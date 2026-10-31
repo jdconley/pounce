@@ -224,7 +224,7 @@ User gesture ──► TableScene/Shell ──► RoomStore.send(ClientMessage) 
 
 **Local dev:** `wrangler dev` needs `apps/play-api/.dev.vars` with a throwaway `TOKEN_SECRET` (gitignored), or every `POST /v1/devices` returns 503 `not_configured`; Plan 2's dev-setup task adds a `.dev.vars.example` and a script. (call)
 
-Base URL per build configuration: Debug → `http://localhost:8787` (ATS exception for localhost only; overridable by a scheme env var for testing on a physical phone over LAN); Release → `https://play.conleychaos.com`. (call)
+Base URL per build configuration: Debug → `http://localhost:8787` (ATS local-networking exception); Release → `https://play.conleychaos.com`. A launch env var overrides it (simulators, UI tests), and an optional gitignored `Local.xcconfig` overrides the Debug build setting so a real phone can use the dev server through Tailscale (`tailscale serve --https=8443` → `https://gin-and-tonic.tailc8d3c2.ts.net:8443`; the existing :4343 serve is left alone). (call; JD: use wrangler and Tailscale for local testing)
 
 ### 7.2 One live socket
 The app holds **at most one** room socket: the room on screen (lobby or table). Home uses the tables endpoint. (call — simplest; server pushes cover the rest)
@@ -303,6 +303,7 @@ Haptics (Core Haptics, pre-built patterns): light tick on pickup, medium on drop
 - Handle in `onOpenURL` / `onContinueUserActivity`: `/j/<CODE>` → join flow; `/j/<CODE>?move=<MOVECODE>` → move-seat claim. Validate the code against the alphabet/length before connecting.
 - First launch from a link: Pick your cat, then continue straight into the join.
 - Without the app, the page shows the code and a TestFlight link (server, done).
+- **Local testing:** universal links only verify against the real domain, so Debug builds also accept `pounce-dev://j/<CODE>[?move=<M>]` (opened with `xcrun simctl openurl`). Release builds never register that scheme. (call)
 
 ## 12. Identity and local data
 
@@ -339,7 +340,8 @@ Haptics (Core Haptics, pre-built patterns): light tick on pickup, medium on drop
 
 - **PounceKit (`swift test`):** protocol decoding against JSON fixtures emitted by the server's own tests (Plan 2 adds a vitest that writes `apps/play-api/fixtures/protocol/*.json` from real `RoomCore` output, so both sides agree); rules mirror tested against `apps/play-api/fixtures/groups.json`; RoomStore reducer (snapshot-equal-seq, gaps, `room_closed`, one-in-flight errors); reconnect/backoff with a fake transport and clock; TableLayout for 2–6 seats; pass-and-play reveal logic.
 - **UI smoke (XCUITest):** against `wrangler dev`: pick cat → new game → add a bot → start → draw → discard.
-- **Manual playtests:** two simulators + a phone, mixing own-phone, pass-and-play and bot seats.
+- **Mixed seats, scripted:** a `pounce-e2e` command-line driver (PounceKit) plays full games against `wrangler dev`, and can join an app-created room as a remote human, dropping and restoring its socket. A UI test pairs the simulator app with that remote driver and a bot, covering presence, reconnect after a dropped socket or backgrounding, the pass-and-play curtain, move-seat and round/game over. A script boots two simulators and joins them through `pounce-dev://` links. Push payloads are tested with `xcrun simctl push` and an `.apns` file. (JD: get as far as possible locally)
+- **Manual playtests:** two real phones over Tailscale plus simulators; whatever no script can reach goes in `apps/play-ios/MANUAL-CHECKLIST.md` and the PR description.
 - **Performance:** Instruments Time Profiler / Energy on an older iPhone: idle table ≈ 0 % CPU; 60 fps through a lay-down + leap.
 
 ## 17. Release
