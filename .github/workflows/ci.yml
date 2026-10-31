@@ -1,0 +1,124 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+      - uses: pnpm/action-setup@fc06bc1257f339d1d5d8b3a19a8cae5388b55320 # v4.4.0
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm lint
+      - run: pnpm typecheck
+      - run: pnpm test
+
+  deploy-play-api:
+    needs: check
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    environment: production
+    concurrency:
+      group: deploy-play-api
+      cancel-in-progress: false
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+    defaults:
+      run:
+        working-directory: apps/play-api
+    steps:
+      - name: Check Cloudflare credentials
+        id: creds
+        working-directory: .
+        run: |
+          # Until the Cloudflare secrets exist the deploy is skipped, not failed,
+          # so the repo can go green before production is wired up.
+          if [ -n "$CLOUDFLARE_API_TOKEN" ] && [ -n "$CLOUDFLARE_ACCOUNT_ID" ]; then
+            echo "ready=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "::notice title=Play API::CLOUDFLARE_API_TOKEN or CLOUDFLARE_ACCOUNT_ID is unset, so the deploy is skipped. See README.md."
+            echo "ready=false" >> "$GITHUB_OUTPUT"
+          fi
+      - if: steps.creds.outputs.ready == 'true'
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+      - if: steps.creds.outputs.ready == 'true'
+        uses: pnpm/action-setup@fc06bc1257f339d1d5d8b3a19a8cae5388b55320 # v4.4.0
+      - if: steps.creds.outputs.ready == 'true'
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+      - if: steps.creds.outputs.ready == 'true'
+        run: pnpm install --frozen-lockfile
+      - name: Deploy
+        if: steps.creds.outputs.ready == 'true'
+        run: |
+          for attempt in 1 2 3; do
+            pnpm exec wrangler deploy && exit 0
+            sleep $((attempt * 15))
+          done
+          exit 1
+      - name: Sync secrets
+        if: steps.creds.outputs.ready == 'true'
+        env:
+          TOKEN_SECRET: ${{ secrets.PLAY_API_TOKEN_SECRET }}
+          APNS_KEY_P8: ${{ secrets.PLAY_API_APNS_KEY_P8 }}
+          APNS_KEY_ID: ${{ secrets.PLAY_API_APNS_KEY_ID }}
+        run: |
+          # After the deploy, because the Worker must exist before it can hold a
+          # secret. Without TOKEN_SECRET the API stays dormant: device and room
+          # routes answer 503 and /healthz reports "configured":false, which the
+          # smoke check below catches. The APNs pair is optional: without it the
+          # Worker skips your-turn pushes. Values reach wrangler on stdin, never
+          # as arguments.
+          put_secret() {
+            for attempt in 1 2 3; do
+              printenv "$1" | pnpm exec wrangler secret put "$1" && return 0
+              sleep $((attempt * 10))
+            done
+            return 1
+          }
+
+          if [ -n "$TOKEN_SECRET" ]; then
+            put_secret TOKEN_SECRET
+          else
+            echo "::warning title=Play API::PLAY_API_TOKEN_SECRET is unset, so the play API stays dormant and the smoke check fails. See README.md."
+          fi
+
+          # Both or neither: one without the other cannot sign an APNs token.
+          if [ -n "$APNS_KEY_P8" ] && [ -n "$APNS_KEY_ID" ]; then
+            put_secret APNS_KEY_P8
+            put_secret APNS_KEY_ID
+          elif [ -n "$APNS_KEY_P8" ] || [ -n "$APNS_KEY_ID" ]; then
+            echo "::warning title=Play API::Set both PLAY_API_APNS_KEY_P8 and PLAY_API_APNS_KEY_ID (one is missing). Your-turn push stays off."
+          else
+            echo "PLAY_API_APNS_KEY_P8 and PLAY_API_APNS_KEY_ID unset. Your-turn push stays off."
+          fi
+      - name: Smoke check
+        if: steps.creds.outputs.ready == 'true'
+        run: |
+          for attempt in $(seq 1 12); do
+            body=$(curl -fsS https://play.conleychaos.com/healthz || true)
+            echo "attempt $attempt: $body"
+            case "$body" in *'"configured":true'*) exit 0 ;; esac
+            sleep 10
+          done
+          echo "::error title=Play API::healthz never reported \"configured\":true"
+          exit 1

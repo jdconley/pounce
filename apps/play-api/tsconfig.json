@@ -1,0 +1,13 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "include": [
+    "src/**/*.ts",
+    "tests/**/*.ts",
+    "wrangler.jsonc"
+  ],
+  "compilerOptions": {
+    "baseUrl": ".",
+    "ignoreDeprecations": "6.0",
+    "types": ["@cloudflare/workers-types", "node"]
+  }
+}

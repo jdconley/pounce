@@ -1,0 +1,29 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "conleychaos-play-api",
+  "main": "./src/index.ts",
+  "compatibility_date": "2026-08-01",
+  // The app reaches the API only through its custom domain.
+  "workers_dev": false,
+  "routes": [
+    { "pattern": "play.conleychaos.com", "custom_domain": true }
+  ],
+  // TOKEN_SECRET, APNS_KEY_P8 and APNS_KEY_ID are secrets set by the deploy
+  // pipeline, never listed here.
+  "vars": {
+    "APNS_TEAM_ID": "B222J9J7B8",
+    "APNS_TOPIC": "com.conleychaos.play",
+    "APNS_HOST": "api.push.apple.com"
+  },
+  "durable_objects": {
+    "bindings": [
+      { "name": "ROOMS", "class_name": "GameRoom" },
+      { "name": "DEVICES", "class_name": "DeviceIndex" }
+    ]
+  },
+  "migrations": [
+    { "tag": "v1", "new_sqlite_classes": ["GameRoom", "DeviceIndex"] }
+  ],
+  // Invocation logs would record each request URL, which carries room codes.
+  "observability": { "enabled": true, "logs": { "invocation_logs": false } }
+}

@@ -1,0 +1,16 @@
+node_modules/
+dist/
+coverage/
+.wrangler/
+.dev.vars
+.env
+.env.*
+.DS_Store
+*.log
+.superpowers/
+
+# Xcode
+xcuserdata/
+DerivedData/
+*.xcuserstate
+build/

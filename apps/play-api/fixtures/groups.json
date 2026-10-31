@@ -1,0 +1,18 @@
+[
+  { "name": "set of 3 with one yarn is valid", "req": { "kind": "set", "size": 3 }, "cards": [6, 30, 96], "valid": true },
+  { "name": "set of 3 all yarn is invalid", "req": { "kind": "set", "size": 3 }, "cards": [96, 97, 98], "valid": false },
+  { "name": "set with a cucumber is invalid", "req": { "kind": "set", "size": 3 }, "cards": [6, 30, 104], "valid": false },
+  { "name": "set with mixed values is invalid", "req": { "kind": "set", "size": 3 }, "cards": [6, 31, 96], "valid": false },
+  { "name": "set with wrong size is invalid", "req": { "kind": "set", "size": 3 }, "cards": [6, 30], "valid": false },
+  { "name": "run 3-4-5-6 valid", "req": { "kind": "run", "size": 4 }, "cards": [2, 27, 52, 77], "valid": true },
+  { "name": "run 10-11-12 + yarn defaults to start 9", "req": { "kind": "run", "size": 4 }, "cards": [9, 10, 11, 96], "valid": true },
+  { "name": "run 10-11-12 + yarn with runStart 9 is valid", "req": { "kind": "run", "size": 4 }, "cards": [9, 10, 11, 96], "runStart": 9, "valid": true },
+  { "name": "run 10-11-12 + yarn with runStart 10 is invalid", "req": { "kind": "run", "size": 4 }, "cards": [9, 10, 11, 96], "runStart": 10, "valid": false },
+  { "name": "run 11-12-1 (wrap) invalid", "req": { "kind": "run", "size": 3 }, "cards": [10, 11, 0], "valid": false },
+  { "name": "run with duplicate value invalid", "req": { "kind": "run", "size": 4 }, "cards": [2, 14, 27, 96], "valid": false },
+  { "name": "run 2,yarn,4,5 valid with start 2", "req": { "kind": "run", "size": 4 }, "cards": [1, 96, 3, 4], "runStart": 2, "valid": true },
+  { "name": "run 2,yarn,4,5 invalid with start 3", "req": { "kind": "run", "size": 4 }, "cards": [1, 96, 3, 4], "runStart": 3, "valid": false },
+  { "name": "run all yarn is invalid", "req": { "kind": "run", "size": 3 }, "cards": [96, 97, 98], "valid": false },
+  { "name": "coat of 7 tuxedo with two yarn valid", "req": { "kind": "coat", "size": 7 }, "cards": [24, 26, 28, 30, 32, 96, 97], "valid": true },
+  { "name": "coat mixing tabby and gray invalid", "req": { "kind": "coat", "size": 3 }, "cards": [0, 73, 96], "valid": false }
+]

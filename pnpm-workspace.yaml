@@ -1,0 +1,27 @@
+packages:
+  - apps/*
+  - packages/*
+
+# Refuse any package version published less than 7 days ago, which gives the
+# registry time to pull compromised releases before we install them.
+minimumReleaseAge: 10080
+
+onlyBuiltDependencies:
+  - esbuild
+  - workerd
+
+# Shared versions. Cloudflare releases wrangler, workerd (via miniflare) and
+# workers-types in lockstep, so move them together.
+catalog:
+  "@cloudflare/workers-types": "5.20260730.1"
+  "@eslint/js": "10.0.1"
+  "@types/node": "25.5.2"
+  "@vitest/coverage-v8": "4.1.12"
+  "eslint": "10.2.0"
+  "eslint-plugin-import-x": "4.16.2"
+  "globals": "17.4.0"
+  "miniflare": "4.20260730.0"
+  "typescript": "6.0.2"
+  "typescript-eslint": "8.58.1"
+  "vitest": "4.1.12"
+  "wrangler": "4.116.0"
