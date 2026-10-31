@@ -1,5 +1,7 @@
 import { ROOM_CODE } from "../room/codes";
 
+import { OG_IMAGE_BASE64 } from "./og-image";
+
 const CACHE = "public, max-age=300";
 const CSP = "default-src 'none'; style-src 'unsafe-inline'; img-src data:";
 
@@ -33,7 +35,7 @@ export function appSiteAssociation(): Response {
 }
 
 /** The landing page for a shared room link, for people without the app. */
-export function sharePage(code: string, testflightUrl: string | undefined): Response {
+export function sharePage(code: string, testflightUrl: string | undefined, origin: string): Response {
   if (!ROOM_CODE.test(code)) {
     return new Response("Not found", {
       status: 404,
@@ -43,12 +45,24 @@ export function sharePage(code: string, testflightUrl: string | undefined): Resp
   const link = testflightUrl?.startsWith("https://")
     ? `<a href="${escapeHtml(testflightUrl)}">Get the app</a>`
     : "";
+  const safeCode = escapeHtml(code);
+  const og = [
+    `<meta property="og:type" content="website">`,
+    `<meta property="og:title" content="Cat Tower">`,
+    `<meta property="og:description" content="${safeCode}">`,
+    `<meta property="og:url" content="${escapeHtml(`${origin}/j/${code}`)}">`,
+    `<meta property="og:image" content="${escapeHtml(`${origin}/og/room.jpg`)}">`,
+    `<meta property="og:image:width" content="1200">`,
+    `<meta property="og:image:height" content="630">`,
+    `<meta name="twitter:card" content="summary_large_image">`,
+  ].join("\n");
   const html = `<!doctype html>
 <html lang="en">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>${escapeHtml(code)}</title>
+<title>${safeCode}</title>
+${og}
 <style>${STYLE}</style>
 </head>
 <body>
@@ -67,5 +81,22 @@ ${link}
       "cache-control": CACHE,
       "content-security-policy": CSP,
     },
+  });
+}
+
+let ogBytes: Uint8Array<ArrayBuffer> | undefined;
+
+function decodeOgImage(): Uint8Array<ArrayBuffer> {
+  const bin = atob(OG_IMAGE_BASE64);
+  const bytes = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+  return bytes;
+}
+
+/** The 1200x630 image Messages shows in the invite bubble. */
+export function ogImage(): Response {
+  ogBytes ??= decodeOgImage();
+  return new Response(ogBytes, {
+    headers: { "content-type": "image/jpeg", "cache-control": "public, max-age=86400" },
   });
 }

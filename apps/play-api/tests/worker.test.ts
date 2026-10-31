@@ -277,12 +277,21 @@ describe("worker", { timeout: 20_000 }, () => {
     const html = await page.text();
     expect(html).toContain("BCDFG");
     expect(html).toContain('<a href="https://testflight.apple.com/join/abc123">Get the app</a>');
+    expect(html).toContain('<meta property="og:image" content="https://play.conleychaos.com/og/room.jpg">');
 
     for (const path of ["/j/bad!", "/j/BCDFG/extra", "/j/", "/j/%E0%A4%A"]) {
       expect((await mf.dispatchFetch(`${BASE}${path}`)).status, path).toBe(404);
     }
     const post = await mf.dispatchFetch(`${BASE}/j/BCDFG`, { method: "POST" });
     expect(post.status).toBe(404);
+  });
+
+  test("the share image is served as a jpeg without a token", async () => {
+    const res = await worker({ secret: null }).dispatchFetch(`${BASE}/og/room.jpg`);
+    expect(res.status).toBe(200);
+    expect(res.headers.get("content-type")).toBe("image/jpeg");
+    const bytes = new Uint8Array(await res.arrayBuffer());
+    expect([bytes[0], bytes[1]]).toEqual([0xff, 0xd8]);
   });
 
   test("device mint returns a verifiable token; rooms require it", async () => {

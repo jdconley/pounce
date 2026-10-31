@@ -1,6 +1,8 @@
 import { describe, expect, test } from "vitest";
 
-import { appSiteAssociation, sharePage } from "./links";
+import { appSiteAssociation, ogImage, sharePage } from "./links";
+
+const ORIGIN = "https://play.conleychaos.com";
 
 const TESTFLIGHT = "https://testflight.apple.com/join/abc123";
 const CSP = "default-src 'none'; style-src 'unsafe-inline'; img-src data:";
@@ -21,7 +23,7 @@ describe("appSiteAssociation", () => {
 
 describe("sharePage", () => {
   test("a valid code renders an html page with the code", async () => {
-    const res = sharePage("BCDFG", undefined);
+    const res = sharePage("BCDFG", undefined, ORIGIN);
     expect(res.status).toBe(200);
     expect(res.headers.get("content-type")).toBe("text/html; charset=utf-8");
     expect(res.headers.get("cache-control")).toBe("public, max-age=300");
@@ -35,34 +37,64 @@ describe("sharePage", () => {
     expect(html).not.toMatch(/(?:src|href)="https?:/);
   });
 
+  test("share page carries Open Graph tags pointing at the origin's image", async () => {
+    const html = await sharePage("BCDFG", undefined, ORIGIN).text();
+    expect(html).toContain('<meta property="og:title" content="Cat Tower">');
+    expect(html).toContain('<meta property="og:image" content="https://play.conleychaos.com/og/room.jpg">');
+    expect(html).toContain('<meta property="og:image:width" content="1200">');
+    expect(html).toContain('<meta property="og:image:height" content="630">');
+    expect(html).toContain('<meta name="twitter:card" content="summary_large_image">');
+    expect(html).toContain('<meta property="og:description" content="BCDFG">');
+    expect(html).toContain('<meta property="og:type" content="website">');
+    expect(html).toContain('<meta property="og:url" content="https://play.conleychaos.com/j/BCDFG">');
+  });
+
+  test("the origin is HTML-escaped in the Open Graph tags", async () => {
+    const html = await sharePage("BCDFG", undefined, 'https://x.test"><script>').text();
+    expect(html).toContain('content="https://x.test&quot;&gt;&lt;script&gt;/og/room.jpg"');
+    expect(html).not.toContain("<script");
+  });
+
   test("the Get the app link appears only when a TestFlight URL is set", async () => {
-    const without = await sharePage("BCDFG", undefined).text();
+    const without = await sharePage("BCDFG", undefined, ORIGIN).text();
     expect(without).not.toContain("Get the app");
     expect(without).not.toContain("<a ");
 
-    const withLink = await sharePage("BCDFG", TESTFLIGHT).text();
+    const withLink = await sharePage("BCDFG", TESTFLIGHT, ORIGIN).text();
     expect(withLink).toContain(`<a href="${TESTFLIGHT}">Get the app</a>`);
   });
 
   test("a TestFlight URL that is not https is omitted", async () => {
     for (const url of ["http://testflight.apple.com/join/x", "javascript:alert(1)", "", " https://x.test"]) {
-      const html = await sharePage("BCDFG", url).text();
+      const html = await sharePage("BCDFG", url, ORIGIN).text();
       expect(html, url).not.toContain("Get the app");
     }
   });
 
   test("the TestFlight URL is HTML-escaped", async () => {
-    const html = await sharePage("BCDFG", 'https://x.test/?a=1&b="2"><script>').text();
+    const html = await sharePage("BCDFG", 'https://x.test/?a=1&b="2"><script>', ORIGIN).text();
     expect(html).toContain('href="https://x.test/?a=1&amp;b=&quot;2&quot;&gt;&lt;script&gt;"');
     expect(html).not.toContain("<script");
   });
 
   test("an invalid code is a plain-text 404 and is never echoed", async () => {
     for (const code of ["bad!", "<script>", "BCDF", "BCDFGH", "bcdfg", "AEIOU", "BCDF0", ""]) {
-      const res = sharePage(code, TESTFLIGHT);
+      const res = sharePage(code, TESTFLIGHT, ORIGIN);
       expect(res.status, code).toBe(404);
       expect(res.headers.get("content-type")).toBe("text/plain; charset=utf-8");
       expect(await res.text()).not.toContain(code || "\u0000");
     }
+  });
+});
+
+describe("ogImage", () => {
+  test("is a cacheable jpeg", async () => {
+    const res = ogImage();
+    expect(res.status).toBe(200);
+    expect(res.headers.get("content-type")).toBe("image/jpeg");
+    expect(res.headers.get("cache-control")).toBe("public, max-age=86400");
+    const bytes = new Uint8Array(await res.arrayBuffer());
+    expect([bytes[0], bytes[1]]).toEqual([0xff, 0xd8]);
+    expect(bytes.length).toBeGreaterThan(10_000);
   });
 });

@@ -1,5 +1,5 @@
 import { issueDeviceToken, verifyDeviceToken } from "./auth";
-import { appSiteAssociation, sharePage } from "./http/links";
+import { appSiteAssociation, ogImage, sharePage } from "./http/links";
 import { newRoomCode, ROOM_CODE } from "./room/codes";
 import { DEVICE_HEADER } from "./room/game-room";
 
@@ -144,8 +144,9 @@ export default {
     if (method === "GET" && pathname === "/.well-known/apple-app-site-association") {
       return appSiteAssociation();
     }
+    if (method === "GET" && pathname === "/og/room.jpg") return ogImage();
     const share = method === "GET" ? SHARE_PATH.exec(pathname) : null;
-    if (share) return sharePage(share[1] as string, env.TESTFLIGHT_URL);
+    if (share) return sharePage(share[1] as string, env.TESTFLIGHT_URL, new URL(request.url).origin);
     const secret = env.TOKEN_SECRET;
     if (method === "POST" && pathname === "/v1/devices") {
       return secret ? mintDevice(request, secret) : notConfigured();
