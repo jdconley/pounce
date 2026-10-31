@@ -1,0 +1,3 @@
+// Release: production API, no custom URL scheme (universal links only).
+POUNCE_API_BASE_URL = https:/$()/play.conleychaos.com
+POUNCE_URL_SCHEMES =

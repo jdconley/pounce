@@ -1,0 +1,6 @@
+// Debug: local wrangler dev server, custom URL scheme for simctl openurl.
+POUNCE_API_BASE_URL = http:/$()/localhost:8787
+POUNCE_URL_SCHEMES = pounce-dev
+
+// Optional, gitignored per-developer overrides (e.g. a tailnet URL for a real phone).
+#include? "Local.xcconfig"
