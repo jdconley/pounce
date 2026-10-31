@@ -29,6 +29,17 @@ pnpm check   # lint, typecheck and tests
 `apps/play-api` tests include a 300-game bot simulation and Miniflare
 integration tests for the Worker and Durable Objects.
 
+## Local dev server
+
+Run the game server on your machine (the iOS Debug build talks to it at
+`http://localhost:8787`):
+
+```bash
+cp apps/play-api/.dev.vars.example apps/play-api/.dev.vars   # gitignored
+# fill TOKEN_SECRET with the output of: openssl rand -hex 32
+pnpm --filter @pounce/play-api exec wrangler dev --port 8787
+```
+
 ## Deploy
 
 Every push to `main` that passes CI deploys `apps/play-api` to
