@@ -35,8 +35,10 @@ extension TableScene {
             await animateReshuffle()
         case .roundStarted(_, let dealer):
             await animateDeal(dealer: dealer)
-        case .roundOver, .gameOver:
-            break  // Task 18
+        case .roundOver(let wentOut, let points, let advanced, _, _):
+            await playRoundOver(wentOut: wentOut, points: points, advanced: advanced)
+        case .gameOver(let winners):
+            await playGameOver(winners: winners)
         }
     }
 
@@ -411,7 +413,7 @@ extension TableScene {
 
     /// A new round is dealt: cards from the deck to each seat in turn from the dealer's left,
     /// 25 ms apart; the bottom seat's land in its fan.
-    private func animateDeal(dealer: Seat) async {
+    func animateDeal(dealer: Seat) async {
         guard let layout, let game = model?.game else { return }
         let seats = max(game.handCounts.count, 1)
         let perSeat = 10
@@ -455,7 +457,7 @@ extension TableScene {
 
     /// One idle flourish (spec §9.2): a random cat in the bar blinks.
     func idleFlourish() {
-        guard view != nil, !animating, input.source == .none,
+        guard view != nil, !animating, input.source == .none, !celebration.announced,
               let cat = opponents.order.compactMap({ opponents.node(for: $0) }).randomElement() else { return }
         let (action, node) = cat.blink()
         let director = director

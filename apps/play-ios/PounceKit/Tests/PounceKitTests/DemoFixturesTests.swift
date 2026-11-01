@@ -137,4 +137,39 @@ import Testing
         #expect(!winners.isEmpty)
         #expect(winners == finished.filter { scores[$0] == best })
     }
+
+    @Test func celebrationStepsChainAndStayConsistent() throws {
+        let steps = DemoFixtures.celebration()
+        #expect(steps.count == 6)
+        var previous: GameView?
+        for step in steps {
+            let game = try #require(step.room.game)
+            for (seat, hand) in game.hands {
+                #expect(game.handCounts[seat] == hand.count)
+            }
+            var visible = game.hands.values.flatMap { $0 }
+            visible += game.laid.compactMap { $0 }.flatMap { $0.flatMap(\.cards) }
+            if let top = game.discardTop { visible.append(top) }
+            #expect(Set(visible).count == visible.count)
+            let laidCount = game.laid.compactMap { $0 }.flatMap { $0 }.reduce(0) { $0 + $1.cards.count }
+            #expect(game.deckCount >= 0)
+            #expect(game.deckCount + game.discardCount + game.handCounts.reduce(0, +) + laidCount == Card.deckSize)
+            for event in step.events {
+                if case .roundOver(_, let points, let advanced, let scores, let phase) = event {
+                    let before = try #require(previous)
+                    #expect(scores == zip(before.scores, points).map { $0 + $1 })
+                    #expect(phase == before.phase.indices.map { before.phase[$0] + (advanced.contains($0) ? 1 : 0) })
+                    #expect(scores == game.scores)
+                    #expect(phase == game.phase)
+                }
+                if case .gameOver(let winners) = event {
+                    #expect(winners == game.winners)
+                    #expect(step.room.status == .over)
+                }
+            }
+            previous = game
+        }
+        #expect(steps.first?.room.status == .playing)
+        #expect(steps.last?.room.game?.status == .gameOver)
+    }
 }

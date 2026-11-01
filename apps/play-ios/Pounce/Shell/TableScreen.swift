@@ -116,12 +116,16 @@ struct ConnectingView: View {
 
 /// The SpriteKit table for one session. Owns the scene (made once, kept across redraws) and
 /// pass-and-play: every room change updates `PassAndPlay` and reconciles the scene with its
-/// `revealed` seat. Task 19 adds the curtain overlay on top.
+/// `revealed` seat. Over it: the scoreboard (tap the tower) and, once the scene has played the
+/// win, the game-over overlay. Task 19 adds the curtain overlay on top.
 private struct TableStage: View {
     @Environment(AppModel.self) private var model
     let session: RoomSession
     @State private var scene: TableScene?
     @State private var pass = PassAndPlay()
+    @State private var scoreboard = false
+    /// Set by the scene when the game-over celebration is done.
+    @State private var winners: [Seat]?
 
     var body: some View {
         ZStack {
@@ -131,7 +135,20 @@ private struct TableStage: View {
             } else {
                 RoomBackground()
             }
+            if scoreboard, winners == nil, let room = session.store.room, room.game != nil {
+                ScoreboardOverlay(model: TableModel(room: room)) { scoreboard = false }
+                    .transition(.opacity)
+            }
+            if let winners {
+                GameOverView(
+                    winners: people(winners),
+                    onHome: { model.goHome() },
+                    onNewGame: { Task { await model.newGame() } })
+                    .transition(.opacity)
+            }
         }
+        .animation(.easeOut(duration: 0.2), value: scoreboard)
+        .animation(.easeOut(duration: 0.3), value: winners)
         .onAppear(perform: attach)
         .onDisappear { session.detachTable() }
         .onChange(of: session.store.room, initial: true) { sync() }
@@ -143,10 +160,20 @@ private struct TableStage: View {
         let scene = self.scene ?? TableScene(store: session.store)
         // Task 20 replaces this with the table menu sheet; until then the paw goes home.
         scene.onMenu = { [weak model] in model?.goHome() }
+        scene.onTower = { scoreboard = true }
+        scene.onGameOver = { seats in winners = seats }
         self.scene = scene
         sync(scene)
         session.attachTable { [weak scene] intent in
             await scene?.play(intent)
+        }
+    }
+
+    /// The winners' people; the House Cat bot as `GameOverView.botWinner`.
+    private func people(_ seats: [Seat]) -> [Person] {
+        let room = session.store.room
+        return seats.map { seat in
+            room?.seats[safe: seat]?.person ?? GameOverView.botWinner
         }
     }
 

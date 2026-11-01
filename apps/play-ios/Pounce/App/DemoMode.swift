@@ -10,7 +10,12 @@ import PounceKit
 /// second (`[replay]` on stdout) to check that the view pauses when nothing moves.
 /// `nope` is my play step on a table that refuses every move (`bad_step`), to see a
 /// provisional move roll back.
-/// `celebrate` (Task 18) and `curtain` (Task 19) show their table until those land.
+/// `celebrate` starts in the lobby and plays `DemoFixtures.celebration()` through the real
+/// store and intent path: the versus intro and deal, a round over with two shelf leaps, the
+/// next deal 6 s later (the server's gap), then my going out, the last leap and game over.
+/// It logs like `replay`. `-slowmo <factor>` (any demo) runs the table at that speed, socket
+/// gaps stretched to match, for screenshots of fast moments.
+/// `curtain` (Task 19) shows its table until that lands.
 enum DemoMode: String {
     case lobby, table, other, replay, nope, celebrate, curtain
 
@@ -32,7 +37,7 @@ enum DemoMode: String {
             var room = DemoFixtures.table(seats: 4, mySeat: 0, phase: 2)
             room.game?.step = .play
             return room
-        case .celebrate: return DemoFixtures.table(seats: 4, mySeat: 0, phase: 9)
+        case .celebrate: return DemoFixtures.lobby()
         case .curtain: return DemoFixtures.curtain()
         }
     }
@@ -41,9 +46,66 @@ enum DemoMode: String {
     func makeSocket() -> any RoomSocketing {
         switch self {
         case .replay: ReplaySocket(loops: 2)
+        case .celebrate: CelebrateSocket()
         case .nope: DemoSocket(room: room, refusing: true)
         default: DemoSocket(room: room)
         }
+    }
+}
+
+/// `-slowmo <factor>`: the table's speed (1 = normal), DEBUG only.
+enum SlowMotion {
+    static func factor(arguments: [String] = CommandLine.arguments) -> Double {
+        guard let i = arguments.firstIndex(of: "-slowmo"), arguments.indices.contains(i + 1),
+              let f = Double(arguments[i + 1]), f > 0 else { return 1 }
+        return min(f, 1)
+    }
+}
+
+/// `-demo celebrate`: the lobby, then each `DemoFixtures.celebration()` step (its events, then
+/// its snapshot) after the gap before it. The gaps follow the real server: the next round is
+/// dealt 6 s after `roundOver`.
+actor CelebrateSocket: RoomSocketing {
+    nonisolated let events: AsyncStream<SocketEvent>
+    private let continuation: AsyncStream<SocketEvent>.Continuation
+    private var player: Task<Void, Never>?
+    /// Seconds before each step: start, lay down, Kiki out, next deal, lay down, go out.
+    static let gaps: [Double] = [1.5, 4.5, 1.6, 6, 3.5, 1.4]
+
+    init() {
+        (events, continuation) = AsyncStream.makeStream(of: SocketEvent.self)
+    }
+
+    func start() async {
+        continuation.yield(.connected)
+        continuation.yield(.message(.snapshot(protocol: PounceKit.protocolVersion, seq: 1, room: DemoFixtures.lobby())))
+        guard player == nil else { return }
+        let continuation = continuation
+        let slow = SlowMotion.factor()
+        player = Task {
+            var seq = 1
+            for (i, step) in DemoFixtures.celebration().enumerated() {
+                try? await Task.sleep(for: .seconds(Self.gaps[i % Self.gaps.count] / slow))
+                guard !Task.isCancelled else { return }
+                print("[celebrate] step \(i) events=\(step.events.count)")
+                for event in step.events {
+                    seq += 1
+                    continuation.yield(.message(.event(seq: seq, event: .game(event))))
+                }
+                if step.events.isEmpty { seq += 1 }
+                continuation.yield(.message(.snapshot(protocol: PounceKit.protocolVersion, seq: seq, room: step.room)))
+            }
+            print("[celebrate] done")
+        }
+    }
+
+    func send(_ m: ClientMessage) async throws {}
+
+    func reconnectNow() async {}
+
+    func stop() async {
+        player?.cancel()
+        continuation.finish()
     }
 }
 
@@ -97,7 +159,7 @@ actor ReplaySocket: RoomSocketing {
 }
 
 extension TableScene {
-    private static let logsTimeline = [.replay, .nope].contains(DemoMode.from())
+    private static let logsTimeline = [.replay, .nope, .celebrate].contains(DemoMode.from())
 
     /// `-demo replay`: one line per game intent (played with its duration, or skipped).
     func timelineLog(_ line: @autoclosure () -> String) {

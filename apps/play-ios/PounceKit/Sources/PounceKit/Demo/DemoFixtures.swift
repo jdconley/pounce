@@ -91,6 +91,108 @@ public enum DemoFixtures {
         ]
     }
 
+    /// The DEBUG `-demo celebrate` script, played after a `lobby()` snapshot. Each step is
+    /// one server message batch (its events, then its snapshot):
+    /// 0. the game starts (no events: the client plays the versus intro and the deal);
+    /// 1. I lay down phase 9 and keep two cards; Kiki is down to one;
+    /// 2. Kiki goes out: `roundOver` (points pop, Mia and Kiki leap a shelf);
+    /// 3. the next round is dealt (`roundStarted`), as the server does 6 s later;
+    /// 4. I lay down phase 10 and keep one card;
+    /// 5. I discard it and go out: `roundOver`, then `gameOver` (`roundOverEvents()`).
+    /// The last room is `table(seats: 4, mySeat: 0, phase: 9)` finished.
+    public static func celebration() -> [ReplayStep] {
+        let final = table(seats: 4, mySeat: 0, phase: 9)
+        let base = final.game!
+        guard case .roundOver(_, let lastPoints, _, _, let lastPhase)? = roundOverEvents().first,
+              case .gameOver(let winners)? = roundOverEvents().last else { return [] }
+
+        // Round 3 (the last) as dealt: nobody has laid down.
+        var dealt = final
+        dealt.game!.laid = Array(repeating: nil, count: 4)
+        dealt.game!.handCounts = Array(repeating: 10, count: 4)
+        balance(&dealt.game!)
+
+        // Round 2: Kiki goes out, Mia and Kiki finish their phases.
+        let points = [15, 40, 0, 15]
+        let advanced: [Seat] = [0, 2]
+        var start = dealt
+        start.game!.round = 2
+        start.game!.dealer = 2
+        start.game!.turn = 3
+        start.game!.phase = base.phase.indices.map { base.phase[$0] - (advanced.contains($0) ? 1 : 0) }
+        start.game!.scores = zip(base.scores, points).map { $0 - $1 }
+        balance(&start.game!)
+
+        var down = start
+        let mine: [Group] = [
+            .set(cards: [id(6, .tabby), id(6, .tuxedo), id(6, .calico), id(6, .gray), id2(6, .tabby)], value: 6),
+            .set(cards: [id(9, .gray), id2(9, .gray)], value: 9),
+        ]
+        let kikis: [Group] = [
+            .set(cards: [id(11, .tabby), id(11, .calico), id(11, .gray), id2(11, .tabby)], value: 11),
+            .run(cards: [id(1, .calico), id(2, .calico), id(3, .gray), id(4, .gray)], start: 1, end: 4),
+        ]
+        down.game!.laid[0] = mine
+        down.game!.laid[2] = kikis
+        down.game!.hands[0] = [id(2, .gray), id(10, .tuxedo)]
+        down.game!.handCounts[0] = 2
+        down.game!.handCounts[2] = 1
+        down.game!.turn = 2
+        down.game!.step = .play
+        balance(&down.game!)
+
+        var roundOver = down
+        roundOver.game!.status = .roundOver
+        roundOver.game!.handCounts[2] = 0
+        roundOver.game!.discardTop = id2(12, .calico)
+        roundOver.game!.discardCount += 1
+        roundOver.game!.phase = base.phase
+        roundOver.game!.scores = base.scores
+        balance(&roundOver.game!)
+        let kikiOut = GameEvent.roundOver(
+            wentOut: 2, points: points, advanced: advanced, scores: base.scores, phase: base.phase)
+
+        // Round 3: I lay down phase 10, then go out.
+        var last = dealt
+        let tens: [Group] = [
+            .set(cards: [id(8, .tabby), id(8, .tuxedo), id(8, .calico), id2(8, .gray), id2(8, .tabby)], value: 8),
+            .set(cards: [id2(3, .tabby), id2(3, .tuxedo), id2(3, .gray)], value: 3),
+        ]
+        last.game!.laid[0] = tens
+        last.game!.hands[0] = [id(1, .tabby)]
+        last.game!.handCounts[0] = 1
+        last.game!.step = .play
+        balance(&last.game!)
+
+        var over = last
+        over.status = .over
+        over.game!.status = .gameOver
+        over.game!.hands[0] = []
+        over.game!.handCounts[0] = 0
+        over.game!.discardTop = id(1, .tabby)
+        over.game!.discardCount += 1
+        over.game!.phase = lastPhase
+        over.game!.scores = zip(base.scores, lastPoints).map { $0 + $1 }
+        over.game!.winners = winners
+        balance(&over.game!)
+
+        return [
+            ReplayStep(events: [], room: start),
+            ReplayStep(events: [], room: down),
+            ReplayStep(events: [kikiOut], room: roundOver),
+            ReplayStep(events: [.roundStarted(round: 3, dealer: base.dealer)], room: dealt),
+            ReplayStep(events: [], room: last),
+            ReplayStep(
+                events: [.discarded(seat: 0, card: id(1, .tabby), skipTarget: nil)] + roundOverEvents(), room: over),
+        ]
+    }
+
+    /// Sets the deck count so every card is accounted for.
+    private static func balance(_ g: inout GameView) {
+        let laid = g.laid.compactMap { $0 }.flatMap { $0 }.reduce(0) { $0 + $1.cards.count }
+        g.deckCount = Card.deckSize - g.discardCount - g.handCounts.reduce(0, +) - laid
+    }
+
     /// One server action in the replay: its events, then the snapshot that follows them.
     public struct ReplayStep: Equatable, Sendable {
         public let events: [GameEvent]

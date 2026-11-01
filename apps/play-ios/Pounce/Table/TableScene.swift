@@ -28,6 +28,12 @@ final class TableScene: SKScene {
     let director = AnimationDirector(view: nil)
     /// The paw button top-right (`table.menu`).
     var onMenu: () -> Void = {}
+    /// The tower was tapped (`table.tower`): the shell shows the scoreboard.
+    var onTower: () -> Void = {}
+    /// The game is over and its celebration has played (or the table opened finished).
+    var onGameOver: ([Seat]) -> Void = { _ in }
+    /// Spotlight and game-over bookkeeping (Celebrations.swift).
+    var celebration = CelebrationState()
 
     private(set) var model: TableModel?
     /// The seat whose hand may show face up, as last set by `reconcile(_:revealed:)`.
@@ -104,6 +110,8 @@ final class TableScene: SKScene {
     /// `.reconcile` intent (or after `deferLimit` if none comes).
     private var pendingReveal: Seat??
     private var deferGeneration = 0
+    /// The last intent handed to `play`, which the next one waits for.
+    private var playChain: Task<Void, Never>?
     private static let deferLimit: Duration = .seconds(3)
     private var accessibilityCache: (version: Int, elements: [UIAccessibilityElement])?
     private var accessibilityVersion = 0
@@ -144,6 +152,8 @@ final class TableScene: SKScene {
         sortButton.zPosition = 4
         sortButton.isHidden = true
         director.flourish = { [weak self] in self?.idleFlourish() }
+        tower.director = director
+        tower.fx = made[.fx]
     }
 
     @available(*, unavailable)
@@ -159,7 +169,8 @@ final class TableScene: SKScene {
         safeInsets = view.safeAreaInsets
         redraw()
         #if DEBUG
-        if DemoMode.from() == .replay { startFrameLog() }
+        if [.replay, .celebrate].contains(DemoMode.from()) { startFrameLog() }
+        speed = CGFloat(SlowMotion.factor())
         #endif
     }
 
@@ -194,6 +205,7 @@ final class TableScene: SKScene {
         shownRevealed = self.revealed
         settle()
         redraw()
+        settleCelebration()
     }
 
     /// Holds a shell reveal until the timeline catches up; a fallback applies it if no
@@ -210,41 +222,64 @@ final class TableScene: SKScene {
         }
     }
 
-    /// Plays one store intent: game events animate (Task 17), then `.reconcile` snaps.
+    /// Plays one store intent: game events animate (Task 17), then `.reconcile` snaps. Intents
+    /// play one at a time in arrival order, even when two callers overlap (the session's replay
+    /// of intents queued before the table attached, and its live feed).
     func play(_ intent: TableIntent) async {
+        let previous = playChain
+        let next = Task { @MainActor [weak self] in
+            await previous?.value
+            await self?.playNow(intent)
+        }
+        playChain = next
+        await next.value
+    }
+
+    private func playNow(_ intent: TableIntent) async {
         switch intent {
         case .reconcile:
             // A snapshot is the truth: a provisional card is either gone from the hand or back.
             clearProvisional()
             lastAct = nil
             reconcileFromStore()
+            #if DEBUG
+            timelineLog("reconcile seq \(store.lastSeq) hand \(hand.cards.count) transients \(transients.count)")
+            #endif
         case .rejected:
             reconcileFromStore()
             rejected()
         case .game(let event, let seq):
             seenSeq = max(seenSeq, seq)
-            switch event {
-            case .roundOver, .gameOver:
-                reconcileFromStore()  // Task 18 animates these
-            default:
-                guard seq > drawnSeq else {
-                    #if DEBUG
-                    timelineLog("skip seq \(seq) (drawn \(drawnSeq)) \(event)")
-                    #endif
-                    return  // the table already shows it
-                }
-                guard model?.game != nil, layout != nil else { return reconcileFromStore() }
-                animating = true
+            guard seq > drawnSeq else {
                 #if DEBUG
-                let started = ContinuousClock.now
+                timelineLog("skip seq \(seq) (drawn \(drawnSeq)) \(event)")
                 #endif
-                await animate(event)
-                animating = false
-                #if DEBUG
-                timelineLog("seq \(seq) \(ContinuousClock.now - started) \(event)")
-                #endif
+                return  // the table already shows it
             }
-        case .presence, .versusIntro:
+            guard model?.game != nil, layout != nil else { return reconcileFromStore() }
+            animating = true
+            #if DEBUG
+            let started = ContinuousClock.now
+            #endif
+            await animate(event)
+            animating = false
+            #if DEBUG
+            timelineLog("seq \(seq) \(ContinuousClock.now - started) \(event)")
+            #endif
+        case .versusIntro:
+            // The first deal sends no events: the lobby → playing snapshot plays it.
+            if model?.game == nil || layout == nil { reconcileFromStore() }
+            guard model?.game != nil, layout != nil else { return }
+            animating = true
+            #if DEBUG
+            let started = ContinuousClock.now
+            #endif
+            await playVersusIntro()
+            animating = false
+            #if DEBUG
+            timelineLog("versusIntro + deal \(ContinuousClock.now - started)")
+            #endif
+        case .presence:
             reconcileFromStore()
         case .lobbyNope:
             break
@@ -332,6 +367,7 @@ final class TableScene: SKScene {
         }
         shownRevealed = shown
         redraw()
+        settleCelebration()
     }
 
     /// Lays every node out for the current model, size and insets.
@@ -525,6 +561,12 @@ final class TableScene: SKScene {
         return CGRect(x: sortButton.position.x - d / 2, y: sortButton.position.y - d / 2, width: d, height: d)
     }
 
+    /// The cat tower's tap area (opens the scoreboard).
+    var towerFrame: CGRect {
+        guard let layout else { return .zero }
+        return layout.towerFrame.insetBy(dx: -4, dy: 0)
+    }
+
     var layDownFrame: CGRect {
         let b = trays.layDownButton
         let d = max(b.size.width, 44)
@@ -611,6 +653,9 @@ final class TableScene: SKScene {
         items.append(Item(
             id: "table.menu", label: String(localized: "Table menu", comment: "VoiceOver: the paw menu button"),
             frame: menuFrame))
+        items.append(Item(
+            id: "table.tower", label: String(localized: "Scoreboard", comment: "VoiceOver: the cat tower; opens the scores"),
+            frame: towerFrame))
         let mine = model.isMyTurn
         let whose = mine
             ? String(localized: "Your turn", comment: "VoiceOver: it is this phone's turn")
