@@ -167,6 +167,36 @@ import Testing
         #expect(TableCache(directory: dir).all().isEmpty)
     }
 
+    // I-3: the dev server and production never share a credential or a table cache.
+    @Test func serverKeyNamesHostAndPort() {
+        func key(_ s: String) -> String { APIConfig(baseURL: URL(string: s)!).serverKey }
+        #expect(key("http://localhost:8787") == "localhost:8787")
+        #expect(key("https://play.conleychaos.com") == "play.conleychaos.com:443")
+        #expect(key("http://example.test") == "example.test:80")
+        #expect(key("https://Gin-And-Tonic.tailc8d3c2.ts.net:8443/") == "gin-and-tonic.tailc8d3c2.ts.net:8443")
+    }
+
+    @Test func keychainServicePerServer() {
+        let dev = KeychainCredentialStore.serviceName(for: APIConfig(baseURL: URL(string: "http://localhost:8787")!))
+        let prod = KeychainCredentialStore.serviceName(for: APIConfig(baseURL: URL(string: "https://play.conleychaos.com")!))
+        #expect(dev == "com.conleychaos.play.device.localhost:8787")
+        #expect(prod == "com.conleychaos.play.device.play.conleychaos.com:443")
+        #expect(dev != prod)
+    }
+
+    @Test func tableCacheFilePerServer() throws {
+        let dir = try tempDir()
+        let dev = APIConfig(baseURL: URL(string: "http://localhost:8787")!)
+        let prod = APIConfig(baseURL: URL(string: "https://play.conleychaos.com")!)
+        #expect(TableCache.fileName(for: dev) == "tables.localhost_8787.json")
+        #expect(TableCache.fileName(for: prod) == "tables.play.conleychaos.com_443.json")
+        let devCache = TableCache(directory: dir, fileName: TableCache.fileName(for: dev))
+        devCache.store(fixtureRoom(game: fixtureGame()))
+        #expect(devCache.contains(code: "K7QM4"))
+        #expect(!TableCache(directory: dir, fileName: TableCache.fileName(for: prod)).contains(code: "K7QM4"))
+        #expect(FileManager.default.fileExists(atPath: dir.appendingPathComponent("tables.localhost_8787.json").path))
+    }
+
     @Test func tableCacheLobbyHasNoTurnOrPhase() throws {
         let cache = TableCache(directory: try tempDir())
         cache.store(fixtureRoom(status: .lobby, game: nil))

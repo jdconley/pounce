@@ -39,7 +39,7 @@ final class AppModel {
         self.config = config
         self.settings = settings
         peopleStore = PeopleStore(directory: dataDirectory)
-        tableCache = TableCache(directory: dataDirectory)
+        tableCache = TableCache(directory: dataDirectory, fileName: TableCache.fileName(for: config))
         let loaded = peopleStore.load()
         people = loaded
         cache = tableCache.all()
@@ -47,7 +47,9 @@ final class AppModel {
     }
 
     /// The real app model, or the throwaway one for `-uitest-reset` (fresh temp data directory,
-    /// in-memory credential, scratch settings).
+    /// in-memory credential, scratch settings). The real one keeps its Keychain credential and
+    /// table cache per server (`host:port`), so a Debug build on the dev server and a Release
+    /// build on production never use each other's device identity.
     static func makeDefault(
         arguments: [String] = CommandLine.arguments,
         env: [String: String] = ProcessInfo.processInfo.environment
@@ -61,7 +63,8 @@ final class AppModel {
         } else {
             let support = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
             model = AppModel(
-                config: config, credentials: KeychainCredentialStore(),
+                config: config,
+                credentials: KeychainCredentialStore(service: KeychainCredentialStore.serviceName(for: config)),
                 dataDirectory: support.appendingPathComponent("Pounce", isDirectory: true))
         }
         #if DEBUG

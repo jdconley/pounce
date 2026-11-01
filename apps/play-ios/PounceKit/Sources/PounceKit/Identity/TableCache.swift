@@ -36,13 +36,18 @@ public struct CachedTable: Codable, Equatable, Sendable {
     }
 }
 
-/// `tables.json` in the given directory, keyed by room code, written atomically.
-/// Not thread-safe by itself; callers use it from one actor (the app model).
+/// `tables.json` (or a per-server `fileName`) in the given directory, keyed by room code,
+/// written atomically. Not thread-safe by itself; callers use it from one actor (the app model).
 public final class TableCache {
     private let fileURL: URL
 
-    public init(directory: URL) {
-        fileURL = directory.appendingPathComponent("tables.json")
+    public init(directory: URL, fileName: String = "tables.json") {
+        fileURL = directory.appendingPathComponent(fileName)
+    }
+
+    /// One server's cache file, `tables.<host>_<port>.json`: room codes belong to a server.
+    public static func fileName(for config: APIConfig) -> String {
+        "tables.\(config.serverKey.replacingOccurrences(of: ":", with: "_")).json"
     }
 
     public func all() -> [String: CachedTable] {

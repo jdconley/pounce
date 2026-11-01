@@ -44,6 +44,13 @@ public final class KeychainCredentialStore: CredentialStore {
         self.service = service
     }
 
+    /// The service for one server's credential: a token minted by the dev server is refused by
+    /// production (and the other way round), so each server keeps its own device identity and
+    /// switching between a Debug and a Release build orphans nothing.
+    public static func serviceName(for config: APIConfig) -> String {
+        "\(defaultService).\(config.serverKey)"
+    }
+
     private var query: [String: Any] {
         [
             kSecClass as String: kSecClassGenericPassword,
