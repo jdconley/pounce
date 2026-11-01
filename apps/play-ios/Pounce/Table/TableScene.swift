@@ -32,6 +32,12 @@ final class TableScene: SKScene {
     var onTower: () -> Void = {}
     /// The game is over and its celebration has played (or the table opened finished).
     var onGameOver: ([Seat]) -> Void = { _ in }
+    /// The face-up hand changed (a reveal landed or the hand turned face down). The shell
+    /// keeps the pass-and-play curtain up until the seat it revealed is actually shown.
+    var onShownRevealed: (Seat?) -> Void = { _ in }
+    /// A tap on the table itself (rug, piles, empty space) while this phone can't act and
+    /// holds no card: the shell hides a peeked hand.
+    var onTableTap: () -> Void = {}
     /// Spotlight and game-over bookkeeping (Celebrations.swift).
     var celebration = CelebrationState()
 
@@ -80,7 +86,9 @@ final class TableScene: SKScene {
     private var revealedTurn: Seat?
     private var revealedRound: Int?
     /// The seat whose hand is actually shown face up right now.
-    private(set) var shownRevealed: Seat?
+    private(set) var shownRevealed: Seat? {
+        didSet { if shownRevealed != oldValue { onShownRevealed(shownRevealed) } }
+    }
 
     // Layers and nodes.
     private let layers: [Layer: SKNode]

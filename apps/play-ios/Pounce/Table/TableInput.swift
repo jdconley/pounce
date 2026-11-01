@@ -254,6 +254,12 @@ extension TableScene {
     // MARK: taps
 
     private func tap(_ source: TableInputState.Source, at p: CGPoint) {
+        if actingSeat == nil, liftedCard == nil {
+            switch source {
+            case .none, .other, .pile: onTableTap()
+            default: break
+            }
+        }
         if store.actionInFlight {
             // Only local taps while an action is in flight.
             switch source {

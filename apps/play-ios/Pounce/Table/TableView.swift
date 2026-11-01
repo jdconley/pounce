@@ -5,6 +5,9 @@ import SwiftUI
 /// `isPaused` directly (spec §8). 60 fps cap, sibling order ignored, off-screen nodes culled.
 struct TableView: UIViewRepresentable {
     let scene: TableScene
+    /// The pass-and-play curtain is over the table: no touches reach the scene and VoiceOver
+    /// skips its elements.
+    var covered = false
 
     func makeUIView(context: Context) -> TableSKView {
         let view = TableSKView(frame: .zero)
@@ -15,6 +18,7 @@ struct TableView: UIViewRepresentable {
         view.backgroundColor = UIColor(Palette.night)
         view.presentScene(scene)
         scene.director.view = view
+        cover(view)
         return view
     }
 
@@ -23,6 +27,14 @@ struct TableView: UIViewRepresentable {
             view.presentScene(scene)
             scene.director.view = view
         }
+        cover(view)
+    }
+
+    private func cover(_ view: TableSKView) {
+        guard view.accessibilityElementsHidden != covered else { return }
+        view.accessibilityElementsHidden = covered
+        view.isUserInteractionEnabled = !covered
+        UIAccessibility.post(notification: .screenChanged, argument: nil)
     }
 
     static func dismantleUIView(_ view: TableSKView, coordinator: ()) {
@@ -46,7 +58,8 @@ final class TableSKView: SKView {
     }
 
     override var accessibilityElements: [Any]? {
-        get { tableScene?.accessibilityElements(in: self) }
+        // Under the curtain the table has no elements at all, not just hidden ones.
+        get { accessibilityElementsHidden ? [] : tableScene?.accessibilityElements(in: self) }
         set {}
     }
 }

@@ -2,7 +2,7 @@
 import Foundation
 import PounceKit
 
-/// DEBUG launch argument `-demo <lobby|table|other|replay|celebrate|curtain>`: opens a room fed
+/// DEBUG launch argument `-demo <lobby|table|other|replay|celebrate|curtain|handoff|peek>`: opens a room fed
 /// by a fake socket that sends one `DemoFixtures` snapshot, so the real screens render with no
 /// server. `other` is the table on another seat's turn (ring glow + paw marker, dimmed hand).
 /// `replay` plays `DemoFixtures.replay()` twice through the real store and intent path
@@ -15,12 +15,15 @@ import PounceKit
 /// next deal 6 s later (the server's gap), then my going out, the last leap and game over.
 /// It logs like `replay`. `-slowmo <factor>` (any demo) runs the table at that speed, socket
 /// gaps stretched to match, for screenshots of fast moments.
-/// `curtain` (Task 19) shows its table until that lands.
+/// `curtain`: two seats on this phone and seat 0's turn, so the pass-and-play curtain is up;
+/// hold the paw to show seat 0's hand.
+/// `peek`: the same table on a remote seat's turn: the local cats row along the bottom; tap
+/// one, hold, and that hand shows until a tap on the table.
 /// `handoff`: two seats on this phone, seat 0's hand shown (the hold is skipped); seat 0 draws,
 /// then discards and the turn goes to a remote seat, so the shown hand must turn face down at
 /// once, not after the discard animates. Logs like `replay`.
 enum DemoMode: String {
-    case lobby, table, other, replay, nope, celebrate, curtain, handoff
+    case lobby, table, other, replay, nope, celebrate, curtain, handoff, peek
 
     static func from(arguments: [String] = CommandLine.arguments) -> DemoMode? {
         guard let i = arguments.firstIndex(of: "-demo"), arguments.indices.contains(i + 1) else { return nil }
@@ -42,6 +45,10 @@ enum DemoMode: String {
             return room
         case .celebrate: return DemoFixtures.lobby()
         case .curtain, .handoff: return DemoFixtures.curtain()
+        case .peek:
+            var room = DemoFixtures.curtain()
+            room.game?.turn = 1
+            return room
         }
     }
 
