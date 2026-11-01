@@ -27,7 +27,9 @@ B_WAS_BOOTED=$(xcrun simctl list devices | grep "$SIM_B" | grep -q Booted && ech
 
 pids=()
 cleanup() {
+  # The pids are the processes themselves (run_role execs xcodebuild), so nothing is orphaned.
   for p in "${pids[@]:-}"; do [ -n "$p" ] && kill "$p" 2>/dev/null || true; done
+  for p in "${pids[@]:-}"; do [ -n "$p" ] && wait "$p" 2>/dev/null || true; done
   if [ "${KEEP_B:-0}" != 1 ] && [ "$B_WAS_BOOTED" = 0 ]; then xcrun simctl shutdown "$SIM_B" 2>/dev/null || true; fi
   stop_dev_server
 }
@@ -89,9 +91,10 @@ mkdir -p "$SHARED"
 rm -f "$SHARED/move.txt"
 MOVE_AT="${MOVE_AT:-8}"
 run_role() {  # <sim> <seats> <log> <result bundle>
+  # exec: the background job's pid is xcodebuild itself, so cleanup can stop it.
   TEST_RUNNER_POUNCE_SHARED_DIR="$SHARED" TEST_RUNNER_POUNCE_MOVE_SEATS="$2" \
     TEST_RUNNER_POUNCE_API_BASE_URL="$DEV_SERVER_URL" \
-    xcodebuild test-without-building -project Pounce.xcodeproj -scheme Pounce -derivedDataPath "$DD" \
+    exec xcodebuild test-without-building -project Pounce.xcodeproj -scheme Pounce -derivedDataPath "$DD" \
     -destination "id=$1" -only-testing:PounceUITests/MultiSimTests/testMovedSeats \
     -resultBundlePath "$4" >"$3" 2>&1
 }

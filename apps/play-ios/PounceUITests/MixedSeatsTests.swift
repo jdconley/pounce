@@ -32,7 +32,8 @@ final class MixedSeatsTests: XCTestCase {
 
     @MainActor
     func testAppPlusRemotePlusBot() throws {
-        Quiescence.disable()
+        let restoreQuiescence = Quiescence.disable()
+        addTeardownBlock { @MainActor in restoreQuiescence() }
         let app = Live.app()
         app.launchArguments.append("-log-timeline")
         app.launch()
@@ -69,7 +70,7 @@ final class MixedSeatsTests: XCTestCase {
         var firstRound = 0
         var roundOverSeen = false
         var stuckSince: Date?
-        let deadline = Date().addingTimeInterval(3600)
+        let deadline = Date().addingTimeInterval(Live.t(3600))
         func watchRemote(_ snap: UISnap) {
             guard let text = snap.label("table.opponent.1") else { return }
             if remoteLabels.last != text {
@@ -112,7 +113,7 @@ final class MixedSeatsTests: XCTestCase {
             // Stuck check: this phone's turn, the hand face down, no curtain to hold.
             if snap.value("table.turn") == "mine", d.status == "playing", snap.label("table.hand.0") == "Card" {
                 if stuckSince == nil { stuckSince = Date() }
-                if let since = stuckSince, Date().timeIntervalSince(since) > 120 {
+                if let since = stuckSince, Date().timeIntervalSince(since) > Live.t(120) {
                     screenshot(app, "mixed-stuck")
                     let tree = XCTAttachment(string: app.debugDescription)
                     tree.name = "mixed-stuck-tree"
@@ -134,7 +135,7 @@ final class MixedSeatsTests: XCTestCase {
                     Thread.sleep(forTimeInterval: 3)
                     app.activate()
                     backgrounded = true
-                    XCTAssertTrue(el(app, "screen-table").waitForExistence(timeout: 15), "no table after returning")
+                    XCTAssertTrue(el(app, "screen-table").waitForExistence(timeout: Live.t(15)), "no table after returning")
                     screenshot(app, "mixed-after-background")
                 }
             } else {

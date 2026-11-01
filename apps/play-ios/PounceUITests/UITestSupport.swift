@@ -6,6 +6,17 @@ import XCTest
 /// `TEST_RUNNER_POUNCE_API_BASE_URL=…` to xcodebuild), default `http://localhost:8787`.
 @MainActor
 enum Live {
+    /// Multiplies every live timeout (`POUNCE_UITEST_TIMEOUT_SCALE` in the runner's environment,
+    /// `TEST_RUNNER_POUNCE_UITEST_TIMEOUT_SCALE=3` for xcodebuild; default 1) so a merely slow
+    /// machine still passes.
+    nonisolated static let scale: Double = {
+        let raw = ProcessInfo.processInfo.environment["POUNCE_UITEST_TIMEOUT_SCALE"].flatMap(Double.init) ?? 1
+        return raw > 0 ? raw : 1
+    }()
+
+    /// A live timeout, scaled.
+    nonisolated static func t(_ seconds: TimeInterval) -> TimeInterval { seconds * scale }
+
     static var baseURL: String {
         ProcessInfo.processInfo.environment["POUNCE_API_BASE_URL"] ?? "http://localhost:8787"
     }
@@ -52,12 +63,12 @@ extension XCTestCase {
         app.descendants(matching: .any)[id]
     }
 
-    /// Polls `condition` every 0.5 s until it holds or `timeout` passes. (Every query snapshots
+    /// Polls `condition` every 0.5 s until it holds or `timeout` (scaled by `Live.scale`) passes. (Every query snapshots
     /// the app's accessibility tree on its main thread; polling faster starves the table's
     /// SpriteKit frames, and its animations crawl.)
     @discardableResult
     func until(_ timeout: TimeInterval, _ condition: () -> Bool) -> Bool {
-        let deadline = Date().addingTimeInterval(timeout)
+        let deadline = Date().addingTimeInterval(Live.t(timeout))
         while Date() < deadline {
             if condition() { return true }
             Thread.sleep(forTimeInterval: 0.5)
@@ -89,16 +100,16 @@ extension XCTestCase {
     /// Onboarding with the suggested name and cat, then Home.
     func onboard(_ app: XCUIApplication) {
         let confirm = el(app, "pickcat.confirm")
-        XCTAssertTrue(confirm.waitForExistence(timeout: 15), "no pick-a-cat screen")
+        XCTAssertTrue(confirm.waitForExistence(timeout: Live.t(15)), "no pick-a-cat screen")
         confirm.tap()
-        XCTAssertTrue(el(app, "home.newGame").waitForExistence(timeout: 10), "no Home")
+        XCTAssertTrue(el(app, "home.newGame").waitForExistence(timeout: Live.t(10)), "no Home")
     }
 
     /// New game from Home; returns once this phone sits at seat 0 of the new lobby.
     func newGame(_ app: XCUIApplication) {
         el(app, "home.newGame").tap()
         let seat0 = el(app, "lobby.seat.0")
-        XCTAssertTrue(seat0.waitForExistence(timeout: 20), "no lobby")
+        XCTAssertTrue(seat0.waitForExistence(timeout: Live.t(20)), "no lobby")
         XCTAssertTrue(until(15) { seat0.label.contains("on this phone") }, "seat 0 not claimed: \(seat0.label)")
     }
 
@@ -113,7 +124,7 @@ extension XCTestCase {
     func seatMenu(_ app: XCUIApplication, seat: Int, _ item: String) {
         el(app, "lobby.seat.\(seat)").tap()
         let button = el(app, "seatmenu.\(item)")
-        XCTAssertTrue(button.waitForExistence(timeout: 5), "no seat menu item \(item)")
+        XCTAssertTrue(button.waitForExistence(timeout: Live.t(5)), "no seat menu item \(item)")
         Thread.sleep(forTimeInterval: 1)  // the bubble springs open
         button.tap()
         Thread.sleep(forTimeInterval: 1)
@@ -124,11 +135,11 @@ extension XCTestCase {
     func addLocalPerson(_ app: XCUIApplication) {
         let addTile = el(app, "picker.add")
         let confirm = el(app, "pickcat.confirm")
-        XCTAssertTrue(addTile.waitForExistence(timeout: 10), "no person picker")
+        XCTAssertTrue(addTile.waitForExistence(timeout: Live.t(10)), "no person picker")
         XCTAssertTrue(until(15) {
             if confirm.exists { return true }
             if addTile.exists { addTile.tap() }
-            return confirm.waitForExistence(timeout: 2)
+            return confirm.waitForExistence(timeout: Live.t(2))
         }, "the new-person editor never opened")
         Thread.sleep(forTimeInterval: 1)
         confirm.tap()
@@ -139,7 +150,7 @@ extension XCTestCase {
     /// the dimmed area above it).
     func dismissShareSheet(_ app: XCUIApplication) {
         let close = app.buttons["Close"]
-        if close.waitForExistence(timeout: 6) {
+        if close.waitForExistence(timeout: Live.t(6)) {
             close.tap()
         } else {
             app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.08)).tap()
@@ -176,7 +187,7 @@ extension XCTestCase {
     /// Polls one app snapshot every `every` seconds until `condition` holds.
     func untilSnap(_ app: XCUIApplication, _ timeout: TimeInterval, every: TimeInterval = 2,
                    _ condition: (UISnap) -> Bool) -> UISnap? {
-        let deadline = Date().addingTimeInterval(timeout)
+        let deadline = Date().addingTimeInterval(Live.t(timeout))
         while Date() < deadline {
             if let snap = UISnap(app), condition(snap) { return snap }
             Thread.sleep(forTimeInterval: every)
@@ -280,7 +291,9 @@ final class HostProcess {
         try ([kind] + args).joined(separator: "\n").write(toFile: base + ".tmp", atomically: true, encoding: .utf8)
         try FileManager.default.moveItem(atPath: base + ".tmp", toPath: base + ".req")
         let deadline = Date().addingTimeInterval(10)
-        while !FileManager.default.fileExists(atPath: base + ".pid") {
+        // Started (.pid), or refused at once (.exit without a .pid).
+        while !FileManager.default.fileExists(atPath: base + ".pid"),
+              !FileManager.default.fileExists(atPath: base + ".exit") {
             guard Date() < deadline else { throw HostProcessError.notStarted(kind) }
             Thread.sleep(forTimeInterval: 0.1)
         }
@@ -317,15 +330,28 @@ final class HostProcess {
 /// and during each wait the scene barely renders: every animation then takes the whole 15 s
 /// wait. Long tap-driven games (MixedSeatsTests, MultiSimTests) poll explicitly instead.
 enum Quiescence {
-    @MainActor static func disable() {
-        guard let cls = NSClassFromString("XCUIApplicationProcess") else { return }
+    /// Swaps the waits out and returns a closure that puts the original implementations back;
+    /// call it from `addTeardownBlock` so later test classes get XCUITest's idle waits again.
+    /// Logs how many of the two selectors were found (0 means XCTest renamed them and the
+    /// idle waits stay on).
+    @MainActor static func disable() -> () -> Void {
+        guard let cls = NSClassFromString("XCUIApplicationProcess") else {
+            print("[quiescence] XCUIApplicationProcess not found; idle waits stay on")
+            return {}
+        }
         let one: @convention(block) (AnyObject, Bool) -> Void = { _, _ in }
         let two: @convention(block) (AnyObject, Bool, Bool) -> Void = { _, _, _ in }
-        if let m = class_getInstanceMethod(cls, NSSelectorFromString("waitForQuiescenceIncludingAnimationsIdle:")) {
-            method_setImplementation(m, imp_implementationWithBlock(one))
+        var saved: [(Method, IMP)] = []
+        for (name, block) in [("waitForQuiescenceIncludingAnimationsIdle:", one as Any),
+                              ("waitForQuiescenceIncludingAnimationsIdle:isPreEvent:", two as Any)] {
+            guard let m = class_getInstanceMethod(cls, NSSelectorFromString(name)) else { continue }
+            saved.append((m, method_setImplementation(m, imp_implementationWithBlock(block))))
         }
-        if let m = class_getInstanceMethod(cls, NSSelectorFromString("waitForQuiescenceIncludingAnimationsIdle:isPreEvent:")) {
-            method_setImplementation(m, imp_implementationWithBlock(two))
+        print("[quiescence] idle waits off (\(saved.count) of 2 selectors found)")
+        XCTAssertFalse(saved.isEmpty, "no XCUITest quiescence selector found; idle waits stay on")
+        return {
+            for (m, imp) in saved { method_setImplementation(m, imp) }
+            print("[quiescence] idle waits restored")
         }
     }
 }

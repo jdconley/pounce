@@ -12,6 +12,15 @@
 HOST_BROKER_DIR=""
 HOST_BROKER_PID=""
 
+# Kills the pid in file $1 only if it is a real child pid (an integer above 1): never `kill 0`
+# or `kill -1`, which would signal a whole process group.
+broker_kill() {
+  [ -f "$1" ] || return 0
+  local pid
+  pid="$(cat "$1")"
+  if [[ $pid =~ ^[1-9][0-9]+$ ]]; then kill "$pid" 2>/dev/null || true; fi
+}
+
 start_host_broker() {
   HOST_BROKER_DIR="$(mktemp -d -t pounce-broker)"
   (
@@ -27,7 +36,8 @@ start_host_broker() {
         case "$kind" in
           e2e) cmd=("$E2E_BIN" "${rest[@]}") ;;
           push) cmd=(xcrun simctl push "${rest[@]}") ;;
-          *) echo "unknown command $kind" > "$id.log"; echo 127 > "$id.exit"; echo 0 > "$id.pid"; continue ;;
+          # Refused: a log and an exit status, never a .pid (nothing runs, nothing to kill).
+          *) echo "unknown command $kind" > "$id.log"; echo 127 > "$id.exit"; continue ;;
         esac
         (
           "${cmd[@]}" > "$id.log" 2>&1 &
@@ -41,7 +51,7 @@ start_host_broker() {
       for k in "$HOST_BROKER_DIR"/*.kill; do
         id="${k%.kill}"
         rm -f "$k"
-        [ -f "$id.pid" ] && kill "$(cat "$id.pid")" 2>/dev/null || true
+        broker_kill "$id.pid"
       done
       sleep 0.3
     done
@@ -52,9 +62,7 @@ start_host_broker() {
 
 stop_host_broker() {
   [ -n "$HOST_BROKER_DIR" ] || return 0
-  for p in "$HOST_BROKER_DIR"/*.pid; do
-    [ -f "$p" ] && kill "$(cat "$p")" 2>/dev/null || true
-  done
+  for p in "$HOST_BROKER_DIR"/*.pid; do broker_kill "$p"; done
   [ -n "$HOST_BROKER_PID" ] && kill "$HOST_BROKER_PID" 2>/dev/null || true
   HOST_BROKER_PID=""
 }

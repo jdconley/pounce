@@ -9,7 +9,7 @@ final class SmokeTests: XCTestCase {
     func testAppLaunches() throws {
         let app = XCUIApplication()
         app.launch()
-        XCTAssertTrue(app.wait(for: .runningForeground, timeout: 10))
+        XCTAssertTrue(app.wait(for: .runningForeground, timeout: Live.t(10)))
     }
 
     /// Task 24 (needs the dev server): a fresh phone picks its cat, makes a room, adds a bot,
@@ -26,7 +26,7 @@ final class SmokeTests: XCTestCase {
         el(app, "lobby.start").tap()
 
         let turn = el(app, "table.turn")
-        XCTAssertTrue(turn.waitForExistence(timeout: 15), "no table")
+        XCTAssertTrue(turn.waitForExistence(timeout: Live.t(15)), "no table")
         XCTAssertTrue(until(30) { value(turn) == "mine" && (debug(app)?.settled ?? false) }, "my turn never came")
         el(app, "table.deck").tap()
         XCTAssertTrue(until(10) { debug(app).map { $0.step == "play" && $0.settled } ?? false }, "no draw")

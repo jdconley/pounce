@@ -21,7 +21,8 @@ final class MultiSimTests: XCTestCase {
         }
         let seats = seatList.split(separator: ",").map(String.init)
         let tag = "seats" + seats.joined()
-        Quiescence.disable()
+        let restoreQuiescence = Quiescence.disable()
+        addTeardownBlock { @MainActor in restoreQuiescence() }
         let app = Live.app()
         app.launch()
         onboard(app)
@@ -38,7 +39,7 @@ final class MultiSimTests: XCTestCase {
             app.open(URL(string: links[seat]!)!)
             // A custom-scheme link can stop at the system's "Open in Pounce?" prompt.
             let open = XCUIApplication(bundleIdentifier: "com.apple.springboard").buttons["Open"]
-            if open.waitForExistence(timeout: 5) { open.tap() }
+            if open.waitForExistence(timeout: Live.t(5)) { open.tap() }
             XCTAssertTrue(until(60) { self.el(app, "screen-table").exists || self.el(app, "screen-curtain").exists },
                           "the move link for seat \(seat) didn't open the table")
             Thread.sleep(forTimeInterval: 2)
@@ -57,7 +58,7 @@ final class MultiSimTests: XCTestCase {
     /// overlay; screenshots the first round over and the game over into `shared`.
     @MainActor
     private func playToGameOver(_ app: XCUIApplication, tag: String, shared: String) {
-        let deadline = Date().addingTimeInterval(4 * 3600)
+        let deadline = Date().addingTimeInterval(Live.t(4 * 3600))
         let gameOver = el(app, "gameover.home")
         var turns = 0, rounds = Set<Int>(), roundOverShot = false, curtains = 0, curtainNames = Set<String>()
         func save(_ name: String) { self.save(app, shared: shared, "\(tag)-\(name)") }
@@ -99,7 +100,7 @@ final class MultiSimTests: XCTestCase {
                 Thread.sleep(forTimeInterval: 2)
             }
         }
-        XCTAssertTrue(gameOver.waitForExistence(timeout: 30), "no game over within the time limit (rounds \(rounds.sorted()))")
+        XCTAssertTrue(gameOver.waitForExistence(timeout: Live.t(30)), "no game over within the time limit (rounds \(rounds.sorted()))")
         save("gameover")
         let summary = "\(tag): \(turns) turns by taps, rounds seen \(rounds.sorted()), curtains held \(curtains) \(curtainNames.sorted())"
         print("[multisim] \(summary)")

@@ -33,19 +33,25 @@ final class PushTests: XCTestCase {
         // The first table with a human on another phone primes push; allow it (system alert too).
         let springboard = XCUIApplication(bundleIdentifier: "com.apple.springboard")
         let allow = el(app, "priming.allow")
-        if allow.waitForExistence(timeout: 10) {
+        if allow.waitForExistence(timeout: Live.t(10)) {
             allow.tap()
             let system = springboard.alerts.buttons["Allow"]
-            if system.waitForExistence(timeout: 10) { system.tap() }
+            if system.waitForExistence(timeout: Live.t(10)) { system.tap() }
         }
-        XCTAssertTrue(el(app, "table.turn").waitForExistence(timeout: 15), "no table")
+        XCTAssertTrue(el(app, "table.turn").waitForExistence(timeout: Live.t(15)), "no table")
+        // The priming sheet can come up late, over the table: answer it before the menu.
+        if allow.waitForExistence(timeout: Live.t(3)) {
+            allow.tap()
+            let system = springboard.alerts.buttons["Allow"]
+            if system.waitForExistence(timeout: Live.t(10)) { system.tap() }
+        }
 
         // Home, then the background.
         el(app, "table.menu").tap()
         let home = el(app, "menu.home")
-        XCTAssertTrue(home.waitForExistence(timeout: 5))
+        XCTAssertTrue(home.waitForExistence(timeout: Live.t(5)))
         home.tap()
-        XCTAssertTrue(el(app, "screen-home").waitForExistence(timeout: 10))
+        XCTAssertTrue(el(app, "screen-home").waitForExistence(timeout: Live.t(10)))
         XCUIDevice.shared.press(.home)
         Thread.sleep(forTimeInterval: 2)
 
@@ -60,16 +66,16 @@ final class PushTests: XCTestCase {
 
         let banner = springboard.descendants(matching: .any)
             .matching(NSPredicate(format: "label CONTAINS 'Your turn'")).firstMatch
-        XCTAssertTrue(banner.waitForExistence(timeout: 15), "no banner")
+        XCTAssertTrue(banner.waitForExistence(timeout: Live.t(15)), "no banner")
         let shot = XCTAttachment(screenshot: XCUIScreen.main.screenshot())
         shot.name = "push-banner"
         shot.lifetime = .keepAlways
         add(shot)
         banner.tap()
 
-        XCTAssertTrue(app.wait(for: .runningForeground, timeout: 10))
-        XCTAssertTrue(el(app, "screen-table").waitForExistence(timeout: 20), "the banner didn't open the table")
-        XCTAssertTrue(el(app, "table.turn").waitForExistence(timeout: 10))
+        XCTAssertTrue(app.wait(for: .runningForeground, timeout: Live.t(10)))
+        XCTAssertTrue(el(app, "screen-table").waitForExistence(timeout: Live.t(20)), "the banner didn't open the table")
+        XCTAssertTrue(el(app, "table.turn").waitForExistence(timeout: Live.t(10)))
         screenshot(app, "push-opened-table")
     }
 }
