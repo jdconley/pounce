@@ -1,7 +1,7 @@
 {
   "images" : [
-    { "filename" : "rug_ph@2x.png", "idiom" : "universal", "scale" : "2x" },
-    { "filename" : "rug_ph@3x.png", "idiom" : "universal", "scale" : "3x" }
+    { "filename" : "rug@2x.png", "idiom" : "universal", "scale" : "2x" },
+    { "filename" : "rug@3x.png", "idiom" : "universal", "scale" : "3x" }
   ],
   "info" : { "author" : "xcode", "version" : 1 }
 }

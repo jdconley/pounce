@@ -1,7 +1,7 @@
 {
   "images" : [
-    { "filename" : "coat-gray_ph@2x.png", "idiom" : "universal", "scale" : "2x" },
-    { "filename" : "coat-gray_ph@3x.png", "idiom" : "universal", "scale" : "3x" }
+    { "filename" : "coat-gray@2x.png", "idiom" : "universal", "scale" : "2x" },
+    { "filename" : "coat-gray@3x.png", "idiom" : "universal", "scale" : "3x" }
   ],
   "info" : { "author" : "xcode", "version" : 1 }
 }
