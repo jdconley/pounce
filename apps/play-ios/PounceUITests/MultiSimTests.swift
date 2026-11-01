@@ -8,6 +8,7 @@ import XCTest
 /// `POUNCE_MOVE_SEATS` ("1,2" on A: two people on one phone, pass and play; "3" on B), opens
 /// those links, and plays its seats by taps (draw, discard; the curtain is held through) to the
 /// game-over overlay, screenshotting the curtain, the first round over and the game over.
+/// It runs on the phone's own data, not `-uitest-reset`: `app.open(url)` relaunches the app.
 final class MultiSimTests: XCTestCase {
     override func setUp() {
         continueAfterFailure = false
@@ -23,9 +24,12 @@ final class MultiSimTests: XCTestCase {
         let tag = "seats" + seats.joined()
         let restoreQuiescence = Quiescence.disable()
         addTeardownBlock { @MainActor in restoreQuiescence() }
-        let app = Live.app()
+        // Not `-uitest-reset`: `app.open(url)` relaunches the app, and each move must land on the
+        // same device (Keychain credential) and owner (multi-sim.sh seeds one on each phone).
+        let app = XCUIApplication()
+        app.launchEnvironment["POUNCE_API_BASE_URL"] = Live.baseURL
         app.launch()
-        onboard(app)
+        if el(app, "pickcat.confirm").waitForExistence(timeout: Live.t(5)) { onboard(app) }
         var links: [String: String] = [:]
         XCTAssertTrue(until(3600) {
             let text = (try? String(contentsOfFile: shared + "/move.txt", encoding: .utf8)) ?? ""

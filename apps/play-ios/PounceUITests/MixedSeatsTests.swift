@@ -119,7 +119,7 @@ final class MixedSeatsTests: XCTestCase {
                     tree.name = "mixed-stuck-tree"
                     tree.lifetime = .keepAlways
                     add(tree)
-                    XCTFail("seat \(d.turn)'s turn: hand face down and no curtain for 120 s")
+                    XCTFail("seat \(d.turn)'s turn: hand face down and no curtain for \(Int(Live.t(120))) s")
                     break
                 }
             } else {
