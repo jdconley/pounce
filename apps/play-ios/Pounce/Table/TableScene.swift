@@ -9,13 +9,16 @@ import SwiftUI
 ///
 /// One timeline (spec §6.2): game intents animate in order over the table as it was, and the
 /// `.reconcile` after them (the snapshot that follows every action) snaps to the truth. A
-/// `reconcile(_:revealed:)` from the shell that arrives while the store holds events this
+/// `reconcile(_:revealed:epoch:)` from the shell that arrives while the store holds events this
 /// scene hasn't played yet only records `revealed`; the coming `.reconcile` intent applies it.
 ///
 /// Privacy: face-up hand nodes exist only for `revealed`, a seat this phone controls. Without a
 /// revealed seat the hand is face-down backs. `TableScreen` owns pass-and-play and passes
-/// `revealed`; between its calls the scene hides the hand on a multi-seat phone as soon as the
-/// turn or round moves, so a reveal never outlives the turn it was made for.
+/// `revealed` with the store turn epoch it was granted in (`RoomStore.turnEpoch`). On a
+/// multi-seat phone a reveal counts only while the store is still in that epoch: one that
+/// arrives late is dropped, and between the shell's calls the scene hides the hand by itself as
+/// soon as the store's epoch moves (a turn, round or status change), so a reveal never outlives
+/// the turn it was made for, however late SwiftUI delivers the shell's update.
 @MainActor
 final class TableScene: SKScene {
     /// zPosition bands. Everything inside a layer stays below the next band.
@@ -43,7 +46,7 @@ final class TableScene: SKScene {
     var celebration = CelebrationState()
 
     private(set) var model: TableModel?
-    /// The seat whose hand may show face up, as last set by `reconcile(_:revealed:)`.
+    /// The seat whose hand may show face up, as last set by `reconcile(_:revealed:epoch:)`.
     private(set) var revealed: Seat?
     /// The seat drawn at the bottom (hand, trays); others go in the opponents bar.
     private(set) var bottomSeat: Seat?
@@ -86,9 +89,8 @@ final class TableScene: SKScene {
         didSet { if safeInsets != oldValue { redraw() } }
     }
 
-    // Turn and round when `revealed` was handed over.
-    private var revealedTurn: Seat?
-    private var revealedRound: Int?
+    /// The store turn epoch `revealed` was granted in.
+    private var revealedEpoch = -1
     /// The seat whose hand is actually shown face up right now.
     private(set) var shownRevealed: Seat? {
         didSet {
@@ -126,9 +128,9 @@ final class TableScene: SKScene {
     /// replaying them). Never `lastSeq`: events past the last snapshot are in `room` only as
     /// turn, step and status, so a redraw between them and their snapshot must not skip them.
     private var drawnSeq = -1
-    /// A shell reconcile that arrived mid-timeline: its `revealed`, applied by the next
+    /// A shell reconcile that arrived mid-timeline: its `revealed` and epoch, applied by the next
     /// `.reconcile` intent (or after `deferLimit` if none comes).
-    private var pendingReveal: Seat??
+    private var pendingReveal: Reveal?
     private var deferGeneration = 0
     /// The last intent handed to `play`, which the next one waits for.
     private var playChain: Task<Void, Never>?
@@ -223,23 +225,44 @@ final class TableScene: SKScene {
     // MARK: reconcile
 
     /// Draws `model` exactly, without animation. `revealed` is the only seat whose hand may
-    /// show face up (ignored unless this phone controls it).
+    /// show face up (ignored unless this phone controls it and, on a multi-seat phone, unless
+    /// `epoch` is still the store's `turnEpoch`).
     ///
     /// Mid-timeline (events still to play, or one animating) the model itself waits for the
     /// coming `.reconcile` intent, but privacy never waits: a reveal that is withdrawn or moves
     /// to another seat hides the shown hand at once (backs, on the table as drawn). Only a new
     /// face-up reveal waits for the timeline.
-    func reconcile(_ model: TableModel, revealed: Seat?) {
+    func reconcile(_ model: TableModel, revealed: Seat?, epoch: Int) {
         #if DEBUG
-        timelineLog("reconcile turn \(model.currentSeat ?? -1) revealed \(String(describing: revealed)) animating \(animating) lastSeq \(store.lastSeq) seen \(seenSeq) pending \(String(describing: pendingReveal))")
+        timelineLog("reconcile turn \(model.currentSeat ?? -1) revealed \(String(describing: revealed)) epoch \(epoch)/\(store.turnEpoch) animating \(animating) lastSeq \(store.lastSeq) seen \(seenSeq) pending \(String(describing: pendingReveal))")
         #endif
+        let reveal = Reveal(seat: revealed, epoch: epoch)
         if self.model != nil, animating || store.lastSeq > seenSeq {
-            let reveal = revealed.flatMap { model.mySeats.contains($0) ? $0 : nil }
-            if shownRevealed != nil, reveal != shownRevealed { hideHand() }
-            deferReveal(revealed)
+            if shownRevealed != nil, valid(reveal, in: model) != shownRevealed || hideIfStale() { hideHand() }
+            deferReveal(reveal)
             return
         }
-        apply(model, revealed: revealed)
+        apply(model, reveal)
+    }
+
+    /// A shell reveal and the store turn epoch it was granted in.
+    private struct Reveal: Equatable {
+        let seat: Seat?
+        let epoch: Int
+    }
+
+    /// The seat `reveal` may show on `model`: one of this phone's, and on a multi-seat phone
+    /// only while the store is still in the reveal's epoch.
+    private func valid(_ reveal: Reveal, in model: TableModel) -> Seat? {
+        guard let seat = reveal.seat, model.mySeats.contains(seat) else { return nil }
+        if model.isMultiSeat, reveal.epoch != store.turnEpoch { return nil }
+        return seat
+    }
+
+    /// A shown hand on a multi-seat phone whose epoch the store has left.
+    private func hideIfStale() -> Bool {
+        guard let model, model.isMultiSeat, shownRevealed != nil else { return false }
+        return revealedEpoch != store.turnEpoch
     }
 
     /// Turns the shown hand face down now: faces, trays and their accessibility elements go.
@@ -256,14 +279,13 @@ final class TableScene: SKScene {
         UIAccessibility.post(notification: .layoutChanged, argument: nil)
     }
 
-    private func apply(_ model: TableModel, revealed: Seat?) {
+    private func apply(_ model: TableModel, _ reveal: Reveal) {
         markDrawn()
         pendingReveal = nil
         self.model = model
-        self.revealed = revealed.flatMap { model.mySeats.contains($0) ? $0 : nil }
-        revealedTurn = model.currentSeat
-        revealedRound = model.game?.round
-        shownRevealed = self.revealed
+        revealed = valid(reveal, in: model)
+        revealedEpoch = reveal.epoch
+        shownRevealed = revealed
         settle()
         redraw()
         settleCelebration()
@@ -271,15 +293,15 @@ final class TableScene: SKScene {
 
     /// Holds a shell reveal until the timeline catches up; a fallback applies it if no
     /// `.reconcile` intent comes (a table detached mid-action, say).
-    private func deferReveal(_ revealed: Seat?) {
-        pendingReveal = .some(revealed)
+    private func deferReveal(_ reveal: Reveal) {
+        pendingReveal = reveal
         deferGeneration += 1
         let generation = deferGeneration
         Task { [weak self] in
             try? await Task.sleep(for: Self.deferLimit)
             guard let self, self.deferGeneration == generation, let reveal = self.pendingReveal,
                   !self.animating, let room = self.store.room else { return }
-            self.apply(TableModel(room: room), revealed: reveal)
+            self.apply(TableModel(room: room), reveal)
         }
     }
 
@@ -328,6 +350,9 @@ final class TableScene: SKScene {
                 return  // the table already shows it
             }
             guard model?.game != nil, layout != nil else { return reconcileFromStore() }
+            // The store has moved past the shown hand's turn (this event or a later one):
+            // privacy doesn't wait for the snapshot or for the shell.
+            if hideIfStale() { hideHand() }
             if let model, let said = TableAnnouncement.announcement(for: event, model: model) { announce(said) }
             animating = true
             #if DEBUG
@@ -425,20 +450,17 @@ final class TableScene: SKScene {
         drawnSeq = store.settledSeq
     }
 
-    /// Redraws from the store's room, keeping the last reveal only while it still belongs to
-    /// the same turn and round (on a multi-seat phone).
+    /// Redraws from the store's room, keeping the last reveal only while the store is still in
+    /// the turn epoch it was granted in (on a multi-seat phone).
     private func reconcileFromStore() {
         guard let room = store.room else { return }
         markDrawn()
         let next = TableModel(room: room)
-        if let reveal = pendingReveal { return apply(next, revealed: reveal) }
+        if let reveal = pendingReveal { return apply(next, reveal) }
         settle()
         model = next
-        var shown = revealed.flatMap { next.mySeats.contains($0) ? $0 : nil }
-        if next.isMultiSeat, next.currentSeat != revealedTurn || next.game?.round != revealedRound {
-            shown = nil
-        }
-        shownRevealed = shown
+        revealed = valid(Reveal(seat: revealed, epoch: revealedEpoch), in: next)
+        shownRevealed = revealed
         redraw()
         settleCelebration()
     }

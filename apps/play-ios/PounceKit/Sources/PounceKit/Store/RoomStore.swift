@@ -35,6 +35,11 @@ import Observation
     public private(set) var connected = false
     public private(set) var moveCode: MoveCode?
     public private(set) var lastError: ErrorCode?
+    /// Goes up whenever an applied room's round, turn or status differs from the previous one
+    /// (see `TurnEpoch`), from snapshots and from the turn and status folded in from events.
+    /// 0 before the first snapshot. Pass-and-play keys a reveal on it, so a reveal never
+    /// survives a turn the shell didn't happen to see.
+    public private(set) var turnEpoch = 0
     /// Single consumer (the table scene). Unbounded, so no intent is ever dropped.
     @ObservationIgnored public let intents: AsyncStream<TableIntent>
 
@@ -48,6 +53,7 @@ import Observation
     /// sees messages in the order they were made.
     @ObservationIgnored private var lastSend: Task<Void, Never>?
     @ObservationIgnored private var nextTaskID = 0
+    @ObservationIgnored private var epochs = TurnEpoch()
 
     public init(code: String, socket: any RoomSocketing) {
         self.code = code
@@ -156,6 +162,7 @@ import Observation
         lastSeq = seq
         settledSeq = seq
         actionInFlight = false
+        noteTurn()
         if phase != .stalled {
             switch new.status {
             case .lobby: phase = .lobby
@@ -195,9 +202,16 @@ import Observation
             default:
                 break  // the snapshot that follows this action carries the rest
             }
+            noteTurn()
             // actionInFlight stays: that snapshot releases it.
             continuation.yield(.game(game, seq: seq))
         }
+    }
+
+    private func noteTurn() {
+        guard let room else { return }
+        epochs.observe(room)
+        if turnEpoch != epochs.value { turnEpoch = epochs.value }
     }
 
     private func applyError(_ code: ErrorCode) {

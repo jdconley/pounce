@@ -87,7 +87,7 @@ import Testing
         let all = game.hands.values.flatMap { $0 } + game.laid.compactMap { $0 }.flatMap { $0.flatMap(\.cards) }
         #expect(Set(all).count == all.count)
         var pass = PassAndPlay()
-        pass.update(model)
+        pass.update(model, epoch: 1)
         #expect(pass.revealed == nil)
         #expect(pass.state == .curtain(game.turn))
     }

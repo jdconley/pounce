@@ -7,26 +7,33 @@ public enum CurtainState: Equatable, Sendable {
 /// Decides when the pass-the-phone curtain covers the table. With one seat on
 /// the phone nothing is ever hidden; with several, a hand is shown only after
 /// the holder confirms, and any turn that leaves this phone hides it again.
+///
+/// Turn changes are read from the store's turn epoch (`RoomStore.turnEpoch`, see `TurnEpoch`),
+/// not by comparing the rooms passed in: a viewer may skip rooms, and two turns of the same
+/// seat with every turn between them skipped must still look like a change. A reveal (a hold
+/// on the curtain, or a peek) is valid only in the epoch it was granted in. Outside live play
+/// (round over, game over, lobby) a multi-seat phone shows no hand and no curtain.
 public struct PassAndPlay: Equatable, Sendable {
     public private(set) var revealed: Seat?
     public private(set) var state: CurtainState = .none
+    /// The turn epoch `state` (and `revealed`) belong to; -1 before the first update.
+    public private(set) var epoch = -1
 
     private var mySeats: [Seat] = []
-    private var lastTurn: Seat?
-    private var lastRound: Int?
     /// The seat of mine whose turn is live, if any.
     private var activeTurn: Seat?
+    /// The room and game are both playing.
+    private var live = false
 
     public init() {}
 
-    public mutating func update(_ model: TableModel) {
+    /// `epoch` is the store's `turnEpoch` for the room `model` was made from.
+    public mutating func update(_ model: TableModel, epoch: Int) {
         mySeats = model.mySeats
-        let game = model.game
-        let turnChanged = game?.turn != lastTurn
-        let roundChanged = game?.round != lastRound
-        lastTurn = game?.turn
-        lastRound = game?.round
-        activeTurn = model.isMyTurn ? game?.turn : nil
+        let moved = epoch != self.epoch
+        self.epoch = epoch
+        live = model.room.status == .playing && model.game?.status == .playing
+        activeTurn = model.isMyTurn ? model.game?.turn : nil
 
         if mySeats.count == 1, let only = mySeats.first {
             revealed = only
@@ -39,7 +46,8 @@ public struct PassAndPlay: Equatable, Sendable {
             return
         }
 
-        if roundChanged { revealed = nil }
+        // A reveal never outlives its epoch, and nothing stays face up outside play.
+        if moved || !live { revealed = nil }
         if let turn = activeTurn {
             if revealed == turn {
                 state = .revealed(turn)
@@ -47,23 +55,23 @@ public struct PassAndPlay: Equatable, Sendable {
                 revealed = nil
                 state = .curtain(turn)
             }
-        } else if turnChanged || roundChanged {
+        } else if moved || !live {
             // A remote, bot or finished turn: nothing of mine stays visible.
             revealed = nil
             state = .none
         }
     }
 
-    /// The hold finished on a curtain: show that seat's hand.
+    /// The hold finished on a curtain: show that seat's hand (for this epoch only).
     public mutating func completeHold() {
         guard case .curtain(let seat) = state else { return }
         revealed = seat
         state = .revealed(seat)
     }
 
-    /// Look at one of my own hands outside my turn (behind the curtain first).
+    /// Look at one of my own hands outside my turn (behind the curtain first), during play.
     public mutating func peek(_ seat: Seat) {
-        guard mySeats.count > 1, mySeats.contains(seat), activeTurn == nil else { return }
+        guard mySeats.count > 1, mySeats.contains(seat), live, activeTurn == nil else { return }
         revealed = nil
         state = .curtain(seat)
     }

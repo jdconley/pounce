@@ -293,6 +293,32 @@ private let discard: Action = .discard(card: 46, skipTarget: nil)
         #expect(store.settledSeq == 4)
     }
 
+    @Test func turnEpochCountsEveryTurnTheStoreApplies() {
+        let (store, _) = makeStore()
+        #expect(store.turnEpoch == 0)
+        store.handle(snapshot(makeRoom(mine: [0, 2], turn: 0), seq: 1))
+        #expect(store.turnEpoch == 1)
+        // Inside the turn (step, cards, presence): same epoch.
+        store.handle(event(.game(.drew(seat: 0, from: .deck, card: 17)), seq: 2))
+        store.handle(event(.presence(seat: 1, presence: .away), seq: 3))
+        store.handle(snapshot(makeRoom(mine: [0, 2], turn: 0, step: .play), seq: 3))
+        #expect(store.turnEpoch == 1)
+        // A turn event moves it; the snapshot that follows carries the same turn and doesn't.
+        store.handle(event(.game(.turn(seat: 1)), seq: 4))
+        #expect(store.turnEpoch == 2)
+        store.handle(snapshot(makeRoom(mine: [0, 2], turn: 1), seq: 4))
+        #expect(store.turnEpoch == 2)
+        // A coalesced jump in one snapshot, and a round over folded from its event.
+        store.handle(snapshot(makeRoom(mine: [0, 2], turn: 3), seq: 5))
+        #expect(store.turnEpoch == 3)
+        store.handle(event(.game(.roundOver(wentOut: 3, points: [0, 0, 0, 0], advanced: [], scores: [0, 0, 0, 0], phase: [0, 0, 0, 0])), seq: 6))
+        #expect(store.turnEpoch == 4)
+        // The reconnect snapshot of the same room: no change.
+        store.handle(snapshot(makeRoom(mine: [0, 2], turn: 3, gameStatus: .roundOver), seq: 6))
+        store.handle(snapshot(makeRoom(mine: [0, 2], turn: 3, gameStatus: .roundOver), seq: 6))
+        #expect(store.turnEpoch == 4)
+    }
+
     @Test func presenceEventKeepsInFlight() async throws {
         let (store, _, _) = try await playingStore(seq: 1)
         store.act(seat: 0, discard)

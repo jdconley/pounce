@@ -134,8 +134,10 @@ struct ConnectingView: View {
 }
 
 /// The SpriteKit table for one session. Owns the scene (made once, kept across redraws) and
-/// pass-and-play (spec §5.9): every room change updates `PassAndPlay` and reconciles the scene
-/// with its `revealed` seat. Over it: the scoreboard (tap the tower), the local cats row on a
+/// pass-and-play (spec §5.9): every room or turn-epoch change updates `PassAndPlay` with the
+/// store's `turnEpoch` and reconciles the scene with its `revealed` seat and that epoch. SwiftUI
+/// may coalesce several room changes into one update; the epoch (counted by the store on every
+/// room it applies) still tells a skipped turn apart, so a stale reveal never comes back. Over it: the scoreboard (tap the tower), the local cats row on a
 /// multi-seat phone, the pass-and-play curtain and, once the scene has played the win, the
 /// game-over overlay.
 ///
@@ -271,7 +273,7 @@ private struct TableStage: View {
         .animation(.easeOut(duration: 0.25), value: priming)
         .onAppear(perform: attach)
         .onDisappear { session.detachTable() }
-        .onChange(of: session.store.room, initial: true) {
+        .onChange(of: StageInput(room: session.store.room, epoch: session.store.turnEpoch), initial: true) {
             sync()
             checkPriming()
         }
@@ -359,18 +361,24 @@ private struct TableStage: View {
         guard let room = session.store.room, let scene = target ?? scene else { return }
         let table = TableModel(room: room)
         let before = pass.state
-        pass.update(table)
+        pass.update(table, epoch: session.store.turnEpoch)
         #if DEBUG
         // `-demo handoff`: skip the hold so a hand is shown to hide later.
         if DemoMode.from() == .handoff, case .curtain = pass.state { pass.completeHold() }
         #endif
         if case .curtain = pass.state, pass.state != before { curtainKey += 1 }
         // The scene hides at once when `revealed` goes away; a new reveal lands on its timeline.
-        scene.reconcile(table, revealed: pass.revealed)
+        scene.reconcile(table, revealed: pass.revealed, epoch: pass.epoch)
         #if DEBUG
         scene.timelineLog("stage seq \(session.store.lastSeq) turn \(table.game?.turn ?? -1) \(table.game?.step.rawValue ?? "-") pass \(pass.state) shown \(String(describing: events.shown)) scene \(String(describing: scene.shownRevealed))")
         #endif
     }
+}
+
+/// What `TableStage` reacts to: the store's room and its turn epoch.
+private struct StageInput: Equatable {
+    let room: RoomView?
+    let epoch: Int
 }
 
 /// What the table scene's callbacks set, kept apart from `TableStage` so the scene's closures
