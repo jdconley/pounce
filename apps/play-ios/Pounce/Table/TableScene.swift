@@ -157,6 +157,10 @@ final class TableScene: SKScene {
             accessibilityVersion += 1
             director.wake()
         }
+        // The snap wins: stop director actions on every node this redraw positions.
+        for layer in [Layer.background, .rug, .piles, .laidZone, .tower, .opponents, .trays, .hand] {
+            director.cancelActions(under: self.layer(layer))
+        }
         guard let model, let game = model.game, size.width > 0, size.height > 0 else {
             clearTable()
             return
@@ -188,7 +192,8 @@ final class TableScene: SKScene {
         laidZone.update(model: model, layout: layout)
         tower.update(model: model, layout: layout)
         if let bottom {
-            opponents.update(model: model, bottom: bottom, layout: layout)
+            let turnedOn = opponents.update(model: model, bottom: bottom, layout: layout)
+            for seat in turnedOn { pulseTurn(seat) }
         }
 
         // Hand: faces only for the revealed seat; backs for a seat of mine that isn't revealed.
@@ -219,6 +224,16 @@ final class TableScene: SKScene {
             ? layout.opponentsBar.maxY + Self.menuSize / 2 - 6
             : layout.opponentsBar.maxY - Self.menuSize / 2
         menuButton.position = CGPoint(x: size.width - Self.menuSize / 2 - 10, y: menuY)
+    }
+
+    /// The finite ring pulse + paw pop for the seat whose turn just came (Task 17 adds the full
+    /// turn handoff). Runs through the director so the view pauses again afterwards.
+    private func pulseTurn(_ seat: Seat) {
+        guard let cat = opponents.node(for: seat) else { return }
+        let director = director
+        for (action, node) in cat.turnPulse(reduceMotion: UIAccessibility.isReduceMotionEnabled) {
+            Task { await director.run(action, on: node, decorative: true) }
+        }
     }
 
     private func clearTable() {

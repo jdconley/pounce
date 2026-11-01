@@ -11,13 +11,16 @@ final class OpponentsNode: SKNode {
 
     func node(for seat: Seat) -> CatNode? { cats[seat] }
 
-    func update(model: TableModel, bottom: Seat, layout: TableLayout) {
+    /// Lays the bar out; returns the seats whose ring just became the current player's.
+    @discardableResult
+    func update(model: TableModel, bottom: Seat, layout: TableLayout) -> [Seat] {
         guard let game = model.game else {
             removeAllChildren()
             cats.removeAll()
             order = []
-            return
+            return []
         }
+        var turnedOn: [Seat] = []
         let seats = model.opponents(bottom: bottom)
         let slots = layout.opponentSlots
         let spacing = slots.count > 1 ? slots[1].x - slots[0].x : layout.size.width
@@ -39,6 +42,7 @@ final class OpponentsNode: SKNode {
                 addChild(node)
             }
             node.position = slots[i]
+            node.setScale(1)
             node.zPosition = CGFloat(i)
             node.setPresence(view?.kind == .bot ? nil : view?.presence)
             node.setBadges(
@@ -46,9 +50,10 @@ final class OpponentsNode: SKNode {
                 skip: game.pendingSkip[safe: seat] ?? false,
                 laid: (game.laid[safe: seat] ?? nil) != nil)
             node.setCount(game.handCounts[safe: seat])
-            node.setActive(game.status == .playing && game.turn == seat)
+            if node.setActive(game.status == .playing && game.turn == seat) { turnedOn.append(seat) }
         }
         order = Array(seats.prefix(slots.count))
+        return turnedOn
     }
 
     /// Touch / accessibility frame of a seat's cat, in this node's parent space.

@@ -17,6 +17,8 @@ final class CatNode: SKNode {
     private let laidBadge: SKSpriteNode
     private let bubble: SKSpriteNode
     private let bubbleNumber: SKSpriteNode
+    /// The current player's paw marker above the ring.
+    private let paw: SKSpriteNode
     private(set) var pose: CatPose = .idle
     private(set) var count: Int?
 
@@ -33,6 +35,7 @@ final class CatNode: SKNode {
         laidBadge = SKSpriteNode(texture: TableArt.image(ArtName.badgeLaid), size: badge)
         bubble = SKSpriteNode(texture: CardFaceFactory.shared.back(), size: CGSize(width: 20 * k, height: 28 * k))
         bubbleNumber = SKSpriteNode()
+        paw = SKSpriteNode(texture: TableArt.image(ArtName.iconPawMenu), size: CGSize(width: 26 * k, height: 26 * k))
         super.init()
 
         glow.zPosition = 0
@@ -55,7 +58,10 @@ final class CatNode: SKNode {
         bubble.isHidden = true
         bubbleNumber.zPosition = 1
         bubble.addChild(bubbleNumber)
-        [glow, ring, sprite, bubble].forEach(addChild)
+        paw.position = CGPoint(x: 0, y: r + 2)
+        paw.zPosition = 6
+        paw.isHidden = true
+        [glow, ring, sprite, bubble, paw].forEach(addChild)
     }
 
     @available(*, unavailable)
@@ -83,9 +89,35 @@ final class CatNode: SKNode {
         }
     }
 
-    /// The current player's ring glows (a still sprite: the table never loops an animation).
-    func setActive(_ on: Bool) {
+    /// The current player's ring glows and wears the paw marker (still sprites: the table never
+    /// loops an animation; `turnPulse` pops them once). Returns true when this turned it on.
+    @discardableResult func setActive(_ on: Bool) -> Bool {
+        let turnedOn = on && glow.isHidden
         glow.isHidden = !on
+        paw.isHidden = !on
+        return turnedOn
+    }
+
+    /// The finite "your ring pulses" pop for a turn that just arrived: the paw pops in, the
+    /// ring bumps twice, the glow flares. Decorative: it only touches scale and alpha of
+    /// children that reconcile never sets. Reduce Motion: a short fade instead.
+    func turnPulse(reduceMotion: Bool) -> [(SKAction, SKNode)] {
+        if reduceMotion {
+            paw.alpha = 0
+            return [(.fadeIn(withDuration: 0.15), paw)]
+        }
+        paw.setScale(0)
+        let pop = SKAction.sequence([
+            .scale(to: 1.25, duration: 0.14).eased(.easeOut),
+            .scale(to: 1.0, duration: 0.1).eased(.easeInEaseOut),
+        ])
+        let bump = SKAction.sequence([
+            .scale(to: 1.1, duration: 0.12), .scale(to: 1.0, duration: 0.12),
+            .scale(to: 1.08, duration: 0.12), .scale(to: 1.0, duration: 0.12),
+        ])
+        glow.alpha = 0.4
+        let flare = SKAction.sequence([.fadeAlpha(to: 1, duration: 0.24), .fadeAlpha(to: 0.6, duration: 0.24), .fadeAlpha(to: 1, duration: 0.24)])
+        return [(pop, paw), (bump, ring), (flare, glow)]
     }
 
     var isActive: Bool { !glow.isHidden }
@@ -102,5 +134,13 @@ final class CatNode: SKNode {
         let t = CardFaceFactory.shared.numeral(String(count), size: 15 * diameter / 72)
         bubbleNumber.texture = t
         bubbleNumber.size = t.size()
+    }
+}
+
+extension SKAction {
+    /// The same action with a timing mode, for chaining.
+    func eased(_ mode: SKActionTimingMode) -> SKAction {
+        timingMode = mode
+        return self
     }
 }

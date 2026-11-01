@@ -67,6 +67,8 @@ final class PileNode: SKNode {
                 top = n
             }
             top?.position = .zero
+            top?.setScale(1)
+            top?.alpha = 1
             top?.zPosition = 1
         } else {
             top?.removeFromParent()

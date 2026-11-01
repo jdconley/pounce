@@ -66,6 +66,8 @@ final class HandNode: SKNode {
             node.size = layout.cardSize
             node.position = p.position
             node.zRotation = p.rotation
+            node.setScale(1)  // a cancelled squash or flip never sticks
+            node.alpha = 1
             // TableLayout's z climbs from 10; keep the hand inside its 10-wide layer band.
             node.zPosition = i == liftedIndex ? Self.liftedZ : (p.z - 10) * 0.1 + 0.1
         }
