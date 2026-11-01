@@ -54,6 +54,40 @@ import Testing
         #expect(store.load().others.first { $0.id == padded.id }?.name.count == 20)
     }
 
+    @Test func emojiNamesClampToTheServersUTF16LimitWithoutSplittingCharacters() throws {
+        let store = PeopleStore(directory: try tempDir())
+        // Family emoji is one Character but 11 UTF-16 units; two of them are 22 units.
+        let family = "\u{1F468}\u{200D}\u{1F469}\u{200D}\u{1F467}\u{200D}\u{1F466}"
+        #expect(family.count == 1)
+        let p = store.add(name: String(repeating: family, count: 2), cat: 0)
+        #expect(p.name.utf16.count <= 20)
+        #expect(p.name == family)  // the second whole Character was dropped, not split
+        let many = store.add(name: String(repeating: "\u{1F63A}", count: 20), cat: 0)  // 2 units each
+        #expect(many.name.utf16.count == 20)
+        #expect(many.name.count == 10)
+        let owner = store.setOwner(name: String(repeating: "\u{1F63A}", count: 15), cat: 0)
+        #expect(owner.name.utf16.count <= 20)
+        var edited = p
+        edited.name = String(repeating: "e\u{301}", count: 30)  // 2 units per Character
+        store.update(edited)
+        let stored = try #require(store.load().others.first { $0.id == p.id })
+        #expect(stored.name.utf16.count == 20)
+        #expect(stored.name.count == 10)
+    }
+
+    @Test func blankNamesBecomeGeneratedNames() throws {
+        let store = PeopleStore(directory: try tempDir())
+        let added = store.add(name: "  \n\t ", cat: 0)
+        #expect(NameGenerator.names.contains(added.name))
+        let owner = store.setOwner(name: "", cat: 1)
+        #expect(NameGenerator.names.contains(owner.name))
+        var edited = added
+        edited.name = "   "
+        store.update(edited)
+        let stored = try #require(store.load().others.first { $0.id == added.id })
+        #expect(NameGenerator.names.contains(stored.name))
+    }
+
     @Test func updateAndRemove() throws {
         let store = PeopleStore(directory: try tempDir())
         let a = store.add(name: "A", cat: 0)

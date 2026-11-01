@@ -74,8 +74,17 @@ public final class PeopleStore {
 
     private static func newID() -> String { UUID().uuidString.lowercased() }
 
-    private static func clean(_ name: String) -> String {
-        String(name.trimmingCharacters(in: .whitespacesAndNewlines).prefix(maxNameLength))
+    /// Trims, then drops whole Characters from the end until the name fits the server's
+    /// limit of 20 UTF-16 units (it validates JavaScript `length`). A name that is empty
+    /// after trimming is replaced by a generated one, since the server rejects empty names.
+    static func clean(_ name: String) -> String {
+        var trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        while trimmed.utf16.count > maxNameLength { trimmed.removeLast() }
+        if trimmed.isEmpty {
+            var rng = SystemRandomNumberGenerator()
+            return NameGenerator.random(using: &rng)
+        }
+        return trimmed
     }
 
     private func save(_ people: LocalPeople) {
