@@ -110,8 +110,17 @@ final class MixedSeatsTests: XCTestCase {
                curtainNames.count >= 2, playedAfterBackground {
                 break
             }
-            // Stuck check: this phone's turn, the hand face down, no curtain to hold.
-            if snap.value("table.turn") == "mine", d.status == "playing", snap.label("table.hand.0") == "Card" {
+            // Stuck check: this phone's turn, the hand face down, no curtain to hold. The turn and
+            // hand come from the scene and the curtain from SwiftUI, so only time while the shell
+            // has synced the store's latest seq counts; while it lags (a starved machine) force a
+            // frame and wait.
+            let looksStuck = snap.value("table.turn") == "mine" && d.status == "playing"
+                && snap.label("table.hand.0") == "Card"
+            if looksStuck, !d.shellCaughtUp {
+                print("[mixed] shell behind the store: stage seq \(d.stageSeq), store seq \(d.storeSeq), pass \(d.pass)")
+                _ = XCUIScreen.main.screenshot()
+                stuckSince = nil
+            } else if looksStuck {
                 if stuckSince == nil { stuckSince = Date() }
                 if let since = stuckSince, Date().timeIntervalSince(since) > Live.t(120) {
                     screenshot(app, "mixed-stuck")
@@ -119,7 +128,7 @@ final class MixedSeatsTests: XCTestCase {
                     tree.name = "mixed-stuck-tree"
                     tree.lifetime = .keepAlways
                     add(tree)
-                    XCTFail("seat \(d.turn)'s turn: hand face down and no curtain for \(Int(Live.t(120))) s")
+                    XCTFail("seat \(d.turn)'s turn: hand face down and no curtain for \(Int(Live.t(120))) s (stage seq \(d.stageSeq), store seq \(d.storeSeq), pass \(d.pass))")
                     break
                 }
             } else {

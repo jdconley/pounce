@@ -44,6 +44,10 @@ final class TableScene: SKScene {
     var onTableTap: () -> Void = {}
     /// Spotlight and game-over bookkeeping (Celebrations.swift).
     var celebration = CelebrationState()
+    #if DEBUG
+    /// What the shell last synced (`TableStage.sync`), read by `table.debug` (UI tests).
+    var stageProbe = StageProbe()
+    #endif
 
     private(set) var model: TableModel?
     /// The seat whose hand may show face up, as last set by `reconcile(_:revealed:epoch:)`.
@@ -784,13 +788,14 @@ final class TableScene: SKScene {
 
     private func debugItems() -> [TableAccessibility.Item] {
         #if DEBUG
+        // step|inFlight|hand size|laid|turn|animating|round|game status|store seq|stage seq|pass
+        // (UI tests only). The last three tell a stuck table from a shell that hasn't synced yet.
         let director = director
         let store = store
         return [
             TableAccessibility.Item(
                 id: "table.frames", label: "frames", frame: CGRect(x: 0, y: 0, width: 24, height: 24),
                 traits: .staticText, live: { String(director.framesRendered) }),
-            // step|inFlight|hand size|laid|turn|animating|round|game status (UI tests only).
             TableAccessibility.Item(
                 id: "table.debug", label: "debug", frame: CGRect(x: 24, y: 0, width: 24, height: 24),
                 traits: .staticText, live: { [weak self] in
@@ -798,7 +803,8 @@ final class TableScene: SKScene {
                     let seat = self.bottomSeat ?? -1
                     let laid = (game.laid[safe: seat] ?? nil) != nil
                     let busy = self.animating || !director.isIdle
-                    return "\(game.step.rawValue)|\(store.actionInFlight ? 1 : 0)|\(game.hands[seat]?.count ?? -1)|\(laid ? 1 : 0)|\(game.turn)|\(busy ? 1 : 0)|\(game.round)|\(game.status.rawValue)"
+                    let probe = self.stageProbe
+                    return "\(game.step.rawValue)|\(store.actionInFlight ? 1 : 0)|\(game.hands[seat]?.count ?? -1)|\(laid ? 1 : 0)|\(game.turn)|\(busy ? 1 : 0)|\(game.round)|\(game.status.rawValue)|\(store.lastSeq)|\(probe.seq)|\(probe.passCode)"
                 }),
         ]
         #else
@@ -806,3 +812,21 @@ final class TableScene: SKScene {
         #endif
     }
 }
+
+#if DEBUG
+/// The shell's last sync, for the DEBUG `table.debug` probe: the store seq it synced at and the
+/// pass-and-play state it decided.
+struct StageProbe {
+    var seq = -1
+    var pass: CurtainState = .none
+
+    /// `none`, `curtain<seat>` or `revealed<seat>` (no spaces or pipes).
+    var passCode: String {
+        switch pass {
+        case .none: "none"
+        case .curtain(let seat): "curtain\(seat)"
+        case .revealed(let seat): "revealed\(seat)"
+        }
+    }
+}
+#endif

@@ -370,6 +370,7 @@ private struct TableStage: View {
         // The scene hides at once when `revealed` goes away; a new reveal lands on its timeline.
         scene.reconcile(table, revealed: pass.revealed, epoch: pass.epoch)
         #if DEBUG
+        scene.stageProbe = StageProbe(seq: session.store.lastSeq, pass: pass.state)
         scene.timelineLog("stage seq \(session.store.lastSeq) turn \(table.game?.turn ?? -1) \(table.game?.step.rawValue ?? "-") pass \(pass.state) shown \(String(describing: events.shown)) scene \(String(describing: scene.shownRevealed))")
         #endif
     }

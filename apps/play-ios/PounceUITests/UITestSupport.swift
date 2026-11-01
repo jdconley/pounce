@@ -30,7 +30,8 @@ enum Live {
     }
 }
 
-/// The DEBUG `table.debug` value: `step|inFlight|hand size|laid|turn|animating|round|status`.
+/// The DEBUG `table.debug` value:
+/// `step|inFlight|hand size|laid|turn|animating|round|status|store seq|stage seq|pass`.
 struct TableDebug: Equatable {
     var step = ""
     var inFlight = false
@@ -40,6 +41,11 @@ struct TableDebug: Equatable {
     var busy = false
     var round = 0
     var status = ""
+    /// The store's last seq, and the one the SwiftUI shell last synced the table at.
+    var storeSeq = -1
+    var stageSeq = -1
+    /// The shell's pass-and-play state when it last synced: `none`, `curtain<n>`, `revealed<n>`.
+    var pass = ""
 
     init?(_ value: String?) {
         guard let parts = value?.split(separator: "|").map(String.init), parts.count >= 8 else { return nil }
@@ -51,7 +57,15 @@ struct TableDebug: Equatable {
         busy = parts[5] == "1"
         round = Int(parts[6]) ?? 0
         status = parts[7]
+        if parts.count >= 11 {
+            storeSeq = Int(parts[8]) ?? -1
+            stageSeq = Int(parts[9]) ?? -1
+            pass = parts[10]
+        }
     }
+
+    /// The shell has synced the store's latest room (true when the probe is missing).
+    var shellCaughtUp: Bool { storeSeq < 0 || stageSeq == storeSeq }
 
     /// Nothing in flight or animating: the table takes a move.
     var settled: Bool { !inFlight && !busy }
