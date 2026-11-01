@@ -205,6 +205,26 @@ final class StubProtocol: URLProtocol, @unchecked Sendable {  // URLProtocol is 
         #expect(store.load() == DeviceCredential(deviceId: "fresh", token: "good"))
     }
 
+    /// M-8: a re-mint after a 401 reports the new credential, and the push token upload says
+    /// which device the server stored it for.
+    @Test func reMintReportsTheNewCredential() async throws {
+        let server = StubServer { req in
+            if req.path == "/v1/devices" { return Reply(200, #"{"deviceId":"fresh","token":"good"}"#) }
+            return req.authorization == "Bearer good" ? Reply(204, "") : Reply(401, #"{"error":"unauthorized"}"#)
+        }
+        let store = MemoryCredentialStore()
+        store.save(DeviceCredential(deviceId: "old", token: "stale"))
+        let (api, _) = client(server, store: store)
+        let changes = Mutex<[String]>([])
+        await api.setCredentialChangeHandler { cred in changes.withLock { $0.append(cred.deviceId) } }
+        let device = try await api.setPushToken("ab")
+        #expect(device == "fresh")
+        #expect(changes.withLock { $0 } == ["fresh"])
+        // A call with the fresh credential mints nothing and reports nothing.
+        #expect(try await api.setPushToken("ab") == "fresh")
+        #expect(changes.withLock { $0 } == ["fresh"])
+    }
+
     /// Two calls go out with the same stale token. The first 401 re-mints; the second
     /// 401 lands after that mint finished and must retry with the fresh credential
     /// instead of clearing it and minting again.

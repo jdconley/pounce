@@ -42,3 +42,41 @@ public enum PushPolicy {
         return code
     }
 }
+
+/// What the server holds of this phone's APNs token. The token goes up every time APNs hands
+/// it over (each launch), and again whenever the device credential changes: a re-mint after a
+/// 401 makes a new device on the server, which has no token until this phone sends it.
+public struct PushTokenState: Equatable, Sendable {
+    /// The last token APNs gave this launch.
+    public private(set) var token: String?
+    /// The device the server stored `token` for, once an upload succeeded.
+    private var uploadedFor: String?
+    /// The device credential's id as last reported by the API client.
+    private var device: String?
+
+    public init() {}
+
+    /// The token to upload now, if the server doesn't hold it for the current device.
+    public var pending: String? {
+        guard let token else { return nil }
+        guard let uploadedFor else { return token }
+        if let device, device != uploadedFor { return token }
+        return nil
+    }
+
+    public mutating func received(_ token: String) {
+        self.token = token
+        uploadedFor = nil
+    }
+
+    /// An upload of `token` succeeded under `deviceId` (ignored for an older token).
+    public mutating func uploaded(_ token: String, deviceId: String) {
+        guard token == self.token else { return }
+        uploadedFor = deviceId
+    }
+
+    /// The API client minted a credential (first launch or a re-mint).
+    public mutating func deviceChanged(_ deviceId: String) {
+        device = deviceId
+    }
+}

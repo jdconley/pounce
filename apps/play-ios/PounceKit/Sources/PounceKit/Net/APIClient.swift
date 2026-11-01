@@ -32,6 +32,7 @@ public actor APIClient {
     private let session: URLSession
     private var cached: DeviceCredential?
     private var minting: Task<DeviceCredential, any Error>?
+    private var onCredentialChange: (@Sendable (DeviceCredential) -> Void)?
 
     public init(config: APIConfig, credentials: CredentialStore, session: URLSession = .shared) {
         self.config = config
@@ -49,8 +50,15 @@ public actor APIClient {
         return try await mint()
     }
 
-    public func setPushToken(_ hex: String) async throws {
-        _ = try await authenticated("PUT", "/v1/devices/me/push", body: ["apnsToken": hex])
+    /// Called with each credential this client mints (the first one, or a re-mint after a 401
+    /// that makes a new device on the server), after it is stored.
+    public func setCredentialChangeHandler(_ handler: (@Sendable (DeviceCredential) -> Void)?) {
+        onCredentialChange = handler
+    }
+
+    /// Uploads the APNs token; returns the device id the server stored it for.
+    @discardableResult public func setPushToken(_ hex: String) async throws -> String {
+        try await authenticatedCall("PUT", "/v1/devices/me/push", body: ["apnsToken": hex]).credential.deviceId
     }
 
     public func listTables() async throws -> [TableEntry] {
@@ -82,6 +90,7 @@ public actor APIClient {
         let minted = try await task.value
         credentials.save(minted)
         cached = minted
+        onCredentialChange?(minted)
         return minted
     }
 
@@ -100,13 +109,21 @@ public actor APIClient {
     // MARK: requests
 
     private func authenticated(_ method: String, _ path: String, body: [String: String]?) async throws -> Data {
+        try await authenticatedCall(method, path, body: body).data
+    }
+
+    /// The reply and the credential that got it.
+    private func authenticatedCall(
+        _ method: String, _ path: String, body: [String: String]?
+    ) async throws -> (data: Data, credential: DeviceCredential) {
         let url = config.endpoint(path)
         let payload = try body.map { try JSONEncoder().encode($0) }
         var cred = try await credential()
         for attempt in 0..<2 {
             do {
-                return try await Self.send(
+                let data = try await Self.send(
                     session: session, method: method, url: url, bearer: cred.token, body: payload)
+                return (data, cred)
             } catch APIError.unauthorized where attempt == 0 {
                 cred = try await replacement(for: cred)
             }

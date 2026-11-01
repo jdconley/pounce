@@ -60,3 +60,54 @@ import Testing
         #expect(!PushPolicy.isReminderID(""))
     }
 }
+
+/// M-8: the APNs token goes up again whenever the server's device changes (a re-mint).
+@Suite struct PushTokenStateTests {
+    @Test func uploadsOnceThenAgainForANewDevice() {
+        var s = PushTokenState()
+        #expect(s.pending == nil)
+        s.received("t1")
+        #expect(s.pending == "t1")
+        s.uploaded("t1", deviceId: "d1")
+        #expect(s.pending == nil)
+        // The same device again (the first mint, or a stored credential): nothing to do.
+        s.deviceChanged("d1")
+        #expect(s.pending == nil)
+        // A re-mint: the server has no token for the new device.
+        s.deviceChanged("d2")
+        #expect(s.pending == "t1")
+        s.uploaded("t1", deviceId: "d2")
+        #expect(s.pending == nil)
+    }
+
+    @Test func noTokenNothingPending() {
+        var s = PushTokenState()
+        s.deviceChanged("d1")
+        #expect(s.pending == nil)
+    }
+
+    /// The upload went out under the old device while the re-mint landed: it still counts as
+    /// not uploaded for the new one.
+    @Test func uploadRacingAReMintStaysPending() {
+        var s = PushTokenState()
+        s.received("t1")
+        s.deviceChanged("d2")
+        s.uploaded("t1", deviceId: "d1")
+        #expect(s.pending == "t1")
+    }
+
+    /// Every launch's token goes up, changed or not; an older upload's result doesn't clear a
+    /// newer token.
+    @Test func newTokenIsPendingEvenForTheSameDevice() {
+        var s = PushTokenState()
+        s.received("t1")
+        s.uploaded("t1", deviceId: "d1")
+        s.received("t2")
+        #expect(s.pending == "t2")
+        s.uploaded("t1", deviceId: "d1")
+        #expect(s.pending == "t2")
+        s.received("t2")
+        s.uploaded("t2", deviceId: "d1")
+        #expect(s.pending == nil)
+    }
+}

@@ -6,7 +6,9 @@ import UserNotifications
 ///
 /// - Registers with APNs on every launch once the user allowed notifications, and uploads the
 ///   token every time it arrives (the server contract). A failed upload is kept and retried on
-///   the next foreground or the next successful call to the server, then cleared.
+///   the next foreground or the next successful call to the server. The token is kept for the
+///   launch and goes up again whenever the API client mints a new device credential (a re-mint
+///   after a 401), since the server has no token for the new device.
 /// - A tap on a "your turn" notification opens that table. On a cold start the tap can land
 ///   before SwiftUI attaches the app model, so it waits here like the token does.
 /// - In the foreground a banner is dropped only when its table is on screen (the table shows
@@ -16,13 +18,14 @@ import UserNotifications
 final class PushCoordinator: NSObject, UNUserNotificationCenterDelegate {
     weak var model: AppModel? {
         didSet {
+            watchCredential()
             uploadPendingToken()
             routePendingTap()
         }
     }
 
-    /// The last token APNs gave this launch, until the server has it.
-    private(set) var pendingToken: String?
+    /// The last token APNs gave this launch and which device the server holds it for.
+    private(set) var tokens = PushTokenState()
     private var uploading = false
     /// A notification tapped before the app model (or its owner) was ready.
     private var pendingTapCode: String?
@@ -54,7 +57,21 @@ final class PushCoordinator: NSObject, UNUserNotificationCenterDelegate {
 
     /// Uploads every time: each launch hands a token here, changed or not.
     func didRegister(token: Data) {
-        pendingToken = PushPolicy.hexToken(token)
+        tokens.received(PushPolicy.hexToken(token))
+        uploadPendingToken()
+    }
+
+    /// Re-sends the token when the API client mints a new device.
+    private func watchCredential() {
+        guard let api = model?.api else { return }
+        let handler: @Sendable (DeviceCredential) -> Void = { [weak self] credential in
+            Task { @MainActor in self?.credentialChanged(credential.deviceId) }
+        }
+        Task { await api.setCredentialChangeHandler(handler) }
+    }
+
+    private func credentialChanged(_ deviceId: String) {
+        tokens.deviceChanged(deviceId)
         uploadPendingToken()
     }
 
@@ -64,19 +81,22 @@ final class PushCoordinator: NSObject, UNUserNotificationCenterDelegate {
     }
 
     private func uploadPendingToken() {
-        guard let model, let token = pendingToken, !uploading else { return }
+        guard let model, let token = tokens.pending, !uploading else { return }
         uploading = true
         Task {
-            defer { uploading = false }
             do {
-                try await model.api.setPushToken(token)
-                // A newer token may have arrived while this one was in flight.
-                if pendingToken == token { pendingToken = nil }
+                // A newer token or a new device may have arrived while this one was in flight;
+                // `tokens` only clears what the server now holds.
+                let deviceId = try await model.api.setPushToken(token)
+                tokens.uploaded(token, deviceId: deviceId)
             } catch {
                 // Offline or the server is down: kept for the next foreground or server call.
+                uploading = false
                 return
             }
-            if pendingToken != nil { uploadPendingToken() }
+            uploading = false
+            // Cleared before retrying, so a token or device that changed mid-flight goes now.
+            if tokens.pending != nil { uploadPendingToken() }
         }
     }
 
