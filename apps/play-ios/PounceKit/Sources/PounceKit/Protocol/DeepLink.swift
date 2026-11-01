@@ -8,6 +8,15 @@ public enum DeepLink: Equatable, Sendable {
     private static let host = "play.conleychaos.com"
     private static let devScheme = "pounce-dev"
 
+    /// The share link for a room: `https://play.conleychaos.com/j/<CODE>`.
+    public static func shareURL(code: String) -> URL {
+        var parts = URLComponents()
+        parts.scheme = "https"
+        parts.host = host
+        parts.path = "/j/\(code)"
+        return parts.url!
+    }
+
     /// Accepts `https://play.conleychaos.com/j/<CODE>[?move=<M>]`, and
     /// `pounce-dev://j/<CODE>[?move=<M>]` only when `allowDevScheme` is true
     /// (Debug builds). A present but malformed `move` parameter rejects the

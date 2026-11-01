@@ -1110,6 +1110,42 @@
   "batch": "ui"
  },
  {
+  "name": "icon-delete",
+  "dest": "imageset",
+  "points": [
+   28,
+   28
+  ],
+  "batch": "ui"
+ },
+ {
+  "name": "icon-remove",
+  "dest": "imageset",
+  "points": [
+   28,
+   28
+  ],
+  "batch": "ui"
+ },
+ {
+  "name": "icon-leave",
+  "dest": "imageset",
+  "points": [
+   28,
+   28
+  ],
+  "batch": "ui"
+ },
+ {
+  "name": "icon-swap",
+  "dest": "imageset",
+  "points": [
+   28,
+   28
+  ],
+  "batch": "ui"
+ },
+ {
   "name": "AppIcon",
   "dest": "appicon",
   "points": [

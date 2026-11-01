@@ -25,8 +25,11 @@ public protocol WebSocketConnector: Sendable {
 ///
 /// `connect` returns only once the upgrade has succeeded: it sends a ping right
 /// after `resume()` (URLSession queues it until the handshake finishes) and waits
-/// for the pong. If the handshake fails instead, the HTTP status of the refused
-/// upgrade decides the error: 404 is `.notFound`, 401 is `.unauthorized`.
+/// for the pong. URLSession only delivers a pong while a `receive()` is pending, so
+/// the first receive starts before the ping and its frame is handed to the
+/// connection's first `receive()` call. If the handshake fails instead, the HTTP
+/// status of the refused upgrade decides the error: 404 is `.notFound`, 401 is
+/// `.unauthorized`.
 public struct URLSessionWebSocketConnector: WebSocketConnector {
     private let session: URLSession
     private let timeout: Duration
@@ -43,11 +46,13 @@ public struct URLSessionWebSocketConnector: WebSocketConnector {
         let task = session.webSocketTask(with: request)
         let connection = URLSessionWebSocketConnection(task: task, pingTimeout: timeout)
         task.resume()
+        connection.prefetch()
         do {
             try await connection.sendPing()
         } catch {
             let status = (task.response as? HTTPURLResponse)?.statusCode
             task.cancel()
+            connection.dropPrefetch()
             if error is CancellationError { throw error }
             switch status {
             case 404: throw SocketConnectError.notFound
@@ -63,6 +68,8 @@ public struct URLSessionWebSocketConnector: WebSocketConnector {
 final class URLSessionWebSocketConnection: WebSocketConnection {
     private let task: URLSessionWebSocketTask
     private let pingTimeout: Duration
+    /// A receive started before the opening ping; the first `receive()` takes its frame.
+    private let early = Mutex<Task<URLSessionWebSocketTask.Message, any Error>?>(nil)
 
     init(task: URLSessionWebSocketTask, pingTimeout: Duration) {
         self.task = task
@@ -73,8 +80,26 @@ final class URLSessionWebSocketConnection: WebSocketConnection {
         try await task.send(.string(text))
     }
 
+    /// Keeps a receive pending so the opening ping's pong can arrive.
+    func prefetch() {
+        let task = task
+        early.withLock { $0 = Task { try await task.receive() } }
+    }
+
+    func dropPrefetch() {
+        early.withLock { pending in
+            pending?.cancel()
+            pending = nil
+        }
+    }
+
     func receive() async throws -> String {
-        switch try await task.receive() {
+        let pending = early.withLock { pending in
+            defer { pending = nil }
+            return pending
+        }
+        let message = if let pending { try await pending.value } else { try await task.receive() }
+        switch message {
         case .string(let text): return text
         case .data(let data): return String(decoding: data, as: UTF8.self)
         @unknown default: throw SocketConnectError.failed("unknown WebSocket frame")

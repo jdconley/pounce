@@ -111,6 +111,14 @@ enum ArtName {
     static let iconTrophy = "icon-trophy"
     static let iconZzz = "icon-zzz"
     static let iconHold = "icon-hold"
+    /// Join keypad backspace.
+    static let iconDelete = "icon-delete"
+    /// Lobby seat bubble: close the seat.
+    static let iconRemove = "icon-remove"
+    /// Lobby seat bubble on your own cat: stand up.
+    static let iconLeave = "icon-leave"
+    /// Lobby seat bubble on your own cat: someone else on this phone sits here.
+    static let iconSwap = "icon-swap"
 
     // MARK: Sounds (Resources/Sounds/<name>.caf, 44.1 kHz mono)
     enum Sound {

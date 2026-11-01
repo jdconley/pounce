@@ -1,10 +1,11 @@
 import SwiftUI
 
-/// Switches on the route with a springy transition. Join and Room are text-free placeholders
-/// until their real screens land.
+/// Switches on the route with a springy transition, and tells the app model about scene phase
+/// changes (the room socket drops in the background and reconnects on return).
 struct RootView: View {
     @Environment(AppModel.self) private var model
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.scenePhase) private var scenePhase
 
     var body: some View {
         ZStack {
@@ -16,6 +17,7 @@ struct RootView: View {
                     removal: .opacity))
         }
         .animation(reduceMotion ? .easeInOut(duration: 0.2) : .spring(duration: 0.45, bounce: 0.3), value: model.route)
+        .onChange(of: scenePhase) { _, phase in model.scenePhaseChanged(phase) }
     }
 
     /// Re-creates the screen when the route's case changes (not for every associated value).
@@ -35,28 +37,9 @@ struct RootView: View {
         case .home:
             HomeView()
         case .join:
-            PlaceholderScreen(color: Palette.teal, art: ArtName.iconKeypad, id: "screen-join")
-        case .room:
-            PlaceholderScreen(color: Palette.orange, art: ArtName.roomBg, id: "screen-room")
+            JoinView()
+        case .room(let code, let intent):
+            RoomContainer(code: code, intent: intent)
         }
-    }
-}
-
-private struct PlaceholderScreen: View {
-    let color: Color
-    let art: String
-    let id: String
-
-    var body: some View {
-        ZStack {
-            color.ignoresSafeArea()
-            Image(art)
-                .resizable()
-                .scaledToFit()
-                .padding(32)
-                .accessibilityHidden(true)
-        }
-        .accessibilityElement(children: .contain)
-        .accessibilityIdentifier(id)
     }
 }

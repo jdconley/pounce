@@ -1,6 +1,7 @@
 import Foundation
 import Observation
 import PounceKit
+import SwiftUI
 
 @MainActor @Observable
 final class AppModel {
@@ -13,8 +14,18 @@ final class AppModel {
     /// Set when creating a room failed; cleared by the next attempt.
     var newGameError: APIError?
     private(set) var isCreatingRoom = false
+    /// The one live room connection (spec §7.2): the room on screen, or a typed code being
+    /// checked from Join. Replaced or closed whenever the route leaves it.
+    private(set) var room: RoomSession?
+    /// The code Join is checking (its socket is `room`); nil once it arrives or fails.
+    private(set) var probing: String?
+    /// Bumped when a typed or linked code turns out not to exist; Join shakes on each bump.
+    private(set) var joinNope = 0
+    /// The bad code that bounced a link to Join, shown in the tiles before they shake.
+    private(set) var bouncedCode: String?
 
     let api: APIClient
+    let config: APIConfig
     let settings: Settings
     @ObservationIgnored let peopleStore: PeopleStore
     @ObservationIgnored let tableCache: TableCache
@@ -23,6 +34,7 @@ final class AppModel {
         config: APIConfig, credentials: CredentialStore, dataDirectory: URL, settings: Settings = .shared
     ) {
         api = APIClient(config: config, credentials: credentials)
+        self.config = config
         self.settings = settings
         peopleStore = PeopleStore(directory: dataDirectory)
         tableCache = TableCache(directory: dataDirectory)
@@ -110,7 +122,126 @@ final class AppModel {
     }
 
     func open(code: String, intent: RoomIntent) {
+        ensureRoom(code: code, intent: intent)
         route = .room(code: code, intent: intent)
+    }
+
+    /// The live session for `code`, created (and the previous one closed) if needed.
+    @discardableResult
+    func ensureRoom(code: String, intent: RoomIntent) -> RoomSession {
+        if let room, room.code == code {
+            probing = nil
+            return room
+        }
+        closeRoom()
+        let session = makeSession(code: code, intent: intent)
+        room = session
+        session.start()
+        return session
+    }
+
+    /// Join's keypad finished a code. A table this device knows rejoins at once; any other
+    /// code is checked first while Join stays on screen, so a bad one can shake the tiles.
+    func joinTyped(_ code: String) {
+        if isKnown(code) {
+            open(code: code, intent: .rejoin)
+            return
+        }
+        closeRoom()
+        let session = makeSession(code: code, intent: .join)
+        room = session
+        probing = code
+        session.start()
+    }
+
+    /// Join's tiles changed while a code was being checked: drop that check.
+    func cancelProbe() {
+        guard probing != nil else { return }
+        closeRoom()
+    }
+
+    /// Hands Join the code that bounced it here (once).
+    func takeBouncedCode() -> String? {
+        defer { bouncedCode = nil }
+        return bouncedCode
+    }
+
+    func closeRoom() {
+        probing = nil
+        guard let room else { return }
+        self.room = nil
+        room.close()
+    }
+
+    /// In the table cache or the last `/tables`: a 404 for it means the room closed.
+    func isKnown(_ code: String) -> Bool {
+        cache[code] != nil || tables.contains { $0.code == code } || tableCache.contains(code: code)
+    }
+
+    /// Scene phase: the room socket goes down in the background and comes back on return.
+    func scenePhaseChanged(_ phase: ScenePhase) {
+        switch phase {
+        case .active: room?.foreground()
+        case .background: room?.background()
+        default: break
+        }
+    }
+
+    private func makeSession(code: String, intent: RoomIntent) -> RoomSession {
+        let config = config
+        let api = api
+        let socket = SuspendableSocket {
+            RoomSocket(code: code, config: config, credential: { try await api.credential() })
+        }
+        let session = RoomSession(code: code, intent: intent, socket: socket)
+        session.owner = { [weak self] in self?.people.owner }
+        session.onSnapshot = { [weak self] room in self?.remember(room) }
+        session.onArrive = { [weak self, weak session] in
+            guard let self, let session, self.room === session, self.probing == session.code else { return }
+            self.probing = nil
+            self.route = .room(code: session.code, intent: .join)
+        }
+        session.onGone = { [weak self, weak session] phase in
+            guard let self, let session, self.room === session else { return }
+            self.roomGone(session, phase: phase)
+        }
+        return session
+    }
+
+    /// `room_closed`, or a 404 on connect.
+    private func roomGone(_ session: RoomSession, phase: RoomPhase) {
+        let meaning: NotFoundMeaning
+        if phase == .closed {
+            meaning = .roomClosed
+        } else {
+            // A room this screen already saw, or one this device made or sat at, closed.
+            let known = session.arrived || session.intent != .join || isKnown(session.code)
+            meaning = RoomEntry.notFoundMeaning(code: session.code, known: known)
+        }
+        session.goneMeaning = meaning
+        switch meaning {
+        case .roomClosed:
+            forget(session.code)
+            Task { await refreshTables() }
+        case .badCode:
+            let wasProbing = probing == session.code
+            closeRoom()
+            if !wasProbing { bouncedCode = session.code }
+            joinNope += 1
+            route = .join
+        }
+    }
+
+    /// Caches a room this device sits at, so Home can draw it before connecting.
+    private func remember(_ room: RoomView) {
+        tableCache.store(room)
+        cache[room.code] = tableCache.all()[room.code]
+    }
+
+    private func forget(_ code: String) {
+        tableCache.remove(code: code)
+        cache[code] = nil
+        tables.removeAll { $0.code == code }
     }
 
     /// A share or move link arrived. Without a local owner, onboarding comes first and the link
@@ -129,6 +260,7 @@ final class AppModel {
     }
 
     func showJoin() {
+        closeRoom()
         route = .join
     }
 
@@ -139,9 +271,11 @@ final class AppModel {
         people = peopleStore.load()
     }
 
-    func addPerson(name: String, cat: Int) {
-        peopleStore.add(name: name, cat: cat)
+    @discardableResult
+    func addPerson(name: String, cat: Int) -> Person {
+        let person = peopleStore.add(name: name, cat: cat)
         people = peopleStore.load()
+        return person
     }
 
     func updatePerson(_ person: Person) {
@@ -156,6 +290,7 @@ final class AppModel {
 
     func goHome() {
         guard people.owner != nil else { return }
+        closeRoom()
         cache = tableCache.all()
         route = .home
     }

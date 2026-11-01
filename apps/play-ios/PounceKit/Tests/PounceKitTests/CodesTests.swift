@@ -24,6 +24,12 @@ import Testing
         #expect(!RoomCode.isValidMoveCode("BCDFGHJ"))
     }
 
+    @Test func shareURLRoundTrips() {
+        let url = DeepLink.shareURL(code: "K7QM4")
+        #expect(url.absoluteString == "https://play.conleychaos.com/j/K7QM4")
+        #expect(DeepLink.parse(url) == .join(code: "K7QM4"))
+    }
+
     @Test func parsesJoinLink() {
         #expect(parse("https://play.conleychaos.com/j/K7QM4") == .join(code: "K7QM4"))
     }

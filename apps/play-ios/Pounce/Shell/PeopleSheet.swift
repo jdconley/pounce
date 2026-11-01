@@ -114,7 +114,7 @@ struct PeopleSheet: View {
 }
 
 /// A big round cat with a seat-colored ring and its name under it.
-private struct PersonTile: View {
+struct PersonTile: View {
     let person: Person
     let ringIndex: Int
     let isOwner: Bool
@@ -163,7 +163,7 @@ private struct PersonTile: View {
 }
 
 /// The dashed "+" slot that adds a person.
-private struct AddTile: View {
+struct AddTile: View {
     let action: () -> Void
 
     var body: some View {
