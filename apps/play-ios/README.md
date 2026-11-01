@@ -26,3 +26,113 @@ xcodebuild -project Pounce.xcodeproj -scheme Pounce \
 
 If simulator code signing complains about provisioning, add `CODE_SIGNING_ALLOWED=NO` to the
 `xcodebuild` command. It was not needed on the author's machine (ad hoc simulator signing).
+
+## Prerequisites
+
+- Xcode 27 (iOS 26 SDK or later; the app's deployment target is iOS 26.0, iPhone only, portrait only).
+- [XcodeGen](https://github.com/yonaskolb/XcodeGen) (`brew install xcodegen`; `scripts/bootstrap.sh`
+  installs it if missing).
+- Node 24 and pnpm 10 (run `pnpm install` at the repo root once) for the dev server.
+- Optional: `jq` (`scripts/check-assets.sh`), ImageMagick 7 and the Codex CLI (art pipeline),
+  Tailscale (phone testing), gitleaks.
+
+## Dev server
+
+```sh
+scripts/dev-server.sh
+```
+
+Runs `wrangler dev` for `apps/play-api` on port 8787 (all interfaces). The first run writes
+`apps/play-api/.dev.vars` with a random `TOKEN_SECRET`. That file is gitignored; never commit it.
+Check it with `curl http://localhost:8787/healthz`, which should say `"configured":true`.
+Debug builds talk to `http://localhost:8787` by default.
+
+## Run on a simulator
+
+`scripts/bootstrap.sh`, open `Pounce.xcodeproj` (or use `xcodebuild`), and run the `Pounce` scheme
+on an iPhone simulator with the dev server up. To point a run at another server set
+`POUNCE_API_BASE_URL` in the scheme's environment (or in the launch environment for `simctl`);
+that beats everything else.
+
+Base URL precedence, strongest first: the `POUNCE_API_BASE_URL` environment variable at launch,
+then the build setting (Debug: `http://localhost:8787`, optionally overridden by the gitignored
+`Config/Local.xcconfig`; Release: `https://play.conleychaos.com`).
+
+### Debug-only launch arguments
+
+- `-demo <lobby|lobbyReady|table|other|replay|nope|celebrate|curtain|handoff|peek>` opens a room fed by
+  a fake socket and canned snapshots, so the real screens render with no server. `-slowmo <factor>`
+  runs a demo at that speed. See `Pounce/App/DemoMode.swift` for what each demo shows.
+- `-show-join` opens the Join screen. `-open-link <url>` handles a link as if it was tapped.
+- The `pounce-dev://j/<CODE>[?move=<MOVECODE>]` URL scheme is registered in Debug only, for
+  `xcrun simctl openurl booted ...` (universal links need the deployed server). Release builds
+  never register or accept it.
+- Push cannot arrive in Debug builds. Test payload handling with `scripts/push.sh <CODE> [NAME]`
+  (an `xcrun simctl push` with a payload shaped like the server's).
+
+## Tests
+
+```sh
+swift test --package-path PounceKit                       # game model, networking, store
+xcodebuild -project Pounce.xcodeproj -scheme Pounce \
+  -destination 'platform=iOS Simulator,name=iPhone 17 Pro,OS=26.2' build-for-testing
+scripts/check-assets.sh                                   # manifest, asset catalog, sounds, ArtName.swift agree
+```
+
+`xcodebuild test` runs the unit and UI tests, but the UI suite includes tests that play against the
+live dev server, so run it through `scripts/ui-tests.sh` (below), not a bare `xcodebuild test`.
+
+### End-to-end
+
+These scripts start the dev server themselves when it is not already running and stop it again on
+exit (a server that was already up is left alone). They share `DEV_SERVER_URL` (default
+`http://localhost:8787`) and `DEV_SERVER_LOG`.
+
+| Script | What it does | Environment |
+| --- | --- | --- |
+| `scripts/e2e.sh [pounce-e2e args]` | Plays a scripted full game against the server with the `pounce-e2e` CLI (default `full --local 2 --bots 2 --timeout 1800`, about 11 minutes). | `DEV_SERVER_URL`, `DEV_SERVER_LOG` |
+| `scripts/ui-tests.sh [xcodebuild args]` | The XCUITest suite on a simulator, with the dev server and a host broker (Mac-side `pounce-e2e` remotes and `simctl push`). Pass `-only-testing:PounceUITests/SmokeTests` to narrow it. | `DESTINATION` (default iPhone 17 Pro, iOS 26.2), `POUNCE_UITEST_TIMEOUT_SCALE` (default 1; use 3 on a busy Mac) |
+| `scripts/multi-sim.sh` | Two simulators: both open the same lobby through a `pounce-dev://` link, then a host game moves seats to the phones and `MultiSimTests` plays them to game over. Screenshots land in `$OUT/shared`. | `SIM_A`, `SIM_B` (UDIDs), `OUT`, `MOVE_AT`, `SKIP_BUILD=1`, `LOBBY_ONLY=1` (lobby screenshots only), `KEEP_B=1` (leave B booted) |
+| `scripts/screenshots.sh` | The six main screens into `Art/screenshots/*.jpg` from the installed Debug build (build and install first; `multi-sim.sh` does both). | `DEVICE` (UDID), `RAW_DIR`, `CELEBRATE_AT` (seconds into the slow-motion celebrate demo) |
+
+The UI suite should run through `scripts/ui-tests.sh` because the live tests need the dev server.
+
+## Art pipeline
+
+Art is generated, cut out and built into the asset catalog; every name lives in `Art/manifest.json`.
+
+1. `Art/tools/gen.sh <prompt.txt> <out.png> [ref.png...]` generates an image with the Codex CLI, using
+   `Art/style-samples/chosen-d-loud-toy.png` as the style reference. Output goes to the gitignored
+   `Art/raw/`. Prompts live in `Art/prompts/`; `Art/tools/run.sh` runs a batch.
+2. Cutout: `Art/tools/cut.sh <name>...` (Vision, `cutout.swift`), or `cutkey.sh` for subjects Vision
+   mis-masks. Results go to the gitignored `Art/cut/`.
+3. `Art/tools/build-assets.sh <name>... | --all` writes @2x/@3x art into `Pounce/Resources/Assets.xcassets`
+   at the manifest sizes. `Art/tools/placeholders.sh` fills any name without art yet.
+4. `scripts/check-assets.sh` verifies the catalog and sounds against the manifest.
+
+The art style is "Loud Toy": saturated violet, hot magenta, electric teal, sunny orange, sky blue,
+thick dark outlines. Never beige or muted.
+
+## TestFlight
+
+```sh
+scripts/testflight.sh --dry-run    # print the commands, run nothing
+scripts/testflight.sh              # bootstrap, archive (Release), export and upload
+```
+
+The build number is the current time as `YYYYMMDDHHMM`, passed to `xcodebuild` (project files are not
+edited). By default Xcode's signed-in account does the signing and upload. To use an App Store Connect
+API key instead, export `ASC_KEY_ID`, `ASC_ISSUER_ID` and `ASC_KEY_PATH` (path to the `.p8`, kept
+outside the repo). `ExportOptions.plist` selects `app-store-connect`, destination `upload`, team
+`B222J9J7B8`, automatic signing. Release builds use `https://play.conleychaos.com` and register no
+custom URL scheme.
+
+### Prerequisites only JD can do
+
+- Apple Developer: enable Push Notifications and Associated Domains on the App ID
+  `com.conleychaos.play`.
+- Create an APNs auth key, store the `.p8` in 1Password, and set the deploy secrets
+  `PLAY_API_APNS_KEY_P8` and `PLAY_API_APNS_KEY_ID` (the other deploy secrets are in the root README).
+- Create the App Store Connect app record for `com.conleychaos.play`, and add TestFlight testers.
+- Deploy the server to `play.conleychaos.com` (also needed for the QR code, universal links, and the
+  invite bubble art).

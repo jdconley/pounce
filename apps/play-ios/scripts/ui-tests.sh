@@ -4,6 +4,7 @@
 # (pounce-e2e remotes, simctl push) for MixedSeatsTests and PushTests.
 # Usage: scripts/ui-tests.sh [extra xcodebuild args, e.g. -only-testing:PounceUITests/SmokeTests]
 # DESTINATION overrides the simulator (default: iPhone 17 Pro, iOS 26.2).
+# POUNCE_UITEST_TIMEOUT_SCALE (default 1) multiplies every live-test timeout; use 3 on a busy Mac.
 set -euo pipefail
 cd "$(dirname "$0")/.."
 source scripts/lib-dev-server.sh
@@ -18,5 +19,6 @@ trap 'stop_host_broker; stop_dev_server' EXIT
 
 status=0
 TEST_RUNNER_POUNCE_BROKER_DIR="$HOST_BROKER_DIR" TEST_RUNNER_POUNCE_API_BASE_URL="$DEV_SERVER_URL" \
+  TEST_RUNNER_POUNCE_UITEST_TIMEOUT_SCALE="${POUNCE_UITEST_TIMEOUT_SCALE:-1}" \
   xcodebuild test -project Pounce.xcodeproj -scheme Pounce -destination "$DESTINATION" "$@" || status=$?
 exit $status

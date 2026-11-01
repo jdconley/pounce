@@ -14,7 +14,7 @@ the next cat skip a turn.
 | Path | What it is |
 | --- | --- |
 | `apps/play-api` | The game server: a Cloudflare Worker with one Durable Object per room. It owns the rules, the bots and the hidden hands. |
-| `apps/play-ios` | The iOS app (SpriteKit), coming next. |
+| `apps/play-ios` | The iOS app (SwiftUI shell, SpriteKit table). See its [README](apps/play-ios/README.md). |
 | `docs/superpowers` | The design spec, implementation plans and follow-up notes. |
 
 ## Develop
