@@ -43,7 +43,8 @@ If simulator code signing complains about provisioning, add `CODE_SIGNING_ALLOWE
 scripts/dev-server.sh
 ```
 
-Runs `wrangler dev` for `apps/play-api` on port 8787 (all interfaces). The first run writes
+Runs `wrangler dev` for `apps/play-api` on `127.0.0.1:8787` (set `DEV_SERVER_IP=0.0.0.0` to listen on
+every interface, for the LAN workflow below). The first run writes
 `apps/play-api/.dev.vars` with a random `TOKEN_SECRET`. That file is gitignored; never commit it.
 Check it with `curl http://localhost:8787/healthz`, which should say `"configured":true`.
 Debug builds talk to `http://localhost:8787` by default.
@@ -91,8 +92,11 @@ already listens on 8443).
    (team `B222J9J7B8`).
 5. When done: `scripts/tailnet-serve.sh down` (with the same `POUNCE_TAILNET_PORT`, if you set one).
 
-A LAN alternative with no Tailscale: set `POUNCE_API_BASE_URL=http://<mac-ip>:8787` in the scheme's
-environment. iOS may ask for local network permission.
+A LAN alternative with no Tailscale: start the dev server with `DEV_SERVER_IP=0.0.0.0
+scripts/dev-server.sh` (it listens on 127.0.0.1 only by default) and set
+`POUNCE_API_BASE_URL=http://<mac-ip>:8787` in the scheme's environment. This exposes a
+token-minting dev server to the whole LAN, so use it only on a network you trust. iOS may ask for
+local network permission.
 
 Share links always use `play.conleychaos.com`, so on the phone join by typing the room code. The QR
 code works only once the server is deployed. Debug builds get sandbox APNs tokens and the server
