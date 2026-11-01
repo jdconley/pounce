@@ -1,0 +1,7 @@
+{
+  "images" : [
+    { "filename" : "icon-paw-menu_ph@2x.png", "idiom" : "universal", "scale" : "2x" },
+    { "filename" : "icon-paw-menu_ph@3x.png", "idiom" : "universal", "scale" : "3x" }
+  ],
+  "info" : { "author" : "xcode", "version" : 1 }
+}
