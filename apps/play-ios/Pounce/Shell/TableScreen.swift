@@ -83,8 +83,7 @@ struct TableScreen: View {
         case .lobby:
             LobbyView(session: session, interactive: store.connected)
         case .table:
-            // Task 15 replaces this with the SpriteKit table.
-            TablePlaceholder(session: session)
+            TableStage(session: session)
                 .allowsHitTesting(store.connected)
         case .state(let kind):
             StateCard(kind: kind, onRetry: kind == .offline ? { session.retry() } : nil) {
@@ -115,47 +114,46 @@ struct ConnectingView: View {
     }
 }
 
-/// Text-free stand-in for the table until Task 15: the rug with every seated cat around it.
-private struct TablePlaceholder: View {
+/// The SpriteKit table for one session. Owns the scene (made once, kept across redraws) and
+/// pass-and-play: every room change updates `PassAndPlay` and reconciles the scene with its
+/// `revealed` seat. Task 19 adds the curtain overlay on top.
+private struct TableStage: View {
     @Environment(AppModel.self) private var model
     let session: RoomSession
+    @State private var scene: TableScene?
+    @State private var pass = PassAndPlay()
 
     var body: some View {
         ZStack {
-            RoomBackground()
-            GeometryReader { geo in
-                let side = min(geo.size.width, geo.size.height) * 0.9
-                let seats = session.store.room?.seats ?? []
-                ZStack {
-                    Image(ArtName.rug)
-                        .resizable()
-                        .frame(width: side, height: side * 0.8)
-                        .accessibilityHidden(true)
-                    ForEach(seats.indices, id: \.self) { i in
-                        let angle = (-90.0 + Double(i) * 360.0 / Double(max(seats.count, 1))) * .pi / 180
-                        let seat = seats[i]
-                        Image(ArtName.cat(seat.kind == .bot ? 3 : seat.person?.cat ?? 0, .idle))
-                            .resizable()
-                            .scaledToFit()
-                            .frame(width: side * 0.26, height: side * 0.26)
-                            .overlay(alignment: .bottomTrailing) {
-                                Image(seat.kind == .bot ? ArtName.badgeBot : seat.yours ? ArtName.badgePhone : ArtName.badgeRemote)
-                                    .resizable().scaledToFit().frame(width: 28, height: 28)
-                            }
-                            .offset(x: cos(angle) * side * 0.36, y: sin(angle) * side * 0.3)
-                            .accessibilityLabel(Text(verbatim: seat.person?.name ?? "House Cat"))
-                    }
-                }
-                .frame(width: geo.size.width, height: geo.size.height)
+            if let scene {
+                TableView(scene: scene)
+                    .ignoresSafeArea()
+            } else {
+                RoomBackground()
             }
         }
-        .overlay(alignment: .topLeading) {
-            CornerHomeButton { model.goHome() }
-                .padding(.leading, 16)
-                .padding(.top, 4)
-                .accessibilityIdentifier("table.home")
-        }
+        .onAppear(perform: attach)
+        .onDisappear { session.detachTable() }
+        .onChange(of: session.store.room, initial: true) { sync() }
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("screen-table")
+    }
+
+    private func attach() {
+        let scene = self.scene ?? TableScene(store: session.store)
+        // Task 20 replaces this with the table menu sheet; until then the paw goes home.
+        scene.onMenu = { [weak model] in model?.goHome() }
+        self.scene = scene
+        sync(scene)
+        session.attachTable { [weak scene] intent in
+            await scene?.play(intent)
+        }
+    }
+
+    private func sync(_ target: TableScene? = nil) {
+        guard let room = session.store.room, let scene = target ?? scene else { return }
+        let table = TableModel(room: room)
+        pass.update(table)
+        scene.reconcile(table, revealed: pass.revealed)
     }
 }

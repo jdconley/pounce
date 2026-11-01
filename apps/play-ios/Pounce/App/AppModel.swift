@@ -51,16 +51,36 @@ final class AppModel {
         env: [String: String] = ProcessInfo.processInfo.environment
     ) -> AppModel {
         let config = AppConfig.load(env: env)
+        let model: AppModel
         if arguments.contains("-uitest-reset") {
             let dir = FileManager.default.temporaryDirectory
                 .appendingPathComponent("pounce-uitest-\(UUID().uuidString)", isDirectory: true)
-            return AppModel(config: config, credentials: MemoryCredentialStore(), dataDirectory: dir)
+            model = AppModel(config: config, credentials: MemoryCredentialStore(), dataDirectory: dir)
+        } else {
+            let support = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
+            model = AppModel(
+                config: config, credentials: KeychainCredentialStore(),
+                dataDirectory: support.appendingPathComponent("Pounce", isDirectory: true))
         }
-        let support = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
-        return AppModel(
-            config: config, credentials: KeychainCredentialStore(),
-            dataDirectory: support.appendingPathComponent("Pounce", isDirectory: true))
+        #if DEBUG
+        if let demo = DemoMode.from(arguments: arguments) { model.openDemo(demo) }
+        #endif
+        return model
     }
+
+    #if DEBUG
+    /// `-demo <screen>`: the room screen fed by one fixture snapshot, no server, nothing cached.
+    func openDemo(_ demo: DemoMode) {
+        closeRoom()
+        let room = demo.room
+        let socket = SuspendableSocket { DemoSocket(room: room) }
+        let session = RoomSession(code: room.code, intent: .rejoin, socket: socket)
+        session.owner = { [weak self] in self?.people.owner }
+        self.room = session
+        session.start()
+        route = .room(code: room.code, intent: .rejoin)
+    }
+    #endif
 
     /// Called once at launch: reload local data, mint the device credential in the background,
     /// then refresh Home's table list. Never blocks the first frame.
