@@ -13,6 +13,7 @@ final class Settings {
         static let hapticsOn = "settings.hapticsOn"
         static let pushPrimed = "settings.pushPrimed"
         static let pushDeclinedOnce = "settings.pushDeclinedOnce"
+        static let pushReoffered = "settings.pushReoffered"
     }
 
     @ObservationIgnored private let defaults: UserDefaults
@@ -23,6 +24,8 @@ final class Settings {
     var pushPrimed: Bool { didSet { defaults.set(pushPrimed, forKey: Key.pushPrimed) } }
     /// The user said "not now" to push once (do not nag again right away).
     var pushDeclinedOnce: Bool { didSet { defaults.set(pushDeclinedOnce, forKey: Key.pushDeclinedOnce) } }
+    /// Home's bell offered push again after a "not now" (it only does that once).
+    var pushReoffered: Bool { didSet { defaults.set(pushReoffered, forKey: Key.pushReoffered) } }
 
     init(defaults: UserDefaults = .standard) {
         self.defaults = defaults
@@ -30,6 +33,7 @@ final class Settings {
         hapticsOn = defaults.object(forKey: Key.hapticsOn) as? Bool ?? true
         pushPrimed = defaults.bool(forKey: Key.pushPrimed)
         pushDeclinedOnce = defaults.bool(forKey: Key.pushDeclinedOnce)
+        pushReoffered = defaults.bool(forKey: Key.pushReoffered)
     }
 
     private static func freshSuite() -> UserDefaults {

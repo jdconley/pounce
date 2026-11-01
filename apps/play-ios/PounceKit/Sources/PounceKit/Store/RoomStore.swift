@@ -83,8 +83,10 @@ import Observation
     }
 
     /// Sends a lobby, presence or move message. Never locks; replies arrive as
-    /// snapshots (or an error that nopes the last control).
+    /// snapshots (or an error that nopes the last control). Asking for a move code
+    /// drops the one held, since the server replaces a seat's code.
     public func send(_ message: ClientMessage) {
+        if case .moveSeat = message { moveCode = nil }
         callSocket(inOrder: true) { socket in try? await socket.send(message) }
     }
 

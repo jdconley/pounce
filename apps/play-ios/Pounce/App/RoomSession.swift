@@ -26,6 +26,15 @@ final class RoomSession {
     /// Set by the app model when the room turned out closed or missing.
     var goneMeaning: NotFoundMeaning?
 
+    /// A seat being moved here from another phone (spec §5.11).
+    enum MoveClaim: Equatable {
+        case claiming(String)
+        case refused(String, ErrorCode)
+    }
+    /// Non-nil from sending `claimMove` until the seat arrives or the server refuses the code.
+    private(set) var move: MoveClaim?
+    @ObservationIgnored private var seatsBeforeMove: Set<Seat> = []
+
     // Hooks the app model fills in.
     @ObservationIgnored var owner: () -> Person? = { nil }
     @ObservationIgnored var onSnapshot: (RoomView) -> Void = { _ in }
@@ -140,8 +149,8 @@ final class RoomSession {
 
     private func routeIntents() async {
         for await intent in store.intents {
-            if case .lobbyNope = intent {
-                lobbyNope += 1
+            if case .lobbyNope(let code) = intent {
+                if !moveRefused(code) { lobbyNope += 1 }
             } else if let tableSink {
                 await tableSink(intent)
             } else {
@@ -205,6 +214,7 @@ final class RoomSession {
             send(.presence(.active))
         }
         let model = TableModel(room: room)
+        moveSnapshot(model)
         if !autoClaimDone {
             autoClaimDone = true
             if let claim = firstClaim(model) { send(claim) }
@@ -224,10 +234,37 @@ final class RoomSession {
             return RoomEntry.autoClaim(model: model, owner: owner)
         case .join, .rejoin:
             return RoomEntry.autoClaim(model: model, owner: owner)
-        case .move:
-            // Task 20: send `.claimMove(code: moveCode)` here instead of claiming a seat.
-            return nil
+        case .move(let moveCode):
+            beginMove(moveCode, seats: model.mySeats)
+            return .claimMove(code: moveCode)
         }
+    }
+
+    // MARK: move my seat (receiving phone)
+
+    /// Claims a seat moved from another phone with its 6-character code (spec §5.11).
+    func claimMove(_ moveCode: String) {
+        beginMove(moveCode, seats: model?.mySeats ?? [])
+        send(.claimMove(code: moveCode))
+    }
+
+    private func beginMove(_ moveCode: String, seats: [Seat]) {
+        move = .claiming(moveCode)
+        seatsBeforeMove = Set(seats)
+    }
+
+    /// While claiming: a snapshot with a new seat of mine means it worked.
+    private func moveSnapshot(_ model: TableModel) {
+        guard case .claiming = move, !Set(model.mySeats).subtracting(seatsBeforeMove).isEmpty else { return }
+        move = nil
+    }
+
+    /// While claiming: the server refused the code.
+    private func moveRefused(_ code: ErrorCode) -> Bool {
+        guard case .claiming(let moveCode) = move,
+              code == .badCode || code == .tooManyAttempts || code == .gameOver else { return false }
+        move = .refused(moveCode, code)
+        return true
     }
 
     private var isTerminal: Bool {

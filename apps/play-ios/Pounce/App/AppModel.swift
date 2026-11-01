@@ -29,6 +29,10 @@ final class AppModel {
     let settings: Settings
     @ObservationIgnored let peopleStore: PeopleStore
     @ObservationIgnored let tableCache: TableCache
+    /// Push and local notifications; attached by the app delegate once SwiftUI built this model.
+    @ObservationIgnored weak var push: PushCoordinator?
+    /// The room whose local turn reminder is scheduled, cancelled on return.
+    @ObservationIgnored private var remindedCode: String?
 
     init(
         config: APIConfig, credentials: CredentialStore, dataDirectory: URL, settings: Settings = .shared
@@ -127,6 +131,8 @@ final class AppModel {
         do {
             let listed = try await api.listTables()
             tables = listed
+            // The server answered: a push token that failed to upload goes now.
+            push?.retryUpload()
             // A cached room the server no longer lists is gone for good.
             let live = Set(listed.map(\.code))
             for code in cache.keys where !live.contains(code) { tableCache.remove(code: code) }
@@ -152,8 +158,16 @@ final class AppModel {
     }
 
     func open(code: String, intent: RoomIntent) {
-        ensureRoom(code: code, intent: intent)
+        let session = ensureRoom(code: code, intent: intent)
+        // A move link for the room already open: its first snapshot is long gone, so claim now.
+        if case .move(let moveCode) = intent, session.intent != intent { session.claimMove(moveCode) }
         route = .room(code: code, intent: intent)
+    }
+
+    /// The table for `code` is the screen in front (a push for it needs no banner).
+    func isOnScreen(code: String) -> Bool {
+        if case .room(let onScreen, _) = route { return onScreen == code }
+        return false
     }
 
     /// The live session for `code`, created (and the previous one closed) if needed.
@@ -209,12 +223,29 @@ final class AppModel {
     }
 
     /// Scene phase: the room socket goes down in the background and comes back on return.
+    /// Going away mid-turn also schedules the local "your turn" reminder (spec §7.5): the server
+    /// only pushes when a turn starts. Coming back cancels it and retries a held push token.
     func scenePhaseChanged(_ phase: ScenePhase) {
         switch phase {
-        case .active: room?.foreground()
-        case .background: room?.background()
+        case .active:
+            room?.foreground()
+            if let code = remindedCode {
+                remindedCode = nil
+                push?.cancelTurnReminder(code: code)
+            }
+            push?.retryUpload()
+        case .background:
+            scheduleTurnReminder()
+            room?.background()
         default: break
         }
+    }
+
+    private func scheduleTurnReminder() {
+        guard let room, let table = room.model, let delay = PushPolicy.reminderDelay(model: table),
+              let turn = table.currentSeat, let person = table.room.seats[safe: turn]?.person else { return }
+        remindedCode = room.code
+        push?.scheduleTurnReminder(code: room.code, name: person.name, after: delay)
     }
 
     private func makeSession(code: String, intent: RoomIntent) -> RoomSession {
@@ -316,6 +347,28 @@ final class AppModel {
     func removePerson(id: String) {
         peopleStore.remove(id: id)
         people = peopleStore.load()
+    }
+
+    // MARK: Push priming (spec §10)
+
+    /// The priming screen's paw: the system prompt. A "no" there counts as a decline.
+    func acceptPush() async {
+        settings.pushPrimed = true
+        guard let push else { return }
+        if await push.authorizationStatus() == .denied {
+            // The system won't ask twice; its settings page is the only way back.
+            if let url = URL(string: UIApplication.openNotificationSettingsURLString) {
+                await UIApplication.shared.open(url)
+            }
+            return
+        }
+        if await !push.requestAuthorization() { settings.pushDeclinedOnce = true }
+    }
+
+    /// The priming screen's "not now": Home's bell offers it once more.
+    func declinePush() {
+        settings.pushPrimed = true
+        settings.pushDeclinedOnce = true
     }
 
     func goHome() {

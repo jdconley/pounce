@@ -30,17 +30,26 @@ struct TableScreen: View {
 
     private enum Screen: Equatable {
         case connecting, lobby, table, state(StateCard.Kind)
+        /// A seat is being moved here from another phone, which holds no seat yet.
+        case moveClaim(String, refused: Bool)
     }
 
     private var screen: Screen {
         switch store.phase {
         case .connecting:
             return session.offline ? .state(.offline) : .connecting
-        case .lobby:
-            return .lobby
-        case .playing, .over:
+        case .lobby, .playing, .over:
+            let seated = !(session.model?.mySeats.isEmpty ?? true)
+            if !seated, let move = session.move {
+                switch move {
+                case .claiming(let code): return .moveClaim(code, refused: false)
+                case .refused(_, .tooManyAttempts): return .state(.locked)
+                case .refused(let code, _): return .moveClaim(code, refused: true)
+                }
+            }
+            if store.phase == .lobby { return .lobby }
             // No spectating in M1: a game this phone isn't in is "full".
-            return (session.model?.mySeats.isEmpty ?? true) ? .state(.full) : .table
+            return seated ? .table : .state(.full)
         case .stalled:
             return .state(.stalled)
         case .closed:
@@ -74,6 +83,14 @@ struct TableScreen: View {
         }
         .animation(.spring(duration: 0.4, bounce: 0.25), value: screen)
         .animation(.spring(duration: 0.3), value: reconnecting)
+        .onChange(of: session.model?.mySeats ?? []) { before, after in
+            // This phone's last seat left while it held a move code: the move went through
+            // (spec §5.11). Home, not the "full" card. The menu sheet is gone with the table.
+            guard !before.isEmpty, after.isEmpty, store.moveCode != nil else { return }
+            Haptics.shared.success()
+            Sound.shared.play(ArtName.Sound.sfxSparkle)
+            model.goHome()
+        }
     }
 
     @ViewBuilder private var content: some View {
@@ -89,6 +106,8 @@ struct TableScreen: View {
             StateCard(kind: kind, onRetry: kind == .offline ? { session.retry() } : nil) {
                 model.goHome()
             }
+        case .moveClaim(let code, let refused):
+            MoveClaimView(moveCode: code, refused: refused) { model.goHome() }
         }
     }
 }
@@ -126,6 +145,7 @@ struct ConnectingView: View {
 /// VoiceOver skips it. The scene itself never builds faces for an unrevealed seat.
 private struct TableStage: View {
     @Environment(AppModel.self) private var model
+    @Environment(Settings.self) private var settings
     let session: RoomSession
     @State private var scene: TableScene?
     @State private var pass = PassAndPlay()
@@ -136,6 +156,10 @@ private struct TableStage: View {
     @State private var scoreboard = false
     /// Set by the scene when the game-over celebration is done.
     @State private var winners: [Seat]?
+    @State private var menuOpen = false
+    /// The push priming screen is up (spec §10).
+    @State private var priming = false
+    @State private var primingChecked = false
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     private var table: TableModel? { session.store.room.map(TableModel.init(room:)) }
@@ -216,6 +240,20 @@ private struct TableStage: View {
                     }
                 }
             }
+            if priming, winners == nil {
+                PushPrimingView(
+                    person: primingPerson,
+                    onAllow: {
+                        priming = false
+                        Task { await model.acceptPush() }
+                    },
+                    onNotNow: {
+                        priming = false
+                        model.declinePush()
+                    })
+                    .transition(.opacity)
+                    .zIndex(15)
+            }
             if let winners {
                 GameOverView(
                     winners: people(winners),
@@ -229,9 +267,24 @@ private struct TableStage: View {
         .animation(.easeOut(duration: 0.3), value: winners)
         .animation(.spring(duration: 0.45, bounce: 0.15), value: curtainSeat)
         .animation(.easeOut(duration: 0.2), value: localCats.map(\.seat))
+        .animation(.easeOut(duration: 0.25), value: priming)
         .onAppear(perform: attach)
         .onDisappear { session.detachTable() }
-        .onChange(of: session.store.room, initial: true) { sync() }
+        .onChange(of: session.store.room, initial: true) {
+            sync()
+            checkPriming()
+        }
+        .sheet(isPresented: $menuOpen) {
+            TableMenuSheet(
+                session: session,
+                onHome: {
+                    menuOpen = false
+                    model.goHome()
+                },
+                onClose: { menuOpen = false })
+                .environment(model)
+                .environment(settings)
+        }
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("screen-table")
     }
@@ -244,8 +297,7 @@ private struct TableStage: View {
 
     private func attach() {
         let scene = self.scene ?? TableScene(store: session.store)
-        // Task 20 replaces this with the table menu sheet; until then the paw goes home.
-        scene.onMenu = { [weak model] in model?.goHome() }
+        scene.onMenu = { menuOpen = true }
         scene.onTower = { scoreboard = true }
         scene.onGameOver = { seats in winners = seats }
         scene.onShownRevealed = { seat in shown = seat }
@@ -261,6 +313,27 @@ private struct TableStage: View {
         session.attachTable { [weak scene] intent in
             await scene?.play(intent)
         }
+    }
+
+    /// The first time this phone plays with a human on another phone, offer push — unless the
+    /// system already has an answer (then there's nothing to prime).
+    private func checkPriming() {
+        guard !primingChecked, let table, PushPolicy.shouldPrime(model: table, primed: settings.pushPrimed),
+              let push = model.push else { return }
+        primingChecked = true
+        Task {
+            if await push.authorizationStatus() == .notDetermined {
+                priming = true
+            } else {
+                settings.pushPrimed = true
+            }
+        }
+    }
+
+    /// The mock banner's player: this phone's first seat, else the owner.
+    private var primingPerson: Person {
+        if let seat = table?.mySeats.first { return person(seat) }
+        return model.people.owner ?? Person(id: "", name: "", cat: 0)
     }
 
     /// The person at a seat of this phone (a placeholder if the snapshot lacks one).

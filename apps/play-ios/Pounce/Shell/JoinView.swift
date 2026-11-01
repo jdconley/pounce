@@ -142,7 +142,8 @@ struct JoinView: View {
 }
 
 /// One letter tile: violet block with a thick outline; the next slot to fill glows teal.
-private struct CodeTile: View {
+/// Also shows a move code's six letters (`MoveSeatSheet`).
+struct CodeTile: View {
     let char: Character?
     let active: Bool
 

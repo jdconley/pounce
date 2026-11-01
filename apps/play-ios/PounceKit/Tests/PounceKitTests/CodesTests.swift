@@ -30,6 +30,12 @@ import Testing
         #expect(DeepLink.parse(url) == .join(code: "K7QM4"))
     }
 
+    @Test func moveURLRoundTrips() {
+        let url = DeepLink.moveURL(code: "K7QM4", moveCode: "BCDFGH")
+        #expect(url.absoluteString == "https://play.conleychaos.com/j/K7QM4?move=BCDFGH")
+        #expect(DeepLink.parse(url) == .move(code: "K7QM4", moveCode: "BCDFGH"))
+    }
+
     @Test func parsesJoinLink() {
         #expect(parse("https://play.conleychaos.com/j/K7QM4") == .join(code: "K7QM4"))
     }

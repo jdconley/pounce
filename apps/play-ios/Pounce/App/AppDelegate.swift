@@ -1,51 +1,37 @@
 import UIKit
 import UserNotifications
 
-/// Push plumbing. The APNs token is uploaded on every launch (the server contract); the app model
-/// attaches after SwiftUI builds it, so a token that arrives first is held until then.
+/// UIKit's entry points for push. The work lives in `PushCoordinator`; the app model attaches
+/// after SwiftUI builds it, and the coordinator holds a token or a tap that arrives first.
 @MainActor
-final class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCenterDelegate {
+final class AppDelegate: NSObject, UIApplicationDelegate {
+    let push = PushCoordinator()
+
     weak var model: AppModel? {
-        didSet { uploadPendingToken() }
+        didSet {
+            model?.push = push
+            push.model = model
+        }
     }
-    private var pendingToken: String?
 
     func application(
         _ application: UIApplication,
         didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]? = nil
     ) -> Bool {
-        UNUserNotificationCenter.current().delegate = self
+        // Set before launch finishes, so a tap that cold-started the app is delivered here.
+        UNUserNotificationCenter.current().delegate = push
         Sound.shared.preload()
-        // Only re-register when the user already allowed notifications; the priming screen asks first.
-        Task {
-            let settings = await UNUserNotificationCenter.current().notificationSettings()
-            if settings.authorizationStatus == .authorized || settings.authorizationStatus == .provisional {
-                application.registerForRemoteNotifications()
-            }
-        }
+        push.registerEveryLaunch()
         return true
     }
 
     func application(
         _ application: UIApplication, didRegisterForRemoteNotificationsWithDeviceToken deviceToken: Data
     ) {
-        pendingToken = deviceToken.map { String(format: "%02x", $0) }.joined()
-        uploadPendingToken()
+        push.didRegister(token: deviceToken)
     }
 
     func application(_ application: UIApplication, didFailToRegisterForRemoteNotificationsWithError error: any Error) {
         // Expected on the simulator and in Debug builds without a sandbox token; nothing to do.
-    }
-
-    private func uploadPendingToken() {
-        guard let model, let token = pendingToken else { return }
-        Task { try? await model.api.setPushToken(token) }
-    }
-
-    // The table shows turns live, so skip foreground banners.
-    nonisolated func userNotificationCenter(
-        _ center: UNUserNotificationCenter, willPresent notification: UNNotification
-    ) async -> UNNotificationPresentationOptions {
-        []
     }
 }

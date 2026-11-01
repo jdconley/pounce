@@ -17,6 +17,13 @@ public enum DeepLink: Equatable, Sendable {
         return parts.url!
     }
 
+    /// The move link for one seat: `https://play.conleychaos.com/j/<CODE>?move=<MOVECODE>`.
+    public static func moveURL(code: String, moveCode: String) -> URL {
+        var parts = URLComponents(url: shareURL(code: code), resolvingAgainstBaseURL: false)!
+        parts.queryItems = [URLQueryItem(name: "move", value: moveCode)]
+        return parts.url!
+    }
+
     /// Accepts `https://play.conleychaos.com/j/<CODE>[?move=<M>]`, and
     /// `pounce-dev://j/<CODE>[?move=<M>]` only when `allowDevScheme` is true
     /// (Debug builds). A present but malformed `move` parameter rejects the

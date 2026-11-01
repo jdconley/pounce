@@ -382,6 +382,19 @@ private let discard: Action = .discard(card: 46, skipTarget: nil)
         #expect(store.moveCode == MoveCode(seat: 3, code: "ZZZZZZ"))
     }
 
+    @Test func askingForAMoveCodeDropsTheOldOne() async throws {
+        let (store, socket) = makeStore()
+        store.handle(.message(.moveCode(seat: 1, code: "BCDFGH")))
+        store.send(.moveSeat(seat: 1))
+        // The server replaces a seat's code, so the old one must never be shown again.
+        #expect(store.moveCode == nil)
+        store.send(.presence(.active))
+        store.handle(.message(.moveCode(seat: 1, code: "ZZZZZZ")))
+        #expect(store.moveCode == MoveCode(seat: 1, code: "ZZZZZZ"))
+        await store.settle()
+        #expect(socket.calls.sends == [.moveSeat(seat: 1), .presence(.active)])
+    }
+
     @Test func roomClosedIsTerminal() async throws {
         let (store, socket, room) = try await playingStore()
         store.act(seat: 0, discard)

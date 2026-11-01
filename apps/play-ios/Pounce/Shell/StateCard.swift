@@ -14,6 +14,8 @@ struct StateCard: View {
         case full
         /// The server speaks a newer protocol: update the app.
         case update
+        /// Too many wrong move codes from this phone: a sad cat, home.
+        case locked
 
         var art: String {
             switch self {
@@ -22,6 +24,7 @@ struct StateCard: View {
             case .offline: ArtName.stateOffline
             case .full: ArtName.stateFull
             case .update: ArtName.stateUpdate
+            case .locked: ArtName.cat(3, .terrified)
             }
         }
 
@@ -32,6 +35,7 @@ struct StateCard: View {
             case .offline: "Can't reach the server"
             case .full: "This table is full or already playing"
             case .update: "Update the app to play"
+            case .locked: "Too many wrong codes. Try again later"
             }
         }
     }

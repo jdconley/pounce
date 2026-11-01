@@ -2,7 +2,8 @@ import PounceKit
 import SwiftUI
 
 /// Home: the Cat Tower hero, two fat pills (new game, join), a row of your tables, the owner's cat
-/// bottom-left (people on this phone) and a small gear (sound, haptics).
+/// bottom-left (people on this phone) and a small gear (sound, haptics). After a "not now" to
+/// push, a small bell top-left offers it once more (spec §10).
 struct HomeView: View {
     @Environment(AppModel.self) private var model
     @Environment(Settings.self) private var settings
@@ -13,6 +14,9 @@ struct HomeView: View {
     @State private var heroWiggle = 0
     @State private var ownerWiggle = 0
     @State private var newGameShake = 0
+    /// Notifications are already allowed (no bell then); nil until checked.
+    @State private var pushAllowed: Bool?
+    @State private var showPriming = false
 
     var body: some View {
         GeometryReader { geo in
@@ -26,6 +30,9 @@ struct HomeView: View {
             .padding(.top, 10)
             .padding(.bottom, 8)
             .overlay(alignment: .topTrailing) { gear }
+            .overlay(alignment: .topLeading) {
+                if showBell { bell.transition(.scale.combined(with: .opacity)) }
+            }
         }
         .background { background }
         .safeAreaInset(edge: .bottom, spacing: 0) { ownerCorner }
@@ -36,9 +43,30 @@ struct HomeView: View {
                 .presentationDragIndicator(.hidden)
                 .presentationBackground(Palette.night)
         }
+        .overlay {
+            if showPriming, let owner = model.people.owner {
+                PushPrimingView(
+                    person: owner,
+                    onAllow: {
+                        showPriming = false
+                        Task {
+                            await model.acceptPush()
+                            await checkPush()
+                        }
+                    },
+                    onNotNow: { showPriming = false })
+                    .transition(.opacity)
+            }
+        }
+        .animation(.easeOut(duration: 0.25), value: showPriming)
+        .animation(.spring(duration: 0.4, bounce: 0.4), value: showBell)
         .task { await model.refreshTables() }
+        .task { await checkPush() }
         .onChange(of: scenePhase) { _, phase in
-            if phase == .active { Task { await model.refreshTables() } }
+            if phase == .active {
+                Task { await model.refreshTables() }
+                Task { await checkPush() }
+            }
         }
         .onChange(of: model.newGameError) { _, error in
             if error != nil {
@@ -124,6 +152,48 @@ struct HomeView: View {
             .frame(height: TableCard.size.height + 44)
             .accessibilityIdentifier("home.tables")
         }
+    }
+
+    private var showBell: Bool {
+        settings.pushDeclinedOnce && !settings.pushReoffered && pushAllowed == false && !showPriming
+    }
+
+    private func checkPush() async {
+        guard let push = model.push else { return }
+        pushAllowed = PushCoordinator.isAllowed(await push.authorizationStatus())
+    }
+
+    /// Re-offers push once: the priming screen again, then the system prompt (or its settings page).
+    private var bell: some View {
+        Button {
+            Haptics.shared.tick()
+            Sound.shared.play(ArtName.Sound.sfxPop)
+            settings.pushReoffered = true
+            showPriming = true
+        } label: {
+            Circle()
+                .fill(
+                    LinearGradient(
+                        colors: [Palette.magenta.mix(with: .white, by: 0.3), Palette.magenta],
+                        startPoint: .top, endPoint: .bottom)
+                )
+                .overlay(Circle().strokeBorder(Palette.ink, lineWidth: 4))
+                .overlay {
+                    Image(ArtName.iconBell)
+                        .resizable().scaledToFit()
+                        .padding(8)
+                }
+                .frame(width: 48, height: 48)
+                .shadow(color: Palette.ink.opacity(0.5), radius: 0, x: 0, y: 4)
+                .frame(width: 56, height: 56)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .bounceLoop(active: true)
+        .padding(.leading, 14)
+        .padding(.top, 4)
+        .accessibilityLabel(Text("Turn on turn notifications", comment: "VoiceOver: Home's bell that offers push again"))
+        .accessibilityIdentifier("home.bell")
     }
 
     private var gear: some View {
