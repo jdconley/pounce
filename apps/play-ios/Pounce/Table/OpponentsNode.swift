@@ -1,8 +1,9 @@
 import PounceKit
 import SpriteKit
 
-/// The bar across the top: every other seat's cat in turn order after the bottom seat, with
-/// its card count, presence pose and badges. The current player's ring glows.
+/// The bar across the top: every other seat's cat in turn order after the bottom seat (every
+/// seat on a phone holding none), with its card count, presence pose and badges. The current
+/// player's ring glows.
 @MainActor
 final class OpponentsNode: SKNode {
     private var cats: [Seat: CatNode] = [:]
@@ -11,17 +12,15 @@ final class OpponentsNode: SKNode {
 
     func node(for seat: Seat) -> CatNode? { cats[seat] }
 
-    /// Lays the bar out; returns the seats whose ring just became the current player's.
+    /// Lays the bar out for `seats` (`TableModel.barSeats`); returns the seats whose ring just
+    /// became the current player's.
     @discardableResult
-    func update(model: TableModel, bottom: Seat, layout: TableLayout) -> [Seat] {
+    func update(model: TableModel, seats: [Seat], layout: TableLayout) -> [Seat] {
         guard let game = model.game else {
-            removeAllChildren()
-            cats.removeAll()
-            order = []
+            clear()
             return []
         }
         var turnedOn: [Seat] = []
-        let seats = model.opponents(bottom: bottom)
         let slots = layout.opponentSlots
         let spacing = slots.count > 1 ? slots[1].x - slots[0].x : layout.size.width
         let diameter = min(72, spacing - 12, TableLayout.opponentsBarHeight - 18)
@@ -54,6 +53,13 @@ final class OpponentsNode: SKNode {
         }
         order = Array(seats.prefix(slots.count))
         return turnedOn
+    }
+
+    /// No cats at all (no game on the table).
+    func clear() {
+        removeAllChildren()
+        cats.removeAll()
+        order = []
     }
 
     /// Touch / accessibility frame of a seat's cat, in this node's parent space.

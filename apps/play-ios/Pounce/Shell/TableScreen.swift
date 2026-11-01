@@ -142,21 +142,19 @@ struct ConnectingView: View {
 /// Privacy: on a multi-seat phone the curtain covers the table whenever `PassAndPlay` says so,
 /// and stays up after the hold until the scene reports that seat's hand is actually face up
 /// (a reveal can wait for an animating event). While it is up the table takes no touches and
-/// VoiceOver skips it. The scene itself never builds faces for an unrevealed seat.
+/// VoiceOver skips it. The scene itself never builds faces for an unrevealed seat. Outside
+/// play (round over, game over) there is no curtain and no peeking: the celebration plays on
+/// the table with every hand face down.
 private struct TableStage: View {
     @Environment(AppModel.self) private var model
     @Environment(Settings.self) private var settings
     let session: RoomSession
     @State private var scene: TableScene?
     @State private var pass = PassAndPlay()
-    /// The seat whose hand the scene shows face up right now (its `shownRevealed`).
-    @State private var shown: Seat?
+    /// What the scene's callbacks set (see `StageEvents`).
+    @State private var events = StageEvents()
     /// Bumped each time a new curtain goes up, so a curtain for the same seat starts fresh.
     @State private var curtainKey = 0
-    @State private var scoreboard = false
-    /// Set by the scene when the game-over celebration is done.
-    @State private var winners: [Seat]?
-    @State private var menuOpen = false
     /// The push priming screen is up (spec §10).
     @State private var priming = false
     @State private var primingChecked = false
@@ -167,17 +165,17 @@ private struct TableStage: View {
     /// The seat the curtain is up for: a curtain waiting for its hold, or a hold that is done
     /// while the scene hasn't shown that hand yet. Never on a one-seat phone.
     private var curtainSeat: Seat? {
-        guard winners == nil, let table, table.isMultiSeat, table.game != nil else { return nil }
+        guard events.winners == nil, let table, table.isMultiSeat, table.game?.status == .playing else { return nil }
         switch pass.state {
         case .none: return nil
         case .curtain(let seat): return seat
-        case .revealed(let seat): return shown == seat ? nil : seat
+        case .revealed(let seat): return events.shown == seat ? nil : seat
         }
     }
 
     /// Looking at a hand outside its turn: the curtain was opened from the local cats row.
     private var peeking: Bool {
-        guard let table, table.isMultiSeat, !table.isMyTurn else { return false }
+        guard let table, table.isMultiSeat, !table.isMyTurn, table.game?.status == .playing else { return false }
         if case .none = pass.state { return false }
         return true
     }
@@ -185,7 +183,7 @@ private struct TableStage: View {
     /// My seats along the bottom on a multi-seat phone while no seat of mine is playing and
     /// nothing is shown: tap one to peek at that hand.
     private var localCats: [(seat: Seat, person: Person)] {
-        guard winners == nil, let table, table.isMultiSeat, !table.isMyTurn, case .none = pass.state,
+        guard events.winners == nil, let table, table.isMultiSeat, !table.isMyTurn, case .none = pass.state,
               table.room.status == .playing, table.game?.status == .playing else { return [] }
         return table.mySeats.compactMap { seat in
             table.room.seats[safe: seat]?.person.map { (seat, $0) }
@@ -193,6 +191,7 @@ private struct TableStage: View {
     }
 
     var body: some View {
+        @Bindable var events = events
         let covered = curtainSeat != nil
         ZStack {
             if let scene {
@@ -210,8 +209,10 @@ private struct TableStage: View {
                 }
                 .transition(.opacity.combined(with: .scale(scale: 0.8, anchor: .bottom)))
             }
-            if scoreboard, winners == nil, let room = session.store.room, room.game != nil {
-                ScoreboardOverlay(model: TableModel(room: room)) { scoreboard = false }
+            if let board = events.scoreboard, events.winners == nil, board.game != nil {
+                // The table as the scene drew it when the tower was tapped, not the store's
+                // newer truth: no spoiling a round-over still animating.
+                ScoreboardOverlay(model: board) { events.scoreboard = nil }
                     .transition(.opacity)
             }
             if let seat = curtainSeat {
@@ -240,7 +241,7 @@ private struct TableStage: View {
                     }
                 }
             }
-            if priming, winners == nil {
+            if priming, events.winners == nil {
                 PushPrimingView(
                     person: primingPerson,
                     onAllow: {
@@ -254,7 +255,7 @@ private struct TableStage: View {
                     .transition(.opacity)
                     .zIndex(15)
             }
-            if let winners {
+            if let winners = events.winners {
                 GameOverView(
                     winners: people(winners),
                     onHome: { model.goHome() },
@@ -263,8 +264,8 @@ private struct TableStage: View {
                     .zIndex(20)
             }
         }
-        .animation(.easeOut(duration: 0.2), value: scoreboard)
-        .animation(.easeOut(duration: 0.3), value: winners)
+        .animation(.easeOut(duration: 0.2), value: events.scoreboard != nil)
+        .animation(.easeOut(duration: 0.3), value: events.winners)
         .animation(.spring(duration: 0.45, bounce: 0.15), value: curtainSeat)
         .animation(.easeOut(duration: 0.2), value: localCats.map(\.seat))
         .animation(.easeOut(duration: 0.25), value: priming)
@@ -274,14 +275,20 @@ private struct TableStage: View {
             sync()
             checkPriming()
         }
-        .sheet(isPresented: $menuOpen) {
+        .onChange(of: events.tableTaps) {
+            // Tapping away from a peeked hand hides it again.
+            guard peeking, case .revealed = pass.state else { return }
+            pass.hide()
+            sync()
+        }
+        .sheet(isPresented: $events.menuOpen) {
             TableMenuSheet(
                 session: session,
                 onHome: {
-                    menuOpen = false
+                    events.menuOpen = false
                     model.goHome()
                 },
-                onClose: { menuOpen = false })
+                onClose: { events.menuOpen = false })
                 .environment(model)
                 .environment(settings)
         }
@@ -297,21 +304,20 @@ private struct TableStage: View {
 
     private func attach() {
         let scene = self.scene ?? TableScene(store: session.store)
-        scene.onMenu = { menuOpen = true }
-        scene.onTower = { scoreboard = true }
-        scene.onGameOver = { seats in winners = seats }
-        scene.onShownRevealed = { seat in shown = seat }
-        scene.onTableTap = {
-            // Tapping away from a peeked hand hides it again.
-            guard peeking, case .revealed = pass.state else { return }
-            pass.hide()
-            sync()
-        }
+        // The callbacks hold `events` weakly and never this view: its `@State` owns the scene,
+        // so capturing the view would keep the scene alive after leaving the table.
+        let events = events
+        scene.onMenu = { [weak events] in events?.menuOpen = true }
+        scene.onTower = { [weak events] drawn in events?.scoreboard = drawn }
+        scene.onGameOver = { [weak events] seats in events?.winners = seats }
+        scene.onShownRevealed = { [weak events] seat in events?.shown = seat }
+        scene.onTableTap = { [weak events] in events?.tableTaps += 1 }
         self.scene = scene
-        shown = scene.shownRevealed
+        events.shown = scene.shownRevealed
         sync(scene)
+        // Synchronous: buffered intents are queued ahead of live ones.
         session.attachTable { [weak scene] intent in
-            await scene?.play(intent)
+            scene?.enqueue(intent)
         }
     }
 
@@ -362,6 +368,21 @@ private struct TableStage: View {
         // The scene hides at once when `revealed` goes away; a new reveal lands on its timeline.
         scene.reconcile(table, revealed: pass.revealed)
     }
+}
+
+/// What the table scene's callbacks set, kept apart from `TableStage` so the scene's closures
+/// can hold it weakly (see `TableStage.attach`).
+@MainActor @Observable
+private final class StageEvents {
+    var menuOpen = false
+    /// The scoreboard is up, showing this table (as the scene drew it).
+    var scoreboard: TableModel?
+    /// Set by the scene when the game-over celebration is done.
+    var winners: [Seat]?
+    /// The seat whose hand the scene shows face up right now (its `shownRevealed`).
+    var shown: Seat?
+    /// Bumped by a tap on the table itself while this phone can't act.
+    var tableTaps = 0
 }
 
 /// The small cats of this phone's seats along the bottom, while another seat plays: tap one

@@ -8,7 +8,8 @@ import PounceKit
 /// in the background and comes back on return, so the lobby or table never resets.
 ///
 /// - After every (re)connect's first snapshot: `presence active`.
-/// - On the first snapshot: the auto-claim for the way the room was opened.
+/// - On the first snapshot: the auto-claim for the way the room was opened; refused (the seat
+///   was taken first), it retries once on the next lobby snapshot, and never nopes.
 /// - Snapshots of a room this device sits at go into the table cache (Home cards).
 /// - The network path becoming satisfied again reconnects at once.
 @MainActor @Observable
@@ -47,11 +48,13 @@ final class RoomSession {
     @ObservationIgnored private var started = false
     @ObservationIgnored private var closed = false
     @ObservationIgnored private var backgrounded = false
-    @ObservationIgnored private var autoClaimDone = false
+    @ObservationIgnored private var autoClaim = AutoClaim()
+    /// Lobby nopes still to come from refused auto-claims: nobody tapped, so nothing wiggles.
+    @ObservationIgnored private var silentNopes = 0
     @ObservationIgnored private var presencePending = false
     @ObservationIgnored private var goneReported = false
     @ObservationIgnored private var failedConnects = 0
-    @ObservationIgnored private var tableSink: ((TableIntent) async -> Void)?
+    @ObservationIgnored private var tableSink: ((TableIntent) -> Void)?
     @ObservationIgnored private var pendingIntents: [TableIntent] = []
 
     private static let offlineAfterFailures = 3
@@ -120,15 +123,15 @@ final class RoomSession {
         store.send(message)
     }
 
-    /// The table scene (Task 15+) takes the store's intents from here, in order. Intents that
-    /// arrived with no table attached (the lobby → playing `versusIntro`, say) are replayed first.
-    func attachTable(_ sink: @escaping (TableIntent) async -> Void) {
+    /// The table scene takes the store's intents from here, in order. `sink` must enqueue
+    /// synchronously (the scene's serialized play queue): intents that arrived with no table
+    /// attached (the lobby → playing `versusIntro`, say) are handed over right here, before
+    /// any live intent can be, so the two can never interleave.
+    func attachTable(_ sink: @escaping (TableIntent) -> Void) {
         tableSink = sink
         let pending = pendingIntents
         pendingIntents.removeAll()
-        Task {
-            for intent in pending { await sink(intent) }
-        }
+        for intent in pending { sink(intent) }
     }
 
     func detachTable() {
@@ -150,17 +153,45 @@ final class RoomSession {
     private func routeIntents() async {
         for await intent in store.intents {
             if case .lobbyNope(let code) = intent {
-                if !moveRefused(code) { lobbyNope += 1 }
+                if silentNopes > 0 {
+                    silentNopes -= 1  // a refused auto-claim: retried, never noped
+                } else if !moveRefused(code) {
+                    lobbyNope += 1
+                }
             } else if let tableSink {
-                await tableSink(intent)
+                tableSink(intent)
             } else {
-                pendingIntents.append(intent)
-                if pendingIntents.count > Self.pendingIntentLimit { pendingIntents.removeFirst() }
+                buffer(intent)
             }
         }
         #if DEBUG
         print("[session] intents ended")
         #endif
+    }
+
+    /// Keeps an intent for a table that isn't attached. A snapshot (`.reconcile`) is the whole
+    /// truth, so it supersedes everything before it, except a `versusIntro` that still has to
+    /// play: the backlog becomes that intro and what came after it, or just this snapshot. In
+    /// the lobby that keeps one reconcile instead of one per lobby change.
+    private func buffer(_ intent: TableIntent) {
+        switch intent {
+        case .versusIntro:
+            pendingIntents = [.versusIntro]
+        case .reconcile:
+            if let intro = pendingIntents.lastIndex(of: .versusIntro) {
+                pendingIntents.removeFirst(intro)
+            } else {
+                pendingIntents.removeAll()
+            }
+            pendingIntents.append(.reconcile)
+        default:
+            pendingIntents.append(intent)
+        }
+        if pendingIntents.count > Self.pendingIntentLimit {
+            // Never drop the intro.
+            let drop = pendingIntents.first == .versusIntro ? 1 : 0
+            pendingIntents.remove(at: drop)
+        }
     }
 
     /// Reconnects when the network comes back after being down (spec §7.4).
@@ -197,6 +228,8 @@ final class RoomSession {
             }
         case .message(.snapshot(_, _, let room)):
             snapshotArrived(room)
+        case .message(.error(let code)):
+            if autoClaim.refused(code) { silentNopes += 1 }
         default:
             break
         }
@@ -215,9 +248,8 @@ final class RoomSession {
         }
         let model = TableModel(room: room)
         moveSnapshot(model)
-        if !autoClaimDone {
-            autoClaimDone = true
-            if let claim = firstClaim(model) { send(claim) }
+        if let claim = autoClaim.snapshot(model, owner: owner(), first: { firstClaim(model) }) {
+            send(claim)
         }
         if !model.mySeats.isEmpty { onSnapshot(room) }
     }

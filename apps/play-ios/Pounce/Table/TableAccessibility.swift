@@ -90,3 +90,46 @@ enum TableAccessibility {
         return CGRect(x: min(a.x, b.x), y: min(a.y, b.y), width: abs(b.x - a.x), height: abs(b.y - a.y))
     }
 }
+
+extension TableScene {
+    /// Posts a short VoiceOver announcement for a turn change or a big event (spec §13).
+    func announce(_ announcement: TableAnnouncement) {
+        guard let model else { return }
+        let text = Self.sentence(announcement, seats: model.room.seats)
+        #if DEBUG
+        timelineLog("announce \(text)")
+        #endif
+        UIAccessibility.post(notification: .announcement, argument: text)
+    }
+
+    static func sentence(_ announcement: TableAnnouncement, seats: [SeatView]) -> String {
+        func name(_ seat: Seat) -> String { SeatInfo.name(seats[safe: seat]) }
+        switch announcement {
+        case .yourTurn(let seat, let multiSeat):
+            return multiSeat
+                ? String(localized: "\(name(seat)), your turn", comment: "VoiceOver announcement: a pass-and-play seat's turn came")
+                : String(localized: "Your turn", comment: "VoiceOver announcement: this phone's turn came")
+        case .roundOver(let mine):
+            switch mine.count {
+            case 0:
+                return String(localized: "Round over", comment: "VoiceOver announcement: the round ended")
+            case 1:
+                return String(
+                    localized: "Round over. You took \(mine[0].points) points",
+                    comment: "VoiceOver announcement: the round ended and the points this phone's player took")
+            default:
+                let each = mine.map {
+                    String(localized: "\(name($0.seat)) \($0.points) points", comment: "VoiceOver: one seat's points in the round-over announcement")
+                }
+                return String(
+                    localized: "Round over. \(each.formatted(.list(type: .and)))",
+                    comment: "VoiceOver announcement: the round ended, with each of this phone's players' points")
+            }
+        case .gameOver(let winners):
+            let names = winners.map(name).formatted(.list(type: .and))
+            return winners.count > 1
+                ? String(localized: "\(names) win", comment: "VoiceOver announcement: the game ended in a tie")
+                : String(localized: "\(names) wins", comment: "VoiceOver announcement: the game ended; who won")
+        }
+    }
+}

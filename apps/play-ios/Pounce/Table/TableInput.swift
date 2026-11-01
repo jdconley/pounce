@@ -9,6 +9,11 @@ struct TableInputState {
         case hand(CardID)
         case tray(CardID, Int)
         case pile(DrawSource)
+
+        var isTray: Bool {
+            if case .tray = self { return true }
+            return false
+        }
     }
 
     var source: Source = .none
@@ -151,10 +156,12 @@ extension TableScene {
             guard let n = hand.node(for: card) else { return false }
             from = layer(.hand).convert(n.position, from: hand)
             node = CardNode(card: card, size: layout.cardSize)
+            node.isPrivate = true  // my hand's face: `hideHand()` turns it down mid-drag
         case .tray(let card, _):
             guard !store.actionInFlight, let f = trays.frame(of: card) else { return false }
             from = CGPoint(x: f.midX, y: f.midY)
             node = CardNode(card: card, size: layout.cardSize)
+            node.isPrivate = true
         case .pile(let source):
             guard let seat = actingSeat, model?.drawSources(for: seat).contains(source) == true else { return false }
             from = source == .deck ? deck.position : discard.position
@@ -254,6 +261,10 @@ extension TableScene {
     // MARK: taps
 
     private func tap(_ source: TableInputState.Source, at p: CGPoint) {
+        if trayYarn != nil, !source.isTray {
+            trayYarn = nil  // a picked-up Yarn goes back down on any other tap
+            refresh()
+        }
         if actingSeat == nil, liftedCard == nil {
             switch source {
             case .none, .other, .pile: onTableTap()
@@ -264,7 +275,7 @@ extension TableScene {
             // Only local taps while an action is in flight.
             switch source {
             case .menu: onMenu()
-            case .tower: onTower()
+            case .tower: showScoreboard()
             case .sort: cycleSort()
             case .hand(let card): liftedCard = liftedCard == card ? nil : card
             default: break
@@ -277,7 +288,7 @@ extension TableScene {
         case .menu:
             onMenu()
         case .tower:
-            onTower()
+            showScoreboard()
         case .sort:
             cycleSort()
         case .layDown:
@@ -288,6 +299,13 @@ extension TableScene {
         case .tray(let card, let tray):
             if let held = liftedCard {
                 if !tryTray(held, tray) { nope(card: held) }
+            } else if let pick = trayYarn {
+                tapWithYarn(pick, on: card, in: tray)
+            } else if trayState.canMoveYarn(card, inTray: tray) {
+                // Tap path for placing a Yarn (spec §13): pick it up, then tap its new slot.
+                trayYarn = (card, tray)
+                Haptics.shared.tick()
+                refresh()
             } else {
                 returnFromTray(card, toX: nil)
             }
@@ -300,6 +318,32 @@ extension TableScene {
         case .other:
             tapTarget(at: p)
         }
+    }
+
+    /// A tap on a tray card while a Yarn is picked up: another slot of its tray moves the Yarn
+    /// there (`TrayState.moveYarn`); the Yarn itself goes back to the hand; another tray drops
+    /// the pick.
+    private func tapWithYarn(_ pick: (card: CardID, tray: Int), on card: CardID, in tray: Int) {
+        trayYarn = nil
+        if card == pick.card {
+            returnFromTray(card, toX: nil)
+            return
+        }
+        guard tray == pick.tray, let index = trayState.slots[tray].firstIndex(of: card) else { return refresh() }
+        let before = trayState
+        trayState.moveYarn(pick.card, inTray: tray, toIndex: index)
+        refresh()
+        if trayState == before {
+            nope(node: nil)  // no run puts the Yarn there
+        } else {
+            Haptics.shared.tick()
+        }
+    }
+
+    /// The tower tap: the scoreboard for the table as drawn.
+    private func showScoreboard() {
+        guard let model else { return }
+        onTower(model)
     }
 
     /// The second tap of tap-tap: a cat, a tray or a laid group for the selected card.

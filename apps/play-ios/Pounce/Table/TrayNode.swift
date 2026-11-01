@@ -88,8 +88,9 @@ final class TrayNode: SKNode {
     }
 
     /// Shows the cards in each tray (leaving out `hidden`, e.g. a card being dragged), gold
-    /// for valid trays, and the target highlight on `targets`.
-    func show(_ state: TrayState, hidden: Set<CardID>, targets: Bool) {
+    /// for valid trays, the target highlight on `targets`, and `lifted` (a Yarn picked up to
+    /// move by taps) raised above its neighbors.
+    func show(_ state: TrayState, hidden: Set<CardID>, targets: Bool, lifted: CardID? = nil) {
         guard state.requirements == requirements else { return }
         var seen = Set<CardID>()
         shownCards = []
@@ -101,7 +102,7 @@ final class TrayNode: SKNode {
             valid.append(isValid)
             slot.tray.texture = TableArt.table(isValid ? ArtName.trayGold : ArtName.tray)
             slot.example.isHidden = !cards.isEmpty
-            layoutCards(cards, in: slot)
+            layoutCards(cards, in: slot, lifted: lifted)
             seen.formUnion(cards)
             slot.node.setScale(targets ? 1.04 : 1)
             slot.tray.colorBlendFactor = 0
@@ -218,7 +219,7 @@ final class TrayNode: SKNode {
         }
     }
 
-    private func layoutCards(_ cards: [CardID], in slot: Slot) {
+    private func layoutCards(_ cards: [CardID], in slot: Slot, lifted: CardID?) {
         let size = Self.cardSize(slot)
         let (start, step) = fan(count: cards.count, card: size, slot: slot)
         for (j, id) in cards.enumerated() {
@@ -235,11 +236,12 @@ final class TrayNode: SKNode {
                 slot.cards.addChild(node)
             }
             node.size = size
-            node.position = CGPoint(x: start + CGFloat(j) * step, y: 0)
+            let up = id == lifted
+            node.position = CGPoint(x: start + CGFloat(j) * step, y: up ? size.height * 0.28 : 0)
             node.zRotation = 0
-            node.setScale(1)
+            node.setScale(up ? 1.1 : 1)
             node.alpha = 1
-            node.zPosition = CGFloat(j) * 0.01
+            node.zPosition = up ? 1 : CGFloat(j) * 0.01
         }
     }
 }

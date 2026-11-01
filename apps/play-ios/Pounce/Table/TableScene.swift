@@ -28,8 +28,9 @@ final class TableScene: SKScene {
     let director = AnimationDirector(view: nil)
     /// The paw button top-right (`table.menu`).
     var onMenu: () -> Void = {}
-    /// The tower was tapped (`table.tower`): the shell shows the scoreboard.
-    var onTower: () -> Void = {}
+    /// The tower was tapped (`table.tower`): the shell shows the scoreboard for the table as
+    /// drawn (never the store's newer truth, which would spoil a celebration still playing).
+    var onTower: (TableModel) -> Void = { _ in }
     /// The game is over and its celebration has played (or the table opened finished).
     var onGameOver: ([Seat]) -> Void = { _ in }
     /// The face-up hand changed (a reveal landed or the hand turned face down). The shell
@@ -58,6 +59,9 @@ final class TableScene: SKScene {
         }
     }
     private var selection: CardID?
+    /// A Yarn picked up in a valid run tray (tap path for moving it, spec §13): the next tap on
+    /// another slot of that tray moves it there. Callers `refresh()` after changing it.
+    var trayYarn: (card: CardID, tray: Int)?
 
     // Interaction state (TableInput.swift).
     var input = TableInputState()
@@ -111,8 +115,10 @@ final class TableScene: SKScene {
     private(set) var animating = false
     /// The store seq this scene has played or drawn up to.
     private var seenSeq = -1
-    /// The store seq the drawn table reflects: game events at or below it are already shown
-    /// (a lagging queue catches up instead of replaying them).
+    /// The store seq the drawn table reflects (`RoomStore.settledSeq` when it was drawn): game
+    /// events at or below it are already shown (a lagging queue catches up instead of
+    /// replaying them). Never `lastSeq`: events past the last snapshot are in `room` only as
+    /// turn, step and status, so a redraw between them and their snapshot must not skip them.
     private var drawnSeq = -1
     /// A shell reconcile that arrived mid-timeline: its `revealed`, applied by the next
     /// `.reconcile` intent (or after `deferLimit` if none comes).
@@ -268,17 +274,27 @@ final class TableScene: SKScene {
         }
     }
 
-    /// Plays one store intent: game events animate (Task 17), then `.reconcile` snaps. Intents
-    /// play one at a time in arrival order, even when two callers overlap (the session's replay
-    /// of intents queued before the table attached, and its live feed).
+    /// Queues one store intent: game events animate (Task 17), then `.reconcile` snaps. Intents
+    /// play one at a time in the order they were queued; queuing is synchronous, so the
+    /// session's replay of intents buffered before the table attached lands ahead of its live
+    /// feed.
+    func enqueue(_ intent: TableIntent) {
+        _ = chain(intent)
+    }
+
+    /// `enqueue`, then waits until that intent has played.
     func play(_ intent: TableIntent) async {
+        await chain(intent).value
+    }
+
+    private func chain(_ intent: TableIntent) -> Task<Void, Never> {
         let previous = playChain
         let next = Task { @MainActor [weak self] in
             await previous?.value
             await self?.playNow(intent)
         }
         playChain = next
-        await next.value
+        return next
     }
 
     private func playNow(_ intent: TableIntent) async {
@@ -303,6 +319,7 @@ final class TableScene: SKScene {
                 return  // the table already shows it
             }
             guard model?.game != nil, layout != nil else { return reconcileFromStore() }
+            if let model, let said = TableAnnouncement.announcement(for: event, model: model) { announce(said) }
             animating = true
             #if DEBUG
             let started = ContinuousClock.now
@@ -393,10 +410,10 @@ final class TableScene: SKScene {
         provisionalCard = nil
     }
 
-    /// The table is about to show the store's room as of now.
+    /// The table is about to show the store's room as of now: whole through `settledSeq`.
     private func markDrawn() {
-        seenSeq = max(seenSeq, store.lastSeq)
-        drawnSeq = store.lastSeq
+        seenSeq = max(seenSeq, store.settledSeq)
+        drawnSeq = store.settledSeq
     }
 
     /// Redraws from the store's room, keeping the last reveal only while it still belongs to
@@ -434,10 +451,12 @@ final class TableScene: SKScene {
         }
         let bottom = Self.bottomSeat(model, revealed: shownRevealed)
         bottomSeat = bottom
-        let opponentCount = bottom.map { model.opponents(bottom: $0).count } ?? max(game.handCounts.count - 1, 1)
+        let barSeats = model.barSeats(bottom: bottom)
         let layout = TableLayout(
-            size: size, safeTop: safeInsets.top, safeBottom: safeInsets.bottom, opponents: max(opponentCount, 1))
+            size: size, safeTop: safeInsets.top, safeBottom: safeInsets.bottom, opponents: max(barSeats.count, 1))
         self.layout = layout
+        for l in [Layer.rug, .piles, .laidZone, .tower] { layer(l).isHidden = false }
+        opponents.isHidden = false
 
         // Room and rug.
         background.isHidden = false
@@ -458,10 +477,9 @@ final class TableScene: SKScene {
 
         laidZone.update(model: model, layout: layout)
         tower.update(model: model, layout: layout)
-        if let bottom {
-            let turnedOn = opponents.update(model: model, bottom: bottom, layout: layout)
-            for seat in turnedOn { pulseTurn(seat) }
-        }
+        // A phone holding no seat shows every seat in the bar.
+        let turnedOn = opponents.update(model: model, seats: barSeats, layout: layout)
+        for seat in turnedOn { pulseTurn(seat) }
 
         // Hand: faces only for the revealed seat; backs for a seat of mine that isn't revealed.
         // Cards in trays, in flight or under the finger are left out of the fan.
@@ -483,6 +501,9 @@ final class TableScene: SKScene {
             content = .backs(game.handCounts[safe: bottom] ?? 0)
         } else {
             content = .none
+        }
+        if let pick = trayYarn, !faceUp || !trayState.canMoveYarn(pick.card, inTray: pick.tray) {
+            trayYarn = nil  // its tray changed or the hand went away: drop the pick
         }
         if !faceUp {
             selection = nil
@@ -507,7 +528,7 @@ final class TableScene: SKScene {
             trays.update(requirements: trayState.requirements, layout: layout)
             var hidden: Set<CardID> = []
             if let dragCard { hidden.insert(dragCard) }
-            trays.show(trayState, hidden: hidden, targets: glows.trays)
+            trays.show(trayState, hidden: hidden, targets: glows.trays, lifted: trayYarn?.card)
             if !glows.layDown { trays.layDownButton.isHidden = true }
         } else {
             trays.isHidden = true
@@ -550,12 +571,20 @@ final class TableScene: SKScene {
         trayState.keep(only: Set(cards))
     }
 
+    /// No game (or no size yet): nothing of a table shows. Piles, the laid zone, the tower,
+    /// the opponents bar, the trays and the hand all go, not just the hand.
     private func clearTable() {
         layout = nil
         bottomSeat = nil
         selection = nil
+        trayYarn = nil
         clearProvisional()
         sortButton.isHidden = true
+        for l in [Layer.rug, .piles, .laidZone, .tower] { layer(l).isHidden = true }
+        opponents.clear()
+        opponents.isHidden = true
+        trays.isHidden = true
+        trays.layDownButton.isHidden = true
         hand.update(.none, layout: TableLayout(size: size, safeTop: 0, safeBottom: 0, opponents: 1), lifted: nil, dimmed: false)
     }
 
