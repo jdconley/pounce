@@ -73,7 +73,7 @@ for sim in "$SIM_A" "$SIM_B"; do
     -open-link "pounce-dev://j/$CODE" >/dev/null
   sleep 4
 done
-sleep 8
+sleep 15
 xcrun simctl io "$SIM_A" screenshot "$OUT/lobby-A.png" >/dev/null 2>&1
 xcrun simctl io "$SIM_B" screenshot "$OUT/lobby-B.png" >/dev/null 2>&1
 echo "lobby screenshots: $OUT/lobby-A.png $OUT/lobby-B.png"
