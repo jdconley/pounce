@@ -21,7 +21,8 @@ with a SpriteKit table. Apple frameworks only, no third-party packages.
 scripts/bootstrap.sh
 swift test --package-path PounceKit
 xcodebuild -project Pounce.xcodeproj -scheme Pounce \
-  -destination 'platform=iOS Simulator,name=iPhone 17 Pro,OS=26.2' test
+  -destination 'platform=iOS Simulator,name=iPhone 17 Pro,OS=26.2' build-for-testing
+scripts/ui-tests.sh        # the UI suite; the live tests need the dev server, which this script starts
 ```
 
 If simulator code signing complains about provisioning, add `CODE_SIGNING_ALLOWED=NO` to the
@@ -72,19 +73,23 @@ then the build setting (Debug: `http://localhost:8787`, optionally overridden by
 
 ## Play on your phone
 
-Phones reach the dev server over Tailscale, through one extra `tailscale serve` on port 8443.
+Phones reach the dev server over Tailscale, through one extra `tailscale serve` on one https port
+(default 8443; set `POUNCE_TAILNET_PORT` to use another, for example when something else on the Mac
+already listens on 8443).
 
 1. Start the dev server: `scripts/dev-server.sh`.
 2. Expose it: `scripts/tailnet-serve.sh up` (`status` shows what is served, `down` removes it).
-   The script only ever adds or removes `:8443`. It never touches any other serve (for example
-   the one on `:4343`), and it refuses if `:8443` is already used by something else. A process on
-   the Mac that listens on `:8443` itself can answer before the serve does; `up` warns if it sees one.
-   Check with `curl -s https://<mac>.<tailnet>.ts.net:8443/healthz`, which should say `"configured":true`.
+   The script only ever adds or removes the serve on its one port. It never touches any other serve
+   (for example the one on `:4343`), and it refuses if the port is already used by something else. A
+   process on the Mac that listens on that port itself can answer before the serve does; `up` warns
+   if it sees one, and then you should pick another port. Check with
+   `curl -s https://<mac>.<tailnet>.ts.net:<port>/healthz`, which should say `"configured":true`.
 3. `cp Config/Local.xcconfig.example Config/Local.xcconfig` (gitignored). It sets
-   `POUNCE_API_BASE_URL = https://gin-and-tonic.tailc8d3c2.ts.net:8443`.
+   `POUNCE_API_BASE_URL = https://gin-and-tonic.tailc8d3c2.ts.net:8443`. If you chose another port with
+   `POUNCE_TAILNET_PORT`, change the port in that URL to match.
 4. `scripts/bootstrap.sh`, then run the `Pounce` scheme on the phone from Xcode with automatic signing
    (team `B222J9J7B8`).
-5. When done: `scripts/tailnet-serve.sh down`.
+5. When done: `scripts/tailnet-serve.sh down` (with the same `POUNCE_TAILNET_PORT`, if you set one).
 
 A LAN alternative with no Tailscale: set `POUNCE_API_BASE_URL=http://<mac-ip>:8787` in the scheme's
 environment. iOS may ask for local network permission.
@@ -102,14 +107,15 @@ xcodebuild -project Pounce.xcodeproj -scheme Pounce \
 scripts/check-assets.sh                                   # manifest, asset catalog, sounds, ArtName.swift agree
 ```
 
-`xcodebuild test` runs the unit and UI tests, but the UI suite includes tests that play against the
-live dev server, so run it through `scripts/ui-tests.sh` (below), not a bare `xcodebuild test`.
+The UI suite includes tests that play against the live dev server, so run it through
+`scripts/ui-tests.sh` (below), not a bare `xcodebuild test`.
 
 ### End-to-end
 
-These scripts start the dev server themselves when it is not already running and stop it again on
-exit (a server that was already up is left alone). They share `DEV_SERVER_URL` (default
-`http://localhost:8787`) and `DEV_SERVER_LOG`.
+`e2e.sh`, `ui-tests.sh` and `multi-sim.sh` start the dev server themselves when it is not already
+running and stop it again on exit (a server that was already up is left alone). They share
+`DEV_SERVER_URL` (default `http://localhost:8787`) and `DEV_SERVER_LOG`. `screenshots.sh` needs no
+server (it uses demo modes, plus whatever the device already knows for Home).
 
 | Script | What it does | Environment |
 | --- | --- | --- |

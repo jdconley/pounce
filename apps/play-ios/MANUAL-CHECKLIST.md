@@ -19,6 +19,9 @@ Setup: see "Play on your phone" in `README.md` (`scripts/dev-server.sh`, `script
 - [ ] The universal link from Messages opens the app straight into the lobby (needs the deploy and the
       apple-app-site-association file).
 - [ ] The QR code in the lobby joins from the other phone.
+- [ ] On the first TestFlight build, confirm the exported app's `aps-environment` is `production`
+      (the Release archive relies on export re-signing; the source entitlements say `development`):
+      `codesign -d --entitlements - <path to the exported Pounce.app>`.
 - [ ] A real "your turn" push arrives on a TestFlight build (Debug builds get sandbox tokens and never
       receive production pushes).
 
