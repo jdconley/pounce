@@ -1,7 +1,7 @@
 import SwiftUI
 
-/// Switches on the route with a springy transition. Pick-cat, Home, Join and Room are
-/// text-free placeholders until their real screens land.
+/// Switches on the route with a springy transition. Join and Room are text-free placeholders
+/// until their real screens land.
 struct RootView: View {
     @Environment(AppModel.self) private var model
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -31,9 +31,9 @@ struct RootView: View {
     @ViewBuilder private var screen: some View {
         switch model.route {
         case .pickCat:
-            PlaceholderScreen(color: Palette.violet, art: ArtName.gameTile, id: "screen-pickCat")
+            PickCatView()
         case .home:
-            PlaceholderScreen(color: Palette.magenta, art: ArtName.homeBg, id: "screen-home")
+            HomeView()
         case .join:
             PlaceholderScreen(color: Palette.teal, art: ArtName.iconKeypad, id: "screen-join")
         case .room:

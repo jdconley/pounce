@@ -19,16 +19,19 @@ struct PillButton: View {
     let icon: String
     let color: Color
     let size: PillSize
+    /// Overrides the size's default width (e.g. full-width CTAs).
+    let width: CGFloat?
     let accessibilityLabel: LocalizedStringKey
     let action: () -> Void
 
     init(
-        icon: String, color: Color, size: PillSize = .large, accessibilityLabel: LocalizedStringKey,
-        action: @escaping () -> Void
+        icon: String, color: Color, size: PillSize = .large, width: CGFloat? = nil,
+        accessibilityLabel: LocalizedStringKey, action: @escaping () -> Void
     ) {
         self.icon = icon
         self.color = color
         self.size = size
+        self.width = width
         self.accessibilityLabel = accessibilityLabel
         self.action = action
     }
@@ -41,7 +44,7 @@ struct PillButton: View {
         } label: {
             EmptyView()
         }
-        .buttonStyle(PillButtonStyle(icon: icon, color: color, size: size))
+        .buttonStyle(PillButtonStyle(icon: icon, color: color, size: size, width: width))
         .accessibilityLabel(accessibilityLabel)
     }
 }
@@ -50,13 +53,14 @@ private struct PillButtonStyle: ButtonStyle {
     let icon: String
     let color: Color
     let size: PillSize
+    let width: CGFloat?
 
     static let lip: CGFloat = 6
     static let press: CGFloat = 4
     static let outline: CGFloat = 4
 
     func makeBody(configuration: Configuration) -> some View {
-        let w = size.width
+        let w = width ?? size.width
         let h = size.height
         let travel = configuration.isPressed ? Self.press : 0
         ZStack(alignment: .top) {

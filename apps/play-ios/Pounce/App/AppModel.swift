@@ -75,10 +75,20 @@ final class AppModel {
         Task { await refreshTables() }
     }
 
+    /// Home's cards: the server's list joined with the local cache.
+    var homeItems: [HomeTableItem] {
+        HomeTables.merge(entries: tables, cache: cache, now: .now)
+    }
+
     func refreshTables() async {
         cache = tableCache.all()
         do {
-            tables = try await api.listTables()
+            let listed = try await api.listTables()
+            tables = listed
+            // A cached room the server no longer lists is gone for good.
+            let live = Set(listed.map(\.code))
+            for code in cache.keys where !live.contains(code) { tableCache.remove(code: code) }
+            cache = tableCache.all()
         } catch {
             // Offline or server down: keep the last list; Home still draws from the cache.
         }
@@ -116,6 +126,32 @@ final class AppModel {
         case .move(let code, let moveCode):
             open(code: code, intent: .move(moveCode: moveCode))
         }
+    }
+
+    func showJoin() {
+        route = .join
+    }
+
+    // MARK: People on this phone (edits apply to tables joined afterwards)
+
+    func updateOwner(name: String, cat: Int) {
+        peopleStore.setOwner(name: name, cat: cat)
+        people = peopleStore.load()
+    }
+
+    func addPerson(name: String, cat: Int) {
+        peopleStore.add(name: name, cat: cat)
+        people = peopleStore.load()
+    }
+
+    func updatePerson(_ person: Person) {
+        peopleStore.update(person)
+        people = peopleStore.load()
+    }
+
+    func removePerson(id: String) {
+        peopleStore.remove(id: id)
+        people = peopleStore.load()
     }
 
     func goHome() {
