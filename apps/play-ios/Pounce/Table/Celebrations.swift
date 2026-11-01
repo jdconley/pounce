@@ -201,6 +201,8 @@ extension TableScene {
         let low = moves.map(\.1).min() ?? 0
         let high = moves.map(\.2).max() ?? 0
         await focusTower(on: tower.focusRect(low: low, high: high))
+        // The sunburst behind the shelf they climb to, as at game over (one turn, then still).
+        tower.spinSunburst(at: tower.spot(shelf: high, index: 0, of: 1))
         let leapGap = t.leapStagger(leapers: moves.count)
         let tower = tower
         let leaps = moves.enumerated().map { i, move in
@@ -324,10 +326,14 @@ extension TableScene {
             : .group([.scale(to: scale, duration: t.zoomIn), .move(to: position, duration: t.zoomIn)]).eased(.easeInEaseOut)
         // Landed flyers (a card just discarded, say) sit in the fx layer above the veil: they
         // fade with the table and the next reconcile replaces them.
-        var items: [(SKAction, SKNode)] = [(zoom, towerLayer), (.fadeAlpha(to: 0.62, duration: t.zoomIn), veil)]
+        // Dark enough that the table (melds, badges, piles) drops away behind the tower.
+        var items: [(SKAction, SKNode)] = [(zoom, towerLayer), (.fadeAlpha(to: Self.veilAlpha, duration: t.zoomIn), veil)]
         for node in transients { items.append((.fadeOut(withDuration: t.zoomIn), node)) }
         await director.runAll(items, decorative: true)
     }
+
+    /// How dark the spotlight veil gets over the table.
+    static let veilAlpha: CGFloat = 0.82
 
     private func unfocusTower() async {
         let t = CelebrationTiming.self
@@ -336,6 +342,7 @@ extension TableScene {
             (.group([.scale(to: 1, duration: t.zoomOut), .move(to: .zero, duration: t.zoomOut)]).eased(.easeInEaseOut), towerLayer),
         ]
         if let veil = celebration.veil { items.append((.fadeOut(withDuration: t.zoomOut), veil)) }
+        tower.hideSunburst(duration: t.zoomOut)
         await director.runAll(items, decorative: true)
         endFocus()
     }

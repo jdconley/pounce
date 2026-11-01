@@ -275,10 +275,12 @@ final class TowerNode: SKNode {
 
     /// The sunburst behind the top cushion pops in and turns once, slowly, then stops.
     /// Decorative (only rotation and alpha), so it runs on past the reconcile that follows.
-    func spinSunburst() {
+    /// The sunburst behind `point` (tower space; the top cushion by default), turning once
+    /// (`CelebrationTiming.sunburstLoop`), then still, so the view can pause again.
+    func spinSunburst(at point: CGPoint? = nil) {
         guard let director else { return }
         sunburst.isHidden = false
-        sunburst.position = topCenter
+        sunburst.position = point ?? topCenter
         sunburst.zRotation = 0
         let reduce = UIAccessibility.isReduceMotionEnabled
         let t = CelebrationTiming.self
@@ -292,6 +294,17 @@ final class TowerNode: SKNode {
             ])
         let sunburst = sunburst
         Task { await director.run(spin, on: sunburst, decorative: true) }
+    }
+
+    /// Fades the sunburst out (the round-over zoom is leaving); the next redraw hides it too.
+    func hideSunburst(duration: TimeInterval) {
+        guard !sunburst.isHidden else { return }
+        guard let director else {
+            sunburst.isHidden = true
+            return
+        }
+        let sunburst = sunburst
+        Task { await director.run(.sequence([.fadeOut(withDuration: duration), .hide()]), on: sunburst, decorative: true) }
     }
 
     // MARK: building
