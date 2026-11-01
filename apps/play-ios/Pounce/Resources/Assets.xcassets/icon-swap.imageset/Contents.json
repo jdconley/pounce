@@ -1,7 +1,7 @@
 {
   "images" : [
-    { "filename" : "icon-swap_ph@2x.png", "idiom" : "universal", "scale" : "2x" },
-    { "filename" : "icon-swap_ph@3x.png", "idiom" : "universal", "scale" : "3x" }
+    { "filename" : "icon-swap@2x.png", "idiom" : "universal", "scale" : "2x" },
+    { "filename" : "icon-swap@3x.png", "idiom" : "universal", "scale" : "3x" }
   ],
   "info" : { "author" : "xcode", "version" : 1 }
 }

@@ -1,7 +1,7 @@
 {
   "images" : [
-    { "filename" : "badge-laid_ph@2x.png", "idiom" : "universal", "scale" : "2x" },
-    { "filename" : "badge-laid_ph@3x.png", "idiom" : "universal", "scale" : "3x" }
+    { "filename" : "badge-laid@2x.png", "idiom" : "universal", "scale" : "2x" },
+    { "filename" : "badge-laid@3x.png", "idiom" : "universal", "scale" : "3x" }
   ],
   "info" : { "author" : "xcode", "version" : 1 }
 }

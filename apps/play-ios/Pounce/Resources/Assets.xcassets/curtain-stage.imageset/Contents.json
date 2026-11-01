@@ -1,7 +1,7 @@
 {
   "images" : [
-    { "filename" : "curtain-stage_ph@2x.png", "idiom" : "universal", "scale" : "2x" },
-    { "filename" : "curtain-stage_ph@3x.png", "idiom" : "universal", "scale" : "3x" }
+    { "filename" : "curtain-stage@2x.png", "idiom" : "universal", "scale" : "2x" },
+    { "filename" : "curtain-stage@3x.png", "idiom" : "universal", "scale" : "3x" }
   ],
   "info" : { "author" : "xcode", "version" : 1 }
 }
