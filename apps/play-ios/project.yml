@@ -46,14 +46,25 @@ targets:
       - package: PounceKit
         product: PounceKit
     postBuildScripts:
-      # The Debug-only pounce-dev URL scheme must never ship: when POUNCE_URL_SCHEMES is
-      # empty (Release), delete the CFBundleURLTypes entry from the built Info.plist.
+      # The Debug-only pounce-dev URL scheme must never ship. In Release (or whenever
+      # POUNCE_URL_SCHEMES is empty) delete CFBundleURLTypes from the built Info.plist; only
+      # "key absent" is tolerated, any other failure fails the build. Then a post-condition:
+      # a Release plist that still mentions pounce-dev or CFBundleURLTypes fails the build.
       # Runs before code signing, so the signature covers the stripped plist.
       - name: Strip debug URL scheme
         basedOnDependencyAnalysis: false
         script: |
-          if [ -z "${POUNCE_URL_SCHEMES// /}" ]; then
-            /usr/libexec/PlistBuddy -c "Delete :CFBundleURLTypes" "${TARGET_BUILD_DIR}/${INFOPLIST_PATH}" 2>/dev/null || true
+          set -eu
+          plist="${TARGET_BUILD_DIR}/${INFOPLIST_PATH}"
+          schemes="$(printf '%s' "${POUNCE_URL_SCHEMES:-}" | tr -d '[:space:]')"
+          if [ "${CONFIGURATION}" = "Release" ] || [ -z "$schemes" ]; then
+            if /usr/libexec/PlistBuddy -c "Print :CFBundleURLTypes" "$plist" >/dev/null 2>&1; then
+              /usr/libexec/PlistBuddy -c "Delete :CFBundleURLTypes" "$plist"
+            fi
+          fi
+          if [ "${CONFIGURATION}" = "Release" ] && /usr/bin/plutil -p "$plist" | grep -q -e pounce-dev -e CFBundleURLTypes; then
+            echo "error: Release Info.plist still registers a URL scheme (pounce-dev / CFBundleURLTypes): $plist"
+            exit 1
           fi
   PounceUITests:
     type: bundle.ui-testing
