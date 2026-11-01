@@ -70,6 +70,29 @@ then the build setting (Debug: `http://localhost:8787`, optionally overridden by
 - Push cannot arrive in Debug builds. Test payload handling with `scripts/push.sh <CODE> [NAME]`
   (an `xcrun simctl push` with a payload shaped like the server's).
 
+## Play on your phone
+
+Phones reach the dev server over Tailscale, through one extra `tailscale serve` on port 8443.
+
+1. Start the dev server: `scripts/dev-server.sh`.
+2. Expose it: `scripts/tailnet-serve.sh up` (`status` shows what is served, `down` removes it).
+   The script only ever adds or removes `:8443`. It never touches any other serve (for example
+   the one on `:4343`), and it refuses if `:8443` is already used by something else. A process on
+   the Mac that listens on `:8443` itself can answer before the serve does; `up` warns if it sees one.
+   Check with `curl -s https://<mac>.<tailnet>.ts.net:8443/healthz`, which should say `"configured":true`.
+3. `cp Config/Local.xcconfig.example Config/Local.xcconfig` (gitignored). It sets
+   `POUNCE_API_BASE_URL = https://gin-and-tonic.tailc8d3c2.ts.net:8443`.
+4. `scripts/bootstrap.sh`, then run the `Pounce` scheme on the phone from Xcode with automatic signing
+   (team `B222J9J7B8`).
+5. When done: `scripts/tailnet-serve.sh down`.
+
+A LAN alternative with no Tailscale: set `POUNCE_API_BASE_URL=http://<mac-ip>:8787` in the scheme's
+environment. iOS may ask for local network permission.
+
+Share links always use `play.conleychaos.com`, so on the phone join by typing the room code. The QR
+code works only once the server is deployed. Debug builds get sandbox APNs tokens and the server
+pushes through production APNs, so a debug build never receives a real "your turn" push.
+
 ## Tests
 
 ```sh
@@ -136,3 +159,5 @@ custom URL scheme.
 - Create the App Store Connect app record for `com.conleychaos.play`, and add TestFlight testers.
 - Deploy the server to `play.conleychaos.com` (also needed for the QR code, universal links, and the
   invite bubble art).
+
+`MANUAL-CHECKLIST.md` lists the checks no script can do.
