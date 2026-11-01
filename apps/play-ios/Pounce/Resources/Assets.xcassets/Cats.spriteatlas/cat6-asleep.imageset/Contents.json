@@ -1,7 +1,7 @@
 {
   "images" : [
-    { "filename" : "cat6-asleep_ph@2x.png", "idiom" : "universal", "scale" : "2x" },
-    { "filename" : "cat6-asleep_ph@3x.png", "idiom" : "universal", "scale" : "3x" }
+    { "filename" : "cat6-asleep@2x.png", "idiom" : "universal", "scale" : "2x" },
+    { "filename" : "cat6-asleep@3x.png", "idiom" : "universal", "scale" : "3x" }
   ],
   "info" : { "author" : "xcode", "version" : 1 }
 }

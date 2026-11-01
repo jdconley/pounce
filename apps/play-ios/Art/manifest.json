@@ -510,7 +510,8 @@
    64,
    90
   ],
-  "batch": "table"
+  "batch": "table",
+  "fit": "fill"
  },
  {
   "name": "card-back",
@@ -519,7 +520,8 @@
    64,
    90
   ],
-  "batch": "table"
+  "batch": "table",
+  "fit": "fill"
  },
  {
   "name": "coat-tabby",

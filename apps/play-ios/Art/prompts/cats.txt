@@ -1,6 +1,0 @@
-Use your image generation tool to generate ONE image. Match the attached reference style exactly (Loud Toy: glossy 3D cartoon, very thick dark ink outlines #1B0B3A, saturated candy colors, rim light). No emoji, no logos, no words or letters anywhere.
-
-Character sheet of ONE cat character, a single row of seven separate full-body poses, evenly spaced, on a flat solid electric-teal #00E5D0 background with wide gaps so no two poses touch. Left to right: (1) idle: sitting upright, calm and smug; (2) awake: alert, eyes wide, ears up; (3) away: facing away, tail curled, ignoring everyone; (4) asleep: curled in a loaf, eyes closed, sleepy; (5) leap: mid-pounce, stretched out, claws forward; (6) terrified: fur puffed up, wide eyes, mouth open, tail bottle-brush; (7) celebrate: standing with paws up, huge grin. Every pose is the same cat with the same markings, same scale, drawn within a square frame.
-
-THE CAT (replace this line per run; roster by index): 0 orange tabby with stripes, 1 black-and-white tuxedo, 2 calico with three patches, 3 gray with a paw-print chest mark, 4 solid black with yellow eyes, 5 white fluffy longhair, 6 siamese with dark points and blue eyes, 7 tortoiseshell.
-CAT: 0 orange tabby with stripes
