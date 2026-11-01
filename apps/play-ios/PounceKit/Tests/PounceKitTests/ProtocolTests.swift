@@ -149,6 +149,18 @@ import Testing
         #expect(try Codec.decode(fixture("moveCode")) == .moveCode(seat: 1, code: "BCDFGH"))
     }
 
+    @Test func futureProtocolSnapshotIsUnsupportedNotRejected() throws {
+        #expect(try Codec.decode(#"{"t":"snapshot","protocol":2,"seq":1,"room":{"weird":true}}"#)
+            == .unsupportedProtocol(2))
+        // Protocol 1 still decodes the room, and a broken protocol-1 room still throws.
+        guard case .snapshot(1, _, _) = try Codec.decode(fixture("snapshot-lobby")) else {
+            Issue.record("protocol 1 snapshot did not decode"); return
+        }
+        #expect(throws: (any Error).self) {
+            _ = try Codec.decode(#"{"t":"snapshot","protocol":1,"seq":1,"room":{"weird":true}}"#)
+        }
+    }
+
     @Test func malformedAndUnknownMessagesThrow() {
         #expect(throws: (any Error).self) { _ = try Codec.decode("not json") }
         #expect(throws: (any Error).self) { _ = try Codec.decode(#"{"t":"mystery"}"#) }

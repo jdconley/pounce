@@ -52,6 +52,9 @@ public struct ErrorCode: RawRepresentable, Codable, Hashable, Sendable {
 /// Server to client (discriminator key `t`).
 public enum ServerMessage: Decodable, Equatable, Sendable {
     case snapshot(protocol: Int, seq: Int, room: RoomView)
+    /// A snapshot from a protocol this client doesn't speak (anything but 1). Its
+    /// room is never decoded, since a future shape may not parse; the app asks for an update.
+    case unsupportedProtocol(Int)
     case event(seq: Int, event: RoomEvent)
     case moveCode(seat: Seat, code: String)
     case error(ErrorCode)
@@ -63,7 +66,12 @@ public enum ServerMessage: Decodable, Equatable, Sendable {
         let t = try c.decode(String.self, forKey: .t)
         switch t {
         case "snapshot":
-            self = .snapshot(protocol: try c.decode(Int.self, forKey: .protocol),
+            let version = try c.decode(Int.self, forKey: .protocol)
+            guard version == PounceKit.protocolVersion else {
+                self = .unsupportedProtocol(version)
+                return
+            }
+            self = .snapshot(protocol: version,
                              seq: try c.decode(Int.self, forKey: .seq),
                              room: try c.decode(RoomView.self, forKey: .room))
         case "event":
