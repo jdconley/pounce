@@ -66,6 +66,18 @@ targets:
             echo "error: Release Info.plist still registers a URL scheme (pounce-dev / CFBundleURLTypes): $plist"
             exit 1
           fi
+      # Pounce/Resources/PrivacyInfo.xcprivacy (required-reason APIs, collected data) is a
+      # resource through the `Pounce` source path. App Store Connect rejects an upload without
+      # it, so a build whose bundle lacks it fails here.
+      - name: Check privacy manifest
+        basedOnDependencyAnalysis: false
+        script: |
+          set -eu
+          manifest="${TARGET_BUILD_DIR}/${UNLOCALIZED_RESOURCES_FOLDER_PATH}/PrivacyInfo.xcprivacy"
+          if [ ! -f "$manifest" ]; then
+            echo "error: PrivacyInfo.xcprivacy is missing from the app bundle: $manifest"
+            exit 1
+          fi
   PounceUITests:
     type: bundle.ui-testing
     platform: iOS
