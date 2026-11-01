@@ -6,7 +6,10 @@ public enum TableIntent: Equatable, Sendable {
     case reconcile
     /// The lobby just became a game: play the versus intro before dealing.
     case versusIntro
-    /// Animate one game event; `room` already holds what the event carries.
+    /// Animate one game event. Events only animate: `room` folds in just the turn,
+    /// step and status they imply, for timing. The snapshot the server sends after
+    /// every action, at the same seq as its last event, carries the truth (drawn
+    /// cards, discard top, counts, a finished room) and follows as `.reconcile`.
     case game(GameEvent, seq: Int)
     case presence(seat: Seat, presence: Presence)
     /// The in-flight `act` was refused: snap the provisional move back and wiggle.

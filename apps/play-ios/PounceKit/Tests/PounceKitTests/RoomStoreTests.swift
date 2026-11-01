@@ -186,9 +186,31 @@ private let discard: Action = .discard(card: 46, skipTarget: nil)
         expected.game?.turn = 0
         expected.game?.step = .draw
         expected.game?.status = .gameOver
-        #expect(store.room == expected)  // reshuffle waits for the next snapshot
+        #expect(store.room == expected)  // the snapshot after the action carries the deck count
         #expect(store.lastSeq == 15)
         #expect(store.phase == .playing)
+    }
+
+    @Test func snapshotAfterActionCarriesTheDrawnCard() async throws {
+        let (store, _, room) = try await playingStore(seq: 5)
+        #expect(store.act(seat: 0, .draw(.deck)))
+        let drew = GameEvent.drew(seat: 0, from: .deck, card: 17)
+        store.handle(event(.game(drew), seq: 6))
+
+        var after = room
+        after.game?.step = .play
+        after.game?.deckCount -= 1
+        after.game?.handCounts[0] += 1
+        after.game?.hands[0]?.append(17)
+        store.handle(snapshot(after, seq: 6))
+
+        #expect(store.room == after)
+        #expect(store.room?.game?.hands[0]?.contains(17) == true)
+        #expect(store.room?.game?.step == .play)
+        #expect(!store.actionInFlight)
+        #expect(store.lastSeq == 6)
+        let intents = await allIntents(store)
+        #expect(Array(intents.suffix(2)) == [.game(drew, seq: 6), .reconcile])
     }
 
     @Test func lobbyToPlayingEmitsVersusIntro() async throws {

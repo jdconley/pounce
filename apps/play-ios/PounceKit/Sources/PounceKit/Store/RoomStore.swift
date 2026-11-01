@@ -8,7 +8,10 @@ import Observation
 /// - Every protocol-1 snapshot is applied, even one whose `seq` equals `lastSeq`
 ///   (the reconnect snapshot after a drop), and clears the in-flight lock.
 /// - Events apply only when `seq == lastSeq + 1`; older ones are ignored and a gap
-///   drops the event and reconnects for a fresh snapshot.
+///   drops the event and reconnects for a fresh snapshot. Events animate; the
+///   server follows every game action with a snapshot at the seq of its last
+///   event, which carries the truth. Only turn, step and status are folded in
+///   from events, so the scene's timing is right before that snapshot lands.
 /// - At most one `act` is in flight. A game event, an error, a snapshot or a send
 ///   that never left releases it; a disconnect does not.
 /// - `closed`, `notFound` and `needsUpdate` are terminal: later messages are ignored.
@@ -176,7 +179,7 @@ import Observation
             case .gameOver:
                 room?.game?.status = .gameOver
             default:
-                break  // the next snapshot carries the numbers
+                break  // the snapshot that follows this action carries the rest
             }
             actionInFlight = false
             continuation.yield(.game(game, seq: seq))
