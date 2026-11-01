@@ -268,7 +268,7 @@ struct CatTile: View {
     }
 }
 
-/// Round magenta trash button, drawn like the pills (no trash art in the icon set).
+/// Round magenta remove button, drawn like the pills, with the manifest's delete icon.
 struct DeleteButton: View {
     let action: () -> Void
 
@@ -285,9 +285,10 @@ struct DeleteButton: View {
                 )
                 .overlay(Circle().strokeBorder(Palette.ink, lineWidth: 4))
                 .overlay {
-                    Image(systemName: "trash.fill")
-                        .font(.system(size: 22, weight: .black))
-                        .foregroundStyle(.white)
+                    Image(ArtName.iconDelete)
+                        .resizable()
+                        .scaledToFit()
+                        .frame(width: 32, height: 32)
                         .shadow(color: Palette.ink.opacity(0.5), radius: 0, x: 0, y: 2)
                 }
                 .frame(width: 58, height: 58)

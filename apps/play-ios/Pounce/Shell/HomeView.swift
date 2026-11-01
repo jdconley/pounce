@@ -34,8 +34,10 @@ struct HomeView: View {
                 if showBell { bell.transition(.scale.combined(with: .opacity)) }
             }
         }
-        .background { background }
         .safeAreaInset(edge: .bottom, spacing: 0) { ownerCorner }
+        // Outside the inset: under the owner's corner and the home indicator too (inside it,
+        // the art stopped above the inset and left a dark band at the bottom).
+        .background { background }
         .sheet(isPresented: $showPeople) {
             PeopleSheet()
                 .environment(model)

@@ -21,17 +21,21 @@ struct PillButton: View {
     let size: PillSize
     /// Overrides the size's default width (e.g. full-width CTAs).
     let width: CGFloat?
+    /// A halo of this color around the icon, for an icon that would blend into the pill (the
+    /// gold play icon on the orange start pill).
+    let iconOutline: Color?
     let accessibilityLabel: LocalizedStringKey
     let action: () -> Void
 
     init(
-        icon: String, color: Color, size: PillSize = .large, width: CGFloat? = nil,
+        icon: String, color: Color, size: PillSize = .large, width: CGFloat? = nil, iconOutline: Color? = nil,
         accessibilityLabel: LocalizedStringKey, action: @escaping () -> Void
     ) {
         self.icon = icon
         self.color = color
         self.size = size
         self.width = width
+        self.iconOutline = iconOutline
         self.accessibilityLabel = accessibilityLabel
         self.action = action
     }
@@ -44,7 +48,7 @@ struct PillButton: View {
         } label: {
             EmptyView()
         }
-        .buttonStyle(PillButtonStyle(icon: icon, color: color, size: size, width: width))
+        .buttonStyle(PillButtonStyle(icon: icon, color: color, size: size, width: width, iconOutline: iconOutline))
         .accessibilityLabel(accessibilityLabel)
     }
 }
@@ -54,6 +58,7 @@ private struct PillButtonStyle: ButtonStyle {
     let color: Color
     let size: PillSize
     let width: CGFloat?
+    let iconOutline: Color?
 
     static let lip: CGFloat = 6
     static let press: CGFloat = 4
@@ -85,11 +90,26 @@ private struct PillButtonStyle: ButtonStyle {
                 }
                 .overlay(Capsule().strokeBorder(Palette.ink, lineWidth: Self.outline))
                 .overlay {
-                    Image(icon)
-                        .resizable()
-                        .scaledToFit()
-                        .frame(height: h * 0.58)
-                        .shadow(color: Palette.ink.opacity(0.5), radius: 0, x: 0, y: 2)
+                    ZStack {
+                        if let iconOutline {
+                            // The icon's silhouette, fattened by offset copies: a solid rim.
+                            ForEach(0..<8, id: \.self) { i in
+                                let angle = Double(i) * .pi / 4
+                                Image(icon)
+                                    .resizable()
+                                    .renderingMode(.template)
+                                    .scaledToFit()
+                                    .foregroundStyle(iconOutline)
+                                    .offset(x: cos(angle) * 3.5, y: sin(angle) * 3.5)
+                            }
+                        }
+                        Image(icon)
+                            .resizable()
+                            .scaledToFit()
+                    }
+                    .frame(height: h * 0.58)
+                    .compositingGroup()
+                    .shadow(color: Palette.ink.opacity(0.5), radius: 0, x: 0, y: 2)
                 }
                 .frame(width: w, height: h)
                 .offset(y: travel)

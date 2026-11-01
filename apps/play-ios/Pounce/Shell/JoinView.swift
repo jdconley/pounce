@@ -3,7 +3,8 @@ import SwiftUI
 
 /// Join by code (spec §5.4): the gray cat peeking over five chunky tiles and the room-code
 /// keypad. The fifth character submits. A code that doesn't exist shakes the tiles clear while
-/// the cat shakes its head; no text.
+/// the cat shakes its head; no text. While a code is being checked delete stays live (it
+/// cancels the check), and a check whose socket can't connect shows the offline card.
 struct JoinView: View {
     @Environment(AppModel.self) private var model
 
@@ -15,6 +16,8 @@ struct JoinView: View {
     private static let length = 5
 
     private var checking: Bool { model.probing != nil && model.probing == typed }
+    /// The check's socket failed to connect several times: the server can't be reached.
+    private var offline: Bool { checking && model.room?.offline == true }
 
     var body: some View {
         GeometryReader { geo in
@@ -24,7 +27,7 @@ struct JoinView: View {
                 tiles
                     .padding(.horizontal, 16)
                     .zIndex(1)
-                CodeKeypad(enabled: !checking, onKey: type, onDelete: delete)
+                CodeKeypad(enabled: !checking, deleteEnabled: true, onKey: type, onDelete: delete)
                     .padding(.horizontal, 14)
                     .padding(.top, 22)
                 Spacer(minLength: 8)
@@ -33,6 +36,13 @@ struct JoinView: View {
             .frame(maxWidth: .infinity)
         }
         .background { background }
+        .overlay {
+            if offline {
+                StateCard(kind: .offline, onRetry: { model.room?.retry() }) { model.goHome() }
+                    .transition(.opacity)
+            }
+        }
+        .animation(.easeOut(duration: 0.25), value: offline)
         .onChange(of: model.joinNope) { nope() }
         .onAppear {
             if let bounced = model.takeBouncedCode() {

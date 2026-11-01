@@ -5,6 +5,8 @@ import SwiftUI
 /// spotlight on one person's cat, their name once, and a glowing paw button. Pressing and
 /// holding the paw for `holdDuration` fills its ring and calls `onRevealed`; letting go early
 /// drains the ring and nothing happens, so the last player can't tap through by accident.
+/// The hold is a long-press gesture: sliding the finger off the paw, a cancelled touch (a
+/// system edge gesture, an interruption) or the app leaving the foreground ends it unrevealed.
 /// VoiceOver activates the button at once (its default action).
 ///
 /// The curtain draws nothing private: the face-down cards along the bottom are decoration.
@@ -17,13 +19,14 @@ struct PassCurtainView: View {
     static let holdDuration: Double = 0.6
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.scenePhase) private var scenePhase
     @State private var progress: CGFloat = 0
     @State private var pressing = false
     @State private var done = false
     @State private var appeared = false
     @State private var breathe = false
     @State private var glow = false
-    @State private var hold: Task<Void, Never>?
+    @State private var pressedAt: ContinuousClock.Instant?
 
     var body: some View {
         GeometryReader { geo in
@@ -76,9 +79,9 @@ struct PassCurtainView: View {
         .accessibilityAddTraits(.isModal)
         .accessibilityIdentifier("screen-curtain")
         .onAppear(perform: enter)
-        .onDisappear {
-            hold?.cancel()
-            hold = nil
+        .onDisappear(perform: release)
+        .onChange(of: scenePhase) { _, phase in
+            if phase != .active { release() }
         }
     }
 
@@ -150,11 +153,13 @@ struct PassCurtainView: View {
         .scaleEffect(pressing && !reduceMotion ? 0.95 : 1)
         .animation(.spring(duration: 0.15, bounce: 0.3), value: pressing)
         .contentShape(Circle())
-        .gesture(
-            DragGesture(minimumDistance: 0)
-                .onChanged { _ in if !pressing { begin() } }
-                .onEnded { _ in release() }
-        )
+        // `onPressingChanged(false)` comes on lift, on a cancelled touch and when the finger
+        // slides further than `maximumDistance`; `perform` only after a full, unbroken hold.
+        .onLongPressGesture(
+            minimumDuration: Self.holdDuration,
+            maximumDistance: Self.buttonSide / 2,
+            perform: holdCompleted,
+            onPressingChanged: { down in down ? begin() : release() })
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(Text(
             "Hold to show \(person.name)'s cards",
@@ -176,35 +181,49 @@ struct PassCurtainView: View {
         withAnimation(.easeInOut(duration: 0.9).repeatForever(autoreverses: true)) { glow = true }
     }
 
-    /// Finger down on the paw: the ring starts filling; still down after `holdDuration`, reveal.
+    /// Finger down on the paw: the ring starts filling.
     private func begin() {
-        guard !done else { return }
+        guard !done, scenePhase == .active else { return }
         pressing = true
+        pressedAt = .now
         Haptics.shared.tick()
         Sound.shared.play(ArtName.Sound.sfxTick)
         withAnimation(.linear(duration: Self.holdDuration)) { progress = 1 }
-        hold?.cancel()
-        hold = Task { @MainActor in
-            try? await Task.sleep(for: .seconds(Self.holdDuration))
-            guard !Task.isCancelled, pressing else { return }
-            complete()
-        }
     }
 
-    /// Finger up: too early drains the ring.
+    /// Finger up, slid off, touch cancelled or app inactive: too early drains the ring.
     private func release() {
+        let wasPressing = pressing
         pressing = false
-        hold?.cancel()
-        hold = nil
-        guard !done else { return }
+        let held = pressedAt.map { ContinuousClock.now - $0 >= .seconds(Self.holdDuration * 0.95) } ?? false
+        pressedAt = nil
+        guard !done, wasPressing else { return }
+        if held, scenePhase == .active {
+            // A full hold ends the press too, right around `perform`: leave the ring full for
+            // it, and drain only if no reveal follows (the finger slid off at the last moment).
+            Task { @MainActor in
+                try? await Task.sleep(for: .milliseconds(150))
+                if !done, !pressing { drain() }
+            }
+            return
+        }
+        drain()
+    }
+
+    private func drain() {
         withAnimation(.easeOut(duration: 0.2)) { progress = 0 }
+    }
+
+    /// The long press held for `holdDuration` without the finger lifting, sliding off or the
+    /// touch being cancelled (the gesture fails for those). Never while the app isn't active.
+    private func holdCompleted() {
+        guard scenePhase == .active else { return release() }
+        complete()
     }
 
     private func complete() {
         guard !done else { return }
         done = true
-        hold?.cancel()
-        hold = nil
         var instant = Transaction()
         instant.disablesAnimations = true
         withTransaction(instant) { progress = 1 }

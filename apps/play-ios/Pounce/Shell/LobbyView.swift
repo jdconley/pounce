@@ -224,11 +224,16 @@ struct LobbyView: View {
     @ViewBuilder private var startRow: some View {
         if let table, seated {
             let ready = table.canStart
-            PillButton(icon: ArtName.iconPlay, color: Palette.orange, size: .large, width: 300, accessibilityLabel: "Start") {
+            // Waiting: a muted violet pill, never a desaturated orange (that reads beige).
+            // Ready: hot orange with a white rim around the gold play icon so it reads.
+            PillButton(
+                icon: ArtName.iconPlay,
+                color: ready ? Palette.orange : Palette.violet.mix(with: Palette.night, by: 0.45),
+                size: .large, width: 300, iconOutline: ready ? .white : nil, accessibilityLabel: "Start"
+            ) {
                 start()
             }
-            .saturation(ready ? 1 : 0.3)
-            .opacity(ready ? 1 : 0.75)
+            .opacity(ready ? 1 : 0.7)
             .shadow(color: ready ? Palette.orange.opacity(0.8) : .clear, radius: 14)
             .wiggle(trigger: wiggles[.start, default: 0])
             .accessibilityValue(ready ? Text("") : Text("Waiting for players"))

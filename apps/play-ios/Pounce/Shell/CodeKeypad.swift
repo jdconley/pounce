@@ -4,7 +4,11 @@ import SwiftUI
 /// A chunky 3D keypad holding only the room-code alphabet: letters wrapped five to a row (the
 /// last letter row ends with delete), digits on the last row.
 struct CodeKeypad: View {
+    /// The character keys take taps.
     var enabled = true
+    /// The delete key takes taps (nil: same as `enabled`). Join keeps it live while a code is
+    /// being checked, since deleting cancels the check.
+    var deleteEnabled: Bool?
     let onKey: (Character) -> Void
     let onDelete: () -> Void
 
@@ -35,8 +39,6 @@ struct CodeKeypad: View {
                 ForEach(Self.digits, id: \.self) { key($0) }
             }
         }
-        .disabled(!enabled)
-        .opacity(enabled ? 1 : 0.6)
     }
 
     private func key(_ c: Character) -> some View {
@@ -48,6 +50,8 @@ struct CodeKeypad: View {
             OutlinedText(String(c), size: 30, width: 2.5)
         }
         .buttonStyle(KeyStyle(color: Palette.magenta))
+        .disabled(!enabled)
+        .opacity(enabled ? 1 : 0.6)
         .accessibilityLabel(Text(verbatim: String(c)))
         .accessibilityIdentifier("join.key.\(c)")
     }
@@ -64,6 +68,8 @@ struct CodeKeypad: View {
                 .frame(height: 30)
         }
         .buttonStyle(KeyStyle(color: Palette.teal))
+        .disabled(!(deleteEnabled ?? enabled))
+        .opacity(deleteEnabled ?? enabled ? 1 : 0.6)
         .accessibilityLabel("Delete")
         .accessibilityIdentifier("join.key.delete")
     }
