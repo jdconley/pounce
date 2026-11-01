@@ -159,6 +159,10 @@ final class TableScene: SKScene {
     @available(*, unavailable)
     required init?(coder aDecoder: NSCoder) { fatalError("init(coder:) is not used") }
 
+    #if DEBUG
+    deinit { print("[scene] deinit") }
+    #endif
+
     /// The node for a layer (drag and fx layers are empty until something animates).
     func layer(_ layer: Layer) -> SKNode { layers[layer]! }
 
@@ -174,6 +178,19 @@ final class TableScene: SKScene {
         #endif
     }
 
+    /// Leaving the view (`presentScene(nil)`, the table screen swapped out mid-animation):
+    /// nothing will render the rest, so the director gives everything up now and every awaited
+    /// intent returns, instead of the intent pipeline waiting forever. Decorative offsets go
+    /// back to rest in case the scene is shown again.
+    override func willMove(from view: SKView) {
+        director.cancelAll()
+        for l in [Layer.background, .rug, .piles, .laidZone, .tower, .opponents, .trays, .hand] {
+            layer(l).position = .zero
+        }
+        hand.position = .zero
+        for seat in opponents.order { opponents.node(for: seat)?.resetMotion() }
+    }
+
     override func didChangeSize(_ oldSize: CGSize) {
         super.didChangeSize(oldSize)
         redraw()
@@ -187,12 +204,33 @@ final class TableScene: SKScene {
 
     /// Draws `model` exactly, without animation. `revealed` is the only seat whose hand may
     /// show face up (ignored unless this phone controls it).
+    ///
+    /// Mid-timeline (events still to play, or one animating) the model itself waits for the
+    /// coming `.reconcile` intent, but privacy never waits: a reveal that is withdrawn or moves
+    /// to another seat hides the shown hand at once (backs, on the table as drawn). Only a new
+    /// face-up reveal waits for the timeline.
     func reconcile(_ model: TableModel, revealed: Seat?) {
         if self.model != nil, animating || store.lastSeq > seenSeq {
+            let reveal = revealed.flatMap { model.mySeats.contains($0) ? $0 : nil }
+            if shownRevealed != nil, reveal != shownRevealed { hideHand() }
             deferReveal(revealed)
             return
         }
         apply(model, revealed: revealed)
+    }
+
+    /// Turns the shown hand face down now: faces, trays and their accessibility elements go.
+    private func hideHand() {
+        #if DEBUG
+        timelineLog("hide hand \(shownRevealed.map(String.init) ?? "-") now (animating \(animating), lastSeq \(store.lastSeq), seen \(seenSeq))")
+        #endif
+        revealed = nil
+        shownRevealed = nil
+        for layer in [layer(.fx), layer(.drag)] {
+            for case let card as CardNode in layer.children where card.isPrivate { card.setCard(nil) }
+        }
+        redraw()
+        UIAccessibility.post(notification: .layoutChanged, argument: nil)
     }
 
     private func apply(_ model: TableModel, revealed: Seat?) {
@@ -307,6 +345,7 @@ final class TableScene: SKScene {
         let node = CardNode(card: card, size: layout?.cardSize ?? CardFaceFactory.cardSize)
         node.position = point
         node.setScale(scale)
+        node.isPrivate = true  // still my hand's card until the server takes it
         layer(.drag).addChild(node)
         provisionalNode = node
         provisionalCard = card
@@ -587,6 +626,8 @@ final class TableScene: SKScene {
         typealias Item = TableAccessibility.Item
         var items: [Item] = []
         guard let model, let game = model.game, let layout else { return debugItems() }
+        // Faces are spoken only for the hand shown face up right now.
+        let facesShown = bottomSeat != nil && bottomSeat == shownRevealed
 
         for seat in opponents.order {
             guard let frame = opponents.frame(of: seat) else { continue }
@@ -617,7 +658,7 @@ final class TableScene: SKScene {
                     frame: frame))
             }
         }
-        if !trays.isHidden {
+        if !trays.isHidden, facesShown {
             for (i, req) in trays.requirements.enumerated() where i < trays.frames.count {
                 let valid = trays.valid[safe: i] ?? false
                 items.append(Item(
@@ -638,12 +679,13 @@ final class TableScene: SKScene {
         }
         for (i, node) in hand.cards.enumerated() {
             guard let frame = hand.frame(at: i) else { continue }
-            let selected = node.card != nil && node.card == liftedCard
+            let face = facesShown ? node.card : nil
+            let selected = face != nil && face == liftedCard
             items.append(Item(
-                id: "table.hand.\(i)", label: CardNode.label(node.card),
+                id: "table.hand.\(i)", label: CardNode.label(face),
                 value: selected ? String(localized: "selected", comment: "VoiceOver: the picked-up hand card") : nil,
                 frame: frame, traits: selected ? [.button, .selected] : .button,
-                actions: node.card.map(handCardActions) ?? []))
+                actions: face.map(handCardActions) ?? []))
         }
         if !sortButton.isHidden {
             items.append(Item(

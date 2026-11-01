@@ -105,4 +105,38 @@ import Testing
         let r9 = gate.frame(0.2)
         #expect(r9.pause == true)
     }
+
+    @Test func cancelAllReleasesEveryRunningTokenOnce() {
+        var gate = RenderGate()
+        let a = gate.begin(duration: 0.3)
+        let b = gate.begin(duration: 10)
+        let c = gate.begin(duration: 0, grace: 0)
+        gate.touchBegan()
+        let released = gate.cancelAll()
+        #expect(released == [a, b, c])
+        #expect(gate.isIdle)
+        let again = gate.cancelAll()
+        #expect(again.isEmpty)
+        let ended = gate.end(b)
+        #expect(!ended, "a cancelled token is already gone")
+        // Nothing comes back as expired later, and the gate pauses as usual.
+        let r = run(&gate, from: 0, seconds: 12)
+        #expect(r.expired.isEmpty)
+        #expect(r.paused)
+    }
+
+    @Test func particleBudgetCapsAndReturns() {
+        var gate = RenderGate()
+        let first = gate.reserveParticles(40)
+        let second = gate.reserveParticles(40)
+        let third = gate.reserveParticles(5)
+        #expect([first, second, third] == [40, 20, 0])
+        #expect(gate.particles == RenderGate.maxParticles)
+        gate.releaseParticles(40)
+        let negative = gate.reserveParticles(-3)
+        let fourth = gate.reserveParticles(10)
+        #expect([negative, fourth] == [0, 10])
+        gate.releaseParticles(1000)
+        #expect(gate.particles == 0)
+    }
 }

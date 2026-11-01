@@ -16,8 +16,11 @@ import PounceKit
 /// It logs like `replay`. `-slowmo <factor>` (any demo) runs the table at that speed, socket
 /// gaps stretched to match, for screenshots of fast moments.
 /// `curtain` (Task 19) shows its table until that lands.
+/// `handoff`: two seats on this phone, seat 0's hand shown (the hold is skipped); seat 0 draws,
+/// then discards and the turn goes to a remote seat, so the shown hand must turn face down at
+/// once, not after the discard animates. Logs like `replay`.
 enum DemoMode: String {
-    case lobby, table, other, replay, nope, celebrate, curtain
+    case lobby, table, other, replay, nope, celebrate, curtain, handoff
 
     static func from(arguments: [String] = CommandLine.arguments) -> DemoMode? {
         guard let i = arguments.firstIndex(of: "-demo"), arguments.indices.contains(i + 1) else { return nil }
@@ -38,14 +41,35 @@ enum DemoMode: String {
             room.game?.step = .play
             return room
         case .celebrate: return DemoFixtures.lobby()
-        case .curtain: return DemoFixtures.curtain()
+        case .curtain, .handoff: return DemoFixtures.curtain()
         }
+    }
+
+    /// `handoff`: seat 0 draws a card, then discards it and the turn passes to seat 1.
+    static func handoffSteps() -> [DemoFixtures.ReplayStep] {
+        var room = DemoFixtures.curtain()
+        let card: CardID = 53  // 6, calico: on no hand, row or pile in the curtain table
+        room.game?.hands[0]?.append(card)
+        room.game?.handCounts[0] += 1
+        room.game?.deckCount -= 1
+        room.game?.step = .play
+        let drew = DemoFixtures.ReplayStep(events: [.drew(seat: 0, from: .deck, card: card)], room: room)
+        room.game?.hands[0]?.removeAll { $0 == card }
+        room.game?.handCounts[0] -= 1
+        room.game?.discardTop = card
+        room.game?.discardCount += 1
+        room.game?.turn = 1
+        room.game?.step = .draw
+        let passed = DemoFixtures.ReplayStep(
+            events: [.discarded(seat: 0, card: card, skipTarget: nil), .turn(seat: 1)], room: room)
+        return [drew, passed]
     }
 
     /// The fake socket behind this demo.
     func makeSocket() -> any RoomSocketing {
         switch self {
-        case .replay: ReplaySocket(loops: 2)
+        case .replay: ReplaySocket(start: DemoFixtures.replayStart(), steps: DemoFixtures.replay(), loops: 2)
+        case .handoff: ReplaySocket(start: room, steps: Self.handoffSteps(), loops: 1)
         case .celebrate: CelebrateSocket()
         case .nope: DemoSocket(room: room, refusing: true)
         default: DemoSocket(room: room)
@@ -109,32 +133,37 @@ actor CelebrateSocket: RoomSocketing {
     }
 }
 
-/// `-demo replay`: the start snapshot, then every replay step (its events, then its snapshot,
-/// seqs counting up like the server's) every `gap`, `loops` times over.
+/// `-demo replay` / `handoff`: the start snapshot, then every step (its events, then its
+/// snapshot, seqs counting up like the server's) every `gap`, `loops` times over.
 actor ReplaySocket: RoomSocketing {
     nonisolated let events: AsyncStream<SocketEvent>
     private let continuation: AsyncStream<SocketEvent>.Continuation
+    private let startRoom: RoomView
+    private let steps: [DemoFixtures.ReplayStep]
     private let loops: Int
     private var player: Task<Void, Never>?
     static let gap: Duration = .milliseconds(1300)
 
-    init(loops: Int) {
+    init(start: RoomView, steps: [DemoFixtures.ReplayStep], loops: Int) {
+        startRoom = start
+        self.steps = steps
         self.loops = loops
         (events, continuation) = AsyncStream.makeStream(of: SocketEvent.self)
     }
 
     func start() async {
         continuation.yield(.connected)
-        continuation.yield(.message(.snapshot(protocol: PounceKit.protocolVersion, seq: 1, room: DemoFixtures.replayStart())))
+        continuation.yield(.message(.snapshot(protocol: PounceKit.protocolVersion, seq: 1, room: startRoom)))
         guard player == nil else { return }
         let continuation = continuation
         let loops = loops
+        let steps = steps
         player = Task {
             var seq = 1
             try? await Task.sleep(for: .seconds(2))
             for loop in 0..<loops {
                 print("[replay] loop \(loop + 1) start")
-                for step in DemoFixtures.replay() {
+                for step in steps {
                     guard !Task.isCancelled else { return }
                     for event in step.events {
                         seq += 1
@@ -159,7 +188,7 @@ actor ReplaySocket: RoomSocketing {
 }
 
 extension TableScene {
-    private static let logsTimeline = [.replay, .nope, .celebrate].contains(DemoMode.from())
+    private static let logsTimeline = [.replay, .nope, .celebrate, .handoff].contains(DemoMode.from())
 
     /// `-demo replay`: one line per game intent (played with its duration, or skipped).
     func timelineLog(_ line: @autoclosure () -> String) {

@@ -69,9 +69,13 @@ extension TableScene {
         let faceUp = seat == shownRevealed
         if faceUp, fromDeck, let card {
             Sound.shared.play(ArtName.Sound.sfxFlip)
+            node.isPrivate = true
             let flip = SKAction.sequence([
                 .scaleX(to: 0, duration: 0.15).eased(.easeIn),
-                .run { [weak node] in node?.setCard(card) },
+                .run { [weak self, weak node] in
+                    // Only face up while that hand is still the one shown.
+                    if let node, self?.shownRevealed == seat { node.setCard(card) }
+                },
                 .scaleX(to: 1.12, duration: 0.15).eased(.easeOut),
             ])
             let lift: SKAction = reduceMotion
@@ -120,6 +124,7 @@ extension TableScene {
         var owned = false  // the provisional node belongs to the scene until the reconcile
         if card == provisionalCard, let p = provisionalNode {
             node = p
+            node.isPrivate = false  // accepted: the card is on the table now
             owned = true
         } else if seat == bottomSeat, let h = hand.node(for: card) {
             node = flyer(card, at: fx.convert(h.position, from: hand), rotation: h.zRotation, z: 1)
@@ -330,6 +335,7 @@ extension TableScene {
         var owned = false
         if card == provisionalCard, let p = provisionalNode {
             node = p
+            node.isPrivate = false  // accepted: the card is on the table now
             owned = true
         } else if seat == bottomSeat, let h = hand.node(for: card) {
             node = flyer(card, at: fx.convert(h.position, from: hand), rotation: h.zRotation, z: 1)

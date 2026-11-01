@@ -197,6 +197,11 @@ public enum DemoFixtures {
     public struct ReplayStep: Equatable, Sendable {
         public let events: [GameEvent]
         public let room: RoomView
+
+        public init(events: [GameEvent], room: RoomView) {
+            self.events = events
+            self.room = room
+        }
     }
 
     /// A scripted loop over every game event kind for the DEBUG `-demo replay` screen, from

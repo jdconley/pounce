@@ -164,7 +164,7 @@ final class CatNode: SKNode {
                 Effects.squash(),
                 .wait(forDuration: 0.06),
             ])
-        return (.sequence([scared, move, .run { [weak self] in self?.restoreSprite() }]), sprite)
+        return (.sequence([scared, move, .run { [weak self] in self?.resetMotion() }]), sprite)
     }
 
     /// Idle flourish: a blink (a different pose for 0.15 s) with a tiny ear-flick squash.
@@ -174,7 +174,7 @@ final class CatNode: SKNode {
             .setTexture(TableArt.cat(cat, other)),
             .scaleX(by: 1.03, y: 0.96, duration: 0.075),
             .scaleX(by: 1 / 1.03, y: 1 / 0.96, duration: 0.075),
-            .run { [weak self] in self?.restoreSprite() },
+            .run { [weak self] in self?.resetMotion() },
         ]), sprite)
     }
 
@@ -188,7 +188,9 @@ final class CatNode: SKNode {
     /// Hides the skip badge while a `skipped` animation pops its own copy.
     func hideSkipBadge() { skipBadge.isHidden = true }
 
-    private func restoreSprite() {
+    /// Back to the seat's pose at rest (after a terror or blink, or when the table is torn
+    /// down mid-motion).
+    func resetMotion() {
         sprite.texture = TableArt.cat(cat, pose)
         sprite.position = .zero
         sprite.setScale(1)

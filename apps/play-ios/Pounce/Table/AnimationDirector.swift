@@ -12,9 +12,14 @@ import SpriteKit
 /// action half way, and a released action can't resume later over a reconcile.
 @MainActor
 final class AnimationDirector {
+    /// Without a view nothing renders, so nothing could ever finish: going nil releases every
+    /// waiter (`cancelAll`), and actions started while detached finish at once.
     weak var view: SKView? {
         didSet {
-            if view == nil { stopFlourishes() }
+            if view == nil {
+                stopFlourishes()
+                cancelAll()
+            }
             wake()
         }
     }
@@ -89,6 +94,7 @@ final class AnimationDirector {
     }
 
     private func start(_ action: SKAction, on node: SKNode, decorative: Bool, finish: @escaping () -> Void) {
+        guard view != nil else { return finish() }  // never rendered: don't wait on it
         let token = gate.begin(duration: RenderGate.sanitize(action.duration) / Self.effectiveSpeed(node))
         let key = "director.\(token)"
         pending[token] = Pending(node: node, key: key, decorative: decorative, finish: finish)
@@ -102,6 +108,10 @@ final class AnimationDirector {
         _ emitter: SKEmitterNode, at point: CGPoint, in parent: SKNode, lifetime: TimeInterval,
         onEnd: (() -> Void)? = nil
     ) {
+        guard view != nil else {
+            onEnd?()
+            return
+        }
         let token = gate.begin(duration: lifetime, grace: 0)
         emitter.position = point
         parent.addChild(emitter)
@@ -121,6 +131,25 @@ final class AnimationDirector {
         }
         for token in tokens { finish(token, removeAction: true) }
     }
+
+    /// The view is going away (or already gone): every action and emitter is given up on now.
+    /// Awaiters resume, actions are removed, emitters leave and return their particles.
+    func cancelAll() {
+        let tokens = Set(gate.cancelAll()).union(pending.keys).sorted()
+        for token in tokens { finish(token, removeAction: true, gateEnded: true) }
+        #if DEBUG
+        if !tokens.isEmpty { print("[director] cancelAll released \(tokens.count)") }
+        #endif
+    }
+
+    // MARK: particle budget (spec §9.2: emitters are counted by the director)
+
+    /// Particles alive in this table's bursts.
+    var liveParticles: Int { gate.particles }
+
+    func reserveParticles(_ wanted: Int) -> Int { gate.reserveParticles(wanted) }
+
+    func releaseParticles(_ count: Int) { gate.releaseParticles(count) }
 
     /// The table just changed (a redraw): idle flourishes run for the next `flourishWindow`.
     func noteChange() {

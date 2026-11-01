@@ -79,6 +79,16 @@ final class AppModel {
         self.room = session
         session.start()
         route = .room(code: room.code, intent: .rejoin)
+        // `-demo-home-after <seconds>`: leave the table mid-animation (teardown check).
+        let args = CommandLine.arguments
+        if let i = args.firstIndex(of: "-demo-home-after"), let secs = args[safe: i + 1].flatMap(Double.init) {
+            Task { [weak self] in
+                try? await Task.sleep(for: .seconds(secs))
+                print("[demo] going home")
+                self?.closeRoom()
+                self?.route = .home
+            }
+        }
     }
     #endif
 

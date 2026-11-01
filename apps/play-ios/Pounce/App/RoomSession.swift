@@ -149,6 +149,9 @@ final class RoomSession {
                 if pendingIntents.count > Self.pendingIntentLimit { pendingIntents.removeFirst() }
             }
         }
+        #if DEBUG
+        print("[session] intents ended")
+        #endif
     }
 
     /// Reconnects when the network comes back after being down (spec §7.4).

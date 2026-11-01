@@ -6,6 +6,9 @@ import SpriteKit
 @MainActor
 final class CardNode: SKSpriteNode {
     private(set) var card: CardID?
+    /// A face only its hand's seat may see (a drawn card in flight, a move not yet accepted):
+    /// turned face down when the scene hides that hand.
+    var isPrivate = false
     private let shadow: SKSpriteNode
 
     init(card: CardID?, size: CGSize = CardFaceFactory.cardSize, shadow hasShadow: Bool = true) {

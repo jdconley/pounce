@@ -181,6 +181,10 @@ private struct TableStage: View {
         guard let room = session.store.room, let scene = target ?? scene else { return }
         let table = TableModel(room: room)
         pass.update(table)
+        #if DEBUG
+        // `-demo handoff`: skip the hold (Task 19's curtain) so a hand is shown to hide later.
+        if DemoMode.from() == .handoff, case .curtain = pass.state { pass.completeHold() }
+        #endif
         scene.reconcile(table, revealed: pass.revealed)
     }
 }

@@ -10,7 +10,13 @@ import Foundation
 /// - `begin` / `end` bracket an action or emitter; `frame` returns the ones whose deadline
 ///   passed (the director removes those actions so they can't resume later) and whether the
 ///   view should pause: nothing running, no touch down, for `idleDelay` of rendered time.
+/// - `cancelAll` gives up on everything at once (the view is going away and will never render
+///   the rest), so every waiter can be released.
+/// - The particle budget: bursts reserve particles up front and release them when their
+///   emitter goes, so at most `maxParticles` are ever alive on the table.
 public struct RenderGate: Sendable {
+    /// Most particles alive at once across every emitter on the table.
+    public static let maxParticles = 60
     public static let idleDelay: TimeInterval = 0.1
     /// Extra rendered time an action gets past its duration before it is given up on.
     public static let grace: TimeInterval = 0.5
@@ -26,6 +32,8 @@ public struct RenderGate: Sendable {
     public private(set) var running: [Int: TimeInterval] = [:]
     public private(set) var touches = 0
     public private(set) var renderedTime: TimeInterval = 0
+    /// Particles reserved by emitters still on screen.
+    public private(set) var particles = 0
     private var lastFrame: TimeInterval?
     private var idleSince: TimeInterval?
     private var nextToken = 0
@@ -51,6 +59,27 @@ public struct RenderGate: Sendable {
     /// Stops tracking `token`. False if it already ended or expired.
     @discardableResult public mutating func end(_ token: Int) -> Bool {
         running.removeValue(forKey: token) != nil
+    }
+
+    /// Stops tracking every running token and returns them (sorted), so the caller can release
+    /// what waits on them. Touches are forgotten too: no finger stays down on a gone view.
+    public mutating func cancelAll() -> [Int] {
+        let tokens = running.keys.sorted()
+        running.removeAll()
+        touches = 0
+        idleSince = nil
+        return tokens
+    }
+
+    /// Reserves up to `wanted` particles within `maxParticles`; returns how many were granted.
+    public mutating func reserveParticles(_ wanted: Int) -> Int {
+        let granted = min(max(wanted, 0), max(Self.maxParticles - particles, 0))
+        particles += granted
+        return granted
+    }
+
+    public mutating func releaseParticles(_ count: Int) {
+        particles = max(particles - max(count, 0), 0)
     }
 
     public mutating func touchBegan() {

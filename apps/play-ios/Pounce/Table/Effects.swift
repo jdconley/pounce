@@ -1,3 +1,4 @@
+import PounceKit
 import SpriteKit
 import UIKit
 
@@ -11,16 +12,14 @@ enum BurstKind: CaseIterable {
 /// where it started, so a node's resting transform is never lost.
 ///
 /// Emitters are capped (spec §9.2): birth rate ≤ 80/s, particle lifetime ≤ 0.8 s, and at most
-/// 60 particles alive across every burst on the table; a burst past the budget shrinks or is
-/// skipped. Reduce Motion halves every burst.
+/// `RenderGate.maxParticles` (60) alive across every burst on the table, counted by that
+/// table's director; a burst past the budget shrinks or is skipped. Reduce Motion halves
+/// every burst.
 @MainActor
 enum Effects {
     static let maxBirthRate: CGFloat = 80
     static let maxLifetime: CGFloat = 0.8
-    static let maxParticles = 60
-
-    /// Particles promised to bursts still on screen.
-    private(set) static var liveParticles = 0
+    static let maxParticles = RenderGate.maxParticles
 
     static var reduceMotion: Bool { UIAccessibility.isReduceMotionEnabled }
 
@@ -63,9 +62,8 @@ enum Effects {
     static func burst(_ kind: BurstKind, at point: CGPoint, in parent: SKNode, director: AnimationDirector) {
         let r = recipe(kind)
         let wanted = reduceMotion ? max(r.count / 2, 1) : r.count
-        let count = min(wanted, maxParticles - liveParticles)
-        guard count >= 2 else { return }
-        liveParticles += count
+        let count = director.reserveParticles(wanted)
+        guard count >= 2 else { return director.releaseParticles(count) }
 
         let e = SKEmitterNode()
         e.particleTexture = TableArt.texture(r.texture, atlas: ArtName.Atlas.fx)
@@ -92,8 +90,8 @@ enum Effects {
         e.particleBlendMode = .alpha
         e.zPosition = 5
         let emitting = TimeInterval(CGFloat(count) / maxBirthRate)
-        director.emit(e, at: point, in: parent, lifetime: emitting + TimeInterval(maxLifetime)) {
-            liveParticles -= count
+        director.emit(e, at: point, in: parent, lifetime: emitting + TimeInterval(maxLifetime)) { [weak director] in
+            director?.releaseParticles(count)
         }
     }
 
