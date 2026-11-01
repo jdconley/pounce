@@ -374,7 +374,7 @@ export class RoomCore {
     // Acting proves the device is in use, whatever it last reported.
     const woke = this.wake(deviceId);
     this.afterGameChange();
-    return [...applied.out, ...woke];
+    return [...applied.out, ...woke, ...this.snapshots()];
   }
 
   /** Marks a device awake; returns the presence events if that was a change. */
@@ -398,9 +398,11 @@ export class RoomCore {
   /**
    * Applies a game action. On success the new state is stored, every event
    * gets its own seq and each connected device receives its filtered copy.
-   * A new round deals fresh hands that no event carries, so each device then
-   * also gets a snapshot at the seq of the last event. On failure nothing
-   * changes.
+   * On failure nothing changes. The events only animate: every caller that
+   * applies an action successfully then runs `afterGameChange()` and sends
+   * each connected device its own snapshot at the seq of the last event
+   * (`snapshots()`), which carries the truth (drawn cards, a fresh deal, the
+   * new discard top, a finished room).
    */
   private applyGame(seat: Seat, action: Action): { out: Outbound[] } | { error: ApplyError } {
     const { state } = this;
@@ -414,15 +416,17 @@ export class RoomCore {
         event: this.game.filterEvent(event, this.controlledSeats(deviceId)),
       }));
     });
-    if (result.events.some((event) => event.kind === "roundStarted")) out.push(...this.snapshots());
     return { out };
   }
 
-  /** A tick's own action: applied, then timers and pushes follow the new state. */
+  /**
+   * A tick's own action: applied, then timers and pushes follow the new state
+   * and, on success, every device gets its snapshot.
+   */
   private applyAndAfter(seat: Seat, action: Action): Outbound[] {
     const applied = this.applyGame(seat, action);
     this.afterGameChange();
-    return "out" in applied ? applied.out : [];
+    return "out" in applied ? [...applied.out, ...this.snapshots()] : [];
   }
 
   private botStep(): Outbound[] {
@@ -439,7 +443,7 @@ export class RoomCore {
       return [{ to: "all", message: { t: "error", code: "bot_stalled" } }];
     }
     this.afterGameChange();
-    return applied.out;
+    return [...applied.out, ...this.snapshots()];
   }
 
   /**

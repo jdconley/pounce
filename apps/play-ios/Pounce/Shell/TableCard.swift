@@ -1,0 +1,114 @@
+import PounceKit
+import SwiftUI
+
+/// One table on Home. Your-turn cards glow orange and bounce with the waiting player's cat awake;
+/// the rest are dimmed with the current player's cat. Finished games carry a trophy.
+struct TableCard: View {
+    let item: HomeTableItem
+    let action: () -> Void
+
+    static let size = CGSize(width: 112, height: 144)
+
+    private var isOver: Bool { item.status == RoomStatus.over.rawValue }
+
+    /// Whose cat to show: the player on turn, else this phone's seat, else the first seat with a cat.
+    private var shownCat: Int? {
+        item.turnCat ?? item.seats.first(where: { $0.yours && $0.cat != nil })?.cat
+            ?? item.seats.compactMap(\.cat).first
+    }
+
+    private var pose: CatPose {
+        if isOver { return .celebrate }
+        return item.yourTurn ? .awake : .idle
+    }
+
+    private var shape: RoundedRectangle { RoundedRectangle(cornerRadius: 26, style: .continuous) }
+
+    var body: some View {
+        Button {
+            Haptics.shared.tick()
+            Sound.shared.play(ArtName.Sound.sfxTick)
+            action()
+        } label: {
+            ZStack {
+                shape.fill(fill)
+                VStack(spacing: 4) {
+                    ZStack(alignment: .topTrailing) {
+                        cat
+                        if isOver {
+                            Image(ArtName.iconTrophy)
+                                .resizable().scaledToFit()
+                                .frame(width: 34, height: 34)
+                                .offset(x: 6, y: -4)
+                        }
+                    }
+                    .frame(height: 78)
+                    OutlinedText(item.id, size: 18, fill: .white, width: 2.5)
+                    SeatPips(seats: item.seats)
+                }
+                .padding(.vertical, 8)
+            }
+            .overlay(shape.strokeBorder(Palette.ink, lineWidth: 5))
+            .overlay {
+                if item.yourTurn {
+                    shape.strokeBorder(.white.opacity(0.85), lineWidth: 2).padding(6)
+                }
+            }
+            .frame(width: Self.size.width, height: Self.size.height)
+            .shadow(
+                color: item.yourTurn ? Palette.orange.opacity(0.95) : Palette.ink.opacity(0.5),
+                radius: item.yourTurn ? 14 : 0, x: 0, y: item.yourTurn ? 0 : 5)
+            .saturation(item.yourTurn ? 1 : 0.75)
+            .brightness(item.yourTurn || isOver ? 0 : -0.1)
+            .bounceLoop(active: item.yourTurn)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(item.yourTurn ? Text("Your turn, table \(item.id)") : Text("Table \(item.id)"))
+        .accessibilityIdentifier("home.table.\(item.id)")
+    }
+
+    @ViewBuilder private var cat: some View {
+        if let shownCat {
+            Image(ArtName.cat(shownCat, pose))
+                .resizable().scaledToFit()
+                .frame(width: 76, height: 76)
+                .shadow(color: Palette.ink.opacity(0.35), radius: 0, x: 0, y: 3)
+        } else {
+            // A table with no cached cats yet: a plain paw mark keeps the card from looking empty.
+            Image(ArtName.iconPawMenu)
+                .resizable().scaledToFit()
+                .frame(width: 56, height: 56)
+                .opacity(0.8)
+        }
+    }
+
+    private var fill: LinearGradient {
+        let colors: [Color] =
+            item.yourTurn
+            ? [Palette.orange.mix(with: .white, by: 0.35), Palette.orange, Palette.orange.mix(with: Palette.magenta, by: 0.3)]
+            : [Palette.violet.mix(with: .white, by: 0.15), Palette.violet.mix(with: Palette.ink, by: 0.35)]
+        return LinearGradient(colors: colors, startPoint: .top, endPoint: .bottom)
+    }
+}
+
+/// A row of little seat dots in the seat ring colors: filled for taken seats, hollow for open ones.
+private struct SeatPips: View {
+    let seats: [CachedSeat]
+
+    var body: some View {
+        HStack(spacing: 4) {
+            ForEach(Array(seats.enumerated()), id: \.offset) { i, seat in
+                if seat.kind != .closed {
+                    let taken = seat.kind == .human || seat.kind == .bot
+                    Circle()
+                        .fill(taken ? Palette.playerRings[i % Palette.playerRings.count] : .clear)
+                        .overlay(Circle().strokeBorder(Palette.ink, lineWidth: 2))
+                        .frame(width: 12, height: 12)
+                }
+            }
+        }
+        .frame(height: 12)
+        .accessibilityHidden(true)
+    }
+}

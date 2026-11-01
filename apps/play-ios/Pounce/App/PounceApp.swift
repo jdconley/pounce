@@ -1,0 +1,33 @@
+import PounceKit
+import SwiftUI
+
+@main
+struct PounceApp: App {
+    @UIApplicationDelegateAdaptor(AppDelegate.self) private var delegate
+    @State private var model = AppModel.makeDefault()
+
+    var body: some Scene {
+        WindowGroup {
+            RootView()
+                .environment(model)
+                .environment(model.settings)
+                .task {
+                    delegate.model = model
+                    await model.bootstrap()
+                }
+                .onOpenURL { open($0) }
+                .onContinueUserActivity(NSUserActivityTypeBrowsingWeb) { activity in
+                    if let url = activity.webpageURL { open(url) }
+                }
+        }
+    }
+
+    private func open(_ url: URL) {
+        #if DEBUG
+        let allowDevScheme = true
+        #else
+        let allowDevScheme = false
+        #endif
+        if let link = DeepLink.parse(url, allowDevScheme: allowDevScheme) { model.handle(link) }
+    }
+}

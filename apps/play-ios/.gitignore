@@ -1,0 +1,6 @@
+Pounce.xcodeproj/
+Art/raw/
+Art/cut/
+build/
+.build/
+Config/Local.xcconfig

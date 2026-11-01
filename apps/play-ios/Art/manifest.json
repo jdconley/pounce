@@ -1,0 +1,1159 @@
+[
+ {
+  "name": "cat0-idle",
+  "dest": "atlas:Cats",
+  "points": [
+   160,
+   160
+  ],
+  "batch": "cats"
+ },
+ {
+  "name": "cat0-awake",
+  "dest": "atlas:Cats",
+  "points": [
+   160,
+   160
+  ],
+  "batch": "cats"
+ },
+ {
+  "name": "cat0-away",
+  "dest": "atlas:Cats",
+  "points": [
+   160,
+   160
+  ],
+  "batch": "cats"
+ },
+ {
+  "name": "cat0-asleep",
+  "dest": "atlas:Cats",
+  "points": [
+   160,
+   160
+  ],
+  "batch": "cats"
+ },
+ {
+  "name": "cat0-leap",
+  "dest": "atlas:Cats",
+  "points": [
+   160,
+   160
+  ],
+  "batch": "cats"
+ },
+ {
+  "name": "cat0-terrified",
+  "dest": "atlas:Cats",
+  "points": [
+   160,
+   160
+  ],
+  "batch": "cats"
+ },
+ {
+  "name": "cat0-celebrate",
+  "dest": "atlas:Cats",
+  "points": [
+   160,
+   160
+  ],
+  "batch": "cats"
+ },
+ {
+  "name": "cat1-idle",
+  "dest": "atlas:Cats",
+  "points": [
+   160,
+   160
+  ],
+  "batch": "cats"
+ },
+ {
+  "name": "cat1-awake",
+  "dest": "atlas:Cats",
+  "points": [
+   160,
+   160
+  ],
+  "batch": "cats"
+ },
+ {
+  "name": "cat1-away",
+  "dest": "atlas:Cats",
+  "points": [
+   160,
+   160
+  ],
+  "batch": "cats"
+ },
+ {
+  "name": "cat1-asleep",
+  "dest": "atlas:Cats",
+  "points": [
+   160,
+   160
+  ],
+  "batch": "cats"
+ },
+ {
+  "name": "cat1-leap",
+  "dest": "atlas:Cats",
+  "points": [
+   160,
+   160
+  ],
+  "batch": "cats"
+ },
+ {
+  "name": "cat1-terrified",
+  "dest": "atlas:Cats",
+  "points": [
+   160,
+   160
+  ],
+  "batch": "cats"
+ },
+ {
+  "name": "cat1-celebrate",
+  "dest": "atlas:Cats",
+  "points": [
+   160,
+   160
+  ],
+  "batch": "cats"
+ },
+ {
+  "name": "cat2-idle",
+  "dest": "atlas:Cats",
+  "points": [
+   160,
+   160
+  ],
+  "batch": "cats"
+ },
+ {
+  "name": "cat2-awake",
+  "dest": "atlas:Cats",
+  "points": [
+   160,
+   160
+  ],
+  "batch": "cats"
+ },
+ {
+  "name": "cat2-away",
+  "dest": "atlas:Cats",
+  "points": [
+   160,
+   160
+  ],
+  "batch": "cats"
+ },
+ {
+  "name": "cat2-asleep",
+  "dest": "atlas:Cats",
+  "points": [
+   160,
+   160
+  ],
+  "batch": "cats"
+ },
+ {
+  "name": "cat2-leap",
+  "dest": "atlas:Cats",
+  "points": [
+   160,
+   160
+  ],
+  "batch": "cats"
+ },
+ {
+  "name": "cat2-terrified",
+  "dest": "atlas:Cats",
+  "points": [
+   160,
+   160
+  ],
+  "batch": "cats"
+ },
+ {
+  "name": "cat2-celebrate",
+  "dest": "atlas:Cats",
+  "points": [
+   160,
+   160
+  ],
+  "batch": "cats"
+ },
+ {
+  "name": "cat3-idle",
+  "dest": "atlas:Cats",
+  "points": [
+   160,
+   160
+  ],
+  "batch": "cats"
+ },
+ {
+  "name": "cat3-awake",
+  "dest": "atlas:Cats",
+  "points": [
+   160,
+   160
+  ],
+  "batch": "cats"
+ },
+ {
+  "name": "cat3-away",
+  "dest": "atlas:Cats",
+  "points": [
+   160,
+   160
+  ],
+  "batch": "cats"
+ },
+ {
+  "name": "cat3-asleep",
+  "dest": "atlas:Cats",
+  "points": [
+   160,
+   160
+  ],
+  "batch": "cats"
+ },
+ {
+  "name": "cat3-leap",
+  "dest": "atlas:Cats",
+  "points": [
+   160,
+   160
+  ],
+  "batch": "cats"
+ },
+ {
+  "name": "cat3-terrified",
+  "dest": "atlas:Cats",
+  "points": [
+   160,
+   160
+  ],
+  "batch": "cats"
+ },
+ {
+  "name": "cat3-celebrate",
+  "dest": "atlas:Cats",
+  "points": [
+   160,
+   160
+  ],
+  "batch": "cats"
+ },
+ {
+  "name": "cat4-idle",
+  "dest": "atlas:Cats",
+  "points": [
+   160,
+   160
+  ],
+  "batch": "cats"
+ },
+ {
+  "name": "cat4-awake",
+  "dest": "atlas:Cats",
+  "points": [
+   160,
+   160
+  ],
+  "batch": "cats"
+ },
+ {
+  "name": "cat4-away",
+  "dest": "atlas:Cats",
+  "points": [
+   160,
+   160
+  ],
+  "batch": "cats"
+ },
+ {
+  "name": "cat4-asleep",
+  "dest": "atlas:Cats",
+  "points": [
+   160,
+   160
+  ],
+  "batch": "cats"
+ },
+ {
+  "name": "cat4-leap",
+  "dest": "atlas:Cats",
+  "points": [
+   160,
+   160
+  ],
+  "batch": "cats"
+ },
+ {
+  "name": "cat4-terrified",
+  "dest": "atlas:Cats",
+  "points": [
+   160,
+   160
+  ],
+  "batch": "cats"
+ },
+ {
+  "name": "cat4-celebrate",
+  "dest": "atlas:Cats",
+  "points": [
+   160,
+   160
+  ],
+  "batch": "cats"
+ },
+ {
+  "name": "cat5-idle",
+  "dest": "atlas:Cats",
+  "points": [
+   160,
+   160
+  ],
+  "batch": "cats"
+ },
+ {
+  "name": "cat5-awake",
+  "dest": "atlas:Cats",
+  "points": [
+   160,
+   160
+  ],
+  "batch": "cats"
+ },
+ {
+  "name": "cat5-away",
+  "dest": "atlas:Cats",
+  "points": [
+   160,
+   160
+  ],
+  "batch": "cats"
+ },
+ {
+  "name": "cat5-asleep",
+  "dest": "atlas:Cats",
+  "points": [
+   160,
+   160
+  ],
+  "batch": "cats"
+ },
+ {
+  "name": "cat5-leap",
+  "dest": "atlas:Cats",
+  "points": [
+   160,
+   160
+  ],
+  "batch": "cats"
+ },
+ {
+  "name": "cat5-terrified",
+  "dest": "atlas:Cats",
+  "points": [
+   160,
+   160
+  ],
+  "batch": "cats"
+ },
+ {
+  "name": "cat5-celebrate",
+  "dest": "atlas:Cats",
+  "points": [
+   160,
+   160
+  ],
+  "batch": "cats"
+ },
+ {
+  "name": "cat6-idle",
+  "dest": "atlas:Cats",
+  "points": [
+   160,
+   160
+  ],
+  "batch": "cats"
+ },
+ {
+  "name": "cat6-awake",
+  "dest": "atlas:Cats",
+  "points": [
+   160,
+   160
+  ],
+  "batch": "cats"
+ },
+ {
+  "name": "cat6-away",
+  "dest": "atlas:Cats",
+  "points": [
+   160,
+   160
+  ],
+  "batch": "cats"
+ },
+ {
+  "name": "cat6-asleep",
+  "dest": "atlas:Cats",
+  "points": [
+   160,
+   160
+  ],
+  "batch": "cats"
+ },
+ {
+  "name": "cat6-leap",
+  "dest": "atlas:Cats",
+  "points": [
+   160,
+   160
+  ],
+  "batch": "cats"
+ },
+ {
+  "name": "cat6-terrified",
+  "dest": "atlas:Cats",
+  "points": [
+   160,
+   160
+  ],
+  "batch": "cats"
+ },
+ {
+  "name": "cat6-celebrate",
+  "dest": "atlas:Cats",
+  "points": [
+   160,
+   160
+  ],
+  "batch": "cats"
+ },
+ {
+  "name": "cat7-idle",
+  "dest": "atlas:Cats",
+  "points": [
+   160,
+   160
+  ],
+  "batch": "cats"
+ },
+ {
+  "name": "cat7-awake",
+  "dest": "atlas:Cats",
+  "points": [
+   160,
+   160
+  ],
+  "batch": "cats"
+ },
+ {
+  "name": "cat7-away",
+  "dest": "atlas:Cats",
+  "points": [
+   160,
+   160
+  ],
+  "batch": "cats"
+ },
+ {
+  "name": "cat7-asleep",
+  "dest": "atlas:Cats",
+  "points": [
+   160,
+   160
+  ],
+  "batch": "cats"
+ },
+ {
+  "name": "cat7-leap",
+  "dest": "atlas:Cats",
+  "points": [
+   160,
+   160
+  ],
+  "batch": "cats"
+ },
+ {
+  "name": "cat7-terrified",
+  "dest": "atlas:Cats",
+  "points": [
+   160,
+   160
+  ],
+  "batch": "cats"
+ },
+ {
+  "name": "cat7-celebrate",
+  "dest": "atlas:Cats",
+  "points": [
+   160,
+   160
+  ],
+  "batch": "cats"
+ },
+ {
+  "name": "card-face",
+  "dest": "atlas:Cards",
+  "points": [
+   64,
+   90
+  ],
+  "batch": "table",
+  "fit": "fill"
+ },
+ {
+  "name": "card-back",
+  "dest": "atlas:Cards",
+  "points": [
+   64,
+   90
+  ],
+  "batch": "table",
+  "fit": "fill"
+ },
+ {
+  "name": "coat-tabby",
+  "dest": "atlas:Cards",
+  "points": [
+   48,
+   48
+  ],
+  "batch": "table"
+ },
+ {
+  "name": "coat-tuxedo",
+  "dest": "atlas:Cards",
+  "points": [
+   48,
+   48
+  ],
+  "batch": "table"
+ },
+ {
+  "name": "coat-calico",
+  "dest": "atlas:Cards",
+  "points": [
+   48,
+   48
+  ],
+  "batch": "table"
+ },
+ {
+  "name": "coat-gray",
+  "dest": "atlas:Cards",
+  "points": [
+   48,
+   48
+  ],
+  "batch": "table"
+ },
+ {
+  "name": "glyph-tabby",
+  "dest": "atlas:Cards",
+  "points": [
+   16,
+   16
+  ],
+  "batch": "table"
+ },
+ {
+  "name": "glyph-tuxedo",
+  "dest": "atlas:Cards",
+  "points": [
+   16,
+   16
+  ],
+  "batch": "table"
+ },
+ {
+  "name": "glyph-calico",
+  "dest": "atlas:Cards",
+  "points": [
+   16,
+   16
+  ],
+  "batch": "table"
+ },
+ {
+  "name": "glyph-gray",
+  "dest": "atlas:Cards",
+  "points": [
+   16,
+   16
+  ],
+  "batch": "table"
+ },
+ {
+  "name": "card-yarn",
+  "dest": "atlas:Cards",
+  "points": [
+   52,
+   52
+  ],
+  "batch": "table"
+ },
+ {
+  "name": "card-cucumber",
+  "dest": "atlas:Cards",
+  "points": [
+   52,
+   52
+  ],
+  "batch": "table"
+ },
+ {
+  "name": "card-glow",
+  "dest": "atlas:Cards",
+  "points": [
+   88,
+   114
+  ],
+  "batch": "table"
+ },
+ {
+  "name": "card-shadow",
+  "dest": "atlas:Cards",
+  "points": [
+   80,
+   106
+  ],
+  "batch": "table"
+ },
+ {
+  "name": "rug",
+  "dest": "atlas:Table",
+  "points": [
+   360,
+   360
+  ],
+  "batch": "table"
+ },
+ {
+  "name": "tower-base",
+  "dest": "atlas:Table",
+  "points": [
+   44,
+   34
+  ],
+  "batch": "table"
+ },
+ {
+  "name": "tower-shelf",
+  "dest": "atlas:Table",
+  "points": [
+   44,
+   30
+  ],
+  "batch": "table"
+ },
+ {
+  "name": "tower-top",
+  "dest": "atlas:Table",
+  "points": [
+   44,
+   40
+  ],
+  "batch": "table"
+ },
+ {
+  "name": "shelf-badge",
+  "dest": "atlas:Table",
+  "points": [
+   24,
+   24
+  ],
+  "batch": "table"
+ },
+ {
+  "name": "ring",
+  "dest": "atlas:Table",
+  "points": [
+   72,
+   72
+  ],
+  "batch": "table"
+ },
+ {
+  "name": "ring-glow",
+  "dest": "atlas:Table",
+  "points": [
+   96,
+   96
+  ],
+  "batch": "table"
+ },
+ {
+  "name": "tray",
+  "dest": "atlas:Table",
+  "points": [
+   120,
+   64
+  ],
+  "batch": "table"
+ },
+ {
+  "name": "tray-gold",
+  "dest": "atlas:Table",
+  "points": [
+   120,
+   64
+  ],
+  "batch": "table"
+ },
+ {
+  "name": "paw-swipe",
+  "dest": "atlas:Table",
+  "points": [
+   72,
+   72
+  ],
+  "batch": "table"
+ },
+ {
+  "name": "crown",
+  "dest": "atlas:Table",
+  "points": [
+   36,
+   28
+  ],
+  "batch": "table"
+ },
+ {
+  "name": "sunburst",
+  "dest": "atlas:Table",
+  "points": [
+   400,
+   400
+  ],
+  "batch": "table"
+ },
+ {
+  "name": "fx-star",
+  "dest": "atlas:FX",
+  "points": [
+   24,
+   24
+  ],
+  "batch": "table"
+ },
+ {
+  "name": "fx-fur",
+  "dest": "atlas:FX",
+  "points": [
+   24,
+   24
+  ],
+  "batch": "table"
+ },
+ {
+  "name": "fx-yarn",
+  "dest": "atlas:FX",
+  "points": [
+   24,
+   24
+  ],
+  "batch": "table"
+ },
+ {
+  "name": "fx-confetti",
+  "dest": "atlas:FX",
+  "points": [
+   24,
+   24
+  ],
+  "batch": "table"
+ },
+ {
+  "name": "fx-sparkle",
+  "dest": "atlas:FX",
+  "points": [
+   24,
+   24
+  ],
+  "batch": "table"
+ },
+ {
+  "name": "room-bg",
+  "dest": "imageset",
+  "points": [
+   390,
+   844
+  ],
+  "batch": "ui",
+  "fit": "cover"
+ },
+ {
+  "name": "home-bg",
+  "dest": "imageset",
+  "points": [
+   390,
+   844
+  ],
+  "batch": "ui",
+  "fit": "cover"
+ },
+ {
+  "name": "curtain-stage",
+  "dest": "imageset",
+  "points": [
+   390,
+   844
+  ],
+  "batch": "ui",
+  "fit": "cover"
+ },
+ {
+  "name": "game-tile",
+  "dest": "imageset",
+  "points": [
+   164,
+   120
+  ],
+  "batch": "ui"
+ },
+ {
+  "name": "state-closed",
+  "dest": "imageset",
+  "points": [
+   240,
+   240
+  ],
+  "batch": "ui"
+ },
+ {
+  "name": "state-stalled",
+  "dest": "imageset",
+  "points": [
+   240,
+   240
+  ],
+  "batch": "ui"
+ },
+ {
+  "name": "state-offline",
+  "dest": "imageset",
+  "points": [
+   240,
+   240
+  ],
+  "batch": "ui"
+ },
+ {
+  "name": "state-full",
+  "dest": "imageset",
+  "points": [
+   240,
+   240
+  ],
+  "batch": "ui"
+ },
+ {
+  "name": "state-update",
+  "dest": "imageset",
+  "points": [
+   240,
+   240
+  ],
+  "batch": "ui"
+ },
+ {
+  "name": "push-priming",
+  "dest": "imageset",
+  "points": [
+   280,
+   240
+  ],
+  "batch": "ui"
+ },
+ {
+  "name": "icon-plus",
+  "dest": "imageset",
+  "points": [
+   28,
+   28
+  ],
+  "batch": "ui"
+ },
+ {
+  "name": "icon-keypad",
+  "dest": "imageset",
+  "points": [
+   28,
+   28
+  ],
+  "batch": "ui"
+ },
+ {
+  "name": "icon-share",
+  "dest": "imageset",
+  "points": [
+   28,
+   28
+  ],
+  "batch": "ui"
+ },
+ {
+  "name": "icon-qr",
+  "dest": "imageset",
+  "points": [
+   28,
+   28
+  ],
+  "batch": "ui"
+ },
+ {
+  "name": "icon-play",
+  "dest": "imageset",
+  "points": [
+   28,
+   28
+  ],
+  "batch": "ui"
+ },
+ {
+  "name": "icon-back",
+  "dest": "imageset",
+  "points": [
+   28,
+   28
+  ],
+  "batch": "ui"
+ },
+ {
+  "name": "icon-gear",
+  "dest": "imageset",
+  "points": [
+   28,
+   28
+  ],
+  "batch": "ui"
+ },
+ {
+  "name": "icon-paw-menu",
+  "dest": "imageset",
+  "points": [
+   28,
+   28
+  ],
+  "batch": "ui"
+ },
+ {
+  "name": "icon-sort",
+  "dest": "imageset",
+  "points": [
+   28,
+   28
+  ],
+  "batch": "ui"
+ },
+ {
+  "name": "icon-bell",
+  "dest": "imageset",
+  "points": [
+   28,
+   28
+  ],
+  "batch": "ui"
+ },
+ {
+  "name": "icon-check",
+  "dest": "imageset",
+  "points": [
+   28,
+   28
+  ],
+  "batch": "ui"
+ },
+ {
+  "name": "icon-dice",
+  "dest": "imageset",
+  "points": [
+   28,
+   28
+  ],
+  "batch": "ui"
+ },
+ {
+  "name": "icon-home",
+  "dest": "imageset",
+  "points": [
+   28,
+   28
+  ],
+  "batch": "ui"
+ },
+ {
+  "name": "icon-move",
+  "dest": "imageset",
+  "points": [
+   28,
+   28
+  ],
+  "batch": "ui"
+ },
+ {
+  "name": "icon-sound-on",
+  "dest": "imageset",
+  "points": [
+   28,
+   28
+  ],
+  "batch": "ui"
+ },
+ {
+  "name": "icon-sound-off",
+  "dest": "imageset",
+  "points": [
+   28,
+   28
+  ],
+  "batch": "ui"
+ },
+ {
+  "name": "icon-haptics-on",
+  "dest": "imageset",
+  "points": [
+   28,
+   28
+  ],
+  "batch": "ui"
+ },
+ {
+  "name": "icon-haptics-off",
+  "dest": "imageset",
+  "points": [
+   28,
+   28
+  ],
+  "batch": "ui"
+ },
+ {
+  "name": "badge-phone",
+  "dest": "imageset",
+  "points": [
+   20,
+   20
+  ],
+  "batch": "ui"
+ },
+ {
+  "name": "badge-remote",
+  "dest": "imageset",
+  "points": [
+   20,
+   20
+  ],
+  "batch": "ui"
+ },
+ {
+  "name": "badge-bot",
+  "dest": "imageset",
+  "points": [
+   20,
+   20
+  ],
+  "batch": "ui"
+ },
+ {
+  "name": "badge-skip",
+  "dest": "imageset",
+  "points": [
+   20,
+   20
+  ],
+  "batch": "ui"
+ },
+ {
+  "name": "badge-laid",
+  "dest": "imageset",
+  "points": [
+   20,
+   20
+  ],
+  "batch": "ui"
+ },
+ {
+  "name": "icon-trophy",
+  "dest": "imageset",
+  "points": [
+   28,
+   28
+  ],
+  "batch": "ui"
+ },
+ {
+  "name": "icon-zzz",
+  "dest": "imageset",
+  "points": [
+   28,
+   28
+  ],
+  "batch": "ui"
+ },
+ {
+  "name": "icon-hold",
+  "dest": "imageset",
+  "points": [
+   28,
+   28
+  ],
+  "batch": "ui"
+ },
+ {
+  "name": "icon-delete",
+  "dest": "imageset",
+  "points": [
+   28,
+   28
+  ],
+  "batch": "ui"
+ },
+ {
+  "name": "icon-remove",
+  "dest": "imageset",
+  "points": [
+   28,
+   28
+  ],
+  "batch": "ui"
+ },
+ {
+  "name": "icon-leave",
+  "dest": "imageset",
+  "points": [
+   28,
+   28
+  ],
+  "batch": "ui"
+ },
+ {
+  "name": "icon-swap",
+  "dest": "imageset",
+  "points": [
+   28,
+   28
+  ],
+  "batch": "ui"
+ },
+ {
+  "name": "AppIcon",
+  "dest": "appicon",
+  "points": [
+   1024,
+   1024
+  ],
+  "batch": "ui"
+ }
+]

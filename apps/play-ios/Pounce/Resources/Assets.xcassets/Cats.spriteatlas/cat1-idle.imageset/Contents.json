@@ -1,0 +1,7 @@
+{
+  "images" : [
+    { "filename" : "cat1-idle@2x.png", "idiom" : "universal", "scale" : "2x" },
+    { "filename" : "cat1-idle@3x.png", "idiom" : "universal", "scale" : "3x" }
+  ],
+  "info" : { "author" : "xcode", "version" : 1 }
+}

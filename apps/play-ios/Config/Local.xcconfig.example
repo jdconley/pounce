@@ -1,0 +1,7 @@
+// Copy this file to Config/Local.xcconfig (gitignored) to point Debug builds at the dev server
+// over Tailscale, for a real phone. Start the server (scripts/dev-server.sh) and expose it with
+// scripts/tailnet-serve.sh up first. Then run scripts/bootstrap.sh and build to the device.
+// Only Debug.xcconfig includes Local.xcconfig; Release always uses https://play.conleychaos.com.
+// The port must match the one tailnet-serve.sh uses: 8443 by default, or POUNCE_TAILNET_PORT.
+// The $() keeps the // of the URL from starting an xcconfig comment.
+POUNCE_API_BASE_URL = https:/$()/gin-and-tonic.tailc8d3c2.ts.net:8443

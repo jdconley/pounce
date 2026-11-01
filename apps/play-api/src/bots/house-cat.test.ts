@@ -292,5 +292,5 @@ describe("House Cat is always legal", () => {
       const result = applyAction(state, state.turn, action);
       expect(result.ok, `game ${i}: ${JSON.stringify(action)}`).toBe(true);
     }
-  });
+  }, 30_000); // 200 games; the 5 s default is tight under coverage on CI runners
 });

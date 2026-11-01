@@ -1,0 +1,262 @@
+import PounceKit
+import SwiftUI
+
+/// The finished game (spec §5.10), over the table once its win moment has played: the
+/// winners' cats in the celebrate pose on a sunburst, a crown dropping onto each (shared wins
+/// show every winner), a one-shot confetti fall, and two pills: Home and New game. No words
+/// but the winners' names. Every motion here runs once and stops, so nothing loops.
+struct GameOverView: View {
+    let winners: [Person]
+    let onHome: () -> Void
+    let onNewGame: () -> Void
+
+    /// The House Cat bot as a winner: the gray cat, no name (ruling B).
+    static let botWinner = Person(id: "bot", name: "", cat: SeatInfo.botCat)
+
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @State private var appeared = false
+    @State private var crowned = false
+    @State private var turned = false
+
+    private var catSize: CGFloat {
+        switch winners.count {
+        case 0, 1: 170
+        case 2: 130
+        default: 96
+        }
+    }
+
+    var body: some View {
+        ZStack {
+            Palette.night.opacity(0.78)
+                .ignoresSafeArea()
+            ConfettiFall(count: reduceMotion ? 10 : 36)
+                .allowsHitTesting(false)
+                .accessibilityHidden(true)
+            VStack(spacing: 30) {
+                Spacer(minLength: 40)
+                ZStack {
+                    Image(ArtName.sunburst)
+                        .resizable()
+                        .scaledToFit()
+                        .frame(width: 420, height: 420)
+                        .rotationEffect(.degrees(turned ? -90 : 0))
+                        .scaleEffect(appeared ? 1 : 0.3)
+                        .opacity(appeared ? 1 : 0)
+                        .accessibilityHidden(true)
+                    HStack(spacing: 10) {
+                        ForEach(Array(winners.enumerated()), id: \.offset) { _, winner in
+                            WinnerCat(person: winner, size: catSize, crowned: crowned, reduceMotion: reduceMotion)
+                        }
+                    }
+                    .scaleEffect(appeared ? 1 : 0.5)
+                    .opacity(appeared ? 1 : 0)
+                }
+                .frame(height: 360)
+                Spacer()
+                HStack(spacing: 22) {
+                    PillButton(icon: ArtName.iconHome, color: Palette.orange, size: .large, accessibilityLabel: "Home") {
+                        onHome()
+                    }
+                    .accessibilityIdentifier("gameover.home")
+                    PillButton(icon: ArtName.iconPlus, color: Palette.magenta, size: .large, accessibilityLabel: "New game") {
+                        onNewGame()
+                    }
+                    .accessibilityIdentifier("gameover.new")
+                }
+                .offset(y: appeared ? 0 : 160)
+                .padding(.bottom, 36)
+            }
+        }
+        .onAppear {
+            withAnimation(.spring(duration: 0.55, bounce: 0.4)) { appeared = true }
+            withAnimation(reduceMotion ? .easeIn(duration: 0.2) : .spring(duration: 0.5, bounce: 0.5).delay(0.35)) {
+                crowned = true
+            }
+            if !reduceMotion {
+                withAnimation(.easeOut(duration: CelebrationTiming.sunburstLoop)) { turned = true }
+            }
+            Sound.shared.play(ArtName.Sound.sfxPop)
+            Haptics.shared.success()
+        }
+        .accessibilityElement(children: .contain)
+        .accessibilityIdentifier("screen-gameover")
+    }
+}
+
+/// One winner: cat in the celebrate pose, the crown dropping onto its head, the name.
+private struct WinnerCat: View {
+    let person: Person
+    let size: CGFloat
+    let crowned: Bool
+    let reduceMotion: Bool
+
+    var body: some View {
+        VStack(spacing: 4) {
+            ZStack(alignment: .top) {
+                Image(ArtName.cat(person.cat, .celebrate))
+                    .resizable()
+                    .scaledToFit()
+                    .frame(width: size, height: size)
+                    .shadow(color: Palette.ink.opacity(0.45), radius: 0, x: 0, y: 6)
+                Image(ArtName.crown)
+                    .resizable()
+                    .scaledToFit()
+                    .frame(width: size * 0.5)
+                    .rotationEffect(.degrees(-8))
+                    .offset(y: crowned ? -size * 0.2 : (reduceMotion ? -size * 0.2 : -size * 1.4))
+                    .opacity(crowned ? 1 : 0)
+            }
+            if person.name.isEmpty {
+                Image(ArtName.badgeBot)
+                    .resizable()
+                    .scaledToFit()
+                    .frame(width: 40, height: 40)
+            } else {
+                OutlinedText(person.name, size: size > 120 ? 34 : 26, fill: .white, width: 4)
+            }
+        }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(Text(
+            "\(person.name.isEmpty ? String(localized: "House Cat") : person.name) wins",
+            comment: "VoiceOver: a game winner"))
+        .accessibilityIdentifier("gameover.winner")
+    }
+}
+
+/// A one-shot shower of confetti, stars and yarn bits from above the screen to below it.
+/// Each piece animates once; when they have all fallen there is nothing left to draw.
+private struct ConfettiFall: View {
+    let count: Int
+    @State private var fallen = false
+
+    private struct Piece {
+        let art: String
+        let x: CGFloat
+        let size: CGFloat
+        let spin: Double
+        let duration: Double
+        let delay: Double
+        let drift: CGFloat
+    }
+
+    @State private var pieces: [Piece] = []
+
+    var body: some View {
+        GeometryReader { geo in
+            ZStack {
+                ForEach(pieces.indices, id: \.self) { i in
+                    let p = pieces[i]
+                    Image(p.art)
+                        .resizable()
+                        .scaledToFit()
+                        .frame(width: p.size, height: p.size)
+                        .rotationEffect(.degrees(fallen ? p.spin : 0))
+                        .position(
+                            x: p.x * geo.size.width + (fallen ? p.drift : 0),
+                            y: fallen ? geo.size.height + 60 : -40)
+                        .animation(.easeIn(duration: p.duration).delay(p.delay), value: fallen)
+                }
+            }
+        }
+        .ignoresSafeArea()
+        .onAppear {
+            let arts = [ArtName.fxConfetti, ArtName.fxConfetti, ArtName.fxStar, ArtName.fxYarn, ArtName.fxSparkle]
+            pieces = (0..<count).map { i in
+                Piece(
+                    art: arts[i % arts.count], x: CGFloat.random(in: 0.04...0.96), size: CGFloat.random(in: 16...30),
+                    spin: Double.random(in: -540...540), duration: Double.random(in: 1.8...2.8),
+                    delay: Double.random(in: 0...0.7), drift: CGFloat.random(in: -50...50))
+            }
+            Task { @MainActor in
+                try? await Task.sleep(for: .milliseconds(30))
+                fallen = true
+            }
+        }
+    }
+}
+
+/// The scoreboard (spec §5.7): opened by tapping the tower. Every seat's cat in its ring,
+/// its phase on a gold shelf badge and its score, numbers only. Tap anywhere to close.
+struct ScoreboardOverlay: View {
+    let model: TableModel
+    let onClose: () -> Void
+
+    @State private var appeared = false
+
+    private var rows: [Seat] { model.game.map { Array($0.phase.indices) } ?? [] }
+
+    var body: some View {
+        ZStack {
+            Palette.night.opacity(0.72)
+                .ignoresSafeArea()
+            VStack(spacing: 12) {
+                ForEach(Array(rows.enumerated()), id: \.element) { i, seat in
+                    row(seat)
+                        .offset(x: appeared ? 0 : (i.isMultiple(of: 2) ? -420 : 420))
+                        .animation(.spring(duration: 0.4, bounce: 0.3).delay(Double(i) * 0.04), value: appeared)
+                }
+            }
+            .padding(.horizontal, 28)
+        }
+        .contentShape(Rectangle())
+        .onTapGesture(perform: onClose)
+        .onAppear {
+            appeared = true
+            Sound.shared.play(ArtName.Sound.sfxPop, volume: 0.7)
+        }
+        .accessibilityElement(children: .contain)
+        .accessibilityAction(.escape, onClose)
+        .accessibilityIdentifier("scoreboard")
+    }
+
+    private func row(_ seat: Seat) -> some View {
+        let view = model.room.seats[safe: seat]
+        let phase = model.game?.phase[safe: seat] ?? 0
+        let score = model.game?.scores[safe: seat] ?? 0
+        let ring = SeatInfo.ringColor(seat)
+        return HStack(spacing: 16) {
+            ZStack(alignment: .topTrailing) {
+                Image(ArtName.cat(SeatInfo.catIndex(view), .idle))
+                    .resizable()
+                    .scaledToFit()
+                    .frame(width: 58, height: 58)
+                    .background(Circle().fill(ring.mix(with: .white, by: 0.25)))
+                    .overlay(Circle().strokeBorder(Palette.ink, lineWidth: 4))
+                if view?.kind == .bot {
+                    Image(ArtName.badgeBot).resizable().frame(width: 24, height: 24).offset(x: 6, y: -4)
+                }
+                if model.game?.winners.contains(seat) == true {
+                    Image(ArtName.crown).resizable().scaledToFit().frame(width: 34).offset(x: -12, y: -16)
+                }
+            }
+            ZStack {
+                Image(ArtName.shelfBadge)
+                    .resizable()
+                    .frame(width: 52, height: 52)
+                if phase >= TableLayout.shelfCount {
+                    Image(ArtName.iconTrophy).resizable().scaledToFit().frame(width: 28, height: 28).offset(y: 3)
+                } else {
+                    OutlinedText(String(phase + 1), size: 24, fill: Palette.orange, width: 3)
+                        .offset(y: 3)
+                }
+            }
+            Spacer(minLength: 8)
+            OutlinedText(String(score), size: 38, fill: .white, width: 4)
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 8)
+        .background(
+            Capsule()
+                .fill(LinearGradient(
+                    colors: [ring.mix(with: .white, by: 0.2), ring, ring.mix(with: Palette.ink, by: 0.25)],
+                    startPoint: .top, endPoint: .bottom))
+                .overlay(Capsule().strokeBorder(Palette.ink, lineWidth: 4))
+        )
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(Text(
+            "\(SeatInfo.name(view)), phase \(min(phase + 1, 10)), \(score) points",
+            comment: "VoiceOver: a scoreboard row"))
+        .accessibilityIdentifier("scoreboard.\(seat)")
+    }
+}
