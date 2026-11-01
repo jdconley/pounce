@@ -15,7 +15,13 @@ struct Seen: Sendable {
 struct Reply: Sendable {
     var status: Int
     var body: String
-    init(_ status: Int, _ body: String = "{}") { self.status = status; self.body = body }
+    /// Seconds to hold the response back (on the loading thread's run loop).
+    var delay: TimeInterval
+    init(_ status: Int, _ body: String = "{}", delay: TimeInterval = 0) {
+        self.status = status
+        self.body = body
+        self.delay = delay
+    }
 }
 
 /// Per-test stub server. Each instance owns a unique host, so tests running in
@@ -83,6 +89,14 @@ final class StubProtocol: URLProtocol, @unchecked Sendable {  // URLProtocol is 
             method: request.httpMethod ?? "GET", path: url.path,
             authorization: request.value(forHTTPHeaderField: "Authorization"), body: body)
         let reply = server.handle(seen)
+        guard reply.delay > 0 else { return respond(reply, url: url) }
+        // URLProtocol clients must be called on the loading thread, whose run loop is running.
+        RunLoop.current.add(Timer(timeInterval: reply.delay, repeats: false) { [self] _ in
+            respond(reply, url: url)
+        }, forMode: .common)
+    }
+
+    private func respond(_ reply: Reply, url: URL) {
         let response = HTTPURLResponse(
             url: url, statusCode: reply.status, httpVersion: "HTTP/1.1",
             headerFields: ["content-type": "application/json"])!
@@ -188,6 +202,30 @@ final class StubProtocol: URLProtocol, @unchecked Sendable {  // URLProtocol is 
         #expect(server.seen.map { "\($0.method) \($0.path)" } == [
             "GET /v1/devices/me/tables", "POST /v1/devices", "GET /v1/devices/me/tables",
         ])
+        #expect(store.load() == DeviceCredential(deviceId: "fresh", token: "good"))
+    }
+
+    /// Two calls go out with the same stale token. The first 401 re-mints; the second
+    /// 401 lands after that mint finished and must retry with the fresh credential
+    /// instead of clearing it and minting again.
+    @Test func concurrentStaleCallsMintOnce() async throws {
+        let staleSeen = Mutex(0)
+        let server = StubServer { req in
+            if req.path == "/v1/devices" { return Reply(200, #"{"deviceId":"fresh","token":"good"}"#) }
+            if req.authorization == "Bearer good" { return Reply(200, #"{"tables":[]}"#) }
+            let n = staleSeen.withLock { $0 += 1; return $0 }
+            // The second stale 401 arrives well after the first one's re-mint is done.
+            return Reply(401, #"{"error":"unauthorized"}"#, delay: n == 1 ? 0 : 0.5)
+        }
+        let store = MemoryCredentialStore()
+        store.save(DeviceCredential(deviceId: "old", token: "stale"))
+        let (api, _) = client(server, store: store)
+        try await withThrowingTaskGroup(of: [TableEntry].self) { group in
+            for _ in 0..<2 { group.addTask { try await api.listTables() } }
+            for try await tables in group { #expect(tables.isEmpty) }
+        }
+        #expect(staleSeen.withLock { $0 } == 2)  // both really went out stale
+        #expect(server.seen.filter { $0.path == "/v1/devices" }.count == 1)
         #expect(store.load() == DeviceCredential(deviceId: "fresh", token: "good"))
     }
 

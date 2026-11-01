@@ -57,4 +57,84 @@ private let host = Person(id: "host", name: "JD", cat: 0)
     @Test func typedCode404IsBadCode() {
         #expect(RoomEntry.notFoundMeaning(code: "BCDFG", known: false) == .badCode)
     }
+
+    // MARK: auto-claim retry
+
+    private func seated(_ room: RoomView, at seat: Seat) -> TableModel {
+        var r = room
+        r.seats[seat] = SeatView(kind: .human, person: owner, yours: true, presence: .awake)
+        return TableModel(room: r)
+    }
+
+    private let seat0: ClientMessage = .claim(seat: 0, person: owner)
+
+    @Test func autoClaimIsSentOnceOnTheFirstSnapshot() {
+        var claim = AutoClaim()
+        let model = TableModel(room: lobby())
+        let first = claim.snapshot(model, owner: owner, first: { seat0 })
+        #expect(first == seat0)
+        #expect(claim.pending)
+        let again = claim.snapshot(model, owner: owner, first: { Issue.record("first() twice"); return nil })
+        #expect(again == nil)
+        // Seated: answered.
+        _ = claim.snapshot(seated(lobby(), at: 0), owner: owner, first: { nil })
+        #expect(!claim.pending)
+        let late = claim.refused(.seatTaken)
+        #expect(!late)  // nothing pending: a later error is a tap's
+    }
+
+    @Test func refusedAutoClaimRetriesOnceOnTheNextLobbySnapshot() {
+        var claim = AutoClaim()
+        _ = claim.snapshot(TableModel(room: lobby()), owner: owner, first: { seat0 })
+        let refused = claim.refused(.seatTaken)
+        #expect(refused)  // suppressed: no nope
+        #expect(!claim.pending)
+
+        // Someone else took seat 0; seat 1 is still open.
+        let taken = lobby([SeatView(kind: .human, person: host, presence: .awake), SeatView(kind: .open)])
+        let retry = claim.snapshot(TableModel(room: taken), owner: owner, first: { nil })
+        #expect(retry == .claim(seat: 1, person: owner))
+        #expect(claim.pending)
+        let refusedAgain = claim.refused(.seatTaken)
+        #expect(refusedAgain)  // the retry's refusal is suppressed too
+        // But there is no second retry, and later errors are a tap's again.
+        let none = claim.snapshot(TableModel(room: taken), owner: owner, first: { nil })
+        #expect(none == nil)
+        let tap = claim.refused(.seatTaken)
+        #expect(!tap)
+    }
+
+    @Test func noRetryOnceSeatedOrOutsideTheLobby() {
+        var claim = AutoClaim()
+        _ = claim.snapshot(TableModel(room: lobby()), owner: owner, first: { seat0 })
+        _ = claim.refused(.seatTaken)
+        // The person tapped a seat themselves before the next snapshot: no retry.
+        let afterSeated = claim.snapshot(seated(lobby(), at: 1), owner: owner, first: { nil })
+        #expect(afterSeated == nil)
+
+        var other = AutoClaim()
+        _ = other.snapshot(TableModel(room: lobby()), owner: owner, first: { seat0 })
+        _ = other.refused(.seatTaken)
+        var playing = lobby()
+        playing.status = .playing
+        let inGame = other.snapshot(TableModel(room: playing), owner: owner, first: { nil })
+        #expect(inGame == nil)
+    }
+
+    @Test func roomWideErrorsAreNotTheClaims() {
+        var claim = AutoClaim()
+        _ = claim.snapshot(TableModel(room: lobby()), owner: owner, first: { seat0 })
+        let stalled = claim.refused(.botStalled)
+        let closed = claim.refused(.roomClosed)
+        #expect(!stalled && !closed)
+        #expect(claim.pending)
+    }
+
+    @Test func aMoveClaimIsNotAnAutoClaim() {
+        var claim = AutoClaim()
+        _ = claim.snapshot(TableModel(room: lobby()), owner: owner, first: { .claimMove(code: "BCDFGH") })
+        #expect(!claim.pending)
+        let refused = claim.refused(.badCode)
+        #expect(!refused)
+    }
 }

@@ -196,6 +196,8 @@ private let discard: Action = .discard(card: 46, skipTarget: nil)
         #expect(store.act(seat: 0, .draw(.deck)))
         let drew = GameEvent.drew(seat: 0, from: .deck, card: 17)
         store.handle(event(.game(drew), seq: 6))
+        #expect(store.lastSeq == 6)
+        #expect(store.settledSeq == 5)  // `room` is still the truth as of seq 5
 
         var after = room
         after.game?.step = .play
@@ -209,6 +211,7 @@ private let discard: Action = .discard(card: 46, skipTarget: nil)
         #expect(store.room?.game?.step == .play)
         #expect(!store.actionInFlight)
         #expect(store.lastSeq == 6)
+        #expect(store.settledSeq == 6)
         let intents = await allIntents(store)
         #expect(Array(intents.suffix(2)) == [.game(drew, seq: 6), .reconcile])
     }
@@ -260,12 +263,34 @@ private let discard: Action = .discard(card: 46, skipTarget: nil)
         #expect(!store.actionInFlight)
     }
 
-    @Test func gameEventClearsInFlight() async throws {
-        let (store, _, _) = try await playingStore(seq: 8)
+    /// R13: an action's events come before its snapshot. A second gesture between
+    /// them would act on a room that doesn't show the first action yet.
+    @Test func eventThenSecondActRefusedUntilSnapshot() async throws {
+        let (store, socket, room) = try await playingStore(seq: 8)
         store.act(seat: 0, discard)
         store.handle(.message(try fixture("event-discarded")))  // seq 9
+        #expect(store.actionInFlight)
+        #expect(!store.act(seat: 0, .draw(.deck)))
+
+        store.handle(snapshot(room, seq: 9))  // the action's snapshot
         #expect(!store.actionInFlight)
         #expect(store.act(seat: 0, .draw(.deck)))
+        await store.settle()
+        #expect(socket.calls.sends == [.act(seat: 0, action: discard), .act(seat: 0, action: .draw(.deck))])
+    }
+
+    /// `room` holds a presence event whole, but a game event only partly until its snapshot.
+    @Test func settledSeqFollowsWhatRoomFullyHolds() async throws {
+        let (store, _, room) = try await playingStore(seq: 1)
+        #expect(store.settledSeq == 1)
+        store.handle(event(.presence(seat: 1, presence: .away), seq: 2))
+        #expect(store.settledSeq == 2)
+        store.handle(event(.game(.drew(seat: 0, from: .deck, card: 17)), seq: 3))
+        store.handle(event(.presence(seat: 1, presence: .awake), seq: 4))
+        #expect(store.lastSeq == 4)
+        #expect(store.settledSeq == 2)  // the drew at 3 isn't in `room` yet
+        store.handle(snapshot(room, seq: 4))
+        #expect(store.settledSeq == 4)
     }
 
     @Test func presenceEventKeepsInFlight() async throws {
@@ -283,7 +308,9 @@ private let discard: Action = .discard(card: 46, skipTarget: nil)
 
         #expect(!store.actionInFlight)
         #expect(socket.calls.sends.isEmpty)
-        #expect(await allIntents(store) == [.reconcile])  // no rejection for a send that never left
+        #expect(store.lastError == nil)  // no server error: nothing to blame
+        // The scene rolls its provisional move back.
+        #expect(await allIntents(store) == [.reconcile, .rejected(.notSent)])
     }
 
     @Test func staleSendFailureKeepsNewerLock() async throws {
@@ -352,11 +379,12 @@ private let discard: Action = .discard(card: 46, skipTarget: nil)
         let (store, socket, room) = try await playingStore(seq: 5)
         store.act(seat: 0, .draw(.deck))
         store.handle(event(.game(.drew(seat: 0, from: .deck, card: 17)), seq: 6))
-        #expect(store.act(seat: 0, discard))
+        #expect(store.actionInFlight)  // the drew event doesn't release it
 
-        store.handle(.disconnected)
+        store.handle(.disconnected)  // the action's snapshot is lost with the socket
         #expect(!store.connected)
         #expect(store.actionInFlight)  // kept until the reconnect snapshot
+        #expect(!store.act(seat: 0, discard))
 
         store.handle(.connecting)
         store.handle(.connected)
@@ -371,7 +399,9 @@ private let discard: Action = .discard(card: 46, skipTarget: nil)
         #expect(store.lastSeq == 6)
         #expect(store.act(seat: 0, .discard(card: 17, skipTarget: nil)))
         await store.settle()
-        #expect(socket.calls.sends.count == 3)
+        #expect(socket.calls.sends == [
+            .act(seat: 0, action: .draw(.deck)), .act(seat: 0, action: .discard(card: 17, skipTarget: nil)),
+        ])
     }
 
     @Test func moveCodeIsKept() throws {

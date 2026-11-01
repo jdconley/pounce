@@ -47,6 +47,9 @@ public struct ErrorCode: RawRepresentable, Codable, Hashable, Sendable {
     // Sent to the whole room, unprompted.
     public static let botStalled = ErrorCode(rawValue: "bot_stalled")
     public static let roomClosed = ErrorCode(rawValue: "room_closed")
+    // Local only, never sent by the server.
+    /// An `act` whose send failed (the socket was down): it never reached the server.
+    public static let notSent = ErrorCode(rawValue: "local_not_sent")
 }
 
 /// Server to client (discriminator key `t`).

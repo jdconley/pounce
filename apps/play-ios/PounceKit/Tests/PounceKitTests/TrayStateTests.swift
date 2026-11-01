@@ -62,6 +62,19 @@ private let phase2 = Rules.phases[1]  // set of 3, run of 4
         #expect(Rules.buildGroup(phase2[1], cards: run.cards, runStart: run.runStart) != nil)
     }
 
+    @Test func canMoveYarnOnlyInAValidRunTray() {
+        var trays = TrayState(requirements: phase2)
+        for c in [card(5, .tabby), card(6, .calico), yarn] { trays.add(c, to: 1) }
+        #expect(!trays.canMoveYarn(yarn, inTray: 1))  // 3 of 4: not a run yet
+        trays.add(card(7, .gray), to: 1)
+        #expect(trays.canMoveYarn(yarn, inTray: 1))
+        #expect(!trays.canMoveYarn(card(5, .tabby), inTray: 1))  // a natural
+        #expect(!trays.canMoveYarn(yarn, inTray: 0))  // not in that tray
+        for c in [card(9, .tabby), card(9, .gray), yarn2] { trays.add(c, to: 0) }
+        #expect(trays.isValid(0))
+        #expect(!trays.canMoveYarn(yarn2, inTray: 0))  // a set: the Yarn has no place to move
+    }
+
     @Test func moveYarnIgnoresIllegalPlacements() {
         var trays = TrayState(requirements: phase2)
         for c in [card(1, .tabby), card(2, .calico), card(3, .gray), yarn] { trays.add(c, to: 1) }

@@ -1,3 +1,4 @@
+import CoreGraphics
 import Testing
 @testable import PounceKit
 
@@ -95,6 +96,14 @@ func makeRoom(
         #expect(lobby([.human, .human, .bot, .closed, .closed, .closed]).canStart)
         #expect(TableModel(room: makeRoom()).blockingSeats.isEmpty)
         #expect(!TableModel(room: makeRoom()).canStart)
+    }
+
+    @Test func barSeatsAreEverySeatWithoutABottomSeat() {
+        let model = TableModel(room: makeRoom(seatCount: 6, mine: []))
+        #expect(model.barSeats(bottom: nil) == [0, 1, 2, 3, 4, 5])
+        #expect(model.barSeats(bottom: 4) == [5, 0, 1, 2, 3])
+        let layout = TableLayout(size: CGSize(width: 390, height: 844), safeTop: 59, safeBottom: 34, opponents: 6)
+        #expect(layout.opponentSlots.count == 6)
     }
 
     @Test func opponentsInTurnOrder() {

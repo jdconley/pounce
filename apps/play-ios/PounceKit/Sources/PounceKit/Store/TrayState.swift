@@ -66,6 +66,14 @@ public struct TrayState: Equatable, Sendable {
         }
     }
 
+    /// A Yarn in a valid run tray, which `moveYarn` can place (the tap path selects it, then a
+    /// tap on another slot of that tray moves it there).
+    public func canMoveYarn(_ card: CardID, inTray tray: Int) -> Bool {
+        guard requirements.indices.contains(tray), requirements[tray].kind == .run,
+              Card.decode(card) == .yarn, slots[tray].contains(card) else { return false }
+        return isValid(tray)
+    }
+
     /// Moves a Yarn in a valid run tray to display slot `toIndex`, which picks the run's start.
     /// A placement no start allows (or a natural card, or a non-run tray) changes nothing.
     public mutating func moveYarn(_ card: CardID, inTray tray: Int, toIndex index: Int) {

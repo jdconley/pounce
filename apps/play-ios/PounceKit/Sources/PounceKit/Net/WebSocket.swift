@@ -23,13 +23,16 @@ public protocol WebSocketConnector: Sendable {
 
 /// Opens sockets with `URLSessionWebSocketTask`, sending `Authorization: Bearer <token>`.
 ///
-/// `connect` returns only once the upgrade has succeeded: it sends a ping right
-/// after `resume()` (URLSession queues it until the handshake finishes) and waits
-/// for the pong. URLSession only delivers a pong while a `receive()` is pending, so
-/// the first receive starts before the ping and its frame is handed to the
-/// connection's first `receive()` call. If the handshake fails instead, the HTTP
-/// status of the refused upgrade decides the error: 404 is `.notFound`, 401 is
-/// `.unauthorized`.
+/// `connect` returns only once the upgrade has succeeded. Right after `resume()` it
+/// starts the first `receive()` (its frame is handed to the connection's first
+/// `receive()` call) and sends a ping (URLSession queues it until the handshake
+/// finishes), then waits for whichever comes first: the pong, or that first frame.
+/// Either proves the upgrade went through. The race matters because URLSession may
+/// stop reading once one data frame is buffered unconsumed: when the server sends
+/// two frames before the pong (the snapshot, then another seat's event or a bot
+/// step), the pong can sit behind them until the ping times out. If the handshake
+/// fails instead, the HTTP status of the refused upgrade decides the error: 404 is
+/// `.notFound`, 401 is `.unauthorized`.
 public struct URLSessionWebSocketConnector: WebSocketConnector {
     private let session: URLSession
     private let timeout: Duration
@@ -48,7 +51,7 @@ public struct URLSessionWebSocketConnector: WebSocketConnector {
         task.resume()
         connection.prefetch()
         do {
-            try await connection.sendPing()
+            try await connection.handshake()
         } catch {
             let status = (task.response as? HTTPURLResponse)?.statusCode
             task.cancel()
@@ -106,10 +109,34 @@ final class URLSessionWebSocketConnection: WebSocketConnection {
         }
     }
 
+    /// Waits for the opening ping's pong or the prefetched first frame, whichever
+    /// lands first (see `URLSessionWebSocketConnector`). The first frame stays queued
+    /// for `receive()`; a prefetch that fails fails the handshake.
+    func handshake() async throws {
+        let result = OneShot()
+        let first = early.withLock { $0 }
+        let watcher = Task {
+            guard let first else { return }
+            do {
+                _ = try await first.value
+                result.finish(.success(()))
+            } catch {
+                result.finish(.failure(error))
+            }
+        }
+        defer { watcher.cancel() }  // never cancels `first`: awaiting a task's value doesn't own it
+        try await ping(settling: result)
+    }
+
     /// Waits for the pong, failing after `pingTimeout`, on the socket failing, or on
     /// task cancellation (a silent dead connection may never call the pong handler).
     func sendPing() async throws {
-        let result = OneShot()
+        try await ping(settling: OneShot())
+    }
+
+    /// Sends a ping and waits for `result`, which the pong, the timeout, cancellation,
+    /// or another racer (the handshake's first frame) settles first.
+    private func ping(settling result: OneShot) async throws {
         let timeout = Task { [pingTimeout] in
             do {
                 try await Task.sleep(for: pingTimeout)

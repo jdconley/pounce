@@ -77,7 +77,7 @@ public struct TableLayout: Sendable {
         let barH = Self.opponentsBarHeight
         let bar = CGRect(x: 0, y: size.height - safeTop - barH, width: width, height: barH)
         opponentsBar = bar
-        let n = min(max(opponents, 1), 5)
+        let n = min(max(opponents, 1), 6)  // 6: every seat, on a phone that holds none
         opponentSlots = (0..<n).map { CGPoint(x: width * (CGFloat($0) + 0.5) / CGFloat(n), y: bar.midY) }
 
         // Hand fan: a circular arc of radius `fanRadius` centered below the hand. The

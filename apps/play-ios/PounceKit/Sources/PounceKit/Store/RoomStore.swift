@@ -12,8 +12,11 @@ import Observation
 ///   server follows every game action with a snapshot at the seq of its last
 ///   event, which carries the truth. Only turn, step and status are folded in
 ///   from events, so the scene's timing is right before that snapshot lands.
-/// - At most one `act` is in flight. A game event, an error, a snapshot or a send
-///   that never left releases it; a disconnect does not.
+/// - At most one `act` is in flight. The snapshot that follows it (R13: every
+///   successful action ends with one), an error, or a send that never left releases
+///   it; its game events and a disconnect do not, so a quick second gesture can't
+///   act on the room before the action's truth lands. A send that never left yields
+///   `.rejected(.notSent)` so the scene rolls the provisional move back.
 /// - `closed`, `notFound` and `needsUpdate` are terminal: later messages are ignored.
 ///   `stalled` survives snapshots too (the bot clock stays stopped), but the room
 ///   keeps updating.
@@ -23,6 +26,11 @@ import Observation
     public private(set) var phase: RoomPhase = .connecting
     /// -1 before the first snapshot.
     public private(set) var lastSeq = -1
+    /// The seq up to which `room` holds every event's full effect (-1 before the first
+    /// snapshot): the last snapshot's, or a presence event right after it (presence is
+    /// folded in whole). Game events after it only fold in turn, step and status, so a
+    /// table drawn from `room` shows events up to here, not up to `lastSeq`.
+    public private(set) var settledSeq = -1
     public private(set) var actionInFlight = false
     public private(set) var connected = false
     public private(set) var moveCode: MoveCode?
@@ -74,9 +82,11 @@ import Observation
             do {
                 try await socket.send(message)
             } catch {
-                // Never left the device: nothing to reject, but input must not stick.
+                // Never left the device: input must not stick, and the scene's
+                // provisional move goes back (no server error will come for it).
                 guard let self, self.actionInFlight, self.actToken == token else { return }
                 self.actionInFlight = false
+                self.continuation.yield(.rejected(.notSent))
             }
         }
         return true
@@ -144,6 +154,7 @@ import Observation
         let previous = room?.status
         room = new
         lastSeq = seq
+        settledSeq = seq
         actionInFlight = false
         if phase != .stalled {
             switch new.status {
@@ -170,6 +181,7 @@ import Observation
             if let room, room.seats.indices.contains(seat) {
                 self.room?.seats[seat].presence = presence
             }
+            if settledSeq == seq - 1 { settledSeq = seq }
             continuation.yield(.presence(seat: seat, presence: presence))
         case .game(let game):
             switch game {
@@ -183,7 +195,7 @@ import Observation
             default:
                 break  // the snapshot that follows this action carries the rest
             }
-            actionInFlight = false
+            // actionInFlight stays: that snapshot releases it.
             continuation.yield(.game(game, seq: seq))
         }
     }

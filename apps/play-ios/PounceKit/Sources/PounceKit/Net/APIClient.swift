@@ -23,7 +23,9 @@ public enum APIError: Error, Equatable {
 
 /// HTTP client for the `play-api` worker. It owns the device credential: it mints
 /// one on first use, and an authenticated call that gets 401 clears it, mints a
-/// fresh one once, and retries once.
+/// fresh one once, and retries once. Concurrent calls that fail with the same stale
+/// credential share one re-mint: a call whose credential was already replaced by
+/// the time its 401 arrives retries with the replacement instead of minting again.
 public actor APIClient {
     private let config: APIConfig
     private let credentials: CredentialStore
@@ -83,6 +85,18 @@ public actor APIClient {
         return minted
     }
 
+    /// A credential to retry with after `failed` got 401: one minted since (by a
+    /// concurrent call) if there is one, otherwise a fresh mint (shared with any
+    /// mint already running).
+    private func replacement(for failed: DeviceCredential) async throws -> DeviceCredential {
+        if let cached, cached != failed { return cached }
+        if cached == failed {
+            credentials.clear()
+            cached = nil
+        }
+        return try await mint()
+    }
+
     // MARK: requests
 
     private func authenticated(_ method: String, _ path: String, body: [String: String]?) async throws -> Data {
@@ -94,9 +108,7 @@ public actor APIClient {
                 return try await Self.send(
                     session: session, method: method, url: url, bearer: cred.token, body: payload)
             } catch APIError.unauthorized where attempt == 0 {
-                credentials.clear()
-                cached = nil
-                cred = try await mint()
+                cred = try await replacement(for: cred)
             }
         }
         throw APIError.unauthorized  // unreachable: attempt 1 rethrows above

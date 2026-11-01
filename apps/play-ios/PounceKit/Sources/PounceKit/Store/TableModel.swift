@@ -31,6 +31,13 @@ public struct TableModel: Equatable, Sendable {
         game?.handCounts.count ?? room.seats.count
     }
 
+    /// The seats along the top bar: the others in turn order after `bottom`, or every seat
+    /// when this phone holds none (nothing is drawn at the bottom).
+    public func barSeats(bottom: Seat?) -> [Seat] {
+        guard let bottom else { return Array(0..<seatCount) }
+        return opponents(bottom: bottom)
+    }
+
     /// Other seats in turn order, starting after `bottom`.
     public func opponents(bottom: Seat) -> [Seat] {
         let n = seatCount
