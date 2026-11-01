@@ -13,7 +13,21 @@ public enum PushPolicy {
     /// How long after going to the background mid-turn the local "your turn" reminder fires;
     /// nil when no seat of this phone is playing. The server only pushes when a turn starts.
     public static func reminderDelay(model: TableModel) -> Duration? {
-        model.isMyTurn ? .seconds(600) : nil
+        model.isMyTurn ? reminderInterval : nil
+    }
+
+    /// The local reminder's delay: 10 minutes.
+    public static let reminderInterval: Duration = .seconds(600)
+
+    private static let reminderPrefix = "turn-reminder-"
+
+    /// The local turn reminder's request identifier for a room.
+    public static func reminderID(code: String) -> String { reminderPrefix + code }
+
+    /// A local turn reminder's identifier (for any room). Every one is removed on each
+    /// foreground, including ones scheduled before the app was terminated and relaunched.
+    public static func isReminderID(_ identifier: String) -> Bool {
+        identifier.hasPrefix(reminderPrefix)
     }
 
     /// The APNs device token as the lowercase hex the server stores.

@@ -22,6 +22,8 @@ final class AppDelegate: NSObject, UIApplicationDelegate {
         UNUserNotificationCenter.current().delegate = push
         Sound.shared.preload()
         push.registerEveryLaunch()
+        // A reminder left from before the app was terminated must not fire now that it's open.
+        push.cancelAllTurnReminders()
         return true
     }
 

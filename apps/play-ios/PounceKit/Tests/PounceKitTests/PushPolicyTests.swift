@@ -49,4 +49,14 @@ import Testing
         #expect(PushPolicy.code(fromPayload: ["code": 12345]) == nil)
         #expect(PushPolicy.code(fromPayload: ["aps": ["thread-id": "K7QM4"]]) == nil)
     }
+
+    @Test func reminderIDsAreRecognisedByPrefix() {
+        #expect(PushPolicy.reminderID(code: "K7QM4") == "turn-reminder-K7QM4")
+        #expect(PushPolicy.isReminderID(PushPolicy.reminderID(code: "K7QM4")))
+        #expect(PushPolicy.isReminderID("turn-reminder-BCDFG"))
+        // Server pushes and anything else on the phone are never touched.
+        #expect(!PushPolicy.isReminderID("K7QM4"))
+        #expect(!PushPolicy.isReminderID("other-turn-reminder-K7QM4"))
+        #expect(!PushPolicy.isReminderID(""))
+    }
 }

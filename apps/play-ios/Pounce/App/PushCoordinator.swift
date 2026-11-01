@@ -86,8 +86,6 @@ final class PushCoordinator: NSObject, UNUserNotificationCenterDelegate {
 
     // MARK: local turn reminder
 
-    private static func reminderID(_ code: String) -> String { "turn-reminder-\(code)" }
-
     /// The same shape as the server's push: title = whose turn, body "Your turn",
     /// thread = room code, top-level `code` for the tap.
     func scheduleTurnReminder(code: String, name: String, after: Duration) {
@@ -99,15 +97,63 @@ final class PushCoordinator: NSObject, UNUserNotificationCenterDelegate {
         content.userInfo = ["code": code]
         let seconds = max(1, Double(after.components.seconds) + Double(after.components.attoseconds) / 1e18)
         let trigger = UNTimeIntervalNotificationTrigger(timeInterval: seconds, repeats: false)
-        let request = UNNotificationRequest(identifier: Self.reminderID(code), content: content, trigger: trigger)
-        center.add(request) { _ in }
+        let id = PushPolicy.reminderID(code: code)
+        let request = UNNotificationRequest(identifier: id, content: content, trigger: trigger)
+        scheduledReminders.insert(id)
+        Self.add(request)
     }
 
-    func cancelTurnReminder(code: String) {
-        let id = Self.reminderID(code)
-        center.removePendingNotificationRequests(withIdentifiers: [id])
-        center.removeDeliveredNotifications(withIdentifiers: [id])
+    /// Nonisolated so the completion closure isn't main-actor isolated: the center calls it on
+    /// a background queue, where an isolated closure would trap.
+    nonisolated private static func add(_ request: UNNotificationRequest) {
+        let id = request.identifier
+        UNUserNotificationCenter.current().add(request) { _ in
+            #if DEBUG
+            logPendingReminders("scheduled \(id)")
+            #endif
+        }
     }
+
+    /// Reminders scheduled by this process, removed by identifier straight away on foreground.
+    private var scheduledReminders: Set<String> = []
+
+    /// Removes every local turn reminder, pending or delivered, for any room. Called at launch
+    /// and on every foreground: a reminder scheduled before iOS terminated the app in the
+    /// background is only found by listing them (spec §7.5, "cancelled on foreground").
+    func cancelAllTurnReminders() {
+        let known = Array(scheduledReminders)
+        scheduledReminders.removeAll()
+        center.removePendingNotificationRequests(withIdentifiers: known)
+        center.removeDeliveredNotifications(withIdentifiers: known)
+        Self.removeListedReminders()
+    }
+
+    /// Lists pending and delivered requests and removes every turn reminder. Nonisolated for
+    /// the same reason as `add`: the list callbacks arrive on a background queue.
+    nonisolated private static func removeListedReminders() {
+        let center = UNUserNotificationCenter.current()
+        center.getPendingNotificationRequests { requests in
+            let ids = requests.map(\.identifier).filter(PushPolicy.isReminderID)
+            UNUserNotificationCenter.current().removePendingNotificationRequests(withIdentifiers: ids)
+            #if DEBUG
+            logPendingReminders("cancelled pending \(ids)")
+            #endif
+        }
+        center.getDeliveredNotifications { notifications in
+            let ids = notifications.map(\.request.identifier).filter(PushPolicy.isReminderID)
+            UNUserNotificationCenter.current().removeDeliveredNotifications(withIdentifiers: ids)
+        }
+    }
+
+    #if DEBUG
+    /// `[push] <event>; pending reminders: [...]` (verification aid).
+    nonisolated private static func logPendingReminders(_ event: String) {
+        UNUserNotificationCenter.current().getPendingNotificationRequests { requests in
+            let ids = requests.map(\.identifier).filter(PushPolicy.isReminderID)
+            print("[push] \(event); pending reminders: \(ids)")
+        }
+    }
+    #endif
 
     // MARK: UNUserNotificationCenterDelegate
 
