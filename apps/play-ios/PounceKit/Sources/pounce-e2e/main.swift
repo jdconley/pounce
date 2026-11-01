@@ -2,8 +2,13 @@
 // over the same PounceKit networking the app uses. macOS only; credentials live in memory.
 //
 //   pounce-e2e full [--local 2] [--bots 2] [--timeout 1800]
-//   pounce-e2e join <CODE> [--name Remote] [--cat 4] [--drop-after N] [--quit-after N] [--timeout 1800]
+//                   [--move-seats 1,2 --move-at-phase 8 --move-file PATH]
+//       (once any seat reaches that phase index, those local seats are offered to other phones
+//        with moveSeat; one line per seat goes to PATH: "<seat> pounce-dev://j/<CODE>?move=<M>")
+//   pounce-e2e join <CODE> [--name Remote] [--cat 4] [--drop-after N [--reconnect-after 3 | --reconnect-file PATH]] [--quit-after N] [--timeout 1800]
+//       (--reconnect-file: stay away until PATH exists, so a slow UI test can't miss the away)
 //   pounce-e2e scenario presence|reconnect|move
+//   pounce-e2e peek <CODE>            (one snapshot as a seatless device: turn, step, seats)
 //
 // Every mode takes `--base <url>` (default http://localhost:8787). Exit 0 on success, 1 with a
 // one-line reason on failure, 2 on bad usage.
@@ -253,8 +258,10 @@ struct Summary {
 
 /// Plays every turn of the seats `device` holds until game over. `afterAct(n)` runs after the
 /// device's n-th action (drop/quit hooks); returning false stops playing (Summary nil).
+/// `tick` runs on every poll (the move hook).
 func play(
     _ device: Device, timeout: Double, stallAfter: Double = 90,
+    tick: (DeviceView) async throws -> Void = { _ in },
     afterAct: (Int) async throws -> Bool = { _ in true }
 ) async throws -> Summary? {
     let deadline = Date().addingTimeInterval(timeout)
@@ -280,6 +287,8 @@ func play(
             throw Failure("\(device.name): stalled at seq \(v.seq) for \(Int(stallAfter)) s (turn \(v.game.map { String($0.turn) } ?? "-"))")
         }
         if Date() > deadline { throw Failure("\(device.name): game not over after \(Int(timeout)) s") }
+        try await tick(v)
+        if await device.view.errors.count > seenErrors { continue }
 
         if v.connected, let room = v.room, let game = room.game, v.mySeats.contains(game.turn),
            let action = Strategy.next(room: room, seat: game.turn) {
@@ -345,19 +354,40 @@ func full(_ base: APIConfig, _ o: Options) async throws {
     }
     try await start(host)
     log("started: \(local) local, \(bots) bots")
-    guard let summary = try await play(host, timeout: timeout) else { throw Failure("stopped early") }
+    let moveSeats = (o.flags["move-seats"] ?? "").split(separator: ",").compactMap { Int($0) }
+    let moveAt = o.int("move-at-phase", 8)
+    let moveFile = o.flags["move-file"]
+    var moved = moveSeats.isEmpty
+    let tick: (DeviceView) async throws -> Void = { v in
+        guard !moved, let game = v.game, game.status == .playing, (game.phase.max() ?? 0) >= moveAt else { return }
+        moved = true
+        var lines: [String] = []
+        for seat in moveSeats {
+            try await host.send(.moveSeat(seat: seat))
+            let withCode = try await wait(host, "a move code for seat \(seat)") { $0.moveCodes[seat] != nil }
+            let link = "pounce-dev://j/\(code)?move=\(withCode.moveCodes[seat]!)"
+            lines.append("\(seat) \(link)")
+            log("move seat \(seat): \(link)")
+        }
+        if let moveFile { try (lines.joined(separator: "\n") + "\n").write(toFile: moveFile, atomically: true, encoding: .utf8) }
+    }
+    // Moved seats are played by people tapping on simulators: allow them time.
+    guard let summary = try await play(host, timeout: timeout, stallAfter: moveSeats.isEmpty ? 90 : 900, tick: tick)
+    else { throw Failure("stopped early") }
     log(summary.line)
 }
 
 /// A remote human on its own phone: claims the first open seat of an app-made room and plays.
 func joinMode(_ base: APIConfig, _ o: Options) async throws {
     guard let code = o.positional.first?.uppercased(), RoomCode.isValid(code) else {
-        throw Failure("usage: join <CODE> [--name Remote] [--cat 4] [--drop-after N] [--quit-after N]")
+        throw Failure("usage: join <CODE> [--name Remote] [--cat 4] [--drop-after N [--reconnect-after S]] [--quit-after N]")
     }
     let name = o.string("name", "Remote")
     let cat = o.int("cat", 4)
     let dropAfter = o.int("drop-after", 0)
     let quitAfter = o.int("quit-after", 0)
+    let reconnectAfter = o.int("reconnect-after", 3)
+    let reconnectFile = o.flags["reconnect-file"]
     let timeout = Double(o.int("timeout", 1800))
     let me = person(name, cat: cat)
     let remote = Device("remote", config: base)
@@ -386,7 +416,7 @@ func joinMode(_ base: APIConfig, _ o: Options) async throws {
     try await wait(remote, "the game to start", timeout: 600) { $0.room?.status == .playing }
     log("game started; seat \(await remote.view.mySeats)")
 
-    let summary = try await play(remote, timeout: timeout, stallAfter: 600) { n in
+    let summary = try await play(remote, timeout: timeout, stallAfter: 600, afterAct: { n in
         if n == quitAfter {
             log("quitting after action \(n)")
             await remote.drop()
@@ -396,12 +426,20 @@ func joinMode(_ base: APIConfig, _ o: Options) async throws {
             let seq = await remote.view.seq
             log("dropping the socket after action \(n) (seq \(seq))")
             await remote.drop()
-            try await Task.sleep(for: .seconds(3))
+            if let reconnectFile {
+                log("waiting for \(reconnectFile)")
+                let until = Date().addingTimeInterval(1800)
+                while !FileManager.default.fileExists(atPath: reconnectFile), Date() < until {
+                    try await Task.sleep(for: .milliseconds(200))
+                }
+            } else {
+                try await Task.sleep(for: .seconds(reconnectAfter))
+            }
             let v = try await join(remote, code)
             log("reconnected: snapshot seq \(v.seq), step \(v.game?.step.rawValue ?? "-")")
         }
         return true
-    }
+    })
     if let summary { log(summary.line) }
 }
 
@@ -526,6 +564,22 @@ func scenario(_ base: APIConfig, _ o: Options) async throws {
     }
 }
 
+/// Prints what a seatless device sees of a room: status, turn, step, hand counts, presence.
+func peek(_ base: APIConfig, _ o: Options) async throws {
+    guard let code = o.positional.first?.uppercased() else { throw Failure("usage: peek <CODE>") }
+    let d = Device("peek", config: base)
+    let v = try await join(d, code)
+    guard let room = v.room else { throw Failure("no room") }
+    let seats = room.seats.enumerated().map { i, s in
+        "\(i):\(s.kind.rawValue)\(s.person.map { "(\($0.name))" } ?? "")\(s.presence.map { "/\($0.rawValue)" } ?? "")"
+    }
+    log("room \(room.code) \(room.status.rawValue) seq \(v.seq) seats \(seats.joined(separator: " "))")
+    if let g = room.game {
+        log("round \(g.round) \(g.status.rawValue) turn \(g.turn) step \(g.step.rawValue) hands \(g.handCounts) phase \(g.phase) laid \(g.laid.map { $0 != nil })")
+    }
+    await d.drop()
+}
+
 // MARK: main
 
 let args = CommandLine.arguments
@@ -540,6 +594,7 @@ do {
     case "full": try await full(config, options)
     case "join": try await joinMode(config, options)
     case "scenario": try await scenario(config, options)
+    case "peek": try await peek(config, options)
     default:
         log("unknown mode \(mode)")
         exit(2)
