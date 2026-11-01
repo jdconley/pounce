@@ -2,11 +2,14 @@ import PounceKit
 import SpriteKit
 
 /// Laid-down groups around the piles: one row per seat that laid this round, a tiny cat of
-/// that seat at the left and its groups as small overlapped card fans.
+/// that seat at the left and its groups as small overlapped card fans. Card nodes keep their
+/// identity by card id across updates, so a hit or a lay-down animates onto nodes that stay.
 @MainActor
 final class LaidZoneNode: SKNode {
     @MainActor private final class Row {
         let node = SKNode()
+        var head: SKSpriteNode?
+        var cards: [CardID: CardNode] = [:]
         var groups: [Group] = []
         var cat = -1
         var rect: CGRect = .zero
@@ -134,47 +137,118 @@ final class LaidZoneNode: SKNode {
 
     var laidSeats: [Seat] { rows.keys.sorted() }
 
-    private func build(_ row: Row, seat: Seat) {
-        row.node.removeAllChildren()
-        let rect = row.rect
-        let mini = row.miniSize
+    /// Where a row's pieces go: the cat head, each group's card centers and frames (zone space).
+    struct RowPlacement {
+        var headCenter: CGPoint
+        var headSize: CGFloat
+        var cards: [[CGPoint]]
+        var frames: [CGRect]
+    }
 
-        // The seat's tiny cat on the left.
+    static func placement(groups: [Group], rect: CGRect, mini: CGSize) -> RowPlacement {
         let headSize = min(26, rect.height * 0.5)
-        let ring = SKSpriteNode(texture: TableArt.table(ArtName.ring), size: CGSize(width: headSize + 4, height: headSize + 4))
-        ring.color = UIColor(SeatInfo.ringColor(seat))
-        ring.colorBlendFactor = 0.85
-        ring.position = CGPoint(x: rect.minX + headSize / 2 + 2, y: rect.midY)
-        ring.zPosition = 0
-        let face = SKSpriteNode(texture: TableArt.cat(row.cat, .idle), size: CGSize(width: headSize, height: headSize))
-        face.zPosition = 0.05
-        ring.addChild(face)
-        row.node.addChild(ring)
-
-        // Groups fanned left to right in the space after the cat.
         let gap: CGFloat = 6
         let left = rect.minX + headSize + 8
         let avail = rect.maxX - left
-        let n = row.groups.count
-        let overlaps = row.groups.reduce(0) { $0 + max($1.cards.count - 1, 0) }
+        let n = groups.count
+        let overlaps = groups.reduce(0) { $0 + max($1.cards.count - 1, 0) }
         var step = overlaps > 0 ? (avail - CGFloat(n) * mini.width - gap * CGFloat(max(n - 1, 0))) / CGFloat(overlaps) : 0
         step = min(max(step, 4), mini.width * 0.62)
         var x = left
-        var z: CGFloat = 0.1
-        row.groupFrames = []
-        for (g, group) in row.groups.enumerated() {
-            let start = x
-            for (j, card) in group.cards.enumerated() {
-                let node = CardNode(card: card, size: mini, shadow: false)
-                node.name = "g\(g)"
-                node.position = CGPoint(x: x + mini.width / 2 + CGFloat(j) * step, y: rect.midY)
-                node.zPosition = z
-                z += 0.01
-                row.node.addChild(node)
-            }
+        var cards: [[CGPoint]] = []
+        var frames: [CGRect] = []
+        for group in groups {
+            cards.append(group.cards.indices.map { j in CGPoint(x: x + mini.width / 2 + CGFloat(j) * step, y: rect.midY) })
             let width = CGFloat(max(group.cards.count - 1, 0)) * step + mini.width
-            row.groupFrames.append(CGRect(x: start, y: rect.midY - mini.height / 2, width: width, height: mini.height))
+            frames.append(CGRect(x: x, y: rect.midY - mini.height / 2, width: width, height: mini.height))
             x += width + gap
         }
+        return RowPlacement(
+            headCenter: CGPoint(x: rect.minX + headSize / 2 + 2, y: rect.midY), headSize: headSize, cards: cards, frames: frames)
+    }
+
+    /// Zone space → parent space (as drawn, enlarged or not).
+    private func toParent(_ p: CGPoint) -> CGPoint {
+        CGPoint(x: p.x * xScale + position.x, y: p.y * yScale + position.y)
+    }
+
+    /// Where each card of `groups` will land when `seat` lays them down, in parent space, for
+    /// a table with `total` seats (the lay-down animation flies there before the row exists).
+    func landing(groups: [Group], seat: Seat, total: Int, layout: TableLayout) -> [[CGPoint]] {
+        let rect = layout.laidRow(slot: seat, of: total)
+        return Self.placement(groups: groups, rect: rect, mini: layout.miniCardSize).cards.map { $0.map(toParent) }
+    }
+
+    /// Where `card` lands when `seat`'s group `index` becomes `group` (a hit), in parent space.
+    func landing(hit card: CardID, seat: Seat, index: Int, group: Group) -> CGPoint? {
+        guard let row = rows[seat], row.groups.indices.contains(index),
+              let j = group.cards.firstIndex(of: card) else { return nil }
+        var groups = row.groups
+        groups[index] = group
+        let p = Self.placement(groups: groups, rect: row.rect, mini: row.miniSize)
+        return p.cards[safe: index]?[safe: j].map(toParent)
+    }
+
+    /// The card nodes of `seat`'s group `index`, for a bump.
+    func groupNodes(seat: Seat, index: Int) -> [CardNode] {
+        guard let row = rows[seat], let group = row.groups[safe: index] else { return [] }
+        return group.cards.compactMap { row.cards[$0] }
+    }
+
+    /// Displayed scale of a mini card relative to a full-size card.
+    func miniScale(layout: TableLayout) -> CGFloat {
+        layout.miniCardSize.width / max(layout.cardSize.width, 1) * xScale
+    }
+
+    private func build(_ row: Row, seat: Seat) {
+        let mini = row.miniSize
+        let place = Self.placement(groups: row.groups, rect: row.rect, mini: mini)
+
+        // The seat's tiny cat on the left (rebuilt only when the cat changes or it moved).
+        let headSize = place.headSize
+        if row.head?.name != "head\(row.cat)" || row.head?.size.width != headSize + 4 {
+            row.head?.removeFromParent()
+            let ring = SKSpriteNode(texture: TableArt.table(ArtName.ring), size: CGSize(width: headSize + 4, height: headSize + 4))
+            ring.name = "head\(row.cat)"
+            ring.color = UIColor(SeatInfo.ringColor(seat))
+            ring.colorBlendFactor = 0.85
+            ring.zPosition = 0
+            let face = SKSpriteNode(texture: TableArt.cat(row.cat, .idle), size: CGSize(width: headSize, height: headSize))
+            face.zPosition = 0.05
+            ring.addChild(face)
+            row.node.addChild(ring)
+            row.head = ring
+        }
+        row.head?.position = place.headCenter
+
+        // Groups fanned left to right in the space after the cat; card nodes reused by id.
+        var keep: Set<CardID> = []
+        var z: CGFloat = 0.1
+        for (g, group) in row.groups.enumerated() {
+            for (j, card) in group.cards.enumerated() {
+                keep.insert(card)
+                let node: CardNode
+                if let existing = row.cards[card] {
+                    node = existing
+                } else {
+                    node = CardNode(card: card, size: mini, shadow: false)
+                    row.cards[card] = node
+                    row.node.addChild(node)
+                }
+                node.name = "g\(g)"
+                node.size = mini
+                node.position = place.cards[g][j]
+                node.zPosition = z
+                node.zRotation = 0
+                node.alpha = 1
+                node.colorBlendFactor = 0
+                z += 0.01
+            }
+        }
+        for (card, node) in row.cards where !keep.contains(card) {
+            node.removeFromParent()
+            row.cards[card] = nil
+        }
+        row.groupFrames = place.frames
     }
 }

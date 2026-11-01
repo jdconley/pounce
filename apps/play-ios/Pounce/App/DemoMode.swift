@@ -2,12 +2,17 @@
 import Foundation
 import PounceKit
 
-/// DEBUG launch argument `-demo <lobby|table|celebrate|curtain>`: opens a room fed by a fake
-/// socket that sends one `DemoFixtures` snapshot, so the real screens render with no server.
-/// `other` is the table on another seat's turn (ring glow + paw marker, dimmed hand).
+/// DEBUG launch argument `-demo <lobby|table|other|replay|celebrate|curtain>`: opens a room fed
+/// by a fake socket that sends one `DemoFixtures` snapshot, so the real screens render with no
+/// server. `other` is the table on another seat's turn (ring glow + paw marker, dimmed hand).
+/// `replay` plays `DemoFixtures.replay()` twice through the real store and intent path
+/// (events, then each action's snapshot), then stops; the scene logs its frame count each
+/// second (`[replay]` on stdout) to check that the view pauses when nothing moves.
+/// `nope` is my play step on a table that refuses every move (`bad_step`), to see a
+/// provisional move roll back.
 /// `celebrate` (Task 18) and `curtain` (Task 19) show their table until those land.
 enum DemoMode: String {
-    case lobby, table, other, celebrate, curtain
+    case lobby, table, other, replay, nope, celebrate, curtain
 
     static func from(arguments: [String] = CommandLine.arguments) -> DemoMode? {
         guard let i = arguments.firstIndex(of: "-demo"), arguments.indices.contains(i + 1) else { return nil }
@@ -22,20 +27,113 @@ enum DemoMode: String {
             var room = DemoFixtures.table(seats: 4, mySeat: 0, phase: 2)
             room.game?.turn = 2
             return room
+        case .replay: return DemoFixtures.replayStart()
+        case .nope:
+            var room = DemoFixtures.table(seats: 4, mySeat: 0, phase: 2)
+            room.game?.step = .play
+            return room
         case .celebrate: return DemoFixtures.table(seats: 4, mySeat: 0, phase: 9)
         case .curtain: return DemoFixtures.curtain()
         }
     }
+
+    /// The fake socket behind this demo.
+    func makeSocket() -> any RoomSocketing {
+        switch self {
+        case .replay: ReplaySocket(loops: 2)
+        case .nope: DemoSocket(room: room, refusing: true)
+        default: DemoSocket(room: room)
+        }
+    }
 }
 
-/// A room socket that connects at once, sends one snapshot and ignores everything sent to it.
+/// `-demo replay`: the start snapshot, then every replay step (its events, then its snapshot,
+/// seqs counting up like the server's) every `gap`, `loops` times over.
+actor ReplaySocket: RoomSocketing {
+    nonisolated let events: AsyncStream<SocketEvent>
+    private let continuation: AsyncStream<SocketEvent>.Continuation
+    private let loops: Int
+    private var player: Task<Void, Never>?
+    static let gap: Duration = .milliseconds(1300)
+
+    init(loops: Int) {
+        self.loops = loops
+        (events, continuation) = AsyncStream.makeStream(of: SocketEvent.self)
+    }
+
+    func start() async {
+        continuation.yield(.connected)
+        continuation.yield(.message(.snapshot(protocol: PounceKit.protocolVersion, seq: 1, room: DemoFixtures.replayStart())))
+        guard player == nil else { return }
+        let continuation = continuation
+        let loops = loops
+        player = Task {
+            var seq = 1
+            try? await Task.sleep(for: .seconds(2))
+            for loop in 0..<loops {
+                print("[replay] loop \(loop + 1) start")
+                for step in DemoFixtures.replay() {
+                    guard !Task.isCancelled else { return }
+                    for event in step.events {
+                        seq += 1
+                        continuation.yield(.message(.event(seq: seq, event: .game(event))))
+                    }
+                    continuation.yield(.message(.snapshot(protocol: PounceKit.protocolVersion, seq: seq, room: step.room)))
+                    try? await Task.sleep(for: Self.gap)
+                }
+            }
+            print("[replay] done")
+        }
+    }
+
+    func send(_ m: ClientMessage) async throws {}
+
+    func reconnectNow() async {}
+
+    func stop() async {
+        player?.cancel()
+        continuation.finish()
+    }
+}
+
+extension TableScene {
+    private static let logsTimeline = [.replay, .nope].contains(DemoMode.from())
+
+    /// `-demo replay`: one line per game intent (played with its duration, or skipped).
+    func timelineLog(_ line: @autoclosure () -> String) {
+        if Self.logsTimeline { print("[timeline] \(line())") }
+    }
+
+    /// `-demo replay`: prints the rendered frame count once a second (a Task, so it never
+    /// wakes the view itself).
+    func startFrameLog() {
+        let director = director
+        let clock = ContinuousClock()
+        let start = clock.now
+        Task { [weak self] in
+            var last = director.framesRendered
+            while self != nil {
+                try? await Task.sleep(for: .seconds(1))
+                let frames = director.framesRendered
+                let t = (clock.now - start).components.seconds
+                print("[replay] t=\(t)s frames=\(frames) +\(frames - last) paused=\(self?.view?.isPaused ?? true)")
+                last = frames
+            }
+        }
+    }
+}
+
+/// A room socket that connects at once, sends one snapshot and ignores everything sent to it
+/// (or, `refusing`, answers every game action with `bad_step` after a moment).
 actor DemoSocket: RoomSocketing {
     nonisolated let events: AsyncStream<SocketEvent>
     private let continuation: AsyncStream<SocketEvent>.Continuation
     private let room: RoomView
+    private let refusing: Bool
 
-    init(room: RoomView) {
+    init(room: RoomView, refusing: Bool = false) {
         self.room = room
+        self.refusing = refusing
         (events, continuation) = AsyncStream.makeStream(of: SocketEvent.self)
     }
 
@@ -44,7 +142,11 @@ actor DemoSocket: RoomSocketing {
         continuation.yield(.message(.snapshot(protocol: PounceKit.protocolVersion, seq: 1, room: room)))
     }
 
-    func send(_ m: ClientMessage) async throws {}
+    func send(_ m: ClientMessage) async throws {
+        guard refusing, case .act = m else { return }
+        try? await Task.sleep(for: .milliseconds(400))
+        continuation.yield(.message(.error(.badStep)))
+    }
 
     func reconnectNow() async {}
 

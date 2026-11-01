@@ -7,6 +7,11 @@ import SwiftUI
 /// never animates; motion comes from intents through the `AnimationDirector`, which also pauses
 /// the view whenever nothing moves.
 ///
+/// One timeline (spec §6.2): game intents animate in order over the table as it was, and the
+/// `.reconcile` after them (the snapshot that follows every action) snaps to the truth. A
+/// `reconcile(_:revealed:)` from the shell that arrives while the store holds events this
+/// scene hasn't played yet only records `revealed`; the coming `.reconcile` intent applies it.
+///
 /// Privacy: face-up hand nodes exist only for `revealed`, a seat this phone controls. Without a
 /// revealed seat the hand is face-down backs. `TableScreen` owns pass-and-play and passes
 /// `revealed`; between its calls the scene hides the hand on a multi-seat phone as soon as the
@@ -55,7 +60,7 @@ final class TableScene: SKScene {
     }
     /// A played card shown at its target until the server answers (`provisionalMove`).
     private(set) var provisionalCard: CardID?
-    private var provisionalNode: CardNode?
+    private(set) var provisionalNode: CardNode?
     /// What the in-flight action was, so a rejection nopes the right thing.
     var lastAct: LastAct?
     /// The glows drawn by the last redraw.
@@ -85,6 +90,21 @@ final class TableScene: SKScene {
     private let menuButton = SKSpriteNode(texture: TableArt.image(ArtName.iconPawMenu))
     /// Hand sort toggle (number / coat), local only.
     let sortButton = SKSpriteNode(texture: TableArt.image(ArtName.iconSort))
+    // Timeline state (IntentAnimations.swift).
+    /// Landed flyers that stand in for the truth until the next reconcile snaps it in.
+    var transients: [SKNode] = []
+    /// A game intent is animating.
+    private(set) var animating = false
+    /// The store seq this scene has played or drawn up to.
+    private var seenSeq = -1
+    /// The store seq the drawn table reflects: game events at or below it are already shown
+    /// (a lagging queue catches up instead of replaying them).
+    private var drawnSeq = -1
+    /// A shell reconcile that arrived mid-timeline: its `revealed`, applied by the next
+    /// `.reconcile` intent (or after `deferLimit` if none comes).
+    private var pendingReveal: Seat??
+    private var deferGeneration = 0
+    private static let deferLimit: Duration = .seconds(3)
     private var accessibilityCache: (version: Int, elements: [UIAccessibilityElement])?
     private var accessibilityVersion = 0
 
@@ -123,6 +143,7 @@ final class TableScene: SKScene {
         sortButton.size = CGSize(width: Self.sortSize, height: Self.sortSize)
         sortButton.zPosition = 4
         sortButton.isHidden = true
+        director.flourish = { [weak self] in self?.idleFlourish() }
     }
 
     @available(*, unavailable)
@@ -137,6 +158,9 @@ final class TableScene: SKScene {
         director.view = view
         safeInsets = view.safeAreaInsets
         redraw()
+        #if DEBUG
+        if DemoMode.from() == .replay { startFrameLog() }
+        #endif
     }
 
     override func didChangeSize(_ oldSize: CGSize) {
@@ -153,15 +177,40 @@ final class TableScene: SKScene {
     /// Draws `model` exactly, without animation. `revealed` is the only seat whose hand may
     /// show face up (ignored unless this phone controls it).
     func reconcile(_ model: TableModel, revealed: Seat?) {
+        if self.model != nil, animating || store.lastSeq > seenSeq {
+            deferReveal(revealed)
+            return
+        }
+        apply(model, revealed: revealed)
+    }
+
+    private func apply(_ model: TableModel, revealed: Seat?) {
+        markDrawn()
+        pendingReveal = nil
         self.model = model
         self.revealed = revealed.flatMap { model.mySeats.contains($0) ? $0 : nil }
         revealedTurn = model.currentSeat
         revealedRound = model.game?.round
         shownRevealed = self.revealed
+        settle()
         redraw()
     }
 
-    /// Plays one store intent. Tasks 17–18 add motion.
+    /// Holds a shell reveal until the timeline catches up; a fallback applies it if no
+    /// `.reconcile` intent comes (a table detached mid-action, say).
+    private func deferReveal(_ revealed: Seat?) {
+        pendingReveal = .some(revealed)
+        deferGeneration += 1
+        let generation = deferGeneration
+        Task { [weak self] in
+            try? await Task.sleep(for: Self.deferLimit)
+            guard let self, self.deferGeneration == generation, let reveal = self.pendingReveal,
+                  !self.animating, let room = self.store.room else { return }
+            self.apply(TableModel(room: room), revealed: reveal)
+        }
+    }
+
+    /// Plays one store intent: game events animate (Task 17), then `.reconcile` snaps.
     func play(_ intent: TableIntent) async {
         switch intent {
         case .reconcile:
@@ -172,11 +221,42 @@ final class TableScene: SKScene {
         case .rejected:
             reconcileFromStore()
             rejected()
-        case .game, .presence, .versusIntro:
+        case .game(let event, let seq):
+            seenSeq = max(seenSeq, seq)
+            switch event {
+            case .roundOver, .gameOver:
+                reconcileFromStore()  // Task 18 animates these
+            default:
+                guard seq > drawnSeq else {
+                    #if DEBUG
+                    timelineLog("skip seq \(seq) (drawn \(drawnSeq)) \(event)")
+                    #endif
+                    return  // the table already shows it
+                }
+                guard model?.game != nil, layout != nil else { return reconcileFromStore() }
+                animating = true
+                #if DEBUG
+                let started = ContinuousClock.now
+                #endif
+                await animate(event)
+                animating = false
+                #if DEBUG
+                timelineLog("seq \(seq) \(ContinuousClock.now - started) \(event)")
+                #endif
+            }
+        case .presence, .versusIntro:
             reconcileFromStore()
         case .lobbyNope:
             break
         }
+    }
+
+    /// Before a snap: landed flyers go and anything an animation hid comes back.
+    private func settle() {
+        for node in transients { node.removeFromParent() }
+        transients.removeAll()
+        hand.isHidden = false
+        laidZone.isHidden = false
     }
 
     // MARK: provisional moves
@@ -198,13 +278,31 @@ final class TableScene: SKScene {
         redraw()
     }
 
-    /// The in-flight action was refused: the provisional card returns to the hand (Task 17
-    /// animates it back) and nopes.
+    /// The in-flight action was refused: the provisional card flies back to its place in the
+    /// hand and nopes there.
     func rollbackProvisional() {
         guard let card = provisionalCard else { return }
-        clearProvisional()
+        let flyer = provisionalNode
+        provisionalNode = nil
+        provisionalCard = nil
         redraw()
-        nope(card: card)
+        guard let flyer, let home = hand.node(for: card), let parent = flyer.parent else {
+            flyer?.removeFromParent()
+            return nope(card: card)
+        }
+        let target = parent.convert(home.position, from: hand)
+        home.alpha = 0
+        #if DEBUG
+        timelineLog("rollback card \(card) from \(flyer.position) to \(target)")
+        #endif
+        let back = Effects.fly(from: flyer.position, to: target, duration: 0.2, lift: 24, rotation: home.zRotation, scale: 1)
+        let director = director
+        Task { [weak self] in
+            await director.run(back, on: flyer)
+            flyer.removeFromParent()
+            home.alpha = 1
+            self?.nope(card: card)
+        }
     }
 
     private func clearProvisional() {
@@ -213,11 +311,20 @@ final class TableScene: SKScene {
         provisionalCard = nil
     }
 
+    /// The table is about to show the store's room as of now.
+    private func markDrawn() {
+        seenSeq = max(seenSeq, store.lastSeq)
+        drawnSeq = store.lastSeq
+    }
+
     /// Redraws from the store's room, keeping the last reveal only while it still belongs to
     /// the same turn and round (on a multi-seat phone).
     private func reconcileFromStore() {
         guard let room = store.room else { return }
+        markDrawn()
         let next = TableModel(room: room)
+        if let reveal = pendingReveal { return apply(next, revealed: reveal) }
+        settle()
         model = next
         var shown = revealed.flatMap { next.mySeats.contains($0) ? $0 : nil }
         if next.isMultiSeat, next.currentSeat != revealedTurn || next.game?.round != revealedRound {
@@ -232,6 +339,7 @@ final class TableScene: SKScene {
         defer {
             accessibilityVersion += 1
             director.wake()
+            director.noteChange()
         }
         // The snap wins: stop director actions on every node this redraw positions.
         for layer in [Layer.background, .rug, .piles, .laidZone, .tower, .opponents, .trays, .hand] {
@@ -335,9 +443,9 @@ final class TableScene: SKScene {
         menuButton.position = CGPoint(x: size.width - Self.menuSize / 2 - 10, y: menuY)
     }
 
-    /// The finite ring pulse + paw pop for the seat whose turn just came (Task 17 adds the full
-    /// turn handoff). Runs through the director so the view pauses again afterwards.
-    private func pulseTurn(_ seat: Seat) {
+    /// The finite ring pulse + paw pop for the seat whose turn just came. Runs through the
+    /// director so the view pauses again afterwards.
+    func pulseTurn(_ seat: Seat) {
         guard let cat = opponents.node(for: seat) else { return }
         let director = director
         for (action, node) in cat.turnPulse(reduceMotion: UIAccessibility.isReduceMotionEnabled) {
@@ -527,14 +635,15 @@ final class TableScene: SKScene {
             TableAccessibility.Item(
                 id: "table.frames", label: "frames", frame: CGRect(x: 0, y: 0, width: 24, height: 24),
                 traits: .staticText, live: { String(director.framesRendered) }),
-            // step|inFlight|hand size|laid (UI tests only).
+            // step|inFlight|hand size|laid|turn|animating (UI tests only).
             TableAccessibility.Item(
                 id: "table.debug", label: "debug", frame: CGRect(x: 24, y: 0, width: 24, height: 24),
                 traits: .staticText, live: { [weak self] in
                     guard let self, let game = store.room?.game else { return "-" }
                     let seat = self.bottomSeat ?? -1
                     let laid = (game.laid[safe: seat] ?? nil) != nil
-                    return "\(game.step.rawValue)|\(store.actionInFlight ? 1 : 0)|\(game.hands[seat]?.count ?? -1)|\(laid ? 1 : 0)|\(game.turn)"
+                    let busy = self.animating || !director.isIdle
+                    return "\(game.step.rawValue)|\(store.actionInFlight ? 1 : 0)|\(game.hands[seat]?.count ?? -1)|\(laid ? 1 : 0)|\(game.turn)|\(busy ? 1 : 0)"
                 }),
         ]
         #else

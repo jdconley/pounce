@@ -73,7 +73,7 @@ final class AppModel {
     func openDemo(_ demo: DemoMode) {
         closeRoom()
         let room = demo.room
-        let socket = SuspendableSocket { DemoSocket(room: room) }
+        let socket = SuspendableSocket { demo.makeSocket() }
         let session = RoomSession(code: room.code, intent: .rejoin, socket: socket)
         session.owner = { [weak self] in self?.people.owner }
         self.room = session

@@ -92,6 +92,28 @@ import Testing
         #expect(pass.state == .curtain(game.turn))
     }
 
+    @Test func replayCoversEveryAnimatedEventAndStaysConsistent() throws {
+        let steps = DemoFixtures.replay()
+        var kinds: Set<String> = []
+        for step in steps {
+            for event in step.events {
+                kinds.insert(String(describing: event).prefix { $0 != "(" }.description)
+            }
+            let game = try #require(step.room.game)
+            for (seat, hand) in game.hands {
+                #expect(game.handCounts[seat] == hand.count)
+            }
+            var visible = game.hands.values.flatMap { $0 }
+            visible += game.laid.compactMap { $0 }.flatMap { $0.flatMap(\.cards) }
+            if let top = game.discardTop { visible.append(top) }
+            #expect(Set(visible).count == visible.count)
+            let laidCount = game.laid.compactMap { $0 }.flatMap { $0 }.reduce(0) { $0 + $1.cards.count }
+            #expect(game.deckCount + game.discardCount + game.handCounts.reduce(0, +) + laidCount == Card.deckSize)
+        }
+        #expect(kinds == ["roundStarted", "drew", "laidDown", "hit", "discarded", "skipped", "turn", "reshuffled"])
+        #expect(steps.last?.room.game?.hands == DemoFixtures.replayStart().game?.hands)
+    }
+
     @Test func roundOverEventsFollowTheFinalTable() throws {
         let base = try #require(DemoFixtures.table(seats: 4, mySeat: 0, phase: 9).game)
         let events = DemoFixtures.roundOverEvents()

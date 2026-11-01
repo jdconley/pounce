@@ -30,11 +30,13 @@ final class Sound {
         }
     }
 
-    func play(_ name: String) {
+    /// Plays `name` at `volume` (0–1; a quiet variant of an effect, say).
+    func play(_ name: String, volume: Float = 1) {
         guard settings.soundOn, let players = pool(for: name), !players.isEmpty else { return }
         let i = cursor[name, default: 0] % players.count
         cursor[name] = i + 1
         let player = players[i]
+        player.volume = volume
         player.currentTime = 0
         player.play()
     }

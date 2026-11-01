@@ -141,6 +141,59 @@ final class CatNode: SKNode {
 
     var isActive: Bool { !glow.isHidden }
 
+    /// Turn handoff, outgoing side: the glow and paw shrink away, then hide (reconcile agrees).
+    func turnOut(reduceMotion: Bool) -> [(SKAction, SKNode)] {
+        guard isActive else { return [] }
+        let away: SKAction = reduceMotion
+            ? .fadeOut(withDuration: 0.15)
+            : .group([.scale(to: 0.4, duration: 0.18).eased(.easeIn), .fadeOut(withDuration: 0.18)])
+        let reset = SKAction.sequence([away, .hide(), .scale(to: 1, duration: 0), .fadeIn(withDuration: 0)])
+        return [(reset, glow), (reset, paw)]
+    }
+
+    /// Cucumber terror: the terrified pose, a leap up and back down, then the seat's pose
+    /// again. Decorative (only the pose sprite's texture and offset, which reconcile never
+    /// sets). Reduce Motion: the pose alone.
+    func terror(reduceMotion: Bool) -> (SKAction, SKNode) {
+        let scared = SKAction.setTexture(TableArt.cat(cat, .terrified))
+        let move: SKAction = reduceMotion
+            ? .wait(forDuration: 0.45)
+            : .sequence([
+                .moveBy(x: 0, y: diameter * 0.28, duration: 0.14).eased(.easeOut),
+                .moveBy(x: 0, y: -diameter * 0.28, duration: 0.16).eased(.easeIn),
+                Effects.squash(),
+                .wait(forDuration: 0.06),
+            ])
+        return (.sequence([scared, move, .run { [weak self] in self?.restoreSprite() }]), sprite)
+    }
+
+    /// Idle flourish: a blink (a different pose for 0.15 s) with a tiny ear-flick squash.
+    func blink() -> (SKAction, SKNode) {
+        let other: CatPose = pose == .awake ? .idle : .awake
+        return (.sequence([
+            .setTexture(TableArt.cat(cat, other)),
+            .scaleX(by: 1.03, y: 0.96, duration: 0.075),
+            .scaleX(by: 1 / 1.03, y: 1 / 0.96, duration: 0.075),
+            .run { [weak self] in self?.restoreSprite() },
+        ]), sprite)
+    }
+
+    /// Where the skip badge sits, in this node's parent space.
+    var skipBadgePoint: CGPoint {
+        CGPoint(x: position.x + skipBadge.position.x * xScale, y: position.y + skipBadge.position.y * yScale)
+    }
+
+    var skipBadgeSize: CGSize { skipBadge.size }
+
+    /// Hides the skip badge while a `skipped` animation pops its own copy.
+    func hideSkipBadge() { skipBadge.isHidden = true }
+
+    private func restoreSprite() {
+        sprite.texture = TableArt.cat(cat, pose)
+        sprite.position = .zero
+        sprite.setScale(1)
+    }
+
     /// Glows, sparkles and grows while this seat is a legal Cucumber target. The scene sets it
     /// after each layout pass (the bar resets scale to 1).
     func setTarget(_ on: Bool) {

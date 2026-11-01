@@ -56,9 +56,10 @@ struct Glows: Equatable {
 extension TableScene {
     // MARK: gating
 
-    /// The seat this phone may act for right now: its turn, its hand showing, nothing in flight.
+    /// The seat this phone may act for right now: its turn, its hand showing, nothing in flight
+    /// and no event still animating (the drawn table is about to change).
     var actingSeat: Seat? {
-        guard let model, let bottom = bottomSeat, bottom == shownRevealed, model.isMyTurn,
+        guard !animating, let model, let bottom = bottomSeat, bottom == shownRevealed, model.isMyTurn,
               model.currentSeat == bottom, !store.actionInFlight, store.phase == .playing else { return nil }
         return bottom
     }
@@ -442,21 +443,7 @@ extension TableScene {
         Haptics.shared.drop()
         Sound.shared.play(ArtName.Sound.sfxNope)
         guard let node, !node.isHidden else { return }
-        let action: SKAction
-        if UIAccessibility.isReduceMotionEnabled {
-            let a = node.alpha
-            action = .sequence([.fadeAlpha(to: a * 0.4, duration: 0.08), .fadeAlpha(to: a, duration: 0.08)])
-        } else {
-            let base = node.zRotation
-            let d = CGFloat.pi / 30  // 6 degrees
-            var steps: [SKAction] = []
-            for _ in 0..<3 {
-                steps.append(.rotate(toAngle: base + d, duration: 0.04, shortestUnitArc: true))
-                steps.append(.rotate(toAngle: base - d, duration: 0.06, shortestUnitArc: true))
-            }
-            steps.append(.rotate(toAngle: base, duration: 0.04, shortestUnitArc: true))
-            action = .sequence(steps)
-        }
+        let action = Effects.nope()
         let director = director
         Task { await director.run(action, on: node) }
     }

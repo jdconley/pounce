@@ -13,8 +13,20 @@ import SpriteKit
 @MainActor
 final class AnimationDirector {
     weak var view: SKView? {
-        didSet { wake() }
+        didSet {
+            if view == nil { stopFlourishes() }
+            wake()
+        }
     }
+
+    /// Idle life (spec §9.2): called every 5–9 s while the table changed in the last
+    /// `flourishWindow`; the scene runs a short decorative action (a cat blink) through `run`,
+    /// so the view unpauses only for that.
+    var flourish: (() -> Void)?
+    static let flourishWindow: Duration = .seconds(60)
+    static let flourishGap: ClosedRange<Double> = 5...9
+    private var lastChange: ContinuousClock.Instant?
+    private var flourishTask: Task<Void, Never>?
 
     private struct Pending {
         weak var node: SKNode?
@@ -57,22 +69,46 @@ final class AnimationDirector {
     /// Runs `action` on `node` and returns when it finishes, is cancelled by a reconcile, or
     /// times out. `decorative` actions (a pop on a badge) are left alone by `cancelActions`.
     func run(_ action: SKAction, on node: SKNode, decorative: Bool = false) async {
-        let token = gate.begin(duration: RenderGate.sanitize(action.duration) / Self.effectiveSpeed(node))
-        let key = "director.\(token)"
-        wake()
+        await runAll([(action, node)], decorative: decorative)
+    }
+
+    /// Runs every action on its node at once and returns when the last one is done (finished,
+    /// cancelled or timed out), so one intent can move many nodes on one timeline.
+    func runAll(_ items: [(SKAction, SKNode)], decorative: Bool = false) async {
+        guard !items.isEmpty else { return }
         await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
-            pending[token] = Pending(node: node, key: key, decorative: decorative) { continuation.resume() }
-            node.run(.sequence([action, .run { [weak self] in self?.finish(token, removeAction: false) }]), withKey: key)
+            var remaining = items.count
+            for (action, node) in items {
+                start(action, on: node, decorative: decorative) {
+                    remaining -= 1
+                    if remaining == 0 { continuation.resume() }
+                }
+            }
         }
         wake()
     }
 
-    /// Adds `emitter` at `point` in `parent` for `lifetime` seconds of rendered time.
-    func emit(_ emitter: SKEmitterNode, at point: CGPoint, in parent: SKNode, lifetime: TimeInterval) {
+    private func start(_ action: SKAction, on node: SKNode, decorative: Bool, finish: @escaping () -> Void) {
+        let token = gate.begin(duration: RenderGate.sanitize(action.duration) / Self.effectiveSpeed(node))
+        let key = "director.\(token)"
+        pending[token] = Pending(node: node, key: key, decorative: decorative, finish: finish)
+        node.run(.sequence([action, .run { [weak self] in self?.finish(token, removeAction: false) }]), withKey: key)
+        wake()
+    }
+
+    /// Adds `emitter` at `point` in `parent` for `lifetime` seconds of rendered time, then
+    /// removes it and calls `onEnd`.
+    func emit(
+        _ emitter: SKEmitterNode, at point: CGPoint, in parent: SKNode, lifetime: TimeInterval,
+        onEnd: (() -> Void)? = nil
+    ) {
         let token = gate.begin(duration: lifetime, grace: 0)
         emitter.position = point
         parent.addChild(emitter)
-        pending[token] = Pending(node: emitter, key: "", decorative: true) { emitter.removeFromParent() }
+        pending[token] = Pending(node: emitter, key: "", decorative: true) {
+            emitter.removeFromParent()
+            onEnd?()
+        }
         wake()
     }
 
@@ -84,6 +120,26 @@ final class AnimationDirector {
             return node === root || node.inParentHierarchy(root) ? token : nil
         }
         for token in tokens { finish(token, removeAction: true) }
+    }
+
+    /// The table just changed (a redraw): idle flourishes run for the next `flourishWindow`.
+    func noteChange() {
+        lastChange = .now
+        guard flourishTask == nil, view != nil else { return }
+        flourishTask = Task { [weak self] in
+            while !Task.isCancelled {
+                try? await Task.sleep(for: .seconds(Double.random(in: Self.flourishGap)))
+                guard let self, !Task.isCancelled, let last = self.lastChange,
+                      ContinuousClock.now - last < Self.flourishWindow else { break }
+                if self.isIdle, self.view != nil { self.flourish?() }
+            }
+            if !Task.isCancelled { self?.flourishTask = nil }
+        }
+    }
+
+    func stopFlourishes() {
+        flourishTask?.cancel()
+        flourishTask = nil
     }
 
     /// Called by the scene once per frame.

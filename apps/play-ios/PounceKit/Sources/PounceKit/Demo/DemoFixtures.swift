@@ -91,6 +91,117 @@ public enum DemoFixtures {
         ]
     }
 
+    /// One server action in the replay: its events, then the snapshot that follows them.
+    public struct ReplayStep: Equatable, Sendable {
+        public let events: [GameEvent]
+        public let room: RoomView
+    }
+
+    /// A scripted loop over every game event kind for the DEBUG `-demo replay` screen, from
+    /// `replayStart()` (4 seats, my phase 1, my turn to draw): I draw a Yarn, lay down, aim a
+    /// Cucumber (two skips follow); the bot draws, lays down, hits and discards; I reshuffle
+    /// and draw a Cucumber, discard; two more seats play; then a new round is dealt and the
+    /// table is back at the start. Every step's room keeps the whole deck accounted for.
+    public static func replay() -> [ReplayStep] {
+        var room = replayStart()
+        var steps: [ReplayStep] = []
+        func step(_ events: [GameEvent], _ change: (inout GameView) -> Void) {
+            change(&room.game!)
+            steps.append(ReplayStep(events: events, room: room))
+        }
+        func take(_ g: inout GameView, _ seat: Seat, _ cards: [CardID]) {
+            g.hands[seat]?.removeAll { cards.contains($0) }
+            g.handCounts[seat] -= cards.count
+        }
+        func discard(_ g: inout GameView, _ seat: Seat, _ card: CardID) {
+            take(&g, seat, [card])
+            g.discardTop = card
+            g.discardCount += 1
+        }
+        func draw(_ g: inout GameView, _ seat: Seat, _ card: CardID?) {
+            if let card { g.hands[seat]?.append(card) }
+            g.handCounts[seat] += 1
+            g.deckCount -= 1
+            g.step = .play
+        }
+        func turn(_ g: inout GameView, _ seat: Seat) {
+            g.turn = seat
+            g.step = .draw
+        }
+
+        let threes: Group = .set(cards: [id(3, .calico), id(3, .tabby), id(3, .tuxedo)], value: 3)
+        let eights: Group = .set(cards: [id(8, .gray), id(8, .tabby), 97], value: 8)
+        step([.drew(seat: 0, from: .deck, card: 97)]) { draw(&$0, 0, 97) }
+        step([.laidDown(seat: 0, groups: [threes, eights])]) {
+            take(&$0, 0, threes.cards + eights.cards)
+            $0.laid[0] = [threes, eights]
+        }
+        step([.discarded(seat: 0, card: 104, skipTarget: 1), .skipped(seat: 1), .skipped(seat: 2), .turn(seat: 3)]) {
+            discard(&$0, 0, 104)
+            $0.pendingSkip[1] = false
+            $0.pendingSkip[2] = false
+            turn(&$0, 3)
+        }
+        step([.drew(seat: 3, from: .deck, card: nil)]) { draw(&$0, 3, nil) }
+        let nines: Group = .set(cards: [id(9, .tabby), id(9, .tuxedo), id(9, .calico)], value: 9)
+        let run: Group = .run(cards: [id(4, .gray), id(5, .gray), id(6, .tabby), id2(7, .calico)], start: 4, end: 7)
+        step([.laidDown(seat: 3, groups: [nines, run])]) {
+            $0.handCounts[3] -= 7
+            $0.laid[3] = [nines, run]
+        }
+        let sevens: Group = .set(cards: laidPhaseOne[0].cards + [id2(7, .gray)], value: 7)
+        step([.hit(seat: 3, card: id2(7, .gray), target: HitTarget(seat: 1, group: 0), group: sevens)]) {
+            $0.handCounts[3] -= 1
+            $0.laid[1]?[0] = sevens
+        }
+        step([.discarded(seat: 3, card: id2(11, .gray), skipTarget: nil), .turn(seat: 0)]) {
+            discard(&$0, 3, id2(11, .gray))
+            turn(&$0, 0)
+        }
+        let reshuffled = room.game!.deckCount + room.game!.discardCount - 1
+        step([.reshuffled(deckCount: reshuffled), .drew(seat: 0, from: .deck, card: 105)]) {
+            $0.deckCount = reshuffled
+            $0.discardCount = 1
+            draw(&$0, 0, 105)
+        }
+        step([.discarded(seat: 0, card: id(12, .tabby), skipTarget: nil), .turn(seat: 1)]) {
+            discard(&$0, 0, id(12, .tabby))
+            turn(&$0, 1)
+        }
+        step([.drew(seat: 1, from: .discard, card: id(12, .tabby))]) {
+            $0.handCounts[1] += 1
+            $0.discardTop = id2(11, .gray)
+            $0.discardCount -= 1
+            $0.step = .play
+        }
+        step([.discarded(seat: 1, card: id2(9, .calico), skipTarget: nil), .turn(seat: 2)]) {
+            discard(&$0, 1, id2(9, .calico))
+            turn(&$0, 2)
+        }
+        step([.drew(seat: 2, from: .deck, card: nil)]) { draw(&$0, 2, nil) }
+        step([.discarded(seat: 2, card: id2(10, .tabby), skipTarget: nil), .turn(seat: 3)]) {
+            discard(&$0, 2, id2(10, .tabby))
+            turn(&$0, 3)
+        }
+        var next = replayStart()
+        next.game?.round = 4
+        steps.append(ReplayStep(events: [.roundStarted(round: 4, dealer: 3)], room: next))
+        return steps
+    }
+
+    /// The replay's first table: `table(seats: 4, mySeat: 0, phase: 0)` with a hand that
+    /// can make phase 1 (two sets of 3) once a Yarn is drawn.
+    public static func replayStart() -> RoomView {
+        var room = table(seats: 4, mySeat: 0, phase: 0)
+        room.game?.hands[0] = replayHand
+        return room
+    }
+
+    static let replayHand: [CardID] = [
+        id(8, .gray), id(8, .tabby), id(3, .calico), id(3, .tabby), id(3, .tuxedo),
+        id(12, .tabby), id(11, .tuxedo), id(1, .tabby), 104, id(10, .tuxedo),
+    ]
+
     // MARK: cards
 
     /// First copy of a number card.
