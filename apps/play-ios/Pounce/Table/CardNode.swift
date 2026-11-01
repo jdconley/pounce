@@ -33,6 +33,11 @@ final class CardNode: SKSpriteNode {
         texture = card.map { CardFaceFactory.shared.texture(for: $0) } ?? CardFaceFactory.shared.back()
     }
 
+    /// card-glow is 88x114 around a 64x90 card.
+    static func glowSize(for card: CGSize) -> CGSize {
+        CGSize(width: card.width * 88 / 64, height: card.height * 114 / 90)
+    }
+
     private func layoutShadow() {
         // card-shadow is 80x106 for a 64x90 card, offset a little down-right.
         let k = size.width / CardFaceFactory.cardSize.width

@@ -19,6 +19,10 @@ final class CatNode: SKNode {
     private let bubbleNumber: SKSpriteNode
     /// The current player's paw marker above the ring.
     private let paw: SKSpriteNode
+    /// Cucumber aim highlight: a bigger glow, sparkles and growth (not hue alone).
+    private let targetGlow: SKSpriteNode
+    private let targetSparkles: [SKSpriteNode]
+    private(set) var isTarget = false
     private(set) var pose: CatPose = .idle
     private(set) var count: Int?
 
@@ -36,7 +40,22 @@ final class CatNode: SKNode {
         bubble = SKSpriteNode(texture: CardFaceFactory.shared.back(), size: CGSize(width: 20 * k, height: 28 * k))
         bubbleNumber = SKSpriteNode()
         paw = SKSpriteNode(texture: TableArt.image(ArtName.iconPawMenu), size: CGSize(width: 26 * k, height: 26 * k))
+        targetGlow = SKSpriteNode(texture: TableArt.table(ArtName.ringGlow), size: CGSize(width: 116 * k, height: 116 * k))
+        let sparkle = TableArt.texture(ArtName.fxSparkle, atlas: ArtName.Atlas.fx)
+        targetSparkles = [(-0.78, 0.6, 22.0), (0.82, -0.2, 16.0), (-0.5, -0.8, 14.0)].map { x, y, d in
+            let n = SKSpriteNode(texture: sparkle, size: CGSize(width: d * k, height: d * k))
+            n.position = CGPoint(x: x * diameter / 2, y: y * diameter / 2)
+            return n
+        }
         super.init()
+        targetGlow.zPosition = 0.5
+        targetGlow.isHidden = true
+        addChild(targetGlow)
+        for n in targetSparkles {
+            n.zPosition = 7
+            n.isHidden = true
+            addChild(n)
+        }
 
         glow.zPosition = 0
         glow.isHidden = true
@@ -121,6 +140,15 @@ final class CatNode: SKNode {
     }
 
     var isActive: Bool { !glow.isHidden }
+
+    /// Glows, sparkles and grows while this seat is a legal Cucumber target. The scene sets it
+    /// after each layout pass (the bar resets scale to 1).
+    func setTarget(_ on: Bool) {
+        isTarget = on
+        targetGlow.isHidden = !on
+        targetSparkles.forEach { $0.isHidden = !on }
+        setScale(on ? 1.14 : 1)
+    }
 
     /// Card-count bubble; nil hides it.
     func setCount(_ count: Int?) {

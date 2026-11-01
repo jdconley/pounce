@@ -9,6 +9,11 @@ final class PileNode: SKNode {
     let kind: Kind
     private var layers: [SKSpriteNode] = []
     private let empty: SKSpriteNode
+    /// Legal-target highlight: a pre-rendered glow, a sparkle and a little growth (spec §13:
+    /// brightness and sparkle, not hue alone).
+    private let glow: SKSpriteNode
+    private let sparkle: SKSpriteNode
+    private(set) var highlighted = false
     private(set) var top: CardNode?
     private(set) var count = -1
     private var cardSize: CGSize = .zero
@@ -21,10 +26,18 @@ final class PileNode: SKNode {
     init(kind: Kind) {
         self.kind = kind
         empty = SKSpriteNode(texture: TableArt.cards(ArtName.cardShadow))
+        glow = SKSpriteNode(texture: TableArt.cards(ArtName.cardGlow))
+        sparkle = SKSpriteNode(texture: TableArt.texture(ArtName.fxSparkle, atlas: ArtName.Atlas.fx))
         super.init()
         empty.alpha = 0.35
         empty.zPosition = 0
         addChild(empty)
+        glow.zPosition = 0.05
+        glow.isHidden = true
+        addChild(glow)
+        sparkle.zPosition = 3
+        sparkle.isHidden = true
+        addChild(sparkle)
     }
 
     @available(*, unavailable)
@@ -38,6 +51,10 @@ final class PileNode: SKNode {
             empty.size = CGSize(width: cardSize.width * 1.1, height: cardSize.height * 1.1)
             layers.forEach { $0.size = cardSize }
             top?.size = cardSize
+            let g = CardNode.glowSize(for: cardSize)
+            glow.size = CGSize(width: g.width * 1.1, height: g.height * 1.08)
+            sparkle.size = CGSize(width: cardSize.width * 0.5, height: cardSize.width * 0.5)
+            sparkle.position = CGPoint(x: cardSize.width * 0.42, y: cardSize.height * 0.42)
         }
         self.count = count
         empty.isHidden = showsTop
@@ -74,6 +91,14 @@ final class PileNode: SKNode {
             top?.removeFromParent()
             top = nil
         }
+    }
+
+    /// Glow, sparkle and grow while this pile is a legal draw or drop.
+    func setHighlighted(_ on: Bool) {
+        highlighted = on
+        glow.isHidden = !on
+        sparkle.isHidden = !on
+        setScale(on ? 1.06 : 1)
     }
 
     /// Touch / accessibility frame in the parent's space.

@@ -65,6 +65,8 @@ enum TableAccessibility {
         var frame: CGRect  // scene space
         var traits: UIAccessibilityTraits = .button
         var live: (@MainActor () -> String?)? = nil
+        /// VoiceOver custom actions ("Discard", "Put in tray 1", "Add to group", "Draw").
+        var actions: [UIAccessibilityCustomAction] = []
     }
 
     static func elements(_ items: [Item], scene: SKScene, view: SKView) -> [UIAccessibilityElement] {
@@ -75,6 +77,7 @@ enum TableAccessibility {
             e.accessibilityValue = item.value
             e.accessibilityTraits = item.traits
             e.liveValue = item.live
+            e.accessibilityCustomActions = item.actions.isEmpty ? nil : item.actions
             e.accessibilityFrameInContainerSpace = viewRect(item.frame, scene: scene, view: view)
             return e
         }

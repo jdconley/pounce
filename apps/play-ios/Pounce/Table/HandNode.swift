@@ -88,6 +88,31 @@ final class HandNode: SKNode {
         return f.offsetBy(dx: position.x, dy: position.y)
     }
 
+    /// The face card under `point` (parent space): the lifted card first, then right to left
+    /// (the fan's stacking order), tested against each card's own rotated rectangle.
+    func card(at point: CGPoint) -> CardID? {
+        let space = parent ?? self
+        let order = cards.sorted { $0.zPosition > $1.zPosition }
+        for node in order {
+            guard let id = node.card else { continue }
+            let local = node.convert(point, from: space)
+            let half = CGSize(width: node.size.width / 2 + 2, height: node.size.height / 2 + 2)
+            if abs(local.x) <= half.width, abs(local.y) <= half.height { return id }
+        }
+        return nil
+    }
+
+    func node(for card: CardID) -> CardNode? { faceNodes[card] }
+
+    /// The card a dragged card dropped at `x` (parent space) should go before; nil = the end.
+    func card(before x: CGFloat) -> CardID? {
+        let local = x - position.x
+        return cards.first { $0.position.x > local }?.card
+    }
+
+    /// Whether the fan holds a card at all (for the hand-area drop zone).
+    var isEmpty: Bool { cards.isEmpty }
+
     private func removeFaces() {
         faceNodes.values.forEach { $0.removeFromParent() }
         faceNodes.removeAll()
