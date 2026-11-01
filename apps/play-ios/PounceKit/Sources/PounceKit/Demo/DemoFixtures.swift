@@ -1,3 +1,5 @@
+#if DEBUG
+// DEBUG only: demo and test data never ships in a Release build.
 /// Hand-made rooms for the app's DEBUG `-demo` screens, previews and UI tests.
 /// Internally consistent (every visible card id unique, counts add up to the
 /// deck, laid groups match their phase), so the screens never show a table the
@@ -338,3 +340,4 @@ public enum DemoFixtures {
         .set(cards: [id2(5, .tabby), id(5, .tuxedo), id(5, .calico)], value: 5),
     ]
 }
+#endif

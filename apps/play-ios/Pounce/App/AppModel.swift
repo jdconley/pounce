@@ -46,28 +46,24 @@ final class AppModel {
         route = loaded.owner == nil ? .pickCat(then: nil) : .home
     }
 
-    /// The real app model, or the throwaway one for `-uitest-reset` (fresh temp data directory,
-    /// in-memory credential, scratch settings). The real one keeps its Keychain credential and
-    /// table cache per server (`host:port`), so a Debug build on the dev server and a Release
-    /// build on production never use each other's device identity.
+    /// The real app model, or (DEBUG only) the throwaway one for `-uitest-reset` (fresh temp data
+    /// directory, in-memory credential, scratch settings). The real one keeps its Keychain
+    /// credential and table cache per server (`host:port`), so a Debug build on the dev server and
+    /// a Release build on production never use each other's device identity.
     static func makeDefault(
         arguments: [String] = CommandLine.arguments,
         env: [String: String] = ProcessInfo.processInfo.environment
     ) -> AppModel {
         let config = AppConfig.load(env: env)
+        #if DEBUG
         let model: AppModel
         if arguments.contains("-uitest-reset") {
             let dir = FileManager.default.temporaryDirectory
                 .appendingPathComponent("pounce-uitest-\(UUID().uuidString)", isDirectory: true)
             model = AppModel(config: config, credentials: MemoryCredentialStore(), dataDirectory: dir)
         } else {
-            let support = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
-            model = AppModel(
-                config: config,
-                credentials: KeychainCredentialStore(service: KeychainCredentialStore.serviceName(for: config)),
-                dataDirectory: support.appendingPathComponent("Pounce", isDirectory: true))
+            model = real(config: config)
         }
-        #if DEBUG
         if let demo = DemoMode.from(arguments: arguments) { model.openDemo(demo) }
         // `-show-join`: open on Join (scripts/screenshots.sh).
         if arguments.contains("-show-join"), model.people.owner != nil { model.route = .join }
@@ -77,8 +73,18 @@ final class AppModel {
            let url = URL(string: text), let link = DeepLink.parse(url, allowDevScheme: true) {
             model.handle(link)
         }
-        #endif
         return model
+        #else
+        return real(config: config)
+        #endif
+    }
+
+    private static func real(config: APIConfig) -> AppModel {
+        let support = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
+        return AppModel(
+            config: config,
+            credentials: KeychainCredentialStore(service: KeychainCredentialStore.serviceName(for: config)),
+            dataDirectory: support.appendingPathComponent("Pounce", isDirectory: true))
     }
 
     #if DEBUG

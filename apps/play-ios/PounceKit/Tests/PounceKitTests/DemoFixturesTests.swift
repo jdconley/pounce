@@ -1,3 +1,4 @@
+#if DEBUG
 import Testing
 @testable import PounceKit
 
@@ -173,3 +174,4 @@ import Testing
         #expect(steps.last?.room.game?.status == .gameOver)
     }
 }
+#endif

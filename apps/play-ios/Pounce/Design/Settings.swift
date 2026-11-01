@@ -4,9 +4,14 @@ import Observation
 /// User toggles and push-priming flags, persisted in UserDefaults.
 @MainActor @Observable
 final class Settings {
-    /// The app-wide instance. Under `-uitest-reset` it uses a scratch suite wiped at launch.
-    static let shared = Settings(
-        defaults: CommandLine.arguments.contains("-uitest-reset") ? Settings.freshSuite() : .standard)
+    /// The app-wide instance. Under `-uitest-reset` (DEBUG only) it uses a scratch suite wiped
+    /// at launch.
+    static let shared: Settings = {
+        #if DEBUG
+        if CommandLine.arguments.contains("-uitest-reset") { return Settings(defaults: freshSuite()) }
+        #endif
+        return Settings(defaults: .standard)
+    }()
 
     private enum Key {
         static let soundOn = "settings.soundOn"
@@ -36,9 +41,11 @@ final class Settings {
         pushReoffered = defaults.bool(forKey: Key.pushReoffered)
     }
 
+    #if DEBUG
     private static func freshSuite() -> UserDefaults {
         let name = "com.conleychaos.play.uitest"
         UserDefaults().removePersistentDomain(forName: name)
         return UserDefaults(suiteName: name) ?? .standard
     }
+    #endif
 }
