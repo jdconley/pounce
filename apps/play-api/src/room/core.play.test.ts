@@ -171,7 +171,10 @@ describe("act", () => {
     room.disconnect("a");
     const seq = room.state.seq;
     const out = room.handle("b", { t: "act", seat: 1, action: { type: "draw", from: "deck" } });
-    expect(out.map((o) => o.to)).toEqual(["b"]);
+    expect(out.map((o) => [o.to, o.message.t])).toEqual([
+      ["b", "event"],
+      ["b", "snapshot"],
+    ]);
     expect(room.state.seq).toBe(seq + 1);
   });
 
@@ -366,11 +369,67 @@ describe("round and game end", () => {
       const room = roundOverRoom();
       expectFreshHands(room, room.handle("b", { t: "act", seat: 1, action: { type: "nextRound" } }));
     });
+  });
 
-    it("but not after an ordinary action", () => {
+  describe("every successful game action ends with each connected device's own snapshot", () => {
+    /**
+     * For each device: its events come first, then exactly one snapshot, last,
+     * at the seq of its last event (the room's current seq).
+     */
+    function expectTrailingSnapshots(room: RoomCore, out: Outbound[], devices: string[]): void {
+      expect(out.filter((o) => o.message.t === "snapshot").map((o) => o.to).sort()).toEqual(
+        [...devices].sort(),
+      );
+      for (const device of devices) {
+        const mine = out.filter((o) => o.to === device);
+        expect(mine.at(-1)!.message.t).toBe("snapshot");
+        expect(mine.slice(0, -1).every((o) => o.message.t === "event")).toBe(true);
+        const snap = snapshotTo(out, device);
+        expect(snap.seq).toBe(room.state.seq);
+        expect(snap.seq).toBe(Math.max(...eventsTo(out, device).map((e) => e.seq)));
+      }
+    }
+
+    it("after a human act, carrying the truth the events cannot, and no other seat's hand", () => {
       const room = startedRoom(["a", "b"]);
-      const out = room.handle("b", { t: "act", seat: 1, action: { type: "draw", from: "deck" } });
-      expect(out.filter((o) => o.message.t === "snapshot")).toEqual([]);
+      room.connect("c");
+      const out = room.handle("b", { t: "act", seat: 1, action: { type: "draw", from: "discard" } });
+      expectTrailingSnapshots(room, out, ["a", "b", "c"]);
+
+      const own: Record<string, string[]> = { a: ["0"], b: ["1"], c: [] };
+      for (const [device, seats] of Object.entries(own)) {
+        const view = snapshotTo(out, device).room.game as NonNullable<Snapshot["room"]["game"]>;
+        expect(Object.keys(view.hands)).toEqual(seats);
+        expect(view.step).toBe("play");
+        expect(view.discardTop).toBe(game(room).discard.at(-1) ?? null);
+        expect(view.handCounts[1]).toBe(11);
+      }
+      const forB = snapshotTo(out, "b").room.game as NonNullable<Snapshot["room"]["game"]>;
+      expect(forB.hands[1]).toEqual(game(room).hands[1]);
+    });
+
+    it("after the final round, already saying the room is over", () => {
+      const room = startedRoom(["a", "b"]);
+      exhaust(room, { lastPhase: true });
+      const out = room.handle("a", { t: "act", seat: 0, action: { type: "draw", from: "deck" } });
+      expectTrailingSnapshots(room, out, ["a", "b"]);
+      for (const device of ["a", "b"]) {
+        const snap = snapshotTo(out, device);
+        expect(snap.room.status).toBe("over");
+        expect(snap.room.game?.status).toBe("gameOver");
+      }
+    });
+
+    it("after a bot move", () => {
+      const room = startedRoom(["a"], 1);
+      clock = room.state.timers.botAt as number;
+      const out = room.tick();
+      expect(gameEventsTo(out, "a").map((e) => e.kind)).toEqual(["drew"]);
+      expectTrailingSnapshots(room, out, ["a"]);
+      const view = snapshotTo(out, "a").room.game as NonNullable<Snapshot["room"]["game"]>;
+      expect(Object.keys(view.hands)).toEqual(["0"]);
+      expect(view.step).toBe("play");
+      expect(view.handCounts[1]).toBe(11);
     });
   });
 
