@@ -367,6 +367,9 @@ private struct TableStage: View {
         if case .curtain = pass.state, pass.state != before { curtainKey += 1 }
         // The scene hides at once when `revealed` goes away; a new reveal lands on its timeline.
         scene.reconcile(table, revealed: pass.revealed)
+        #if DEBUG
+        scene.timelineLog("stage seq \(session.store.lastSeq) turn \(table.game?.turn ?? -1) \(table.game?.step.rawValue ?? "-") pass \(pass.state) shown \(String(describing: events.shown)) scene \(String(describing: scene.shownRevealed))")
+        #endif
     }
 }
 

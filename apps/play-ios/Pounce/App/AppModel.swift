@@ -66,6 +66,14 @@ final class AppModel {
         }
         #if DEBUG
         if let demo = DemoMode.from(arguments: arguments) { model.openDemo(demo) }
+        // `-show-join`: open on Join (scripts/screenshots.sh).
+        if arguments.contains("-show-join"), model.people.owner != nil { model.route = .join }
+        // `-open-link <pounce-dev://…>`: open a share or move link at launch, as if tapped
+        // (scripts/multi-sim.sh; `simctl openurl` stops at an "Open in Pounce?" system prompt).
+        if let i = arguments.firstIndex(of: "-open-link"), let text = arguments[safe: i + 1],
+           let url = URL(string: text), let link = DeepLink.parse(url, allowDevScheme: true) {
+            model.handle(link)
+        }
         #endif
         return model
     }

@@ -91,7 +91,13 @@ final class TableScene: SKScene {
     private var revealedRound: Int?
     /// The seat whose hand is actually shown face up right now.
     private(set) var shownRevealed: Seat? {
-        didSet { if shownRevealed != oldValue { onShownRevealed(shownRevealed) } }
+        didSet {
+            guard shownRevealed != oldValue else { return }
+            #if DEBUG
+            timelineLog("shownRevealed \(String(describing: oldValue)) -> \(String(describing: shownRevealed))")
+            #endif
+            onShownRevealed(shownRevealed)
+        }
     }
 
     // Layers and nodes.
@@ -224,6 +230,9 @@ final class TableScene: SKScene {
     /// to another seat hides the shown hand at once (backs, on the table as drawn). Only a new
     /// face-up reveal waits for the timeline.
     func reconcile(_ model: TableModel, revealed: Seat?) {
+        #if DEBUG
+        timelineLog("reconcile turn \(model.currentSeat ?? -1) revealed \(String(describing: revealed)) animating \(animating) lastSeq \(store.lastSeq) seen \(seenSeq) pending \(String(describing: pendingReveal))")
+        #endif
         if self.model != nil, animating || store.lastSeq > seenSeq {
             let reveal = revealed.flatMap { model.mySeats.contains($0) ? $0 : nil }
             if shownRevealed != nil, reveal != shownRevealed { hideHand() }
@@ -759,7 +768,7 @@ final class TableScene: SKScene {
             TableAccessibility.Item(
                 id: "table.frames", label: "frames", frame: CGRect(x: 0, y: 0, width: 24, height: 24),
                 traits: .staticText, live: { String(director.framesRendered) }),
-            // step|inFlight|hand size|laid|turn|animating (UI tests only).
+            // step|inFlight|hand size|laid|turn|animating|round|game status (UI tests only).
             TableAccessibility.Item(
                 id: "table.debug", label: "debug", frame: CGRect(x: 24, y: 0, width: 24, height: 24),
                 traits: .staticText, live: { [weak self] in
@@ -767,7 +776,7 @@ final class TableScene: SKScene {
                     let seat = self.bottomSeat ?? -1
                     let laid = (game.laid[safe: seat] ?? nil) != nil
                     let busy = self.animating || !director.isIdle
-                    return "\(game.step.rawValue)|\(store.actionInFlight ? 1 : 0)|\(game.hands[seat]?.count ?? -1)|\(laid ? 1 : 0)|\(game.turn)|\(busy ? 1 : 0)"
+                    return "\(game.step.rawValue)|\(store.actionInFlight ? 1 : 0)|\(game.hands[seat]?.count ?? -1)|\(laid ? 1 : 0)|\(game.turn)|\(busy ? 1 : 0)|\(game.round)|\(game.status.rawValue)"
                 }),
         ]
         #else
