@@ -133,15 +133,17 @@ struct ConnectingView: View {
     }
 }
 
-/// The SpriteKit table for one session. Owns the scene (made once, kept across redraws) and
-/// pass-and-play (spec §5.9): every room or turn-epoch change updates `PassAndPlay` with the
-/// store's `turnEpoch` and reconciles the scene with its `revealed` seat and that epoch. SwiftUI
-/// may coalesce several room changes into one update; the epoch (counted by the store on every
-/// room it applies) still tells a skipped turn apart, so a stale reveal never comes back. Over it: the scoreboard (tap the tower), the local cats row on a
-/// multi-seat phone, the pass-and-play curtain and, once the scene has played the win, the
-/// game-over overlay.
+/// The SpriteKit table for one session. Owns the scene (made once, kept across redraws) and shows
+/// pass-and-play (spec §5.9) as the store decides it (`RoomStore.pass`, updated with every room
+/// the store applies). The curtain is read from the store in `body`, never from state an
+/// `onChange` keeps: SwiftUI runs an `onChange` action at most once per frame and drops a second
+/// change in the same frame, which once left a seat's turn face down with no curtain. Room and
+/// reveal changes reconcile the scene with the store's `revealed` seat and turn epoch (the scene
+/// also hides a stale reveal by itself, and redraws from the store after every action). Over it:
+/// the scoreboard (tap the tower), the local cats row on a multi-seat phone, the pass-and-play
+/// curtain and, once the scene has played the win, the game-over overlay.
 ///
-/// Privacy: on a multi-seat phone the curtain covers the table whenever `PassAndPlay` says so,
+/// Privacy: on a multi-seat phone the curtain covers the table whenever `RoomStore.pass` says so,
 /// and stays up after the hold until the scene reports that seat's hand is actually face up
 /// (a reveal can wait for an animating event). While it is up the table takes no touches and
 /// VoiceOver skips it. The scene itself never builds faces for an unrevealed seat. Outside
@@ -152,17 +154,15 @@ private struct TableStage: View {
     @Environment(Settings.self) private var settings
     let session: RoomSession
     @State private var scene: TableScene?
-    @State private var pass = PassAndPlay()
     /// What the scene's callbacks set (see `StageEvents`).
     @State private var events = StageEvents()
-    /// Bumped each time a new curtain goes up, so a curtain for the same seat starts fresh.
-    @State private var curtainKey = 0
     /// The push priming screen is up (spec §10).
     @State private var priming = false
     @State private var primingChecked = false
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     private var table: TableModel? { session.store.room.map(TableModel.init(room:)) }
+    private var pass: PassAndPlay { session.store.pass }
 
     /// The seat the curtain is up for: a curtain waiting for its hold, or a hold that is done
     /// while the scene hasn't shown that hand yet. Never on a one-seat phone.
@@ -206,7 +206,7 @@ private struct TableStage: View {
             }
             if !localCats.isEmpty {
                 LocalCatsRow(cats: localCats) { seat in
-                    pass.peek(seat)
+                    session.store.peek(seat)
                     sync()
                 }
                 .transition(.opacity.combined(with: .scale(scale: 0.8, anchor: .bottom)))
@@ -222,10 +222,11 @@ private struct TableStage: View {
                 // inside it at once, so the table never shows between two curtains.
                 ZStack {
                     PassCurtainView(person: person(seat)) {
-                        pass.completeHold()
+                        session.store.completeHold()
                         sync()
                     }
-                    .id(curtainKey)
+                    // A new curtain (even for the same seat) starts the hold afresh.
+                    .id(pass.curtains)
                     .transition(.identity)
                 }
                 .transition(curtainTransition)
@@ -234,7 +235,7 @@ private struct TableStage: View {
                     if peeking {
                         // A peek the person didn't mean: back to the table, nothing shown.
                         CornerHomeButton(label: "Back to the table") {
-                            pass.hide()
+                            session.store.hidePass()
                             sync()
                         }
                         .padding(.leading, 16)
@@ -273,14 +274,16 @@ private struct TableStage: View {
         .animation(.easeOut(duration: 0.25), value: priming)
         .onAppear(perform: attach)
         .onDisappear { session.detachTable() }
-        .onChange(of: StageInput(room: session.store.room, epoch: session.store.turnEpoch), initial: true) {
+        .onChange(of: StageInput(room: session.store.room, pass: session.store.pass), initial: true) {
+            // Can be skipped (at most one call per frame): the curtain doesn't depend on it, and
+            // the scene redraws from the store after every action and hides a stale reveal itself.
             sync()
             checkPriming()
         }
         .onChange(of: events.tableTaps) {
             // Tapping away from a peeked hand hides it again.
             guard peeking, case .revealed = pass.state else { return }
-            pass.hide()
+            session.store.hidePass()
             sync()
         }
         .sheet(isPresented: $events.menuOpen) {
@@ -357,16 +360,14 @@ private struct TableStage: View {
         }
     }
 
+    /// Reconciles the scene with the store's room and pass-and-play reveal.
     private func sync(_ target: TableScene? = nil) {
         guard let room = session.store.room, let scene = target ?? scene else { return }
         let table = TableModel(room: room)
-        let before = pass.state
-        pass.update(table, epoch: session.store.turnEpoch)
         #if DEBUG
         // `-demo handoff`: skip the hold so a hand is shown to hide later.
-        if DemoMode.from() == .handoff, case .curtain = pass.state { pass.completeHold() }
+        if DemoMode.from() == .handoff, case .curtain = pass.state { session.store.completeHold() }
         #endif
-        if case .curtain = pass.state, pass.state != before { curtainKey += 1 }
         // The scene hides at once when `revealed` goes away; a new reveal lands on its timeline.
         scene.reconcile(table, revealed: pass.revealed, epoch: pass.epoch)
         #if DEBUG
@@ -376,10 +377,10 @@ private struct TableStage: View {
     }
 }
 
-/// What `TableStage` reacts to: the store's room and its turn epoch.
+/// What `TableStage` reacts to: the store's room and its pass-and-play decision.
 private struct StageInput: Equatable {
     let room: RoomView?
-    let epoch: Int
+    let pass: PassAndPlay
 }
 
 /// What the table scene's callbacks set, kept apart from `TableStage` so the scene's closures

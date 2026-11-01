@@ -1,9 +1,9 @@
 import Testing
 @testable import PounceKit
 
-/// `PassAndPlay` fed the way the shell feeds it: every room the store applies goes through a
-/// `TurnEpoch` (as `RoomStore.turnEpoch` does), and `update` gets that epoch. `missed` is a room
-/// the store applied but the shell never saw (SwiftUI coalesced it away).
+/// `PassAndPlay` fed the way the shell fed it before `RoomStore` owned it: every room the store
+/// applies goes through a `TurnEpoch` (as `RoomStore.turnEpoch` does), and `update` gets that
+/// epoch. `missed` is a room the store applied but `update` never saw (a skipped `onChange`).
 struct PassDriver {
     var pnp = PassAndPlay()
     var epochs = TurnEpoch()
@@ -131,6 +131,43 @@ struct PassDriver {
         pnp.update(makeRoom(mine: [0], turn: 0))
         pnp.update(makeRoom(mine: [0], turn: 0, step: .play, gameStatus: .roundOver))
         #expect(pnp.state == .revealed(0))
+    }
+
+    /// The multi-sim arrival: a move link put seat 1 on a one-seat phone in seat 1's turn (its
+    /// hand shown, no hold needed), then a second link added seat 2 in the same turn. Two people
+    /// share the phone now, so seat 1's hand goes behind the curtain until a hold.
+    @Test func secondSeatArrivingMidTurnCurtains() {
+        var pnp = PassDriver()
+        pnp.update(makeRoom(mine: [1], turn: 1))
+        #expect(pnp.state == .revealed(1))
+        pnp.update(makeRoom(mine: [1, 2], turn: 1))
+        #expect(pnp.state == .curtain(1))
+        #expect(pnp.revealed == nil)
+        // A seat leaving mid-reveal drops the reveal too.
+        pnp.completeHold()
+        pnp.update(makeRoom(mine: [0, 1, 2], turn: 1))
+        #expect(pnp.state == .curtain(1))
+    }
+
+    /// `curtains` counts each new curtain (the shell restarts the hold view on it).
+    @Test func countsEachNewCurtain() {
+        var pnp = PassDriver()
+        pnp.update(makeRoom(mine: [0, 1], turn: 0))
+        #expect(pnp.pnp.curtains == 1)
+        pnp.update(makeRoom(mine: [0, 1], turn: 0, step: .play))
+        #expect(pnp.pnp.curtains == 1)
+        pnp.update(makeRoom(mine: [0, 1], turn: 1))
+        #expect(pnp.pnp.curtains == 2)
+        pnp.completeHold()
+        pnp.update(makeRoom(mine: [0, 1], turn: 2))
+        pnp.peek(1)
+        #expect(pnp.pnp.curtains == 3)
+        pnp.update(makeRoom(mine: [0, 1], turn: 0))
+        #expect(pnp.pnp.curtains == 4)
+        // A curtain that stays up (never held) across a turn change is the same curtain.
+        pnp.update(makeRoom(mine: [0, 1], turn: 0, round: 2))
+        #expect(pnp.state == .curtain(0))
+        #expect(pnp.pnp.curtains == 4)
     }
 
     /// The reveal is valid only in its epoch: the same seat and round with every turn in

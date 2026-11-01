@@ -13,8 +13,8 @@ import SwiftUI
 /// scene hasn't played yet only records `revealed`; the coming `.reconcile` intent applies it.
 ///
 /// Privacy: face-up hand nodes exist only for `revealed`, a seat this phone controls. Without a
-/// revealed seat the hand is face-down backs. `TableScreen` owns pass-and-play and passes
-/// `revealed` with the store turn epoch it was granted in (`RoomStore.turnEpoch`). On a
+/// revealed seat the hand is face-down backs. The store decides pass-and-play (`RoomStore.pass`)
+/// and `TableScreen` passes its `revealed` with the store turn epoch it was granted in. On a
 /// multi-seat phone a reveal counts only while the store is still in that epoch: one that
 /// arrives late is dropped, and between the shell's calls the scene hides the hand by itself as
 /// soon as the store's epoch moves (a turn, round or status change), so a reveal never outlives

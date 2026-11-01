@@ -4,7 +4,9 @@ import Testing
 /// Replays the room sequences from the MixedSeatsTests "stuck" runs (tl14 / tl15 timeline logs)
 /// through PassAndPlay, the only thing that decides the curtain. Seats: 0 and 2 local, 1 remote,
 /// 3 bot. Rooms the shell sees go through `PassDriver.update`; rooms only the store applied
-/// (SwiftUI coalesced them away) go through `missed` or, in the last tests, a real `RoomStore`.
+/// (SwiftUI skipped the shell's `onChange`, which it runs at most once per frame) go through
+/// `missed` or, in the last tests, a real `RoomStore`. `RoomStore.pass` now updates with every
+/// room, so the shell no longer feeds PassAndPlay at all.
 @MainActor @Suite struct CurtainReplayTests {
     private let mine: Set<Seat> = [0, 2]
 

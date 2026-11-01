@@ -319,6 +319,62 @@ private let discard: Action = .discard(card: 46, skipTarget: nil)
         #expect(store.turnEpoch == 4)
     }
 
+    /// The multi-sim stall (R9PNJ, round 12): seats 1 and 2 on this phone, seat 2 skipped by the
+    /// bot. Seat 1 plays, the turn goes 3, 4, 0 and back to seat 1 in a burst of messages. The
+    /// shell used to update pass-and-play from a SwiftUI `onChange`, which SwiftUI calls at most
+    /// once per frame: the turn back to seat 1 was dropped, the table sat face down with no
+    /// curtain until an unrelated message 15 minutes later. The store now updates pass-and-play
+    /// with every message it applies, so the curtain is up with no shell involved at all.
+    @Test func passAndPlayFollowsEveryMessageWithNoShell() {
+        let (store, _) = makeStore()
+        func room(_ turn: Seat, _ step: TurnStep = .draw) -> RoomView {
+            makeRoom(seatCount: 5, mine: [1, 2], turn: turn, step: step)
+        }
+        store.handle(snapshot(room(1), seq: 10))
+        #expect(store.pass.state == .curtain(1))
+        store.completeHold()
+        #expect(store.pass.state == .revealed(1))
+        store.handle(event(.game(.drew(seat: 1, from: .deck, card: 17)), seq: 11))
+        store.handle(snapshot(room(1, .play), seq: 11))
+        #expect(store.pass.state == .revealed(1))
+        // Seat 1 discards; seat 2 (also this phone's) was skipped; seat 3 is up.
+        store.handle(event(.game(.discarded(seat: 1, card: 17, skipTarget: nil)), seq: 12))
+        store.handle(event(.game(.skipped(seat: 2)), seq: 13))
+        store.handle(event(.game(.turn(seat: 3)), seq: 14))
+        #expect(store.pass.state == CurtainState.none)
+        #expect(store.pass.revealed == nil)
+        store.handle(snapshot(room(3), seq: 14))
+        var seq = 14
+        for (seat, next) in [(3, 4), (4, 0), (0, 1)] {
+            store.handle(event(.game(.drew(seat: seat, from: .deck, card: nil)), seq: seq + 1))
+            store.handle(snapshot(room(seat, .play), seq: seq + 1))
+            store.handle(event(.game(.discarded(seat: seat, card: 30, skipTarget: nil)), seq: seq + 2))
+            store.handle(event(.game(.turn(seat: next)), seq: seq + 3))
+            store.handle(snapshot(room(next), seq: seq + 3))
+            seq += 3
+        }
+        #expect(store.pass.state == .curtain(1))
+        #expect(store.pass.revealed == nil)
+    }
+
+    @Test func passAndPlayGrantsAndHidesThroughTheStore() {
+        let (store, _) = makeStore()
+        store.handle(snapshot(makeRoom(mine: [0, 2], turn: 1), seq: 1))
+        #expect(store.pass.state == CurtainState.none)
+        store.peek(2)
+        #expect(store.pass.state == .curtain(2))
+        store.completeHold()
+        #expect(store.pass.state == .revealed(2))
+        store.hidePass()
+        #expect(store.pass.state == CurtainState.none)
+        // A peek's reveal ends with the turn that leaves this phone's hands alone.
+        store.peek(0)
+        store.completeHold()
+        store.handle(snapshot(makeRoom(mine: [0, 2], turn: 3), seq: 2))
+        #expect(store.pass.state == CurtainState.none)
+        #expect(store.pass.revealed == nil)
+    }
+
     @Test func presenceEventKeepsInFlight() async throws {
         let (store, _, _) = try await playingStore(seq: 1)
         store.act(seat: 0, discard)

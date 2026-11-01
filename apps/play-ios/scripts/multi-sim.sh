@@ -11,7 +11,9 @@
 #    Each phone's screenshots (arrival, curtain, round over, game over) land in $OUT/shared.
 #
 # Env: SIM_A / SIM_B (UDIDs; default iPhone 17 Pro and iPhone 17, iOS 26.2), OUT (default a temp
-# dir), MOVE_AT (phase index that triggers the moves, default 8), SKIP_BUILD=1, LOBBY_ONLY=1, KEEP_B=1 (leave B booted; otherwise B is shut down at the end).
+# dir), MOVE_AT (phase index that triggers the moves, default 8), SKIP_BUILD=1, LOBBY_ONLY=1, KEEP_B=1 (leave B booted; otherwise B is shut down at the end),
+# POUNCE_UITEST_TIMEOUT_SCALE (default 1; 3 on a busy Mac), LOG_TIMELINE=1 (each phone's table
+# timeline from the unified log into $OUT/timeline-A.log and timeline-B.log).
 set -euo pipefail
 cd "$(dirname "$0")/.."
 source scripts/lib-dev-server.sh
@@ -94,10 +96,20 @@ run_role() {  # <sim> <seats> <log> <result bundle>
   # exec: the background job's pid is xcodebuild itself, so cleanup can stop it.
   TEST_RUNNER_POUNCE_SHARED_DIR="$SHARED" TEST_RUNNER_POUNCE_MOVE_SEATS="$2" \
     TEST_RUNNER_POUNCE_API_BASE_URL="$DEV_SERVER_URL" \
+    TEST_RUNNER_POUNCE_UITEST_TIMEOUT_SCALE="${POUNCE_UITEST_TIMEOUT_SCALE:-1}" \
+    TEST_RUNNER_POUNCE_LOG_TIMELINE="${LOG_TIMELINE:-0}" \
     exec xcodebuild test-without-building -project Pounce.xcodeproj -scheme Pounce -derivedDataPath "$DD" \
     -destination "id=$1" -only-testing:PounceUITests/MultiSimTests/testMovedSeats \
     -resultBundlePath "$4" >"$3" 2>&1
 }
+if [ "${LOG_TIMELINE:-0}" = 1 ]; then
+  for role in A B; do
+    sim=$SIM_A; [ $role = B ] && sim=$SIM_B
+    xcrun simctl spawn "$sim" log stream --level debug --style compact \
+      --predicate 'eventMessage CONTAINS "[timeline]" OR eventMessage CONTAINS "multiple times per frame"' \
+      >"$OUT/timeline-$role.log" 2>&1 & pids+=($!)
+  done
+fi
 "$E2E" full --local 4 --bots 1 --move-seats 1,2,3 --move-at-phase "$MOVE_AT" --move-file "$SHARED/move.txt" \
   --base "$DEV_SERVER_URL" --timeout 14400 >"$OUT/host-e2e.log" 2>&1 & pids+=($!); host_pid=$!
 run_role "$SIM_A" 1,2 "$OUT/simA.log" "$OUT/simA.xcresult" & pids+=($!); a_pid=$!

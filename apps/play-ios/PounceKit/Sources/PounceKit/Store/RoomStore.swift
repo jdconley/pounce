@@ -37,9 +37,14 @@ import Observation
     public private(set) var lastError: ErrorCode?
     /// Goes up whenever an applied room's round, turn or status differs from the previous one
     /// (see `TurnEpoch`), from snapshots and from the turn and status folded in from events.
-    /// 0 before the first snapshot. Pass-and-play keys a reveal on it, so a reveal never
-    /// survives a turn the shell didn't happen to see.
+    /// 0 before the first snapshot. Pass-and-play (`pass`) and the scene key a reveal on it, so
+    /// a reveal never survives its turn.
     public private(set) var turnEpoch = 0
+    /// Pass-and-play for this phone (spec §5.9), updated with every room the store applies, so
+    /// the curtain always matches the room. Never from the shell's `onChange`: SwiftUI calls an
+    /// `onChange` action at most once per frame and drops a second change in that frame, which
+    /// left a pass-and-play seat's turn face down with no curtain until some later message.
+    public private(set) var pass = PassAndPlay()
     /// Single consumer (the table scene). Unbounded, so no intent is ever dropped.
     @ObservationIgnored public let intents: AsyncStream<TableIntent>
 
@@ -104,6 +109,33 @@ import Observation
     public func send(_ message: ClientMessage) {
         if case .moveSeat = message { moveCode = nil }
         callSocket(inOrder: true) { socket in try? await socket.send(message) }
+    }
+
+    // MARK: pass and play
+
+    /// The hold on the curtain finished: that seat's hand shows, for this turn only.
+    public func completeHold() {
+        var next = pass
+        next.completeHold()
+        setPass(next)
+    }
+
+    /// Puts the curtain up for one of this phone's seats outside its turn.
+    public func peek(_ seat: Seat) {
+        var next = pass
+        next.peek(seat)
+        setPass(next)
+    }
+
+    /// Back to the table with no hand shown (a peek put away).
+    public func hidePass() {
+        var next = pass
+        next.hide()
+        setPass(next)
+    }
+
+    private func setPass(_ next: PassAndPlay) {
+        if next != pass { pass = next }
     }
 
     // MARK: reducer
@@ -189,6 +221,7 @@ import Observation
                 self.room?.seats[seat].presence = presence
             }
             if settledSeq == seq - 1 { settledSeq = seq }
+            noteTurn()
             continuation.yield(.presence(seat: seat, presence: presence))
         case .game(let game):
             switch game {
@@ -208,10 +241,14 @@ import Observation
         }
     }
 
+    /// After every room applied: the turn epoch, then pass-and-play for that room.
     private func noteTurn() {
         guard let room else { return }
         epochs.observe(room)
         if turnEpoch != epochs.value { turnEpoch = epochs.value }
+        var next = pass
+        next.update(TableModel(room: room), epoch: epochs.value)
+        setPass(next)
     }
 
     private func applyError(_ code: ErrorCode) {
