@@ -125,6 +125,7 @@ extension TableScene {
         if card == provisionalCard, let p = provisionalNode {
             node = p
             node.isPrivate = false  // accepted: the card is on the table now
+            node.setCard(card)  // a hand hide on the turn change may have turned it face down
             owned = true
         } else if seat == bottomSeat, let h = hand.node(for: card) {
             node = flyer(card, at: fx.convert(h.position, from: hand), rotation: h.zRotation, z: 1)
@@ -336,6 +337,7 @@ extension TableScene {
         if card == provisionalCard, let p = provisionalNode {
             node = p
             node.isPrivate = false  // accepted: the card is on the table now
+            node.setCard(card)  // a hand hide on the turn change may have turned it face down
             owned = true
         } else if seat == bottomSeat, let h = hand.node(for: card) {
             node = flyer(card, at: fx.convert(h.position, from: hand), rotation: h.zRotation, z: 1)
