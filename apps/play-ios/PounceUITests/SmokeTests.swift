@@ -8,6 +8,7 @@ final class SmokeTests: XCTestCase {
     @MainActor
     func testAppLaunches() throws {
         let app = XCUIApplication()
+        app.launchArguments = Live.arguments()
         app.launch()
         XCTAssertTrue(app.wait(for: .runningForeground, timeout: Live.t(10)))
     }

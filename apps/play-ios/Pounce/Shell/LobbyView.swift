@@ -67,7 +67,7 @@ struct LobbyView: View {
             }
         }
         .coordinateSpace(.named("lobby"))
-        .animation(.easeOut(duration: 0.15), value: menuSeat)
+        .animation(.easeOut(duration: 0.15).paced, value: menuSeat)
         .background(ShareRoom(isPresented: $sharing, url: shareURL, catArt: ArtName.cat(hostCat, .idle)))
         .sheet(item: $picker) { target in
             personPicker(target)
@@ -119,7 +119,7 @@ struct LobbyView: View {
             .wiggle(trigger: wiggles[.share, default: 0])
             .accessibilityIdentifier("lobby.share")
             PillButton(icon: ArtName.iconQr, color: Palette.teal, size: .small, width: 54, accessibilityLabel: showQR ? "Hide QR code" : "Show QR code") {
-                withAnimation(.spring(duration: 0.4, bounce: 0.4)) { showQR.toggle() }
+                withAnimation(.spring(duration: 0.4, bounce: 0.4).paced) { showQR.toggle() }
             }
             .accessibilityIdentifier("lobby.qr")
         }
@@ -147,7 +147,7 @@ struct LobbyView: View {
                 }
                 if showQR {
                     QRTile(text: shareURL.absoluteString, side: min(side * 0.58, 240))
-                        .onTapGesture { withAnimation(.spring(duration: 0.3)) { showQR = false } }
+                        .onTapGesture { withAnimation(.spring(duration: 0.3).paced) { showQR = false } }
                         .position(x: geo.size.width / 2, y: geo.size.height / 2)
                         .transition(.scale(scale: 0.3).combined(with: .opacity))
                         .accessibilityLabel("QR code for this table")
@@ -461,7 +461,7 @@ struct Cushion: View {
                 .frame(maxHeight: .infinity, alignment: .bottom)
                 .padding(.bottom, height * 0.3)
                 .onAppear {
-                    withAnimation(.easeInOut(duration: 0.6).repeatForever(autoreverses: true)) { pulse = true }
+                    withAnimation(.easeInOut(duration: 0.6).repeatForever(autoreverses: true).paced) { pulse = true }
                 }
         case .closed:
             EmptyView()

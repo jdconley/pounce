@@ -13,9 +13,12 @@
 # Env: SIM_A / SIM_B (UDIDs; default iPhone 17 Pro and iPhone 17, iOS 26.2), OUT (default a temp
 # dir), MOVE_AT (phase index that triggers the moves, default 8), SKIP_BUILD=1, LOBBY_ONLY=1, KEEP_B=1 (leave B booted; otherwise B is shut down at the end),
 # POUNCE_UITEST_TIMEOUT_SCALE (default 1; 3 on a busy Mac), LOG_TIMELINE=1 (each phone's table
-# timeline from the unified log into $OUT/timeline-A.log and timeline-B.log).
+# timeline from the unified log into $OUT/timeline-A.log and timeline-B.log), SPEED (default 10:
+# the phones' animations and the tests' fixed waits run that many times faster, silent sound and
+# haptics; a dev server started here runs its bots at SPEED too; SPEED=1 is a normal-speed game).
 set -euo pipefail
 cd "$(dirname "$0")/.."
+SPEED="${SPEED:-10}"
 source scripts/lib-dev-server.sh
 
 SIM_A="${SIM_A:-0FEFDAA5-2552-4E51-9281-C1DA13365F42}"
@@ -74,7 +77,7 @@ echo "room $CODE (made by a third device)"
 for sim in "$SIM_A" "$SIM_B"; do
   xcrun simctl terminate "$sim" "$BUNDLE" 2>/dev/null || true
   SIMCTL_CHILD_POUNCE_API_BASE_URL="$DEV_SERVER_URL" xcrun simctl launch "$sim" "$BUNDLE" \
-    -open-link "pounce-dev://j/$CODE" >/dev/null
+    -anim-speed "$SPEED" -open-link "pounce-dev://j/$CODE" >/dev/null
   sleep 4
 done
 sleep 15
@@ -97,7 +100,7 @@ run_role() {  # <sim> <seats> <log> <result bundle>
   TEST_RUNNER_POUNCE_SHARED_DIR="$SHARED" TEST_RUNNER_POUNCE_MOVE_SEATS="$2" \
     TEST_RUNNER_POUNCE_API_BASE_URL="$DEV_SERVER_URL" \
     TEST_RUNNER_POUNCE_UITEST_TIMEOUT_SCALE="${POUNCE_UITEST_TIMEOUT_SCALE:-1}" \
-    TEST_RUNNER_POUNCE_LOG_TIMELINE="${LOG_TIMELINE:-0}" \
+    TEST_RUNNER_POUNCE_LOG_TIMELINE="${LOG_TIMELINE:-0}" TEST_RUNNER_POUNCE_SPEED="$SPEED" \
     exec xcodebuild test-without-building -project Pounce.xcodeproj -scheme Pounce -derivedDataPath "$DD" \
     -destination "id=$1" -only-testing:PounceUITests/MultiSimTests/testMovedSeats \
     -resultBundlePath "$4" >"$3" 2>&1

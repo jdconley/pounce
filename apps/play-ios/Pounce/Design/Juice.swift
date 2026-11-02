@@ -1,6 +1,7 @@
 import SwiftUI
 
-// Motion modifiers. Each respects Reduce Motion by swapping movement for a short fade.
+// Motion modifiers. Each respects Reduce Motion by swapping movement for a short fade, and runs
+// at the app's pace (`Pace`).
 
 private struct JuiceValues {
     var scale: Double = 1
@@ -19,12 +20,12 @@ private struct PopModifier<T: Equatable & Sendable>: ViewModifier {
             view.scaleEffect(v.scale).opacity(v.opacity)
         } keyframes: { _ in
             KeyframeTrack(\.scale) {
-                CubicKeyframe(1 + 0.3 * k, duration: 0.10)
-                SpringKeyframe(1, duration: 0.35, spring: .bouncy)
+                CubicKeyframe(1 + 0.3 * k, duration: Pace.seconds(0.10))
+                SpringKeyframe(1, duration: Pace.seconds(0.35), spring: .bouncy)
             }
             KeyframeTrack(\.opacity) {
-                CubicKeyframe(1 - 0.5 * (1 - k), duration: 0.10)
-                CubicKeyframe(1, duration: 0.25)
+                CubicKeyframe(1 - 0.5 * (1 - k), duration: Pace.seconds(0.10))
+                CubicKeyframe(1, duration: Pace.seconds(0.25))
             }
         }
     }
@@ -40,15 +41,15 @@ private struct WiggleModifier<T: Equatable & Sendable>: ViewModifier {
             view.rotationEffect(.degrees(v.rotation)).opacity(v.opacity)
         } keyframes: { _ in
             KeyframeTrack(\.rotation) {
-                CubicKeyframe(10 * k, duration: 0.07)
-                CubicKeyframe(-8 * k, duration: 0.10)
-                CubicKeyframe(5 * k, duration: 0.09)
-                CubicKeyframe(-3 * k, duration: 0.08)
-                CubicKeyframe(0, duration: 0.07)
+                CubicKeyframe(10 * k, duration: Pace.seconds(0.07))
+                CubicKeyframe(-8 * k, duration: Pace.seconds(0.10))
+                CubicKeyframe(5 * k, duration: Pace.seconds(0.09))
+                CubicKeyframe(-3 * k, duration: Pace.seconds(0.08))
+                CubicKeyframe(0, duration: Pace.seconds(0.07))
             }
             KeyframeTrack(\.opacity) {
-                CubicKeyframe(1 - 0.5 * (1 - k), duration: 0.15)
-                CubicKeyframe(1, duration: 0.26)
+                CubicKeyframe(1 - 0.5 * (1 - k), duration: Pace.seconds(0.15))
+                CubicKeyframe(1, duration: Pace.seconds(0.26))
             }
         }
     }
@@ -64,15 +65,15 @@ private struct ShakeModifier<T: Equatable & Sendable>: ViewModifier {
             view.offset(x: v.offsetX).opacity(v.opacity)
         } keyframes: { _ in
             KeyframeTrack(\.offsetX) {
-                CubicKeyframe(-12 * k, duration: 0.05)
-                CubicKeyframe(10 * k, duration: 0.08)
-                CubicKeyframe(-8 * k, duration: 0.08)
-                CubicKeyframe(5 * k, duration: 0.07)
-                CubicKeyframe(0, duration: 0.06)
+                CubicKeyframe(-12 * k, duration: Pace.seconds(0.05))
+                CubicKeyframe(10 * k, duration: Pace.seconds(0.08))
+                CubicKeyframe(-8 * k, duration: Pace.seconds(0.08))
+                CubicKeyframe(5 * k, duration: Pace.seconds(0.07))
+                CubicKeyframe(0, duration: Pace.seconds(0.06))
             }
             KeyframeTrack(\.opacity) {
-                CubicKeyframe(1 - 0.5 * (1 - k), duration: 0.15)
-                CubicKeyframe(1, duration: 0.19)
+                CubicKeyframe(1 - 0.5 * (1 - k), duration: Pace.seconds(0.15))
+                CubicKeyframe(1, duration: Pace.seconds(0.19))
             }
         }
     }
@@ -95,11 +96,11 @@ private struct BounceLoopModifier: ViewModifier {
 
     private func update() {
         if active {
-            withAnimation(.easeInOut(duration: reduceMotion ? 0.9 : 0.45).repeatForever(autoreverses: true)) {
+            withAnimation(.easeInOut(duration: reduceMotion ? 0.9 : 0.45).repeatForever(autoreverses: true).paced) {
                 up = true
             }
         } else {
-            withAnimation(.easeOut(duration: 0.2)) { up = false }
+            withAnimation(.easeOut(duration: Pace.seconds(0.2)).paced) { up = false }
         }
     }
 }

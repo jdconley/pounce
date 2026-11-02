@@ -27,7 +27,7 @@ struct PeopleSheet: View {
                     .transition(.opacity)
             }
         }
-        .animation(.spring(duration: 0.4, bounce: 0.3), value: editing)
+        .animation(.spring(duration: 0.4, bounce: 0.3).paced, value: editing)
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("sheet-people")
     }

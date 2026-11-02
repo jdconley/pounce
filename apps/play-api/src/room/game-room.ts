@@ -1,5 +1,6 @@
 import { DurableObject } from "cloudflare:workers";
 
+import { devSpeed } from "../env";
 import { catTower } from "../games/cat-tower";
 import { parseClientMessage } from "../protocol";
 
@@ -48,7 +49,13 @@ export class GameRoom extends DurableObject<Env> {
     this.ctx.storage.sql.exec(
       "CREATE TABLE IF NOT EXISTS listed (id INTEGER PRIMARY KEY CHECK (id = 1), fingerprint TEXT, devices TEXT)",
     );
-    this.core = new RoomCore(RoomCore.create(code, hostDeviceId, Date.now()), Date.now, cryptoRng);
+    this.core = new RoomCore(
+      RoomCore.create(code, hostDeviceId, Date.now()),
+      Date.now,
+      cryptoRng,
+      catTower,
+      devSpeed(this.env),
+    );
     await this.after([]);
     return { ok: true };
   }
@@ -115,7 +122,7 @@ export class GameRoom extends DurableObject<Env> {
       this.tablesFingerprint = listed.fingerprint;
       this.tableDevices = new Set(JSON.parse(listed.devices) as string[]);
     }
-    return new RoomCore(JSON.parse(row.json) as RoomState, Date.now, cryptoRng);
+    return new RoomCore(JSON.parse(row.json) as RoomState, Date.now, cryptoRng, catTower, devSpeed(this.env));
   }
 
   /**

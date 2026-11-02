@@ -8,6 +8,7 @@ final class HardeningTests: XCTestCase {
         continueAfterFailure = false
     }
 
+    @MainActor
     private func element(_ app: XCUIApplication, _ id: String) -> XCUIElement {
         app.descendants(matching: .any)[id]
     }
@@ -18,10 +19,11 @@ final class HardeningTests: XCTestCase {
     }
 
     /// A short press and a press that slides off the paw both leave the curtain up; only a
-    /// full hold on the paw lifts it.
+    /// full hold on the paw lifts it. The hold's timing is what's tested, so this runs at
+    /// normal speed whatever the suite's speed.
+    @MainActor
     func testCurtainNeedsAFullUnbrokenHold() throws {
-        let app = XCUIApplication()
-        app.launchArguments = ["-demo", "curtain"]
+        let app = Live.demo("curtain", speed: 1)
         app.launch()
         let curtain = element(app, "screen-curtain")
         let hold = element(app, "curtain.hold")
@@ -44,10 +46,13 @@ final class HardeningTests: XCTestCase {
 
     /// A code being checked against a server that never answers: delete still works (and
     /// cancels the check).
+    @MainActor
     func testJoinDeleteWorksWhileChecking() throws {
         let app = XCUIApplication()
+        app.launchArguments = Live.arguments() + ["-uitest-reset"]
         app.launchEnvironment["POUNCE_API_BASE_URL"] = "http://10.255.255.1:8787"  // blackholed
         app.launch()
+        onboard(app)
         let join = element(app, "home.join")
         XCTAssertTrue(join.waitForExistence(timeout: 10))
         join.tap()
@@ -63,10 +68,13 @@ final class HardeningTests: XCTestCase {
 
     /// A code checked against a server that refuses connections: the offline card, not a
     /// spinner forever.
+    @MainActor
     func testJoinShowsOfflineWhenTheServerIsUnreachable() throws {
         let app = XCUIApplication()
+        app.launchArguments = Live.arguments() + ["-uitest-reset"]
         app.launchEnvironment["POUNCE_API_BASE_URL"] = "http://127.0.0.1:9"  // refused
         app.launch()
+        onboard(app)
         let join = element(app, "home.join")
         XCTAssertTrue(join.waitForExistence(timeout: 10))
         join.tap()
@@ -80,10 +88,12 @@ final class HardeningTests: XCTestCase {
     }
 
     /// Opens a table, goes home through the paw menu and waits: the scene must be freed
-    /// (`[scene] deinit` lands in this test's app output in the result bundle).
+    /// (`[scene] deinit` lands in this test's app output in the result bundle). Home needs an
+    /// owner on the device, so a fresh simulator onboards first.
+    @MainActor
     func testLeavingTheTableFreesTheScene() throws {
-        let app = XCUIApplication()
-        app.launchArguments = ["-demo", "table"]
+        ensureOwner()
+        let app = Live.demo("table")
         app.launch()
         let menu = element(app, "table.menu")
         XCTAssertTrue(menu.waitForExistence(timeout: 10))

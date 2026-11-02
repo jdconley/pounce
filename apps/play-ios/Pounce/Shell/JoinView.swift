@@ -42,7 +42,7 @@ struct JoinView: View {
                     .transition(.opacity)
             }
         }
-        .animation(.easeOut(duration: 0.25), value: offline)
+        .animation(.easeOut(duration: 0.25).paced, value: offline)
         .onChange(of: model.joinNope) { nope() }
         .onAppear {
             if let bounced = model.takeBouncedCode() {
@@ -81,7 +81,7 @@ struct JoinView: View {
         .padding(.horizontal, 16)
         .padding(.top, 4)
         .frame(height: 64)
-        .animation(.spring(duration: 0.3), value: checking)
+        .animation(.spring(duration: 0.3).paced, value: checking)
     }
 
     private func cat(height: CGFloat) -> some View {
@@ -143,9 +143,9 @@ struct JoinView: View {
         Haptics.shared.thump()
         Sound.shared.play(ArtName.Sound.sfxNope)
         Task {
-            try? await Task.sleep(for: .milliseconds(380))
-            withAnimation(.spring(duration: 0.3)) { typed = "" }
-            try? await Task.sleep(for: .milliseconds(600))
+            try? await Task.sleep(for: Pace.duration(.milliseconds(380)))
+            withAnimation(.spring(duration: 0.3).paced) { typed = "" }
+            try? await Task.sleep(for: Pace.duration(.milliseconds(600)))
             sad = false
         }
     }
@@ -174,7 +174,7 @@ struct CodeTile: View {
             .aspectRatio(0.86, contentMode: .fit)
             .shadow(color: active ? Palette.teal.opacity(0.9) : Palette.ink.opacity(0.4), radius: active ? 10 : 0, x: 0, y: active ? 0 : 4)
             .pop(trigger: char.map(String.init) ?? "")
-            .animation(.spring(duration: 0.25, bounce: 0.5), value: char)
+            .animation(.spring(duration: 0.25, bounce: 0.5).paced, value: char)
             .accessibilityElement()
             .accessibilityLabel(char.map { Text(verbatim: String($0)) } ?? Text("Empty"))
     }
