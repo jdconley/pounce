@@ -5,6 +5,8 @@ import SwiftUI
 /// the rest are dimmed with the current player's cat. Finished games carry a trophy.
 struct TableCard: View {
     let item: HomeTableItem
+    /// Home's `home.table.<code>`; the Archived sheet uses its own.
+    var identifier: String?
     let action: () -> Void
 
     static let size = CGSize(width: 112, height: 144)
@@ -65,7 +67,7 @@ struct TableCard: View {
         }
         .buttonStyle(.plain)
         .accessibilityLabel(item.yourTurn ? Text("Your turn, table \(item.id)") : Text("Table \(item.id)"))
-        .accessibilityIdentifier("home.table.\(item.id)")
+        .accessibilityIdentifier(identifier ?? "home.table.\(item.id)")
     }
 
     @ViewBuilder private var cat: some View {

@@ -250,4 +250,26 @@ import Testing
         let again = try JSONDecoder().decode(DeviceCredential.self, from: JSONEncoder().encode(c))
         #expect(again == c)
     }
+
+    // MARK: TableArchive
+
+    @Test func archiveRoundTripsThroughDisk() throws {
+        let dir = try tempDir()
+        let archive = TableArchive(directory: dir)
+        #expect(archive.all().isEmpty)
+        archive.archive(code: "BCDFG", updatedAt: 1_000)
+        archive.archive(code: "HJKLM", updatedAt: 2_000)
+        #expect(TableArchive(directory: dir).all() == ["BCDFG": 1_000, "HJKLM": 2_000])
+        archive.restore(code: "BCDFG")
+        #expect(TableArchive(directory: dir).all() == ["HJKLM": 2_000])
+        archive.replace(with: [:])
+        #expect(TableArchive(directory: dir).all().isEmpty)
+    }
+
+    @Test func archiveFileIsPerServer() {
+        let dev = APIConfig(baseURL: URL(string: "http://localhost:8787")!)
+        let prod = APIConfig(baseURL: URL(string: "https://play.conleychaos.com")!)
+        #expect(TableArchive.fileName(for: dev) == "archived.localhost_8787.json")
+        #expect(TableArchive.fileName(for: prod) == "archived.play.conleychaos.com_443.json")
+    }
 }
