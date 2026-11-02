@@ -13,8 +13,8 @@ import PounceKit
 /// `celebrate` starts in the lobby and plays `DemoFixtures.celebration()` through the real
 /// store and intent path: the versus intro and deal, a round over with two shelf leaps, the
 /// next deal 6 s later (the server's gap), then my going out, the last leap and game over.
-/// It logs like `replay`. `-slowmo <factor>` (any demo) runs the table at that speed, socket
-/// gaps stretched to match, for screenshots of fast moments.
+/// It logs like `replay`. `-slowmo <factor>` (any demo) runs the app at that speed (`Pace`),
+/// socket gaps stretched to match, for screenshots of fast moments.
 /// `curtain`: two seats on this phone and seat 0's turn, so the pass-and-play curtain is up;
 /// hold the paw to show seat 0's hand.
 /// `peek`: the same table on a remote seat's turn: the local cats row along the bottom; tap
@@ -90,15 +90,6 @@ enum DemoMode: String {
     }
 }
 
-/// `-slowmo <factor>`: the table's speed (1 = normal), DEBUG only.
-enum SlowMotion {
-    static func factor(arguments: [String] = CommandLine.arguments) -> Double {
-        guard let i = arguments.firstIndex(of: "-slowmo"), arguments.indices.contains(i + 1),
-              let f = Double(arguments[i + 1]), f > 0 else { return 1 }
-        return min(f, 1)
-    }
-}
-
 /// `-demo celebrate`: the lobby, then each `DemoFixtures.celebration()` step (its events, then
 /// its snapshot) after the gap before it. The gaps follow the real server: the next round is
 /// dealt 6 s after `roundOver`.
@@ -118,11 +109,10 @@ actor CelebrateSocket: RoomSocketing {
         continuation.yield(.message(.snapshot(protocol: PounceKit.protocolVersion, seq: 1, room: DemoFixtures.lobby())))
         guard player == nil else { return }
         let continuation = continuation
-        let slow = SlowMotion.factor()
         player = Task {
             var seq = 1
             for (i, step) in DemoFixtures.celebration().enumerated() {
-                try? await Task.sleep(for: .seconds(Self.gaps[i % Self.gaps.count] / slow))
+                try? await Task.sleep(for: .seconds(Pace.seconds(Self.gaps[i % Self.gaps.count])))
                 guard !Task.isCancelled else { return }
                 print("[celebrate] step \(i) events=\(step.events.count)")
                 for event in step.events {
@@ -173,7 +163,7 @@ actor ReplaySocket: RoomSocketing {
         let steps = steps
         player = Task {
             var seq = 1
-            try? await Task.sleep(for: .seconds(2))
+            try? await Task.sleep(for: .seconds(Pace.seconds(2)))
             for loop in 0..<loops {
                 print("[replay] loop \(loop + 1) start")
                 for step in steps {
@@ -183,7 +173,7 @@ actor ReplaySocket: RoomSocketing {
                         continuation.yield(.message(.event(seq: seq, event: .game(event))))
                     }
                     continuation.yield(.message(.snapshot(protocol: PounceKit.protocolVersion, seq: seq, room: step.room)))
-                    try? await Task.sleep(for: Self.gap)
+                    try? await Task.sleep(for: Pace.duration(Self.gap))
                 }
             }
             print("[replay] done")
@@ -252,7 +242,7 @@ actor DemoSocket: RoomSocketing {
 
     func send(_ m: ClientMessage) async throws {
         guard refusing, case .act = m else { return }
-        try? await Task.sleep(for: .milliseconds(400))
+        try? await Task.sleep(for: Pace.duration(.milliseconds(400)))
         continuation.yield(.message(.error(.badStep)))
     }
 

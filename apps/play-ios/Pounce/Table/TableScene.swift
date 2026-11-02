@@ -200,8 +200,8 @@ final class TableScene: SKScene {
         redraw()
         #if DEBUG
         if [.replay, .celebrate].contains(DemoMode.from()) { startFrameLog() }
-        speed = CGFloat(SlowMotion.factor())
         #endif
+        speed = CGFloat(Pace.factor)
     }
 
     /// Leaving the view (`presentScene(nil)`, the table screen swapped out mid-animation):
@@ -302,7 +302,7 @@ final class TableScene: SKScene {
         deferGeneration += 1
         let generation = deferGeneration
         Task { [weak self] in
-            try? await Task.sleep(for: Self.deferLimit)
+            try? await Task.sleep(for: Pace.duration(Self.deferLimit))
             guard let self, self.deferGeneration == generation, let reveal = self.pendingReveal,
                   !self.animating, let room = self.store.room else { return }
             self.apply(TableModel(room: room), reveal)

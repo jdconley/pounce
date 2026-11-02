@@ -4,8 +4,43 @@ import XCTest
 ///
 /// The server URL comes from the test runner's `POUNCE_API_BASE_URL` (pass
 /// `TEST_RUNNER_POUNCE_API_BASE_URL=…` to xcodebuild), default `http://localhost:8787`.
+///
+/// Every app a test launches runs at `Live.speed` (`-anim-speed`, which also swaps sound and
+/// haptics for silent stand-ins), and fixed waits for an animation and poll intervals shrink to
+/// match (`Live.pace`). Timeouts (`Live.t`) stay as they are: they are upper bounds, and a
+/// condition that holds early ends its wait early.
 @MainActor
 enum Live {
+    /// The app's speed under test: `POUNCE_SPEED` in the runner's environment (the scripts'
+    /// `SPEED`, as `TEST_RUNNER_POUNCE_SPEED`), default 10; 1 is normal speed.
+    nonisolated static let speed: Double = {
+        let raw = ProcessInfo.processInfo.environment["POUNCE_SPEED"].flatMap(Double.init) ?? 10
+        return raw > 0 ? raw : 1
+    }()
+
+    /// A fixed wait of `seconds` at normal speed, at the test speed (never under `floor`, nor
+    /// longer than at normal speed).
+    nonisolated static func pace(_ seconds: TimeInterval, floor: TimeInterval = 0.1) -> TimeInterval {
+        max(seconds / speed, min(floor, seconds))
+    }
+
+    /// A poll interval of `seconds` at normal speed, at the test speed. Floored at 0.25 s: every
+    /// poll snapshots the app's accessibility tree on its main thread, and polling much faster
+    /// starves the table's SpriteKit frames.
+    nonisolated static func poll(_ seconds: TimeInterval) -> TimeInterval { pace(seconds, floor: 0.25) }
+
+    /// The launch arguments every test app gets (see `Live.speed`).
+    nonisolated static func arguments(speed: Double = speed) -> [String] {
+        ["-anim-speed", String(speed)]
+    }
+
+    /// An app on a `-demo` screen (no server) at `speed`.
+    static func demo(_ name: String, speed: Double = speed) -> XCUIApplication {
+        let app = XCUIApplication()
+        app.launchArguments = arguments(speed: speed) + ["-demo", name]
+        return app
+    }
+
     /// Multiplies every live timeout (`POUNCE_UITEST_TIMEOUT_SCALE` in the runner's environment,
     /// `TEST_RUNNER_POUNCE_UITEST_TIMEOUT_SCALE=3` for xcodebuild; default 1) so a merely slow
     /// machine still passes.
@@ -24,7 +59,7 @@ enum Live {
     /// A fresh app (scratch data, in-memory credential) pointed at the dev server.
     static func app() -> XCUIApplication {
         let app = XCUIApplication()
-        app.launchArguments = ["-uitest-reset"]
+        app.launchArguments = arguments() + ["-uitest-reset"]
         app.launchEnvironment["POUNCE_API_BASE_URL"] = baseURL
         return app
     }
@@ -77,15 +112,16 @@ extension XCTestCase {
         app.descendants(matching: .any)[id]
     }
 
-    /// Polls `condition` every 0.5 s until it holds or `timeout` (scaled by `Live.scale`) passes. (Every query snapshots
-    /// the app's accessibility tree on its main thread; polling faster starves the table's
-    /// SpriteKit frames, and its animations crawl.)
+    /// Polls `condition` every 0.5 s (at the test speed, `Live.poll`) until it holds or `timeout`
+    /// (scaled by `Live.scale`) passes. (Every query snapshots the app's accessibility tree on
+    /// its main thread; polling faster starves the table's SpriteKit frames, and its animations
+    /// crawl.)
     @discardableResult
     func until(_ timeout: TimeInterval, _ condition: () -> Bool) -> Bool {
         let deadline = Date().addingTimeInterval(Live.t(timeout))
         while Date() < deadline {
             if condition() { return true }
-            Thread.sleep(forTimeInterval: 0.5)
+            Thread.sleep(forTimeInterval: Live.poll(0.5))
         }
         return condition()
     }
@@ -119,6 +155,17 @@ extension XCTestCase {
         XCTAssertTrue(el(app, "home.newGame").waitForExistence(timeout: Live.t(10)), "no Home")
     }
 
+    /// Gives this device an owner if it has none (a fresh simulator opens on pick-a-cat): one
+    /// launch on its own data, onboarding if asked, then the app is closed again. For tests that
+    /// run on the device's data, not `-uitest-reset`, and need Home.
+    func ensureOwner() {
+        let app = XCUIApplication()
+        app.launchArguments = Live.arguments()
+        app.launch()
+        if el(app, "pickcat.confirm").waitForExistence(timeout: Live.t(5)) { onboard(app) }
+        app.terminate()
+    }
+
     /// New game from Home; returns once this phone sits at seat 0 of the new lobby.
     func newGame(_ app: XCUIApplication) {
         el(app, "home.newGame").tap()
@@ -139,9 +186,9 @@ extension XCTestCase {
         el(app, "lobby.seat.\(seat)").tap()
         let button = el(app, "seatmenu.\(item)")
         XCTAssertTrue(button.waitForExistence(timeout: Live.t(5)), "no seat menu item \(item)")
-        Thread.sleep(forTimeInterval: 1)  // the bubble springs open
+        Thread.sleep(forTimeInterval: Live.pace(1))  // the bubble springs open
         button.tap()
-        Thread.sleep(forTimeInterval: 1)
+        Thread.sleep(forTimeInterval: Live.pace(1))
     }
 
     /// In the person picker (after `seatmenu.here`): a new person with the suggested name and
@@ -155,7 +202,7 @@ extension XCTestCase {
             if addTile.exists { addTile.tap() }
             return confirm.waitForExistence(timeout: Live.t(2))
         }, "the new-person editor never opened")
-        Thread.sleep(forTimeInterval: 1)
+        Thread.sleep(forTimeInterval: Live.pace(1))
         confirm.tap()
         _ = until(10) { !confirm.exists }
     }
@@ -170,7 +217,7 @@ extension XCTestCase {
             app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.08)).tap()
         }
         _ = until(5) { !app.buttons["Close"].exists }
-        Thread.sleep(forTimeInterval: 0.5)
+        Thread.sleep(forTimeInterval: Live.pace(0.5))
     }
 
     /// Taps the center of `frame` (screen points) without another element query.
@@ -178,13 +225,14 @@ extension XCTestCase {
         app.coordinate(withNormalizedOffset: .zero).withOffset(CGVector(dx: frame.midX, dy: frame.midY)).tap()
     }
 
-    /// Holds the curtain's paw if the curtain is up in `snap`; returns the name on it. Presses
-    /// by coordinate, so a curtain that lifts on its own (round over) doesn't fail the test.
+    /// Holds the curtain's paw (past its hold time, at the test speed) if the curtain is up in
+    /// `snap`; returns the name on it. Presses by coordinate, so a curtain that lifts on its own
+    /// (round over) doesn't fail the test.
     @discardableResult
     func holdCurtain(_ app: XCUIApplication, _ snap: UISnap) -> String? {
         guard let paw = snap.frame("curtain.hold") else { return nil }
         app.coordinate(withNormalizedOffset: .zero).withOffset(CGVector(dx: paw.midX, dy: paw.midY))
-            .press(forDuration: 1.3)
+            .press(forDuration: Live.pace(1.3, floor: 0.3))
         return snap.label("curtain.name") ?? "?"
     }
 
@@ -198,13 +246,14 @@ extension XCTestCase {
         if notNow.exists { notNow.tap() }
     }
 
-    /// Polls one app snapshot every `every` seconds until `condition` holds.
+    /// Polls one app snapshot every `every` seconds (at the test speed, `Live.poll`) until
+    /// `condition` holds.
     func untilSnap(_ app: XCUIApplication, _ timeout: TimeInterval, every: TimeInterval = 2,
                    _ condition: (UISnap) -> Bool) -> UISnap? {
         let deadline = Date().addingTimeInterval(Live.t(timeout))
         while Date() < deadline {
             if let snap = UISnap(app), condition(snap) { return snap }
-            Thread.sleep(forTimeInterval: every)
+            Thread.sleep(forTimeInterval: Live.poll(every))
         }
         return nil
     }
@@ -212,7 +261,7 @@ extension XCTestCase {
     /// One whole turn by taps for whichever seat of this phone is up and showing: draw from the
     /// deck, then pick the first non-Cucumber hand card and tap the discard (a hand of only
     /// Cucumbers aims the first glowing cat). Returns false if `snap` shows the table isn't
-    /// ready. Works from whole-app snapshots polled every 2 s and taps by coordinate: every
+    /// ready. Works from whole-app snapshots polled every 2 s (`Live.poll`) and taps by coordinate: every
     /// element query snapshots the app's accessibility tree on its main thread, and querying
     /// element by element, flat out, starved the app (its table animations crawled, and SwiftUI
     /// updates waited minutes). `observe` sees each polled snapshot.
@@ -238,11 +287,11 @@ extension XCTestCase {
         }
         if let pick, let card = drawn.frame(pick), let pile = drawn.frame("table.discard") {
             tap(app, card)
-            Thread.sleep(forTimeInterval: 0.5)
+            Thread.sleep(forTimeInterval: Live.pace(0.5))
             tap(app, pile)
         } else if let card = drawn.frame("table.hand.0") {
             tap(app, card)
-            Thread.sleep(forTimeInterval: 1)
+            Thread.sleep(forTimeInterval: Live.pace(1))
             if let cat = UISnap(app)?.items.first(where: { $0.key.hasPrefix("table.opponent.") && $0.value.value == "glowing" }) {
                 tap(app, cat.value.frame)
             }
