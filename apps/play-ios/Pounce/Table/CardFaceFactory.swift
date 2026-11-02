@@ -106,14 +106,18 @@ final class CardFaceFactory {
     /// a fanned group overlaps the next card no further, so every numeral shows.
     static func indexWidth(_ card: CardID) -> CGFloat {
         guard case .number(let value, _) = Card(id: card) else { return 36 }
+        if let cached = indexWidths[value] { return cached }
         let style = IndexStyle.compact
         let text = String(value)
         let size = style.size(text)
         var attrs = numeralAttributes(size: size)
         attrs[.kern] = style.kern(text)
-        let width = (text as NSString).size(withAttributes: attrs).width
-        return ceil(style.corner.x + width + indexOutline * 2 + 2)
+        let width = ceil(style.corner.x + (text as NSString).size(withAttributes: attrs).width + indexOutline * 2 + 2)
+        indexWidths[value] = width
+        return width
     }
+
+    private static var indexWidths: [Int: CGFloat] = [:]
 
     /// A numeral in SF Pro Rounded Black with a thick ink outline, cached by content.
     func numeral(_ text: String, size: CGFloat, fill: UIColor = .white, outline: CGFloat = 3) -> SKTexture {
