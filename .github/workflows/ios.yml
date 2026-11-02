@@ -1,10 +1,8 @@
 name: iOS
 
 on:
+  # Every PR builds: `build` is a required check on main, so it has to report on all of them.
   pull_request:
-    paths:
-      - apps/play-ios/**
-      - .github/workflows/ios.yml
   push:
     branches: [main]
     paths:
