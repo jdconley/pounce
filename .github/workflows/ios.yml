@@ -1,0 +1,73 @@
+name: iOS
+
+on:
+  pull_request:
+    paths:
+      - apps/play-ios/**
+      - .github/workflows/ios.yml
+  push:
+    branches: [main]
+    paths:
+      - apps/play-ios/**
+      - .github/workflows/ios.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ios-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+defaults:
+  run:
+    working-directory: apps/play-ios
+
+jobs:
+  build:
+    runs-on: macos-26
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+      - run: xcodebuild -version
+      - run: swift test --package-path PounceKit
+      - run: scripts/bootstrap.sh
+      - name: Build Release (unsigned)
+        run: >
+          xcodebuild build -project Pounce.xcodeproj -scheme Pounce -configuration Release
+          -destination generic/platform=iOS CODE_SIGNING_ALLOWED=NO -quiet
+
+  testflight:
+    needs: build
+    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+    runs-on: macos-26
+    timeout-minutes: 45
+    environment: production
+    concurrency:
+      group: testflight
+      cancel-in-progress: false
+    env:
+      ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+      ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
+      ASC_KEY_P8: ${{ secrets.ASC_KEY_P8 }}
+    steps:
+      - name: Check App Store Connect credentials
+        id: creds
+        working-directory: .
+        run: |
+          # Until the API key secrets exist the upload is skipped, not failed.
+          if [ -n "$ASC_KEY_ID" ] && [ -n "$ASC_ISSUER_ID" ] && [ -n "$ASC_KEY_P8" ]; then
+            echo "ready=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "::notice title=TestFlight::ASC_KEY_ID, ASC_ISSUER_ID or ASC_KEY_P8 is unset, so the upload is skipped. See apps/play-ios/README.md."
+            echo "ready=false" >> "$GITHUB_OUTPUT"
+          fi
+      - if: steps.creds.outputs.ready == 'true'
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+      - name: Archive and upload
+        if: steps.creds.outputs.ready == 'true'
+        run: |
+          export ASC_KEY_PATH="$RUNNER_TEMP/AuthKey_$ASC_KEY_ID.p8"
+          printenv ASC_KEY_P8 > "$ASC_KEY_PATH"
+          trap 'rm -f "$ASC_KEY_PATH"' EXIT
+          scripts/testflight.sh
