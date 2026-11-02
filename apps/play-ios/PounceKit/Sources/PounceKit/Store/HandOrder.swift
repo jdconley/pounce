@@ -34,6 +34,24 @@ public struct HandOrder: Equatable, Sendable {
         sort = nil
     }
 
+    /// Moves `card` into slot `slot` of the fan as drawn: `shown` is the fan left to right
+    /// (`card` itself, and anything else not in the order, is skipped), and afterwards the fan
+    /// reads `shown` with `card` at `slot`. Cards left out of the fan (in trays) keep their places.
+    public mutating func move(_ card: CardID, toSlot slot: Int, shown: [CardID]) {
+        let others = shown.filter { $0 != card && cards.contains($0) }
+        let slot = min(max(slot, 0), others.count)
+        if slot < others.count {
+            move(card, before: others[slot])
+        } else if let last = others.last, let from = cards.firstIndex(of: card) {
+            // Just after the fan's last card, not the order's end, so tray cards keep their places.
+            cards.remove(at: from)
+            if let at = cards.firstIndex(of: last) { cards.insert(card, at: at + 1) }
+            sort = nil
+        } else {
+            move(card, before: nil)
+        }
+    }
+
     /// Number order, then coat order, then number again.
     public mutating func cycleSort() {
         let next: Sort = sort == .number ? .coat : .number

@@ -191,4 +191,60 @@ private func rotatedBounds(_ c: CardPlacement, _ s: CGSize) -> CGRect {
     let xs = [-hw, hw].flatMap { x in [-hh, hh].map { y in c.position.x + x * cs - y * sn } }
     let ys = [-hw, hw].flatMap { x in [-hh, hh].map { y in c.position.y + x * sn + y * cs } }
     return CGRect(x: xs.min()!, y: ys.min()!, width: xs.max()! - xs.min()!, height: ys.max()! - ys.min()!)
+
+}
+
+extension TableLayoutTests {
+    @Test func gapLeavesTheDroppedCardsSlotEmpty() {
+        forEachLayout { l, _, _ in
+            for n in 1...11 {
+                let full = l.hand(count: n + 1, lifted: nil)
+                for gap in 0...n {
+                    let open = l.hand(count: n, gap: gap)
+                    #expect(open.count == n)
+                    // The others sit exactly where they will once the card lands in the gap.
+                    var landed = open
+                    landed.insert(full[gap], at: gap)
+                    #expect(landed == full)
+                }
+            }
+        }
+    }
+
+    @Test func handSlotIsTheNearestSlot() {
+        forEachLayout { l, _, _ in
+            for n in 1...11 {
+                let xs = l.hand(count: n, lifted: nil).map(\.position.x)
+                for (i, x) in xs.enumerated() {
+                    #expect(l.handSlot(x: x, count: n, current: nil) == i)
+                    #expect(l.handSlot(x: x + 3, count: n, current: nil) == i)
+                }
+                // Past either end: the end slots.
+                #expect(l.handSlot(x: -500, count: n, current: nil) == 0)
+                #expect(l.handSlot(x: 5000, count: n, current: nil) == n - 1)
+            }
+        }
+    }
+
+    @Test func handSlotHoldsAcrossABoundaryUntilPastTheHysteresis() {
+        let l = TableLayout(size: CGSize(width: 375, height: 667), safeTop: 20, safeBottom: 0, opponents: 3)
+        let n = 11  // a full hand on the smallest phone
+        let xs = l.hand(count: n, lifted: nil).map(\.position.x)
+        let step = xs[1] - xs[0]
+        let boundary = (xs[4] + xs[5]) / 2
+        let margin = step * TableLayout.slotHysteresis
+        // Just past halfway: still slot 4 while it is shown, slot 5 from scratch.
+        #expect(l.handSlot(x: boundary + 1, count: n, current: 4) == 4)
+        #expect(l.handSlot(x: boundary + 1, count: n, current: nil) == 5)
+        #expect(l.handSlot(x: boundary + margin - 0.5, count: n, current: 4) == 4)
+        #expect(l.handSlot(x: boundary + margin + 0.5, count: n, current: 4) == 5)
+        // And back the other way from 5.
+        #expect(l.handSlot(x: boundary - margin + 0.5, count: n, current: 5) == 5)
+        #expect(l.handSlot(x: boundary - margin - 0.5, count: n, current: 5) == 4)
+        // A fast swipe jumps straight to the far slot.
+        #expect(l.handSlot(x: xs[9], count: n, current: 4) == 9)
+        // A stale slot from a bigger fan doesn't stick.
+        #expect(l.handSlot(x: xs[2], count: n, current: 40) == 2)
+        #expect(l.handSlot(x: 0, count: 1, current: nil) == 0)
+    }
 }

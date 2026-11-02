@@ -19,11 +19,14 @@ final class HandNode: SKNode {
     private(set) var content: Content = .none
     /// The selected card is raised and straightened (and drawn above its neighbors).
     private(set) var lifted: CardID?
+    /// The empty slot a dragged card will land in (`TableLayout.hand(count:gap:)`); nil closes
+    /// the fan up.
+    private(set) var gap: Int?
 
     /// Within-layer z for a lifted card, above every resting card.
     static let liftedZ: CGFloat = 6
 
-    func update(_ content: Content, layout: TableLayout, lifted: CardID?, dimmed: Bool) {
+    func update(_ content: Content, layout: TableLayout, lifted: CardID?, gap: Int? = nil, dimmed: Bool) {
         self.content = content
         let ordered: [CardNode]
         switch content {
@@ -59,8 +62,9 @@ final class HandNode: SKNode {
             self.lifted = nil
         }
         cards = ordered
+        self.gap = gap.map { min(max($0, 0), ordered.count) }
         let liftedIndex = self.lifted.flatMap { id in ordered.firstIndex { $0.card == id } }
-        let placements = layout.hand(count: ordered.count, lifted: liftedIndex)
+        let placements = placements(layout, lifted: liftedIndex)
         for (i, node) in ordered.enumerated() {
             let p = placements[i]
             node.size = layout.cardSize
@@ -68,11 +72,40 @@ final class HandNode: SKNode {
             node.zRotation = p.rotation
             node.setScale(1)  // a cancelled squash or flip never sticks
             node.alpha = 1
-            // TableLayout's z climbs from 10; keep the hand inside its 10-wide layer band.
-            node.zPosition = i == liftedIndex ? Self.liftedZ : (p.z - 10) * 0.1 + 0.1
+            node.zPosition = i == liftedIndex ? Self.liftedZ : Self.z(p)
         }
         alpha = dimmed ? 0.82 : 1
     }
+
+    /// Opens the fan at `gap` (or closes it, nil) without snapping: the moves that slide each
+    /// card to its new place, for the scene to run through its director.
+    func slide(gap: Int?, layout: TableLayout) -> [(SKAction, SKNode)] {
+        let gap = gap.map { min(max($0, 0), cards.count) }
+        guard gap != self.gap else { return [] }
+        self.gap = gap
+        let liftedIndex = lifted.flatMap { id in cards.firstIndex { $0.card == id } }
+        return zip(cards, placements(layout, lifted: liftedIndex)).map { node, p in
+            node.zPosition = Self.z(p)
+            let move = SKAction.group([
+                .move(to: p.position, duration: Self.slideDuration),
+                .rotate(toAngle: p.rotation, duration: Self.slideDuration, shortestUnitArc: true),
+            ])
+            move.timingMode = .easeOut
+            return (move, node)
+        }
+    }
+
+    /// A card spreading apart or closing up for a dragged card, at normal speed (the scene's
+    /// speed is the Pace factor).
+    static let slideDuration: TimeInterval = 0.14
+
+    private func placements(_ layout: TableLayout, lifted: Int?) -> [CardPlacement] {
+        if let gap { return layout.hand(count: cards.count, gap: gap) }
+        return layout.hand(count: cards.count, lifted: lifted)
+    }
+
+    /// TableLayout's z climbs from 10; keep the hand inside its 10-wide layer band.
+    private static func z(_ p: CardPlacement) -> CGFloat { (p.z - 10) * 0.1 + 0.1 }
 
     /// The card at `index` in the fan, with its frame in the parent's space.
     func frame(at index: Int) -> CGRect? {
@@ -103,12 +136,6 @@ final class HandNode: SKNode {
     }
 
     func node(for card: CardID) -> CardNode? { faceNodes[card] }
-
-    /// The card a dragged card dropped at `x` (parent space) should go before; nil = the end.
-    func card(before x: CGFloat) -> CardID? {
-        let local = x - position.x
-        return cards.first { $0.position.x > local }?.card
-    }
 
     /// Whether the fan holds a card at all (for the hand-area drop zone).
     var isEmpty: Bool { cards.isEmpty }
