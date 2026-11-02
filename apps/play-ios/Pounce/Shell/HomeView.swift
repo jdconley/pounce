@@ -2,8 +2,9 @@ import PounceKit
 import SwiftUI
 
 /// Home: the Cat Tower hero, two fat pills (Create, Join), a row of your tables, the owner's cat
-/// bottom-left (people on this phone) and a small gear (sound, haptics, how to play). After a "not now" to
-/// push, a small bell top-left offers it once more (spec §10).
+/// bottom-left (people on this phone) and a small gear (sound, haptics, how to play). After a
+/// "not now" to push, a small bell top-left offers it once more (spec §10). Long-press a table
+/// to archive it; the sleeping-cat tile at the end of the row opens the archived ones.
 struct HomeView: View {
     @Environment(AppModel.self) private var model
     @Environment(Settings.self) private var settings
@@ -11,6 +12,7 @@ struct HomeView: View {
 
     @State private var showPeople = false
     @State private var showSettings = false
+    @State private var showArchived = false
     @State private var showRules = false
     @State private var heroWiggle = 0
     @State private var ownerWiggle = 0
@@ -44,6 +46,13 @@ struct HomeView: View {
                 .environment(model)
                 .presentationDetents([.large])
                 .presentationDragIndicator(.hidden)
+                .presentationBackground(Palette.night)
+        }
+        .sheet(isPresented: $showArchived) {
+            ArchivedSheet()
+                .environment(model)
+                .presentationDetents([.medium, .large])
+                .presentationDragIndicator(.visible)
                 .presentationBackground(Palette.night)
         }
         .sheet(isPresented: $showRules) {
@@ -147,15 +156,37 @@ struct HomeView: View {
 
     @ViewBuilder private var tablesRow: some View {
         let items = model.homeItems
-        if !items.isEmpty {
+        let archivedCount = model.archivedItems.count
+        if !items.isEmpty || archivedCount > 0 {
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 14) {
                     ForEach(items) { item in
                         TableCard(item: item) {
                             model.open(code: item.id, intent: .rejoin)
                         }
+                        .contextMenu {
+                            Button {
+                                archive(item.id)
+                            } label: {
+                                Label(
+                                    String(localized: "Archive", comment: "Home: a table's long-press menu item that hides it"),
+                                    systemImage: "archivebox")
+                            }
+                            .accessibilityIdentifier("home.table.archive")
+                        }
+                        .contentShape(.contextMenuPreview, RoundedRectangle(cornerRadius: 26, style: .continuous))
+                        .accessibilityAction(named: Text("Archive", comment: "VoiceOver: hides a table from Home")) {
+                            archive(item.id)
+                        }
+                        .transition(.scale(scale: 0.6).combined(with: .opacity))
+                    }
+                    if archivedCount > 0 {
+                        ArchivedTile(count: archivedCount, cat: model.people.owner?.cat ?? 0) { showArchived = true }
+                            .transition(.scale(scale: 0.6).combined(with: .opacity))
                     }
                 }
+                .animation(.spring(duration: 0.4, bounce: 0.35), value: items.map(\.id))
+                .animation(.spring(duration: 0.4, bounce: 0.35), value: archivedCount)
                 // Room for the glow and the bounce so neither is clipped by the scroll view.
                 .padding(.horizontal, 24)
                 .padding(.vertical, 22)
@@ -164,6 +195,12 @@ struct HomeView: View {
             .frame(height: TableCard.size.height + 44)
             .accessibilityIdentifier("home.tables")
         }
+    }
+
+    private func archive(_ code: String) {
+        Haptics.shared.drop()
+        Sound.shared.play(ArtName.Sound.sfxWhoosh)
+        model.archive(code: code)
     }
 
     private var showBell: Bool {

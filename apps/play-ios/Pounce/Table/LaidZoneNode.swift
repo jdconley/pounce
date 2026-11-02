@@ -2,14 +2,17 @@ import PounceKit
 import SpriteKit
 
 /// Laid-down groups around the piles: one row per seat that laid this round, a tiny cat of
-/// that seat at the left and its groups as small overlapped card fans. Card nodes keep their
-/// identity by card id across updates, so a hit or a lay-down animates onto nodes that stay.
+/// that seat at the left and its groups as small card fans (compact faces, each card
+/// overlapped only past its corner index). A group too long for its row folds its middle
+/// cards under a "+N" badge. Card nodes keep their identity by card id across updates, so a
+/// hit or a lay-down animates onto nodes that stay.
 @MainActor
 final class LaidZoneNode: SKNode {
     @MainActor private final class Row {
         let node = SKNode()
         var head: SKSpriteNode?
         var cards: [CardID: CardNode] = [:]
+        var badges: [SKSpriteNode] = []
         var groups: [Group] = []
         var cat = -1
         var rect: CGRect = .zero
@@ -138,33 +141,76 @@ final class LaidZoneNode: SKNode {
     var laidSeats: [Seat] { rows.keys.sorted() }
 
     /// Where a row's pieces go: the cat head, each group's card centers and frames (zone space).
+    /// Folded cards (`shown` false) sit under their group's last shown card.
     struct RowPlacement {
         var headCenter: CGPoint
         var headSize: CGFloat
         var cards: [[CGPoint]]
+        var shown: [[Bool]]
+        /// Per group, how many cards are folded away and where their badge goes.
+        var folded: [(count: Int, at: CGPoint)]
         var frames: [CGRect]
     }
 
+    /// "+N" badge text size: an 11 pt cap height.
+    static let badgeSize: CGFloat = 16
+
     static func placement(groups: [Group], rect: CGRect, mini: CGSize) -> RowPlacement {
         let headSize = min(26, rect.height * 0.5)
-        let gap: CGFloat = 6
+        let gap: CGFloat = 8
         let left = rect.minX + headSize + 8
         let avail = rect.maxX - left
-        let n = groups.count
-        let overlaps = groups.reduce(0) { $0 + max($1.cards.count - 1, 0) }
-        var step = overlaps > 0 ? (avail - CGFloat(n) * mini.width - gap * CGFloat(max(n - 1, 0))) / CGFloat(overlaps) : 0
-        step = min(max(step, 4), mini.width * 0.62)
+        // Each card shows up to the end of its corner index before the next one covers it.
+        let k = mini.width / CardFaceFactory.cardSize.width
+        let strips = groups.map { $0.cards.map { min(CardFaceFactory.indexWidth($0) * k, mini.width) } }
+        var counts = groups.map(\.cards.count)
+        // A folded group shows its first cards and its last (a run keeps both ends).
+        func visible(_ g: Int) -> [Int] {
+            let n = groups[g].cards.count, v = counts[g]
+            if v >= n { return Array(0..<n) }
+            return v <= 1 ? [0] : Array(0..<(v - 1)) + [n - 1]
+        }
+        func width(_ g: Int) -> CGFloat {
+            visible(g).dropLast().reduce(mini.width) { $0 + strips[g][$1] }
+        }
+        func total() -> CGFloat {
+            groups.indices.reduce(gap * CGFloat(max(groups.count - 1, 0))) { $0 + width($1) }
+        }
+        // Fold the group showing the most cards, one card at a time, until the row fits.
+        while total() > avail,
+              let g = counts.indices.filter({ counts[$0] > 1 }).max(by: { counts[$0] < counts[$1] }) {
+            counts[g] -= 1
+        }
+
         var x = left
         var cards: [[CGPoint]] = []
+        var shown: [[Bool]] = []
+        var folded: [(count: Int, at: CGPoint)] = []
         var frames: [CGRect] = []
-        for group in groups {
-            cards.append(group.cards.indices.map { j in CGPoint(x: x + mini.width / 2 + CGFloat(j) * step, y: rect.midY) })
-            let width = CGFloat(max(group.cards.count - 1, 0)) * step + mini.width
-            frames.append(CGRect(x: x, y: rect.midY - mini.height / 2, width: width, height: mini.height))
-            x += width + gap
+        for (g, group) in groups.enumerated() {
+            let vis = visible(g)
+            var centers = Array(repeating: CGPoint.zero, count: group.cards.count)
+            var on = Array(repeating: false, count: group.cards.count)
+            var cx = x + mini.width / 2
+            for j in vis {
+                centers[j] = CGPoint(x: cx, y: rect.midY)
+                on[j] = true
+                cx += strips[g][j]
+            }
+            let last = centers[vis.last ?? 0]
+            for j in centers.indices where !on[j] { centers[j] = last }
+            // Low on the cards, clear of the corner indexes: over the fold, or on a lone card.
+            let badgeX = vis.count > 1 ? last.x - mini.width / 2 : last.x + mini.width * 0.2
+            folded.append((group.cards.count - vis.count, CGPoint(x: badgeX, y: rect.midY - mini.height * 0.24)))
+            cards.append(centers)
+            shown.append(on)
+            let w = width(g)
+            frames.append(CGRect(x: x, y: rect.midY - mini.height / 2, width: w, height: mini.height))
+            x += w + gap
         }
         return RowPlacement(
-            headCenter: CGPoint(x: rect.minX + headSize / 2 + 2, y: rect.midY), headSize: headSize, cards: cards, frames: frames)
+            headCenter: CGPoint(x: rect.minX + headSize / 2 + 2, y: rect.midY), headSize: headSize,
+            cards: cards, shown: shown, folded: folded, frames: frames)
     }
 
     /// Zone space → parent space (as drawn, enlarged or not).
@@ -231,7 +277,7 @@ final class LaidZoneNode: SKNode {
                 if let existing = row.cards[card] {
                     node = existing
                 } else {
-                    node = CardNode(card: card, size: mini, shadow: false)
+                    node = CardNode(card: card, size: mini, shadow: false, compact: true)
                     row.cards[card] = node
                     row.node.addChild(node)
                 }
@@ -242,8 +288,18 @@ final class LaidZoneNode: SKNode {
                 node.zRotation = 0
                 node.alpha = 1
                 node.colorBlendFactor = 0
+                node.isHidden = !place.shown[g][j]
                 z += 0.01
             }
+        }
+        row.badges.forEach { $0.removeFromParent() }
+        row.badges = place.folded.filter { $0.count > 0 }.map { fold in
+            let t = CardFaceFactory.shared.badge("+\(fold.count)", size: Self.badgeSize)
+            let badge = SKSpriteNode(texture: t, size: t.size())
+            badge.position = fold.at
+            badge.zPosition = z + 0.1
+            row.node.addChild(badge)
+            return badge
         }
         for (card, node) in row.cards where !keep.contains(card) {
             node.removeFromParent()

@@ -11,6 +11,8 @@ final class AppModel {
     var tables: [TableEntry] = []
     /// Locally cached table summaries by room code, so Home can draw before sockets connect.
     var cache: [String: CachedTable]
+    /// Tables archived off Home on this phone: room code to the server's `updatedAt` then.
+    private(set) var archived: [String: Double]
     /// Set when creating a room failed; cleared by the next attempt.
     var newGameError: APIError?
     private(set) var isCreatingRoom = false
@@ -29,6 +31,7 @@ final class AppModel {
     let settings: Settings
     @ObservationIgnored let peopleStore: PeopleStore
     @ObservationIgnored let tableCache: TableCache
+    @ObservationIgnored let tableArchive: TableArchive
     @ObservationIgnored let tutorialStore: TutorialStore
     /// The coaching tips each person on this phone has seen (first-game tutorial).
     private(set) var tipsSeen: TipsSeen
@@ -48,9 +51,11 @@ final class AppModel {
         self.settings = settings
         peopleStore = PeopleStore(directory: dataDirectory)
         tableCache = TableCache(directory: dataDirectory, fileName: TableCache.fileName(for: config))
+        tableArchive = TableArchive(directory: dataDirectory, fileName: TableArchive.fileName(for: config))
         let loaded = peopleStore.load()
         people = loaded
         cache = tableCache.all()
+        archived = tableArchive.all()
         tutorialStore = TutorialStore(directory: dataDirectory)
         tipsSeen = tutorialStore.load()
         route = loaded.owner == nil ? .pickCat(then: nil) : .home
@@ -150,9 +155,27 @@ final class AppModel {
         Task { await refreshTables() }
     }
 
-    /// Home's cards: the server's list joined with the local cache.
+    /// Home's cards: the server's list joined with the local cache, less what's archived.
     var homeItems: [HomeTableItem] {
-        HomeTables.merge(entries: tables, cache: cache, now: .now)
+        HomeTables.merge(entries: tables, cache: cache, archived: archived, now: .now)
+    }
+
+    /// Home's Archived sheet.
+    var archivedItems: [HomeTableItem] {
+        HomeTables.archivedItems(entries: tables, cache: cache, archived: archived, now: .now)
+    }
+
+    /// Hides a table from Home. The seat stays: links, pushes and Join still open it, and it
+    /// comes back by itself when it is your turn there again.
+    func archive(code: String) {
+        let updatedAt = tables.first { $0.code == code }?.updatedAt ?? Date.now.timeIntervalSince1970 * 1000
+        tableArchive.archive(code: code, updatedAt: updatedAt)
+        archived = tableArchive.all()
+    }
+
+    func restore(code: String) {
+        tableArchive.restore(code: code)
+        archived = tableArchive.all()
     }
 
     func refreshTables() async {
@@ -166,6 +189,9 @@ final class AppModel {
             let live = Set(listed.map(\.code))
             for code in cache.keys where !live.contains(code) { tableCache.remove(code: code) }
             cache = tableCache.all()
+            // Forget archived rooms that closed, and ones a new turn brought back.
+            tableArchive.replace(with: HomeTables.keptArchive(entries: listed, archived: tableArchive.all()))
+            archived = tableArchive.all()
         } catch {
             // Offline or server down: keep the last list; Home still draws from the cache.
         }
@@ -336,6 +362,7 @@ final class AppModel {
     private func forget(_ code: String) {
         tableCache.remove(code: code)
         cache[code] = nil
+        restore(code: code)
         tables.removeAll { $0.code == code }
     }
 

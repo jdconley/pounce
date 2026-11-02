@@ -62,7 +62,7 @@ final class PileNode: SKNode {
         // Under-cards: backs on the deck, blank faces (edges only show) under the discard.
         while layers.count > under { layers.removeLast().removeFromParent() }
         while layers.count < under {
-            let texture = kind == .deck ? CardFaceFactory.shared.back() : TableArt.cards(ArtName.cardFace)
+            let texture = kind == .deck ? CardFaceFactory.shared.back() : CardFaceFactory.shared.blank()
             let n = SKSpriteNode(texture: texture, size: cardSize)
             addChild(n)
             layers.append(n)

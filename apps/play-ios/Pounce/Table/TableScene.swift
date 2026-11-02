@@ -577,7 +577,7 @@ final class TableScene: SKScene {
             trays.layDownButton.isHidden = true
         }
         sortButton.isHidden = !faceUp || hand.cards.count < 2
-        sortButton.position = CGPoint(x: size.width - Self.sortSize / 2 - 8, y: layout.traysFrame.maxY + Self.sortSize / 2 + 6)
+        sortButton.position = layout.sortButton
 
         menuButton.isHidden = false
         // Top-right: in the status bar's right ear when the safe top is tall enough (notch /

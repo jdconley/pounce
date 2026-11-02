@@ -48,8 +48,11 @@ enum TableArt {
     }
 }
 
-/// Composites each card face once (`card-face` + `coat-<c>` + numeral + `glyph-<c>`, or the
-/// Yarn / Cucumber art) into one texture per id, so a card is a single sprite at runtime.
+/// Draws each card face once (frame + numeral + `glyph-<c>` + `coat-<c>`, or the Yarn /
+/// Cucumber art) into one texture per id, so a card is a single sprite at runtime. Every card,
+/// back included, gets the same frame: a white keyline outside a thick ink outline. On the
+/// dark violet floor the white edge carries the contrast (6:1 or more), on the bright rug the
+/// ink does (4.5:1 or more); some edge reads at 3:1 or better on any surface.
 /// Also renders the outlined numerals the table uses (count bubbles, shelf badges).
 @MainActor
 final class CardFaceFactory {
@@ -58,24 +61,63 @@ final class CardFaceFactory {
     /// Card art is drawn at this point size (the manifest's `card-face`).
     static let cardSize = CGSize(width: 64, height: 90)
 
-    private var faces: [CardID: SKTexture] = [:]
+    private struct FaceKey: Hashable {
+        let card: CardID
+        let compact: Bool
+    }
+
+    private var faces: [FaceKey: SKTexture] = [:]
     private var numerals: [String: SKTexture] = [:]
     private var backTexture: SKTexture?
+    private var blankTexture: SKTexture?
 
-    func texture(for card: CardID) -> SKTexture {
-        if let cached = faces[card] { return cached }
-        let image = Self.renderFace(card)
-        let t = SKTexture(image: image)
-        faces[card] = t
+    /// The full face (hand, piles, cards in flight), or the compact one for cards drawn small
+    /// (laid groups, trays): a corner index half again as big and a smaller cat.
+    func texture(for card: CardID, compact: Bool = false) -> SKTexture {
+        let key = FaceKey(card: card, compact: compact)
+        if let cached = faces[key] { return cached }
+        let t = SKTexture(image: Self.renderFace(card, compact: compact))
+        faces[key] = t
         return t
     }
 
     func back() -> SKTexture {
         if let backTexture { return backTexture }
-        let t = TableArt.cards(ArtName.cardBack)
+        let t = SKTexture(image: Self.backImage)
         backTexture = t
         return t
     }
+
+    /// A face with nothing on it (the discard pile's under-cards).
+    func blank() -> SKTexture {
+        if let blankTexture { return blankTexture }
+        let t = SKTexture(image: Self.render(scale: 1) { inner in Self.drawFace(in: inner) })
+        blankTexture = t
+        return t
+    }
+
+    /// The card back in its frame, for SwiftUI screens too.
+    static let backImage: UIImage = render(scale: 1) { inner in
+        // A little larger than the hole so the art's own rim tucks under the ink.
+        UIImage(named: ArtName.cardBack)?.draw(in: inner.insetBy(dx: -1.5, dy: -1.5))
+    }
+
+    /// How far a card's corner index reaches from its left edge (card points, compact face):
+    /// a fanned group overlaps the next card no further, so every numeral shows.
+    static func indexWidth(_ card: CardID) -> CGFloat {
+        guard case .number(let value, _) = Card(id: card) else { return 36 }
+        if let cached = indexWidths[value] { return cached }
+        let style = IndexStyle.compact
+        let text = String(value)
+        let size = style.size(text)
+        var attrs = numeralAttributes(size: size)
+        attrs[.kern] = style.kern(text)
+        let width = ceil(style.corner.x + (text as NSString).size(withAttributes: attrs).width + indexOutline * 2 + 2)
+        indexWidths[value] = width
+        return width
+    }
+
+    private static var indexWidths: [Int: CGFloat] = [:]
 
     /// A numeral in SF Pro Rounded Black with a thick ink outline, cached by content.
     func numeral(_ text: String, size: CGFloat, fill: UIColor = .white, outline: CGFloat = 3) -> SKTexture {
@@ -92,41 +134,155 @@ final class CardFaceFactory {
         return t
     }
 
+    /// A "+3" pill for cards folded out of a laid group: white on ink (18:1) inside a white
+    /// keyline, so it reads on a card face and on the rug alike. Cached by content.
+    func badge(_ text: String, size: CGFloat) -> SKTexture {
+        let key = "badge|\(text)|\(size)"
+        if let cached = numerals[key] { return cached }
+        let attrs = Self.numeralAttributes(size: size)
+        let textSize = (text as NSString).size(withAttributes: attrs)
+        let h = ceil(textSize.height + 4)
+        let canvas = CGSize(width: max(h, ceil(textSize.width + h * 0.6)), height: h)
+        let image = UIGraphicsImageRenderer(size: canvas).image { _ in
+            let pill = CGRect(origin: .zero, size: canvas)
+            UIColor.white.setFill()
+            UIBezierPath(roundedRect: pill, cornerRadius: h / 2).fill()
+            UIColor(Palette.ink).setFill()
+            UIBezierPath(roundedRect: pill.insetBy(dx: 1.5, dy: 1.5), cornerRadius: h / 2 - 1.5).fill()
+            var fill = attrs
+            fill[.foregroundColor] = UIColor.white
+            (text as NSString).draw(at: CGPoint(x: (canvas.width - textSize.width) / 2, y: 2), withAttributes: fill)
+        }
+        let t = SKTexture(image: image)
+        numerals[key] = t
+        return t
+    }
+
     // MARK: drawing
 
-    private static func renderFace(_ card: CardID) -> UIImage {
-        let size = cardSize
-        return UIGraphicsImageRenderer(size: size).image { _ in
-            UIImage(named: ArtName.cardFace)?.draw(in: CGRect(origin: .zero, size: size))
+    /// White keyline, then the ink outline, then whatever `inside` draws, clipped to the hole.
+    private static let keyline: CGFloat = 2
+    private static let inkLine: CGFloat = 3
+    private static let corner: CGFloat = 10
+    private static let indexOutline: CGFloat = 3
+
+    /// Where and how big the corner index is drawn (card points).
+    private enum IndexStyle {
+        case full, compact
+
+        var corner: CGPoint { self == .full ? CGPoint(x: 7, y: 7) : CGPoint(x: 6, y: 6) }
+
+        func size(_ text: String) -> CGFloat {
+            switch self {
+            case .full: text.count > 1 ? 21 : 25
+            case .compact: text.count > 1 ? 30 : 34
+            }
+        }
+
+        /// Two digits sit a little tighter so they fit a fanned card's visible strip.
+        func kern(_ text: String) -> CGFloat {
+            guard text.count > 1 else { return 0 }
+            return self == .full ? -0.8 : -1.8
+        }
+    }
+
+    /// Compact faces are only ever drawn small, so they render at three quarters the pixels.
+    private static func render(scale: CGFloat, _ inside: (CGRect) -> Void) -> UIImage {
+        let format = UIGraphicsImageRendererFormat.preferred()
+        format.scale *= scale
+        let bounds = CGRect(origin: .zero, size: cardSize)
+        return UIGraphicsImageRenderer(size: cardSize, format: format).image { ctx in
+            UIColor.white.setFill()
+            UIBezierPath(roundedRect: bounds, cornerRadius: corner).fill()
+            UIColor(Palette.ink).setFill()
+            UIBezierPath(roundedRect: bounds.insetBy(dx: keyline, dy: keyline), cornerRadius: corner - keyline).fill()
+            let inner = bounds.insetBy(dx: keyline + inkLine, dy: keyline + inkLine)
+            ctx.cgContext.saveGState()
+            UIBezierPath(roundedRect: inner, cornerRadius: corner - keyline - inkLine).addClip()
+            inside(inner)
+            ctx.cgContext.restoreGState()
+        }
+    }
+
+    /// Plain white where the numerals sit; a soft lilac toward the bottom for a little gloss.
+    private static func drawFace(in inner: CGRect) {
+        UIColor.white.setFill()
+        UIRectFill(inner)
+        let colors = [UIColor.white.cgColor, UIColor(red: 0.93, green: 0.89, blue: 1, alpha: 1).cgColor] as CFArray
+        if let gradient = CGGradient(colorsSpace: CGColorSpaceCreateDeviceRGB(), colors: colors, locations: [0, 1]),
+           let ctx = UIGraphicsGetCurrentContext() {
+            ctx.drawLinearGradient(gradient, start: CGPoint(x: 0, y: inner.minY + inner.height * 0.62),
+                                   end: CGPoint(x: 0, y: inner.maxY), options: [.drawsBeforeStartLocation, .drawsAfterEndLocation])
+        }
+    }
+
+    static func numeralColor(_ coat: Coat) -> UIColor {
+        switch coat {
+        case .tabby: UIColor(Palette.numeralTabby)
+        case .tuxedo: UIColor(Palette.numeralTuxedo)
+        case .calico: UIColor(Palette.numeralCalico)
+        case .gray: UIColor(Palette.numeralGray)
+        }
+    }
+
+    private static func renderFace(_ card: CardID, compact: Bool) -> UIImage {
+        render(scale: compact ? 0.75 : 1) { _ in
+            drawFace(in: CGRect(origin: .zero, size: cardSize))
             switch Card(id: card) {
             case .yarn:
-                UIImage(named: ArtName.cardYarn)?.draw(in: CGRect(x: 6, y: 19, width: 52, height: 52))
+                UIImage(named: ArtName.cardYarn)?.draw(in: compact ? CGRect(x: 6, y: 6, width: 44, height: 44) : CGRect(x: 8, y: 21, width: 48, height: 48))
             case .cucumber:
-                UIImage(named: ArtName.cardCucumber)?.draw(in: CGRect(x: 6, y: 19, width: 52, height: 52))
+                UIImage(named: ArtName.cardCucumber)?.draw(in: compact ? CGRect(x: 6, y: 6, width: 44, height: 44) : CGRect(x: 8, y: 21, width: 48, height: 48))
             case .number(let value, let coat):
-                // Cat face lower center, numeral top-left, glyph under the numeral.
-                UIImage(named: ArtName.coat(coat))?.draw(in: CGRect(x: 12, y: 36, width: 46, height: 46))
-                drawOutlined(String(value), at: CGPoint(x: 5, y: 2), size: value >= 10 ? 21 : 25,
-                             fill: UIColor(Palette.violet), outline: 3)
-                UIImage(named: ArtName.glyph(coat))?.draw(in: CGRect(x: 7, y: 33, width: 15, height: 15))
+                // Numeral top-left, glyph under it, cat face lower right.
+                let style: IndexStyle = compact ? .compact : .full
+                let text = String(value)
+                let capHeight = drawIndex(text, style: style, fill: numeralColor(coat))
+                let glyphY = style.corner.y + capHeight + indexOutline * 2 + 2
+                if compact {
+                    UIImage(named: ArtName.glyph(coat))?.draw(in: CGRect(x: 8, y: glyphY, width: 15, height: 15))
+                    UIImage(named: ArtName.coat(coat))?.draw(in: CGRect(x: 24, y: 46, width: 34, height: 34))
+                } else {
+                    UIImage(named: ArtName.coat(coat))?.draw(in: CGRect(x: 13, y: 37, width: 44, height: 44))
+                    UIImage(named: ArtName.glyph(coat))?.draw(in: CGRect(x: 8, y: glyphY, width: 14, height: 14))
+                }
             }
         }
     }
 
-    private static func numeralAttributes(size: CGFloat) -> [NSAttributedString.Key: Any] {
+    /// Draws the corner index with its outlined cap top-left at the style's corner; returns
+    /// the cap height.
+    private static func drawIndex(_ text: String, style: IndexStyle, fill: UIColor) -> CGFloat {
+        let size = style.size(text)
+        let font = numeralFont(size: size)
+        let origin = CGPoint(
+            x: style.corner.x + indexOutline,
+            y: style.corner.y + indexOutline - (font.ascender - font.capHeight))
+        drawOutlined(text, at: origin, size: size, fill: fill, outline: indexOutline, kern: style.kern(text))
+        return font.capHeight
+    }
+
+    private static func numeralFont(size: CGFloat) -> UIFont {
         let base = UIFont.systemFont(ofSize: size, weight: .black)
-        let font = base.fontDescriptor.withDesign(.rounded).map { UIFont(descriptor: $0, size: size) } ?? base
-        return [.font: font]
+        return base.fontDescriptor.withDesign(.rounded).map { UIFont(descriptor: $0, size: size) } ?? base
+    }
+
+    private static func numeralAttributes(size: CGFloat) -> [NSAttributedString.Key: Any] {
+        [.font: numeralFont(size: size)]
     }
 
     /// Stroke first (centered on the glyph edge), then the fill on top, so the outline only
     /// grows outward and the numeral keeps its weight.
-    private static func drawOutlined(_ text: String, at origin: CGPoint, size: CGFloat, fill: UIColor, outline: CGFloat) {
+    private static func drawOutlined(
+        _ text: String, at origin: CGPoint, size: CGFloat, fill: UIColor, outline: CGFloat, kern: CGFloat = 0
+    ) {
         var attrs = numeralAttributes(size: size)
+        attrs[.kern] = kern
         attrs[.strokeColor] = UIColor(Palette.ink)
         attrs[.strokeWidth] = outline * 2 / size * 100  // percent of the font size, stroke only
         (text as NSString).draw(at: origin, withAttributes: attrs)
         var fillAttrs = numeralAttributes(size: size)
+        fillAttrs[.kern] = kern
         fillAttrs[.foregroundColor] = fill
         (text as NSString).draw(at: origin, withAttributes: fillAttrs)
     }
