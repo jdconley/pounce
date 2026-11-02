@@ -39,7 +39,12 @@ final class SmokeTests: XCTestCase {
                 .matching(NSPredicate(format: "identifier BEGINSWITH 'table.opponent.' AND value == 'glowing'")).firstMatch
             if cat.exists { cat.tap() }
         }
-        XCTAssertTrue(until(10) { value(turn) == "other" }, "the turn didn't pass: \(String(describing: debug(app)))")
+        // The discard landed: the bot is up, or my next turn already began with a hand back at
+        // 10 (a Cucumber skipped the bot, or its whole turn went by between two queries, each
+        // of which waits for the app to idle).
+        XCTAssertTrue(until(10) {
+            value(turn) == "other" || debug(app).map { $0.step == "draw" && $0.handCount == 10 && $0.settled } ?? false
+        }, "the turn didn't pass: \(String(describing: debug(app)))")
         screenshot(app, "smoke-after-discard")
     }
 }
