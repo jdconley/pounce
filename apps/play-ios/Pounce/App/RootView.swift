@@ -16,8 +16,9 @@ struct RootView: View {
                     insertion: .scale(scale: 0.9).combined(with: .opacity),
                     removal: .opacity))
         }
-        .animation(reduceMotion ? .easeInOut(duration: 0.2) : .spring(duration: 0.45, bounce: 0.3), value: model.route)
+        .animation(reduceMotion ? .easeInOut(duration: 0.2).paced : .spring(duration: 0.45, bounce: 0.3).paced, value: model.route)
         .onChange(of: scenePhase) { _, phase in model.scenePhaseChanged(phase) }
+        .onAppear { Pace.applyToWindows() }
     }
 
     /// Re-creates the screen when the route's case changes (not for every associated value).

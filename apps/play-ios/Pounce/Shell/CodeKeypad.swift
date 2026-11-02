@@ -111,6 +111,6 @@ struct KeyStyle: ButtonStyle {
         .frame(maxWidth: .infinity)
         .frame(height: height + Self.lip)
         .contentShape(Rectangle())
-        .animation(.spring(duration: 0.1, bounce: 0.2), value: configuration.isPressed)
+        .animation(.spring(duration: 0.1, bounce: 0.2).paced, value: configuration.isPressed)
     }
 }

@@ -69,8 +69,8 @@ struct HomeView: View {
                     .transition(.opacity)
             }
         }
-        .animation(.easeOut(duration: 0.25), value: showPriming)
-        .animation(.spring(duration: 0.4, bounce: 0.4), value: showBell)
+        .animation(.easeOut(duration: 0.25).paced, value: showPriming)
+        .animation(.spring(duration: 0.4, bounce: 0.4).paced, value: showBell)
         .task { await model.refreshTables() }
         .task { await checkPush() }
         .onChange(of: scenePhase) { _, phase in
