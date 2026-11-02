@@ -42,6 +42,9 @@ final class TableScene: SKScene {
     /// A tap on the table itself (rug, piles, empty space) while this phone can't act and
     /// holds no card: the shell hides a peeked hand.
     var onTableTap: () -> Void = {}
+    /// The first-game coach's view of the table changed (TableCoach.swift); nil while no hand of
+    /// this phone is face up.
+    var onCoach: (TableCoach?) -> Void = { _ in }
     /// Spotlight and game-over bookkeeping (Celebrations.swift).
     var celebration = CelebrationState()
     #if DEBUG
@@ -124,7 +127,9 @@ final class TableScene: SKScene {
     /// Landed flyers that stand in for the truth until the next reconcile snaps it in.
     var transients: [SKNode] = []
     /// A game intent is animating.
-    private(set) var animating = false
+    private(set) var animating = false {
+        didSet { if animating != oldValue { publishCoach() } }
+    }
     /// The store seq this scene has played or drawn up to.
     private var seenSeq = -1
     /// The store seq the drawn table reflects (`RoomStore.settledSeq` when it was drawn): game
@@ -475,6 +480,7 @@ final class TableScene: SKScene {
             accessibilityVersion += 1
             director.wake()
             director.noteChange()
+            publishCoach()
         }
         // The snap wins: stop director actions on every node this redraw positions.
         for layer in [Layer.background, .rug, .piles, .laidZone, .tower, .opponents, .trays, .hand] {
@@ -655,6 +661,10 @@ final class TableScene: SKScene {
             director.touchEnded()
             inputCancelled()
         }
+    }
+
+    private func publishCoach() {
+        onCoach(coachSnapshot())
     }
 
     /// Asks for a redraw after an input change (selection, trays, order).

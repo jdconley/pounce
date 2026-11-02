@@ -74,7 +74,7 @@ echo "room $CODE (made by a third device)"
 for sim in "$SIM_A" "$SIM_B"; do
   xcrun simctl terminate "$sim" "$BUNDLE" 2>/dev/null || true
   SIMCTL_CHILD_POUNCE_API_BASE_URL="$DEV_SERVER_URL" xcrun simctl launch "$sim" "$BUNDLE" \
-    -open-link "pounce-dev://j/$CODE" >/dev/null
+    -open-link "pounce-dev://j/$CODE" -no-tips >/dev/null
   sleep 4
 done
 sleep 15

@@ -28,6 +28,8 @@ final class MultiSimTests: XCTestCase {
         // same device (Keychain credential) and owner (multi-sim.sh seeds one on each phone).
         let app = XCUIApplication()
         app.launchEnvironment["POUNCE_API_BASE_URL"] = Live.baseURL
+        // A phone's own data may hold first-timers: no coaching bubbles over the taps.
+        app.launchArguments.append("-no-tips")
         // POUNCE_LOG_TIMELINE=1: the table's timeline (shell syncs, reveals) to the unified log.
         if env["POUNCE_LOG_TIMELINE"] == "1" { app.launchArguments.append("-log-timeline") }
         app.launch()

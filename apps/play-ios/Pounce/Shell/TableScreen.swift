@@ -140,8 +140,9 @@ struct ConnectingView: View {
 /// change in the same frame, which once left a seat's turn face down with no curtain. Room and
 /// reveal changes reconcile the scene with the store's `revealed` seat and turn epoch (the scene
 /// also hides a stale reveal by itself, and redraws from the store after every action). Over it:
-/// the scoreboard (tap the tower), the local cats row on a multi-seat phone, the pass-and-play
-/// curtain and, once the scene has played the win, the game-over overlay.
+/// the first-game coach's tips (`CoachMark`), the scoreboard (tap the tower), the local cats row
+/// on a multi-seat phone, the pass-and-play curtain and, once the scene has played the win, the
+/// game-over overlay.
 ///
 /// Privacy: on a multi-seat phone the curtain covers the table whenever `RoomStore.pass` says so,
 /// and stays up after the hold until the scene reports that seat's hand is actually face up
@@ -159,6 +160,8 @@ private struct TableStage: View {
     /// The push priming screen is up (spec §10).
     @State private var priming = false
     @State private var primingChecked = false
+    /// The first-game tips for whoever's hand is face up (each person's first games).
+    @State private var coach = Coach()
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     private var table: TableModel? { session.store.room.map(TableModel.init(room:)) }
@@ -192,6 +195,14 @@ private struct TableStage: View {
         }
     }
 
+    /// The table as the coach should see it: nothing while tips are off, or while the curtain, the
+    /// scoreboard, the menu, the push priming or the game over is up.
+    private var coachView: TableCoach? {
+        guard model.tipsEnabled, curtainSeat == nil, events.scoreboard == nil, events.winners == nil, !priming,
+              !events.menuOpen else { return nil }
+        return events.coach
+    }
+
     var body: some View {
         @Bindable var events = events
         let covered = curtainSeat != nil
@@ -210,6 +221,21 @@ private struct TableStage: View {
                     sync()
                 }
                 .transition(.opacity.combined(with: .scale(scale: 0.8, anchor: .bottom)))
+            }
+            if let tip = coach.tip, let shown = coachView, shown.person.id == coach.person {
+                CoachMark(
+                    tip: tip, coach: shown,
+                    onOK: {
+                        coach.dismiss()
+                        feedCoach(allowNew: false)
+                    },
+                    onOff: {
+                        coach.turnOff()
+                        feedCoach(allowNew: false)
+                    })
+                    .id(tip)
+                    .transition(.scale(scale: 0.85).combined(with: .opacity))
+                    .zIndex(5)
             }
             if let board = events.scoreboard, events.winners == nil, board.game != nil {
                 // The table as the scene drew it when the tower was tapped, not the store's
@@ -272,6 +298,7 @@ private struct TableStage: View {
         .animation(.spring(duration: 0.45, bounce: 0.15), value: curtainSeat)
         .animation(.easeOut(duration: 0.2), value: localCats.map(\.seat))
         .animation(.easeOut(duration: 0.25), value: priming)
+        .animation(.spring(duration: 0.35, bounce: 0.3), value: coach.tip)
         .onAppear(perform: attach)
         .onDisappear { session.detachTable() }
         .onChange(of: StageInput(room: session.store.room, pass: session.store.pass), initial: true) {
@@ -279,6 +306,23 @@ private struct TableStage: View {
             // the scene redraws from the store after every action and hides a stale reveal itself.
             sync()
             checkPriming()
+        }
+        .onChange(of: coachView) { feedCoach(allowNew: false) }
+        // A new tip waits until the table has held still for a moment (and the last tip is gone).
+        .task(id: CoachWait(table: coachView, tip: coach.tip)) {
+            try? await Task.sleep(for: .milliseconds(900))
+            guard !Task.isCancelled else { return }
+            feedCoach(allowNew: true)
+        }
+        .onChange(of: coach.tip) { _, tip in
+            guard let tip, let shown = coachView else { return }
+            Sound.shared.play(ArtName.Sound.sfxPop)
+            let words = CoachCopy.words(tip, shown)
+            UIAccessibility.post(notification: .announcement, argument: "\(words.title). \(words.body)")
+        }
+        .onChange(of: model.tipsReplays) {
+            coach.turnOn()
+            feedCoach(allowNew: true)
         }
         .onChange(of: events.tableTaps) {
             // Tapping away from a peeked hand hides it again.
@@ -317,6 +361,9 @@ private struct TableStage: View {
         scene.onGameOver = { [weak events] seats in events?.winners = seats }
         scene.onShownRevealed = { [weak events] seat in events?.shown = seat }
         scene.onTableTap = { [weak events] in events?.tableTaps += 1 }
+        scene.onCoach = { [weak events] coach in
+            if events?.coach != coach { events?.coach = coach }
+        }
         self.scene = scene
         events.shown = scene.shownRevealed
         sync(scene)
@@ -324,6 +371,15 @@ private struct TableStage: View {
         session.attachTable { [weak scene] intent in
             scene?.enqueue(intent)
         }
+    }
+
+    /// Tells the coach what the table shows now and saves what that person has now seen.
+    private func feedCoach(allowNew: Bool) {
+        let shown = coachView
+        let person = shown?.person.id
+        let seen = person.flatMap { model.tipsSeen[$0] } ?? []
+        let marked = coach.update(shown?.context, seen: seen, allowNew: allowNew && !(shown?.busy ?? true))
+        if let person, !marked.isEmpty { model.markTipsSeen(marked, person: person) }
     }
 
     /// The first time this phone plays with a human on another phone, offer push — unless the
@@ -383,6 +439,12 @@ private struct StageInput: Equatable {
     let pass: PassAndPlay
 }
 
+/// What the coach's settle timer restarts on.
+private struct CoachWait: Equatable {
+    let table: TableCoach?
+    let tip: CoachTip?
+}
+
 /// What the table scene's callbacks set, kept apart from `TableStage` so the scene's closures
 /// can hold it weakly (see `TableStage.attach`).
 @MainActor @Observable
@@ -396,6 +458,8 @@ private final class StageEvents {
     var shown: Seat?
     /// Bumped by a tap on the table itself while this phone can't act.
     var tableTaps = 0
+    /// The scene's view of the face-up hand for the first-game coach.
+    var coach: TableCoach?
 }
 
 /// The small cats of this phone's seats along the bottom, while another seat plays: tap one

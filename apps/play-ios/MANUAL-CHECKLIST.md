@@ -32,6 +32,8 @@ Setup: see "Play on your phone" in `README.md` (`scripts/dev-server.sh`, `script
 - [ ] VoiceOver pass through a full turn: Home, lobby, draw, hit or meld, discard, a Cucumber target,
       round over.
 - [ ] Reduce Motion pass: leaps, sunburst and shakes tone down and nothing is stuck.
+- [ ] First-game tips with a real first-timer: the bubbles read well, point at the right thing, and
+      never get in the way of a move. VoiceOver reads each tip when it appears.
 
 ## Rerun on a quiet Mac
 

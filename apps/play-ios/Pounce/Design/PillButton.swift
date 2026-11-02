@@ -14,10 +14,10 @@ enum PillSize {
     var width: CGFloat { height * 1.6 }
 }
 
-/// A glossy candy pill with an icon (and an optional word beside it), a 6 pt bottom "lip", and a
-/// 4 pt press-down.
+/// A glossy candy pill with an icon (and an optional word beside it, or only a word), a 6 pt
+/// bottom "lip", and a 4 pt press-down.
 struct PillButton: View {
-    let icon: String
+    let icon: String?
     let color: Color
     let size: PillSize
     /// Overrides the size's default width (e.g. full-width CTAs).
@@ -32,7 +32,7 @@ struct PillButton: View {
     let action: () -> Void
 
     init(
-        icon: String, color: Color, size: PillSize = .large, width: CGFloat? = nil, iconOutline: Color? = nil,
+        icon: String?, color: Color, size: PillSize = .large, width: CGFloat? = nil, iconOutline: Color? = nil,
         title: String? = nil, accessibilityLabel: LocalizedStringKey, action: @escaping () -> Void
     ) {
         self.icon = icon
@@ -60,7 +60,7 @@ struct PillButton: View {
 }
 
 private struct PillButtonStyle: ButtonStyle {
-    let icon: String
+    let icon: String?
     let color: Color
     let size: PillSize
     let width: CGFloat?
@@ -98,7 +98,7 @@ private struct PillButtonStyle: ButtonStyle {
                 .overlay(Capsule().strokeBorder(Palette.ink, lineWidth: Self.outline))
                 .overlay {
                     HStack(spacing: h * 0.14) {
-                        glyph(h: h)
+                        if let icon { glyph(icon, h: h) }
                         if let title {
                             OutlinedText(title, size: h * 0.4, width: h * 0.045)
                                 .lineLimit(1)
@@ -117,7 +117,7 @@ private struct PillButtonStyle: ButtonStyle {
     }
 
     /// The icon, with its halo if any.
-    private func glyph(h: CGFloat) -> some View {
+    private func glyph(_ icon: String, h: CGFloat) -> some View {
         ZStack {
             if let iconOutline {
                 // The icon's silhouette, fattened by offset copies: a solid rim.

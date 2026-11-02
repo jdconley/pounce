@@ -66,6 +66,10 @@ then the build setting (Debug: `http://localhost:8787`, optionally overridden by
   a fake socket and canned snapshots, so the real screens render with no server. `-slowmo <factor>`
   runs a demo at that speed. See `Pounce/App/DemoMode.swift` for what each demo shows.
 - `-show-join` opens the Join screen. `-open-link <url>` handles a link as if it was tapped.
+- First-game coaching tips are off under `-uitest-reset` and `-demo` (no bubble over a test's
+  taps); add `-tips` to turn them on there (`TutorialTests`), or `-no-tips` to turn them off on
+  a phone's own data (`MultiSimTests`). Tips seen are kept per person in `tutorial.json`, next to
+  `people.json`; How to play (Home's gear, the table's paw menu) can bring them back.
 - The `pounce-dev://j/<CODE>[?move=<MOVECODE>]` URL scheme is registered in Debug only, for
   `xcrun simctl openurl booted ...` (universal links need the deployed server). Release builds
   never register or accept it.

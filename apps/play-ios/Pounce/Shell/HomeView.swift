@@ -2,7 +2,7 @@ import PounceKit
 import SwiftUI
 
 /// Home: the Cat Tower hero, two fat pills (Create, Join), a row of your tables, the owner's cat
-/// bottom-left (people on this phone) and a small gear (sound, haptics). After a "not now" to
+/// bottom-left (people on this phone) and a small gear (sound, haptics, how to play). After a "not now" to
 /// push, a small bell top-left offers it once more (spec §10).
 struct HomeView: View {
     @Environment(AppModel.self) private var model
@@ -11,6 +11,7 @@ struct HomeView: View {
 
     @State private var showPeople = false
     @State private var showSettings = false
+    @State private var showRules = false
     @State private var heroWiggle = 0
     @State private var ownerWiggle = 0
     @State private var newGameShake = 0
@@ -43,6 +44,13 @@ struct HomeView: View {
                 .environment(model)
                 .presentationDetents([.large])
                 .presentationDragIndicator(.hidden)
+                .presentationBackground(Palette.night)
+        }
+        .sheet(isPresented: $showRules) {
+            HowToPlaySheet { showRules = false }
+                .environment(model)
+                .presentationDetents([.large])
+                .presentationDragIndicator(.visible)
                 .presentationBackground(Palette.night)
         }
         .overlay {
@@ -234,23 +242,38 @@ struct HomeView: View {
     }
 
     private var settingsPopover: some View {
-        HStack(spacing: 16) {
-            PillButton(
-                icon: settings.soundOn ? ArtName.iconSoundOn : ArtName.iconSoundOff,
-                color: settings.soundOn ? Palette.teal : Palette.violet, size: .small,
-                accessibilityLabel: settings.soundOn ? "Sound on" : "Sound off"
-            ) {
-                settings.soundOn.toggle()
+        VStack(spacing: 14) {
+            HStack(spacing: 16) {
+                PillButton(
+                    icon: settings.soundOn ? ArtName.iconSoundOn : ArtName.iconSoundOff,
+                    color: settings.soundOn ? Palette.teal : Palette.violet, size: .small,
+                    accessibilityLabel: settings.soundOn ? "Sound on" : "Sound off"
+                ) {
+                    settings.soundOn.toggle()
+                }
+                .accessibilityIdentifier("settings.sound")
+                PillButton(
+                    icon: settings.hapticsOn ? ArtName.iconHapticsOn : ArtName.iconHapticsOff,
+                    color: settings.hapticsOn ? Palette.orange : Palette.violet, size: .small,
+                    accessibilityLabel: settings.hapticsOn ? "Haptics on" : "Haptics off"
+                ) {
+                    settings.hapticsOn.toggle()
+                }
+                .accessibilityIdentifier("settings.haptics")
             }
-            .accessibilityIdentifier("settings.sound")
             PillButton(
-                icon: settings.hapticsOn ? ArtName.iconHapticsOn : ArtName.iconHapticsOff,
-                color: settings.hapticsOn ? Palette.orange : Palette.violet, size: .small,
-                accessibilityLabel: settings.hapticsOn ? "Haptics on" : "Haptics off"
+                icon: nil, color: Palette.orange, size: .small, width: 156,
+                title: String(localized: "How to play", comment: "Home settings: open the rules"),
+                accessibilityLabel: "How to play"
             ) {
-                settings.hapticsOn.toggle()
+                showSettings = false
+                // The sheet waits for the popover to finish going away.
+                Task {
+                    try? await Task.sleep(for: .milliseconds(350))
+                    showRules = true
+                }
             }
-            .accessibilityIdentifier("settings.haptics")
+            .accessibilityIdentifier("settings.rules")
         }
         .padding(18)
         .background(Palette.night)
