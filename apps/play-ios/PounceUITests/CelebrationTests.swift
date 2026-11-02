@@ -13,6 +13,12 @@ final class CelebrationTests: XCTestCase {
         app.launch()
         let tower = app.descendants(matching: .any)["table.tower"]
         XCTAssertTrue(tower.waitForExistence(timeout: 10))
+        // A fresh simulator has no push answer yet, so the table puts the priming screen up.
+        let notNow = el(app, "priming.notNow")
+        if notNow.waitForExistence(timeout: 2) {
+            dismissPriming(app)
+            XCTAssertTrue(notNow.waitForNonExistence(timeout: 3))
+        }
         // By coordinate: the tower's element starts just past the screen's left edge, XCUITest
         // finds no hit point for it ({-1, -1}), and `tower.tap()` lands nowhere.
         tap(app, tower.frame)

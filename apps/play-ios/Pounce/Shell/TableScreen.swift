@@ -240,7 +240,9 @@ private struct TableStage: View {
             if let board = events.scoreboard, events.winners == nil, board.game != nil {
                 // The table as the scene drew it when the tower was tapped, not the store's
                 // newer truth: no spoiling a round-over still animating.
-                ScoreboardOverlay(model: board) { events.scoreboard = nil }
+                ScoreboardOverlay(model: board, focus: TableScene.bottomSeat(board, revealed: events.shown)) {
+                    events.scoreboard = nil
+                }
                     .transition(.opacity)
             }
             if let seat = curtainSeat {
