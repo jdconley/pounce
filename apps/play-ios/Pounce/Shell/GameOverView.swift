@@ -185,9 +185,13 @@ private struct ConfettiFall: View {
 }
 
 /// The scoreboard (spec §5.7): opened by tapping the tower. Every seat's cat in its ring,
-/// its phase on a gold shelf badge and its score, numbers only. Tap anywhere to close.
+/// its phase on a gold shelf badge and its score, numbers only; under them all ten phases
+/// with everyone's cat on theirs (`PhaseLadderView`), lit for `focus`. It scrolls when it
+/// doesn't fit. Tap anywhere to close.
 struct ScoreboardOverlay: View {
     let model: TableModel
+    /// The seat whose phase is lit: the one this phone shows (whoever is up or revealed).
+    let focus: Seat?
     let onClose: () -> Void
 
     @State private var appeared = false
@@ -196,16 +200,26 @@ struct ScoreboardOverlay: View {
 
     var body: some View {
         ZStack {
-            Palette.night.opacity(0.72)
+            Palette.night.opacity(0.85)
                 .ignoresSafeArea()
-            VStack(spacing: 12) {
-                ForEach(Array(rows.enumerated()), id: \.element) { i, seat in
-                    row(seat)
-                        .offset(x: appeared ? 0 : (i.isMultiple(of: 2) ? -420 : 420))
-                        .animation(.spring(duration: 0.4, bounce: 0.3).delay(Double(i) * 0.04), value: appeared)
+            ScrollView {
+                VStack(spacing: 10) {
+                    ForEach(Array(rows.enumerated()), id: \.element) { i, seat in
+                        row(seat)
+                            .offset(x: appeared ? 0 : (i.isMultiple(of: 2) ? -420 : 420))
+                            .animation(.spring(duration: 0.4, bounce: 0.3).delay(Double(i) * 0.04), value: appeared)
+                    }
+                    PhaseLadderView(ladder: PhaseLadder(model: model, focus: focus), model: model)
+                        .padding(.top, 16)
+                        .offset(y: appeared ? 0 : 120)
+                        .opacity(appeared ? 1 : 0)
+                        .animation(.spring(duration: 0.45, bounce: 0.2).delay(0.12), value: appeared)
                 }
+                .padding(.horizontal, 16)
+                .padding(.vertical, 20)
             }
-            .padding(.horizontal, 28)
+            .scrollBounceBehavior(.basedOnSize)
+            .scrollIndicators(.hidden)
         }
         .contentShape(Rectangle())
         .onTapGesture(perform: onClose)
@@ -228,32 +242,32 @@ struct ScoreboardOverlay: View {
                 Image(ArtName.cat(SeatInfo.catIndex(view), .idle))
                     .resizable()
                     .scaledToFit()
-                    .frame(width: 58, height: 58)
+                    .frame(width: 48, height: 48)
                     .background(Circle().fill(ring.mix(with: .white, by: 0.25)))
                     .overlay(Circle().strokeBorder(Palette.ink, lineWidth: 4))
                 if view?.kind == .bot {
-                    Image(ArtName.badgeBot).resizable().frame(width: 24, height: 24).offset(x: 6, y: -4)
+                    Image(ArtName.badgeBot).resizable().frame(width: 22, height: 22).offset(x: 6, y: -4)
                 }
                 if model.game?.winners.contains(seat) == true {
-                    Image(ArtName.crown).resizable().scaledToFit().frame(width: 34).offset(x: -12, y: -16)
+                    Image(ArtName.crown).resizable().scaledToFit().frame(width: 30).offset(x: -10, y: -14)
                 }
             }
             ZStack {
                 Image(ArtName.shelfBadge)
                     .resizable()
-                    .frame(width: 52, height: 52)
+                    .frame(width: 44, height: 44)
                 if phase >= TableLayout.shelfCount {
-                    Image(ArtName.iconTrophy).resizable().scaledToFit().frame(width: 28, height: 28).offset(y: 3)
+                    Image(ArtName.iconTrophy).resizable().scaledToFit().frame(width: 24, height: 24).offset(y: 3)
                 } else {
-                    OutlinedText(String(phase + 1), size: 24, fill: Palette.orange, width: 3)
+                    OutlinedText(String(phase + 1), size: 20, fill: Palette.orange, width: 3)
                         .offset(y: 3)
                 }
             }
             Spacer(minLength: 8)
-            OutlinedText(String(score), size: 38, fill: .white, width: 4)
+            OutlinedText(String(score), size: 32, fill: .white, width: 4)
         }
         .padding(.horizontal, 16)
-        .padding(.vertical, 8)
+        .padding(.vertical, 6)
         .background(
             Capsule()
                 .fill(LinearGradient(

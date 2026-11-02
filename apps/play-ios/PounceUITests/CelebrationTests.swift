@@ -7,12 +7,19 @@ final class CelebrationTests: XCTestCase {
         continueAfterFailure = false
     }
 
+    @MainActor
     func testTowerOpensScoreboard() throws {
         let app = XCUIApplication()
         app.launchArguments = ["-demo", "table"]
         app.launch()
         let tower = app.descendants(matching: .any)["table.tower"]
         XCTAssertTrue(tower.waitForExistence(timeout: 10))
+        // A fresh simulator has no push answer yet, so the table puts the priming screen up.
+        let notNow = el(app, "priming.notNow")
+        if notNow.waitForExistence(timeout: 2) {
+            dismissPriming(app)
+            XCTAssertTrue(notNow.waitForNonExistence(timeout: 3))
+        }
         tower.tap()
         let board = app.descendants(matching: .any)["scoreboard"]
         XCTAssertTrue(board.waitForExistence(timeout: 3))
