@@ -14,7 +14,8 @@ enum PillSize {
     var width: CGFloat { height * 1.6 }
 }
 
-/// A glossy candy pill with an icon, a 6 pt bottom "lip", and a 4 pt press-down.
+/// A glossy candy pill with an icon (and an optional word beside it), a 6 pt bottom "lip", and a
+/// 4 pt press-down.
 struct PillButton: View {
     let icon: String
     let color: Color
@@ -24,18 +25,22 @@ struct PillButton: View {
     /// A halo of this color around the icon, for an icon that would blend into the pill (the
     /// gold play icon on the orange start pill).
     let iconOutline: Color?
+    /// A word in toy lettering after the icon ("Create", "Join"), for a pill whose icon alone
+    /// isn't obvious.
+    let title: String?
     let accessibilityLabel: LocalizedStringKey
     let action: () -> Void
 
     init(
         icon: String, color: Color, size: PillSize = .large, width: CGFloat? = nil, iconOutline: Color? = nil,
-        accessibilityLabel: LocalizedStringKey, action: @escaping () -> Void
+        title: String? = nil, accessibilityLabel: LocalizedStringKey, action: @escaping () -> Void
     ) {
         self.icon = icon
         self.color = color
         self.size = size
         self.width = width
         self.iconOutline = iconOutline
+        self.title = title
         self.accessibilityLabel = accessibilityLabel
         self.action = action
     }
@@ -48,7 +53,8 @@ struct PillButton: View {
         } label: {
             EmptyView()
         }
-        .buttonStyle(PillButtonStyle(icon: icon, color: color, size: size, width: width, iconOutline: iconOutline))
+        .buttonStyle(
+            PillButtonStyle(icon: icon, color: color, size: size, width: width, iconOutline: iconOutline, title: title))
         .accessibilityLabel(accessibilityLabel)
     }
 }
@@ -59,6 +65,7 @@ private struct PillButtonStyle: ButtonStyle {
     let size: PillSize
     let width: CGFloat?
     let iconOutline: Color?
+    let title: String?
 
     static let lip: CGFloat = 6
     static let press: CGFloat = 4
@@ -90,26 +97,16 @@ private struct PillButtonStyle: ButtonStyle {
                 }
                 .overlay(Capsule().strokeBorder(Palette.ink, lineWidth: Self.outline))
                 .overlay {
-                    ZStack {
-                        if let iconOutline {
-                            // The icon's silhouette, fattened by offset copies: a solid rim.
-                            ForEach(0..<8, id: \.self) { i in
-                                let angle = Double(i) * .pi / 4
-                                Image(icon)
-                                    .resizable()
-                                    .renderingMode(.template)
-                                    .scaledToFit()
-                                    .foregroundStyle(iconOutline)
-                                    .offset(x: cos(angle) * 3.5, y: sin(angle) * 3.5)
-                            }
+                    HStack(spacing: h * 0.14) {
+                        glyph(h: h)
+                        if let title {
+                            OutlinedText(title, size: h * 0.4, width: h * 0.045)
+                                .lineLimit(1)
+                                .minimumScaleFactor(0.6)
+                                .accessibilityHidden(true)
                         }
-                        Image(icon)
-                            .resizable()
-                            .scaledToFit()
                     }
-                    .frame(height: h * 0.58)
-                    .compositingGroup()
-                    .shadow(color: Palette.ink.opacity(0.5), radius: 0, x: 0, y: 2)
+                    .padding(.horizontal, h * 0.22)
                 }
                 .frame(width: w, height: h)
                 .offset(y: travel)
@@ -117,6 +114,30 @@ private struct PillButtonStyle: ButtonStyle {
         .frame(width: w, height: h + Self.lip)
         .contentShape(Rectangle())
         .animation(.spring(duration: 0.12, bounce: 0.2), value: configuration.isPressed)
+    }
+
+    /// The icon, with its halo if any.
+    private func glyph(h: CGFloat) -> some View {
+        ZStack {
+            if let iconOutline {
+                // The icon's silhouette, fattened by offset copies: a solid rim.
+                ForEach(0..<8, id: \.self) { i in
+                    let angle = Double(i) * .pi / 4
+                    Image(icon)
+                        .resizable()
+                        .renderingMode(.template)
+                        .scaledToFit()
+                        .foregroundStyle(iconOutline)
+                        .offset(x: cos(angle) * 3.5, y: sin(angle) * 3.5)
+                }
+            }
+            Image(icon)
+                .resizable()
+                .scaledToFit()
+        }
+        .frame(width: h * 0.58, height: h * 0.58)
+        .compositingGroup()
+        .shadow(color: Palette.ink.opacity(0.5), radius: 0, x: 0, y: 2)
     }
 }
 

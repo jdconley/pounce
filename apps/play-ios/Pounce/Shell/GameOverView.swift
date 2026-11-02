@@ -54,12 +54,20 @@ struct GameOverView: View {
                 }
                 .frame(height: 360)
                 Spacer()
-                HStack(spacing: 22) {
-                    PillButton(icon: ArtName.iconHome, color: Palette.orange, size: .large, accessibilityLabel: "Home") {
+                HStack(spacing: 18) {
+                    PillButton(
+                        icon: ArtName.iconHome, color: Palette.orange, size: .large, width: 176,
+                        title: String(localized: "Home", comment: "Game over: the pill back to Home"),
+                        accessibilityLabel: "Home"
+                    ) {
                         onHome()
                     }
                     .accessibilityIdentifier("gameover.home")
-                    PillButton(icon: ArtName.iconPlus, color: Palette.magenta, size: .large, accessibilityLabel: "New game") {
+                    PillButton(
+                        icon: ArtName.iconPlus, color: Palette.magenta, size: .large, width: 176,
+                        title: String(localized: "Create", comment: "Game over: the pill that starts a new game"),
+                        accessibilityLabel: "Create a game"
+                    ) {
                         onNewGame()
                     }
                     .accessibilityIdentifier("gameover.new")
