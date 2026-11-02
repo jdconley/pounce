@@ -34,6 +34,22 @@ struct TableLayoutTests {
         let huge = TableLayout(size: CGSize(width: 600, height: 900), safeTop: 20, safeBottom: 0, opponents: 2)
         #expect(huge.cardSize.width == 76)
         #expect(a.miniCardSize.width < a.cardSize.width)
+        // Laid cards never shrink below 41 pt wide (two-digit numerals keep an 11 pt cap).
+        forEachLayout { l, _, _ in #expect(l.miniCardSize.width >= 41) }
+        // A scene before its first size.
+        #expect(TableLayout(size: .zero, safeTop: 0, safeBottom: 0, opponents: 1).laidRow(slot: 0, of: 2).height > 0)
+    }
+
+    @Test func smallTablesGetFullWidthLaidRows() {
+        forEachLayout { l, _, _ in
+            for total in 1...3 {
+                for slot in 0..<total {
+                    #expect(l.laidRow(slot: slot, of: total).width == l.laidZone.width)
+                }
+            }
+            // Six seats never fit a row each: two columns, none cut short by the sort button.
+            for slot in 0..<6 { #expect(l.laidRow(slot: slot, of: 6).width == (l.laidZone.width - 8) / 2) }
+        }
     }
 
     @Test func everyPointInsideTheScene() {
@@ -154,7 +170,7 @@ struct TableLayoutTests {
             let rows = (0..<total).map { l.laidRow(slot: $0, of: total) }
             var regions: [(String, CGRect)] = [
                 ("deck", deck), ("discard", discard), ("tower", l.towerFrame),
-                ("trays", l.traysFrame), ("bar", l.opponentsBar),
+                ("trays", l.traysFrame), ("bar", l.opponentsBar), ("sort", l.sortButtonFrame),
             ]
             for (i, r) in rows.enumerated() { regions.append(("row\(i)", r)); #expect(l.laidZone.contains(r)) }
             #expect(l.laidZone.contains(deck) && l.laidZone.contains(discard))

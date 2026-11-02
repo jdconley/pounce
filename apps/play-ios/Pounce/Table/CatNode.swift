@@ -214,7 +214,8 @@ final class CatNode: SKNode {
             return
         }
         bubble.isHidden = false
-        let t = CardFaceFactory.shared.numeral(String(count), size: 15 * diameter / 72)
+        // Never under an 11 pt cap height, however many cats share the bar.
+        let t = CardFaceFactory.shared.numeral(String(count), size: max(16 * diameter / 72, 16))
         bubbleNumber.texture = t
         bubbleNumber.size = t.size()
     }

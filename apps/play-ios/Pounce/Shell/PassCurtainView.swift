@@ -242,7 +242,7 @@ private struct CardBacksPeek: View {
         let cardH = cardW * 90 / 64
         HStack(spacing: -cardW * 0.18) {
             ForEach(0..<5, id: \.self) { i in
-                Image(ArtName.cardBack)
+                Image(uiImage: CardFaceFactory.backImage)
                     .resizable()
                     .scaledToFit()
                     .frame(width: cardW, height: cardH)

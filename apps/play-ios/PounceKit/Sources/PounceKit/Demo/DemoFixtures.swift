@@ -53,6 +53,32 @@ public enum DemoFixtures {
         return RoomView(code: code, status: .playing, youAreHost: me == 0, seats: seatViews, game: game)
     }
 
+    /// The busiest table the laid zone draws: six seats, every other seat laid down, with a
+    /// twelve-card run, five-card sets and two-digit numbers (the DEBUG `-demo crowded`
+    /// screen, for checking that laid cards stay readable on small phones).
+    public static func crowded() -> RoomView {
+        var room = table(seats: 6, mySeat: 0, phase: 2)
+        let laid: [[Group]] = [
+            [.run(cards: [id(1, .calico), id(2, .tabby), id(3, .gray), id(4, .tuxedo), 97, id(6, .calico),
+                          id(7, .tabby), id(8, .tuxedo), id(9, .calico), id(10, .gray), id(11, .calico), id(12, .gray)],
+                  start: 1, end: 12)],
+            [.set(cards: [id(11, .tabby), id2(11, .tabby), id2(11, .tuxedo), id2(11, .calico), id(11, .gray)], value: 11),
+             .set(cards: [id(12, .tuxedo), id2(12, .tuxedo), id(12, .calico)], value: 12)],
+            [.coat(cards: [id2(1, .tuxedo), id2(3, .tuxedo), id2(4, .tuxedo), id(5, .tuxedo), id2(6, .tuxedo),
+                           id2(9, .tuxedo), id2(10, .tuxedo)], coat: .tuxedo)],
+            [.set(cards: [id(10, .tabby), id2(10, .tabby), id(10, .calico), id2(10, .gray)], value: 10),
+             .run(cards: [id(3, .tabby), id(4, .tabby), id(5, .tabby), id(6, .tabby)], start: 3, end: 6)],
+            [.set(cards: [id(8, .tabby), id2(8, .tabby), id(8, .calico), id2(8, .gray)], value: 8),
+             .set(cards: [id(9, .tabby), id2(9, .tabby), id(9, .gray), id2(9, .gray)], value: 9)],
+        ]
+        room.game!.laid = [nil] + laid
+        room.game!.phase = [2, 5, 9, 7, 2, 6]
+        room.game!.handCounts = [myHand.count, 1, 2, 3, 2, 2]
+        room.game!.pendingSkip = Array(repeating: false, count: 6)
+        balance(&room.game!)
+        return room
+    }
+
     /// The lobby before a game: me (host), a friend on another phone, a bot, an
     /// open seat and two closed ones.
     public static func lobby() -> RoomView {

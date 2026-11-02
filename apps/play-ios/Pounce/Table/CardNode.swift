@@ -1,21 +1,27 @@
 import PounceKit
 import SpriteKit
 
-/// One card: a composited face, or the back when `card` is nil. Sized by the caller (hand,
-/// pile and laid rows draw the same texture at different sizes).
+/// One card: a composited face, or the back when `card` is nil. Sized by the caller; cards
+/// drawn small (laid groups, trays) use the compact face so the numeral stays readable.
 @MainActor
 final class CardNode: SKSpriteNode {
     private(set) var card: CardID?
     /// A face only its hand's seat may see (a drawn card in flight, a move not yet accepted):
     /// turned face down when the scene hides that hand.
     var isPrivate = false
+    /// Shows the compact face (bigger corner index, smaller cat).
+    var compact: Bool {
+        didSet {
+            if compact != oldValue { texture = Self.texture(card, compact: compact) }
+        }
+    }
     private let shadow: SKSpriteNode
 
-    init(card: CardID?, size: CGSize = CardFaceFactory.cardSize, shadow hasShadow: Bool = true) {
+    init(card: CardID?, size: CGSize = CardFaceFactory.cardSize, shadow hasShadow: Bool = true, compact: Bool = false) {
         self.card = card
+        self.compact = compact
         shadow = SKSpriteNode(texture: TableArt.cards(ArtName.cardShadow))
-        let texture = card.map { CardFaceFactory.shared.texture(for: $0) } ?? CardFaceFactory.shared.back()
-        super.init(texture: texture, color: .clear, size: size)
+        super.init(texture: Self.texture(card, compact: compact), color: .clear, size: size)
         shadow.zPosition = -0.05  // between this card and the one under it
         shadow.isHidden = !hasShadow
         addChild(shadow)
@@ -33,7 +39,11 @@ final class CardNode: SKSpriteNode {
     func setCard(_ card: CardID?) {
         guard card != self.card else { return }
         self.card = card
-        texture = card.map { CardFaceFactory.shared.texture(for: $0) } ?? CardFaceFactory.shared.back()
+        texture = Self.texture(card, compact: compact)
+    }
+
+    private static func texture(_ card: CardID?, compact: Bool) -> SKTexture {
+        card.map { CardFaceFactory.shared.texture(for: $0, compact: compact) } ?? CardFaceFactory.shared.back()
     }
 
     /// card-glow is 88x114 around a 64x90 card.
