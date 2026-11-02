@@ -283,6 +283,7 @@ extension TableScene {
     /// will draw them, each landing with a squash, a few stars and a pop.
     private func animateLayDown(seat: Seat, groups: [Group]) async {
         guard let layout, let game = model?.game else { return }
+        let fx = self.fx
         let cards = groups.flatMap(\.cards)
         let targets = laidZone.landing(groups: groups, seat: seat, total: game.laid.count, layout: layout)
             .flatMap { $0 }.map { fx.convert($0, from: laidZone.parent ?? self) }
@@ -306,7 +307,6 @@ extension TableScene {
         if mine, !trays.isHidden { trays.show(trayState, hidden: Set(cards), targets: false) }
 
         let director = director
-        let fx = self.fx
         var items: [(SKAction, SKNode)] = []
         var nodes: [CardNode] = []
         for (i, card) in cards.enumerated() where i < targets.count {
