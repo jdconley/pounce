@@ -162,7 +162,8 @@ outside the repo). `ExportOptions.plist` selects `app-store-connect`, destinatio
 custom URL scheme.
 
 CI does this for you. `.github/workflows/ios.yml` runs the PounceKit tests and an unsigned Release
-build on every pull request that touches `apps/play-ios`, and on each such push to `main` it runs
+build on every pull request (`build` is a required check on `main`), and on each push to `main` that
+touches `apps/play-ios` it runs
 `scripts/testflight.sh` with an App Store Connect API key (Admin role, so Xcode can manage signing).
 It needs the repository secrets `ASC_KEY_ID`, `ASC_ISSUER_ID` and `ASC_KEY_P8` (the `.p8` file's
 contents); until they exist the upload is skipped with a notice. To upload without a code change, run
