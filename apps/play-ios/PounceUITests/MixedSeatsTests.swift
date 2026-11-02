@@ -84,10 +84,10 @@ final class MixedSeatsTests: XCTestCase {
             }
             if sawAway, text.contains("awake") { sawAwakeAfterAway = true }
         }
-        // One whole-app snapshot per poll, every 2 s (see `playTurnByTaps`).
+        // One whole-app snapshot per poll, every 2 s at normal speed (see `playTurnByTaps`).
         while Date() < deadline {
             guard let snap = UISnap(app) else {
-                Thread.sleep(forTimeInterval: 2)
+                Thread.sleep(forTimeInterval: Live.poll(2))
                 continue
             }
             if snap.exists("priming.notNow") {
@@ -96,12 +96,12 @@ final class MixedSeatsTests: XCTestCase {
             }
             if let name = holdCurtain(app, snap) {
                 curtainNames.insert(name)
-                Thread.sleep(forTimeInterval: 1)
+                Thread.sleep(forTimeInterval: Live.pace(1))
                 continue
             }
             watchRemote(snap)
             guard let d = snap.debug else {
-                Thread.sleep(forTimeInterval: 2)
+                Thread.sleep(forTimeInterval: Live.poll(2))
                 continue
             }
             if firstRound == 0 { firstRound = d.round }
@@ -148,7 +148,7 @@ final class MixedSeatsTests: XCTestCase {
                     screenshot(app, "mixed-after-background")
                 }
             } else {
-                Thread.sleep(forTimeInterval: 2)
+                Thread.sleep(forTimeInterval: Live.poll(2))
             }
         }
         screenshot(app, "mixed-end")

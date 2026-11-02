@@ -42,10 +42,10 @@ final class PhoneGameTests: XCTestCase {
 
         var turns = 0, rounds = Set<Int>()
         let deadline = Date().addingTimeInterval(Live.t(4 * 3600))
-        // One whole-app snapshot per poll, every 2 s (see `playTurnByTaps`).
+        // One whole-app snapshot per poll, every 2 s at normal speed (see `playTurnByTaps`).
         while Date() < deadline {
             guard let snap = UISnap(app) else {
-                Thread.sleep(forTimeInterval: 2)
+                Thread.sleep(forTimeInterval: Live.poll(2))
                 continue
             }
             if snap.exists("gameover.home") { break }
@@ -60,7 +60,7 @@ final class PhoneGameTests: XCTestCase {
             if playTurnByTaps(app, snap) {
                 turns += 1
             } else {
-                Thread.sleep(forTimeInterval: 2)
+                Thread.sleep(forTimeInterval: Live.poll(2))
             }
         }
         XCTAssertTrue(el(app, "gameover.home").waitForExistence(timeout: Live.t(30)),

@@ -102,8 +102,8 @@ final class AnimationDirector {
         wake()
     }
 
-    /// Adds `emitter` at `point` in `parent` for `lifetime` seconds of rendered time, then
-    /// removes it and calls `onEnd`.
+    /// Adds `emitter` at `point` in `parent` for `lifetime` seconds of rendered time (at the
+    /// parent's speed, like an action), then removes it and calls `onEnd`.
     func emit(
         _ emitter: SKEmitterNode, at point: CGPoint, in parent: SKNode, lifetime: TimeInterval,
         onEnd: (() -> Void)? = nil
@@ -112,7 +112,7 @@ final class AnimationDirector {
             onEnd?()
             return
         }
-        let token = gate.begin(duration: lifetime, grace: 0)
+        let token = gate.begin(duration: lifetime / Self.effectiveSpeed(parent), grace: 0)
         emitter.position = point
         parent.addChild(emitter)
         pending[token] = Pending(node: emitter, key: "", decorative: true) {

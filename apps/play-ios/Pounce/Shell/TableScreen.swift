@@ -81,8 +81,8 @@ struct TableScreen: View {
                     .transition(.scale.combined(with: .opacity))
             }
         }
-        .animation(.spring(duration: 0.4, bounce: 0.25), value: screen)
-        .animation(.spring(duration: 0.3), value: reconnecting)
+        .animation(.spring(duration: 0.4, bounce: 0.25).paced, value: screen)
+        .animation(.spring(duration: 0.3).paced, value: reconnecting)
         .onChange(of: session.model?.mySeats ?? []) { before, after in
             // This phone's last seat left while it held a move code: the move went through
             // (spec §5.11). Home, not the "full" card. The menu sheet is gone with the table.
@@ -293,12 +293,12 @@ private struct TableStage: View {
                     .zIndex(20)
             }
         }
-        .animation(.easeOut(duration: 0.2), value: events.scoreboard != nil)
-        .animation(.easeOut(duration: 0.3), value: events.winners)
-        .animation(.spring(duration: 0.45, bounce: 0.15), value: curtainSeat)
-        .animation(.easeOut(duration: 0.2), value: localCats.map(\.seat))
-        .animation(.easeOut(duration: 0.25), value: priming)
-        .animation(.spring(duration: 0.35, bounce: 0.3), value: coach.tip)
+        .animation(.easeOut(duration: 0.2).paced, value: events.scoreboard != nil)
+        .animation(.easeOut(duration: 0.3).paced, value: events.winners)
+        .animation(.spring(duration: 0.45, bounce: 0.15).paced, value: curtainSeat)
+        .animation(.easeOut(duration: 0.2).paced, value: localCats.map(\.seat))
+        .animation(.easeOut(duration: 0.25).paced, value: priming)
+        .animation(.spring(duration: 0.35, bounce: 0.3).paced, value: coach.tip)
         .onAppear(perform: attach)
         .onDisappear { session.detachTable() }
         .onChange(of: StageInput(room: session.store.room, pass: session.store.pass), initial: true) {
@@ -310,7 +310,7 @@ private struct TableStage: View {
         .onChange(of: coachView) { feedCoach(allowNew: false) }
         // A new tip waits until the table has held still for a moment (and the last tip is gone).
         .task(id: CoachWait(table: coachView, tip: coach.tip)) {
-            try? await Task.sleep(for: .milliseconds(900))
+            try? await Task.sleep(for: Pace.duration(.milliseconds(900)))
             guard !Task.isCancelled else { return }
             feedCoach(allowNew: true)
         }

@@ -51,7 +51,7 @@ struct HowToPlaySheet: View {
                 accessibilityLabel: "Show the tips again"
             ) {
                 model.replayTips()
-                withAnimation(.spring(duration: 0.3)) { replayed = true }
+                withAnimation(.spring(duration: 0.3).paced) { replayed = true }
             }
             .accessibilityIdentifier("rules.replay")
             if replayed {

@@ -113,7 +113,7 @@ private struct PillButtonStyle: ButtonStyle {
         }
         .frame(width: w, height: h + Self.lip)
         .contentShape(Rectangle())
-        .animation(.spring(duration: 0.12, bounce: 0.2), value: configuration.isPressed)
+        .animation(.spring(duration: 0.12, bounce: 0.2).paced, value: configuration.isPressed)
     }
 
     /// The icon, with its halo if any.

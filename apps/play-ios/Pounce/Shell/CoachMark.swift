@@ -43,7 +43,7 @@ struct CoachMark: View {
         }
         .onAppear {
             guard !reduceMotion else { return }
-            withAnimation(.easeInOut(duration: 0.7).repeatForever(autoreverses: true)) { pulse = true }
+            withAnimation(.easeInOut(duration: 0.7).repeatForever(autoreverses: true).paced) { pulse = true }
         }
     }
 

@@ -41,7 +41,7 @@ final class TutorialTests: XCTestCase {
         while Date() < deadline {
             if roundOver, shown.count == 2, turns.values.count == 2, turns.values.allSatisfy({ $0 >= 3 }) { break }
             guard let snap = UISnap(app) else {
-                Thread.sleep(forTimeInterval: 2)
+                Thread.sleep(forTimeInterval: Live.poll(2))
                 continue
             }
             if let tip = snap.value("coach.tip") {
@@ -56,7 +56,7 @@ final class TutorialTests: XCTestCase {
                     XCTAssertTrue(text.contains(who), "the goal tip isn't for \(who): \(text)")
                     XCTAssertEqual(shown[who]?.first, "goal", "\(who)'s first tip wasn't the goal: \(shown)")
                 }
-                Thread.sleep(forTimeInterval: 1)  // the bubble springs in
+                Thread.sleep(forTimeInterval: Live.pace(1))  // the bubble springs in
                 if screenshotted.insert(tip).inserted { screenshot(app, "tip-\(tip)") }
                 guard let ok = (UISnap(app) ?? snap).frame("coach.ok") else { continue }
                 tap(app, ok)
@@ -72,7 +72,7 @@ final class TutorialTests: XCTestCase {
             if let name = holdCurtain(app, snap) {
                 holder = name
                 acted = false
-                Thread.sleep(forTimeInterval: 1)
+                Thread.sleep(forTimeInterval: Live.pace(1))
                 continue
             }
             if let d = snap.debug {
@@ -81,31 +81,31 @@ final class TutorialTests: XCTestCase {
             }
             guard let d = snap.debug, snap.value("table.turn") == "mine", d.settled, d.status == "playing",
                   let first = snap.label("table.hand.0"), first != "Card" else {
-                Thread.sleep(forTimeInterval: 2)
+                Thread.sleep(forTimeInterval: Live.poll(2))
                 continue
             }
             if d.step == "draw", let deck = snap.frame("table.deck") {
                 // Give a tip a moment to come up before acting (one appears ~1 s after the table settles).
                 if !acted {
                     acted = true
-                    Thread.sleep(forTimeInterval: 2.5)
+                    Thread.sleep(forTimeInterval: Live.pace(2.5))
                     continue
                 }
                 tap(app, deck)
                 acted = false
-                Thread.sleep(forTimeInterval: 2)
+                Thread.sleep(forTimeInterval: Live.poll(2))
             } else if d.step == "play" {
                 // Every move waits for the table to settle first, so a tip it brings on shows.
                 if !acted {
                     acted = true
-                    Thread.sleep(forTimeInterval: 2.5)
+                    Thread.sleep(forTimeInterval: Live.pace(2.5))
                     continue
                 }
                 acted = false
                 if playOneMove(app, snap, handCount: d.handCount, laid: d.laid), let holder {
                     turns[holder, default: 0] += 1
                 }
-                Thread.sleep(forTimeInterval: 1.5)
+                Thread.sleep(forTimeInterval: Live.pace(1.5))
             }
         }
         let summary = "tips by person \(shown), turns \(turns)"
@@ -180,7 +180,7 @@ final class TutorialTests: XCTestCase {
         func pick(_ id: String, then target: CGRect) {
             guard let card = snap.frame(id) else { return }
             tap(app, card)
-            Thread.sleep(forTimeInterval: 0.6)
+            Thread.sleep(forTimeInterval: Live.pace(0.6))
             tap(app, target)
         }
         if let layDown = snap.frame("table.laydown") {
@@ -208,7 +208,7 @@ final class TutorialTests: XCTestCase {
         guard let pile = snap.frame("table.discard") else { return false }
         if let cucumber = hand.first(where: { $0.face == .cucumber }), let card = snap.frame(cucumber.id) {
             tap(app, card)
-            Thread.sleep(forTimeInterval: 1)
+            Thread.sleep(forTimeInterval: Live.pace(1))
             if let cat = UISnap(app)?.items.first(where: { $0.key.hasPrefix("table.opponent.") && $0.value.value == "glowing" }) {
                 tap(app, cat.value.frame)
             } else {

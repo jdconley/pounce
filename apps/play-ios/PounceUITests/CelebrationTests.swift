@@ -7,13 +7,15 @@ final class CelebrationTests: XCTestCase {
         continueAfterFailure = false
     }
 
+    @MainActor
     func testTowerOpensScoreboard() throws {
-        let app = XCUIApplication()
-        app.launchArguments = ["-demo", "table"]
+        let app = Live.demo("table")
         app.launch()
         let tower = app.descendants(matching: .any)["table.tower"]
         XCTAssertTrue(tower.waitForExistence(timeout: 10))
-        tower.tap()
+        // By coordinate: the tower's element starts just past the screen's left edge, XCUITest
+        // finds no hit point for it ({-1, -1}), and `tower.tap()` lands nowhere.
+        tap(app, tower.frame)
         let board = app.descendants(matching: .any)["scoreboard"]
         XCTAssertTrue(board.waitForExistence(timeout: 3))
         XCTAssertTrue(app.descendants(matching: .any)["scoreboard.0"].exists)
@@ -27,9 +29,9 @@ final class CelebrationTests: XCTestCase {
         wait(for: [gone], timeout: 3)
     }
 
+    @MainActor
     func testCelebrateEndsOnGameOverWithTheTablePaused() throws {
-        let app = XCUIApplication()
-        app.launchArguments = ["-demo", "celebrate"]
+        let app = Live.demo("celebrate")
         app.launch()
         let home = app.descendants(matching: .any)["gameover.home"]
         XCTAssertTrue(home.waitForExistence(timeout: 45))

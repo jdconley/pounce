@@ -50,7 +50,13 @@ afterEach(async () => {
  * `onTestFinished`, so one test's cleanup cannot dispose another's worker.
  */
 function worker(
-  options: { secret?: string | null; testflight?: string; persist?: string; onFinished?: (fn: () => Promise<void>) => void } = {},
+  options: {
+    secret?: string | null;
+    testflight?: string;
+    persist?: string;
+    devSpeed?: string;
+    onFinished?: (fn: () => Promise<void>) => void;
+  } = {},
 ): Miniflare {
   const secret = options.secret === undefined ? SECRET : options.secret;
   const mf = new Miniflare({
@@ -64,6 +70,7 @@ function worker(
     bindings: {
       ...(secret === null ? {} : { TOKEN_SECRET: secret }),
       ...(options.testflight ? { TESTFLIGHT_URL: options.testflight } : {}),
+      ...(options.devSpeed ? { DEV_SPEED: options.devSpeed } : {}),
     },
     ...(options.persist ? { durableObjectsPersist: options.persist } : {}),
   });
@@ -258,6 +265,9 @@ describe("worker", { timeout: 20_000 }, () => {
 
     const bare = await worker({ secret: null }).dispatchFetch(`${BASE}/healthz`);
     expect(await bare.json()).toEqual({ ok: true, service: "play-api", configured: false });
+
+    const fast = await worker({ devSpeed: "10" }).dispatchFetch(`${BASE}/healthz`);
+    expect(await fast.json()).toEqual({ ok: true, service: "play-api", configured: true, speed: 10 });
   });
 
   test("universal links: the association file and the share page need no token", async () => {
