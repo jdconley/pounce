@@ -79,4 +79,58 @@ import Testing
             entries: [entry("ODD11", "playing")], cache: ["ODD11": cached("ODD11", turn: 9)], now: now)
         #expect(items[0].turnCat == nil)
     }
+
+    // MARK: archive
+
+    @Test func archivedTablesLeaveHomeForTheArchivedList() {
+        let entries = [
+            entry("KEEP1", "playing", ago: hour), entry("HIDE1", "playing", ago: 2 * hour),
+            entry("HIDE2", "lobby", ago: 3 * hour),
+        ]
+        let archived = ["HIDE1": nowMs - 2 * hour, "HIDE2": nowMs - 3 * hour]
+        #expect(HomeTables.merge(entries: entries, cache: [:], archived: archived, now: now).map(\.id) == ["KEEP1"])
+        #expect(
+            HomeTables.archivedItems(entries: entries, cache: [:], archived: archived, now: now).map(\.id)
+                == ["HIDE1", "HIDE2"])
+    }
+
+    @Test func aTableArchivedOnYourTurnStaysArchivedUntilSomeoneMoves() {
+        let untouched = entry("MINE1", "playing", turn: true, ago: hour)
+        #expect(HomeTables.isArchived(untouched, mark: untouched.updatedAt))
+        let moved = entry("MINE1", "playing", turn: true, ago: 0)
+        #expect(!HomeTables.isArchived(moved, mark: untouched.updatedAt))
+    }
+
+    @Test func aNewTurnForYouBringsATableBack() {
+        let mark = nowMs - 2 * hour
+        let items = HomeTables.merge(
+            entries: [entry("BACK1", "playing", turn: true, ago: hour)], cache: [:],
+            archived: ["BACK1": mark], now: now)
+        #expect(items.map(\.id) == ["BACK1"])
+        #expect(HomeTables.archivedItems(
+            entries: [entry("BACK1", "playing", turn: true, ago: hour)], cache: [:],
+            archived: ["BACK1": mark], now: now).isEmpty)
+    }
+
+    @Test func otherPlayersMovesAndTheEndDoNotBringATableBack() {
+        let mark = nowMs - 5 * hour
+        #expect(HomeTables.isArchived(entry("PLAY1", "playing", ago: hour), mark: mark))
+        #expect(HomeTables.isArchived(entry("DONE1", "over", turn: true, ago: hour), mark: mark))
+        #expect(HomeTables.isArchived(entry("LOBB1", "lobby", ago: hour), mark: mark))
+    }
+
+    @Test func oldFinishedTablesLeaveTheArchivedListToo() {
+        let items = HomeTables.archivedItems(
+            entries: [entry("OLD11", "over", ago: 25 * hour), entry("NEW11", "over", ago: hour)],
+            cache: [:], archived: ["OLD11": 0, "NEW11": 0], now: now)
+        #expect(items.map(\.id) == ["NEW11"])
+    }
+
+    @Test func keptArchiveDropsUnlistedAndReturnedTables() {
+        let archived = ["STAY1": nowMs - 3 * hour, "GONE1": nowMs - 3 * hour, "BACK1": nowMs - 3 * hour]
+        let kept = HomeTables.keptArchive(
+            entries: [entry("STAY1", "playing", ago: hour), entry("BACK1", "playing", turn: true, ago: hour)],
+            archived: archived)
+        #expect(kept == ["STAY1": nowMs - 3 * hour])
+    }
 }
