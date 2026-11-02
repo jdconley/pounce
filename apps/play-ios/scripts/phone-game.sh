@@ -38,7 +38,7 @@ echo "phone test log: $OUT/phone.log"
 
 code=""
 for _ in $(seq 1 300); do
-  code=$(sed -nE 's/.*\[phone\] room ([A-Z]{5}).*/\1/p' "$OUT/phone.log" | head -1)
+  code=$(sed -nE 's/.*\[phone\] room ([A-Z0-9]{5}).*/\1/p' "$OUT/phone.log" | head -1)
   [ -n "$code" ] && break
   kill -0 "$phone_pid" 2>/dev/null || break
   sleep 1
