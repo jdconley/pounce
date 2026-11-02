@@ -69,6 +69,10 @@ then the build setting (Debug: `http://localhost:8787`, optionally overridden by
 - `-anim-speed <n>` (or `POUNCE_ANIM_SPEED=<n>` in the environment) runs the whole app n times faster
   and marks the run as a test: sound and haptics go to silent stand-ins. See [Test speed](#test-speed).
 - `-show-join` opens the Join screen. `-open-link <url>` handles a link as if it was tapped.
+- First-game coaching tips are off under `-uitest-reset` and `-demo` (no bubble over a test's
+  taps); add `-tips` to turn them on there (`TutorialTests`), or `-no-tips` to turn them off on
+  a phone's own data (`MultiSimTests`). Tips seen are kept per person in `tutorial.json`, next to
+  `people.json`; How to play (Home's gear, the table's paw menu) can bring them back.
 - The `pounce-dev://j/<CODE>[?move=<MOVECODE>]` URL scheme is registered in Debug only, for
   `xcrun simctl openurl booted ...` (universal links need the deployed server). Release builds
   never register or accept it.

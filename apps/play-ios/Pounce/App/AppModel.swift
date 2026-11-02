@@ -32,6 +32,14 @@ final class AppModel {
     @ObservationIgnored let peopleStore: PeopleStore
     @ObservationIgnored let tableCache: TableCache
     @ObservationIgnored let tableArchive: TableArchive
+    @ObservationIgnored let tutorialStore: TutorialStore
+    /// The coaching tips each person on this phone has seen (first-game tutorial).
+    private(set) var tipsSeen: TipsSeen
+    /// Coaching tips show on the table. Off for the UI tests and demos, which never expect a
+    /// bubble over the table, unless `-tips` asks for them, and under `-no-tips` (DEBUG only).
+    var tipsEnabled = true
+    /// Bumped by "Show the tips again": tables turn tips back on for everyone.
+    private(set) var tipsReplays = 0
     /// Push and local notifications; attached by the app delegate once SwiftUI built this model.
     @ObservationIgnored weak var push: PushCoordinator?
 
@@ -48,6 +56,8 @@ final class AppModel {
         people = loaded
         cache = tableCache.all()
         archived = tableArchive.all()
+        tutorialStore = TutorialStore(directory: dataDirectory)
+        tipsSeen = tutorialStore.load()
         route = loaded.owner == nil ? .pickCat(then: nil) : .home
     }
 
@@ -70,6 +80,10 @@ final class AppModel {
             model = real(config: config)
         }
         if let demo = DemoMode.from(arguments: arguments) { model.openDemo(demo) }
+        if arguments.contains("-uitest-reset") || DemoMode.from(arguments: arguments) != nil {
+            model.tipsEnabled = arguments.contains("-tips")
+        }
+        if arguments.contains("-no-tips") { model.tipsEnabled = false }
         // `-show-join`: open on Join (scripts/screenshots.sh).
         if arguments.contains("-show-join"), model.people.owner != nil { model.route = .join }
         // `-open-link <pounce-dev://…>`: open a share or move link at launch, as if tapped
@@ -394,6 +408,20 @@ final class AppModel {
     func removePerson(id: String) {
         peopleStore.remove(id: id)
         people = peopleStore.load()
+    }
+
+    // MARK: Coaching tips (first-game tutorial)
+
+    func markTipsSeen(_ tips: Set<CoachTip>, person: String) {
+        guard !tips.isSubset(of: tipsSeen[person] ?? []) else { return }
+        tipsSeen = tutorialStore.markSeen(tips, person: person)
+    }
+
+    /// Everyone on this phone gets the tips again, from the next thing that fits.
+    func replayTips() {
+        tutorialStore.reset()
+        tipsSeen = [:]
+        tipsReplays += 1
     }
 
     // MARK: Push priming (spec §10)
