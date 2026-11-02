@@ -63,6 +63,19 @@ import Testing
         }
     }
 
+    @Test func crowdedTableIsConsistent() throws {
+        let game = try #require(DemoFixtures.crowded().game)
+        #expect(game.laid.count == 6)
+        #expect(game.laid.compactMap { $0 }.count == 5)
+        var visible = game.hands.values.flatMap { $0 }
+        visible += game.laid.compactMap { $0 }.flatMap { $0.flatMap(\.cards) }
+        if let top = game.discardTop { visible.append(top) }
+        #expect(visible.allSatisfy { (0..<Card.deckSize).contains($0) })
+        #expect(Set(visible).count == visible.count)
+        let laidCount = game.laid.compactMap { $0 }.flatMap { $0 }.reduce(0) { $0 + $1.cards.count }
+        #expect(game.deckCount + game.discardCount + game.handCounts.reduce(0, +) + laidCount == Card.deckSize)
+    }
+
     @Test func lobbyIsMineAndWaiting() {
         let room = DemoFixtures.lobby()
         let model = TableModel(room: room)

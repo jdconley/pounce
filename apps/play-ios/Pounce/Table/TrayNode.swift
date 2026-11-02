@@ -206,15 +206,15 @@ final class TrayNode: SKNode {
         slot.fanLeft = number.frame.maxX + 6
         slot.fanRight = f.width / 2 - 10
 
-        let cardH = f.height - 18
+        let cardH = f.height - 12
         let card = CGSize(width: (cardH * 64 / 90).rounded(), height: cardH)
         let ids = Self.example(req)
         let (start, step) = fan(count: ids.count, card: card, slot: slot)
         for (j, id) in ids.enumerated() {
-            let n = CardNode(card: id, size: card, shadow: false)
+            let n = CardNode(card: id, size: card, shadow: false, compact: true)
             n.position = CGPoint(x: start + CGFloat(j) * step, y: 0)
             n.zPosition = CGFloat(j) * 0.01
-            n.alpha = 0.55
+            n.alpha = 0.75
             slot.example.addChild(n)
         }
     }
@@ -231,7 +231,7 @@ final class TrayNode: SKNode {
                     slot.cards.addChild(node)
                 }
             } else {
-                node = CardNode(card: id, size: size, shadow: false)
+                node = CardNode(card: id, size: size, shadow: false, compact: true)
                 cardNodes[id] = node
                 slot.cards.addChild(node)
             }

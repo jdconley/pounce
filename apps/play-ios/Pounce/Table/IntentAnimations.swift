@@ -312,8 +312,10 @@ extension TableScene {
         for (i, card) in cards.enumerated() where i < targets.count {
             let s = starts[i]
             let node = flyer(card, at: s.point, scale: s.scale, rotation: s.rotation, z: 0.5 + CGFloat(i) * 0.01)
+            node.compact = s.scale < 0.8  // from a tray or a cat: already small
             let land = SKAction.run { [weak node] in
                 guard let node else { return }
+                node.compact = true  // the face the row draws it with
                 Sound.shared.play(ArtName.Sound.sfxPop, volume: 0.8)
                 Effects.burst(.stars, at: node.position, in: fx, director: director)
             }
@@ -358,6 +360,7 @@ extension TableScene {
             Effects.fly(from: node.position, to: local(end, for: node), duration: 0.3, lift: 40,
                         scale: laidZone.miniScale(layout: layout)),
             on: node)
+        node.compact = true
         Sound.shared.play(ArtName.Sound.sfxPop)
         Haptics.shared.drop()
         Effects.burst(.stars, at: end, in: fx, director: director)

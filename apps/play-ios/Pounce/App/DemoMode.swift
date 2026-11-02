@@ -2,7 +2,7 @@
 import Foundation
 import PounceKit
 
-/// DEBUG launch argument `-demo <lobby|lobbyReady|table|other|replay|celebrate|curtain|handoff|peek>`: opens a room fed
+/// DEBUG launch argument `-demo <lobby|lobbyReady|table|other|replay|celebrate|curtain|handoff|peek|crowded>`: opens a room fed
 /// by a fake socket that sends one `DemoFixtures` snapshot, so the real screens render with no
 /// server. `lobbyReady` is the lobby with no open seat, so the start pill is live. `other` is the table on another seat's turn (ring glow + paw marker, dimmed hand).
 /// `replay` plays `DemoFixtures.replay()` twice through the real store and intent path
@@ -22,8 +22,9 @@ import PounceKit
 /// `handoff`: two seats on this phone, seat 0's hand shown (the hold is skipped); seat 0 draws,
 /// then discards and the turn goes to a remote seat, so the shown hand must turn face down at
 /// once, not after the discard animates. Logs like `replay`.
+/// `crowded`: six seats, five of them laid down with long runs and big sets (`DemoFixtures.crowded()`).
 enum DemoMode: String {
-    case lobby, lobbyReady, table, other, replay, nope, celebrate, curtain, handoff, peek
+    case lobby, lobbyReady, table, other, replay, nope, celebrate, curtain, handoff, peek, crowded
 
     static func from(arguments: [String] = CommandLine.arguments) -> DemoMode? {
         guard let i = arguments.firstIndex(of: "-demo"), arguments.indices.contains(i + 1) else { return nil }
@@ -53,6 +54,7 @@ enum DemoMode: String {
             var room = DemoFixtures.curtain()
             room.game?.turn = 1
             return room
+        case .crowded: return DemoFixtures.crowded()
         }
     }
 

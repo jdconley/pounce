@@ -26,6 +26,8 @@ public struct TableLayout: Sendable {
     public static let opponentsBarHeight: CGFloat = 96
     public static let traysHeight: CGFloat = 64
     public static let towerWidth: CGFloat = 44
+    /// The sort button's touch target (drawn 36 pt) at the right, just above the trays.
+    public static let sortButtonHit: CGFloat = 44
     public static let shelfCount = 10
 
     public let size: CGSize
@@ -45,6 +47,8 @@ public struct TableLayout: Sendable {
     public let traysFrame: CGRect
     /// Rect all laid-down rows live in (right of the tower, between bar and trays).
     public let laidZone: CGRect
+    /// Sort button center; laid rows stop short of its touch target.
+    public let sortButton: CGPoint
 
     // Hand fan.
     private let handBaseY: CGFloat
@@ -55,6 +59,9 @@ public struct TableLayout: Sendable {
     private let columnWidth: CGFloat
     private let columnGap: CGFloat
     private let rowGap: CGFloat
+    /// Full-width rows that fit above and below the piles.
+    private let rowsAboveCapacity: Int
+    private let rowsBelowCapacity: Int
 
     private static let handSidePad: CGFloat = 4
     private static let handBottomPad: CGFloat = 4
@@ -71,7 +78,9 @@ public struct TableLayout: Sendable {
         let cardW = min(max(64 * width / Self.designWidth, 56), 76)
         let card = CGSize(width: cardW, height: (cardW * 90 / 64).rounded())
         cardSize = card
-        miniCardSize = CGSize(width: (cardW * 0.55).rounded(), height: (card.height * 0.55).rounded())
+        // Laid cards: 0.66 of a hand card (41 pt wide on a 375 pt phone), the smallest at which
+        // the compact face's two-digit numerals keep an 11 pt cap height.
+        miniCardSize = CGSize(width: (cardW * 0.66).rounded(), height: (card.height * 0.66).rounded())
 
         // Opponents bar and slots.
         let barH = Self.opponentsBarHeight
@@ -100,6 +109,7 @@ public struct TableLayout: Sendable {
         // Trays sit just above the hand.
         let trays = CGRect(x: 8, y: handTop + 6, width: width - 16, height: Self.traysHeight)
         traysFrame = trays
+        sortButton = CGPoint(x: width - 26, y: trays.maxY + 24)
 
         // Tower: left edge, from above the trays to below the opponents bar.
         let towerBottom = trays.maxY + 6
@@ -111,21 +121,35 @@ public struct TableLayout: Sendable {
         laidZone = zone
 
         // Rows: two columns; rows above and below the piles hug them.
-        let gap: CGFloat = 10
-        let rowH = miniCardSize.height + 10
+        let gap: CGFloat = 8
+        let rowH = miniCardSize.height + 8
         rowHeight = rowH
         rowGap = gap
         columnGap = 8
         columnWidth = (zone.width - 8) / 2
 
         // Pile height is fixed by the largest table (3 laid rows: 1 above, 2 below) so the
-        // piles never jump between player counts.
+        // piles never jump between player counts. Centered, unless that puts the lowest row
+        // beside the sort button: then raised as far as it takes (or fits).
         let stack = 3 * rowH + 4 * gap + card.height
-        let slack = max((zone.height - stack) / 2, 0)
+        let clearOfSort = zone.maxY - stack + gap - (sortButton.y + Self.sortButtonHit / 2) - 1
+        let slack = max(min((zone.height - stack) / 2, clearOfSort), 0)
         let pilesY = zone.maxY - slack - rowH - gap - card.height / 2
         let pileOffset = card.width / 2 + 8
         deck = CGPoint(x: zone.midX - pileOffset, y: pilesY)
         discard = CGPoint(x: zone.midX + pileOffset, y: pilesY)
+        // A scene not sized yet can make these NaN.
+        func rows(fitting span: CGFloat) -> Int {
+            let n = (span / (rowH + gap)).rounded(.down)
+            return n.isFinite && n > 0 ? Int(n) : 0
+        }
+        rowsAboveCapacity = rows(fitting: zone.maxY - pilesY - card.height / 2)
+        rowsBelowCapacity = rows(fitting: pilesY - card.height / 2 - zone.minY)
+    }
+
+    public var sortButtonFrame: CGRect {
+        let d = Self.sortButtonHit
+        return CGRect(x: sortButton.x - d / 2, y: sortButton.y - d / 2, width: d, height: d)
     }
 
     /// Cat-tower shelf center, 0 (bottom) ... 9 (top).
@@ -164,18 +188,26 @@ public struct TableLayout: Sendable {
         }
     }
 
-    /// Laid-down row for seat `slot` of `total` seats. Two columns; rows above the piles
-    /// fill from the top, rows below from the piles down. A lone last row is centered.
+    /// Laid-down row for seat `slot` of `total` seats. When a row per seat fits above and below
+    /// the piles, each row spans the zone (seats top to bottom, the upper half above the
+    /// piles). Otherwise two columns; rows above the piles fill from the top, rows below from
+    /// the piles down, and a lone last row is centered.
     public func laidRow(slot: Int, of total: Int) -> CGRect {
         let total = max(total, 1)
         let slot = min(max(slot, 0), total - 1)
-        let rows = (total + 1) / 2
-        let rowsAbove = rows / 2
-        let r = slot / 2
-        let alone = total % 2 == 1 && slot == total - 1
-        let x: CGFloat = alone
-            ? laidZone.midX - columnWidth / 2
-            : laidZone.minX + CGFloat(slot % 2) * (columnWidth + columnGap)
+        let r: Int, rowsAbove: Int, x: CGFloat, width: CGFloat
+        if total <= rowsAboveCapacity + rowsBelowCapacity {
+            rowsAbove = max(total - rowsBelowCapacity, min(rowsAboveCapacity, total / 2))
+            r = slot
+            x = laidZone.minX
+            width = laidZone.width
+        } else {
+            rowsAbove = (total + 1) / 2 / 2
+            r = slot / 2
+            let alone = total % 2 == 1 && slot == total - 1
+            x = alone ? laidZone.midX - columnWidth / 2 : laidZone.minX + CGFloat(slot % 2) * (columnWidth + columnGap)
+            width = columnWidth
+        }
         let pilesY = deck.y
         let half = cardSize.height / 2
         let midY: CGFloat
@@ -186,6 +218,8 @@ public struct TableLayout: Sendable {
             let k = CGFloat(r - rowsAbove)
             midY = pilesY - half - rowGap - rowHeight / 2 - k * (rowHeight + rowGap)
         }
-        return CGRect(x: x, y: midY - rowHeight / 2, width: columnWidth, height: rowHeight)
+        var row = CGRect(x: x, y: midY - rowHeight / 2, width: width, height: rowHeight)
+        if row.intersects(sortButtonFrame) { row.size.width = max(sortButtonFrame.minX - 4 - row.minX, 0) }
+        return row
     }
 }

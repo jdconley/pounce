@@ -13,6 +13,15 @@ enum Palette {
     /// App background.
     static let night = Color(hex: 0x2A0F5C)
 
+    /// Card numerals by coat: tabby orange and tuxedo pink like their glyphs (stripes, bow),
+    /// calico teal (ink would melt into the outline), gray violet like its paw. Each is at least
+    /// 4.5:1 on the white card face before its ink outline: tabby 5.1, tuxedo 5.4, calico 5.2,
+    /// gray 5.7.
+    static let numeralTabby = Color(hex: 0xC24400)
+    static let numeralTuxedo = Color(hex: 0xD1006B)
+    static let numeralCalico = Color(hex: 0x00788A)
+    static let numeralGray = violet
+
     /// Seat avatar rings, in seat order.
     static let playerRings: [Color] = [violet, magenta, teal, orange, sky, lime]
 }
