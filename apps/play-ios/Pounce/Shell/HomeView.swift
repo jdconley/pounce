@@ -1,7 +1,7 @@
 import PounceKit
 import SwiftUI
 
-/// Home: the Cat Tower hero, two fat pills (new game, join), a row of your tables, the owner's cat
+/// Home: the Cat Tower hero, two fat pills (Create, Join), a row of your tables, the owner's cat
 /// bottom-left (people on this phone) and a small gear (sound, haptics). After a "not now" to
 /// push, a small bell top-left offers it once more (spec §10).
 struct HomeView: View {
@@ -116,7 +116,8 @@ struct HomeView: View {
         return VStack(spacing: 12) {
             PillButton(
                 icon: ArtName.iconPlus, color: Palette.violet, size: .large, width: w,
-                accessibilityLabel: "New game"
+                title: String(localized: "Create", comment: "Home: the pill that starts a new game"),
+                accessibilityLabel: "Create a game"
             ) {
                 Task { await model.newGame() }
             }
@@ -127,6 +128,7 @@ struct HomeView: View {
 
             PillButton(
                 icon: ArtName.iconKeypad, color: Palette.teal, size: .large, width: w,
+                title: String(localized: "Join", comment: "Home: the pill that joins a game by code"),
                 accessibilityLabel: "Join a game"
             ) {
                 model.showJoin()
