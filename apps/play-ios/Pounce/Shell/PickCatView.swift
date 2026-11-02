@@ -128,7 +128,7 @@ struct CatEditorView: View {
                 .accessibilityLabel(CatNames.label(cat))
         }
         .frame(height: 246)
-        .animation(reduceMotion ? nil : .spring(duration: 0.4, bounce: 0.4), value: cat)
+        .animation(reduceMotion ? nil : .spring(duration: 0.4, bounce: 0.4).paced, value: cat)
     }
 
     private var nameRow: some View {
@@ -259,7 +259,7 @@ struct CatTile: View {
                 .shadow(color: selected ? Palette.orange.opacity(0.9) : Palette.ink.opacity(0.5),
                         radius: selected ? 10 : 0, x: 0, y: selected ? 0 : 4)
                 .scaleEffect(selected ? 1.08 : 1)
-                .animation(.spring(duration: 0.3, bounce: 0.5), value: selected)
+                .animation(.spring(duration: 0.3, bounce: 0.5).paced, value: selected)
                 .contentShape(Rectangle())
         }
         .buttonStyle(.plain)

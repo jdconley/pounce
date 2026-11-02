@@ -1,13 +1,30 @@
 import AVFoundation
 import Foundation
 
+/// Plays the app's sound effects. `Sound.shared` is the real one, or under a UI test
+/// (`Pace.underTest`) a silent stand-in that never touches the audio session.
+@MainActor
+protocol SoundPlaying: AnyObject {
+    /// Loads every effect up front so the first play has no hitch.
+    func preload()
+    /// Plays `name` at `volume` (0–1; a quiet variant of an effect, say).
+    func play(_ name: String, volume: Float)
+}
+
+extension SoundPlaying {
+    func play(_ name: String) { play(name, volume: 1) }
+}
+
+@MainActor
+enum Sound {
+    static let shared: any SoundPlaying = Pace.underTest ? SilentSound() : AudioSound()
+}
+
 /// Sound effects from a small pool of pre-loaded `AVAudioPlayer`s per effect, so rapid repeats
 /// overlap instead of cutting off. The ambient session mixes with the user's music and follows
 /// the silent switch.
 @MainActor
-final class Sound {
-    static let shared = Sound()
-
+final class AudioSound: SoundPlaying {
     private static let voicesPerEffect = 3
     private let settings: Settings
     private var pools: [String: [AVAudioPlayer]] = [:]
@@ -18,7 +35,6 @@ final class Sound {
         self.settings = settings
     }
 
-    /// Loads every effect up front so the first play has no hitch.
     func preload() {
         prepareSession()
         let a = ArtName.Sound.self
@@ -30,8 +46,7 @@ final class Sound {
         }
     }
 
-    /// Plays `name` at `volume` (0–1; a quiet variant of an effect, say).
-    func play(_ name: String, volume: Float = 1) {
+    func play(_ name: String, volume: Float) {
         guard settings.soundOn, let players = pool(for: name), !players.isEmpty else { return }
         let i = cursor[name, default: 0] % players.count
         cursor[name] = i + 1
@@ -63,4 +78,14 @@ final class Sound {
         pools[name] = players
         return players
     }
+}
+
+/// Under a UI test: counts what would have played and plays nothing.
+@MainActor
+final class SilentSound: SoundPlaying {
+    private(set) var played = 0
+
+    func preload() {}
+
+    func play(_ name: String, volume: Float) { played += 1 }
 }

@@ -46,8 +46,8 @@ struct SeatMenu: View {
                         x: c.x + (open || reduceMotion ? p.x : 0),
                         y: c.y + (open || reduceMotion ? p.y : 0))
                     .animation(
-                        reduceMotion ? .easeOut(duration: 0.15)
-                            : .spring(duration: 0.4, bounce: 0.5).delay(Double(i) * 0.04),
+                        reduceMotion ? .easeOut(duration: 0.15).paced
+                            : .spring(duration: 0.4, bounce: 0.5).delay(Double(i) * 0.04).paced,
                         value: open)
                 }
             }
@@ -106,7 +106,7 @@ struct PersonPicker: View {
                 list.transition(.opacity)
             }
         }
-        .animation(.spring(duration: 0.4, bounce: 0.3), value: creating)
+        .animation(.spring(duration: 0.4, bounce: 0.3).paced, value: creating)
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("sheet-picker")
     }

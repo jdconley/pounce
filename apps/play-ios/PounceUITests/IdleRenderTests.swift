@@ -9,8 +9,7 @@ final class IdleRenderTests: XCTestCase {
 
     @MainActor
     func testTableStopsRenderingWhenIdle() throws {
-        let app = XCUIApplication()
-        app.launchArguments = ["-demo", "table"]
+        let app = Live.demo("table")
         app.launch()
         let frames = el(app, "table.frames")
         XCTAssertTrue(frames.waitForExistence(timeout: 10))

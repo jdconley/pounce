@@ -58,7 +58,7 @@ struct PushPrimingView: View {
                 .accessibilityIdentifier("priming.notNow")
         }
         .onAppear {
-            withAnimation(.spring(duration: 0.6, bounce: 0.45)) { appeared = true }
+            withAnimation(.spring(duration: 0.6, bounce: 0.45).paced) { appeared = true }
             Sound.shared.play(ArtName.Sound.sfxSparkle)
         }
         .task {

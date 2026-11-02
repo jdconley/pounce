@@ -4,7 +4,9 @@
 # `pounce-e2e join` remote on the Mac for seat 1. The phone adds House Cats and plays to game over.
 #
 # Env: DEVICE (UDID; default the first connected physical iPhone), BASE (default
-# https://play.conleychaos.com), BOTS (default 1), OUT (default a temp dir), SKIP_BUILD=1.
+# https://play.conleychaos.com), BOTS (default 1), OUT (default a temp dir), SKIP_BUILD=1, SPEED
+# (default 10: the phone's animations and the test's fixed waits run that many times faster,
+# silent sound and haptics; SPEED=1 for a normal-speed game; the server's bots keep their pace).
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
@@ -29,7 +31,7 @@ cleanup() {
 }
 trap cleanup EXIT
 
-TEST_RUNNER_POUNCE_PHONE_GAME=1 TEST_RUNNER_POUNCE_PHONE_BOTS="${BOTS:-1}" \
+TEST_RUNNER_POUNCE_PHONE_GAME=1 TEST_RUNNER_POUNCE_PHONE_BOTS="${BOTS:-1}" TEST_RUNNER_POUNCE_SPEED="${SPEED:-10}" \
   TEST_RUNNER_POUNCE_API_BASE_URL="$BASE" \
   xcodebuild test-without-building -project Pounce.xcodeproj -scheme Pounce -derivedDataPath "$DD" \
   -destination "id=$DEVICE" -only-testing:PounceUITests/PhoneGameTests/testHostOnPhone \

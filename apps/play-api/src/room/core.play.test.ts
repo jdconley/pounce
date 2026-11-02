@@ -57,9 +57,9 @@ function snapshotTo(out: Outbound[], to: string): Snapshot {
  * A started room. Each name in `humans` is a connected device holding the next
  * seat; `bots` bot seats follow. Seat 0 is the dealer, so seat 1 plays first.
  */
-function startedRoom(humans: string[], bots = 0, game?: CatTowerModule): RoomCore {
+function startedRoom(humans: string[], bots = 0, game?: CatTowerModule, speed?: number): RoomCore {
   const state = RoomCore.create("BCDFG", humans[0] as string, clock);
-  const room = new RoomCore(state, () => clock, rng, game);
+  const room = new RoomCore(state, () => clock, rng, game, speed);
   humans.forEach((id, seat) => {
     room.connect(id);
     room.handle(id, { t: "claim", seat, person: person(seat + 1) });
@@ -473,6 +473,16 @@ describe("handle", () => {
 });
 
 describe("bots", () => {
+  it("divides the bot delay and the next-round gap by the dev speed", () => {
+    const fast = startedRoom(["a"], 1, undefined, 10);
+    expect(fast.state.timers.botAt).toBe(clock + 120);
+
+    const room = startedRoom(["a", "b"], 0, undefined, 10);
+    exhaust(room);
+    room.handle("a", { t: "act", seat: 0, action: { type: "draw", from: "deck" } });
+    expect(room.state.timers.nextRoundAt).toBe(clock + 600);
+  });
+
   it("moves a bot seat on tick once botAt is due, one action per tick", () => {
     const room = startedRoom(["a"], 1);
     expect(game(room).turn).toBe(1);

@@ -27,6 +27,7 @@ final class MultiSimTests: XCTestCase {
         // Not `-uitest-reset`: `app.open(url)` relaunches the app, and each move must land on the
         // same device (Keychain credential) and owner (multi-sim.sh seeds one on each phone).
         let app = XCUIApplication()
+        app.launchArguments = Live.arguments()
         app.launchEnvironment["POUNCE_API_BASE_URL"] = Live.baseURL
         // POUNCE_LOG_TIMELINE=1: the table's timeline (shell syncs, reveals) to the unified log.
         if env["POUNCE_LOG_TIMELINE"] == "1" { app.launchArguments.append("-log-timeline") }
@@ -48,7 +49,7 @@ final class MultiSimTests: XCTestCase {
             if open.waitForExistence(timeout: Live.t(5)) { open.tap() }
             XCTAssertTrue(until(60) { self.el(app, "screen-table").exists || self.el(app, "screen-curtain").exists },
                           "the move link for seat \(seat) didn't open the table")
-            Thread.sleep(forTimeInterval: 2)
+            Thread.sleep(forTimeInterval: Live.poll(2))
         }
         save(app, shared: shared, "\(tag)-arrived")
         playToGameOver(app, tag: tag, shared: shared)
@@ -68,10 +69,10 @@ final class MultiSimTests: XCTestCase {
         let gameOver = el(app, "gameover.home")
         var turns = 0, rounds = Set<Int>(), roundOverShot = false, curtains = 0, curtainNames = Set<String>()
         func save(_ name: String) { self.save(app, shared: shared, "\(tag)-\(name)") }
-        // One whole-app snapshot per poll, every 2 s (see `playTurnByTaps`).
+        // One whole-app snapshot per poll, every 2 s at normal speed (see `playTurnByTaps`).
         while Date() < deadline {
             guard let snap = UISnap(app) else {
-                Thread.sleep(forTimeInterval: 2)
+                Thread.sleep(forTimeInterval: Live.poll(2))
                 continue
             }
             if snap.exists("gameover.home") { break }
@@ -83,11 +84,11 @@ final class MultiSimTests: XCTestCase {
             if let name = holdCurtain(app, snap) {
                 curtainNames.insert(name)
                 curtains += 1
-                Thread.sleep(forTimeInterval: 1)
+                Thread.sleep(forTimeInterval: Live.pace(1))
                 continue
             }
             guard let d = snap.debug else {
-                Thread.sleep(forTimeInterval: 2)
+                Thread.sleep(forTimeInterval: Live.poll(2))
                 continue
             }
             rounds.insert(d.round)
@@ -96,14 +97,14 @@ final class MultiSimTests: XCTestCase {
                 roundOverShot = true
             }
             if d.status == "gameOver" {
-                Thread.sleep(forTimeInterval: 2)
+                Thread.sleep(forTimeInterval: Live.poll(2))
                 continue
             }
             if playTurnByTaps(app, snap) {
                 turns += 1
                 if turns == 1 { save("first-turn") }
             } else {
-                Thread.sleep(forTimeInterval: 2)
+                Thread.sleep(forTimeInterval: Live.poll(2))
             }
         }
         XCTAssertTrue(gameOver.waitForExistence(timeout: Live.t(30)), "no game over within the time limit (rounds \(rounds.sorted()))")
