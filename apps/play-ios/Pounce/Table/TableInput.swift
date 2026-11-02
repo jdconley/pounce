@@ -111,6 +111,7 @@ extension TableScene {
         }
         if let node = input.dragNode {
             node.position = CGPoint(x: p.x + input.grab.dx, y: p.y + input.grab.dy)
+            followDrag(node, finger: p)
         }
     }
 
@@ -118,9 +119,11 @@ extension TableScene {
         let state = input
         input = TableInputState()
         if state.dragging {
+            let landing = Landing(gap: dragGap, from: state.dragNode.map { hand.convert($0.position, from: layer(.drag)) })
+            dragGap = nil
             state.dragNode?.removeFromParent()
             dragCard = nil
-            drop(state.source, at: p)
+            drop(state.source, at: p, landing: landing)
         } else if hypot(p.x - state.start.x, p.y - state.start.y) <= TableInputState.dragThreshold * 2 {
             tap(state.source, at: p)
         }
@@ -130,6 +133,7 @@ extension TableScene {
         input.dragNode?.removeFromParent()
         let wasDragging = input.dragging
         input = TableInputState()
+        dragGap = nil
         dragCard = nil
         if wasDragging { refresh() }
     }
@@ -179,6 +183,8 @@ extension TableScene {
         Haptics.shared.tick()
         switch input.source {
         case .hand(let card), .tray(let card, _):
+            // A hand card leaves its own slot open, so nothing moves until the finger does.
+            if case .hand = input.source { dragGap = hand.cards.firstIndex { $0.card == card } }
             selectionForDrag(card)
         default:
             refresh()
@@ -192,14 +198,53 @@ extension TableScene {
         dragCard = card
     }
 
+    /// Live reorder: while a hand card (or one coming back from a tray) is over the hand area,
+    /// the fan holds open the slot it would land in, sliding the others apart as that slot
+    /// changes, with a light tick each time. Outside the hand area the fan closes up.
+    private func followDrag(_ node: CardNode, finger p: CGPoint) {
+        guard let layout, case .faces = hand.content else { return }
+        switch input.source {
+        case .hand, .tray: break
+        default: return
+        }
+        let next: Int? = isOverHand(p, layout)
+            ? layout.handSlot(x: hand.convert(node.position, from: layer(.drag)).x, count: hand.cards.count + 1, current: dragGap)
+            : nil
+        guard next != dragGap else { return }
+        dragGap = next
+        if next != nil {
+            Haptics.shared.tick()
+            #if DEBUG
+            dragProbe.changes += 1
+            #endif
+        }
+        let moves = hand.slide(gap: next, layout: layout)
+        guard !moves.isEmpty else { return }
+        let director = director
+        director.cancelActions(under: hand)  // a slide still running gives way to the new one
+        Task { await director.runAll(moves) }
+    }
+
+    /// A drop here reorders the hand (the fan and the strip just above it, below the trays).
+    private func isOverHand(_ p: CGPoint, _ layout: TableLayout) -> Bool {
+        p.y < layout.traysFrame.minY
+    }
+
     // MARK: drops
 
-    private func drop(_ source: TableInputState.Source, at p: CGPoint) {
+    /// Where a dragged card was let go: the fan slot held open for it (nil outside the hand
+    /// area) and its center in hand space, for the glide into that slot.
+    struct Landing {
+        var gap: Int?
+        var from: CGPoint?
+    }
+
+    private func drop(_ source: TableInputState.Source, at p: CGPoint, landing: Landing) {
         // One action in flight at a time: game drops are ignored (no nope, nothing sent);
         // only reordering the hand still works.
         if store.actionInFlight {
-            if case .hand(let card) = source, let layout, p.y < layout.traysFrame.minY {
-                reorder(card, toX: p.x)
+            if case .hand(let card) = source, let layout, isOverHand(p, layout) {
+                reorder(card, landing)
             } else {
                 refresh()
             }
@@ -207,9 +252,9 @@ extension TableScene {
         }
         switch source {
         case .hand(let card):
-            dropHandCard(card, at: p)
+            dropHandCard(card, at: p, landing: landing)
         case .tray(let card, let tray):
-            dropTrayCard(card, from: tray, at: p)
+            dropTrayCard(card, from: tray, at: p, landing: landing)
         case .pile(let pile):
             guard let layout else { return refresh() }
             // Anywhere over the hand or the trays counts as "to the hand".
@@ -223,7 +268,7 @@ extension TableScene {
         }
     }
 
-    private func dropHandCard(_ card: CardID, at p: CGPoint) {
+    private func dropHandCard(_ card: CardID, at p: CGPoint, landing: Landing) {
         if discard.hitFrame.insetBy(dx: -12, dy: -12).contains(p) { return chooseDiscard(card) }
         if let seat = opponentSeat(at: p) { return aim(card, at: seat) }
         if !trays.isHidden, let tray = trays.tray(at: p) {
@@ -234,14 +279,14 @@ extension TableScene {
             if !tryHit(card, target) { nope(card: card) }
             return
         }
-        if let layout, p.y < layout.traysFrame.minY {
-            reorder(card, toX: p.x)
+        if let layout, isOverHand(p, layout) {
+            reorder(card, landing)
             return
         }
         refresh()  // dropped on nothing: back to its place
     }
 
-    private func dropTrayCard(_ card: CardID, from tray: Int, at p: CGPoint) {
+    private func dropTrayCard(_ card: CardID, from tray: Int, at p: CGPoint, landing: Landing) {
         if !trays.isHidden, let target = trays.tray(at: p) {
             if target == tray {
                 if Card(id: card) == .yarn, trayState.requirements[safe: tray]?.kind == .run {
@@ -255,7 +300,9 @@ extension TableScene {
             }
             return
         }
-        returnFromTray(card, toX: (layout.map { p.y < $0.traysFrame.minY } ?? false) ? p.x : nil)
+        guard let layout, isOverHand(p, layout), let gap = landing.gap else { return returnFromTray(card, toSlot: nil) }
+        returnFromTray(card, toSlot: gap)
+        settle(card, from: landing.from)
     }
 
     // MARK: taps
@@ -307,7 +354,7 @@ extension TableScene {
                 Haptics.shared.tick()
                 refresh()
             } else {
-                returnFromTray(card, toX: nil)
+                returnFromTray(card, toSlot: nil)
             }
         case .pile(let pile):
             if let seat = actingSeat, model?.drawSources(for: seat).contains(pile) == true {
@@ -326,7 +373,7 @@ extension TableScene {
     private func tapWithYarn(_ pick: (card: CardID, tray: Int), on card: CardID, in tray: Int) {
         trayYarn = nil
         if card == pick.card {
-            returnFromTray(card, toX: nil)
+            returnFromTray(card, toSlot: nil)
             return
         }
         guard tray == pick.tray, let index = trayState.slots[tray].firstIndex(of: card) else { return refresh() }
@@ -442,22 +489,50 @@ extension TableScene {
         return true
     }
 
-    /// Takes a card out of its tray, optionally dropping it into the hand at `x`.
-    func returnFromTray(_ card: CardID, toX x: CGFloat?) {
+    /// Takes a card out of its tray, optionally dropping it into slot `slot` of the fan.
+    func returnFromTray(_ card: CardID, toSlot slot: Int?) {
         trayState.remove(card)
-        if let x { reorderInPlace(card, toX: x) }
+        if let slot { reorderInPlace(card, toSlot: slot) }
         refresh()
     }
 
-    private func reorder(_ card: CardID, toX x: CGFloat) {
-        reorderInPlace(card, toX: x)
+    /// A hand card let go over the hand: it takes the slot the fan held open for it and
+    /// glides in.
+    private func reorder(_ card: CardID, _ landing: Landing) {
+        if let gap = landing.gap { reorderInPlace(card, toSlot: gap) }
         refresh()
+        settle(card, from: landing.from)
     }
 
-    private func reorderInPlace(_ card: CardID, toX x: CGFloat) {
+    private func reorderInPlace(_ card: CardID, toSlot slot: Int) {
         guard let seat = bottomSeat else { return }
-        handOrders[seat]?.move(card, before: hand.card(before: x))
+        handOrders[seat]?.move(card, toSlot: slot, shown: hand.cards.compactMap(\.card))
+        #if DEBUG
+        dragProbe.landed = slot
+        #endif
     }
+
+    /// The dropped card glides from where it was let go into its slot; the rest of the fan is
+    /// already in place.
+    private func settle(_ card: CardID, from start: CGPoint?) {
+        guard let start, let node = hand.node(for: card) else { return }
+        let end = (position: node.position, rotation: node.zRotation, z: node.zPosition)
+        node.position = start
+        node.zRotation = 0
+        node.setScale(1.08)
+        node.zPosition = HandNode.liftedZ
+        let glide = SKAction.group([
+            .move(to: end.position, duration: Self.settleDuration),
+            .rotate(toAngle: end.rotation, duration: Self.settleDuration, shortestUnitArc: true),
+            .scale(to: 1, duration: Self.settleDuration),
+        ])
+        glide.timingMode = .easeOut
+        let director = director
+        Task { await director.run(.sequence([glide, .run { node.zPosition = end.z }]), on: node) }
+    }
+
+    /// The glide of a dropped card into its slot, at normal speed (scene speed is the Pace).
+    static let settleDuration: TimeInterval = 0.16
 
     func cycleSort() {
         guard let seat = bottomSeat else { return }
@@ -553,7 +628,7 @@ extension TableScene {
     /// "Back to hand", and for a Yarn in a run, move it left or right.
     func trayCardActions(_ card: CardID, tray: Int, index: Int) -> [UIAccessibilityCustomAction] {
         var actions = [customAction(String(localized: "Back to hand", comment: "VoiceOver action: take a card out of its tray")) { [weak self] in
-            self?.returnFromTray(card, toX: nil)
+            self?.returnFromTray(card, toSlot: nil)
             return true
         }]
         if Card(id: card) == .yarn, trayState.requirements[safe: tray]?.kind == .run, trayState.isValid(tray) {

@@ -174,7 +174,7 @@ public struct TableLayout: Sendable {
     public func hand(count: Int, lifted: Int?) -> [CardPlacement] {
         guard count > 0 else { return [] }
         let mid = CGFloat(count - 1) / 2
-        let step = count > 1 ? min(cardSize.width * 0.72, 2 * handSpan / CGFloat(count - 1)) : 0
+        let step = handStep(count: count)
         let cx = size.width / 2
         return (0..<count).map { i in
             let dx = (CGFloat(i) - mid) * step
@@ -186,6 +186,42 @@ public struct TableLayout: Sendable {
             }
             return CardPlacement(position: CGPoint(x: cx + dx, y: y), rotation: rotation, z: 10 + CGFloat(i))
         }
+    }
+
+    /// The fan with an empty slot at `gap` (a card being dragged over the hand): `count` cards
+    /// spread over `count + 1` slots, exactly where they sit once the dragged card lands in the
+    /// gap, so dropping it moves nothing else.
+    public func hand(count: Int, gap: Int) -> [CardPlacement] {
+        guard count > 0 else { return [] }
+        let gap = min(max(gap, 0), count)
+        let slots = hand(count: count + 1, lifted: nil)
+        return (0..<count).map { slots[$0 < gap ? $0 : $0 + 1] }
+    }
+
+    /// The slot, 0 ... `count` - 1, that a card dragged with its center at `x` lands in, in a
+    /// fan of `count` slots (the dragged card's own included): the slot whose center is nearest.
+    /// `current` (the slot shown now) holds until `x` is `slotHysteresis` of a step past the
+    /// halfway line to a neighbor, so a card resting on a boundary doesn't flicker between two.
+    public func handSlot(x: CGFloat, count: Int, current: Int?) -> Int {
+        guard count > 1 else { return 0 }
+        let step = handStep(count: count)
+        let first = size.width / 2 - CGFloat(count - 1) / 2 * step
+        let raw = ((x - first) / step).rounded()
+        let nearest = raw.isFinite ? Int(min(max(raw, 0), CGFloat(count - 1))) : 0
+        if let current, (0..<count).contains(current), nearest != current {
+            let center = first + CGFloat(current) * step
+            if abs(x - center) <= step * (0.5 + Self.slotHysteresis) { return current }
+        }
+        return nearest
+    }
+
+    /// How far past a slot boundary, as a fraction of the slot step, a dragged card must go
+    /// before the target slot changes.
+    public static let slotHysteresis: CGFloat = 0.2
+
+    /// Distance between neighboring card centers in a fan of `count`.
+    private func handStep(count: Int) -> CGFloat {
+        count > 1 ? min(cardSize.width * 0.72, 2 * handSpan / CGFloat(count - 1)) : 0
     }
 
     /// Laid-down row for seat `slot` of `total` seats. When a row per seat fits above and below

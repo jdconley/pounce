@@ -84,6 +84,13 @@ final class TableScene: SKScene {
     var dragCard: CardID? {
         didSet { if dragCard != oldValue { redraw() } }
     }
+    /// The fan slot the dragged card lands in if let go now, held open in the hand; nil while
+    /// it is outside the hand area. `TableInput` slides the fan when it changes.
+    var dragGap: Int?
+    #if DEBUG
+    /// Target-slot changes during drags, and the slot the last reorder landed in (`table.drag`).
+    var dragProbe = (changes: 0, landed: -1)
+    #endif
     /// A played card shown at its target until the server answers (`provisionalMove`).
     private(set) var provisionalCard: CardID?
     private(set) var provisionalNode: CardNode?
@@ -553,7 +560,7 @@ final class TableScene: SKScene {
             trayKey = nil
         }
         let dimmed = !(model.isMyTurn && model.currentSeat == bottom)
-        hand.update(content, layout: layout, lifted: selection, dimmed: dimmed)
+        hand.update(content, layout: layout, lifted: selection, gap: faceUp && dragCard != nil ? dragGap : nil, dimmed: dimmed)
 
         // Legal-target glows for the current step and held card.
         let glows = computeGlows()
@@ -806,6 +813,11 @@ final class TableScene: SKScene {
             TableAccessibility.Item(
                 id: "table.frames", label: "frames", frame: CGRect(x: 0, y: 0, width: 24, height: 24),
                 traits: .staticText, live: { String(director.framesRendered) }),
+            TableAccessibility.Item(
+                id: "table.drag", label: "drag", frame: CGRect(x: 48, y: 0, width: 24, height: 24),
+                traits: .staticText, live: { [weak self] in
+                    self.map { "\($0.dragProbe.changes)|\($0.dragProbe.landed)" }
+                }),
             TableAccessibility.Item(
                 id: "table.debug", label: "debug", frame: CGRect(x: 24, y: 0, width: 24, height: 24),
                 traits: .staticText, live: { [weak self] in
