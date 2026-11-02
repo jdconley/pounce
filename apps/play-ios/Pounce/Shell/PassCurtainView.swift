@@ -15,8 +15,8 @@ struct PassCurtainView: View {
     let person: Person
     let onRevealed: () -> Void
 
-    /// How long the paw must be held.
-    static let holdDuration: Double = 0.6
+    /// How long the paw must be held (at the app's pace).
+    static let holdDuration: Double = Pace.seconds(0.6)
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.scenePhase) private var scenePhase
@@ -151,7 +151,7 @@ struct PassCurtainView: View {
         .compositingGroup()
         .shadow(color: Palette.teal.opacity(glow ? 0.95 : 0.5), radius: glow ? 26 : 12)
         .scaleEffect(pressing && !reduceMotion ? 0.95 : 1)
-        .animation(.spring(duration: 0.15, bounce: 0.3), value: pressing)
+        .animation(.spring(duration: 0.15, bounce: 0.3).paced, value: pressing)
         .contentShape(Circle())
         // `onPressingChanged(false)` comes on lift, on a cancelled touch and when the finger
         // slides further than `maximumDistance`; `perform` only after a full, unbroken hold.
@@ -173,12 +173,12 @@ struct PassCurtainView: View {
 
     private func enter() {
         Sound.shared.play(ArtName.Sound.sfxWhoosh, volume: 0.7)
-        withAnimation(reduceMotion ? .easeOut(duration: 0.2) : .spring(duration: 0.5, bounce: 0.45)) {
+        withAnimation(reduceMotion ? .easeOut(duration: 0.2).paced : .spring(duration: 0.5, bounce: 0.45).paced) {
             appeared = true
         }
         guard !reduceMotion else { return }
-        withAnimation(.easeInOut(duration: 1.6).repeatForever(autoreverses: true)) { breathe = true }
-        withAnimation(.easeInOut(duration: 0.9).repeatForever(autoreverses: true)) { glow = true }
+        withAnimation(.easeInOut(duration: 1.6).repeatForever(autoreverses: true).paced) { breathe = true }
+        withAnimation(.easeInOut(duration: 0.9).repeatForever(autoreverses: true).paced) { glow = true }
     }
 
     /// Finger down on the paw: the ring starts filling.
@@ -188,7 +188,7 @@ struct PassCurtainView: View {
         pressedAt = .now
         Haptics.shared.tick()
         Sound.shared.play(ArtName.Sound.sfxTick)
-        withAnimation(.linear(duration: Self.holdDuration)) { progress = 1 }
+        withAnimation(.linear(duration: Self.holdDuration).paced) { progress = 1 }
     }
 
     /// Finger up, slid off, touch cancelled or app inactive: too early drains the ring.
@@ -202,7 +202,7 @@ struct PassCurtainView: View {
             // A full hold ends the press too, right around `perform`: leave the ring full for
             // it, and drain only if no reveal follows (the finger slid off at the last moment).
             Task { @MainActor in
-                try? await Task.sleep(for: .milliseconds(150))
+                try? await Task.sleep(for: Pace.duration(.milliseconds(150)))
                 if !done, !pressing { drain() }
             }
             return
@@ -211,7 +211,7 @@ struct PassCurtainView: View {
     }
 
     private func drain() {
-        withAnimation(.easeOut(duration: 0.2)) { progress = 0 }
+        withAnimation(.easeOut(duration: 0.2).paced) { progress = 0 }
     }
 
     /// The long press held for `holdDuration` without the finger lifting, sliding off or the

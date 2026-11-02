@@ -87,14 +87,17 @@ export class RoomCore {
   private readonly now: () => number;
   private readonly rng: Rng;
   private readonly game: CatTowerModule;
+  /** Divides the bot and next-round delays (`DEV_SPEED` on the dev server; 1 everywhere else). */
+  private readonly speed: number;
   /** Not persisted: the Durable Object drains it after every call. */
   private pushIntents: PushIntent[] = [];
 
-  constructor(state: RoomState, now: () => number, rng: Rng, game: CatTowerModule = catTower) {
+  constructor(state: RoomState, now: () => number, rng: Rng, game: CatTowerModule = catTower, speed = 1) {
     this.state = state;
     this.now = now;
     this.rng = rng;
     this.game = game;
+    this.speed = speed;
   }
 
   static create(code: string, hostDeviceId: string, now: number): RoomState {
@@ -483,7 +486,7 @@ export class RoomCore {
       return;
     }
     if (game.status === "roundOver") {
-      timers.nextRoundAt = now + NEXT_ROUND_DELAY_MS;
+      timers.nextRoundAt = now + NEXT_ROUND_DELAY_MS / this.speed;
       timers.botAt = null;
       return;
     }
@@ -492,7 +495,7 @@ export class RoomCore {
     const actor = this.game.currentActor(game) as Seat;
     const seat = state.seats[actor] as SeatInfo;
     if (seat.kind === "bot") {
-      timers.botAt = now + BOT_DELAY_MS;
+      timers.botAt = now + BOT_DELAY_MS / this.speed;
       return;
     }
     timers.botAt = null;

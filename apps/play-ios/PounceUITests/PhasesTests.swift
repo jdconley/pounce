@@ -9,8 +9,7 @@ final class PhasesTests: XCTestCase {
 
     @MainActor
     func testTowerShowsEveryPhaseAndWhoIsOnIt() throws {
-        let app = XCUIApplication()
-        app.launchArguments = ["-demo", "table"]
+        let app = Live.demo("table")
         app.launch()
         let tower = app.descendants(matching: .any)["table.tower"]
         XCTAssertTrue(tower.waitForExistence(timeout: 10))
@@ -20,7 +19,9 @@ final class PhasesTests: XCTestCase {
             dismissPriming(app)
             XCTAssertTrue(notNow.waitForNonExistence(timeout: 3))
         }
-        tower.tap()
+        // By coordinate: XCUITest finds no hit point for the tower's element (it starts just past
+        // the screen's left edge).
+        tap(app, tower.frame)
         XCTAssertTrue(app.descendants(matching: .any)["phases"].waitForExistence(timeout: 3))
         attach(app, "phases-top")
 

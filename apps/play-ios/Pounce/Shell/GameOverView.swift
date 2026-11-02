@@ -77,12 +77,12 @@ struct GameOverView: View {
             }
         }
         .onAppear {
-            withAnimation(.spring(duration: 0.55, bounce: 0.4)) { appeared = true }
-            withAnimation(reduceMotion ? .easeIn(duration: 0.2) : .spring(duration: 0.5, bounce: 0.5).delay(0.35)) {
+            withAnimation(.spring(duration: 0.55, bounce: 0.4).paced) { appeared = true }
+            withAnimation(reduceMotion ? .easeIn(duration: 0.2).paced : .spring(duration: 0.5, bounce: 0.5).delay(0.35).paced) {
                 crowned = true
             }
             if !reduceMotion {
-                withAnimation(.easeOut(duration: CelebrationTiming.sunburstLoop)) { turned = true }
+                withAnimation(.easeOut(duration: CelebrationTiming.sunburstLoop).paced) { turned = true }
             }
             Sound.shared.play(ArtName.Sound.sfxPop)
             Haptics.shared.success()
@@ -163,7 +163,7 @@ private struct ConfettiFall: View {
                         .position(
                             x: p.x * geo.size.width + (fallen ? p.drift : 0),
                             y: fallen ? geo.size.height + 60 : -40)
-                        .animation(.easeIn(duration: p.duration).delay(p.delay), value: fallen)
+                        .animation(.easeIn(duration: p.duration).delay(p.delay).paced, value: fallen)
                 }
             }
         }
@@ -177,7 +177,7 @@ private struct ConfettiFall: View {
                     delay: Double.random(in: 0...0.7), drift: CGFloat.random(in: -50...50))
             }
             Task { @MainActor in
-                try? await Task.sleep(for: .milliseconds(30))
+                try? await Task.sleep(for: Pace.duration(.milliseconds(30)))
                 fallen = true
             }
         }
@@ -207,13 +207,13 @@ struct ScoreboardOverlay: View {
                     ForEach(Array(rows.enumerated()), id: \.element) { i, seat in
                         row(seat)
                             .offset(x: appeared ? 0 : (i.isMultiple(of: 2) ? -420 : 420))
-                            .animation(.spring(duration: 0.4, bounce: 0.3).delay(Double(i) * 0.04), value: appeared)
+                            .animation(.spring(duration: 0.4, bounce: 0.3).delay(Double(i) * 0.04).paced, value: appeared)
                     }
                     PhaseLadderView(ladder: PhaseLadder(model: model, focus: focus), model: model)
                         .padding(.top, 16)
                         .offset(y: appeared ? 0 : 120)
                         .opacity(appeared ? 1 : 0)
-                        .animation(.spring(duration: 0.45, bounce: 0.2).delay(0.12), value: appeared)
+                        .animation(.spring(duration: 0.45, bounce: 0.2).delay(0.12).paced, value: appeared)
                 }
                 .padding(.horizontal, 16)
                 .padding(.vertical, 20)

@@ -1,4 +1,5 @@
 import { issueDeviceToken, verifyDeviceToken } from "./auth";
+import { devSpeed } from "./env";
 import { appSiteAssociation, ogImage, sharePage } from "./http/links";
 import { newRoomCode, ROOM_CODE } from "./room/codes";
 import { DEVICE_HEADER } from "./room/game-room";
@@ -139,7 +140,13 @@ export default {
     const { pathname } = new URL(request.url);
     const { method } = request;
     if (method === "GET" && pathname === "/healthz") {
-      return json(200, { ok: true, service: "play-api", configured: Boolean(env.TOKEN_SECRET) });
+      const speed = devSpeed(env);
+      return json(200, {
+        ok: true,
+        service: "play-api",
+        configured: Boolean(env.TOKEN_SECRET),
+        ...(speed === 1 ? {} : { speed }),
+      });
     }
     if (method === "GET" && pathname === "/.well-known/apple-app-site-association") {
       return appSiteAssociation();

@@ -82,7 +82,7 @@ struct StateCard: View {
             }
         }
         .onAppear {
-            withAnimation(.spring(duration: 0.5, bounce: 0.45)) { appeared = true }
+            withAnimation(.spring(duration: 0.5, bounce: 0.45).paced) { appeared = true }
             Sound.shared.play(kind == .offline ? ArtName.Sound.sfxThud : ArtName.Sound.sfxNope)
         }
         .accessibilityElement(children: .contain)
@@ -134,8 +134,8 @@ struct YarnIndicator: View {
         .onAppear {
             withAnimation(
                 reduceMotion
-                    ? .easeInOut(duration: 0.9).repeatForever(autoreverses: true)
-                    : .linear(duration: 1.1).repeatForever(autoreverses: false)
+                    ? .easeInOut(duration: 0.9).repeatForever(autoreverses: true).paced
+                    : .linear(duration: 1.1).repeatForever(autoreverses: false).paced
             ) { spin = true }
         }
         .accessibilityElement()

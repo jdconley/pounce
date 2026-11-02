@@ -60,7 +60,7 @@ struct MoveSeatSheet: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .shake(trigger: nope)
-        .animation(.spring(duration: 0.45, bounce: 0.35), value: code)
+        .animation(.spring(duration: 0.45, bounce: 0.35).paced, value: code)
         .background(ShareRoom(
             isPresented: $sharing,
             url: code.map { DeepLink.moveURL(code: session.code, moveCode: $0.code) } ?? DeepLink.shareURL(code: session.code),
@@ -228,7 +228,7 @@ struct MoveClaimView: View {
             }
             .padding(.horizontal, 16)
         }
-        .animation(.spring(duration: 0.4, bounce: 0.4), value: refused)
+        .animation(.spring(duration: 0.4, bounce: 0.4).paced, value: refused)
         .overlay(alignment: .topLeading) {
             CornerHomeButton { onHome() }
                 .padding(.leading, 16)

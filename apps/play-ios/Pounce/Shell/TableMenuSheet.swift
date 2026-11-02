@@ -33,7 +33,7 @@ struct TableMenuSheet: View {
                     .transition(.move(edge: .leading).combined(with: .opacity))
             }
         }
-        .animation(.spring(duration: 0.4, bounce: 0.25), value: moving)
+        .animation(.spring(duration: 0.4, bounce: 0.25).paced, value: moving)
         .presentationDetents(moving ? [.large] : [Self.menuDetent], selection: $detent)
         .presentationDragIndicator(.visible)
         .presentationBackground(Palette.night)
