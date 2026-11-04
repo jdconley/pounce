@@ -10,8 +10,10 @@ export type ProfilePerson = { id: string; name: string; cat: number; key: string
 /** What a device uploads on launch: its time zone, its owner's age band and the people on it. */
 export type Profile = { timeZone: string; ageBand?: AgeBand; people: ProfilePerson[] };
 
+export type Json = string | number | boolean | null | Json[] | { [key: string]: Json };
+
 /** One synced value and when it was last written (client ms). */
-export type Entry = { v: unknown; at: number };
+export type Entry = { v: Json; at: number };
 export type Section = Record<string, Entry>;
 export type StatePatch = { settings?: Section; tutorial?: Section; archive?: Section };
 
@@ -88,7 +90,8 @@ function parseSection(section: unknown, keyOk: (key: string) => boolean): Sectio
     if (!keyOk(key) || !isObj(entry) || !hasKeys(entry, ["v", "at"]) || !isInt(entry.at, 0)) return null;
     const json = JSON.stringify(entry.v);
     if (json === undefined || new TextEncoder().encode(json).length > MAX_VALUE_BYTES) return null;
-    out[key] = { v: entry.v, at: entry.at };
+    // JSON.parse produced it, so it is JSON.
+    out[key] = { v: entry.v as Json, at: entry.at };
   }
   return out;
 }

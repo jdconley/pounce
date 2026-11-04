@@ -1,8 +1,23 @@
 import { issueDeviceToken, verifyDeviceToken } from "./auth";
 import { devSpeed } from "./env";
 import { appSiteAssociation, ogImage, sharePage } from "./http/links";
+import {
+  deleteMe,
+  devicePlayers,
+  deviceTables,
+  linkIdentity,
+  player,
+  resolveMe,
+  signIn,
+  signOut,
+  unlinkIdentity,
+  uploadProfile,
+  type Result,
+} from "./players/accounts";
+import { PERSON_ID } from "./players/ids";
+import { parseProfile, parseStatePatch } from "./players/parse";
 import { newRoomCode, ROOM_CODE } from "./room/codes";
-import { DEVICE_HEADER } from "./room/game-room";
+import { DEVICE_HEADER, PLAYER_HEADER } from "./room/game-room";
 import { parseRoomName } from "./room/names";
 
 import type { Env } from "./env";
@@ -14,10 +29,16 @@ export { GameRoom } from "./room/game-room";
 
 const SHARE_PATH = /^\/j\/([^/]+)$/;
 const ROOM_WS = /^\/v1\/rooms\/([^/]+)\/ws$/;
+const SIGN_IN = /^\/v1\/identities\/([a-z]+)$/;
+const MY_IDENTITY = /^\/v1\/me\/identities\/([a-z]+)$/;
 const APNS_TOKEN = /^[0-9a-fA-F]{64,200}$/;
 const DEVICE_ID_BYTES = 18; // 24 base64url characters.
 const ROOM_CODE_ATTEMPTS = 5;
 const MAX_BODY_BYTES = 1024;
+const MAX_PROFILE_BYTES = 2048;
+/** An Apple identity token alone is about 1 KB. */
+const MAX_PROOF_BYTES = 4096;
+const MAX_STATE_BYTES = 8192;
 const MINTS_PER_WINDOW = 10;
 const MINT_WINDOW_MS = 60_000;
 const MAX_TRACKED_IPS = 10_000;
@@ -62,9 +83,9 @@ function allowMint(ip: string, now: number): boolean {
 }
 
 /** The parsed JSON object body, or null when it is missing, too big or not an object. */
-async function readObject(request: Request): Promise<Record<string, unknown> | null> {
+async function readObject(request: Request, maxBytes = MAX_BODY_BYTES): Promise<Record<string, unknown> | null> {
   const text = await request.text();
-  if (new TextEncoder().encode(text).length > MAX_BODY_BYTES) return null;
+  if (new TextEncoder().encode(text).length > maxBytes) return null;
   try {
     const value: unknown = JSON.parse(text);
     return typeof value === "object" && value !== null && !Array.isArray(value)
@@ -103,15 +124,17 @@ async function createRoom(request: Request, env: Env, deviceId: string): Promise
   return json(503, { error: "no_room_code" });
 }
 
-function openSocket(request: Request, env: Env, deviceId: string, code: string): Promise<Response> | Response {
+async function openSocket(request: Request, env: Env, deviceId: string, code: string): Promise<Response> {
   if (!ROOM_CODE.test(code)) return notFound();
   if (request.headers.get("upgrade")?.toLowerCase() !== "websocket") {
     return json(426, { error: "upgrade_required" });
   }
-  // The room trusts this header, so a client-supplied one must never reach it.
+  // The room trusts these headers, so client-supplied ones must never reach it.
   const headers = new Headers(request.headers);
   headers.delete(DEVICE_HEADER);
+  headers.delete(PLAYER_HEADER);
   headers.set(DEVICE_HEADER, deviceId);
+  headers.set(PLAYER_HEADER, JSON.stringify(await devicePlayers(env, deviceId)));
   return env.ROOMS.get(env.ROOMS.idFromName(code)).fetch(new Request(request, { headers }));
 }
 
@@ -126,15 +149,80 @@ async function setPushToken(request: Request, env: Env, deviceId: string): Promi
 }
 
 async function listTables(env: Env, deviceId: string): Promise<Response> {
-  const tables = await env.DEVICES.get(env.DEVICES.idFromName(deviceId)).listTables();
-  return json(200, { tables });
+  return json(200, { tables: await deviceTables(env, deviceId) });
 }
+
+function respond<T>(result: Result<T>, okStatus = 200): Response {
+  if ("ok" in result) return result.ok === null ? noContent() : json(okStatus, result.ok);
+  return json(result.status, { error: result.error, ...result.extra });
+}
+
+async function putProfile(request: Request, env: Env, deviceId: string): Promise<Response> {
+  const profile = parseProfile(await readObject(request, MAX_PROFILE_BYTES));
+  if (!profile) return badRequest();
+  return json(200, await uploadProfile(env, deviceId, profile, Date.now()));
+}
+
+/** The player a `/v1/me` route acts for (`?person=` picks one of the device's people), or a 404. */
+async function me(request: Request, env: Env, deviceId: string): Promise<string | Response> {
+  const person = new URL(request.url).searchParams.get("person");
+  if (person !== null && !PERSON_ID.test(person)) return badRequest();
+  return (await resolveMe(env, deviceId, person)) ?? json(404, { error: "no_player" });
+}
+
+/** Runs `run` for the request's player. */
+function asMe(run: (request: Request, env: Env, deviceId: string, playerId: string) => Promise<Response>): Route {
+  return async (request, env, deviceId) => {
+    const playerId = await me(request, env, deviceId);
+    return typeof playerId === "string" ? run(request, env, deviceId, playerId) : playerId;
+  };
+}
+
+const getState = asMe(async (_r, env, _d, playerId) => json(200, await player(env, playerId).getState()));
+
+const patchState = asMe(async (request, env, _d, playerId) => {
+  const patch = parseStatePatch(await readObject(request, MAX_STATE_BYTES));
+  if (!patch) return badRequest();
+  await player(env, playerId).patchState(patch, Date.now());
+  return noContent();
+});
+
+const deleteAccount = asMe(async (_r, env, _d, playerId) => {
+  await deleteMe(env, playerId, Date.now(), fetch);
+  return noContent();
+});
 
 type Route = (request: Request, env: Env, deviceId: string) => Promise<Response> | Response;
 
 /** The authenticated route for this request, or null for a 404. */
 function route(method: string, pathname: string): Route | null {
   if (method === "PUT" && pathname === "/v1/devices/me/push") return setPushToken;
+  if (method === "PUT" && pathname === "/v1/devices/me/profile") return putProfile;
+  if (method === "GET" && pathname === "/v1/me/state") return getState;
+  if (method === "PATCH" && pathname === "/v1/me/state") return patchState;
+  if (method === "DELETE" && pathname === "/v1/me") return deleteAccount;
+  if (method === "POST" && pathname === "/v1/me/signout") {
+    return async (_r, env, id) => {
+      await signOut(env, id);
+      return noContent();
+    };
+  }
+  const signInPath = method === "POST" ? SIGN_IN.exec(pathname) : null;
+  if (signInPath) {
+    return async (r, env, id) =>
+      respond(await signIn(env, id, signInPath[1] as string, await readObject(r, MAX_PROOF_BYTES), Date.now(), fetch));
+  }
+  const mine = MY_IDENTITY.exec(pathname);
+  if (mine && method === "POST") {
+    return asMe(async (r, env, _id, playerId) =>
+      respond(await linkIdentity(env, playerId, mine[1] as string, await readObject(r, MAX_PROOF_BYTES), Date.now(), fetch)),
+    );
+  }
+  if (mine && method === "DELETE") {
+    return asMe(async (_r, env, id, playerId) =>
+      respond(await unlinkIdentity(env, id, playerId, mine[1] as string, Date.now(), fetch)),
+    );
+  }
   if (method === "GET" && pathname === "/v1/devices/me/tables") return (_r, env, id) => listTables(env, id);
   if (method === "POST" && pathname === "/v1/rooms") return createRoom;
   const ws = method === "GET" ? ROOM_WS.exec(pathname) : null;

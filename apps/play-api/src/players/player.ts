@@ -6,7 +6,7 @@ import { IDENTITIES_NAME } from "./identities";
 import { mergeSection } from "./state";
 
 import type { Env } from "../env";
-import type { AgeBand, Section, StatePatch } from "./parse";
+import type { AgeBand, Json, Section, StatePatch } from "./parse";
 
 export type PlayerMeta = {
   name: string;
@@ -216,7 +216,7 @@ export class Player extends DurableObject<Env> {
     const rows = this.ctx.storage.sql
       .exec<{ key: string; v: string; at: number }>("SELECT key, v, at FROM state WHERE section = ?", name)
       .toArray();
-    return Object.fromEntries(rows.map((r) => [r.key, { v: JSON.parse(r.v) as unknown, at: r.at }]));
+    return Object.fromEntries(rows.map((r) => [r.key, { v: JSON.parse(r.v) as Json, at: r.at }]));
   }
 
   private writeSection(name: string, patch: Section, now: number): void {

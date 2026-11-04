@@ -2,15 +2,21 @@ import { DurableObject } from "cloudflare:workers";
 
 import { devSpeed } from "../env";
 import { catTower } from "../games/cat-tower";
+import { PERSON_ID, PLAYER_ID } from "../players/ids";
 import { parseClientMessage } from "../protocol";
 
-import { RoomCore, type Outbound, type RoomState } from "./core";
+
+import { RoomCore, type AdoptRule, type Outbound, type PushIntent, type RoomState } from "./core";
 
 import type { Env } from "../env";
 import type { ServerMessage } from "../protocol";
 
 /** Internal header the Worker sets to the verified device id. */
 export const DEVICE_HEADER = "x-play-device";
+/** Internal header the Worker sets to the device's people and their players, as JSON `{personId: playerId}`. */
+export const PLAYER_HEADER = "x-play-player";
+
+const MAX_HEADER_PLAYERS = 16;
 
 const BAD_MESSAGE: ServerMessage = { t: "error", code: "bad_message" };
 const NORMAL_CLOSURE = 1000;
@@ -31,6 +37,7 @@ export class GameRoom extends DurableObject<Env> {
    */
   private tablesFingerprint = "";
   private tableDevices = new Set<string>();
+  private tablePlayers = new Set<string>();
 
   constructor(ctx: DurableObjectState, env: Env) {
     super(ctx, env);
@@ -47,7 +54,7 @@ export class GameRoom extends DurableObject<Env> {
       "CREATE TABLE IF NOT EXISTS room (id INTEGER PRIMARY KEY CHECK (id = 1), json TEXT)",
     );
     this.ctx.storage.sql.exec(
-      "CREATE TABLE IF NOT EXISTS listed (id INTEGER PRIMARY KEY CHECK (id = 1), fingerprint TEXT, devices TEXT)",
+      "CREATE TABLE IF NOT EXISTS listed (id INTEGER PRIMARY KEY CHECK (id = 1), fingerprint TEXT, devices TEXT, players TEXT)",
     );
     this.core = new RoomCore(
       RoomCore.create(code, hostDeviceId, Date.now(), name),
@@ -72,7 +79,7 @@ export class GameRoom extends DurableObject<Env> {
     const [client, server] = Object.values(pair) as [WebSocket, WebSocket];
     this.ctx.acceptWebSocket(server, [deviceId]);
     server.serializeAttachment({ deviceId });
-    await this.after(this.core.connect(deviceId));
+    await this.after(this.core.connect(deviceId, parsePlayers(request.headers.get(PLAYER_HEADER))));
     return new Response(null, { status: 101, webSocket: client });
   }
 
@@ -107,6 +114,11 @@ export class GameRoom extends DurableObject<Env> {
     if (this.core) await this.after(this.core.tick());
   }
 
+  /** Hands seats to players (§13.1): a backfill after a profile upload, a merge, or an account deletion. */
+  async adopt(rule: AdoptRule): Promise<void> {
+    if (this.core) await this.after(this.core.adopt(rule));
+  }
+
   private load(): RoomCore | null {
     const sql = this.ctx.storage.sql;
     // Reading sqlite_master creates nothing, so probing an unused code leaves
@@ -115,12 +127,18 @@ export class GameRoom extends DurableObject<Env> {
     if (table.length === 0) return null;
     const row = sql.exec<{ json: string }>("SELECT json FROM room WHERE id = 1").toArray()[0];
     if (!row) return null;
+    // Rooms made before players have no `players` column.
+    const columns = sql.exec<{ name: string }>("PRAGMA table_info(listed)").toArray();
+    if (!columns.some((c) => c.name === "players")) sql.exec("ALTER TABLE listed ADD COLUMN players TEXT");
     const listed = sql
-      .exec<{ fingerprint: string; devices: string }>("SELECT fingerprint, devices FROM listed WHERE id = 1")
+      .exec<{ fingerprint: string; devices: string; players: string | null }>(
+        "SELECT fingerprint, devices, players FROM listed WHERE id = 1",
+      )
       .toArray()[0];
     if (listed) {
       this.tablesFingerprint = listed.fingerprint;
       this.tableDevices = new Set(JSON.parse(listed.devices) as string[]);
+      this.tablePlayers = new Set(JSON.parse(listed.players ?? "[]") as string[]);
     }
     return new RoomCore(JSON.parse(row.json) as RoomState, Date.now, cryptoRng, catTower, devSpeed(this.env));
   }
@@ -162,9 +180,7 @@ export class GameRoom extends DurableObject<Env> {
     }
 
     for (const intent of core.drainPushIntents()) {
-      if (intent.kind !== "your_turn") continue;
-      const device = this.env.DEVICES.get(this.env.DEVICES.idFromName(intent.deviceId));
-      this.ctx.waitUntil(device.push(intent).catch(() => undefined));
+      this.ctx.waitUntil(this.push(intent).catch(() => undefined));
     }
 
     this.ctx.storage.sql.exec(
@@ -183,35 +199,58 @@ export class GameRoom extends DurableObject<Env> {
     await this.updateTables(core);
   }
 
+  /**
+   * "Your turn" goes to every device of the seat's player, and to the device
+   * holding the seat; a dismiss goes to the player's other devices (§12.5).
+   */
+  private async push(intent: PushIntent): Promise<void> {
+    const playerDevices = intent.playerId ? await this.player(intent.playerId).deviceIds() : [];
+    const targets =
+      intent.kind === "your_turn"
+        ? new Set([...playerDevices, intent.deviceId])
+        : new Set(playerDevices.filter((d) => d !== intent.exceptDeviceId));
+    await Promise.all([...targets].map((deviceId) => this.index(deviceId).push(intent).catch(() => undefined)));
+  }
+
   private async updateTables(core: RoomCore): Promise<void> {
     const { state } = core;
     const actor = state.status === "playing" && state.gameState ? catTower.currentActor(state.gameState) : null;
     const devices = tableDevices(state);
-    const fingerprint = JSON.stringify([state.status, actor, state.name, [...devices]]);
+    const players = new Set(core.seatPlayers());
+    const fingerprint = JSON.stringify([state.status, actor, state.name, [...devices], [...players]]);
     if (fingerprint === this.tablesFingerprint) return;
     this.tablesFingerprint = fingerprint;
 
     const gone = [...this.tableDevices].filter((d) => !devices.has(d));
+    const gonePlayers = [...this.tablePlayers].filter((p) => !players.has(p));
     this.tableDevices = devices;
+    this.tablePlayers = players;
     // Saved before the RPCs: an eviction mid-update must not lose who is listed.
     this.ctx.storage.sql.exec(
-      `INSERT INTO listed (id, fingerprint, devices) VALUES (1, ?, ?)
-       ON CONFLICT (id) DO UPDATE SET fingerprint = excluded.fingerprint, devices = excluded.devices`,
+      `INSERT INTO listed (id, fingerprint, devices, players) VALUES (1, ?, ?, ?)
+       ON CONFLICT (id) DO UPDATE SET fingerprint = excluded.fingerprint, devices = excluded.devices,
+         players = excluded.players`,
       fingerprint,
       JSON.stringify([...devices]),
+      JSON.stringify([...players]),
     );
     const updatedAt = Date.now();
+    const entry = { code: state.code, name: state.name, status: state.status, updatedAt };
     await Promise.all([
       ...[...devices].map((deviceId) =>
         this.index(deviceId).upsertTable({
-          code: state.code,
-          name: state.name,
-          status: state.status,
+          ...entry,
           yourTurn: actor !== null && core.controlledSeats(deviceId).includes(actor),
-          updatedAt,
+        }),
+      ),
+      ...[...players].map((playerId) =>
+        this.player(playerId).upsertTable({
+          ...entry,
+          yourTurn: actor !== null && state.seats[actor]?.playerId === playerId,
         }),
       ),
       ...gone.map((deviceId) => this.index(deviceId).removeTable(state.code)),
+      ...gonePlayers.map((playerId) => this.player(playerId).removeTable(state.code)),
     ]).catch((error: unknown) => {
       // A stale tables list is cosmetic; the room itself is saved.
       console.error("tables_update_failed", state.code, String(error));
@@ -229,7 +268,11 @@ export class GameRoom extends DurableObject<Env> {
       }
     }
     const devices = new Set([...tableDevices(core.state), ...this.tableDevices]);
-    await Promise.all([...devices].map((deviceId) => this.index(deviceId).removeTable(code))).catch(
+    const players = new Set([...core.seatPlayers(), ...this.tablePlayers]);
+    await Promise.all([
+      ...[...devices].map((deviceId) => this.index(deviceId).removeTable(code)),
+      ...[...players].map((playerId) => this.player(playerId).removeTable(code)),
+    ]).catch(
       (error: unknown) => {
         console.error("tables_update_failed", code, String(error));
       },
@@ -237,12 +280,32 @@ export class GameRoom extends DurableObject<Env> {
     this.core = null;
     this.tablesFingerprint = "";
     this.tableDevices = new Set();
+    this.tablePlayers = new Set();
     await this.ctx.storage.deleteAlarm();
     await this.ctx.storage.deleteAll();
   }
 
   private index(deviceId: string) {
     return this.env.DEVICES.get(this.env.DEVICES.idFromName(deviceId));
+  }
+
+  private player(playerId: string) {
+    return this.env.PLAYERS.get(this.env.PLAYERS.idFromName(playerId));
+  }
+}
+
+/** The Worker's `x-play-player` header, or no players when it is missing or malformed. */
+function parsePlayers(header: string | null): Record<string, string> {
+  if (!header) return {};
+  try {
+    const value: unknown = JSON.parse(header);
+    if (typeof value !== "object" || value === null || Array.isArray(value)) return {};
+    const entries = Object.entries(value as Record<string, unknown>);
+    if (entries.length > MAX_HEADER_PLAYERS) return {};
+    if (!entries.every(([person, p]) => PERSON_ID.test(person) && typeof p === "string" && PLAYER_ID.test(p))) return {};
+    return Object.fromEntries(entries) as Record<string, string>;
+  } catch {
+    return {};
   }
 }
 
