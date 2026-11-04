@@ -2,8 +2,9 @@ import PounceKit
 import SwiftUI
 
 /// People on this phone ("who's playing?"): the owner and the others who share the phone for
-/// pass-and-play. Tap a cat to edit it, the dashed plus to add someone. Edits apply to tables
-/// joined afterwards.
+/// pass-and-play. Tap a cat to edit it, the dashed plus to add someone. A new name reaches every
+/// table they sit at (each one as it next opens; the table menu's Names renames mid-game); a
+/// new cat applies to tables joined afterwards.
 struct PeopleSheet: View {
     @Environment(AppModel.self) private var model
     @Environment(\.dismiss) private var dismiss
@@ -97,7 +98,7 @@ struct PeopleSheet: View {
             }
         case .new:
             CatEditorView(
-                initialName: CatEditorView.randomName(), initialCat: nextFreshCat(),
+                initialName: "", initialCat: nextFreshCat(),
                 onCancel: { self.editing = nil }
             ) { name, cat in
                 model.addPerson(name: name, cat: cat)

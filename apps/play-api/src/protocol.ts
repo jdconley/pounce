@@ -48,7 +48,8 @@ export type ClientMessage =
   | { t: "presence"; state: "active" | "background" }
   | { t: "moveSeat"; seat: Seat }
   | { t: "claimMove"; code: string }
-  | { t: "leave"; seat: Seat };
+  | { t: "leave"; seat: Seat }
+  | { t: "rename"; seat: Seat; name: string };
 
 /** Every `error` code the server sends. */
 export type ErrorCode =
@@ -155,15 +156,21 @@ function parseAction(a: unknown): Action | null {
   }
 }
 
-function parsePerson(p: unknown): Person | null {
-  if (!isObj(p) || !hasKeys(p, ["id", "name", "cat"])) return null;
-  const { id, name, cat } = p;
-  if (typeof id !== "string" || !UUID.test(id)) return null;
+/** A person's name trimmed, or null when it is not a string of 1-20 characters after trimming. */
+function parseName(name: unknown): string | null {
   if (typeof name !== "string") return null;
   const trimmed = name.trim();
-  if (trimmed.length < 1 || trimmed.length > MAX_NAME) return null;
+  return trimmed.length < 1 || trimmed.length > MAX_NAME ? null : trimmed;
+}
+
+function parsePerson(p: unknown): Person | null {
+  if (!isObj(p) || !hasKeys(p, ["id", "name", "cat"])) return null;
+  const { id, cat } = p;
+  if (typeof id !== "string" || !UUID.test(id)) return null;
+  const name = parseName(p.name);
+  if (name === null) return null;
   if (!isInt(cat, 0, MAX_CAT)) return null;
-  return { id, name: trimmed, cat };
+  return { id, name, cat };
 }
 
 function isMoveCode(code: unknown): code is string {
@@ -193,6 +200,11 @@ function parseObject(o: Obj): ClientMessage | null {
       if (!hasKeys(o, ["t", "seat", "person"]) || !isInt(o.seat, 0)) return null;
       const person = parsePerson(o.person);
       return person ? { t: "claim", seat: o.seat, person } : null;
+    }
+    case "rename": {
+      if (!hasKeys(o, ["t", "seat", "name"]) || !isInt(o.seat, 0)) return null;
+      const name = parseName(o.name);
+      return name === null ? null : { t: "rename", seat: o.seat, name };
     }
     case "claimMove":
       if (!hasKeys(o, ["t", "code"]) || !isMoveCode(o.code)) return null;

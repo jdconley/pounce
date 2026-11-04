@@ -38,6 +38,8 @@ final class RoomSession {
 
     // Hooks the app model fills in.
     @ObservationIgnored var owner: () -> Person? = { nil }
+    /// Everyone on this phone (the owner first): renamed people get their seats renamed.
+    @ObservationIgnored var people: () -> [Person] = { [] }
     @ObservationIgnored var onSnapshot: (RoomView) -> Void = { _ in }
     @ObservationIgnored var onArrive: () -> Void = {}
     @ObservationIgnored var onGone: (RoomPhase) -> Void = { _ in }
@@ -49,6 +51,7 @@ final class RoomSession {
     @ObservationIgnored private var closed = false
     @ObservationIgnored private var backgrounded = false
     @ObservationIgnored private var autoClaim = AutoClaim()
+    @ObservationIgnored private var nameSync = NameSync()
     /// Lobby nopes still to come from refused auto-claims: nobody tapped, so nothing wiggles.
     @ObservationIgnored private var silentNopes = 0
     @ObservationIgnored private var presencePending = false
@@ -251,6 +254,7 @@ final class RoomSession {
         if let claim = autoClaim.snapshot(model, owner: owner(), first: { firstClaim(model) }) {
             send(claim)
         }
+        syncNames(model)
         if !model.mySeats.isEmpty { onSnapshot(room) }
     }
 
@@ -270,6 +274,19 @@ final class RoomSession {
             beginMove(moveCode, seats: model.mySeats)
             return .claimMove(code: moveCode)
         }
+    }
+
+    // MARK: names
+
+    /// Sends a `rename` for each of my seats whose person was renamed on this phone (People
+    /// sheet, table menu, or before this room opened). Called on every snapshot and after an edit.
+    func syncNames() {
+        guard let model else { return }
+        syncNames(model)
+    }
+
+    private func syncNames(_ model: TableModel) {
+        for rename in nameSync.renames(model, people: people()) { send(rename) }
     }
 
     // MARK: move my seat (receiving phone)

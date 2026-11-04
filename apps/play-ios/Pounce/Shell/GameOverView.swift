@@ -3,15 +3,44 @@ import SwiftUI
 
 /// The finished game (spec §5.10), over the table once its win moment has played: the
 /// winners' cats in the celebrate pose on a sunburst, a crown dropping onto each (shared wins
-/// show every winner), a one-shot confetti fall, and two pills: Home and New game. No words
-/// but the winners' names. Every motion here runs once and stops, so nothing loops.
+/// show every winner), everyone's final standing (cat, name, score) under it, a one-shot
+/// confetti fall, and two pills: Home and New game. No words but names. Every motion here
+/// runs once and stops, so nothing loops.
 struct GameOverView: View {
     let winners: [Person]
+    /// Every seat, best first: phase reached, then lowest score.
+    var standings: [Standing] = []
     let onHome: () -> Void
     let onNewGame: () -> Void
 
-    /// The House Cat bot as a winner: the gray cat, no name (ruling B).
-    static let botWinner = Person(id: "bot", name: "", cat: SeatInfo.botCat)
+    struct Standing: Identifiable {
+        let seat: Seat
+        let name: String
+        let cat: Int
+        let phase: Int
+        let score: Int
+        var id: Seat { seat }
+    }
+
+    /// The person id a House Cat bot wins under (the gray cat with the bot badge).
+    static let botID = "bot"
+
+    /// The House Cat bot at `seat` as a winner, under its table name.
+    static func botWinner(name: String) -> Person {
+        Person(id: botID, name: name, cat: SeatInfo.botCat)
+    }
+
+    /// Every seat of a finished table, best first.
+    static func standings(_ model: TableModel) -> [Standing] {
+        guard let game = model.game else { return [] }
+        let names = SeatInfo.names(model.room)
+        return game.phase.indices.map { seat in
+            Standing(
+                seat: seat, name: names[safe: seat] ?? "", cat: SeatInfo.catIndex(model.room.seats[safe: seat]),
+                phase: game.phase[seat], score: game.scores[safe: seat] ?? 0)
+        }
+        .sorted { ($0.phase, -$0.score, -$0.seat) > ($1.phase, -$1.score, -$1.seat) }
+    }
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var appeared = false
@@ -52,7 +81,16 @@ struct GameOverView: View {
                     .scaleEffect(appeared ? 1 : 0.5)
                     .opacity(appeared ? 1 : 0)
                 }
-                .frame(height: 360)
+                .frame(height: standings.isEmpty ? 360 : 300)
+                if !standings.isEmpty {
+                    FlowLayout(spacing: 8, lineSpacing: 8) {
+                        ForEach(standings) { standing($0) }
+                    }
+                    .padding(.horizontal, 16)
+                    .opacity(appeared ? 1 : 0)
+                    .accessibilityElement(children: .contain)
+                    .accessibilityIdentifier("gameover.standings")
+                }
                 Spacer()
                 HStack(spacing: 18) {
                     PillButton(
@@ -90,6 +128,26 @@ struct GameOverView: View {
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("screen-gameover")
     }
+
+    /// One seat's final line: cat, name, score.
+    private func standing(_ s: Standing) -> some View {
+        HStack(spacing: 6) {
+            Image(ArtName.cat(s.cat, .idle))
+                .resizable()
+                .scaledToFit()
+                .frame(width: 34, height: 34)
+                .background(Circle().fill(SeatInfo.ringColor(s.seat).mix(with: .white, by: 0.25)))
+                .overlay(Circle().strokeBorder(Palette.ink, lineWidth: 3))
+            NameTag(s.name, maxWidth: 110)
+            OutlinedText(String(s.score), size: 20, fill: .white, width: 3)
+                .fixedSize()
+        }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(Text(
+            "\(s.name), phase \(min(s.phase + 1, 10)), \(s.score) points",
+            comment: "VoiceOver: a player's final standing on the game over screen"))
+        .accessibilityIdentifier("gameover.standing.\(s.seat)")
+    }
 }
 
 /// One winner: cat in the celebrate pose, the crown dropping onto its head, the name.
@@ -115,18 +173,19 @@ private struct WinnerCat: View {
                     .offset(y: crowned ? -size * 0.2 : (reduceMotion ? -size * 0.2 : -size * 1.4))
                     .opacity(crowned ? 1 : 0)
             }
-            if person.name.isEmpty {
-                Image(ArtName.badgeBot)
-                    .resizable()
-                    .scaledToFit()
-                    .frame(width: 40, height: 40)
-            } else {
-                OutlinedText(person.name, size: size > 120 ? 34 : 26, fill: .white, width: 4)
+            HStack(spacing: 6) {
+                if person.id == GameOverView.botID {
+                    Image(ArtName.badgeBot)
+                        .resizable()
+                        .scaledToFit()
+                        .frame(width: 34, height: 34)
+                }
+                NameTag(person.name, maxWidth: max(size * 1.3, 120), size: size > 120 ? 30 : 22)
             }
         }
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(Text(
-            "\(person.name.isEmpty ? String(localized: "House Cat") : person.name) wins",
+            "\(person.name) wins",
             comment: "VoiceOver: a game winner"))
         .accessibilityIdentifier("gameover.winner")
     }
@@ -232,6 +291,10 @@ struct ScoreboardOverlay: View {
         .accessibilityIdentifier("scoreboard")
     }
 
+    private func isTurn(_ seat: Seat) -> Bool {
+        model.game?.status == .playing && model.game?.turn == seat
+    }
+
     private func row(_ seat: Seat) -> some View {
         let view = model.room.seats[safe: seat]
         let phase = model.game?.phase[safe: seat] ?? 0
@@ -263,8 +326,10 @@ struct ScoreboardOverlay: View {
                         .offset(y: 3)
                 }
             }
+            NameTag(SeatInfo.name(model.room, seat), maxWidth: 160, active: isTurn(seat), size: 20)
             Spacer(minLength: 8)
             OutlinedText(String(score), size: 32, fill: .white, width: 4)
+                .fixedSize()
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 6)
@@ -277,7 +342,7 @@ struct ScoreboardOverlay: View {
         )
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(Text(
-            "\(SeatInfo.name(view)), phase \(min(phase + 1, 10)), \(score) points",
+            "\(SeatInfo.name(model.room, seat)), phase \(min(phase + 1, 10)), \(score) points",
             comment: "VoiceOver: a scoreboard row"))
         .accessibilityIdentifier("scoreboard.\(seat)")
     }

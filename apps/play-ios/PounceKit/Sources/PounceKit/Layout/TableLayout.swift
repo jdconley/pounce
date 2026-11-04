@@ -47,7 +47,7 @@ public struct TableLayout: Sendable {
     public let traysFrame: CGRect
     /// Rect all laid-down rows live in (right of the tower, between bar and trays).
     public let laidZone: CGRect
-    /// Sort button center; laid rows stop short of its touch target.
+    /// Sort button center; laid rows stop short of its touch target (and the seat's name pill).
     public let sortButton: CGPoint
 
     // Hand fan.
@@ -150,6 +150,19 @@ public struct TableLayout: Sendable {
     public var sortButtonFrame: CGRect {
         let d = Self.sortButtonHit
         return CGRect(x: sortButton.x - d / 2, y: sortButton.y - d / 2, width: d, height: d)
+    }
+
+    /// The widest the bottom seat's name pill gets.
+    public static let seatTagWidth: CGFloat = 150
+    public static let seatTagHeight: CGFloat = 26
+
+    /// Where the bottom seat's name pill may sit (it is right-aligned in here): just left of
+    /// the sort button, on its line. Laid rows stop short of it too.
+    public var seatTagFrame: CGRect {
+        let sort = sortButtonFrame
+        return CGRect(
+            x: sort.minX - 4 - Self.seatTagWidth, y: sortButton.y - Self.seatTagHeight / 2,
+            width: Self.seatTagWidth, height: Self.seatTagHeight)
     }
 
     /// Cat-tower shelf center, 0 (bottom) ... 9 (top).
@@ -255,7 +268,8 @@ public struct TableLayout: Sendable {
             midY = pilesY - half - rowGap - rowHeight / 2 - k * (rowHeight + rowGap)
         }
         var row = CGRect(x: x, y: midY - rowHeight / 2, width: width, height: rowHeight)
-        if row.intersects(sortButtonFrame) { row.size.width = max(sortButtonFrame.minX - 4 - row.minX, 0) }
+        let corner = sortButtonFrame.union(seatTagFrame)
+        if row.intersects(corner) { row.size.width = max(corner.minX - 4 - row.minX, 0) }
         return row
     }
 }

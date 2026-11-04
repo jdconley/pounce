@@ -147,10 +147,12 @@ extension XCTestCase {
         add(shot)
     }
 
-    /// Onboarding with the suggested name and cat, then Home.
+    /// Onboarding with a dice-rolled name and the first cat, then Home.
     func onboard(_ app: XCUIApplication) {
         let confirm = el(app, "pickcat.confirm")
         XCTAssertTrue(confirm.waitForExistence(timeout: Live.t(15)), "no pick-a-cat screen")
+        el(app, "pickcat.dice").tap()
+        _ = until(3) { app.keyboards.count == 0 }  // the keyboard drops away from the check
         confirm.tap()
         XCTAssertTrue(el(app, "home.newGame").waitForExistence(timeout: Live.t(10)), "no Home")
     }
@@ -191,8 +193,8 @@ extension XCTestCase {
         Thread.sleep(forTimeInterval: Live.pace(1))
     }
 
-    /// In the person picker (after `seatmenu.here`): a new person with the suggested name and
-    /// cat. Taps again while the sheet is still sliding in.
+    /// In the person picker (after `seatmenu.here`): a new person with a dice-rolled name and the
+    /// suggested cat. Taps again while the sheet is still sliding in.
     func addLocalPerson(_ app: XCUIApplication) {
         let addTile = el(app, "picker.add")
         let confirm = el(app, "pickcat.confirm")
@@ -203,6 +205,8 @@ extension XCTestCase {
             return confirm.waitForExistence(timeout: Live.t(2))
         }, "the new-person editor never opened")
         Thread.sleep(forTimeInterval: Live.pace(1))
+        el(app, "pickcat.dice").tap()
+        _ = until(3) { app.keyboards.count == 0 }  // the keyboard drops away from the check
         confirm.tap()
         _ = until(10) { !confirm.exists }
     }

@@ -205,6 +205,7 @@ function clientSamples(): Sample<ClientMessage>[] {
     { name: "moveSeat", message: { t: "moveSeat", seat: 1 } },
     { name: "claimMove", message: { t: "claimMove", code: "BCDFGH" } },
     { name: "leave", message: { t: "leave", seat: 1 } },
+    { name: "rename", message: { t: "rename", seat: 1, name: "Mo" } },
   ] satisfies Sample<ClientMessage>[];
 }
 

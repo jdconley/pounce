@@ -192,5 +192,13 @@
       "t": "leave",
       "seat": 1
     }
+  },
+  {
+    "name": "rename",
+    "message": {
+      "t": "rename",
+      "seat": 1,
+      "name": "Mo"
+    }
   }
 ]

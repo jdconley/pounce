@@ -249,6 +249,8 @@ export class RoomCore {
         return this.act(deviceId, msg.seat, msg.action);
       case "presence":
         return this.presence(deviceId, msg.state);
+      case "rename":
+        return this.rename(deviceId, msg.seat, msg.name);
       default:
         return [this.fail(deviceId, "bad_message")];
     }
@@ -263,6 +265,20 @@ export class RoomCore {
       return [this.fail(deviceId, "person_seated")];
     }
     this.state.seats[seat] = { kind: "human", person, deviceId };
+    return this.changed();
+  }
+
+  /**
+   * Renames the person in one of the device's seats, in the lobby or mid-game,
+   * so every phone at the table sees the new name in its next snapshot.
+   */
+  private rename(deviceId: string, seat: Seat, name: string): Outbound[] {
+    if (this.state.status === "over") return [this.fail(deviceId, "game_over")];
+    const target = this.state.seats[seat];
+    if (!target) return [this.fail(deviceId, "bad_seat")];
+    if (target.deviceId !== deviceId || !target.person) return [this.fail(deviceId, "not_your_seat")];
+    if (target.person.name === name) return [];
+    target.person = { ...target.person, name };
     return this.changed();
   }
 

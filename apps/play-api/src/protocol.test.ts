@@ -161,6 +161,23 @@ describe("parseClientMessage", () => {
     });
   });
 
+  describe("rename", () => {
+    it("parses a rename and trims the name", () => {
+      expect(parse({ t: "rename", seat: 1, name: "  Mo  " })).toEqual({ t: "rename", seat: 1, name: "Mo" });
+      expect(parse({ t: "rename", seat: 0, name: "a".repeat(20) })).toEqual({ t: "rename", seat: 0, name: "a".repeat(20) });
+    });
+    it("rejects empty, blank, too-long and non-string names", () => {
+      for (const name of ["", "   ", "a".repeat(21), 7, null]) expect(parse({ t: "rename", seat: 0, name })).toEqual(BAD);
+    });
+    it("rejects bad seats, missing keys and extra keys", () => {
+      expect(parse({ t: "rename", seat: -1, name: "Mo" })).toEqual(BAD);
+      expect(parse({ t: "rename", seat: "0", name: "Mo" })).toEqual(BAD);
+      expect(parse({ t: "rename", name: "Mo" })).toEqual(BAD);
+      expect(parse({ t: "rename", seat: 0 })).toEqual(BAD);
+      expect(parse({ t: "rename", seat: 0, name: "Mo", cat: 1 })).toEqual(BAD);
+    });
+  });
+
   describe("claimMove", () => {
     it("accepts a 6-char code from the alphabet", () => {
       expect(parse({ t: "claimMove", code: "BCDF23" })).toEqual({ t: "claimMove", code: "BCDF23" });
