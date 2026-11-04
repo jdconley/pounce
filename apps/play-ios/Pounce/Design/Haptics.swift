@@ -15,6 +15,8 @@ protocol HapticPlaying: AnyObject {
     func thump()
     /// Round or game won: a rolling burst.
     func celebrate()
+    /// Your turn came: a knock-knock with a soft swell, unlike any move's feedback.
+    func turn()
 }
 
 @MainActor
@@ -62,6 +64,14 @@ final class EngineHaptics: HapticPlaying {
         }
         events.append(continuous(0.6, duration: 0.3, intensity: 0.8, sharpness: 0.3))
         play(events)
+    }
+
+    func turn() {
+        play([
+            transient(0, intensity: 0.9, sharpness: 0.6),
+            transient(0.14, intensity: 1, sharpness: 0.6),
+            continuous(0.2, duration: 0.18, intensity: 0.45, sharpness: 0.2),
+        ])
     }
 
     // MARK: engine
@@ -124,4 +134,5 @@ final class SilentHaptics: HapticPlaying {
     func success() { played += 1 }
     func thump() { played += 1 }
     func celebrate() { played += 1 }
+    func turn() { played += 1 }
 }

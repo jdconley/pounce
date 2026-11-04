@@ -379,7 +379,8 @@ extension TableScene {
     // MARK: turn
 
     /// Turn handoff: the outgoing ring shrinks, the incoming one pops and pulses. On my turn
-    /// the hand bounces up and the piles flare (the local seat has no ring).
+    /// the hand bounces up and the piles flare (the local seat has no ring); the shell's turn
+    /// cue (TurnCue.swift) brings the sound once that hand is shown.
     private func animateTurn(_ seat: Seat) async {
         guard let model else { return }
         if let old = model.game?.turn, old != seat, let cat = opponents.node(for: old) {
@@ -392,7 +393,6 @@ extension TableScene {
             items += cat.turnPulse(reduceMotion: reduceMotion)
         }
         if seat == bottomSeat || model.mySeats.contains(seat) {
-            Sound.shared.play(ArtName.Sound.sfxTick)
             items.append(deck.flare())
             if let top = model.game?.discardTop, Card(id: top) != .cucumber { items.append(discard.flare()) }
             if !reduceMotion { items.append((hop(height: 22), hand)) }

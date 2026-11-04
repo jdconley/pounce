@@ -126,6 +126,7 @@ Layout, top to bottom (portrait):
 
 Turn flow, all by direct manipulation, every action also reachable by tap-tap (select a card, then tap a target) for accessibility:
 - **Your turn starts:** hand bounces up, the two piles glow (draw step). Drag from deck or discard to your hand, or tap a pile. Discard glow is off when the top card is a Cucumber (rules).
+- **Turn cue (unmissable):** once your hand is shown (after any pass-and-play curtain), your cat pounces in and "Your turn!" slams down in outlined letters ("Your turn, Mia!" on a shared phone), with a knock-knock haptic, a sound and a VoiceOver announcement. The piles you can draw from get a thick pulsing "start here" ring and the words say "Draw a card". It breathes gently and takes no touches; the first touch on the table puts it away for the turn. Coming back from the background on your turn plays it again. A first-game tip takes its place while one is up. Reduce Motion: no pounce, slam or breathing, same size and boldness. Someone else's turn: a calm "Mochi's turn" pill under their cat, no sound.
 - **Play step:** the trays glow; legal moves glow; illegal drops snap back with a "nope" wiggle.
 - **Discard:** drag a card to the discard pile — this ends the turn. **A Cucumber is aimed by dropping it on an opponent's cat** (only seats not already pending a skip glow). If no seat is targetable it just discards. (server rules)
 - **Others' turns:** their actions animate on your table from server events (§7); your hand dims slightly but stays visible (single-seat phone).

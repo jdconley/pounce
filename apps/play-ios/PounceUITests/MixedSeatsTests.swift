@@ -9,7 +9,8 @@ import XCTest
 /// test has seen its cat go away (`--reconnect-file`: each UI query can wait many seconds for
 /// the app to idle, so a fixed 3 s spell is easy to miss); then it reconnects and the cat must
 /// wake again. The curtain comes up for each of this phone's seats
-/// (with the remote's turn between them). Backgrounding the app reconnects and the table plays on.
+/// (with the remote's turn between them), and the turn cue plays after it, never behind it.
+/// Backgrounding the app reconnects and the table plays on.
 final class MixedSeatsTests: XCTestCase {
     private var remote: HostProcess?
 
@@ -67,6 +68,8 @@ final class MixedSeatsTests: XCTestCase {
         var sawAway = false, sawAwakeAfterAway = false
         var backgrounded = false, playedAfterBackground = false
         var turns = 0
+        /// "Your turn, <name>!" seen on a shared-phone turn, after its curtain.
+        var cueAfterCurtain: String?
         var firstRound = 0
         var roundOverSeen = false
         var stuckSince: Date?
@@ -94,6 +97,8 @@ final class MixedSeatsTests: XCTestCase {
                 dismissPriming(app, snap)
                 continue
             }
+            XCTAssertFalse(
+                snap.exists("curtain.hold") && snap.exists("turncue.mine"), "the turn cue showed behind the curtain")
             if let name = holdCurtain(app, snap) {
                 curtainNames.insert(name)
                 Thread.sleep(forTimeInterval: Live.pace(1))
@@ -134,6 +139,10 @@ final class MixedSeatsTests: XCTestCase {
             } else {
                 stuckSince = nil
             }
+            if cueAfterCurtain == nil, d.step == "draw", let cue = snap.label("turncue.mine"), cue.hasPrefix("Your turn, ") {
+                cueAfterCurtain = cue
+                screenshot(app, "mixed-turn-cue")
+            }
             if playTurnByTaps(app, snap, observe: watchRemote) {
                 turns += 1
                 if backgrounded { playedAfterBackground = true }
@@ -153,7 +162,7 @@ final class MixedSeatsTests: XCTestCase {
         }
         screenshot(app, "mixed-end")
         let summary = """
-            turns by taps \(turns), rounds \(firstRound)→\(UISnap(app)?.debug?.round ?? -1), curtain names \(curtainNames.sorted()), \
+            turns by taps \(turns), turn cue \(cueAfterCurtain ?? "-"), rounds \(firstRound)→\(UISnap(app)?.debug?.round ?? -1), curtain names \(curtainNames.sorted()), \
             remote labels \(remoteLabels), backgrounded \(backgrounded), played after \(playedAfterBackground)
             """
         let note = XCTAttachment(string: summary)
@@ -164,6 +173,7 @@ final class MixedSeatsTests: XCTestCase {
         XCTAssertTrue(sawAway, "the remote's cat never went away: \(remoteLabels)\n\(remoteOutput())")
         XCTAssertTrue(sawAwakeAfterAway, "the remote's cat never woke after the drop: \(remoteLabels)")
         XCTAssertGreaterThanOrEqual(curtainNames.count, 2, "the curtain didn't come up for both local seats: \(curtainNames)")
+        XCTAssertNotNil(cueAfterCurtain, "no named turn cue after a curtain")
         XCTAssertTrue(playedAfterBackground, "no turn played after the app came back from the background")
         XCTAssertTrue(roundOverSeen, "no round ended within the time limit")
         XCTAssertTrue(remoteOutput().contains("reconnected"), "the remote didn't reconnect:\n\(remoteOutput())")
