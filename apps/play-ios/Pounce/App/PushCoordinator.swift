@@ -106,12 +106,13 @@ final class PushCoordinator: NSObject, UNUserNotificationCenterDelegate {
 
     // MARK: local turn reminder
 
-    /// The same shape as the server's push: title = whose turn, body "Your turn",
+    /// The same shape as the server's push: title = whose turn, body "Your turn at <table>",
     /// thread = room code, top-level `code` for the tap.
-    func scheduleTurnReminder(code: String, name: String, after: Duration) {
+    func scheduleTurnReminder(code: String, name: String, table: String, after: Duration) {
         let content = UNMutableNotificationContent()
         content.title = name
-        content.body = String(localized: "Your turn", comment: "Notification body: it is this person's turn")
+        content.body = String(
+            localized: "Your turn at \(table)", comment: "Notification body: it is this person's turn at this table")
         content.sound = .default
         content.threadIdentifier = code
         content.userInfo = ["code": code]

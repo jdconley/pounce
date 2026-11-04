@@ -288,6 +288,7 @@ private struct TableStage: View {
             }
             if let winners = events.winners {
                 GameOverView(
+                    tableName: session.store.room?.title ?? TableName.fallback(code: session.code),
                     winners: people(winners),
                     onHome: { model.goHome() },
                     onNewGame: { Task { await model.newGame() } })

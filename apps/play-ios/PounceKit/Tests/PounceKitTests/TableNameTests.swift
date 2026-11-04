@@ -30,6 +30,15 @@ import Testing
         #expect(TableName.clamp("Short") == "Short")
     }
 
+    @Test func randomNamesAreValidNames() {
+        var rng = SystemRandomNumberGenerator()
+        for _ in 0..<200 {
+            let name = TableName.random(using: &rng)
+            #expect(name.hasPrefix("The "))
+            #expect(TableName.clean(name) == name)
+        }
+    }
+
     @Test func fallbackNamesTheCode() {
         #expect(TableName.fallback(code: "BCDFG") == "Table BCDFG")
     }

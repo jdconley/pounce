@@ -20,6 +20,21 @@ public enum TableName {
         return clipped
     }
 
+    /// The words the server's default names are made of (play-api `room/names.ts`).
+    static let adjectives = [
+        "Sleepy", "Sneaky", "Fuzzy", "Zoomy", "Grumpy", "Fancy",
+        "Chonky", "Velvet", "Midnight", "Sunny", "Wobbly", "Purring",
+    ]
+    static let nouns = [
+        "Sardines", "Whiskers", "Mittens", "Yarn Club", "Box Fort", "Sunbeams",
+        "Tuna Heist", "Catnip Lounge", "Laser Dots", "Hairballs", "Scratch Post", "Nap Squad",
+    ]
+
+    /// A name like the server's defaults ("The Sleepy Sardines"), for the rename sheet's dice.
+    public static func random<G: RandomNumberGenerator>(using g: inout G) -> String {
+        "The \(adjectives.randomElement(using: &g) ?? "Sleepy") \(nouns.randomElement(using: &g) ?? "Sardines")"
+    }
+
     /// What to call a table whose name this phone doesn't know yet (an older server, or a
     /// Home entry from before tables had names).
     public static func fallback(code: String) -> String { "Table \(code)" }

@@ -64,6 +64,7 @@ struct MoveSeatSheet: View {
         .background(ShareRoom(
             isPresented: $sharing,
             url: code.map { DeepLink.moveURL(code: session.code, moveCode: $0.code) } ?? DeepLink.shareURL(code: session.code),
+            tableName: session.store.room?.title ?? TableName.fallback(code: session.code),
             catArt: ArtName.cat(person?.cat ?? 0, .idle)))
         .onAppear {
             if seat == nil, mine.count == 1 { pick(mine[0].seat) }

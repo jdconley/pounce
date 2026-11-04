@@ -5,11 +5,17 @@ import SwiftUI
 import UIKit
 
 /// Presents the system share sheet for a room link while `isPresented` is true (spec §5.6).
-/// The item carries `LPLinkMetadata` (title "Cat Tower", the host's cat as icon and image),
-/// so the share sheet's header shows cat art. Put it in a `.background`.
+/// The item carries `LPLinkMetadata` (the table's name and "Cat Tower", the host's cat as icon
+/// and image), so the share sheet's header shows cat art; a short invite with the name and the
+/// room code goes along as text. Put it in a `.background`.
 struct ShareRoom: UIViewControllerRepresentable {
     @Binding var isPresented: Bool
     let url: URL
+    /// The table's name, for the invite text and the link title.
+    let tableName: String
+    /// The room code, spelled out in an invite for anyone joining by typing it. Nil sends the
+    /// link alone (moving a seat is not an invite).
+    var inviteCode: String?
     /// Asset name of the cat drawn in the share sheet header.
     let catArt: String
 
@@ -22,8 +28,9 @@ struct ShareRoom: UIViewControllerRepresentable {
     func updateUIViewController(_ controller: UIViewController, context: Context) {
         guard isPresented, !context.coordinator.presenting else { return }
         context.coordinator.presenting = true
-        let item = RoomShareItem(url: url, image: UIImage(named: catArt))
-        let sheet = UIActivityViewController(activityItems: [item], applicationActivities: nil)
+        let item = RoomShareItem(url: url, title: RoomShareItem.title(tableName), image: UIImage(named: catArt))
+        let invite: [Any] = inviteCode.map { [RoomShareItem.invite(tableName: tableName, code: $0)] } ?? []
+        let sheet = UIActivityViewController(activityItems: invite + [item], applicationActivities: nil)
         let coordinator = context.coordinator
         let binding = $isPresented
         sheet.completionWithItemsHandler = { _, _, _, _ in
@@ -54,10 +61,10 @@ final class RoomShareItem: NSObject, UIActivityItemSource {
     let url: URL
     private let metadata: LPLinkMetadata
 
-    init(url: URL, image: UIImage?) {
+    init(url: URL, title: String, image: UIImage?) {
         self.url = url
         let metadata = LPLinkMetadata()
-        metadata.title = "Cat Tower"
+        metadata.title = title
         metadata.originalURL = url
         metadata.url = url
         if let image {
@@ -65,6 +72,24 @@ final class RoomShareItem: NSObject, UIActivityItemSource {
             metadata.imageProvider = NSItemProvider(object: image)
         }
         self.metadata = metadata
+    }
+
+    /// The link's title: the table's name, then the game.
+    static func title(_ tableName: String) -> String {
+        String(localized: "\(tableName) - Cat Tower", comment: "Share sheet: link title, the table's name then the game")
+    }
+
+    /// The text that goes with the link: the table's name and its room code.
+    static func invite(tableName: String, code: String) -> String {
+        String(
+            localized: "Come play Cat Tower at \(tableName)! Room code \(code)",
+            comment: "Share sheet: the invite text sent with the link")
+    }
+
+    func activityViewController(
+        _ activityViewController: UIActivityViewController, subjectForActivityType activityType: UIActivity.ActivityType?
+    ) -> String {
+        metadata.title ?? ""
     }
 
     func activityViewControllerPlaceholderItem(_ activityViewController: UIActivityViewController) -> Any {
