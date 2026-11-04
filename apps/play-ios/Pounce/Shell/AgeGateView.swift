@@ -139,7 +139,6 @@ struct AgeGateView: View {
                     Image(ArtName.iconCheck).resizable().scaledToFit().frame(height: size)
                 }
                 .buttonStyle(KeyStyle(color: Palette.lime, height: height))
-                .saturation(entry.digits.count == BirthYearEntry.length ? 1 : 0.35)
                 .accessibilityLabel("Done")
                 .accessibilityIdentifier("age.confirm")
             }

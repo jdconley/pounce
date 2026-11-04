@@ -186,7 +186,7 @@ struct MergeView: View {
 
     var body: some View {
         ZStack {
-            Palette.night.opacity(0.92).ignoresSafeArea()
+            Palette.night.ignoresSafeArea()
             VStack(spacing: 28) {
                 HStack(spacing: together ? -36 : 18) {
                     CatDisc(cat: merge.mine, side: 120, color: Palette.sky)
@@ -243,7 +243,7 @@ struct DeleteConfirmView: View {
 
     var body: some View {
         ZStack {
-            Palette.night.opacity(0.94).ignoresSafeArea()
+            Palette.night.ignoresSafeArea()
             VStack(spacing: 30) {
                 ZStack(alignment: .bottom) {
                     CatDisc(cat: cat, side: 170, color: Palette.magenta)
@@ -280,7 +280,7 @@ struct SettingsPathView: View {
 
     var body: some View {
         ZStack {
-            Palette.night.opacity(0.95).ignoresSafeArea()
+            Palette.night.ignoresSafeArea()
             VStack(spacing: 34) {
                 ViewThatFits {
                     HStack(spacing: 10) { steps }
@@ -343,7 +343,7 @@ struct AgeBandPicker: View {
         ZStack {
             LinearGradient(colors: [Palette.violet, Palette.night], startPoint: .top, endPoint: .bottom).ignoresSafeArea()
             VStack(spacing: 34) {
-                HStack(alignment: .bottom, spacing: sizeClass == .regular ? 36 : 14) {
+                HStack(alignment: .bottom, spacing: sizeClass == .regular ? 36 : 10) {
                     choice(.kitten, scale: 0.5, color: Palette.lime)
                     choice(.teen, scale: 0.75, color: Palette.sky)
                     choice(.adult, scale: 1, color: Palette.orange)
@@ -360,7 +360,7 @@ struct AgeBandPicker: View {
     }
 
     private func choice(_ band: AgeBand, scale: CGFloat, color: Color) -> some View {
-        let base: CGFloat = sizeClass == .regular ? 220 : 110
+        let base: CGFloat = sizeClass == .regular ? 220 : 96
         return Button {
             Haptics.shared.tick()
             Sound.shared.play(ArtName.Sound.sfxPop)
