@@ -1,0 +1,30 @@
+[
+  {
+    "name": "rematch",
+    "message": {
+      "t": "rematch"
+    }
+  },
+  {
+    "name": "setLook-rug",
+    "message": {
+      "t": "setLook",
+      "rug": "rug-night-sky"
+    }
+  },
+  {
+    "name": "setLook-back",
+    "message": {
+      "t": "setLook",
+      "back": "back-crown"
+    }
+  },
+  {
+    "name": "setLook-both",
+    "message": {
+      "t": "setLook",
+      "rug": "rug-classic",
+      "back": "back-violet-paw"
+    }
+  }
+]

@@ -16,6 +16,8 @@ export default defineConfig({
         "src/players/player.ts",
         "src/players/identities.ts",
         "src/players/accounts.ts",
+        "src/streaks/pair.ts",
+        "src/streaks/pairs.ts",
         "src/index.ts",
       ],
       reporter: ["text", "json-summary"],
@@ -25,6 +27,12 @@ export default defineConfig({
         functions: 90,
         lines: 90,
         "src/rules/**": {
+          statements: 100,
+          branches: 100,
+          functions: 100,
+          lines: 100,
+        },
+        "src/streaks/**": {
           statements: 100,
           branches: 100,
           functions: 100,

@@ -17,4 +17,6 @@ export interface GameModule<S, A, V, E, Err extends string = string> {
   /** The seat that must act next, or null when nobody is to act. */
   currentActor(s: S): Seat | null;
   botAction(s: S, seat: Seat, rng: Rng): A;
+  /** True when `seat`'s action `a`, which produced `events`, ended its turn: what a streak counts (§6.1). */
+  endsTurn(a: A, events: readonly E[], seat: Seat): boolean;
 }

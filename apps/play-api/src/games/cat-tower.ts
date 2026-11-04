@@ -21,4 +21,7 @@ export const catTower: GameModule<CatTowerState, Action, CatTowerView, GameEvent
   filterEvent: eventFor,
   currentActor: (s) => (s.status === "playing" ? s.turn : null),
   botAction: (s, seat, rng) => chooseAction(viewFor(s, [seat]), seat, rng),
+  // A discard or going out ends a turn; drawing alone doesn't, and a new round's deal isn't anyone's turn.
+  endsTurn: (a, events, seat) =>
+    a.type !== "nextRound" && events.some((e) => e.kind === "turn" || (e.kind === "roundOver" && e.wentOut === seat)),
 };

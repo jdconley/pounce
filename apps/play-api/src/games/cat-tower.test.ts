@@ -52,4 +52,21 @@ describe("catTower module", () => {
     const r = catTower.apply(s, s.turn, action);
     expect(r.ok).toBe(true);
   });
+
+  it("endsTurn counts a discard or going out, never a draw or a new deal", () => {
+    const discarded = [
+      { kind: "discarded" as const, seat: 0, card: 1 },
+      { kind: "turn" as const, seat: 1 },
+    ];
+    expect(catTower.endsTurn({ type: "discard", card: 1 }, discarded, 0)).toBe(true);
+    const out = { kind: "roundOver" as const, wentOut: 0, points: [], advanced: [], scores: [], phase: [] };
+    expect(catTower.endsTurn({ type: "layDown", groups: [] }, [out], 0)).toBe(true);
+    expect(catTower.endsTurn({ type: "draw", from: "deck" }, [{ ...out, wentOut: null }], 0)).toBe(false);
+    expect(catTower.endsTurn({ type: "draw", from: "deck" }, [{ kind: "drew", seat: 0, from: "deck" }], 0)).toBe(false);
+    const dealt = [
+      { kind: "roundStarted" as const, round: 2, dealer: 1 },
+      { kind: "turn" as const, seat: 2 },
+    ];
+    expect(catTower.endsTurn({ type: "nextRound" }, dealt, 0)).toBe(false);
+  });
 });

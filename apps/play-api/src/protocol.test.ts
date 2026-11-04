@@ -40,8 +40,11 @@ describe("ErrorCode", () => {
       round_not_over: true,
       bot_stalled: true,
       room_closed: true,
+      not_over: true,
+      too_soon: true,
+      not_unlocked: true,
     };
-    expect(Object.keys(codes)).toHaveLength(27);
+    expect(Object.keys(codes)).toHaveLength(30);
   });
 });
 
@@ -303,6 +306,36 @@ describe("rename", () => {
       { t: "rename", name: "Taco Night", seat: 0 },
     ]) {
       expect(parse(msg), JSON.stringify(msg)).toEqual(BAD);
+    }
+  });
+});
+
+describe("streak additions", () => {
+  it("parses rematch", () => {
+    expect(parse({ t: "rematch" })).toEqual({ t: "rematch" });
+    expect(parse({ t: "rematch", code: "BCDFG" })).toEqual(BAD);
+  });
+
+  it("parses setLook with a known rug, back or both", () => {
+    expect(parse({ t: "setLook", rug: "rug-night-sky" })).toEqual({ t: "setLook", rug: "rug-night-sky" });
+    expect(parse({ t: "setLook", back: "back-crown" })).toEqual({ t: "setLook", back: "back-crown" });
+    expect(parse({ t: "setLook", rug: "rug-classic", back: "back-violet-paw" })).toEqual({
+      t: "setLook",
+      rug: "rug-classic",
+      back: "back-violet-paw",
+    });
+  });
+
+  it("rejects an empty setLook, unknown ids and extra keys", () => {
+    for (const bad of [
+      { t: "setLook" },
+      { t: "setLook", rug: "rug-lava" },
+      { t: "setLook", rug: "back-crown" },
+      { t: "setLook", back: "rug-classic" },
+      { t: "setLook", back: 3 },
+      { t: "setLook", rug: "rug-classic", seat: 0 },
+    ]) {
+      expect(parse(bad)).toEqual(BAD);
     }
   });
 });

@@ -2,6 +2,7 @@ import type { Identities } from "./players/identities";
 import type { Player } from "./players/player";
 import type { DeviceIndex } from "./room/device-index";
 import type { GameRoom } from "./room/game-room";
+import type { Pair } from "./streaks/pair";
 
 export interface Env {
   ROOMS: DurableObjectNamespace<GameRoom>;
@@ -9,6 +10,14 @@ export interface Env {
   PLAYERS: DurableObjectNamespace<Player>;
   /** One instance, named `IDENTITIES_NAME`. */
   IDENTITIES: DurableObjectNamespace<Identities>;
+  /** One instance per pair of players, named by pair id (§13.2). */
+  PAIRS: DurableObjectNamespace<Pair>;
+  /**
+   * Streaks, table looks and Play again (daily habit PR 3) when "on". Never
+   * listed in wrangler.jsonc: production keeps them off until the app ships
+   * them (PR 4); tests set it.
+   */
+  STREAKS?: string;
   /** HMAC key for device tokens. A secret; absent until configured. */
   TOKEN_SECRET?: string;
   /** Public TestFlight link for the share page. Optional; the page omits the link when unset. */

@@ -4,11 +4,24 @@ import { devSpeed } from "../env";
 import { catTower } from "../games/cat-tower";
 import { PERSON_ID, PLAYER_ID } from "../players/ids";
 import { parseClientMessage } from "../protocol";
+import { rememberLook, reportTable, unlocksFor, type PairViews } from "../streaks/pairs";
+import { streaksOn } from "../streaks/profile";
 
-import { RoomCore, type AdoptRule, type Outbound, type PushIntent, type RoomState } from "./core";
+import { newRoomCode } from "./codes";
+import {
+  RoomCore,
+  type AdoptRule,
+  type Look,
+  type Outbound,
+  type PushIntent,
+  type RematchIntent,
+  type RoomFeatures,
+  type RoomState,
+  type StreakIntent,
+} from "./core";
 
 import type { Env } from "../env";
-import type { ServerMessage } from "../protocol";
+import type { ClientMessage, ServerMessage } from "../protocol";
 
 /** Internal header the Worker sets to the verified device id. */
 export const DEVICE_HEADER = "x-play-device";
@@ -19,6 +32,8 @@ const MAX_HEADER_PLAYERS = 16;
 
 const BAD_MESSAGE: ServerMessage = { t: "error", code: "bad_message" };
 const NORMAL_CLOSURE = 1000;
+const ROOM_CODE_ATTEMPTS = 5;
+const STREAK_ATTEMPTS = 2;
 
 const cryptoRng = (): number => (crypto.getRandomValues(new Uint32Array(1))[0] as number) / 2 ** 32;
 
@@ -37,6 +52,8 @@ export class GameRoom extends DurableObject<Env> {
   private tablesFingerprint = "";
   private tableDevices = new Set<string>();
   private tablePlayers = new Set<string>();
+  /** Streak reports go out one at a time, in turn order. */
+  private streakChain: Promise<void> = Promise.resolve();
 
   constructor(ctx: DurableObjectState, env: Env) {
     super(ctx, env);
@@ -46,23 +63,51 @@ export class GameRoom extends DurableObject<Env> {
     });
   }
 
-  /** Creates the room, or reports that the code is already taken. `name` is already validated. */
-  async init(code: string, hostDeviceId: string, name?: string): Promise<{ ok: true } | { exists: true }> {
-    if (this.core) return { exists: true };
+  private features(): RoomFeatures {
+    return { streaks: streaksOn(this.env) };
+  }
+
+  private createSchema(): void {
     this.ctx.storage.sql.exec(
       "CREATE TABLE IF NOT EXISTS room (id INTEGER PRIMARY KEY CHECK (id = 1), json TEXT)",
     );
     this.ctx.storage.sql.exec(
       "CREATE TABLE IF NOT EXISTS listed (id INTEGER PRIMARY KEY CHECK (id = 1), fingerprint TEXT, devices TEXT, players TEXT)",
     );
+  }
+
+  /**
+   * Creates the room, or reports that the code is already taken. `name` is
+   * already validated; `look` is the creator's last-used one (§9.4).
+   */
+  async init(code: string, hostDeviceId: string, name?: string, look?: Look): Promise<{ ok: true } | { exists: true }> {
+    if (this.core) return { exists: true };
+    this.createSchema();
     this.core = new RoomCore(
-      RoomCore.create(code, hostDeviceId, Date.now(), name),
+      RoomCore.create(code, hostDeviceId, Date.now(), name, look),
       Date.now,
       cryptoRng,
       catTower,
       devSpeed(this.env),
+      this.features(),
     );
     await this.after([]);
+    return { ok: true };
+  }
+
+  /** "Play again" (§10.4): creates this room from the old one's seats and deals at once. */
+  async initRematch(code: string, spec: RematchIntent): Promise<{ ok: true } | { exists: true }> {
+    if (this.core) return { exists: true };
+    this.createSchema();
+    this.core = new RoomCore(
+      RoomCore.rematchState(code, spec, Date.now()),
+      Date.now,
+      cryptoRng,
+      catTower,
+      devSpeed(this.env),
+      this.features(),
+    );
+    await this.after(this.core.deal());
     return { ok: true };
   }
 
@@ -93,6 +138,10 @@ export class GameRoom extends DurableObject<Env> {
       send(ws, BAD_MESSAGE);
       return;
     }
+    if (parsed.t === "setLook" && streaksOn(this.env)) {
+      await this.setLook(deviceOf(ws), parsed);
+      return;
+    }
     await this.after(core.handle(deviceOf(ws), parsed));
   }
 
@@ -118,6 +167,70 @@ export class GameRoom extends DurableObject<Env> {
     if (this.core) await this.after(this.core.adopt(rule));
   }
 
+  /** A look from the setter's own unlocks (§9.4, §17); the new look becomes their last-used one. */
+  private async setLook(deviceId: string, msg: Extract<ClientMessage, { t: "setLook" }>): Promise<void> {
+    const players = (this.core as RoomCore).lookPlayers(deviceId);
+    const unlocks = await unlocksFor(this.env, players).catch(() => ({ backs: [], rugs: [] }));
+    const core = this.core;
+    if (!core) return;
+    const out = core.handle(deviceId, msg, unlocks);
+    const changed = out.some(({ message }) => message.t === "event" && message.event.kind === "look");
+    if (changed && core.state.look) {
+      this.ctx.waitUntil(rememberLook(this.env, players, core.state.look).catch(() => undefined));
+    }
+    await this.after(out);
+  }
+
+  /**
+   * Hands a report to the table's pairs (§13.3): in turn order, retried once,
+   * never fatal (a lost update is cosmetic and the game is saved). Each pair's
+   * views then reach the sockets of the devices that speak for its people.
+   */
+  private reportStreak(intent: StreakIntent): void {
+    if (new Set(intent.players).size < 2) return;
+    const run = async () => {
+      let views: PairViews | null = null;
+      for (let attempt = 0; attempt < STREAK_ATTEMPTS && views === null; attempt++) {
+        views = await reportTable(this.env, intent, Date.now()).catch(() => null);
+      }
+      if (views === null) {
+        console.error("streak_report_failed");
+        return;
+      }
+      const core = this.core;
+      if (!core) return;
+      for (const [playerId, list] of Object.entries(views)) {
+        for (const { deviceId, personId } of core.devicesFor(playerId)) {
+          for (const ws of this.ctx.getWebSockets(deviceId)) {
+            for (const { pair, view } of list) send(ws, { t: "streak", pair, person: personId, view });
+          }
+        }
+      }
+    };
+    this.streakChain = this.streakChain.then(run).catch(() => undefined);
+    this.ctx.waitUntil(this.streakChain);
+  }
+
+  /** Deals the "Play again" table under a fresh code and tells everyone here; on failure, it may be asked again. */
+  private async dealRematch(spec: RematchIntent): Promise<void> {
+    for (let i = 0; i < ROOM_CODE_ATTEMPTS; i++) {
+      const code = newRoomCode(cryptoRng);
+      const made = await this.env.ROOMS.get(this.env.ROOMS.idFromName(code))
+        .initRematch(code, spec)
+        .catch(() => null);
+      if (made === null) break;
+      if ("ok" in made) {
+        if (this.core) await this.after(this.core.rematchDealt(code));
+        return;
+      }
+    }
+    console.error("rematch_failed");
+    if (this.core) {
+      this.core.rematchFailed();
+      await this.after([]);
+    }
+  }
+
   private load(): RoomCore | null {
     const sql = this.ctx.storage.sql;
     // Reading sqlite_master creates nothing, so probing an unused code leaves
@@ -139,7 +252,14 @@ export class GameRoom extends DurableObject<Env> {
       this.tableDevices = new Set(JSON.parse(listed.devices) as string[]);
       this.tablePlayers = new Set(JSON.parse(listed.players ?? "[]") as string[]);
     }
-    return new RoomCore(JSON.parse(row.json) as RoomState, Date.now, cryptoRng, catTower, devSpeed(this.env));
+    return new RoomCore(
+      JSON.parse(row.json) as RoomState,
+      Date.now,
+      cryptoRng,
+      catTower,
+      devSpeed(this.env),
+      this.features(),
+    );
   }
 
   /**
@@ -181,6 +301,9 @@ export class GameRoom extends DurableObject<Env> {
     for (const intent of core.drainPushIntents()) {
       this.ctx.waitUntil(this.push(intent).catch(() => undefined));
     }
+    for (const intent of core.drainStreakIntents()) this.reportStreak(intent);
+    const rematch = core.drainRematch();
+    if (rematch) this.ctx.waitUntil(this.dealRematch(rematch));
 
     this.ctx.storage.sql.exec(
       "INSERT INTO room (id, json) VALUES (1, ?) ON CONFLICT (id) DO UPDATE SET json = excluded.json",
@@ -217,7 +340,8 @@ export class GameRoom extends DurableObject<Env> {
     const actor = state.status === "playing" && state.gameState ? catTower.currentActor(state.gameState) : null;
     const devices = tableDevices(state);
     const players = new Set(core.seatPlayers());
-    const fingerprint = JSON.stringify([state.status, actor, state.name, [...devices], [...players]]);
+    const next = state.rematch?.code ?? null;
+    const fingerprint = JSON.stringify([state.status, actor, state.name, [...devices], [...players], ...(next ? [next] : [])]);
     if (fingerprint === this.tablesFingerprint) return;
     this.tablesFingerprint = fingerprint;
 
@@ -235,7 +359,7 @@ export class GameRoom extends DurableObject<Env> {
       JSON.stringify([...players]),
     );
     const updatedAt = Date.now();
-    const entry = { code: state.code, name: state.name, status: state.status, updatedAt };
+    const entry = { code: state.code, name: state.name, status: state.status, updatedAt, ...(next ? { next } : {}) };
     await Promise.all([
       ...[...devices].map((deviceId) =>
         this.index(deviceId).upsertTable({

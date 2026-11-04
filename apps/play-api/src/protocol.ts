@@ -1,8 +1,10 @@
 import { ROOM_CODE_ALPHABET } from "./room/codes";
 import { parseRoomName } from "./room/names";
+import { isBack, isRug } from "./streaks/catalog";
 
 import type { Action, ApplyError, GameEvent, Seat } from "./rules/engine";
 import type { CatTowerView } from "./rules/view";
+import type { StreakView } from "./streaks/pair-core";
 
 export { ROOM_CODE_ALPHABET };
 
@@ -37,11 +39,17 @@ export type RoomView = {
     presence: Presence | null;
   }[];
   game: CatTowerView | null;
+  /** The table's rug and card back (§9.4). Only while streaks are on. */
+  look?: { rug: string; back: string };
+  /** The code of the table "Play again" dealt (§10.4), once there is one. */
+  rematch?: string;
 };
 
 export type RoomEvent =
   | { kind: "presence"; seat: Seat; presence: Presence }
-  | { kind: "game"; event: GameEvent };
+  | { kind: "game"; event: GameEvent }
+  /** Someone at the table changed its look; `seat` is theirs, for the pill with their cat (§9.4). */
+  | { kind: "look"; seat: Seat; rug: string; back: string };
 
 export type ClientMessage =
   | { t: "claim"; seat: Seat; person: Person }
@@ -53,7 +61,9 @@ export type ClientMessage =
   | { t: "claimMove"; code: string }
   | { t: "leave"; seat: Seat }
   | { t: "rename"; name: string }
-  | { t: "renameSeat"; seat: Seat; name: string };
+  | { t: "renameSeat"; seat: Seat; name: string }
+  | { t: "rematch" }
+  | { t: "setLook"; rug?: string; back?: string };
 
 /** Every `error` code the server sends. */
 export type ErrorCode =
@@ -79,13 +89,21 @@ export type ErrorCode =
   | ApplyError
   // Sent to the whole room, unprompted.
   | "bot_stalled"
-  | "room_closed";
+  | "room_closed"
+  // Play again and table looks.
+  | "not_over"
+  | "too_soon"
+  | "not_unlocked";
 
 export type ServerMessage =
   | { t: "snapshot"; protocol: typeof PROTOCOL_VERSION; seq: number; room: RoomView }
   | { t: "event"; seq: number; event: RoomEvent }
   | { t: "moveCode"; seat: Seat; code: string }
-  | { t: "error"; code: ErrorCode };
+  | { t: "error"; code: ErrorCode }
+  /** A pair's streak after a turn (§13.3), for `person`, one of the people this device speaks for. */
+  | { t: "streak"; pair: string; person: string; view: StreakView }
+  /** "Play again" dealt a new table (§10.4). */
+  | { t: "rematch"; code: string };
 
 export type BadMessage = { error: "bad_message" };
 
@@ -218,6 +236,15 @@ function parseObject(o: Obj): ClientMessage | null {
       if (!hasKeys(o, ["t", "seat", "name"]) || !isInt(o.seat, 0)) return null;
       const name = parseName(o.name);
       return name === null ? null : { t: "renameSeat", seat: o.seat, name };
+    }
+    case "rematch":
+      return hasKeys(o, ["t"]) ? { t: "rematch" } : null;
+    case "setLook": {
+      if (!hasKeys(o, ["t"], ["rug", "back"]) || !("rug" in o || "back" in o)) return null;
+      const { rug, back } = o;
+      if ("rug" in o && !(typeof rug === "string" && isRug(rug))) return null;
+      if ("back" in o && !(typeof back === "string" && isBack(back))) return null;
+      return { t: "setLook", ...(typeof rug === "string" ? { rug } : {}), ...(typeof back === "string" ? { back } : {}) };
     }
     case "claimMove":
       if (!hasKeys(o, ["t", "code"]) || !isMoveCode(o.code)) return null;

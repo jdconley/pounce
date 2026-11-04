@@ -5,6 +5,7 @@ import { expect, test } from "vitest";
 import { parseClientMessage } from "../src/protocol";
 import { RoomCore } from "../src/room/core";
 import { createRng } from "../src/rules/rng";
+import { newPair, report, view } from "../src/streaks/pair-core";
 
 import type { ClientMessage, Person, ServerMessage } from "../src/protocol";
 
@@ -237,4 +238,59 @@ test("no sample leaks server-only state", () => {
   expect(text).not.toContain('"deck":');
   const noHand = serverSamples().find((s) => s.name === "snapshot-playing-no-hand")?.message as Snapshot;
   expect(noHand.room.game?.hands).toEqual({});
+});
+
+const PA = "p_AAAAAAAAAAAAAAAAAAAAAA";
+const PB = "p_BBBBBBBBBBBBBBBBBBBBBB";
+const day = (h: number) => Date.UTC(2026, 10, 4, h);
+
+/**
+ * The streak additions (§13.4), kept apart from the files above so the
+ * Swift tests, which decode every server sample and count the client ones,
+ * are unchanged until the app adopts them (PR 4).
+ */
+function streakServerSamples(): Sample<ServerMessage>[] {
+  const zone = "America/Los_Angeles";
+  const pair = newPair(
+    "pair_3f9cAAAAAAAAAAAAAAAAAA",
+    [
+      { id: PA, name: "Alice", cat: 0, zone, quietStart: 1320 },
+      { id: PB, name: "Bob", cat: 3, zone, quietStart: 1320 },
+    ],
+    day(16),
+    [1, 2, 3, 4],
+  );
+  report(pair, { code: "BCDFG", at: day(17), by: PA, holder: PB, over: false }, day(17));
+  report(pair, { code: "BCDFG", at: day(18), by: PB, holder: PA, over: false }, day(18));
+  const room = new RoomCore(RoomCore.create("BCDFG", "devA", 1_000), () => 1_000, createRng([1, 2, 3, 4]), undefined, 1, {
+    streaks: true,
+  });
+  room.connect("devA");
+  room.handle("devA", { t: "claim", seat: 0, person: alice });
+  return [
+    { name: "streak", message: { t: "streak", pair: pair.id, person: alice.id, view: view(pair, PA, day(18)) } },
+    { name: "rematch", message: { t: "rematch", code: "NWCDF" } },
+    { name: "event-look", message: { t: "event", seq: 9, event: { kind: "look", seat: 1, rug: "rug-night-sky", back: "back-crown" } } },
+    { name: "snapshot-lobby-with-look", message: room.snapshotFor("devA") },
+    { name: "error-not_unlocked", message: { t: "error", code: "not_unlocked" } },
+    { name: "error-too_soon", message: { t: "error", code: "too_soon" } },
+    { name: "error-not_over", message: { t: "error", code: "not_over" } },
+  ];
+}
+
+function streakClientSamples(): Sample<ClientMessage>[] {
+  return [
+    { name: "rematch", message: { t: "rematch" } },
+    { name: "setLook-rug", message: { t: "setLook", rug: "rug-night-sky" } },
+    { name: "setLook-back", message: { t: "setLook", back: "back-crown" } },
+    { name: "setLook-both", message: { t: "setLook", rug: "rug-classic", back: "back-violet-paw" } },
+  ];
+}
+
+test("streak fixtures match the server and parse to themselves", () => {
+  check("streaks-server-messages.json", streakServerSamples());
+  for (const { name, message } of streakClientSamples()) {
+    expect(parseClientMessage(JSON.stringify(message)), name).toEqual(message);
+  }
+  check("streaks-client-messages.json", streakClientSamples());
 });
