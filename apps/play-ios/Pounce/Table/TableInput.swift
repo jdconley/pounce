@@ -466,7 +466,7 @@ extension TableScene {
             if !tryTray(held, tray) { nope(card: held) }
             return
         }
-        if let aim = laidDrop(at: p) {
+        if let aim = laidZone.drop(at: p) {
             if !tryHit(held, aim.target, toward: aim.toward) { nope(card: held) }
             return
         }
