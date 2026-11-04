@@ -7,6 +7,8 @@ import { parseRoomName } from "./room/names";
 
 import type { Env } from "./env";
 
+export { Identities } from "./players/identities";
+export { Player } from "./players/player";
 export { DeviceIndex } from "./room/device-index";
 export { GameRoom } from "./room/game-room";
 

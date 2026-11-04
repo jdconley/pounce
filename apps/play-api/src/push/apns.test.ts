@@ -1,9 +1,9 @@
 import { describe, expect, it, vi } from "vitest";
 
-import { createApnsJwt, pushYourTurn, sendApns } from "./apns";
+import { createApnsJwt, pushDismiss, pushYourTurn, sendApns } from "./apns";
 
 import type { Env } from "../env";
-import type { PushIntent } from "../room/core";
+import type { YourTurnIntent } from "../room/core";
 
 const TEAM = "B222J9J7B8";
 const NOW = 1_800_000_000;
@@ -136,8 +136,25 @@ describe("sendApns", () => {
   });
 });
 
+describe("background pushes", () => {
+  it("send content-available only, at low priority, with the data beside aps", async () => {
+    const { fetcher, calls } = fakeFetch(new Response(null, { status: 200 }));
+    const result = await sendApns(fetcher, CFG, TOKEN, { background: { kind: "dismiss", code: "BCDFG" }, collapseId: "dismiss:BCDFG" });
+    expect(result.ok).toBe(true);
+    const { init } = calls[0] as Call;
+    expect(init.headers).toEqual({
+      authorization: "bearer the.jwt.value",
+      "apns-topic": "com.conleychaos.play",
+      "apns-push-type": "background",
+      "apns-priority": "5",
+      "apns-collapse-id": "dismiss:BCDFG",
+    });
+    expect(JSON.parse(init.body as string)).toEqual({ aps: { "content-available": 1 }, kind: "dismiss", code: "BCDFG" });
+  });
+});
+
 describe("pushYourTurn", () => {
-  const intent: PushIntent = {
+  const intent: YourTurnIntent = {
     deviceId: "dev",
     kind: "your_turn",
     seat: 1,
@@ -224,5 +241,32 @@ describe("pushYourTurn", () => {
     expect(logged).not.toContain(TOKEN);
     expect(logged).not.toContain("PRIVATE KEY");
     spy.mockRestore();
+  });
+});
+
+describe("pushDismiss", () => {
+  it("tells a device to clear a table's notifications, and is a no-op without a token or the secrets", async () => {
+    const pair = await crypto.subtle.generateKey({ name: "ECDSA", namedCurve: "P-256" }, true, ["sign"]);
+    const der = new Uint8Array(await crypto.subtle.exportKey("pkcs8", pair.privateKey));
+    const env = {
+      APNS_TEAM_ID: TEAM,
+      APNS_TOPIC: "com.conleychaos.play",
+      APNS_HOST: "api.push.apple.com",
+      APNS_KEY_P8: `-----BEGIN PRIVATE KEY-----\n${btoa(String.fromCharCode(...der))}\n-----END PRIVATE KEY-----`,
+      APNS_KEY_ID: "KID-DISMISS",
+    } as Env;
+    const { fetcher, calls } = fakeFetch(new Response(null, { status: 200 }));
+    expect(await pushDismiss(env, TOKEN, "BCDFG", fetcher, NOW)).toEqual({ sent: true, unregistered: false });
+    expect(JSON.parse((calls[0] as Call).init.body as string)).toEqual({
+      aps: { "content-available": 1 },
+      kind: "dismiss",
+      code: "BCDFG",
+    });
+    expect(await pushDismiss(env, null, "BCDFG", fetcher, NOW)).toEqual({ sent: false, unregistered: false });
+    expect(await pushDismiss({ ...env, APNS_KEY_ID: undefined }, TOKEN, "BCDFG", fetcher, NOW)).toEqual({
+      sent: false,
+      unregistered: false,
+    });
+    expect(calls).toHaveLength(1);
   });
 });

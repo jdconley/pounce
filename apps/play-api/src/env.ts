@@ -1,9 +1,14 @@
+import type { Identities } from "./players/identities";
+import type { Player } from "./players/player";
 import type { DeviceIndex } from "./room/device-index";
 import type { GameRoom } from "./room/game-room";
 
 export interface Env {
   ROOMS: DurableObjectNamespace<GameRoom>;
   DEVICES: DurableObjectNamespace<DeviceIndex>;
+  PLAYERS: DurableObjectNamespace<Player>;
+  /** One instance, named `IDENTITIES_NAME`. */
+  IDENTITIES: DurableObjectNamespace<Identities>;
   /** HMAC key for device tokens. A secret; absent until configured. */
   TOKEN_SECRET?: string;
   /** Public TestFlight link for the share page. Optional; the page omits the link when unset. */
