@@ -18,29 +18,75 @@ struct HowToPlaySheet: View {
             }
             .padding(.horizontal, 16)
             .padding(.top, 14)
-            ScrollView {
-                VStack(spacing: 18) {
-                    OutlinedText(String(localized: "How to play", comment: "Rules sheet title"), size: 34, fill: Palette.orange)
-                        .accessibilityAddTraits(.isHeader)
-                    ForEach(sections, id: \.title) { section in
-                        RulesCard(title: section.title, color: section.color, lines: section.lines)
+            GeometryReader { geo in
+                ScrollView {
+                    if sizeClass == .regular && geo.size.width >= 760 {
+                        roomy
+                    } else {
+                        VStack(spacing: 18) {
+                            title
+                            ForEach(sections, id: \.title) { section in
+                                RulesCard(title: section.title, color: section.color, lines: section.lines)
+                            }
+                            phasesCard
+                            replay
+                        }
+                        .padding(.horizontal, 20)
+                        .padding(.top, 4)
+                        .padding(.bottom, 32)
+                        .frame(maxWidth: sizeClass == .regular ? 640 : .infinity)
+                        .frame(maxWidth: .infinity)
                     }
-                    RulesCard(
-                        title: String(localized: "The ten phases", comment: "Rules sheet: the list of phases"),
-                        color: Palette.sky,
-                        lines: Rules.phases.enumerated().map { i, reqs in
-                            String(localized: "\(i + 1). \(CoachCopy.phase(reqs).capitalizedFirst)", comment: "Rules sheet: one phase, e.g. '1. Two sets of 3'")
-                        })
-                    replay
                 }
-                .padding(.horizontal, 20)
-                .padding(.top, 4)
-                .padding(.bottom, 32)
             }
         }
         .background(Palette.night.ignoresSafeArea())
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("sheet-rules")
+    }
+
+    @Environment(\.horizontalSizeClass) private var sizeClass
+
+    private var title: some View {
+        OutlinedText(String(localized: "How to play", comment: "Rules sheet title"), size: 34, fill: Palette.orange)
+            .accessibilityAddTraits(.isHeader)
+    }
+
+    private var phasesCard: some View {
+        RulesCard(
+            title: String(localized: "The ten phases", comment: "Rules sheet: the list of phases"),
+            color: Palette.sky,
+            lines: Rules.phases.enumerated().map { i, reqs in
+                String(localized: "\(i + 1). \(CoachCopy.phase(reqs).capitalizedFirst)", comment: "Rules sheet: one phase, e.g. '1. Two sets of 3'")
+            })
+    }
+
+    /// A wide sheet: the rules in two columns (the goal, a turn and groups on the left; special
+    /// cards, the end of a round and the phases on the right), the replay pill under both.
+    private var roomy: some View {
+        let split = 3
+        return VStack(spacing: 22) {
+            title
+            HStack(alignment: .top, spacing: 22) {
+                VStack(spacing: 18) {
+                    ForEach(sections.prefix(split), id: \.title) { section in
+                        RulesCard(title: section.title, color: section.color, lines: section.lines)
+                    }
+                }
+                VStack(spacing: 18) {
+                    ForEach(sections.dropFirst(split), id: \.title) { section in
+                        RulesCard(title: section.title, color: section.color, lines: section.lines)
+                    }
+                    phasesCard
+                }
+            }
+            replay
+        }
+        .padding(.horizontal, 32)
+        .padding(.top, 4)
+        .padding(.bottom, 36)
+        .frame(maxWidth: 1080)
+        .frame(maxWidth: .infinity)
     }
 
     private var replay: some View {

@@ -27,12 +27,17 @@ struct PassCurtainView: View {
     @State private var breathe = false
     @State private var glow = false
     @State private var pressedAt: ContinuousClock.Instant?
+    @Environment(\.horizontalSizeClass) private var sizeClass
+
+    /// The cat, name and paw are bigger on a roomy (iPad) screen that is tall enough for them.
+    private func scale(height: CGFloat) -> CGFloat { sizeClass == .regular && height >= 900 ? 1.3 : 1 }
 
     var body: some View {
         GeometryReader { geo in
             let w = geo.size.width
             let h = geo.size.height
-            let catSide = min(w * 0.86, h * 0.4, 360)
+            let scale = scale(height: h)
+            let catSide = min(w * 0.86, h * 0.4, 360 * scale)
             ZStack {
                 // The spotlight pool the cat sits in.
                 Ellipse()
@@ -55,15 +60,16 @@ struct PassCurtainView: View {
                     .position(x: w / 2, y: h * 0.47)
                     .accessibilityHidden(true)
 
-                OutlinedText(person.name, size: 54, fill: Palette.orange, width: 5)
+                OutlinedText(person.name, size: 54 * scale, fill: Palette.orange, width: 5)
                     .frame(maxWidth: w - 48)
-                    .position(x: w / 2, y: h * 0.47 - catSide * 0.5 - 44)
+                    .position(x: w / 2, y: h * 0.47 - catSide * 0.5 - 44 * scale)
                     .offset(y: appeared || reduceMotion ? 0 : -60)
                     .opacity(appeared ? 1 : 0)
                     .accessibilityIdentifier("curtain.name")
 
                 holdButton
-                    .position(x: w / 2, y: h * 0.47 + catSide * 0.5 + 92)
+                    .scaleEffect(scale)
+                    .position(x: w / 2, y: h * 0.47 + catSide * 0.5 + 92 * scale)
                     .offset(y: appeared || reduceMotion ? 0 : 120)
                     .opacity(appeared ? 1 : 0)
 

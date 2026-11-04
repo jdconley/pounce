@@ -34,7 +34,7 @@ targets:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.conleychaos.play
         PRODUCT_NAME: Pounce
-        TARGETED_DEVICE_FAMILY: "1"
+        TARGETED_DEVICE_FAMILY: "1,2"
         INFOPLIST_FILE: Pounce/Info.plist
         CODE_SIGN_ENTITLEMENTS: Pounce/Pounce.entitlements
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
@@ -89,7 +89,7 @@ targets:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.conleychaos.play.uitests
         GENERATE_INFOPLIST_FILE: YES
-        TARGETED_DEVICE_FAMILY: "1"
+        TARGETED_DEVICE_FAMILY: "1,2"
         TEST_TARGET_NAME: Pounce
 schemes:
   Pounce:

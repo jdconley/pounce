@@ -41,6 +41,8 @@ struct LobbyView: View {
     @State private var wiggles: [Control: Int] = [:]
     @State private var lastTapped: Control?
     @State private var rugFrame: CGRect = .zero
+    /// The landscape iPad lobby shows the QR code in its side panel, not over the rug.
+    @State private var qrInPanel = false
 
     private var room: RoomView? { session.store.room }
     private var table: TableModel? { session.model }
@@ -50,19 +52,25 @@ struct LobbyView: View {
     /// The server takes a rename from the host or any seated phone.
     private var canRename: Bool { seated || room?.youAreHost == true }
 
+    @Environment(\.horizontalSizeClass) private var sizeClass
+
     var body: some View {
         ZStack {
             RoomBackground()
-            VStack(spacing: 6) {
-                topBar
-                codeRow
-                    .allowsHitTesting(interactive)
-                rug
-                    .allowsHitTesting(interactive)
-                startRow
-                    .allowsHitTesting(interactive)
+            if sizeClass == .regular {
+                roomy
+            } else {
+                VStack(spacing: 6) {
+                    topBar
+                    codeRow
+                        .allowsHitTesting(interactive)
+                    rug
+                        .allowsHitTesting(interactive)
+                    startRow
+                        .allowsHitTesting(interactive)
+                }
+                .padding(.bottom, 10)
             }
-            .padding(.bottom, 10)
             if let menuSeat, let room, room.seats.indices.contains(menuSeat) {
                 SeatMenu(center: cushionCenter(menuSeat), toward: rugCenter, items: menuItems(menuSeat, room.seats[menuSeat])) {
                     self.menuSeat = nil
@@ -101,6 +109,91 @@ struct LobbyView: View {
         .accessibilityIdentifier("screen-lobby")
     }
 
+    // MARK: roomy (iPad)
+
+    /// A regular-width window. Wide: a panel on the left with the table's name, the room code,
+    /// invite and QR (the code shows right there in the panel) and the start pill; the rug and
+    /// its cushions fill the right. Tall: the phone's column with a bigger code and the rug
+    /// capped to a comfortable size, so the cushions don't balloon.
+    private var roomy: some View {
+        GeometryReader { geo in
+            let side = Roomy.sideBySide(geo.size)
+            Group {
+                if side {
+                    HStack(spacing: 24) {
+                        infoPanel(height: geo.size.height)
+                            .frame(width: min(geo.size.width * 0.34, 420))
+                        rug
+                            .frame(maxWidth: min(geo.size.height * 1.15, 900))
+                            .allowsHitTesting(interactive)
+                    }
+                    .padding(.horizontal, 28)
+                    .padding(.vertical, 20)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .overlay(alignment: .topLeading) {
+                        CornerHomeButton { model.goHome() }
+                            .accessibilityIdentifier("lobby.home")
+                            .padding(.leading, 16)
+                            .padding(.top, 2)
+                    }
+                } else {
+                    VStack(spacing: 14) {
+                        topBar
+                        codeRow
+                            .scaleEffect(1.2)
+                            .padding(.vertical, 8)
+                            .allowsHitTesting(interactive)
+                        rug
+                            .frame(maxWidth: 820)
+                            .allowsHitTesting(interactive)
+                        startRow
+                            .allowsHitTesting(interactive)
+                    }
+                    .padding(.bottom, 24)
+                }
+            }
+            .onChange(of: side, initial: true) { _, wide in qrInPanel = wide }
+        }
+    }
+
+    /// The landscape lobby's left panel: name, code, invite and QR, start.
+    private func infoPanel(height: CGFloat) -> some View {
+        RoomyPanel {
+            VStack(spacing: 22) {
+                TableNameTitle(name: tableName, editable: canRename && interactive) {
+                    renaming = true
+                }
+                .accessibilityIdentifier("lobby.name")
+                .padding(.top, 8)
+                codeCapsule
+                    .scaleEffect(1.25)
+                    .padding(.vertical, 8)
+                HStack(spacing: 18) {
+                    shareButton
+                    qrButton
+                }
+                .scaleEffect(1.2)
+                .padding(.vertical, 4)
+                .allowsHitTesting(interactive)
+                if showQR {
+                    QRTile(text: shareURL.absoluteString, side: min(220, height * 0.3))
+                        .onTapGesture { withAnimation(.spring(duration: 0.3).paced) { showQR = false } }
+                        .transition(.scale(scale: 0.3).combined(with: .opacity))
+                        .accessibilityLabel("QR code for this table")
+                        .accessibilityAddTraits(.isImage)
+                        .accessibilityIdentifier("lobby.qrcode")
+                }
+                startRow
+                    .allowsHitTesting(interactive)
+                    .padding(.top, 6)
+            }
+            .padding(.horizontal, 20)
+            .padding(.vertical, 34)
+            .frame(maxWidth: .infinity)
+        }
+        .padding(.top, 56)
+    }
+
     // MARK: header
 
     private var topBar: some View {
@@ -122,7 +215,15 @@ struct LobbyView: View {
 
     private var codeRow: some View {
         HStack(spacing: 10) {
-            OutlinedText(session.code, size: 44, fill: .white, width: 3.5)
+            codeCapsule
+            shareButton
+            qrButton
+        }
+        .padding(.horizontal, 12)
+    }
+
+    private var codeCapsule: some View {
+        OutlinedText(session.code, size: 44, fill: .white, width: 3.5)
                 .padding(.horizontal, 20)
                 .padding(.vertical, 6)
                 .background(
@@ -137,18 +238,22 @@ struct LobbyView: View {
                 .accessibilityElement()
                 .accessibilityLabel(Text("Room code \(spelled(session.code))"))
                 .accessibilityIdentifier("lobby.code")
-            PillButton(icon: ArtName.iconShare, color: Palette.magenta, size: .small, width: 54, accessibilityLabel: "Invite") {
-                lastTapped = .share
-                sharing = true
-            }
-            .wiggle(trigger: wiggles[.share, default: 0])
-            .accessibilityIdentifier("lobby.share")
-            PillButton(icon: ArtName.iconQr, color: Palette.teal, size: .small, width: 54, accessibilityLabel: showQR ? "Hide QR code" : "Show QR code") {
-                withAnimation(.spring(duration: 0.4, bounce: 0.4).paced) { showQR.toggle() }
-            }
-            .accessibilityIdentifier("lobby.qr")
+    }
+
+    private var shareButton: some View {
+        PillButton(icon: ArtName.iconShare, color: Palette.magenta, size: .small, width: 54, accessibilityLabel: "Invite") {
+            lastTapped = .share
+            sharing = true
         }
-        .padding(.horizontal, 12)
+        .wiggle(trigger: wiggles[.share, default: 0])
+        .accessibilityIdentifier("lobby.share")
+    }
+
+    private var qrButton: some View {
+        PillButton(icon: ArtName.iconQr, color: Palette.teal, size: .small, width: 54, accessibilityLabel: showQR ? "Hide QR code" : "Show QR code") {
+            withAnimation(.spring(duration: 0.4, bounce: 0.4).paced) { showQR.toggle() }
+        }
+        .accessibilityIdentifier("lobby.qr")
     }
 
     // MARK: rug and cushions
@@ -170,7 +275,7 @@ struct LobbyView: View {
                             .position(Self.seatPoint(i, count: room.seats.count, in: geo.size, side: side))
                     }
                 }
-                if showQR {
+                if showQR && !qrInPanel {
                     QRTile(text: shareURL.absoluteString, side: min(side * 0.58, 240))
                         .onTapGesture { withAnimation(.spring(duration: 0.3).paced) { showQR = false } }
                         .position(x: geo.size.width / 2, y: geo.size.height / 2)

@@ -3,7 +3,7 @@ import XCTest
 /// The start of your turn is unmissable (TurnCue.swift, TurnCueView.swift): "Your turn" plays
 /// when this phone's turn comes, stays until the table is touched, and comes back when the app
 /// returns from the background on that turn. Someone else's turn gets a calm label instead.
-final class TurnCueTests: XCTestCase {
+class TurnCueTests: XCTestCase {
     override func setUp() {
         continueAfterFailure = false
     }

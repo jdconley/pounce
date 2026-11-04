@@ -88,8 +88,14 @@ extension TableScene {
                 piles: piles, stage: stage))
         }
         guard let frame = opponents.frame(of: seat) else { return nil }
+        // Roomy bars curve, so an outer seat's name pill can hang below the bar: the cue goes
+        // under the pill.
+        var barBottom = layout.opponentsBar.minY
+        if layout.arrangement != .phone, let tag = opponents.tag(for: seat) {
+            barBottom = min(barBottom, tag.frame.minY - 4)
+        }
         return .theirs(TurnCue.Theirs(
-            seat: seat, name: SeatInfo.name(seats[safe: seat]), cat: frame, barBottom: layout.opponentsBar.minY))
+            seat: seat, name: SeatInfo.name(seats[safe: seat]), cat: frame, barBottom: barBottom))
     }
 
     /// Sends the shell a changed cue.

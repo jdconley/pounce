@@ -257,10 +257,18 @@ final class CardFaceFactory {
         }
     }
 
+    /// Extra pixels for a screen whose tables can be roomy (`TableLayout.roomyMinSide`), where
+    /// hand cards are drawn up to 104 pt wide: the art keeps its edges at that size.
+    static let detail: CGFloat = {
+        let screen = UIApplication.shared.connectedScenes.compactMap { ($0 as? UIWindowScene)?.screen }.first
+        guard let side = screen.map({ min($0.bounds.width, $0.bounds.height) }) else { return 1 }
+        return side >= TableLayout.roomyMinSide ? 1.6 : 1
+    }()
+
     /// Compact faces are only ever drawn small, so they render at three quarters the pixels.
     private static func render(scale: CGFloat, _ inside: (CGRect) -> Void) -> UIImage {
         let format = UIGraphicsImageRendererFormat.preferred()
-        format.scale *= scale
+        format.scale *= scale * detail
         let bounds = CGRect(origin: .zero, size: cardSize)
         return UIGraphicsImageRenderer(size: cardSize, format: format).image { ctx in
             UIColor.white.setFill()

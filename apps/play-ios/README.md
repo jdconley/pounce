@@ -1,6 +1,6 @@
 # Pounce (iOS)
 
-Native iPhone client for the Pounce card game. iOS 26+, Swift 6 (strict concurrency), SwiftUI shell
+Native iPhone and iPad client for the Pounce card game. iOS 26+, Swift 6 (strict concurrency), SwiftUI shell
 with a SpriteKit table. Apple frameworks only, no third-party packages.
 
 ## Layout
@@ -30,7 +30,7 @@ If simulator code signing complains about provisioning, add `CODE_SIGNING_ALLOWE
 
 ## Prerequisites
 
-- Xcode 27 (iOS 26 SDK or later; the app's deployment target is iOS 26.0, iPhone only, portrait only).
+- Xcode 27 (iOS 26 SDK or later; the app's deployment target is iOS 26.0; universal: iPhone in portrait, iPad in every orientation and every multitasking size).
 - [XcodeGen](https://github.com/yonaskolb/XcodeGen) (`brew install xcodegen`; `scripts/bootstrap.sh`
   installs it if missing).
 - Node 24 and pnpm 10 (run `pnpm install` at the repo root once) for the dev server.
@@ -63,12 +63,14 @@ then the build setting (Debug: `http://localhost:8787`, optionally overridden by
 
 ### Debug-only launch arguments
 
-- `-demo <lobby|lobbyReady|table|other|replay|nope|celebrate|curtain|handoff|peek>` opens a room fed by
+- `-demo <lobby|lobbyReady|table|other|replay|nope|celebrate|curtain|handoff|peek|crowded|hit|over>` opens a room fed by
   a fake socket and canned snapshots, so the real screens render with no server. `-slowmo <factor>`
   (at most 1) runs a demo in slow motion. See `Pounce/App/DemoMode.swift` for what each demo shows.
 - `-anim-speed <n>` (or `POUNCE_ANIM_SPEED=<n>` in the environment) runs the whole app n times faster
   and marks the run as a test: sound and haptics go to silent stand-ins. See [Test speed](#test-speed).
 - `-show-join` opens the Join screen. `-open-link <url>` handles a link as if it was tapped.
+- For screenshots: `-demo-home` puts sample tables on Home, `-show-rules` / `-show-people` open
+  those sheets over Home, and `-show-scoreboard` opens the scoreboard over a table.
 - First-game coaching tips are off under `-uitest-reset` and `-demo` (no bubble over a test's
   taps); add `-tips` to turn them on there (`TutorialTests`), or `-no-tips` to turn them off on
   a phone's own data (`MultiSimTests`). Tips seen are kept per person in `tutorial.json`, next to
@@ -121,6 +123,15 @@ scripts/check-assets.sh                                   # manifest, asset cata
 The UI suite includes tests that play against the live dev server, so run it through
 `scripts/ui-tests.sh` (below), not a bare `xcodebuild test`.
 
+### iPad
+
+`IPadTests.swift` runs only on an iPad simulator (a phone skips it). `IPadRotationTests` plays a
+turn against a bot and turns the iPad between landscape and portrait mid-turn. It checks that the
+hand, its order, the step and the turn survive each turn, and that the table lays out again for the
+new shape. The `Landscape*` classes run `ReorderTests`, `HitTests`, `TurnCueTests`, `NamesTests` and
+`TableNameTests` again with the iPad on its side. For a whole game on two iPads, run
+`SIM_A=<iPad> SIM_B=<iPad> ORIENTATION_A=rotate ORIENTATION_B=landscape scripts/multi-sim.sh`.
+
 ### End-to-end
 
 `e2e.sh`, `ui-tests.sh` and `multi-sim.sh` start the dev server themselves when it is not already
@@ -133,8 +144,9 @@ server (it uses demo modes, plus whatever the device already knows for Home).
 | --- | --- | --- |
 | `scripts/e2e.sh [pounce-e2e args]` | Plays a scripted full game against the server with the `pounce-e2e` CLI (default `full --local 2 --bots 2 --timeout 1800`, about 11 minutes at `SPEED=1`). | `DEV_SERVER_URL`, `DEV_SERVER_LOG`, `SPEED` |
 | `scripts/ui-tests.sh [xcodebuild args]` | The XCUITest suite on a simulator, with the dev server and a host broker (Mac-side `pounce-e2e` remotes and `simctl push`). Pass `-only-testing:PounceUITests/SmokeTests` to narrow it. | `DESTINATION` (default iPhone 17 Pro, iOS 26.2), `SPEED`, `POUNCE_UITEST_TIMEOUT_SCALE` (default 1; use 3 on a busy Mac) |
-| `scripts/multi-sim.sh` | Two simulators: both open the same lobby through a `pounce-dev://` link, then a host game moves seats to the phones and `MultiSimTests` plays them to game over. Screenshots land in `$OUT/shared`. | `SIM_A`, `SIM_B` (UDIDs), `OUT`, `MOVE_AT`, `SPEED`, `SKIP_BUILD=1`, `LOBBY_ONLY=1` (lobby screenshots only), `KEEP_B=1` (leave B booted) |
+| `scripts/multi-sim.sh` | Two simulators: both open the same lobby through a `pounce-dev://` link, then a host game moves seats to the phones and `MultiSimTests` plays them to game over. Screenshots land in `$OUT/shared`. | `SIM_A`, `SIM_B` (UDIDs), `OUT`, `MOVE_AT`, `SPEED`, `SKIP_BUILD=1`, `LOBBY_ONLY=1` (lobby screenshots only), `KEEP_B=1` (leave B booted), `ORIENTATION_A` / `ORIENTATION_B` (iPads: `landscape`, or `rotate` to turn over at every round), `DD` |
 | `scripts/phone-game.sh` | A game hosted on a plugged-in iPhone (Developer Mode and UI Automation on) against the live server: `PhoneGameTests` hosts and plays its seat by taps, a `pounce-e2e join` remote on the Mac takes seat 1, House Cats fill the rest, and it runs to game over. Needs no dev server. | `DEVICE` (UDID; default the first connected iPhone), `BASE` (default https://play.conleychaos.com), `BOTS` (default 1), `SPEED` (the phone only; the live server's bots keep their pace), `OUT`, `SKIP_BUILD=1` |
+| `IPadScreenshotTests` (UI test) | Screens in portrait and landscape: iPadOS won't let the app rotate itself, so this test turns the simulator. Each `name=launch args` entry lands as `<name>-<orientation>.png`. The iPad set is in `Art/screenshots/ipad/`. | `TEST_RUNNER_POUNCE_SHOTS_DIR` (skipped without it), `TEST_RUNNER_POUNCE_SHOTS` (`table=-demo table;join=-show-join`), `TEST_RUNNER_POUNCE_SHOTS_ORIENTATIONS`, `TEST_RUNNER_POUNCE_SHOTS_WAIT` |
 | `scripts/screenshots.sh` | The six main screens into `Art/screenshots/*.jpg` from the installed Debug build (build and install first; `multi-sim.sh` does both). | `DEVICE` (UDID), `RAW_DIR`, `CELEBRATE_AT` (seconds into the slow-motion celebrate demo) |
 
 The UI suite should run through `scripts/ui-tests.sh` because the live tests need the dev server.

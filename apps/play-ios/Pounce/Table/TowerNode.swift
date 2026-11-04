@@ -29,7 +29,8 @@ final class TowerNode: SKNode {
     /// The shelf each head is drawn on (`shelfCount` = the top cushion).
     private var shelves: [Seat: Int] = [:]
 
-    static let headSize: CGFloat = 26
+    /// The mini cat heads' size (`TableLayout.towerHeadSize`).
+    private(set) var headSize: CGFloat = 26
     /// A winner's head on the top cushion is drawn this much bigger.
     static let winnerScale: CGFloat = 1.3
 
@@ -94,7 +95,7 @@ final class TowerNode: SKNode {
                 head.alpha = 1
                 faces[seat]?.texture = TableArt.cat(cat, winner ? .celebrate : .idle)
                 crowns[seat]?.isHidden = !winner
-                crowns[seat]?.position = Self.crownRest
+                crowns[seat]?.position = crownRest
                 crowns[seat]?.alpha = 1
                 shelves[seat] = shelf
             }
@@ -112,7 +113,7 @@ final class TowerNode: SKNode {
     /// top cushion; `index` of `count` heads sharing it.
     func spot(shelf: Int, index: Int, of count: Int) -> CGPoint {
         guard let layout else { return .zero }
-        let size = Self.headSize
+        let size = headSize
         let spread = min(14, (layout.towerFrame.width - size) / CGFloat(max(count - 1, 1)))
         let dx = (CGFloat(index) - CGFloat(count - 1) / 2) * spread
         if shelf >= TableLayout.shelfCount {
@@ -253,14 +254,14 @@ final class TowerNode: SKNode {
                 ])
             items.append((move, head))
             crown.isHidden = false
-            let high = CGPoint(x: Self.crownRest.x, y: Self.crownRest.y + 70)
-            crown.position = reduce ? Self.crownRest : high
+            let high = CGPoint(x: crownRest.x, y: crownRest.y + 70)
+            crown.position = reduce ? crownRest : high
             crown.alpha = 0
             let drop: SKAction = reduce
                 ? .fadeIn(withDuration: 0.2)
                 : .sequence([
                     .wait(forDuration: 0.15 + Double(i) * 0.12),
-                    .group([.fadeIn(withDuration: 0.1), .move(to: Self.crownRest, duration: t.crownDrop).eased(.easeIn)]),
+                    .group([.fadeIn(withDuration: 0.1), .move(to: crownRest, duration: t.crownDrop).eased(.easeIn)]),
                     Effects.squash(),
                 ])
             items.append((drop, crown))
@@ -309,18 +310,18 @@ final class TowerNode: SKNode {
 
     // MARK: building
 
-    private static let crownRest = CGPoint(x: 0, y: headSize * 0.62)
+    private var crownRest: CGPoint { CGPoint(x: 0, y: headSize * 0.62) }
 
     private func makeHead(cat: Int, seat: Seat) -> SKNode {
-        let size = Self.headSize
+        let size = headSize
         let node = SKNode()
         let ring = SKSpriteNode(texture: TableArt.table(ArtName.ring), size: CGSize(width: size + 4, height: size + 4))
         ring.color = UIColor(SeatInfo.ringColor(seat))
         ring.colorBlendFactor = 0.85
         let face = SKSpriteNode(texture: TableArt.cat(cat, .idle), size: CGSize(width: size, height: size))
         face.zPosition = 1
-        let crown = SKSpriteNode(texture: TableArt.table(ArtName.crown), size: CGSize(width: 22, height: 17))
-        crown.position = Self.crownRest
+        let crown = SKSpriteNode(texture: TableArt.table(ArtName.crown), size: CGSize(width: 22 * size / 26, height: 17 * size / 26))
+        crown.position = crownRest
         crown.zPosition = 2
         crown.isHidden = true
         node.addChild(ring)
@@ -335,6 +336,15 @@ final class TowerNode: SKNode {
     private func build(_ layout: TableLayout) {
         builtFor = layout.towerFrame
         structure.removeAllChildren()
+        if headSize != layout.towerHeadSize {
+            // New head size (the window resized): every head is made again at it.
+            headSize = layout.towerHeadSize
+            heads.removeAllChildren()
+            headNodes.removeAll()
+            headKeys.removeAll()
+            faces.removeAll()
+            crowns.removeAll()
+        }
         let frame = layout.towerFrame
         let w = frame.width
         let base = SKSpriteNode(texture: TableArt.table(ArtName.towerBase), size: CGSize(width: w, height: w * 34 / 44))
@@ -347,10 +357,11 @@ final class TowerNode: SKNode {
             shelf.position = CGPoint(x: c.x, y: c.y - 6)
             shelf.zPosition = 0.1 + CGFloat(i) * 0.1
             structure.addChild(shelf)
-            let badge = SKSpriteNode(texture: TableArt.table(ArtName.shelfBadge), size: CGSize(width: 18, height: 18))
-            badge.position = CGPoint(x: frame.maxX - 4, y: c.y - 8)
+            let k = w / TableLayout.towerWidth  // a wider (roomy) tower gets bigger badges
+            let badge = SKSpriteNode(texture: TableArt.table(ArtName.shelfBadge), size: CGSize(width: 18 * k, height: 18 * k))
+            badge.position = CGPoint(x: frame.maxX - 4 * k, y: c.y - 8 * k)
             badge.zPosition = 2
-            let digits = CardFaceFactory.shared.numeral(String(i + 1), size: 10, outline: 2)
+            let digits = CardFaceFactory.shared.numeral(String(i + 1), size: (10 * k).rounded(), outline: 2)
             let number = SKSpriteNode(texture: digits, size: digits.size())
             number.position = CGPoint(x: 0, y: -1)
             number.zPosition = 0.01

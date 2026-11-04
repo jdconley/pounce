@@ -21,13 +21,21 @@ struct HomeView: View {
     @State private var pushAllowed: Bool?
     @State private var showPriming = false
 
+    @Environment(\.horizontalSizeClass) private var sizeClass
+
     var body: some View {
         GeometryReader { geo in
-            VStack(spacing: 14) {
-                hero(width: geo.size.width, height: geo.size.height)
-                pills(width: geo.size.width)
-                Spacer(minLength: 8)
-                tablesRow
+            Group {
+                if sizeClass == .regular {
+                    roomy(geo.size)
+                } else {
+                    VStack(spacing: 14) {
+                        hero(width: geo.size.width, height: geo.size.height)
+                        pills(width: geo.size.width)
+                        Spacer(minLength: 8)
+                        tablesRow
+                    }
+                }
             }
             .frame(maxWidth: .infinity)
             .padding(.top, 10)
@@ -58,6 +66,8 @@ struct HomeView: View {
         .sheet(isPresented: $showRules) {
             HowToPlaySheet { showRules = false }
                 .environment(model)
+                // A big page on iPad, so the rules get two columns (no effect on a phone).
+                .presentationSizing(.page)
                 .presentationDetents([.large])
                 .presentationDragIndicator(.visible)
                 .presentationBackground(Palette.night)
@@ -81,6 +91,15 @@ struct HomeView: View {
         .animation(.spring(duration: 0.4, bounce: 0.4).paced, value: showBell)
         .task { await model.refreshTables() }
         .task { await checkPush() }
+        #if DEBUG
+        // `-show-rules` / `-show-people`: open that sheet at launch (iPad screenshots).
+        .task {
+            let args = CommandLine.arguments
+            try? await Task.sleep(for: .milliseconds(600))
+            if args.contains("-show-rules") { showRules = true }
+            if args.contains("-show-people") { showPeople = true }
+        }
+        #endif
         .onChange(of: scenePhase) { _, phase in
             if phase == .active {
                 Task { await model.refreshTables() }
@@ -128,9 +147,11 @@ struct HomeView: View {
             .accessibilityAddTraits(.isImage)
     }
 
-    private func pills(width: CGFloat) -> some View {
-        let w = min(width - 56, 360)
-        return VStack(spacing: 12) {
+    /// `wide`: each pill this wide, side by side (roomy portrait); else stacked.
+    private func pills(width: CGFloat, wide: CGFloat? = nil) -> some View {
+        let w = wide ?? min(width - 56, 360)
+        let stack = wide == nil ? AnyLayout(VStackLayout(spacing: 12)) : AnyLayout(HStackLayout(spacing: 20))
+        return stack {
             PillButton(
                 icon: ArtName.iconPlus, color: Palette.violet, size: .large, width: w,
                 title: String(localized: "Create", comment: "Home: the pill that starts a new game"),
@@ -196,6 +217,137 @@ struct HomeView: View {
             .accessibilityIdentifier("home.tables")
         }
     }
+
+    // MARK: roomy (iPad)
+
+    /// A regular-width window. Wide (landscape): the hero and the two pills in a column on the
+    /// left, your tables as a grid in a panel on the right. Tall (portrait): a bigger hero, the
+    /// pills side by side, and the tables grid under them. With no tables the hero and pills
+    /// stand alone in the middle.
+    @ViewBuilder private func roomy(_ size: CGSize) -> some View {
+        let hasTables = !shownItems.isEmpty || model.archivedItems.count > 0
+        if Roomy.sideBySide(size) && hasTables {
+            let left = min(size.width * 0.36, 480)
+            HStack(alignment: .center, spacing: 36) {
+                VStack(spacing: 26) {
+                    hero(width: left, height: size.height * 1.15)
+                    pills(width: left + 56)
+                }
+                .frame(width: left)
+                tablesPanel
+                    .frame(maxWidth: 720, maxHeight: min(size.height - 40, 640))
+            }
+            .padding(.horizontal, 56)
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+        } else {
+            let width = min(size.width - 80, 900)
+            VStack(spacing: 26) {
+                Spacer(minLength: 0)
+                hero(width: min(size.width, 640), height: size.height * (hasTables ? 0.8 : 1.25))
+                pills(width: 0, wide: min((width - 20) / 2, 340))
+                if hasTables {
+                    tablesPanel
+                        .frame(width: width)
+                        .padding(.top, 10)
+                }
+                Spacer(minLength: 0)
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+        }
+    }
+
+    /// The tables Home shows (DEBUG: `-demo-home` puts sample tables here for screenshots).
+    private var shownItems: [HomeTableItem] {
+        #if DEBUG
+        if CommandLine.arguments.contains("-demo-home") { return Self.demoItems }
+        #endif
+        return model.homeItems
+    }
+
+    /// Your tables as a grid of cards in a panel, hugging them, and scrolling once there are
+    /// more than fit.
+    private var tablesPanel: some View {
+        RoomyPanel {
+            ViewThatFits(in: .vertical) {
+                tablesGrid
+                ScrollView(.vertical, showsIndicators: false) { tablesGrid }
+                    .scrollBounceBehavior(.basedOnSize)
+                    .clipShape(RoundedRectangle(cornerRadius: 34, style: .continuous))
+            }
+            .accessibilityElement(children: .contain)
+            .accessibilityIdentifier("home.tables")
+        }
+    }
+
+    private var tablesGrid: some View {
+        let items = shownItems
+        let archivedCount = model.archivedItems.count
+        return LazyVGrid(
+            columns: [GridItem(.adaptive(minimum: Self.roomyCard.width, maximum: Self.roomyCard.width + 30), spacing: 22)],
+            spacing: 26
+        ) {
+            ForEach(items) { item in
+                Self.roomyScaled(tableCard(item))
+            }
+            if archivedCount > 0 {
+                Self.roomyScaled(ArchivedTile(count: archivedCount, cat: model.people.owner?.cat ?? 0) { showArchived = true })
+                    .transition(.scale(scale: 0.6).combined(with: .opacity))
+            }
+        }
+        .animation(.spring(duration: 0.4, bounce: 0.35), value: items.map(\.id))
+        .animation(.spring(duration: 0.4, bounce: 0.35), value: archivedCount)
+        .padding(.horizontal, 22)
+        .padding(.vertical, 26)
+    }
+
+    /// Table cards are drawn this much bigger on a roomy Home.
+    private static let roomyScale: CGFloat = 1.2
+    private static var roomyCard: CGSize {
+        CGSize(width: TableCard.size.width * roomyScale, height: TableCard.size.height * roomyScale)
+    }
+
+    private static func roomyScaled(_ card: some View) -> some View {
+        card
+            .scaleEffect(roomyScale)
+            .frame(width: roomyCard.width, height: roomyCard.height)
+    }
+
+    private func tableCard(_ item: HomeTableItem) -> some View {
+        TableCard(item: item) {
+            model.open(code: item.id, intent: .rejoin)
+        }
+        .contextMenu {
+            Button {
+                archive(item.id)
+            } label: {
+                Label(
+                    String(localized: "Archive", comment: "Home: a table's long-press menu item that hides it"),
+                    systemImage: "archivebox")
+            }
+            .accessibilityIdentifier("home.table.archive")
+        }
+        .contentShape(.contextMenuPreview, RoundedRectangle(cornerRadius: 26, style: .continuous))
+        .accessibilityAction(named: Text("Archive", comment: "VoiceOver: hides a table from Home")) {
+            archive(item.id)
+        }
+        .transition(.scale(scale: 0.6).combined(with: .opacity))
+    }
+
+    #if DEBUG
+    private static let demoItems: [HomeTableItem] = {
+        func seats(_ cats: [Int], open: Int = 0) -> [CachedSeat] {
+            cats.enumerated().map { CachedSeat(kind: .human, name: "Cat \($0.offset)", cat: $0.element, yours: $0.offset == 0) }
+                + Array(repeating: CachedSeat(kind: .open), count: open)
+        }
+        return [
+            HomeTableItem(id: "M3W7Z", name: "Friday Night Cats", yourTurn: true, status: "playing", seats: seats([2, 0]), turnCat: 2, updatedAt: 0),
+            HomeTableItem(id: "K9PQR", name: "Sunday Brunch", yourTurn: false, status: "playing", seats: seats([2, 4, 6]), turnCat: 4, updatedAt: 0),
+            HomeTableItem(id: "TB4XN", name: "Couch League", yourTurn: false, status: "lobby", seats: seats([2], open: 2), turnCat: nil, updatedAt: 0),
+            HomeTableItem(id: "GH2VD", name: "Rematch", yourTurn: false, status: "over", seats: seats([2, 5]), turnCat: 5, updatedAt: 0),
+            HomeTableItem(id: "WZ8CM", name: "Road Trip", yourTurn: true, status: "playing", seats: seats([2, 1, 3, 7]), turnCat: 2, updatedAt: 0),
+        ]
+    }()
+    #endif
 
     private func archive(_ code: String) {
         Haptics.shared.drop()

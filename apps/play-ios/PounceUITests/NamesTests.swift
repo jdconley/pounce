@@ -3,7 +3,7 @@ import XCTest
 /// Names people set and see: first launch asks for a name (the random one is only a
 /// placeholder), the name is on the table, and a rename from the table menu reaches the server
 /// and comes back in the next snapshot.
-final class NamesTests: XCTestCase {
+class NamesTests: XCTestCase {
     override func setUp() {
         continueAfterFailure = false
     }
