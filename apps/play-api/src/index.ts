@@ -1,6 +1,7 @@
 import { issueDeviceToken, verifyDeviceToken } from "./auth";
 import { devSpeed } from "./env";
 import { appSiteAssociation, ogImage, sharePage } from "./http/links";
+import { privacyPage } from "./http/privacy";
 import {
   deleteMe,
   devicePlayers,
@@ -247,6 +248,7 @@ export default {
       return appSiteAssociation();
     }
     if (method === "GET" && pathname === "/og/room.jpg") return ogImage();
+    if (method === "GET" && pathname === "/privacy") return privacyPage();
     const share = method === "GET" ? SHARE_PATH.exec(pathname) : null;
     if (share) return sharePage(share[1] as string, env.TESTFLIGHT_URL, new URL(request.url).origin);
     const secret = env.TOKEN_SECRET;

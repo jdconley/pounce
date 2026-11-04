@@ -299,6 +299,16 @@ describe("worker", { timeout: 20_000 }, () => {
     expect(post.status).toBe(404);
   });
 
+  test("the privacy policy is served at /privacy without a token", async () => {
+    const mf = worker({ secret: null });
+    const res = await mf.dispatchFetch(`${BASE}/privacy`);
+    expect(res.status).toBe(200);
+    expect(res.headers.get("content-type")).toBe("text/html; charset=utf-8");
+    expect(await res.text()).toContain('id="coppa"');
+    expect((await mf.dispatchFetch(`${BASE}/privacy`, { method: "POST" })).status).toBe(404);
+    expect((await mf.dispatchFetch(`${BASE}/privacy/extra`)).status).toBe(404);
+  });
+
   test("the share image is served as a jpeg without a token", async () => {
     const res = await worker({ secret: null }).dispatchFetch(`${BASE}/og/room.jpg`);
     expect(res.status).toBe(200);

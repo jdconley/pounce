@@ -23,7 +23,16 @@ export type IdentityRow = { provider: string; subjectHash: string; deviceId: str
 /** A pass-and-play person listed on a signed-in owner's account, so they follow the owner to the iPad. */
 export type HouseholdPerson = { personId: string; playerId: string; name: string; cat: number };
 
-export type MeState = { settings: Section; tutorial: Section; archive: Section; people: HouseholdPerson[] };
+/** The player's name and cat, and when a device last changed them (client ms), so other devices can catch up. */
+export type MeProfile = { name: string; cat: number; at: number };
+
+export type MeState = {
+  settings: Section;
+  tutorial: Section;
+  archive: Section;
+  people: HouseholdPerson[];
+  profile: MeProfile | null;
+};
 
 export type PlayerExport = {
   identities: IdentityRow[];
@@ -239,6 +248,9 @@ export class Player extends DurableObject<Env> {
       tutorial: this.section("tutorial"),
       archive: this.section("archive"),
       people: this.household(),
+      profile: this.exists()
+        ? { name: this.getMeta("name") as string, cat: Number(this.getMeta("cat")), at: Number(this.getMeta("name_at") ?? 0) }
+        : null,
     };
   }
 
@@ -255,7 +267,9 @@ export class Player extends DurableObject<Env> {
       identities: this.identities(),
       devices: this.deviceIds(),
       tables: this.listTables(),
-      ...this.getState(),
+      settings: this.section("settings"),
+      tutorial: this.section("tutorial"),
+      archive: this.section("archive"),
       household: this.ctx.storage.sql
         .exec<{ device_id: string; person_id: string; player_id: string; name: string; cat: number }>(
           "SELECT device_id, person_id, player_id, name, cat FROM household",

@@ -13,7 +13,7 @@ const encoder = new TextEncoder();
 
 type Snapshot = Extract<ServerMessage, { t: "snapshot" }>;
 type Device = { deviceId: string; token: string };
-type Person = { id: string; name: string; cat: number; key: string; ageBand?: string };
+type Person = { id: string; name: string; cat: number; key: string; ageBand?: string; at?: number };
 
 let script = "";
 let rsa: CryptoKeyPair;
@@ -403,6 +403,18 @@ describe("synced state", () => {
     expect(state.tutorial.done?.v).toBe(true);
     expect((await call(mf, await mint(mf), "GET", `/v1/me/state?person=${mia.id}`)).status).toBe(404);
     expect((await call(mf, phone, "PATCH", `/v1/me/state?person=${mia.id}`, { nope: {} })).status).toBe(400);
+  });
+
+  test("the state carries the player's name and cat, and when they last changed", async () => {
+    const mf = worker();
+    const phone = await mint(mf);
+    const mia = { ...newPerson("Mia"), at: 1234 };
+    await profile(mf, phone, [mia]);
+    const state = (await (await call(mf, phone, "GET", `/v1/me/state?person=${mia.id}`)).json()) as { profile: unknown };
+    expect(state.profile).toEqual({ name: "Mia", cat: 3, at: 1234 });
+    await profile(mf, phone, [{ ...mia, name: "Mochi", cat: 5, at: 1000 }]);
+    const older = (await (await call(mf, phone, "GET", `/v1/me/state?person=${mia.id}`)).json()) as { profile: unknown };
+    expect(older.profile).toEqual({ name: "Mia", cat: 3, at: 1234 });
   });
 
   test("household people on a signed-in phone follow the account to the iPad", async () => {
