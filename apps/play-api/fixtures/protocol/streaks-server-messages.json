@@ -72,7 +72,11 @@
         "theirMove": [],
         "pounce": {
           "sent": false,
-          "resting": false
+          "resting": false,
+          "quiet": false,
+          "answer": null,
+          "code": null,
+          "waiting": null
         }
       }
     }
