@@ -1,6 +1,6 @@
 # Pounce daily habit loop ("Us" streaks) — Design
 
-Date: 2026-11-04 · Owner: JD Conley (Conley Chaos LLC) · Status: **draft v2. JD answered the first round of open questions (2026-11-04), and the design is waiting on his approval.** Nothing gets built until JD approves.
+Date: 2026-11-04 · Owner: JD Conley (Conley Chaos LLC) · Status: **draft v3. JD answered rounds 1 and 2 of the open questions (2026-11-04), and the design is waiting on his approval.** Nothing gets built until JD approves.
 
 Parent specs: `2026-10-31-pounce-cat-tower-design.md` (product and rules) and `2026-10-31-pounce-ios-design.md` (the client). Where this doc changes something they decided, it says so. The biggest change is that **accounts (Sign in with Apple) move from M2 into this work**, because JD wants everything to sync between devices.
 
@@ -35,7 +35,9 @@ The aim is a habit in the Duolingo sense, with one difference that shapes every 
 
 **Goals**
 - **A shared streak for every pair of people who play together** (partner, kids, mom) **(JD)**. A day is kept only when **both** of you took a turn in a game together **(JD)**. Every Pounce game counts, so a future co-op game would too.
-- **Accounts with Sign in with Apple, and everything synced across devices** **(JD)**: your identity, your seats at tables, your tables list and archive, your streaks and rewards, and your settings. Guests can still join by link with no sign-in, as the parent spec says.
+- **Accounts that sync everything across devices, and that work with any sign-in provider** **(JD)**: Sign in with Apple first, with others such as Google, email or passkeys later, and no migration. Your identity, seats, tables, archive, streaks, rewards and settings all belong to your player.
+- **Sign-in is never required** **(JD)**. A guest has a full streak. Signing in later is an **anonymous upgrade**: the same player gains a sign-in, and nothing moves.
+- **The rules for minors are followed** **(JD)** (§14.1).
 - **Forgiving by design:**
   - automatic cat naps (freezes);
   - a free way to win back a broken streak;
@@ -61,7 +63,7 @@ The aim is a habit in the Duolingo sense, with one difference that shapes every 
 - A new mini-game. Turns in a real game together are the daily ritual **(JD)**.
 - Leagues, XP, leaderboards, or competing with other couples. Pounce isn't social with strangers.
 - Purchases of any kind: no paid freezes, repairs or gems. Pounce has no monetization.
-- Email or password accounts, and other sign-in providers.
+- Passwords. Future providers will be passwordless: Google, email one-time codes, passkeys.
 - Android and the Mac.
 - Analytics.
 
@@ -88,8 +90,10 @@ The aim is a habit in the Duolingo sense, with one difference that shapes every 
   - People are created on the phone (`Person {id, name, cat}`, a UUID made on the device), and one phone can hold several (pass-and-play).
   - A seat belongs to a `deviceId` (`SeatInfo.deviceId`, `RoomCore.controlledSeats(deviceId)`), and person ids aren't verified **(server)**. §13.1 replaces this with players.
 - **Secrets:**
-  - Sign in with Apple **token revocation**, which Apple requires on account deletion, needs a Sign in with Apple private key. JD creates it, and the deploy pipeline sets it as a secret (`SIWA_KEY_P8`, `SIWA_KEY_ID`), exactly like `APNS_KEY_P8`. No session ever handles it.
-  - Verifying sign-in needs no secret (Apple's public keys).
+  - Verifying Sign in with Apple needs none (Apple's public keys).
+  - Token revocation needs a Sign in with Apple private key, set like the APNs key as the optional pipeline secrets `PLAY_API_SIWA_KEY_P8` and `PLAY_API_SIWA_KEY_ID`. Without them, revocation stays off, and the server warns, the way push does today **(server)**.
+  - JD creates the key once, before App Store submission (§13.1). One key with APNs and Sign in with Apple both enabled can serve both secret pairs.
+  - No session ever handles a key.
 - **The push path already in the app:**
   - priming (`PushPrimingView.swift`);
   - `PushCoordinator`: token upload every launch, tap routing, and the local 10-minute reminder;
@@ -296,6 +300,44 @@ Research was done on 2026-11-04, with web sources in the Sources list at the end
   - Revocation takes a refresh or access token, not the identity token. The authorization code lasts only minutes, so the server exchanges it for a refresh token at sign-in and keeps that token [61][62].
 - *Taken:* no scopes requested, server-side verification, a refresh token stored only to revoke it, and in-app deletion (§13.1, §14).
 
+### 4.7 Rules for minors
+
+Research was done on 2026-11-04. It isn't legal advice. **Unverified** marks what couldn't be read in a primary source.
+
+**COPPA** [63][64][65]:
+- **Dates:** the amended rule was published in April 2025, and compliance has been due since **22 April 2026** [63].
+- **"Directed to children":** decided by factors that include subject matter, visual content and animated characters [64].
+- **Mixed-audience services** must age-screen neutrally before collecting personal information, and must not block children [64][65].
+- **What an under-13 can do without verifiable parental consent:** only a persistent identifier used for *support for internal operations*, with notice. That covers keeping user-driven state such as scores or character choices [64][65].
+- **Push:** the device information used for push counts as online contact information. So push to an under-13 needs consent, or the narrow multiple-contact exception, which requires notifying a parent [65].
+- **Names:** a first name or nickname combined with an identifier is personal information [64].
+- **Paperwork:** the 2025 rule adds a written retention policy (§ 312.10) and a written security program (§ 312.8) [64].
+- **Age-checking data:** the FTC's February 2026 policy statement won't pursue data collected solely to determine age, if it's deleted promptly and used for nothing else [66].
+- The FTC declined to finalize limits on push and engagement techniques, but said it remains concerned about them [78].
+
+**Apple:**
+- **Guidelines:** 5.1.4 (kids' data, and no metadata implying kids are the audience) and 1.3 (Kids Category) [30].
+- **Age ratings:** new 13+, 16+ and 18+ ratings, with an age-assurance question, required from 31 January 2026 [67].
+- **Declared Age Range (iOS 26):** returns a band, never a birthdate. Parents control sharing. Apple says to check age where the law requires it [68].
+- **The Significant Change API** (PermissionKit) handles parental approval for significant updates in states with app-store laws [68].
+- **Sign in with Apple and children:** Apple has said Sign in with Apple doesn't support under-13 accounts (a 2020 staff reply, and current status is unverified) [73].
+- **Third-party logins:** 4.8 requires a privacy-preserving login option alongside them. Sign in with Apple already satisfies it for future providers [30].
+
+**App-store age laws:**
+- **Texas SB 2420** has applied to new Texas accounts since 4 June 2026, with the merits appeal pending [70][71].
+- **Utah and Louisiana:** Apple shares age categories there, though the statute dates conflict [72].
+- **California's AB 1043** from 2027 has developers request an age signal (secondary).
+- **Developer duties:** rate the app, use the store's signals only for age limits and safety defaults, and take significant changes through the store [70].
+
+**UK and EU:**
+- **The ICO Children's Code,** standard 13, says no nudges that lead children to share more or weaken privacy [74]. Standard 5 treats "sticky" features (reward loops, notifications) as an impact-weighing test (secondary).
+- **The EU's DSA Article 28 guidelines (July 2025)** recommend that features driving excessive use, streaks and push among them, be off by default for minors, with no push in core sleep hours [76]. They target online platforms, which Pounce likely isn't (unverified).
+- **GDPR Article 8:** the age of consent is 13 to 16, by member state [75].
+
+**New York SAFE for Kids:** no notifications to under-18s from midnight to 6 a.m. without parental consent, effective 25 January 2027, for feed-based platforms [77].
+
+*Taken:* §14.1.
+
 ## 5. The recommendation on one page
 
 - **The unit is the pair** **(JD)**.
@@ -314,10 +356,11 @@ Research was done on 2026-11-04, with web sources in the Sources list at the end
   - Either of you can **pause** it for up to 14 days **(JD)**.
   - After a real break, the best streak and lifetime days together stay on show, and the next Monday brings a fresh deal.
 - **Accounts make it one you on every device** **(JD)**.
-  - Sign in with Apple creates a **player**.
-  - Your seats belong to your player, not to a phone, so your iPad and your iPhone sit in the same seat.
-  - Your tables, archive, streaks, rewards and settings all sync.
-  - Guests still join by link without signing in, and everything they did merges in when they sign in later.
+  - Everyone is a **player** from first launch.
+  - Sign-in identities attach to a player: Apple now, other providers later through one interface.
+  - A guest keeps a full streak. Signing in is an **anonymous upgrade** (same player, nothing moves). Signing in on a second device merges that device in.
+  - Seats, tables, the archive, streaks, rewards and settings belong to the player and sync.
+  - Kids follow the rules for minors (§14.1).
 - **Pounce: "come play with me."**
   - Tap someone's cat, then pick a table to make a move at, a new game, or "you pick", and they get a push with your cat on it.
   - It also works as a link in Messages.
@@ -358,7 +401,7 @@ Research was done on 2026-11-04, with web sources in the Sources list at the end
 - **Evening cutoff:** two hours before that person's quiet hours start. With the default quiet hours, that's 20:00.
 - **In for the day:** a person is in for day `D` if either:
   1. they completed a turn at a shared table during `D`; or
-  2. they were **waiting**: at no moment between the start of `D` and their evening cutoff did they hold the move at a shared table. That is, the move never reached them, or it reached them only after the cutoff. This is the **late move pass**.
+  2. they were **waiting**: at no moment between the start of `D` and their evening cutoff did they hold the move at a shared table **(JD: the two-hour window is right)**. That is, the move never reached them, or it reached them only after the cutoff. This is the **late move pass**.
 - **Kept day:** both people are in, and at least one of them actually took a turn.
 - **Held day:** neither person took a turn, there was a shared table in play all day, and neither of them held the move before their cutoff, because a third human held it all day. This happens only at family tables. A held day neither grows nor breaks the streak, and it shows as a plain day **(call)**.
 - **Missed day:** anything else, unless the pair is paused.
@@ -502,7 +545,7 @@ The condo is the pair's shared cat tree, with your two cats sitting on it. It's 
 - **Card backs:** the default violet paw, plus 6 to unlock: yarn swirl, moonlit fish, cucumber chaos, crown, heart paws and golden yarn.
 - **Rugs:** the default magenta, teal and orange rug, plus 4 to unlock: night sky, candy stripe, fish pond and royal violet.
 - **Anyone seated at a table can change its rug or card back at any time, as in a group chat** **(JD)**. The control is in the table menu: a rug icon opens a tray of rug and back tiles.
-- **What you can pick from:** what *you* have unlocked with anyone. Changing the table shows off your rewards **(call)**.
+- **What you can pick from:** what *you* have unlocked with anyone **(JD)**. Changing the table shows off your rewards.
 - **How it shows:**
   - Everyone at the table sees the change at once.
   - A little pill floats down with the changer's cat and the new rug or back. There are no words.
@@ -590,15 +633,22 @@ This closes the parent iOS spec's server follow-up #2.
 
 ### 10.5 Accounts in the app **(JD, call)**
 
-- **Pick your cat** (first launch) gains a **Sign in with Apple** button under the check. It's optional, and play still starts without it.
-- **On a device that's already set up,** the button appears in three places:
-  - the people sheet (owner corner);
-  - the Us screen, once a streak reaches 3: the badge shows a little cloud with a plus;
-  - the gear sheet.
-- **Signing in on a second device:**
-  - The device becomes the same you: same cat, same name, same seats, same tables.
-  - Any guest person it already had merges in (§13.2).
-- **The gear sheet** shows the account as your cat with a check, and also offers sign out and **delete account** (§14).
+- **Never required.** Pick your cat works as today, and play starts at once as a guest.
+- **Sign-in offers** show the provider buttons. In v1 that's only **Sign in with Apple**; later providers appear as more buttons in the same spot. They're offered:
+  - on the people sheet;
+  - on the gear sheet;
+  - when a streak first reaches 3, as a little cloud with a plus on the Us badge, meaning "keep this on all your devices";
+  - when a second device of yours shows up. That's detectable only when you're signed in, so before then the offer comes from the people sheet.
+  - Never to a player under 13 (§14.1).
+- **Signing in:**
+  - On a guest phone, the anonymous upgrade runs in place.
+  - On a second device, it merges into your player. That device then shows your cat, name, seats and tables.
+- **A household person** can sign in on their own: hold their cat on the people sheet.
+- **The gear sheet** shows:
+  - the account (your cat with a check);
+  - linked providers (icons);
+  - sign out;
+  - **delete account** (§14).
 
 ## 11. Widgets
 
@@ -708,6 +758,8 @@ Cat Tower games run for days, longer than a Live Activity may last (8 hours acti
 | **Play again** | A rematch was dealt. | The others. | `active` | — |
 | **Fresh start** | The first Monday or 1st of the month after a break (§8.4). | Each person, at their reminder time. | `active` | Once per break |
 
+**Age bands change the defaults:** kittens get no server pushes at all, and teens get gentler defaults and no overnight sends (§14.1).
+
 **Hard caps,** which the `Player` DO enforces:
 - **Reminder-type pushes:** at most 2 a day. These are the daily reminder, last chance and fresh start. "Your move" and Pounce aren't counted: one is the game, and the other is a person asking.
 - **Spacing:** at most one push of any kind every 20 minutes, except "your move" and Pounce.
@@ -807,7 +859,7 @@ A sheet opens with the other person's cat at the top. You pick a target from thr
 - after **Not now**, no pounces from that sender for 1 hour;
 - after **3 unanswered in a row**, the pounce button rests for 3 hours and shows a sleeping bell.
 
-**In quiet hours** the pounce lands silently, and the sender sees a moon on it ("they may be asleep"). Communication notifications from people the recipient has allowed through a Focus can still break through, under iOS's own control [24]. So the late-night couch pounce works when someone has chosen that.
+**In quiet hours** the pounce lands silently, and the sender sees a moon on it ("they may be asleep"). **iOS Focus decides beyond that (JD).** Communication notifications from people the recipient has allowed through a Focus can still break through, under iOS's own control [24]. Pounce has no "always ring" override.
 
 **Pounce link tokens:**
 - 16 random bytes, single use.
@@ -875,53 +927,102 @@ It's about 400 bytes, well under the 4 KB APNs limit.
 
 ## 13. Server design
 
-### 13.1 Identity: players, accounts and guests **(JD, call)**
+### 13.1 Identity: players, identities and the anonymous upgrade **(JD, call)**
 
-JD wants accounts and everything synced **(JD)**. The design introduces the **player**.
+JD wants accounts that sync everything, and other sign-in providers later **(JD)**. Signing in must never be required: a guest keeps a streak and can bring it along when they sign in **(JD)**. The design separates **who you are** (a player) from **how you prove it** (identities).
 
-- **Account player:**
-  - Created by Sign in with Apple.
-  - `playerId = "a_" + base64url(SHA-256("acct:v1:" + apple_sub))[0..22]`.
-  - One player holds the owner's name and cat, the household's pass-and-play people, devices, settings, tables, archive, tutorial state and pairs.
-- **Guest player:**
-  - Any person on a device that isn't signed in.
-  - `playerId = "g_" + personId`.
-  - It works exactly as today and keeps a streak, but only on that device.
-  - Binding a guest to its device uses a per-person random `personKey`, kept in the Keychain. The `Player` stores its SHA-256 on first use, and later binds must present the same key. Person ids are visible to everyone at a table, so knowing one mustn't be enough to get someone's pushes.
-- **Seats belong to players.**
-  - `SeatInfo` gains `playerId`.
-  - A device controls a seat when the seat's `deviceId` is that device (today's rule, still used for guests), or when the seat's `playerId` is the player signed in on that device.
-  - So your iPad and your iPhone are the same seat. "Move my seat" stays for guests.
-  - `RoomCore.controlledSeats(deviceId)` becomes `controlledSeats(deviceId, playerId?)`. The Worker resolves `deviceId → playerId` from `DeviceIndex` and passes it to the room in a new internal header, `x-play-player`, alongside `x-play-device`. Both are stripped from client requests, as today.
-- **Presence per player:** a seat is `awake` if any of the player's devices is awake in the room.
-- **Signing in on a device** (`POST /v1/accounts/apple`):
-  1. The app runs `ASAuthorizationAppleIDProvider`, requesting **no scopes**. We don't want the email or the Apple name; Pounce already has names.
-  2. It sends the `identityToken`, the `authorizationCode` and the raw nonce.
-  3. The Worker verifies the token's RS256 signature against Apple's published keys (`appleid.apple.com/auth/keys`, cached for an hour), plus `iss`, `aud = com.conleychaos.play`, `exp`, and that the nonce hash matches. [60]
-  4. The Worker exchanges the `authorizationCode` for a refresh token, which is needed to revoke on deletion. That uses a client secret signed with `SIWA_KEY_P8`, a deploy-pipeline secret (§3). The refresh token is stored in the account `Player`.
-  5. `DeviceIndex.link(playerId)` runs, and the account `Player` adds the device.
-  6. **Merge:**
-     - Every guest person on that device that is the device's owner merges into the account: its pairs, tables and seats.
-     - Other local people (pass-and-play) become household people on the account, keeping their own guest players. They are separate people, so their streaks stay theirs.
-- **Merge rules** (`Player.merge(guestId)`):
-  - **Tables:** each room where the guest holds a seat is told `adopt(guestPersonId, playerId)`. The room sets `playerId` on those seats.
-  - **Pairs:** each guest pair re-points to the account player. If the account already has a pair with the same partner, the two merge:
-    - the longer current streak wins;
-    - lifetime counters take the maximum;
-    - toys and unlocks are the union;
-    - naps take the maximum, capped at 2.
-  - **Name and cat:** the account keeps its own. A brand-new account takes the guest's.
-  - The guest player is left as a forwarding stub for 30 days, then deleted.
-- **What syncs** (all through the account `Player`):
-  - identity (name, cat);
-  - household people;
-  - seats and tables (through rooms);
-  - the archive list;
-  - tutorial progress;
-  - settings: sound, haptics, pace, reminder time, quiet hours, last chance, live table;
-  - streaks, rewards and the chosen looks.
-  - **Device-only:** push tokens, the time zone report, and the cached snapshots.
-- **Kids:** Sign in with Apple needs an Apple Account. A child without one plays as a guest on their own device, or as a household person on a parent's device. Either way it's a full streak pair (§17 Q1).
+**Players**
+- A **player** is one person: their name and cat, seats, tables, streaks, rewards and settings.
+- `playerId` = `"p_"` + 16 random bytes, base64url.
+  - It's **never derived from a provider's user id**.
+  - Seats, pairs, tables and pounces refer only to `playerId`. So providers can be added, removed or swapped later without re-keying anything.
+- **Everyone is a player from the first launch.** Pick your cat creates the person on the phone, as today. The first `PUT /v1/devices/me/profile` creates a **guest player** for each person on the phone. "Guest" only means the player has no sign-in identity yet. A guest has the same streaks, rewards and seats as anyone else.
+
+**Identities**
+- An identity is a verified claim, "this is player X".
+- The single `Identities` index DO maps `(provider, subject_hash) → playerId`, where `subject_hash = SHA-256(provider + ":" + subject)`. Raw provider subjects aren't stored.
+- Each provider is a server module with this interface:
+
+  ```ts
+  type IdentityProvider = {
+    id: "device" | "apple" | "google" | "email" | "passkey";
+    verify(proof: unknown, env: Env): Promise<{ subject: string; secret?: string } | null>;
+    revoke?(secret: string, env: Env): Promise<void>; // called on unlink and account deletion
+  };
+  ```
+
+  Adding a provider later means a new module, a button in the app, and a row in this table. No data migrations.
+
+| Provider | v1? | Proof | Notes |
+|---|---|---|---|
+| `device` | yes | person id + `personKey` (32 random bytes kept in the Keychain; the server stores its hash, trusting it on first use) | The guest credential. Every person has one. It binds a guest player to the phone(s) holding the key. Person ids are visible at a table, so the key, not the id, is what proves it. |
+| `apple` | yes | identity token + nonce, and the authorization code (§4.6) | Requests no scopes (no email, no name). The refresh token is stored as the identity's `secret`, used only by `revoke` (below). |
+| `google`, `email` (one-time code), `passkey` (WebAuthn) | later | per provider | Same interface. For email, the address hash is the subject. A passkey needs the server's own WebAuthn verification, with no third party. |
+
+**Sessions are ours, not the provider's.**
+- The existing device credential, an HMAC device token **(server)**, stays the only session.
+- Signing in **links this device to a player**: `DeviceIndex.player_id` and `Player.devices`.
+- Provider tokens are never used as sessions. A provider outage or a provider being dropped logs nobody out, and an Android client later can reuse the same device-credential scheme.
+
+**The anonymous upgrade.** When you sign in with a provider on a device, one of two things happens:
+1. **The identity is new: it attaches to your guest player in place.**
+   - The `playerId` stays the same, so nothing moves.
+   - Streaks, seats, tables, rewards and settings are already yours. Your partner sees no change.
+   - This is the common case: you sign in for the first time.
+2. **The identity already belongs to another player:** for example, you signed in on your iPhone first, and now on the iPad. The device's guest player **merges** into that player (rules below):
+   - its `device` identity re-points to that player;
+   - it's left as a forwarding stub for 30 days, so any reference that's in flight still resolves.
+
+**Linking, unlinking, signing out:**
+- **Link another provider:** `POST /v1/me/identities/{provider}`, for example adding Google to an Apple-signed player later. If that identity already belongs to a *different* player, the app shows the two cats merging into one, and merges only on a yes.
+- **Unlink:** allowed when another sign-in identity remains. Unlinking the last one turns the player back into a guest on this device, with the data kept.
+- **Sign out:** this device unlinks and starts a fresh guest player. The account and its data stay with the account, ready for the next sign-in.
+
+**Household people** (pass-and-play on one phone):
+- Each person is their own guest player, bound to the phone by its own `device` identity.
+- On a signed-in phone, they're listed on the owner's account, so they follow the owner to the iPad.
+- Any of them can upgrade on their own later, from the people sheet: hold their cat, then sign in. For example, a kid who gets their own Apple Account.
+  - That runs the same anonymous upgrade for *that* player.
+  - Their streak with Dad comes along.
+- (§14.1 has the rules for minors.)
+
+**Seats belong to players.**
+- `SeatInfo` gains `playerId` for every human seat, guests included.
+- **Control:** a device controls a seat when the device is linked to the seat's player, or holds that guest player's `device` identity.
+  - The Worker resolves both and passes them to the room in a new internal header, `x-play-player`, alongside `x-play-device`. Both are stripped from client requests, as today.
+  - `RoomCore.controlledSeats(deviceId)` becomes `controlledSeats(deviceId, playerIds)`.
+- **Existing rooms:** seats without a `playerId` keep today's `deviceId` rule. The first profile upload sends `adopt(personId → playerId)` to each of the device's rooms, which backfills them.
+- **Presence:** a seat is `awake` if any of its player's devices is awake in the room.
+
+**Merge rules** (`Player.merge(fromId)`):
+- **Tables:** every room where `from` holds a seat gets `adopt(from → to)`.
+- **Pairs:** each pair of `from` re-points to `to`. If `to` already has a pair with the same partner, the two merge:
+  - the longer current streak wins;
+  - lifetime counters take the maximum;
+  - toys and unlocks are unioned;
+  - naps take the maximum, capped at 2.
+- **Name and cat:** the target player keeps its own.
+- **Settings:** last writer wins per key.
+
+**What syncs:** everything on the player:
+- name and cat;
+- household people;
+- seats and tables (through rooms);
+- the archive;
+- tutorial progress;
+- settings: sound, haptics, pace, reminder time, quiet hours, last chance, live table;
+- streaks and rewards;
+- the last-used table look.
+
+**Device-only:** push tokens, the time zone report, and cached snapshots.
+
+**Apple's revocation key, and why it's not needed yet:**
+- Verifying a Sign in with Apple token needs no secret, only Apple's public keys (§4.6).
+- Only `revoke` needs one: a client secret signed with a Sign in with Apple private key, which is used to exchange the authorization code at sign-in and to revoke on deletion.
+- The design makes that key **optional**, exactly like the APNs key today (`ci.yml` warns and turns push off when `PLAY_API_APNS_KEY_P8` is unset) **(server)**:
+  - **Without `PLAY_API_SIWA_KEY_P8` / `PLAY_API_SIWA_KEY_ID`:** sign-in works, and no refresh token is stored. Account deletion deletes all data and shows, as a picture, the iOS path for stopping Apple sign-in for the app: Settings → your name → Sign in with Apple → Pounce. That's Apple's documented fallback when an app holds no tokens [61].
+  - **With the key** (needed before App Store submission): codes are exchanged and tokens revoked automatically.
+  - **One key for both:** a single new key with both *Apple Push Notifications service* and *Sign in with Apple* enabled can back both pairs of secrets (§4.6 search: one key may carry several services). That's one visit to the portal, once.
 
 ### 13.2 Durable Objects **(call)**
 
@@ -938,7 +1039,8 @@ Its push path:
 Tables for guest devices stay here, as today.
 
 **`Player`** (new, one per `playerId`):
-- **`meta`:** kind (account or guest), name, cat, `key_hash` (guests), `apple_refresh_token` (accounts), and `forward_to` (merged guests).
+- **`meta`:** name, cat, `age_band` (§14.1), and `forward_to` (merged stubs).
+- **`identities(provider, subject_hash, secret, linked_at)`:** mirrors the `Identities` index for this player. `secret` holds only what a provider's `revoke` needs, such as the Apple refresh token.
 - **`devices(device_id, attached_at, last_seen)`**
 - **`people(person_id, name, cat)`:** household people (accounts only).
 - **`settings`:** a single JSON row, last writer wins per key, with `updated_at` per key.
@@ -963,6 +1065,8 @@ Tables for guest devices stay here, as today.
   - `gifts(gift_id, milestone, item_id, opened_a, opened_b)`;
   - `toys_pity(shiny_since, golden_since)`.
 - **An alarm** at the next settlement (§6.3).
+
+**`Identities`** (new, a single instance; it can be sharded by hash prefix if it ever needs to be): `identities(provider, subject_hash PRIMARY KEY, player_id)`.
 
 **`Links`** (new, a single instance): `token → (playerId, expires)` for pounce links. Rows are deleted when used or when they expire.
 
@@ -1010,9 +1114,11 @@ All routes use device-token auth, as today. The routes under `/v1/me/...` act fo
 
 | Method and path | Body → result | Notes |
 |---|---|---|
-| `POST /v1/accounts/apple` | `{identityToken, authorizationCode, nonce, guests: [{id, key}]}` → `{playerId, profile}` | Signs in and merges (§13.1). |
-| `POST /v1/accounts/signout` | → 204 | Unlinks this device. The device keeps playing as a fresh guest. |
-| `DELETE /v1/accounts/me` | → 204 | Deletes the account (§14). |
+| `POST /v1/identities/{provider}` | `{proof, person: {id, key}}` → `{playerId, upgraded \| merged, profile}` | Sign in for that person on this device: the anonymous upgrade, or a merge (§13.1). `provider` is `apple` in v1. |
+| `POST /v1/me/identities/{provider}` | `{proof, confirmMerge?}` → `{linked}` or `409 {otherPlayer: {name, cat}}` | Link another provider. A 409 asks the app to confirm a merge. |
+| `DELETE /v1/me/identities/{provider}` | → 204 | Unlink. |
+| `POST /v1/me/signout` | → 204 | Unlinks this device. The device keeps playing as a fresh guest. |
+| `DELETE /v1/me` | → 204 | Deletes the player and all their data (§14). |
 | `PUT /v1/devices/me/profile` | `{timeZone, people: [{id, name, cat, key}]}` → 204 | Called on launch and on a time zone change. Binds guests. The existing 1 KB body cap rises to 2 KB for this route. |
 | `GET /v1/me/state` / `PATCH /v1/me/state` | `{settings, people, archive, tutorial}`, per-key `updatedAt` | Sync. A patch merges last writer wins per key. |
 | `GET /v1/devices/me/tables` (exists) | | Returns the player's tables when signed in. |
@@ -1046,7 +1152,8 @@ At family scale, all of this is a rounding error on Durable Objects pricing.
 ## 14. Privacy
 
 **What's new on the server:**
-- **Account link:** a hash of the Apple user id, plus the Sign in with Apple refresh token, which is used only for revocation. No email, and no Apple name.
+- **Identities:** a hash of each provider's user id. When the optional Apple key is set, also the Sign in with Apple refresh token, kept only to revoke it. No email, and no Apple name.
+- **Age band:** kitten, teen or adult (§14.1). Never a birthdate.
 - **Per device:** the time zone.
 - **Per player:** settings, a histogram of the times of day you start playing, the tables list, the archive and tutorial flags.
 - **Per pair:** daily state for 120 days, lifetime counters and rewards.
@@ -1070,7 +1177,7 @@ At family scale, all of this is a rounding error on Durable Objects pricing.
 **Deleting your account** (gear sheet, then account, then the trash can, with a confirm; required by App Review 5.1.1(v) [30]):
 - It deletes the `Player`.
 - It leaves every pair.
-- It revokes the Sign in with Apple token [61].
+- It revokes each identity's tokens through the provider's `revoke`, when the key is configured. Without the key, it shows the Settings path for stopping Apple sign-in (§13.1) [61].
 - Rooms keep your seat, but it falls back to the device that last held it. The game goes on, and nothing breaks for the others.
 
 **Retention:**
@@ -1086,6 +1193,93 @@ At family scale, all of this is a rounding error on Durable Objects pricing.
 - It adds **Product Interaction** (play times) and **Other Usage Data** (streak state), for App Functionality only, with no tracking.
 - The App Store Connect privacy label needs the same update before external TestFlight review.
 
+### 14.1 Minors **(JD: "follow all the rules for minors"; research §4.7; call)**
+
+*This is a design that follows the rules as researched, not legal advice. JD should have counsel review §14.1 before the App Store launch (§17).*
+
+**Audience: mixed, not child-directed.**
+- Pounce is for couples and families: adults, with their kids and parents. Children aren't the primary audience.
+- Bright cartoon cats are a COPPA "directed to children" factor [64]. So the app's metadata, screenshots and copy must present it as a couples-and-family game, never a kids' app.
+- It stays out of the Kids Category (Apple 5.1.4 and 1.3) [30].
+- The App Store age-rating questionnaire is answered truthfully, with "Age Assurance: yes" [67].
+- As a mixed-audience service, the app **must age-screen before collecting personal information, and must not block children** [64][65].
+
+**Three age bands.** The server stores only the band, never a birthdate:
+
+| Band | Ages | Shown as |
+|---|---|---|
+| `kitten` | under 13 | a kitten |
+| `teen` | 13–17 | a young cat |
+| `adult` | 18+ | a grown cat |
+
+**How the band is set:**
+- **The phone's owner,** at first launch, before anything is sent to the server:
+  1. The app asks the **Declared Age Range** API (iOS 26) for ranges split at 13 and 18 [68]. This is the age signal the Texas, Utah and Louisiana app-store laws, and California's AB 1043 from 2027, expect developers to use. Apple says to check age where the law requires it [68][70][71][72].
+  2. If the person declines to share, or the API returns nothing, the app shows a **neutral age screen**. It's a numeral keypad (the room-code keypad's style) for the birth year:
+     - there's no default value and no hint about what's "allowed";
+     - the result goes into the Keychain, so the back button can't retry it;
+     - the year is turned into a band on the device and then discarded [65].
+  3. The FTC's February 2026 policy statement covers data collected only to work out age, as long as it's deleted promptly and used only for that [66].
+- **Household people** (pass-and-play): the parent who adds someone taps kitten, young cat or grown cat. That's an adult declaring for a family member. Whether data a parent enters on their own phone counts as "collected from a child" is unsettled, so the design treats a parent-entered kitten exactly like a child [65] (unverified).
+- **Re-checks:** the band is checked again with Declared Age Range on each launch, at most once a week. If Apple reports a newer band (a kitten turned 13), the limits lift. That's when the anonymous upgrade lets them sign in and keep their streaks.
+
+**Under 13 (`kitten`), with no parental consent (v1).** COPPA allows only a persistent identifier used for support for internal operations, with notice [64]:
+
+| Area | What's allowed |
+|---|---|
+| **Play** | Full games, seats and turns. The device id and seats are internal operations. |
+| **Streaks and rewards** | Yes. Streaks, rewards and the condo are game progress, which the FAQ counts as internal operations ("scores, character choices") [65]. The partner (Dad) sees the pair's streak, as with anyone. |
+| **Name** | **Generated, not typed.** The kitten picks one from the existing `NameGenerator` list (Mochi, Biscuit, Pickle…) with the dice. There's no free-text field, because a name plus an identifier is personal information [64]. The cat avatar is chosen as usual. |
+| **Push notifications** | **None from the server.** No "your move", reminders, pounces, milestones, widget pushes or push-started Live Activities. The FTC treats a push token as online contact information [65]. The narrow multiple-contact exception needs parent notice, which v1 has no way to give. Local, on-device reminders only: the existing 10-minute turn reminder, and a daily one at a fixed 17:00, both off by default. Nothing is sent anywhere. |
+| **Learned timing** | Off. There's no play-time histogram for kittens: no profiling. |
+| **Sign-in** | Not offered. Apple has said Sign in with Apple doesn't support under-13 accounts [73], and an account would collect more. |
+| **Pounce** | A kitten can **send** in-app pounces to people they already play with. Nothing is collected from them, and the push goes to the adult. They can't **receive** pushed pounces. They see waiting pounces in the app and on the widget's next refresh. |
+| **Messages links** | None: no share-sheet links out from a kitten's device. |
+| **Widgets** | Yes, refreshed by timelines and by the app only. No widget push. |
+| **Live table** | No push-to-start or push updates. |
+| **Retention** | The kitten's player is deleted after 90 days with no activity. Pair history is capped at 120 days, as for everyone. |
+
+**Later: parent consent (PR 9, §15).** This lets a kitten on their own device get turn pushes and pounces from family.
+- A **signed-in adult player** gives verifiable parental consent from their own device, using one of the COPPA methods, e.g. "email plus" or "text plus" [64].
+  - That needs the parent's email. It's collected for this purpose only, and §13.1 still requests no Apple scopes.
+- The kitten's device is linked to that parent.
+- What it unlocks: turn pushes, pounces from the people the parent approves, and a fixed-time reminder. Learned timing stays off.
+- Apple's PermissionKit "ask to communicate" is the alternative to evaluate when building it [69].
+- The consent can be revoked at any time.
+
+Until then, **a kitten's best setup is as a household person on a parent's phone or iPad.** Pushes then go to the parent's device, titled with the kitten's generated name, and the parent hands over the phone. That's exactly how pass-and-play works today.
+
+**13 to 17 (`teen`).** Everything is available, with gentler defaults (DSA Article 28 guidelines and the ICO Children's Code [76][74]; best practice, since Pounce is likely outside the DSA's "online platform" scope):
+- **Off by default, and the teen can turn them on:** daily reminders, the last-chance push, and learned timing. A fixed reminder time is offered instead.
+- **"Your move" pushes and pounces stay on.** They're a person or the game, not engagement nudges.
+- **Quiet hours:** default 21:00–08:00. **Nothing is ever sent between 00:00 and 06:00**, not even `passive`. That mirrors the New York SAFE for Kids Act's overnight rule, though that act targets feed-based platforms [77].
+- **No nudges to weaken privacy.** No prompts to sign in, share links or turn on reminders beyond the one in-context offer (ICO standard 13) [74].
+- **Sign in with Apple is allowed.**
+
+**Everyone.** Features that already follow the ethics line in §4.5 and §12:
+- no ads, analytics, location or third-party SDKs;
+- no free-text messaging;
+- invites by code or link only;
+- no strangers, and no public profiles.
+
+**Paperwork.** COPPA's 2025 rule applies in full from 22 April 2026 [63]. PR 2 adds these, drafted for JD and counsel to review:
+- `docs/privacy/retention-policy.md`: written retention, as § 312.10 requires;
+- `docs/privacy/security-program.md`: a written security program with a named coordinator and an annual review (§ 312.8);
+- the privacy policy and COPPA direct notice at `play.conleychaos.com/privacy`, linked from the gear sheet (§ 312.4(d), Apple 5.1.4) [64][30].
+
+**State app-store acts.**
+- **Texas SB 2420** is in force for new Texas accounts from 4 June 2026, with an appeal pending [71].
+- **Utah and Louisiana** have dates that conflict between Apple and the statutes [72].
+
+What they require of developers:
+- The developer rates the app, uses the store's age and consent signals only for age limits and safety defaults, and treats "significant changes" through the store [70].
+- **This work is a significant change:** accounts, new data (play times, streaks) and new notifications. So the release with PR 2 goes through Apple's **Significant Change API** (PermissionKit), letting a parent approve for a minor in those states [68].
+
+**GDPR (if Pounce goes worldwide).**
+- Pounce relies on contract and legitimate interest, not consent, for play.
+- Wherever consent is the basis (optional reminders and learned timing for a teen), Article 8's age of consent applies: 13 to 16 depending on the member state [75].
+- The simple rule: in the EU, a teen's optional reminders and learned timing stay off unless the teen turns them on, which the defaults above already do.
+
 ## 15. Phasing into shippable PRs
 
 Each PR ships to TestFlight on its own and leaves the app working **(call)**.
@@ -1093,14 +1287,15 @@ Each PR ships to TestFlight on its own and leaves the app working **(call)**.
 | # | PR | Contents | Depends on |
 |---|---|---|---|
 | 0 | **This design** | The doc. | — |
-| 1 | **Server: accounts and players** | Sign in with Apple verification and the code exchange; the `Player` DO; device link; seats by `playerId`, with `controlledSeats(deviceId, playerId)` and the `x-play-player` header; `adopt`; guest merge; tables per player; `/v1/me/state` sync; sign-out and account deletion with token revocation; all-device pushes and dismiss pushes. Tests. | 0; JD creates the Sign in with Apple key and pipeline secrets |
-| 2 | **App: accounts and sync** | The Sign in with Apple button (Pick your cat, people sheet, gear); merge on sign-in; settings, people, archive and tutorial synced; the tables list from the account; badge clearing across devices; account deletion UI. | 1 |
+| 1 | **Server: players and identities** | The `Player` and `Identities` DOs; guest players from profile upload; the provider interface with `device` and `apple`, where Apple verification needs no secret and the code exchange and revocation run only when the optional key is set; the anonymous upgrade and merge; link and unlink; device link; seats by `playerId`, with `controlledSeats(deviceId, playerIds)` and the `x-play-player` header; `adopt`; tables per player; `/v1/me/state` sync; sign-out and deletion; all-device pushes and dismiss pushes; age bands (§14.1). Tests. | 0 |
+| 2 | **App: accounts, sync and age** | Sign-in offers (§10.5) with Sign in with Apple; the anonymous upgrade and merge confirm; household sign-in; settings, people, archive and tutorial synced; the tables list from the player; badge clearing across devices; the Declared Age Range request and the under-13 limits (§14.1); deletion UI. | 1 |
 | 3 | **Server: streaks** | The `Pair` DO; turn reporting; the both-in rule with the late move pass and held days; settlement; naps, win-back and pause; milestones, gifts and toys; the streak routes; `{t:"streak"}`; `rematch`; `setLook` and `look`. Fake-clock tests across time zones, DST and the rollover. A `STREAKS` env var stays off in production until PR 4 ships. | 1 |
 | 4 | **App: streak UI, Play again, table looks** | Home badge; the Us screen; the stamp; gifts; pause; leave; pin; Play again; the table menu's look tray, with default looks and **placeholder** unlocks. | 2, 3 |
 | 5 | **Notifications and Pounce** | Server: reminder alarms (auto and fixed time), caps, backoff, quiet hours, status, milestone and fresh-start pushes, the new copy, and pounces with links, `/p/` pages and the OG card. App: categories and actions, provisional, the synced settings panel, the Pounce sheet and answer flow, and the share link. The `PounceNotify` extension with communication avatars. | 3, 4 |
 | 6 | **Widgets** | The `PounceWidgets` target, App Group and keychain group; small, medium, the three accessory families and StandBy; configuration; the interactive Pounce intent; timelines; reloads; WidgetKit push. | 4 (5 for push refresh) |
 | 7 | **Live table** | The Live Activity in §11.3: push-to-start, updates and end from `GameRoom`; the 30-minute and 2-hour limits; the toggle. | 5, 6 |
 | 8 | **Reward art** | Codex art in three approval batches (§9.6), which swaps in for placeholders by file name. It can start in parallel any time after PR 4. | 4 |
+| 9 | **Parent consent for kittens (later)** | Verifiable parental consent from a signed-in adult, which unlocks turn pushes and approved pounces for an under-13 on their own device (§14.1). Build it only if the kids play on their own devices. | 5 |
 
 **Why this order:**
 - Accounts come first, because streaks key on players. Keying them on guest identity first would mean a migration later.
@@ -1134,6 +1329,11 @@ Each PR ships to TestFlight on its own and leaves the app working **(call)**.
   - Pounce sheet targets;
   - sign-in from a stubbed provider in Debug.
 - **Widgets and the Live Activity:** Xcode previews for every family, state and rendering mode.
+- **Age bands:**
+  - Declared Age Range results are stubbed in Debug.
+  - A neutral age screen can't be retried.
+  - Kitten limits are enforced on the server: no push of any kind to a kitten's devices, and no histogram.
+  - Teen defaults, and the 00:00–06:00 block.
 - **Push and Live Activity delivery:** TestFlight builds only, since dev builds get sandbox tokens **(app)**. `MANUAL-CHECKLIST.md` gains the steps:
   - pounce from one phone to another;
   - pounce through Messages;
@@ -1143,13 +1343,31 @@ Each PR ships to TestFlight on its own and leaves the app working **(call)**.
 
 ## 17. Open questions only JD can answer
 
-JD answered round 1 on 2026-11-04 (§1, and the **(JD)** marks throughout). What's left:
+JD answered rounds 1 and 2 on 2026-11-04, marked **(JD)** throughout. Round 2 settled these:
+- Guests keep streaks, and signing in is an anonymous upgrade.
+- The two-hour late move pass.
+- Table looks come from your own unlocks.
+- Pounces follow iOS Focus, with no "always ring".
 
-1. **Kids and family without Apple accounts.** Is it fine that someone without an Apple Account plays as a guest? That's on their own device, or as a household person on yours. Their streak is full but lives on that one device until they sign in. Or should signing in be required for anyone who has a streak?
-2. **The late move pass.** If the move reaches you within two hours of your quiet hours, you're covered for that day. Does that feel fair, or should the window be tighter (one hour) or looser?
-3. **Table looks.** When someone changes the rug, should the tray offer only what *they* have unlocked (the recommendation, which shows off rewards)? Or anything anyone at the table has unlocked?
-4. **Late-night pounces.** In quiet hours a pounce lands silently. Should you be able to mark someone (your wife) so their pounces always ring? iOS Focus can already allow a person through, which needs a step in Settings.
-5. **The Sign in with Apple key.** PR 1 needs you to create a Sign in with Apple key for `com.conleychaos.play` in the developer portal and add it to the deploy pipeline as `SIWA_KEY_P8` and `SIWA_KEY_ID`. That's an action for you, not a question. No session will handle it.
+What's left:
+
+1. **How old are your son and daughter, and do they have their own devices?**
+   - Under 13 on their own device, they get **no server push** in v1: no turn pushes, pounces or reminders. That's required without parental consent (§14.1). They can still play, keep streaks with you, and get on-device reminders.
+   - Playing as a household person on your phone or iPad gives the full experience today.
+   - If they're under 13 and on their own devices, PR 9 (parent consent) moves up.
+2. **Counsel review.** §14.1 follows the rules as researched, but it isn't legal advice. Before the App Store launch, not before family TestFlight, should a lawyer review it together with the privacy policy, the retention policy and the security program that PR 2 drafts?
+
+**One action, needed only before App Store submission, not before PR 1:** create one key in the Apple Developer portal with both *Apple Push Notifications service* and *Sign in with Apple* enabled (primary App ID `com.conleychaos.play`). Then set it as the repo secrets, from the folder the key was downloaded to:
+
+```bash
+gh secret set PLAY_API_SIWA_KEY_P8 --repo jdconley/pounce < AuthKey_XXXXXXXXXX.p8
+```
+
+```bash
+gh secret set PLAY_API_SIWA_KEY_ID --repo jdconley/pounce --body XXXXXXXXXX
+```
+
+The same key can replace the APNs pair (`PLAY_API_APNS_KEY_P8` and `PLAY_API_APNS_KEY_ID`) the same way. No session creates or handles the key; downloading a private key is outside what a session may do.
 
 ## 18. Left to the builder
 
@@ -1230,3 +1448,19 @@ Habit psychology, couples and ethics:
 60. WWDC20 session 10173, "Get the most out of Sign in with Apple," and the Apple Developer Forums thread on verifying the identity token. https://developer.apple.com/videos/play/wwdc2020/10173/ · https://developer.apple.com/forums/thread/124175
 61. Apple Developer Forums, "About account deletion when users use Sign in with Apple." https://developer.apple.com/forums/thread/706792
 62. WWDC22 session 10122, "Enhance your Sign in with Apple experience." https://developer.apple.com/videos/play/wwdc2022/10122/
+63. Federal Register, COPPA Rule amendments (22 April 2025). https://www.govinfo.gov/content/pkg/FR-2025-04-22/html/2025-05904.htm
+64. eCFR, 16 CFR Part 312 (COPPA Rule). https://www.ecfr.gov/current/title-16/chapter-I/subchapter-C/part-312
+65. FTC, "Complying with COPPA: Frequently Asked Questions." https://www.ftc.gov/business-guidance/resources/complying-coppa-frequently-asked-questions
+66. FTC, COPPA policy statement on age verification (February 2026). https://www.ftc.gov/news-events/news/press-releases/2026/02/ftc-issues-coppa-policy-statement-incentivize-use-age-verification-technologies-protect-children
+67. Apple Developer News, updated age ratings (July 2025). https://developer.apple.com/news/?id=ks775ehf
+68. Apple, Age assurance (Declared Age Range, Significant Change API). https://developer.apple.com/support/age-assurance/
+69. Apple, Kids and families (developer). https://developer.apple.com/kids/
+70. Texas SB 2420, App Store Accountability Act (enrolled). https://capitol.texas.gov/tlodocs/89R/billtext/html/SB02420F.htm
+71. Apple Developer News, Texas law update (June 2026). https://developer.apple.com/news/?id=sg176nne
+72. Apple Developer News, Utah and Louisiana age categories. https://developer.apple.com/news/?id=f5zj08ey
+73. Apple Developer Forums, Sign in with Apple and under-13 accounts (2020). https://developer.apple.com/forums/thread/134264
+74. ICO, Age Appropriate Design Code, standard 13: nudge techniques. https://ico.org.uk/for-organisations/uk-gdpr-guidance-and-resources/childrens-information/childrens-code-guidance-and-resources/age-appropriate-design-a-code-of-practice-for-online-services/13-nudge-techniques/
+75. GDPR Article 8. https://gdpr-info.eu/art-8-gdpr/
+76. European Commission, guidelines on the protection of minors under DSA Article 28 (July 2025). https://digital-strategy.ec.europa.eu/en/library/commission-publishes-guidelines-protection-minors
+77. New York Attorney General, final SAFE for Kids Act rules (July 2026). https://ag.ny.gov/press-release/2026/attorney-general-james-and-governor-hochul-release-final-safe-kids-act-rules
+78. FTC press release, COPPA Rule changes finalized (January 2025). https://www.ftc.gov/news-events/news/press-releases/2025/01/ftc-finalizes-changes-childrens-privacy-rule-limiting-companies-ability-monetize-kids-data
