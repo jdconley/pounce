@@ -1,8 +1,8 @@
-# Pounce daily habit loop ("Us" streak) — Design
+# Pounce daily habit loop ("Us" streaks) — Design
 
-Date: 2026-11-04 · Owner: JD Conley (Conley Chaos LLC) · Status: **draft, waiting on JD's approval**. Nothing gets built until JD approves.
+Date: 2026-11-04 · Owner: JD Conley (Conley Chaos LLC) · Status: **draft v2. JD answered the first round of open questions (2026-11-04), and the design is waiting on his approval.** Nothing gets built until JD approves.
 
-Parent specs: `2026-10-31-pounce-cat-tower-design.md` (product and rules) and `2026-10-31-pounce-ios-design.md` (the client). Where this doc changes something they decided, it says so.
+Parent specs: `2026-10-31-pounce-cat-tower-design.md` (product and rules) and `2026-10-31-pounce-ios-design.md` (the client). Where this doc changes something they decided, it says so. The biggest change is that **accounts (Sign in with Apple) move from M2 into this work**, because JD wants everything to sync between devices.
 
 Marks: **(JD)** = JD's words or decision; **(call)** = a designer call made while writing this, open to override; **(research)** = follows from a cited source in §4; **(server)** / **(app)** = fixed by what is already built.
 
@@ -12,50 +12,90 @@ Marks: **(JD)** = JD's words or decision; **(call)** = a designer call made whil
 
 > "i want to play with my wife daily, so let's design something like duo lingo. a home widget that urges you to play something. push notifications to remind you to connect. streaks. rewards for those streaks. … i want this to be addictive, it's for a good cause." **(JD)**
 
-Cat Tower is already a good game for two people who love each other. What it lacks is a reason to open it *today*. Async play makes this worse: a game can stall for days because nobody noticed it was their move. This design adds a daily loop on top of the game. A shared streak gives the reason. A home and lock screen widget makes it visible. Push reminders arrive at the time you usually play. Rewards are themed to the cats and celebrate the days you kept.
+> "i want the streak to be both of us playing together, something that affects the other. … it might even just be making a few moves but in a game together." **(JD, round 2)**
 
-The aim is a habit in the Duolingo sense, with one difference that shapes every decision. **The streak belongs to the couple, and it must never become a way for one partner to feel bad about the other.** Sticky, yes. Guilt, blame or nagging, no. A relationship app that sours the relationship has failed even if its retention chart looks great.
+Cat Tower is already a good game for two people who love each other. What it lacks is a reason to open it *today*. Async play makes it worse, because a game can stall for days when nobody notices it's their move. This design adds a daily loop on top of the game:
 
-**Success:** JD and his wife take at least one turn with each other on most days for two months (about how long a habit takes to form; Lally et al., §4.5). Both say the reminders feel like the cats asking them to play, not like the app scolding them.
+- a streak you share with each person you play with;
+- home and lock screen widgets that keep the streak in view;
+- reminders at the time you usually play;
+- a way to **pounce**, asking someone to come play right now (the couch-and-TV moment);
+- a Live Activity while you're both mid-game;
+- accounts, so you and your partner can each play from your iPhone and your iPad and it's all one you;
+- rewards themed to the cats.
+
+The aim is a habit in the Duolingo sense, with one difference that shapes every decision. **The streak belongs to the two of you, and it must never become a way for one of you to feel bad about the other.** Sticky, yes. Guilt, blame or nagging, no. A relationship app that sours the relationship has failed, whatever its retention chart says.
+
+**Success:**
+- JD and his wife both take a turn in a game together on most days for two months. That's about how long a habit takes to form (Lally et al., §4.5).
+- JD also keeps a streak going with his son, his daughter or his mom.
+- Both say the reminders feel like the cats asking them to play, not like the app scolding them.
 
 ## 2. Goals, non-goals, anti-goals
 
 **Goals**
-- A **shared streak per pair of people** ("Us"), kept by playing Cat Tower turns with each other. It is the one streak number in the app.
-- **Forgiving by design:** automatic cat naps (freezes), a free way to earn a broken streak back, a pause for travel or illness, and a fresh-start moment after a break.
-- **Rewards** that fit the Loud Toy art: a shared Cat Condo that grows, toys that drop on days you both played, card backs and rugs, and celebration moments.
-- **Widgets:** home screen (small, medium), lock screen (circular, rectangular, inline) and StandBy. One interactive button, "send a paw", for when you are waiting on your partner.
-- **Notifications:** the existing "your turn" push gets your partner's name. Add one daily reminder at the time you usually play, an optional last-chance reminder, partner paws, quiet hours, frequency caps and backoff.
-- **"Play again"** with the same people when a game ends, so a finished game never stalls a streak.
-- **Server:** pair and player state in Durable Objects, day boundaries in each person's own time zone, all settled on the server.
+- **A shared streak for every pair of people who play together** (partner, kids, mom) **(JD)**. A day is kept only when **both** of you took a turn in a game together **(JD)**. Every Pounce game counts, so a future co-op game would too.
+- **Accounts with Sign in with Apple, and everything synced across devices** **(JD)**: your identity, your seats at tables, your tables list and archive, your streaks and rewards, and your settings. Guests can still join by link with no sign-in, as the parent spec says.
+- **Forgiving by design:**
+  - automatic cat naps (freezes);
+  - a free way to win back a broken streak;
+  - a pause of up to two weeks **(JD)**;
+  - a fresh-start moment after a break;
+  - a fair rule for when the move simply never reached you.
+- **Pounce: ask someone to come play now**, from the app or through Messages. You can point them at an existing table or a new game, or let them pick **(JD)**.
+- **Rewards** that fit the Loud Toy art: a shared Cat Condo that grows, toys that drop on kept days, card backs and rugs, and celebrations.
+- **Anyone at a table can change its rug and card back**, as in a group chat **(JD)**.
+- **Widgets:** home (small, medium), lock screen (circular, rectangular, inline) and StandBy, with a **Pounce** button.
+- **A Live Activity** for a live game ("live table"), easy to dismiss, which hides itself after a while **(JD)**.
+- **Notifications:**
+  - "your turn" now says who played;
+  - one daily reminder, at your learned time or a time you set **(JD: adjustable)**;
+  - a last-chance reminder;
+  - Pounce;
+  - adjustable quiet hours **(JD)**;
+  - hard caps and backoff.
+- **"Play again"** with the same people when a game ends.
+- **Server:** players, pairs, accounts and day boundaries in Durable Objects, settled on the server in each person's own time zone.
 
 **Non-goals (this design)**
-- A new mini-game. Taking turns at Cat Tower *is* the daily ritual (§6).
-- Leagues, XP, leaderboards, or competition between couples. Pounce is not social with strangers (parent spec).
-- Any purchase: no paid freezes, paid repair or gems. Pounce has no monetization (parent spec).
-- Sign in with Apple and accounts. Those are still M2. This design works on today's device and person identity (§13.1).
-- Analytics. Nothing leaves the server except to the two people in a pair.
+- A new mini-game. Turns in a real game together are the daily ritual **(JD)**.
+- Leagues, XP, leaderboards, or competing with other couples. Pounce isn't social with strangers.
+- Purchases of any kind: no paid freezes, repairs or gems. Pounce has no monetization.
+- Email or password accounts, and other sign-in providers.
 - Android and the Mac.
+- Analytics.
 
 **Anti-goals** (failure even if it "works")
-- **Showing who broke it.** No screen, push or history entry ever says that one partner missed a day.
-- **Confirmshaming or guilt copy.** No "Don't let Mia down" and no crying mascot.
-- **Notifications at night**, or more than two reminders a day.
-- **Countdown pressure:** no ticking timers and no "streak ends in 2h 13m".
-- Rewards that feel like gambling: no loot boxes with currency and no paid rerolls.
-- **Text on screen.** The no-words rule still holds: names, table names and numerals only, everything else art **(JD)**. Push copy is the one place for sentences, and it already has them **(app)**.
+- **Showing who broke it.** No screen, push or history entry ever says one person missed a day.
+- **Confirmshaming or guilt copy:** no "Don't let Mia down", no crying mascot.
+- **Notifications that wake you,** or more than two reminders a day.
+- **Countdown pressure:** no ticking timers, no "streak ends in 2h 13m".
+- **Rewards that feel like gambling:** no currency, no rerolls.
+- **Text on screen.** The no-words rule holds: names, table names and numerals only, everything else is art **(JD)**. Push copy is the one place for sentences, and it already uses them **(app)**. The Sign in with Apple button carries Apple's own text, which Apple requires.
 - **Emoji anywhere**, including push copy and widgets **(JD)**.
-- Beige, muted, storybook art **(JD)**.
+- **Beige, muted, storybook art (JD).**
+- **A Live Activity that overstays.** It must end itself and be easy to dismiss **(JD)**.
 
 ## 3. Constraints
 
-- iOS 26+, iPhone and iPad, SwiftUI shell and SpriteKit table, Swift 6, Apple frameworks only, XcodeGen `project.yml` **(app)**.
-- Bundle `com.conleychaos.play`, team `B222J9J7B8`. New targets need new bundle IDs under it, e.g. `com.conleychaos.play.widgets` and `com.conleychaos.play.notify` **(call)**.
-- Server: Cloudflare Workers plus SQLite-backed Durable Objects (`GameRoom` per room, `DeviceIndex` per device). APNs is sent straight from the Worker with a `.p8` JWT (`src/push/apns.ts`) **(server)**.
-- **Identity today:** a device has a `deviceId` and an HMAC token. People are created on the phone (`Person {id, name, cat}`, UUID made on device), and a phone can hold several (pass-and-play). Seats are claimed with a `Person`, and the server does not verify person ids **(server)**. This design builds on that; §13.1 covers its limits.
-- The push path already in the app: priming (`PushPrimingView.swift`), `PushCoordinator` (token upload every launch, tap routing, the local 10-minute reminder), and the server `pushYourTurn` with `thread-id` and collapse id = room code **(app)**.
-- Art comes from the Codex pipeline in `apps/play-ios/Art` with style reference `chosen-d-loud-toy.png`. Prompts are committed. **Placeholders come first and JD approves art in batches (JD).**
-- Never touch the `:4343` server; work only in a worktree; no secrets in the repo (session rules).
+- iOS 26+, iPhone and iPad, SwiftUI shell and SpriteKit table, Swift 6, Apple frameworks only, XcodeGen `project.yml` **(app)**. Sign in with Apple uses AuthenticationServices, an Apple framework, so no package is needed.
+- Bundle `com.conleychaos.play`, team `B222J9J7B8`. New targets get bundle IDs under it: `com.conleychaos.play.widgets` and `com.conleychaos.play.notify` **(call)**. The Live Activity lives in the widgets target.
+- **Server:**
+  - Cloudflare Workers plus SQLite-backed Durable Objects: `GameRoom` per room, `DeviceIndex` per device **(server)**.
+  - APNs is sent straight from the Worker over HTTP/2 with a `.p8` JWT. This already works in production for TestFlight **(server)**.
+- **Identity today:**
+  - A device has a `deviceId` and an HMAC token. A re-mint after a 401 makes a new device **(app)**.
+  - People are created on the phone (`Person {id, name, cat}`, a UUID made on the device), and one phone can hold several (pass-and-play).
+  - A seat belongs to a `deviceId` (`SeatInfo.deviceId`, `RoomCore.controlledSeats(deviceId)`), and person ids aren't verified **(server)**. §13.1 replaces this with players.
+- **Secrets:**
+  - Sign in with Apple **token revocation**, which Apple requires on account deletion, needs a Sign in with Apple private key. JD creates it, and the deploy pipeline sets it as a secret (`SIWA_KEY_P8`, `SIWA_KEY_ID`), exactly like `APNS_KEY_P8`. No session ever handles it.
+  - Verifying sign-in needs no secret (Apple's public keys).
+- **The push path already in the app:**
+  - priming (`PushPrimingView.swift`);
+  - `PushCoordinator`: token upload every launch, tap routing, and the local 10-minute reminder;
+  - the server's `pushYourTurn`, with `thread-id` and collapse id set to the room code **(app)**.
+- **Art** comes from the Codex pipeline in `apps/play-ios/Art`, with style reference `chosen-d-loud-toy.png`. Prompts are committed. **Placeholders come first, and JD approves art in batches (JD).**
+- **Session rules:** never touch the `:4343` server, work only in a worktree, and keep secrets out of the repo.
 
 ## 4. Research
 
@@ -91,7 +131,7 @@ Research was done on 2026-11-04, with web sources in the Sources list at the end
   - Learners with at least one friend streak are **22% more likely to complete their daily lesson**, and the effect grows with each friend [7].
   - What happens when one friend misses isn't published.
   - Friends Quests pair mutual followers for a weekly shared goal, with preset nudges [8].
-  - *Taken:* one streak per pair (§7) and a partner paw (§12.4). The "both every day" rule is rejected for turn-based play (§6.2).
+  - *Taken:* one streak per pair (§7) and Pounce (§12.4). The "both every day" rule is adopted, as JD asked, with a late move pass for turn-based play (§6.2).
 - **Leagues and XP.**
   - Leagues raised total learning time 17% and tripled highly engaged learners, with D1 and D7 retention up [10].
   - *Not taken:* competition between strangers isn't Pounce (§2).
@@ -124,7 +164,7 @@ Research was done on 2026-11-04, with web sources in the Sources list at the end
   - The ritual is a daily question, and your answer stays hidden until your partner answers.
   - Streaks are **individual**, so your partner's miss never resets yours. Any one activity before local midnight counts. Freezes apply automatically, and premium users can recover a streak of 7+ days broken less than 7 days ago with 3 activities on the first day back [18].
   - Its top review complaint is the paywall [21].
-  - *Taken:* automatic naps and the earned win-back (§8). Paired avoids partner blame by splitting streaks. We avoid it with "either of you keeps the day", which keeps one shared number (§6.2).
+  - *Taken:* automatic naps and the earned win-back (§8). Paired avoids partner blame by splitting streaks into individual ones. JD wants one streak that takes both of you (§6.2), so we avoid blame differently: the late move pass makes the move reaching you late a non-miss, and no screen ever records whose miss a day was.
 - **Locket.**
   - Photos land straight on your friends' home-screen widget. The widget *is* the product.
   - 2M sign-ups in two weeks at launch, with no paid ads [19]. Company-claimed 80M downloads and 9M+ daily actives by 2025 [20].
@@ -247,115 +287,174 @@ Research was done on 2026-11-04, with web sources in the Sources list at the end
 - Require push for anything.
 - Let one partner nag the other through the app without a limit.
 
+### 4.6 Sign in with Apple and accounts
+
+- **Verifying a sign-in.** The server checks the identity token's RS256 signature against Apple's published keys, choosing the key that matches the token's `kid`. It then checks `iss`, `aud` (the bundle id, for a native sign-in), `exp` and `nonce`. Apple says to generate a fresh nonce for every request and verify it on the server [60].
+- **Account deletion.**
+  - Apps that offer account creation must let people delete their account in the app (App Review 5.1.1(v)) [30].
+  - Apps that use Sign in with Apple must revoke the user's tokens through the REST API when an account is deleted [61].
+  - Revocation takes a refresh or access token, not the identity token. The authorization code lasts only minutes, so the server exchanges it for a refresh token at sign-in and keeps that token [61][62].
+- *Taken:* no scopes requested, server-side verification, a refresh token stored only to revoke it, and in-app deletion (§13.1, §14).
+
 ## 5. The recommendation on one page
 
-**The unit is the pair.** Any two people who have each taken a turn at the same table form a pair, and every pair has one streak. JD and his wife have one. JD and his mom would have another. Home, the widget and the reminders lead with your top pair.
-
-**A day is kept when the game moved between you.** A day is kept when either of you takes a turn at a table you share. A day becomes a **together day** (a gold paw) when *both* of you took a turn. Days are counted in each person's own time zone, and the day rolls over at 4 a.m. In a two-person game the turns alternate, so the streak can only grow if each of you answers the other within about a day. Yet nobody can ever be blocked from keeping the day by a partner who holds the move: whoever holds the move is the one who can keep it. That is why this rule beats "both must play every day" (§6.2).
-
-**Forgiveness is built in and free.** The pair shares up to two **cat naps**, which cover a missed day automatically. You earn them at 7 days and with each perfect week (seven together days). With no nap left, a miss starts a **win-back**: keep the next two days and the streak comes back whole. Either partner can **pause** the streak for a trip, an illness or a new baby. After a real break, the best streak and the lifetime count of days together stay on show, and the next Monday brings a "fresh deal" (fresh start effect, §4.5).
-
-**Rewards come in three layers.**
-1. A shared **Cat Condo** grows a stage at each lifetime milestone and never shrinks, even after a break.
-2. A **gift box** opens at each streak milestone (3, 7, 14, 30, 50, 100, …). It holds a random card back, rug or toy that you don't have yet.
-3. A **toy** drops onto the condo on every together day. It is a small surprise from a set of 24 to collect.
-
-All three are cosmetic, earned only by playing together, and never sold.
-
-**Notifications stay few and warm, and the timing is learned.**
-- The existing "your turn" push now says who played: "Mia played. Your move at Couch Cats."
-- One daily reminder goes out at the time you usually play, and only if today isn't kept yet and it's your move.
-- A last-chance reminder comes in the evening, for streaks of 3 days or more. It's on by default, and one tap turns it off.
-- A partner can send a paw at most once a day.
-- Quiet hours default to 10 p.m. to 8 a.m. A push that lands during quiet hours is silent.
-- Reminders back off after missed days and stop after a week.
-
-**Widgets put the streak on the home screen.** A small widget shows the two cats on the condo with the streak numeral and today's paws. A medium widget adds the tables where it's your move, plus a paw button when you're waiting on your partner. Lock screen widgets show the numeral and today's paw state. StandBy shows the sleepy-night version. The widgets refresh when a push arrives, when the day rolls over and when the app updates them.
-
-**The server owns the truth.** A new `Pair` Durable Object holds each streak, and a new `Player` Durable Object holds each person's reminder clock. `DeviceIndex` gains the phone's time zone and quiet hours. `GameRoom` reports every completed human turn to the pairs at its table.
-
-**It ships in six PRs** after this doc (§15): server core, app streak UI with "Play again", notifications, widgets, reward art, and an optional Live Activity.
+- **The unit is the pair** **(JD)**.
+  - Any two people who each take a turn in the same game form a pair, and each pair has one streak: JD and his wife, JD and his son, JD and his mom.
+  - Home, the widgets and the reminders lead with your top pair.
+- **A day is kept when both of you played together** **(JD)**.
+  - Each of you takes at least one turn in a game you share.
+  - Days are counted in each person's own time zone and roll over at 4 a.m.
+  - Turn-based play has one fairness problem: you can't play when the move isn't yours. Two rules cover it:
+    - **The late move pass.** If the move only reached you in the last two hours before your quiet hours, or later, you're covered for today.
+    - **Held days.** At a family table, if a third person held the move all day, the day neither counts nor breaks.
+  - So a day is only ever missed when someone held the move earlier in the day and didn't play. The app never says who that was.
+- **Forgiveness is built in and free.**
+  - The pair shares up to two **cat naps**, which cover a missed day automatically.
+  - With no nap left, a **win-back** starts: keep the next two days and the streak returns whole.
+  - Either of you can **pause** it for up to 14 days **(JD)**.
+  - After a real break, the best streak and lifetime days together stay on show, and the next Monday brings a fresh deal.
+- **Accounts make it one you on every device** **(JD)**.
+  - Sign in with Apple creates a **player**.
+  - Your seats belong to your player, not to a phone, so your iPad and your iPhone sit in the same seat.
+  - Your tables, archive, streaks, rewards and settings all sync.
+  - Guests still join by link without signing in, and everything they did merges in when they sign in later.
+- **Pounce: "come play with me."**
+  - Tap someone's cat, then pick a table to make a move at, a new game, or "you pick", and they get a push with your cat on it.
+  - It also works as a link in Messages.
+  - It's rate-limited, and "not now" is respected.
+- **Rewards come in three layers:**
+  - a shared **Cat Condo** that grows with lifetime days together and never shrinks;
+  - a **gift box** at each streak milestone, holding a card back, a rug or a toy;
+  - a **toy** that drops onto the condo every kept day.
+  - All are cosmetic, earned only by playing together, and never sold.
+  - **Anyone at a table can change its rug and card back** **(JD)**.
+- **Notifications are few and warm.**
+  - "Mia played. Your move at Couch Cats."
+  - One daily reminder, at your learned time or a time you set.
+  - A last-chance reminder in the evening.
+  - Pounces.
+  - Adjustable quiet hours, during which pushes land silently.
+  - At most two reminders a day, backing off after missed days and stopping after a week.
+- **Widgets and a Live Activity.**
+  - The small widget shows the two cats on the condo, the streak numeral and today's two paws.
+  - The medium widget adds your tables and a Pounce button.
+  - Lock screen widgets and StandBy carry the same state.
+  - **Live table** is a Live Activity that appears when you leave a game the other person is actively playing. It shows whose move it is, updates by push, and ends itself after 30 minutes with no move or at the end of the round. You can swipe it away or turn it off **(JD)**.
+- **The server owns the truth.**
+  - `Player` Durable Objects hold accounts, devices, tables, settings and reminder clocks.
+  - `Pair` Durable Objects hold the streaks.
+  - `GameRoom` seats belong to players and report every completed turn.
+- **The order.** It ships in eight PRs after this doc: accounts (server, then app) → streaks (server, then app) → notifications and Pounce → widgets → Live Activity → reward art (§15).
 
 ## 6. What counts as "playing today"
 
-### 6.1 Definitions **(call)**
+### 6.1 Definitions **(JD rule, call details)**
 
-- **Shared table:** a Cat Tower room in `playing` status where both people of the pair hold a human seat. A seat on the same phone counts too, so pass-and-play on the couch counts. Bot seats are ignored.
-- **Turn:** a completed turn by a human seat, ended by that seat's own action (a discard, or going out). Drawing alone is not a turn. A turn taken by a bot, or by a future bot takeover, never counts.
-- **Pair:** two distinct person ids that have each completed at least one turn at the same shared table. A pair forms on its first such turn and lasts until either person leaves it (§14).
-- **Day:** each person's local calendar day, rolling over at **04:00** local time. A turn at 1 a.m. counts as "tonight", not tomorrow. The day of a turn is computed in the time zone of the person who took it.
-- **Kept day:** at least one turn by either person of the pair at any shared table on that day.
-- **Together day:** both people took at least one turn at a shared table that day. The app shows it as two gold paws.
-- **Held day:** there was a shared table in play all day, but neither of the two ever held the move, because a third human held it. This happens only at family tables with three or more humans. A held day neither grows nor breaks the streak, and the app shows it as a plain day **(call: fairness at family tables)**.
-- **Missed day:** none of the above, and no pause.
-- **Streak count:** the number of kept days in a row, including today once today is kept. Nap, held and paused days don't add to it, but they don't break the run either. The count shown during the day is the count through yesterday until today is kept, and then it goes up by one at once (the Duolingo "extend" moment).
+- **Shared table:** a room in `playing` status where both people of the pair hold a human seat. A seat on the same phone counts too, so pass-and-play on the couch counts. Bot seats are ignored. Any Pounce game counts, so future games will too.
+- **Turn:** a completed turn by a human seat, ended by that seat's own action. In Cat Tower that's a discard or going out. Drawing alone doesn't count, and a turn taken by a bot never counts.
+- **Player:** a signed-in account, or a guest person (§13.1).
+- **Pair:** two players who have each completed at least one turn at the same shared table. It lasts until either of them leaves it (§14). Kids, parents and partners are all pairs alike **(JD)**.
+- **Day:** each player's local calendar day, rolling over at **04:00** local time. A turn at 1 a.m. counts as "tonight". The day of a turn is computed in the time zone of the person who took it.
+- **Evening cutoff:** two hours before that person's quiet hours start. With the default quiet hours, that's 20:00.
+- **In for the day:** a person is in for day `D` if either:
+  1. they completed a turn at a shared table during `D`; or
+  2. they were **waiting**: at no moment between the start of `D` and their evening cutoff did they hold the move at a shared table. That is, the move never reached them, or it reached them only after the cutoff. This is the **late move pass**.
+- **Kept day:** both people are in, and at least one of them actually took a turn.
+- **Held day:** neither person took a turn, there was a shared table in play all day, and neither of them held the move before their cutoff, because a third human held it all day. This happens only at family tables. A held day neither grows nor breaks the streak, and it shows as a plain day **(call)**.
+- **Missed day:** anything else, unless the pair is paused.
+- **Streak count:** kept days in a row, including today once it's kept. Nap, held and paused days don't add to it but don't break the run. During the day the count shows yesterday's total until today is kept, then goes up by one at once: the "extend" moment.
 
-### 6.2 Why "either of you", with "both" as the gold tier **(call, research)**
+### 6.2 Why this rule **(JD, research)**
 
-Three rules were weighed:
+JD chose "both of us playing together" **(JD)**. It's also the Duolingo friend-streak rule: both of you do a lesson each day. Learners with a friend streak complete their daily lesson 22% more often (§4.1).
 
-1. **Both must take a turn every day** (Duolingo friend streak style). Cat Tower turns depend on each other, so this is unfair. If your partner sits on the move all day and plays at 11 p.m., you couldn't play until then and you lose the day for something you didn't do. Fixing that takes grace windows and blocked-time accounting, and then every miss raises the question of whose fault it was. That is exactly what we must never show.
-2. **Daily mini-game** both play on their own (like a daily puzzle). It avoids the dependency, but it is a second game to design and art up. Worse, the daily habit would then be the mini-game and not playing *with* each other. JD wants to play with his wife **(JD)**.
-3. **Either takes a turn; both earns gold** (chosen). It is simple, and nobody can be blocked: whoever holds the move can keep the day. In a two-person game the turns alternate, so the streak still needs both of you. JD can't play two days in a row at one table unless his wife played in between. The gold together day, and the toy and perfect-week nap that come with it, pull toward both of you playing every day, with a reward instead of a penalty. Silverman & Barasch found that blame for a break makes it hurt more and drives people away (§4.5). This rule removes the unfair misses, the ones where you couldn't have played. The app never assigns a miss to anyone.
+In a turn-based game, a pure "both play every day" rule is unfair in one way. If your partner holds the move all day and plays at 11 p.m., you could lose a day you never had the chance to play. The late move pass fixes that without hiding anything:
 
-**The honest limit.** At a single two-person table, a missed day does mean the person holding the move didn't play, and both of you can work that out, because "your move" is visible all day. The design never *says* it. Settled days show only kept, gold, nap or held, with no record of whose move it was. The status pushes never name anyone. A nap or the win-back usually absorbs the miss first. Removing even that inference would need a rule that hides whose move it is, which would wreck the "your move" cue the game depends on. So this design accepts it. JD should confirm (§17 Q1).
+- In a two-person game, a day is missed only when someone held the move during the day and didn't take it.
+- The app never says who that was. Settled days show only kept, nap, held or paused, and the status pushes name nobody.
+- A nap or the win-back usually absorbs the miss first.
 
-One honest edge in the other direction: with several shared tables, one person can keep the day alone for a few days by working through the tables where it's their move. That's fine. Those turns become moves waiting for the partner, and this pull toward "your move" is the point.
+Both of you can still work out whose move it was, because "your move" is shown all day. Hiding that would break the game's turn cue, so this design accepts it. That fits the research too: Silverman & Barasch found that what hurts after a break is self-blame and having no repair (§4.5). The design never assigns blame, and it always offers repair.
+
+**What "together" means in practice:**
+- Each of you makes at least one move in a game you share. That can be "just a few moves" **(JD)**.
+- Cat Tower turns affect each other: discards feed the other player's hand, and hits land on their laid groups.
+- A future co-op game counts the same way.
 
 ### 6.3 Time zones and the day boundary **(call)**
 
-- Each phone reports its IANA time zone (`TimeZone.current.identifier`) on launch, on foreground, and when `NSSystemTimeZoneDidChange` fires. `DeviceIndex` stores it. A person's time zone is the most recently reported one of their devices.
-- Day key = the `YYYY-MM-DD` of `(instant − 4h)` in that zone. The Worker computes it with `Intl.DateTimeFormat`, which handles DST. On DST days the day is 23 or 25 hours long, and nothing special happens.
-- **Settlement:** a pair's day `D` is settled once *both* people's day `D` has ended, plus 10 minutes. The `Pair` object's alarm is set to that instant. Before then, today's state is live.
-- **Travel:** a day that had a turn is kept, whatever the clock did. A flight that skips most of a day may produce a miss, and the naps exist for that.
-- A person with no reported time zone yet uses their partner's, then `America/Los_Angeles` **(call: JD's household; also the server's fallback for both)**.
+- Each device reports its IANA time zone (`TimeZone.current.identifier`):
+  - on launch;
+  - on foreground;
+  - on `NSSystemTimeZoneDidChange`.
+- A player's time zone is the most recently reported one from any of their devices.
+- **Day key:** the `YYYY-MM-DD` of `(instant − 4h)` in that zone. The Worker computes it with `Intl.DateTimeFormat`, so DST is handled. A DST day is simply 23 or 25 hours long.
+- **Settlement:** a pair's day `D` settles once *both* players' day `D` has ended, plus 10 minutes. The `Pair` sets an alarm for that moment. Until then, today's state is live.
+- **Travel:**
+  - A day that had both turns is kept, whatever the clock did.
+  - A flight that eats most of a day is what naps are for.
+- **Fallback zone:** a player with no time zone yet uses their partner's zone, then `America/Los_Angeles`.
 
-## 7. One shared streak per pair (not personal, not per table) **(call)**
+## 7. One shared streak per pair **(JD, call)**
 
-- **Not a personal streak.** A personal streak rewards playing alone, which here would mean bots, and the point is together. Two numbers would also split attention, and the clearest lesson from Duolingo is that the streak works because it's one number you care about (§4.1). The app keeps lifetime totals per pair, not per person.
-- **Not per table.** Tables end, since a game finishes in days, and new tables get new codes. A streak tied to a table would die with every game. The pair is what lasts.
-- **Many pairs per person.** A family table makes one pair for each two people who play there. The pair shown first everywhere is your **top pair**: the one with the longest current streak, with the most recent turn breaking ties. You can pin another one (widget configuration and the Us screen).
-- **Same-phone pairs** (pass-and-play) are ordinary pairs. Their pushes go to the one phone, titled with whose turn it is, as today **(app)**.
+- **Every pair that plays together gets a streak** **(JD)**:
+  - JD and his wife, his son, his daughter, his mom;
+  - and his wife and his mom, if those two play together.
+- **No personal streak.** A personal streak would reward playing alone (bots), and the point is together. Duolingo's lesson is also that the streak works because it's one number you care about (§4.1).
+- **Not per table.** Tables end, so a streak tied to one would die with every game. The pair is what lasts.
+- **Your top pair** is the pair shown first everywhere: the one with the longest current streak, with the most recent turn breaking ties. You can pin another, from the Us screen and in the widget's configuration.
+- **Same-phone pairs.** Two people playing pass-and-play on one phone are an ordinary pair. On a signed-in phone, the household people belong to that account (§13.1).
 
 ## 8. Naps, win-back, pause and fresh start
 
 ### 8.1 Cat naps (streak freeze) **(call, research)**
 
-- The pair shares one pool of naps, at most **2** (Duolingo found that letting people hold two raised daily actives without adding days off; §4.1). A shared pool means a nap is never "yours" or "mine". It's "ours", and using one blames nobody.
-- **Earned:** 1 at the 7-day milestone, and 1 for each perfect week (seven together days in a row, not counting naps, holds or pauses; Duolingo's perfect week rewards a week kept without freezes [5]). Never bought.
-- **Applied automatically** at settlement to a missed day. The day shows as a cat asleep under a blanket. The next morning both get a quiet push: "A cat nap covered yesterday. 12 days and counting." It's informative, and it doesn't say whose day it was.
-- The count doesn't go up on a nap day, but the run continues.
+- **One shared pool per pair, at most 2.** Duolingo found that holding two raised daily actives without adding days off (§4.1). A shared pool means a nap is never "yours" or "mine".
+- **Earned:**
+  - 1 at the 7-day milestone;
+  - 1 for each perfect week: seven kept days in a row with no naps. Duolingo's perfect week rewards a week kept without freezes [5].
+  - Naps are never bought.
+- **Applied automatically** at settlement to a missed day.
+  - The day shows a cat asleep under a blanket.
+  - The next morning both of you get a quiet push: "A cat nap covered yesterday. 12 days and counting."
+- **Effect on the count:** it doesn't go up on a nap day, but the run continues.
 
 ### 8.2 Win-back (repair) **(call, research)**
 
-- If a day is missed with no naps left, the streak doesn't drop to 0 right away. It goes into **win-back**. The numeral wears a bandage, and two empty paw dots show beside it, so progress starts endowed (§4.4).
-- **Keep the next two days** (any kept days, not necessarily together days) and the streak comes back whole. The missed day becomes a nap day, and the count carries on.
-- If either of those two days is missed, the streak ends. It resets to 0, and any of those days that was kept starts the new streak.
-- It's free and earned by coming back, which mirrors Milkman et al.'s finding that rewarding the return after a miss works best (§4.5). Duolingo charges for repair, and deceptive.design lists that as a dark pattern (§4.5). We don't.
+- **When it starts:** a day is missed and no nap is left. The streak doesn't drop to 0. It goes into **win-back**:
+  - the numeral wears a bandage;
+  - two empty paw dots show beside it, so the progress starts endowed (§4.4).
+- **Success:** keep the next two days and the streak comes back whole. The missed day becomes a nap day, and the count carries on.
+- **Failure:** if either of those days is missed, the streak ends at 0. A kept day among them starts the new streak.
+- **Free, earned by coming back.** Milkman et al. found that rewarding the return after a miss worked best (§4.5). Duolingo charges for repair, and deceptive.design lists that as a dark pattern [56].
 
-### 8.3 Pause **(call)**
+### 8.3 Pause **(JD)**
 
-- Either person can pause the pair's streak for **1 to 14 days** from the Us screen (a suitcase icon and a day dial). Paused days neither grow nor break it. Pausing again extends the pause, and either person can end it early.
-- Both see the suitcase on the badge and widget. The partner gets a quiet push: "JD put the cats to bed for 3 days."
-- **No reminders** for that pair during a pause. "Your turn" pushes still come, because a turn is still a turn.
-- **Limit:** none in v1 **(call: it's two adults who love each other; see open questions)**.
+- **Up to 14 days at a time** **(JD)**. Either person can pause from the Us screen, using a suitcase and a day dial.
+- **While paused:** days neither grow nor break the streak, and the pair gets no reminders. Pounces and "your move" still work.
+- **Extending and ending:** pausing again extends the pause, up to 14 days from today. Either person can end it early.
+- **Both people see it:** the suitcase shows on the badge and the widget. The other person gets a quiet push: "JD put the cats to bed for 3 days."
 
 ### 8.4 When a streak ends: the fresh start **(call, research)**
 
-- The current count goes to 0. **Best streak**, **days together** (lifetime kept days) and **together days** (lifetime gold days) stay big on the Us screen, so the history never goes away.
-- The Cat Condo never shrinks (§9.1).
-- **No "streak lost" screen.** The next time you open the app, the condo cats are curled up asleep, and the numeral is a fresh 0 with a soft sparkle that invites a new one.
-- On the next Monday or the 1st of the month, whichever comes first, and only if the pair hasn't already started again, each person gets one push at their usual time: "New week, new deal. One turn starts a streak with Mia." (Fresh start effect: temporal landmarks make a new attempt more likely, §4.5.) It's sent once per break.
+- **What stays:**
+  - The count goes to 0, but **best streak** and **days together** (lifetime kept days) stay big on the Us screen.
+  - The Cat Condo never shrinks (§9.1).
+- **No "streak lost" screen.** The condo cats are curled up asleep, and the fresh 0 has a soft sparkle that invites a new run.
+- **Fresh-start push:**
+  - When: the next Monday or the 1st of the month, whichever comes first, and only if the pair hasn't already started again.
+  - What: each person gets one push at their reminder time: "New week, new deal. One turn starts a streak with Mia." This uses the fresh start effect (§4.5).
+  - It's sent once per break.
 
 ## 9. Milestones and rewards
 
-Every reward is cosmetic or a celebration. Every reward is earned only by playing together, never sold, and never needed to play **(call, research: Deci et al. on rewards crowding out intrinsic motivation; Apple 5.1.2)**.
+Every reward is cosmetic or a celebration, earned only by playing together, never sold, and never needed to play **(call, research)**.
 
 ### 9.1 The Cat Condo (the thing that grows) **(call)**
 
-The pair's shared cat tree. Your two cats sit on it. It's the hero of the Us screen and the small widget. It grows a stage at **lifetime days-together** thresholds, and those **never go down**. So a broken streak never takes away what the two of you built. Only the streak numeral resets.
+The condo is the pair's shared cat tree, with your two cats sitting on it. It's the hero of the Us screen and the small widget. It grows a stage at **lifetime days-together** thresholds, which never go down, so a broken streak never takes away what you built. Only the streak numeral resets.
 
-| Stage | Lifetime days together | What's added |
+| Stage | Lifetime days together | Added |
 |---|---|---|
 | 1 | 1 | a round cushion on the rug |
 | 2 | 3 | a scratching post |
@@ -368,152 +467,265 @@ The pair's shared cat tree. Your two cats sit on it. It's the hero of the Us scr
 | 9 | 200 | string lights |
 | 10 | 365 | a glowing rooftop deck and fireworks |
 
-**Why a condo, not a cat that grows:** the cats are each person's avatar, and they're whole-cat sprites, 8 cats in 7 poses **(app)**. Ageing or levelling them would mean regenerating 56 sprites per level and keeping them consistent. A condo is one illustration per stage. Each stage is generated with the previous stage as an extra `-i` reference, the same way the cat pose sets were kept consistent.
+**Why a condo, not a cat that grows:**
+- The cats are each person's avatar, drawn as whole-cat sprites: 8 cats × 7 poses **(app)**. Levelling them would mean regenerating 56 consistent sprites per level.
+- A condo needs one illustration per stage. Each stage is generated with the previous stage as an extra `-i` reference, the same way the cat pose sets were kept consistent.
 
 ### 9.2 Streak milestones and gift boxes **(call, research)**
 
-- **Milestones:** 3, 7, 14, 30, 50, 75, 100, 150, 200, 250, 300, 365, then every 100. They come quickly at first and then the gaps widen (goal gradient; quick early wins, §4.4). The Us screen always shows the distance to the next one as a progress arc that starts part-filled.
-- **Each milestone hands both people a gift box**: a glossy box tied with magenta yarn. The pair gets the same content, decided by the server when the milestone is reached. Either person can open it; for the other, it stays wrapped until they open it themselves. Both get to unwrap.
-- **What's inside (variable):** the server picks something the pair doesn't own yet, from a tier set by the milestone:
-  - small milestones (3, 14, 50, …): a toy or a card back;
-  - big milestones (7, 30, 100, 365): a rug or a rare card back, plus a nap at 7.
-  - Once everything is owned, gifts give toys and a confetti burst.
-- **Repeats after a reset:** milestones give gifts again every time they're reached, so a fresh start gets its quick wins at 3 and 7 days again.
-- **When it's opened:** on Home or the Us screen, never mid-table **(call: don't break the game's flow; the turn cue owns the table)**.
+- **Milestones:** 3, 7, 14, 30, 50, 75, 100, 150, 200, 250, 300 and 365, then every 100. They're quick early and widen later (goal gradient, §4.4).
+- **Progress arc:** the Us screen always shows the distance to the next milestone as an arc that starts part-filled.
+- **The gift:** each milestone hands both people the same gift box, a glossy box tied with magenta yarn. The server decides the content. Each person unwraps their own.
+- **Content (variable):** the server picks something the pair doesn't own yet, from a tier set by the milestone.
+  - Small milestones (3, 14, 50, …): a toy or a card back.
+  - Big milestones (7, 30, 100, 365): a rug or a rare card back, plus a nap at 7.
+  - Once everything is owned, gifts give toys and confetti.
+- **Repeats:** milestones give again each time they're reached, so a fresh start gets quick wins at 3 and 7.
+- **Where gifts open:** on Home or the Us screen, never mid-table.
 
 ### 9.3 Toys (the daily surprise) **(call, research)**
 
-- On every **together day**, one toy drops onto the condo: a yarn ball, feather wand, cardboard box, mouse, fish, bell, laser dot, catnip sack and so on. There are 24 to collect, in three rarities (16 common, 6 shiny, 2 golden).
-- **No duplicates** until the set is done. A shiny is guaranteed at least once every 7 together days, and a golden at least once every 30, so luck can't stretch the set out forever.
-- The drop happens when the second turn of the day lands. The person who completed the day sees it live, and the other sees it at their next open. That moment is the variable reward: small, frequent and surprising, but never spendable or tradable (§4.5 on variable rewards versus gambling).
+- **When a toy drops:** one toy drops onto the condo on every **kept day**, at the moment the second person's turn completes the day.
+  - The person who completed the day sees it live.
+  - The other person sees it at their next open.
+- **The set:** 24 toys, among them a yarn ball, feather wand, cardboard box, mouse, fish, bell, laser dot and catnip sack.
+- **Rarity:** 16 common, 6 shiny and 2 golden.
+- **Keeping the set finishable:**
+  - no duplicates until the set is complete;
+  - a shiny at least every 7 kept days;
+  - a golden at least every 30.
+- **Never spendable or tradable** (§4.5 on variable rewards versus gambling).
 - **A full set** unlocks the golden yarn card back.
 
-### 9.4 Card backs and rugs (things the table shows) **(call)**
+### 9.4 Card backs and rugs, changeable by anyone at the table **(JD, call)**
 
-- **Card backs:** the default violet paw, plus 6 to unlock: yarn swirl, moonlit fish, cucumber chaos, crown, heart paws and golden yarn. Text-free art, thick ink outline, saturated palette, never the four-color set **(JD)**.
-- **Rugs:** the default magenta/teal/orange rug, plus 4 to unlock: night sky, candy stripe, fish pond and royal violet.
-- **Equipping:** whoever creates a table picks its rug and card back in the lobby, from anything they've unlocked with anyone. Their last choice is remembered. Everyone at the table sees it. The server stores `look: {rug, back}` on the room, checked against the known ids. It isn't checked against ownership, since this is cosmetic and the lobby only offers what you own. Tables created before this get the defaults.
+- **Card backs:** the default violet paw, plus 6 to unlock: yarn swirl, moonlit fish, cucumber chaos, crown, heart paws and golden yarn.
+- **Rugs:** the default magenta, teal and orange rug, plus 4 to unlock: night sky, candy stripe, fish pond and royal violet.
+- **Anyone seated at a table can change its rug or card back at any time, as in a group chat** **(JD)**. The control is in the table menu: a rug icon opens a tray of rug and back tiles.
+- **What you can pick from:** what *you* have unlocked with anyone. Changing the table shows off your rewards **(call)**.
+- **How it shows:**
+  - Everyone at the table sees the change at once.
+  - A little pill floats down with the changer's cat and the new rug or back. There are no words.
+  - The rug cross-fades. Card backs swap on the next draw animation.
+- **Rate limit:** one change per person every 10 seconds, so two people can't strobe it.
+- **Server:**
+  - New client message `{ t: "setLook", rug?, back? }`, accepted from any seated human.
+  - The ids are validated against the known catalog. Ownership isn't checked, because it's cosmetic and the tray only offers what you own.
+  - New event `{ kind: "look", seat, rug, back }`.
+  - `look` is stored on the room. Older rooms get the defaults.
+- **A new table** starts with the creator's last-used look.
 
 ### 9.5 Celebrations **(call)**
 
-- **Day kept** (your turn kept today): the streak badge in the table's top bar does a paw *stamp*. The numeral rolls up by one, and there's a sparkle with `sfx-sparkle` and a light haptic. It lasts under a second and never blocks the next action.
-- **Together day:** a double stamp, gold, and a toy arcs from the badge to the corner. It's a stronger haptic.
-- **Milestone:** the gift box waits on Home. Opening it is full screen: the box wiggles, bursts into confetti, and the reward spins in on a sunburst, reusing `Celebrations.swift` effects. Both cats do their `celebrate` pose.
+- **Day kept** (your turn completed today for both of you):
+  - The table's streak badge does a double paw *stamp*, and the numeral rolls up by one.
+  - Sparkle with `sfx-sparkle`, a haptic, and the toy arcs to the corner.
+  - It lasts under a second and never blocks play.
+- **Your half done** (you're in, and the other person isn't yet): one paw lights up, with a small stamp.
+- **Milestone:** the gift waits on Home. Opening it is full screen:
+  - The box wiggles, then bursts.
+  - The reward spins in on a sunburst, reusing `Celebrations.swift`.
+  - Both cats strike their `celebrate` pose.
 - **Condo stage:** the new piece drops in with squash and stretch, and the cats leap onto it.
-- **Reduce Motion:** fades instead of arcs, and no shake (parent spec §13).
+- **Reduce Motion:** fades instead of arcs, and no shake.
 
 ### 9.6 Art list (Codex pipeline, placeholders first) **(call)**
 
-New prompt files under `Art/prompts/habit/`, all in the house style block from `push-priming.txt`:
-- `condo-1` … `condo-10`: whole illustrations, square, with transparent cutout;
-- `toy-*` (24);
-- `back-*` (6) and `rug-*` (4);
-- `gift-box` (closed, open);
-- `paw-badge` states: grey, half (one paw), gold (both), nap blanket, bandage, suitcase;
-- `cats-asleep-condo` for StandBy and night.
+New prompt files go under `Art/prompts/habit/`, in the house style of `push-priming.txt`:
+- `condo-1` … `condo-10`
+- `toy-*` (24)
+- `back-*` (6)
+- `rug-*` (4)
+- `gift-box` (closed and open)
+- `paw-badge` states: grey, one paw, both paws, nap blanket, bandage, suitcase
+- `pounce-bell`: a cat ringing a bell at a doorway, for the Pounce push and the Messages card
+- `cats-asleep-condo`: for StandBy and night
+- `live-table` assets, reusing the cats and a mini rug
 
-JD approves them in three batches: (1) badge states, the gift box and condo stages 1-5; (2) toys; (3) backs, rugs and condo stages 6-10.
+JD approves in three batches:
+1. badge states, the gift box, the pounce bell and condo 1–5;
+2. toys;
+3. backs, rugs and condo 6–10.
 
 ## 10. In-app surfaces
 
 ### 10.1 Home **(call)**
 
-- Top center, beside the hero: the **streak badge** (two paws plus the numeral). It's live for the top pair. If you have no pair yet, it shows the grey paws and a 0, which pulse gently once you're seated at a shared table.
-- A tap opens the **Us screen**.
-- The table tiles keep their "your turn" bell. A table that would **keep today** gets a small gold paw on its corner.
+- **Streak badge:** the two paws plus the numeral, at top center by the hero. It's live for your top pair. A tap opens the **Us screen**.
+- **Table tiles:**
+  - They keep their "your turn" bell.
+  - A table where your turn would **complete today** gets a small paw on its corner.
+- **The people row** (the owner's corner today): your pairs' cats appear beside your own cat. Tapping a cat opens **Pounce** (§12.4).
 
 ### 10.2 The Us screen (new) **(call)**
 
-- The full **Cat Condo** with both cats, the toys scattered on it, and the big numeral.
-- Under it, three stat tiles (Duolingo's three-tile pattern; mobbin note): **best**, **days together** and **together days**, each a numeral with an icon.
-- **This week's strip:** seven paw dots, showing grey, kept, gold, nap, held or suitcase per day. It never shows who played.
-- The **next milestone** arc.
-- Unopened gift boxes.
-- Two round buttons: **suitcase** (pause) and **bell** (reminder settings, §12.6).
-- If there are several pairs, a row of partner cats at the top switches between them.
-- When there's no shared table in play, a big **Play** pill starts a table with that partner. It reuses create plus share, or "Play again" when there's a finished table (§10.4).
+- **The Cat Condo:** both cats, the toys scattered on it, and the big numeral.
+- **Three stat tiles:** **best**, **days together** and **perfect weeks**, each a numeral with an icon.
+- **This week's strip:** seven paw dots, each grey, kept, nap, held or suitcase. It never shows who played.
+- **The next-milestone arc,** plus any unopened gift boxes.
+- **Round buttons:** **Pounce** (a bell), **pause** (a suitcase) and **settings** (a gear, §12.6).
+- **Several pairs:** a row of cats at the top switches between them. Long-press a cat to pin it as your top pair, or to leave that streak (§14).
+- **No shared table in play:** a big **Play** pill appears. It runs Pounce with "new game" preselected.
 
 ### 10.3 Table top bar **(call)**
 
-A small streak badge for the top pair sits at the table, but only when both people of that pair are seated here. That's where the stamp celebrates.
+When both people of a pair are seated at this table, a small streak badge for that pair sits here. If several pairs are seated (family tables), it shows the top one. This badge is where the stamp plays.
 
-### 10.4 "Play again" (enabler) **(call)**
+### 10.4 "Play again" **(call)**
 
-- A streak stalls whenever a game ends and nobody starts a new one. So `GameOverView` gets a **Play again** pill.
-- **Server:** a new message, `{ t: "rematch" }`, available to any seated human once the room is `over`, and accepted once per room. It creates a new room with the same name and look, fills its seats straight from the old room's seats (the same `person` and `deviceId` for humans, the same bots), and **deals at once**, with no lobby. The first seat rotates to the seat after the old game's first seat.
-- It posts `rematch: <newCode>` to everyone in the old room. Every other human gets the "Play again" push ("Mia dealt a new game."). Whoever holds the first move also gets the normal "your move" push. **(call: a lobby would let a partner who never opens the app stall the new table, which defeats the point.)**
-- The old room's `/tables` entry points to the new one, so Home shows the new table in its place. This closes the parent iOS spec's server follow-up #2.
+`GameOverView` gets a **Play again** pill.
+
+- **Server message:** `{ t: "rematch" }`, available to any seated human once the room is `over`, and accepted once per room.
+- **What it creates:** a new room with the same name and look.
+  - Seats are filled straight from the old room's seats: the same player for humans, the same bots.
+  - It **deals at once**, with no lobby, because a lobby would let someone who never opens the app stall the new table.
+  - The first seat rotates.
+- **Who is told:**
+  - Everyone in the old room gets `rematch: <newCode>`.
+  - Everyone else gets "Mia dealt a new game."
+  - Whoever holds the first move also gets "your move".
+- **The tables list:** the old room's entry points to the new one.
+
+This closes the parent iOS spec's server follow-up #2.
+
+### 10.5 Accounts in the app **(JD, call)**
+
+- **Pick your cat** (first launch) gains a **Sign in with Apple** button under the check. It's optional, and play still starts without it.
+- **On a device that's already set up,** the button appears in three places:
+  - the people sheet (owner corner);
+  - the Us screen, once a streak reaches 3: the badge shows a little cloud with a plus;
+  - the gear sheet.
+- **Signing in on a second device:**
+  - The device becomes the same you: same cat, same name, same seats, same tables.
+  - Any guest person it already had merges in (§13.2).
+- **The gear sheet** shows the account as your cat with a check, and also offers sign out and **delete account** (§14).
 
 ## 11. Widgets
 
-A widget extension target, `PounceWidgets` (`com.conleychaos.play.widgets`). It shares an **App Group** (`group.com.conleychaos.play`) for the cached streak snapshot and the art, and a **keychain access group** so its one intent can call the server with the device token **(call)**.
+**Target and sharing:**
+- The `PounceWidgets` target, bundle `com.conleychaos.play.widgets`, holds the widgets and the Live Activity.
+- It shares an **App Group** (`group.com.conleychaos.play`) for the snapshot and the art.
+- It shares a **keychain access group** for the device credential, which its intents need **(call)**.
+
+### 11.1 Widget set
 
 | Widget | Family | Shows | Tap / action |
 |---|---|---|---|
-| **Us** | `systemSmall` | The condo with both cats (pose per state, below), the numeral, and today's paws (grey, half or gold). | Opens the table where it's your move, otherwise the Us screen. |
-| **Us + tables** | `systemMedium` | Left: same as small. Right: up to 2 shared tables, each with the table name and either your bell ("your move") or the partner's cat ("their move"). On a "their move" row there's a round **paw** button. | Row: opens that table. Paw button: sends a paw (interactive `AppIntent`; §12.4), then shows "sent" (a check on the paw) until tomorrow. |
-| **Streak** | `accessoryCircular` | The paw ring with the numeral; the ring fills halfway or fully for today. | Opens the Us screen. |
-| **Us** | `accessoryRectangular` | Partner's cat (template-rendered), numeral, and a bell when it's your move. | Opens your move. |
-| **Inline** | `accessoryInline` | The paw image plus "12 · Mia" (numeral and name; the only words are a name, per the no-text rule). | Opens the app. |
-| **StandBy** | `systemSmall` in StandBy | The night art: both cats asleep on the condo, with the numeral. It's red in night mode. | — |
+| **Us** | `systemSmall` | The condo with both cats (pose by state), the numeral, and today's two paws. Each paw lights when that person is in. | Opens the table where it's your move, otherwise the Us screen. |
+| **Us + tables** | `systemMedium` | Left: the small widget. Right: up to 2 shared tables, each with the table name and either your bell ("your move") or their cat ("their move"). Below: a round **Pounce** button. | A row opens that table. **Pounce** (an interactive `AppIntent`) sends a pounce to the pair's partner with target "you pick", then shows a check until it's answered or the hour passes (§12.4). |
+| **Streak** | `accessoryCircular` | The paw ring with the numeral. The ring fills halfway or fully for today. | Opens the Us screen. |
+| **Us** | `accessoryRectangular` | The partner's cat (template-rendered), the numeral, and a bell when it's your move. | Opens your move. |
+| **Inline** | `accessoryInline` | The paw image plus "12 · Mia". | Opens the app. |
+| **StandBy** | `systemSmall` in StandBy | Night art: both cats asleep on the condo with the numeral. Red in night mode. | — |
 
-**Cat poses per state:**
-- your move and today not kept: your cat awake, partner's cat looking at you;
-- their move: your cat idle, partner's cat awake;
-- kept: one cat in `celebrate`;
-- together: both in `celebrate`;
-- paused: both asleep;
-- win-back: the bandage on the numeral.
+**Cat poses by state:**
+- **Your move, today not done:** your cat awake, theirs looking at you.
+- **Their move:** your cat idle, theirs awake.
+- **Your half done:** your cat celebrating.
+- **Kept:** both cats celebrating.
+- **Paused:** both asleep.
+- **Win-back:** a bandage on the numeral.
 
-All poses reuse the existing cat sprites **(app)**.
+The poses reuse the existing cat sprites **(app)**. Interactive buttons work only on an unlocked device [35].
 
-**Configuration:** a `WidgetConfigurationIntent` with one parameter, *partner*. It defaults to the top pair and is listed by the partner's name and cat.
+**Configuration:** a `WidgetConfigurationIntent` with one parameter, *partner*. It defaults to your top pair and lists partners by name and cat.
 
-**Freshness** (WidgetKit budget about 40 to 70 reloads a day [36]):
-- **Timeline:** entries for the next state changes the widget can predict: the 4 a.m. rollover (today goes back to grey), the end of a pause, and the evening, when the "at risk" pose begins. No network is needed for these.
-- **App:** writes the snapshot to the App Group and calls `WidgetCenter.reloadTimelines` whenever it fetches streaks, and once more when it goes to the background [38]. Foreground reloads don't use the budget [36].
-- **Notification Service Extension:** every alert push carries the `streak` block (§12.7). The extension writes it to the App Group and reloads timelines. *Verify on device in PR 4 that a reload from the service extension takes effect. If it doesn't, the widget push below covers it.*
-- **WidgetKit push** [37]: the widget extension adopts `WidgetPushHandler`, and its `pushTokenDidChange` uploads the token (`PUT /v1/devices/me/widget-push`, using the shared keychain credential).
-  - The server sends `apns-push-type: widgets`, topic `com.conleychaos.play.push-type.widgets`, body `{"aps":{"content-changed":true}}`, `apns-priority: 5`.
-  - It sends one when the pair's widget state changes *without* an alert to this device: the partner kept or gilded today while it wasn't your move, settlement at rollover, a pause, or a paw resting.
-  - **Server throttle:** at most one per device every 15 minutes (Apple asks providers to throttle [34]).
-  - The push carries no data, so on reload the provider does one short `GET /v1/devices/me/streaks` (5-second timeout) and falls back to the App Group snapshot.
-- **Server truth** always wins on the next app open.
+**Rendering:** glass, tinted and clear home screens. In accented and vibrant modes, the cats and condo use mono template versions, and the numeral is `widgetAccentable` [33][34].
 
-**Rendering:** glass, tinted and clear home screens (`widgetRenderingMode`). In accented and vibrant modes, the cats and condo use mono template versions and the numeral is `widgetAccentable` **(call)**.
+### 11.2 Freshness **(call, research)**
 
-**Live Activity:** not for the daily loop. A Cat Tower game lasts days, longer than a Live Activity can (§4.4), and a permanent lock screen banner for "your move" would be the nagging we promised not to do. An **optional** "live table" activity comes in the last phase (§15). It starts only when you leave the app mid-round while your partner is awake at the same table. It shows whose move it is and both cats, updates by push on each turn, and ends at the end of the round or after 30 minutes with no move. While it runs, the "your move" alert for that table is suppressed, because the HIG says not to duplicate a Live Activity with notifications [42].
+WidgetKit allows about 40 to 70 reloads a day [36]. Freshness comes from five sources:
+
+- **Timeline entries** for predictable changes, with no network needed:
+  - the 4 a.m. rollover (today goes back to grey);
+  - the end of a pause;
+  - the evening "at risk" pose.
+- **The app** writes the snapshot to the App Group and calls `WidgetCenter.reloadTimelines`:
+  - whenever it fetches streaks;
+  - once more when it goes to the background [38].
+  - Foreground reloads don't use up the budget [36].
+- **The Notification Service Extension:** every alert push carries the `streak` block (§12.7). The extension writes it to the App Group and reloads.
+  - *Verify on device in PR 7 that a reload from the extension takes effect. The widget push covers it if not.*
+- **WidgetKit push** [37]:
+  - The widget extension adopts `WidgetPushHandler`, and `pushTokenDidChange` uploads the token (`PUT /v1/devices/me/widget-push`).
+  - The server sends:
+    - `apns-push-type: widgets`;
+    - topic `com.conleychaos.play.push-type.widgets`;
+    - body `{"aps":{"content-changed":true}}`;
+    - `apns-priority: 5`.
+  - It sends one when the widget state changes *without* an alert to that device. Examples: the other person's half landed while it isn't your move, settlement at rollover, a pause, or a pounce answered.
+  - **Server throttle:** one per device every 15 minutes [34].
+  - The push carries no data, so the provider makes one short `GET /v1/me/streaks` (5-second timeout) and falls back to the App Group snapshot.
+- **Server truth** wins on the next app open.
+
+### 11.3 Live table (Live Activity) **(JD, call, research)**
+
+Cat Tower games run for days, longer than a Live Activity may last (8 hours active, 12 at most [40]). Apple also says Live Activities are for events with a clear start and end [42]. So the Live Activity covers a **live stretch of play**, not the whole game.
+
+**When it starts** (the server starts it with **push-to-start** [41], so it doesn't depend on the app winning a race while going to the background):
+- you leave the app, or lock the phone, at a table where the game is `playing` and at least one other human is `awake` there right now; or
+- you answer "Play" to a pounce and then leave the app before the table is done.
+- At most one live table at a time per device. A newer one replaces the older.
+
+**What it shows:**
+- **Lock screen:** the rug strip with every seat's cat; whose move it is (a glowing ring on that cat, and a bell when it's yours); each player's phase numeral; the table name; and the pair's streak paws.
+- **Dynamic Island:**
+  - Compact: your cat on the leading side; the bell, or the current player's cat, on the trailing side.
+  - Minimal: the bell, or the current player's cat.
+  - Expanded: the lock screen layout, condensed.
+- **No buttons.** A tap opens the table. Apple recommends at most one control, and opening the table is the only useful one.
+
+**How it updates:**
+- `GameRoom` sends `apns-push-type: liveactivity` updates (`event: update`, `content-state`) on each turn change, and on round end with `event: end`.
+- Priority is 5, except when the move comes to you: that update uses priority 10 with an `alert`, so the lock screen lights up and plays the turn sound.
+- While a live table is running for a table, the regular "your move" notification for that table is suppressed. The HIG says not to duplicate the Live Activity with notifications [42].
+- Update tokens arrive through `pushTokenUpdates`, and the app uploads them (`PUT /v1/devices/me/live-activity`). *Verify in PR 8 that the app gets background time to upload the token after a push-to-start. Before then, the fallback is the regular "your move" notifications.*
+
+**How it ends (hides itself, JD):**
+- `event: end` with `dismissal-date` = now when:
+  - the round or game ends;
+  - you return to that table in the app;
+  - **30 minutes pass with no move at the table**.
+- `stale-date` is set to last update + 30 minutes, so a missed push still greys it out.
+- **A hard cap of 2 hours** per activity.
+- You can always swipe it away on the lock screen **(platform)**.
+- The gear sheet has a **live table** toggle, as the HIG asks [42]. It's on by default.
+- The game isn't "live" when the other person is away, so it doesn't start then.
 
 ## 12. Notifications
 
 ### 12.1 The set **(call)**
 
-| Kind | When | Who gets it | Interruption | Cap |
+| Kind | When | To | Interruption | Cap |
 |---|---|---|---|---|
-| **Your move** (exists, new copy) | Your partner's turn hands you the move and you're not awake in that room. | The person whose move it is. | `active`; `passive` during quiet hours | Once per turn (exists), collapsed per table (exists) |
-| **Daily reminder** | At your usual time (§12.3), if today isn't kept for your top pair, it's your move at a shared table, and you haven't opened the app in the last 2 hours. | You. | `active` | 1 a day |
-| **Last chance** | 90 minutes before your quiet hours start, if today still isn't kept, the streak is 3 or more, and it's your move. **On by default**, and one toggle turns it off. Duolingo's first big streak win was its late-night streak saver [10] **(call; see open questions)**. | You. | `active` (not Time Sensitive; §12.5) | 1 a day, counts toward the 2 |
-| **Paw from partner** | Your partner taps the paw (widget, Us screen, or "their move" on Home). | You. | `active`; held until your quiet hours end | 1 a day per pair, from each side |
-| **Nap used** / **win-back** / **paused** | At settlement, or when a partner pauses. | Both. | `passive` (no sound, no light-up) | — |
+| **Your move** (exists, new copy) | The move reaches you, and none of your devices is awake in that room (and no live table is running for it). | The player whose move it is, on all of their devices. | `active`, or `passive` in quiet hours | Once per turn (exists), collapsed per table (exists) |
+| **Daily reminder** | At your reminder time (§12.3), only when all of these hold: today isn't kept for your top pair; you aren't in yet; it's your move at a shared table; and you haven't opened the app in the last 2 hours. | You. | `active` | 1 a day |
+| **Last chance** | 90 minutes before your quiet hours, if the streak is 3 or more, you aren't in, and it's your move. On by default, one toggle turns it off. Duolingo's first big streak win was its late-night streak saver [10]. | You. | `active` (not Time Sensitive, §12.5) | 1 a day, part of the 2 |
+| **Pounce** | Someone pounces on you (§12.4). | You. | `active` communication notification; `passive` in quiet hours | §12.4 limits |
+| **Pounce answered** | They tapped Play, In a bit, or Not now. | The sender. | `passive` | — |
+| **Nap used**, **win-back**, **paused** | At settlement, or when a pause starts. | Both. | `passive` | — |
 | **Milestone** | A milestone was reached and you weren't in the app. | Both. | `active` | — |
-| **Play again** | A partner started a rematch. | The others. | `active` | — |
-| **Fresh start** | The first Monday or 1st of the month after a streak ended (§8.4). | Each person, at their usual time. | `active` | Once per break |
+| **Play again** | A rematch was dealt. | The others. | `active` | — |
+| **Fresh start** | The first Monday or 1st of the month after a break (§8.4). | Each person, at their reminder time. | `active` | Once per break |
 
-**Hard caps** (the `Player` DO enforces them):
-- at most **2 reminder-type pushes a day**, where reminder-type means the daily reminder, last chance, paws and fresh start. "Your move" pushes are driven by events, deduped per turn, and not counted, because they're the game;
-- at most **one push of any kind every 20 minutes**, except "your move" (§4.3 backoff guidance);
-- never in quiet hours, except "your move" as `passive`.
+**Hard caps,** which the `Player` DO enforces:
+- **Reminder-type pushes:** at most 2 a day. These are the daily reminder, last chance and fresh start. "Your move" and Pounce aren't counted: one is the game, and the other is a person asking.
+- **Spacing:** at most one push of any kind every 20 minutes, except "your move" and Pounce.
+- **Quiet hours:** reminders never go out. Everything else is sent `passive`.
 
 ### 12.2 Copy **(call)**
 
-The voice is the cats, warm and a little dramatic about *themselves*, never about the partner. Copy names people, not blame. There's no emoji, no countdown and no guilt. Titles stay the name of the person the push is for, which matters on shared phones **(app)**.
+The voice is the cats: warm, a little dramatic about *themselves*, never about the other person. Copy names people but never blames them. No emoji, no countdowns, no guilt. The title stays the name of the person the push is for, which matters on shared phones **(app)**.
 
 | Kind | Title | Body (rotated, no repeat within 7 days) |
 |---|---|---|
-| Your move | JD | "Mia played. Your move at Couch Cats." / "Mia played. Play back and it's a together day." (the second when your turn would make today gold) |
-| Daily reminder | JD | "The cats are on the rug. Your move at Couch Cats." / "Day 13 is up for grabs. One turn keeps it." / "Mia's cat is guarding the deck. Your move." / "A turn with Mia, then the couch." |
+| Your move | JD | "Mia played. Your move at Couch Cats." / "Mia played. Your turn makes today count." (the second when your turn would complete today) |
+| Daily reminder | JD | "The cats are on the rug. Your move at Couch Cats." / "Day 13 is up for grabs. One turn with Mia keeps it." / "Mia's cat is guarding the deck. Your move." / "A turn with Mia, then the couch." |
 | Last chance | JD | "One turn tonight keeps 12 days going." / "The cats want one more turn before bed." |
-| Paw | JD | "Mia sent a paw. Your move at Couch Cats." |
+| Pounce: a table | JD | "Mia wants to play. Couch Cats?" |
+| Pounce: new game | JD | "Mia wants to play. New game?" |
+| Pounce: you pick | JD | "Mia wants to play. You pick." |
+| Pounce answered | Mia | "JD is coming." / "JD: in a bit." / "JD: not now." |
 | Nap used | Couch Cats | "A cat nap covered yesterday. 12 days and counting." |
 | Win-back | Couch Cats | "Two days in a row brings 12 back." |
 | Paused | Couch Cats | "Mia put the cats to bed for 3 days." |
@@ -523,192 +735,356 @@ The voice is the cats, warm and a little dramatic about *themselves*, never abou
 | Last reminder before going quiet (§12.3) | JD | "The cats will keep your seat warm." |
 
 **Never written:**
-- "Mia is waiting on you";
-- "Don't break your streak";
-- "You missed yesterday";
-- anything with a timer;
-- anything addressed to the partner about the other's absence.
+- "Mia is waiting on you"
+- "Don't break your streak"
+- "You missed yesterday"
+- anything with a timer
+- anything to one person about the other's absence
 
-### 12.3 Timing, backoff and quiet hours **(call, research)**
+For streak pushes, the title is the table's name when the pair has one shared table, and the partner's name otherwise.
 
-**Usual time:**
-- For each person, the `Player` DO keeps a histogram of the local time of their **first turn of each day**, in 30-minute buckets, separately for weekdays and weekends. Each day's weight is multiplied by 0.85, so recent habits count most.
-- The reminder fires 15 minutes before the weighted median.
-- Until 5 days of data exist, it uses 7:30 p.m. local.
-- It's always clamped to outside quiet hours and at least 2 hours before quiet hours start.
-- This is the simple form of Duolingo's lesson, "send near when the person usually practices" (§4.1). A bandit needs far more users than a family TestFlight, so copy rotation is plain round-robin.
+### 12.3 Timing, backoff and quiet hours **(JD: adjustable; call, research)**
 
-**Backoff** (for the person, counted in days they took no turn at any shared table):
-- after 2 such days: no last chance;
-- after 4: the daily reminder only every other day;
-- after 7: one "The cats will keep your seat warm." and then no reminders at all.
-- The person's next turn resets everything.
-- Partner paws still work during backoff, but after **3 unanswered paws in a row** the paw button rests for 3 days (it shows a sleeping paw). That stops one partner nagging the other through us (§4.5 on nagging).
+**Reminder time is adjustable** **(JD)**, with two choices:
+- **Auto (the default):**
+  - The `Player` DO keeps a histogram of the local time of your **first turn each day**, in 30-minute buckets, with weekdays and weekends kept separate. Each day the old weights decay by ×0.85, so recent habits count most.
+  - The reminder fires 15 minutes before the weighted median.
+  - Until there are 5 days of data, it uses **19:30** local **(JD: "that timing is fine")**.
+  - This is the simple form of Duolingo's lesson: send near when the person usually practices (§4.1).
+- **A fixed time:** one for weekdays and one for weekends.
 
-**Quiet hours:**
-- The default is 22:00 to 08:00 local, per phone, set in Settings with two dials (a moon and a sun, no words).
-- Reminders and paws never go out in quiet hours. Paws wait until quiet hours end.
-- "Your move" pushes during quiet hours go as `passive`. They land silently in Notification Center, so the move is there in the morning without a buzz at 2 a.m.
+**Either way, the reminder time is clamped:**
+- outside quiet hours;
+- at least 2 hours before quiet hours start.
 
-### 12.4 Partner paw (nudge) **(call)**
+**Copy rotation** is round-robin. A bandit like Duolingo's needs far more users than a family TestFlight.
 
-- Offered only when **it's the partner's move** at a shared table and today isn't kept: a "their move" row on the medium widget, the Us screen, or a long-press on that table's tile on Home.
-- `POST /v1/pairs/{pairId}/paw`. The server checks the rate limit (1 per sender per pair per day, and the 3-unanswered rest), holds it through the recipient's quiet hours, and counts it in the recipient's 2-a-day cap. If the cap is full, the paw is delivered as `passive` instead of being dropped, so the sender's gesture still arrives.
-- The sender sees a check on the paw. The recipient's next turn clears the "unanswered" count.
+**Quiet hours are adjustable** **(JD)**:
+- The default is 22:00 to 08:00 local **(JD)**.
+- They're set per player and synced.
+- During quiet hours, reminders never go out, and every other push lands `passive`: silent, in Notification Center.
+
+**Backoff** (counted in days you took no turn at any shared table):
+- After 2 days: no last chance.
+- After 4 days: the daily reminder comes only every other day.
+- After 7 days: one "The cats will keep your seat warm.", then no reminders at all.
+- Your next turn resets the backoff.
+- Pounces still work during backoff (§12.4 has its own limits).
+
+### 12.4 Pounce: "come play with me" **(JD, call)**
+
+**The moment:** you sit down with someone, the TV's on, and you want them to come play **(JD)**.
+
+**Starting a pounce.** You start one from any of these:
+- a cat in Home's people row;
+- the Us screen's bell;
+- the medium widget's button;
+- a long-press on a table tile;
+- the share sheet.
+
+A sheet opens with the other person's cat at the top. You pick a target from three big picture tiles, with no words beyond table names:
+1. **A table you share.** "Come make a move." Their-move tables come first, and they're preselected when there is one.
+2. **New game.** A plus on a rug. When it's answered, the server deals a new Cat Tower table seating you both (and nobody else), with your last-used look.
+3. **You pick.** Dice. They choose from your shared tables or a new game.
+
+**Sending it:**
+- **To someone who already plays with you** (has a player): a push. It's a **communication notification** with your cat as the avatar (§12.5), category `POUNCE`, and actions **Play** (`.foreground`), **In a bit** (background) and **Not now** (background).
+  - Opening it lands on the table they picked, or on the "pick one" sheet.
+  - The new-game table is created at that moment.
+- **Through Messages** (or anywhere else):
+  - The sheet's share button sends a link: `https://play.conleychaos.com/p/<token>`.
+  - Its preview card shows your cat ringing the pounce bell, plus your name.
+  - With the app installed, the link opens the same "pick one" sheet.
+  - Without it, it opens the existing TestFlight landing page **(server)**.
+  - This is how you pounce on someone who doesn't play yet (a new pair). On "new game" they're seated as a guest straight from the link.
+- **Answering:**
+  - Play: the sender sees their cat sprint in, and gets "JD is coming."
+  - In a bit: shows a little clock, and sends "JD: in a bit."
+  - Not now: shows a sleeping cat, and sends "JD: not now."
+
+**Limits** (no nagging, §4.5):
+- at most **3 pounces an hour** from one person to another;
+- after **Not now**, no pounces from that sender for 1 hour;
+- after **3 unanswered in a row**, the pounce button rests for 3 hours and shows a sleeping bell.
+
+**In quiet hours** the pounce lands silently, and the sender sees a moon on it ("they may be asleep"). Communication notifications from people the recipient has allowed through a Focus can still break through, under iOS's own control [24]. So the late-night couch pounce works when someone has chosen that.
+
+**Pounce link tokens:**
+- 16 random bytes, single use.
+- They expire after 24 hours.
+- They're stored in the sender's `Player` DO and looked up through a small `Links` index (§13.3).
 
 ### 12.5 iOS specifics **(call, research)**
 
 - **Authorization:**
-  - The existing priming screen and system prompt stay as they are, asking for alert, sound and badge **(app)**.
-  - **New:** if someone taps "Not now" on priming, the app requests **provisional** authorization, which shows no prompt. Reminders then arrive quietly in Notification Center with iOS's own Keep / Turn Off buttons. It's a trial the person controls, and it means "not now" isn't "never" (§4.3).
-  - The bell on Home still offers the full prompt once.
-- **Interruption levels:** "your move", daily reminder, paws, last chance, milestones and play again are `active`. Status changes (nap used, win-back, paused) are `passive`. **No Time Sensitive in v1.** Apple reserves it for things that need attention right now, and Focus can let it break through. A card game isn't that, and a streak isn't an emergency. Using it would spend trust we need (§4.3).
+  - The existing priming and system prompt stay **(app)**.
+  - **New:** "Not now" on priming requests **provisional** authorization, which shows no prompt. Reminders then arrive quietly in Notification Center with iOS's own Keep / Turn Off buttons [22].
+  - Home's bell still offers the full prompt once.
+- **Interruption levels:**
+  - `active`: your move, reminders, last chance, pounce, milestone, play again.
+  - `passive`: status pushes, and anything in quiet hours.
+  - **No Time Sensitive.** A card game isn't urgent, and using it would spend trust [24].
 - **Grouping:**
-  - `thread-id` = room code for table pushes (exists), `pair:<pairId>` for streak pushes. No `summary-arg`: iOS has ignored it since iOS 15 [26];
-  - collapse id = room code for "your move" (exists) and `pair:<pairId>:<kind>` for the others, at most 64 bytes [27];
-  - `relevance-score`: "your move" 1.0, reminders 0.6, status 0.2, for the scheduled summary.
-- **Badge:** the server sets `aps.badge` = the number of tables where it's your move. The app sets the same number when it refreshes tables.
+  - `thread-id`:
+    - the room code for table pushes (exists);
+    - `pair:<pairId>` for streak pushes;
+    - `pounce:<senderPlayer>` for pounces.
+  - No `summary-arg`: iOS ignores it since iOS 15 [26].
+  - Collapse id: the room code for "your move" (exists), and `<kind>:<id>` for the others, at most 64 bytes [27].
+  - `relevance-score`: your move 1.0, pounce 0.9, reminders 0.6, status 0.2.
+- **Badge:** `aps.badge` is the number of tables where it's your move. The app sets the same number on refresh.
+- **Across devices** (§13): "your move" goes to all of a player's devices. When you play from one device, the server sends the others a background push (`content-available: 1`, no alert). Their app removes that table's delivered notifications and updates the badge. It's best effort: iOS may delay background pushes.
 - **Categories and actions:**
-  - `YOUR_MOVE` and `REMINDER`: **Play** (`.foreground`, opens the table; the lock screen "take your turn", which needs the app because a turn needs the table) and **In an hour** (background: schedules a local reminder 60 minutes later, reusing the local reminder path; no server call).
-  - `PAW`: **Play** and **Paw back** (background: a `POST` to the paw endpoint, sending one back. It's capped like any paw, so "Paw back" to a paw that answered yours is free and fun). Apple publishes no time budget for background actions [28], so the request runs inside `beginBackgroundTask`, carries an idempotency id, and is retried on the next launch if it didn't finish.
+  - `YOUR_MOVE` and `REMINDER`:
+    - **Play** (`.foreground`, opens the table): the lock screen "take your turn".
+    - **In an hour** (background): schedules a local reminder, with no server call.
+  - `POUNCE`: **Play**, **In a bit** and **Not now**. The background actions `POST` the answer inside `beginBackgroundTask`, with an idempotency id, and retry on the next launch [28].
   - `STATUS`: none.
-- **Notification Service Extension** (`PounceNotify`, `com.conleychaos.play.notify`), triggered by `mutable-content: 1` on every push:
-  - It makes partner pushes **communication notifications**: an `INSendMessageIntent` whose sender's avatar is the partner's cat face from the shared art. "Mia played" then shows Mia's cat where the app icon would be. That needs the Communication Notifications capability (§4.3).
-  - It writes the `streak` block from the payload into the App Group and reloads the widgets (§12.7).
-- **Foreground behaviour** (exists): a banner for the table on screen is dropped. New: streak pushes are dropped while the Us screen is on screen.
+- **Notification Service Extension** (`PounceNotify`, `com.conleychaos.play.notify`), triggered by `mutable-content: 1`:
+  - It makes pushes from a person (your move, pounce, play again) into **communication notifications**. That's an `INSendMessageIntent` whose sender `INPerson` has the sender's cat face from the shared art as the avatar [24]. This needs the Communication Notifications capability.
+  - It writes the payload's `streak` block to the App Group and reloads the widgets.
 
-### 12.6 Reminder settings (in-app) **(call)**
+### 12.6 Settings (synced) **(JD, call)**
 
-On the existing settings sheet (gear) and the Us screen bell:
-- one bell toggle (reminders on or off for this phone; "your move" is unaffected);
-- the moon and sun quiet-hours dials;
-- one toggle with a crescent-moon-and-bell icon for the last chance.
+The gear sheet and the Us screen's gear share one panel, in pictures and numerals:
+- a bell toggle for reminders ("your move" is unaffected);
+- reminder time: an **Auto** chip, or two clock dials (weekdays and weekends);
+- quiet hours: moon and sun dials;
+- a last-chance toggle;
+- a live table toggle.
 
-Everything is pictures plus numerals (times shown in the phone's locale format). The settings go to the server with the profile (§13.4).
+The settings belong to the player, so they sync across devices.
 
 ### 12.7 Payload additions **(call)**
-
-Every push to a person who is in a pair gets a small top-level `streak` object for the extension:
 
 ```json
 {
   "aps": {
     "alert": {"title": "JD", "body": "Mia played. Your move at Couch Cats."},
-    "sound": "default",
-    "thread-id": "GH2VD",
-    "mutable-content": 1,
-    "category": "YOUR_MOVE",
-    "interruption-level": "active",
-    "relevance-score": 1.0,
-    "badge": 2
+    "sound": "default", "thread-id": "GH2VD", "mutable-content": 1,
+    "category": "YOUR_MOVE", "interruption-level": "active", "relevance-score": 1.0, "badge": 2
   },
   "code": "GH2VD",
   "kind": "your_move",
   "from": {"name": "Mia", "cat": 2},
-  "streak": {"pair": "p_3f9c…", "count": 12, "today": "half", "myMove": ["GH2VD"], "theirMove": [], "naps": 1}
+  "streak": {"pair": "p_3f9c…", "count": 12, "me": false, "them": true, "naps": 1, "myMove": ["GH2VD"], "theirMove": []}
 }
 ```
 
-That's about 400 bytes, well under APNs' 4 KB.
+It's about 400 bytes, well under the 4 KB APNs limit.
 
 ## 13. Server design
 
-### 13.1 Identity: who a "person" is **(call)**
+### 13.1 Identity: players, accounts and guests **(JD, call)**
 
-- Streaks key on **person ids**, not device ids. A device id changes on a re-mint after a 401 **(app)**, and one phone can hold several people.
-- **Cross-device:** today the iPad and the iPhone each create their own owner person at Pick your cat, so JD on the iPad would be a different person. Fix: the app keeps the **owner** `Person` (and a per-person secret, below) in a **synchronizable Keychain item**. A new device of the same Apple ID that finds one adopts it instead of asking Pick your cat again. There's no new entitlement, because it uses iCloud Keychain when the person has it on. Existing devices with their own owner keep it. Merging two owners is not in v1 (see open questions).
-- **Binding a person to a device:**
-  - Person ids are visible to everyone at a table **(server)**, so knowing one must not be enough to get someone's reminders.
-  - On first registration the app sends a random 32-byte `personKey` (kept in the Keychain beside the person). `Player` stores its SHA-256, trust on first use.
-  - Attaching a device to that person later needs the same key.
-  - Turn attribution still trusts seat claims, as the game does today. The worst a cheat could do is keep someone's streak alive, which is acceptable at this scale. Sign in with Apple (M2) replaces this.
+JD wants accounts and everything synced **(JD)**. The design introduces the **player**.
+
+- **Account player:**
+  - Created by Sign in with Apple.
+  - `playerId = "a_" + base64url(SHA-256("acct:v1:" + apple_sub))[0..22]`.
+  - One player holds the owner's name and cat, the household's pass-and-play people, devices, settings, tables, archive, tutorial state and pairs.
+- **Guest player:**
+  - Any person on a device that isn't signed in.
+  - `playerId = "g_" + personId`.
+  - It works exactly as today and keeps a streak, but only on that device.
+  - Binding a guest to its device uses a per-person random `personKey`, kept in the Keychain. The `Player` stores its SHA-256 on first use, and later binds must present the same key. Person ids are visible to everyone at a table, so knowing one mustn't be enough to get someone's pushes.
+- **Seats belong to players.**
+  - `SeatInfo` gains `playerId`.
+  - A device controls a seat when the seat's `deviceId` is that device (today's rule, still used for guests), or when the seat's `playerId` is the player signed in on that device.
+  - So your iPad and your iPhone are the same seat. "Move my seat" stays for guests.
+  - `RoomCore.controlledSeats(deviceId)` becomes `controlledSeats(deviceId, playerId?)`. The Worker resolves `deviceId → playerId` from `DeviceIndex` and passes it to the room in a new internal header, `x-play-player`, alongside `x-play-device`. Both are stripped from client requests, as today.
+- **Presence per player:** a seat is `awake` if any of the player's devices is awake in the room.
+- **Signing in on a device** (`POST /v1/accounts/apple`):
+  1. The app runs `ASAuthorizationAppleIDProvider`, requesting **no scopes**. We don't want the email or the Apple name; Pounce already has names.
+  2. It sends the `identityToken`, the `authorizationCode` and the raw nonce.
+  3. The Worker verifies the token's RS256 signature against Apple's published keys (`appleid.apple.com/auth/keys`, cached for an hour), plus `iss`, `aud = com.conleychaos.play`, `exp`, and that the nonce hash matches. [60]
+  4. The Worker exchanges the `authorizationCode` for a refresh token, which is needed to revoke on deletion. That uses a client secret signed with `SIWA_KEY_P8`, a deploy-pipeline secret (§3). The refresh token is stored in the account `Player`.
+  5. `DeviceIndex.link(playerId)` runs, and the account `Player` adds the device.
+  6. **Merge:**
+     - Every guest person on that device that is the device's owner merges into the account: its pairs, tables and seats.
+     - Other local people (pass-and-play) become household people on the account, keeping their own guest players. They are separate people, so their streaks stay theirs.
+- **Merge rules** (`Player.merge(guestId)`):
+  - **Tables:** each room where the guest holds a seat is told `adopt(guestPersonId, playerId)`. The room sets `playerId` on those seats.
+  - **Pairs:** each guest pair re-points to the account player. If the account already has a pair with the same partner, the two merge:
+    - the longer current streak wins;
+    - lifetime counters take the maximum;
+    - toys and unlocks are the union;
+    - naps take the maximum, capped at 2.
+  - **Name and cat:** the account keeps its own. A brand-new account takes the guest's.
+  - The guest player is left as a forwarding stub for 30 days, then deleted.
+- **What syncs** (all through the account `Player`):
+  - identity (name, cat);
+  - household people;
+  - seats and tables (through rooms);
+  - the archive list;
+  - tutorial progress;
+  - settings: sound, haptics, pace, reminder time, quiet hours, last chance, live table;
+  - streaks, rewards and the chosen looks.
+  - **Device-only:** push tokens, the time zone report, and the cached snapshots.
+- **Kids:** Sign in with Apple needs an Apple Account. A child without one plays as a guest on their own device, or as a household person on a parent's device. Either way it's a full streak pair (§17 Q1).
 
 ### 13.2 Durable Objects **(call)**
 
-**`DeviceIndex` (exists, per device), gains:**
-- a `profile` row: `time_zone`, `quiet_start` and `quiet_end` (minutes after midnight), `reminders` (0/1), `last_chance` (0/1), and `updated_at`;
-- `people`: the person ids on this phone, each with its name and cat;
-- `widget_push_token`, and `live_activity_tokens` later;
-- the push path: `push(intent)` now picks `active` or `passive` from the quiet hours, adds the `streak` block, sets `badge`, `category` and `mutable-content`, and forgets dead tokens as today.
+**`DeviceIndex`** (exists, one per device) gains:
+- `player_id`, set when signed in;
+- `time_zone`;
+- the push tokens: APNs (exists), widget, Live Activity push-to-start, and per-activity update tokens.
 
-**`Player` (new, one per person id, named by person id):**
-- `meta`: name, cat, `key_hash`;
-- `devices(device_id, attached_at)`;
-- `pairs(pair_id, partner_id)`;
-- `playtime(bucket, daytype, weight)`, the 48 × 2 histogram;
-- `reminders`: today's day key, `sent_today`, `last_sent_at`, `backoff_days`, `last_turn_day`, `rotation` (copy index per kind), and `fresh_start_sent_for` (a break id);
-- an **alarm** at the next reminder decision time. At the alarm it asks each pair `today()`, decides by §12.1 and §12.3, and pushes through each of its devices' `DeviceIndex.push`.
+Its push path:
+- `push(intent)` picks `active` or `passive` from the player's quiet hours;
+- adds the `streak` block, `badge`, `category` and `mutable-content`;
+- forgets dead tokens, as today.
 
-**`Pair` (new, one per unordered pair, named by `pairId` = the base64url SHA-256 of `"pair:v1:" + min(a,b) + ":" + max(a,b)`, truncated to 22 characters):**
-- `people(person_id, name, cat)`, two rows;
-- `streak` (one row): `count`, `run_started_day`, `last_settled_day`, `best`, `lifetime_kept`, `lifetime_together`, `perfect_run` (together days in a row toward a perfect week), `naps`, `winback_from_day` (null, or the missed day), `winback_kept` (0-2), `paused_until_day`, `paused_by`, `break_id`;
-- `days(day TEXT PRIMARY KEY, turns_a, turns_b, had_move INTEGER, state TEXT)`, where `state` is one of `live`, `kept`, `together`, `nap`, `held`, `paused`, `missed` or `winback`. Kept for **120 days**, plus the lifetime counters **(call)**;
-- `moves(code PRIMARY KEY, holder_id, since)`: who holds the move at each shared table, and `active` tables;
-- `rewards`: `owned(item_id, got_at)`, `gifts(gift_id, milestone, item_id, opened_a, opened_b, created_at)`, `toys_pity(shiny_since, golden_since)`;
-- `paws(sender_id, day, unanswered)`;
-- an **alarm** at the next settlement instant (§6.3).
+Tables for guest devices stay here, as today.
+
+**`Player`** (new, one per `playerId`):
+- **`meta`:** kind (account or guest), name, cat, `key_hash` (guests), `apple_refresh_token` (accounts), and `forward_to` (merged guests).
+- **`devices(device_id, attached_at, last_seen)`**
+- **`people(person_id, name, cat)`:** household people (accounts only).
+- **`settings`:** a single JSON row, last writer wins per key, with `updated_at` per key.
+- **`tables`:** the same shape as today's `DeviceIndex.tables`. `GameRoom` reports seats that have a `playerId` here.
+- **`archive(code)`** and **`tutorial(key, value)`**.
+- **`pairs(pair_id, partner_id, pinned)`** and **`left(partner_id)`:** tombstones (§14).
+- **`playtime(bucket, daytype, weight)`:** 48 × 2 buckets.
+- **`reminders`:** today's key, `sent_today`, `last_sent_at`, `backoff_days`, `last_turn_day`, the copy rotation, and `fresh_start_sent_for`.
+- **`pounces(id, to, target, created_at, answered)`** plus the limit counters, and **`links(token, pounce_id, expires)`**.
+- **An alarm** at the next reminder decision. It asks its pairs for `today()`, decides by §12.1 and §12.3, and pushes through each device's `DeviceIndex`.
+
+**`Pair`** (new). It's named by a random `pairId` (16 bytes, base64url) made when the pair forms, and both players store it.
+- **`people(player_id, name, cat)`:** two rows.
+- **`streak`:** a single row with `count`, `run_started_day`, `last_settled_day`, `best`, `lifetime_kept`, `perfect_weeks`, `perfect_run`, `naps`, `winback_from_day`, `winback_kept`, `paused_until_day`, `paused_by` and `break_id`.
+- **`days(day PRIMARY KEY, turns_a, turns_b, held_before_cutoff_a, held_before_cutoff_b, state)`:**
+  - `state` is one of `live`, `kept`, `nap`, `held`, `paused`, `missed` or `winback`.
+  - It never records whose miss a day was, and the API never exposes per-person rows for past days.
+  - 120 days are kept, plus the lifetime counters.
+- **`moves(code PRIMARY KEY, holder_id, since)`** and the active shared tables.
+- **`rewards`:**
+  - `owned(item_id, got_at)`;
+  - `gifts(gift_id, milestone, item_id, opened_a, opened_b)`;
+  - `toys_pity(shiny_since, golden_since)`.
+- **An alarm** at the next settlement (§6.3).
+
+**`Links`** (new, a single instance): `token → (playerId, expires)` for pounce links. Rows are deleted when used or when they expire.
+
+**`GameRoom`** (exists) gains:
+- `playerId` on seats, plus `adopt`;
+- `look`, with `setLook`;
+- `rematch`;
+- turn reporting to pairs;
+- moving-the-move updates;
+- Live Activity pushes (start, update, end);
+- background "dismiss" pushes to a player's other devices;
+- new-game creation for pounces.
+
+The game logic stays in `RoomCore`.
 
 ### 13.3 Flows **(call)**
 
-1. **Turn completes** in `GameRoom` (`core.ts`, where `turn` is emitted for the next seat):
-   - If the seat that just finished is human, a new `StreakIntent {by, at, code, next}` is drained beside the push intents.
-   - For each other human person `p` at the table, `GameRoom.after()` calls `Pair(by, p).turn({by, at, code, nextHolder})` with `waitUntil`. It's retried once, and a failure is logged, never fatal: a lost streak update is cosmetic, and the game is saved.
-   - The `Pair` records the day key (taker's time zone, fetched from `Player`, then `DeviceIndex`), updates `moves`, and settles any days past due first.
-   - If this is the first turn of today, `count` goes up at once, and the response tells the room so the app can stamp. If it's both people's first turn, it's a together day: a toy is drawn.
-   - It returns a small `StreakView` that the room broadcasts to the two people's sockets as a new server message, `{ t: "streak", pair, view }`, so the table badge stamps live.
-   - The `Player` of the person who played records the playtime bucket.
-2. **Move arrives** (`nextHolder` is in the pair): `moves` is updated and `days[today].had_move = 1`. The "your move" push goes out as today **(server)**, with the new copy, using `from` = the person who just played.
-3. **Settlement alarm** (in `Pair`): for each unsettled day up to the latest one both people have finished, it applies §6.1, §8.1 and §8.2 in order:
+1. **Turn completes** (`RoomCore` emits `turn` for the next seat):
+   - If the seat that finished is human, a `StreakIntent {by, at, code, next}` is drained beside the push intents.
+   - For each other human player `p` at the table, `GameRoom.after()` calls `Pair(by, p).turn(...)`, using `waitUntil` with one retry. A failure is logged, never fatal: a lost update is cosmetic, and the game is saved.
+   - The pair computes today's key and updates `days` and `moves`, settling any days that are past due first.
+   - If this turn makes both people in for today, the day is kept at once: the count goes up and a toy is drawn.
+   - It returns a `StreakView`, which the room sends to the two players' sockets as `{ t: "streak", pair, view }`. That's additive: the iOS socket already skips unknown messages **(app)**.
+   - The mover's `Player` records the playtime bucket.
+2. **Move arrives** (`next` is a pair member):
+   - `moves` is updated. If it's before that person's cutoff, `held_before_cutoff` is set for today.
+   - "Your move" goes out with the new copy, or a Live Activity update when one is live.
+   - The player's other devices get the dismiss push for that table's earlier notifications.
+3. **Settlement alarm** (`Pair`): for each unsettled day, the first rule that applies sets its state:
    1. paused;
-   2. kept or together;
-   3. held (`had_move = 0`, and a shared table was `active` the whole day);
-   4. otherwise a nap if one is left;
-   5. otherwise win-back or a reset.
+   2. kept (both in);
+   3. held;
+   4. a nap, if one is left;
+   5. otherwise win-back, or a reset.
 
-   It updates milestones, gifts, perfect weeks and naps, asks both `Player`s to send any status push, and re-arms for the next day.
-4. **Room ends or closes**: the room tells its pairs to drop its row from `moves`.
-5. **Reminder alarm** (in `Player`): computes the decision at the reminder time and the last-chance time, and re-arms for tomorrow.
+   Then it updates milestones, gifts, perfect weeks and naps, asks both `Player`s for any status push, and re-arms.
+4. **Pounce:** `POST /v1/pounces` checks the limits, stores the pounce, and pushes it or returns a link token. The answer comes from `POST /v1/pounces/{id}/answer`.
+   - "New game", or "you pick" answered with a new game: the Worker creates a room seating both players. For a link answered by a guest, that's the link opener's device. Then it deals.
+5. **Reminder alarm** (`Player`): decides at the reminder time and at the last-chance time, then re-arms for tomorrow.
+6. **Room ends or closes:** pairs drop that room from `moves`, and `Player` and `DeviceIndex` tables are updated, as today.
 
-### 13.4 HTTP API (device token auth, as today) **(call)**
+### 13.4 HTTP API **(call)**
 
-| Method and path | Body / result | Notes |
+All routes use device-token auth, as today. The routes under `/v1/me/...` act for the device's player: the account if signed in, otherwise the person named in the body.
+
+| Method and path | Body → result | Notes |
 |---|---|---|
-| `PUT /v1/devices/me/profile` | `{timeZone, quietStart, quietEnd, reminders, lastChance, people: [{id, name, cat, key}]}` → 204 | Sent on launch, on foreground when anything changed, and on a time zone change. Attaches each person to this device (§13.1). It's within the existing 1 KB body cap for up to 4 people, so that cap rises to 2 KB for this route only. |
-| `GET /v1/devices/me/streaks` | `{pairs: [StreakView]}` for every person on this phone | `StreakView` = `{pair, me, partner: {name, cat}, count, today: "none"\|"half"\|"together", mine, theirs, naps, winback: {kept, of: 2}\|null, pausedUntil, best, lifetimeKept, lifetimeTogether, week: [7 states], next: {milestone, at}, condoStage, toys: [ids], unlocked: [ids], gifts: [{id, milestone, item, opened}], myMove: [codes], theirMove: [codes], pawSent, pawResting}` |
-| `POST /v1/pairs/{pair}/paw` | `{from}` → 204 / 429 | `from` must be a person on this device. |
-| `PUT /v1/pairs/{pair}/pause` | `{from, days: 1-14}` → 204 | |
-| `DELETE /v1/pairs/{pair}/pause` | `{from}` → 204 | |
-| `POST /v1/pairs/{pair}/gifts/{id}/open` | `{from}` → 204 | Marks it opened for that person. |
-| `DELETE /v1/pairs/{pair}` | `{from}` → 204 | Leave the streak (§14). |
-| `PUT /v1/devices/me/widget-push` | `{token}` → 204 | Called from the widget extension's `WidgetPushHandler` (§11). It's a separate token from the app's APNs token, sent with the widgets push type and topic. |
+| `POST /v1/accounts/apple` | `{identityToken, authorizationCode, nonce, guests: [{id, key}]}` → `{playerId, profile}` | Signs in and merges (§13.1). |
+| `POST /v1/accounts/signout` | → 204 | Unlinks this device. The device keeps playing as a fresh guest. |
+| `DELETE /v1/accounts/me` | → 204 | Deletes the account (§14). |
+| `PUT /v1/devices/me/profile` | `{timeZone, people: [{id, name, cat, key}]}` → 204 | Called on launch and on a time zone change. Binds guests. The existing 1 KB body cap rises to 2 KB for this route. |
+| `GET /v1/me/state` / `PATCH /v1/me/state` | `{settings, people, archive, tutorial}`, per-key `updatedAt` | Sync. A patch merges last writer wins per key. |
+| `GET /v1/devices/me/tables` (exists) | | Returns the player's tables when signed in. |
+| `GET /v1/me/streaks` | `{pairs: [StreakView]}` | `StreakView` = `{pair, partner: {name, cat}, count, me, them, naps, winback, pausedUntil, best, lifetimeKept, perfectWeeks, week: [7], next, condoStage, toys, unlocked, gifts, myMove, theirMove, pounce: {sent, resting}}` |
+| `PUT /v1/pairs/{pair}/pause` | `{days: 1-14}` → 204 | |
+| `DELETE /v1/pairs/{pair}/pause` | → 204 | Ends a pause early. |
+| `POST /v1/pairs/{pair}/gifts/{id}/open` | → 204 | |
+| `PUT /v1/pairs/{pair}/pin` | → 204 | Pins this pair as your top pair. |
+| `DELETE /v1/pairs/{pair}` | → 204 | Leave (§14). |
+| `POST /v1/pounces` | `{to?: playerId, target: {table: code} \| "new" \| "pick"}` → `{id, link?}` | With `to`, a push. Without it, a link. |
+| `POST /v1/pounces/{id}/answer` | `{answer: "play" \| "later" \| "no", choice?: code \| "new"}` → `{code?}` | |
+| `GET /p/{token}` | HTML preview page (OG card) | Public. Same pattern as `/j/<CODE>` **(server)**, and added to AASA. |
+| `PUT /v1/devices/me/widget-push` | `{token}` → 204 | From the widget extension. |
+| `PUT /v1/devices/me/live-activity` | `{pushToStart?, activities?: [{code, token}]}` → 204 | |
 
-**WebSocket additions:** the server message `{t: "streak", pair, view}`, and the client message `{t: "rematch"}` (§10.4). `PROTOCOL_VERSION` stays 1: both are additive, and older apps ignore unknown messages **(call, check against the client's decoder before merging)**.
+**WebSocket additions:**
+- server messages `{t:"streak"}` and `rematch`;
+- client messages `{t:"rematch"}` and `{t:"setLook"}`;
+- the `look` event.
+
+`PROTOCOL_VERSION` stays 1. These are additive, and the client skips unknown messages **(app)**.
 
 ### 13.5 Limits and costs **(call)**
 
-- A pair object wakes about once a day for settlement and once per turn.
-- A player object wakes up to 3 times a day.
-- At family scale that's a rounding error on Durable Objects pricing.
-- The `days` table at 120 rows per pair is tiny.
+- A `Pair` wakes about once per turn and once a day.
+- A `Player` wakes up to 3 times a day.
+- Live Activity pushes are one per turn, only during live play.
+
+At family scale, all of this is a rounding error on Durable Objects pricing.
 
 ## 14. Privacy
 
-- **What's new on the server:**
-  - each phone's time zone and quiet hours;
-  - per person, a histogram of what times of day they start playing;
-  - per pair, the daily turn counts for 120 days, the lifetime counters, and the rewards.
-- **Never collected:** location (the time zone is enough), contacts, ad identifiers, or analytics.
-- **Who sees what:**
-  - your partner sees the pair's shared state: the count, today's paws (half or gold), the week's strip, rewards and gifts;
-  - your partner never sees your play-time histogram, your reminder settings, or a per-person history of who played on which past day;
-  - "half" today, meaning one of you has played, is visible to both, because it's what tells you it's your move. Once the day settles, only kept, together or nap remains.
-- **Lock screen:** pushes show names and table names, as today **(app)**. iOS's own "Show Previews" setting hides them.
-- **Leaving:** either person can **leave a streak** (Us screen → hold the partner's cat → a trash can). That deletes the `Pair` object and its history for both, and both people's `Player` forget it. The partner sees that pair disappear, with no push.
-  - **Leaving sticks.** The leaver's `Player` keeps a tombstone for that partner's person id, so the pair doesn't re-form the next time they play together.
-  - Only the leaver can undo it: in the Us screen's partner row, a ghosted cat with a plus starts a fresh pair at 0. The deleted history doesn't come back **(call)**. Deleting the app's last person on a phone (People sheet) leaves every pair of that person. A `Player` with no devices left for 90 days deletes itself **(call)**.
-- **Retention:** day rows after 120 days, `Player` objects after 90 idle days, and pairs whose people both have no devices after 90 days.
-- **Logging:** no person ids, pair ids, names or tokens in logs. This follows the existing rule: invocation logs are off because URLs carry room codes **(server)**, and pair URLs carry pair ids, so the same rule applies.
-- **App Store privacy:** `PrivacyInfo.xcprivacy` adds **Product Interaction** (play times) and **Other Usage Data** (streak state), both for App Functionality only, not linked to identity beyond the existing device ID, and no tracking. The privacy label in App Store Connect needs the same update before external TestFlight review.
+**What's new on the server:**
+- **Account link:** a hash of the Apple user id, plus the Sign in with Apple refresh token, which is used only for revocation. No email, and no Apple name.
+- **Per device:** the time zone.
+- **Per player:** settings, a histogram of the times of day you start playing, the tables list, the archive and tutorial flags.
+- **Per pair:** daily state for 120 days, lifetime counters and rewards.
+- **Pounces:** kept 7 days.
+
+**Never collected:** location (the time zone is enough), contacts, ad identifiers, analytics, or phone numbers. Messages pounces go through the system share sheet, and Pounce never reads your contacts.
+
+**Who sees what:**
+- **The other person in a pair** sees the pair's state: the count, today's two paws, the week strip, rewards and gifts.
+- **Nobody** sees your playtime histogram or your settings, or a record of who played on past days.
+- **Today's paws** are visible to both of you, because they're what tells you it's your move. After settlement, only the day's outcome remains.
+
+**Lock screen:** pushes show names and table names, as today **(app)**. iOS's Show Previews setting hides them.
+
+**Leaving a streak:**
+- Where: on the Us screen, long-press the cat, then the trash can.
+- It deletes the `Pair` and its history for both of you. The other person sees it disappear, with no push.
+- It sticks: the leaver's `Player` keeps a tombstone, so the pair doesn't re-form the next time you play.
+- Only the leaver can undo it: a ghosted cat with a plus in the Us screen's row starts a fresh pair at 0 **(call)**.
+
+**Deleting your account** (gear sheet, then account, then the trash can, with a confirm; required by App Review 5.1.1(v) [30]):
+- It deletes the `Player`.
+- It leaves every pair.
+- It revokes the Sign in with Apple token [61].
+- Rooms keep your seat, but it falls back to the device that last held it. The game goes on, and nothing breaks for the others.
+
+**Retention:**
+- day rows: 120 days;
+- guest `Player`s with no device for 90 days: deleted;
+- merged guest stubs: 30 days;
+- pounce links: 24 hours.
+
+**Logging:** no player ids, pair ids, tokens or names in logs. Invocation logs stay off **(server)**.
+
+**App Store privacy:**
+- `PrivacyInfo.xcprivacy` keeps the existing User ID and Device ID declarations.
+- It adds **Product Interaction** (play times) and **Other Usage Data** (streak state), for App Functionality only, with no tracking.
+- The App Store Connect privacy label needs the same update before external TestFlight review.
 
 ## 15. Phasing into shippable PRs
 
@@ -716,51 +1092,74 @@ Each PR ships to TestFlight on its own and leaves the app working **(call)**.
 
 | # | PR | Contents | Depends on |
 |---|---|---|---|
-| 0 | **This design** | The doc only. | — |
-| 1 | **Server: streak core** | `Player` and `Pair` DOs plus the migration; `DeviceIndex` profile; turn reporting from `GameRoom`; day keys and settlement; naps, win-back, pause and held days; milestones, gifts and toys drawn on the server; the HTTP routes in §13.4 (except widget-push); `{t:"streak"}`. Unit tests with a fake clock across time zones, DST and the 4 a.m. rollover. No push changes yet. Turn reporting sits behind a `STREAKS` env var that stays off in production until PR 2 ships, so the first real streaks start with correct time zones **(call)**. | 0 |
-| 2 | **App: streak UI and Play again** | Profile upload; the synchronizable owner Person and `personKey`; `StreakStore` in PounceKit; Home badge; Us screen; table top-bar stamp; gift opening; pause; leave streak. Server and app `rematch` with "Play again". All with **placeholder art** in the final names and sizes. | 1 |
-| 3 | **Notifications** | Server: `Player` reminder alarms, learned time, caps, backoff, quiet hours (passive), paws, status and milestone pushes, the new "your move" copy, badge, category, `mutable-content`, and the `streak` block. App: categories and actions, provisional on "Not now", the settings dials, and the paw button in the app. The `PounceNotify` extension with communication-notification avatars. | 1, 2 |
-| 4 | **Widgets** | The `PounceWidgets` target, App Group and keychain group; small, medium, the three accessory families and StandBy; the configuration intent; the interactive paw intent; timeline entries at rollover; reloads from the app and the extension; WidgetKit push updates if available. | 2 (3 for push refresh) |
-| 5 | **Reward art and cosmetics** | Codex art in three approval batches (§9.6); rug and card-back picker in the lobby; `look` on rooms; toy drops on the condo; condo stages. Art swaps in for placeholders by file name. | 2 |
-| 6 | **Live table (optional)** | The Live Activity in §11, updated by APNs `liveactivity` pushes from `GameRoom`. Built only if JD wants it after living with 1-5. | 3 |
+| 0 | **This design** | The doc. | — |
+| 1 | **Server: accounts and players** | Sign in with Apple verification and the code exchange; the `Player` DO; device link; seats by `playerId`, with `controlledSeats(deviceId, playerId)` and the `x-play-player` header; `adopt`; guest merge; tables per player; `/v1/me/state` sync; sign-out and account deletion with token revocation; all-device pushes and dismiss pushes. Tests. | 0; JD creates the Sign in with Apple key and pipeline secrets |
+| 2 | **App: accounts and sync** | The Sign in with Apple button (Pick your cat, people sheet, gear); merge on sign-in; settings, people, archive and tutorial synced; the tables list from the account; badge clearing across devices; account deletion UI. | 1 |
+| 3 | **Server: streaks** | The `Pair` DO; turn reporting; the both-in rule with the late move pass and held days; settlement; naps, win-back and pause; milestones, gifts and toys; the streak routes; `{t:"streak"}`; `rematch`; `setLook` and `look`. Fake-clock tests across time zones, DST and the rollover. A `STREAKS` env var stays off in production until PR 4 ships. | 1 |
+| 4 | **App: streak UI, Play again, table looks** | Home badge; the Us screen; the stamp; gifts; pause; leave; pin; Play again; the table menu's look tray, with default looks and **placeholder** unlocks. | 2, 3 |
+| 5 | **Notifications and Pounce** | Server: reminder alarms (auto and fixed time), caps, backoff, quiet hours, status, milestone and fresh-start pushes, the new copy, and pounces with links, `/p/` pages and the OG card. App: categories and actions, provisional, the synced settings panel, the Pounce sheet and answer flow, and the share link. The `PounceNotify` extension with communication avatars. | 3, 4 |
+| 6 | **Widgets** | The `PounceWidgets` target, App Group and keychain group; small, medium, the three accessory families and StandBy; configuration; the interactive Pounce intent; timelines; reloads; WidgetKit push. | 4 (5 for push refresh) |
+| 7 | **Live table** | The Live Activity in §11.3: push-to-start, updates and end from `GameRoom`; the 30-minute and 2-hour limits; the toggle. | 5, 6 |
+| 8 | **Reward art** | Codex art in three approval batches (§9.6), which swaps in for placeholders by file name. It can start in parallel any time after PR 4. | 4 |
 
-The order is deliberate. The streak becomes visible (2) before it can nag (3). Notifications come before widgets because they're the bigger lever and the plumbing is already there. Art goes last because placeholders carry everything, per JD's rule.
+**Why this order:**
+- Accounts come first, because streaks key on players. Keying them on guest identity first would mean a migration later.
+- Streaks become visible (4) before they can nag (5).
+- Widgets and the Live Activity build on the notification plumbing.
+- Art runs alongside, placeholders first **(JD)**.
 
 ## 16. Testing **(call)**
 
 - **Server (vitest, as today):**
-  - settlement table tests over sequences of turns in one and in two time zones;
-  - DST forward and back;
-  - a turn at 03:59 and at 04:01;
-  - held days at a three-person table;
-  - nap use and earning, perfect week, win-back success and failure, and pause;
-  - milestones and gift content (seeded);
-  - toy pity counters;
-  - reminder decisions under caps, backoff, quiet hours and paws;
-  - person-key binding.
-- **App (PounceKit tests):** `StreakStore` decoding; badge state mapping; the widget snapshot; the `PushPolicy` additions.
-- **UI tests:** the Us screen from `DemoFixtures` (a 12-day pair with a gift and a nap); the stamp after a turn on the dev server (`devSpeed`); "Play again".
-- **Widgets:** Xcode previews for every family and state, checked in all rendering modes.
-- **Push:** on TestFlight builds only, since dev builds get sandbox tokens **(app)**. A manual checklist is added to `MANUAL-CHECKLIST.md`.
+  - Settlement tables for one and two time zones, DST, and turns at 03:59 and 04:01.
+  - The late move pass at the cutoff edge.
+  - Held days at three-person tables.
+  - Naps (used and earned), perfect weeks, win-back (success and failure) and pause up to 14 days.
+  - Milestones and gift content (seeded), and toy pity.
+  - Reminder decisions under caps, backoff, quiet hours, and fixed and auto times.
+  - Pounce limits and link tokens.
+  - Sign in with Apple token verification, against fixture keys and tokens, never real ones.
+  - Guest merges, including two guest pairs with the same partner.
+  - Seat control by player, and `setLook` and `rematch`.
+- **App (PounceKit tests):**
+  - decoding `StreakStore`, `MeState` and the settings merge;
+  - badge state mapping;
+  - widget snapshots;
+  - the `PushPolicy` additions.
+- **UI tests:**
+  - the Us screen from `DemoFixtures`;
+  - the stamp after a turn on the dev server;
+  - Play again;
+  - the look tray;
+  - Pounce sheet targets;
+  - sign-in from a stubbed provider in Debug.
+- **Widgets and the Live Activity:** Xcode previews for every family, state and rendering mode.
+- **Push and Live Activity delivery:** TestFlight builds only, since dev builds get sandbox tokens **(app)**. `MANUAL-CHECKLIST.md` gains the steps:
+  - pounce from one phone to another;
+  - pounce through Messages;
+  - live table start, update, and end at 30 minutes;
+  - iPad and iPhone in the same seat;
+  - account deletion.
 
 ## 17. Open questions only JD can answer
 
-1. **"Either of you" or "both of you"?** The recommendation keeps the day when either of you takes a turn and makes it gold when both do (§6.2). Do you want the stricter rule, both every day, even though it can cost you a day your wife held the move? And at your usual single two-person table, the app never names who missed, but either of you can tell whose move it was. Is that acceptable, given that hiding it would mean hiding "your move"?
-2. **More than one device?** Do you or your wife play on the iPad as well as the iPhone? If yes, the synced owner Person (§13.1) matters in PR 2. Your existing separate iPad person would need a merge, or you'd simply re-pick your cat on the iPad.
-3. **Family pairs too, or only the two of you?** By default every two people who play together get a streak (mom, the kids). Or should only one "partner" pair have a streak?
-4. **Your usual time and bedtime.** Are 10 p.m. to 8 a.m. quiet hours and a 7:30 p.m. first-week reminder right for your house? Is the evening last-chance push (on by default for streaks of 3 or more) welcome, or does it feel like pressure?
-5. **Pause limits.** Is an unlimited pause (up to 14 days at a time) fine, or do you want it capped so the streak means something?
-6. **Rewards at the table.** Is it right that the table's creator picks the rug and card back everyone sees (§9.4)?
-7. **Live table.** Is PR 6 worth building at all?
+JD answered round 1 on 2026-11-04 (§1, and the **(JD)** marks throughout). What's left:
+
+1. **Kids and family without Apple accounts.** Is it fine that someone without an Apple Account plays as a guest? That's on their own device, or as a household person on yours. Their streak is full but lives on that one device until they sign in. Or should signing in be required for anyone who has a streak?
+2. **The late move pass.** If the move reaches you within two hours of your quiet hours, you're covered for that day. Does that feel fair, or should the window be tighter (one hour) or looser?
+3. **Table looks.** When someone changes the rug, should the tray offer only what *they* have unlocked (the recommendation, which shows off rewards)? Or anything anyone at the table has unlocked?
+4. **Late-night pounces.** In quiet hours a pounce lands silently. Should you be able to mark someone (your wife) so their pounces always ring? iOS Focus can already allow a person through, which needs a step in Settings.
+5. **The Sign in with Apple key.** PR 1 needs you to create a Sign in with Apple key for `com.conleychaos.play` in the developer portal and add it to the deploy pipeline as `SIWA_KEY_P8` and `SIWA_KEY_ID`. That's an action for you, not a question. No session will handle it.
 
 ## 18. Left to the builder
 
-- Exact animation timings, haptic patterns and sound choices for the stamp, gift and condo (start from `Juice.swift` and `Celebrations.swift`).
-- The exact toy, card-back and rug lineup, and the prompt wording, within §9 (JD approves the art).
-- The internal shape of `StreakView` beyond the fields listed; SQL schemas and indexes; the migration tag names.
-- How the medium widget lays out on iPad and in StandBy.
-- The copy rotation order, and further lines in the same voice (JD reviews them in the PR).
+- Exact animation timings, haptic patterns and sounds (start from `Juice.swift` and `Celebrations.swift`).
+- The exact lineup of toys, card backs and rugs, and the prompt wording, within §9 (JD approves the art).
+- `StreakView` fields beyond those listed; SQL schemas and indexes; migration tags.
+- Medium widget layout on iPad and in StandBy; Live Activity layout details within §11.3.
+- Further copy lines in the same voice (JD reviews them in the PR).
 - Whether `Pair.turn` is called directly or batched per room `after()`.
+- How the "pick one" sheet lays out its table tiles.
 
 ## Sources
 
@@ -828,3 +1227,6 @@ Habit psychology, couples and ethics:
 57. US FTC, *Bringing Dark Patterns to Light* (2022; read via a law-firm summary). https://www.arnoldporter.com/en/perspectives/advisories/2022/09/ftc-shines-a-little-light-on-dark-patterns
 58. N. Eyal, Hook model and variable rewards (secondary). https://www.nirandfar.com/2012/03want-to-hook-your-users-drive-them-crazy.html
 59. Deconstructor of Fun, Duolingo notification teardown (third party; unverified claims only). https://duolingo.deconstructoroffun.com/mechanics/notifications
+60. WWDC20 session 10173, "Get the most out of Sign in with Apple," and the Apple Developer Forums thread on verifying the identity token. https://developer.apple.com/videos/play/wwdc2020/10173/ · https://developer.apple.com/forums/thread/124175
+61. Apple Developer Forums, "About account deletion when users use Sign in with Apple." https://developer.apple.com/forums/thread/706792
+62. WWDC22 session 10122, "Enhance your Sign in with Apple experience." https://developer.apple.com/videos/play/wwdc2022/10122/
