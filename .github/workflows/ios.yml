@@ -24,6 +24,10 @@ on:
         description: Distribute this already-uploaded build number instead of archiving a new one (e.g. a build uploaded from a Mac)
         type: string
         default: ""
+      revoke_ci_certs:
+        description: Before archiving, revoke every development certificate CI created through the API (for "maximum number of certificates")
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -80,6 +84,13 @@ jobs:
         uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
         with:
           fetch-depth: 0 # What to Test lists the commits since the group's previous build
+      - name: Free the certificate slots CI used up
+        if: steps.creds.outputs.ready == 'true' && github.event_name == 'workflow_dispatch' && inputs.revoke_ci_certs
+        run: |
+          export ASC_KEY_PATH="$RUNNER_TEMP/AuthKey_$ASC_KEY_ID.p8"
+          (umask 077; printenv ASC_KEY_P8 > "$ASC_KEY_PATH")
+          trap 'rm -f "$ASC_KEY_PATH"' EXIT
+          scripts/certs.swift --revoke-api-created
       - name: Archive and upload
         id: upload
         if: steps.creds.outputs.ready == 'true' && inputs.build == ''
@@ -91,6 +102,22 @@ jobs:
           (umask 077; printenv ASC_KEY_P8 > "$ASC_KEY_PATH")
           trap 'rm -f "$ASC_KEY_PATH"' EXIT
           scripts/testflight.sh
+      # The archive minted a development certificate on this throwaway runner. Revoke it, pass or
+      # fail, so runs don't pile them up until the team hits Apple's certificate limit.
+      - name: Revoke this runner's development certificate
+        if: always() && steps.creds.outputs.ready == 'true' && inputs.build == ''
+        run: |
+          export ASC_KEY_PATH="$RUNNER_TEMP/AuthKey_$ASC_KEY_ID.p8"
+          (umask 077; printenv ASC_KEY_P8 > "$ASC_KEY_PATH")
+          trap 'rm -f "$ASC_KEY_PATH" "$RUNNER_TEMP"/devcert*.pem' EXIT
+          security find-certificate -a -c "Apple Development" -p |
+            awk -v dir="$RUNNER_TEMP" '/BEGIN CERTIFICATE/ { n++ } n { print > (dir "/devcert" n ".pem") }'
+          serials=()
+          for pem in "$RUNNER_TEMP"/devcert*.pem; do
+            [ -e "$pem" ] && serials+=("$(openssl x509 -noout -serial -in "$pem" | cut -d= -f2)")
+          done
+          if [ ${#serials[@]} -eq 0 ]; then echo "no development certificate on this runner"; exit 0; fi
+          scripts/certs.swift --revoke "${serials[@]}"
       - name: Distribute to the TestFlight group
         if: steps.creds.outputs.ready == 'true' && github.event_name == 'workflow_dispatch' && inputs.distribute
         env:

@@ -222,6 +222,11 @@ workflow on `main` (or `gh workflow run ios.yml --ref main`). Its inputs:
 - `build` (default empty): distribute this already-uploaded build number and skip the archive, e.g.
   a build uploaded from a Mac with `scripts/testflight.sh` when CI can't sign
   (`gh workflow run ios.yml --ref main -f build=202611040600`).
+- `revoke_ci_certs` (default off): before archiving, revoke every development certificate CI ever
+  created (`scripts/certs.swift --revoke-api-created`). Each fresh runner's archive mints one; the
+  job now revokes its own when it finishes, but runs before that left them behind until Apple
+  refused with "Your account has reached the maximum number of certificates". Certificates a Mac
+  made through Xcode are named after its user and are left alone.
 
 `scripts/distribute.swift` talks to the App Store Connect API with the same key (an ES256 JWT signed
 with CryptoKit; neither the key nor the token is ever printed). It waits up to 30 minutes for the
