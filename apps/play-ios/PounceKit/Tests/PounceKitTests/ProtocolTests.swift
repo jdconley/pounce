@@ -47,6 +47,7 @@ import Testing
         case "claimMove": return .claimMove(code: "BCDFGH")
         case "leave": return .leave(seat: 1)
         case "rename": return .rename(name: "Taco Night")
+        case "renameSeat": return .renameSeat(seat: 1, name: "Mo")
         default: throw Fixtures.FixtureError.malformed("no sample for client fixture \(name)")
         }
     }
@@ -77,7 +78,7 @@ import Testing
 
     @Test func encodesEveryClientFixture() throws {
         let fixtures = try Fixtures.clientMessages()
-        #expect(fixtures.count == 20)
+        #expect(fixtures.count == 21)
         for (name, json) in fixtures {
             #expect(try jsonEqual(Codec.encode(sample(name)), json), "\(name)")
         }

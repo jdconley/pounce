@@ -20,12 +20,24 @@ enum SeatInfo {
 
     static func name(_ seat: SeatView?) -> String {
         if let name = seat?.person?.name { return name }
-        return String(localized: "House Cat", comment: "VoiceOver: the bot player's name")
+        return botName
+    }
+
+    static var botName: String { String(localized: "House Cat", comment: "The bot player's name") }
+
+    /// Every seat's name as the table shows it (bots numbered when there are several).
+    static func names(_ room: RoomView) -> [String] {
+        SeatNames.names(room.seats, bot: botName)
+    }
+
+    /// Seat `seat`'s shown name, "" for an empty seat.
+    static func name(_ room: RoomView, _ seat: Seat) -> String {
+        names(room)[safe: seat] ?? ""
     }
 
     /// "Mia, 6 cards, phase 3, asleep".
-    static func label(_ view: SeatView?, cards: Int?, phase: Int?) -> String {
-        var parts = [name(view)]
+    static func label(_ view: SeatView?, name: String? = nil, cards: Int?, phase: Int?) -> String {
+        var parts = [name ?? self.name(view)]
         if let cards {
             parts.append(String(localized: "\(cards) cards", comment: "VoiceOver: a player's card count"))
         }
@@ -103,7 +115,8 @@ extension TableScene {
     }
 
     static func sentence(_ announcement: TableAnnouncement, seats: [SeatView]) -> String {
-        func name(_ seat: Seat) -> String { SeatInfo.name(seats[safe: seat]) }
+        let names = SeatNames.names(seats, bot: SeatInfo.botName)
+        func name(_ seat: Seat) -> String { names[safe: seat] ?? SeatInfo.botName }
         switch announcement {
         case .yourTurn(let seat, let multiSeat):
             return multiSeat

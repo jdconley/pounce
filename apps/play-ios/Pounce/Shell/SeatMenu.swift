@@ -96,7 +96,7 @@ struct PersonPicker: View {
             Palette.night.ignoresSafeArea()
             if creating {
                 CatEditorView(
-                    initialName: CatEditorView.randomName(), initialCat: freshCat(),
+                    initialName: "", initialCat: freshCat(),
                     onCancel: { creating = false }
                 ) { name, cat in
                     onCreate(name, cat)

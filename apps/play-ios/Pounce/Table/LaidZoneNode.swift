@@ -2,8 +2,8 @@ import PounceKit
 import SpriteKit
 
 /// Laid-down groups around the piles: one row per seat that laid this round, a tiny cat of
-/// that seat at the left and its groups as small card fans (compact faces, each card
-/// overlapped only past its corner index). A group too long for its row folds its middle
+/// that seat at the left with its name under it, and its groups as small card fans (compact
+/// faces, each card overlapped only past its corner index). A group too long for its row folds its middle
 /// cards under a "+N" badge. Card nodes keep their identity by card id across updates, so a
 /// hit or a lay-down animates onto nodes that stay.
 ///
@@ -16,6 +16,8 @@ final class LaidZoneNode: SKNode {
     @MainActor private final class Row {
         let node = SKNode()
         var head: SKSpriteNode?
+        let tag = SKSpriteNode()
+        var name = ""
         var cards: [CardID: CardNode] = [:]
         var badges: [SKSpriteNode] = []
         var groups: [Group] = []
@@ -31,6 +33,8 @@ final class LaidZoneNode: SKNode {
     }
 
     private var rows: [Seat: Row] = [:]
+    /// Every seat's shown name, as of the last update (the lay-down landing needs it first).
+    private var names: [String] = []
     /// Glows behind laid groups a held card can hit, above the rows' rings, below their cards.
     private let glowLayer = SKNode()
     private var shownTargets: Set<HitTarget> = []
@@ -65,6 +69,7 @@ final class LaidZoneNode: SKNode {
             return
         }
         let total = game.laid.count
+        names = SeatInfo.names(model.room)
         for (seat, row) in rows where (game.laid[safe: seat] ?? nil) == nil {
             row.node.removeFromParent()
             rows[seat] = nil
@@ -80,10 +85,13 @@ final class LaidZoneNode: SKNode {
             }()
             let rect = layout.laidRow(slot: seat, of: total)
             let cat = SeatInfo.catIndex(model.room.seats[safe: seat])
-            if row.groups != groups || row.rect != rect || row.cat != cat || row.miniSize != layout.miniCardSize {
+            let name = names[safe: seat] ?? ""
+            if row.groups != groups || row.rect != rect || row.cat != cat || row.miniSize != layout.miniCardSize
+                || row.name != name {
                 row.groups = groups
                 row.rect = rect
                 row.cat = cat
+                row.name = name
                 row.miniSize = layout.miniCardSize
                 if preview?.target.seat == seat { preview = nil }  // it was aimed at the old groups
                 build(row, seat: seat)
@@ -201,7 +209,7 @@ final class LaidZoneNode: SKNode {
     /// says. Animated, the cards that move are returned as slides instead of set.
     private func arrange(_ row: Row, seat: Seat, animated: Bool) -> [(SKAction, SKNode)] {
         let groups = shownGroups(row, seat: seat)
-        let place = Self.placement(groups: groups, rect: row.rect, mini: row.miniSize)
+        let place = Self.placement(groups: groups, rect: row.rect, mini: row.miniSize, name: row.tag.size)
         let ghostCard = preview.flatMap { p in p.target.seat == seat && p.ghost && p.plan != nil ? p.card : nil }
         var moves: [(SKAction, SKNode)] = []
         for (g, group) in groups.enumerated() {
@@ -273,11 +281,12 @@ final class LaidZoneNode: SKNode {
 
     var laidSeats: [Seat] { rows.keys.sorted() }
 
-    /// Where a row's pieces go: the cat head, each group's card centers and frames (zone space).
-    /// Folded cards (`shown` false) sit under their group's last shown card.
+    /// Where a row's pieces go: the cat head, the name under it, each group's card centers and
+    /// frames (zone space). Folded cards (`shown` false) sit under their group's last shown card.
     struct RowPlacement {
         var headCenter: CGPoint
         var headSize: CGFloat
+        var nameCenter: CGPoint
         var cards: [[CGPoint]]
         var shown: [[Bool]]
         /// Per group, how many cards are folded away and where their badge goes.
@@ -288,10 +297,28 @@ final class LaidZoneNode: SKNode {
     /// "+N" badge text size: an 11 pt cap height.
     static let badgeSize: CGFloat = 16
 
-    static func placement(groups: [Group], rect: CGRect, mini: CGSize) -> RowPlacement {
+    /// How far a row's name pill may hang past the row's left edge.
+    static let nameOverhang: CGFloat = 8
+
+    /// The widest a row's name pill gets: a fair share of a two-column row, more of a wide one.
+    static func nameWidth(row: CGRect) -> CGFloat {
+        min(84, max(56, row.width * 0.3))
+    }
+
+    /// The name pill for a row, cut to fit `nameWidth(row:)`.
+    static func nameTexture(_ name: String, row: CGRect) -> SKTexture {
+        CardFaceFactory.shared.nameTag(name, maxWidth: nameWidth(row: row), active: false)
+    }
+
+    /// `name`: the drawn name pill's size; the cat sits over it and the groups start after the
+    /// wider of the two.
+    static func placement(groups: [Group], rect: CGRect, mini: CGSize, name: CGSize) -> RowPlacement {
         let headSize = min(26, rect.height * 0.5)
         let gap: CGFloat = 8
-        let left = rect.minX + headSize + 8
+        // The name may hang a little past the row's left edge, over the bare rug (rows and the
+        // tower sit 8 pt apart), so the cards keep as much of the row as they can.
+        let column = max(headSize + 4, name.width - Self.nameOverhang)
+        let left = rect.minX + column + 3
         let avail = rect.maxX - left
         // Each card shows up to the end of its corner index before the next one covers it.
         let k = mini.width / CardFaceFactory.cardSize.width
@@ -341,8 +368,14 @@ final class LaidZoneNode: SKNode {
             frames.append(CGRect(x: x, y: rect.midY - mini.height / 2, width: w, height: mini.height))
             x += w + gap
         }
+        // Cat over name, the pair centered on the row's middle and on the column.
+        let stack = headSize + 4 + 1 + name.height
+        let headY = rect.midY + stack / 2 - (headSize + 4) / 2
+        let nameY = rect.midY - stack / 2 + name.height / 2
+        let nameX = rect.minX + column - name.width / 2
         return RowPlacement(
-            headCenter: CGPoint(x: rect.minX + headSize / 2 + 2, y: rect.midY), headSize: headSize,
+            headCenter: CGPoint(x: nameX, y: headY), headSize: headSize,
+            nameCenter: CGPoint(x: nameX, y: nameY),
             cards: cards, shown: shown, folded: folded, frames: frames)
     }
 
@@ -355,7 +388,8 @@ final class LaidZoneNode: SKNode {
     /// a table with `total` seats (the lay-down animation flies there before the row exists).
     func landing(groups: [Group], seat: Seat, total: Int, layout: TableLayout) -> [[CGPoint]] {
         let rect = layout.laidRow(slot: seat, of: total)
-        return Self.placement(groups: groups, rect: rect, mini: layout.miniCardSize).cards.map { $0.map(toParent) }
+        let name = Self.nameTexture(names[safe: seat] ?? "", row: rect).size()
+        return Self.placement(groups: groups, rect: rect, mini: layout.miniCardSize, name: name).cards.map { $0.map(toParent) }
     }
 
     /// Where `card` lands when `seat`'s group `index` becomes `group` (a hit), in parent space.
@@ -364,7 +398,7 @@ final class LaidZoneNode: SKNode {
               let j = group.cards.firstIndex(of: card) else { return nil }
         var groups = row.groups
         groups[index] = group
-        let p = Self.placement(groups: groups, rect: row.rect, mini: row.miniSize)
+        let p = Self.placement(groups: groups, rect: row.rect, mini: row.miniSize, name: row.tag.size)
         return p.cards[safe: index]?[safe: j].map(toParent)
     }
 
@@ -381,7 +415,13 @@ final class LaidZoneNode: SKNode {
 
     private func build(_ row: Row, seat: Seat) {
         let mini = row.miniSize
-        let place = Self.placement(groups: row.groups, rect: row.rect, mini: mini)
+        let nameTexture = Self.nameTexture(row.name, row: row.rect)
+        row.tag.texture = nameTexture
+        row.tag.size = nameTexture.size()
+        row.tag.zPosition = 0.06
+        if row.tag.parent == nil { row.node.addChild(row.tag) }
+        let place = Self.placement(groups: row.groups, rect: row.rect, mini: mini, name: row.tag.size)
+        row.tag.position = place.nameCenter
 
         // The seat's tiny cat on the left (rebuilt only when the cat changes or it moved).
         let headSize = place.headSize

@@ -2,20 +2,24 @@ import PounceKit
 import SwiftUI
 
 /// The table's paw menu (`table.menu`): the table's name (tap to rename it), sound, haptics, how
-/// to play, move my seat, home. Renaming grows the sheet into `RenameTableView`, move my seat into
-/// `MoveSeatSheet`, how to play into `HowToPlaySheet`.
+/// to play, names, move my seat, home. Renaming the table grows the sheet into `RenameTableView`,
+/// names (this phone's players) into `RenameSheet`, move my seat into `MoveSeatSheet`, how to play
+/// into `HowToPlaySheet`.
 struct TableMenuSheet: View {
     @Environment(Settings.self) private var settings
     let session: RoomSession
     let onHome: () -> Void
     let onClose: () -> Void
 
-    private enum Page { case menu, moving, rules, renaming }
+    private enum Page { case menu, moving, rules, renaming, names }
 
     @State private var page = Page.menu
     @State private var detent: PresentationDetent = Self.menuDetent
 
-    static let menuDetent = PresentationDetent.height(360)
+    static let menuDetent = PresentationDetent.height(440)
+
+    /// This phone's players can change their names until the game is over.
+    private var canRenamePeople: Bool { canMove }
 
     private var canMove: Bool {
         guard let table = session.model else { return false }
@@ -49,6 +53,9 @@ struct TableMenuSheet: View {
                     show(.menu)
                 }
                 .transition(.move(edge: .trailing).combined(with: .opacity))
+            case .names:
+                RenameSheet(session: session) { show(.menu) }
+                    .transition(.move(edge: .trailing).combined(with: .opacity))
             case .menu:
                 menu
                     .transition(.move(edge: .leading).combined(with: .opacity))
@@ -91,6 +98,16 @@ struct TableMenuSheet: View {
                 show(.rules)
             }
             .accessibilityIdentifier("menu.rules")
+            if canRenamePeople {
+                PillButton(
+                    icon: nil, color: Palette.teal, size: .medium, width: 230,
+                    title: String(localized: "Names", comment: "Table menu: rename this phone's players"),
+                    accessibilityLabel: "Change names"
+                ) {
+                    show(.names)
+                }
+                .accessibilityIdentifier("menu.names")
+            }
             HStack(spacing: 18) {
                 if canMove {
                     PillButton(icon: ArtName.iconMove, color: Palette.magenta, size: .medium, accessibilityLabel: "Move my seat to another phone") {

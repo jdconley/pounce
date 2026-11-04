@@ -114,6 +114,7 @@ final class AppModel {
         let socket = SuspendableSocket { demo.makeSocket() }
         let session = RoomSession(code: room.code, intent: .rejoin, socket: socket)
         session.owner = { [weak self] in self?.people.owner }
+        session.people = { [weak self] in self?.everyone ?? [] }
         self.room = session
         session.start()
         route = .room(code: room.code, intent: .rejoin)
@@ -317,6 +318,7 @@ final class AppModel {
         }
         let session = RoomSession(code: code, intent: intent, socket: socket)
         session.owner = { [weak self] in self?.people.owner }
+        session.people = { [weak self] in self?.everyone ?? [] }
         session.onSnapshot = { [weak self] room in self?.remember(room) }
         session.onArrive = { [weak self, weak session] in
             guard let self, let session, self.room === session, self.probing == session.code else { return }
@@ -387,11 +389,33 @@ final class AppModel {
         route = .join
     }
 
-    // MARK: People on this phone (edits apply to tables joined afterwards)
+    // MARK: People on this phone
 
+    /// The owner, then the others who share this phone.
+    var everyone: [Person] { [people.owner].compactMap { $0 } + people.others }
+
+    /// A new name or cat. A new name also reaches the open table at once (the other tables
+    /// this phone sits at catch up when they next open); a new cat applies to tables joined
+    /// afterwards.
     func updateOwner(name: String, cat: Int) {
         peopleStore.setOwner(name: name, cat: cat)
         people = peopleStore.load()
+        room?.syncNames()
+    }
+
+    /// Renames whoever sits at `seat` of the open table: the person on this phone with that
+    /// id (so the new name sticks for later tables too), or, for a seat moved here from
+    /// another phone, just that seat.
+    func renamePerson(seat: Seat, person: Person, to name: String) {
+        if let local = everyone.first(where: { $0.id == person.id }) {
+            if local.id == people.owner?.id {
+                updateOwner(name: name, cat: local.cat)
+            } else {
+                updatePerson(Person(id: local.id, name: name, cat: local.cat))
+            }
+        } else {
+            room?.send(.renameSeat(seat: seat, name: name))
+        }
     }
 
     @discardableResult
@@ -404,6 +428,7 @@ final class AppModel {
     func updatePerson(_ person: Person) {
         peopleStore.update(person)
         people = peopleStore.load()
+        room?.syncNames()
     }
 
     func removePerson(id: String) {

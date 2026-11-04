@@ -133,6 +133,9 @@ final class TableScene: SKScene {
     private let menuButton = SKSpriteNode(texture: TableArt.image(ArtName.iconPawMenu))
     /// Hand sort toggle (number / coat), local only.
     let sortButton = SKSpriteNode(texture: TableArt.image(ArtName.iconSort))
+    /// The bottom seat's name, beside the sort button: whose hand this is (orange on its turn).
+    let bottomTag = SKSpriteNode()
+    private var bottomTagName: String?
     // Timeline state (IntentAnimations.swift).
     /// Landed flyers that stand in for the truth until the next reconcile snaps it in.
     var transients: [SKNode] = []
@@ -192,6 +195,9 @@ final class TableScene: SKScene {
         sortButton.size = CGSize(width: Self.sortSize, height: Self.sortSize)
         sortButton.zPosition = 4
         sortButton.isHidden = true
+        made[.trays]?.addChild(bottomTag)
+        bottomTag.zPosition = 4
+        bottomTag.isHidden = true
         director.flourish = { [weak self] in self?.idleFlourish() }
         tower.director = director
         tower.fx = made[.fx]
@@ -593,6 +599,19 @@ final class TableScene: SKScene {
         sortButton.isHidden = !faceUp || hand.cards.count < 2
         sortButton.position = layout.sortButton
 
+        // The hand's owner by name: always on a one-seat phone, and on a shared phone while
+        // a hand is shown (otherwise the local cats row at the bottom names everyone here).
+        if let bottom, faceUp || !model.isMultiSeat {
+            bottomTagName = SeatInfo.name(model.room, bottom)
+            setBottomTag(active: game.status == .playing && game.turn == bottom)
+            let frame = layout.seatTagFrame
+            bottomTag.position = CGPoint(x: frame.maxX - bottomTag.size.width / 2, y: frame.midY)
+            bottomTag.isHidden = false
+        } else {
+            bottomTagName = nil
+            bottomTag.isHidden = true
+        }
+
         menuButton.isHidden = false
         // Top-right: in the status bar's right ear when the safe top is tall enough (notch /
         // island phones), else tucked into the bar's corner.
@@ -600,6 +619,15 @@ final class TableScene: SKScene {
             ? layout.opponentsBar.maxY + Self.menuSize / 2 - 6
             : layout.opponentsBar.maxY - Self.menuSize / 2
         menuButton.position = CGPoint(x: size.width - Self.menuSize / 2 - 10, y: menuY)
+    }
+
+    /// Redraws the bottom seat's name pill, orange while it is that seat's turn.
+    func setBottomTag(active: Bool) {
+        guard let name = bottomTagName, let layout else { return }
+        let texture = CardFaceFactory.shared.nameTag(name, maxWidth: layout.seatTagFrame.width, active: active)
+        bottomTag.texture = texture
+        bottomTag.size = texture.size()
+        bottomTag.position.x = layout.seatTagFrame.maxX - texture.size().width / 2
     }
 
     /// The finite ring pulse + paw pop for the seat whose turn just came. Runs through the
@@ -635,6 +663,8 @@ final class TableScene: SKScene {
         trayYarn = nil
         clearProvisional()
         sortButton.isHidden = true
+        bottomTag.isHidden = true
+        bottomTagName = nil
         for l in [Layer.rug, .piles, .laidZone, .tower] { layer(l).isHidden = true }
         opponents.clear()
         opponents.isHidden = true
@@ -727,7 +757,9 @@ final class TableScene: SKScene {
 
         for seat in opponents.order {
             guard let frame = opponents.frame(of: seat) else { continue }
-            let label = SeatInfo.label(model.room.seats[safe: seat], cards: game.handCounts[safe: seat], phase: game.phase[safe: seat])
+            let label = SeatInfo.label(
+                model.room.seats[safe: seat], name: SeatInfo.name(model.room, seat),
+                cards: game.handCounts[safe: seat], phase: game.phase[safe: seat])
             items.append(Item(
                 id: "table.opponent.\(seat)", label: label, value: glows.cats.contains(seat) ? Self.targetValue : nil,
                 frame: frame))
@@ -743,7 +775,7 @@ final class TableScene: SKScene {
             value: discard.highlighted ? Self.targetValue : nil,
             frame: discard.hitFrame, actions: drawActions(.discard)))
         for seat in laidZone.laidSeats {
-            let name = SeatInfo.name(model.room.seats[safe: seat])
+            let name = SeatInfo.name(model.room, seat)
             let groups = (game.laid[safe: seat] ?? nil) ?? []
             for (g, frame) in laidZone.groupFrames(seat: seat).enumerated() {
                 let cards = groups[safe: g]?.cards.map { CardNode.label($0) }.joined(separator: "; ") ?? ""
@@ -783,6 +815,13 @@ final class TableScene: SKScene {
                 frame: frame, traits: selected ? [.button, .selected] : .button,
                 actions: face.map(handCardActions) ?? []))
         }
+        if !bottomTag.isHidden, let bottom = bottomSeat, let name = bottomTagName {
+            let up = game.status == .playing && game.turn == bottom
+            items.append(Item(
+                id: "table.me", label: name,
+                value: up ? String(localized: "their turn", comment: "VoiceOver: the shown hand's owner is up") : nil,
+                frame: bottomTag.frame, traits: .staticText))
+        }
         if !sortButton.isHidden {
             items.append(Item(
                 id: "table.sort", label: String(localized: "Sort hand", comment: "VoiceOver: sort the hand by number or coat"),
@@ -797,7 +836,7 @@ final class TableScene: SKScene {
         let mine = model.isMyTurn
         let whose = mine
             ? String(localized: "Your turn", comment: "VoiceOver: it is this phone's turn")
-            : String(localized: "\(SeatInfo.name(model.room.seats[safe: game.turn]))'s turn", comment: "VoiceOver: whose turn it is")
+            : String(localized: "\(SeatInfo.name(model.room, game.turn))'s turn", comment: "VoiceOver: whose turn it is")
         let bar = layout.opponentsBar
         items.append(Item(
             id: "table.turn", label: whose, value: mine ? "mine" : "other",

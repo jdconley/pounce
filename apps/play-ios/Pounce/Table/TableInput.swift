@@ -670,7 +670,7 @@ extension TableScene {
         let aims = model.skipTargets(for: seat)
         if Card(id: card) == .cucumber, !aims.isEmpty {
             for target in aims {
-                let name = SeatInfo.name(model.room.seats[safe: target])
+                let name = SeatInfo.name(model.room, target)
                 actions.append(customAction(String(localized: "Discard, skip \(name)", comment: "VoiceOver action: discard the Cucumber at a player")) { [weak self] in
                     self?.tryDiscard(card, target: target) ?? false
                 })
@@ -688,7 +688,7 @@ extension TableScene {
             }
         }
         for target in model.hitTargets(card: card, seat: seat) {
-            let name = SeatInfo.name(model.room.seats[safe: target.seat])
+            let name = SeatInfo.name(model.room, target.seat)
             let low = model.hitPlan(card: card, seat: seat, target: target, toward: .start)
             let high = model.hitPlan(card: card, seat: seat, target: target, toward: .end)
             if let low, let high, low.side == .start, high.side == .end {

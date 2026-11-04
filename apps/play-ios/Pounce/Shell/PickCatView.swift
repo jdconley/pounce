@@ -1,14 +1,15 @@
 import PounceKit
 import SwiftUI
 
-/// First launch: pick a cat and a name. Wordless: a hero cat over a 4x2 grid, a name field with a
-/// dice, and one big check.
+/// First launch: pick a cat and type your name. A hero cat over "What's your name?", the name
+/// field (focused, empty, a random name as its placeholder; the dice fills one in), the 4x2 cat
+/// grid and one big check. Everyone at the table sees this name.
 struct PickCatView: View {
     @Environment(AppModel.self) private var model
 
     var body: some View {
         CatEditorView(
-            initialName: CatEditorView.randomName(), initialCat: 0
+            initialName: "", initialCat: 0, asksName: true
         ) { name, cat in
             model.finishPickCat(name: name, cat: cat)
         }
@@ -35,10 +36,14 @@ enum CatNames {
 }
 
 /// Hero cat + name field + dice + cat grid + check. Used for the first launch and for editing a
-/// person in the People sheet.
+/// person in the People sheet. A new person starts with an empty name: a random one shows as
+/// the placeholder, never taken unless the dice puts it in the field, and the check sends you
+/// back to the field until it holds a name.
 struct CatEditorView: View {
     let initialName: String
     let initialCat: Int
+    /// Ask for the name out loud ("What's your name?") and focus the field at once.
+    let asksName: Bool
     /// Show the extra delete button (people other than the owner).
     var onDelete: (() -> Void)?
     var onCancel: (() -> Void)?
@@ -48,15 +53,19 @@ struct CatEditorView: View {
     @State private var cat: Int
     @State private var blink = false
     @State private var diceSpin = 0
+    @State private var nameNope = 0
+    /// The placeholder: a name to type over (or roll with the dice).
+    @State private var suggestion = CatEditorView.randomName()
     @FocusState private var nameFocused: Bool
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     init(
-        initialName: String, initialCat: Int, onCancel: (() -> Void)? = nil, onDelete: (() -> Void)? = nil,
-        onConfirm: @escaping (String, Int) -> Void
+        initialName: String, initialCat: Int, asksName: Bool = false, onCancel: (() -> Void)? = nil,
+        onDelete: (() -> Void)? = nil, onConfirm: @escaping (String, Int) -> Void
     ) {
         self.initialName = initialName
         self.initialCat = initialCat
+        self.asksName = asksName
         self.onCancel = onCancel
         self.onDelete = onDelete
         self.onConfirm = onConfirm
@@ -78,6 +87,13 @@ struct CatEditorView: View {
             ScrollView {
                 VStack(spacing: 18) {
                     hero
+                    if asksName {
+                        OutlinedText(
+                            String(localized: "What's your name?", comment: "First launch: the prompt over the name field"),
+                            size: 30, fill: .white, width: 4)
+                            .accessibilityAddTraits(.isHeader)
+                            .accessibilityIdentifier("pickcat.prompt")
+                    }
                     nameRow
                     catGrid
                     confirmRow
@@ -92,6 +108,14 @@ struct CatEditorView: View {
             .scrollDismissesKeyboard(.interactively)
         }
         .task { await blinkLoop() }
+        .task {
+            // A new name is the first thing to fill in: the keyboard comes up with the screen.
+            guard asksName || initialName.isEmpty else { return }
+            try? await Task.sleep(for: Pace.duration(.milliseconds(350)))
+            // Not if a name went in meanwhile (the dice), which would only cover the check.
+            guard trimmed.isEmpty else { return }
+            nameFocused = true
+        }
     }
 
     // MARK: pieces
@@ -127,13 +151,21 @@ struct CatEditorView: View {
                 .transition(.scale(scale: 0.6).combined(with: .opacity))
                 .accessibilityLabel(CatNames.label(cat))
         }
-        .frame(height: 246)
+        // Smaller while typing, so the prompt, the field and the check stay above the keyboard.
+        .scaleEffect(nameFocused ? Self.typingScale : 1, anchor: .bottom)
+        .frame(height: 246 * (nameFocused ? Self.typingScale : 1))
         .animation(reduceMotion ? nil : .spring(duration: 0.4, bounce: 0.4).paced, value: cat)
+        .animation(reduceMotion ? nil : .spring(duration: 0.35, bounce: 0.2).paced, value: nameFocused)
     }
+
+    private static let typingScale: CGFloat = 0.5
 
     private var nameRow: some View {
         HStack(spacing: 12) {
-            TextField("", text: $name)
+            TextField(
+                "", text: $name,
+                prompt: Text(verbatim: suggestion).foregroundStyle(Palette.ink.opacity(0.4))
+            )
                 .focused($nameFocused)
                 .font(.system(size: 28, weight: .black, design: .rounded))
                 .foregroundStyle(Palette.ink)
@@ -152,11 +184,13 @@ struct CatEditorView: View {
                 .background(Capsule().fill(.white))
                 .overlay(Capsule().strokeBorder(Palette.ink, lineWidth: 4))
                 .shadow(color: Palette.ink.opacity(0.5), radius: 0, x: 0, y: 5)
-                .accessibilityLabel(Text("Name"))
+                .wiggle(trigger: nameNope)
+                .accessibilityLabel(Text("Your name"))
                 .accessibilityIdentifier("pickcat.name")
 
-            PillButton(icon: ArtName.iconDice, color: Palette.orange, size: .small, accessibilityLabel: "Pick a new name") {
-                name = Self.randomName()
+            PillButton(icon: ArtName.iconDice, color: Palette.orange, size: .small, accessibilityLabel: "Pick a random name") {
+                name = suggestion
+                suggestion = Self.randomName()
                 diceSpin += 1
                 nameFocused = false
             }
@@ -192,12 +226,18 @@ struct CatEditorView: View {
                 icon: ArtName.iconCheck, color: Palette.lime, size: .large,
                 width: onCancel == nil ? 260 : 190, accessibilityLabel: "Done"
             ) {
-                guard canConfirm else { return }
+                guard canConfirm else {
+                    // No name yet: back to the field, which wiggles.
+                    nameNope += 1
+                    nameFocused = true
+                    Haptics.shared.thump()
+                    return
+                }
                 onConfirm(trimmed, cat)
             }
-            .disabled(!canConfirm)
             .saturation(canConfirm ? 1 : 0)
             .opacity(canConfirm ? 1 : 0.55)
+            .accessibilityHint(canConfirm ? Text("") : Text("Type your name first"))
             .accessibilityIdentifier("pickcat.confirm")
             if let onDelete {
                 DeleteButton(action: onDelete)

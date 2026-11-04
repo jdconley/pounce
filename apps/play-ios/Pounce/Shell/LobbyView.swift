@@ -207,7 +207,7 @@ struct LobbyView: View {
         Button {
             tapSeat(i)
         } label: {
-            Cushion(seat: seat, index: i, width: width)
+            Cushion(seat: seat, index: i, width: width, name: room.map { SeatInfo.name($0, i) } ?? "")
         }
         .buttonStyle(.plain)
         .wiggle(trigger: wiggles[.seat(i), default: 0])
@@ -414,6 +414,8 @@ struct Cushion: View {
     let seat: SeatView
     let index: Int
     let width: CGFloat
+    /// The person's name, or the bot's; shown on a pill under the cat.
+    var name = ""
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var pulse = false
@@ -464,15 +466,10 @@ struct Cushion: View {
         switch seat.kind {
         case .human:
             cat(seat.person?.cat ?? 0, pose: pose, badge: seat.yours ? ArtName.badgePhone : ArtName.badgeRemote)
-                .overlay(alignment: .bottom) {
-                    if let name = seat.person?.name {
-                        OutlinedText(name, size: 15, width: 2)
-                            .fixedSize()
-                            .offset(y: 20)
-                    }
-                }
+                .overlay(alignment: .bottom) { nameTag }
         case .bot:
             cat(3, pose: .idle, badge: ArtName.badgeBot)
+                .overlay(alignment: .bottom) { nameTag }
         case .open:
             Circle()
                 .fill(LinearGradient(
@@ -491,6 +488,11 @@ struct Cushion: View {
         case .closed:
             EmptyView()
         }
+    }
+
+    private var nameTag: some View {
+        NameTag(name, maxWidth: max(width * 1.2, 84))
+            .offset(y: 20)
     }
 
     private var pose: CatPose {

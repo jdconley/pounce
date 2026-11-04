@@ -290,6 +290,7 @@ private struct TableStage: View {
                 GameOverView(
                     tableName: session.store.room?.title ?? TableName.fallback(code: session.code),
                     winners: people(winners),
+                    standings: session.model.map(GameOverView.standings) ?? [],
                     onHome: { model.goHome() },
                     onNewGame: { Task { await model.newGame() } })
                     .transition(.opacity)
@@ -411,11 +412,11 @@ private struct TableStage: View {
         session.store.room?.seats[safe: seat]?.person ?? Person(id: "", name: "", cat: 0)
     }
 
-    /// The winners' people; the House Cat bot as `GameOverView.botWinner`.
+    /// The winners' people; a House Cat bot as `GameOverView.botWinner`.
     private func people(_ seats: [Seat]) -> [Person] {
-        let room = session.store.room
+        guard let room = session.store.room else { return [] }
         return seats.map { seat in
-            room?.seats[safe: seat]?.person ?? GameOverView.botWinner
+            room.seats[safe: seat]?.person ?? GameOverView.botWinner(name: SeatInfo.name(room, seat))
         }
     }
 
@@ -520,6 +521,10 @@ private struct LocalCat: View {
             }
             .frame(width: side, height: side)
             .shadow(color: Palette.ink.opacity(0.5), radius: 0, x: 0, y: 4)
+            .overlay(alignment: .bottom) {
+                NameTag(person.name, maxWidth: 96)
+                    .offset(y: 14)
+            }
         }
         .buttonStyle(.plain)
         .accessibilityLabel(Text(

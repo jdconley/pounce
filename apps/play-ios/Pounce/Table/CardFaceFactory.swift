@@ -158,6 +158,37 @@ final class CardFaceFactory {
         return t
     }
 
+    /// Name text size on the table: an 11 pt cap height in SF Pro Rounded Black.
+    static let nameSize: CGFloat = 16
+
+    /// A player's name on a pill no wider than `maxWidth`, cut short with an ellipsis when it
+    /// doesn't fit. At rest white on ink inside a white keyline (18:1, readable on the rug, the
+    /// floor and card faces alike); `active` (whose turn it is) ink on orange (7.6:1). Cached.
+    func nameTag(_ name: String, maxWidth: CGFloat, active: Bool) -> SKTexture {
+        let size = Self.nameSize
+        let key = "name|\(name)|\(Int(maxWidth))|\(active)"
+        if let cached = numerals[key] { return cached }
+        let attrs = Self.numeralAttributes(size: size)
+        let h = ceil(("Ag" as NSString).size(withAttributes: attrs).height + 4)
+        let pad = h * 0.24
+        let text = Self.truncated(name, toFit: max(maxWidth - 2 * pad, size), attributes: attrs)
+        let textSize = (text as NSString).size(withAttributes: attrs)
+        let canvas = CGSize(width: max(h, ceil(textSize.width + 2 * pad)), height: h)
+        let image = UIGraphicsImageRenderer(size: canvas).image { _ in
+            let pill = CGRect(origin: .zero, size: canvas)
+            UIColor.white.setFill()
+            UIBezierPath(roundedRect: pill, cornerRadius: h / 2).fill()
+            UIColor(active ? Palette.orange : Palette.ink).setFill()
+            UIBezierPath(roundedRect: pill.insetBy(dx: 1.5, dy: 1.5), cornerRadius: h / 2 - 1.5).fill()
+            var fill = attrs
+            fill[.foregroundColor] = active ? UIColor(Palette.ink) : UIColor.white
+            (text as NSString).draw(at: CGPoint(x: (canvas.width - textSize.width) / 2, y: 2), withAttributes: fill)
+        }
+        let t = SKTexture(image: image)
+        numerals[key] = t
+        return t
+    }
+
     /// A rounded ring for the laid group a dragged card is over: `color` inside an ink
     /// outline, so it reads on the rug and over card faces. Stretch it with `ringCenter`.
     func ring(_ color: UIColor) -> SKTexture {
@@ -180,6 +211,19 @@ final class CardFaceFactory {
         let t = SKTexture(image: image)
         numerals[key] = t
         return t
+    }
+
+    /// `text`, or as much of it as fits `width` followed by an ellipsis.
+    private static func truncated(_ text: String, toFit width: CGFloat, attributes: [NSAttributedString.Key: Any]) -> String {
+        func fits(_ s: String) -> Bool { (s as NSString).size(withAttributes: attributes).width <= width }
+        if fits(text) { return text }
+        var cut = text
+        while !cut.isEmpty {
+            cut.removeLast()
+            let trimmed = cut.trimmingCharacters(in: .whitespaces)
+            if fits(trimmed + "…") { return trimmed + "…" }
+        }
+        return "…"
     }
 
     /// The stretchable middle of `ring(_:)`.

@@ -1,8 +1,8 @@
 import PounceKit
 import SwiftUI
 
-/// All ten phases under the scoreboard: each in plain words, every seat's cat on the phase it
-/// is working on (a laid badge once it laid it this round), the focus seat's phase lit orange
+/// All ten phases under the scoreboard: each in plain words, every seat's cat and name on the
+/// phase it is working on (a laid badge once it laid it this round), the focus seat's phase lit orange
 /// and the phases it has climbed past checked off. Shows what everyone is collecting, for
 /// choosing what to discard.
 struct PhaseLadderView: View {
@@ -33,6 +33,7 @@ struct PhaseLadderView: View {
                     .fixedSize()
                 Spacer(minLength: 4)
                 cats(rung.seats)
+                    .fixedSize()
             }
             VStack(alignment: .leading, spacing: 4) {
                 HStack(spacing: 8) {
@@ -86,9 +87,9 @@ struct PhaseLadderView: View {
         .frame(width: 40, height: 40)
     }
 
-    /// The cats on a phase, overlapping a little, in seat order.
+    /// The cats on a phase with their names, in seat order, wrapping when they don't fit a line.
     private func cats(_ seats: [Seat]) -> some View {
-        HStack(spacing: -8) {
+        FlowLayout(spacing: 6, lineSpacing: 4) {
             ForEach(seats, id: \.self) { seat in
                 cat(seat)
             }
@@ -96,6 +97,13 @@ struct PhaseLadderView: View {
     }
 
     private func cat(_ seat: Seat) -> some View {
+        VStack(spacing: -4) {
+            catFace(seat)
+            NameTag(SeatInfo.name(model.room, seat), maxWidth: 76, active: seat == ladder.focus && model.isMultiSeat)
+        }
+    }
+
+    private func catFace(_ seat: Seat) -> some View {
         let view = model.room.seats[safe: seat]
         let ring = SeatInfo.ringColor(seat)
         return ZStack(alignment: .bottomTrailing) {
@@ -118,7 +126,7 @@ struct PhaseLadderView: View {
     private func label(_ rung: PhaseLadder.Rung) -> String {
         let number = rung.index + 1
         var parts = [String(localized: "Phase \(number): \(rung.text).", comment: "VoiceOver: a phase and what it needs")]
-        let names = rung.seats.map { SeatInfo.name(model.room.seats[safe: $0]) }
+        let names = rung.seats.map { SeatInfo.name(model.room, $0) }
         switch names.count {
         case 0: break
         case 1: parts.append(String(localized: "\(names[0]) is here.", comment: "VoiceOver: one player on this phase"))
@@ -126,14 +134,14 @@ struct PhaseLadderView: View {
             let list = names.formatted(.list(type: .and))
             parts.append(String(localized: "\(list) are here.", comment: "VoiceOver: players on this phase"))
         }
-        let laid = rung.seats.filter(ladder.laid.contains).map { SeatInfo.name(model.room.seats[safe: $0]) }
+        let laid = rung.seats.filter(ladder.laid.contains).map { SeatInfo.name(model.room, $0) }
         if !laid.isEmpty {
             let list = laid.formatted(.list(type: .and))
             parts.append(String(localized: "\(list) laid it down.", comment: "VoiceOver: players who laid this phase this round"))
         }
         if rung.isFocus {
             if model.isMultiSeat, let focus = ladder.focus {
-                let name = SeatInfo.name(model.room.seats[safe: focus])
+                let name = SeatInfo.name(model.room, focus)
                 parts.append(String(localized: "\(name)'s phase.", comment: "VoiceOver: the shown player's phase on a shared phone"))
             } else {
                 parts.append(String(localized: "Your phase.", comment: "VoiceOver: my current phase"))

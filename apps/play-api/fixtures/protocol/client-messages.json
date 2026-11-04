@@ -215,5 +215,13 @@
       "t": "rename",
       "name": "Taco Night"
     }
+  },
+  {
+    "name": "renameSeat",
+    "message": {
+      "t": "renameSeat",
+      "seat": 1,
+      "name": "Mo"
+    }
   }
 ]

@@ -143,6 +143,8 @@ public enum ClientMessage: Encodable, Equatable, Sendable {
     case leave(seat: Seat)
     /// Names the table (send it `TableName.clean`ed); the host or any seated phone, until game over.
     case rename(name: String)
+    /// Renames the person in one of this device's seats, in the lobby or mid-game.
+    case renameSeat(seat: Seat, name: String)
 
     private enum CodingKeys: String, CodingKey { case t, seat, person, kind, action, state, code, name }
 
@@ -177,6 +179,10 @@ public enum ClientMessage: Encodable, Equatable, Sendable {
             try c.encode(seat, forKey: .seat)
         case .rename(let name):
             try c.encode("rename", forKey: .t)
+            try c.encode(name, forKey: .name)
+        case .renameSeat(let seat, let name):
+            try c.encode("renameSeat", forKey: .t)
+            try c.encode(seat, forKey: .seat)
             try c.encode(name, forKey: .name)
         }
     }

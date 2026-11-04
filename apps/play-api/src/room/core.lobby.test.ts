@@ -345,6 +345,46 @@ describe("leave", () => {
   });
 });
 
+describe("renameSeat", () => {
+  it("renames the person in your seat and sends everyone a snapshot", () => {
+    const room = twoPlayerLobby();
+    const seq = room.state.seq;
+    const out = room.handle("a", { t: "renameSeat", seat: 0, name: "Jo" });
+    expect(room.state.seats[0]?.person).toEqual({ ...person(1), name: "Jo" });
+    expect(room.state.seq).toBe(seq + 1);
+    expect(out.map((o) => o.to).sort()).toEqual(["a", "b"]);
+    expect(snapshotOf(out, "b").room.seats[0]?.person?.name).toBe("Jo");
+  });
+
+  it("works mid-game, keeping the seat's person id and cat", () => {
+    const room = twoPlayerLobby();
+    room.handle("a", { t: "start" });
+    const out = room.handle("b", { t: "renameSeat", seat: 1, name: "Bea" });
+    expect(room.state.seats[1]?.person).toEqual({ id: person(2).id, name: "Bea", cat: person(2).cat });
+    expect(snapshotOf(out, "a").room.seats[1]?.person?.name).toBe("Bea");
+    expect(snapshotOf(out, "a").room.game).not.toBeNull();
+  });
+
+  it("changes nothing and sends nothing when the name is the same", () => {
+    const room = twoPlayerLobby();
+    const before = structuredClone(room.state);
+    expect(room.handle("a", { t: "renameSeat", seat: 0, name: person(1).name })).toEqual([]);
+    expect(room.state).toEqual(before);
+  });
+
+  it("rejects another device's seat, an empty seat, a bad seat and a finished room", () => {
+    const room = twoPlayerLobby();
+    room.handle("a", { t: "configure", seat: 2, kind: "bot" });
+    const before = structuredClone(room.state);
+    expect(errorsOf(room.handle("a", { t: "renameSeat", seat: 1, name: "X" }))).toEqual([{ to: "a", code: "not_your_seat" }]);
+    expect(errorsOf(room.handle("a", { t: "renameSeat", seat: 2, name: "X" }))).toEqual([{ to: "a", code: "not_your_seat" }]);
+    expect(errorsOf(room.handle("a", { t: "renameSeat", seat: 6, name: "X" }))).toEqual([{ to: "a", code: "bad_seat" }]);
+    expect(room.state).toEqual(before);
+    room.state.status = "over";
+    expect(errorsOf(room.handle("a", { t: "renameSeat", seat: 0, name: "X" }))).toEqual([{ to: "a", code: "game_over" }]);
+  });
+});
+
 describe("moveSeat and claimMove", () => {
   function moveCodeFor(room: RoomCore, device: string, seat: number): string {
     const out = room.handle(device, { t: "moveSeat", seat });

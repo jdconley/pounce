@@ -171,12 +171,15 @@ struct TableLayoutTests {
             var regions: [(String, CGRect)] = [
                 ("deck", deck), ("discard", discard), ("tower", l.towerFrame),
                 ("trays", l.traysFrame), ("bar", l.opponentsBar), ("sort", l.sortButtonFrame),
+                ("seatTag", l.seatTagFrame),
             ]
             for (i, r) in rows.enumerated() { regions.append(("row\(i)", r)); #expect(l.laidZone.contains(r)) }
             #expect(l.laidZone.contains(deck) && l.laidZone.contains(discard))
             for i in 0..<regions.count { for j in (i + 1)..<regions.count {
                 #expect(!regions[i].1.intersects(regions[j].1), "\(regions[i].0) overlaps \(regions[j].0)")
             } }
+            #expect(l.seatTagFrame.maxX < l.sortButtonFrame.minX)
+            #expect(l.seatTagFrame.minX > l.towerFrame.maxX)
             for slot in l.opponentSlots {
                 #expect(l.opponentsBar.contains(slot))
                 #expect(!l.towerFrame.contains(slot))
