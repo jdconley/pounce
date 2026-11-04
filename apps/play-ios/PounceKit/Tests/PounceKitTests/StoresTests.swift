@@ -121,7 +121,7 @@ import Testing
 
     private func fixtureRoom(status: RoomStatus = .playing, game: GameView? = nil) -> RoomView {
         RoomView(
-            code: "K7QM4", status: status, youAreHost: true,
+            code: "K7QM4", name: "Taco Night", status: status, youAreHost: true,
             seats: [
                 SeatView(kind: .human, person: Person(id: "a", name: "Mochi", cat: 2), yours: true, presence: .awake),
                 SeatView(kind: .bot, person: nil, yours: false, presence: nil),
@@ -148,7 +148,7 @@ import Testing
         #expect(cache.contains(code: "K7QM4"))
 
         let expected = CachedTable(
-            code: "K7QM4", status: .playing,
+            code: "K7QM4", name: "Taco Night", status: .playing,
             seats: [
                 CachedSeat(kind: .human, name: "Mochi", cat: 2, yours: true),
                 CachedSeat(kind: .bot, name: nil, cat: nil, yours: false),
@@ -212,6 +212,15 @@ import Testing
         cache.store(fixtureRoom(status: .over))
         #expect(cache.all().count == 1)
         #expect(cache.all()["K7QM4"]?.status == .over)
+    }
+
+    @Test func tableCacheFromBeforeNamesLoadsWithoutOne() throws {
+        let dir = try tempDir()
+        let old = #"{"K7QM4":{"code":"K7QM4","phase":[],"seats":[],"status":"lobby","updatedAt":1700000000}}"#
+        try Data(old.utf8).write(to: dir.appendingPathComponent("tables.json"))
+        let table = try #require(TableCache(directory: dir).all()["K7QM4"])
+        #expect(table.name == nil)
+        #expect(table.status == .lobby)
     }
 
     @Test func corruptTableFileLoadsEmpty() throws {

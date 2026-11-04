@@ -138,8 +138,10 @@ public enum ClientMessage: Encodable, Equatable, Sendable {
     case moveSeat(seat: Seat)
     case claimMove(code: String)
     case leave(seat: Seat)
+    /// Names the table (send it `TableName.clean`ed); the host or any seated phone, until game over.
+    case rename(name: String)
 
-    private enum CodingKeys: String, CodingKey { case t, seat, person, kind, action, state, code }
+    private enum CodingKeys: String, CodingKey { case t, seat, person, kind, action, state, code, name }
 
     public func encode(to encoder: any Encoder) throws {
         var c = encoder.container(keyedBy: CodingKeys.self)
@@ -170,6 +172,9 @@ public enum ClientMessage: Encodable, Equatable, Sendable {
         case .leave(let seat):
             try c.encode("leave", forKey: .t)
             try c.encode(seat, forKey: .seat)
+        case .rename(let name):
+            try c.encode("rename", forKey: .t)
+            try c.encode(name, forKey: .name)
         }
     }
 }

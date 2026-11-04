@@ -4,6 +4,8 @@ import Foundation
 public struct HomeTableItem: Equatable, Sendable, Identifiable {
     /// The room code.
     public var id: String
+    /// The table's name: the server's list, else the cache, else nil (see `title`).
+    public var name: String?
     public var yourTurn: Bool
     public var status: String
     /// Seat summaries from the cache; empty until the room has been opened on this phone.
@@ -14,22 +16,28 @@ public struct HomeTableItem: Equatable, Sendable, Identifiable {
     public var updatedAt: Double
 
     public init(
-        id: String, yourTurn: Bool, status: String, seats: [CachedSeat], turnCat: Int?, updatedAt: Double
+        id: String, name: String? = nil, yourTurn: Bool, status: String, seats: [CachedSeat], turnCat: Int?,
+        updatedAt: Double
     ) {
         self.id = id
+        self.name = name
         self.yourTurn = yourTurn
         self.status = status
         self.seats = seats
         self.turnCat = turnCat
         self.updatedAt = updatedAt
     }
+
+    /// The name to show on the card.
+    public var title: String { name ?? TableName.fallback(code: id) }
 }
 
 public enum HomeTables {
     /// Finished tables stay on Home this long after their last update.
     static let finishedLifetimeMs: Double = 24 * 3_600_000
 
-    /// The server's list is the truth for which tables exist; the cache only adds cats and names.
+    /// The server's list is the truth for which tables exist (and, when it has one, the table's
+    /// name); the cache only adds cats, seat names and a name the list lacks.
     /// Order: your-turn tables (newest first), then playing/lobby tables by recency, then finished
     /// tables from the last 24 hours. Older finished tables are dropped, as is any cached code the
     /// server no longer lists, and any table archived on this phone (`archived`, see `isArchived`).
@@ -95,7 +103,7 @@ public enum HomeTables {
             var turnCat: Int?
             if let turn = cached?.turn, seats.indices.contains(turn) { turnCat = seats[turn].cat }
             return HomeTableItem(
-                id: entry.code, yourTurn: entry.yourTurn && !isOver, status: entry.status,
+                id: entry.code, name: entry.name ?? cached?.name, yourTurn: entry.yourTurn && !isOver, status: entry.status,
                 seats: seats, turnCat: turnCat, updatedAt: entry.updatedAt)
         }
     }

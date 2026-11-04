@@ -161,16 +161,25 @@ private struct StringKeyedSeats: Codable {
 
 public struct RoomView: Codable, Equatable, Sendable {
     public var code: String
+    /// The table's name. Every current server sends one; nil only from a server older than names.
+    public var name: String?
     public var status: RoomStatus
     public var youAreHost: Bool
     public var seats: [SeatView]
     public var game: GameView?
 
-    public init(code: String, status: RoomStatus, youAreHost: Bool, seats: [SeatView], game: GameView? = nil) {
+    public init(
+        code: String, name: String? = nil, status: RoomStatus, youAreHost: Bool, seats: [SeatView],
+        game: GameView? = nil
+    ) {
         self.code = code
+        self.name = name
         self.status = status
         self.youAreHost = youAreHost
         self.seats = seats
         self.game = game
     }
+
+    /// The name to show: the table's own, or `TableName.fallback` from an older server.
+    public var title: String { name ?? TableName.fallback(code: code) }
 }
