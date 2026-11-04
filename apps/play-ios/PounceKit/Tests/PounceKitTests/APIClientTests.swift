@@ -17,10 +17,14 @@ struct Reply: Sendable {
     var body: String
     /// Seconds to hold the response back (on the loading thread's run loop).
     var delay: TimeInterval
-    init(_ status: Int, _ body: String = "{}", delay: TimeInterval = 0) {
+    /// Holds the response back until this holds (checked every 10 ms, for at most 5 s), so a test
+    /// can order replies after other requests arrive instead of guessing at timing.
+    var until: (@Sendable () -> Bool)?
+    init(_ status: Int, _ body: String = "{}", delay: TimeInterval = 0, until: (@Sendable () -> Bool)? = nil) {
         self.status = status
         self.body = body
         self.delay = delay
+        self.until = until
     }
 }
 
@@ -89,6 +93,17 @@ final class StubProtocol: URLProtocol, @unchecked Sendable {  // URLProtocol is 
             method: request.httpMethod ?? "GET", path: url.path,
             authorization: request.value(forHTTPHeaderField: "Authorization"), body: body)
         let reply = server.handle(seen)
+        if let until = reply.until {
+            // Polled on the loading thread's run loop, never blocking it: other requests on this
+            // session must still get through.
+            let deadline = Date().addingTimeInterval(5)
+            RunLoop.current.add(Timer(timeInterval: 0.01, repeats: true) { [self] timer in
+                guard until() || Date() >= deadline else { return }
+                timer.invalidate()
+                respond(reply, url: url)
+            }, forMode: .common)
+            return
+        }
         guard reply.delay > 0 else { return respond(reply, url: url) }
         // URLProtocol clients must be called on the loading thread, whose run loop is running.
         RunLoop.current.add(Timer(timeInterval: reply.delay, repeats: false) { [self] _ in
@@ -256,8 +271,13 @@ final class StubProtocol: URLProtocol, @unchecked Sendable {  // URLProtocol is 
             if req.path == "/v1/devices" { return Reply(200, #"{"deviceId":"fresh","token":"good"}"#) }
             if req.authorization == "Bearer good" { return Reply(200, #"{"tables":[]}"#) }
             let n = staleSeen.withLock { $0 += 1; return $0 }
-            // The second stale 401 arrives well after the first one's re-mint is done.
-            return Reply(401, #"{"error":"unauthorized"}"#, delay: n == 1 ? 0 : 0.5)
+            // The first stale 401 waits until the second call has gone out stale too (otherwise a
+            // slow start for the second call lets it pick up the fresh token first); the second
+            // stale 401 then arrives well after the first one's re-mint is done.
+            if n == 1 {
+                return Reply(401, #"{"error":"unauthorized"}"#, until: { staleSeen.withLock { $0 } >= 2 })
+            }
+            return Reply(401, #"{"error":"unauthorized"}"#, delay: 0.5)
         }
         let store = MemoryCredentialStore()
         store.save(DeviceCredential(deviceId: "old", token: "stale"))
