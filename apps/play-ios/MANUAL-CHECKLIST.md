@@ -27,6 +27,34 @@ Setup: see "Play on your phone" in `README.md` (`scripts/dev-server.sh`, `script
 - [ ] A real "your turn" push arrives on a TestFlight build (Debug builds get sandbox tokens and never
       receive production pushes).
 
+## Accounts, sync and age (daily habit PR 2)
+
+Needs a TestFlight build (Sign in with Apple and Declared Age Range need the real services; Debug
+builds stub them only under `-stub-accounts` and `-age-range`).
+
+- [ ] Fresh install: Apple's Declared Age Range sheet appears before pick-a-cat. Decline it: the
+      birth-year keypad appears with four empty tiles; after the check it never comes back, even
+      after deleting and reinstalling the app (the band is in the Keychain).
+- [ ] Sign in with Apple from the people sheet on a guest iPhone: Apple's sheet asks for no name or
+      email; the owner's cat gets the lime check; tables and streaks stay.
+- [ ] Sign in on the iPad with the same Apple ID: the two cats merge, the iPad shows the iPhone's
+      name and cat, the iPhone's household people appear (with a cloud), and the account's tables
+      are on Home. Archive a table on one device, foreground the other: it's archived there too.
+      Turn sound off on one: off on the other after a foreground.
+- [ ] iPad and iPhone in the same seat: take the turn on the iPhone; the iPad's "your turn"
+      notification for that table disappears and its badge drops (best effort, background push).
+- [ ] Hold a household cat on the people sheet: that person signs in with their own Apple ID and gets
+      their own check; the owner stays signed in.
+- [ ] Gear sheet: sign out (the account's household people leave; this device plays on as a guest),
+      sign back in, then delete the account: confirm, then the Settings path picture. Check that
+      Settings, your name, Sign in with Apple lists Pounce until you stop it there (or until the server
+      has `PLAY_API_SIWA_KEY_P8`, when deletion revokes it).
+- [ ] The gear sheet's hand opens `play.conleychaos.com/privacy`.
+- [ ] An account under 13 (Family Sharing child): no sign-in offer anywhere, the name is dice only, no
+      share buttons in the lobby, and no "your turn" pushes from the server.
+- [ ] In Texas, Utah or Louisiana with a teen account that existed before this build: a parent
+      approval request goes out (PermissionKit) and sign-in stays hidden until the parent approves.
+
 ## Performance and accessibility
 
 - [ ] Instruments idle-CPU check on the oldest iPhone available: the table scene should pause when

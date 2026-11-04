@@ -147,8 +147,14 @@ final class AccountModel {
             record = working
             save()
             if !renamed.isEmpty { app.peopleRenamed() }
+            #if DEBUG
+            print("[account] profile up: \(working.playerIds.count) players, \(renamed.count) renamed")
+            #endif
         } catch {
             // Offline or the server is down: still owed (pendingUpload stays set).
+            #if DEBUG
+            print("[account] profile upload failed: \(error)")
+            #endif
         }
     }
 

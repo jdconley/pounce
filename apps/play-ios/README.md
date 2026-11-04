@@ -80,6 +80,14 @@ then the build setting (Debug: `http://localhost:8787`, optionally overridden by
   never register or accept it.
 - Push cannot arrive in Debug builds. Test payload handling with `scripts/push.sh <CODE> [NAME]`
   (an `xcrun simctl push` with a payload shaped like the server's).
+- Accounts and age (spec §10.5, §14.1): `-stub-accounts <upgraded|merged|link-merge|cancel|signed-in>`
+  swaps Sign in with Apple and the account routes for in-memory fakes (no Apple account, no server).
+  `-age-range <kitten|teen|adult|declined|unavailable>` stubs Declared Age Range; any test run
+  (`-anim-speed`) without it answers `adult`. Under `-uitest-reset`, `-age-band <band>` starts
+  with that band, `-age-range` starts with none (the age screen), and `-uitest-age-service <name>`
+  keeps the age record in its own Keychain item. For screenshots: `-seed-people` (an owner and two
+  others under `-uitest-reset`), `-show-gear`, `-show-merge` (with `-show-gear`) and
+  `-show-household-age` (with `-show-people`).
 
 ## Play on your phone
 
@@ -265,6 +273,15 @@ Connect (feedback email, beta app description, review contact); if it's missing,
 submission fails with Apple's message in the log.
 
 ### Prerequisites only JD can do
+
+- Sign in with Apple and Declared Age Range are new entitlements (daily habit PR 2). Automatic
+  signing with `-allowProvisioningUpdates` turns both capabilities on for the App ID when the App
+  Store Connect key has Admin access (or App Manager with access to Certificates, Identifiers &
+  Profiles). If the first archive after this change fails on provisioning, enable them by hand:
+  Certificates, Identifiers & Profiles, Identifiers, `com.conleychaos.play`, tick **Sign In with
+  Apple** (Configure: **Enable as a primary App ID**) and **Declared Age Range**, Save. Then check
+  the archive: `codesign -d --entitlements - <Pounce.app>` lists `com.apple.developer.applesignin`
+  and `com.apple.developer.declared-age-range`.
 
 - Apple Developer: enable Push Notifications and Associated Domains on the App ID
   `com.conleychaos.play`.

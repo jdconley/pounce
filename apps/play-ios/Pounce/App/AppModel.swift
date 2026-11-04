@@ -55,6 +55,10 @@ final class AppModel {
     /// Players, Sign in with Apple and sync (spec §10.5, §13.1).
     @ObservationIgnored private(set) var account: AccountModel!
 
+    /// This phone had a person before this version asked ages: an existing player, for whom this
+    /// update is a significant change (§14.1). A new install agreed to it at download.
+    @ObservationIgnored private(set) var hadOwnerBeforeThisVersion = false
+
     /// The local "your turn" reminder: the person's choice, else the band's default.
     var turnReminderOn: Bool { settings.turnReminderChoice ?? limits.turnReminderDefault }
 
@@ -79,6 +83,7 @@ final class AppModel {
         self.ageAsker = ageAsker
         let age = ageStore.load()
         ageRecord = age
+        hadOwnerBeforeThisVersion = age == nil && loaded.owner != nil
         route = age == nil ? .age(then: nil) : loaded.owner == nil ? .pickCat(then: nil) : .home
         #if DEBUG
         let stub = StubScenario.from(arguments: CommandLine.arguments)
@@ -113,6 +118,18 @@ final class AppModel {
                 ageStore: debugAgeStore(arguments: arguments), ageAsker: asker, personKeys: MemoryPersonKeyStore())
         } else {
             model = real(config: config, ageAsker: asker)
+        }
+        // `-seed-people`: a fresh run starts with an owner and two others (screenshots).
+        if arguments.contains("-uitest-reset"), arguments.contains("-seed-people"), model.people.owner == nil {
+            model.peopleStore.setOwner(name: "JD", cat: 4)
+            model.peopleStore.add(name: "Ella", cat: 2)
+            model.peopleStore.add(name: "Sam", cat: 6)
+            model.people = model.peopleStore.load()
+            if model.ageRecord != nil { model.route = .home }
+        }
+        // `-show-merge`: the two-cats question over the gear sheet (screenshots).
+        if arguments.contains("-show-merge") {
+            model.account.merge = .init(mine: 4, theirs: 2, theirName: StubAccountService.other.name, asking: true)
         }
         if let demo = DemoMode.from(arguments: arguments) { model.openDemo(demo) }
         if arguments.contains("-uitest-reset") || DemoMode.from(arguments: arguments) != nil {
@@ -199,10 +216,16 @@ final class AppModel {
         #if DEBUG
         await account.applyDebugPreset()
         #endif
-        await account.uploadProfile()
-        await account.sync()
+        if ageRecord != nil { await accountsAfterAge() }
         if people.owner != nil { await refreshTables() }
         await recheckAge()
+    }
+
+    /// Once the age is known: the significant-change check, then the profile and sync.
+    private func accountsAfterAge() async {
+        await SignificantChangeGate.check(self)
+        await account.uploadProfile()
+        await account.sync()
     }
 
     // MARK: Age check (spec §14.1)
@@ -222,6 +245,7 @@ final class AppModel {
         ageStore.save(record)
         ageRecord = record
         applyAgeLimits()
+        Task { await accountsAfterAge() }
         guard case .age(let then) = route else { return }
         if people.owner == nil {
             route = .pickCat(then: then)
@@ -304,6 +328,8 @@ final class AppModel {
         do {
             let listed = try await api.listTables()
             tables = listed
+            // The icon's badge: tables where it's your move (spec §12.5), on every device.
+            push?.setBadge(PushPolicy.badgeCount(listed))
             // The server answered: a push token that failed to upload goes now.
             push?.retryUpload()
             // A cached room the server no longer lists is gone for good.

@@ -101,6 +101,30 @@ final class PushCoordinator: NSObject, UNUserNotificationCenterDelegate {
         }
     }
 
+    // MARK: across devices (spec §12.5)
+
+    /// The badge says how many tables wait on your move. Best effort: needs badge permission.
+    func setBadge(_ count: Int) {
+        center.setBadgeCount(count) { _ in }
+    }
+
+    /// A background push said the player moved at `code` on another device: that table's
+    /// delivered notifications go, and the tables (and the badge) refresh.
+    func dismiss(code: String) async {
+        let delivered = await center.deliveredNotifications()
+        let ids = delivered
+            .filter {
+                PushPolicy.matches(
+                    code: code, userInfo: $0.request.content.userInfo, threadId: $0.request.content.threadIdentifier)
+            }
+            .map(\.request.identifier)
+        center.removeDeliveredNotifications(withIdentifiers: ids)
+        #if DEBUG
+        print("[push] dismissed \(code): removed \(ids.count) delivered")
+        #endif
+        await model?.refreshTables()
+    }
+
     static func isAllowed(_ status: UNAuthorizationStatus) -> Bool {
         status == .authorized || status == .provisional || status == .ephemeral
     }

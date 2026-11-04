@@ -69,7 +69,8 @@ final class LiveAppleSignIn: NSObject, AppleSigning, ASAuthorizationControllerDe
             let scenes = UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }
             if let key = scenes.flatMap(\.windows).first(where: \.isKeyWindow) { return key }
             // A sign-in only starts from a button on screen, so a scene is always there.
-            return scenes.first.map { ASPresentationAnchor(windowScene: $0) } ?? ASPresentationAnchor(frame: .zero)
+            guard let scene = scenes.first else { preconditionFailure("a sign-in with no window scene") }
+            return ASPresentationAnchor(windowScene: scene)
         }
     }
 }
