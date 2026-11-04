@@ -5,7 +5,6 @@ import { catTower } from "../games/cat-tower";
 import { PERSON_ID, PLAYER_ID } from "../players/ids";
 import { parseClientMessage } from "../protocol";
 
-
 import { RoomCore, type AdoptRule, type Outbound, type PushIntent, type RoomState } from "./core";
 
 import type { Env } from "../env";
