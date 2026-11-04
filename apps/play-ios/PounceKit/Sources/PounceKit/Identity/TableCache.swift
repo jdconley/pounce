@@ -17,6 +17,8 @@ public struct CachedSeat: Codable, Equatable, Sendable {
 /// Just enough of a table to draw its Home tile before the socket connects.
 public struct CachedTable: Codable, Equatable, Sendable {
     public var code: String
+    /// Nil in caches written before tables had names.
+    public var name: String?
     public var status: RoomStatus
     public var seats: [CachedSeat]
     public var turn: Seat?
@@ -24,10 +26,11 @@ public struct CachedTable: Codable, Equatable, Sendable {
     public var updatedAt: Date
 
     public init(
-        code: String, status: RoomStatus, seats: [CachedSeat], turn: Seat? = nil, phase: [Int] = [],
-        updatedAt: Date
+        code: String, name: String? = nil, status: RoomStatus, seats: [CachedSeat], turn: Seat? = nil,
+        phase: [Int] = [], updatedAt: Date
     ) {
         self.code = code
+        self.name = name
         self.status = status
         self.seats = seats
         self.turn = turn
@@ -60,7 +63,7 @@ public final class TableCache {
     public func store(_ room: RoomView, now: Date = .now) {
         var tables = all()
         tables[room.code] = CachedTable(
-            code: room.code, status: room.status,
+            code: room.code, name: room.name, status: room.status,
             seats: room.seats.map {
                 CachedSeat(kind: $0.kind, name: $0.person?.name, cat: $0.person?.cat, yours: $0.yours)
             },

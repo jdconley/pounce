@@ -45,6 +45,7 @@ import Testing
         case "moveSeat": return .moveSeat(seat: 1)
         case "claimMove": return .claimMove(code: "BCDFGH")
         case "leave": return .leave(seat: 1)
+        case "rename": return .rename(name: "Taco Night")
         default: throw Fixtures.FixtureError.malformed("no sample for client fixture \(name)")
         }
     }
@@ -75,10 +76,19 @@ import Testing
 
     @Test func encodesEveryClientFixture() throws {
         let fixtures = try Fixtures.clientMessages()
-        #expect(fixtures.count == 18)
+        #expect(fixtures.count == 19)
         for (name, json) in fixtures {
             #expect(try jsonEqual(Codec.encode(sample(name)), json), "\(name)")
         }
+    }
+
+    @Test func snapshotFromAServerOlderThanNamesStillDecodes() throws {
+        let json = #"{"t":"snapshot","protocol":1,"seq":1,"room":{"code":"BCDFG","status":"lobby","youAreHost":true,"seats":[],"game":null}}"#
+        guard case .snapshot(_, _, let room) = try Codec.decode(json) else {
+            Issue.record("not a snapshot"); return
+        }
+        #expect(room.name == nil)
+        #expect(room.title == "Table BCDFG")
     }
 
     @Test func unknownErrorCodeStillDecodes() throws {
@@ -103,6 +113,8 @@ import Testing
             Issue.record("not a snapshot"); return
         }
         #expect(seq == 3)
+        #expect(room.name == "The Fancy Sunbeams")
+        #expect(room.title == "The Fancy Sunbeams")
         #expect(room.status == .lobby)
         #expect(room.game == nil)
         #expect(room.seats[0].person == Person(id: "11111111-1111-4111-8111-111111111111", name: "Alice", cat: 0))

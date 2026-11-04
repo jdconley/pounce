@@ -261,3 +261,23 @@ describe("parseClientMessage", () => {
     });
   });
 });
+
+describe("rename", () => {
+  it("parses a trimmed name with its spaces collapsed", () => {
+    expect(parse({ t: "rename", name: "  Taco   Night " })).toEqual({ t: "rename", name: "Taco Night" });
+  });
+
+  it("rejects a missing, empty, long, non-string or control-character name, and extra keys", () => {
+    for (const msg of [
+      { t: "rename" },
+      { t: "rename", name: "" },
+      { t: "rename", name: "   " },
+      { t: "rename", name: "x".repeat(31) },
+      { t: "rename", name: 7 },
+      { t: "rename", name: "two\nlines" },
+      { t: "rename", name: "Taco Night", seat: 0 },
+    ]) {
+      expect(parse(msg), JSON.stringify(msg)).toEqual(BAD);
+    }
+  });
+});

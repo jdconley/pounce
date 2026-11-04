@@ -159,6 +159,28 @@ final class StubProtocol: URLProtocol, @unchecked Sendable {  // URLProtocol is 
         #expect(json == ["game": "cat-tower"])
     }
 
+    @Test func createRoomSendsTheNameWhenGiven() async throws {
+        let server = StubServer { req in
+            req.path == "/v1/devices" ? Reply(200, #"{"deviceId":"dev1","token":"tok1"}"#) : Reply(201, #"{"code":"K7QM4"}"#)
+        }
+        let (api, _) = client(server)
+        _ = try await api.createRoom(name: "Taco Night")
+        let post = try #require(server.seen.last)
+        let json = try #require(try JSONSerialization.jsonObject(with: post.body) as? [String: String])
+        #expect(json == ["game": "cat-tower", "name": "Taco Night"])
+    }
+
+    @Test func listTablesDecodesTheNameWhenPresent() async throws {
+        let server = StubServer { req in
+            req.path == "/v1/devices"
+                ? Reply(200, #"{"deviceId":"dev1","token":"tok1"}"#)
+                : Reply(200, #"{"tables":[{"code":"K7QM4","name":"Taco Night","status":"lobby","yourTurn":false,"updatedAt":1},{"code":"BCDFG","status":"lobby","yourTurn":false,"updatedAt":2}]}"#)
+        }
+        let (api, _) = client(server)
+        let tables = try await api.listTables()
+        #expect(tables.map(\.name) == ["Taco Night", nil])
+    }
+
     @Test func listTablesDecodes() async throws {
         let server = StubServer { req in
             req.path == "/v1/devices"

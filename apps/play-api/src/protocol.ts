@@ -1,4 +1,5 @@
 import { ROOM_CODE_ALPHABET } from "./room/codes";
+import { parseRoomName } from "./room/names";
 
 import type { Action, ApplyError, GameEvent, Seat } from "./rules/engine";
 import type { CatTowerView } from "./rules/view";
@@ -25,6 +26,8 @@ export type RoomStatus = "lobby" | "playing" | "over";
 
 export type RoomView = {
   code: string;
+  /** The table's name, shown on every phone: 1-30 characters (see `parseRoomName`). */
+  name: string;
   status: RoomStatus;
   youAreHost: boolean;
   seats: {
@@ -48,7 +51,8 @@ export type ClientMessage =
   | { t: "presence"; state: "active" | "background" }
   | { t: "moveSeat"; seat: Seat }
   | { t: "claimMove"; code: string }
-  | { t: "leave"; seat: Seat };
+  | { t: "leave"; seat: Seat }
+  | { t: "rename"; name: string };
 
 /** Every `error` code the server sends. */
 export type ErrorCode =
@@ -193,6 +197,11 @@ function parseObject(o: Obj): ClientMessage | null {
       if (!hasKeys(o, ["t", "seat", "person"]) || !isInt(o.seat, 0)) return null;
       const person = parsePerson(o.person);
       return person ? { t: "claim", seat: o.seat, person } : null;
+    }
+    case "rename": {
+      if (!hasKeys(o, ["t", "name"])) return null;
+      const name = parseRoomName(o.name);
+      return name === null ? null : { t: "rename", name };
     }
     case "claimMove":
       if (!hasKeys(o, ["t", "code"]) || !isMoveCode(o.code)) return null;

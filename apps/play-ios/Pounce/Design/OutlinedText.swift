@@ -8,13 +8,19 @@ struct OutlinedText: View {
     let fill: Color
     let outline: Color
     let width: CGFloat
+    /// Wraps onto up to this many centered lines before shrinking.
+    let lines: Int
 
-    init(_ text: String, size: CGFloat, fill: Color = .white, outline: Color = Palette.ink, width: CGFloat = 3) {
+    init(
+        _ text: String, size: CGFloat, fill: Color = .white, outline: Color = Palette.ink, width: CGFloat = 3,
+        lines: Int = 1
+    ) {
         self.text = text
         self.size = size
         self.fill = fill
         self.outline = outline
         self.width = width
+        self.lines = lines
     }
 
     private static let directions: [CGSize] = [
@@ -38,7 +44,8 @@ struct OutlinedText: View {
             }
             label.foregroundStyle(fill)
         }
-        .lineLimit(1)
+        .lineLimit(lines)
+        .multilineTextAlignment(.center)
         .minimumScaleFactor(0.5)
         .padding(width)
         .accessibilityElement(children: .ignore)

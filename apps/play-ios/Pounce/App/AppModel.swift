@@ -299,13 +299,14 @@ final class AppModel {
         // `-debug-reminder <CODE>`: schedule one on every background, whoever's turn it is.
         let args = CommandLine.arguments
         if let i = args.firstIndex(of: "-debug-reminder"), let code = args[safe: i + 1] {
-            push?.scheduleTurnReminder(code: code, name: "Debug", after: PushPolicy.reminderInterval)
+            push?.scheduleTurnReminder(
+                code: code, name: "Debug", table: TableName.fallback(code: code), after: PushPolicy.reminderInterval)
             return
         }
         #endif
         guard let room, let table = room.model, let delay = PushPolicy.reminderDelay(model: table),
               let turn = table.currentSeat, let person = table.room.seats[safe: turn]?.person else { return }
-        push?.scheduleTurnReminder(code: room.code, name: person.name, after: delay)
+        push?.scheduleTurnReminder(code: room.code, name: person.name, table: table.room.title, after: delay)
     }
 
     private func makeSession(code: String, intent: RoomIntent) -> RoomSession {

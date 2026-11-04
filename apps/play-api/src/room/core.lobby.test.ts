@@ -5,6 +5,7 @@ import { PROTOCOL_VERSION, type Person, type ServerMessage } from "../protocol";
 import { createRng } from "../rules/rng";
 
 import { RoomCore, type Outbound } from "./core";
+import { defaultRoomName } from "./names";
 
 
 const MIN = 60_000;
@@ -651,5 +652,60 @@ describe("handle robustness", () => {
     room.handle("a", { t: "claim", seat: 0, person: person(2) }); // rejected
     expect(room.state.seq).toBe(1);
     expect(room.state.lastActivity).toBe(T0 + DAY);
+  });
+});
+
+describe("table name", () => {
+  it("defaults to the code's name, or takes the one given at creation", () => {
+    expect(newRoom().state.name).toBe(defaultRoomName("BCDFG"));
+    expect(RoomCore.create("BCDFG", "host", T0, "Taco Night").name).toBe("Taco Night");
+    expect(snapshotOf(twoPlayerLobby().connect("a"), "a").room.name).toBe(defaultRoomName("BCDFG"));
+  });
+
+  it("fills in the default for a room saved before tables had names", () => {
+    const state = RoomCore.create("BCDFG", "host", T0);
+    delete (state as Partial<typeof state>).name;
+    const room = new RoomCore(state, () => clock, rng);
+    expect(room.state.name).toBe(defaultRoomName("BCDFG"));
+  });
+
+  it("a seated phone renames it: every connected phone gets a snapshot with the new name", () => {
+    const room = twoPlayerLobby();
+    const seq = room.state.seq;
+    const out = room.handle("b", { t: "rename", name: "Taco Night" });
+    expect(snapshotOf(out, "a").room.name).toBe("Taco Night");
+    expect(snapshotOf(out, "b").room.name).toBe("Taco Night");
+    expect(room.state.seq).toBe(seq + 1);
+  });
+
+  it("the host may rename before sitting down; a seatless guest may not", () => {
+    const room = newRoom("host");
+    room.connect("host");
+    room.connect("guest");
+    expect(errorsOf(room.handle("guest", { t: "rename", name: "Mine" }))).toEqual([
+      { to: "guest", code: "not_seated" },
+    ]);
+    expect(snapshotOf(room.handle("host", { t: "rename", name: "Taco Night" }), "guest").room.name).toBe(
+      "Taco Night",
+    );
+  });
+
+  it("works mid-game, but not once the game is over", () => {
+    const room = twoPlayerLobby();
+    room.handle("a", { t: "start" });
+    expect(snapshotOf(room.handle("a", { t: "rename", name: "Round Two" }), "b").room.name).toBe("Round Two");
+    room.state.status = "over";
+    expect(errorsOf(room.handle("a", { t: "rename", name: "Too Late" }))).toEqual([
+      { to: "a", code: "game_over" },
+    ]);
+    expect(room.state.name).toBe("Round Two");
+  });
+
+  it("the same name again changes nothing and sends nothing", () => {
+    const room = twoPlayerLobby();
+    room.handle("a", { t: "rename", name: "Taco Night" });
+    const seq = room.state.seq;
+    expect(room.handle("b", { t: "rename", name: "Taco Night" })).toEqual([]);
+    expect(room.state.seq).toBe(seq);
   });
 });

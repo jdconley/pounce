@@ -3,6 +3,7 @@ import { PROTOCOL_VERSION } from "../protocol";
 import { card } from "../rules/cards";
 
 import { newMoveCode } from "./codes";
+import { defaultRoomName } from "./names";
 
 import type { GameModule } from "../games/module";
 import type {
@@ -31,6 +32,8 @@ export type SeatInfo = {
 
 export type RoomState = {
   code: string;
+  /** Rooms saved before tables had names lack it; `RoomCore` fills in the default. */
+  name: string;
   game: "cat-tower";
   hostDeviceId: string;
   status: RoomStatus;
@@ -55,6 +58,8 @@ export type PushIntent = {
   kind: "your_turn";
   seat: Seat;
   personName: string;
+  /** The table's name, for the notification text. */
+  tableName: string;
   /** The room code, so the app can open the right game from the notification. */
   code: string;
 };
@@ -94,15 +99,18 @@ export class RoomCore {
 
   constructor(state: RoomState, now: () => number, rng: Rng, game: CatTowerModule = catTower, speed = 1) {
     this.state = state;
+    (state as Partial<RoomState>).name ??= defaultRoomName(state.code);
     this.now = now;
     this.rng = rng;
     this.game = game;
     this.speed = speed;
   }
 
-  static create(code: string, hostDeviceId: string, now: number): RoomState {
+  /** A new lobby; `name` is already validated (`parseRoomName`) when given. */
+  static create(code: string, hostDeviceId: string, now: number, name?: string): RoomState {
     return {
       code,
+      name: name ?? defaultRoomName(code),
       game: "cat-tower",
       hostDeviceId,
       status: "lobby",
@@ -215,6 +223,7 @@ export class RoomCore {
       seq: state.seq,
       room: {
         code: state.code,
+        name: state.name,
         status: state.status,
         youAreHost: deviceId === state.hostDeviceId,
         seats,
@@ -249,6 +258,8 @@ export class RoomCore {
         return this.act(deviceId, msg.seat, msg.action);
       case "presence":
         return this.presence(deviceId, msg.state);
+      case "rename":
+        return this.rename(deviceId, msg.name);
       default:
         return [this.fail(deviceId, "bad_message")];
     }
@@ -263,6 +274,18 @@ export class RoomCore {
       return [this.fail(deviceId, "person_seated")];
     }
     this.state.seats[seat] = { kind: "human", person, deviceId };
+    return this.changed();
+  }
+
+  /** The host, or any phone holding a seat, names the table until the game is over. */
+  private rename(deviceId: string, name: string): Outbound[] {
+    const { state } = this;
+    if (state.status === "over") return [this.fail(deviceId, "game_over")];
+    if (deviceId !== state.hostDeviceId && this.controlledSeats(deviceId).length === 0) {
+      return [this.fail(deviceId, "not_seated")];
+    }
+    if (name === state.name) return [];
+    state.name = name;
     return this.changed();
   }
 
@@ -510,6 +533,7 @@ export class RoomCore {
         kind: "your_turn",
         seat: actor,
         personName: (seat.person as Person).name,
+        tableName: state.name,
         code: state.code,
       });
     }

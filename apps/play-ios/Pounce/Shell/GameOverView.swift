@@ -1,11 +1,12 @@
 import PounceKit
 import SwiftUI
 
-/// The finished game (spec §5.10), over the table once its win moment has played: the
-/// winners' cats in the celebrate pose on a sunburst, a crown dropping onto each (shared wins
+/// The finished game (spec §5.10), over the table once its win moment has played: the table's
+/// name up top, the winners' cats in the celebrate pose on a sunburst, a crown dropping onto each (shared wins
 /// show every winner), a one-shot confetti fall, and two pills: Home and New game. No words
-/// but the winners' names. Every motion here runs once and stops, so nothing loops.
+/// but the table's and the winners' names. Every motion here runs once and stops, so nothing loops.
 struct GameOverView: View {
+    let tableName: String
     let winners: [Person]
     let onHome: () -> Void
     let onNewGame: () -> Void
@@ -34,7 +35,13 @@ struct GameOverView: View {
                 .allowsHitTesting(false)
                 .accessibilityHidden(true)
             VStack(spacing: 30) {
-                Spacer(minLength: 40)
+                OutlinedText(tableName, size: 30, fill: .white, width: 3, lines: 2)
+                    .padding(.horizontal, 24)
+                    .padding(.top, 24)
+                    .scaleEffect(appeared ? 1 : 0.6)
+                    .opacity(appeared ? 1 : 0)
+                    .accessibilityIdentifier("gameover.name")
+                Spacer(minLength: 0)
                 ZStack {
                     Image(ArtName.sunburst)
                         .resizable()

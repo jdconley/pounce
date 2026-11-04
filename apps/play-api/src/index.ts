@@ -3,6 +3,7 @@ import { devSpeed } from "./env";
 import { appSiteAssociation, ogImage, sharePage } from "./http/links";
 import { newRoomCode, ROOM_CODE } from "./room/codes";
 import { DEVICE_HEADER } from "./room/game-room";
+import { parseRoomName } from "./room/names";
 
 import type { Env } from "./env";
 
@@ -87,10 +88,14 @@ async function mintDevice(request: Request, secret: string): Promise<Response> {
 
 async function createRoom(request: Request, env: Env, deviceId: string): Promise<Response> {
   const body = await readObject(request);
-  if (!body || Object.keys(body).length !== 1 || body.game !== "cat-tower") return badRequest();
+  if (!body || body.game !== "cat-tower") return badRequest();
+  if (Object.keys(body).some((key) => key !== "game" && key !== "name")) return badRequest();
+  // Optional: without one the room gets its default name.
+  const name = "name" in body ? parseRoomName(body.name) : undefined;
+  if (name === null) return badRequest();
   for (let i = 0; i < ROOM_CODE_ATTEMPTS; i++) {
     const code = newRoomCode(cryptoRng);
-    const result = await env.ROOMS.get(env.ROOMS.idFromName(code)).init(code, deviceId);
+    const result = await env.ROOMS.get(env.ROOMS.idFromName(code)).init(code, deviceId, name);
     if ("ok" in result) return json(201, { code });
   }
   return json(503, { error: "no_room_code" });

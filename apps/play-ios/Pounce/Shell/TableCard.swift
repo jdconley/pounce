@@ -1,15 +1,16 @@
 import PounceKit
 import SwiftUI
 
-/// One table on Home. Your-turn cards glow orange and bounce with the waiting player's cat awake;
-/// the rest are dimmed with the current player's cat. Finished games carry a trophy.
+/// One table on Home: its name, its code small beneath, the seats as pips. Your-turn cards glow
+/// orange and bounce with the waiting player's cat awake; the rest are dimmed with the current
+/// player's cat. Finished games carry a trophy.
 struct TableCard: View {
     let item: HomeTableItem
     /// Home's `home.table.<code>`; the Archived sheet uses its own.
     var identifier: String?
     let action: () -> Void
 
-    static let size = CGSize(width: 112, height: 144)
+    static let size = CGSize(width: 132, height: 160)
 
     private var isOver: Bool { item.status == RoomStatus.over.rawValue }
 
@@ -34,18 +35,24 @@ struct TableCard: View {
         } label: {
             ZStack {
                 shape.fill(fill)
-                VStack(spacing: 4) {
+                VStack(spacing: 3) {
                     ZStack(alignment: .topTrailing) {
                         cat
                         if isOver {
                             Image(ArtName.iconTrophy)
                                 .resizable().scaledToFit()
-                                .frame(width: 34, height: 34)
+                                .frame(width: 32, height: 32)
                                 .offset(x: 6, y: -4)
                         }
                     }
-                    .frame(height: 78)
-                    OutlinedText(item.id, size: 18, fill: .white, width: 2.5)
+                    .frame(height: 66)
+                    OutlinedText(item.title, size: 15, fill: .white, width: 2, lines: 2)
+                        .frame(height: 40)
+                        .padding(.horizontal, 6)
+                    Text(verbatim: item.id)
+                        .font(.system(size: 12, weight: .heavy, design: .rounded))
+                        .tracking(1.5)
+                        .foregroundStyle(.white.opacity(0.8))
                     SeatPips(seats: item.seats)
                 }
                 .padding(.vertical, 8)
@@ -66,7 +73,9 @@ struct TableCard: View {
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
-        .accessibilityLabel(item.yourTurn ? Text("Your turn, table \(item.id)") : Text("Table \(item.id)"))
+        .accessibilityLabel(
+            item.yourTurn
+                ? Text("Your turn, \(item.title), table \(item.id)") : Text("\(item.title), table \(item.id)"))
         .accessibilityIdentifier(identifier ?? "home.table.\(item.id)")
     }
 
@@ -74,13 +83,13 @@ struct TableCard: View {
         if let shownCat {
             Image(ArtName.cat(shownCat, pose))
                 .resizable().scaledToFit()
-                .frame(width: 76, height: 76)
+                .frame(width: 64, height: 64)
                 .shadow(color: Palette.ink.opacity(0.35), radius: 0, x: 0, y: 3)
         } else {
             // A table with no cached cats yet: a plain paw mark keeps the card from looking empty.
             Image(ArtName.iconPawMenu)
                 .resizable().scaledToFit()
-                .frame(width: 56, height: 56)
+                .frame(width: 50, height: 50)
                 .opacity(0.8)
         }
     }

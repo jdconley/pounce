@@ -6,6 +6,8 @@
 /// server couldn't have sent.
 public enum DemoFixtures {
     public static let code = "M3W7Z"
+    /// Every demo table's name.
+    public static let demoName = "Friday Night Cats"
     static let names = ["Mia", "Leo", "Kiki", "Otis", "Nova", "Ziggy"]
     /// Cat per seat; 3 (gray) is the House Cat, so humans skip it.
     static let cats = [0, 1, 2, 4, 5, 6]
@@ -50,7 +52,8 @@ public enum DemoFixtures {
             phase: phases, scores: (0..<n).map { 5 * (($0 * 7 + 3) % 13) },
             laid: laid, handCounts: handCounts, hands: [me: myHand],
             pendingSkip: pendingSkip, winners: [])
-        return RoomView(code: code, status: .playing, youAreHost: me == 0, seats: seatViews, game: game)
+        return RoomView(
+            code: code, name: demoName, status: .playing, youAreHost: me == 0, seats: seatViews, game: game)
     }
 
     /// The busiest table the laid zone draws: six seats, every other seat laid down, with a
@@ -90,7 +93,7 @@ public enum DemoFixtures {
             SeatView(kind: .closed),
             SeatView(kind: .closed),
         ]
-        return RoomView(code: code, status: .lobby, youAreHost: true, seats: seats)
+        return RoomView(code: code, name: demoName, status: .lobby, youAreHost: true, seats: seats)
     }
 
     /// A pass-and-play table: seats 0 and 2 are on this phone and it is seat

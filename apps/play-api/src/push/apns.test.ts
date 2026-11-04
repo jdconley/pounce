@@ -137,7 +137,14 @@ describe("sendApns", () => {
 });
 
 describe("pushYourTurn", () => {
-  const intent: PushIntent = { deviceId: "dev", kind: "your_turn", seat: 1, personName: "Sam", code: "BCDFG" };
+  const intent: PushIntent = {
+    deviceId: "dev",
+    kind: "your_turn",
+    seat: 1,
+    personName: "Sam",
+    tableName: "Taco Night",
+    code: "BCDFG",
+  };
 
   async function env(extra: Partial<Env> = {}): Promise<Env> {
     const { pem } = await keyPair();
@@ -151,7 +158,7 @@ describe("pushYourTurn", () => {
     } as Env;
   }
 
-  it("sends the person's name and 'Your turn' with the room code", async () => {
+  it("sends the person's name and 'Your turn at' the table's name, with the room code", async () => {
     const { fetcher, calls } = fakeFetch(new Response(null, { status: 200 }));
     const result = await pushYourTurn(await env(), TOKEN, intent, fetcher, NOW);
 
@@ -160,7 +167,7 @@ describe("pushYourTurn", () => {
     expect(url).toBe(`https://api.push.apple.com/3/device/${TOKEN}`);
     expect((init.headers as Record<string, string>).authorization).toMatch(/^bearer [\w-]+\.[\w-]+\.[\w-]+$/);
     expect(JSON.parse(init.body as string)).toEqual({
-      aps: { alert: { title: "Sam", body: "Your turn" }, sound: "default", "thread-id": "BCDFG" },
+      aps: { alert: { title: "Sam", body: "Your turn at Taco Night" }, sound: "default", "thread-id": "BCDFG" },
       code: "BCDFG",
     });
   });

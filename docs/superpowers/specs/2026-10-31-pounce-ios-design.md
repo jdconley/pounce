@@ -104,11 +104,12 @@ Mock: `m3-lobby.jpg`. Refs: Flo "waiting for partner" (code huge), Airbuds empty
 - Tap your own cat → swap person (leave + claim) or stand up (`leave`).
 - **Start** (big orange play pill) is shown to every seated device (server lets any seated device start). Disabled while any seat is `open` or fewer than 2 players; when disabled, the blocking cushions pulse (the wordless reason). (server: `seats_open`, `not_enough_players`)
 - **Creating:** `POST /v1/rooms {game:"cat-tower"}` → code → connect → auto-`claim` seat 0 with the owner. (call)
+- **Table name:** every room has a name everyone sees (`RoomView.name`): a cat-themed default from the room code ("The Sleepy Sardines") until someone renames it. It sits at the top of the lobby; the host or anyone seated taps it to rename the table (`rename {name}`: trimmed, spaces collapsed, 1-30 code points, no control or bidi characters; refused with `not_seated` or, after the game, `game_over`). The table menu shows it with the same rename, and Home cards, game over, the share text and the your-turn push carry it. The room code stays on the lobby and under the name on Home cards for joining by code.
 - **Joining by link/code:** connect → if no seat of mine, auto-claim the **first open seat** with the owner, so the invitee's path is literally one tap. They can swap seats/person after. (call — this is the "she taps and is at your table" moment)
 
 ### 5.6 Share / invite
 Refs: yope invite card, Apple Games invite bubble, Peerspace share sheet with preview.
-- Share sheet item = the link `https://play.conleychaos.com/j/<CODE>` with `LPLinkMetadata` (title "Cat Tower", host cat image) so the share-sheet header shows cat art.
+- Share sheet item = the link `https://play.conleychaos.com/j/<CODE>` with `LPLinkMetadata` (title "<table name> - Cat Tower", host cat image) so the share-sheet header shows cat art, plus the invite text "Come play Cat Tower at <table name>! Room code <CODE>".
 - **The Messages bubble on her phone is built by Messages fetching the page**, so the `/j/` landing page needs Open Graph tags and an image. **Server follow-up in Plan 2:** add `og:title`, `og:description`, `og:image` (a static PNG of the room card art served by the Worker) to the share page. (call — this is the invite moment JD described)
 
 ### 5.7 Table (the game)
@@ -217,8 +218,8 @@ User gesture ──► TableScene/Shell ──► RoomStore.send(ClientMessage) 
 |---|---|
 | `POST /v1/devices` → `{deviceId, token}` | First launch (and if the token is ever rejected with 401). Token + deviceId in Keychain (`AfterFirstUnlockThisDeviceOnly`). |
 | `PUT /v1/devices/me/push {apnsToken}` | Every launch after APNs registration (contract), and whenever the token changes. |
-| `GET /v1/devices/me/tables` → `{tables:[{code,status,yourTurn,updatedAt}]}` | Home. |
-| `POST /v1/rooms {game:"cat-tower"}` → `201 {code}` | New game. |
+| `GET /v1/devices/me/tables` → `{tables:[{code,name?,status,yourTurn,updatedAt}]}` | Home. `name` is absent only for tables last reported before tables had names. |
+| `POST /v1/rooms {game:"cat-tower", name?}` → `201 {code}` | New game. Without `name` the room gets its default name. |
 | `GET /v1/rooms/<CODE>/ws` (WebSocket, `Authorization: Bearer <token>`) | The live room. 404 = no such room. |
 | `GET /healthz` | Debug screen only. |
 
@@ -291,7 +292,7 @@ Haptics (Core Haptics, pre-built patterns): light tick on pickup, medium on drop
 
 ## 10. Push notifications
 
-- Payload (server as built): `aps.alert = {title: <name of the person whose turn it is>, body: "Your turn"}`, `sound: default`, `thread-id = code`, collapse id = code, top-level `code`. Using the person's name means a shared phone shows *whose* turn it is.
+- Payload (server as built): `aps.alert = {title: <name of the person whose turn it is>, body: "Your turn at <table name>"}`, `sound: default`, `thread-id = code`, collapse id = code, top-level `code`. Using the person's name means a shared phone shows *whose* turn it is.
 - **Priming (call):** don't ask at first launch. Ask the first time this device is in a started game with a seat on another phone (i.e. a turn could happen while you're away): a cat holds up a mock "your turn" banner; tap the paw → system prompt. Refs: Duolingo "Remind me", Zocdoc mock notification. If declined, a small bell on Home re-offers it once.
 - `registerForRemoteNotifications` every launch; upload token every launch (contract) and on change.
 - Tap a notification → open that table by `code` (cold start or warm). Foreground: if that table is on screen, suppress the banner (the table already shows it); otherwise show it and refresh Home.

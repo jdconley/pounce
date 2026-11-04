@@ -1,24 +1,33 @@
 import PounceKit
 import SwiftUI
 
-/// The table's paw menu (`table.menu`): sound, haptics, how to play, move my seat, home. Move my
-/// seat grows the sheet into `MoveSeatSheet`, how to play into `HowToPlaySheet`.
+/// The table's paw menu (`table.menu`): the table's name (tap to rename it), sound, haptics, how
+/// to play, move my seat, home. Renaming grows the sheet into `RenameTableView`, move my seat into
+/// `MoveSeatSheet`, how to play into `HowToPlaySheet`.
 struct TableMenuSheet: View {
     @Environment(Settings.self) private var settings
     let session: RoomSession
     let onHome: () -> Void
     let onClose: () -> Void
 
-    private enum Page { case menu, moving, rules }
+    private enum Page { case menu, moving, rules, renaming }
 
     @State private var page = Page.menu
     @State private var detent: PresentationDetent = Self.menuDetent
 
-    static let menuDetent = PresentationDetent.height(300)
+    static let menuDetent = PresentationDetent.height(360)
 
     private var canMove: Bool {
         guard let table = session.model else { return false }
         return !table.mySeats.isEmpty && table.room.status != .over
+    }
+
+    private var tableName: String { session.store.room?.title ?? TableName.fallback(code: session.code) }
+
+    /// The server takes a rename from the host or any seated phone, until the game is over.
+    private var canRename: Bool {
+        guard let room = session.store.room, room.status != .over else { return false }
+        return room.youAreHost || room.seats.contains { $0.yours }
     }
 
     var body: some View {
@@ -34,6 +43,12 @@ struct TableMenuSheet: View {
             case .rules:
                 HowToPlaySheet { show(.menu) }
                     .transition(.move(edge: .trailing).combined(with: .opacity))
+            case .renaming:
+                RenameTableView(current: tableName, onCancel: { show(.menu) }) { name in
+                    session.send(.rename(name: name))
+                    show(.menu)
+                }
+                .transition(.move(edge: .trailing).combined(with: .opacity))
             case .menu:
                 menu
                     .transition(.move(edge: .leading).combined(with: .opacity))
@@ -47,6 +62,9 @@ struct TableMenuSheet: View {
 
     private var menu: some View {
         VStack(spacing: 22) {
+            TableNameTitle(name: tableName, editable: canRename) { show(.renaming) }
+                .padding(.horizontal, 20)
+                .accessibilityIdentifier("menu.name")
             HStack(spacing: 18) {
                 PillButton(
                     icon: settings.soundOn ? ArtName.iconSoundOn : ArtName.iconSoundOff,
