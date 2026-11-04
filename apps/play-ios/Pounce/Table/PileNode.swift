@@ -101,12 +101,13 @@ final class PileNode: SKNode {
         setScale(on ? 1.06 : 1)
     }
 
-    /// Turn start: the glow flares up and settles (the reconcile that follows decides whether
-    /// it stays lit).
+    /// Turn start: the glow flares up and settles twice (the reconcile that follows decides
+    /// whether it stays lit).
     func flare() -> (SKAction, SKNode) {
         (.sequence([
             .unhide(), .fadeAlpha(to: 0.2, duration: 0),
-            .fadeAlpha(to: 1, duration: 0.15), .fadeAlpha(to: 0.55, duration: 0.18), .fadeAlpha(to: 1, duration: 0.18),
+            .fadeAlpha(to: 1, duration: 0.15), .fadeAlpha(to: 0.45, duration: 0.18), .fadeAlpha(to: 1, duration: 0.18),
+            .fadeAlpha(to: 0.55, duration: 0.18), .fadeAlpha(to: 1, duration: 0.18),
         ]), glow)
     }
 

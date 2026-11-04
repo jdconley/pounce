@@ -142,7 +142,8 @@ struct ConnectingView: View {
 /// also hides a stale reveal by itself, and redraws from the store after every action). Over it:
 /// the first-game coach's tips (`CoachMark`), the scoreboard (tap the tower), the local cats row
 /// on a multi-seat phone, the pass-and-play curtain and, once the scene has played the win, the
-/// game-over overlay.
+/// game-over overlay. Under all of those, the turn cue (`TurnCueView`): "Your turn" when a hand
+/// of this phone is up (after its curtain), "Mochi's turn" under whoever else is.
 ///
 /// Privacy: on a multi-seat phone the curtain covers the table whenever `RoomStore.pass` says so,
 /// and stays up after the hold until the scene reports that seat's hand is actually face up
@@ -162,7 +163,10 @@ private struct TableStage: View {
     @State private var primingChecked = false
     /// The first-game tips for whoever's hand is face up (each person's first games).
     @State private var coach = Coach()
+    /// The app went to the background: back on this phone's turn, the turn cue plays again.
+    @State private var backgrounded = false
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.scenePhase) private var scenePhase
 
     private var table: TableModel? { session.store.room.map(TableModel.init(room:)) }
     private var pass: PassAndPlay { session.store.pass }
@@ -203,6 +207,13 @@ private struct TableStage: View {
         return events.coach
     }
 
+    /// The turn cue as it should show now: nothing while the curtain, the scoreboard, the menu,
+    /// the push priming or the game over is up (it plays once they are gone).
+    private var turnCue: TurnCue? {
+        guard curtainSeat == nil, events.scoreboard == nil, events.winners == nil, !priming, !events.menuOpen else { return nil }
+        return events.turnCue
+    }
+
     var body: some View {
         @Bindable var events = events
         let covered = curtainSeat != nil
@@ -221,6 +232,11 @@ private struct TableStage: View {
                     sync()
                 }
                 .transition(.opacity.combined(with: .scale(scale: 0.8, anchor: .bottom)))
+            }
+            if let cue = turnCue {
+                TurnCueView(cue: cue, yield: coach.tip != nil && coachView != nil)
+                    .transition(.opacity.combined(with: .scale(scale: cue.isMine ? 0.85 : 1)))
+                    .zIndex(4)
             }
             if let tip = coach.tip, let shown = coachView, shown.person.id == coach.person {
                 CoachMark(
@@ -302,6 +318,8 @@ private struct TableStage: View {
         .animation(.easeOut(duration: 0.2).paced, value: localCats.map(\.seat))
         .animation(.easeOut(duration: 0.25).paced, value: priming)
         .animation(.spring(duration: 0.35, bounce: 0.3).paced, value: coach.tip)
+        // Out of the way fast once the table is touched.
+        .animation(.easeOut(duration: 0.15).paced, value: turnCue)
         .onAppear(perform: attach)
         .onDisappear { session.detachTable() }
         .onChange(of: StageInput(room: session.store.room, pass: session.store.pass), initial: true) {
@@ -322,6 +340,14 @@ private struct TableStage: View {
             Sound.shared.play(ArtName.Sound.sfxPop)
             let words = CoachCopy.words(tip, shown)
             UIAccessibility.post(notification: .announcement, argument: "\(words.title). \(words.body)")
+        }
+        .onChange(of: scenePhase) { _, phase in
+            if phase == .background {
+                backgrounded = true
+            } else if phase == .active, backgrounded {
+                backgrounded = false
+                scene?.replayTurnCue()
+            }
         }
         .onChange(of: model.tipsReplays) {
             coach.turnOn()
@@ -367,6 +393,7 @@ private struct TableStage: View {
         scene.onCoach = { [weak events] coach in
             if events?.coach != coach { events?.coach = coach }
         }
+        scene.onTurnCue = { [weak events] cue in events?.turnCue = cue }
         self.scene = scene
         events.shown = scene.shownRevealed
         sync(scene)
@@ -463,6 +490,8 @@ private final class StageEvents {
     var tableTaps = 0
     /// The scene's view of the face-up hand for the first-game coach.
     var coach: TableCoach?
+    /// Whose turn the scene says to show.
+    var turnCue: TurnCue?
 }
 
 /// The small cats of this phone's seats along the bottom, while another seat plays: tap one

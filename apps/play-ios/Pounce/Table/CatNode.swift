@@ -30,7 +30,7 @@ final class CatNode: SKNode {
         self.cat = cat
         self.diameter = diameter
         let k = diameter / 72
-        glow = SKSpriteNode(texture: TableArt.table(ArtName.ringGlow), size: CGSize(width: 96 * k, height: 96 * k))
+        glow = SKSpriteNode(texture: TableArt.table(ArtName.ringGlow), size: CGSize(width: 114 * k, height: 114 * k))
         ring = SKSpriteNode(texture: TableArt.table(ArtName.ring), size: CGSize(width: diameter, height: diameter))
         sprite = SKSpriteNode(texture: TableArt.cat(cat, .idle), size: CGSize(width: diameter * 0.92, height: diameter * 0.92))
         let badge = CGSize(width: 22 * k, height: 22 * k)
@@ -59,6 +59,8 @@ final class CatNode: SKNode {
 
         glow.zPosition = 0
         glow.isHidden = true
+        // Additive, so the current player's ring reads from across the room.
+        glow.blendMode = .add
         ring.zPosition = 1
         ring.color = UIColor(ringColor)
         ring.colorBlendFactor = 0.85
@@ -118,8 +120,8 @@ final class CatNode: SKNode {
     }
 
     /// The finite "your ring pulses" pop for a turn that just arrived: the paw pops in, the
-    /// ring bumps twice, the glow flares. Decorative: it only touches scale and alpha of
-    /// children that reconcile never sets. Reduce Motion: a short fade instead.
+    /// ring bumps three times, the glow flares and swells. Decorative: it only touches scale
+    /// and alpha of children that reconcile never sets. Reduce Motion: a short fade instead.
     func turnPulse(reduceMotion: Bool) -> [(SKAction, SKNode)] {
         if reduceMotion {
             paw.alpha = 0
@@ -131,11 +133,18 @@ final class CatNode: SKNode {
             .scale(to: 1.0, duration: 0.1).eased(.easeInEaseOut),
         ])
         let bump = SKAction.sequence([
-            .scale(to: 1.1, duration: 0.12), .scale(to: 1.0, duration: 0.12),
+            .scale(to: 1.16, duration: 0.12), .scale(to: 1.0, duration: 0.12),
+            .scale(to: 1.12, duration: 0.12), .scale(to: 1.0, duration: 0.12),
             .scale(to: 1.08, duration: 0.12), .scale(to: 1.0, duration: 0.12),
         ])
         glow.alpha = 0.4
-        let flare = SKAction.sequence([.fadeAlpha(to: 1, duration: 0.24), .fadeAlpha(to: 0.6, duration: 0.24), .fadeAlpha(to: 1, duration: 0.24)])
+        let flare = SKAction.group([
+            .sequence([
+                .fadeAlpha(to: 1, duration: 0.24), .fadeAlpha(to: 0.6, duration: 0.24),
+                .fadeAlpha(to: 1, duration: 0.24), .fadeAlpha(to: 0.7, duration: 0.24), .fadeAlpha(to: 1, duration: 0.24),
+            ]),
+            .sequence([.scale(to: 1.25, duration: 0.3).eased(.easeOut), .scale(to: 1, duration: 0.5).eased(.easeInEaseOut)]),
+        ])
         return [(pop, paw), (bump, ring), (flare, glow)]
     }
 

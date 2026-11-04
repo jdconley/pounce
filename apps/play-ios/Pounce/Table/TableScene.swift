@@ -45,6 +45,9 @@ final class TableScene: SKScene {
     /// The first-game coach's view of the table changed (TableCoach.swift); nil while no hand of
     /// this phone is face up.
     var onCoach: (TableCoach?) -> Void = { _ in }
+    /// Whose turn the shell's overlay should show (TurnCue.swift); nil for none.
+    var onTurnCue: (TurnCue?) -> Void = { _ in }
+    var turnCue = TurnCueState()
     /// Spotlight and game-over bookkeeping (Celebrations.swift).
     var celebration = CelebrationState()
     #if DEBUG
@@ -138,7 +141,7 @@ final class TableScene: SKScene {
     var transients: [SKNode] = []
     /// A game intent is animating.
     private(set) var animating = false {
-        didSet { if animating != oldValue { publishCoach() } }
+        didSet { if animating != oldValue { publishOverlays() } }
     }
     /// The store seq this scene has played or drawn up to.
     private var seenSeq = -1
@@ -372,7 +375,10 @@ final class TableScene: SKScene {
             // The store has moved past the shown hand's turn (this event or a later one):
             // privacy doesn't wait for the snapshot or for the shell.
             if hideIfStale() { hideHand() }
-            if let model, let said = TableAnnouncement.announcement(for: event, model: model) { announce(said) }
+            // "Your turn" is said by the turn cue once that hand is shown (after any curtain).
+            if let model, let said = TableAnnouncement.announcement(for: event, model: model) {
+                if case .yourTurn = said {} else { announce(said) }
+            }
             animating = true
             #if DEBUG
             let started = ContinuousClock.now
@@ -492,7 +498,7 @@ final class TableScene: SKScene {
             accessibilityVersion += 1
             director.wake()
             director.noteChange()
-            publishCoach()
+            publishOverlays()
         }
         // The snap wins: stop director actions on every node this redraw positions.
         for layer in [Layer.background, .rug, .piles, .laidZone, .tower, .opponents, .trays, .hand] {
@@ -653,6 +659,7 @@ final class TableScene: SKScene {
     // MARK: touches
 
     override func touchesBegan(_ touches: Set<UITouch>, with event: UIEvent?) {
+        dismissTurnCue()
         for touch in touches {
             director.touchBegan()
             inputBegan(touch.location(in: self))
@@ -677,8 +684,10 @@ final class TableScene: SKScene {
         }
     }
 
-    private func publishCoach() {
+    /// The shell's overlays over the table: the first-game coach and the turn cue.
+    private func publishOverlays() {
         onCoach(coachSnapshot())
+        publishTurnCue()
     }
 
     /// Asks for a redraw after an input change (selection, trays, order).
