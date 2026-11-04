@@ -24,7 +24,7 @@ export default {
       return new Response(null, { status: 204 });
     }
     if (url.pathname === "/__test/grant") {
-      const state = (await stub().exportState()) as PairState;
+      const state = (await stub().exportState()) as unknown as PairState;
       state.owned.push(url.searchParams.get("item") ?? "");
       await stub().replace(state);
       return new Response(null, { status: 204 });
