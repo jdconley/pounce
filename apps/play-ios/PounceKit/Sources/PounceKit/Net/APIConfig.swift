@@ -23,10 +23,11 @@ public struct APIConfig: Sendable {
         return parts.url ?? baseURL
     }
 
-    func endpoint(_ path: String) -> URL {
+    /// The page or route at `path` on this server (for example the privacy page, `/privacy`).
+    public func endpoint(_ path: String, query: [URLQueryItem] = []) -> URL {
         var parts = URLComponents(url: baseURL, resolvingAgainstBaseURL: false) ?? URLComponents()
         parts.path = path
-        parts.query = nil
+        parts.queryItems = query.isEmpty ? nil : query
         parts.fragment = nil
         return parts.url ?? baseURL
     }

@@ -20,6 +20,12 @@ public struct TableEntry: Codable, Equatable, Sendable {
 
 public enum APIError: Error, Equatable {
     case notConfigured, rateLimited, unauthorized, badRequest, notFound
+    /// 403: not allowed for this person (a kitten signing in, §14.1).
+    case forbidden
+    /// 409 with the body's `error` (`already_linked`, `already_signed_in`, ...).
+    case conflict(String)
+    /// 409 `merge_needed`: the identity belongs to another player, shown as these two cats merging.
+    case mergeNeeded(name: String, cat: Int)
     case server(Int)
     case transport(String)
 }
@@ -114,15 +120,17 @@ public actor APIClient {
 
     // MARK: requests
 
-    private func authenticated(_ method: String, _ path: String, body: [String: String]?) async throws -> Data {
-        try await authenticatedCall(method, path, body: body).data
+    func authenticated(
+        _ method: String, _ path: String, body: (any Encodable & Sendable)?, query: [URLQueryItem] = []
+    ) async throws -> Data {
+        try await authenticatedCall(method, path, body: body, query: query).data
     }
 
     /// The reply and the credential that got it.
     private func authenticatedCall(
-        _ method: String, _ path: String, body: [String: String]?
+        _ method: String, _ path: String, body: (any Encodable & Sendable)?, query: [URLQueryItem] = []
     ) async throws -> (data: Data, credential: DeviceCredential) {
-        let url = config.endpoint(path)
+        let url = config.endpoint(path, query: query)
         let payload = try body.map { try JSONEncoder().encode($0) }
         var cred = try await credential()
         for attempt in 0..<2 {
@@ -160,18 +168,33 @@ public actor APIClient {
         case 200..<300: return data
         case 400: throw APIError.badRequest
         case 401: throw APIError.unauthorized
+        case 403: throw APIError.forbidden
         case 404: throw APIError.notFound
+        case 409: throw conflict(in: data)
         case 429: throw APIError.rateLimited
         case 503 where errorCode(in: data) == "not_configured": throw APIError.notConfigured
         default: throw APIError.server(http.statusCode)
         }
     }
 
+    private static func conflict(in data: Data) -> APIError {
+        struct Body: Decodable {
+            struct Other: Decodable { let name: String; let cat: Int }
+            let error: String?
+            let otherPlayer: Other?
+        }
+        let body = try? JSONDecoder().decode(Body.self, from: data)
+        if body?.error == "merge_needed", let other = body?.otherPlayer {
+            return .mergeNeeded(name: other.name, cat: other.cat)
+        }
+        return .conflict(body?.error ?? "")
+    }
+
     private static func errorCode(in data: Data) -> String? {
         (try? JSONSerialization.jsonObject(with: data) as? [String: Any])?["error"] as? String
     }
 
-    private func decode<T: Decodable>(_ type: T.Type, from data: Data, status: Int) throws -> T {
+    func decode<T: Decodable>(_ type: T.Type, from data: Data, status: Int) throws -> T {
         try Self.decode(type, from: data, status: status)
     }
 

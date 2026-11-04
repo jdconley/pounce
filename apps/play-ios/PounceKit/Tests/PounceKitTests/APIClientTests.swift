@@ -9,6 +9,7 @@ struct Seen: Sendable {
     var path: String
     var authorization: String?
     var body: Data
+    var query: String? = nil
 }
 
 /// A canned response.
@@ -91,7 +92,7 @@ final class StubProtocol: URLProtocol, @unchecked Sendable {  // URLProtocol is 
         }
         let seen = Seen(
             method: request.httpMethod ?? "GET", path: url.path,
-            authorization: request.value(forHTTPHeaderField: "Authorization"), body: body)
+            authorization: request.value(forHTTPHeaderField: "Authorization"), body: body, query: url.query)
         let reply = server.handle(seen)
         if let until = reply.until {
             // Polled on the loading thread's run loop, never blocking it: other requests on this
