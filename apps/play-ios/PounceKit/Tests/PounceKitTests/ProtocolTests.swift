@@ -77,7 +77,7 @@ import Testing
 
     @Test func encodesEveryClientFixture() throws {
         let fixtures = try Fixtures.clientMessages()
-        #expect(fixtures.count == 19)
+        #expect(fixtures.count == 20)
         for (name, json) in fixtures {
             #expect(try jsonEqual(Codec.encode(sample(name)), json), "\(name)")
         }
