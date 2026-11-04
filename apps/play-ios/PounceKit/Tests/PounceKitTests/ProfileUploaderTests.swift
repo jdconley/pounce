@@ -166,4 +166,13 @@ import Testing
         #expect(store.load() == LocalPeople(
             owner: Person(id: "new-owner", name: "JD", cat: 4), others: [Person(id: "new-kid", name: "Sam", cat: 1)]))
     }
+
+    @Test func testUpsertOtherAddsThenUpdatesInPlace() throws {
+        let store = PeopleStore(directory: try tempDir())
+        store.setOwner(name: "JD", cat: 4)
+        let kid = store.add(name: "Sam", cat: 1)
+        store.upsertOther(Person(id: "i", name: "Mia", cat: 2))
+        store.upsertOther(Person(id: "i", name: "Mochi", cat: 3))
+        #expect(store.load().others == [kid, Person(id: "i", name: "Mochi", cat: 3)])
+    }
 }

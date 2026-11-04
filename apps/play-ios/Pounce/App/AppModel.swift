@@ -52,12 +52,16 @@ final class AppModel {
     var ageBand: AgeBand? { ageRecord?.band }
     /// What the owner's band allows on this device. Unknown counts as the most limited.
     var limits: AgeLimits { AgeLimits(band: ageBand) }
+    /// Players, Sign in with Apple and sync (spec §10.5, §13.1).
+    @ObservationIgnored private(set) var account: AccountModel!
+
     /// The local "your turn" reminder: the person's choice, else the band's default.
     var turnReminderOn: Bool { settings.turnReminderChoice ?? limits.turnReminderDefault }
 
     init(
         config: APIConfig, credentials: CredentialStore, dataDirectory: URL, settings: Settings = .shared,
-        ageStore: AgeRecordStore = KeychainAgeRecordStore(), ageAsker: AgeRangeAsking = LiveAgeRange()
+        ageStore: AgeRecordStore = KeychainAgeRecordStore(), ageAsker: AgeRangeAsking = LiveAgeRange(),
+        personKeys: PersonKeyStore = KeychainPersonKeyStore()
     ) {
         api = APIClient(config: config, credentials: credentials)
         self.config = config
@@ -76,6 +80,17 @@ final class AppModel {
         let age = ageStore.load()
         ageRecord = age
         route = age == nil ? .age(then: nil) : loaded.owner == nil ? .pickCat(then: nil) : .home
+        #if DEBUG
+        let stub = StubScenario.from(arguments: CommandLine.arguments)
+        let service: AccountService = stub.map { StubAccountService(scenario: $0) } ?? api
+        let apple: AppleSigning = stub.map { StubAppleSignIn(scenario: $0) } ?? LiveAppleSignIn()
+        #else
+        let service: AccountService = api
+        let apple: AppleSigning = LiveAppleSignIn()
+        #endif
+        account = AccountModel(
+            app: self, service: service, apple: apple, keys: personKeys,
+            store: AccountStore(directory: dataDirectory, fileName: AccountStore.fileName(for: config)))
     }
 
     /// The real app model, or (DEBUG only) the throwaway one for `-uitest-reset` (fresh temp data
@@ -95,7 +110,7 @@ final class AppModel {
                 .appendingPathComponent("pounce-uitest-\(UUID().uuidString)", isDirectory: true)
             model = AppModel(
                 config: config, credentials: MemoryCredentialStore(), dataDirectory: dir,
-                ageStore: debugAgeStore(arguments: arguments), ageAsker: asker)
+                ageStore: debugAgeStore(arguments: arguments), ageAsker: asker, personKeys: MemoryPersonKeyStore())
         } else {
             model = real(config: config, ageAsker: asker)
         }
@@ -181,6 +196,11 @@ final class AppModel {
     func bootstrap() async {
         reloadLocal()
         _ = try? await api.credential()
+        #if DEBUG
+        await account.applyDebugPreset()
+        #endif
+        await account.uploadProfile()
+        await account.sync()
         if people.owner != nil { await refreshTables() }
         await recheckAge()
     }
@@ -240,8 +260,12 @@ final class AppModel {
 
     /// Saves the owner, then continues to the link that interrupted onboarding, or Home.
     func finishPickCat(name: String, cat: Int) {
-        peopleStore.setOwner(name: name, cat: cat)
+        let owner = peopleStore.setOwner(name: name, cat: cat)
         people = peopleStore.load()
+        account.noteChanged(owner.id)
+        #if DEBUG
+        Task { await account.applyDebugPreset() }
+        #endif
         if case .pickCat(let then?) = route {
             handle(then)
         } else {
@@ -266,11 +290,13 @@ final class AppModel {
         let updatedAt = tables.first { $0.code == code }?.updatedAt ?? Date.now.timeIntervalSince1970 * 1000
         tableArchive.archive(code: code, updatedAt: updatedAt)
         archived = tableArchive.all()
+        account.noteLocalChanges()
     }
 
     func restore(code: String) {
         tableArchive.restore(code: code)
         archived = tableArchive.all()
+        account?.noteLocalChanges()
     }
 
     func refreshTables() async {
@@ -379,6 +405,10 @@ final class AppModel {
         switch phase {
         case .active:
             room?.foreground()
+            Task {
+                await account.uploadProfile()
+                await account.sync()
+            }
             // Every reminder, not just this launch's: one may predate a relaunch.
             push?.cancelAllTurnReminders()
             push?.retryUpload()
@@ -497,9 +527,10 @@ final class AppModel {
     /// this phone sits at catch up when they next open); a new cat applies to tables joined
     /// afterwards.
     func updateOwner(name: String, cat: Int) {
-        peopleStore.setOwner(name: name, cat: cat)
+        let owner = peopleStore.setOwner(name: name, cat: cat)
         people = peopleStore.load()
         room?.syncNames()
+        account?.noteChanged(owner.id)
     }
 
     /// Renames whoever sits at `seat` of the open table: the person on this phone with that
@@ -517,10 +548,12 @@ final class AppModel {
         }
     }
 
+    /// Someone else who shares this phone, with the age band whoever added them picked (§14.1).
     @discardableResult
-    func addPerson(name: String, cat: Int) -> Person {
+    func addPerson(name: String, cat: Int, band: AgeBand = .adult) -> Person {
         let person = peopleStore.add(name: name, cat: cat)
         people = peopleStore.load()
+        account.noteAdded(person.id, band: band)
         return person
     }
 
@@ -528,11 +561,97 @@ final class AppModel {
         peopleStore.update(person)
         people = peopleStore.load()
         room?.syncNames()
+        account.noteChanged(person.id)
     }
 
     func removePerson(id: String) {
         peopleStore.remove(id: id)
         people = peopleStore.load()
+        account.noteRemoved(id)
+    }
+
+    // MARK: Accounts: what the account model changes here
+
+    /// The profile upload gave people new ids: reload them and their tips.
+    func peopleRenamed() {
+        people = peopleStore.load()
+        tipsSeen = tutorialStore.load()
+    }
+
+    /// Signed in on a second device: it shows the account's name and cat (spec §10.5). Not a
+    /// local edit, so it isn't stamped as one.
+    func adoptAccountProfile(name: String, cat: Int) {
+        guard let owner = people.owner, owner.name != name || owner.cat != cat else { return }
+        peopleStore.setOwner(name: name, cat: cat)
+        people = peopleStore.load()
+        room?.syncNames()
+    }
+
+    /// The account's household people from its other devices (they come and go with the account).
+    func setImported(_ imported: [Person], previous: Set<String>) {
+        let keep = Set(imported.map(\.id))
+        for id in previous.subtracting(keep) { peopleStore.remove(id: id) }
+        for person in imported { peopleStore.upsertOther(person) }
+        people = peopleStore.load()
+    }
+
+    func removeImported(_ ids: Set<String>) {
+        for id in ids { peopleStore.remove(id: id) }
+        people = peopleStore.load()
+    }
+
+    /// Settings, sound and haptics, changed on the gear sheet.
+    func settingsChanged() {
+        account.noteLocalChanges()
+    }
+
+    /// This device's synced values for one section (spec §13.1, "what syncs").
+    func syncedValues(_ section: SyncSectionName, accountPersonId: String?) -> [String: JSONValue] {
+        switch section {
+        case .settings:
+            var values: [String: JSONValue] = ["soundOn": .bool(settings.soundOn), "hapticsOn": .bool(settings.hapticsOn)]
+            if let reminder = settings.turnReminderChoice { values["turnReminder"] = .bool(reminder) }
+            return values
+        case .archive:
+            return tableArchive.all().mapValues { .number($0) }
+        case .tutorial:
+            guard let id = accountPersonId else { return [:] }
+            return Dictionary(uniqueKeysWithValues: (tipsSeen[id] ?? []).map { ($0.rawValue, JSONValue.bool(true)) })
+        }
+    }
+
+    /// Takes in values another device wrote later than this one.
+    func applySynced(_ section: SyncSectionName, _ entries: SyncSection, accountPersonId: String?) {
+        switch section {
+        case .settings:
+            for (key, entry) in entries {
+                guard let on = entry.v.boolValue else { continue }
+                switch key {
+                case "soundOn": settings.soundOn = on
+                case "hapticsOn": settings.hapticsOn = on
+                case "turnReminder": settings.turnReminderChoice = on
+                default: break
+                }
+            }
+        case .archive:
+            for (code, entry) in entries where RoomCode.isValid(code) {
+                if let updatedAt = entry.v.numberValue {
+                    tableArchive.archive(code: code, updatedAt: updatedAt)
+                } else {
+                    tableArchive.restore(code: code)
+                }
+            }
+            archived = tableArchive.all()
+        case .tutorial:
+            guard let id = accountPersonId else { return }
+            var all = tutorialStore.load()
+            for (key, entry) in entries {
+                guard let tip = CoachTip(rawValue: key) else { continue }
+                if entry.v.boolValue == true { all[id, default: []].insert(tip) } else { all[id]?.remove(tip) }
+            }
+            tutorialStore.replace(all)
+            tipsSeen = all
+        }
     }
 
     // MARK: Coaching tips (first-game tutorial)
@@ -540,6 +659,7 @@ final class AppModel {
     func markTipsSeen(_ tips: Set<CoachTip>, person: String) {
         guard !tips.isSubset(of: tipsSeen[person] ?? []) else { return }
         tipsSeen = tutorialStore.markSeen(tips, person: person)
+        account.noteLocalChanges()
     }
 
     /// Everyone on this phone gets the tips again, from the next thing that fits.
@@ -547,6 +667,7 @@ final class AppModel {
         tutorialStore.reset()
         tipsSeen = [:]
         tipsReplays += 1
+        account.noteLocalChanges()
     }
 
     // MARK: Push priming (spec §10)

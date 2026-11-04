@@ -72,6 +72,20 @@ public final class PeopleStore {
         if people.others.count != before { save(people) }
     }
 
+    /// Adds one of the other people with a known id (a household person from the account), or
+    /// updates them in place.
+    public func upsertOther(_ p: Person) {
+        var people = load()
+        let cleaned = Person(id: p.id, name: Self.clean(p.name), cat: p.cat)
+        if let i = people.others.firstIndex(where: { $0.id == p.id }) {
+            guard people.others[i] != cleaned else { return }
+            people.others[i] = cleaned
+        } else {
+            people.others.append(cleaned)
+        }
+        save(people)
+    }
+
     /// Gives a person a new id, in place (the server rejected the old one: someone else bound it).
     public func replaceID(_ old: String, with new: String) {
         var people = load()

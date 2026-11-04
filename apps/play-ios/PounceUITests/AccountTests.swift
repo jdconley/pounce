@@ -1,0 +1,171 @@
+import XCTest
+
+/// Accounts in the app (spec §10.5, §13.1, §14), against the Debug stub: `-stub-accounts
+/// <scenario>` swaps both Sign in with Apple and the account routes for in-memory fakes, so no
+/// Apple account and no server are needed.
+@MainActor
+final class AccountTests: XCTestCase {
+    override func setUp() {
+        continueAfterFailure = false
+    }
+
+    private func launch(_ scenario: String, _ extra: [String] = []) -> XCUIApplication {
+        let app = XCUIApplication()
+        app.launchArguments = Live.arguments() + ["-uitest-reset", "-stub-accounts", scenario] + extra
+        app.launchEnvironment["POUNCE_API_BASE_URL"] = Live.baseURL
+        app.launch()
+        onboard(app)
+        return app
+    }
+
+    private func openPeople(_ app: XCUIApplication) {
+        el(app, "home.people").tap()
+        XCTAssertTrue(el(app, "sheet-people").waitForExistence(timeout: Live.t(5)), "no people sheet")
+    }
+
+    private func openGear(_ app: XCUIApplication) {
+        el(app, "home.settings").tap()
+        XCTAssertTrue(el(app, "sheet-gear").waitForExistence(timeout: Live.t(5)), "no gear sheet")
+    }
+
+    private func signedIn(_ e: XCUIElement) -> Bool { value(e) == "signed in" }
+
+    func testSignInFromPeopleSheetUpgrades() {
+        let app = launch("upgraded")
+        openPeople(app)
+        let offer = el(app, "people.signin")
+        XCTAssertTrue(offer.waitForExistence(timeout: Live.t(5)), "no sign-in offer on the people sheet")
+        XCTAssertFalse(signedIn(el(app, "people.owner")))
+        offer.tap()
+        XCTAssertTrue(until(5) { self.signedIn(self.el(app, "people.owner")) }, "the owner didn't sign in")
+        XCTAssertTrue(until(3) { !offer.exists }, "the offer stays after signing in")
+        XCTAssertFalse(el(app, "screen-merge").exists, "an upgrade is not a merge")
+    }
+
+    func testMergedShowsTwoCatsThenAccount() {
+        let app = launch("merged")
+        openPeople(app)
+        el(app, "people.signin").tap()
+        let done = el(app, "merge.done")
+        XCTAssertTrue(done.waitForExistence(timeout: Live.t(5)), "a merge shows the two cats becoming one")
+        XCTAssertFalse(el(app, "merge.back").exists, "a finished merge asks nothing")
+        done.tap()
+        XCTAssertTrue(until(5) { self.label(self.el(app, "people.owner")) == "Mia" }, "the account's name didn't arrive")
+        XCTAssertTrue(signedIn(el(app, "people.owner")))
+    }
+
+    func testMergeNeededAsksFirst() {
+        let app = launch("link-merge")
+        openGear(app)
+        XCTAssertTrue(el(app, "gear.account").waitForExistence(timeout: Live.t(5)), "not signed in")
+        XCTAssertFalse(el(app, "gear.provider.apple").exists)
+        el(app, "gear.link.apple").tap()
+        let back = el(app, "merge.back")
+        XCTAssertTrue(back.waitForExistence(timeout: Live.t(5)), "no merge question")
+        XCTAssertTrue(el(app, "merge.confirm").exists)
+        back.tap()
+        XCTAssertTrue(until(3) { !back.exists }, "back doesn't close the question")
+        XCTAssertFalse(el(app, "gear.provider.apple").exists, "back merged anyway")
+
+        el(app, "gear.link.apple").tap()
+        let confirm = el(app, "merge.confirm")
+        XCTAssertTrue(confirm.waitForExistence(timeout: Live.t(5)))
+        confirm.tap()
+        let done = el(app, "merge.done")
+        if done.waitForExistence(timeout: Live.t(5)) { done.tap() }
+        XCTAssertTrue(el(app, "gear.provider.apple").waitForExistence(timeout: Live.t(5)), "the provider didn't link")
+    }
+
+    func testCancelledSignInChangesNothing() {
+        let app = launch("cancel")
+        openPeople(app)
+        let offer = el(app, "people.signin")
+        XCTAssertTrue(offer.waitForExistence(timeout: Live.t(5)))
+        offer.tap()
+        Thread.sleep(forTimeInterval: Live.pace(1.5))
+        XCTAssertTrue(offer.exists, "a cancelled sign-in removed the offer")
+        XCTAssertFalse(signedIn(el(app, "people.owner")))
+        XCTAssertFalse(el(app, "screen-merge").exists)
+    }
+
+    func testSignOutReturnsToGuest() {
+        let app = launch("signed-in")
+        openGear(app)
+        XCTAssertTrue(el(app, "gear.account").waitForExistence(timeout: Live.t(5)), "not signed in")
+        XCTAssertTrue(el(app, "gear.provider.apple").exists, "no Apple icon")
+        el(app, "gear.signout").tap()
+        XCTAssertTrue(el(app, "gear.signin").waitForExistence(timeout: Live.t(5)), "no offer after signing out")
+        XCTAssertFalse(el(app, "gear.account").exists)
+    }
+
+    func testDeleteConfirmsThenShowsSettingsPath() {
+        let app = launch("signed-in")
+        openGear(app)
+        el(app, "gear.delete").tap()
+        let back = el(app, "delete.back")
+        XCTAssertTrue(back.waitForExistence(timeout: Live.t(5)), "no delete confirm")
+        back.tap()
+        XCTAssertTrue(until(3) { !back.exists })
+        XCTAssertTrue(el(app, "gear.account").exists, "back deleted anyway")
+
+        el(app, "gear.delete").tap()
+        el(app, "delete.confirm").tap()
+        let path = el(app, "settings.path")
+        XCTAssertTrue(path.waitForExistence(timeout: Live.t(5)), "no picture of the Settings path")
+        el(app, "settings.path.done").tap()
+        XCTAssertTrue(el(app, "gear.signin").waitForExistence(timeout: Live.t(5)), "still signed in after deleting")
+    }
+
+    func testKittenSeesNoSignIn() {
+        let app = launch("upgraded", ["-age-band", "kitten"])
+        openPeople(app)
+        Thread.sleep(forTimeInterval: Live.pace(1))
+        XCTAssertFalse(el(app, "people.signin").exists, "a kitten was offered sign-in")
+        el(app, "people.close").tap()
+        XCTAssertTrue(until(3) { !self.el(app, "sheet-people").exists })
+        openGear(app)
+        XCTAssertFalse(el(app, "gear.signin").exists, "a kitten was offered sign-in")
+    }
+
+    func testHouseholdKittenPicksDiceName() {
+        let app = launch("upgraded")
+        openPeople(app)
+        el(app, "people.add").tap()
+        let kitten = el(app, "age.band.kitten")
+        XCTAssertTrue(kitten.waitForExistence(timeout: Live.t(5)), "no age pictures for a new person")
+        XCTAssertTrue(el(app, "age.band.teen").exists)
+        XCTAssertTrue(el(app, "age.band.adult").exists)
+        kitten.tap()
+        XCTAssertTrue(el(app, "pickcat.generatedName").waitForExistence(timeout: Live.t(5)), "a kitten gets a generated name")
+        XCTAssertFalse(app.textFields["pickcat.name"].exists)
+        el(app, "pickcat.confirm").tap()
+        let tile = app.descendants(matching: .any).matching(
+            NSPredicate(format: "identifier BEGINSWITH 'people.person.'")).firstMatch
+        XCTAssertTrue(tile.waitForExistence(timeout: Live.t(5)), "the kitten wasn't added")
+        tile.press(forDuration: 1.2)
+        Thread.sleep(forTimeInterval: Live.pace(1))
+        XCTAssertFalse(el(app, "people.signin.person").exists, "a kitten was offered sign-in")
+    }
+
+    func testHouseholdHoldSignsIn() {
+        let app = launch("upgraded")
+        openPeople(app)
+        el(app, "people.add").tap()
+        let teen = el(app, "age.band.teen")
+        XCTAssertTrue(teen.waitForExistence(timeout: Live.t(5)))
+        teen.tap()
+        XCTAssertTrue(el(app, "pickcat.dice").waitForExistence(timeout: Live.t(5)))
+        el(app, "pickcat.dice").tap()
+        _ = until(3) { app.keyboards.count == 0 }
+        el(app, "pickcat.confirm").tap()
+        let tile = app.descendants(matching: .any).matching(
+            NSPredicate(format: "identifier BEGINSWITH 'people.person.'")).firstMatch
+        XCTAssertTrue(tile.waitForExistence(timeout: Live.t(5)))
+        tile.press(forDuration: 1.2)
+        let button = el(app, "people.signin.person")
+        XCTAssertTrue(button.waitForExistence(timeout: Live.t(5)), "holding a cat offers that person sign-in")
+        button.tap()
+        XCTAssertTrue(until(5) { self.signedIn(tile) }, "the household person didn't sign in")
+        XCTAssertFalse(signedIn(el(app, "people.owner")), "the owner signed in instead")
+    }
+}
