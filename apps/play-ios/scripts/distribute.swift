@@ -95,6 +95,9 @@ func changes(since: String) -> [String] {
     }
     subject = subject.replacing(prNumber, with: "").trimmingCharacters(in: .whitespaces)
     guard let first = subject.first else { return nil }
+    // Leave a word already cased on purpose alone ("iPad support", not "IPad support").
+    let firstWord = subject.prefix { !$0.isWhitespace }
+    if firstWord.dropFirst().contains(where: \.isUppercase) { return subject }
     return first.uppercased() + subject.dropFirst()
   }
 }
