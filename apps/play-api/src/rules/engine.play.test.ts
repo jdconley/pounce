@@ -239,6 +239,29 @@ describe("hit", () => {
     expect(s).toEqual(snapshot);
   });
 
+  test("hit yarn with side start extends the low end of the run", () => {
+    const s = laidState();
+    const { state, events } = ok(
+      applyAction(s, 0, { type: "hit", card: YARN, target: { seat: 1, group: 0 }, side: "start" }),
+    );
+    const extended = { kind: "run", cards: [YARN, ...run4.cards], start: 2, end: 6 };
+    expect(state.laid[1]).toEqual([extended]);
+    expect(events).toEqual([
+      { kind: "hit", seat: 0, card: YARN, target: { seat: 1, group: 0 }, group: extended },
+    ]);
+  });
+
+  test("hit without a side keeps the old default (yarn extends the high end)", () => {
+    const { state } = ok(applyAction(laidState(), 0, { type: "hit", card: YARN, target: { seat: 1, group: 0 } }));
+    expect(state.laid[1]).toEqual([{ kind: "run", cards: [...run4.cards, YARN], start: 3, end: 7 }]);
+  });
+
+  test("hit a natural on the wrong side -> bad_target", () => {
+    expect(
+      applyAction(laidState(), 0, { type: "hit", card: tabby(7), target: { seat: 1, group: 0 }, side: "start" }),
+    ).toEqual(fails("bad_target"));
+  });
+
   test("hit invalid card -> bad_target", () => {
     const s = laidState();
     expect(

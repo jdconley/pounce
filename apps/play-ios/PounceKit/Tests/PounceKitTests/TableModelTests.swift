@@ -64,6 +64,58 @@ func makeRoom(
         #expect(TableModel(room: makeRoom(step: .draw, laid: laid)).hitTargets(card: 42, seat: 0).isEmpty)
     }
 
+    /// Where a card dropped toward one end of a group lands, and what goes on the wire.
+    @Test func hitPlanFollowsTheEndTheCardWasDroppedOn() throws {
+        let run: Group = .run(cards: [3, 4, 5, 6], start: 4, end: 7)  // 4-5-6-7
+        let set7: Group = .set(cards: [6 + 12, 30, 54], value: 7)
+        let laid: [[Group]?] = [[set7], [run], nil, nil]
+        let model = TableModel(room: makeRoom(step: .play, laid: laid))
+        let target = HitTarget(seat: 1, group: 0)
+
+        // A Yarn at the start: W-4-5-6-7 from 3, sent with side start.
+        let low = try #require(model.hitPlan(card: 96, seat: 0, target: target, toward: .start))
+        #expect(low.group == .run(cards: [96, 3, 4, 5, 6], start: 3, end: 7))
+        #expect(low.index == 0)
+        #expect(low.side == .start)
+        #expect(low.stands == 3)
+        #expect(low.action == .hit(card: 96, target: target, side: .start))
+
+        // At the end it extends upward; that is the server's default, so no side is sent
+        // (a server without `side` still takes it).
+        let high = try #require(model.hitPlan(card: 96, seat: 0, target: target, toward: .end))
+        #expect(high.group == .run(cards: [3, 4, 5, 6, 96], start: 4, end: 8))
+        #expect(high.index == 4)
+        #expect(high.stands == 8)
+        #expect(high.action == .hit(card: 96, target: target))
+
+        // A natural goes where its value fits, whichever end it was dropped on.
+        let eight = try #require(model.hitPlan(card: 7, seat: 0, target: target, toward: .start))
+        #expect(eight.index == 4)
+        #expect(eight.side == .end)
+        #expect(eight.stands == nil)
+        #expect(eight.action == .hit(card: 7, target: target))
+
+        // A Yarn on a run that tops out at 12 dropped at the end slides to the start.
+        let top: Group = .run(cards: [8, 9, 10, 11], start: 9, end: 12)
+        let model2 = TableModel(room: makeRoom(step: .play, laid: [[set7], [top], nil, nil]))
+        let slid = try #require(model2.hitPlan(card: 96, seat: 0, target: target, toward: .end))
+        #expect(slid.side == .start)
+        #expect(slid.stands == 8)
+        #expect(slid.action == .hit(card: 96, target: target))  // the server's default there
+
+        // Sets: the Yarn stands for the set's number; no side.
+        let onSet = try #require(model.hitPlan(card: 96, seat: 0, target: HitTarget(seat: 0, group: 0), toward: .start))
+        #expect(onSet.side == nil)
+        #expect(onSet.stands == 7)
+        #expect(onSet.action == .hit(card: 96, target: HitTarget(seat: 0, group: 0)))
+
+        // Illegal or out of turn: no plan.
+        #expect(model.hitPlan(card: 104, seat: 0, target: target, toward: .start) == nil)
+        #expect(model.hitPlan(card: 0, seat: 0, target: target, toward: .start) == nil)
+        #expect(model.hitPlan(card: 96, seat: 0, target: HitTarget(seat: 2, group: 0), toward: .start) == nil)
+        #expect(TableModel(room: makeRoom(step: .draw, laid: laid)).hitPlan(card: 96, seat: 0, target: target, toward: .start) == nil)
+    }
+
     @Test func cucumberWithNoTargetsDiscardsPlain() {
         let model = TableModel(room: makeRoom(step: .play, pendingSkip: [false, true, true, true]))
         #expect(model.skipTargets(for: 0).isEmpty)

@@ -137,10 +137,14 @@ function parseAction(a: unknown): Action | null {
       return { type: "discard", card: a.card, skipTarget: a.skipTarget };
     }
     case "hit": {
-      if (!hasKeys(a, ["type", "card", "target"]) || !isCard(a.card)) return null;
+      if (!hasKeys(a, ["type", "card", "target"], ["side"]) || !isCard(a.card)) return null;
       const t = a.target;
       if (!isObj(t) || !hasKeys(t, ["seat", "group"]) || !isInt(t.seat, 0) || !isInt(t.group, 0)) return null;
-      return { type: "hit", card: a.card, target: { seat: t.seat, group: t.group } };
+      const hit = { type: "hit" as const, card: a.card, target: { seat: t.seat, group: t.group } };
+      if (!("side" in a)) return hit;
+      // Which end of a run the card goes on; older clients leave it out.
+      if (a.side !== "start" && a.side !== "end") return null;
+      return { ...hit, side: a.side };
     }
     case "layDown": {
       if (!hasKeys(a, ["type", "groups"])) return null;

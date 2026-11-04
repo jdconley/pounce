@@ -76,8 +76,11 @@ public enum Rules {
     }
 
     /// Whether `card` can be added to a laid-down group. Returns the extended
-    /// group (the input is a value and is not mutated), or nil.
-    public static func canHit(_ group: Group, card id: CardID) -> Group? {
+    /// group (the input is a value and is not mutated), or nil. For a run, `side`
+    /// pins the end the card goes on and refuses it when that end can't take it;
+    /// without it a natural goes where its value fits and a Yarn extends the
+    /// end first, else the start. Sets and coats ignore `side`.
+    public static func canHit(_ group: Group, card id: CardID, side: HitSide? = nil) -> Group? {
         guard let card = Card.decode(id), card != .cucumber else { return nil }
         switch group {
         case .set(let cards, let value):
@@ -89,14 +92,16 @@ public enum Rules {
         case .run(let cards, let start, let end):
             let atEnd = Group.run(cards: cards + [id], start: start, end: end + 1)
             let atStart = Group.run(cards: [id] + cards, start: start - 1, end: end)
-            switch card {
-            case .number(let value, _):
-                if value == end + 1 { return atEnd }
-                if value == start - 1 { return atStart }
-                return nil
-            default: // yarn: extend the end first, else the start
-                if end < maxValue { return atEnd }
-                return start > 1 ? atStart : nil
+            let fitsEnd: Bool, fitsStart: Bool
+            if case .number(let value, _) = card {
+                (fitsEnd, fitsStart) = (value == end + 1, value == start - 1)
+            } else {  // yarn
+                (fitsEnd, fitsStart) = (end < maxValue, start > 1)
+            }
+            switch side {
+            case .end: return fitsEnd ? atEnd : nil
+            case .start: return fitsStart ? atStart : nil
+            case nil: return fitsEnd ? atEnd : fitsStart ? atStart : nil
             }
         }
     }

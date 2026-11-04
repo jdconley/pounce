@@ -79,6 +79,29 @@ public enum DemoFixtures {
         return room
     }
 
+    /// My play step with my phase laid (two sets) and four cards left: 2, 3, a Yarn and an 8.
+    /// Leo has laid a set of 7s and the run 4-5-6-7, so the 3 fits only below the run, the 8
+    /// only above, and the Yarn either end (the DEBUG `-demo hit` screen).
+    public static func hitTable() -> RoomView {
+        var room = table(seats: 4, mySeat: 0, phase: 0)
+        let hand = [id(2, .gray), id(3, .calico), 96, id(8, .gray)]
+        room.game!.step = .play
+        room.game!.hands = [0: hand]
+        room.game!.laid[0] = [
+            .set(cards: [id2(9, .tabby), id2(9, .calico), id(9, .gray)], value: 9),
+            .set(cards: [id2(10, .tabby), id2(10, .calico), id(10, .gray)], value: 10),
+        ]
+        room.game!.laid[1] = [
+            laidPhaseOne[0],
+            .run(cards: [id2(4, .gray), id2(5, .gray), id2(6, .tabby), id2(7, .calico)], start: 4, end: 7),
+        ]
+        room.game!.phase[1] = 1  // a set of 3 and a run of 4
+        room.game!.handCounts[0] = hand.count
+        room.game!.handCounts[1] = 3
+        balance(&room.game!)
+        return room
+    }
+
     /// The lobby before a game: me (host), a friend on another phone, a bot, an
     /// open seat and two closed ones.
     public static func lobby() -> RoomView {

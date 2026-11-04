@@ -48,6 +48,11 @@ public struct HitTarget: Codable, Hashable, Sendable {
     }
 }
 
+/// Which end of a run a hit goes on: `start` below its lowest card, `end` above its highest.
+public enum HitSide: String, Codable, Sendable {
+    case start, end
+}
+
 /// What this device may see of a game. `hands` holds only the seats this
 /// device controls; on the wire it is a JSON object keyed by seat number as a
 /// string.

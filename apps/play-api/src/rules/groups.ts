@@ -75,13 +75,20 @@ function buildRun(
   return { kind: "run", cards, start, end: start + size - 1 };
 }
 
+/** Which end of a run a hit goes on: `start` below the lowest card, `end` above the highest. */
+export type HitSide = "start" | "end";
+
 /**
  * Whether `id` can be added to a laid-down group. Returns the extended group
- * (the input is not mutated).
+ * (the input is not mutated). For a run, `side` pins the end the card goes on (a
+ * Yarn dropped at the start extends the low end); without it a natural goes
+ * where its value fits and a Yarn extends the high end first, else the low
+ * end. Sets and coats ignore `side`.
  */
 export function canHit(
   group: Group,
   id: CardId,
+  side?: HitSide,
 ): { ok: true; group: Group } | { ok: false } {
   const c = card(id);
   if (c.kind === "cucumber") return { ok: false };
@@ -106,13 +113,12 @@ export function canHit(
         ok: true,
         group: { ...group, cards: cards(true), start: group.start - 1 },
       });
-      if (c.kind === "yarn") {
-        if (group.end < MAX_VALUE) return atEnd();
-        return group.start > 1 ? atStart() : { ok: false };
-      }
-      if (c.value === group.end + 1) return atEnd();
-      if (c.value === group.start - 1) return atStart();
-      return { ok: false };
+      const fitsEnd = c.kind === "yarn" ? group.end < MAX_VALUE : c.value === group.end + 1;
+      const fitsStart = c.kind === "yarn" ? group.start > 1 : c.value === group.start - 1;
+      if (side === "end") return fitsEnd ? atEnd() : { ok: false };
+      if (side === "start") return fitsStart ? atStart() : { ok: false };
+      if (fitsEnd) return atEnd();
+      return fitsStart ? atStart() : { ok: false };
     }
   }
 }
