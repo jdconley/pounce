@@ -115,7 +115,7 @@ export async function pushYourTurn(
       fetcher,
       { host: env.APNS_HOST, topic: env.APNS_TOPIC, jwt },
       deviceToken,
-      { title: intent.personName, body: "Your turn", code: intent.code },
+      { title: intent.personName, body: `Your turn at ${intent.tableName}`, code: intent.code },
     );
     if (!result.ok) console.error("apns_push_failed", result.status, result.reason);
     return { sent: result.ok, unregistered: result.unregistered };

@@ -34,7 +34,10 @@ afterAll(async () => {
   await mf.dispose();
 });
 
-const intent: PushIntent = { deviceId: "dev-1", kind: "your_turn", seat: 0, personName: "Sam", code: "BCDFG" };
+const intent: PushIntent = { deviceId: "dev-1", kind: "your_turn", seat: 0, personName: "Sam",
+  tableName: "Taco Night",
+  code: "BCDFG",
+};
 
 describe("DeviceIndex.push", () => {
   test("with a token stored but no APNs secrets configured, nothing is sent", async () => {

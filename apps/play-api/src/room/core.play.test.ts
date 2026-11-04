@@ -4,6 +4,7 @@ import { catTower } from "../games/cat-tower";
 import { card } from "../rules/cards";
 
 import { RoomCore, type CatTowerModule, type Outbound } from "./core";
+import { defaultRoomName } from "./names";
 
 import type { Person, RoomEvent, ServerMessage } from "../protocol";
 import type { CatTowerState, GameEvent, Seat } from "../rules/engine";
@@ -13,6 +14,8 @@ const SEC = 1000;
 const MIN = 60_000;
 const DAY = 24 * 60 * MIN;
 const T0 = 1_000_000;
+/** Every room here is BCDFG, unnamed. */
+const NAME = defaultRoomName("BCDFG");
 
 const person = (n: number): Person => ({
   id: `00000000-0000-4000-8000-${String(n).padStart(12, "0")}`,
@@ -644,7 +647,7 @@ describe("push intents", () => {
 
     tickUntilTurn(room, 0);
     expect(room.drainPushIntents()).toEqual([
-      { deviceId: "a", kind: "your_turn", seat: 0, personName: "Cat 1", code: "BCDFG" },
+      { deviceId: "a", kind: "your_turn", seat: 0, personName: "Cat 1", tableName: NAME, code: "BCDFG" },
     ]);
     expect(room.drainPushIntents()).toEqual([]);
 
@@ -682,7 +685,7 @@ describe("push intents", () => {
     ghost.state.devices = {};
     tickUntilTurn(ghost, 0);
     expect(ghost.drainPushIntents()).toEqual([
-      { deviceId: "g", kind: "your_turn", seat: 0, personName: "Cat 1", code: "BCDFG" },
+      { deviceId: "g", kind: "your_turn", seat: 0, personName: "Cat 1", tableName: NAME, code: "BCDFG" },
     ]);
   });
 
@@ -696,7 +699,7 @@ describe("push intents", () => {
     room.disconnect("b");
     room.handle("a", { t: "start" });
     expect(room.drainPushIntents()).toEqual([
-      { deviceId: "b", kind: "your_turn", seat: 1, personName: "Cat 2", code: "BCDFG" },
+      { deviceId: "b", kind: "your_turn", seat: 1, personName: "Cat 2", tableName: NAME, code: "BCDFG" },
     ]);
   });
 
@@ -714,7 +717,7 @@ describe("push intents", () => {
     room.tick();
     // Round 2 deals with seat 0 first (dealer 1): a is away.
     expect(room.drainPushIntents()).toEqual([
-      { deviceId: "a", kind: "your_turn", seat: 0, personName: "Cat 1", code: "BCDFG" },
+      { deviceId: "a", kind: "your_turn", seat: 0, personName: "Cat 1", tableName: NAME, code: "BCDFG" },
     ]);
     expect(room.state.pushedForTurn).toBe(`2:0:${seqBefore + 2}`);
     expect(room.state.turnSeq).toBe(seqBefore + 2);

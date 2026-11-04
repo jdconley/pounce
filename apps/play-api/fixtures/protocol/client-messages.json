@@ -192,5 +192,12 @@
       "t": "leave",
       "seat": 1
     }
+  },
+  {
+    "name": "rename",
+    "message": {
+      "t": "rename",
+      "name": "Taco Night"
+    }
   }
 ]
