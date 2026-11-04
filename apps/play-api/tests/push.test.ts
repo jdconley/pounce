@@ -2,7 +2,7 @@ import { build } from "esbuild";
 import { Miniflare, Response as MiniflareResponse, type Request as MiniflareRequest } from "miniflare";
 import { afterAll, beforeAll, describe, expect, test } from "vitest";
 
-import type { PushIntent } from "../src/room/core";
+import type { YourTurnIntent } from "../src/room/core";
 
 let mf: Miniflare;
 let script = "";
@@ -34,7 +34,7 @@ afterAll(async () => {
   await mf.dispose();
 });
 
-const intent: PushIntent = { deviceId: "dev-1", kind: "your_turn", seat: 0, personName: "Sam",
+const intent: YourTurnIntent = { deviceId: "dev-1", kind: "your_turn", seat: 0, personName: "Sam",
   tableName: "Taco Night",
   code: "BCDFG",
 };

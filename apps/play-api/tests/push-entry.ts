@@ -1,7 +1,7 @@
 import worker from "../src/index";
 
 import type { Env } from "../src/env";
-import type { PushIntent } from "../src/room/core";
+import type { YourTurnIntent } from "../src/room/core";
 
 export { DeviceIndex } from "../src/room/device-index";
 export { GameRoom } from "../src/room/game-room";
@@ -19,7 +19,7 @@ export default {
         await stub.setApnsToken(url.searchParams.get("token") ?? "");
         return new Response(null, { status: 204 });
       }
-      const intent = (await request.json()) as PushIntent;
+      const intent = (await request.json()) as YourTurnIntent;
       return Response.json(await stub.push(intent));
     }
     return worker.fetch(request, env);

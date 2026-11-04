@@ -3,7 +3,7 @@ import { DurableObject } from "cloudflare:workers";
 import { pushYourTurn } from "../push/apns";
 
 import type { Env } from "../env";
-import type { PushIntent } from "./core";
+import type { YourTurnIntent } from "./core";
 
 export type TableEntry = {
   code: string;
@@ -83,7 +83,7 @@ export class DeviceIndex extends DurableObject<Env> {
    * that token: the device may have registered a new one while the push was
    * in flight.
    */
-  async push(intent: PushIntent): Promise<{ sent: boolean }> {
+  async push(intent: YourTurnIntent): Promise<{ sent: boolean }> {
     const token =
       this.ctx.storage.sql.exec<{ v: string }>("SELECT v FROM meta WHERE k = 'apns_token'").toArray()[0]?.v ?? null;
     const { sent, unregistered } = await pushYourTurn(this.env, token, intent);

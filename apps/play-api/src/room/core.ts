@@ -26,9 +26,23 @@ export type CatTowerModule = GameModule<CatTowerState, Action, CatTowerView, Gam
 export type SeatInfo = {
   kind: SeatKind;
   person?: Person;
+  /** The device that claimed the seat, or that it was last moved to. */
   deviceId?: string;
+  /** The player in the seat. Seats claimed before players existed, or by an old app, have none. */
+  playerId?: string;
   botLevel?: "house";
 };
+
+export type DeviceRecord = {
+  presence: Presence;
+  since: number;
+  connected: boolean;
+  /** personId → playerId for the people this device speaks for, as the Worker resolved them on connect. */
+  players?: Record<string, string>;
+};
+
+/** `person`: backfill seats by person id. `from`/`to`: hand one player's seats to another, or (null) to their devices. */
+export type AdoptRule = { person: Record<string, string> } | { from: string; to: string | null };
 
 export type RoomState = {
   code: string;
@@ -42,20 +56,25 @@ export type RoomState = {
   gameState: CatTowerState | null;
   seq: number;
   lastActivity: number;
-  devices: Record<string, { presence: Presence; since: number; connected: boolean }>;
+  devices: Record<string, DeviceRecord>;
   moveCodes: Record<string, { seat: Seat; expires: number }>;
   /** Failed `claimMove` attempts per device, within a rolling window. */
   moveFailures: Record<string, { count: number; windowStart: number }>;
   timers: { botAt: number | null; nextRoundAt: number | null; cleanupAt: number };
   /** "<round>:<turn>:<turnSeq>" dedupe key for turn pushes. */
   pushedForTurn: string | null;
+  /** The turn whose push the player's other devices were last told to clear. Absent in older rooms. */
+  dismissedForTurn?: string | null;
   /** Seq of the latest `turn` or `roundStarted` event: tells one turn from the next. */
   turnSeq: number;
 };
 
-export type PushIntent = {
-  deviceId: string;
+export type YourTurnIntent = {
   kind: "your_turn";
+  /** The seat's device. */
+  deviceId: string;
+  /** Set when the seat has a player: the push goes to all of the player's devices. */
+  playerId?: string;
   seat: Seat;
   personName: string;
   /** The table's name, for the notification text. */
@@ -63,6 +82,11 @@ export type PushIntent = {
   /** The room code, so the app can open the right game from the notification. */
   code: string;
 };
+
+/** A background push telling a player's other devices to clear a table's notifications (§12.5). */
+export type DismissIntent = { kind: "dismiss"; playerId: string; exceptDeviceId: string; code: string };
+
+export type PushIntent = YourTurnIntent | DismissIntent;
 
 export type Outbound = {
   /** "all" or a deviceId. */
@@ -82,6 +106,7 @@ const UINT32_RANGE = 2 ** 32;
 const BOT_DELAY_MS = 1200;
 const NEXT_ROUND_DELAY_MS = 6000;
 const ASLEEP_AFTER_MS = 5 * MS_PER_MINUTE;
+const PRESENCE_RANK: Record<Presence, number> = { asleep: 0, away: 1, awake: 2 };
 
 /**
  * The room state machine. Pure: it mutates `state` and returns the messages
@@ -138,23 +163,63 @@ export class RoomCore {
     }
   }
 
-  connect(deviceId: string): Outbound[] {
-    const wasAwake = this.state.devices[deviceId]?.presence === "awake";
-    this.state.devices[deviceId] = { presence: "awake", since: this.now(), connected: true };
+  /** `players`: the people this device speaks for, mapped to their players. Old apps send none. */
+  connect(deviceId: string, players: Record<string, string> = {}): Outbound[] {
     // Everyone else hears about the seat holder waking up; the connecting
     // device gets a snapshot that already includes those events' seq.
-    const events = wasAwake ? [] : this.presenceEvents(deviceId, "awake", deviceId);
+    const events = this.presenceChange(
+      deviceId,
+      () => {
+        this.state.devices[deviceId] = {
+          presence: "awake",
+          since: this.now(),
+          connected: true,
+          ...(Object.keys(players).length > 0 ? { players } : {}),
+        };
+      },
+      deviceId,
+    );
     return [...events, { to: deviceId, message: this.snapshotFor(deviceId) }];
   }
 
   disconnect(deviceId: string): Outbound[] {
     const device = this.state.devices[deviceId];
     if (!device) return [];
-    const wasAway = device.presence === "away";
-    device.connected = false;
-    device.presence = "away";
-    if (!wasAway) device.since = this.now();
-    return wasAway ? [] : this.presenceEvents(deviceId, "away");
+    return this.presenceChange(deviceId, () => {
+      device.connected = false;
+      if (device.presence !== "away") device.since = this.now();
+      device.presence = "away";
+    });
+  }
+
+  /**
+   * Gives seats to players: backfilled by person id once a device's people
+   * have players, or moved on a merge or an account deletion. Only seats that
+   * change send snapshots.
+   */
+  adopt(rule: AdoptRule): Outbound[] {
+    let changed = false;
+    for (const seat of this.state.seats) {
+      if (seat.kind !== "human") continue;
+      if ("person" in rule) {
+        const playerId = rule.person[(seat.person as Person).id];
+        if (playerId === undefined || seat.playerId !== undefined) continue;
+        seat.playerId = playerId;
+      } else {
+        if (seat.playerId !== rule.from) continue;
+        if (rule.to === null) delete seat.playerId;
+        else seat.playerId = rule.to;
+      }
+      changed = true;
+    }
+    if (!changed) return [];
+    this.state.seq += 1;
+    return this.snapshots();
+  }
+
+  /** Every player holding a seat, once each. */
+  seatPlayers(): string[] {
+    return [...new Set(this.state.seats.flatMap((s) => (s.playerId ? [s.playerId] : [])))];
   }
 
   /**
@@ -178,9 +243,12 @@ export class RoomCore {
 
     for (const [deviceId, device] of Object.entries(state.devices)) {
       if (device.presence === "away" && device.since + ASLEEP_AFTER_MS <= this.now()) {
-        device.presence = "asleep";
-        device.since = this.now();
-        out.push(...this.presenceEvents(deviceId, "asleep"));
+        out.push(
+          ...this.presenceChange(deviceId, () => {
+            device.presence = "asleep";
+            device.since = this.now();
+          }),
+        );
       }
     }
 
@@ -211,11 +279,11 @@ export class RoomCore {
   snapshotFor(deviceId: string): Snapshot {
     const { state } = this;
     const controlled = this.controlledSeats(deviceId);
-    const seats: RoomView["seats"] = state.seats.map((s) => ({
+    const seats: RoomView["seats"] = state.seats.map((s, i) => ({
       kind: s.kind,
       ...(s.person ? { person: s.person } : {}),
-      yours: s.deviceId === deviceId,
-      presence: s.kind === "human" ? (state.devices[s.deviceId as string]?.presence ?? "away") : null,
+      yours: controlled.includes(i),
+      presence: s.kind === "human" ? this.seatPresence(i) : null,
     }));
     return {
       t: "snapshot",
@@ -232,12 +300,31 @@ export class RoomCore {
     };
   }
 
+  /** Seats the device holds, plus the seats of every player it speaks for. */
   controlledSeats(deviceId: string): Seat[] {
     const out: Seat[] = [];
-    this.state.seats.forEach((s, i) => {
-      if (s.deviceId === deviceId) out.push(i);
+    this.state.seats.forEach((_, i) => {
+      if (this.controls(deviceId, i)) out.push(i);
     });
     return out;
+  }
+
+  private controls(deviceId: string, seat: Seat): boolean {
+    // Callers have bounds-checked the seat.
+    const s = this.state.seats[seat] as SeatInfo;
+    if (s.deviceId === deviceId) return true;
+    const players = this.state.devices[deviceId]?.players;
+    return s.playerId !== undefined && players !== undefined && Object.values(players).includes(s.playerId);
+  }
+
+  /** The best presence among the devices that control the seat; away when none has been seen. */
+  private seatPresence(seat: Seat): Presence {
+    let best: Presence | null = null;
+    for (const [id, device] of Object.entries(this.state.devices)) {
+      if (!this.controls(id, seat)) continue;
+      if (best === null || PRESENCE_RANK[device.presence] > PRESENCE_RANK[best]) best = device.presence;
+    }
+    return best ?? "away";
   }
 
   private dispatch(deviceId: string, msg: ClientMessage): Outbound[] {
@@ -272,10 +359,11 @@ export class RoomCore {
     if (this.state.status !== "lobby") return [this.fail(deviceId, "not_lobby")];
     if (!target) return [this.fail(deviceId, "bad_seat")];
     if (target.kind !== "open") return [this.fail(deviceId, "seat_taken")];
-    if (this.state.seats.some((s) => s.person?.id === person.id)) {
+    const playerId = this.state.devices[deviceId]?.players?.[person.id];
+    if (this.state.seats.some((s) => s.person?.id === person.id || (playerId && s.playerId === playerId))) {
       return [this.fail(deviceId, "person_seated")];
     }
-    this.state.seats[seat] = { kind: "human", person, deviceId };
+    this.state.seats[seat] = { kind: "human", person, deviceId, ...(playerId ? { playerId } : {}) };
     return this.changed();
   }
 
@@ -299,7 +387,7 @@ export class RoomCore {
     if (this.state.status === "over") return [this.fail(deviceId, "game_over")];
     const target = this.state.seats[seat];
     if (!target) return [this.fail(deviceId, "bad_seat")];
-    if (target.deviceId !== deviceId || !target.person) return [this.fail(deviceId, "not_your_seat")];
+    if (!this.controls(deviceId, seat) || !target.person) return [this.fail(deviceId, "not_your_seat")];
     if (target.person.name === name) return [];
     target.person = { ...target.person, name };
     return this.changed();
@@ -352,7 +440,7 @@ export class RoomCore {
     const target = this.state.seats[seat];
     if (this.state.status !== "lobby") return [this.fail(deviceId, "in_game")];
     if (!target) return [this.fail(deviceId, "bad_seat")];
-    if (target.deviceId !== deviceId) return [this.fail(deviceId, "not_your_seat")];
+    if (!this.controls(deviceId, seat)) return [this.fail(deviceId, "not_your_seat")];
     this.state.seats[seat] = { kind: "open" };
     this.dropMoveCodes((entry) => entry.seat === seat);
     return this.changed();
@@ -362,7 +450,7 @@ export class RoomCore {
     if (this.state.status === "over") return [this.fail(deviceId, "game_over")];
     const target = this.state.seats[seat];
     if (!target) return [this.fail(deviceId, "bad_seat")];
-    if (target.deviceId !== deviceId) return [this.fail(deviceId, "not_your_seat")];
+    if (!this.controls(deviceId, seat)) return [this.fail(deviceId, "not_your_seat")];
 
     const now = this.now();
     // One live code per seat; expired ones are pruned as we go.
@@ -410,8 +498,10 @@ export class RoomCore {
   private act(deviceId: string, seat: Seat, action: Action): Outbound[] {
     if (!this.controlledSeats(deviceId).includes(seat)) return [this.fail(deviceId, "not_your_seat")];
     if (this.state.status !== "playing") return [this.fail(deviceId, "not_playing")];
+    const turn = this.turnKey();
     const applied = this.applyGame(seat, action);
     if ("error" in applied) return [this.fail(deviceId, applied.error)];
+    this.dismissPushed(deviceId, seat, turn);
     this.touch();
     // Acting proves the device is in use, whatever it last reported.
     const woke = this.wake(deviceId);
@@ -419,22 +509,41 @@ export class RoomCore {
     return [...applied.out, ...woke, ...this.snapshots()];
   }
 
+  /**
+   * Once a player acts on a turn that was pushed, their other devices are
+   * told to clear that notification. Once per turn.
+   */
+  private dismissPushed(deviceId: string, seat: Seat, turn: string): void {
+    const { state } = this;
+    const playerId = state.seats[seat]?.playerId;
+    if (!playerId || state.pushedForTurn !== turn || state.dismissedForTurn === turn) return;
+    state.dismissedForTurn = turn;
+    this.pushIntents.push({ kind: "dismiss", playerId, exceptDeviceId: deviceId, code: state.code });
+  }
+
+  private turnKey(): string {
+    const game = this.state.gameState as CatTowerState;
+    return `${game.round}:${game.turn}:${this.state.turnSeq}`;
+  }
+
   /** Marks a device awake; returns the presence events if that was a change. */
   private wake(deviceId: string): Outbound[] {
     const device = this.state.devices[deviceId];
     if (!device || device.presence === "awake") return [];
-    device.presence = "awake";
-    device.since = this.now();
-    return this.presenceEvents(deviceId, "awake");
+    return this.presenceChange(deviceId, () => {
+      device.presence = "awake";
+      device.since = this.now();
+    });
   }
 
   private presence(deviceId: string, state: "active" | "background"): Outbound[] {
     if (state === "active") return this.wake(deviceId);
     const device = this.state.devices[deviceId];
     if (!device || device.presence === "away") return [];
-    device.presence = "away";
-    device.since = this.now();
-    return this.presenceEvents(deviceId, "away");
+    return this.presenceChange(deviceId, () => {
+      device.presence = "away";
+      device.since = this.now();
+    });
   }
 
   /**
@@ -539,14 +648,13 @@ export class RoomCore {
     }
     timers.botAt = null;
 
-    const deviceId = seat.deviceId as string;
-    const key = `${game.round}:${game.turn}:${state.turnSeq}`;
-    const presence = state.devices[deviceId]?.presence ?? "away";
-    if (presence !== "awake" && state.pushedForTurn !== key) {
+    const key = this.turnKey();
+    if (this.seatPresence(actor) !== "awake" && state.pushedForTurn !== key) {
       state.pushedForTurn = key;
       this.pushIntents.push({
-        deviceId,
+        deviceId: seat.deviceId as string,
         kind: "your_turn",
+        ...(seat.playerId ? { playerId: seat.playerId } : {}),
         seat: actor,
         personName: (seat.person as Person).name,
         tableName: state.name,
@@ -555,11 +663,18 @@ export class RoomCore {
     }
   }
 
-  /** One presence event per seat the device holds. */
-  private presenceEvents(deviceId: string, presence: Presence, exclude?: string): Outbound[] {
-    return this.controlledSeats(deviceId).flatMap((seat) =>
-      this.broadcast(() => ({ kind: "presence", seat, presence }), exclude),
-    );
+  /**
+   * Applies a change to one device's presence and returns a presence event
+   * for each of its seats whose presence, the best of all the devices that
+   * control it, changed as a result.
+   */
+  private presenceChange(deviceId: string, change: () => void, exclude?: string): Outbound[] {
+    const before = this.state.seats.map((_, i) => this.seatPresence(i));
+    change();
+    return this.controlledSeats(deviceId).flatMap((seat) => {
+      const presence = this.seatPresence(seat);
+      return presence === before[seat] ? [] : this.broadcast(() => ({ kind: "presence", seat, presence }), exclude);
+    });
   }
 
   /** Gives `event` the next seq and addresses it to each connected device. */

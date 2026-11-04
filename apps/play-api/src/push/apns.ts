@@ -1,7 +1,7 @@
 import { base64url, pemBody } from "../players/ids";
 
 import type { Env } from "../env";
-import type { PushIntent } from "../room/core";
+import type { YourTurnIntent } from "../room/core";
 
 /** Apple rejects provider tokens older than an hour; refresh well before that. */
 const JWT_TTL_SEC = 50 * 60;
@@ -84,7 +84,7 @@ export async function sendApns(
 export async function pushYourTurn(
   env: Env,
   deviceToken: string | null,
-  intent: PushIntent,
+  intent: YourTurnIntent,
   fetcher: typeof fetch = fetch,
   nowSec: number = Math.floor(Date.now() / 1000),
 ): Promise<{ sent: boolean; unregistered: boolean }> {

@@ -162,6 +162,7 @@ export class GameRoom extends DurableObject<Env> {
     }
 
     for (const intent of core.drainPushIntents()) {
+      if (intent.kind !== "your_turn") continue;
       const device = this.env.DEVICES.get(this.env.DEVICES.idFromName(intent.deviceId));
       this.ctx.waitUntil(device.push(intent).catch(() => undefined));
     }
