@@ -1,6 +1,6 @@
 # Pounce daily habit loop ("Us" streaks) — Design
 
-Date: 2026-11-04 · Owner: JD Conley (Conley Chaos LLC) · Status: **draft v3. JD answered rounds 1 and 2 of the open questions (2026-11-04), and the design is waiting on his approval.** Nothing gets built until JD approves.
+Date: 2026-11-04 · Owner: JD Conley (Conley Chaos LLC) · Status: **approved (2026-11-04).** JD answered every open question and approved the design. Building starts with PR 1 (§15).
 
 Parent specs: `2026-10-31-pounce-cat-tower-design.md` (product and rules) and `2026-10-31-pounce-ios-design.md` (the client). Where this doc changes something they decided, it says so. The biggest change is that **accounts (Sign in with Apple) move from M2 into this work**, because JD wants everything to sync between devices.
 
@@ -1195,7 +1195,7 @@ At family scale, all of this is a rounding error on Durable Objects pricing.
 
 ### 14.1 Minors **(JD: "follow all the rules for minors"; research §4.7; call)**
 
-*This is a design that follows the rules as researched, not legal advice. JD should have counsel review §14.1 before the App Store launch (§17).*
+*This is a design that follows the rules as researched, not legal advice. No counsel review for the TestFlight beta **(JD)**; review before the App Store launch is decided then (§17).*
 
 **Audience: mixed, not child-directed.**
 - Pounce is for couples and families: adults, with their kids and parents. Children aren't the primary audience.
@@ -1262,7 +1262,7 @@ Until then, **a kitten's best setup is as a household person on a parent's phone
 - invites by code or link only;
 - no strangers, and no public profiles.
 
-**Paperwork.** COPPA's 2025 rule applies in full from 22 April 2026 [63]. PR 2 adds these, drafted for JD and counsel to review:
+**Paperwork.** COPPA's 2025 rule applies in full from 22 April 2026 [63]. PR 2 adds these, drafted for JD to review:
 - `docs/privacy/retention-policy.md`: written retention, as § 312.10 requires;
 - `docs/privacy/security-program.md`: a written security program with a named coordinator and an annual review (§ 312.8);
 - the privacy policy and COPPA direct notice at `play.conleychaos.com/privacy`, linked from the gear sheet (§ 312.4(d), Apple 5.1.4) [64][30].
@@ -1295,7 +1295,7 @@ Each PR ships to TestFlight on its own and leaves the app working **(call)**.
 | 6 | **Widgets** | The `PounceWidgets` target, App Group and keychain group; small, medium, the three accessory families and StandBy; configuration; the interactive Pounce intent; timelines; reloads; WidgetKit push. | 4 (5 for push refresh) |
 | 7 | **Live table** | The Live Activity in §11.3: push-to-start, updates and end from `GameRoom`; the 30-minute and 2-hour limits; the toggle. | 5, 6 |
 | 8 | **Reward art** | Codex art in three approval batches (§9.6), which swaps in for placeholders by file name. It can start in parallel any time after PR 4. | 4 |
-| 9 | **Parent consent for kittens (later)** | Verifiable parental consent from a signed-in adult, which unlocks turn pushes and approved pounces for an under-13 on their own device (§14.1). Build it only if the kids play on their own devices. | 5 |
+| 9 | **Parent consent for kittens (later)** | Verifiable parental consent from a signed-in adult, which unlocks turn pushes and approved pounces for an under-13 on their own device (§14.1). Optional: JD's kids are 17 **(JD)**, so nobody in the family needs it. | 5 |
 
 **Why this order:**
 - Accounts come first, because streaks key on players. Keying them on guest identity first would mean a migration later.
@@ -1341,7 +1341,7 @@ Each PR ships to TestFlight on its own and leaves the app working **(call)**.
   - iPad and iPhone in the same seat;
   - account deletion.
 
-## 17. Open questions only JD can answer
+## 17. Questions JD answered
 
 JD answered rounds 1 and 2 on 2026-11-04, marked **(JD)** throughout. Round 2 settled these:
 - Guests keep streaks, and signing in is an anonymous upgrade.
@@ -1349,13 +1349,9 @@ JD answered rounds 1 and 2 on 2026-11-04, marked **(JD)** throughout. Round 2 se
 - Table looks come from your own unlocks.
 - Pounces follow iOS Focus, with no "always ring".
 
-What's left:
-
-1. **How old are your son and daughter, and do they have their own devices?**
-   - Under 13 on their own device, they get **no server push** in v1: no turn pushes, pounces or reminders. That's required without parental consent (§14.1). They can still play, keep streaks with you, and get on-device reminders.
-   - Playing as a household person on your phone or iPad gives the full experience today.
-   - If they're under 13 and on their own devices, PR 9 (parent consent) moves up.
-2. **Counsel review.** §14.1 follows the rules as researched, but it isn't legal advice. Before the App Store launch, not before family TestFlight, should a lawyer review it together with the privacy policy, the retention policy and the security program that PR 2 drafts?
+Round 3 (2026-11-04) settled the rest, and JD approved the design:
+- **The kids are 17 (twins), on their own devices (JD).** So they're `teen` (§14.1): everything works, with the gentler teen defaults. Nobody in JD's family is a kitten, so PR 9 (parent consent) stays last and optional. The kitten limits are still built, because the rules apply to anyone who installs the app.
+- **No counsel review for the TestFlight beta (JD).** Whether a lawyer reviews §14.1 and the privacy documents before the App Store launch is decided then.
 
 **One action, needed only before App Store submission, not before PR 1:** create one key in the Apple Developer portal with both *Apple Push Notifications service* and *Sign in with Apple* enabled (primary App ID `com.conleychaos.play`). Then set it as the repo secrets, from the folder the key was downloaded to:
 
