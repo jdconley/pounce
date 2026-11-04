@@ -8,7 +8,18 @@ on:
     paths:
       - apps/play-ios/**
       - .github/workflows/ios.yml
+  # A push uploads for internal testers only. Running the workflow by hand from main also sends the
+  # build to a beta group, so external testers get one build per release, not one per merged PR.
   workflow_dispatch:
+    inputs:
+      distribute:
+        description: Send the build to the TestFlight group below (an external group goes through beta app review)
+        type: boolean
+        default: true
+      group:
+        description: TestFlight beta group name
+        type: string
+        default: Family and Friends
 
 permissions:
   contents: read
@@ -39,7 +50,8 @@ jobs:
     needs: build
     if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
     runs-on: macos-26
-    timeout-minutes: 45
+    # Archive and upload take ~15 min; distributing waits up to 30 more for App Store Connect processing.
+    timeout-minutes: 75
     environment: production
     concurrency:
       group: testflight
@@ -62,10 +74,26 @@ jobs:
           fi
       - if: steps.creds.outputs.ready == 'true'
         uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+        with:
+          fetch-depth: 0 # What to Test lists the commits since the group's previous build
       - name: Archive and upload
+        id: upload
         if: steps.creds.outputs.ready == 'true'
         run: |
+          BUILD_NUMBER="$(date +%Y%m%d%H%M)"
+          export BUILD_NUMBER
+          echo "build=$BUILD_NUMBER" >> "$GITHUB_OUTPUT"
           export ASC_KEY_PATH="$RUNNER_TEMP/AuthKey_$ASC_KEY_ID.p8"
-          printenv ASC_KEY_P8 > "$ASC_KEY_PATH"
+          (umask 077; printenv ASC_KEY_P8 > "$ASC_KEY_PATH")
           trap 'rm -f "$ASC_KEY_PATH"' EXIT
           scripts/testflight.sh
+      - name: Distribute to the TestFlight group
+        if: steps.creds.outputs.ready == 'true' && github.event_name == 'workflow_dispatch' && inputs.distribute
+        env:
+          BUILD: ${{ steps.upload.outputs.build }}
+          GROUP: ${{ inputs.group }}
+        run: |
+          export ASC_KEY_PATH="$RUNNER_TEMP/AuthKey_$ASC_KEY_ID.p8"
+          (umask 077; printenv ASC_KEY_P8 > "$ASC_KEY_PATH")
+          trap 'rm -f "$ASC_KEY_PATH"' EXIT
+          scripts/distribute.swift --build "$BUILD" --group "$GROUP"
