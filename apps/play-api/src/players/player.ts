@@ -1,12 +1,16 @@
 import { DurableObject } from "cloudflare:workers";
 
 import { createTables, listTables, removeTable, upsertTable, type TableEntry } from "../room/tables";
+import { leaveAllPairs } from "../streaks/pairs";
+import { quietStartMinutes } from "../streaks/profile";
 
 import { IDENTITIES_NAME } from "./identities";
 import { mergeSection } from "./state";
 
 import type { Env } from "../env";
 import type { AgeBand, Json, Section, StatePatch } from "./parse";
+import type { Look } from "../room/core";
+import type { PairPerson } from "../streaks/pair-core";
 
 export type PlayerMeta = {
   name: string;
@@ -24,6 +28,9 @@ export type IdentityRow = { provider: string; subjectHash: string; deviceId: str
 export type HouseholdPerson = { personId: string; playerId: string; name: string; cat: number };
 
 export type MeState = { settings: Section; tutorial: Section; archive: Section; people: HouseholdPerson[] };
+
+/** One of a player's pairs (§13.2): the partner, and whether it's pinned as the top pair. */
+export type PairRow = { pairId: string; partnerId: string; pinned: boolean };
 
 export type PlayerExport = {
   identities: IdentityRow[];
@@ -67,6 +74,9 @@ export class Player extends DurableObject<Env> {
          PRIMARY KEY (device_id, person_id))`,
     );
     sql.exec("CREATE TABLE IF NOT EXISTS state (section TEXT, key TEXT, v TEXT, at INTEGER, PRIMARY KEY (section, key))");
+    sql.exec("CREATE TABLE IF NOT EXISTS pairs (pair_id TEXT PRIMARY KEY, partner_id TEXT UNIQUE, pinned INTEGER, created_at INTEGER)");
+    // Tombstones (§14): partners whose streak this player left, so it doesn't re-form.
+    sql.exec("CREATE TABLE IF NOT EXISTS left_pairs (partner_id TEXT PRIMARY KEY, at INTEGER)");
     createTables(sql);
   }
 
@@ -97,6 +107,8 @@ export class Player extends DurableObject<Env> {
     name: string;
     cat: number;
     ageBand?: AgeBand;
+    /** The device's time zone: a player's zone is the latest any of their devices reported (§6.3). */
+    timeZone?: string;
     at: number;
     now: number;
   }): Promise<void> {
@@ -109,6 +121,7 @@ export class Player extends DurableObject<Env> {
       this.setMeta("name_at", t.at);
     }
     if (t.ageBand) this.setMeta("age_band", t.ageBand);
+    if (t.timeZone) this.setMeta("time_zone", t.timeZone);
     this.setMeta("last_touch", t.now);
     this.attachDevice(t.deviceId, t.now);
     await this.arm(t.now);
@@ -308,6 +321,120 @@ export class Player extends DurableObject<Env> {
     await this.ctx.storage.setAlarm(now + STUB_TTL_MS);
   }
 
+  private live(): boolean {
+    return this.exists() && this.getMeta("forward_to") === null;
+  }
+
+  private hasLeft(partnerId: string): boolean {
+    return this.ctx.storage.sql.exec("SELECT 1 FROM left_pairs WHERE partner_id = ?", partnerId).toArray().length > 0;
+  }
+
+  pairList(): PairRow[] {
+    return this.ctx.storage.sql
+      .exec<{ pair_id: string; partner_id: string; pinned: number }>("SELECT pair_id, partner_id, pinned FROM pairs ORDER BY created_at")
+      .toArray()
+      .map((r) => ({ pairId: r.pair_id, partnerId: r.partner_id, pinned: r.pinned === 1 }));
+  }
+
+  pairWith(partnerId: string): string | null {
+    return (
+      this.ctx.storage.sql
+        .exec<{ pair_id: string }>("SELECT pair_id FROM pairs WHERE partner_id = ?", partnerId)
+        .toArray()[0]?.pair_id ?? null
+    );
+  }
+
+  /**
+   * This player (the one with the smaller id: the pair's coordinator) makes
+   * the pair with `partnerId`, or returns the one it has. Check and insert run
+   * with no await between, so two rooms can't make two pairs. Null when this
+   * player is gone or merged, left that partner, or is that partner.
+   */
+  createPair(partnerId: string, pairId: string, now: number): { pairId: string; created: boolean } | null {
+    const existing = this.pairWith(partnerId);
+    if (existing) return { pairId: existing, created: false };
+    if (!this.storePair(pairId, partnerId, now)) return null;
+    return { pairId, created: true };
+  }
+
+  /** Records a pair this player is in; false when it can't be (gone, merged, left that partner, or themself). */
+  storePair(pairId: string, partnerId: string, now: number): boolean {
+    if (!this.live() || partnerId === this.getMeta("id") || this.hasLeft(partnerId)) return false;
+    const existing = this.pairWith(partnerId);
+    if (existing) return existing === pairId;
+    this.ctx.storage.sql.exec(
+      "INSERT OR IGNORE INTO pairs (pair_id, partner_id, pinned, created_at) VALUES (?, ?, 0, ?)",
+      pairId,
+      partnerId,
+      now,
+    );
+    return true;
+  }
+
+  dropPair(pairId: string): void {
+    this.ctx.storage.sql.exec("DELETE FROM pairs WHERE pair_id = ?", pairId);
+  }
+
+  /** Leaves a pair (§14) and remembers the partner, so it doesn't re-form. Returns the partner. */
+  leavePair(pairId: string, now: number): string | null {
+    const row = this.pairList().find((r) => r.pairId === pairId);
+    if (!row) return null;
+    this.dropPair(pairId);
+    this.ctx.storage.sql.exec(
+      "INSERT INTO left_pairs (partner_id, at) VALUES (?, ?) ON CONFLICT (partner_id) DO UPDATE SET at = excluded.at",
+      row.partnerId,
+      now,
+    );
+    return row.partnerId;
+  }
+
+  /** After a merge: the partner `from` is now `to`. */
+  repointPair(pairId: string, to: string): void {
+    this.ctx.storage.sql.exec("UPDATE pairs SET partner_id = ? WHERE pair_id = ?", to, pairId);
+  }
+
+  /** Pins one pair as the top pair (§7); false if it isn't this player's. */
+  pin(pairId: string): boolean {
+    if (!this.pairList().some((r) => r.pairId === pairId)) return false;
+    this.ctx.storage.sql.exec("UPDATE pairs SET pinned = CASE WHEN pair_id = ? THEN 1 ELSE 0 END", pairId);
+    return true;
+  }
+
+  tombstones(): string[] {
+    return this.ctx.storage.sql
+      .exec<{ partner_id: string }>("SELECT partner_id FROM left_pairs")
+      .toArray()
+      .map((r) => r.partner_id);
+  }
+
+  addTombstones(partnerIds: string[], now: number): void {
+    for (const id of partnerIds) {
+      this.ctx.storage.sql.exec("INSERT OR IGNORE INTO left_pairs (partner_id, at) VALUES (?, ?)", id, now);
+    }
+  }
+
+  /** What a pair needs to know about this player: name, cat, time zone and quiet hours. */
+  streakProfile(): PairPerson | null {
+    if (!this.live()) return null;
+    return {
+      id: this.getMeta("id") as string,
+      name: this.getMeta("name") as string,
+      cat: Number(this.getMeta("cat")),
+      zone: this.getMeta("time_zone"),
+      quietStart: quietStartMinutes(this.section("settings"), this.getMeta("age_band") as AgeBand | null),
+    };
+  }
+
+  /** The look this player last put on a table: a new table starts with it (§9.4). */
+  setLastLook(look: Look): void {
+    if (this.live()) this.setMeta("last_look", JSON.stringify(look));
+  }
+
+  lastLook(): Look | null {
+    const v = this.getMeta("last_look");
+    return v === null ? null : (JSON.parse(v) as Look);
+  }
+
   async destroy(): Promise<void> {
     await this.ctx.storage.deleteAlarm();
     await this.ctx.storage.deleteAll();
@@ -349,6 +476,7 @@ export class Player extends DurableObject<Env> {
         ...this.deviceIds().map((d) => env.DEVICES.get(env.DEVICES.idFromName(d)).forgetPlayer(id)),
         env.IDENTITIES.get(env.IDENTITIES.idFromName(IDENTITIES_NAME)).removePlayer(id),
       ]);
+      await leaveAllPairs(env, id, this.pairList());
     }
     await this.destroy();
   }

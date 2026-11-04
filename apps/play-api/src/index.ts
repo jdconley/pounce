@@ -19,6 +19,8 @@ import { parseProfile, parseStatePatch } from "./players/parse";
 import { newRoomCode, ROOM_CODE } from "./room/codes";
 import { DEVICE_HEADER, PLAYER_HEADER } from "./room/game-room";
 import { parseRoomName } from "./room/names";
+import { creatorLook, isMine, leavePair, myStreaks, PAIR_ID, pairStub, syncPairPeople } from "./streaks/pairs";
+import { streaksOn } from "./streaks/profile";
 
 import type { Env } from "./env";
 
@@ -26,11 +28,15 @@ export { Identities } from "./players/identities";
 export { Player } from "./players/player";
 export { DeviceIndex } from "./room/device-index";
 export { GameRoom } from "./room/game-room";
+export { Pair } from "./streaks/pair";
 
 const SHARE_PATH = /^\/j\/([^/]+)$/;
 const ROOM_WS = /^\/v1\/rooms\/([^/]+)\/ws$/;
 const SIGN_IN = /^\/v1\/identities\/([a-z]+)$/;
 const MY_IDENTITY = /^\/v1\/me\/identities\/([a-z]+)$/;
+/** `/v1/pairs/{pair}`, `/pause`, `/pin` or `/gifts/{id}/open` (§13.4). */
+const PAIR_PATH = /^\/v1\/pairs\/([^/]+)(?:\/(pause|pin)|\/gifts\/(g[0-9]{1,9})\/open)?$/;
+const MAX_PAUSE_DAYS = 14;
 const APNS_TOKEN = /^[0-9a-fA-F]{64,200}$/;
 const DEVICE_ID_BYTES = 18; // 24 base64url characters.
 const ROOM_CODE_ATTEMPTS = 5;
@@ -116,9 +122,14 @@ async function createRoom(request: Request, env: Env, deviceId: string): Promise
   // Optional: without one the room gets its default name.
   const name = "name" in body ? parseRoomName(body.name) : undefined;
   if (name === null) return badRequest();
+  let look;
+  if (streaksOn(env)) {
+    const { people, account } = await env.DEVICES.get(env.DEVICES.idFromName(deviceId)).players();
+    look = (await creatorLook(env, people, account)) ?? undefined;
+  }
   for (let i = 0; i < ROOM_CODE_ATTEMPTS; i++) {
     const code = newRoomCode(cryptoRng);
-    const result = await env.ROOMS.get(env.ROOMS.idFromName(code)).init(code, deviceId, name);
+    const result = await env.ROOMS.get(env.ROOMS.idFromName(code)).init(code, deviceId, name, look);
     if ("ok" in result) return json(201, { code });
   }
   return json(503, { error: "no_room_code" });
@@ -184,6 +195,8 @@ const patchState = asMe(async (request, env, _d, playerId) => {
   const patch = parseStatePatch(await readObject(request, MAX_STATE_BYTES));
   if (!patch) return badRequest();
   await player(env, playerId).patchState(patch, Date.now());
+  // Quiet hours set when the evening cutoff falls (§6.1).
+  if (streaksOn(env)) await syncPairPeople(env, playerId, Date.now()).catch(() => undefined);
   return noContent();
 });
 
@@ -194,8 +207,62 @@ const deleteAccount = asMe(async (_r, env, _d, playerId) => {
 
 type Route = (request: Request, env: Env, deviceId: string) => Promise<Response> | Response;
 
+const getStreaks = asMe(async (_r, env, _d, me) => json(200, { pairs: await myStreaks(env, me, Date.now()) }));
+
+type PairHandler = (request: Request, env: Env, me: string, pairId: string) => Promise<Response>;
+
+async function putPause(request: Request, env: Env, me: string, pairId: string): Promise<Response> {
+  const body = await readObject(request);
+  const days = body?.days;
+  if (!body || Object.keys(body).length !== 1 || typeof days !== "number" || !Number.isInteger(days)) return badRequest();
+  if (days < 1 || days > MAX_PAUSE_DAYS) return badRequest();
+  return (await pairStub(env, pairId).pause(me, days, Date.now())) ? noContent() : badRequest();
+}
+
+/** The handler for one `/v1/pairs/...` method and path, or null for a 404. */
+function pairHandler(method: string, action: string | undefined, gift: string | undefined): PairHandler | null {
+  if (gift !== undefined) {
+    return method === "POST"
+      ? async (_r, env, me, pairId) => ((await pairStub(env, pairId).openGift(me, gift)) ? noContent() : notFound())
+      : null;
+  }
+  if (action === "pause" && method === "PUT") return putPause;
+  if (action === "pause" && method === "DELETE") {
+    return async (_r, env, me, pairId) => {
+      await pairStub(env, pairId).unpause(me, Date.now());
+      return noContent();
+    };
+  }
+  if (action === "pin" && method === "PUT") {
+    return async (_r, env, me, pairId) => ((await player(env, me).pin(pairId)) ? noContent() : notFound());
+  }
+  if (action === undefined && method === "DELETE") {
+    return async (_r, env, me, pairId) => ((await leavePair(env, me, pairId, Date.now())) ? noContent() : notFound());
+  }
+  return null;
+}
+
+/** Streak routes (§13.4), only while `STREAKS` is on. */
+function streakRoute(method: string, pathname: string): Route | null {
+  if (method === "GET" && pathname === "/v1/me/streaks") return getStreaks;
+  const path = PAIR_PATH.exec(pathname);
+  if (!path) return null;
+  const [, pairId, action, gift] = path as unknown as [string, string, string | undefined, string | undefined];
+  const handler = pairHandler(method, action, gift);
+  if (!handler) return null;
+  return asMe(async (request, env, _d, me) => {
+    // Someone else's pair is a 404, like one that doesn't exist.
+    if (!PAIR_ID.test(pairId) || !(await isMine(env, me, pairId))) return notFound();
+    return handler(request, env, me, pairId);
+  });
+}
+
 /** The authenticated route for this request, or null for a 404. */
-function route(method: string, pathname: string): Route | null {
+function route(method: string, pathname: string, streaks: boolean): Route | null {
+  if (streaks) {
+    const streak = streakRoute(method, pathname);
+    if (streak) return streak;
+  }
   if (method === "PUT" && pathname === "/v1/devices/me/push") return setPushToken;
   if (method === "PUT" && pathname === "/v1/devices/me/profile") return putProfile;
   if (method === "GET" && pathname === "/v1/me/state") return getState;
@@ -253,7 +320,7 @@ export default {
     if (method === "POST" && pathname === "/v1/devices") {
       return secret ? mintDevice(request, secret) : notConfigured();
     }
-    const handler = route(method, pathname);
+    const handler = route(method, pathname, streaksOn(env));
     if (!handler) return notFound();
     if (!secret) return notConfigured();
     const deviceId = await authenticate(request, secret);

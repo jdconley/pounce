@@ -16,6 +16,8 @@ export default defineConfig({
         "src/players/player.ts",
         "src/players/identities.ts",
         "src/players/accounts.ts",
+        "src/streaks/pair.ts",
+        "src/streaks/pairs.ts",
         "src/index.ts",
       ],
       reporter: ["text", "json-summary"],

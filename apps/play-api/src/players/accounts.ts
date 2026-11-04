@@ -1,3 +1,6 @@
+import { leaveAllPairs, mergePairs, syncPairPeople } from "../streaks/pairs";
+import { streaksOn } from "../streaks/profile";
+
 import { IDENTITIES_NAME } from "./identities";
 import { newPlayerId, sha256Hex, subjectHash } from "./ids";
 import { parseLink, parseSignIn } from "./parse";
@@ -22,7 +25,7 @@ const identities = (env: Env) => env.IDENTITIES.get(env.IDENTITIES.idFromName(ID
  * The `Player` stub with each method's plain return type. The generated RPC
  * types recurse through `Json` past TypeScript's depth limit.
  */
-type PlayerRpc = {
+export type PlayerRpc = {
   [K in keyof Player]: Player[K] extends (...args: infer A) => infer R ? (...args: A) => Promise<Awaited<R>> : never;
 };
 export const player = (env: Env, id: string) => env.PLAYERS.get(env.PLAYERS.idFromName(id)) as unknown as PlayerRpc;
@@ -71,6 +74,7 @@ export async function uploadProfile(
       name: person.name,
       cat: person.cat,
       ...(ageBand ? { ageBand } : {}),
+      timeZone: profile.timeZone,
       at: person.at ?? now,
       now,
     });
@@ -92,6 +96,16 @@ export async function uploadProfile(
       .filter((person) => players[person.id] !== undefined && players[person.id] !== account)
       .map((person) => ({ personId: person.id, playerId: players[person.id] as string, name: person.name, cat: person.cat }));
     await player(env, account).setHousehold(deviceId, household);
+  }
+  if (streaksOn(env)) {
+    // Names, cats and zones reach the pairs; a stale one is cosmetic until the next upload.
+    await Promise.all(
+      Object.values(players).map((id) =>
+        syncPairPeople(env, id, now).catch(() => {
+          console.error("pair_sync_failed");
+        }),
+      ),
+    );
   }
   return { players, rejected };
 }
@@ -137,6 +151,7 @@ export async function merge(env: Env, from: string, to: string, now: number): Pr
   await player(env, to).absorb(exported, now);
   await Promise.all(exported.devices.map((d) => device(env, d).repointPlayer(from, to)));
   await Promise.all(exported.tables.map((t) => room(env, t.code).adopt({ from, to })));
+  await mergePairs(env, from, to, now);
   await identities(env).repoint(from, to);
   await player(env, from).becomeStub(to, now);
 }
@@ -306,6 +321,7 @@ export async function deleteMe(env: Env, me: string, now: number, fetcher: typeo
     if (row.secret) await provider(row.provider)?.revoke?.(row.secret, env, fetcher, nowSec(now));
   }
   await identities(env).removePlayer(me);
+  await leaveAllPairs(env, me);
   await Promise.all(exported.devices.map((d) => device(env, d).forgetPlayer(me)));
   await eachRoom(
     exported.tables.map((t) => t.code),
