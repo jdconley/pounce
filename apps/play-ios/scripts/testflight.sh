@@ -4,8 +4,9 @@
 #   scripts/testflight.sh --dry-run   print every command, run nothing
 #   scripts/testflight.sh             bootstrap, archive, export + upload
 #
-# The build number (CURRENT_PROJECT_VERSION) is the local time as
-# YYYYMMDDHHMM, passed to xcodebuild as a build setting, so project.yml is never edited.
+# The build number (CURRENT_PROJECT_VERSION) is the local time as YYYYMMDDHHMM (or $BUILD_NUMBER
+# when set), passed to xcodebuild as a build setting, so project.yml is never edited.
+# The upload reaches internal testers only; scripts/distribute.swift sends it to a beta group.
 # Release builds point at https://play.conleychaos.com and register no custom URL scheme.
 #
 # Signing is automatic (team B222J9J7B8). By default Xcode's signed-in account is used. To
@@ -20,12 +21,12 @@ DRY_RUN=0
 for arg in "$@"; do
   case "$arg" in
     --dry-run) DRY_RUN=1 ;;
-    -h|--help) sed -n '2,15p' "$0"; exit 0 ;;
+    -h|--help) sed -n '2,16p' "$0"; exit 0 ;;
     *) echo "usage: scripts/testflight.sh [--dry-run]" >&2; exit 64 ;;
   esac
 done
 
-BUILD_NUMBER="$(date +%Y%m%d%H%M)"
+BUILD_NUMBER="${BUILD_NUMBER:-$(date +%Y%m%d%H%M)}"
 ARCHIVE=build/Pounce.xcarchive
 EXPORT=build/export
 
