@@ -27,3 +27,9 @@ export async function sha256Hex(text: string): Promise<string> {
 export function subjectHash(provider: string, subject: string): Promise<string> {
   return sha256Hex(`${provider}:${subject}`);
 }
+
+/** The DER bytes inside a PEM block, such as a .p8 key. */
+export function pemBody(pem: string): Uint8Array<ArrayBuffer> {
+  const bin = atob(pem.replace(/-----(BEGIN|END)[^-]*-----/g, "").replace(/\s+/g, ""));
+  return Uint8Array.from(bin, (c) => c.charCodeAt(0));
+}

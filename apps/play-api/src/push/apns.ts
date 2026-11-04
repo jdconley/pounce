@@ -1,3 +1,5 @@
+import { base64url, pemBody } from "../players/ids";
+
 import type { Env } from "../env";
 import type { PushIntent } from "../room/core";
 
@@ -6,17 +8,6 @@ const JWT_TTL_SEC = 50 * 60;
 const encoder = new TextEncoder();
 
 let cachedJwt: { kid: string; iat: number; jwt: string } | null = null;
-
-function base64url(bytes: Uint8Array): string {
-  let bin = "";
-  for (const byte of bytes) bin += String.fromCharCode(byte);
-  return btoa(bin).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
-}
-
-function pemBody(pem: string): Uint8Array<ArrayBuffer> {
-  const bin = atob(pem.replace(/-----(BEGIN|END)[^-]*-----/g, "").replace(/\s+/g, ""));
-  return Uint8Array.from(bin, (c) => c.charCodeAt(0));
-}
 
 const encodeJson = (value: unknown): string => base64url(encoder.encode(JSON.stringify(value)));
 
