@@ -20,6 +20,10 @@ on:
         description: TestFlight beta group name
         type: string
         default: Family and Friends
+      build:
+        description: Distribute this already-uploaded build number instead of archiving a new one (e.g. a build uploaded from a Mac)
+        type: string
+        default: ""
 
 permissions:
   contents: read
@@ -78,7 +82,7 @@ jobs:
           fetch-depth: 0 # What to Test lists the commits since the group's previous build
       - name: Archive and upload
         id: upload
-        if: steps.creds.outputs.ready == 'true'
+        if: steps.creds.outputs.ready == 'true' && inputs.build == ''
         run: |
           BUILD_NUMBER="$(date +%Y%m%d%H%M)"
           export BUILD_NUMBER
@@ -90,7 +94,7 @@ jobs:
       - name: Distribute to the TestFlight group
         if: steps.creds.outputs.ready == 'true' && github.event_name == 'workflow_dispatch' && inputs.distribute
         env:
-          BUILD: ${{ steps.upload.outputs.build }}
+          BUILD: ${{ inputs.build || steps.upload.outputs.build }}
           GROUP: ${{ inputs.group }}
         run: |
           export ASC_KEY_PATH="$RUNNER_TEMP/AuthKey_$ASC_KEY_ID.p8"

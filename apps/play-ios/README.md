@@ -219,6 +219,9 @@ workflow on `main` (or `gh workflow run ios.yml --ref main`). Its inputs:
 - `distribute` (default on): after the upload, run `scripts/distribute.swift` for that build. Off
   means upload only.
 - `group` (default `Family and Friends`): the beta group, looked up by name.
+- `build` (default empty): distribute this already-uploaded build number and skip the archive, e.g.
+  a build uploaded from a Mac with `scripts/testflight.sh` when CI can't sign
+  (`gh workflow run ios.yml --ref main -f build=202611040600`).
 
 `scripts/distribute.swift` talks to the App Store Connect API with the same key (an ES256 JWT signed
 with CryptoKit; neither the key nor the token is ever printed). It waits up to 30 minutes for the
