@@ -2,7 +2,7 @@ import { DurableObject } from "cloudflare:workers";
 
 import {
   advance,
-  nextSettleAt,
+  nextWakeAt,
   openGift,
   pause,
   repoint,
@@ -42,7 +42,7 @@ export class Pair extends DurableObject<Env> {
       "INSERT INTO pair (id, json) VALUES (1, ?) ON CONFLICT (id) DO UPDATE SET json = excluded.json",
       JSON.stringify(s),
     );
-    const at = nextSettleAt(s);
+    const at = nextWakeAt(s);
     if (at === null) await this.ctx.storage.deleteAlarm();
     else await this.ctx.storage.setAlarm(at);
   }
@@ -68,12 +68,13 @@ export class Pair extends DurableObject<Env> {
     return Object.fromEntries(s.people.map((p) => [p.id, view(s, p.id, now)]));
   }
 
-  async view(playerId: string, now: number): Promise<StreakView | null> {
+  /** A person's view, and the latest turn for sorting (which never goes to a client: §14). */
+  async view(playerId: string, now: number): Promise<{ view: StreakView; lastTurnAt: number } | null> {
     const s = this.state;
     if (!s || !s.people.some((p) => p.id === playerId)) return null;
     const v = view(s, playerId, now);
     await this.save();
-    return v;
+    return { view: v, lastTurnAt: s.lastTurnAt };
   }
 
   async pause(by: string, days: number, now: number): Promise<boolean> {

@@ -64,13 +64,17 @@ export async function reportTable(env: Env, intent: StreakIntent, now: number): 
   for (let i = 0; i < players.length; i++) {
     for (let j = i + 1; j < players.length; j++) {
       const [a, b] = [players[i] as string, players[j] as string];
-      const pairId = await ensurePair(env, a, b, intent.turnedAt, now);
+      const r = { code: intent.code, at: intent.at, by: intent.by, holder: intent.holder, over: intent.over };
+      let pairId = await ensurePair(env, a, b, intent.turnedAt, now);
       if (!pairId) continue;
-      const views = await pair(env, pairId).report(
-        { code: intent.code, at: intent.at, by: intent.by, holder: intent.holder, over: intent.over },
-        now,
-      );
-      if (!views) continue;
+      let views = await pair(env, pairId).report(r, now);
+      if (!views) {
+        // Both players list a pair whose object has no state (its creation failed part way): start it over.
+        await Promise.all([player(env, a).dropPair(pairId), player(env, b).dropPair(pairId)]);
+        pairId = await ensurePair(env, a, b, intent.turnedAt, now);
+        views = pairId ? await pair(env, pairId).report(r, now) : null;
+      }
+      if (!pairId || !views) continue;
       for (const id of [a, b]) (out[id] ??= []).push({ pair: pairId, view: views[id] as StreakView });
     }
   }
@@ -88,7 +92,11 @@ export async function myStreaks(env: Env, me: string, now: number): Promise<(Str
   );
   return views
     .filter((v) => v !== null)
-    .sort((x, y) => Number(y.pinned) - Number(x.pinned) || y.count - x.count || y.lastTurnAt - x.lastTurnAt);
+    .sort(
+      (x, y) =>
+        Number(y.pinned) - Number(x.pinned) || y.view.count - x.view.count || y.lastTurnAt - x.lastTurnAt,
+    )
+    .map(({ view, pinned }) => ({ ...view, pinned }));
 }
 
 /** Whether `pairId` is one of `me`'s pairs. */

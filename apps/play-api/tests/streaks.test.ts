@@ -334,6 +334,42 @@ describe("streaks", { timeout: 30_000 }, () => {
     expect(Object.values(state.days).map((d) => d.state)).toContain("kept");
   });
 
+  test("a pair whose object lost its state forms again at the next turns", async () => {
+    const mf = worker();
+    const { jd, phone, pairId, a, clients } = await pairedUp(mf);
+    await mf.dispatchFetch(`${BASE}/__test/break?pair=${pairId}`);
+    await takeTurn(clients);
+    const healed = await a.find<StreakMessage>((m) => isStreak(m) && m.pair !== pairId);
+    expect(healed.view.count).toBe(1);
+    const listed = await streaks(mf, phone, jd);
+    expect(listed.map((p) => p.pair)).toEqual([healed.pair]);
+  });
+
+  test("a player on the way out (deleted or merged away) forms no new pair", async () => {
+    const mf = worker();
+    const phone = await mint(mf);
+    const tablet = await mint(mf);
+    const jd = newPerson("JD", 1);
+    const mia = newPerson("Mia", 2);
+    const ids = { ...(await profile(mf, phone, [jd])), ...(await profile(mf, tablet, [mia])) };
+    await mf.dispatchFetch(`${BASE}/__test/retire?player=${ids[mia.id]}`);
+    const { clients } = await table(mf, [
+      [phone, jd],
+      [tablet, mia],
+    ]);
+    await takeTurn(clients);
+    await takeTurn(clients);
+    await new Promise((resolve) => setTimeout(resolve, 300));
+    expect(await streaks(mf, phone, jd)).toEqual([]);
+  });
+
+  test("streak views never say when anyone last played", async () => {
+    const mf = worker();
+    const { jd, phone, a } = await pairedUp(mf);
+    expect((await a.find<StreakMessage>(isStreak)).view).not.toHaveProperty("lastTurnAt");
+    expect((await streaks(mf, phone, jd))[0]).not.toHaveProperty("lastTurnAt");
+  });
+
   test("deleting an account leaves every pair", async () => {
     const mf = worker();
     const { jd, mia, phone, tablet } = await pairedUp(mf);

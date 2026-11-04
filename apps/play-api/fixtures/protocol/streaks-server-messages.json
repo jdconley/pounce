@@ -14,6 +14,7 @@
         "count": 1,
         "me": true,
         "them": true,
+        "kept": true,
         "naps": 0,
         "winback": null,
         "pausedUntil": null,
@@ -72,8 +73,7 @@
         "pounce": {
           "sent": false,
           "resting": false
-        },
-        "lastTurnAt": 1793815200000
+        }
       }
     }
   },

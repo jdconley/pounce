@@ -151,6 +151,7 @@ export async function merge(env: Env, from: string, to: string, now: number): Pr
   await player(env, to).absorb(exported, now);
   await Promise.all(exported.devices.map((d) => device(env, d).repointPlayer(from, to)));
   await Promise.all(exported.tables.map((t) => room(env, t.code).adopt({ from, to })));
+  await player(env, from).retire();
   await mergePairs(env, from, to, now);
   await identities(env).repoint(from, to);
   await player(env, from).becomeStub(to, now);
@@ -321,6 +322,7 @@ export async function deleteMe(env: Env, me: string, now: number, fetcher: typeo
     if (row.secret) await provider(row.provider)?.revoke?.(row.secret, env, fetcher, nowSec(now));
   }
   await identities(env).removePlayer(me);
+  await self.retire();
   await leaveAllPairs(env, me);
   await Promise.all(exported.devices.map((d) => device(env, d).forgetPlayer(me)));
   await eachRoom(

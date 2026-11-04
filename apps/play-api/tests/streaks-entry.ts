@@ -19,6 +19,15 @@ export default {
     const url = new URL(request.url);
     const stub = () => env.PAIRS.get(env.PAIRS.idFromName(url.searchParams.get("pair") ?? ""));
     if (url.pathname === "/__test/pair") return Response.json(await stub().exportState());
+    if (url.pathname === "/__test/break") {
+      // The pair's object loses its state while both players still list it.
+      await stub().destroy();
+      return new Response(null, { status: 204 });
+    }
+    if (url.pathname === "/__test/retire") {
+      await env.PLAYERS.get(env.PLAYERS.idFromName(url.searchParams.get("player") ?? "")).retire();
+      return new Response(null, { status: 204 });
+    }
     if (url.pathname === "/__test/settle") {
       await stub().settle(Number(url.searchParams.get("now")));
       return new Response(null, { status: 204 });

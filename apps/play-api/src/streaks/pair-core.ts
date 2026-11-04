@@ -90,8 +90,11 @@ export type StreakView = {
   pair: string;
   partner: { name: string; cat: number };
   count: number;
+  /** Today's paws: each lights when that person is in, once someone has played today. */
   me: boolean;
   them: boolean;
+  /** Today is kept. */
+  kept: boolean;
   naps: number;
   winback: { kept: number } | null;
   pausedUntil: Day | null;
@@ -108,7 +111,6 @@ export type StreakView = {
   myMove: string[];
   theirMove: string[];
   pounce: { sent: boolean; resting: boolean };
-  lastTurnAt: number;
 };
 
 const SETTLE_AFTER_MS = 10 * 60_000;
@@ -384,6 +386,18 @@ export function nextSettleAt(s: PairState): number | null {
   return settleAt(s, dayAfter(s.lastSettled, s));
 }
 
+/**
+ * The pair's next alarm: the next settlement, or the moment its oldest day
+ * row passes 120 days (§14 retention), so an idle pair still forgets.
+ */
+export function nextWakeAt(s: PairState): number | null {
+  const settle = nextSettleAt(s);
+  const oldest = Object.keys(s.days).sort()[0];
+  const prune = oldest === undefined ? null : Date.parse(`${addDays(oldest, KEEP_DAYS + 1)}T00:00:00Z`);
+  const times = [settle, prune].filter((t): t is number => t !== null);
+  return times.length === 0 ? null : Math.min(...times);
+}
+
 const todayOf = (s: PairState, id: string, now: number): Day => dayKey(now, zoneOf(s, personOf(s, id)));
 
 /**
@@ -392,11 +406,15 @@ const todayOf = (s: PairState, id: string, now: number): Day => dayKey(now, zone
  */
 export function pause(s: PairState, by: string, days: number, now: number): boolean {
   if (!isMember(s, by) || !Number.isInteger(days) || days < 1 || days > MAX_PAUSE_DAYS) return false;
+  // Settle first: whether the old pause still has unsettled days depends on it.
+  advance(s, now);
   const st = s.streak;
   const today = todayOf(s, by, now);
   const start = s.days[today]?.applied ? addDays(today, 1) : today;
   const until = [addDays(start, days - 1), addDays(today, MAX_PAUSE_DAYS - 1)].sort()[0] as Day;
-  const active = st.pausedUntil !== null && st.pausedUntil >= today;
+  // A pause is still on while any of its days is today or later, or hasn't settled yet.
+  const active =
+    st.pausedUntil !== null && (st.pausedUntil >= today || s.lastSettled === null || st.pausedUntil > s.lastSettled);
   st.pausedFrom = active && (st.pausedFrom as Day) < start ? st.pausedFrom : start;
   st.pausedUntil = active && (st.pausedUntil as Day) > until ? st.pausedUntil : until;
   st.pausedBy = by;
@@ -453,12 +471,16 @@ export function view(s: PairState, playerId: string, now: number): StreakView {
   const today = todayOf(s, playerId, now);
   const st = s.streak;
   const moves = Object.entries(s.moves);
+  const row = s.days[today];
+  // Waiting lights a paw only once someone has played: two lit paws on a day nobody played would read as kept.
+  const played = Object.values(row?.turns ?? {}).some((n) => n > 0);
   return {
     pair: s.id,
     partner: { name: partner.name, cat: partner.cat },
     count: st.count,
-    me: isIn(s, me, today, now),
-    them: isIn(s, partner, today, now),
+    me: played && isIn(s, me, today, now),
+    them: played && isIn(s, partner, today, now),
+    kept: row?.applied === true,
     naps: st.naps,
     winback: st.winback ? { kept: st.winback.kept } : null,
     pausedUntil: st.pausedUntil !== null && st.pausedUntil >= today ? st.pausedUntil : null,
@@ -480,7 +502,6 @@ export function view(s: PairState, playerId: string, now: number): StreakView {
     myMove: moves.filter(([, m]) => m.holder === me.id).map(([code]) => code),
     theirMove: moves.filter(([, m]) => m.holder === partner.id).map(([code]) => code),
     pounce: { sent: false, resting: false },
-    lastTurnAt: s.lastTurnAt,
   };
 }
 

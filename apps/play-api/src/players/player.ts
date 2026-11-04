@@ -321,8 +321,18 @@ export class Player extends DurableObject<Env> {
     await this.ctx.storage.setAlarm(now + STUB_TTL_MS);
   }
 
+  /** Can be in pairs: exists, isn't merged away, and isn't being deleted or merged (`retire`). */
   private live(): boolean {
-    return this.exists() && this.getMeta("forward_to") === null;
+    return this.exists() && this.getMeta("forward_to") === null && this.getMeta("retiring") === null;
+  }
+
+  /**
+   * Stops this player forming pairs, before its pairs are left or merged: a
+   * room's report already in flight can't make a new one with a player on
+   * the way out.
+   */
+  retire(): void {
+    this.setMeta("retiring", 1);
   }
 
   private hasLeft(partnerId: string): boolean {
@@ -469,6 +479,7 @@ export class Player extends DurableObject<Env> {
    */
   async expire(): Promise<void> {
     const id = this.getMeta("id");
+    this.retire();
     if (id) {
       const { env } = this;
       await Promise.all([
