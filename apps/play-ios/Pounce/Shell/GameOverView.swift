@@ -44,16 +44,21 @@ struct GameOverView: View {
     }
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.horizontalSizeClass) private var sizeClass
     @State private var appeared = false
     @State private var crowned = false
     @State private var turned = false
 
+    /// Bigger winners and sunburst on a roomy (regular-width) screen.
+    private var scale: CGFloat { sizeClass == .regular ? 1.35 : 1 }
+
     private var catSize: CGFloat {
-        switch winners.count {
+        let base: CGFloat = switch winners.count {
         case 0, 1: 170
         case 2: 130
         default: 96
         }
+        return base * scale
     }
 
     var body: some View {
@@ -63,63 +68,10 @@ struct GameOverView: View {
             ConfettiFall(count: reduceMotion ? 10 : 36)
                 .allowsHitTesting(false)
                 .accessibilityHidden(true)
-            VStack(spacing: 30) {
-                OutlinedText(tableName, size: 30, fill: .white, width: 3, lines: 2)
-                    .padding(.horizontal, 24)
-                    .padding(.top, 24)
-                    .scaleEffect(appeared ? 1 : 0.6)
-                    .opacity(appeared ? 1 : 0)
-                    .accessibilityIdentifier("gameover.name")
-                Spacer(minLength: 0)
-                ZStack {
-                    Image(ArtName.sunburst)
-                        .resizable()
-                        .scaledToFit()
-                        .frame(width: 420, height: 420)
-                        .rotationEffect(.degrees(turned ? -90 : 0))
-                        .scaleEffect(appeared ? 1 : 0.3)
-                        .opacity(appeared ? 1 : 0)
-                        .accessibilityHidden(true)
-                    HStack(spacing: 10) {
-                        ForEach(Array(winners.enumerated()), id: \.offset) { _, winner in
-                            WinnerCat(person: winner, size: catSize, crowned: crowned, reduceMotion: reduceMotion)
-                        }
-                    }
-                    .scaleEffect(appeared ? 1 : 0.5)
-                    .opacity(appeared ? 1 : 0)
-                }
-                .frame(height: standings.isEmpty ? 360 : 300)
-                if !standings.isEmpty {
-                    FlowLayout(spacing: 8, lineSpacing: 8) {
-                        ForEach(standings) { standing($0) }
-                    }
-                    // The sunburst is wider than a small phone: wrap to the screen, not to it.
-                    .containerRelativeFrame(.horizontal) { width, _ in width - 32 }
-                    .opacity(appeared ? 1 : 0)
-                    .accessibilityElement(children: .contain)
-                    .accessibilityIdentifier("gameover.standings")
-                }
-                Spacer()
-                HStack(spacing: 18) {
-                    PillButton(
-                        icon: ArtName.iconHome, color: Palette.orange, size: .large, width: 176,
-                        title: String(localized: "Home", comment: "Game over: the pill back to Home"),
-                        accessibilityLabel: "Home"
-                    ) {
-                        onHome()
-                    }
-                    .accessibilityIdentifier("gameover.home")
-                    PillButton(
-                        icon: ArtName.iconPlus, color: Palette.magenta, size: .large, width: 176,
-                        title: String(localized: "Create", comment: "Game over: the pill that starts a new game"),
-                        accessibilityLabel: "Create a game"
-                    ) {
-                        onNewGame()
-                    }
-                    .accessibilityIdentifier("gameover.new")
-                }
-                .offset(y: appeared ? 0 : 160)
-                .padding(.bottom, 36)
+            if sizeClass == .regular {
+                roomy
+            } else {
+                phone
             }
         }
         .onAppear {
@@ -137,17 +89,155 @@ struct GameOverView: View {
         .accessibilityIdentifier("screen-gameover")
     }
 
+    private var phone: some View {
+        VStack(spacing: 30) {
+            title
+            Spacer(minLength: 0)
+            ZStack {
+                Image(ArtName.sunburst)
+                    .resizable()
+                    .scaledToFit()
+                    .frame(width: 420, height: 420)
+                    .rotationEffect(.degrees(turned ? -90 : 0))
+                    .scaleEffect(appeared ? 1 : 0.3)
+                    .opacity(appeared ? 1 : 0)
+                    .accessibilityHidden(true)
+                HStack(spacing: 10) {
+                    ForEach(Array(winners.enumerated()), id: \.offset) { _, winner in
+                        WinnerCat(person: winner, size: catSize, crowned: crowned, reduceMotion: reduceMotion)
+                    }
+                }
+                .scaleEffect(appeared ? 1 : 0.5)
+                .opacity(appeared ? 1 : 0)
+            }
+            .frame(height: standings.isEmpty ? 360 : 300)
+            if !standings.isEmpty {
+                standingsFlow
+                    // The sunburst is wider than a small phone: wrap to the screen, not to it.
+                    .containerRelativeFrame(.horizontal) { width, _ in width - 32 }
+            }
+            Spacer()
+            pills
+                .padding(.bottom, 36)
+        }
+    }
+
+    /// A regular-width window. Wide: the winners on a bigger sunburst on the left; the table's
+    /// name, everyone's standing (one per line, best first) and the pills on the right. Tall:
+    /// the phone's column with everything bigger and the standings capped to a readable width.
+    private var roomy: some View {
+        GeometryReader { geo in
+            if Roomy.sideBySide(geo.size) {
+                HStack(spacing: 40) {
+                    winnersStage(height: min(geo.size.height * 0.7, 560))
+                        .frame(maxWidth: .infinity)
+                    VStack(spacing: 28) {
+                        title
+                        if !standings.isEmpty {
+                            VStack(alignment: .leading, spacing: 12) {
+                                ForEach(standings) { standing($0) }
+                            }
+                            .opacity(appeared ? 1 : 0)
+                            .accessibilityElement(children: .contain)
+                            .accessibilityIdentifier("gameover.standings")
+                        }
+                        pills
+                    }
+                    .frame(width: min(geo.size.width * 0.4, 480))
+                }
+                .padding(.horizontal, 40)
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+            } else {
+                VStack(spacing: 34) {
+                    title
+                    Spacer(minLength: 0)
+                    winnersStage(height: standings.isEmpty ? 520 : 440)
+                    if !standings.isEmpty {
+                        standingsFlow
+                            .frame(maxWidth: 640)
+                    }
+                    Spacer()
+                    pills
+                        .padding(.bottom, 48)
+                }
+                .frame(maxWidth: .infinity)
+            }
+        }
+    }
+
+    private var title: some View {
+        OutlinedText(tableName, size: 30 * (sizeClass == .regular ? 1.25 : 1), fill: .white, width: 3, lines: 2)
+            .padding(.horizontal, 24)
+            .padding(.top, 24)
+            .scaleEffect(appeared ? 1 : 0.6)
+            .opacity(appeared ? 1 : 0)
+            .accessibilityIdentifier("gameover.name")
+    }
+
+    /// The sunburst with the winners on it (roomy).
+    private func winnersStage(height: CGFloat) -> some View {
+        ZStack {
+            Image(ArtName.sunburst)
+                .resizable()
+                .scaledToFit()
+                .frame(width: 420 * scale, height: 420 * scale)
+                .rotationEffect(.degrees(turned ? -90 : 0))
+                .scaleEffect(appeared ? 1 : 0.3)
+                .opacity(appeared ? 1 : 0)
+                .accessibilityHidden(true)
+            HStack(spacing: 14) {
+                ForEach(Array(winners.enumerated()), id: \.offset) { _, winner in
+                    WinnerCat(person: winner, size: catSize, crowned: crowned, reduceMotion: reduceMotion)
+                }
+            }
+            .scaleEffect(appeared ? 1 : 0.5)
+            .opacity(appeared ? 1 : 0)
+        }
+        .frame(height: height)
+    }
+
+    private var standingsFlow: some View {
+        FlowLayout(spacing: 8 * scale, lineSpacing: 8 * scale) {
+            ForEach(standings) { standing($0) }
+        }
+        .opacity(appeared ? 1 : 0)
+        .accessibilityElement(children: .contain)
+        .accessibilityIdentifier("gameover.standings")
+    }
+
+    private var pills: some View {
+        HStack(spacing: 18) {
+            PillButton(
+                icon: ArtName.iconHome, color: Palette.orange, size: .large, width: 176,
+                title: String(localized: "Home", comment: "Game over: the pill back to Home"),
+                accessibilityLabel: "Home"
+            ) {
+                onHome()
+            }
+            .accessibilityIdentifier("gameover.home")
+            PillButton(
+                icon: ArtName.iconPlus, color: Palette.magenta, size: .large, width: 176,
+                title: String(localized: "Create", comment: "Game over: the pill that starts a new game"),
+                accessibilityLabel: "Create a game"
+            ) {
+                onNewGame()
+            }
+            .accessibilityIdentifier("gameover.new")
+        }
+        .offset(y: appeared ? 0 : 160)
+    }
+
     /// One seat's final line: cat, name, score.
     private func standing(_ s: Standing) -> some View {
-        HStack(spacing: 6) {
+        HStack(spacing: 6 * scale) {
             Image(ArtName.cat(s.cat, .idle))
                 .resizable()
                 .scaledToFit()
-                .frame(width: 34, height: 34)
+                .frame(width: 34 * scale, height: 34 * scale)
                 .background(Circle().fill(SeatInfo.ringColor(s.seat).mix(with: .white, by: 0.25)))
                 .overlay(Circle().strokeBorder(Palette.ink, lineWidth: 3))
-            NameTag(s.name, maxWidth: 110)
-            OutlinedText(String(s.score), size: 20, fill: .white, width: 3)
+            NameTag(s.name, maxWidth: 110 * scale, size: sizeClass == .regular ? 20 : 16)
+            OutlinedText(String(s.score), size: 20 * scale, fill: .white, width: 3)
                 .fixedSize()
         }
         .accessibilityElement(children: .ignore)
@@ -269,24 +359,36 @@ struct ScoreboardOverlay: View {
         ZStack {
             Palette.night.opacity(0.85)
                 .ignoresSafeArea()
-            ScrollView {
-                VStack(spacing: 10) {
-                    ForEach(Array(rows.enumerated()), id: \.element) { i, seat in
-                        row(seat)
-                            .offset(x: appeared ? 0 : (i.isMultiple(of: 2) ? -420 : 420))
-                            .animation(.spring(duration: 0.4, bounce: 0.3).delay(Double(i) * 0.04).paced, value: appeared)
+            GeometryReader { geo in
+                ScrollView {
+                    if sizeClass == .regular && Roomy.sideBySide(geo.size) {
+                        // Wide: the scores on the left, the ten phases beside them.
+                        HStack(alignment: .top, spacing: 28) {
+                            VStack(spacing: 12) { seatRows }
+                                .frame(maxWidth: 460)
+                                .padding(.top, 52)
+                            ladder
+                                .frame(maxWidth: 600)
+                        }
+                        .padding(.horizontal, 32)
+                        .padding(.vertical, 28)
+                        .frame(maxWidth: .infinity, minHeight: geo.size.height)
+                    } else {
+                        VStack(spacing: 10) {
+                            seatRows
+                            ladder
+                                .padding(.top, 16)
+                        }
+                        .padding(.horizontal, 16)
+                        .padding(.vertical, 20)
+                        // A tall iPad: a readable column, not edge to edge.
+                        .frame(maxWidth: sizeClass == .regular ? 680 : .infinity)
+                        .frame(maxWidth: .infinity)
                     }
-                    PhaseLadderView(ladder: PhaseLadder(model: model, focus: focus), model: model)
-                        .padding(.top, 16)
-                        .offset(y: appeared ? 0 : 120)
-                        .opacity(appeared ? 1 : 0)
-                        .animation(.spring(duration: 0.45, bounce: 0.2).delay(0.12).paced, value: appeared)
                 }
-                .padding(.horizontal, 16)
-                .padding(.vertical, 20)
+                .scrollBounceBehavior(.basedOnSize)
+                .scrollIndicators(.hidden)
             }
-            .scrollBounceBehavior(.basedOnSize)
-            .scrollIndicators(.hidden)
         }
         .contentShape(Rectangle())
         .onTapGesture(perform: onClose)
@@ -297,6 +399,23 @@ struct ScoreboardOverlay: View {
         .accessibilityElement(children: .contain)
         .accessibilityAction(.escape, onClose)
         .accessibilityIdentifier("scoreboard")
+    }
+
+    @Environment(\.horizontalSizeClass) private var sizeClass
+
+    @ViewBuilder private var seatRows: some View {
+        ForEach(Array(rows.enumerated()), id: \.element) { i, seat in
+            row(seat)
+                .offset(x: appeared ? 0 : (i.isMultiple(of: 2) ? -420 : 420))
+                .animation(.spring(duration: 0.4, bounce: 0.3).delay(Double(i) * 0.04).paced, value: appeared)
+        }
+    }
+
+    private var ladder: some View {
+        PhaseLadderView(ladder: PhaseLadder(model: model, focus: focus), model: model)
+            .offset(y: appeared ? 0 : 120)
+            .opacity(appeared ? 1 : 0)
+            .animation(.spring(duration: 0.45, bounce: 0.2).delay(0.12).paced, value: appeared)
     }
 
     private func isTurn(_ seat: Seat) -> Bool {

@@ -9,6 +9,10 @@ struct CodeKeypad: View {
     /// The delete key takes taps (nil: same as `enabled`). Join keeps it live while a code is
     /// being checked, since deleting cancels the check.
     var deleteEnabled: Bool?
+    /// Key height, the characters' size and the gap between keys (bigger on a roomy screen).
+    var keyHeight: CGFloat = 54
+    var keySize: CGFloat = 30
+    var spacing: CGFloat = 8
     let onKey: (Character) -> Void
     let onDelete: () -> Void
 
@@ -21,10 +25,10 @@ struct CodeKeypad: View {
     }
 
     var body: some View {
-        VStack(spacing: 10) {
+        VStack(spacing: spacing + 2) {
             let rows = Self.letterRows
             ForEach(rows.indices, id: \.self) { r in
-                HStack(spacing: 8) {
+                HStack(spacing: spacing) {
                     ForEach(rows[r], id: \.self) { key($0) }
                     if r == rows.count - 1 {
                         deleteKey
@@ -35,7 +39,7 @@ struct CodeKeypad: View {
                     }
                 }
             }
-            HStack(spacing: 6) {
+            HStack(spacing: spacing - 2) {
                 ForEach(Self.digits, id: \.self) { key($0) }
             }
         }
@@ -47,9 +51,9 @@ struct CodeKeypad: View {
             Sound.shared.play(ArtName.Sound.sfxTick)
             onKey(c)
         } label: {
-            OutlinedText(String(c), size: 30, width: 2.5)
+            OutlinedText(String(c), size: keySize, width: 2.5)
         }
-        .buttonStyle(KeyStyle(color: Palette.magenta))
+        .buttonStyle(KeyStyle(color: Palette.magenta, height: keyHeight))
         .disabled(!enabled)
         .opacity(enabled ? 1 : 0.6)
         .accessibilityLabel(Text(verbatim: String(c)))
@@ -65,9 +69,9 @@ struct CodeKeypad: View {
             Image(ArtName.iconDelete)
                 .resizable()
                 .scaledToFit()
-                .frame(height: 30)
+                .frame(height: keySize)
         }
-        .buttonStyle(KeyStyle(color: Palette.teal))
+        .buttonStyle(KeyStyle(color: Palette.teal, height: keyHeight))
         .disabled(!(deleteEnabled ?? enabled))
         .opacity(deleteEnabled ?? enabled ? 1 : 0.6)
         .accessibilityLabel("Delete")

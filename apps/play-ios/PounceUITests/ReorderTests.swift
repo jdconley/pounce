@@ -3,7 +3,7 @@ import XCTest
 /// Live hand reorder: while a card is dragged over the hand, the fan holds open the slot it
 /// will land in, and letting go puts it exactly there. `-demo table`: Mia's ten-card hand, face
 /// up. The DEBUG `table.drag` probe reads `<target-slot changes>|<slot the last reorder landed in>`.
-final class ReorderTests: XCTestCase {
+class ReorderTests: XCTestCase {
     override func setUp() {
         continueAfterFailure = false
     }
@@ -81,11 +81,15 @@ final class ReorderTests: XCTestCase {
         app.coordinate(withNormalizedOffset: .zero).withOffset(CGVector(dx: x, dy: y))
     }
 
-    /// The visible strip of hand card `index` (frames are cut at the next card's edge).
+    /// The middle of hand card `index`'s visible strip (frames are cut at the next card's edge).
+    /// Not its left edge: a frame is the tilted card's bounding box, and on big (iPad) cards the
+    /// box's corner sticks out well past the card.
     @MainActor private func grabPoint(_ app: XCUIApplication, card index: Int) -> XCUICoordinate {
         let f = el(app, "table.hand.\(index)").frame
-        return point(app, f.minX + min(f.width, 24) / 2, f.midY + 10)
+        return point(app, Self.grabX(f), f.midY + 10)
     }
+
+    private static func grabX(_ f: CGRect) -> CGFloat { f.minX + min(f.width, 96) / 2 }
 
     /// Drags hand card `index` so its center ends over the center of slot `slot` in a fan of
     /// `count`: the fan's slots are where its cards sit now, and the card keeps its offset from
@@ -95,7 +99,9 @@ final class ReorderTests: XCTestCase {
         let box = frames[count - 1].width  // the last card's frame is its whole rotated box
         let center = { (i: Int) in frames[i].minX + box / 2 }
         let start = grabPoint(app, card: index)
-        let finger = start.screenPoint
+        // From the frame, not `start.screenPoint`: that is in the screen's own (portrait) space,
+        // which an iPad on its side doesn't share with element frames.
+        let finger = CGPoint(x: Self.grabX(frames[index]), y: frames[index].midY + 10)
         let target = center(slot) - (center(index) - finger.x)
         start.press(forDuration: 0.15, thenDragTo: point(app, target, finger.y - 6), withVelocity: 500,
                     thenHoldForDuration: Live.pace(0.6))

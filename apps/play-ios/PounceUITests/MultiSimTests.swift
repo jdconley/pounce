@@ -9,6 +9,8 @@ import XCTest
 /// those links, and plays its seats by taps (draw, discard; the curtain is held through) to the
 /// game-over overlay, screenshotting the curtain, the first round over and the game over.
 /// It runs on the phone's own data, not `-uitest-reset`: `app.open(url)` relaunches the app.
+/// `POUNCE_ORIENTATION` (an iPad's): `landscape` plays the whole game on its side, `rotate`
+/// starts on its side and turns the iPad over at every new round, mid-game.
 final class MultiSimTests: XCTestCase {
     override func setUp() {
         continueAfterFailure = false
@@ -31,6 +33,11 @@ final class MultiSimTests: XCTestCase {
         app.launchEnvironment["POUNCE_API_BASE_URL"] = Live.baseURL
         // A phone's own data may hold first-timers: no coaching bubbles over the taps.
         app.launchArguments.append("-no-tips")
+        let orientation = env["POUNCE_ORIENTATION"] ?? ""
+        if orientation == "landscape" || orientation == "rotate" {
+            XCUIDevice.shared.orientation = .landscapeLeft
+            addTeardownBlock { @MainActor in XCUIDevice.shared.orientation = .portrait }
+        }
         // POUNCE_LOG_TIMELINE=1: the table's timeline (shell syncs, reveals) to the unified log.
         if env["POUNCE_LOG_TIMELINE"] == "1" { app.launchArguments.append("-log-timeline") }
         app.launch()
@@ -91,6 +98,15 @@ final class MultiSimTests: XCTestCase {
             }
             guard let d = snap.debug else {
                 Thread.sleep(forTimeInterval: Live.poll(2))
+                continue
+            }
+            if !rounds.contains(d.round), !rounds.isEmpty, ProcessInfo.processInfo.environment["POUNCE_ORIENTATION"] == "rotate" {
+                // A new round: turn the iPad over, mid-game. This snapshot's frames are from before
+                // the turn, so the next poll takes a fresh one once the window has turned.
+                rounds.insert(d.round)
+                XCUIDevice.shared.orientation = XCUIDevice.shared.orientation.isLandscape ? .portrait : .landscapeLeft
+                print("[multisim] \(tag) round \(d.round): turned \(XCUIDevice.shared.orientation.isLandscape ? "landscape" : "portrait")")
+                Thread.sleep(forTimeInterval: 1.5)
                 continue
             }
             rounds.insert(d.round)

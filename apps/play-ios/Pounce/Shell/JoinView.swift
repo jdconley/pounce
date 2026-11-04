@@ -19,21 +19,27 @@ struct JoinView: View {
     /// The check's socket failed to connect several times: the server can't be reached.
     private var offline: Bool { checking && model.room?.offline == true }
 
+    @Environment(\.horizontalSizeClass) private var sizeClass
+
     var body: some View {
         GeometryReader { geo in
-            VStack(spacing: 0) {
-                topBar
-                cat(height: max(120, geo.size.height * 0.22))
-                tiles
-                    .padding(.horizontal, 16)
-                    .zIndex(1)
-                CodeKeypad(enabled: !checking, deleteEnabled: true, onKey: type, onDelete: delete)
-                    .padding(.horizontal, 14)
-                    .padding(.top, 22)
-                Spacer(minLength: 8)
+            if sizeClass == .regular {
+                roomy(geo.size)
+            } else {
+                VStack(spacing: 0) {
+                    topBar
+                    cat(height: max(120, geo.size.height * 0.22))
+                    tiles
+                        .padding(.horizontal, 16)
+                        .zIndex(1)
+                    CodeKeypad(enabled: !checking, deleteEnabled: true, onKey: type, onDelete: delete)
+                        .padding(.horizontal, 14)
+                        .padding(.top, 22)
+                    Spacer(minLength: 8)
+                }
+                .frame(maxWidth: 560)
+                .frame(maxWidth: .infinity)
             }
-            .frame(maxWidth: 560)
-            .frame(maxWidth: .infinity)
         }
         .background { background }
         .overlay {
@@ -52,6 +58,49 @@ struct JoinView: View {
         }
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("screen-join")
+    }
+
+    // MARK: roomy (iPad)
+
+    /// A regular-width window. Wide: the cat peeking over the code tiles on the left, the
+    /// keypad on the right with bigger keys, both centered. Tall: one column like the phone's,
+    /// with a bigger cat and keys, capped to a comfortable width.
+    @ViewBuilder private func roomy(_ size: CGSize) -> some View {
+        let keypad = CodeKeypad(
+            enabled: !checking, deleteEnabled: true, keyHeight: 68, keySize: 36, spacing: 14,
+            onKey: type, onDelete: delete)
+        if Roomy.sideBySide(size) {
+            VStack(spacing: 0) {
+                topBar
+                HStack(alignment: .center, spacing: 56) {
+                    VStack(spacing: 0) {
+                        cat(height: min(size.height * 0.36, 300))
+                        tiles
+                            .zIndex(1)
+                    }
+                    .frame(width: min(size.width * 0.4, 500))
+                    keypad
+                        .frame(width: min(size.width * 0.42, 540))
+                }
+                .frame(maxHeight: .infinity)
+                .padding(.bottom, 40)
+            }
+            .frame(maxWidth: .infinity)
+        } else {
+            VStack(spacing: 0) {
+                topBar
+                Spacer(minLength: 0)
+                cat(height: min(max(160, size.height * 0.24), 300))
+                tiles
+                    .zIndex(1)
+                keypad
+                    .padding(.top, 34)
+                Spacer(minLength: 0)
+                Spacer(minLength: 0)
+            }
+            .frame(maxWidth: 620)
+            .frame(maxWidth: .infinity)
+        }
     }
 
     // MARK: pieces

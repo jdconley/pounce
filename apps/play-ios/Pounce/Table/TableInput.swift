@@ -147,7 +147,7 @@ extension TableScene {
 
     private func source(at p: CGPoint) -> TableInputState.Source {
         if !menuHidden, menuFrame.contains(p) { return .menu }
-        if towerFrame.contains(p), layout.map({ p.y > $0.traysFrame.maxY }) ?? false { return .tower }
+        if towerFrame.contains(p), layout.map({ p.y > $0.traysFrame.maxY || !$0.traysFrame.contains(p) }) ?? false { return .tower }
         if !trays.isHidden, !trays.layDownButton.isHidden, layDownFrame.contains(p) { return .layDown }
         if let card = hand.card(at: p) { return .hand(card) }
         if !trays.isHidden, let hit = trays.card(at: p) { return .tray(hit.card, hit.tray) }

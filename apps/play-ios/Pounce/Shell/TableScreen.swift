@@ -398,6 +398,12 @@ private struct TableStage: View {
         self.scene = scene
         events.shown = scene.shownRevealed
         sync(scene)
+        #if DEBUG
+        // `-show-scoreboard` (screenshots): the scoreboard over the table as it opens.
+        if CommandLine.arguments.contains("-show-scoreboard"), let room = session.store.room {
+            events.scoreboard = TableModel(room: room)
+        }
+        #endif
         // Synchronous: buffered intents are queued ahead of live ones.
         session.attachTable { [weak scene] intent in
             scene?.enqueue(intent)

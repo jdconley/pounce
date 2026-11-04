@@ -12,7 +12,8 @@
 #
 # Env: SIM_A / SIM_B (UDIDs; default iPhone 17 Pro and iPhone 17, iOS 26.2), OUT (default a temp
 # dir), MOVE_AT (phase index that triggers the moves, default 8), SKIP_BUILD=1, LOBBY_ONLY=1, KEEP_B=1 (leave B booted; otherwise B is shut down at the end),
-# POUNCE_UITEST_TIMEOUT_SCALE (default 1; 3 on a busy Mac), LOG_TIMELINE=1 (each phone's table
+# ORIENTATION_A / ORIENTATION_B (iPads: `landscape`, or `rotate` to turn over every round; see
+# MultiSimTests), DD (derived data, default build/dd), POUNCE_UITEST_TIMEOUT_SCALE (default 1; 3 on a busy Mac), LOG_TIMELINE=1 (each phone's table
 # timeline from the unified log into $OUT/timeline-A.log and timeline-B.log), SPEED (default 10:
 # the phones' animations and the tests' fixed waits run that many times faster, silent sound and
 # haptics; a dev server started here runs its bots at SPEED too; SPEED=1 is a normal-speed game).
@@ -24,7 +25,7 @@ source scripts/lib-dev-server.sh
 SIM_A="${SIM_A:-0FEFDAA5-2552-4E51-9281-C1DA13365F42}"
 SIM_B="${SIM_B:-36EC3B13-032B-47CD-BB25-0A50E5E4AA03}"
 OUT="${OUT:-$(mktemp -d -t pounce-multisim)}"
-DD=build/dd
+DD="${DD:-build/dd}"
 APP="$DD/Build/Products/Debug-iphonesimulator/Pounce.app"
 BUNDLE=com.conleychaos.play
 mkdir -p "$OUT"
@@ -95,12 +96,13 @@ SHARED="$OUT/shared"
 mkdir -p "$SHARED"
 rm -f "$SHARED/move.txt"
 MOVE_AT="${MOVE_AT:-8}"
-run_role() {  # <sim> <seats> <log> <result bundle>
+run_role() {  # <sim> <seats> <log> <result bundle> [orientation]
   # exec: the background job's pid is xcodebuild itself, so cleanup can stop it.
   TEST_RUNNER_POUNCE_SHARED_DIR="$SHARED" TEST_RUNNER_POUNCE_MOVE_SEATS="$2" \
     TEST_RUNNER_POUNCE_API_BASE_URL="$DEV_SERVER_URL" \
     TEST_RUNNER_POUNCE_UITEST_TIMEOUT_SCALE="${POUNCE_UITEST_TIMEOUT_SCALE:-1}" \
     TEST_RUNNER_POUNCE_LOG_TIMELINE="${LOG_TIMELINE:-0}" TEST_RUNNER_POUNCE_SPEED="$SPEED" \
+    TEST_RUNNER_POUNCE_ORIENTATION="${5:-}" \
     exec xcodebuild test-without-building -project Pounce.xcodeproj -scheme Pounce -derivedDataPath "$DD" \
     -destination "id=$1" -only-testing:PounceUITests/MultiSimTests/testMovedSeats \
     -resultBundlePath "$4" >"$3" 2>&1
@@ -115,9 +117,9 @@ if [ "${LOG_TIMELINE:-0}" = 1 ]; then
 fi
 "$E2E" full --local 4 --bots 1 --move-seats 1,2,3 --move-at-phase "$MOVE_AT" --move-file "$SHARED/move.txt" \
   --base "$DEV_SERVER_URL" --timeout 14400 >"$OUT/host-e2e.log" 2>&1 & pids+=($!); host_pid=$!
-run_role "$SIM_A" 1,2 "$OUT/simA.log" "$OUT/simA.xcresult" & pids+=($!); a_pid=$!
+run_role "$SIM_A" 1,2 "$OUT/simA.log" "$OUT/simA.xcresult" "${ORIENTATION_A:-}" & pids+=($!); a_pid=$!
 sleep 5
-run_role "$SIM_B" 3 "$OUT/simB.log" "$OUT/simB.xcresult" & pids+=($!); b_pid=$!
+run_role "$SIM_B" 3 "$OUT/simB.log" "$OUT/simB.xcresult" "${ORIENTATION_B:-}" & pids+=($!); b_pid=$!
 
 host_status=0; a_status=0; b_status=0
 wait "$host_pid" || host_status=$?

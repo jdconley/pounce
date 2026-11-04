@@ -5,7 +5,7 @@ import XCTest
 /// run 4-5-6-7 is his group 2, and my hand is 2, 3, a Yarn and an 8; the fake server takes
 /// each hit like the real one. The DEBUG `table.hit` probe reads
 /// `<laid-group aim changes>|<last hit sent as seat.group.side>` (side `-` when none is sent).
-final class HitTests: XCTestCase {
+class HitTests: XCTestCase {
     private let run = "table.group.1.1"
 
     override func setUp() {

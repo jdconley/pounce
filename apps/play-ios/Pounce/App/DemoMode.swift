@@ -25,8 +25,9 @@ import PounceKit
 /// `crowded`: six seats, five of them laid down with long runs and big sets (`DemoFixtures.crowded()`).
 /// `hit`: my play step after laying down, with Leo's run 4-7 to hit (`DemoFixtures.hitTable()`);
 /// the fake server takes each hit as the real one would and sends the event and snapshot.
+/// `over`: the celebration's finished table, opened as is, so the game over screen shows at once.
 enum DemoMode: String {
-    case lobby, lobbyReady, table, other, replay, nope, celebrate, curtain, handoff, peek, crowded, hit
+    case lobby, lobbyReady, table, other, replay, nope, celebrate, curtain, handoff, peek, crowded, hit, over
 
     static func from(arguments: [String] = CommandLine.arguments) -> DemoMode? {
         guard let i = arguments.firstIndex(of: "-demo"), arguments.indices.contains(i + 1) else { return nil }
@@ -58,6 +59,7 @@ enum DemoMode: String {
             return room
         case .crowded: return DemoFixtures.crowded()
         case .hit: return DemoFixtures.hitTable()
+        case .over: return DemoFixtures.celebration().last?.room ?? DemoFixtures.lobby()
         }
     }
 

@@ -45,6 +45,7 @@ struct StateCard: View {
     let onHome: () -> Void
 
     @State private var appeared = false
+    @Environment(\.horizontalSizeClass) private var sizeClass
 
     var body: some View {
         ZStack {
@@ -80,6 +81,8 @@ struct StateCard: View {
                     .accessibilityIdentifier("state.home")
                 }
             }
+            // Bigger on a roomy (iPad) screen; the phone keeps its size.
+            .scaleEffect(sizeClass == .regular ? 1.3 : 1)
         }
         .onAppear {
             withAnimation(.spring(duration: 0.5, bounce: 0.45).paced) { appeared = true }

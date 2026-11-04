@@ -81,31 +81,31 @@ struct CatEditorView: View {
     private var trimmed: String { name.trimmingCharacters(in: .whitespacesAndNewlines) }
     private var canConfirm: Bool { !trimmed.isEmpty }
 
+    @Environment(\.horizontalSizeClass) private var sizeClass
+
     var body: some View {
         ZStack {
             background
-            ScrollView {
-                VStack(spacing: 18) {
-                    hero
-                    if asksName {
-                        OutlinedText(
-                            String(localized: "What's your name?", comment: "First launch: the prompt over the name field"),
-                            size: 30, fill: .white, width: 4)
-                            .accessibilityAddTraits(.isHeader)
-                            .accessibilityIdentifier("pickcat.prompt")
+            if sizeClass == .regular {
+                roomy
+            } else {
+                ScrollView {
+                    VStack(spacing: 18) {
+                        hero
+                        prompt
+                        nameRow
+                        catGrid
+                        confirmRow
                     }
-                    nameRow
-                    catGrid
-                    confirmRow
+                    .padding(.horizontal, 20)
+                    .padding(.top, 12)
+                    .padding(.bottom, 24)
+                    .frame(maxWidth: 520)
+                    .frame(maxWidth: .infinity)
                 }
-                .padding(.horizontal, 20)
-                .padding(.top, 12)
-                .padding(.bottom, 24)
-                .frame(maxWidth: 520)
-                .frame(maxWidth: .infinity)
+                .scrollBounceBehavior(.basedOnSize)
+                .scrollDismissesKeyboard(.interactively)
             }
-            .scrollBounceBehavior(.basedOnSize)
-            .scrollDismissesKeyboard(.interactively)
         }
         .task { await blinkLoop() }
         .task {
@@ -118,7 +118,63 @@ struct CatEditorView: View {
         }
     }
 
+    // MARK: roomy (iPad)
+
+    /// A regular-width window. Wide: you (the big cat, the prompt and your name) on the left,
+    /// the cats to choose from and the check on the right. Tall: one centered column with a
+    /// bigger cat and grid. Both scroll when the keyboard leaves too little room.
+    private var roomy: some View {
+        GeometryReader { geo in
+            ScrollView {
+                Group {
+                    if Roomy.sideBySide(geo.size, minWidth: 820) {
+                        // With the keyboard up a landscape window is short: the name comes
+                        // first and the big cat steps aside (the grid still shows the pick).
+                        let short = geo.size.height < 460
+                        HStack(alignment: short ? .top : .center, spacing: 48) {
+                            VStack(spacing: 20) {
+                                if !short { hero }
+                                prompt
+                                nameRow
+                            }
+                            .frame(width: min(geo.size.width * 0.4, 460))
+                            VStack(spacing: 26) {
+                                catGrid
+                                confirmRow
+                            }
+                            .frame(width: min(geo.size.width * 0.42, 520))
+                        }
+                    } else {
+                        VStack(spacing: 22) {
+                            hero
+                            prompt
+                            nameRow
+                            catGrid
+                            confirmRow
+                        }
+                        .frame(maxWidth: 600)
+                    }
+                }
+                .padding(.horizontal, 32)
+                .padding(.vertical, 24)
+                .frame(maxWidth: .infinity, minHeight: geo.size.height)
+            }
+            .scrollBounceBehavior(.basedOnSize)
+            .scrollDismissesKeyboard(.interactively)
+        }
+    }
+
     // MARK: pieces
+
+    @ViewBuilder private var prompt: some View {
+        if asksName {
+            OutlinedText(
+                String(localized: "What's your name?", comment: "First launch: the prompt over the name field"),
+                size: sizeClass == .regular ? 38 : 30, fill: .white, width: 4)
+                .accessibilityAddTraits(.isHeader)
+                .accessibilityIdentifier("pickcat.prompt")
+        }
+    }
 
     private var background: some View {
         ZStack {
@@ -141,11 +197,11 @@ struct CatEditorView: View {
                 )
                 .overlay(Circle().strokeBorder(Palette.ink, lineWidth: 6))
                 .shadow(color: Palette.ink.opacity(0.5), radius: 0, x: 0, y: 8)
-                .frame(width: 230, height: 230)
+                .frame(width: 230 * heroScale, height: 230 * heroScale)
             Image(ArtName.cat(cat, blink ? .awake : .idle))
                 .resizable()
                 .scaledToFit()
-                .frame(width: 190, height: 190)
+                .frame(width: 190 * heroScale, height: 190 * heroScale)
                 .shadow(color: Palette.ink.opacity(0.4), radius: 0, x: 0, y: 6)
                 .id(cat)
                 .transition(.scale(scale: 0.6).combined(with: .opacity))
@@ -153,12 +209,14 @@ struct CatEditorView: View {
         }
         // Smaller while typing, so the prompt, the field and the check stay above the keyboard.
         .scaleEffect(nameFocused ? Self.typingScale : 1, anchor: .bottom)
-        .frame(height: 246 * (nameFocused ? Self.typingScale : 1))
+        .frame(height: 246 * heroScale * (nameFocused ? Self.typingScale : 1))
         .animation(reduceMotion ? nil : .spring(duration: 0.4, bounce: 0.4).paced, value: cat)
         .animation(reduceMotion ? nil : .spring(duration: 0.35, bounce: 0.2).paced, value: nameFocused)
     }
 
     private static let typingScale: CGFloat = 0.5
+    /// The hero cat is bigger on a roomy screen.
+    private var heroScale: CGFloat { sizeClass == .regular ? 1.3 : 1 }
 
     private var nameRow: some View {
         HStack(spacing: 12) {

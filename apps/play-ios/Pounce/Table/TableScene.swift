@@ -523,13 +523,21 @@ final class TableScene: SKScene {
         for l in [Layer.rug, .piles, .laidZone, .tower] { layer(l).isHidden = false }
         opponents.isHidden = false
 
-        // Room and rug.
+        // Room and rug. The room art is portrait; a wide table turns it on its side (the floor
+        // seen from above, planks running across) so it fills the view with less zoom.
         background.isHidden = false
-        let bgScale = max(size.width / 390, size.height / 844)
+        let sideways = layout.arrangement == .wide
+        background.zRotation = sideways ? .pi / 2 : 0
+        let art = sideways ? CGSize(width: 844, height: 390) : CGSize(width: 390, height: 844)
+        let bgScale = max(size.width / art.width, size.height / art.height)
         background.size = CGSize(width: 390 * bgScale, height: 844 * bgScale)
         background.position = CGPoint(x: size.width / 2, y: size.height / 2)
         let zone = layout.laidZone
-        let rugSide = min(zone.width + 36, zone.height * 0.92)
+        // Roomy: the rug reaches a little past the zone's top and bottom, under the trays' and
+        // the bar's edges, so it reads as the table everyone sits around.
+        let rugSide = layout.arrangement == .phone
+            ? min(zone.width + 36, zone.height * 0.92)
+            : min(zone.width, zone.height * 1.12)
         rug.isHidden = false
         rug.size = CGSize(width: rugSide, height: rugSide)
         rug.position = CGPoint(x: zone.midX, y: (layout.deck.y + zone.midY) / 2)
@@ -604,6 +612,9 @@ final class TableScene: SKScene {
         }
         sortButton.isHidden = !faceUp || hand.cards.count < 2
         sortButton.position = layout.sortButton
+        let roomy = layout.arrangement != .phone
+        sortButton.size = CGSize(width: roomy ? 44 : Self.sortSize, height: roomy ? 44 : Self.sortSize)
+        menuButton.size = CGSize(width: roomy ? 44 : Self.menuSize, height: roomy ? 44 : Self.menuSize)
 
         // The hand's owner by name: always on a one-seat phone, and on a shared phone while
         // a hand is shown (otherwise the local cats row at the bottom names everyone here).
@@ -621,10 +632,11 @@ final class TableScene: SKScene {
         menuButton.isHidden = false
         // Top-right: in the status bar's right ear when the safe top is tall enough (notch /
         // island phones), else tucked into the bar's corner.
+        let menuSide = menuButton.size.width
         let menuY = safeInsets.top >= 44
-            ? layout.opponentsBar.maxY + Self.menuSize / 2 - 6
-            : layout.opponentsBar.maxY - Self.menuSize / 2
-        menuButton.position = CGPoint(x: size.width - Self.menuSize / 2 - 10, y: menuY)
+            ? layout.opponentsBar.maxY + menuSide / 2 - 6
+            : layout.opponentsBar.maxY - menuSide / 2 - (roomy ? 6 : 0)
+        menuButton.position = CGPoint(x: size.width - menuSide / 2 - (roomy ? 16 : 10), y: menuY)
     }
 
     /// Redraws the bottom seat's name pill, orange while it is that seat's turn.
@@ -726,12 +738,12 @@ final class TableScene: SKScene {
     var menuHidden: Bool { menuButton.isHidden }
 
     var menuFrame: CGRect {
-        let d = max(Self.menuSize, 44)
+        let d = max(menuButton.size.width, 44)
         return CGRect(x: menuButton.position.x - d / 2, y: menuButton.position.y - d / 2, width: d, height: d)
     }
 
     var sortFrame: CGRect {
-        let d = max(Self.sortSize, 44)
+        let d = max(sortButton.size.width, 44)
         return CGRect(x: sortButton.position.x - d / 2, y: sortButton.position.y - d / 2, width: d, height: d)
     }
 

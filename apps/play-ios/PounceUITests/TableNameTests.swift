@@ -3,7 +3,7 @@ import XCTest
 /// Table names (needs the dev server): a new table starts with a cat-themed name, the host names
 /// it in the lobby, Home's card shows it, the table menu shows it, and renaming it from the menu
 /// reaches Home too.
-final class TableNameTests: XCTestCase {
+class TableNameTests: XCTestCase {
     override func setUp() {
         continueAfterFailure = false
     }

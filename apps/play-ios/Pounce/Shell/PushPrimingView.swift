@@ -12,6 +12,7 @@ struct PushPrimingView: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var appeared = false
     @State private var ring = 0
+    @Environment(\.horizontalSizeClass) private var sizeClass
 
     var body: some View {
         ZStack {
@@ -49,6 +50,8 @@ struct PushPrimingView: View {
                 .bounceLoop(active: appeared && !reduceMotion)
                 .accessibilityIdentifier("priming.allow")
             }
+            // Bigger on a roomy (iPad) screen; the phone keeps its size.
+            .scaleEffect(sizeClass == .regular ? 1.25 : 1)
             .opacity(appeared ? 1 : 0)
         }
         .overlay(alignment: .topLeading) {
