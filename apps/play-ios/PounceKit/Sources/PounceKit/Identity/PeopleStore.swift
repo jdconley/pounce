@@ -72,6 +72,19 @@ public final class PeopleStore {
         if people.others.count != before { save(people) }
     }
 
+    /// Gives a person a new id, in place (the server rejected the old one: someone else bound it).
+    public func replaceID(_ old: String, with new: String) {
+        var people = load()
+        if people.owner?.id == old {
+            people.owner?.id = new
+        } else if let i = people.others.firstIndex(where: { $0.id == old }) {
+            people.others[i].id = new
+        } else {
+            return
+        }
+        save(people)
+    }
+
     private static func newID() -> String { UUID().uuidString.lowercased() }
 
     /// Trims, then drops whole Characters from the end until the name fits the server's
