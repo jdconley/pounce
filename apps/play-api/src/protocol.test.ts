@@ -225,6 +225,14 @@ describe("parseClientMessage", () => {
       expect(parse(act({ ...ok, target: { seat: 1, group: 0, x: 1 } }))).toEqual(BAD);
     });
 
+    it("hit: optional side start/end picks the end of a run", () => {
+      const ok = { type: "hit", card: 96, target: { seat: 1, group: 0 } };
+      for (const side of ["start", "end"]) {
+        expect(parse(act({ ...ok, side }))).toEqual({ t: "act", seat: 0, action: { ...ok, side } });
+      }
+      for (const side of ["middle", "", 0, null, true]) expect(parse(act({ ...ok, side }))).toEqual(BAD);
+    });
+
     it("layDown: 1-2 groups of 1-12 cards, optional runStart 1-12", () => {
       const g = (cards: unknown, runStart?: unknown) => (runStart === undefined ? { cards } : { cards, runStart });
       const ok = { type: "layDown", groups: [g([0, 1, 2]), g([10, 11, 12, 13], 4)] };

@@ -8,6 +8,8 @@ enum Palette {
     static let orange = Color(hex: 0xFF8A00)
     static let sky = Color(hex: 0x2EB8FF)
     static let lime = Color(hex: 0x9BE22E)
+    /// A drop the table refuses (the ring around a laid group that can't take the card).
+    static let refuse = Color(hex: 0xFF3B4E)
     /// Outline color for everything chunky.
     static let ink = Color(hex: 0x1B0B3A)
     /// App background.

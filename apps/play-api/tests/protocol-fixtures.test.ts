@@ -194,6 +194,10 @@ function clientSamples(): Sample<ClientMessage>[] {
       name: "act-hit",
       message: { t: "act", seat: 0, action: { type: "hit", card: 76, target: { seat: 1, group: 0 } } },
     },
+    {
+      name: "act-hit-side",
+      message: { t: "act", seat: 0, action: { type: "hit", card: 96, target: { seat: 1, group: 0 }, side: "start" } },
+    },
     { name: "act-discard", message: { t: "act", seat: 0, action: { type: "discard", card: 11 } } },
     {
       name: "act-discard-skip",

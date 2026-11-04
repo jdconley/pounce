@@ -37,6 +37,7 @@ import Testing
         case "act-layDown-runStart":
             return .act(seat: 0, action: .layDown([LayGroup(cards: [9, 10, 11, 96], runStart: 9)]))
         case "act-hit": return .act(seat: 0, action: .hit(card: 76, target: HitTarget(seat: 1, group: 0)))
+        case "act-hit-side": return .act(seat: 0, action: .hit(card: 96, target: HitTarget(seat: 1, group: 0), side: .start))
         case "act-discard": return .act(seat: 0, action: .discard(card: 11, skipTarget: nil))
         case "act-discard-skip": return .act(seat: 0, action: .discard(card: 104, skipTarget: 2))
         case "act-nextRound": return .act(seat: 0, action: .nextRound)

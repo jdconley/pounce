@@ -10,6 +10,8 @@ Setup: see "Play on your phone" in `README.md` (`scripts/dev-server.sh`, `script
 - [ ] Install on two real phones and play a full game: one phone with a pass-and-play seat, a bot in
       the game, through round over, the next deal, and game over.
 - [ ] Haptics feel right on device (draw, discard, hit, Cucumber skip, going out).
+- [ ] Dragging a card over laid groups on a small phone: the ring and gap follow the finger, a light
+      tick on each new group or end, and a Yarn let go at the start of a run lands at the start.
 - [ ] Sound levels are sensible next to music and with the ringer switch on and off.
 - [ ] Join by typing the room code on the second phone (share links use `play.conleychaos.com`).
 

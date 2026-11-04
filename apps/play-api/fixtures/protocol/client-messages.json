@@ -126,6 +126,22 @@
     }
   },
   {
+    "name": "act-hit-side",
+    "message": {
+      "t": "act",
+      "seat": 0,
+      "action": {
+        "type": "hit",
+        "card": 96,
+        "target": {
+          "seat": 1,
+          "group": 0
+        },
+        "side": "start"
+      }
+    }
+  },
+  {
     "name": "act-discard",
     "message": {
       "t": "act",

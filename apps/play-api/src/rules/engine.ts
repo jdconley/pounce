@@ -1,5 +1,5 @@
 import { ALL_CARD_IDS, card, cardPoints, type CardId } from "./cards";
-import { canHit, type Group } from "./groups";
+import { canHit, type Group, type HitSide } from "./groups";
 import { matchPhase } from "./phases";
 import { createRng, shuffle, type Seed } from "./rng";
 
@@ -33,7 +33,7 @@ export type CatTowerState = {
 export type Action =
   | { type: "draw"; from: "deck" | "discard" }
   | { type: "layDown"; groups: { cards: CardId[]; runStart?: number }[] }
-  | { type: "hit"; card: CardId; target: { seat: Seat; group: number } }
+  | { type: "hit"; card: CardId; target: { seat: Seat; group: number }; side?: HitSide }
   | { type: "discard"; card: CardId; skipTarget?: Seat }
   | { type: "nextRound" };
 
@@ -379,7 +379,7 @@ function hit(
   const { target } = action;
   const group = s.laid[target.seat]?.[target.group];
   if (group === undefined) return "bad_target";
-  const hitResult = canHit(group, action.card);
+  const hitResult = canHit(group, action.card, action.side);
   if (!hitResult.ok) return "bad_target";
 
   hand.splice(index, 1);

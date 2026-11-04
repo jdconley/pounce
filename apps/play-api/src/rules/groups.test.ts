@@ -207,6 +207,26 @@ describe("canHit", () => {
     expect(canHit(full, tuxedo(1))).toEqual({ ok: false });
     expect(canHit(full, tuxedo(12))).toEqual({ ok: false });
   });
+  test("canHit yarn with side start extends a run 3..6 down to 2", () => {
+    expect(canHit(run36, 96, "start")).toEqual({
+      ok: true,
+      group: { kind: "run", cards: [96, 2, 3, 4, 5], start: 2, end: 6 },
+    });
+    expect(canHit(run36, 96, "end")).toEqual(canHit(run36, 96));
+  });
+  test("canHit with a side refuses the end that cannot take the card", () => {
+    const run912 = buildGroup({ kind: "run", size: 4 }, [tabby(9), tabby(10), tabby(11), tabby(12)]) as Group;
+    expect(canHit(run912, 96, "end")).toEqual({ ok: false });
+    const run112 = buildGroup({ kind: "run", size: 4 }, [tabby(1), tabby(2), tabby(3), tabby(4)]) as Group;
+    expect(canHit(run112, 96, "start")).toEqual({ ok: false });
+    expect(canHit(run36, tuxedo(2), "end")).toEqual({ ok: false });
+    expect(canHit(run36, calico(7), "start")).toEqual({ ok: false });
+    expect(canHit(run36, tuxedo(2), "start")).toEqual(canHit(run36, tuxedo(2)));
+  });
+  test("canHit ignores the side on sets and coats", () => {
+    const sevens = buildGroup({ kind: "set", size: 3 }, [tabby(7), tuxedo(7), calico(7)]) as Group;
+    expect(canHit(sevens, 96, "start")).toEqual(canHit(sevens, 96));
+  });
   test("canHit set of 7s accepts 7 and yarn, rejects cucumber and other values", () => {
     const sevens = buildGroup(
       { kind: "set", size: 3 },

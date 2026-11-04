@@ -22,6 +22,8 @@ struct TableInputState {
     var dragNode: CardNode?
     /// Card center minus finger, so the card doesn't jump under the finger.
     var grab: CGVector = .zero
+    /// The dragged card is lifted clear of the laid group it would hit.
+    var lifted = false
 
     /// A finger that moves further than this is dragging, not tapping.
     static let dragThreshold: CGFloat = 10
@@ -110,7 +112,10 @@ extension TableScene {
                   beginDrag() else { return }
         }
         if let node = input.dragNode {
-            node.position = CGPoint(x: p.x + input.grab.dx, y: p.y + input.grab.dy)
+            let free = CGPoint(x: p.x + input.grab.dx, y: p.y + input.grab.dy)
+            let lift = aimHit(finger: p)
+            place(node, at: lift ?? free, scale: lift == nil ? Self.dragScale : Self.liftScale, settle: (lift != nil) != input.lifted)
+            input.lifted = lift != nil
             followDrag(node, finger: p)
         }
     }
@@ -124,6 +129,7 @@ extension TableScene {
             state.dragNode?.removeFromParent()
             dragCard = nil
             drop(state.source, at: p, landing: landing)
+            if provisionalCard == nil { showHitPreview(nil) }  // no hit went out: close any gap
         } else if hypot(p.x - state.start.x, p.y - state.start.y) <= TableInputState.dragThreshold * 2 {
             tap(state.source, at: p)
         }
@@ -135,6 +141,7 @@ extension TableScene {
         input = TableInputState()
         dragGap = nil
         dragCard = nil
+        showHitPreview(nil)
         if wasDragging { refresh() }
     }
 
@@ -176,7 +183,7 @@ extension TableScene {
         input.dragging = true
         input.grab = CGVector(dx: from.x - input.start.x, dy: from.y - input.start.y)
         node.position = from
-        node.setScale(1.08)
+        node.setScale(Self.dragScale)
         node.zPosition = 0
         layer(.drag).addChild(node)
         input.dragNode = node
@@ -223,6 +230,64 @@ extension TableScene {
         let director = director
         director.cancelActions(under: hand)  // a slide still running gives way to the new one
         Task { await director.runAll(moves) }
+    }
+
+    /// A dragged card at full size, and lifted over a laid group (small enough to leave the
+    /// group's gap in view).
+    static let dragScale: CGFloat = 1.08
+    static let liftScale: CGFloat = 0.8
+    /// How long the dragged card takes to lift clear of a laid group or come back down.
+    static let liftDuration: TimeInterval = 0.12
+
+    /// Moves the dragged card: straight to `point`, or eased there while it lifts, lands or is
+    /// still settling (the scene's speed is the Pace).
+    private func place(_ node: CardNode, at point: CGPoint, scale: CGFloat, settle: Bool) {
+        guard settle || node.action(forKey: "lift") != nil else {
+            node.position = point
+            return
+        }
+        let d = Self.liftDuration
+        node.run(.group([.move(to: point, duration: d), .scale(to: scale, duration: d)]).eased(.easeOut), withKey: "lift")
+    }
+
+    /// Live hit preview: while a hand card is over a laid group, that group shows where the
+    /// card would land, or that it can't take it, with a light tick each time the group or the
+    /// end changes. Returns where the card floats meanwhile (above the group, clear of the gap),
+    /// or nil away from the laid groups.
+    private func aimHit(finger p: CGPoint) -> CGPoint? {
+        guard case .hand(let card) = input.source, let layout else { return nil }
+        let aim = laidDrop(at: p).map { d in
+            HitPreview(target: d.target, card: card,
+                       plan: actingSeat.flatMap { model?.hitPlan(card: card, seat: $0, target: d.target, toward: d.toward) })
+        }
+        let old = laidZone.preview
+        showHitPreview(aim)
+        guard let aim, let f = laidZone.shownFrame(of: aim.target) else { return nil }
+        if aim.target != old?.target || aim.plan?.index != old?.plan?.index || (aim.plan == nil) != (old?.plan == nil) {
+            Haptics.shared.tick()
+            #if DEBUG
+            hitProbe.aims += 1
+            #endif
+        }
+        let h = layout.cardSize.height * Self.liftScale
+        return CGPoint(x: p.x, y: min(f.maxY + 10 + h / 2, size.height - h / 2))
+    }
+
+    /// Shows `preview` in the laid zone, sliding its groups open or closed.
+    func showHitPreview(_ preview: HitPreview?) {
+        let moves = laidZone.setPreview(preview)
+        guard !moves.isEmpty else { return }
+        let director = director
+        director.cancelActions(under: laidZone)  // a slide still running gives way to the new one
+        Task { await director.runAll(moves) }
+    }
+
+    /// The laid group (and its end) a hand card let go at `p` would hit: nothing where the
+    /// discard pile, a cat or a tray takes the drop first.
+    private func laidDrop(at p: CGPoint) -> (target: HitTarget, toward: HitSide)? {
+        if discard.hitFrame.insetBy(dx: -12, dy: -12).contains(p) || opponentSeat(at: p) != nil { return nil }
+        if !trays.isHidden, trays.tray(at: p) != nil { return nil }
+        return laidZone.drop(at: p)
     }
 
     /// A drop here reorders the hand (the fan and the strip just above it, below the trays).
@@ -275,8 +340,8 @@ extension TableScene {
             if !tryTray(card, tray) { nope(card: card) }
             return
         }
-        if let target = laidZone.group(at: p) {
-            if !tryHit(card, target) { nope(card: card) }
+        if let aim = laidDrop(at: p) {
+            if !tryHit(card, aim.target, toward: aim.toward) { nope(card: card) }
             return
         }
         if let layout, isOverHand(p, layout) {
@@ -401,8 +466,8 @@ extension TableScene {
             if !tryTray(held, tray) { nope(card: held) }
             return
         }
-        if let target = laidZone.group(at: p) {
-            if !tryHit(held, target) { nope(card: held) }
+        if let aim = laidZone.drop(at: p) {
+            if !tryHit(held, aim.target, toward: aim.toward) { nope(card: held) }
             return
         }
         liftedCard = nil
@@ -469,14 +534,20 @@ extension TableScene {
         return true
     }
 
-    @discardableResult func tryHit(_ card: CardID, _ target: HitTarget) -> Bool {
-        guard let seat = actingSeat, let model, model.hitTargets(card: card, seat: seat).contains(target),
-              store.act(seat: seat, .hit(card: card, target: target)) else { return false }
+    /// Hits `target` with `card`, on the end of a run it was dropped toward (a natural goes
+    /// where it fits). The card waits in the gap the group opens for it until the server answers.
+    @discardableResult func tryHit(_ card: CardID, _ target: HitTarget, toward: HitSide) -> Bool {
+        guard let seat = actingSeat, let model, let plan = model.hitPlan(card: card, seat: seat, target: target, toward: toward),
+              store.act(seat: seat, plan.action) else { return false }
         lastAct = .card(card)
         Haptics.shared.drop()
-        let frames = laidZone.groupFrames(seat: target.seat)
-        let f = frames[safe: target.group] ?? .zero
-        provisionalMove(card: card, to: CGPoint(x: f.maxX, y: f.midY), scale: 0.6)
+        #if DEBUG
+        if case .hit(_, _, let side) = plan.action { hitProbe.sent = "\(target.seat).\(target.group).\(side?.rawValue ?? "-")" }
+        #endif
+        showHitPreview(HitPreview(target: target, card: card, plan: plan, ghost: false))
+        let spot = laidZone.landing(hit: card, seat: target.seat, index: target.group, group: plan.group)
+        let f = laidZone.groupFrames(seat: target.seat)[safe: target.group] ?? .zero
+        provisionalMove(card: card, to: spot ?? CGPoint(x: f.maxX, y: f.midY), scale: layout.map { laidZone.miniScale(layout: $0) } ?? 0.6)
         return true
     }
 
@@ -618,9 +689,21 @@ extension TableScene {
         }
         for target in model.hitTargets(card: card, seat: seat) {
             let name = SeatInfo.name(model.room.seats[safe: target.seat])
-            actions.append(customAction(String(localized: "Add to group \(target.group + 1), \(name)", comment: "VoiceOver action: hit a laid group")) { [weak self] in
-                self?.tryHit(card, target) ?? false
-            })
+            let low = model.hitPlan(card: card, seat: seat, target: target, toward: .start)
+            let high = model.hitPlan(card: card, seat: seat, target: target, toward: .end)
+            if let low, let high, low.side == .start, high.side == .end {
+                // A Yarn that fits either end of a run: one action per end.
+                actions.append(customAction(String(localized: "Add to the start of group \(target.group + 1), \(name)", comment: "VoiceOver action: hit the low end of a laid run")) { [weak self] in
+                    self?.tryHit(card, target, toward: .start) ?? false
+                })
+                actions.append(customAction(String(localized: "Add to the end of group \(target.group + 1), \(name)", comment: "VoiceOver action: hit the high end of a laid run")) { [weak self] in
+                    self?.tryHit(card, target, toward: .end) ?? false
+                })
+            } else {
+                actions.append(customAction(String(localized: "Add to group \(target.group + 1), \(name)", comment: "VoiceOver action: hit a laid group")) { [weak self] in
+                    self?.tryHit(card, target, toward: .end) ?? false
+                })
+            }
         }
         return actions
     }

@@ -90,6 +90,9 @@ final class TableScene: SKScene {
     #if DEBUG
     /// Target-slot changes during drags, and the slot the last reorder landed in (`table.drag`).
     var dragProbe = (changes: 0, landed: -1)
+    /// Laid-group aim changes during drags, and the last hit sent as `seat.group.side`, side
+    /// `-` when the action carries none (`table.hit`).
+    var hitProbe = (aims: 0, sent: "-")
     #endif
     /// A played card shown at its target until the server answers (`provisionalMove`).
     private(set) var provisionalCard: CardID?
@@ -434,6 +437,7 @@ final class TableScene: SKScene {
         let flyer = provisionalNode
         provisionalNode = nil
         provisionalCard = nil
+        showHitPreview(nil)
         redraw()
         guard let flyer, let home = hand.node(for: card), let parent = flyer.parent else {
             flyer?.removeFromParent()
@@ -458,6 +462,7 @@ final class TableScene: SKScene {
         provisionalNode?.removeFromParent()
         provisionalNode = nil
         provisionalCard = nil
+        showHitPreview(nil)
     }
 
     /// The table is about to show the store's room as of now: whole through `settledSeq`.
@@ -561,6 +566,8 @@ final class TableScene: SKScene {
         }
         let dimmed = !(model.isMyTurn && model.currentSeat == bottom)
         hand.update(content, layout: layout, lifted: selection, gap: faceUp && dragCard != nil ? dragGap : nil, dimmed: dimmed)
+        // A hit preview lasts while its card is dragged or in flight.
+        if dragCard == nil, provisionalCard == nil, laidZone.preview != nil { _ = laidZone.setPreview(nil, animated: false) }
 
         // Legal-target glows for the current step and held card.
         let glows = computeGlows()
@@ -817,6 +824,11 @@ final class TableScene: SKScene {
                 id: "table.drag", label: "drag", frame: CGRect(x: 48, y: 0, width: 24, height: 24),
                 traits: .staticText, live: { [weak self] in
                     self.map { "\($0.dragProbe.changes)|\($0.dragProbe.landed)" }
+                }),
+            TableAccessibility.Item(
+                id: "table.hit", label: "hit", frame: CGRect(x: 72, y: 0, width: 24, height: 24),
+                traits: .staticText, live: { [weak self] in
+                    self.map { "\($0.hitProbe.aims)|\($0.hitProbe.sent)" }
                 }),
             TableAccessibility.Item(
                 id: "table.debug", label: "debug", frame: CGRect(x: 24, y: 0, width: 24, height: 24),

@@ -158,6 +158,33 @@ final class CardFaceFactory {
         return t
     }
 
+    /// A rounded ring for the laid group a dragged card is over: `color` inside an ink
+    /// outline, so it reads on the rug and over card faces. Stretch it with `ringCenter`.
+    func ring(_ color: UIColor) -> SKTexture {
+        let key = "ring|\(color.hexKey)"
+        if let cached = numerals[key] { return cached }
+        let side: CGFloat = 40
+        let image = UIGraphicsImageRenderer(size: CGSize(width: side, height: side)).image { _ in
+            let outer = UIBezierPath(roundedRect: CGRect(x: 0, y: 0, width: side, height: side), cornerRadius: 12)
+            let inner = UIBezierPath(roundedRect: CGRect(x: 8, y: 8, width: side - 16, height: side - 16), cornerRadius: 6)
+            outer.append(inner)
+            outer.usesEvenOddFillRule = true
+            UIColor(Palette.ink).setFill()
+            outer.fill()
+            let band = UIBezierPath(roundedRect: CGRect(x: 2, y: 2, width: side - 4, height: side - 4), cornerRadius: 10)
+            band.append(UIBezierPath(roundedRect: CGRect(x: 6, y: 6, width: side - 12, height: side - 12), cornerRadius: 7))
+            band.usesEvenOddFillRule = true
+            color.setFill()
+            band.fill()
+        }
+        let t = SKTexture(image: image)
+        numerals[key] = t
+        return t
+    }
+
+    /// The stretchable middle of `ring(_:)`.
+    static let ringCenter = CGRect(x: 0.4, y: 0.4, width: 0.2, height: 0.2)
+
     // MARK: drawing
 
     /// White keyline, then the ink outline, then whatever `inside` draws, clipped to the hole.

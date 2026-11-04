@@ -76,6 +76,25 @@ import Testing
         #expect(game.deckCount + game.discardCount + game.handCounts.reduce(0, +) + laidCount == Card.deckSize)
     }
 
+    @Test func hitTableIsConsistentAndOffersBothEndsOfTheRun() throws {
+        let room = DemoFixtures.hitTable()
+        let game = try #require(room.game)
+        var visible = game.hands.values.flatMap { $0 }
+        visible += game.laid.compactMap { $0 }.flatMap { $0.flatMap(\.cards) }
+        if let top = game.discardTop { visible.append(top) }
+        #expect(Set(visible).count == visible.count)
+        let laidCount = game.laid.compactMap { $0 }.flatMap { $0 }.reduce(0) { $0 + $1.cards.count }
+        #expect(game.deckCount + game.discardCount + game.handCounts.reduce(0, +) + laidCount == Card.deckSize)
+        for (seat, groups) in game.laid.enumerated() {
+            guard let groups else { continue }
+            #expect(Rules.matchPhase(game.phase[seat], groups: groups.map { LayGroup(cards: $0.cards) }) != nil)
+        }
+        let model = TableModel(room: room)
+        let run = HitTarget(seat: 1, group: 1)
+        #expect(model.hitPlan(card: 96, seat: 0, target: run, toward: .start)?.side == .start)
+        #expect(model.hitPlan(card: 96, seat: 0, target: run, toward: .end)?.side == .end)
+    }
+
     @Test func lobbyIsMineAndWaiting() {
         let room = DemoFixtures.lobby()
         let model = TableModel(room: room)

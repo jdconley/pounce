@@ -2,7 +2,7 @@
 import Foundation
 import PounceKit
 
-/// DEBUG launch argument `-demo <lobby|lobbyReady|table|other|replay|celebrate|curtain|handoff|peek|crowded>`: opens a room fed
+/// DEBUG launch argument `-demo <lobby|lobbyReady|table|other|replay|celebrate|curtain|handoff|peek|crowded|hit>`: opens a room fed
 /// by a fake socket that sends one `DemoFixtures` snapshot, so the real screens render with no
 /// server. `lobbyReady` is the lobby with no open seat, so the start pill is live. `other` is the table on another seat's turn (ring glow + paw marker, dimmed hand).
 /// `replay` plays `DemoFixtures.replay()` twice through the real store and intent path
@@ -23,8 +23,10 @@ import PounceKit
 /// then discards and the turn goes to a remote seat, so the shown hand must turn face down at
 /// once, not after the discard animates. Logs like `replay`.
 /// `crowded`: six seats, five of them laid down with long runs and big sets (`DemoFixtures.crowded()`).
+/// `hit`: my play step after laying down, with Leo's run 4-7 to hit (`DemoFixtures.hitTable()`);
+/// the fake server takes each hit as the real one would and sends the event and snapshot.
 enum DemoMode: String {
-    case lobby, lobbyReady, table, other, replay, nope, celebrate, curtain, handoff, peek, crowded
+    case lobby, lobbyReady, table, other, replay, nope, celebrate, curtain, handoff, peek, crowded, hit
 
     static func from(arguments: [String] = CommandLine.arguments) -> DemoMode? {
         guard let i = arguments.firstIndex(of: "-demo"), arguments.indices.contains(i + 1) else { return nil }
@@ -55,6 +57,7 @@ enum DemoMode: String {
             room.game?.turn = 1
             return room
         case .crowded: return DemoFixtures.crowded()
+        case .hit: return DemoFixtures.hitTable()
         }
     }
 
@@ -85,6 +88,7 @@ enum DemoMode: String {
         case .handoff: ReplaySocket(start: room, steps: Self.handoffSteps(), loops: 1)
         case .celebrate: CelebrateSocket()
         case .nope: DemoSocket(room: room, refusing: true)
+        case .hit: DemoSocket(room: room, hits: true)
         default: DemoSocket(room: room)
         }
     }
@@ -226,12 +230,17 @@ extension TableScene {
 actor DemoSocket: RoomSocketing {
     nonisolated let events: AsyncStream<SocketEvent>
     private let continuation: AsyncStream<SocketEvent>.Continuation
-    private let room: RoomView
+    private var room: RoomView
     private let refusing: Bool
+    /// Takes hits like the server: the card joins the group (on the `side` asked for), then
+    /// the `hit` event and a snapshot.
+    private let hits: Bool
+    private var seq = 1
 
-    init(room: RoomView, refusing: Bool = false) {
+    init(room: RoomView, refusing: Bool = false, hits: Bool = false) {
         self.room = room
         self.refusing = refusing
+        self.hits = hits
         (events, continuation) = AsyncStream.makeStream(of: SocketEvent.self)
     }
 
@@ -241,6 +250,7 @@ actor DemoSocket: RoomSocketing {
     }
 
     func send(_ m: ClientMessage) async throws {
+        if hits, case .act(let seat, .hit(let card, let target, let side)) = m { return hit(seat: seat, card: card, target: target, side: side) }
         guard refusing, case .act = m else { return }
         try? await Task.sleep(for: Pace.duration(.milliseconds(400)))
         continuation.yield(.message(.error(.badStep)))
@@ -250,6 +260,22 @@ actor DemoSocket: RoomSocketing {
 
     func stop() async {
         continuation.finish()
+    }
+
+    private func hit(seat: Seat, card: CardID, target: HitTarget, side: HitSide?) {
+        guard var game = room.game, var groups = game.laid[safe: target.seat] ?? nil, groups.indices.contains(target.group),
+              let group = Rules.canHit(groups[target.group], card: card, side: side) else {
+            continuation.yield(.message(.error(.badTarget)))
+            return
+        }
+        groups[target.group] = group
+        game.laid[target.seat] = groups
+        game.hands[seat]?.removeAll { $0 == card }
+        game.handCounts[seat] -= 1
+        room.game = game
+        seq += 1
+        continuation.yield(.message(.event(seq: seq, event: .game(.hit(seat: seat, card: card, target: target, group: group)))))
+        continuation.yield(.message(.snapshot(protocol: PounceKit.protocolVersion, seq: seq, room: room)))
     }
 }
 #endif
