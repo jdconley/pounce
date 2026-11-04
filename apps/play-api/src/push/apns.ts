@@ -1,22 +1,13 @@
+import { base64url, pemBody } from "../players/ids";
+
 import type { Env } from "../env";
-import type { PushIntent } from "../room/core";
+import type { YourTurnIntent } from "../room/core";
 
 /** Apple rejects provider tokens older than an hour; refresh well before that. */
 const JWT_TTL_SEC = 50 * 60;
 const encoder = new TextEncoder();
 
 let cachedJwt: { kid: string; iat: number; jwt: string } | null = null;
-
-function base64url(bytes: Uint8Array): string {
-  let bin = "";
-  for (const byte of bytes) bin += String.fromCharCode(byte);
-  return btoa(bin).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
-}
-
-function pemBody(pem: string): Uint8Array<ArrayBuffer> {
-  const bin = atob(pem.replace(/-----(BEGIN|END)[^-]*-----/g, "").replace(/\s+/g, ""));
-  return Uint8Array.from(bin, (c) => c.charCodeAt(0));
-}
 
 const encodeJson = (value: unknown): string => base64url(encoder.encode(JSON.stringify(value)));
 
@@ -42,7 +33,10 @@ export async function createApnsJwt(p8: string, keyId: string, teamId: string, n
 }
 
 export type ApnsConfig = { host: string; topic: string; jwt: string };
-export type ApnsPayload = { title: string; body: string; code: string };
+/** An alert, or a background push (`content-available`, no alert) whose data sits beside `aps`. */
+export type ApnsPayload =
+  | { title: string; body: string; code: string }
+  | { background: Record<string, unknown>; collapseId: string };
 export type ApnsResult = { ok: boolean; status: number; unregistered: boolean; reason: string | null };
 
 async function apnsReason(response: Response): Promise<string | null> {
@@ -60,23 +54,29 @@ export async function sendApns(
   deviceToken: string,
   payload: ApnsPayload,
 ): Promise<ApnsResult> {
+  const background = "background" in payload;
   const response = await fetcher(`https://${cfg.host}/3/device/${encodeURIComponent(deviceToken)}`, {
     method: "POST",
     headers: {
       authorization: `bearer ${cfg.jwt}`,
       "apns-topic": cfg.topic,
-      "apns-push-type": "alert",
-      "apns-priority": "10",
-      "apns-collapse-id": payload.code,
+      "apns-push-type": background ? "background" : "alert",
+      // Apple requires priority 5 for background pushes.
+      "apns-priority": background ? "5" : "10",
+      "apns-collapse-id": background ? payload.collapseId : payload.code,
     },
-    body: JSON.stringify({
-      aps: {
-        alert: { title: payload.title, body: payload.body },
-        sound: "default",
-        "thread-id": payload.code,
-      },
-      code: payload.code,
-    }),
+    body: JSON.stringify(
+      background
+        ? { aps: { "content-available": 1 }, ...payload.background }
+        : {
+            aps: {
+              alert: { title: payload.title, body: payload.body },
+              sound: "default",
+              "thread-id": payload.code,
+            },
+            code: payload.code,
+          },
+    ),
   });
   if (response.ok) return { ok: true, status: response.status, unregistered: false, reason: null };
 
@@ -86,16 +86,16 @@ export async function sendApns(
 }
 
 /**
- * Pushes "your turn" to one device. Does nothing without a device token or the
- * APNs secrets. `unregistered` tells the caller to forget the token. Neither
- * the token nor the key is ever logged.
+ * Sends one push. Does nothing without a device token or the APNs secrets.
+ * `unregistered` tells the caller to forget the token. Neither the token nor
+ * the key is ever logged.
  */
-export async function pushYourTurn(
+async function deliver(
   env: Env,
   deviceToken: string | null,
-  intent: PushIntent,
-  fetcher: typeof fetch = fetch,
-  nowSec: number = Math.floor(Date.now() / 1000),
+  payload: ApnsPayload,
+  fetcher: typeof fetch,
+  nowSec: number,
 ): Promise<{ sent: boolean; unregistered: boolean }> {
   const none = { sent: false, unregistered: false };
   if (!deviceToken || !env.APNS_KEY_P8 || !env.APNS_KEY_ID) return none;
@@ -111,12 +111,7 @@ export async function pushYourTurn(
   }
 
   try {
-    const result = await sendApns(
-      fetcher,
-      { host: env.APNS_HOST, topic: env.APNS_TOPIC, jwt },
-      deviceToken,
-      { title: intent.personName, body: `Your turn at ${intent.tableName}`, code: intent.code },
-    );
+    const result = await sendApns(fetcher, { host: env.APNS_HOST, topic: env.APNS_TOPIC, jwt }, deviceToken, payload);
     if (!result.ok) console.error("apns_push_failed", result.status, result.reason);
     return { sent: result.ok, unregistered: result.unregistered };
   } catch {
@@ -124,4 +119,32 @@ export async function pushYourTurn(
     console.error("apns_push_failed", "network_error");
     return none;
   }
+}
+
+/** Pushes "your turn" to one device. */
+export function pushYourTurn(
+  env: Env,
+  deviceToken: string | null,
+  intent: YourTurnIntent,
+  fetcher: typeof fetch = fetch,
+  nowSec: number = Math.floor(Date.now() / 1000),
+): Promise<{ sent: boolean; unregistered: boolean }> {
+  return deliver(
+    env,
+    deviceToken,
+    { title: intent.personName, body: `Your turn at ${intent.tableName}`, code: intent.code },
+    fetcher,
+    nowSec,
+  );
+}
+
+/** Tells one device to clear a table's delivered notifications: the player took the turn elsewhere (§12.5). */
+export function pushDismiss(
+  env: Env,
+  deviceToken: string | null,
+  code: string,
+  fetcher: typeof fetch = fetch,
+  nowSec: number = Math.floor(Date.now() / 1000),
+): Promise<{ sent: boolean; unregistered: boolean }> {
+  return deliver(env, deviceToken, { background: { kind: "dismiss", code }, collapseId: `dismiss:${code}` }, fetcher, nowSec);
 }

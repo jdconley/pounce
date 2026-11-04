@@ -165,7 +165,7 @@ function parseAction(a: unknown): Action | null {
 }
 
 /** A person's name trimmed, or null when it is not a string of 1-20 characters after trimming. */
-function parseName(name: unknown): string | null {
+export function parseName(name: unknown): string | null {
   if (typeof name !== "string") return null;
   const trimmed = name.trim();
   return trimmed.length < 1 || trimmed.length > MAX_NAME ? null : trimmed;

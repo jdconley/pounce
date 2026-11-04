@@ -67,6 +67,8 @@ function worker(
     durableObjects: {
       ROOMS: { className: "GameRoom", useSQLite: true },
       DEVICES: { className: "DeviceIndex", useSQLite: true },
+      PLAYERS: { className: "Player", useSQLite: true },
+      IDENTITIES: { className: "Identities", useSQLite: true },
     },
     bindings: {
       ...(secret === null ? {} : { TOKEN_SECRET: secret }),

@@ -81,13 +81,16 @@ jobs:
           TOKEN_SECRET: ${{ secrets.PLAY_API_TOKEN_SECRET }}
           APNS_KEY_P8: ${{ secrets.PLAY_API_APNS_KEY_P8 }}
           APNS_KEY_ID: ${{ secrets.PLAY_API_APNS_KEY_ID }}
+          SIWA_KEY_P8: ${{ secrets.PLAY_API_SIWA_KEY_P8 }}
+          SIWA_KEY_ID: ${{ secrets.PLAY_API_SIWA_KEY_ID }}
         run: |
           # After the deploy, because the Worker must exist before it can hold a
           # secret. Without TOKEN_SECRET the API stays dormant: device and room
           # routes answer 503 and /healthz reports "configured":false, which the
           # smoke check below catches. The APNs pair is optional: without it the
-          # Worker skips your-turn pushes. Values reach wrangler on stdin, never
-          # as arguments.
+          # Worker skips your-turn pushes. So is the Sign in with Apple pair:
+          # without it sign-in works but no tokens are kept to revoke. Values
+          # reach wrangler on stdin, never as arguments.
           put_secret() {
             for attempt in 1 2 3; do
               printenv "$1" | pnpm exec wrangler secret put "$1" && return 0
@@ -110,6 +113,16 @@ jobs:
             echo "::warning title=Play API::Set both PLAY_API_APNS_KEY_P8 and PLAY_API_APNS_KEY_ID (one is missing). Your-turn push stays off."
           else
             echo "PLAY_API_APNS_KEY_P8 and PLAY_API_APNS_KEY_ID unset. Your-turn push stays off."
+          fi
+
+          # Both or neither: the key id names the key that signs the client secret.
+          if [ -n "$SIWA_KEY_P8" ] && [ -n "$SIWA_KEY_ID" ]; then
+            put_secret SIWA_KEY_P8
+            put_secret SIWA_KEY_ID
+          elif [ -n "$SIWA_KEY_P8" ] || [ -n "$SIWA_KEY_ID" ]; then
+            echo "::warning title=Play API::Set both PLAY_API_SIWA_KEY_P8 and PLAY_API_SIWA_KEY_ID (one is missing). Sign in with Apple tokens aren't kept or revoked."
+          else
+            echo "PLAY_API_SIWA_KEY_P8 and PLAY_API_SIWA_KEY_ID unset. Sign in with Apple works; its tokens aren't kept or revoked (needed before App Store submission)."
           fi
       - name: Smoke check
         if: steps.creds.outputs.ready == 'true'

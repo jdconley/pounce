@@ -53,6 +53,8 @@ secrets exist:
 | `PLAY_API_TOKEN_SECRET` | yes | Signs device tokens. Generate with `openssl rand -hex 32`. Without it the API answers 503 and the smoke check fails. |
 | `PLAY_API_APNS_KEY_P8` | no | APNs auth key (.p8 contents) for "your turn" pushes. Set it together with the key ID. |
 | `PLAY_API_APNS_KEY_ID` | no | The APNs key's ID. |
+| `PLAY_API_SIWA_KEY_P8` | no, until App Store submission | Sign in with Apple key (.p8 contents). Sign-in works without it, but the API keeps no Apple tokens, so it can't revoke them on account deletion as App Review requires. One key with both APNs and Sign in with Apple enabled can serve both pairs. Set it together with the key ID. |
+| `PLAY_API_SIWA_KEY_ID` | no | The Sign in with Apple key's ID. |
 
 ## License
 

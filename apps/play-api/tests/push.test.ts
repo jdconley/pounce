@@ -2,7 +2,7 @@ import { build } from "esbuild";
 import { Miniflare, Response as MiniflareResponse, type Request as MiniflareRequest } from "miniflare";
 import { afterAll, beforeAll, describe, expect, test } from "vitest";
 
-import type { PushIntent } from "../src/room/core";
+import type { YourTurnIntent } from "../src/room/core";
 
 let mf: Miniflare;
 let script = "";
@@ -24,6 +24,8 @@ beforeAll(async () => {
     durableObjects: {
       ROOMS: { className: "GameRoom", useSQLite: true },
       DEVICES: { className: "DeviceIndex", useSQLite: true },
+      PLAYERS: { className: "Player", useSQLite: true },
+      IDENTITIES: { className: "Identities", useSQLite: true },
     },
     // No APNS_KEY_P8 / APNS_KEY_ID: the secrets are unset.
     bindings: { APNS_TEAM_ID: "B222J9J7B8", APNS_TOPIC: "com.conleychaos.play", APNS_HOST: "api.push.apple.com" },
@@ -34,7 +36,7 @@ afterAll(async () => {
   await mf.dispose();
 });
 
-const intent: PushIntent = { deviceId: "dev-1", kind: "your_turn", seat: 0, personName: "Sam",
+const intent: YourTurnIntent = { deviceId: "dev-1", kind: "your_turn", seat: 0, personName: "Sam",
   tableName: "Taco Night",
   code: "BCDFG",
 };
@@ -82,6 +84,8 @@ describe("DeviceIndex.push when APNs says the token is dead", () => {
       durableObjects: {
         ROOMS: { className: "GameRoom", useSQLite: true },
         DEVICES: { className: "DeviceIndex", useSQLite: true },
+        PLAYERS: { className: "Player", useSQLite: true },
+        IDENTITIES: { className: "Identities", useSQLite: true },
       },
       bindings: {
         APNS_TEAM_ID: "B222J9J7B8",
@@ -131,5 +135,81 @@ describe("DeviceIndex.push when APNs says the token is dead", () => {
     expect(await push("dev-race")).toEqual({ sent: false });
     expect(await push("dev-race")).toEqual({ sent: false });
     expect(sentTo).toEqual([OLD, NEW]);
+  });
+});
+
+/** An IANA zone where it is `hour` o'clock right now (Etc/GMT names have inverted signs). */
+function zoneAtHour(hour: number): string {
+  let offset = (hour - new Date().getUTCHours() + 24) % 24;
+  if (offset > 14) offset -= 24;
+  return offset === 0 ? "Etc/GMT" : `Etc/GMT${offset > 0 ? "-" : "+"}${Math.abs(offset)}`;
+}
+
+describe("DeviceIndex.push by age band", () => {
+  let sent: { token: string; type: string | null }[] = [];
+  let ok: Miniflare;
+
+  beforeAll(async () => {
+    ok = new Miniflare({
+      modules: true,
+      script,
+      compatibilityDate: "2026-08-01",
+      durableObjects: {
+        ROOMS: { className: "GameRoom", useSQLite: true },
+        DEVICES: { className: "DeviceIndex", useSQLite: true },
+        PLAYERS: { className: "Player", useSQLite: true },
+        IDENTITIES: { className: "Identities", useSQLite: true },
+      },
+      bindings: {
+        APNS_TEAM_ID: "B222J9J7B8",
+        APNS_TOPIC: "com.conleychaos.play",
+        APNS_HOST: "api.push.apple.com",
+        APNS_KEY_P8: await p8(),
+        APNS_KEY_ID: "KID-BANDS",
+      },
+      outboundService: async (request: MiniflareRequest) => {
+        sent.push({ token: new URL(request.url).pathname.split("/").at(-1) as string, type: request.headers.get("apns-push-type") });
+        return new MiniflareResponse(null, { status: 200 });
+      },
+    });
+  });
+
+  afterAll(async () => {
+    await ok.dispose();
+  });
+
+  async function device(name: string, band: string, zone: string): Promise<void> {
+    await ok.dispatchFetch(`https://x.test/__test/token?device=${name}&token=${"cd".repeat(32)}`);
+    await ok.dispatchFetch(`https://x.test/__test/profile?device=${name}&band=${band}&zone=${encodeURIComponent(zone)}`);
+  }
+  const push = async (name: string, body: unknown) =>
+    (await ok.dispatchFetch(`https://x.test/__test/push?device=${name}`, { method: "POST", body: JSON.stringify(body) }).then((r) =>
+      r.json(),
+    )) as { sent: boolean };
+  const dismiss = { kind: "dismiss", playerId: "p_x", exceptDeviceId: "other", code: "BCDFG" };
+
+  test("a kitten's device gets nothing, not even a background push", async () => {
+    sent = [];
+    await device("kitten", "kitten", "UTC");
+    expect(await push("kitten", { ...intent, deviceId: "kitten" })).toEqual({ sent: false });
+    expect(await push("kitten", dismiss)).toEqual({ sent: false });
+    expect(sent).toEqual([]);
+  });
+
+  test("a teen's device gets nothing at 2 a.m., not even a background push (§14.1)", async () => {
+    sent = [];
+    await device("teen-night", "teen", zoneAtHour(2));
+    expect(await push("teen-night", { ...intent, deviceId: "teen-night" })).toEqual({ sent: false });
+    expect(await push("teen-night", dismiss)).toEqual({ sent: false });
+    expect(sent).toEqual([]);
+  });
+
+  test("a teen at noon and an adult at 2 a.m. get their alerts", async () => {
+    sent = [];
+    await device("teen-noon", "teen", zoneAtHour(12));
+    await device("adult-night", "adult", zoneAtHour(2));
+    expect(await push("teen-noon", { ...intent, deviceId: "teen-noon" })).toEqual({ sent: true });
+    expect(await push("adult-night", { ...intent, deviceId: "adult-night" })).toEqual({ sent: true });
+    expect(sent.map((s) => s.type)).toEqual(["alert", "alert"]);
   });
 });

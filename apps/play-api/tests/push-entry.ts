@@ -1,10 +1,12 @@
 import worker from "../src/index";
 
 import type { Env } from "../src/env";
-import type { PushIntent } from "../src/room/core";
+import type { DismissIntent, YourTurnIntent } from "../src/room/core";
 
 export { DeviceIndex } from "../src/room/device-index";
 export { GameRoom } from "../src/room/game-room";
+export { Identities } from "../src/players/identities";
+export { Player } from "../src/players/player";
 
 /**
  * The real worker, plus one test-only route that calls DeviceIndex over RPC
@@ -19,7 +21,16 @@ export default {
         await stub.setApnsToken(url.searchParams.get("token") ?? "");
         return new Response(null, { status: 204 });
       }
-      const intent = (await request.json()) as PushIntent;
+      if (url.pathname === "/__test/profile") {
+        const band = url.searchParams.get("band");
+        await stub.setProfile({
+          timeZone: url.searchParams.get("zone") ?? "UTC",
+          ageBand: band === "kitten" || band === "teen" || band === "adult" ? band : null,
+          people: {},
+        });
+        return new Response(null, { status: 204 });
+      }
+      const intent = (await request.json()) as YourTurnIntent | DismissIntent;
       return Response.json(await stub.push(intent));
     }
     return worker.fetch(request, env);
