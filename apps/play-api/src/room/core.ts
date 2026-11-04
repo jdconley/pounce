@@ -1,6 +1,7 @@
 import { catTower } from "../games/cat-tower";
 import { PROTOCOL_VERSION } from "../protocol";
 import { card } from "../rules/cards";
+import { DEFAULT_BACK, DEFAULT_RUG } from "../streaks/catalog";
 
 import { newMoveCode } from "./codes";
 import { defaultRoomName } from "./names";
@@ -73,7 +74,43 @@ export type RoomState = {
   dismissedForTurn?: string | null;
   /** Seq of the latest `turn` or `roundStarted` event: tells one turn from the next. */
   turnSeq: number;
+  /** The table's rug and card back (§9.4). Absent: the defaults. */
+  look?: Look;
+  /** When each device last changed the look, for the 10-second limit. */
+  lookChangedAt?: Record<string, number>;
+  /** Each player's last completed turn here: a pair forms once both have one (§6.1). */
+  streakTurns?: Record<string, number>;
+  /** The turn and status last reported to pairs, so a draw alone reports nothing. */
+  streakKey?: string;
+  /** "Play again" (§10.4): asked once, then the new table's code (null while it's being dealt). */
+  rematch?: { code: string | null };
 };
+
+export type Look = { rug: string; back: string };
+
+/** Which optional behaviour a room has. Streaks (and looks and Play again) stay off until `STREAKS` is set. */
+export type RoomFeatures = { streaks: boolean };
+
+/**
+ * A change pairs hear about (§13.3): a completed turn by a player (`by`), and
+ * who holds the move now (`holder`: a player, or null for a bot, a seat with no
+ * player, or between rounds). `over`: the table is no longer in play.
+ */
+export type StreakIntent = {
+  code: string;
+  at: number;
+  by: string | null;
+  holder: string | null;
+  players: string[];
+  turnedAt: Record<string, number>;
+  over: boolean;
+};
+
+/** What "Play again" needs to deal the new table: the same people and bots, name and look. */
+export type RematchIntent = { name: string; look: Look; seats: SeatInfo[]; hostDeviceId: string };
+
+/** The card backs and rugs the people a device speaks for have unlocked. */
+export type Unlocks = { backs: readonly string[]; rugs: readonly string[] };
 
 export type YourTurnIntent = {
   kind: "your_turn";
@@ -113,6 +150,8 @@ const BOT_DELAY_MS = 1200;
 const NEXT_ROUND_DELAY_MS = 6000;
 const ASLEEP_AFTER_MS = 5 * MS_PER_MINUTE;
 const PRESENCE_RANK: Record<Presence, number> = { asleep: 0, away: 1, awake: 2 };
+const LOOK_EVERY_MS = 10_000;
+const NO_UNLOCKS: Unlocks = { backs: [], rugs: [] };
 
 /**
  * The room state machine. Pure: it mutates `state` and returns the messages
@@ -125,21 +164,35 @@ export class RoomCore {
   private readonly game: CatTowerModule;
   /** Divides the bot and next-round delays (`DEV_SPEED` on the dev server; 1 everywhere else). */
   private readonly speed: number;
+  private readonly features: RoomFeatures;
   /** Not persisted: the Durable Object drains it after every call. */
   private pushIntents: PushIntent[] = [];
+  private streakIntents: StreakIntent[] = [];
+  private rematchIntent: RematchIntent | null = null;
+  /** The player whose action is being applied ended their turn. */
+  private turnBy: string | null = null;
 
-  constructor(state: RoomState, now: () => number, rng: Rng, game: CatTowerModule = catTower, speed = 1) {
+  constructor(
+    state: RoomState,
+    now: () => number,
+    rng: Rng,
+    game: CatTowerModule = catTower,
+    speed = 1,
+    features: RoomFeatures = { streaks: false },
+  ) {
     this.state = state;
     (state as Partial<RoomState>).name ??= defaultRoomName(state.code);
     this.now = now;
     this.rng = rng;
     this.game = game;
     this.speed = speed;
+    this.features = features;
   }
 
   /** A new lobby; `name` is already validated (`parseRoomName`) when given. */
-  static create(code: string, hostDeviceId: string, now: number, name?: string): RoomState {
+  static create(code: string, hostDeviceId: string, now: number, name?: string, look?: Look): RoomState {
     return {
+      ...(look ? { look } : {}),
       code,
       name: name ?? defaultRoomName(code),
       game: "cat-tower",
@@ -160,10 +213,27 @@ export class RoomCore {
     };
   }
 
-  /** Never throws: any unexpected failure becomes `error: internal`. */
-  handle(deviceId: string, msg: ClientMessage): Outbound[] {
+  /**
+   * The new table "Play again" deals (§10.4): the old seats as they were,
+   * then `deal()` starts it with no lobby.
+   */
+  static rematchState(code: string, spec: RematchIntent, now: number): RoomState {
+    const state = RoomCore.create(code, spec.hostDeviceId, now, spec.name, spec.look);
+    state.seats = [
+      ...spec.seats.map((s) => ({ ...s })),
+      ...Array.from({ length: LOBBY_SEATS - spec.seats.length }, (): SeatInfo => ({ kind: "closed" })),
+    ];
+    return state;
+  }
+
+  /**
+   * Never throws: any unexpected failure becomes `error: internal`. `unlocks`
+   * are what the device's people may put on the table (`setLook`), resolved
+   * by the Durable Object first; the defaults need none.
+   */
+  handle(deviceId: string, msg: ClientMessage, unlocks: Unlocks = NO_UNLOCKS): Outbound[] {
     try {
-      return this.dispatch(deviceId, msg);
+      return this.dispatch(deviceId, msg, unlocks);
     } catch {
       return [this.fail(deviceId, "internal")];
     }
@@ -279,6 +349,7 @@ export class RoomCore {
 
     if (timers.cleanupAt <= this.now()) {
       state.status = "over";
+      this.queueStreak(true);
       out.push({ to: "all", message: { t: "error", code: "room_closed" } });
     }
     return out;
@@ -301,6 +372,78 @@ export class RoomCore {
     return drained;
   }
 
+  /** Hands over and forgets the streak reports queued since the last call. */
+  drainStreakIntents(): StreakIntent[] {
+    const drained = this.streakIntents;
+    this.streakIntents = [];
+    return drained;
+  }
+
+  /** Hands over and forgets a "Play again" the room has accepted and not yet dealt. */
+  drainRematch(): RematchIntent | null {
+    const drained = this.rematchIntent;
+    this.rematchIntent = null;
+    return drained;
+  }
+
+  /** The new table is dealt: everyone here is told where it is. */
+  rematchDealt(code: string): Outbound[] {
+    this.state.rematch = { code };
+    return [{ to: "all", message: { t: "rematch", code } }];
+  }
+
+  /** Dealing the new table failed: "Play again" may be asked again. */
+  rematchFailed(): void {
+    delete this.state.rematch;
+  }
+
+  /** Starts the game with the seats as they are: "Play again" deals at once (§10.4). */
+  deal(): Outbound[] {
+    const { state } = this;
+    const playing = state.seats.flatMap((s, i) =>
+      s.kind === "human" || s.kind === "bot" ? [{ seat: s, from: i }] : [],
+    );
+    const gameState = this.game.create(playing.length, this.newSeed());
+
+    // Move codes address seats by index, and compaction renumbers them. Codes
+    // only exist for human seats, which are never dropped.
+    const renumbered = new Map(playing.map((p, to) => [p.from, to]));
+    for (const entry of Object.values(state.moveCodes)) {
+      entry.seat = renumbered.get(entry.seat) as Seat;
+    }
+    state.seats = playing.map((p) => p.seat);
+    state.gameState = gameState;
+    state.status = "playing";
+    const out = this.changed();
+    state.turnSeq = state.seq;
+    this.afterGameChange();
+    return out;
+  }
+
+  /** The players in the seats `deviceId` controls: whose unlocks a `setLook` from it may use. */
+  lookPlayers(deviceId: string): string[] {
+    const ids = this.controlledSeats(deviceId).flatMap((i) => {
+      const playerId = this.state.seats[i]?.playerId;
+      return playerId ? [playerId] : [];
+    });
+    return [...new Set(ids)];
+  }
+
+  /** Each connected device that speaks for `playerId`, and the person on it who is that player. */
+  devicesFor(playerId: string): { deviceId: string; personId: string }[] {
+    return Object.entries(this.state.devices).flatMap(([deviceId, device]) =>
+      device.connected
+        ? Object.entries(device.players ?? {})
+            .filter(([, p]) => p === playerId)
+            .map(([personId]) => ({ deviceId, personId }))
+        : [],
+    );
+  }
+
+  private look(): Look {
+    return this.state.look ?? { rug: DEFAULT_RUG, back: DEFAULT_BACK };
+  }
+
   snapshotFor(deviceId: string): Snapshot {
     const { state } = this;
     const controlled = this.controlledSeats(deviceId);
@@ -321,6 +464,8 @@ export class RoomCore {
         youAreHost: deviceId === state.hostDeviceId,
         seats,
         game: state.gameState ? this.game.view(state.gameState, controlled) : null,
+        ...(this.features.streaks ? { look: this.look() } : {}),
+        ...(state.rematch?.code ? { rematch: state.rematch.code } : {}),
       },
     };
   }
@@ -351,8 +496,12 @@ export class RoomCore {
     return best ?? "away";
   }
 
-  private dispatch(deviceId: string, msg: ClientMessage): Outbound[] {
+  private dispatch(deviceId: string, msg: ClientMessage, unlocks: Unlocks): Outbound[] {
     switch (msg.t) {
+      case "rematch":
+        return this.features.streaks ? this.rematch(deviceId) : [this.fail(deviceId, "bad_message")];
+      case "setLook":
+        return this.features.streaks ? this.setLook(deviceId, msg, unlocks) : [this.fail(deviceId, "bad_message")];
       case "claim":
         return this.claim(deviceId, msg.seat, msg.person);
       case "configure":
@@ -436,22 +585,43 @@ export class RoomCore {
       s.kind === "human" || s.kind === "bot" ? [{ seat: s, from: i }] : [],
     );
     if (playing.length < this.game.minSeats) return [this.fail(deviceId, "not_enough_players")];
+    return this.deal();
+  }
 
-    const gameState = this.game.create(playing.length, this.newSeed());
+  /** Anyone seated changes the table's rug or card back, from their own unlocks (§9.4, §17). */
+  private setLook(deviceId: string, msg: { rug?: string; back?: string }, unlocks: Unlocks): Outbound[] {
+    const seats = this.controlledSeats(deviceId);
+    if (seats.length === 0) return [this.fail(deviceId, "not_seated")];
+    const now = this.now();
+    const last = this.state.lookChangedAt?.[deviceId];
+    if (last !== undefined && now - last < LOOK_EVERY_MS) return [this.fail(deviceId, "too_soon")];
+    const rugOk = msg.rug === undefined || msg.rug === DEFAULT_RUG || unlocks.rugs.includes(msg.rug);
+    const backOk = msg.back === undefined || msg.back === DEFAULT_BACK || unlocks.backs.includes(msg.back);
+    if (!rugOk || !backOk) return [this.fail(deviceId, "not_unlocked")];
+    const look = { rug: msg.rug ?? this.look().rug, back: msg.back ?? this.look().back };
+    this.state.look = look;
+    this.state.lookChangedAt = { ...this.state.lookChangedAt, [deviceId]: now };
+    return this.broadcast(() => ({ kind: "look", seat: seats[0] as Seat, ...look }));
+  }
 
-    // Move codes address seats by index, and compaction renumbers them. Codes
-    // only exist for human seats, which are never dropped.
-    const renumbered = new Map(playing.map((p, to) => [p.from, to]));
-    for (const entry of Object.values(state.moveCodes)) {
-      entry.seat = renumbered.get(entry.seat) as Seat;
+  /** "Play again" (§10.4): once the game is over, once per room, from anyone seated. */
+  private rematch(deviceId: string): Outbound[] {
+    const { state } = this;
+    if (state.status !== "over") return [this.fail(deviceId, "not_over")];
+    if (this.controlledSeats(deviceId).length === 0) return [this.fail(deviceId, "not_seated")];
+    if (state.rematch) {
+      const { code } = state.rematch;
+      return code ? [{ to: deviceId, message: { t: "rematch", code } }] : [];
     }
-    state.seats = playing.map((p) => p.seat);
-    state.gameState = gameState;
-    state.status = "playing";
-    const out = this.changed();
-    state.turnSeq = state.seq;
-    this.afterGameChange();
-    return out;
+    state.rematch = { code: null };
+    this.rematchIntent = {
+      name: state.name,
+      look: this.look(),
+      // The first seat rotates: everyone moves one on.
+      seats: [...state.seats.slice(1), ...state.seats.slice(0, 1)].map((s) => ({ ...s })),
+      hostDeviceId: deviceId,
+    };
+    return [];
   }
 
   /** Four uint32 words from the room's rng, which is crypto-backed in production. */
@@ -528,6 +698,8 @@ export class RoomCore {
     const turn = this.turnKey();
     const applied = this.applyGame(seat, action);
     if ("error" in applied) return [this.fail(deviceId, applied.error)];
+    const mover = this.state.seats[seat]?.playerId;
+    if (mover && this.game.endsTurn(action, applied.events, seat)) this.turnBy = mover;
     this.dismissPushed(deviceId, seat, turn);
     this.touch();
     // Acting proves the device is in use, whatever it last reported.
@@ -582,7 +754,7 @@ export class RoomCore {
    * (`snapshots()`), which carries the truth (drawn cards, a fresh deal, the
    * new discard top, a finished room).
    */
-  private applyGame(seat: Seat, action: Action): { out: Outbound[] } | { error: ApplyError } {
+  private applyGame(seat: Seat, action: Action): { out: Outbound[]; events: GameEvent[] } | { error: ApplyError } {
     const { state } = this;
     const result = this.game.apply(state.gameState as CatTowerState, seat, action);
     if (!result.ok) return { error: result.error };
@@ -594,7 +766,7 @@ export class RoomCore {
         event: this.game.filterEvent(event, this.controlledSeats(deviceId)),
       }));
     });
-    return { out };
+    return { out, events: result.events };
   }
 
   /**
@@ -653,6 +825,7 @@ export class RoomCore {
     const { timers } = state;
     const game = state.gameState as CatTowerState;
     const now = this.now();
+    this.queueStreak(game.status === "gameOver");
 
     if (game.status === "gameOver") {
       state.status = "over";
@@ -688,6 +861,35 @@ export class RoomCore {
         code: state.code,
       });
     }
+  }
+
+  /**
+   * Queues a report for the pairs at the table (§13.3) when a player ended a
+   * turn, the move went somewhere new, or the table stopped being in play.
+   */
+  private queueStreak(over: boolean): void {
+    const by = this.turnBy;
+    this.turnBy = null;
+    if (!this.features.streaks) return;
+    const { state } = this;
+    const now = this.now();
+    // Only a closing lobby reports with no game, and that report is `over`.
+    const game = state.gameState as CatTowerState;
+    const key = `${state.turnSeq}:${over ? "over" : game.status}`;
+    if (by === null && key === state.streakKey) return;
+    state.streakKey = key;
+    if (by) state.streakTurns = { ...state.streakTurns, [by]: now };
+    const actor = over ? null : this.game.currentActor(game);
+    const holder = actor === null ? null : (state.seats[actor]?.playerId ?? null);
+    this.streakIntents.push({
+      code: state.code,
+      at: now,
+      by,
+      holder,
+      players: this.seatPlayers(),
+      turnedAt: { ...state.streakTurns },
+      over,
+    });
   }
 
   /**
