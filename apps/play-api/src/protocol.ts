@@ -1,4 +1,5 @@
 import { ROOM_CODE_ALPHABET } from "./room/codes";
+import { parseRoomName } from "./room/names";
 
 import type { Action, ApplyError, GameEvent, Seat } from "./rules/engine";
 import type { CatTowerView } from "./rules/view";
@@ -25,6 +26,8 @@ export type RoomStatus = "lobby" | "playing" | "over";
 
 export type RoomView = {
   code: string;
+  /** The table's name, shown on every phone: 1-30 characters (see `parseRoomName`). */
+  name: string;
   status: RoomStatus;
   youAreHost: boolean;
   seats: {
@@ -49,7 +52,8 @@ export type ClientMessage =
   | { t: "moveSeat"; seat: Seat }
   | { t: "claimMove"; code: string }
   | { t: "leave"; seat: Seat }
-  | { t: "rename"; seat: Seat; name: string };
+  | { t: "rename"; name: string }
+  | { t: "renameSeat"; seat: Seat; name: string };
 
 /** Every `error` code the server sends. */
 export type ErrorCode =
@@ -138,10 +142,14 @@ function parseAction(a: unknown): Action | null {
       return { type: "discard", card: a.card, skipTarget: a.skipTarget };
     }
     case "hit": {
-      if (!hasKeys(a, ["type", "card", "target"]) || !isCard(a.card)) return null;
+      if (!hasKeys(a, ["type", "card", "target"], ["side"]) || !isCard(a.card)) return null;
       const t = a.target;
       if (!isObj(t) || !hasKeys(t, ["seat", "group"]) || !isInt(t.seat, 0) || !isInt(t.group, 0)) return null;
-      return { type: "hit", card: a.card, target: { seat: t.seat, group: t.group } };
+      const hit = { type: "hit" as const, card: a.card, target: { seat: t.seat, group: t.group } };
+      if (!("side" in a)) return hit;
+      // Which end of a run the card goes on; older clients leave it out.
+      if (a.side !== "start" && a.side !== "end") return null;
+      return { ...hit, side: a.side };
     }
     case "layDown": {
       if (!hasKeys(a, ["type", "groups"])) return null;
@@ -202,9 +210,14 @@ function parseObject(o: Obj): ClientMessage | null {
       return person ? { t: "claim", seat: o.seat, person } : null;
     }
     case "rename": {
+      if (!hasKeys(o, ["t", "name"])) return null;
+      const name = parseRoomName(o.name);
+      return name === null ? null : { t: "rename", name };
+    }
+    case "renameSeat": {
       if (!hasKeys(o, ["t", "seat", "name"]) || !isInt(o.seat, 0)) return null;
       const name = parseName(o.name);
-      return name === null ? null : { t: "rename", seat: o.seat, name };
+      return name === null ? null : { t: "renameSeat", seat: o.seat, name };
     }
     case "claimMove":
       if (!hasKeys(o, ["t", "code"]) || !isMoveCode(o.code)) return null;

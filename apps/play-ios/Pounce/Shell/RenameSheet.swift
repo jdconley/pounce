@@ -31,7 +31,7 @@ struct RenameSheet: View {
                 VStack(spacing: 16) {
                     ForEach(mine, id: \.seat) { entry in
                         RenameRow(seat: entry.seat, person: entry.person) { name in
-                            model.rename(seat: entry.seat, person: entry.person, to: name)
+                            model.renamePerson(seat: entry.seat, person: entry.person, to: name)
                         }
                     }
                 }

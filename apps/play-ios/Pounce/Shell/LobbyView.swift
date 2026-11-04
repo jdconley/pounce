@@ -1,8 +1,8 @@
 import PounceKit
 import SwiftUI
 
-/// The lobby, one screen for host and guests (spec §5.5, mock m3-lobby): the room code huge
-/// with share and QR, the rug with six cushions (the server's six seats), and the big orange
+/// The lobby, one screen for host and guests (spec §5.5, mock m3-lobby): the table's name up top
+/// (the host or anyone seated taps it to rename the table), the room code huge with share and QR, the rug with six cushions (the server's six seats), and the big orange
 /// start pill for every seated phone.
 struct LobbyView: View {
     @Environment(AppModel.self) private var model
@@ -37,6 +37,7 @@ struct LobbyView: View {
     @State private var picker: PickerTarget?
     @State private var sharing = false
     @State private var showQR = false
+    @State private var renaming = false
     @State private var wiggles: [Control: Int] = [:]
     @State private var lastTapped: Control?
     @State private var rugFrame: CGRect = .zero
@@ -45,6 +46,9 @@ struct LobbyView: View {
     private var table: TableModel? { session.model }
     private var seated: Bool { !(table?.mySeats.isEmpty ?? true) }
     private var shareURL: URL { DeepLink.shareURL(code: session.code) }
+    private var tableName: String { room?.title ?? TableName.fallback(code: session.code) }
+    /// The server takes a rename from the host or any seated phone.
+    private var canRename: Bool { seated || room?.youAreHost == true }
 
     var body: some View {
         ZStack {
@@ -68,7 +72,18 @@ struct LobbyView: View {
         }
         .coordinateSpace(.named("lobby"))
         .animation(.easeOut(duration: 0.15).paced, value: menuSeat)
-        .background(ShareRoom(isPresented: $sharing, url: shareURL, catArt: ArtName.cat(hostCat, .idle)))
+        .background(ShareRoom(
+            isPresented: $sharing, url: shareURL, tableName: tableName, inviteCode: session.code,
+            catArt: ArtName.cat(hostCat, .idle)))
+        .sheet(isPresented: $renaming) {
+            RenameTableView(current: tableName, onCancel: { renaming = false }) { name in
+                renaming = false
+                session.send(.rename(name: name))
+            }
+            .presentationDetents([.medium])
+            .presentationDragIndicator(.visible)
+            .presentationBackground(Palette.night)
+        }
         .sheet(item: $picker) { target in
             personPicker(target)
                 .presentationDetents([.large])
@@ -77,7 +92,10 @@ struct LobbyView: View {
         }
         .onChange(of: session.lobbyNope) { nope() }
         .onChange(of: interactive) { _, on in
-            if !on { menuSeat = nil }
+            if !on {
+                menuSeat = nil
+                renaming = false
+            }
         }
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("screen-lobby")
@@ -86,10 +104,17 @@ struct LobbyView: View {
     // MARK: header
 
     private var topBar: some View {
-        HStack {
+        HStack(spacing: 8) {
             CornerHomeButton { model.goHome() }
                 .accessibilityIdentifier("lobby.home")
-            Spacer()
+            Spacer(minLength: 0)
+            TableNameTitle(name: tableName, editable: canRename && interactive) {
+                renaming = true
+            }
+            .accessibilityIdentifier("lobby.name")
+            Spacer(minLength: 0)
+            // Balances the home button so the name sits in the middle.
+            Color.clear.frame(width: 52, height: 1)
         }
         .padding(.horizontal, 16)
         .frame(height: 56)

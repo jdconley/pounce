@@ -35,6 +35,23 @@ import Testing
         #expect(items.map(\.yourTurn) == [true, true, false, false, false])
     }
 
+    @Test func nameComesFromTheServerListThenTheCacheThenTheCode() {
+        var named = cached("CACH1")
+        named.name = "Cached Name"
+        var stale = cached("BOTH1")
+        stale.name = "Old Name"
+        let items = HomeTables.merge(
+            entries: [
+                TableEntry(code: "LIST1", name: "Taco Night", status: "lobby", yourTurn: false, updatedAt: nowMs),
+                TableEntry(code: "BOTH1", name: "New Name", status: "lobby", yourTurn: false, updatedAt: nowMs - 1),
+                entry("CACH1", "lobby", ago: 2),
+                entry("NONE1", "lobby", ago: 3),
+            ],
+            cache: ["CACH1": named, "BOTH1": stale], now: now)
+        #expect(items.map(\.name) == ["Taco Night", "New Name", "Cached Name", nil])
+        #expect(items.map(\.title) == ["Taco Night", "New Name", "Cached Name", "Table NONE1"])
+    }
+
     @Test func overAndOldIsDropped() {
         let items = HomeTables.merge(
             entries: [entry("OLD11", "over", ago: 25 * hour), entry("NEW11", "over", ago: 23 * hour)],

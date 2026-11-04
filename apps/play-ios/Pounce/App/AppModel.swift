@@ -300,13 +300,14 @@ final class AppModel {
         // `-debug-reminder <CODE>`: schedule one on every background, whoever's turn it is.
         let args = CommandLine.arguments
         if let i = args.firstIndex(of: "-debug-reminder"), let code = args[safe: i + 1] {
-            push?.scheduleTurnReminder(code: code, name: "Debug", after: PushPolicy.reminderInterval)
+            push?.scheduleTurnReminder(
+                code: code, name: "Debug", table: TableName.fallback(code: code), after: PushPolicy.reminderInterval)
             return
         }
         #endif
         guard let room, let table = room.model, let delay = PushPolicy.reminderDelay(model: table),
               let turn = table.currentSeat, let person = table.room.seats[safe: turn]?.person else { return }
-        push?.scheduleTurnReminder(code: room.code, name: person.name, after: delay)
+        push?.scheduleTurnReminder(code: room.code, name: person.name, table: table.room.title, after: delay)
     }
 
     private func makeSession(code: String, intent: RoomIntent) -> RoomSession {
@@ -405,7 +406,7 @@ final class AppModel {
     /// Renames whoever sits at `seat` of the open table: the person on this phone with that
     /// id (so the new name sticks for later tables too), or, for a seat moved here from
     /// another phone, just that seat.
-    func rename(seat: Seat, person: Person, to name: String) {
+    func renamePerson(seat: Seat, person: Person, to name: String) {
         if let local = everyone.first(where: { $0.id == person.id }) {
             if local.id == people.owner?.id {
                 updateOwner(name: name, cat: local.cat)
@@ -413,7 +414,7 @@ final class AppModel {
                 updatePerson(Person(id: local.id, name: name, cat: local.cat))
             }
         } else {
-            room?.send(.rename(seat: seat, name: name))
+            room?.send(.renameSeat(seat: seat, name: name))
         }
     }
 

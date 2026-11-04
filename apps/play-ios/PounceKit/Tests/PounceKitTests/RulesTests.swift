@@ -85,6 +85,24 @@ struct GroupVector: Decodable, Sendable, CustomTestStringConvertible {
         #expect(Rules.canHit(full, card: 96) == nil)
     }
 
+    /// JD's bug: a Yarn dropped at the start of a run went to its end.
+    @Test func hitYarnOnRunTakesTheSideAsked() {
+        let run = Rules.buildGroup(.init(kind: .run, size: 4), cards: [3, 4, 5, 6])! // 4-5-6-7
+        #expect(Rules.canHit(run, card: 96, side: .start) == .run(cards: [96, 3, 4, 5, 6], start: 3, end: 7))
+        #expect(Rules.canHit(run, card: 96, side: .end) == .run(cards: [3, 4, 5, 6, 96], start: 4, end: 8))
+        #expect(Rules.canHit(run, card: 96) == Rules.canHit(run, card: 96, side: .end))
+        // A side that can't take the card refuses it.
+        let high = Rules.buildGroup(.init(kind: .run, size: 4), cards: [8, 9, 10, 11])! // 9-12
+        #expect(Rules.canHit(high, card: 96, side: .end) == nil)
+        let low = Rules.buildGroup(.init(kind: .run, size: 4), cards: [0, 1, 2, 3])! // 1-4
+        #expect(Rules.canHit(low, card: 96, side: .start) == nil)
+        #expect(Rules.canHit(run, card: 2, side: .end) == nil)    // a 3 only fits below
+        #expect(Rules.canHit(run, card: 2, side: .start)?.cards.first == 2)
+        // Sets and coats ignore it.
+        let sevens = Rules.buildGroup(.init(kind: .set, size: 2), cards: [6, 30])!
+        #expect(Rules.canHit(sevens, card: 96, side: .start) == Rules.canHit(sevens, card: 96))
+    }
+
     @Test func hitSetAndCoat() {
         let sevens = Rules.buildGroup(.init(kind: .set, size: 2), cards: [6, 30])!
         #expect(Rules.canHit(sevens, card: 54) == .set(cards: [6, 30, 54], value: 7))

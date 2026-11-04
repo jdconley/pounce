@@ -32,18 +32,18 @@ private func room(_ seats: [SeatView], status: RoomStatus = .playing) -> TableMo
         ])
         // Leo is on another phone: only my seat is mine to rename.
         let people = [Person(id: "mia", name: "Mia J", cat: 0), Person(id: "leo", name: "Leon", cat: 1)]
-        #expect(sync.renames(model, people: people) == [.rename(seat: 0, name: "Mia J")])
+        #expect(sync.renames(model, people: people) == [.renameSeat(seat: 0, name: "Mia J")])
     }
 
     @Test func sendsEachRenameOnceUntilTheNameChangesAgain() {
         var sync = NameSync()
         let model = room([SeatView(kind: .human, person: mia, yours: true, presence: .awake)])
         let renamed = [Person(id: "mia", name: "Mimi", cat: 0)]
-        #expect(sync.renames(model, people: renamed) == [.rename(seat: 0, name: "Mimi")])
+        #expect(sync.renames(model, people: renamed) == [.renameSeat(seat: 0, name: "Mimi")])
         // The old snapshot again (the rename is in flight, or was refused): nothing more.
         #expect(sync.renames(model, people: renamed).isEmpty)
         // Renamed again before it landed: the newer name goes.
-        #expect(sync.renames(model, people: [Person(id: "mia", name: "Mo", cat: 0)]) == [.rename(seat: 0, name: "Mo")])
+        #expect(sync.renames(model, people: [Person(id: "mia", name: "Mo", cat: 0)]) == [.renameSeat(seat: 0, name: "Mo")])
     }
 
     @Test func matchingNamesSendNothingAndResetTheLastSent() {
@@ -54,7 +54,7 @@ private func room(_ seats: [SeatView], status: RoomStatus = .playing) -> TableMo
         // The rename landed; renaming back to Mimi later must go out again.
         let landed = room([SeatView(kind: .human, person: Person(id: "mia", name: "Mimi", cat: 0), yours: true, presence: .awake)])
         #expect(sync.renames(landed, people: [Person(id: "mia", name: "Mimi", cat: 0)]).isEmpty)
-        #expect(sync.renames(model, people: [Person(id: "mia", name: "Mimi", cat: 0)]) == [.rename(seat: 0, name: "Mimi")])
+        #expect(sync.renames(model, people: [Person(id: "mia", name: "Mimi", cat: 0)]) == [.renameSeat(seat: 0, name: "Mimi")])
     }
 
     @Test func nothingForStrangersBotsOrAFinishedRoom() {
@@ -67,6 +67,6 @@ private func room(_ seats: [SeatView], status: RoomStatus = .playing) -> TableMo
         ]
         let renamed = [Person(id: "mia", name: "Mimi", cat: 0)]
         #expect(sync.renames(room(seats, status: .over), people: renamed).isEmpty)
-        #expect(sync.renames(room(seats), people: renamed) == [.rename(seat: 2, name: "Mimi")])
+        #expect(sync.renames(room(seats), people: renamed) == [.renameSeat(seat: 2, name: "Mimi")])
     }
 }

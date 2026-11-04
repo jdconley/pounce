@@ -87,6 +87,34 @@ public struct TableModel: Equatable, Sendable {
         return targets
     }
 
+    /// Where `card` lands when `seat` drops it toward the `toward` end of `target`. A natural
+    /// goes where its value fits whichever end it was dropped on; a Yarn on a run takes the
+    /// end it was dropped on, or the other end when that one can't take it (a run up to 12).
+    /// The action carries `side` only when the server's default would put the card elsewhere,
+    /// so it means the same to a server that predates `side`.
+    public func hitPlan(card: CardID, seat: Seat, target: HitTarget, toward: HitSide) -> HitPlan? {
+        guard hitTargets(card: card, seat: seat).contains(target), let game,
+              let groups = game.laid[target.seat], groups.indices.contains(target.group) else { return nil }
+        let group = groups[target.group]
+        let other: HitSide = toward == .start ? .end : .start
+        guard case .run = group else {
+            guard let extended = Rules.canHit(group, card: card), let index = extended.cards.lastIndex(of: card) else { return nil }
+            let stands: Int? = if case .set(_, let value) = group, Card(id: card) == .yarn { value } else { nil }
+            return HitPlan(target: target, group: extended, index: index, side: nil, stands: stands,
+                           action: .hit(card: card, target: target))
+        }
+        for side in [toward, other] {
+            guard let extended = Rules.canHit(group, card: card, side: side),
+                  case .run(let cards, let start, let end) = extended else { continue }
+            let byDefault = Rules.canHit(group, card: card) == extended
+            return HitPlan(
+                target: target, group: extended, index: side == .start ? 0 : cards.count - 1, side: side,
+                stands: Card(id: card) == .yarn ? (side == .start ? start : end) : nil,
+                action: .hit(card: card, target: target, side: byDefault ? nil : side))
+        }
+        return nil
+    }
+
     /// Other seats not already pending a skip.
     public func skipTargets(for seat: Seat) -> [Seat] {
         guard let game else { return [] }
@@ -121,4 +149,16 @@ public struct TableModel: Equatable, Sendable {
         guard room.status == .lobby else { return [] }
         return room.seats.indices.filter { room.seats[$0].kind == .open }
     }
+}
+
+/// Where a hit puts its card: the extended group, the card's place in it, the end of a run it
+/// goes on (nil for sets and coats), the number a Yarn stands for there (nil for naturals and
+/// coats) and the action to send.
+public struct HitPlan: Equatable, Sendable {
+    public var target: HitTarget
+    public var group: Group
+    public var index: Int
+    public var side: HitSide?
+    public var stands: Int?
+    public var action: Action
 }

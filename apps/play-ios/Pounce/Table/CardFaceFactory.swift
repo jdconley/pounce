@@ -170,7 +170,7 @@ final class CardFaceFactory {
         if let cached = numerals[key] { return cached }
         let attrs = Self.numeralAttributes(size: size)
         let h = ceil(("Ag" as NSString).size(withAttributes: attrs).height + 4)
-        let pad = h * 0.3
+        let pad = h * 0.24
         let text = Self.truncated(name, toFit: max(maxWidth - 2 * pad, size), attributes: attrs)
         let textSize = (text as NSString).size(withAttributes: attrs)
         let canvas = CGSize(width: max(h, ceil(textSize.width + 2 * pad)), height: h)
@@ -189,6 +189,30 @@ final class CardFaceFactory {
         return t
     }
 
+    /// A rounded ring for the laid group a dragged card is over: `color` inside an ink
+    /// outline, so it reads on the rug and over card faces. Stretch it with `ringCenter`.
+    func ring(_ color: UIColor) -> SKTexture {
+        let key = "ring|\(color.hexKey)"
+        if let cached = numerals[key] { return cached }
+        let side: CGFloat = 40
+        let image = UIGraphicsImageRenderer(size: CGSize(width: side, height: side)).image { _ in
+            let outer = UIBezierPath(roundedRect: CGRect(x: 0, y: 0, width: side, height: side), cornerRadius: 12)
+            let inner = UIBezierPath(roundedRect: CGRect(x: 8, y: 8, width: side - 16, height: side - 16), cornerRadius: 6)
+            outer.append(inner)
+            outer.usesEvenOddFillRule = true
+            UIColor(Palette.ink).setFill()
+            outer.fill()
+            let band = UIBezierPath(roundedRect: CGRect(x: 2, y: 2, width: side - 4, height: side - 4), cornerRadius: 10)
+            band.append(UIBezierPath(roundedRect: CGRect(x: 6, y: 6, width: side - 12, height: side - 12), cornerRadius: 7))
+            band.usesEvenOddFillRule = true
+            color.setFill()
+            band.fill()
+        }
+        let t = SKTexture(image: image)
+        numerals[key] = t
+        return t
+    }
+
     /// `text`, or as much of it as fits `width` followed by an ellipsis.
     private static func truncated(_ text: String, toFit width: CGFloat, attributes: [NSAttributedString.Key: Any]) -> String {
         func fits(_ s: String) -> Bool { (s as NSString).size(withAttributes: attributes).width <= width }
@@ -201,6 +225,9 @@ final class CardFaceFactory {
         }
         return "…"
     }
+
+    /// The stretchable middle of `ring(_:)`.
+    static let ringCenter = CGRect(x: 0.4, y: 0.4, width: 0.2, height: 0.2)
 
     // MARK: drawing
 

@@ -92,15 +92,17 @@ public enum ServerMessage: Decodable, Equatable, Sendable {
     }
 }
 
-/// A move inside a game (discriminator key `type`). `skipTarget` is omitted when nil.
+/// A move inside a game (discriminator key `type`). `skipTarget` and `side` are omitted when
+/// nil; a hit with no `side` goes where the server's default puts it (a Yarn on a run extends
+/// the high end first), so it reads the same to a server that predates `side`.
 public enum Action: Encodable, Equatable, Sendable {
     case draw(DrawSource)
     case layDown([LayGroup])
-    case hit(card: CardID, target: HitTarget)
+    case hit(card: CardID, target: HitTarget, side: HitSide? = nil)
     case discard(card: CardID, skipTarget: Seat?)
     case nextRound
 
-    private enum CodingKeys: String, CodingKey { case type, from, groups, card, target, skipTarget }
+    private enum CodingKeys: String, CodingKey { case type, from, groups, card, target, skipTarget, side }
 
     public func encode(to encoder: any Encoder) throws {
         var c = encoder.container(keyedBy: CodingKeys.self)
@@ -111,10 +113,11 @@ public enum Action: Encodable, Equatable, Sendable {
         case .layDown(let groups):
             try c.encode("layDown", forKey: .type)
             try c.encode(groups, forKey: .groups)
-        case .hit(let card, let target):
+        case .hit(let card, let target, let side):
             try c.encode("hit", forKey: .type)
             try c.encode(card, forKey: .card)
             try c.encode(target, forKey: .target)
+            try c.encodeIfPresent(side, forKey: .side)
         case .discard(let card, let skipTarget):
             try c.encode("discard", forKey: .type)
             try c.encode(card, forKey: .card)
@@ -138,8 +141,10 @@ public enum ClientMessage: Encodable, Equatable, Sendable {
     case moveSeat(seat: Seat)
     case claimMove(code: String)
     case leave(seat: Seat)
+    /// Names the table (send it `TableName.clean`ed); the host or any seated phone, until game over.
+    case rename(name: String)
     /// Renames the person in one of this device's seats, in the lobby or mid-game.
-    case rename(seat: Seat, name: String)
+    case renameSeat(seat: Seat, name: String)
 
     private enum CodingKeys: String, CodingKey { case t, seat, person, kind, action, state, code, name }
 
@@ -172,8 +177,11 @@ public enum ClientMessage: Encodable, Equatable, Sendable {
         case .leave(let seat):
             try c.encode("leave", forKey: .t)
             try c.encode(seat, forKey: .seat)
-        case .rename(let seat, let name):
+        case .rename(let name):
             try c.encode("rename", forKey: .t)
+            try c.encode(name, forKey: .name)
+        case .renameSeat(let seat, let name):
+            try c.encode("renameSeat", forKey: .t)
             try c.encode(seat, forKey: .seat)
             try c.encode(name, forKey: .name)
         }

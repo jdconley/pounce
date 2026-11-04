@@ -194,6 +194,10 @@ function clientSamples(): Sample<ClientMessage>[] {
       name: "act-hit",
       message: { t: "act", seat: 0, action: { type: "hit", card: 76, target: { seat: 1, group: 0 } } },
     },
+    {
+      name: "act-hit-side",
+      message: { t: "act", seat: 0, action: { type: "hit", card: 96, target: { seat: 1, group: 0 }, side: "start" } },
+    },
     { name: "act-discard", message: { t: "act", seat: 0, action: { type: "discard", card: 11 } } },
     {
       name: "act-discard-skip",
@@ -205,7 +209,8 @@ function clientSamples(): Sample<ClientMessage>[] {
     { name: "moveSeat", message: { t: "moveSeat", seat: 1 } },
     { name: "claimMove", message: { t: "claimMove", code: "BCDFGH" } },
     { name: "leave", message: { t: "leave", seat: 1 } },
-    { name: "rename", message: { t: "rename", seat: 1, name: "Mo" } },
+    { name: "rename", message: { t: "rename", name: "Taco Night" } },
+    { name: "renameSeat", message: { t: "renameSeat", seat: 1, name: "Mo" } },
   ] satisfies Sample<ClientMessage>[];
 }
 

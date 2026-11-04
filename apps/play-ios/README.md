@@ -205,10 +205,44 @@ custom URL scheme.
 CI does this for you. `.github/workflows/ios.yml` runs the PounceKit tests and an unsigned Release
 build on every pull request (`build` is a required check on `main`), and on each push to `main` that
 touches `apps/play-ios` it runs
-`scripts/testflight.sh` with an App Store Connect API key (Admin role, so Xcode can manage signing).
+`scripts/testflight.sh` with an App Store Connect API key (Admin role, so Xcode can manage signing
+and distribute builds).
 It needs the repository secrets `ASC_KEY_ID`, `ASC_ISSUER_ID` and `ASC_KEY_P8` (the `.p8` file's
-contents); until they exist the upload is skipped with a notice. To upload without a code change, run
-the workflow from the Actions tab.
+contents); until they exist the upload is skipped with a notice.
+
+### Sending a build to testers
+
+A push to `main` uploads for **internal testers only**, so merging a burst of PRs doesn't spam
+anyone. To send a build to the external group, run the workflow by hand: Actions → iOS → Run
+workflow on `main` (or `gh workflow run ios.yml --ref main`). Its inputs:
+
+- `distribute` (default on): after the upload, run `scripts/distribute.swift` for that build. Off
+  means upload only.
+- `group` (default `Family and Friends`): the beta group, looked up by name.
+
+`scripts/distribute.swift` talks to the App Store Connect API with the same key (an ES256 JWT signed
+with CryptoKit; neither the key nor the token is ever printed). It waits up to 30 minutes for the
+build to finish processing, answers export compliance if it is still pending (Info.plist already
+sets `ITSAppUsesNonExemptEncryption` to false, so normally it isn't), sets "What to Test" from the
+commit subjects since the group's previous build (CI, docs and chore commits are left out; with no
+previous build, a short default), adds the build to the group and, for an external group, submits it
+for beta app review when App Store Connect says the build is ready for one. Apple reviews the first
+build of a version; later builds are usually approved in minutes. The run's summary shows the notes
+that went out.
+
+Run it locally with the same three `ASC_*` variables as `testflight.sh`:
+
+```sh
+scripts/distribute.swift --dry-run                         # read only: notes and planned changes
+scripts/distribute.swift --build 202611020653              # distribute that build to Family and Friends
+scripts/distribute.swift --build 202611020653 --group "Family and Friends" --since 2026-11-01
+```
+
+`--build` defaults to the newest upload, `--since` overrides the start of the What to Test commit
+list, and `--timeout` sets the processing wait in minutes. Without credentials, `--dry-run` prints
+the plan and the notes only. External testing also needs the app-level Test Information in App Store
+Connect (feedback email, beta app description, review contact); if it's missing, the review
+submission fails with Apple's message in the log.
 
 ### Prerequisites only JD can do
 

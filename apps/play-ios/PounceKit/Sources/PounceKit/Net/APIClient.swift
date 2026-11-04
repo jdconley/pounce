@@ -3,12 +3,15 @@ import Foundation
 /// One row of `GET /v1/devices/me/tables`. `updatedAt` is epoch milliseconds.
 public struct TableEntry: Codable, Equatable, Sendable {
     public let code: String
+    /// The table's name; absent for tables the server last heard about before tables had names.
+    public let name: String?
     public let status: String
     public let yourTurn: Bool
     public let updatedAt: Double
 
-    public init(code: String, status: String, yourTurn: Bool, updatedAt: Double) {
+    public init(code: String, name: String? = nil, status: String, yourTurn: Bool, updatedAt: Double) {
         self.code = code
+        self.name = name
         self.status = status
         self.yourTurn = yourTurn
         self.updatedAt = updatedAt
@@ -67,10 +70,13 @@ public actor APIClient {
         return try decode(Reply.self, from: data, status: 200).tables
     }
 
-    /// Creates a Cat Tower room and returns its code.
-    public func createRoom() async throws -> String {
+    /// Creates a Cat Tower room and returns its code. Without a `name` (`TableName.clean`ed) the
+    /// server picks one.
+    public func createRoom(name: String? = nil) async throws -> String {
         struct Reply: Decodable { let code: String }
-        let data = try await authenticated("POST", "/v1/rooms", body: ["game": "cat-tower"])
+        var body = ["game": "cat-tower"]
+        if let name { body["name"] = name }
+        let data = try await authenticated("POST", "/v1/rooms", body: body)
         return try decode(Reply.self, from: data, status: 201).code
     }
 

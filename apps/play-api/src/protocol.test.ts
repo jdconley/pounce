@@ -161,20 +161,20 @@ describe("parseClientMessage", () => {
     });
   });
 
-  describe("rename", () => {
-    it("parses a rename and trims the name", () => {
-      expect(parse({ t: "rename", seat: 1, name: "  Mo  " })).toEqual({ t: "rename", seat: 1, name: "Mo" });
-      expect(parse({ t: "rename", seat: 0, name: "a".repeat(20) })).toEqual({ t: "rename", seat: 0, name: "a".repeat(20) });
+  describe("renameSeat", () => {
+    it("parses a renameSeat and trims the name", () => {
+      expect(parse({ t: "renameSeat", seat: 1, name: "  Mo  " })).toEqual({ t: "renameSeat", seat: 1, name: "Mo" });
+      expect(parse({ t: "renameSeat", seat: 0, name: "a".repeat(20) })).toEqual({ t: "renameSeat", seat: 0, name: "a".repeat(20) });
     });
     it("rejects empty, blank, too-long and non-string names", () => {
-      for (const name of ["", "   ", "a".repeat(21), 7, null]) expect(parse({ t: "rename", seat: 0, name })).toEqual(BAD);
+      for (const name of ["", "   ", "a".repeat(21), 7, null]) expect(parse({ t: "renameSeat", seat: 0, name })).toEqual(BAD);
     });
     it("rejects bad seats, missing keys and extra keys", () => {
-      expect(parse({ t: "rename", seat: -1, name: "Mo" })).toEqual(BAD);
-      expect(parse({ t: "rename", seat: "0", name: "Mo" })).toEqual(BAD);
-      expect(parse({ t: "rename", name: "Mo" })).toEqual(BAD);
-      expect(parse({ t: "rename", seat: 0 })).toEqual(BAD);
-      expect(parse({ t: "rename", seat: 0, name: "Mo", cat: 1 })).toEqual(BAD);
+      expect(parse({ t: "renameSeat", seat: -1, name: "Mo" })).toEqual(BAD);
+      expect(parse({ t: "renameSeat", seat: "0", name: "Mo" })).toEqual(BAD);
+      expect(parse({ t: "renameSeat", name: "Mo" })).toEqual(BAD);
+      expect(parse({ t: "renameSeat", seat: 0 })).toEqual(BAD);
+      expect(parse({ t: "renameSeat", seat: 0, name: "Mo", cat: 1 })).toEqual(BAD);
     });
   });
 
@@ -242,6 +242,14 @@ describe("parseClientMessage", () => {
       expect(parse(act({ ...ok, target: { seat: 1, group: 0, x: 1 } }))).toEqual(BAD);
     });
 
+    it("hit: optional side start/end picks the end of a run", () => {
+      const ok = { type: "hit", card: 96, target: { seat: 1, group: 0 } };
+      for (const side of ["start", "end"]) {
+        expect(parse(act({ ...ok, side }))).toEqual({ t: "act", seat: 0, action: { ...ok, side } });
+      }
+      for (const side of ["middle", "", 0, null, true]) expect(parse(act({ ...ok, side }))).toEqual(BAD);
+    });
+
     it("layDown: 1-2 groups of 1-12 cards, optional runStart 1-12", () => {
       const g = (cards: unknown, runStart?: unknown) => (runStart === undefined ? { cards } : { cards, runStart });
       const ok = { type: "layDown", groups: [g([0, 1, 2]), g([10, 11, 12, 13], 4)] };
@@ -276,5 +284,25 @@ describe("parseClientMessage", () => {
       ];
       for (const action of bad) expect(parse(act(action))).toEqual(BAD);
     });
+  });
+});
+
+describe("rename", () => {
+  it("parses a trimmed name with its spaces collapsed", () => {
+    expect(parse({ t: "rename", name: "  Taco   Night " })).toEqual({ t: "rename", name: "Taco Night" });
+  });
+
+  it("rejects a missing, empty, long, non-string or control-character name, and extra keys", () => {
+    for (const msg of [
+      { t: "rename" },
+      { t: "rename", name: "" },
+      { t: "rename", name: "   " },
+      { t: "rename", name: "x".repeat(31) },
+      { t: "rename", name: 7 },
+      { t: "rename", name: "two\nlines" },
+      { t: "rename", name: "Taco Night", seat: 0 },
+    ]) {
+      expect(parse(msg), JSON.stringify(msg)).toEqual(BAD);
+    }
   });
 });

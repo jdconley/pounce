@@ -25,7 +25,7 @@ const cryptoRng = (): number => (crypto.getRandomValues(new Uint32Array(1))[0] a
 export class GameRoom extends DurableObject<Env> {
   private core: RoomCore | null = null;
   /**
-   * Status, actor and seat holders when the tables index was last updated,
+   * Status, actor, name and seat holders when the tables index was last updated,
    * and the devices it listed this room for. Persisted in `listed` so an
    * instance woken from hibernation still knows whom to remove.
    */
@@ -40,8 +40,8 @@ export class GameRoom extends DurableObject<Env> {
     });
   }
 
-  /** Creates the room, or reports that the code is already taken. */
-  async init(code: string, hostDeviceId: string): Promise<{ ok: true } | { exists: true }> {
+  /** Creates the room, or reports that the code is already taken. `name` is already validated. */
+  async init(code: string, hostDeviceId: string, name?: string): Promise<{ ok: true } | { exists: true }> {
     if (this.core) return { exists: true };
     this.ctx.storage.sql.exec(
       "CREATE TABLE IF NOT EXISTS room (id INTEGER PRIMARY KEY CHECK (id = 1), json TEXT)",
@@ -50,7 +50,7 @@ export class GameRoom extends DurableObject<Env> {
       "CREATE TABLE IF NOT EXISTS listed (id INTEGER PRIMARY KEY CHECK (id = 1), fingerprint TEXT, devices TEXT)",
     );
     this.core = new RoomCore(
-      RoomCore.create(code, hostDeviceId, Date.now()),
+      RoomCore.create(code, hostDeviceId, Date.now(), name),
       Date.now,
       cryptoRng,
       catTower,
@@ -186,7 +186,7 @@ export class GameRoom extends DurableObject<Env> {
     const { state } = core;
     const actor = state.status === "playing" && state.gameState ? catTower.currentActor(state.gameState) : null;
     const devices = tableDevices(state);
-    const fingerprint = JSON.stringify([state.status, actor, [...devices]]);
+    const fingerprint = JSON.stringify([state.status, actor, state.name, [...devices]]);
     if (fingerprint === this.tablesFingerprint) return;
     this.tablesFingerprint = fingerprint;
 
@@ -204,6 +204,7 @@ export class GameRoom extends DurableObject<Env> {
       ...[...devices].map((deviceId) =>
         this.index(deviceId).upsertTable({
           code: state.code,
+          name: state.name,
           status: state.status,
           yourTurn: actor !== null && core.controlledSeats(deviceId).includes(actor),
           updatedAt,

@@ -1,12 +1,13 @@
 import PounceKit
 import SwiftUI
 
-/// The finished game (spec §5.10), over the table once its win moment has played: the
-/// winners' cats in the celebrate pose on a sunburst, a crown dropping onto each (shared wins
-/// show every winner), everyone's final standing (cat, name, score) under it, a one-shot
-/// confetti fall, and two pills: Home and New game. No words but names. Every motion here
-/// runs once and stops, so nothing loops.
+/// The finished game (spec §5.10), over the table once its win moment has played: the table's
+/// name up top, the winners' cats in the celebrate pose on a sunburst, a crown dropping onto each
+/// (shared wins show every winner), everyone's final standing (cat, name, score) under it, a
+/// one-shot confetti fall, and two pills: Home and New game. No words but the table's and the
+/// players' names. Every motion here runs once and stops, so nothing loops.
 struct GameOverView: View {
+    let tableName: String
     let winners: [Person]
     /// Every seat, best first: phase reached, then lowest score.
     var standings: [Standing] = []
@@ -63,7 +64,13 @@ struct GameOverView: View {
                 .allowsHitTesting(false)
                 .accessibilityHidden(true)
             VStack(spacing: 30) {
-                Spacer(minLength: 40)
+                OutlinedText(tableName, size: 30, fill: .white, width: 3, lines: 2)
+                    .padding(.horizontal, 24)
+                    .padding(.top, 24)
+                    .scaleEffect(appeared ? 1 : 0.6)
+                    .opacity(appeared ? 1 : 0)
+                    .accessibilityIdentifier("gameover.name")
+                Spacer(minLength: 0)
                 ZStack {
                     Image(ArtName.sunburst)
                         .resizable()
@@ -86,7 +93,8 @@ struct GameOverView: View {
                     FlowLayout(spacing: 8, lineSpacing: 8) {
                         ForEach(standings) { standing($0) }
                     }
-                    .padding(.horizontal, 16)
+                    // The sunburst is wider than a small phone: wrap to the screen, not to it.
+                    .containerRelativeFrame(.horizontal) { width, _ in width - 32 }
                     .opacity(appeared ? 1 : 0)
                     .accessibilityElement(children: .contain)
                     .accessibilityIdentifier("gameover.standings")

@@ -1,28 +1,37 @@
 import PounceKit
 import SwiftUI
 
-/// The table's paw menu (`table.menu`): sound, haptics, how to play, names, move my seat, home.
-/// Move my seat grows the sheet into `MoveSeatSheet`, how to play into `HowToPlaySheet`, names
-/// into `RenameSheet`.
+/// The table's paw menu (`table.menu`): the table's name (tap to rename it), sound, haptics, how
+/// to play, names, move my seat, home. Renaming the table grows the sheet into `RenameTableView`,
+/// names (this phone's players) into `RenameSheet`, move my seat into `MoveSeatSheet`, how to play
+/// into `HowToPlaySheet`.
 struct TableMenuSheet: View {
     @Environment(Settings.self) private var settings
     let session: RoomSession
     let onHome: () -> Void
     let onClose: () -> Void
 
-    private enum Page { case menu, moving, rules, names }
+    private enum Page { case menu, moving, rules, renaming, names }
 
     @State private var page = Page.menu
     @State private var detent: PresentationDetent = Self.menuDetent
 
-    static let menuDetent = PresentationDetent.height(370)
+    static let menuDetent = PresentationDetent.height(440)
 
-    /// Names can change until the game is over.
-    private var canRename: Bool { canMove }
+    /// This phone's players can change their names until the game is over.
+    private var canRenamePeople: Bool { canMove }
 
     private var canMove: Bool {
         guard let table = session.model else { return false }
         return !table.mySeats.isEmpty && table.room.status != .over
+    }
+
+    private var tableName: String { session.store.room?.title ?? TableName.fallback(code: session.code) }
+
+    /// The server takes a rename from the host or any seated phone, until the game is over.
+    private var canRename: Bool {
+        guard let room = session.store.room, room.status != .over else { return false }
+        return room.youAreHost || room.seats.contains { $0.yours }
     }
 
     var body: some View {
@@ -38,6 +47,12 @@ struct TableMenuSheet: View {
             case .rules:
                 HowToPlaySheet { show(.menu) }
                     .transition(.move(edge: .trailing).combined(with: .opacity))
+            case .renaming:
+                RenameTableView(current: tableName, onCancel: { show(.menu) }) { name in
+                    session.send(.rename(name: name))
+                    show(.menu)
+                }
+                .transition(.move(edge: .trailing).combined(with: .opacity))
             case .names:
                 RenameSheet(session: session) { show(.menu) }
                     .transition(.move(edge: .trailing).combined(with: .opacity))
@@ -54,6 +69,9 @@ struct TableMenuSheet: View {
 
     private var menu: some View {
         VStack(spacing: 22) {
+            TableNameTitle(name: tableName, editable: canRename) { show(.renaming) }
+                .padding(.horizontal, 20)
+                .accessibilityIdentifier("menu.name")
             HStack(spacing: 18) {
                 PillButton(
                     icon: settings.soundOn ? ArtName.iconSoundOn : ArtName.iconSoundOff,
@@ -80,7 +98,7 @@ struct TableMenuSheet: View {
                 show(.rules)
             }
             .accessibilityIdentifier("menu.rules")
-            if canRename {
+            if canRenamePeople {
                 PillButton(
                     icon: nil, color: Palette.teal, size: .medium, width: 230,
                     title: String(localized: "Names", comment: "Table menu: rename this phone's players"),

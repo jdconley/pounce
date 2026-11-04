@@ -6,6 +6,7 @@ import { build } from "esbuild";
 import { Miniflare } from "miniflare";
 import { afterEach, beforeAll, describe, expect, test } from "vitest";
 
+import { defaultRoomName } from "../src/room/names";
 import { card } from "../src/rules/cards";
 
 import type { ServerMessage } from "../src/protocol";
@@ -22,7 +23,7 @@ const BOB = { id: "22222222-2222-4222-8222-222222222222", name: "Bob", cat: 2 };
 
 type Snapshot = Extract<ServerMessage, { t: "snapshot" }>;
 type Device = { deviceId: string; token: string };
-type Table = { code: string; status: string; yourTurn: boolean; updatedAt: number };
+type Table = { code: string; name?: string; status: string; yourTurn: boolean; updatedAt: number };
 
 let script = "";
 const open: Miniflare[] = [];
@@ -133,11 +134,11 @@ async function mint(mf: Miniflare, ip = "198.51.100.7"): Promise<Device> {
 
 const auth = (device: Device) => ({ authorization: `Bearer ${device.token}` });
 
-async function createRoom(mf: Miniflare, device: Device): Promise<string> {
+async function createRoom(mf: Miniflare, device: Device, name?: string): Promise<string> {
   const res = await mf.dispatchFetch(`${BASE}/v1/rooms`, {
     method: "POST",
     headers: { ...auth(device), "content-type": "application/json" },
-    body: JSON.stringify({ game: "cat-tower" }),
+    body: JSON.stringify(name === undefined ? { game: "cat-tower" } : { game: "cat-tower", name }),
   });
   expect(res.status).toBe(201);
   const { code } = (await res.json()) as { code: string };
@@ -361,7 +362,10 @@ describe("worker", { timeout: 20_000 }, () => {
   test("bad requests: room body, code shape, upgrade, push token, unknown routes", async () => {
     const mf = worker();
     const device = await mint(mf);
-    for (const body of ["", "nope", "{}", '{"game":"other"}', '{"game":"cat-tower","x":1}', "[]"]) {
+    const names = ["", "   ", "x".repeat(31), "tab\there", 7, null].map((name) =>
+      JSON.stringify({ game: "cat-tower", name }),
+    );
+    for (const body of ["", "nope", "{}", '{"game":"other"}', '{"game":"cat-tower","x":1}', "[]", ...names]) {
       const res = await mf.dispatchFetch(`${BASE}/v1/rooms`, {
         method: "POST",
         headers: auth(device),
@@ -502,8 +506,9 @@ describe("worker", { timeout: 20_000 }, () => {
       () => tables(mf, bob),
       (t) => t[0]?.status === "playing",
     );
-    expect(ta).toEqual([{ code, status: "playing", yourTurn: turn === 0, updatedAt: expect.any(Number) }]);
-    expect(tb).toEqual([{ code, status: "playing", yourTurn: turn === 1, updatedAt: expect.any(Number) }]);
+    const name = defaultRoomName(code);
+    expect(ta).toEqual([{ code, name, status: "playing", yourTurn: turn === 0, updatedAt: expect.any(Number) }]);
+    expect(tb).toEqual([{ code, name, status: "playing", yourTurn: turn === 1, updatedAt: expect.any(Number) }]);
   });
 
   test("a fresh room is listed for its host only", async () => {
@@ -515,8 +520,67 @@ describe("worker", { timeout: 20_000 }, () => {
       () => tables(mf, alice),
       (t) => t.length > 0,
     );
-    expect(ta).toEqual([{ code, status: "lobby", yourTurn: false, updatedAt: expect.any(Number) }]);
+    expect(ta).toEqual([
+      { code, name: defaultRoomName(code), status: "lobby", yourTurn: false, updatedAt: expect.any(Number) },
+    ]);
     expect(await tables(mf, bob)).toEqual([]);
+  });
+
+  test("a table named at creation keeps its name; a rename reaches every socket and the tables list", async () => {
+    const mf = worker();
+    const alice = await mint(mf);
+    const bob = await mint(mf);
+    const code = await createRoom(mf, alice, "  Taco   Night ");
+    const a = await connect(mf, code, alice);
+    const b = await connect(mf, code, bob);
+    expect((await a.snapshot()).room.name).toBe("Taco Night");
+    expect((await b.snapshot()).room.name).toBe("Taco Night");
+    expect(
+      await eventually(
+        () => tables(mf, alice),
+        (t) => t.length > 0,
+      ),
+    ).toEqual([{ code, name: "Taco Night", status: "lobby", yourTurn: false, updatedAt: expect.any(Number) }]);
+
+    // Bob holds no seat and isn't the host: refused.
+    b.send({ t: "rename", name: "Bob's Table" });
+    expect(await b.next((m) => m.t === "error")).toEqual({ t: "error", code: "not_seated" });
+
+    b.send({ t: "claim", seat: 1, person: BOB });
+    await b.next((m) => m.t === "snapshot" && m.room.seats[1]?.kind === "human");
+    b.send({ t: "rename", name: "Bob's Table" });
+    expect((await a.next<Snapshot>((m) => m.t === "snapshot" && m.room.name !== "Taco Night")).room.name).toBe(
+      "Bob's Table",
+    );
+    expect((await b.next<Snapshot>((m) => m.t === "snapshot" && m.room.name !== "Taco Night")).room.name).toBe(
+      "Bob's Table",
+    );
+    const listed = await eventually(
+      () => tables(mf, bob),
+      (t) => t[0]?.name === "Bob's Table",
+    );
+    expect(listed[0]?.name).toBe("Bob's Table");
+    expect((await tables(mf, alice))[0]?.name).toBe("Bob's Table");
+
+    // A name that isn't one never reaches the room.
+    a.send({ t: "rename", name: "line\nbreak" });
+    expect(await a.next((m) => m.t === "error")).toEqual({ t: "error", code: "bad_message" });
+  });
+
+  test("a room saved before tables had names loads with its default name", async () => {
+    const dir = tempDir();
+    const mf1 = worker({ persist: dir });
+    const alice = await mint(mf1);
+    const code = await createRoom(mf1, alice, "Taco Night");
+    await (await connect(mf1, code, alice)).snapshot();
+    await restart(mf1);
+    await editStoredRoom(dir, (state) => {
+      delete (state as Partial<RoomState>).name;
+    });
+
+    const mf2 = worker({ persist: dir });
+    const after = await (await connect(mf2, code, alice)).snapshot();
+    expect(after.room.name).toBe(defaultRoomName(code));
   });
 
   test("a device that leaves its seat drops the room from its tables", async () => {
@@ -594,7 +658,7 @@ describe("worker", { timeout: 20_000 }, () => {
       ),
     ).toEqual([]);
     expect(await tables(mf, alice)).toEqual([
-      { code, status: "lobby", yourTurn: false, updatedAt: expect.any(Number) },
+      { code, name: defaultRoomName(code), status: "lobby", yourTurn: false, updatedAt: expect.any(Number) },
     ]);
   });
 

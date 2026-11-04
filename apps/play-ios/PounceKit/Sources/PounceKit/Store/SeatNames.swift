@@ -21,7 +21,7 @@ public enum SeatNames {
 
 /// Keeps the names in this device's seats in step with the people on this phone, so a rename
 /// in the People sheet or the table menu reaches every phone at the table: the server takes
-/// `rename` in the lobby and mid-game, and everyone's next snapshot carries the new name.
+/// `renameSeat` in the lobby and mid-game, and everyone's next snapshot carries the new name.
 public struct NameSync: Equatable, Sendable {
     /// The name last sent per seat, so a rename waiting on its snapshot (or refused) goes once.
     private var sent: [Seat: String] = [:]
@@ -40,7 +40,7 @@ public struct NameSync: Equatable, Sendable {
                 sent[seat] = nil
             } else if sent[seat] != local.name {
                 sent[seat] = local.name
-                out.append(.rename(seat: seat, name: local.name))
+                out.append(.renameSeat(seat: seat, name: local.name))
             }
         }
         return out
