@@ -31,7 +31,7 @@ const room = (env: Env, code: string) => env.ROOMS.get(env.ROOMS.idFromName(code
 
 const nowSec = (now: number) => Math.floor(now / 1000);
 
-/** Room RPCs here are best effort: a room that missed one catches up on the next profile upload. */
+/** Best effort: a room that misses a backfill gets it again on the next profile upload. */
 async function eachRoom(codes: string[], run: (code: string) => Promise<unknown>): Promise<void> {
   await Promise.all(
     codes.map((code) =>
@@ -56,6 +56,8 @@ export async function uploadProfile(
   const players: Record<string, string> = {};
   const rejected: string[] = [];
   for (const person of profile.people) {
+    // A person without a band is the device's owner's age (§14.1).
+    const ageBand = person.ageBand ?? profile.ageBand;
     const hash = await subjectHash("device", person.id);
     const bound = await identities(env).bind("device", hash, newPlayerId(), await sha256Hex(person.key));
     if ("mismatch" in bound) {
@@ -68,7 +70,7 @@ export async function uploadProfile(
       deviceId,
       name: person.name,
       cat: person.cat,
-      ...(person.ageBand ? { ageBand: person.ageBand } : {}),
+      ...(ageBand ? { ageBand } : {}),
       at: person.at ?? now,
       now,
     });
@@ -77,12 +79,12 @@ export async function uploadProfile(
   }
 
   const index = device(env, deviceId);
-  const { changed, tables } = await index.setProfile({
+  const { tables } = await index.setProfile({
     timeZone: profile.timeZone,
     ageBand: profile.ageBand ?? null,
     people: players,
   });
-  if (Object.keys(changed).length > 0) await eachRoom(tables, (code) => room(env, code).adopt({ person: changed }));
+  await eachRoom(tables, (code) => room(env, code).adopt({ person: players, deviceId }));
 
   const { account } = await index.players();
   if (account) {
@@ -124,19 +126,18 @@ export async function deviceTables(env: Env, deviceId: string): Promise<TableEnt
 }
 
 /**
- * Folds `from` into `to`: identities, devices, tables and synced state move,
- * rooms hand over `from`'s seats, and `from` becomes a forwarding stub. Each
- * step is idempotent, so a retried sign-in finishes a merge cut short.
+ * Folds `from` into `to`: synced state, devices and tables move, rooms hand
+ * over `from`'s seats, and `from` becomes a forwarding stub. Repointing the
+ * identities commits it: until then `from`'s device identity still names
+ * `from`, so a sign-in retried after a failure runs the whole merge again,
+ * and every step before is idempotent.
  */
 export async function merge(env: Env, from: string, to: string, now: number): Promise<void> {
   const exported = await player(env, from).exportForMerge();
-  await identities(env).repoint(from, to);
   await player(env, to).absorb(exported, now);
   await Promise.all(exported.devices.map((d) => device(env, d).repointPlayer(from, to)));
-  await eachRoom(
-    exported.tables.map((t) => t.code),
-    (code) => room(env, code).adopt({ from, to }),
-  );
+  await Promise.all(exported.tables.map((t) => room(env, t.code).adopt({ from, to })));
+  await identities(env).repoint(from, to);
   await player(env, from).becomeStub(to, now);
 }
 
@@ -178,14 +179,15 @@ export async function signIn(
   const guestId = binding.playerId;
   const guest = await player(env, guestId).meta();
   if (!guest) return fail(404, "unknown_person");
-  if (guest.ageBand === "kitten") return fail(403, "not_allowed");
+  if (guest.ageBand === "kitten" || (await device(env, deviceId).ageBand()) === "kitten") return fail(403, "not_allowed");
 
   const hash = await subjectHash(p.id, verified.subject);
   if (guest.signedIn) {
     const own = (await player(env, guestId).identities()).some((r) => r.provider === p.id && r.subjectHash === hash);
     if (!own) return fail(409, "already_signed_in");
   }
-  const identity = { provider: p.id, subjectHash: hash, deviceId, secret: verified.secret ?? null };
+  const secret = (await p.secret?.(parsed.proof, env, fetcher, nowSec(now))) ?? null;
+  const identity = { provider: p.id, subjectHash: hash, deviceId, secret };
   const bound = await identities(env).bind(p.id, hash, guestId);
   // A sign-in identity is bound without a verifier, so `bind` never reports a mismatch for one.
   const owner = (bound as { playerId: string; created: boolean }).playerId;
@@ -217,6 +219,7 @@ export async function signIn(
 /** Adds a provider to a player. If someone else has that identity, merging takes a yes from the app first. */
 export async function linkIdentity(
   env: Env,
+  deviceId: string,
   me: string,
   providerId: string,
   body: unknown,
@@ -230,7 +233,7 @@ export async function linkIdentity(
   const self = player(env, me);
   const meta = await self.meta();
   if (!meta) return fail(404, "no_player");
-  if (meta.ageBand === "kitten") return fail(403, "not_allowed");
+  if (meta.ageBand === "kitten" || (await device(env, deviceId).ageBand()) === "kitten") return fail(403, "not_allowed");
   if ((await self.identities()).some((r) => r.provider === p.id)) return fail(409, "already_linked");
   const verified = await p.verify(parsed.proof, env, fetcher, nowSec(now));
   if (!verified) return fail(401, "bad_proof");
@@ -245,7 +248,8 @@ export async function linkIdentity(
   if (verified.nonce && !(await identities(env).useNonce(verified.nonce.hash, verified.nonce.expiresAt, now))) {
     return fail(401, "bad_proof");
   }
-  await self.addIdentity({ provider: p.id, subjectHash: hash, deviceId: null, secret: verified.secret ?? null });
+  const secret = (await p.secret?.(parsed.proof, env, fetcher, nowSec(now))) ?? null;
+  await self.addIdentity({ provider: p.id, subjectHash: hash, deviceId: null, secret });
   if (existing && existing.playerId !== me) {
     await merge(env, existing.playerId, me, now);
     return { ok: { linked: true, merged: true } };
@@ -278,7 +282,9 @@ export async function unlinkIdentity(
   if (!(await self.meta())?.signedIn) {
     const others = (await self.deviceIds()).filter((d) => d !== deviceId);
     await Promise.all(others.map((d) => detach(env, d, me)));
-    await device(env, deviceId).setAccount(null);
+    // A household person unlinking leaves the phone signed in to its owner.
+    const index = device(env, deviceId);
+    if ((await index.players()).account === me) await index.setAccount(null);
   }
   return { ok: null };
 }

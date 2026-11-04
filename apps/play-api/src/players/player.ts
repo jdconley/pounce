@@ -269,8 +269,10 @@ export class Player extends DurableObject<Env> {
   absorb(e: PlayerExport, now: number): void {
     const { sql } = this.ctx.storage;
     for (const row of e.identities) {
+      // Keep whichever side holds the refresh token: revoking needs it.
       sql.exec(
-        "INSERT OR IGNORE INTO identities (provider, subject_hash, device_id, secret) VALUES (?, ?, ?, ?)",
+        `INSERT INTO identities (provider, subject_hash, device_id, secret) VALUES (?, ?, ?, ?)
+         ON CONFLICT (provider, subject_hash) DO UPDATE SET secret = COALESCE(identities.secret, excluded.secret)`,
         row.provider,
         row.subjectHash,
         row.deviceId,
@@ -331,8 +333,23 @@ export class Player extends DurableObject<Env> {
       await this.ctx.storage.setAlarm(lastTouch + GUEST_TTL_MS);
       return;
     }
+    await this.expire();
+  }
+
+  /**
+   * Deletes an expired guest, as account deletion does: its seats go back to
+   * their devices, its devices and identities forget it.
+   */
+  async expire(): Promise<void> {
     const id = this.getMeta("id");
-    if (id) await this.env.IDENTITIES.get(this.env.IDENTITIES.idFromName(IDENTITIES_NAME)).removePlayer(id);
+    if (id) {
+      const { env } = this;
+      await Promise.all([
+        ...this.listTables().map((t) => env.ROOMS.get(env.ROOMS.idFromName(t.code)).adopt({ from: id, to: null })),
+        ...this.deviceIds().map((d) => env.DEVICES.get(env.DEVICES.idFromName(d)).forgetPlayer(id)),
+        env.IDENTITIES.get(env.IDENTITIES.idFromName(IDENTITIES_NAME)).removePlayer(id),
+      ]);
+    }
     await this.destroy();
   }
 }

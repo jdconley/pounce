@@ -202,26 +202,57 @@ describe("adopt", () => {
   it("backfills players on seats claimed by person, once", () => {
     const room = startedWithPlayer({ legacy: true });
     expect(room.controlledSeats("ipad")).toEqual([]);
-    const out = room.adopt({ person: { [P1]: A } });
+    const out = room.adopt({ person: { [P1]: A }, deviceId: "phone" });
     expect(room.state.seats[0]?.playerId).toBe(A);
     expect(room.controlledSeats("ipad")).toEqual([0]);
+    // The phone's open socket keeps the seat it just handed to its player.
+    expect(room.controlledSeats("phone")).toEqual([0]);
     expect(snapshotTo(out, "ipad").room.seats[0]?.yours).toBe(true);
-    expect(room.adopt({ person: { [P1]: A } })).toEqual([]);
+    expect(room.adopt({ person: { [P1]: A }, deviceId: "phone" })).toEqual([]);
   });
 
   it("by person never overwrites a seat's player", () => {
     const room = startedWithPlayer();
-    expect(room.adopt({ person: { [P1]: B } })).toEqual([]);
+    expect(room.adopt({ person: { [P1]: B }, deviceId: "phone" })).toEqual([]);
     expect(room.state.seats[0]?.playerId).toBe(A);
   });
 
-  it("moves seats from one player to another", () => {
+  it("by person touches only the uploading device's seats: a person id is no proof", () => {
+    const room = startedWithPlayer({ legacy: true, ipad: false });
+    room.connect("mallory");
+    expect(room.adopt({ person: { [P1]: B }, deviceId: "mallory" })).toEqual([]);
+    expect(room.state.seats[0]).not.toHaveProperty("playerId");
+    expect(room.controlledSeats("mallory")).toEqual([]);
+    // A device that isn't connected still backfills; it just has no map to update.
+    expect(room.adopt({ person: { [P1]: A }, deviceId: "offline" })).toEqual([]);
+  });
+
+  it("a seat with a player is controlled only by devices that speak for the player", () => {
+    const room = startedWithPlayer();
+    room.connect("phone");
+    expect(room.controlledSeats("phone")).toEqual([]);
+    expect(room.controlledSeats("ipad")).toEqual([0]);
+  });
+
+  it("a seat moved by code goes to the new device and leaves the player", () => {
+    const room = startedWithPlayer();
+    const { code } = room.handle("ipad", { t: "moveSeat", seat: 0 })[0]?.message as { code: string };
+    room.connect("wife");
+    room.handle("wife", { t: "claimMove", code });
+    expect(room.state.seats[0]).not.toHaveProperty("playerId");
+    expect(room.controlledSeats("wife")).toEqual([0]);
+    expect(room.controlledSeats("ipad")).toEqual([]);
+  });
+
+  it("moves seats from one player to another, and the devices that spoke for one now speak for the other", () => {
     const room = startedWithPlayer();
     room.connect("b-device", { [P2]: B });
+    room.connect("bystander");
     room.adopt({ from: A, to: B });
     expect(room.state.seats[0]?.playerId).toBe(B);
     expect(room.controlledSeats("b-device")).toEqual([0]);
-    expect(room.controlledSeats("ipad")).toEqual([]);
+    expect(room.controlledSeats("ipad")).toEqual([0]);
+    expect(room.controlledSeats("bystander")).toEqual([]);
   });
 
   it("with no target, the seat falls back to the device that holds it", () => {

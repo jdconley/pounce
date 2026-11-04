@@ -1,6 +1,6 @@
 import type { AgeBand } from "./parse";
 
-/** A teen's device gets no alerts in these local hours (§14.1): [start, end). */
+/** A teen's device gets nothing in these local hours (§14.1): [start, end). */
 const TEEN_NIGHT_START_HOUR = 0;
 const TEEN_NIGHT_END_HOUR = 6;
 
@@ -20,8 +20,8 @@ function localHour(timeZone: string | null, now: number): number {
   }
 }
 
-/** True when an alert must not be sent now: a teen's device overnight. */
-export function alertsBlocked(band: AgeBand | null, timeZone: string | null, now: number): boolean {
+/** True when nothing may be sent now, "not even passive" (§14.1): a teen's device overnight. */
+export function nightBlocked(band: AgeBand | null, timeZone: string | null, now: number): boolean {
   if (band !== "teen") return false;
   const hour = localHour(timeZone, now);
   return hour >= TEEN_NIGHT_START_HOUR && hour < TEEN_NIGHT_END_HOUR;

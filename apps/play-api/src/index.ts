@@ -214,8 +214,8 @@ function route(method: string, pathname: string): Route | null {
   }
   const mine = MY_IDENTITY.exec(pathname);
   if (mine && method === "POST") {
-    return asMe(async (r, env, _id, playerId) =>
-      respond(await linkIdentity(env, playerId, mine[1] as string, await readObject(r, MAX_PROOF_BYTES), Date.now(), fetch)),
+    return asMe(async (r, env, id, playerId) =>
+      respond(await linkIdentity(env, id, playerId, mine[1] as string, await readObject(r, MAX_PROOF_BYTES), Date.now(), fetch)),
     );
   }
   if (mine && method === "DELETE") {

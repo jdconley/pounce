@@ -5,8 +5,8 @@ import type { Env } from "../env";
 
 export type ProviderId = "device" | "apple";
 
-/** A verified claim. `nonce` is the token's nonce hash, used once; `secret` is what `revoke` needs. */
-export type Verified = { subject: string; secret?: string; nonce?: { hash: string; expiresAt: number } };
+/** A verified claim. `nonce` is the token's nonce hash, used once. */
+export type Verified = { subject: string; nonce?: { hash: string; expiresAt: number } };
 
 /**
  * One way to prove who you are (§13.1). Adding Google, email or passkeys later
@@ -17,6 +17,11 @@ export type IdentityProvider = {
   /** Offered by POST /v1/identities/{provider}; `device` binds through the profile instead. */
   signIn: boolean;
   verify(proof: unknown, env: Env, fetcher: typeof fetch, nowSec: number): Promise<Verified | null>;
+  /**
+   * What `revoke` will need later, from a verified proof. Called once the
+   * request is sure to go through, because it can use up a one-time code.
+   */
+  secret?(proof: unknown, env: Env, fetcher: typeof fetch, nowSec: number): Promise<string | null>;
   revoke?(secret: string, env: Env, fetcher: typeof fetch, nowSec: number): Promise<void>;
 };
 
@@ -45,15 +50,15 @@ const apple: IdentityProvider = {
       fetcher,
     });
     if (!claims) return null;
-    const secret = parsed.authorizationCode
-      ? await exchangeAppleCode(env, parsed.authorizationCode, fetcher, nowSec)
-      : null;
     return {
       subject: claims.sub,
-      ...(secret ? { secret } : {}),
       // The claim, not the raw nonce: a replayed token carries the same one.
       nonce: { hash: claims.nonce, expiresAt: claims.exp * 1000 },
     };
+  },
+  async secret(proof, env, fetcher, nowSec) {
+    const code = parseAppleProof(proof)?.authorizationCode;
+    return code ? exchangeAppleCode(env, code, fetcher, nowSec) : null;
   },
   revoke: (secret, env, fetcher, nowSec) => revokeAppleToken(env, secret, fetcher, nowSec),
 };

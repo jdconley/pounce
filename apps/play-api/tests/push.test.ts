@@ -196,12 +196,12 @@ describe("DeviceIndex.push by age band", () => {
     expect(sent).toEqual([]);
   });
 
-  test("a teen's device gets no alert at 2 a.m., but still a background dismiss", async () => {
+  test("a teen's device gets nothing at 2 a.m., not even a background push (§14.1)", async () => {
     sent = [];
     await device("teen-night", "teen", zoneAtHour(2));
     expect(await push("teen-night", { ...intent, deviceId: "teen-night" })).toEqual({ sent: false });
-    expect(await push("teen-night", dismiss)).toEqual({ sent: true });
-    expect(sent.map((s) => s.type)).toEqual(["background"]);
+    expect(await push("teen-night", dismiss)).toEqual({ sent: false });
+    expect(sent).toEqual([]);
   });
 
   test("a teen at noon and an adult at 2 a.m. get their alerts", async () => {

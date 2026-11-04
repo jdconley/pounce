@@ -1,6 +1,6 @@
 import { DurableObject } from "cloudflare:workers";
 
-import { alertsBlocked, pushBlocked } from "../players/age";
+import { nightBlocked, pushBlocked } from "../players/age";
 import { pushDismiss, pushYourTurn } from "../push/apns";
 
 import { createTables, listTables, removeTable, upsertTable, type TableEntry } from "./tables";
@@ -42,23 +42,23 @@ export class DeviceIndex extends DurableObject<Env> {
   /**
    * Stores the device's time zone, its owner's age band and its people's
    * players (the whole list: people no longer on the device are dropped).
-   * Returns the mappings that are new or changed, and the device's tables,
-   * so the caller can backfill those rooms.
+   * Returns the device's tables that aren't over, so the caller can
+   * backfill them (every upload: a room that missed one catches up).
    */
-  setProfile(p: { timeZone: string; ageBand: AgeBand | null; people: Record<string, string> }): {
-    changed: Record<string, string>;
-    tables: string[];
-  } {
+  setProfile(p: { timeZone: string; ageBand: AgeBand | null; people: Record<string, string> }): { tables: string[] } {
     const { sql } = this.ctx.storage;
     this.setMeta("time_zone", p.timeZone);
     this.setMeta("age_band", p.ageBand);
-    const before = this.people();
-    const changed = Object.fromEntries(Object.entries(p.people).filter(([person, player]) => before[person] !== player));
     sql.exec("DELETE FROM people");
     for (const [person, player] of Object.entries(p.people)) {
       sql.exec("INSERT INTO people (person_id, player_id) VALUES (?, ?)", person, player);
     }
-    return { changed, tables: listTables(sql).map((t) => t.code) };
+    return { tables: listTables(sql).filter((t) => t.status !== "over").map((t) => t.code) };
+  }
+
+  /** The device owner's age band, from the last profile. */
+  ageBand(): AgeBand | null {
+    return this.getMeta("age_band") as AgeBand | null;
   }
 
   private people(): Record<string, string> {
@@ -111,14 +111,11 @@ export class DeviceIndex extends DurableObject<Env> {
   /**
    * Sends a push, and forgets a token APNs says is dead. Only that token: the
    * device may have registered a new one while the push was in flight. A
-   * kitten's device gets nothing, and a teen's no alerts overnight (§14.1).
+   * kitten's device gets nothing, and a teen's nothing overnight (§14.1).
    */
   async push(intent: YourTurnIntent | DismissIntent): Promise<{ sent: boolean }> {
-    const band = this.getMeta("age_band") as AgeBand | null;
-    if (pushBlocked(band)) return { sent: false };
-    if (intent.kind === "your_turn" && alertsBlocked(band, this.getMeta("time_zone"), Date.now())) {
-      return { sent: false };
-    }
+    const band = this.ageBand();
+    if (pushBlocked(band) || nightBlocked(band, this.getMeta("time_zone"), Date.now())) return { sent: false };
     const token = this.getMeta("apns_token");
     const { sent, unregistered } =
       intent.kind === "your_turn"

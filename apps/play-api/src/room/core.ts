@@ -26,9 +26,12 @@ export type CatTowerModule = GameModule<CatTowerState, Action, CatTowerView, Gam
 export type SeatInfo = {
   kind: SeatKind;
   person?: Person;
-  /** The device that claimed the seat, or that it was last moved to. */
+  /** The device that claimed the seat, or that it was last moved to. It controls the seat only when there is no player. */
   deviceId?: string;
-  /** The player in the seat. Seats claimed before players existed, or by an old app, have none. */
+  /**
+   * The player in the seat: then the devices that speak for the player control it (§13.1). Seats
+   * claimed before players existed, by an old app, or moved by code to another device have none.
+   */
   playerId?: string;
   botLevel?: "house";
 };
@@ -41,8 +44,11 @@ export type DeviceRecord = {
   players?: Record<string, string>;
 };
 
-/** `person`: backfill seats by person id. `from`/`to`: hand one player's seats to another, or (null) to their devices. */
-export type AdoptRule = { person: Record<string, string> } | { from: string; to: string | null };
+/**
+ * `person`: backfill the seats `deviceId` holds, by person id, once its people have players.
+ * `from`/`to`: hand one player's seats to another (a merge), or with null back to their devices.
+ */
+export type AdoptRule = { person: Record<string, string>; deviceId: string } | { from: string; to: string | null };
 
 export type RoomState = {
   code: string;
@@ -195,15 +201,18 @@ export class RoomCore {
   /**
    * Gives seats to players: backfilled by person id once a device's people
    * have players, or moved on a merge or an account deletion. Only seats that
-   * change send snapshots.
+   * change send snapshots. Connected devices' maps follow, so an open socket
+   * keeps the seats it had.
    */
   adopt(rule: AdoptRule): Outbound[] {
+    this.adoptDevices(rule);
     let changed = false;
     for (const seat of this.state.seats) {
       if (seat.kind !== "human") continue;
       if ("person" in rule) {
+        // Only the uploading device's own seats: a person id is visible to everyone at the table.
         const playerId = rule.person[(seat.person as Person).id];
-        if (playerId === undefined || seat.playerId !== undefined) continue;
+        if (seat.deviceId !== rule.deviceId || playerId === undefined || seat.playerId !== undefined) continue;
         seat.playerId = playerId;
       } else {
         if (seat.playerId !== rule.from) continue;
@@ -215,6 +224,22 @@ export class RoomCore {
     if (!changed) return [];
     this.state.seq += 1;
     return this.snapshots();
+  }
+
+  private adoptDevices(rule: AdoptRule): void {
+    if ("person" in rule) {
+      const device = this.state.devices[rule.deviceId];
+      if (device) device.players = { ...device.players, ...rule.person };
+      return;
+    }
+    for (const device of Object.values(this.state.devices)) {
+      if (!device.players) continue;
+      for (const [person, playerId] of Object.entries(device.players)) {
+        if (playerId !== rule.from) continue;
+        if (rule.to === null) delete device.players[person];
+        else device.players[person] = rule.to;
+      }
+    }
   }
 
   /** Every player holding a seat, once each. */
@@ -300,7 +325,7 @@ export class RoomCore {
     };
   }
 
-  /** Seats the device holds, plus the seats of every player it speaks for. */
+  /** Seats of every player the device speaks for, plus seats with no player that the device holds. */
   controlledSeats(deviceId: string): Seat[] {
     const out: Seat[] = [];
     this.state.seats.forEach((_, i) => {
@@ -312,9 +337,8 @@ export class RoomCore {
   private controls(deviceId: string, seat: Seat): boolean {
     // Callers have bounds-checked the seat.
     const s = this.state.seats[seat] as SeatInfo;
-    if (s.deviceId === deviceId) return true;
-    const players = this.state.devices[deviceId]?.players;
-    return s.playerId !== undefined && players !== undefined && Object.values(players).includes(s.playerId);
+    if (s.playerId === undefined) return s.deviceId === deviceId;
+    return Object.values(this.state.devices[deviceId]?.players ?? {}).includes(s.playerId);
   }
 
   /** The best presence among the devices that control the seat; away when none has been seen. */
@@ -484,7 +508,10 @@ export class RoomCore {
       return [this.fail(deviceId, "bad_code")];
     }
 
-    state.seats[entry.seat]!.deviceId = deviceId;
+    // The seat goes to this device, whoever it speaks for.
+    const moved = state.seats[entry.seat] as SeatInfo;
+    moved.deviceId = deviceId;
+    delete moved.playerId;
     delete state.moveCodes[code];
     return this.changed();
   }

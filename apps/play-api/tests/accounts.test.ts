@@ -22,7 +22,7 @@ const open: Miniflare[] = [];
 
 beforeAll(async () => {
   const built = await build({
-    entryPoints: [new URL("../src/index.ts", import.meta.url).pathname],
+    entryPoints: [new URL("./accounts-entry.ts", import.meta.url).pathname],
     bundle: true,
     write: false,
     format: "esm",
@@ -51,8 +51,13 @@ async function p8(): Promise<string> {
   return `-----BEGIN PRIVATE KEY-----\n${btoa(String.fromCharCode(...der))}\n-----END PRIVATE KEY-----\n`;
 }
 
-function worker(push?: { p8: string }): Miniflare {
+/** Calls to Apple's token and revoke endpoints. Each authorization code works once, as at Apple. */
+let appleCalls: { path: string; form: URLSearchParams }[] = [];
+
+function worker(push?: { p8: string }, siwa?: { p8: string }): Miniflare {
   apnsSent = [];
+  appleCalls = [];
+  const usedCodes = new Set<string>();
   const mf = new Miniflare({
     modules: true,
     script,
@@ -70,11 +75,24 @@ function worker(push?: { p8: string }): Miniflare {
       APNS_TOPIC: CLIENT_ID,
       APNS_HOST: "api.push.apple.com",
       ...(push ? { APNS_KEY_P8: push.p8, APNS_KEY_ID: "KID-ACCOUNTS", DEV_SPEED: "100" } : {}),
+      ...(siwa ? { SIWA_KEY_P8: siwa.p8, SIWA_KEY_ID: "KID-SIWA" } : {}),
     },
     // Stands in for Apple: the public keys, which need no secret, and APNs.
     outboundService: async (request: MiniflareRequest) => {
       if (request.url === "https://appleid.apple.com/auth/keys") {
         return new MiniflareResponse(JSON.stringify({ keys: [jwk] }), { headers: { "content-type": "application/json" } });
+      }
+      const { pathname } = new URL(request.url);
+      if (request.url.startsWith("https://appleid.apple.com/auth/")) {
+        const form = new URLSearchParams(await request.text());
+        appleCalls.push({ path: pathname, form });
+        const code = form.get("code");
+        if (pathname === "/auth/token") {
+          if (!code || usedCodes.has(code)) return new MiniflareResponse(JSON.stringify({ error: "invalid_grant" }), { status: 400 });
+          usedCodes.add(code);
+          return new MiniflareResponse(JSON.stringify({ refresh_token: `r-${code}` }), { headers: { "content-type": "application/json" } });
+        }
+        return new MiniflareResponse(null, { status: 200 });
       }
       if (new URL(request.url).host === "api.push.apple.com") {
         apnsSent.push({ token: new URL(request.url).pathname.split("/").at(-1) as string, type: request.headers.get("apns-push-type") });
@@ -119,10 +137,17 @@ async function mint(mf: Miniflare): Promise<Device> {
   return (await res.json()) as Device;
 }
 
-function call(mf: Miniflare, device: Device, method: string, path: string, body?: unknown): Promise<Response> {
+function call(
+  mf: Miniflare,
+  device: Device,
+  method: string,
+  path: string,
+  body?: unknown,
+  headers: Record<string, string> = {},
+): Promise<Response> {
   return mf.dispatchFetch(`${BASE}${path}`, {
     method,
-    headers: { authorization: `Bearer ${device.token}`, "content-type": "application/json" },
+    headers: { authorization: `Bearer ${device.token}`, "content-type": "application/json", ...headers },
     ...(body === undefined ? {} : { body: JSON.stringify(body) }),
   }) as unknown as Promise<Response>;
 }
@@ -133,8 +158,19 @@ async function profile(mf: Miniflare, device: Device, people: Person[], ageBand 
   return (await res.json()) as { players: Record<string, string>; rejected: string[] };
 }
 
-async function signIn(mf: Miniflare, device: Device, person: Person, proof: unknown) {
-  return call(mf, device, "POST", "/v1/identities/apple", { proof, person: { id: person.id, key: person.key } });
+async function signIn(mf: Miniflare, device: Device, person: Person, proof: unknown, headers: Record<string, string> = {}) {
+  return call(mf, device, "POST", "/v1/identities/apple", { proof, person: { id: person.id, key: person.key } }, headers);
+}
+
+/** `device` creates a room and takes seat 0 as `person`. */
+async function seatedRoom(mf: Miniflare, device: Device, person: Person): Promise<string> {
+  const code = await createRoom(mf, device);
+  const socket = await connect(mf, code, device);
+  await socket.snapshot();
+  socket.send({ t: "claim", seat: 0, person: { id: person.id, name: person.name, cat: person.cat } });
+  await socket.next((m) => m.t === "snapshot" && m.room.seats[0]?.kind === "human");
+  socket.close();
+  return code;
 }
 
 async function createRoom(mf: Miniflare, device: Device): Promise<string> {
@@ -453,5 +489,116 @@ describe("pushes reach every device of a player", () => {
     expect(sent.map((s) => s.token).sort()).toEqual([PHONE, IPAD]);
     expect(sent.every((s) => s.type === "alert")).toBe(true);
     client.close();
+  });
+});
+
+describe("review fixes", () => {
+  test("a table-mate who uploads someone else's person id first doesn't get their seat", async () => {
+    const mf = worker();
+    const victim = await mint(mf);
+    const jd = newPerson("JD");
+    const code = await seatedRoom(mf, victim, jd);
+    // The attacker sits at the same table, so its profile upload reaches this room.
+    const attacker = await mint(mf);
+    const own = newPerson("Mallory");
+    const seat = await connect(mf, code, attacker);
+    await seat.snapshot();
+    seat.send({ t: "claim", seat: 1, person: { id: own.id, name: own.name, cat: own.cat } });
+    await seat.next((m) => m.t === "snapshot" && m.room.seats[1]?.kind === "human");
+    seat.close();
+    await eventually(() => tables(mf, attacker), (codes) => codes.includes(code));
+    await profile(mf, attacker, [own, { ...jd, key: newPerson("x").key }]);
+    expect(await ownsSeat0(mf, code, attacker)).toBe(false);
+    expect(await ownsSeat0(mf, code, victim)).toBe(true);
+  });
+
+  test("the phone that claimed a seat stops controlling it once it signs out", async () => {
+    const mf = worker();
+    const { phone, code } = await signedInPhone(mf);
+    expect(await ownsSeat0(mf, code, phone)).toBe(true);
+    expect((await call(mf, phone, "POST", "/v1/me/signout")).status).toBe(204);
+    expect(await ownsSeat0(mf, code, phone)).toBe(false);
+  });
+
+  test("a seat moved to another device by move code goes with the device, not the player", async () => {
+    const mf = worker();
+    const { phone, code } = await signedInPhone(mf);
+    const wife = await mint(mf);
+    const a = await connect(mf, code, phone);
+    await a.snapshot();
+    a.send({ t: "moveSeat", seat: 0 });
+    const { code: move } = await a.next<Extract<ServerMessage, { t: "moveCode" }>>((m) => m.t === "moveCode");
+    const b = await connect(mf, code, wife);
+    await b.snapshot();
+    b.send({ t: "claimMove", code: move });
+    await b.next((m) => m.t === "snapshot" && m.room.seats[0]?.yours === true);
+    a.close();
+    b.close();
+    expect(await ownsSeat0(mf, code, phone)).toBe(false);
+    expect(await ownsSeat0(mf, code, wife)).toBe(true);
+  });
+
+  test("a household person unlinking doesn't sign the phone out of the owner's account", async () => {
+    const mf = worker();
+    const { phone, jd } = await signedInPhone(mf);
+    const kid = newPerson("Twin", { ageBand: "teen" });
+    await profile(mf, phone, [jd, kid]);
+    const kidIn = (await (await signIn(mf, phone, kid, await appleProof("apple-kid"))).json()) as { account: boolean };
+    expect(kidIn.account).toBe(false);
+    expect((await call(mf, phone, "DELETE", `/v1/me/identities/apple?person=${kid.id}`)).status).toBe(204);
+    expect((await call(mf, phone, "GET", "/v1/me/state")).status).toBe(200);
+  });
+
+  test("a merge cut short by a failing room finishes on the next sign-in", async () => {
+    const mf = worker();
+    const { phone } = await signedInPhone(mf);
+    const ipad = await mint(mf);
+    const jdIpad = newPerson("JD on iPad");
+    await profile(mf, ipad, [jdIpad]);
+    const code = await seatedRoom(mf, ipad, jdIpad);
+    await eventually(
+      () => call(mf, ipad, "GET", "/v1/devices/me/tables").then((r) => r.json() as Promise<{ tables: unknown[] }>),
+      (t) => t.tables.length > 0,
+    );
+    const cut = await signIn(mf, ipad, jdIpad, await appleProof("apple-jd"), { "x-test-fail-adopt": "1" });
+    expect(cut.status).toBe(500);
+    const retry = (await (await signIn(mf, ipad, jdIpad, await appleProof("apple-jd"))).json()) as { outcome: string };
+    expect(retry.outcome).toBe("merged");
+    expect(await ownsSeat0(mf, code, phone)).toBe(true);
+  });
+
+  test("a guest that expires hands its seats back to its device and is forgotten there", async () => {
+    const mf = worker();
+    const phone = await mint(mf);
+    const mia = newPerson("Mia");
+    const { players } = await profile(mf, phone, [mia]);
+    const code = await seatedRoom(mf, phone, mia);
+    expect((await mf.dispatchFetch(`${BASE}/__test/expire?player=${players[mia.id]}`)).status).toBe(204);
+    expect(await ownsSeat0(mf, code, phone)).toBe(true);
+    expect((await call(mf, phone, "GET", `/v1/me/state?person=${mia.id}`)).status).toBe(404);
+  });
+
+  test("confirming a merge keeps the Apple token, so deleting the account revokes it", async () => {
+    const mf = worker(undefined, { p8: await p8() });
+    await signedInPhone(mf);
+    const ipad = await mint(mf);
+    const jdIpad = newPerson("JD on iPad");
+    await profile(mf, ipad, [jdIpad]);
+    const proof = { ...(await appleProof("apple-jd")), authorizationCode: "code-ipad" };
+    const path = `/v1/me/identities/apple?person=${jdIpad.id}`;
+    expect((await call(mf, ipad, "POST", path, { proof })).status).toBe(409);
+    const confirmed = await call(mf, ipad, "POST", path, { proof, confirmMerge: true });
+    expect(await confirmed.json()).toEqual({ linked: true, merged: true });
+    expect((await call(mf, ipad, "DELETE", `/v1/me?person=${jdIpad.id}`)).status).toBe(204);
+    const revoked = appleCalls.filter((c) => c.path === "/auth/revoke").map((c) => c.form.get("token"));
+    expect(revoked).toContain("r-code-ipad");
+  });
+
+  test("a phone whose owner is under 13 can't sign in, even if the person carries no band", async () => {
+    const mf = worker();
+    const phone = await mint(mf);
+    const kid = newPerson("Mochi");
+    await profile(mf, phone, [kid], "kitten");
+    expect((await signIn(mf, phone, kid, await appleProof("apple-kid"))).status).toBe(403);
   });
 });

@@ -200,14 +200,15 @@ export class GameRoom extends DurableObject<Env> {
   }
 
   /**
-   * "Your turn" goes to every device of the seat's player, and to the device
-   * holding the seat; a dismiss goes to the player's other devices (§12.5).
+   * "Your turn" goes to every device of the seat's player, or to the device
+   * holding a seat with no player; a dismiss goes to the player's other
+   * devices (§12.5).
    */
   private async push(intent: PushIntent): Promise<void> {
     const playerDevices = intent.playerId ? await this.player(intent.playerId).deviceIds() : [];
     const targets =
       intent.kind === "your_turn"
-        ? new Set([...playerDevices, intent.deviceId])
+        ? new Set(intent.playerId ? playerDevices : [intent.deviceId])
         : new Set(playerDevices.filter((d) => d !== intent.exceptDeviceId));
     await Promise.all([...targets].map((deviceId) => this.index(deviceId).push(intent).catch(() => undefined)));
   }
