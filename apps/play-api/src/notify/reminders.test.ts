@@ -10,7 +10,6 @@ import { notifySettings } from "./settings";
 const LA = "America/Los_Angeles";
 const NY = "America/New_York";
 const D: Day = "2026-11-04"; // a Wednesday
-const H = 60 * 60 * 1000;
 const at = (day: Day, hhmm: string, zone = LA) => {
   const [h, m] = hhmm.split(":").map(Number) as [number, number];
   return localToInstant(day, h * 60 + m, zone);

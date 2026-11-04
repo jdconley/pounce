@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 
-import { createApnsJwt, pushDismiss, pushYourTurn, sendApns } from "./apns";
+import { createApnsJwt, pushAlert, pushDismiss, pushWidget, pushYourTurn, sendApns } from "./apns";
 
 import type { Env } from "../env";
 import type { YourTurnIntent } from "../room/core";
@@ -267,6 +267,58 @@ describe("pushDismiss", () => {
       sent: false,
       unregistered: false,
     });
+    expect(calls).toHaveLength(1);
+  });
+});
+
+describe("rich alerts (§12.5)", () => {
+  it("send the built body at priority 10 when active and 5 when passive, collapsed by id", async () => {
+    const { fetcher, calls } = fakeFetch(new Response(null, { status: 200 }));
+    const body = { aps: { alert: { title: "JD", body: "hi" } }, kind: "nap" };
+    await sendApns(fetcher, CFG, TOKEN, { alert: body, collapseId: "nap:pr_1", level: "passive" });
+    await sendApns(fetcher, CFG, TOKEN, { alert: body, collapseId: "GH2VD", level: "active" });
+    const [passive, active] = calls as [Call, Call];
+    expect(passive.init.headers).toEqual({
+      authorization: "bearer the.jwt.value",
+      "apns-topic": "com.conleychaos.play",
+      "apns-push-type": "alert",
+      "apns-priority": "5",
+      "apns-collapse-id": "nap:pr_1",
+    });
+    expect((active.init.headers as Record<string, string>)["apns-priority"]).toBe("10");
+    expect(JSON.parse(passive.init.body as string)).toEqual(body);
+  });
+
+  it("pushAlert delivers through the configured key", async () => {
+    const { pem } = await keyPair();
+    const env = { APNS_TEAM_ID: TEAM, APNS_TOPIC: "com.conleychaos.play", APNS_HOST: "api.push.apple.com", APNS_KEY_P8: pem, APNS_KEY_ID: "KID-RICH" } as Env;
+    const { fetcher, calls } = fakeFetch(new Response(null, { status: 200 }));
+    expect(await pushAlert(env, TOKEN, { aps: {} }, "x", "active", fetcher, NOW)).toEqual({ sent: true, unregistered: false });
+    expect(await pushAlert(env, null, { aps: {} }, "x", "active", fetcher, NOW)).toEqual({ sent: false, unregistered: false });
+    expect(calls).toHaveLength(1);
+  });
+});
+
+describe("widget pushes (§11.2)", () => {
+  it("send content-changed to the widgets topic at priority 5, with no collapse id", async () => {
+    const { fetcher, calls } = fakeFetch(new Response(null, { status: 200 }));
+    await sendApns(fetcher, CFG, TOKEN, { widget: true });
+    const { init } = calls[0] as Call;
+    expect(init.headers).toEqual({
+      authorization: "bearer the.jwt.value",
+      "apns-topic": "com.conleychaos.play.push-type.widgets",
+      "apns-push-type": "widgets",
+      "apns-priority": "5",
+    });
+    expect(JSON.parse(init.body as string)).toEqual({ aps: { "content-changed": true } });
+  });
+
+  it("pushWidget is a no-op without a token", async () => {
+    const { pem } = await keyPair();
+    const env = { APNS_TEAM_ID: TEAM, APNS_TOPIC: "com.conleychaos.play", APNS_HOST: "api.push.apple.com", APNS_KEY_P8: pem, APNS_KEY_ID: "KID-WIDGET" } as Env;
+    const { fetcher, calls } = fakeFetch(new Response(null, { status: 200 }));
+    expect(await pushWidget(env, null, fetcher, NOW)).toEqual({ sent: false, unregistered: false });
+    expect(await pushWidget(env, TOKEN, fetcher, NOW)).toEqual({ sent: true, unregistered: false });
     expect(calls).toHaveLength(1);
   });
 });

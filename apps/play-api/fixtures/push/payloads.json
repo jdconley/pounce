@@ -1,0 +1,560 @@
+[
+  {
+    "name": "your_move",
+    "collapseId": "GH2VD",
+    "priority": 10,
+    "body": {
+      "aps": {
+        "alert": {
+          "title": "JD",
+          "body": "Mia played. Your move at Couch Cats."
+        },
+        "sound": "default",
+        "thread-id": "GH2VD",
+        "mutable-content": 1,
+        "category": "YOUR_MOVE",
+        "interruption-level": "active",
+        "relevance-score": 1,
+        "badge": 2
+      },
+      "code": "GH2VD",
+      "kind": "your_move",
+      "from": {
+        "name": "Mia",
+        "cat": 2
+      },
+      "streak": {
+        "pair": "pr_3f9cAAAAAAAAAAAAAAAAAA",
+        "count": 12,
+        "me": false,
+        "them": true,
+        "naps": 1,
+        "myMove": [
+          "GH2VD"
+        ],
+        "theirMove": []
+      }
+    }
+  },
+  {
+    "name": "your_move-quiet",
+    "collapseId": "GH2VD",
+    "priority": 5,
+    "body": {
+      "aps": {
+        "alert": {
+          "title": "JD",
+          "body": "Mia played. Your turn makes today count."
+        },
+        "thread-id": "GH2VD",
+        "mutable-content": 1,
+        "category": "YOUR_MOVE",
+        "interruption-level": "passive",
+        "relevance-score": 1,
+        "badge": 2
+      },
+      "code": "GH2VD",
+      "kind": "your_move",
+      "from": {
+        "name": "Mia",
+        "cat": 2
+      },
+      "streak": {
+        "pair": "pr_3f9cAAAAAAAAAAAAAAAAAA",
+        "count": 12,
+        "me": false,
+        "them": true,
+        "naps": 1,
+        "myMove": [
+          "GH2VD"
+        ],
+        "theirMove": []
+      }
+    }
+  },
+  {
+    "name": "reminder",
+    "collapseId": "reminder:pr_3f9cAAAAAAAAAAAAAAAAAA",
+    "priority": 10,
+    "body": {
+      "aps": {
+        "alert": {
+          "title": "JD",
+          "body": "The cats are on the rug. Your move at Couch Cats."
+        },
+        "sound": "default",
+        "thread-id": "pair:pr_3f9cAAAAAAAAAAAAAAAAAA",
+        "mutable-content": 1,
+        "category": "REMINDER",
+        "interruption-level": "active",
+        "relevance-score": 0.6,
+        "badge": 2
+      },
+      "code": "GH2VD",
+      "kind": "reminder",
+      "streak": {
+        "pair": "pr_3f9cAAAAAAAAAAAAAAAAAA",
+        "count": 12,
+        "me": false,
+        "them": true,
+        "naps": 1,
+        "myMove": [
+          "GH2VD"
+        ],
+        "theirMove": []
+      }
+    }
+  },
+  {
+    "name": "last_chance",
+    "collapseId": "last_chance:pr_3f9cAAAAAAAAAAAAAAAAAA",
+    "priority": 10,
+    "body": {
+      "aps": {
+        "alert": {
+          "title": "JD",
+          "body": "One turn tonight keeps 12 days going."
+        },
+        "sound": "default",
+        "thread-id": "pair:pr_3f9cAAAAAAAAAAAAAAAAAA",
+        "mutable-content": 1,
+        "category": "REMINDER",
+        "interruption-level": "active",
+        "relevance-score": 0.6,
+        "badge": 2
+      },
+      "code": "GH2VD",
+      "kind": "last_chance",
+      "streak": {
+        "pair": "pr_3f9cAAAAAAAAAAAAAAAAAA",
+        "count": 12,
+        "me": false,
+        "them": true,
+        "naps": 1,
+        "myMove": [
+          "GH2VD"
+        ],
+        "theirMove": []
+      }
+    }
+  },
+  {
+    "name": "fresh_start",
+    "collapseId": "fresh_start:pr_3f9cAAAAAAAAAAAAAAAAAA",
+    "priority": 10,
+    "body": {
+      "aps": {
+        "alert": {
+          "title": "JD",
+          "body": "New week, new deal. One turn starts a streak with Mia."
+        },
+        "sound": "default",
+        "thread-id": "pair:pr_3f9cAAAAAAAAAAAAAAAAAA",
+        "mutable-content": 1,
+        "category": "REMINDER",
+        "interruption-level": "active",
+        "relevance-score": 0.6,
+        "badge": 2
+      },
+      "kind": "fresh_start",
+      "streak": {
+        "pair": "pr_3f9cAAAAAAAAAAAAAAAAAA",
+        "count": 0,
+        "me": false,
+        "them": true,
+        "naps": 1,
+        "myMove": [
+          "GH2VD"
+        ],
+        "theirMove": []
+      }
+    }
+  },
+  {
+    "name": "going_quiet",
+    "collapseId": "going_quiet:pr_3f9cAAAAAAAAAAAAAAAAAA",
+    "priority": 10,
+    "body": {
+      "aps": {
+        "alert": {
+          "title": "JD",
+          "body": "The cats will keep your seat warm."
+        },
+        "sound": "default",
+        "thread-id": "pair:pr_3f9cAAAAAAAAAAAAAAAAAA",
+        "mutable-content": 1,
+        "category": "STATUS",
+        "interruption-level": "active",
+        "relevance-score": 0.2,
+        "badge": 2
+      },
+      "kind": "going_quiet"
+    }
+  },
+  {
+    "name": "pounce-table",
+    "collapseId": "pounce:pc_7QkAAAAAAAAAAAAAAAAAAA",
+    "priority": 10,
+    "body": {
+      "aps": {
+        "alert": {
+          "title": "JD",
+          "body": "Mia wants to play. Couch Cats?"
+        },
+        "sound": "default",
+        "thread-id": "pounce:pr_3f9cAAAAAAAAAAAAAAAAAA",
+        "mutable-content": 1,
+        "category": "POUNCE",
+        "interruption-level": "active",
+        "relevance-score": 0.9,
+        "badge": 2
+      },
+      "code": "GH2VD",
+      "kind": "pounce",
+      "from": {
+        "name": "Mia",
+        "cat": 2
+      },
+      "streak": {
+        "pair": "pr_3f9cAAAAAAAAAAAAAAAAAA",
+        "count": 12,
+        "me": false,
+        "them": true,
+        "naps": 1,
+        "myMove": [
+          "GH2VD"
+        ],
+        "theirMove": []
+      },
+      "pounce": {
+        "id": "pc_7QkAAAAAAAAAAAAAAAAAAA",
+        "target": {
+          "table": "GH2VD"
+        }
+      }
+    }
+  },
+  {
+    "name": "pounce-new",
+    "collapseId": "pounce:pc_7QkAAAAAAAAAAAAAAAAAAA",
+    "priority": 10,
+    "body": {
+      "aps": {
+        "alert": {
+          "title": "JD",
+          "body": "Mia wants to play. New game?"
+        },
+        "sound": "default",
+        "thread-id": "pounce:pr_3f9cAAAAAAAAAAAAAAAAAA",
+        "mutable-content": 1,
+        "category": "POUNCE",
+        "interruption-level": "active",
+        "relevance-score": 0.9,
+        "badge": 2
+      },
+      "kind": "pounce",
+      "from": {
+        "name": "Mia",
+        "cat": 2
+      },
+      "streak": {
+        "pair": "pr_3f9cAAAAAAAAAAAAAAAAAA",
+        "count": 12,
+        "me": false,
+        "them": true,
+        "naps": 1,
+        "myMove": [
+          "GH2VD"
+        ],
+        "theirMove": []
+      },
+      "pounce": {
+        "id": "pc_7QkAAAAAAAAAAAAAAAAAAA",
+        "target": "new"
+      }
+    }
+  },
+  {
+    "name": "pounce-pick-quiet",
+    "collapseId": "pounce:pc_7QkAAAAAAAAAAAAAAAAAAA",
+    "priority": 5,
+    "body": {
+      "aps": {
+        "alert": {
+          "title": "JD",
+          "body": "Mia wants to play. You pick."
+        },
+        "thread-id": "pounce:pr_3f9cAAAAAAAAAAAAAAAAAA",
+        "mutable-content": 1,
+        "category": "POUNCE",
+        "interruption-level": "passive",
+        "relevance-score": 0.9,
+        "badge": 2
+      },
+      "kind": "pounce",
+      "from": {
+        "name": "Mia",
+        "cat": 2
+      },
+      "streak": {
+        "pair": "pr_3f9cAAAAAAAAAAAAAAAAAA",
+        "count": 12,
+        "me": false,
+        "them": true,
+        "naps": 1,
+        "myMove": [
+          "GH2VD"
+        ],
+        "theirMove": []
+      },
+      "pounce": {
+        "id": "pc_7QkAAAAAAAAAAAAAAAAAAA",
+        "target": "pick"
+      }
+    }
+  },
+  {
+    "name": "pounce_answered-play",
+    "collapseId": "answer:pc_7QkAAAAAAAAAAAAAAAAAAA",
+    "priority": 5,
+    "body": {
+      "aps": {
+        "alert": {
+          "title": "Mia",
+          "body": "JD is coming."
+        },
+        "thread-id": "pounce:pr_3f9cAAAAAAAAAAAAAAAAAA",
+        "mutable-content": 1,
+        "category": "STATUS",
+        "interruption-level": "passive",
+        "relevance-score": 0.2,
+        "badge": 2
+      },
+      "code": "NWCDF",
+      "kind": "pounce_answered",
+      "from": {
+        "name": "JD",
+        "cat": 1
+      },
+      "pounce": {
+        "id": "pc_7QkAAAAAAAAAAAAAAAAAAA",
+        "answer": "play"
+      }
+    }
+  },
+  {
+    "name": "pounce_answered-later",
+    "collapseId": "answer:pc_7QkAAAAAAAAAAAAAAAAAAA",
+    "priority": 5,
+    "body": {
+      "aps": {
+        "alert": {
+          "title": "Mia",
+          "body": "JD: in a bit."
+        },
+        "thread-id": "pounce:pr_3f9cAAAAAAAAAAAAAAAAAA",
+        "mutable-content": 1,
+        "category": "STATUS",
+        "interruption-level": "passive",
+        "relevance-score": 0.2,
+        "badge": 2
+      },
+      "kind": "pounce_answered",
+      "from": {
+        "name": "JD",
+        "cat": 1
+      },
+      "pounce": {
+        "id": "pc_7QkAAAAAAAAAAAAAAAAAAA",
+        "answer": "later"
+      }
+    }
+  },
+  {
+    "name": "pounce_answered-no",
+    "collapseId": "answer:pc_7QkAAAAAAAAAAAAAAAAAAA",
+    "priority": 5,
+    "body": {
+      "aps": {
+        "alert": {
+          "title": "Mia",
+          "body": "JD: not now."
+        },
+        "thread-id": "pounce:pr_3f9cAAAAAAAAAAAAAAAAAA",
+        "mutable-content": 1,
+        "category": "STATUS",
+        "interruption-level": "passive",
+        "relevance-score": 0.2,
+        "badge": 2
+      },
+      "kind": "pounce_answered",
+      "from": {
+        "name": "JD",
+        "cat": 1
+      },
+      "pounce": {
+        "id": "pc_7QkAAAAAAAAAAAAAAAAAAA",
+        "answer": "no"
+      }
+    }
+  },
+  {
+    "name": "nap",
+    "collapseId": "nap:pr_3f9cAAAAAAAAAAAAAAAAAA",
+    "priority": 5,
+    "body": {
+      "aps": {
+        "alert": {
+          "title": "Couch Cats",
+          "body": "A cat nap covered yesterday. 12 days and counting."
+        },
+        "thread-id": "pair:pr_3f9cAAAAAAAAAAAAAAAAAA",
+        "mutable-content": 1,
+        "category": "STATUS",
+        "interruption-level": "passive",
+        "relevance-score": 0.2,
+        "badge": 2
+      },
+      "kind": "nap",
+      "streak": {
+        "pair": "pr_3f9cAAAAAAAAAAAAAAAAAA",
+        "count": 12,
+        "me": false,
+        "them": true,
+        "naps": 1,
+        "myMove": [
+          "GH2VD"
+        ],
+        "theirMove": []
+      },
+      "pair": "pr_3f9cAAAAAAAAAAAAAAAAAA"
+    }
+  },
+  {
+    "name": "winback",
+    "collapseId": "winback:pr_3f9cAAAAAAAAAAAAAAAAAA",
+    "priority": 5,
+    "body": {
+      "aps": {
+        "alert": {
+          "title": "Couch Cats",
+          "body": "Two days in a row brings 12 back."
+        },
+        "thread-id": "pair:pr_3f9cAAAAAAAAAAAAAAAAAA",
+        "mutable-content": 1,
+        "category": "STATUS",
+        "interruption-level": "passive",
+        "relevance-score": 0.2,
+        "badge": 2
+      },
+      "kind": "winback",
+      "streak": {
+        "pair": "pr_3f9cAAAAAAAAAAAAAAAAAA",
+        "count": 12,
+        "me": false,
+        "them": true,
+        "naps": 1,
+        "myMove": [
+          "GH2VD"
+        ],
+        "theirMove": []
+      },
+      "pair": "pr_3f9cAAAAAAAAAAAAAAAAAA"
+    }
+  },
+  {
+    "name": "paused",
+    "collapseId": "paused:pr_3f9cAAAAAAAAAAAAAAAAAA",
+    "priority": 5,
+    "body": {
+      "aps": {
+        "alert": {
+          "title": "Couch Cats",
+          "body": "Mia put the cats to bed for 3 days."
+        },
+        "thread-id": "pair:pr_3f9cAAAAAAAAAAAAAAAAAA",
+        "mutable-content": 1,
+        "category": "STATUS",
+        "interruption-level": "passive",
+        "relevance-score": 0.2,
+        "badge": 2
+      },
+      "kind": "paused",
+      "from": {
+        "name": "Mia",
+        "cat": 2
+      },
+      "streak": {
+        "pair": "pr_3f9cAAAAAAAAAAAAAAAAAA",
+        "count": 12,
+        "me": false,
+        "them": true,
+        "naps": 1,
+        "myMove": [
+          "GH2VD"
+        ],
+        "theirMove": []
+      },
+      "pair": "pr_3f9cAAAAAAAAAAAAAAAAAA"
+    }
+  },
+  {
+    "name": "milestone",
+    "collapseId": "milestone:pr_3f9cAAAAAAAAAAAAAAAAAA:30",
+    "priority": 10,
+    "body": {
+      "aps": {
+        "alert": {
+          "title": "Couch Cats",
+          "body": "30 days together. There's a gift on the rug."
+        },
+        "sound": "default",
+        "thread-id": "pair:pr_3f9cAAAAAAAAAAAAAAAAAA",
+        "mutable-content": 1,
+        "category": "STATUS",
+        "interruption-level": "active",
+        "relevance-score": 0.2,
+        "badge": 2
+      },
+      "kind": "milestone",
+      "streak": {
+        "pair": "pr_3f9cAAAAAAAAAAAAAAAAAA",
+        "count": 30,
+        "me": false,
+        "them": true,
+        "naps": 1,
+        "myMove": [
+          "GH2VD"
+        ],
+        "theirMove": []
+      },
+      "pair": "pr_3f9cAAAAAAAAAAAAAAAAAA"
+    }
+  },
+  {
+    "name": "play_again",
+    "collapseId": "play_again:NWCDF",
+    "priority": 10,
+    "body": {
+      "aps": {
+        "alert": {
+          "title": "Couch Cats",
+          "body": "Mia dealt a new game."
+        },
+        "sound": "default",
+        "thread-id": "NWCDF",
+        "mutable-content": 1,
+        "category": "STATUS",
+        "interruption-level": "active",
+        "relevance-score": 0.2,
+        "badge": 2
+      },
+      "code": "NWCDF",
+      "kind": "play_again",
+      "from": {
+        "name": "Mia",
+        "cat": 2
+      }
+    }
+  }
+]
