@@ -43,8 +43,21 @@ final class AppModel {
     /// Push and local notifications; attached by the app delegate once SwiftUI built this model.
     @ObservationIgnored weak var push: PushCoordinator?
 
+    // MARK: age (spec §14.1)
+
+    @ObservationIgnored let ageStore: AgeRecordStore
+    @ObservationIgnored let ageAsker: AgeRangeAsking
+    /// The phone owner's age band and where it came from; nil until the age check ran.
+    private(set) var ageRecord: AgeRecord?
+    var ageBand: AgeBand? { ageRecord?.band }
+    /// What the owner's band allows on this device. Unknown counts as the most limited.
+    var limits: AgeLimits { AgeLimits(band: ageBand) }
+    /// The local "your turn" reminder: the person's choice, else the band's default.
+    var turnReminderOn: Bool { settings.turnReminderChoice ?? limits.turnReminderDefault }
+
     init(
-        config: APIConfig, credentials: CredentialStore, dataDirectory: URL, settings: Settings = .shared
+        config: APIConfig, credentials: CredentialStore, dataDirectory: URL, settings: Settings = .shared,
+        ageStore: AgeRecordStore = KeychainAgeRecordStore(), ageAsker: AgeRangeAsking = LiveAgeRange()
     ) {
         api = APIClient(config: config, credentials: credentials)
         self.config = config
@@ -58,7 +71,11 @@ final class AppModel {
         archived = tableArchive.all()
         tutorialStore = TutorialStore(directory: dataDirectory)
         tipsSeen = tutorialStore.load()
-        route = loaded.owner == nil ? .pickCat(then: nil) : .home
+        self.ageStore = ageStore
+        self.ageAsker = ageAsker
+        let age = ageStore.load()
+        ageRecord = age
+        route = age == nil ? .age(then: nil) : loaded.owner == nil ? .pickCat(then: nil) : .home
     }
 
     /// The real app model, or (DEBUG only) the throwaway one for `-uitest-reset` (fresh temp data
@@ -72,12 +89,15 @@ final class AppModel {
         let config = AppConfig.load(env: env)
         #if DEBUG
         let model: AppModel
+        let asker = debugAgeAsker(arguments: arguments, env: env)
         if arguments.contains("-uitest-reset") {
             let dir = FileManager.default.temporaryDirectory
                 .appendingPathComponent("pounce-uitest-\(UUID().uuidString)", isDirectory: true)
-            model = AppModel(config: config, credentials: MemoryCredentialStore(), dataDirectory: dir)
+            model = AppModel(
+                config: config, credentials: MemoryCredentialStore(), dataDirectory: dir,
+                ageStore: debugAgeStore(arguments: arguments), ageAsker: asker)
         } else {
-            model = real(config: config)
+            model = real(config: config, ageAsker: asker)
         }
         if let demo = DemoMode.from(arguments: arguments) { model.openDemo(demo) }
         if arguments.contains("-uitest-reset") || DemoMode.from(arguments: arguments) != nil {
@@ -98,13 +118,38 @@ final class AppModel {
         #endif
     }
 
-    private static func real(config: APIConfig) -> AppModel {
+    private static func real(config: APIConfig, ageAsker: AgeRangeAsking = LiveAgeRange()) -> AppModel {
         let support = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
         return AppModel(
             config: config,
             credentials: KeychainCredentialStore(service: KeychainCredentialStore.serviceName(for: config)),
-            dataDirectory: support.appendingPathComponent("Pounce", isDirectory: true))
+            dataDirectory: support.appendingPathComponent("Pounce", isDirectory: true),
+            ageAsker: ageAsker)
     }
+
+    #if DEBUG
+    /// `-age-range <answer>` stubs Declared Age Range; any test run (`-anim-speed`) without it
+    /// answers "adult", so the existing tests never meet the system sheet.
+    private static func debugAgeAsker(arguments: [String], env: [String: String]) -> AgeRangeAsking {
+        if let stub = StubAgeRange(arguments: arguments) { return stub }
+        if PaceSetting.resolve(arguments: arguments, env: env).underTest { return StubAgeRange(answer: .band(.adult)) }
+        return LiveAgeRange()
+    }
+
+    /// Under `-uitest-reset`: `-uitest-age-service <name>` keeps the record in a Keychain item of
+    /// its own (the can't-retry test); `-age-band <band>` starts with that band; `-age-range`
+    /// starts with none (the age screen); otherwise an adult, as before the age screen existed.
+    private static func debugAgeStore(arguments: [String]) -> AgeRecordStore {
+        if let i = arguments.firstIndex(of: "-uitest-age-service"), let service = arguments[safe: i + 1] {
+            return KeychainAgeRecordStore(service: service)
+        }
+        if let i = arguments.firstIndex(of: "-age-band"), let band = arguments[safe: i + 1].flatMap(AgeBand.init) {
+            return MemoryAgeRecordStore(AgeRecord(band: band, source: .keypad, checkedAt: .now))
+        }
+        if arguments.contains("-age-range") { return MemoryAgeRecordStore() }
+        return MemoryAgeRecordStore(AgeRecord(band: .adult, source: .declared, checkedAt: .now))
+    }
+    #endif
 
     #if DEBUG
     /// `-demo <screen>`: the room screen fed by one fixture snapshot, no server, nothing cached.
@@ -137,6 +182,55 @@ final class AppModel {
         reloadLocal()
         _ = try? await api.credential()
         if people.owner != nil { await refreshTables() }
+        await recheckAge()
+    }
+
+    // MARK: Age check (spec §14.1)
+
+    /// The age screen's first step: Declared Age Range. True when it gave a band (and the
+    /// screen moved on); false sends the person to the birth-year keypad.
+    func askDeclaredAge() async -> Bool {
+        guard ageRecord == nil else { return true }
+        guard case .band(let band) = await ageAsker.ask() else { return false }
+        finishAge(band, source: .declared)
+        return true
+    }
+
+    /// Keeps the band (only the band) and goes on to pick-a-cat, the link that was waiting, or Home.
+    func finishAge(_ band: AgeBand, source: AgeRecord.Source) {
+        let record = AgeRecord(band: band, source: source, checkedAt: .now)
+        ageStore.save(record)
+        ageRecord = record
+        applyAgeLimits()
+        guard case .age(let then) = route else { return }
+        if people.owner == nil {
+            route = .pickCat(then: then)
+        } else if let then {
+            route = .home
+            handle(then)
+        } else {
+            route = .home
+        }
+    }
+
+    /// At most once a week, Declared Age Range again: a kitten who turned 13 gets the limits lifted.
+    func recheckAge() async {
+        guard var record = ageRecord, record.needsRecheck(now: .now) else { return }
+        if case .band(let band) = await ageAsker.ask() {
+            record.band = band
+            record.source = .declared
+        }
+        record.checkedAt = .now
+        ageStore.save(record)
+        ageRecord = record
+        applyAgeLimits()
+    }
+
+    /// A kitten keeps no typed name (a name plus an identifier is personal information): an owner
+    /// from before the age check gets a generated one.
+    private func applyAgeLimits() {
+        guard !limits.typedNames, let owner = people.owner, AgeLimits.needsGeneratedName(owner.name) else { return }
+        updateOwner(name: CatEditorView.randomName(), cat: owner.cat)
     }
 
     func reloadLocal() {
@@ -305,6 +399,7 @@ final class AppModel {
             return
         }
         #endif
+        guard turnReminderOn else { return }
         guard let room, let table = room.model, let delay = PushPolicy.reminderDelay(model: table),
               let turn = table.currentSeat, let person = table.room.seats[safe: turn]?.person else { return }
         push?.scheduleTurnReminder(code: room.code, name: person.name, table: table.room.title, after: delay)
@@ -372,6 +467,10 @@ final class AppModel {
     /// A share or move link arrived. Without a local owner, onboarding comes first and the link
     /// is remembered. A join link for a table already on this device rejoins it.
     func handle(_ link: DeepLink) {
+        guard ageRecord != nil else {
+            route = .age(then: link)
+            return
+        }
         guard people.owner != nil else {
             route = .pickCat(then: link)
             return

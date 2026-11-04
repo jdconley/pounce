@@ -19,6 +19,7 @@ final class Settings {
         static let pushPrimed = "settings.pushPrimed"
         static let pushDeclinedOnce = "settings.pushDeclinedOnce"
         static let pushReoffered = "settings.pushReoffered"
+        static let turnReminder = "settings.turnReminder"
     }
 
     @ObservationIgnored private let defaults: UserDefaults
@@ -32,6 +33,15 @@ final class Settings {
     /// Home's bell offered push again after a "not now" (it only does that once).
     var pushReoffered: Bool { didSet { defaults.set(pushReoffered, forKey: Key.pushReoffered) } }
 
+    /// The local "your turn" reminder, as the person set it; nil until they touch it, when the age
+    /// band's default applies (off for a kitten, spec §14.1).
+    var turnReminderChoice: Bool? {
+        didSet {
+            if let turnReminderChoice { defaults.set(turnReminderChoice, forKey: Key.turnReminder) }
+            else { defaults.removeObject(forKey: Key.turnReminder) }
+        }
+    }
+
     init(defaults: UserDefaults = .standard) {
         self.defaults = defaults
         soundOn = defaults.object(forKey: Key.soundOn) as? Bool ?? true
@@ -39,6 +49,7 @@ final class Settings {
         pushPrimed = defaults.bool(forKey: Key.pushPrimed)
         pushDeclinedOnce = defaults.bool(forKey: Key.pushDeclinedOnce)
         pushReoffered = defaults.bool(forKey: Key.pushReoffered)
+        turnReminderChoice = defaults.object(forKey: Key.turnReminder) as? Bool
     }
 
     #if DEBUG

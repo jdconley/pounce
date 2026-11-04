@@ -81,7 +81,8 @@ final class PushCoordinator: NSObject, UNUserNotificationCenterDelegate {
     }
 
     private func uploadPendingToken() {
-        guard let model, let token = tokens.pending, !uploading else { return }
+        // A kitten's push token never goes up: it is online contact information (spec §14.1).
+        guard let model, model.limits.uploadsPushToken, let token = tokens.pending, !uploading else { return }
         uploading = true
         Task {
             do {

@@ -77,7 +77,8 @@ struct PeopleSheet: View {
         case .owner:
             if let owner = model.people.owner {
                 CatEditorView(
-                    initialName: owner.name, initialCat: owner.cat, onCancel: { self.editing = nil }
+                    initialName: owner.name, initialCat: owner.cat, typedNames: model.limits.typedNames,
+                    onCancel: { self.editing = nil }
                 ) { name, cat in
                     model.updateOwner(name: name, cat: cat)
                     self.editing = nil
