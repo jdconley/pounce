@@ -178,6 +178,20 @@ enum ArtName {
         static let iconDays = "icon-days"
         static let iconWeeks = "icon-weeks"
         static let iconReplay = "icon-replay"
+        /// Pounce (PR 5): the resting bell, the New game and You pick tiles.
+        static let pounceBellAsleep = "pounce-bell-asleep"
+        static let pounceNewGame = "pounce-new-game"
+        static let pouncePick = "pounce-pick"
+        /// "In a bit"; the reminder dials.
+        static let iconClock = "icon-clock"
+        /// Quiet hours start and end.
+        static let iconMoon = "icon-moon"
+        static let iconSun = "icon-sun"
+        /// Learned reminder time, the weekday and weekend dials, last chance.
+        static let iconAuto = "icon-auto"
+        static let iconWeekday = "icon-weekday"
+        static let iconWeekend = "icon-weekend"
+        static let iconLastChance = "icon-last-chance"
     }
 
     // MARK: Sounds (Resources/Sounds/<name>.caf, 44.1 kHz mono)

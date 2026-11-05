@@ -1712,6 +1712,96 @@
   "batch": "habit"
  },
  {
+  "name": "pounce-bell-asleep",
+  "dest": "imageset",
+  "points": [
+   240,
+   240
+  ],
+  "batch": "habit"
+ },
+ {
+  "name": "pounce-new-game",
+  "dest": "imageset",
+  "points": [
+   160,
+   160
+  ],
+  "batch": "habit"
+ },
+ {
+  "name": "pounce-pick",
+  "dest": "imageset",
+  "points": [
+   160,
+   160
+  ],
+  "batch": "habit"
+ },
+ {
+  "name": "icon-clock",
+  "dest": "imageset",
+  "points": [
+   28,
+   28
+  ],
+  "batch": "habit"
+ },
+ {
+  "name": "icon-moon",
+  "dest": "imageset",
+  "points": [
+   28,
+   28
+  ],
+  "batch": "habit"
+ },
+ {
+  "name": "icon-sun",
+  "dest": "imageset",
+  "points": [
+   28,
+   28
+  ],
+  "batch": "habit"
+ },
+ {
+  "name": "icon-auto",
+  "dest": "imageset",
+  "points": [
+   28,
+   28
+  ],
+  "batch": "habit"
+ },
+ {
+  "name": "icon-weekday",
+  "dest": "imageset",
+  "points": [
+   28,
+   28
+  ],
+  "batch": "habit"
+ },
+ {
+  "name": "icon-weekend",
+  "dest": "imageset",
+  "points": [
+   28,
+   28
+  ],
+  "batch": "habit"
+ },
+ {
+  "name": "icon-last-chance",
+  "dest": "imageset",
+  "points": [
+   28,
+   28
+  ],
+  "batch": "habit"
+ },
+ {
   "name": "AppIcon",
   "dest": "appicon",
   "points": [
