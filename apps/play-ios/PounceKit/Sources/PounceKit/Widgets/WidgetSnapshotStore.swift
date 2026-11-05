@@ -26,11 +26,14 @@ public final class WidgetSnapshotStore: Sendable {
 
     public func save(_ snapshot: WidgetSnapshot) { Self.write(snapshot, to: snapshotURL) }
 
-    /// Read, change, write. Without a snapshot there is nothing to change.
-    public func update(_ change: (WidgetSnapshot) -> WidgetSnapshot) {
-        guard let current = load() else { return }
+    /// Read, change, write. Without a snapshot there is nothing to change. True when it changed.
+    @discardableResult
+    public func update(_ change: (WidgetSnapshot) -> WidgetSnapshot) -> Bool {
+        guard let current = load() else { return false }
         let next = change(current)
-        if next != current { save(next) }
+        guard next != current else { return false }
+        save(next)
+        return true
     }
 
     /// The last widget push token the server took, and for which device.
