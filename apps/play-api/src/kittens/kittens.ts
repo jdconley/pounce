@@ -1,6 +1,6 @@
 import { readNotification } from "../consent/appstore";
 import { outcomePage, tokenPage } from "../consent/pages";
-import { approvedSet, isStop, KID, LINK_CODE, normalizePhone, parentState, type ConsentRecord, type ParentState } from "../consent/rules";
+import { approvedSet, isStop, KID, LINK_CODE, normalizePhone, parentState, textable, type ConsentRecord, type ParentState } from "../consent/rules";
 import { twilioConfig, verifyTwilio } from "../consent/twilio";
 import { player, type Result } from "../players/accounts";
 import { PAIR_ID } from "../players/ids";
@@ -183,12 +183,12 @@ export async function startConsent(
 ): Promise<Result<{ state: "texted" }>> {
   if (!isObj(body) || !onlyKeys(body, ["phone"])) return fail(400, "bad_request");
   const phone = normalizePhone(body.phone);
-  if (!phone) return fail(400, "bad_request");
+  if (!phone || !textable(phone)) return fail(400, "bad_request");
   const r = await mine(env, deviceId, parent, kid);
   if (!r) return fail(404, "not_found");
   const out = await consents(env, r.kitten).startText(parent, phone, origin, now);
   if ("ok" in out) return { ok: { state: "texted" } };
-  const status = { not_parent: 404, consented: 409, not_configured: 503, send_failed: 502 }[out.error];
+  const status = { not_parent: 404, consented: 409, not_configured: 503, send_failed: 502, rate_limited: 429 }[out.error];
   return fail(status, out.error);
 }
 
@@ -241,7 +241,7 @@ export async function twilioInbound(env: Env, request: Request): Promise<Respons
   const form = new URLSearchParams(text);
   const from = normalizePhone(form.get("From"));
   if (from && isStop(form.get("Body"), form.get("OptOutType"))) {
-    const kittens = await index(env).kittensByPhone(await phoneHash(from));
+    const kittens = await index(env).kittensByPhone(await phoneHash(env, from));
     await Promise.all(kittens.map((k) => consents(env, k).revoke("stop")));
   }
   return new Response(TWIML, { headers: { "content-type": "text/xml" } });
@@ -260,36 +260,31 @@ export async function appStoreNotification(env: Env, body: unknown, roots: reado
 
 // ---- Elsewhere ----
 
-/** A kitten's player is deleted, expired or turned 13 (decisions 10, 12): its record goes. Never fatal. */
+// These throw on failure (review I6): the caller's own retry (an account deletion asked again, a
+// player's alarm, a sign-in retried) runs them again, so no consent or number is left behind.
+
+/** A kitten's player is deleted, expired or turned 13 (decisions 10, 12): its record goes. */
 export async function endKitten(env: Env, kitten: string): Promise<void> {
   if (!kittensBound(env)) return;
-  try {
-    await consents(env, kitten).end();
-  } catch {
-    console.error("consent_end_failed");
-  }
+  await consents(env, kitten).end();
 }
 
-/** A parent's account is deleted (decision 11): unlinked from each kitten. Never fatal. */
+/** A parent's account is deleted (decision 11): unlinked from each kitten. */
 export async function parentGone(env: Env, parent: string): Promise<void> {
   if (!kittensBound(env)) return;
-  try {
-    const kittens = await index(env).kittensOf(parent);
-    await Promise.all(kittens.map((k) => consents(env, k).unlinkParent(parent)));
-  } catch {
-    console.error("consent_parent_gone_failed");
-  }
+  const kittens = await index(env).kittensOf(parent);
+  await Promise.all(kittens.map((k) => consents(env, k).unlinkParent(parent)));
 }
 
-/** A merge: parent `from` is now `to`. Never fatal. */
-export async function parentMerged(env: Env, from: string, to: string): Promise<void> {
+/**
+ * A merge: parent `from` is now `to`, and a kitten that approved `from`
+ * (one of `from`'s pair partners) now approves `to` (review M9).
+ */
+export async function parentMerged(env: Env, from: string, to: string, partners: string[]): Promise<void> {
   if (!kittensBound(env)) return;
-  try {
-    const kittens = await index(env).repointParent(from, to);
-    await Promise.all(kittens.map((k) => consents(env, k).repointParent(from, to)));
-  } catch {
-    console.error("consent_merge_failed");
-  }
+  const kittens = await index(env).repointParent(from, to);
+  await Promise.all(kittens.map((k) => consents(env, k).repointParent(from, to)));
+  await Promise.all(partners.map((k) => consents(env, k).repointPartner(from, to)));
 }
 
 /** Any of these players has consent (decision 19). */

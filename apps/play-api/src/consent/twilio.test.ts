@@ -1,6 +1,6 @@
 import { describe, expect, test } from "vitest";
 
-import { OPTED_OUT, sendText, twilioConfig, twilioSignature, verifyTwilio } from "./twilio";
+import { deleteText, OPTED_OUT, sendText, twilioConfig, twilioSignature, verifyTwilio } from "./twilio";
 
 // Twilio's documented example (its helper libraries' webhook tests). Fixture values, not real ones.
 const TOKEN = "12345";
@@ -62,7 +62,7 @@ describe("sendText", () => {
       seen = new Request(input, init);
       return new Response(JSON.stringify({ sid: "SMx" }), { status: 201 });
     }) as typeof fetch;
-    expect(await sendText(CFG, "+15551234567", "Hello & bye", fetcher)).toEqual({ ok: true });
+    expect(await sendText(CFG, "+15551234567", "Hello & bye", fetcher)).toEqual({ ok: true, sid: "SMx" });
     const req = seen as unknown as Request;
     expect(req.url).toBe("https://api.twilio.com/2010-04-01/Accounts/ACtest/Messages.json");
     expect(req.method).toBe("POST");
@@ -81,5 +81,36 @@ describe("sendText", () => {
       throw new Error("offline");
     }) as unknown as typeof fetch;
     expect(await sendText(CFG, "+1", "x", down)).toEqual({ ok: false, status: 0, code: null });
+  });
+});
+
+describe("sendText's SID and deleteText (review I5)", () => {
+  const SM = `SM${"a".repeat(32)}`;
+
+  test("a reply without a SID still counts as sent", async () => {
+    const reply = (body: string) => (async () => new Response(body, { status: 201 })) as unknown as typeof fetch;
+    expect(await sendText(CFG, "+1", "x", reply(JSON.stringify({ sid: 7 })))).toEqual({ ok: true, sid: null });
+    expect(await sendText(CFG, "+1", "x", reply("not json"))).toEqual({ ok: true, sid: null });
+  });
+
+  test("deletes the message by SID with basic auth; gone counts as deleted", async () => {
+    let seen: Request | null = null;
+    const ok = (async (input: RequestInfo | URL, init?: RequestInit) => {
+      seen = new Request(input, init);
+      return new Response(null, { status: 204 });
+    }) as typeof fetch;
+    expect(await deleteText(CFG, SM, ok)).toBe(true);
+    const req = seen as unknown as Request;
+    expect(req.method).toBe("DELETE");
+    expect(req.url).toBe(`https://api.twilio.com/2010-04-01/Accounts/ACtest/Messages/${SM}.json`);
+    expect(req.headers.get("authorization")).toBe(`Basic ${btoa("SKtest:secret-test")}`);
+    const status = (n: number) => (async () => new Response(null, { status: n })) as unknown as typeof fetch;
+    expect(await deleteText(CFG, SM, status(404))).toBe(true);
+    expect(await deleteText(CFG, SM, status(409))).toBe(false);
+    const down = (async () => {
+      throw new Error("offline");
+    }) as unknown as typeof fetch;
+    expect(await deleteText(CFG, SM, down)).toBe(false);
+    expect(await deleteText(CFG, "../evil", ok)).toBe(false);
   });
 });

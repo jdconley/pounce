@@ -463,7 +463,7 @@ export default {
       return appSiteAssociation(notify);
     }
     if (method === "GET" && pathname === "/og/room.jpg") return ogImage();
-    if (method === "GET" && pathname === "/privacy") return privacyPage();
+    if (method === "GET" && pathname === "/privacy") return privacyPage(consentOn(env));
     const share = method === "GET" ? SHARE_PATH.exec(pathname) : null;
     if (share) return sharePage(share[1] as string, env.TESTFLIGHT_URL, new URL(request.url).origin);
     if (notify && method === "GET") {

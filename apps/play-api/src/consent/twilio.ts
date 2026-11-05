@@ -57,7 +57,8 @@ export async function verifyTwilio(authToken: string, url: string, params: [stri
   return sameText(await twilioSignature(authToken, url, params), signature);
 }
 
-export type SendResult = { ok: true } | { ok: false; status: number; code: number | null };
+/** A sent text's message SID (`SM…`, or null if Twilio's reply had none), or why it failed. */
+export type SendResult = { ok: true; sid: string | null } | { ok: false; status: number; code: number | null };
 
 /** Sends one text through the Messaging Service. Never throws. */
 export async function sendText(cfg: TwilioConfig, to: string, body: string, fetcher: typeof fetch): Promise<SendResult> {
@@ -70,7 +71,16 @@ export async function sendText(cfg: TwilioConfig, to: string, body: string, fetc
       },
       body: new URLSearchParams({ To: to, MessagingServiceSid: cfg.messagingServiceSid, Body: body }).toString(),
     });
-    if (res.ok) return { ok: true };
+    if (res.ok) {
+      let sid: string | null = null;
+      try {
+        const parsed = (await res.json()) as { sid?: unknown };
+        sid = typeof parsed.sid === "string" ? parsed.sid : null;
+      } catch {
+        sid = null;
+      }
+      return { ok: true, sid };
+    }
     let code: number | null = null;
     try {
       const parsed = (await res.json()) as { code?: unknown };
@@ -81,5 +91,25 @@ export async function sendText(cfg: TwilioConfig, to: string, body: string, fetc
     return { ok: false, status: res.status, code };
   } catch {
     return { ok: false, status: 0, code: null };
+  }
+}
+
+const SID = /^SM[0-9a-f]{32}$/i;
+
+/**
+ * Deletes a sent text from Twilio's logs, so the parent's number doesn't
+ * outlive consent there (review I5). Best effort: true when Twilio deleted it
+ * or never had it.
+ */
+export async function deleteText(cfg: TwilioConfig, sid: string, fetcher: typeof fetch): Promise<boolean> {
+  if (!SID.test(sid)) return false;
+  try {
+    const res = await fetcher(`${API}/Accounts/${encodeURIComponent(cfg.accountSid)}/Messages/${sid}.json`, {
+      method: "DELETE",
+      headers: { authorization: `Basic ${btoa(`${cfg.apiKeySid}:${cfg.apiKeySecret}`)}` },
+    });
+    return res.ok || res.status === 404;
+  } catch {
+    return false;
   }
 }

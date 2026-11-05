@@ -34,7 +34,7 @@ const HTML = `<!doctype html>
 <li><strong>Sign in with Apple</strong>, if you use it: a one-way hash of the id Apple gives us, and, when our revocation key is set up, Apple's refresh token, kept only so we can revoke it when you delete your account. We ask Apple for no email and no name.</li>
 <li><strong>Streaks</strong> (coming soon): the days you and another player both played, kept for 120 days, plus lifetime counts and rewards, and a count of the times of day you usually start playing.</li>
 </ul>
-<p>We never collect contacts, location, ad identifiers or messages, and no phone numbers except a parent's, given to us to consent for a child (below). Invites go through the share sheet; Pounce never reads your contacts.</p>
+<!--consent--><p>We never collect contacts, location, ad identifiers or messages, and no phone numbers except a parent's, given to us to consent for a child (below). Invites go through the share sheet; Pounce never reads your contacts.</p><!--/consent--><!--plain--><p>We never collect contacts, location, ad identifiers, phone numbers or messages. Invites go through the share sheet; Pounce never reads your contacts.</p><!--/plain-->
 
 <h2>Who sees what</h2>
 <ul>
@@ -70,7 +70,7 @@ const HTML = `<!doctype html>
 <li>game progress such as streaks and rewards.</li>
 </ul>
 <p>For a player under 13 there are no push notifications from our server, no sign-in, no invite links sent out, and no record of play times. The only reminders are ones the phone schedules for itself, and they start off.</p>
-<h2>With a parent's consent</h2>
+<!--consent--><h2>With a parent's consent</h2>
 <p>A parent or guardian who is signed in to Pounce can allow notifications on a child's own device. The child's device shows a six-digit code; the parent enters it on their own device, reads our <a href="/privacy/kitten-notice">notice to parents</a>, and confirms by text message ("text plus": a text with a link to confirm, and a second text a day or so later saying how to take it back). With that consent we also keep:</p>
 <ul>
 <li>the child's device's push token, used only to tell it when it's the child's move at a table where everyone else is approved, and when an approved person asks the child to play;</li>
@@ -79,7 +79,7 @@ const HTML = `<!doctype html>
 <li>Apple's app transaction id for the child's copy of Pounce, so that a parent withdrawing approval through Apple ends this consent too.</li>
 </ul>
 <p>The parent can take it back at any time: in the app, through the link in the second text, by replying STOP, or through Apple. That stops every notification at once and deletes the push token and the number. It also ends when the child turns 13 or the child's player is deleted.</p>
-<p>A parent may ask to review or delete a child's information, or to stop any further collection, by writing to <a href="mailto:privacy@conleychaos.com">privacy@conleychaos.com</a>. A child's player that no device has opened for 90 days is deleted from our server automatically, for example after the app is removed from the child's device.</p>
+<!--/consent--><p>A parent may ask to review or delete a child's information, or to stop any further collection, by writing to <a href="mailto:privacy@conleychaos.com">privacy@conleychaos.com</a>. A child's player that no device has opened for 90 days is deleted from our server automatically, for example after the app is removed from the child's device.</p>
 <p>Operator: Conley Chaos LLC, <a href="mailto:privacy@conleychaos.com">privacy@conleychaos.com</a>.</p>
 </section>
 
@@ -90,9 +90,13 @@ const HTML = `<!doctype html>
 </html>
 `;
 
+/** With parent consent (`CONSENT` on) the policy says what it adds; off, the page is as before. */
+const WITH_CONSENT = HTML.replace(/<!--plain-->[\s\S]*?<!--\/plain-->/g, "").replace(/<!--\/?consent-->/g, "");
+const WITHOUT_CONSENT = HTML.replace(/<!--consent-->[\s\S]*?<!--\/consent-->/g, "").replace(/<!--\/?plain-->/g, "");
+
 /** The privacy policy page; public, static, no scripts. */
-export function privacyPage(): Response {
-  return new Response(HTML, {
+export function privacyPage(consent = true): Response {
+  return new Response(consent ? WITH_CONSENT : WITHOUT_CONSENT, {
     headers: { "content-type": "text/html; charset=utf-8", "cache-control": CACHE, "content-security-policy": CSP },
   });
 }

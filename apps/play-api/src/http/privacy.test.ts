@@ -38,6 +38,15 @@ describe("privacyPage", () => {
     expect(html.replace("/privacy/kitten-notice", "")).not.toMatch(/kitten/i);
   });
 
+  test("without CONSENT the policy is as before: no consent section, no phone numbers at all", async () => {
+    const html = await privacyPage(false).text();
+    expect(html).not.toContain("kitten-notice");
+    expect(html).not.toContain("text plus");
+    expect(html).toContain("ad identifiers, phone numbers or messages");
+    expect(html).not.toContain("<!--");
+    expect(await privacyPage(true).text()).not.toContain("<!--");
+  });
+
   test("says what parental consent adds, and how it ends", async () => {
     const html = await privacyPage().text();
     for (const s of ["text plus", "push token", "mobile number", "Twilio", "STOP", "turns 13", 'href="/privacy/kitten-notice"']) {

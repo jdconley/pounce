@@ -557,7 +557,9 @@ export class GameRoom extends DurableObject<Env> {
    * takes it only when they're all approved (parent consent, plan decision 16).
    */
   private otherHumans(playerId: string): (string | null)[] {
-    const seats = this.core?.state.seats ?? [];
+    // No room state: nobody can be checked, so nobody counts as approved (review M7).
+    if (!this.core) return [null];
+    const seats = this.core.state.seats;
     return seats.flatMap((s) => (s.kind !== "human" || s.playerId === playerId ? [] : [s.playerId ?? null]));
   }
 

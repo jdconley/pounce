@@ -152,7 +152,9 @@ send leaves the kitten on the hourglass.
 - [ ] Toggle a person on, have them move at a shared table while the kitten's phone is locked: "your
       move" arrives. Toggle them off: nothing arrives. Their pounce: the same.
 - [ ] A day or so later the second text arrives; reply STOP: the kitten's bell sleeps again and no
-      push arrives.
+      push arrives. (This needs the Messaging Service's incoming webhook, root README step 3. If the
+      bell keeps ringing, check that webhook first.)
+- [ ] In the Twilio console's message logs, both texts are gone after the revoke.
 - [ ] Give consent again, then revoke from the panel (the bell with a slash): pushes stop at once.
 - [ ] With Screen Time Communication Limits on the kitten (Family Sharing): a padlocked person in the
       Pounce sheet, tapped, shows Apple's ask; approve in Messages: the padlock goes and the parent's

@@ -61,6 +61,14 @@ secrets exist:
 | `PLAY_API_TWILIO_MESSAGING_SERVICE_SID` | no | The Messaging Service (`MG…`) that sends from the verified toll-free or A2P 10DLC number. |
 | `PLAY_API_TWILIO_AUTH_TOKEN` | no | The account's Auth Token. Only checks `X-Twilio-Signature` on the STOP webhook (`/v1/twilio/inbound`): Twilio signs webhooks with it, which an API key can't. |
 
+Parent consent's Twilio setup, beyond the secrets (all in the Twilio console):
+
+1. Buy a toll-free number (or register A2P 10DLC for a local one) and complete **toll-free verification** (or the 10DLC brand and campaign). US carriers block unverified traffic; approval can take days. Use case: account notifications / parental consent, with the two message samples from `apps/play-api/src/consent/pages.ts`.
+2. Create a **Messaging Service** with that number as its sender, and keep **Advanced Opt-Out** on (STOP, START, HELP).
+3. In the Messaging Service's Integration settings, set **Incoming Messages** to "Send a webhook", **Request URL** `https://play.conleychaos.com/v1/twilio/inbound`, method `POST`, exactly as written: the signature is checked against that URL. Without it a parent's STOP blocks our texts but doesn't end consent.
+4. Geo permissions: allow the United States and Canada only (the API texts only +1 numbers).
+5. Optional: set the Messaging Service's message data retention to the shortest offered. The API also deletes its texts from Twilio's logs when consent ends.
+
 ## License
 
 [MIT](LICENSE)

@@ -1,6 +1,6 @@
 import { DurableObject } from "cloudflare:workers";
 
-import { attemptAllowed, LINK_CODE_MS, newKid, newLinkCode } from "../consent/rules";
+import { attemptAllowed, LINK_CODE_MS, newKid, newLinkCode, textAllowed, TEXTS_PER_PARENT, TEXT_WINDOW_MS } from "../consent/rules";
 
 import type { Env } from "../env";
 
@@ -12,6 +12,8 @@ export type TokenRow = { kitten: string; kind: TokenKind };
 
 const cryptoRng = (): number => (crypto.getRandomValues(new Uint32Array(1))[0] as number) / 2 ** 32;
 const CODE_ATTEMPTS = 8;
+/** Failed link tries from everyone in 10 minutes before every try waits (review M12). */
+const GLOBAL_FAILS = 200;
 
 /**
  * One instance (plan decisions 1, 13–15, 26): six-digit link codes and each
@@ -32,13 +34,14 @@ export class KittenIndex extends DurableObject<Env> {
       sql.exec("CREATE TABLE IF NOT EXISTS tokens (token TEXT PRIMARY KEY, kitten TEXT, kind TEXT, expires INTEGER)");
       sql.exec("CREATE TABLE IF NOT EXISTS phones (hash TEXT, kitten TEXT, PRIMARY KEY (hash, kitten))");
       sql.exec("CREATE TABLE IF NOT EXISTS transactions (tx TEXT PRIMARY KEY, kitten TEXT)");
+      sql.exec("CREATE TABLE IF NOT EXISTS texts (parent TEXT, at INTEGER)");
     });
   }
 
   private async arm(): Promise<void> {
     const t = this.ctx.storage.sql
       .exec<{ t: number | null }>(
-        "SELECT MIN(t) AS t FROM (SELECT MIN(expires) AS t FROM codes UNION ALL SELECT MIN(expires) FROM tokens UNION ALL SELECT MIN(at) + 600000 FROM fails)",
+        "SELECT MIN(t) AS t FROM (SELECT MIN(expires) AS t FROM codes UNION ALL SELECT MIN(expires) FROM tokens UNION ALL SELECT MIN(at) + 600000 FROM fails UNION ALL SELECT MIN(at) + 86400000 FROM texts)",
       )
       .toArray()[0]?.t ?? null;
     if (t === null) await this.ctx.storage.deleteAlarm();
@@ -54,6 +57,7 @@ export class KittenIndex extends DurableObject<Env> {
     sql.exec("DELETE FROM codes WHERE expires <= ?", now);
     sql.exec("DELETE FROM tokens WHERE expires <= ?", now);
     sql.exec("DELETE FROM fails WHERE at <= ?", now - LINK_CODE_MS);
+    sql.exec("DELETE FROM texts WHERE at <= ?", now - TEXT_WINDOW_MS);
     await this.arm();
   }
 
@@ -79,7 +83,8 @@ export class KittenIndex extends DurableObject<Env> {
   async takeCode(parent: string, code: string, now: number): Promise<{ kitten: string; tx: string | null } | { limited: true } | { bad: true }> {
     const { sql } = this.ctx.storage;
     const fails = sql.exec<{ at: number }>("SELECT at FROM fails WHERE parent = ?", parent).toArray().map((r) => r.at);
-    if (!attemptAllowed(fails, now)) return { limited: true };
+    const everyone = sql.exec<{ n: number }>("SELECT COUNT(*) AS n FROM fails WHERE at > ?", now - LINK_CODE_MS).toArray()[0]?.n ?? 0;
+    if (!attemptAllowed(fails, now) || everyone >= GLOBAL_FAILS) return { limited: true };
     const row = sql.exec<{ kitten: string; tx: string | null; expires: number }>("SELECT kitten, tx, expires FROM codes WHERE code = ?", code).toArray()[0];
     if (!row || row.expires <= now) {
       sql.exec("INSERT INTO fails (parent, at) VALUES (?, ?)", parent, now);
@@ -125,6 +130,7 @@ export class KittenIndex extends DurableObject<Env> {
     const kittens = this.kittensOf(from);
     for (const k of kittens) this.addParent(to, k);
     this.ctx.storage.sql.exec("DELETE FROM parents WHERE parent = ?", from);
+    this.ctx.storage.sql.exec("UPDATE texts SET parent = ? WHERE parent = ?", to, from);
     return kittens;
   }
 
@@ -160,9 +166,22 @@ export class KittenIndex extends DurableObject<Env> {
       .map((r) => r.kitten);
   }
 
+  /** A kitten's app transaction id. One already held by another kitten keeps its owner (review M8). */
   setTransaction(kitten: string, tx: string): void {
+    const owner = this.kittenByTransaction(tx);
+    if (owner !== null && owner !== kitten) return;
     this.ctx.storage.sql.exec("DELETE FROM transactions WHERE kitten = ?", kitten);
-    this.ctx.storage.sql.exec("INSERT INTO transactions (tx, kitten) VALUES (?, ?) ON CONFLICT (tx) DO UPDATE SET kitten = excluded.kitten", tx, kitten);
+    this.ctx.storage.sql.exec("INSERT OR IGNORE INTO transactions (tx, kitten) VALUES (?, ?)", tx, kitten);
+  }
+
+  /** A parent sends a text: allowed, and counted, unless they sent 5 in the last day (review I2). */
+  async noteText(parent: string, now: number): Promise<boolean> {
+    const { sql } = this.ctx.storage;
+    const times = sql.exec<{ at: number }>("SELECT at FROM texts WHERE parent = ?", parent).toArray().map((r) => r.at);
+    if (!textAllowed(times, now, TEXTS_PER_PARENT)) return false;
+    sql.exec("INSERT INTO texts (parent, at) VALUES (?, ?)", parent, now);
+    await this.arm();
+    return true;
   }
 
   kittenByTransaction(tx: string): string | null {

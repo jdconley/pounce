@@ -33,12 +33,15 @@ import type { Miniflare } from "miniflare";
 const KID_TOKEN = tokenOf(7);
 const MIA_TOKEN = tokenOf(2);
 const MOM_TOKEN = tokenOf(3);
-const PHONE = "+15551234567";
+const PHONE = "+14155550123";
 
 let script = "";
 let sent: Sent[] = [];
 let texts: Text[] = [];
+let deleted: string[] = [];
 const optedOut = new Set<string>();
+const failing = new Set<string>();
+const twilioDelay = { ms: 0 };
 const open: Miniflare[] = [];
 
 beforeAll(async () => {
@@ -49,11 +52,14 @@ afterEach(async () => {
   await Promise.all(open.splice(0).map((mf) => mf.dispose()));
   sent = [];
   texts = [];
+  deleted = [];
   optedOut.clear();
+  failing.clear();
+  twilioDelay.ms = 0;
 });
 
 async function start(options: { twilio?: boolean; consentFlag?: boolean } = {}): Promise<Miniflare> {
-  const mf = await worker(script, { links: true, sent, consent: true, texts, optedOut, ...options });
+  const mf = await worker(script, { links: true, sent, consent: true, texts, optedOut, failing, twilioDelay, deleted, ...options });
   open.push(mf);
   return mf;
 }
@@ -113,7 +119,7 @@ const linkFrom = (t: Text) => /https:\/\/play\.conleychaos\.com\/consent\/([A-Za
 /** Linked, texted, confirmed, and the kitten's token uploaded. */
 async function consented(mf: Miniflare, f: Family, body: unknown = {}): Promise<ParentKitten> {
   const k = await linked(mf, f, body);
-  expect((await call(mf, f.momPhone, "POST", `/v1/kittens/${k.id}/consent`, { phone: "(555) 123-4567" })).status).toBe(202);
+  expect((await call(mf, f.momPhone, "POST", `/v1/kittens/${k.id}/consent`, { phone: "(415) 555-0123" })).status).toBe(202);
   const token = linkFrom(texts.at(-1) as Text);
   expect((await hook(mf, `/consent/${token}`, { method: "POST" })).status).toBe(200);
   expect((await call(mf, f.kidPad, "PUT", "/v1/devices/me/push", { apnsToken: KID_TOKEN })).status).toBe(204);
@@ -230,7 +236,7 @@ describe("consent by text plus (D1)", { timeout: 30_000 }, () => {
     const k = await linked(mf, f);
     const kitten = f.ids[f.kid.id] as string;
     expect((await call(mf, f.momPhone, "POST", `/v1/kittens/${k.id}/consent`, { phone: "nope" })).status).toBe(400);
-    expect((await call(mf, f.momPhone, "POST", `/v1/kittens/${k.id}/consent`, { phone: "(555) 123-4567" })).status).toBe(202);
+    expect((await call(mf, f.momPhone, "POST", `/v1/kittens/${k.id}/consent`, { phone: "(415) 555-0123" })).status).toBe(202);
     expect(texts).toHaveLength(1);
     const one = texts[0] as Text;
     expect(one.to).toBe(PHONE);
@@ -341,7 +347,7 @@ describe("revoke (consent design §2 Revocation)", { timeout: 30_000 }, () => {
     const hello = await stop(mf, PHONE, "hello");
     expect(hello.status).toBe(200);
     expect((await record(mf, kitten))?.state).toBe("consented");
-    const res = await stop(mf, "+1 (555) 123-4567", " Stop ");
+    const res = await stop(mf, "+1 (415) 555-0123", " Stop ");
     expect(res.status).toBe(200);
     expect(res.headers.get("content-type")).toBe("text/xml");
     expect(await record(mf, kitten)).toMatchObject({ state: "pending", phone: null });
@@ -383,6 +389,7 @@ describe("revoke (consent design §2 Revocation)", { timeout: 30_000 }, () => {
     const kitten = f.ids[f.kid.id] as string;
     await hook(mf, `/__test/expire?player=${kitten}`);
     expect(await record(mf, kitten)).toBeNull();
+    expect(await tokens(mf, f.kidPad)).toMatchObject({ apns: false });
 
     const g = await family(mf);
     await consented(mf, g);
@@ -498,5 +505,75 @@ describe("the notice page", { timeout: 30_000 }, () => {
     expect(res.status).toBe(200);
     expect(await res.text()).toContain("Notice to parents");
     expect((await hook(mf, "/consent/not-a-token")).status).toBe(404);
+  });
+});
+
+describe("review fixes", { timeout: 30_000 }, () => {
+  test("a revoke while text 2 is sending stays revoked (I1)", async () => {
+    const mf = await start();
+    const f = await family(mf);
+    const k = await consented(mf, f);
+    const kitten = f.ids[f.kid.id] as string;
+    const r = (await record(mf, kitten)) as ConsentRecord;
+    twilioDelay.ms = 600;
+    const sending = hook(mf, `/__test/consent-tick?player=${kitten}&now=${r.secondAt as number}`);
+    await settle(150);
+    expect((await call(mf, f.momPhone, "DELETE", `/v1/kittens/${k.id}/consent`)).status).toBe(204);
+    await sending;
+    expect(await record(mf, kitten)).toMatchObject({ state: "pending", phone: null });
+    expect(await json(kidCall(mf, f, "GET", "/v1/kittens/me"))).toMatchObject({ state: "pending" });
+    expect((await call(mf, f.kidPad, "PUT", "/v1/devices/me/push", { apnsToken: KID_TOKEN })).status).toBe(403);
+  });
+
+  test("texts are limited per kitten, and only North American numbers are texted (I2)", async () => {
+    const mf = await start();
+    const f = await family(mf);
+    const k = await linked(mf, f);
+    expect((await call(mf, f.momPhone, "POST", `/v1/kittens/${k.id}/consent`, { phone: "+44 20 7946 0958" })).status).toBe(400);
+    for (let i = 0; i < 3; i++) expect((await call(mf, f.momPhone, "POST", `/v1/kittens/${k.id}/consent`, { phone: PHONE })).status).toBe(202);
+    const fourth = await call(mf, f.momPhone, "POST", `/v1/kittens/${k.id}/consent`, { phone: PHONE });
+    expect(fourth.status).toBe(429);
+    expect(texts).toHaveLength(3);
+  });
+
+  test("text 2 that can't be delivered for a day revokes: no plus, no consent (I4)", async () => {
+    const mf = await start();
+    const f = await family(mf);
+    await consented(mf, f);
+    const kitten = f.ids[f.kid.id] as string;
+    const due = ((await record(mf, kitten)) as ConsentRecord).secondAt as number;
+    failing.add(PHONE);
+    await hook(mf, `/__test/consent-tick?player=${kitten}&now=${due}`);
+    expect((await record(mf, kitten))?.state).toBe("consented");
+    expect(await json(hook(mf, `/__test/consent-alarm?player=${kitten}`))).toBe(due + 3_600_000);
+    await hook(mf, `/__test/consent-tick?player=${kitten}&now=${due + 24 * 3_600_000}`);
+    expect(await record(mf, kitten)).toMatchObject({ state: "pending", phone: null });
+  });
+
+  test("ending consent deletes our texts from Twilio's logs (I5)", async () => {
+    const mf = await start();
+    const f = await family(mf);
+    const k = await consented(mf, f);
+    expect((await call(mf, f.momPhone, "DELETE", `/v1/kittens/${k.id}/consent`)).status).toBe(204);
+    expect(deleted).toHaveLength(1);
+    expect(deleted[0]).toMatch(/^SM[0-9a-f]{32}$/);
+  });
+
+  test("an approved partner who merges into their account stays approved (M9)", async () => {
+    const mf = await start();
+    const f = await family(mf);
+    const k = await consented(mf, f);
+    const { pair } = await sharedTable(mf, f);
+    await call(mf, f.momPhone, "PUT", `/v1/kittens/${k.id}/approved`, { approved: [pair] });
+    // Mia already has an account on her iPad; her phone's guest signs in to it and merges.
+    const miaPad = await mint(mf);
+    const miaToo = newPerson("Mia", 2);
+    await profile(mf, miaPad, [miaToo]);
+    const sub = `apple-mia-${crypto.randomUUID()}`;
+    expect((await call(mf, miaPad, "POST", "/v1/identities/apple", { proof: await appleProof(sub), person: { id: miaToo.id, key: miaToo.key } })).status).toBe(200);
+    const merged = await call(mf, f.miaPhone, "POST", "/v1/identities/apple", { proof: await appleProof(sub), person: { id: f.mia.id, key: f.mia.key } });
+    expect(((await merged.json()) as { outcome: string }).outcome).toBe("merged");
+    const view = (await json<{ kittens: ParentKitten[] }>(call(mf, f.momPhone, "GET", "/v1/kittens"))).kittens[0] as ParentKitten;
+    expect(view.people).toMatchObject([{ approved: true }]);
   });
 });

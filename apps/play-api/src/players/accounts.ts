@@ -152,6 +152,8 @@ export async function deviceTables(env: Env, deviceId: string): Promise<TableEnt
  */
 export async function merge(env: Env, from: string, to: string, now: number): Promise<void> {
   const exported = await player(env, from).exportForMerge();
+  // Before the pairs move: `from`'s partners, any of whom may be a kitten that approved `from`.
+  const partners = (await player(env, from).pairList()).map((r) => r.partnerId);
   await player(env, to).absorb(exported, now);
   await Promise.all(exported.devices.map((d) => device(env, d).repointPlayer(from, to)));
   await Promise.all(exported.tables.map((t) => room(env, t.code).adopt({ from, to })));
@@ -159,7 +161,7 @@ export async function merge(env: Env, from: string, to: string, now: number): Pr
   await mergePairs(env, from, to, now);
   // The guest's pounces are short-lived; they end with it (its rows go with the stub's storage).
   await forgetLinks(env, from);
-  await parentMerged(env, from, to);
+  await parentMerged(env, from, to, partners);
   await identities(env).repoint(from, to);
   await player(env, from).becomeStub(to, now);
 }

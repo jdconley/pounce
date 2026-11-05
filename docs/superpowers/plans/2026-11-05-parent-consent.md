@@ -157,6 +157,14 @@
 38. **Pounce sheet:** a linked kitten's unapproved partner shows a padlock on their cat. Send is disabled, and a tap on the cat asks PermissionKit when the kitten has Communication Limits. The people row on Us shows the same padlock.
 39. **Demo flags** (Debug): `-demo-kitten locked|held|pending|on` (the kitten's side, from `DemoKittenService`) and `-demo-kittens` (the parent's side, with two kittens), with `-stub-accounts signed-in` for the parent.
 
+**After the whole-branch review** (Opus; findings fixed test-first)
+40. **One change at a time in `Consents`** (I1): every mutating method runs on a per-object queue, so a revoke that lands while text 2 is out is applied after it, never overwritten by the older record. Test: `a revoke while text 2 is sending stays revoked`.
+41. **Text limits** (I2): 3 texts a day per kitten and 5 a day per parent (`KittenIndex.texts`), 429 past that. Only North American numbers (`+1`, NANP shape) are texted: the sending number is US toll-free or 10DLC, and it closes SMS pumping abroad. Cost if wrong: a family abroad can't consent until JD widens `textable` and Twilio's geo permissions.
+42. **No plus, no consent** (I4): text 2 that can't be delivered for a day (any failure, including Twilio unconfigured) revokes, as a 21610 opt-out does.
+43. **Twilio's copy of the number** (I5): each text's SID is kept, and the texts are deleted from Twilio when contact info is forgotten (revoke, expiry, end). The notice says so.
+44. **Cleanup failures propagate** (I6): `endKitten`, `parentGone` and `parentMerged` throw instead of logging, so the caller's own retry (deletion asked again, the player's alarm, a retried sign-in) runs them again.
+45. **Smaller ones:** an approved partner who merges stays approved (M9); a room with no state gives "your move" senders `[null]` (M7); an app transaction id held by one kitten can't be taken by another (M8); the confirm token is stored before text 1 goes (M13); a global ceiling of 200 failed link tries per 10 minutes (M12); phone hashes are an HMAC under `TOKEN_SECRET` (M16); `/privacy` drops the consent section with `CONSENT` off (M11). The STOP webhook setup is documented as a JD step (I3).
+
 ## Review Focus
 
 1. **The push gate fails closed.**

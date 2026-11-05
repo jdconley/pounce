@@ -84,6 +84,19 @@ export function newLinkCode(rng: () => number): string {
   return String(Math.floor(rng() * 10 ** LINK_CODE_DIGITS)).padStart(LINK_CODE_DIGITS, "0");
 }
 
+/** Texts a kitten's record may send in a day, and a parent across their kittens (review I2: no SMS pumping). */
+export const TEXTS_PER_KITTEN = 3;
+export const TEXTS_PER_PARENT = 5;
+export const TEXT_WINDOW_MS = DAY_MS;
+
+/** Another text may go: fewer than `max` in the last day. */
+export function textAllowed(times: number[], now: number, max: number): boolean {
+  return times.filter((at) => at > now - TEXT_WINDOW_MS).length < max;
+}
+
+/** The sending number is US toll-free or A2P 10DLC (D1), so only North American numbers are texted. */
+export const textable = (e164: string): boolean => /^\+1[2-9][0-9]{2}[2-9][0-9]{6}$/.test(e164);
+
 /** A parent may try another code: fewer than `MAX_FAILS` failures in the last 10 minutes. */
 export function attemptAllowed(fails: number[], now: number): boolean {
   return fails.filter((at) => at > now - FAIL_WINDOW_MS).length < MAX_FAILS;
@@ -153,6 +166,12 @@ export function repointParent(r: ConsentRecord, from: string, to: string): Conse
     textedBy: swap(r.textedBy),
     consentedBy: swap(r.consentedBy),
   };
+}
+
+/** After a merge: approved partner `from` is now `to` (review M9), in both lists. */
+export function repointPartner(r: ConsentRecord, from: string, to: string): ConsentRecord {
+  const swap = (list: string[]) => [...new Set(list.map((p) => (p === from ? to : p)))];
+  return { ...r, approved: swap(r.approved), apple: r.apple === null ? null : swap(r.apple) };
 }
 
 const within = (list: string[], partners: string[]) => [...new Set(list.filter((p) => partners.includes(p)))];

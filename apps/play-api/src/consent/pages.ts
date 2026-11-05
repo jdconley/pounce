@@ -41,7 +41,7 @@ const NOTICE = `<h1>Notice to parents: notifications for a child</h1>
 <p>Pounce is a card game for couples and families, made by Conley Chaos LLC, <a href="mailto:privacy@conleychaos.com">privacy@conleychaos.com</a>. A child under 13 can play Pounce on their own device without notifications. With your consent, the child's device can also be told when it's their move, and when someone you approve asks them to play.</p>
 
 <h2>Why we have your mobile number</h2>
-<p>You gave us your mobile number in the Pounce app, signed in to your own account, so that we can ask for your consent and confirm it. We use it only for that: two texts (this request, and a reminder a day or so after you agree that tells you how to take it back) and nothing else. If you don't confirm within 7 days, we delete the number. If you do, we keep it only while your consent lasts and delete it as soon as it ends.</p>
+<p>You gave us your mobile number in the Pounce app, signed in to your own account, so that we can ask for your consent and confirm it. We use it only for that: two texts (this request, and a reminder a day or so after you agree that tells you how to take it back) and nothing else. If you don't confirm within 7 days, we delete the number. If you do, we keep it only while your consent lasts and delete it as soon as it ends, along with our texts in our text message provider's records. If our second text can't reach you within a day, consent ends.</p>
 
 <h2>What we collect from the child with your consent</h2>
 <ul>

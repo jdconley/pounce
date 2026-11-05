@@ -19,6 +19,7 @@ import {
   parentState,
   approvedSet,
   repointParent,
+  repointPartner,
   revoke,
   secondSent,
   secondTextAt,
@@ -26,6 +27,9 @@ import {
   setParentApprovals,
   text,
   TEXTED_MS,
+  textable,
+  textAllowed,
+  TEXTS_PER_KITTEN,
   unlinkParent,
   type ConsentRecord,
 } from "./rules";
@@ -277,5 +281,31 @@ describe("phones, codes, ids and STOP", () => {
     expect(isStop("please stop texting", null)).toBe(false);
     expect(isStop("START", "START")).toBe(false);
     expect(isStop(null, null)).toBe(false);
+  });
+});
+
+describe("text limits and numbers (review I2)", () => {
+  test("three texts a day per kitten; the oldest ages out", () => {
+    const times = [NOW - 23 * H, NOW - H, NOW - 60_000];
+    expect(textAllowed(times.slice(1), NOW, TEXTS_PER_KITTEN)).toBe(true);
+    expect(textAllowed(times, NOW, TEXTS_PER_KITTEN)).toBe(false);
+    expect(textAllowed(times, NOW + H, TEXTS_PER_KITTEN)).toBe(true);
+  });
+
+  test("only North American numbers are texted", () => {
+    // An exchange starting with 1 is not a real number.
+    expect(textable("+15551234567")).toBe(false);
+    expect(textable("+14155550123")).toBe(true);
+    expect(textable("+442079460958")).toBe(false);
+    expect(textable("+11234567890")).toBe(false);
+    expect(textable("+14151234567")).toBe(false);
+  });
+});
+
+describe("approvals follow a merged partner (review M9)", () => {
+  test("both lists repoint, once", () => {
+    const r = { ...fresh(), approved: ["p_guest", "p_acct"], apple: ["p_guest"] };
+    expect(repointPartner(r, "p_guest", "p_acct")).toMatchObject({ approved: ["p_acct"], apple: ["p_acct"] });
+    expect(repointPartner(fresh(), "p_guest", "p_acct").apple).toBeNull();
   });
 });

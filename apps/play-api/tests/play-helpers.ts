@@ -69,6 +69,12 @@ export async function worker(
     twilio?: boolean;
     /** Numbers the fake Twilio says replied STOP (error 21610). */
     optedOut?: Set<string>;
+    /** Numbers the fake Twilio fails with a 500. */
+    failing?: Set<string>;
+    /** A delay before the fake Twilio answers a send, changeable mid-test. */
+    twilioDelay?: { ms: number };
+    /** Message SIDs the fake Twilio was asked to delete. */
+    deleted?: string[];
   },
 ): Promise<Miniflare> {
   return new Miniflare({
@@ -115,11 +121,18 @@ export async function worker(
         return new MiniflareResponse(null, { status: 200 });
       }
       if (new URL(request.url).host === "api.twilio.com") {
+        if (request.method === "DELETE") {
+          options.deleted?.push(new URL(request.url).pathname.split("/").at(-1)?.replace(".json", "") ?? "");
+          return new MiniflareResponse(null, { status: 204 });
+        }
         const form = new URLSearchParams(await request.text());
         const to = form.get("To") ?? "";
+        if (options.twilioDelay?.ms) await new Promise((resolve) => setTimeout(resolve, options.twilioDelay?.ms));
         if (options.optedOut?.has(to)) return new MiniflareResponse(JSON.stringify({ code: 21610 }), { status: 400 });
+        if (options.failing?.has(to)) return new MiniflareResponse(JSON.stringify({ code: 30001 }), { status: 500 });
         options.texts?.push({ to, body: form.get("Body") ?? "", auth: request.headers.get("authorization"), service: form.get("MessagingServiceSid") });
-        return new MiniflareResponse(JSON.stringify({ sid: "SMtest" }), { status: 201 });
+        const sid = `SM${crypto.randomUUID().replace(/-/g, "")}`;
+        return new MiniflareResponse(JSON.stringify({ sid }), { status: 201 });
       }
       return new MiniflareResponse(null, { status: 599 });
     },
