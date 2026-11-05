@@ -62,7 +62,8 @@ async function start(options: { streaks?: boolean; notify?: boolean; persist?: s
 
 type Aps = { alert: { title: string; body: string }; category?: string; "interruption-level"?: string; badge?: number; "thread-id"?: string };
 const aps = (s: Sent) => s.body.aps as Aps;
-const alertsTo = (token: string) => sent.filter((s) => s.token === token && s.headers["apns-push-type"] === "alert");
+const alertsTo = (token: string, kind?: string) =>
+  sent.filter((s) => s.token === token && s.headers["apns-push-type"] === "alert" && (kind === undefined || s.body.kind === kind));
 const widgetsTo = (token: string) => sent.filter((s) => s.token === token && s.headers["apns-push-type"] === "widgets");
 
 /** JD on a phone (seat 0) and Mia on a tablet (seat 1), at a started table. */
@@ -180,9 +181,11 @@ describe("the reminder alarm (§12.1, §12.3)", { timeout: 30_000 }, () => {
     const me = seats[holder];
     const other = seats[1 - holder] as (typeof seats)[number];
     const when = slotAt(addDays(dayKey(Date.now(), LA), 1), 19 * 60 + 30, LA);
+    // The other person's move just pushed "your move" here; let it land so it isn't counted below.
+    await eventually(() => alertsTo(me.token, "your_move"), (l) => l.length >= 1);
     const before = alertsTo(me.token).length;
     await mf.dispatchFetch(`${BASE}/__test/remind?player=${me.id}&now=${when}`);
-    const reminders = await eventually(() => alertsTo(me.token).slice(before), (l) => l.length >= 1);
+    const reminders = await eventually(() => alertsTo(me.token, "reminder"), (l) => l.length >= 1);
     expect(reminders).toHaveLength(1);
     expect(reminders[0]?.body).toMatchObject({ kind: "reminder" });
     expect(aps(reminders[0] as Sent)).toMatchObject({ alert: { title: me.face.name }, category: "REMINDER", "relevance-score": 0.6 });
