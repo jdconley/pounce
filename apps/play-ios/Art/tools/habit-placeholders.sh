@@ -267,4 +267,12 @@ magick "$HOME_BG" -gravity center -crop 1170x1170+0+0 +repage -resize 1080x1080!
   \( -size 1080x1080 xc:none -fill "#FFFFFF38" -stroke none "${pawsprinkle[@]}" \) -gravity northwest -composite \
   "PNG32:$TMP/widget-bg.png"
 put widget-bg "$TMP/widget-bg.png"
+echo "live table (PR 7)"
+# The live table toggle: a violet phone whose Lock Screen holds the teal rug strip with two cats'
+# faces, and the bell ringing at its corner.
+ic -fill "$V" -draw "roundrectangle 58,8 194,244 28,28" -fill "$S" -strokewidth 0 -draw "roundrectangle 74,28 178,224 16,16" \
+  -stroke "$INK" -strokewidth 10 -fill "$T" -draw "roundrectangle 64,124 188,184 16,16" \
+  -fill "$O" -draw "circle 98,154 98,138" -fill "$M" -draw "circle 154,154 154,138" \
+  \( "$BELL" -resize 120x120 \) -gravity northeast -geometry +0+0 -composite "PNG32:$TMP/live-table.png"
+put icon-live-table "$TMP/live-table.png"
 echo "habit placeholders done"

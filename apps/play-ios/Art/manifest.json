@@ -1820,6 +1820,15 @@
   "batch": "habit"
  },
  {
+  "name": "icon-live-table",
+  "dest": "imageset",
+  "points": [
+   28,
+   28
+  ],
+  "batch": "habit"
+ },
+ {
   "name": "AppIcon",
   "dest": "appicon",
   "points": [
