@@ -96,6 +96,8 @@ final class AppModel {
         account = AccountModel(
             app: self, service: service, apple: apple, keys: personKeys,
             store: AccountStore(directory: dataDirectory, fileName: AccountStore.fileName(for: config)))
+        // Before anything can upload: hold accounts while this update's approval may be owed.
+        SignificantChangeGate.prepare(self)
     }
 
     /// The real app model, or (DEBUG only) the throwaway one for `-uitest-reset` (fresh temp data
@@ -576,7 +578,7 @@ final class AppModel {
 
     /// Someone else who shares this phone, with the age band whoever added them picked (§14.1).
     @discardableResult
-    func addPerson(name: String, cat: Int, band: AgeBand = .adult) -> Person {
+    func addPerson(name: String, cat: Int, band: AgeBand) -> Person {
         let person = peopleStore.add(name: name, cat: cat)
         people = peopleStore.load()
         account.noteAdded(person.id, band: band)

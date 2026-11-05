@@ -86,20 +86,27 @@ struct PersonPicker: View {
     let people: [Person]
     let ownerID: String?
     let onPick: (Person) -> Void
-    let onCreate: (String, Int) -> Void
+    /// On a kitten's device everyone added is a kitten (§14.1): no age pictures, dice names.
+    var kittenDevice = false
+    let onCreate: (String, Int, AgeBand) -> Void
     let onClose: () -> Void
 
-    @State private var creating = false
+    /// Adding someone: how old they are first (§14.1), then their name and cat.
+    private enum Creating: Equatable { case age, person(AgeBand) }
+    @State private var creating: Creating?
 
     var body: some View {
         ZStack {
             Palette.night.ignoresSafeArea()
-            if creating {
+            if creating == .age {
+                AgeBandPicker(cat: freshCat(), onBack: { creating = nil }) { creating = .person($0) }
+                    .transition(.scale(scale: 0.92).combined(with: .opacity))
+            } else if case .person(let band) = creating {
                 CatEditorView(
-                    initialName: "", initialCat: freshCat(),
-                    onCancel: { creating = false }
+                    initialName: "", initialCat: freshCat(), typedNames: band != .kitten,
+                    onCancel: { creating = nil }
                 ) { name, cat in
-                    onCreate(name, cat)
+                    onCreate(name, cat, band)
                 }
                 .transition(.scale(scale: 0.92).combined(with: .opacity))
             } else {
@@ -130,7 +137,7 @@ struct PersonPicker: View {
                         }
                         .accessibilityIdentifier("picker.person.\(i)")
                     }
-                    AddTile { creating = true }
+                    AddTile { creating = kittenDevice ? .person(.kitten) : .age }
                         .accessibilityIdentifier("picker.add")
                 }
                 .padding(24)

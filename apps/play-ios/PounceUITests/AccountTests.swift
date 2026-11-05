@@ -147,9 +147,62 @@ final class AccountTests: XCTestCase {
         XCTAssertFalse(el(app, "people.signin.person").exists, "a kitten was offered sign-in")
     }
 
+    /// Adds a teen with a dice name and returns their tile.
+    private func addTeen(_ app: XCUIApplication) -> XCUIElement {
+        el(app, "people.add").tap()
+        let teen = el(app, "age.band.teen")
+        XCTAssertTrue(teen.waitForExistence(timeout: Live.t(5)))
+        teen.tap()
+        XCTAssertTrue(el(app, "pickcat.dice").waitForExistence(timeout: Live.t(5)))
+        el(app, "pickcat.dice").tap()
+        _ = until(3) { app.keyboards.count == 0 }
+        el(app, "pickcat.confirm").tap()
+        let tile = app.descendants(matching: .any).matching(
+            NSPredicate(format: "identifier BEGINSWITH 'people.person.'")).firstMatch
+        XCTAssertTrue(tile.waitForExistence(timeout: Live.t(5)))
+        return tile
+    }
+
+    func testHouseholdHoldNeedsTheOwnerSignedIn() {
+        // On a phone with no account the server would make the teen the phone's account.
+        let app = launch("upgraded")
+        openPeople(app)
+        let tile = addTeen(app)
+        tile.press(forDuration: 1.2)
+        Thread.sleep(forTimeInterval: Live.pace(1))
+        XCTAssertFalse(el(app, "people.signin.person").exists, "offered before the owner signed in")
+    }
+
+    func testKittenDeviceAddsKittens() {
+        let app = launch("upgraded", ["-age-band", "kitten"])
+        openPeople(app)
+        el(app, "people.add").tap()
+        XCTAssertTrue(el(app, "pickcat.generatedName").waitForExistence(timeout: Live.t(5)), "a dice name")
+        XCTAssertFalse(el(app, "age.band.adult").exists, "a kitten picked someone's age")
+        XCTAssertFalse(app.textFields["pickcat.name"].exists)
+    }
+
+    func testPersonFromBeforeAgesPicksABandFirst() {
+        let app = XCUIApplication()
+        app.launchArguments = Live.arguments() + ["-uitest-reset", "-seed-people", "-stub-accounts", "upgraded"]
+        app.launch()
+        XCTAssertTrue(el(app, "home.people").waitForExistence(timeout: Live.t(10)))
+        openPeople(app)
+        let ella = app.descendants(matching: .any).matching(
+            NSPredicate(format: "identifier BEGINSWITH 'people.person.'")).firstMatch
+        XCTAssertTrue(ella.waitForExistence(timeout: Live.t(5)))
+        ella.tap()
+        let grown = el(app, "age.band.adult")
+        XCTAssertTrue(grown.waitForExistence(timeout: Live.t(5)), "no age pictures for a person with no band")
+        grown.tap()
+        XCTAssertTrue(app.textFields["pickcat.name"].waitForExistence(timeout: Live.t(5)), "a grown cat types a name")
+    }
+
     func testHouseholdHoldSignsIn() {
         let app = launch("upgraded")
         openPeople(app)
+        el(app, "people.signin").tap()
+        XCTAssertTrue(until(5) { self.signedIn(self.el(app, "people.owner")) }, "the owner didn't sign in")
         el(app, "people.add").tap()
         let teen = el(app, "age.band.teen")
         XCTAssertTrue(teen.waitForExistence(timeout: Live.t(5)))
@@ -166,6 +219,17 @@ final class AccountTests: XCTestCase {
         XCTAssertTrue(button.waitForExistence(timeout: Live.t(5)), "holding a cat offers that person sign-in")
         button.tap()
         XCTAssertTrue(until(5) { self.signedIn(tile) }, "the household person didn't sign in")
-        XCTAssertFalse(signedIn(el(app, "people.owner")), "the owner signed in instead")
+        XCTAssertTrue(signedIn(el(app, "people.owner")), "the owner is still the phone's account")
+
+        // Their own account can be deleted from the app too.
+        tile.press(forDuration: 1.2)
+        let trash = el(app, "people.account.delete")
+        XCTAssertTrue(trash.waitForExistence(timeout: Live.t(5)), "no way to delete their account")
+        trash.tap()
+        el(app, "delete.confirm").tap()
+        let done = el(app, "settings.path.done")
+        XCTAssertTrue(done.waitForExistence(timeout: Live.t(5)), "no Settings path after deleting")
+        done.tap()
+        XCTAssertTrue(until(5) { !self.signedIn(tile) }, "still signed in after deleting")
     }
 }

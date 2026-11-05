@@ -17,8 +17,25 @@ enum SignificantChangeGate {
     enum State: String {
         /// Asked and settled (approved, acknowledged, not required, or a new install).
         case done
+        /// An existing player's first launch of this version: not decided yet.
+        case owed
         /// A parent's approval is owed.
         case pending
+    }
+
+    /// At launch, before anything can upload: an existing player's accounts wait until `check`
+    /// decides, and stay held while a parent's approval is pending.
+    static func prepare(_ model: AppModel, defaults: UserDefaults = .standard) {
+        if defaults.string(forKey: key) == nil, model.hadOwnerBeforeThisVersion {
+            defaults.set(State.owed.rawValue, forKey: key)
+        }
+        let state = defaults.string(forKey: key).flatMap(State.init)
+        model.account.heldForApproval = state == .owed || state == .pending
+    }
+
+    private static func settle(_ model: AppModel, defaults: UserDefaults) {
+        defaults.set(State.done.rawValue, forKey: key)
+        model.account.heldForApproval = false
     }
 
     static let updateDescription = String(
@@ -29,19 +46,14 @@ enum SignificantChangeGate {
     static func check(_ model: AppModel, defaults: UserDefaults = .standard) async {
         #if DEBUG
         if PaceSetting.resolve(arguments: CommandLine.arguments, env: ProcessInfo.processInfo.environment).underTest {
-            return
+            return settle(model, defaults: defaults)
         }
         #endif
         guard let band = model.ageBand else { return }
-        if defaults.string(forKey: key) == State.done.rawValue { return }
-        if defaults.string(forKey: key) == nil, !model.hadOwnerBeforeThisVersion {
-            defaults.set(State.done.rawValue, forKey: key)
-            return
-        }
-        guard #available(iOS 26.4, *) else {
-            defaults.set(State.done.rawValue, forKey: key)
-            return
-        }
+        let stored = defaults.string(forKey: key).flatMap(State.init)
+        // A new install (nothing owed) agreed at download; a settled change stays settled.
+        guard stored == .owed || stored == .pending else { return settle(model, defaults: defaults) }
+        guard #available(iOS 26.4, *) else { return settle(model, defaults: defaults) }
         let features = await regulatoryFeatures()
         let action = SignificantChange.action(
             requiresConsent: features.contains(.significantAppChangeRequiresParentalConsent),
@@ -49,16 +61,16 @@ enum SignificantChangeGate {
             band: band, isNewInstall: false, done: false)
         switch action {
         case .none:
-            defaults.set(State.done.rawValue, forKey: key)
+            settle(model, defaults: defaults)
         case .notifyAdult:
             if let scene = UIApplication.shared.connectedScenes.compactMap({ $0 as? UIWindowScene }).first {
                 try? await AgeRangeService.shared.showSignificantUpdateAcknowledgment(
                     in: scene, updateDescription: updateDescription)
             }
-            defaults.set(State.done.rawValue, forKey: key)
+            settle(model, defaults: defaults)
         case .askParent:
             model.account.heldForApproval = true
-            let first = defaults.string(forKey: key) == nil
+            let first = stored == .owed
             defaults.set(State.pending.rawValue, forKey: key)
             listen(model, defaults: defaults)
             if first, let presenter = UIApplication.shared.topViewController {

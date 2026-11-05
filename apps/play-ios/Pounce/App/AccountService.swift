@@ -42,9 +42,15 @@ actor StubAccountService: AccountService {
     private let scenario: StubScenario
     private var names: [String: (String, Int)] = [:]
     private var linkedOnce = false
+    /// The person this stub device is signed in as (the server's device account).
+    private var account: String?
+    private var presetAccount: Bool
     private(set) var patches: [StatePatch] = []
 
-    init(scenario: StubScenario) { self.scenario = scenario }
+    init(scenario: StubScenario) {
+        self.scenario = scenario
+        presetAccount = scenario == .signedIn || scenario == .linkMerge
+    }
 
     private static func playerId(_ personId: String) -> String {
         "p_" + String(personId.replacingOccurrences(of: "-", with: "").prefix(22))
@@ -59,10 +65,13 @@ actor StubAccountService: AccountService {
     func signIn(provider: String, proof: AppleProof, personId: String, personKey: String) async throws -> SignInReply {
         try await Task.sleep(for: .milliseconds(150))
         let own = names[personId].map { SignInReply.Profile(name: $0.0, cat: $0.1) } ?? Self.other
+        // As on the server: the first sign-in on a device without an account becomes its account.
+        let isAccount = !presetAccount && (account == nil || account == personId)
+        if isAccount { account = personId }
         if scenario == .merged {
-            return SignInReply(playerId: "p_mia", outcome: .merged, account: true, profile: Self.other)
+            return SignInReply(playerId: "p_mia", outcome: .merged, account: isAccount, profile: Self.other)
         }
-        return SignInReply(playerId: Self.playerId(personId), outcome: .upgraded, account: true, profile: own)
+        return SignInReply(playerId: Self.playerId(personId), outcome: .upgraded, account: isAccount, profile: own)
     }
 
     func link(provider: String, proof: AppleProof, confirmMerge: Bool, person: String?) async throws -> LinkResult {
@@ -71,8 +80,16 @@ actor StubAccountService: AccountService {
         return .linked(merged: confirmMerge)
     }
 
-    func signOut() async throws {}
-    func deleteMe(person: String?) async throws {}
+    func signOut() async throws {
+        account = nil
+        presetAccount = false
+    }
+
+    func deleteMe(person: String?) async throws {
+        guard person == nil else { return }
+        account = nil
+        presetAccount = false
+    }
 
     func state(person: String?) async throws -> MeState {
         guard scenario == .signedIn else { return MeState() }

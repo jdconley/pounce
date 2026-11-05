@@ -46,6 +46,7 @@ import Testing
         let fromIPhone = Person(id: "i", name: "Mia", cat: 2)
         var record = AccountRecord()
         record.imported = ["i"]
+        record.bands = ["k": .teen]
         let body = try #require(ProfileUploader.body(
             people: LocalPeople(owner: owner, others: [kid, fromIPhone]), record: record, ownerBand: .adult,
             timeZone: "Europe/Paris", keys: MemoryPersonKeyStore()))
@@ -73,11 +74,21 @@ import Testing
             keys: MemoryPersonKeyStore()) == nil)
     }
 
+    @Test func testBodyLeavesOutPeopleWithoutABand() throws {
+        // Added before ages were asked: nobody has said how old they are yet (§14.1).
+        let body = try #require(ProfileUploader.body(
+            people: LocalPeople(owner: Person(id: "o", name: "JD", cat: 4), others: [Person(id: "old", name: "Ella", cat: 1)]),
+            record: AccountRecord(), ownerBand: .adult, timeZone: "UTC", keys: MemoryPersonKeyStore()))
+        #expect(body.people.map(\.id) == ["o"])
+    }
+
     @Test func testBodyCapsAtEightPeople() throws {
         let others = (0..<12).map { Person(id: "p\($0)", name: "P\($0)", cat: $0 % 8) }
+        var record = AccountRecord()
+        for p in others { record.bands[p.id] = .adult }
         let body = try #require(ProfileUploader.body(
             people: LocalPeople(owner: Person(id: "o", name: "JD", cat: 4), others: others),
-            record: AccountRecord(), ownerBand: .adult, timeZone: "UTC", keys: MemoryPersonKeyStore()))
+            record: record, ownerBand: .adult, timeZone: "UTC", keys: MemoryPersonKeyStore()))
         #expect(body.people.count == 8)
         #expect(body.people.first?.id == "o")
     }
@@ -95,7 +106,8 @@ import Testing
         let calls = Mutex(0)
 
         let renamed = try await ProfileUploader.run(
-            people: people, tutorial: tutorial, record: &record, keys: keys, ownerBand: .adult, timeZone: "UTC"
+            people: people, tutorial: tutorial, keys: keys, ownerBand: .adult, timeZone: "UTC",
+            record: { record }, update: { $0(&record) }
         ) { body in
             calls.withLock { $0 += 1 }
             // Every id is "taken", every time: the pass must stop after one re-mint.
@@ -120,13 +132,64 @@ import Testing
         let people = PeopleStore(directory: dir)
         let owner = people.setOwner(name: "JD", cat: 4)
         var record = AccountRecord()
-        record.pendingUpload = true
         _ = try await ProfileUploader.run(
-            people: people, tutorial: TutorialStore(directory: dir), record: &record, keys: MemoryPersonKeyStore(),
-            ownerBand: .adult, timeZone: "UTC"
+            people: people, tutorial: TutorialStore(directory: dir), keys: MemoryPersonKeyStore(),
+            ownerBand: .adult, timeZone: "UTC", record: { record }, update: { $0(&record) }
         ) { _ in ProfileReply(players: [owner.id: "p_X"], rejected: []) }
         #expect(record.playerIds == [owner.id: "p_X"])
-        #expect(!record.pendingUpload)
+    }
+
+    @MainActor @Test func testChangesMadeDuringTheUploadSurvive() async throws {
+        let dir = try tempDir()
+        let people = PeopleStore(directory: dir)
+        let owner = people.setOwner(name: "JD", cat: 4)
+        var record = AccountRecord()
+        _ = try await ProfileUploader.run(
+            people: people, tutorial: TutorialStore(directory: dir), keys: MemoryPersonKeyStore(),
+            ownerBand: .adult, timeZone: "UTC", record: { record }, update: { $0(&record) }
+        ) { _ in
+            // Sign-in finished and a rename was noted while this was on the wire.
+            record.accountPersonId = owner.id
+            record.changedAt[owner.id] = 999
+            return ProfileReply(players: [owner.id: "p_X"], rejected: [])
+        }
+        #expect(record.accountPersonId == owner.id)
+        #expect(record.changedAt[owner.id] == 999)
+        #expect(record.playerIds == [owner.id: "p_X"])
+    }
+
+    @MainActor @Test func testRenameSurvivesAFailedRetry() async throws {
+        let dir = try tempDir()
+        let people = PeopleStore(directory: dir)
+        let owner = people.setOwner(name: "JD", cat: 4)
+        var record = AccountRecord()
+        record.accountPersonId = owner.id
+        let calls = Mutex(0)
+        await #expect(throws: APIError.transport("offline")) {
+            _ = try await ProfileUploader.run(
+                people: people, tutorial: TutorialStore(directory: dir), keys: MemoryPersonKeyStore(),
+                ownerBand: .adult, timeZone: "UTC", record: { record }, update: { $0(&record) }
+            ) { body in
+                let n = calls.withLock { $0 += 1; return $0 }
+                if n == 1 { return ProfileReply(players: [:], rejected: body.people.map(\.id)) }
+                throw APIError.transport("offline")
+            }
+        }
+        let newOwner = try #require(people.load().owner)
+        #expect(newOwner.id != owner.id)
+        #expect(record.accountPersonId == newOwner.id, "the record must follow the stores' new id")
+    }
+
+    @Test func testAChangeDuringAnUploadKeepsItOwed() {
+        var sync = UploadState()
+        sync.noteChange()
+        let started = sync.begin()
+        sync.noteChange()
+        sync.finished(started)
+        #expect(sync.pending)
+        let again = sync.begin()
+        sync.finished(again)
+        #expect(!sync.pending)
     }
 
     @MainActor @Test func testFailureLeavesUploadPending() async throws {
@@ -134,14 +197,17 @@ import Testing
         let people = PeopleStore(directory: dir)
         people.setOwner(name: "JD", cat: 4)
         var record = AccountRecord()
-        record.pendingUpload = true
+        var sync = UploadState()
+        sync.noteChange()
+        let started = sync.begin()
         await #expect(throws: APIError.transport("offline")) {
             _ = try await ProfileUploader.run(
-                people: people, tutorial: TutorialStore(directory: dir), record: &record, keys: MemoryPersonKeyStore(),
-                ownerBand: .adult, timeZone: "UTC"
+                people: people, tutorial: TutorialStore(directory: dir), keys: MemoryPersonKeyStore(),
+                ownerBand: .adult, timeZone: "UTC", record: { record }, update: { $0(&record) }
             ) { _ in throw APIError.transport("offline") }
         }
-        #expect(record.pendingUpload)
+        sync.failed(started)
+        #expect(sync.pending)
     }
 
     @Test func testAccountStoreRoundTrips() throws {

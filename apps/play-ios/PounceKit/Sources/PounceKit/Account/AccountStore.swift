@@ -20,8 +20,6 @@ public struct AccountRecord: Codable, Equatable, Sendable {
     public var imported: [String] = []
     /// The last value and write time of every synced key on this device, by section name.
     public var ledger: [String: SyncSection] = [:]
-    /// A profile upload is owed (launch, time zone or people changed, or the last one failed).
-    public var pendingUpload = true
 
     public init() {}
 
@@ -38,7 +36,7 @@ public struct AccountRecord: Codable, Equatable, Sendable {
     }
 
     private enum CodingKeys: String, CodingKey {
-        case accountPersonId, playerIds, providers, signedIn, bands, changedAt, imported, ledger, pendingUpload
+        case accountPersonId, playerIds, providers, signedIn, bands, changedAt, imported, ledger
     }
 
     public init(from decoder: any Decoder) throws {
@@ -51,7 +49,6 @@ public struct AccountRecord: Codable, Equatable, Sendable {
         changedAt = try c.decodeIfPresent([String: Int64].self, forKey: .changedAt) ?? [:]
         imported = try c.decodeIfPresent([String].self, forKey: .imported) ?? []
         ledger = try c.decodeIfPresent([String: SyncSection].self, forKey: .ledger) ?? [:]
-        pendingUpload = try c.decodeIfPresent(Bool.self, forKey: .pendingUpload) ?? true
     }
 }
 

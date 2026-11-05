@@ -34,6 +34,11 @@ final class AccountModel {
     @ObservationIgnored private var pendingProof: AppleProof?
     @ObservationIgnored private var uploadTask: Task<Void, Never>?
     @ObservationIgnored private var uploading = false
+    @ObservationIgnored private var uploadState = UploadState()
+    @ObservationIgnored private var syncing = false
+    @ObservationIgnored private var syncTask: Task<Void, Never>?
+    /// This device just started the account (an upgrade): its values win the first sync.
+    @ObservationIgnored private var firstLookWins = false
     #if DEBUG
     @ObservationIgnored let stub: StubScenario?
     #endif
@@ -68,17 +73,40 @@ final class AccountModel {
 
     func isImported(_ personId: String) -> Bool { record.imported.contains(personId) }
 
+    /// A person's age band: the owner's from the age check; a household person's as whoever
+    /// added them picked it. Nil for someone added before ages were asked, until a band is picked.
+    /// On a kitten's device everyone counts as a kitten (§14.1).
     func band(of personId: String) -> AgeBand? {
-        personId == app.people.owner?.id ? app.ageBand : record.bands[personId] ?? app.ageBand
+        if personId == app.people.owner?.id { return app.ageBand }
+        if app.ageBand == .kitten { return .kitten }
+        return record.bands[personId]
+    }
+
+    /// Names are typed for this person (never for a kitten, or anyone whose band isn't known).
+    func typesName(_ personId: String) -> Bool {
+        app.limits.typedNames && (band(of: personId) == .teen || band(of: personId) == .adult)
+    }
+
+    /// Sets the band of someone added before ages were asked.
+    func setBand(_ personId: String, _ band: AgeBand) {
+        record.bands[personId] = band
+        save()
+        uploadState.noteChange()
+        scheduleUpload()
     }
 
     /// Sign-in is offered on this device at all: never to a kitten (spec §14.1), never while a
     /// parent's approval of this update is owed.
     var offersSignIn: Bool { app.limits.signInOffered && !heldForApproval }
 
-    /// This person may sign in from here: not a kitten, and not signed in already.
+    /// This person may sign in from here: not a kitten (or a band nobody picked), not signed in
+    /// already. A household person signs in on their own only once the owner has: on a phone with
+    /// no account the server would make them the phone's account.
     func canSignIn(_ personId: String) -> Bool {
-        offersSignIn && band(of: personId) != .kitten && !isSignedIn(personId) && !isImported(personId)
+        guard offersSignIn, !isSignedIn(personId), !isImported(personId) else { return false }
+        if personId == app.people.owner?.id { return true }
+        guard let band = band(of: personId), band != .kitten else { return false }
+        return isSignedIn
     }
 
     /// Providers the account could still link (v1 offers only Apple).
@@ -89,8 +117,8 @@ final class AccountModel {
     /// A person's name or cat changed here: it goes up with that time, so the newest edit wins.
     func noteChanged(_ personId: String) {
         record.changedAt[personId] = Self.nowMs
-        record.pendingUpload = true
         save()
+        uploadState.noteChange()
         scheduleUpload()
     }
 
@@ -104,24 +132,26 @@ final class AccountModel {
         record.bands[personId] = nil
         record.changedAt[personId] = nil
         record.signedIn.remove(personId)
-        record.pendingUpload = true
         save()
         keys.remove(personId)
+        uploadState.noteChange()
         scheduleUpload()
     }
 
     /// The device's time zone changed (spec §13.4).
     func timeZoneChanged() {
-        record.pendingUpload = true
-        save()
+        uploadState.noteChange()
         scheduleUpload()
     }
 
     // MARK: profile upload
 
-    /// Profile uploads wait for the age check and an owner; a kitten's still go up (generated name,
-    /// band `kitten`, so the server sends it nothing).
-    private var canUpload: Bool { app.ageRecord != nil && app.people.owner != nil && !heldForApproval }
+    /// Profile uploads wait for the age check and an owner, and for a parent's approval of this
+    /// update where it's owed. A kitten's always go up: a generated name and the band `kitten` are
+    /// internal operations, and the band is what stops the server pushing to the device.
+    private var canUpload: Bool {
+        app.ageRecord != nil && app.people.owner != nil && (!heldForApproval || app.ageBand == .kitten)
+    }
 
     private func scheduleUpload() {
         uploadTask?.cancel()
@@ -137,26 +167,37 @@ final class AccountModel {
         guard canUpload, !uploading else { return }
         uploading = true
         defer { uploading = false }
-        var working = record
         let service = service
-        do {
-            let renamed = try await ProfileUploader.run(
-                people: app.peopleStore, tutorial: app.tutorialStore, record: &working, keys: keys,
-                ownerBand: app.ageBand, timeZone: TimeZone.current.identifier
-            ) { body in try await service.uploadProfile(body) }
-            record = working
-            save()
-            if !renamed.isEmpty { app.peopleRenamed() }
-            #if DEBUG
-            print("[account] profile up: \(working.playerIds.count) players, \(renamed.count) renamed")
-            #endif
-        } catch {
-            // Offline or the server is down: still owed (pendingUpload stays set).
-            #if DEBUG
-            print("[account] profile upload failed: \(error)")
-            #endif
+        // Another change can land while this one is on the wire: go again until none did.
+        for _ in 0..<3 {
+            let started = uploadState.begin()
+            do {
+                let renamed = try await ProfileUploader.run(
+                    people: app.peopleStore, tutorial: app.tutorialStore, keys: keys,
+                    ownerBand: app.ageBand, timeZone: TimeZone.current.identifier,
+                    record: { record }, update: { change in change(&record); save() }
+                ) { body in try await service.uploadProfile(body) }
+                if !renamed.isEmpty { app.peopleRenamed() }
+                uploadState.finished(started)
+                #if DEBUG
+                print("[account] profile up: \(record.playerIds.count) players, \(renamed.count) renamed")
+                #endif
+            } catch {
+                // Offline or the server is down: still owed for the next try. A rename that
+                // already happened is in the stores and the record alike.
+                uploadState.failed(started)
+                app.peopleRenamed()
+                #if DEBUG
+                print("[account] profile upload failed: \(error)")
+                #endif
+                return
+            }
+            if !uploadState.pending { return }
         }
     }
+
+    /// Whether a profile upload is owed (a change since the last one went up).
+    var uploadPending: Bool { uploadState.pending }
 
     // MARK: sign in (spec §13.1)
 
@@ -175,7 +216,7 @@ final class AccountModel {
         guard canSignIn(person.id), !busy else { return .refused }
         busy = true
         defer { busy = false }
-        if record.pendingUpload || record.playerIds[person.id] == nil { await uploadProfile() }
+        if uploadState.pending || record.playerIds[person.id] == nil { await uploadProfile() }
         let proof: AppleProof
         do {
             proof = try await apple.proof()
@@ -200,6 +241,9 @@ final class AccountModel {
             if !record.providers.contains("apple") { record.providers.append("apple") }
         }
         save()
+        // The device that upgrades in place started the account: what was chosen here as a guest
+        // goes up as chosen. A device that merged into an account takes the account's values.
+        firstLookWins = reply.account && reply.outcome != .merged
         if reply.outcome == .merged {
             // The account keeps its own name and cat; this device shows them now.
             if person.id == app.people.owner?.id {
@@ -309,8 +353,8 @@ final class AccountModel {
         record.providers = []
         record.imported = []
         record.ledger = [:]
-        record.pendingUpload = true
         save()
+        uploadState.noteChange()
     }
 
     // MARK: sync (spec §13.1, "what syncs")
@@ -318,9 +362,22 @@ final class AccountModel {
     /// Settings, the archive and the account person's tips, last writer wins per key; household
     /// people and the account's name and cat from the server. Signed-in devices only.
     func sync() async {
-        guard isSignedIn, !heldForApproval else { return }
-        noteLocalChanges()
-        guard let state = try? await service.state(person: nil) else { return }
+        guard isSignedIn, !heldForApproval, !syncing else { return }
+        syncing = true
+        defer { syncing = false }
+        noteLocalChanges(scheduling: false)
+        let state: MeState
+        do {
+            state = try await service.state(person: nil)
+        } catch APIError.notFound {
+            // The account is gone (deleted, or this device was detached elsewhere): a guest again.
+            forgetAccount()
+            await uploadProfile()
+            await app.refreshTables()
+            return
+        } catch {
+            return
+        }
         for name in SyncSectionName.allCases {
             let local = record.ledger[name.rawValue] ?? [:]
             let (push, apply) = SyncMerge.reconcile(local: local, remote: state[name])
@@ -343,8 +400,9 @@ final class AccountModel {
 
     /// Writes this device's current settings, archive and tips into the ledger, stamping what
     /// changed since the last look with now. Called after each local change, and before a sync.
-    func noteLocalChanges() {
+    func noteLocalChanges(scheduling: Bool = true) {
         guard isSignedIn else { return }
+        defer { if scheduling { scheduleSync() } }
         let now = Self.nowMs
         for name in SyncSectionName.allCases {
             let current = app.syncedValues(name, accountPersonId: record.accountPersonId)
@@ -354,7 +412,7 @@ final class AccountModel {
             let first = record.ledger[name.rawValue] == nil
             var ledger = record.ledger[name.rawValue] ?? [:]
             for (key, value) in current where ledger[key]?.v != value {
-                ledger[key] = SyncEntry(v: value, at: first ? 1 : now)
+                ledger[key] = SyncEntry(v: value, at: first && !firstLookWins ? 1 : now)
             }
             // A key that went away (a table restored, tips shown again) is written as cleared.
             for (key, entry) in ledger where current[key] == nil && entry.v != .null && entry.v != .bool(false) {
@@ -362,7 +420,18 @@ final class AccountModel {
             }
             record.ledger[name.rawValue] = ledger
         }
+        firstLookWins = false
         save()
+    }
+
+    /// A local change goes up soon, not only on the next foreground.
+    private func scheduleSync() {
+        syncTask?.cancel()
+        syncTask = Task { [weak self] in
+            try? await Task.sleep(for: .seconds(1.5))
+            guard !Task.isCancelled else { return }
+            await self?.sync()
+        }
     }
 
     /// The account's household people from its other devices, for pass-and-play here too.

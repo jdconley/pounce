@@ -475,7 +475,8 @@ struct LobbyView: View {
         return PersonPicker(
             people: local, ownerID: model.people.owner?.id,
             onPick: { seat($0, target) },
-            onCreate: { name, cat in seat(model.addPerson(name: name, cat: cat), target) },
+            kittenDevice: model.ageBand == .kitten,
+            onCreate: { name, cat, band in seat(model.addPerson(name: name, cat: cat, band: band), target) },
             onClose: { picker = nil })
     }
 

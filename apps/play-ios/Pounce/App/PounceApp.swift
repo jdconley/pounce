@@ -16,6 +16,10 @@ struct PounceApp: App {
                     await model.bootstrap()
                 }
                 .onOpenURL { open($0) }
+                // The server keeps each device's time zone for the day boundary (spec §13.4).
+                .onReceive(NotificationCenter.default.publisher(for: .NSSystemTimeZoneDidChange)) { _ in
+                    model.account.timeZoneChanged()
+                }
                 .onContinueUserActivity(NSUserActivityTypeBrowsingWeb) { activity in
                     if let url = activity.webpageURL { open(url) }
                 }

@@ -17,6 +17,10 @@ struct PeopleSheet: View {
         case new(AgeBand)
         /// Holding a household cat: that person signs in on their own (spec §10.5).
         case signIn(String)
+        /// Someone added before ages were asked: their band first, then the editor.
+        case ageFor(String)
+        /// Holding a signed-in household cat: their account, with the trash can.
+        case account(String)
     }
 
     @State private var editing: Editing?
@@ -74,14 +78,16 @@ struct PeopleSheet: View {
                         PersonTile(
                             person: person, ringIndex: i + 1, isOwner: false,
                             signedIn: account.isSignedIn(person.id), imported: account.isImported(person.id),
-                            onHold: account.canSignIn(person.id) ? { editing = .signIn(person.id) } : nil
+                            onHold: hold(person.id)
                         ) {
                             // People from the account's other devices are edited there.
-                            if !account.isImported(person.id) { editing = .person(person.id) }
+                            guard !account.isImported(person.id) else { return }
+                            editing = account.band(of: person.id) == nil ? .ageFor(person.id) : .person(person.id)
                         }
                         .accessibilityIdentifier("people.person.\(person.id)")
                     }
-                    AddTile { editing = .age }
+                    // On a kitten's device everyone added is a kitten: no age pictures (§14.1).
+                    AddTile { editing = model.ageBand == .kitten ? .new(.kitten) : .age }
                         .accessibilityIdentifier("people.add")
                 }
                 .padding(.horizontal, 24)
@@ -117,7 +123,7 @@ struct PeopleSheet: View {
             if let person = model.people.others.first(where: { $0.id == id }) {
                 CatEditorView(
                     initialName: person.name, initialCat: person.cat,
-                    typedNames: account.band(of: id) != .kitten, onCancel: { self.editing = nil },
+                    typedNames: account.typesName(id), onCancel: { self.editing = nil },
                     onDelete: {
                         model.removePerson(id: id)
                         self.editing = nil
@@ -139,6 +145,17 @@ struct PeopleSheet: View {
                 model.addPerson(name: name, cat: cat, band: band)
                 self.editing = nil
             }
+        case .ageFor(let id):
+            if let person = model.people.others.first(where: { $0.id == id }) {
+                AgeBandPicker(cat: person.cat, onBack: { self.editing = nil }) { band in
+                    account.setBand(id, band)
+                    self.editing = .person(id)
+                }
+            }
+        case .account(let id):
+            if let person = model.people.others.first(where: { $0.id == id }) {
+                HouseholdAccount(person: person, onBack: { self.editing = nil })
+            }
         case .signIn(let id):
             if let person = model.people.others.first(where: { $0.id == id }) {
                 HouseholdSignIn(person: person, onBack: { self.editing = nil }) {
@@ -149,6 +166,12 @@ struct PeopleSheet: View {
                 }
             }
         }
+    }
+
+    /// What holding a household cat does: their own account if signed in, else sign-in when allowed.
+    private func hold(_ id: String) -> (() -> Void)? {
+        if account.isSignedIn(id), !account.isImported(id) { return { editing = .account(id) } }
+        return account.canSignIn(id) ? { editing = .signIn(id) } : nil
     }
 
     /// A cat nobody on this phone uses yet, so a new person starts out different from the others.
@@ -196,8 +219,10 @@ struct PersonTile: View {
             .accessibilityAddTraits(.isButton)
             .accessibilityLabel(Text(verbatim: person.name))
             .accessibilityValue(signedIn ? "signed in" : "")
-            .accessibilityAction(named: Text("Sign in", comment: "VoiceOver: sign this person in on their own")) {
-                onHold?()
+            .accessibilityActions {
+                if let onHold {
+                    Button { onHold() } label: { Text("Sign in", comment: "VoiceOver: sign this person in on their own") }
+                }
             }
     }
 
@@ -242,6 +267,44 @@ struct PersonTile: View {
                     }
                 }
                 OutlinedText(person.name, size: 18, width: 2.5)
+            }
+        }
+    }
+}
+
+/// A signed-in household person's own account: their cat with a check, and the trash can to
+/// delete it (App Review 5.1.1(v), spec §14), with the same confirm and Settings picture.
+struct HouseholdAccount: View {
+    @Environment(AppModel.self) private var model
+    let person: Person
+    let onBack: () -> Void
+    @State private var confirming = false
+
+    var body: some View {
+        VStack(spacing: 30) {
+            Spacer()
+            CatDisc(cat: person.cat, side: 190, color: Palette.teal, check: true)
+            OutlinedText(person.name, size: 30, width: 3)
+            HStack(spacing: 22) {
+                PillButton(icon: ArtName.iconBack, color: Palette.sky, size: .medium, accessibilityLabel: "Back") {
+                    onBack()
+                }
+                .accessibilityIdentifier("people.account.back")
+                DeleteButton { confirming = true }
+                    .accessibilityLabel("Delete account")
+                    .accessibilityIdentifier("people.account.delete")
+            }
+            Spacer()
+        }
+        .frame(maxWidth: .infinity)
+        .overlay {
+            if confirming {
+                DeleteConfirmView(cat: person.cat, onBack: { confirming = false }) {
+                    Task {
+                        if await model.account.deleteAccount(personId: person.id) { onBack() }
+                        confirming = false
+                    }
+                }
             }
         }
     }

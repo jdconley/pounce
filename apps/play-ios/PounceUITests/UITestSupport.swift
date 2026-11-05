@@ -199,9 +199,10 @@ extension XCTestCase {
         let addTile = el(app, "picker.add")
         let confirm = el(app, "pickcat.confirm")
         XCTAssertTrue(addTile.waitForExistence(timeout: Live.t(10)), "no person picker")
+        let grownUp = el(app, "age.band.adult")
         XCTAssertTrue(until(15) {
             if confirm.exists { return true }
-            if addTile.exists { addTile.tap() }
+            if grownUp.exists { grownUp.tap() } else if addTile.exists { addTile.tap() }
             return confirm.waitForExistence(timeout: Live.t(2))
         }, "the new-person editor never opened")
         Thread.sleep(forTimeInterval: Live.pace(1))
