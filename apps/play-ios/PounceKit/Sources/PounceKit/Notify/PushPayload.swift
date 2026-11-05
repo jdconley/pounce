@@ -147,7 +147,9 @@ public struct PushPayload: Equatable, Sendable {
     private static func pounce(_ v: Any?) -> Pounce? {
         guard let o = v as? [String: Any], let id = o["id"] as? String else { return nil }
         var target: PounceTarget?
-        if let raw = o["target"], let data = try? JSONSerialization.data(withJSONObject: [raw]) {
+        // `data(withJSONObject:)` raises (not throws) on a non-JSON value: check first.
+        if let raw = o["target"], JSONSerialization.isValidJSONObject([raw]),
+           let data = try? JSONSerialization.data(withJSONObject: [raw]) {
             target = (try? JSONDecoder().decode([PounceTarget].self, from: data))?.first
         }
         return Pounce(id: id, target: target, answer: (o["answer"] as? String).flatMap(PounceAnswer.init(rawValue:)))

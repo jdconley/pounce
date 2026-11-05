@@ -79,6 +79,13 @@ import Testing
         #expect(legacy?.title == "JD")
     }
 
+    /// Review fix: a target that isn't JSON (never from APNs, but userInfo can hold anything)
+    /// is left out instead of raising.
+    @Test func aNonJSONTargetIsDropped() {
+        let p = PushPayload(userInfo: ["kind": "pounce", "pounce": ["id": "pc_1", "target": Date()]])
+        #expect(p?.pounce == .init(id: "pc_1", target: nil))
+    }
+
     @Test func aBadRoomCodeIsDropped() {
         let p = PushPayload(userInfo: ["kind": "your_move", "code": "nope!"])
         #expect(p?.code == nil)

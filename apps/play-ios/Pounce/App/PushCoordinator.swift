@@ -343,17 +343,19 @@ final class PushCoordinator: NSObject, UNUserNotificationCenterDelegate {
         case .open(let code):
             tapped(code: code)
         case .answer(let id, let answer, let opensApp):
-            pending = .answer(id: id, answer, opens: opensApp)
+            pending = .answer(id: id, answer, opens: opensApp, title: payload.title)
             if opensApp {
                 routePendingTap()
             } else {
-                // Runs in the background: iOS gives it a little time; the queue keeps it if not enough.
-                let task = UIApplication.shared.beginBackgroundTask(withName: "pounce-answer")
+                // Runs in the background: iOS gives it a little time; the queue (on disk before the
+                // request) keeps the answer for the next launch if that isn't enough.
+                let task = BackgroundTask()
+                task.id = UIApplication.shared.beginBackgroundTask(withName: "pounce-answer") { task.end() }
                 await routePending()
-                if task != .invalid { UIApplication.shared.endBackgroundTask(task) }
+                task.end()
             }
         case .pick(let id, let target, let from):
-            pending = .pick(id: id, target: target, from: from)
+            pending = .pick(id: id, target: target, from: from, title: payload.title)
             routePendingTap()
         case .snooze(let seconds):
             snooze(snoozable.content, key: snoozable.key.isEmpty ? UUID().uuidString : snoozable.key, after: seconds)
@@ -377,8 +379,9 @@ final class PushCoordinator: NSObject, UNUserNotificationCenterDelegate {
     /// What a tap or a button asked for, waiting for the app model (and its owner) if needed.
     private enum Pending {
         case open(String)
-        case answer(id: String, PounceAnswer, opens: Bool)
-        case pick(id: String, target: PounceTarget, from: PushFace?)
+        /// `title` names the person on this phone the pounce is for (§12.2).
+        case answer(id: String, PounceAnswer, opens: Bool, title: String?)
+        case pick(id: String, target: PounceTarget, from: PushFace?, title: String?)
     }
 
     private var pending: Pending?
@@ -393,11 +396,23 @@ final class PushCoordinator: NSObject, UNUserNotificationCenterDelegate {
         switch next {
         case .open(let code):
             model.open(code: code, intent: .rejoin)
-        case .answer(let id, let answer, let opens):
-            await model.answerPounce(id: id, answer: answer, choice: nil, link: nil, opens: opens)
-        case .pick(let id, let target, let from):
-            model.showPick(PickRequest(id: id, target: target, from: from, link: nil))
+        case .answer(let id, let answer, let opens, let title):
+            await model.answerPounce(
+                id: id, answer: answer, choice: nil, link: nil, person: model.pounceRecipient(title: title), opens: opens)
+        case .pick(let id, let target, let from, let title):
+            model.showPick(PickRequest(id: id, target: target, from: from, link: nil, person: model.pounceRecipient(title: title)))
         }
+    }
+}
+
+/// A background task ended once: when its work is done, or when iOS says time is up.
+@MainActor private final class BackgroundTask {
+    var id = UIBackgroundTaskIdentifier.invalid
+
+    func end() {
+        guard id != .invalid else { return }
+        UIApplication.shared.endBackgroundTask(id)
+        id = .invalid
     }
 }
 

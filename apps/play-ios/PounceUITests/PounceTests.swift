@@ -105,4 +105,14 @@ final class PounceTests: XCTestCase {
         el(app, "pick.no").tap()
         XCTAssertTrue(until(5) { !self.el(app, "sheet-pick").exists })
     }
+
+    /// Review fix: a link opened by mistake closes without answering.
+    func testLinkPickCloses() {
+        let app = XCUIApplication()
+        app.launchArguments = Live.arguments() + ["-uitest-reset", "-seed-people", "-demo-streaks", "-show-link"]
+        app.launch()
+        XCTAssertTrue(el(app, "sheet-pick").waitForExistence(timeout: Live.t(10)))
+        el(app, "pick.close").tap()
+        XCTAssertTrue(until(5) { !self.el(app, "sheet-pick").exists }, "the pick sheet didn't close")
+    }
 }

@@ -53,8 +53,6 @@ final class AppModel {
     let notify: NotifySettingsStore
     /// A pounce to answer by picking (a "you pick" push, or a Messages link): the pick sheet.
     var pick: PickRequest?
-    /// Bumped when a Messages link turned out used or expired: the link sheet shakes away.
-    private(set) var linkNope = 0
 
     // MARK: age (spec §14.1)
 
@@ -363,6 +361,11 @@ final class AppModel {
     /// A kitten keeps no typed name (a name plus an identifier is personal information): an owner
     /// from before the age check gets a generated one.
     private func applyAgeLimits() {
+        // A kitten who turned 13 loses the kitten-only panel, so its local 17:00 reminder goes too.
+        if ageBand != .kitten, settings.kittenDaily {
+            settings.kittenDaily = false
+            push?.setKittenDaily(on: false, name: "")
+        }
         guard !limits.typedNames, let owner = people.owner, AgeLimits.needsGeneratedName(owner.name) else { return }
         updateOwner(name: CatEditorView.randomName(), cat: owner.cat)
     }
@@ -691,13 +694,19 @@ final class AppModel {
     // MARK: Pounce (spec §12.4)
 
     /// A Messages pounce: who sent it and what it asks, then the pick sheet. A used or expired
-    /// link just bumps `linkNope` (the sheet never opens).
+    /// link (or one that can't be checked offline) gets the nope thump and sound, and no sheet.
     private func openLink(_ token: String) async {
         guard let found = await pounces.link(token: token) else {
-            linkNope += 1
+            Haptics.shared.thump()
+            Sound.shared.play(ArtName.Sound.sfxNope)
             return
         }
-        showPick(PickRequest(id: found.id, target: found.target, from: found.from, link: token))
+        showPick(PickRequest(id: found.id, target: found.target, from: found.from, link: token, person: people.owner?.id))
+    }
+
+    /// The person on this phone a pounce push is for: its title is their name (§12.2).
+    func pounceRecipient(title: String?) -> String? {
+        PounceRecipient.person(title: title, owner: people.owner, others: people.others)
     }
 
     func showPick(_ request: PickRequest) {
@@ -729,9 +738,10 @@ final class AppModel {
     /// `opens` goes to the table the answer names.
     @discardableResult
     func answerPounce(
-        id: String, answer: PounceAnswer, choice: String?, link: String?, opens: Bool = true
+        id: String, answer: PounceAnswer, choice: String?, link: String?, person: String? = nil, opens: Bool = true
     ) async -> PounceStore.AnswerResult {
-        let result = await pounces.answer(PendingAnswer(id: id, answer: answer, choice: choice, link: link, person: people.owner?.id))
+        let who = person ?? people.owner?.id
+        let result = await pounces.answer(PendingAnswer(id: id, answer: answer, choice: choice, link: link, person: who))
         if pick?.id == id { pick = nil }
         if opens, answer == .play, case .done(let code?) = result {
             #if DEBUG

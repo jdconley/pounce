@@ -86,21 +86,26 @@ import Observation
         for id in pending.map(\.id) { _ = await flush(id) }
     }
 
+    /// Sends a pounce's entry. An answer that replaced it while the request was out (In a bit,
+    /// then Play) isn't dropped with the reply: it goes out next.
     private func flush(_ id: String) async -> AnswerResult {
         guard !inFlight.contains(id), let entry = pending.first(where: { $0.id == id }) else { return .queued }
         inFlight.insert(id)
-        defer { inFlight.remove(id) }
+        let result: AnswerResult
         do {
             let code = try await service.answer(
                 id: entry.id, answer: entry.answer, choice: entry.choice, link: entry.link, person: entry.person)
-            drop(id)
-            return .done(code: code)
+            result = .done(code: code)
         } catch let error as APIError where Self.keeps(error) {
-            return .queued
+            result = .queued
         } catch {
-            drop(id)
-            return .failed
+            result = .failed
         }
+        inFlight.remove(id)
+        let replaced = pending.first(where: { $0.id == id }).map { $0 != entry } ?? false
+        if replaced { return await flush(id) }
+        if result != .queued { drop(id) }
+        return result
     }
 
     /// Worth trying again: offline, the server down, or the other answer still dealing the table.

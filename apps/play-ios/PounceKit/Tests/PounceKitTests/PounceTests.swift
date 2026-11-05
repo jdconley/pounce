@@ -197,6 +197,20 @@ final class FakePounces: PounceService, Sendable {
         #expect(fake.calls.withLock { $0 } == ["answer pc_1 no"])
     }
 
+    /// Review fix: In a bit is in flight when Play replaces it; the reply to In a bit must not
+    /// drop Play, which then goes out too.
+    @Test func aNewerAnswerWhileInFlightIsKept() async {
+        let fake = FakePounces(answer: .success(nil))
+        let store = PounceStore(service: fake, file: file())
+        async let first = store.answer(pending(.later))
+        try? await Task.sleep(for: .milliseconds(5))
+        let second = await store.answer(pending(.play))
+        _ = await first
+        #expect(second == .queued)
+        #expect(fake.calls.withLock { $0 } == ["answer pc_1 later", "answer pc_1 play"])
+        #expect(store.pending.isEmpty)
+    }
+
     @Test func sendReportsResting() async {
         let store = PounceStore(service: FakePounces(send: .failure(.rateLimited)), file: file())
         #expect(await store.send(pair: "pr_x", target: .new, person: "me") == .resting)
@@ -276,6 +290,30 @@ final class FakePounces: PounceService, Sendable {
         let tiles = PounceSheet.pickTiles(view: view(myMove: ["K9PQR"], theirMove: ["BBBBB"]), names: [:])
         #expect(tiles.map(PounceSheet.choice) == ["K9PQR", "BBBBB", "new"])
         #expect(PounceSheet.pickTiles(view: nil, names: [:]) == [.new])
+    }
+}
+
+/// Review fix: on a shared phone a pounce for a household person (titled with their name, §12.2)
+/// is answered as that person, not the owner.
+@Suite struct PounceRecipientTests {
+    private let owner = Person(id: "o", name: "JD", cat: 4)
+    private let ella = Person(id: "e", name: "Ella", cat: 2)
+
+    @Test func theTitleNamesTheRecipient() {
+        #expect(PounceRecipient.person(title: "Ella", owner: owner, others: [ella]) == "e")
+        #expect(PounceRecipient.person(title: "JD", owner: owner, others: [ella]) == "o")
+    }
+
+    @Test func anUnknownOrMissingTitleIsTheOwner() {
+        #expect(PounceRecipient.person(title: "Zed", owner: owner, others: [ella]) == "o")
+        #expect(PounceRecipient.person(title: nil, owner: owner, others: [ella]) == "o")
+        #expect(PounceRecipient.person(title: "Ella", owner: nil, others: [ella]) == "e")
+        #expect(PounceRecipient.person(title: nil, owner: nil, others: []) == nil)
+    }
+
+    /// A household person who shares the owner's name: the owner wins.
+    @Test func theOwnerWinsATie() {
+        #expect(PounceRecipient.person(title: "JD", owner: owner, others: [Person(id: "x", name: "JD", cat: 1)]) == "o")
     }
 }
 

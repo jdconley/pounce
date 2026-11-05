@@ -50,9 +50,10 @@ import Observation
         if changed { save() }
     }
 
-    /// The chosen values for the account's settings ledger; none on a kitten's (or unknown) device.
+    /// The chosen values for the account's settings ledger; none on a kitten's device (which never
+    /// signs in). An unknown band keeps them, so the ledger never reads them as removed.
     public func values(band: AgeBand?) -> [String: JSONValue] {
-        guard PushPolicy.registersRemote(band: band) else { return [:] }
+        guard band != .kitten else { return [:] }
         return entries.mapValues(\.v)
     }
 

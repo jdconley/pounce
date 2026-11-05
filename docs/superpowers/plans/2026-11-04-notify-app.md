@@ -136,3 +136,11 @@ Accessibility ids: `us.bell` (value `ready|sent|quiet|resting|play|later|no`), `
 - [ ] README flags; MANUAL-CHECKLIST: pounce phone to phone, through Messages, the actions on the lock screen, provisional "not now".
 - [ ] Whole-branch review; fix Critical/Important test-first.
 - [ ] Full verification: `swift test --package-path apps/play-ios/PounceKit` (also under Xcode 26.2's toolchain for the CI floor), `pnpm --filter @pounce/play-api test` + typecheck + lint, Debug simulator and Release generic builds, `scripts/check-assets.sh`, the touched UI tests plus SmokeTests/UsTests/AccountTests.
+
+## Changes made while executing
+
+- **Clock dials gained quarter-hour steppers** (`<id>.minus`, `<id>.plus`): XCUITest on iOS can't drive an adjustable element, and a precise time is fiddly by drag alone.
+- **Task 8's "simctl push shows the avatar" can't be done on the simulator:** `simctl push` skips service extensions. The intent-building code moved to `PounceNotify/Communication.swift`, compiled into both targets, and the Debug `-demo-communication` posts a pounce drawn by it once the app is in the background; `PushShotTests` screenshots that. The extension itself first runs on TestFlight (MANUAL-CHECKLIST).
+- **Communication notifications show the sender's name, then the recipient's** (iOS's group layout), so the recipient's name stays visible (§12.2) but is no longer the first line.
+- **Review fixes:** the answer queue no longer drops an answer that replaced an in-flight one; pounce answers go out as the person the push was for (its title names them, §12.2) rather than always the owner; a kitten's local reminder is removed when the band lifts; the pick sheet closes without answering; the waiting card undoes a refused answer; the background answer's task has an expiration handler; an unknown band keeps the notification keys in the account's ledger.
+- **PounceKit under Xcode 26.2:** the library and the new tests compile; two older test files use `Test.cancel` (26.4+), so the 26.2 run is a compile check, not a test run.

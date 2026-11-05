@@ -31,11 +31,11 @@ enum Communication {
         guard let payload = PushPayload(userInfo: content.userInfo), let plan = CommunicationPlan.make(payload) else {
             return nil
         }
-        let intent = intent(plan, body: content.body, art: art)
-        let interaction = INInteraction(intent: intent, response: nil)
+        let message = intent(plan, body: content.body, art: art)
+        let interaction = INInteraction(intent: message, response: nil)
         interaction.direction = .incoming
         interaction.donate(completion: nil)
-        return try? content.updating(from: intent)
+        return try? content.updating(from: message)
     }
 }
 

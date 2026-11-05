@@ -148,6 +148,14 @@ import Testing
         #expect(store.values(band: .adult) == [NotifyKey.reminders: .bool(true)])
     }
 
+    /// Review fix: a signed-in device whose band isn't known yet must not read as "every key went
+    /// away" in the account's settings ledger (which would write nulls over the account's choices).
+    @Test func anUnknownBandKeepsTheLedgerValues() {
+        let store = NotifySettingsStore(file: file())
+        store.set(NotifyKey.quietStart, ClockTime(h: 23, m: 0).json, now: 10)
+        #expect(store.values(band: nil) == [NotifyKey.quietStart: ClockTime(h: 23, m: 0).json])
+    }
+
     @Test func takeRemoteKeepsTheNewer() {
         let store = NotifySettingsStore(file: file())
         store.set(NotifyKey.reminders, .bool(false), now: 50)

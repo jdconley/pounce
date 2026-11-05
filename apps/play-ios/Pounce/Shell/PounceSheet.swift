@@ -276,7 +276,9 @@ struct WaitingPounceCard: View {
             .accessibilityIdentifier("waiting.no")
             ArtIconButton(icon: ArtName.iconPlay, color: Palette.lime, size: 62 * scale, label: "Play") {
                 if waiting.target == .pick {
-                    model.showPick(PickRequest(id: waiting.id, target: .pick, from: PushFace(name: view.partner.name, cat: view.partner.cat), link: nil))
+                    model.showPick(PickRequest(
+                        id: waiting.id, target: .pick, from: PushFace(name: view.partner.name, cat: view.partner.cat),
+                        link: nil, person: model.people.owner?.id))
                 } else {
                     answer(.play)
                 }
@@ -288,7 +290,14 @@ struct WaitingPounceCard: View {
     private func answer(_ a: PounceAnswer) {
         Haptics.shared.success()
         if a != .play { answered = a }
-        Task { await model.answerPounce(id: waiting.id, answer: a, choice: nil, link: nil) }
+        Task {
+            // Refused for good (expired, gone): the answer comes back off the card with a nope.
+            if await model.answerPounce(id: waiting.id, answer: a, choice: nil, link: nil) == .failed {
+                answered = nil
+                Haptics.shared.thump()
+                Sound.shared.play(ArtName.Sound.sfxNope)
+            }
+        }
     }
 }
 
@@ -335,6 +344,11 @@ struct PouncePickView: View {
                 .scrollClipDisabled()
                 .frame(maxWidth: 720)
                 HStack(spacing: 16 * scale) {
+                    // Closing answers nothing (a link opened by mistake keeps its token).
+                    PillButton(icon: ArtName.iconBack, color: Palette.violet, size: .medium, accessibilityLabel: "Close") {
+                        model.pick = nil
+                    }
+                    .accessibilityIdentifier("pick.close")
                     ArtIconButton(icon: ArtName.Habit.iconClock, color: Palette.sky, size: 64 * scale, label: "In a bit") {
                         answer(.later, choice: nil)
                     }
@@ -398,7 +412,8 @@ struct PouncePickView: View {
     private func answer(_ a: PounceAnswer, choice: String?) {
         let request = request
         Task {
-            let result = await model.answerPounce(id: request.id, answer: a, choice: choice, link: request.link)
+            let result = await model.answerPounce(
+                id: request.id, answer: a, choice: choice, link: request.link, person: request.person)
             if result == .failed {
                 shake += 1
                 Haptics.shared.thump()

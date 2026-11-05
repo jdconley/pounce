@@ -27,4 +27,6 @@ struct PickRequest: Identifiable, Equatable {
     var target: PounceTarget
     var from: PushFace?
     var link: String?
+    /// The person on this phone answering (the push's recipient, else the owner).
+    var person: String?
 }
