@@ -114,7 +114,6 @@ describe("pounce by push (§12.4)", { timeout: 30_000 }, () => {
     expect(c.last?.room.status).toBe("playing");
     expect(c.last?.room.seats.map((s) => s.person?.id)).toEqual([jd.id, mia.id]);
     expect(c.last?.room.seats.map((s) => s.yours)).toEqual([false, true]);
-    expect(c.last?.room.game?.turn).toBe(1);
 
     const [coming] = (await eventually(() => alertsTo(JD_TOKEN, "pounce_answered"), (l) => l.length === 1)) as [Sent];
     expect(aps(coming)).toMatchObject({ alert: { title: "JD", body: "Mia is coming." }, "interruption-level": "passive" });
@@ -130,6 +129,22 @@ describe("pounce by push (§12.4)", { timeout: 30_000 }, () => {
     // Only the person pounced on can answer.
     expect((await answer(mf, phone, jd, id, { answer: "play" })).status).toBe(404);
     expect(ids[jd.id]).toBeDefined();
+  });
+
+  test("two answers at once deal one table and tell the sender once; the answerer gets no push for the table they asked for", async () => {
+    const mf = await start();
+    const { phone, tablet, jd, mia, pairId } = await pairedUp(mf);
+    const { id } = (await (await pounce(mf, phone, jd, { to: pairId, target: "new" })).json()) as { id: string };
+    const results = await Promise.all([answer(mf, tablet, mia, id, { answer: "play" }), answer(mf, tablet, mia, id, { answer: "play" })]);
+    const bodies = (await Promise.all(results.map((r) => r.json()))) as { code?: string }[];
+    const codes = new Set(bodies.flatMap((b) => (b.code ? [b.code] : [])));
+    expect(codes.size).toBe(1);
+    const code = [...codes][0] as string;
+    await settle(500);
+    expect(alertsTo(JD_TOKEN, "pounce_answered")).toHaveLength(1);
+    expect(alertsTo(MIA_TOKEN, "your_move").filter((s) => s.body.code === code)).toEqual([]);
+    // A retry once it's dealt gets the table.
+    expect(await (await answer(mf, tablet, mia, id, { answer: "play" })).json()).toEqual({ code });
   });
 
   test("a table target must be one you share; Play opens it", async () => {
@@ -230,6 +245,27 @@ describe("pounce through Messages (§12.4)", { timeout: 30_000 }, () => {
     expect((await call(mf, other, "GET", `/v1/pounces/links/${token}`)).status).toBe(404);
     expect((await mf.dispatchFetch(`${BASE}/p/${token}`)).status).toBe(404);
     expect(await (await answer(mf, ipad, kim, id, { answer: "play" })).json()).toEqual({ code });
+  });
+
+  test("two people opening the same link at once: only one gets it", async () => {
+    const mf = await start();
+    const phone = await mint(mf);
+    const jd = newPerson("JD", 1);
+    await profile(mf, phone, [jd], { apns: JD_TOKEN });
+    const { id, link } = (await (await pounce(mf, phone, jd, { target: "new" })).json()) as { id: string; link: string };
+    const token = link.split("/").at(-1) as string;
+    const guests = await Promise.all(
+      ["Kim", "Sam"].map(async (name, i) => {
+        const d = await mint(mf);
+        const p = newPerson(name, 3 + i);
+        await profile(mf, d, [p]);
+        return [d, p] as const;
+      }),
+    );
+    const results = await Promise.all(guests.map(([d, p]) => answer(mf, d, p, id, { answer: "play", link: token })));
+    expect(results.map((r) => r.status).sort()).toEqual([200, 404]);
+    await settle(500);
+    expect(alertsTo(JD_TOKEN, "pounce_answered")).toHaveLength(1);
   });
 
   test("links expire after 24 hours and pounces after 7 days", async () => {

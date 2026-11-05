@@ -62,6 +62,8 @@ export class GameRoom extends DurableObject<Env> {
   private streakChain: Promise<void> = Promise.resolve();
   /** Each player's latest views of their pairs at this table, for the next "your move" (§12.7). */
   private lastViews = new Map<string, PairViews[string]>();
+  /** While dealing a pounce's table: the player whose deal-time "your move" is skipped. */
+  private quietFor: string | null = null;
 
   constructor(ctx: DurableObjectState, env: Env) {
     super(ctx, env);
@@ -108,8 +110,14 @@ export class GameRoom extends DurableObject<Env> {
    * from the given seats and deals at once. `first` is the player with the
    * first move, who gets "your move" from here.
    */
-  async initRematch(code: string, spec: RematchIntent): Promise<{ ok: true; first: string | null } | { exists: true }> {
+  async initRematch(
+    code: string,
+    spec: RematchIntent,
+    /** A pounce's answerer, who is opening this table now: no "your move" push for them (§12.4). */
+    quietFor?: string,
+  ): Promise<{ ok: true; first: string | null } | { exists: true }> {
     if (this.core) return { exists: true };
+    this.quietFor = quietFor ?? null;
     this.createSchema();
     this.core = new RoomCore(
       RoomCore.rematchState(code, spec, Date.now()),
@@ -120,6 +128,7 @@ export class GameRoom extends DurableObject<Env> {
       this.features(),
     );
     await this.after(this.core.deal());
+    this.quietFor = null;
     const { state } = this.core;
     const actor = state.gameState ? catTower.currentActor(state.gameState) : null;
     return { ok: true, first: actor === null ? null : (state.seats[actor]?.playerId ?? null) };
@@ -371,6 +380,7 @@ export class GameRoom extends DurableObject<Env> {
 
     for (const intent of core.drainStreakIntents()) this.reportStreak(intent);
     for (const intent of core.drainPushIntents()) {
+      if (intent.kind === "your_turn" && intent.playerId !== undefined && intent.playerId === this.quietFor) continue;
       if (intent.kind === "your_turn" && intent.playerId && streaksOn(this.env)) {
         const rich = { ...intent, playerId: intent.playerId };
         this.streakChain = this.streakChain.then(() => this.pushYourMove(rich)).catch(() => undefined);

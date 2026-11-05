@@ -87,6 +87,17 @@ export function answerable(row: PounceRow, now: number): boolean {
   return now - row.at < ANSWER_MS;
 }
 
+/**
+ * Whether `by` may record `answer` now. The sender's `Player` runs this and
+ * records the answer in one step, so of two answers at once (a double tap,
+ * two people on one link) exactly one claims it.
+ */
+export function claimAnswer(row: PounceRow, by: string, answer: Answer, now: number): "claim" | "repeat" | "gone" | "expired" {
+  if (row.to !== null && row.to !== by) return "gone";
+  if (!answerable(row, now)) return "expired";
+  return nextAnswer(row, answer) ? "claim" : "repeat";
+}
+
 /** Whether `answer` changes the pounce: not a repeat, and never a step down from "Play". */
 export function nextAnswer(row: PounceRow, answer: Answer): boolean {
   return row.answer !== answer && row.answer !== "play";

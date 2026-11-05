@@ -6,7 +6,7 @@ import { gate } from "../notify/policy";
 import { streakBlock } from "../notify/pushes";
 import { decide, dueSlots, emptyNotifyState, nextWake, noteSent, noteTurn, type NotifyState, type PairFacts, type ReminderInput } from "../notify/reminders";
 import { notifySettings, type NotifySettings } from "../notify/settings";
-import { KEEP_MS, restingUntil, type Answer, type PounceRow, type Target } from "../pounce/limits";
+import { claimAnswer, KEEP_MS, restingUntil, type Answer, type PounceRow, type Target } from "../pounce/limits";
 import { createTables, listTables, removeTable, upsertTable, type TableEntry } from "../room/tables";
 import { FALLBACK_ZONE } from "../streaks/clock";
 import { leaveAllPairs } from "../streaks/pairs";
@@ -635,16 +635,44 @@ export class Player extends DurableObject<Env> {
     return { ok: true };
   }
 
-  /** Records an answer: a link pounce now belongs to whoever answered it. */
-  answerPounce(id: string, by: string, answer: Answer, code: string | null, now: number): void {
+  /**
+   * Claims a pounce for an answer and records it, in one step with no await
+   * (§12.4): of two answers at once, one claims it and the other sees the
+   * result. A link pounce now belongs to whoever answered it. `code` is the
+   * table, or null while a new one is being dealt.
+   */
+  claimAnswer(
+    id: string,
+    by: string,
+    answer: Answer,
+    code: string | null,
+    now: number,
+  ): { claimed: { answer: Answer | null; answeredAt: number | null; code: string | null } } | { repeat: StoredPounce } | { gone: true } | { expired: true } {
+    const row = this.pounce(id);
+    if (!row) return { gone: true };
+    const verdict = claimAnswer(row, by, answer, now);
+    if (verdict === "gone") return { gone: true };
+    if (verdict === "expired") return { expired: true };
+    if (verdict === "repeat") return { repeat: row };
     this.ctx.storage.sql.exec(
-      "UPDATE pounces SET to_id = COALESCE(to_id, ?), answer = ?, answered_at = ?, code = COALESCE(?, code) WHERE id = ?",
+      "UPDATE pounces SET to_id = COALESCE(to_id, ?), answer = ?, answered_at = ?, code = ? WHERE id = ?",
       by,
       answer,
       now,
-      code,
+      code ?? row.code,
       id,
     );
+    return { claimed: { answer: row.answer, answeredAt: row.answeredAt, code: row.code } };
+  }
+
+  /** The new table a claimed "Play" was dealt. */
+  setPounceCode(id: string, code: string): void {
+    this.ctx.storage.sql.exec("UPDATE pounces SET code = ? WHERE id = ?", code, id);
+  }
+
+  /** Dealing failed: the pounce goes back to how it was, so it can be answered again. */
+  releaseAnswer(id: string, prev: { answer: Answer | null; answeredAt: number | null; code: string | null }): void {
+    this.ctx.storage.sql.exec("UPDATE pounces SET answer = ?, answered_at = ?, code = ? WHERE id = ?", prev.answer, prev.answeredAt, prev.code, id);
   }
 
   private prunePounces(now: number): void {

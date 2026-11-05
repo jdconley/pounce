@@ -1,6 +1,6 @@
 import { describe, expect, test } from "vitest";
 
-import { ANSWER_MS, answerable, LIVE_MS, nextAnswer, NO_REST_MS, pounceView, restingUntil, UNANSWERED_REST_MS, type PounceRow } from "./limits";
+import { ANSWER_MS, answerable, claimAnswer, LIVE_MS, nextAnswer, NO_REST_MS, pounceView, restingUntil, UNANSWERED_REST_MS, type PounceRow } from "./limits";
 
 const M = 60_000;
 const H = 60 * M;
@@ -62,6 +62,20 @@ describe("pounceView", () => {
     expect(pounceView([], theirs, NOW + H).waiting).toBeNull();
     expect(pounceView([], [row({ answer: "no", answeredAt: NOW })], NOW).waiting).toBeNull();
     expect(pounceView([row({ answer: "no", answeredAt: NOW })], [], NOW).resting).toBe(true);
+  });
+});
+
+describe("claimAnswer", () => {
+  test("the person pounced on claims it; a link's first answerer becomes that person", () => {
+    expect(claimAnswer(row({ to: "p_mia" }), "p_mia", "play", NOW)).toBe("claim");
+    expect(claimAnswer(row({ to: "p_mia" }), "p_kim", "play", NOW)).toBe("gone");
+    expect(claimAnswer(row({ to: null }), "p_kim", "play", NOW)).toBe("claim");
+  });
+
+  test("a repeat, a step down from Play, or a late answer doesn't claim", () => {
+    expect(claimAnswer(row({ answer: "play", answeredAt: NOW }), "p_mia", "play", NOW)).toBe("repeat");
+    expect(claimAnswer(row({ answer: "play", answeredAt: NOW }), "p_mia", "no", NOW)).toBe("repeat");
+    expect(claimAnswer(row({ at: NOW - ANSWER_MS }), "p_mia", "play", NOW)).toBe("expired");
   });
 });
 

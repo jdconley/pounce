@@ -9,7 +9,7 @@ import { defaultRoomName } from "../room/names";
 import { DEFAULT_BACK, DEFAULT_RUG } from "../streaks/catalog";
 import { FALLBACK_ZONE } from "../streaks/clock";
 
-import { ANSWER_MS, answerable, KEEP_MS, nextAnswer, type Target } from "./limits";
+import { ANSWER_MS, KEEP_MS, type Target } from "./limits";
 import { LINK_TOKEN, parseAnswer, parsePounce, POUNCE_ID } from "./parse";
 
 import type { Env } from "../env";
@@ -120,12 +120,16 @@ async function shared(env: Env, a: string, b: string, code: string): Promise<boo
   return live(x) && live(y);
 }
 
-/** Deals a new Cat Tower table seating exactly these two (§12.4), with the sender's last-used look. */
-async function dealFor(env: Env, seats: SeatInfo[], sender: string, hostDeviceId: string): Promise<string | null> {
+/**
+ * Deals a new Cat Tower table seating exactly these two (§12.4), with the
+ * sender's last-used look. The answerer, who is opening it now, gets no
+ * "your move" push for it.
+ */
+async function dealFor(env: Env, seats: SeatInfo[], sender: string, hostDeviceId: string, answerer: string): Promise<string | null> {
   const look = (await player(env, sender).lastLook()) ?? { rug: DEFAULT_RUG, back: DEFAULT_BACK };
   for (let i = 0; i < ROOM_CODE_ATTEMPTS; i++) {
     const code = newRoomCode(cryptoRng);
-    const made = await env.ROOMS.get(env.ROOMS.idFromName(code)).initRematch(code, { name: defaultRoomName(code), look, seats, hostDeviceId });
+    const made = await env.ROOMS.get(env.ROOMS.idFromName(code)).initRematch(code, { name: defaultRoomName(code), look, seats, hostDeviceId }, answerer);
     if ("ok" in made) return code;
   }
   return null;
@@ -134,8 +138,9 @@ async function dealFor(env: Env, seats: SeatInfo[], sender: string, hostDeviceId
 /**
  * `POST /v1/pounces/{id}/answer` (§12.4): Play (to the table, a new game, or
  * the one picked), In a bit, or Not now. Idempotent, so the app's background
- * retry is safe; Play is never taken back. A link pounce needs its token,
- * which the first answer uses up.
+ * retry is safe; Play is never taken back. The sender's `Player` claims the
+ * answer in one step, so two answers at once deal one table and send one
+ * push. A link pounce needs its token, and the first answer takes it.
  */
 export async function answerPounce(
   env: Env,
@@ -157,31 +162,44 @@ export async function answerPounce(
   } else if (row.to !== me) {
     return fail(404, "not_found");
   }
-  if (!answerable(row, now)) return fail(410, "expired");
   const done = (code: string | null): Result<{ code?: string }> => ({ ok: code ? { code } : {} });
-  if (!nextAnswer(row, parsed.answer)) return done(row.code);
 
-  let code: string | null = null;
-  if (parsed.answer === "play") {
-    const choice = typeof row.target === "object" ? row.target.table : row.target === "pick" ? parsed.choice : "new";
+  // Where "Play" goes, checked before claiming: a table you both still sit at, or a new one.
+  let choice: string | null = null;
+  if (parsed.answer === "play" && row.answer !== "play") {
+    choice = typeof row.target === "object" ? row.target.table : row.target === "pick" ? parsed.choice : "new";
     if (choice === null) return fail(400, "bad_request");
-    if (choice === "new") {
-      const [mine, theirs, person] = await Promise.all([player(env, me).meta(), player(env, sender).meta(), personOn(env, deviceId, me, named)]);
-      if (!mine || !theirs || !person) return fail(404, "no_player");
-      // The answerer is here now, so they get the first move (seat 1 in Cat Tower).
-      const seats: SeatInfo[] = [
-        { kind: "human", person: { id: row.fromPerson, name: theirs.name, cat: theirs.cat }, deviceId: row.fromDevice, playerId: sender },
-        { kind: "human", person: { id: person, name: mine.name, cat: mine.cat }, deviceId, playerId: me },
-      ];
-      code = await dealFor(env, seats, sender, deviceId);
-      if (!code) return fail(503, "no_room_code");
-    } else {
-      if (!(await shared(env, me, sender, choice))) return fail(409, "not_shared");
-      code = choice;
+    if (choice !== "new" && !(await shared(env, me, sender, choice))) return fail(409, "not_shared");
+  }
+  const dealing = choice === "new";
+  const claim = await player(env, sender).claimAnswer(id, me, parsed.answer, dealing ? null : choice, now);
+  if ("gone" in claim) return fail(404, "not_found");
+  if ("expired" in claim) return fail(410, "expired");
+  if ("repeat" in claim) {
+    // The other answer is still dealing the table: the app retries.
+    if (claim.repeat.answer === "play" && claim.repeat.code === null) return fail(409, "busy");
+    return done(claim.repeat.code);
+  }
+
+  let code = dealing ? null : choice;
+  if (dealing) {
+    const [mine, theirs, person] = await Promise.all([player(env, me).meta(), player(env, sender).meta(), personOn(env, deviceId, me, named)]);
+    // The answerer is here now, so they get the first move (seat 1 in Cat Tower, unless a Cucumber is flipped).
+    const seats: SeatInfo[] | null =
+      mine && theirs && person
+        ? [
+            { kind: "human", person: { id: row.fromPerson, name: theirs.name, cat: theirs.cat }, deviceId: row.fromDevice, playerId: sender },
+            { kind: "human", person: { id: person, name: mine.name, cat: mine.cat }, deviceId, playerId: me },
+          ]
+        : null;
+    code = seats ? await dealFor(env, seats, sender, deviceId, me) : null;
+    if (!code) {
+      await player(env, sender).releaseAnswer(id, claim.claimed);
+      return seats ? fail(503, "no_room_code") : fail(404, "no_player");
     }
+    await player(env, sender).setPounceCode(id, code);
   }
   if (row.to === null && parsed.link !== null) await links(env).take(parsed.link, now);
-  await player(env, sender).answerPounce(id, me, parsed.answer, code, now);
 
   const [mine, theirs] = await Promise.all([player(env, me).meta(), player(env, sender).meta()]);
   if (mine && theirs) {
@@ -190,7 +208,7 @@ export async function answerPounce(
     const push = answeredPush({ id, pair, to: theirs.name, who, answer: parsed.answer, code });
     await player(env, sender).status(push, now).catch(() => false);
   }
-  return done(code ?? row.code);
+  return done(code ?? claim.claimed.code);
 }
 
 /** `GET /v1/pounces/links/{token}` and the `/p/` page: an unused, unexpired link's pounce and sender. */
