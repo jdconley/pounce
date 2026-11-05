@@ -203,8 +203,3 @@ export async function linkPounce(env: Env, token: string, now: number): Promise<
   if (!row || row.to !== null || !meta || meta.forwardTo !== null) return null;
   return { id: row.id, from: { name: meta.name, cat: meta.cat }, target: row.target };
 }
-
-/** A deleted or merged-away player's pounce index rows go (§14). */
-export async function forgetPounces(env: Env, playerId: string): Promise<void> {
-  await links(env).removePlayer(playerId);
-}

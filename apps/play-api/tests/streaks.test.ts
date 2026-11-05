@@ -66,6 +66,7 @@ function worker(options: { streaks?: boolean; persist?: string } = {}): Miniflar
       PLAYERS: { className: "Player", useSQLite: true },
       IDENTITIES: { className: "Identities", useSQLite: true },
       PAIRS: { className: "Pair", useSQLite: true },
+      LINKS: { className: "Links", useSQLite: true },
     },
     bindings: {
       TOKEN_SECRET: SECRET,

@@ -5,6 +5,19 @@ import type { Env } from "../env";
 /** The single instance's name. */
 export const LINKS_NAME = "links";
 
+/**
+ * Deleting or merging away a player forgets its pounce ids and link tokens
+ * (§14). Links only exist with streaks on; never fatal.
+ */
+export async function forgetLinks(env: Env, playerId: string): Promise<void> {
+  if (!["on", "1", "true"].includes((env.STREAKS ?? "").toLowerCase())) return;
+  try {
+    await env.LINKS.get(env.LINKS.idFromName(LINKS_NAME)).removePlayer(playerId);
+  } catch {
+    console.error("links_forget_failed");
+  }
+}
+
 /** `pounce`: a pounce id → its sender. `link`: a Messages link token → its sender and pounce (§12.4). */
 export type LinkKind = "pounce" | "link";
 export type LinkRow = { kind: LinkKind; playerId: string; pounceId: string; expires: number };

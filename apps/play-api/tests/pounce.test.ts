@@ -1,6 +1,7 @@
 import { afterEach, beforeAll, describe, expect, test } from "vitest";
 
 import {
+  appleProof,
   BASE,
   bundle,
   call,
@@ -246,6 +247,45 @@ describe("pounce through Messages (§12.4)", { timeout: 30_000 }, () => {
     expect(await rows()).toHaveLength(1);
     await mf.dispatchFetch(`${BASE}/__test/remind?player=${ids[jd.id] as string}&now=${Date.now() + 7 * DAY_MS + 1}`);
     expect(await rows()).toEqual([]);
+  });
+});
+
+describe("pounces and deletion (§14)", { timeout: 30_000 }, () => {
+  const linkOf = async (mf: Miniflare, d: Device, p: Person) => {
+    const { id, link } = (await (await pounce(mf, d, p, { target: "new" })).json()) as { id: string; link: string };
+    return { id, token: link.split("/").at(-1) as string };
+  };
+  const indexed = async (mf: Miniflare, key: string) => (await (await mf.dispatchFetch(`${BASE}/__test/link?key=${key}`)).json()) !== null;
+
+  test("deleting an account forgets its links", async () => {
+    const mf = await start();
+    const phone = await mint(mf);
+    const jd = newPerson("JD", 1);
+    await profile(mf, phone, [jd]);
+    const { id, token } = await linkOf(mf, phone, jd);
+    expect(await indexed(mf, token)).toBe(true);
+    expect((await call(mf, phone, "DELETE", `/v1/me?person=${jd.id}`)).status).toBe(204);
+    expect(await indexed(mf, token)).toBe(false);
+    expect(await indexed(mf, id)).toBe(false);
+    expect((await mf.dispatchFetch(`${BASE}/p/${token}`)).status).toBe(404);
+  });
+
+  test("a guest merged into an account takes no pounces or links along", async () => {
+    const mf = await start();
+    const phone = await mint(mf);
+    const ipad = await mint(mf);
+    const jd = newPerson("JD", 1);
+    const jdPad = newPerson("JD", 1);
+    await profile(mf, phone, [jd]);
+    const padIds = await profile(mf, ipad, [jdPad]);
+    const { token } = await linkOf(mf, ipad, jdPad);
+    const signIn = async (d: Device, p: Person) =>
+      call(mf, d, "POST", "/v1/identities/apple", { proof: await appleProof("apple-jd"), person: { id: p.id, key: p.key } });
+    expect((await signIn(phone, jd)).status).toBe(200);
+    expect(((await (await signIn(ipad, jdPad)).json()) as { outcome: string }).outcome).toBe("merged");
+    expect(await indexed(mf, token)).toBe(false);
+    const rows = await (await mf.dispatchFetch(`${BASE}/__test/pounces?player=${padIds[jdPad.id] as string}`)).json();
+    expect(rows).toEqual([]);
   });
 });
 

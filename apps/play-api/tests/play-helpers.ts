@@ -70,6 +70,9 @@ export async function worker(
     },
     ...(options.persist ? { durableObjectsPersist: options.persist } : {}),
     outboundService: async (request: MiniflareRequest) => {
+      if (request.url === "https://appleid.apple.com/auth/keys") {
+        return new MiniflareResponse(JSON.stringify({ keys: [(await appleKeys()).jwk] }), { headers: { "content-type": "application/json" } });
+      }
       if (new URL(request.url).host === "api.push.apple.com") {
         options.sent.push({
           token: new URL(request.url).pathname.split("/").at(-1) as string,
@@ -81,6 +84,38 @@ export async function worker(
       return new MiniflareResponse(null, { status: 599 });
     },
   });
+}
+
+let apple: Promise<{ rsa: CryptoKeyPair; jwk: JsonWebKey }> | null = null;
+const encoder = new TextEncoder();
+
+/** A fixture Sign in with Apple key pair; the fake Apple serves its public half. */
+function appleKeys(): Promise<{ rsa: CryptoKeyPair; jwk: JsonWebKey }> {
+  apple ??= (async () => {
+    const rsa = (await crypto.subtle.generateKey(
+      { name: "RSASSA-PKCS1-v1_5", modulusLength: 2048, publicExponent: new Uint8Array([1, 0, 1]), hash: "SHA-256" },
+      true,
+      ["sign", "verify"],
+    )) as CryptoKeyPair;
+    const jwk = { ...(await crypto.subtle.exportKey("jwk", rsa.publicKey)), kid: "TEST1", use: "sig", alg: "RS256" } as JsonWebKey;
+    return { rsa, jwk };
+  })();
+  return apple;
+}
+
+let nonces = 0;
+
+/** A Sign in with Apple proof for `sub`, signed with the fixture key (never a real one). */
+export async function appleProof(sub: string): Promise<{ identityToken: string; nonce: string }> {
+  const { rsa } = await appleKeys();
+  const nonce = `nonce-${(nonces += 1)}-${Math.random()}`;
+  const now = Math.floor(Date.now() / 1000);
+  const json = (v: unknown) => base64url(encoder.encode(JSON.stringify(v)));
+  const digest = new Uint8Array(await crypto.subtle.digest("SHA-256", encoder.encode(nonce)));
+  const hashed = [...digest].map((b) => b.toString(16).padStart(2, "0")).join("");
+  const input = `${json({ alg: "RS256", kid: "TEST1" })}.${json({ iss: "https://appleid.apple.com", aud: CLIENT_ID, exp: now + 600, iat: now, sub, nonce: hashed })}`;
+  const sig = await crypto.subtle.sign("RSASSA-PKCS1-v1_5", rsa.privateKey, encoder.encode(input));
+  return { identityToken: `${input}.${base64url(new Uint8Array(sig))}`, nonce };
 }
 
 export const newPerson = (name: string, cat: number): Person => ({

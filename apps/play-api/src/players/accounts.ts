@@ -1,3 +1,4 @@
+import { forgetLinks } from "../links/links";
 import { leaveAllPairs, mergePairs, syncPairPeople } from "../streaks/pairs";
 import { streaksOn } from "../streaks/profile";
 
@@ -153,6 +154,8 @@ export async function merge(env: Env, from: string, to: string, now: number): Pr
   await Promise.all(exported.tables.map((t) => room(env, t.code).adopt({ from, to })));
   await player(env, from).retire();
   await mergePairs(env, from, to, now);
+  // The guest's pounces are short-lived; they end with it (its rows go with the stub's storage).
+  await forgetLinks(env, from);
   await identities(env).repoint(from, to);
   await player(env, from).becomeStub(to, now);
 }
@@ -324,6 +327,7 @@ export async function deleteMe(env: Env, me: string, now: number, fetcher: typeo
   await identities(env).removePlayer(me);
   await self.retire();
   await leaveAllPairs(env, me);
+  await forgetLinks(env, me);
   await Promise.all(exported.devices.map((d) => device(env, d).forgetPlayer(me)));
   await eachRoom(
     exported.tables.map((t) => t.code),

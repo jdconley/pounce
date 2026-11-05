@@ -1,5 +1,6 @@
 import { DurableObject } from "cloudflare:workers";
 
+import { forgetLinks } from "../links/links";
 import { deliverToPlayer, type PushProfile } from "../notify/deliver";
 import { gate } from "../notify/policy";
 import { streakBlock } from "../notify/pushes";
@@ -803,6 +804,7 @@ export class Player extends DurableObject<Env> {
         env.IDENTITIES.get(env.IDENTITIES.idFromName(IDENTITIES_NAME)).removePlayer(id),
       ]);
       await leaveAllPairs(env, id, this.pairList());
+      await forgetLinks(env, id);
     }
     await this.destroy();
   }
