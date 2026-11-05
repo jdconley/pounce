@@ -251,6 +251,10 @@ struct UsView: View {
                 if !view.gifts.isEmpty {
                     Image(ArtName.Habit.giftBox).resizable().scaledToFit().frame(width: 22).offset(x: 6, y: 34)
                 }
+                // A kitten's unapproved person (parent consent, PR 9).
+                if model.pounceLocked(view.pair) {
+                    Image(ArtName.Habit.iconPadlock).resizable().scaledToFit().frame(width: 22).offset(x: -34, y: 34)
+                }
             }
             NameTag(view.partner.name, maxWidth: 76 * rowScale, active: on, size: 13 * rowScale)
         }
@@ -268,6 +272,7 @@ struct UsView: View {
         }
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(Text("\(view.partner.name), \(view.count)", comment: "VoiceOver: a pair's cat on the Us screen"))
+        .accessibilityValue(model.pounceLocked(view.pair) ? "locked" : "")
         .accessibilityAddTraits(on ? [.isButton, .isSelected] : .isButton)
         .accessibilityIdentifier("us.pair.\(index)")
         .accessibilityAction(named: Text("Pin", comment: "VoiceOver: pin a pair as the top one")) { pin(view) }

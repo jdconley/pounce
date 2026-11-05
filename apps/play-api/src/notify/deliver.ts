@@ -32,13 +32,25 @@ export async function badgeFor(env: Env, deviceId: string, also?: string): Promi
   return mine.size;
 }
 
-/** Sends one push to every device of a player, each with its own badge. True if any device got it. */
-export async function deliverToPlayer(env: Env, profile: PushProfile, o: Outgoing, level: Level, also?: string): Promise<boolean> {
+/**
+ * Sends one push to every device of a player, each with its own badge. True if any device got it.
+ * `senders` are the people behind it, which a consented kitten's device checks (parent consent,
+ * plan decision 16); without them a kitten's device refuses it.
+ */
+export async function deliverToPlayer(
+  env: Env,
+  profile: PushProfile,
+  o: Outgoing,
+  level: Level,
+  also?: string,
+  senders?: (string | null)[],
+): Promise<boolean> {
+  const gate = senders ? { recipient: profile.id, senders } : undefined;
   const results = await Promise.all(
     profile.devices.map(async (d) => {
       try {
         const body = apnsBody(o, level, await badgeFor(env, d, also));
-        return (await device(env, d).pushAlert(body, collapseId(o.collapse), level)).sent;
+        return (await device(env, d).pushAlert(body, collapseId(o.collapse), level, gate)).sent;
       } catch {
         return false;
       }

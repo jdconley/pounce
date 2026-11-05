@@ -137,6 +137,31 @@ Needs the server with `STREAKS` on (production once this PR deploys).
 - [ ] A kitten's phone never shows a live table; a teen's shows none between 00:00 and 06:00.
 - [ ] Two tables: lock on one, come back and lock on the other: only the newer live table stays.
 
+## Parent consent for kittens (daily habit PR 9, TestFlight builds and real texts)
+
+Needs the five `PLAY_API_TWILIO_*` secrets and a verified sending number; without them the parent's
+send leaves the kitten on the hourglass.
+
+- [ ] A kitten's own phone (age keypad under 13): the gear shows the padlocked bell and six numerals.
+- [ ] A signed-in adult's phone: gear, Kittens, plus, enter the six numerals: the kitten appears with
+      the hourglass; the kitten's bell falls asleep within 15 seconds.
+- [ ] The phone button: the notice page loads, enter a real mobile number, send: a text arrives with
+      the link; the card shows the phone.
+- [ ] Open the link: the page only asks; nothing changes until the button. Tap it: the kitten's bell
+      rings (the normal bell) and iOS asks the kitten's phone for notifications.
+- [ ] Toggle a person on, have them move at a shared table while the kitten's phone is locked: "your
+      move" arrives. Toggle them off: nothing arrives. Their pounce: the same.
+- [ ] A day or so later the second text arrives; reply STOP: the kitten's bell sleeps again and no
+      push arrives. (This needs the Messaging Service's incoming webhook, root README step 3. If the
+      bell keeps ringing, check that webhook first.)
+- [ ] In the Twilio console's message logs, both texts are gone after the revoke.
+- [ ] Give consent again, then revoke from the panel (the bell with a slash): pushes stop at once.
+- [ ] With Screen Time Communication Limits on the kitten (Family Sharing): a padlocked person in the
+      Pounce sheet, tapped, shows Apple's ask; approve in Messages: the padlock goes and the parent's
+      toggle shows it, read-only.
+- [ ] In App Store Connect's sandbox, withdraw the significant-change approval for the kitten: a
+      `RESCIND_CONSENT` arrives (sandbox notifications on) and consent ends.
+
 ## Performance and accessibility
 
 - [ ] Instruments idle-CPU check on the oldest iPhone available: the table scene should pause when

@@ -1,3 +1,4 @@
+import { endKitten, parentGone, parentMerged } from "../kittens/kittens";
 import { forgetLinks } from "../links/links";
 import { leaveAllPairs, mergePairs, syncPairPeople } from "../streaks/pairs";
 import { streaksOn } from "../streaks/profile";
@@ -69,7 +70,7 @@ export async function uploadProfile(
       continue;
     }
     const p = player(env, bound.playerId);
-    await p.touch({
+    const { previousBand } = await p.touch({
       playerId: bound.playerId,
       deviceId,
       name: person.name,
@@ -81,6 +82,8 @@ export async function uploadProfile(
     });
     await p.addIdentity({ provider: "device", subjectHash: hash, deviceId, secret: null });
     players[person.id] = bound.playerId;
+    // A kitten who turned 13 no longer needs a parent's consent: the record goes (plan decision 12).
+    if (previousBand === "kitten" && ageBand && ageBand !== "kitten") await endKitten(env, bound.playerId);
   }
 
   const index = device(env, deviceId);
@@ -149,6 +152,8 @@ export async function deviceTables(env: Env, deviceId: string): Promise<TableEnt
  */
 export async function merge(env: Env, from: string, to: string, now: number): Promise<void> {
   const exported = await player(env, from).exportForMerge();
+  // Before the pairs move: `from`'s partners, any of whom may be a kitten that approved `from`.
+  const partners = (await player(env, from).pairList()).map((r) => r.partnerId);
   await player(env, to).absorb(exported, now);
   await Promise.all(exported.devices.map((d) => device(env, d).repointPlayer(from, to)));
   await Promise.all(exported.tables.map((t) => room(env, t.code).adopt({ from, to })));
@@ -156,6 +161,7 @@ export async function merge(env: Env, from: string, to: string, now: number): Pr
   await mergePairs(env, from, to, now);
   // The guest's pounces are short-lived; they end with it (its rows go with the stub's storage).
   await forgetLinks(env, from);
+  await parentMerged(env, from, to, partners);
   await identities(env).repoint(from, to);
   await player(env, from).becomeStub(to, now);
 }
@@ -328,6 +334,9 @@ export async function deleteMe(env: Env, me: string, now: number, fetcher: typeo
   await self.retire();
   await leaveAllPairs(env, me);
   await forgetLinks(env, me);
+  // Parent consent (plan decisions 10, 11): a kitten's record goes; a parent is unlinked from theirs.
+  await endKitten(env, me);
+  await parentGone(env, me);
   await Promise.all(exported.devices.map((d) => device(env, d).forgetPlayer(me)));
   await eachRoom(
     exported.tables.map((t) => t.code),

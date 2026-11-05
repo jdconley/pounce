@@ -1829,6 +1829,60 @@
   "batch": "habit"
  },
  {
+  "name": "kitten-bell-locked",
+  "dest": "imageset",
+  "points": [
+   240,
+   240
+  ],
+  "batch": "habit"
+ },
+ {
+  "name": "icon-kittens",
+  "dest": "imageset",
+  "points": [
+   28,
+   28
+  ],
+  "batch": "habit"
+ },
+ {
+  "name": "icon-padlock",
+  "dest": "imageset",
+  "points": [
+   28,
+   28
+  ],
+  "batch": "habit"
+ },
+ {
+  "name": "icon-phone",
+  "dest": "imageset",
+  "points": [
+   28,
+   28
+  ],
+  "batch": "habit"
+ },
+ {
+  "name": "icon-hourglass",
+  "dest": "imageset",
+  "points": [
+   28,
+   28
+  ],
+  "batch": "habit"
+ },
+ {
+  "name": "icon-bell-off",
+  "dest": "imageset",
+  "points": [
+   28,
+   28
+  ],
+  "batch": "habit"
+ },
+ {
   "name": "AppIcon",
   "dest": "appicon",
   "points": [

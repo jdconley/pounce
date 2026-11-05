@@ -1,3 +1,4 @@
+import { kittenMayPounce } from "../kittens/kittens";
 import { LINKS_NAME } from "../links/links";
 import { deliverToPlayer } from "../notify/deliver";
 import { gate } from "../notify/policy";
@@ -75,6 +76,8 @@ export async function createPounce(
   const pairId = parsed.to;
   const row = (await self.pairList()).find((r) => r.pairId === pairId);
   if (!row) return fail(404, "not_found");
+  // A linked kitten pounces only people its parent approved (parent consent, plan decision 20).
+  if (profile.band === "kitten" && !(await kittenMayPounce(env, me, row.partnerId))) return fail(403, "not_approved");
   const facts = await pairStub(env, pairId).facts(row.partnerId, now);
   if (!facts) return fail(404, "not_found");
   if (typeof parsed.target === "object" && !facts.tables.includes(parsed.target.table)) return fail(409, "not_shared");
@@ -100,7 +103,7 @@ export async function createPounce(
       target,
       streak: streakBlock(facts.view),
     });
-    await deliverToPlayer(env, them, push, g.level);
+    await deliverToPlayer(env, them, push, g.level, undefined, [me]);
   }
   return { ok: { id } };
 }

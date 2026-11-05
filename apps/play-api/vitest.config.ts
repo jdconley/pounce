@@ -21,6 +21,7 @@ export default defineConfig({
         "src/notify/deliver.ts",
         "src/pounce/pounces.ts",
         "src/links/links.ts",
+        "src/kittens/**",
         "src/index.ts",
       ],
       reporter: ["text", "json-summary"],
@@ -54,6 +55,12 @@ export default defineConfig({
           lines: 100,
         },
         "src/pounce/**": {
+          statements: 100,
+          branches: 100,
+          functions: 100,
+          lines: 100,
+        },
+        "src/consent/**": {
           statements: 100,
           branches: 100,
           functions: 100,

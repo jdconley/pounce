@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { liveOn, notifyOn, quietStartMinutes, streaksOn } from "./profile";
+import { consentOn, liveOn, notifyOn, quietStartMinutes, streaksOn } from "./profile";
 
 import type { Json } from "../players/parse";
 
@@ -48,5 +48,15 @@ describe("liveOn", () => {
     expect(liveOn({ NOTIFY: "on", LIVE: "on" })).toBe(false);
     expect(liveOn({ STREAKS: "on", NOTIFY: "on", LIVE: "off" })).toBe(false);
     for (const on of ["on", "1", "true", "ON"]) expect(liveOn({ STREAKS: "on", NOTIFY: "on", LIVE: on })).toBe(true);
+  });
+});
+
+describe("consentOn", () => {
+  it("needs CONSENT on top of STREAKS and NOTIFY (daily habit PR 9)", () => {
+    expect(consentOn({ STREAKS: "on", NOTIFY: "on" })).toBe(false);
+    expect(consentOn({ CONSENT: "on" })).toBe(false);
+    expect(consentOn({ NOTIFY: "on", CONSENT: "on" })).toBe(false);
+    expect(consentOn({ STREAKS: "on", NOTIFY: "on", CONSENT: "off" })).toBe(false);
+    for (const on of ["on", "1", "true", "ON"]) expect(consentOn({ STREAKS: "on", NOTIFY: "on", CONSENT: on })).toBe(true);
   });
 });

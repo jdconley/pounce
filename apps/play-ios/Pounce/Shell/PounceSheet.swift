@@ -17,6 +17,9 @@ struct PounceSheetView: View {
     @State private var sharing: URL?
     @State private var shareShown = false
 
+    /// This kitten can't pounce them yet (parent consent, plan decision 38).
+    private var locked: Bool { view.map { model.pounceLocked($0.pair) } ?? false }
+
     private var tiles: [PounceTile] { PounceSheet.tiles(view: view, names: tableNames) }
     private var choice: PounceTile { selected ?? PounceSheet.preselect(tiles, preferNew: preferNew) }
     private var scale: CGFloat { sizeClass == .regular ? 1.35 : 1 }
@@ -69,6 +72,19 @@ struct PounceSheetView: View {
             if let view {
                 VStack(spacing: 2) {
                     Image(ArtName.cat(view.partner.cat, .awake)).resizable().scaledToFit().frame(width: 110 * scale)
+                        // A kitten's unapproved person (parent consent, PR 9): a padlock; a tap asks Apple.
+                        .overlay(alignment: .bottomTrailing) {
+                            if locked {
+                                Image(ArtName.Habit.iconPadlock).resizable().scaledToFit().frame(width: 44 * scale)
+                                    .offset(x: 6, y: 4)
+                                    .accessibilityIdentifier("pounce.padlock")
+                            }
+                        }
+                        .onTapGesture {
+                            guard locked else { return }
+                            fail()
+                            Task { await model.communicationLimits.askAgain(pair: view.pair) }
+                        }
                     NameTag(view.partner.name, maxWidth: 160, active: true, size: 18 * scale)
                 }
             } else {
@@ -156,11 +172,14 @@ struct PounceSheetView: View {
                 .accessibilityIdentifier("pounce.share")
             }
             if view != nil {
-                PillButton(icon: ArtName.Habit.pounceBell, color: Palette.orange, size: .large, width: 170 * scale,
+                PillButton(icon: locked ? ArtName.Habit.iconPadlock : ArtName.Habit.pounceBell,
+                           color: locked ? Palette.violet : Palette.orange, size: .large, width: 170 * scale,
                            accessibilityLabel: "Pounce") {
-                    send()
+                    if locked { fail() } else { send() }
                 }
-                .bounceLoop(active: true)
+                .saturation(locked ? 0.4 : 1)
+                .bounceLoop(active: !locked)
+                .accessibilityValue(locked ? "locked" : "ready")
                 .accessibilityIdentifier("pounce.send")
             }
         }

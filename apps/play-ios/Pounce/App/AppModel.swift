@@ -1,6 +1,7 @@
 import Foundation
 import Observation
 import PounceKit
+import StoreKit
 import SwiftUI
 
 @MainActor @Observable
@@ -57,6 +58,13 @@ final class AppModel {
     @ObservationIgnored let widgets: WidgetBridge
     /// The live table's tokens and ends (spec §11.3).
     @ObservationIgnored private(set) var liveTables: LiveTableBridge!
+    /// Parent consent (consent design §2): a kitten's consent and code here, or a signed-in
+    /// adult's kittens.
+    let kittens: KittenStore
+    /// The kitten-push significant change is owed or a parent said no: the bell stays padlocked.
+    var kittenPushHeld = false
+    /// Apple's Communication Limits approvals, mirrored up from a kitten's device.
+    @ObservationIgnored private(set) var communicationLimits: CommunicationLimitsBridge!
 
     // MARK: age (spec §14.1)
 
@@ -109,6 +117,13 @@ final class AppModel {
         let pounceService: any PounceService = api
         #endif
         pounces = PounceStore(service: pounceService, file: dataDirectory.appendingPathComponent("pounce-answers.json"))
+        #if DEBUG
+        let kittenService: any KittenService = Self.debugKittens(arguments: CommandLine.arguments) ?? api
+        #else
+        let kittenService: any KittenService = api
+        #endif
+        kittens = KittenStore(service: kittenService, file: dataDirectory.appendingPathComponent("kitten.json"))
+        if age?.band == .kitten { kittens.person = loaded.owner?.id }
         notify = NotifySettingsStore(file: dataDirectory.appendingPathComponent("notify-settings.json"))
         streaks.person = loaded.owner?.id
         #if DEBUG
@@ -134,6 +149,9 @@ final class AppModel {
             store: AccountStore(directory: dataDirectory, fileName: AccountStore.fileName(for: config)))
         // Before anything can upload: hold accounts while this update's approval may be owed.
         SignificantChangeGate.prepare(self)
+        KittenPushChange.prepare(self)
+        communicationLimits = CommunicationLimitsBridge(model: self)
+        communicationLimits.start()
         // At launch, background ones too: a push-started live table hands its token over then.
         liveTables = LiveTableBridge(
             api: api, band: { [weak self] in self?.ageBand }, liveOn: { [weak self] in self?.notifySettings.liveTable ?? true })
@@ -223,6 +241,14 @@ final class AppModel {
     private static func debugStreaks(arguments: [String]) -> (any StreakService)? {
         guard let i = arguments.firstIndex(of: "-demo-streaks") else { return nil }
         return arguments[safe: i + 1] == "off" ? StreaksOffService() : DemoStreakService()
+    }
+
+    /// `-demo-kitten <locked|held|pending|on>` and `-demo-kittens`: the consent routes in memory.
+    private static func debugKittens(arguments: [String]) -> (any KittenService)? {
+        if let i = arguments.firstIndex(of: "-demo-kitten") {
+            return DemoKittenService(scenario: arguments[safe: i + 1].flatMap(DemoKittenService.Scenario.init) ?? .locked)
+        }
+        return arguments.contains("-demo-kittens") ? DemoKittenService(scenario: .locked) : nil
     }
 
     /// `-age-range <answer>` stubs Declared Age Range; any test run (`-anim-speed`) without it
@@ -323,6 +349,7 @@ final class AppModel {
         if ageRecord != nil { await accountsAfterAge() }
         if people.owner != nil { await refreshTables() }
         await refreshStreaks()
+        await refreshKitten()
         await pounces.retryPending()
         await recheckAge()
         await uploadWidgetToken()
@@ -332,6 +359,7 @@ final class AppModel {
     /// Once the age is known: the significant-change check, then the profile and sync.
     private func accountsAfterAge() async {
         await SignificantChangeGate.check(self)
+        await KittenPushChange.check(self)
         await account.uploadProfile()
         await account.sync()
         await uploadGuestNotify()
@@ -668,6 +696,7 @@ final class AppModel {
                 await account.sync()
                 await uploadGuestNotify()
                 await refreshStreaks()
+                await refreshKitten()
                 await pounces.retryPending()
                 await uploadWidgetToken()
                 await liveTables.retry()
@@ -823,6 +852,54 @@ final class AppModel {
         let result = await pounces.send(pair: pair, target: target, person: people.owner?.id)
         await refreshStreaks()
         return result
+    }
+
+    // MARK: Parent consent (consent design §2)
+
+    /// A kitten's device: its consent from the server, push registration to match, and Apple's
+    /// approvals mirrored. Quiet when offline.
+    func refreshKitten() async {
+        guard ageBand == .kitten, let owner = people.owner else { return }
+        kittens.person = owner.id
+        await kittens.refreshStatus()
+        push?.registerIfAllowed()
+        await communicationLimits.sync()
+    }
+
+    /// Screen Time's Communication Limits, asked once a launch and only when the age came from
+    /// Declared Age Range (a person who declined it never sees its sheet again from here).
+    @ObservationIgnored private var limitsAnswer: Bool?
+
+    func communicationLimitsOn() async -> Bool {
+        if let limitsAnswer { return limitsAnswer }
+        let on = ageRecord?.source == .declared ? await ageAsker.communicationLimits() : false
+        limitsAnswer = on
+        return on
+    }
+
+    /// A linked parent consented for this kitten's device (the server's word, or the last one seen).
+    var kittenConsented: Bool { ageBand == .kitten && kittens.consented }
+
+    /// Signed in as an adult: the gear sheet offers the Kittens panel.
+    var isParent: Bool { ageBand == .adult && account.isSignedIn }
+
+    /// A person this kitten can't pounce yet (plan decision 38).
+    func pounceLocked(_ pair: String) -> Bool { ageBand == .kitten && kittens.locks(pair: pair) }
+
+    /// The code for a grown-up, with this copy's app transaction id for `RESCIND_CONSENT`.
+    func requestKittenCode() async {
+        guard ageBand == .kitten, !kittenPushHeld else { return }
+        await kittens.requestCode(appTransactionId: await Self.appTransactionId())
+    }
+
+    /// `AppTransaction.shared`'s `appTransactionID`, when StoreKit has one (not in Debug runs).
+    private static func appTransactionId() async -> String? {
+        #if DEBUG
+        return nil
+        #else
+        guard case .verified(let tx)? = try? await AppTransaction.shared else { return nil }
+        return tx.appTransactionID
+        #endif
     }
 
     /// A Messages pounce's link, never from a kitten's device (§14.1).

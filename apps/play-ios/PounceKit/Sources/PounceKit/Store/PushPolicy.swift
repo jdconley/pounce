@@ -67,6 +67,14 @@ public enum PushPolicy {
         band == .teen || band == .adult
     }
 
+    /// The same, with a parent's consent (consent design §2): a kitten's device registers once a
+    /// linked parent consented, for "your move" and pounces from approved people only. An unknown
+    /// band still never registers. The widget and live table tokens keep the band-only rule:
+    /// consent doesn't cover them (spec "Still off").
+    public static func registersRemote(band: AgeBand?, kittenConsented: Bool) -> Bool {
+        registersRemote(band: band) || (band == .kitten && kittenConsented)
+    }
+
     /// Home's bell offers the full system prompt (once) while notifications aren't fully allowed:
     /// provisional (priming's "not now", §12.5) counts as not yet.
     public static func offersFullPrompt(_ status: PushAuthorization) -> Bool {

@@ -83,7 +83,7 @@ enum SignificantChangeGate {
 
     /// What the law where the person's account lives asks of this app (empty where it asks nothing).
     @available(iOS 26.4, *)
-    nonisolated private static func regulatoryFeatures() async -> Set<AgeRangeService.RegulatoryFeature> {
+    nonisolated static func regulatoryFeatures() async -> Set<AgeRangeService.RegulatoryFeature> {
         (try? await AgeRangeService.shared.requiredRegulatoryFeatures) ?? []
     }
 
@@ -92,11 +92,92 @@ enum SignificantChangeGate {
     private static func listen(_ model: AppModel, defaults: UserDefaults) {
         Task { @MainActor [weak model] in
             for await response in AskCenter.shared.responses(for: SignificantAppUpdateTopic.self) {
-                guard response.choice.answer == .approval else { continue }
+                // The kitten-push change's answer is its own (PR 9).
+                guard response.choice.answer == .approval, !KittenPushChange.isItsQuestion(response.question.id, defaults) else { continue }
                 defaults.set(State.done.rawValue, forKey: key)
                 guard let model else { return }
                 model.account.heldForApproval = false
                 await model.account.uploadProfile()
+                return
+            }
+        }
+    }
+}
+
+/// The second significant change (consent design §2 "State-law significant change"): the release
+/// that lets a kitten's own device get notifications once a parent consents. Only a kitten is
+/// asked, before the link code shows; where the law asks for a parent's approval and the answer is
+/// no (or not yet), the bell stays padlocked with no code. An install of this version agreed at
+/// download, as with PR 2's change. The parent's answer is matched by its question id, so PR 2's
+/// listener and this one each settle their own.
+@MainActor
+enum KittenPushChange {
+    static let changeId = "kitten-push-2026-11"
+    private static let key = "significantChange.\(changeId)"
+    private static let questionKey = "significantChange.\(changeId).question"
+
+    static let updateDescription = String(
+        localized: "Pounce can now tell a child's own device when it's their move, and when someone their parent approved asks them to play. A parent links the device and gives consent first.",
+        comment: "Shown by iOS when a parent approves this significant update for a child")
+
+    /// At launch: an existing kitten's first launch of this version owes the question; a fresh
+    /// install (no cat picked yet) doesn't.
+    static func prepare(_ model: AppModel, defaults: UserDefaults = .standard) {
+        if defaults.string(forKey: key) == nil {
+            let owed = model.people.owner != nil
+            defaults.set((owed ? SignificantChangeGate.State.owed : .done).rawValue, forKey: key)
+        }
+        model.kittenPushHeld = held(defaults)
+    }
+
+    private static func held(_ defaults: UserDefaults) -> Bool {
+        let state = defaults.string(forKey: key).flatMap(SignificantChangeGate.State.init)
+        return state == .owed || state == .pending
+    }
+
+    /// After the age check, on a kitten's device only.
+    static func check(_ model: AppModel, defaults: UserDefaults = .standard) async {
+        #if DEBUG
+        if PaceSetting.resolve(arguments: CommandLine.arguments, env: ProcessInfo.processInfo.environment).underTest {
+            // `-kitten-held` keeps it owed, for the held bell's test and screenshot.
+            let isHeld = CommandLine.arguments.contains("-kitten-held")
+            defaults.set((isHeld ? SignificantChangeGate.State.owed : .done).rawValue, forKey: key)
+            model.kittenPushHeld = isHeld
+            return
+        }
+        #endif
+        guard model.ageBand == .kitten, held(defaults) else { return settle(model, defaults) }
+        guard #available(iOS 26.4, *) else { return settle(model, defaults) }
+        let features = await SignificantChangeGate.regulatoryFeatures()
+        guard features.contains(.significantAppChangeRequiresParentalConsent) else { return settle(model, defaults) }
+        model.kittenPushHeld = true
+        let first = defaults.string(forKey: key) == SignificantChangeGate.State.owed.rawValue
+        defaults.set(SignificantChangeGate.State.pending.rawValue, forKey: key)
+        listen(model, defaults: defaults)
+        if first, let presenter = UIApplication.shared.topViewController {
+            let question = PermissionQuestion(significantAppUpdateTopic: SignificantAppUpdateTopic(description: updateDescription))
+            defaults.set(question.id.uuidString, forKey: questionKey)
+            try? await AskCenter.shared.ask(question, in: presenter)
+        }
+    }
+
+    static func isItsQuestion(_ id: UUID, _ defaults: UserDefaults) -> Bool {
+        defaults.string(forKey: questionKey) == id.uuidString
+    }
+
+    private static func settle(_ model: AppModel, _ defaults: UserDefaults) {
+        defaults.set(SignificantChangeGate.State.done.rawValue, forKey: key)
+        model.kittenPushHeld = false
+    }
+
+    @available(iOS 26.4, *)
+    private static func listen(_ model: AppModel, defaults: UserDefaults) {
+        Task { @MainActor [weak model] in
+            for await response in AskCenter.shared.responses(for: SignificantAppUpdateTopic.self) {
+                guard response.question.id.uuidString == defaults.string(forKey: questionKey),
+                      response.choice.answer == .approval else { continue }
+                defaults.set(SignificantChangeGate.State.done.rawValue, forKey: key)
+                model?.kittenPushHeld = false
                 return
             }
         }

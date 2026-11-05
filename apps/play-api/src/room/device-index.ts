@@ -3,7 +3,7 @@ import { DurableObject } from "cloudflare:workers";
 import { CAP_MS, IDLE_MS, endBody, type LiveState, type LiveTokens } from "../live/live";
 import { nightBlocked, pushBlocked } from "../players/age";
 import { pushAlert, pushDismiss, pushLive, pushWidget, pushYourTurn } from "../push/apns";
-import { liveOn } from "../streaks/profile";
+import { consentOn, liveOn } from "../streaks/profile";
 
 import { createTables, listTables, removeTable, upsertTable, type TableEntry } from "./tables";
 
@@ -13,6 +13,14 @@ import type { Level } from "../notify/policy";
 import type { AgeBand } from "../players/parse";
 
 export type { TableEntry } from "./tables";
+
+/**
+ * Who a push is for and who is behind it, for a kitten's device (parent
+ * consent, plan decision 16): the recipient's player, and the other human
+ * seats' players for "your move" (null for a seat with no player) or the
+ * sender of a pounce.
+ */
+export type PushGate = { recipient: string; senders: (string | null)[] };
 
 /**
  * One instance per device (named by deviceId): its APNs token, the rooms it
@@ -121,9 +129,10 @@ export class DeviceIndex extends DurableObject<Env> {
    * device may have registered a new one while the push was in flight. A
    * kitten's device gets nothing, and a teen's nothing overnight (§14.1).
    */
-  async push(intent: YourTurnIntent | DismissIntent): Promise<{ sent: boolean }> {
+  async push(intent: YourTurnIntent | DismissIntent, gate?: PushGate): Promise<{ sent: boolean }> {
     const band = this.ageBand();
-    if (pushBlocked(band) || nightBlocked(band, this.getMeta("time_zone"), Date.now())) return { sent: false };
+    if (nightBlocked(band, this.getMeta("time_zone"), Date.now())) return { sent: false };
+    if (pushBlocked(band) && !(await this.kittenAllows(intent.kind === "dismiss" ? "dismiss" : "your_move", gate))) return { sent: false };
     // The live table shows the move already (§11.3, §12.1).
     if (intent.kind === "your_turn" && this.liveRunning(intent.code)) return { sent: false };
     const token = this.getMeta("apns_token");
@@ -135,6 +144,31 @@ export class DeviceIndex extends DurableObject<Env> {
     return { sent };
   }
 
+  /**
+   * A kitten's device gets a push only with `CONSENT` on and the recipient's
+   * consent allowing this kind from these senders (plan decisions 16, 18).
+   * Asked per push, so a revocation applies at once.
+   */
+  private async kittenAllows(kind: string, gate?: PushGate): Promise<boolean> {
+    if (!gate || !consentOn(this.env)) return false;
+    try {
+      return await this.env.CONSENTS.get(this.env.CONSENTS.idFromName(gate.recipient)).allows(kind, gate.senders);
+    } catch {
+      return false;
+    }
+  }
+
+  /** Which push tokens this device holds, for tests and support (never the tokens themselves). */
+  tokens(): { apns: boolean; widget: boolean; live: boolean } {
+    return { apns: this.getMeta("apns_token") !== null, widget: this.getMeta("widget_token") !== null, live: this.getMeta("live_start_token") !== null };
+  }
+
+  /** Revocation (plan decision 9): every push token this device holds goes, and any live table. */
+  dropPushTokens(): void {
+    for (const k of ["apns_token", "widget_token", "live_start_token"]) this.setMeta(k, null);
+    this.clearLive();
+  }
+
   /** The device's owner may get nothing now: a kitten never, a teen not overnight (§14.1). */
   private silenced(now: number): boolean {
     const band = this.ageBand();
@@ -142,9 +176,11 @@ export class DeviceIndex extends DurableObject<Env> {
   }
 
   /** Sends a built alert (§12.7); the caller has applied the player's own rules. */
-  async pushAlert(body: Record<string, unknown>, collapseId: string, level: Level): Promise<{ sent: boolean }> {
+  async pushAlert(body: Record<string, unknown>, collapseId: string, level: Level, gate?: PushGate): Promise<{ sent: boolean }> {
     const now = Date.now();
-    if (this.silenced(now)) return { sent: false };
+    const band = this.ageBand();
+    if (nightBlocked(band, this.getMeta("time_zone"), now)) return { sent: false };
+    if (pushBlocked(band) && !(await this.kittenAllows(String(body.kind), gate))) return { sent: false };
     // While this device's live table can show the move, "your move" stays quiet (§11.3, §12.1).
     if (body.kind === "your_move" && typeof body.code === "string" && this.liveRunning(body.code)) return { sent: false };
     const token = this.getMeta("apns_token");

@@ -124,6 +124,12 @@ then the build setting (Debug: `http://localhost:8787`, optionally overridden by
   demo fixture at launch (no server, no push), for the Lock Screen and the Dynamic Island.
   `LiveShotTests` takes the screenshots (`TEST_RUNNER_POUNCE_SHOTS_DIR`); the previews are in
   `PounceWidgets/Previews.swift`. iPad shows the live table on its Lock Screen too (no Dynamic Island).
+- Parent consent (daily habit PR 9): `-demo-kitten locked|held|pending|on` is a kitten's own device
+  (with `-age-band kitten`; `-kitten-held` keeps the significant change owed) and `-demo-kittens` a
+  parent's Kittens panel (with `-stub-accounts signed-in`), both from `DemoKittenService` with no
+  server. The notice page loads from the server. `KittenTests` drives them, and saves screenshots
+  when the runner sets `TEST_RUNNER_KITTEN_SHOTS_DIR` (`TEST_RUNNER_KITTEN_SHOTS_ORIENTATION=landscape`
+  on an iPad).
 
 ## Play on your phone
 
@@ -334,6 +340,10 @@ submission fails with Apple's message in the log.
   Keychain sharing (`<team>.com.conleychaos.play`) needs no portal change. Check the archive:
   `codesign -d --entitlements - <Pounce.app/PlugIns/PounceWidgets.appex>` lists
   `com.apple.security.application-groups`, `keychain-access-groups` and `aps-environment`.
+
+- Parent consent (daily habit PR 9) needs no new capability: PermissionKit and `AppTransaction` need
+  no entitlement, and Declared Age Range already has one (PR 2). It needs the App Store Server Notifications URL in App Store
+  Connect and the Twilio secrets (root README).
 
 - The live table (daily habit PR 7) needs no new App ID, capability or key: Live Activities ride on
   the app's Push Notifications capability (`NSSupportsLiveActivities` in its Info.plist), and the

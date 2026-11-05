@@ -1,7 +1,25 @@
 import { issueDeviceToken, verifyDeviceToken } from "./auth";
+import { APPLE_ROOTS } from "./consent/appstore";
+import { noticePage } from "./consent/pages";
 import { devSpeed } from "./env";
 import { appSiteAssociation, ogImage, pouncePage, sharePage } from "./http/links";
 import { privacyPage } from "./http/privacy";
+import {
+  anyConsented,
+  appStoreNotification,
+  consentPage,
+  consentPost,
+  kittenMe,
+  linkCode,
+  linkKitten,
+  listKittens,
+  mirrorApple,
+  revokeConsent,
+  setApproved,
+  startConsent,
+  twilioInbound,
+  unlinkKitten,
+} from "./kittens/kittens";
 import { parseLiveTokens } from "./live/live";
 import {
   deleteMe,
@@ -23,10 +41,12 @@ import { newRoomCode, ROOM_CODE } from "./room/codes";
 import { DEVICE_HEADER, PLAYER_HEADER } from "./room/game-room";
 import { parseRoomName } from "./room/names";
 import { creatorLook, isMine, leavePair, myLeft, myStreaks, PAIR_ID, pairStub, rejoinPair, syncPairPeople } from "./streaks/pairs";
-import { liveOn, notifyOn, streaksOn } from "./streaks/profile";
+import { consentOn, liveOn, notifyOn, streaksOn } from "./streaks/profile";
 
 import type { Env } from "./env";
 
+export { Consents } from "./kittens/consents";
+export { KittenIndex } from "./kittens/kitten-index";
 export { Links } from "./links/links";
 export { Identities } from "./players/identities";
 export { Player } from "./players/player";
@@ -43,6 +63,11 @@ const SIGN_IN = /^\/v1\/identities\/([a-z]+)$/;
 const MY_IDENTITY = /^\/v1\/me\/identities\/([a-z]+)$/;
 /** `/v1/pairs/{pair}`, `/pause`, `/pin` or `/gifts/{id}/open` (§13.4). */
 /** `DELETE /v1/me/left/{pair}`: undo leaving a streak (§14's ghosted cat). */
+/** `/v1/kittens/{k}`, `/approved` or `/consent` (parent consent, plan decision 1). */
+const KITTEN_PATH = /^\/v1\/kittens\/(k_[A-Za-z0-9_-]{22})(?:\/(approved|consent))?$/;
+const CONSENT_PAGE = /^\/consent\/([^/]+)$/;
+/** An App Store notification is a few KB of JWS. */
+const MAX_NOTIFICATION_BYTES = 32_768;
 const LEFT_PATH = /^\/v1\/me\/left\/([^/]+)$/;
 const PAIR_PATH = /^\/v1\/pairs\/([^/]+)(?:\/(pause|pin)|\/gifts\/(g[0-9]{1,9})\/open)?$/;
 const MAX_PAUSE_DAYS = 14;
@@ -164,7 +189,13 @@ async function setPushToken(request: Request, env: Env, deviceId: string): Promi
   if (!body || Object.keys(body).length !== 1 || typeof token !== "string" || !APNS_TOKEN.test(token)) {
     return badRequest();
   }
-  await env.DEVICES.get(env.DEVICES.idFromName(deviceId)).setApnsToken(token);
+  const index = env.DEVICES.get(env.DEVICES.idFromName(deviceId));
+  // A kitten's device holds a token only with a parent's consent (plan decision 19).
+  if (consentOn(env) && (await index.ageBand()) === "kitten") {
+    const { people } = await index.players();
+    if (!(await anyConsented(env, Object.values(people)))) return json(403, { error: "not_allowed" });
+  }
+  await index.setApnsToken(token);
   return noContent();
 }
 
@@ -327,8 +358,54 @@ function streakRoute(method: string, pathname: string, notify: boolean, live: bo
   });
 }
 
+const origin = (request: Request) => new URL(request.url).origin;
+
+/** Parent consent routes (consent design §3), only while `CONSENT` is on. */
+function kittenRoute(method: string, pathname: string): Route | null {
+  if (method === "POST" && pathname === "/v1/kittens/me/link-code") {
+    return asMe(async (r, env, d, me) => respond(await linkCode(env, d, me, await readObject(r), Date.now()), 201));
+  }
+  if (method === "GET" && pathname === "/v1/kittens/me") return asMe(async (_r, env, d, me) => respond(await kittenMe(env, d, me)));
+  if (method === "PUT" && pathname === "/v1/kittens/me/approved") {
+    return asMe(async (r, env, d, me) => respond(await mirrorApple(env, d, me, await readObject(r, MAX_STATE_BYTES))));
+  }
+  if (method === "POST" && pathname === "/v1/kittens/link") {
+    return asMe(async (r, env, d, me) => respond(await linkKitten(env, d, me, await readObject(r), Date.now()), 201));
+  }
+  if (method === "GET" && pathname === "/v1/kittens") return asMe(async (_r, env, d, me) => respond(await listKittens(env, d, me)));
+  const k = KITTEN_PATH.exec(pathname);
+  if (!k) return null;
+  const [, kid, action] = k as unknown as [string, string, string | undefined];
+  if (action === "approved" && method === "PUT") {
+    return asMe(async (r, env, d, me) => respond(await setApproved(env, d, me, kid, await readObject(r, MAX_STATE_BYTES))));
+  }
+  if (action === "consent" && method === "POST") {
+    return asMe(async (r, env, d, me) => respond(await startConsent(env, d, me, kid, await readObject(r), origin(r), Date.now()), 202));
+  }
+  if (action === "consent" && method === "DELETE") return asMe(async (_r, env, d, me) => respond(await revokeConsent(env, d, me, kid)));
+  if (action === undefined && method === "DELETE") return asMe(async (_r, env, d, me) => respond(await unlinkKitten(env, d, me, kid)));
+  return null;
+}
+
+/** Parent consent's public routes: the notice, the texts' pages, Twilio's STOP webhook, App Store notifications. */
+async function publicConsent(request: Request, env: Env, method: string, pathname: string): Promise<Response | null> {
+  if (method === "GET" && pathname === "/privacy/kitten-notice") return noticePage();
+  const page = CONSENT_PAGE.exec(pathname);
+  if (page && method === "GET") return consentPage(env, page[1] as string, Date.now());
+  if (page && method === "POST") return consentPost(env, page[1] as string, Date.now());
+  if (method === "POST" && pathname === "/v1/twilio/inbound") return twilioInbound(env, request);
+  if (method === "POST" && pathname === "/v1/appstore/notifications") {
+    return appStoreNotification(env, await readObject(request, MAX_NOTIFICATION_BYTES), APPLE_ROOTS, Date.now());
+  }
+  return null;
+}
+
 /** The authenticated route for this request, or null for a 404. */
-function route(method: string, pathname: string, streaks: boolean, notify: boolean, live: boolean): Route | null {
+function route(method: string, pathname: string, streaks: boolean, notify: boolean, live: boolean, consent: boolean): Route | null {
+  if (consent) {
+    const kitten = kittenRoute(method, pathname);
+    if (kitten) return kitten;
+  }
   if (streaks) {
     const streak = streakRoute(method, pathname, notify, live);
     if (streak) return streak;
@@ -386,7 +463,7 @@ export default {
       return appSiteAssociation(notify);
     }
     if (method === "GET" && pathname === "/og/room.jpg") return ogImage();
-    if (method === "GET" && pathname === "/privacy") return privacyPage();
+    if (method === "GET" && pathname === "/privacy") return privacyPage(consentOn(env));
     const share = method === "GET" ? SHARE_PATH.exec(pathname) : null;
     if (share) return sharePage(share[1] as string, env.TESTFLIGHT_URL, new URL(request.url).origin);
     if (notify && method === "GET") {
@@ -399,11 +476,16 @@ export default {
         return pouncePage(found?.from ?? null, token, env.TESTFLIGHT_URL, new URL(request.url).origin);
       }
     }
+    const consent = consentOn(env);
+    if (consent) {
+      const answered = await publicConsent(request, env, method, pathname);
+      if (answered) return answered;
+    }
     const secret = env.TOKEN_SECRET;
     if (method === "POST" && pathname === "/v1/devices") {
       return secret ? mintDevice(request, secret) : notConfigured();
     }
-    const handler = route(method, pathname, streaks, notify, liveOn(env));
+    const handler = route(method, pathname, streaks, notify, liveOn(env), consent);
     if (!handler) return notFound();
     if (!secret) return notConfigured();
     const deviceId = await authenticate(request, secret);
