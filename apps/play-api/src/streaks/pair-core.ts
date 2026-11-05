@@ -448,6 +448,14 @@ export function pause(s: PairState, by: string, days: number, now: number): bool
   return true;
 }
 
+/** The days of the pause from `by`'s today (or its later start) to its end, for "for 3 days" (§12.2); 0 when not paused. */
+export function pauseDays(s: PairState, by: string, now: number): number {
+  const { pausedFrom, pausedUntil } = s.streak;
+  const today = todayOf(s, by, now);
+  if (pausedFrom === null || pausedUntil === null || pausedUntil < today) return 0;
+  return daysBetween(pausedFrom > today ? pausedFrom : today, pausedUntil) + 1;
+}
+
 /** Ends a pause early: today counts again, unless it's past the person's evening cutoff. */
 export function unpause(s: PairState, by: string, now: number): void {
   const st = s.streak;

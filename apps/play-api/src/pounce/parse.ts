@@ -1,5 +1,5 @@
+import { PAIR_ID } from "../players/ids";
 import { ROOM_CODE } from "../room/codes";
-import { PAIR_ID } from "../streaks/pairs";
 
 import type { Answer, Target } from "./limits";
 

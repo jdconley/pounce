@@ -11,6 +11,24 @@ import {
 } from "./copy";
 
 import type { Outgoing, StreakBlock } from "./types";
+import type { StreakView } from "../streaks/pair-core";
+
+/** The `streak` block of a push (§12.7) from a person's view of the pair. */
+export function streakBlock(v: StreakView): StreakBlock {
+  return { pair: v.pair, count: v.count, me: v.me, them: v.them, naps: v.naps, myMove: v.myMove, theirMove: v.theirMove };
+}
+
+/** This turn would keep today: the partner is in, you aren't, and the move here is yours. */
+const completes = (v: StreakView, code: string) => v.myMove.includes(code) && v.them && !v.me && !v.kept && v.pausedUntil === null;
+
+/**
+ * Which of the recipient's pairs at this table a "your move" push carries:
+ * one this turn would complete today, else one whose move is here, else any.
+ */
+export function yourMoveContext(views: StreakView[], code: string): { streak: StreakBlock | null; completesToday: boolean } {
+  const best = views.find((v) => completes(v, code)) ?? views.find((v) => v.myMove.includes(code)) ?? views[0];
+  return best ? { streak: streakBlock(best), completesToday: completes(best, code) } : { streak: null, completesToday: false };
+}
 
 /** A person as a push shows them: the name and the cat avatar. */
 export type Face = { name: string; cat: number };

@@ -243,9 +243,19 @@ function pairHandler(method: string, action: string | undefined, gift: string | 
   return null;
 }
 
+/** The widget extension's WidgetKit push token (§11.2). */
+async function setWidgetToken(request: Request, env: Env, deviceId: string): Promise<Response> {
+  const body = await readObject(request);
+  const token = body?.token;
+  if (!body || Object.keys(body).length !== 1 || typeof token !== "string" || !APNS_TOKEN.test(token)) return badRequest();
+  await env.DEVICES.get(env.DEVICES.idFromName(deviceId)).setWidgetToken(token);
+  return noContent();
+}
+
 /** Streak routes (§13.4), only while `STREAKS` is on. */
 function streakRoute(method: string, pathname: string): Route | null {
   if (method === "GET" && pathname === "/v1/me/streaks") return getStreaks;
+  if (method === "PUT" && pathname === "/v1/devices/me/widget-push") return setWidgetToken;
   const path = PAIR_PATH.exec(pathname);
   if (!path) return null;
   const [, pairId, action, gift] = path as unknown as [string, string, string | undefined, string | undefined];

@@ -1,6 +1,12 @@
 import { describe, expect, test } from "vitest";
 
-import { answeredPush, playAgainPush, pouncePush, statusPush, yourMovePush } from "./pushes";
+import { newPair, view as viewOf, type StreakView } from "../streaks/pair-core";
+
+import { answeredPush, playAgainPush, pouncePush, statusPush, streakBlock, yourMoveContext, yourMovePush } from "./pushes";
+
+const A = "p_aaaaaaaaaaaaaaaaaaaaaa";
+const personA = { id: A, name: "JD", cat: 1, zone: "America/Los_Angeles", quietStart: 1320 };
+const personB = { id: "p_bbbbbbbbbbbbbbbbbbbbbb", name: "Mia", cat: 2, zone: "America/Los_Angeles", quietStart: 1320 };
 
 const streak = { pair: "pr_1", count: 12, me: false, them: true, naps: 1, myMove: ["GH2VD"], theirMove: [] };
 
@@ -89,5 +95,32 @@ describe("push builders", () => {
       collapse: "play_again:NWCDF",
       from: { name: "Mia", cat: 2 },
     });
+  });
+});
+
+describe("yourMoveContext", () => {
+  function view(over: Partial<StreakView>): StreakView {
+    return { ...viewOf(newPair("pr_1", [personA, personB], 0, [1, 2, 3, 4]), A, 0), ...over };
+  }
+  const base = view({});
+
+  test("the view of a pair this turn would complete today wins, and says so", () => {
+    const other = view({ pair: "pr_2", myMove: ["GH2VD"], them: false });
+    const completes = view({ pair: "pr_3", myMove: ["GH2VD"], them: true, me: false, kept: false });
+    expect(yourMoveContext([other, completes], "GH2VD")).toMatchObject({ completesToday: true, streak: { pair: "pr_3" } });
+    expect(yourMoveContext([base, other], "GH2VD")).toMatchObject({ completesToday: false, streak: { pair: "pr_2" } });
+  });
+
+  test("not when already in, kept, paused, or the move is elsewhere; none without views", () => {
+    for (const over of [{ me: true }, { kept: true }, { pausedUntil: "2026-11-09" }, { myMove: ["OTHER"] }]) {
+      const v = view({ myMove: ["GH2VD"], them: true, ...over });
+      expect(yourMoveContext([v], "GH2VD").completesToday).toBe(false);
+    }
+    expect(yourMoveContext([], "GH2VD")).toEqual({ streak: null, completesToday: false });
+    expect(yourMoveContext([base], "GH2VD").streak).toEqual(streakBlock(base));
+  });
+
+  test("streakBlock keeps only what the payload carries", () => {
+    expect(Object.keys(streakBlock(base)).sort()).toEqual(["count", "me", "myMove", "naps", "pair", "theirMove", "them"]);
   });
 });

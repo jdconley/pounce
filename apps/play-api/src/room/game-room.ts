@@ -2,8 +2,13 @@ import { DurableObject } from "cloudflare:workers";
 
 import { devSpeed } from "../env";
 import { catTower } from "../games/cat-tower";
+import { deliverToPlayer } from "../notify/deliver";
+import { gate } from "../notify/policy";
+import { playAgainPush, yourMoveContext, yourMovePush } from "../notify/pushes";
+import { player as playerRpc } from "../players/accounts";
 import { PERSON_ID, PLAYER_ID } from "../players/ids";
 import { parseClientMessage } from "../protocol";
+import { FALLBACK_ZONE } from "../streaks/clock";
 import { rememberLook, reportTable, unlocksFor, type PairViews } from "../streaks/pairs";
 import { streaksOn } from "../streaks/profile";
 
@@ -18,6 +23,7 @@ import {
   type RoomFeatures,
   type RoomState,
   type StreakIntent,
+  type YourTurnIntent,
 } from "./core";
 
 import type { Env } from "../env";
@@ -52,8 +58,10 @@ export class GameRoom extends DurableObject<Env> {
   private tablesFingerprint = "";
   private tableDevices = new Set<string>();
   private tablePlayers = new Set<string>();
-  /** Streak reports go out one at a time, in turn order. */
+  /** Streak reports, and the "your move" pushes that follow them, go out one at a time, in turn order. */
   private streakChain: Promise<void> = Promise.resolve();
+  /** Each player's latest views of their pairs at this table, for the next "your move" (§12.7). */
+  private lastViews = new Map<string, PairViews[string]>();
 
   constructor(ctx: DurableObjectState, env: Env) {
     super(ctx, env);
@@ -95,8 +103,12 @@ export class GameRoom extends DurableObject<Env> {
     return { ok: true };
   }
 
-  /** "Play again" (§10.4): creates this room from the old one's seats and deals at once. */
-  async initRematch(code: string, spec: RematchIntent): Promise<{ ok: true } | { exists: true }> {
+  /**
+   * "Play again" (§10.4), or a pounce's new game (§12.4): creates this room
+   * from the given seats and deals at once. `first` is the player with the
+   * first move, who gets "your move" from here.
+   */
+  async initRematch(code: string, spec: RematchIntent): Promise<{ ok: true; first: string | null } | { exists: true }> {
     if (this.core) return { exists: true };
     this.createSchema();
     this.core = new RoomCore(
@@ -108,7 +120,9 @@ export class GameRoom extends DurableObject<Env> {
       this.features(),
     );
     await this.after(this.core.deal());
-    return { ok: true };
+    const { state } = this.core;
+    const actor = state.gameState ? catTower.currentActor(state.gameState) : null;
+    return { ok: true, first: actor === null ? null : (state.seats[actor]?.playerId ?? null) };
   }
 
   /** WebSocket upgrade only. The Worker has verified the device token. */
@@ -188,15 +202,20 @@ export class GameRoom extends DurableObject<Env> {
    */
   private reportStreak(intent: StreakIntent): void {
     if (new Set(intent.players).size < 2) return;
+    // Who is looking at the table now: a milestone isn't pushed to them (§12.1).
+    const awake = (this.core as RoomCore).awakePlayers();
     const run = async () => {
       let views: PairViews | null = null;
       for (let attempt = 0; attempt < STREAK_ATTEMPTS && views === null; attempt++) {
-        views = await reportTable(this.env, intent, Date.now()).catch(() => null);
+        views = await reportTable(this.env, intent, Date.now(), awake).catch(() => null);
       }
       if (views === null) {
         console.error("streak_report_failed");
         return;
       }
+      for (const [playerId, list] of Object.entries(views)) this.lastViews.set(playerId, list);
+      // The mover's reminders and learned timing (§12.3, §13.3 flow 1).
+      if (intent.by) await playerRpc(this.env, intent.by).recordTurn(intent.at, Date.now()).catch(() => undefined);
       const core = this.core;
       if (!core) return;
       for (const [playerId, list] of Object.entries(views)) {
@@ -220,7 +239,10 @@ export class GameRoom extends DurableObject<Env> {
         .catch(() => null);
       if (made === null) break;
       if ("ok" in made) {
-        if (this.core) await this.after(this.core.rematchDealt(code));
+        if (this.core) {
+          if (streaksOn(this.env)) this.ctx.waitUntil(this.pushPlayAgain(spec, code, made.first).catch(() => undefined));
+          await this.after(this.core.rematchDealt(code));
+        }
         return;
       }
     }
@@ -229,6 +251,55 @@ export class GameRoom extends DurableObject<Env> {
       this.core.rematchFailed();
       await this.after([]);
     }
+  }
+
+  /**
+   * "Mia dealt a new game." (§10.4) to the new table's other players: not
+   * the one who asked, not the first mover (who gets "your move"), and not
+   * anyone looking at this table, who has just seen it.
+   */
+  private async pushPlayAgain(spec: RematchIntent, code: string, first: string | null): Promise<void> {
+    const core = this.core as RoomCore;
+    const asked = core.controlledSeats(spec.hostDeviceId)[0];
+    const who = asked === undefined ? undefined : core.state.seats[asked]?.person;
+    if (!who) return;
+    const skip = new Set([...core.lookPlayers(spec.hostDeviceId), ...core.awakePlayers(), ...(first ? [first] : [])]);
+    const others = new Set(spec.seats.flatMap((s) => (s.playerId && !skip.has(s.playerId) ? [s.playerId] : [])));
+    const push = playAgainPush({ code, table: spec.name, who: { name: who.name, cat: who.cat } });
+    const now = Date.now();
+    await Promise.allSettled([...others].map((id) => playerRpc(this.env, id).status(push, now)));
+  }
+
+  /**
+   * "Your move" with streaks on (§12.2, §12.5, §12.7): after this turn's
+   * streak report, so it can say the turn keeps today and carry the pair's
+   * state; quiet hours and the band rules come from the player.
+   */
+  private async pushYourMove(intent: YourTurnIntent & { playerId: string }): Promise<void> {
+    const profile = await playerRpc(this.env, intent.playerId).pushProfile();
+    if (!profile) return;
+    const now = Date.now();
+    const g = gate({
+      kind: "your_move",
+      band: profile.band,
+      zone: profile.zone ?? FALLBACK_ZONE,
+      settings: profile.settings,
+      now,
+      spacedAt: null,
+      remindersToday: 0,
+    });
+    if (!g.send) return;
+    const views = (this.lastViews.get(intent.playerId) ?? []).map((v) => v.view);
+    const { streak, completesToday } = yourMoveContext(views, intent.code);
+    const push = yourMovePush({
+      code: intent.code,
+      table: intent.tableName,
+      to: intent.personName,
+      from: intent.from ?? null,
+      completesToday,
+      streak,
+    });
+    await deliverToPlayer(this.env, profile, push, g.level, intent.code);
   }
 
   private load(): RoomCore | null {
@@ -298,10 +369,16 @@ export class GameRoom extends DurableObject<Env> {
       for (const ws of sockets) send(ws, message);
     }
 
-    for (const intent of core.drainPushIntents()) {
-      this.ctx.waitUntil(this.push(intent).catch(() => undefined));
-    }
     for (const intent of core.drainStreakIntents()) this.reportStreak(intent);
+    for (const intent of core.drainPushIntents()) {
+      if (intent.kind === "your_turn" && intent.playerId && streaksOn(this.env)) {
+        const rich = { ...intent, playerId: intent.playerId };
+        this.streakChain = this.streakChain.then(() => this.pushYourMove(rich)).catch(() => undefined);
+        this.ctx.waitUntil(this.streakChain);
+      } else {
+        this.ctx.waitUntil(this.push(intent).catch(() => undefined));
+      }
+    }
     const rematch = core.drainRematch();
     if (rematch) this.ctx.waitUntil(this.dealRematch(rematch));
 

@@ -1,15 +1,17 @@
+import { pokeWidgets } from "../notify/deliver";
+import { statusPush, type Face } from "../notify/pushes";
 import { base64url } from "../players/ids";
 
-import { mergeStates, newPair, repoint, type PairPerson, type PairState, type StreakView } from "./pair-core";
+import { mergeStates, newPair, repoint, type PairEvent, type PairPerson, type PairState, type StreakView } from "./pair-core";
 
 import type { Env } from "../env";
 import type { Pair } from "./pair";
+import type { StreakBlock } from "../notify/types";
 import type { PlayerRpc } from "../players/accounts";
 import type { Look, StreakIntent, Unlocks } from "../room/core";
 import type { Seed } from "../rules/rng";
 
-/** `pr_` + 16 random bytes, base64url (§13.2). */
-export const PAIR_ID = /^pr_[A-Za-z0-9_-]{22}$/;
+export { PAIR_ID } from "../players/ids";
 const PAIR_ID_BYTES = 16;
 
 type PairRpc = {
@@ -58,7 +60,7 @@ async function ensurePair(env: Env, a: string, b: string, turnedAt: Record<strin
  * A room's report reaches every pair at the table (§13.3): each pair of
  * different players seated there. Returns each player's new views.
  */
-export async function reportTable(env: Env, intent: StreakIntent, now: number): Promise<PairViews> {
+export async function reportTable(env: Env, intent: StreakIntent, now: number, awake: string[] = []): Promise<PairViews> {
   const out: PairViews = {};
   const players = [...new Set(intent.players)];
   for (let i = 0; i < players.length; i++) {
@@ -67,12 +69,12 @@ export async function reportTable(env: Env, intent: StreakIntent, now: number): 
       const r = { code: intent.code, at: intent.at, by: intent.by, holder: intent.holder, over: intent.over };
       let pairId = await ensurePair(env, a, b, intent.turnedAt, now);
       if (!pairId) continue;
-      let views = await pair(env, pairId).report(r, now);
+      let views = await pair(env, pairId).report(r, now, awake);
       if (!views) {
         // Both players list a pair whose object has no state (its creation failed part way): start it over.
         await Promise.all([player(env, a).dropPair(pairId), player(env, b).dropPair(pairId)]);
         pairId = await ensurePair(env, a, b, intent.turnedAt, now);
-        views = pairId ? await pair(env, pairId).report(r, now) : null;
+        views = pairId ? await pair(env, pairId).report(r, now, awake) : null;
       }
       if (!pairId || !views) continue;
       for (const id of [a, b]) (out[id] ??= []).push({ pair: pairId, view: views[id] as StreakView });
@@ -196,4 +198,40 @@ export async function creatorLook(env: Env, people: Record<string, string>, acco
 
 export async function rememberLook(env: Env, playerIds: string[], look: Look): Promise<void> {
   await Promise.all(playerIds.map((id) => player(env, id).setLastLook(look)));
+}
+
+/** One person of a pair, as its pushes need them. */
+export type PairTarget = { id: string; face: Face; partner: string; shared: string[]; streak: StreakBlock };
+
+/**
+ * What a pair tells its people (§12.1, §11.2): nap, win-back and milestone
+ * pushes to both (a milestone skips whoever is looking at the table), the
+ * pause to the other person, then widget reloads.
+ */
+/** What else happened with a save: who's looking at the table, a pause, whose widgets to reload. */
+export type PairNotice = { awake?: string[]; paused?: { by: string; days: number }; widgets?: string[] };
+
+export async function notifyPair(
+  env: Env,
+  n: PairNotice & { pair: string; events: PairEvent[]; targets: PairTarget[] },
+  now: number,
+): Promise<void> {
+  const jobs: Promise<unknown>[] = [];
+  const title = (t: PairTarget) => ({ shared: t.shared, partner: t.partner });
+  for (const e of n.events) {
+    for (const t of n.targets) {
+      if (e.kind === "milestone" && n.awake?.includes(t.id)) continue;
+      const o = statusPush({ kind: e.kind, pair: n.pair, title: t.partner, count: e.count, streak: t.streak });
+      jobs.push(player(env, t.id).status(o, now, title(t)));
+    }
+  }
+  const pauser = n.targets.find((t) => t.id === n.paused?.by);
+  const other = n.targets.find((t) => t.id !== n.paused?.by);
+  if (n.paused && pauser && other) {
+    const o = statusPush({ kind: "paused", pair: n.pair, title: other.partner, count: n.paused.days, who: pauser.face, streak: other.streak });
+    jobs.push(player(env, other.id).status(o, now, title(other)));
+  }
+  await Promise.allSettled(jobs);
+  // After the alerts: a device that just got one already reloaded its widgets.
+  await Promise.allSettled((n.widgets ?? []).map((id) => pokeWidgets(env, id, now)));
 }

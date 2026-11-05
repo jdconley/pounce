@@ -124,6 +124,8 @@ export type YourTurnIntent = {
   tableName: string;
   /** The room code, so the app can open the right game from the notification. */
   code: string;
+  /** With streaks on: the human whose turn just ended, for "Mia played." (§12.2). */
+  from?: { name: string; cat: number };
 };
 
 /** A background push telling a player's other devices to clear a table's notifications (§12.5). */
@@ -171,6 +173,8 @@ export class RoomCore {
   private rematchIntent: RematchIntent | null = null;
   /** The player whose action is being applied ended their turn. */
   private turnBy: string | null = null;
+  /** The person whose action is being applied ended their turn: "your move" names them. */
+  private movedBy: Person | null = null;
 
   constructor(
     state: RoomState,
@@ -310,6 +314,12 @@ export class RoomCore {
         else device.players[person] = rule.to;
       }
     }
+  }
+
+  /** The players of every connected device that is awake here: they see what happens at once. */
+  awakePlayers(): string[] {
+    const awake = Object.values(this.state.devices).filter((d) => d.connected && d.presence === "awake");
+    return [...new Set(awake.flatMap((d) => Object.values(d.players ?? {})))];
   }
 
   /** Every player holding a seat, once each. */
@@ -699,7 +709,9 @@ export class RoomCore {
     const applied = this.applyGame(seat, action);
     if ("error" in applied) return [this.fail(deviceId, applied.error)];
     const mover = this.state.seats[seat]?.playerId;
-    if (mover && this.game.endsTurn(action, applied.events, seat)) this.turnBy = mover;
+    const ended = this.game.endsTurn(action, applied.events, seat);
+    if (mover && ended) this.turnBy = mover;
+    if (ended) this.movedBy = (this.state.seats[seat] as SeatInfo).person as Person;
     this.dismissPushed(deviceId, seat, turn);
     this.touch();
     // Acting proves the device is in use, whatever it last reported.
@@ -826,6 +838,8 @@ export class RoomCore {
     const game = state.gameState as CatTowerState;
     const now = this.now();
     this.queueStreak(game.status === "gameOver");
+    const from = this.movedBy;
+    this.movedBy = null;
 
     if (game.status === "gameOver") {
       state.status = "over";
@@ -859,6 +873,7 @@ export class RoomCore {
         personName: (seat.person as Person).name,
         tableName: state.name,
         code: state.code,
+        ...(this.features.streaks && from ? { from: { name: from.name, cat: from.cat } } : {}),
       });
     }
   }

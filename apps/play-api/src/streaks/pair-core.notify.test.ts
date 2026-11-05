@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest";
 import { A, at, B, D0, keepDays, missDay, pairOn, play, settle } from "../../tests/streak-helpers";
 
 import { addDays } from "./clock";
-import { drainEvents, facts, pause, view } from "./pair-core";
+import { drainEvents, facts, pause, pauseDays, view } from "./pair-core";
 
 const day = (n: number) => addDays(D0, n);
 
@@ -55,6 +55,18 @@ describe("facts", () => {
     expect(f.view.theirMove).toEqual(["ROOM1"]);
     expect(facts(s, B, at(D0, "09:30"))).toMatchObject({ in: false, view: { myMove: ["ROOM1"] } });
     expect(f.lastTurnAt).toBe(at(D0, "09:00"));
+  });
+
+  it("pauseDays counts the days left in the pause, from today or its later start", () => {
+    const s = pairOn();
+    expect(pauseDays(s, A, at(D0, "09:00"))).toBe(0);
+    pause(s, A, 3, at(D0, "09:00"));
+    expect(pauseDays(s, A, at(D0, "09:00"))).toBe(3);
+    expect(pauseDays(s, A, at(day(1), "09:00"))).toBe(2);
+    const kept = pairOn();
+    keepDays(kept, D0, 1);
+    pause(kept, A, 2, at(D0, "11:00"));
+    expect(pauseDays(kept, A, at(D0, "11:00"))).toBe(2);
   });
 
   it("paused reflects today", () => {
