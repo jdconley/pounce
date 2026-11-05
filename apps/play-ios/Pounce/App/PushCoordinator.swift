@@ -199,6 +199,28 @@ final class PushCoordinator: NSObject, UNUserNotificationCenterDelegate {
         center.removePendingNotificationRequests(withIdentifiers: ids)
     }
 
+    #if DEBUG
+    /// A pounce from Mia (play-api's `pounce-new` sample), as a communication notification.
+    func postDemoPounce(after seconds: TimeInterval) {
+        let content = UNMutableNotificationContent()
+        content.title = "JD"
+        content.body = "Mia wants to play. New game?"
+        content.sound = .default
+        content.categoryIdentifier = PushCategory.pounce.rawValue
+        content.threadIdentifier = "pounce:pr_3f9cAAAAAAAAAAAAAAAAAA"
+        content.interruptionLevel = .active
+        content.relevanceScore = 0.9
+        content.userInfo = [
+            "kind": "pounce", "from": ["name": "Mia", "cat": 2],
+            "pounce": ["id": "pc_demoKikiAAAAAAAAAAAAAA", "target": "new"],
+            "aps": ["alert": ["title": "JD", "body": content.body], "thread-id": content.threadIdentifier, "category": "POUNCE"],
+        ]
+        let drawn = Communication.content(for: content, art: .main) ?? content
+        let trigger = UNTimeIntervalNotificationTrigger(timeInterval: seconds, repeats: false)
+        Self.add(UNNotificationRequest(identifier: "demo-pounce", content: drawn, trigger: trigger))
+    }
+    #endif
+
     // MARK: a kitten's daily reminder (spec §14.1): local, at a fixed 17:00, off by default
 
     func setKittenDaily(on: Bool, name: String) {

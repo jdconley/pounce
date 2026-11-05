@@ -76,6 +76,27 @@ Needs the server with `STREAKS` on (production once this PR deploys).
 - [ ] Play again at game over: the phone that tapped goes to the new table; the other phone's pill
       bounces and jumps there.
 
+## Notifications and Pounce (daily habit PR 5, TestFlight builds only)
+
+- [ ] Pounce from one phone to another (Us screen bell, New game): the other phone gets "Mia wants
+      to play. New game?" with Mia's cat as the avatar and the recipient's name still showing. Play
+      deals a table seating both and opens it; the sender gets "JD is coming." and their bell shows
+      the leaping cat.
+- [ ] Long-press a pounce on the Lock Screen: In a bit and Not now answer without opening the app
+      (the sender sees the clock or the sleeping cat). Repeat with the phone in Airplane Mode, then
+      turn it off and open the app: the answer goes out once.
+- [ ] Three pounces in an hour from one phone: the bell falls asleep and won't open the sheet.
+- [ ] Pounce through Messages (the sheet's share button): the link's card shows the bell and the
+      sender's name; with the app installed it opens the pick sheet; without it, the TestFlight page.
+- [ ] A kitten's phone: no share button on the Pounce sheet, the settings panel has only the 17:00
+      bell, and no push of any kind arrives.
+- [ ] A fresh install: "not now" on the priming screen, then a "your move": it arrives quietly in
+      Notification Center with iOS's Keep and Turn Off; Home's bell offers the full prompt once.
+- [ ] Your move's In an hour: the same notification comes back an hour later, and not at all if the
+      move was taken in the meantime.
+- [ ] Settings panel: change the weekday dial and quiet hours on the iPhone; the iPad (same account)
+      shows the same values after a foreground.
+
 ## Performance and accessibility
 
 - [ ] Instruments idle-CPU check on the oldest iPhone available: the table scene should pause when

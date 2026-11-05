@@ -293,6 +293,10 @@ final class AppModel {
     /// then refresh Home's table list. Never blocks the first frame.
     func bootstrap() async {
         reloadLocal()
+        #if DEBUG
+        // `-request-push`: the system prompt at launch (the notification screenshots).
+        if CommandLine.arguments.contains("-request-push") { _ = await push?.requestAuthorization() }
+        #endif
         _ = try? await api.credential()
         #if DEBUG
         await account.applyDebugPreset()
@@ -576,6 +580,11 @@ final class AppModel {
             push?.cancelAllTurnReminders()
             push?.retryUpload()
         case .background:
+            #if DEBUG
+            // `-demo-communication`: once the app is away, a pounce from Mia lands, drawn exactly as
+            // PounceNotify draws a push (the simulator's `simctl push` skips service extensions).
+            if CommandLine.arguments.contains("-demo-communication") { push?.postDemoPounce(after: 2) }
+            #endif
             scheduleTurnReminder()
             room?.background()
         default: break
