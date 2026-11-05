@@ -40,11 +40,18 @@ export type PairViews = Record<string, { pair: string; view: StreakView }[]>;
  * (§6.1). The player with the smaller id coordinates, so two rooms can't make
  * two pairs. Null when either left the other's streak, or is gone.
  */
-async function ensurePair(env: Env, a: string, b: string, turnedAt: Record<string, number>, now: number): Promise<string | null> {
+async function ensurePair(
+  env: Env,
+  a: string,
+  b: string,
+  turnedAt: Record<string, number>,
+  now: number,
+  requireTurns = true,
+): Promise<string | null> {
   const [x, y] = a < b ? [a, b] : [b, a];
   const existing = await player(env, x).pairWith(y);
   if (existing) return existing;
-  if (turnedAt[x] === undefined || turnedAt[y] === undefined) return null;
+  if (requireTurns && (turnedAt[x] === undefined || turnedAt[y] === undefined)) return null;
   const made = await player(env, x).createPair(y, newPairId(), now);
   if (!made) return null;
   if (!made.created) return made.pairId;
@@ -54,7 +61,8 @@ async function ensurePair(env: Env, a: string, b: string, turnedAt: Record<strin
     await player(env, x).dropPair(made.pairId);
     return null;
   }
-  const turns = { [x]: turnedAt[x], [y]: turnedAt[y] };
+  const turns: Record<string, number> = {};
+  for (const id of [x, y]) if (turnedAt[id] !== undefined) turns[id] = turnedAt[id];
   await pair(env, made.pairId).init(newPair(made.pairId, [px as PairPerson, py as PairPerson], now, cryptoSeed(), turns));
   return made.pairId;
 }
@@ -139,6 +147,30 @@ export async function leavePair(env: Env, me: string, pairId: string, now: numbe
   return true;
 }
 
+/** The streaks `me` left and can still undo, with the partner's current name and cat (§14's ghosted cat). */
+export async function myLeft(env: Env, me: string): Promise<{ pair: string; partner: { name: string; cat: number } }[]> {
+  const rows = await player(env, me).leftHandles();
+  const listed = await Promise.all(
+    rows.map(async (r) => {
+      const p = await player(env, r.partnerId).streakProfile();
+      return p ? { pair: r.pairId, partner: { name: p.name, cat: p.cat } } : null;
+    }),
+  );
+  return listed.filter((l) => l !== null);
+}
+
+/**
+ * The ghosted cat's plus: only the leaver can undo a leave. The tombstone
+ * goes and a fresh pair at 0 starts at once (or at the next shared turns,
+ * if the partner can't pair now). False when `pairId` isn't a leave of `me`'s.
+ */
+export async function rejoinPair(env: Env, me: string, pairId: string, now: number): Promise<boolean> {
+  const partner = await player(env, me).rejoin(pairId);
+  if (partner === null) return false;
+  await ensurePair(env, me, partner, {}, now, false);
+  return true;
+}
+
 /** Account deletion and guest expiry leave every pair (§14). Touches no pair when there are none. */
 export async function leaveAllPairs(env: Env, me: string, rows?: { pairId: string; partnerId: string }[]): Promise<void> {
   for (const row of rows ?? (await player(env, me).pairList())) {
@@ -186,6 +218,7 @@ export async function mergePairs(env: Env, from: string, to: string, now: number
     await player(env, from).dropPair(row.pairId);
   }
   await target.addTombstones(await player(env, from).tombstones(), now);
+  await target.addLeftHandles(await player(env, from).leftHandles());
   await syncPairPeople(env, to, now);
 }
 

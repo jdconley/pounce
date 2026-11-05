@@ -307,6 +307,27 @@ describe("streaks", { timeout: 30_000 }, () => {
     expect(await streaks(mf, tablet, mia)).toEqual([]);
   });
 
+  test("the leaver sees a ghosted cat, and only they can start a fresh pair from it", async () => {
+    const mf = worker();
+    const { jd, mia, phone, tablet, pairId } = await pairedUp(mf);
+    expect((await call(mf, phone, "DELETE", `/v1/pairs/${pairId}?person=${jd.id}`)).status).toBe(204);
+    const listing = async (device: Device, who: Person) =>
+      (await (await call(mf, device, "GET", `/v1/me/streaks?person=${who.id}`)).json()) as { pairs: Listed[]; left: unknown[] };
+    expect((await listing(phone, jd)).left).toEqual([{ pair: pairId, partner: { name: "Mia", cat: 2 } }]);
+    expect((await listing(tablet, mia)).left).toEqual([]);
+    // The partner can't clear the leaver's tombstone.
+    expect((await call(mf, tablet, "DELETE", `/v1/me/left/${pairId}?person=${mia.id}`)).status).toBe(404);
+
+    expect((await call(mf, phone, "DELETE", `/v1/me/left/${pairId}?person=${jd.id}`)).status).toBe(204);
+    const after = await listing(phone, jd);
+    expect(after.left).toEqual([]);
+    expect(after.pairs).toHaveLength(1);
+    expect(after.pairs[0]).toMatchObject({ count: 0, partner: { name: "Mia", cat: 2 } });
+    expect(after.pairs[0]?.pair).not.toBe(pairId);
+    expect((await streaks(mf, tablet, mia)).map((p) => p.pair)).toEqual([after.pairs[0]?.pair]);
+    expect((await call(mf, phone, "DELETE", `/v1/me/left/${pairId}?person=${jd.id}`)).status).toBe(404);
+  });
+
   test("table looks come from the setter's unlocks and follow them to a new table", async () => {
     const mf = worker();
     const { a, b, phone, pairId } = await pairedUp(mf);

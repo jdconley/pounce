@@ -16,9 +16,9 @@ export interface Env {
   /** One instance, named `LINKS_NAME`: pounce ids and Messages link tokens (§13.2). */
   LINKS: DurableObjectNamespace<Links>;
   /**
-   * Streaks, table looks and Play again (daily habit PR 3) when "on". Never
-   * listed in wrangler.jsonc: production keeps them off until the app ships
-   * them (PR 4); tests set it.
+   * Streaks, table looks and Play again (daily habit PR 3) when "on".
+   * wrangler.jsonc turns it on in production (and for `wrangler dev`) since
+   * the app shipped them (PR 4); Miniflare tests set it themselves.
    */
   STREAKS?: string;
   /**
