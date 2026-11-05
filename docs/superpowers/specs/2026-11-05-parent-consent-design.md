@@ -33,13 +33,12 @@ Three layers, each doing what it's good for.
 - One kitten can have more than one linked parent. Any one of them can consent or revoke.
 - Household kittens (pass-and-play people on the parent's own phone) need nothing new. Their pushes already go to the parent's device (§14.1).
 
-### Layer 2: verifiable parental consent (ours, email plus)
+### Layer 2: verifiable parental consent (ours, text plus)
 - On the parent's device, the parent reads the **direct notice**. It is a short page from the server at `/privacy/kitten-notice`, with the §312.4(c) contents: what we collect (a push token and the people the kitten plays with), why, that nothing is shared, how to revoke, and a link to the privacy policy.
-- The parent then enters an email address. It is collected only for consent and kept only while consent lasts.
-- The server sends the notice by email with a one-time confirm link.
-- Confirming flips the state to `consented`. 24 to 48 hours later a **second email** goes out (the "plus"): "You allowed this. Revoke here."
-- This works because a kitten's information is never disclosed: the name is generated, nothing is public, and there are no strangers. That is the condition for email plus.
-- **Text plus** is the same flow over SMS. It's kept as an alternative but not built; see decision D1.
+- The parent then enters a mobile number (**text plus**, D1). It is collected only for consent and kept only while consent lasts.
+- The server texts the notice link with a one-time confirm.
+- Confirming flips the state to `consented`. 24 to 48 hours later a **second text** goes out (the "plus"): "You allowed this. Revoke here."
+- This works because a kitten's information is never disclosed: the name is generated, nothing is public, and there are no strangers. That is the condition for text plus.
 
 ### Layer 3: who may reach the kitten (Apple where it works, ours otherwise)
 - **With Family Sharing and Communication Limits** (Declared Age Range shows `.communicationLimits`):
@@ -60,7 +59,7 @@ Three layers, each doing what it's good for.
 ### Revocation
 Any of these turns the kitten back to today's no-push behavior at once. The server deletes the kitten's push tokens, keeps the gameplay, and the kitten's device drops its token on the next launch.
 - A linked parent taps revoke on their device.
-- The revoke link in either email is used.
+- The revoke link in either text is used, or the parent replies STOP.
 - A `RESCIND_CONSENT` notification arrives for that app transaction.
 - The kitten's player is deleted, including the 90-day inactivity deletion.
 - Declared Age Range reports the kitten turned 13. The consent is then no longer needed, and the record is deleted.
@@ -80,35 +79,44 @@ Any of these turns the kitten back to today's no-push behavior at once. The serv
 ### What the parent sees
 - **Kittens** in the gear sheet, for signed-in adults only.
 - For each kitten: their cat, the consent state (pending, waiting for email, on), a toggle per person, and revoke.
-- The notice page and the email field. Those are the only words, and they are legal text, as with the privacy page.
+- The notice page and the phone number field. Those are the only words, and they are legal text, as with the privacy page.
 
 ## 3. Server and flags
 - New `CONSENT` flag. It requires `NOTIFY`, and it is off in production until JD turns it on.
-- New storage: a `Consents` record per kitten player, holding linked parents, state, the email hash and address (deleted when consent ends), and the approved set.
+- New storage: a `Consents` record per kitten player, holding linked parents, state, the parent's phone number (deleted when consent ends), and the approved set.
 - New code index for the link codes.
 - New routes:
   - `POST /v1/kittens/link-code` (kitten device);
   - `POST /v1/kittens/link` (parent);
   - `PUT /v1/kittens/{player}/approved`;
-  - `POST /v1/kittens/{player}/consent` (email);
-  - `GET /consent/{token}` (the email confirm and revoke pages);
+  - `POST /v1/kittens/{player}/consent` (phone number);
+  - `GET /consent/{token}` (the confirm and revoke pages the texts link to);
+  - a Twilio inbound webhook for STOP replies;
   - `DELETE /v1/kittens/{player}/consent`;
   - an App Store Server Notifications endpoint for `RESCIND_CONSENT`, verified by Apple's signed JWS.
 - `DeviceIndex.push` changes:
   - today a kitten device is refused outright;
   - with consent, it allows the kinds listed above, from senders in the approved set.
 
-## 4. Decisions for JD
-- **D1, consent method.** Email plus needs an email provider and its API key as a Worker secret (for example `PLAY_API_EMAIL_KEY` for Resend, Postmark or similar). JD creates the account and the secret. Text plus needs an SMS provider (for example Twilio), costs per message, and needs a key the same way.
-- **D2, scope.**
-  - (a) Full: turn pushes and pounces from approved people. This needs Layer 2.
-  - (b) Turn pushes only, under the multiple-contact exception: an emailed notice with opt-out, and no confirm step. That's smaller, but it still needs email, and counsel should confirm the exception fits.
-- **D3, PermissionKit.** Use Apple's "ask to communicate" as the approval path when the kitten has Communication Limits on, with the parent's own-device list as the fallback. Or use only the parent's list, which is simpler and the same for every family.
-- **D4, production.** `CONSENT` stays off in production until counsel reviews the notice and flow. JD has no kittens in the beta, so TestFlight loses nothing.
-- **D5, App Store Server Notifications.** Receiving `RESCIND_CONSENT` needs the production notification URL set in App Store Connect: App, then App Information, then App Store Server Notifications, then Production Server URL `https://play.conleychaos.com/v1/appstore/notifications`, Version 2. That is a portal item for JD.
+## 4. Decisions (JD, 2026-11-05)
+- **D1, consent method: text plus (JD).**
+  - The parent enters a mobile number on their own device. The server texts the notice link with a one-time confirm.
+  - 24 to 48 hours later a second text goes out ("You allowed this. Reply STOP or tap to revoke").
+  - The number is kept only while consent lasts, and is deleted when consent ends.
+  - Layer 2 above reads "text" wherever it says "email". Email plus is not built.
+  - **Provider: Twilio (call).** It's the standard choice and works from a Worker with plain HTTPS and basic auth. It's optional exactly like the APNs key: without the secrets, consent can't finish and nothing is sent.
+  - **Secrets JD creates:** `PLAY_API_TWILIO_ACCOUNT_SID`, `PLAY_API_TWILIO_API_KEY_SID`, `PLAY_API_TWILIO_API_KEY_SECRET`, `PLAY_API_TWILIO_MESSAGING_SERVICE_SID`.
+  - **US texting also needs** toll-free verification or A2P 10DLC registration for the sending number in Twilio. That can take days.
+- **D2, scope: turn pushes and pounces from approved people (JD).** Plus the optional fixed-time reminder.
+- **D3, approvals: Apple's PermissionKit when the kitten has Communication Limits, otherwise the parent's own list in Pounce (JD).**
+- **D4, production: `CONSENT` is on at merge (JD).** Real kittens can consent as soon as the Twilio secrets exist, without a legal review of the notice first. The notice text is a draft for JD to check.
+- **D5, App Store Server Notifications (portal item for JD).** Receiving `RESCIND_CONSENT` needs the production notification URL set in App Store Connect:
+  1. App, then App Information, then App Store Server Notifications.
+  2. Production Server URL: `https://play.conleychaos.com/v1/appstore/notifications`.
+  3. Version 2.
 
 ## 5. Left to the builder
-- Copy of the notice and the emails.
+- Copy of the notice and the texts.
 - Link-code expiry and attempt limits.
 - How approvals mirror between Apple's `knownHandles` and the server.
 - Art for the padlocked bell and the Kittens panel, as `_ph` placeholders.
