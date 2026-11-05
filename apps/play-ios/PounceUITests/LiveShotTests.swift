@@ -7,16 +7,19 @@ import XCTest
 ///     TEST_RUNNER_POUNCE_SHOTS_DIR=/some/dir xcodebuild test ... -only-testing:PounceUITests/LiveShotTests
 ///
 /// Shots land as `lock-<mine|theirs>.png`, `island-compact-<…>.png` and `island-expanded-<…>.png`.
+/// `POUNCE_SHOTS_ORIENTATIONS=landscape` turns the device first (iPad shows the live table too).
 /// The app points at a port nothing listens on, so it never reaches a dev server.
 @MainActor
 final class LiveShotTests: XCTestCase {
     private var dir = ""
+    private var landscape = false
     private let springboard = XCUIApplication(bundleIdentifier: "com.apple.springboard")
 
     override func setUpWithError() throws {
         let env = ProcessInfo.processInfo.environment
         guard let dir = env["POUNCE_SHOTS_DIR"], !dir.isEmpty else { throw XCTSkip("no POUNCE_SHOTS_DIR") }
         self.dir = dir
+        landscape = env["POUNCE_SHOTS_ORIENTATIONS"] == "landscape"
         try FileManager.default.createDirectory(atPath: dir, withIntermediateDirectories: true)
         continueAfterFailure = false
     }
@@ -36,6 +39,7 @@ final class LiveShotTests: XCTestCase {
         XCTAssertTrue(el(app, "home.streak").waitForExistence(timeout: 15))
         Thread.sleep(forTimeInterval: 2)
         XCUIDevice.shared.press(.home)
+        XCUIDevice.shared.orientation = landscape ? .landscapeLeft : .portrait
         Thread.sleep(forTimeInterval: 2)
     }
 
@@ -53,11 +57,22 @@ final class LiveShotTests: XCTestCase {
         springboard.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.6)).tap()
         pressLock()
         pressLock()
+        // The first live tables ask whether Pounce may show them on the Lock Screen ("Allow", then
+        // "Always Allow").
+        for label in ["Always Allow", "Allow"] {
+            let allow = springboard.buttons[label]
+            if allow.waitForExistence(timeout: 2) {
+                allow.tap()
+                pressLock()
+                pressLock()
+            }
+        }
         try shot("lock-\(whose)")
         // Unlock again for the next run: swipe up from the bottom.
         springboard.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.995))
             .press(forDuration: 0.05, thenDragTo: springboard.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.3)))
         Thread.sleep(forTimeInterval: 1.5)
+        XCUIDevice.shared.orientation = .portrait
     }
 
     func testMyMove() throws {
