@@ -57,6 +57,10 @@ targets:
       # Runs before code signing, so the signature covers the stripped plist.
       - name: Strip debug URL scheme
         basedOnDependencyAnalysis: false
+        # The built Info.plist as an input, so this runs after it is written: with an embedded
+        # extension (PounceNotify) Xcode processes the plist late, after unordered script phases.
+        inputFiles:
+          - $(TARGET_BUILD_DIR)/$(INFOPLIST_PATH)
         script: |
           set -eu
           plist="${TARGET_BUILD_DIR}/${INFOPLIST_PATH}"
