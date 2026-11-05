@@ -47,11 +47,11 @@ struct SmallUsView: View {
     let state: UsWidgetState
 
     var body: some View {
-        VStack(spacing: 0) {
+        ZStack(alignment: .top) {
+            CondoScene(state: state)
             if state.kind == .pair {
                 PawRow(state: state, numeral: 34, paw: 24)
             }
-            CondoScene(state: state)
         }
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(Text(verbatim: Self.label(state)))
@@ -103,19 +103,23 @@ struct CondoScene: View {
     var body: some View {
         GeometryReader { geo in
             let side = min(geo.size.width, geo.size.height)
-            let cat = side * 0.5
+            let cat = side * 0.52
             ZStack(alignment: .bottom) {
-                ArtImage(ArtName.Habit.condo(state.condoStage) ?? ArtName.Habit.condos[0], points: side)
-                    .frame(width: side, height: side)
-                HStack(alignment: .bottom, spacing: -cat * 0.18) {
+                ArtImage(ArtName.Habit.condo(state.condoStage) ?? ArtName.Habit.condos[0], points: side * 0.86)
+                    .frame(width: side * 0.86, height: side * 0.86)
+                    .offset(y: -side * 0.04)
+                HStack(alignment: .bottom, spacing: 0) {
                     ArtImage(WidgetArt.cat(state.me?.cat ?? 3, state.myPose), points: cat)
                         .frame(width: cat, height: cat)
+                    Spacer(minLength: 0)
                     if let partner = state.partner {
                         ArtImage(WidgetArt.cat(partner.cat, state.theirPose), points: cat)
                             .frame(width: cat, height: cat)
                             .scaleEffect(x: -1, y: 1)
                     }
                 }
+                .frame(width: side * 1.04)
+                .offset(y: side * 0.04)
             }
             .frame(width: geo.size.width, height: geo.size.height, alignment: .bottom)
         }

@@ -421,6 +421,12 @@ final class AppModel {
         var names: [String: String] = [:]
         for (code, table) in cache { if let name = table.name { names[code] = name } }
         for entry in tables { if let name = entry.name { names[entry.code] = name } }
+        #if DEBUG
+        // `-demo-streaks`: the demo pairs' tables have names, as on a server.
+        if CommandLine.arguments.contains("-demo-streaks") {
+            names.merge(DemoFixtures.widgetSnapshot().tableNames) { mine, _ in mine }
+        }
+        #endif
         // Until the server answered for this person the list is unknown, not empty (an offline
         // launch); once it has, it is news only as of that answer.
         let pairs: [StreakView]? = streaks.fetchedAt == nil ? nil : (streaks.enabled == false ? [] : streaks.pairs)
