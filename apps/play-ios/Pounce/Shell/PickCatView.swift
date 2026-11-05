@@ -9,7 +9,7 @@ struct PickCatView: View {
 
     var body: some View {
         CatEditorView(
-            initialName: "", initialCat: 0, asksName: true
+            initialName: "", initialCat: 0, asksName: true, typedNames: model.limits.typedNames
         ) { name, cat in
             model.finishPickCat(name: name, cat: cat)
         }
@@ -44,6 +44,8 @@ struct CatEditorView: View {
     let initialCat: Int
     /// Ask for the name out loud ("What's your name?") and focus the field at once.
     let asksName: Bool
+    /// Names are typed. Off (a kitten, spec §14.1): only the generated names, by the dice.
+    let typedNames: Bool
     /// Show the extra delete button (people other than the owner).
     var onDelete: (() -> Void)?
     var onCancel: (() -> Void)?
@@ -60,16 +62,18 @@ struct CatEditorView: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     init(
-        initialName: String, initialCat: Int, asksName: Bool = false, onCancel: (() -> Void)? = nil,
-        onDelete: (() -> Void)? = nil, onConfirm: @escaping (String, Int) -> Void
+        initialName: String, initialCat: Int, asksName: Bool = false, typedNames: Bool = true,
+        onCancel: (() -> Void)? = nil, onDelete: (() -> Void)? = nil, onConfirm: @escaping (String, Int) -> Void
     ) {
-        self.initialName = initialName
+        let start = typedNames || !AgeLimits.needsGeneratedName(initialName) ? initialName : Self.randomName()
+        self.initialName = start
         self.initialCat = initialCat
         self.asksName = asksName
+        self.typedNames = typedNames
         self.onCancel = onCancel
         self.onDelete = onDelete
         self.onConfirm = onConfirm
-        _name = State(initialValue: initialName)
+        _name = State(initialValue: start)
         _cat = State(initialValue: initialCat)
     }
 
@@ -110,7 +114,7 @@ struct CatEditorView: View {
         .task { await blinkLoop() }
         .task {
             // A new name is the first thing to fill in: the keyboard comes up with the screen.
-            guard asksName || initialName.isEmpty else { return }
+            guard typedNames, asksName || initialName.isEmpty else { return }
             try? await Task.sleep(for: Pace.duration(.milliseconds(350)))
             // Not if a name went in meanwhile (the dice), which would only cover the check.
             guard trimmed.isEmpty else { return }
@@ -167,7 +171,7 @@ struct CatEditorView: View {
     // MARK: pieces
 
     @ViewBuilder private var prompt: some View {
-        if asksName {
+        if asksName && typedNames {
             OutlinedText(
                 String(localized: "What's your name?", comment: "First launch: the prompt over the name field"),
                 size: sizeClass == .regular ? 38 : 30, fill: .white, width: 4)
@@ -220,6 +224,40 @@ struct CatEditorView: View {
 
     private var nameRow: some View {
         HStack(spacing: 12) {
+            if typedNames { nameField } else { generatedName }
+            PillButton(icon: ArtName.iconDice, color: Palette.orange, size: .small, accessibilityLabel: "Pick a random name") {
+                if typedNames {
+                    name = suggestion
+                    suggestion = Self.randomName()
+                } else {
+                    var next = Self.randomName()
+                    while next == name { next = Self.randomName() }
+                    name = next
+                }
+                diceSpin += 1
+                nameFocused = false
+            }
+            .wiggle(trigger: diceSpin)
+            .accessibilityIdentifier("pickcat.dice")
+        }
+        .padding(.bottom, 6)
+    }
+
+    /// A kitten's name: one of the generated names, shown, not typed (spec §14.1).
+    private var generatedName: some View {
+        OutlinedText(name, size: 28, fill: .white, width: 3)
+            .frame(maxWidth: .infinity)
+            .frame(height: 60)
+            .background(Capsule().fill(Palette.teal.mix(with: Palette.violet, by: 0.35)))
+            .overlay(Capsule().strokeBorder(Palette.ink, lineWidth: 4))
+            .shadow(color: Palette.ink.opacity(0.5), radius: 0, x: 0, y: 5)
+            .pop(trigger: name)
+            .accessibilityElement()
+            .accessibilityLabel(Text(verbatim: name))
+            .accessibilityIdentifier("pickcat.generatedName")
+    }
+
+    private var nameField: some View {
             TextField(
                 "", text: $name,
                 prompt: Text(verbatim: suggestion).foregroundStyle(Palette.ink.opacity(0.4))
@@ -245,17 +283,6 @@ struct CatEditorView: View {
                 .wiggle(trigger: nameNope)
                 .accessibilityLabel(Text("Your name"))
                 .accessibilityIdentifier("pickcat.name")
-
-            PillButton(icon: ArtName.iconDice, color: Palette.orange, size: .small, accessibilityLabel: "Pick a random name") {
-                name = suggestion
-                suggestion = Self.randomName()
-                diceSpin += 1
-                nameFocused = false
-            }
-            .wiggle(trigger: diceSpin)
-            .accessibilityIdentifier("pickcat.dice")
-        }
-        .padding(.bottom, 6)
     }
 
     private var catGrid: some View {

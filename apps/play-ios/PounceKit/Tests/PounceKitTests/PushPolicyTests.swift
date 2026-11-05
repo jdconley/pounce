@@ -111,3 +111,34 @@ import Testing
         #expect(s.pending == nil)
     }
 }
+
+/// Across devices (spec §12.5).
+@Suite struct PushAcrossDevicesTests {
+    @Test func testDismissPayloadFromServerShape() {
+        let payload: [AnyHashable: Any] = ["aps": ["content-available": 1], "kind": "dismiss", "code": "GH2VD"]
+        #expect(PushPolicy.dismissCode(fromPayload: payload) == "GH2VD")
+    }
+
+    @Test func testOtherPayloadsAreNotDismissals() {
+        #expect(PushPolicy.dismissCode(fromPayload: ["aps": ["alert": ["title": "JD"]], "code": "GH2VD"]) == nil)
+        #expect(PushPolicy.dismissCode(fromPayload: ["kind": "dismiss", "code": "nope!"]) == nil)
+        #expect(PushPolicy.dismissCode(fromPayload: ["kind": "dismiss"]) == nil)
+    }
+
+    @Test func testNotificationMatchesByThreadOrCode() {
+        #expect(PushPolicy.matches(code: "GH2VD", userInfo: [:], threadId: "GH2VD"))
+        #expect(PushPolicy.matches(code: "GH2VD", userInfo: ["code": "GH2VD"], threadId: ""))
+        #expect(!PushPolicy.matches(code: "GH2VD", userInfo: ["code": "BCDFG"], threadId: "BCDFG"))
+    }
+
+    @Test func testBadgeCountsTablesWhereItIsYourMove() {
+        let tables = [
+            TableEntry(code: "AAAAA", status: "playing", yourTurn: true, updatedAt: 1),
+            TableEntry(code: "BBBBB", status: "playing", yourTurn: false, updatedAt: 1),
+            TableEntry(code: "CCCCC", status: "lobby", yourTurn: true, updatedAt: 1),
+            TableEntry(code: "DDDDD", status: "over", yourTurn: true, updatedAt: 1),
+        ]
+        #expect(PushPolicy.badgeCount(tables) == 2)
+        #expect(PushPolicy.badgeCount([]) == 0)
+    }
+}

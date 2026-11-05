@@ -30,6 +30,19 @@ public final class TutorialStore {
         return all
     }
 
+    /// Moves one person's tips to a new id (their old id was rejected by the server).
+    public func moveTips(from old: String, to new: String) {
+        var all = load()
+        guard let tips = all.removeValue(forKey: old) else { return }
+        all[new, default: []].formUnion(tips)
+        save(all)
+    }
+
+    /// Replaces the whole record (sync brought another device's tips).
+    public func replace(_ all: TipsSeen) {
+        save(all)
+    }
+
     /// Everyone sees the tips again.
     public func reset() {
         try? FileManager.default.removeItem(at: fileURL)

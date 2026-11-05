@@ -6,6 +6,7 @@ import SwiftUI
 /// pill. When the other phone claims it the seat leaves this phone's snapshot and the sheet
 /// closes (or goes home, if that was this phone's last seat).
 struct MoveSeatSheet: View {
+    @Environment(AppModel.self) private var model
     let session: RoomSession
     let onBack: () -> Void
     let onMovedAll: () -> Void
@@ -156,10 +157,12 @@ struct MoveSeatSheet: View {
                     comment: "VoiceOver: scan with another phone to move this seat there"))
                 .accessibilityAddTraits(.isImage)
                 .accessibilityIdentifier("move.qr")
-            PillButton(icon: ArtName.iconShare, color: Palette.magenta, size: .medium, width: 160, accessibilityLabel: "Share the move link") {
-                sharing = true
+            if model.limits.sharesLinks {
+                PillButton(icon: ArtName.iconShare, color: Palette.magenta, size: .medium, width: 160, accessibilityLabel: "Share the move link") {
+                    sharing = true
+                }
+                .accessibilityIdentifier("move.share")
             }
-            .accessibilityIdentifier("move.share")
         }
         .padding(.horizontal, 16)
     }

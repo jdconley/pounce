@@ -56,6 +56,21 @@ struct HomeView: View {
                 .presentationDragIndicator(.hidden)
                 .presentationBackground(Palette.night)
         }
+        .sheet(isPresented: $showSettings) {
+            GearSheet {
+                showSettings = false
+                // The rules wait for the gear sheet to finish going away.
+                Task {
+                    try? await Task.sleep(for: Pace.duration(.milliseconds(450)))
+                    showRules = true
+                }
+            }
+            .environment(model)
+            .environment(settings)
+            .presentationDetents([.large])
+            .presentationDragIndicator(.visible)
+            .presentationBackground(Palette.night)
+        }
         .sheet(isPresented: $showArchived) {
             ArchivedSheet()
                 .environment(model)
@@ -98,6 +113,7 @@ struct HomeView: View {
             try? await Task.sleep(for: .milliseconds(600))
             if args.contains("-show-rules") { showRules = true }
             if args.contains("-show-people") { showPeople = true }
+            if args.contains("-show-gear") { showSettings = true }
         }
         #endif
         .onChange(of: scenePhase) { _, phase in
@@ -424,48 +440,6 @@ struct HomeView: View {
         .padding(.top, 4)
         .accessibilityLabel("Settings")
         .accessibilityIdentifier("home.settings")
-        .popover(isPresented: $showSettings, attachmentAnchor: .point(.bottom), arrowEdge: .top) {
-            settingsPopover
-                .presentationCompactAdaptation(.popover)
-        }
-    }
-
-    private var settingsPopover: some View {
-        VStack(spacing: 14) {
-            HStack(spacing: 16) {
-                PillButton(
-                    icon: settings.soundOn ? ArtName.iconSoundOn : ArtName.iconSoundOff,
-                    color: settings.soundOn ? Palette.teal : Palette.violet, size: .small,
-                    accessibilityLabel: settings.soundOn ? "Sound on" : "Sound off"
-                ) {
-                    settings.soundOn.toggle()
-                }
-                .accessibilityIdentifier("settings.sound")
-                PillButton(
-                    icon: settings.hapticsOn ? ArtName.iconHapticsOn : ArtName.iconHapticsOff,
-                    color: settings.hapticsOn ? Palette.orange : Palette.violet, size: .small,
-                    accessibilityLabel: settings.hapticsOn ? "Haptics on" : "Haptics off"
-                ) {
-                    settings.hapticsOn.toggle()
-                }
-                .accessibilityIdentifier("settings.haptics")
-            }
-            PillButton(
-                icon: nil, color: Palette.orange, size: .small, width: 156,
-                title: String(localized: "How to play", comment: "Home settings: open the rules"),
-                accessibilityLabel: "How to play"
-            ) {
-                showSettings = false
-                // The sheet waits for the popover to finish going away.
-                Task {
-                    try? await Task.sleep(for: Pace.duration(.milliseconds(350)))
-                    showRules = true
-                }
-            }
-            .accessibilityIdentifier("settings.rules")
-        }
-        .padding(18)
-        .background(Palette.night)
     }
 
     /// The owner's cat on a cushion, bottom-left. Tap for the people on this phone.

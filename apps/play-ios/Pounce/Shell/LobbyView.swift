@@ -240,13 +240,16 @@ struct LobbyView: View {
                 .accessibilityIdentifier("lobby.code")
     }
 
-    private var shareButton: some View {
-        PillButton(icon: ArtName.iconShare, color: Palette.magenta, size: .small, width: 54, accessibilityLabel: "Invite") {
-            lastTapped = .share
-            sharing = true
+    /// No share-sheet links out from a kitten's device (spec §14.1): the code and QR still show.
+    @ViewBuilder private var shareButton: some View {
+        if model.limits.sharesLinks {
+            PillButton(icon: ArtName.iconShare, color: Palette.magenta, size: .small, width: 54, accessibilityLabel: "Invite") {
+                lastTapped = .share
+                sharing = true
+            }
+            .wiggle(trigger: wiggles[.share, default: 0])
+            .accessibilityIdentifier("lobby.share")
         }
-        .wiggle(trigger: wiggles[.share, default: 0])
-        .accessibilityIdentifier("lobby.share")
     }
 
     private var qrButton: some View {
@@ -450,6 +453,7 @@ struct LobbyView: View {
                 picker = .claim(i)
             },
         ]
+        if !model.limits.sharesLinks { items.removeAll { $0.id == "invite" } }
         if seat.kind != .bot {
             items.append(SeatMenuItem(id: "bot", icon: ArtName.badgeBot, color: Palette.orange, label: "Add a bot") {
                 menuSeat = nil
@@ -471,7 +475,8 @@ struct LobbyView: View {
         return PersonPicker(
             people: local, ownerID: model.people.owner?.id,
             onPick: { seat($0, target) },
-            onCreate: { name, cat in seat(model.addPerson(name: name, cat: cat), target) },
+            kittenDevice: model.ageBand == .kitten,
+            onCreate: { name, cat, band in seat(model.addPerson(name: name, cat: cat, band: band), target) },
             onClose: { picker = nil })
     }
 

@@ -30,7 +30,7 @@ struct RenameSheet: View {
             ScrollView {
                 VStack(spacing: 16) {
                     ForEach(mine, id: \.seat) { entry in
-                        RenameRow(seat: entry.seat, person: entry.person) { name in
+                        RenameRow(seat: entry.seat, person: entry.person, typed: typesName(entry.person)) { name in
                             model.renamePerson(seat: entry.seat, person: entry.person, to: name)
                         }
                     }
@@ -44,6 +44,12 @@ struct RenameSheet: View {
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("sheet-rename")
     }
+
+    /// A kitten's name comes from the dice, never the keyboard (spec §14.1).
+    private func typesName(_ person: Person) -> Bool {
+        guard model.limits.typedNames else { return false }
+        return model.everyone.contains { $0.id == person.id } ? model.account.typesName(person.id) : true
+    }
 }
 
 /// One seat: its cat in its ring, the name field and a check that lights up once the name
@@ -52,16 +58,20 @@ struct RenameSheet: View {
 private struct RenameRow: View {
     let seat: Seat
     let person: Person
+    /// Typed; otherwise a generated name, rolled with the dice.
+    let typed: Bool
     let onSave: (String) -> Void
 
     @State private var name: String
+    @State private var roll = 0
     @State private var selection: TextSelection?
     @State private var saved = 0
     @FocusState private var focused: Bool
 
-    init(seat: Seat, person: Person, onSave: @escaping (String) -> Void) {
+    init(seat: Seat, person: Person, typed: Bool, onSave: @escaping (String) -> Void) {
         self.seat = seat
         self.person = person
+        self.typed = typed
         self.onSave = onSave
         _name = State(initialValue: person.name)
     }
@@ -80,6 +90,42 @@ private struct RenameRow: View {
                 .overlay(Circle().strokeBorder(SeatInfo.ringColor(seat), lineWidth: 5))
                 .overlay(Circle().strokeBorder(Palette.ink, lineWidth: 2).padding(-1))
                 .accessibilityHidden(true)
+            if typed { field } else { dice }
+            PillButton(
+                icon: ArtName.iconCheck, color: Palette.lime, size: .small, accessibilityLabel: "Save name"
+            ) {
+                save()
+            }
+            .saturation(changed ? 1 : 0)
+            .opacity(changed ? 1 : 0.55)
+            .wiggle(trigger: saved)
+            .accessibilityIdentifier("rename.save.\(seat)")
+        }
+    }
+
+    /// A kitten's row: the generated name, and the dice for another.
+    private var dice: some View {
+        HStack(spacing: 10) {
+            OutlinedText(name, size: 24, fill: .white, width: 2.5)
+                .frame(maxWidth: .infinity)
+                .frame(height: 52)
+                .background(Capsule().fill(Palette.teal.mix(with: Palette.violet, by: 0.35)))
+                .overlay(Capsule().strokeBorder(Palette.ink, lineWidth: 4))
+                .accessibilityElement()
+                .accessibilityLabel(Text(verbatim: name))
+                .accessibilityIdentifier("rename.name.\(seat)")
+            PillButton(icon: ArtName.iconDice, color: Palette.orange, size: .small, accessibilityLabel: "Pick a random name") {
+                var next = CatEditorView.randomName()
+                while next == name { next = CatEditorView.randomName() }
+                name = next
+                roll += 1
+            }
+            .wiggle(trigger: roll)
+            .accessibilityIdentifier("rename.dice.\(seat)")
+        }
+    }
+
+    private var field: some View {
             TextField("", text: $name, selection: $selection)
                 .focused($focused)
                 .onChange(of: focused) { _, on in
@@ -105,16 +151,6 @@ private struct RenameRow: View {
                 .overlay(Capsule().strokeBorder(Palette.ink, lineWidth: 4))
                 .accessibilityLabel(Text("Name"))
                 .accessibilityIdentifier("rename.name.\(seat)")
-            PillButton(
-                icon: ArtName.iconCheck, color: Palette.lime, size: .small, accessibilityLabel: "Save name"
-            ) {
-                save()
-            }
-            .saturation(changed ? 1 : 0)
-            .opacity(changed ? 1 : 0.55)
-            .wiggle(trigger: saved)
-            .accessibilityIdentifier("rename.save.\(seat)")
-        }
     }
 
     private func save() {

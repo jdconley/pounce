@@ -43,8 +43,29 @@ final class AppModel {
     /// Push and local notifications; attached by the app delegate once SwiftUI built this model.
     @ObservationIgnored weak var push: PushCoordinator?
 
+    // MARK: age (spec §14.1)
+
+    @ObservationIgnored let ageStore: AgeRecordStore
+    @ObservationIgnored let ageAsker: AgeRangeAsking
+    /// The phone owner's age band and where it came from; nil until the age check ran.
+    private(set) var ageRecord: AgeRecord?
+    var ageBand: AgeBand? { ageRecord?.band }
+    /// What the owner's band allows on this device. Unknown counts as the most limited.
+    var limits: AgeLimits { AgeLimits(band: ageBand) }
+    /// Players, Sign in with Apple and sync (spec §10.5, §13.1).
+    @ObservationIgnored private(set) var account: AccountModel!
+
+    /// This phone had a person before this version asked ages: an existing player, for whom this
+    /// update is a significant change (§14.1). A new install agreed to it at download.
+    @ObservationIgnored private(set) var hadOwnerBeforeThisVersion = false
+
+    /// The local "your turn" reminder: the person's choice, else the band's default.
+    var turnReminderOn: Bool { settings.turnReminderChoice ?? limits.turnReminderDefault }
+
     init(
-        config: APIConfig, credentials: CredentialStore, dataDirectory: URL, settings: Settings = .shared
+        config: APIConfig, credentials: CredentialStore, dataDirectory: URL, settings: Settings = .shared,
+        ageStore: AgeRecordStore = KeychainAgeRecordStore(), ageAsker: AgeRangeAsking = LiveAgeRange(),
+        personKeys: PersonKeyStore = KeychainPersonKeyStore()
     ) {
         api = APIClient(config: config, credentials: credentials)
         self.config = config
@@ -58,7 +79,25 @@ final class AppModel {
         archived = tableArchive.all()
         tutorialStore = TutorialStore(directory: dataDirectory)
         tipsSeen = tutorialStore.load()
-        route = loaded.owner == nil ? .pickCat(then: nil) : .home
+        self.ageStore = ageStore
+        self.ageAsker = ageAsker
+        let age = ageStore.load()
+        ageRecord = age
+        hadOwnerBeforeThisVersion = age == nil && loaded.owner != nil
+        route = age == nil ? .age(then: nil) : loaded.owner == nil ? .pickCat(then: nil) : .home
+        #if DEBUG
+        let stub = StubScenario.from(arguments: CommandLine.arguments)
+        let service: AccountService = stub.map { StubAccountService(scenario: $0) } ?? api
+        let apple: AppleSigning = stub.map { StubAppleSignIn(scenario: $0) } ?? LiveAppleSignIn()
+        #else
+        let service: AccountService = api
+        let apple: AppleSigning = LiveAppleSignIn()
+        #endif
+        account = AccountModel(
+            app: self, service: service, apple: apple, keys: personKeys,
+            store: AccountStore(directory: dataDirectory, fileName: AccountStore.fileName(for: config)))
+        // Before anything can upload: hold accounts while this update's approval may be owed.
+        SignificantChangeGate.prepare(self)
     }
 
     /// The real app model, or (DEBUG only) the throwaway one for `-uitest-reset` (fresh temp data
@@ -72,12 +111,27 @@ final class AppModel {
         let config = AppConfig.load(env: env)
         #if DEBUG
         let model: AppModel
+        let asker = debugAgeAsker(arguments: arguments, env: env)
         if arguments.contains("-uitest-reset") {
             let dir = FileManager.default.temporaryDirectory
                 .appendingPathComponent("pounce-uitest-\(UUID().uuidString)", isDirectory: true)
-            model = AppModel(config: config, credentials: MemoryCredentialStore(), dataDirectory: dir)
+            model = AppModel(
+                config: config, credentials: MemoryCredentialStore(), dataDirectory: dir,
+                ageStore: debugAgeStore(arguments: arguments), ageAsker: asker, personKeys: MemoryPersonKeyStore())
         } else {
-            model = real(config: config)
+            model = real(config: config, ageAsker: asker)
+        }
+        // `-seed-people`: a fresh run starts with an owner and two others (screenshots).
+        if arguments.contains("-uitest-reset"), arguments.contains("-seed-people"), model.people.owner == nil {
+            model.peopleStore.setOwner(name: "JD", cat: 4)
+            model.peopleStore.add(name: "Ella", cat: 2)
+            model.peopleStore.add(name: "Sam", cat: 6)
+            model.people = model.peopleStore.load()
+            if model.ageRecord != nil { model.route = .home }
+        }
+        // `-show-merge`: the two-cats question over the gear sheet (screenshots).
+        if arguments.contains("-show-merge") {
+            model.account.merge = .init(mine: 4, theirs: 2, theirName: StubAccountService.other.name, asking: true)
         }
         if let demo = DemoMode.from(arguments: arguments) { model.openDemo(demo) }
         if arguments.contains("-uitest-reset") || DemoMode.from(arguments: arguments) != nil {
@@ -98,13 +152,38 @@ final class AppModel {
         #endif
     }
 
-    private static func real(config: APIConfig) -> AppModel {
+    private static func real(config: APIConfig, ageAsker: AgeRangeAsking = LiveAgeRange()) -> AppModel {
         let support = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
         return AppModel(
             config: config,
             credentials: KeychainCredentialStore(service: KeychainCredentialStore.serviceName(for: config)),
-            dataDirectory: support.appendingPathComponent("Pounce", isDirectory: true))
+            dataDirectory: support.appendingPathComponent("Pounce", isDirectory: true),
+            ageAsker: ageAsker)
     }
+
+    #if DEBUG
+    /// `-age-range <answer>` stubs Declared Age Range; any test run (`-anim-speed`) without it
+    /// answers "adult", so the existing tests never meet the system sheet.
+    private static func debugAgeAsker(arguments: [String], env: [String: String]) -> AgeRangeAsking {
+        if let stub = StubAgeRange(arguments: arguments) { return stub }
+        if PaceSetting.resolve(arguments: arguments, env: env).underTest { return StubAgeRange(answer: .band(.adult)) }
+        return LiveAgeRange()
+    }
+
+    /// Under `-uitest-reset`: `-uitest-age-service <name>` keeps the record in a Keychain item of
+    /// its own (the can't-retry test); `-age-band <band>` starts with that band; `-age-range`
+    /// starts with none (the age screen); otherwise an adult, as before the age screen existed.
+    private static func debugAgeStore(arguments: [String]) -> AgeRecordStore {
+        if let i = arguments.firstIndex(of: "-uitest-age-service"), let service = arguments[safe: i + 1] {
+            return KeychainAgeRecordStore(service: service)
+        }
+        if let i = arguments.firstIndex(of: "-age-band"), let band = arguments[safe: i + 1].flatMap(AgeBand.init) {
+            return MemoryAgeRecordStore(AgeRecord(band: band, source: .keypad, checkedAt: .now))
+        }
+        if arguments.contains("-age-range") { return MemoryAgeRecordStore() }
+        return MemoryAgeRecordStore(AgeRecord(band: .adult, source: .declared, checkedAt: .now))
+    }
+    #endif
 
     #if DEBUG
     /// `-demo <screen>`: the room screen fed by one fixture snapshot, no server, nothing cached.
@@ -136,7 +215,68 @@ final class AppModel {
     func bootstrap() async {
         reloadLocal()
         _ = try? await api.credential()
+        #if DEBUG
+        await account.applyDebugPreset()
+        #endif
+        if ageRecord != nil { await accountsAfterAge() }
         if people.owner != nil { await refreshTables() }
+        await recheckAge()
+    }
+
+    /// Once the age is known: the significant-change check, then the profile and sync.
+    private func accountsAfterAge() async {
+        await SignificantChangeGate.check(self)
+        await account.uploadProfile()
+        await account.sync()
+    }
+
+    // MARK: Age check (spec §14.1)
+
+    /// The age screen's first step: Declared Age Range. True when it gave a band (and the
+    /// screen moved on); false sends the person to the birth-year keypad.
+    func askDeclaredAge() async -> Bool {
+        guard ageRecord == nil else { return true }
+        guard case .band(let band) = await ageAsker.ask() else { return false }
+        finishAge(band, source: .declared)
+        return true
+    }
+
+    /// Keeps the band (only the band) and goes on to pick-a-cat, the link that was waiting, or Home.
+    func finishAge(_ band: AgeBand, source: AgeRecord.Source) {
+        let record = AgeRecord(band: band, source: source, checkedAt: .now)
+        ageStore.save(record)
+        ageRecord = record
+        applyAgeLimits()
+        Task { await accountsAfterAge() }
+        guard case .age(let then) = route else { return }
+        if people.owner == nil {
+            route = .pickCat(then: then)
+        } else if let then {
+            route = .home
+            handle(then)
+        } else {
+            route = .home
+        }
+    }
+
+    /// At most once a week, Declared Age Range again: a kitten who turned 13 gets the limits lifted.
+    func recheckAge() async {
+        guard var record = ageRecord, record.needsRecheck(now: .now) else { return }
+        if case .band(let band) = await ageAsker.ask() {
+            record.band = band
+            record.source = .declared
+        }
+        record.checkedAt = .now
+        ageStore.save(record)
+        ageRecord = record
+        applyAgeLimits()
+    }
+
+    /// A kitten keeps no typed name (a name plus an identifier is personal information): an owner
+    /// from before the age check gets a generated one.
+    private func applyAgeLimits() {
+        guard !limits.typedNames, let owner = people.owner, AgeLimits.needsGeneratedName(owner.name) else { return }
+        updateOwner(name: CatEditorView.randomName(), cat: owner.cat)
     }
 
     func reloadLocal() {
@@ -146,8 +286,12 @@ final class AppModel {
 
     /// Saves the owner, then continues to the link that interrupted onboarding, or Home.
     func finishPickCat(name: String, cat: Int) {
-        peopleStore.setOwner(name: name, cat: cat)
+        let owner = peopleStore.setOwner(name: name, cat: cat)
         people = peopleStore.load()
+        account.noteChanged(owner.id)
+        #if DEBUG
+        Task { await account.applyDebugPreset() }
+        #endif
         if case .pickCat(let then?) = route {
             handle(then)
         } else {
@@ -172,11 +316,13 @@ final class AppModel {
         let updatedAt = tables.first { $0.code == code }?.updatedAt ?? Date.now.timeIntervalSince1970 * 1000
         tableArchive.archive(code: code, updatedAt: updatedAt)
         archived = tableArchive.all()
+        account.noteLocalChanges()
     }
 
     func restore(code: String) {
         tableArchive.restore(code: code)
         archived = tableArchive.all()
+        account?.noteLocalChanges()
     }
 
     func refreshTables() async {
@@ -184,6 +330,8 @@ final class AppModel {
         do {
             let listed = try await api.listTables()
             tables = listed
+            // The icon's badge: tables where it's your move (spec §12.5), on every device.
+            push?.setBadge(PushPolicy.badgeCount(listed))
             // The server answered: a push token that failed to upload goes now.
             push?.retryUpload()
             // A cached room the server no longer lists is gone for good.
@@ -285,6 +433,10 @@ final class AppModel {
         switch phase {
         case .active:
             room?.foreground()
+            Task {
+                await account.uploadProfile()
+                await account.sync()
+            }
             // Every reminder, not just this launch's: one may predate a relaunch.
             push?.cancelAllTurnReminders()
             push?.retryUpload()
@@ -305,6 +457,7 @@ final class AppModel {
             return
         }
         #endif
+        guard turnReminderOn else { return }
         guard let room, let table = room.model, let delay = PushPolicy.reminderDelay(model: table),
               let turn = table.currentSeat, let person = table.room.seats[safe: turn]?.person else { return }
         push?.scheduleTurnReminder(code: room.code, name: person.name, table: table.room.title, after: delay)
@@ -372,6 +525,10 @@ final class AppModel {
     /// A share or move link arrived. Without a local owner, onboarding comes first and the link
     /// is remembered. A join link for a table already on this device rejoins it.
     func handle(_ link: DeepLink) {
+        guard ageRecord != nil else {
+            route = .age(then: link)
+            return
+        }
         guard people.owner != nil else {
             route = .pickCat(then: link)
             return
@@ -398,9 +555,10 @@ final class AppModel {
     /// this phone sits at catch up when they next open); a new cat applies to tables joined
     /// afterwards.
     func updateOwner(name: String, cat: Int) {
-        peopleStore.setOwner(name: name, cat: cat)
+        let owner = peopleStore.setOwner(name: name, cat: cat)
         people = peopleStore.load()
         room?.syncNames()
+        account?.noteChanged(owner.id)
     }
 
     /// Renames whoever sits at `seat` of the open table: the person on this phone with that
@@ -418,10 +576,12 @@ final class AppModel {
         }
     }
 
+    /// Someone else who shares this phone, with the age band whoever added them picked (§14.1).
     @discardableResult
-    func addPerson(name: String, cat: Int) -> Person {
+    func addPerson(name: String, cat: Int, band: AgeBand) -> Person {
         let person = peopleStore.add(name: name, cat: cat)
         people = peopleStore.load()
+        account.noteAdded(person.id, band: band)
         return person
     }
 
@@ -429,11 +589,97 @@ final class AppModel {
         peopleStore.update(person)
         people = peopleStore.load()
         room?.syncNames()
+        account.noteChanged(person.id)
     }
 
     func removePerson(id: String) {
         peopleStore.remove(id: id)
         people = peopleStore.load()
+        account.noteRemoved(id)
+    }
+
+    // MARK: Accounts: what the account model changes here
+
+    /// The profile upload gave people new ids: reload them and their tips.
+    func peopleRenamed() {
+        people = peopleStore.load()
+        tipsSeen = tutorialStore.load()
+    }
+
+    /// Signed in on a second device: it shows the account's name and cat (spec §10.5). Not a
+    /// local edit, so it isn't stamped as one.
+    func adoptAccountProfile(name: String, cat: Int) {
+        guard let owner = people.owner, owner.name != name || owner.cat != cat else { return }
+        peopleStore.setOwner(name: name, cat: cat)
+        people = peopleStore.load()
+        room?.syncNames()
+    }
+
+    /// The account's household people from its other devices (they come and go with the account).
+    func setImported(_ imported: [Person], previous: Set<String>) {
+        let keep = Set(imported.map(\.id))
+        for id in previous.subtracting(keep) { peopleStore.remove(id: id) }
+        for person in imported { peopleStore.upsertOther(person) }
+        people = peopleStore.load()
+    }
+
+    func removeImported(_ ids: Set<String>) {
+        for id in ids { peopleStore.remove(id: id) }
+        people = peopleStore.load()
+    }
+
+    /// Settings, sound and haptics, changed on the gear sheet.
+    func settingsChanged() {
+        account.noteLocalChanges()
+    }
+
+    /// This device's synced values for one section (spec §13.1, "what syncs").
+    func syncedValues(_ section: SyncSectionName, accountPersonId: String?) -> [String: JSONValue] {
+        switch section {
+        case .settings:
+            var values: [String: JSONValue] = ["soundOn": .bool(settings.soundOn), "hapticsOn": .bool(settings.hapticsOn)]
+            if let reminder = settings.turnReminderChoice { values["turnReminder"] = .bool(reminder) }
+            return values
+        case .archive:
+            return tableArchive.all().mapValues { .number($0) }
+        case .tutorial:
+            guard let id = accountPersonId else { return [:] }
+            return Dictionary(uniqueKeysWithValues: (tipsSeen[id] ?? []).map { ($0.rawValue, JSONValue.bool(true)) })
+        }
+    }
+
+    /// Takes in values another device wrote later than this one.
+    func applySynced(_ section: SyncSectionName, _ entries: SyncSection, accountPersonId: String?) {
+        switch section {
+        case .settings:
+            for (key, entry) in entries {
+                guard let on = entry.v.boolValue else { continue }
+                switch key {
+                case "soundOn": settings.soundOn = on
+                case "hapticsOn": settings.hapticsOn = on
+                case "turnReminder": settings.turnReminderChoice = on
+                default: break
+                }
+            }
+        case .archive:
+            for (code, entry) in entries where RoomCode.isValid(code) {
+                if let updatedAt = entry.v.numberValue {
+                    tableArchive.archive(code: code, updatedAt: updatedAt)
+                } else {
+                    tableArchive.restore(code: code)
+                }
+            }
+            archived = tableArchive.all()
+        case .tutorial:
+            guard let id = accountPersonId else { return }
+            var all = tutorialStore.load()
+            for (key, entry) in entries {
+                guard let tip = CoachTip(rawValue: key) else { continue }
+                if entry.v.boolValue == true { all[id, default: []].insert(tip) } else { all[id]?.remove(tip) }
+            }
+            tutorialStore.replace(all)
+            tipsSeen = all
+        }
     }
 
     // MARK: Coaching tips (first-game tutorial)
@@ -441,6 +687,7 @@ final class AppModel {
     func markTipsSeen(_ tips: Set<CoachTip>, person: String) {
         guard !tips.isSubset(of: tipsSeen[person] ?? []) else { return }
         tipsSeen = tutorialStore.markSeen(tips, person: person)
+        account.noteLocalChanges()
     }
 
     /// Everyone on this phone gets the tips again, from the next thing that fits.
@@ -448,6 +695,7 @@ final class AppModel {
         tutorialStore.reset()
         tipsSeen = [:]
         tipsReplays += 1
+        account.noteLocalChanges()
     }
 
     // MARK: Push priming (spec §10)

@@ -24,6 +24,7 @@ struct RootView: View {
     /// Re-creates the screen when the route's case changes (not for every associated value).
     private var routeKey: String {
         switch model.route {
+        case .age: "age"
         case .pickCat: "pickCat"
         case .home: "home"
         case .join: "join"
@@ -33,6 +34,8 @@ struct RootView: View {
 
     @ViewBuilder private var screen: some View {
         switch model.route {
+        case .age:
+            AgeGateView()
         case .pickCat:
             PickCatView()
         case .home:

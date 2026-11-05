@@ -41,6 +41,24 @@ public enum PushPolicy {
         guard let code = userInfo["code"] as? String, RoomCode.isValid(code) else { return nil }
         return code
     }
+
+    /// The table a background "dismiss" push is about (spec §12.5): the player moved there from
+    /// another device, so this one clears that table's notifications.
+    public static func dismissCode(fromPayload userInfo: [AnyHashable: Any]) -> String? {
+        guard userInfo["kind"] as? String == "dismiss" else { return nil }
+        return code(fromPayload: userInfo)
+    }
+
+    /// A delivered notification belongs to `code`'s table: its thread (the server's
+    /// `thread-id`) or its `code` says so.
+    public static func matches(code: String, userInfo: [AnyHashable: Any], threadId: String) -> Bool {
+        threadId == code || self.code(fromPayload: userInfo) == code
+    }
+
+    /// The app icon's badge: the tables where it's your move (the server's `aps.badge`).
+    public static func badgeCount(_ tables: [TableEntry]) -> Int {
+        tables.filter { $0.yourTurn && $0.status != "over" }.count
+    }
 }
 
 /// What the server holds of this phone's APNs token. The token goes up every time APNs hands

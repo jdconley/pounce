@@ -1,3 +1,4 @@
+import PounceKit
 import UIKit
 import UserNotifications
 
@@ -31,6 +32,16 @@ final class AppDelegate: NSObject, UIApplicationDelegate {
         _ application: UIApplication, didRegisterForRemoteNotificationsWithDeviceToken deviceToken: Data
     ) {
         push.didRegister(token: deviceToken)
+    }
+
+    /// Background pushes (`content-available`): a "dismiss" clears a table this player moved at on
+    /// another device (spec §12.5). Anything else is left alone.
+    func application(
+        _ application: UIApplication, didReceiveRemoteNotification userInfo: [AnyHashable: Any]
+    ) async -> UIBackgroundFetchResult {
+        guard let code = PushPolicy.dismissCode(fromPayload: userInfo) else { return .noData }
+        await push.dismiss(code: code)
+        return .newData
     }
 
     func application(_ application: UIApplication, didFailToRegisterForRemoteNotificationsWithError error: any Error) {
