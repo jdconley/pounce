@@ -1,0 +1,208 @@
+#!/bin/bash
+# Placeholder art for the daily habit rewards (spec §9.6, manifest batch "habit"), drawn from the
+# existing Loud Toy art and plain shapes so screens read right before the Codex art lands. Every
+# file carries the "_ph" suffix, so placeholders.sh --report lists them and build-assets.sh
+# replaces each by name with real art (PR 8). Never touches an entry that already has real art.
+#
+#   habit-placeholders.sh            render missing habit placeholders
+#   habit-placeholders.sh --force    re-render every habit placeholder
+set -euo pipefail
+source "$(dirname "$0")/lib.sh"
+force=0
+[ "${1:-}" = "--force" ] && force=1
+
+V="#7B2FF7"; M="#FF2BD6"; T="#12E0D0"; O="#FF8A00"; S="#2EA8FF"; L="#8BE000"; G="#FFC21A"; W="#FFFFFF"
+TMP="$(mktemp -d)"; trap 'rm -rf "$TMP"' EXIT
+
+src() { # src <name>: the catalog's @3x PNG of an existing entry
+  local d; d="$(entry_dir "$1")"
+  echo "$d/$(jq -r '.images[] | select(.scale=="3x") | .filename' "$d/Contents.json")"
+}
+
+# put <name> <png at @3x>: writes <name>_ph@3x / @2x and the Contents.json.
+put() {
+  local name="$1" png="$2" dir; dir="$(entry_dir "$name")"
+  if [ -f "$dir/Contents.json" ] && ! is_placeholder "$name"; then return; fi
+  if [ -f "$dir/Contents.json" ] && [ "$force" -eq 0 ]; then return; fi
+  read -r pw ph < <(point_size "$name")
+  ensure_atlas_container "$name"
+  mkdir -p "$dir"; clear_images "$dir"
+  magick "$png" -resize "$((pw * 3))x$((ph * 3))!" -depth 8 "PNG32:$dir/${name}_ph@3x.png"
+  magick "$png" -resize "$((pw * 2))x$((ph * 2))!" -depth 8 "PNG32:$dir/${name}_ph@2x.png"
+  write_contents "$name" "_ph"
+  echo "  $name"
+}
+
+# paw <cx> <cy> <size>: -draw ellipses for a paw (pad + four toes).
+paw() {
+  awk -v cx="$1" -v cy="$2" -v s="$3" 'BEGIN{
+    printf "ellipse %.1f,%.1f %.1f,%.1f 0,360 ", cx, cy+s*0.12, s*0.24, s*0.19
+    printf "ellipse %.1f,%.1f %.1f,%.1f 0,360 ", cx-s*0.28, cy-s*0.08, s*0.09, s*0.11
+    printf "ellipse %.1f,%.1f %.1f,%.1f 0,360 ", cx-s*0.10, cy-s*0.24, s*0.09, s*0.11
+    printf "ellipse %.1f,%.1f %.1f,%.1f 0,360 ", cx+s*0.10, cy-s*0.24, s*0.09, s*0.11
+    printf "ellipse %.1f,%.1f %.1f,%.1f 0,360", cx+s*0.28, cy-s*0.08, s*0.09, s*0.11 }'
+}
+
+RUG="$(src rug)"; BACK="$(src card-back)"; YARN="$(src card-yarn)"; CUKE="$(src card-cucumber)"
+CROWN="$(src crown)"; STAR="$(src fx-star)"; CONF="$(src fx-confetti)"; FYARN="$(src fx-yarn)"; FUR="$(src fx-fur)"
+SPARK="$(src fx-sparkle)"; SUN="$(src sunburst)"; BELL="$(src icon-bell)"
+
+echo "rugs"
+rug() { # rug <name> <hue> [overlay] [overlay size]
+  local out="$TMP/$1.png"
+  magick "$RUG" -modulate 100,125,"$2" "$out"
+  if [ -n "${3:-}" ]; then
+    magick "$out" \( "$3" -resize "${4:-360}x${4:-360}" \) -gravity center -composite "$out"
+  fi
+  put "$1" "$out"
+}
+rug rug-night-sky 40 "$STAR" 300
+rug rug-candy-stripe 130 "$CONF" 320
+rug rug-fish-pond 60 "$FUR" 300
+rug rug-royal-violet 80 "$CROWN" 360
+
+echo "backs"
+back() { # back <name> <modulate> <overlay>
+  local out="$TMP/$1.png"
+  magick "$BACK" -modulate "$2" \( "$3" -resize 130x130 \) -gravity center -composite "$out"
+  put "$1" "$out"
+}
+back back-yarn-swirl 100,120,60 "$YARN"
+back back-moonlit-fish 85,120,40 "$STAR"
+back back-cucumber-chaos 100,130,155 "$CUKE"
+back back-crown 105,130,135 "$CROWN"
+back back-heart-paws 105,130,170 "$CONF"
+back back-golden-yarn 120,170,145 "$YARN"
+
+echo "condo"
+condo() { # condo <stage>: a cat tree that grows a piece per stage (§9.1)
+  local n="$1" out="$TMP/condo-$1.png" top=760
+  [ "$n" -ge 3 ] && top=560; [ "$n" -ge 5 ] && top=380; [ "$n" -ge 7 ] && top=230; [ "$n" -ge 10 ] && top=170
+  local args=(-size 900x900 xc:none)
+  if [ "$n" -ge 10 ]; then args+=(\( "$SUN" -resize 900x900 \) -gravity center -composite -gravity northwest); fi
+  args+=(-stroke "$INK" -strokewidth 14)
+  # 1: a round cushion on the rug.
+  args+=(-fill "$M" -draw "ellipse 450,790 250,60 0,360" -fill "$O" -draw "ellipse 450,770 170,38 0,360")
+  # 2: a scratching post (to the top piece).
+  if [ "$n" -ge 2 ]; then
+    args+=(-fill "$T" -draw "rectangle 420,$top 480,770")
+    for y in $(seq $((top + 40)) 60 740); do args+=(-strokewidth 6 -draw "line 420,$y 480,$((y + 22))" -strokewidth 14); done
+  fi
+  # 3: the first platform. 4: a hammock under it.
+  [ "$n" -ge 3 ] && args+=(-fill "$V" -draw "roundrectangle 240,540 660,595 24,24")
+  [ "$n" -ge 4 ] && args+=(-fill "$O" -draw "path 'M 290,595 Q 450,700 610,595 Z'")
+  # 5: a second tier and a dangling yarn toy.
+  if [ "$n" -ge 5 ]; then
+    args+=(-fill "$L" -draw "roundrectangle 290,360 610,412 24,24" -draw "line 580,412 580,470")
+    args+=(\( "$YARN" -resize 90x90 \) -geometry +535+455 -composite -stroke "$INK" -strokewidth 14)
+  fi
+  # 6: a tunnel.
+  [ "$n" -ge 6 ] && args+=(-fill "$S" -draw "ellipse 735,745 120,85 180,360" -draw "rectangle 615,745 855,790" -fill "$INK" -draw "ellipse 735,775 55,40 180,360")
+  # 7: a tower top with the crown.
+  if [ "$n" -ge 7 ]; then
+    args+=(-fill "$O" -draw "roundrectangle 330,$top 570,$((top + 48)) 24,24")
+    args+=(\( "$CROWN" -resize 170x130 \) -geometry +365+$((top - 120)) -composite -stroke "$INK" -strokewidth 14)
+  fi
+  # 8: a window perch with a moon.
+  [ "$n" -ge 8 ] && args+=(-fill "$T" -draw "roundrectangle 90,430 270,470 18,18" -draw "line 180,470 180,600" -fill "$G" -draw "circle 170,320 170,250" -fill "#2A0F5C" -strokewidth 0 -draw "circle 205,300 205,245" -strokewidth 14)
+  # 9: string lights.
+  if [ "$n" -ge 9 ]; then
+    local cols=("$M" "$G" "$T" "$O" "$S" "$L") i=0
+    args+=(-fill none -strokewidth 5 -draw "path 'M 80,140 Q 450,300 820,140'" -strokewidth 6)
+    for x in 120 200 280 360 440 520 600 680 760; do
+      local y; y=$(awk -v x="$x" 'BEGIN{t=(x-80)/740; printf "%d", (1-t)*(1-t)*140 + 2*(1-t)*t*300 + t*t*140 + 14}')
+      args+=(-fill "${cols[$((i % 6))]}" -draw "circle $x,$y $x,$((y + 16))"); i=$((i + 1))
+    done
+    args+=(-strokewidth 14)
+  fi
+  # 10: a glowing rooftop deck and fireworks.
+  if [ "$n" -ge 10 ]; then
+    args+=(-fill "$G" -draw "roundrectangle 300,130 600,168 18,18")
+    for p in "+40+40" "+760+60" "+60+600" "+780+520"; do args+=(\( "$STAR" -resize 110x110 \) -geometry "$p" -composite); done
+  fi
+  magick "${args[@]}" "PNG32:$out"
+  put "condo-$n" "$out"
+}
+for n in 1 2 3 4 5 6 7 8 9 10; do condo "$n"; done
+
+echo "toys"
+toy() { # toy <id> <rarity> <index>: a candy disc with a mark; shiny and golden rings
+  local out="$TMP/$1.png" cols=("$V" "$M" "$T" "$O" "$S" "$L") marks=("$FYARN" "$STAR" "$CONF" "$FUR")
+  local fill="${cols[$(($3 % 6))]}" ring="$INK" width=10
+  [ "$2" = shiny ] && { ring="$W"; width=14; }
+  [ "$2" = golden ] && { fill="$G"; ring="$O"; width=14; }
+  local args=(-size 432x432 xc:none -fill "$fill" -stroke "$INK" -strokewidth 22 -draw "circle 216,216 216,30"
+              -fill none -stroke "$ring" -strokewidth "$width" -draw "circle 216,216 216,52"
+              \( "${marks[$(($3 % 4))]}" -resize 230x230 \) -gravity center -composite)
+  [ "$2" != common ] && args+=(\( "$SPARK" -resize 150x150 \) -gravity northeast -composite)
+  if [ "$(($3 % 4))" = 3 ]; then args+=(-gravity northwest -fill "$W" -stroke "$INK" -strokewidth 6 -draw "$(paw 216 230 230)"); fi
+  magick "${args[@]}" "PNG32:$out"
+  put "$1" "$out"
+}
+i=0
+while read -r id; do
+  case "$id" in
+    toy-rainbow-yarn|toy-glitter-mouse|toy-silver-bell|toy-moon-fish|toy-star-wand|toy-disco-ball) r=shiny ;;
+    toy-golden-*) r=golden ;;
+    *) r=common ;;
+  esac
+  toy "$id" "$r" "$i"; i=$((i + 1))
+done < <(jq -r '.[] | select(.name | startswith("toy-")) | .name' "$MANIFEST")
+
+echo "gift box"
+magick -size 480x480 xc:none -stroke "$INK" -strokewidth 16 \
+  -fill "$V" -draw "roundrectangle 90,210 390,440 26,26" -fill "#9B5BFF" -draw "roundrectangle 66,150 414,222 22,22" \
+  -fill "$M" -draw "rectangle 212,150 268,440" -draw "ellipse 190,120 60,38 0,360" -draw "ellipse 290,120 60,38 0,360" \
+  -fill "$G" -draw "circle 240,128 240,104" "PNG32:$TMP/gift-box.png"
+put gift-box "$TMP/gift-box.png"
+magick -size 480x480 xc:none \( "$SUN" -resize 420x420 \) -gravity center -geometry +0-40 -composite -gravity northwest \
+  -stroke "$INK" -strokewidth 16 -fill "$V" -draw "roundrectangle 90,250 390,450 26,26" -fill "$M" -draw "rectangle 212,250 268,450" \
+  -fill "#9B5BFF" -draw "polygon 40,120 300,40 320,100 60,180" \
+  \( "$SPARK" -resize 120x120 \) -geometry +300+150 -composite \( "$SPARK" -resize 90x90 \) -geometry +110+170 -composite \
+  "PNG32:$TMP/gift-box-open.png"
+put gift-box-open "$TMP/gift-box-open.png"
+
+echo "paw badges"
+pb() { magick -size 360x360 xc:none -stroke "$INK" -strokewidth 16 "$@"; }
+pb -fill "#9A8CC8" -draw "$(paw 180 190 330)" "PNG32:$TMP/grey.png"; put paw-badge-grey "$TMP/grey.png"
+pb -fill "$O" -draw "$(paw 180 190 330)" "PNG32:$TMP/one.png"; put paw-badge-one "$TMP/one.png"
+pb -fill "$M" -draw "$(paw 130 200 250)" -fill "$O" -draw "$(paw 235 165 250)" "PNG32:$TMP/both.png"; put paw-badge-both "$TMP/both.png"
+pb -fill "$S" -draw "roundrectangle 30,120 330,320 40,40" -fill "$W" -strokewidth 10 -draw "line 30,180 330,180" -draw "line 30,250 330,250" \
+  -fill "$G" -strokewidth 12 -draw "circle 270,80 270,40" "PNG32:$TMP/nap.png"; put paw-badge-nap "$TMP/nap.png"
+pb -fill "#FF7CC8" -draw "polygon 40,250 250,40 320,110 110,320" -fill "$W" -draw "roundrectangle 130,130 230,230 18,18" \
+  -fill "$M" -strokewidth 0 -draw "circle 160,160 160,150" -draw "circle 200,160 200,150" -draw "circle 160,200 160,190" -draw "circle 200,200 200,190" \
+  "PNG32:$TMP/bandage.png"; put paw-badge-bandage "$TMP/bandage.png"
+pb -fill none -draw "roundrectangle 130,40 230,120 24,24" -fill "$O" -draw "roundrectangle 30,100 330,320 36,36" \
+  -fill "$G" -draw "rectangle 100,100 130,320" -draw "rectangle 230,100 260,320" "PNG32:$TMP/suitcase.png"
+put paw-badge-suitcase "$TMP/suitcase.png"
+
+echo "pounce bell and sleepy condo"
+magick -size 720x720 xc:none -fill "$M" -stroke "$INK" -strokewidth 24 -draw "circle 360,360 360,40" \
+  \( "$BELL" -resize 420x420 \) -gravity center -composite \( "$SPARK" -resize 160x160 \) -gravity northeast -composite \
+  "PNG32:$TMP/pounce-bell.png"
+put pounce-bell "$TMP/pounce-bell.png"
+magick "$TMP/condo-5.png" \( "$(src cat2-asleep)" -resize 300x300 \) -gravity south -geometry -150+90 -composite \
+  \( "$(src cat4-asleep)" -resize 300x300 \) -gravity south -geometry +150+90 -composite "PNG32:$TMP/sleepy.png"
+put cats-asleep-condo "$TMP/sleepy.png"
+
+echo "icons"
+ic() { magick -size 252x252 xc:none -stroke "$INK" -strokewidth 16 "$@"; }
+cp "$TMP/suitcase.png" "$TMP/icon-pause.png"; put icon-pause "$TMP/icon-pause.png"
+ic -fill "$INK" -draw "polygon 120,150 132,150 128,240 124,240" -fill "$M" -draw "circle 126,96 126,26" -fill "$W" -strokewidth 0 -draw "circle 106,76 106,62" "PNG32:$TMP/pin.png"
+put icon-pin "$TMP/pin.png"
+ic -fill "$S" -draw "polygon 50,80 202,80 184,236 68,236" -fill "$T" -draw "roundrectangle 30,46 222,84 12,12" -draw "roundrectangle 96,20 156,50 10,10" \
+  -fill none -strokewidth 10 -draw "line 100,110 106,210" -draw "line 152,110 146,210" "PNG32:$TMP/trash.png"
+put icon-trash "$TMP/trash.png"
+magick "$RUG" -resize 252x252 "$TMP/icon-rug.png"; put icon-rug "$TMP/icon-rug.png"
+ic -fill "$W" -draw "circle 90,150 90,100" -draw "circle 150,120 150,56" -draw "circle 196,160 196,118" -draw "roundrectangle 50,140 230,206 30,30" \
+  -fill "$M" -strokewidth 0 -draw "rectangle 132,118 160,206" -draw "rectangle 102,148 190,176" "PNG32:$TMP/cloud.png"
+put icon-cloud-plus "$TMP/cloud.png"
+heart() { awk -v x="$1" -v y="$2" -v s="$3" 'BEGIN{printf "path '\''M %d,%d C %d,%d %d,%d %d,%d C %d,%d %d,%d %d,%d Z'\''", x, y+s*0.9, x-s*1.2, y+s*0.1, x-s*0.5, y-s*0.8, x, y-s*0.15, x+s*0.5, y-s*0.8, x+s*1.2, y+s*0.1, x, y+s*0.9}'; }
+ic -fill "$O" -draw "$(heart 160 120 80)" -fill "$M" -draw "$(heart 100 140 80)" "PNG32:$TMP/days.png"
+put icon-days "$TMP/days.png"
+ic -fill "$G" -draw "polygon 126,14 156,92 238,96 174,148 196,228 126,182 56,228 78,148 14,96 96,92" "PNG32:$TMP/weeks.png"
+put icon-weeks "$TMP/weeks.png"
+ic -fill none -stroke "$INK" -strokewidth 46 -draw "arc 40,40 212,212 -30,250" -stroke "$T" -strokewidth 26 -draw "arc 40,40 212,212 -30,250" \
+  -fill "$T" -stroke "$INK" -strokewidth 12 -draw "polygon 168,60 240,60 212,130" "PNG32:$TMP/replay.png"
+put icon-replay "$TMP/replay.png"
+echo "habit placeholders done"
