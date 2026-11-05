@@ -23,7 +23,7 @@ const device = (env: Env, id: string) => env.DEVICES.get(env.DEVICES.idFromName(
 /**
  * The badge (§12.5): tables where it's this device's move, as the app's own
  * tables list counts them. `also` counts a table whose index may not have
- * caught up with the move yet.
+ * caught up with the move yet: only for "your move", whose table it is.
  */
 export async function badgeFor(env: Env, deviceId: string, also?: string): Promise<number> {
   const tables = await deviceTables(env, deviceId);

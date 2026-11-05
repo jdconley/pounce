@@ -127,8 +127,9 @@ export function dueSlots(st: NotifyState, i: ReminderInput): Slot[] {
 export function nextWake(st: NotifyState, i: ReminderInput): number | null {
   if (!enabled(i)) return null;
   const today = dayKey(i.now, zoneOf(i));
-  const times = [today, addDays(today, 1)].flatMap((day) =>
-    SLOTS.map((slot) => slotWake(st, i, day, slot)).filter((t): t is number => t !== null),
+  // Three days: after a trip west, today can be stale while tomorrow was already decided elsewhere.
+  const times = [0, 1, 2].flatMap((n) =>
+    SLOTS.map((slot) => slotWake(st, i, addDays(today, n), slot)).filter((t): t is number => t !== null),
   );
   return Math.max(i.now, Math.min(...times));
 }
@@ -170,10 +171,12 @@ const byTop = (x: PairFacts, y: PairFacts) =>
 
 type Candidate = { push: Outgoing; commit: () => void };
 
+/** The line, and the table the push opens: the one the line names, else the first where it's your move. */
 function lineFor(st: NotifyState, i: ReminderInput, p: PairFacts, slot: Slot, lines: readonly Line[]) {
-  const code = p.myMove.find((c) => i.tableNames[c] !== undefined);
-  const ctx = { table: code === undefined ? null : (i.tableNames[code] as string), partner: p.partner, count: p.count };
-  return pickLine(lines, ctx, st.lines, st.cursor[slot], i.now);
+  const named = p.myMove.find((c) => i.tableNames[c] !== undefined);
+  const ctx = { table: named === undefined ? null : (i.tableNames[named] as string), partner: p.partner, count: p.count };
+  const line = pickLine(lines, ctx, st.lines, st.cursor[slot], i.now);
+  return line && { ...line, code: named ?? (p.myMove[0] as string) };
 }
 
 function rotated(st: NotifyState, i: ReminderInput, p: PairFacts, slot: Slot, kind: NotifyKind): Candidate {
@@ -184,7 +187,7 @@ function rotated(st: NotifyState, i: ReminderInput, p: PairFacts, slot: Slot, ki
       kind,
       title: i.name,
       body: line.text,
-      code: p.myMove[0] as string,
+      code: line.code,
       thread: `pair:${p.pair}`,
       collapse: `${kind}:${p.pair}`,
       streak: p.streak,

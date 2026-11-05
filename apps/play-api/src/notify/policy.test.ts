@@ -44,9 +44,14 @@ describe("kinds", () => {
 });
 
 describe("gate", () => {
-  test("a kitten gets nothing at all (§14.1)", () => {
-    for (const kind of ["your_move", "pounce", "nap", "reminder"] as NotifyKind[]) {
-      expect(gate({ ...base, kind, band: "kitten", now: at("12:00") })).toEqual({ send: false, retryAt: null });
+  test("a kitten player gets no reminders; delivery to a kitten's own device is the device's call (§14.1)", () => {
+    const kitten = { ...base, band: "kitten" as const, settings: notifySettings({}, "kitten") };
+    for (const kind of ["reminder", "last_chance", "fresh_start", "going_quiet"] as NotifyKind[]) {
+      expect(gate({ ...kitten, kind, now: at("12:00") })).toEqual({ send: false, retryAt: null });
+    }
+    // A household kitten on a parent's phone still gets the game's pushes there.
+    for (const kind of ["your_move", "pounce", "nap", "play_again"] as NotifyKind[]) {
+      expect(gate({ ...kitten, kind, now: at("12:00") }).send).toBe(true);
     }
   });
 

@@ -99,7 +99,7 @@ export async function createPounce(
       target,
       streak: streakBlock(facts.view),
     });
-    await deliverToPlayer(env, them, push, g.level, typeof target === "object" ? target.table : undefined);
+    await deliverToPlayer(env, them, push, g.level);
   }
   return { ok: { id } };
 }

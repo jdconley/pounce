@@ -503,7 +503,7 @@ export class Player extends DurableObject<Env> {
     if (oldest !== null) times.push(oldest + POUNCE_KEEP_MS);
     if (streaksOn(this.env) && this.live()) {
       const wake = nextWake(this.notify(), this.reminderInput(now));
-      if (wake !== null) times.push(wake);
+      if (wake !== null && Number.isFinite(wake)) times.push(wake);
       times.push(...this.pending().map((p) => p.at));
     }
     if (times.length === 0) await this.ctx.storage.deleteAlarm();
@@ -723,7 +723,7 @@ export class Player extends DurableObject<Env> {
     }
     noteSent(st, out.kind, now, profile.zone);
     this.saveNotify(st);
-    return deliverToPlayer(this.env, profile, out, g.level, out.code);
+    return deliverToPlayer(this.env, profile, out, g.level);
   }
 
   /** A turn at a shared table (§13.3 flow 1): backoff resets and, with learned timing, the histogram counts it. */

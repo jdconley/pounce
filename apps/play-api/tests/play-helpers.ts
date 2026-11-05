@@ -256,3 +256,16 @@ export async function takeTurn(clients: Client[]): Promise<number> {
 }
 
 export const tokenOf = (n: number) => n.toString(16).padStart(2, "0").repeat(32);
+
+/**
+ * At a two-seat table, whoever's turn it is plays while the other is away,
+ * so the move reaches them as a push. The first move is usually seat 1, but
+ * a flipped Cucumber skips it, so callers must not assume which.
+ */
+export async function playWhileAway(clients: Client[]): Promise<{ mover: number; next: number }> {
+  const mover = (clients[0] as Client).game().turn;
+  const next = 1 - mover;
+  (clients[next] as Client).away();
+  await takeTurn(clients);
+  return { mover, next };
+}

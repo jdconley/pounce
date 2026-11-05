@@ -126,6 +126,12 @@ describe("the daily reminder (§12.1, §12.3)", () => {
     );
   });
 
+  test("the push opens the table its line names", () => {
+    const pairs = [facts({ myMove: ["AAAAA", "GH2VD"] })];
+    const { push } = decide(fresh(), input(at(D, "19:30"), { pairs, tableNames: { GH2VD: "Couch Cats" } }), "daily");
+    expect(push).toMatchObject({ code: "GH2VD", body: "The cats are on the rug. Your move at Couch Cats." });
+  });
+
   test("a table with no known name still gets a line that needs none", () => {
     const { push } = decide(fresh(), input(at(D, "19:30"), { tableNames: {}, pairs: [facts({ count: 0 })] }), "daily");
     expect(push?.body).not.toContain("undefined");
@@ -277,6 +283,15 @@ describe("nextWake", () => {
     expect(nextWake(st, input(at(D, "19:31")))).toBe(at(D, "20:30"));
     st.decided.lastChance = D;
     expect(nextWake(st, input(at(D, "20:31")))).toBe(at(addDays(D, 1), "19:30"));
+  });
+
+  test("after a westward trip, with today stale and tomorrow already decided, it looks a day further", () => {
+    const st = fresh();
+    // Both of 11-05's slots were decided in Tokyo that evening; at 03:50 in LA it's still 11-04.
+    st.decided = { daily: "2026-11-05", lastChance: "2026-11-05" };
+    const now = at("2026-11-05", "03:50");
+    expect(nextWake(st, input(now))).toBe(at("2026-11-06", "19:30"));
+    expect(Number.isFinite(nextWake(st, input(now)))).toBe(true);
   });
 
   test("a due slot wakes now; a slot an hour stale is skipped; zones are the player's", () => {

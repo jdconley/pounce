@@ -67,13 +67,15 @@ function nightEnd(now: number, zone: string): number {
 
 /**
  * Whether a push may go out now, and how loud (§12.1, §12.3, §14.1). A
- * kitten gets nothing; a teen nothing overnight; reminders never in quiet
- * hours or past the daily cap; spaced kinds wait out the 20 minutes.
+ * teen gets nothing overnight; reminders never go in quiet hours, past the
+ * daily cap, or to a kitten (whose settings have them off); spaced kinds
+ * wait out the 20 minutes. A kitten's own device refuses every push itself
+ * (`DeviceIndex`), while a household kitten's pushes still reach the
+ * parent's phone (§14.1).
  */
 export function gate(i: GateInput): Gate {
   const minutes = localMinutes(i.now, i.zone);
   const reminder = isReminder(i.kind);
-  if (i.band === "kitten") return { send: false, retryAt: null };
   if (i.band === "teen" && minutes < TEEN_NIGHT_END_MIN) {
     return { send: false, retryAt: reminder || !isSpaced(i.kind) ? null : nightEnd(i.now, i.zone) };
   }
