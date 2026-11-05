@@ -110,6 +110,8 @@ export class Player extends DurableObject<Env> {
       `CREATE TABLE IF NOT EXISTS pounces (id TEXT PRIMARY KEY, to_id TEXT, target TEXT, at INTEGER, answer TEXT,
          answered_at INTEGER, code TEXT, quiet INTEGER, link TEXT, from_person TEXT, from_device TEXT)`,
     );
+    // The old pair id of each tombstone: the handle the leaver's ghosted cat undoes it by.
+    sql.exec("CREATE TABLE IF NOT EXISTS left_handles (pair_id TEXT PRIMARY KEY, partner_id TEXT UNIQUE)");
     createTables(sql);
   }
 
@@ -435,7 +437,37 @@ export class Player extends DurableObject<Env> {
       row.partnerId,
       now,
     );
+    this.ctx.storage.sql.exec(
+      "INSERT INTO left_handles (pair_id, partner_id) VALUES (?, ?) ON CONFLICT (partner_id) DO UPDATE SET pair_id = excluded.pair_id",
+      pairId,
+      row.partnerId,
+    );
     return row.partnerId;
+  }
+
+  /** The streaks this player left that can still be undone: old pair id and partner (§14's ghosted cat). */
+  leftHandles(): { pairId: string; partnerId: string }[] {
+    return this.ctx.storage.sql
+      .exec<{ pair_id: string; partner_id: string }>(
+        "SELECT h.pair_id, h.partner_id FROM left_handles h JOIN left_pairs l ON l.partner_id = h.partner_id ORDER BY l.at",
+      )
+      .toArray()
+      .map((r) => ({ pairId: r.pair_id, partnerId: r.partner_id }));
+  }
+
+  /** Undoes the leave of `pairId` (only the leaver can): the tombstone goes. Returns the partner, or null. */
+  rejoin(pairId: string): string | null {
+    const row = this.leftHandles().find((r) => r.pairId === pairId);
+    if (!row) return null;
+    this.ctx.storage.sql.exec("DELETE FROM left_handles WHERE pair_id = ?", pairId);
+    this.ctx.storage.sql.exec("DELETE FROM left_pairs WHERE partner_id = ?", row.partnerId);
+    return row.partnerId;
+  }
+
+  addLeftHandles(rows: { pairId: string; partnerId: string }[]): void {
+    for (const r of rows) {
+      this.ctx.storage.sql.exec("INSERT OR IGNORE INTO left_handles (pair_id, partner_id) VALUES (?, ?)", r.pairId, r.partnerId);
+    }
   }
 
   /** After a merge: the partner `from` is now `to`. */

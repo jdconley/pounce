@@ -14,7 +14,10 @@
     "APNS_TEAM_ID": "B222J9J7B8",
     "APNS_TOPIC": "com.conleychaos.play",
     "APNS_HOST": "api.push.apple.com",
-    "SIWA_CLIENT_ID": "com.conleychaos.play"
+    "SIWA_CLIENT_ID": "com.conleychaos.play",
+    // Shared streaks, table looks and Play again (daily habit §15 row 3), on since the app's
+    // streak screens shipped (row 4).
+    "STREAKS": "on"
   },
   "durable_objects": {
     "bindings": [

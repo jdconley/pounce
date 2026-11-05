@@ -165,8 +165,14 @@ private struct TableStage: View {
     @State private var coach = Coach()
     /// The app went to the background: back on this phone's turn, the turn cue plays again.
     @State private var backgrounded = false
+    /// The game over screen's Play again (§10.4).
+    @State private var playAgain = PlayAgain()
+    @State private var againTick = 0
+    /// The look pill floating down after someone changed the table (§9.4).
+    @State private var lookPill: RoomStore.LookChange?
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.scenePhase) private var scenePhase
+    @Environment(\.horizontalSizeClass) private var horizontalSizeClass
 
     private var table: TableModel? { session.store.room.map(TableModel.init(room:)) }
     private var pass: PassAndPlay { session.store.pass }
@@ -233,6 +239,28 @@ private struct TableStage: View {
                 }
                 .transition(.opacity.combined(with: .scale(scale: 0.8, anchor: .bottom)))
             }
+            if let shown = tableStreak, events.winners == nil {
+                GeometryReader { geo in
+                    TableStreakBadge(
+                        badge: shown.badge,
+                        stamp: session.stamps.latest(pair: shown.pair, person: shown.person),
+                        at: streakBadgeCenter(geo), scale: streakScale)
+                }
+                .ignoresSafeArea()
+                .transition(.scale.combined(with: .opacity))
+                .zIndex(3)
+            }
+            if let pill = lookPill, let seat = table?.room.seats[safe: pill.seat] {
+                VStack {
+                    LookPill(cat: SeatInfo.catIndex(seat), art: lookArt(pill), isBack: lookIsBack(pill))
+                        .padding(.top, 70)
+                    Spacer()
+                }
+                .transition(.move(edge: .top).combined(with: .opacity))
+                .allowsHitTesting(false)
+                .zIndex(6)
+            }
+            probes
             if let cue = turnCue {
                 TurnCueView(cue: cue, yield: coach.tip != nil && coachView != nil)
                     .transition(.opacity.combined(with: .scale(scale: cue.isMine ? 0.85 : 1)))
@@ -308,7 +336,9 @@ private struct TableStage: View {
                     winners: people(winners),
                     standings: session.model.map(GameOverView.standings) ?? [],
                     onHome: { model.goHome() },
-                    onNewGame: { Task { await model.newGame() } })
+                    onNewGame: { Task { await model.newGame() } },
+                    again: againState,
+                    onPlayAgain: tapPlayAgain)
                     .transition(.opacity)
                     .zIndex(20)
             }
@@ -330,6 +360,23 @@ private struct TableStage: View {
             checkPriming()
         }
         .onChange(of: coachView) { feedCoach(allowNew: false) }
+        .onChange(of: session.store.lookChange) { _, change in
+            guard let change else { return }
+            Sound.shared.play(ArtName.Sound.sfxWhoosh)
+            withAnimation(.spring(duration: 0.45, bounce: 0.4).paced) { lookPill = change }
+            Task {
+                try? await Task.sleep(for: Pace.duration(.seconds(2)))
+                if lookPill == change { withAnimation(.easeIn(duration: 0.3).paced) { lookPill = nil } }
+            }
+        }
+        .onChange(of: session.store.rematch) { _, code in
+            // The phone that asked goes to the new table; the others' pill now jumps there.
+            if let code, let go = playAgain.arrived(code: code) { model.openRematch(code: go) }
+        }
+        .onChange(of: session.lobbyNope) {
+            // A refused Play again (the server said no): it can be asked again.
+            if playAgain.waiting { playAgain.refused() }
+        }
         // A new tip waits until the table has held still for a moment (and the last tip is gone).
         .task(id: CoachWait(table: coachView, tip: coach.tip)) {
             try? await Task.sleep(for: Pace.duration(.milliseconds(900)))
@@ -399,6 +446,13 @@ private struct TableStage: View {
         events.shown = scene.shownRevealed
         sync(scene)
         #if DEBUG
+        // `-show-look` (screenshots): the table menu open on its look tray.
+        if CommandLine.arguments.contains("-show-look") {
+            Task {
+                try? await Task.sleep(for: .milliseconds(900))
+                events.menuOpen = true
+            }
+        }
         // `-show-scoreboard` (screenshots): the scoreboard over the table as it opens.
         if CommandLine.arguments.contains("-show-scoreboard"), let room = session.store.room {
             events.scoreboard = TableModel(room: room)
@@ -434,6 +488,94 @@ private struct TableStage: View {
         }
     }
 
+    // MARK: streaks and looks
+
+    /// The badge for the top pair seated here (§10.3), once the server has streaks on.
+    private var tableStreak: (badge: StreakBadge, pair: String, person: String)? {
+        guard model.streaks.enabled != false, let table else { return nil }
+        let mine = table.mySeats.compactMap { table.room.seats[safe: $0]?.person }
+        let owner = model.people.owner?.id
+        let ordered = mine.filter { $0.id == owner } + mine.filter { $0.id != owner }
+        let candidates = ordered.flatMap { person in model.streaks.views(for: person.id).map { (person: person.id, view: $0) } }
+        let others = table.room.seats.indices.filter { !table.mySeats.contains($0) }.compactMap { table.room.seats[$0].person }
+        guard let pick = TableStreak.pick(code: session.code, candidates: candidates, reported: session.streakPairs, others: others)
+        else { return nil }
+        guard let badge = StreakBadge.make(pick.view, all: [], signedIn: true, offersSignIn: false) else { return nil }
+        return (badge, pick.view.pair, pick.person)
+    }
+
+    private var streakScale: CGFloat { horizontalSizeClass == .regular ? 1.15 : 0.8 }
+
+    /// Just under the top bar's right end (the paw menu sits above it in the status bar's ear).
+    private func streakBadgeCenter(_ geo: GeometryProxy) -> CGPoint {
+        let size = geo.size
+        let insets = geo.safeAreaInsets
+        guard let table else { return CGPoint(x: size.width - 70, y: 140) }
+        let bottom = TableScene.bottomSeat(table, revealed: events.shown)
+        let n = max(table.barSeats(bottom: bottom).count, 1)
+        let bar = TableLayout(size: size, safeTop: insets.top, safeBottom: insets.bottom, opponents: n).opponentsBar
+        // Under the bar's name tags (the bar's frame holds the rings; the tags hang below it).
+        return CGPoint(x: size.width - 84 * streakScale - insets.trailing, y: size.height - bar.minY + 104 * streakScale)
+    }
+
+    private func lookIsBack(_ change: RoomStore.LookChange) -> Bool {
+        lastLook.map { $0.rug == change.look.rug } ?? false
+    }
+
+    private func lookArt(_ change: RoomStore.LookChange) -> String {
+        lookIsBack(change) ? ArtName.Habit.back(change.look.back) : ArtName.Habit.rug(change.look.rug)
+    }
+
+    /// The look before the last change (for the pill: what changed).
+    @State private var lastLook: Look?
+
+    /// Hidden values for the UI tests: the table's look and code.
+    private var probes: some View {
+        let look = table?.room.look ?? .standard
+        return ZStack {
+            Color.clear.frame(width: 1, height: 1)
+                .accessibilityElement()
+                .accessibilityIdentifier("table.look")
+                .accessibilityValue("\(look.rug)|\(look.back)")
+            Color.clear.frame(width: 1, height: 1)
+                .accessibilityElement()
+                .accessibilityIdentifier("table.code")
+                .accessibilityValue(session.code)
+            #if DEBUG
+            // The last stamp heard here and whose badge shows (`pair/person/serial > pair/person`).
+            Color.clear.frame(width: 1, height: 1)
+                .accessibilityElement()
+                .accessibilityIdentifier("table.stamp.debug")
+                .accessibilityValue(tableStreak.map { shown in
+                    "\(shown.pair)/\(shown.person) stamp \(session.stamps.latest(pair: shown.pair, person: shown.person)?.serial ?? 0)"
+                } ?? "-")
+            #endif
+        }
+        .allowsHitTesting(false)
+        .onChange(of: look, initial: true) { old, _ in lastLook = old }
+    }
+
+    private var againState: GameOverView.Again? {
+        _ = againTick
+        guard PlayAgain.available(session.store.room) else { return nil }
+        if session.store.rematch != nil { return .go }
+        return playAgain.isWaiting() ? .waiting : .ask
+    }
+
+    private func tapPlayAgain() {
+        switch playAgain.tap(room: session.store.room, rematch: session.store.rematch) {
+        case .send:
+            session.send(.rematch)
+            // No answer by then (the send never left, or the deal failed): the pill wakes up again.
+            Task {
+                try? await Task.sleep(for: .seconds(PlayAgain.wait + 0.2))
+                againTick += 1
+            }
+        case .jump(let code): model.openRematch(code: code)
+        case .none: break
+        }
+    }
+
     /// The mock banner's player: this phone's first seat, else the owner.
     private var primingPerson: Person {
         if let seat = table?.mySeats.first { return person(seat) }
@@ -461,6 +603,7 @@ private struct TableStage: View {
         // `-demo handoff`: skip the hold so a hand is shown to hide later.
         if DemoMode.from() == .handoff, case .curtain = pass.state { session.store.completeHold() }
         #endif
+        scene.setLook(room.look ?? .standard)
         // The scene hides at once when `revealed` goes away; a new reveal lands on its timeline.
         scene.reconcile(table, revealed: pass.revealed, epoch: pass.epoch)
         #if DEBUG

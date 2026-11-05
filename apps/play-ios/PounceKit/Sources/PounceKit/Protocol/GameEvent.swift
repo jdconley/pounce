@@ -116,8 +116,10 @@ public enum GameEvent: Codable, Equatable, Sendable {
 public enum RoomEvent: Codable, Equatable, Sendable {
     case presence(seat: Seat, presence: Presence)
     case game(GameEvent)
+    /// Someone at the table changed its rug or card back (§9.4); `look` is the whole new look.
+    case look(seat: Seat, look: Look)
 
-    private enum CodingKeys: String, CodingKey { case kind, seat, presence, event }
+    private enum CodingKeys: String, CodingKey { case kind, seat, presence, event, rug, back }
 
     public init(from decoder: any Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
@@ -128,6 +130,9 @@ public enum RoomEvent: Codable, Equatable, Sendable {
                              presence: try c.decode(Presence.self, forKey: .presence))
         case "game":
             self = .game(try c.decode(GameEvent.self, forKey: .event))
+        case "look":
+            self = .look(seat: try c.decode(Seat.self, forKey: .seat),
+                         look: Look(rug: try c.decode(String.self, forKey: .rug), back: try c.decode(String.self, forKey: .back)))
         default:
             throw DecodingError.dataCorruptedError(
                 forKey: .kind, in: c, debugDescription: "unknown room event kind: \(kind)")
@@ -144,6 +149,11 @@ public enum RoomEvent: Codable, Equatable, Sendable {
         case .game(let event):
             try c.encode("game", forKey: .kind)
             try c.encode(event, forKey: .event)
+        case .look(let seat, let look):
+            try c.encode("look", forKey: .kind)
+            try c.encode(seat, forKey: .seat)
+            try c.encode(look.rug, forKey: .rug)
+            try c.encode(look.back, forKey: .back)
         }
     }
 }

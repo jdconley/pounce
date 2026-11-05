@@ -318,8 +318,10 @@ final class AccountModel {
         defer { busy = false }
         do { try await service.signOut() } catch { return }
         forgetAccount()
+        app.streaks.reset()
         await uploadProfile()
         await app.refreshTables()
+        await app.refreshStreaks()
     }
 
     /// Deletes the account (the device's, or a household person's own), then shows how to stop
@@ -339,8 +341,10 @@ final class AccountModel {
             save()
         }
         showSettingsPath = true
+        app.streaks.reset()
         await uploadProfile()
         await app.refreshTables()
+        await app.refreshStreaks()
         return true
     }
 

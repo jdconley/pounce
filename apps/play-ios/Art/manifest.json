@@ -1148,6 +1148,570 @@
   "batch": "ui"
  },
  {
+  "name": "condo-1",
+  "dest": "imageset",
+  "points": [
+   300,
+   300
+  ],
+  "batch": "habit"
+ },
+ {
+  "name": "condo-2",
+  "dest": "imageset",
+  "points": [
+   300,
+   300
+  ],
+  "batch": "habit"
+ },
+ {
+  "name": "condo-3",
+  "dest": "imageset",
+  "points": [
+   300,
+   300
+  ],
+  "batch": "habit"
+ },
+ {
+  "name": "condo-4",
+  "dest": "imageset",
+  "points": [
+   300,
+   300
+  ],
+  "batch": "habit"
+ },
+ {
+  "name": "condo-5",
+  "dest": "imageset",
+  "points": [
+   300,
+   300
+  ],
+  "batch": "habit"
+ },
+ {
+  "name": "condo-6",
+  "dest": "imageset",
+  "points": [
+   300,
+   300
+  ],
+  "batch": "habit"
+ },
+ {
+  "name": "condo-7",
+  "dest": "imageset",
+  "points": [
+   300,
+   300
+  ],
+  "batch": "habit"
+ },
+ {
+  "name": "condo-8",
+  "dest": "imageset",
+  "points": [
+   300,
+   300
+  ],
+  "batch": "habit"
+ },
+ {
+  "name": "condo-9",
+  "dest": "imageset",
+  "points": [
+   300,
+   300
+  ],
+  "batch": "habit"
+ },
+ {
+  "name": "condo-10",
+  "dest": "imageset",
+  "points": [
+   300,
+   300
+  ],
+  "batch": "habit"
+ },
+ {
+  "name": "toy-yarn-ball",
+  "dest": "imageset",
+  "points": [
+   48,
+   48
+  ],
+  "batch": "habit"
+ },
+ {
+  "name": "toy-feather-wand",
+  "dest": "imageset",
+  "points": [
+   48,
+   48
+  ],
+  "batch": "habit"
+ },
+ {
+  "name": "toy-cardboard-box",
+  "dest": "imageset",
+  "points": [
+   48,
+   48
+  ],
+  "batch": "habit"
+ },
+ {
+  "name": "toy-mouse",
+  "dest": "imageset",
+  "points": [
+   48,
+   48
+  ],
+  "batch": "habit"
+ },
+ {
+  "name": "toy-fish",
+  "dest": "imageset",
+  "points": [
+   48,
+   48
+  ],
+  "batch": "habit"
+ },
+ {
+  "name": "toy-bell",
+  "dest": "imageset",
+  "points": [
+   48,
+   48
+  ],
+  "batch": "habit"
+ },
+ {
+  "name": "toy-laser-dot",
+  "dest": "imageset",
+  "points": [
+   48,
+   48
+  ],
+  "batch": "habit"
+ },
+ {
+  "name": "toy-catnip-sack",
+  "dest": "imageset",
+  "points": [
+   48,
+   48
+  ],
+  "batch": "habit"
+ },
+ {
+  "name": "toy-sock",
+  "dest": "imageset",
+  "points": [
+   48,
+   48
+  ],
+  "batch": "habit"
+ },
+ {
+  "name": "toy-bottle-cap",
+  "dest": "imageset",
+  "points": [
+   48,
+   48
+  ],
+  "batch": "habit"
+ },
+ {
+  "name": "toy-crinkle-ball",
+  "dest": "imageset",
+  "points": [
+   48,
+   48
+  ],
+  "batch": "habit"
+ },
+ {
+  "name": "toy-spring",
+  "dest": "imageset",
+  "points": [
+   48,
+   48
+  ],
+  "batch": "habit"
+ },
+ {
+  "name": "toy-ribbon",
+  "dest": "imageset",
+  "points": [
+   48,
+   48
+  ],
+  "batch": "habit"
+ },
+ {
+  "name": "toy-paper-bag",
+  "dest": "imageset",
+  "points": [
+   48,
+   48
+  ],
+  "batch": "habit"
+ },
+ {
+  "name": "toy-pom-pom",
+  "dest": "imageset",
+  "points": [
+   48,
+   48
+  ],
+  "batch": "habit"
+ },
+ {
+  "name": "toy-cork",
+  "dest": "imageset",
+  "points": [
+   48,
+   48
+  ],
+  "batch": "habit"
+ },
+ {
+  "name": "toy-rainbow-yarn",
+  "dest": "imageset",
+  "points": [
+   48,
+   48
+  ],
+  "batch": "habit"
+ },
+ {
+  "name": "toy-glitter-mouse",
+  "dest": "imageset",
+  "points": [
+   48,
+   48
+  ],
+  "batch": "habit"
+ },
+ {
+  "name": "toy-silver-bell",
+  "dest": "imageset",
+  "points": [
+   48,
+   48
+  ],
+  "batch": "habit"
+ },
+ {
+  "name": "toy-moon-fish",
+  "dest": "imageset",
+  "points": [
+   48,
+   48
+  ],
+  "batch": "habit"
+ },
+ {
+  "name": "toy-star-wand",
+  "dest": "imageset",
+  "points": [
+   48,
+   48
+  ],
+  "batch": "habit"
+ },
+ {
+  "name": "toy-disco-ball",
+  "dest": "imageset",
+  "points": [
+   48,
+   48
+  ],
+  "batch": "habit"
+ },
+ {
+  "name": "toy-golden-fish",
+  "dest": "imageset",
+  "points": [
+   48,
+   48
+  ],
+  "batch": "habit"
+ },
+ {
+  "name": "toy-golden-mouse",
+  "dest": "imageset",
+  "points": [
+   48,
+   48
+  ],
+  "batch": "habit"
+ },
+ {
+  "name": "back-yarn-swirl",
+  "dest": "atlas:Cards",
+  "points": [
+   64,
+   90
+  ],
+  "batch": "habit",
+  "fit": "fill"
+ },
+ {
+  "name": "back-moonlit-fish",
+  "dest": "atlas:Cards",
+  "points": [
+   64,
+   90
+  ],
+  "batch": "habit",
+  "fit": "fill"
+ },
+ {
+  "name": "back-cucumber-chaos",
+  "dest": "atlas:Cards",
+  "points": [
+   64,
+   90
+  ],
+  "batch": "habit",
+  "fit": "fill"
+ },
+ {
+  "name": "back-crown",
+  "dest": "atlas:Cards",
+  "points": [
+   64,
+   90
+  ],
+  "batch": "habit",
+  "fit": "fill"
+ },
+ {
+  "name": "back-heart-paws",
+  "dest": "atlas:Cards",
+  "points": [
+   64,
+   90
+  ],
+  "batch": "habit",
+  "fit": "fill"
+ },
+ {
+  "name": "back-golden-yarn",
+  "dest": "atlas:Cards",
+  "points": [
+   64,
+   90
+  ],
+  "batch": "habit",
+  "fit": "fill"
+ },
+ {
+  "name": "rug-night-sky",
+  "dest": "atlas:Table",
+  "points": [
+   360,
+   360
+  ],
+  "batch": "habit"
+ },
+ {
+  "name": "rug-candy-stripe",
+  "dest": "atlas:Table",
+  "points": [
+   360,
+   360
+  ],
+  "batch": "habit"
+ },
+ {
+  "name": "rug-fish-pond",
+  "dest": "atlas:Table",
+  "points": [
+   360,
+   360
+  ],
+  "batch": "habit"
+ },
+ {
+  "name": "rug-royal-violet",
+  "dest": "atlas:Table",
+  "points": [
+   360,
+   360
+  ],
+  "batch": "habit"
+ },
+ {
+  "name": "gift-box",
+  "dest": "imageset",
+  "points": [
+   160,
+   160
+  ],
+  "batch": "habit"
+ },
+ {
+  "name": "gift-box-open",
+  "dest": "imageset",
+  "points": [
+   160,
+   160
+  ],
+  "batch": "habit"
+ },
+ {
+  "name": "paw-badge-grey",
+  "dest": "imageset",
+  "points": [
+   40,
+   40
+  ],
+  "batch": "habit"
+ },
+ {
+  "name": "paw-badge-one",
+  "dest": "imageset",
+  "points": [
+   40,
+   40
+  ],
+  "batch": "habit"
+ },
+ {
+  "name": "paw-badge-both",
+  "dest": "imageset",
+  "points": [
+   40,
+   40
+  ],
+  "batch": "habit"
+ },
+ {
+  "name": "paw-badge-nap",
+  "dest": "imageset",
+  "points": [
+   40,
+   40
+  ],
+  "batch": "habit"
+ },
+ {
+  "name": "paw-badge-bandage",
+  "dest": "imageset",
+  "points": [
+   40,
+   40
+  ],
+  "batch": "habit"
+ },
+ {
+  "name": "paw-badge-suitcase",
+  "dest": "imageset",
+  "points": [
+   40,
+   40
+  ],
+  "batch": "habit"
+ },
+ {
+  "name": "pounce-bell",
+  "dest": "imageset",
+  "points": [
+   240,
+   240
+  ],
+  "batch": "habit"
+ },
+ {
+  "name": "cats-asleep-condo",
+  "dest": "imageset",
+  "points": [
+   300,
+   300
+  ],
+  "batch": "habit"
+ },
+ {
+  "name": "icon-pause",
+  "dest": "imageset",
+  "points": [
+   28,
+   28
+  ],
+  "batch": "habit"
+ },
+ {
+  "name": "icon-pin",
+  "dest": "imageset",
+  "points": [
+   28,
+   28
+  ],
+  "batch": "habit"
+ },
+ {
+  "name": "icon-trash",
+  "dest": "imageset",
+  "points": [
+   28,
+   28
+  ],
+  "batch": "habit"
+ },
+ {
+  "name": "icon-rug",
+  "dest": "imageset",
+  "points": [
+   28,
+   28
+  ],
+  "batch": "habit"
+ },
+ {
+  "name": "icon-cloud-plus",
+  "dest": "imageset",
+  "points": [
+   28,
+   28
+  ],
+  "batch": "habit"
+ },
+ {
+  "name": "icon-days",
+  "dest": "imageset",
+  "points": [
+   28,
+   28
+  ],
+  "batch": "habit"
+ },
+ {
+  "name": "icon-weeks",
+  "dest": "imageset",
+  "points": [
+   28,
+   28
+  ],
+  "batch": "habit"
+ },
+ {
+  "name": "icon-replay",
+  "dest": "imageset",
+  "points": [
+   28,
+   28
+  ],
+  "batch": "habit"
+ },
+ {
   "name": "AppIcon",
   "dest": "appicon",
   "points": [

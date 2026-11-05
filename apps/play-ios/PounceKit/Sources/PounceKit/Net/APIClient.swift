@@ -8,18 +8,23 @@ public struct TableEntry: Codable, Equatable, Sendable {
     public let status: String
     public let yourTurn: Bool
     public let updatedAt: Double
+    /// Play again's table, on a finished table's entry (§10.4).
+    public let next: String?
 
-    public init(code: String, name: String? = nil, status: String, yourTurn: Bool, updatedAt: Double) {
+    public init(code: String, name: String? = nil, status: String, yourTurn: Bool, updatedAt: Double, next: String? = nil) {
         self.code = code
         self.name = name
         self.status = status
         self.yourTurn = yourTurn
         self.updatedAt = updatedAt
+        self.next = next
     }
 }
 
 public enum APIError: Error, Equatable {
     case notConfigured, rateLimited, unauthorized, badRequest, notFound
+    /// 404 `no_player`: a `/v1/me` route for a person this device hasn't bound to a player yet.
+    case noPlayer
     /// 403: not allowed for this person (a kitten signing in, §14.1).
     case forbidden
     /// 409 with the body's `error` (`already_linked`, `already_signed_in`, ...).
@@ -120,15 +125,19 @@ public actor APIClient {
 
     // MARK: requests
 
+    /// `noPlayer`: a 404 `no_player` throws `.noPlayer` instead of `.notFound` (the streak list,
+    /// where a plain 404 means the server has streaks off).
     func authenticated(
-        _ method: String, _ path: String, body: (any Encodable & Sendable)?, query: [URLQueryItem] = []
+        _ method: String, _ path: String, body: (any Encodable & Sendable)?, query: [URLQueryItem] = [],
+        noPlayer: Bool = false
     ) async throws -> Data {
-        try await authenticatedCall(method, path, body: body, query: query).data
+        try await authenticatedCall(method, path, body: body, query: query, noPlayer: noPlayer).data
     }
 
     /// The reply and the credential that got it.
     private func authenticatedCall(
-        _ method: String, _ path: String, body: (any Encodable & Sendable)?, query: [URLQueryItem] = []
+        _ method: String, _ path: String, body: (any Encodable & Sendable)?, query: [URLQueryItem] = [],
+        noPlayer: Bool = false
     ) async throws -> (data: Data, credential: DeviceCredential) {
         let url = config.endpoint(path, query: query)
         let payload = try body.map { try JSONEncoder().encode($0) }
@@ -136,7 +145,7 @@ public actor APIClient {
         for attempt in 0..<2 {
             do {
                 let data = try await Self.send(
-                    session: session, method: method, url: url, bearer: cred.token, body: payload)
+                    session: session, method: method, url: url, bearer: cred.token, body: payload, noPlayer: noPlayer)
                 return (data, cred)
             } catch APIError.unauthorized where attempt == 0 {
                 cred = try await replacement(for: cred)
@@ -146,7 +155,7 @@ public actor APIClient {
     }
 
     private static func send(
-        session: URLSession, method: String, url: URL, bearer: String?, body: Data?
+        session: URLSession, method: String, url: URL, bearer: String?, body: Data?, noPlayer: Bool = false
     ) async throws -> Data {
         var request = URLRequest(url: url)
         request.httpMethod = method
@@ -169,6 +178,7 @@ public actor APIClient {
         case 400: throw APIError.badRequest
         case 401: throw APIError.unauthorized
         case 403: throw APIError.forbidden
+        case 404 where noPlayer && errorCode(in: data) == "no_player": throw APIError.noPlayer
         case 404: throw APIError.notFound
         case 409: throw conflict(in: data)
         case 429: throw APIError.rateLimited

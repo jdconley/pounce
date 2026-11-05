@@ -1,0 +1,7 @@
+{
+  "images" : [
+    { "filename" : "toy-bottle-cap_ph@2x.png", "idiom" : "universal", "scale" : "2x" },
+    { "filename" : "toy-bottle-cap_ph@3x.png", "idiom" : "universal", "scale" : "3x" }
+  ],
+  "info" : { "author" : "xcode", "version" : 1 }
+}

@@ -147,6 +147,8 @@ actor Device {
                 state.moveCodes[seat] = code
             case .error(let code):
                 state.errors.append(code)
+            case .streak, .rematch:
+                break
             }
         }
     }

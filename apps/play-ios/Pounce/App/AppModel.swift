@@ -40,6 +40,11 @@ final class AppModel {
     var tipsEnabled = true
     /// Bumped by "Show the tips again": tables turn tips back on for everyone.
     private(set) var tipsReplays = 0
+    /// The owner's shared streaks (spec §7–§10), and what each table socket says about them.
+    let streaks: StreakStore
+    /// The condo stage this phone last showed per pair, so a new stage drops in once (§9.5).
+    private(set) var condoSeen: [String: Int]
+    @ObservationIgnored private let condoSeenURL: URL
     /// Push and local notifications; attached by the app delegate once SwiftUI built this model.
     @ObservationIgnored weak var push: PushCoordinator?
 
@@ -86,6 +91,14 @@ final class AppModel {
         hadOwnerBeforeThisVersion = age == nil && loaded.owner != nil
         route = age == nil ? .age(then: nil) : loaded.owner == nil ? .pickCat(then: nil) : .home
         #if DEBUG
+        streaks = StreakStore(service: Self.debugStreaks(arguments: CommandLine.arguments) ?? api)
+        #else
+        streaks = StreakStore(service: api)
+        #endif
+        streaks.person = loaded.owner?.id
+        condoSeenURL = dataDirectory.appendingPathComponent("streak-seen.json")
+        condoSeen = (try? JSONDecoder().decode([String: Int].self, from: Data(contentsOf: condoSeenURL))) ?? [:]
+        #if DEBUG
         let stub = StubScenario.from(arguments: CommandLine.arguments)
         let service: AccountService = stub.map { StubAccountService(scenario: $0) } ?? api
         let apple: AppleSigning = stub.map { StubAppleSignIn(scenario: $0) } ?? LiveAppleSignIn()
@@ -127,8 +140,13 @@ final class AppModel {
             model.peopleStore.add(name: "Ella", cat: 2)
             model.peopleStore.add(name: "Sam", cat: 6)
             model.people = model.peopleStore.load()
+            model.streaks.person = model.people.owner?.id
+            // Screens for screenshots: no push priming over them.
+            model.settings.pushPrimed = true
             if model.ageRecord != nil { model.route = .home }
         }
+        // `-show-us`: open on the Us screen (UI tests, screenshots).
+        if arguments.contains("-show-us"), model.people.owner != nil, model.ageRecord != nil { model.route = .us }
         // `-show-merge`: the two-cats question over the gear sheet (screenshots).
         if arguments.contains("-show-merge") {
             model.account.merge = .init(mine: 4, theirs: 2, theirName: StubAccountService.other.name, asking: true)
@@ -162,6 +180,13 @@ final class AppModel {
     }
 
     #if DEBUG
+    /// `-demo-streaks`: the streak routes from `DemoFixtures.streaks()`, no server; `-demo-streaks off`:
+    /// a server with streaks off (every list is a 404).
+    private static func debugStreaks(arguments: [String]) -> (any StreakService)? {
+        guard let i = arguments.firstIndex(of: "-demo-streaks") else { return nil }
+        return arguments[safe: i + 1] == "off" ? StreaksOffService() : DemoStreakService()
+    }
+
     /// `-age-range <answer>` stubs Declared Age Range; any test run (`-anim-speed`) without it
     /// answers "adult", so the existing tests never meet the system sheet.
     private static func debugAgeAsker(arguments: [String], env: [String: String]) -> AgeRangeAsking {
@@ -187,18 +212,53 @@ final class AppModel {
 
     #if DEBUG
     /// `-demo <screen>`: the room screen fed by one fixture snapshot, no server, nothing cached.
-    func openDemo(_ demo: DemoMode) {
+    func openDemo(_ demo: DemoMode, code: String? = nil) {
         closeRoom()
-        let room = demo.room
-        let socket = SuspendableSocket { demo.makeSocket() }
+        var room = demo.room
+        if let code { room.code = code }
+        let socket = SuspendableSocket { [room] in code == nil ? demo.makeSocket() : DemoSocket(room: room) }
         let session = RoomSession(code: room.code, intent: .rejoin, socket: socket)
         session.owner = { [weak self] in self?.people.owner }
         session.people = { [weak self] in self?.everyone ?? [] }
+        session.onStreak = { [weak self] pair, person, view in self?.streaks.apply(pair: pair, person: person, view: view) }
         self.room = session
         session.start()
         route = .room(code: room.code, intent: .rejoin)
-        // `-demo-home-after <seconds>`: leave the table mid-animation (teardown check).
+        // `-demo-stamp`: a streak view keeps today for the top pair a moment in (the stamp, screenshots).
+        // `-demo-stamp new`: a brand-new pair's first kept day instead (its badge appears with it).
         let args = CommandLine.arguments
+        let newPair = args.firstIndex(of: "-demo-stamp").flatMap { args[safe: $0 + 1] } == "new"
+        if args.contains("-demo-stamp") {
+            Task { [weak self, weak session] in
+                await self?.streaks.refresh()
+                try? await Task.sleep(for: Pace.duration(.seconds(2.5)))
+                // For the demo seat's person (the owner doesn't sit at a demo table).
+                guard let self, let session, var view = self.streaks.top,
+                      let seat = session.model?.mySeats.first, let person = session.model?.room.seats[seat].person?.id
+                else { return }
+                view.count = newPair ? 1 : view.count + 1
+                if newPair { view.pair = "pr_demoNewAAAAAAAAAAAAAAAA" }
+                view.me = true
+                view.them = true
+                view.kept = true
+                view.todayToy = "toy-golden-mouse"
+                view.myMove = [session.code]
+                session.store.handle(.message(.streak(pair: view.pair, person: person, view: view)))
+            }
+        }
+        // `-demo-streaks` at a demo table: the demo seat's person has the demo pairs (the owner
+        // doesn't sit there), so the badge and the look tray's unlocks show as for a real seat.
+        // (Not with `-demo-stamp new`: there the badge appears with its first message.)
+        if args.contains("-demo-streaks"), !newPair,
+           let seat = room.seats.firstIndex(where: \.yours),
+           let person = room.seats[seat].person?.id {
+            Task { [weak self] in
+                guard let self else { return }
+                await self.streaks.refresh()
+                for view in self.streaks.pairs { self.streaks.apply(pair: view.pair, person: person, view: view) }
+            }
+        }
+        // `-demo-home-after <seconds>`: leave the table mid-animation (teardown check).
         if let i = args.firstIndex(of: "-demo-home-after"), let secs = args[safe: i + 1].flatMap(Double.init) {
             Task { [weak self] in
                 try? await Task.sleep(for: .seconds(secs))
@@ -220,6 +280,7 @@ final class AppModel {
         #endif
         if ageRecord != nil { await accountsAfterAge() }
         if people.owner != nil { await refreshTables() }
+        await refreshStreaks()
         await recheckAge()
     }
 
@@ -282,12 +343,41 @@ final class AppModel {
     func reloadLocal() {
         people = peopleStore.load()
         cache = tableCache.all()
+        streaks.person = people.owner?.id
+    }
+
+    // MARK: Streaks (spec §7–§10)
+
+    /// The owner's streaks again (Home, foreground, back from a table). Quiet when offline.
+    func refreshStreaks() async {
+        streaks.person = people.owner?.id
+        await streaks.refresh()
+    }
+
+    /// A gift Home asked the Us screen to open (§9.5: the gift waits on Home).
+    var pendingGift: String?
+
+    func showUs(openingGift gift: String? = nil) {
+        guard people.owner != nil else { return }
+        closeRoom()
+        pendingGift = gift
+        route = .us
+    }
+
+    func noteCondoSeen(pair: String, stage: Int) {
+        guard condoSeen[pair] != stage else { return }
+        condoSeen[pair] = stage
+        if let data = try? JSONEncoder().encode(condoSeen) {
+            try? FileManager.default.createDirectory(at: condoSeenURL.deletingLastPathComponent(), withIntermediateDirectories: true)
+            try? data.write(to: condoSeenURL, options: .atomic)
+        }
     }
 
     /// Saves the owner, then continues to the link that interrupted onboarding, or Home.
     func finishPickCat(name: String, cat: Int) {
         let owner = peopleStore.setOwner(name: name, cat: cat)
         people = peopleStore.load()
+        streaks.person = owner.id
         account.noteChanged(owner.id)
         #if DEBUG
         Task { await account.applyDebugPreset() }
@@ -368,6 +458,18 @@ final class AppModel {
         route = .room(code: code, intent: intent)
     }
 
+    /// Play again's table (§10.4): open it as one this phone sits at.
+    func openRematch(code: String) {
+        #if DEBUG
+        // A demo's Play again deals a demo table under the new code.
+        if DemoMode.from() != nil {
+            openDemo(.table, code: code)
+            return
+        }
+        #endif
+        open(code: code, intent: .rejoin)
+    }
+
     /// The table for `code` is the screen in front (a push for it needs no banner).
     func isOnScreen(code: String) -> Bool {
         if case .room(let onScreen, _) = route { return onScreen == code }
@@ -436,6 +538,7 @@ final class AppModel {
             Task {
                 await account.uploadProfile()
                 await account.sync()
+                await refreshStreaks()
             }
             // Every reminder, not just this launch's: one may predate a relaunch.
             push?.cancelAllTurnReminders()
@@ -472,6 +575,7 @@ final class AppModel {
         let session = RoomSession(code: code, intent: intent, socket: socket)
         session.owner = { [weak self] in self?.people.owner }
         session.people = { [weak self] in self?.everyone ?? [] }
+        session.onStreak = { [weak self] pair, person, view in self?.streaks.apply(pair: pair, person: person, view: view) }
         session.onSnapshot = { [weak self] room in self?.remember(room) }
         session.onArrive = { [weak self, weak session] in
             guard let self, let session, self.room === session, self.probing == session.code else { return }
@@ -604,6 +708,7 @@ final class AppModel {
     func peopleRenamed() {
         people = peopleStore.load()
         tipsSeen = tutorialStore.load()
+        streaks.person = people.owner?.id
     }
 
     /// Signed in on a second device: it shows the account's name and cat (spec §10.5). Not a
@@ -725,5 +830,6 @@ final class AppModel {
         closeRoom()
         cache = tableCache.all()
         route = .home
+        Task { await refreshStreaks() }
     }
 }

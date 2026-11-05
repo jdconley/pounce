@@ -68,7 +68,7 @@ final class CardFaceFactory {
 
     private var faces: [FaceKey: SKTexture] = [:]
     private var numerals: [String: SKTexture] = [:]
-    private var backTexture: SKTexture?
+
     private var blankTexture: SKTexture?
 
     /// The full face (hand, piles, cards in flight), or the compact one for cards drawn small
@@ -81,11 +81,27 @@ final class CardFaceFactory {
         return t
     }
 
+    /// The open table's card back (§9.4), an art name; cards drawn from now on take it.
+    private(set) var backName = ArtName.cardBack
+    private var backTextures: [String: SKTexture] = [:]
+
+    /// Sets the table's back from its look's id (an unknown id is the classic back).
+    func setBack(_ id: String) {
+        backName = ArtName.Habit.back(id)
+    }
+
     func back() -> SKTexture {
-        if let backTexture { return backTexture }
-        let t = SKTexture(image: Self.backImage)
-        backTexture = t
+        if let cached = backTextures[backName] { return cached }
+        let t = SKTexture(image: backName == ArtName.cardBack ? Self.backImage : Self.backImage(backName))
+        backTextures[backName] = t
         return t
+    }
+
+    /// A card back's art in the card frame, for SwiftUI (the look tray).
+    static func backImage(_ name: String) -> UIImage {
+        render(scale: 1) { inner in
+            UIImage(named: name)?.draw(in: inner.insetBy(dx: -1.5, dy: -1.5))
+        }
     }
 
     /// A face with nothing on it (the discard pile's under-cards).

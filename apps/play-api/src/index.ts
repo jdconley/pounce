@@ -21,7 +21,7 @@ import { answerPounce, createPounce, linkPounce } from "./pounce/pounces";
 import { newRoomCode, ROOM_CODE } from "./room/codes";
 import { DEVICE_HEADER, PLAYER_HEADER } from "./room/game-room";
 import { parseRoomName } from "./room/names";
-import { creatorLook, isMine, leavePair, myStreaks, PAIR_ID, pairStub, syncPairPeople } from "./streaks/pairs";
+import { creatorLook, isMine, leavePair, myLeft, myStreaks, PAIR_ID, pairStub, rejoinPair, syncPairPeople } from "./streaks/pairs";
 import { notifyOn, streaksOn } from "./streaks/profile";
 
 import type { Env } from "./env";
@@ -41,6 +41,8 @@ const ROOM_WS = /^\/v1\/rooms\/([^/]+)\/ws$/;
 const SIGN_IN = /^\/v1\/identities\/([a-z]+)$/;
 const MY_IDENTITY = /^\/v1\/me\/identities\/([a-z]+)$/;
 /** `/v1/pairs/{pair}`, `/pause`, `/pin` or `/gifts/{id}/open` (§13.4). */
+/** `DELETE /v1/me/left/{pair}`: undo leaving a streak (§14's ghosted cat). */
+const LEFT_PATH = /^\/v1\/me\/left\/([^/]+)$/;
 const PAIR_PATH = /^\/v1\/pairs\/([^/]+)(?:\/(pause|pin)|\/gifts\/(g[0-9]{1,9})\/open)?$/;
 const MAX_PAUSE_DAYS = 14;
 const APNS_TOKEN = /^[0-9a-fA-F]{64,200}$/;
@@ -213,7 +215,10 @@ const deleteAccount = asMe(async (_r, env, _d, playerId) => {
 
 type Route = (request: Request, env: Env, deviceId: string) => Promise<Response> | Response;
 
-const getStreaks = asMe(async (_r, env, _d, me) => json(200, { pairs: await myStreaks(env, me, Date.now()) }));
+const getStreaks = asMe(async (_r, env, _d, me) => {
+  const [pairs, left] = await Promise.all([myStreaks(env, me, Date.now()), myLeft(env, me)]);
+  return json(200, { pairs, left });
+});
 
 type PairHandler = (request: Request, env: Env, me: string, pairId: string) => Promise<Response>;
 
@@ -292,6 +297,13 @@ function streakRoute(method: string, pathname: string, notify: boolean): Route |
     if (method === "PUT" && pathname === "/v1/devices/me/widget-push") return setWidgetToken;
     const pounce = pounceRoute(method, pathname);
     if (pounce) return pounce;
+  }
+  const left = method === "DELETE" ? LEFT_PATH.exec(pathname) : null;
+  if (left) {
+    const pairId = left[1] as string;
+    return asMe(async (_r, env, _d, me) =>
+      PAIR_ID.test(pairId) && (await rejoinPair(env, me, pairId, Date.now())) ? noContent() : notFound(),
+    );
   }
   const path = PAIR_PATH.exec(pathname);
   if (!path) return null;

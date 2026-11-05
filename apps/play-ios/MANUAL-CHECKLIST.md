@@ -55,6 +55,27 @@ builds stub them only under `-stub-accounts` and `-age-range`).
 - [ ] In Texas, Utah or Louisiana with a teen account that existed before this build: a parent
       approval request goes out (PermissionKit) and sign-in stays hidden until the parent approves.
 
+## Streaks, looks and Play again (daily habit PR 4)
+
+Needs the server with `STREAKS` on (production once this PR deploys).
+
+- [ ] Two phones, two people, one table: each takes a turn. The second turn stamps both badges at
+      the table (double paw, the numeral to 1, a toy into the badge), and Home's badge shows 1 with
+      both paws lit on each phone.
+- [ ] The next day, before anyone plays: both paws grey, the count still shows; after one turn, one
+      paw lights on that phone only for the person who played (a small stamp).
+- [ ] Reaching 3 as a guest: the cloud with a plus shows on the badge and on the Us screen; a kitten
+      phone never shows it.
+- [ ] A gift at 3 opens on the Us screen (wiggle, burst, the reward on the sunburst) and its rug or
+      back shows up in the table menu's look tray right after.
+- [ ] Change the rug from one phone: the other phone's rug cross-fades at once and the pill with the
+      changer's cat floats down. A second change within 10 s shakes the tile.
+- [ ] Pause 3 days from one phone: the suitcase shows on both phones' badges.
+- [ ] Leave from one phone: it disappears on the other with no push; the leaver's ghosted cat starts
+      a fresh pair at 0.
+- [ ] Play again at game over: the phone that tapped goes to the new table; the other phone's pill
+      bounces and jumps there.
+
 ## Performance and accessibility
 
 - [ ] Instruments idle-CPU check on the oldest iPhone available: the table scene should pause when

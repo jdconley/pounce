@@ -11,12 +11,27 @@ struct TableMenuSheet: View {
     let onHome: () -> Void
     let onClose: () -> Void
 
-    private enum Page { case menu, moving, rules, renaming, names }
+    private enum Page { case menu, moving, rules, renaming, names, look }
 
-    @State private var page = Page.menu
-    @State private var detent: PresentationDetent = Self.menuDetent
+    @State private var page = Self.firstPage
+    @State private var detent: PresentationDetent = Self.firstPage == .look ? Self.lookDetent : Self.menuDetent
+
+    /// `-show-look` (DEBUG, screenshots) opens on the look tray.
+    private static var firstPage: Page {
+        #if DEBUG
+        if CommandLine.arguments.contains("-show-look") { return .look }
+        #endif
+        return .menu
+    }
 
     static let menuDetent = PresentationDetent.height(440)
+    static let lookDetent = PresentationDetent.height(380)
+
+    /// The look tray is offered on a server with looks (streaks on), to a phone seated here.
+    private var canChangeLook: Bool {
+        guard let room = session.store.room, room.look != nil else { return false }
+        return room.seats.contains { $0.yours && $0.kind == .human }
+    }
 
     /// This phone's players can change their names until the game is over.
     private var canRenamePeople: Bool { canMove }
@@ -56,13 +71,16 @@ struct TableMenuSheet: View {
             case .names:
                 RenameSheet(session: session) { show(.menu) }
                     .transition(.move(edge: .trailing).combined(with: .opacity))
+            case .look:
+                LookTraySheet(session: session) { show(.menu) }
+                    .transition(.move(edge: .trailing).combined(with: .opacity))
             case .menu:
                 menu
                     .transition(.move(edge: .leading).combined(with: .opacity))
             }
         }
         .animation(.spring(duration: 0.4, bounce: 0.25).paced, value: page)
-        .presentationDetents(page == .menu ? [Self.menuDetent] : [.large], selection: $detent)
+        .presentationDetents(page == .menu ? [Self.menuDetent] : page == .look ? [Self.lookDetent] : [.large], selection: $detent)
         .presentationDragIndicator(.visible)
         .presentationBackground(Palette.night)
     }
@@ -115,6 +133,13 @@ struct TableMenuSheet: View {
                     }
                     .accessibilityIdentifier("menu.move")
                 }
+                if canChangeLook {
+                    PillButton(icon: ArtName.Habit.iconRug, color: Palette.orange, size: .medium,
+                               accessibilityLabel: "Change the rug and card backs") {
+                        show(.look)
+                    }
+                    .accessibilityIdentifier("menu.look")
+                }
                 PillButton(icon: ArtName.iconHome, color: Palette.sky, size: .medium, accessibilityLabel: "Home") {
                     onHome()
                 }
@@ -128,7 +153,7 @@ struct TableMenuSheet: View {
     }
 
     private func show(_ page: Page) {
-        detent = page == .menu ? Self.menuDetent : .large
+        detent = page == .menu ? Self.menuDetent : page == .look ? Self.lookDetent : .large
         self.page = page
     }
 }

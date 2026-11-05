@@ -32,6 +32,8 @@ final class IPadScreenshotTests: XCTestCase {
                 XCUIDevice.shared.orientation = orientation == "landscape" ? .landscapeLeft : .portrait
                 let app = XCUIApplication()
                 app.launchArguments = Live.arguments(speed: 1) + args
+                // A server of the run's own (never the shared one), when the runner names it.
+                if let url = env["POUNCE_API_BASE_URL"] { app.launchEnvironment["POUNCE_API_BASE_URL"] = url }
                 app.launch()
                 Thread.sleep(forTimeInterval: wait)
                 let png = XCUIScreen.main.screenshot().pngRepresentation

@@ -8,6 +8,8 @@ struct TableCard: View {
     let item: HomeTableItem
     /// Home's `home.table.<code>`; the Archived sheet uses its own.
     var identifier: String?
+    /// Your turn here would keep today for a streak (§10.1): a small paw on the corner.
+    var streakPaw = false
     let action: () -> Void
 
     static let size = CGSize(width: 132, height: 160)
@@ -58,6 +60,17 @@ struct TableCard: View {
                 .padding(.vertical, 8)
             }
             .overlay(shape.strokeBorder(Palette.ink, lineWidth: 5))
+            .overlay(alignment: .topLeading) {
+                if streakPaw {
+                    Image(ArtName.Habit.pawOne)
+                        .resizable().scaledToFit()
+                        .frame(width: 30, height: 30)
+                        .padding(5)
+                        .background(Circle().fill(Palette.violet).overlay(Circle().strokeBorder(Palette.ink, lineWidth: 3)))
+                        .offset(x: -10, y: -10)
+                        .accessibilityHidden(true)
+                }
+            }
             .overlay {
                 if item.yourTurn {
                     shape.strokeBorder(.white.opacity(0.85), lineWidth: 2).padding(6)

@@ -89,6 +89,14 @@ then the build setting (Debug: `http://localhost:8787`, optionally overridden by
   others under `-uitest-reset`), `-show-gear`, `-show-merge` (with `-show-gear`) and
   `-show-household-age` (with `-show-people`).
 
+- Streaks (spec §9, §10): `-demo-streaks` swaps the streak routes for `DemoStreakService`, which plays
+  `DemoFixtures.streaks()` in memory (a long pinned streak with a gift, a win-back, a pause and a
+  ghosted cat), so Home's badge, the Us screen and the look tray's unlocks draw with no server;
+  `-demo-streaks off` is a server with streaks off (every list a 404: no badge, no Us screen).
+  `-show-us` opens on the Us screen and `-show-gift` opens its first gift (screenshots). Demo tables
+  carry the standard look, so the paw menu's look tray and the game over's Play again show; a demo's
+  Play again deals a demo table under `NWCDF`.
+
 ## Play on your phone
 
 Phones reach the dev server over Tailscale, through one extra `tailscale serve` on one https port
@@ -203,6 +211,9 @@ Art is generated, cut out and built into the asset catalog; every name lives in 
    mis-masks. Results go to the gitignored `Art/cut/`.
 3. `Art/tools/build-assets.sh <name>... | --all` writes @2x/@3x art into `Pounce/Resources/Assets.xcassets`
    at the manifest sizes. `Art/tools/placeholders.sh` fills any name without art yet.
+   `Art/tools/habit-placeholders.sh` draws the daily habit placeholders (manifest batch `habit`: condos,
+   toys, card backs, rugs, the gift box, paw badges, streak icons) from the existing art; they carry
+   `_ph` like every placeholder, so real art replaces them by name.
 4. `scripts/check-assets.sh` verifies the catalog and sounds against the manifest.
 
 The art style is "Loud Toy": saturated violet, hot magenta, electric teal, sunny orange, sky blue,

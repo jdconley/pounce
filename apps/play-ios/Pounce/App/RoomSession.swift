@@ -26,6 +26,11 @@ final class RoomSession {
     private(set) var lobbyNope = 0
     /// Set by the app model when the room turned out closed or missing.
     var goneMeaning: NotFoundMeaning?
+    /// Pairs this table's socket reported a streak for (§10.3: their people both sit here).
+    private(set) var streakPairs: Set<String> = []
+    /// The latest stamp a streak view earned here, per pair and person (a serial on each so the
+    /// same stamp plays twice).
+    private(set) var stamps = TableStamps()
 
     /// A seat being moved here from another phone (spec §5.11).
     enum MoveClaim: Equatable {
@@ -42,6 +47,8 @@ final class RoomSession {
     @ObservationIgnored var people: () -> [Person] = { [] }
     @ObservationIgnored var onSnapshot: (RoomView) -> Void = { _ in }
     @ObservationIgnored var onArrive: () -> Void = {}
+    /// A `{t:"streak"}` for one of this device's people: the app's store takes it and says what it earns.
+    @ObservationIgnored var onStreak: (String, String, StreakView) -> StreakStamp? = { _, _, _ in nil }
     @ObservationIgnored var onGone: (RoomPhase) -> Void = { _ in }
 
     @ObservationIgnored private let socket: SuspendableSocket
@@ -68,6 +75,14 @@ final class RoomSession {
         self.intent = intent
         self.socket = socket
         store = RoomStore(code: code, socket: socket)
+        store.onStreak = { [weak self] pair, person, view in self?.streakArrived(pair: pair, person: person, view: view) }
+    }
+
+    private func streakArrived(pair: String, person: String, view: StreakView) {
+        streakPairs.insert(pair)
+        if let kind = onStreak(pair, person, view) {
+            stamps.add(pair: pair, person: person, kind: kind, at: .now)
+        }
     }
 
     var model: TableModel? { store.room.map(TableModel.init(room:)) }

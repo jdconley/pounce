@@ -34,7 +34,15 @@ enum DemoMode: String {
         return DemoMode(rawValue: arguments[i + 1])
     }
 
+    /// The demo's room. Rooms on a `DemoSocket` carry the standard look, as a server with streaks
+    /// on sends (the look tray and Play again show); the replays don't.
     var room: RoomView {
+        var room = baseRoom
+        if room.look == nil, ![.replay, .celebrate, .handoff].contains(self) { room.look = .standard }
+        return room
+    }
+
+    private var baseRoom: RoomView {
         switch self {
         case .lobby: return DemoFixtures.lobby()
         case .lobbyReady:
@@ -251,8 +259,18 @@ actor DemoSocket: RoomSocketing {
         continuation.yield(.message(.snapshot(protocol: PounceKit.protocolVersion, seq: 1, room: room)))
     }
 
+    /// Play again's table in every demo.
+    static let rematchCode = "NWCDF"
+
     func send(_ m: ClientMessage) async throws {
         if hits, case .act(let seat, .hit(let card, let target, let side)) = m { return hit(seat: seat, card: card, target: target, side: side) }
+        if case .setLook(let rug, let back) = m { return setLook(rug: rug, back: back) }
+        if case .rematch = m {
+            try? await Task.sleep(for: Pace.duration(.milliseconds(300)))
+            room.rematch = Self.rematchCode
+            continuation.yield(.message(.rematch(code: Self.rematchCode)))
+            return
+        }
         guard refusing, case .act = m else { return }
         try? await Task.sleep(for: Pace.duration(.milliseconds(400)))
         continuation.yield(.message(.error(.badStep)))
@@ -262,6 +280,17 @@ actor DemoSocket: RoomSocketing {
 
     func stop() async {
         continuation.finish()
+    }
+
+    /// As the server: the look event from this phone's seat, then the snapshot.
+    private func setLook(rug: String?, back: String?) {
+        let now = room.look ?? .standard
+        let look = Look(rug: rug ?? now.rug, back: back ?? now.back)
+        room.look = look
+        seq += 1
+        let seat = room.seats.firstIndex { $0.yours } ?? 0
+        continuation.yield(.message(.event(seq: seq, event: .look(seat: seat, look: look))))
+        continuation.yield(.message(.snapshot(protocol: PounceKit.protocolVersion, seq: seq, room: room)))
     }
 
     private func hit(seat: Seat, card: CardID, target: HitTarget, side: HitSide?) {

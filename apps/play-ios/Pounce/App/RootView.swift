@@ -27,6 +27,7 @@ struct RootView: View {
         case .age: "age"
         case .pickCat: "pickCat"
         case .home: "home"
+        case .us: "us"
         case .join: "join"
         case .room(let code, _): "room-\(code)"
         }
@@ -40,6 +41,8 @@ struct RootView: View {
             PickCatView()
         case .home:
             HomeView()
+        case .us:
+            UsView()
         case .join:
             JoinView()
         case .room(let code, let intent):
