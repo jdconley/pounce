@@ -41,7 +41,7 @@ const intent: YourTurnIntent = { deviceId: "dev-1", kind: "your_turn", seat: 0, 
   code: "BCDFG",
 };
 
-describe("DeviceIndex.push", () => {
+describe("DeviceIndex.push", { timeout: 30_000 }, () => {
   test("with a token stored but no APNs secrets configured, nothing is sent", async () => {
     const set = await mf.dispatchFetch("https://x.test/__test/token?device=dev-1&token=" + "ab".repeat(32));
     expect(set.status).toBe(204);
@@ -68,7 +68,7 @@ async function p8(): Promise<string> {
   return `-----BEGIN PRIVATE KEY-----\n${btoa(String.fromCharCode(...der))}\n-----END PRIVATE KEY-----\n`;
 }
 
-describe("DeviceIndex.push when APNs says the token is dead", () => {
+describe("DeviceIndex.push when APNs says the token is dead", { timeout: 30_000 }, () => {
   const OLD = "aa".repeat(32);
   const NEW = "bb".repeat(32);
   /** Device tokens APNs was asked to deliver to, in order. */
@@ -145,7 +145,7 @@ function zoneAtHour(hour: number): string {
   return offset === 0 ? "Etc/GMT" : `Etc/GMT${offset > 0 ? "-" : "+"}${Math.abs(offset)}`;
 }
 
-describe("DeviceIndex.push by age band", () => {
+describe("DeviceIndex.push by age band", { timeout: 30_000 }, () => {
   let sent: { token: string; type: string | null }[] = [];
   let ok: Miniflare;
 

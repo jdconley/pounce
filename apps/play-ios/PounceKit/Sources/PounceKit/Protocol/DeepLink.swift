@@ -1,9 +1,11 @@
 import Foundation
 
-/// A parsed share or move link.
+/// A parsed share, move or pounce link.
 public enum DeepLink: Equatable, Sendable {
     case join(code: String)
     case move(code: String, moveCode: String)
+    /// A Messages pounce (§12.4): `https://play.conleychaos.com/p/<token>`.
+    case pounce(token: String)
 
     private static let host = "play.conleychaos.com"
     private static let devScheme = "pounce-dev"
@@ -24,7 +26,25 @@ public enum DeepLink: Equatable, Sendable {
         return parts.url!
     }
 
-    /// Accepts `https://play.conleychaos.com/j/<CODE>[?move=<M>]`, and
+    /// The link a Messages pounce sends: `https://play.conleychaos.com/p/<TOKEN>`.
+    public static func pounceURL(token: String) -> URL {
+        var parts = URLComponents()
+        parts.scheme = "https"
+        parts.host = host
+        parts.path = "/p/\(token)"
+        return parts.url!
+    }
+
+    /// 16 random bytes, base64url (play-api `LINK_TOKEN`).
+    public static func isPounceToken(_ s: String) -> Bool {
+        s.utf8.count == 22 && s.unicodeScalars.allSatisfy { tokenScalars.contains($0) }
+    }
+
+    private static let tokenScalars = CharacterSet(
+        charactersIn: "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789_-")
+
+    /// Accepts `https://play.conleychaos.com/p/<TOKEN>` (and `pounce-dev://p/<TOKEN>` in Debug),
+    /// `https://play.conleychaos.com/j/<CODE>[?move=<M>]`, and
     /// `pounce-dev://j/<CODE>[?move=<M>]` only when `allowDevScheme` is true
     /// (Debug builds). A present but malformed `move` parameter rejects the
     /// whole link rather than silently downgrading it to a join.
@@ -33,20 +53,26 @@ public enum DeepLink: Equatable, Sendable {
               let scheme = parts.scheme?.lowercased()
         else { return nil }
 
+        let kind: String
         let code: String
         switch scheme {
         case "https":
             guard parts.host?.lowercased() == host, parts.port == nil else { return nil }
             let path = parts.path.split(separator: "/", omittingEmptySubsequences: false).map(String.init)
-            guard path.count == 3, path[0].isEmpty, path[1] == "j" else { return nil }
+            guard path.count == 3, path[0].isEmpty, path[1] == "j" || path[1] == "p" else { return nil }
+            kind = path[1]
             code = path[2]
         case devScheme where allowDevScheme:
-            guard parts.host == "j" else { return nil }
+            guard let h = parts.host, h == "j" || h == "p" else { return nil }
             let path = parts.path.split(separator: "/", omittingEmptySubsequences: false).map(String.init)
             guard path.count == 2, path[0].isEmpty else { return nil }
+            kind = h
             code = path[1]
         default:
             return nil
+        }
+        if kind == "p" {
+            return isPounceToken(code) && (parts.queryItems ?? []).isEmpty ? .pounce(token: code) : nil
         }
         guard RoomCode.isValid(code) else { return nil }
 

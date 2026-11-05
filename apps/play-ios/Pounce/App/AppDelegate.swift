@@ -10,6 +10,7 @@ final class AppDelegate: NSObject, UIApplicationDelegate {
 
     weak var model: AppModel? {
         didSet {
+            guard model !== oldValue else { return }
             model?.push = push
             push.model = model
         }
@@ -21,8 +22,11 @@ final class AppDelegate: NSObject, UIApplicationDelegate {
     ) -> Bool {
         // Set before launch finishes, so a tap that cold-started the app is delivered here.
         UNUserNotificationCenter.current().delegate = push
+        push.registerCategories()
         Sound.shared.preload()
-        push.registerEveryLaunch()
+        // The one app model, attached now so a notification button that launched the app in the
+        // background (a pounce's In a bit) can answer before any scene connects.
+        model = AppModel.shared
         // A reminder left from before the app was terminated must not fire now that it's open.
         push.cancelAllTurnReminders()
         return true

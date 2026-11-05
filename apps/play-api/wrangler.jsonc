@@ -17,7 +17,10 @@
     "SIWA_CLIENT_ID": "com.conleychaos.play",
     // Shared streaks, table looks and Play again (daily habit §15 row 3), on since the app's
     // streak screens shipped (row 4).
-    "STREAKS": "on"
+    "STREAKS": "on",
+    // Reminders, status pushes, Pounce and Messages links (daily habit §15 row 5), on since the
+    // app's notification settings and Pounce sheet shipped (row 5, app half). Needs STREAKS.
+    "NOTIFY": "on"
   },
   "durable_objects": {
     "bindings": [

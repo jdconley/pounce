@@ -205,4 +205,50 @@ put icon-weeks "$TMP/weeks.png"
 ic -fill none -stroke "$INK" -strokewidth 46 -draw "arc 40,40 212,212 -30,250" -stroke "$T" -strokewidth 26 -draw "arc 40,40 212,212 -30,250" \
   -fill "$T" -stroke "$INK" -strokewidth 12 -draw "polygon 168,60 240,60 212,130" "PNG32:$TMP/replay.png"
 put icon-replay "$TMP/replay.png"
+
+echo "pounce and notification settings (PR 5)"
+ZZZ="$(src icon-zzz)"; PLUS="$(src icon-plus)"; DICE="$(src icon-dice)"
+# The resting bell: tilted over on a violet disc, with the zzz.
+magick -size 720x720 xc:none -fill "$V" -stroke "$INK" -strokewidth 24 -draw "circle 360,360 360,40" \
+  \( "$BELL" -resize 400x400 -background none -rotate -28 \) -gravity center -geometry +0+30 -composite \
+  \( "$ZZZ" -resize 230x230 \) -gravity northeast -geometry +40+40 -composite "PNG32:$TMP/bell-asleep.png"
+put pounce-bell-asleep "$TMP/bell-asleep.png"
+# New game: a big lime plus on a rug. You pick: the dice on a sky rug.
+magick "$RUG" -resize 480x480 \( -size 300x300 xc:none -fill "$L" -stroke "$INK" -strokewidth 18 -draw "circle 150,150 150,12" \
+  \( "$PLUS" -resize 210x210 \) -gravity center -composite \) -gravity center -composite "PNG32:$TMP/new-game.png"
+put pounce-new-game "$TMP/new-game.png"
+magick "$RUG" -resize 480x480 -modulate 100,130,40 \( "$DICE" -resize 300x300 \) -gravity center -composite "PNG32:$TMP/pick.png"
+put pounce-pick "$TMP/pick.png"
+# A clock face (In a bit; the reminder dials).
+ic -fill "$O" -draw "circle 126,126 126,14" -fill "$W" -draw "circle 126,126 126,46" \
+  -strokewidth 18 -draw "line 126,126 126,70" -draw "line 126,126 170,146" -fill "$M" -strokewidth 8 -draw "circle 126,126 126,112" \
+  "PNG32:$TMP/clock.png"
+put icon-clock "$TMP/clock.png"
+# Quiet hours: a gold moon (start) and a gold sun (end).
+ic -fill "$G" -draw "circle 126,126 126,16" -fill "#2A0F5C" -strokewidth 0 -draw "circle 172,96 172,24" "PNG32:$TMP/moon.png"
+put icon-moon "$TMP/moon.png"
+rays=(); for a in 0 45 90 135 180 225 270 315; do
+  rays+=(-draw "$(awk -v a="$a" 'BEGIN{r=a*3.14159/180; printf "line %d,%d %d,%d", 126+cos(r)*78, 126+sin(r)*78, 126+cos(r)*118, 126+sin(r)*118}')")
+done
+ic -stroke "$O" -strokewidth 22 "${rays[@]}" -stroke "$INK" -strokewidth 14 -fill "$G" -draw "circle 126,126 126,58" "PNG32:$TMP/sun.png"
+put icon-sun "$TMP/sun.png"
+# Auto (learned timing): a sky clock with a sparkle.
+ic -fill "$S" -draw "circle 126,140 126,30" -fill "$W" -strokewidth 16 -draw "line 126,140 126,86" -draw "line 126,140 166,160" \
+  \( "$SPARK" -resize 120x120 \) -gravity northeast -composite "PNG32:$TMP/auto.png"
+put icon-auto "$TMP/auto.png"
+# Weekdays: a magenta calendar with five dots; weekends: a teal one with two big gold dots.
+cal() { # cal <fill> <dots...as -draw args>
+  local fill="$1"; shift
+  ic -fill "$fill" -draw "roundrectangle 20,40 232,228 26,26" -fill "$W" -draw "roundrectangle 20,40 232,96 26,26" \
+    -fill "$INK" -draw "roundrectangle 64,16 88,64 8,8" -draw "roundrectangle 164,16 188,64 8,8" "$@"
+}
+cal "$M" -fill "$W" -strokewidth 8 -draw "circle 56,156 56,138" -draw "circle 96,156 96,138" -draw "circle 136,156 136,138" \
+  -draw "circle 176,156 176,138" -draw "circle 216,156 216,138" "PNG32:$TMP/weekday.png"
+put icon-weekday "$TMP/weekday.png"
+cal "$T" -fill "$G" -strokewidth 10 -draw "circle 86,162 86,128" -draw "circle 166,162 166,128" "PNG32:$TMP/weekend.png"
+put icon-weekend "$TMP/weekend.png"
+# Last chance: a moon with an orange paw in front of it.
+ic -fill "$V" -draw "circle 126,126 126,14" -fill "$G" -draw "circle 110,104 110,40" -fill "$V" -strokewidth 0 -draw "circle 146,80 146,30" \
+  -stroke "$INK" -strokewidth 10 -fill "$O" -draw "$(paw 150 168 120)" "PNG32:$TMP/last-chance.png"
+put icon-last-chance "$TMP/last-chance.png"
 echo "habit placeholders done"

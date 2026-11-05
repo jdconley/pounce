@@ -98,6 +98,8 @@ public struct StreakView: Codable, Equatable, Sendable, Identifiable {
     public var theirMove: [String]
     /// Only in `GET /v1/me/streaks`: the person's pinned top pair.
     public var pinned: Bool
+    /// Pounces between the two (§12.4): mine on them, and theirs waiting on me.
+    public var pounce: PounceState
 
     public var id: String { pair }
 
@@ -106,7 +108,7 @@ public struct StreakView: Codable, Equatable, Sendable, Identifiable {
         naps: Int = 0, winback: Winback? = nil, pausedUntil: String? = nil, best: Int = 0, lifetimeKept: Int = 0,
         perfectWeeks: Int = 0, week: [WeekDot] = [], next: Int = 3, condoStage: Int = 0, toys: [String] = [],
         todayToy: String? = nil, unlocked: Unlocks = Unlocks(backs: [], rugs: []), gifts: [Gift] = [],
-        myMove: [String] = [], theirMove: [String] = [], pinned: Bool = false
+        myMove: [String] = [], theirMove: [String] = [], pinned: Bool = false, pounce: PounceState = .none
     ) {
         self.pair = pair
         self.partner = partner
@@ -130,11 +132,12 @@ public struct StreakView: Codable, Equatable, Sendable, Identifiable {
         self.myMove = myMove
         self.theirMove = theirMove
         self.pinned = pinned
+        self.pounce = pounce
     }
 
     private enum CodingKeys: String, CodingKey {
         case pair, partner, count, me, them, kept, naps, winback, pausedUntil, best, lifetimeKept, perfectWeeks
-        case week, next, condoStage, toys, todayToy, unlocked, gifts, myMove, theirMove, pinned
+        case week, next, condoStage, toys, todayToy, unlocked, gifts, myMove, theirMove, pinned, pounce
     }
 
     public init(from decoder: any Decoder) throws {
@@ -161,6 +164,7 @@ public struct StreakView: Codable, Equatable, Sendable, Identifiable {
         myMove = try c.decodeIfPresent([String].self, forKey: .myMove) ?? []
         theirMove = try c.decodeIfPresent([String].self, forKey: .theirMove) ?? []
         pinned = try c.decodeIfPresent(Bool.self, forKey: .pinned) ?? false
+        pounce = (try? c.decodeIfPresent(PounceState.self, forKey: .pounce)) ?? .none
     }
 }
 

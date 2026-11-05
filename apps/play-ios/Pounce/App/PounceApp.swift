@@ -4,7 +4,7 @@ import SwiftUI
 @main
 struct PounceApp: App {
     @UIApplicationDelegateAdaptor(AppDelegate.self) private var delegate
-    @State private var model = AppModel.makeDefault()
+    @State private var model = AppModel.shared
 
     var body: some Scene {
         WindowGroup {
