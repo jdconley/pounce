@@ -342,7 +342,7 @@ export class GameRoom extends DurableObject<Env> {
     });
     // A live table's held-back move goes quietly, to that device only (§11.3).
     const to = only ? { ...profile, devices: [only] } : profile;
-    await deliverToPlayer(this.env, to, push, only ? "passive" : g.level, intent.code);
+    await deliverToPlayer(this.env, to, push, only ? "passive" : g.level, intent.code, this.otherHumans(intent.playerId));
   }
 
   /**
@@ -546,7 +546,19 @@ export class GameRoom extends DurableObject<Env> {
       intent.kind === "your_turn"
         ? new Set(intent.playerId ? playerDevices : [intent.deviceId])
         : new Set(playerDevices.filter((d) => d !== intent.exceptDeviceId));
-    await Promise.all([...targets].map((deviceId) => this.index(deviceId).push(intent).catch(() => undefined)));
+    // A consented kitten's device takes a dismiss (no alert); "your move" comes the rich way (plan decision 16).
+    const gate = intent.kind === "dismiss" ? { recipient: intent.playerId, senders: [] } : undefined;
+    await Promise.all([...targets].map((deviceId) => this.index(deviceId).push(intent, gate).catch(() => undefined)));
+  }
+
+  /**
+   * The people behind a "your move" for `playerId`: every other human seat's
+   * player, null for a human seat with no player. A consented kitten's device
+   * takes it only when they're all approved (parent consent, plan decision 16).
+   */
+  private otherHumans(playerId: string): (string | null)[] {
+    const seats = this.core?.state.seats ?? [];
+    return seats.flatMap((s) => (s.kind !== "human" || s.playerId === playerId ? [] : [s.playerId ?? null]));
   }
 
   private async updateTables(core: RoomCore): Promise<void> {

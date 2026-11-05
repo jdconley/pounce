@@ -34,6 +34,14 @@ describe("privacyPage", () => {
     expect(html).toContain("under 13");
     expect(html).toContain("parent");
     expect(html).toContain("no push notifications");
-    expect(html).not.toMatch(/kitten/i);
+    // The app's word for a child stays out of the policy's prose (the notice's URL has it).
+    expect(html.replace("/privacy/kitten-notice", "")).not.toMatch(/kitten/i);
+  });
+
+  test("says what parental consent adds, and how it ends", async () => {
+    const html = await privacyPage().text();
+    for (const s of ["text plus", "push token", "mobile number", "Twilio", "STOP", "turns 13", 'href="/privacy/kitten-notice"']) {
+      expect(html).toContain(s);
+    }
   });
 });

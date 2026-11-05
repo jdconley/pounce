@@ -20,7 +20,7 @@ const HTML = `<!doctype html>
 <body>
 <main>
 <h1>Pounce privacy policy</h1>
-<p class="updated">Last updated 4 November 2026</p>
+<p class="updated">Last updated 5 November 2026</p>
 <p>Pounce is a card game for couples and families, made by Conley Chaos LLC ("we"). This page says what the app and its server keep, why, for how long, and how to make it go away. Pounce has no ads, no analytics, no tracking and no third-party SDKs, and it never sells or shares your data.</p>
 
 <h2>What we keep</h2>
@@ -34,7 +34,7 @@ const HTML = `<!doctype html>
 <li><strong>Sign in with Apple</strong>, if you use it: a one-way hash of the id Apple gives us, and, when our revocation key is set up, Apple's refresh token, kept only so we can revoke it when you delete your account. We ask Apple for no email and no name.</li>
 <li><strong>Streaks</strong> (coming soon): the days you and another player both played, kept for 120 days, plus lifetime counts and rewards, and a count of the times of day you usually start playing.</li>
 </ul>
-<p>We never collect contacts, location, ad identifiers, phone numbers or messages. Invites go through the share sheet; Pounce never reads your contacts.</p>
+<p>We never collect contacts, location, ad identifiers or messages, and no phone numbers except a parent's, given to us to consent for a child (below). Invites go through the share sheet; Pounce never reads your contacts.</p>
 
 <h2>Who sees what</h2>
 <ul>
@@ -70,6 +70,15 @@ const HTML = `<!doctype html>
 <li>game progress such as streaks and rewards.</li>
 </ul>
 <p>For a player under 13 there are no push notifications from our server, no sign-in, no invite links sent out, and no record of play times. The only reminders are ones the phone schedules for itself, and they start off.</p>
+<h2>With a parent's consent</h2>
+<p>A parent or guardian who is signed in to Pounce can allow notifications on a child's own device. The child's device shows a six-digit code; the parent enters it on their own device, reads our <a href="/privacy/kitten-notice">notice to parents</a>, and confirms by text message ("text plus": a text with a link to confirm, and a second text a day or so later saying how to take it back). With that consent we also keep:</p>
+<ul>
+<li>the child's device's push token, used only to tell it when it's the child's move at a table where everyone else is approved, and when an approved person asks the child to play;</li>
+<li>which of the people the child plays with the parent approved (or that Apple's Screen Time Communication Limits approved);</li>
+<li>the parent's mobile number, only while consent lasts, or 7 days if it is never confirmed; texts go through Twilio, our text message provider;</li>
+<li>Apple's app transaction id for the child's copy of Pounce, so that a parent withdrawing approval through Apple ends this consent too.</li>
+</ul>
+<p>The parent can take it back at any time: in the app, through the link in the second text, by replying STOP, or through Apple. That stops every notification at once and deletes the push token and the number. It also ends when the child turns 13 or the child's player is deleted.</p>
 <p>A parent may ask to review or delete a child's information, or to stop any further collection, by writing to <a href="mailto:privacy@conleychaos.com">privacy@conleychaos.com</a>. A child's player that no device has opened for 90 days is deleted from our server automatically, for example after the app is removed from the child's device.</p>
 <p>Operator: Conley Chaos LLC, <a href="mailto:privacy@conleychaos.com">privacy@conleychaos.com</a>.</p>
 </section>

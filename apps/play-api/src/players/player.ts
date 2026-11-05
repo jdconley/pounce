@@ -1,5 +1,6 @@
 import { DurableObject } from "cloudflare:workers";
 
+import { endKitten } from "../kittens/kittens";
 import { forgetLinks } from "../links/links";
 import { deliverToPlayer, type PushProfile } from "../notify/deliver";
 import { gate } from "../notify/policy";
@@ -146,8 +147,9 @@ export class Player extends DurableObject<Env> {
     timeZone?: string;
     at: number;
     now: number;
-  }): Promise<void> {
-    if (this.getMeta("forward_to") !== null) return;
+  }): Promise<{ previousBand: AgeBand | null }> {
+    const previousBand = this.getMeta("age_band") as AgeBand | null;
+    if (this.getMeta("forward_to") !== null) return { previousBand };
     this.setMeta("id", t.playerId);
     const nameAt = Number(this.getMeta("name_at") ?? -1);
     if (!this.exists() || t.at > nameAt) {
@@ -160,6 +162,7 @@ export class Player extends DurableObject<Env> {
     this.setMeta("last_touch", t.now);
     this.attachDevice(t.deviceId, t.now);
     await this.arm(t.now);
+    return { previousBand };
   }
 
   meta(): PlayerMeta | null {
@@ -872,6 +875,8 @@ export class Player extends DurableObject<Env> {
       ]);
       await leaveAllPairs(env, id, this.pairList());
       await forgetLinks(env, id);
+      // A kitten's consent record goes with it (parent consent, plan decision 10).
+      await endKitten(env, id);
     }
     await this.destroy();
   }

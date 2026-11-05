@@ -1,3 +1,5 @@
+import type { Consents } from "./kittens/consents";
+import type { KittenIndex } from "./kittens/kitten-index";
 import type { Links } from "./links/links";
 import type { Identities } from "./players/identities";
 import type { Player } from "./players/player";
@@ -15,6 +17,10 @@ export interface Env {
   PAIRS: DurableObjectNamespace<Pair>;
   /** One instance, named `LINKS_NAME`: pounce ids and Messages link tokens (§13.2). */
   LINKS: DurableObjectNamespace<Links>;
+  /** One instance per kitten player: the parent-consent record (consent design §3). */
+  CONSENTS: DurableObjectNamespace<Consents>;
+  /** One instance, named `KITTENS_NAME`: link codes, kitten ids, parents, text tokens, phone hashes, app transactions. */
+  KITTENS: DurableObjectNamespace<KittenIndex>;
   /**
    * Streaks, table looks and Play again (daily habit PR 3) when "on".
    * wrangler.jsonc turns it on in production (and for `wrangler dev`) since
@@ -32,6 +38,21 @@ export interface Env {
    * too. wrangler.jsonc turns it on; it's a kill switch for every Live Activity push.
    */
   LIVE?: string;
+  /**
+   * Parent consent for kittens (daily habit PR 9) when "on", and only with `NOTIFY` on too.
+   * wrangler.jsonc turns it on (consent design D4). Off, a kitten's device gets nothing, as before.
+   */
+  CONSENT?: string;
+  /**
+   * Twilio, for text plus (consent design D1). Secrets, optional: texting needs all five, so
+   * without them consent can't start and nothing is sent. The Auth Token checks STOP webhooks'
+   * `X-Twilio-Signature` (plan decision 24); the API key sends.
+   */
+  TWILIO_ACCOUNT_SID?: string;
+  TWILIO_API_KEY_SID?: string;
+  TWILIO_API_KEY_SECRET?: string;
+  TWILIO_MESSAGING_SERVICE_SID?: string;
+  TWILIO_AUTH_TOKEN?: string;
   /** HMAC key for device tokens. A secret; absent until configured. */
   TOKEN_SECRET?: string;
   /** Public TestFlight link for the share page. Optional; the page omits the link when unset. */

@@ -8,8 +8,8 @@
   "routes": [
     { "pattern": "play.conleychaos.com", "custom_domain": true }
   ],
-  // TOKEN_SECRET, APNS_KEY_P8, APNS_KEY_ID, SIWA_KEY_P8 and SIWA_KEY_ID are
-  // secrets set by the deploy pipeline, never listed here.
+  // TOKEN_SECRET, APNS_KEY_P8, APNS_KEY_ID, SIWA_KEY_P8, SIWA_KEY_ID and the five
+  // TWILIO_* secrets are set by the deploy pipeline, never listed here.
   "vars": {
     "APNS_TEAM_ID": "B222J9J7B8",
     "APNS_TOPIC": "com.conleychaos.play",
@@ -24,7 +24,11 @@
     // The live table, a Live Activity (daily habit §15 row 7). Needs NOTIFY. On with the PR that
     // ships the app half: nothing is sent until a device uploads a push-to-start token, and
     // turning it off stops every Live Activity push without an app build.
-    "LIVE": "on"
+    "LIVE": "on",
+    // Parent consent for kittens (daily habit §15 row 9). Needs NOTIFY. On at merge (consent
+    // design D4): a kitten's device still gets nothing until a parent links it and confirms by
+    // text, and texting needs the Twilio secrets.
+    "CONSENT": "on"
   },
   "durable_objects": {
     "bindings": [
@@ -33,14 +37,17 @@
       { "name": "PLAYERS", "class_name": "Player" },
       { "name": "IDENTITIES", "class_name": "Identities" },
       { "name": "PAIRS", "class_name": "Pair" },
-      { "name": "LINKS", "class_name": "Links" }
+      { "name": "LINKS", "class_name": "Links" },
+      { "name": "CONSENTS", "class_name": "Consents" },
+      { "name": "KITTENS", "class_name": "KittenIndex" }
     ]
   },
   "migrations": [
     { "tag": "v1", "new_sqlite_classes": ["GameRoom", "DeviceIndex"] },
     { "tag": "v2", "new_sqlite_classes": ["Player", "Identities"] },
     { "tag": "v3", "new_sqlite_classes": ["Pair"] },
-    { "tag": "v4", "new_sqlite_classes": ["Links"] }
+    { "tag": "v4", "new_sqlite_classes": ["Links"] },
+    { "tag": "v5", "new_sqlite_classes": ["Consents", "KittenIndex"] }
   ],
   // Invocation logs would record each request URL, which carries room codes.
   "observability": { "enabled": true, "logs": { "invocation_logs": false } }

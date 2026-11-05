@@ -17,7 +17,7 @@ Draft for JD Conley (Conley Chaos LLC) to review, 4 November 2026. Written to me
 | Name and cat | `Player` DO meta; seats in `GameRoom` | Shown to people at the same table | With the player; seats with the room | Account deletion; guest expiry; room close. |
 | Age band (`kitten`, `teen`, `adult`) | `Player` and `DeviceIndex` | Age limits and safety defaults (§14.1) | With the player | With the player. The birth year typed on the age keypad is never stored: the app turns it into a band on the device and discards it at once (FTC policy statement, February 2026). |
 | Time zone | `DeviceIndex` | The day boundary for streaks | While the device is in use | Replaced by every profile upload; removed with the device record. |
-| APNs push token | `DeviceIndex` | "Your move" notifications | Until APNs reports it dead or the app uploads a new one | Forgotten on a 410 or `BadDeviceToken`. Never collected for a kitten. |
+| APNs push token | `DeviceIndex` | "Your move" notifications | Until APNs reports it dead or the app uploads a new one | Forgotten on a 410 or `BadDeviceToken`. For a kitten, kept only with a parent's consent (PR 9), and deleted from all of the kitten's devices the moment consent ends. |
 | Sign in with Apple subject hash | `Identities`, `Player` | Finds the player on sign-in | With the identity | Unlink, sign-out of the last device, or account deletion. |
 | Sign in with Apple refresh token | `Player.identities.secret` (only when `PLAY_API_SIWA_KEY_P8` is set) | Revocation on deletion, as Apple requires | With the identity | Revoked with Apple, then deleted, on unlink and on account deletion. |
 | Synced state: settings, tutorial flags, archive | `Player.state` | Same settings and tables on every device | With the player | Account deletion; guest expiry. |
@@ -27,6 +27,11 @@ Draft for JD Conley (Conley Chaos LLC) to review, 4 November 2026. Written to me
 | Play-time histogram (PR 5) | `Player.playtime` | Learning reminder times | With the player | Never collected for a kitten; account deletion. |
 | Pounces (PR 5) | `Player.pounces` | "Come play with me" | 7 days | Alarm deletes them. |
 | Pounce links (PR 5) | `Links` DO | Messages invites | 24 hours, or once used | Deleted on use or expiry. |
+| Parent's mobile number (PR 9) | `Consents` DO (per kitten), its SHA-256 hash in `KittenIndex` | Verifiable parental consent by text plus, and STOP replies | While consent lasts; 7 days if never confirmed (16 CFR 312.5(c)(1)) | Deleted on revocation (in the app, the revoke link, STOP, `RESCIND_CONSENT`), on the 7-day expiry, when the child turns 13 or is deleted, and when the consenting parent unlinks or deletes their account. |
+| Consent record: linked parents, state, approved people (PR 9) | `Consents` DO | Which parents may manage a kitten, and who may reach it | While at least one parent stays linked and the kitten is under 13 | Deleted when the last parent unlinks, the kitten turns 13, or the kitten's player is deleted or expires. Revocation keeps parents and approvals (no contact information) so consent can be given again. |
+| Link codes (PR 9) | `KittenIndex` | Linking a kitten's device to a parent | 10 minutes, or once used | Alarm and use delete them. Failed tries: 10 minutes. |
+| Text link tokens (PR 9) | `KittenIndex` | The confirm and revoke links in the texts | Confirm: 7 days or once used. Revoke: while consent lasts | Deleted on use, expiry or revocation. |
+| App transaction id (PR 9) | `Consents`, `KittenIndex` | Matching Apple's `RESCIND_CONSENT` to the kitten | With the consent record | Deleted with the record. |
 
 ## Expiry rules
 

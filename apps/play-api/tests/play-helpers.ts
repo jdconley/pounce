@@ -20,6 +20,17 @@ export type Device = { deviceId: string; token: string };
 export type Person = { id: string; name: string; cat: number; key: string };
 /** One request APNs was asked to deliver. */
 export type Sent = { token: string; headers: Record<string, string>; body: Record<string, unknown> };
+/** One text Twilio was asked to send (fake). */
+export type Text = { to: string; body: string; auth: string | null; service: string | null };
+
+/** Fixture Twilio secrets: never real ones. */
+export const TWILIO = {
+  TWILIO_ACCOUNT_SID: "ACtest0000000000000000000000000000",
+  TWILIO_API_KEY_SID: "SKtest0000000000000000000000000000",
+  TWILIO_API_KEY_SECRET: "fixture-api-key-secret",
+  TWILIO_MESSAGING_SERVICE_SID: "MGtest0000000000000000000000000000",
+  TWILIO_AUTH_TOKEN: "fixture-auth-token",
+};
 
 export async function bundle(entry: string): Promise<string> {
   const built = await build({
@@ -43,7 +54,22 @@ export async function p8(): Promise<string> {
 /** A worker whose APNs is a recorder: every push lands in `sent`. */
 export async function worker(
   script: string,
-  options: { streaks?: boolean; notify?: boolean; live?: boolean; persist?: string; links?: boolean; sent: Sent[] },
+  options: {
+    streaks?: boolean;
+    notify?: boolean;
+    live?: boolean;
+    persist?: string;
+    links?: boolean;
+    sent: Sent[];
+    /** Parent consent's DOs, with `CONSENT` on unless `consentFlag` is false. */
+    consent?: boolean;
+    consentFlag?: boolean;
+    /** The fake Twilio's outbox; set the secrets unless `twilio` is false. */
+    texts?: Text[];
+    twilio?: boolean;
+    /** Numbers the fake Twilio says replied STOP (error 21610). */
+    optedOut?: Set<string>;
+  },
 ): Promise<Miniflare> {
   return new Miniflare({
     modules: true,
@@ -56,6 +82,9 @@ export async function worker(
       IDENTITIES: { className: "Identities", useSQLite: true },
       PAIRS: { className: "Pair", useSQLite: true },
       ...(options.links ? { LINKS: { className: "Links", useSQLite: true } } : {}),
+      ...(options.consent
+        ? { CONSENTS: { className: "Consents", useSQLite: true }, KITTENS: { className: "KittenIndex", useSQLite: true } }
+        : {}),
     },
     bindings: {
       TOKEN_SECRET: SECRET,
@@ -69,6 +98,8 @@ export async function worker(
       ...(options.streaks === false ? {} : { STREAKS: "on" }),
       ...(options.notify === false ? {} : { NOTIFY: "on" }),
       ...(options.live ? { LIVE: "on" } : {}),
+      ...(options.consent && options.consentFlag !== false ? { CONSENT: "on" } : {}),
+      ...(options.consent && options.twilio !== false ? TWILIO : {}),
     },
     ...(options.persist ? { durableObjectsPersist: options.persist } : {}),
     outboundService: async (request: MiniflareRequest) => {
@@ -82,6 +113,13 @@ export async function worker(
           body: (await request.json()) as Record<string, unknown>,
         });
         return new MiniflareResponse(null, { status: 200 });
+      }
+      if (new URL(request.url).host === "api.twilio.com") {
+        const form = new URLSearchParams(await request.text());
+        const to = form.get("To") ?? "";
+        if (options.optedOut?.has(to)) return new MiniflareResponse(JSON.stringify({ code: 21610 }), { status: 400 });
+        options.texts?.push({ to, body: form.get("Body") ?? "", auth: request.headers.get("authorization"), service: form.get("MessagingServiceSid") });
+        return new MiniflareResponse(JSON.stringify({ sid: "SMtest" }), { status: 201 });
       }
       return new MiniflareResponse(null, { status: 599 });
     },
