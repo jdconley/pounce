@@ -1,6 +1,6 @@
 import { issueDeviceToken, verifyDeviceToken } from "./auth";
 import { devSpeed } from "./env";
-import { appSiteAssociation, ogImage, sharePage } from "./http/links";
+import { appSiteAssociation, ogImage, pouncePage, sharePage } from "./http/links";
 import { privacyPage } from "./http/privacy";
 import {
   deleteMe,
@@ -17,14 +17,16 @@ import {
 } from "./players/accounts";
 import { PERSON_ID } from "./players/ids";
 import { parseProfile, parseStatePatch } from "./players/parse";
+import { answerPounce, createPounce, linkPounce } from "./pounce/pounces";
 import { newRoomCode, ROOM_CODE } from "./room/codes";
 import { DEVICE_HEADER, PLAYER_HEADER } from "./room/game-room";
 import { parseRoomName } from "./room/names";
 import { creatorLook, isMine, leavePair, myStreaks, PAIR_ID, pairStub, syncPairPeople } from "./streaks/pairs";
-import { streaksOn } from "./streaks/profile";
+import { notifyOn, streaksOn } from "./streaks/profile";
 
 import type { Env } from "./env";
 
+export { Links } from "./links/links";
 export { Identities } from "./players/identities";
 export { Player } from "./players/player";
 export { DeviceIndex } from "./room/device-index";
@@ -32,6 +34,9 @@ export { GameRoom } from "./room/game-room";
 export { Pair } from "./streaks/pair";
 
 const SHARE_PATH = /^\/j\/([^/]+)$/;
+const POUNCE_PAGE = /^\/p\/([^/]+)$/;
+const POUNCE_ANSWER = /^\/v1\/pounces\/([^/]+)\/answer$/;
+const POUNCE_LINK = /^\/v1\/pounces\/links\/([^/]+)$/;
 const ROOM_WS = /^\/v1\/rooms\/([^/]+)\/ws$/;
 const SIGN_IN = /^\/v1\/identities\/([a-z]+)$/;
 const MY_IDENTITY = /^\/v1\/me\/identities\/([a-z]+)$/;
@@ -243,9 +248,51 @@ function pairHandler(method: string, action: string | undefined, gift: string | 
   return null;
 }
 
+/** The widget extension's WidgetKit push token (§11.2). */
+async function setWidgetToken(request: Request, env: Env, deviceId: string): Promise<Response> {
+  const body = await readObject(request);
+  const token = body?.token;
+  if (!body || Object.keys(body).length !== 1 || typeof token !== "string" || !APNS_TOKEN.test(token)) return badRequest();
+  await env.DEVICES.get(env.DEVICES.idFromName(deviceId)).setWidgetToken(token);
+  return noContent();
+}
+
+const personParam = (request: Request) => new URL(request.url).searchParams.get("person");
+
+const postPounce = asMe(async (request, env, deviceId, me) =>
+  respond(
+    await createPounce(env, deviceId, me, personParam(request), await readObject(request), Date.now(), new URL(request.url).origin),
+    201,
+  ),
+);
+
+/** Pounce routes (§13.4), only while `STREAKS` is on. */
+function pounceRoute(method: string, pathname: string): Route | null {
+  if (method === "POST" && pathname === "/v1/pounces") return postPounce;
+  const answer = method === "POST" ? POUNCE_ANSWER.exec(pathname) : null;
+  if (answer) {
+    return asMe(async (request, env, deviceId, me) =>
+      respond(await answerPounce(env, deviceId, me, personParam(request), answer[1] as string, await readObject(request), Date.now())),
+    );
+  }
+  const link = method === "GET" ? POUNCE_LINK.exec(pathname) : null;
+  if (link) {
+    return async (_r, env) => {
+      const found = await linkPounce(env, link[1] as string, Date.now());
+      return found ? json(200, found) : notFound();
+    };
+  }
+  return null;
+}
+
 /** Streak routes (§13.4), only while `STREAKS` is on. */
-function streakRoute(method: string, pathname: string): Route | null {
+function streakRoute(method: string, pathname: string, notify: boolean): Route | null {
   if (method === "GET" && pathname === "/v1/me/streaks") return getStreaks;
+  if (notify) {
+    if (method === "PUT" && pathname === "/v1/devices/me/widget-push") return setWidgetToken;
+    const pounce = pounceRoute(method, pathname);
+    if (pounce) return pounce;
+  }
   const path = PAIR_PATH.exec(pathname);
   if (!path) return null;
   const [, pairId, action, gift] = path as unknown as [string, string, string | undefined, string | undefined];
@@ -259,9 +306,9 @@ function streakRoute(method: string, pathname: string): Route | null {
 }
 
 /** The authenticated route for this request, or null for a 404. */
-function route(method: string, pathname: string, streaks: boolean): Route | null {
+function route(method: string, pathname: string, streaks: boolean, notify: boolean): Route | null {
   if (streaks) {
-    const streak = streakRoute(method, pathname);
+    const streak = streakRoute(method, pathname, notify);
     if (streak) return streak;
   }
   if (method === "PUT" && pathname === "/v1/devices/me/push") return setPushToken;
@@ -311,18 +358,30 @@ export default {
         ...(speed === 1 ? {} : { speed }),
       });
     }
+    const streaks = streaksOn(env);
+    const notify = notifyOn(env);
     if (method === "GET" && pathname === "/.well-known/apple-app-site-association") {
-      return appSiteAssociation();
+      return appSiteAssociation(notify);
     }
     if (method === "GET" && pathname === "/og/room.jpg") return ogImage();
     if (method === "GET" && pathname === "/privacy") return privacyPage();
     const share = method === "GET" ? SHARE_PATH.exec(pathname) : null;
     if (share) return sharePage(share[1] as string, env.TESTFLIGHT_URL, new URL(request.url).origin);
+    if (notify && method === "GET") {
+      // The pounce card reuses the room card until the bell art lands (§9.6).
+      if (pathname === "/og/pounce.jpg") return ogImage();
+      const p = POUNCE_PAGE.exec(pathname);
+      if (p) {
+        const token = p[1] as string;
+        const found = await linkPounce(env, token, Date.now()).catch(() => null);
+        return pouncePage(found?.from ?? null, token, env.TESTFLIGHT_URL, new URL(request.url).origin);
+      }
+    }
     const secret = env.TOKEN_SECRET;
     if (method === "POST" && pathname === "/v1/devices") {
       return secret ? mintDevice(request, secret) : notConfigured();
     }
-    const handler = route(method, pathname, streaksOn(env));
+    const handler = route(method, pathname, streaks, notify);
     if (!handler) return notFound();
     if (!secret) return notConfigured();
     const deviceId = await authenticate(request, secret);

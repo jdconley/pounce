@@ -1,6 +1,7 @@
 import { base64url, pemBody } from "../players/ids";
 
 import type { Env } from "../env";
+import type { Level } from "../notify/policy";
 import type { YourTurnIntent } from "../room/core";
 
 /** Apple rejects provider tokens older than an hour; refresh well before that. */
@@ -33,10 +34,16 @@ export async function createApnsJwt(p8: string, keyId: string, teamId: string, n
 }
 
 export type ApnsConfig = { host: string; topic: string; jwt: string };
-/** An alert, or a background push (`content-available`, no alert) whose data sits beside `aps`. */
+/**
+ * The original "your turn" alert; a background push (`content-available`, no
+ * alert) whose data sits beside `aps`; a built alert body (§12.7, sent at
+ * priority 5 when passive); or a WidgetKit push (§11.2).
+ */
 export type ApnsPayload =
   | { title: string; body: string; code: string }
-  | { background: Record<string, unknown>; collapseId: string };
+  | { background: Record<string, unknown>; collapseId: string }
+  | { alert: Record<string, unknown>; collapseId: string; level: Level }
+  | { widget: true };
 export type ApnsResult = { ok: boolean; status: number; unregistered: boolean; reason: string | null };
 
 async function apnsReason(response: Response): Promise<string | null> {
@@ -48,35 +55,61 @@ async function apnsReason(response: Response): Promise<string | null> {
   }
 }
 
-export async function sendApns(
-  fetcher: typeof fetch,
-  cfg: ApnsConfig,
-  deviceToken: string,
-  payload: ApnsPayload,
-): Promise<ApnsResult> {
+/** Headers and JSON body for each kind of push. */
+function request(cfg: ApnsConfig, payload: ApnsPayload): { headers: Record<string, string>; body: unknown } {
+  const auth = { authorization: `bearer ${cfg.jwt}` };
+  if ("widget" in payload) {
+    return {
+      headers: { ...auth, "apns-topic": `${cfg.topic}.push-type.widgets`, "apns-push-type": "widgets", "apns-priority": "5" },
+      body: { aps: { "content-changed": true } },
+    };
+  }
+  if ("alert" in payload) {
+    return {
+      headers: {
+        ...auth,
+        "apns-topic": cfg.topic,
+        "apns-push-type": "alert",
+        "apns-priority": payload.level === "active" ? "10" : "5",
+        "apns-collapse-id": payload.collapseId,
+      },
+      body: payload.alert,
+    };
+  }
   const background = "background" in payload;
-  const response = await fetcher(`https://${cfg.host}/3/device/${encodeURIComponent(deviceToken)}`, {
-    method: "POST",
+  return {
     headers: {
-      authorization: `bearer ${cfg.jwt}`,
+      ...auth,
       "apns-topic": cfg.topic,
       "apns-push-type": background ? "background" : "alert",
       // Apple requires priority 5 for background pushes.
       "apns-priority": background ? "5" : "10",
       "apns-collapse-id": background ? payload.collapseId : payload.code,
     },
-    body: JSON.stringify(
-      background
-        ? { aps: { "content-available": 1 }, ...payload.background }
-        : {
-            aps: {
-              alert: { title: payload.title, body: payload.body },
-              sound: "default",
-              "thread-id": payload.code,
-            },
-            code: payload.code,
+    body: background
+      ? { aps: { "content-available": 1 }, ...payload.background }
+      : {
+          aps: {
+            alert: { title: payload.title, body: payload.body },
+            sound: "default",
+            "thread-id": payload.code,
           },
-    ),
+          code: payload.code,
+        },
+  };
+}
+
+export async function sendApns(
+  fetcher: typeof fetch,
+  cfg: ApnsConfig,
+  deviceToken: string,
+  payload: ApnsPayload,
+): Promise<ApnsResult> {
+  const { headers, body } = request(cfg, payload);
+  const response = await fetcher(`https://${cfg.host}/3/device/${encodeURIComponent(deviceToken)}`, {
+    method: "POST",
+    headers,
+    body: JSON.stringify(body),
   });
   if (response.ok) return { ok: true, status: response.status, unregistered: false, reason: null };
 
@@ -147,4 +180,27 @@ export function pushDismiss(
   nowSec: number = Math.floor(Date.now() / 1000),
 ): Promise<{ sent: boolean; unregistered: boolean }> {
   return deliver(env, deviceToken, { background: { kind: "dismiss", code }, collapseId: `dismiss:${code}` }, fetcher, nowSec);
+}
+
+/** Sends a built alert body (§12.7) to one device. */
+export function pushAlert(
+  env: Env,
+  deviceToken: string | null,
+  body: Record<string, unknown>,
+  collapseId: string,
+  level: Level,
+  fetcher: typeof fetch = fetch,
+  nowSec: number = Math.floor(Date.now() / 1000),
+): Promise<{ sent: boolean; unregistered: boolean }> {
+  return deliver(env, deviceToken, { alert: body, collapseId, level }, fetcher, nowSec);
+}
+
+/** Tells one device's widgets to reload (§11.2). The push carries no data. */
+export function pushWidget(
+  env: Env,
+  widgetToken: string | null,
+  fetcher: typeof fetch = fetch,
+  nowSec: number = Math.floor(Date.now() / 1000),
+): Promise<{ sent: boolean; unregistered: boolean }> {
+  return deliver(env, widgetToken, { widget: true }, fetcher, nowSec);
 }

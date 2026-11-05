@@ -18,6 +18,9 @@ export default defineConfig({
         "src/players/accounts.ts",
         "src/streaks/pair.ts",
         "src/streaks/pairs.ts",
+        "src/notify/deliver.ts",
+        "src/pounce/pounces.ts",
+        "src/links/links.ts",
         "src/index.ts",
       ],
       reporter: ["text", "json-summary"],
@@ -33,6 +36,18 @@ export default defineConfig({
           lines: 100,
         },
         "src/streaks/**": {
+          statements: 100,
+          branches: 100,
+          functions: 100,
+          lines: 100,
+        },
+        "src/notify/**": {
+          statements: 100,
+          branches: 100,
+          functions: 100,
+          lines: 100,
+        },
+        "src/pounce/**": {
           statements: 100,
           branches: 100,
           functions: 100,

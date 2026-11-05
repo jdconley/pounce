@@ -5,11 +5,14 @@ import { OG_IMAGE_BASE64 } from "./og-image";
 const CACHE = "public, max-age=300";
 const CSP = "default-src 'none'; style-src 'unsafe-inline'; img-src data:";
 
-const ASSOCIATION = JSON.stringify({
-  applinks: {
-    details: [{ appIDs: ["B222J9J7B8.com.conleychaos.play"], components: [{ "/": "/j/*" }] }],
-  },
-});
+const association = (pounces: boolean) =>
+  JSON.stringify({
+    applinks: {
+      details: [
+        { appIDs: ["B222J9J7B8.com.conleychaos.play"], components: [{ "/": "/j/*" }, ...(pounces ? [{ "/": "/p/*" }] : [])] },
+      ],
+    },
+  });
 
 const CAT = `<svg class="cat" viewBox="0 0 120 110" role="img" aria-hidden="true" xmlns="http://www.w3.org/2000/svg"><path fill="currentColor" d="M18 6 44 30q16-6 32 0L102 6q8 22 4 48 8 10 8 24 0 28-54 28T6 78q0-14 8-24Q10 28 18 6Z"/><circle cx="43" cy="62" r="6" fill="#fff"/><circle cx="77" cy="62" r="6" fill="#fff"/></svg>`;
 
@@ -27,11 +30,53 @@ function escapeHtml(text: string): string {
   return text.replace(/[&<>"']/g, (ch) => ESCAPES[ch] as string);
 }
 
-/** Apple fetches this to bind `/j/*` links on our domain to the app. */
-export function appSiteAssociation(): Response {
-  return new Response(ASSOCIATION, {
+/** Apple fetches this to bind `/j/*` links (and, with streaks on, `/p/*` pounce links) on our domain to the app. */
+export function appSiteAssociation(pounces = false): Response {
+  return new Response(association(pounces), {
     headers: { "content-type": "application/json", "cache-control": CACHE },
   });
+}
+
+/**
+ * The landing page for a pounce link (§12.4), for Messages' preview and for
+ * people without the app: "Mia wants to play", the bell card, and the
+ * TestFlight link. Never cached and never indexed; an unknown, used or
+ * expired link is a 404 that says nothing.
+ */
+export function pouncePage(from: { name: string; cat: number } | null, token: string, testflightUrl: string | undefined, origin: string): Response {
+  const headers = { "cache-control": "no-store", "referrer-policy": "no-referrer", "x-robots-tag": "noindex" };
+  if (!from) return new Response("Not found", { status: 404, headers: { ...headers, "content-type": "text/plain; charset=utf-8" } });
+  const title = escapeHtml(`${from.name} wants to play`);
+  const link = testflightUrl?.startsWith("https://") ? `<a href="${escapeHtml(testflightUrl)}">Get the app</a>` : "";
+  const og = [
+    `<meta property="og:type" content="website">`,
+    `<meta property="og:title" content="${title}">`,
+    `<meta property="og:description" content="Cat Tower">`,
+    `<meta property="og:url" content="${escapeHtml(`${origin}/p/${token}`)}">`,
+    `<meta property="og:image" content="${escapeHtml(`${origin}/og/pounce.jpg`)}">`,
+    `<meta property="og:image:width" content="1200">`,
+    `<meta property="og:image:height" content="630">`,
+    `<meta name="twitter:card" content="summary_large_image">`,
+  ].join("\n");
+  const html = `<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>${title}</title>
+${og}
+<style>${STYLE}</style>
+</head>
+<body>
+<main>
+${CAT}
+<h1>${title}</h1>
+${link}
+</main>
+</body>
+</html>
+`;
+  return new Response(html, { headers: { ...headers, "content-type": "text/html; charset=utf-8", "content-security-policy": CSP } });
 }
 
 /** The landing page for a shared room link, for people without the app. */

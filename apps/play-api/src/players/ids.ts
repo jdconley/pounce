@@ -1,5 +1,7 @@
 /** `p_` + 16 random bytes, base64url. Never derived from a provider's user id. */
 export const PLAYER_ID = /^p_[A-Za-z0-9_-]{22}$/;
+/** A pair's id: `pr_` + 16 random bytes, base64url (§13.2). */
+export const PAIR_ID = /^pr_[A-Za-z0-9_-]{22}$/;
 /** A person's id: a UUID made on the device. */
 export const PERSON_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 /** A person's key: 32 random bytes from the device's Keychain, base64url. */

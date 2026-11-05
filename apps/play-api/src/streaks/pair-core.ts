@@ -14,6 +14,8 @@ import {
 import { addDays, cutoffAt, dayEnd, dayKey, daysBetween, dayStart, FALLBACK_ZONE, type Day } from "./clock";
 import { CONFETTI, drawToy, giftItem, type Pity } from "./rewards";
 
+import type { PounceView } from "../pounce/limits";
+
 /**
  * The pure streak of one pair (§6–§9). The `Pair` Durable Object stores a
  * `PairState` as JSON and calls these functions with the time; nothing here
@@ -56,7 +58,12 @@ export type Streak = {
   pausedBy: string | null;
   /** Bumped each time a streak ends, so a fresh-start push goes once per break (§8.4). */
   breakId: number;
+  /** The day the last streak ended: the fresh start comes the next Monday or 1st (§8.4). Absent in older pairs. */
+  brokeOn?: Day | null;
 };
+
+/** What settlement and keeping days tell the pair's people (§12.1): drained by the `Pair` DO. */
+export type PairEvent = { kind: "nap" | "winback" | "milestone"; count: number };
 
 export type PairState = {
   id: string;
@@ -78,6 +85,8 @@ export type PairState = {
   pity: Pity;
   lastTurnAt: number;
   rng: { seed: Seed; calls: number };
+  /** Events not yet handed to the glue. Absent in older pairs. */
+  events?: PairEvent[];
 };
 
 /** `{code, at, by, holder, over}`: a turn and where the move went, as a room reports it. */
@@ -110,8 +119,15 @@ export type StreakView = {
   gifts: { id: string; milestone: number; item: string }[];
   myMove: string[];
   theirMove: string[];
-  pounce: { sent: boolean; resting: boolean };
+  /**
+   * PR 3's stub from the pair alone; with notifications on, the glue fills in
+   * the whole `PounceView` from the players' pounces (§12.4).
+   */
+  pounce: PounceView | { sent: boolean; resting: boolean };
 };
+
+/** A full pounce view with nothing sent or waiting. */
+export const NO_POUNCE: PounceView = { sent: false, resting: false, quiet: false, answer: null, code: null, waiting: null };
 
 const SETTLE_AFTER_MS = 10 * 60_000;
 const MAX_NAPS = 2;
@@ -270,6 +286,17 @@ function settleAt(s: PairState, d: Day): number {
   return Math.max(...s.people.map((p) => dayEnd(d, zoneOf(s, p)))) + SETTLE_AFTER_MS;
 }
 
+const emit = (s: PairState, e: PairEvent): void => {
+  (s.events ??= []).push(e);
+};
+
+/** Hands over and forgets the events queued since the last call. */
+export function drainEvents(s: PairState): PairEvent[] {
+  const out = s.events ?? [];
+  s.events = [];
+  return out;
+}
+
 const own = (s: PairState, item: string): void => {
   if (item !== CONFETTI && !s.owned.includes(item)) s.owned.push(item);
 };
@@ -299,6 +326,7 @@ function applyKept(s: PairState, d: Day): void {
     s.gifts.push({ id: `g${s.nextGift}`, milestone: st.count, item, openedBy: [] });
     s.nextGift += 1;
     own(s, item);
+    emit(s, { kind: "milestone", count: st.count });
     if (st.count === NAP_MILESTONE) st.naps = Math.min(MAX_NAPS, st.naps + 1);
   }
   if (TOYS.every((t) => s.owned.includes(t.id))) own(s, FULL_SET_BACK);
@@ -323,16 +351,19 @@ function finalize(s: PairState, d: Day, now: number): void {
     r.state = "nap";
     st.naps -= 1;
     st.perfectRun = 0;
+    emit(s, { kind: "nap", count: st.count });
   } else if (st.count > 0 && !st.winback) {
     r.state = "winback";
     st.winback = { missedDay: d, kept: 0 };
     st.perfectRun = 0;
+    emit(s, { kind: "winback", count: st.count });
   } else {
     r.state = "missed";
     if (st.count > 0) {
       st.count = 0;
       st.winback = null;
       st.breakId += 1;
+      st.brokeOn = d;
     }
     st.perfectRun = 0;
   }
@@ -421,6 +452,14 @@ export function pause(s: PairState, by: string, days: number, now: number): bool
   return true;
 }
 
+/** The days of the pause from `by`'s today (or its later start) to its end, for "for 3 days" (§12.2); 0 when not paused. */
+export function pauseDays(s: PairState, by: string, now: number): number {
+  const { pausedFrom, pausedUntil } = s.streak;
+  const today = todayOf(s, by, now);
+  if (pausedFrom === null || pausedUntil === null || pausedUntil < today) return 0;
+  return daysBetween(pausedFrom > today ? pausedFrom : today, pausedUntil) + 1;
+}
+
 /** Ends a pause early: today counts again, unless it's past the person's evening cutoff. */
 export function unpause(s: PairState, by: string, now: number): void {
   const st = s.streak;
@@ -502,6 +541,33 @@ export function view(s: PairState, playerId: string, now: number): StreakView {
     myMove: moves.filter(([, m]) => m.holder === me.id).map(([code]) => code),
     theirMove: moves.filter(([, m]) => m.holder === partner.id).map(([code]) => code),
     pounce: { sent: false, resting: false },
+  };
+}
+
+/** What reminders need from a pair (§12.1), for the server only: never sent to anyone as is. */
+export type Facts = {
+  view: StreakView;
+  /** In for today, by a turn or the late move pass (`view.me` waits for someone to have played). */
+  in: boolean;
+  paused: boolean;
+  breakId: number;
+  brokeOn: Day | null;
+  lastTurnAt: number;
+  /** The shared tables in play. */
+  tables: string[];
+};
+
+export function facts(s: PairState, playerId: string, now: number): Facts {
+  const v = view(s, playerId, now);
+  const today = todayOf(s, playerId, now);
+  return {
+    view: v,
+    in: isIn(s, personOf(s, playerId), today, now),
+    paused: paused(s, today),
+    breakId: s.streak.breakId,
+    brokeOn: s.streak.brokeOn ?? null,
+    lastTurnAt: s.lastTurnAt,
+    tables: Object.keys(s.moves),
   };
 }
 

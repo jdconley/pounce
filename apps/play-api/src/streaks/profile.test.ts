@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { quietStartMinutes, streaksOn } from "./profile";
+import { notifyOn, quietStartMinutes, streaksOn } from "./profile";
 
 import type { Json } from "../players/parse";
 
@@ -28,5 +28,15 @@ describe("streaksOn", () => {
     expect(streaksOn({ STREAKS: "off" })).toBe(false);
     expect(streaksOn({ STREAKS: "0" })).toBe(false);
     for (const on of ["on", "1", "true", "ON"]) expect(streaksOn({ STREAKS: on })).toBe(true);
+  });
+});
+
+describe("notifyOn", () => {
+  it("needs both STREAKS and NOTIFY on (PR 5's app half turns NOTIFY on)", () => {
+    expect(notifyOn({})).toBe(false);
+    expect(notifyOn({ STREAKS: "on" })).toBe(false);
+    expect(notifyOn({ NOTIFY: "on" })).toBe(false);
+    expect(notifyOn({ STREAKS: "on", NOTIFY: "off" })).toBe(false);
+    for (const on of ["on", "1", "true", "ON"]) expect(notifyOn({ STREAKS: "on", NOTIFY: on })).toBe(true);
   });
 });

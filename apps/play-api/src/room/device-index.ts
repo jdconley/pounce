@@ -1,12 +1,13 @@
 import { DurableObject } from "cloudflare:workers";
 
 import { nightBlocked, pushBlocked } from "../players/age";
-import { pushDismiss, pushYourTurn } from "../push/apns";
+import { pushAlert, pushDismiss, pushWidget, pushYourTurn } from "../push/apns";
 
 import { createTables, listTables, removeTable, upsertTable, type TableEntry } from "./tables";
 
 import type { Env } from "../env";
 import type { DismissIntent, YourTurnIntent } from "./core";
+import type { Level } from "../notify/policy";
 import type { AgeBand } from "../players/parse";
 
 export type { TableEntry } from "./tables";
@@ -124,4 +125,46 @@ export class DeviceIndex extends DurableObject<Env> {
     if (unregistered) this.ctx.storage.sql.exec("DELETE FROM meta WHERE k = 'apns_token' AND v = ?", token);
     return { sent };
   }
+
+  /** The device's owner may get nothing now: a kitten never, a teen not overnight (§14.1). */
+  private silenced(now: number): boolean {
+    const band = this.ageBand();
+    return pushBlocked(band) || nightBlocked(band, this.getMeta("time_zone"), now);
+  }
+
+  /** Sends a built alert (§12.7); the caller has applied the player's own rules. */
+  async pushAlert(body: Record<string, unknown>, collapseId: string, level: Level): Promise<{ sent: boolean }> {
+    const now = Date.now();
+    if (this.silenced(now)) return { sent: false };
+    const token = this.getMeta("apns_token");
+    const { sent, unregistered } = await pushAlert(this.env, token, body, collapseId, level);
+    if (unregistered) this.ctx.storage.sql.exec("DELETE FROM meta WHERE k = 'apns_token' AND v = ?", token);
+    if (sent) this.setMeta("last_alert_at", String(now));
+    return { sent };
+  }
+
+  /** The widget extension's WidgetKit push token (§11.2). */
+  setWidgetToken(token: string): void {
+    this.setMeta("widget_token", token);
+  }
+
+  /**
+   * Asks the widgets to reload (§11.2): at most once every 15 minutes, and
+   * not right after an alert, whose Notification Service Extension already
+   * refreshed them.
+   */
+  async pokeWidget(now: number): Promise<{ sent: boolean }> {
+    if (this.silenced(now)) return { sent: false };
+    const last = Number(this.getMeta("widget_at") ?? -Infinity);
+    const alerted = Number(this.getMeta("last_alert_at") ?? -Infinity);
+    if (now - last < WIDGET_EVERY_MS || now - alerted < ALERT_REFRESHED_MS) return { sent: false };
+    const token = this.getMeta("widget_token");
+    const { sent, unregistered } = await pushWidget(this.env, token);
+    if (unregistered) this.ctx.storage.sql.exec("DELETE FROM meta WHERE k = 'widget_token' AND v = ?", token);
+    if (sent) this.setMeta("widget_at", String(now));
+    return { sent };
+  }
 }
+
+const WIDGET_EVERY_MS = 15 * 60_000;
+const ALERT_REFRESHED_MS = 60_000;

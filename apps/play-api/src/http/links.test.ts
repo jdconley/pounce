@@ -1,6 +1,6 @@
 import { describe, expect, test } from "vitest";
 
-import { appSiteAssociation, ogImage, sharePage } from "./links";
+import { appSiteAssociation, ogImage, pouncePage, sharePage } from "./links";
 
 const ORIGIN = "https://play.conleychaos.com";
 
@@ -84,6 +84,43 @@ describe("sharePage", () => {
       expect(res.headers.get("content-type")).toBe("text/plain; charset=utf-8");
       expect(await res.text()).not.toContain(code || "\u0000");
     }
+  });
+});
+
+describe("with pounce links (§12.4)", () => {
+  test("the association adds /p/*", async () => {
+    expect(await appSiteAssociation(true).json()).toEqual({
+      applinks: {
+        details: [{ appIDs: ["B222J9J7B8.com.conleychaos.play"], components: [{ "/": "/j/*" }, { "/": "/p/*" }] }],
+      },
+    });
+  });
+
+  test("the pounce page shows the sender's name and the bell card, with no caching and no referrer", async () => {
+    const token = "A".repeat(22);
+    const res = pouncePage({ name: "Mia <3", cat: 2 }, token, TESTFLIGHT, ORIGIN);
+    expect(res.status).toBe(200);
+    expect(res.headers.get("content-type")).toBe("text/html; charset=utf-8");
+    expect(res.headers.get("cache-control")).toBe("no-store");
+    expect(res.headers.get("referrer-policy")).toBe("no-referrer");
+    expect(res.headers.get("x-robots-tag")).toBe("noindex");
+    expect(res.headers.get("content-security-policy")).toBe(CSP);
+    const html = await res.text();
+    expect(html).toContain("Mia &lt;3 wants to play");
+    expect(html).not.toContain("Mia <3");
+    expect(html).toContain(`<meta property="og:title" content="Mia &lt;3 wants to play">`);
+    expect(html).toContain(`<meta property="og:url" content="${ORIGIN}/p/${token}">`);
+    expect(html).toContain(`<meta property="og:image" content="${ORIGIN}/og/pounce.jpg">`);
+    expect(html).toContain(`href="${TESTFLIGHT}"`);
+    expect(html).not.toContain("<script");
+    expect(html).not.toMatch(/\p{Extended_Pictographic}/u);
+  });
+
+  test("an unknown or used link is a plain 404 that says nothing", async () => {
+    const res = pouncePage(null, "A".repeat(22), TESTFLIGHT, ORIGIN);
+    expect(res.status).toBe(404);
+    expect(res.headers.get("cache-control")).toBe("no-store");
+    expect(await res.text()).toBe("Not found");
   });
 });
 
