@@ -53,6 +53,8 @@ final class AppModel {
     let notify: NotifySettingsStore
     /// A pounce to answer by picking (a "you pick" push, or a Messages link): the pick sheet.
     var pick: PickRequest?
+    /// The widgets' snapshot, reloads and push token (spec §11.2).
+    @ObservationIgnored let widgets: WidgetBridge
 
     // MARK: age (spec §14.1)
 
@@ -107,6 +109,14 @@ final class AppModel {
         pounces = PounceStore(service: pounceService, file: dataDirectory.appendingPathComponent("pounce-answers.json"))
         notify = NotifySettingsStore(file: dataDirectory.appendingPathComponent("notify-settings.json"))
         streaks.person = loaded.owner?.id
+        #if DEBUG
+        // Demos and UI tests write demo data for the widgets, which then never fetch (no server).
+        let args = CommandLine.arguments
+        let offline = args.contains("-uitest-reset") || args.contains("-demo-streaks") || DemoMode.from(arguments: args) != nil
+        widgets = WidgetBridge(server: offline ? nil : config.baseURL)
+        #else
+        widgets = WidgetBridge(server: config.baseURL)
+        #endif
         condoSeenURL = dataDirectory.appendingPathComponent("streak-seen.json")
         condoSeen = (try? JSONDecoder().decode([String: Int].self, from: Data(contentsOf: condoSeenURL))) ?? [:]
         #if DEBUG
@@ -181,6 +191,11 @@ final class AppModel {
         }
         // `-show-link`: a Messages pounce link opens at launch (the demo's, from Leo).
         if arguments.contains("-show-link") { model.handle(.pounce(token: DemoPounceService.linkToken)) }
+        // `-open-widget-link <pounce-widget://…>`: a widget tap at launch (WidgetLinkTests).
+        if let i = arguments.firstIndex(of: "-open-widget-link"), let text = arguments[safe: i + 1],
+           let url = URL(string: text), let link = WidgetLink.parse(url) {
+            model.handle(link)
+        }
         return model
         #else
         return real(config: config)
@@ -237,7 +252,7 @@ final class AppModel {
         let session = RoomSession(code: room.code, intent: .rejoin, socket: socket)
         session.owner = { [weak self] in self?.people.owner }
         session.people = { [weak self] in self?.everyone ?? [] }
-        session.onStreak = { [weak self] pair, person, view in self?.streaks.apply(pair: pair, person: person, view: view) }
+        session.onStreak = { [weak self] pair, person, view in self?.streakArrived(pair: pair, person: person, view: view) }
         self.room = session
         session.start()
         route = .room(code: room.code, intent: .rejoin)
@@ -304,6 +319,7 @@ final class AppModel {
         await refreshStreaks()
         await pounces.retryPending()
         await recheckAge()
+        await uploadWidgetToken()
     }
 
     /// Once the age is known: the significant-change check, then the profile and sync.
@@ -332,6 +348,7 @@ final class AppModel {
         ageRecord = record
         applyAgeLimits()
         push?.registerIfAllowed()
+        syncWidgets()
         Task { await accountsAfterAge() }
         guard case .age(let then) = route else { return }
         if people.owner == nil {
@@ -356,6 +373,8 @@ final class AppModel {
         ageRecord = record
         applyAgeLimits()
         push?.registerIfAllowed()
+        syncWidgets()
+        await uploadWidgetToken()
     }
 
     /// A kitten keeps no typed name (a name plus an identifier is personal information): an owner
@@ -382,6 +401,58 @@ final class AppModel {
     func refreshStreaks() async {
         streaks.person = people.owner?.id
         await streaks.refresh()
+        syncWidgets()
+    }
+
+    /// A table socket's `{t:"streak"}`: the store takes it (its stamp plays at the table), and the
+    /// widgets see the owner's new paws.
+    @discardableResult
+    func streakArrived(pair: String, person: String, view: StreakView) -> StreakStamp? {
+        let stamp = streaks.apply(pair: pair, person: person, view: view)
+        if person == people.owner?.id { widgets.fold(view) }
+        return stamp
+    }
+
+    // MARK: Widgets (spec §11)
+
+    /// The widgets' snapshot from what this phone knows now; they reload only when it changed
+    /// (and always when `reload`, going to the background).
+    func syncWidgets(reload: Bool = false) {
+        var names: [String: String] = [:]
+        for (code, table) in cache { if let name = table.name { names[code] = name } }
+        for entry in tables { if let name = entry.name { names[entry.code] = name } }
+        #if DEBUG
+        // `-demo-streaks`: the demo pairs' tables have names, as on a server.
+        if CommandLine.arguments.contains("-demo-streaks") {
+            names.merge(DemoFixtures.widgetSnapshot().tableNames) { mine, _ in mine }
+        }
+        #endif
+        // Until the server answered for this person the list is unknown, not empty (an offline
+        // launch); once it has, it is news only as of that answer.
+        let pairs: [StreakView]? = streaks.fetchedAt == nil ? nil : (streaks.enabled == false ? [] : streaks.pairs)
+        widgets.update(
+            owner: people.owner, band: ageBand, pairs: pairs, pairsAt: streaks.fetchedAt, names: names,
+            quietStart: notifySettings.quietStart, reload: reload)
+    }
+
+    /// The widgets' push token, from a teen's or an adult's device only.
+    func uploadWidgetToken() async {
+        await widgets.uploadToken(api: api, band: ageBand)
+    }
+
+    /// A widget was tapped (spec §11.1). Before the age and a cat exist there's nowhere to go.
+    func handle(_ link: WidgetLink) {
+        guard ageRecord != nil, people.owner != nil else { return }
+        switch link {
+        case .table(let code):
+            pick = nil
+            open(code: code, intent: .rejoin)
+        case .us(let pair):
+            pick = nil
+            showUs(pair: pair)
+        case .app:
+            break
+        }
     }
 
     /// A gift Home asked the Us screen to open (§9.5: the gift waits on Home).
@@ -413,6 +484,7 @@ final class AppModel {
         people = peopleStore.load()
         streaks.person = owner.id
         account.noteChanged(owner.id)
+        syncWidgets()
         #if DEBUG
         Task { await account.applyDebugPreset() }
         #endif
@@ -467,6 +539,8 @@ final class AppModel {
             // Forget archived rooms that closed, and ones a new turn brought back.
             tableArchive.replace(with: HomeTables.keptArchive(entries: listed, archived: tableArchive.all()))
             archived = tableArchive.all()
+            // Table names for the medium widget.
+            syncWidgets()
         } catch {
             // Offline or server down: keep the last list; Home still draws from the cache.
         }
@@ -578,11 +652,14 @@ final class AppModel {
                 await uploadGuestNotify()
                 await refreshStreaks()
                 await pounces.retryPending()
+                await uploadWidgetToken()
             }
             // Every reminder, not just this launch's: one may predate a relaunch.
             push?.cancelAllTurnReminders()
             push?.retryUpload()
         case .background:
+            // One last reload on the way out (spec §11.2), with whatever changed meanwhile.
+            syncWidgets(reload: true)
             #if DEBUG
             // `-demo-communication`: once the app is away, a pounce from Mia lands, drawn exactly as
             // PounceNotify draws a push (the simulator's `simctl push` skips service extensions).
@@ -619,7 +696,7 @@ final class AppModel {
         let session = RoomSession(code: code, intent: intent, socket: socket)
         session.owner = { [weak self] in self?.people.owner }
         session.people = { [weak self] in self?.everyone ?? [] }
-        session.onStreak = { [weak self] pair, person, view in self?.streaks.apply(pair: pair, person: person, view: view) }
+        session.onStreak = { [weak self] pair, person, view in self?.streakArrived(pair: pair, person: person, view: view) }
         session.onSnapshot = { [weak self] room in self?.remember(room) }
         session.onArrive = { [weak self, weak session] in
             guard let self, let session, self.room === session, self.probing == session.code else { return }
@@ -763,6 +840,8 @@ final class AppModel {
     /// A dial or toggle changed on the panel: kept here, then synced (signed in) or sent (guest).
     func setNotify(_ key: String, _ value: JSONValue) {
         notify.set(key, value, now: Int64(Date.now.timeIntervalSince1970 * 1000))
+        // Quiet hours move the widgets' evening.
+        if key == NotifyKey.quietStart { syncWidgets() }
         if account.isSignedIn {
             account.noteLocalChanges()
         } else {
@@ -812,6 +891,7 @@ final class AppModel {
         people = peopleStore.load()
         room?.syncNames()
         account?.noteChanged(owner.id)
+        syncWidgets()
     }
 
     /// Renames whoever sits at `seat` of the open table: the person on this phone with that

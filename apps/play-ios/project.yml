@@ -49,6 +49,8 @@ targets:
         product: PounceKit
       # Communication notifications with the sender's cat (spec §12.5), embedded in PlugIns.
       - target: PounceNotify
+      # The Us and Streak widgets (spec §11), embedded in PlugIns.
+      - target: PounceWidgets
     postBuildScripts:
       # The Debug-only pounce-dev URL scheme must never ship. In Release (or whenever
       # POUNCE_URL_SCHEMES is empty) delete CFBundleURLTypes from the built Info.plist; only
@@ -95,12 +97,15 @@ targets:
       - path: PounceNotify
         excludes:
           - Info.plist
+          - PounceNotify.entitlements
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.conleychaos.play.notify
         PRODUCT_NAME: PounceNotify
         TARGETED_DEVICE_FAMILY: "1,2"
         INFOPLIST_FILE: PounceNotify/Info.plist
+        # The App Group: a push's streak block goes to the widgets' snapshot (spec §11.2).
+        CODE_SIGN_ENTITLEMENTS: PounceNotify/PounceNotify.entitlements
         MARKETING_VERSION: "1.0"
         CURRENT_PROJECT_VERSION: "1"
         SKIP_INSTALL: YES
@@ -108,6 +113,34 @@ targets:
       - package: PounceKit
         product: PounceKit
       - sdk: Intents.framework
+  # The widgets (spec §11): the Us widget (small, medium, StandBy) and the Streak widget (the lock
+  # screen's three families), the Pounce button and WidgetKit push. Shares the App Group with the
+  # app and PounceNotify, and the app's keychain group for the device credential. Draws the app's
+  # own art from the containing bundle, plus the app's palette and lettering.
+  PounceWidgets:
+    type: app-extension
+    platform: iOS
+    sources:
+      - path: PounceWidgets
+        excludes:
+          - Info.plist
+          - PounceWidgets.entitlements
+      - path: Pounce/Design/Palette.swift
+      - path: Pounce/Design/OutlinedText.swift
+      - path: Pounce/Design/ArtName.swift
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.conleychaos.play.widgets
+        PRODUCT_NAME: PounceWidgets
+        TARGETED_DEVICE_FAMILY: "1,2"
+        INFOPLIST_FILE: PounceWidgets/Info.plist
+        CODE_SIGN_ENTITLEMENTS: PounceWidgets/PounceWidgets.entitlements
+        MARKETING_VERSION: "1.0"
+        CURRENT_PROJECT_VERSION: "1"
+        SKIP_INSTALL: YES
+    dependencies:
+      - package: PounceKit
+        product: PounceKit
   PounceUITests:
     type: bundle.ui-testing
     platform: iOS

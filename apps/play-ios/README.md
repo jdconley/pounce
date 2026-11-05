@@ -7,6 +7,12 @@ with a SpriteKit table. Apple frameworks only, no third-party packages.
 
 - `project.yml` XcodeGen spec. `Pounce.xcodeproj` is generated and gitignored.
 - `Pounce/` app target. `PounceUITests/` UI tests.
+- `PounceNotify/` the Notification Service Extension (communication avatars; it also writes each
+  push's streak block to the widgets' snapshot). `PounceWidgets/` the widgets (Us: small, medium and
+  StandBy; Streak: the lock screen's three families), the Pounce button and WidgetKit push. All three
+  share the App Group `group.com.conleychaos.play` (the snapshot, `Widgets/widgets.json`); the app and
+  the widgets share the keychain group `<team>.com.conleychaos.play` (the device credential, which the
+  widgets read and never mint). The widgets draw the app's own art from the containing bundle.
 - `PounceKit/` local Swift package (game model, networking, `pounce-e2e` CLI) with Swift Testing tests.
 - `Config/` xcconfigs. `Debug.xcconfig` points at `http://localhost:8787` and registers the
   `pounce-dev` URL scheme; `Release.xcconfig` points at `https://play.conleychaos.com` and registers no
@@ -104,6 +110,11 @@ then the build setting (Debug: `http://localhost:8787`, optionally overridden by
   `-demo-communication` posts a pounce from Mia once the app is in the background, drawn exactly as `PounceNotify` draws a push (the
   simulator's `simctl push` skips service extensions; `scripts/push-pounce.apns` is the sample
   payload for a device). `PushShotTests` takes the notification screenshots.
+- Widgets (spec §11): `-demo-streaks` (and any `-uitest-reset` or `-demo` run) writes the demo pairs to
+  the widgets' snapshot with no server, so the widgets on the simulator's home and lock screen draw
+  them and never fetch. `-open-widget-link <pounce-widget://…>` handles a widget tap at launch
+  (`WidgetLinkTests`). Every family, state and rendering mode has an Xcode preview in
+  `PounceWidgets/Previews.swift`.
 
 ## Play on your phone
 
@@ -301,6 +312,19 @@ submission fails with Apple's message in the log.
   Apple** (Configure: **Enable as a primary App ID**) and **Declared Age Range**, Save. Then check
   the archive: `codesign -d --entitlements - <Pounce.app>` lists `com.apple.developer.applesignin`
   and `com.apple.developer.declared-age-range`.
+
+- The widgets (daily habit PR 6) add an App ID, an App Group and two capabilities. Automatic signing
+  with `-allowProvisioningUpdates` and an Admin (or App Manager with Certificates, Identifiers &
+  Profiles) key normally creates them. If the first archive fails on provisioning, in Certificates,
+  Identifiers & Profiles:
+  1. Identifiers, +, App Groups: `group.com.conleychaos.play`.
+  2. Identifiers, +, App IDs, App: `com.conleychaos.play.widgets` (description "Pounce Widgets"),
+     with **App Groups** (assign `group.com.conleychaos.play`) and **Push Notifications**.
+  3. `com.conleychaos.play` and `com.conleychaos.play.notify`: tick **App Groups** and assign
+     `group.com.conleychaos.play`.
+  Keychain sharing (`<team>.com.conleychaos.play`) needs no portal change. Check the archive:
+  `codesign -d --entitlements - <Pounce.app/PlugIns/PounceWidgets.appex>` lists
+  `com.apple.security.application-groups`, `keychain-access-groups` and `aps-environment`.
 
 - Apple Developer: enable Push Notifications and Associated Domains on the App ID
   `com.conleychaos.play`.

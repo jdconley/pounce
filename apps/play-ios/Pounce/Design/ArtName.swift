@@ -180,6 +180,9 @@ enum ArtName {
         static let iconReplay = "icon-replay"
         /// Pounce (PR 5): the resting bell, the New game and You pick tiles.
         static let pounceBellAsleep = "pounce-bell-asleep"
+        /// Widgets (PR 6): the Pounce button once sent (the check), and the widgets' backdrop.
+        static let pounceBellSent = "pounce-bell-sent"
+        static let widgetBackground = "widget-bg"
         static let pounceNewGame = "pounce-new-game"
         static let pouncePick = "pounce-pick"
         /// "In a bit"; the reminder dials.

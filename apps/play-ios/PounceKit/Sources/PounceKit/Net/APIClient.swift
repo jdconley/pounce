@@ -47,11 +47,22 @@ public actor APIClient {
     private var cached: DeviceCredential?
     private var minting: Task<DeviceCredential, any Error>?
     private var onCredentialChange: (@Sendable (DeviceCredential) -> Void)?
+    private let mints: Bool
+    private let timeout: TimeInterval
 
-    public init(config: APIConfig, credentials: CredentialStore, session: URLSession = .shared) {
+    /// `mints: false` is the widget extension's client (spec §11): it only ever uses the app's
+    /// stored credential. With none stored it throws `.unauthorized`, and a 401 throws without
+    /// clearing the credential or minting a new device, so the app's device identity is never
+    /// replaced from a widget. `timeout` bounds each request (the widget's fetch uses 5 s).
+    public init(
+        config: APIConfig, credentials: CredentialStore, session: URLSession = .shared, mints: Bool = true,
+        timeout: TimeInterval = 15
+    ) {
         self.config = config
         self.credentials = credentials
         self.session = session
+        self.mints = mints
+        self.timeout = timeout
     }
 
     /// The device credential, minting one through `POST /v1/devices` if none is stored.
@@ -61,6 +72,7 @@ public actor APIClient {
             cached = stored
             return stored
         }
+        guard mints else { throw APIError.unauthorized }
         return try await mint()
     }
 
@@ -73,6 +85,12 @@ public actor APIClient {
     /// Uploads the APNs token; returns the device id the server stored it for.
     @discardableResult public func setPushToken(_ hex: String) async throws -> String {
         try await authenticatedCall("PUT", "/v1/devices/me/push", body: ["apnsToken": hex]).credential.deviceId
+    }
+
+    /// Uploads the widget extension's WidgetKit push token (spec §11.2); returns the device id the
+    /// server stored it for. Never called on a kitten's device (`WidgetPushToken`).
+    @discardableResult public func setWidgetPushToken(_ hex: String) async throws -> String {
+        try await authenticatedCall("PUT", "/v1/devices/me/widget-push", body: ["token": hex]).credential.deviceId
     }
 
     public func listTables() async throws -> [TableEntry] {
@@ -98,8 +116,9 @@ public actor APIClient {
         if let minting { return try await minting.value }
         let session = session
         let url = config.endpoint("/v1/devices")
+        let timeout = timeout
         let task = Task { () throws -> DeviceCredential in
-            let data = try await Self.send(session: session, method: "POST", url: url, bearer: nil, body: nil)
+            let data = try await Self.send(session: session, method: "POST", url: url, bearer: nil, body: nil, timeout: timeout)
             return try Self.decode(DeviceCredential.self, from: data, status: 200)
         }
         minting = task
@@ -145,9 +164,10 @@ public actor APIClient {
         for attempt in 0..<2 {
             do {
                 let data = try await Self.send(
-                    session: session, method: method, url: url, bearer: cred.token, body: payload, noPlayer: noPlayer)
+                    session: session, method: method, url: url, bearer: cred.token, body: payload, noPlayer: noPlayer,
+                    timeout: timeout)
                 return (data, cred)
-            } catch APIError.unauthorized where attempt == 0 {
+            } catch APIError.unauthorized where attempt == 0 && mints {
                 cred = try await replacement(for: cred)
             }
         }
@@ -155,11 +175,12 @@ public actor APIClient {
     }
 
     private static func send(
-        session: URLSession, method: String, url: URL, bearer: String?, body: Data?, noPlayer: Bool = false
+        session: URLSession, method: String, url: URL, bearer: String?, body: Data?, noPlayer: Bool = false,
+        timeout: TimeInterval
     ) async throws -> Data {
         var request = URLRequest(url: url)
         request.httpMethod = method
-        request.timeoutInterval = 15
+        request.timeoutInterval = timeout
         if let bearer { request.setValue("Bearer \(bearer)", forHTTPHeaderField: "Authorization") }
         if let body {
             request.httpBody = body

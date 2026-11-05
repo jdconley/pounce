@@ -1,13 +1,14 @@
 import PounceKit
 import UIKit
 @preconcurrency import UserNotifications
+import WidgetKit
 
 /// `PounceNotify` (spec §12.5): pushes from a person (your move, a pounce, Play again, a pounce's
 /// answer) become communication notifications with the sender's cat as the avatar
 /// (`Communication`). Anything else, or anything that fails, is delivered as it came.
 ///
-/// Writing the payload's `streak` block to the App Group for the widgets waits for PR 6, which
-/// adds the widgets and the group.
+/// Every push's `streak` block (and a pounce's answer) also goes into the widgets' snapshot in
+/// the App Group, and the widgets reload (spec §11.2).
 final class NotificationService: UNNotificationServiceExtension {
     private var handler: ((UNNotificationContent) -> Void)?
     private var original: UNNotificationContent?
@@ -23,11 +24,28 @@ final class NotificationService: UNNotificationServiceExtension {
     ) {
         handler = contentHandler
         original = request.content
+        Self.updateWidgets(request.content.userInfo)
         deliver(Communication.content(for: request.content, art: Self.appBundle) ?? request.content)
     }
 
     override func serviceExtensionTimeWillExpire() {
         if let original { deliver(original) }
+    }
+
+    /// Folds the push into the widgets' snapshot. Reloads at once when a paw, the numeral or the
+    /// bell changed, and for moved tables alone at most every 15 minutes: reloads from an
+    /// extension spend the widgets' daily budget.
+    private static func updateWidgets(_ userInfo: [AnyHashable: Any]) {
+        guard let payload = PushPayload(userInfo: userInfo), let store = WidgetSnapshotStore.shared else { return }
+        let now = Date.now
+        var reload = false
+        store.update { old in
+            var next = old.applying(payload, now: now)
+            reload = WidgetSnapshot.reloadsAfterPush(old: old, new: next, now: now)
+            if reload { next.pushReloadAt = now }
+            return next
+        }
+        if reload { WidgetCenter.shared.reloadAllTimelines() }
     }
 
     private func deliver(_ content: UNNotificationContent) {

@@ -97,6 +97,25 @@ Needs the server with `STREAKS` on (production once this PR deploys).
 - [ ] Settings panel: change the weekday dial and quiet hours on the iPhone; the iPad (same account)
       shows the same values after a foreground.
 
+## Widgets (daily habit PR 6, TestFlight builds for push)
+
+- [ ] Add the Us widget (small and medium) and the Streak widget (circular, rectangular, inline):
+      each shows the top pair; edit one to another partner and it follows that pair.
+- [ ] Take a turn at a shared table on the other phone while this one is locked: within a few
+      minutes this phone's widgets show their paw lit (WidgetKit push; at most one every 15 minutes).
+      The same from a "your move" push (PounceNotify writes the snapshot): the paw lights with it.
+- [ ] Medium widget's bell, phone unlocked: the other phone gets a "you pick" pounce and the bell
+      turns into the check; an answer (or an hour) brings the bell back. Locked: the bell does nothing.
+- [ ] At 04:00 the widgets go grey for the new day without opening the app; a pause that ended
+      loses its suitcase.
+- [ ] StandBy at night (charging, on its side): the sleeping cats and the numeral, red in night mode.
+- [ ] Glass, clear and tinted home screens and the lock screen: the cats and condo draw as mono
+      art, the numeral picks up the tint.
+- [ ] A kitten's phone: the widgets work and refresh when the app opens, and no widget push ever
+      arrives (the token never leaves the phone).
+- [ ] Tap each widget: small and rectangular open your move's table, else the Us screen on that pair;
+      circular opens the Us screen; a medium row opens its table.
+
 ## Performance and accessibility
 
 - [ ] Instruments idle-CPU check on the oldest iPhone available: the table scene should pause when
