@@ -12,6 +12,7 @@
 
 ## Global Constraints
 
+- **Amended after review:** everything new here that sends or accepts something is behind a second flag, `NOTIFY` (on only with `STREAKS` on too; never in `wrangler.jsonc`; tests set it), because PR 4 turns `STREAKS` on before PR 5's app half exists. With `STREAKS` on and `NOTIFY` off, behavior equals PR 3's (tested). The `Links` binding and migration `v4` are unconditional.
 - Everything new is behind `STREAKS` (`"on"`, `"1"`, `"true"`). With it unset: no new routes (404), `/p/*` is 404, AASA lists only `/j/*`, "your move" keeps the base payload and copy (`Your turn at <table>`), the `Player` alarm does only retention, and every existing suite passes unchanged.
 - Copy: no emoji, no countdowns, no guilt or blame (§2, §12.2). Never "waiting on you", "don't break", "you missed". Titles: the recipient's own name for your move, reminders, last chance, fresh start, going quiet and pounce; the pounce sender's name for "pounce answered"; for streak status pushes the table's name when the pair has exactly one shared table, else the partner's name.
 - Caps (§12.1): reminder-type pushes (daily, last chance, fresh start; going quiet counts too) at most 2 a day; spacing at most one push every 20 minutes for every kind except `your_move`, `pounce` and `pounce_answered`; in quiet hours reminders never go out and everything else is `passive`.

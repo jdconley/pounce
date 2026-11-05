@@ -54,7 +54,7 @@ afterEach(async () => {
   sent = [];
 });
 
-async function start(options: { streaks?: boolean; persist?: string } = {}): Promise<Miniflare> {
+async function start(options: { streaks?: boolean; notify?: boolean; persist?: string } = {}): Promise<Miniflare> {
   const mf = await worker(script, { ...options, sent });
   open.push(mf);
   return mf;
@@ -197,6 +197,45 @@ describe("the reminder alarm (§12.1, §12.3)", { timeout: 30_000 }, () => {
     await mf.dispatchFetch(`${BASE}/__test/remind?player=${other.id}&now=${when}`);
     await settle();
     expect(alertsTo(other.token)).toHaveLength(otherBefore);
+  });
+});
+
+describe("with STREAKS on and NOTIFY unset", { timeout: 30_000 }, () => {
+  test("everything is PR 3's: the original your-move push, no reminders or status pushes, no pounce or widget routes", async () => {
+    const mf = await start({ notify: false });
+    const s = await setUp(mf);
+    const one = await playWhileAway(s.clients);
+    const [push] = await eventually(() => alertsTo(s.seats[one.next].token), (l) => l.length === 1);
+    expect((push as Sent).body).toEqual({
+      aps: { alert: { title: s.seats[one.next].face.name, body: `Your turn at ${s.name}` }, sound: "default", "thread-id": s.code },
+      code: s.code,
+    });
+    expect((push as Sent).headers["apns-priority"]).toBe("10");
+    await playWhileAway(s.clients);
+    const streak = await s.a.find<Extract<ServerMessage, { t: "streak" }>>((m) => m.t === "streak");
+    expect(streak.view.pounce).toEqual({ sent: false, resting: false });
+    const listed = (await (await call(mf, s.phone, "GET", `/v1/me/streaks?person=${s.jd.id}`)).json()) as { pairs: { pounce: unknown }[] };
+    expect(listed.pairs[0]?.pounce).toEqual({ sent: false, resting: false });
+
+    const before = sent.length;
+    // No reminders, nothing learned from turns, no pause push, no status push at settlement.
+    const holder = s.seats[s.a.game().turn];
+    const when = slotAt(addDays(dayKey(Date.now(), LA), 1), 19 * 60 + 30, LA);
+    await mf.dispatchFetch(`${BASE}/__test/remind?player=${holder.id}&now=${when}`);
+    expect(await (await mf.dispatchFetch(`${BASE}/__test/notify?player=${holder.id}`)).json()).toMatchObject({ lastTurnDay: null, reminders: 0 });
+    expect((await call(mf, s.phone, "PUT", `/v1/pairs/${streak.pair}/pause?person=${s.jd.id}`, { days: 2 })).status).toBe(204);
+    await mf.dispatchFetch(`${BASE}/__test/settle?pair=${streak.pair}&now=${Date.now() + 3 * DAY_MS}`);
+    expect((await call(mf, s.phone, "PUT", "/v1/devices/me/widget-push", { token: JD_WIDGET })).status).toBe(404);
+    expect((await call(mf, s.phone, "POST", `/v1/pounces?person=${s.jd.id}`, { to: streak.pair, target: "new" })).status).toBe(404);
+    expect((await call(mf, s.phone, "GET", `/v1/pounces/links/${"A".repeat(22)}`)).status).toBe(404);
+    expect((await mf.dispatchFetch(`${BASE}/p/${"A".repeat(22)}`)).status).toBe(404);
+    expect((await mf.dispatchFetch(`${BASE}/og/pounce.jpg`)).status).toBe(404);
+    const aasa = (await (await mf.dispatchFetch(`${BASE}/.well-known/apple-app-site-association`)).json()) as {
+      applinks: { details: { components: unknown[] }[] };
+    };
+    expect(aasa.applinks.details[0]?.components).toEqual([{ "/": "/j/*" }]);
+    await settle();
+    expect(sent.slice(before)).toEqual([]);
   });
 });
 

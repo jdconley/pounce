@@ -22,7 +22,7 @@ import { newRoomCode, ROOM_CODE } from "./room/codes";
 import { DEVICE_HEADER, PLAYER_HEADER } from "./room/game-room";
 import { parseRoomName } from "./room/names";
 import { creatorLook, isMine, leavePair, myStreaks, PAIR_ID, pairStub, syncPairPeople } from "./streaks/pairs";
-import { streaksOn } from "./streaks/profile";
+import { notifyOn, streaksOn } from "./streaks/profile";
 
 import type { Env } from "./env";
 
@@ -286,11 +286,13 @@ function pounceRoute(method: string, pathname: string): Route | null {
 }
 
 /** Streak routes (§13.4), only while `STREAKS` is on. */
-function streakRoute(method: string, pathname: string): Route | null {
+function streakRoute(method: string, pathname: string, notify: boolean): Route | null {
   if (method === "GET" && pathname === "/v1/me/streaks") return getStreaks;
-  if (method === "PUT" && pathname === "/v1/devices/me/widget-push") return setWidgetToken;
-  const pounce = pounceRoute(method, pathname);
-  if (pounce) return pounce;
+  if (notify) {
+    if (method === "PUT" && pathname === "/v1/devices/me/widget-push") return setWidgetToken;
+    const pounce = pounceRoute(method, pathname);
+    if (pounce) return pounce;
+  }
   const path = PAIR_PATH.exec(pathname);
   if (!path) return null;
   const [, pairId, action, gift] = path as unknown as [string, string, string | undefined, string | undefined];
@@ -304,9 +306,9 @@ function streakRoute(method: string, pathname: string): Route | null {
 }
 
 /** The authenticated route for this request, or null for a 404. */
-function route(method: string, pathname: string, streaks: boolean): Route | null {
+function route(method: string, pathname: string, streaks: boolean, notify: boolean): Route | null {
   if (streaks) {
-    const streak = streakRoute(method, pathname);
+    const streak = streakRoute(method, pathname, notify);
     if (streak) return streak;
   }
   if (method === "PUT" && pathname === "/v1/devices/me/push") return setPushToken;
@@ -357,14 +359,15 @@ export default {
       });
     }
     const streaks = streaksOn(env);
+    const notify = notifyOn(env);
     if (method === "GET" && pathname === "/.well-known/apple-app-site-association") {
-      return appSiteAssociation(streaks);
+      return appSiteAssociation(notify);
     }
     if (method === "GET" && pathname === "/og/room.jpg") return ogImage();
     if (method === "GET" && pathname === "/privacy") return privacyPage();
     const share = method === "GET" ? SHARE_PATH.exec(pathname) : null;
     if (share) return sharePage(share[1] as string, env.TESTFLIGHT_URL, new URL(request.url).origin);
-    if (streaks && method === "GET") {
+    if (notify && method === "GET") {
       // The pounce card reuses the room card until the bell art lands (§9.6).
       if (pathname === "/og/pounce.jpg") return ogImage();
       const p = POUNCE_PAGE.exec(pathname);
@@ -378,7 +381,7 @@ export default {
     if (method === "POST" && pathname === "/v1/devices") {
       return secret ? mintDevice(request, secret) : notConfigured();
     }
-    const handler = route(method, pathname, streaks);
+    const handler = route(method, pathname, streaks, notify);
     if (!handler) return notFound();
     if (!secret) return notConfigured();
     const deviceId = await authenticate(request, secret);

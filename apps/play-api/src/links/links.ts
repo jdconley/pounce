@@ -1,5 +1,7 @@
 import { DurableObject } from "cloudflare:workers";
 
+import { notifyOn } from "../streaks/profile";
+
 import type { Env } from "../env";
 
 /** The single instance's name. */
@@ -10,7 +12,7 @@ export const LINKS_NAME = "links";
  * (§14). Links only exist with streaks on; never fatal.
  */
 export async function forgetLinks(env: Env, playerId: string): Promise<void> {
-  if (!["on", "1", "true"].includes((env.STREAKS ?? "").toLowerCase())) return;
+  if (!notifyOn(env)) return;
   try {
     await env.LINKS.get(env.LINKS.idFromName(LINKS_NAME)).removePlayer(playerId);
   } catch {

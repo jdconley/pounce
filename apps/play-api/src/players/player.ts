@@ -10,7 +10,7 @@ import { claimAnswer, KEEP_MS, restingUntil, type Answer, type PounceRow, type T
 import { createTables, listTables, removeTable, upsertTable, type TableEntry } from "../room/tables";
 import { FALLBACK_ZONE } from "../streaks/clock";
 import { leaveAllPairs } from "../streaks/pairs";
-import { quietStartMinutes, streaksOn } from "../streaks/profile";
+import { notifyOn, quietStartMinutes } from "../streaks/profile";
 
 import { IDENTITIES_NAME } from "./identities";
 import { mergeSection } from "./state";
@@ -298,7 +298,7 @@ export class Player extends DurableObject<Env> {
       if (section) this.writeSection(name, section, now);
     }
     // Reminder times and quiet hours may have moved (§12.6).
-    if (patch.settings && streaksOn(this.env)) await this.arm(now);
+    if (patch.settings && notifyOn(this.env)) await this.arm(now);
   }
 
   exportForMerge(): PlayerExport {
@@ -501,7 +501,7 @@ export class Player extends DurableObject<Env> {
     if (!this.isSignedIn()) times.push(Number(this.getMeta("last_touch") ?? now) + GUEST_TTL_MS);
     const oldest = this.ctx.storage.sql.exec<{ t: number | null }>("SELECT MIN(at) AS t FROM pounces").toArray()[0]?.t ?? null;
     if (oldest !== null) times.push(oldest + POUNCE_KEEP_MS);
-    if (streaksOn(this.env) && this.live()) {
+    if (notifyOn(this.env) && this.live()) {
       const wake = nextWake(this.notify(), this.reminderInput(now));
       if (wake !== null && Number.isFinite(wake)) times.push(wake);
       times.push(...this.pending().map((p) => p.at));
@@ -524,7 +524,7 @@ export class Player extends DurableObject<Env> {
       return;
     }
     this.prunePounces(now);
-    if (streaksOn(this.env)) await this.remind(now);
+    if (notifyOn(this.env)) await this.remind(now);
     else await this.arm(now);
   }
 
@@ -729,7 +729,7 @@ export class Player extends DurableObject<Env> {
    * One held back by spacing or a teen's night waits for the alarm.
    */
   async status(o: Outgoing, now: number, title?: StatusTitle): Promise<boolean> {
-    const profile = streaksOn(this.env) ? this.pushProfile() : null;
+    const profile = notifyOn(this.env) ? this.pushProfile() : null;
     if (!profile) return false;
     const out = this.titled(o, title);
     const st = this.notify();
@@ -756,7 +756,7 @@ export class Player extends DurableObject<Env> {
 
   /** A turn at a shared table (§13.3 flow 1): backoff resets and, with learned timing, the histogram counts it. */
   async recordTurn(at: number, now: number): Promise<void> {
-    if (!streaksOn(this.env) || !this.live()) return;
+    if (!notifyOn(this.env) || !this.live()) return;
     const st = this.notify();
     const band = this.band();
     noteTurn(st, at, this.getMeta("time_zone"), this.notifySettings().auto && band !== "kitten");
@@ -800,7 +800,7 @@ export class Player extends DurableObject<Env> {
    */
   async remind(now: number): Promise<void> {
     this.prunePounces(now);
-    if (!streaksOn(this.env) || !this.live()) {
+    if (!notifyOn(this.env) || !this.live()) {
       await this.arm(now);
       return;
     }

@@ -76,7 +76,7 @@ describe("facts", () => {
     expect(facts(s, B, at(day(3), "10:00")).paused).toBe(false);
   });
 
-  it("views carry an empty pounce state until the glue fills it in", () => {
-    expect(view(pairOn(), A, at(D0, "09:00")).pounce).toEqual({ sent: false, resting: false, quiet: false, answer: null, code: null, waiting: null });
+  it("views carry PR 3's pounce stub until the glue fills it in (with NOTIFY on)", () => {
+    expect(view(pairOn(), A, at(D0, "09:00")).pounce).toEqual({ sent: false, resting: false });
   });
 });

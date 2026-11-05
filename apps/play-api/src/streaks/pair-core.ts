@@ -119,10 +119,14 @@ export type StreakView = {
   gifts: { id: string; milestone: number; item: string }[];
   myMove: string[];
   theirMove: string[];
-  /** Filled in from the players' pounces (§12.4); empty from the pair alone. */
-  pounce: PounceView;
+  /**
+   * PR 3's stub from the pair alone; with notifications on, the glue fills in
+   * the whole `PounceView` from the players' pounces (§12.4).
+   */
+  pounce: PounceView | { sent: boolean; resting: boolean };
 };
 
+/** A full pounce view with nothing sent or waiting. */
 export const NO_POUNCE: PounceView = { sent: false, resting: false, quiet: false, answer: null, code: null, waiting: null };
 
 const SETTLE_AFTER_MS = 10 * 60_000;
@@ -536,7 +540,7 @@ export function view(s: PairState, playerId: string, now: number): StreakView {
       .map((g) => ({ id: g.id, milestone: g.milestone, item: g.item })),
     myMove: moves.filter(([, m]) => m.holder === me.id).map(([code]) => code),
     theirMove: moves.filter(([, m]) => m.holder === partner.id).map(([code]) => code),
-    pounce: NO_POUNCE,
+    pounce: { sent: false, resting: false },
   };
 }
 

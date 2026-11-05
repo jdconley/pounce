@@ -83,7 +83,7 @@ describe("the view", () => {
     expect(JSON.stringify(v)).not.toContain(A);
     expect(JSON.stringify(v)).not.toContain(B);
     expect(v.partner).toEqual({ name: "JD", cat: 1 });
-    expect(v.pounce).toEqual({ sent: false, resting: false, quiet: false, answer: null, code: null, waiting: null });
+    expect(v.pounce).toEqual({ sent: false, resting: false });
   });
 
   it("shows an unsettled past day as live", () => {

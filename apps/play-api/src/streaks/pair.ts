@@ -23,7 +23,7 @@ import {
   type TableReport,
 } from "./pair-core";
 import { notifyPair, type PairNotice, type PairTarget } from "./pairs";
-import { streaksOn } from "./profile";
+import { notifyOn } from "./profile";
 
 import type { Env } from "../env";
 
@@ -59,7 +59,7 @@ export class Pair extends DurableObject<Env> {
     const at = nextWakeAt(s);
     if (at === null) await this.ctx.storage.deleteAlarm();
     else await this.ctx.storage.setAlarm(at);
-    if (!streaksOn(this.env) || (events.length === 0 && !notify.paused && (notify.widgets ?? []).length === 0)) return;
+    if (!notifyOn(this.env) || (events.length === 0 && !notify.paused && (notify.widgets ?? []).length === 0)) return;
     const targets: PairTarget[] = s.people.map((p) => ({
       id: p.id,
       face: { name: p.name, cat: p.cat },

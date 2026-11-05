@@ -4,6 +4,8 @@ import { base64url } from "../players/ids";
 import { pounceView, type PounceView } from "../pounce/limits";
 
 import { mergeStates, newPair, NO_POUNCE, repoint, type PairEvent, type PairPerson, type PairState, type StreakView } from "./pair-core";
+import { notifyOn } from "./profile";
+
 
 import type { Env } from "../env";
 import type { Pair } from "./pair";
@@ -78,9 +80,10 @@ export async function reportTable(env: Env, intent: StreakIntent, now: number, a
         views = pairId ? await pair(env, pairId).report(r, now, awake) : null;
       }
       if (!pairId || !views) continue;
-      const pounces = await pounceViews(env, a, b, now);
+      const pounces = notifyOn(env) ? await pounceViews(env, a, b, now) : null;
       for (const id of [a, b]) {
-        (out[id] ??= []).push({ pair: pairId, view: { ...(views[id] as StreakView), pounce: pounces[id] as PounceView } });
+        const view = views[id] as StreakView;
+        (out[id] ??= []).push({ pair: pairId, view: pounces ? { ...view, pounce: pounces[id] as PounceView } : view });
       }
     }
   }
@@ -107,8 +110,8 @@ export async function myStreaks(env: Env, me: string, now: number): Promise<(Str
     rows.map(async (row) => {
       const v = await pair(env, row.pairId).view(me, now);
       if (!v) return null;
-      const pounce = (await pounceViews(env, me, row.partnerId, now))[me] as PounceView;
-      return { view: { ...v.view, pounce }, lastTurnAt: v.lastTurnAt, pinned: row.pinned };
+      const view = notifyOn(env) ? { ...v.view, pounce: (await pounceViews(env, me, row.partnerId, now))[me] as PounceView } : v.view;
+      return { view, lastTurnAt: v.lastTurnAt, pinned: row.pinned };
     }),
   );
   return views

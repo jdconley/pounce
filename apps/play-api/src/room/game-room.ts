@@ -10,7 +10,7 @@ import { PERSON_ID, PLAYER_ID } from "../players/ids";
 import { parseClientMessage } from "../protocol";
 import { FALLBACK_ZONE } from "../streaks/clock";
 import { rememberLook, reportTable, unlocksFor, type PairViews } from "../streaks/pairs";
-import { streaksOn } from "../streaks/profile";
+import { notifyOn, streaksOn } from "../streaks/profile";
 
 import { newRoomCode } from "./codes";
 import {
@@ -224,7 +224,7 @@ export class GameRoom extends DurableObject<Env> {
       }
       for (const [playerId, list] of Object.entries(views)) this.lastViews.set(playerId, list);
       // The mover's reminders and learned timing (§12.3, §13.3 flow 1).
-      if (intent.by) await playerRpc(this.env, intent.by).recordTurn(intent.at, Date.now()).catch(() => undefined);
+      if (intent.by && notifyOn(this.env)) await playerRpc(this.env, intent.by).recordTurn(intent.at, Date.now()).catch(() => undefined);
       const core = this.core;
       if (!core) return;
       for (const [playerId, list] of Object.entries(views)) {
@@ -249,7 +249,7 @@ export class GameRoom extends DurableObject<Env> {
       if (made === null) break;
       if ("ok" in made) {
         if (this.core) {
-          if (streaksOn(this.env)) this.ctx.waitUntil(this.pushPlayAgain(spec, code, made.first).catch(() => undefined));
+          if (notifyOn(this.env)) this.ctx.waitUntil(this.pushPlayAgain(spec, code, made.first).catch(() => undefined));
           await this.after(this.core.rematchDealt(code));
         }
         return;
@@ -381,7 +381,7 @@ export class GameRoom extends DurableObject<Env> {
     for (const intent of core.drainStreakIntents()) this.reportStreak(intent);
     for (const intent of core.drainPushIntents()) {
       if (intent.kind === "your_turn" && intent.playerId !== undefined && intent.playerId === this.quietFor) continue;
-      if (intent.kind === "your_turn" && intent.playerId && streaksOn(this.env)) {
+      if (intent.kind === "your_turn" && intent.playerId && notifyOn(this.env)) {
         const rich = { ...intent, playerId: intent.playerId };
         this.streakChain = this.streakChain.then(() => this.pushYourMove(rich)).catch(() => undefined);
         this.ctx.waitUntil(this.streakChain);
