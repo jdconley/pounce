@@ -259,6 +259,73 @@ describe("ending (§11.3)", { timeout: 30_000 }, () => {
     await eventually(() => alertsTo(JD_APNS), (l) => l.length === 1);
     expect(liveTo(JD_LIVE)).toHaveLength(1);
   });
+
+  test("replaced while it was JD's move there: that table's your move comes back, quietly", async () => {
+    const mf = await start();
+    const s = await setUp(mf);
+    await liveForJd(mf, s);
+    await uploadLiveToken(mf, s, s.code, JD_LIVE);
+    await miaPlays(s);
+    await eventually(() => liveTo(JD_LIVE), (l) => l.length === 1);
+    expect(alertsTo(JD_APNS)).toEqual([]);
+    const second = await table(mf, [
+      [s.phone, s.jd],
+      [s.tablet, s.mia],
+    ]);
+    await miasMove(second.clients);
+    (second.clients[0] as Client).away();
+    const [held] = await eventually(() => alertsTo(JD_APNS), (l) => l.length === 1);
+    expect((held as Sent).body).toMatchObject({ kind: "your_move", code: s.code });
+    expect(((held as Sent).body.aps as Record<string, unknown>)["interruption-level"]).toBe("passive");
+  });
+
+  test("closing the socket inside the app (Home, another table) starts nothing", async () => {
+    const mf = await start();
+    const s = await setUp(mf);
+    await miasMove(s.clients);
+    s.a.ws.close();
+    await settle(500);
+    expect(liveTo(JD_START)).toEqual([]);
+  });
+
+  test("a held-back your move never outlives the live table's limits", async () => {
+    const mf = await start();
+    const s = await setUp(mf);
+    await liveForJd(mf, s);
+    await uploadLiveToken(mf, s, s.code, JD_LIVE);
+    const running = async (later: number) =>
+      (await (await mf.dispatchFetch(`${BASE}/__test/running?device=${s.phone.deviceId}&code=${s.code}&now=${Date.now() + later}`)).json()) as boolean;
+    expect(await running(0)).toBe(true);
+    expect(await running(IDLE_MS - 60_000)).toBe(true);
+    expect(await running(IDLE_MS + 1000)).toBe(false);
+  });
+
+  test("a null for the table before the new activity's token arrived is a late word about an old one", async () => {
+    const mf = await start();
+    const s = await setUp(mf);
+    await liveForJd(mf, s);
+    expect(await uploadLiveToken(mf, s, s.code, null)).toBe(204);
+    await uploadLiveToken(mf, s, s.code, JD_LIVE);
+    await miaPlays(s);
+    await eventually(() => liveTo(JD_LIVE), (l) => l.length === 1);
+  });
+});
+
+describe("quiet hours (§12.3)", { timeout: 30_000 }, () => {
+  test("the move coming to JD in his quiet hours updates the live table without ringing", async () => {
+    // A zone where it's 23:00 now: inside an adult's 22:00–08:00.
+    const k = (((new Date().getUTCHours() - 23) % 24) + 24) % 24;
+    const zone = k <= 12 ? `Etc/GMT+${k}` : `Etc/GMT-${24 - k}`;
+    const mf = await start();
+    const s = await setUp(mf, { zone });
+    await liveForJd(mf, s);
+    await uploadLiveToken(mf, s, s.code, JD_LIVE);
+    await miaPlays(s);
+    const [update] = await eventually(() => liveTo(JD_LIVE), (l) => l.length === 1);
+    expect((update as Sent).headers["apns-priority"]).toBe("5");
+    expect(aps(update)).not.toHaveProperty("alert");
+    expect(aps(update)["content-state"]).toMatchObject({ mine: true });
+  });
 });
 
 describe("age bands (§14.1)", { timeout: 30_000 }, () => {

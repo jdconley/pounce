@@ -99,7 +99,7 @@ export type Look = { rug: string; back: string };
 export type RoomFeatures = { streaks: boolean; live?: boolean };
 
 /** Why a live table ended: the round or game is over, its device came back, or a limit passed (§11.3). */
-export type LiveEnd = "over" | "back" | "idle" | "cap";
+export type LiveEnd = "over" | "back" | "idle" | "cap" | "replaced";
 
 /**
  * A Live Activity push for one device (§11.3), from that device's view. The
@@ -295,20 +295,18 @@ export class RoomCore {
   }
 
   /**
-   * `startsLive`: leaving this way may start a live table (§11.3). Not when a
-   * restart closed every socket: the apps are about to reconnect.
+   * A closed socket never starts a live table (§11.3): the app closes it in
+   * the foreground too (Home, another table), and says `background` first
+   * when it leaves or the phone locks.
    */
-  disconnect(deviceId: string, startsLive = true): Outbound[] {
+  disconnect(deviceId: string): Outbound[] {
     const device = this.state.devices[deviceId];
     if (!device) return [];
-    const wasAwake = device.presence === "awake";
-    const out = this.presenceChange(deviceId, () => {
+    return this.presenceChange(deviceId, () => {
       device.connected = false;
       if (device.presence !== "away") device.since = this.now();
       device.presence = "away";
     });
-    if (startsLive && wasAwake) this.maybeStartLive(deviceId);
-    return out;
   }
 
   /**
@@ -453,6 +451,14 @@ export class RoomCore {
     if (this.state.live) delete this.state.live[deviceId];
   }
 
+  /**
+   * The device's live table moved to another table (at most one per device):
+   * this one's record goes, and on its move the held-back "your move" comes back.
+   */
+  liveReplaced(deviceId: string): void {
+    this.endLive(deviceId, "replaced");
+  }
+
   /** Ends the live tables whose 30 minutes or 2 hours have passed (§11.3). */
   expireLive(now: number): void {
     for (const [deviceId, record] of Object.entries(this.state.live ?? {})) {
@@ -497,8 +503,11 @@ export class RoomCore {
     const { state } = this;
     if (!state.live?.[deviceId]) return;
     delete state.live[deviceId];
+    // Turned off (the kill switch): records left behind go quietly; DeviceIndex lets its own lapse.
+    if (!this.features.live) return;
     const view = this.liveView(deviceId);
-    const yourMove = (reason === "idle" || reason === "cap") && view.mine ? this.heldYourMove(view.turn as Seat) : null;
+    const held = reason === "idle" || reason === "cap" || reason === "replaced";
+    const yourMove = held && view.mine ? this.heldYourMove(view.turn as Seat) : null;
     this.liveIntents.push({
       kind: "end",
       deviceId,
@@ -558,7 +567,8 @@ export class RoomCore {
     const actor = this.game.currentActor(game) as Seat;
     for (const [deviceId, record] of Object.entries(state.live ?? {})) {
       record.movedAt = this.now();
-      const mine = this.controlledSeats(deviceId).includes(actor);
+      // Rung only when the move is this device's and nobody is at the table for it (§12.1).
+      const mine = this.controlledSeats(deviceId).includes(actor) && this.seatPresence(actor) !== "awake";
       this.liveIntents.push({
         kind: "update",
         deviceId,

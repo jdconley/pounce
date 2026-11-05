@@ -197,6 +197,13 @@ export class GameRoom extends DurableObject<Env> {
     await this.after([]);
   }
 
+  /** This device's live table moved to another table (§11.3): forget it here, giving back a held "your move". */
+  async liveReplaced(deviceId: string): Promise<void> {
+    if (!this.core) return;
+    this.core.liveReplaced(deviceId);
+    await this.after([]);
+  }
+
   /** Ends live tables whose limits have passed by `now` (the alarm does this; tests call it with a later clock). */
   async checkLive(now: number): Promise<void> {
     if (!this.core) return;
@@ -361,12 +368,17 @@ export class GameRoom extends DurableObject<Env> {
     const state: LiveState = { ...intent.state, streak };
     if (intent.kind === "start") {
       const allowed = await this.liveAllowed(intent.playerId);
-      const sent = allowed && (await device.liveStart(intent.code, startBody(intent.code, state, now, startAlert(state)), state, now)).sent;
-      if (!sent) this.dropLive(intent.deviceId);
+      const started = allowed ? await device.liveStart(intent.code, startBody(intent.code, state, now, startAlert(state)), state, now) : null;
+      if (!started?.sent) this.dropLive(intent.deviceId);
+      if (started?.replaced) {
+        const old = started.replaced;
+        await this.env.ROOMS.get(this.env.ROOMS.idFromName(old)).liveReplaced(intent.deviceId).catch(() => undefined);
+      }
       return;
     }
     if (intent.kind === "update") {
-      const alert = intent.alert ? { title: intent.alert.to, body: yourMoveBody(intent.alert.from, state.table, completesToday) } : null;
+      const rings = intent.alert && (await this.ringsNow(intent.playerId, now));
+      const alert = rings && intent.alert ? { title: intent.alert.to, body: yourMoveBody(intent.alert.from, state.table, completesToday) } : null;
       await device.liveUpdate(intent.code, updateBody(state, now, alert), state, alert ? 10 : 5, now);
       return;
     }
@@ -389,6 +401,18 @@ export class GameRoom extends DurableObject<Env> {
     const views = (this.lastViews.get(playerId) ?? []).map((v) => v.view);
     const { streak, completesToday } = yourMoveContext(views, intent.code);
     return { streak: streak ? { count: streak.count, me: streak.me, them: streak.them } : null, completesToday };
+  }
+
+  /**
+   * A live table rings like "your move" would (§12.1, §12.3): not in the
+   * player's quiet hours, where it updates silently instead.
+   */
+  private async ringsNow(playerId: string | null, now: number): Promise<boolean> {
+    if (!playerId) return true;
+    const profile = await playerRpc(this.env, playerId).pushProfile();
+    if (!profile) return true;
+    const g = gate({ kind: "your_move", band: profile.band, zone: profile.zone ?? FALLBACK_ZONE, settings: profile.settings, now, spacedAt: null, remindersToday: 0 });
+    return g.send && g.level === "active";
   }
 
   /** The player's live table toggle (§12.6); a seat with no player has the default, on. */
@@ -452,8 +476,7 @@ export class GameRoom extends DurableObject<Env> {
       .filter(([id, device]) => device.connected && !this.hasOpenSocket(id))
       .map(([id]) => id);
     if (stale.length === 0) return;
-    // The apps reconnect in a moment: no live tables for a restart (§11.3).
-    await this.after(stale.flatMap((id) => core.disconnect(id, false)));
+    await this.after(stale.flatMap((id) => core.disconnect(id)));
   }
 
   private hasOpenSocket(deviceId: string, except?: WebSocket): boolean {

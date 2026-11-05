@@ -11,7 +11,7 @@ export { Pair } from "../src/streaks/pair";
 /**
  * The real worker, plus test hooks: `/__test/live?code=&now=` ends the
  * room's live tables whose limits have passed by `now` (the alarm's job, on a
- * later clock), and `/__test/room?code=` reads the room's live records.
+ * later clock), and `/__test/running?device=&code=&now=` asks a device whether it holds "your move" back.
  */
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {
@@ -21,6 +21,10 @@ export default {
     if (url.pathname === "/__test/live") {
       await room().checkLive(Number(q("now")));
       return new Response(null, { status: 204 });
+    }
+    if (url.pathname === "/__test/running") {
+      const device = env.DEVICES.get(env.DEVICES.idFromName(q("device")));
+      return Response.json(await device.liveRunning(q("code"), Number(q("now"))));
     }
     return worker.fetch(request, env);
   },

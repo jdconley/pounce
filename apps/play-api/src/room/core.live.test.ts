@@ -75,10 +75,10 @@ describe("when a live table starts (§11.3)", () => {
     expect(r.drainLiveIntents()).toEqual([]);
   });
 
-  it("a locked phone whose socket just drops starts one too", () => {
+  it("only leaving the app starts one: a socket closed in the app (Home, another table) or dropped starts nothing", () => {
     const r = started();
     r.disconnect("phone");
-    expect(kinds(r.drainLiveIntents())).toEqual(["start:phone"]);
+    expect(r.drainLiveIntents()).toEqual([]);
   });
 
   it("not when nobody else is awake, unless you just answered a pounce with Play (used up by the start)", () => {
@@ -131,10 +131,6 @@ describe("when a live table starts (§11.3)", () => {
     watcher.connect("ipad");
     away(watcher, "ipad");
     expect(watcher.drainLiveIntents()).toEqual([]);
-
-    const restarted = started();
-    restarted.disconnect("phone", false);
-    expect(restarted.drainLiveIntents()).toEqual([]);
   });
 
   it("names the bots and caps a finished phase at 10", () => {
@@ -190,9 +186,47 @@ describe("updates (§11.3)", () => {
     expect(update).toMatchObject({ kind: "update", deviceId: "phone", state: { turn: 2, mine: false } });
     expect(update).not.toHaveProperty("alert");
   });
+
+  it("no ring while the same player is awake at the table on another device (§12.1)", () => {
+    const r = started();
+    if (game(r).turn === 0) takeTurn(r);
+    away(r, "phone");
+    r.drainLiveIntents();
+    // JD's iPad is here, awake, speaking for the same player.
+    r.connect("ipad", { [P1]: A });
+    r.drainLiveIntents();
+    takeTurn(r);
+    const [update] = r.drainLiveIntents();
+    expect(update).toMatchObject({ kind: "update", deviceId: "phone", state: { turn: 0, mine: true } });
+    expect(update).not.toHaveProperty("alert");
+  });
 });
 
 describe("when it ends (§11.3)", () => {
+  it("a newer live table on another table replaced it: the record goes, and a held your move comes back", () => {
+    const r = started();
+    if (game(r).turn === 1) takeTurn(r);
+    away(r, "phone");
+    r.drainLiveIntents();
+    r.liveReplaced("phone");
+    const [end] = r.drainLiveIntents();
+    expect(end).toMatchObject({ kind: "end", deviceId: "phone", reason: "replaced", state: { mine: true } });
+    expect(end?.yourMove).toMatchObject({ playerId: A, seat: 0 });
+    expect(r.state.live).toEqual({});
+    r.liveReplaced("phone");
+    expect(r.drainLiveIntents()).toEqual([]);
+  });
+
+  it("with the feature turned off, leftover records end with no push", () => {
+    const r = started();
+    away(r, "phone");
+    r.drainLiveIntents();
+    const off = new RoomCore(r.state, () => clock, () => 0.25, catTower, 1, { streaks: true });
+    off.connect("phone", { [P1]: A });
+    expect(off.drainLiveIntents()).toEqual([]);
+    expect(off.state.live).toEqual({});
+  });
+
   it("you come back: a reconnect, presence active, or an act ends that device's", () => {
     for (const back of [
       (r: RoomCore) => r.connect("phone", { [P1]: A }),
