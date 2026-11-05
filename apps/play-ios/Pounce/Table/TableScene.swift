@@ -213,6 +213,31 @@ final class TableScene: SKScene {
     deinit { print("[scene] deinit") }
     #endif
 
+    /// The table's look (§9.4). The rug cross-fades to a new one; a new card back applies to the
+    /// cards drawn from then on (the next draw animation, the deck at the next redraw).
+    private(set) var look = Look.standard
+
+    func setLook(_ next: Look) {
+        CardFaceFactory.shared.setBack(next.back)
+        guard next.rug != look.rug else {
+            look = next
+            return
+        }
+        look = next
+        let texture = TableArt.table(ArtName.Habit.rug(next.rug))
+        guard !rug.isHidden, rug.size.width > 0 else {
+            rug.texture = texture
+            return
+        }
+        let fading = SKSpriteNode(texture: rug.texture, size: rug.size)
+        fading.position = rug.position
+        fading.zPosition = 1
+        layer(.rug).addChild(fading)
+        rug.texture = texture
+        let director = director
+        Task { await director.run(.sequence([.fadeOut(withDuration: 0.6), .removeFromParent()]), on: fading, decorative: true) }
+    }
+
     /// The node for a layer (drag and fx layers are empty until something animates).
     func layer(_ layer: Layer) -> SKNode { layers[layer]! }
 

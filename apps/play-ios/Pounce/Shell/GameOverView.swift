@@ -13,6 +13,18 @@ struct GameOverView: View {
     var standings: [Standing] = []
     let onHome: () -> Void
     let onNewGame: () -> Void
+    /// Play again (§10.4): nil on a server without it.
+    var again: Again? = nil
+    var onPlayAgain: () -> Void = {}
+
+    enum Again: Equatable {
+        /// Deal the same people a new game.
+        case ask
+        /// Asked; the deal is on its way.
+        case waiting
+        /// Someone dealt it: jump to that table.
+        case go
+    }
 
     struct Standing: Identifiable {
         let seat: Seat
@@ -206,6 +218,25 @@ struct GameOverView: View {
     }
 
     private var pills: some View {
+        VStack(spacing: 16) {
+            if let again {
+                PillButton(
+                    icon: ArtName.Habit.iconReplay, color: Palette.lime, size: .large, width: 230,
+                    accessibilityLabel: "Play again"
+                ) {
+                    onPlayAgain()
+                }
+                .opacity(again == .waiting ? 0.7 : 1)
+                .overlay { if again == .waiting { YarnIndicator() } }
+                .bounceLoop(active: again == .go)
+                .accessibilityIdentifier("gameover.again")
+            }
+            homeAndNew
+        }
+        .offset(y: appeared ? 0 : 160)
+    }
+
+    private var homeAndNew: some View {
         HStack(spacing: 18) {
             PillButton(
                 icon: ArtName.iconHome, color: Palette.orange, size: .large, width: 176,
@@ -224,7 +255,6 @@ struct GameOverView: View {
             }
             .accessibilityIdentifier("gameover.new")
         }
-        .offset(y: appeared ? 0 : 160)
     }
 
     /// One seat's final line: cat, name, score.

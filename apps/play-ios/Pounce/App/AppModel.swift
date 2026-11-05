@@ -210,10 +210,11 @@ final class AppModel {
 
     #if DEBUG
     /// `-demo <screen>`: the room screen fed by one fixture snapshot, no server, nothing cached.
-    func openDemo(_ demo: DemoMode) {
+    func openDemo(_ demo: DemoMode, code: String? = nil) {
         closeRoom()
-        let room = demo.room
-        let socket = SuspendableSocket { demo.makeSocket() }
+        var room = demo.room
+        if let code { room.code = code }
+        let socket = SuspendableSocket { [room] in code == nil ? demo.makeSocket() : DemoSocket(room: room) }
         let session = RoomSession(code: room.code, intent: .rejoin, socket: socket)
         session.owner = { [weak self] in self?.people.owner }
         session.people = { [weak self] in self?.everyone ?? [] }
@@ -416,6 +417,18 @@ final class AppModel {
         // A move link for the room already open: its first snapshot is long gone, so claim now.
         if case .move(let moveCode) = intent, session.intent != intent { session.claimMove(moveCode) }
         route = .room(code: code, intent: intent)
+    }
+
+    /// Play again's table (§10.4): open it as one this phone sits at.
+    func openRematch(code: String) {
+        #if DEBUG
+        // A demo's Play again deals a demo table under the new code.
+        if DemoMode.from() != nil {
+            openDemo(.table, code: code)
+            return
+        }
+        #endif
+        open(code: code, intent: .rejoin)
     }
 
     /// The table for `code` is the screen in front (a push for it needs no banner).
