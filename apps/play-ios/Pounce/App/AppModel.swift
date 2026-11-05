@@ -141,6 +141,8 @@ final class AppModel {
             model.peopleStore.add(name: "Sam", cat: 6)
             model.people = model.peopleStore.load()
             model.streaks.person = model.people.owner?.id
+            // Screens for screenshots: no push priming over them.
+            model.settings.pushPrimed = true
             if model.ageRecord != nil { model.route = .home }
         }
         // `-show-us`: open on the Us screen (UI tests, screenshots).
@@ -222,6 +224,24 @@ final class AppModel {
         self.room = session
         session.start()
         route = .room(code: room.code, intent: .rejoin)
+        // `-demo-stamp`: a streak view keeps today for the top pair a moment in (the stamp, screenshots).
+        if CommandLine.arguments.contains("-demo-stamp") {
+            Task { [weak self, weak session] in
+                await self?.streaks.refresh()
+                try? await Task.sleep(for: Pace.duration(.seconds(2.5)))
+                // For the demo seat's person (the owner doesn't sit at a demo table).
+                guard let self, let session, var view = self.streaks.top,
+                      let seat = session.model?.mySeats.first, let person = session.model?.room.seats[seat].person?.id
+                else { return }
+                view.count += 1
+                view.me = true
+                view.them = true
+                view.kept = true
+                view.todayToy = "toy-golden-mouse"
+                view.myMove = [session.code]
+                session.store.handle(.message(.streak(pair: view.pair, person: person, view: view)))
+            }
+        }
         // `-demo-home-after <seconds>`: leave the table mid-animation (teardown check).
         let args = CommandLine.arguments
         if let i = args.firstIndex(of: "-demo-home-after"), let secs = args[safe: i + 1].flatMap(Double.init) {

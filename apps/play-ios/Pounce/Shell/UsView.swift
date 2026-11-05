@@ -26,6 +26,9 @@ struct UsView: View {
 
     private var mine: Int { model.people.owner?.cat ?? 0 }
 
+    /// The pairs row is bigger on a roomy screen.
+    private var rowScale: CGFloat { sizeClass == .regular ? 1.4 : 1 }
+
     var body: some View {
         GeometryReader { geo in
             ZStack {
@@ -126,7 +129,7 @@ struct UsView: View {
                 Image(ArtName.cat(view.partner.cat, .idle))
                     .resizable().scaledToFit()
                     .padding(4)
-                    .frame(width: on ? 62 : 52, height: on ? 62 : 52)
+                    .frame(width: (on ? 62 : 52) * rowScale, height: (on ? 62 : 52) * rowScale)
                     .background(Circle().fill(on ? Palette.teal : Palette.violet))
                     .overlay(Circle().strokeBorder(Palette.ink, lineWidth: 3))
                 if view.pinned {
@@ -136,7 +139,7 @@ struct UsView: View {
                     Image(ArtName.Habit.giftBox).resizable().scaledToFit().frame(width: 22).offset(x: 6, y: 34)
                 }
             }
-            NameTag(view.partner.name, maxWidth: 76, active: on, size: 13)
+            NameTag(view.partner.name, maxWidth: 76 * rowScale, active: on, size: 13 * rowScale)
         }
         .contentShape(Rectangle())
         .onTapGesture {
@@ -185,14 +188,14 @@ struct UsView: View {
                     Image(ArtName.cat(ghost.partner.cat, .idle))
                         .resizable().scaledToFit()
                         .padding(4)
-                        .frame(width: 52, height: 52)
+                        .frame(width: 52 * rowScale, height: 52 * rowScale)
                         .saturation(0.2)
                         .opacity(0.45)
                         .background(Circle().strokeBorder(.white.opacity(0.6), style: StrokeStyle(lineWidth: 3, dash: [6, 5])))
                     Image(ArtName.iconPlus).resizable().scaledToFit().frame(width: 22)
                         .background(Circle().fill(Palette.lime).overlay(Circle().strokeBorder(Palette.ink, lineWidth: 2)))
                 }
-                NameTag(ghost.partner.name, maxWidth: 76, size: 13).opacity(0.6)
+                NameTag(ghost.partner.name, maxWidth: 76 * rowScale, size: 13 * rowScale).opacity(0.6)
             }
         }
         .buttonStyle(.plain)
@@ -206,18 +209,18 @@ struct UsView: View {
         let roomy = sizeClass == .regular
         if roomy && Roomy.sideBySide(size, minWidth: 900) {
             HStack(spacing: 48) {
-                hero(view, side: min(size.height * 0.62, 520))
+                hero(view, side: min(size.height * 0.7, 640))
                     .frame(maxWidth: .infinity)
-                details(view, scale: 1.3)
-                    .frame(width: min(size.width * 0.42, 520))
+                details(view, scale: 1.6)
+                    .frame(width: min(size.width * 0.45, 620))
             }
             .padding(.horizontal, 40)
             .frame(maxHeight: .infinity)
         } else {
             ScrollView(.vertical, showsIndicators: false) {
                 VStack(spacing: roomy ? 28 : 16) {
-                    hero(view, side: roomy ? min(size.width * 0.6, 460) : min(size.width - 60, 300))
-                    details(view, scale: roomy ? 1.3 : 1)
+                    hero(view, side: roomy ? min(size.width * 0.66, 600) : min(size.width - 60, 300))
+                    details(view, scale: roomy ? 1.6 : 1)
                 }
                 .frame(maxWidth: .infinity)
                 .padding(.bottom, 24)

@@ -442,6 +442,13 @@ private struct TableStage: View {
         events.shown = scene.shownRevealed
         sync(scene)
         #if DEBUG
+        // `-show-look` (screenshots): the table menu open on its look tray.
+        if CommandLine.arguments.contains("-show-look") {
+            Task {
+                try? await Task.sleep(for: .milliseconds(900))
+                events.menuOpen = true
+            }
+        }
         // `-show-scoreboard` (screenshots): the scoreboard over the table as it opens.
         if CommandLine.arguments.contains("-show-scoreboard"), let room = session.store.room {
             events.scoreboard = TableModel(room: room)
@@ -502,7 +509,8 @@ private struct TableStage: View {
         let bottom = TableScene.bottomSeat(table, revealed: events.shown)
         let n = max(table.barSeats(bottom: bottom).count, 1)
         let bar = TableLayout(size: size, safeTop: insets.top, safeBottom: insets.bottom, opponents: n).opponentsBar
-        return CGPoint(x: size.width - 64 * streakScale - insets.trailing, y: size.height - bar.minY + 26 * streakScale)
+        // Under the bar's name tags (the bar's frame holds the rings; the tags hang below it).
+        return CGPoint(x: size.width - 84 * streakScale - insets.trailing, y: size.height - bar.minY + 104 * streakScale)
     }
 
     private func lookIsBack(_ change: RoomStore.LookChange) -> Bool {

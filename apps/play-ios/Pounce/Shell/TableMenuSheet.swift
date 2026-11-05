@@ -13,8 +13,16 @@ struct TableMenuSheet: View {
 
     private enum Page { case menu, moving, rules, renaming, names, look }
 
-    @State private var page = Page.menu
-    @State private var detent: PresentationDetent = Self.menuDetent
+    @State private var page = Self.firstPage
+    @State private var detent: PresentationDetent = Self.firstPage == .look ? Self.lookDetent : Self.menuDetent
+
+    /// `-show-look` (DEBUG, screenshots) opens on the look tray.
+    private static var firstPage: Page {
+        #if DEBUG
+        if CommandLine.arguments.contains("-show-look") { return .look }
+        #endif
+        return .menu
+    }
 
     static let menuDetent = PresentationDetent.height(440)
     static let lookDetent = PresentationDetent.height(380)
