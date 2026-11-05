@@ -78,7 +78,7 @@ Any of these turns the kitten back to today's no-push behavior at once. The serv
 
 ### What the parent sees
 - **Kittens** in the gear sheet, for signed-in adults only.
-- For each kitten: their cat, the consent state (pending, waiting for email, on), a toggle per person, and revoke.
+- For each kitten: their cat, the consent state (pending, waiting for the text, on), a toggle per person, and revoke.
 - The notice page and the phone number field. Those are the only words, and they are legal text, as with the privacy page.
 
 ## 3. Server and flags
