@@ -20,6 +20,7 @@ final class Settings {
         static let pushDeclinedOnce = "settings.pushDeclinedOnce"
         static let pushReoffered = "settings.pushReoffered"
         static let turnReminder = "settings.turnReminder"
+        static let kittenDaily = "settings.kittenDaily"
     }
 
     @ObservationIgnored private let defaults: UserDefaults
@@ -42,6 +43,9 @@ final class Settings {
         }
     }
 
+    /// A kitten's local daily reminder at 17:00 (spec §14.1): off until they turn it on.
+    var kittenDaily: Bool { didSet { defaults.set(kittenDaily, forKey: Key.kittenDaily) } }
+
     init(defaults: UserDefaults = .standard) {
         self.defaults = defaults
         soundOn = defaults.object(forKey: Key.soundOn) as? Bool ?? true
@@ -50,6 +54,7 @@ final class Settings {
         pushDeclinedOnce = defaults.bool(forKey: Key.pushDeclinedOnce)
         pushReoffered = defaults.bool(forKey: Key.pushReoffered)
         turnReminderChoice = defaults.object(forKey: Key.turnReminder) as? Bool
+        kittenDaily = defaults.bool(forKey: Key.kittenDaily)
     }
 
     #if DEBUG

@@ -11,6 +11,9 @@ import UserNotifications
 ///   after a 401), since the server has no token for the new device.
 /// - A tap on a "your turn" notification opens that table. On a cold start the tap can land
 ///   before SwiftUI attaches the app model, so it waits here like the token does.
+/// - Categories and their buttons (spec §12.5): Play opens the app; In an hour re-posts the
+///   notification locally; a pounce's In a bit and Not now are answered in the background
+///   through the app's answer queue. A kitten's device never registers for remote push (§14.1).
 /// - In the foreground a banner is dropped only when its table is on screen (the table shows
 ///   the turn already); any other table's banner shows and Home's list refreshes.
 /// - The local turn reminder looks exactly like the server's push.
@@ -18,7 +21,9 @@ import UserNotifications
 final class PushCoordinator: NSObject, UNUserNotificationCenterDelegate {
     weak var model: AppModel? {
         didSet {
+            guard model !== oldValue else { return }
             watchCredential()
+            registerIfAllowed()
             uploadPendingToken()
             routePendingTap()
         }
@@ -27,16 +32,48 @@ final class PushCoordinator: NSObject, UNUserNotificationCenterDelegate {
     /// The last token APNs gave this launch and which device the server holds it for.
     private(set) var tokens = PushTokenState()
     private var uploading = false
-    /// A notification tapped before the app model (or its owner) was ready.
-    private var pendingTapCode: String?
 
     private var center: UNUserNotificationCenter { .current() }
 
     // MARK: registration
 
-    /// Called at every launch: re-register only when the user already allowed notifications.
-    /// The priming screen asks first; the system prompt never shows at launch.
-    func registerEveryLaunch() {
+    /// The categories and their buttons (spec §12.5), set at every launch before any arrives.
+    func registerCategories() {
+        let categories = PushCategory.allCases.map { category in
+            UNNotificationCategory(
+                identifier: category.rawValue, actions: NotifyActions.actions(for: category).map(Self.action),
+                intentIdentifiers: [], options: [])
+        }
+        center.setNotificationCategories(Set(categories))
+    }
+
+    private static func action(_ action: NotifyAction) -> UNNotificationAction {
+        let title: String
+        let icon: String
+        switch action {
+        case .play:
+            title = String(localized: "Play", comment: "Notification button: open the table and play")
+            icon = "play.fill"
+        case .inAnHour:
+            title = String(localized: "In an hour", comment: "Notification button: remind me again in an hour")
+            icon = "clock.fill"
+        case .later:
+            title = String(localized: "In a bit", comment: "Notification button: answer a pounce, coming in a bit")
+            icon = "clock.fill"
+        case .notNow:
+            title = String(localized: "Not now", comment: "Notification button: answer a pounce, not now")
+            icon = "moon.zzz.fill"
+        }
+        return UNNotificationAction(
+            identifier: action.rawValue, title: title, options: action.foreground ? [.foreground] : [],
+            icon: UNNotificationActionIcon(systemImageName: icon))
+    }
+
+    /// Registers with APNs when the user allowed notifications (fully or provisionally) and this
+    /// device may hold a push token at all: never a kitten's, or one whose age isn't known yet
+    /// (spec §14.1). The priming screen asks first; the system prompt never shows at launch.
+    func registerIfAllowed() {
+        guard let model, PushPolicy.registersRemote(band: model.ageBand) else { return }
         Task {
             if Self.isAllowed(await center.notificationSettings().authorizationStatus) {
                 UIApplication.shared.registerForRemoteNotifications()
@@ -47,8 +84,16 @@ final class PushCoordinator: NSObject, UNUserNotificationCenterDelegate {
     /// The system prompt (after the priming screen). Registers on yes.
     func requestAuthorization() async -> Bool {
         let granted = (try? await center.requestAuthorization(options: [.alert, .sound, .badge])) ?? false
-        if granted { UIApplication.shared.registerForRemoteNotifications() }
+        if granted { registerIfAllowed() }
         return granted
+    }
+
+    /// Priming's "not now" (§12.5): provisional authorization, with no prompt. Notifications then
+    /// land quietly in Notification Center with iOS's own Keep and Turn Off buttons.
+    func requestProvisional() async {
+        guard await center.notificationSettings().authorizationStatus == .notDetermined else { return }
+        let granted = (try? await center.requestAuthorization(options: [.alert, .sound, .badge, .provisional])) ?? false
+        if granted { registerIfAllowed() }
     }
 
     func authorizationStatus() async -> UNAuthorizationStatus {
@@ -129,6 +174,46 @@ final class PushCoordinator: NSObject, UNUserNotificationCenterDelegate {
         status == .authorized || status == .provisional || status == .ephemeral
     }
 
+    static func mirror(_ status: UNAuthorizationStatus) -> PushAuthorization {
+        switch status {
+        case .authorized: .authorized
+        case .provisional: .provisional
+        case .ephemeral: .ephemeral
+        case .denied: .denied
+        default: .notDetermined
+        }
+    }
+
+    // MARK: "In an hour" (spec §12.5): the same notification again, on this phone only
+
+    func snooze(_ content: UNNotificationContent, key: String, after seconds: Int) {
+        guard let copy = content.mutableCopy() as? UNMutableNotificationContent else { return }
+        let trigger = UNTimeIntervalNotificationTrigger(timeInterval: TimeInterval(max(1, seconds)), repeats: false)
+        Self.add(UNNotificationRequest(identifier: PushPolicy.snoozeID(key), content: copy, trigger: trigger))
+    }
+
+    /// A snoozed "your move" goes once its table is open, or no longer waits on you.
+    func cancelSnoozes(codes: [String]) {
+        guard !codes.isEmpty else { return }
+        let ids = codes.map { PushPolicy.snoozeID($0) }
+        center.removePendingNotificationRequests(withIdentifiers: ids)
+    }
+
+    // MARK: a kitten's daily reminder (spec §14.1): local, at a fixed 17:00, off by default
+
+    func setKittenDaily(on: Bool, name: String) {
+        center.removePendingNotificationRequests(withIdentifiers: [KittenReminder.id])
+        guard on else { return }
+        let content = UNMutableNotificationContent()
+        content.title = name
+        content.body = String(localized: "The cats are on the rug.", comment: "A kitten's local daily reminder (spec §12.2 copy)")
+        content.sound = .default
+        content.threadIdentifier = KittenReminder.id
+        let when = DateComponents(hour: KittenReminder.time.h, minute: KittenReminder.time.m)
+        let trigger = UNCalendarNotificationTrigger(dateMatching: when, repeats: true)
+        Self.add(UNNotificationRequest(identifier: KittenReminder.id, content: content, trigger: trigger))
+    }
+
     // MARK: local turn reminder
 
     /// The same shape as the server's push: title = whose turn, body "Your turn at <table>",
@@ -206,42 +291,98 @@ final class PushCoordinator: NSObject, UNUserNotificationCenterDelegate {
     nonisolated func userNotificationCenter(
         _ center: UNUserNotificationCenter, willPresent notification: UNNotification
     ) async -> UNNotificationPresentationOptions {
-        let code = PushPolicy.code(fromPayload: notification.request.content.userInfo)
-        return await presentation(for: code)
+        let userInfo = notification.request.content.userInfo
+        let code = PushPolicy.code(fromPayload: userInfo)
+        let kind = userInfo["kind"] as? String
+        return await presentation(for: code, kind: kind)
     }
 
     /// The completion-handler form on purpose: UIKit asserts this handler runs on the main
     /// thread, and the async form's bridge finishes on a background thread (a crash on tap).
+    /// A background button (In a bit, Not now) calls it only once its answer is sent or queued.
     nonisolated func userNotificationCenter(
         _ center: UNUserNotificationCenter, didReceive response: UNNotificationResponse,
         withCompletionHandler completionHandler: @escaping () -> Void
     ) {
-        let tap = response.actionIdentifier == UNNotificationDefaultActionIdentifier
-        let code = PushPolicy.code(fromPayload: response.notification.request.content.userInfo)
+        let action = response.actionIdentifier
+        let request = response.notification.request
+        let payload = PushPayload(userInfo: request.content.userInfo)
+        let content = Snoozable(content: request.content, key: payload?.code ?? request.content.threadIdentifier)
         let done = MainThreadCallback(completionHandler)
         Task { @MainActor in
-            if tap { self.tapped(code: code) }
+            await self.respond(action: action, payload: payload, snoozable: content)
             done.call()
         }
     }
 
-    private func presentation(for code: String?) -> UNNotificationPresentationOptions {
-        if let code, let model, model.isOnScreen(code: code) { return [] }
+    private func respond(action: String, payload: PushPayload?, snoozable: Snoozable) async {
+        guard let payload else { return }
+        switch NotifyActions.outcome(action: action, payload: payload) {
+        case .open(let code):
+            tapped(code: code)
+        case .answer(let id, let answer, let opensApp):
+            pending = .answer(id: id, answer, opens: opensApp)
+            if opensApp {
+                routePendingTap()
+            } else {
+                // Runs in the background: iOS gives it a little time; the queue keeps it if not enough.
+                let task = UIApplication.shared.beginBackgroundTask(withName: "pounce-answer")
+                await routePending()
+                if task != .invalid { UIApplication.shared.endBackgroundTask(task) }
+            }
+        case .pick(let id, let target, let from):
+            pending = .pick(id: id, target: target, from: from)
+            routePendingTap()
+        case .snooze(let seconds):
+            snooze(snoozable.content, key: snoozable.key.isEmpty ? UUID().uuidString : snoozable.key, after: seconds)
+        case .none:
+            break
+        }
+    }
+
+    private func presentation(for code: String?, kind: String?) -> UNNotificationPresentationOptions {
+        if let model, ["pounce", "pounce_answered"].contains(kind) { Task { await model.refreshStreaks() } }
+        if let code, let model, model.isOnScreen(code: code), kind != "pounce" { return [] }
         if let model { Task { await model.refreshTables() } }
         return [.banner, .list, .sound]
     }
 
-    private func tapped(code: String?) {
-        guard let code else { return }
-        pendingTapCode = code
+    private func tapped(code: String) {
+        pending = .open(code)
         routePendingTap()
     }
 
-    private func routePendingTap() {
-        guard let code = pendingTapCode, let model, model.people.owner != nil else { return }
-        pendingTapCode = nil
-        model.open(code: code, intent: .rejoin)
+    /// What a tap or a button asked for, waiting for the app model (and its owner) if needed.
+    private enum Pending {
+        case open(String)
+        case answer(id: String, PounceAnswer, opens: Bool)
+        case pick(id: String, target: PounceTarget, from: PushFace?)
     }
+
+    private var pending: Pending?
+
+    private func routePendingTap() {
+        Task { await routePending() }
+    }
+
+    private func routePending() async {
+        guard let next = pending, let model, model.people.owner != nil else { return }
+        pending = nil
+        switch next {
+        case .open(let code):
+            model.open(code: code, intent: .rejoin)
+        case .answer(let id, let answer, let opens):
+            await model.answerPounce(id: id, answer: answer, choice: nil, link: nil, opens: opens)
+        case .pick(let id, let target, let from):
+            model.showPick(PickRequest(id: id, target: target, from: from, link: nil))
+        }
+    }
+}
+
+/// A delivered notification's content, carried to the main actor for "In an hour".
+private struct Snoozable: @unchecked Sendable {
+    let content: UNNotificationContent
+    let key: String
 }
 
 /// Carries a UIKit completion handler to the main actor, where it is called.

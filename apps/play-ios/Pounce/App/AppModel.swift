@@ -45,8 +45,16 @@ final class AppModel {
     /// The condo stage this phone last showed per pair, so a new stage drops in once (§9.5).
     private(set) var condoSeen: [String: Int]
     @ObservationIgnored private let condoSeenURL: URL
-    /// Push and local notifications; attached by the app delegate once SwiftUI built this model.
+    /// Push and local notifications; attached by the app delegate at launch.
     @ObservationIgnored weak var push: PushCoordinator?
+    /// Pounces sent from here and answers owed to the server (spec §12.4).
+    let pounces: PounceStore
+    /// The notification settings chosen on this phone or another of the account's (§12.6).
+    let notify: NotifySettingsStore
+    /// A pounce to answer by picking (a "you pick" push, or a Messages link): the pick sheet.
+    var pick: PickRequest?
+    /// Bumped when a Messages link turned out used or expired: the link sheet shakes away.
+    private(set) var linkNope = 0
 
     // MARK: age (spec §14.1)
 
@@ -91,10 +99,15 @@ final class AppModel {
         hadOwnerBeforeThisVersion = age == nil && loaded.owner != nil
         route = age == nil ? .age(then: nil) : loaded.owner == nil ? .pickCat(then: nil) : .home
         #if DEBUG
-        streaks = StreakStore(service: Self.debugStreaks(arguments: CommandLine.arguments) ?? api)
+        let demoStreaks = Self.debugStreaks(arguments: CommandLine.arguments)
+        streaks = StreakStore(service: demoStreaks ?? api)
+        let pounceService: any PounceService = (demoStreaks as? DemoStreakService).map { DemoPounceService(streaks: $0) } ?? api
         #else
         streaks = StreakStore(service: api)
+        let pounceService: any PounceService = api
         #endif
+        pounces = PounceStore(service: pounceService, file: dataDirectory.appendingPathComponent("pounce-answers.json"))
+        notify = NotifySettingsStore(file: dataDirectory.appendingPathComponent("notify-settings.json"))
         streaks.person = loaded.owner?.id
         condoSeenURL = dataDirectory.appendingPathComponent("streak-seen.json")
         condoSeen = (try? JSONDecoder().decode([String: Int].self, from: Data(contentsOf: condoSeenURL))) ?? [:]
@@ -112,6 +125,10 @@ final class AppModel {
         // Before anything can upload: hold accounts while this update's approval may be owed.
         SignificantChangeGate.prepare(self)
     }
+
+    /// The app's one model: SwiftUI shows it and the app delegate attaches it at launch, so a
+    /// notification button that launched the app in the background can use it before any scene.
+    static let shared = makeDefault()
 
     /// The real app model, or (DEBUG only) the throwaway one for `-uitest-reset` (fresh temp data
     /// directory, in-memory credential, scratch settings). The real one keeps its Keychain
@@ -164,6 +181,8 @@ final class AppModel {
            let url = URL(string: text), let link = DeepLink.parse(url, allowDevScheme: true) {
             model.handle(link)
         }
+        // `-show-link`: a Messages pounce link opens at launch (the demo's, from Leo).
+        if arguments.contains("-show-link") { model.handle(.pounce(token: DemoPounceService.linkToken)) }
         return model
         #else
         return real(config: config)
@@ -281,6 +300,7 @@ final class AppModel {
         if ageRecord != nil { await accountsAfterAge() }
         if people.owner != nil { await refreshTables() }
         await refreshStreaks()
+        await pounces.retryPending()
         await recheckAge()
     }
 
@@ -289,6 +309,7 @@ final class AppModel {
         await SignificantChangeGate.check(self)
         await account.uploadProfile()
         await account.sync()
+        await uploadGuestNotify()
     }
 
     // MARK: Age check (spec §14.1)
@@ -308,6 +329,7 @@ final class AppModel {
         ageStore.save(record)
         ageRecord = record
         applyAgeLimits()
+        push?.registerIfAllowed()
         Task { await accountsAfterAge() }
         guard case .age(let then) = route else { return }
         if people.owner == nil {
@@ -331,6 +353,7 @@ final class AppModel {
         ageStore.save(record)
         ageRecord = record
         applyAgeLimits()
+        push?.registerIfAllowed()
     }
 
     /// A kitten keeps no typed name (a name plus an identifier is personal information): an owner
@@ -422,6 +445,8 @@ final class AppModel {
             tables = listed
             // The icon's badge: tables where it's your move (spec §12.5), on every device.
             push?.setBadge(PushPolicy.badgeCount(listed))
+            // A snoozed "your move" for a table that no longer waits on you goes.
+            push?.cancelSnoozes(codes: listed.filter { !$0.yourTurn || $0.status == "over" }.map(\.code))
             // The server answered: a push token that failed to upload goes now.
             push?.retryUpload()
             // A cached room the server no longer lists is gone for good.
@@ -452,6 +477,7 @@ final class AppModel {
     }
 
     func open(code: String, intent: RoomIntent) {
+        push?.cancelSnoozes(codes: [code])
         let session = ensureRoom(code: code, intent: intent)
         // A move link for the room already open: its first snapshot is long gone, so claim now.
         if case .move(let moveCode) = intent, session.intent != intent { session.claimMove(moveCode) }
@@ -538,7 +564,9 @@ final class AppModel {
             Task {
                 await account.uploadProfile()
                 await account.sync()
+                await uploadGuestNotify()
                 await refreshStreaks()
+                await pounces.retryPending()
             }
             // Every reminder, not just this launch's: one may predate a relaunch.
             push?.cancelAllTurnReminders()
@@ -642,6 +670,104 @@ final class AppModel {
             open(code: code, intent: tableCache.contains(code: code) ? .rejoin : .join)
         case .move(let code, let moveCode):
             open(code: code, intent: .move(moveCode: moveCode))
+        case .pounce(let token):
+            Task { await openLink(token) }
+        }
+    }
+
+    // MARK: Pounce (spec §12.4)
+
+    /// A Messages pounce: who sent it and what it asks, then the pick sheet. A used or expired
+    /// link just bumps `linkNope` (the sheet never opens).
+    private func openLink(_ token: String) async {
+        guard let found = await pounces.link(token: token) else {
+            linkNope += 1
+            return
+        }
+        showPick(PickRequest(id: found.id, target: found.target, from: found.from, link: token))
+    }
+
+    func showPick(_ request: PickRequest) {
+        guard people.owner != nil else { return }
+        if case .room = route { closeRoom(); route = .home }
+        pick = request
+    }
+
+    /// The pair a pounce's sender is, by their name and cat (a pick's shared tables come from it).
+    func pairOf(_ face: PushFace?) -> StreakView? {
+        guard let face else { return nil }
+        return streaks.pairs.first { $0.partner.name == face.name && $0.partner.cat == face.cat }
+    }
+
+    /// Sends a pounce to a pair's partner; the bell's state comes back with the streaks.
+    func sendPounce(pair: String, target: PounceTarget) async -> PounceStore.SendResult {
+        let result = await pounces.send(pair: pair, target: target, person: people.owner?.id)
+        await refreshStreaks()
+        return result
+    }
+
+    /// A Messages pounce's link, never from a kitten's device (§14.1).
+    func sharePounce(target: PounceTarget) async -> URL? {
+        guard limits.sharesLinks else { return nil }
+        return await pounces.share(target: target, person: people.owner?.id)
+    }
+
+    /// Answers a pounce (a notification button, the waiting card, or the pick sheet). Play with
+    /// `opens` goes to the table the answer names.
+    @discardableResult
+    func answerPounce(
+        id: String, answer: PounceAnswer, choice: String?, link: String?, opens: Bool = true
+    ) async -> PounceStore.AnswerResult {
+        let result = await pounces.answer(PendingAnswer(id: id, answer: answer, choice: choice, link: link, person: people.owner?.id))
+        if pick?.id == id { pick = nil }
+        if opens, answer == .play, case .done(let code?) = result {
+            #if DEBUG
+            if DemoMode.from() != nil || CommandLine.arguments.contains("-demo-streaks") {
+                openDemo(.table, code: code)
+                return result
+            }
+            #endif
+            open(code: code, intent: .rejoin)
+        }
+        Task { await refreshStreaks() }
+        return result
+    }
+
+    // MARK: Notification settings (spec §12.6)
+
+    var notifySettings: NotifySettings { notify.settings(band: ageBand) }
+
+    /// A dial or toggle changed on the panel: kept here, then synced (signed in) or sent (guest).
+    func setNotify(_ key: String, _ value: JSONValue) {
+        notify.set(key, value, now: Int64(Date.now.timeIntervalSince1970 * 1000))
+        if account.isSignedIn {
+            account.noteLocalChanges()
+        } else {
+            Task { await uploadGuestNotify() }
+        }
+    }
+
+    /// A guest device's changed notification settings go to its player: the server decides
+    /// every player's reminders, not just signed-in ones. Kept for the next try on failure.
+    func uploadGuestNotify() async {
+        guard !account.isSignedIn, people.owner != nil, let patch = notify.pendingPatch(band: ageBand) else { return }
+        do {
+            try await api.patchState(patch, person: nil)
+            notify.sent(patch)
+        } catch {
+            // Offline, or no player yet: the next foreground tries again.
+        }
+    }
+
+    /// A kitten's local daily reminder (§14.1), off until they turn it on.
+    var kittenDailyOn: Bool { settings.kittenDaily }
+
+    func setKittenDaily(_ on: Bool) {
+        settings.kittenDaily = on
+        let name = people.owner?.name ?? ""
+        Task {
+            if on, let push, await push.authorizationStatus() == .notDetermined { _ = await push.requestAuthorization() }
+            push?.setKittenDaily(on: on, name: name)
         }
     }
 
@@ -744,6 +870,8 @@ final class AppModel {
         case .settings:
             var values: [String: JSONValue] = ["soundOn": .bool(settings.soundOn), "hapticsOn": .bool(settings.hapticsOn)]
             if let reminder = settings.turnReminderChoice { values["turnReminder"] = .bool(reminder) }
+            // The notification settings someone chose (none on a kitten's device).
+            values.merge(notify.values(band: ageBand)) { $1 }
             return values
         case .archive:
             return tableArchive.all().mapValues { .number($0) }
@@ -757,6 +885,7 @@ final class AppModel {
     func applySynced(_ section: SyncSectionName, _ entries: SyncSection, accountPersonId: String?) {
         switch section {
         case .settings:
+            notify.takeRemote(entries.filter { NotifyKey.all.contains($0.key) })
             for (key, entry) in entries {
                 guard let on = entry.v.boolValue else { continue }
                 switch key {
@@ -819,10 +948,12 @@ final class AppModel {
         if await !push.requestAuthorization() { settings.pushDeclinedOnce = true }
     }
 
-    /// The priming screen's "not now": Home's bell offers it once more.
+    /// The priming screen's "not now": provisional authorization, with no prompt (§12.5), so
+    /// notifications arrive quietly in Notification Center; Home's bell offers the full prompt once.
     func declinePush() {
         settings.pushPrimed = true
         settings.pushDeclinedOnce = true
+        Task { await push?.requestProvisional() }
     }
 
     func goHome() {

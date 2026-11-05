@@ -17,7 +17,7 @@ struct HomeView: View {
     @State private var heroWiggle = 0
     @State private var ownerWiggle = 0
     @State private var newGameShake = 0
-    /// Notifications are already allowed (no bell then); nil until checked.
+    /// Notifications are fully allowed (no bell then; provisional still gets it, §12.5); nil until checked.
     @State private var pushAllowed: Bool?
     @State private var showPriming = false
     /// The streak badge's cloud was tapped: the sign-in offer is up (§10.5).
@@ -447,7 +447,7 @@ struct HomeView: View {
 
     private func checkPush() async {
         guard let push = model.push else { return }
-        pushAllowed = PushCoordinator.isAllowed(await push.authorizationStatus())
+        pushAllowed = !PushPolicy.offersFullPrompt(PushCoordinator.mirror(await push.authorizationStatus()))
     }
 
     /// Re-offers push once: the priming screen again, then the system prompt (or its settings page).

@@ -19,3 +19,12 @@ enum Route: Equatable {
     case join
     case room(code: String, intent: RoomIntent)
 }
+
+/// A pounce answered by picking (spec §12.4): a "you pick" push, or a Messages link (`link` is its
+/// token). The pick sheet shows the sender's cat and the tables you share, plus a new game.
+struct PickRequest: Identifiable, Equatable {
+    var id: String
+    var target: PounceTarget
+    var from: PushFace?
+    var link: String?
+}
