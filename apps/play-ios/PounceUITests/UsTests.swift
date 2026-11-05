@@ -31,6 +31,21 @@ final class UsTests: XCTestCase {
         XCTAssertTrue(el(app, "home.streak").waitForExistence(timeout: Live.t(10)))
     }
 
+    /// The gift waits on Home (§9.5): tapping it opens it on the Us screen.
+    func testHomeGiftOpens() {
+        let app = launch()
+        let gift = el(app, "home.gift")
+        XCTAssertTrue(gift.waitForExistence(timeout: Live.t(10)), "no gift waiting on Home")
+        gift.tap()
+        XCTAssertTrue(el(app, "gift.reveal").waitForExistence(timeout: Live.t(10)), "the gift didn't open")
+        let done = el(app, "gift.done")
+        XCTAssertTrue(done.waitForExistence(timeout: Live.t(10)))
+        done.tap()
+        el(app, "us.back").tap()
+        XCTAssertTrue(el(app, "home.streak").waitForExistence(timeout: Live.t(10)))
+        XCTAssertTrue(until(5) { !self.el(app, "home.gift").exists }, "the opened gift still waits on Home")
+    }
+
     func testUsShowsCondoWeekAndStats() {
         let app = launch(["-show-us"])
         us(app)

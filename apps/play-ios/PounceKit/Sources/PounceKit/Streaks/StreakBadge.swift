@@ -1,3 +1,5 @@
+import Foundation
+
 /// What a streak badge draws (Home §10.1, the table's top bar §10.3): today's two paws, the
 /// numeral and one mode picture. Never who missed a day.
 public struct StreakBadge: Equatable, Sendable {
@@ -60,6 +62,54 @@ public enum StreakStamp: Equatable, Sendable {
         if new.me && !new.kept && old?.me != true { return .halfDone }
         return nil
     }
+}
+
+/// A stamp a table socket brought (§9.5), for one pair as one person on this phone sees it.
+public struct TableStamp: Sendable {
+    public var pair: String
+    public var person: String
+    public var kind: StreakStamp
+    /// Goes up with each stamp at this table, so the same stamp plays twice.
+    public var serial: Int
+    public var at: Date
+
+    /// A badge that appears this soon after its stamp still plays it (the first day's badge
+    /// appears with the message that made the pair).
+    public static let freshFor: TimeInterval = 1.5
+
+    public init(pair: String, person: String, kind: StreakStamp, serial: Int, at: Date) {
+        self.pair = pair
+        self.person = person
+        self.kind = kind
+        self.serial = serial
+        self.at = at
+    }
+
+    /// Plays on the badge of this pair as this person sees it; never on another pair's badge, and
+    /// never twice for one pair whose two people share this phone.
+    public func plays(on pair: String, person: String) -> Bool {
+        self.pair == pair && self.person == person
+    }
+
+    public func isFresh(now: Date = .now) -> Bool {
+        now.timeIntervalSince(at) < Self.freshFor
+    }
+}
+
+/// The latest stamp per pair and person at one table. Two people of a same-phone pair hear a kept
+/// day back to back, often before the screen redraws, so one slot would lose the first stamp.
+public struct TableStamps: Sendable {
+    private var latest: [String: TableStamp] = [:]
+    private var serial = 0
+
+    public init() {}
+
+    public mutating func add(pair: String, person: String, kind: StreakStamp, at: Date) {
+        serial += 1
+        latest["\(pair)|\(person)"] = TableStamp(pair: pair, person: person, kind: kind, serial: serial, at: at)
+    }
+
+    public func latest(pair: String, person: String) -> TableStamp? { latest["\(pair)|\(person)"] }
 }
 
 /// Which pair's badge a table shows (§10.3): the top one whose people both sit there.

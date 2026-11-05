@@ -176,6 +176,25 @@ struct HomeView: View {
         .accessibilityLabel(Text("Your streak, \(badge.count)", comment: "VoiceOver: Home's streak badge; opens the Us screen"))
         .accessibilityValue(PawBadge.value(badge))
         .accessibilityIdentifier("home.streak")
+        .overlay(alignment: .leading) {
+            if let waiting = model.streaks.waitingGift {
+                Button {
+                    Haptics.shared.tick()
+                    Sound.shared.play(ArtName.Sound.sfxPop)
+                    model.showUs(openingGift: waiting.gift.id)
+                } label: {
+                    Image(ArtName.Habit.giftBox)
+                        .resizable().scaledToFit()
+                        .frame(width: 50 * scale, height: 50 * scale)
+                        .shadow(color: Palette.ink.opacity(0.5), radius: 0, x: 0, y: 3)
+                }
+                .buttonStyle(.plain)
+                .bounceLoop(active: true)
+                .offset(x: -58 * scale)
+                .accessibilityLabel(Text("Open the gift", comment: "VoiceOver: a milestone gift waiting on Home"))
+                .accessibilityIdentifier("home.gift")
+            }
+        }
         .overlay(alignment: .topTrailing) {
             if badge.offerSignIn {
                 CloudPlusBubble(size: 36 * scale) { streakSignIn = true }

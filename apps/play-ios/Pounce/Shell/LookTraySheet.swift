@@ -14,6 +14,12 @@ struct LookTraySheet: View {
 
     private var look: Look { session.store.room?.look ?? .standard }
 
+    /// The server checks the unlocks of this phone's people seated here, so those are offered.
+    private var unlocked: StreakView.Unlocks {
+        let seated = session.model.map { table in table.mySeats.compactMap { table.room.seats[$0].person?.id } } ?? []
+        return model.streaks.unlocked(for: seated)
+    }
+
     var body: some View {
         VStack(spacing: 18) {
             HStack {
@@ -25,11 +31,11 @@ struct LookTraySheet: View {
                 Color.clear.frame(width: 52, height: 1)
             }
             .padding(.horizontal, 18)
-            row(LookTray.rugs(unlocked: model.streaks.unlocked, current: look), prefix: "look.rug.",
+            row(LookTray.rugs(unlocked: unlocked, current: look), prefix: "look.rug.",
                 send: { .setLook(rug: $0, back: nil) }) { item in
                 Image(ArtName.Habit.rug(item.id)).resizable().scaledToFit().frame(width: 84, height: 84)
             }
-            row(LookTray.backs(unlocked: model.streaks.unlocked, current: look), prefix: "look.back.",
+            row(LookTray.backs(unlocked: unlocked, current: look), prefix: "look.back.",
                 send: { .setLook(rug: nil, back: $0) }) { item in
                 Image(uiImage: CardFaceFactory.backImage(ArtName.Habit.back(item.id))).resizable().scaledToFit().frame(width: 60, height: 84)
             }

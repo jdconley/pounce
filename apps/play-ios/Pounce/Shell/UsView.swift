@@ -46,6 +46,16 @@ struct UsView: View {
         .animation(.easeOut(duration: 0.25).paced, value: overlayKey)
         .animation(.spring(duration: 0.4, bounce: 0.3).paced, value: current?.pair)
         .task { await model.refreshStreaks() }
+        .task {
+            // Home's gift: open it here.
+            guard let id = model.pendingGift else { return }
+            model.pendingGift = nil
+            if let view = store.pairs.first(where: { $0.gifts.contains { $0.id == id } }),
+               let gift = view.gifts.first(where: { $0.id == id }) {
+                selected = view.pair
+                opening = (view, gift)
+            }
+        }
         #if DEBUG
         .task {
             // `-show-gift`: the first gift opens at launch (screenshots).

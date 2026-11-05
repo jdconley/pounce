@@ -225,7 +225,10 @@ final class AppModel {
         session.start()
         route = .room(code: room.code, intent: .rejoin)
         // `-demo-stamp`: a streak view keeps today for the top pair a moment in (the stamp, screenshots).
-        if CommandLine.arguments.contains("-demo-stamp") {
+        // `-demo-stamp new`: a brand-new pair's first kept day instead (its badge appears with it).
+        let args = CommandLine.arguments
+        let newPair = args.firstIndex(of: "-demo-stamp").flatMap { args[safe: $0 + 1] } == "new"
+        if args.contains("-demo-stamp") {
             Task { [weak self, weak session] in
                 await self?.streaks.refresh()
                 try? await Task.sleep(for: Pace.duration(.seconds(2.5)))
@@ -233,7 +236,8 @@ final class AppModel {
                 guard let self, let session, var view = self.streaks.top,
                       let seat = session.model?.mySeats.first, let person = session.model?.room.seats[seat].person?.id
                 else { return }
-                view.count += 1
+                view.count = newPair ? 1 : view.count + 1
+                if newPair { view.pair = "pr_demoNewAAAAAAAAAAAAAAAA" }
                 view.me = true
                 view.them = true
                 view.kept = true
@@ -242,8 +246,19 @@ final class AppModel {
                 session.store.handle(.message(.streak(pair: view.pair, person: person, view: view)))
             }
         }
+        // `-demo-streaks` at a demo table: the demo seat's person has the demo pairs (the owner
+        // doesn't sit there), so the badge and the look tray's unlocks show as for a real seat.
+        // (Not with `-demo-stamp new`: there the badge appears with its first message.)
+        if args.contains("-demo-streaks"), !newPair,
+           let seat = room.seats.firstIndex(where: \.yours),
+           let person = room.seats[seat].person?.id {
+            Task { [weak self] in
+                guard let self else { return }
+                await self.streaks.refresh()
+                for view in self.streaks.pairs { self.streaks.apply(pair: view.pair, person: person, view: view) }
+            }
+        }
         // `-demo-home-after <seconds>`: leave the table mid-animation (teardown check).
-        let args = CommandLine.arguments
         if let i = args.firstIndex(of: "-demo-home-after"), let secs = args[safe: i + 1].flatMap(Double.init) {
             Task { [weak self] in
                 try? await Task.sleep(for: .seconds(secs))
@@ -339,9 +354,13 @@ final class AppModel {
         await streaks.refresh()
     }
 
-    func showUs() {
+    /// A gift Home asked the Us screen to open (§9.5: the gift waits on Home).
+    var pendingGift: String?
+
+    func showUs(openingGift gift: String? = nil) {
         guard people.owner != nil else { return }
         closeRoom()
+        pendingGift = gift
         route = .us
     }
 

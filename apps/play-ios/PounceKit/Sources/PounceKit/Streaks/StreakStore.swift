@@ -63,6 +63,8 @@ import Observation
         }
         let old = others[person]?[pair]
         others[person, default: [:]][pair] = view
+        // First heard since launch: only a brand-new pair's first day is news, not a long streak.
+        if old == nil && view.count > 1 { return nil }
         return StreakStamp.diff(old: old, new: view)
     }
 
@@ -73,6 +75,20 @@ import Observation
     }
 
     public func pair(_ id: String) -> StreakView? { pairs.first { $0.pair == id } }
+
+    /// Forgets everything shown (the account signed out or was deleted); the next refresh refills it.
+    public func reset() {
+        pairs = []
+        left = []
+        others = [:]
+        enabled = nil
+    }
+
+    /// The first gift waiting in any pair (Home's gift box, §9.5).
+    public var waitingGift: (pair: String, gift: StreakView.Gift)? {
+        for view in pairs { if let gift = view.gifts.first { return (view.pair, gift) } }
+        return nil
+    }
 
     // MARK: actions (each refreshes after)
 
@@ -141,9 +157,14 @@ import Observation
 
     /// The card backs and rugs the owner can put on a table: the defaults, and everything unlocked
     /// with anyone (§9.4), in catalog order.
-    public var unlocked: StreakView.Unlocks {
-        let backs = Set(pairs.flatMap(\.unlocked.backs) + [StreakCatalog.defaultBack])
-        let rugs = Set(pairs.flatMap(\.unlocked.rugs) + [StreakCatalog.defaultRug])
+    public var unlocked: StreakView.Unlocks { unlocked(for: person.map { [$0] } ?? []) }
+
+    /// What these people can put on a table: the server checks the unlocks of the players seated
+    /// there from this phone, so the tray offers theirs, not the owner's.
+    public func unlocked(for people: [String]) -> StreakView.Unlocks {
+        let views = people.flatMap { views(for: $0) }
+        let backs = Set(views.flatMap(\.unlocked.backs) + [StreakCatalog.defaultBack])
+        let rugs = Set(views.flatMap(\.unlocked.rugs) + [StreakCatalog.defaultRug])
         return StreakView.Unlocks(
             backs: StreakCatalog.backs.filter(backs.contains), rugs: StreakCatalog.rugs.filter(rugs.contains))
     }

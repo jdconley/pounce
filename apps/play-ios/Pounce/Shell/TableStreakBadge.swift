@@ -7,7 +7,8 @@ import SwiftUI
 /// badge; your half done is one paw and a small stamp. Under a second, and it never takes a touch.
 struct TableStreakBadge: View {
     let badge: StreakBadge
-    let stamp: (kind: StreakStamp, serial: Int)?
+    /// The stamp for this badge's pair and person, if one came.
+    let stamp: TableStamp?
     /// Where the badge's center is, in this view's space.
     let at: CGPoint
     let scale: CGFloat
@@ -15,18 +16,20 @@ struct TableStreakBadge: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var flyingToy: String?
     @State private var landed = false
-    @State private var sparkle = 0
+    /// Stamps this badge played (the paw badge's trigger), and the last stamp's serial it played.
+    @State private var played = 0
+    @State private var playedSerial = 0
 
     var body: some View {
         GeometryReader { geo in
             ZStack {
-                PawBadge(badge: badge, scale: scale, stamps: stamp?.serial ?? 0)
+                PawBadge(badge: badge, scale: scale, stamps: played)
                     .overlay {
                         if case .dayKept = stamp?.kind {
                             Image(ArtName.Habit.pawBoth)
                                 .resizable().scaledToFit()
                                 .frame(width: 44 * scale)
-                                .keyframeAnimator(initialValue: 0.0, trigger: stamp?.serial ?? 0) { content, t in
+                                .keyframeAnimator(initialValue: 0.0, trigger: played) { content, t in
                                     content.scaleEffect(0.6 + t * 0.9).opacity(t > 0 ? 1.2 - t : 0)
                                 } keyframes: { _ in
                                     LinearKeyframe(1.0, duration: Pace.seconds(0.6))
@@ -46,15 +49,19 @@ struct TableStreakBadge: View {
             .frame(width: geo.size.width, height: geo.size.height)
         }
         .allowsHitTesting(false)
+        // The first day's badge appears with the message that made it: a fresh stamp still plays.
+        .onAppear { if stamp?.isFresh() == true { play() } }
         .onChange(of: stamp?.serial) { play() }
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(Text("Your streak, \(badge.count)", comment: "VoiceOver: the table's streak badge"))
         .accessibilityIdentifier("table.streak")
-        .accessibilityValue("\(badge.count)|\(badge.me ? 1 : 0)|\(badge.them ? 1 : 0)|\(badge.kept ? 1 : 0)|\(stamp?.serial ?? 0)")
+        .accessibilityValue("\(badge.count)|\(badge.me ? 1 : 0)|\(badge.them ? 1 : 0)|\(badge.kept ? 1 : 0)|\(played)")
     }
 
     private func play() {
-        guard let stamp else { return }
+        guard let stamp, stamp.serial > playedSerial else { return }
+        playedSerial = stamp.serial
+        played += 1
         switch stamp.kind {
         case .halfDone:
             Haptics.shared.tick()

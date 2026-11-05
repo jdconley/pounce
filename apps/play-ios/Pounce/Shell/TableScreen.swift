@@ -167,6 +167,7 @@ private struct TableStage: View {
     @State private var backgrounded = false
     /// The game over screen's Play again (§10.4).
     @State private var playAgain = PlayAgain()
+    @State private var againTick = 0
     /// The look pill floating down after someone changed the table (§9.4).
     @State private var lookPill: RoomStore.LookChange?
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -238,9 +239,12 @@ private struct TableStage: View {
                 }
                 .transition(.opacity.combined(with: .scale(scale: 0.8, anchor: .bottom)))
             }
-            if let badge = tableStreak, events.winners == nil {
+            if let shown = tableStreak, events.winners == nil {
                 GeometryReader { geo in
-                    TableStreakBadge(badge: badge, stamp: session.stamp, at: streakBadgeCenter(geo), scale: streakScale)
+                    TableStreakBadge(
+                        badge: shown.badge,
+                        stamp: session.stamps.latest(pair: shown.pair, person: shown.person),
+                        at: streakBadgeCenter(geo), scale: streakScale)
                 }
                 .ignoresSafeArea()
                 .transition(.scale.combined(with: .opacity))
@@ -487,7 +491,7 @@ private struct TableStage: View {
     // MARK: streaks and looks
 
     /// The badge for the top pair seated here (§10.3), once the server has streaks on.
-    private var tableStreak: StreakBadge? {
+    private var tableStreak: (badge: StreakBadge, pair: String, person: String)? {
         guard model.streaks.enabled != false, let table else { return nil }
         let mine = table.mySeats.compactMap { table.room.seats[safe: $0]?.person }
         let owner = model.people.owner?.id
@@ -496,7 +500,8 @@ private struct TableStage: View {
         let others = table.room.seats.indices.filter { !table.mySeats.contains($0) }.compactMap { table.room.seats[$0].person }
         guard let pick = TableStreak.pick(code: session.code, candidates: candidates, reported: session.streakPairs, others: others)
         else { return nil }
-        return StreakBadge.make(pick.view, all: [], signedIn: true, offersSignIn: false)
+        guard let badge = StreakBadge.make(pick.view, all: [], signedIn: true, offersSignIn: false) else { return nil }
+        return (badge, pick.view.pair, pick.person)
     }
 
     private var streakScale: CGFloat { horizontalSizeClass == .regular ? 1.15 : 0.8 }
@@ -536,20 +541,36 @@ private struct TableStage: View {
                 .accessibilityElement()
                 .accessibilityIdentifier("table.code")
                 .accessibilityValue(session.code)
+            #if DEBUG
+            // The last stamp heard here and whose badge shows (`pair/person/serial > pair/person`).
+            Color.clear.frame(width: 1, height: 1)
+                .accessibilityElement()
+                .accessibilityIdentifier("table.stamp.debug")
+                .accessibilityValue(tableStreak.map { shown in
+                    "\(shown.pair)/\(shown.person) stamp \(session.stamps.latest(pair: shown.pair, person: shown.person)?.serial ?? 0)"
+                } ?? "-")
+            #endif
         }
         .allowsHitTesting(false)
         .onChange(of: look, initial: true) { old, _ in lastLook = old }
     }
 
     private var againState: GameOverView.Again? {
+        _ = againTick
         guard PlayAgain.available(session.store.room) else { return nil }
         if session.store.rematch != nil { return .go }
-        return playAgain.waiting ? .waiting : .ask
+        return playAgain.isWaiting() ? .waiting : .ask
     }
 
     private func tapPlayAgain() {
         switch playAgain.tap(room: session.store.room, rematch: session.store.rematch) {
-        case .send: session.send(.rematch)
+        case .send:
+            session.send(.rematch)
+            // No answer by then (the send never left, or the deal failed): the pill wakes up again.
+            Task {
+                try? await Task.sleep(for: .seconds(PlayAgain.wait + 0.2))
+                againTick += 1
+            }
         case .jump(let code): model.openRematch(code: code)
         case .none: break
         }
