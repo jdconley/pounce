@@ -23,6 +23,7 @@ export default {
       return new Response(null, { status: 204 });
     }
     if (url.pathname === "/__test/notify") return Response.json(await player().notifyState());
+    if (url.pathname === "/__test/alarm") return Response.json(await player().alarmAt());
     if (url.pathname === "/__test/settle") {
       await env.PAIRS.get(env.PAIRS.idFromName(q("pair"))).settle(Number(q("now")));
       return new Response(null, { status: 204 });

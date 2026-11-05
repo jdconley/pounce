@@ -291,12 +291,14 @@ export class Player extends DurableObject<Env> {
     };
   }
 
-  patchState(patch: StatePatch, now: number): void {
+  async patchState(patch: StatePatch, now: number): Promise<void> {
     if (!this.exists()) return;
     for (const name of SECTIONS) {
       const section = patch[name];
       if (section) this.writeSection(name, section, now);
     }
+    // Reminder times and quiet hours may have moved (§12.6).
+    if (patch.settings && streaksOn(this.env)) await this.arm(now);
   }
 
   exportForMerge(): PlayerExport {
@@ -647,6 +649,11 @@ export class Player extends DurableObject<Env> {
 
   private prunePounces(now: number): void {
     this.ctx.storage.sql.exec("DELETE FROM pounces WHERE at <= ?", now - POUNCE_KEEP_MS);
+  }
+
+  /** When the alarm is set, for tests. */
+  async alarmAt(): Promise<number | null> {
+    return this.ctx.storage.getAlarm();
   }
 
   /** The reminder state, for tests and support. */

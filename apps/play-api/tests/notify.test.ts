@@ -168,6 +168,28 @@ describe("the reminder alarm (§12.1, §12.3)", { timeout: 30_000 }, () => {
   });
 });
 
+describe("synced settings (§12.6)", { timeout: 30_000 }, () => {
+  test("changing the reminder time moves the alarm at once", async () => {
+    const mf = await start();
+    const phone = await mint(mf);
+    const jd = newPerson("JD", 1);
+    const ids = await profile(mf, phone, [jd]);
+    const alarmAt = async () => (await (await mf.dispatchFetch(`${BASE}/__test/alarm?player=${ids[jd.id] as string}`)).json()) as number;
+    const before = await alarmAt();
+    const at = Date.now();
+    const patch = {
+      settings: {
+        "reminders.auto": { v: false, at },
+        "reminders.weekday": { v: { h: 9, m: 0 }, at },
+        "reminders.weekend": { v: { h: 9, m: 0 }, at },
+      },
+    };
+    expect((await call(mf, phone, "PATCH", `/v1/me/state?person=${jd.id}`, patch)).status).toBe(204);
+    // Whatever the time of day, the next wake differs once the 19:30 default becomes 09:00.
+    expect(await alarmAt()).not.toBe(before);
+  });
+});
+
 describe("status pushes (§8, §12.1)", { timeout: 30_000 }, () => {
   test("a pause tells the partner, quietly, titled with the table; widgets reload once in 15 minutes", async () => {
     const mf = await start();
