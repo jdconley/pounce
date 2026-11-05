@@ -27,6 +27,11 @@ export interface Env {
    * app half shipped the settings panel and Pounce; Miniflare tests set it.
    */
   NOTIFY?: string;
+  /**
+   * The live table, a Live Activity (daily habit PR 7), when "on", and only with `NOTIFY` on
+   * too. wrangler.jsonc turns it on; it's a kill switch for every Live Activity push.
+   */
+  LIVE?: string;
   /** HMAC key for device tokens. A secret; absent until configured. */
   TOKEN_SECRET?: string;
   /** Public TestFlight link for the share page. Optional; the page omits the link when unset. */

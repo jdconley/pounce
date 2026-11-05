@@ -118,8 +118,10 @@ final class PushCoordinator: NSObject, UNUserNotificationCenterDelegate {
     private func credentialChanged(_ deviceId: String) {
         tokens.deviceChanged(deviceId)
         uploadPendingToken()
-        // The new device has no widget token on the server either (spec §11.2).
+        // The new device has no widget token on the server either (spec §11.2), nor live table ones (§11.3).
         Task { await model?.uploadWidgetToken() }
+        model?.liveTables.deviceChanged()
+        Task { await model?.liveTables.retry() }
     }
 
     /// Tries a held token again (foreground, or after another server call succeeded).

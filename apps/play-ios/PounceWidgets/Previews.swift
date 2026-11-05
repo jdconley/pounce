@@ -59,4 +59,39 @@ enum PreviewEntries {
 } timeline: {
     for entry in PreviewEntries.all { entry }
 }
+
+/// The live table (spec §11.3): my move, their move, no paws yet, and six seats.
+enum LivePreviews {
+    static let attributes = LiveTableAttributes(code: DemoFixtures.liveTable(mine: true).code)
+    static let states: [LiveTableState] = [
+        DemoFixtures.liveTable(mine: true).state,
+        DemoFixtures.liveTable(mine: false).state,
+        DemoFixtures.liveTable(mine: false, seats: 2, paws: false).state,
+        DemoFixtures.liveTable(mine: true, seats: 6).state,
+    ]
+}
+
+#Preview("Live table", as: .content, using: LivePreviews.attributes) {
+    LiveTableWidget()
+} contentStates: {
+    for state in LivePreviews.states { state }
+}
+
+#Preview("Island expanded", as: .dynamicIsland(.expanded), using: LivePreviews.attributes) {
+    LiveTableWidget()
+} contentStates: {
+    for state in LivePreviews.states { state }
+}
+
+#Preview("Island compact", as: .dynamicIsland(.compact), using: LivePreviews.attributes) {
+    LiveTableWidget()
+} contentStates: {
+    for state in LivePreviews.states { state }
+}
+
+#Preview("Island minimal", as: .dynamicIsland(.minimal), using: LivePreviews.attributes) {
+    LiveTableWidget()
+} contentStates: {
+    for state in LivePreviews.states { state }
+}
 #endif

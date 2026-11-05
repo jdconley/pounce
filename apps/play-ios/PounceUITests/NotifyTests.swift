@@ -71,6 +71,22 @@ final class NotifyTests: XCTestCase {
         XCTAssertEqual(value(bell), "off")
         XCTAssertFalse(el(app, "notify.reminders").exists)
         XCTAssertFalse(el(app, "notify.quietStart").exists)
+        XCTAssertFalse(el(app, "notify.liveTable").exists, "a kitten never gets a live table (§14.1)")
+    }
+
+    /// The live table toggle (spec §11.3, §12.6): on by default for adults and teens, and it flips.
+    func testLiveTableToggle() {
+        let app = launch()
+        let live = el(app, "notify.liveTable")
+        XCTAssertTrue(live.exists, "no live table toggle")
+        XCTAssertEqual(value(live), "on")
+        live.tap()
+        XCTAssertTrue(until(3) { self.value(live) == "off" })
+        live.tap()
+        XCTAssertTrue(until(3) { self.value(live) == "on" })
+        app.terminate()
+        let teen = launch(["-age-band", "teen"])
+        XCTAssertEqual(value(el(teen, "notify.liveTable")), "on", "the game itself, so on for teens too")
     }
 
     func testGearHasPanel() {

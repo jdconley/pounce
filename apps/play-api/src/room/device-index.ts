@@ -1,7 +1,9 @@
 import { DurableObject } from "cloudflare:workers";
 
+import { CAP_MS, IDLE_MS, endBody, type LiveState, type LiveTokens } from "../live/live";
 import { nightBlocked, pushBlocked } from "../players/age";
-import { pushAlert, pushDismiss, pushWidget, pushYourTurn } from "../push/apns";
+import { pushAlert, pushDismiss, pushLive, pushWidget, pushYourTurn } from "../push/apns";
+import { liveOn } from "../streaks/profile";
 
 import { createTables, listTables, removeTable, upsertTable, type TableEntry } from "./tables";
 
@@ -50,6 +52,11 @@ export class DeviceIndex extends DurableObject<Env> {
     const { sql } = this.ctx.storage;
     this.setMeta("time_zone", p.timeZone);
     this.setMeta("age_band", p.ageBand);
+    // A kitten's device keeps no live table token (§14.1).
+    if (pushBlocked(p.ageBand)) {
+      this.setMeta("live_start_token", null);
+      this.clearLive();
+    }
     sql.exec("DELETE FROM people");
     for (const [person, player] of Object.entries(p.people)) {
       sql.exec("INSERT INTO people (person_id, player_id) VALUES (?, ?)", person, player);
@@ -117,6 +124,8 @@ export class DeviceIndex extends DurableObject<Env> {
   async push(intent: YourTurnIntent | DismissIntent): Promise<{ sent: boolean }> {
     const band = this.ageBand();
     if (pushBlocked(band) || nightBlocked(band, this.getMeta("time_zone"), Date.now())) return { sent: false };
+    // The live table shows the move already (§11.3, §12.1).
+    if (intent.kind === "your_turn" && this.liveRunning(intent.code)) return { sent: false };
     const token = this.getMeta("apns_token");
     const { sent, unregistered } =
       intent.kind === "your_turn"
@@ -136,6 +145,8 @@ export class DeviceIndex extends DurableObject<Env> {
   async pushAlert(body: Record<string, unknown>, collapseId: string, level: Level): Promise<{ sent: boolean }> {
     const now = Date.now();
     if (this.silenced(now)) return { sent: false };
+    // While this device's live table can show the move, "your move" stays quiet (§11.3, §12.1).
+    if (body.kind === "your_move" && typeof body.code === "string" && this.liveRunning(body.code)) return { sent: false };
     const token = this.getMeta("apns_token");
     const { sent, unregistered } = await pushAlert(this.env, token, body, collapseId, level);
     if (unregistered) this.ctx.storage.sql.exec("DELETE FROM meta WHERE k = 'apns_token' AND v = ?", token);
@@ -162,6 +173,98 @@ export class DeviceIndex extends DurableObject<Env> {
     const { sent, unregistered } = await pushWidget(this.env, token);
     if (unregistered) this.ctx.storage.sql.exec("DELETE FROM meta WHERE k = 'widget_token' AND v = ?", token);
     if (sent) this.setMeta("widget_at", String(now));
+    return { sent };
+  }
+
+  // MARK: the live table (§11.3). At most one per device: `live_code` is its table,
+  // `live_token` its activity's update token once the app sends it, `live_state` the
+  // content it last showed (an end needs one).
+
+  /** The live table's tokens from the app. A kitten's device keeps none (§14.1). */
+  setLiveTokens(t: LiveTokens): void {
+    if (pushBlocked(this.ageBand())) return;
+    if (t.pushToStart !== undefined) this.setMeta("live_start_token", t.pushToStart);
+    for (const a of t.activities ?? []) {
+      if (a.code !== this.getMeta("live_code")) continue;
+      // Null: the activity ended on the device (swiped away): stop holding "your move" back. Not
+      // before a token arrived: then it's a late word about an older activity for the same table.
+      if (a.token === null) {
+        if (this.getMeta("live_token") !== null) this.clearLive();
+      } else {
+        this.setMeta("live_token", a.token);
+      }
+    }
+  }
+
+  /**
+   * This device's live table for `code` can be updated: its "your move" is
+   * held back. Never past the live table's own limits, so a lost end can't
+   * keep it quiet, and never with `LIVE` off.
+   */
+  liveRunning(code: string, now = Date.now()): boolean {
+    if (!liveOn(this.env) || this.getMeta("live_code") !== code || this.getMeta("live_token") === null) return false;
+    const started = Number(this.getMeta("live_at") ?? 0);
+    const moved = Number(this.getMeta("live_moved") ?? started);
+    return now < Math.min(moved + IDLE_MS, started + CAP_MS);
+  }
+
+  private clearLive(): void {
+    for (const k of ["live_code", "live_token", "live_state", "live_at", "live_moved"]) this.setMeta(k, null);
+  }
+
+  private forgetLiveToken(key: "live_start_token" | "live_token", token: string): void {
+    this.ctx.storage.sql.exec("DELETE FROM meta WHERE k = ? AND v = ?", key, token);
+  }
+
+  /**
+   * Push-to-start (§11.3). A newer table replaces the older one, which is
+   * ended first with the state it last showed. Nothing for a kitten, or a
+   * teen overnight, or without a push-to-start token.
+   */
+  async liveStart(
+    code: string,
+    body: Record<string, unknown>,
+    state: LiveState,
+    now: number,
+  ): Promise<{ sent: boolean; replaced: string | null }> {
+    if (this.silenced(now)) return { sent: false, replaced: null };
+    const start = this.getMeta("live_start_token");
+    if (!start) return { sent: false, replaced: null };
+    const old = this.getMeta("live_code");
+    const oldState = this.getMeta("live_state");
+    if (old !== null && oldState !== null) await this.liveEnd(old, endBody(JSON.parse(oldState) as LiveState, now), now);
+    this.setMeta("live_code", code);
+    this.setMeta("live_token", null);
+    this.setMeta("live_state", JSON.stringify(state));
+    this.setMeta("live_at", String(now));
+    this.setMeta("live_moved", String(now));
+    const { sent, unregistered } = await pushLive(this.env, start, body, 10);
+    if (unregistered) this.forgetLiveToken("live_start_token", start);
+    if (!sent) this.clearLive();
+    // The older table's room drops its record (and gives back a held "your move").
+    return { sent, replaced: old !== null && old !== code ? old : null };
+  }
+
+  /** A turn change for this device's live table; ignored for any other table, or before its token arrived. */
+  async liveUpdate(code: string, body: Record<string, unknown>, state: LiveState, priority: 5 | 10, now: number): Promise<{ sent: boolean }> {
+    if (this.getMeta("live_code") !== code) return { sent: false };
+    this.setMeta("live_state", JSON.stringify(state));
+    this.setMeta("live_moved", String(now));
+    const token = this.getMeta("live_token");
+    if (!token || this.silenced(now)) return { sent: false };
+    const { sent, unregistered } = await pushLive(this.env, token, body, priority);
+    if (unregistered) this.clearLive();
+    return { sent };
+  }
+
+  /** Ends this device's live table for `code`: forgotten here at once, the push only when it may go. */
+  async liveEnd(code: string, body: Record<string, unknown>, now: number): Promise<{ sent: boolean }> {
+    if (this.getMeta("live_code") !== code) return { sent: false };
+    const token = this.getMeta("live_token");
+    this.clearLive();
+    if (!token || this.silenced(now)) return { sent: false };
+    const { sent, unregistered } = await pushLive(this.env, token, body, 10);
+    if (unregistered) this.forgetLiveToken("live_token", token);
     return { sent };
   }
 }

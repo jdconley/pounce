@@ -195,6 +195,8 @@ enum ArtName {
         static let iconWeekday = "icon-weekday"
         static let iconWeekend = "icon-weekend"
         static let iconLastChance = "icon-last-chance"
+        /// The live table toggle (PR 7): a phone's Lock Screen with the rug strip and the bell.
+        static let iconLiveTable = "icon-live-table"
     }
 
     // MARK: Sounds (Resources/Sounds/<name>.caf, 44.1 kHz mono)

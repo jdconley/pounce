@@ -4,12 +4,14 @@ import WidgetKit
 
 /// `PounceWidgets` (spec §11): the Us widget on the home screen and in StandBy, and the Streak
 /// widget on the lock screen. Both read the App Group snapshot the app keeps (`WidgetSnapshot`)
-/// and reload on a WidgetKit push.
+/// and reload on a WidgetKit push. Plus the live table (§11.3), the Live Activity the server
+/// starts and updates by push.
 @main
 struct PounceWidgetsBundle: WidgetBundle {
     var body: some Widget {
         UsWidget()
         StreakWidget()
+        LiveTableWidget()
     }
 }
 

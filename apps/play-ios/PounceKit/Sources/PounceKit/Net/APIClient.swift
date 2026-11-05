@@ -93,6 +93,17 @@ public actor APIClient {
         try await authenticatedCall("PUT", "/v1/devices/me/widget-push", body: ["token": hex]).credential.deviceId
     }
 
+    /// The live table's push-to-start token (spec §11.3, §13.4). Returns the device it went up for.
+    @discardableResult public func setLivePushToStart(_ hex: String) async throws -> String {
+        try await authenticatedCall("PUT", "/v1/devices/me/live-activity", body: ["pushToStart": hex]).credential.deviceId
+    }
+
+    /// One live table's update token; nil tells the server it ended on this device (swiped away),
+    /// so "your move" stops being held back for it.
+    public func setLiveActivityToken(code: String, token: String?) async throws {
+        _ = try await authenticated("PUT", "/v1/devices/me/live-activity", body: LiveActivityBody(code: code, token: token))
+    }
+
     public func listTables() async throws -> [TableEntry] {
         struct Reply: Decodable { let tables: [TableEntry] }
         let data = try await authenticated("GET", "/v1/devices/me/tables", body: nil)
@@ -231,5 +242,27 @@ public actor APIClient {
 
     private static func decode<T: Decodable>(_ type: T.Type, from data: Data, status: Int) throws -> T {
         do { return try JSONDecoder().decode(type, from: data) } catch { throw APIError.server(status) }
+    }
+}
+
+/// `{"activities": [{"code": ..., "token": ... | null}]}`: an explicit null, which clears it.
+struct LiveActivityBody: Encodable, Sendable {
+    struct Entry: Encodable, Sendable {
+        let code: String
+        let token: String?
+
+        private enum CodingKeys: String, CodingKey { case code, token }
+
+        func encode(to encoder: any Encoder) throws {
+            var c = encoder.container(keyedBy: CodingKeys.self)
+            try c.encode(code, forKey: .code)
+            try c.encode(token, forKey: .token)
+        }
+    }
+
+    let activities: [Entry]
+
+    init(code: String, token: String?) {
+        activities = [Entry(code: code, token: token)]
     }
 }
