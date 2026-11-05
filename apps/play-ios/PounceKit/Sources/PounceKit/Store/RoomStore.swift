@@ -45,6 +45,19 @@ import Observation
     /// `onChange` action at most once per frame and drops a second change in that frame, which
     /// left a pass-and-play seat's turn face down with no curtain until some later message.
     public private(set) var pass = PassAndPlay()
+    /// The last `look` event (§9.4): who changed the table and to what. `serial` goes up with
+    /// each, so the same look twice still floats its pill. Nil until one arrives.
+    public private(set) var lookChange: LookChange?
+    /// Play again's table (§10.4): from `{t:"rematch"}`, or a snapshot that already has one.
+    public private(set) var rematch: String?
+    /// Each `{t:"streak"}` for this device's people: pair, person, view. Set by the session.
+    @ObservationIgnored public var onStreak: ((String, String, StreakView) -> Void)?
+
+    public struct LookChange: Equatable, Sendable {
+        public var seat: Seat
+        public var look: Look
+        public var serial: Int
+    }
     /// Single consumer (the table scene). Unbounded, so no intent is ever dropped.
     @ObservationIgnored public let intents: AsyncStream<TableIntent>
 
@@ -180,8 +193,10 @@ import Observation
             moveCode = MoveCode(seat: seat, code: code)
         case .error(let code):
             applyError(code)
-        case .streak, .rematch:
-            break  // Task 4
+        case .streak(let pair, let person, let view):
+            onStreak?(pair, person, view)
+        case .rematch(let code):
+            rematch = code
         }
     }
 
@@ -193,6 +208,7 @@ import Observation
     private func applySnapshot(seq: Int, room new: RoomView) {
         let previous = room?.status
         room = new
+        if let code = new.rematch, rematch != code { rematch = code }
         lastSeq = seq
         settledSeq = seq
         actionInFlight = false
@@ -240,8 +256,11 @@ import Observation
             noteTurn()
             // actionInFlight stays: that snapshot releases it.
             continuation.yield(.game(game, seq: seq))
-        case .look:
-            break  // Task 4
+        case .look(let seat, let look):
+            // Folded in whole, like presence: the snapshot that follows says the same.
+            room?.look = look
+            if settledSeq == seq - 1 { settledSeq = seq }
+            lookChange = LookChange(seat: seat, look: look, serial: (lookChange?.serial ?? 0) + 1)
         }
     }
 
