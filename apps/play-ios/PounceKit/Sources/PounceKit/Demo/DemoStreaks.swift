@@ -5,7 +5,8 @@ import Synchronization
 extension DemoFixtures {
     /// The Us screen with no server (`-demo-streaks`): a long pinned streak with Mia (a big condo,
     /// most toys, a gift waiting, today half done, a nap and a held day this week), a win-back with
-    /// Kiki, a pause with Nova, and the ghosted cat of a streak left with Leo. Pair ids look like
+    /// Kiki (whose pounce waits on you), a pause with Nova (your bell resting), and the ghosted cat
+    /// of a streak left with Leo. Pair ids look like
     /// the server's; the week ends today.
     public static func streaks(today: Date = .now) -> StreakList {
         let days = week(ending: today)
@@ -25,13 +26,15 @@ extension DemoFixtures {
             week: dots([.kept, .kept, .kept, .none, .kept, .kept, .live]), next: 14, condoStage: 5,
             toys: Array(StreakCatalog.commonToys.suffix(6)) + [StreakCatalog.shinyToys[5]],
             unlocked: .init(backs: ["back-violet-paw", "back-cucumber-chaos"], rugs: ["rug-classic"]),
-            myMove: ["K9PQR"])
+            myMove: ["K9PQR"],
+            pounce: PounceState(waiting: .init(id: "pc_demoKikiAAAAAAAAAAAAAA", target: .table("K9PQR"))))
         let nova = StreakView(
             pair: "pr_demoNovaAAAAAAAAAAAAAA", partner: .init(name: "Nova", cat: 5), count: 41, naps: 2,
             pausedUntil: days[6], best: 41, lifetimeKept: 58, perfectWeeks: 4,
             week: dots([.kept, .kept, .kept, .kept, .paused, .paused, .paused]), next: 50, condoStage: 6,
             toys: Array(StreakCatalog.commonToys.prefix(5)),
-            unlocked: .init(backs: ["back-violet-paw", "back-heart-paws"], rugs: ["rug-classic", "rug-royal-violet"]))
+            unlocked: .init(backs: ["back-violet-paw", "back-heart-paws"], rugs: ["rug-classic", "rug-royal-violet"]),
+            pounce: PounceState(resting: true))
         return StreakList(
             pairs: [mia, kiki, nova],
             left: [LeftPair(pair: "pr_demoLeoAAAAAAAAAAAAAAA", partner: .init(name: "Leo", cat: 1))])
@@ -59,6 +62,14 @@ public final class DemoStreakService: StreakService, Sendable {
         list.withLock { l in
             if let i = l.pairs.firstIndex(where: { $0.pair == pair }) { change(&l.pairs[i]) }
         }
+    }
+
+    /// Changes one pair's view in place (the demo pounce routes).
+    public func edit(_ pair: String, _ change: (inout StreakView) -> Void) { update(pair, change) }
+
+    /// The pair whose view matches, if any.
+    public func first(where match: (StreakView) -> Bool) -> StreakView? {
+        list.withLock { $0.pairs.first(where: match) }
     }
 
     public func pause(pair: String, days: Int, person: String?) async throws {
