@@ -23,8 +23,8 @@ export interface Env {
   STREAKS?: string;
   /**
    * Notifications and Pounce (daily habit PR 5) when "on", and only with
-   * `STREAKS` on too. Never listed in wrangler.jsonc: PR 5's app half turns it
-   * on; tests set it.
+   * `STREAKS` on too. wrangler.jsonc turns it on in production since PR 5's
+   * app half shipped the settings panel and Pounce; Miniflare tests set it.
    */
   NOTIFY?: string;
   /** HMAC key for device tokens. A secret; absent until configured. */

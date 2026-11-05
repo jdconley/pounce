@@ -28,7 +28,7 @@ export function streaksOn(env: { STREAKS?: string }): boolean {
 /**
  * Notifications and Pounce (§15 row 5) need both `STREAKS` and `NOTIFY`:
  * streaks become visible (PR 4) before anything can nag, and PR 5's app half
- * turns `NOTIFY` on once people can change the settings.
+ * turned `NOTIFY` on in wrangler.jsonc once people could change the settings.
  */
 export function notifyOn(env: { STREAKS?: string; NOTIFY?: string }): boolean {
   return streaksOn(env) && ON.includes((env.NOTIFY ?? "").toLowerCase());
