@@ -197,6 +197,19 @@ enum ArtName {
         static let iconLastChance = "icon-last-chance"
         /// The live table toggle (PR 7): a phone's Lock Screen with the rug strip and the bell.
         static let iconLiveTable = "icon-live-table"
+
+        // Parent consent (PR 9). The kitten's bell: padlocked (with the code), asleep (the resting
+        // bell, `pounceBellAsleep`), or the normal pounce bell.
+        static let kittenBellLocked = "kitten-bell-locked"
+        /// The parent's Kittens panel: a kitten face with a heart.
+        static let iconKittens = "icon-kittens"
+        /// A person a kitten can't pounce yet.
+        static let iconPadlock = "icon-padlock"
+        /// The text to the parent's phone; waiting on it.
+        static let iconPhone = "icon-phone"
+        static let iconHourglass = "icon-hourglass"
+        /// Turn a kitten's notifications off (revoke).
+        static let iconBellOff = "icon-bell-off"
     }
 
     // MARK: Sounds (Resources/Sounds/<name>.caf, 44.1 kHz mono)

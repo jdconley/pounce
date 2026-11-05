@@ -116,46 +116,8 @@ struct AgeGateView: View {
     }
 
     private func keys(height: CGFloat, size: CGFloat) -> some View {
-        let rows: [[Int]] = [[1, 2, 3], [4, 5, 6], [7, 8, 9]]
-        return VStack(spacing: 12) {
-            ForEach(rows, id: \.self) { row in
-                HStack(spacing: 10) {
-                    ForEach(row, id: \.self) { digit($0, height: height, size: size) }
-                }
-            }
-            HStack(spacing: 10) {
-                Button {
-                    Haptics.shared.tick()
-                    Sound.shared.play(ArtName.Sound.sfxPop)
-                    entry.delete()
-                } label: {
-                    Image(ArtName.iconDelete).resizable().scaledToFit().frame(height: size)
-                }
-                .buttonStyle(KeyStyle(color: Palette.teal, height: height))
-                .accessibilityLabel("Delete")
-                .accessibilityIdentifier("age.key.delete")
-                digit(0, height: height, size: size)
-                Button(action: confirm) {
-                    Image(ArtName.iconCheck).resizable().scaledToFit().frame(height: size)
-                }
-                .buttonStyle(KeyStyle(color: Palette.lime, height: height))
-                .accessibilityLabel("Done")
-                .accessibilityIdentifier("age.confirm")
-            }
-        }
-    }
-
-    private func digit(_ d: Int, height: CGFloat, size: CGFloat) -> some View {
-        Button {
-            Haptics.shared.tick()
-            Sound.shared.play(ArtName.Sound.sfxTick)
-            entry.type(d)
-        } label: {
-            OutlinedText(String(d), size: size, width: 2.5)
-        }
-        .buttonStyle(KeyStyle(color: Palette.magenta, height: height))
-        .accessibilityLabel(Text(verbatim: String(d)))
-        .accessibilityIdentifier("age.key.\(d)")
+        DigitKeys(height: height, size: size, idPrefix: "age", onDigit: { entry.type($0) }, onDelete: { entry.delete() },
+                  onDone: confirm)
     }
 
     private func confirm() {
@@ -169,5 +131,60 @@ struct AgeGateView: View {
         Sound.shared.play(ArtName.Sound.sfxPop)
         // Only the band is kept; the year goes out of scope here.
         model.finishAge(AgeBand.from(birthYear: year), source: .keypad)
+    }
+}
+
+/// The numeral keypad in the room-code keypad's style (the age screen, the parent's link code):
+/// 1 to 9, then delete, 0 and the check. Ids: `<prefix>.key.<n>`, `<prefix>.key.delete`,
+/// `<prefix>.confirm`.
+struct DigitKeys: View {
+    let height: CGFloat
+    let size: CGFloat
+    let idPrefix: String
+    let onDigit: (Int) -> Void
+    let onDelete: () -> Void
+    let onDone: () -> Void
+
+    var body: some View {
+        let rows: [[Int]] = [[1, 2, 3], [4, 5, 6], [7, 8, 9]]
+        VStack(spacing: 12) {
+            ForEach(rows, id: \.self) { row in
+                HStack(spacing: 10) {
+                    ForEach(row, id: \.self) { digit($0) }
+                }
+            }
+            HStack(spacing: 10) {
+                Button {
+                    Haptics.shared.tick()
+                    Sound.shared.play(ArtName.Sound.sfxPop)
+                    onDelete()
+                } label: {
+                    Image(ArtName.iconDelete).resizable().scaledToFit().frame(height: size)
+                }
+                .buttonStyle(KeyStyle(color: Palette.teal, height: height))
+                .accessibilityLabel("Delete")
+                .accessibilityIdentifier("\(idPrefix).key.delete")
+                digit(0)
+                Button(action: onDone) {
+                    Image(ArtName.iconCheck).resizable().scaledToFit().frame(height: size)
+                }
+                .buttonStyle(KeyStyle(color: Palette.lime, height: height))
+                .accessibilityLabel("Done")
+                .accessibilityIdentifier("\(idPrefix).confirm")
+            }
+        }
+    }
+
+    private func digit(_ d: Int) -> some View {
+        Button {
+            Haptics.shared.tick()
+            Sound.shared.play(ArtName.Sound.sfxTick)
+            onDigit(d)
+        } label: {
+            OutlinedText(String(d), size: size, width: 2.5)
+        }
+        .buttonStyle(KeyStyle(color: Palette.magenta, height: height))
+        .accessibilityLabel(Text(verbatim: String(d)))
+        .accessibilityIdentifier("\(idPrefix).key.\(d)")
     }
 }

@@ -15,6 +15,9 @@ enum AgeAnswer: Equatable {
 @MainActor
 protocol AgeRangeAsking {
     func ask() async -> AgeAnswer
+    /// Screen Time's Communication Limits are on for this person (Family Sharing): then Apple's
+    /// PermissionKit approves who a kitten may hear from (consent design D3). False when unknown.
+    func communicationLimits() async -> Bool
 }
 
 /// Apple's Declared Age Range. The system shows its own sheet the first time; later calls
@@ -36,14 +39,27 @@ struct LiveAgeRange: AgeRangeAsking {
             return .unavailable
         }
     }
+
+    /// Asked again: the system answers from what the person already chose, with no sheet.
+    func communicationLimits() async -> Bool {
+        guard let presenter = UIApplication.shared.topViewController else { return false }
+        guard case .sharing(let range)? = try? await AgeRangeService.shared.requestAgeRange(ageGates: 13, 18, in: presenter) else {
+            return false
+        }
+        return range.activeParentalControls.contains(.communicationLimits)
+    }
 }
 
 #if DEBUG
 /// `-age-range <kitten|teen|adult|declined|unavailable>`: a canned answer, for tests and screenshots.
+/// `-communication-limits` reports Screen Time's Communication Limits on.
 struct StubAgeRange: AgeRangeAsking {
     let answer: AgeAnswer
+    var limits = CommandLine.arguments.contains("-communication-limits")
 
     init(answer: AgeAnswer) { self.answer = answer }
+
+    func communicationLimits() async -> Bool { limits }
 
     init?(arguments: [String]) {
         guard let i = arguments.firstIndex(of: "-age-range"), let raw = arguments[safe: i + 1] else { return nil }

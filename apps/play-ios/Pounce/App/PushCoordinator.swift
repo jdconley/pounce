@@ -73,10 +73,21 @@ final class PushCoordinator: NSObject, UNUserNotificationCenterDelegate {
     /// device may hold a push token at all: never a kitten's, or one whose age isn't known yet
     /// (spec §14.1). The priming screen asks first; the system prompt never shows at launch.
     func registerIfAllowed() {
-        guard let model, PushPolicy.registersRemote(band: model.ageBand) else { return }
+        guard let model else { return }
+        guard PushPolicy.registersRemote(band: model.ageBand, kittenConsented: model.kittenConsented) else {
+            // Consent ended (consent design §2 Revocation): the server already dropped the token;
+            // this device drops its registration too.
+            if model.kittens.registeredAsKitten {
+                UIApplication.shared.unregisterForRemoteNotifications()
+                model.kittens.noteRegistered(false)
+            }
+            return
+        }
+        let kitten = model.ageBand == .kitten
         Task {
             if Self.isAllowed(await center.notificationSettings().authorizationStatus) {
                 UIApplication.shared.registerForRemoteNotifications()
+                if kitten { model.kittens.noteRegistered(true) }
             }
         }
     }
@@ -130,8 +141,9 @@ final class PushCoordinator: NSObject, UNUserNotificationCenterDelegate {
     }
 
     private func uploadPendingToken() {
-        // A kitten's push token never goes up: it is online contact information (spec §14.1).
-        guard let model, model.limits.uploadsPushToken, let token = tokens.pending, !uploading else { return }
+        // A kitten's push token goes up only with a parent's consent: it is online contact
+        // information (spec §14.1, consent design §2).
+        guard let model, model.limits.uploadsPushToken || model.kittenConsented, let token = tokens.pending, !uploading else { return }
         uploading = true
         Task {
             do {

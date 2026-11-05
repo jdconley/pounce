@@ -13,6 +13,7 @@ struct GearSheet: View {
     let onRules: () -> Void
 
     @State private var confirmingDelete = false
+    @State private var showingKittens = false
 
     var body: some View {
         ZStack {
@@ -27,6 +28,10 @@ struct GearSheet: View {
                         .accessibilityIdentifier("gear.close")
                     }
                     toggles
+                    // A kitten's own device: the bell a grown-up unlocks (parent consent, PR 9).
+                    if model.ageBand == .kitten {
+                        KittenBellView()
+                    }
                     // The notification settings (§12.6), the same panel as the Us screen's gear.
                     NotifyPanel()
                         .padding(.vertical, 6)
@@ -43,6 +48,13 @@ struct GearSheet: View {
                             openURL(model.config.endpoint("/privacy"))
                         }
                         .accessibilityIdentifier("gear.privacy")
+                        // A signed-in adult's kittens (parent consent, PR 9).
+                        if model.isParent {
+                            ArtIconButton(icon: ArtName.Habit.iconKittens, color: Palette.teal, size: 52, label: "Kittens") {
+                                showingKittens = true
+                            }
+                            .accessibilityIdentifier("gear.kittens")
+                        }
                     }
                     account
                 }
@@ -69,6 +81,7 @@ struct GearSheet: View {
         }
         .animation(.easeOut(duration: 0.25).paced, value: confirmingDelete)
         .accountOverlays()
+        .sheet(isPresented: $showingKittens) { KittensSheet() }
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("sheet-gear")
     }

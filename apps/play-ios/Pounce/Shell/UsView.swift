@@ -251,6 +251,10 @@ struct UsView: View {
                 if !view.gifts.isEmpty {
                     Image(ArtName.Habit.giftBox).resizable().scaledToFit().frame(width: 22).offset(x: 6, y: 34)
                 }
+                // A kitten's unapproved person (parent consent, PR 9).
+                if model.pounceLocked(view.pair) {
+                    Image(ArtName.Habit.iconPadlock).resizable().scaledToFit().frame(width: 22).offset(x: -34, y: 34)
+                }
             }
             NameTag(view.partner.name, maxWidth: 76 * rowScale, active: on, size: 13 * rowScale)
         }

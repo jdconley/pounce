@@ -275,4 +275,45 @@ ic -fill "$V" -draw "roundrectangle 58,8 194,244 28,28" -fill "$S" -strokewidth 
   -fill "$O" -draw "circle 98,154 98,138" -fill "$M" -draw "circle 154,154 154,138" \
   \( "$BELL" -resize 120x120 \) -gravity northeast -geometry +0+0 -composite "PNG32:$TMP/live-table.png"
 put icon-live-table "$TMP/live-table.png"
+echo "parent consent (PR 9)"
+# The kitten's locked bell: the pounce bell on its disc, a big gold padlock hung on its front.
+lock() { # lock <size> <out>: a gold padlock, shackle up, keyhole in ink
+  local s="$1"
+  magick -size "${s}x${s}" xc:none -stroke "$INK" -strokewidth "$((s / 16))" \
+    -fill none -draw "arc $((s * 26 / 100)),$((s * 6 / 100)) $((s * 74 / 100)),$((s * 62 / 100)) 180,360" \
+    -draw "line $((s * 26 / 100)),$((s * 34 / 100)) $((s * 26 / 100)),$((s * 50 / 100))" \
+    -draw "line $((s * 74 / 100)),$((s * 34 / 100)) $((s * 74 / 100)),$((s * 50 / 100))" \
+    -fill none -stroke "$G" -strokewidth "$((s / 28))" -draw "arc $((s * 26 / 100)),$((s * 6 / 100)) $((s * 74 / 100)),$((s * 62 / 100)) 180,360" \
+    -stroke "$INK" -strokewidth "$((s / 16))" -fill "$G" -draw "roundrectangle $((s * 14 / 100)),$((s * 44 / 100)) $((s * 86 / 100)),$((s * 94 / 100)) $((s / 9)),$((s / 9))" \
+    -fill "$INK" -strokewidth 0 -draw "circle $((s / 2)),$((s * 63 / 100)) $((s / 2)),$((s * 56 / 100))" \
+    -draw "polygon $((s * 46 / 100)),$((s * 66 / 100)) $((s * 54 / 100)),$((s * 66 / 100)) $((s * 56 / 100)),$((s * 82 / 100)) $((s * 44 / 100)),$((s * 82 / 100))" \
+    "$2"
+}
+lock 360 "PNG32:$TMP/lock-big.png"
+magick "$(src pounce-bell)" -resize 720x720 \( "$TMP/lock-big.png" -resize 380x380 \) -gravity south -geometry +0+40 -composite \
+  "PNG32:$TMP/bell-locked.png"
+put kitten-bell-locked "$TMP/bell-locked.png"
+# The padlock badge (a person you can't pounce yet): the padlock on a magenta disc.
+lock 252 "PNG32:$TMP/lock.png"
+ic -fill "$M" -draw "circle 126,126 126,10" \( "$TMP/lock.png" -resize 170x170 \) -gravity center -geometry +0+4 -composite "PNG32:$TMP/padlock.png"
+put icon-padlock "$TMP/padlock.png"
+# Kittens (the parent's panel): an orange kitten face with big ears and a magenta heart.
+ic -fill "$O" -draw "polygon 40,120 56,26 112,82" -draw "polygon 212,120 196,26 140,82" -draw "ellipse 126,140 92,82 0,360" \
+  -fill "$INK" -strokewidth 0 -draw "circle 94,134 94,120" -draw "circle 158,134 158,120" -draw "polygon 118,160 134,160 126,170" \
+  -fill "$M" -stroke "$INK" -strokewidth 10 -draw "$(heart 196 196 46)" "PNG32:$TMP/kittens.png"
+put icon-kittens "$TMP/kittens.png"
+# A teal phone with a lime speech bubble (the text to the parent).
+ic -fill "$T" -draw "roundrectangle 62,14 190,238 26,26" -fill "$S" -strokewidth 0 -draw "roundrectangle 78,36 174,206 12,12" \
+  -stroke "$INK" -strokewidth 10 -fill "$L" -draw "roundrectangle 96,70 220,140 24,24" -draw "polygon 120,136 150,136 112,168" "PNG32:$TMP/phone.png"
+put icon-phone "$TMP/phone.png"
+# Waiting: an orange hourglass with gold sand.
+ic -fill "$O" -draw "roundrectangle 46,14 206,46 12,12" -draw "roundrectangle 46,206 206,238 12,12" \
+  -fill "$S" -draw "polygon 66,46 186,46 132,126 186,206 66,206 120,126" -fill "$G" -strokewidth 0 \
+  -draw "polygon 90,72 162,72 126,118" -draw "polygon 82,198 170,198 126,150" "PNG32:$TMP/hourglass.png"
+put icon-hourglass "$TMP/hourglass.png"
+# Turn them off: the bell on a violet disc with a magenta slash.
+magick -size 252x252 xc:none -fill "$V" -stroke "$INK" -strokewidth 14 -draw "circle 126,126 126,10" \
+  \( "$BELL" -resize 170x170 \) -gravity center -composite \
+  -stroke "$INK" -strokewidth 34 -draw "line 50,50 202,202" -stroke "$M" -strokewidth 20 -draw "line 50,50 202,202" "PNG32:$TMP/bell-off.png"
+put icon-bell-off "$TMP/bell-off.png"
 echo "habit placeholders done"
