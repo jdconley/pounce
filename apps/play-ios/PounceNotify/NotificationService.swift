@@ -32,11 +32,20 @@ final class NotificationService: UNNotificationServiceExtension {
         if let original { deliver(original) }
     }
 
-    /// Folds the push into the widgets' snapshot; reloads them only when something changed.
+    /// Folds the push into the widgets' snapshot. Reloads at once when a paw, the numeral or the
+    /// bell changed, and for moved tables alone at most every 15 minutes: reloads from an
+    /// extension spend the widgets' daily budget.
     private static func updateWidgets(_ userInfo: [AnyHashable: Any]) {
         guard let payload = PushPayload(userInfo: userInfo), let store = WidgetSnapshotStore.shared else { return }
         let now = Date.now
-        if store.update({ $0.applying(payload, now: now) }) { WidgetCenter.shared.reloadAllTimelines() }
+        var reload = false
+        store.update { old in
+            var next = old.applying(payload, now: now)
+            reload = WidgetSnapshot.reloadsAfterPush(old: old, new: next, now: now)
+            if reload { next.pushReloadAt = now }
+            return next
+        }
+        if reload { WidgetCenter.shared.reloadAllTimelines() }
     }
 
     private func deliver(_ content: UNNotificationContent) {

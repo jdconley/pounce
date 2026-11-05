@@ -35,12 +35,17 @@ public struct WidgetSnapshot: Codable, Equatable, Sendable {
     /// The streak day `pairs`' today fields (`me`, `them`, `kept`) are for.
     public var day: String
     public var savedAt: Date
+    /// When `pairs` was last news (a fetch, a push, a table's socket, the Pounce button): an app
+    /// list older than this never overwrites it.
+    public var pairsAt: Date
     /// When each pair's pounce bell last changed on this device: its hour runs from here.
     public var pounced: [String: Date]
+    /// When `PounceNotify` last reloaded the widgets for a push that only moved the tables.
+    public var pushReloadAt: Date?
 
     public init(
         owner: Owner?, band: AgeBand?, server: String?, pairs: [StreakView], tableNames: [String: String],
-        quietStart: ClockTime, day: String, savedAt: Date, pounced: [String: Date] = [:]
+        quietStart: ClockTime, day: String, savedAt: Date, pairsAt: Date? = nil, pounced: [String: Date] = [:]
     ) {
         self.owner = owner
         self.band = band
@@ -50,31 +55,44 @@ public struct WidgetSnapshot: Codable, Equatable, Sendable {
         self.quietStart = quietStart
         self.day = day
         self.savedAt = savedAt
+        self.pairsAt = pairsAt ?? savedAt
         self.pounced = pounced
     }
 
     /// The app's snapshot: `names` may hold every known table; only the pairs' tables are kept
     /// (with any name `previous` had for them). Pounce times carry over from `previous` while a
-    /// pair's bell is unchanged. `pairs` nil means the app doesn't know them yet (it launched
-    /// offline): the same owner's stored pairs stay, moved on to today.
+    /// pair's bell is unchanged. `pairs` are as of `pairsAt` (default now) and move on to today;
+    /// nil means the app doesn't know them yet (it launched offline). Either way the same owner's
+    /// stored pairs stay when they are newer news than the app's.
     public static func make(
-        owner: Owner?, band: AgeBand?, server: String?, pairs known: [StreakView]?, names: [String: String],
-        quietStart: ClockTime, previous: WidgetSnapshot?, now: Date, calendar: Calendar = .current
+        owner: Owner?, band: AgeBand?, server: String?, pairs known: [StreakView]?, pairsAt: Date? = nil,
+        names: [String: String], quietStart: ClockTime, previous: WidgetSnapshot?, now: Date,
+        calendar: Calendar = .current
     ) -> WidgetSnapshot {
-        let pairs: [StreakView]
-        if let known {
-            pairs = known
-        } else if let previous, owner != nil, previous.owner?.person == owner?.person {
-            pairs = previous.projected(to: now, calendar: calendar).pairs
+        let mine = previous.flatMap { owner != nil && $0.owner?.person == owner?.person ? $0 : nil }
+        let asOf = pairsAt ?? now
+        let base: WidgetSnapshot
+        if let known, mine.map({ $0.pairsAt <= asOf }) ?? true {
+            base = WidgetSnapshot(
+                owner: owner, band: band, server: server, pairs: known, tableNames: [:], quietStart: quietStart,
+                day: WidgetDay.key(asOf, calendar: calendar), savedAt: now, pairsAt: asOf)
+        } else if let mine {
+            base = mine
         } else {
-            pairs = []
+            base = WidgetSnapshot(
+                owner: owner, band: band, server: server, pairs: [], tableNames: [:], quietStart: quietStart,
+                day: WidgetDay.key(now, calendar: calendar), savedAt: now)
         }
-        let codes = Set(pairs.flatMap { $0.myMove + $0.theirMove })
-        let kept = (previous?.tableNames ?? [:]).merging(names) { $1 }.filter { codes.contains($0.key) }
-        var snapshot = WidgetSnapshot(
-            owner: owner, band: band, server: server, pairs: pairs, tableNames: kept, quietStart: quietStart,
-            day: WidgetDay.key(now, calendar: calendar), savedAt: now)
-        snapshot.pounced = Self.pounceTimes(pairs, previous: previous, now: now)
+        var snapshot = base.projected(to: now, calendar: calendar)
+        let codes = Set(snapshot.pairs.flatMap { $0.myMove + $0.theirMove })
+        snapshot.owner = owner
+        snapshot.band = band
+        snapshot.server = server
+        snapshot.quietStart = quietStart
+        snapshot.tableNames = (previous?.tableNames ?? [:]).merging(names) { $1 }.filter { codes.contains($0.key) }
+        snapshot.pounced = Self.pounceTimes(snapshot.pairs, previous: previous, now: now)
+        snapshot.pushReloadAt = mine?.pushReloadAt
+        snapshot.savedAt = now
         return snapshot
     }
 
@@ -84,11 +102,66 @@ public struct WidgetSnapshot: Codable, Equatable, Sendable {
         return pairs.first
     }
 
-    /// Whether a widget would draw differently: everything but the save time.
+    /// Whether a widget would draw differently: everything but the bookkeeping times.
     public func visiblyDiffers(from old: WidgetSnapshot?) -> Bool {
         guard var old else { return true }
         old.savedAt = savedAt
+        old.pairsAt = pairsAt
+        old.pushReloadAt = pushReloadAt
         return old != self
+    }
+
+    /// The widget's own fetch is worth it: there is a server and an owner, and the pairs aren't
+    /// news from the last minute (the app usually just wrote them and reloaded).
+    public func needsFetch(now: Date) -> Bool {
+        server != nil && owner != nil && now.timeIntervalSince(pairsAt) >= 60
+    }
+
+    /// One pair from a table's socket: replaced (or added, a brand-new pair), and news as of now.
+    public func replacing(_ view: StreakView, now: Date, calendar: Calendar = .current) -> WidgetSnapshot {
+        var next = projected(to: now, calendar: calendar)
+        if let i = next.pairs.firstIndex(where: { $0.pair == view.pair }) {
+            var v = view
+            v.pinned = next.pairs[i].pinned
+            next.pairs[i] = v
+        } else {
+            next.pairs.append(view)
+        }
+        next.pounced = Self.pounceTimes(next.pairs, previous: self, now: now)
+        next.pairsAt = now
+        next.savedAt = now
+        return next
+    }
+
+    /// The Pounce button's send (`sent`, from `WidgetPounce.send`) on top of whatever was written
+    /// meanwhile: only that pair's bell and its time change.
+    public func mergingPounce(_ pair: String, from sent: WidgetSnapshot, now: Date) -> WidgetSnapshot {
+        guard let view = sent.pairs.first(where: { $0.pair == pair }),
+              let i = pairs.firstIndex(where: { $0.pair == pair }) else { return self }
+        var next = self
+        next.pairs[i].pounce = view.pounce
+        next.pounced[pair] = sent.pounced[pair]
+        next.pairsAt = now
+        next.savedAt = now
+        return next
+    }
+
+    /// `PounceNotify` reloads at once for what a widget's face shows (a paw, the numeral, the bell),
+    /// and for a push that only moved the tables at most every 15 minutes: extension reloads
+    /// spend the widgets' daily budget.
+    public static func reloadsAfterPush(old: WidgetSnapshot, new: WidgetSnapshot, now: Date) -> Bool {
+        guard new.visiblyDiffers(from: old) else { return false }
+        let before = Dictionary(old.pairs.map { ($0.pair, $0) }, uniquingKeysWith: { a, _ in a })
+        for view in new.pairs {
+            guard let was = before[view.pair] else { return true }
+            if was.count != view.count || was.me != view.me || was.them != view.them || was.kept != view.kept
+                || was.pounce != view.pounce || was.pausedUntil != view.pausedUntil {
+                return true
+            }
+        }
+        if old.day != new.day { return true }
+        guard let last = old.pushReloadAt else { return true }
+        return now.timeIntervalSince(last) >= 15 * 60
     }
 
     /// A fresh list from the server (the widget's fetch, or the app): the table names stay.
@@ -98,6 +171,7 @@ public struct WidgetSnapshot: Codable, Equatable, Sendable {
         next.pairs = list
         next.day = WidgetDay.key(now, calendar: calendar)
         next.savedAt = now
+        next.pairsAt = now
         return next
     }
 
@@ -146,6 +220,7 @@ public struct WidgetSnapshot: Codable, Equatable, Sendable {
         }
         guard changed else { return self }
         next.savedAt = now
+        next.pairsAt = now
         return next
     }
 

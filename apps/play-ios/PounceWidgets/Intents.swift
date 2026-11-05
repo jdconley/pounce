@@ -72,16 +72,16 @@ struct PounceIntent: AppIntent {
     @MainActor
     func perform() async throws -> some IntentResult {
         guard let store = WidgetSnapshotStore.shared, let snapshot = store.load() else { return .result() }
+        let now = Date.now
         let (next, result) = await WidgetPounce.send(
-            snapshot: snapshot, pair: pair, service: WidgetData.client(snapshot, timeout: 15), now: .now)
-        guard result != nil, let sent = next.pairs.first(where: { $0.pair == pair }) else { return .result() }
-        let id = pair
-        // Only this pair's bell: the app may have written the snapshot meanwhile.
-        store.update { current in
-            var merged = current
-            if let i = merged.pairs.firstIndex(where: { $0.pair == id }) { merged.pairs[i].pounce = sent.pounce }
-            merged.pounced[id] = next.pounced[id]
-            return merged
+            snapshot: snapshot, pair: pair, service: WidgetData.client(snapshot, timeout: 15), now: now)
+        switch result {
+        case .sent?, .resting?:
+            // Only this pair's bell: the app, the widget or PounceNotify may have written meanwhile.
+            let id = pair
+            store.update { $0.mergingPounce(id, from: next, now: now) }
+        default:
+            break
         }
         return .result()
     }

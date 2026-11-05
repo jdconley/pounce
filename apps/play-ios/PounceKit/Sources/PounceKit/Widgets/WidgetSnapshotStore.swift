@@ -16,24 +16,46 @@ public final class WidgetSnapshotStore: Sendable {
 
     private let snapshotURL: URL
     private let tokenURL: URL
+    private let lockURL: URL
 
     public init(directory: URL) {
         snapshotURL = directory.appendingPathComponent("widgets.json")
         tokenURL = directory.appendingPathComponent("widget-push.json")
+        lockURL = directory.appendingPathComponent("widgets.lock")
     }
 
     public func load() -> WidgetSnapshot? { Self.read(WidgetSnapshot.self, at: snapshotURL) }
 
-    public func save(_ snapshot: WidgetSnapshot) { Self.write(snapshot, to: snapshotURL) }
+    public func save(_ snapshot: WidgetSnapshot) { locked { Self.write(snapshot, to: snapshotURL) } }
 
-    /// Read, change, write. Without a snapshot there is nothing to change. True when it changed.
+    /// Read, change, write, under the group's lock so the app, the widget and `PounceNotify` never
+    /// lose each other's writes. Without a snapshot there is nothing to change. True when it changed.
     @discardableResult
     public func update(_ change: (WidgetSnapshot) -> WidgetSnapshot) -> Bool {
-        guard let current = load() else { return false }
-        let next = change(current)
-        guard next != current else { return false }
-        save(next)
-        return true
+        write { current in current.map(change) }
+    }
+
+    /// Like `update`, but from nothing too; `nil` from `change` writes nothing.
+    @discardableResult
+    public func write(_ change: (WidgetSnapshot?) -> WidgetSnapshot?) -> Bool {
+        locked {
+            let current = load()
+            guard let next = change(current), next != current else { return false }
+            Self.write(next, to: snapshotURL)
+            return true
+        }
+    }
+
+    /// An exclusive `flock` on `widgets.lock`, held only for one read and write (never across a
+    /// suspension point). Without a lock file it runs unlocked rather than not at all.
+    private func locked<T>(_ body: () -> T) -> T {
+        try? FileManager.default.createDirectory(at: lockURL.deletingLastPathComponent(), withIntermediateDirectories: true)
+        let fd = open(lockURL.path, O_CREAT | O_RDWR, 0o644)
+        guard fd >= 0 else { return body() }
+        defer { close(fd) }
+        flock(fd, LOCK_EX)
+        defer { flock(fd, LOCK_UN) }
+        return body()
     }
 
     /// The last widget push token the server took, and for which device.

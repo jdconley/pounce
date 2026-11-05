@@ -110,6 +110,30 @@ func streakView(
         #expect(store.pairs.count == 1)
     }
 
+    /// The widgets take the list only as news from when it was fetched (spec §11.2).
+    @Test func fetchedAtIsTheLastAnsweredRefresh() async {
+        let (store, fake) = store(StreakList(pairs: [streakView()]))
+        #expect(store.fetchedAt == nil)
+        let before = Date.now
+        await store.refresh()
+        let first = try? #require(store.fetchedAt)
+        #expect(first.map { $0 >= before } == true)
+        fake.fail(.transport("offline"))
+        await store.refresh()
+        #expect(store.fetchedAt == first, "an offline refresh isn't news")
+        fake.fail(.notFound)
+        await store.refresh()
+        #expect(store.fetchedAt.map { $0 >= first! } == true, "streaks off is an answer")
+        store.reset()
+        #expect(store.fetchedAt == nil)
+        await store.refresh()
+        store.person = "someone-else"
+        #expect(store.fetchedAt == nil, "a new person's list isn't fetched yet")
+        // A socket's view alone makes no fetched list.
+        store.apply(pair: "pr_x", person: "someone-else", view: streakView("pr_x"))
+        #expect(store.fetchedAt == nil)
+    }
+
     @Test func applyUpdatesOwnerPairAndReturnsStamp() async {
         var pinned = streakView(count: 5)
         pinned.pinned = true

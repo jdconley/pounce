@@ -51,10 +51,12 @@ enum WidgetData {
     }
 
     /// The owner's streaks from the server, written back to the App Group; the stored snapshot
-    /// when offline (or anything else fails). A 404 is a server with streaks off: no pairs.
+    /// when offline (or anything else fails), or when its pairs are news from the last minute (the
+    /// app just wrote and reloaded). A 404 is a server with streaks off: no pairs.
     static func fresh() async -> WidgetSnapshot? {
         guard let store = WidgetSnapshotStore.shared, let snapshot = store.load() else { return nil }
-        guard let api = client(snapshot), let person = snapshot.owner?.person else { return snapshot }
+        guard snapshot.needsFetch(now: .now), let api = client(snapshot), let person = snapshot.owner?.person
+        else { return snapshot }
         let pairs: [StreakView]
         do {
             pairs = try await api.streaks(person: person).pairs

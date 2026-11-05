@@ -29,10 +29,12 @@ struct UsWidgetView: View {
 
 /// The loud backdrop: violet into magenta under the living-room sky.
 struct WidgetBackdrop: View {
+    @Environment(\.widgetFamily) private var family
+
     var body: some View {
         ZStack {
             LinearGradient(colors: [Palette.violet, Palette.magenta], startPoint: .top, endPoint: .bottom)
-            ArtImage(ArtName.Habit.widgetBackground, points: 240)
+            ArtImage(ArtName.Habit.widgetBackground, points: family == .systemMedium ? 380 : 180)
                 .scaledToFill()
                 .opacity(0.55)
             LinearGradient(colors: [.clear, Palette.night.opacity(0.55)], startPoint: .center, endPoint: .bottom)

@@ -143,6 +143,101 @@ func widgetSnapshot(
         #expect(other.pairs.isEmpty)
     }
 
+    @Test func aListFetchedYesterdayIsGreyToday() {
+        // Review: the app resumed offline the next morning with last night's kept day.
+        let list = [streakView(count: 9, me: true, them: true, kept: true)]
+        let next = WidgetSnapshot.make(
+            owner: widgetOwner, band: .adult, server: nil, pairs: list, pairsAt: at(2026, 11, 5, 22), names: [:],
+            quietStart: ClockTime(h: 22, m: 0), previous: nil, now: at(2026, 11, 6, 9), calendar: la)
+        #expect(next.day == "2026-11-06")
+        #expect(!next.pairs[0].kept && !next.pairs[0].me && next.pairs[0].count == 9)
+        #expect(next.pairsAt == at(2026, 11, 5, 22))
+    }
+
+    @Test func anOlderListNeverOverwritesNewerNews() {
+        // A push (or the Pounce button) landed after the app's last fetch: the app's list waits.
+        var stored = widgetSnapshot([streakView(count: 9)], now: at(2026, 11, 5, 12))
+        stored = stored.applying(try! #require(Self.payloadFor("pr_mia")), now: at(2026, 11, 5, 13), calendar: la)
+        #expect(stored.pairsAt == at(2026, 11, 5, 13))
+        let older = WidgetSnapshot.make(
+            owner: widgetOwner, band: .teen, server: nil, pairs: [streakView(count: 9)], pairsAt: at(2026, 11, 5, 12, 30),
+            names: [:], quietStart: ClockTime(h: 22, m: 0), previous: stored, now: at(2026, 11, 5, 14), calendar: la)
+        #expect(older.pairs == stored.pairs, "the pushed paws stay")
+        #expect(older.band == .teen, "everything else is the app's")
+        let newer = WidgetSnapshot.make(
+            owner: widgetOwner, band: .teen, server: nil, pairs: [streakView(count: 10)], pairsAt: at(2026, 11, 5, 13, 30),
+            names: [:], quietStart: ClockTime(h: 22, m: 0), previous: stored, now: at(2026, 11, 5, 14), calendar: la)
+        #expect(newer.pairs.map(\.count) == [10])
+    }
+
+    @Test func aSocketViewReplacesItsPair() {
+        let s = widgetSnapshot([streakView(count: 9), streakView("pr_kiki", count: 2)], now: at(2026, 11, 5, 12))
+        var view = streakView(count: 10, me: true, them: true, kept: true)
+        view.pounce = PounceState(sent: true)
+        let next = s.replacing(view, now: at(2026, 11, 5, 15), calendar: la)
+        #expect(next.pairs[0].count == 10 && next.pairs[0].kept)
+        #expect(next.pairs[1] == s.pairs[1])
+        #expect(next.pairsAt == at(2026, 11, 5, 15))
+        #expect(next.pounced["pr_mia"] == at(2026, 11, 5, 15))
+        let added = s.replacing(streakView("pr_new", count: 1), now: at(2026, 11, 5, 15), calendar: la)
+        #expect(added.pairs.map(\.pair) == ["pr_mia", "pr_kiki", "pr_new"], "a brand-new pair joins at the end")
+    }
+
+    @Test func fetchesAtMostOnceAMinute() {
+        let s = widgetSnapshot([streakView()], now: at(2026, 11, 5, 12))
+        #expect(!s.needsFetch(now: at(2026, 11, 5, 12, 0)), "the app just wrote it")
+        #expect(s.needsFetch(now: at(2026, 11, 5, 12, 1)))
+        let demo = widgetSnapshot([streakView()], now: at(2026, 11, 5, 12), server: nil)
+        #expect(!demo.needsFetch(now: at(2026, 11, 5, 13)), "no server, no fetch")
+    }
+
+    @Test func pushReloadsAtOnceOnlyForWhatMatters() throws {
+        let la = la
+        let old = widgetSnapshot([streakView("pr_3f9cAAAAAAAAAAAAAAAAAA", count: 12, them: true, myMove: ["AAAAA"])])
+        let push = try #require(Self.payload("your_move"))
+        // Only the move lists changed (the paws were already lit): at most every 15 minutes.
+        let moves = old.applying(push, now: at(2026, 11, 5, 13), calendar: la)
+        #expect(WidgetSnapshot.reloadsAfterPush(old: old, new: moves, now: at(2026, 11, 5, 13)))
+        var reloaded = moves
+        reloaded.pushReloadAt = at(2026, 11, 5, 13)
+        var again = reloaded
+        again.pairs[0].myMove = ["BBBBB"]
+        #expect(!WidgetSnapshot.reloadsAfterPush(old: reloaded, new: again, now: at(2026, 11, 5, 13, 10)))
+        #expect(WidgetSnapshot.reloadsAfterPush(old: reloaded, new: again, now: at(2026, 11, 5, 13, 15)))
+        // A paw lit: at once, whenever.
+        var paw = reloaded
+        paw.pairs[0].me = true
+        #expect(WidgetSnapshot.reloadsAfterPush(old: reloaded, new: paw, now: at(2026, 11, 5, 13, 1)))
+        #expect(!WidgetSnapshot.reloadsAfterPush(old: old, new: old, now: at(2026, 11, 5, 13)))
+    }
+
+    @Test func bandSurvivesEveryWriter() throws {
+        let s = widgetSnapshot([streakView("pr_3f9cAAAAAAAAAAAAAAAAAA")], band: .kitten)
+        #expect(s.withPairs([], now: at(2026, 11, 5, 13), calendar: la).band == .kitten)
+        #expect(s.applying(try #require(Self.payload("your_move")), now: at(2026, 11, 5, 13), calendar: la).band == .kitten)
+        #expect(s.replacing(streakView(), now: at(2026, 11, 5, 13), calendar: la).band == .kitten)
+        #expect(s.mergingPounce("pr_3f9cAAAAAAAAAAAAAAAAAA", from: s, now: at(2026, 11, 5, 13)).band == .kitten)
+    }
+
+    @Test func storeUpdatesUnderALockAndCreates() {
+        let store = WidgetSnapshotStore(directory: FileManager.default.temporaryDirectory.appendingPathComponent("w-\(UUID().uuidString)"))
+        #expect(!store.update { $0 }, "nothing to update yet")
+        let s = widgetSnapshot([streakView()])
+        #expect(store.write { old in old == nil ? s : nil })
+        #expect(store.load() == s)
+        #expect(!store.write { _ in nil }, "nil writes nothing")
+        DispatchQueue.concurrentPerform(iterations: 20) { _ in
+            store.update { var n = $0; n.pairs[0].count += 1; return n }
+        }
+        #expect(store.load()?.pairs[0].count == s.pairs[0].count + 20, "no lost updates")
+    }
+
+    static func payloadFor(_ pair: String) -> PushPayload? {
+        PushPayload(userInfo: [
+            "kind": "your_move", "streak": ["pair": pair, "count": 9, "me": true, "them": false, "naps": 0, "myMove": [], "theirMove": []],
+        ])
+    }
+
     @Test func sampleIsAPair() {
         #expect(WidgetSnapshot.sample.pairs.first?.partner.name == "Mia")
         #expect(WidgetSnapshot.sample.owner != nil)

@@ -15,10 +15,10 @@ enum WidgetArt {
         return .main
     }()
 
-    /// Pixels per point the art is redrawn at.
-    static let scale: CGFloat = 2
+    /// Pixels per point the art is redrawn at, unless the view knows the display's.
+    static let defaultScale: CGFloat = 2
 
-    static func image(_ name: String, points: CGFloat) -> UIImage? {
+    static func image(_ name: String, points: CGFloat, scale: CGFloat = defaultScale) -> UIImage? {
         guard let source = UIImage(named: name, in: bundle, compatibleWith: nil) ?? UIImage(named: name) else { return nil }
         let size = source.size
         guard size.width > 0, size.height > 0 else { return nil }
@@ -34,9 +34,10 @@ enum WidgetArt {
         return UIImage(cgImage: cg, scale: scale, orientation: .up)
     }
 
-    static func mono(_ name: String, points: CGFloat) -> UIImage? {
-        guard let color = image(name, points: points), let cg = color.cgImage, let mono = MonoArt.template(cg) else { return nil }
-        return UIImage(cgImage: mono, scale: scale, orientation: .up)
+    static func mono(_ name: String, points: CGFloat, scale: CGFloat = defaultScale) -> UIImage? {
+        guard let color = image(name, points: points, scale: scale), let cg = color.cgImage,
+              let mono = MonoArt.template(cg) else { return nil }
+        return UIImage(cgImage: mono, scale: color.scale, orientation: .up)
     }
 
     /// PNG data, for the partner list's faces.
@@ -55,18 +56,22 @@ struct ArtImage: View {
     var points: CGFloat
 
     @Environment(\.widgetRenderingMode) private var mode
+    @Environment(\.displayScale) private var displayScale
 
     init(_ name: String, points: CGFloat) {
         self.name = name
         self.points = points
     }
 
+    /// The display's scale, at most 3 (and the default when unknown).
+    private var scale: CGFloat { displayScale > 0 ? min(displayScale, 3) : WidgetArt.defaultScale }
+
     var body: some View {
         if mode == .fullColor {
-            if let ui = WidgetArt.image(name, points: points) {
+            if let ui = WidgetArt.image(name, points: points, scale: scale) {
                 Image(uiImage: ui).resizable().scaledToFit()
             }
-        } else if let ui = WidgetArt.mono(name, points: points) {
+        } else if let ui = WidgetArt.mono(name, points: points, scale: scale) {
             Image(uiImage: ui).renderingMode(.template).resizable().scaledToFit()
         }
     }

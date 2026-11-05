@@ -11,9 +11,12 @@ import Observation
 @MainActor @Observable public final class StreakStore {
     /// The local person the list is for (the phone's owner); nothing loads without one.
     public var person: String? {
-        didSet { if person != oldValue { pairs = []; left = []; others = [:] } }
+        didSet { if person != oldValue { pairs = []; left = []; others = [:]; fetchedAt = nil } }
     }
     public private(set) var enabled: Bool?
+    /// When the server last answered `refresh()` for this person (a list, or streaks off). The
+    /// widgets take `pairs` only as news from then (spec §11.2): socket views don't move it.
+    public private(set) var fetchedAt: Date?
     public private(set) var pairs: [StreakView] = []
     public private(set) var left: [LeftPair] = []
     /// Views for other people on this phone, by person, then pair.
@@ -37,10 +40,12 @@ import Observation
             enabled = true
             pairs = list.pairs
             left = list.left
+            fetchedAt = .now
         } catch APIError.notFound {
             enabled = false
             pairs = []
             left = []
+            fetchedAt = .now
         } catch {
             // Offline or the server is down: keep what was shown.
         }
@@ -82,6 +87,7 @@ import Observation
         left = []
         others = [:]
         enabled = nil
+        fetchedAt = nil
     }
 
     /// The first gift waiting in any pair (Home's gift box, §9.5).

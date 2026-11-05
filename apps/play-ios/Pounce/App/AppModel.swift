@@ -409,7 +409,7 @@ final class AppModel {
     @discardableResult
     func streakArrived(pair: String, person: String, view: StreakView) -> StreakStamp? {
         let stamp = streaks.apply(pair: pair, person: person, view: view)
-        if person == people.owner?.id { syncWidgets() }
+        if person == people.owner?.id { widgets.fold(view) }
         return stamp
     }
 
@@ -421,15 +421,12 @@ final class AppModel {
         var names: [String: String] = [:]
         for (code, table) in cache { if let name = table.name { names[code] = name } }
         for entry in tables { if let name = entry.name { names[entry.code] = name } }
-        // Before the server answered this launch the list is unknown, not empty (an offline launch).
-        let pairs: [StreakView]? = switch streaks.enabled {
-        case nil: nil
-        case false?: []
-        case true?: streaks.pairs
-        }
+        // Until the server answered for this person the list is unknown, not empty (an offline
+        // launch); once it has, it is news only as of that answer.
+        let pairs: [StreakView]? = streaks.fetchedAt == nil ? nil : (streaks.enabled == false ? [] : streaks.pairs)
         widgets.update(
-            owner: people.owner, band: ageBand, pairs: pairs, names: names, quietStart: notifySettings.quietStart,
-            reload: reload)
+            owner: people.owner, band: ageBand, pairs: pairs, pairsAt: streaks.fetchedAt, names: names,
+            quietStart: notifySettings.quietStart, reload: reload)
     }
 
     /// The widgets' push token, from a teen's or an adult's device only.

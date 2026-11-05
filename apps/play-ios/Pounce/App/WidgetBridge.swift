@@ -1,3 +1,4 @@
+import Foundation
 import PounceKit
 import WidgetKit
 
@@ -17,34 +18,41 @@ final class WidgetBridge {
         self.server = server
     }
 
-    /// Writes the snapshot when a widget would draw differently, and reloads them. `pairs` nil:
-    /// not known yet this launch (the stored ones stay). `reload` also reloads when nothing
-    /// changed (going to the background).
+    /// Writes the snapshot when a widget would draw differently, and reloads them. `pairs` are as
+    /// of `pairsAt` (the last answered fetch); nil: not known yet this launch, the stored ones stay.
+    /// A stored list that is newer news (a push, the Pounce button) is kept over an older one.
+    /// `reload` also reloads when nothing changed (going to the background).
     func update(
-        owner: Person?, band: AgeBand?, pairs: [StreakView]?, names: [String: String], quietStart: ClockTime,
-        reload: Bool = false
+        owner: Person?, band: AgeBand?, pairs: [StreakView]?, pairsAt: Date?, names: [String: String],
+        quietStart: ClockTime, reload: Bool = false
     ) {
         guard let store else { return }
-        let stored = store.load()
-        let next = WidgetSnapshot.make(
-            owner: owner.map { .init(person: $0.id, name: $0.name, cat: $0.cat) }, band: band,
-            server: server?.absoluteString, pairs: owner == nil ? [] : pairs, names: names, quietStart: quietStart,
-            previous: stored, now: .now)
-        let changed = next.visiblyDiffers(from: stored)
-        if changed { store.save(next) }
+        let changed = store.write { stored in
+            let next = WidgetSnapshot.make(
+                owner: owner.map { .init(person: $0.id, name: $0.name, cat: $0.cat) }, band: band,
+                server: self.server?.absoluteString, pairs: owner == nil ? [] : pairs, pairsAt: pairsAt, names: names,
+                quietStart: quietStart, previous: stored, now: .now)
+            return next.visiblyDiffers(from: stored) ? next : nil
+        }
         if changed || reload { WidgetCenter.shared.reloadAllTimelines() }
+    }
+
+    /// One pair a table's socket brought, as news from now.
+    func fold(_ view: StreakView) {
+        guard let store else { return }
+        let now = Date.now
+        if store.update({ $0.replacing(view, now: now) }) { WidgetCenter.shared.reloadAllTimelines() }
     }
 
     /// The widgets' push token to the server, once per token and device.
     func uploadToken(api: APIClient, band: AgeBand?) async {
-        guard let store, server != nil, !uploading, WidgetPushToken.uploads(band: band),
-              let token = await Self.pushToken()
-        else { return }
+        guard let store, server != nil, !uploading, WidgetPushToken.uploads(band: band) else { return }
+        uploading = true
+        defer { uploading = false }
+        guard let token = await Self.pushToken() else { return }
         let hex = PushPolicy.hexToken(token)
         let device = try? await api.credential().deviceId
         guard WidgetPushToken.needsUpload(token: hex, deviceId: device, last: store.uploadedToken, band: band) else { return }
-        uploading = true
-        defer { uploading = false }
         // Offline, or a server with NOTIFY off: tried again on the next foreground.
         if let deviceId = try? await api.setWidgetPushToken(hex) {
             store.uploadedToken = .init(deviceId: deviceId, token: hex)

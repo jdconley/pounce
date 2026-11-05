@@ -82,7 +82,8 @@ import Testing
     }
 }
 
-@MainActor @Suite struct WidgetPounceTests {
+/// Serialized: a send in flight is remembered process-wide by pair (the double-tap guard).
+@MainActor @Suite(.serialized) struct WidgetPounceTests {
     let la = widgetCalendar()
     let now = at(2026, 11, 5, 21)
 
@@ -105,6 +106,30 @@ import Testing
         let (_, again) = await WidgetPounce.send(snapshot: next, pair: "pr_mia", service: fake, now: now, calendar: la)
         #expect(again == nil)
         #expect(fake.calls.withLock { $0 }.count == 1)
+    }
+
+    @Test func aDoubleTapSendsOnce() async {
+        // Two performs read the same ready snapshot before either saved.
+        let fake = FakePounces()
+        let s = snapshot()
+        async let a = WidgetPounce.send(snapshot: s, pair: "pr_mia", service: fake, now: now, calendar: la)
+        async let b = WidgetPounce.send(snapshot: s, pair: "pr_mia", service: fake, now: now, calendar: la)
+        let results = await [a.1, b.1]
+        #expect(fake.calls.withLock { $0 }.count == 1)
+        #expect(results.compactMap { $0 } == [.sent("pc_1")], "the other tap does nothing (and writes nothing)")
+    }
+
+    @Test func theIntentMergesOnlyThisPairsBell() async {
+        let fake = FakePounces()
+        let (sent, _) = await WidgetPounce.send(snapshot: snapshot(), pair: "pr_mia", service: fake, now: now, calendar: la)
+        var current = snapshot()
+        current.pairs[1].count = 99  // the app wrote meanwhile
+        current.band = .teen
+        let merged = current.mergingPounce("pr_mia", from: sent, now: now)
+        #expect(merged.pairs[0].pounce.sent)
+        #expect(merged.pounced["pr_mia"] == now)
+        #expect(merged.pairs[1].count == 99 && merged.band == .teen)
+        #expect(merged.pairsAt == now)
     }
 
     @Test func onlyFromReady() async {
