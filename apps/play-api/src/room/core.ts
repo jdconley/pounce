@@ -1,4 +1,5 @@
 import { catTower } from "../games/cat-tower";
+import { POUNCE_LIVE_MS, deadline, expired, liveState, type LiveRecord, type LiveState } from "../live/live";
 import { PROTOCOL_VERSION } from "../protocol";
 import { card } from "../rules/cards";
 import { DEFAULT_BACK, DEFAULT_RUG } from "../streaks/catalog";
@@ -84,12 +85,40 @@ export type RoomState = {
   streakKey?: string;
   /** "Play again" (§10.4): asked once, then the new table's code (null while it's being dealt). */
   rematch?: { code: string | null };
+  /** Each device's live table here (§11.3), by device id. Absent: none. */
+  live?: Record<string, LiveRecord>;
+  /** Players who answered a pounce for this table with Play, and when: leaving soon after starts a live table. */
+  livePounce?: Record<string, number>;
+  /** The turn the live tables were last told about. */
+  liveTurn?: string;
 };
 
 export type Look = { rug: string; back: string };
 
 /** Which optional behaviour a room has. Streaks (and looks and Play again) stay off until `STREAKS` is set. */
-export type RoomFeatures = { streaks: boolean };
+export type RoomFeatures = { streaks: boolean; live?: boolean };
+
+/** Why a live table ended: the round or game is over, its device came back, or a limit passed (§11.3). */
+export type LiveEnd = "over" | "back" | "idle" | "cap";
+
+/**
+ * A Live Activity push for one device (§11.3), from that device's view. The
+ * Durable Object adds the pair's paws, checks the player's toggle and hands it
+ * to the device's `DeviceIndex`, which holds the tokens.
+ */
+export type LiveIntent = {
+  kind: "start" | "update" | "end";
+  deviceId: string;
+  code: string;
+  /** The player in the device's first seat with one: whose toggle and paws. */
+  playerId: string | null;
+  state: LiveState;
+  /** An update that brings the move to this device: rung, for the person whose move it is. */
+  alert?: { to: string; from: string | null };
+  reason?: LiveEnd;
+  /** A limit ended it on this device's move: the "your move" it held back, sent quietly to this device. */
+  yourMove?: YourTurnIntent;
+};
 
 /**
  * A change pairs hear about (§13.3): a completed turn by a player (`by`), and
@@ -171,6 +200,7 @@ export class RoomCore {
   private pushIntents: PushIntent[] = [];
   private streakIntents: StreakIntent[] = [];
   private rematchIntent: RematchIntent | null = null;
+  private liveIntents: LiveIntent[] = [];
   /** The player whose action is being applied ended their turn. */
   private turnBy: string | null = null;
   /** The person whose action is being applied ended their turn: "your move" names them. */
@@ -259,17 +289,26 @@ export class RoomCore {
       },
       deviceId,
     );
+    // Back at the table in the app: its live table goes (§11.3).
+    this.endLive(deviceId, "back");
     return [...events, { to: deviceId, message: this.snapshotFor(deviceId) }];
   }
 
-  disconnect(deviceId: string): Outbound[] {
+  /**
+   * `startsLive`: leaving this way may start a live table (§11.3). Not when a
+   * restart closed every socket: the apps are about to reconnect.
+   */
+  disconnect(deviceId: string, startsLive = true): Outbound[] {
     const device = this.state.devices[deviceId];
     if (!device) return [];
-    return this.presenceChange(deviceId, () => {
+    const wasAwake = device.presence === "awake";
+    const out = this.presenceChange(deviceId, () => {
       device.connected = false;
       if (device.presence !== "away") device.since = this.now();
       device.presence = "away";
     });
+    if (startsLive && wasAwake) this.maybeStartLive(deviceId);
+    return out;
   }
 
   /**
@@ -357,7 +396,10 @@ export class RoomCore {
       }
     }
 
+    this.expireLive(this.now());
+
     if (timers.cleanupAt <= this.now()) {
+      for (const deviceId of Object.keys(state.live ?? {})) this.endLive(deviceId, "over");
       state.status = "over";
       this.queueStreak(true);
       out.push({ to: "all", message: { t: "error", code: "room_closed" } });
@@ -371,7 +413,9 @@ export class RoomCore {
       .filter((device) => device.presence === "away")
       .map((device) => device.since + ASLEEP_AFTER_MS);
     return Math.min(
-      ...[botAt, nextRoundAt, cleanupAt, ...decays].filter((t): t is number => t !== null),
+      ...[botAt, nextRoundAt, cleanupAt, ...decays, ...Object.values(this.state.live ?? {}).map(deadline)].filter(
+        (t): t is number => t !== null,
+      ),
     );
   }
 
@@ -390,6 +434,142 @@ export class RoomCore {
   }
 
   /** Hands over and forgets a "Play again" the room has accepted and not yet dealt. */
+  /** Hands over and forgets the Live Activity pushes queued since the last call. */
+  drainLiveIntents(): LiveIntent[] {
+    const drained = this.liveIntents;
+    this.liveIntents = [];
+    return drained;
+  }
+
+  /** `playerId` answered a pounce for this table with Play: leaving within the hour starts a live table (§11.3). */
+  notePounce(playerId: string): void {
+    if (!this.features.live) return;
+    const marks = this.freshPounces(this.now());
+    marks[playerId] = this.now();
+  }
+
+  /** The device's start went nowhere (no token, the toggle off, a kitten): no record to update. */
+  liveDropped(deviceId: string): void {
+    if (this.state.live) delete this.state.live[deviceId];
+  }
+
+  /** Ends the live tables whose 30 minutes or 2 hours have passed (§11.3). */
+  expireLive(now: number): void {
+    for (const [deviceId, record] of Object.entries(this.state.live ?? {})) {
+      const why = expired(record, now);
+      if (why) this.endLive(deviceId, why);
+    }
+  }
+
+  private freshPounces(now: number): Record<string, number> {
+    const marks = (this.state.livePounce ??= {});
+    for (const [playerId, at] of Object.entries(marks)) if (now - at >= POUNCE_LIVE_MS) delete marks[playerId];
+    return marks;
+  }
+
+  /**
+   * Leaving the table (§11.3): a live table starts for this device when the
+   * game is mid-round, the device holds a seat, and someone else is awake at
+   * the table, or one of its players just answered a pounce here with Play.
+   */
+  private maybeStartLive(deviceId: string): void {
+    const { state } = this;
+    if (!this.features.live || state.live?.[deviceId]) return;
+    if (state.status !== "playing" || state.gameState?.status !== "playing") return;
+    const mine = this.controlledSeats(deviceId);
+    if (mine.length === 0) return;
+    const now = this.now();
+    const othersAwake = state.seats.some((s, i) => s.kind === "human" && !mine.includes(i) && this.seatPresence(i) === "awake");
+    if (!othersAwake && !this.takePounce(deviceId, now)) return;
+    state.live = { ...state.live, [deviceId]: { startedAt: now, movedAt: now } };
+    this.liveIntents.push({ kind: "start", deviceId, code: state.code, playerId: this.livePlayer(deviceId), state: this.liveView(deviceId) });
+  }
+
+  private takePounce(deviceId: string, now: number): boolean {
+    const marks = this.freshPounces(now);
+    const player = Object.values((this.state.devices[deviceId] as DeviceRecord).players ?? {}).find((p) => marks[p] !== undefined);
+    if (player === undefined) return false;
+    delete marks[player];
+    return true;
+  }
+
+  private endLive(deviceId: string, reason: LiveEnd): void {
+    const { state } = this;
+    if (!state.live?.[deviceId]) return;
+    delete state.live[deviceId];
+    const view = this.liveView(deviceId);
+    const yourMove = (reason === "idle" || reason === "cap") && view.mine ? this.heldYourMove(view.turn as Seat) : null;
+    this.liveIntents.push({
+      kind: "end",
+      deviceId,
+      code: state.code,
+      playerId: this.livePlayer(deviceId),
+      state: view,
+      reason,
+      ...(yourMove ? { yourMove } : {}),
+    });
+  }
+
+  /** The "your move" a live table stood in for: the seat's, as the turn's push had it. */
+  private heldYourMove(seat: Seat): YourTurnIntent {
+    const info = this.state.seats[seat] as SeatInfo;
+    return {
+      kind: "your_turn",
+      deviceId: info.deviceId as string,
+      ...(info.playerId ? { playerId: info.playerId } : {}),
+      seat,
+      personName: (info.person as Person).name,
+      tableName: this.state.name,
+      code: this.state.code,
+    };
+  }
+
+  /** The device's live table as it should look now. */
+  private liveView(deviceId: string): LiveState {
+    const { state } = this;
+    const game = state.gameState as CatTowerState;
+    const playing = state.status === "playing" && game.status === "playing";
+    return liveState({
+      table: state.name,
+      seats: state.seats.slice(0, game.phase.length),
+      phases: game.phase,
+      controlled: this.controlledSeats(deviceId),
+      turn: playing ? this.game.currentActor(game) : null,
+      streak: null,
+    });
+  }
+
+  private livePlayer(deviceId: string): string | null {
+    return this.controlledSeats(deviceId).flatMap((seat) => this.state.seats[seat]?.playerId ?? [])[0] ?? null;
+  }
+
+  /** After a game change: every live table hears about a new turn, and goes when the round or game is over. */
+  private liveAfterGame(from: Person | null): void {
+    const { state } = this;
+    if (!this.features.live) return;
+    const game = state.gameState as CatTowerState;
+    if (game.status !== "playing") {
+      for (const deviceId of Object.keys(state.live ?? {})) this.endLive(deviceId, "over");
+      return;
+    }
+    const key = this.turnKey();
+    if (key === state.liveTurn) return;
+    state.liveTurn = key;
+    const actor = this.game.currentActor(game) as Seat;
+    for (const [deviceId, record] of Object.entries(state.live ?? {})) {
+      record.movedAt = this.now();
+      const mine = this.controlledSeats(deviceId).includes(actor);
+      this.liveIntents.push({
+        kind: "update",
+        deviceId,
+        code: state.code,
+        playerId: this.livePlayer(deviceId),
+        state: this.liveView(deviceId),
+        ...(mine ? { alert: { to: ((state.seats[actor] as SeatInfo).person as Person).name, from: from?.name ?? null } } : {}),
+      });
+    }
+  }
+
   drainRematch(): RematchIntent | null {
     const drained = this.rematchIntent;
     this.rematchIntent = null;
@@ -739,6 +919,7 @@ export class RoomCore {
 
   /** Marks a device awake; returns the presence events if that was a change. */
   private wake(deviceId: string): Outbound[] {
+    this.endLive(deviceId, "back");
     const device = this.state.devices[deviceId];
     if (!device || device.presence === "awake") return [];
     return this.presenceChange(deviceId, () => {
@@ -751,10 +932,13 @@ export class RoomCore {
     if (state === "active") return this.wake(deviceId);
     const device = this.state.devices[deviceId];
     if (!device || device.presence === "away") return [];
-    return this.presenceChange(deviceId, () => {
+    const wasAwake = device.presence === "awake";
+    const out = this.presenceChange(deviceId, () => {
       device.presence = "away";
       device.since = this.now();
     });
+    if (wasAwake) this.maybeStartLive(deviceId);
+    return out;
   }
 
   /**
@@ -840,6 +1024,7 @@ export class RoomCore {
     this.queueStreak(game.status === "gameOver");
     const from = this.movedBy;
     this.movedBy = null;
+    this.liveAfterGame(from);
 
     if (game.status === "gameOver") {
       state.status = "over";
