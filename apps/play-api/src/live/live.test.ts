@@ -1,5 +1,7 @@
 import { describe, expect, test } from "vitest";
 
+import { ROOM_CODE } from "../room/codes";
+
 import {
   ATTRIBUTES_TYPE,
   CAP_MS,
@@ -9,6 +11,7 @@ import {
   endBody,
   expired,
   liveState,
+  parseLiveTokens,
   startAlert,
   startBody,
   updateBody,
@@ -83,6 +86,47 @@ describe("liveState", () => {
     const between = liveState({ table: "T", seats, phases: [], controlled: [0], turn: null, streak: { count: 2, me: true, them: true } });
     expect(between).toMatchObject({ turn: null, mine: false, streak: { count: 2, me: true, them: true } });
     expect(between.seats.map((s) => s.phase)).toEqual([1, 1]);
+  });
+});
+
+describe("parseLiveTokens (§13.4)", () => {
+  const T = "ab".repeat(40);
+  const ok = (b: unknown) => parseLiveTokens(b, ROOM_CODE);
+  test("takes the push-to-start token, activity tokens, and nulls that clear them", () => {
+    expect(ok({ pushToStart: T })).toEqual({ pushToStart: T });
+    expect(ok({ pushToStart: null })).toEqual({ pushToStart: null });
+    expect(ok({ activities: [{ code: "GH2VD", token: T }, { code: "BCDFG", token: null }] })).toEqual({
+      activities: [
+        { code: "GH2VD", token: T },
+        { code: "BCDFG", token: null },
+      ],
+    });
+    expect(ok({ pushToStart: T, activities: [{ code: "GH2VD", token: T }] })).toEqual({ pushToStart: T, activities: [{ code: "GH2VD", token: T }] });
+  });
+
+  test("refuses anything else", () => {
+    const five = Array.from({ length: 5 }, () => ({ code: "GH2VD", token: T }));
+    for (const bad of [
+      null,
+      [],
+      "x",
+      {},
+      { pushToStart: T, extra: 1 },
+      { pushToStart: "zz" },
+      { pushToStart: 12 },
+      { activities: [] },
+      { activities: five },
+      { activities: "GH2VD" },
+      { activities: [null] },
+      { activities: [{ code: "AAAAA", token: T }] },
+      { activities: [{ code: 5, token: T }] },
+      { activities: [{ code: "GH2VD" }] },
+      { activities: [{ code: "GH2VD", other: T }] },
+      { activities: [{ code: "GH2VD", token: T, more: 1 }] },
+      { activities: [{ code: "GH2VD", token: "nothex" }] },
+    ]) {
+      expect(ok(bad)).toBeNull();
+    }
   });
 });
 

@@ -20,7 +20,11 @@
     "STREAKS": "on",
     // Reminders, status pushes, Pounce and Messages links (daily habit §15 row 5), on since the
     // app's notification settings and Pounce sheet shipped (row 5, app half). Needs STREAKS.
-    "NOTIFY": "on"
+    "NOTIFY": "on",
+    // The live table, a Live Activity (daily habit §15 row 7). Needs NOTIFY. On with the PR that
+    // ships the app half: nothing is sent until a device uploads a push-to-start token, and
+    // turning it off stops every Live Activity push without an app build.
+    "LIVE": "on"
   },
   "durable_objects": {
     "bindings": [

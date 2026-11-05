@@ -113,6 +113,40 @@ export function updateBody(s: LiveState, now: number, alert: LiveAlert | null): 
   };
 }
 
+/** `PUT /v1/devices/me/live-activity` (§13.4): null clears a token (the activity ended on the device). */
+export type LiveTokens = { pushToStart?: string | null; activities?: { code: string; token: string | null }[] };
+
+/** ActivityKit tokens as lowercase or uppercase hex. */
+const LIVE_TOKEN = /^[0-9a-fA-F]{32,512}$/;
+const MAX_ACTIVITIES = 4;
+
+const isObject = (v: unknown): v is Record<string, unknown> => typeof v === "object" && v !== null && !Array.isArray(v);
+const tokenOrNull = (v: unknown): v is string | null => v === null || (typeof v === "string" && LIVE_TOKEN.test(v));
+
+/** The route's body, or null for anything else: at least one key, no others, at most 4 activities. */
+export function parseLiveTokens(body: unknown, roomCode: RegExp): LiveTokens | null {
+  if (!isObject(body)) return null;
+  const keys = Object.keys(body);
+  if (keys.length === 0 || keys.some((k) => k !== "pushToStart" && k !== "activities")) return null;
+  const out: LiveTokens = {};
+  if ("pushToStart" in body) {
+    if (!tokenOrNull(body.pushToStart)) return null;
+    out.pushToStart = body.pushToStart;
+  }
+  if ("activities" in body) {
+    const list = body.activities;
+    if (!Array.isArray(list) || list.length === 0 || list.length > MAX_ACTIVITIES) return null;
+    const activities: { code: string; token: string | null }[] = [];
+    for (const a of list as unknown[]) {
+      if (!isObject(a) || Object.keys(a).length !== 2 || typeof a.code !== "string" || !roomCode.test(a.code)) return null;
+      if (!("token" in a) || !tokenOrNull(a.token)) return null;
+      activities.push({ code: a.code, token: a.token });
+    }
+    out.activities = activities;
+  }
+  return out;
+}
+
 /** Ends it and takes it off the Lock Screen now. */
 export function endBody(s: LiveState, now: number): Record<string, unknown> {
   return { aps: { timestamp: seconds(now), event: "end", "content-state": s, "dismissal-date": seconds(now) } };

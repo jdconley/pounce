@@ -37,13 +37,15 @@ export type ApnsConfig = { host: string; topic: string; jwt: string };
 /**
  * The original "your turn" alert; a background push (`content-available`, no
  * alert) whose data sits beside `aps`; a built alert body (§12.7, sent at
- * priority 5 when passive); or a WidgetKit push (§11.2).
+ * priority 5 when passive); a WidgetKit push (§11.2); or a live table's
+ * Live Activity push (§11.3).
  */
 export type ApnsPayload =
   | { title: string; body: string; code: string }
   | { background: Record<string, unknown>; collapseId: string }
   | { alert: Record<string, unknown>; collapseId: string; level: Level }
-  | { widget: true };
+  | { widget: true }
+  | { live: Record<string, unknown>; priority: 5 | 10 };
 export type ApnsResult = { ok: boolean; status: number; unregistered: boolean; reason: string | null };
 
 async function apnsReason(response: Response): Promise<string | null> {
@@ -62,6 +64,17 @@ function request(cfg: ApnsConfig, payload: ApnsPayload): { headers: Record<strin
     return {
       headers: { ...auth, "apns-topic": `${cfg.topic}.push-type.widgets`, "apns-push-type": "widgets", "apns-priority": "5" },
       body: { aps: { "content-changed": true } },
+    };
+  }
+  if ("live" in payload) {
+    return {
+      headers: {
+        ...auth,
+        "apns-topic": `${cfg.topic}.push-type.liveactivity`,
+        "apns-push-type": "liveactivity",
+        "apns-priority": String(payload.priority),
+      },
+      body: payload.live,
     };
   }
   if ("alert" in payload) {
@@ -203,4 +216,16 @@ export function pushWidget(
   nowSec: number = Math.floor(Date.now() / 1000),
 ): Promise<{ sent: boolean; unregistered: boolean }> {
   return deliver(env, widgetToken, { widget: true }, fetcher, nowSec);
+}
+
+/** A live table's start, update or end (§11.3), to a push-to-start or an activity's update token. */
+export function pushLive(
+  env: Env,
+  token: string | null,
+  body: Record<string, unknown>,
+  priority: 5 | 10,
+  fetcher: typeof fetch = fetch,
+  nowSec: number = Math.floor(Date.now() / 1000),
+): Promise<{ sent: boolean; unregistered: boolean }> {
+  return deliver(env, token, { live: body, priority }, fetcher, nowSec);
 }

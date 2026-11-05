@@ -2,6 +2,7 @@ import { issueDeviceToken, verifyDeviceToken } from "./auth";
 import { devSpeed } from "./env";
 import { appSiteAssociation, ogImage, pouncePage, sharePage } from "./http/links";
 import { privacyPage } from "./http/privacy";
+import { parseLiveTokens } from "./live/live";
 import {
   deleteMe,
   devicePlayers,
@@ -22,7 +23,7 @@ import { newRoomCode, ROOM_CODE } from "./room/codes";
 import { DEVICE_HEADER, PLAYER_HEADER } from "./room/game-room";
 import { parseRoomName } from "./room/names";
 import { creatorLook, isMine, leavePair, myLeft, myStreaks, PAIR_ID, pairStub, rejoinPair, syncPairPeople } from "./streaks/pairs";
-import { notifyOn, streaksOn } from "./streaks/profile";
+import { liveOn, notifyOn, streaksOn } from "./streaks/profile";
 
 import type { Env } from "./env";
 
@@ -262,6 +263,14 @@ async function setWidgetToken(request: Request, env: Env, deviceId: string): Pro
   return noContent();
 }
 
+/** The live table's push-to-start and activity tokens (§11.3, §13.4). */
+async function setLiveTokens(request: Request, env: Env, deviceId: string): Promise<Response> {
+  const tokens = parseLiveTokens(await readObject(request), ROOM_CODE);
+  if (!tokens) return badRequest();
+  await env.DEVICES.get(env.DEVICES.idFromName(deviceId)).setLiveTokens(tokens);
+  return noContent();
+}
+
 const personParam = (request: Request) => new URL(request.url).searchParams.get("person");
 
 const postPounce = asMe(async (request, env, deviceId, me) =>
@@ -291,8 +300,9 @@ function pounceRoute(method: string, pathname: string): Route | null {
 }
 
 /** Streak routes (§13.4), only while `STREAKS` is on. */
-function streakRoute(method: string, pathname: string, notify: boolean): Route | null {
+function streakRoute(method: string, pathname: string, notify: boolean, live: boolean): Route | null {
   if (method === "GET" && pathname === "/v1/me/streaks") return getStreaks;
+  if (live && method === "PUT" && pathname === "/v1/devices/me/live-activity") return setLiveTokens;
   if (notify) {
     if (method === "PUT" && pathname === "/v1/devices/me/widget-push") return setWidgetToken;
     const pounce = pounceRoute(method, pathname);
@@ -318,9 +328,9 @@ function streakRoute(method: string, pathname: string, notify: boolean): Route |
 }
 
 /** The authenticated route for this request, or null for a 404. */
-function route(method: string, pathname: string, streaks: boolean, notify: boolean): Route | null {
+function route(method: string, pathname: string, streaks: boolean, notify: boolean, live: boolean): Route | null {
   if (streaks) {
-    const streak = streakRoute(method, pathname, notify);
+    const streak = streakRoute(method, pathname, notify, live);
     if (streak) return streak;
   }
   if (method === "PUT" && pathname === "/v1/devices/me/push") return setPushToken;
@@ -393,7 +403,7 @@ export default {
     if (method === "POST" && pathname === "/v1/devices") {
       return secret ? mintDevice(request, secret) : notConfigured();
     }
-    const handler = route(method, pathname, streaks, notify);
+    const handler = route(method, pathname, streaks, notify, liveOn(env));
     if (!handler) return notFound();
     if (!secret) return notConfigured();
     const deviceId = await authenticate(request, secret);

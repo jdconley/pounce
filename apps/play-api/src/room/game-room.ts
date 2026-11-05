@@ -2,6 +2,8 @@ import { DurableObject } from "cloudflare:workers";
 
 import { devSpeed } from "../env";
 import { catTower } from "../games/cat-tower";
+import { endBody, startAlert, startBody, updateBody, type LiveState } from "../live/live";
+import { yourMoveBody } from "../notify/copy";
 import { deliverToPlayer } from "../notify/deliver";
 import { gate } from "../notify/policy";
 import { playAgainPush, yourMoveContext, yourMovePush } from "../notify/pushes";
@@ -9,13 +11,14 @@ import { player as playerRpc } from "../players/accounts";
 import { PERSON_ID, PLAYER_ID } from "../players/ids";
 import { parseClientMessage } from "../protocol";
 import { FALLBACK_ZONE } from "../streaks/clock";
-import { rememberLook, reportTable, unlocksFor, type PairViews } from "../streaks/pairs";
-import { notifyOn, streaksOn } from "../streaks/profile";
+import { myStreaks, rememberLook, reportTable, unlocksFor, type PairViews } from "../streaks/pairs";
+import { liveOn, notifyOn, streaksOn } from "../streaks/profile";
 
 import { newRoomCode } from "./codes";
 import {
   RoomCore,
   type AdoptRule,
+  type LiveIntent,
   type Look,
   type Outbound,
   type PushIntent,
@@ -74,7 +77,7 @@ export class GameRoom extends DurableObject<Env> {
   }
 
   private features(): RoomFeatures {
-    return { streaks: streaksOn(this.env) };
+    return { streaks: streaksOn(this.env), live: liveOn(this.env) };
   }
 
   private createSchema(): void {
@@ -127,6 +130,8 @@ export class GameRoom extends DurableObject<Env> {
       devSpeed(this.env),
       this.features(),
     );
+    // The pounce's answerer is opening this table: leaving it soon makes it live for them (§11.3).
+    if (quietFor) this.core.notePounce(quietFor);
     await this.after(this.core.deal());
     this.quietFor = null;
     const { state } = this.core;
@@ -185,6 +190,20 @@ export class GameRoom extends DurableObject<Env> {
     if (this.core) await this.after(this.core.tick());
   }
 
+  /** `playerId` answered a pounce for this table with Play (§11.3): leaving it soon starts a live table. */
+  async pounced(playerId: string): Promise<void> {
+    if (!this.core) return;
+    this.core.notePounce(playerId);
+    await this.after([]);
+  }
+
+  /** Ends live tables whose limits have passed by `now` (the alarm does this; tests call it with a later clock). */
+  async checkLive(now: number): Promise<void> {
+    if (!this.core) return;
+    this.core.expireLive(now);
+    await this.after([]);
+  }
+
   /** Hands seats to players (§13.1): a backfill after a profile upload, a merge, or an account deletion. */
   async adopt(rule: AdoptRule): Promise<void> {
     if (this.core) await this.after(this.core.adopt(rule));
@@ -239,6 +258,12 @@ export class GameRoom extends DurableObject<Env> {
     this.ctx.waitUntil(this.streakChain);
   }
 
+  /** Runs `step` after everything queued on the room's chain, never fatal. */
+  private chain(step: () => Promise<void>): void {
+    this.streakChain = this.streakChain.then(step).catch(() => undefined);
+    this.ctx.waitUntil(this.streakChain);
+  }
+
   /** Deals the "Play again" table under a fresh code and tells everyone here; on failure, it may be asked again. */
   private async dealRematch(spec: RematchIntent): Promise<void> {
     for (let i = 0; i < ROOM_CODE_ATTEMPTS; i++) {
@@ -284,7 +309,7 @@ export class GameRoom extends DurableObject<Env> {
    * streak report, so it can say the turn keeps today and carry the pair's
    * state; quiet hours and the band rules come from the player.
    */
-  private async pushYourMove(intent: YourTurnIntent & { playerId: string }): Promise<void> {
+  private async pushYourMove(intent: YourTurnIntent & { playerId: string }, only?: string): Promise<void> {
     const profile = await playerRpc(this.env, intent.playerId).pushProfile();
     if (!profile) return;
     const now = Date.now();
@@ -308,7 +333,82 @@ export class GameRoom extends DurableObject<Env> {
       completesToday,
       streak,
     });
-    await deliverToPlayer(this.env, profile, push, g.level, intent.code);
+    // A live table's held-back move goes quietly, to that device only (§11.3).
+    const to = only ? { ...profile, devices: [only] } : profile;
+    await deliverToPlayer(this.env, to, push, only ? "passive" : g.level, intent.code);
+  }
+
+  /**
+   * The live table's pushes (§11.3), in order: the pair's paws from this
+   * table's latest views, the player's toggle for a start, the copy for an
+   * update that rings. A start that went nowhere is dropped so nothing
+   * waits on it; an end on a timeout sends the "your move" it held back.
+   */
+  private async sendLive(list: LiveIntent[]): Promise<void> {
+    for (const intent of list) {
+      try {
+        await this.sendOneLive(intent);
+      } catch {
+        if (intent.kind === "start") this.dropLive(intent.deviceId);
+      }
+    }
+  }
+
+  private async sendOneLive(intent: LiveIntent): Promise<void> {
+    const now = Date.now();
+    const device = this.index(intent.deviceId);
+    const { streak, completesToday } = await this.livePaws(intent, now);
+    const state: LiveState = { ...intent.state, streak };
+    if (intent.kind === "start") {
+      const allowed = await this.liveAllowed(intent.playerId);
+      const sent = allowed && (await device.liveStart(intent.code, startBody(intent.code, state, now, startAlert(state)), state, now)).sent;
+      if (!sent) this.dropLive(intent.deviceId);
+      return;
+    }
+    if (intent.kind === "update") {
+      const alert = intent.alert ? { title: intent.alert.to, body: yourMoveBody(intent.alert.from, state.table, completesToday) } : null;
+      await device.liveUpdate(intent.code, updateBody(state, now, alert), state, alert ? 10 : 5, now);
+      return;
+    }
+    await device.liveEnd(intent.code, endBody(state, now), now);
+    const held = intent.yourMove;
+    if (!held) return;
+    if (held.playerId) await this.pushYourMove({ ...held, playerId: held.playerId }, intent.deviceId);
+    else await device.push(held);
+  }
+
+  /** The paws: the device player's pair at this table, from the latest report or (first) from the pairs. */
+  private async livePaws(intent: LiveIntent, now: number): Promise<{ streak: LiveState["streak"]; completesToday: boolean }> {
+    const playerId = intent.playerId;
+    if (!playerId) return { streak: null, completesToday: false };
+    if (!this.lastViews.has(playerId) && intent.kind === "start") {
+      const mine = await myStreaks(this.env, playerId, now).catch(() => []);
+      const here = mine.filter((v) => v.myMove.includes(intent.code) || v.theirMove.includes(intent.code));
+      if (here.length > 0) this.lastViews.set(playerId, here.map((view) => ({ pair: view.pair, view })));
+    }
+    const views = (this.lastViews.get(playerId) ?? []).map((v) => v.view);
+    const { streak, completesToday } = yourMoveContext(views, intent.code);
+    return { streak: streak ? { count: streak.count, me: streak.me, them: streak.them } : null, completesToday };
+  }
+
+  /** The player's live table toggle (§12.6); a seat with no player has the default, on. */
+  private async liveAllowed(playerId: string | null): Promise<boolean> {
+    if (!playerId) return true;
+    const profile = await playerRpc(this.env, playerId).pushProfile();
+    return profile ? profile.settings.liveTable : true;
+  }
+
+  private dropLive(deviceId: string): void {
+    if (!this.core) return;
+    this.core.liveDropped(deviceId);
+    this.persist(this.core);
+  }
+
+  private persist(core: RoomCore): void {
+    this.ctx.storage.sql.exec(
+      "INSERT INTO room (id, json) VALUES (1, ?) ON CONFLICT (id) DO UPDATE SET json = excluded.json",
+      JSON.stringify(core.state),
+    );
   }
 
   private load(): RoomCore | null {
@@ -352,7 +452,8 @@ export class GameRoom extends DurableObject<Env> {
       .filter(([id, device]) => device.connected && !this.hasOpenSocket(id))
       .map(([id]) => id);
     if (stale.length === 0) return;
-    await this.after(stale.flatMap((id) => core.disconnect(id)));
+    // The apps reconnect in a moment: no live tables for a restart (§11.3).
+    await this.after(stale.flatMap((id) => core.disconnect(id, false)));
   }
 
   private hasOpenSocket(deviceId: string, except?: WebSocket): boolean {
@@ -379,12 +480,18 @@ export class GameRoom extends DurableObject<Env> {
     }
 
     for (const intent of core.drainStreakIntents()) this.reportStreak(intent);
+    // Live table pushes go after the turn's streak report (fresh paws) and before
+    // the pushes, so an end has cleared the device before a "your move" checks it.
+    const live = core.drainLiveIntents();
+    if (live.length > 0) this.chain(() => this.sendLive(live));
+    const chained = liveOn(this.env);
     for (const intent of core.drainPushIntents()) {
       if (intent.kind === "your_turn" && intent.playerId !== undefined && intent.playerId === this.quietFor) continue;
       if (intent.kind === "your_turn" && intent.playerId && notifyOn(this.env)) {
         const rich = { ...intent, playerId: intent.playerId };
-        this.streakChain = this.streakChain.then(() => this.pushYourMove(rich)).catch(() => undefined);
-        this.ctx.waitUntil(this.streakChain);
+        this.chain(() => this.pushYourMove(rich));
+      } else if (chained) {
+        this.chain(() => this.push(intent));
       } else {
         this.ctx.waitUntil(this.push(intent).catch(() => undefined));
       }
@@ -392,10 +499,7 @@ export class GameRoom extends DurableObject<Env> {
     const rematch = core.drainRematch();
     if (rematch) this.ctx.waitUntil(this.dealRematch(rematch));
 
-    this.ctx.storage.sql.exec(
-      "INSERT INTO room (id, json) VALUES (1, ?) ON CONFLICT (id) DO UPDATE SET json = excluded.json",
-      JSON.stringify(state),
-    );
+    this.persist(core);
     await this.ctx.storage.setAlarm(core.nextAlarm());
 
     if (out.some(({ message }) => message.t === "error" && message.code === "bot_stalled")) {
