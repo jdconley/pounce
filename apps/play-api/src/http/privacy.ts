@@ -4,10 +4,10 @@
  * is not legal advice. Keep it in step with docs/privacy/retention-policy.md.
  */
 
-const CACHE = "public, max-age=300";
-const CSP = "default-src 'none'; style-src 'unsafe-inline'; img-src data:";
+export const CACHE = "public, max-age=300";
+export const CSP = "default-src 'none'; style-src 'unsafe-inline'; img-src data:";
 
-const STYLE = `body{margin:0;background:#2a0f5c;color:#fff;font-family:system-ui,sans-serif;line-height:1.55}main{max-width:720px;margin:0 auto;padding:28px 20px 56px}h1{font-size:2rem;margin:0 0 4px;color:#ff8a00}h2{font-size:1.25rem;margin:32px 0 8px;color:#00d1c1}p,li{font-size:1rem}ul{padding-left:22px}.updated{color:#9be22e;font-weight:600;margin:0 0 20px}a{color:#2eb8ff}section{background:#3a1a75;border:3px solid #1b0b3a;border-radius:18px;padding:4px 18px 14px;margin-top:24px}`;
+export const STYLE = `body{margin:0;background:#2a0f5c;color:#fff;font-family:system-ui,sans-serif;line-height:1.55}main{max-width:720px;margin:0 auto;padding:28px 20px 56px}h1{font-size:2rem;margin:0 0 4px;color:#ff8a00}h2{font-size:1.25rem;margin:32px 0 8px;color:#00d1c1}p,li{font-size:1rem}ul{padding-left:22px}.updated{color:#9be22e;font-weight:600;margin:0 0 20px}a{color:#2eb8ff}section{background:#3a1a75;border:3px solid #1b0b3a;border-radius:18px;padding:4px 18px 14px;margin-top:24px}`;
 
 const HTML = `<!doctype html>
 <html lang="en">
