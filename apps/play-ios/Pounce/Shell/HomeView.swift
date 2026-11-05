@@ -195,6 +195,30 @@ struct HomeView: View {
                 .accessibilityIdentifier("home.gift")
             }
         }
+        .overlay(alignment: .trailing) {
+            // A pounce waiting on you (§12.4): their bell rings here; it opens their pair on Us.
+            if let waiting = model.streaks.pairs.first(where: { $0.pounce.waiting != nil }) {
+                Button {
+                    Haptics.shared.tick()
+                    Sound.shared.play(ArtName.Sound.sfxPop)
+                    model.showUs(pair: waiting.pair)
+                } label: {
+                    ZStack(alignment: .bottomTrailing) {
+                        Image(ArtName.Habit.pounceBell).resizable().scaledToFit()
+                            .frame(width: 50 * scale, height: 50 * scale)
+                        Image(ArtName.cat(waiting.partner.cat, .awake)).resizable().scaledToFit()
+                            .frame(width: 30 * scale, height: 30 * scale)
+                            .offset(x: 8 * scale, y: 6 * scale)
+                    }
+                    .shadow(color: Palette.ink.opacity(0.5), radius: 0, x: 0, y: 3)
+                }
+                .buttonStyle(.plain)
+                .bounceLoop(active: true)
+                .offset(x: 62 * scale)
+                .accessibilityLabel(Text("\(waiting.partner.name) wants to play", comment: "VoiceOver: a pounce waiting on Home"))
+                .accessibilityIdentifier("home.pounce")
+            }
+        }
         .overlay(alignment: .topTrailing) {
             if badge.offerSignIn {
                 CloudPlusBubble(size: 36 * scale) { streakSignIn = true }

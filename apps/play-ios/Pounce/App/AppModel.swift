@@ -380,10 +380,14 @@ final class AppModel {
     /// A gift Home asked the Us screen to open (§9.5: the gift waits on Home).
     var pendingGift: String?
 
-    func showUs(openingGift gift: String? = nil) {
+    /// The pair the Us screen should open on (Home's waiting pounce).
+    var pendingPair: String?
+
+    func showUs(openingGift gift: String? = nil, pair: String? = nil) {
         guard people.owner != nil else { return }
         closeRoom()
         pendingGift = gift
+        pendingPair = pair
         route = .us
     }
 
