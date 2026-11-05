@@ -92,10 +92,9 @@ import Testing
     }
 
     @Test func pawsShowWhoIsInToday() {
-        #expect(LiveTableLook(state(turn: 1, mine: false)).paws == .init(count: 12, lit: .one))
-        #expect(LiveTableLook(state(turn: 1, mine: false, streak: .init(count: 3, me: true, them: true))).paws == .init(count: 3, lit: .both))
-        #expect(LiveTableLook(state(turn: 1, mine: false, streak: .init(count: 0, me: false, them: false))).paws == .init(count: 0, lit: .none))
-        #expect(LiveTableLook(state(turn: 1, mine: false, streak: .init(count: 4, me: false, them: true))).paws == .init(count: 4, lit: .one))
+        #expect(LiveTableLook(state(turn: 1, mine: false)).paws == .init(count: 12, me: true, them: false))
+        #expect(LiveTableLook(state(turn: 1, mine: false, streak: .init(count: 3, me: true, them: true))).paws == .init(count: 3, me: true, them: true))
+        #expect(LiveTableLook(state(turn: 1, mine: false, streak: .init(count: 4, me: false, them: true))).paws == .init(count: 4, me: false, them: true))
         #expect(LiveTableLook(state(turn: 1, mine: false, streak: nil)).paws == nil)
     }
 

@@ -13,6 +13,11 @@ with a SpriteKit table. Apple frameworks only, no third-party packages.
   share the App Group `group.com.conleychaos.play` (the snapshot, `Widgets/widgets.json`); the app and
   the widgets share the keychain group `<team>.com.conleychaos.play` (the device credential, which the
   widgets read and never mint). The widgets draw the app's own art from the containing bundle.
+  `PounceWidgets/LiveTableWidget.swift` is the live table (spec §11.3, daily habit PR 7): a Live
+  Activity on the Lock Screen and in the Dynamic Island that play-api starts with push-to-start
+  when you leave a table someone else is at, updates on each turn and ends on its own. The app
+  (`Pounce/App/LiveTableBridge.swift`) uploads its tokens (never from a kitten's device) and ends a
+  table's activity when the table opens; the settings panel's live table toggle turns it off.
 - `PounceKit/` local Swift package (game model, networking, `pounce-e2e` CLI) with Swift Testing tests.
 - `Config/` xcconfigs. `Debug.xcconfig` points at `http://localhost:8787` and registers the
   `pounce-dev` URL scheme; `Release.xcconfig` points at `https://play.conleychaos.com` and registers no
@@ -115,6 +120,10 @@ then the build setting (Debug: `http://localhost:8787`, optionally overridden by
   them and never fetch. `-open-widget-link <pounce-widget://…>` handles a widget tap at launch
   (`WidgetLinkTests`). Every family, state and rendering mode has an Xcode preview in
   `PounceWidgets/Previews.swift`.
+- Live table (spec §11.3): `-demo-live-table mine|theirs [seats]` starts a local live table from the
+  demo fixture at launch (no server, no push), for the Lock Screen and the Dynamic Island.
+  `LiveShotTests` takes the screenshots (`TEST_RUNNER_POUNCE_SHOTS_DIR`); the previews are in
+  `PounceWidgets/Previews.swift`. iPad shows no Live Activities.
 
 ## Play on your phone
 
@@ -325,6 +334,10 @@ submission fails with Apple's message in the log.
   Keychain sharing (`<team>.com.conleychaos.play`) needs no portal change. Check the archive:
   `codesign -d --entitlements - <Pounce.app/PlugIns/PounceWidgets.appex>` lists
   `com.apple.security.application-groups`, `keychain-access-groups` and `aps-environment`.
+
+- The live table (daily habit PR 7) needs no new App ID, capability or key: Live Activities ride on
+  the app's Push Notifications capability (`NSSupportsLiveActivities` in its Info.plist), and the
+  server pushes to `com.conleychaos.play.push-type.liveactivity` with the same token-based APNs key.
 
 - Apple Developer: enable Push Notifications and Associated Domains on the App ID
   `com.conleychaos.play`.

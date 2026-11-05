@@ -21,10 +21,11 @@ public struct LiveTableLook: Equatable, Sendable {
         case none
     }
 
+    /// The numeral with today's two paws: yours lights when you're in, theirs when they are.
     public struct Paws: Equatable, Sendable {
-        public enum Lit: Equatable, Sendable { case none, one, both }
         public let count: Int
-        public let lit: Lit
+        public let me: Bool
+        public let them: Bool
     }
 
     public let table: String
@@ -54,9 +55,7 @@ public struct LiveTableLook: Equatable, Sendable {
         } else {
             trailing = .none
         }
-        paws = state.streak.map { p in
-            Paws(count: p.count, lit: p.me && p.them ? .both : (p.me || p.them ? .one : .none))
-        }
+        paws = state.streak.map { Paws(count: $0.count, me: $0.me, them: $0.them) }
         if state.mine {
             spoken = "\(state.table). Your move."
         } else if let mover {

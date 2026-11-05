@@ -1,3 +1,4 @@
+#if DEBUG
 import Foundation
 
 extension DemoFixtures {
@@ -19,3 +20,4 @@ extension DemoFixtures {
         return ("GH2VD", state)
     }
 }
+#endif

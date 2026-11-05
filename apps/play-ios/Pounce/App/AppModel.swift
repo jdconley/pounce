@@ -55,6 +55,8 @@ final class AppModel {
     var pick: PickRequest?
     /// The widgets' snapshot, reloads and push token (spec §11.2).
     @ObservationIgnored let widgets: WidgetBridge
+    /// The live table's tokens and ends (spec §11.3).
+    @ObservationIgnored private(set) var liveTables: LiveTableBridge!
 
     // MARK: age (spec §14.1)
 
@@ -132,6 +134,10 @@ final class AppModel {
             store: AccountStore(directory: dataDirectory, fileName: AccountStore.fileName(for: config)))
         // Before anything can upload: hold accounts while this update's approval may be owed.
         SignificantChangeGate.prepare(self)
+        // At launch, background ones too: a push-started live table hands its token over then.
+        liveTables = LiveTableBridge(
+            api: api, band: { [weak self] in self?.ageBand }, liveOn: { [weak self] in self?.notifySettings.liveTable ?? true })
+        liveTables.start()
     }
 
     /// The app's one model: SwiftUI shows it and the app delegate attaches it at launch, so a
@@ -320,6 +326,7 @@ final class AppModel {
         await pounces.retryPending()
         await recheckAge()
         await uploadWidgetToken()
+        await liveTables.retry()
     }
 
     /// Once the age is known: the significant-change check, then the profile and sync.
@@ -350,6 +357,7 @@ final class AppModel {
         push?.registerIfAllowed()
         syncWidgets()
         Task { await accountsAfterAge() }
+        Task { await liveTables.retry() }
         guard case .age(let then) = route else { return }
         if people.owner == nil {
             route = .pickCat(then: then)
@@ -375,6 +383,7 @@ final class AppModel {
         push?.registerIfAllowed()
         syncWidgets()
         await uploadWidgetToken()
+        await liveTables.retry()
     }
 
     /// A kitten keeps no typed name (a name plus an identifier is personal information): an owner
@@ -563,6 +572,8 @@ final class AppModel {
 
     func open(code: String, intent: RoomIntent) {
         push?.cancelSnoozes(codes: [code])
+        // Back at this table in the app: its live table goes now (spec §11.3).
+        Task { await liveTables.sweep(entering: code) }
         let session = ensureRoom(code: code, intent: intent)
         // A move link for the room already open: its first snapshot is long gone, so claim now.
         if case .move(let moveCode) = intent, session.intent != intent { session.claimMove(moveCode) }
@@ -579,6 +590,12 @@ final class AppModel {
         }
         #endif
         open(code: code, intent: .rejoin)
+    }
+
+    /// The table on screen, if any.
+    var onScreenCode: String? {
+        if case .room(let code, _) = route { return code }
+        return nil
     }
 
     /// The table for `code` is the screen in front (a push for it needs no banner).
@@ -653,7 +670,10 @@ final class AppModel {
                 await refreshStreaks()
                 await pounces.retryPending()
                 await uploadWidgetToken()
+                await liveTables.retry()
             }
+            // Back at the table on screen: its live table goes; stale and older ones too (§11.3).
+            Task { await liveTables.sweep(entering: onScreenCode) }
             // Every reminder, not just this launch's: one may predate a relaunch.
             push?.cancelAllTurnReminders()
             push?.retryUpload()
@@ -842,6 +862,8 @@ final class AppModel {
         notify.set(key, value, now: Int64(Date.now.timeIntervalSince1970 * 1000))
         // Quiet hours move the widgets' evening.
         if key == NotifyKey.quietStart { syncWidgets() }
+        // The live table toggle off ends any on the Lock Screen now (spec §11.3).
+        if key == NotifyKey.liveTable { Task { await liveTables.sweep(entering: nil) } }
         if account.isSignedIn {
             account.noteLocalChanges()
         } else {

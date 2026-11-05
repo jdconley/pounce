@@ -2,9 +2,9 @@ import PounceKit
 import SwiftUI
 
 /// The notification settings (spec §12.6), in pictures and numerals, shared by the gear sheet and
-/// the Us screen's gear: the bell for reminders ("your move" is unaffected) and the last-chance
-/// moon; the reminder time as an Auto chip or two clock dials (weekdays, weekends); quiet hours as
-/// a moon dial and a sun dial. Each band's defaults show until someone changes them (§14.1). A
+/// the Us screen's gear: the bell for reminders ("your move" is unaffected), the last-chance
+/// moon, the Auto chip and the live table (§11.3); the reminder time as two clock dials (weekdays,
+/// weekends) when not Auto; quiet hours as a moon dial and a sun dial. Each band's defaults show until someone changes them (§14.1). A
 /// kitten's device has only the local 17:00 reminder's bell.
 struct NotifyPanel: View {
     @Environment(AppModel.self) private var model
@@ -53,6 +53,12 @@ struct NotifyPanel: View {
                     model.setNotify(NotifyKey.auto, .bool(!s.auto))
                 }
                 .accessibilityIdentifier("notify.auto")
+                // The live table on the Lock Screen (§11.3): on by default, the game itself.
+                FlagButton(icon: ArtName.Habit.iconLiveTable, on: s.liveTable, color: Palette.teal, size: 64 * scale,
+                           label: "Live table") {
+                    model.setNotify(NotifyKey.liveTable, .bool(!s.liveTable))
+                }
+                .accessibilityIdentifier("notify.liveTable")
             }
             if !s.auto {
                 HStack(spacing: 18 * scale) {
