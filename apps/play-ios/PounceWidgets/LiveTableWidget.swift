@@ -74,14 +74,8 @@ struct LiveTableLockView: View {
         }
         .padding(.horizontal, 14)
         .padding(.vertical, 12)
-        .background {
-            ZStack {
-                LinearGradient(colors: [Palette.violet, Palette.magenta], startPoint: .topLeading, endPoint: .bottomTrailing)
-                ArtImage(ArtName.Habit.widgetBackground, points: 360)
-                    .scaledToFill()
-                    .opacity(0.4)
-            }
-        }
+        // Shapes, not the big backdrop art: a Live Activity draws an oversized image as a grey box.
+        .background(LinearGradient(colors: [Palette.violet, Palette.magenta], startPoint: .topLeading, endPoint: .bottomTrailing))
         .opacity(stale ? 0.6 : 1)
         .saturation(stale ? 0 : 1)
         .accessibilityElement(children: .ignore)
@@ -111,12 +105,22 @@ struct RugStrip: View {
         }
         .padding(.horizontal, 8)
         .padding(.vertical, 6)
-        .background {
-            ArtImage(ArtName.rug, points: 360)
-                .scaledToFill()
-                .clipShape(RoundedRectangle(cornerRadius: cat * 0.36, style: .continuous))
-                .overlay(RoundedRectangle(cornerRadius: cat * 0.36, style: .continuous).strokeBorder(Palette.ink, lineWidth: 3))
-        }
+        .background { RugShape(corner: cat * 0.42) }
+    }
+}
+
+/// The rug, drawn: a teal shag with the classic rug's magenta and violet rings and an ink edge.
+struct RugShape: View {
+    let corner: CGFloat
+
+    var body: some View {
+        let shape = RoundedRectangle(cornerRadius: corner, style: .continuous)
+        shape
+            .fill(RadialGradient(colors: [Palette.teal.mix(with: .white, by: 0.25), Palette.teal, Palette.sky],
+                                 center: .center, startRadius: 4, endRadius: 220))
+            .overlay(shape.inset(by: 5).strokeBorder(Palette.magenta, lineWidth: 4))
+            .overlay(shape.inset(by: 9).strokeBorder(Palette.violet, lineWidth: 3))
+            .overlay(shape.strokeBorder(Palette.ink, lineWidth: 3))
     }
 }
 

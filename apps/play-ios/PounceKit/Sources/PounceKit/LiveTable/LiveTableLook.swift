@@ -100,8 +100,9 @@ public enum LiveTableSweep {
         guard liveOn else { return items.map(\.id) }
         var end = items.filter { $0.code == code || ($0.stale.map { $0 <= now } ?? false) }.map(\.id)
         let kept = items.filter { !end.contains($0.id) }
-        let newest = kept.max { ($0.stale ?? .distantFuture) < ($1.stale ?? .distantFuture) }
-        end += kept.filter { $0.id != newest?.id }.map(\.id)
+        // Ties go to the later one in ActivityKit's list (the newer request).
+        let newest = kept.indices.max { (kept[$0].stale ?? .distantFuture, $0) < (kept[$1].stale ?? .distantFuture, $1) }
+        end += kept.indices.filter { $0 != newest }.map { kept[$0].id }
         return end
     }
 }

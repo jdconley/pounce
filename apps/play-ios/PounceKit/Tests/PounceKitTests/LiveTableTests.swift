@@ -152,6 +152,8 @@ import Testing
         // A local demo has no stale date: it counts as the newest.
         let demo = [item("demo", "GH2VD", staleIn: nil), item("pushed", "BCDFG", staleIn: 25)]
         #expect(LiveTableSweep.toEnd(demo, entering: nil, liveOn: true, now: now) == ["pushed"])
+        let tie = [item("first", "GH2VD", staleIn: 20), item("second", "BCDFG", staleIn: 20)]
+        #expect(LiveTableSweep.toEnd(tie, entering: nil, liveOn: true, now: now) == ["first"], "a tie keeps the later one")
     }
 
     @Test func theToggleOffEndsThemAll() {

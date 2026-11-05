@@ -37,7 +37,7 @@
 ## Decisions where the spec is silent
 
 1. **The `LIVE` flag:** see Global Constraints.
-2. **When it starts:** a device's presence goes from awake to away, either by `presence: background` or by its socket closing, and all of these hold:
+2. **When it starts:** a device sends `presence: background` while it was awake (the app always says so when it leaves or the phone locks), and all of these hold. A socket that merely closes never starts one: the app closes it in the foreground too (Home, another table), where a live table would only hide that table's "your move" (review C1).
    - the room is `playing` and its game is mid-round (not `roundOver`);
    - the device controls a seat;
    - it has no live record here yet;
@@ -56,7 +56,7 @@
    - With no pair, no paws are drawn.
 6. **Updates:** one on each turn change (the turn key changes), to every live device.
    - Priority 5.
-   - Priority 10 with an alert (sound `default`, title the name of the person whose move it is, body the "your move" copy) when the new turn's seat is one the device controls.
+   - Priority 10 with an alert (sound `default`, title the name of the person whose move it is, body the "your move" copy) when the new turn's seat is one the device controls, nobody is awake at the table for that seat (another device of the same player), and the player's gate says `active` (quiet hours update silently at priority 5, review I4/I5).
    - Each update moves the 30-minute idle clock.
 7. **Start push:**
    - Priority 10 and `input-push-token: 1`, so the activity gets an update token.
@@ -68,18 +68,18 @@
    - 2 hours pass since the start.
    - `stale-date` is now + 30 minutes on the start and on every update.
 9. **One per device:** `DeviceIndex` keeps `live_code`, `live_token` and `live_state`. A start for another table first ends the older one with its last state, then switches. An update or end for any other code is ignored.
-10. **"Your move" is suppressed only while the device can update its live table** (it holds an update token for that code), on both the rich and the legacy push paths. Before the token arrives, the regular push goes out: the spec's fallback until PR 8 verifies the upload timing.
-11. **When a live table times out on your move,** the room sends that one device the regular "your move", `passive`. The activity is about to disappear, and the earlier "your move" was suppressed, so the push leaves a quiet trace in Notification Center instead of a second sound.
+10. **"Your move" is suppressed only while the device can update its live table** (it holds an update token for that code, `LIVE` is on, and the live table's own 30-minute and 2-hour limits haven't passed, kept in `DeviceIndex` so a lost end can't keep a table quiet), on both the rich and the legacy push paths. Before the token arrives, the regular push goes out: the spec's fallback until PR 8 verifies the upload timing. A null token is ignored until the new activity's token arrived (a late word about an older activity).
+11. **When a live table times out on your move, or a newer table replaces it,** the room sends that one device the regular "your move", `passive`. The activity is about to disappear, and the earlier "your move" was suppressed, so the push leaves a quiet trace in Notification Center instead of a second sound.
 12. **The token route** is `PUT /v1/devices/me/live-activity` with body `{pushToStart?: hex | null, activities?: [{code, token: hex | null}]}`.
     - At most 4 activities, and at least one key. It returns 204, or 400 for anything else.
     - `null` clears a token: the app sends it when an activity ends on the device.
     - It needs `LIVE`. A kitten device's call returns 204 and stores nothing.
-13. **The app's sweep**, at launch and on each foreground: it ends activities past their stale date or older than 2 hours, and every one but the newest.
+13. **The app's sweep**, at launch and on each foreground: it ends activities past their stale date, and every one but the newest (latest stale date). ActivityKit gives no start date, and the stale date (last update + 30 minutes) passes before any 2-hour cap would, so there is no separate 2-hour rule. The app also keeps, across launches, which token the server holds per table, and clears a table whose activity is gone from the phone (a swipe while the app was suspended) on the next foreground.
     - This covers a teen's night, when the server may not send the end.
 14. **The app ends a table's activity when you open that table**, at once, before the socket says so. Turning the toggle off ends every activity. Tokens still go up while the toggle is off: the server reads the setting, so turning it back on on another device works.
 15. **Taps:** `widgetURL(WidgetLink.table(code).url)`, the PR 6 link. No buttons.
 16. **Debug demo:** `-demo-live-table mine|theirs` starts a local activity from `DemoFixtures.liveTable(mine:)` at launch, for previews and screenshots. It is Debug only.
-17. **iPad:** iPadOS doesn't show Live Activities (ActivityKit reports them disabled), so iPad gets no screenshots and needs no layout. The token upload still runs; the server just never hears a token from iPad.
+17. **iPad:** iPadOS 26 shows the live table on its Lock Screen (checked on the simulator; there's no Dynamic Island), with the same layout, which fits both orientations. It uploads its tokens like a phone, so a player at a table on both gets a live table on whichever device leaves.
 
 ## Review Focus
 

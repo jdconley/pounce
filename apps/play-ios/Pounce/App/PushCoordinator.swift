@@ -120,6 +120,7 @@ final class PushCoordinator: NSObject, UNUserNotificationCenterDelegate {
         uploadPendingToken()
         // The new device has no widget token on the server either (spec §11.2), nor live table ones (§11.3).
         Task { await model?.uploadWidgetToken() }
+        model?.liveTables.deviceChanged()
         Task { await model?.liveTables.retry() }
     }
 

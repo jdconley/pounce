@@ -123,7 +123,7 @@ then the build setting (Debug: `http://localhost:8787`, optionally overridden by
 - Live table (spec §11.3): `-demo-live-table mine|theirs [seats]` starts a local live table from the
   demo fixture at launch (no server, no push), for the Lock Screen and the Dynamic Island.
   `LiveShotTests` takes the screenshots (`TEST_RUNNER_POUNCE_SHOTS_DIR`); the previews are in
-  `PounceWidgets/Previews.swift`. iPad shows no Live Activities.
+  `PounceWidgets/Previews.swift`. iPad shows the live table on its Lock Screen too (no Dynamic Island).
 
 ## Play on your phone
 

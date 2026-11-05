@@ -19,17 +19,24 @@ final class LiveTableBridge {
     private var started = false
     /// The latest push-to-start token, kept so a band that becomes known later can still send it.
     private var startToken: String?
-    /// Each activity's update token, by activity id; and which token the server last took per table.
+    /// Each activity's update token, by activity id.
     private var activityTokens: [String: String] = [:]
-    private var currentToken: [String: String] = [:]
+    /// Which token the server last took per table, kept across launches: an activity swiped away
+    /// while the app was suspended is gone by the next launch, and the server still holds "your
+    /// move" back for it until told.
+    private var currentToken: [String: String] {
+        didSet { UserDefaults.standard.set(currentToken, forKey: Self.currentKey) }
+    }
     private var watching: Set<String> = []
 
     private static let uploadedKey = "live.pushToStart.uploaded"
+    private static let currentKey = "live.activityTokens"
 
     init(api: APIClient, band: @escaping () -> AgeBand?, liveOn: @escaping () -> Bool) {
         self.api = api
         self.band = band
         self.liveOn = liveOn
+        currentToken = UserDefaults.standard.dictionary(forKey: Self.currentKey) as? [String: String] ?? [:]
     }
 
     /// Starts listening for tokens and new activities. Once per launch.
@@ -56,12 +63,23 @@ final class LiveTableBridge {
         #endif
     }
 
-    /// Foreground, a new device credential, or a band that just became known: the start token again.
+    /// Foreground, a new device credential, or a band that just became known: the start token again,
+    /// each activity's token, and a clear for every table whose activity is gone from the phone.
     func retry() async {
         await uploadStartToken()
-        for activity in Activity<LiveTableAttributes>.activities {
+        let activities = Activity<LiveTableAttributes>.activities
+        for activity in activities {
             if let token = activityTokens[activity.id] { await uploadActivityToken(token, for: activity) }
         }
+        let live = Set(activities.map(\.attributes.code))
+        for code in currentToken.keys where !live.contains(code) {
+            if (try? await api.setLiveActivityToken(code: code, token: nil)) != nil { currentToken[code] = nil }
+        }
+    }
+
+    /// A new device credential: the server holds none of this phone's live tokens for it.
+    func deviceChanged() {
+        currentToken = [:]
     }
 
     /// Ends the activities `LiveTableSweep` picks: `entering`'s table (it's on screen now), stale
@@ -132,8 +150,8 @@ final class LiveTableBridge {
     private func forget(_ activity: Activity<LiveTableAttributes>) async {
         let code = activity.attributes.code
         guard let token = activityTokens.removeValue(forKey: activity.id), currentToken[code] == token else { return }
-        currentToken[code] = nil
-        try? await api.setLiveActivityToken(code: code, token: nil)
+        // Kept in `currentToken` until the server took the clear: `retry` sends it again.
+        if (try? await api.setLiveActivityToken(code: code, token: nil)) != nil { currentToken[code] = nil }
     }
 
     private static func loadUploaded() -> LiveTableToken.Uploaded? {
