@@ -489,10 +489,11 @@ describe("pushes reach every device of a player", { timeout: 30_000 }, () => {
     await client.snapshot();
     client.send({ t: "configure", seat: 1, kind: "bot" });
     await client.next((m) => m.t === "snapshot" && m.room.seats[1]?.kind === "bot");
+    // Away on every device before the deal, so whichever turn reaches JD first is pushed. At
+    // DEV_SPEED the House Cat moves 12 ms after the deal, which can beat a "background" sent after it.
+    client.send({ t: "presence", state: "background" });
     client.send({ t: "start" });
     await client.next((m) => m.t === "snapshot" && m.room.status === "playing");
-    // Away on every device, so the House Cat's move hands JD a pushed turn.
-    client.send({ t: "presence", state: "background" });
 
     const sent = await eventually(
       async () => apnsSent,
