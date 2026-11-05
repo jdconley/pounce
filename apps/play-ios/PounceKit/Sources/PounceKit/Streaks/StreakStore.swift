@@ -162,9 +162,9 @@ import Observation
     /// What these people can put on a table: the server checks the unlocks of the players seated
     /// there from this phone, so the tray offers theirs, not the owner's.
     public func unlocked(for people: [String]) -> StreakView.Unlocks {
-        let views = people.flatMap { views(for: $0) }
-        let backs = Set(views.flatMap(\.unlocked.backs) + [StreakCatalog.defaultBack])
-        let rugs = Set(views.flatMap(\.unlocked.rugs) + [StreakCatalog.defaultRug])
+        let seated = people.flatMap { self.views(for: $0) }
+        let backs = Set(seated.flatMap(\.unlocked.backs) + [StreakCatalog.defaultBack])
+        let rugs = Set(seated.flatMap(\.unlocked.rugs) + [StreakCatalog.defaultRug])
         return StreakView.Unlocks(
             backs: StreakCatalog.backs.filter(backs.contains), rugs: StreakCatalog.rugs.filter(rugs.contains))
     }
