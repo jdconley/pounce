@@ -147,4 +147,145 @@ for k, (c, g) in BADGES.items():
     w(k, BADGE.format(c=c, g=g))
 w("AppIcon", "iOS app icon for Cat Tower: a big-eyed excited orange tabby cat (sunny-orange fur, bold darker stripes, white muzzle, green eyes) waving one paw from the top of a chunky turquoise-carpet cat tower with golden sisal posts and an orange cushion, on a glossy deep-violet background with soft orange-magenta sunburst rays. The cat's face is large and fills the upper half. Bold, readable at small size.",
   "Composition (required): a full-bleed SQUARE image painted edge to edge, no border, NO rounded corners (square corners, iOS masks it), no text, no letters, no logo.")
+
+# --- habit (daily habit rewards, spec §9.6) ---
+# The Cat Condo is one picture grown a piece at a time. condo-10 (the whole condo) is generated first;
+# condo-1..9 are edits of raw/condo-10.png (second reference) that take pieces away, so every stage
+# keeps the same camera, scale and place in the frame. condo.sh cuts them without trimming and crops all
+# ten to one shared box. The app stands both cats in front of the base, left and right of the post.
+CONDO = [
+ "a big plump round floor cushion in glossy sunny orange with a puffy rim, lying on the floor at the bottom center",
+ "one thick golden sisal-rope scratching post rising straight up from the back center of the cushion",
+ "a chunky round-cornered turquoise-carpet platform on the post, at about half the height of the frame",
+ "a hot-magenta fabric hammock slung underneath that first platform",
+ "a second, smaller turquoise-carpet platform higher up the post, with a glossy hot-magenta yarn ball dangling from its edge on a string",
+ "a short round sky-blue fabric play tunnel tube lying on top of the first platform, its dark opening facing us",
+ "a top perch at the very top of the post: a turquoise-carpet platform with a small orange cushion and a chunky glossy gold crown with magenta and teal gems sitting on it",
+ "a little round window perch sticking out from the left side of the post at the height of the second platform: a violet round window frame showing a glowing gold crescent moon inside it",
+ "a string of chunky glowing candy-colored light bulbs (magenta, teal, orange, lime, sky blue) draped in swags from the top perch down around the platforms",
+ "a glowing gold railing deck around the top perch, and three fireworks bursts in magenta, teal and gold popping in the air just above and beside the top",
+]
+FRAME = ("Composition (required): ONE cat condo (a cartoon cat tree) seen from the front with a slight top-down 3/4 angle, "
+"standing on a perfectly flat plain light-gray background (#D9D9D9) - no gradient, no floor, no rug, no cast shadow, no cats, no other "
+"objects. The condo is centered and tall: the bottom of the cushion sits near the bottom edge of the frame and the fireworks at the top "
+"reach near the top edge, with a small empty margin on all four sides; nothing is cropped by the edges. The thick dark outline is the "
+"outermost edge - no white sticker border or halo. Square image.")
+w("condo-10", "a cartoon cat condo that has everything, built up from these pieces, bottom to top: " + "; ".join(CONDO) +
+  ". The pieces are joined into one sturdy, cozy, chunky condo in the style of the cat tower pieces in the reference image (turquoise carpet, golden sisal posts, orange cushions).", FRAME)
+for n in range(1, 10):
+    if n == 2: continue
+    keep = "; ".join(CONDO[:n]); gone = "; ".join(CONDO[n:])
+    w(f"condo-{n}", "EDIT the second attached reference image (the complete cat condo). REMOVE these pieces completely: " + gone +
+      ". KEEP only these pieces, exactly as they are in that image: " + keep + ". Where a piece is removed, show the plain flat "
+      "light-gray background (#D9D9D9). Do not move, resize, recolor or redraw anything that stays: same camera, same scale, same "
+      "position in the frame, the cushion stays exactly where it is at the bottom.",
+      "Composition (required): exactly the same framing as the second reference image, square, on the same perfectly flat plain "
+      "light-gray background (#D9D9D9) - no floor, no rug, no shadow, no cats. Large empty gray space above the condo is expected.")
+# condo-2 is condo-3 without its platform, so the post is already the height the platform needs.
+w("condo-2", "EDIT the second attached reference image (a cushion, a post and a platform). REMOVE the turquoise-carpet platform "
+  "completely. KEEP the orange cushion and the golden sisal-rope scratching post exactly as they are: same height, same thickness, "
+  "same place; give the top of the post a small rounded golden sisal cap where the platform was. Where the platform was, show the "
+  "plain flat light-gray background (#D9D9D9). Do not move, resize, recolor or redraw anything that stays: same camera, same scale.",
+  "Composition (required): exactly the same framing as the second reference image, square, on the same perfectly flat plain "
+  "light-gray background (#D9D9D9) - no floor, no rug, no shadow, no cats.")
+w("cats-asleep-condo", "a cozy night spot illustration: a small cartoon cat condo (one thick golden sisal post, a big plump sunny-orange "
+  "round cushion at the bottom and one turquoise-carpet platform with a magenta hammock under it) like the condo in the second "
+  "reference image, with two cartoon cats fast asleep on it, eyes closed and tails curled - a calico cat (white with bold orange and "
+  "black patches) curled in the cushion and a black cat (glossy jet-black fur, violet rim light) curled on the platform - with a "
+  "glowing gold crescent moon and two little sleep clouds (no letters) above. Grouped as one compact vignette.")
+
+w("gift-box", "a closed glossy gift box seen from the front with a slight top-down 3/4 angle: a chunky deep-violet box with a lighter "
+  "violet lid, tied with thick hot-magenta YARN (visible wound yarn strands, not ribbon) crossing over the lid and down the sides, "
+  "finished with a big fluffy hot-magenta yarn bow on top and a few loose yarn curls. Shiny highlights, rim light, fun and inviting.")
+w("gift-box-open", "the same glossy deep-violet gift box as the second attached reference image, now OPEN: the lid with its "
+  "hot-magenta yarn bow is popping off up and to the side, loose magenta yarn strands flying, and bright gold light and sparkles "
+  "bursting up out of the open box. The box is empty (no object inside). Same box, same colors, same yarn.")
+
+PAWB = ("a tiny UI status glyph: {g}. Bold simple silhouette with glossy fill, shiny highlight and a VERY thick dark ink outline, "
+        "readable at 20 pixels, no background shape behind it.")
+w("paw-badge-grey", PAWB.format(g="a single chunky cat paw print (one big rounded pad and four round toes) in cool lilac-gray, matte and unlit, no glow"))
+w("paw-badge-one", PAWB.format(g="a single chunky cat paw print (one big rounded pad and four round toes) in glowing sunny orange, lit up with a warm glow"))
+w("paw-badge-both", PAWB.format(g="TWO chunky cat paw prints side by side and slightly overlapping, the left one hot magenta and the right one sunny orange, both lit up and glowing, like a double stamp"))
+w("paw-badge-nap", PAWB.format(g="a small folded fluffy sky-blue nap blanket with a lilac-white stitched trim, with one tiny puffy sleep cloud above it (no letters)"))
+w("paw-badge-bandage", PAWB.format(g="a pink adhesive bandage strip laid diagonally, with a tiny white paw print on its center pad"))
+w("paw-badge-suitcase", PAWB.format(g="a chunky little sunny-orange travel suitcase with a gold handle on top and two gold straps"))
+
+w("pounce-bell", "a spot illustration: a cartoon calico cat (white fur with bold orange and black patches, sky-blue eyes) standing "
+  "up in a glowing open doorway with a violet door frame, joyfully ringing a big glossy gold hand bell held up in one paw, ring "
+  "motion lines and sparkles around the bell - come play with me! Grouped as one compact vignette.")
+
+ICONS_H = {
+ "icon-pause": "a chunky travel suitcase with a handle and two straps",
+ "icon-pin": "a chunky push pin seen at an angle, round head on top and a short point",
+ "icon-trash": "a chunky trash can with a lid and three vertical grooves",
+ "icon-cloud-plus": "a puffy cloud with a fat hot-magenta plus sign on it",
+ "icon-days": "two chunky hearts overlapping, one a little behind the other",
+ "icon-weeks": "a chunky five-pointed star with seven tiny round dots in an arc under it",
+ "icon-replay": "a fat circular arrow going round clockwise, almost a full circle, with a big arrowhead",
+}
+for k, g in ICONS_H.items():
+    w(k, ICON.format(g=g))
+w("icon-rug", "an app UI icon: a tiny round living-room rug seen straight from above, concentric stripes of hot magenta, electric "
+  "teal and sunny orange with a lilac-white paw print in the middle, like the rug in the reference image. Bold simple silhouette, "
+  "very thick dark ink outline, readable at 28 pixels, no background shape behind it.")
+
+TOY = ("a single small cat toy: {g}. Chunky, glossy and simple, a bold silhouette readable at 30 pixels, VERY thick dark ink outline.")
+SHINY = " It is a SHINY rare toy: extra glossy with an iridescent shimmer, a bright rim light and two or three small white-gold twinkle sparkles touching it."
+GOLD = " It is a GOLDEN legendary toy: made entirely of shiny polished metallic gold with bright highlights, small glowing gems and two or three white twinkle sparkles touching it."
+TOYS = {
+ "toy-yarn-ball": "a round ball of electric-teal yarn with visible wound strands and one loose strand curling off",
+ "toy-feather-wand": "a short violet wand stick with a bunch of fluffy hot-magenta and sunny-orange feathers tied to the end on a little string",
+ "toy-cardboard-box": "a small open cardboard box painted bright sunny orange with its four flaps open (no beige or brown)",
+ "toy-mouse": "a plush toy mouse in violet with big hot-magenta ears, a pink nose and a curly string tail",
+ "toy-fish": "a plush toy fish in sky blue with an orange tail fin and a big stitched eye",
+ "toy-bell": "a round jingle ball in hot magenta with a slot and a little gold jingle bell inside showing",
+ "toy-laser-dot": "a glowing hot-magenta laser dot of light seen flat from above: a small white-hot core inside a wide soft magenta glow halo with four short sharp light rays, NOT a ball, no sphere shading",
+ "toy-catnip-sack": "a small lime-green fabric sack tied at the top with violet string, with a lime catnip leaf printed on it",
+ "toy-sock": "a single striped sock with electric-teal and sunny-orange stripes, a little floppy",
+ "toy-bottle-cap": "a crinkle-edged metal bottle cap in sunny orange, seen at an angle",
+ "toy-crinkle-ball": "a crinkly scrunched foil ball in shiny sky-blue metallic foil",
+ "toy-spring": "a coiled plastic spring toy in lime green, bouncy, slightly bent",
+ "toy-ribbon": "a curly twirled ribbon in violet with a loose looping tail",
+ "toy-paper-bag": "a small crumpled paper shopping bag in sky blue with its top open and two little handles",
+ "toy-pom-pom": "a round fluffy pom-pom ball in hot magenta",
+ "toy-cork": "a plain wine-bottle cork lying on its side at a slight angle: a short stubby cylinder with flat round ends, a porous speckled surface, glossy sunny orange with a hot-magenta band painted around its middle; nothing attached to it, no feathers, no pot, no plant",
+ "toy-rainbow-yarn": "a round ball of yarn wound in candy rainbow stripes of violet, hot magenta, electric teal, sunny orange and lime" + SHINY,
+ "toy-glitter-mouse": "a toy mouse covered all over in sparkly hot-magenta glitter, with a curly string tail" + SHINY,
+ "toy-silver-bell": "a round jingle bell in polished shiny chrome silver with a little electric-teal bow on top" + SHINY,
+ "toy-moon-fish": "a plush fish shaped like a crescent moon, glowing lilac-white with tiny gold stars on its side" + SHINY,
+ "toy-star-wand": "a short violet wand stick with a big chunky gold star on its end and a short trail of sparkles" + SHINY,
+ "toy-disco-ball": "a small round mirror disco ball made of many tiny shiny square mirror tiles reflecting violet, magenta and teal" + SHINY,
+ "toy-golden-fish": "a toy fish" + GOLD,
+ "toy-golden-mouse": "a toy mouse with round ears and a curly tail" + GOLD,
+}
+for k, g in TOYS.items():
+    w(k, TOY.format(g=g))
+
+BACK = ("a single playing card back standing upright in portrait orientation (about 64:90), front view, perfectly flat and "
+        "straight-on (not tilted): EXACTLY the same card shape, size, corner radius, thick rounded rim and very thick dark ink "
+        "outline as the card back in the second attached reference image, but restyled: {g}. The design is symmetric and "
+        "centered, bold and readable at small size.")
+BACKS = {
+ "back-yarn-swirl": "a glossy hot-magenta card with a lighter pink rim, covered in a big swirl of wound yarn strands spiralling into a fluffy yarn ball at the center",
+ "back-moonlit-fish": "a glossy deep midnight-violet card with a sky-blue rim, a glowing lilac-white crescent moon at the center with a little glowing teal fish leaping over it, and tiny gold stars around",
+ "back-cucumber-chaos": "a glossy lime-green card with an electric-teal rim, a goofy green cucumber character with googly eyes and a wide grin at the center, surrounded by small tumbling cucumbers and motion lines",
+ "back-crown": "a glossy royal violet card with a shiny gold rim, a chunky glossy gold crown with magenta and teal gems at the center and a subtle gold diamond pattern behind it",
+ "back-heart-paws": "a glossy hot-pink card with a magenta rim, a big chunky paw print at the center whose main pad is a heart, in lilac-white with a warm glow, and tiny hearts scattered around",
+ "back-golden-yarn": "a shiny polished metallic GOLD card with a bright gold rim, a gleaming golden yarn ball with wound strands at the center, bursting with white-gold sparkles - the rarest back",
+}
+for k, g in BACKS.items():
+    w(k, BACK.format(g=g))
+
+RUG = ("a round living-room rug seen straight from above (top-down, perfectly circular, no perspective), thick fluffy texture, "
+       "exactly the same shape, size, fluffy yarn texture and outline as the rug in the second attached reference image, but "
+       "restyled: {g}. Cards will be played on top of it, so keep the middle calm and readable.")
+RUGS = {
+ "rug-night-sky": "a deep midnight-violet center with a sky-blue outer stripe and a violet stripe, a big glowing lilac-white crescent moon in the middle and small gold stars scattered around it",
+ "rug-candy-stripe": "a peppermint-candy swirl of hot magenta, white-lilac and electric teal stripes spiralling out from the center, with a sunny-orange outer rim",
+ "rug-fish-pond": "a round pond: an electric-teal water center with sky-blue ripple rings, two sunny-orange koi fish swimming around the middle and a few lime lily pads near the edge, with a violet outer rim",
+ "rug-royal-violet": "a rich royal-violet rug with a thick shiny gold outer stripe and a hot-magenta inner stripe, a gold crown-topped paw print in the middle and a short gold fringe all around the edge",
+}
+for k, g in RUGS.items():
+    w(k, RUG.format(g=g))
+
 print("prompts written to", os.path.abspath(D))

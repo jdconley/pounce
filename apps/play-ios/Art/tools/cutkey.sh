@@ -1,10 +1,17 @@
 #!/bin/bash
 # cutkey.sh <name>...: fallback cutout by flood-filling the flat gray background from the 4 corners
 # (fuzz 7%), eroding alpha 2px, trimming with 4px padding. For subjects Vision mis-masks (white interiors).
+# GLOBAL=1 keys every background-gray pixel instead; GAPS=<px> keys only gray patches of at least that many pixels.
 ART="$(cd "$(dirname "$0")/.." && pwd)"; cd "$ART"
 for n in "$@"; do
   f="raw/$n.png"; W=$(magick identify -format %w "$f"); H=$(magick identify -format %h "$f")
-  if [ -n "${GLOBAL:-}" ]; then  # key out every background-gray pixel (subjects with no gray, enclosed gaps)
+  if [ -n "${GAPS:-}" ]; then  # key every background-gray patch of at least GAPS pixels (enclosed gaps, keeps gray fur shading)
+    bg=$(magick "$f" -format '%[pixel:p{2,2}]' info:)
+    magick "$f" -fuzz ${FUZZ:-7}% -fill '#00FF00' -opaque "$bg" -fuzz 0 -fill black +opaque '#00FF00' -fill white -opaque '#00FF00' \
+      -define connected-components:area-threshold="$GAPS" -define connected-components:mean-color=true -connected-components 8 \
+      -threshold 50% -negate "raw/logs/$n.keep.png"
+    magick "$f" "raw/logs/$n.keep.png" -alpha off -compose copy_opacity -composite "PNG32:cut/$n.png"
+  elif [ -n "${GLOBAL:-}" ]; then  # key out every background-gray pixel (subjects with no gray, enclosed gaps)
     bg=$(magick "$f" -format '%[pixel:p{2,2}]' info:)
     magick "$f" -alpha set -fuzz ${FUZZ:-7}% -transparent "$bg" "PNG32:cut/$n.png"
   else

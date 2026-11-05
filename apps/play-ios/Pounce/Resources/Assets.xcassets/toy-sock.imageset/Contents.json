@@ -1,7 +1,7 @@
 {
   "images" : [
-    { "filename" : "toy-sock_ph@2x.png", "idiom" : "universal", "scale" : "2x" },
-    { "filename" : "toy-sock_ph@3x.png", "idiom" : "universal", "scale" : "3x" }
+    { "filename" : "toy-sock@2x.png", "idiom" : "universal", "scale" : "2x" },
+    { "filename" : "toy-sock@3x.png", "idiom" : "universal", "scale" : "3x" }
   ],
   "info" : { "author" : "xcode", "version" : 1 }
 }
