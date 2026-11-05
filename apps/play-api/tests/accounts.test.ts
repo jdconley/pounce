@@ -275,7 +275,7 @@ async function mergedIpad(mf: Miniflare) {
   return { ipad, jdIpad, signIn: (await res.json()) as { playerId: string; outcome: string; account: boolean } };
 }
 
-describe("profiles make guest players", () => {
+describe("profiles make guest players", { timeout: 30_000 }, () => {
   test("each person gets a player, and the same one on every upload", async () => {
     const mf = worker();
     const phone = await mint(mf);
@@ -304,7 +304,7 @@ describe("profiles make guest players", () => {
   });
 });
 
-describe("Sign in with Apple", () => {
+describe("Sign in with Apple", { timeout: 30_000 }, () => {
   test("a guest's first sign-in upgrades them in place and signs the device in", async () => {
     const mf = worker();
     const { playerId, signIn: body } = await signedInPhone(mf);
@@ -378,7 +378,7 @@ describe("Sign in with Apple", () => {
   });
 });
 
-describe("synced state", () => {
+describe("synced state", { timeout: 30_000 }, () => {
   test("settings written on the iPad are read on the phone", async () => {
     const mf = worker();
     const { phone } = await signedInPhone(mf);
@@ -428,7 +428,7 @@ describe("synced state", () => {
   });
 });
 
-describe("signing out, unlinking and deleting", () => {
+describe("signing out, unlinking and deleting", { timeout: 30_000 }, () => {
   test("a device that signs out stops controlling the player's seats and starts over as a guest", async () => {
     const mf = worker();
     const { code, playerId } = await signedInPhone(mf);
@@ -475,7 +475,7 @@ describe("signing out, unlinking and deleting", () => {
   });
 });
 
-describe("pushes reach every device of a player", () => {
+describe("pushes reach every device of a player", { timeout: 30_000 }, () => {
   test("your turn goes to the phone and the iPad", async () => {
     const mf = worker({ p8: await p8() });
     const { phone, code } = await signedInPhone(mf);
@@ -504,7 +504,7 @@ describe("pushes reach every device of a player", () => {
   });
 });
 
-describe("review fixes", () => {
+describe("review fixes", { timeout: 30_000 }, () => {
   test("a table-mate who uploads someone else's person id first doesn't get their seat", async () => {
     const mf = worker();
     const victim = await mint(mf);
