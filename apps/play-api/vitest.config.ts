@@ -47,6 +47,12 @@ export default defineConfig({
           functions: 100,
           lines: 100,
         },
+        "src/live/**": {
+          statements: 100,
+          branches: 100,
+          functions: 100,
+          lines: 100,
+        },
         "src/pounce/**": {
           statements: 100,
           branches: 100,

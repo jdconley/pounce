@@ -13,6 +13,8 @@ export type NotifySettings = {
   quietStart: number;
   quietEnd: number;
   lastChance: boolean;
+  /** The live table on the Lock Screen (§11.3, §12.6): on by default, never for a kitten (§14.1). */
+  liveTable: boolean;
 };
 
 /** The synced `settings` keys (last writer wins per key, so each dial is its own key). */
@@ -24,6 +26,7 @@ export const SETTING_KEYS = {
   quietStart: "quiet.start",
   quietEnd: "quiet.end",
   lastChance: "lastChance.on",
+  liveTable: "liveTable.on",
 } as const;
 
 /** 19:30 local (§12.3: "that timing is fine"). */
@@ -49,7 +52,8 @@ function flag(settings: Section, key: string, fallback: boolean): boolean {
 /**
  * The settings with each band's defaults (§12.3, §14.1): adults get reminders,
  * learned timing and last chance; teens get them off until they turn them on,
- * and quiet hours from 21:00; a kitten gets nothing from the server.
+ * and quiet hours from 21:00; a kitten gets nothing from the server. The live
+ * table is the game itself, so it's on for adults and teens alike.
  */
 export function notifySettings(settings: Section, band: AgeBand | null): NotifySettings {
   const gentle = band === "teen";
@@ -62,5 +66,6 @@ export function notifySettings(settings: Section, band: AgeBand | null): NotifyS
     quietStart: quietStartMinutes(settings, band),
     quietEnd: clock(settings, SETTING_KEYS.quietEnd, DEFAULT_QUIET_END),
     lastChance: !kitten && flag(settings, SETTING_KEYS.lastChance, !gentle),
+    liveTable: !kitten && flag(settings, SETTING_KEYS.liveTable, true),
   };
 }
