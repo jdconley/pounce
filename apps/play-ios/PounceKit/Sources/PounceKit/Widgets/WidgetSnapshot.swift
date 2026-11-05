@@ -53,14 +53,24 @@ public struct WidgetSnapshot: Codable, Equatable, Sendable {
         self.pounced = pounced
     }
 
-    /// The app's snapshot: `names` may hold every known table; only the pairs' tables are kept.
-    /// Pounce times carry over from `previous` while a pair's bell is unchanged.
+    /// The app's snapshot: `names` may hold every known table; only the pairs' tables are kept
+    /// (with any name `previous` had for them). Pounce times carry over from `previous` while a
+    /// pair's bell is unchanged. `pairs` nil means the app doesn't know them yet (it launched
+    /// offline): the same owner's stored pairs stay, moved on to today.
     public static func make(
-        owner: Owner?, band: AgeBand?, server: String?, pairs: [StreakView], names: [String: String],
+        owner: Owner?, band: AgeBand?, server: String?, pairs known: [StreakView]?, names: [String: String],
         quietStart: ClockTime, previous: WidgetSnapshot?, now: Date, calendar: Calendar = .current
     ) -> WidgetSnapshot {
+        let pairs: [StreakView]
+        if let known {
+            pairs = known
+        } else if let previous, owner != nil, previous.owner?.person == owner?.person {
+            pairs = previous.projected(to: now, calendar: calendar).pairs
+        } else {
+            pairs = []
+        }
         let codes = Set(pairs.flatMap { $0.myMove + $0.theirMove })
-        let kept = names.filter { codes.contains($0.key) }
+        let kept = (previous?.tableNames ?? [:]).merging(names) { $1 }.filter { codes.contains($0.key) }
         var snapshot = WidgetSnapshot(
             owner: owner, band: band, server: server, pairs: pairs, tableNames: kept, quietStart: quietStart,
             day: WidgetDay.key(now, calendar: calendar), savedAt: now)

@@ -127,6 +127,22 @@ func widgetSnapshot(
         #expect(ready.pounced["pr_mia"] == nil, "a ready bell has no hour")
     }
 
+    @Test func unknownPairsKeepTheStoredOnesProjected() {
+        // The app launched offline: its streak list never loaded, so the widgets keep theirs.
+        let stored = widgetSnapshot([streakView(count: 9, me: true, them: true, kept: true)], now: at(2026, 11, 5, 12))
+        let next = WidgetSnapshot.make(
+            owner: widgetOwner, band: .adult, server: nil, pairs: nil, names: [:], quietStart: ClockTime(h: 22, m: 0),
+            previous: stored, now: at(2026, 11, 6, 9), calendar: la)
+        #expect(next.pairs.map(\.count) == [9])
+        #expect(next.pairs[0].kept == false, "yesterday's kept day doesn't carry into today")
+        #expect(next.day == "2026-11-06")
+        // Someone else's stored pairs are never kept.
+        let other = WidgetSnapshot.make(
+            owner: .init(person: "someone-else", name: "Ella", cat: 2), band: .adult, server: nil, pairs: nil, names: [:],
+            quietStart: ClockTime(h: 22, m: 0), previous: stored, now: at(2026, 11, 6, 9), calendar: la)
+        #expect(other.pairs.isEmpty)
+    }
+
     @Test func sampleIsAPair() {
         #expect(WidgetSnapshot.sample.pairs.first?.partner.name == "Mia")
         #expect(WidgetSnapshot.sample.owner != nil)

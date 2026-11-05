@@ -27,6 +27,11 @@ struct PounceApp: App {
     }
 
     private func open(_ url: URL) {
+        // A widget tap (spec §11.1): WidgetKit hands these only to this app.
+        if let link = WidgetLink.parse(url) {
+            model.handle(link)
+            return
+        }
         #if DEBUG
         let allowDevScheme = true
         #else
