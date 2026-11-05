@@ -24,7 +24,7 @@ extension APIClient: StreakService {
     }
 
     public func streaks(person: String?) async throws -> StreakList {
-        let data = try await authenticated("GET", "/v1/me/streaks", body: nil, query: Self.query(person))
+        let data = try await authenticated("GET", "/v1/me/streaks", body: nil, query: Self.query(person), noPlayer: true)
         return try decode(StreakList.self, from: data, status: 200)
     }
 

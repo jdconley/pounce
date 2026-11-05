@@ -20,6 +20,8 @@ struct HomeView: View {
     /// Notifications are already allowed (no bell then); nil until checked.
     @State private var pushAllowed: Bool?
     @State private var showPriming = false
+    /// The streak badge's cloud was tapped: the sign-in offer is up (§10.5).
+    @State private var streakSignIn = false
 
     @Environment(\.horizontalSizeClass) private var sizeClass
 
@@ -30,7 +32,8 @@ struct HomeView: View {
                     roomy(geo.size)
                 } else {
                     VStack(spacing: 14) {
-                        hero(width: geo.size.width, height: geo.size.height)
+                        if let badge = streakBadge { streakBadgeView(badge, scale: 1) }
+                        hero(width: geo.size.width, height: geo.size.height * (streakBadge == nil ? 1 : 0.86))
                         pills(width: geo.size.width)
                         Spacer(minLength: 8)
                         tablesRow
@@ -41,6 +44,9 @@ struct HomeView: View {
             .padding(.top, 10)
             .padding(.bottom, 8)
             .overlay(alignment: .topTrailing) { gear }
+            .overlay(alignment: .top) {
+                if sizeClass == .regular, let badge = streakBadge { streakBadgeView(badge, scale: 1.4).padding(.top, 6) }
+            }
             .overlay(alignment: .topLeading) {
                 if showBell { bell.transition(.scale.combined(with: .opacity)) }
             }
@@ -105,6 +111,22 @@ struct HomeView: View {
         .animation(.easeOut(duration: 0.25).paced, value: showPriming)
         .animation(.spring(duration: 0.4, bounce: 0.4).paced, value: showBell)
         .task { await model.refreshTables() }
+        .task { await model.refreshStreaks() }
+        .overlay {
+            if streakSignIn, let owner = model.people.owner {
+                ZStack {
+                    Palette.night.opacity(0.85).ignoresSafeArea().onTapGesture { streakSignIn = false }
+                    SignInOffer(identifier: "home.streak.signin") {
+                        Task {
+                            await model.account.signIn(owner)
+                            streakSignIn = false
+                        }
+                    }
+                }
+                .transition(.opacity)
+            }
+        }
+        .animation(.easeOut(duration: 0.25).paced, value: streakSignIn)
         .task { await checkPush() }
         #if DEBUG
         // `-show-rules` / `-show-people`: open that sheet at launch (iPad screenshots).
@@ -134,6 +156,35 @@ struct HomeView: View {
     }
 
     // MARK: pieces
+
+    /// The top pair's badge, once the server said streaks are on and there is a pair (§10.1).
+    private var streakBadge: StreakBadge? {
+        guard model.streaks.enabled == true else { return nil }
+        return StreakBadge.make(model.streaks.top, all: model.streaks.pairs, signedIn: model.account.isSignedIn,
+                                offersSignIn: model.account.offersSignIn)
+    }
+
+    private func streakBadgeView(_ badge: StreakBadge, scale: CGFloat) -> some View {
+        Button {
+            Haptics.shared.tick()
+            Sound.shared.play(ArtName.Sound.sfxPop)
+            model.showUs()
+        } label: {
+            PawBadge(badge: badge, scale: scale)
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(Text("Your streak, \(badge.count)", comment: "VoiceOver: Home's streak badge; opens the Us screen"))
+        .accessibilityValue(PawBadge.value(badge))
+        .accessibilityIdentifier("home.streak")
+        .overlay(alignment: .topTrailing) {
+            if badge.offerSignIn {
+                CloudPlusBubble(size: 36 * scale) { streakSignIn = true }
+                    .offset(x: 26 * scale, y: -14 * scale)
+                    .accessibilityIdentifier("home.streak.cloud")
+            }
+        }
+        .transition(.scale.combined(with: .opacity))
+    }
 
     private var background: some View {
         ZStack {
@@ -198,7 +249,7 @@ struct HomeView: View {
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 14) {
                     ForEach(items) { item in
-                        TableCard(item: item) {
+                        TableCard(item: item, streakPaw: model.streaks.completesToday(code: item.id)) {
                             model.open(code: item.id, intent: .rejoin)
                         }
                         .contextMenu {
@@ -329,7 +380,7 @@ struct HomeView: View {
     }
 
     private func tableCard(_ item: HomeTableItem) -> some View {
-        TableCard(item: item) {
+        TableCard(item: item, streakPaw: model.streaks.completesToday(code: item.id)) {
             model.open(code: item.id, intent: .rejoin)
         }
         .contextMenu {

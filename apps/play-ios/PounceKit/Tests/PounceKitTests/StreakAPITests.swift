@@ -31,6 +31,11 @@ import Testing
         await #expect(throws: APIError.notFound) { _ = try await api.streaks(person: me) }
     }
 
+    @Test func aPersonWithoutAPlayerYetIsNotStreaksOff() async throws {
+        let (api, _) = client { _ in Reply(404, #"{"error":"no_player"}"#) }
+        await #expect(throws: APIError.noPlayer) { _ = try await api.streaks(person: me) }
+    }
+
     @Test func eachActionHitsItsRoute() async throws {
         let (api, server) = client { _ in Reply(204, "") }
         try await api.pause(pair: pair, days: 3, person: me)

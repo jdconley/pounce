@@ -14,6 +14,8 @@ enum Route: Equatable {
     /// First launch (or a link arrived before a name exists): pick a name and cat, then continue to `then`.
     case pickCat(then: DeepLink?)
     case home
+    /// The Us screen (spec §10.2): the owner's shared streaks.
+    case us
     case join
     case room(code: String, intent: RoomIntent)
 }

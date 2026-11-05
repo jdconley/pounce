@@ -91,6 +91,16 @@ func streakView(
         #expect(store.pairs.isEmpty && store.left.isEmpty && store.top == nil)
     }
 
+    @Test func noPlayerYetLeavesStreaksUnknown() async {
+        let (store, fake) = store(StreakList(pairs: [streakView()]))
+        fake.fail(.noPlayer)
+        await store.refresh()
+        #expect(store.enabled == nil)
+        fake.fail(nil)
+        await store.refresh()
+        #expect(store.enabled == true)
+    }
+
     @Test func offlineKeepsLastList() async {
         let (store, fake) = store(StreakList(pairs: [streakView()]))
         await store.refresh()
