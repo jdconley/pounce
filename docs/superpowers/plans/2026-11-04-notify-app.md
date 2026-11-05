@@ -48,7 +48,7 @@
 2. **The background answer when the network is down or the app was killed**: it must be on disk before the POST and go out at the next launch, once. Test: `PounceStoreTests.testFailedAnswerRetriesOnce`, `testPlayIsNeverDowngraded`.
 3. **Kitten device**: no remote registration, no settings upload, no share button. Test: `NotifySettingsTests.testKittenSendsNothing`, `PushPolicyTests.testKittenNeverRegisters`, UI `PounceTests.testKittenHasNoShare`.
 4. **Guest edits a dial twice offline**: the last value goes up once the server answers. Test: `NotifySettingsTests.testUnsentSurvivesFailure`.
-5. **Quiet hours wrapping midnight or degenerate** (start = end) in the dial clamp. Test: `NotifySettingsTests.testClampWrapsMidnight`, `testDegenerateQuietNeverClamps`.
+5. **Quiet hours wrapping midnight or degenerate** (start = end) in the dial clamp. Test: `NotifySettingsTests.testClampWrapsMidnight`, `testDegenerateQuietMatchesServer`.
 
 ---
 
@@ -83,7 +83,7 @@
 - `@MainActor final class NotifySettingsStore(file: URL?)`: `entries: SyncSection` (chosen values only), `unsent: Set<String>`; `settings(band:) -> NotifySettings`; `set(_ key: String, _ value: JSONValue, now: Int64)`; `takeRemote(_ section: SyncSection)` (newer `at` wins); `values -> [String: JSONValue]`; `pendingPatch() -> StatePatch?`; `sent(_ patch: StatePatch)` (clears keys whose entry is unchanged).
 - `KittenReminder.id = "kitten-daily"`, `KittenReminder.time = ClockTime(h: 17, m: 0)`.
 
-- [ ] Step 1: tests: adult/teen/kitten defaults (values from Global Constraints); synced values override, malformed (`{h:25}`) fall back; kitten resolves reminders/auto/lastChance false even when set; `inQuiet` 22–08 at 23:00 and 07:59 true, 08:00 false; `testDegenerateQuietNeverClamps`; clamp 21:30 with quiet 22:00 → 20:00, 06:00 with quiet end 08:00 → 08:00; `testClampWrapsMidnight` (quiet 23:00–01:00, 00:30 → 21:00); store: set writes an entry and marks unsent, `pendingPatch` has only notification keys, `sent` clears; `testUnsentSurvivesFailure` (two sets, no `sent`, reload from file → latest value pending); `takeRemote` takes newer and ignores older; `testKittenSendsNothing` is in the app wiring task (store's `pendingPatch(band: .kitten) == nil`); PushPolicy `testKittenNeverRegisters`, unknown band never registers, teen/adult do; `offersFullPrompt` true for provisional and denied, false for authorized.
+- [ ] Step 1: tests: adult/teen/kitten defaults (values from Global Constraints); synced values override, malformed (`{h:25}`) fall back; kitten resolves reminders/auto/lastChance false even when set; `inQuiet` 22–08 at 23:00 and 07:59 true, 08:00 false; `testDegenerateQuietMatchesServer`; clamp 21:30 with quiet 22:00 → 20:00, 06:00 with quiet end 08:00 → 08:00; `testClampWrapsMidnight` (quiet 23:00–01:00, 00:30 → 21:00); store: set writes an entry and marks unsent, `pendingPatch` has only notification keys, `sent` clears; `testUnsentSurvivesFailure` (two sets, no `sent`, reload from file → latest value pending); `takeRemote` takes newer and ignores older; `testKittenSendsNothing` is in the app wiring task (store's `pendingPatch(band: .kitten) == nil`); PushPolicy `testKittenNeverRegisters`, unknown band never registers, teen/adult do; `offersFullPrompt` true for provisional and denied, false for authorized.
 - [ ] Steps 2–4: fail, implement, pass. Step 5: commit `feat(pounce-kit): notification settings, band defaults and their synced store`.
 
 ### Task 4: Pounce wire, service, store, sheet rules and the `/p/` link
