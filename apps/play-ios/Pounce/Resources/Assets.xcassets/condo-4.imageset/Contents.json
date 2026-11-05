@@ -1,7 +1,7 @@
 {
   "images" : [
-    { "filename" : "condo-4_ph@2x.png", "idiom" : "universal", "scale" : "2x" },
-    { "filename" : "condo-4_ph@3x.png", "idiom" : "universal", "scale" : "3x" }
+    { "filename" : "condo-4@2x.png", "idiom" : "universal", "scale" : "2x" },
+    { "filename" : "condo-4@3x.png", "idiom" : "universal", "scale" : "3x" }
   ],
   "info" : { "author" : "xcode", "version" : 1 }
 }
