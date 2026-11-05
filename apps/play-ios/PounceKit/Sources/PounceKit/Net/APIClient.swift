@@ -8,13 +8,16 @@ public struct TableEntry: Codable, Equatable, Sendable {
     public let status: String
     public let yourTurn: Bool
     public let updatedAt: Double
+    /// Play again's table, on a finished table's entry (§10.4).
+    public let next: String?
 
-    public init(code: String, name: String? = nil, status: String, yourTurn: Bool, updatedAt: Double) {
+    public init(code: String, name: String? = nil, status: String, yourTurn: Bool, updatedAt: Double, next: String? = nil) {
         self.code = code
         self.name = name
         self.status = status
         self.yourTurn = yourTurn
         self.updatedAt = updatedAt
+        self.next = next
     }
 }
 

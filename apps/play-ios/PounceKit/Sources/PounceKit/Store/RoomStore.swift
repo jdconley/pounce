@@ -180,6 +180,8 @@ import Observation
             moveCode = MoveCode(seat: seat, code: code)
         case .error(let code):
             applyError(code)
+        case .streak, .rematch:
+            break  // Task 4
         }
     }
 
@@ -238,6 +240,8 @@ import Observation
             noteTurn()
             // actionInFlight stays: that snapshot releases it.
             continuation.yield(.game(game, seq: seq))
+        case .look:
+            break  // Task 4
         }
     }
 

@@ -172,10 +172,14 @@ public struct RoomView: Codable, Equatable, Sendable {
     public var youAreHost: Bool
     public var seats: [SeatView]
     public var game: GameView?
+    /// The table's rug and card back; nil from a server without looks (streaks off).
+    public var look: Look?
+    /// The Play again table's code, once someone dealt it (§10.4).
+    public var rematch: String?
 
     public init(
         code: String, name: String? = nil, status: RoomStatus, youAreHost: Bool, seats: [SeatView],
-        game: GameView? = nil
+        game: GameView? = nil, look: Look? = nil, rematch: String? = nil
     ) {
         self.code = code
         self.name = name
@@ -183,6 +187,8 @@ public struct RoomView: Codable, Equatable, Sendable {
         self.youAreHost = youAreHost
         self.seats = seats
         self.game = game
+        self.look = look
+        self.rematch = rematch
     }
 
     /// The name to show: the table's own, or `TableName.fallback` from an older server.

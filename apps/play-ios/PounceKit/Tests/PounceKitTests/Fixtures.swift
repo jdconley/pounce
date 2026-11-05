@@ -25,6 +25,15 @@ enum Fixtures {
         try messages(in: "protocol/client-messages.json")
     }
 
+    /// The streak protocol samples PR 3 kept apart, so the counts above stay as they were.
+    static func streakServerMessages() throws -> [(name: String, json: String)] {
+        try messages(in: "protocol/streaks-server-messages.json")
+    }
+
+    static func streakClientMessages() throws -> [(name: String, json: String)] {
+        try messages(in: "protocol/streaks-client-messages.json")
+    }
+
     private static func messages(in relative: String) throws -> [(name: String, json: String)] {
         let data = try Data(contentsOf: url(relative))
         guard let entries = try JSONSerialization.jsonObject(with: data) as? [[String: Any]] else {

@@ -44,6 +44,13 @@ public struct ErrorCode: RawRepresentable, Codable, Hashable, Sendable {
     public static let emptyDiscard = ErrorCode(rawValue: "empty_discard")
     public static let cucumberFromDiscard = ErrorCode(rawValue: "cucumber_from_discard")
     public static let roundNotOver = ErrorCode(rawValue: "round_not_over")
+    // Table looks and Play again (daily habit §9.4, §10.4).
+    /// Play again before the game is over.
+    public static let notOver = ErrorCode(rawValue: "not_over")
+    /// A second look change from this device within 10 s.
+    public static let tooSoon = ErrorCode(rawValue: "too_soon")
+    /// A rug or back the setter hasn't unlocked.
+    public static let notUnlocked = ErrorCode(rawValue: "not_unlocked")
     // Sent to the whole room, unprompted.
     public static let botStalled = ErrorCode(rawValue: "bot_stalled")
     public static let roomClosed = ErrorCode(rawValue: "room_closed")
@@ -61,8 +68,12 @@ public enum ServerMessage: Decodable, Equatable, Sendable {
     case event(seq: Int, event: RoomEvent)
     case moveCode(seat: Seat, code: String)
     case error(ErrorCode)
+    /// A pair's new streak view for one person on this device, after a turn (§9.5).
+    case streak(pair: String, person: String, view: StreakView)
+    /// Play again dealt the next table under this code (§10.4).
+    case rematch(code: String)
 
-    private enum CodingKeys: String, CodingKey { case t, `protocol`, seq, room, event, seat, code }
+    private enum CodingKeys: String, CodingKey { case t, `protocol`, seq, room, event, seat, code, pair, person, view }
 
     public init(from decoder: any Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
@@ -85,6 +96,12 @@ public enum ServerMessage: Decodable, Equatable, Sendable {
                              code: try c.decode(String.self, forKey: .code))
         case "error":
             self = .error(try c.decode(ErrorCode.self, forKey: .code))
+        case "streak":
+            self = .streak(pair: try c.decode(String.self, forKey: .pair),
+                           person: try c.decode(String.self, forKey: .person),
+                           view: try c.decode(StreakView.self, forKey: .view))
+        case "rematch":
+            self = .rematch(code: try c.decode(String.self, forKey: .code))
         default:
             throw DecodingError.dataCorruptedError(
                 forKey: .t, in: c, debugDescription: "unknown server message type: \(t)")
@@ -145,8 +162,12 @@ public enum ClientMessage: Encodable, Equatable, Sendable {
     case rename(name: String)
     /// Renames the person in one of this device's seats, in the lobby or mid-game.
     case renameSeat(seat: Seat, name: String)
+    /// Play again, once the room is over (§10.4).
+    case rematch
+    /// Changes the table's rug or card back (at least one), from the sender's own unlocks (§9.4).
+    case setLook(rug: String?, back: String?)
 
-    private enum CodingKeys: String, CodingKey { case t, seat, person, kind, action, state, code, name }
+    private enum CodingKeys: String, CodingKey { case t, seat, person, kind, action, state, code, name, rug, back }
 
     public func encode(to encoder: any Encoder) throws {
         var c = encoder.container(keyedBy: CodingKeys.self)
@@ -184,6 +205,12 @@ public enum ClientMessage: Encodable, Equatable, Sendable {
             try c.encode("renameSeat", forKey: .t)
             try c.encode(seat, forKey: .seat)
             try c.encode(name, forKey: .name)
+        case .rematch:
+            try c.encode("rematch", forKey: .t)
+        case .setLook(let rug, let back):
+            try c.encode("setLook", forKey: .t)
+            try c.encodeIfPresent(rug, forKey: .rug)
+            try c.encodeIfPresent(back, forKey: .back)
         }
     }
 }
