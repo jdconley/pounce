@@ -59,6 +59,31 @@ public enum PushPolicy {
     public static func badgeCount(_ tables: [TableEntry]) -> Int {
         tables.filter { $0.yourTurn && $0.status != "over" }.count
     }
+
+    /// This device registers for remote push at all: never a kitten's, or one whose age isn't
+    /// known yet (spec §14.1: a push token is online contact information). Kittens get local
+    /// reminders only.
+    public static func registersRemote(band: AgeBand?) -> Bool {
+        band == .teen || band == .adult
+    }
+
+    /// Home's bell offers the full system prompt (once) while notifications aren't fully allowed:
+    /// provisional (priming's "not now", §12.5) counts as not yet.
+    public static func offersFullPrompt(_ status: PushAuthorization) -> Bool {
+        status != .authorized && status != .ephemeral
+    }
+
+    /// Snoozed "In an hour" notifications (§12.5), one per table (or per collapse key).
+    private static let snoozePrefix = "snooze-"
+
+    public static func snoozeID(_ key: String) -> String { snoozePrefix + key }
+
+    public static func isSnoozeID(_ identifier: String) -> Bool { identifier.hasPrefix(snoozePrefix) }
+}
+
+/// `UNAuthorizationStatus`, mirrored so the rule above stays testable without UserNotifications.
+public enum PushAuthorization: Sendable {
+    case notDetermined, denied, authorized, provisional, ephemeral
 }
 
 /// What the server holds of this phone's APNs token. The token goes up every time APNs hands

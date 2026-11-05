@@ -5,8 +5,10 @@ import SwiftUI
 /// pin it as your top pair or leave that streak; a ghosted cat with a plus starts a left streak
 /// afresh), the Cat Condo with both cats and the toys, the big numeral, today's two paws, this
 /// week's strip, three stat tiles (best, days together, perfect weeks), the next-milestone arc and
-/// any gifts waiting, and the pause suitcase. With no shared table in play a big Play pill starts
-/// a game. No words but names and numerals.
+/// any gifts waiting, and the pause suitcase. The top bar's bell opens the Pounce sheet and its
+/// gear the notification settings (§12.4, §12.6); a pounce waiting on you shows as a card with
+/// the three answers. With no shared table in play a big Play pill opens Pounce with New game
+/// picked. No words but names and numerals.
 struct UsView: View {
     @Environment(AppModel.self) private var model
     @Environment(\.horizontalSizeClass) private var sizeClass
@@ -17,6 +19,11 @@ struct UsView: View {
     @State private var pausing: StreakView?
     @State private var opening: (pair: StreakView, gift: StreakView.Gift)?
     @State private var signIn = false
+    /// The Pounce sheet (§12.4): for a pair (nil: the share-only sheet), New game first or not.
+    @State private var pouncing: (view: StreakView?, preferNew: Bool)?
+    /// The notification settings panel (§12.6).
+    @State private var settingsShown = false
+    @State private var bellShake = 0
 
     private var store: StreakStore { model.streaks }
 
@@ -47,6 +54,11 @@ struct UsView: View {
         .animation(.spring(duration: 0.4, bounce: 0.3).paced, value: current?.pair)
         .task { await model.refreshStreaks() }
         .task {
+            // Home's waiting pounce: its pair.
+            if let pair = model.pendingPair {
+                model.pendingPair = nil
+                selected = pair
+            }
             // Home's gift: open it here.
             guard let id = model.pendingGift else { return }
             model.pendingGift = nil
@@ -57,6 +69,17 @@ struct UsView: View {
             }
         }
         #if DEBUG
+        .task {
+            // `-show-notify` / `-show-pounce`: the settings panel or the Pounce sheet at launch
+            // (screenshots); `-show-pair <i>` picks the pair first.
+            let args = CommandLine.arguments
+            try? await Task.sleep(for: .milliseconds(700))
+            if let i = args.firstIndex(of: "-show-pair"), let n = args[safe: i + 1].flatMap(Int.init), n < store.pairs.count {
+                selected = store.pairs[n].pair
+            }
+            if args.contains("-show-notify") { settingsShown = true }
+            if args.contains("-show-pounce") { pouncing = (current, false) }
+        }
         .task {
             // `-show-gift`: the first gift opens at launch (screenshots).
             guard CommandLine.arguments.contains("-show-gift") else { return }
@@ -73,6 +96,7 @@ struct UsView: View {
 
     private var overlayKey: String {
         "\(leaving?.pair ?? "")|\(pausing?.pair ?? "")|\(opening?.gift.id ?? "")|\(signIn)|\(bubble ?? "")"
+            + "|\(pouncing.map { $0.view?.pair ?? "share" } ?? "")|\(settingsShown)"
     }
 
     private var background: some View {
@@ -104,10 +128,89 @@ struct UsView: View {
                 CloudPlusBubble(size: 44) { signIn = true }
                     .accessibilityIdentifier("us.cloud")
             }
+            bell
+            ArtIconButton(icon: ArtName.iconGear, color: Palette.violet, size: 48, label: "Settings") {
+                settingsShown = true
+            }
+            .accessibilityIdentifier("us.gear")
         }
         .padding(.horizontal, 16)
         .padding(.top, 4)
         .padding(.bottom, 6)
+    }
+
+    /// The Pounce bell (§12.4) for the pair on screen: ringing while my pounce is out, a moon when
+    /// it landed in their quiet hours, asleep while it rests, and their answer once they gave one
+    /// (their cat leaping in, a clock, or their cat asleep). With no pair, the share-only sheet.
+    @ViewBuilder private var bell: some View {
+        let state = current.map { BellState.make($0.pounce) } ?? .ready
+        if current != nil || model.limits.sharesLinks {
+            Button {
+                tapBell(state)
+            } label: {
+                ZStack(alignment: .bottomTrailing) {
+                    Circle()
+                        .fill(LinearGradient(colors: [Palette.orange.mix(with: .white, by: 0.3), Palette.magenta],
+                                             startPoint: .top, endPoint: .bottom))
+                        .overlay(Circle().strokeBorder(Palette.ink, lineWidth: 4))
+                        .overlay { bellArt(state).padding(5) }
+                        .frame(width: 52, height: 52)
+                        .shadow(color: Palette.ink.opacity(0.5), radius: 0, x: 0, y: 4)
+                    bellBadge(state)
+                }
+                .wiggle(trigger: bellShake)
+            }
+            .buttonStyle(.plain)
+            .phaseAnimator([false, true]) { content, phase in
+                content.rotationEffect(.degrees((state == .sent || state == .quiet) && phase ? 12 : 0), anchor: .top)
+            } animation: { _ in .easeInOut(duration: 0.35).paced }
+            .accessibilityLabel(Text("Pounce", comment: "VoiceOver: the Us screen's bell, ask them to come play"))
+            .accessibilityValue(state.name)
+            .accessibilityIdentifier("us.bell")
+        }
+    }
+
+    @ViewBuilder private func bellArt(_ state: BellState) -> some View {
+        switch state {
+        case .resting:
+            Image(ArtName.Habit.pounceBellAsleep).resizable().scaledToFit()
+        case .answered(.play):
+            Image(ArtName.cat(current?.partner.cat ?? 0, .leap)).resizable().scaledToFit()
+        case .answered(.no):
+            Image(ArtName.cat(current?.partner.cat ?? 0, .asleep)).resizable().scaledToFit()
+        default:
+            Image(ArtName.Habit.pounceBell).resizable().scaledToFit()
+        }
+    }
+
+    @ViewBuilder private func bellBadge(_ state: BellState) -> some View {
+        switch state {
+        case .quiet:
+            Image(ArtName.Habit.iconMoon).resizable().scaledToFit().frame(width: 22).offset(x: 4, y: 4)
+        case .answered(.later):
+            Image(ArtName.Habit.iconClock).resizable().scaledToFit().frame(width: 22).offset(x: 4, y: 4)
+        default:
+            EmptyView()
+        }
+    }
+
+    private func tapBell(_ state: BellState) {
+        switch state {
+        case .resting, .answered(.no):
+            bellShake += 1
+            Haptics.shared.thump()
+            Sound.shared.play(ArtName.Sound.sfxNope)
+        case .answered(.play):
+            if let code = current?.pounce.code {
+                model.open(code: code, intent: .rejoin)
+            } else {
+                pouncing = (current, false)
+            }
+        default:
+            Haptics.shared.tick()
+            Sound.shared.play(ArtName.Sound.sfxPop)
+            pouncing = (current, false)
+        }
     }
 
     private var offerSignIn: Bool {
@@ -290,6 +393,12 @@ struct UsView: View {
 
     private func details(_ view: StreakView, scale: CGFloat) -> some View {
         VStack(spacing: 16 * scale) {
+            if let waiting = view.pounce.waiting {
+                WaitingPounceCard(view: view, waiting: waiting, scale: min(scale, 1.3))
+                    .padding(.horizontal, 14)
+                    .id(waiting.id)
+                    .transition(.scale(scale: 0.6).combined(with: .opacity))
+            }
             WeekStrip(week: view.week, size: 34 * scale)
             HStack(spacing: 12 * scale) {
                 StatTile(icon: ArtName.iconTrophy, number: view.best, color: Palette.orange, id: "us.stat.best", scale: scale)
@@ -306,13 +415,15 @@ struct UsView: View {
                     .accessibilityIdentifier("us.pause")
             }
             if view.myMove.isEmpty && view.theirMove.isEmpty {
+                // No shared table in play (§10.2): Pounce, with New game picked.
                 PillButton(icon: ArtName.iconPlay, color: Palette.lime, size: .large, width: 150 * scale,
                            accessibilityLabel: "Play") {
-                    Task { await model.newGame() }
+                    pouncing = (view, true)
                 }
                 .accessibilityIdentifier("us.play")
             }
         }
+        .animation(.spring(duration: 0.4, bounce: 0.35).paced, value: view.pounce.waiting?.id)
     }
 
     /// Today's two paws for VoiceOver and the tests: mine, then theirs.
@@ -355,6 +466,7 @@ struct UsView: View {
         .accessibilityIdentifier("us.gift.\(gift.id)")
     }
 
+    /// No pairs yet: the sleeping cats and Play; the top bar's bell shares a link (§12.4).
     private var empty: some View {
         VStack(spacing: 20) {
             Image(ArtName.Habit.catsAsleepCondo).resizable().scaledToFit().frame(width: 260)
@@ -368,7 +480,32 @@ struct UsView: View {
     // MARK: overlays
 
     @ViewBuilder private var overlays: some View {
-        if let opening {
+        if let pouncing {
+            PounceSheetView(view: pouncing.view, preferNew: pouncing.preferNew) { self.pouncing = nil }
+                .transition(.opacity)
+        } else if settingsShown {
+            ZStack {
+                Palette.night.opacity(0.9).ignoresSafeArea().onTapGesture { settingsShown = false }
+                VStack(spacing: 18) {
+                    HStack {
+                        Spacer()
+                        PillButton(icon: ArtName.iconBack, color: Palette.sky, size: .small, accessibilityLabel: "Close") {
+                            settingsShown = false
+                        }
+                        .accessibilityIdentifier("notify.close")
+                    }
+                    NotifyPanel(scale: sizeClass == .regular ? 1.3 : 1)
+                }
+                .padding(22)
+                .frame(maxWidth: 560)
+                .background(RoundedRectangle(cornerRadius: 36, style: .continuous).fill(Palette.night)
+                    .overlay(RoundedRectangle(cornerRadius: 36, style: .continuous).strokeBorder(Palette.ink, lineWidth: 5)))
+                .padding(16)
+            }
+            .accessibilityElement(children: .contain)
+            .accessibilityIdentifier("sheet-notify")
+            .transition(.opacity)
+        } else if let opening {
             GiftReveal(gift: opening.gift, mine: mine, theirs: opening.pair.partner.cat) {
                 await store.openGift(opening.pair.pair, opening.gift.id)
             } onDone: {

@@ -1,7 +1,8 @@
 import PounceKit
 import SwiftUI
 
-/// Home's gear (spec §10.5, §12.6): sound, haptics and the turn reminder, How to play, the
+/// Home's gear (spec §10.5, §12.6): sound, haptics and the turn reminder, the notification
+/// settings panel (reminders, their time, quiet hours, last chance), How to play, the
 /// privacy page, and the account: signed out, the sign-in offer; signed in, your cat with a
 /// check, the linked providers, sign out and the trash can.
 struct GearSheet: View {
@@ -26,6 +27,9 @@ struct GearSheet: View {
                         .accessibilityIdentifier("gear.close")
                     }
                     toggles
+                    // The notification settings (§12.6), the same panel as the Us screen's gear.
+                    NotifyPanel()
+                        .padding(.vertical, 6)
                     HStack(spacing: 16) {
                         PillButton(
                             icon: nil, color: Palette.orange, size: .small, width: 156,

@@ -3,7 +3,7 @@ import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 
 import { devSpeed } from "./env";
-import { streaksOn } from "./streaks/profile";
+import { notifyOn, streaksOn } from "./streaks/profile";
 
 describe("devSpeed", () => {
   it("is 1 unless DEV_SPEED is a number above 1", () => {
@@ -33,5 +33,15 @@ describe("STREAKS in production", () => {
     const value = /"STREAKS"\s*:\s*"([^"]*)"/.exec(config)?.[1];
     expect(value).toBeDefined();
     expect(streaksOn({ STREAKS: value })).toBe(true);
+  });
+});
+
+describe("NOTIFY in production", () => {
+  it("is on in wrangler.jsonc, with STREAKS, so notifyOn accepts it (the app's settings and Pounce shipped)", () => {
+    const config = readFileSync(new URL("../wrangler.jsonc", import.meta.url), "utf8");
+    const streaks = /"STREAKS"\s*:\s*"([^"]*)"/.exec(config)?.[1];
+    const notify = /"NOTIFY"\s*:\s*"([^"]*)"/.exec(config)?.[1];
+    expect(notify).toBeDefined();
+    expect(notifyOn({ STREAKS: streaks, NOTIFY: notify })).toBe(true);
   });
 });

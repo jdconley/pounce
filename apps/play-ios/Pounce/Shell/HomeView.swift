@@ -17,7 +17,7 @@ struct HomeView: View {
     @State private var heroWiggle = 0
     @State private var ownerWiggle = 0
     @State private var newGameShake = 0
-    /// Notifications are already allowed (no bell then); nil until checked.
+    /// Notifications are fully allowed (no bell then; provisional still gets it, §12.5); nil until checked.
     @State private var pushAllowed: Bool?
     @State private var showPriming = false
     /// The streak badge's cloud was tapped: the sign-in offer is up (§10.5).
@@ -193,6 +193,30 @@ struct HomeView: View {
                 .offset(x: -58 * scale)
                 .accessibilityLabel(Text("Open the gift", comment: "VoiceOver: a milestone gift waiting on Home"))
                 .accessibilityIdentifier("home.gift")
+            }
+        }
+        .overlay(alignment: .trailing) {
+            // A pounce waiting on you (§12.4): their bell rings here; it opens their pair on Us.
+            if let waiting = model.streaks.pairs.first(where: { $0.pounce.waiting != nil }) {
+                Button {
+                    Haptics.shared.tick()
+                    Sound.shared.play(ArtName.Sound.sfxPop)
+                    model.showUs(pair: waiting.pair)
+                } label: {
+                    ZStack(alignment: .bottomTrailing) {
+                        Image(ArtName.Habit.pounceBell).resizable().scaledToFit()
+                            .frame(width: 50 * scale, height: 50 * scale)
+                        Image(ArtName.cat(waiting.partner.cat, .awake)).resizable().scaledToFit()
+                            .frame(width: 30 * scale, height: 30 * scale)
+                            .offset(x: 8 * scale, y: 6 * scale)
+                    }
+                    .shadow(color: Palette.ink.opacity(0.5), radius: 0, x: 0, y: 3)
+                }
+                .buttonStyle(.plain)
+                .bounceLoop(active: true)
+                .offset(x: 62 * scale)
+                .accessibilityLabel(Text("\(waiting.partner.name) wants to play", comment: "VoiceOver: a pounce waiting on Home"))
+                .accessibilityIdentifier("home.pounce")
             }
         }
         .overlay(alignment: .topTrailing) {
@@ -447,7 +471,7 @@ struct HomeView: View {
 
     private func checkPush() async {
         guard let push = model.push else { return }
-        pushAllowed = PushCoordinator.isAllowed(await push.authorizationStatus())
+        pushAllowed = !PushPolicy.offersFullPrompt(PushCoordinator.mirror(await push.authorizationStatus()))
     }
 
     /// Re-offers push once: the priming screen again, then the system prompt (or its settings page).

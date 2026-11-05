@@ -16,6 +16,15 @@ struct RootView: View {
                     insertion: .scale(scale: 0.9).combined(with: .opacity),
                     removal: .opacity))
         }
+        .overlay {
+            // A "you pick" pounce or a Messages link (§12.4), over whatever screen is up.
+            if let pick = model.pick {
+                PouncePickView(request: pick)
+                    .id(pick.id)
+                    .transition(.opacity)
+            }
+        }
+        .animation(.easeOut(duration: 0.25).paced, value: model.pick)
         .animation(reduceMotion ? .easeInOut(duration: 0.2).paced : .spring(duration: 0.45, bounce: 0.3).paced, value: model.route)
         .onChange(of: scenePhase) { _, phase in model.scenePhaseChanged(phase) }
         .onAppear { Pace.applyToWindows() }

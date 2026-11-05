@@ -34,6 +34,22 @@ enum Fixtures {
         try messages(in: "protocol/streaks-client-messages.json")
     }
 
+    /// The APNs bodies play-api sends (`fixtures/push/payloads.json`, PR 5): each entry is
+    /// `{ "name", "collapseId", "priority", "body" }`, the body as `userInfo` would hold it.
+    static func pushPayloads() throws -> [(name: String, collapseId: String, body: [String: Any])] {
+        let relative = "push/payloads.json"
+        let data = try Data(contentsOf: url(relative))
+        guard let entries = try JSONSerialization.jsonObject(with: data) as? [[String: Any]] else {
+            throw FixtureError.malformed(relative)
+        }
+        return try entries.map { entry in
+            guard let name = entry["name"] as? String, let collapse = entry["collapseId"] as? String,
+                  let body = entry["body"] as? [String: Any]
+            else { throw FixtureError.malformed("\(relative): entry without name/collapseId/body") }
+            return (name, collapse, body)
+        }
+    }
+
     private static func messages(in relative: String) throws -> [(name: String, json: String)] {
         let data = try Data(contentsOf: url(relative))
         guard let entries = try JSONSerialization.jsonObject(with: data) as? [[String: Any]] else {

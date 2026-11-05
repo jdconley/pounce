@@ -96,6 +96,14 @@ then the build setting (Debug: `http://localhost:8787`, optionally overridden by
   `-show-us` opens on the Us screen and `-show-gift` opens its first gift (screenshots). Demo tables
   carry the standard look, so the paw menu's look tray and the game over's Play again show; a demo's
   Play again deals a demo table under `NWCDF`.
+- Notifications and Pounce (spec §12): with `-demo-streaks`, `DemoPounceService` plays the pounce
+  routes in memory (Kiki's pounce waits on you, Nova's bell rests, a send rings Mia's bell).
+  `-show-notify` opens the Us screen's settings panel, `-show-pounce` the Pounce sheet, and
+  `-show-pair <i>` picks a pair first (all with `-show-us`); `-show-link` opens the demo Messages
+  link's pick sheet (from Leo). `-request-push` asks for notifications at launch, and
+  `-demo-communication` posts a pounce from Mia once the app is in the background, drawn exactly as `PounceNotify` draws a push (the
+  simulator's `simctl push` skips service extensions; `scripts/push-pounce.apns` is the sample
+  payload for a device). `PushShotTests` takes the notification screenshots.
 
 ## Play on your phone
 

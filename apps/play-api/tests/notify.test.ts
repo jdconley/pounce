@@ -253,6 +253,8 @@ describe("synced settings (§12.6)", { timeout: 30_000 }, () => {
         "reminders.auto": { v: false, at },
         "reminders.weekday": { v: { h: 9, m: 0 }, at },
         "reminders.weekend": { v: { h: 9, m: 0 }, at },
+        // Without this, between 19:30 and 20:30 local the next wake is last chance either way.
+        "lastChance.on": { v: false, at },
       },
     };
     expect((await call(mf, phone, "PATCH", `/v1/me/state?person=${jd.id}`, patch)).status).toBe(204);

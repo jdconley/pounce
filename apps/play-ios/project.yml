@@ -30,6 +30,8 @@ targets:
         excludes:
           - Info.plist
           - Pounce.entitlements
+      # Shared with PounceNotify: the Debug -demo-communication notification draws the same way.
+      - path: PounceNotify/Communication.swift
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.conleychaos.play
@@ -45,6 +47,8 @@ targets:
     dependencies:
       - package: PounceKit
         product: PounceKit
+      # Communication notifications with the sender's cat (spec §12.5), embedded in PlugIns.
+      - target: PounceNotify
     postBuildScripts:
       # The Debug-only pounce-dev URL scheme must never ship. In Release (or whenever
       # POUNCE_URL_SCHEMES is empty) delete CFBundleURLTypes from the built Info.plist; only
@@ -53,6 +57,10 @@ targets:
       # Runs before code signing, so the signature covers the stripped plist.
       - name: Strip debug URL scheme
         basedOnDependencyAnalysis: false
+        # The built Info.plist as an input, so this runs after it is written: with an embedded
+        # extension (PounceNotify) Xcode processes the plist late, after unordered script phases.
+        inputFiles:
+          - $(TARGET_BUILD_DIR)/$(INFOPLIST_PATH)
         script: |
           set -eu
           plist="${TARGET_BUILD_DIR}/${INFOPLIST_PATH}"
@@ -78,6 +86,28 @@ targets:
             echo "error: PrivacyInfo.xcprivacy is missing from the app bundle: $manifest"
             exit 1
           fi
+  # The Notification Service Extension (spec §12.5): pushes from a person become communication
+  # notifications with their cat as the avatar, read from the containing app's art.
+  PounceNotify:
+    type: app-extension
+    platform: iOS
+    sources:
+      - path: PounceNotify
+        excludes:
+          - Info.plist
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.conleychaos.play.notify
+        PRODUCT_NAME: PounceNotify
+        TARGETED_DEVICE_FAMILY: "1,2"
+        INFOPLIST_FILE: PounceNotify/Info.plist
+        MARKETING_VERSION: "1.0"
+        CURRENT_PROJECT_VERSION: "1"
+        SKIP_INSTALL: YES
+    dependencies:
+      - package: PounceKit
+        product: PounceKit
+      - sdk: Intents.framework
   PounceUITests:
     type: bundle.ui-testing
     platform: iOS
