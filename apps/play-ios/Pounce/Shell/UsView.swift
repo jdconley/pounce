@@ -272,6 +272,7 @@ struct UsView: View {
         }
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(Text("\(view.partner.name), \(view.count)", comment: "VoiceOver: a pair's cat on the Us screen"))
+        .accessibilityValue(model.pounceLocked(view.pair) ? "locked" : "")
         .accessibilityAddTraits(on ? [.isButton, .isSelected] : .isButton)
         .accessibilityIdentifier("us.pair.\(index)")
         .accessibilityAction(named: Text("Pin", comment: "VoiceOver: pin a pair as the top one")) { pin(view) }

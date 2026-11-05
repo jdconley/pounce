@@ -55,6 +55,11 @@ secrets exist:
 | `PLAY_API_APNS_KEY_ID` | no | The APNs key's ID. |
 | `PLAY_API_SIWA_KEY_P8` | no, until App Store submission | Sign in with Apple key (.p8 contents). Sign-in works without it, but the API keeps no Apple tokens, so it can't revoke them on account deletion as App Review requires. One key with both APNs and Sign in with Apple enabled can serve both pairs. Set it together with the key ID. |
 | `PLAY_API_SIWA_KEY_ID` | no | The Sign in with Apple key's ID. |
+| `PLAY_API_TWILIO_ACCOUNT_SID` | no | Twilio account SID (`AC…`), for parent consent by text (daily habit PR 9). Set all five Twilio secrets or none: without them no text is sent and a kitten's consent can't start. |
+| `PLAY_API_TWILIO_API_KEY_SID` | no | A Twilio API key's SID (`SK…`): sends the texts (basic auth). |
+| `PLAY_API_TWILIO_API_KEY_SECRET` | no | That API key's secret. |
+| `PLAY_API_TWILIO_MESSAGING_SERVICE_SID` | no | The Messaging Service (`MG…`) that sends from the verified toll-free or A2P 10DLC number. |
+| `PLAY_API_TWILIO_AUTH_TOKEN` | no | The account's Auth Token. Only checks `X-Twilio-Signature` on the STOP webhook (`/v1/twilio/inbound`): Twilio signs webhooks with it, which an API key can't. |
 
 ## License
 

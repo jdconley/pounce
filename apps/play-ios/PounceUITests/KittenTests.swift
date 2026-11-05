@@ -2,12 +2,16 @@ import XCTest
 
 /// Parent consent (consent design §2; plan decisions 33–39) from the Debug demos: `-demo-kitten
 /// <locked|held|pending|on>` is the kitten's own device, `-demo-kittens` with `-stub-accounts
-/// signed-in` a parent's. No server needed. `KITTEN_SHOTS_DIR` in the runner's environment
-/// (`TEST_RUNNER_KITTEN_SHOTS_DIR`) also saves each screen as `<name>-<orientation>.png`.
+/// signed-in` a parent's. No server needed, except for the notice page, which the app loads from
+/// the server. `KITTEN_SHOTS_DIR` in the runner's environment (`TEST_RUNNER_KITTEN_SHOTS_DIR`) also
+/// saves each screen as `<name>-<orientation>.png`.
 @MainActor
 final class KittenTests: XCTestCase {
     override func setUp() {
         continueAfterFailure = false
+        // Screenshots in landscape (`TEST_RUNNER_KITTEN_SHOTS_ORIENTATION=landscape`, an iPad).
+        let landscape = ProcessInfo.processInfo.environment["KITTEN_SHOTS_ORIENTATION"] == "landscape"
+        XCUIDevice.shared.orientation = landscape ? .landscapeLeft : .portrait
     }
 
     private func launch(_ extra: [String], speed: Double = Live.speed) -> XCUIApplication {
@@ -140,11 +144,16 @@ final class KittenTests: XCTestCase {
         XCTAssertTrue(el(app, "notice.web").exists)
         let phone = el(app, "notice.phone")
         XCTAssertTrue(phone.exists)
+        shot(app, "kitten-notice")
         phone.tap()
         phone.typeText("5551234567")
-        shot(app, "kitten-notice")
-        el(app, "notice.send").tap()
-        XCTAssertTrue(until(5) { !self.el(app, "sheet-notice").exists }, "sending didn't close the page")
+        // The iPad simulator's hardware keyboard takes the first tap after typing: tap until it goes.
+        let sheet = el(app, "sheet-notice")
+        for _ in 0..<3 where sheet.exists {
+            el(app, "notice.send").tap()
+            _ = until(2) { !sheet.exists }
+        }
+        XCTAssertFalse(sheet.exists, "sending didn't close the page")
         XCTAssertTrue(until(3) { self.value(self.el(app, "kittens.card.0")) == "texted" }, "the card isn't waiting for the text")
     }
 
@@ -153,7 +162,9 @@ final class KittenTests: XCTestCase {
     func testUnapprovedPersonIsPadlocked() {
         let app = launch(["-age-band", "kitten", "-demo-kitten", "pending", "-demo-streaks", "-show-us"])
         XCTAssertTrue(el(app, "screen-us").waitForExistence(timeout: Live.t(10)), "no Us screen")
-        // Mia is approved: no padlock.
+        // The row padlocks Kiki and Nova once the kitten's consent arrives; Mia is approved.
+        XCTAssertTrue(until(10) { self.value(self.el(app, "us.pair.1")) == "locked" }, "Kiki isn't padlocked in the row")
+        XCTAssertNotEqual(value(el(app, "us.pair.0")), "locked")
         el(app, "us.bell").tap()
         XCTAssertTrue(el(app, "sheet-pounce").waitForExistence(timeout: Live.t(5)))
         XCTAssertFalse(el(app, "pounce.padlock").exists, "Mia is approved")
@@ -161,8 +172,12 @@ final class KittenTests: XCTestCase {
         el(app, "pounce.close").tap()
         XCTAssertTrue(until(3) { !self.el(app, "sheet-pounce").exists })
         // Kiki isn't.
-        el(app, "us.pair.1").tap()
-        Thread.sleep(forTimeInterval: Live.pace(0.5))
+        // Kiki's pounce waits on the kitten: her card shows once she's the one picked.
+        XCTAssertTrue(until(6) {
+            if self.el(app, "us.waiting").exists { return true }
+            self.el(app, "us.pair.1").tap()
+            return self.el(app, "us.waiting").waitForExistence(timeout: Live.t(1))
+        }, "Kiki isn't picked")
         el(app, "us.bell").tap()
         XCTAssertTrue(el(app, "pounce.padlock").waitForExistence(timeout: Live.t(5)), "Kiki isn't padlocked")
         XCTAssertEqual(value(el(app, "pounce.send")), "locked")

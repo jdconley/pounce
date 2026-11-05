@@ -419,6 +419,8 @@ struct KittenNoticeSheet: View {
                     .keyboardType(.phonePad)
                     .textContentType(.telephoneNumber)
                     .focused($focused)
+                    .submitLabel(.send)
+                    .onSubmit(send)
                     .font(.system(size: 22, weight: .bold, design: .rounded))
                     .foregroundStyle(Palette.ink)
                     .padding(.horizontal, 14)
