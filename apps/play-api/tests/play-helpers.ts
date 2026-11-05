@@ -43,7 +43,7 @@ export async function p8(): Promise<string> {
 /** A worker whose APNs is a recorder: every push lands in `sent`. */
 export async function worker(
   script: string,
-  options: { streaks?: boolean; persist?: string; sent: Sent[] },
+  options: { streaks?: boolean; persist?: string; links?: boolean; sent: Sent[] },
 ): Promise<Miniflare> {
   return new Miniflare({
     modules: true,
@@ -55,6 +55,7 @@ export async function worker(
       PLAYERS: { className: "Player", useSQLite: true },
       IDENTITIES: { className: "Identities", useSQLite: true },
       PAIRS: { className: "Pair", useSQLite: true },
+      ...(options.links ? { LINKS: { className: "Links", useSQLite: true } } : {}),
     },
     bindings: {
       TOKEN_SECRET: SECRET,

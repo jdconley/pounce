@@ -5,6 +5,7 @@ import { gate } from "../notify/policy";
 import { streakBlock } from "../notify/pushes";
 import { decide, dueSlots, emptyNotifyState, nextWake, noteSent, noteTurn, type NotifyState, type PairFacts, type ReminderInput } from "../notify/reminders";
 import { notifySettings, type NotifySettings } from "../notify/settings";
+import { KEEP_MS, restingUntil, type Answer, type PounceRow, type Target } from "../pounce/limits";
 import { createTables, listTables, removeTable, upsertTable, type TableEntry } from "../room/tables";
 import { FALLBACK_ZONE } from "../streaks/clock";
 import { leaveAllPairs } from "../streaks/pairs";
@@ -18,6 +19,10 @@ import type { AgeBand, Json, Section, StatePatch } from "./parse";
 import type { Outgoing } from "../notify/types";
 import type { Look } from "../room/core";
 import type { PairPerson, StreakView } from "../streaks/pair-core";
+
+/** A sent pounce as the sender keeps it: the link token while unanswered, and who sent it from where (to seat them). */
+export type StoredPounce = PounceRow & { link: string | null; fromPerson: string; fromDevice: string };
+const POUNCE_KEEP_MS = KEEP_MS;
 
 /** A push held back by spacing or a teen's night (§12.1, §14.1), and when it may go. */
 type Pending = { at: number; o: Outgoing };
@@ -99,6 +104,11 @@ export class Player extends DurableObject<Env> {
     sql.exec("CREATE TABLE IF NOT EXISTS pairs (pair_id TEXT PRIMARY KEY, partner_id TEXT UNIQUE, pinned INTEGER, created_at INTEGER)");
     // Tombstones (§14): partners whose streak this player left, so it doesn't re-form.
     sql.exec("CREATE TABLE IF NOT EXISTS left_pairs (partner_id TEXT PRIMARY KEY, at INTEGER)");
+    // Pounces this player sent (§13.2), kept 7 days.
+    sql.exec(
+      `CREATE TABLE IF NOT EXISTS pounces (id TEXT PRIMARY KEY, to_id TEXT, target TEXT, at INTEGER, answer TEXT,
+         answered_at INTEGER, code TEXT, quiet INTEGER, link TEXT, from_person TEXT, from_device TEXT)`,
+    );
     createTables(sql);
   }
 
@@ -486,6 +496,8 @@ export class Player extends DurableObject<Env> {
     if (!this.exists()) return;
     const times: number[] = [];
     if (!this.isSignedIn()) times.push(Number(this.getMeta("last_touch") ?? now) + GUEST_TTL_MS);
+    const oldest = this.ctx.storage.sql.exec<{ t: number | null }>("SELECT MIN(at) AS t FROM pounces").toArray()[0]?.t ?? null;
+    if (oldest !== null) times.push(oldest + POUNCE_KEEP_MS);
     if (streaksOn(this.env) && this.live()) {
       const wake = nextWake(this.notify(), this.reminderInput(now));
       if (wake !== null) times.push(wake);
@@ -508,6 +520,7 @@ export class Player extends DurableObject<Env> {
       await this.expire();
       return;
     }
+    this.prunePounces(now);
     if (streaksOn(this.env)) await this.remind(now);
     else await this.arm(now);
   }
@@ -539,6 +552,100 @@ export class Player extends DurableObject<Env> {
 
   private notifySettings(): NotifySettings {
     return notifySettings(this.section("settings"), this.band());
+  }
+
+  // ---- Pounces (§12.4) ----
+
+  /** Every pounce this player has sent, newest first. */
+  pounceRows(): StoredPounce[] {
+    return this.ctx.storage.sql
+      .exec<{
+        id: string;
+        to_id: string | null;
+        target: string;
+        at: number;
+        answer: string | null;
+        answered_at: number | null;
+        code: string | null;
+        quiet: number;
+        link: string | null;
+        from_person: string;
+        from_device: string;
+      }>("SELECT * FROM pounces ORDER BY at DESC")
+      .toArray()
+      .map((r) => ({
+        id: r.id,
+        to: r.to_id,
+        target: JSON.parse(r.target) as Target,
+        at: r.at,
+        answer: r.answer as Answer | null,
+        answeredAt: r.answered_at,
+        code: r.code,
+        quiet: r.quiet === 1,
+        link: r.link,
+        fromPerson: r.from_person,
+        fromDevice: r.from_device,
+      }));
+  }
+
+  /** This player's pounces on `to` (or, for null, its Messages links) from the last 7 days. */
+  pouncesTo(to: string | null, now: number): PounceRow[] {
+    return this.pounceRows()
+      .filter((r) => (to === null ? r.link !== null : r.to === to) && r.at > now - POUNCE_KEEP_MS)
+      .map((r) => ({
+        id: r.id,
+        to: r.to,
+        target: r.target,
+        at: r.at,
+        answer: r.answer,
+        answeredAt: r.answeredAt,
+        code: r.code,
+        quiet: r.quiet,
+      }));
+  }
+
+  pounce(id: string): StoredPounce | null {
+    return this.pounceRows().find((r) => r.id === id) ?? null;
+  }
+
+  /**
+   * Stores a pounce unless this player is resting from pouncing on that
+   * person (§12.4). Check and insert run with no await between.
+   */
+  async tryPounce(row: StoredPounce, now: number): Promise<{ ok: true } | { until: number } | { gone: true }> {
+    if (!this.live()) return { gone: true };
+    const until = restingUntil(this.pouncesTo(row.link === null ? row.to : null, now), now);
+    if (until !== null) return { until };
+    this.ctx.storage.sql.exec(
+      `INSERT INTO pounces (id, to_id, target, at, answer, answered_at, code, quiet, link, from_person, from_device)
+       VALUES (?, ?, ?, ?, NULL, NULL, NULL, ?, ?, ?, ?)`,
+      row.id,
+      row.to,
+      JSON.stringify(row.target),
+      row.at,
+      row.quiet ? 1 : 0,
+      row.link,
+      row.fromPerson,
+      row.fromDevice,
+    );
+    await this.arm(now);
+    return { ok: true };
+  }
+
+  /** Records an answer: a link pounce now belongs to whoever answered it. */
+  answerPounce(id: string, by: string, answer: Answer, code: string | null, now: number): void {
+    this.ctx.storage.sql.exec(
+      "UPDATE pounces SET to_id = COALESCE(to_id, ?), answer = ?, answered_at = ?, code = COALESCE(?, code) WHERE id = ?",
+      by,
+      answer,
+      now,
+      code,
+      id,
+    );
+  }
+
+  private prunePounces(now: number): void {
+    this.ctx.storage.sql.exec("DELETE FROM pounces WHERE at <= ?", now - POUNCE_KEEP_MS);
   }
 
   /** The reminder state, for tests and support. */
@@ -656,6 +763,7 @@ export class Player extends DurableObject<Env> {
    * does a test hook with a chosen time.
    */
   async remind(now: number): Promise<void> {
+    this.prunePounces(now);
     if (!streaksOn(this.env) || !this.live()) {
       await this.arm(now);
       return;

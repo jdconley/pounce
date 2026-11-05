@@ -19,6 +19,8 @@ export default defineConfig({
         "src/streaks/pair.ts",
         "src/streaks/pairs.ts",
         "src/notify/deliver.ts",
+        "src/pounce/pounces.ts",
+        "src/links/links.ts",
         "src/index.ts",
       ],
       reporter: ["text", "json-summary"],

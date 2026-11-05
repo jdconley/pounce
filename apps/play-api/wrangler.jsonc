@@ -22,13 +22,15 @@
       { "name": "DEVICES", "class_name": "DeviceIndex" },
       { "name": "PLAYERS", "class_name": "Player" },
       { "name": "IDENTITIES", "class_name": "Identities" },
-      { "name": "PAIRS", "class_name": "Pair" }
+      { "name": "PAIRS", "class_name": "Pair" },
+      { "name": "LINKS", "class_name": "Links" }
     ]
   },
   "migrations": [
     { "tag": "v1", "new_sqlite_classes": ["GameRoom", "DeviceIndex"] },
     { "tag": "v2", "new_sqlite_classes": ["Player", "Identities"] },
-    { "tag": "v3", "new_sqlite_classes": ["Pair"] }
+    { "tag": "v3", "new_sqlite_classes": ["Pair"] },
+    { "tag": "v4", "new_sqlite_classes": ["Links"] }
   ],
   // Invocation logs would record each request URL, which carries room codes.
   "observability": { "enabled": true, "logs": { "invocation_logs": false } }

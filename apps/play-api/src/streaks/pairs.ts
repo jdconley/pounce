@@ -1,8 +1,9 @@
 import { pokeWidgets } from "../notify/deliver";
 import { statusPush, type Face } from "../notify/pushes";
 import { base64url } from "../players/ids";
+import { pounceView, type PounceView } from "../pounce/limits";
 
-import { mergeStates, newPair, repoint, type PairEvent, type PairPerson, type PairState, type StreakView } from "./pair-core";
+import { mergeStates, newPair, NO_POUNCE, repoint, type PairEvent, type PairPerson, type PairState, type StreakView } from "./pair-core";
 
 import type { Env } from "../env";
 import type { Pair } from "./pair";
@@ -77,10 +78,26 @@ export async function reportTable(env: Env, intent: StreakIntent, now: number, a
         views = pairId ? await pair(env, pairId).report(r, now, awake) : null;
       }
       if (!pairId || !views) continue;
-      for (const id of [a, b]) (out[id] ??= []).push({ pair: pairId, view: views[id] as StreakView });
+      const pounces = await pounceViews(env, a, b, now);
+      for (const id of [a, b]) {
+        (out[id] ??= []).push({ pair: pairId, view: { ...(views[id] as StreakView), pounce: pounces[id] as PounceView } });
+      }
     }
   }
   return out;
+}
+
+/**
+ * Both people's `pounce` field for one pair (§12.4, §13.4), from the pounces
+ * each has sent the other. Cosmetic: a failure shows none.
+ */
+export async function pounceViews(env: Env, a: string, b: string, now: number): Promise<Record<string, PounceView>> {
+  try {
+    const [ab, ba] = await Promise.all([player(env, a).pouncesTo(b, now), player(env, b).pouncesTo(a, now)]);
+    return { [a]: pounceView(ab, ba, now), [b]: pounceView(ba, ab, now) };
+  } catch {
+    return { [a]: NO_POUNCE, [b]: NO_POUNCE };
+  }
 }
 
 /** `GET /v1/me/streaks`: the top pair first (pinned, else the longest streak, then the latest turn; §7). */
@@ -89,7 +106,9 @@ export async function myStreaks(env: Env, me: string, now: number): Promise<(Str
   const views = await Promise.all(
     rows.map(async (row) => {
       const v = await pair(env, row.pairId).view(me, now);
-      return v ? { ...v, pinned: row.pinned } : null;
+      if (!v) return null;
+      const pounce = (await pounceViews(env, me, row.partnerId, now))[me] as PounceView;
+      return { view: { ...v.view, pounce }, lastTurnAt: v.lastTurnAt, pinned: row.pinned };
     }),
   );
   return views
