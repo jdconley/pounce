@@ -41,8 +41,10 @@ public enum NotifyKey {
     public static let quietStart = "quiet.start"
     public static let quietEnd = "quiet.end"
     public static let lastChance = "lastChance.on"
+    /// The live table on the Lock Screen (spec §11.3, §12.6).
+    public static let liveTable = "liveTable.on"
 
-    public static let all: Set<String> = [reminders, auto, weekday, weekend, quietStart, quietEnd, lastChance]
+    public static let all: Set<String> = [reminders, auto, weekday, weekend, quietStart, quietEnd, lastChance, liveTable]
 }
 
 /// A player's notification settings (spec §12.6) with the age band's defaults (§12.3, §14.1):
@@ -58,10 +60,12 @@ public struct NotifySettings: Equatable, Sendable {
     public var quietStart: ClockTime
     public var quietEnd: ClockTime
     public var lastChance: Bool
+    /// The live table (spec §11.3): the game itself, so on for adults and teens; never a kitten's.
+    public var liveTable: Bool
 
     public init(
         reminders: Bool, auto: Bool, weekday: ClockTime, weekend: ClockTime, quietStart: ClockTime,
-        quietEnd: ClockTime, lastChance: Bool
+        quietEnd: ClockTime, lastChance: Bool, liveTable: Bool = true
     ) {
         self.reminders = reminders
         self.auto = auto
@@ -70,6 +74,7 @@ public struct NotifySettings: Equatable, Sendable {
         self.quietStart = quietStart
         self.quietEnd = quietEnd
         self.lastChance = lastChance
+        self.liveTable = liveTable
     }
 
     /// 19:30 local (§12.3).
@@ -79,7 +84,8 @@ public struct NotifySettings: Equatable, Sendable {
         let on = band != .teen && band != .kitten
         return NotifySettings(
             reminders: on, auto: on, weekday: defaultReminder, weekend: defaultReminder,
-            quietStart: ClockTime(h: band == .teen ? 21 : 22, m: 0), quietEnd: ClockTime(h: 8, m: 0), lastChance: on)
+            quietStart: ClockTime(h: band == .teen ? 21 : 22, m: 0), quietEnd: ClockTime(h: 8, m: 0), lastChance: on,
+            liveTable: band != .kitten)
     }
 
     /// Synced values over the band's defaults; a value that doesn't parse falls back. A kitten's
@@ -92,6 +98,7 @@ public struct NotifySettings: Equatable, Sendable {
         s.reminders = !kitten && (flag(NotifyKey.reminders) ?? s.reminders)
         s.auto = !kitten && (flag(NotifyKey.auto) ?? s.auto)
         s.lastChance = !kitten && (flag(NotifyKey.lastChance) ?? s.lastChance)
+        s.liveTable = !kitten && (flag(NotifyKey.liveTable) ?? s.liveTable)
         s.weekday = clock(NotifyKey.weekday) ?? s.weekday
         s.weekend = clock(NotifyKey.weekend) ?? s.weekend
         s.quietStart = clock(NotifyKey.quietStart) ?? s.quietStart

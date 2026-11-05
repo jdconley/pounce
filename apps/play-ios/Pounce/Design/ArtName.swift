@@ -180,6 +180,9 @@ enum ArtName {
         static let iconReplay = "icon-replay"
         /// Pounce (PR 5): the resting bell, the New game and You pick tiles.
         static let pounceBellAsleep = "pounce-bell-asleep"
+        /// Widgets (PR 6): the Pounce button once sent (the check), and the widgets' backdrop.
+        static let pounceBellSent = "pounce-bell-sent"
+        static let widgetBackground = "widget-bg"
         static let pounceNewGame = "pounce-new-game"
         static let pouncePick = "pounce-pick"
         /// "In a bit"; the reminder dials.
@@ -192,6 +195,8 @@ enum ArtName {
         static let iconWeekday = "icon-weekday"
         static let iconWeekend = "icon-weekend"
         static let iconLastChance = "icon-last-chance"
+        /// The live table toggle (PR 7): a phone's Lock Screen with the rug strip and the bell.
+        static let iconLiveTable = "icon-live-table"
     }
 
     // MARK: Sounds (Resources/Sounds/<name>.caf, 44.1 kHz mono)

@@ -1,0 +1,236 @@
+[
+  {
+    "name": "start-their-move",
+    "priority": 10,
+    "body": {
+      "aps": {
+        "timestamp": 1793907000,
+        "event": "start",
+        "content-state": {
+          "table": "Couch Cats",
+          "seats": [
+            {
+              "cat": 1,
+              "phase": 3,
+              "name": "JD",
+              "bot": false,
+              "me": true
+            },
+            {
+              "cat": 2,
+              "phase": 4,
+              "name": "Mia",
+              "bot": false,
+              "me": false
+            },
+            {
+              "cat": 3,
+              "phase": 2,
+              "bot": true,
+              "me": false
+            }
+          ],
+          "turn": 1,
+          "mine": false,
+          "streak": {
+            "count": 12,
+            "me": false,
+            "them": true
+          }
+        },
+        "attributes-type": "LiveTableAttributes",
+        "attributes": {
+          "code": "GH2VD"
+        },
+        "input-push-token": 1,
+        "stale-date": 1793908800,
+        "alert": {
+          "title": "Couch Cats",
+          "body": "Mia's move."
+        }
+      }
+    }
+  },
+  {
+    "name": "start-my-move",
+    "priority": 10,
+    "body": {
+      "aps": {
+        "timestamp": 1793907000,
+        "event": "start",
+        "content-state": {
+          "table": "Couch Cats",
+          "seats": [
+            {
+              "cat": 1,
+              "phase": 3,
+              "name": "JD",
+              "bot": false,
+              "me": true
+            },
+            {
+              "cat": 2,
+              "phase": 4,
+              "name": "Mia",
+              "bot": false,
+              "me": false
+            },
+            {
+              "cat": 3,
+              "phase": 2,
+              "bot": true,
+              "me": false
+            }
+          ],
+          "turn": 0,
+          "mine": true,
+          "streak": {
+            "count": 12,
+            "me": false,
+            "them": true
+          }
+        },
+        "attributes-type": "LiveTableAttributes",
+        "attributes": {
+          "code": "GH2VD"
+        },
+        "input-push-token": 1,
+        "stale-date": 1793908800,
+        "alert": {
+          "title": "Couch Cats",
+          "body": "Your move."
+        }
+      }
+    }
+  },
+  {
+    "name": "update-my-move",
+    "priority": 10,
+    "body": {
+      "aps": {
+        "timestamp": 1793907000,
+        "event": "update",
+        "content-state": {
+          "table": "Couch Cats",
+          "seats": [
+            {
+              "cat": 1,
+              "phase": 3,
+              "name": "JD",
+              "bot": false,
+              "me": true
+            },
+            {
+              "cat": 2,
+              "phase": 4,
+              "name": "Mia",
+              "bot": false,
+              "me": false
+            },
+            {
+              "cat": 3,
+              "phase": 2,
+              "bot": true,
+              "me": false
+            }
+          ],
+          "turn": 0,
+          "mine": true,
+          "streak": {
+            "count": 12,
+            "me": false,
+            "them": true
+          }
+        },
+        "stale-date": 1793908800,
+        "alert": {
+          "title": "JD",
+          "body": "Mia played. Your move at Couch Cats.",
+          "sound": "default"
+        }
+      }
+    }
+  },
+  {
+    "name": "update-their-move",
+    "priority": 5,
+    "body": {
+      "aps": {
+        "timestamp": 1793907000,
+        "event": "update",
+        "content-state": {
+          "table": "Couch Cats",
+          "seats": [
+            {
+              "cat": 1,
+              "phase": 3,
+              "name": "JD",
+              "bot": false,
+              "me": true
+            },
+            {
+              "cat": 2,
+              "phase": 4,
+              "name": "Mia",
+              "bot": false,
+              "me": false
+            },
+            {
+              "cat": 3,
+              "phase": 2,
+              "bot": true,
+              "me": false
+            }
+          ],
+          "turn": 1,
+          "mine": false,
+          "streak": {
+            "count": 12,
+            "me": false,
+            "them": true
+          }
+        },
+        "stale-date": 1793908800
+      }
+    }
+  },
+  {
+    "name": "end",
+    "priority": 10,
+    "body": {
+      "aps": {
+        "timestamp": 1793907000,
+        "event": "end",
+        "content-state": {
+          "table": "Couch Cats",
+          "seats": [
+            {
+              "cat": 1,
+              "phase": 3,
+              "name": "JD",
+              "bot": false,
+              "me": true
+            },
+            {
+              "cat": 2,
+              "phase": 4,
+              "name": "Mia",
+              "bot": false,
+              "me": false
+            },
+            {
+              "cat": 3,
+              "phase": 2,
+              "bot": true,
+              "me": false
+            }
+          ],
+          "turn": null,
+          "mine": false,
+          "streak": null
+        },
+        "dismissal-date": 1793907000
+      }
+    }
+  }
+]

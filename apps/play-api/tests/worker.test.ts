@@ -114,6 +114,17 @@ async function editStoredRoom(dir: string, edit: (state: RoomState) => void): Pr
 }
 
 /** Stops a persistent worker, as a deploy or crash would. */
+/**
+ * Waits until the room has finished the start and saved it: a new socket is served only after
+ * the event before it. Without this a restart can land between the "playing" snapshot reaching
+ * the client and the room's write, and the room comes back in the lobby.
+ */
+async function settled(mf: Miniflare, code: string, device: Device): Promise<void> {
+  const probe = await connect(mf, code, device);
+  expect((await probe.snapshot()).room.status).toBe("playing");
+  probe.ws.close();
+}
+
 async function restart(mf: Miniflare): Promise<void> {
   await mf.dispose();
   open.splice(open.indexOf(mf), 1);
@@ -768,6 +779,7 @@ describe("worker", { timeout: 20_000 }, () => {
       a: (sa.room.game as CatTowerView).hands[0] as number[],
       b: (sb.room.game as CatTowerView).hands[1] as number[],
     };
+    await settled(mf1, code, alice);
     await restart(mf1);
 
     // Seat 0 is to draw from a deck that cannot be refilled: drawing ends the round.
@@ -809,6 +821,7 @@ describe("worker", { timeout: 20_000 }, () => {
     const mf1 = worker({ persist: dir });
     const { alice, code, sa } = await startedGame(mf1);
     expect(sa.room.seats.map((s) => s.presence)).toEqual(["awake", "awake"]);
+    await settled(mf1, code, alice);
     await restart(mf1);
 
     // Bob's socket died with the old instance; only Alice comes back.

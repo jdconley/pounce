@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 
-import { createApnsJwt, pushAlert, pushDismiss, pushWidget, pushYourTurn, sendApns } from "./apns";
+import { createApnsJwt, pushAlert, pushDismiss, pushLive, pushWidget, pushYourTurn, sendApns } from "./apns";
 
 import type { Env } from "../env";
 import type { YourTurnIntent } from "../room/core";
@@ -319,6 +319,33 @@ describe("widget pushes (§11.2)", () => {
     const { fetcher, calls } = fakeFetch(new Response(null, { status: 200 }));
     expect(await pushWidget(env, null, fetcher, NOW)).toEqual({ sent: false, unregistered: false });
     expect(await pushWidget(env, TOKEN, fetcher, NOW)).toEqual({ sent: true, unregistered: false });
+    expect(calls).toHaveLength(1);
+  });
+});
+
+describe("live table pushes (§11.3)", () => {
+  it("go to the liveactivity topic at the priority asked, with no collapse id", async () => {
+    const body = { aps: { timestamp: NOW, event: "update", "content-state": { table: "Couch Cats" } } };
+    for (const priority of [5, 10] as const) {
+      const { fetcher, calls } = fakeFetch(new Response(null, { status: 200 }));
+      await sendApns(fetcher, CFG, TOKEN, { live: body, priority });
+      const { init } = calls[0] as Call;
+      expect(init.headers).toEqual({
+        authorization: "bearer the.jwt.value",
+        "apns-topic": "com.conleychaos.play.push-type.liveactivity",
+        "apns-push-type": "liveactivity",
+        "apns-priority": String(priority),
+      });
+      expect(JSON.parse(init.body as string)).toEqual(body);
+    }
+  });
+
+  it("pushLive is a no-op without a token", async () => {
+    const { pem } = await keyPair();
+    const env = { APNS_TEAM_ID: TEAM, APNS_TOPIC: "com.conleychaos.play", APNS_HOST: "api.push.apple.com", APNS_KEY_P8: pem, APNS_KEY_ID: "KID-LIVE" } as Env;
+    const { fetcher, calls } = fakeFetch(new Response(null, { status: 200 }));
+    expect(await pushLive(env, null, { aps: {} }, 5, fetcher, NOW)).toEqual({ sent: false, unregistered: false });
+    expect(await pushLive(env, TOKEN, { aps: {} }, 10, fetcher, NOW)).toEqual({ sent: true, unregistered: false });
     expect(calls).toHaveLength(1);
   });
 });

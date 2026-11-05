@@ -13,6 +13,18 @@ import Testing
             reminders: true, auto: true, weekday: t(19, 30), weekend: t(19, 30), quietStart: t(22), quietEnd: t(8),
             lastChance: true))
         #expect(NotifySettings.defaults(band: nil) == s)
+        #expect(s.liveTable)
+    }
+
+    @Test func liveTableIsOnUnlessAKittenOrTurnedOff() {
+        #expect(NotifySettings.defaults(band: .teen).liveTable)
+        #expect(!NotifySettings.defaults(band: .kitten).liveTable)
+        let on: SyncSection = [NotifyKey.liveTable: SyncEntry(v: .bool(true), at: 5)]
+        #expect(!NotifySettings.resolve(on, band: .kitten).liveTable)
+        let off: SyncSection = [NotifyKey.liveTable: SyncEntry(v: .bool(false), at: 5)]
+        #expect(!NotifySettings.resolve(off, band: .adult).liveTable)
+        #expect(NotifySettings.resolve([NotifyKey.liveTable: SyncEntry(v: .number(0), at: 5)], band: .adult).liveTable)
+        #expect(NotifyKey.all.contains("liveTable.on"))
     }
 
     @Test func teenDefaultsAreGentle() {

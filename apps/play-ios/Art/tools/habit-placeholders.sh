@@ -251,4 +251,28 @@ put icon-weekend "$TMP/weekend.png"
 ic -fill "$V" -draw "circle 126,126 126,14" -fill "$G" -draw "circle 110,104 110,40" -fill "$V" -strokewidth 0 -draw "circle 146,80 146,30" \
   -stroke "$INK" -strokewidth 10 -fill "$O" -draw "$(paw 150 168 120)" "PNG32:$TMP/last-chance.png"
 put icon-last-chance "$TMP/last-chance.png"
+echo "widgets (PR 6)"
+CHECK="$(src icon-check)"; HOME_BG="$(src home-bg)"
+# The Pounce button once sent: the bell on its magenta disc, with a big lime check badge.
+magick "$(src pounce-bell)" -resize 720x720 \( -size 330x330 xc:none -fill "$L" -stroke "$INK" -strokewidth 22 -draw "circle 165,165 165,14" \
+  \( "$CHECK" -resize 210x210 \) -gravity center -composite \) -gravity southeast -geometry +6+6 -composite \
+  "PNG32:$TMP/bell-sent.png"
+put pounce-bell-sent "$TMP/bell-sent.png"
+# The widgets' backdrop: the home sky, cropped square, pushed louder, sprinkled with paws.
+pawsprinkle=()
+for p in "180 200 150" "560 140 110" "900 260 170" "300 620 120" "760 560 150" "140 960 130" "620 940 170" "960 860 110"; do
+  read -r x y s <<< "$p"; pawsprinkle+=(-draw "$(paw "$x" "$y" "$s")")
+done
+magick "$HOME_BG" -gravity center -crop 1170x1170+0+0 +repage -resize 1080x1080! -modulate 105,140,100 \
+  \( -size 1080x1080 xc:none -fill "#FFFFFF38" -stroke none "${pawsprinkle[@]}" \) -gravity northwest -composite \
+  "PNG32:$TMP/widget-bg.png"
+put widget-bg "$TMP/widget-bg.png"
+echo "live table (PR 7)"
+# The live table toggle: a violet phone whose Lock Screen holds the teal rug strip with two cats'
+# faces, and the bell ringing at its corner.
+ic -fill "$V" -draw "roundrectangle 58,8 194,244 28,28" -fill "$S" -strokewidth 0 -draw "roundrectangle 74,28 178,224 16,16" \
+  -stroke "$INK" -strokewidth 10 -fill "$T" -draw "roundrectangle 64,124 188,184 16,16" \
+  -fill "$O" -draw "circle 98,154 98,138" -fill "$M" -draw "circle 154,154 154,138" \
+  \( "$BELL" -resize 120x120 \) -gravity northeast -geometry +0+0 -composite "PNG32:$TMP/live-table.png"
+put icon-live-table "$TMP/live-table.png"
 echo "habit placeholders done"

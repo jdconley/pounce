@@ -43,7 +43,7 @@ export async function p8(): Promise<string> {
 /** A worker whose APNs is a recorder: every push lands in `sent`. */
 export async function worker(
   script: string,
-  options: { streaks?: boolean; notify?: boolean; persist?: string; links?: boolean; sent: Sent[] },
+  options: { streaks?: boolean; notify?: boolean; live?: boolean; persist?: string; links?: boolean; sent: Sent[] },
 ): Promise<Miniflare> {
   return new Miniflare({
     modules: true,
@@ -68,6 +68,7 @@ export async function worker(
       TESTFLIGHT_URL: "https://testflight.apple.com/join/abc",
       ...(options.streaks === false ? {} : { STREAKS: "on" }),
       ...(options.notify === false ? {} : { NOTIFY: "on" }),
+      ...(options.live ? { LIVE: "on" } : {}),
     },
     ...(options.persist ? { durableObjectsPersist: options.persist } : {}),
     outboundService: async (request: MiniflareRequest) => {

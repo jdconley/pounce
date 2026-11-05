@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { notifyOn, quietStartMinutes, streaksOn } from "./profile";
+import { liveOn, notifyOn, quietStartMinutes, streaksOn } from "./profile";
 
 import type { Json } from "../players/parse";
 
@@ -38,5 +38,15 @@ describe("notifyOn", () => {
     expect(notifyOn({ NOTIFY: "on" })).toBe(false);
     expect(notifyOn({ STREAKS: "on", NOTIFY: "off" })).toBe(false);
     for (const on of ["on", "1", "true", "ON"]) expect(notifyOn({ STREAKS: "on", NOTIFY: on })).toBe(true);
+  });
+});
+
+describe("liveOn", () => {
+  it("needs LIVE on top of STREAKS and NOTIFY (daily habit PR 7)", () => {
+    expect(liveOn({ STREAKS: "on", NOTIFY: "on" })).toBe(false);
+    expect(liveOn({ LIVE: "on" })).toBe(false);
+    expect(liveOn({ NOTIFY: "on", LIVE: "on" })).toBe(false);
+    expect(liveOn({ STREAKS: "on", NOTIFY: "on", LIVE: "off" })).toBe(false);
+    for (const on of ["on", "1", "true", "ON"]) expect(liveOn({ STREAKS: "on", NOTIFY: "on", LIVE: on })).toBe(true);
   });
 });

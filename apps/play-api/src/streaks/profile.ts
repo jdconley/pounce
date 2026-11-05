@@ -33,3 +33,13 @@ export function streaksOn(env: { STREAKS?: string }): boolean {
 export function notifyOn(env: { STREAKS?: string; NOTIFY?: string }): boolean {
   return streaksOn(env) && ON.includes((env.NOTIFY ?? "").toLowerCase());
 }
+
+/**
+ * The live table (§15 row 7) needs `LIVE` on top of `NOTIFY`: a kill switch
+ * that stops every Live Activity push without an app build. wrangler.jsonc
+ * turns it on, since the app half ships in the same PR and nothing is sent
+ * until a device uploads a push-to-start token.
+ */
+export function liveOn(env: { STREAKS?: string; NOTIFY?: string; LIVE?: string }): boolean {
+  return notifyOn(env) && ON.includes((env.LIVE ?? "").toLowerCase());
+}

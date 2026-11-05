@@ -97,6 +97,46 @@ Needs the server with `STREAKS` on (production once this PR deploys).
 - [ ] Settings panel: change the weekday dial and quiet hours on the iPhone; the iPad (same account)
       shows the same values after a foreground.
 
+## Widgets (daily habit PR 6, TestFlight builds for push)
+
+- [ ] Add the Us widget (small and medium) and the Streak widget (circular, rectangular, inline):
+      each shows the top pair; edit one to another partner and it follows that pair.
+- [ ] Take a turn at a shared table on the other phone while this one is locked: within a few
+      minutes this phone's widgets show their paw lit (WidgetKit push; at most one every 15 minutes).
+      The same from a "your move" push (PounceNotify writes the snapshot): the paw lights with it.
+- [ ] Medium widget's bell, phone unlocked: the other phone gets a "you pick" pounce and the bell
+      turns into the check; an answer (or an hour) brings the bell back. Locked: the bell does nothing.
+- [ ] At 04:00 the widgets go grey for the new day without opening the app; a pause that ended
+      loses its suitcase.
+- [ ] StandBy at night (charging, on its side): the sleeping cats and the numeral, red in night mode.
+- [ ] Glass, clear and tinted home screens and the lock screen: the cats and condo draw as mono
+      art, the numeral picks up the tint.
+- [ ] A kitten's phone: the widgets work and refresh when the app opens, and no widget push ever
+      arrives (the token never leaves the phone).
+- [ ] Tap each widget: small and rectangular open your move's table, else the Us screen on that pair;
+      circular opens the Us screen; a medium row opens its table.
+
+## Live table (daily habit PR 7, TestFlight builds only)
+
+- [ ] Two phones at a table, both open. Lock this phone on the other person's move: within a few
+      seconds the live table appears on the Lock Screen (rug strip, their cat ringed, phase
+      numerals, the table name, the paws) and in the Dynamic Island (your cat, their cat).
+- [ ] The other person plays: the live table lights up with the bell and the turn sound, and no
+      separate "your move" notification arrives. (If the app didn't get time to upload the
+      activity's token, the regular "your move" arrives instead: note which.)
+- [ ] The other person plays again on a bot or a third seat: the ring moves, quietly.
+- [ ] Open the app at that table: the live table goes at once.
+- [ ] Leave it 30 minutes with no move: it goes by itself; if it was your move, a quiet "your move"
+      waits in Notification Center.
+- [ ] Swipe it away on the Lock Screen while the app is running: the next "your move" arrives as a
+      notification.
+- [ ] Gear sheet: turn the live table off, lock on their move: nothing appears. Turn it back on.
+- [ ] Round end: the live table goes when the round is over.
+- [ ] Answer a pounce with Play, open the table, lock the phone before the other person arrives:
+      the live table starts anyway.
+- [ ] A kitten's phone never shows a live table; a teen's shows none between 00:00 and 06:00.
+- [ ] Two tables: lock on one, come back and lock on the other: only the newer live table stays.
+
 ## Performance and accessibility
 
 - [ ] Instruments idle-CPU check on the oldest iPhone available: the table scene should pause when

@@ -8,6 +8,7 @@ import { newRoomCode } from "../room/codes";
 import { defaultRoomName } from "../room/names";
 import { DEFAULT_BACK, DEFAULT_RUG } from "../streaks/catalog";
 import { FALLBACK_ZONE } from "../streaks/clock";
+import { liveOn } from "../streaks/profile";
 
 import { ANSWER_MS, KEEP_MS, type Target } from "./limits";
 import { LINK_TOKEN, parseAnswer, parsePounce, POUNCE_ID } from "./parse";
@@ -200,6 +201,11 @@ export async function answerPounce(
     await player(env, sender).setPounceCode(id, code);
   }
   if (row.to === null && parsed.link !== null) await links(env).take(parsed.link, now);
+  // Play at a table you both sit at: leaving it soon makes it live for you (§11.3). A new
+  // game's room marks it as it deals.
+  if (parsed.answer === "play" && code && !dealing && liveOn(env)) {
+    await env.ROOMS.get(env.ROOMS.idFromName(code)).pounced(me).catch(() => undefined);
+  }
 
   const [mine, theirs] = await Promise.all([player(env, me).meta(), player(env, sender).meta()]);
   if (mine && theirs) {
