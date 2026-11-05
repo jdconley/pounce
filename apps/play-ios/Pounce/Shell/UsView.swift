@@ -395,6 +395,7 @@ struct UsView: View {
         VStack(spacing: 16 * scale) {
             if let waiting = view.pounce.waiting {
                 WaitingPounceCard(view: view, waiting: waiting, scale: min(scale, 1.3))
+                    .padding(.horizontal, 14)
                     .id(waiting.id)
                     .transition(.scale(scale: 0.6).combined(with: .opacity))
             }

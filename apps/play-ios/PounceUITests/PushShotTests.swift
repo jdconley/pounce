@@ -36,9 +36,13 @@ final class PushShotTests: XCTestCase {
         Thread.sleep(forTimeInterval: 1)
         try XCUIScreen.main.screenshot().pngRepresentation
             .write(to: URL(fileURLWithPath: dir).appendingPathComponent("push-banner-\(orientation).png"))
-        // Expanded: the long-press shows the buttons.
+        // Expanded: the long-press shows the buttons. On iPad the press dismisses the banner
+        // instead, so the banner shot is the one to use there.
         banner.press(forDuration: 1.2)
-        XCTAssertTrue(springboard.buttons["In a bit"].waitForExistence(timeout: 10), "no pounce buttons")
+        guard springboard.buttons["In a bit"].waitForExistence(timeout: 10) else {
+            XCUIDevice.shared.orientation = .portrait
+            throw XCTSkip("the banner didn't expand (iPad): use push-banner-\(orientation).png")
+        }
         Thread.sleep(forTimeInterval: 1)
         try XCUIScreen.main.screenshot().pngRepresentation
             .write(to: URL(fileURLWithPath: dir).appendingPathComponent("push-\(orientation).png"))

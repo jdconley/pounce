@@ -201,21 +201,19 @@ struct WaitingPounceCard: View {
     @State private var answered: PounceAnswer?
 
     var body: some View {
-        HStack(spacing: 12 * scale) {
-            ZStack(alignment: .topTrailing) {
-                Image(ArtName.cat(view.partner.cat, .awake)).resizable().scaledToFit().frame(width: 70 * scale)
-                Image(ArtName.Habit.pounceBell).resizable().scaledToFit().frame(width: 34 * scale)
-                    .wiggle(trigger: ring)
-                    .offset(x: 8, y: -6)
+        // One row where it fits; on a narrow phone the answers go under the cat and the table.
+        ViewThatFits(in: .horizontal) {
+            HStack(spacing: 12 * scale) {
+                who
+                Spacer(minLength: 0)
+                reply
             }
-            target
-            Spacer(minLength: 0)
-            if let answered {
-                Image(answered == .later ? ArtName.Habit.iconClock : ArtName.cat(view.partner.cat, .asleep))
-                    .resizable().scaledToFit().frame(width: 56 * scale)
-                    .transition(.scale.combined(with: .opacity))
-            } else {
-                answers
+            VStack(spacing: 8 * scale) {
+                HStack(spacing: 12 * scale) {
+                    who
+                    Spacer(minLength: 0)
+                }
+                reply
             }
         }
         .padding(.horizontal, 14 * scale)
@@ -236,6 +234,28 @@ struct WaitingPounceCard: View {
         .accessibilityLabel(Text("\(view.partner.name) wants to play", comment: "VoiceOver: a pounce waiting on you"))
         .accessibilityValue(PounceSheetView.value(Self.tile(waiting.target, view: view)))
         .accessibilityIdentifier("us.waiting")
+    }
+
+    private var who: some View {
+        HStack(spacing: 12 * scale) {
+            ZStack(alignment: .topTrailing) {
+                Image(ArtName.cat(view.partner.cat, .awake)).resizable().scaledToFit().frame(width: 70 * scale)
+                Image(ArtName.Habit.pounceBell).resizable().scaledToFit().frame(width: 34 * scale)
+                    .wiggle(trigger: ring)
+                    .offset(x: 8, y: -6)
+            }
+            target
+        }
+    }
+
+    @ViewBuilder private var reply: some View {
+        if let answered {
+            Image(answered == .later ? ArtName.Habit.iconClock : ArtName.cat(view.partner.cat, .asleep))
+                .resizable().scaledToFit().frame(width: 56 * scale)
+                .transition(.scale.combined(with: .opacity))
+        } else {
+            answers
+        }
     }
 
     static func tile(_ target: PounceTarget, view: StreakView) -> PounceTile {
