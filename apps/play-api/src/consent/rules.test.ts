@@ -3,10 +3,11 @@ import { describe, expect, test } from "vitest";
 import {
   allows,
   attemptAllowed,
+  CODE_MS,
   confirm,
-  expireText,
+  expireCode,
   FAIL_WINDOW_MS,
-  isStop,
+  intoWindow,
   KID,
   LINK_CODE,
   link,
@@ -18,19 +19,24 @@ import {
   normalizePhone,
   parentState,
   approvedSet,
+  PLUS_GIVE_UP_MS,
+  plusDone,
+  plusRetryAt,
+  plusTimeAt,
   repointParent,
   repointPartner,
+  resend,
+  RESEND_MS,
   revoke,
-  secondSent,
-  secondTextAt,
   setAppleApprovals,
   setParentApprovals,
-  text,
-  TEXTED_MS,
+  startCode,
   textable,
   textAllowed,
   TEXTS_PER_KITTEN,
   unlinkParent,
+  upgrade,
+  VERIFY_CODE,
   type ConsentRecord,
 } from "./rules";
 
@@ -40,9 +46,11 @@ const LA = "America/Los_Angeles";
 
 const fresh = (): ConsentRecord => newRecord("k_x", "p_kid", "p_mom", null);
 
+const waiting = (): ConsentRecord => (startCode(fresh(), "p_mom", "+15551234567", NOW) as { ok: ConsentRecord }).ok;
+
 function consented(): ConsentRecord {
-  const t = text(fresh(), "p_mom", "+15551234567", NOW);
-  if (!("ok" in t)) throw new Error("text failed");
+  const t = startCode(fresh(), "p_mom", "+15551234567", NOW);
+  if (!("ok" in t)) throw new Error("start failed");
   return confirm(t.ok, NOW + H, LA) as ConsentRecord;
 }
 
@@ -54,12 +62,12 @@ describe("the record (decisions 4–12)", () => {
       parents: ["p_mom"],
       state: "pending",
       phone: null,
-      textedBy: null,
-      textedAt: null,
+      codeBy: null,
+      codeAt: null,
       consentedBy: null,
       consentedAt: null,
-      secondAt: null,
-      secondSent: false,
+      plusAt: null,
+      plusSent: false,
       approved: [],
       apple: null,
       transaction: null,
@@ -76,44 +84,53 @@ describe("the record (decisions 4–12)", () => {
     expect(link({ ...two, transaction: "tx1" }, "p_mom", null).transaction).toBe("tx1");
   });
 
-  test("text: only a linked parent, not while consented; a new number replaces the old", () => {
-    expect(text(fresh(), "p_stranger", "+15551234567", NOW)).toEqual({ error: "not_parent" });
-    const t = text(fresh(), "p_mom", "+15551234567", NOW);
-    expect(t).toEqual({ ok: expect.objectContaining({ state: "texted", phone: "+15551234567", textedBy: "p_mom", textedAt: NOW }) });
-    const again = text((t as { ok: ConsentRecord }).ok, "p_mom", "+15557654321", NOW + 5);
-    expect(again).toEqual({ ok: expect.objectContaining({ phone: "+15557654321", textedAt: NOW + 5 }) });
-    expect(parentState((again as { ok: ConsentRecord }).ok)).toBe("texted");
-    expect(text(consented(), "p_mom", "+15551234567", NOW)).toEqual({ error: "consented" });
+  test("startCode: only a linked parent, not while consented; a new number replaces the old", () => {
+    expect(startCode(fresh(), "p_stranger", "+15551234567", NOW)).toEqual({ error: "not_parent" });
+    const t = startCode(fresh(), "p_mom", "+15551234567", NOW);
+    expect(t).toEqual({ ok: expect.objectContaining({ state: "code", phone: "+15551234567", codeBy: "p_mom", codeAt: NOW }) });
+    const again = startCode((t as { ok: ConsentRecord }).ok, "p_mom", "+15557654321", NOW + 5);
+    expect(again).toEqual({ ok: expect.objectContaining({ phone: "+15557654321", codeAt: NOW + 5 }) });
+    expect(parentState((again as { ok: ConsentRecord }).ok)).toBe("code");
+    expect(startCode(consented(), "p_mom", "+15551234567", NOW)).toEqual({ error: "consented" });
   });
 
-  test("confirm: only from texted; schedules text 2", () => {
+  test("resend: only while waiting for the code, by a linked parent, and not within 30 s", () => {
+    expect(resend(fresh(), "p_mom", NOW)).toEqual({ error: "not_waiting" });
+    expect(resend(consented(), "p_mom", NOW)).toEqual({ error: "not_waiting" });
+    expect(resend(waiting(), "p_stranger", NOW + RESEND_MS)).toEqual({ error: "not_parent" });
+    expect(resend(waiting(), "p_mom", NOW + RESEND_MS - 1)).toEqual({ error: "too_soon" });
+    const dad = link(waiting(), "p_dad", null);
+    expect(resend(dad, "p_dad", NOW + RESEND_MS)).toEqual({ ok: expect.objectContaining({ codeAt: NOW + RESEND_MS, codeBy: "p_mom", phone: "+15551234567" }) });
+  });
+
+  test("confirm: only while waiting for the code; schedules the plus", () => {
     expect(confirm(fresh(), NOW, LA)).toBeNull();
     const c = consented();
-    expect(c).toMatchObject({ state: "consented", consentedBy: "p_mom", consentedAt: NOW + H, secondSent: false });
-    expect(c.secondAt).toBe(secondTextAt(NOW + H, LA));
+    expect(c).toMatchObject({ state: "consented", consentedBy: "p_mom", consentedAt: NOW + H, plusSent: false });
+    expect(c.plusAt).toBe(plusTimeAt(NOW + H, LA));
     expect(parentState(c)).toBe("on");
     expect(confirm(c, NOW, LA)).toBeNull();
   });
 
-  test("the plus: marked sent once", () => {
-    const c = secondSent(consented());
-    expect(c.secondSent).toBe(true);
+  test("the plus: marked done once", () => {
+    const c = plusDone(consented());
+    expect(c.plusSent).toBe(true);
     expect(nextWake(c)).toBeNull();
   });
 
-  test("texted expiry after 7 days: the phone goes, back to pending", () => {
-    const t = (text(fresh(), "p_mom", "+15551234567", NOW) as { ok: ConsentRecord }).ok;
-    expect(nextWake(t)).toBe(NOW + TEXTED_MS);
-    expect(expireText(t, NOW + TEXTED_MS - 1)).toBe(t);
-    const gone = expireText(t, NOW + TEXTED_MS);
-    expect(gone).toMatchObject({ state: "pending", phone: null, textedBy: null, textedAt: null });
-    expect(expireText(fresh(), NOW + TEXTED_MS * 2)).toEqual(fresh());
+  test("the code state ends after 30 minutes without consent: the phone goes, back to pending", () => {
+    const t = waiting();
+    expect(nextWake(t)).toBe(NOW + CODE_MS);
+    expect(expireCode(t, NOW + CODE_MS - 1)).toBe(t);
+    const gone = expireCode(t, NOW + CODE_MS);
+    expect(gone).toMatchObject({ state: "pending", phone: null, codeBy: null, codeAt: null });
+    expect(expireCode(fresh(), NOW + CODE_MS * 2)).toEqual(fresh());
   });
 
   test("nextWake: text 2 while it's owed, nothing when pending", () => {
     expect(nextWake(fresh())).toBeNull();
     const c = consented();
-    expect(nextWake(c)).toBe(c.secondAt);
+    expect(nextWake(c)).toBe(c.plusAt);
   });
 
   test("revoke: back to pending; parents and approvals stay; phone and schedule go", () => {
@@ -122,12 +139,12 @@ describe("the record (decisions 4–12)", () => {
     expect(r).toMatchObject({
       state: "pending",
       phone: null,
-      textedBy: null,
-      textedAt: null,
+      codeBy: null,
+      codeAt: null,
       consentedBy: null,
       consentedAt: null,
-      secondAt: null,
-      secondSent: false,
+      plusAt: null,
+      plusSent: false,
       parents: ["p_mom", "p_dad"],
       approved: ["p_mia"],
     });
@@ -139,14 +156,14 @@ describe("the record (decisions 4–12)", () => {
     const both = link(consented(), "p_dad", null);
     expect(unlinkParent(both, "p_dad")).toMatchObject({ state: "consented", parents: ["p_mom"] });
     expect(unlinkParent(both, "p_mom")).toMatchObject({ state: "pending", parents: ["p_dad"], phone: null });
-    const texted = link((text(fresh(), "p_mom", "+15551234567", NOW) as { ok: ConsentRecord }).ok, "p_dad", null);
-    expect(unlinkParent(texted, "p_mom")).toMatchObject({ state: "pending", phone: null });
-    expect(unlinkParent(texted, "p_dad")).toMatchObject({ state: "texted" });
+    const code = link(waiting(), "p_dad", null);
+    expect(unlinkParent(code, "p_mom")).toMatchObject({ state: "pending", phone: null });
+    expect(unlinkParent(code, "p_dad")).toMatchObject({ state: "code" });
   });
 
   test("repoint: a merged parent becomes the other, once", () => {
     const c = consented();
-    expect(repointParent(c, "p_mom", "p_acct")).toMatchObject({ parents: ["p_acct"], consentedBy: "p_acct", textedBy: "p_acct" });
+    expect(repointParent(c, "p_mom", "p_acct")).toMatchObject({ parents: ["p_acct"], consentedBy: "p_acct", codeBy: "p_acct" });
     const two = link(fresh(), "p_acct", null);
     expect(repointParent(two, "p_mom", "p_acct").parents).toEqual(["p_acct"]);
     expect(repointParent(fresh(), "p_x", "p_y")).toEqual(fresh());
@@ -182,7 +199,7 @@ describe("allows: the push gate (decision 16)", () => {
   test("nothing without a record or before consent", () => {
     expect(allows(null, "your_move", [])).toBe(false);
     expect(allows(fresh(), "pounce", ["p_mom"])).toBe(false);
-    expect(allows((text(fresh(), "p_mom", "+15551234567", NOW) as { ok: ConsentRecord }).ok, "dismiss", [])).toBe(false);
+    expect(allows(waiting(), "dismiss", [])).toBe(false);
   });
 
   test("your move: every other human approved; a seat without a player blocks", () => {
@@ -209,40 +226,56 @@ describe("allows: the push gate (decision 16)", () => {
   });
 });
 
-describe("secondTextAt (decision 8)", () => {
+describe("the plus: its time and retries inside 10:00–20:00 (decision 8, Verify)", () => {
   const local = (t: number, zone: string) =>
     new Intl.DateTimeFormat("en-US", { timeZone: zone, hour: "numeric", minute: "numeric", hourCycle: "h23" }).format(new Date(t));
 
   test("a day later when that's daytime there", () => {
-    expect(secondTextAt(NOW, LA)).toBe(NOW + 24 * H);
+    expect(plusTimeAt(NOW, LA)).toBe(NOW + 24 * H);
     const late = Date.UTC(2026, 10, 6, 3, 59); // 19:59 LA
-    expect(secondTextAt(late, LA)).toBe(late + 24 * H);
+    expect(plusTimeAt(late, LA)).toBe(late + 24 * H);
   });
 
   test("moved to the next 10:00 when it would land at night, always within 24–48 h", () => {
     const evening = Date.UTC(2026, 10, 6, 4); // 20:00 LA
-    const at = secondTextAt(evening, LA);
+    const at = plusTimeAt(evening, LA);
     expect(local(at, LA)).toBe("10:00");
     expect(at - evening).toBe(38 * H);
     const early = Date.UTC(2026, 10, 5, 14, 30); // 06:30 LA
-    expect(local(secondTextAt(early, LA), LA)).toBe("10:00");
-    expect(secondTextAt(early, LA) - early).toBe(27.5 * H);
+    expect(local(plusTimeAt(early, LA), LA)).toBe("10:00");
+    expect(plusTimeAt(early, LA) - early).toBe(27.5 * H);
     for (let m = 0; m < 24 * 60; m += 37) {
       const t = NOW + m * 60_000;
-      const d = secondTextAt(t, "Asia/Tokyo") - t;
+      const d = plusTimeAt(t, "Asia/Tokyo") - t;
       expect(d).toBeGreaterThanOrEqual(24 * H);
       expect(d).toBeLessThanOrEqual(48 * H);
     }
   });
 
+  test("intoWindow: daytime stays, night moves to the next 10:00", () => {
+    expect(intoWindow(NOW, LA)).toBe(NOW);
+    const evening = Date.UTC(2026, 10, 6, 4); // 20:00 LA
+    expect(local(intoWindow(evening, LA), LA)).toBe("10:00");
+    expect(intoWindow(evening, LA) - evening).toBe(14 * H);
+  });
+
+  test("a failed push is retried an hour later, never outside the window; a day of failures gives up", () => {
+    const c = consented();
+    expect(plusRetryAt(NOW, LA)).toBe(NOW + H);
+    const late = Date.UTC(2026, 10, 6, 3, 30); // 19:30 LA: an hour later is 20:30
+    expect(local(plusRetryAt(late, LA), LA)).toBe("10:00");
+    expect(PLUS_GIVE_UP_MS).toBe(24 * H);
+    expect((c.plusAt as number) + PLUS_GIVE_UP_MS).toBeGreaterThan(c.plusAt as number);
+  });
+
   test("an unknown zone counts as UTC", () => {
     const t = Date.UTC(2026, 10, 5, 22);
-    expect(secondTextAt(t, null)).toBe(Date.UTC(2026, 10, 7, 10));
-    expect(secondTextAt(t, "Not/AZone")).toBe(Date.UTC(2026, 10, 7, 10));
+    expect(plusTimeAt(t, null)).toBe(Date.UTC(2026, 10, 7, 10));
+    expect(plusTimeAt(t, "Not/AZone")).toBe(Date.UTC(2026, 10, 7, 10));
   });
 });
 
-describe("phones, codes, ids and STOP", () => {
+describe("phones, codes and ids", () => {
   test("normalizePhone: US 10 and 11 digits, E.164, junk refused", () => {
     expect(normalizePhone("(555) 123-4567")).toBe("+15551234567");
     expect(normalizePhone("1 555 123 4567")).toBe("+15551234567");
@@ -275,24 +308,21 @@ describe("phones, codes, ids and STOP", () => {
     expect(attemptAllowed(full, NOW - 9 * 60_000 + FAIL_WINDOW_MS)).toBe(true);
   });
 
-  test("isStop: Twilio's opt-out words and OptOutType", () => {
-    for (const w of ["STOP", " stop ", "Stopall", "UNSUBSCRIBE", "cancel", "END", "quit", "revoke", "optout"]) expect(isStop(w, null)).toBe(true);
-    expect(isStop("hello", "STOP")).toBe(true);
-    expect(isStop("please stop texting", null)).toBe(false);
-    expect(isStop("START", "START")).toBe(false);
-    expect(isStop(null, null)).toBe(false);
+  test("the Verify code is six digits", () => {
+    expect(VERIFY_CODE.test("012345")).toBe(true);
+    for (const bad of ["12345", "1234567", "12a456", " 12345"]) expect(VERIFY_CODE.test(bad)).toBe(false);
   });
 });
 
-describe("text limits and numbers (review I2)", () => {
-  test("three texts a day per kitten; the oldest ages out", () => {
+describe("code limits and numbers (review I2)", () => {
+  test("three codes a day per kitten; the oldest ages out", () => {
     const times = [NOW - 23 * H, NOW - H, NOW - 60_000];
     expect(textAllowed(times.slice(1), NOW, TEXTS_PER_KITTEN)).toBe(true);
     expect(textAllowed(times, NOW, TEXTS_PER_KITTEN)).toBe(false);
     expect(textAllowed(times, NOW + H, TEXTS_PER_KITTEN)).toBe(true);
   });
 
-  test("only North American numbers are texted", () => {
+  test("only North American numbers get a code", () => {
     // An exchange starting with 1 is not a real number.
     expect(textable("+15551234567")).toBe(false);
     expect(textable("+14155550123")).toBe(true);
@@ -307,5 +337,41 @@ describe("approvals follow a merged partner (review M9)", () => {
     const r = { ...fresh(), approved: ["p_guest", "p_acct"], apple: ["p_guest"] };
     expect(repointPartner(r, "p_guest", "p_acct")).toMatchObject({ approved: ["p_acct"], apple: ["p_acct"] });
     expect(repointPartner(fresh(), "p_guest", "p_acct").apple).toBeNull();
+  });
+});
+
+describe("stored records from the text plus build", () => {
+  test("a record without the Verify fields is upgraded; a pending text link is pending again", () => {
+    const old = {
+      kid: "k_x",
+      kitten: "p_kid",
+      parents: ["p_mom"],
+      state: "texted" as const,
+      phone: "+14155550123",
+      textedBy: "p_mom",
+      textedAt: NOW,
+      consentedBy: null,
+      consentedAt: null,
+      secondAt: null,
+      secondSent: false,
+      approved: ["p_mia"],
+      apple: null,
+      transaction: "tx1",
+    };
+    expect(upgrade(old)).toEqual({ ...fresh(), approved: ["p_mia"], transaction: "tx1" });
+    const on = { ...old, state: "consented" as const, consentedBy: "p_mom", consentedAt: NOW, secondAt: NOW + 24 * H, secondSent: true };
+    expect(upgrade(on)).toMatchObject({ state: "consented", phone: "+14155550123", codeBy: "p_mom", codeAt: NOW, plusAt: NOW + 24 * H, plusSent: true });
+    expect(upgrade(on)).not.toHaveProperty("textedBy");
+    const pending = { ...old, state: "pending" as const, phone: null, textedBy: null, textedAt: null };
+    expect(upgrade(pending)).toEqual({ ...fresh(), approved: ["p_mia"], transaction: "tx1" });
+    // Fields an older write left out read as unset.
+    const sparse: Record<string, unknown> = { ...on, textedBy: undefined };
+    for (const k of ["textedAt", "secondAt", "secondSent"]) delete sparse[k];
+    expect(upgrade(sparse as never)).toMatchObject({ state: "consented", codeBy: null, codeAt: null, plusAt: null, plusSent: false });
+  });
+
+  test("a current record is left as it is", () => {
+    const c = consented();
+    expect(upgrade(c)).toBe(c);
   });
 });

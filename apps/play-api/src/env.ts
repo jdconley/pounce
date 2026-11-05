@@ -44,15 +44,14 @@ export interface Env {
    */
   CONSENT?: string;
   /**
-   * Twilio, for text plus (consent design D1). Secrets, optional: texting needs all five, so
-   * without them consent can't start and nothing is sent. The Auth Token checks STOP webhooks'
-   * `X-Twilio-Signature` (plan decision 24); the API key sends.
+   * Twilio Verify, for parent consent (consent design D1, D6). Secrets, optional: all four or
+   * nothing is sent, so consent can't start. Verify texts a six-digit code from Twilio's own
+   * pre-registered senders, so Pounce needs no phone number of its own and no 10DLC.
    */
   TWILIO_ACCOUNT_SID?: string;
   TWILIO_API_KEY_SID?: string;
   TWILIO_API_KEY_SECRET?: string;
-  TWILIO_MESSAGING_SERVICE_SID?: string;
-  TWILIO_AUTH_TOKEN?: string;
+  TWILIO_VERIFY_SERVICE_SID?: string;
   /** HMAC key for device tokens. A secret; absent until configured. */
   TOKEN_SECRET?: string;
   /** Public TestFlight link for the share page. Optional; the page omits the link when unset. */

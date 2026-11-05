@@ -7,17 +7,16 @@ import { privacyPage } from "./http/privacy";
 import {
   anyConsented,
   appStoreNotification,
-  consentPage,
-  consentPost,
+  checkConsent,
   kittenMe,
   linkCode,
   linkKitten,
   listKittens,
   mirrorApple,
+  resendConsent,
   revokeConsent,
   setApproved,
   startConsent,
-  twilioInbound,
   unlinkKitten,
 } from "./kittens/kittens";
 import { parseLiveTokens } from "./live/live";
@@ -63,9 +62,8 @@ const SIGN_IN = /^\/v1\/identities\/([a-z]+)$/;
 const MY_IDENTITY = /^\/v1\/me\/identities\/([a-z]+)$/;
 /** `/v1/pairs/{pair}`, `/pause`, `/pin` or `/gifts/{id}/open` (§13.4). */
 /** `DELETE /v1/me/left/{pair}`: undo leaving a streak (§14's ghosted cat). */
-/** `/v1/kittens/{k}`, `/approved` or `/consent` (parent consent, plan decision 1). */
-const KITTEN_PATH = /^\/v1\/kittens\/(k_[A-Za-z0-9_-]{22})(?:\/(approved|consent))?$/;
-const CONSENT_PAGE = /^\/consent\/([^/]+)$/;
+/** `/v1/kittens/{k}`, `/approved`, `/consent`, `/consent/check` or `/consent/resend` (parent consent, plan decision 1). */
+const KITTEN_PATH = /^\/v1\/kittens\/(k_[A-Za-z0-9_-]{22})(?:\/(approved|consent|consent\/check|consent\/resend))?$/;
 /** An App Store notification is a few KB of JWS. */
 const MAX_NOTIFICATION_BYTES = 32_768;
 const LEFT_PATH = /^\/v1\/me\/left\/([^/]+)$/;
@@ -358,8 +356,6 @@ function streakRoute(method: string, pathname: string, notify: boolean, live: bo
   });
 }
 
-const origin = (request: Request) => new URL(request.url).origin;
-
 /** Parent consent routes (consent design §3), only while `CONSENT` is on. */
 function kittenRoute(method: string, pathname: string): Route | null {
   if (method === "POST" && pathname === "/v1/kittens/me/link-code") {
@@ -380,20 +376,20 @@ function kittenRoute(method: string, pathname: string): Route | null {
     return asMe(async (r, env, d, me) => respond(await setApproved(env, d, me, kid, await readObject(r, MAX_STATE_BYTES))));
   }
   if (action === "consent" && method === "POST") {
-    return asMe(async (r, env, d, me) => respond(await startConsent(env, d, me, kid, await readObject(r), origin(r), Date.now()), 202));
+    return asMe(async (r, env, d, me) => respond(await startConsent(env, d, me, kid, await readObject(r), Date.now()), 202));
+  }
+  if (action === "consent/resend" && method === "POST") return asMe(async (_r, env, d, me) => respond(await resendConsent(env, d, me, kid, Date.now()), 202));
+  if (action === "consent/check" && method === "POST") {
+    return asMe(async (r, env, d, me) => respond(await checkConsent(env, d, me, kid, await readObject(r), Date.now())));
   }
   if (action === "consent" && method === "DELETE") return asMe(async (_r, env, d, me) => respond(await revokeConsent(env, d, me, kid)));
   if (action === undefined && method === "DELETE") return asMe(async (_r, env, d, me) => respond(await unlinkKitten(env, d, me, kid)));
   return null;
 }
 
-/** Parent consent's public routes: the notice, the texts' pages, Twilio's STOP webhook, App Store notifications. */
+/** Parent consent's public routes: the notice and App Store notifications. */
 async function publicConsent(request: Request, env: Env, method: string, pathname: string): Promise<Response | null> {
   if (method === "GET" && pathname === "/privacy/kitten-notice") return noticePage();
-  const page = CONSENT_PAGE.exec(pathname);
-  if (page && method === "GET") return consentPage(env, page[1] as string, Date.now());
-  if (page && method === "POST") return consentPost(env, page[1] as string, Date.now());
-  if (method === "POST" && pathname === "/v1/twilio/inbound") return twilioInbound(env, request);
   if (method === "POST" && pathname === "/v1/appstore/notifications") {
     return appStoreNotification(env, await readObject(request, MAX_NOTIFICATION_BYTES), APPLE_ROOTS, Date.now());
   }

@@ -1,21 +1,18 @@
 import { readNotification } from "../consent/appstore";
-import { outcomePage, tokenPage } from "../consent/pages";
-import { approvedSet, isStop, KID, LINK_CODE, normalizePhone, parentState, textable, type ConsentRecord, type ParentState } from "../consent/rules";
-import { twilioConfig, verifyTwilio } from "../consent/twilio";
+import { approvedSet, KID, LINK_CODE, normalizePhone, parentState, textable, VERIFY_CODE, type ConsentRecord, type ParentState } from "../consent/rules";
 import { player, type Result } from "../players/accounts";
 import { PAIR_ID } from "../players/ids";
 import { consentOn } from "../streaks/profile";
 
-import { phoneHash } from "./consents";
 import { KITTENS_NAME } from "./kitten-index";
 
+import type { CheckError, CodeError } from "./consents";
 import type { Env } from "../env";
 
 /** The route flows of parent consent (consent design §3; plan decisions 1–23). */
 
 const MAX_PAIRS = 64;
 const TX_ID = /^[A-Za-z0-9._-]{1,64}$/;
-const TOKEN = /^[A-Za-z0-9_-]{22}$/;
 
 const fail = (status: number, error: string): Result<never> => ({ status, error });
 const index = (env: Env) => env.KITTENS.get(env.KITTENS.idFromName(KITTENS_NAME));
@@ -27,14 +24,19 @@ const isObj = (v: unknown): v is Obj => typeof v === "object" && v !== null && !
 const onlyKeys = (o: Obj, keys: string[]) => Object.keys(o).every((k) => keys.includes(k));
 
 /** The kitten's view of itself (`GET /v1/kittens/me`). */
-export type KittenView = { state: "none" | "pending" | "texted" | "consented"; linked: boolean; approved: string[] };
+export type KittenView = { state: "none" | "pending" | "code" | "consented"; linked: boolean; approved: string[] };
 
-/** One kitten on a parent's Kittens panel. People are the kitten's pairs; linked parents are always on. */
+/**
+ * One kitten on a parent's Kittens panel. People are the kitten's pairs;
+ * linked parents are always on. `confirmed`: the confirmation push (the plus,
+ * D6) reached the consenting parent.
+ */
 export type ParentKitten = {
   id: string;
   name: string;
   cat: number;
   state: ParentState;
+  confirmed: boolean;
   mode: "parent" | "apple";
   people: { pair: string; name: string; cat: number; approved: boolean; parent: boolean }[];
 };
@@ -93,6 +95,7 @@ async function parentView(env: Env, r: ConsentRecord): Promise<ParentKitten | nu
     name: meta.name,
     cat: meta.cat,
     state: parentState(r),
+    confirmed: r.state === "consented" && r.plusSent,
     mode: r.apple === null ? "parent" : "apple",
     people: people.filter((p) => p !== null),
   };
@@ -171,25 +174,52 @@ export async function setApproved(env: Env, deviceId: string, parent: string, ki
   return out === "ok" ? { ok: null } : fail(404, "not_found");
 }
 
-/** `POST /v1/kittens/{k}/consent` (D1): text 1 to the parent's mobile. */
-export async function startConsent(
-  env: Env,
-  deviceId: string,
-  parent: string,
-  kid: string,
-  body: unknown,
-  origin: string,
-  now: number,
-): Promise<Result<{ state: "texted" }>> {
+const CODE_STATUS: Record<CodeError, number> = {
+  not_parent: 404,
+  consented: 409,
+  not_waiting: 409,
+  not_configured: 503,
+  send_failed: 502,
+  rate_limited: 429,
+  bad_number: 400,
+};
+
+/** `POST /v1/kittens/{k}/consent` (D1, D6): Twilio Verify texts the parent's mobile a code. */
+export async function startConsent(env: Env, deviceId: string, parent: string, kid: string, body: unknown, now: number): Promise<Result<{ state: "code" }>> {
   if (!isObj(body) || !onlyKeys(body, ["phone"])) return fail(400, "bad_request");
   const phone = normalizePhone(body.phone);
   if (!phone || !textable(phone)) return fail(400, "bad_request");
   const r = await mine(env, deviceId, parent, kid);
   if (!r) return fail(404, "not_found");
-  const out = await consents(env, r.kitten).startText(parent, phone, origin, now);
-  if ("ok" in out) return { ok: { state: "texted" } };
-  const status = { not_parent: 404, consented: 409, not_configured: 503, send_failed: 502, rate_limited: 429 }[out.error];
-  return fail(status, out.error);
+  const out = await consents(env, r.kitten).startCode(parent, phone, now);
+  return "ok" in out ? { ok: { state: "code" } } : fail(CODE_STATUS[out.error], out.error);
+}
+
+/** `POST /v1/kittens/{k}/consent/resend`: the same number again, 30 s apart at least, within the day's limits. */
+export async function resendConsent(env: Env, deviceId: string, parent: string, kid: string, now: number): Promise<Result<{ state: "code" }>> {
+  const r = await mine(env, deviceId, parent, kid);
+  if (!r) return fail(404, "not_found");
+  const out = await consents(env, r.kitten).resendCode(parent, now);
+  return "ok" in out ? { ok: { state: "code" } } : fail(CODE_STATUS[out.error], out.error);
+}
+
+const CHECK_STATUS: Record<CheckError, number> = {
+  not_parent: 404,
+  not_waiting: 409,
+  not_configured: 503,
+  wrong_code: 422,
+  expired: 410,
+  rate_limited: 429,
+  check_failed: 502,
+};
+
+/** `POST /v1/kittens/{k}/consent/check`: the six digits from the text. Right is consent (D6). */
+export async function checkConsent(env: Env, deviceId: string, parent: string, kid: string, body: unknown, now: number): Promise<Result<{ state: "on" }>> {
+  if (!isObj(body) || !onlyKeys(body, ["code"]) || typeof body.code !== "string" || !VERIFY_CODE.test(body.code)) return fail(400, "bad_request");
+  const r = await mine(env, deviceId, parent, kid);
+  if (!r) return fail(404, "not_found");
+  const out = await consents(env, r.kitten).checkCode(parent, body.code, now);
+  return "ok" in out ? { ok: { state: "on" } } : fail(CHECK_STATUS[out.error], out.error);
 }
 
 export async function revokeConsent(env: Env, deviceId: string, parent: string, kid: string): Promise<Result<null>> {
@@ -206,46 +236,7 @@ export async function unlinkKitten(env: Env, deviceId: string, parent: string, k
   return { ok: null };
 }
 
-// ---- Public: the texts' pages, Twilio, the App Store ----
-
-/** `GET /consent/{token}`: a page with a button. Changes nothing (decision 6). */
-export async function consentPage(env: Env, token: string, now: number): Promise<Response> {
-  const row = TOKEN.test(token) ? await index(env).getToken(token, now) : null;
-  const meta = row ? await player(env, row.kitten).meta() : null;
-  return row && meta ? tokenPage(row.kind, { name: meta.name }, token) : outcomePage("gone");
-}
-
-/** `POST /consent/{token}`: confirm or revoke. */
-export async function consentPost(env: Env, token: string, now: number): Promise<Response> {
-  const row = TOKEN.test(token) ? await index(env).getToken(token, now) : null;
-  if (!row) return outcomePage("gone");
-  const c = consents(env, row.kitten);
-  if (row.kind === "revoke") return outcomePage((await c.revoke("link")) ? "revoked" : "gone");
-  const r = await c.record();
-  const zone = r?.textedBy ? ((await player(env, r.textedBy).pushProfile())?.zone ?? null) : null;
-  return outcomePage((await c.confirm(zone, now)) ? "confirmed" : "gone");
-}
-
-const TWIML = `<?xml version="1.0" encoding="UTF-8"?><Response></Response>`;
-
-/** `POST /v1/twilio/inbound` (decision 26): a signed STOP revokes every consent on that number. */
-export async function twilioInbound(env: Env, request: Request): Promise<Response> {
-  const cfg = twilioConfig(env);
-  if (!cfg) return new Response(null, { status: 503 });
-  const text = await request.text();
-  if (text.length > 16_384) return new Response(null, { status: 413 });
-  const params = [...new URLSearchParams(text).entries()];
-  if (!(await verifyTwilio(cfg.authToken, request.url, params, request.headers.get("x-twilio-signature")))) {
-    return new Response(null, { status: 403 });
-  }
-  const form = new URLSearchParams(text);
-  const from = normalizePhone(form.get("From"));
-  if (from && isStop(form.get("Body"), form.get("OptOutType"))) {
-    const kittens = await index(env).kittensByPhone(await phoneHash(env, from));
-    await Promise.all(kittens.map((k) => consents(env, k).revoke("stop")));
-  }
-  return new Response(TWIML, { headers: { "content-type": "text/xml" } });
-}
+// ---- Public: the App Store ----
 
 /** `POST /v1/appstore/notifications` (D5): a verified `RESCIND_CONSENT` revokes that app transaction's kitten. */
 export async function appStoreNotification(env: Env, body: unknown, roots: readonly string[], now: number): Promise<Response> {

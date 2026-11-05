@@ -8,8 +8,8 @@
   "routes": [
     { "pattern": "play.conleychaos.com", "custom_domain": true }
   ],
-  // TOKEN_SECRET, APNS_KEY_P8, APNS_KEY_ID, SIWA_KEY_P8, SIWA_KEY_ID and the five
-  // TWILIO_* secrets are set by the deploy pipeline, never listed here.
+  // TOKEN_SECRET, APNS_KEY_P8, APNS_KEY_ID, SIWA_KEY_P8, SIWA_KEY_ID and the four
+  // TWILIO_* secrets (Twilio Verify) are set by the deploy pipeline, never listed here.
   "vars": {
     "APNS_TEAM_ID": "B222J9J7B8",
     "APNS_TOPIC": "com.conleychaos.play",
@@ -26,8 +26,8 @@
     // turning it off stops every Live Activity push without an app build.
     "LIVE": "on",
     // Parent consent for kittens (daily habit §15 row 9). Needs NOTIFY. On at merge (consent
-    // design D4): a kitten's device still gets nothing until a parent links it and confirms by
-    // text, and texting needs the Twilio secrets.
+    // design D4): a kitten's device still gets nothing until a parent links it and types the
+    // code Twilio Verify texts them, and that needs the Twilio secrets.
     "CONSENT": "on"
   },
   "durable_objects": {

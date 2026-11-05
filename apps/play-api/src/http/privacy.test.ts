@@ -41,7 +41,7 @@ describe("privacyPage", () => {
   test("without CONSENT the policy is as before: no consent section, no phone numbers at all", async () => {
     const html = await privacyPage(false).text();
     expect(html).not.toContain("kitten-notice");
-    expect(html).not.toContain("text plus");
+    expect(html).not.toContain("Twilio");
     expect(html).toContain("ad identifiers, phone numbers or messages");
     expect(html).not.toContain("<!--");
     expect(await privacyPage(true).text()).not.toContain("<!--");
@@ -49,8 +49,11 @@ describe("privacyPage", () => {
 
   test("says what parental consent adds, and how it ends", async () => {
     const html = await privacyPage().text();
-    for (const s of ["text plus", "push token", "mobile number", "Twilio", "STOP", "turns 13", 'href="/privacy/kitten-notice"']) {
+    for (const s of ["six-digit code", "Twilio Verify", "push token", "mobile number", "own device", "Revoke", "turns 13", 'href="/privacy/kitten-notice"']) {
       expect(html).toContain(s);
     }
+    // Verify sends only its code: no link to confirm by, and nothing to reply STOP to.
+    expect(html).not.toContain("STOP");
+    expect(html).not.toContain("second text");
   });
 });

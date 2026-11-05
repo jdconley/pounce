@@ -86,8 +86,7 @@ jobs:
           TWILIO_ACCOUNT_SID: ${{ secrets.PLAY_API_TWILIO_ACCOUNT_SID }}
           TWILIO_API_KEY_SID: ${{ secrets.PLAY_API_TWILIO_API_KEY_SID }}
           TWILIO_API_KEY_SECRET: ${{ secrets.PLAY_API_TWILIO_API_KEY_SECRET }}
-          TWILIO_MESSAGING_SERVICE_SID: ${{ secrets.PLAY_API_TWILIO_MESSAGING_SERVICE_SID }}
-          TWILIO_AUTH_TOKEN: ${{ secrets.PLAY_API_TWILIO_AUTH_TOKEN }}
+          TWILIO_VERIFY_SERVICE_SID: ${{ secrets.PLAY_API_TWILIO_VERIFY_SERVICE_SID }}
         run: |
           # After the deploy, because the Worker must exist before it can hold a
           # secret. Without TOKEN_SECRET the API stays dormant: device and room
@@ -95,7 +94,7 @@ jobs:
           # smoke check below catches. The APNs pair is optional: without it the
           # Worker skips your-turn pushes. So is the Sign in with Apple pair:
           # without it sign-in works but no tokens are kept to revoke. So is the
-          # Twilio set: without it parent consent can't text. Values
+          # Twilio Verify set: without it parent consent can't send its code. Values
           # reach wrangler on stdin, never as arguments.
           put_secret() {
             for attempt in 1 2 3; do
@@ -131,17 +130,17 @@ jobs:
             echo "PLAY_API_SIWA_KEY_P8 and PLAY_API_SIWA_KEY_ID unset. Sign in with Apple works; its tokens aren't kept or revoked (needed before App Store submission)."
           fi
 
-          # All five or none: texting (parent consent, text plus) needs the API key to send and the
-          # Auth Token to check STOP replies' signatures, so consent can't start unless STOP can end it.
-          twilio=(TWILIO_ACCOUNT_SID TWILIO_API_KEY_SID TWILIO_API_KEY_SECRET TWILIO_MESSAGING_SERVICE_SID TWILIO_AUTH_TOKEN)
+          # All four or none: parent consent's code goes through Twilio Verify, which needs the
+          # account, the API key pair that signs in, and the Verify Service that sends it.
+          twilio=(TWILIO_ACCOUNT_SID TWILIO_API_KEY_SID TWILIO_API_KEY_SECRET TWILIO_VERIFY_SERVICE_SID)
           set_count=0
           for name in "${twilio[@]}"; do [ -n "${!name}" ] && set_count=$((set_count + 1)); done
-          if [ "$set_count" -eq 5 ]; then
+          if [ "$set_count" -eq 4 ]; then
             for name in "${twilio[@]}"; do put_secret "$name"; done
           elif [ "$set_count" -gt 0 ]; then
-            echo "::warning title=Play API::Set all five PLAY_API_TWILIO_* secrets (some are missing). Parent consent can't text, so kittens stay without notifications."
+            echo "::warning title=Play API::Set all four PLAY_API_TWILIO_* secrets: ACCOUNT_SID, API_KEY_SID, API_KEY_SECRET and VERIFY_SERVICE_SID (some are missing). Parent consent can't send its code, so kittens stay without notifications."
           else
-            echo "PLAY_API_TWILIO_* unset. Parent consent can't text, so kittens stay without notifications."
+            echo "PLAY_API_TWILIO_* unset. Parent consent can't send its code, so kittens stay without notifications."
           fi
       - name: Smoke check
         if: steps.creds.outputs.ready == 'true'

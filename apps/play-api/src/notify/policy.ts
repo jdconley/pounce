@@ -16,7 +16,9 @@ export type NotifyKind =
   | "winback"
   | "paused"
   | "milestone"
-  | "play_again";
+  | "play_again"
+  /** Parent consent's confirmation, on the consenting parent's own devices (consent design D6). */
+  | "consent";
 
 export type Level = "active" | "passive";
 
