@@ -7,6 +7,7 @@ import {
   confirm,
   expireCode,
   FAIL_WINDOW_MS,
+  isOldShape,
   link,
   newRecord,
   nextWake,
@@ -66,7 +67,24 @@ export class Consents extends DurableObject<Env> {
 
   constructor(ctx: DurableObjectState, env: Env) {
     super(ctx, env);
-    void ctx.blockConcurrencyWhile(async () => this.schema());
+    void ctx.blockConcurrencyWhile(async () => {
+      this.schema();
+      this.upgradeStored();
+    });
+  }
+
+  /**
+   * A record from the text plus build is rewritten in today's shape and
+   * revoked (review I3): the number leaves storage now, and the kitten's push
+   * tokens go once the queue runs.
+   */
+  private upgradeStored(): void {
+    const v = this.getMeta("rec");
+    if (v === null) return;
+    const stored = JSON.parse(v) as ConsentRecord;
+    if (!isOldShape(stored)) return;
+    this.setMeta("rec", JSON.stringify(upgrade(stored)));
+    if ((stored.state as string) !== "pending") void this.serial(() => dropKittenTokens(this.env, stored.kitten));
   }
 
   private schema(): void {

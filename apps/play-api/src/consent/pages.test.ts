@@ -32,7 +32,7 @@ describe("the direct notice (16 CFR 312.4(c))", () => {
       "privacy@conleychaos.com",
       "mobile number",
       "six-digit code",
-      "within 30 minutes",
+      "within 30 minutes of the last code",
       "notification on your own device",
       "Revoke",
       "push token",

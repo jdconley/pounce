@@ -157,8 +157,10 @@ send leaves the kitten on the hourglass.
       kitten's name. The card's bell now has a check. A tap opens Kittens on that kitten.
 - [ ] Press and hold that notification, then Revoke (Face ID or the passcode if locked): the kitten's
       bell sleeps again and no push arrives.
-- [ ] With notifications off for Pounce on the parent's phone, give consent: a day after the
-      confirmation was due it ends by itself (the card back to the hourglass).
+- [ ] On a parent phone that never allowed notifications for Pounce (deny the prompt after the
+      code), give consent: a day after the confirmation was due it ends by itself (the card back to
+      the hourglass). A phone that allowed them once and turned them off later still counts as
+      delivered: APNs accepts the push.
 - [ ] Give consent again, then revoke from the panel (the bell with a slash): pushes stop at once.
 - [ ] With Screen Time Communication Limits on the kitten (Family Sharing): a padlocked person in the
       Pounce sheet, tapped, shows Apple's ask; approve in Messages: the padlock goes and the parent's

@@ -180,13 +180,16 @@ public struct ConsentCodeState: Equatable, Sendable {
 
     /// The server's wait between codes to one number.
     public static let resendAfter: TimeInterval = 30
+    /// The server's window for 5 wrong codes.
+    public static let restAfterWrong: TimeInterval = 600
 
     public private(set) var phase: Phase
     public var entry = LinkCodeEntry()
-    /// When this screen last had a code sent; nil when it opened on a code sent earlier.
+    /// When this screen last had a code sent (or a resend refused); nil when it opened on a code
+    /// sent earlier.
     public private(set) var sentAt: Date?
-    /// Too many tries, or the day's codes are used up: the hourglass.
-    public private(set) var resting = false
+    /// Five wrong codes: the keypad rests (the hourglass) until then.
+    public private(set) var restingUntil: Date?
     /// Verify's code expired (10 minutes): only a fresh one helps, so resend bounces.
     public private(set) var expired = false
 
@@ -197,6 +200,8 @@ public struct ConsentCodeState: Equatable, Sendable {
         case .on: phase = .done
         }
     }
+
+    public func resting(now: Date) -> Bool { restingUntil.map { now < $0 } ?? false }
 
     public func canResend(now: Date) -> Bool {
         guard phase == .code else { return false }
@@ -209,38 +214,41 @@ public struct ConsentCodeState: Equatable, Sendable {
         phase = .code
         entry.clear()
         sentAt = now
-        resting = false
+        restingUntil = nil
         expired = false
     }
 
+    /// Another code. A refusal (too soon, or the day's codes used up) only waits out the loop
+    /// arrow again: the keypad stays, for a code that is still good.
     public mutating func resent(_ result: KittenStore.PhoneResult, at now: Date) {
         switch result {
         case .sent:
             sentAt = now
-            resting = false
             expired = false
         case .tooMany:
-            resting = true
+            sentAt = now
         case .notConfigured, .failed:
             break
         }
     }
 
-    public mutating func checked(_ result: KittenStore.CheckResult) {
+    public mutating func checked(_ result: KittenStore.CheckResult, at now: Date) {
         entry.clear()
         switch result {
         case .on: phase = .done
         case .wrong, .failed: break
         case .expired: expired = true
-        case .tooMany: resting = true
+        case .tooMany: restingUntil = now.addingTimeInterval(Self.restAfterWrong)
         case .notWaiting: phase = .phone
         }
     }
 
-    /// Back to the phone field, for another number.
+    /// Back to the phone field, for another number (which starts the server's count again).
     public mutating func changeNumber() {
         phase = .phone
         entry.clear()
+        restingUntil = nil
+        expired = false
     }
 }
 

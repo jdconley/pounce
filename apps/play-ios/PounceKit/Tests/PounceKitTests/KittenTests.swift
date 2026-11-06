@@ -141,33 +141,54 @@ import Testing
     @Test func checkResultsMoveTheState() {
         var s = ConsentCodeState(state: .code)
         for d in [1, 2, 3, 4, 5, 6] { s.entry.type(d) }
-        s.checked(.wrong)
+        s.checked(.wrong, at: now)
         #expect(s.entry.digits.isEmpty)
-        #expect(s.phase == .code && !s.expired && !s.resting)
-        s.checked(.expired)
+        #expect(s.phase == .code && !s.expired && !s.resting(now: now))
+        s.checked(.expired, at: now)
         #expect(s.expired)
-        s.checked(.tooMany)
-        #expect(s.resting)
         s.resent(.sent, at: now)
-        #expect(!s.expired && !s.resting)
+        #expect(!s.expired)
         #expect(s.sentAt == now)
-        s.resent(.tooMany, at: now)
-        #expect(s.resting)
-        s.checked(.failed)
+        s.checked(.failed, at: now)
         #expect(s.phase == .code)
-        s.checked(.notWaiting)
+        s.checked(.notWaiting, at: now)
         #expect(s.phase == .phone)
         s.sent(at: now)
-        s.checked(.on)
+        s.checked(.on, at: now)
         #expect(s.phase == .done)
+    }
+
+    /// Five wrong codes rest the keypad for the server's 10 minutes, no longer (review I2).
+    @Test func tooManyWrongCodesRestTheKeypadFor10Minutes() {
+        var s = ConsentCodeState(state: .code)
+        s.checked(.tooMany, at: now)
+        #expect(s.resting(now: now))
+        #expect(s.resting(now: now.addingTimeInterval(599)))
+        #expect(!s.resting(now: now.addingTimeInterval(600)))
+    }
+
+    /// A refused resend (too soon, or the day's codes used up) only dims the loop arrow: a parent
+    /// holding a good code can still type it (review I2).
+    @Test func aRefusedResendLeavesTheKeypadAlone() {
+        var s = ConsentCodeState(state: .code)
+        #expect(s.canResend(now: now))
+        s.resent(.tooMany, at: now)
+        #expect(!s.resting(now: now))
+        #expect(!s.canResend(now: now.addingTimeInterval(29)))
+        #expect(s.canResend(now: now.addingTimeInterval(30)))
+        s.resent(.failed, at: now)
+        #expect(!s.resting(now: now))
     }
 
     @Test func aNewNumberGoesBackToThePhone() {
         var s = ConsentCodeState(state: .code)
         s.entry.type(4)
+        s.checked(.expired, at: now)
+        s.checked(.tooMany, at: now)
         s.changeNumber()
         #expect(s.phase == .phone)
         #expect(s.entry.digits.isEmpty)
+        #expect(!s.expired && !s.resting(now: now))
     }
 }
 
@@ -254,6 +275,42 @@ final class FakeKittens: KittenService, Sendable {
     func checkConsent(kitten: String, code: String) async throws { try record("check \(kitten) \(code)") }
     func revokeConsent(kitten: String) async throws { try record("revoke \(kitten)") }
     func unlink(kitten: String) async throws { try record("unlink \(kitten)") }
+}
+
+@MainActor @Suite struct KittenRevokeQueueTests {
+    private func file() -> URL {
+        FileManager.default.temporaryDirectory.appendingPathComponent("kitten-\(UUID().uuidString).json")
+    }
+
+    /// A revoke (the panel's, or the notification's in the background) is kept on disk until the
+    /// server has it, and tried again on the next launch or foreground (review I1).
+    @Test func aFailedRevokeIsKeptAndTriedAgain() async {
+        let fake = FakeKittens()
+        let url = file()
+        let store = KittenStore(service: fake, file: url)
+        await store.refreshKittens()
+        fake.fail.withLock { $0 = .transport("offline") }
+        #expect(await store.revoke(kitten: DemoKittenService.biscuit) == false)
+        #expect(store.pendingRevokes == [DemoKittenService.biscuit])
+        #expect(store.kittens[1].state == .on)
+        let next = KittenStore(service: fake, file: url)
+        #expect(next.pendingRevokes == [DemoKittenService.biscuit])
+        await next.drainRevokes()
+        #expect(next.pendingRevokes == [DemoKittenService.biscuit], "still offline")
+        fake.fail.withLock { $0 = nil }
+        await next.drainRevokes()
+        #expect(next.pendingRevokes.isEmpty)
+        #expect(KittenStore(service: fake, file: url).pendingRevokes.isEmpty)
+        #expect(fake.calls.withLock { $0 }.filter { $0.hasPrefix("revoke") }.count == 3)
+    }
+
+    @Test func aKittenTheServerNoLongerKnowsLeavesTheQueue() async {
+        let fake = FakeKittens()
+        let store = KittenStore(service: fake, file: nil)
+        fake.fail.withLock { $0 = .notFound }
+        #expect(await store.revoke(kitten: "k_gone") == true)
+        #expect(store.pendingRevokes.isEmpty)
+    }
 }
 
 @MainActor @Suite struct KittenStoreTests {

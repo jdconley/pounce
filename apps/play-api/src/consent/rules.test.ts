@@ -8,6 +8,7 @@ import {
   expireCode,
   FAIL_WINDOW_MS,
   intoWindow,
+  isOldShape,
   KID,
   LINK_CODE,
   link,
@@ -259,6 +260,13 @@ describe("the plus: its time and retries inside 10:00–20:00 (decision 8, Verif
     expect(intoWindow(evening, LA) - evening).toBe(14 * H);
   });
 
+  test("intoWindow lands at 10:00 local across a DST change (review M11)", () => {
+    const beforeFallBack = Date.UTC(2026, 10, 1, 5); // 22:00 PDT, 31 October
+    expect(local(intoWindow(beforeFallBack, LA), LA)).toBe("10:00");
+    const beforeSpring = Date.UTC(2027, 2, 14, 6); // 22:00 PST, 13 March
+    expect(local(intoWindow(beforeSpring, LA), LA)).toBe("10:00");
+  });
+
   test("a failed push is retried an hour later, never outside the window; a day of failures gives up", () => {
     const c = consented();
     expect(plusRetryAt(NOW, LA)).toBe(NOW + H);
@@ -341,7 +349,7 @@ describe("approvals follow a merged partner (review M9)", () => {
 });
 
 describe("stored records from the text plus build", () => {
-  test("a record without the Verify fields is upgraded; a pending text link is pending again", () => {
+  test("a record without the Verify fields is upgraded and revoked: its texted channels are gone (review I3)", () => {
     const old = {
       kid: "k_x",
       kitten: "p_kid",
@@ -360,14 +368,17 @@ describe("stored records from the text plus build", () => {
     };
     expect(upgrade(old)).toEqual({ ...fresh(), approved: ["p_mia"], transaction: "tx1" });
     const on = { ...old, state: "consented" as const, consentedBy: "p_mom", consentedAt: NOW, secondAt: NOW + 24 * H, secondSent: true };
-    expect(upgrade(on)).toMatchObject({ state: "consented", phone: "+14155550123", codeBy: "p_mom", codeAt: NOW, plusAt: NOW + 24 * H, plusSent: true });
+    // Consent given by text plus promised a revoke link and STOP, which Verify removed: it ends.
+    expect(upgrade(on)).toEqual({ ...fresh(), approved: ["p_mia"], transaction: "tx1" });
     expect(upgrade(on)).not.toHaveProperty("textedBy");
+    expect(isOldShape(on)).toBe(true);
+    expect(isOldShape(consented())).toBe(false);
     const pending = { ...old, state: "pending" as const, phone: null, textedBy: null, textedAt: null };
     expect(upgrade(pending)).toEqual({ ...fresh(), approved: ["p_mia"], transaction: "tx1" });
     // Fields an older write left out read as unset.
     const sparse: Record<string, unknown> = { ...on, textedBy: undefined };
     for (const k of ["textedAt", "secondAt", "secondSent"]) delete sparse[k];
-    expect(upgrade(sparse as never)).toMatchObject({ state: "consented", codeBy: null, codeAt: null, plusAt: null, plusSent: false });
+    expect(upgrade(sparse as never)).toMatchObject({ state: "pending", codeBy: null, codeAt: null, plusAt: null, plusSent: false });
   });
 
   test("a current record is left as it is", () => {

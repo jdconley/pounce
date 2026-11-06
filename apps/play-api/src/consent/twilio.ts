@@ -42,11 +42,20 @@ const TOO_MANY_REQUESTS = 20429;
 const BAD_NUMBER = [60200, 60205, 21211, 21614];
 const HTTP_TOO_MANY = 429;
 const HTTP_NOT_FOUND = 404;
+/** A Verify call runs inside the consent record's one-at-a-time queue, so it can't hang it (review M6). */
+const TIMEOUT_MS = 10_000;
 
-async function post(cfg: TwilioConfig, path: string, form: Record<string, string>, fetcher: typeof fetch): Promise<{ status: number; body: unknown } | null> {
+async function post(
+  cfg: TwilioConfig,
+  path: string,
+  form: Record<string, string>,
+  fetcher: typeof fetch,
+  timeoutMs: number,
+): Promise<{ status: number; body: unknown } | null> {
   try {
     const res = await fetcher(`${API}/${encodeURIComponent(cfg.serviceSid)}/${path}`, {
       method: "POST",
+      signal: AbortSignal.timeout(timeoutMs),
       headers: {
         authorization: `Basic ${btoa(`${cfg.apiKeySid}:${cfg.apiKeySecret}`)}`,
         "content-type": "application/x-www-form-urlencoded",
@@ -73,8 +82,8 @@ export type StartResult = "sent" | "limited" | "bad_number" | "failed";
  * Texts a code to `to` (E.164) by SMS. Within a verification's 10 minutes
  * Verify sends the same code again, up to 5 sends. Never throws.
  */
-export async function startVerification(cfg: TwilioConfig, to: string, fetcher: typeof fetch): Promise<StartResult> {
-  const res = await post(cfg, "Verifications", { To: to, Channel: "sms" }, fetcher);
+export async function startVerification(cfg: TwilioConfig, to: string, fetcher: typeof fetch, timeoutMs = TIMEOUT_MS): Promise<StartResult> {
+  const res = await post(cfg, "Verifications", { To: to, Channel: "sms" }, fetcher, timeoutMs);
   if (!res) return "failed";
   if (res.status >= 200 && res.status < 300) return "sent";
   const code = field(res.body, "code");
@@ -91,8 +100,8 @@ export async function startVerification(cfg: TwilioConfig, to: string, fetcher: 
  */
 export type CheckResult = "approved" | "wrong" | "expired" | "limited" | "failed";
 
-export async function checkVerification(cfg: TwilioConfig, to: string, code: string, fetcher: typeof fetch): Promise<CheckResult> {
-  const res = await post(cfg, "VerificationCheck", { To: to, Code: code }, fetcher);
+export async function checkVerification(cfg: TwilioConfig, to: string, code: string, fetcher: typeof fetch, timeoutMs = TIMEOUT_MS): Promise<CheckResult> {
+  const res = await post(cfg, "VerificationCheck", { To: to, Code: code }, fetcher, timeoutMs);
   if (!res) return "failed";
   if (res.status === HTTP_NOT_FOUND) return "expired";
   if (res.status === HTTP_TOO_MANY || field(res.body, "code") === MAX_CHECK_ATTEMPTS) return "limited";

@@ -44,6 +44,22 @@ import Observation
         var mirror: KittenApprovals.Mirror?
         /// This device registered for remote push as a consented kitten (so it unregisters after).
         var registered = false
+        /// A parent's revokes the server hasn't confirmed yet (review I1), tried again until it does.
+        var revokes: [String] = []
+
+        init() {}
+
+        private enum CodingKeys: String, CodingKey { case consented, asked, mirror, registered, revokes }
+
+        /// Fields an older build didn't write read as their defaults.
+        init(from decoder: any Decoder) throws {
+            let c = try decoder.container(keyedBy: CodingKeys.self)
+            consented = try c.decodeIfPresent(Bool.self, forKey: .consented) ?? false
+            asked = try c.decodeIfPresent([String].self, forKey: .asked) ?? []
+            mirror = try c.decodeIfPresent(KittenApprovals.Mirror.self, forKey: .mirror)
+            registered = try c.decodeIfPresent(Bool.self, forKey: .registered) ?? false
+            revokes = try c.decodeIfPresent([String].self, forKey: .revokes) ?? []
+        }
     }
 
     // The kitten's device.
@@ -214,12 +230,41 @@ import Observation
         }
     }
 
-    public func revoke(kitten id: String) async {
-        guard (try? await service.revokeConsent(kitten: id)) != nil else { return }
+    /// Revokes not yet confirmed by the server, kept on disk.
+    public var pendingRevokes: [String] { saved.revokes }
+
+    /// Takes a kitten's consent back (the panel's bell with a slash, or the notification's Revoke
+    /// in the background). Kept on disk first, so a failure is tried again on the next launch or
+    /// foreground (`drainRevokes`) instead of being lost (review I1). True once the server has it.
+    @discardableResult
+    public func revoke(kitten id: String) async -> Bool {
+        if !saved.revokes.contains(id) {
+            saved.revokes.append(id)
+            save()
+        }
+        return await sendRevoke(id)
+    }
+
+    /// Every kept revoke, again.
+    public func drainRevokes() async {
+        for id in saved.revokes { _ = await sendRevoke(id) }
+    }
+
+    private func sendRevoke(_ id: String) async -> Bool {
+        do {
+            try await service.revokeConsent(kitten: id)
+        } catch APIError.notFound {
+            // Unlinked or gone: there is no consent left to take back.
+        } catch {
+            return false
+        }
+        saved.revokes.removeAll { $0 == id }
+        save()
         if let i = kittens.firstIndex(where: { $0.id == id }) {
             kittens[i].state = .pending
             kittens[i].confirmed = false
         }
+        return true
     }
 
     public func unlink(kitten id: String) async {

@@ -47,6 +47,15 @@ describe("startVerification", () => {
     expect(req.headers.get("authorization")).toBe(`Basic ${btoa("SKtest:secret-test")}`);
     expect(req.headers.get("content-type")).toBe("application/x-www-form-urlencoded");
     expect(Object.fromEntries(new URLSearchParams(await req.text()))).toEqual({ To: "+14155550123", Channel: "sms" });
+    // A hung Verify call can't hold the consent record's queue for long (review M6).
+    expect(req.signal).toBeDefined();
+  });
+
+  test("a call past its time is a failure", async () => {
+    const slow = (async (_input: RequestInfo | URL, init?: RequestInit) =>
+      new Promise<Response>((_resolve, reject) => init?.signal?.addEventListener("abort", () => reject(new Error("aborted"))))) as Fetcher;
+    expect(await startVerification(CFG, "+1", slow, 10)).toBe("failed");
+    expect(await checkVerification(CFG, "+1", "1", slow, 10)).toBe("failed");
   });
 
   test("Verify's limits, a number it can't text, and everything else", async () => {

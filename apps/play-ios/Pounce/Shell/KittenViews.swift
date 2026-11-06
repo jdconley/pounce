@@ -197,6 +197,8 @@ private struct KittenCard: View {
     let onPhone: () -> Void
 
     @State private var confirmUnlink = false
+    /// Rings the card once it's on screen, when a notification opened the panel on it.
+    @State private var pulse = 0
 
     private let columns = [GridItem(.adaptive(minimum: 92), spacing: 12)]
 
@@ -251,7 +253,12 @@ private struct KittenCard: View {
         .background(RoundedRectangle(cornerRadius: 28, style: .continuous).fill(Palette.violet)
             .overlay(RoundedRectangle(cornerRadius: 28, style: .continuous)
                 .strokeBorder(focused ? Palette.lime : Palette.ink, lineWidth: focused ? 8 : 5)))
-        .wiggle(trigger: focused)
+        .wiggle(trigger: pulse)
+        .task {
+            guard focused else { return }
+            try? await Task.sleep(for: .milliseconds(450))
+            pulse += 1
+        }
         .accessibilityElement(children: .contain)
         .accessibilityValue(Self.value(kitten))
         .accessibilityAddTraits(focused ? .isSelected : [])
@@ -487,7 +494,7 @@ struct KittenNoticeSheet: View {
                 if clean != new { phone = clean }
             }
             .accessibilityIdentifier("notice.phone")
-            if waiting || flow.resting {
+            if waiting {
                 Image(ArtName.Habit.iconHourglass).resizable().scaledToFit().frame(width: 56)
                     .accessibilityIdentifier("notice.waiting")
             } else {
@@ -513,10 +520,7 @@ struct KittenNoticeSheet: View {
             case .notConfigured:
                 // Nothing was sent; the kitten stays pending (the hourglass).
                 waiting = true
-            case .tooMany:
-                flow.resent(.tooMany, at: .now)
-                nope()
-            case .failed:
+            case .tooMany, .failed:
                 nope()
             }
         }
@@ -525,11 +529,21 @@ struct KittenNoticeSheet: View {
     // MARK: the code
 
     private var codeStep: some View {
+        TimelineView(.periodic(from: .now, by: 1)) { context in
+            codePanel(now: context.date)
+        }
+        .frame(maxHeight: .infinity)
+        .transition(.scale(scale: 0.85).combined(with: .opacity))
+    }
+
+    private func codePanel(now: Date) -> some View {
         let roomy = sizeClass == .regular
         let chars = Array(flow.entry.digits)
+        let resting = flow.resting(now: now)
+        let ready = flow.canResend(now: now)
         return VStack(spacing: roomy ? 22 : 16) {
             Image(ArtName.Habit.iconPhone).resizable().scaledToFit().frame(width: roomy ? 96 : 76)
-                .bounceLoop(active: flow.entry.digits.isEmpty && !flow.resting)
+                .bounceLoop(active: flow.entry.digits.isEmpty && !resting)
                 .accessibilityHidden(true)
             HStack(spacing: 8) {
                 ForEach(0..<LinkCodeEntry.length, id: \.self) { i in
@@ -542,23 +556,19 @@ struct KittenNoticeSheet: View {
             .shake(trigger: shake)
             DigitKeys(height: roomy ? 68 : 58, size: roomy ? 36 : 30, idPrefix: "consent",
                       onDigit: type, onDelete: { flow.entry.delete() }, onDone: check)
-                .disabled(busy || flow.resting)
-                .opacity(flow.resting ? 0.5 : 1)
+                .disabled(busy || resting)
+                .opacity(resting ? 0.5 : 1)
             HStack(spacing: 18) {
-                TimelineView(.periodic(from: .now, by: 1)) { context in
-                    let ready = flow.canResend(now: context.date) && !flow.resting
-                    ArtIconButton(icon: ArtName.Habit.iconResend, color: Palette.lime, size: 60, label: "Another code") { resend() }
-                        .opacity(ready ? 1 : 0.45)
-                        .bounceLoop(active: flow.expired && ready)
-                        .accessibilityValue(ready ? "ready" : "waiting")
-                        .accessibilityIdentifier("consent.resend")
-                }
-                .frame(width: 60, height: 60)
+                ArtIconButton(icon: ArtName.Habit.iconResend, color: Palette.lime, size: 60, label: "Another code") { resend() }
+                    .opacity(ready ? 1 : 0.45)
+                    .bounceLoop(active: flow.expired && ready)
+                    .accessibilityValue(ready ? "ready" : "waiting")
+                    .accessibilityIdentifier("consent.resend")
                 ArtIconButton(icon: ArtName.Habit.iconPhone, color: Palette.sky, size: 60, label: "Another number") {
                     flow.changeNumber()
                 }
                 .accessibilityIdentifier("consent.number")
-                if flow.resting {
+                if resting {
                     Image(ArtName.Habit.iconHourglass).resizable().scaledToFit().frame(width: 56)
                         .accessibilityIdentifier("consent.resting")
                 }
@@ -568,10 +578,8 @@ struct KittenNoticeSheet: View {
         .frame(maxWidth: roomy ? 520 : 420)
         .background(RoundedRectangle(cornerRadius: 34, style: .continuous).fill(Palette.violet)
             .overlay(RoundedRectangle(cornerRadius: 34, style: .continuous).strokeBorder(Palette.ink, lineWidth: 5)))
-        .frame(maxHeight: .infinity)
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("consent.code")
-        .transition(.scale(scale: 0.85).combined(with: .opacity))
     }
 
     /// Consent is on: the bell with a check, until the sheet closes.
@@ -591,13 +599,18 @@ struct KittenNoticeSheet: View {
     }
 
     private func check() {
-        guard flow.entry.complete, !busy, !flow.resting else { return nope() }
+        guard flow.entry.complete, !busy, !flow.resting(now: .now) else { return nope() }
         busy = true
         let code = flow.entry.digits
         Task {
             defer { busy = false }
             let result = await model.kittens.check(kitten: kitten.id, code: code)
-            flow.checked(result)
+            flow.checked(result, at: .now)
+            if result == .notWaiting {
+                // Its 30 minutes ran out, or another parent finished: if consent is on, done.
+                await model.kittens.refreshKittens()
+                if model.kittens.kittens.first(where: { $0.id == kitten.id })?.state == .on { return dismiss() }
+            }
             guard result == .on else { return nope() }
             Haptics.shared.success()
             Sound.shared.play(ArtName.Sound.sfxFanfare)
@@ -608,7 +621,7 @@ struct KittenNoticeSheet: View {
     }
 
     private func resend() {
-        guard flow.canResend(now: .now), !flow.resting, !busy else { return nope() }
+        guard flow.canResend(now: .now), !busy else { return nope() }
         busy = true
         Task {
             defer { busy = false }

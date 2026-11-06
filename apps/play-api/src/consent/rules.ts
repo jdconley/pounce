@@ -257,7 +257,9 @@ export function intoWindow(t: number, zone: string | null): number {
   const m = minutesIn(t, zone);
   if (m >= DAY_START_MIN && m < DAY_END_MIN) return t;
   const wait = m < DAY_START_MIN ? DAY_START_MIN - m : DAY_MIN - m + DAY_START_MIN;
-  return t + wait * MIN_MS;
+  const at = t + wait * MIN_MS;
+  // Across a DST change the clock moved by an hour on the way: land on 10:00 itself (review M11).
+  return at + (DAY_START_MIN - minutesIn(at, zone)) * MIN_MS;
 }
 
 /** A day after consent, moved into 10:00–20:00 local: within 24–48 h. */
@@ -290,14 +292,18 @@ type Stored = Omit<ConsentRecord, "state" | "codeBy" | "codeAt" | "plusAt" | "pl
   secondSent?: boolean;
 };
 
+/** Stored by the text plus build, before Verify. */
+export const isOldShape = (stored: ConsentRecord | Stored): stored is Stored => "textedBy" in stored;
+
 /**
- * A record stored by the text plus build (before Verify) in today's shape. A
- * text's confirm link no longer works, so a record waiting on one is pending
- * again and its number goes.
+ * A record stored by the text plus build (before Verify) in today's shape,
+ * and revoked (review I3): a text's confirm link no longer works, and a
+ * consent given by text plus was promised a revoke link and STOP, which went
+ * with Verify. The number goes; parents and approvals stay, so the parent can
+ * consent again with a code.
  */
 export function upgrade(stored: ConsentRecord | Stored): ConsentRecord {
-  if (!("textedBy" in stored)) return stored as ConsentRecord;
+  if (!isOldShape(stored)) return stored;
   const { textedBy, textedAt, secondAt, secondSent, ...rest } = stored;
-  const r = { ...rest, codeBy: textedBy ?? null, codeAt: textedAt ?? null, plusAt: secondAt ?? null, plusSent: secondSent ?? false } as ConsentRecord;
-  return r.state === "consented" ? r : revoke(r);
+  return revoke({ ...rest, codeBy: textedBy ?? null, codeAt: textedAt ?? null, plusAt: secondAt ?? null, plusSent: secondSent ?? false } as ConsentRecord);
 }

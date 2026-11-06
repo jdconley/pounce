@@ -388,11 +388,17 @@ final class PushCoordinator: NSObject, UNUserNotificationCenterDelegate {
             pending = .kittens(kitten)
             routePendingTap()
         case .revokeConsent(let kitten):
-            // In the background, like a pounce's answer: iOS gives it a little time.
-            pending = .revoke(kitten)
+            // In the background, like a pounce's answer: iOS gives it a little time. The store keeps
+            // the revoke on disk before the request, so a failure is tried again on the next launch
+            // or foreground.
             let task = BackgroundTask()
             task.id = UIApplication.shared.beginBackgroundTask(withName: "pounce-revoke") { task.end() }
-            await routePending()
+            if let model {
+                await model.kittens.revoke(kitten: kitten)
+            } else {
+                pending = .revoke(kitten)
+                await routePending()
+            }
             task.end()
         case .none:
             break

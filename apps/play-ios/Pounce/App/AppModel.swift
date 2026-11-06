@@ -354,6 +354,7 @@ final class AppModel {
         if people.owner != nil { await refreshTables() }
         await refreshStreaks()
         await refreshKitten()
+        await kittens.drainRevokes()
         await pounces.retryPending()
         await recheckAge()
         await uploadWidgetToken()
@@ -701,6 +702,7 @@ final class AppModel {
                 await uploadGuestNotify()
                 await refreshStreaks()
                 await refreshKitten()
+                await kittens.drainRevokes()
                 await pounces.retryPending()
                 await uploadWidgetToken()
                 await liveTables.retry()
