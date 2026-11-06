@@ -180,23 +180,71 @@ public struct LeftPair: Codable, Hashable, Sendable, Identifiable {
     }
 }
 
-/// `GET /v1/me/streaks`: the top pair first (pinned, then longest, then latest turn).
+/// Your own streak (trophy room design §2, D1): a day counts when you take a turn at a table with
+/// another person. The pair's day, naps, win-back and fresh start; no gifts, no pause.
+public struct OwnStreak: Codable, Equatable, Sendable {
+    public var count: Int
+    public var best: Int
+    /// Today is kept.
+    public var kept: Bool
+    public var naps: Int
+    public var winback: StreakView.Winback?
+    /// Days you've kept, ever (the trophy room's total days).
+    public var lifetimeKept: Int
+    public var perfectWeeks: Int
+    /// Seven days ending today, in the pair's states (`missed` is drawn like `none`).
+    public var week: [WeekDot]
+
+    public init(
+        count: Int, best: Int = 0, kept: Bool = false, naps: Int = 0, winback: StreakView.Winback? = nil,
+        lifetimeKept: Int = 0, perfectWeeks: Int = 0, week: [WeekDot] = []
+    ) {
+        self.count = count
+        self.best = best
+        self.kept = kept
+        self.naps = naps
+        self.winback = winback
+        self.lifetimeKept = lifetimeKept
+        self.perfectWeeks = perfectWeeks
+        self.week = week
+    }
+
+    private enum CodingKeys: String, CodingKey { case count, best, kept, naps, winback, lifetimeKept, perfectWeeks, week }
+
+    public init(from decoder: any Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        count = try c.decode(Int.self, forKey: .count)
+        best = try c.decodeIfPresent(Int.self, forKey: .best) ?? count
+        kept = try c.decodeIfPresent(Bool.self, forKey: .kept) ?? false
+        naps = try c.decodeIfPresent(Int.self, forKey: .naps) ?? 0
+        winback = try c.decodeIfPresent(StreakView.Winback.self, forKey: .winback)
+        lifetimeKept = try c.decodeIfPresent(Int.self, forKey: .lifetimeKept) ?? 0
+        perfectWeeks = try c.decodeIfPresent(Int.self, forKey: .perfectWeeks) ?? 0
+        week = try c.decodeIfPresent([WeekDot].self, forKey: .week) ?? []
+    }
+}
+
+/// `GET /v1/me/streaks`: the top pair first (pinned, then longest, then latest turn), and your own
+/// streak when the server has the trophy room (`TROPHY`).
 public struct StreakList: Codable, Equatable, Sendable {
+    public var own: OwnStreak?
     public var pairs: [StreakView]
     public var left: [LeftPair]
 
-    public init(pairs: [StreakView] = [], left: [LeftPair] = []) {
+    public init(own: OwnStreak? = nil, pairs: [StreakView] = [], left: [LeftPair] = []) {
+        self.own = own
         self.pairs = pairs
         self.left = left
     }
 
     public init(from decoder: any Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
+        own = try c.decodeIfPresent(OwnStreak.self, forKey: .own)
         pairs = try c.decode([StreakView].self, forKey: .pairs)
         left = try c.decodeIfPresent([LeftPair].self, forKey: .left) ?? []
     }
 
-    private enum CodingKeys: String, CodingKey { case pairs, left }
+    private enum CodingKeys: String, CodingKey { case own, pairs, left }
 }
 
 /// The catalog the server rewards from (`apps/play-api/src/streaks/catalog.ts`). Ids are art file names.

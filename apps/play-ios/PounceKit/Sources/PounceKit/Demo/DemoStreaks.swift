@@ -35,9 +35,21 @@ extension DemoFixtures {
             toys: Array(StreakCatalog.commonToys.prefix(5)),
             unlocked: .init(backs: ["back-violet-paw", "back-heart-paws"], rugs: ["rug-classic", "rug-royal-violet"]),
             pounce: PounceState(resting: true))
+        // Your own streak: twelve days, a cat nap covered yesterday.
+        let own = OwnStreak(
+            count: 12, best: 30, kept: false, naps: 1, lifetimeKept: 96, perfectWeeks: 6,
+            week: dots([.kept, .kept, .kept, .kept, .kept, .nap, .live]))
         return StreakList(
+            own: own,
             pairs: [mia, kiki, nova],
             left: [LeftPair(pair: "pr_demoLeoAAAAAAAAAAAAAAA", partner: .init(name: "Leo", cat: 1))])
+    }
+
+    /// `-demo-streaks empty`: the trophy room is on but nobody is connected yet (Home's big plus).
+    public static func emptyStreaks(today: Date = .now) -> StreakList {
+        let days = week(ending: today)
+        let states: [WeekState] = [.none, .none, .none, .none, .none, .none, .live]
+        return StreakList(own: OwnStreak(count: 0, week: zip(days, states).map { WeekDot(day: $0, state: $1) }))
     }
 
     /// The seven day keys ending `today` (`YYYY-MM-DD`, the 04:00 rollover ignored).

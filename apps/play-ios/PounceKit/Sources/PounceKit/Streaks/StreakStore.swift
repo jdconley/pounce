@@ -11,7 +11,7 @@ import Observation
 @MainActor @Observable public final class StreakStore {
     /// The local person the list is for (the phone's owner); nothing loads without one.
     public var person: String? {
-        didSet { if person != oldValue { pairs = []; left = []; others = [:]; fetchedAt = nil } }
+        didSet { if person != oldValue { pairs = []; left = []; own = nil; others = [:]; fetchedAt = nil } }
     }
     public private(set) var enabled: Bool?
     /// When the server last answered `refresh()` for this person (a list, or streaks off). The
@@ -19,6 +19,8 @@ import Observation
     public private(set) var fetchedAt: Date?
     public private(set) var pairs: [StreakView] = []
     public private(set) var left: [LeftPair] = []
+    /// Your own streak (trophy room design §2): nil while the server has no trophy room.
+    public private(set) var own: OwnStreak?
     /// Views for other people on this phone, by person, then pair.
     private var others: [String: [String: StreakView]] = [:]
 
@@ -40,11 +42,13 @@ import Observation
             enabled = true
             pairs = list.pairs
             left = list.left
+            own = list.own
             fetchedAt = .now
         } catch APIError.notFound {
             enabled = false
             pairs = []
             left = []
+            own = nil
             fetchedAt = .now
         } catch {
             // Offline or the server is down: keep what was shown.
@@ -85,6 +89,7 @@ import Observation
     public func reset() {
         pairs = []
         left = []
+        own = nil
         others = [:]
         enabled = nil
         fetchedAt = nil
