@@ -122,6 +122,8 @@ export async function worker(
     streaks?: boolean;
     notify?: boolean;
     live?: boolean;
+    /** `TROPHY` (your own streak, the trophy room, connections on accept). */
+    trophy?: boolean;
     persist?: string;
     links?: boolean;
     sent: Sent[];
@@ -162,6 +164,7 @@ export async function worker(
       ...(options.streaks === false ? {} : { STREAKS: "on" }),
       ...(options.notify === false ? {} : { NOTIFY: "on" }),
       ...(options.live ? { LIVE: "on" } : {}),
+      ...(options.trophy ? { TROPHY: "on" } : {}),
       ...(options.consent && options.consentFlag !== false ? { CONSENT: "on" } : {}),
       ...(options.consent && options.twilio !== false ? TWILIO : {}),
     },

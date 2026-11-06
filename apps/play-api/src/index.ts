@@ -39,8 +39,8 @@ import { answerPounce, createPounce, linkPounce } from "./pounce/pounces";
 import { newRoomCode, ROOM_CODE } from "./room/codes";
 import { DEVICE_HEADER, PLAYER_HEADER } from "./room/game-room";
 import { parseRoomName } from "./room/names";
-import { creatorLook, isMine, leavePair, myLeft, myStreaks, PAIR_ID, pairStub, rejoinPair, syncPairPeople } from "./streaks/pairs";
-import { consentOn, liveOn, notifyOn, streaksOn } from "./streaks/profile";
+import { creatorLook, isMine, leavePair, myLeft, myOwn, myStreaks, myTrophies, PAIR_ID, pairStub, rejoinPair, syncPairPeople } from "./streaks/pairs";
+import { consentOn, liveOn, notifyOn, streaksOn, trophyOn } from "./streaks/profile";
 
 import type { Env } from "./env";
 
@@ -246,8 +246,16 @@ const deleteAccount = asMe(async (_r, env, _d, playerId) => {
 type Route = (request: Request, env: Env, deviceId: string) => Promise<Response> | Response;
 
 const getStreaks = asMe(async (_r, env, _d, me) => {
-  const [pairs, left] = await Promise.all([myStreaks(env, me, Date.now()), myLeft(env, me)]);
-  return json(200, { pairs, left });
+  const now = Date.now();
+  const [pairs, left] = await Promise.all([myStreaks(env, me, now), myLeft(env, me)]);
+  // Your own streak, for Home's strip (trophy room design §1): only with TROPHY on.
+  const own = trophyOn(env) ? await myOwn(env, me, now, pairs) : null;
+  return json(200, own ? { own, pairs, left } : { pairs, left });
+});
+
+const getTrophies = asMe(async (_r, env, _d, me) => {
+  const found = await myTrophies(env, me, Date.now());
+  return found ? json(200, found) : notFound();
 });
 
 type PairHandler = (request: Request, env: Env, me: string, pairId: string) => Promise<Response>;
@@ -329,8 +337,9 @@ function pounceRoute(method: string, pathname: string): Route | null {
 }
 
 /** Streak routes (§13.4), only while `STREAKS` is on. */
-function streakRoute(method: string, pathname: string, notify: boolean, live: boolean): Route | null {
+function streakRoute(method: string, pathname: string, notify: boolean, live: boolean, trophy: boolean): Route | null {
   if (method === "GET" && pathname === "/v1/me/streaks") return getStreaks;
+  if (trophy && method === "GET" && pathname === "/v1/me/trophies") return getTrophies;
   if (live && method === "PUT" && pathname === "/v1/devices/me/live-activity") return setLiveTokens;
   if (notify) {
     if (method === "PUT" && pathname === "/v1/devices/me/widget-push") return setWidgetToken;
@@ -397,13 +406,21 @@ async function publicConsent(request: Request, env: Env, method: string, pathnam
 }
 
 /** The authenticated route for this request, or null for a 404. */
-function route(method: string, pathname: string, streaks: boolean, notify: boolean, live: boolean, consent: boolean): Route | null {
+function route(
+  method: string,
+  pathname: string,
+  streaks: boolean,
+  notify: boolean,
+  live: boolean,
+  consent: boolean,
+  trophy: boolean,
+): Route | null {
   if (consent) {
     const kitten = kittenRoute(method, pathname);
     if (kitten) return kitten;
   }
   if (streaks) {
-    const streak = streakRoute(method, pathname, notify, live);
+    const streak = streakRoute(method, pathname, notify, live, trophy);
     if (streak) return streak;
   }
   if (method === "PUT" && pathname === "/v1/devices/me/push") return setPushToken;
@@ -481,7 +498,7 @@ export default {
     if (method === "POST" && pathname === "/v1/devices") {
       return secret ? mintDevice(request, secret) : notConfigured();
     }
-    const handler = route(method, pathname, streaks, notify, liveOn(env), consent);
+    const handler = route(method, pathname, streaks, notify, liveOn(env), consent, trophyOn(env));
     if (!handler) return notFound();
     if (!secret) return notConfigured();
     const deviceId = await authenticate(request, secret);

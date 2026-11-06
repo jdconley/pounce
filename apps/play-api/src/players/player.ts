@@ -11,7 +11,8 @@ import { claimAnswer, KEEP_MS, restingUntil, type Answer, type PounceRow, type T
 import { createTables, listTables, removeTable, upsertTable, type TableEntry } from "../room/tables";
 import { FALLBACK_ZONE } from "../streaks/clock";
 import { leaveAllPairs } from "../streaks/pairs";
-import { notifyOn, quietStartMinutes } from "../streaks/profile";
+import { mergePersonal, ownView, recordTurn, type OwnStreak, type Personal } from "../streaks/personal";
+import { notifyOn, quietStartMinutes, trophyOn } from "../streaks/profile";
 
 import { IDENTITIES_NAME } from "./identities";
 import { mergeSection } from "./state";
@@ -69,6 +70,9 @@ export type PlayerExport = {
   tutorial: Section;
   archive: Section;
   household: (HouseholdPerson & { deviceId: string })[];
+  /** Your own streak and the longest pair streak seen (trophy room design §2, §3). Absent from older exports. */
+  personal?: Personal | null;
+  pairBest?: number;
 };
 
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -320,6 +324,8 @@ export class Player extends DurableObject<Env> {
         )
         .toArray()
         .map((r) => ({ deviceId: r.device_id, personId: r.person_id, playerId: r.player_id, name: r.name, cat: r.cat })),
+      personal: this.personal(),
+      pairBest: this.pairBest(),
     };
   }
 
@@ -350,6 +356,10 @@ export class Player extends DurableObject<Env> {
         p.cat,
       );
     }
+    // Your own streak merges as pairs do (§13.1): the longer current streak wins, the lifetime numbers take the maximum.
+    const merged = mergePersonal(this.personal(), e.personal ?? null);
+    if (merged) this.setMeta("personal", JSON.stringify(merged));
+    this.setMeta("pair_best", Math.max(this.pairBest(), e.pairBest ?? 0));
   }
 
   /** Empties a merged player, leaving a pointer to `to` for 30 days. */
@@ -508,6 +518,44 @@ export class Player extends DurableObject<Env> {
       zone: this.getMeta("time_zone"),
       quietStart: quietStartMinutes(this.section("settings"), this.getMeta("age_band") as AgeBand | null),
     };
+  }
+
+  private personal(): Personal | null {
+    const v = this.getMeta("personal");
+    return v === null ? null : (JSON.parse(v) as Personal);
+  }
+
+  private pairBest(): number {
+    return Number(this.getMeta("pair_best") ?? 0);
+  }
+
+  /** The zone this player's days are in (§6.3): the latest a device reported. */
+  private zone(): string {
+    return this.getMeta("time_zone") ?? FALLBACK_ZONE;
+  }
+
+  /**
+   * A turn of this player's at a table with another person (trophy room
+   * design D1): their own streak counts the day. Only with `TROPHY` on.
+   */
+  recordPersonalTurn(at: number, now: number): void {
+    if (!trophyOn(this.env) || !this.live()) return;
+    this.setMeta("personal", JSON.stringify(recordTurn(this.personal(), at, this.zone(), now)));
+  }
+
+  /**
+   * Your own streak now, and the longest pair streak seen, raised to
+   * `pairBest` (the pairs' current bests): kept here so leaving a pair
+   * doesn't lower the record. Null for a player that doesn't exist.
+   */
+  ownStreak(now: number, pairBest: number): { own: OwnStreak; pairBest: number } | null {
+    if (!this.live()) return null;
+    const p = this.personal();
+    const own = ownView(p, this.zone(), now);
+    if (p) this.setMeta("personal", JSON.stringify(p));
+    const best = Math.max(this.pairBest(), pairBest);
+    this.setMeta("pair_best", best);
+    return { own, pairBest: best };
   }
 
   /** The look this player last put on a table: a new table starts with it (§9.4). */

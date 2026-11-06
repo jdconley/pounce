@@ -12,7 +12,7 @@ import { PERSON_ID, PLAYER_ID } from "../players/ids";
 import { parseClientMessage } from "../protocol";
 import { FALLBACK_ZONE } from "../streaks/clock";
 import { myStreaks, rememberLook, reportTable, unlocksFor, type PairViews } from "../streaks/pairs";
-import { liveOn, notifyOn, streaksOn } from "../streaks/profile";
+import { liveOn, notifyOn, streaksOn, trophyOn } from "../streaks/profile";
 
 import { newRoomCode } from "./codes";
 import {
@@ -240,6 +240,8 @@ export class GameRoom extends DurableObject<Env> {
     // Who is looking at the table now: a milestone isn't pushed to them (§12.1).
     const awake = (this.core as RoomCore).awakePlayers();
     const run = async () => {
+      // Your own streak (trophy room design D1): a turn at a table with another person counts, once per report.
+      if (intent.by && trophyOn(this.env)) await playerRpc(this.env, intent.by).recordPersonalTurn(intent.at, Date.now()).catch(() => undefined);
       let views: PairViews | null = null;
       for (let attempt = 0; attempt < STREAK_ATTEMPTS && views === null; attempt++) {
         views = await reportTable(this.env, intent, Date.now(), awake).catch(() => null);

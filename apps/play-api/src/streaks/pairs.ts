@@ -3,12 +3,14 @@ import { statusPush, type Face } from "../notify/pushes";
 import { base64url } from "../players/ids";
 import { pounceView, type PounceView } from "../pounce/limits";
 
-import { mergeStates, newPair, NO_POUNCE, repoint, type PairEvent, type PairPerson, type PairState, type StreakView } from "./pair-core";
+import { advance, mergeStates, newPair, NO_POUNCE, repoint, type PairEvent, type PairPerson, type PairState, type StreakView } from "./pair-core";
 import { notifyOn } from "./profile";
+import { trophies, type Trophies } from "./trophies";
 
 
 import type { Env } from "../env";
 import type { Pair } from "./pair";
+import type { OwnStreak } from "./personal";
 import type { StreakBlock } from "../notify/types";
 import type { PlayerRpc } from "../players/accounts";
 import type { Look, StreakIntent, Unlocks } from "../room/core";
@@ -65,6 +67,17 @@ async function ensurePair(
   for (const id of [x, y]) if (turnedAt[id] !== undefined) turns[id] = turnedAt[id];
   await pair(env, made.pairId).init(newPair(made.pairId, [px as PairPerson, py as PairPerson], now, cryptoSeed(), turns));
   return made.pairId;
+}
+
+/**
+ * Connections on accept (trophy room design D2): the pair of a link's sender
+ * and the person who answered it Play, made now at 0 without a turn, so both
+ * lists show it before the table is dealt. Null when either left the other's
+ * streak (the leaver can undo that from the ghosted cat), or is gone.
+ */
+export async function connect(env: Env, a: string, b: string, now: number): Promise<string | null> {
+  if (a === b) return null;
+  return ensurePair(env, a, b, {}, now, false);
 }
 
 /**
@@ -129,6 +142,25 @@ export async function myStreaks(env: Env, me: string, now: number): Promise<(Str
         Number(y.pinned) - Number(x.pinned) || y.view.count - x.view.count || y.lastTurnAt - x.lastTurnAt,
     )
     .map(({ view, pinned }) => ({ ...view, pinned }));
+}
+
+const bestOf = (views: { best: number }[]) => views.reduce((m, v) => Math.max(m, v.best), 0);
+
+/** Your own streak for `GET /v1/me/streaks` (trophy room design §1), raising the kept longest pair streak. */
+export async function myOwn(env: Env, me: string, now: number, pairs: { best: number }[]): Promise<OwnStreak | null> {
+  return (await player(env, me).ownStreak(now, bestOf(pairs)))?.own ?? null;
+}
+
+/** `GET /v1/me/trophies` (trophy room design §3, §5): null for a player that doesn't exist. */
+export async function myTrophies(env: Env, me: string, now: number): Promise<Trophies | null> {
+  const [connections, rows] = await Promise.all([myStreaks(env, me, now), player(env, me).pairList()]);
+  const states = await Promise.all(rows.map((r) => pair(env, r.pairId).exportState().catch(() => null)));
+  const pairs = states.filter((s): s is PairState => s !== null);
+  // Each is a copy: bringing it up to now here changes nothing stored.
+  for (const s of pairs) advance(s, now);
+  const own = await player(env, me).ownStreak(now, bestOf(pairs.map((s) => s.streak)));
+  if (!own) return null;
+  return trophies({ me, own: own.own, pairBest: own.pairBest, pairs, connections });
 }
 
 /** Whether `pairId` is one of `me`'s pairs. */

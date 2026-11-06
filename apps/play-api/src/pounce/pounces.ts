@@ -9,7 +9,8 @@ import { newRoomCode } from "../room/codes";
 import { defaultRoomName } from "../room/names";
 import { DEFAULT_BACK, DEFAULT_RUG } from "../streaks/catalog";
 import { FALLBACK_ZONE } from "../streaks/clock";
-import { liveOn } from "../streaks/profile";
+import { connect } from "../streaks/pairs";
+import { liveOn, trophyOn } from "../streaks/profile";
 
 import { ANSWER_MS, KEEP_MS, type Target } from "./limits";
 import { LINK_TOKEN, parseAnswer, parsePounce, POUNCE_ID } from "./parse";
@@ -184,6 +185,9 @@ export async function answerPounce(
     if (claim.repeat.answer === "play" && claim.repeat.code === null) return fail(409, "busy");
     return done(claim.repeat.code);
   }
+  // Connections on accept (trophy room design D2): Play on a link makes the pair at once, at 0, before
+  // the table is dealt, so the deal reaches it and both lists show it. Never fatal: the table still deals.
+  if (row.to === null && parsed.answer === "play" && trophyOn(env)) await connect(env, me, sender, now).catch(() => null);
 
   let code = dealing ? null : choice;
   if (dealing) {
