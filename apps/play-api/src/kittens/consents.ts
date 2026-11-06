@@ -1,43 +1,39 @@
 import { DurableObject } from "cloudflare:workers";
 
-import { firstText, secondText } from "../consent/pages";
+import { plusPush } from "../consent/pages";
 import {
   allows,
+  attemptAllowed,
   confirm,
-  expireText,
+  expireCode,
+  FAIL_WINDOW_MS,
+  isOldShape,
   link,
   newRecord,
   nextWake,
-  revoke,
+  plusDone,
+  PLUS_GIVE_UP_MS,
+  plusRetryAt,
   repointParent,
   repointPartner,
-  secondSent,
+  resend,
+  revoke,
   setAppleApprovals,
   setParentApprovals,
-  text,
+  startCode,
   textAllowed,
-  TEXTED_MS,
   TEXTS_PER_KITTEN,
   TEXT_WINDOW_MS,
   unlinkParent,
+  upgrade,
   type ConsentRecord,
 } from "../consent/rules";
-import { deleteText, OPTED_OUT, sendText, twilioConfig } from "../consent/twilio";
-import { base64url } from "../players/ids";
+import { checkVerification, startVerification, twilioConfig, type TwilioConfig } from "../consent/twilio";
+import { deliverToPlayer } from "../notify/deliver";
 
 import { KITTENS_NAME } from "./kitten-index";
 
 import type { Env } from "../env";
-
-const TOKEN_BYTES = 16;
-const HOUR_MS = 60 * 60_000;
-/** A revoke link works while consent lasts; this only bounds the row. */
-const REVOKE_MS = 3 * 365 * 24 * HOUR_MS;
-/** Text 2 is retried hourly; a day of failures revokes, since text plus needs it (review I4). */
-const SECOND_RETRY_MS = HOUR_MS;
-const SECOND_GIVE_UP_MS = 24 * HOUR_MS;
-
-export const DEFAULT_ORIGIN = "https://play.conleychaos.com";
 
 const encoder = new TextEncoder();
 
@@ -48,34 +44,53 @@ export async function phoneHash(env: Pick<Env, "TOKEN_SECRET">, e164: string): P
   return [...mac].map((b) => b.toString(16).padStart(2, "0")).join("");
 }
 
-const newToken = () => base64url(crypto.getRandomValues(new Uint8Array(TOKEN_BYTES)));
 const index = (env: Env) => env.KITTENS.get(env.KITTENS.idFromName(KITTENS_NAME));
+const playerRpc = (env: Env, id: string) => env.PLAYERS.get(env.PLAYERS.idFromName(id));
 
-export type Why = "parent" | "link" | "stop" | "rescind" | "opted_out" | "no_plus";
-export type TextError = "not_parent" | "consented" | "not_configured" | "send_failed" | "rate_limited";
+export type Why = "parent" | "rescind" | "no_plus";
+export type CodeError = "not_parent" | "consented" | "not_waiting" | "not_configured" | "send_failed" | "rate_limited" | "bad_number";
+export type CheckError = "not_parent" | "not_waiting" | "not_configured" | "wrong_code" | "expired" | "rate_limited" | "check_failed";
 
 /**
  * One instance per kitten player (named by the kitten's player id): the
- * consent record (consent design §3), its alarm for the second text and the
- * texted expiry, the texts themselves, and the side effects of revocation:
- * the phone and tokens go from the index, our texts from Twilio's logs, and
- * every push token from the kitten's devices.
+ * consent record (consent design §3), its alarm for the confirmation push and
+ * the code's expiry, the Twilio Verify calls, and the side effects of
+ * revocation: the number goes, and every push token from the kitten's devices.
  *
  * Every change runs one at a time (`serial`): a change awaits outside calls
- * (Twilio, the index, the kitten's devices), during which a Durable Object
- * takes other requests, so a revoke arriving while text 2 is out would
- * otherwise be overwritten by the older record (review I1).
+ * (Verify, APNs, the index, the kitten's devices), during which a Durable
+ * Object takes other requests, so a revoke arriving while a code check is out
+ * would otherwise be overwritten by the older record (review I1).
  */
 export class Consents extends DurableObject<Env> {
   private queue: Promise<unknown> = Promise.resolve();
 
   constructor(ctx: DurableObjectState, env: Env) {
     super(ctx, env);
-    void ctx.blockConcurrencyWhile(async () => this.schema());
+    void ctx.blockConcurrencyWhile(async () => {
+      this.schema();
+      this.upgradeStored();
+    });
+  }
+
+  /**
+   * A record from the text plus build is rewritten in today's shape and
+   * revoked (review I3): the number leaves storage now, and the kitten's push
+   * tokens go once the queue runs.
+   */
+  private upgradeStored(): void {
+    const v = this.getMeta("rec");
+    if (v === null) return;
+    const stored = JSON.parse(v) as ConsentRecord;
+    if (!isOldShape(stored)) return;
+    this.setMeta("rec", JSON.stringify(upgrade(stored)));
+    if ((stored.state as string) !== "pending") void this.serial(() => dropKittenTokens(this.env, stored.kitten));
   }
 
   private schema(): void {
     this.ctx.storage.sql.exec("CREATE TABLE IF NOT EXISTS meta (k TEXT PRIMARY KEY, v TEXT)");
+    // The text plus build's leftovers: Twilio message SIDs and the texted pages' revoke token.
+    this.ctx.storage.sql.exec("DELETE FROM meta WHERE k IN ('sids', 'revoke_token', 'origin')");
   }
 
   /** Runs `fn` after every change before it has finished, failed or not. */
@@ -94,14 +109,14 @@ export class Consents extends DurableObject<Env> {
     else this.ctx.storage.sql.exec("INSERT INTO meta (k, v) VALUES (?, ?) ON CONFLICT (k) DO UPDATE SET v = excluded.v", k, v);
   }
 
-  private list(k: string): string[] {
+  private times(k: string, now: number, window: number): number[] {
     const v = this.getMeta(k);
-    return v === null ? [] : (JSON.parse(v) as string[]);
+    return v === null ? [] : (JSON.parse(v) as number[]).filter((t) => t > now - window);
   }
 
   record(): ConsentRecord | null {
     const v = this.getMeta("rec");
-    return v === null ? null : (JSON.parse(v) as ConsentRecord);
+    return v === null ? null : upgrade(JSON.parse(v) as ConsentRecord);
   }
 
   private async save(r: ConsentRecord): Promise<void> {
@@ -128,62 +143,83 @@ export class Consents extends DurableObject<Env> {
   }
 
   /**
-   * Text 1 (decision 5): the confirm link to `phone`. Without all of
-   * Twilio's secrets nothing is sent and nothing changes. At most 3 a day for
-   * a kitten, and 5 a day from a parent (review I2).
+   * Counts a code against the day's limits (3 for a kitten, 5 from a parent,
+   * 3 to one number; review I2), then asks Verify to text it. Without all of
+   * Twilio's secrets nothing is sent and nothing changes.
    */
-  startText(parent: string, phone: string, origin: string, now: number): Promise<{ ok: ConsentRecord } | { error: TextError }> {
+  private async send(parent: string, phone: string, now: number): Promise<{ cfg: TwilioConfig } | { error: CodeError }> {
+    const cfg = twilioConfig(this.env);
+    if (!cfg) return { error: "not_configured" };
+    const times = this.times("text_times", now, TEXT_WINDOW_MS);
+    if (!textAllowed(times, now, TEXTS_PER_KITTEN) || !(await index(this.env).noteText(parent, await phoneHash(this.env, phone), now))) {
+      return { error: "rate_limited" };
+    }
+    this.setMeta("text_times", JSON.stringify([...times, now]));
+    const sent = await startVerification(cfg, phone, fetch);
+    if (sent === "sent") return { cfg };
+    return { error: sent === "limited" ? "rate_limited" : sent === "bad_number" ? "bad_number" : "send_failed" };
+  }
+
+  /** A code to the parent's number (decision 5; D6). A new number replaces the old one. */
+  startCode(parent: string, phone: string, now: number): Promise<{ ok: ConsentRecord } | { error: CodeError }> {
     return this.serial(async () => {
       const r = this.record();
       if (!r) return { error: "not_parent" as const };
-      const next = text(r, parent, phone, now);
+      const next = startCode(r, parent, phone, now);
       if ("error" in next) return next;
-      const cfg = twilioConfig(this.env);
-      if (!cfg) return { error: "not_configured" as const };
-      const times = this.list("text_times").map(Number).filter((t) => t > now - TEXT_WINDOW_MS);
-      if (!textAllowed(times, now, TEXTS_PER_KITTEN) || !(await index(this.env).noteText(parent, now))) {
-        return { error: "rate_limited" as const };
-      }
-      this.setMeta("text_times", JSON.stringify([...times, now].map(String)));
-      // The token exists before the text can be opened (review M13).
-      const ix = index(this.env);
-      const token = newToken();
-      await ix.dropTokens(r.kitten, "confirm");
-      await ix.putToken(token, { kitten: r.kitten, kind: "confirm" }, now + TEXTED_MS);
-      const sent = await sendText(cfg, phone, firstText(`${origin}/consent/${token}`), fetch);
-      if (!sent.ok) {
-        await ix.dropTokens(r.kitten, "confirm");
-        return { error: "send_failed" as const };
-      }
-      this.noteSid(sent.sid);
-      await ix.setPhone(r.kitten, await phoneHash(this.env, phone));
-      this.setMeta("origin", origin);
+      const sent = await this.send(parent, phone, now);
+      if ("error" in sent) return sent;
+      this.setMeta("check_fails", null);
       await this.save(next.ok);
       return next;
     });
   }
 
-  private noteSid(sid: string | null): void {
-    if (sid) this.setMeta("sids", JSON.stringify([...this.list("sids"), sid]));
-  }
-
-  /** The confirm link's button (decision 6). The zone is the texting parent's, for text 2's hour. */
-  confirm(zone: string | null, now: number): Promise<boolean> {
+  /** Another code to the same number: Verify repeats the live one, or makes a fresh one once it expired. */
+  resendCode(parent: string, now: number): Promise<{ ok: ConsentRecord } | { error: CodeError }> {
     return this.serial(async () => {
       const r = this.record();
-      const next = r ? confirm(r, now, zone) : null;
-      if (!next) return false;
-      const ix = index(this.env);
-      await ix.dropTokens(next.kitten, "confirm");
-      const revokeToken = newToken();
-      await ix.putToken(revokeToken, { kitten: next.kitten, kind: "revoke" }, now + REVOKE_MS);
-      this.setMeta("revoke_token", revokeToken);
-      await this.save(next);
-      return true;
+      if (!r) return { error: "not_parent" as const };
+      const next = resend(r, parent, now);
+      if ("error" in next) return { error: next.error === "too_soon" ? ("rate_limited" as const) : next.error };
+      const sent = await this.send(parent, r.phone as string, now);
+      if ("error" in sent) return sent;
+      await this.save(next.ok);
+      return next;
     });
   }
 
-  /** Back to pending (decision 9): phone, tokens and the kitten's push tokens go. True if consent (or a text) was live. */
+  /**
+   * The parent types the code (decision 6; D6). Verify's `approved` is
+   * consent. A wrong code counts against 5 in 10 minutes, like link codes.
+   * The zone is the number owner's, for the confirmation push's hour.
+   */
+  checkCode(parent: string, code: string, now: number): Promise<{ ok: ConsentRecord } | { error: CheckError }> {
+    return this.serial(async () => {
+      const r = this.record();
+      if (!r || !r.parents.includes(parent)) return { error: "not_parent" as const };
+      if (r.state !== "code") return { error: "not_waiting" as const };
+      const cfg = twilioConfig(this.env);
+      if (!cfg) return { error: "not_configured" as const };
+      const fails = this.times("check_fails", now, FAIL_WINDOW_MS);
+      if (!attemptAllowed(fails, now)) return { error: "rate_limited" as const };
+      const result = await checkVerification(cfg, r.phone as string, code, fetch);
+      if (result === "wrong") {
+        this.setMeta("check_fails", JSON.stringify([...fails, now]));
+        return { error: "wrong_code" as const };
+      }
+      if (result !== "approved") {
+        return { error: result === "expired" ? ("expired" as const) : result === "limited" ? ("rate_limited" as const) : ("check_failed" as const) };
+      }
+      const zone = (await playerRpc(this.env, r.codeBy as string).pushProfile())?.zone ?? null;
+      const next = confirm(r, now, zone) as ConsentRecord;
+      this.setMeta("check_fails", null);
+      await this.save(next);
+      return { ok: next };
+    });
+  }
+
+  /** Back to pending (decision 9): the number and the kitten's push tokens go. True if consent (or a code) was live. */
   revoke(why: Why): Promise<boolean> {
     return this.serial(() => this.revokeNow(why));
   }
@@ -197,25 +233,11 @@ export class Consents extends DurableObject<Env> {
     return true;
   }
 
-  /** The number goes everywhere it was: our index, the link tokens, Twilio's logs; and the kitten's push tokens. */
+  /** The number is already gone from the record; the retry state and the kitten's push tokens go too. */
   private async forgetContact(kitten: string): Promise<void> {
-    this.setMeta("revoke_token", null);
     this.setMeta("retry_at", null);
-    const ix = index(this.env);
-    await ix.setPhone(kitten, null);
-    await ix.dropTokens(kitten);
-    await this.deleteTexts();
+    this.setMeta("check_fails", null);
     await dropKittenTokens(this.env, kitten);
-  }
-
-  /** Our texts leave Twilio's logs (review I5). A SID Twilio can't delete yet stays for the next try. */
-  private async deleteTexts(): Promise<void> {
-    const cfg = twilioConfig(this.env);
-    const sids = this.list("sids");
-    if (!cfg || sids.length === 0) return;
-    const kept: string[] = [];
-    for (const sid of sids) if (!(await deleteText(cfg, sid, fetch))) kept.push(sid);
-    this.setMeta("sids", kept.length === 0 ? null : JSON.stringify(kept));
   }
 
   /** The record ends (decision 10): deleted, expired, or turned 13. */
@@ -226,7 +248,6 @@ export class Consents extends DurableObject<Env> {
   private async endNow(): Promise<void> {
     const r = this.record();
     if (r) {
-      await this.deleteTexts();
       await index(this.env).forgetKitten(r.kitten);
       await dropKittenTokens(this.env, r.kitten);
     }
@@ -283,7 +304,7 @@ export class Consents extends DurableObject<Env> {
     });
   }
 
-  /** Text 2 and the texted expiry (decisions 7, 8). The alarm runs it; so does a test hook with a chosen time. */
+  /** The confirmation push and the code's expiry (decisions 7, 8; D6). The alarm runs it; so does a test hook with a chosen time. */
   tick(now: number): Promise<void> {
     return this.serial(() => this.tickNow(now));
   }
@@ -291,30 +312,29 @@ export class Consents extends DurableObject<Env> {
   private async tickNow(now: number): Promise<void> {
     const r = this.record();
     if (!r) return;
-    if (r.state === "texted") {
-      const next = expireText(r, now);
+    if (r.state === "code") {
+      const next = expireCode(r, now);
       await this.save(next);
       if (next !== r) await this.forgetContact(r.kitten);
       return;
     }
-    if (r.state !== "consented" || r.secondSent || (r.secondAt as number) > now) return this.save(r);
-    const cfg = twilioConfig(this.env);
-    const token = this.getMeta("revoke_token");
-    const origin = this.getMeta("origin") ?? DEFAULT_ORIGIN;
-    const sent = cfg && token && r.phone ? await sendText(cfg, r.phone, secondText(`${origin}/consent/${token}`), fetch) : null;
-    if (sent?.ok) {
-      this.noteSid(sent.sid);
+    if (r.state !== "consented" || r.plusSent || (r.plusAt as number) > now) return this.save(r);
+    // No device of the consenting parent's accepted it for a day: no plus, no consent (review I4).
+    const giveUp = (r.plusAt as number) + PLUS_GIVE_UP_MS;
+    if (now >= giveUp) {
+      await this.revokeNow("no_plus");
+      return;
+    }
+    const parent = await playerRpc(this.env, r.consentedBy as string).pushProfile();
+    const kitten = await playerRpc(this.env, r.kitten).meta();
+    const delivered = parent !== null && kitten !== null && (await deliverToPlayer(this.env, parent, plusPush(r.kid, kitten.name), "active"));
+    if (delivered) {
       this.setMeta("retry_at", null);
-      await this.save(secondSent(r));
+      await this.save(plusDone(r));
       return;
     }
-    // A number that replied STOP, or a day without delivering the "plus": consent ends (review I4).
-    const optedOut = sent !== null && !sent.ok && sent.code === OPTED_OUT;
-    if (optedOut || now >= (r.secondAt as number) + SECOND_GIVE_UP_MS) {
-      await this.revokeNow(optedOut ? "opted_out" : "no_plus");
-      return;
-    }
-    this.setMeta("retry_at", String(now + SECOND_RETRY_MS));
+    // Hourly inside 10:00–20:00, and once more exactly when the day is up, which revokes.
+    this.setMeta("retry_at", String(Math.min(plusRetryAt(now, parent?.zone ?? null), giveUp)));
     await this.save(r);
   }
 

@@ -71,14 +71,14 @@ const HTML = `<!doctype html>
 </ul>
 <p>For a player under 13 there are no push notifications from our server, no sign-in, no invite links sent out, and no record of play times. The only reminders are ones the phone schedules for itself, and they start off.</p>
 <!--consent--><h2>With a parent's consent</h2>
-<p>A parent or guardian who is signed in to Pounce can allow notifications on a child's own device. The child's device shows a six-digit code; the parent enters it on their own device, reads our <a href="/privacy/kitten-notice">notice to parents</a>, and confirms by text message ("text plus": a text with a link to confirm, and a second text a day or so later saying how to take it back). With that consent we also keep:</p>
+<p>A parent or guardian who is signed in to Pounce can allow notifications on a child's own device. The child's device shows a six-digit code; the parent enters it on their own device, reads our <a href="/privacy/kitten-notice">notice to parents</a>, and gives their mobile number. Twilio Verify, our verification provider, texts that number a six-digit code, and the parent types it into Pounce to confirm. A day or so later, Pounce sends a notification to the parent's own device saying what they allowed, with a Revoke button; if none of their devices can get it within a day, consent ends. With that consent we also keep:</p>
 <ul>
 <li>the child's device's push token, used only to tell it when it's the child's move at a table where everyone else is approved, and when an approved person asks the child to play;</li>
 <li>which of the people the child plays with the parent approved (or that Apple's Screen Time Communication Limits approved);</li>
-<li>the parent's mobile number, only while consent lasts, or 7 days if it is never confirmed; texts go through Twilio, our text message provider;</li>
+<li>the parent's mobile number, only while consent lasts, or 30 minutes if the code is never entered. Twilio Verify holds it while the code lasts (10 minutes) and in its own records for about 30 days after that; for a day we also keep a keyed hash of it, so that no number gets more than three codes a day;</li>
 <li>Apple's app transaction id for the child's copy of Pounce, so that a parent withdrawing approval through Apple ends this consent too.</li>
 </ul>
-<p>The parent can take it back at any time: in the app, through the link in the second text, by replying STOP, or through Apple. That stops every notification at once and deletes the push token and the number. It also ends when the child turns 13 or the child's player is deleted.</p>
+<p>The parent can take it back at any time: in the app, with the Revoke button on our notification, or through Apple. That stops every notification at once and deletes the push token and the number. It also ends when the child turns 13 or the child's player is deleted.</p>
 <!--/consent--><p>A parent may ask to review or delete a child's information, or to stop any further collection, by writing to <a href="mailto:privacy@conleychaos.com">privacy@conleychaos.com</a>. A child's player that no device has opened for 90 days is deleted from our server automatically, for example after the app is removed from the child's device.</p>
 <p>Operator: Conley Chaos LLC, <a href="mailto:privacy@conleychaos.com">privacy@conleychaos.com</a>.</p>
 </section>

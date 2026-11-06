@@ -47,7 +47,7 @@ export function liveOn(env: { STREAKS?: string; NOTIFY?: string; LIVE?: string }
 /**
  * Parent consent for kittens (§15 row 9, consent design §3) needs `CONSENT`
  * on top of `NOTIFY`. Off, a kitten's device gets nothing, exactly as before.
- * wrangler.jsonc turns it on (D4); texting still needs the Twilio secrets.
+ * wrangler.jsonc turns it on (D4); the parent's code still needs the Twilio Verify secrets.
  */
 export function consentOn(env: { STREAKS?: string; NOTIFY?: string; CONSENT?: string }): boolean {
   return notifyOn(env) && ON.includes((env.CONSENT ?? "").toLowerCase());

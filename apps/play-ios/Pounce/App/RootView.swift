@@ -25,6 +25,10 @@ struct RootView: View {
             }
         }
         .animation(.easeOut(duration: 0.25).paced, value: model.pick)
+        // A consent notification's tap (consent design D6): the Kittens panel on that kitten.
+        .sheet(item: Binding(get: { model.kittensPanel }, set: { model.kittensPanel = $0 })) { request in
+            KittensSheet(focus: request.focus)
+        }
         .animation(reduceMotion ? .easeInOut(duration: 0.2).paced : .spring(duration: 0.45, bounce: 0.3).paced, value: model.route)
         .onChange(of: scenePhase) { _, phase in model.scenePhaseChanged(phase) }
         .onAppear { Pace.applyToWindows() }

@@ -11,10 +11,22 @@ import Testing
             KittenStatus.self, from: Data(#"{"state":"consented","linked":true,"approved":["pr_a"]}"#.utf8))
         #expect(me == KittenStatus(state: .consented, linked: true, approved: ["pr_a"]))
         let list = try JSONDecoder().decode(ParentKitten.self, from: Data(#"""
-            {"id":"k_x","name":"Mochi","cat":4,"state":"texted","mode":"apple",
+            {"id":"k_x","name":"Mochi","cat":4,"state":"code","confirmed":false,"mode":"apple",
              "people":[{"pair":"pr_a","name":"Mia","cat":2,"approved":true,"parent":false}]}
             """#.utf8))
-        #expect(list.state == .texted)
+        #expect(list.state == .code)
+        #expect(!list.confirmed)
+        let on = try JSONDecoder().decode(ParentKitten.self, from: Data(#"""
+            {"id":"k_x","name":"Mochi","cat":4,"state":"on","confirmed":true,"mode":"parent","people":[]}
+            """#.utf8))
+        #expect(on.state == .on && on.confirmed)
+        // An older server without `confirmed`: not confirmed.
+        let older = try JSONDecoder().decode(ParentKitten.self, from: Data(#"""
+            {"id":"k_x","name":"Mochi","cat":4,"state":"on","mode":"parent","people":[]}
+            """#.utf8))
+        #expect(!older.confirmed)
+        let waiting = try JSONDecoder().decode(KittenStatus.self, from: Data(#"{"state":"code","linked":true,"approved":[]}"#.utf8))
+        #expect(waiting.state == .code)
         #expect(list.mode == .apple)
         #expect(list.people.first?.name == "Mia")
         let code = try JSONDecoder().decode(LinkCode.self, from: Data(#"{"code":"012345","expiresAt":1800000000000}"#.utf8))
@@ -66,7 +78,7 @@ import Testing
     }
 
     @Test func linkedSleepsUntilConsent() {
-        for state in [KittenStatus.State.pending, .texted] {
+        for state in [KittenStatus.State.pending, .code] {
             #expect(KittenBell.of(status: KittenStatus(state: state, linked: true, approved: []), held: false, code: fresh, now: now) == .asleep)
         }
         #expect(KittenBell.of(status: KittenStatus(state: .consented, linked: true, approved: []), held: false, code: nil, now: now) == .on)
@@ -102,6 +114,81 @@ import Testing
         #expect(!PhoneEntry.plausible("2 555 123 4567"))
         #expect(!PhoneEntry.plausible("12345"))
         #expect(!PhoneEntry.plausible("+12"))
+    }
+}
+
+/// The parent's code entry (Twilio Verify, consent design D6): the number, then six numerals.
+@Suite struct ConsentCodeStateTests {
+    private let now = Date(timeIntervalSince1970: 1_800_000_000)
+
+    @Test func startsWhereTheKittenIs() {
+        #expect(ConsentCodeState(state: .pending).phase == .phone)
+        #expect(ConsentCodeState(state: .code).phase == .code)
+        #expect(ConsentCodeState(state: .on).phase == .done)
+    }
+
+    @Test func aSentCodeOpensTheKeypadAndAResendWaits30Seconds() {
+        var s = ConsentCodeState(state: .pending)
+        #expect(!s.canResend(now: now), "nothing to resend before a number")
+        s.sent(at: now)
+        #expect(s.phase == .code)
+        #expect(!s.canResend(now: now.addingTimeInterval(29)))
+        #expect(s.canResend(now: now.addingTimeInterval(30)))
+        // Opened later, in the code state, with no send time: the server decides.
+        #expect(ConsentCodeState(state: .code).canResend(now: now))
+    }
+
+    @Test func checkResultsMoveTheState() {
+        var s = ConsentCodeState(state: .code)
+        for d in [1, 2, 3, 4, 5, 6] { s.entry.type(d) }
+        s.checked(.wrong, at: now)
+        #expect(s.entry.digits.isEmpty)
+        #expect(s.phase == .code && !s.expired && !s.resting(now: now))
+        s.checked(.expired, at: now)
+        #expect(s.expired)
+        s.resent(.sent, at: now)
+        #expect(!s.expired)
+        #expect(s.sentAt == now)
+        s.checked(.failed, at: now)
+        #expect(s.phase == .code)
+        s.checked(.notWaiting, at: now)
+        #expect(s.phase == .phone)
+        s.sent(at: now)
+        s.checked(.on, at: now)
+        #expect(s.phase == .done)
+    }
+
+    /// Five wrong codes rest the keypad for the server's 10 minutes, no longer (review I2).
+    @Test func tooManyWrongCodesRestTheKeypadFor10Minutes() {
+        var s = ConsentCodeState(state: .code)
+        s.checked(.tooMany, at: now)
+        #expect(s.resting(now: now))
+        #expect(s.resting(now: now.addingTimeInterval(599)))
+        #expect(!s.resting(now: now.addingTimeInterval(600)))
+    }
+
+    /// A refused resend (too soon, or the day's codes used up) only dims the loop arrow: a parent
+    /// holding a good code can still type it (review I2).
+    @Test func aRefusedResendLeavesTheKeypadAlone() {
+        var s = ConsentCodeState(state: .code)
+        #expect(s.canResend(now: now))
+        s.resent(.tooMany, at: now)
+        #expect(!s.resting(now: now))
+        #expect(!s.canResend(now: now.addingTimeInterval(29)))
+        #expect(s.canResend(now: now.addingTimeInterval(30)))
+        s.resent(.failed, at: now)
+        #expect(!s.resting(now: now))
+    }
+
+    @Test func aNewNumberGoesBackToThePhone() {
+        var s = ConsentCodeState(state: .code)
+        s.entry.type(4)
+        s.checked(.expired, at: now)
+        s.checked(.tooMany, at: now)
+        s.changeNumber()
+        #expect(s.phase == .phone)
+        #expect(s.entry.digits.isEmpty)
+        #expect(!s.expired && !s.resting(now: now))
     }
 }
 
@@ -184,8 +271,46 @@ final class FakeKittens: KittenService, Sendable {
 
     func setApproved(kitten: String, pairs: [String]) async throws { try record("approve \(kitten) \(pairs.joined(separator: ","))") }
     func startConsent(kitten: String, phone: String) async throws { try record("text \(kitten) \(phone)") }
+    func resendConsent(kitten: String) async throws { try record("resend \(kitten)") }
+    func checkConsent(kitten: String, code: String) async throws { try record("check \(kitten) \(code)") }
     func revokeConsent(kitten: String) async throws { try record("revoke \(kitten)") }
     func unlink(kitten: String) async throws { try record("unlink \(kitten)") }
+}
+
+@MainActor @Suite struct KittenRevokeQueueTests {
+    private func file() -> URL {
+        FileManager.default.temporaryDirectory.appendingPathComponent("kitten-\(UUID().uuidString).json")
+    }
+
+    /// A revoke (the panel's, or the notification's in the background) is kept on disk until the
+    /// server has it, and tried again on the next launch or foreground (review I1).
+    @Test func aFailedRevokeIsKeptAndTriedAgain() async {
+        let fake = FakeKittens()
+        let url = file()
+        let store = KittenStore(service: fake, file: url)
+        await store.refreshKittens()
+        fake.fail.withLock { $0 = .transport("offline") }
+        #expect(await store.revoke(kitten: DemoKittenService.biscuit) == false)
+        #expect(store.pendingRevokes == [DemoKittenService.biscuit])
+        #expect(store.kittens[1].state == .on)
+        let next = KittenStore(service: fake, file: url)
+        #expect(next.pendingRevokes == [DemoKittenService.biscuit])
+        await next.drainRevokes()
+        #expect(next.pendingRevokes == [DemoKittenService.biscuit], "still offline")
+        fake.fail.withLock { $0 = nil }
+        await next.drainRevokes()
+        #expect(next.pendingRevokes.isEmpty)
+        #expect(KittenStore(service: fake, file: url).pendingRevokes.isEmpty)
+        #expect(fake.calls.withLock { $0 }.filter { $0.hasPrefix("revoke") }.count == 3)
+    }
+
+    @Test func aKittenTheServerNoLongerKnowsLeavesTheQueue() async {
+        let fake = FakeKittens()
+        let store = KittenStore(service: fake, file: nil)
+        fake.fail.withLock { $0 = .notFound }
+        #expect(await store.revoke(kitten: "k_gone") == true)
+        #expect(store.pendingRevokes.isEmpty)
+    }
 }
 
 @MainActor @Suite struct KittenStoreTests {
@@ -285,7 +410,14 @@ final class FakeKittens: KittenService, Sendable {
         await store.toggle(kitten: DemoKittenService.biscuit, pair: "pr_demoLeoAAAAAAAAAAAAAAA")
         #expect(fake.calls.withLock { $0 }.count == before)
         #expect(await store.sendPhone(kitten: DemoKittenService.mochi, phone: "555 123 4567") == .sent)
-        #expect(store.kittens[0].state == .texted)
+        #expect(store.kittens[0].state == .code)
+        #expect(await store.resend(kitten: DemoKittenService.mochi) == .sent)
+        #expect(await store.check(kitten: DemoKittenService.mochi, code: "135790") == .on)
+        #expect(store.kittens[0].state == .on)
+        #expect(!store.kittens[0].confirmed)
+        #expect(fake.calls.withLock { $0 }.suffix(3) == [
+            "text \(DemoKittenService.mochi) 555 123 4567", "resend \(DemoKittenService.mochi)", "check \(DemoKittenService.mochi) 135790",
+        ])
         await store.revoke(kitten: DemoKittenService.biscuit)
         #expect(store.kittens[1].state == .pending)
         await store.unlink(kitten: "k_new")
@@ -310,6 +442,23 @@ final class FakeKittens: KittenService, Sendable {
         #expect(store.kittens[0].state == .pending)
         fake.fail.withLock { $0 = .server(502) }
         #expect(await store.sendPhone(kitten: DemoKittenService.mochi, phone: "555 123 4567") == .failed)
+        fake.fail.withLock { $0 = .rateLimited }
+        #expect(await store.sendPhone(kitten: DemoKittenService.mochi, phone: "555 123 4567") == .tooMany)
+        #expect(await store.resend(kitten: DemoKittenService.mochi) == .tooMany)
+        fake.fail.withLock { $0 = .notConfigured }
+        #expect(await store.resend(kitten: DemoKittenService.mochi) == .notConfigured)
+        fake.fail.withLock { $0 = .transport("offline") }
+        #expect(await store.resend(kitten: DemoKittenService.mochi) == .failed)
+        // The code: wrong, expired, too many tries, not waiting any more, or the server failing.
+        let outcomes: [(APIError, KittenStore.CheckResult)] = [
+            (.server(422), .wrong), (.server(410), .expired), (.rateLimited, .tooMany), (.conflict("not_waiting"), .notWaiting),
+            (.notConfigured, .failed), (.server(502), .failed), (.transport("offline"), .failed),
+        ]
+        for (error, result) in outcomes {
+            fake.fail.withLock { $0 = error }
+            #expect(await store.check(kitten: DemoKittenService.mochi, code: "000000") == result, "\(error)")
+        }
+        #expect(store.kittens[0].state == .pending)
         await store.revoke(kitten: DemoKittenService.biscuit)
         #expect(store.kittens[1].state == .on)
         await store.unlink(kitten: DemoKittenService.biscuit)
@@ -344,14 +493,18 @@ final class FakeKittens: KittenService, Sendable {
         _ = try await api.link(code: "123456")
         try await api.setApproved(kitten: "k_x", pairs: ["pr_a"])
         try await api.startConsent(kitten: "k_x", phone: "555")
+        try await api.resendConsent(kitten: "k_x")
+        try await api.checkConsent(kitten: "k_x", code: "012345")
         try await api.revokeConsent(kitten: "k_x")
         try await api.unlink(kitten: "k_x")
         let calls = server.seen.filter { $0.path != "/v1/devices" }
         #expect(calls.map { "\($0.method) \($0.path)" } == [
             "GET /v1/kittens/me", "POST /v1/kittens/me/link-code", "PUT /v1/kittens/me/approved", "GET /v1/kittens",
             "POST /v1/kittens/link", "PUT /v1/kittens/k_x/approved", "POST /v1/kittens/k_x/consent",
+            "POST /v1/kittens/k_x/consent/resend", "POST /v1/kittens/k_x/consent/check",
             "DELETE /v1/kittens/k_x/consent", "DELETE /v1/kittens/k_x",
         ])
+        #expect(String(decoding: calls[8].body, as: UTF8.self) == #"{"code":"012345"}"#)
         #expect(calls.prefix(3).allSatisfy { $0.query == "person=p1" })
         #expect(String(decoding: calls[1].body, as: UTF8.self) == #"{"appTransactionId":"704"}"#)
         #expect(String(decoding: calls[2].body, as: UTF8.self) == #"{"apple":null}"#)

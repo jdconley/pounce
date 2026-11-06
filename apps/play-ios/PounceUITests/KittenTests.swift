@@ -90,8 +90,8 @@ final class KittenTests: XCTestCase {
 
     // MARK: the parent's panel
 
-    private func parent() -> XCUIApplication {
-        let app = launch(["-stub-accounts", "signed-in", "-demo-kittens"])
+    private func parent(_ extra: [String] = []) -> XCUIApplication {
+        let app = launch(["-stub-accounts", "signed-in", "-demo-kittens"] + extra)
         XCTAssertTrue(el(app, "screen-home").waitForExistence(timeout: Live.t(10)), "no Home")
         openGear(app)
         let kittens = el(app, "gear.kittens")
@@ -105,7 +105,8 @@ final class KittenTests: XCTestCase {
     func testParentPanelTogglesLinksAndRevokes() {
         let app = parent()
         XCTAssertEqual(value(el(app, "kittens.card.0")), "pending")
-        XCTAssertEqual(value(el(app, "kittens.card.1")), "on")
+        // Biscuit's confirmation push reached this parent: the bell with a check.
+        XCTAssertEqual(value(el(app, "kittens.card.1")), "confirmed")
         shot(app, "kittens-panel")
         // Kiki is off; a tap turns her on.
         let kiki = el(app, "kittens.person.0.2")
@@ -137,7 +138,7 @@ final class KittenTests: XCTestCase {
         XCTAssertTrue(el(app, "kittens.card.2").waitForExistence(timeout: Live.t(5)), "the new kitten isn't listed")
     }
 
-    func testNoticeAndPhonePage() {
+    func testNoticePhoneAndCode() {
         let app = parent()
         el(app, "kittens.phone.0").tap()
         XCTAssertTrue(el(app, "sheet-notice").waitForExistence(timeout: Live.t(5)), "no notice page")
@@ -148,13 +149,58 @@ final class KittenTests: XCTestCase {
         phone.tap()
         phone.typeText("5551234567")
         // The iPad simulator's hardware keyboard takes the first tap after typing: tap until it goes.
-        let sheet = el(app, "sheet-notice")
-        for _ in 0..<3 where sheet.exists {
+        let code = el(app, "consent.code")
+        for _ in 0..<3 where !code.exists {
             el(app, "notice.send").tap()
-            _ = until(2) { !sheet.exists }
+            _ = code.waitForExistence(timeout: Live.t(2))
         }
-        XCTAssertFalse(sheet.exists, "sending didn't close the page")
-        XCTAssertTrue(until(3) { self.value(self.el(app, "kittens.card.0")) == "texted" }, "the card isn't waiting for the text")
+        XCTAssertTrue(code.exists, "sending didn't open the code keypad")
+        XCTAssertFalse(el(app, "notice.web").exists, "the notice stayed over the code")
+        XCTAssertTrue(el(app, "consent.tile.5").exists)
+        // A fresh code can't be asked for again for 30 s.
+        XCTAssertEqual(value(el(app, "consent.resend")), "waiting")
+        shot(app, "consent-code")
+        // A wrong code (six numerals checks itself) shakes and clears.
+        for d in [1, 1, 1, 1, 1, 1] { el(app, "consent.key.\(d)").tap() }
+        XCTAssertTrue(until(3) { self.value(self.el(app, "consent.tile.0")) == "" }, "a wrong code stayed")
+        XCTAssertTrue(el(app, "sheet-notice").exists)
+        // Another number goes back to the phone field.
+        el(app, "consent.number").tap()
+        XCTAssertTrue(el(app, "notice.phone").waitForExistence(timeout: Live.t(3)), "no phone field after another number")
+        el(app, "notice.close").tap()
+        XCTAssertTrue(until(3) { self.value(self.el(app, "kittens.card.0")) == "code" }, "the card isn't waiting for the code")
+        // Back in, the sheet opens on the code; the right one turns consent on.
+        el(app, "kittens.phone.0").tap()
+        XCTAssertTrue(el(app, "consent.code").waitForExistence(timeout: Live.t(5)), "a kitten waiting for a code didn't open on the keypad")
+        for d in [1, 3, 5, 7, 9, 0] { el(app, "consent.key.\(d)").tap() }
+        allowNotifications()
+        XCTAssertTrue(until(8) { !self.el(app, "sheet-notice").exists }, "the sheet stayed after the right code")
+        XCTAssertTrue(until(3) { self.value(self.el(app, "kittens.card.0")) == "on" }, "consent isn't on")
+        XCTAssertTrue(el(app, "kittens.revoke.0").exists, "no revoke once on")
+    }
+
+    /// iOS asks once whether Pounce may send notifications (the confirmation push needs them).
+    private func allowNotifications() {
+        let springboard = XCUIApplication(bundleIdentifier: "com.apple.springboard")
+        let allow = springboard.buttons["Allow"]
+        if allow.waitForExistence(timeout: Live.t(3)) { allow.tap() }
+    }
+
+    func testConsentNotificationOpensKittensOnThatKitten() {
+        let app = launch(["-stub-accounts", "signed-in", "-demo-kittens", "-open-kittens", DemoIDs.biscuit])
+        XCTAssertTrue(el(app, "sheet-kittens").waitForExistence(timeout: Live.t(10)), "the notification didn't open Kittens")
+        let biscuit = el(app, "kittens.card.1")
+        XCTAssertTrue(biscuit.waitForExistence(timeout: Live.t(5)), "the kittens didn't load")
+        XCTAssertTrue(biscuit.isSelected, "the panel isn't on the notification's kitten")
+        XCTAssertFalse(el(app, "kittens.card.0").isSelected)
+        XCTAssertEqual(value(biscuit), "confirmed")
+        // The panel scrolled to it: its buttons show.
+        let revoke = el(app, "kittens.revoke.1")
+        XCTAssertTrue(until(3) { revoke.isHittable }, "the panel didn't scroll to the notification's kitten")
+        shot(app, "kittens-confirmed")
+        // Its revoke, as the notification's Revoke button does in the background.
+        revoke.tap()
+        XCTAssertTrue(until(3) { self.value(biscuit) == "pending" }, "revoke didn't take")
     }
 
     // MARK: the Pounce sheet
@@ -186,4 +232,9 @@ final class KittenTests: XCTestCase {
         Thread.sleep(forTimeInterval: Live.pace(1))
         XCTAssertTrue(el(app, "sheet-pounce").exists, "a padlocked pounce went out")
     }
+}
+
+/// The demo kittens' ids (`DemoKittenService`), which the UI test target can't import.
+private enum DemoIDs {
+    static let biscuit = "k_demoBiscuitAAAAAAAAAAAA"
 }

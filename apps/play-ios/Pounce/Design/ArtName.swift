@@ -205,11 +205,13 @@ enum ArtName {
         static let iconKittens = "icon-kittens"
         /// A person a kitten can't pounce yet.
         static let iconPadlock = "icon-padlock"
-        /// The text to the parent's phone; waiting on it.
+        /// The parent's phone and the code Twilio Verify texts it; waiting on it.
         static let iconPhone = "icon-phone"
         static let iconHourglass = "icon-hourglass"
         /// Turn a kitten's notifications off (revoke).
         static let iconBellOff = "icon-bell-off"
+        /// Another code to the parent's phone.
+        static let iconResend = "icon-resend"
     }
 
     // MARK: Sounds (Resources/Sounds/<name>.caf, 44.1 kHz mono)

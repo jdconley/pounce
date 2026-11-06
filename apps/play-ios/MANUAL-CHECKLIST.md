@@ -137,24 +137,30 @@ Needs the server with `STREAKS` on (production once this PR deploys).
 - [ ] A kitten's phone never shows a live table; a teen's shows none between 00:00 and 06:00.
 - [ ] Two tables: lock on one, come back and lock on the other: only the newer live table stays.
 
-## Parent consent for kittens (daily habit PR 9, TestFlight builds and real texts)
+## Parent consent for kittens (daily habit PR 9, TestFlight builds and real codes)
 
-Needs the five `PLAY_API_TWILIO_*` secrets and a verified sending number; without them the parent's
+Needs the four `PLAY_API_TWILIO_*` secrets (Twilio Verify, root README); without them the parent's
 send leaves the kitten on the hourglass.
 
 - [ ] A kitten's own phone (age keypad under 13): the gear shows the padlocked bell and six numerals.
 - [ ] A signed-in adult's phone: gear, Kittens, plus, enter the six numerals: the kitten appears with
       the hourglass; the kitten's bell falls asleep within 15 seconds.
-- [ ] The phone button: the notice page loads, enter a real mobile number, send: a text arrives with
-      the link; the card shows the phone.
-- [ ] Open the link: the page only asks; nothing changes until the button. Tap it: the kitten's bell
-      rings (the normal bell) and iOS asks the kitten's phone for notifications.
+- [ ] The phone button: the notice page loads, enter a real mobile number, send: the keypad replaces
+      the notice and a text arrives ("Your Pounce verification code is: …"); the card shows the phone.
+- [ ] A wrong code shakes and clears. The loop arrow is dim for 30 seconds, then sends the same code
+      again. After 10 minutes the old code is refused and the loop arrow bounces: a fresh code works.
+- [ ] The right code: the sheet closes, iOS asks this phone for notifications (allow), the card shows
+      the bell with a small hourglass, and the kitten's bell rings (the normal bell).
 - [ ] Toggle a person on, have them move at a shared table while the kitten's phone is locked: "your
       move" arrives. Toggle them off: nothing arrives. Their pounce: the same.
-- [ ] A day or so later the second text arrives; reply STOP: the kitten's bell sleeps again and no
-      push arrives. (This needs the Messaging Service's incoming webhook, root README step 3. If the
-      bell keeps ringing, check that webhook first.)
-- [ ] In the Twilio console's message logs, both texts are gone after the revoke.
+- [ ] A day or so later (between 10:00 and 20:00), the parent's phone shows a notification with the
+      kitten's name. The card's bell now has a check. A tap opens Kittens on that kitten.
+- [ ] Press and hold that notification, then Revoke (Face ID or the passcode if locked): the kitten's
+      bell sleeps again and no push arrives.
+- [ ] On a parent phone that never allowed notifications for Pounce (deny the prompt after the
+      code), give consent: a day after the confirmation was due it ends by itself (the card back to
+      the hourglass). A phone that allowed them once and turned them off later still counts as
+      delivered: APNs accepts the push.
 - [ ] Give consent again, then revoke from the panel (the bell with a slash): pushes stop at once.
 - [ ] With Screen Time Communication Limits on the kitten (Family Sharing): a padlocked person in the
       Pounce sheet, tapped, shows Apple's ask; approve in Messages: the padlock goes and the parent's

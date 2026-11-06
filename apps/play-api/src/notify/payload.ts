@@ -1,7 +1,7 @@
 import type { Level, NotifyKind } from "./policy";
 import type { Outgoing } from "./types";
 
-export type Category = "YOUR_MOVE" | "REMINDER" | "POUNCE" | "STATUS";
+export type Category = "YOUR_MOVE" | "REMINDER" | "POUNCE" | "CONSENT" | "STATUS";
 
 /** Room codes listed in a payload's `streak` block, so the push stays well under 4 KB. */
 export const MAX_CODES = 10;
@@ -15,9 +15,10 @@ const CATEGORY: Partial<Record<NotifyKind, Category>> = {
   last_chance: "REMINDER",
   fresh_start: "REMINDER",
   pounce: "POUNCE",
+  consent: "CONSENT",
 };
 
-const RELEVANCE: Record<Category, number> = { YOUR_MOVE: 1, POUNCE: 0.9, REMINDER: 0.6, STATUS: 0.2 };
+const RELEVANCE: Record<Category, number> = { YOUR_MOVE: 1, POUNCE: 0.9, CONSENT: 0.8, REMINDER: 0.6, STATUS: 0.2 };
 
 /** The notification category the app registers actions for (§12.5); everything else is `STATUS`. */
 export const category = (kind: NotifyKind): Category => CATEGORY[kind] ?? "STATUS";

@@ -20,17 +20,81 @@ export type Device = { deviceId: string; token: string };
 export type Person = { id: string; name: string; cat: number; key: string };
 /** One request APNs was asked to deliver. */
 export type Sent = { token: string; headers: Record<string, string>; body: Record<string, unknown> };
-/** One text Twilio was asked to send (fake). */
-export type Text = { to: string; body: string; auth: string | null; service: string | null };
-
 /** Fixture Twilio secrets: never real ones. */
 export const TWILIO = {
   TWILIO_ACCOUNT_SID: "ACtest0000000000000000000000000000",
   TWILIO_API_KEY_SID: "SKtest0000000000000000000000000000",
   TWILIO_API_KEY_SECRET: "fixture-api-key-secret",
-  TWILIO_MESSAGING_SERVICE_SID: "MGtest0000000000000000000000000000",
-  TWILIO_AUTH_TOKEN: "fixture-auth-token",
+  TWILIO_VERIFY_SERVICE_SID: "VAtest0000000000000000000000000000",
 };
+
+/** One code the fake Verify was asked to send. */
+export type VerifySend = { to: string; channel: string | null; auth: string | null; service: string };
+
+/**
+ * A fake Twilio Verify, as its docs describe it: a verification per number
+ * with one six-digit code that a resend within its life repeats, 5 sends,
+ * 5 wrong checks before it's deleted (then 404, as for an expired or approved
+ * one), 404 once approved. `expire` stands in for its 10 minutes passing.
+ */
+export class FakeVerify {
+  sends: VerifySend[] = [];
+  checks: { to: string; code: string }[] = [];
+  live = new Map<string, { code: string; sends: number; wrong: number }>();
+  /** Numbers whose sends fail with a 500. */
+  failing = new Set<string>();
+  /** A delay before a check answers, changeable mid-test. */
+  delay = { ms: 0 };
+
+  code(to: string): string {
+    return this.live.get(to)?.code as string;
+  }
+
+  expire(to: string): void {
+    this.live.delete(to);
+  }
+
+  reset(): void {
+    this.sends = [];
+    this.checks = [];
+    this.live.clear();
+    this.failing.clear();
+    this.delay.ms = 0;
+  }
+
+  async answer(request: MiniflareRequest): Promise<MiniflareResponse> {
+    const url = new URL(request.url);
+    const [, , , service, action] = url.pathname.split("/");
+    const form = new URLSearchParams(await request.text());
+    const to = form.get("To") ?? "";
+    const json = (status: number, body: unknown) => new MiniflareResponse(JSON.stringify(body), { status, headers: { "content-type": "application/json" } });
+    if (request.method !== "POST" || !service) return json(404, { code: 20404 });
+    if (action === "Verifications") {
+      if (this.failing.has(to)) return json(500, { code: 20500 });
+      const v = this.live.get(to) ?? { code: String(Math.floor(Math.random() * 1e6)).padStart(6, "0"), sends: 0, wrong: 0 };
+      if (v.sends >= 5) return json(429, { code: 60203 });
+      v.sends += 1;
+      this.live.set(to, v);
+      this.sends.push({ to, channel: form.get("Channel"), auth: request.headers.get("authorization"), service });
+      return json(201, { sid: `VE${"0".repeat(32)}`, status: "pending", to });
+    }
+    if (action === "VerificationCheck") {
+      if (this.delay.ms) await new Promise((resolve) => setTimeout(resolve, this.delay.ms));
+      const code = form.get("Code") ?? "";
+      this.checks.push({ to, code });
+      const v = this.live.get(to);
+      if (!v) return json(404, { code: 20404 });
+      if (v.code === code) {
+        this.live.delete(to);
+        return json(200, { status: "approved", to });
+      }
+      v.wrong += 1;
+      if (v.wrong >= 5) this.live.delete(to);
+      return json(200, { status: "pending", to });
+    }
+    return json(404, { code: 20404 });
+  }
+}
 
 export async function bundle(entry: string): Promise<string> {
   const built = await build({
@@ -64,17 +128,11 @@ export async function worker(
     /** Parent consent's DOs, with `CONSENT` on unless `consentFlag` is false. */
     consent?: boolean;
     consentFlag?: boolean;
-    /** The fake Twilio's outbox; set the secrets unless `twilio` is false. */
-    texts?: Text[];
+    /** The fake Twilio Verify; the secrets are set unless `twilio` is false. */
+    verify?: FakeVerify;
     twilio?: boolean;
-    /** Numbers the fake Twilio says replied STOP (error 21610). */
-    optedOut?: Set<string>;
-    /** Numbers the fake Twilio fails with a 500. */
-    failing?: Set<string>;
-    /** A delay before the fake Twilio answers a send, changeable mid-test. */
-    twilioDelay?: { ms: number };
-    /** Message SIDs the fake Twilio was asked to delete. */
-    deleted?: string[];
+    /** Device tokens the fake APNs fails with a 500 (no device accepted the push). */
+    apnsDown?: Set<string>;
   },
 ): Promise<Miniflare> {
   return new Miniflare({
@@ -113,6 +171,7 @@ export async function worker(
         return new MiniflareResponse(JSON.stringify({ keys: [(await appleKeys()).jwk] }), { headers: { "content-type": "application/json" } });
       }
       if (new URL(request.url).host === "api.push.apple.com") {
+        if (options.apnsDown?.has(new URL(request.url).pathname.split("/").at(-1) as string)) return new MiniflareResponse(null, { status: 500 });
         options.sent.push({
           token: new URL(request.url).pathname.split("/").at(-1) as string,
           headers: Object.fromEntries(request.headers),
@@ -120,20 +179,7 @@ export async function worker(
         });
         return new MiniflareResponse(null, { status: 200 });
       }
-      if (new URL(request.url).host === "api.twilio.com") {
-        if (request.method === "DELETE") {
-          options.deleted?.push(new URL(request.url).pathname.split("/").at(-1)?.replace(".json", "") ?? "");
-          return new MiniflareResponse(null, { status: 204 });
-        }
-        const form = new URLSearchParams(await request.text());
-        const to = form.get("To") ?? "";
-        if (options.twilioDelay?.ms) await new Promise((resolve) => setTimeout(resolve, options.twilioDelay?.ms));
-        if (options.optedOut?.has(to)) return new MiniflareResponse(JSON.stringify({ code: 21610 }), { status: 400 });
-        if (options.failing?.has(to)) return new MiniflareResponse(JSON.stringify({ code: 30001 }), { status: 500 });
-        options.texts?.push({ to, body: form.get("Body") ?? "", auth: request.headers.get("authorization"), service: form.get("MessagingServiceSid") });
-        const sid = `SM${crypto.randomUUID().replace(/-/g, "")}`;
-        return new MiniflareResponse(JSON.stringify({ sid }), { status: 201 });
-      }
+      if (new URL(request.url).host === "verify.twilio.com" && options.verify) return options.verify.answer(request);
       return new MiniflareResponse(null, { status: 599 });
     },
   });

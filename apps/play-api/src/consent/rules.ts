@@ -2,14 +2,16 @@ import { base64url } from "../players/ids";
 import { localMinutes } from "../streaks/clock";
 
 /**
- * Parent consent for a kitten (consent design §2, §4; plan decisions 4–23).
- * Pure: the record, its state machine, the push filter, and the small rules
- * around it (the second text's time, phones, link codes, STOP words).
+ * Parent consent for a kitten (consent design §2, §4 D1 and D6; plan
+ * decisions 4–23, 46–55). Pure: the record, its state machine, the push
+ * filter, and the small rules around it (the confirmation push's time,
+ * phones, link codes, code limits).
  */
 
-export type ConsentState = "pending" | "texted" | "consented";
+/** `code`: Twilio Verify texted the parent a code, which they haven't entered yet. */
+export type ConsentState = "pending" | "code" | "consented";
 /** What the parent's Kittens panel shows. */
-export type ParentState = "pending" | "texted" | "on";
+export type ParentState = "pending" | "code" | "on";
 
 export type ConsentRecord = {
   /** The public id the parent's app addresses this kitten by (`k_…`). */
@@ -19,15 +21,17 @@ export type ConsentRecord = {
   /** Linked signed-in adults, in link order. */
   parents: string[];
   state: ConsentState;
-  /** E.164, only while texted or consented (D1: kept only while consent lasts). */
+  /** E.164, only while waiting for the code or consented (D1: kept only while consent lasts). */
   phone: string | null;
-  textedBy: string | null;
-  textedAt: number | null;
+  /** The parent who entered the number, and when the last code went. */
+  codeBy: string | null;
+  codeAt: number | null;
   consentedBy: string | null;
   consentedAt: number | null;
-  /** When the second text ("the plus") is due. */
-  secondAt: number | null;
-  secondSent: boolean;
+  /** When the confirmation push to the consenting parent's devices ("the plus", D6) is due. */
+  plusAt: number | null;
+  /** Some device of theirs accepted it: the Kittens panel shows consent as confirmed. */
+  plusSent: boolean;
   /** The parent's own list: partner player ids. */
   approved: string[];
   /** Apple's list (Communication Limits), mirrored from the kitten's device; null in parent mode. */
@@ -40,8 +44,16 @@ const MIN_MS = 60_000;
 const HOUR_MS = 60 * MIN_MS;
 const DAY_MS = 24 * HOUR_MS;
 
-/** A texted number nobody confirms is deleted after this long (16 CFR 312.5(c)(1)). */
-export const TEXTED_MS = 7 * DAY_MS;
+/**
+ * A number whose code nobody enters is deleted after this long (16 CFR
+ * 312.5(c)(1)). Verify's own code lasts 10 minutes; the extra time lets the
+ * parent ask for a fresh one without typing the number again.
+ */
+export const CODE_MS = 30 * MIN_MS;
+/** The code Verify texts: six digits (the Verify Service's code length). */
+export const VERIFY_CODE = /^[0-9]{6}$/;
+/** Another code for the same number waits this long, so a double tap doesn't spend the day's sends. */
+export const RESEND_MS = 30_000;
 /** A link code lives this long, and is used once. */
 export const LINK_CODE_MS = 10 * MIN_MS;
 export const LINK_CODE = /^[0-9]{6}$/;
@@ -52,8 +64,11 @@ export const FAIL_WINDOW_MS = 10 * MIN_MS;
 export const KID = /^k_[A-Za-z0-9_-]{22}$/;
 const KID_BYTES = 16;
 
-const SECOND_AFTER_MS = DAY_MS;
-/** Text 2 goes out between 10:00 and 20:00 local. */
+const PLUS_AFTER_MS = DAY_MS;
+const PLUS_RETRY_MS = HOUR_MS;
+/** A confirmation push no device accepted for this long ends consent: no plus, no consent (review I4). */
+export const PLUS_GIVE_UP_MS = DAY_MS;
+/** The confirmation push goes out between 10:00 and 20:00 local. */
 const DAY_START_MIN = 10 * 60;
 const DAY_END_MIN = 20 * 60;
 const DAY_MIN = 24 * 60;
@@ -65,12 +80,12 @@ export function newRecord(kid: string, kitten: string, parent: string, transacti
     parents: [parent],
     state: "pending",
     phone: null,
-    textedBy: null,
-    textedAt: null,
+    codeBy: null,
+    codeAt: null,
     consentedBy: null,
     consentedAt: null,
-    secondAt: null,
-    secondSent: false,
+    plusAt: null,
+    plusSent: false,
     approved: [],
     apple: null,
     transaction,
@@ -84,9 +99,14 @@ export function newLinkCode(rng: () => number): string {
   return String(Math.floor(rng() * 10 ** LINK_CODE_DIGITS)).padStart(LINK_CODE_DIGITS, "0");
 }
 
-/** Texts a kitten's record may send in a day, and a parent across their kittens (review I2: no SMS pumping). */
+/**
+ * Codes a kitten's record may send in a day, a parent across their kittens,
+ * and one number (by its HMAC) from anyone (review I2: no SMS pumping, and no
+ * texting someone else's phone over and over). Resends count.
+ */
 export const TEXTS_PER_KITTEN = 3;
 export const TEXTS_PER_PARENT = 5;
+export const TEXTS_PER_PHONE = 3;
 export const TEXT_WINDOW_MS = DAY_MS;
 
 /** Another text may go: fewer than `max` in the last day. */
@@ -94,7 +114,7 @@ export function textAllowed(times: number[], now: number, max: number): boolean 
   return times.filter((at) => at > now - TEXT_WINDOW_MS).length < max;
 }
 
-/** The sending number is US toll-free or A2P 10DLC (D1), so only North American numbers are texted. */
+/** Only North American numbers get a code (D1): it closes SMS pumping abroad, and Verify's geo permissions match. */
 export const textable = (e164: string): boolean => /^\+1[2-9][0-9]{2}[2-9][0-9]{6}$/.test(e164);
 
 /** A parent may try another code: fewer than `MAX_FAILS` failures in the last 10 minutes. */
@@ -112,47 +132,55 @@ export function link(r: ConsentRecord, parent: string, transaction: string | nul
 
 export type Refused<E extends string> = { error: E };
 
-/** A linked parent sends text 1 to `phone` (normalized already). */
-export function text(r: ConsentRecord, parent: string, phone: string, now: number): { ok: ConsentRecord } | Refused<"not_parent" | "consented"> {
+/** A linked parent asks for a code at `phone` (normalized already). A new number replaces the old. */
+export function startCode(r: ConsentRecord, parent: string, phone: string, now: number): { ok: ConsentRecord } | Refused<"not_parent" | "consented"> {
   if (!r.parents.includes(parent)) return { error: "not_parent" };
   if (r.state === "consented") return { error: "consented" };
-  return { ok: { ...r, state: "texted", phone, textedBy: parent, textedAt: now } };
+  return { ok: { ...r, state: "code", phone, codeBy: parent, codeAt: now } };
 }
 
-/** The confirm link was used. Null unless texted. */
+/** Another code to the same number, by any linked parent. */
+export function resend(r: ConsentRecord, parent: string, now: number): { ok: ConsentRecord } | Refused<"not_parent" | "not_waiting" | "too_soon"> {
+  if (r.state !== "code") return { error: "not_waiting" };
+  if (!r.parents.includes(parent)) return { error: "not_parent" };
+  if ((r.codeAt as number) + RESEND_MS > now) return { error: "too_soon" };
+  return { ok: { ...r, codeAt: now } };
+}
+
+/** Verify approved the code. Null unless waiting for one. The number's owner is the consenting parent. */
 export function confirm(r: ConsentRecord, now: number, zone: string | null): ConsentRecord | null {
-  if (r.state !== "texted") return null;
-  return { ...r, state: "consented", consentedBy: r.textedBy, consentedAt: now, secondAt: secondTextAt(now, zone), secondSent: false };
+  if (r.state !== "code") return null;
+  return { ...r, state: "consented", consentedBy: r.codeBy, consentedAt: now, plusAt: plusTimeAt(now, zone), plusSent: false };
 }
 
-export const secondSent = (r: ConsentRecord): ConsentRecord => ({ ...r, secondSent: true });
+export const plusDone = (r: ConsentRecord): ConsentRecord => ({ ...r, plusSent: true });
 
-const cleared = { phone: null, textedBy: null, textedAt: null, consentedBy: null, consentedAt: null, secondAt: null, secondSent: false };
+const cleared = { phone: null, codeBy: null, codeAt: null, consentedBy: null, consentedAt: null, plusAt: null, plusSent: false };
 
 /** Back to pending: the phone and the schedule go; parents and approvals stay (decision 9). */
 export function revoke(r: ConsentRecord): ConsentRecord {
   return { ...r, state: "pending", ...cleared };
 }
 
-/** Texted but never confirmed for 7 days: the number is deleted (decision 7). */
-export function expireText(r: ConsentRecord, now: number): ConsentRecord {
-  if (r.state !== "texted" || (r.textedAt as number) + TEXTED_MS > now) return r;
+/** Waiting for a code for 30 minutes: the number is deleted (decision 7). */
+export function expireCode(r: ConsentRecord, now: number): ConsentRecord {
+  if (r.state !== "code" || (r.codeAt as number) + CODE_MS > now) return r;
   return revoke(r);
 }
 
-/** The next time the record's alarm has work: text 2, or the texted expiry. */
+/** The next time the record's alarm has work: the confirmation push, or the code's expiry. */
 export function nextWake(r: ConsentRecord): number | null {
-  if (r.state === "consented") return r.secondSent ? null : r.secondAt;
-  if (r.state === "texted") return (r.textedAt as number) + TEXTED_MS;
+  if (r.state === "consented") return r.plusSent ? null : r.plusAt;
+  if (r.state === "code") return (r.codeAt as number) + CODE_MS;
   return null;
 }
 
-/** A parent leaves. Null: nobody is left, so the record goes. The parent behind the consent (or the text) leaving revokes it. */
+/** A parent leaves. Null: nobody is left, so the record goes. The parent behind the consent (or the number) leaving revokes it. */
 export function unlinkParent(r: ConsentRecord, parent: string): ConsentRecord | null {
   if (!r.parents.includes(parent)) return r;
   const parents = r.parents.filter((p) => p !== parent);
   if (parents.length === 0) return null;
-  const theirs = r.state === "consented" ? r.consentedBy === parent : r.state === "texted" && r.textedBy === parent;
+  const theirs = r.state === "consented" ? r.consentedBy === parent : r.state === "code" && r.codeBy === parent;
   return theirs ? { ...revoke(r), parents } : { ...r, parents };
 }
 
@@ -163,7 +191,7 @@ export function repointParent(r: ConsentRecord, from: string, to: string): Conse
   return {
     ...r,
     parents: [...new Set(r.parents.map((p) => swap(p) as string))],
-    textedBy: swap(r.textedBy),
+    codeBy: swap(r.codeBy),
     consentedBy: swap(r.consentedBy),
   };
 }
@@ -224,14 +252,21 @@ function minutesIn(t: number, zone: string | null): number {
   }
 }
 
-/** A day after consent, moved to the next 10:00 when that falls outside 10:00–20:00 local: within 24–48 h. */
-export function secondTextAt(consentedAt: number, zone: string | null): number {
-  const t = consentedAt + SECOND_AFTER_MS;
+/** `t`, or the next 10:00 local when `t` falls outside 10:00–20:00 there. */
+export function intoWindow(t: number, zone: string | null): number {
   const m = minutesIn(t, zone);
   if (m >= DAY_START_MIN && m < DAY_END_MIN) return t;
   const wait = m < DAY_START_MIN ? DAY_START_MIN - m : DAY_MIN - m + DAY_START_MIN;
-  return t + wait * MIN_MS;
+  const at = t + wait * MIN_MS;
+  // Across a DST change the clock moved by an hour on the way: land on 10:00 itself (review M11).
+  return at + (DAY_START_MIN - minutesIn(at, zone)) * MIN_MS;
 }
+
+/** A day after consent, moved into 10:00–20:00 local: within 24–48 h. */
+export const plusTimeAt = (consentedAt: number, zone: string | null): number => intoWindow(consentedAt + PLUS_AFTER_MS, zone);
+
+/** A push no device accepted is tried again an hour later, still inside the window. */
+export const plusRetryAt = (now: number, zone: string | null): number => intoWindow(now + PLUS_RETRY_MS, zone);
 
 const PHONE_CHARS = /^[0-9+().\s-]+$/;
 const E164_MIN_DIGITS = 8;
@@ -249,10 +284,26 @@ export function normalizePhone(raw: unknown): string | null {
   return null;
 }
 
-/** Twilio's standard opt-out words (Advanced Opt-Out), or its `OptOutType`. */
-const STOP_WORDS = ["STOP", "STOPALL", "UNSUBSCRIBE", "CANCEL", "END", "QUIT", "REVOKE", "OPTOUT"];
+type Stored = Omit<ConsentRecord, "state" | "codeBy" | "codeAt" | "plusAt" | "plusSent"> & {
+  state: ConsentState | "texted";
+  textedBy?: string | null;
+  textedAt?: number | null;
+  secondAt?: number | null;
+  secondSent?: boolean;
+};
 
-export function isStop(body: string | null, optOutType: string | null): boolean {
-  if (optOutType?.toUpperCase() === "STOP") return true;
-  return STOP_WORDS.includes((body ?? "").trim().toUpperCase());
+/** Stored by the text plus build, before Verify. */
+export const isOldShape = (stored: ConsentRecord | Stored): stored is Stored => "textedBy" in stored;
+
+/**
+ * A record stored by the text plus build (before Verify) in today's shape,
+ * and revoked (review I3): a text's confirm link no longer works, and a
+ * consent given by text plus was promised a revoke link and STOP, which went
+ * with Verify. The number goes; parents and approvals stay, so the parent can
+ * consent again with a code.
+ */
+export function upgrade(stored: ConsentRecord | Stored): ConsentRecord {
+  if (!isOldShape(stored)) return stored;
+  const { textedBy, textedAt, secondAt, secondSent, ...rest } = stored;
+  return revoke({ ...rest, codeBy: textedBy ?? null, codeAt: textedAt ?? null, plusAt: secondAt ?? null, plusSent: secondSent ?? false } as ConsentRecord);
 }

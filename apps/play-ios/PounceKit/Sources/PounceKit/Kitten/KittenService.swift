@@ -12,8 +12,12 @@ public protocol KittenService: Sendable {
     func kittens() async throws -> [ParentKitten]
     func link(code: String) async throws -> ParentKitten
     func setApproved(kitten: String, pairs: [String]) async throws
-    /// Texts the parent's number. 503 `notConfigured` when the server has no Twilio.
+    /// Twilio Verify texts the parent's number a code. 503 `notConfigured` when the server has no Twilio.
     func startConsent(kitten: String, phone: String) async throws
+    /// Another code to the same number (30 s apart at least; 429 past the limits).
+    func resendConsent(kitten: String) async throws
+    /// The six numerals. 422 wrong, 410 expired, 429 too many tries, 409 `not_waiting`.
+    func checkConsent(kitten: String, code: String) async throws
     func revokeConsent(kitten: String) async throws
     func unlink(kitten: String) async throws
 }
@@ -70,6 +74,15 @@ extension APIClient: KittenService {
     public func startConsent(kitten: String, phone: String) async throws {
         struct Body: Encodable, Sendable { let phone: String }
         _ = try await authenticated("POST", "/v1/kittens/\(Self.segment(kitten))/consent", body: Body(phone: phone))
+    }
+
+    public func resendConsent(kitten: String) async throws {
+        _ = try await authenticated("POST", "/v1/kittens/\(Self.segment(kitten))/consent/resend", body: nil)
+    }
+
+    public func checkConsent(kitten: String, code: String) async throws {
+        struct Body: Encodable, Sendable { let code: String }
+        _ = try await authenticated("POST", "/v1/kittens/\(Self.segment(kitten))/consent/check", body: Body(code: code))
     }
 
     public func revokeConsent(kitten: String) async throws {

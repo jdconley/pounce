@@ -63,6 +63,8 @@ final class AppModel {
     let kittens: KittenStore
     /// The kitten-push significant change is owed or a parent said no: the bell stays padlocked.
     var kittenPushHeld = false
+    /// The Kittens panel opened from a consent notification, on that kitten (consent design D6).
+    var kittensPanel: KittensPanelRequest?
     /// Apple's Communication Limits approvals, mirrored up from a kitten's device.
     @ObservationIgnored private(set) var communicationLimits: CommunicationLimitsBridge!
 
@@ -213,6 +215,8 @@ final class AppModel {
            let url = URL(string: text), let link = DeepLink.parse(url, allowDevScheme: true) {
             model.handle(link)
         }
+        // `-open-kittens <k_…>`: a consent notification's tap at launch (KittenTests).
+        if let i = arguments.firstIndex(of: "-open-kittens"), let kid = arguments[safe: i + 1] { model.showKittens(focus: kid) }
         // `-show-link`: a Messages pounce link opens at launch (the demo's, from Leo).
         if arguments.contains("-show-link") { model.handle(.pounce(token: DemoPounceService.linkToken)) }
         // `-open-widget-link <pounce-widget://…>`: a widget tap at launch (WidgetLinkTests).
@@ -350,6 +354,7 @@ final class AppModel {
         if people.owner != nil { await refreshTables() }
         await refreshStreaks()
         await refreshKitten()
+        await kittens.drainRevokes()
         await pounces.retryPending()
         await recheckAge()
         await uploadWidgetToken()
@@ -697,6 +702,7 @@ final class AppModel {
                 await uploadGuestNotify()
                 await refreshStreaks()
                 await refreshKitten()
+                await kittens.drainRevokes()
                 await pounces.retryPending()
                 await uploadWidgetToken()
                 await liveTables.retry()
@@ -882,6 +888,14 @@ final class AppModel {
 
     /// Signed in as an adult: the gear sheet offers the Kittens panel.
     var isParent: Bool { ageBand == .adult && account.isSignedIn }
+
+    /// A consent notification's tap: the Kittens panel on that kitten, over whatever is up. Only a
+    /// consenting parent's devices get that notification; the panel's list comes from the server,
+    /// which answers only a signed-in adult (the account may still be loading at launch).
+    func showKittens(focus: String) {
+        if case .room = route { closeRoom(); route = .home }
+        kittensPanel = KittensPanelRequest(focus: focus)
+    }
 
     /// A person this kitten can't pounce yet (plan decision 38).
     func pounceLocked(_ pair: String) -> Bool { ageBand == .kitten && kittens.locks(pair: pair) }
@@ -1165,4 +1179,10 @@ final class AppModel {
         route = .home
         Task { await refreshStreaks() }
     }
+}
+
+/// Which kitten a consent notification opened the Kittens panel on.
+struct KittensPanelRequest: Identifiable, Equatable {
+    let focus: String
+    var id: String { focus }
 }

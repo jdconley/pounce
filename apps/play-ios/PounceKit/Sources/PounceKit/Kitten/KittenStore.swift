@@ -3,7 +3,7 @@ import Observation
 
 /// Parent consent on both sides (consent design §2). On a kitten's device: its consent, the code
 /// to show a grown-up, and Apple's approvals mirrored up. On a signed-in adult's: their kittens,
-/// linking by code, the toggles, the text and revoking. What the kitten's device last knew is kept
+/// linking by code, the toggles, the number and its code (Twilio Verify), and revoking. What the kitten's device last knew is kept
 /// on disk, so a launch can decide about push before the server answers.
 @MainActor @Observable public final class KittenStore {
     public enum LinkResult: Equatable, Sendable {
@@ -17,8 +17,23 @@ import Observation
 
     public enum PhoneResult: Equatable, Sendable {
         case sent
-        /// The server has no text provider yet: nothing was sent, the kitten stays pending.
+        /// Too soon, or the day's codes are used up.
+        case tooMany
+        /// The server has no Twilio Verify yet: nothing was sent, the kitten stays pending.
         case notConfigured
+        case failed
+    }
+
+    public enum CheckResult: Equatable, Sendable {
+        /// Verify approved it: consent is on.
+        case on
+        case wrong
+        /// Verify's code expired: a fresh one is needed.
+        case expired
+        /// Five wrong in 10 minutes: wait.
+        case tooMany
+        /// Nothing is waiting for a code (it ran out, or another parent finished).
+        case notWaiting
         case failed
     }
 
@@ -29,6 +44,22 @@ import Observation
         var mirror: KittenApprovals.Mirror?
         /// This device registered for remote push as a consented kitten (so it unregisters after).
         var registered = false
+        /// A parent's revokes the server hasn't confirmed yet (review I1), tried again until it does.
+        var revokes: [String] = []
+
+        init() {}
+
+        private enum CodingKeys: String, CodingKey { case consented, asked, mirror, registered, revokes }
+
+        /// Fields an older build didn't write read as their defaults.
+        init(from decoder: any Decoder) throws {
+            let c = try decoder.container(keyedBy: CodingKeys.self)
+            consented = try c.decodeIfPresent(Bool.self, forKey: .consented) ?? false
+            asked = try c.decodeIfPresent([String].self, forKey: .asked) ?? []
+            mirror = try c.decodeIfPresent(KittenApprovals.Mirror.self, forKey: .mirror)
+            registered = try c.decodeIfPresent(Bool.self, forKey: .registered) ?? false
+            revokes = try c.decodeIfPresent([String].self, forKey: .revokes) ?? []
+        }
     }
 
     // The kitten's device.
@@ -152,21 +183,88 @@ import Observation
         }
     }
 
+    /// Twilio Verify texts the parent's number a code (consent design D6).
     public func sendPhone(kitten id: String, phone: String) async -> PhoneResult {
+        let result = await Self.phoneResult { try await self.service.startConsent(kitten: id, phone: phone) }
+        if result == .sent, let i = kittens.firstIndex(where: { $0.id == id }) { kittens[i].state = .code }
+        return result
+    }
+
+    /// Another code to the number already given.
+    public func resend(kitten id: String) async -> PhoneResult {
+        await Self.phoneResult { try await self.service.resendConsent(kitten: id) }
+    }
+
+    private static func phoneResult(_ call: () async throws -> Void) async -> PhoneResult {
         do {
-            try await service.startConsent(kitten: id, phone: phone)
-            if let i = kittens.firstIndex(where: { $0.id == id }) { kittens[i].state = .texted }
+            try await call()
             return .sent
         } catch APIError.notConfigured {
             return .notConfigured
+        } catch APIError.rateLimited {
+            return .tooMany
         } catch {
             return .failed
         }
     }
 
-    public func revoke(kitten id: String) async {
-        guard (try? await service.revokeConsent(kitten: id)) != nil else { return }
-        if let i = kittens.firstIndex(where: { $0.id == id }) { kittens[i].state = .pending }
+    /// The six numerals from the text. Right turns consent on.
+    public func check(kitten id: String, code: String) async -> CheckResult {
+        do {
+            try await service.checkConsent(kitten: id, code: code)
+            if let i = kittens.firstIndex(where: { $0.id == id }) {
+                kittens[i].state = .on
+                kittens[i].confirmed = false
+            }
+            return .on
+        } catch APIError.server(422) {
+            return .wrong
+        } catch APIError.server(410) {
+            return .expired
+        } catch APIError.rateLimited {
+            return .tooMany
+        } catch APIError.conflict("not_waiting") {
+            return .notWaiting
+        } catch {
+            return .failed
+        }
+    }
+
+    /// Revokes not yet confirmed by the server, kept on disk.
+    public var pendingRevokes: [String] { saved.revokes }
+
+    /// Takes a kitten's consent back (the panel's bell with a slash, or the notification's Revoke
+    /// in the background). Kept on disk first, so a failure is tried again on the next launch or
+    /// foreground (`drainRevokes`) instead of being lost (review I1). True once the server has it.
+    @discardableResult
+    public func revoke(kitten id: String) async -> Bool {
+        if !saved.revokes.contains(id) {
+            saved.revokes.append(id)
+            save()
+        }
+        return await sendRevoke(id)
+    }
+
+    /// Every kept revoke, again.
+    public func drainRevokes() async {
+        for id in saved.revokes { _ = await sendRevoke(id) }
+    }
+
+    private func sendRevoke(_ id: String) async -> Bool {
+        do {
+            try await service.revokeConsent(kitten: id)
+        } catch APIError.notFound {
+            // Unlinked or gone: there is no consent left to take back.
+        } catch {
+            return false
+        }
+        saved.revokes.removeAll { $0 == id }
+        save()
+        if let i = kittens.firstIndex(where: { $0.id == id }) {
+            kittens[i].state = .pending
+            kittens[i].confirmed = false
+        }
+        return true
     }
 
     public func unlink(kitten id: String) async {
