@@ -128,6 +128,13 @@ struct UsView: View {
                 CloudPlusBubble(size: 44) { signIn = true }
                     .accessibilityIdentifier("us.cloud")
             }
+            // The trophy room (trophy room design §3), when the server has it.
+            if store.own != nil {
+                ArtIconButton(icon: ArtName.iconTrophy, color: Palette.orange, size: 48, label: "Trophies") {
+                    model.showTrophies()
+                }
+                .accessibilityIdentifier("us.trophies")
+            }
             bell
             ArtIconButton(icon: ArtName.iconGear, color: Palette.violet, size: 48, label: "Settings") {
                 settingsShown = true

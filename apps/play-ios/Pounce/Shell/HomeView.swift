@@ -32,8 +32,9 @@ struct HomeView: View {
                     roomy(geo.size)
                 } else {
                     VStack(spacing: 14) {
-                        if let badge = streakBadge { streakBadgeView(badge, scale: 1) }
-                        hero(width: geo.size.width, height: geo.size.height * (streakBadge == nil ? 1 : 0.86))
+                        // Under the bell and gear row, the phone's full width, so a connection or two shows whole.
+                        if showStrip { strip(scale: 1).padding(.top, 40) }
+                        hero(width: geo.size.width, height: geo.size.height * (showStrip ? 0.78 : 1))
                         pills(width: geo.size.width)
                         Spacer(minLength: 8)
                         tablesRow
@@ -45,7 +46,11 @@ struct HomeView: View {
             .padding(.bottom, 8)
             .overlay(alignment: .topTrailing) { gear }
             .overlay(alignment: .top) {
-                if sizeClass == .regular, let badge = streakBadge { streakBadgeView(badge, scale: 1.4).padding(.top, 6) }
+                if sizeClass == .regular, showStrip {
+                    strip(scale: 1.3)
+                        .frame(maxWidth: max(geo.size.width - 180, 300))
+                        .padding(.top, 2)
+                }
             }
             .overlay(alignment: .topLeading) {
                 if showBell { bell.transition(.scale.combined(with: .opacity)) }
@@ -157,76 +162,13 @@ struct HomeView: View {
 
     // MARK: pieces
 
-    /// The top pair's badge, once the server said streaks are on and there is a pair (§10.1).
-    private var streakBadge: StreakBadge? {
-        guard model.streaks.enabled == true else { return nil }
-        return StreakBadge.make(model.streaks.top, all: model.streaks.pairs, signedIn: model.account.isSignedIn,
-                                offersSignIn: model.account.offersSignIn)
-    }
+    /// The streak strip (trophy room design §1), once the server said streaks are on: your own
+    /// streak, your connections and the plus, which is there even before anyone is connected.
+    private var showStrip: Bool { model.streaks.enabled == true }
 
-    private func streakBadgeView(_ badge: StreakBadge, scale: CGFloat) -> some View {
-        Button {
-            Haptics.shared.tick()
-            Sound.shared.play(ArtName.Sound.sfxPop)
-            model.showUs()
-        } label: {
-            PawBadge(badge: badge, scale: scale)
-        }
-        .buttonStyle(.plain)
-        .accessibilityLabel(Text("Your streak, \(badge.count)", comment: "VoiceOver: Home's streak badge; opens the Us screen"))
-        .accessibilityValue(PawBadge.value(badge))
-        .accessibilityIdentifier("home.streak")
-        .overlay(alignment: .leading) {
-            if let waiting = model.streaks.waitingGift {
-                Button {
-                    Haptics.shared.tick()
-                    Sound.shared.play(ArtName.Sound.sfxPop)
-                    model.showUs(openingGift: waiting.gift.id)
-                } label: {
-                    Image(ArtName.Habit.giftBox)
-                        .resizable().scaledToFit()
-                        .frame(width: 50 * scale, height: 50 * scale)
-                        .shadow(color: Palette.ink.opacity(0.5), radius: 0, x: 0, y: 3)
-                }
-                .buttonStyle(.plain)
-                .bounceLoop(active: true)
-                .offset(x: -58 * scale)
-                .accessibilityLabel(Text("Open the gift", comment: "VoiceOver: a milestone gift waiting on Home"))
-                .accessibilityIdentifier("home.gift")
-            }
-        }
-        .overlay(alignment: .trailing) {
-            // A pounce waiting on you (§12.4): their bell rings here; it opens their pair on Us.
-            if let waiting = model.streaks.pairs.first(where: { $0.pounce.waiting != nil }) {
-                Button {
-                    Haptics.shared.tick()
-                    Sound.shared.play(ArtName.Sound.sfxPop)
-                    model.showUs(pair: waiting.pair)
-                } label: {
-                    ZStack(alignment: .bottomTrailing) {
-                        Image(ArtName.Habit.pounceBell).resizable().scaledToFit()
-                            .frame(width: 50 * scale, height: 50 * scale)
-                        Image(ArtName.cat(waiting.partner.cat, .awake)).resizable().scaledToFit()
-                            .frame(width: 30 * scale, height: 30 * scale)
-                            .offset(x: 8 * scale, y: 6 * scale)
-                    }
-                    .shadow(color: Palette.ink.opacity(0.5), radius: 0, x: 0, y: 3)
-                }
-                .buttonStyle(.plain)
-                .bounceLoop(active: true)
-                .offset(x: 62 * scale)
-                .accessibilityLabel(Text("\(waiting.partner.name) wants to play", comment: "VoiceOver: a pounce waiting on Home"))
-                .accessibilityIdentifier("home.pounce")
-            }
-        }
-        .overlay(alignment: .topTrailing) {
-            if badge.offerSignIn {
-                CloudPlusBubble(size: 36 * scale) { streakSignIn = true }
-                    .offset(x: 26 * scale, y: -14 * scale)
-                    .accessibilityIdentifier("home.streak.cloud")
-            }
-        }
-        .transition(.scale.combined(with: .opacity))
+    private func strip(scale: CGFloat) -> some View {
+        StreakStripView(scale: scale) { streakSignIn = true }
+            .transition(.scale.combined(with: .opacity))
     }
 
     private var background: some View {

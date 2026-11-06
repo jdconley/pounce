@@ -16,6 +16,8 @@ enum Route: Equatable {
     case home
     /// The Us screen (spec §10.2): the owner's shared streaks.
     case us
+    /// The trophy room (trophy room design §3): your records, the shelf, what's still to earn.
+    case trophies
     case join
     case room(code: String, intent: RoomIntent)
 }

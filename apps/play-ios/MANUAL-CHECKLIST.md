@@ -168,6 +168,22 @@ send leaves the kitten on the hourglass.
 - [ ] In App Store Connect's sandbox, withdraw the significant-change approval for the kitten: a
       `RESCIND_CONSENT` arrives (sandbox notifications on) and consent ends.
 
+## Streaks on Home, the trophy room and adding people (TROPHY on the deployed server)
+
+- [ ] A phone with no connections: Home's strip shows your own streak and the big bouncing plus.
+- [ ] Tap the plus: the invite sheet shows a QR. On a second phone, point the Camera at it and tap
+      the banner: Pounce opens on the pick sheet with your cat; Play deals a new table for both.
+- [ ] Back on the first phone's Home (foreground it): the new person's chip is there at 0, before
+      either of you has played. The second phone's Home shows yours.
+- [ ] The plus's share button sends the same link through Messages; opening the sheet again within
+      the hour shows the same QR.
+- [ ] Take a turn at that table: your own streak's chip goes up by one when you're back on Home. A
+      table of you and bots alone never moves it.
+- [ ] Tap your own streak: the trophy room shows your records, the shelf, the locked silhouettes with
+      rings, your connections (a tap opens Us on that pair) and the plus.
+- [ ] A kitten's phone: the plus shows a room code and its QR, no share button; scanning it with
+      another phone's Camera opens that table's lobby.
+
 ## Performance and accessibility
 
 - [ ] Instruments idle-CPU check on the oldest iPhone available: the table scene should pause when
