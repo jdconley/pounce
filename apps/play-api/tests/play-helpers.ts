@@ -292,8 +292,8 @@ export class Client {
     }
   }
 
-  async until(ok: (s: Snapshot) => boolean): Promise<Snapshot> {
-    const end = Date.now() + 5000;
+  async until(ok: (s: Snapshot) => boolean, ms = 5000): Promise<Snapshot> {
+    const end = Date.now() + ms;
     while (!(this.last && ok(this.last))) {
       if (Date.now() > end) throw new Error("snapshot never matched");
       await new Promise((resolve) => setTimeout(resolve, 20));

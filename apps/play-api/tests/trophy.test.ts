@@ -116,8 +116,8 @@ describe("your own streak and GET /v1/me/trophies (trophy room design §2, §3, 
     await c.until((s) => s.room.seats[1]?.kind === "bot");
     c.send({ t: "start" });
     await c.until((s) => s.room.status === "playing");
-    // Play until JD has taken a turn.
-    await c.until((s) => s.room.game?.turn === 0);
+    // Play until JD has taken a turn. The House Cat moves on its real 1.2 s delay, which a loaded runner can stretch.
+    await c.until((s) => s.room.game?.turn === 0, 15_000);
     await takeTurn([c, c]);
     await settle(500);
     const list = await streaks(mf, jd.d, jd.p);
