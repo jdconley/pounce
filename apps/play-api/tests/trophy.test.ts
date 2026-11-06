@@ -21,6 +21,7 @@ import {
   type Device,
   type Person,
   type Sent,
+  PLAYER_ID_JSON,
 } from "./play-helpers";
 
 import type { ServerMessage } from "../src/protocol";
@@ -101,7 +102,7 @@ describe("your own streak and GET /v1/me/trophies (trophy room design §2, §3, 
     expect(room.earned.condoStage).toBe(1);
     // The kept day's toy is on the shelf.
     expect(room.earned.toys).toEqual([list.pairs[0]?.todayToy]);
-    expect(JSON.stringify(room)).not.toContain("p_");
+    expect(JSON.stringify(room)).not.toMatch(PLAYER_ID_JSON);
   });
 
   test("a table of one person and bots never counts", async () => {
@@ -150,7 +151,7 @@ describe("connections on accept (D2)", { timeout: 30_000 }, () => {
     // Nobody has played: no own streak yet.
     expect(jdList.own?.count).toBe(0);
     // The answered push names the pair.
-    expect(JSON.stringify(sent)).not.toContain("p_");
+    expect(JSON.stringify(sent)).not.toMatch(PLAYER_ID_JSON);
   });
 
   test("a double tap makes one pair and one table; In a bit makes none", async () => {

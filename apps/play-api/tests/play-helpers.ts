@@ -263,6 +263,12 @@ export async function eventually<T>(read: () => Promise<T> | T, ok: (value: T) =
   return value;
 }
 
+/**
+ * A whole player id in JSON: `"p_"` plus 22 base64url characters. Checking for the bare text `p_` flakes, because other
+ * random ids are base64url too and contain `p_` about once in a few hundred (`k_…zp_8…`).
+ */
+export const PLAYER_ID_JSON = /"p_[A-Za-z0-9_-]{22}"/;
+
 export const settle = (ms = 300) => new Promise((resolve) => setTimeout(resolve, ms));
 
 /** A socket that keeps every frame and its latest snapshot. */

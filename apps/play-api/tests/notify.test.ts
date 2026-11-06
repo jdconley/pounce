@@ -26,6 +26,7 @@ import {
   type Device,
   type Person,
   type Sent,
+  PLAYER_ID_JSON,
 } from "./play-helpers";
 
 import type { ServerMessage } from "../src/protocol";
@@ -127,7 +128,7 @@ describe("your move (§12.2, §12.5)", { timeout: 30_000 }, () => {
     const two = await playWhileAway(clients);
     const [second] = await eventually(() => alertsTo(seats[two.next].token), (l) => l.length === 1);
     expect((second as Sent).body).toMatchObject({ from: seats[two.mover].face, streak: { count: 1, me: true, them: true } });
-    expect(JSON.stringify((second as Sent).body)).not.toContain("p_");
+    expect(JSON.stringify((second as Sent).body)).not.toMatch(PLAYER_ID_JSON);
   });
 
   test("with STREAKS unset the push is the original one", async () => {

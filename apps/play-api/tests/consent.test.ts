@@ -22,6 +22,7 @@ import {
   type Device,
   type Person,
   type Sent,
+  PLAYER_ID_JSON,
 } from "./play-helpers";
 
 import type { ConsentRecord } from "../src/consent/rules";
@@ -168,7 +169,7 @@ describe("link (consent design §2 layer 1)", { timeout: 30_000 }, () => {
     const { kitten } = (await link.json()) as { kitten: ParentKitten };
     expect(kitten).toMatchObject({ name: "Mochi", cat: 4, state: "pending", mode: "parent", people: [] });
     expect(kitten.id).toMatch(/^k_[A-Za-z0-9_-]{22}$/);
-    expect(JSON.stringify(kitten)).not.toContain("p_");
+    expect(JSON.stringify(kitten)).not.toMatch(PLAYER_ID_JSON);
     // Used once.
     expect((await call(mf, f.momPhone, "POST", "/v1/kittens/link", { code: second })).status).toBe(404);
     expect(await json(kidCall(mf, f, "GET", "/v1/kittens/me"))).toEqual({ state: "pending", linked: true, approved: [] });
@@ -348,7 +349,7 @@ describe("the plus: a push to the parent's own devices (D6)", { timeout: 30_000 
     const [push, ...more] = alertsTo(MOM_TOKEN, "consent");
     expect(more).toEqual([]);
     expect(push?.body).toMatchObject({ kind: "consent", kitten: k.id, aps: { category: "CONSENT", alert: { title: "Mochi" } } });
-    expect(JSON.stringify(push?.body)).not.toContain("p_");
+    expect(JSON.stringify(push?.body)).not.toMatch(PLAYER_ID_JSON);
     // Never to the kitten or anyone else.
     expect(sent.filter((s) => s.body.kind === "consent" && s.token !== MOM_TOKEN)).toEqual([]);
     expect((await record(mf, kitten))?.plusSent).toBe(true);
