@@ -143,15 +143,33 @@ describe("mergePersonal (§13.1)", () => {
     short.best = 20;
     short.perfectWeeks = 3;
     short.lifetimeKept = 40;
-    const merged = mergePersonal(short, long) as Personal;
+    const now = at(day(8), "12:00");
+    const merged = mergePersonal(short, long, LA, now) as Personal;
     expect(look(merged, day(8))).toMatchObject({ count: 9, best: 20, lifetimeKept: 40, perfectWeeks: 3, naps: 2 });
-    expect(mergePersonal(long, short)?.count).toBe(9);
+    expect(mergePersonal(long, short, LA, now)?.count).toBe(9);
+  });
+
+  it("settles both records first, so a long-gone streak doesn't wipe a live one", () => {
+    const old = playDays(null, 0, 30);
+    const live = playDays(null, 200, 5);
+    const merged = mergePersonal(old, live, LA, at(day(204), "12:00")) as Personal;
+    expect(look(merged, day(204))).toMatchObject({ count: 5, best: 30, lifetimeKept: 30, kept: true });
+  });
+
+  it("keeps the other record's turn today when the winner hasn't played yet", () => {
+    const a = playDays(null, 0, 4);
+    const b = playDays(null, 2, 2);
+    // A hasn't played on day 4; B has.
+    const bToday = recordTurn(b, at(day(4), "09:00"), LA, at(day(4), "09:00"));
+    const merged = mergePersonal(a, bToday, LA, at(day(4), "10:00")) as Personal;
+    expect(look(merged, day(4), "11:00")).toMatchObject({ count: 5, kept: true });
   });
 
   it("takes whichever exists, and nothing from nothing", () => {
     const s = playDays(null, 0, 2);
-    expect(mergePersonal(null, s)).toEqual(s);
-    expect(mergePersonal(s, null)).toEqual(s);
-    expect(mergePersonal(null, null)).toBeNull();
+    const now = at(day(1), "12:00");
+    expect(mergePersonal(null, s, LA, now)).toEqual(s);
+    expect(mergePersonal(s, null, LA, now)).toEqual(s);
+    expect(mergePersonal(null, null, LA, now)).toBeNull();
   });
 });

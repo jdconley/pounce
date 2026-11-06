@@ -186,7 +186,8 @@ export async function answerPounce(
     return done(claim.repeat.code);
   }
   // Connections on accept (trophy room design D2): Play on a link makes the pair at once, at 0, before
-  // the table is dealt, so the deal reaches it and both lists show it. Never fatal: the table still deals.
+  // the table is dealt, so the deal's report reaches it and both lists show the table as a move. A
+  // failed connect still deals; a failed deal leaves the pair at 0 (a retried answer finds it).
   if (row.to === null && parsed.answer === "play" && trophyOn(env)) await connect(env, me, sender, now).catch(() => null);
 
   let code = dealing ? null : choice;

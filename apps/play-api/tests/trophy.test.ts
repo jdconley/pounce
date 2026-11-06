@@ -1,6 +1,11 @@
+import { mkdtempSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+
 import { afterEach, beforeAll, describe, expect, test } from "vitest";
 
 import {
+  appleProof,
   bundle,
   call,
   connect,
@@ -27,6 +32,7 @@ import type { Miniflare } from "miniflare";
 let script = "";
 let sent: Sent[] = [];
 const open: Miniflare[] = [];
+const dirs: string[] = [];
 
 beforeAll(async () => {
   script = await bundle("./pounce-entry.ts");
@@ -34,11 +40,12 @@ beforeAll(async () => {
 
 afterEach(async () => {
   await Promise.all(open.splice(0).map((mf) => mf.dispose()));
+  for (const dir of dirs.splice(0)) rmSync(dir, { recursive: true, force: true });
   sent = [];
 });
 
-async function start(trophy = true): Promise<Miniflare> {
-  const mf = await worker(script, { links: true, trophy, sent });
+async function start(trophy = true, persist?: string): Promise<Miniflare> {
+  const mf = await worker(script, { links: true, trophy, sent, ...(persist ? { persist } : {}) });
   open.push(mf);
   return mf;
 }
@@ -193,7 +200,93 @@ describe("connections on accept (D2)", { timeout: 30_000 }, () => {
   });
 });
 
+describe("connections, records and links over time", { timeout: 30_000 }, () => {
+  /** JD and Kim connected by a link, each with a turn at the dealt table (a kept day for the pair). */
+  async function connected(mf: Miniflare) {
+    const jd = await someone(mf, "JD", 1);
+    const kim = await someone(mf, "Kim", 5);
+    const { id, token } = await linkFrom(mf, jd.d, jd.p);
+    const { code } = (await (await answer(mf, kim.d, kim.p, id, { answer: "play", link: token })).json()) as { code: string };
+    const a = await connect(mf, code, jd.d);
+    const b = await connect(mf, code, kim.d);
+    await takeTurn([a, b]);
+    await takeTurn([a, b]);
+    await eventually(() => streaks(mf, jd.d, jd.p), (l) => l.pairs[0]?.count === 1);
+    return { jd, kim };
+  }
+
+  test("the longest pair streak stays a record after leaving that pair", async () => {
+    const mf = await start();
+    const { jd } = await connected(mf);
+    const before = (await (await trophiesOf(mf, jd.d, jd.p)).json()) as Trophies;
+    expect(before.records.longestPair).toBe(1);
+    const pair = before.connections[0]?.pair as string;
+    expect((await call(mf, jd.d, "DELETE", `/v1/pairs/${pair}?person=${jd.p.id}`)).status).toBe(204);
+    const after = (await (await trophiesOf(mf, jd.d, jd.p)).json()) as Trophies;
+    expect(after.connections).toEqual([]);
+    expect(after.records).toMatchObject({ longestPair: 1, current: 1, totalDays: 1 });
+  });
+
+  test("a link answered by someone already connected makes no second pair, and is used up", async () => {
+    const mf = await start();
+    const { jd, kim } = await connected(mf);
+    const { id, token } = await linkFrom(mf, jd.d, jd.p);
+    expect((await answer(mf, kim.d, kim.p, id, { answer: "play", link: token })).status).toBe(200);
+    expect((await streaks(mf, jd.d, jd.p)).pairs).toHaveLength(1);
+    expect((await streaks(mf, kim.d, kim.p)).pairs.map((p) => p.count)).toEqual([1]);
+    expect((await call(mf, jd.d, "GET", `/v1/pounces/links/${token}`)).status).toBe(404);
+  });
+});
+
+describe("your own streak and account merges (§13.1)", { timeout: 30_000 }, () => {
+  test("a guest's live own streak merges into the account it signs in to", async () => {
+    const mf = await start();
+    const phone = await mint(mf);
+    const ipad = await mint(mf);
+    const jd = newPerson("JD", 1);
+    const jdPad = newPerson("JD", 1);
+    await profile(mf, phone, [jd]);
+    await profile(mf, ipad, [jdPad]);
+    const mia = await someone(mf, "Mia", 2);
+    const t = await table(mf, [
+      [ipad, jdPad],
+      [mia.d, mia.p],
+    ]);
+    await takeTurn(t.clients);
+    await takeTurn(t.clients);
+    await eventually(() => streaks(mf, ipad, jdPad), (l) => l.own?.count === 1);
+    const signIn = async (d: Device, p: Person) =>
+      call(mf, d, "POST", "/v1/identities/apple", { proof: await appleProof("apple-jd"), person: { id: p.id, key: p.key } });
+    expect((await signIn(phone, jd)).status).toBe(200);
+    expect(((await (await signIn(ipad, jdPad)).json()) as { outcome: string }).outcome).toBe("merged");
+    expect((await streaks(mf, phone, jd)).own).toMatchObject({ count: 1, kept: true, lifetimeKept: 1 });
+  });
+});
+
 describe("with TROPHY off", { timeout: 30_000 }, () => {
+  test("turns taken while it's off aren't recorded: turning it on later starts every own streak at 0", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "play-api-trophy-"));
+    dirs.push(dir);
+    const off = await start(false, dir);
+    const jd = await someone(off, "JD", 1);
+    const mia = await someone(off, "Mia", 2);
+    const t = await table(off, [
+      [jd.d, jd.p],
+      [mia.d, mia.p],
+    ]);
+    await takeTurn(t.clients);
+    await takeTurn(t.clients);
+    await (t.clients[0] as Client).find((m) => m.t === "streak");
+    await settle(300);
+    await off.dispose();
+    open.splice(open.indexOf(off), 1);
+
+    const on = await start(true, dir);
+    const list = await streaks(on, jd.d, jd.p);
+    expect(list.pairs).toHaveLength(1);
+    expect(list.own).toMatchObject({ count: 0, lifetimeKept: 0 });
+  });
+
   test("the server answers as before: no own streak, no trophy room, and a link makes no pair until both take a turn", async () => {
     const mf = await start(false);
     const jd = await someone(mf, "JD", 1);

@@ -28,9 +28,22 @@ import Testing
         #expect(kept.reusable(now: t0.addingTimeInterval(60), pairs: []))
     }
 
-    @Test func whileTheBellRestsAnyUnexpiredLinkStillServes() {
-        let kept = InviteLink(url: url, at: t0, pairs: [])
-        #expect(kept.usableWhileResting(now: t0.addingTimeInterval(23 * 3600)))
-        #expect(!kept.usableWhileResting(now: t0.addingTimeInterval(25 * 3600)))
+    @Test func whileTheBellRestsAnUnexpiredLinkNobodyUsedStillServes() {
+        let kept = InviteLink(url: url, at: t0, pairs: ["pr_mia"])
+        #expect(kept.usableWhileResting(now: t0.addingTimeInterval(23 * 3600), pairs: ["pr_mia"]))
+        #expect(!kept.usableWhileResting(now: t0.addingTimeInterval(25 * 3600), pairs: ["pr_mia"]))
+        #expect(!kept.usableWhileResting(now: t0.addingTimeInterval(60), pairs: ["pr_mia", "pr_kim"]),
+                "a new connection probably used it")
+    }
+
+    @Test func itsTokenIsTheLinksLastPart() {
+        #expect(InviteLink(url: url, at: t0, pairs: []).token == "AAAAAAAAAAAAAAAAAAAAAA")
+        #expect(InviteLink(url: URL(string: "https://play.conleychaos.com/x")!, at: t0, pairs: []).token == nil)
+    }
+
+    @Test func aKittensRoomCodeIsKeptForAnHour() {
+        let code = InviteCode(code: "TB4XN", at: t0)
+        #expect(code.reusable(now: t0.addingTimeInterval(59 * 60)))
+        #expect(!code.reusable(now: t0.addingTimeInterval(61 * 60)))
     }
 }

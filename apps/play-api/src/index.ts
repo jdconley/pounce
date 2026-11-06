@@ -255,7 +255,8 @@ const getStreaks = asMe(async (_r, env, _d, me) => {
 
 const getTrophies = asMe(async (_r, env, _d, me) => {
   const found = await myTrophies(env, me, Date.now());
-  return found ? json(200, found) : notFound();
+  // A player that isn't there now (merging, being deleted) is no_player, never "no trophy room".
+  return found ? json(200, found) : json(404, { error: "no_player" });
 });
 
 type PairHandler = (request: Request, env: Env, me: string, pairId: string) => Promise<Response>;

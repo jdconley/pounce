@@ -150,7 +150,7 @@ struct TrophyRoomView: View {
                             .frame(width: side + 22, height: 14 * scale)
                     }
                     .accessibilityElement()
-                    .accessibilityLabel(Text(verbatim: item.id))
+                    .accessibilityLabel(Text(verbatim: Self.spoken(item.id)))
                     .accessibilityIdentifier("trophies.shelf.\(item.id)")
                 }
             }
@@ -245,6 +245,11 @@ struct TrophyRoomView: View {
         }
     }
 
+    /// What VoiceOver says for a catalog id: its words without the kind ("golden fish", "condo 7").
+    static func spoken(_ id: String) -> String {
+        id.split(separator: "-").dropFirst().joined(separator: " ")
+    }
+
     /// Golden things glow gold, shiny ones sky; the rest a magenta halo.
     static func glow(_ id: String) -> Color {
         switch StreakCatalog.rarity(id) {
@@ -281,14 +286,17 @@ struct LockedTrophy: View {
             Image(ArtName.Habit.trophyLock).resizable().scaledToFit()
                 .frame(width: 22 * scale, height: 22 * scale)
                 .offset(x: ring * 0.32, y: -ring * 0.32)
-            OutlinedText(String(item.at), size: 17 * scale, fill: .white, width: 2.5)
-                .fixedSize()
-                .offset(y: ring * 0.44)
+            // 0: no milestone of the current streak brings it (past the small tier's last); no numeral.
+            if item.at > 0 {
+                OutlinedText(String(item.at), size: 17 * scale, fill: .white, width: 2.5)
+                    .fixedSize()
+                    .offset(y: ring * 0.44)
+            }
         }
         .frame(width: ring, height: ring)
         .padding(.bottom, 8 * scale)
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel(Text(verbatim: item.id))
+        .accessibilityLabel(Text(verbatim: TrophyRoomView.spoken(item.id)))
         .accessibilityValue("\(item.at)|\(Int((item.progress * 100).rounded()))")
         .accessibilityIdentifier("trophies.locked.\(item.id)")
     }

@@ -100,8 +100,8 @@ describe("the catalog: still to earn (D4)", () => {
     expect(item(t, "back-yarn-swirl")?.progress).toBeCloseTo(20 / 50);
     expect(item(t, "rug-night-sky")).toMatchObject({ at: 30 });
     expect(item(t, "back-heart-paws")?.progress).toBeCloseTo(20 / 30);
-    // Past the last listed small milestone, only a fresh start's 3 can bring one.
-    expect(item(trophies(input([pairWith(B, { count: 320 })])), "back-moonlit-fish")).toMatchObject({ at: 3, progress: 0 });
+    // Past the last listed small milestone no milestone of this streak brings one: no numeral (0).
+    expect(item(trophies(input([pairWith(B, { count: 320 })])), "back-moonlit-fish")).toMatchObject({ at: 0, progress: 0 });
     expect(item(trophies(input([pairWith(B, { count: 370 })])), "rug-candy-stripe")).toMatchObject({ at: 400 });
   });
 

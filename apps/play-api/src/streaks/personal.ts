@@ -170,17 +170,27 @@ export function ownView(s: Personal | null, zone: string, now: number): OwnStrea
 }
 
 /**
- * Two players' records after an account merge (§13.1), as pairs merge: the
- * longer current streak wins whole; best, total days and perfect weeks take
- * the maximum; naps take the maximum, capped at 2.
+ * Two players' records after an account merge (§13.1), as pairs merge: both
+ * are brought up to `now` first (a record only settles when it's touched, so
+ * a stored count can be long out of date); the longer current streak wins
+ * whole; best, total days and perfect weeks take the maximum; naps take the
+ * maximum, capped at 2. A turn the other record has on a day the winner
+ * hasn't settled or kept counts for the winner too.
  */
-export function mergePersonal(a: Personal | null, b: Personal | null): Personal | null {
+export function mergePersonal(a: Personal | null, b: Personal | null, zone: string, now: number): Personal | null {
   if (!a || !b) return a ?? b;
+  advancePersonal(a, zone, now);
+  advancePersonal(b, zone, now);
   const [win, lose] = b.count > a.count ? [b, a] : [a, b];
   const merged = structuredClone(win);
   merged.best = Math.max(win.best, lose.best);
   merged.lifetimeKept = Math.max(win.lifetimeKept, lose.lifetimeKept);
   merged.perfectWeeks = Math.max(win.perfectWeeks, lose.perfectWeeks);
   merged.naps = Math.min(MAX_NAPS, Math.max(win.naps, lose.naps));
+  for (const [d, mark] of Object.entries(lose.days)) {
+    const open = merged.lastSettled === null || d > merged.lastSettled;
+    if (open && d >= merged.firstDay && merged.days[d] === undefined && (mark === "turn" || mark === "kept")) merged.days[d] = "turn";
+  }
+  advancePersonal(merged, zone, now);
   return merged;
 }

@@ -144,12 +144,13 @@ struct InviteSheet: View {
                 ArtIconButton(icon: ArtName.iconShare, color: Palette.sky, size: 64 * scale, label: "Send a link") {
                     shareShown = true
                 }
-                .bounceLoop(active: true)
+                // No nudges to share links for a teen (§14.1).
+                .bounceLoop(active: model.ageBand != .teen)
                 .accessibilityIdentifier("invite.share")
             case .code(let code):
                 PillButton(icon: ArtName.iconPlay, color: Palette.lime, size: .large, width: 150 * scale, accessibilityLabel: "Play") {
                     Haptics.shared.success()
-                    model.inviteShown = false
+                    model.inviteTableUsed()
                     model.open(code: code, intent: .create)
                 }
                 .accessibilityIdentifier("invite.play")

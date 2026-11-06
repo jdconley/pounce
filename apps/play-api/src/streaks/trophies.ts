@@ -34,7 +34,7 @@ export type TrophyInput = {
 
 export type CatalogKind = "condo" | "back" | "rug" | "toy";
 
-/** One thing to earn: `at` is the numeral on its ring, `progress` how far along (1 once earned). */
+/** One thing to earn: `at` is the numeral on its ring (0: none), `progress` how far along (1 once earned). */
 export type CatalogItem = { id: string; kind: CatalogKind; at: number; progress: number };
 
 export type Trophies = {
@@ -48,8 +48,8 @@ export type Trophies = {
 /** Kept days within which each rarity is sure to drop (§9.3). */
 const GUARANTEE: Record<Rarity, number> = { common: 1, shiny: 7, golden: 30 };
 const LAST_LISTED = 365;
-/** A first milestone of the small tier: a fresh start's first gift. */
-const FIRST_SMALL = 3;
+/** `at` when no milestone of the current streak can bring the item (past the small tier's last, 300): the ring has no numeral. */
+const NO_NUMERAL = 0;
 
 /** The next milestone above `n` whose gift comes from the big tier (or the small one); null when the tier has none left. */
 function nextOfTier(n: number, big: boolean): number | null {
@@ -87,7 +87,7 @@ export function trophies(t: TrophyInput): Trophies {
   const gift = (id: string, kind: CatalogKind, big: boolean): CatalogItem => {
     const at = nextOfTier(count, big);
     const progress = items.has(id) ? 1 : at === null ? 0 : ratio(count, at);
-    return { id, kind, at: at ?? FIRST_SMALL, progress };
+    return { id, kind, at: at ?? NO_NUMERAL, progress };
   };
   const back = (id: string): CatalogItem => {
     if (id === FULL_SET_BACK) return { id, kind: "back", at: TOYS.length, progress: items.has(id) ? 1 : ratio(toyCount, TOYS.length) };

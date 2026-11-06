@@ -49,6 +49,8 @@ final class AppModel {
     var inviteShown = false
     /// The last invite link, shown again for an hour (`InviteLink`).
     @ObservationIgnored private var inviteLink: InviteLink?
+    /// A kitten's last invite table, shown again for an hour (`InviteCode`).
+    @ObservationIgnored private var inviteCode: InviteCode?
     /// The condo stage this phone last showed per pair, so a new stage drops in once (§9.5).
     private(set) var condoSeen: [String: Int]
     @ObservationIgnored private let condoSeenURL: URL
@@ -488,26 +490,42 @@ final class AppModel {
     }
 
     /// The invite sheet's Messages link (PR 5's link pounce, target "new"): the kept one when it's
-    /// under an hour old and nobody new connected since, else a new one; while the bell rests any
-    /// unexpired kept link. Nil on a kitten's device, and when there's none to show.
+    /// under an hour old, nobody new connected since and the server says nobody answered it yet,
+    /// else a new one; while the bell rests, a kept one nobody used. Nil on a kitten's device, and
+    /// when there's none to show.
     func inviteURL() async -> URL? {
         guard InviteLink.mode(limits) == .link else { return nil }
         let pairs = streaks.pairs.map(\.pair)
-        if let kept = inviteLink, kept.reusable(now: .now, pairs: pairs) { return kept.url }
+        if let kept = inviteLink, kept.reusable(now: .now, pairs: pairs), await unused(kept) { return kept.url }
         if let url = await sharePounce(target: .new) {
             inviteLink = InviteLink(url: url, at: .now, pairs: Set(pairs))
             return url
         }
-        if let kept = inviteLink, kept.usableWhileResting(now: .now) { return kept.url }
+        if let kept = inviteLink, kept.usableWhileResting(now: .now, pairs: pairs), await unused(kept) { return kept.url }
         return nil
     }
 
-    /// A kitten's invite (§14.1): a new table whose code and QR are for in-person play only.
+    /// Any answer to a link (Play, In a bit, Not now) uses it up: the server's preview says so.
+    private func unused(_ link: InviteLink) async -> Bool {
+        guard let token = link.token else { return false }
+        return await pounces.link(token: token) != nil
+    }
+
+    /// A kitten's invite (§14.1): a new table whose code and QR are for in-person play only, the
+    /// same one again within the hour.
     func inviteTable() async -> String? {
+        if let kept = inviteCode, kept.reusable(now: .now) { return kept.code }
         #if DEBUG
         if CommandLine.arguments.contains("-demo-streaks") { return "TB4XN" }
         #endif
-        return try? await api.createRoom()
+        guard let code = try? await api.createRoom() else { return nil }
+        inviteCode = InviteCode(code: code, at: .now)
+        return code
+    }
+
+    /// The kitten's invite table was opened: the next plus makes a new one.
+    func inviteTableUsed() {
+        inviteCode = nil
     }
 
     /// A table socket's `{t:"streak"}`: the store takes it (its stamp plays at the table), and the
@@ -569,6 +587,7 @@ final class AppModel {
 
     func showUs(openingGift gift: String? = nil, pair: String? = nil) {
         guard people.owner != nil else { return }
+        inviteShown = false
         closeRoom()
         pendingGift = gift
         pendingPair = pair
@@ -668,6 +687,8 @@ final class AppModel {
     }
 
     func open(code: String, intent: RoomIntent) {
+        // A push tap or a link while the invite sheet is up: the table, not the sheet over it.
+        inviteShown = false
         push?.cancelSnoozes(codes: [code])
         // Back at this table in the app: its live table goes now (spec §11.3).
         Task { await liveTables.sweep(entering: code) }

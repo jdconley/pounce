@@ -357,9 +357,9 @@ export class Player extends DurableObject<Env> {
       );
     }
     // Your own streak merges as pairs do (§13.1): the longer current streak wins, the lifetime numbers take the maximum.
-    const merged = mergePersonal(this.personal(), e.personal ?? null);
+    const merged = mergePersonal(this.personal(), e.personal ?? null, this.zone(), now);
     if (merged) this.setMeta("personal", JSON.stringify(merged));
-    this.setMeta("pair_best", Math.max(this.pairBest(), e.pairBest ?? 0));
+    if ((e.pairBest ?? 0) > this.pairBest()) this.setMeta("pair_best", e.pairBest as number);
   }
 
   /** Empties a merged player, leaving a pointer to `to` for 30 days. */
