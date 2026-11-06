@@ -316,4 +316,9 @@ magick -size 252x252 xc:none -fill "$V" -stroke "$INK" -strokewidth 14 -draw "ci
   \( "$BELL" -resize 170x170 \) -gravity center -composite \
   -stroke "$INK" -strokewidth 34 -draw "line 50,50 202,202" -stroke "$M" -strokewidth 20 -draw "line 50,50 202,202" "PNG32:$TMP/bell-off.png"
 put icon-bell-off "$TMP/bell-off.png"
+# Another code (Twilio Verify): a fat lime loop arrow on a sky disc, its head at the gap.
+ic -fill "$S" -draw "circle 126,126 126,10" -fill none -stroke "$INK" -strokewidth 46 -draw "arc 52,52 200,200 -20,250" \
+  -stroke "$L" -strokewidth 28 -draw "arc 52,52 200,200 -20,250" \
+  -stroke "$INK" -strokewidth 10 -fill "$L" -draw "polygon 150,30 232,62 160,118" "PNG32:$TMP/resend.png"
+put icon-resend "$TMP/resend.png"
 echo "habit placeholders done"

@@ -11,9 +11,13 @@ public enum NotifyAction: String, CaseIterable, Sendable {
     case later = "LATER"
     /// Pounce: "Not now", answered in the background.
     case notNow = "NOT_NOW"
+    /// Parent consent's confirmation: take it back, in the background (consent design D6).
+    case revoke = "REVOKE"
 
     /// Only Play brings the app forward; the others run in the background.
     public var foreground: Bool { self == .play }
+    /// Revoke is drawn red and asks for the device to be unlocked.
+    public var destructive: Bool { self == .revoke }
 }
 
 /// What the app does with a tap or a button on a notification.
@@ -26,6 +30,10 @@ public enum NotifyOutcome: Equatable, Sendable {
     case pick(id: String, target: PounceTarget, from: PushFace?)
     /// Post the same notification again after this many seconds.
     case snooze(Int)
+    /// Open the Kittens panel on this kitten.
+    case kittens(String)
+    /// Revoke this kitten's consent.
+    case revokeConsent(String)
     case none
 }
 
@@ -38,6 +46,7 @@ public enum NotifyActions {
         switch category {
         case .yourMove, .reminder: [.play, .inAnHour]
         case .pounce: [.play, .later, .notNow]
+        case .consent: [.revoke]
         case .status: []
         }
     }
@@ -47,11 +56,17 @@ public enum NotifyActions {
         let tapped = action == defaultAction
         let chosen = NotifyAction(rawValue: action)
         guard tapped || chosen != nil else { return .none }
+        if payload.kind == .consent || payload.category == .consent {
+            guard let kitten = payload.kitten else { return .none }
+            if tapped { return .kittens(kitten) }
+            return chosen == .revoke ? .revokeConsent(kitten) : .none
+        }
+        if chosen == .revoke { return .none }
         if payload.kind == .pounce || payload.category == .pounce, let pounce = payload.pounce {
             switch chosen {
             case .later: return .answer(id: pounce.id, .later, opensApp: false)
             case .notNow: return .answer(id: pounce.id, .no, opensApp: false)
-            case .inAnHour: return .none
+            case .inAnHour, .revoke: return .none
             case .play, nil:
                 // A tap is Play (§12.4: opening it lands on the table they picked, or the pick sheet).
                 if pounce.target == .pick || pounce.target == nil {

@@ -13,7 +13,9 @@ import UserNotifications
 ///   before SwiftUI attaches the app model, so it waits here like the token does.
 /// - Categories and their buttons (spec §12.5): Play opens the app; In an hour re-posts the
 ///   notification locally; a pounce's In a bit and Not now are answered in the background
-///   through the app's answer queue. A kitten's device never registers for remote push (§14.1).
+///   through the app's answer queue. A kitten's device never registers for remote push (§14.1)
+///   without a parent's consent. Parent consent's confirmation (consent design D6) has Revoke,
+///   in the background; a tap opens the Kittens panel on that kitten.
 /// - In the foreground a banner is dropped only when its table is on screen (the table shows
 ///   the turn already); any other table's banner shows and Home's list refreshes.
 /// - The local turn reminder looks exactly like the server's push.
@@ -63,10 +65,17 @@ final class PushCoordinator: NSObject, UNUserNotificationCenterDelegate {
         case .notNow:
             title = String(localized: "Not now", comment: "Notification button: answer a pounce, not now")
             icon = "moon.zzz.fill"
+        case .revoke:
+            title = String(
+                localized: "Revoke",
+                comment: "Notification button on parent consent's confirmation: take back a child's notifications (legal text)")
+            icon = "bell.slash.fill"
         }
+        var options: UNNotificationActionOptions = action.foreground ? [.foreground] : []
+        // Revoke runs in the background, drawn red, and only on an unlocked device.
+        if action.destructive { options.formUnion([.destructive, .authenticationRequired]) }
         return UNNotificationAction(
-            identifier: action.rawValue, title: title, options: action.foreground ? [.foreground] : [],
-            icon: UNNotificationActionIcon(systemImageName: icon))
+            identifier: action.rawValue, title: title, options: options, icon: UNNotificationActionIcon(systemImageName: icon))
     }
 
     /// Registers with APNs when the user allowed notifications (fully or provisionally) and this
@@ -375,6 +384,16 @@ final class PushCoordinator: NSObject, UNUserNotificationCenterDelegate {
             routePendingTap()
         case .snooze(let seconds):
             snooze(snoozable.content, key: snoozable.key.isEmpty ? UUID().uuidString : snoozable.key, after: seconds)
+        case .kittens(let kitten):
+            pending = .kittens(kitten)
+            routePendingTap()
+        case .revokeConsent(let kitten):
+            // In the background, like a pounce's answer: iOS gives it a little time.
+            pending = .revoke(kitten)
+            let task = BackgroundTask()
+            task.id = UIApplication.shared.beginBackgroundTask(withName: "pounce-revoke") { task.end() }
+            await routePending()
+            task.end()
         case .none:
             break
         }
@@ -382,6 +401,7 @@ final class PushCoordinator: NSObject, UNUserNotificationCenterDelegate {
 
     private func presentation(for code: String?, kind: String?) -> UNNotificationPresentationOptions {
         if let model, ["pounce", "pounce_answered"].contains(kind) { Task { await model.refreshStreaks() } }
+        if let model, kind == "consent" { Task { await model.kittens.refreshKittens() } }
         if let code, let model, model.isOnScreen(code: code), kind != "pounce" { return [] }
         if let model { Task { await model.refreshTables() } }
         return [.banner, .list, .sound]
@@ -398,6 +418,9 @@ final class PushCoordinator: NSObject, UNUserNotificationCenterDelegate {
         /// `title` names the person on this phone the pounce is for (§12.2).
         case answer(id: String, PounceAnswer, opens: Bool, title: String?)
         case pick(id: String, target: PounceTarget, from: PushFace?, title: String?)
+        /// A consent notification: the Kittens panel on this kitten, or its Revoke button.
+        case kittens(String)
+        case revoke(String)
     }
 
     private var pending: Pending?
@@ -417,6 +440,10 @@ final class PushCoordinator: NSObject, UNUserNotificationCenterDelegate {
                 id: id, answer: answer, choice: nil, link: nil, person: model.pounceRecipient(title: title), opens: opens)
         case .pick(let id, let target, let from, let title):
             model.showPick(PickRequest(id: id, target: target, from: from, link: nil, person: model.pounceRecipient(title: title)))
+        case .kittens(let kitten):
+            model.showKittens(focus: kitten)
+        case .revoke(let kitten):
+            await model.kittens.revoke(kitten: kitten)
         }
     }
 }

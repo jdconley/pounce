@@ -1883,6 +1883,15 @@
   "batch": "habit"
  },
  {
+  "name": "icon-resend",
+  "dest": "imageset",
+  "points": [
+   28,
+   28
+  ],
+  "batch": "habit"
+ },
+ {
   "name": "AppIcon",
   "dest": "appicon",
   "points": [

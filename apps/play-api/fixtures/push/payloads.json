@@ -556,5 +556,27 @@
         "cat": 2
       }
     }
+  },
+  {
+    "name": "consent",
+    "collapseId": "consent:k_demoMochiAAAAAAAAAAAAAA",
+    "priority": 10,
+    "body": {
+      "aps": {
+        "alert": {
+          "title": "Mochi",
+          "body": "You allowed notifications on this child's Pounce. To take it back, press and hold for Revoke, or tap to open Kittens."
+        },
+        "sound": "default",
+        "thread-id": "consent",
+        "mutable-content": 1,
+        "category": "CONSENT",
+        "interruption-level": "active",
+        "relevance-score": 0.8,
+        "badge": 2
+      },
+      "kind": "consent",
+      "kitten": "k_demoMochiAAAAAAAAAAAAAA"
+    }
   }
 ]

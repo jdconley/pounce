@@ -13,6 +13,8 @@ public enum PushKind: String, Sendable {
     case pounce
     case pounceAnswered = "pounce_answered"
     case dismiss
+    /// Parent consent's confirmation on the parent's own device (consent design D6).
+    case consent
     case unknown
 }
 
@@ -21,6 +23,8 @@ public enum PushCategory: String, CaseIterable, Sendable {
     case yourMove = "YOUR_MOVE"
     case reminder = "REMINDER"
     case pounce = "POUNCE"
+    /// Parent consent's confirmation: Revoke.
+    case consent = "CONSENT"
     case status = "STATUS"
 }
 
@@ -114,6 +118,8 @@ public struct PushPayload: Equatable, Sendable {
     public var pounce: Pounce?
     public var streak: Streak?
     public var pair: String?
+    /// A consent push's kitten (`k_…`), the public id the Kittens panel uses.
+    public var kitten: String?
 
     /// Nil only when `userInfo` has nothing of ours at all.
     public init?(userInfo: [AnyHashable: Any]) {
@@ -131,6 +137,13 @@ public struct PushPayload: Equatable, Sendable {
         pounce = Self.pounce(userInfo["pounce"])
         streak = Self.streak(userInfo["streak"])
         pair = userInfo["pair"] as? String
+        kitten = (userInfo["kitten"] as? String).flatMap { Self.isKittenId($0) ? $0 : nil }
+    }
+
+    /// `k_` and base64url characters (play-api's `KID` has 22; the server checks it again).
+    private static func isKittenId(_ s: String) -> Bool {
+        guard s.hasPrefix("k_"), (3...66).contains(s.count) else { return false }
+        return s.dropFirst(2).allSatisfy { $0.isASCII && ($0.isLetter || $0.isNumber || $0 == "_" || $0 == "-") }
     }
 
     private static func int(_ v: Any?) -> Int? {

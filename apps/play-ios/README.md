@@ -127,7 +127,8 @@ then the build setting (Debug: `http://localhost:8787`, optionally overridden by
 - Parent consent (daily habit PR 9): `-demo-kitten locked|held|pending|on` is a kitten's own device
   (with `-age-band kitten`; `-kitten-held` keeps the significant change owed) and `-demo-kittens` a
   parent's Kittens panel (with `-stub-accounts signed-in`), both from `DemoKittenService` with no
-  server. The notice page loads from the server. `KittenTests` drives them, and saves screenshots
+  server. The demo's Twilio Verify code is `135790`; `-open-kittens <k_…>` opens the panel on that
+  kitten as a consent notification's tap does. The notice page loads from the server. `KittenTests` drives them, and saves screenshots
   when the runner sets `TEST_RUNNER_KITTEN_SHOTS_DIR` (`TEST_RUNNER_KITTEN_SHOTS_ORIENTATION=landscape`
   on an iPad).
 
@@ -343,7 +344,8 @@ submission fails with Apple's message in the log.
 
 - Parent consent (daily habit PR 9) needs no new capability: PermissionKit and `AppTransaction` need
   no entitlement, and Declared Age Range already has one (PR 2). It needs the App Store Server Notifications URL in App Store
-  Connect and the Twilio secrets (root README).
+  Connect and the four Twilio Verify secrets (root README). Its confirmation push uses a new
+  notification category, `CONSENT`, with a Revoke button; no portal change.
 
 - The live table (daily habit PR 7) needs no new App ID, capability or key: Live Activities ride on
   the app's Push Notifications capability (`NSSupportsLiveActivities` in its Info.plist), and the

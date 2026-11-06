@@ -151,6 +151,31 @@ import Testing
         #expect(NotifyActions.outcome(action: "LATER", payload: pick) == .answer(id: id, .later, opensApp: false))
     }
 
+    @Test func consentsPlusOpensKittensAndRevokes() throws {
+        let plus = try payload("consent")
+        let kid = "k_demoMochiAAAAAAAAAAAAAA"
+        #expect(plus.kind == .consent)
+        #expect(plus.category == .consent)
+        #expect(plus.kitten == kid)
+        #expect(plus.code == nil)
+        #expect(NotifyActions.actions(for: .consent) == [.revoke])
+        #expect(!NotifyAction.revoke.foreground)
+        #expect(NotifyAction.revoke.destructive)
+        #expect(!NotifyAction.play.destructive)
+        #expect(NotifyActions.outcome(action: tap, payload: plus) == .kittens(kid))
+        #expect(NotifyActions.outcome(action: "REVOKE", payload: plus) == .revokeConsent(kid))
+        #expect(NotifyActions.outcome(action: "IN_AN_HOUR", payload: plus) == .none)
+        // A kitten id that isn't one is dropped: nothing to open or revoke.
+        var body = try #require(try Fixtures.pushPayloads().first { $0.name == "consent" }).body
+        body["kitten"] = "p_notAKitten"
+        let bad = try #require(PushPayload(userInfo: body))
+        #expect(bad.kitten == nil)
+        #expect(NotifyActions.outcome(action: tap, payload: bad) == .none)
+        #expect(NotifyActions.outcome(action: "REVOKE", payload: bad) == .none)
+        // Revoke on anything else does nothing.
+        #expect(NotifyActions.outcome(action: "REVOKE", payload: try payload("your_move")) == .none)
+    }
+
     @Test func statusTapsOpenWhatTheyNameOrNothing() throws {
         #expect(NotifyActions.outcome(action: tap, payload: try payload("nap")) == .none)
         #expect(NotifyActions.outcome(action: tap, payload: try payload("pounce_answered-play")) == .open("NWCDF"))

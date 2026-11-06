@@ -11,6 +11,8 @@ public final class DemoKittenService: KittenService, Sendable {
     }
 
     public static let code = "482913"
+    /// The code the demo's Twilio Verify "texts"; any other is wrong.
+    public static let verifyCode = "135790"
     public static let mochi = "k_demoMochiAAAAAAAAAAAAAA"
     public static let biscuit = "k_demoBiscuitAAAAAAAAAAAA"
 
@@ -24,7 +26,8 @@ public final class DemoKittenService: KittenService, Sendable {
         state = Mutex((status, Self.parentKittens()))
     }
 
-    /// Mochi waits on the text; Biscuit is on, with Apple's Communication Limits deciding.
+    /// Mochi waits on the parent's number; Biscuit is on and confirmed, with Apple's Communication
+    /// Limits deciding.
     public static func parentKittens() -> [ParentKitten] {
         [
             ParentKitten(
@@ -35,7 +38,7 @@ public final class DemoKittenService: KittenService, Sendable {
                     KittenPerson(pair: "pr_demoKikiAAAAAAAAAAAAAA", name: "Kiki", cat: 6, approved: false, parent: false),
                 ]),
             ParentKitten(
-                id: biscuit, name: "Biscuit", cat: 7, state: .on, mode: .apple,
+                id: biscuit, name: "Biscuit", cat: 7, state: .on, confirmed: true, mode: .apple,
                 people: [
                     KittenPerson(pair: "pr_demoNovaAAAAAAAAAAAAAA", name: "Nova", cat: 5, approved: true, parent: false),
                     KittenPerson(pair: "pr_demoLeoAAAAAAAAAAAAAAA", name: "Leo", cat: 1, approved: false, parent: false),
@@ -69,8 +72,20 @@ public final class DemoKittenService: KittenService, Sendable {
         }
     }
 
-    public func startConsent(kitten: String, phone: String) async throws { edit(kitten) { $0.state = .texted } }
-    public func revokeConsent(kitten: String) async throws { edit(kitten) { $0.state = .pending } }
+    public func startConsent(kitten: String, phone: String) async throws { edit(kitten) { $0.state = .code } }
+    public func resendConsent(kitten: String) async throws {}
+
+    public func checkConsent(kitten: String, code: String) async throws {
+        guard code == Self.verifyCode else { throw APIError.server(422) }
+        edit(kitten) { $0.state = .on }
+    }
+
+    public func revokeConsent(kitten: String) async throws {
+        edit(kitten) {
+            $0.state = .pending
+            $0.confirmed = false
+        }
+    }
     public func unlink(kitten: String) async throws { state.withLock { $0.kittens.removeAll { $0.id == kitten } } }
 
     private func edit(_ id: String, _ change: (inout ParentKitten) -> Void) {
