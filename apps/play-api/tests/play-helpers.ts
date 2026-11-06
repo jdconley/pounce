@@ -122,6 +122,8 @@ export async function worker(
     streaks?: boolean;
     notify?: boolean;
     live?: boolean;
+    /** `TROPHY` (your own streak, the trophy room, connections on accept). */
+    trophy?: boolean;
     persist?: string;
     links?: boolean;
     sent: Sent[];
@@ -162,6 +164,7 @@ export async function worker(
       ...(options.streaks === false ? {} : { STREAKS: "on" }),
       ...(options.notify === false ? {} : { NOTIFY: "on" }),
       ...(options.live ? { LIVE: "on" } : {}),
+      ...(options.trophy ? { TROPHY: "on" } : {}),
       ...(options.consent && options.consentFlag !== false ? { CONSENT: "on" } : {}),
       ...(options.consent && options.twilio !== false ? TWILIO : {}),
     },
@@ -260,6 +263,12 @@ export async function eventually<T>(read: () => Promise<T> | T, ok: (value: T) =
   return value;
 }
 
+/**
+ * A whole player id in JSON: `"p_"` plus 22 base64url characters. Checking for the bare text `p_` flakes, because other
+ * random ids are base64url too and contain `p_` about once in a few hundred (`k_…zp_8…`).
+ */
+export const PLAYER_ID_JSON = /"p_[A-Za-z0-9_-]{22}"/;
+
 export const settle = (ms = 300) => new Promise((resolve) => setTimeout(resolve, ms));
 
 /** A socket that keeps every frame and its latest snapshot. */
@@ -289,8 +298,8 @@ export class Client {
     }
   }
 
-  async until(ok: (s: Snapshot) => boolean): Promise<Snapshot> {
-    const end = Date.now() + 5000;
+  async until(ok: (s: Snapshot) => boolean, ms = 5000): Promise<Snapshot> {
+    const end = Date.now() + ms;
     while (!(this.last && ok(this.last))) {
       if (Date.now() > end) throw new Error("snapshot never matched");
       await new Promise((resolve) => setTimeout(resolve, 20));

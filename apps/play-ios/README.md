@@ -107,6 +107,12 @@ then the build setting (Debug: `http://localhost:8787`, optionally overridden by
   `-show-us` opens on the Us screen and `-show-gift` opens its first gift (screenshots). Demo tables
   carry the standard look, so the paw menu's look tray and the game over's Play again show; a demo's
   Play again deals a demo table under `NWCDF`.
+- The strip, the trophy room and adding people (trophy room design): with `-demo-streaks` the list also
+  carries your own streak (12, a nap yesterday) and `DemoTrophyService` serves the trophy room from
+  the demo pairs; `-demo-streaks empty` has nobody connected yet (Home's big plus). `-show-trophies`
+  opens the trophy room and `-show-invite` the invite sheet over Home; a kitten's invite under
+  `-demo-streaks` shows the room code `TB4XN`. `TrophyTests` takes the screenshots
+  (`TEST_RUNNER_TROPHY_SHOTS_DIR`, `TEST_RUNNER_TROPHY_SHOTS_ORIENTATION=landscape` on an iPad).
 - Notifications and Pounce (spec §12): with `-demo-streaks`, `DemoPounceService` plays the pounce
   routes in memory (Kiki's pounce waits on you, Nova's bell rests, a send rings Mia's bell).
   `-show-notify` opens the Us screen's settings panel, `-show-pounce` the Pounce sheet, and

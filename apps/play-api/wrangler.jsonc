@@ -28,7 +28,10 @@
     // Parent consent for kittens (daily habit §15 row 9). Needs NOTIFY. On at merge (consent
     // design D4): a kitten's device still gets nothing until a parent links it and types the
     // code Twilio Verify texts them, and that needs the Twilio secrets.
-    "CONSENT": "on"
+    "CONSENT": "on",
+    // Your own streak, the trophy room and connections on accept (trophy room design §5). Needs
+    // STREAKS. On with the PR that ships the app half; off, the server answers as before.
+    "TROPHY": "on"
   },
   "durable_objects": {
     "bindings": [

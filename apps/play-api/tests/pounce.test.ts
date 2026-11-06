@@ -19,6 +19,7 @@ import {
   type Device,
   type Person,
   type Sent,
+  PLAYER_ID_JSON,
 } from "./play-helpers";
 
 import type { PounceRow, PounceView } from "../src/pounce/limits";
@@ -101,7 +102,7 @@ describe("pounce by push (§12.4)", { timeout: 30_000 }, () => {
     });
     expect(push.body).toMatchObject({ kind: "pounce", from: { name: "JD", cat: 1 }, pounce: { id, target: "new" } });
     expect(push.headers["apns-collapse-id"]).toBe(`pounce:${id}`);
-    expect(JSON.stringify(push.body)).not.toContain("p_");
+    expect(JSON.stringify(push.body)).not.toMatch(PLAYER_ID_JSON);
 
     expect((await streakOf(mf, phone, jd)).pounce).toMatchObject({ sent: true, resting: false, waiting: null });
     expect((await streakOf(mf, tablet, mia)).pounce).toMatchObject({ sent: false, waiting: { id, target: "new" } });

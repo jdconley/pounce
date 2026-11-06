@@ -321,4 +321,50 @@ ic -fill "$S" -draw "circle 126,126 126,10" -fill none -stroke "$INK" -strokewid
   -stroke "$L" -strokewidth 28 -draw "arc 52,52 200,200 -20,250" \
   -stroke "$INK" -strokewidth 10 -fill "$L" -draw "polygon 150,30 232,62 160,118" "PNG32:$TMP/resend.png"
 put icon-resend "$TMP/resend.png"
+echo "trophy room (streaks on Home, the trophy room and adding people)"
+# The shelf: a fat magenta plank with a violet lip and two orange brackets.
+magick -size 1080x144 xc:none -stroke "$INK" -strokewidth 14 -fill "$M" -draw "roundrectangle 10,12 1070,74 24,24" \
+  -fill "$V" -draw "roundrectangle 10,58 1070,104 20,20" -fill "$O" -draw "polygon 130,100 200,100 176,138 154,138" \
+  -draw "polygon 880,100 950,100 926,138 904,138" -fill "#FFFFFF66" -strokewidth 0 -draw "roundrectangle 40,22 1040,34 6,6" \
+  "PNG32:$TMP/shelf.png"
+put trophy-shelf "$TMP/shelf.png"
+# The lock on a still-to-earn silhouette: the gold padlock on an orange disc.
+ic -fill "$O" -draw "circle 126,126 126,10" \( "$TMP/lock.png" -resize 170x170 \) -gravity center -geometry +0+4 -composite "PNG32:$TMP/trophy-lock.png"
+put trophy-lock "$TMP/trophy-lock.png"
+# The plus chip (add someone): a fat lime plus on a magenta disc, an orange paw at its foot.
+magick -size 576x576 xc:none -stroke "$INK" -strokewidth 30 -fill "$M" -draw "circle 288,288 288,22" \
+  -fill "$L" -draw "roundrectangle 238,110 338,466 30,30" -draw "roundrectangle 110,238 466,338 30,30" \
+  -strokewidth 0 -fill "$L" -draw "roundrectangle 252,124 324,452 22,22" -draw "roundrectangle 124,252 452,324 22,22" \
+  -stroke "$INK" -strokewidth 14 -fill "$O" -draw "$(paw 430 440 150)" "PNG32:$TMP/chip-plus.png"
+put chip-plus "$TMP/chip-plus.png"
+# The QR frame: a thick violet ring with cat ears on top and magenta corner paws; clear inside.
+magick -size 900x900 xc:none -stroke "$INK" -strokewidth 22 -fill "$V" -draw "polygon 150,190 230,30 330,170" \
+  -draw "polygon 750,190 670,30 570,170" -fill "$M" -strokewidth 0 -draw "polygon 196,160 236,82 290,156" \
+  -draw "polygon 704,160 664,82 610,156" -stroke "$INK" -strokewidth 22 -fill none \
+  -draw "roundrectangle 60,120 840,880 90,90" -stroke "$V" -strokewidth 60 -draw "roundrectangle 60,120 840,880 90,90" \
+  -stroke "$INK" -strokewidth 10 -draw "roundrectangle 100,160 800,840 60,60" \
+  -fill "$O" -stroke "$INK" -strokewidth 10 -draw "$(paw 92 860 120)" -draw "$(paw 808 860 120)" "PNG32:$TMP/qr-frame.png"
+put qr-frame "$TMP/qr-frame.png"
+# Records: your own streak (a magenta paw on an orange disc with a lime star), your best (the gold
+# crown on violet), the longest pair streak (two paws, magenta and teal, on sky), total days (an
+# orange calendar with a magenta paw) and perfect weeks (seven lime dots around a gold star).
+STARS="$(src fx-star)"
+ic -fill "$O" -draw "circle 126,126 126,10" -strokewidth 10 -fill "$M" -draw "$(paw 126 140 150)" \
+  \( "$STARS" -resize 90x90 \) -gravity northeast -geometry +6+6 -composite "PNG32:$TMP/rec-own.png"
+put icon-record-own "$TMP/rec-own.png"
+ic -fill "$V" -draw "circle 126,126 126,10" \( "$CROWN" -resize 180x180 \) -gravity center -composite "PNG32:$TMP/rec-best.png"
+put icon-record-best "$TMP/rec-best.png"
+ic -fill "$S" -draw "circle 126,126 126,10" -strokewidth 10 -fill "$M" -draw "$(paw 94 136 120)" -fill "$T" -draw "$(paw 162 120 120)" \
+  "PNG32:$TMP/rec-pair.png"
+put icon-record-pair "$TMP/rec-pair.png"
+ic -fill "$O" -draw "roundrectangle 22,40 230,230 26,26" -fill "$W" -draw "roundrectangle 22,40 230,94 26,26" \
+  -fill "$INK" -draw "roundrectangle 66,16 90,62 8,8" -draw "roundrectangle 162,16 186,62 8,8" \
+  -strokewidth 10 -fill "$M" -draw "$(paw 126 168 120)" "PNG32:$TMP/rec-days.png"
+put icon-record-days "$TMP/rec-days.png"
+dots=(); for k in 0 1 2 3 4 5 6; do
+  dots+=(-draw "$(awk -v k="$k" 'BEGIN{a=(k*360/7-90)*3.14159/180; x=126+cos(a)*92; y=126+sin(a)*92; printf "circle %d,%d %d,%d", x, y, x+20, y}')")
+done
+ic -fill "$V" -draw "circle 126,126 126,10" -strokewidth 8 -fill "$L" "${dots[@]}" \( "$STARS" -resize 110x110 \) -gravity center -composite \
+  "PNG32:$TMP/rec-weeks.png"
+put icon-record-weeks "$TMP/rec-weeks.png"
 echo "habit placeholders done"

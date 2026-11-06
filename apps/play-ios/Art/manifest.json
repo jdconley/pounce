@@ -1892,6 +1892,87 @@
   "batch": "habit"
  },
  {
+  "name": "trophy-shelf",
+  "dest": "imageset",
+  "points": [
+   360,
+   48
+  ],
+  "batch": "habit"
+ },
+ {
+  "name": "trophy-lock",
+  "dest": "imageset",
+  "points": [
+   28,
+   28
+  ],
+  "batch": "habit"
+ },
+ {
+  "name": "chip-plus",
+  "dest": "imageset",
+  "points": [
+   64,
+   64
+  ],
+  "batch": "habit"
+ },
+ {
+  "name": "qr-frame",
+  "dest": "imageset",
+  "points": [
+   300,
+   300
+  ],
+  "batch": "habit"
+ },
+ {
+  "name": "icon-record-own",
+  "dest": "imageset",
+  "points": [
+   28,
+   28
+  ],
+  "batch": "habit"
+ },
+ {
+  "name": "icon-record-best",
+  "dest": "imageset",
+  "points": [
+   28,
+   28
+  ],
+  "batch": "habit"
+ },
+ {
+  "name": "icon-record-pair",
+  "dest": "imageset",
+  "points": [
+   28,
+   28
+  ],
+  "batch": "habit"
+ },
+ {
+  "name": "icon-record-days",
+  "dest": "imageset",
+  "points": [
+   28,
+   28
+  ],
+  "batch": "habit"
+ },
+ {
+  "name": "icon-record-weeks",
+  "dest": "imageset",
+  "points": [
+   28,
+   28
+  ],
+  "batch": "habit"
+ },
+ {
   "name": "AppIcon",
   "dest": "appicon",
   "points": [

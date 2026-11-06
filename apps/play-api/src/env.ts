@@ -44,6 +44,11 @@ export interface Env {
    */
   CONSENT?: string;
   /**
+   * Your own streak, the trophy room and connections on accept (trophy room design §5) when
+   * "on", and only with `STREAKS` on too. wrangler.jsonc turns it on.
+   */
+  TROPHY?: string;
+  /**
    * Twilio Verify, for parent consent (consent design D1, D6). Secrets, optional: all four or
    * nothing is sent, so consent can't start. Verify texts a six-digit code from Twilio's own
    * pre-registered senders, so Pounce needs no phone number of its own and no 10DLC.

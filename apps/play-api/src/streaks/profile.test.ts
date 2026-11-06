@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { consentOn, liveOn, notifyOn, quietStartMinutes, streaksOn } from "./profile";
+import { consentOn, liveOn, notifyOn, quietStartMinutes, streaksOn, trophyOn } from "./profile";
 
 import type { Json } from "../players/parse";
 
@@ -58,5 +58,15 @@ describe("consentOn", () => {
     expect(consentOn({ NOTIFY: "on", CONSENT: "on" })).toBe(false);
     expect(consentOn({ STREAKS: "on", NOTIFY: "on", CONSENT: "off" })).toBe(false);
     for (const on of ["on", "1", "true", "ON"]) expect(consentOn({ STREAKS: "on", NOTIFY: "on", CONSENT: on })).toBe(true);
+  });
+});
+
+describe("trophyOn", () => {
+  it("needs TROPHY on top of STREAKS (the trophy room and the own streak)", () => {
+    expect(trophyOn({})).toBe(false);
+    expect(trophyOn({ STREAKS: "on" })).toBe(false);
+    expect(trophyOn({ TROPHY: "on" })).toBe(false);
+    expect(trophyOn({ STREAKS: "on", TROPHY: "off" })).toBe(false);
+    for (const on of ["on", "1", "true", "ON"]) expect(trophyOn({ STREAKS: "on", TROPHY: on })).toBe(true);
   });
 });

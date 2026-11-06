@@ -262,7 +262,7 @@ describe("streaks", { timeout: 30_000 }, () => {
     expect(forJd).toMatchObject({ pair: pairId, person: jd.id, view: { me: true, them: true, partner: { name: "Mia", cat: 2 } } });
     const forMia = await b.find<StreakMessage>((m) => isStreak(m) && m.view.count === 1);
     expect(forMia).toMatchObject({ pair: pairId, person: mia.id, view: { partner: { name: "JD", cat: 1 } } });
-    expect(JSON.stringify(forJd)).not.toContain("p_");
+    expect(JSON.stringify(forJd)).not.toMatch(/"p_[A-Za-z0-9_-]{22}"/);
 
     const [listed] = await streaks(mf, phone, jd);
     expect(listed).toMatchObject({ pair: pairId, count: 1, pinned: false, partner: { name: "Mia", cat: 2 } });

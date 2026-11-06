@@ -43,6 +43,14 @@ final class AppModel {
     private(set) var tipsReplays = 0
     /// The owner's shared streaks (spec §7–§10), and what each table socket says about them.
     let streaks: StreakStore
+    /// The owner's trophy room (trophy room design §3).
+    let trophies: TrophyStore
+    /// The invite sheet is up (trophy room design §4), over Home or the trophy room.
+    var inviteShown = false
+    /// The last invite link, shown again for an hour (`InviteLink`).
+    @ObservationIgnored private var inviteLink: InviteLink?
+    /// A kitten's last invite table, shown again for an hour (`InviteCode`).
+    @ObservationIgnored private var inviteCode: InviteCode?
     /// The condo stage this phone last showed per pair, so a new stage drops in once (§9.5).
     private(set) var condoSeen: [String: Int]
     @ObservationIgnored private let condoSeenURL: URL
@@ -114,10 +122,15 @@ final class AppModel {
         let demoStreaks = Self.debugStreaks(arguments: CommandLine.arguments)
         streaks = StreakStore(service: demoStreaks ?? api)
         let pounceService: any PounceService = (demoStreaks as? DemoStreakService).map { DemoPounceService(streaks: $0) } ?? api
+        let trophyOff: any TrophyService = TrophiesOffService()
+        let trophyService: any TrophyService =
+            (demoStreaks as? DemoStreakService).map { DemoTrophyService(streaks: $0) } ?? (demoStreaks == nil ? api : trophyOff)
         #else
         streaks = StreakStore(service: api)
         let pounceService: any PounceService = api
+        let trophyService: any TrophyService = api
         #endif
+        trophies = TrophyStore(service: trophyService)
         pounces = PounceStore(service: pounceService, file: dataDirectory.appendingPathComponent("pounce-answers.json"))
         #if DEBUG
         let kittenService: any KittenService = Self.debugKittens(arguments: CommandLine.arguments) ?? api
@@ -128,6 +141,7 @@ final class AppModel {
         if age?.band == .kitten { kittens.person = loaded.owner?.id }
         notify = NotifySettingsStore(file: dataDirectory.appendingPathComponent("notify-settings.json"))
         streaks.person = loaded.owner?.id
+        trophies.person = loaded.owner?.id
         #if DEBUG
         // Demos and UI tests write demo data for the widgets, which then never fetch (no server).
         let args = CommandLine.arguments
@@ -192,12 +206,16 @@ final class AppModel {
             model.peopleStore.add(name: "Sam", cat: 6)
             model.people = model.peopleStore.load()
             model.streaks.person = model.people.owner?.id
+            model.trophies.person = model.people.owner?.id
             // Screens for screenshots: no push priming over them.
             model.settings.pushPrimed = true
             if model.ageRecord != nil { model.route = .home }
         }
         // `-show-us`: open on the Us screen (UI tests, screenshots).
         if arguments.contains("-show-us"), model.people.owner != nil, model.ageRecord != nil { model.route = .us }
+        // `-show-trophies` / `-show-invite`: the trophy room, or the invite sheet over Home (UI tests, screenshots).
+        if arguments.contains("-show-trophies"), model.people.owner != nil, model.ageRecord != nil { model.route = .trophies }
+        if arguments.contains("-show-invite"), model.people.owner != nil, model.ageRecord != nil { model.inviteShown = true }
         // `-show-merge`: the two-cats question over the gear sheet (screenshots).
         if arguments.contains("-show-merge") {
             model.account.merge = .init(mine: 4, theirs: 2, theirName: StubAccountService.other.name, asking: true)
@@ -241,10 +259,15 @@ final class AppModel {
 
     #if DEBUG
     /// `-demo-streaks`: the streak routes from `DemoFixtures.streaks()`, no server; `-demo-streaks off`:
-    /// a server with streaks off (every list is a 404).
+    /// a server with streaks off (every list is a 404); `-demo-streaks empty`: the trophy room on and
+    /// nobody connected yet (Home's big plus).
     private static func debugStreaks(arguments: [String]) -> (any StreakService)? {
         guard let i = arguments.firstIndex(of: "-demo-streaks") else { return nil }
-        return arguments[safe: i + 1] == "off" ? StreaksOffService() : DemoStreakService()
+        switch arguments[safe: i + 1] {
+        case "off": return StreaksOffService()
+        case "empty": return DemoStreakService(DemoFixtures.emptyStreaks())
+        default: return DemoStreakService()
+        }
     }
 
     /// `-demo-kitten <locked|held|pending|on>` and `-demo-kittens`: the consent routes in memory.
@@ -446,6 +469,65 @@ final class AppModel {
         syncWidgets()
     }
 
+    // MARK: The trophy room and adding people (trophy room design §1, §3, §4)
+
+    /// The trophy room, from your own streak's chip or the Us screen's trophy.
+    func showTrophies() {
+        guard people.owner != nil else { return }
+        closeRoom()
+        route = .trophies
+    }
+
+    func refreshTrophies() async {
+        trophies.person = people.owner?.id
+        await trophies.refresh()
+    }
+
+    /// The plus: the invite sheet.
+    func showInvite() {
+        guard people.owner != nil else { return }
+        inviteShown = true
+    }
+
+    /// The invite sheet's Messages link (PR 5's link pounce, target "new"): the kept one when it's
+    /// under an hour old, nobody new connected since and the server says nobody answered it yet,
+    /// else a new one; while the bell rests, a kept one nobody used. Nil on a kitten's device, and
+    /// when there's none to show.
+    func inviteURL() async -> URL? {
+        guard InviteLink.mode(limits) == .link else { return nil }
+        let pairs = streaks.pairs.map(\.pair)
+        if let kept = inviteLink, kept.reusable(now: .now, pairs: pairs), await unused(kept) { return kept.url }
+        if let url = await sharePounce(target: .new) {
+            inviteLink = InviteLink(url: url, at: .now, pairs: Set(pairs))
+            return url
+        }
+        if let kept = inviteLink, kept.usableWhileResting(now: .now, pairs: pairs), await unused(kept) { return kept.url }
+        return nil
+    }
+
+    /// Any answer to a link (Play, In a bit, Not now) uses it up: the server's preview says so.
+    private func unused(_ link: InviteLink) async -> Bool {
+        guard let token = link.token else { return false }
+        return await pounces.link(token: token) != nil
+    }
+
+    /// A kitten's invite (§14.1): a new table whose code and QR are for in-person play only, the
+    /// same one again within the hour.
+    func inviteTable() async -> String? {
+        if let kept = inviteCode, kept.reusable(now: .now) { return kept.code }
+        #if DEBUG
+        if CommandLine.arguments.contains("-demo-streaks") { return "TB4XN" }
+        #endif
+        guard let code = try? await api.createRoom() else { return nil }
+        inviteCode = InviteCode(code: code, at: .now)
+        return code
+    }
+
+    /// The kitten's invite table was opened: the next plus makes a new one.
+    func inviteTableUsed() {
+        inviteCode = nil
+    }
+
     /// A table socket's `{t:"streak"}`: the store takes it (its stamp plays at the table), and the
     /// widgets see the owner's new paws.
     @discardableResult
@@ -505,6 +587,7 @@ final class AppModel {
 
     func showUs(openingGift gift: String? = nil, pair: String? = nil) {
         guard people.owner != nil else { return }
+        inviteShown = false
         closeRoom()
         pendingGift = gift
         pendingPair = pair
@@ -604,6 +687,8 @@ final class AppModel {
     }
 
     func open(code: String, intent: RoomIntent) {
+        // A push tap or a link while the invite sheet is up: the table, not the sheet over it.
+        inviteShown = false
         push?.cancelSnoozes(codes: [code])
         // Back at this table in the app: its live table goes now (spec §11.3).
         Task { await liveTables.sweep(entering: code) }
@@ -1174,6 +1259,7 @@ final class AppModel {
 
     func goHome() {
         guard people.owner != nil else { return }
+        inviteShown = false
         closeRoom()
         cache = tableCache.all()
         route = .home

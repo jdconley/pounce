@@ -25,6 +25,14 @@ struct RootView: View {
             }
         }
         .animation(.easeOut(duration: 0.25).paced, value: model.pick)
+        .overlay {
+            // The plus (trophy room design §4): over Home or the trophy room.
+            if model.inviteShown {
+                InviteSheet()
+                    .transition(.opacity)
+            }
+        }
+        .animation(.easeOut(duration: 0.25).paced, value: model.inviteShown)
         // A consent notification's tap (consent design D6): the Kittens panel on that kitten.
         .sheet(item: Binding(get: { model.kittensPanel }, set: { model.kittensPanel = $0 })) { request in
             KittensSheet(focus: request.focus)
@@ -41,6 +49,7 @@ struct RootView: View {
         case .pickCat: "pickCat"
         case .home: "home"
         case .us: "us"
+        case .trophies: "trophies"
         case .join: "join"
         case .room(let code, _): "room-\(code)"
         }
@@ -56,6 +65,8 @@ struct RootView: View {
             HomeView()
         case .us:
             UsView()
+        case .trophies:
+            TrophyRoomView()
         case .join:
             JoinView()
         case .room(let code, let intent):

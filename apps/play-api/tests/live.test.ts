@@ -47,13 +47,22 @@ const alertsTo = (token: string) => sent.filter((s) => s.token === token && s.he
 const aps = (s: Sent | undefined) => (s as Sent).body.aps as LiveAps;
 
 /** JD on a phone (seat 0, with a push-to-start token) and Mia on a tablet (seat 1), at a started table. */
+/** A fixed-offset zone where the local hour is `hour` right now, so quiet hours never depend on when the suite runs. */
+function zoneAt(hour: number): string {
+  const k = (((new Date().getUTCHours() - hour) % 24) + 24) % 24;
+  return k <= 12 ? `Etc/GMT+${k}` : `Etc/GMT-${24 - k}`;
+}
+
 async function setUp(mf: Miniflare, options: { band?: string; zone?: string; startToken?: boolean } = {}) {
   const phone = await mint(mf);
   const tablet = await mint(mf);
   const jd = newPerson("JD", 1);
   const mia = newPerson("Mia", 2);
-  await profile(mf, phone, [jd], { apns: JD_APNS, ...(options.band ? { band: options.band } : {}), ...(options.zone ? { zone: options.zone } : {}) });
-  await profile(mf, tablet, [mia], { apns: MIA_APNS });
+  // Midday unless a test asks otherwise: outside an adult's 22:00–08:00 quiet hours whenever it runs. Both in one zone, so
+  // they share a streak day.
+  const zone = options.zone ?? zoneAt(12);
+  await profile(mf, phone, [jd], { apns: JD_APNS, ...(options.band ? { band: options.band } : {}), zone });
+  await profile(mf, tablet, [mia], { apns: MIA_APNS, zone });
   if (options.startToken !== false) {
     expect((await call(mf, phone, "PUT", "/v1/devices/me/live-activity", { pushToStart: JD_START })).status).toBe(204);
   }
@@ -314,8 +323,7 @@ describe("ending (§11.3)", { timeout: 30_000 }, () => {
 describe("quiet hours (§12.3)", { timeout: 30_000 }, () => {
   test("the move coming to JD in his quiet hours updates the live table without ringing", async () => {
     // A zone where it's 23:00 now: inside an adult's 22:00–08:00.
-    const k = (((new Date().getUTCHours() - 23) % 24) + 24) % 24;
-    const zone = k <= 12 ? `Etc/GMT+${k}` : `Etc/GMT-${24 - k}`;
+    const zone = zoneAt(23);
     const mf = await start();
     const s = await setUp(mf, { zone });
     await liveForJd(mf, s);
