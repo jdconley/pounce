@@ -51,7 +51,7 @@ Opened from your own streak chip, and from the Us screen's top bar.
 - **The connection appears on accept (D2):** answering the link creates the pair at once at count 0, deals a new table for both, and shows the new chip on both Homes.
 - No contacts sync and no usernames (§14).
 - **Kittens** (§14.1, unchanged):
-  - A kitten's device can't send links, so the plus there shows the six numerals of a **room code** and its QR instead, for in-person play only.
+  - A kitten's device can't send links, so the plus there shows a **room code** (the same five-character code the lobby shows) and its `/j/` QR instead, for in-person play only.
   - A kitten *can* accept an invite, because nothing is collected from them.
   - Pushes still follow PR 9's consent rules.
 
