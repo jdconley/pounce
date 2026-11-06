@@ -194,9 +194,12 @@ final class KittenTests: XCTestCase {
         XCTAssertTrue(biscuit.isSelected, "the panel isn't on the notification's kitten")
         XCTAssertFalse(el(app, "kittens.card.0").isSelected)
         XCTAssertEqual(value(biscuit), "confirmed")
+        // The panel scrolled to it: its buttons show.
+        let revoke = el(app, "kittens.revoke.1")
+        XCTAssertTrue(until(3) { revoke.isHittable }, "the panel didn't scroll to the notification's kitten")
         shot(app, "kittens-confirmed")
         // Its revoke, as the notification's Revoke button does in the background.
-        el(app, "kittens.revoke.1").tap()
+        revoke.tap()
         XCTAssertTrue(until(3) { self.value(biscuit) == "pending" }, "revoke didn't take")
     }
 

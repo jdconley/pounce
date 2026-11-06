@@ -169,7 +169,10 @@ struct KittensSheet: View {
                 .scrollBounceBehavior(.basedOnSize)
                 .task {
                     await model.kittens.refreshKittens()
-                    if let focus { withAnimation(.easeOut(duration: 0.3).paced) { proxy.scrollTo(focus, anchor: .center) } }
+                    guard let focus else { return }
+                    // After the loaded cards have laid out; the top of the card, so its buttons show.
+                    try? await Task.sleep(for: .milliseconds(150))
+                    withAnimation(.easeOut(duration: 0.3).paced) { proxy.scrollTo(focus, anchor: .top) }
                 }
             }
             if linking {
