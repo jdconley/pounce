@@ -52,3 +52,12 @@ export function liveOn(env: { STREAKS?: string; NOTIFY?: string; LIVE?: string }
 export function consentOn(env: { STREAKS?: string; NOTIFY?: string; CONSENT?: string }): boolean {
   return notifyOn(env) && ON.includes((env.CONSENT ?? "").toLowerCase());
 }
+
+/**
+ * Your own streak, the trophy room and connections on accept (trophy room
+ * design §5) need `TROPHY` on top of `STREAKS`. Off, the server answers
+ * exactly as before. wrangler.jsonc turns it on: the app half ships with it.
+ */
+export function trophyOn(env: { STREAKS?: string; TROPHY?: string }): boolean {
+  return streaksOn(env) && ON.includes((env.TROPHY ?? "").toLowerCase());
+}

@@ -3,7 +3,7 @@ import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 
 import { devSpeed } from "./env";
-import { liveOn, notifyOn, streaksOn } from "./streaks/profile";
+import { liveOn, notifyOn, streaksOn, trophyOn } from "./streaks/profile";
 
 describe("devSpeed", () => {
   it("is 1 unless DEV_SPEED is a number above 1", () => {
@@ -52,5 +52,14 @@ describe("LIVE in production", () => {
     const read = (key: string) => new RegExp(`"${key}"\\s*:\\s*"([^"]*)"`).exec(config)?.[1];
     expect(read("LIVE")).toBeDefined();
     expect(liveOn({ STREAKS: read("STREAKS"), NOTIFY: read("NOTIFY"), LIVE: read("LIVE") })).toBe(true);
+  });
+});
+
+describe("TROPHY in production", () => {
+  it("is on in wrangler.jsonc, with STREAKS, so trophyOn accepts it (the app half ships with it)", () => {
+    const config = readFileSync(new URL("../wrangler.jsonc", import.meta.url), "utf8");
+    const read = (key: string) => new RegExp(`"${key}"\\s*:\\s*"([^"]*)"`).exec(config)?.[1];
+    expect(read("TROPHY")).toBeDefined();
+    expect(trophyOn({ STREAKS: read("STREAKS"), TROPHY: read("TROPHY") })).toBe(true);
   });
 });
