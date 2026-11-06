@@ -65,7 +65,7 @@ export function isBigMilestone(n: number): boolean {
 }
 
 /** Lifetime days together at which the condo gains a stage (§9.1). */
-const CONDO = [1, 3, 7, 14, 30, 50, 100, 150, 200, 365];
+export const CONDO: readonly number[] = [1, 3, 7, 14, 30, 50, 100, 150, 200, 365];
 
 export function condoStage(lifetimeKept: number): number {
   return CONDO.filter((t) => lifetimeKept >= t).length;
