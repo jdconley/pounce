@@ -127,6 +127,9 @@ final class TrophyTests: XCTestCase {
         let app = launch()
         let add = el(app, "home.add")
         XCTAssertTrue(add.waitForExistence(timeout: Live.t(10)))
+        // On a phone the plus is last in a strip that scrolls sideways.
+        let screen = app.windows.firstMatch.frame
+        for _ in 0..<4 where !screen.contains(add.frame) { el(app, "home.strip").swipeLeft() }
         add.tap()
         XCTAssertTrue(el(app, "sheet-invite").waitForExistence(timeout: Live.t(5)), "no invite sheet")
         let qr = el(app, "invite.qr")
