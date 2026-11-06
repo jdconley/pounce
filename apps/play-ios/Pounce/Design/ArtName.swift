@@ -212,6 +212,22 @@ enum ArtName {
         static let iconBellOff = "icon-bell-off"
         /// Another code to the parent's phone.
         static let iconResend = "icon-resend"
+
+        // Streaks on Home, the trophy room and adding people.
+        /// The plank the trophy room's shelf items stand on.
+        static let trophyShelf = "trophy-shelf"
+        /// The lock on a still-to-earn silhouette.
+        static let trophyLock = "trophy-lock"
+        /// The strip's plus: add someone.
+        static let chipPlus = "chip-plus"
+        /// The invite sheet's frame around the QR code.
+        static let qrFrame = "qr-frame"
+        /// The five personal records: your own streak, your best, the longest pair streak, total days, perfect weeks.
+        static let iconRecordOwn = "icon-record-own"
+        static let iconRecordBest = "icon-record-best"
+        static let iconRecordPair = "icon-record-pair"
+        static let iconRecordDays = "icon-record-days"
+        static let iconRecordWeeks = "icon-record-weeks"
     }
 
     // MARK: Sounds (Resources/Sounds/<name>.caf, 44.1 kHz mono)
