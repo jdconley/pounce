@@ -128,7 +128,7 @@
 30. **Tests:** fixture CA, intermediate and leaf made with OpenSSL (`fixtures/appstore/`, test-only), with the root passed in. Production code pins only Apple's root; there's no env override. The Miniflare entry reaches the handler with the fixture root through a test hook.
 
 **Pages and notice**
-31. `/privacy/kitten-notice` is a draft for JD (D4) with the §312.4(c) contents:
+31. `/privacy/kitten-notice` (approved by counsel 2026-11-06, D4) has the §312.4(c) contents:
     - who we are and how to reach us;
     - that we collected the parent's mobile number to get consent;
     - what consent allows us to collect from the child (a push token, and the people the child plays with) and why;
@@ -310,7 +310,7 @@ JD chose Twilio Verify so Pounce needs no phone number of its own and no A2P 10D
 52. **The panel** gains `confirmed` on `ParentKitten` (the plus was delivered); the card's bell gets a check, or a small hourglass while it's owed.
 53. **App.** The notice sheet becomes notice, number, then the code: six tiles and `DigitKeys` (`consent.*` ids; six numerals check themselves), a loop arrow for another code (dim for 30 s, bouncing once Verify says the code expired), the phone for another number, and the hourglass when resting. After the right code the app asks iOS for notifications if it hasn't yet, because the plus needs them. A `CONSENT` category with a background, destructive, authentication-required **Revoke** action calls `DELETE /v1/kittens/{k}/consent`; a tap opens the Kittens panel on that kitten (`AppModel.showKittens(focus:)`, Debug `-open-kittens <k_…>`). New placeholder art: `icon-resend_ph`.
 54. **Removed:** the confirm and revoke pages (`GET`/`POST /consent/{token}`, now 404), `/v1/twilio/inbound` and its `X-Twilio-Signature` check, `isStop`, Messaging sends, deleting texts by SID, `TWILIO_AUTH_TOKEN` and `TWILIO_MESSAGING_SERVICE_SID`. `KittenIndex` drops its `tokens` and `phones` tables; `Consents` drops its `sids`, `revoke_token` and `origin` rows; a stored record in the old shape is upgraded on read (one waiting on a texted link goes back to pending, its number deleted). Revoking stays available from the app, the push's Revoke, `RESCIND_CONSENT` and every lifecycle path.
-55. **Judgment call, for counsel:** 16 CFR 312.5(b)(2) gives the text plus confirmatory contact as an example ("such as"). The push to the parent's own device stands in for the second text; counsel should confirm it qualifies. If not, the fallback is Verify's custom template (2 to 4 weeks) or a Messaging number with 10DLC for one text.
+55. **Approved by counsel (2026-11-06):** 16 CFR 312.5(b)(2) gives the text plus confirmatory contact as an example ("such as"). The push to the parent's own device stands in for the second text, and counsel approved it. If that changes, the fallback is Verify's custom template (2 to 4 weeks) or a Messaging number with 10DLC for one text.
 
 **After the whole-branch review of the Verify change** (Opus; findings fixed test-first)
 
