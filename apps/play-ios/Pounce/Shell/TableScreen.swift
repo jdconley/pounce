@@ -133,6 +133,24 @@ struct ConnectingView: View {
     }
 }
 
+/// The table stage's layers, bottom to top (its `zIndex` values). A view with no `zIndex` sits at
+/// 0 with the SpriteKit table, under every named layer, so each overlay names its own. The streak
+/// badge belongs to the top bar it hangs under (the scene draws that bar): just over the table and
+/// under everything the table puts up over it, so no dialog has the badge on top. Sheets (the paw
+/// menu and its look tray) are presented over the whole stage and need no layer.
+enum TableLayer {
+    /// The streak badge, with the opponents bar it hangs under.
+    static let topBar: Double = 1
+    /// The scoreboard and its phase ladder (tap the tower).
+    static let scoreboard: Double = 2
+    static let turnCue: Double = 4
+    static let coach: Double = 5
+    static let lookPill: Double = 6
+    static let curtain: Double = 10
+    static let priming: Double = 15
+    static let gameOver: Double = 20
+}
+
 /// The SpriteKit table for one session. Owns the scene (made once, kept across redraws) and shows
 /// pass-and-play (spec §5.9) as the store decides it (`RoomStore.pass`, updated with every room
 /// the store applies). The curtain is read from the store in `body`, never from state an
@@ -248,7 +266,7 @@ private struct TableStage: View {
                 }
                 .ignoresSafeArea()
                 .transition(.scale.combined(with: .opacity))
-                .zIndex(3)
+                .zIndex(TableLayer.topBar)
             }
             if let pill = lookPill, let seat = table?.room.seats[safe: pill.seat] {
                 VStack {
@@ -258,13 +276,13 @@ private struct TableStage: View {
                 }
                 .transition(.move(edge: .top).combined(with: .opacity))
                 .allowsHitTesting(false)
-                .zIndex(6)
+                .zIndex(TableLayer.lookPill)
             }
             probes
             if let cue = turnCue {
                 TurnCueView(cue: cue, yield: coach.tip != nil && coachView != nil)
                     .transition(.opacity.combined(with: .scale(scale: cue.isMine ? 0.85 : 1)))
-                    .zIndex(4)
+                    .zIndex(TableLayer.turnCue)
             }
             if let tip = coach.tip, let shown = coachView, shown.person.id == coach.person {
                 CoachMark(
@@ -279,7 +297,7 @@ private struct TableStage: View {
                     })
                     .id(tip)
                     .transition(.scale(scale: 0.85).combined(with: .opacity))
-                    .zIndex(5)
+                    .zIndex(TableLayer.coach)
             }
             if let board = events.scoreboard, events.winners == nil, board.game != nil {
                 // The table as the scene drew it when the tower was tapped, not the store's
@@ -288,6 +306,7 @@ private struct TableStage: View {
                     events.scoreboard = nil
                 }
                     .transition(.opacity)
+                    .zIndex(TableLayer.scoreboard)
             }
             if let seat = curtainSeat {
                 // The container drops in and lifts away; a curtain for someone else swaps
@@ -302,7 +321,7 @@ private struct TableStage: View {
                     .transition(.identity)
                 }
                 .transition(curtainTransition)
-                .zIndex(10)
+                .zIndex(TableLayer.curtain)
                 .overlay(alignment: .topLeading) {
                     if peeking {
                         // A peek the person didn't mean: back to the table, nothing shown.
@@ -328,7 +347,7 @@ private struct TableStage: View {
                         model.declinePush()
                     })
                     .transition(.opacity)
-                    .zIndex(15)
+                    .zIndex(TableLayer.priming)
             }
             if let winners = events.winners {
                 GameOverView(
@@ -340,7 +359,7 @@ private struct TableStage: View {
                     again: againState,
                     onPlayAgain: tapPlayAgain)
                     .transition(.opacity)
-                    .zIndex(20)
+                    .zIndex(TableLayer.gameOver)
             }
         }
         .animation(.easeOut(duration: 0.2).paced, value: events.scoreboard != nil)
