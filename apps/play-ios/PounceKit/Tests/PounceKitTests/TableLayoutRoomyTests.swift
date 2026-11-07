@@ -63,7 +63,7 @@ struct TableLayoutRoomyTests {
             #expect(l.opponentSlots.count == opp)
             for p in l.opponentSlots { #expect(l.opponentsBar.contains(p)) }
             #expect(s.contains(cardRect(l.deck, l.cardSize)) && s.contains(cardRect(l.discard, l.cardSize)))
-            #expect(s.contains(l.towerFrame) && s.contains(l.traysFrame))
+            #expect(s.contains(l.towerFrame) && s.contains(l.traysFrame) && s.contains(l.towerTab))
             #expect(s.contains(l.sortButtonFrame) && s.contains(l.seatTagFrame))
             for n in 1...14 {
                 for c in l.hand(count: n, lifted: nil) {
@@ -82,7 +82,7 @@ struct TableLayoutRoomyTests {
             for total in [opp + 1, 6] {
                 let rows = (0..<total).map { l.laidRow(slot: $0, of: total) }
                 var regions: [(String, CGRect)] = [
-                    ("deck", deck), ("discard", discard), ("tower", l.towerFrame), ("trays", l.traysFrame),
+                    ("deck", deck), ("discard", discard), ("towerTab", l.towerTab), ("trays", l.traysFrame),
                     ("bar", l.opponentsBar), ("sort", l.sortButtonFrame), ("seatTag", l.seatTagFrame),
                 ]
                 for (i, r) in rows.enumerated() {
@@ -94,7 +94,12 @@ struct TableLayoutRoomyTests {
                     #expect(!regions[i].1.intersects(regions[j].1), "\(regions[i].0) overlaps \(regions[j].0) at \(l.size), \(total) seats")
                 } }
             }
-            #expect(l.seatTagFrame.minX > l.towerFrame.maxX)
+            #expect(l.seatTagFrame.minX > l.towerTab.maxX)
+            #expect(abs(l.laidZone.midX - l.size.width / 2) < 0.001)
+            #expect(abs((l.deck.x + l.discard.x) / 2 - l.size.width / 2) < 0.001)
+            for n in 1...14 {
+                for c in l.hand(count: n, lifted: n / 2) { #expect(!rotatedBounds(c, l.cardSize).intersects(l.towerTab)) }
+            }
         }
     }
 

@@ -230,6 +230,18 @@ extension XCTestCase {
         app.coordinate(withNormalizedOffset: .zero).withOffset(CGVector(dx: frame.midX, dy: frame.midY)).tap()
     }
 
+    /// Taps the folded tower's tab and waits for the tower to open (its value then lists every
+    /// seat's phase). By coordinate: the open tower's element starts at the screen's left edge,
+    /// where XCUITest finds no hit point for it.
+    @discardableResult
+    func openTower(_ app: XCUIApplication) -> XCUIElement {
+        let tower = el(app, "table.tower")
+        XCTAssertNil(value(tower), "the tower should start folded")
+        tap(app, tower.frame)
+        XCTAssertTrue(until(3) { !(value(tower) ?? "").isEmpty }, "the tower didn't open")
+        return tower
+    }
+
     /// Holds the curtain's paw (past its hold time, at the test speed) if the curtain is up in
     /// `snap`; returns the name on it. Presses by coordinate, so a curtain that lifts on its own
     /// (round over) doesn't fail the test.

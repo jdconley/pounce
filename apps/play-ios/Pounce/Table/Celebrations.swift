@@ -299,12 +299,14 @@ extension TableScene {
             if !animating { announceGameOver(model.game?.winners ?? []) }
         } else if celebration.focused, !animating {
             endFocus()
+            foldTower(animated: false)
         }
     }
 
     // MARK: spotlight
 
-    /// Dims the table and zooms the tower so `rect` (tower space) fills the middle-left.
+    /// Dims the table and zooms the tower so `rect` (tower space) fills the middle-left. The
+    /// folded tower springs open as the zoom starts.
     private func focusTower(on rect: CGRect) async {
         let t = CelebrationTiming.self
         let towerLayer = layer(.tower)
@@ -312,6 +314,7 @@ extension TableScene {
         let target = CGPoint(x: size.width * 0.36, y: size.height * 0.5)
         let center = CGPoint(x: rect.midX, y: rect.midY)
         let position = CGPoint(x: target.x - center.x * scale, y: target.y - center.y * scale)
+        openTower()
         celebration.focused = true
         towerLayer.zPosition = Layer.drag.rawValue + 4
         let veil = celebration.veil ?? makeVeil(in: self, alpha: 0)
@@ -327,9 +330,13 @@ extension TableScene {
         // Landed flyers (a card just discarded, say) sit in the fx layer above the veil: they
         // fade with the table and the next reconcile replaces them.
         // Dark enough that the table (melds, badges, piles) drops away behind the tower.
-        var items: [(SKAction, SKNode)] = [(zoom, towerLayer), (.fadeAlpha(to: Self.veilAlpha, duration: t.zoomIn), veil)]
+        var items: [(SKAction, SKNode)] = [
+            (zoom, towerLayer), (.fadeAlpha(to: Self.veilAlpha, duration: t.zoomIn), veil),
+            (.fadeOut(withDuration: t.zoomIn), tower.panel),  // the spotlight is the tower's backing
+        ]
         for node in transients { items.append((.fadeOut(withDuration: t.zoomIn), node)) }
         await director.runAll(items, decorative: true)
+        await tower.settled()
     }
 
     /// How dark the spotlight veil gets over the table.
@@ -340,11 +347,14 @@ extension TableScene {
         let towerLayer = layer(.tower)
         var items: [(SKAction, SKNode)] = [
             (.group([.scale(to: 1, duration: t.zoomOut), .move(to: .zero, duration: t.zoomOut)]).eased(.easeInEaseOut), towerLayer),
+            (.fadeIn(withDuration: t.zoomOut), tower.panel),
         ]
         if let veil = celebration.veil { items.append((.fadeOut(withDuration: t.zoomOut), veil)) }
         tower.hideSunburst(duration: t.zoomOut)
         await director.runAll(items, decorative: true)
         endFocus()
+        foldTower()  // back down to its tab once the climb is seen
+        await tower.settled()
     }
 
     /// Puts the tower layer back at once.
@@ -354,6 +364,8 @@ extension TableScene {
         towerLayer.position = .zero
         towerLayer.alpha = 1
         towerLayer.zPosition = Layer.tower.rawValue
+        director.cancelActions(on: tower.panel)
+        tower.panel.alpha = 1
         celebration.veil?.removeFromParent()
         celebration.veil = nil
         celebration.focused = false

@@ -7,6 +7,12 @@ import UIKit
 /// phase 10 sits on the top cushion; once the game is over the winners there wear a crown in
 /// the `celebrate` pose with the sunburst behind them.
 ///
+/// Folded by default (`isOpen` false): only `tab` shows, a squat tower on a chip at the
+/// tower's foot (`TableLayout.towerTab`) wearing the shown hand's phase number. Open, the
+/// whole tower springs up from its foot over the table's left edge on a dark backing panel.
+/// `setOpen` moves between the two; nothing `update` sets is touched by it, so a redraw
+/// never stops it half way.
+///
 /// `leap` and `crown` are the Shelf leap and Win verbs (spec §9.1); they move only what
 /// `update` sets again, so a reconcile mid-way snaps every head to the truth.
 @MainActor
@@ -15,6 +21,20 @@ final class TowerNode: SKNode {
     var director: AnimationDirector?
     weak var fx: SKNode?
 
+    /// Scales about the tower's foot to open and fold it; `content` inside it gives back the
+    /// tower's own space (this node's), so nothing else changes while it is open.
+    private let body = SKNode()
+    private let content = SKNode()
+    /// The open tower's dark backing; a celebration's spotlight fades it away.
+    let panel = SKSpriteNode()
+    /// The folded tower, at the tower's foot.
+    let tab = SKNode()
+    private let tabChip = SKSpriteNode()
+    private let tabBadge = SKSpriteNode(texture: TableArt.table(ArtName.shelfBadge))
+    private let tabNumber = SKSpriteNode()
+    private var tabPhase: Int?
+    /// The whole tower shows (else just the tab).
+    private(set) var isOpen = false
     private let structure = SKNode()
     private let heads = SKNode()
     private let sunburst = SKSpriteNode(texture: TableArt.table(ArtName.sunburst))
@@ -36,21 +56,38 @@ final class TowerNode: SKNode {
 
     override init() {
         super.init()
+        panel.zPosition = -1
         sunburst.zPosition = -0.5  // behind the structure, inside the tower's z band
         sunburst.isHidden = true
         structure.zPosition = 0
         heads.zPosition = 5  // above every structure piece (layers stay inside a 10-wide z band)
-        addChild(sunburst)
-        addChild(structure)
-        addChild(heads)
+        addChild(body)
+        body.addChild(content)
+        content.addChild(panel)
+        content.addChild(sunburst)
+        content.addChild(structure)
+        content.addChild(heads)
+        addChild(tab)
+        tab.zPosition = 6
+        tabChip.zPosition = 0
+        tab.addChild(tabChip)
+        tabBadge.zPosition = 3
+        tabNumber.zPosition = 0.01
+        tabBadge.addChild(tabNumber)
+        tab.addChild(tabBadge)
+        snap(open: false)
     }
 
     @available(*, unavailable)
     required init?(coder aDecoder: NSCoder) { fatalError("init(coder:) is not used") }
 
     func update(model: TableModel, layout: TableLayout) {
-        if builtFor != layout.towerFrame { build(layout) }
         self.layout = layout
+        if builtFor != layout.towerFrame || tabBuiltFor != layout.towerTab { build(layout) }
+        let foot = CGPoint(x: layout.towerFrame.midX, y: layout.towerFrame.minY)
+        body.position = foot
+        content.position = CGPoint(x: -foot.x, y: -foot.y)
+        tab.position = CGPoint(x: layout.towerTab.midX, y: layout.towerTab.midY)
         guard let game = model.game else {
             heads.removeAllChildren()
             headNodes.removeAll()
@@ -131,6 +168,114 @@ final class TowerNode: SKNode {
         let b = spot(shelf: high, index: 0, of: 1)
         let w = layout?.towerFrame.width ?? 44
         return CGRect(x: min(a.x, b.x) - w / 2, y: min(a.y, b.y) - 24, width: w, height: abs(b.y - a.y) + 64)
+    }
+
+    // MARK: open and fold
+
+    /// The open tower's tap area, in this node's space: the tower and its backing panel.
+    static func openFrame(_ layout: TableLayout) -> CGRect {
+        panelRect(layout).intersection(CGRect(origin: .zero, size: layout.size))
+    }
+
+    /// The phase number the tab wears (0-based, `shelfCount` or more: finished), nil for none.
+    func showPhase(_ phase: Int?) {
+        let shown = phase.map { min(max($0, 0), TableLayout.shelfCount) }
+        guard shown != tabPhase || tabNumber.texture == nil else { return }
+        tabPhase = shown
+        tabBadge.isHidden = shown == nil
+        guard let shown, let layout else { return }
+        let d = tabBadge.size.width
+        if shown >= TableLayout.shelfCount {
+            tabNumber.texture = TableArt.image(ArtName.iconTrophy)
+            tabNumber.size = CGSize(width: d * 0.6, height: d * 0.6)
+        } else {
+            let k = layout.towerTab.width / TableLayout.sortButtonHit
+            let digits = CardFaceFactory.shared.numeral(String(shown + 1), size: (12 * k).rounded(), outline: 2)
+            tabNumber.texture = digits
+            tabNumber.size = digits.size()
+        }
+        tabNumber.position = CGPoint(x: 0, y: -1)
+    }
+
+    /// The open or fold motion running now, if any (`settled` waits for it).
+    private var motion: Task<Void, Never>?
+
+    /// Waits until the last `setOpen` motion is done.
+    func settled() async { await motion?.value }
+
+    /// Opens the tower (it springs up out of the tab) or folds it back down into the tab.
+    /// Reduce Motion: the two cross-fade. Calling it again mid-way turns it around from where
+    /// it is. `isOpen` changes at once; the motion runs on (`settled`).
+    func setOpen(_ open: Bool, animated: Bool) {
+        guard open != isOpen else { return }
+        isOpen = open
+        director?.cancelActions(on: body)
+        director?.cancelActions(on: tab)
+        guard animated, let director else {
+            motion = nil
+            return snap(open: open)
+        }
+        let reduce = UIAccessibility.isReduceMotionEnabled
+        var items: [(SKAction, SKNode)] = []
+        if open {
+            Sound.shared.play(ArtName.Sound.sfxPop, volume: 0.6)
+            let wasHidden = body.isHidden
+            body.isHidden = false
+            if reduce {
+                body.setScale(1)
+                items.append((.fadeIn(withDuration: 0.18), body))
+            } else {
+                if wasHidden {  // grows from its foot, however it was last folded away
+                    body.xScale = Self.foldedScale.width
+                    body.yScale = Self.foldedScale.height
+                }
+                body.alpha = 1
+                items.append((.group([
+                    .sequence([
+                        .scaleY(to: 1.08, duration: 0.2).eased(.easeOut),
+                        .scaleY(to: 1, duration: 0.1).eased(.easeInEaseOut),
+                    ]),
+                    .scaleX(to: 1, duration: 0.2).eased(.easeOut),
+                ]), body))
+            }
+            items.append((.sequence([.group([.fadeOut(withDuration: 0.12), .scale(to: reduce ? 1 : 0.5, duration: 0.12)]), .hide()]), tab))
+        } else {
+            tab.isHidden = false
+            if reduce {
+                tab.setScale(1)
+                items.append((.fadeIn(withDuration: 0.18), tab))
+                items.append((.sequence([.fadeOut(withDuration: 0.18), .hide()]), body))
+            } else {
+                items.append((.sequence([
+                    .wait(forDuration: 0.12),
+                    .group([.fadeIn(withDuration: 0.08), .scale(to: 1.12, duration: 0.12).eased(.easeOut)]),
+                    .scale(to: 1, duration: 0.08).eased(.easeInEaseOut),
+                ]), tab))
+                items.append((.sequence([
+                    .group([
+                        .scaleY(to: Self.foldedScale.height, duration: 0.2).eased(.easeIn),
+                        .scaleX(to: Self.foldedScale.width, duration: 0.2).eased(.easeIn),
+                        .sequence([.wait(forDuration: 0.12), .fadeOut(withDuration: 0.08)]),
+                    ]),
+                    .hide(),
+                ]), body))
+            }
+        }
+        motion = Task { await director.runAll(items, decorative: true) }
+    }
+
+    /// The folded tower's squash, about its foot.
+    private static let foldedScale = CGSize(width: 0.7, height: 0.04)
+
+    /// Open or folded at once, no motion.
+    private func snap(open: Bool) {
+        body.isHidden = !open
+        body.alpha = open ? 1 : 0
+        body.xScale = open ? 1 : Self.foldedScale.width
+        body.yScale = open ? 1 : Self.foldedScale.height
+        tab.isHidden = open
+        tab.alpha = 1
+        tab.setScale(1)
     }
 
     // MARK: Shelf leap
@@ -333,8 +478,24 @@ final class TowerNode: SKNode {
         return node
     }
 
+    private var tabBuiltFor: CGRect?
+
+    /// The open tower's backing panel, in tower space: a little past the tower's sides (its
+    /// shelf badges stick out right) and ends, running off the left edge. The top leaves room
+    /// for a (crowned) head on the top cushion.
+    private static func panelRect(_ layout: TableLayout) -> CGRect {
+        let f = layout.towerFrame
+        return CGRect(x: f.minX - 16, y: f.minY - 6, width: f.width + 16 + 12, height: f.height + 6 + 18)
+    }
+
     private func build(_ layout: TableLayout) {
         builtFor = layout.towerFrame
+        tabBuiltFor = layout.towerTab
+        buildTab(layout)
+        let panelFrame = Self.panelRect(layout)
+        panel.texture = Self.panelTexture(panelFrame.size)
+        panel.size = panelFrame.size
+        panel.position = CGPoint(x: panelFrame.midX, y: panelFrame.midY)
         structure.removeAllChildren()
         if headSize != layout.towerHeadSize {
             // New head size (the window resized): every head is made again at it.
@@ -377,5 +538,63 @@ final class TowerNode: SKNode {
         topCenter = top.position
         let burst = min(260, layout.size.width * 0.7)
         sunburst.size = CGSize(width: burst, height: burst)
+    }
+
+    /// The tab: a squat tower (the base with the top cushion sat right on it) on a round chip,
+    /// and the shown hand's phase number on a shelf badge at its top right.
+    private func buildTab(_ layout: TableLayout) {
+        let side = layout.towerTab.width
+        tabChip.texture = Self.chipTexture(side)
+        tabChip.size = CGSize(width: side + 8, height: side + 8)
+        tabChip.position = CGPoint(x: 0, y: -1)
+        tabChip.removeAllChildren()
+        let w = side * 0.78
+        let base = SKSpriteNode(texture: TableArt.table(ArtName.towerBase), size: CGSize(width: w, height: w * 34 / 44))
+        base.position = CGPoint(x: 0, y: -side * 0.22)
+        base.zPosition = 1
+        let top = SKSpriteNode(texture: TableArt.table(ArtName.towerTop), size: CGSize(width: w, height: w * 40 / 44))
+        top.position = CGPoint(x: 0, y: base.position.y + side * 0.34)
+        top.zPosition = 2
+        tabChip.addChild(base)
+        tabChip.addChild(top)
+        let d = (side * 0.5).rounded()
+        tabBadge.size = CGSize(width: d, height: d)
+        tabBadge.position = CGPoint(x: side * 0.42, y: side * 0.36)
+        tabNumber.texture = nil  // drawn again at this size
+        let phase = tabPhase
+        tabPhase = nil
+        showPhase(phase)
+    }
+
+    /// A dark round chip with a teal ring and an ink outline, a hard shadow under it.
+    private static func chipTexture(_ side: CGFloat) -> SKTexture {
+        let d = side + 8
+        let image = UIGraphicsImageRenderer(size: CGSize(width: d, height: d)).image { _ in
+            let circle = CGRect(x: 4, y: 2, width: side, height: side)
+            UIColor(Palette.ink).withAlphaComponent(0.55).setFill()
+            UIBezierPath(ovalIn: circle.offsetBy(dx: 0, dy: 3)).fill()
+            UIColor(Palette.ink).setFill()
+            UIBezierPath(ovalIn: circle).fill()
+            UIColor(Palette.teal).setFill()
+            UIBezierPath(ovalIn: circle.insetBy(dx: 2, dy: 2)).fill()
+            UIColor(Palette.night).setFill()
+            UIBezierPath(ovalIn: circle.insetBy(dx: 6, dy: 6)).fill()
+        }
+        return SKTexture(image: image)
+    }
+
+    /// The open tower's backing: a dark rounded panel with an ink outline and a violet rim.
+    private static func panelTexture(_ size: CGSize) -> SKTexture {
+        guard size.width > 0, size.height > 0 else { return SKTexture() }
+        let image = UIGraphicsImageRenderer(size: size).image { _ in
+            let r = CGRect(origin: .zero, size: size)
+            UIColor(Palette.ink).setFill()
+            UIBezierPath(roundedRect: r, cornerRadius: 18).fill()
+            UIColor(Palette.violet).setFill()
+            UIBezierPath(roundedRect: r.insetBy(dx: 3, dy: 3), cornerRadius: 15).fill()
+            UIColor(Palette.night).withAlphaComponent(0.96).setFill()
+            UIBezierPath(roundedRect: r.insetBy(dx: 6, dy: 6), cornerRadius: 12).fill()
+        }
+        return SKTexture(image: image)
     }
 }
