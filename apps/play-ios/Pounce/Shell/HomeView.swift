@@ -228,13 +228,15 @@ struct HomeView: View {
     }
 
     @ViewBuilder private var tablesRow: some View {
-        let items = model.homeItems
+        let items = shownItems
         let archivedCount = model.archivedItems.count
         if !items.isEmpty || archivedCount > 0 {
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 14) {
                     ForEach(items) { item in
-                        TableCard(item: item, streakPaw: model.streaks.completesToday(code: item.id)) {
+                        TableCard(
+                            item: item, people: model.tablePeople(item), streakPaw: model.streaks.completesToday(code: item.id)
+                        ) {
                             model.open(code: item.id, intent: .rejoin)
                         }
                         .contextMenu {
@@ -365,7 +367,7 @@ struct HomeView: View {
     }
 
     private func tableCard(_ item: HomeTableItem) -> some View {
-        TableCard(item: item, streakPaw: model.streaks.completesToday(code: item.id)) {
+        TableCard(item: item, people: model.tablePeople(item), streakPaw: model.streaks.completesToday(code: item.id)) {
             model.open(code: item.id, intent: .rejoin)
         }
         .contextMenu {
@@ -387,16 +389,19 @@ struct HomeView: View {
 
     #if DEBUG
     private static let demoItems: [HomeTableItem] = {
-        func seats(_ cats: [Int], open: Int = 0) -> [CachedSeat] {
-            cats.enumerated().map { CachedSeat(kind: .human, name: "Cat \($0.offset)", cat: $0.element, yours: $0.offset == 0) }
+        // Your seat first, then the others: Mia, Kiki and Nova are `-demo-streaks`' connections.
+        func seats(_ others: [(String, Int)], open: Int = 0, bots: Int = 0) -> [CachedSeat] {
+            [CachedSeat(kind: .human, name: "You", cat: 2, yours: true)]
+                + others.map { CachedSeat(kind: .human, name: $0.0, cat: $0.1) }
+                + Array(repeating: CachedSeat(kind: .bot), count: bots)
                 + Array(repeating: CachedSeat(kind: .open), count: open)
         }
         return [
-            HomeTableItem(id: "M3W7Z", name: "Friday Night Cats", yourTurn: true, status: "playing", seats: seats([2, 0]), turnCat: 2, updatedAt: 0),
-            HomeTableItem(id: "K9PQR", name: "Sunday Brunch", yourTurn: false, status: "playing", seats: seats([2, 4, 6]), turnCat: 4, updatedAt: 0),
-            HomeTableItem(id: "TB4XN", name: "Couch League", yourTurn: false, status: "lobby", seats: seats([2], open: 2), turnCat: nil, updatedAt: 0),
-            HomeTableItem(id: "GH2VD", name: "Rematch", yourTurn: false, status: "over", seats: seats([2, 5]), turnCat: 5, updatedAt: 0),
-            HomeTableItem(id: "WZ8CM", name: "Road Trip", yourTurn: true, status: "playing", seats: seats([2, 1, 3, 7]), turnCat: 2, updatedAt: 0),
+            HomeTableItem(id: "M3W7Z", name: "Friday Night Cats", yourTurn: true, status: "playing", seats: seats([("Mia", 2)]), turnCat: 2, updatedAt: 0),
+            HomeTableItem(id: "K9PQR", name: "Sunday Brunch", yourTurn: false, status: "playing", seats: seats([("Biscuit", 4), ("Kiki", 6)]), turnCat: 4, updatedAt: 0),
+            HomeTableItem(id: "TB4XN", name: "Couch League", yourTurn: false, status: "lobby", seats: seats([], open: 2), turnCat: nil, updatedAt: 0),
+            HomeTableItem(id: "GH2VD", name: "Rematch", yourTurn: false, status: "over", seats: seats([], bots: 1), turnCat: 3, updatedAt: 0),
+            HomeTableItem(id: "WZ8CM", name: "Road Trip", yourTurn: true, status: "playing", seats: seats([("Pickle", 1), ("Nova", 5), ("Clementine", 3)]), turnCat: 2, updatedAt: 0),
         ]
     }()
     #endif

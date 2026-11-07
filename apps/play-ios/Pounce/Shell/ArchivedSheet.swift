@@ -83,7 +83,7 @@ struct ArchivedSheet: View {
                     columns: [GridItem(.adaptive(minimum: TableCard.size.width), spacing: 14)], spacing: 18
                 ) {
                     ForEach(items) { item in
-                        TableCard(item: item, identifier: "archived.table.\(item.id)") {
+                        TableCard(item: item, people: model.tablePeople(item), identifier: "archived.table.\(item.id)") {
                             Haptics.shared.success()
                             Sound.shared.play(ArtName.Sound.sfxPop)
                             model.restore(code: item.id)

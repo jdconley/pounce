@@ -119,6 +119,28 @@ import Testing
         #expect(entry.next == "NWCDF")
     }
 
+    @Test func tableEntryCarriesSeats() throws {
+        let entry = try JSONDecoder().decode(TableEntry.self, from: Data(
+            #"{"code":"BCDFG","status":"playing","yourTurn":false,"updatedAt":1,"seats":[{"kind":"human","person":{"id":"p1","name":"Sam","cat":4},"yours":true},{"kind":"human","person":{"id":"p2","name":"Clover","cat":1}},{"kind":"bot"},{"kind":"open"}]}"#.utf8))
+        #expect(entry.seats == [
+            TableSeat(kind: .human, person: Person(id: "p1", name: "Sam", cat: 4), yours: true),
+            TableSeat(kind: .human, person: Person(id: "p2", name: "Clover", cat: 1)),
+            TableSeat(kind: .bot), TableSeat(kind: .open),
+        ])
+    }
+
+    @Test func tableEntrySeatsAreOptionalAndNeverBreakTheList() throws {
+        let none = try JSONDecoder().decode(TableEntry.self, from: Data(
+            #"{"code":"BCDFG","status":"lobby","yourTurn":false,"updatedAt":1}"#.utf8))
+        #expect(none.seats == nil)
+        let garbled = try JSONDecoder().decode(TableEntry.self, from: Data(
+            #"{"code":"BCDFG","status":"lobby","yourTurn":false,"updatedAt":1,"seats":"nope"}"#.utf8))
+        #expect(garbled.seats == nil)
+        let odd = try JSONDecoder().decode(TableEntry.self, from: Data(
+            #"{"code":"BCDFG","status":"lobby","yourTurn":false,"updatedAt":1,"seats":[{"kind":"dragon","person":7}]}"#.utf8))
+        #expect(odd.seats == [TableSeat(kind: .closed)])
+    }
+
     @Test func viewRoundTrips() throws {
         guard case .streak(_, _, let view) = try Codec.decode(server("streak")) else { return }
         #expect(try JSONDecoder().decode(StreakView.self, from: JSONEncoder().encode(view)) == view)
