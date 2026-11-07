@@ -93,8 +93,15 @@ public struct TableModel: Equatable, Sendable {
     /// The action carries `side` only when the server's default would put the card elsewhere,
     /// so it means the same to a server that predates `side`.
     public func hitPlan(card: CardID, seat: Seat, target: HitTarget, toward: HitSide) -> HitPlan? {
-        guard hitTargets(card: card, seat: seat).contains(target), let game,
-              let groups = game.laid[target.seat], groups.indices.contains(target.group) else { return nil }
+        guard hitTargets(card: card, seat: seat).contains(target) else { return nil }
+        return plannedHit(card: card, target: target, toward: toward)
+    }
+
+    /// `hitPlan` for a `target` already known to be one of `hitTargets(card:seat:)` (`HitAims`
+    /// checks that once per drag instead of once per touch move).
+    func plannedHit(card: CardID, target: HitTarget, toward: HitSide) -> HitPlan? {
+        guard let game, game.laid.indices.contains(target.seat), let groups = game.laid[target.seat],
+              groups.indices.contains(target.group) else { return nil }
         let group = groups[target.group]
         let other: HitSide = toward == .start ? .end : .start
         guard case .run = group else {

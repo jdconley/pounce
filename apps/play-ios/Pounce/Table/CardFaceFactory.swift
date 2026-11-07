@@ -81,6 +81,23 @@ final class CardFaceFactory {
         return t
     }
 
+    /// The face is already drawn (`texture(for:compact:)` returns it at once).
+    func hasTexture(for card: CardID, compact: Bool = false) -> Bool {
+        faces[FaceKey(card: card, compact: compact)] != nil
+    }
+
+    /// Draws ahead what a drag over the laid groups shows for the first time: the preview
+    /// rings, the "+N" badges a group's gap can fold to and the numbers a Yarn stands for.
+    /// Each is cached, so a second call costs nothing.
+    func prewarmPreview() {
+        _ = ring(UIColor(Palette.lime))
+        _ = ring(UIColor(Palette.refuse))
+        for n in 1...12 {
+            _ = badge("+\(n)", size: LaidZoneNode.badgeSize)
+            _ = badge(String(n), size: LaidZoneNode.badgeSize + 4)
+        }
+    }
+
     /// The open table's card back (§9.4), an art name; cards drawn from now on take it.
     private(set) var backName = ArtName.cardBack
     private var backTextures: [String: SKTexture] = [:]
