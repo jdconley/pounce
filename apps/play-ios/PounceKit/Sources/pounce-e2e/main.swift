@@ -7,7 +7,8 @@
 //        with moveSeat; one line per seat goes to PATH: "<seat> pounce-dev://j/<CODE>?move=<M>")
 //   pounce-e2e join <CODE> [--name Remote] [--cat 4] [--drop-after N [--reconnect-after 3 | --reconnect-file PATH]] [--quit-after N] [--timeout 1800]
 //       (--reconnect-file: stay away until PATH exists, so a slow UI test can't miss the away)
-//   pounce-e2e scenario presence|reconnect|move
+//   pounce-e2e scenario presence|reconnect|move|stall [--stall 20]
+//       (stall: one phone's network goes dead as it plays; prints when each phone shows it)
 //   pounce-e2e peek <CODE>            (one snapshot as a seatless device: turn, step, seats)
 //
 // Every mode takes `--base <url>` (default http://localhost:8787). Exit 0 on success, 1 with a
@@ -58,6 +59,7 @@ struct DeviceView: Sendable {
     var events: [RoomEvent] = []
     var moveCodes: [Seat: String] = [:]
     var connected = false
+    var link: LinkQuality = .good
     var gone: SocketEvent?
 
     var game: GameView? { room?.game }
@@ -131,6 +133,9 @@ actor Device {
             state.connected = true
         case .notFound, .closed:
             state.gone = event
+        case .link(let quality):
+            state.link = quality
+            log("[\(name)] link \(quality)")
         case .message(let message):
             switch message {
             case .snapshot(_, let seq, let room):
@@ -147,7 +152,10 @@ actor Device {
                 state.moveCodes[seat] = code
             case .error(let code):
                 state.errors.append(code)
-            case .streak, .rematch:
+            case .link(let seats):
+                state.room?.seats.indices.forEach { state.room?.seats[$0].link = seats.indices.contains($0) ? seats[$0] : nil }
+                log("[\(name)] seats link \(seats.map { $0?.rawValue ?? "-" })")
+            case .streak, .rematch, .pong:
                 break
             }
         }
@@ -561,8 +569,11 @@ func scenario(_ base: APIConfig, _ o: Options) async throws {
         if await a.view.errors.isEmpty == false { throw Failure("A got errors \(await a.view.errors)") }
         log("ok move: code \(moveCode) moved seat 1 to B; A holds hands [0], B holds [1] and acted for it")
 
+    case "stall":
+        try await stallScenario(base, o)
+
     default:
-        throw Failure("usage: scenario presence|reconnect|move")
+        throw Failure("usage: scenario presence|reconnect|move|stall")
     }
 }
 

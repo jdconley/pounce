@@ -62,27 +62,42 @@ struct TableScreen: View {
         }
     }
 
-    /// The yarn shows once the room is on screen and the socket is down.
-    private var reconnecting: Bool {
+    /// This phone's connection once the room is on screen; a drop shows only after a second
+    /// (a resume from the background reconnects faster than that).
+    @State private var shownConnection: RoomStore.Connection = .good
+
+    private var connection: RoomStore.Connection {
         switch screen {
-        case .lobby, .table: !store.connected
-        default: false
+        case .lobby, .table: store.connection
+        default: .good
         }
     }
 
     var body: some View {
-        ZStack(alignment: .topTrailing) {
+        ZStack(alignment: .top) {
             content
                 .transition(.opacity.combined(with: .scale(scale: 0.96)))
-            if reconnecting {
-                YarnIndicator()
-                    .padding(.trailing, 16)
-                    .padding(.top, 8)
-                    .transition(.scale.combined(with: .opacity))
+            if shownConnection != .good {
+                ConnectionPill(connection: shownConnection)
+                    .padding(.top, connectionTop)
+                    .transition(.move(edge: .top).combined(with: .opacity))
+                    .zIndex(30)
             }
         }
         .animation(.spring(duration: 0.4, bounce: 0.25).paced, value: screen)
-        .animation(.spring(duration: 0.3).paced, value: reconnecting)
+        .animation(.spring(duration: 0.35, bounce: 0.3).paced, value: shownConnection)
+        .task(id: connection) {
+            if connection == .reconnecting, shownConnection == .good {
+                try? await Task.sleep(for: .seconds(1))
+                guard !Task.isCancelled else { return }
+            }
+            if connection != shownConnection, connection != .good {
+                UIAccessibility.post(
+                    notification: .announcement,
+                    argument: connection == .weak ? LinkWords.weak() : LinkWords.reconnecting())
+            }
+            shownConnection = connection
+        }
         .onChange(of: session.model?.mySeats ?? []) { before, after in
             // This phone's last seat left while it held a move code: the move went through
             // (spec §5.11). Home, not the "full" card. The menu sheet is gone with the table.
@@ -93,6 +108,15 @@ struct TableScreen: View {
         }
     }
 
+    /// Just under the table's top bar (its cats and name tags), clear of the hand; in the lobby,
+    /// at the top.
+    private var connectionTop: CGFloat {
+        guard screen == .table else { return 8 }
+        return horizontalSizeClass == .regular ? 196 : 104
+    }
+
+    @Environment(\.horizontalSizeClass) private var horizontalSizeClass
+
     @ViewBuilder private var content: some View {
         switch screen {
         case .connecting:
@@ -100,8 +124,17 @@ struct TableScreen: View {
         case .lobby:
             LobbyView(session: session, interactive: store.connected)
         case .table:
+            // No touches while the socket is down. Not `allowsHitTesting(false)`: that rehosts the
+            // SpriteKit view with no safe area, and the whole table jumps under the status bar.
             TableStage(session: session)
-                .allowsHitTesting(store.connected)
+                .overlay {
+                    if !store.connected {
+                        Color.clear
+                            .contentShape(Rectangle())
+                            .ignoresSafeArea()
+                            .accessibilityHidden(true)
+                    }
+                }
         case .state(let kind):
             StateCard(kind: kind, onRetry: kind == .offline ? { session.retry() } : nil) {
                 model.goHome()
@@ -451,6 +484,15 @@ private struct TableStage: View {
             Task {
                 try? await Task.sleep(for: .milliseconds(900))
                 events.menuOpen = true
+            }
+        }
+        // `-demo pending`: a card goes to the discard by itself, and the demo server never answers.
+        if DemoMode.from() == .pending {
+            Task { [weak scene, session] in
+                try? await Task.sleep(for: .milliseconds(1500))
+                guard let scene, let card = session.store.room?.game?.hands[0]?.first(where: { Card(id: $0) != .cucumber })
+                else { return }
+                scene.tryDiscard(card, target: nil)
             }
         }
         // `-show-scoreboard` (screenshots): the scoreboard over the table as it opens.

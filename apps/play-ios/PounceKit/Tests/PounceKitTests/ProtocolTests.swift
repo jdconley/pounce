@@ -48,6 +48,10 @@ import Testing
         case "leave": return .leave(seat: 1)
         case "rename": return .rename(name: "Taco Night")
         case "renameSeat": return .renameSeat(seat: 1, name: "Mo")
+        case "act-draw-deck-id": return .act(seat: 0, action: .draw(.deck), id: "0F8C1D2E-3A4B-4C5D-8E6F-7A8B9C0D1E2F")
+        case "ping": return .ping
+        case "link-weak": return .link(.weak)
+        case "link-good": return .link(.good)
         default: throw Fixtures.FixtureError.malformed("no sample for client fixture \(name)")
         }
     }
@@ -78,7 +82,7 @@ import Testing
 
     @Test func encodesEveryClientFixture() throws {
         let fixtures = try Fixtures.clientMessages()
-        #expect(fixtures.count == 21)
+        #expect(fixtures.count == 25)
         for (name, json) in fixtures {
             #expect(try jsonEqual(Codec.encode(sample(name)), json), "\(name)")
         }
@@ -91,6 +95,41 @@ import Testing
         }
         #expect(room.name == nil)
         #expect(room.title == "Table BCDFG")
+    }
+
+    // MARK: links (the bad connection indicator)
+
+    @Test func linkSnapshotCarriesAcksAndSeatLinks() throws {
+        guard case .snapshot(_, _, let room) = try Codec.decode(fixture("snapshot-playing-link")) else {
+            Issue.record("not a snapshot"); return
+        }
+        #expect(room.link == RoomLink(ping: 3000, acks: ["move-1"]))
+        #expect(room.seats.map(\.link) == [nil, .lost])
+        // Every other snapshot fixture comes from a server with links off.
+        guard case .snapshot(_, _, let plain) = try Codec.decode(fixture("snapshot-playing-with-hand")) else {
+            Issue.record("not a snapshot"); return
+        }
+        #expect(plain.link == nil)
+    }
+
+    @Test func pongAndLinkMessagesDecode() throws {
+        #expect(try Codec.decode(fixture("pong")) == .pong)
+        #expect(try Codec.decode(fixture("link")) == .link(seats: [nil, .weak, .lost]))
+    }
+
+    @Test func unknownSeatLinkAndPartialRoomLinkStillDecode() throws {
+        let json = #"{"t":"snapshot","protocol":1,"seq":1,"room":{"code":"BCDFG","status":"playing","youAreHost":true,"seats":[{"kind":"human","yours":false,"presence":"awake","link":"wobbly"}],"game":null,"link":{}}}"#
+        guard case .snapshot(_, _, let room) = try Codec.decode(json) else {
+            Issue.record("not a snapshot"); return
+        }
+        #expect(room.seats[0].link == SeatLink(rawValue: "wobbly"))
+        #expect(room.link == RoomLink(ping: 3000, acks: []))
+        #expect(try Codec.decode(#"{"t":"link","seats":["new_kind",null]}"#) == .link(seats: [SeatLink(rawValue: "new_kind"), nil]))
+    }
+
+    @Test func pingEncodesExactlyWhatTheRoomAutoAnswers() throws {
+        #expect(try Codec.encode(.ping) == #"{"t":"ping"}"#)
+        #expect(try Codec.encode(.act(seat: 0, action: .nextRound)) == #"{"action":{"type":"nextRound"},"seat":0,"t":"act"}"#)
     }
 
     @Test func unknownErrorCodeStillDecodes() throws {

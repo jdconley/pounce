@@ -101,7 +101,12 @@ final class TableScene: SKScene {
     private(set) var provisionalCard: CardID?
     private(set) var provisionalNode: CardNode?
     /// What the in-flight action was, so a rejection nopes the right thing.
-    var lastAct: LastAct?
+    var lastAct: LastAct? {
+        didSet { lastAct == nil ? hidePendingMark() : schedulePendingMark() }
+    }
+    /// The hourglass on a move the server hasn't answered for a moment (`PendingMark.swift`).
+    let pendingMark = SKSpriteNode(texture: TableArt.image(ArtName.Habit.iconHourglass))
+    var pendingMarkTask: Task<Void, Never>?
     /// The glows drawn by the last redraw.
     private(set) var glows = Glows()
 
@@ -385,9 +390,14 @@ final class TableScene: SKScene {
         switch intent {
         case .reconcile:
             // A snapshot is the truth: a provisional card is either gone from the hand or back.
-            clearProvisional()
-            lastAct = nil
+            // Not while this phone's move is still pending (sent again after a reconnect): the
+            // card stays where it was played, under its hourglass, until the server has it.
+            if store.pendingMove == nil {
+                clearProvisional()
+                lastAct = nil
+            }
             reconcileFromStore()
+            updatePendingMark()
             #if DEBUG
             timelineLog("reconcile seq \(store.lastSeq) hand \(hand.cards.count) transients \(transients.count)")
             #endif
@@ -432,7 +442,7 @@ final class TableScene: SKScene {
             #if DEBUG
             timelineLog("versusIntro + deal \(ContinuousClock.now - started)")
             #endif
-        case .presence:
+        case .presence, .link:
             reconcileFromStore()
         case .lobbyNope:
             break

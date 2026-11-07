@@ -138,7 +138,15 @@ final class FakeConnector: WebSocketConnector {
     }
 }
 
-/// The injected `sleep`. Ping sleeps (`pingInterval`) wait for `tickPing()`.
+/// The injected clock: time moves only when a test says so.
+final class FakeClock: Sendable {
+    private let time = Mutex<Duration>(.zero)
+    var now: Duration { time.withLock { $0 } }
+    func advance(_ by: Duration) { time.withLock { $0 += by } }
+}
+
+/// The injected `sleep`. Heartbeat ticks (`pingInterval`, passed as the socket's `tick`) wait for
+/// `tickPing()`.
 /// Backoff sleeps are recorded and return at once, or, while `holdBackoff` is
 /// set, wait for `releaseBackoff()` or cancellation.
 final class FakeSleeper: Sendable {
@@ -216,6 +224,19 @@ struct EventReader {
     }
 }
 
+/// Ticks the heartbeat until `condition` holds (a pong still on its way makes a tick skip its ping).
+func tick(_ sleeper: FakeSleeper, until condition: () -> Bool) async -> Bool {
+    for _ in 0..<100 {
+        sleeper.tickPing()
+        for _ in 0..<50 {
+            if condition() { return true }
+            await Task.yield()
+            try? await Task.sleep(for: .microseconds(200))
+        }
+    }
+    return condition()
+}
+
 /// Polls `condition`, yielding in between, for fake state that has no event of its own.
 func eventually(_ condition: () -> Bool) async -> Bool {
     for _ in 0..<5_000 {
@@ -237,11 +258,14 @@ func eventually(_ condition: () -> Bool) async -> Bool {
         try #require(try Fixtures.serverMessages().first { $0.name == "snapshot-lobby" }).json
     }
 
+    private let clock = FakeClock()
+
     private func makeSocket(_ connector: FakeConnector, _ sleeper: FakeSleeper) -> RoomSocket {
         let credential = credential
+        let clock = clock
         return RoomSocket(
             code: "BCDFG", config: config, credential: { credential }, connector: connector,
-            pingInterval: sleeper.pingInterval, sleep: { try await sleeper.sleep($0) })
+            tick: sleeper.pingInterval, clock: { clock.now }, sleep: { try await sleeper.sleep($0) })
     }
 
     @Test func connectsAndForwardsSnapshot() async throws {
@@ -292,10 +316,11 @@ func eventually(_ condition: () -> Bool) async -> Bool {
     @Test func backoffStopsClimbingAtTheLastStep() async throws {
         let connector = FakeConnector(Array(repeating: .failure(.failed("down")), count: 8))
         let sleeper = FakeSleeper()
+        let clock = clock
         let socket = RoomSocket(
             code: "BCDFG", config: config, credential: { [credential] in credential }, connector: connector,
             backoff: [.milliseconds(250), .milliseconds(500), .seconds(1)],
-            pingInterval: sleeper.pingInterval, sleep: { try await sleeper.sleep($0) })
+            tick: sleeper.pingInterval, clock: { clock.now }, sleep: { try await sleeper.sleep($0) })
         var reader = EventReader(socket.events)
 
         await socket.start()
@@ -332,7 +357,8 @@ func eventually(_ condition: () -> Bool) async -> Bool {
         #expect(await reader.rest() == [
             .connecting, .connected, .message(try Codec.decode(frame)), .message(.error(.roomClosed)), .closed,
         ])
-        #expect(conn.isClosed)
+        // The stream ends just before the close goes out.
+        #expect(await eventually { conn.isClosed })
         #expect(connector.calls.count == 1)
         #expect(sleeper.backoffs.isEmpty)
         await #expect(throws: RoomSocketError.notConnected) { try await socket.send(.start) }
@@ -450,9 +476,9 @@ func eventually(_ condition: () -> Bool) async -> Bool {
         await socket.stop()
     }
 
-    @Test func twoConsecutivePingFailuresForceReconnect() async throws {
-        // fail, pong, fail, fail: only the second run of two failures reconnects.
-        let first = FakeConnection(pings: [false, true, false, false])
+    @Test func aSilentConnectionTurnsWeakThenReconnects() async throws {
+        // The first ping is never answered (cellular quietly lost the socket).
+        let first = FakeConnection(pings: [false])
         let second = FakeConnection()
         let connector = FakeConnector([.connection(first), .connection(second)])
         let sleeper = FakeSleeper()
@@ -461,17 +487,61 @@ func eventually(_ condition: () -> Bool) async -> Bool {
 
         await socket.start()
         #expect(await reader.next(2) == [.connecting, .connected])
-        for _ in 0..<4 { sleeper.tickPing() }
+        sleeper.tickPing()  // t=0: the ping goes out
+        #expect(await eventually { first.pings == 1 })
+        clock.advance(.milliseconds(1500))
+        sleeper.tickPing()
+        #expect(await reader.next(1) == [.link(.weak)])
+        clock.advance(.milliseconds(8500))
+        sleeper.tickPing()  // ten seconds with nothing back
 
         #expect(await reader.next(3) == [.disconnected, .connecting, .connected])
-        #expect(first.pings == 4)
         #expect(first.isClosed)
-        #expect(sleeper.backoffs == [.milliseconds(250)])
+        #expect(sleeper.backoffs.isEmpty)  // straight back, no backoff first
 
-        // The new connection gets its own ping loop.
+        // The new connection starts good and gets its own heartbeat.
         sleeper.tickPing()
         #expect(await eventually { second.pings == 1 })
-        #expect(first.pings == 4)
+        #expect(first.pings == 1)
+        await socket.stop()
+    }
+
+    @Test func appPingsOnceTheServerHasLinks() async throws {
+        let snapshot = try #require(try Fixtures.serverMessages().first { $0.name == "snapshot-playing-link" }).json
+        let conn = FakeConnection(frames: [snapshot])
+        let sleeper = FakeSleeper()
+        let socket = makeSocket(FakeConnector([.connection(conn)]), sleeper)
+        var reader = EventReader(socket.events)
+
+        await socket.start()
+        #expect(await reader.next(3).count == 3)  // connecting, connected, the snapshot
+        sleeper.tickPing()
+        #expect(await eventually { conn.sent == [#"{"t":"ping"}"#] })
+        #expect(conn.pings == 0)  // no WebSocket ping once the server takes app pings
+
+        // A slow pong: weak, and the other phones are told.
+        clock.advance(.seconds(2))
+        conn.push(#"{"t":"pong"}"#)
+        #expect(await reader.next(1) == [.link(.weak)])
+        #expect(await eventually { conn.sent.last == #"{"state":"weak","t":"link"}"# })
+
+        // Two quick ones: good again.
+        for count in 2...3 {
+            clock.advance(.seconds(3))
+            #expect(await tick(sleeper) { conn.sent.filter { $0 == #"{"t":"ping"}"# }.count == count })
+            clock.advance(.milliseconds(100))
+            conn.push(#"{"t":"pong"}"#)
+            // Taken before the clock moves on (a tick first would find the ping 3 s late).
+            var taken = false
+            for _ in 0..<5_000 where !taken {
+                taken = await socket.lastRoundTrip == .milliseconds(100)
+                if !taken { try? await Task.sleep(for: .microseconds(200)) }
+            }
+            #expect(taken)
+        }
+        #expect(await reader.next(1) == [.link(.good)])
+        #expect(await eventually { conn.sent.last == #"{"state":"good","t":"link"}"# })
+        #expect(conn.sent.filter { $0 == #"{"t":"ping"}"# }.count == 3)
         await socket.stop()
     }
 

@@ -12,6 +12,8 @@ public enum TableIntent: Equatable, Sendable {
     /// cards, discard top, counts, a finished room) and follows as `.reconcile`.
     case game(GameEvent, seq: Int)
     case presence(seat: Seat, presence: Presence)
+    /// Some seat's connection quality changed (`SeatView.link`): redraw the seats.
+    case link
     /// The in-flight `act` was refused: snap the provisional move back and wiggle.
     case rejected(ErrorCode)
     /// A lobby message was refused: wiggle the control tapped last.

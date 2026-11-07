@@ -72,8 +72,12 @@ public enum ServerMessage: Decodable, Equatable, Sendable {
     case streak(pair: String, person: String, view: StreakView)
     /// Play again dealt the next table under this code (§10.4).
     case rematch(code: String)
+    /// The answer to `ClientMessage.ping`.
+    case pong
+    /// Every seat's link (nil: fine) whenever one changes. Not a state change: no seq.
+    case link(seats: [SeatLink?])
 
-    private enum CodingKeys: String, CodingKey { case t, `protocol`, seq, room, event, seat, code, pair, person, view }
+    private enum CodingKeys: String, CodingKey { case t, `protocol`, seq, room, event, seat, code, pair, person, view, seats }
 
     public init(from decoder: any Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
@@ -102,6 +106,10 @@ public enum ServerMessage: Decodable, Equatable, Sendable {
                            view: try c.decode(StreakView.self, forKey: .view))
         case "rematch":
             self = .rematch(code: try c.decode(String.self, forKey: .code))
+        case "pong":
+            self = .pong
+        case "link":
+            self = .link(seats: try c.decode([SeatLink?].self, forKey: .seats))
         default:
             throw DecodingError.dataCorruptedError(
                 forKey: .t, in: c, debugDescription: "unknown server message type: \(t)")
@@ -146,6 +154,8 @@ public enum Action: Encodable, Equatable, Sendable {
 }
 
 public enum ConfigureKind: String, Codable, Sendable { case open, bot, closed }
+/// This phone's own view of its connection, for the other phones (`ClientMessage.link`).
+public enum LinkReport: String, Codable, Sendable { case weak, good }
 public enum PresenceState: String, Codable, Sendable { case active, background }
 
 /// Client to server (discriminator key `t`).
@@ -153,7 +163,9 @@ public enum ClientMessage: Encodable, Equatable, Sendable {
     case claim(seat: Seat, person: Person)
     case configure(seat: Seat, kind: ConfigureKind)
     case start
-    case act(seat: Seat, action: Action)
+    /// `id`: the move's id, so a server with links applies it once even if it is sent again
+    /// after a reconnect. Omitted when nil (a server without links refuses unknown keys).
+    case act(seat: Seat, action: Action, id: String? = nil)
     case presence(PresenceState)
     case moveSeat(seat: Seat)
     case claimMove(code: String)
@@ -166,8 +178,13 @@ public enum ClientMessage: Encodable, Equatable, Sendable {
     case rematch
     /// Changes the table's rug or card back (at least one), from the sender's own unlocks (§9.4).
     case setLook(rug: String?, back: String?)
+    /// A heartbeat; only to a server with links (its snapshots carry `link`). Encodes exactly
+    /// `{"t":"ping"}`, the string the room answers without waking.
+    case ping
+    /// This phone's link turned weak or good again; only to a server with links.
+    case link(LinkReport)
 
-    private enum CodingKeys: String, CodingKey { case t, seat, person, kind, action, state, code, name, rug, back }
+    private enum CodingKeys: String, CodingKey { case t, seat, person, kind, action, state, code, name, rug, back, id }
 
     public func encode(to encoder: any Encoder) throws {
         var c = encoder.container(keyedBy: CodingKeys.self)
@@ -182,10 +199,11 @@ public enum ClientMessage: Encodable, Equatable, Sendable {
             try c.encode(kind, forKey: .kind)
         case .start:
             try c.encode("start", forKey: .t)
-        case .act(let seat, let action):
+        case .act(let seat, let action, let id):
             try c.encode("act", forKey: .t)
             try c.encode(seat, forKey: .seat)
             try c.encode(action, forKey: .action)
+            try c.encodeIfPresent(id, forKey: .id)
         case .presence(let state):
             try c.encode("presence", forKey: .t)
             try c.encode(state, forKey: .state)
@@ -211,6 +229,11 @@ public enum ClientMessage: Encodable, Equatable, Sendable {
             try c.encode("setLook", forKey: .t)
             try c.encodeIfPresent(rug, forKey: .rug)
             try c.encodeIfPresent(back, forKey: .back)
+        case .ping:
+            try c.encode("ping", forKey: .t)
+        case .link(let report):
+            try c.encode("link", forKey: .t)
+            try c.encode(report, forKey: .state)
         }
     }
 }

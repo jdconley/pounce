@@ -44,6 +44,24 @@ function snapshots(): { lobby: Snapshot; withHand: Snapshot; noHand: Snapshot } 
   return { lobby, withHand: room.snapshotFor("devA"), noHand: room.snapshotFor("devC") };
 }
 
+/** A room with `LINK` on: alice's (devA) snapshot after her move "move-1", bob's phone just dropped. */
+function linkSnapshot(): Snapshot {
+  const room = new RoomCore(RoomCore.create("BCDFG", "devA", 1_000), () => 1_000, createRng([1, 2, 3, 4]), undefined, 1, {
+    streaks: false,
+    link: true,
+  });
+  room.connect("devA");
+  room.connect("devB");
+  room.handle("devA", { t: "claim", seat: 0, person: alice });
+  room.handle("devB", { t: "claim", seat: 1, person: bob });
+  room.handle("devA", { t: "start" });
+  // Seat 1 plays first.
+  room.handle("devB", { t: "act", seat: 1, action: { type: "draw", from: "deck" }, id: "move-0" });
+  room.disconnect("devB", false);
+  (room.state.devices.devA as { acks?: string[] }).acks = ["move-1"];
+  return room.snapshotFor("devA");
+}
+
 function serverSamples(): Sample<ServerMessage>[] {
   const { lobby, withHand, noHand } = snapshots();
   return [
@@ -163,6 +181,9 @@ function serverSamples(): Sample<ServerMessage>[] {
     { name: "moveCode", message: { t: "moveCode", seat: 1, code: "BCDFGH" } },
     { name: "error-room_closed", message: { t: "error", code: "room_closed" } },
     { name: "error-bad_code", message: { t: "error", code: "bad_code" } },
+    { name: "pong", message: { t: "pong" } },
+    { name: "link", message: { t: "link", seats: [null, "weak", "lost"] } },
+    { name: "snapshot-playing-link", message: linkSnapshot() },
   ] satisfies Sample<ServerMessage>[];
 }
 
@@ -212,6 +233,13 @@ function clientSamples(): Sample<ClientMessage>[] {
     { name: "leave", message: { t: "leave", seat: 1 } },
     { name: "rename", message: { t: "rename", name: "Taco Night" } },
     { name: "renameSeat", message: { t: "renameSeat", seat: 1, name: "Mo" } },
+    {
+      name: "act-draw-deck-id",
+      message: { t: "act", seat: 0, action: { type: "draw", from: "deck" }, id: "0F8C1D2E-3A4B-4C5D-8E6F-7A8B9C0D1E2F" },
+    },
+    { name: "ping", message: { t: "ping" } },
+    { name: "link-weak", message: { t: "link", state: "weak" } },
+    { name: "link-good", message: { t: "link", state: "good" } },
   ] satisfies Sample<ClientMessage>[];
 }
 

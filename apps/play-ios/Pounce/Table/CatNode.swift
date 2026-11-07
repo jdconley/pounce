@@ -15,6 +15,9 @@ final class CatNode: SKNode {
     private let botBadge: SKSpriteNode
     private let skipBadge: SKSpriteNode
     private let laidBadge: SKSpriteNode
+    /// The seat's phone has a weak or lost connection (`SignalGlyph`).
+    private let linkBadge: SKSpriteNode
+    private(set) var link: SignalGlyph.Level?
     private let bubble: SKSpriteNode
     private let bubbleNumber: SKSpriteNode
     /// The current player's paw marker above the ring.
@@ -37,6 +40,7 @@ final class CatNode: SKNode {
         botBadge = SKSpriteNode(texture: TableArt.image(ArtName.badgeBot), size: badge)
         skipBadge = SKSpriteNode(texture: TableArt.image(ArtName.badgeSkip), size: badge)
         laidBadge = SKSpriteNode(texture: TableArt.image(ArtName.badgeLaid), size: badge)
+        linkBadge = SKSpriteNode(color: .clear, size: CGSize(width: 32 * k, height: 32 * k))
         bubble = SKSpriteNode(texture: CardFaceFactory.shared.back(), size: CGSize(width: 20 * k, height: 28 * k))
         bubbleNumber = SKSpriteNode()
         paw = SKSpriteNode(texture: TableArt.image(ArtName.iconPawMenu), size: CGSize(width: 26 * k, height: 26 * k))
@@ -74,6 +78,11 @@ final class CatNode: SKNode {
             b.isHidden = true
             addChild(b)
         }
+        // Where the bot badge goes (a bot has no phone), a little bigger: it's news.
+        linkBadge.position = CGPoint(x: r * 0.78, y: r * 0.72)
+        linkBadge.zPosition = 6.5
+        linkBadge.isHidden = true
+        addChild(linkBadge)
         bubble.position = CGPoint(x: r * 0.62, y: -r * 0.62)
         bubble.zPosition = 5
         bubble.isHidden = true
@@ -98,6 +107,14 @@ final class CatNode: SKNode {
         botBadge.isHidden = !bot
         skipBadge.isHidden = !skip
         laidBadge.isHidden = !laid
+    }
+
+    /// The weak-signal badge for a seat whose phone's connection is poor or gone; nil hides it.
+    func setLink(_ level: SignalGlyph.Level?) {
+        guard level != link else { return }
+        link = level
+        linkBadge.isHidden = level == nil
+        if let level { linkBadge.texture = SignalGlyph.texture(level, side: linkBadge.size.width * 2) }
     }
 
     /// Awake = alert, away = curled up, asleep = Zzz; nil (a bot) = idle.

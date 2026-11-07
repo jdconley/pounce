@@ -1,6 +1,6 @@
 import { DurableObject } from "cloudflare:workers";
 
-import { devSpeed } from "../env";
+import { devSpeed, linkOn } from "../env";
 import { catTower } from "../games/cat-tower";
 import { endBody, startAlert, startBody, updateBody, type LiveState } from "../live/live";
 import { yourMoveBody } from "../notify/copy";
@@ -41,6 +41,11 @@ const MAX_HEADER_PLAYERS = 16;
 
 const BAD_MESSAGE: ServerMessage = { t: "error", code: "bad_message" };
 const NORMAL_CLOSURE = 1000;
+/** The app closed the socket itself (leaving the table, going to the background). */
+const ASKED_CLOSURES = [NORMAL_CLOSURE, 1001];
+/** The heartbeat the room answers without waking (the bad connection indicator). */
+const PING = '{"t":"ping"}';
+const PONG = '{"t":"pong"}';
 const ROOM_CODE_ATTEMPTS = 5;
 const STREAK_ATTEMPTS = 2;
 
@@ -70,6 +75,7 @@ export class GameRoom extends DurableObject<Env> {
 
   constructor(ctx: DurableObjectState, env: Env) {
     super(ctx, env);
+    ctx.setWebSocketAutoResponse(new WebSocketRequestResponsePair(PING, PONG));
     void ctx.blockConcurrencyWhile(async () => {
       this.core = this.load();
       if (this.core) await this.dropStaleDevices(this.core);
@@ -77,7 +83,7 @@ export class GameRoom extends DurableObject<Env> {
   }
 
   private features(): RoomFeatures {
-    return { streaks: streaksOn(this.env), live: liveOn(this.env) };
+    return { streaks: streaksOn(this.env), live: liveOn(this.env), link: linkOn(this.env) };
   }
 
   private createSchema(): void {
@@ -179,15 +185,25 @@ export class GameRoom extends DurableObject<Env> {
     } catch {
       // Already closed, or a code that may not be sent back (1005, 1006).
     }
-    await this.dropped(ws);
+    await this.dropped(ws, ASKED_CLOSURES.includes(code));
   }
 
   async webSocketError(ws: WebSocket): Promise<void> {
-    await this.dropped(ws);
+    await this.dropped(ws, false);
   }
 
   async alarm(): Promise<void> {
-    if (this.core) await this.after(this.core.tick());
+    if (!this.core) return;
+    this.heardPings(this.core);
+    await this.after(this.core.tick());
+  }
+
+  /** Each open socket's last auto-answered ping, for the seats' links. */
+  private heardPings(core: RoomCore): void {
+    for (const ws of this.ctx.getWebSockets()) {
+      const at = this.ctx.getWebSocketAutoResponseTimestamp(ws);
+      if (at && ws.readyState === WebSocket.OPEN) core.heard(deviceOf(ws), at.getTime());
+    }
   }
 
   /** `playerId` answered a pounce for this table with Play (§11.3): leaving it soon starts a live table. */
@@ -487,11 +503,11 @@ export class GameRoom extends DurableObject<Env> {
       .some((s) => s !== except && s.readyState === WebSocket.OPEN);
   }
 
-  /** A device is disconnected only when its last open socket goes. */
-  private async dropped(ws: WebSocket): Promise<void> {
+  /** A device is disconnected only when its last open socket goes. `asked`: the app closed it. */
+  private async dropped(ws: WebSocket, asked: boolean): Promise<void> {
     if (!this.core) return;
     const deviceId = deviceOf(ws);
-    if (!this.hasOpenSocket(deviceId, ws)) await this.after(this.core.disconnect(deviceId));
+    if (!this.hasOpenSocket(deviceId, ws)) await this.after(this.core.disconnect(deviceId, asked));
   }
 
   /** Delivers, pushes, persists, re-arms the alarm and updates the tables index. */

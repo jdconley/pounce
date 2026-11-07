@@ -50,6 +50,7 @@ enum SeatInfo {
         case .asleep: parts.append(String(localized: "asleep", comment: "VoiceOver: presence"))
         case nil: if view?.kind == .bot { parts.append(String(localized: "bot", comment: "VoiceOver: a bot player")) }
         }
+        if let link = LinkWords.seat(view?.link) { parts.append(link.text) }
         return parts.joined(separator: ", ")
     }
 }
