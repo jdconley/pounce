@@ -18,7 +18,8 @@ const MAX_VALUE = 12;
  * Build a group for `req` from `cards`, or null if invalid. Needs exactly
  * `req.size` distinct cards, no Cucumbers and at least one natural card.
  * For a run containing Yarn, `runStart` (the value of the first card) picks the
- * placement; without it the lowest start that fits is used.
+ * placement. Without it the cards' own order picks it when that order is a run
+ * (each Yarn keeps the spot the player gave it), else the lowest start that fits.
  */
 export function buildGroup(
   req: Requirement,
@@ -65,7 +66,7 @@ function buildRun(
   // run stays within 1..12.
   const lowest = Math.max(1, Math.max(...values) - size + 1);
   const highest = Math.min(Math.min(...values), MAX_VALUE + 1 - size);
-  const start = runStart ?? lowest;
+  const start = runStart ?? startFromOrder(decoded, lowest, highest) ?? lowest;
   if (!Number.isInteger(start) || start < lowest || start > highest) return null;
 
   const slots: (CardId | undefined)[] = new Array<CardId | undefined>(size);
@@ -73,6 +74,22 @@ function buildRun(
   const yarns = decoded.filter((c) => c.kind === "yarn").map((c) => c.id);
   const cards = Array.from(slots, (id) => id ?? (yarns.shift() as CardId));
   return { kind: "run", cards, start, end: start + size - 1 };
+}
+
+/**
+ * The start the cards' order spells out: every natural sits at index
+ * `value - start` for one start in `lowest..highest`. Null when the order
+ * isn't a run (shuffled naturals, or a Yarn where no start puts it).
+ */
+function startFromOrder(decoded: Card[], lowest: number, highest: number): number | null {
+  let start: number | null = null;
+  for (const [i, c] of decoded.entries()) {
+    if (c.kind !== "number") continue;
+    const s = c.value - i;
+    if (start !== null && s !== start) return null;
+    start = s;
+  }
+  return start !== null && start >= lowest && start <= highest ? start : null;
 }
 
 /** Which end of a run a hit goes on: `start` below the lowest card, `end` above the highest. */

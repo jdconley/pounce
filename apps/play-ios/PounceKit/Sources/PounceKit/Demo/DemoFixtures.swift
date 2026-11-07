@@ -105,6 +105,19 @@ public enum DemoFixtures {
         return room
     }
 
+    /// My play step on phase 2 (a set of 3, a run of 4), not laid yet: three 9s, a Yarn and
+    /// 4-5-6 make the phase, so the Yarn can stand for 3 or 7 (the DEBUG `-demo lay` screen).
+    public static func layTable() -> RoomView {
+        var room = table(seats: 4, mySeat: 0, phase: 1)
+        let hand = [id(9, .tabby), id(9, .gray), id(9, .calico), 96, id(4, .tuxedo), id(5, .gray),
+                    id(6, .calico), id(11, .tabby), id(2, .gray)]
+        room.game!.step = .play
+        room.game!.hands = [0: hand]
+        room.game!.handCounts[0] = hand.count
+        balance(&room.game!)
+        return room
+    }
+
     /// The lobby before a game: me (host), a friend on another phone, a bot, an
     /// open seat and two closed ones.
     public static func lobby() -> RoomView {
