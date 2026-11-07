@@ -109,6 +109,7 @@ Set = same number (any coats). Run = consecutive numbers (any coats), no wraparo
 - If the first discard flipped is a Cucumber, the first player is skipped.
 - Yarn can be drawn from the discard pile.
 - Each laid-down group must include at least one natural (non-Yarn) card. **(call)**
+- **Yarn in a run** keeps the rank the player gave it, and a laid run shows each Yarn at that rank. A `layDown` group's `runStart` sets the ranks. Without it, the cards' order sets them when that order is a run: `4 5 6 Yarn` is 4-7 and `Yarn 4 5 6` is 3-6. Otherwise the run takes the lowest start that fits, the old default. Hits then use the run's real ends: on 4-7 a 3 or an 8 fits and a 7 doesn't. (JD's playtest, 2026-11-06: a Yarn must stay where it was laid.)
 - A player can't be targeted by a Cucumber if they're already pending a skip; if everyone else is already pending, the Cucumber is just discarded. **(call)**
 - Running out of draw pile: reshuffle discards except the top card.
 - 2-player: Cucumber skips the only opponent (you take two turns in a row).

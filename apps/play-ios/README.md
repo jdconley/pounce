@@ -74,7 +74,7 @@ then the build setting (Debug: `http://localhost:8787`, optionally overridden by
 
 ### Debug-only launch arguments
 
-- `-demo <lobby|lobbyReady|table|other|replay|nope|celebrate|curtain|handoff|peek|crowded|hit|over>` opens a room fed by
+- `-demo <lobby|lobbyReady|table|other|replay|nope|celebrate|curtain|handoff|peek|crowded|hit|lay|over>` opens a room fed by
   a fake socket and canned snapshots, so the real screens render with no server. `-slowmo <factor>`
   (at most 1) runs a demo in slow motion. See `Pounce/App/DemoMode.swift` for what each demo shows.
 - `-anim-speed <n>` (or `POUNCE_ANIM_SPEED=<n>` in the environment) runs the whole app n times faster
