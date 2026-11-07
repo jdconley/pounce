@@ -19,16 +19,19 @@ public struct CardPlacement: Equatable, Sendable {
 ///
 /// Bands, top to bottom: opponents bar (96 pt, below the safe top), the rug with the
 /// deck left and discard right of center, laid-down rows around the piles, phase trays
-/// (64 pt) above the hand, and the fanned hand (above the safe bottom). The cat tower
-/// runs down the left edge between the opponents bar and the trays. No two hit-test
-/// regions (opponent slots, deck, discard, trays, laid rows, tower) overlap.
+/// (64 pt) above the hand, and the fanned hand (above the safe bottom). The table is centered;
+/// the cat tower folds down to a tab (`towerTab`) at the left end of the sort button's line
+/// and opens over the table's left edge (`towerFrame`, between the opponents bar and the
+/// trays) only for a look. No two hit-test regions (opponent slots, deck, discard, trays, laid
+/// rows, tower tab) overlap; the open tower lies over the laid zone's left edge.
 ///
 /// A roomy view (both sides at least `roomyMinSide`, an iPad window) gets its own
 /// `Arrangement` instead of a stretched phone table: bigger cards sized from the shorter
 /// side, the opponents seated along an arc across the far side, the piles in the middle of
 /// the rug, a hand fan and trays of a comfortable width centered at the bottom. `.tall`
 /// keeps the name pill and sort button above the trays' right end; `.wide` (landscape)
-/// moves them beside the trays, runs the tower down the whole left edge, and seats laid
+/// moves them beside the trays, opens the tower down the whole left edge from a tab in the
+/// bottom-left corner, and seats laid
 /// rows in columns left and right of the piles when a row per seat doesn't fit above and
 /// below them.
 public struct TableLayout: Sendable {
@@ -78,9 +81,12 @@ public struct TableLayout: Sendable {
     /// Centers of the draw pile and the discard pile.
     public let deck: CGPoint
     public let discard: CGPoint
+    /// The cat tower when it is open: over the left edge of the table.
     public let towerFrame: CGRect
+    /// The folded tower: a tab at the tower's foot (the tap target that opens it).
+    public let towerTab: CGRect
     public let traysFrame: CGRect
-    /// Rect all laid-down rows live in (right of the tower, between bar and trays).
+    /// Rect all laid-down rows live in (centered, between bar and trays).
     public let laidZone: CGRect
     /// Sort button center; laid rows stop short of its touch target (and the seat's name pill).
     public let sortButton: CGPoint
@@ -195,21 +201,30 @@ public struct TableLayout: Sendable {
         traysFrame = trays
 
         // Tower: left edge, from above the trays to below the opponents bar (wide: from the
-        // bottom, since the trays and the hand stay in the middle).
+        // bottom, since the trays and the hand stay in the middle). It opens over the table, so
+        // nothing is laid out around it. Folded, it is a tab at its foot: at the left end of the
+        // sort button's line, mirroring the button (wide: in the bottom-left corner).
         let towerBottom = arrangement == .wide ? safeBottom + 12 : trays.maxY + 6
         towerFrame = CGRect(x: 0, y: towerBottom, width: towerW, height: bar.minY - 4 - towerBottom)
+        let tab = Self.sortButtonHit
+        switch arrangement {
+        case .phone:
+            towerTab = CGRect(x: width - sortButton.x - tab / 2, y: sortButton.y - tab / 2, width: tab, height: tab)
+        case .tall:
+            towerTab = CGRect(x: trays.minX, y: sortButton.y - tab / 2, width: tab, height: tab)
+        case .wide:
+            towerTab = CGRect(x: 16, y: towerBottom, width: tab, height: tab)
+        }
 
-        // Laid zone: right of the tower, between the bar and the trays (tall: and above the
-        // name pill's strip).
+        // Laid zone: centered, between the bar and the trays (tall: and above the name pill's
+        // strip).
         let zone: CGRect
         switch arrangement {
         case .phone:
-            let zoneMinX = towerFrame.maxX + 8
-            zone = CGRect(x: zoneMinX, y: towerBottom, width: width - 8 - zoneMinX, height: bar.minY - 8 - towerBottom)
+            zone = CGRect(x: 8, y: towerBottom, width: width - 16, height: bar.minY - 8 - towerBottom)
         case .tall, .wide:
-            let zoneMinX = towerFrame.maxX + 16
             let zoneMinY = arrangement == .tall ? sortButton.y + Self.sortButtonHit / 2 + 6 : trays.maxY + 12
-            zone = CGRect(x: zoneMinX, y: zoneMinY, width: width - 16 - zoneMinX, height: bar.minY - 8 - zoneMinY)
+            zone = CGRect(x: 16, y: zoneMinY, width: width - 32, height: bar.minY - 8 - zoneMinY)
         }
         laidZone = zone
 
@@ -384,6 +399,10 @@ public struct TableLayout: Sendable {
         var row = CGRect(x: x, y: midY - rowHeight / 2, width: width, height: rowHeight)
         let corner = sortButtonFrame.union(seatTagFrame)
         if row.intersects(corner) { row.size.width = max(corner.minX - 4 - row.minX, 0) }
+        if row.intersects(towerTab) {
+            let left = towerTab.maxX + 4
+            row = CGRect(x: left, y: row.minY, width: max(row.maxX - left, 0), height: row.height)
+        }
         return row
     }
 }

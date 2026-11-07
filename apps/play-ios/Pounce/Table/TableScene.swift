@@ -31,8 +31,9 @@ final class TableScene: SKScene {
     let director = AnimationDirector(view: nil)
     /// The paw button top-right (`table.menu`).
     var onMenu: () -> Void = {}
-    /// The tower was tapped (`table.tower`): the shell shows the scoreboard for the table as
-    /// drawn (never the store's newer truth, which would spoil a celebration still playing).
+    /// The open tower was tapped (`table.tower`, TowerToggle.swift): the shell shows the
+    /// scoreboard for the table as drawn (never the store's newer truth, which would spoil a
+    /// celebration still playing).
     var onTower: (TableModel) -> Void = { _ in }
     /// The game is over and its celebration has played (or the table opened finished).
     var onGameOver: ([Seat]) -> Void = { _ in }
@@ -113,6 +114,8 @@ final class TableScene: SKScene {
     var pendingMarkTask: Task<Void, Never>?
     /// The glows drawn by the last redraw.
     private(set) var glows = Glows()
+    /// The turn and round the tower last saw (a change folds it open).
+    var towerFoldKey: TowerFoldKey?
 
     var safeInsets: UIEdgeInsets = .zero {
         didSet { if safeInsets != oldValue { redraw() } }
@@ -599,6 +602,7 @@ final class TableScene: SKScene {
 
         laidZone.update(model: model, layout: layout)
         tower.update(model: model, layout: layout)
+        foldOnTurnChange(game)
         // A phone holding no seat shows every seat in the bar.
         let turnedOn = opponents.update(model: model, seats: barSeats, layout: layout)
         for seat in turnedOn { pulseTurn(seat) }
@@ -674,9 +678,11 @@ final class TableScene: SKScene {
             let frame = layout.seatTagFrame
             bottomTag.position = CGPoint(x: frame.maxX - bottomTag.size.width / 2, y: frame.midY)
             bottomTag.isHidden = false
+            tower.showPhase(game.phase[safe: bottom])  // the folded tower wears the same hand's phase
         } else {
             bottomTagName = nil
             bottomTag.isHidden = true
+            tower.showPhase(nil)
         }
 
         menuButton.isHidden = false
@@ -755,6 +761,8 @@ final class TableScene: SKScene {
         bottomTag.isHidden = true
         bottomTagName = nil
         for l in [Layer.rug, .piles, .laidZone, .tower] { layer(l).isHidden = true }
+        tower.setOpen(false, animated: false)
+        towerFoldKey = nil
         opponents.clear()
         opponents.isHidden = true
         trays.isHidden = true
@@ -819,12 +827,6 @@ final class TableScene: SKScene {
         return CGRect(x: sortButton.position.x - d / 2, y: sortButton.position.y - d / 2, width: d, height: d)
     }
 
-    /// The cat tower's tap area (opens the scoreboard).
-    var towerFrame: CGRect {
-        guard let layout else { return .zero }
-        return layout.towerFrame.insetBy(dx: -4, dy: 0)
-    }
-
     var layDownFrame: CGRect {
         let b = trays.layDownButton
         let d = max(b.size.width, 44)
@@ -832,6 +834,13 @@ final class TableScene: SKScene {
     }
 
     // MARK: accessibility
+
+    /// Rebuilds the accessibility elements (something changed between redraws) and tells
+    /// VoiceOver the layout moved.
+    func invalidateAccessibility() {
+        accessibilityVersion += 1
+        UIAccessibility.post(notification: .layoutChanged, argument: nil)
+    }
 
     /// The table's accessibility elements for `view`, rebuilt after each redraw.
     func accessibilityElements(in view: SKView) -> [UIAccessibilityElement] {
@@ -923,9 +932,7 @@ final class TableScene: SKScene {
         items.append(Item(
             id: "table.menu", label: String(localized: "Table menu", comment: "VoiceOver: the paw menu button"),
             frame: menuFrame))
-        items.append(Item(
-            id: "table.tower", label: String(localized: "Scoreboard", comment: "VoiceOver: the cat tower; opens the scores"),
-            frame: towerFrame))
+        items.append(towerAccessibilityItem(model, game))
         let mine = model.isMyTurn
         let whose = mine
             ? String(localized: "Your turn", comment: "VoiceOver: it is this phone's turn")

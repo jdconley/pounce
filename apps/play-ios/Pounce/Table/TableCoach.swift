@@ -11,6 +11,7 @@ struct TableCoach: Equatable {
     var anchors: Anchors
 
     struct Anchors: Equatable {
+        /// The folded tower's tab.
         var tower: CGRect
         var deck: CGRect
         var discard: CGRect
@@ -47,7 +48,7 @@ extension TableScene {
             hasCucumber: faces.contains { Card(id: $0) == .cucumber },
             handCount: game.hands[bottom]?.count ?? faces.count)
         let anchors = TableCoach.Anchors(
-            tower: towerFrame, deck: deck.hitFrame, discard: discard.hitFrame,
+            tower: layout.towerTab, deck: deck.hitFrame, discard: discard.hitFrame,
             trays: layout.traysFrame, layDown: layDownShown ? layDownFrame : nil,
             laid: laidFrames.isEmpty ? nil : laidFrames.reduce(CGRect.null) { $0.union($1) },
             hand: handFrame,

@@ -142,6 +142,7 @@ extension TableScene {
         input = TableInputState()
         input.start = p
         input.source = source(at: p)
+        if input.source != .tower { foldTower() }  // any other touch folds the open tower
     }
 
     /// A touch moved. Moves are applied once per frame (`stepDrag`, from the scene's
@@ -472,7 +473,7 @@ extension TableScene {
             // Only local taps while an action is in flight.
             switch source {
             case .menu: onMenu()
-            case .tower: showScoreboard()
+            case .tower: towerTapped()
             case .sort: cycleSort()
             case .hand(let card): liftedCard = liftedCard == card ? nil : card
             default: break
@@ -485,7 +486,7 @@ extension TableScene {
         case .menu:
             onMenu()
         case .tower:
-            showScoreboard()
+            towerTapped()
         case .sort:
             cycleSort()
         case .layDown:
@@ -535,12 +536,6 @@ extension TableScene {
         } else {
             Haptics.shared.tick()
         }
-    }
-
-    /// The tower tap: the scoreboard for the table as drawn.
-    private func showScoreboard() {
-        guard let model else { return }
-        onTower(model)
     }
 
     /// The second tap of tap-tap: a cat, a tray or a laid group for the selected card.

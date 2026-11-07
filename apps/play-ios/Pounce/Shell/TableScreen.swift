@@ -481,6 +481,10 @@ private struct TableStage: View {
                     events.menuOpen = false
                     model.goHome()
                 },
+                onScores: scene?.model?.game == nil ? nil : {
+                    events.menuOpen = false
+                    events.scoreboard = scene?.model
+                },
                 onClose: { events.menuOpen = false })
                 .environment(model)
                 .environment(settings)

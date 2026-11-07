@@ -19,8 +19,9 @@ final class CelebrationTests: XCTestCase {
             dismissPriming(app)
             XCTAssertTrue(notNow.waitForNonExistence(timeout: 3))
         }
-        // By coordinate: the tower's element starts just past the screen's left edge, XCUITest
-        // finds no hit point for it ({-1, -1}), and `tower.tap()` lands nowhere.
+        // The tower is folded to a tab: the first tap opens it, a tap on the open tower brings
+        // up the scoreboard.
+        openTower(app)
         tap(app, tower.frame)
         let board = app.descendants(matching: .any)["scoreboard"]
         XCTAssertTrue(board.waitForExistence(timeout: 3))
@@ -33,6 +34,32 @@ final class CelebrationTests: XCTestCase {
         app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.9)).tap()
         let gone = expectation(for: NSPredicate(format: "exists == false"), evaluatedWith: board)
         wait(for: [gone], timeout: 3)
+    }
+
+    /// A tap anywhere else folds the open tower; the paw menu's Scores brings up the scoreboard.
+    @MainActor
+    func testTowerFoldsAndMenuOpensScoreboard() throws {
+        let app = Live.demo("table")
+        app.launch()
+        let tower = app.descendants(matching: .any)["table.tower"]
+        XCTAssertTrue(tower.waitForExistence(timeout: 10))
+        let notNow = el(app, "priming.notNow")
+        if notNow.waitForExistence(timeout: 2) {
+            dismissPriming(app)
+            XCTAssertTrue(notNow.waitForNonExistence(timeout: 3))
+        }
+        openTower(app)
+        XCTAssertTrue(value(tower)?.contains("Kiki, phase 7") ?? false, value(tower) ?? "-")
+        // The rug, right of the open tower: folds it, no scoreboard.
+        app.coordinate(withNormalizedOffset: CGVector(dx: 0.75, dy: 0.45)).tap()
+        XCTAssertTrue(until(3) { value(tower) == nil }, "the tower didn't fold")
+        XCTAssertFalse(app.descendants(matching: .any)["scoreboard"].exists)
+
+        el(app, "table.menu").tap()
+        let scores = el(app, "menu.scores")
+        XCTAssertTrue(scores.waitForExistence(timeout: 3))
+        scores.tap()
+        XCTAssertTrue(app.descendants(matching: .any)["scoreboard"].waitForExistence(timeout: 3))
     }
 
     @MainActor

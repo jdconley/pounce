@@ -19,8 +19,9 @@ final class PhasesTests: XCTestCase {
             dismissPriming(app)
             XCTAssertTrue(notNow.waitForNonExistence(timeout: 3))
         }
-        // By coordinate: XCUITest finds no hit point for the tower's element (it starts just past
-        // the screen's left edge).
+        // The tower is folded to a tab: the first tap opens it, a tap on the open tower brings
+        // up the scoreboard.
+        openTower(app)
         tap(app, tower.frame)
         XCTAssertTrue(app.descendants(matching: .any)["phases"].waitForExistence(timeout: 3))
         attach(app, "phases-top")

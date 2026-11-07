@@ -59,6 +59,7 @@ struct TableLayoutTests {
             #expect(s.contains(cardRect(l.deck, l.cardSize)))
             #expect(s.contains(cardRect(l.discard, l.cardSize)))
             #expect(s.contains(l.towerFrame))
+            #expect(s.contains(l.towerTab))
             #expect(s.contains(l.traysFrame))
             for i in 0..<10 { #expect(s.contains(l.shelf(i))) }
             for tray in l.trayFrames(count: 3) { #expect(s.contains(tray)) }
@@ -161,6 +162,30 @@ struct TableLayoutTests {
         }
     }
 
+    /// The tower folds down to a tab at the bottom of its edge, on the sort button's line,
+    /// and opens up from there over the table.
+    @Test func towerTabSitsAtTheFootOfTheTower() {
+        forEachLayout { l, _, _ in
+            #expect(l.towerTab.width >= 44 && l.towerTab.height >= 44)
+            #expect(l.towerTab.minX >= 0 && l.towerTab.maxX < l.towerFrame.maxX + 8)
+            #expect(abs(l.towerTab.midY - l.sortButton.y) < 0.001)
+            #expect(l.towerTab.minY >= l.traysFrame.maxY)
+            #expect(l.towerTab.minY < l.towerFrame.minY + 8)
+            for n in 1...14 {
+                for c in l.hand(count: n, lifted: n / 2) { #expect(!rotatedBounds(c, l.cardSize).intersects(l.towerTab)) }
+            }
+        }
+    }
+
+    /// Centered as if the tower weren't there: the laid zone, the piles and the rug's middle.
+    @Test func tableIsCentered() {
+        forEachLayout { l, s, _ in
+            #expect(abs(l.laidZone.midX - s.midX) < 0.001)
+            #expect(abs((l.deck.x + l.discard.x) / 2 - s.midX) < 0.001)
+            #expect(abs(l.traysFrame.midX - s.midX) < 0.001)
+        }
+    }
+
     @Test func regionsDoNotOverlap() {
         forEachLayout { l, _, opp in
             let deck = cardRect(l.deck, l.cardSize), discard = cardRect(l.discard, l.cardSize)
@@ -169,7 +194,7 @@ struct TableLayoutTests {
             let total = opp + 1
             let rows = (0..<total).map { l.laidRow(slot: $0, of: total) }
             var regions: [(String, CGRect)] = [
-                ("deck", deck), ("discard", discard), ("tower", l.towerFrame),
+                ("deck", deck), ("discard", discard), ("towerTab", l.towerTab),
                 ("trays", l.traysFrame), ("bar", l.opponentsBar), ("sort", l.sortButtonFrame),
                 ("seatTag", l.seatTagFrame),
             ]
@@ -179,10 +204,15 @@ struct TableLayoutTests {
                 #expect(!regions[i].1.intersects(regions[j].1), "\(regions[i].0) overlaps \(regions[j].0)")
             } }
             #expect(l.seatTagFrame.maxX < l.sortButtonFrame.minX)
-            #expect(l.seatTagFrame.minX > l.towerFrame.maxX)
+            #expect(l.seatTagFrame.minX > l.towerTab.maxX)
             for slot in l.opponentSlots {
                 #expect(l.opponentsBar.contains(slot))
                 #expect(!l.towerFrame.contains(slot))
+            }
+            // Five rows (two columns) and six reach down to the tab's line on the smallest
+            // phones: they stop short of it.
+            for total in [5, 6] {
+                for slot in 0..<total { #expect(!l.laidRow(slot: slot, of: total).intersects(l.towerTab)) }
             }
         }
     }
