@@ -30,8 +30,13 @@ import PounceKit
 /// `lay`: my play step on phase 2, not laid yet, with three 9s, a Yarn and 4-5-6 in hand
 /// (`DemoFixtures.layTable()`); the fake server takes the lay-down as the real one would.
 /// `over`: the celebration's finished table, opened as is, so the game over screen shows at once.
+/// The bad connection indicator, from a server with links: `weak` (this phone's round trips
+/// turn slow a second in), `reconnecting` (its socket drops a second in), `pending` (my play
+/// step; a card is discarded by itself and the server never answers, so it waits under its
+/// hourglass) and `seatLink` (Kiki's turn, Kiki's phone weak, Leo's reconnecting).
 enum DemoMode: String {
     case lobby, lobbyReady, table, other, replay, nope, celebrate, curtain, handoff, peek, crowded, crowdedHit, hit, lay, over
+    case weak, reconnecting, pending, seatLink
 
     static func from(arguments: [String] = CommandLine.arguments) -> DemoMode? {
         guard let i = arguments.firstIndex(of: "-demo"), arguments.indices.contains(i + 1) else { return nil }
@@ -74,6 +79,24 @@ enum DemoMode: String {
         case .hit: return DemoFixtures.hitTable()
         case .lay: return DemoFixtures.layTable()
         case .over: return DemoFixtures.celebration().last?.room ?? DemoFixtures.lobby()
+        case .weak, .reconnecting:
+            var room = DemoFixtures.table(seats: 4, mySeat: 0, phase: 2)
+            room.link = RoomLink(ping: 3000)
+            return room
+        case .pending:
+            var room = DemoFixtures.table(seats: 4, mySeat: 0, phase: 2)
+            room.game?.step = .play
+            room.link = RoomLink(ping: 3000)
+            return room
+        case .seatLink:
+            var room = DemoFixtures.table(seats: 4, mySeat: 0, phase: 2)
+            room.game?.turn = 2
+            room.seats[2].presence = .awake
+            room.seats[2].link = .weak
+            room.seats[1].presence = .away
+            room.seats[1].link = .lost
+            room.link = RoomLink(ping: 3000)
+            return room
         }
     }
 
@@ -106,6 +129,8 @@ enum DemoMode: String {
         case .nope: DemoSocket(room: room, refusing: true)
         case .hit, .crowdedHit: DemoSocket(room: room, hits: true)
         case .lay: DemoSocket(room: room, lays: true)
+        case .weak: DemoSocket(room: room, script: [(.seconds(1), .link(.weak))])
+        case .reconnecting: DemoSocket(room: room, script: [(.seconds(1), .disconnected), (.zero, .connecting)])
         default: DemoSocket(room: room)
         }
     }
@@ -255,27 +280,38 @@ actor DemoSocket: RoomSocketing {
     /// Takes a lay-down like the server (`Rules.matchPhase`), then the `laidDown` event and a
     /// snapshot.
     private let lays: Bool
+    /// Socket events played after the snapshot, each after its wait (the bad connection demos).
+    private let script: [(Duration, SocketEvent)]
     private var seq = 1
 
-    init(room: RoomView, refusing: Bool = false, hits: Bool = false, lays: Bool = false) {
+    init(room: RoomView, refusing: Bool = false, hits: Bool = false, lays: Bool = false, script: [(Duration, SocketEvent)] = []) {
         self.room = room
         self.refusing = refusing
         self.hits = hits
         self.lays = lays
+        self.script = script
         (events, continuation) = AsyncStream.makeStream(of: SocketEvent.self)
     }
 
     func start() async {
         continuation.yield(.connected)
         continuation.yield(.message(.snapshot(protocol: PounceKit.protocolVersion, seq: 1, room: room)))
+        let continuation = continuation
+        let script = script
+        Task {
+            for (wait, event) in script {
+                try? await Task.sleep(for: wait)
+                continuation.yield(event)
+            }
+        }
     }
 
     /// Play again's table in every demo.
     static let rematchCode = "NWCDF"
 
     func send(_ m: ClientMessage) async throws {
-        if hits, case .act(let seat, .hit(let card, let target, let side)) = m { return hit(seat: seat, card: card, target: target, side: side) }
-        if lays, case .act(let seat, .layDown(let groups)) = m { return layDown(seat: seat, groups: groups) }
+        if hits, case .act(let seat, .hit(let card, let target, let side), _) = m { return hit(seat: seat, card: card, target: target, side: side) }
+        if lays, case .act(let seat, .layDown(let groups), _) = m { return layDown(seat: seat, groups: groups) }
         if case .setLook(let rug, let back) = m { return setLook(rug: rug, back: back) }
         if case .rematch = m {
             try? await Task.sleep(for: Pace.duration(.milliseconds(300)))

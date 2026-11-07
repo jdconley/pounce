@@ -17,6 +17,10 @@ import Observation
 ///   it; its game events and a disconnect do not, so a quick second gesture can't
 ///   act on the room before the action's truth lands. A send that never left yields
 ///   `.rejected(.notSent)` so the scene rolls the provisional move back.
+/// - With a server that has links (`room.link`), each `act` carries a move id and stays pending
+///   until a snapshot lists it in `link.acks` (or an error refuses it). A snapshot that doesn't
+///   list it keeps the lock; the first snapshot on a newer connection sends it again, same id,
+///   which the server applies once. Without links, any snapshot releases the lock as before.
 /// - `closed`, `notFound` and `needsUpdate` are terminal: later messages are ignored.
 ///   `stalled` survives snapshots too (the bot clock stays stopped), but the room
 ///   keeps updating.
@@ -33,6 +37,10 @@ import Observation
     public private(set) var settledSeq = -1
     public private(set) var actionInFlight = false
     public private(set) var connected = false
+    /// The open connection's quality (`.link` socket events); `good` on every new connection.
+    public private(set) var linkQuality: LinkQuality = .good
+    /// The in-flight move, while the server hasn't acked it (only with a server that has links).
+    public private(set) var pendingMove: PendingMove?
     public private(set) var moveCode: MoveCode?
     public private(set) var lastError: ErrorCode?
     /// Goes up whenever an applied room's round, turn or status differs from the previous one
@@ -53,6 +61,24 @@ import Observation
     /// Each `{t:"streak"}` for this device's people: pair, person, view. Set by the session.
     @ObservationIgnored public var onStreak: ((String, String, StreakView) -> Void)?
 
+    /// This phone's connection as the table shows it.
+    public enum Connection: Equatable, Sendable {
+        case good, weak, reconnecting
+    }
+
+    public var connection: Connection {
+        guard connected else { return .reconnecting }
+        return linkQuality == .weak ? .weak : .good
+    }
+
+    /// A move sent and not yet acked, with the connection it was last sent on.
+    public struct PendingMove: Equatable, Sendable {
+        public let id: String
+        public let seat: Seat
+        public let action: Action
+        fileprivate var connection: Int
+    }
+
     public struct LookChange: Equatable, Sendable {
         public var seat: Seat
         public var look: Look
@@ -72,10 +98,14 @@ import Observation
     @ObservationIgnored private var lastSend: Task<Void, Never>?
     @ObservationIgnored private var nextTaskID = 0
     @ObservationIgnored private var epochs = TurnEpoch()
+    /// Connections opened so far: a pending move sent on an older one goes again.
+    @ObservationIgnored private var connections = 0
+    @ObservationIgnored private let makeMoveID: () -> String
 
-    public init(code: String, socket: any RoomSocketing) {
+    public init(code: String, socket: any RoomSocketing, makeMoveID: @escaping () -> String = { UUID().uuidString }) {
         self.code = code
         self.socket = socket
+        self.makeMoveID = makeMoveID
         (intents, continuation) = AsyncStream.makeStream(of: TableIntent.self, bufferingPolicy: .unbounded)
     }
 
@@ -101,14 +131,18 @@ import Observation
         actionInFlight = true
         actToken += 1
         let token = actToken
-        let message = ClientMessage.act(seat: seat, action: action)
+        let id = room?.link != nil ? makeMoveID() : nil
+        if let id { pendingMove = PendingMove(id: id, seat: seat, action: action, connection: connections) }
+        let message = ClientMessage.act(seat: seat, action: action, id: id)
         callSocket(inOrder: true) { [weak self] socket in
             do {
                 try await socket.send(message)
             } catch {
+                guard let self, self.actionInFlight, self.actToken == token else { return }
+                // A pending move waits for the next connection and goes again then.
+                if let id, self.pendingMove?.id == id { return }
                 // Never left the device: input must not stick, and the scene's
                 // provisional move goes back (no server error will come for it).
-                guard let self, self.actionInFlight, self.actToken == token else { return }
                 self.actionInFlight = false
                 self.continuation.yield(.rejected(.notSent))
             }
@@ -159,8 +193,12 @@ import Observation
             break
         case .connected:
             connected = true
+            connections += 1
+            if linkQuality != .good { linkQuality = .good }
         case .disconnected:
-            connected = false  // keep actionInFlight: the reconnect snapshot clears it
+            connected = false  // keep actionInFlight: the reconnect snapshot clears it (or resends it)
+        case .link(let quality):
+            if linkQuality != quality { linkQuality = quality }
         case .notFound:
             connected = false
             if !isTerminal { phase = .notFound }
@@ -197,7 +235,22 @@ import Observation
             onStreak?(pair, person, view)
         case .rematch(let code):
             rematch = code
+        case .link(let seats):
+            applyLinks(seats)
+        case .pong:
+            break
         }
+    }
+
+    /// Folded into the room as is: not a state change, so no seq (the next snapshot agrees).
+    private func applyLinks(_ links: [SeatLink?]) {
+        guard var next = room else { return }
+        for i in next.seats.indices {
+            next.seats[i].link = links.indices.contains(i) ? links[i] : nil
+        }
+        guard next != room else { return }
+        room = next
+        continuation.yield(.link)
     }
 
     private func needsUpdate() {
@@ -211,7 +264,7 @@ import Observation
         if let code = new.rematch, rematch != code { rematch = code }
         lastSeq = seq
         settledSeq = seq
-        actionInFlight = false
+        settlePending(new)
         noteTurn()
         if phase != .stalled {
             switch new.status {
@@ -224,6 +277,25 @@ import Observation
             continuation.yield(.versusIntro)
         }
         continuation.yield(.reconcile)
+    }
+
+    /// Releases the lock, unless a pending move isn't in this snapshot's acks yet: then it waits
+    /// (its own snapshot or error is coming), or goes again if it was sent on an older connection.
+    private func settlePending(_ new: RoomView) {
+        guard var pending = pendingMove else {
+            actionInFlight = false
+            return
+        }
+        guard let link = new.link, !link.acks.contains(pending.id) else {
+            pendingMove = nil
+            actionInFlight = false
+            return
+        }
+        guard pending.connection < connections else { return }
+        pending.connection = connections
+        pendingMove = pending
+        let message = ClientMessage.act(seat: pending.seat, action: pending.action, id: pending.id)
+        callSocket(inOrder: true) { socket in try? await socket.send(message) }
     }
 
     private func applyEvent(seq: Int, event: RoomEvent) {
@@ -283,6 +355,7 @@ import Observation
             phase = .stalled
         } else if actionInFlight {
             actionInFlight = false
+            pendingMove = nil
             continuation.yield(.rejected(code))
         } else {
             continuation.yield(.lobbyNope(code))

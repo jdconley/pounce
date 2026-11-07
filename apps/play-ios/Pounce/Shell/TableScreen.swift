@@ -62,27 +62,43 @@ struct TableScreen: View {
         }
     }
 
-    /// The yarn shows once the room is on screen and the socket is down.
-    private var reconnecting: Bool {
+    /// This phone's connection once the room is on screen; a drop shows only after a second
+    /// (a resume from the background reconnects faster than that).
+    @State private var shownConnection: RoomStore.Connection = .good
+
+    private var connection: RoomStore.Connection {
         switch screen {
-        case .lobby, .table: !store.connected
-        default: false
+        case .lobby, .table: store.connection
+        default: .good
         }
     }
 
     var body: some View {
-        ZStack(alignment: .topTrailing) {
+        ZStack(alignment: .top) {
             content
                 .transition(.opacity.combined(with: .scale(scale: 0.96)))
-            if reconnecting {
-                YarnIndicator()
-                    .padding(.trailing, 16)
+            // The table draws its own, on its own layer (`TableLayer.connection`).
+            if shownConnection != .good, screen == .lobby {
+                ConnectionPill(connection: shownConnection)
                     .padding(.top, 8)
-                    .transition(.scale.combined(with: .opacity))
+                    .transition(.move(edge: .top).combined(with: .opacity))
+                    .zIndex(1)
             }
         }
         .animation(.spring(duration: 0.4, bounce: 0.25).paced, value: screen)
-        .animation(.spring(duration: 0.3).paced, value: reconnecting)
+        .animation(.spring(duration: 0.35, bounce: 0.3).paced, value: shownConnection)
+        .task(id: connection) {
+            if connection == .reconnecting, shownConnection == .good {
+                try? await Task.sleep(for: .seconds(1))
+                guard !Task.isCancelled else { return }
+            }
+            if connection != shownConnection, connection != .good {
+                UIAccessibility.post(
+                    notification: .announcement,
+                    argument: connection == .weak ? LinkWords.weak() : LinkWords.reconnecting())
+            }
+            shownConnection = connection
+        }
         .onChange(of: session.model?.mySeats ?? []) { before, after in
             // This phone's last seat left while it held a move code: the move went through
             // (spec §5.11). Home, not the "full" card. The menu sheet is gone with the table.
@@ -100,8 +116,17 @@ struct TableScreen: View {
         case .lobby:
             LobbyView(session: session, interactive: store.connected)
         case .table:
-            TableStage(session: session)
-                .allowsHitTesting(store.connected)
+            // No touches while the socket is down. Not `allowsHitTesting(false)`: that rehosts the
+            // SpriteKit view with no safe area, and the whole table jumps under the status bar.
+            TableStage(session: session, connection: shownConnection)
+                .overlay {
+                    if !store.connected {
+                        Color.clear
+                            .contentShape(Rectangle())
+                            .ignoresSafeArea()
+                            .accessibilityHidden(true)
+                    }
+                }
         case .state(let kind):
             StateCard(kind: kind, onRetry: kind == .offline ? { session.retry() } : nil) {
                 model.goHome()
@@ -143,6 +168,8 @@ enum TableLayer {
     static let topBar: Double = 1
     /// The scoreboard and its phase ladder (tap the tower).
     static let scoreboard: Double = 2
+    /// This phone's connection pill, just under the top bar.
+    static let connection: Double = 3
     static let turnCue: Double = 4
     static let coach: Double = 5
     static let lookPill: Double = 6
@@ -173,6 +200,8 @@ private struct TableStage: View {
     @Environment(AppModel.self) private var model
     @Environment(Settings.self) private var settings
     let session: RoomSession
+    /// This phone's connection as the screen shows it (`TableScreen`: a drop waits a second).
+    let connection: RoomStore.Connection
     @State private var scene: TableScene?
     /// What the scene's callbacks set (see `StageEvents`).
     @State private var events = StageEvents()
@@ -238,6 +267,14 @@ private struct TableStage: View {
         return events.turnCue
     }
 
+    /// The connection pill as it should show now: like the turn cue, never over the curtain, the
+    /// scoreboard, the menu, the push priming or the game over.
+    private var connectionPill: RoomStore.Connection? {
+        guard connection != .good, curtainSeat == nil, events.scoreboard == nil, events.winners == nil, !priming,
+              !events.menuOpen else { return nil }
+        return connection
+    }
+
     var body: some View {
         @Bindable var events = events
         let covered = curtainSeat != nil
@@ -279,6 +316,16 @@ private struct TableStage: View {
                 .zIndex(TableLayer.lookPill)
             }
             probes
+            if let shown = connectionPill {
+                // Just under the top bar's cats and name tags, clear of the hand.
+                VStack {
+                    ConnectionPill(connection: shown)
+                        .padding(.top, horizontalSizeClass == .regular ? 196 : 104)
+                    Spacer()
+                }
+                .transition(.move(edge: .top).combined(with: .opacity))
+                .zIndex(TableLayer.connection)
+            }
             if let cue = turnCue {
                 TurnCueView(cue: cue, yield: coach.tip != nil && coachView != nil)
                     .transition(.opacity.combined(with: .scale(scale: cue.isMine ? 0.85 : 1)))
@@ -370,6 +417,7 @@ private struct TableStage: View {
         .animation(.spring(duration: 0.35, bounce: 0.3).paced, value: coach.tip)
         // Out of the way fast once the table is touched.
         .animation(.easeOut(duration: 0.15).paced, value: turnCue)
+        .animation(.spring(duration: 0.35, bounce: 0.3).paced, value: connectionPill)
         .onAppear(perform: attach)
         .onDisappear { session.detachTable() }
         .onChange(of: StageInput(room: session.store.room, pass: session.store.pass), initial: true) {
@@ -470,6 +518,15 @@ private struct TableStage: View {
             Task {
                 try? await Task.sleep(for: .milliseconds(900))
                 events.menuOpen = true
+            }
+        }
+        // `-demo pending`: a card goes to the discard by itself, and the demo server never answers.
+        if DemoMode.from() == .pending {
+            Task { [weak scene, session] in
+                try? await Task.sleep(for: .milliseconds(1500))
+                guard let scene, let card = session.store.room?.game?.hands[0]?.first(where: { Card(id: $0) != .cucumber })
+                else { return }
+                scene.tryDiscard(card, target: nil)
             }
         }
         // `-show-scoreboard` (screenshots): the scoreboard over the table as it opens.

@@ -77,6 +77,9 @@ then the build setting (Debug: `http://localhost:8787`, optionally overridden by
 - `-demo <lobby|lobbyReady|table|other|replay|nope|celebrate|curtain|handoff|peek|crowded|hit|lay|over>` opens a room fed by
   a fake socket and canned snapshots, so the real screens render with no server. `-slowmo <factor>`
   (at most 1) runs a demo in slow motion. See `Pounce/App/DemoMode.swift` for what each demo shows.
+  The bad connection indicator has four: `weak`, `reconnecting`, `pending` (a move the server never
+  answers) and `seatLink` (other players' weak and reconnecting phones). Screenshots of each are in
+  `Art/screenshots/connection/`.
 - `-anim-speed <n>` (or `POUNCE_ANIM_SPEED=<n>` in the environment) runs the whole app n times faster
   and marks the run as a test: sound and haptics go to silent stand-ins. See [Test speed](#test-speed).
 - `-show-join` opens the Join screen. `-open-link <url>` handles a link as if it was tapped.
@@ -200,6 +203,7 @@ server (it uses demo modes, plus whatever the device already knows for Home).
 | Script | What it does | Environment |
 | --- | --- | --- |
 | `scripts/e2e.sh [pounce-e2e args]` | Plays a scripted full game against the server with the `pounce-e2e` CLI (default `full --local 2 --bots 2 --timeout 1800`, about 11 minutes at `SPEED=1`). | `DEV_SERVER_URL`, `DEV_SERVER_LOG`, `SPEED` |
+| `pounce-e2e scenario stall [--stall 20] --base <url>` | The playtest's slow move: two phones at a table, and one phone's network goes dead (sends, frames and pings held, connects time out) just as it discards. Prints when that phone shows weak and reconnecting, when the other sees its seat weak and lost, and when the move lands, and checks it landed once. Run it from `PounceKit/` with `swift run` against any dev server. | `--stall` seconds (default 20; under 11 shows weak only, with no reconnect) |
 | `scripts/ui-tests.sh [xcodebuild args]` | The XCUITest suite on a simulator, with the dev server and a host broker (Mac-side `pounce-e2e` remotes and `simctl push`). Pass `-only-testing:PounceUITests/SmokeTests` to narrow it. | `DESTINATION` (default iPhone 17 Pro, iOS 26.2), `SPEED`, `POUNCE_UITEST_TIMEOUT_SCALE` (default 1; use 3 on a busy Mac) |
 | `scripts/multi-sim.sh` | Two simulators: both open the same lobby through a `pounce-dev://` link, then a host game moves seats to the phones and `MultiSimTests` plays them to game over. Screenshots land in `$OUT/shared`. | `SIM_A`, `SIM_B` (UDIDs), `OUT`, `MOVE_AT`, `SPEED`, `SKIP_BUILD=1`, `LOBBY_ONLY=1` (lobby screenshots only), `KEEP_B=1` (leave B booted), `ORIENTATION_A` / `ORIENTATION_B` (iPads: `landscape`, or `rotate` to turn over at every round), `DD` |
 | `scripts/phone-game.sh` | A game hosted on a plugged-in iPhone (Developer Mode and UI Automation on) against the live server: `PhoneGameTests` hosts and plays its seat by taps, a `pounce-e2e join` remote on the Mac takes seat 1, House Cats fill the rest, and it runs to game over. Needs no dev server. | `DEVICE` (UDID; default the first connected iPhone), `BASE` (default https://play.conleychaos.com), `BOTS` (default 1), `SPEED` (the phone only; the live server's bots keep their pace), `OUT`, `SKIP_BUILD=1` |

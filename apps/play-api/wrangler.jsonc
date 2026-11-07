@@ -31,7 +31,12 @@
     "CONSENT": "on",
     // Your own streak, the trophy room and connections on accept (trophy room design §5). Needs
     // STREAKS. On with the PR that ships the app half; off, the server answers as before.
-    "TROPHY": "on"
+    "TROPHY": "on",
+    // The bad connection indicator: heartbeats the room answers without waking, move ids so a
+    // move sent again after a reconnect lands once, and each seat's connection quality. Apps
+    // before it never see the new fields (unknown keys and message types are ignored); off, the
+    // server answers as before.
+    "LINK": "on"
   },
   "durable_objects": {
     "bindings": [

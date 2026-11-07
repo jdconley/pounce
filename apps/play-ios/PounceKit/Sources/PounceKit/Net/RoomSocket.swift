@@ -12,6 +12,9 @@ public enum SocketEvent: Equatable, Sendable {
     case notFound
     /// Terminal: the server said `room_closed`.
     case closed
+    /// The open connection's quality changed (`LinkMeter`). Every new connection starts `good`
+    /// without one.
+    case link(LinkQuality)
 }
 
 public enum RoomSocketError: Error, Equatable {
@@ -34,6 +37,12 @@ public protocol RoomSocketing: Sendable {
 /// finishes when the socket stops for good: 404 on connect (`.notFound`), a
 /// `room_closed` error (`.closed`), or `stop()`. A stopped socket can't be restarted.
 ///
+/// Heartbeats: every `tick` the connection's `LinkMeter` is checked and, when due, a heartbeat
+/// goes out: `{"t":"ping"}` once a snapshot says the server takes them (`room.link`, at its
+/// `ping` interval), else a WebSocket ping. Quality changes are `.link` events (and, to a server
+/// with links, a `link` report so the other phones can see it); a dead connection is aborted
+/// (no close frame, so the server shows the seat reconnecting) and a new one connects at once.
+///
 /// The run loop holds the actor until it stops, so call `stop()` when done.
 public actor RoomSocket: RoomSocketing {
     public nonisolated let events: AsyncStream<SocketEvent>
@@ -43,7 +52,9 @@ public actor RoomSocket: RoomSocketing {
     private let credential: @Sendable () async throws -> DeviceCredential
     private let connector: any WebSocketConnector
     private let backoff: [Duration]
-    private let pingInterval: Duration
+    private let heartbeat: LinkMeter.Config
+    private let tick: Duration
+    private let clock: @Sendable () -> Duration
     private let sleep: @Sendable (Duration) async throws -> Void
 
     private var started = false
@@ -55,6 +66,11 @@ public actor RoomSocket: RoomSocketing {
     private var connection: (any WebSocketConnection)?
     private var runTask: Task<Void, Never>?
     private var pingTask: Task<Void, Never>?
+    /// The open connection's meter, and the quality last reported for it.
+    private var meter: LinkMeter?
+    private var shownQuality: LinkQuality = .good
+    /// From the last snapshot: the server takes `{"t":"ping"}` (and `link` reports), this often.
+    private var appPings: Duration?
 
     public init(
         code: String,
@@ -62,7 +78,9 @@ public actor RoomSocket: RoomSocketing {
         credential: @escaping @Sendable () async throws -> DeviceCredential,
         connector: any WebSocketConnector = URLSessionWebSocketConnector(),
         backoff: [Duration] = [.milliseconds(250), .milliseconds(500), .seconds(1), .seconds(2), .seconds(4), .seconds(8)],
-        pingInterval: Duration = .seconds(25),
+        heartbeat: LinkMeter.Config = LinkMeter.Config(),
+        tick: Duration = .milliseconds(500),
+        clock: @escaping @Sendable () -> Duration = RoomSocket.uptime,
         sleep: @escaping @Sendable (Duration) async throws -> Void = { try await Task.sleep(for: $0) }
     ) {
         (events, continuation) = AsyncStream.makeStream(of: SocketEvent.self)
@@ -70,9 +88,18 @@ public actor RoomSocket: RoomSocketing {
         self.credential = credential
         self.connector = connector
         self.backoff = backoff
-        self.pingInterval = pingInterval
+        self.heartbeat = heartbeat
+        self.tick = tick
+        self.clock = clock
         self.sleep = sleep
     }
+
+    /// The time since this process started, on a clock that keeps going while the app sleeps.
+    @Sendable public static func uptime() -> Duration {
+        Self.origin.duration(to: .now)
+    }
+
+    private static let origin = ContinuousClock.now
 
     // MARK: public
 
@@ -81,6 +108,9 @@ public actor RoomSocket: RoomSocketing {
         started = true
         launch()
     }
+
+    /// The open connection's last heartbeat round trip (diagnostics and tests).
+    public var lastRoundTrip: Duration? { meter?.lastRoundTrip }
 
     public func send(_ m: ClientMessage) async throws {
         guard let connection else { throw RoomSocketError.notConnected }
@@ -132,6 +162,7 @@ public actor RoomSocket: RoomSocketing {
     private func dropConnection() -> (any WebSocketConnection)? {
         pingTask?.cancel()
         pingTask = nil
+        meter = nil
         defer { connection = nil }
         return connection
     }
@@ -165,8 +196,10 @@ public actor RoomSocket: RoomSocketing {
             }
 
             connection = conn
+            meter = LinkMeter(config: heartbeat, now: clock())
+            shownQuality = .good
             emit(.connected)
-            pingTask = Task { await self.ping(gen, conn) }
+            pingTask = Task { await self.beat(gen, conn) }
             await receive(gen, conn)
 
             guard isCurrent(gen) else { return }
@@ -184,11 +217,17 @@ public actor RoomSocket: RoomSocketing {
             let text: String
             do { text = try await conn.receive() } catch { return }
             guard isCurrent(gen) else { return }
+            meter?.heard(now: clock())
             guard let message = try? Codec.decode(text) else { continue }
+            if case .pong = message {
+                pong(gen)
+                continue
+            }
             emit(.message(message))
             switch message {
-            case .snapshot:
+            case .snapshot(_, _, let room):
                 attempt = 0
+                appPings = room.link.map { .milliseconds(min(max($0.ping, 1000), 30_000)) }
             case .error(let code) where code == .roomClosed:
                 emit(.closed)
                 await finish()?.close()
@@ -207,24 +246,60 @@ public actor RoomSocket: RoomSocketing {
         return isCurrent(gen)
     }
 
-    /// Pings `conn` every `pingInterval`; two failures in a row close it, which
-    /// ends the receive loop and so reconnects. Cancelled when `conn` is dropped.
-    private func ping(_ gen: Int, _ conn: any WebSocketConnection) async {
-        var failures = 0
+    /// Every `tick`: a heartbeat when one is due, then the meter's verdict. A dead connection is
+    /// closed, which ends the receive loop and so reconnects. Cancelled when `conn` is dropped.
+    private func beat(_ gen: Int, _ conn: any WebSocketConnection) async {
         while true {
-            do { try await sleep(pingInterval) } catch { return }
-            guard isCurrent(gen) else { return }
-            do {
-                try await conn.sendPing()
-                failures = 0
-            } catch {
-                guard isCurrent(gen) else { return }
-                failures += 1
-                if failures >= 2 {
-                    await conn.close()
-                    return
+            do { try await sleep(tick) } catch { return }
+            guard isCurrent(gen), var meter else { return }
+            let now = clock()
+            if let every = appPings { meter.config.pingEvery = every }
+            if meter.shouldPing(now: now) {
+                meter.pingSent(now: now)
+                // Never awaited here: a send into a dead socket can hang, and the meter must keep ticking.
+                if appPings != nil {
+                    Task { try? await conn.send(Codec.encode(ClientMessage.ping)) }
+                } else {
+                    Task { [weak self] in
+                        guard (try? await conn.sendPing()) != nil else { return }
+                        await self?.pong(gen)
+                    }
                 }
             }
+            let verdict = meter.tick(now: now)
+            self.meter = meter
+            show(meter.quality, conn)
+            if verdict == .dead {
+                await died(gen, conn)
+                return
+            }
         }
+    }
+
+    /// A dead connection: reconnect now, without waiting for its receive to fail (on a dead
+    /// network that can take as long as the network stays dead), and drop it with no goodbye.
+    private func died(_ gen: Int, _ conn: any WebSocketConnection) async {
+        guard isCurrent(gen) else { return }
+        _ = dropConnection()
+        emit(.disconnected)
+        launch()
+        await conn.abort()
+    }
+
+    private func pong(_ gen: Int) {
+        guard isCurrent(gen), var meter, let conn = connection else { return }
+        meter.pong(now: clock())
+        self.meter = meter
+        show(meter.quality, conn)
+    }
+
+    /// Reports a quality change: a `.link` event, and to a server with links, a `link` message.
+    private func show(_ quality: LinkQuality, _ conn: any WebSocketConnection) {
+        guard quality != shownQuality else { return }
+        shownQuality = quality
+        emit(.link(quality))
+        guard appPings != nil else { return }
+        let report = ClientMessage.link(quality == .weak ? .weak : .good)
+        Task { try? await conn.send(Codec.encode(report)) }
     }
 }

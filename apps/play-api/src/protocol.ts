@@ -23,6 +23,8 @@ export type Person = {
 };
 
 export type Presence = "awake" | "away" | "asleep";
+/** A seat whose phone's connection is poor ("weak") or gone mid-game ("lost"). Absent: fine. */
+export type SeatLink = "weak" | "lost";
 export type SeatKind = "open" | "closed" | "human" | "bot";
 export type RoomStatus = "lobby" | "playing" | "over";
 
@@ -37,12 +39,21 @@ export type RoomView = {
     person?: Person;
     yours: boolean;
     presence: Presence | null;
+    /** Only with `LINK` on, while playing, and only when not fine. */
+    link?: SeatLink;
   }[];
   game: CatTowerView | null;
   /** The table's rug and card back (§9.4). Only while streaks are on. */
   look?: { rug: string; back: string };
   /** The code of the table "Play again" dealt (§10.4), once there is one. */
   rematch?: string;
+  /**
+   * With `LINK` on: the server takes `{"t":"ping"}` heartbeats every `ping` ms
+   * and move ids, and `acks` are the ids of this device's moves it applied
+   * lately (oldest first), so an app can tell a move that got through from one
+   * to send again after a reconnect.
+   */
+  link?: { ping: number; acks: string[] };
 };
 
 export type RoomEvent =
@@ -55,7 +66,8 @@ export type ClientMessage =
   | { t: "claim"; seat: Seat; person: Person }
   | { t: "configure"; seat: Seat; kind: "open" | "bot" | "closed" }
   | { t: "start" }
-  | { t: "act"; seat: Seat; action: Action }
+  /** `id`: the app's move id, so a move sent twice (after a reconnect) is applied once. */
+  | { t: "act"; seat: Seat; action: Action; id?: string }
   | { t: "presence"; state: "active" | "background" }
   | { t: "moveSeat"; seat: Seat }
   | { t: "claimMove"; code: string }
@@ -63,7 +75,11 @@ export type ClientMessage =
   | { t: "rename"; name: string }
   | { t: "renameSeat"; seat: Seat; name: string }
   | { t: "rematch" }
-  | { t: "setLook"; rug?: string; back?: string };
+  | { t: "setLook"; rug?: string; back?: string }
+  /** A heartbeat. The room answers `{"t":"pong"}` without waking (WebSocket auto-response). */
+  | { t: "ping" }
+  /** The app's own view of its connection: round trips slow or not. */
+  | { t: "link"; state: "weak" | "good" };
 
 /** Every `error` code the server sends. */
 export type ErrorCode =
@@ -103,7 +119,11 @@ export type ServerMessage =
   /** A pair's streak after a turn (§13.3), for `person`, one of the people this device speaks for. */
   | { t: "streak"; pair: string; person: string; view: StreakView }
   /** "Play again" dealt a new table (§10.4). */
-  | { t: "rematch"; code: string };
+  | { t: "rematch"; code: string }
+  /** The answer to `{"t":"ping"}`. */
+  | { t: "pong" }
+  /** Every seat's link (null: fine) whenever one changes; not a state change, so no seq. */
+  | { t: "link"; seats: (SeatLink | null)[] };
 
 export type BadMessage = { error: "bad_message" };
 
@@ -115,6 +135,8 @@ const MAX_GROUPS = 2;
 const MAX_GROUP_CARDS = 12;
 const MAX_NAME = 20;
 const MAX_CAT = 7;
+/** A move id: what the app makes (a UUID), or anything short and plain. */
+const MOVE_ID = /^[A-Za-z0-9_-]{1,64}$/;
 
 type Obj = Record<string, unknown>;
 
@@ -250,10 +272,19 @@ function parseObject(o: Obj): ClientMessage | null {
       if (!hasKeys(o, ["t", "code"]) || !isMoveCode(o.code)) return null;
       return { t: "claimMove", code: o.code };
     case "act": {
-      if (!hasKeys(o, ["t", "seat", "action"]) || !isInt(o.seat, 0)) return null;
+      if (!hasKeys(o, ["t", "seat", "action"], ["id"]) || !isInt(o.seat, 0)) return null;
       const action = parseAction(o.action);
-      return action ? { t: "act", seat: o.seat, action } : null;
+      if (!action) return null;
+      if (!("id" in o)) return { t: "act", seat: o.seat, action };
+      // Older apps send no id.
+      if (typeof o.id !== "string" || !MOVE_ID.test(o.id)) return null;
+      return { t: "act", seat: o.seat, action, id: o.id };
     }
+    case "ping":
+      return hasKeys(o, ["t"]) ? { t: "ping" } : null;
+    case "link":
+      if (!hasKeys(o, ["t", "state"]) || (o.state !== "weak" && o.state !== "good")) return null;
+      return { t: "link", state: o.state };
     default:
       return null;
   }

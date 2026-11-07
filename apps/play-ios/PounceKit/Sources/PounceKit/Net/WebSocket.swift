@@ -7,6 +7,13 @@ public protocol WebSocketConnection: Sendable {
     func receive() async throws -> String
     func sendPing() async throws
     func close() async
+    /// Drops the socket with no close frame, as a dead network would: the server sees an
+    /// abnormal close, not a goodbye, and shows the seat as reconnecting. Defaults to `close()`.
+    func abort() async
+}
+
+extension WebSocketConnection {
+    public func abort() async { await close() }
 }
 
 public enum SocketConnectError: Error, Equatable {
@@ -158,6 +165,10 @@ final class URLSessionWebSocketConnection: WebSocketConnection {
 
     func close() async {
         task.cancel(with: .normalClosure, reason: nil)
+    }
+
+    func abort() async {
+        task.cancel()
     }
 }
 

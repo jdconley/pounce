@@ -5,6 +5,7 @@ import { card } from "../rules/cards";
 import { DEFAULT_BACK, DEFAULT_RUG } from "../streaks/catalog";
 
 import { newMoveCode } from "./codes";
+import { LINK_PING_MS, LinkTracker } from "./link";
 import { defaultRoomName } from "./names";
 
 import type { GameModule } from "../games/module";
@@ -17,6 +18,7 @@ import type {
   RoomStatus,
   RoomView,
   SeatKind,
+  SeatLink,
   ServerMessage,
 } from "../protocol";
 import type { Action, ApplyError, CatTowerState, GameEvent, Seat } from "../rules/engine";
@@ -44,6 +46,8 @@ export type DeviceRecord = {
   connected: boolean;
   /** personId → playerId for the people this device speaks for, as the Worker resolved them on connect. */
   players?: Record<string, string>;
+  /** The ids of this device's latest applied moves, oldest first: a move sent again is applied once. */
+  acks?: string[];
 };
 
 /**
@@ -95,8 +99,11 @@ export type RoomState = {
 
 export type Look = { rug: string; back: string };
 
-/** Which optional behaviour a room has. Streaks (and looks and Play again) stay off until `STREAKS` is set. */
-export type RoomFeatures = { streaks: boolean; live?: boolean };
+/**
+ * Which optional behaviour a room has. Streaks (and looks and Play again) stay off until `STREAKS` is set.
+ * `link`: heartbeats, move acks and each seat's connection quality (`LINK`).
+ */
+export type RoomFeatures = { streaks: boolean; live?: boolean; link?: boolean };
 
 /** Why a live table ended: the round or game is over, its device came back, or a limit passed (§11.3). */
 export type LiveEnd = "over" | "back" | "idle" | "cap" | "replaced";
@@ -183,6 +190,8 @@ const ASLEEP_AFTER_MS = 5 * MS_PER_MINUTE;
 const PRESENCE_RANK: Record<Presence, number> = { asleep: 0, away: 1, awake: 2 };
 const LOOK_EVERY_MS = 10_000;
 const NO_UNLOCKS: Unlocks = { backs: [], rugs: [] };
+/** Move ids remembered per device: far more than one app ever has in flight. */
+const ACKS_KEPT = 16;
 
 /**
  * The room state machine. Pure: it mutates `state` and returns the messages
@@ -205,6 +214,8 @@ export class RoomCore {
   private turnBy: string | null = null;
   /** The person whose action is being applied ended their turn: "your move" names them. */
   private movedBy: Person | null = null;
+  /** Each device's connection quality (not persisted). */
+  private readonly link = new LinkTracker();
 
   constructor(
     state: RoomState,
@@ -266,6 +277,7 @@ export class RoomCore {
    * by the Durable Object first; the defaults need none.
    */
   handle(deviceId: string, msg: ClientMessage, unlocks: Unlocks = NO_UNLOCKS): Outbound[] {
+    this.heard(deviceId, this.now());
     try {
       return this.dispatch(deviceId, msg, unlocks);
     } catch {
@@ -289,9 +301,18 @@ export class RoomCore {
       },
       deviceId,
     );
+    this.link.connected(deviceId, this.now());
     // Back at the table in the app: its live table goes (§11.3).
     this.endLive(deviceId, "back");
-    return [...events, { to: deviceId, message: this.snapshotFor(deviceId) }];
+    return [...events, ...this.linkCheck(deviceId), { to: deviceId, message: this.snapshotFor(deviceId) }];
+  }
+
+  /**
+   * A ping or message from a connected device at `at` (the Durable Object
+   * passes each socket's last auto-answered ping before a tick).
+   */
+  heard(deviceId: string, at: number): void {
+    if (this.state.devices[deviceId]?.connected) this.link.hear(deviceId, at);
   }
 
   /**
@@ -299,14 +320,17 @@ export class RoomCore {
    * the foreground too (Home, another table), and says `background` first
    * when it leaves or the phone locks.
    */
-  disconnect(deviceId: string): Outbound[] {
+  /** `asked`: the app closed the socket itself; otherwise the seat shows as reconnecting for a while. */
+  disconnect(deviceId: string, asked = true): Outbound[] {
     const device = this.state.devices[deviceId];
     if (!device) return [];
-    return this.presenceChange(deviceId, () => {
+    this.link.disconnected(deviceId, this.now(), asked);
+    const out = this.presenceChange(deviceId, () => {
       device.connected = false;
       if (device.presence !== "away") device.since = this.now();
       device.presence = "away";
     });
+    return [...out, ...this.linkCheck()];
   }
 
   /**
@@ -395,6 +419,7 @@ export class RoomCore {
     }
 
     this.expireLive(this.now());
+    out.push(...this.linkCheck());
 
     if (timers.cleanupAt <= this.now()) {
       for (const deviceId of Object.keys(state.live ?? {})) this.endLive(deviceId, "over");
@@ -410,8 +435,9 @@ export class RoomCore {
     const decays = Object.values(this.state.devices)
       .filter((device) => device.presence === "away")
       .map((device) => device.since + ASLEEP_AFTER_MS);
+    const link = this.linkWatched() ? this.link.nextChange(this.now()) : null;
     return Math.min(
-      ...[botAt, nextRoundAt, cleanupAt, ...decays, ...Object.values(this.state.live ?? {}).map(deadline)].filter(
+      ...[botAt, nextRoundAt, cleanupAt, link, ...decays, ...Object.values(this.state.live ?? {}).map(deadline)].filter(
         (t): t is number => t !== null,
       ),
     );
@@ -647,12 +673,17 @@ export class RoomCore {
   snapshotFor(deviceId: string): Snapshot {
     const { state } = this;
     const controlled = this.controlledSeats(deviceId);
-    const seats: RoomView["seats"] = state.seats.map((s, i) => ({
-      kind: s.kind,
-      ...(s.person ? { person: s.person } : {}),
-      yours: controlled.includes(i),
-      presence: s.kind === "human" ? this.seatPresence(i) : null,
-    }));
+    const links = this.seatLinks();
+    const seats: RoomView["seats"] = state.seats.map((s, i) => {
+      const link = links[i];
+      return {
+        kind: s.kind,
+        ...(s.person ? { person: s.person } : {}),
+        yours: controlled.includes(i),
+        presence: s.kind === "human" ? this.seatPresence(i) : null,
+        ...(link ? { link } : {}),
+      };
+    });
     return {
       t: "snapshot",
       protocol: PROTOCOL_VERSION,
@@ -666,8 +697,33 @@ export class RoomCore {
         game: state.gameState ? this.game.view(state.gameState, controlled) : null,
         ...(this.features.streaks ? { look: this.look() } : {}),
         ...(state.rematch?.code ? { rematch: state.rematch.code } : {}),
+        ...(this.features.link ? { link: { ping: LINK_PING_MS, acks: [...(state.devices[deviceId]?.acks ?? [])] } } : {}),
       },
     };
+  }
+
+  /** Links are watched while a game is on with the feature on. */
+  private linkWatched(): boolean {
+    return this.features.link === true && this.state.status === "playing";
+  }
+
+  /** Each seat's link now; all null unless watched (and for every seat but a human's). */
+  private seatLinks(): (SeatLink | null)[] {
+    const now = this.now();
+    const devices = Object.keys(this.state.devices);
+    return this.state.seats.map((s, i) =>
+      this.linkWatched() && s.kind === "human" ? this.link.seat(devices.filter((id) => this.controls(id, i)), now) : null,
+    );
+  }
+
+  /** A `{t:"link"}` to every connected device (but `exclude`) when a seat's link changed since the last one. */
+  private linkCheck(exclude?: string): Outbound[] {
+    if (!this.features.link) return [];
+    const seats = this.seatLinks();
+    if (!this.link.show(seats)) return [];
+    return Object.entries(this.state.devices)
+      .filter(([id, device]) => device.connected && id !== exclude)
+      .map(([id]) => ({ to: id, message: { t: "link", seats } }));
   }
 
   /** Seats of every player the device speaks for, plus seats with no player that the device holds. */
@@ -715,7 +771,13 @@ export class RoomCore {
       case "claimMove":
         return this.claimMove(deviceId, msg.code);
       case "act":
-        return this.act(deviceId, msg.seat, msg.action);
+        return this.act(deviceId, msg.seat, msg.action, msg.id);
+      case "ping":
+        // The Durable Object answers pings itself; one that gets here still gets its pong.
+        return [{ to: deviceId, message: { t: "pong" } }];
+      case "link":
+        this.link.report(deviceId, msg.state === "weak");
+        return this.linkCheck();
       case "presence":
         return this.presence(deviceId, msg.state);
       case "rename":
@@ -892,12 +954,16 @@ export class RoomCore {
     }
   }
 
-  private act(deviceId: string, seat: Seat, action: Action): Outbound[] {
+  private act(deviceId: string, seat: Seat, action: Action, id?: string): Outbound[] {
+    const device = this.state.devices[deviceId];
+    // Sent again after a reconnect, already applied: the snapshot says so.
+    if (id !== undefined && device?.acks?.includes(id)) return [{ to: deviceId, message: this.snapshotFor(deviceId) }];
     if (!this.controlledSeats(deviceId).includes(seat)) return [this.fail(deviceId, "not_your_seat")];
     if (this.state.status !== "playing") return [this.fail(deviceId, "not_playing")];
     const turn = this.turnKey();
     const applied = this.applyGame(seat, action);
     if ("error" in applied) return [this.fail(deviceId, applied.error)];
+    if (id !== undefined && device) device.acks = [...(device.acks ?? []), id].slice(-ACKS_KEPT);
     const mover = this.state.seats[seat]?.playerId;
     const ended = this.game.endsTurn(action, applied.events, seat);
     if (mover && ended) this.turnBy = mover;

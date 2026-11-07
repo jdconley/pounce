@@ -21,19 +21,64 @@ public enum TurnStep: String, Codable, Sendable { case draw, play }
 public enum GameStatus: String, Codable, Sendable { case playing, roundOver, gameOver }
 public enum DrawSource: String, Codable, Sendable { case deck, discard }
 
+/// A seat whose phone's connection is poor (`weak`) or gone mid-game (`lost`), as the server
+/// sees it. Unknown strings are kept, never rejected, so a future value can't break a snapshot.
+public struct SeatLink: RawRepresentable, Codable, Hashable, Sendable {
+    public let rawValue: String
+
+    public init(rawValue: String) { self.rawValue = rawValue }
+
+    public init(from decoder: any Decoder) throws {
+        rawValue = try decoder.singleValueContainer().decode(String.self)
+    }
+
+    public func encode(to encoder: any Encoder) throws {
+        var container = encoder.singleValueContainer()
+        try container.encode(rawValue)
+    }
+
+    /// Round trips are slow, or the phone missed its heartbeats.
+    public static let weak = SeatLink(rawValue: "weak")
+    /// The phone has gone quiet or its socket dropped: it is reconnecting.
+    public static let lost = SeatLink(rawValue: "lost")
+}
+
 /// One lobby/table seat. `person` is absent (not null) for open, closed and
-/// bot seats; `presence` is null for non-human seats.
+/// bot seats; `presence` is null for non-human seats. `link` is set only by a
+/// server with links on, while playing, and only when the seat's link isn't fine.
 public struct SeatView: Codable, Equatable, Sendable {
     public var kind: SeatKind
     public var person: Person?
     public var yours: Bool
     public var presence: Presence?
+    public var link: SeatLink?
 
-    public init(kind: SeatKind, person: Person? = nil, yours: Bool = false, presence: Presence? = nil) {
+    public init(kind: SeatKind, person: Person? = nil, yours: Bool = false, presence: Presence? = nil, link: SeatLink? = nil) {
         self.kind = kind
         self.person = person
         self.yours = yours
         self.presence = presence
+        self.link = link
+    }
+}
+
+/// A server with links on: it takes `{"t":"ping"}` heartbeats every `ping` ms and move ids, and
+/// `acks` are the ids of this device's moves it applied lately (oldest first).
+public struct RoomLink: Codable, Equatable, Sendable {
+    public var ping: Int
+    public var acks: [String]
+
+    public init(ping: Int, acks: [String] = []) {
+        self.ping = ping
+        self.acks = acks
+    }
+
+    private enum CodingKeys: String, CodingKey { case ping, acks }
+
+    public init(from decoder: any Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        ping = try c.decodeIfPresent(Int.self, forKey: .ping) ?? 3000
+        acks = try c.decodeIfPresent([String].self, forKey: .acks) ?? []
     }
 }
 
@@ -176,10 +221,12 @@ public struct RoomView: Codable, Equatable, Sendable {
     public var look: Look?
     /// The Play again table's code, once someone dealt it (§10.4).
     public var rematch: String?
+    /// Heartbeats and move acks; nil from a server without links (it takes neither).
+    public var link: RoomLink?
 
     public init(
         code: String, name: String? = nil, status: RoomStatus, youAreHost: Bool, seats: [SeatView],
-        game: GameView? = nil, look: Look? = nil, rematch: String? = nil
+        game: GameView? = nil, look: Look? = nil, rematch: String? = nil, link: RoomLink? = nil
     ) {
         self.code = code
         self.name = name
@@ -189,6 +236,7 @@ public struct RoomView: Codable, Equatable, Sendable {
         self.game = game
         self.look = look
         self.rematch = rematch
+        self.link = link
     }
 
     /// The name to show: the table's own, or `TableName.fallback` from an older server.

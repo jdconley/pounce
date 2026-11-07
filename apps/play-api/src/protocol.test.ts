@@ -193,6 +193,19 @@ describe("parseClientMessage", () => {
     });
   });
 
+  describe("ping and link", () => {
+    it("ping is just its type", () => {
+      expect(parse({ t: "ping" })).toEqual({ t: "ping" });
+      expect(parse({ t: "ping", at: 1 })).toEqual(BAD);
+    });
+    it("link says weak or good", () => {
+      expect(parse({ t: "link", state: "weak" })).toEqual({ t: "link", state: "weak" });
+      expect(parse({ t: "link", state: "good" })).toEqual({ t: "link", state: "good" });
+      expect(parse({ t: "link", state: "lost" })).toEqual(BAD);
+      expect(parse({ t: "link" })).toEqual(BAD);
+    });
+  });
+
   describe("act", () => {
     it("valid act parses", () => {
       expect(parse(act({ type: "draw", from: "deck" }, 1))).toEqual({
@@ -200,6 +213,19 @@ describe("parseClientMessage", () => {
         seat: 1,
         action: { type: "draw", from: "deck" },
       });
+    });
+    it("an optional move id: short and plain", () => {
+      const id = "0F8C1D2E-3A4B-4C5D-8E6F-7A8B9C0D1E2F";
+      expect(parse({ ...act({ type: "draw", from: "deck" }), id })).toEqual({
+        t: "act",
+        seat: 0,
+        action: { type: "draw", from: "deck" },
+        id,
+      });
+      for (const bad of ["", "x".repeat(65), "has space", "a/b", 7, null]) {
+        expect(parse({ ...act({ type: "draw", from: "deck" }), id: bad })).toEqual(BAD);
+      }
+      expect(parse({ ...act({ type: "fold" }), id })).toEqual(BAD);
     });
     it("act with string seat -> bad_message", () => {
       expect(parse(act({ type: "draw", from: "deck" }, "0"))).toEqual(BAD);

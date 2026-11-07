@@ -48,6 +48,8 @@ export interface Env {
    * "on", and only with `STREAKS` on too. wrangler.jsonc turns it on.
    */
   TROPHY?: string;
+  /** The bad connection indicator's server half (`linkOn`). */
+  LINK?: string;
   /**
    * Twilio Verify, for parent consent (consent design D1, D6). Secrets, optional: all four or
    * nothing is sent, so consent can't start. Verify texts a six-digit code from Twilio's own
@@ -93,4 +95,13 @@ export function devSpeed(env: Pick<Env, "DEV_SPEED">): number {
   const speed = Number(env.DEV_SPEED ?? "");
   if (!Number.isFinite(speed) || speed <= 1) return 1;
   return Math.min(speed, MAX_DEV_SPEED);
+}
+
+/**
+ * Heartbeats, move acks and each seat's connection quality (the bad connection
+ * indicator) when "on". wrangler.jsonc turns it on; off, snapshots carry no
+ * `link` and apps behave as before.
+ */
+export function linkOn(env: Pick<Env, "LINK">): boolean {
+  return ["on", "1", "true"].includes((env.LINK ?? "").toLowerCase());
 }

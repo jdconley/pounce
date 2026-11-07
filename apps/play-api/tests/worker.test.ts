@@ -56,6 +56,8 @@ function worker(
     testflight?: string;
     persist?: string;
     devSpeed?: string;
+    /** The bad connection indicator's server half (`LINK`). */
+    link?: boolean;
     onFinished?: (fn: () => Promise<void>) => void;
   } = {},
 ): Miniflare {
@@ -74,6 +76,7 @@ function worker(
       ...(secret === null ? {} : { TOKEN_SECRET: secret }),
       ...(options.testflight ? { TESTFLIGHT_URL: options.testflight } : {}),
       ...(options.devSpeed ? { DEV_SPEED: options.devSpeed } : {}),
+      ...(options.link ? { LINK: "on" } : {}),
     },
     ...(options.persist ? { durableObjectsPersist: options.persist } : {}),
   });
@@ -203,8 +206,9 @@ class Client {
   /** The next unread message matching `match`; earlier unread ones are skipped. */
   async next<M extends ServerMessage = ServerMessage>(
     match: (m: ServerMessage) => boolean = () => true,
+    within = 5000,
   ): Promise<M> {
-    const end = Date.now() + 5000;
+    const end = Date.now() + within;
     for (;;) {
       while (this.cursor < this.received.length) {
         const m = this.received[this.cursor++] as ServerMessage;
@@ -881,5 +885,59 @@ describe("worker", { timeout: 20_000 }, () => {
       headers: { ...auth(alice), upgrade: "websocket" },
     });
     expect(stillGone.status).toBe(404);
+  });
+
+  describe("bad connections (LINK)", () => {
+    test("the room answers pings itself and snapshots say so", async () => {
+      const mf = worker({ link: true });
+      const { a, sa } = await startedGame(mf);
+      expect(sa.room.link).toEqual({ ping: 3000, acks: [] });
+      a.send({ t: "ping" });
+      expect(await a.next((m) => m.t === "pong")).toEqual({ t: "pong" });
+      // Off, no `link` in snapshots (and a ping still gets its pong, from the room itself).
+      const off = await startedGame(worker());
+      expect(off.sa.room.link).toBeUndefined();
+      off.a.send({ t: "ping" });
+      expect(await off.a.next((m) => m.t === "pong")).toEqual({ t: "pong" });
+    });
+
+    test("a socket that drops shows the seat as lost to the others; a close it asked for does not", async () => {
+      const mf = worker({ link: true });
+      const { bob, code, a, b } = await startedGame(mf);
+      b.ws.close(4000, "network gone");
+      expect(await a.next((m) => m.t === "link")).toEqual({ t: "link", seats: [null, "lost"] });
+      const again = await connect(mf, code, bob);
+      expect((await again.snapshot()).room.seats[1]?.link).toBeUndefined();
+      expect(await a.next((m) => m.t === "link")).toEqual({ t: "link", seats: [null, null] });
+      again.ws.close(1000);
+      const away = await a.next((m) => m.t === "event" && m.event.kind === "presence");
+      expect(away).toMatchObject({ event: { kind: "presence", seat: 1, presence: "away" } });
+      expect(a.received.filter((m) => m.t === "link")).toHaveLength(2);
+    });
+
+    test("a move sent twice with one id is applied once", async () => {
+      const mf = worker({ link: true });
+      const { a, b, sb } = await startedGame(mf);
+      const turn = (sb.room.game as CatTowerView).turn;
+      const mover = turn === 0 ? a : b;
+      const move = { t: "act", seat: turn, action: { type: "draw", from: "deck" }, id: "move-1" };
+      mover.send(move);
+      const applied = await mover.next<Snapshot>((m) => m.t === "snapshot" && m.room.link?.acks.includes("move-1") === true);
+      const deck = (applied.room.game as CatTowerView).deckCount;
+      mover.send(move);
+      const answer = await mover.next();
+      expect(answer.t).toBe("snapshot");
+      expect(((answer as Snapshot).room.game as CatTowerView).deckCount).toBe(deck);
+    });
+
+    test.concurrent("a phone that goes silent turns weak for the others", async ({ onTestFinished }) => {
+      const mf = worker({ link: true, onFinished: onTestFinished });
+      const { a } = await startedGame(mf);
+      // Alice keeps pinging; Bob's phone says nothing at all.
+      const beat = setInterval(() => a.send({ t: "ping" }), 1000);
+      onTestFinished(() => clearInterval(beat));
+      const weak = await a.next((m) => m.t === "link", 12_000);
+      expect(weak).toEqual({ t: "link", seats: [null, "weak"] });
+    }, 20_000);
   });
 });
