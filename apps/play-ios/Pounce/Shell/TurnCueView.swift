@@ -1,8 +1,8 @@
 import PounceKit
 import SwiftUI
 
-/// The table's turn overlay (`TurnCue`): the big "Your turn" moment, or a calm "Mochi's turn"
-/// label under whoever is up. It never takes a touch, so every tap goes through to the table
+/// The table's turn overlay (`TurnCue`): the big "Your turn" moment. Nobody else's turn gets a
+/// label (their cat's glowing ring says it). It never takes a touch, so every tap goes through to the table
 /// under it (the first one puts "Your turn" away). Laid out in scene space: the view ignores
 /// the safe area, like the table.
 struct TurnCueView: View {
@@ -23,10 +23,6 @@ struct TurnCueView: View {
                 YourTurnCue(cue: mine, yield: yield, size: geo.size, local: local)
                     // A new turn, or the same one again after the background: the entrance replays.
                     .id("\(mine.key.epoch).\(mine.key.seat).\(mine.showing)")
-            case .theirs(let theirs):
-                TheirTurnTag(
-                    name: theirs.name, x: local(theirs.cat).midX, top: height - theirs.barBottom, width: geo.size.width)
-                    .id(theirs.seat)
             }
         }
         .ignoresSafeArea()
@@ -175,36 +171,5 @@ private struct PileRing: View {
             .scaleEffect(pulse ? 1.08 : 1)
             .position(x: frame.midX, y: frame.midY)
             .accessibilityHidden(true)
-    }
-}
-
-/// Someone else is up: their name and "'s turn" on a small pill hanging from the bar under
-/// their cat. Quiet on purpose: no sound, no bounce.
-private struct TheirTurnTag: View {
-    let name: String
-    /// Under their cat, in this view's space.
-    let x: CGFloat
-    /// The bar's bottom edge, in this view's space.
-    let top: CGFloat
-    let width: CGFloat
-
-    private static let maxWidth: CGFloat = 200
-
-    var body: some View {
-        let half = Self.maxWidth / 2
-        Text(String(localized: "\(name)'s turn", comment: "Under another player's cat while it is their turn"))
-            .font(.system(size: 15, weight: .black, design: .rounded))
-            .foregroundStyle(Palette.ink)
-            .lineLimit(1)
-            .truncationMode(.middle)
-            .padding(.horizontal, 10)
-            .padding(.vertical, 4)
-            .background(Capsule().fill(Palette.orange))
-            .overlay(Capsule().strokeBorder(Palette.ink, lineWidth: 2.5))
-            .shadow(color: Palette.ink.opacity(0.5), radius: 0, x: 0, y: 3)
-            .frame(maxWidth: Self.maxWidth)
-            .fixedSize(horizontal: false, vertical: true)
-            .accessibilityIdentifier("turncue.theirs")
-            .position(x: min(max(x, half * 0.6 + 8), width - half * 0.6 - 8), y: top + 12)
     }
 }

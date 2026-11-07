@@ -2,7 +2,7 @@ import XCTest
 
 /// The start of your turn is unmissable (TurnCue.swift, TurnCueView.swift): "Your turn" plays
 /// when this phone's turn comes, stays until the table is touched, and comes back when the app
-/// returns from the background on that turn. Someone else's turn gets a calm label instead.
+/// returns from the background on that turn. Someone else's turn gets no label: their ring glows.
 class TurnCueTests: XCTestCase {
     override func setUp() {
         continueAfterFailure = false
@@ -51,15 +51,15 @@ class TurnCueTests: XCTestCase {
         XCTAssertNotNil(untilSnap(app, 10) { !$0.exists("turncue.mine") }, "a touch didn't put the cue away")
     }
 
-    /// Someone else's turn: a calm label with their name under their cat, no "Your turn".
+    /// Someone else's turn: no label at all (their cat's glowing ring says it), and no "Your turn".
     @MainActor
-    func testTheirTurnLabel() throws {
+    func testNoLabelForTheirTurn() throws {
         let app = Live.demo("other")
         app.launch()
-        let tag = el(app, "turncue.theirs")
         if el(app, "priming.notNow").waitForExistence(timeout: Live.t(3)) { dismissPriming(app) }
-        XCTAssertTrue(tag.waitForExistence(timeout: Live.t(15)), "no label for the other seat's turn")
-        XCTAssertTrue(tag.label.hasSuffix("'s turn"), "label says \(tag.label)")
+        XCTAssertNotNil(untilSnap(app, 15) { $0.value("table.turn") == "other" }, "not someone else's turn")
+        Thread.sleep(forTimeInterval: Live.pace(1.5))
+        XCTAssertFalse(el(app, "turncue.theirs").exists, "a label for the other seat's turn")
         XCTAssertFalse(el(app, "turncue.mine").exists)
         screenshot(app, "turn-cue-theirs")
     }

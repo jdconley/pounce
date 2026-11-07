@@ -18,9 +18,15 @@ struct TableView: UIViewRepresentable {
         view.backgroundColor = UIColor(Palette.night)
         view.presentScene(scene)
         scene.director.view = view
+        let swipe = UIScreenEdgePanGestureRecognizer(target: context.coordinator, action: #selector(Coordinator.swiped))
+        swipe.edges = .left
+        swipe.delegate = context.coordinator
+        view.addGestureRecognizer(swipe)
         cover(view)
         return view
     }
+
+    func makeCoordinator() -> Coordinator { Coordinator() }
 
     func updateUIView(_ view: TableSKView, context: Context) {
         if view.scene !== scene {
@@ -37,9 +43,38 @@ struct TableView: UIViewRepresentable {
         UIAccessibility.post(notification: .screenChanged, argument: nil)
     }
 
-    static func dismantleUIView(_ view: TableSKView, coordinator: ()) {
+    static func dismantleUIView(_ view: TableSKView, coordinator: Coordinator) {
         (view.scene as? TableScene)?.director.view = nil
         view.presentScene(nil)
+    }
+}
+
+extension TableView {
+    /// The swipe in from the left edge that goes Home. It starts only while no card can be under
+    /// the finger (`TableScene.allowsSwipeHome`), so it never takes a card drag over; once it
+    /// starts, the scene's touch is cancelled.
+    @MainActor
+    final class Coordinator: NSObject, UIGestureRecognizerDelegate {
+        /// How far, or how fast, the swipe has to go right to count.
+        static let distance: CGFloat = 70
+        static let speed: CGFloat = 600
+
+        private func scene(_ recognizer: UIGestureRecognizer) -> TableScene? {
+            (recognizer.view as? SKView)?.scene as? TableScene
+        }
+
+        func gestureRecognizerShouldBegin(_ recognizer: UIGestureRecognizer) -> Bool {
+            scene(recognizer)?.allowsSwipeHome ?? false
+        }
+
+        @objc func swiped(_ recognizer: UIScreenEdgePanGestureRecognizer) {
+            guard recognizer.state == .ended, let view = recognizer.view else { return }
+            let moved = recognizer.translation(in: view)
+            let speed = recognizer.velocity(in: view)
+            guard moved.x > abs(moved.y), moved.x >= Self.distance || (moved.x >= 24 && speed.x >= Self.speed) else { return }
+            Haptics.shared.tick()
+            scene(recognizer)?.onSwipeHome()
+        }
     }
 }
 

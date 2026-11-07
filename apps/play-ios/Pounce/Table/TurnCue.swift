@@ -9,13 +9,13 @@ import UIKit
 ///   moment plays and stays (the piles pulse "start here" while there is a card to draw) until
 ///   the first touch on the table, then gets out of the way. It comes back for the same turn
 ///   only when the app returns from the background (`replayTurnCue`).
-/// - `theirs`: another seat is up. A calm "Mochi's turn" label hangs under their cat.
+///
+/// Another seat's turn has no cue: the glowing ring on their cat in the top bar says it.
 ///
 /// On a pass-and-play phone a seat's hand is shown only once its curtain lifts, so the cue
 /// plays after the curtain, never behind it.
 enum TurnCue: Equatable {
     case mine(Mine)
-    case theirs(Theirs)
 
     /// One seat's turn: the store's turn epoch moves with every turn, round and status change.
     struct Key: Hashable {
@@ -39,19 +39,6 @@ enum TurnCue: Equatable {
         var stage: CGRect
     }
 
-    struct Theirs: Equatable {
-        var seat: Seat
-        var name: String
-        /// Their cat in the bar.
-        var cat: CGRect
-        /// The bar's bottom edge: the label hangs from it.
-        var barBottom: CGFloat
-    }
-
-    var isMine: Bool {
-        if case .mine = self { return true }
-        return false
-    }
 }
 
 /// The scene's bookkeeping for `TurnCue`.
@@ -71,31 +58,21 @@ extension TableScene {
               model.room.status == .playing else { return nil }
         let seat = game.turn
         let seats = model.room.seats
-        if model.mySeats.contains(seat) {
-            let key = TurnCue.Key(epoch: store.turnEpoch, seat: seat)
-            let draw = game.step == .draw
-            guard seat == bottomSeat, seat == shownRevealed, !animating, !celebration.announced,
-                  turnCue.dismissed != key, draw || turnCue.replay == key else { return nil }
-            let piles = draw ? [deck.hitFrame, discard.hitFrame].enumerated()
-                .filter { glows.piles.contains($0.offset == 0 ? .deck : .discard) }.map(\.element) : []
-            let pilesBottom = layout.deck.y - layout.cardSize.height / 2
-            let stage = CGRect(
-                x: 0, y: layout.traysFrame.minY, width: size.width,
-                height: max(pilesBottom - layout.traysFrame.minY, 0))
-            return .mine(TurnCue.Mine(
-                key: key, showing: turnCue.showing, name: SeatInfo.name(seats[safe: seat]),
-                cat: SeatInfo.catIndex(seats[safe: seat]), multiSeat: model.isMultiSeat, draw: draw,
-                piles: piles, stage: stage))
-        }
-        guard let frame = opponents.frame(of: seat) else { return nil }
-        // Roomy bars curve, so an outer seat's name pill can hang below the bar: the cue goes
-        // under the pill.
-        var barBottom = layout.opponentsBar.minY
-        if layout.arrangement != .phone, let tag = opponents.tag(for: seat) {
-            barBottom = min(barBottom, tag.frame.minY - 4)
-        }
-        return .theirs(TurnCue.Theirs(
-            seat: seat, name: SeatInfo.name(seats[safe: seat]), cat: frame, barBottom: barBottom))
+        guard model.mySeats.contains(seat) else { return nil }
+        let key = TurnCue.Key(epoch: store.turnEpoch, seat: seat)
+        let draw = game.step == .draw
+        guard seat == bottomSeat, seat == shownRevealed, !animating, !celebration.announced,
+              turnCue.dismissed != key, draw || turnCue.replay == key else { return nil }
+        let piles = draw ? [deck.hitFrame, discard.hitFrame].enumerated()
+            .filter { glows.piles.contains($0.offset == 0 ? .deck : .discard) }.map(\.element) : []
+        let pilesBottom = layout.deck.y - layout.cardSize.height / 2
+        let stage = CGRect(
+            x: 0, y: layout.traysFrame.minY, width: size.width,
+            height: max(pilesBottom - layout.traysFrame.minY, 0))
+        return .mine(TurnCue.Mine(
+            key: key, showing: turnCue.showing, name: SeatInfo.name(seats[safe: seat]),
+            cat: SeatInfo.catIndex(seats[safe: seat]), multiSeat: model.isMultiSeat, draw: draw,
+            piles: piles, stage: stage))
     }
 
     /// Sends the shell a changed cue.
