@@ -12,6 +12,11 @@
   { "name": "run with duplicate value invalid", "req": { "kind": "run", "size": 4 }, "cards": [2, 14, 27, 96], "valid": false },
   { "name": "run 2,yarn,4,5 valid with start 2", "req": { "kind": "run", "size": 4 }, "cards": [1, 96, 3, 4], "runStart": 2, "valid": true },
   { "name": "run 2,yarn,4,5 invalid with start 3", "req": { "kind": "run", "size": 4 }, "cards": [1, 96, 3, 4], "runStart": 3, "valid": false },
+  { "name": "run 4-5-6 + yarn sent last keeps the yarn at the end", "req": { "kind": "run", "size": 4 }, "cards": [3, 4, 5, 96], "valid": true, "start": 4 },
+  { "name": "run 4-5-6 + yarn sent first keeps the yarn at the start", "req": { "kind": "run", "size": 4 }, "cards": [96, 3, 4, 5], "valid": true, "start": 3 },
+  { "name": "run with a yarn where no start puts it falls back to the lowest start", "req": { "kind": "run", "size": 4 }, "cards": [3, 96, 4, 5], "valid": true, "start": 3 },
+  { "name": "run with yarns at both ends keeps the order", "req": { "kind": "run", "size": 4 }, "cards": [96, 4, 5, 97], "valid": true, "start": 4 },
+  { "name": "runStart wins over the order", "req": { "kind": "run", "size": 4 }, "cards": [3, 4, 5, 96], "runStart": 3, "valid": true, "start": 3 },
   { "name": "run all yarn is invalid", "req": { "kind": "run", "size": 3 }, "cards": [96, 97, 98], "valid": false },
   { "name": "coat of 7 tuxedo with two yarn valid", "req": { "kind": "coat", "size": 7 }, "cards": [24, 26, 28, 30, 32, 96, 97], "valid": true },
   { "name": "coat mixing tabby and gray invalid", "req": { "kind": "coat", "size": 3 }, "cards": [0, 73, 96], "valid": false }

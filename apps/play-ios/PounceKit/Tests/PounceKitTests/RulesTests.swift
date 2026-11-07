@@ -14,12 +14,14 @@ struct GroupVector: Decodable, Sendable, CustomTestStringConvertible {
     let cards: [CardID]
     let runStart: Int?
     let valid: Bool
+    /// The run's start, where the vector pins it.
+    let start: Int?
 
     var req: Requirement { Requirement(kind: reqRaw.kind, size: reqRaw.size) }
     var testDescription: String { name }
 
     private enum CodingKeys: String, CodingKey {
-        case name, cards, runStart, valid
+        case name, cards, runStart, valid, start
         case reqRaw = "req"
     }
 
@@ -51,7 +53,15 @@ struct GroupVector: Decodable, Sendable, CustomTestStringConvertible {
 
     @Test(arguments: try! GroupVector.load())
     func groupVectors(_ v: GroupVector) {
-        #expect((Rules.buildGroup(v.req, cards: v.cards, runStart: v.runStart) != nil) == v.valid, "\(v.name)")
+        let built = Rules.buildGroup(v.req, cards: v.cards, runStart: v.runStart)
+        #expect((built != nil) == v.valid, "\(v.name)")
+        if let start = v.start {
+            guard case .run(_, let s, _)? = built else {
+                Issue.record("\(v.name): not a run")
+                return
+            }
+            #expect(s == start, "\(v.name)")
+        }
     }
 
     @Test func buildGroupOutputs() {

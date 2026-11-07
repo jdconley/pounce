@@ -422,7 +422,7 @@ extension TableScene {
         if discard.hitFrame.insetBy(dx: -12, dy: -12).contains(p) { return chooseDiscard(card) }
         if let seat = opponentSeat(at: p) { return aim(card, at: seat) }
         if !trays.isHidden, let tray = trays.tray(at: p) {
-            if !tryTray(card, tray) { nope(card: card) }
+            if !tryTray(card, tray, at: dropSlot(tray: tray, x: p.x)) { nope(card: card) }
             return
         }
         if let aim = laidDrop(at: p) {
@@ -444,7 +444,7 @@ extension TableScene {
                     trayState.moveYarn(card, inTray: tray, toIndex: index)
                 }
                 refresh()
-            } else if !tryTray(card, target) {
+            } else if !tryTray(card, target, at: dropSlot(tray: target, x: p.x)) {
                 refresh()
                 nope(card: card)
             }
@@ -608,11 +608,13 @@ extension TableScene {
         return true
     }
 
-    @discardableResult func tryTray(_ card: CardID, _ tray: Int) -> Bool {
+    /// Puts `card` in `tray`; `slot` is the display slot it was dropped on (nil on the tap
+    /// path), which a Yarn in a run keeps (`TrayState.add`).
+    @discardableResult func tryTray(_ card: CardID, _ tray: Int, at slot: Int? = nil) -> Bool {
         guard let seat = actingSeat, model?.canPlay(seat) == true, !trays.isHidden,
               trayState.requirements.indices.contains(tray), trayState.tray(of: card) != tray,
               !trayState.isFull(tray) else { return false }
-        trayState.add(card, to: tray)
+        trayState.add(card, to: tray, at: slot)
         if liftedCard == card { liftedCard = nil }
         Haptics.shared.tick()
         refresh()
@@ -643,6 +645,11 @@ extension TableScene {
         Haptics.shared.success()
         refresh()
         return true
+    }
+
+    /// The display slot a card let go at `x` would take in `tray`, among its cards plus this one.
+    private func dropSlot(tray: Int, x: CGFloat) -> Int {
+        trays.slotIndex(tray: tray, x: x, count: (trayState.slots[safe: tray]?.count ?? 0) + 1)
     }
 
     /// Takes a card out of its tray, optionally dropping it into slot `slot` of the fan.

@@ -256,6 +256,8 @@ describe("shared fixtures (fixtures/groups.json)", () => {
     cards: number[];
     runStart?: number;
     valid: boolean;
+    /** The run's start, where the vector pins it. */
+    start?: number;
   };
   const vectors = JSON.parse(
     readFileSync(new URL("../../fixtures/groups.json", import.meta.url), "utf8"),
@@ -268,7 +270,9 @@ describe("shared fixtures (fixtures/groups.json)", () => {
 
   for (const v of vectors) {
     test(`fixture: ${v.name}`, () => {
-      expect(buildGroup(v.req, v.cards, v.runStart) !== null).toBe(v.valid);
+      const built = buildGroup(v.req, v.cards, v.runStart);
+      expect(built !== null).toBe(v.valid);
+      if (v.start !== undefined) expect(built).toMatchObject({ kind: "run", start: v.start });
     });
   }
 });
