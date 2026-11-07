@@ -8,7 +8,8 @@ public struct HomeTableItem: Equatable, Sendable, Identifiable {
     public var name: String?
     public var yourTurn: Bool
     public var status: String
-    /// Seat summaries from the cache; empty until the room has been opened on this phone.
+    /// Seat summaries: the server's list when it carries them, else the cache (empty until the
+    /// room has been opened on this phone).
     public var seats: [CachedSeat]
     /// The cat of the seat whose turn it is, when the cache knows it.
     public var turnCat: Int?
@@ -37,7 +38,7 @@ public enum HomeTables {
     static let finishedLifetimeMs: Double = 24 * 3_600_000
 
     /// The server's list is the truth for which tables exist (and, when it has one, the table's
-    /// name); the cache only adds cats, seat names and a name the list lacks.
+    /// name, and who sits where); the cache only adds the turn, and seats or a name the list lacks.
     /// Order: your-turn tables (newest first), then playing/lobby tables by recency, then finished
     /// tables from the last 24 hours. Older finished tables are dropped, as is any cached code the
     /// server no longer lists, and any table archived on this phone (`archived`, see `isArchived`).
@@ -99,7 +100,7 @@ public enum HomeTables {
             let isOver = entry.status == RoomStatus.over.rawValue
             if isOver && nowMs - entry.updatedAt >= finishedLifetimeMs { return nil }
             let cached = cache[entry.code]
-            let seats = cached?.seats ?? []
+            let seats = entry.seats.map { $0.map(CachedSeat.init) } ?? cached?.seats ?? []
             var turnCat: Int?
             if let turn = cached?.turn, seats.indices.contains(turn) { turnCat = seats[turn].cat }
             return HomeTableItem(

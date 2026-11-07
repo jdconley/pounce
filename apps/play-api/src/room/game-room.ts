@@ -31,6 +31,7 @@ import {
 
 import type { Env } from "../env";
 import type { ClientMessage, ServerMessage } from "../protocol";
+import type { TableSeat } from "./tables";
 
 /** Internal header the Worker sets to the verified device id. */
 export const DEVICE_HEADER = "x-play-device";
@@ -587,7 +588,9 @@ export class GameRoom extends DurableObject<Env> {
     const devices = tableDevices(state);
     const players = new Set(core.seatPlayers());
     const next = state.rematch?.code ?? null;
-    const fingerprint = JSON.stringify([state.status, actor, state.name, [...devices], [...players], ...(next ? [next] : [])]);
+    // Who sits where, and as whom: a join, a rename or a new cat reaches Home's cards.
+    const faces = state.seats.map((s) => [s.kind, s.person?.id, s.person?.name, s.person?.cat, s.playerId ?? s.deviceId]);
+    const fingerprint = JSON.stringify([state.status, actor, state.name, [...devices], [...players], faces, ...(next ? [next] : [])]);
     if (fingerprint === this.tablesFingerprint) return;
     this.tablesFingerprint = fingerprint;
 
@@ -611,12 +614,17 @@ export class GameRoom extends DurableObject<Env> {
         this.index(deviceId).upsertTable({
           ...entry,
           yourTurn: actor !== null && core.controlledSeats(deviceId).includes(actor),
+          seats: tableSeats(state, core.controlledSeats(deviceId)),
         }),
       ),
       ...[...players].map((playerId) =>
         this.player(playerId).upsertTable({
           ...entry,
           yourTurn: actor !== null && state.seats[actor]?.playerId === playerId,
+          seats: tableSeats(
+            state,
+            state.seats.flatMap((s, i) => (s.playerId === playerId ? [i] : [])),
+          ),
         }),
       ),
       ...gone.map((deviceId) => this.index(deviceId).removeTable(state.code)),
@@ -680,6 +688,15 @@ function parsePlayers(header: string | null): Record<string, string> {
 }
 
 /** Every device holding a seat, plus the host. */
+/** The seats as a tables list shows them, with `yours` on the list owner's (`mine`). */
+function tableSeats(state: RoomState, mine: number[]): TableSeat[] {
+  return state.seats.map((s, i) => ({
+    kind: s.kind,
+    ...(s.person ? { person: { id: s.person.id, name: s.person.name, cat: s.person.cat } } : {}),
+    ...(mine.includes(i) ? { yours: true as const } : {}),
+  }));
+}
+
 function tableDevices(state: RoomState): Set<string> {
   const out = new Set<string>([state.hostDeviceId]);
   for (const seat of state.seats) if (seat.deviceId) out.add(seat.deviceId);

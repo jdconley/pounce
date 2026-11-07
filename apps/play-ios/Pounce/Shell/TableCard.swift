@@ -1,18 +1,20 @@
 import PounceKit
 import SwiftUI
 
-/// One table on Home: its name, its code small beneath, the seats as pips. Your-turn cards glow
-/// orange and bounce with the waiting player's cat awake; the rest are dimmed with the current
-/// player's cat. Finished games carry a trophy.
+/// One table on Home: its name, who you're playing with, its code small beneath, the seats as
+/// pips. Your-turn cards glow orange and bounce with the waiting player's cat awake; the rest are
+/// dimmed with the current player's cat. Finished games carry a trophy.
 struct TableCard: View {
     let item: HomeTableItem
+    /// Everyone at the table but you (`AppModel.tablePeople`): your own people on name pills.
+    var people = TablePeople.Line(faces: [])
     /// Home's `home.table.<code>`; the Archived sheet uses its own.
     var identifier: String?
     /// Your turn here would keep today for a streak (§10.1): a small paw on the corner.
     var streakPaw = false
     let action: () -> Void
 
-    static let size = CGSize(width: 132, height: 160)
+    static let size = CGSize(width: 132, height: 180)
 
     private var isOver: Bool { item.status == RoomStatus.over.rawValue }
 
@@ -51,6 +53,9 @@ struct TableCard: View {
                     OutlinedText(item.title, size: 15, fill: .white, width: 2, lines: 2)
                         .frame(height: 40)
                         .padding(.horizontal, 6)
+                    PeopleLine(line: people)
+                        .frame(height: 20)
+                        .padding(.horizontal, 7)
                     Text(verbatim: item.id)
                         .font(.system(size: 12, weight: .heavy, design: .rounded))
                         .tracking(1.5)
@@ -86,10 +91,16 @@ struct TableCard: View {
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
-        .accessibilityLabel(
-            item.yourTurn
-                ? Text("Your turn, \(item.title), table \(item.id)") : Text("\(item.title), table \(item.id)"))
+        .accessibilityLabel(accessibilityText)
         .accessibilityIdentifier(identifier ?? "home.table.\(item.id)")
+    }
+
+    private var accessibilityText: Text {
+        let table =
+            item.yourTurn ? Text("Your turn, \(item.title), table \(item.id)") : Text("\(item.title), table \(item.id)")
+        let names = people.faces.map(\.name).joined(separator: ", ")
+        guard !names.isEmpty else { return table }
+        return Text("\(table), with \(names)", comment: "VoiceOver: a Home table card, then who else plays there")
     }
 
     @ViewBuilder private var cat: some View {
@@ -113,6 +124,50 @@ struct TableCard: View {
             ? [Palette.orange.mix(with: .white, by: 0.35), Palette.orange, Palette.orange.mix(with: Palette.magenta, by: 0.3)]
             : [Palette.violet.mix(with: .white, by: 0.15), Palette.violet.mix(with: Palette.ink, by: 0.35)]
         return LinearGradient(colors: colors, startPoint: .top, endPoint: .bottom)
+    }
+}
+
+/// Who you're playing with, on one line: your own people (connections, and anyone sharing this
+/// phone) first on name pills, then everyone else, then bots. Names that don't fit become a count
+/// ("+2"), dropped from the end; a single name left over truncates.
+private struct PeopleLine: View {
+    let line: TablePeople.Line
+
+    var body: some View {
+        if !line.isEmpty {
+            let variants = line.variants
+            ViewThatFits(in: .horizontal) {
+                ForEach(Array(variants.enumerated()), id: \.offset) { _, variant in
+                    row(variant.faces, more: variant.more)
+                }
+            }
+            .accessibilityHidden(true)
+        }
+    }
+
+    private func row(_ faces: [TablePeople.Face], more: Int) -> some View {
+        let close = faces.filter(\.close)
+        let others = faces.filter { !$0.close }.map(\.name).joined(separator: ", ")
+        return HStack(spacing: 4) {
+            ForEach(Array(close.enumerated()), id: \.offset) { _, face in
+                NameTag(face.name, maxWidth: more > 0 ? 92 : 118, size: 12)
+            }
+            if !others.isEmpty {
+                Text(verbatim: others)
+                    .font(.system(size: 12, weight: .heavy, design: .rounded))
+                    .foregroundStyle(.white.opacity(0.92))
+                    .shadow(color: Palette.ink.opacity(0.6), radius: 0, x: 0, y: 1)
+                    .lineLimit(1)
+                    .truncationMode(.tail)
+            }
+            if more > 0 {
+                Text(verbatim: "+\(more)")
+                    .font(.system(size: 12, weight: .black, design: .rounded))
+                    .foregroundStyle(.white)
+                    .shadow(color: Palette.ink.opacity(0.6), radius: 0, x: 0, y: 1)
+                    .fixedSize()
+            }
+        }
     }
 }
 

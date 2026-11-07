@@ -5,12 +5,20 @@ public struct CachedSeat: Codable, Equatable, Sendable {
     public var name: String?
     public var cat: Int?
     public var yours: Bool
+    /// The seated person's id; nil in caches written before Home showed names.
+    public var person: String?
 
-    public init(kind: SeatKind, name: String? = nil, cat: Int? = nil, yours: Bool = false) {
+    public init(kind: SeatKind, name: String? = nil, cat: Int? = nil, yours: Bool = false, person: String? = nil) {
         self.kind = kind
         self.name = name
         self.cat = cat
         self.yours = yours
+        self.person = person
+    }
+
+    /// A seat from the server's tables list.
+    public init(_ seat: TableSeat) {
+        self.init(kind: seat.kind, name: seat.person?.name, cat: seat.person?.cat, yours: seat.yours, person: seat.person?.id)
     }
 }
 
@@ -65,7 +73,7 @@ public final class TableCache {
         tables[room.code] = CachedTable(
             code: room.code, name: room.name, status: room.status,
             seats: room.seats.map {
-                CachedSeat(kind: $0.kind, name: $0.person?.name, cat: $0.person?.cat, yours: $0.yours)
+                CachedSeat(kind: $0.kind, name: $0.person?.name, cat: $0.person?.cat, yours: $0.yours, person: $0.person?.id)
             },
             turn: room.game?.turn, phase: room.game?.phase ?? [], updatedAt: now)
         save(tables)
