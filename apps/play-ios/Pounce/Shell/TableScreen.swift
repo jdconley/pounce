@@ -77,11 +77,12 @@ struct TableScreen: View {
         ZStack(alignment: .top) {
             content
                 .transition(.opacity.combined(with: .scale(scale: 0.96)))
-            if shownConnection != .good {
+            // The table draws its own, on its own layer (`TableLayer.connection`).
+            if shownConnection != .good, screen == .lobby {
                 ConnectionPill(connection: shownConnection)
-                    .padding(.top, connectionTop)
+                    .padding(.top, 8)
                     .transition(.move(edge: .top).combined(with: .opacity))
-                    .zIndex(30)
+                    .zIndex(1)
             }
         }
         .animation(.spring(duration: 0.4, bounce: 0.25).paced, value: screen)
@@ -108,15 +109,6 @@ struct TableScreen: View {
         }
     }
 
-    /// Just under the table's top bar (its cats and name tags), clear of the hand; in the lobby,
-    /// at the top.
-    private var connectionTop: CGFloat {
-        guard screen == .table else { return 8 }
-        return horizontalSizeClass == .regular ? 196 : 104
-    }
-
-    @Environment(\.horizontalSizeClass) private var horizontalSizeClass
-
     @ViewBuilder private var content: some View {
         switch screen {
         case .connecting:
@@ -126,7 +118,7 @@ struct TableScreen: View {
         case .table:
             // No touches while the socket is down. Not `allowsHitTesting(false)`: that rehosts the
             // SpriteKit view with no safe area, and the whole table jumps under the status bar.
-            TableStage(session: session)
+            TableStage(session: session, connection: shownConnection)
                 .overlay {
                     if !store.connected {
                         Color.clear
@@ -166,6 +158,26 @@ struct ConnectingView: View {
     }
 }
 
+/// The table stage's layers, bottom to top (its `zIndex` values). A view with no `zIndex` sits at
+/// 0 with the SpriteKit table, under every named layer, so each overlay names its own. The streak
+/// badge belongs to the top bar it hangs under (the scene draws that bar): just over the table and
+/// under everything the table puts up over it, so no dialog has the badge on top. Sheets (the paw
+/// menu and its look tray) are presented over the whole stage and need no layer.
+enum TableLayer {
+    /// The streak badge, with the opponents bar it hangs under.
+    static let topBar: Double = 1
+    /// The scoreboard and its phase ladder (tap the tower).
+    static let scoreboard: Double = 2
+    /// This phone's connection pill, just under the top bar.
+    static let connection: Double = 3
+    static let turnCue: Double = 4
+    static let coach: Double = 5
+    static let lookPill: Double = 6
+    static let curtain: Double = 10
+    static let priming: Double = 15
+    static let gameOver: Double = 20
+}
+
 /// The SpriteKit table for one session. Owns the scene (made once, kept across redraws) and shows
 /// pass-and-play (spec §5.9) as the store decides it (`RoomStore.pass`, updated with every room
 /// the store applies). The curtain is read from the store in `body`, never from state an
@@ -188,6 +200,8 @@ private struct TableStage: View {
     @Environment(AppModel.self) private var model
     @Environment(Settings.self) private var settings
     let session: RoomSession
+    /// This phone's connection as the screen shows it (`TableScreen`: a drop waits a second).
+    let connection: RoomStore.Connection
     @State private var scene: TableScene?
     /// What the scene's callbacks set (see `StageEvents`).
     @State private var events = StageEvents()
@@ -253,6 +267,14 @@ private struct TableStage: View {
         return events.turnCue
     }
 
+    /// The connection pill as it should show now: like the turn cue, never over the curtain, the
+    /// scoreboard, the menu, the push priming or the game over.
+    private var connectionPill: RoomStore.Connection? {
+        guard connection != .good, curtainSeat == nil, events.scoreboard == nil, events.winners == nil, !priming,
+              !events.menuOpen else { return nil }
+        return connection
+    }
+
     var body: some View {
         @Bindable var events = events
         let covered = curtainSeat != nil
@@ -281,7 +303,7 @@ private struct TableStage: View {
                 }
                 .ignoresSafeArea()
                 .transition(.scale.combined(with: .opacity))
-                .zIndex(3)
+                .zIndex(TableLayer.topBar)
             }
             if let pill = lookPill, let seat = table?.room.seats[safe: pill.seat] {
                 VStack {
@@ -291,13 +313,23 @@ private struct TableStage: View {
                 }
                 .transition(.move(edge: .top).combined(with: .opacity))
                 .allowsHitTesting(false)
-                .zIndex(6)
+                .zIndex(TableLayer.lookPill)
             }
             probes
+            if let shown = connectionPill {
+                // Just under the top bar's cats and name tags, clear of the hand.
+                VStack {
+                    ConnectionPill(connection: shown)
+                        .padding(.top, horizontalSizeClass == .regular ? 196 : 104)
+                    Spacer()
+                }
+                .transition(.move(edge: .top).combined(with: .opacity))
+                .zIndex(TableLayer.connection)
+            }
             if let cue = turnCue {
                 TurnCueView(cue: cue, yield: coach.tip != nil && coachView != nil)
                     .transition(.opacity.combined(with: .scale(scale: cue.isMine ? 0.85 : 1)))
-                    .zIndex(4)
+                    .zIndex(TableLayer.turnCue)
             }
             if let tip = coach.tip, let shown = coachView, shown.person.id == coach.person {
                 CoachMark(
@@ -312,7 +344,7 @@ private struct TableStage: View {
                     })
                     .id(tip)
                     .transition(.scale(scale: 0.85).combined(with: .opacity))
-                    .zIndex(5)
+                    .zIndex(TableLayer.coach)
             }
             if let board = events.scoreboard, events.winners == nil, board.game != nil {
                 // The table as the scene drew it when the tower was tapped, not the store's
@@ -321,6 +353,7 @@ private struct TableStage: View {
                     events.scoreboard = nil
                 }
                     .transition(.opacity)
+                    .zIndex(TableLayer.scoreboard)
             }
             if let seat = curtainSeat {
                 // The container drops in and lifts away; a curtain for someone else swaps
@@ -335,7 +368,7 @@ private struct TableStage: View {
                     .transition(.identity)
                 }
                 .transition(curtainTransition)
-                .zIndex(10)
+                .zIndex(TableLayer.curtain)
                 .overlay(alignment: .topLeading) {
                     if peeking {
                         // A peek the person didn't mean: back to the table, nothing shown.
@@ -361,7 +394,7 @@ private struct TableStage: View {
                         model.declinePush()
                     })
                     .transition(.opacity)
-                    .zIndex(15)
+                    .zIndex(TableLayer.priming)
             }
             if let winners = events.winners {
                 GameOverView(
@@ -373,7 +406,7 @@ private struct TableStage: View {
                     again: againState,
                     onPlayAgain: tapPlayAgain)
                     .transition(.opacity)
-                    .zIndex(20)
+                    .zIndex(TableLayer.gameOver)
             }
         }
         .animation(.easeOut(duration: 0.2).paced, value: events.scoreboard != nil)
@@ -384,6 +417,7 @@ private struct TableStage: View {
         .animation(.spring(duration: 0.35, bounce: 0.3).paced, value: coach.tip)
         // Out of the way fast once the table is touched.
         .animation(.easeOut(duration: 0.15).paced, value: turnCue)
+        .animation(.spring(duration: 0.35, bounce: 0.3).paced, value: connectionPill)
         .onAppear(perform: attach)
         .onDisappear { session.detachTable() }
         .onChange(of: StageInput(room: session.store.room, pass: session.store.pass), initial: true) {

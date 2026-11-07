@@ -2,7 +2,7 @@
 import Foundation
 import PounceKit
 
-/// DEBUG launch argument `-demo <lobby|lobbyReady|table|other|replay|celebrate|curtain|handoff|peek|crowded|hit>`: opens a room fed
+/// DEBUG launch argument `-demo <lobby|lobbyReady|table|other|replay|celebrate|curtain|handoff|peek|crowded|hit|lay>`: opens a room fed
 /// by a fake socket that sends one `DemoFixtures` snapshot, so the real screens render with no
 /// server. `lobbyReady` is the lobby with no open seat, so the start pill is live. `other` is the table on another seat's turn (ring glow + paw marker, dimmed hand).
 /// `replay` plays `DemoFixtures.replay()` twice through the real store and intent path
@@ -25,13 +25,15 @@ import PounceKit
 /// `crowded`: six seats, five of them laid down with long runs and big sets (`DemoFixtures.crowded()`).
 /// `hit`: my play step after laying down, with Leo's run 4-7 to hit (`DemoFixtures.hitTable()`);
 /// the fake server takes each hit as the real one would and sends the event and snapshot.
+/// `lay`: my play step on phase 2, not laid yet, with three 9s, a Yarn and 4-5-6 in hand
+/// (`DemoFixtures.layTable()`); the fake server takes the lay-down as the real one would.
 /// `over`: the celebration's finished table, opened as is, so the game over screen shows at once.
 /// The bad connection indicator, from a server with links: `weak` (this phone's round trips
 /// turn slow a second in), `reconnecting` (its socket drops a second in), `pending` (my play
 /// step; a card is discarded by itself and the server never answers, so it waits under its
 /// hourglass) and `seatLink` (Kiki's turn, Kiki's phone weak, Leo's reconnecting).
 enum DemoMode: String {
-    case lobby, lobbyReady, table, other, replay, nope, celebrate, curtain, handoff, peek, crowded, hit, over
+    case lobby, lobbyReady, table, other, replay, nope, celebrate, curtain, handoff, peek, crowded, hit, lay, over
     case weak, reconnecting, pending, seatLink
 
     static func from(arguments: [String] = CommandLine.arguments) -> DemoMode? {
@@ -72,6 +74,7 @@ enum DemoMode: String {
             return room
         case .crowded: return DemoFixtures.crowded()
         case .hit: return DemoFixtures.hitTable()
+        case .lay: return DemoFixtures.layTable()
         case .over: return DemoFixtures.celebration().last?.room ?? DemoFixtures.lobby()
         case .weak, .reconnecting:
             var room = DemoFixtures.table(seats: 4, mySeat: 0, phase: 2)
@@ -122,6 +125,7 @@ enum DemoMode: String {
         case .celebrate: CelebrateSocket()
         case .nope: DemoSocket(room: room, refusing: true)
         case .hit: DemoSocket(room: room, hits: true)
+        case .lay: DemoSocket(room: room, lays: true)
         case .weak: DemoSocket(room: room, script: [(.seconds(1), .link(.weak))])
         case .reconnecting: DemoSocket(room: room, script: [(.seconds(1), .disconnected), (.zero, .connecting)])
         default: DemoSocket(room: room)
@@ -270,14 +274,18 @@ actor DemoSocket: RoomSocketing {
     /// Takes hits like the server: the card joins the group (on the `side` asked for), then
     /// the `hit` event and a snapshot.
     private let hits: Bool
+    /// Takes a lay-down like the server (`Rules.matchPhase`), then the `laidDown` event and a
+    /// snapshot.
+    private let lays: Bool
     /// Socket events played after the snapshot, each after its wait (the bad connection demos).
     private let script: [(Duration, SocketEvent)]
     private var seq = 1
 
-    init(room: RoomView, refusing: Bool = false, hits: Bool = false, script: [(Duration, SocketEvent)] = []) {
+    init(room: RoomView, refusing: Bool = false, hits: Bool = false, lays: Bool = false, script: [(Duration, SocketEvent)] = []) {
         self.room = room
         self.refusing = refusing
         self.hits = hits
+        self.lays = lays
         self.script = script
         (events, continuation) = AsyncStream.makeStream(of: SocketEvent.self)
     }
@@ -300,6 +308,7 @@ actor DemoSocket: RoomSocketing {
 
     func send(_ m: ClientMessage) async throws {
         if hits, case .act(let seat, .hit(let card, let target, let side), _) = m { return hit(seat: seat, card: card, target: target, side: side) }
+        if lays, case .act(let seat, .layDown(let groups), _) = m { return layDown(seat: seat, groups: groups) }
         if case .setLook(let rug, let back) = m { return setLook(rug: rug, back: back) }
         if case .rematch = m {
             try? await Task.sleep(for: Pace.duration(.milliseconds(300)))
@@ -326,6 +335,22 @@ actor DemoSocket: RoomSocketing {
         seq += 1
         let seat = room.seats.firstIndex { $0.yours } ?? 0
         continuation.yield(.message(.event(seq: seq, event: .look(seat: seat, look: look))))
+        continuation.yield(.message(.snapshot(protocol: PounceKit.protocolVersion, seq: seq, room: room)))
+    }
+
+    private func layDown(seat: Seat, groups: [LayGroup]) {
+        print("[lay] sent \(groups.map { "\($0.cards) start \($0.runStart.map(String.init) ?? "-")" })")
+        guard var game = room.game, let built = Rules.matchPhase(game.phase[seat], groups: groups) else {
+            continuation.yield(.message(.error(.badGroups)))
+            return
+        }
+        let used = Set(built.flatMap(\.cards))
+        game.laid[seat] = built
+        game.hands[seat]?.removeAll { used.contains($0) }
+        game.handCounts[seat] -= used.count
+        room.game = game
+        seq += 1
+        continuation.yield(.message(.event(seq: seq, event: .game(.laidDown(seat: seat, groups: built)))))
         continuation.yield(.message(.snapshot(protocol: PounceKit.protocolVersion, seq: seq, room: room)))
     }
 

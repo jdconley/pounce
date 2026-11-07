@@ -24,7 +24,9 @@ public enum Rules {
     /// Build a group for `req` from `cards`, or nil if invalid. Needs exactly
     /// `req.size` distinct cards, no Cucumbers and at least one natural card.
     /// For a run containing Yarn, `runStart` (the value of the first card)
-    /// picks the placement; without it the lowest start that fits is used.
+    /// picks the placement. Without it the cards' own order picks it when that
+    /// order is a run (each Yarn keeps the spot the player gave it), else the
+    /// lowest start that fits.
     public static func buildGroup(_ req: Requirement, cards: [CardID], runStart: Int? = nil) -> Group? {
         guard cards.count == req.size, Set(cards).count == cards.count else { return nil }
         var decoded: [Card] = []
@@ -65,7 +67,7 @@ public enum Rules {
         // whole run stays within 1...12.
         let lowest = max(1, values.max()! - size + 1)
         let highest = min(values.min()!, maxValue + 1 - size)
-        let start = runStart ?? lowest
+        let start = runStart ?? startFromOrder(decoded, lowest: lowest, highest: highest) ?? lowest
         guard start >= lowest, start <= highest else { return nil }
 
         var slots = [CardID?](repeating: nil, count: size)
@@ -73,6 +75,19 @@ public enum Rules {
         var yarns = zip(cards, decoded).filter { $0.1 == .yarn }.map(\.0)[...]
         let ordered = slots.map { slot in slot ?? yarns.removeFirst() }
         return .run(cards: ordered, start: start, end: start + size - 1)
+    }
+
+    /// The start the cards' order spells out: every natural sits at index `value - start`
+    /// for one start in `lowest...highest`. Nil when the order isn't a run.
+    private static func startFromOrder(_ decoded: [Card], lowest: Int, highest: Int) -> Int? {
+        var start: Int?
+        for (i, card) in decoded.enumerated() {
+            guard case .number(let value, _) = card else { continue }
+            if let start, start != value - i { return nil }
+            start = value - i
+        }
+        guard let start, start >= lowest, start <= highest else { return nil }
+        return start
     }
 
     /// Whether `card` can be added to a laid-down group. Returns the extended
