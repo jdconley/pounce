@@ -83,6 +83,26 @@ import Testing
         #expect(items[1].turnCat == 2)
     }
 
+    @Test func theListsSeatsWinOverTheCache() {
+        let listed = TableEntry(
+            code: "CATS1", status: "playing", yourTurn: false, updatedAt: nowMs,
+            seats: [
+                TableSeat(kind: .human, person: Person(id: "me", name: "Mochi", cat: 2), yours: true),
+                TableSeat(kind: .human, person: Person(id: "sam", name: "Sam", cat: 6)),
+            ])
+        let items = HomeTables.merge(
+            entries: [listed, entry("CATS2", "lobby", ago: 1)],
+            cache: ["CATS1": cached("CATS1", turn: 1), "CATS2": cached("CATS2")], now: now)
+        #expect(items[0].seats == [
+            CachedSeat(kind: .human, name: "Mochi", cat: 2, yours: true, person: "me"),
+            CachedSeat(kind: .human, name: "Sam", cat: 6, person: "sam"),
+        ])
+        // The turn still comes from the cache, read against the list's seats.
+        #expect(items[0].turnCat == 6)
+        // A list entry without seats falls back to the cache.
+        #expect(items[1].seats.map(\.name) == ["Mochi", "Biscuit"])
+    }
+
     @Test func uncachedTableStillAppearsWithoutCats() {
         let items = HomeTables.merge(entries: [entry("BARE1", "lobby")], cache: [:], now: now)
         #expect(items.count == 1)

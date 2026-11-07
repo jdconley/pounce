@@ -150,7 +150,7 @@ import Testing
         let expected = CachedTable(
             code: "K7QM4", name: "Taco Night", status: .playing,
             seats: [
-                CachedSeat(kind: .human, name: "Mochi", cat: 2, yours: true),
+                CachedSeat(kind: .human, name: "Mochi", cat: 2, yours: true, person: "a"),
                 CachedSeat(kind: .bot, name: nil, cat: nil, yours: false),
                 CachedSeat(kind: .open, name: nil, cat: nil, yours: false),
                 CachedSeat(kind: .closed, name: nil, cat: nil, yours: false),
@@ -165,6 +165,14 @@ import Testing
         reloaded.remove(code: "K7QM4")
         #expect(!reloaded.contains(code: "K7QM4"))
         #expect(TableCache(directory: dir).all().isEmpty)
+    }
+
+    @Test func aCacheWrittenBeforeSeatIdsStillLoads() throws {
+        let dir = try tempDir()
+        try Data(#"{"K7QM4":{"code":"K7QM4","status":"playing","phase":[],"updatedAt":1,"seats":[{"kind":"human","name":"Mochi","cat":2,"yours":true},{"kind":"bot","yours":false}]}}"#.utf8)
+            .write(to: dir.appendingPathComponent("tables.json"))
+        let seats = TableCache(directory: dir).all()["K7QM4"]?.seats
+        #expect(seats == [CachedSeat(kind: .human, name: "Mochi", cat: 2, yours: true), CachedSeat(kind: .bot)])
     }
 
     // I-3: the dev server and production never share a credential or a table cache.
