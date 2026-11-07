@@ -82,6 +82,21 @@ public enum DemoFixtures {
         return room
     }
 
+    /// `crowded()` on my play step with my phase laid too (two sets of 3): six laid rows around
+    /// the piles and a full hand with something for most groups (the DEBUG `-demo crowdedHit`
+    /// screen, for profiling a drag over a busy laid zone).
+    public static func crowdedHit() -> RoomView {
+        var room = crowded()
+        room.game!.step = .play
+        room.game!.laid[0] = [
+            .set(cards: [id2(5, .gray), id2(5, .calico), id2(5, .tabby)], value: 5),
+            .set(cards: [id2(7, .gray), id2(7, .calico), id2(7, .tuxedo)], value: 7),
+        ]
+        room.game!.phase[0] = 0
+        balance(&room.game!)
+        return room
+    }
+
     /// My play step with my phase laid (two sets) and four cards left: 2, 3, a Yarn and an 8.
     /// Leo has laid a set of 7s and the run 4-5-6-7, so the 3 fits only below the run, the 8
     /// only above, and the Yarn either end (the DEBUG `-demo hit` screen).

@@ -44,6 +44,16 @@ final class LaidZoneNode: SKNode {
     private(set) var preview: HitPreview?
     /// The preview's ring and the number a Yarn stands for, above the rows.
     private let previewLayer = SKNode()
+    private let previewRing = SKSpriteNode()
+    private let previewStands = SKSpriteNode()
+    /// Each glowing target's glow and two sparkles, kept while the targets stay the same: a
+    /// preview only moves and fades them.
+    private var glowNodes: [HitTarget: [SKSpriteNode]] = [:]
+    /// The targets and refused group the laid cards were last darkened for.
+    private var dimmed: (targets: Set<HitTarget>, refused: HitTarget?)?
+    /// Every laid group's frame as aimed at (`drop(at:)`), in parent space; nil once rows or
+    /// the zone's scale change.
+    private var dropFrames: (scale: CGFloat, origin: CGPoint, frames: [(target: HitTarget, frame: CGRect)])?
 
     /// Growth while enlarged, about `center`.
     static let enlargeScale: CGFloat = 1.1
@@ -54,6 +64,12 @@ final class LaidZoneNode: SKNode {
         addChild(glowLayer)
         previewLayer.zPosition = 5
         addChild(previewLayer)
+        previewRing.centerRect = CardFaceFactory.ringCenter
+        previewRing.isHidden = true
+        previewLayer.addChild(previewRing)
+        previewStands.zPosition = 1
+        previewStands.isHidden = true
+        previewLayer.addChild(previewStands)
     }
 
     @available(*, unavailable)
@@ -63,6 +79,7 @@ final class LaidZoneNode: SKNode {
         guard let game = model.game else {
             rows.values.forEach { $0.node.removeFromParent() }
             rows.removeAll()
+            dropFrames = nil
             preview = nil
             drawPreview()
             setTargets([], enlarged: false, about: .zero)
@@ -101,6 +118,7 @@ final class LaidZoneNode: SKNode {
         // Snap every row to where it belongs now (a redraw stops any slide half way).
         for (seat, row) in rows { _ = arrange(row, seat: seat, animated: false) }
         drawPreview()
+        placeGlows(seats: nil)
     }
 
     /// Frames of `seat`'s laid groups, in the zone's parent space (as drawn, enlarged or not).
@@ -121,13 +139,22 @@ final class LaidZoneNode: SKNode {
     /// The laid group nearest `point` (parent space), within `LaidTargets.reach`, and the end of
     /// it the point is nearer. Aimed at the groups as laid, not as a preview draws them.
     func drop(at point: CGPoint) -> (target: HitTarget, toward: HitSide)? {
+        let frames = aimFrames()
+        guard let target = LaidTargets.target(at: point, in: frames),
+              let frame = frames.first(where: { $0.target == target })?.frame else { return nil }
+        return (target, LaidTargets.side(at: point, of: frame))
+    }
+
+    /// Every laid group's frame as aimed at, in parent space, worked out once per layout and
+    /// scale rather than on every touch move.
+    private func aimFrames() -> [(target: HitTarget, frame: CGRect)] {
+        if let cached = dropFrames, cached.scale == xScale, cached.origin == position { return cached.frames }
         var frames: [(target: HitTarget, frame: CGRect)] = []
         for seat in laidSeats {
             for (g, f) in groupFrames(seat: seat).enumerated() { frames.append((HitTarget(seat: seat, group: g), f)) }
         }
-        guard let target = LaidTargets.target(at: point, in: frames),
-              let frame = frames.first(where: { $0.target == target })?.frame else { return nil }
-        return (target, LaidTargets.side(at: point, of: frame))
+        dropFrames = (xScale, position, frames)
+        return frames
     }
 
     /// Shows `new` as the drop the dragged card would make (nil: none). Returns the slides
@@ -140,7 +167,8 @@ final class LaidZoneNode: SKNode {
         var moves: [(SKAction, SKNode)] = []
         for seat in seats { if let row = rows[seat] { moves += arrange(row, seat: seat, animated: animated) } }
         drawPreview()
-        drawGlows()
+        placeGlows(seats: seats)
+        emphasize()
         return moves
     }
 
@@ -157,12 +185,60 @@ final class LaidZoneNode: SKNode {
         drawGlows()
     }
 
-    /// The glows and darkening for `shownTargets` and the preview: while a legal preview
-    /// shows, its group alone glows full and the other targets fade back.
+    /// Builds the glow sprites for `shownTargets` (card-glow behind each group plus two
+    /// sparkles), then places and fades them for the preview.
     private func drawGlows() {
-        let targets = shownTargets
         glowLayer.removeAllChildren()
+        glowNodes = [:]
+        let glowTexture = TableArt.cards(ArtName.cardGlow)
+        let sparkle = TableArt.texture(ArtName.fxSparkle, atlas: ArtName.Atlas.fx)
+        for t in shownTargets where rows[t.seat] != nil {
+            let glow = SKSpriteNode(texture: glowTexture)
+            glow.centerRect = CGRect(x: 0.35, y: 0.35, width: 0.3, height: 0.3)
+            var nodes = [glow]
+            for d in [20.0, 14.0] {
+                let s = SKSpriteNode(texture: sparkle, size: CGSize(width: d, height: d))
+                s.zPosition = 1
+                nodes.append(s)
+            }
+            nodes.forEach(glowLayer.addChild)
+            glowNodes[t] = nodes
+        }
+        placeGlows(seats: nil)
+        emphasize()
+    }
+
+    /// Fits the glows of `seats`' groups (every seat: nil) to the groups as drawn, a preview's
+    /// gap included.
+    private func placeGlows(seats: Set<Seat>?) {
+        for (t, nodes) in glowNodes where seats?.contains(t.seat) ?? true {
+            guard let row = rows[t.seat], row.shownFrames.indices.contains(t.group), nodes.count == 3 else {
+                nodes.forEach { $0.isHidden = true }
+                continue
+            }
+            let f = row.shownFrames[t.group]
+            let pad = CardNode.glowSize(for: row.miniSize)
+            nodes[0].size = CGSize(width: f.width + (pad.width - row.miniSize.width) * 1.8,
+                                   height: f.height + (pad.height - row.miniSize.height) * 1.8)
+            nodes[0].position = CGPoint(x: f.midX, y: f.midY)
+            nodes[1].position = CGPoint(x: f.maxX - 2, y: f.maxY - 2)
+            nodes[2].position = CGPoint(x: f.minX + 3, y: f.minY + 4)
+            nodes.forEach { $0.isHidden = false }
+        }
+    }
+
+    /// While a legal preview shows, its group alone glows full and the other targets fade
+    /// back; groups that can't take the held card, and one that refuses it, are darkened.
+    private func emphasize() {
         let refused = preview.flatMap { $0.plan == nil ? $0.target : nil }
+        let chosen = preview.flatMap { $0.plan == nil ? nil : $0.target }
+        for (t, nodes) in glowNodes {
+            let alpha: CGFloat = chosen == nil || chosen == t ? 1 : 0.35
+            nodes.forEach { $0.alpha = alpha }
+        }
+        let targets = shownTargets
+        if let dimmed, dimmed.targets == targets, dimmed.refused == refused { return }
+        dimmed = (targets, refused)
         for (seat, row) in rows {
             for child in row.node.children {
                 guard let card = child as? CardNode, card !== row.ghost, let name = card.name, name.hasPrefix("g"),
@@ -172,26 +248,6 @@ final class LaidZoneNode: SKNode {
                 let lit = (targets.isEmpty || targets.contains(here)) && here != refused
                 card.color = UIColor(white: 0.08, alpha: 1)
                 card.colorBlendFactor = lit ? 0 : 0.5
-            }
-        }
-        let chosen = preview.flatMap { $0.plan == nil ? nil : $0.target }
-        let sparkle = TableArt.texture(ArtName.fxSparkle, atlas: ArtName.Atlas.fx)
-        for t in targets {
-            guard let row = rows[t.seat], row.shownFrames.indices.contains(t.group) else { continue }
-            let f = row.shownFrames[t.group]
-            let glow = SKSpriteNode(texture: TableArt.cards(ArtName.cardGlow))
-            let pad = CardNode.glowSize(for: row.miniSize)
-            glow.size = CGSize(width: f.width + (pad.width - row.miniSize.width) * 1.8, height: f.height + (pad.height - row.miniSize.height) * 1.8)
-            glow.centerRect = CGRect(x: 0.35, y: 0.35, width: 0.3, height: 0.3)
-            glow.position = CGPoint(x: f.midX, y: f.midY)
-            glow.alpha = chosen == nil || chosen == t ? 1 : 0.35
-            glowLayer.addChild(glow)
-            for (dx, dy, d) in [(f.maxX - 2, f.maxY - 2, 20.0), (f.minX + 3, f.minY + 4, 14.0)] {
-                let s = SKSpriteNode(texture: sparkle, size: CGSize(width: d, height: d))
-                s.position = CGPoint(x: dx, y: dy)
-                s.zPosition = 1
-                s.alpha = glow.alpha
-                glowLayer.addChild(s)
             }
         }
     }
@@ -237,18 +293,23 @@ final class LaidZoneNode: SKNode {
                 }
             }
         }
-        if ghostCard == nil {
-            row.ghost?.removeFromParent()
-            row.ghost = nil
-        }
-        row.badges.forEach { $0.removeFromParent() }
-        row.badges = place.folded.filter { $0.count > 0 }.map { fold in
-            let t = CardFaceFactory.shared.badge("+\(fold.count)", size: Self.badgeSize)
-            let badge = SKSpriteNode(texture: t, size: t.size())
-            badge.position = fold.at
+        if ghostCard == nil { row.ghost?.isHidden = true }  // kept for the next preview
+        // "+N" badges, reusing the sprites already there.
+        let folds = place.folded.filter { $0.count > 0 }
+        while row.badges.count < folds.count {
+            let badge = SKSpriteNode()
             badge.zPosition = 3
             row.node.addChild(badge)
-            return badge
+            row.badges.append(badge)
+        }
+        while row.badges.count > folds.count { row.badges.removeLast().removeFromParent() }
+        for (badge, fold) in zip(row.badges, folds) {
+            let t = CardFaceFactory.shared.badge("+\(fold.count)", size: Self.badgeSize)
+            if badge.texture !== t {
+                badge.texture = t
+                badge.size = t.size()
+            }
+            badge.position = fold.at
         }
         row.shownFrames = place.frames
         return moves
@@ -257,26 +318,34 @@ final class LaidZoneNode: SKNode {
     /// The preview's ring (lime for a drop the group takes, red for one it refuses) and, for a
     /// Yarn, the number it stands for there.
     private func drawPreview() {
-        previewLayer.removeAllChildren()
-        guard let p = preview, let row = rows[p.target.seat], row.shownFrames.indices.contains(p.target.group) else { return }
+        guard let p = preview, let row = rows[p.target.seat], row.shownFrames.indices.contains(p.target.group) else {
+            previewRing.isHidden = true
+            previewStands.isHidden = true
+            return
+        }
         let f = row.shownFrames[p.target.group]
-        let ring = SKSpriteNode(texture: CardFaceFactory.shared.ring(UIColor(p.plan == nil ? Palette.refuse : Palette.lime)))
-        ring.centerRect = CardFaceFactory.ringCenter
-        ring.size = CGSize(width: f.width + 14, height: f.height + 14)
-        ring.position = CGPoint(x: f.midX, y: f.midY)
-        previewLayer.addChild(ring)
-        guard p.ghost, let plan = p.plan, let stands = plan.stands, let ghost = row.ghost else { return }
+        previewRing.texture = CardFaceFactory.shared.ring(UIColor(p.plan == nil ? Palette.refuse : Palette.lime))
+        previewRing.size = CGSize(width: f.width + 14, height: f.height + 14)
+        previewRing.position = CGPoint(x: f.midX, y: f.midY)
+        previewRing.isHidden = false
+        guard p.ghost, let plan = p.plan, let stands = plan.stands, let ghost = row.ghost else {
+            previewStands.isHidden = true
+            return
+        }
         let t = CardFaceFactory.shared.badge(String(stands), size: Self.badgeSize + 4)
-        let badge = SKSpriteNode(texture: t, size: t.size())
-        badge.position = CGPoint(x: ghost.position.x, y: ghost.position.y - row.miniSize.height * 0.22)
-        badge.zPosition = 1
-        previewLayer.addChild(badge)
+        previewStands.texture = t
+        previewStands.size = t.size()
+        previewStands.position = CGPoint(x: ghost.position.x, y: ghost.position.y - row.miniSize.height * 0.22)
+        previewStands.isHidden = false
     }
 
     /// Forces the glow sprites to rebuild after rows moved.
     private func invalidateGlows() {
         shownTargets = []
         glowLayer.removeAllChildren()
+        glowNodes = [:]
+        dimmed = nil
+        dropFrames = nil
     }
 
     var laidSeats: [Seat] { rows.keys.sorted() }
