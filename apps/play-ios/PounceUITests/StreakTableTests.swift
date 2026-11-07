@@ -1,7 +1,7 @@
 import XCTest
 
-/// The table side of streaks (spec §9.4, §9.5, §10.3, §10.4): the look tray, Play again, and the
-/// stamp after a turn. The first two run on `-demo` tables (no server); the stamp plays a real
+/// The table side of streaks (spec §9.4, §9.5, §10.4): the look tray, Play again, and the
+/// stamp after a turn (heard by the table; the streak itself shows on the player's card). The first two run on `-demo` tables (no server); the stamp plays a real
 /// game on the dev server (run it with scripts/ui-tests.sh; the server needs `STREAKS` on, which
 /// wrangler.jsonc sets).
 @MainActor
@@ -62,18 +62,20 @@ final class StreakTableTests: XCTestCase {
         XCTAssertTrue(until(10) { self.value(self.el(app, "table.code")) == "NWCDF" }, "not at the new table")
     }
 
-    /// A new pair's first day: the badge appears with the message that keeps it, and still stamps.
-    func testStampPlaysWhenTheBadgeAppearsWithIt() {
+    /// A new pair's first day at the table: the stamp comes, and still no badge on the table (the
+    /// streak is on the player's card).
+    func testNoBadgeOnTheTable() {
         let app = Live.demo("table")
         app.launchArguments += ["-uitest-reset", "-seed-people", "-demo-streaks", "-demo-stamp", "new"]
         app.launch()
-        let badge = el(app, "table.streak")
-        XCTAssertTrue(badge.waitForExistence(timeout: Live.t(15)), "no badge after the streak message")
-        XCTAssertTrue(until(5) { (self.value(badge)?.split(separator: "|").last).flatMap { Int($0) } ?? 0 >= 1 },
-                      "the badge appeared but never stamped: \(String(describing: value(badge)))")
+        let probe = el(app, "table.streak.debug")
+        XCTAssertTrue(until(15) { (self.value(probe)?.split(separator: "|").last).flatMap { Int($0) } ?? 0 >= 1 },
+                      "the streak message never came: \(String(describing: value(probe)))")
+        XCTAssertFalse(el(app, "table.streak").exists, "a streak badge on the table")
     }
 
-    /// Two people on this phone each take a turn: the table's badge shows the new streak and stamps.
+    /// Two people on this phone each take a turn: the table hears the new streak, kept, and stamps
+    /// (read from the DEBUG probe: the table itself draws no badge).
     func testStampAfterTurn() throws {
         let restoreQuiescence = Quiescence.disable()
         addTeardownBlock { @MainActor in restoreQuiescence() }
@@ -95,10 +97,10 @@ final class StreakTableTests: XCTestCase {
                 continue
             }
             // The badge is there and kept: from here it has a moment to have stamped.
-            if let parts = snap.value("table.streak")?.split(separator: "|").map(String.init), parts.count == 5,
+            if let parts = snap.value("table.streak.debug")?.split(separator: "|").map(String.init), parts.count == 5,
                Int(parts[0]) ?? 0 >= 1, parts[3] == "1" {
-                _ = until(5) { (self.value(self.el(app, "table.streak"))?.split(separator: "|").last).flatMap { Int($0) } ?? 0 >= 1 }
-                stamped = value(el(app, "table.streak"))?.split(separator: "|").map(String.init)
+                _ = until(5) { (self.value(self.el(app, "table.streak.debug"))?.split(separator: "|").last).flatMap { Int($0) } ?? 0 >= 1 }
+                stamped = value(el(app, "table.streak.debug"))?.split(separator: "|").map(String.init)
                 break
             }
             dismissPriming(app, snap)
@@ -108,11 +110,10 @@ final class StreakTableTests: XCTestCase {
             }
             if !playTurnByTaps(app, snap) { Thread.sleep(forTimeInterval: Live.poll(1)) }
         }
-        let debug = String(describing: UISnap(app)?.value("table.stamp.debug"))
-        let parts = try XCTUnwrap(stamped, "no kept badge: \(String(describing: UISnap(app)?.value("table.streak"))) \(debug)")
+        let parts = try XCTUnwrap(stamped, "no kept badge: \(String(describing: UISnap(app)?.value("table.streak.debug")))")
         XCTAssertEqual(parts[0], "1")
         XCTAssertEqual(parts[3], "1", "the day is kept")
-        XCTAssertGreaterThanOrEqual(Int(parts[4]) ?? 0, 1, "the badge never stamped: \(parts) \(debug)")
+        XCTAssertGreaterThanOrEqual(Int(parts[4]) ?? 0, 1, "the badge never stamped: \(parts)")
         screenshot(app, "stamp")
     }
 }

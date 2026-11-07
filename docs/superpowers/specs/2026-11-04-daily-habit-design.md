@@ -614,6 +614,8 @@ JD approves in three batches:
 
 When both people of a pair are seated at this table, a small streak badge for that pair sits here. If several pairs are seated (family tables), it shows the top one. This badge is where the stamp plays.
 
+**Changed 2026-11-07 (JD's playtest):** no badge on the table at all. Tapping another player's cat opens their player card (over the table, like the scoreboard), and the streak with them is shown there: the paw badge, your best and the days kept together, or "Not connected yet" for a person you don't have a pair with. The day-kept stamp no longer plays at the table.
+
 ### 10.4 "Play again" **(call)**
 
 `GameOverView` gets a **Play again** pill.

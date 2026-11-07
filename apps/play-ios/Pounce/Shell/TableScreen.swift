@@ -159,14 +159,10 @@ struct ConnectingView: View {
 }
 
 /// The table stage's layers, bottom to top (its `zIndex` values). A view with no `zIndex` sits at
-/// 0 with the SpriteKit table, under every named layer, so each overlay names its own. The streak
-/// badge belongs to the top bar it hangs under (the scene draws that bar): just over the table and
-/// under everything the table puts up over it, so no dialog has the badge on top. Sheets (the paw
-/// menu and its look tray) are presented over the whole stage and need no layer.
+/// 0 with the SpriteKit table, under every named layer, so each overlay names its own. Sheets (the
+/// paw menu and its look tray) are presented over the whole stage and need no layer.
 enum TableLayer {
-    /// The streak badge, with the opponents bar it hangs under.
-    static let topBar: Double = 1
-    /// The scoreboard and its phase ladder (tap the tower).
+    /// The scoreboard and its phase ladder (tap the tower), or a player's card (tap their cat).
     static let scoreboard: Double = 2
     /// This phone's connection pill, just under the top bar.
     static let connection: Double = 3
@@ -188,7 +184,7 @@ enum TableLayer {
 /// the first-game coach's tips (`CoachMark`), the scoreboard (tap the tower), the local cats row
 /// on a multi-seat phone, the pass-and-play curtain and, once the scene has played the win, the
 /// game-over overlay. Under all of those, the turn cue (`TurnCueView`): "Your turn" when a hand
-/// of this phone is up (after its curtain), "Mochi's turn" under whoever else is.
+/// of this phone is up (after its curtain); nothing for anyone else's turn.
 ///
 /// Privacy: on a multi-seat phone the curtain covers the table whenever `RoomStore.pass` says so,
 /// and stays up after the hold until the scene reports that seat's hand is actually face up
@@ -255,23 +251,24 @@ private struct TableStage: View {
     /// The table as the coach should see it: nothing while tips are off, or while the curtain, the
     /// scoreboard, the menu, the push priming or the game over is up.
     private var coachView: TableCoach? {
-        guard model.tipsEnabled, curtainSeat == nil, events.scoreboard == nil, events.winners == nil, !priming,
-              !events.menuOpen else { return nil }
+        guard model.tipsEnabled, curtainSeat == nil, events.scoreboard == nil, events.player == nil, events.winners == nil,
+              !priming, !events.menuOpen else { return nil }
         return events.coach
     }
 
-    /// The turn cue as it should show now: nothing while the curtain, the scoreboard, the menu,
-    /// the push priming or the game over is up (it plays once they are gone).
+    /// The turn cue as it should show now: nothing while the curtain, the scoreboard, a player's
+    /// card, the menu, the push priming or the game over is up (it plays once they are gone).
     private var turnCue: TurnCue? {
-        guard curtainSeat == nil, events.scoreboard == nil, events.winners == nil, !priming, !events.menuOpen else { return nil }
+        guard curtainSeat == nil, events.scoreboard == nil, events.player == nil, events.winners == nil, !priming,
+              !events.menuOpen else { return nil }
         return events.turnCue
     }
 
     /// The connection pill as it should show now: like the turn cue, never over the curtain, the
-    /// scoreboard, the menu, the push priming or the game over.
+    /// scoreboard, a player's card, the menu, the push priming or the game over.
     private var connectionPill: RoomStore.Connection? {
-        guard connection != .good, curtainSeat == nil, events.scoreboard == nil, events.winners == nil, !priming,
-              !events.menuOpen else { return nil }
+        guard connection != .good, curtainSeat == nil, events.scoreboard == nil, events.player == nil,
+              events.winners == nil, !priming, !events.menuOpen else { return nil }
         return connection
     }
 
@@ -293,17 +290,6 @@ private struct TableStage: View {
                     sync()
                 }
                 .transition(.opacity.combined(with: .scale(scale: 0.8, anchor: .bottom)))
-            }
-            if let shown = tableStreak, events.winners == nil {
-                GeometryReader { geo in
-                    TableStreakBadge(
-                        badge: shown.badge,
-                        stamp: session.stamps.latest(pair: shown.pair, person: shown.person),
-                        at: streakBadgeCenter(geo), scale: streakScale)
-                }
-                .ignoresSafeArea()
-                .transition(.scale.combined(with: .opacity))
-                .zIndex(TableLayer.topBar)
             }
             if let pill = lookPill, let seat = table?.room.seats[safe: pill.seat] {
                 VStack {
@@ -328,7 +314,7 @@ private struct TableStage: View {
             }
             if let cue = turnCue {
                 TurnCueView(cue: cue, yield: coach.tip != nil && coachView != nil)
-                    .transition(.opacity.combined(with: .scale(scale: cue.isMine ? 0.85 : 1)))
+                    .transition(.opacity.combined(with: .scale(scale: 0.85)))
                     .zIndex(TableLayer.turnCue)
             }
             if let tip = coach.tip, let shown = coachView, shown.person.id == coach.person {
@@ -352,6 +338,13 @@ private struct TableStage: View {
                 ScoreboardOverlay(model: board, focus: TableScene.bottomSeat(board, revealed: events.shown)) {
                     events.scoreboard = nil
                 }
+                    .transition(.opacity)
+                    .zIndex(TableLayer.scoreboard)
+            }
+            if let tap = events.player, events.winners == nil, curtainSeat == nil,
+               let card = PlayerCard.make(model: tap.model, seat: tap.seat, streaks: streakCandidates, reported: session.streakPairs) {
+                // The table as the scene drew it when the cat was tapped, like the scoreboard.
+                PlayerCardOverlay(card: card, model: tap.model) { events.player = nil }
                     .transition(.opacity)
                     .zIndex(TableLayer.scoreboard)
             }
@@ -410,6 +403,7 @@ private struct TableStage: View {
             }
         }
         .animation(.easeOut(duration: 0.2).paced, value: events.scoreboard != nil)
+        .animation(.easeOut(duration: 0.2).paced, value: events.player != nil)
         .animation(.easeOut(duration: 0.3).paced, value: events.winners)
         .animation(.spring(duration: 0.45, bounce: 0.15).paced, value: curtainSeat)
         .animation(.easeOut(duration: 0.2).paced, value: localCats.map(\.seat))
@@ -502,6 +496,8 @@ private struct TableStage: View {
         let events = events
         scene.onMenu = { [weak events] in events?.menuOpen = true }
         scene.onTower = { [weak events] drawn in events?.scoreboard = drawn }
+        scene.onPlayer = { [weak events] drawn, seat in events?.player = PlayerTap(model: drawn, seat: seat) }
+        scene.onSwipeHome = { [weak model] in model?.goHome() }
         scene.onGameOver = { [weak events] seats in events?.winners = seats }
         scene.onShownRevealed = { [weak events] seat in events?.shown = seat }
         scene.onTableTap = { [weak events] in events?.tableTaps += 1 }
@@ -532,6 +528,12 @@ private struct TableStage: View {
         // `-show-scoreboard` (screenshots): the scoreboard over the table as it opens.
         if CommandLine.arguments.contains("-show-scoreboard"), let room = session.store.room {
             events.scoreboard = TableModel(room: room)
+        }
+        // `-show-player <seat>` (screenshots): that seat's player card over the table.
+        let args = CommandLine.arguments
+        if let i = args.firstIndex(of: "-show-player"), let seat = args[safe: i + 1].flatMap(Int.init),
+           let room = session.store.room {
+            events.player = PlayerTap(model: TableModel(room: room), seat: seat)
         }
         #endif
         // Synchronous: buffered intents are queued ahead of live ones.
@@ -564,34 +566,16 @@ private struct TableStage: View {
         }
     }
 
-    // MARK: streaks and looks
+    // MARK: player cards and looks
 
-    /// The badge for the top pair seated here (§10.3), once the server has streaks on.
-    private var tableStreak: (badge: StreakBadge, pair: String, person: String)? {
-        guard model.streaks.enabled != false, let table else { return nil }
+    /// Every pair of this phone's seated people, the owner's first, for the player card; nil
+    /// while streaks are off or not answered yet.
+    private var streakCandidates: [(person: String, view: StreakView)]? {
+        guard model.streaks.enabled == true, let table else { return nil }
         let mine = table.mySeats.compactMap { table.room.seats[safe: $0]?.person }
         let owner = model.people.owner?.id
         let ordered = mine.filter { $0.id == owner } + mine.filter { $0.id != owner }
-        let candidates = ordered.flatMap { person in model.streaks.views(for: person.id).map { (person: person.id, view: $0) } }
-        let others = table.room.seats.indices.filter { !table.mySeats.contains($0) }.compactMap { table.room.seats[$0].person }
-        guard let pick = TableStreak.pick(code: session.code, candidates: candidates, reported: session.streakPairs, others: others)
-        else { return nil }
-        guard let badge = StreakBadge.make(pick.view, all: [], signedIn: true, offersSignIn: false) else { return nil }
-        return (badge, pick.view.pair, pick.person)
-    }
-
-    private var streakScale: CGFloat { horizontalSizeClass == .regular ? 1.15 : 0.8 }
-
-    /// Just under the top bar's right end (the paw menu sits above it in the status bar's ear).
-    private func streakBadgeCenter(_ geo: GeometryProxy) -> CGPoint {
-        let size = geo.size
-        let insets = geo.safeAreaInsets
-        guard let table else { return CGPoint(x: size.width - 70, y: 140) }
-        let bottom = TableScene.bottomSeat(table, revealed: events.shown)
-        let n = max(table.barSeats(bottom: bottom).count, 1)
-        let bar = TableLayout(size: size, safeTop: insets.top, safeBottom: insets.bottom, opponents: n).opponentsBar
-        // Under the bar's name tags (the bar's frame holds the rings; the tags hang below it).
-        return CGPoint(x: size.width - 84 * streakScale - insets.trailing, y: size.height - bar.minY + 104 * streakScale)
+        return ordered.flatMap { person in model.streaks.views(for: person.id).map { (person: person.id, view: $0) } }
     }
 
     private func lookIsBack(_ change: RoomStore.LookChange) -> Bool {
@@ -604,6 +588,18 @@ private struct TableStage: View {
 
     /// The look before the last change (for the pill: what changed).
     @State private var lastLook: Look?
+
+    #if DEBUG
+    private var streakProbe: String {
+        guard let candidates = streakCandidates, let table else { return "-" }
+        let others = table.room.seats.indices.filter { !table.mySeats.contains($0) }.compactMap { table.room.seats[$0].person }
+        guard let pick = TableStreak.pick(code: session.code, candidates: candidates, reported: session.streakPairs, others: others)
+        else { return "-" }
+        let view = pick.view
+        let serial = session.stamps.latest(pair: view.pair, person: pick.person)?.serial ?? 0
+        return "\(view.count)|\(view.me ? 1 : 0)|\(view.them ? 1 : 0)|\(view.kept ? 1 : 0)|\(serial)"
+    }
+    #endif
 
     /// Hidden values for the UI tests: the table's look and code.
     private var probes: some View {
@@ -618,13 +614,12 @@ private struct TableStage: View {
                 .accessibilityIdentifier("table.code")
                 .accessibilityValue(session.code)
             #if DEBUG
-            // The last stamp heard here and whose badge shows (`pair/person/serial > pair/person`).
+            // The top pair seated here as the table hears it: `count|me|them|kept|stamp serial`.
+            // The table draws no badge (the streak is on the player's card); UI tests read this.
             Color.clear.frame(width: 1, height: 1)
                 .accessibilityElement()
-                .accessibilityIdentifier("table.stamp.debug")
-                .accessibilityValue(tableStreak.map { shown in
-                    "\(shown.pair)/\(shown.person) stamp \(session.stamps.latest(pair: shown.pair, person: shown.person)?.serial ?? 0)"
-                } ?? "-")
+                .accessibilityIdentifier("table.streak.debug")
+                .accessibilityValue(streakProbe)
             #endif
         }
         .allowsHitTesting(false)
@@ -689,6 +684,12 @@ private struct TableStage: View {
     }
 }
 
+/// A cat tapped in the top bar: its seat on the table as the scene drew it.
+private struct PlayerTap: Equatable {
+    let model: TableModel
+    let seat: Seat
+}
+
 /// What `TableStage` reacts to: the store's room and its pass-and-play decision.
 private struct StageInput: Equatable {
     let room: RoomView?
@@ -708,6 +709,8 @@ private final class StageEvents {
     var menuOpen = false
     /// The scoreboard is up, showing this table (as the scene drew it).
     var scoreboard: TableModel?
+    /// A player's card is up (a cat in the top bar was tapped).
+    var player: PlayerTap?
     /// Set by the scene when the game-over celebration is done.
     var winners: [Seat]?
     /// The seat whose hand the scene shows face up right now (its `shownRevealed`).

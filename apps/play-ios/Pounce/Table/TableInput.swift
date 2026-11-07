@@ -213,6 +213,16 @@ extension TableScene {
         }
     }
 
+    /// The left-edge swipe home may start: never while a card, a tray card or a pile is under
+    /// the finger (it could become a drag) or a drag is on.
+    var allowsSwipeHome: Bool {
+        guard !input.dragging, input.dragNode == nil else { return false }
+        switch input.source {
+        case .none, .other, .tower, .menu: return true
+        case .sort, .layDown, .hand, .tray, .pile: return false
+        }
+    }
+
     func inputCancelled() {
         input.dragNode?.removeFromParent()
         let wasDragging = input.dragging
@@ -458,6 +468,10 @@ extension TableScene {
     // MARK: taps
 
     private func tap(_ source: TableInputState.Source, at p: CGPoint) {
+        // A cat with nothing picked up opens its player's card (a held card aims at it instead).
+        if source == .other, liftedCard == nil, trayYarn == nil, let seat = opponentSeat(at: p) {
+            return showPlayer(seat)
+        }
         if trayYarn != nil, !source.isTray {
             trayYarn = nil  // a picked-up Yarn goes back down on any other tap
             refresh()
@@ -541,6 +555,13 @@ extension TableScene {
     private func showScoreboard() {
         guard let model else { return }
         onTower(model)
+    }
+
+    /// A cat tap: that player's card for the table as drawn.
+    func showPlayer(_ seat: Seat) {
+        guard let model, model.game?.phase.indices.contains(seat) == true else { return }
+        Haptics.shared.tick()
+        onPlayer(model, seat)
     }
 
     /// The second tap of tap-tap: a cat, a tray or a laid group for the selected card.
@@ -742,7 +763,7 @@ extension TableScene {
 
     // MARK: VoiceOver custom actions
 
-    private func customAction(_ name: String, _ body: @escaping @MainActor () -> Bool) -> UIAccessibilityCustomAction {
+    func customAction(_ name: String, _ body: @escaping @MainActor () -> Bool) -> UIAccessibilityCustomAction {
         UIAccessibilityCustomAction(name: name) { _ in MainActor.assumeIsolated { body() } }
     }
 

@@ -34,6 +34,11 @@ final class TableScene: SKScene {
     /// The tower was tapped (`table.tower`): the shell shows the scoreboard for the table as
     /// drawn (never the store's newer truth, which would spoil a celebration still playing).
     var onTower: (TableModel) -> Void = { _ in }
+    /// A cat in the top bar was tapped with no card picked up: the shell shows that player's
+    /// card for the table as drawn.
+    var onPlayer: (TableModel, Seat) -> Void = { _, _ in }
+    /// A swipe in from the left edge: straight to Home (the paw menu's Home).
+    var onSwipeHome: () -> Void = {}
     /// The game is over and its celebration has played (or the table opened finished).
     var onGameOver: ([Seat]) -> Void = { _ in }
     /// The face-up hand changed (a reveal landed or the hand turned face down). The shell
@@ -666,9 +671,9 @@ final class TableScene: SKScene {
         sortButton.size = CGSize(width: roomy ? 44 : Self.sortSize, height: roomy ? 44 : Self.sortSize)
         menuButton.size = CGSize(width: roomy ? 44 : Self.menuSize, height: roomy ? 44 : Self.menuSize)
 
-        // The hand's owner by name: always on a one-seat phone, and on a shared phone while
-        // a hand is shown (otherwise the local cats row at the bottom names everyone here).
-        if let bottom, faceUp || !model.isMultiSeat {
+        // The hand's owner by name only on a shared phone while a hand is shown: it says whose
+        // hand is up. A one-seat phone never names its own player on the table.
+        if let bottom, faceUp, model.isMultiSeat {
             bottomTagName = SeatInfo.name(model.room, bottom)
             setBottomTag(active: game.status == .playing && game.turn == bottom)
             let frame = layout.seatTagFrame
@@ -853,9 +858,13 @@ final class TableScene: SKScene {
             let label = SeatInfo.label(
                 model.room.seats[safe: seat], name: SeatInfo.name(model.room, seat),
                 cards: game.handCounts[safe: seat], phase: game.phase[safe: seat])
+            let card = customAction(String(localized: "Player card", comment: "VoiceOver action: open a player's card")) { [weak self] in
+                self?.showPlayer(seat)
+                return true
+            }
             items.append(Item(
                 id: "table.opponent.\(seat)", label: label, value: glows.cats.contains(seat) ? Self.targetValue : nil,
-                frame: frame))
+                frame: frame, actions: [card]))
         }
         items.append(Item(
             id: "table.deck", label: String(localized: "Draw pile", comment: "VoiceOver: the deck"),
@@ -915,6 +924,14 @@ final class TableScene: SKScene {
                 value: up ? String(localized: "their turn", comment: "VoiceOver: the shown hand's owner is up") : nil,
                 frame: bottomTag.frame, traits: .staticText))
         }
+        #if DEBUG
+        // A one-seat phone draws no name of its own: the UI tests still read it here.
+        if bottomTag.isHidden, let bottom = bottomSeat {
+            items.append(Item(
+                id: "table.me", label: SeatInfo.name(model.room, bottom),
+                frame: CGRect(x: 96, y: 0, width: 24, height: 24), traits: .staticText))
+        }
+        #endif
         if !sortButton.isHidden {
             items.append(Item(
                 id: "table.sort", label: String(localized: "Sort hand", comment: "VoiceOver: sort the hand by number or coat"),

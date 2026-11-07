@@ -386,7 +386,6 @@ extension TableScene {
         if let old = model.game?.turn, old != seat, let cat = opponents.node(for: old) {
             await director.runAll(cat.turnOut(reduceMotion: reduceMotion), decorative: true)
         }
-        opponents.setTurn(seat)
         setBottomTag(active: seat == bottomSeat)
         var items: [(SKAction, SKNode)] = []
         if seat != bottomSeat, let cat = opponents.node(for: seat), cat.setActive(true) {

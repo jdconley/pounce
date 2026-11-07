@@ -10,7 +10,7 @@ public enum DemoFixtures {
     public static let demoName = "Friday Night Cats"
     static let names = ["Mia", "Leo", "Kiki", "Otis", "Nova", "Ziggy"]
     /// Cat per seat; 3 (gray) is the House Cat, so humans skip it.
-    static let cats = [0, 1, 2, 4, 5, 6]
+    static let cats = [0, 1, 6, 4, 5, 2]
 
     /// A game in round 3 on `mySeat`'s draw step. `phase` is `mySeat`'s phase
     /// index (0 = phase 1, as in `GameView.phase`). The seat after mine has laid
