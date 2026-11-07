@@ -132,6 +132,13 @@ final class AnimationDirector {
         for token in tokens { finish(token, removeAction: true) }
     }
 
+    /// Stops every director action on `node` itself, decorative ones too (a motion about to be
+    /// turned around), and releases whoever awaits them.
+    func cancelActions(on node: SKNode) {
+        let tokens = pending.compactMap { token, p -> Int? in p.key != "" && p.node === node ? token : nil }
+        for token in tokens { finish(token, removeAction: true) }
+    }
+
     /// The view is going away (or already gone): every action and emitter is given up on now.
     /// Awaiters resume, actions are removed, emitters leave and return their particles.
     func cancelAll() {

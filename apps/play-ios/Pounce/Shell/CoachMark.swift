@@ -51,7 +51,7 @@ struct CoachMark: View {
     private var target: (ring: CGRect, aim: CGRect, Placement) {
         let a = coach.anchors
         switch tip {
-        case .goal: return (a.tower, a.tower, .beside)
+        case .goal: return (a.tower, a.tower, .above)
         case .draw: return (a.deck.union(a.discard), a.deck.union(a.discard), .below)
         case .phase, .run, .coat: return (a.trays, a.trays, .above)
         case .layDown: return (a.layDown ?? a.trays, a.layDown ?? a.trays, .above)
@@ -181,7 +181,7 @@ enum CoachCopy {
             return (
                 String(localized: "Hi, \(coach.person.name)!", comment: "Coach: the first tip's title, with the player's name"),
                 String(
-                    localized: "Climb the cat tower. Lay down your phase in a round to go up a shelf. The first cat to finish all ten phases wins.",
+                    localized: "Climb the cat tower. Lay down your phase in a round to go up a shelf. The first cat to finish all ten phases wins. Tap the tower to see every cat's shelf.",
                     comment: "Coach: the goal of Cat Tower, pointing at the tower"))
         case .draw:
             return (

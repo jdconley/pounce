@@ -23,7 +23,16 @@ const BOB = { id: "22222222-2222-4222-8222-222222222222", name: "Bob", cat: 2 };
 
 type Snapshot = Extract<ServerMessage, { t: "snapshot" }>;
 type Device = { deviceId: string; token: string };
-type Table = { code: string; name?: string; status: string; yourTurn: boolean; updatedAt: number };
+type Table = {
+  code: string;
+  name?: string;
+  status: string;
+  yourTurn: boolean;
+  updatedAt: number;
+  seats?: { kind: string; person?: { id: string; name: string; cat: number }; yours?: true }[];
+};
+/** A new room's six lobby seats: two open, four closed. */
+const LOBBY = [{ kind: "open" }, { kind: "open" }, ...Array.from({ length: 4 }, () => ({ kind: "closed" }))];
 
 let script = "";
 const open: Miniflare[] = [];
@@ -534,8 +543,14 @@ describe("worker", { timeout: 20_000 }, () => {
       (t) => t[0]?.status === "playing",
     );
     const name = defaultRoomName(code);
-    expect(ta).toEqual([{ code, name, status: "playing", yourTurn: turn === 0, updatedAt: expect.any(Number) }]);
-    expect(tb).toEqual([{ code, name, status: "playing", yourTurn: turn === 1, updatedAt: expect.any(Number) }]);
+    // Each list carries who sits where, with the list owner's own seat marked.
+    const seat = (person: typeof ALICE, yours: boolean) => ({ kind: "human", person, ...(yours ? { yours: true } : {}) });
+    expect(ta).toEqual([
+      { code, name, status: "playing", yourTurn: turn === 0, updatedAt: expect.any(Number), seats: [seat(ALICE, true), seat(BOB, false)] },
+    ]);
+    expect(tb).toEqual([
+      { code, name, status: "playing", yourTurn: turn === 1, updatedAt: expect.any(Number), seats: [seat(ALICE, false), seat(BOB, true)] },
+    ]);
   });
 
   test("a fresh room is listed for its host only", async () => {
@@ -548,7 +563,14 @@ describe("worker", { timeout: 20_000 }, () => {
       (t) => t.length > 0,
     );
     expect(ta).toEqual([
-      { code, name: defaultRoomName(code), status: "lobby", yourTurn: false, updatedAt: expect.any(Number) },
+      {
+        code,
+        name: defaultRoomName(code),
+        status: "lobby",
+        yourTurn: false,
+        updatedAt: expect.any(Number),
+        seats: LOBBY,
+      },
     ]);
     expect(await tables(mf, bob)).toEqual([]);
   });
@@ -567,7 +589,16 @@ describe("worker", { timeout: 20_000 }, () => {
         () => tables(mf, alice),
         (t) => t.length > 0,
       ),
-    ).toEqual([{ code, name: "Taco Night", status: "lobby", yourTurn: false, updatedAt: expect.any(Number) }]);
+    ).toEqual([
+      {
+        code,
+        name: "Taco Night",
+        status: "lobby",
+        yourTurn: false,
+        updatedAt: expect.any(Number),
+        seats: LOBBY,
+      },
+    ]);
 
     // Bob holds no seat and isn't the host: refused.
     b.send({ t: "rename", name: "Bob's Table" });
@@ -587,7 +618,17 @@ describe("worker", { timeout: 20_000 }, () => {
       (t) => t[0]?.name === "Bob's Table",
     );
     expect(listed[0]?.name).toBe("Bob's Table");
+    expect(listed[0]?.seats?.[1]).toEqual({ kind: "human", person: BOB, yours: true });
     expect((await tables(mf, alice))[0]?.name).toBe("Bob's Table");
+    // Bob's seat is on the host's list too, as someone else's.
+    expect((await tables(mf, alice))[0]?.seats?.[1]).toEqual({ kind: "human", person: BOB });
+    // A seat's new name reaches the lists as well.
+    b.send({ t: "renameSeat", seat: 1, name: "Robert" });
+    const renamed = await eventually(
+      () => tables(mf, alice),
+      (t) => t[0]?.seats?.[1]?.person?.name === "Robert",
+    );
+    expect(renamed[0]?.seats?.[1]).toEqual({ kind: "human", person: { ...BOB, name: "Robert" } });
 
     // A name that isn't one never reaches the room.
     a.send({ t: "rename", name: "line\nbreak" });
@@ -685,7 +726,14 @@ describe("worker", { timeout: 20_000 }, () => {
       ),
     ).toEqual([]);
     expect(await tables(mf, alice)).toEqual([
-      { code, name: defaultRoomName(code), status: "lobby", yourTurn: false, updatedAt: expect.any(Number) },
+      {
+        code,
+        name: defaultRoomName(code),
+        status: "lobby",
+        yourTurn: false,
+        updatedAt: expect.any(Number),
+        seats: LOBBY,
+      },
     ]);
   });
 

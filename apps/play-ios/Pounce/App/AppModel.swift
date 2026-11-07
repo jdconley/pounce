@@ -626,6 +626,14 @@ final class AppModel {
         HomeTables.merge(entries: tables, cache: cache, archived: archived, now: .now)
     }
 
+    /// Who's at a table besides you, for its card: your connections and the people sharing this
+    /// phone first, bots under the bot's name; a kitten's phone names only its own people (§14.1).
+    func tablePeople(_ item: HomeTableItem) -> TablePeople.Line {
+        TablePeople.line(
+            seats: item.seats, code: item.id, owner: people.owner?.id, household: people.others, pairs: streaks.pairs,
+            band: ageBand, bot: SeatInfo.botName, botCat: SeatInfo.botCat)
+    }
+
     /// Home's Archived sheet.
     var archivedItems: [HomeTableItem] {
         HomeTables.archivedItems(entries: tables, cache: cache, archived: archived, now: .now)

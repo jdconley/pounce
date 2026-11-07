@@ -1,14 +1,16 @@
 import PounceKit
 import SwiftUI
 
-/// The table's paw menu (`table.menu`): the table's name (tap to rename it), sound, haptics, how
-/// to play, names, move my seat, home. Renaming the table grows the sheet into `RenameTableView`,
+/// The table's paw menu (`table.menu`): the table's name (tap to rename it), sound, haptics, the
+/// scores, how to play, names, move my seat, home. Renaming the table grows the sheet into `RenameTableView`,
 /// names (this phone's players) into `RenameSheet`, move my seat into `MoveSeatSheet`, how to play
 /// into `HowToPlaySheet`.
 struct TableMenuSheet: View {
     @Environment(Settings.self) private var settings
     let session: RoomSession
     let onHome: () -> Void
+    /// Closes the menu and shows the scoreboard (the open tower's tap does too).
+    var onScores: (() -> Void)?
     let onClose: () -> Void
 
     private enum Page { case menu, moving, rules, renaming, names, look }
@@ -24,7 +26,7 @@ struct TableMenuSheet: View {
         return .menu
     }
 
-    static let menuDetent = PresentationDetent.height(440)
+    static let menuDetent = PresentationDetent.height(510)
     static let lookDetent = PresentationDetent.height(380)
 
     /// The look tray is offered on a server with looks (streaks on), to a phone seated here.
@@ -107,6 +109,16 @@ struct TableMenuSheet: View {
                     settings.hapticsOn.toggle()
                 }
                 .accessibilityIdentifier("menu.haptics")
+            }
+            if let onScores {
+                PillButton(
+                    icon: nil, color: Palette.violet, size: .medium, width: 230,
+                    title: String(localized: "Scores", comment: "Table menu: open the scoreboard"),
+                    accessibilityLabel: "Scores"
+                ) {
+                    onScores()
+                }
+                .accessibilityIdentifier("menu.scores")
             }
             PillButton(
                 icon: nil, color: Palette.orange, size: .medium, width: 230,

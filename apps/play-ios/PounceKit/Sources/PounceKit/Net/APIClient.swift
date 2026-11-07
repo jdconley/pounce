@@ -10,14 +10,58 @@ public struct TableEntry: Codable, Equatable, Sendable {
     public let updatedAt: Double
     /// Play again's table, on a finished table's entry (§10.4).
     public let next: String?
+    /// Who sits where, for Home's names; nil from a server (or an entry) older than that, or
+    /// when the field can't be read: the list itself never fails over it.
+    public let seats: [TableSeat]?
 
-    public init(code: String, name: String? = nil, status: String, yourTurn: Bool, updatedAt: Double, next: String? = nil) {
+    public init(
+        code: String, name: String? = nil, status: String, yourTurn: Bool, updatedAt: Double, next: String? = nil,
+        seats: [TableSeat]? = nil
+    ) {
         self.code = code
         self.name = name
         self.status = status
         self.yourTurn = yourTurn
         self.updatedAt = updatedAt
         self.next = next
+        self.seats = seats
+    }
+
+    private enum CodingKeys: String, CodingKey { case code, name, status, yourTurn, updatedAt, next, seats }
+
+    public init(from decoder: any Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        code = try c.decode(String.self, forKey: .code)
+        name = try c.decodeIfPresent(String.self, forKey: .name)
+        status = try c.decode(String.self, forKey: .status)
+        yourTurn = try c.decode(Bool.self, forKey: .yourTurn)
+        updatedAt = try c.decode(Double.self, forKey: .updatedAt)
+        next = try c.decodeIfPresent(String.self, forKey: .next)
+        seats = (try? c.decodeIfPresent([TableSeat].self, forKey: .seats)) ?? nil
+    }
+}
+
+/// One seat on a tables-list entry: its kind, who sits there, and whether it is the list
+/// owner's (this phone's seats on a device's list, the player's own on an account's).
+public struct TableSeat: Codable, Equatable, Sendable {
+    public var kind: SeatKind
+    public var person: Person?
+    public var yours: Bool
+
+    public init(kind: SeatKind, person: Person? = nil, yours: Bool = false) {
+        self.kind = kind
+        self.person = person
+        self.yours = yours
+    }
+
+    private enum CodingKeys: String, CodingKey { case kind, person, yours }
+
+    /// A kind this app doesn't know reads as closed, and a person it can't read as nobody.
+    public init(from decoder: any Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        kind = (try? c.decode(String.self, forKey: .kind)).flatMap(SeatKind.init(rawValue:)) ?? .closed
+        person = (try? c.decodeIfPresent(Person.self, forKey: .person)) ?? nil
+        yours = (try? c.decodeIfPresent(Bool.self, forKey: .yours)) ?? false
     }
 }
 

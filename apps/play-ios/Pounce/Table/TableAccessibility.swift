@@ -75,6 +75,7 @@ enum TableAccessibility {
         var id: String
         var label: String
         var value: String? = nil
+        var hint: String? = nil
         var frame: CGRect  // scene space
         var traits: UIAccessibilityTraits = .button
         var live: (@MainActor () -> String?)? = nil
@@ -88,6 +89,7 @@ enum TableAccessibility {
             e.accessibilityIdentifier = item.id
             e.accessibilityLabel = item.label
             e.accessibilityValue = item.value
+            e.accessibilityHint = item.hint
             e.accessibilityTraits = item.traits
             e.liveValue = item.live
             e.accessibilityCustomActions = item.actions.isEmpty ? nil : item.actions
