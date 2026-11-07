@@ -23,11 +23,13 @@ import PounceKit
 /// then discards and the turn goes to a remote seat, so the shown hand must turn face down at
 /// once, not after the discard animates. Logs like `replay`.
 /// `crowded`: six seats, five of them laid down with long runs and big sets (`DemoFixtures.crowded()`).
+/// `crowdedHit`: `crowded` on my play step with my phase laid too, to profile a drag over six
+/// laid rows (`[dragperf]` on stdout after each drag).
 /// `hit`: my play step after laying down, with Leo's run 4-7 to hit (`DemoFixtures.hitTable()`);
 /// the fake server takes each hit as the real one would and sends the event and snapshot.
 /// `over`: the celebration's finished table, opened as is, so the game over screen shows at once.
 enum DemoMode: String {
-    case lobby, lobbyReady, table, other, replay, nope, celebrate, curtain, handoff, peek, crowded, hit, over
+    case lobby, lobbyReady, table, other, replay, nope, celebrate, curtain, handoff, peek, crowded, crowdedHit, hit, over
 
     static func from(arguments: [String] = CommandLine.arguments) -> DemoMode? {
         guard let i = arguments.firstIndex(of: "-demo"), arguments.indices.contains(i + 1) else { return nil }
@@ -66,6 +68,7 @@ enum DemoMode: String {
             room.game?.turn = 1
             return room
         case .crowded: return DemoFixtures.crowded()
+        case .crowdedHit: return DemoFixtures.crowdedHit()
         case .hit: return DemoFixtures.hitTable()
         case .over: return DemoFixtures.celebration().last?.room ?? DemoFixtures.lobby()
         }
@@ -98,7 +101,7 @@ enum DemoMode: String {
         case .handoff: ReplaySocket(start: room, steps: Self.handoffSteps(), loops: 1)
         case .celebrate: CelebrateSocket()
         case .nope: DemoSocket(room: room, refusing: true)
-        case .hit: DemoSocket(room: room, hits: true)
+        case .hit, .crowdedHit: DemoSocket(room: room, hits: true)
         default: DemoSocket(room: room)
         }
     }

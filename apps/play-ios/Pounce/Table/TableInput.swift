@@ -24,6 +24,21 @@ struct TableInputState {
     var grab: CGVector = .zero
     /// The dragged card is lifted clear of the laid group it would hit.
     var lifted = false
+    /// The height the lifted card floats at (above its row), so a row change eases over.
+    var liftY: CGFloat?
+    /// The latest finger position not yet applied: touch moves are applied once per frame.
+    var finger: CGPoint?
+    /// Where the dragged card is drawn: on the finger, easing over only when its target jumps.
+    var follow = DragFollow(duration: 0)
+    /// The laid group and end the finger was last over (nil: none); `aimed` is false until
+    /// the first look, and again after a redraw (the preview may have gone).
+    var aim: AimKey?
+    var aimed = false
+
+    struct AimKey: Equatable {
+        let target: HitTarget
+        let toward: HitSide
+    }
 
     /// A finger that moves further than this is dragging, not tapping.
     static let dragThreshold: CGFloat = 10
@@ -91,10 +106,34 @@ extension TableScene {
             } else {
                 g.discard = true
             }
-            g.groups = Set(model.hitTargets(card: card, seat: seat))
+            g.groups = heldAims(card)?.targets ?? []
             g.enlarge = !g.groups.isEmpty
         }
         return g
+    }
+
+    /// The laid groups `card` can hit and where it lands on each, worked out once per held
+    /// card (and again after a redraw), never per touch move.
+    func heldAims(_ card: CardID) -> HitAims? {
+        if let aims = hitAims, aims.card == card { return aims }
+        guard let model else { return nil }
+        hitAims = HitAims(model: model, card: card, seat: actingSeat)
+        #if DEBUG
+        dragPerf.hitRuleCalls += 1
+        #endif
+        return hitAims
+    }
+
+    /// `TableModel.hitPlan` for the held card, from `heldAims`.
+    private func heldPlan(_ card: CardID, _ target: HitTarget, _ toward: HitSide) -> HitPlan? {
+        // Nothing can be hit while this phone can't act (an action in flight, an event
+        // animating), even if that started after the card was picked up.
+        guard actingSeat != nil, heldAims(card) != nil else { return nil }
+        #if DEBUG
+        let before = hitAims?.ruleRuns ?? 0
+        defer { dragPerf.hitRuleCalls += (hitAims?.ruleRuns ?? 0) - before }
+        #endif
+        return hitAims?.plan(target: target, toward: toward)
     }
 
     // MARK: touches
@@ -105,25 +144,64 @@ extension TableScene {
         input.source = source(at: p)
     }
 
+    /// A touch moved. Moves are applied once per frame (`stepDrag`, from the scene's
+    /// `update`): a 120 Hz touch screen sends two per frame, and only the latest counts.
     func inputMoved(_ p: CGPoint) {
         guard input.source != .none else { return }
+        input.finger = p
+        // A paused view renders no frame to pick the move up.
+        if view?.isPaused ?? true { stepDrag() }
+    }
+
+    /// Applies the latest finger position, if a new one came, and draws the dragged card where
+    /// it follows (every frame, so an eased jump runs smoothly while the finger rests).
+    func stepDrag() {
+        let now = CACurrentMediaTime()
+        if let p = input.finger {
+            input.finger = nil
+            #if DEBUG
+            let started = CACurrentMediaTime()
+            #endif
+            applyMove(p, at: now)
+            #if DEBUG
+            if input.dragging { dragPerf.move(CACurrentMediaTime() - started) }
+            #endif
+        }
+        if let node = input.dragNode, let at = input.follow.position(at: now) { node.position = at }
+    }
+
+    private func applyMove(_ p: CGPoint, at now: Double) {
         if !input.dragging {
             guard hypot(p.x - input.start.x, p.y - input.start.y) > TableInputState.dragThreshold,
                   beginDrag() else { return }
         }
-        if let node = input.dragNode {
-            let free = CGPoint(x: p.x + input.grab.dx, y: p.y + input.grab.dy)
-            let lift = aimHit(finger: p)
-            place(node, at: lift ?? free, scale: lift == nil ? Self.dragScale : Self.liftScale, settle: (lift != nil) != input.lifted)
-            input.lifted = lift != nil
-            followDrag(node, finger: p)
+        guard let node = input.dragNode else { return }
+        let free = CGPoint(x: p.x + input.grab.dx, y: p.y + input.grab.dy)
+        let lift = aimHit(finger: p)
+        let lifted = lift != nil
+        let rowChanged = lifted && input.lifted && abs((lift?.y ?? 0) - (input.liftY ?? 0)) > 0.5
+        input.follow.move(to: lift ?? free, jump: lifted != input.lifted || rowChanged, at: now)
+        #if DEBUG
+        dragPerf.intended = lift ?? free
+        #endif
+        if lifted != input.lifted {
+            let scale = SKAction.scale(to: lifted ? Self.liftScale : Self.dragScale, duration: Self.liftDuration)
+            node.run(scale.eased(.easeOut), withKey: "lift")
         }
+        input.lifted = lifted
+        input.liftY = lift?.y
+        if let at = input.follow.position(at: now) { node.position = at }
+        followDrag(node, finger: p)
     }
 
     func inputEnded(_ p: CGPoint) {
+        if input.finger != nil { stepDrag() }  // the last move counts before the drop
         let state = input
         input = TableInputState()
         if state.dragging {
+            #if DEBUG
+            print(dragPerf.summary)
+            #endif
             let landing = Landing(gap: dragGap, from: state.dragNode.map { hand.convert($0.position, from: layer(.drag)) })
             dragGap = nil
             state.dragNode?.removeFromParent()
@@ -168,6 +246,9 @@ extension TableScene {
             from = layer(.hand).convert(n.position, from: hand)
             node = CardNode(card: card, size: layout.cardSize)
             node.isPrivate = true  // my hand's face: `hideHand()` turns it down mid-drag
+            // The see-through copy a laid group's gap shows (usually drawn ahead already).
+            _ = CardFaceFactory.shared.texture(for: card, compact: true)
+            CardFaceFactory.shared.prewarmPreview()
         case .tray(let card, _):
             guard !store.actionInFlight, let f = trays.frame(of: card) else { return false }
             from = CGPoint(x: f.midX, y: f.midY)
@@ -181,8 +262,13 @@ extension TableScene {
             return false
         }
         input.dragging = true
+        #if DEBUG
+        dragPerf.begin()
+        #endif
         input.grab = CGVector(dx: from.x - input.start.x, dy: from.y - input.start.y)
         node.position = from
+        input.follow = DragFollow(duration: Self.liftDuration / Double(max(speed, 0.01)))
+        input.follow.move(to: from, jump: false, at: CACurrentMediaTime())
         node.setScale(Self.dragScale)
         node.zPosition = 0
         layer(.drag).addChild(node)
@@ -239,43 +325,42 @@ extension TableScene {
     /// How long the dragged card takes to lift clear of a laid group or come back down.
     static let liftDuration: TimeInterval = 0.12
 
-    /// Moves the dragged card: straight to `point`, or eased there while it lifts, lands or is
-    /// still settling (the scene's speed is the Pace).
-    private func place(_ node: CardNode, at point: CGPoint, scale: CGFloat, settle: Bool) {
-        guard settle || node.action(forKey: "lift") != nil else {
-            node.position = point
-            return
-        }
-        let d = Self.liftDuration
-        node.run(.group([.move(to: point, duration: d), .scale(to: scale, duration: d)]).eased(.easeOut), withKey: "lift")
-    }
-
     /// Live hit preview: while a hand card is over a laid group, that group shows where the
     /// card would land, or that it can't take it, with a light tick each time the group or the
     /// end changes. Returns where the card floats meanwhile (above the group, clear of the gap),
     /// or nil away from the laid groups.
     private func aimHit(finger p: CGPoint) -> CGPoint? {
         guard case .hand(let card) = input.source, let layout else { return nil }
-        let aim = laidDrop(at: p).map { d in
-            HitPreview(target: d.target, card: card,
-                       plan: actingSeat.flatMap { model?.hitPlan(card: card, seat: $0, target: d.target, toward: d.toward) })
+        let drop = laidDrop(at: p)
+        let key = drop.map { TableInputState.AimKey(target: $0.target, toward: $0.toward) }
+        // The preview changes only when the finger reaches another group or end.
+        if !input.aimed || key != input.aim {
+            input.aimed = true
+            input.aim = key
+            let aim = drop.map { d in HitPreview(target: d.target, card: card, plan: heldPlan(card, d.target, d.toward)) }
+            let old = laidZone.preview
+            showHitPreview(aim)
+            if let aim, aim.target != old?.target || aim.plan?.index != old?.plan?.index || (aim.plan == nil) != (old?.plan == nil) {
+                Haptics.shared.tick()
+                #if DEBUG
+                hitProbe.aims += 1
+                #endif
+            }
         }
-        let old = laidZone.preview
-        showHitPreview(aim)
-        guard let aim, let f = laidZone.shownFrame(of: aim.target) else { return nil }
-        if aim.target != old?.target || aim.plan?.index != old?.plan?.index || (aim.plan == nil) != (old?.plan == nil) {
-            Haptics.shared.tick()
-            #if DEBUG
-            hitProbe.aims += 1
-            #endif
-        }
+        guard let drop, let f = laidZone.shownFrame(of: drop.target) else { return nil }
         let h = layout.cardSize.height * Self.liftScale
         return CGPoint(x: p.x, y: min(f.maxY + 10 + h / 2, size.height - h / 2))
     }
 
     /// Shows `preview` in the laid zone, sliding its groups open or closed.
     func showHitPreview(_ preview: HitPreview?) {
+        #if DEBUG
+        let was = laidZone.preview
+        #endif
         let moves = laidZone.setPreview(preview)
+        #if DEBUG
+        if laidZone.preview != was { dragPerf.previewChanges += 1 }
+        #endif
         guard !moves.isEmpty else { return }
         let director = director
         director.cancelActions(under: laidZone)  // a slide still running gives way to the new one

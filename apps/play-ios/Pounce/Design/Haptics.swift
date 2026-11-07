@@ -5,6 +5,9 @@ import Foundation
 /// (`Pace.underTest`) a silent stand-in that never starts the Taptic Engine.
 @MainActor
 protocol HapticPlaying: AnyObject {
+    /// Wakes the Taptic Engine without blocking (a finger went down), so the ticks of a drag
+    /// that follows don't wait for it to start.
+    func prepare()
     /// Light UI tap.
     func tick()
     /// A card landing.
@@ -31,14 +34,34 @@ final class EngineHaptics: HapticPlaying {
     private let settings: Settings
     private let supported: Bool
     private var engine: CHHapticEngine?
+    /// The engine is started (it stops by itself when idle, and says so).
+    private var running = false
+    /// The tick's player, made once per engine: a drag ticks on every target it crosses.
+    private var tickPlayer: CHHapticPatternPlayer?
 
     init(settings: Settings = .shared) {
         self.settings = settings
         supported = CHHapticEngine.capabilitiesForHardware().supportsHaptics
     }
 
+    func prepare() {
+        guard supported, settings.hapticsOn, !running, let engine = try? engine ?? makeEngine() else { return }
+        engine.start { [weak self] error in
+            Task { @MainActor in if error == nil { self?.running = true } }
+        }
+    }
+
     func tick() {
-        play([transient(0, intensity: 0.5, sharpness: 0.7)])
+        guard supported, settings.hapticsOn else { return }
+        do {
+            let engine = try readyEngine()
+            let player = try tickPlayer ?? engine.makePlayer(
+                with: CHHapticPattern(events: [transient(0, intensity: 0.5, sharpness: 0.7)], parameters: []))
+            tickPlayer = player
+            try player.start(atTime: CHHapticTimeImmediate)
+        } catch {
+            reset()
+        }
     }
 
     func drop() {
@@ -106,21 +129,39 @@ final class EngineHaptics: HapticPlaying {
             let player = try engine.makePlayer(with: pattern)
             try player.start(atTime: CHHapticTimeImmediate)
         } catch {
-            engine = nil  // rebuild on the next call
+            reset()
         }
     }
 
+    /// The engine, started. `start()` blocks, so it runs only when the engine has stopped
+    /// (idle shutdown, or never started), not on every pattern.
     private func readyEngine() throws -> CHHapticEngine {
-        let ready: CHHapticEngine
-        if let engine {
-            ready = engine
-        } else {
-            ready = try CHHapticEngine()
-            ready.isAutoShutdownEnabled = true
-            engine = ready
+        let ready = try engine ?? makeEngine()
+        if !running {
+            try ready.start()
+            running = true
         }
-        try ready.start()  // no-op while running; wakes an engine that auto-shut down
         return ready
+    }
+
+    private func makeEngine() throws -> CHHapticEngine {
+        let made = try CHHapticEngine()
+        made.isAutoShutdownEnabled = true
+        made.stoppedHandler = { [weak self] _ in
+            Task { @MainActor in self?.running = false }
+        }
+        made.resetHandler = { [weak self] in
+            Task { @MainActor in self?.reset() }
+        }
+        engine = made
+        return made
+    }
+
+    /// Something failed or the haptic server restarted: rebuild everything on the next call.
+    private func reset() {
+        engine = nil
+        tickPlayer = nil
+        running = false
     }
 }
 
@@ -129,6 +170,7 @@ final class EngineHaptics: HapticPlaying {
 final class SilentHaptics: HapticPlaying {
     private(set) var played = 0
 
+    func prepare() {}
     func tick() { played += 1 }
     func drop() { played += 1 }
     func success() { played += 1 }

@@ -90,12 +90,16 @@ final class TableScene: SKScene {
     /// The fan slot the dragged card lands in if let go now, held open in the hand; nil while
     /// it is outside the hand area. `TableInput` slides the fan when it changes.
     var dragGap: Int?
+    /// The held card's hit targets and plans (`heldAims`), dropped at every redraw.
+    var hitAims: HitAims?
     #if DEBUG
     /// Target-slot changes during drags, and the slot the last reorder landed in (`table.drag`).
     var dragProbe = (changes: 0, landed: -1)
     /// Laid-group aim changes during drags, and the last hit sent as `seat.group.side`, side
     /// `-` when the action carries none (`table.hit`).
     var hitProbe = (aims: 0, sent: "-")
+    /// Per-drag timings (`[dragperf]` on stdout when a drag ends).
+    var dragPerf = DragPerf()
     #endif
     /// A played card shown at its target until the server answers (`provisionalMove`).
     private(set) var provisionalCard: CardID?
@@ -160,6 +164,8 @@ final class TableScene: SKScene {
     /// The last intent handed to `play`, which the next one waits for.
     private var playChain: Task<Void, Never>?
     private static let deferLimit: Duration = .seconds(3)
+    /// Drawing faces ahead (`prewarmFaces`).
+    private var prewarm: Task<Void, Never>?
     private var accessibilityCache: (version: Int, elements: [UIAccessibilityElement])?
     private var accessibilityVersion = 0
 
@@ -272,6 +278,10 @@ final class TableScene: SKScene {
     }
 
     override func update(_ currentTime: TimeInterval) {
+        if input.source != .none { stepDrag() }
+        #if DEBUG
+        if input.dragging { dragPerf.frame(currentTime, drawn: input.dragNode?.position) }
+        #endif
         director.frame(currentTime)
     }
 
@@ -531,6 +541,10 @@ final class TableScene: SKScene {
             director.noteChange()
             publishOverlays()
         }
+        // The table may have changed under a held card: its aims are worked out again, and a
+        // drag looks at the group under the finger afresh.
+        hitAims = nil
+        input.aimed = false
         // The snap wins: stop director actions on every node this redraw positions.
         for layer in [Layer.background, .rug, .piles, .laidZone, .tower, .opponents, .trays, .hand] {
             director.cancelActions(under: self.layer(layer))
@@ -593,6 +607,7 @@ final class TableScene: SKScene {
             var hidden = trayState.cardsInTrays
             for card in [dragCard, provisionalCard].compactMap({ $0 }) { hidden.insert(card) }
             let shown = order.cards.filter { !hidden.contains($0) }
+            if model.game?.laid.contains(where: { $0 != nil }) == true { prewarmFaces(order.cards) }
             if let s = selection, !shown.contains(s) { selection = nil }
             content = .faces(shown)
         } else if let bottom, model.mySeats.contains(bottom) {
@@ -664,6 +679,27 @@ final class TableScene: SKScene {
         menuButton.position = CGPoint(x: size.width - menuSide / 2 - (roomy ? 16 : 10), y: menuY)
     }
 
+    /// Draws ahead, a card per idle moment, the small faces a drag over the laid groups shows
+    /// (the see-through copy in a group's gap) and the preview's rings and badges, so the
+    /// first drag over a group doesn't stop to draw them.
+    private func prewarmFaces(_ cards: [CardID]) {
+        let factory = CardFaceFactory.shared
+        guard prewarm == nil, cards.contains(where: { !factory.hasTexture(for: $0, compact: true) }) else { return }
+        prewarm = Task { @MainActor [weak self] in
+            factory.prewarmPreview()
+            for card in cards {
+                try? await Task.sleep(for: .milliseconds(40))
+                guard let self, !Task.isCancelled else { return }
+                // Never under a finger or an animation: only in frames that have time to spare.
+                while self.input.source != .none || self.animating, !Task.isCancelled {
+                    try? await Task.sleep(for: .milliseconds(100))
+                }
+                _ = factory.texture(for: card, compact: true)
+            }
+            self?.prewarm = nil
+        }
+    }
+
     /// Redraws the bottom seat's name pill, orange while it is that seat's turn.
     func setBottomTag(active: Bool) {
         guard let name = bottomTagName, let layout else { return }
@@ -727,6 +763,7 @@ final class TableScene: SKScene {
 
     override func touchesBegan(_ touches: Set<UITouch>, with event: UIEvent?) {
         dismissTurnCue()
+        Haptics.shared.prepare()
         for touch in touches {
             director.touchBegan()
             inputBegan(touch.location(in: self))
