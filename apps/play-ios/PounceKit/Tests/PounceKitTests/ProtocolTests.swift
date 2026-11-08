@@ -52,6 +52,7 @@ import Testing
         case "ping": return .ping
         case "link-weak": return .link(.weak)
         case "link-good": return .link(.good)
+        case "act-forfeit": return .act(seat: 1, action: .forfeit)
         default: throw Fixtures.FixtureError.malformed("no sample for client fixture \(name)")
         }
     }
@@ -82,7 +83,7 @@ import Testing
 
     @Test func encodesEveryClientFixture() throws {
         let fixtures = try Fixtures.clientMessages()
-        #expect(fixtures.count == 25)
+        #expect(fixtures.count == 26)
         for (name, json) in fixtures {
             #expect(try jsonEqual(Codec.encode(sample(name)), json), "\(name)")
         }

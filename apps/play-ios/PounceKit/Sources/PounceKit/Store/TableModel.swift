@@ -16,6 +16,36 @@ public struct TableModel: Equatable, Sendable {
 
     public var isMultiSeat: Bool { mySeats.count > 1 }
 
+    /// This device's seats still in the game: `mySeats` less any that forfeited (§5.10).
+    public var myActiveSeats: [Seat] {
+        mySeats.filter { !(game?.isOut($0) ?? false) }
+    }
+
+    /// Every seat this device holds forfeited while the others play on (§5.10): the game is over
+    /// for this phone, though not for the table.
+    public var isOutForMe: Bool {
+        room.status == .playing && !mySeats.isEmpty && myActiveSeats.isEmpty
+    }
+
+    /// The seat a forfeit from this phone's menu applies to (§5.10): the hand that is up
+    /// (`shown`, on a shared phone), else the seat whose turn it is, else this phone's first seat
+    /// still in. Nil when there is nothing to forfeit: outside play, or every seat already out.
+    public func forfeitSeat(shown: Seat?) -> Seat? {
+        guard room.status == .playing, let game, game.status != .gameOver else { return nil }
+        let active = myActiveSeats
+        if let shown, active.contains(shown) { return shown }
+        if active.contains(game.turn) { return game.turn }
+        return active.first
+    }
+
+    /// What a forfeit by `seat` does (§5.10): with one other seat in, the game ends and that seat
+    /// wins; with more, `seat` is out and the rest play on.
+    public func forfeitOutcome(_ seat: Seat) -> ForfeitOutcome {
+        let others = (0..<seatCount).filter { $0 != seat && !(game?.isOut($0) ?? false) }
+        if others.count == 1, let winner = others.first { return .ends(winner: winner) }
+        return .out
+    }
+
     public var currentSeat: Seat? { game?.turn }
 
     private var isLive: Bool {
@@ -122,11 +152,11 @@ public struct TableModel: Equatable, Sendable {
         return nil
     }
 
-    /// Other seats not already pending a skip.
+    /// Other seats not already pending a skip, and still in the game.
     public func skipTargets(for seat: Seat) -> [Seat] {
         guard let game else { return [] }
         return (0..<seatCount).filter { other in
-            other != seat && !(game.pendingSkip.indices.contains(other) && game.pendingSkip[other])
+            other != seat && !(game.pendingSkip.indices.contains(other) && game.pendingSkip[other]) && !game.isOut(other)
         }
     }
 
@@ -156,6 +186,13 @@ public struct TableModel: Equatable, Sendable {
         guard room.status == .lobby else { return [] }
         return room.seats.indices.filter { room.seats[$0].kind == .open }
     }
+}
+
+/// What a forfeit does (§5.10): the game ends and `winner` wins, or the seat is out and the
+/// others play on.
+public enum ForfeitOutcome: Equatable, Sendable {
+    case ends(winner: Seat)
+    case out
 }
 
 /// Where a hit puts its card: the extended group, the card's place in it, the end of a run it

@@ -44,6 +44,8 @@ public struct ErrorCode: RawRepresentable, Codable, Hashable, Sendable {
     public static let emptyDiscard = ErrorCode(rawValue: "empty_discard")
     public static let cucumberFromDiscard = ErrorCode(rawValue: "cucumber_from_discard")
     public static let roundNotOver = ErrorCode(rawValue: "round_not_over")
+    /// The seat already forfeited (§5.10).
+    public static let forfeited = ErrorCode(rawValue: "forfeited")
     // Table looks and Play again (daily habit §9.4, §10.4).
     /// Play again before the game is over.
     public static let notOver = ErrorCode(rawValue: "not_over")
@@ -126,6 +128,8 @@ public enum Action: Encodable, Equatable, Sendable {
     case hit(card: CardID, target: HitTarget, side: HitSide? = nil)
     case discard(card: CardID, skipTarget: Seat?)
     case nextRound
+    /// Leave the game for good (§5.10), on anyone's turn, until it is over.
+    case forfeit
 
     private enum CodingKeys: String, CodingKey { case type, from, groups, card, target, skipTarget, side }
 
@@ -149,6 +153,8 @@ public enum Action: Encodable, Equatable, Sendable {
             try c.encodeIfPresent(skipTarget, forKey: .skipTarget)
         case .nextRound:
             try c.encode("nextRound", forKey: .type)
+        case .forfeit:
+            try c.encode("forfeit", forKey: .type)
         }
     }
 }

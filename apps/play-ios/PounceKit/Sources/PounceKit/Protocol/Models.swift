@@ -117,11 +117,18 @@ public struct GameView: Codable, Equatable, Sendable {
     public var hands: [Seat: [CardID]]
     public var pendingSkip: [Bool]
     public var winners: [Seat]
+    /// Seats that forfeited (spec §5.10): out of the game for good, last place, never given a
+    /// turn. All false from a server that predates forfeits.
+    public var forfeited: [Bool]
+
+    /// True when `seat` forfeited.
+    public func isOut(_ seat: Seat) -> Bool { forfeited.indices.contains(seat) && forfeited[seat] }
 
     public init(
         round: Int, dealer: Seat, turn: Seat, step: TurnStep, status: GameStatus, deckCount: Int,
         discardTop: CardID?, discardCount: Int, phase: [Int], scores: [Int], laid: [[Group]?],
-        handCounts: [Int], hands: [Seat: [CardID]], pendingSkip: [Bool], winners: [Seat]
+        handCounts: [Int], hands: [Seat: [CardID]], pendingSkip: [Bool], winners: [Seat],
+        forfeited: [Bool]? = nil
     ) {
         self.round = round
         self.dealer = dealer
@@ -138,11 +145,12 @@ public struct GameView: Codable, Equatable, Sendable {
         self.hands = hands
         self.pendingSkip = pendingSkip
         self.winners = winners
+        self.forfeited = forfeited ?? Array(repeating: false, count: phase.count)
     }
 
     private enum CodingKeys: String, CodingKey {
         case round, dealer, turn, step, status, deckCount, discardTop, discardCount, phase, scores
-        case laid, handCounts, hands, pendingSkip, winners
+        case laid, handCounts, hands, pendingSkip, winners, forfeited
     }
 
     public init(from decoder: any Decoder) throws {
@@ -162,6 +170,7 @@ public struct GameView: Codable, Equatable, Sendable {
         hands = try c.decode(StringKeyedSeats.self, forKey: .hands).hands
         pendingSkip = try c.decode([Bool].self, forKey: .pendingSkip)
         winners = try c.decode([Seat].self, forKey: .winners)
+        forfeited = try c.decodeIfPresent([Bool].self, forKey: .forfeited) ?? Array(repeating: false, count: phase.count)
     }
 
     public func encode(to encoder: any Encoder) throws {
@@ -181,6 +190,7 @@ public struct GameView: Codable, Equatable, Sendable {
         try c.encode(StringKeyedSeats(hands: hands), forKey: .hands)
         try c.encode(pendingSkip, forKey: .pendingSkip)
         try c.encode(winners, forKey: .winners)
+        try c.encode(forfeited, forKey: .forfeited)
     }
 }
 

@@ -11,6 +11,8 @@ public enum GameEvent: Codable, Equatable, Sendable {
     case skipped(seat: Seat)
     case turn(seat: Seat)
     case reshuffled(deckCount: Int)
+    /// `seat` left the game for good (§5.10). A game it leaves with one seat in ends with `gameOver` next.
+    case forfeited(seat: Seat)
     case roundOver(wentOut: Seat?, points: [Int], advanced: [Seat], scores: [Int], phase: [Int])
     case gameOver(winners: [Seat])
 
@@ -48,6 +50,8 @@ public enum GameEvent: Codable, Equatable, Sendable {
             self = .turn(seat: try c.decode(Seat.self, forKey: .seat))
         case "reshuffled":
             self = .reshuffled(deckCount: try c.decode(Int.self, forKey: .deckCount))
+        case "forfeited":
+            self = .forfeited(seat: try c.decode(Seat.self, forKey: .seat))
         case "roundOver":
             self = .roundOver(wentOut: try c.decodeIfPresent(Seat.self, forKey: .wentOut),
                               points: try c.decode([Int].self, forKey: .points),
@@ -98,6 +102,9 @@ public enum GameEvent: Codable, Equatable, Sendable {
         case .reshuffled(let deckCount):
             try c.encode("reshuffled", forKey: .kind)
             try c.encode(deckCount, forKey: .deckCount)
+        case .forfeited(let seat):
+            try c.encode("forfeited", forKey: .kind)
+            try c.encode(seat, forKey: .seat)
         case .roundOver(let wentOut, let points, let advanced, let scores, let phase):
             try c.encode("roundOver", forKey: .kind)
             try c.encode(wentOut, forKey: .wentOut)  // null when nobody went out

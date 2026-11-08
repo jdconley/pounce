@@ -16,6 +16,8 @@ public enum TableAnnouncement: Equatable, Sendable {
     case roundOver(mine: [SeatPoints])
     /// The game ended: who won (several on a tie).
     case gameOver(winners: [Seat])
+    /// `seat` forfeited (§5.10); `mine` when it is one of this phone's.
+    case forfeited(seat: Seat, mine: Bool)
 
     /// The announcement for `event` on the table `model` shows, or nil (most events are only
     /// seen: another seat's turn, draws, discards).
@@ -29,6 +31,8 @@ public enum TableAnnouncement: Equatable, Sendable {
             return .roundOver(mine: mine)
         case .gameOver(let winners):
             return .gameOver(winners: winners)
+        case .forfeited(let seat):
+            return .forfeited(seat: seat, mine: model.mySeats.contains(seat))
         default:
             return nil
         }
