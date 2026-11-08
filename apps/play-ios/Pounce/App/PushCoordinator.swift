@@ -19,6 +19,8 @@ import UserNotifications
 /// - In the foreground a banner is dropped only when its table is on screen (the table shows
 ///   the turn already); any other table's banner shows and Home's list refreshes.
 /// - The local turn reminder looks exactly like the server's push.
+/// - Every call to the notification center goes through `NotificationCenterQueue`, never on the
+///   main thread.
 @MainActor
 final class PushCoordinator: NSObject, UNUserNotificationCenterDelegate {
     weak var model: AppModel? {
@@ -35,18 +37,17 @@ final class PushCoordinator: NSObject, UNUserNotificationCenterDelegate {
     private(set) var tokens = PushTokenState()
     private var uploading = false
 
-    private var center: UNUserNotificationCenter { .current() }
-
     // MARK: registration
 
     /// The categories and their buttons (spec §12.5), set at every launch before any arrives.
     func registerCategories() {
-        let categories = PushCategory.allCases.map { category in
+        let categories = Set(PushCategory.allCases.map { category in
             UNNotificationCategory(
                 identifier: category.rawValue, actions: NotifyActions.actions(for: category).map(Self.action),
                 intentIdentifiers: [], options: [])
-        }
-        center.setNotificationCategories(Set(categories))
+        })
+        let set = Unchecked(categories)
+        NotificationCenterQueue.run { $0.setNotificationCategories(set.value) }
     }
 
     private static func action(_ action: NotifyAction) -> UNNotificationAction {
@@ -94,7 +95,7 @@ final class PushCoordinator: NSObject, UNUserNotificationCenterDelegate {
         }
         let kitten = model.ageBand == .kitten
         Task {
-            if Self.isAllowed(await center.notificationSettings().authorizationStatus) {
+            if Self.isAllowed(await NotificationCenterQueue.authorizationStatus()) {
                 UIApplication.shared.registerForRemoteNotifications()
                 if kitten { model.kittens.noteRegistered(true) }
             }
@@ -103,7 +104,7 @@ final class PushCoordinator: NSObject, UNUserNotificationCenterDelegate {
 
     /// The system prompt (after the priming screen). Registers on yes.
     func requestAuthorization() async -> Bool {
-        let granted = (try? await center.requestAuthorization(options: [.alert, .sound, .badge])) ?? false
+        let granted = await NotificationCenterQueue.requestAuthorization([.alert, .sound, .badge])
         if granted { registerIfAllowed() }
         return granted
     }
@@ -111,13 +112,13 @@ final class PushCoordinator: NSObject, UNUserNotificationCenterDelegate {
     /// Priming's "not now" (§12.5): provisional authorization, with no prompt. Notifications then
     /// land quietly in Notification Center with iOS's own Keep and Turn Off buttons.
     func requestProvisional() async {
-        guard await center.notificationSettings().authorizationStatus == .notDetermined else { return }
-        let granted = (try? await center.requestAuthorization(options: [.alert, .sound, .badge, .provisional])) ?? false
+        guard await NotificationCenterQueue.authorizationStatus() == .notDetermined else { return }
+        let granted = await NotificationCenterQueue.requestAuthorization([.alert, .sound, .badge, .provisional])
         if granted { registerIfAllowed() }
     }
 
     func authorizationStatus() async -> UNAuthorizationStatus {
-        await center.notificationSettings().authorizationStatus
+        await NotificationCenterQueue.authorizationStatus()
     }
 
     /// Uploads every time: each launch hands a token here, changed or not.
@@ -175,22 +176,26 @@ final class PushCoordinator: NSObject, UNUserNotificationCenterDelegate {
 
     /// The badge says how many tables wait on your move. Best effort: needs badge permission.
     func setBadge(_ count: Int) {
-        center.setBadgeCount(count) { _ in }
+        NotificationCenterQueue.run { $0.setBadgeCount(count) { _ in } }
     }
 
     /// A background push said the player moved at `code` on another device: that table's
     /// delivered notifications go, and the tables (and the badge) refresh.
     func dismiss(code: String) async {
-        let delivered = await center.deliveredNotifications()
-        let ids = delivered
-            .filter {
-                PushPolicy.matches(
-                    code: code, userInfo: $0.request.content.userInfo, threadId: $0.request.content.threadIdentifier)
+        let removed: Int = await NotificationCenterQueue.value { center, answer in
+            center.getDeliveredNotifications { delivered in
+                let ids = delivered
+                    .filter {
+                        PushPolicy.matches(
+                            code: code, userInfo: $0.request.content.userInfo, threadId: $0.request.content.threadIdentifier)
+                    }
+                    .map(\.request.identifier)
+                UNUserNotificationCenter.current().removeDeliveredNotifications(withIdentifiers: ids)
+                answer(ids.count)
             }
-            .map(\.request.identifier)
-        center.removeDeliveredNotifications(withIdentifiers: ids)
+        }
         #if DEBUG
-        print("[push] dismissed \(code): removed \(ids.count) delivered")
+        print("[push] dismissed \(code): removed \(removed) delivered")
         #endif
         await model?.refreshTables()
     }
@@ -221,7 +226,7 @@ final class PushCoordinator: NSObject, UNUserNotificationCenterDelegate {
     func cancelSnoozes(codes: [String]) {
         guard !codes.isEmpty else { return }
         let ids = codes.map { PushPolicy.snoozeID($0) }
-        center.removePendingNotificationRequests(withIdentifiers: ids)
+        NotificationCenterQueue.run { $0.removePendingNotificationRequests(withIdentifiers: ids) }
     }
 
     #if DEBUG
@@ -249,7 +254,7 @@ final class PushCoordinator: NSObject, UNUserNotificationCenterDelegate {
     // MARK: a kitten's daily reminder (spec §14.1): local, at a fixed 17:00, off by default
 
     func setKittenDaily(on: Bool, name: String) {
-        center.removePendingNotificationRequests(withIdentifiers: [KittenReminder.id])
+        NotificationCenterQueue.run { $0.removePendingNotificationRequests(withIdentifiers: [KittenReminder.id]) }
         guard on else { return }
         let content = UNMutableNotificationContent()
         content.title = name
@@ -282,13 +287,17 @@ final class PushCoordinator: NSObject, UNUserNotificationCenterDelegate {
     }
 
     /// Nonisolated so the completion closure isn't main-actor isolated: the center calls it on
-    /// a background queue, where an isolated closure would trap.
+    /// a background queue, where an isolated closure would trap. Queued after any cancel asked
+    /// for before it.
     nonisolated private static func add(_ request: UNNotificationRequest) {
         let id = request.identifier
-        UNUserNotificationCenter.current().add(request) { _ in
-            #if DEBUG
-            logPendingReminders("scheduled \(id)")
-            #endif
+        let request = Unchecked(request)
+        NotificationCenterQueue.run { center in
+            center.add(request.value) { _ in
+                #if DEBUG
+                logPendingReminders("scheduled \(id)")
+                #endif
+            }
         }
     }
 
@@ -301,25 +310,33 @@ final class PushCoordinator: NSObject, UNUserNotificationCenterDelegate {
     func cancelAllTurnReminders() {
         let known = Array(scheduledReminders)
         scheduledReminders.removeAll()
-        center.removePendingNotificationRequests(withIdentifiers: known)
-        center.removeDeliveredNotifications(withIdentifiers: known)
+        NotificationCenterQueue.run { center in
+            center.removePendingNotificationRequests(withIdentifiers: known)
+            center.removeDeliveredNotifications(withIdentifiers: known)
+        }
         Self.removeListedReminders()
     }
 
     /// Lists pending and delivered requests and removes every turn reminder. Nonisolated for
-    /// the same reason as `add`: the list callbacks arrive on a background queue.
+    /// the same reason as `add`: the list callbacks arrive on a background queue. The queue
+    /// holds until the pending ones are gone, so a reminder scheduled after this lands after
+    /// it and survives.
     nonisolated private static func removeListedReminders() {
-        let center = UNUserNotificationCenter.current()
-        center.getPendingNotificationRequests { requests in
-            let ids = requests.map(\.identifier).filter(PushPolicy.isReminderID)
-            UNUserNotificationCenter.current().removePendingNotificationRequests(withIdentifiers: ids)
-            #if DEBUG
-            logPendingReminders("cancelled pending \(ids)")
-            #endif
+        NotificationCenterQueue.runHolding { center, done in
+            center.getPendingNotificationRequests { requests in
+                let ids = requests.map(\.identifier).filter(PushPolicy.isReminderID)
+                UNUserNotificationCenter.current().removePendingNotificationRequests(withIdentifiers: ids)
+                done()
+                #if DEBUG
+                logPendingReminders("cancelled pending \(ids)")
+                #endif
+            }
         }
-        center.getDeliveredNotifications { notifications in
-            let ids = notifications.map(\.request.identifier).filter(PushPolicy.isReminderID)
-            UNUserNotificationCenter.current().removeDeliveredNotifications(withIdentifiers: ids)
+        NotificationCenterQueue.run { center in
+            center.getDeliveredNotifications { notifications in
+                let ids = notifications.map(\.request.identifier).filter(PushPolicy.isReminderID)
+                UNUserNotificationCenter.current().removeDeliveredNotifications(withIdentifiers: ids)
+            }
         }
     }
 
@@ -452,6 +469,56 @@ final class PushCoordinator: NSObject, UNUserNotificationCenterDelegate {
             await model.kittens.revoke(kitten: kitten)
         }
     }
+}
+
+/// Every call to the notification center, on one serial queue off the main thread, in the order
+/// they were asked for (a reminder scheduled after a cancel lands after it).
+///
+/// The center's adds, removes and lists wait on a reply from `usernotificationsd`; a slow daemon
+/// (a freshly booted iOS 27 simulator can take minutes) would otherwise freeze the app at launch.
+enum NotificationCenterQueue {
+    private static let queue = DispatchQueue(label: "com.conleychaos.play.notification-center", qos: .userInitiated)
+
+    /// Runs `work` after everything asked for before it.
+    static func run(_ work: @escaping @Sendable (UNUserNotificationCenter) -> Void) {
+        queue.async { work(.current()) }
+    }
+
+    /// Runs `work`, and nothing asked for after it until `work` calls `done` (once, from any
+    /// thread, typically a center callback). No thread waits meanwhile: the queue is suspended.
+    static func runHolding(
+        _ work: @escaping @Sendable (UNUserNotificationCenter, _ done: @escaping @Sendable () -> Void) -> Void
+    ) {
+        queue.async {
+            // Takes effect once this block returns, even if `done` already ran.
+            queue.suspend()
+            work(.current()) { queue.resume() }
+        }
+    }
+
+    /// Runs `work` in order and waits (without blocking a thread) for the answer it hands back once.
+    static func value<T: Sendable>(
+        _ work: @escaping @Sendable (UNUserNotificationCenter, _ answer: @escaping @Sendable (T) -> Void) -> Void
+    ) async -> T {
+        await withCheckedContinuation { continuation in
+            queue.async { work(.current()) { continuation.resume(returning: $0) } }
+        }
+    }
+
+    static func authorizationStatus() async -> UNAuthorizationStatus {
+        await value { center, answer in center.getNotificationSettings { answer($0.authorizationStatus) } }
+    }
+
+    /// False on an error, as the async form's `try?` was.
+    static func requestAuthorization(_ options: UNAuthorizationOptions) async -> Bool {
+        await value { center, answer in center.requestAuthorization(options: options) { granted, _ in answer(granted) } }
+    }
+}
+
+/// An immutable framework object carried to the notification queue.
+private struct Unchecked<Value>: @unchecked Sendable {
+    let value: Value
+    init(_ value: Value) { self.value = value }
 }
 
 /// A background task ended once: when its work is done, or when iOS says time is up.
