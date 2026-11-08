@@ -28,6 +28,7 @@ import Testing
         #expect(game.forfeited == [false, true, false])
         #expect(game.isOut(1) && !game.isOut(0) && !game.isOut(7))
         #expect(game.handCounts[1] == 0)
+        #expect(game.endReason == nil)
         guard case .error(let code) = try server("error-forfeited") else {
             Issue.record("not an error")
             return

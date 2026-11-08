@@ -59,11 +59,13 @@ describe("forfeit with one other player", () => {
     const { state, events } = ok(applyAction(makeState(2), 0, FORFEIT));
     expect(events).toEqual([
       { kind: "forfeited", seat: 0 },
-      { kind: "gameOver", winners: [1] },
+      { kind: "gameOver", winners: [1], reason: "forfeit" },
     ]);
     expect(state.status).toBe("gameOver");
     expect(state.winners).toEqual([1]);
     expect(state.forfeited).toEqual([true, false]);
+    expect(state.endReason).toBe("forfeit");
+    expect(viewFor(state, [1]).endReason).toBe("forfeit");
     expect(state.hands[0]).toEqual([]);
   });
 
@@ -72,7 +74,7 @@ describe("forfeit with one other player", () => {
     const { state, events } = ok(applyAction(drawn, 1, FORFEIT));
     expect(events).toEqual([
       { kind: "forfeited", seat: 1 },
-      { kind: "gameOver", winners: [0] },
+      { kind: "gameOver", winners: [0], reason: "forfeit" },
     ]);
     expect(state.winners).toEqual([0]);
   });
@@ -139,7 +141,7 @@ describe("forfeit with three or more players", () => {
     const { state, events } = ok(applyAction(one, 0, FORFEIT));
     expect(events).toEqual([
       { kind: "forfeited", seat: 0 },
-      { kind: "gameOver", winners: [1] },
+      { kind: "gameOver", winners: [1], reason: "forfeit" },
     ]);
     expect(state.forfeited).toEqual([true, false, true]);
     expect(state.winners).toEqual([1]);
@@ -252,6 +254,30 @@ describe("forfeit with three or more players", () => {
     expect(s.winners.length).toBeGreaterThan(0);
     expect(s.winners).not.toContain(2);
     expect(s.phase[2]).toBe(0);
+  });
+});
+
+describe("forfeit and a decided hand", () => {
+  const set = buildGroup({ kind: "set", size: 3 }, [tabby(7), tuxedo(7), calico(7)]);
+  if (!set) throw new Error("bad set");
+
+  test("a forfeited seat on its last phase doesn't make the hand decide the game", () => {
+    // Seat 1 laid phase 10, then forfeited: nobody still in is finishing, so play goes on.
+    const s = makeState(3, { phase: [2, 9, 2], laid: [null, [set], null] });
+    const out = ok(applyAction(s, 1, FORFEIT)).state;
+    const { state, events } = ok(applyAction(out, 0, DRAW));
+    expect(state.status).toBe("playing");
+    expect(events.some((e) => e.kind === "gameOver")).toBe(false);
+  });
+
+  test("a forfeit that leaves the places fixed ends the game as decided", () => {
+    // Seat 0 laid phase 10 and seat 2 is far behind; only seat 1 (phase 9, not laid) could catch up.
+    const s = makeState(3, { phase: [9, 9, 2], laid: [[set], null, null], turn: 2 });
+    const { state, events } = ok(applyAction(s, 1, FORFEIT));
+    expect(events.map((e) => e.kind)).toEqual(["forfeited", "roundOver", "gameOver"]);
+    expect(state.winners).toEqual([0]);
+    expect(state.endReason).toBe("decided");
+    expect(state.phase[1]).toBe(9);
   });
 });
 

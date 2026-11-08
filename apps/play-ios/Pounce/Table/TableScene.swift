@@ -609,8 +609,9 @@ final class TableScene: SKScene {
         tower.update(model: model, layout: layout)
         foldOnTurnChange(game)
         // A phone holding no seat shows every seat in the bar.
-        let turnedOn = opponents.update(model: model, seats: barSeats, layout: layout)
-        for seat in turnedOn { pulseTurn(seat) }
+        let barChanges = opponents.update(model: model, seats: barSeats, layout: layout)
+        for seat in barChanges.turnedOn { pulseTurn(seat) }
+        for seat in barChanges.movedOn { popPhase(seat) }
 
         // Hand: faces only for the revealed seat; backs for a seat of mine that isn't revealed.
         // Cards in trays, in flight or under the finger are left out of the fan.
@@ -683,12 +684,13 @@ final class TableScene: SKScene {
             let frame = layout.seatTagFrame
             bottomTag.position = CGPoint(x: frame.maxX - bottomTag.size.width / 2, y: frame.midY)
             bottomTag.isHidden = false
-            tower.showPhase(game.phase[safe: bottom])  // the folded tower wears the same hand's phase
         } else {
             bottomTagName = nil
             bottomTag.isHidden = true
-            tower.showPhase(nil)
         }
+        // The folded tower wears the shown hand's phase on the cats' gold chip: the one place the
+        // table shows my own phase, on a phone with one seat or several.
+        tower.showPhase(faceUp ? bottom.flatMap { game.phase[safe: $0] } : nil)
 
         menuButton.isHidden = false
         // Top-right: in the status bar's right ear when the safe top is tall enough (notch /
@@ -736,6 +738,15 @@ final class TableScene: SKScene {
         guard let cat = opponents.node(for: seat) else { return }
         let director = director
         for (action, node) in cat.turnPulse(reduceMotion: UIAccessibility.isReduceMotionEnabled) {
+            Task { await director.run(action, on: node, decorative: true) }
+        }
+    }
+
+    /// The phase chip's pop for a seat that just moved on a phase (Reduce Motion: a fade).
+    func popPhase(_ seat: Seat) {
+        guard let cat = opponents.node(for: seat) else { return }
+        let director = director
+        for (action, node) in cat.phasePop(reduceMotion: UIAccessibility.isReduceMotionEnabled) {
             Task { await director.run(action, on: node, decorative: true) }
         }
     }
@@ -869,7 +880,7 @@ final class TableScene: SKScene {
                 ? String(localized: "\(SeatInfo.name(model.room, seat)), forfeited", comment: "VoiceOver: a player who left the game")
                 : SeatInfo.label(
                     model.room.seats[safe: seat], name: SeatInfo.name(model.room, seat),
-                    cards: game.handCounts[safe: seat], phase: game.phase[safe: seat])
+                    cards: game.handCounts[safe: seat], phase: PhaseMark.seat(seat, in: game))
             let card = customAction(String(localized: "Player card", comment: "VoiceOver action: open a player's card")) { [weak self] in
                 self?.showPlayer(seat)
                 return true
@@ -983,6 +994,17 @@ final class TableScene: SKScene {
                 id: "table.drag", label: "drag", frame: CGRect(x: 48, y: 0, width: 24, height: 24),
                 traits: .staticText, live: { [weak self] in
                     self.map { "\($0.dragProbe.changes)|\($0.dragProbe.landed)" }
+                }),
+            // Each bar seat's chips as drawn, then the folded tower's: "1=P1+laid/4,2=P7/10,tab=P3"
+            // (seat=phase chip/card count; tab=- when the tab wears none).
+            TableAccessibility.Item(
+                id: "table.badges", label: "badges", frame: CGRect(x: 120, y: 0, width: 24, height: 24),
+                traits: .staticText, live: { [weak self] in
+                    guard let self else { return "-" }
+                    let cats = self.opponents.order.compactMap { seat in
+                        self.opponents.node(for: seat).map { "\(seat)=\($0.badgeProbe)" }
+                    }
+                    return (cats + ["tab=\(self.tower.tabPhaseText ?? "-")"]).joined(separator: ",")
                 }),
             TableAccessibility.Item(
                 id: "table.hit", label: "hit", frame: CGRect(x: 72, y: 0, width: 24, height: 24),

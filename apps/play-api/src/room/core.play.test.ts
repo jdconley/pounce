@@ -459,6 +459,29 @@ describe("round and game end", () => {
   });
 });
 
+describe("a decided game", () => {
+  it("closes the room as soon as the rest of the hand cannot change the result", () => {
+    const room = startedRoom(["a", "b"]);
+    const g = game(room);
+    g.turn = 0;
+    g.step = "draw";
+    g.phase = [9, 3];
+    g.laid[0] = [{ kind: "set", cards: [1, 2, 3], value: 1 } satisfies Group];
+    const out = room.handle("a", { t: "act", seat: 0, action: { type: "draw", from: "deck" } });
+    expect(gameEventsTo(out, "b").map((e) => e.kind)).toEqual(["drew", "roundOver", "gameOver"]);
+    expect(gameEventsTo(out, "b").at(-1)).toEqual({ kind: "gameOver", winners: [0], reason: "decided" });
+    expect(room.state.status).toBe("over");
+    expect(room.state.timers.botAt).toBeNull();
+    expect(room.state.timers.nextRoundAt).toBeNull();
+    for (const device of ["a", "b"]) {
+      const view = snapshotTo(out, device).room.game as NonNullable<Snapshot["room"]["game"]>;
+      expect(view.status).toBe("gameOver");
+      expect(view.endReason).toBe("decided");
+      expect(view.winners).toEqual([0]);
+    }
+  });
+});
+
 describe("handle", () => {
   it("answers an unknown message type with bad_message", () => {
     const room = startedRoom(["a", "b"]);

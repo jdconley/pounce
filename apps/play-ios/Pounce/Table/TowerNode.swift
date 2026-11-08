@@ -8,7 +8,8 @@ import UIKit
 /// the `celebrate` pose with the sunburst behind them.
 ///
 /// Folded by default (`isOpen` false): only `tab` shows, a squat tower on a chip at the
-/// tower's foot (`TableLayout.towerTab`) wearing the shown hand's phase number. Open, the
+/// tower's foot (`TableLayout.towerTab`) wearing the shown hand's phase on the same gold "P4"
+/// chip the cats in the top bar wear (`CardFaceFactory.phaseChip`). Open, the
 /// whole tower springs up from its foot over the table's left edge on a dark backing panel.
 /// `setOpen` moves between the two; nothing `update` sets is touched by it, so a redraw
 /// never stops it half way.
@@ -30,9 +31,11 @@ final class TowerNode: SKNode {
     /// The folded tower, at the tower's foot.
     let tab = SKNode()
     private let tabChip = SKSpriteNode()
-    private let tabBadge = SKSpriteNode(texture: TableArt.table(ArtName.shelfBadge))
-    private let tabNumber = SKSpriteNode()
+    private let tabBadge = SKSpriteNode()
     private var tabPhase: Int?
+    /// The tab's phase chip height, from the tab's size (`buildTab`).
+    private var tabChipHeight: CGFloat = 0
+    private var tabSide: CGFloat = 0
     /// The whole tower shows (else just the tab).
     private(set) var isOpen = false
     private let structure = SKNode()
@@ -72,8 +75,6 @@ final class TowerNode: SKNode {
         tabChip.zPosition = 0
         tab.addChild(tabChip)
         tabBadge.zPosition = 3
-        tabNumber.zPosition = 0.01
-        tabBadge.addChild(tabNumber)
         tab.addChild(tabBadge)
         snap(open: false)
     }
@@ -177,24 +178,24 @@ final class TowerNode: SKNode {
         panelRect(layout).intersection(CGRect(origin: .zero, size: layout.size))
     }
 
-    /// The phase number the tab wears (0-based, `shelfCount` or more: finished), nil for none.
+    /// The phase the tab wears (0-based, `shelfCount` or more: finished), nil for none.
     func showPhase(_ phase: Int?) {
         let shown = phase.map { min(max($0, 0), TableLayout.shelfCount) }
-        guard shown != tabPhase || tabNumber.texture == nil else { return }
+        guard shown != tabPhase || tabBadge.texture == nil else { return }
         tabPhase = shown
         tabBadge.isHidden = shown == nil
-        guard let shown, let layout else { return }
-        let d = tabBadge.size.width
-        if shown >= TableLayout.shelfCount {
-            tabNumber.texture = TableArt.image(ArtName.iconTrophy)
-            tabNumber.size = CGSize(width: d * 0.6, height: d * 0.6)
-        } else {
-            let k = layout.towerTab.width / TableLayout.sortButtonHit
-            let digits = CardFaceFactory.shared.numeral(String(shown + 1), size: (12 * k).rounded(), outline: 2)
-            tabNumber.texture = digits
-            tabNumber.size = digits.size()
-        }
-        tabNumber.position = CGPoint(x: 0, y: -1)
+        guard let shown, tabChipHeight > 0 else { return }
+        let texture = CardFaceFactory.shared.phaseChip(PhaseMark(index: shown, laid: false), height: tabChipHeight)
+        tabBadge.texture = texture
+        tabBadge.size = texture.size()
+        // Top right of the tower, its left end over the tower's middle.
+        tabBadge.position = CGPoint(x: tabSide * 0.08 + tabBadge.size.width / 2, y: tabSide * 0.4)
+    }
+
+    /// What the tab's chip shows (DEBUG and tests): "P4", "done", nil when hidden.
+    var tabPhaseText: String? {
+        guard !tabBadge.isHidden, let tabPhase else { return nil }
+        return PhaseMark(index: tabPhase, laid: false).text ?? "done"
     }
 
     /// The open or fold motion running now, if any (`settled` waits for it).
@@ -541,7 +542,7 @@ final class TowerNode: SKNode {
     }
 
     /// The tab: a squat tower (the base with the top cushion sat right on it) on a round chip,
-    /// and the shown hand's phase number on a shelf badge at its top right.
+    /// and the shown hand's phase on a gold phase chip at its top right.
     private func buildTab(_ layout: TableLayout) {
         let side = layout.towerTab.width
         tabChip.texture = Self.chipTexture(side)
@@ -557,10 +558,9 @@ final class TowerNode: SKNode {
         top.zPosition = 2
         tabChip.addChild(base)
         tabChip.addChild(top)
-        let d = (side * 0.5).rounded()
-        tabBadge.size = CGSize(width: d, height: d)
-        tabBadge.position = CGPoint(x: side * 0.42, y: side * 0.36)
-        tabNumber.texture = nil  // drawn again at this size
+        tabSide = side
+        tabChipHeight = max((side * 0.46).rounded(), 20)
+        tabBadge.texture = nil  // drawn again at this size
         let phase = tabPhase
         tabPhase = nil
         showPhase(phase)

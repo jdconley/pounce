@@ -5,12 +5,15 @@ import SwiftUI
 /// name up top, the winners' cats in the celebrate pose on a sunburst, a crown dropping onto each
 /// (shared wins show every winner), everyone's final standing (cat, name, score) under it, a
 /// one-shot confetti fall, and two pills: Home and New game. No words but the table's and the
-/// players' names. Every motion here runs once and stops, so nothing loops.
+/// players' names, and one short line when the server ended the game early because the rest of
+/// the hand couldn't change the result. Every motion here runs once and stops, so nothing loops.
 struct GameOverView: View {
     let tableName: String
     let winners: [Person]
     /// Every seat, best first: phase reached, then lowest score.
     var standings: [Standing] = []
+    /// Why the game ended early, if it did: shown as one line under the standings.
+    var endReason: GameEndReason? = nil
     let onHome: () -> Void
     let onNewGame: () -> Void
     /// Play again (§10.4): nil on a server without it.
@@ -135,6 +138,7 @@ struct GameOverView: View {
                     // The sunburst is wider than a small phone: wrap to the screen, not to it.
                     .containerRelativeFrame(.horizontal) { width, _ in width - 32 }
             }
+            endNote
             Spacer()
             pills
                 .padding(.bottom, 36)
@@ -160,6 +164,7 @@ struct GameOverView: View {
                             .accessibilityElement(children: .contain)
                             .accessibilityIdentifier("gameover.standings")
                         }
+                        endNote
                         pills
                     }
                     .frame(width: min(geo.size.width * 0.4, 480))
@@ -175,6 +180,7 @@ struct GameOverView: View {
                         standingsFlow
                             .frame(maxWidth: 640)
                     }
+                    endNote
                     Spacer()
                     pills
                         .padding(.bottom, 48)
@@ -213,6 +219,29 @@ struct GameOverView: View {
             .opacity(appeared ? 1 : 0)
         }
         .frame(height: height)
+    }
+
+    /// The early-end line: why the game stopped before the hand was played out.
+    @ViewBuilder private var endNote: some View {
+        if let text = Self.endNote(endReason) {
+            OutlinedText(text, size: 22 * (sizeClass == .regular ? 1.2 : 1), fill: Palette.lime, width: 3, lines: 2)
+                .padding(.horizontal, 24)
+                .opacity(appeared ? 1 : 0)
+                .accessibilityIdentifier("gameover.reason")
+        }
+    }
+
+    /// The line for an early end, or nil for a game that ended the usual way.
+    static func endNote(_ reason: GameEndReason?) -> String? {
+        switch reason {
+        case .decided:
+            String(
+                localized: "The rest of the hand couldn't change the result.",
+                comment: "Game over: the game ended early because no one could still change a finishing place")
+        case .forfeit, nil:
+            // A forfeit says so on the forfeiter's standing ("Forfeited").
+            nil
+        }
     }
 
     private var standingsFlow: some View {

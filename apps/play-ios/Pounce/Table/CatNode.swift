@@ -3,8 +3,10 @@ import SpriteKit
 import SwiftUI
 
 /// A seat's cat in its colored ring: pose sprite, an optional glow for the current player,
-/// badges (bot, skip pending, laid down) and a card-count bubble. Static by default; every
-/// motion goes through the `AnimationDirector`.
+/// badges (bot, skip pending), and along the bottom its two numbers: the phase on a gold "P4"
+/// chip at the left (wearing the "laid down" sticker once this round's phase is down) and the
+/// card count on a mini card back at the right. Static by default; every motion goes through
+/// the `AnimationDirector`.
 @MainActor
 final class CatNode: SKNode {
     let cat: Int
@@ -14,7 +16,11 @@ final class CatNode: SKNode {
     private let sprite: SKSpriteNode
     private let botBadge: SKSpriteNode
     private let skipBadge: SKSpriteNode
+    /// The "laid down" sticker, on the phase chip's left end.
     private let laidBadge: SKSpriteNode
+    /// The phase chip (`PhaseMark`), bottom left.
+    private let phaseChip: SKSpriteNode
+    private(set) var phase: PhaseMark?
     /// The seat's phone has a weak or lost connection (`SignalGlyph`).
     private let linkBadge: SKSpriteNode
     private(set) var link: SignalGlyph.Level?
@@ -39,7 +45,9 @@ final class CatNode: SKNode {
         let badge = CGSize(width: 22 * k, height: 22 * k)
         botBadge = SKSpriteNode(texture: TableArt.image(ArtName.badgeBot), size: badge)
         skipBadge = SKSpriteNode(texture: TableArt.image(ArtName.badgeSkip), size: badge)
-        laidBadge = SKSpriteNode(texture: TableArt.image(ArtName.badgeLaid), size: badge)
+        let sticker = max(19 * k, 16)
+        laidBadge = SKSpriteNode(texture: TableArt.image(ArtName.badgeLaid), size: CGSize(width: sticker, height: sticker))
+        phaseChip = SKSpriteNode()
         linkBadge = SKSpriteNode(color: .clear, size: CGSize(width: 32 * k, height: 32 * k))
         bubble = SKSpriteNode(texture: CardFaceFactory.shared.back(), size: CGSize(width: 20 * k, height: 28 * k))
         bubbleNumber = SKSpriteNode()
@@ -72,12 +80,17 @@ final class CatNode: SKNode {
         let r = diameter / 2
         botBadge.position = CGPoint(x: r * 0.72, y: r * 0.72)
         skipBadge.position = CGPoint(x: -r * 0.72, y: r * 0.72)
-        laidBadge.position = CGPoint(x: -r * 0.72, y: -r * 0.62)
-        for b in [botBadge, skipBadge, laidBadge] {
+        for b in [botBadge, skipBadge] {
             b.zPosition = 4
             b.isHidden = true
             addChild(b)
         }
+        phaseChip.zPosition = 5
+        phaseChip.isHidden = true
+        laidBadge.zPosition = 1
+        laidBadge.isHidden = true
+        phaseChip.addChild(laidBadge)
+        addChild(phaseChip)
         // Where the bot badge goes (a bot has no phone), a little bigger: it's news.
         linkBadge.position = CGPoint(x: r * 0.78, y: r * 0.72)
         linkBadge.zPosition = 6.5
@@ -103,10 +116,63 @@ final class CatNode: SKNode {
         sprite.texture = TableArt.cat(cat, pose)
     }
 
-    func setBadges(bot: Bool, skip: Bool, laid: Bool) {
+    func setBadges(bot: Bool, skip: Bool) {
         botBadge.isHidden = !bot
         skipBadge.isHidden = !skip
-        laidBadge.isHidden = !laid
+    }
+
+    /// The phase chip's height: the card count's numeral size, never under 20 pt.
+    var phaseChipHeight: CGFloat { max((22 * diameter / 72).rounded(), 20) }
+
+    /// The phase chip (nil hides it). Returns true when the seat moved on to a later phase
+    /// than the chip showed (`phasePop`); a cat's first mark never counts.
+    @discardableResult func setPhase(_ mark: PhaseMark?) -> Bool {
+        guard mark != phase else { return false }
+        let advanced = mark?.advanced(from: phase) ?? false
+        phase = mark
+        guard let mark else {
+            phaseChip.isHidden = true
+            return false
+        }
+        phaseChip.isHidden = false
+        let texture = CardFaceFactory.shared.phaseChip(mark, height: phaseChipHeight)
+        phaseChip.texture = texture
+        phaseChip.size = texture.size()
+        let r = diameter / 2
+        let w = phaseChip.size.width
+        // Bottom left, its left end on the ring's edge, its right end clear of the card count
+        // (a wide "P10" pokes a little past the ring rather than touch the count).
+        let countLeft = bubble.position.x - bubble.size.width / 2
+        let right = min(-r + w - 2, countLeft - 3)
+        phaseChip.position = CGPoint(x: right - w / 2, y: -r * 0.7)
+        laidBadge.isHidden = !mark.laid
+        let s = laidBadge.size.width
+        // The sticker sits on the chip's top left corner, over the ring, not over the number.
+        laidBadge.position = CGPoint(x: -w / 2 + s * 0.12, y: phaseChip.size.height / 2 + s * 0.12)
+        return advanced
+    }
+
+    /// The finite pop for a seat that just moved on a phase: the chip bounces up big and back.
+    /// Decorative (only the chip's scale and alpha, which reconcile never sets). Reduce Motion:
+    /// a short fade in instead.
+    func phasePop(reduceMotion: Bool) -> [(SKAction, SKNode)] {
+        if reduceMotion {
+            phaseChip.alpha = 0.2
+            return [(.fadeIn(withDuration: 0.25), phaseChip)]
+        }
+        phaseChip.setScale(0.4)
+        return [(.sequence([
+            .scale(to: 1.45, duration: 0.16).eased(.easeOut),
+            .scale(to: 0.92, duration: 0.1).eased(.easeInEaseOut),
+            .scale(to: 1.08, duration: 0.08),
+            .scale(to: 1, duration: 0.08),
+        ]), phaseChip)]
+    }
+
+    /// What the bottom chips show, for the DEBUG `table.badges` probe: "P4+laid/7", "done/0".
+    var badgeProbe: String {
+        let p = phase.map { ($0.text ?? "done") + ($0.laid ? "+laid" : "") } ?? "-"
+        return "\(p)/\(count.map(String.init) ?? "-")"
     }
 
     /// The weak-signal badge for a seat whose phone's connection is poor or gone; nil hides it.

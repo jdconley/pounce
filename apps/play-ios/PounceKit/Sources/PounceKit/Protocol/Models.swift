@@ -19,6 +19,16 @@ public enum SeatKind: String, Codable, Sendable { case open, closed, human, bot 
 public enum RoomStatus: String, Codable, Sendable { case lobby, playing, over }
 public enum TurnStep: String, Codable, Sendable { case draw, play }
 public enum GameStatus: String, Codable, Sendable { case playing, roundOver, gameOver }
+
+/// Why a game ended before its last hand was played out. Absent (nil) on a game that ended the
+/// usual way; a reason this build doesn't know also decodes as nil.
+public enum GameEndReason: String, Codable, Sendable {
+    /// Someone had laid down phase 10 and the rest of the hand couldn't change anyone's place,
+    /// so the server scored the hands as they stood and ended the game.
+    case decided
+    /// Every other seat forfeited (§5.13): the one left wins.
+    case forfeit
+}
 public enum DrawSource: String, Codable, Sendable { case deck, discard }
 
 /// A seat whose phone's connection is poor (`weak`) or gone mid-game (`lost`), as the server
@@ -117,6 +127,8 @@ public struct GameView: Codable, Equatable, Sendable {
     public var hands: [Seat: [CardID]]
     public var pendingSkip: [Bool]
     public var winners: [Seat]
+    /// Set only on a game that ended early (`GameEndReason`).
+    public var endReason: GameEndReason?
     /// Seats that forfeited (spec §5.13): out of the game for good, last place, never given a
     /// turn. All false from a server that predates forfeits.
     public var forfeited: [Bool]
@@ -128,6 +140,7 @@ public struct GameView: Codable, Equatable, Sendable {
         round: Int, dealer: Seat, turn: Seat, step: TurnStep, status: GameStatus, deckCount: Int,
         discardTop: CardID?, discardCount: Int, phase: [Int], scores: [Int], laid: [[Group]?],
         handCounts: [Int], hands: [Seat: [CardID]], pendingSkip: [Bool], winners: [Seat],
+        endReason: GameEndReason? = nil,
         forfeited: [Bool]? = nil
     ) {
         self.round = round
@@ -145,12 +158,13 @@ public struct GameView: Codable, Equatable, Sendable {
         self.hands = hands
         self.pendingSkip = pendingSkip
         self.winners = winners
+        self.endReason = endReason
         self.forfeited = forfeited ?? Array(repeating: false, count: phase.count)
     }
 
     private enum CodingKeys: String, CodingKey {
         case round, dealer, turn, step, status, deckCount, discardTop, discardCount, phase, scores
-        case laid, handCounts, hands, pendingSkip, winners, forfeited
+        case laid, handCounts, hands, pendingSkip, winners, endReason, forfeited
     }
 
     public init(from decoder: any Decoder) throws {
@@ -170,6 +184,8 @@ public struct GameView: Codable, Equatable, Sendable {
         hands = try c.decode(StringKeyedSeats.self, forKey: .hands).hands
         pendingSkip = try c.decode([Bool].self, forKey: .pendingSkip)
         winners = try c.decode([Seat].self, forKey: .winners)
+        // Older servers send none; a newer server's unknown reason reads as none too.
+        endReason = (try? c.decodeIfPresent(String.self, forKey: .endReason)).flatMap(GameEndReason.init(rawValue:))
         forfeited = try c.decodeIfPresent([Bool].self, forKey: .forfeited) ?? Array(repeating: false, count: phase.count)
     }
 
@@ -190,6 +206,7 @@ public struct GameView: Codable, Equatable, Sendable {
         try c.encode(StringKeyedSeats(hands: hands), forKey: .hands)
         try c.encode(pendingSkip, forKey: .pendingSkip)
         try c.encode(winners, forKey: .winners)
+        try c.encodeIfPresent(endReason, forKey: .endReason)
         try c.encode(forfeited, forKey: .forfeited)
     }
 }

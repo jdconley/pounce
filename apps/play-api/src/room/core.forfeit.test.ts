@@ -100,7 +100,7 @@ describe("two players", () => {
     for (const device of ["a", "b"]) {
       expect(gameEventsTo(out, device)).toEqual([
         { kind: "forfeited", seat: 0 },
-        { kind: "gameOver", winners: [1] },
+        { kind: "gameOver", winners: [1], reason: "forfeit" },
       ]);
       const snap = snapshotTo(out, device);
       expect(snap.room.status).toBe("over");
@@ -164,7 +164,7 @@ describe("three or more players", () => {
     const out = room.handle("a", { t: "act", seat: 0, action: FORFEIT });
     expect(gameEventsTo(out, "b")).toEqual([
       { kind: "forfeited", seat: 0 },
-      { kind: "gameOver", winners: [2] },
+      { kind: "gameOver", winners: [2], reason: "forfeit" },
     ]);
     expect(room.state.status).toBe("over");
   });
