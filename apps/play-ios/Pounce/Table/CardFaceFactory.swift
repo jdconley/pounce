@@ -222,6 +222,73 @@ final class CardFaceFactory {
         return t
     }
 
+    /// A seat's phase chip: "P4" in ink on a glossy gold pill (the tower's shelf-badge gold)
+    /// inside an ink outline, with a hard shadow; a trophy on it once every phase is done. The
+    /// "P" is small and the number big, cap heights at least 11 pt. Not a card shape and not
+    /// white numerals, so it never reads as the card count. Cached by mark and height.
+    func phaseChip(_ mark: PhaseMark, height: CGFloat) -> SKTexture {
+        let h = max(height.rounded(), 20)
+        let key = "phase|\(mark.text ?? "done")|\(h)"
+        if let cached = numerals[key] { return cached }
+        let digitSize = (h * 0.8).rounded()
+        let letterSize = max((digitSize * 0.72).rounded(), 16)
+        let ink = UIColor(Palette.ink)
+        let text = NSMutableAttributedString()
+        if let number = mark.number {
+            text.append(NSAttributedString(string: "P", attributes: [
+                .font: Self.numeralFont(size: letterSize), .foregroundColor: ink, .kern: 1,
+            ]))
+            text.append(NSAttributedString(string: String(number), attributes: [
+                .font: Self.numeralFont(size: digitSize), .foregroundColor: ink,
+            ]))
+        }
+        let pad = (h * 0.32).rounded()
+        let textWidth = ceil(text.size().width)
+        let width = mark.isDone ? (h * 1.6).rounded() : max(h, textWidth + pad * 2)
+        let shadow: CGFloat = 2
+        let canvas = CGSize(width: width, height: h + shadow)
+        let image = UIGraphicsImageRenderer(size: canvas).image { ctx in
+            let pill = CGRect(x: 0, y: 0, width: width, height: h)
+            ink.withAlphaComponent(0.55).setFill()
+            UIBezierPath(roundedRect: pill.offsetBy(dx: 0, dy: shadow), cornerRadius: h / 2).fill()
+            ink.setFill()
+            UIBezierPath(roundedRect: pill, cornerRadius: h / 2).fill()
+            let inner = pill.insetBy(dx: 2, dy: 2)
+            ctx.cgContext.saveGState()
+            UIBezierPath(roundedRect: inner, cornerRadius: inner.height / 2).addClip()
+            let colors = [Self.chipGoldTop.cgColor, Self.chipGold.cgColor, Self.chipGoldDeep.cgColor] as CFArray
+            if let gradient = CGGradient(colorsSpace: CGColorSpaceCreateDeviceRGB(), colors: colors, locations: [0, 0.5, 1]) {
+                ctx.cgContext.drawLinearGradient(
+                    gradient, start: CGPoint(x: 0, y: inner.minY), end: CGPoint(x: 0, y: inner.maxY), options: [])
+            }
+            // A soft gloss along the top, the tower art's rim light.
+            UIColor.white.withAlphaComponent(0.35).setFill()
+            UIBezierPath(
+                roundedRect: CGRect(x: inner.minX + h * 0.3, y: inner.minY + 1.5, width: inner.width - h * 0.6, height: h * 0.18),
+                cornerRadius: h * 0.09
+            ).fill()
+            ctx.cgContext.restoreGState()
+            if mark.isDone {
+                let side = h * 0.86
+                UIImage(named: ArtName.iconTrophy)?.draw(
+                    in: CGRect(x: (width - side) / 2, y: (h - side) / 2, width: side, height: side))
+            } else {
+                // Center the digits' cap height in the pill; the "P" shares their baseline.
+                let font = Self.numeralFont(size: digitSize)
+                let baseline = h / 2 + font.capHeight / 2
+                text.draw(at: CGPoint(x: (width - textWidth) / 2, y: baseline - font.ascender))
+            }
+        }
+        let t = SKTexture(image: image)
+        numerals[key] = t
+        return t
+    }
+
+    /// The phase chip's gold, top to bottom (the tower's shelf badges).
+    private static let chipGoldTop = UIColor(red: 1, green: 0.88, blue: 0.36, alpha: 1)
+    private static let chipGold = UIColor(red: 1, green: 0.76, blue: 0.1, alpha: 1)
+    private static let chipGoldDeep = UIColor(red: 0.98, green: 0.6, blue: 0, alpha: 1)
+
     /// A rounded ring for the laid group a dragged card is over: `color` inside an ink
     /// outline, so it reads on the rug and over card faces. Stretch it with `ringCenter`.
     func ring(_ color: UIColor) -> SKTexture {
