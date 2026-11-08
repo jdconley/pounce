@@ -394,6 +394,7 @@ private struct TableStage: View {
                     tableName: session.store.room?.title ?? TableName.fallback(code: session.code),
                     winners: people(winners),
                     standings: session.model.map(GameOverView.standings) ?? [],
+                    endReason: session.model?.game?.endReason,
                     onHome: { model.goHome() },
                     onNewGame: { Task { await model.newGame() } },
                     again: againState,

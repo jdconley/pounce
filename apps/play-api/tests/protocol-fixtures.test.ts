@@ -8,6 +8,7 @@ import { createRng } from "../src/rules/rng";
 import { newPair, report, view } from "../src/streaks/pair-core";
 
 import type { ClientMessage, Person, ServerMessage } from "../src/protocol";
+import type { CatTowerState } from "../src/rules/engine";
 
 /**
  * Shared with the Swift client (PounceKit): it decodes every server sample and
@@ -59,6 +60,28 @@ function linkSnapshot(): Snapshot {
   room.handle("devB", { t: "act", seat: 1, action: { type: "draw", from: "deck" }, id: "move-0" });
   room.disconnect("devB", false);
   (room.state.devices.devA as { acks?: string[] }).acks = ["move-1"];
+  return room.snapshotFor("devA");
+}
+
+/**
+ * Alice's (devA) snapshot of a game that ended early: she drew while down on
+ * phase 10 and bob, on phase 4, could no longer catch her.
+ */
+function decidedSnapshot(): Snapshot {
+  const room = new RoomCore(RoomCore.create("BCDFG", "devA", 1_000), () => 1_000, createRng([1, 2, 3, 4]), undefined, 1, {
+    streaks: false,
+  });
+  room.connect("devA");
+  room.connect("devB");
+  room.handle("devA", { t: "claim", seat: 0, person: alice });
+  room.handle("devB", { t: "claim", seat: 1, person: bob });
+  room.handle("devA", { t: "start" });
+  const game = room.state.gameState as CatTowerState;
+  game.turn = 0;
+  game.step = "draw";
+  game.phase = [9, 3];
+  game.laid[0] = [{ kind: "set", cards: [8, 32, 56], value: 9 }];
+  room.handle("devA", { t: "act", seat: 0, action: { type: "draw", from: "deck" } });
   return room.snapshotFor("devA");
 }
 
@@ -178,12 +201,21 @@ function serverSamples(): Sample<ServerMessage>[] {
       name: "event-gameOver",
       message: { t: "event", seq: 16, event: { kind: "game", event: { kind: "gameOver", winners: [1] } } },
     },
+    {
+      name: "event-gameOver-decided",
+      message: {
+        t: "event",
+        seq: 16,
+        event: { kind: "game", event: { kind: "gameOver", winners: [0], reason: "decided" } },
+      },
+    },
     { name: "moveCode", message: { t: "moveCode", seat: 1, code: "BCDFGH" } },
     { name: "error-room_closed", message: { t: "error", code: "room_closed" } },
     { name: "error-bad_code", message: { t: "error", code: "bad_code" } },
     { name: "pong", message: { t: "pong" } },
     { name: "link", message: { t: "link", seats: [null, "weak", "lost"] } },
     { name: "snapshot-playing-link", message: linkSnapshot() },
+    { name: "snapshot-over-decided", message: decidedSnapshot() },
   ] satisfies Sample<ServerMessage>[];
 }
 
