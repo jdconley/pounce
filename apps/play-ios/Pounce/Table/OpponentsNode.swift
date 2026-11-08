@@ -2,9 +2,9 @@ import PounceKit
 import SpriteKit
 
 /// The bar across the top: every other seat's cat in turn order after the bottom seat (every
-/// seat on a phone holding none), with its card count, presence pose and badges, and its name on
-/// a plain pill under it. The current player's ring glows; nothing else says whose turn it is.
-/// A tap on a cat opens that player's card (`TableScene.onPlayer`).
+/// seat on a phone holding none), with its phase chip, card count, presence pose and badges, and
+/// its name on a plain pill under it. The current player's ring glows; nothing else says whose
+/// turn it is. A tap on a cat opens that player's card (`TableScene.onPlayer`).
 @MainActor
 final class OpponentsNode: SKNode {
     private var cats: [Seat: CatNode] = [:]
@@ -18,15 +18,22 @@ final class OpponentsNode: SKNode {
 
     func node(for seat: Seat) -> CatNode? { cats[seat] }
 
-    /// Lays the bar out for `seats` (`TableModel.barSeats`); returns the seats whose ring just
-    /// became the current player's.
+    /// What a layout pass changed that the scene pops.
+    struct Changes {
+        /// Seats whose ring just became the current player's.
+        var turnedOn: [Seat] = []
+        /// Seats whose phase chip just moved on to a later phase.
+        var movedOn: [Seat] = []
+    }
+
+    /// Lays the bar out for `seats` (`TableModel.barSeats`).
     @discardableResult
-    func update(model: TableModel, seats: [Seat], layout: TableLayout) -> [Seat] {
+    func update(model: TableModel, seats: [Seat], layout: TableLayout) -> Changes {
         guard let game = model.game else {
             clear()
-            return []
+            return Changes()
         }
-        var turnedOn: [Seat] = []
+        var changes = Changes()
         let slots = layout.opponentSlots
         let spacing = slots.count > 1 ? slots[1].x - slots[0].x : layout.size.width
         // The cat sits high in its slot and its name pill under it, along the bar's bottom.
@@ -64,13 +71,11 @@ final class OpponentsNode: SKNode {
             node.setPresence(view?.kind == .bot ? nil : view?.presence)
             let link = view?.kind == .human ? LinkWords.seat(view?.link) : nil
             node.setLink(link?.level)
-            node.setBadges(
-                bot: view?.kind == .bot,
-                skip: game.pendingSkip[safe: seat] ?? false,
-                laid: (game.laid[safe: seat] ?? nil) != nil)
+            node.setBadges(bot: view?.kind == .bot, skip: game.pendingSkip[safe: seat] ?? false)
             node.setCount(game.handCounts[safe: seat])
+            if node.setPhase(PhaseMark.seat(seat, in: game)) { changes.movedOn.append(seat) }
             let active = game.status == .playing && game.turn == seat
-            if node.setActive(active) { turnedOn.append(seat) }
+            if node.setActive(active) { changes.turnedOn.append(seat) }
 
             let tag = tags[seat] ?? {
                 let t = SKSpriteNode()
@@ -93,7 +98,7 @@ final class OpponentsNode: SKNode {
                 z: 30 + CGFloat(i))
         }
         order = Array(seats.prefix(slots.count))
-        return turnedOn
+        return changes
     }
 
     private func setLinkTag(
