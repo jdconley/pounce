@@ -25,6 +25,11 @@ export type CatTowerState = {
   status: "playing" | "roundOver" | "gameOver";
   winners: Seat[];
   /**
+   * Seats that forfeited (spec §5.13): out for the rest of the game, last place, never dealt
+   * in or given a turn. Absent in games saved before forfeits, and until someone forfeits.
+   */
+  forfeited?: boolean[];
+  /**
    * Set only when the game ended before the hand was played out: "decided"
    * means the rest of the hand could not change anyone's finishing place.
    * Absent on a game that ended the usual way (and on older stored states).
@@ -36,15 +41,20 @@ export type CatTowerState = {
   rngCalls: number;
 };
 
-/** Why a game ended early; see `outcomeDecided`. */
-export type EndReason = "decided";
+/**
+ * Why a game ended early: "decided", see `outcomeDecided`; "forfeit", every
+ * other seat forfeited (§5.13).
+ */
+export type EndReason = "decided" | "forfeit";
 
 export type Action =
   | { type: "draw"; from: "deck" | "discard" }
   | { type: "layDown"; groups: { cards: CardId[]; runStart?: number }[] }
   | { type: "hit"; card: CardId; target: { seat: Seat; group: number }; side?: HitSide }
   | { type: "discard"; card: CardId; skipTarget?: Seat }
-  | { type: "nextRound" };
+  | { type: "nextRound" }
+  /** Leave the game for good (§5.13): any time before it is over, on anyone's turn. */
+  | { type: "forfeit" };
 
 export type GameEvent =
   | { kind: "roundStarted"; round: number; dealer: Seat }
@@ -69,6 +79,7 @@ export type GameEvent =
       scores: number[];
       phase: number[];
     }
+  | { kind: "forfeited"; seat: Seat }
   | { kind: "gameOver"; winners: Seat[]; reason?: EndReason };
 
 export type ApplyError =
@@ -81,7 +92,9 @@ export type ApplyError =
   | "bad_target"
   | "empty_discard"
   | "cucumber_from_discard"
-  | "round_not_over";
+  | "round_not_over"
+  /** The seat already forfeited. */
+  | "forfeited";
 
 export type ApplyResult =
   | { ok: true; state: CatTowerState; events: GameEvent[] }
@@ -95,6 +108,23 @@ const FINAL_PHASE = 10;
 const MAX_CARD_POINTS = 25;
 
 const fail = (error: ApplyError): ApplyResult => ({ ok: false, error });
+
+/** True when `seat` forfeited. */
+export function isOut(s: CatTowerState, seat: Seat): boolean {
+  return s.forfeited?.[seat] === true;
+}
+
+/** The seats still in the game, in seat order. */
+export function activeSeats(s: CatTowerState): Seat[] {
+  return Array.from({ length: s.seats }, (_, seat) => seat).filter((seat) => !isOut(s, seat));
+}
+
+/** The first seat after `from`, going round, that is still in the game. */
+function nextActive(s: CatTowerState, from: Seat): Seat {
+  let next = (from + 1) % s.seats;
+  while (isOut(s, next) && next !== from) next = (next + 1) % s.seats;
+  return next;
+}
 
 /**
  * Shuffle `items` with the game's seeded rng. Every shuffle (deal and
@@ -155,11 +185,14 @@ export function dealRound(
   const n = s.seats;
   const shuffled = shuffleSeeded(s, ALL_CARD_IDS);
   s.hands = Array.from({ length: n }, () => [] as CardId[]);
-  for (let i = 0; i < HAND_SIZE * n; i++) {
-    (s.hands[(dealer + 1 + (i % n)) % n] as CardId[]).push(shuffled[i] as CardId);
+  // Dealt in seat order from the dealer's left, skipping seats that forfeited.
+  const order = Array.from({ length: n }, (_, i) => (dealer + 1 + i) % n).filter((seat) => !isOut(s, seat));
+  const dealt = HAND_SIZE * order.length;
+  for (let i = 0; i < dealt; i++) {
+    (s.hands[order[i % order.length] as Seat] as CardId[]).push(shuffled[i] as CardId);
   }
-  s.discard = [shuffled[HAND_SIZE * n] as CardId];
-  s.deck = shuffled.slice(HAND_SIZE * n + 1);
+  s.discard = [shuffled[dealt] as CardId];
+  s.deck = shuffled.slice(dealt + 1);
   s.laid = new Array<null>(n).fill(null);
   s.pendingSkip = new Array<boolean>(n).fill(false);
   s.status = "playing";
@@ -167,7 +200,7 @@ export function dealRound(
   s.dealer = dealer;
 
   const events: GameEvent[] = [{ kind: "roundStarted", round, dealer }];
-  const first = (dealer + 1) % n;
+  const first = nextActive(s, dealer);
   s.turn = dealer;
   if (card(s.discard[0] as CardId).kind === "cucumber") {
     s.pendingSkip[first] = true;
@@ -177,14 +210,17 @@ export function dealRound(
 }
 
 /**
- * Move to the next seat, clearing and announcing any pending skips on the way.
- * Terminates because a pending seat is never the seat whose turn is ending.
+ * Move to the next seat, clearing and announcing any pending skips on the way
+ * and passing over seats that forfeited. Terminates because each skip is
+ * cleared as it is passed and at least two seats are still in the game.
  */
 function advanceTurn(s: CatTowerState, events: GameEvent[]): void {
   let next = (s.turn + 1) % s.seats;
-  while (s.pendingSkip[next]) {
-    s.pendingSkip[next] = false;
-    events.push({ kind: "skipped", seat: next });
+  while (s.pendingSkip[next] || isOut(s, next)) {
+    if (s.pendingSkip[next]) {
+      s.pendingSkip[next] = false;
+      events.push({ kind: "skipped", seat: next });
+    }
     next = (next + 1) % s.seats;
   }
   s.turn = next;
@@ -207,7 +243,7 @@ function endRound(
   const advanced: Seat[] = [];
   for (let seat = 0; seat < s.seats; seat++) {
     s.scores[seat] = (s.scores[seat] as number) + (points[seat] as number);
-    if (s.laid[seat] !== null) {
+    if (s.laid[seat] !== null && !isOut(s, seat)) {
       s.phase[seat] = (s.phase[seat] as number) + 1;
       advanced.push(seat);
     }
@@ -226,7 +262,7 @@ function endRound(
   // finished it can win; the lowest score among them takes it, ties share.
   const finished: Seat[] = [];
   for (let seat = 0; seat < s.seats; seat++) {
-    if (s.phase[seat] === FINAL_PHASE) finished.push(seat);
+    if (s.phase[seat] === FINAL_PHASE && !isOut(s, seat)) finished.push(seat);
   }
   if (finished.length > 0) {
     const best = Math.min(...finished.map((seat) => s.scores[seat] as number));
@@ -273,8 +309,10 @@ function surelyAhead(a: Bounds, b: Bounds): boolean {
  */
 export function outcomeDecided(s: CatTowerState): boolean {
   if (s.status !== "playing") return false;
+  // A seat that forfeited (§5.13) never advances or wins and finishes last: it
+  // neither finishes the game nor leaves a place open.
   const finishing = s.laid.some(
-    (groups, seat) => groups !== null && s.phase[seat] === FINAL_PHASE - 1,
+    (groups, seat) => groups !== null && s.phase[seat] === FINAL_PHASE - 1 && !isOut(s, seat),
   );
   if (!finishing) return false;
   const bounds: Bounds[] = s.hands.map((hand, seat) => {
@@ -288,7 +326,9 @@ export function outcomeDecided(s: CatTowerState): boolean {
     };
   });
   for (let a = 0; a < s.seats; a++) {
+    if (isOut(s, a)) continue;
     for (let b = a + 1; b < s.seats; b++) {
+      if (isOut(s, b)) continue;
       const x = bounds[a] as Bounds;
       const y = bounds[b] as Bounds;
       if (!surelyAhead(x, y) && !surelyAhead(y, x)) return false;
@@ -306,8 +346,14 @@ export function applyAction(
   if (action.type === "nextRound") {
     // Any seat may start the next round, whoever's turn it was.
     if (state.status !== "roundOver") return fail("round_not_over");
-    const dealt = dealRound(state, (state.dealer + 1) % state.seats, state.round + 1);
+    const dealt = dealRound(state, nextActive(state, state.dealer), state.round + 1);
     return { ok: true, state: dealt.state, events: dealt.events };
+  }
+  if (action.type === "forfeit") {
+    const result = forfeit(state, seat);
+    // With the forfeiter's place no longer open, the rest of the hand may not matter any more.
+    if (result.ok && outcomeDecided(result.state)) endRound(result.state, null, result.events, "decided");
+    return result;
   }
   if (state.status !== "playing") return fail("bad_step");
   if (seat !== state.turn) return fail("not_your_turn");
@@ -326,7 +372,7 @@ export function applyAction(
 
 function dispatch(
   s: CatTowerState,
-  action: Exclude<Action, { type: "nextRound" }>,
+  action: Exclude<Action, { type: "nextRound" | "forfeit" }>,
   events: GameEvent[],
 ): ApplyError | null {
   switch (action.type) {
@@ -339,6 +385,37 @@ function dispatch(
     case "discard":
       return discard(s, action, events);
   }
+}
+
+/**
+ * A seat leaves the game (§5.13). With one seat left in, that seat wins and
+ * the game is over. Otherwise the seat is out: its hand leaves play (not to
+ * the discard), it is never dealt in or given a turn again, it can't win, and
+ * on its own turn the turn moves on. Laid groups stay on the table to hit on.
+ */
+function forfeit(state: CatTowerState, seat: Seat): ApplyResult {
+  if (state.status === "gameOver") return fail("bad_step");
+  if (!Number.isInteger(seat) || seat < 0 || seat >= state.seats) return fail("bad_target");
+  if (isOut(state, seat)) return fail("forfeited");
+
+  const s = structuredClone(state);
+  const out = s.forfeited ?? new Array<boolean>(s.seats).fill(false);
+  out[seat] = true;
+  s.forfeited = out;
+  s.hands[seat] = [];
+  s.pendingSkip[seat] = false;
+  const events: GameEvent[] = [{ kind: "forfeited", seat }];
+
+  const left = activeSeats(s);
+  if (left.length <= 1) {
+    s.winners = left;
+    s.status = "gameOver";
+    s.endReason = "forfeit";
+    events.push({ kind: "gameOver", winners: [...left], reason: "forfeit" });
+    return { ok: true, state: s, events };
+  }
+  if (s.status === "playing" && s.turn === seat) advanceTurn(s, events);
+  return { ok: true, state: s, events };
 }
 
 function draw(
@@ -394,7 +471,7 @@ function discard(
   if (card(action.card).kind === "cucumber") {
     const candidates: Seat[] = [];
     for (let other = 0; other < s.seats; other++) {
-      if (other !== s.turn && !s.pendingSkip[other]) candidates.push(other);
+      if (other !== s.turn && !s.pendingSkip[other] && !isOut(s, other)) candidates.push(other);
     }
     if (candidates.length > 0) {
       if (action.skipTarget === undefined || !candidates.includes(action.skipTarget)) {

@@ -2,7 +2,7 @@ import PounceKit
 import SwiftUI
 
 /// The table's paw menu (`table.menu`): the table's name (tap to rename it), sound, haptics, the
-/// scores, how to play, names, move my seat, home. Renaming the table grows the sheet into `RenameTableView`,
+/// scores, how to play, names, move my seat, home, and forfeit (§5.13, behind a confirmation). Renaming the table grows the sheet into `RenameTableView`,
 /// names (this phone's players) into `RenameSheet`, move my seat into `MoveSeatSheet`, how to play
 /// into `HowToPlaySheet`.
 struct TableMenuSheet: View {
@@ -11,12 +11,18 @@ struct TableMenuSheet: View {
     let onHome: () -> Void
     /// Closes the menu and shows the scoreboard (the open tower's tap does too).
     var onScores: (() -> Void)?
+    /// The seat a forfeit applies to (`TableModel.forfeitSeat`: the hand that is up on a shared
+    /// phone): nil hides Forfeit.
+    var forfeitSeat: Seat?
+    /// Confirmed: forfeit `seat`.
+    var onForfeit: (Seat) -> Void = { _ in }
     let onClose: () -> Void
 
     private enum Page { case menu, moving, rules, renaming, names, look }
 
     @State private var page = Self.firstPage
-    @State private var detent: PresentationDetent = Self.firstPage == .look ? Self.lookDetent : Self.menuDetent
+    @State private var confirmingForfeit = false
+    @State private var detent: PresentationDetent = Self.firstPage == .look ? Self.lookDetent : Self.menuForfeitDetent
 
     /// `-show-look` (DEBUG, screenshots) opens on the look tray.
     private static var firstPage: Page {
@@ -27,6 +33,9 @@ struct TableMenuSheet: View {
     }
 
     static let menuDetent = PresentationDetent.height(510)
+    /// Room for the Forfeit row.
+    static let menuForfeitDetent = PresentationDetent.height(590)
+    private var menuDetent: PresentationDetent { forfeitSeat == nil ? Self.menuDetent : Self.menuForfeitDetent }
     static let lookDetent = PresentationDetent.height(380)
 
     /// The look tray is offered on a server with looks (streaks on), to a phone seated here.
@@ -82,7 +91,9 @@ struct TableMenuSheet: View {
             }
         }
         .animation(.spring(duration: 0.4, bounce: 0.25).paced, value: page)
-        .presentationDetents(page == .menu ? [Self.menuDetent] : page == .look ? [Self.lookDetent] : [.large], selection: $detent)
+        .presentationDetents(page == .menu ? [menuDetent] : page == .look ? [Self.lookDetent] : [.large], selection: $detent)
+        .onAppear { if page == .menu { detent = menuDetent } }
+        .onChange(of: forfeitSeat == nil) { if page == .menu { detent = menuDetent } }
         .presentationDragIndicator(.visible)
         .presentationBackground(Palette.night)
     }
@@ -157,6 +168,26 @@ struct TableMenuSheet: View {
                 }
                 .accessibilityIdentifier("menu.home")
             }
+            if let seat = forfeitSeat {
+                PillButton(
+                    icon: nil, color: Palette.refuse, size: .medium, width: 230,
+                    title: String(localized: "Forfeit", comment: "Table menu: give up this game (asks first)"),
+                    accessibilityLabel: "Forfeit this game"
+                ) {
+                    confirmingForfeit = true
+                }
+                .accessibilityIdentifier("menu.forfeit")
+                .alert(forfeitTitle(seat), isPresented: $confirmingForfeit) {
+                    Button(String(localized: "Forfeit", comment: "Forfeit confirmation: the destructive button"), role: .destructive) {
+                        onForfeit(seat)
+                    }
+                    .accessibilityIdentifier("forfeit.confirm")
+                    Button(String(localized: "Keep playing", comment: "Forfeit confirmation: back to the game"), role: .cancel) {}
+                        .accessibilityIdentifier("forfeit.cancel")
+                } message: {
+                    Text(forfeitMessage(seat))
+                }
+            }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .padding(.top, 12)
@@ -164,8 +195,40 @@ struct TableMenuSheet: View {
         .accessibilityIdentifier("sheet-table-menu")
     }
 
+    /// "Forfeit this game?", or on a shared phone, whose seat: "Forfeit for Mia?".
+    private func forfeitTitle(_ seat: Seat) -> String {
+        guard let table = session.model, table.isMultiSeat else {
+            return String(localized: "Forfeit this game?", comment: "Forfeit confirmation title")
+        }
+        let name = SeatInfo.name(table.room, seat)
+        return String(localized: "Forfeit for \(name)?", comment: "Forfeit confirmation title on a shared phone: whose seat")
+    }
+
+    /// What will happen (§5.13): the game ends and the other player wins, or you are out and the
+    /// rest play on.
+    private func forfeitMessage(_ seat: Seat) -> String {
+        guard let table = session.model else { return "" }
+        let shared = table.isMultiSeat
+        let name = SeatInfo.name(table.room, seat)
+        switch table.forfeitOutcome(seat) {
+        case .ends(let winner):
+            let other = SeatInfo.name(table.room, winner)
+            return String(
+                localized: "The game ends now and \(other) wins.",
+                comment: "Forfeit confirmation: with one other player left, the game ends and they win")
+        case .out:
+            return shared
+                ? String(
+                    localized: "\(name) is out and finishes last. Everyone else keeps playing.",
+                    comment: "Forfeit confirmation on a shared phone: that seat is out, the rest play on")
+                : String(
+                    localized: "You're out and finish last. Everyone else keeps playing.",
+                    comment: "Forfeit confirmation: you are out, the rest play on")
+        }
+    }
+
     private func show(_ page: Page) {
-        detent = page == .menu ? Self.menuDetent : page == .look ? Self.lookDetent : .large
+        detent = page == .menu ? menuDetent : page == .look ? Self.lookDetent : .large
         self.page = page
     }
 }

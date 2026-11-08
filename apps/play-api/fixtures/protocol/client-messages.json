@@ -255,5 +255,15 @@
       "t": "link",
       "state": "good"
     }
+  },
+  {
+    "name": "act-forfeit",
+    "message": {
+      "t": "act",
+      "seat": 1,
+      "action": {
+        "type": "forfeit"
+      }
+    }
   }
 ]

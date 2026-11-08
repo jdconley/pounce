@@ -1,7 +1,7 @@
 import PounceKit
 import SwiftUI
 
-/// The finished game (spec §5.10), over the table once its win moment has played: the table's
+/// The finished game (spec §5.13), over the table once its win moment has played: the table's
 /// name up top, the winners' cats in the celebrate pose on a sunburst, a crown dropping onto each
 /// (shared wins show every winner), everyone's final standing (cat, name, score) under it, a
 /// one-shot confetti fall, and two pills: Home and New game. No words but the table's and the
@@ -35,6 +35,8 @@ struct GameOverView: View {
         let cat: Int
         let phase: Int
         let score: Int
+        /// Left the game (§5.13): last, whatever the phase.
+        var forfeited = false
         var id: Seat { seat }
     }
 
@@ -46,16 +48,21 @@ struct GameOverView: View {
         Person(id: botID, name: name, cat: SeatInfo.botCat)
     }
 
-    /// Every seat of a finished table, best first.
+    /// Every seat of a finished table, best first: the winners, then by phase and score, and
+    /// whoever forfeited (§5.13) last (a forfeit can end a game before anyone finishes).
     static func standings(_ model: TableModel) -> [Standing] {
         guard let game = model.game else { return [] }
         let names = SeatInfo.names(model.room)
+        let winners = Set(game.winners)
+        func rank(_ s: Standing) -> (Int, Int, Int, Int, Int) {
+            (s.forfeited ? 0 : 1, winners.contains(s.seat) ? 1 : 0, s.phase, -s.score, -s.seat)
+        }
         return game.phase.indices.map { seat in
             Standing(
                 seat: seat, name: names[safe: seat] ?? "", cat: SeatInfo.catIndex(model.room.seats[safe: seat]),
-                phase: game.phase[seat], score: game.scores[safe: seat] ?? 0)
+                phase: game.phase[seat], score: game.scores[safe: seat] ?? 0, forfeited: game.isOut(seat))
         }
-        .sorted { ($0.phase, -$0.score, -$0.seat) > ($1.phase, -$1.score, -$1.seat) }
+        .sorted { rank($0) > rank($1) }
     }
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -231,7 +238,8 @@ struct GameOverView: View {
             String(
                 localized: "The rest of the hand couldn't change the result.",
                 comment: "Game over: the game ended early because no one could still change a finishing place")
-        case nil:
+        case .forfeit, nil:
+            // A forfeit says so on the forfeiter's standing ("Forfeited").
             nil
         }
     }
@@ -295,13 +303,23 @@ struct GameOverView: View {
                 .background(Circle().fill(SeatInfo.ringColor(s.seat).mix(with: .white, by: 0.25)))
                 .overlay(Circle().strokeBorder(Palette.ink, lineWidth: 3))
             NameTag(s.name, maxWidth: 110 * scale, size: sizeClass == .regular ? 20 : 16)
-            OutlinedText(String(s.score), size: 20 * scale, fill: .white, width: 3)
-                .fixedSize()
+            if s.forfeited {
+                OutlinedText(
+                    String(localized: "Forfeited", comment: "Game over standings: this player left the game"),
+                    size: 16 * scale, fill: Palette.refuse, width: 3)
+                    .fixedSize()
+            } else {
+                OutlinedText(String(s.score), size: 20 * scale, fill: .white, width: 3)
+                    .fixedSize()
+            }
         }
+        .opacity(s.forfeited ? 0.75 : 1)
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel(Text(
-            "\(s.name), phase \(min(s.phase + 1, 10)), \(s.score) points",
-            comment: "VoiceOver: a player's final standing on the game over screen"))
+        .accessibilityLabel(s.forfeited
+            ? Text("\(s.name), forfeited", comment: "VoiceOver: a player who forfeited, on the game over screen")
+            : Text(
+                "\(s.name), phase \(min(s.phase + 1, 10)), \(s.score) points",
+                comment: "VoiceOver: a player's final standing on the game over screen"))
         .accessibilityIdentifier("gameover.standing.\(s.seat)")
     }
 }

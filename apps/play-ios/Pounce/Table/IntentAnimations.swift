@@ -39,6 +39,9 @@ extension TableScene {
             await playRoundOver(wentOut: wentOut, points: points, advanced: advanced)
         case .gameOver(let winners):
             await playGameOver(winners: winners)
+        case .forfeited:
+            // The shell floats "Mia forfeited" down; the snap that follows dims the seat.
+            break
         }
     }
 

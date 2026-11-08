@@ -20,6 +20,8 @@ export type CatTowerView = {
   hands: Record<Seat, CardId[]>;
   pendingSkip: boolean[];
   winners: Seat[];
+  /** Seats that forfeited (§5.13): out of the game, last place. All false until someone does. */
+  forfeited: boolean[];
   /** Only on a game that ended early; see `CatTowerState.endReason`. */
   endReason?: CatTowerState["endReason"];
 };
@@ -54,6 +56,7 @@ export function viewFor(
     hands,
     pendingSkip: [...state.pendingSkip],
     winners: [...state.winners],
+    forfeited: Array.from({ length: state.seats }, (_, seat) => state.forfeited?.[seat] === true),
     ...(state.endReason === undefined ? {} : { endReason: state.endReason }),
   };
 }

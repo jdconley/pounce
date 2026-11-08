@@ -22,6 +22,8 @@ export const catTower: GameModule<CatTowerState, Action, CatTowerView, GameEvent
   currentActor: (s) => (s.status === "playing" ? s.turn : null),
   botAction: (s, seat, rng) => chooseAction(viewFor(s, [seat]), seat, rng),
   // A discard or going out ends a turn; drawing alone doesn't, and a new round's deal isn't anyone's turn.
+  // Nor is a forfeit: it moves the turn on, but nobody played (§5.13).
   endsTurn: (a, events, seat) =>
-    a.type !== "nextRound" && events.some((e) => e.kind === "turn" || (e.kind === "roundOver" && e.wentOut === seat)),
+    a.type !== "nextRound" &&
+    a.type !== "forfeit" && events.some((e) => e.kind === "turn" || (e.kind === "roundOver" && e.wentOut === seat)),
 };

@@ -37,6 +37,8 @@ import PounceKit
 enum DemoMode: String {
     case lobby, lobbyReady, table, other, replay, nope, celebrate, curtain, handoff, peek, crowded, crowdedHit, hit, lay, over
     case weak, reconnecting, pending, seatLink
+    /// Kiki (seat 2) forfeits a second in (§5.13): the pill, then her seat dimmed and tagged.
+    case forfeited
 
     static func from(arguments: [String] = CommandLine.arguments) -> DemoMode? {
         guard let i = arguments.firstIndex(of: "-demo"), arguments.indices.contains(i + 1) else { return nil }
@@ -88,6 +90,10 @@ enum DemoMode: String {
             room.game?.step = .play
             room.link = RoomLink(ping: 3000)
             return room
+        case .forfeited:
+            var room = DemoFixtures.table(seats: 4, mySeat: 0, phase: 2)
+            room.game?.turn = 1
+            return room
         case .seatLink:
             var room = DemoFixtures.table(seats: 4, mySeat: 0, phase: 2)
             room.game?.turn = 2
@@ -120,11 +126,24 @@ enum DemoMode: String {
         return [drew, passed]
     }
 
+    /// `forfeited`: a beat (time to wave the push priming away), then seat 2 forfeits and its
+    /// hand leaves play.
+    static func forfeitSteps(_ start: RoomView) -> [DemoFixtures.ReplayStep] {
+        var room = start
+        room.game?.forfeited[2] = true
+        room.game?.handCounts[2] = 0
+        return [
+            DemoFixtures.ReplayStep(events: [], room: start),
+            DemoFixtures.ReplayStep(events: [.forfeited(seat: 2)], room: room),
+        ]
+    }
+
     /// The fake socket behind this demo.
     func makeSocket() -> any RoomSocketing {
         switch self {
         case .replay: ReplaySocket(start: DemoFixtures.replayStart(), steps: DemoFixtures.replay(), loops: 2)
         case .handoff: ReplaySocket(start: room, steps: Self.handoffSteps(), loops: 1)
+        case .forfeited: ReplaySocket(start: room, steps: Self.forfeitSteps(room), loops: 1)
         case .celebrate: CelebrateSocket()
         case .nope: DemoSocket(room: room, refusing: true)
         case .hit, .crowdedHit: DemoSocket(room: room, hits: true)

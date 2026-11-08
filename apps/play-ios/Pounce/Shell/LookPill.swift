@@ -29,3 +29,26 @@ struct LookPill: View {
         .accessibilityIdentifier("look.pill")
     }
 }
+
+/// The pill that floats down when someone forfeits (§5.13): their cat, asleep, and "Mia forfeited".
+struct ForfeitPill: View {
+    let name: String
+    let cat: Int
+
+    var body: some View {
+        HStack(spacing: 8) {
+            Image(ArtName.cat(cat, .asleep)).resizable().scaledToFit().frame(width: 40, height: 40)
+            OutlinedText(
+                String(localized: "\(name) forfeited", comment: "Table notice: a player left the game for good"),
+                size: 20)
+                .fixedSize()
+        }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 6)
+        .background(Capsule().fill(Palette.refuse).overlay(Capsule().strokeBorder(Palette.ink, lineWidth: 4)))
+        .shadow(color: Palette.ink.opacity(0.5), radius: 0, x: 0, y: 4)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(Text("\(name) forfeited", comment: "VoiceOver: a player left the game for good"))
+        .accessibilityIdentifier("forfeit.pill")
+    }
+}

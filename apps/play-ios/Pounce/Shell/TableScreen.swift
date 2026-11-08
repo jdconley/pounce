@@ -48,6 +48,8 @@ struct TableScreen: View {
                 }
             }
             if store.phase == .lobby { return .lobby }
+            // Every seat of this phone forfeited while the others play on (§5.13).
+            if session.model?.isOutForMe == true { return .state(.out) }
             // No spectating in M1: a game this phone isn't in is "full".
             return seated ? .table : .state(.full)
         case .stalled:
@@ -105,6 +107,13 @@ struct TableScreen: View {
             guard !before.isEmpty, after.isEmpty, store.moveCode != nil else { return }
             Haptics.shared.success()
             Sound.shared.play(ArtName.Sound.sfxSparkle)
+            model.goHome()
+        }
+        .onChange(of: session.model?.isOutForMe) { was, out in
+            // This phone's last seat here just forfeited and the game goes on without it (§5.13):
+            // Home. Opening the table later shows the `.out` card instead (no room yet, then out,
+            // is not a forfeit).
+            guard was == false, out == true else { return }
             model.goHome()
         }
     }
@@ -213,6 +222,8 @@ private struct TableStage: View {
     @State private var againTick = 0
     /// The look pill floating down after someone changed the table (§9.4).
     @State private var lookPill: RoomStore.LookChange?
+    /// "Mia forfeited" floating down (§5.13).
+    @State private var forfeitPill: RoomStore.ForfeitNotice?
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.scenePhase) private var scenePhase
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
@@ -241,9 +252,9 @@ private struct TableStage: View {
     /// My seats along the bottom on a multi-seat phone while no seat of mine is playing and
     /// nothing is shown: tap one to peek at that hand.
     private var localCats: [(seat: Seat, person: Person)] {
-        guard events.winners == nil, let table, table.isMultiSeat, !table.isMyTurn, case .none = pass.state,
+        guard events.winners == nil, let table, table.myActiveSeats.count > 1, !table.isMyTurn, case .none = pass.state,
               table.room.status == .playing, table.game?.status == .playing else { return [] }
-        return table.mySeats.compactMap { seat in
+        return table.myActiveSeats.compactMap { seat in
             table.room.seats[safe: seat]?.person.map { (seat, $0) }
         }
     }
@@ -295,6 +306,17 @@ private struct TableStage: View {
                 VStack {
                     LookPill(cat: SeatInfo.catIndex(seat), art: lookArt(pill), isBack: lookIsBack(pill))
                         .padding(.top, 70)
+                    Spacer()
+                }
+                .transition(.move(edge: .top).combined(with: .opacity))
+                .allowsHitTesting(false)
+                .zIndex(TableLayer.lookPill)
+            }
+            if let pill = forfeitPill, let table, !table.mySeats.contains(pill.seat) || table.isMultiSeat {
+                VStack {
+                    // Under the top bar's name tags and the "Forfeited" tag it brings.
+                    ForfeitPill(name: SeatInfo.name(table.room, pill.seat), cat: SeatInfo.catIndex(table.room.seats[safe: pill.seat]))
+                        .padding(.top, horizontalSizeClass == .regular ? 236 : 136)
                     Spacer()
                 }
                 .transition(.move(edge: .top).combined(with: .opacity))
@@ -431,6 +453,15 @@ private struct TableStage: View {
                 if lookPill == change { withAnimation(.easeIn(duration: 0.3).paced) { lookPill = nil } }
             }
         }
+        .onChange(of: session.store.forfeitNotice) { _, notice in
+            guard let notice else { return }
+            Sound.shared.play(ArtName.Sound.sfxThud, volume: 0.7)
+            withAnimation(.spring(duration: 0.45, bounce: 0.4).paced) { forfeitPill = notice }
+            Task {
+                try? await Task.sleep(for: Pace.duration(.seconds(3)))
+                if forfeitPill == notice { withAnimation(.easeIn(duration: 0.3).paced) { forfeitPill = nil } }
+            }
+        }
         .onChange(of: session.store.rematch) { _, code in
             // The phone that asked goes to the new table; the others' pill now jumps there.
             if let code, let go = playAgain.arrived(code: code) { model.openRematch(code: go) }
@@ -479,6 +510,11 @@ private struct TableStage: View {
                 onScores: scene?.model?.game == nil ? nil : {
                     events.menuOpen = false
                     events.scoreboard = scene?.model
+                },
+                forfeitSeat: table?.forfeitSeat(shown: events.shown),
+                onForfeit: { seat in
+                    events.menuOpen = false
+                    session.forfeit(seat: seat)
                 },
                 onClose: { events.menuOpen = false })
                 .environment(model)

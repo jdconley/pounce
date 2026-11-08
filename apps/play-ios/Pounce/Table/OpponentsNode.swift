@@ -69,8 +69,13 @@ final class OpponentsNode: SKNode {
             node.setScale(1)
             node.zPosition = CGFloat(i)
             node.setPresence(view?.kind == .bot ? nil : view?.presence)
-            let link = view?.kind == .human ? LinkWords.seat(view?.link) : nil
-            node.setLink(link?.level)
+            // A seat that forfeited (§5.13): dimmed, with "Forfeited" where a bad link would show.
+            let out = game.isOut(seat)
+            node.alpha = out ? 0.45 : 1
+            let link = out
+                ? (level: SignalGlyph.Level.lost, text: String(localized: "Forfeited", comment: "Under a player's name: they left the game"))
+                : view?.kind == .human ? LinkWords.seat(view?.link) : nil
+            node.setLink(out ? nil : link?.level)
             node.setBadges(bot: view?.kind == .bot, skip: game.pendingSkip[safe: seat] ?? false)
             node.setCount(game.handCounts[safe: seat])
             if node.setPhase(PhaseMark.seat(seat, in: game)) { changes.movedOn.append(seat) }

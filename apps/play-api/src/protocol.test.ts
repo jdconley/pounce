@@ -38,13 +38,14 @@ describe("ErrorCode", () => {
       empty_discard: true,
       cucumber_from_discard: true,
       round_not_over: true,
+      forfeited: true,
       bot_stalled: true,
       room_closed: true,
       not_over: true,
       too_soon: true,
       not_unlocked: true,
     };
-    expect(Object.keys(codes)).toHaveLength(30);
+    expect(Object.keys(codes)).toHaveLength(31);
   });
 });
 

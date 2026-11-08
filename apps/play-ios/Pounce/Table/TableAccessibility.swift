@@ -155,6 +155,11 @@ extension TableScene {
             return winners.count > 1
                 ? String(localized: "\(names) win", comment: "VoiceOver announcement: the game ended in a tie")
                 : String(localized: "\(names) wins", comment: "VoiceOver announcement: the game ended; who won")
+        case .forfeited(let seat, let mine):
+            // A shared phone names the seat; a phone with one seat says "you".
+            return mine && seats.filter(\.yours).count == 1
+                ? String(localized: "You forfeited", comment: "VoiceOver announcement: this phone's player forfeited")
+                : String(localized: "\(name(seat)) forfeited", comment: "VoiceOver announcement: a player forfeited")
         }
     }
 }

@@ -140,6 +140,11 @@ export type StreakIntent = {
   players: string[];
   turnedAt: Record<string, number>;
   over: boolean;
+  /**
+   * Players whose every seat here forfeited (§5.13): the table is over for any pair with one of
+   * them, and later turns here don't count for that pair. Absent: nobody.
+   */
+  out?: string[];
 };
 
 /** What "Play again" needs to deal the new table: the same people and bots, name and look. */
@@ -1080,7 +1085,7 @@ export class RoomCore {
       hand.find((id) => card(id).kind === "yarn") ??
       (hand[0] as number);
     const target = Array.from({ length: game.seats }, (_, i) => i).find(
-      (i) => i !== seat && !game.pendingSkip[i],
+      (i) => i !== seat && !game.pendingSkip[i] && game.forfeited?.[i] !== true,
     );
     return card(pick).kind === "cucumber" && target !== undefined
       ? { type: "discard", card: pick, skipTarget: target }
@@ -1151,7 +1156,9 @@ export class RoomCore {
     const now = this.now();
     // Only a closing lobby reports with no game, and that report is `over`.
     const game = state.gameState as CatTowerState;
-    const key = `${state.turnSeq}:${over ? "over" : game.status}`;
+    const out = this.outPlayers();
+    // A forfeit is news to the pairs even when the move stays put.
+    const key = `${state.turnSeq}:${over ? "over" : game.status}${out.length > 0 ? `:out${out.length}` : ""}`;
     if (by === null && key === state.streakKey) return;
     state.streakKey = key;
     if (by) state.streakTurns = { ...state.streakTurns, [by]: now };
@@ -1165,7 +1172,23 @@ export class RoomCore {
       players: this.seatPlayers(),
       turnedAt: { ...state.streakTurns },
       over,
+      ...(out.length > 0 ? { out } : {}),
     });
+  }
+
+  /** The players at the table whose every seat forfeited (§5.13). */
+  outPlayers(): string[] {
+    const game = this.state.gameState;
+    if (!game?.forfeited) return [];
+    return this.seatPlayers().filter((playerId) =>
+      this.state.seats.every((s, i) => s.playerId !== playerId || game.forfeited?.[i] === true),
+    );
+  }
+
+  /** True when the seats `seats` all forfeited: the game is over for whoever holds them (§5.13). */
+  allOut(seats: readonly Seat[]): boolean {
+    const forfeited = this.state.gameState?.forfeited;
+    return seats.length > 0 && forfeited !== undefined && seats.every((seat) => forfeited[seat] === true);
   }
 
   /**

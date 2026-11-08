@@ -16,6 +16,8 @@ struct StateCard: View {
         case update
         /// Too many wrong move codes from this phone: a sad cat, home.
         case locked
+        /// This phone forfeited every seat it had here (§5.13) while the others play on.
+        case out
 
         var art: String {
             switch self {
@@ -25,6 +27,7 @@ struct StateCard: View {
             case .full: ArtName.stateFull
             case .update: ArtName.stateUpdate
             case .locked: ArtName.cat(3, .terrified)
+            case .out: ArtName.cat(5, .asleep)
             }
         }
 
@@ -36,6 +39,7 @@ struct StateCard: View {
             case .full: "This table is full or already playing"
             case .update: "Update the app to play"
             case .locked: "Too many wrong codes. Try again later"
+            case .out: "You forfeited this game. The others are still playing"
             }
         }
     }

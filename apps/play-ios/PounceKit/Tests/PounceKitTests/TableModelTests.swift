@@ -15,7 +15,8 @@ func makeRoom(
     pendingSkip: [Bool]? = nil,
     hands: [Seat: [CardID]] = [:],
     status: RoomStatus = .playing,
-    gameStatus: GameStatus = .playing
+    gameStatus: GameStatus = .playing,
+    forfeited: [Bool]? = nil
 ) -> RoomView {
     let seats = (0..<seatCount).map { i in
         SeatView(kind: .human, person: Person(id: "p\(i)", name: "P\(i)", cat: i % 8), yours: mine.contains(i), presence: .awake)
@@ -27,7 +28,7 @@ func makeRoom(
         scores: Array(repeating: 0, count: seatCount),
         laid: laid ?? Array(repeating: nil, count: seatCount),
         handCounts: Array(repeating: 10, count: seatCount), hands: hands,
-        pendingSkip: pendingSkip ?? Array(repeating: false, count: seatCount), winners: [])
+        pendingSkip: pendingSkip ?? Array(repeating: false, count: seatCount), winners: [], forfeited: forfeited)
     return RoomView(code: "BCDFG", status: status, youAreHost: true, seats: seats, game: game)
 }
 
