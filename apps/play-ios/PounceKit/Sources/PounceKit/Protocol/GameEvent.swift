@@ -11,7 +11,7 @@ public enum GameEvent: Codable, Equatable, Sendable {
     case skipped(seat: Seat)
     case turn(seat: Seat)
     case reshuffled(deckCount: Int)
-    /// `seat` left the game for good (§5.10). A game it leaves with one seat in ends with `gameOver` next.
+    /// `seat` left the game for good (§5.13). A game it leaves with one seat in ends with `gameOver` next.
     case forfeited(seat: Seat)
     case roundOver(wentOut: Seat?, points: [Int], advanced: [Seat], scores: [Int], phase: [Int])
     case gameOver(winners: [Seat])

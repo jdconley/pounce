@@ -56,7 +56,7 @@ import Observation
     /// The last `look` event (§9.4): who changed the table and to what. `serial` goes up with
     /// each, so the same look twice still floats its pill. Nil until one arrives.
     public private(set) var lookChange: LookChange?
-    /// The last `forfeited` event (§5.10): whose seat left the game. `serial` goes up with each.
+    /// The last `forfeited` event (§5.13): whose seat left the game. `serial` goes up with each.
     /// Nil until one arrives.
     public private(set) var forfeitNotice: ForfeitNotice?
     /// Play again's table (§10.4): from `{t:"rematch"}`, or a snapshot that already has one.

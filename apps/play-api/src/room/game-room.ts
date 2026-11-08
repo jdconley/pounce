@@ -258,7 +258,7 @@ export class GameRoom extends DurableObject<Env> {
     const awake = (this.core as RoomCore).awakePlayers();
     const run = async () => {
       // Your own streak (trophy room design D1): a turn at a table with another person counts, once per report.
-      // Someone who forfeited (§5.10) no longer counts as that other person.
+      // Someone who forfeited (§5.13) no longer counts as that other person.
       const withSomeone = new Set(intent.players.filter((p) => !intent.out?.includes(p))).size >= 2;
       if (intent.by && withSomeone && trophyOn(this.env)) await playerRpc(this.env, intent.by).recordPersonalTurn(intent.at, Date.now()).catch(() => undefined);
       let views: PairViews | null = null;
@@ -616,7 +616,7 @@ export class GameRoom extends DurableObject<Env> {
       ...[...devices].map((deviceId) =>
         this.index(deviceId).upsertTable({
           ...entry,
-          // Every seat this device holds forfeited: the table is over for it (§5.10), whoever plays on.
+          // Every seat this device holds forfeited: the table is over for it (§5.13), whoever plays on.
           ...(core.allOut(core.controlledSeats(deviceId)) ? { status: "over" } : {}),
           yourTurn: actor !== null && core.controlledSeats(deviceId).includes(actor),
           seats: tableSeats(state, core.controlledSeats(deviceId)),

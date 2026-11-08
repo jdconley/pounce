@@ -62,7 +62,7 @@ function linkSnapshot(): Snapshot {
   return room.snapshotFor("devA");
 }
 
-/** Alice (devA), bob (devB) and a bot: bob forfeited (§5.10); alice's snapshot. */
+/** Alice (devA), bob (devB) and a bot: bob forfeited (§5.13); alice's snapshot. */
 function forfeitedSnapshot(): Snapshot {
   const room = new RoomCore(RoomCore.create("BCDFG", "devA", 1_000), () => 1_000, createRng([1, 2, 3, 4]));
   room.connect("devA");

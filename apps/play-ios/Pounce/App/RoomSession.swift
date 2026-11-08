@@ -141,6 +141,12 @@ final class RoomSession {
         store.send(message)
     }
 
+    /// Forfeits `seat` (§5.13), confirmed in the paw menu. A move: it locks the table until the
+    /// server answers, unless one is already in flight, when it goes out plain.
+    func forfeit(seat: Seat) {
+        if !store.act(seat: seat, .forfeit) { store.send(.act(seat: seat, action: .forfeit)) }
+    }
+
     /// The table scene takes the store's intents from here, in order. `sink` must enqueue
     /// synchronously (the scene's serialized play queue): intents that arrived with no table
     /// attached (the lobby → playing `versusIntro`, say) are handed over right here, before

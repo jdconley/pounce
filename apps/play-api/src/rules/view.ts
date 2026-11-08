@@ -20,7 +20,7 @@ export type CatTowerView = {
   hands: Record<Seat, CardId[]>;
   pendingSkip: boolean[];
   winners: Seat[];
-  /** Seats that forfeited (§5.10): out of the game, last place. All false until someone does. */
+  /** Seats that forfeited (§5.13): out of the game, last place. All false until someone does. */
   forfeited: boolean[];
 };
 

@@ -38,7 +38,7 @@ public struct PassAndPlay: Equatable, Sendable {
 
     /// `epoch` is the store's `turnEpoch` for the room `model` was made from.
     public mutating func update(_ model: TableModel, epoch: Int) {
-        // A seat that forfeited (§5.10) never plays again: a shared phone passes between the rest.
+        // A seat that forfeited (§5.13) never plays again: a shared phone passes between the rest.
         let seats = model.myActiveSeats
         let moved = epoch != self.epoch || seats != mySeats
         mySeats = seats

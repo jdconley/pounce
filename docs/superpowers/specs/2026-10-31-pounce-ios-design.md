@@ -160,11 +160,27 @@ Server: `moveSeat` returns a one-time 6-character code valid 10 minutes; another
 - The other phone opens the link (camera or share) → connects to the room → sends `claimMove` → the seat is now on that phone; the old phone's view updates via snapshot. (call: reuse the universal link path; the AASA `/j/*` pattern already covers the query)
 - `bad_code` → shake; `too_many_attempts` → sad cat, home.
 
+### 5.13 Forfeit (JD's playtest, 2026-11-08: "need to be able to forfeit a game")
+Table menu → **Forfeit** (red, at the bottom; only while this phone has a seat still in a game that isn't over, between rounds too) → a plain system alert says what will happen, **Forfeit** (destructive) or **Keep playing**:
+- one other player left (human or bot): "The game ends now and Mia wins.";
+- more: "You're out and finish last. Everyone else keeps playing." (a shared phone names the seat: "Forfeit for Mia?").
+
+The app sends `{"t":"act","seat":n,"action":{"type":"forfeit"}}`. Rules (server, authoritative):
+- **Two players:** the game ends at once (`forfeited`, then `gameOver`); the other player wins, whatever the phases and scores.
+- **Three or more:** the seat is **out**: its hand leaves play (not to the discard), it is never dealt in or given a turn again (no bot takes it), a Cucumber can't target it, it never advances or wins, its laid groups stay on the table to hit on, and it finishes last. If that leaves one seat in, that seat wins. A forfeit on the seat's own turn passes the turn on; on someone else's turn the turn stays put; between rounds the next deal leaves it out and the deal moves to a seat still in.
+- **Pass-and-play:** a forfeit applies to the seat whose hand is up (the revealed hand, else the seat whose turn it is, else the phone's first seat still in); the phone plays on with its other seats.
+- **Bots never forfeit.** Only a seat this device controls can forfeit, only while playing: `not_your_seat`, `not_playing`, and `forfeited` (already out) otherwise.
+
+What players see: everyone gets a `forfeited` event, a red "Mia forfeited" pill floats down, and the seat stays dimmed with a red "Forfeited" tag under its name (`game.forfeited[]` in every view). After a two-player forfeit both phones show the game-over screen; the forfeiter's standing reads "Forfeited", always last. After a 3+ forfeit the forfeiter's phone goes **Home** (the game goes on without it); the table moves to Home's finished tables for that phone and player (the tables list reports it `over` for them), and opening it shows the `.out` state card (an asleep cat, home button) instead of the table.
+
+Streaks, records, trophies: a forfeit is **not a turn** (no streak credit, no personal-streak turn, no "Mia played"). Turns already played that day still count, so a play-together streak keeps the day if both had played. From the forfeit on, every pair that includes the forfeiter hears the table as over (no holder, no "their move") and later turns there no longer count for that pair; pairs among the players still in carry on as before. Wins aren't recorded anywhere, so nothing counts a forfeit as a win for the forfeiter. Older apps: the new `forfeited` view key is ignored, and an older app drops the `forfeited` event it can't decode (the snapshot right after carries the state); it never sends a forfeit.
+
 ### 5.12 Other states (all art, no text)
 - **Room closed** (`room_closed`, terminal): a cat asleep on an empty rug, one home button; the table is removed from Home.
 - **Bot stalled** (`bot_stalled`): House Cat with a tangled yarn; table frozen; home button. (rare)
 - **Server not configured / unreachable**: cat looking at an unplugged yarn ball; retry button.
 - **Push priming** (§10).
+- **Forfeited** (`.out`, §5.13): every seat of this phone forfeited while the others play on: an asleep cat, one home button.
 
 ## 6. Client architecture
 

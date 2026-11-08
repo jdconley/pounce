@@ -141,7 +141,7 @@ export type StreakIntent = {
   turnedAt: Record<string, number>;
   over: boolean;
   /**
-   * Players whose every seat here forfeited (§5.10): the table is over for any pair with one of
+   * Players whose every seat here forfeited (§5.13): the table is over for any pair with one of
    * them, and later turns here don't count for that pair. Absent: nobody.
    */
   out?: string[];
@@ -1176,7 +1176,7 @@ export class RoomCore {
     });
   }
 
-  /** The players at the table whose every seat forfeited (§5.10). */
+  /** The players at the table whose every seat forfeited (§5.13). */
   outPlayers(): string[] {
     const game = this.state.gameState;
     if (!game?.forfeited) return [];
@@ -1185,7 +1185,7 @@ export class RoomCore {
     );
   }
 
-  /** True when the seats `seats` all forfeited: the game is over for whoever holds them (§5.10). */
+  /** True when the seats `seats` all forfeited: the game is over for whoever holds them (§5.13). */
   allOut(seats: readonly Seat[]): boolean {
     const forfeited = this.state.gameState?.forfeited;
     return seats.length > 0 && forfeited !== undefined && seats.every((seat) => forfeited[seat] === true);

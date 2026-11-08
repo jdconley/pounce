@@ -779,7 +779,8 @@ final class TableScene: SKScene {
     static func bottomSeat(_ model: TableModel, revealed: Seat?) -> Seat? {
         if let revealed, model.mySeats.contains(revealed) { return revealed }
         if let turn = model.currentSeat, model.mySeats.contains(turn) { return turn }
-        return model.mySeats.first
+        // A seat that forfeited (§5.13) has no hand: a shared phone shows one still in.
+        return model.myActiveSeats.first ?? model.mySeats.first
     }
 
     // MARK: touches
@@ -864,9 +865,11 @@ final class TableScene: SKScene {
 
         for seat in opponents.order {
             guard let frame = opponents.frame(of: seat) else { continue }
-            let label = SeatInfo.label(
-                model.room.seats[safe: seat], name: SeatInfo.name(model.room, seat),
-                cards: game.handCounts[safe: seat], phase: game.phase[safe: seat])
+            let label = game.isOut(seat)
+                ? String(localized: "\(SeatInfo.name(model.room, seat)), forfeited", comment: "VoiceOver: a player who left the game")
+                : SeatInfo.label(
+                    model.room.seats[safe: seat], name: SeatInfo.name(model.room, seat),
+                    cards: game.handCounts[safe: seat], phase: game.phase[safe: seat])
             let card = customAction(String(localized: "Player card", comment: "VoiceOver action: open a player's card")) { [weak self] in
                 self?.showPlayer(seat)
                 return true

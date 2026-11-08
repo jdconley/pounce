@@ -2,7 +2,7 @@ import Foundation
 import Testing
 @testable import PounceKit
 
-/// Forfeiting a game (spec §5.10): the protocol, the table model and pass-and-play.
+/// Forfeiting a game (spec §5.13): the protocol, the table model and pass-and-play.
 @Suite struct ForfeitTests {
     private func server(_ name: String) throws -> ServerMessage {
         let json = try #require(try Fixtures.serverMessages().first { $0.name == name }).json

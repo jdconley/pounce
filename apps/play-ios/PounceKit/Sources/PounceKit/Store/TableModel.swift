@@ -16,18 +16,18 @@ public struct TableModel: Equatable, Sendable {
 
     public var isMultiSeat: Bool { mySeats.count > 1 }
 
-    /// This device's seats still in the game: `mySeats` less any that forfeited (§5.10).
+    /// This device's seats still in the game: `mySeats` less any that forfeited (§5.13).
     public var myActiveSeats: [Seat] {
         mySeats.filter { !(game?.isOut($0) ?? false) }
     }
 
-    /// Every seat this device holds forfeited while the others play on (§5.10): the game is over
+    /// Every seat this device holds forfeited while the others play on (§5.13): the game is over
     /// for this phone, though not for the table.
     public var isOutForMe: Bool {
         room.status == .playing && !mySeats.isEmpty && myActiveSeats.isEmpty
     }
 
-    /// The seat a forfeit from this phone's menu applies to (§5.10): the hand that is up
+    /// The seat a forfeit from this phone's menu applies to (§5.13): the hand that is up
     /// (`shown`, on a shared phone), else the seat whose turn it is, else this phone's first seat
     /// still in. Nil when there is nothing to forfeit: outside play, or every seat already out.
     public func forfeitSeat(shown: Seat?) -> Seat? {
@@ -38,7 +38,7 @@ public struct TableModel: Equatable, Sendable {
         return active.first
     }
 
-    /// What a forfeit by `seat` does (§5.10): with one other seat in, the game ends and that seat
+    /// What a forfeit by `seat` does (§5.13): with one other seat in, the game ends and that seat
     /// wins; with more, `seat` is out and the rest play on.
     public func forfeitOutcome(_ seat: Seat) -> ForfeitOutcome {
         let others = (0..<seatCount).filter { $0 != seat && !(game?.isOut($0) ?? false) }
@@ -188,7 +188,7 @@ public struct TableModel: Equatable, Sendable {
     }
 }
 
-/// What a forfeit does (§5.10): the game ends and `winner` wins, or the seat is out and the
+/// What a forfeit does (§5.13): the game ends and `winner` wins, or the seat is out and the
 /// others play on.
 public enum ForfeitOutcome: Equatable, Sendable {
     case ends(winner: Seat)

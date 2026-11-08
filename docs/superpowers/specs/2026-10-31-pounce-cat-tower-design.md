@@ -113,6 +113,7 @@ Set = same number (any coats). Run = consecutive numbers (any coats), no wraparo
 - A player can't be targeted by a Cucumber if they're already pending a skip; if everyone else is already pending, the Cucumber is just discarded. **(call)**
 - Running out of draw pile: reshuffle discards except the top card.
 - 2-player: Cucumber skips the only opponent (you take two turns in a row).
+- **Forfeit** (house rule, JD's playtest 2026-11-08): any player may forfeit until the game is over. With one other player left, the game ends and that player wins. With more, the forfeiter is out and finishes last: their hand leaves play, they are never dealt in, given a turn or targeted by a Cucumber, they don't advance or win, and their laid groups stay to be hit on; the rest play on, and if one player is left, they win. Bots never forfeit. Details: iOS design §5.13.
 
 ## 5. Architecture
 

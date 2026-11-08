@@ -117,7 +117,7 @@ public struct GameView: Codable, Equatable, Sendable {
     public var hands: [Seat: [CardID]]
     public var pendingSkip: [Bool]
     public var winners: [Seat]
-    /// Seats that forfeited (spec §5.10): out of the game for good, last place, never given a
+    /// Seats that forfeited (spec §5.13): out of the game for good, last place, never given a
     /// turn. All false from a server that predates forfeits.
     public var forfeited: [Bool]
 

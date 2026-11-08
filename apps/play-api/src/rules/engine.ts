@@ -25,7 +25,7 @@ export type CatTowerState = {
   status: "playing" | "roundOver" | "gameOver";
   winners: Seat[];
   /**
-   * Seats that forfeited (spec §5.10): out for the rest of the game, last place, never dealt
+   * Seats that forfeited (spec §5.13): out for the rest of the game, last place, never dealt
    * in or given a turn. Absent in games saved before forfeits, and until someone forfeits.
    */
   forfeited?: boolean[];
@@ -41,7 +41,7 @@ export type Action =
   | { type: "hit"; card: CardId; target: { seat: Seat; group: number }; side?: HitSide }
   | { type: "discard"; card: CardId; skipTarget?: Seat }
   | { type: "nextRound" }
-  /** Leave the game for good (§5.10): any time before it is over, on anyone's turn. */
+  /** Leave the game for good (§5.13): any time before it is over, on anyone's turn. */
   | { type: "forfeit" };
 
 export type GameEvent =
@@ -293,7 +293,7 @@ function dispatch(
 }
 
 /**
- * A seat leaves the game (§5.10). With one seat left in, that seat wins and
+ * A seat leaves the game (§5.13). With one seat left in, that seat wins and
  * the game is over. Otherwise the seat is out: its hand leaves play (not to
  * the discard), it is never dealt in or given a turn again, it can't win, and
  * on its own turn the turn moves on. Laid groups stay on the table to hit on.

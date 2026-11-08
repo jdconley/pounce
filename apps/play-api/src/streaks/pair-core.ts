@@ -400,7 +400,7 @@ export function advance(s: PairState, now: number): void {
 }
 
 /**
- * What one pair at the table hears of a room's report. When either of them forfeited (§5.10) the
+ * What one pair at the table hears of a room's report. When either of them forfeited (§5.13) the
  * table is over for the pair, and turns there no longer count for it: nobody moved, nobody holds it.
  */
 export function pairReport(intent: StreakIntent, a: string, b: string): TableReport {
