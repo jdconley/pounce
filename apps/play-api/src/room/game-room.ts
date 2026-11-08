@@ -258,7 +258,9 @@ export class GameRoom extends DurableObject<Env> {
     const awake = (this.core as RoomCore).awakePlayers();
     const run = async () => {
       // Your own streak (trophy room design D1): a turn at a table with another person counts, once per report.
-      if (intent.by && trophyOn(this.env)) await playerRpc(this.env, intent.by).recordPersonalTurn(intent.at, Date.now()).catch(() => undefined);
+      // Someone who forfeited (§5.10) no longer counts as that other person.
+      const withSomeone = new Set(intent.players.filter((p) => !intent.out?.includes(p))).size >= 2;
+      if (intent.by && withSomeone && trophyOn(this.env)) await playerRpc(this.env, intent.by).recordPersonalTurn(intent.at, Date.now()).catch(() => undefined);
       let views: PairViews | null = null;
       for (let attempt = 0; attempt < STREAK_ATTEMPTS && views === null; attempt++) {
         views = await reportTable(this.env, intent, Date.now(), awake).catch(() => null);
@@ -590,7 +592,8 @@ export class GameRoom extends DurableObject<Env> {
     const next = state.rematch?.code ?? null;
     // Who sits where, and as whom: a join, a rename or a new cat reaches Home's cards.
     const faces = state.seats.map((s) => [s.kind, s.person?.id, s.person?.name, s.person?.cat, s.playerId ?? s.deviceId]);
-    const fingerprint = JSON.stringify([state.status, actor, state.name, [...devices], [...players], faces, ...(next ? [next] : [])]);
+    const out = state.gameState?.forfeited ?? [];
+    const fingerprint = JSON.stringify([state.status, actor, state.name, [...devices], [...players], faces, out, ...(next ? [next] : [])]);
     if (fingerprint === this.tablesFingerprint) return;
     this.tablesFingerprint = fingerprint;
 
@@ -613,6 +616,8 @@ export class GameRoom extends DurableObject<Env> {
       ...[...devices].map((deviceId) =>
         this.index(deviceId).upsertTable({
           ...entry,
+          // Every seat this device holds forfeited: the table is over for it (§5.10), whoever plays on.
+          ...(core.allOut(core.controlledSeats(deviceId)) ? { status: "over" } : {}),
           yourTurn: actor !== null && core.controlledSeats(deviceId).includes(actor),
           seats: tableSeats(state, core.controlledSeats(deviceId)),
         }),
@@ -620,6 +625,7 @@ export class GameRoom extends DurableObject<Env> {
       ...[...players].map((playerId) =>
         this.player(playerId).upsertTable({
           ...entry,
+          ...(core.allOut(state.seats.flatMap((s, i) => (s.playerId === playerId ? [i] : []))) ? { status: "over" } : {}),
           yourTurn: actor !== null && state.seats[actor]?.playerId === playerId,
           seats: tableSeats(
             state,

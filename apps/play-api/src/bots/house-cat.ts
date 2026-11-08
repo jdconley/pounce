@@ -88,7 +88,7 @@ function discardAction(
 function skipTarget(view: CatTowerView, seat: Seat, rng: Rng): Seat | null {
   const targets = view.phase
     .map((_, other) => other)
-    .filter((other) => other !== seat && !view.pendingSkip[other]);
+    .filter((other) => other !== seat && !view.pendingSkip[other] && !view.forfeited[other]);
   if (targets.length === 0) return null;
   const leaders = cheapest(targets, (other) => -(view.phase[other] as number));
   const fewest = cheapest(leaders, (other) => view.handCounts[other] as number);

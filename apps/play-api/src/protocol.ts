@@ -175,6 +175,8 @@ function parseAction(a: unknown): Action | null {
       return { type: "draw", from: a.from };
     case "nextRound":
       return hasKeys(a, ["type"]) ? { type: "nextRound" } : null;
+    case "forfeit":
+      return hasKeys(a, ["type"]) ? { type: "forfeit" } : null;
     case "discard": {
       if (!hasKeys(a, ["type", "card"], ["skipTarget"]) || !isCard(a.card)) return null;
       if (!("skipTarget" in a)) return { type: "discard", card: a.card };

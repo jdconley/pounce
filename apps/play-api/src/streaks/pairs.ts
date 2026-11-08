@@ -3,7 +3,7 @@ import { statusPush, type Face } from "../notify/pushes";
 import { base64url } from "../players/ids";
 import { pounceView, type PounceView } from "../pounce/limits";
 
-import { advance, mergeStates, newPair, NO_POUNCE, repoint, type PairEvent, type PairPerson, type PairState, type StreakView } from "./pair-core";
+import { advance, mergeStates, newPair, NO_POUNCE, pairReport, repoint, type PairEvent, type PairPerson, type PairState, type StreakView } from "./pair-core";
 import { notifyOn } from "./profile";
 import { trophies, type Trophies } from "./trophies";
 
@@ -90,7 +90,7 @@ export async function reportTable(env: Env, intent: StreakIntent, now: number, a
   for (let i = 0; i < players.length; i++) {
     for (let j = i + 1; j < players.length; j++) {
       const [a, b] = [players[i] as string, players[j] as string];
-      const r = { code: intent.code, at: intent.at, by: intent.by, holder: intent.holder, over: intent.over };
+      const r = pairReport(intent, a, b);
       let pairId = await ensurePair(env, a, b, intent.turnedAt, now);
       if (!pairId) continue;
       let views = await pair(env, pairId).report(r, now, awake);

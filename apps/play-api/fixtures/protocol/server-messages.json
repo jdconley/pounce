@@ -142,7 +142,12 @@
             false,
             false
           ],
-          "winners": []
+          "winners": [],
+          "forfeited": [
+            false,
+            false,
+            false
+          ]
         }
       }
     }
@@ -220,7 +225,12 @@
             false,
             false
           ],
-          "winners": []
+          "winners": [],
+          "forfeited": [
+            false,
+            false,
+            false
+          ]
         }
       }
     }
@@ -629,7 +639,11 @@
             false,
             false
           ],
-          "winners": []
+          "winners": [],
+          "forfeited": [
+            false,
+            false
+          ]
         },
         "link": {
           "ping": 3000,
@@ -638,6 +652,123 @@
           ]
         }
       }
+    }
+  },
+  {
+    "name": "event-forfeited",
+    "message": {
+      "t": "event",
+      "seq": 17,
+      "event": {
+        "kind": "game",
+        "event": {
+          "kind": "forfeited",
+          "seat": 1
+        }
+      }
+    }
+  },
+  {
+    "name": "snapshot-playing-forfeited",
+    "message": {
+      "t": "snapshot",
+      "protocol": 1,
+      "seq": 6,
+      "room": {
+        "code": "BCDFG",
+        "name": "The Fancy Sunbeams",
+        "status": "playing",
+        "youAreHost": true,
+        "seats": [
+          {
+            "kind": "human",
+            "person": {
+              "id": "11111111-1111-4111-8111-111111111111",
+              "name": "Alice",
+              "cat": 0
+            },
+            "yours": true,
+            "presence": "awake"
+          },
+          {
+            "kind": "human",
+            "person": {
+              "id": "22222222-2222-4222-8222-222222222222",
+              "name": "Bob",
+              "cat": 3
+            },
+            "yours": false,
+            "presence": "awake"
+          },
+          {
+            "kind": "bot",
+            "yours": false,
+            "presence": null
+          }
+        ],
+        "game": {
+          "round": 1,
+          "dealer": 0,
+          "turn": 2,
+          "step": "draw",
+          "status": "playing",
+          "deckCount": 77,
+          "discardTop": 68,
+          "discardCount": 1,
+          "phase": [
+            0,
+            0,
+            0
+          ],
+          "scores": [
+            0,
+            0,
+            0
+          ],
+          "laid": [
+            null,
+            null,
+            null
+          ],
+          "handCounts": [
+            10,
+            0,
+            10
+          ],
+          "hands": {
+            "0": [
+              46,
+              74,
+              44,
+              63,
+              8,
+              92,
+              88,
+              32,
+              53,
+              2
+            ]
+          },
+          "pendingSkip": [
+            false,
+            false,
+            false
+          ],
+          "winners": [],
+          "forfeited": [
+            false,
+            true,
+            false
+          ]
+        }
+      }
+    }
+  },
+  {
+    "name": "error-forfeited",
+    "message": {
+      "t": "error",
+      "code": "forfeited"
     }
   }
 ]

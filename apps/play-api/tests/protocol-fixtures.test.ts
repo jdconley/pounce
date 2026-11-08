@@ -62,6 +62,19 @@ function linkSnapshot(): Snapshot {
   return room.snapshotFor("devA");
 }
 
+/** Alice (devA), bob (devB) and a bot: bob forfeited (§5.10); alice's snapshot. */
+function forfeitedSnapshot(): Snapshot {
+  const room = new RoomCore(RoomCore.create("BCDFG", "devA", 1_000), () => 1_000, createRng([1, 2, 3, 4]));
+  room.connect("devA");
+  room.connect("devB");
+  room.handle("devA", { t: "claim", seat: 0, person: alice });
+  room.handle("devB", { t: "claim", seat: 1, person: bob });
+  room.handle("devA", { t: "configure", seat: 2, kind: "bot" });
+  room.handle("devA", { t: "start" });
+  room.handle("devB", { t: "act", seat: 1, action: { type: "forfeit" } });
+  return room.snapshotFor("devA");
+}
+
 function serverSamples(): Sample<ServerMessage>[] {
   const { lobby, withHand, noHand } = snapshots();
   return [
@@ -184,6 +197,9 @@ function serverSamples(): Sample<ServerMessage>[] {
     { name: "pong", message: { t: "pong" } },
     { name: "link", message: { t: "link", seats: [null, "weak", "lost"] } },
     { name: "snapshot-playing-link", message: linkSnapshot() },
+    { name: "event-forfeited", message: { t: "event", seq: 17, event: { kind: "game", event: { kind: "forfeited", seat: 1 } } } },
+    { name: "snapshot-playing-forfeited", message: forfeitedSnapshot() },
+    { name: "error-forfeited", message: { t: "error", code: "forfeited" } },
   ] satisfies Sample<ServerMessage>[];
 }
 
@@ -240,6 +256,7 @@ function clientSamples(): Sample<ClientMessage>[] {
     { name: "ping", message: { t: "ping" } },
     { name: "link-weak", message: { t: "link", state: "weak" } },
     { name: "link-good", message: { t: "link", state: "good" } },
+    { name: "act-forfeit", message: { t: "act", seat: 1, action: { type: "forfeit" } } },
   ] satisfies Sample<ClientMessage>[];
 }
 

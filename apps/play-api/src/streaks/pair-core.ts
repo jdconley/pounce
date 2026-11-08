@@ -15,6 +15,7 @@ import { addDays, cutoffAt, dayEnd, dayKey, daysBetween, dayStart, FALLBACK_ZONE
 import { CONFETTI, drawToy, giftItem, type Pity } from "./rewards";
 
 import type { PounceView } from "../pounce/limits";
+import type { StreakIntent } from "../room/core";
 
 /**
  * The pure streak of one pair (§6–§9). The `Pair` Durable Object stores a
@@ -396,6 +397,16 @@ export function advance(s: PairState, now: number): void {
   for (const d of Object.keys(s.days)) {
     if (daysBetween(d, latest) >= KEEP_DAYS && s.lastSettled !== null && d <= s.lastSettled) delete s.days[d];
   }
+}
+
+/**
+ * What one pair at the table hears of a room's report. When either of them forfeited (§5.10) the
+ * table is over for the pair, and turns there no longer count for it: nobody moved, nobody holds it.
+ */
+export function pairReport(intent: StreakIntent, a: string, b: string): TableReport {
+  const { code, at } = intent;
+  if (intent.out?.includes(a) || intent.out?.includes(b)) return { code, at, by: null, holder: null, over: true };
+  return { code, at, by: intent.by, holder: intent.holder, over: intent.over };
 }
 
 /** A room's report: a member's turn counts on their own day, and the table's move is updated. */

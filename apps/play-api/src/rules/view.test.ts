@@ -86,6 +86,7 @@ describe("viewFor", () => {
       "deckCount",
       "discardCount",
       "discardTop",
+      "forfeited",
       "handCounts",
       "hands",
       "laid",
