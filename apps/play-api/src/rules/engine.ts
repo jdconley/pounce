@@ -24,11 +24,20 @@ export type CatTowerState = {
   pendingSkip: boolean[];
   status: "playing" | "roundOver" | "gameOver";
   winners: Seat[];
+  /**
+   * Set only when the game ended before the hand was played out: "decided"
+   * means the rest of the hand could not change anyone's finishing place.
+   * Absent on a game that ended the usual way (and on older stored states).
+   */
+  endReason?: EndReason;
   /** Server-only: 128 bits from a crypto source. Never sent to a device. */
   seed: Seed;
   /** How many values of the seeded rng stream have been consumed. */
   rngCalls: number;
 };
+
+/** Why a game ended early; see `outcomeDecided`. */
+export type EndReason = "decided";
 
 export type Action =
   | { type: "draw"; from: "deck" | "discard" }
@@ -60,7 +69,7 @@ export type GameEvent =
       scores: number[];
       phase: number[];
     }
-  | { kind: "gameOver"; winners: Seat[] };
+  | { kind: "gameOver"; winners: Seat[]; reason?: EndReason };
 
 export type ApplyError =
   | "not_your_turn"
@@ -82,6 +91,8 @@ const HAND_SIZE = 10;
 const MIN_SEATS = 2;
 const MAX_SEATS = 6;
 const FINAL_PHASE = 10;
+/** The most a single card in hand can score (Yarn). */
+const MAX_CARD_POINTS = 25;
 
 const fail = (error: ApplyError): ApplyResult => ({ ok: false, error });
 
@@ -186,7 +197,12 @@ function advanceTurn(s: CatTowerState, events: GameEvent[]): void {
  * seat that laid down its phase. `wentOut` is null when nobody emptied their
  * hand. If that finishes phase 10 for anyone, the game is over too.
  */
-function endRound(s: CatTowerState, wentOut: Seat | null, events: GameEvent[]): void {
+function endRound(
+  s: CatTowerState,
+  wentOut: Seat | null,
+  events: GameEvent[],
+  reason?: EndReason,
+): void {
   const points = s.hands.map((hand) => hand.reduce((sum, id) => sum + cardPoints(id), 0));
   const advanced: Seat[] = [];
   for (let seat = 0; seat < s.seats; seat++) {
@@ -216,8 +232,69 @@ function endRound(s: CatTowerState, wentOut: Seat | null, events: GameEvent[]): 
     const best = Math.min(...finished.map((seat) => s.scores[seat] as number));
     s.winners = finished.filter((seat) => s.scores[seat] === best);
     s.status = "gameOver";
-    events.push({ kind: "gameOver", winners: [...s.winners] });
+    if (reason === undefined) {
+      events.push({ kind: "gameOver", winners: [...s.winners] });
+    } else {
+      s.endReason = reason;
+      events.push({ kind: "gameOver", winners: [...s.winners], reason });
+    }
   }
+}
+
+/** The range a seat's end-of-game phase and score can still land in. */
+type Bounds = { phaseLo: number; phaseHi: number; scoreLo: number; scoreHi: number };
+
+/**
+ * Whether `a` finishes strictly ahead of `b` under every outcome in the
+ * bounds: more phases completed, or the same phase and a lower score.
+ */
+function surelyAhead(a: Bounds, b: Bounds): boolean {
+  if (a.phaseLo > b.phaseHi) return true;
+  return a.phaseLo === b.phaseHi && a.scoreHi < b.scoreLo;
+}
+
+/**
+ * True when the game will end with this hand and nothing left in it can
+ * change anyone's finishing place (phases completed, then lowest score; the
+ * order the game-over screen shows and `winners` takes the top of).
+ *
+ * This hand ends the game once any seat has laid down phase 10. Each seat's
+ * outcome is then bounded independently, which over-counts what can happen
+ * and so only ever errs toward playing on:
+ * - phase: a seat that laid down finishes one up; one that has not may still
+ *   lay down, so either its phase or one up.
+ * - score: its score now plus 0 (it may still go out) up to 25 per card it
+ *   holds. A hand never ends holding more cards than it holds now: a draw is
+ *   always followed by a discard, and a hand ends mid-turn only by going out.
+ *   The bound includes the cards held now, so scoring the hand as it stands
+ *   lands inside it (see `applyAction`).
+ * The order is decided when every pair of seats is surely ordered. A tie is
+ * never surely kept (it needs empty hands), so a decided game has one winner.
+ */
+export function outcomeDecided(s: CatTowerState): boolean {
+  if (s.status !== "playing") return false;
+  const finishing = s.laid.some(
+    (groups, seat) => groups !== null && s.phase[seat] === FINAL_PHASE - 1,
+  );
+  if (!finishing) return false;
+  const bounds: Bounds[] = s.hands.map((hand, seat) => {
+    const phase = s.phase[seat] as number;
+    const score = s.scores[seat] as number;
+    return {
+      phaseLo: s.laid[seat] !== null ? phase + 1 : phase,
+      phaseHi: phase + 1,
+      scoreLo: score,
+      scoreHi: score + MAX_CARD_POINTS * hand.length,
+    };
+  });
+  for (let a = 0; a < s.seats; a++) {
+    for (let b = a + 1; b < s.seats; b++) {
+      const x = bounds[a] as Bounds;
+      const y = bounds[b] as Bounds;
+      if (!surelyAhead(x, y) && !surelyAhead(y, x)) return false;
+    }
+  }
+  return true;
 }
 
 /** Apply `action` by `seat`. Pure: `state` is never mutated. */
@@ -238,7 +315,13 @@ export function applyAction(
   const s = structuredClone(state);
   const events: GameEvent[] = [];
   const error = dispatch(s, action, events);
-  return error === null ? { ok: true, state: s, events } : fail(error);
+  if (error !== null) return fail(error);
+  // Once the rest of the hand cannot change anyone's place, stop it here:
+  // score the hands as they stand (nobody went out) and end the game. The
+  // standing scores lie inside the bounds `outcomeDecided` proved the order
+  // for, so the places come out exactly as they would have.
+  if (outcomeDecided(s)) endRound(s, null, events, "decided");
+  return { ok: true, state: s, events };
 }
 
 function dispatch(

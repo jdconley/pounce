@@ -20,6 +20,8 @@ export type CatTowerView = {
   hands: Record<Seat, CardId[]>;
   pendingSkip: boolean[];
   winners: Seat[];
+  /** Only on a game that ended early; see `CatTowerState.endReason`. */
+  endReason?: CatTowerState["endReason"];
 };
 
 function copyGroup(group: Group): Group {
@@ -52,6 +54,7 @@ export function viewFor(
     hands,
     pendingSkip: [...state.pendingSkip],
     winners: [...state.winners],
+    ...(state.endReason === undefined ? {} : { endReason: state.endReason }),
   };
 }
 

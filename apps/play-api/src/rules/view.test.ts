@@ -100,6 +100,12 @@ describe("viewFor", () => {
     ]);
   });
 
+  test("carries endReason only on a game that ended early", () => {
+    const over = makeState({ status: "gameOver", winners: [1], endReason: "decided" });
+    expect(viewFor(over, []).endReason).toBe("decided");
+    expect("endReason" in viewFor(makeState({ status: "gameOver", winners: [1] }), [])).toBe(false);
+  });
+
   test("the whole serialized view never carries hidden values", () => {
     // Every hidden value is distinct from every number the view may show, so
     // finding one anywhere in the JSON can only mean a leak.

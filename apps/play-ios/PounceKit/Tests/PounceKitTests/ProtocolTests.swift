@@ -244,6 +244,45 @@ import Testing
         #expect(game.hands == [0: [1, 2, 3, 4]])
     }
 
+    @Test func gameViewEndReason() throws {
+        func view(_ extra: String) throws -> GameView {
+            let json = """
+            {"round":12,"dealer":0,"turn":1,"step":"play","status":"gameOver","deckCount":40,"discardTop":5,
+            "discardCount":3,"phase":[6,10],"scores":[95,155],"laid":[null,null],"handCounts":[10,2],
+            "hands":{},"pendingSkip":[false,false],"winners":[1]\(extra)}
+            """
+            return try JSONDecoder().decode(GameView.self, from: Data(json.utf8))
+        }
+        #expect(try view(#","endReason":"decided""#).endReason == .decided)
+        // An older server sends none.
+        #expect(try view("").endReason == nil)
+        // A reason this build doesn't know never breaks the snapshot.
+        #expect(try view(#","endReason":"somethingNew""#).endReason == nil)
+        #expect(try view(#","endReason":null"#).endReason == nil)
+
+        let decided = try view(#","endReason":"decided""#)
+        let data = try JSONEncoder().encode(decided)
+        #expect(try JSONDecoder().decode(GameView.self, from: data) == decided)
+        let plain = try JSONSerialization.jsonObject(with: try JSONEncoder().encode(try view(""))) as? [String: Any]
+        #expect(plain?["endReason"] == nil)
+    }
+
+    @Test func decidedGameOverFixtures() throws {
+        #expect(try Codec.decode(fixture("event-gameOver-decided")) == .event(seq: 16, event: .game(.gameOver(winners: [0]))))
+        guard case .snapshot(_, _, let room) = try Codec.decode(fixture("snapshot-over-decided")), let game = room.game else {
+            Issue.record("not a game snapshot"); return
+        }
+        #expect(room.status == .over)
+        #expect(game.status == .gameOver)
+        #expect(game.endReason == .decided)
+        #expect(game.winners == [0])
+    }
+
+    @Test func gameOverEventWithAReasonStillDecodes() throws {
+        let json = #"{"t":"event","seq":16,"event":{"kind":"game","event":{"kind":"gameOver","winners":[1],"reason":"decided"}}}"#
+        #expect(try Codec.decode(json) == .event(seq: 16, event: .game(.gameOver(winners: [1]))))
+    }
+
     @Test func gameViewRoundTripsWithNullAndNonNullLaid() throws {
         let game = GameView(
             round: 1, dealer: 0, turn: 1, step: .play, status: .playing, deckCount: 70, discardTop: 12,
