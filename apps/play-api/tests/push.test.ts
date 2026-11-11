@@ -26,6 +26,8 @@ beforeAll(async () => {
       DEVICES: { className: "DeviceIndex", useSQLite: true },
       PLAYERS: { className: "Player", useSQLite: true },
       IDENTITIES: { className: "Identities", useSQLite: true },
+      LIMITS: { className: "Limiter", useSQLite: true },
+      REPORTS: { className: "Reports", useSQLite: true },
     },
     // No APNS_KEY_P8 / APNS_KEY_ID: the secrets are unset.
     bindings: { APNS_TEAM_ID: "B222J9J7B8", APNS_TOPIC: "com.conleychaos.play", APNS_HOST: "api.push.apple.com" },
@@ -86,6 +88,8 @@ describe("DeviceIndex.push when APNs says the token is dead", { timeout: 30_000 
         DEVICES: { className: "DeviceIndex", useSQLite: true },
         PLAYERS: { className: "Player", useSQLite: true },
         IDENTITIES: { className: "Identities", useSQLite: true },
+        LIMITS: { className: "Limiter", useSQLite: true },
+        REPORTS: { className: "Reports", useSQLite: true },
       },
       bindings: {
         APNS_TEAM_ID: "B222J9J7B8",
@@ -159,6 +163,8 @@ describe("DeviceIndex.push by age band", { timeout: 30_000 }, () => {
         DEVICES: { className: "DeviceIndex", useSQLite: true },
         PLAYERS: { className: "Player", useSQLite: true },
         IDENTITIES: { className: "Identities", useSQLite: true },
+        LIMITS: { className: "Limiter", useSQLite: true },
+        REPORTS: { className: "Reports", useSQLite: true },
       },
       bindings: {
         APNS_TEAM_ID: "B222J9J7B8",

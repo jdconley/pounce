@@ -65,6 +65,8 @@ function worker(options: { streaks?: boolean; persist?: string } = {}): Miniflar
       DEVICES: { className: "DeviceIndex", useSQLite: true },
       PLAYERS: { className: "Player", useSQLite: true },
       IDENTITIES: { className: "Identities", useSQLite: true },
+      LIMITS: { className: "Limiter", useSQLite: true },
+      REPORTS: { className: "Reports", useSQLite: true },
       PAIRS: { className: "Pair", useSQLite: true },
       LINKS: { className: "Links", useSQLite: true },
     },

@@ -51,7 +51,8 @@ async function setUp(mf: Miniflare, options: { miaBand?: string; hour?: number }
   const phone = await mint(mf);
   const tablet = await mint(mf);
   const jd = newPerson("JD", 1);
-  const mia = newPerson("Mia", 2);
+  // A kitten's name comes from the dice (the server takes no other from a kitten's device).
+  const mia = newPerson(options.miaBand === "kitten" ? "Mochi" : "Mia", 2);
   await profile(mf, phone, [jd], { apns: JD_TOKEN, zone: zoneAt(12) });
   await profile(mf, tablet, [mia], { apns: MIA_TOKEN, zone: zoneAt(options.hour ?? 12), ...(options.miaBand ? { band: options.miaBand } : {}) });
   const t = await table(mf, [

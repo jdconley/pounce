@@ -139,6 +139,8 @@ export async function worker(
     nudge?: boolean;
     /** `DEV_SPEED`: divides the bots' think time, the next round's gap and a nudge's waits. */
     devSpeed?: number;
+    /** `REPORTS_KEY`: the owner's key for `GET /v1/admin/reports`. */
+    reportsKey?: string;
   },
 ): Promise<Miniflare> {
   return new Miniflare({
@@ -150,6 +152,8 @@ export async function worker(
       DEVICES: { className: "DeviceIndex", useSQLite: true },
       PLAYERS: { className: "Player", useSQLite: true },
       IDENTITIES: { className: "Identities", useSQLite: true },
+      LIMITS: { className: "Limiter", useSQLite: true },
+      REPORTS: { className: "Reports", useSQLite: true },
       PAIRS: { className: "Pair", useSQLite: true },
       ...(options.links ? { LINKS: { className: "Links", useSQLite: true } } : {}),
       ...(options.consent
@@ -171,6 +175,7 @@ export async function worker(
       ...(options.trophy ? { TROPHY: "on" } : {}),
       ...(options.nudge ? { NUDGE: "on" } : {}),
       ...(options.devSpeed ? { DEV_SPEED: String(options.devSpeed) } : {}),
+      ...(options.reportsKey ? { REPORTS_KEY: options.reportsKey } : {}),
       ...(options.consent && options.consentFlag !== false ? { CONSENT: "on" } : {}),
       ...(options.consent && options.twilio !== false ? TWILIO : {}),
     },

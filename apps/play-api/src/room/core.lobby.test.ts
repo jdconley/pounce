@@ -4,7 +4,7 @@ import { seedOf } from "../../tests/seeds";
 import { PROTOCOL_VERSION, type Person, type ServerMessage } from "../protocol";
 import { createRng } from "../rules/rng";
 
-import { RoomCore, type Outbound } from "./core";
+import { RENAME_WINDOW_MS, RENAMES_PER_WINDOW, RoomCore, type Outbound } from "./core";
 import { defaultRoomName } from "./names";
 
 
@@ -356,13 +356,27 @@ describe("renameSeat", () => {
     expect(snapshotOf(out, "b").room.seats[0]?.person?.name).toBe("Jo");
   });
 
-  it("works mid-game, keeping the seat's person id and cat", () => {
+  it("is frozen once the game has started", () => {
     const room = twoPlayerLobby();
     room.handle("a", { t: "start" });
-    const out = room.handle("b", { t: "renameSeat", seat: 1, name: "Bea" });
-    expect(room.state.seats[1]?.person).toEqual({ id: person(2).id, name: "Bea", cat: person(2).cat });
-    expect(snapshotOf(out, "a").room.seats[1]?.person?.name).toBe("Bea");
-    expect(snapshotOf(out, "a").room.game).not.toBeNull();
+    const before = room.state.seats[1]?.person;
+    expect(errorsOf(room.handle("b", { t: "renameSeat", seat: 1, name: "Bea" }))).toEqual([{ to: "b", code: "in_game" }]);
+    expect(room.state.seats[1]?.person).toEqual(before);
+  });
+
+  it("takes five renames a minute from one device, table and seats together", () => {
+    const room = twoPlayerLobby();
+    for (const name of ["A", "B", "C"]) expect(errorsOf(room.handle("a", { t: "renameSeat", seat: 0, name }))).toEqual([]);
+    for (const name of ["T1", "T2"]) expect(errorsOf(room.handle("a", { t: "rename", name }))).toEqual([]);
+    expect(errorsOf(room.handle("a", { t: "renameSeat", seat: 0, name: "D" }))).toEqual([{ to: "a", code: "too_soon" }]);
+    expect(errorsOf(room.handle("a", { t: "rename", name: "T3" }))).toEqual([{ to: "a", code: "too_soon" }]);
+    expect(room.state.seats[0]?.person?.name).toBe("C");
+    expect(room.state.name).toBe("T2");
+    // Another device has its own count; a refused or unchanged name costs nothing.
+    expect(errorsOf(room.handle("b", { t: "rename", name: "T3" }))).toEqual([]);
+    clock += RENAME_WINDOW_MS;
+    expect(errorsOf(room.handle("a", { t: "renameSeat", seat: 0, name: "D" }))).toEqual([]);
+    expect(RENAMES_PER_WINDOW).toBe(5);
   });
 
   it("changes nothing and sends nothing when the name is the same", () => {
@@ -730,10 +744,11 @@ describe("table name", () => {
     );
   });
 
-  it("works mid-game, but not once the game is over", () => {
+  it("is frozen once the game has started, and once it is over", () => {
     const room = twoPlayerLobby();
-    room.handle("a", { t: "start" });
     expect(snapshotOf(room.handle("a", { t: "rename", name: "Round Two" }), "b").room.name).toBe("Round Two");
+    room.handle("a", { t: "start" });
+    expect(errorsOf(room.handle("a", { t: "rename", name: "Mid Game" }))).toEqual([{ to: "a", code: "in_game" }]);
     room.state.status = "over";
     expect(errorsOf(room.handle("a", { t: "rename", name: "Too Late" }))).toEqual([
       { to: "a", code: "game_over" },

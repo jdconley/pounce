@@ -56,6 +56,10 @@ struct CatEditorView: View {
     @State private var blink = false
     @State private var diceSpin = 0
     @State private var nameNope = 0
+    /// Why the server's name filter refused the typed name; nil while it hasn't.
+    @State private var refusal: String?
+    @State private var checking = false
+    @Environment(AppModel.self) private var model
     /// The placeholder: a name to type over (or roll with the dice).
     @State private var suggestion = CatEditorView.randomName()
     @FocusState private var nameFocused: Bool
@@ -241,6 +245,17 @@ struct CatEditorView: View {
             .accessibilityIdentifier("pickcat.dice")
         }
         .padding(.bottom, 6)
+        .overlay(alignment: .bottom) {
+            // Hangs just under the field, over the gap above the cats, so nothing jumps.
+            if let refusal {
+                NameRefusal(text: refusal, size: 14)
+                    .alignmentGuide(.bottom) { $0[.top] }
+                    .offset(y: -4)
+                    .zIndex(1)
+            }
+        }
+        .animation(.spring(duration: 0.3, bounce: 0.3).paced, value: refusal)
+        .zIndex(1)
     }
 
     /// A kitten's name: one of the generated names, shown, not typed (spec §14.1).
@@ -274,6 +289,7 @@ struct CatEditorView: View {
                     var clipped = new
                     while clipped.utf16.count > PeopleStore.maxNameLength { clipped.removeLast() }
                     if clipped != new { name = clipped }
+                    refusal = nil
                 }
                 .padding(.horizontal, 16)
                 .frame(height: 60)
@@ -318,8 +334,9 @@ struct CatEditorView: View {
                     Haptics.shared.thump()
                     return
                 }
-                onConfirm(trimmed, cat)
+                confirm()
             }
+            .disabled(checking)
             .saturation(canConfirm ? 1 : 0)
             .opacity(canConfirm ? 1 : 0.55)
             .accessibilityHint(canConfirm ? Text("") : Text("Type your name first"))
@@ -330,6 +347,26 @@ struct CatEditorView: View {
             }
         }
         .padding(.top, 6)
+    }
+
+    /// A typed name is put to the server's name filter first; a generated one needs no asking.
+    private func confirm() {
+        let name = trimmed, cat = cat
+        guard typedNames, AgeLimits.needsGeneratedName(name) else { return onConfirm(name, cat) }
+        guard !checking else { return }
+        checking = true
+        Task {
+            let verdict = await NameGate.verdict(model.api, name, kind: .person)
+            checking = false
+            if let words = NameGate.words(verdict) {
+                refusal = words
+                nameNope += 1
+                Haptics.shared.thump()
+                UIAccessibility.post(notification: .announcement, argument: words)
+            } else {
+                onConfirm(name, cat)
+            }
+        }
     }
 
     // MARK: blink
