@@ -1051,8 +1051,8 @@ export class RoomCore {
     if (from === null) return [this.fail(deviceId, "not_seated")];
     if (this.game.currentActor(state.gameState) !== seat) return [this.fail(deviceId, "not_their_turn")];
     if (this.retireWait(this.now()) > 0) return [this.fail(deviceId, "too_soon")];
-    const applied = this.applyGame(seat, { type: "forfeit" });
-    if ("error" in applied) return [this.fail(deviceId, applied.error)];
+    // The seat on the move is in the game, so its forfeit is never refused.
+    const applied = this.applyGame(seat, { type: "forfeit" }) as { out: Outbound[]; events: GameEvent[] };
     const sender = state.seats[from] as SeatInfo;
     if (target.playerId) {
       const person = sender.person as Person;

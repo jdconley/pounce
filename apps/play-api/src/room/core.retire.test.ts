@@ -206,6 +206,14 @@ describe("retiring a stalled seat", () => {
     expect(t.r.drainRetireIntents()).toEqual([]);
   });
 
+  it("a retirer with no player of their own is named, with no player for a kitten's consent to check", () => {
+    const t = table(["phone", "tablet"]);
+    delete t.r.state.seats[0]!.playerId;
+    t.clock.now = T0 + RETIRE_AFTER_MS;
+    expect(errors(retire(t, "phone", 1))).toEqual([]);
+    expect(t.r.drainRetireIntents()).toMatchObject([{ kind: "done", playerId: playerOf(1), from: { name: "Cat 1" }, fromPlayer: null }]);
+  });
+
   it("parses, and refuses a malformed one", () => {
     expect(parseClientMessage('{"t":"retire","seat":1}')).toEqual({ t: "retire", seat: 1 });
     expect(parseClientMessage('{"t":"retire"}')).toEqual({ error: "bad_message" });
