@@ -12,7 +12,7 @@ extension DemoFixtures {
         let days = week(ending: today)
         func dots(_ states: [WeekState]) -> [WeekDot] { zip(days, states).map { WeekDot(day: $0, state: $1) } }
         let mia = StreakView(
-            pair: "pr_demoMiaAAAAAAAAAAAAAAA", partner: .init(name: "Mia", cat: 2), count: 128, me: true, them: false,
+            pair: "pr_demoMiaAAAAAAAAAAAAAAA", partner: .init(name: castName(1, "Mia"), cat: 2), count: 128, me: true, them: false,
             kept: false, naps: 1, best: 128, lifetimeKept: 141, perfectWeeks: 14,
             week: dots([.kept, .kept, .nap, .kept, .held, .kept, .live]), next: 150, condoStage: 7,
             toys: Array(StreakCatalog.commonToys.prefix(12)) + Array(StreakCatalog.shinyToys.prefix(4)) + [StreakCatalog.goldenToys[0]],
@@ -21,7 +21,7 @@ extension DemoFixtures {
             gifts: [.init(id: "g7", milestone: 100, item: "rug-fish-pond")],
             myMove: [], theirMove: [code], pinned: true)
         let kiki = StreakView(
-            pair: "pr_demoKikiAAAAAAAAAAAAAA", partner: .init(name: "Kiki", cat: 6), count: 9, me: false, them: true,
+            pair: "pr_demoKikiAAAAAAAAAAAAAA", partner: .init(name: castName(2, "Kiki"), cat: 6), count: 9, me: false, them: true,
             naps: 0, winback: .init(kept: 1), best: 23, lifetimeKept: 31, perfectWeeks: 1,
             week: dots([.kept, .kept, .kept, .none, .kept, .kept, .live]), next: 14, condoStage: 5,
             toys: Array(StreakCatalog.commonToys.suffix(6)) + [StreakCatalog.shinyToys[5]],
@@ -29,7 +29,7 @@ extension DemoFixtures {
             myMove: ["K9PQR"],
             pounce: PounceState(waiting: .init(id: "pc_demoKikiAAAAAAAAAAAAAA", target: .table("K9PQR"))))
         let nova = StreakView(
-            pair: "pr_demoNovaAAAAAAAAAAAAAA", partner: .init(name: "Nova", cat: 5), count: 41, naps: 2,
+            pair: "pr_demoNovaAAAAAAAAAAAAAA", partner: .init(name: castName(3, "Nova"), cat: 5), count: 41, naps: 2,
             pausedUntil: days[6], best: 41, lifetimeKept: 58, perfectWeeks: 4,
             week: dots([.kept, .kept, .kept, .kept, .paused, .paused, .paused]), next: 50, condoStage: 6,
             toys: Array(StreakCatalog.commonToys.prefix(5)),
@@ -42,7 +42,7 @@ extension DemoFixtures {
         return StreakList(
             own: own,
             pairs: [mia, kiki, nova],
-            left: [LeftPair(pair: "pr_demoLeoAAAAAAAAAAAAAAA", partner: .init(name: "Leo", cat: 1))])
+            left: [LeftPair(pair: "pr_demoLeoAAAAAAAAAAAAAAA", partner: .init(name: castName(4, "Leo"), cat: 1))])
     }
 
     /// `-demo-streaks empty`: the trophy room is on but nobody is connected yet (Home's big plus).

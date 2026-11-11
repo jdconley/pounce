@@ -35,7 +35,7 @@ import PounceKit
 /// step; a card is discarded by itself and the server never answers, so it waits under its
 /// hourglass) and `seatLink` (Kiki's turn, Kiki's phone weak, Leo's reconnecting).
 enum DemoMode: String {
-    case lobby, lobbyReady, table, other, replay, nope, celebrate, curtain, handoff, peek, crowded, crowdedHit, hit, lay, over
+    case lobby, lobbyReady, lobbyFamily, table, other, replay, nope, celebrate, curtain, handoff, peek, crowded, crowdedHit, hit, lay, over
     case weak, reconnecting, pending, seatLink
     /// Kiki (seat 2) forfeits a second in (§5.13): the pill, then her seat dimmed and tagged.
     case forfeited
@@ -64,6 +64,7 @@ enum DemoMode: String {
     private var baseRoom: RoomView {
         switch self {
         case .lobby: return DemoFixtures.lobby()
+        case .lobbyFamily: return DemoFixtures.familyLobby()
         case .lobbyReady:
             var room = DemoFixtures.lobby()
             room.seats[3] = SeatView(kind: .closed)

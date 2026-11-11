@@ -1,4 +1,5 @@
 #if DEBUG
+import Foundation
 // DEBUG only: demo and test data never ships in a Release build.
 /// Hand-made rooms for the app's DEBUG `-demo` screens, previews and UI tests.
 /// Internally consistent (every visible card id unique, counts add up to the
@@ -8,7 +9,16 @@ public enum DemoFixtures {
     public static let code = "M3W7Z"
     /// Every demo table's name.
     public static let demoName = "Friday Night Cats"
-    static let names = ["Mia", "Leo", "Kiki", "Otis", "Nova", "Ziggy"]
+    static let names = ["Mia", "Leo", "Kiki", "Otis", "Nova", "Ziggy"].enumerated().map { castName($0.offset, $0.element) }
+    /// `POUNCE_DEMO_CAST=Jess,Sam,Grandma` in the launch environment renames the demo people in
+    /// order (you, your person, then the rest of the table), for the App Store captures
+    /// (`AppStore/capture.sh`). Without it every demo keeps its own names.
+    static let cast: [String] = (ProcessInfo.processInfo.environment["POUNCE_DEMO_CAST"] ?? "")
+        .split(separator: ",").map { $0.trimmingCharacters(in: .whitespaces) }.filter { !$0.isEmpty }
+    /// The cast's name at `index`, or `fallback` when the cast is shorter (or unset).
+    public static func castName(_ index: Int, _ fallback: String) -> String {
+        cast.indices.contains(index) ? cast[index] : fallback
+    }
     /// Cat per seat; 3 (gray) is the House Cat, so humans skip it.
     static let cats = [0, 1, 6, 4, 5, 2]
 
@@ -144,6 +154,16 @@ public enum DemoFixtures {
             SeatView(kind: .closed),
             SeatView(kind: .closed),
         ]
+        return RoomView(code: code, name: demoName, status: .lobby, youAreHost: true, seats: seats)
+    }
+
+    /// A full lobby: me (host), four more people on their own phones and a bot (the DEBUG
+    /// `-demo lobbyFamily` screen, for the App Store captures).
+    public static func familyLobby() -> RoomView {
+        var seats: [SeatView] = (0..<5).map { i in
+            SeatView(kind: .human, person: Person(id: "demo-\(i)", name: names[i], cat: cats[i]), yours: i == 0, presence: .awake)
+        }
+        seats.append(SeatView(kind: .bot))
         return RoomView(code: code, name: demoName, status: .lobby, youAreHost: true, seats: seats)
     }
 
