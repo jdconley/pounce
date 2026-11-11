@@ -3,7 +3,7 @@ import SwiftUI
 
 /// Push priming (spec §10): the calico ringing its bell under a mock "your turn" banner drawn
 /// from this player's cat and name. The paw opens the system prompt; the corner button is
-/// "not now". No words: the banner shows who, the bell shows why.
+/// "not now". Short words say why.
 struct PushPrimingView: View {
     let person: Person
     let onAllow: () -> Void
@@ -41,9 +41,12 @@ struct PushPrimingView: View {
                         "Get a notification when it's your turn",
                         comment: "VoiceOver: push priming art, a cat ringing a bell"))
                     .accessibilityAddTraits(.isImage)
+                WordLabel(title: "Know when it's your turn", detail: "Pounce can tell you when a game is waiting for you.",
+                          alignment: .center)
+                    .padding(.horizontal, 28)
                 PillButton(
-                    icon: ArtName.iconPawMenu, color: Palette.orange, size: .large, width: 220,
-                    accessibilityLabel: "Turn on notifications"
+                    icon: ArtName.iconPawMenu, color: Palette.orange, size: .large, width: 260,
+                    title: String(localized: "Turn on"), accessibilityLabel: "Turn on notifications"
                 ) {
                     onAllow()
                 }
@@ -59,6 +62,7 @@ struct PushPrimingView: View {
                 .padding(.leading, 16)
                 .padding(.top, 4)
                 .accessibilityIdentifier("priming.notNow")
+                .captioned("Not now")
         }
         .onAppear {
             withAnimation(.spring(duration: 0.6, bounce: 0.45).paced) { appeared = true }

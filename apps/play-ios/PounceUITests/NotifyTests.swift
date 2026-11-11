@@ -24,28 +24,12 @@ final class NotifyTests: XCTestCase {
     func testAdultDefaults() {
         let app = launch()
         XCTAssertEqual(value(el(app, "notify.reminders")), "on")
-        XCTAssertEqual(value(el(app, "notify.auto")), "on")
-        XCTAssertEqual(value(el(app, "notify.lastChance")), "on")
         XCTAssertEqual(value(el(app, "notify.quietStart")), "22:00")
         XCTAssertEqual(value(el(app, "notify.quietEnd")), "08:00")
-        XCTAssertFalse(el(app, "notify.weekday").exists, "Auto hides the dials")
+        XCTAssertFalse(el(app, "notify.weekday").exists, "Reminders pick their own time, so no dials")
         XCTAssertFalse(el(app, "notify.kitten").exists)
     }
 
-    func testAutoOffShowsDials() {
-        let app = launch()
-        el(app, "notify.auto").tap()
-        XCTAssertTrue(until(3) { self.value(self.el(app, "notify.auto")) == "off" })
-        let weekday = el(app, "notify.weekday")
-        XCTAssertTrue(weekday.waitForExistence(timeout: Live.t(3)), "no weekday dial")
-        XCTAssertEqual(value(weekday), "19:30")
-        XCTAssertEqual(value(el(app, "notify.weekend")), "19:30")
-        el(app, "notify.weekday.plus").tap()
-        XCTAssertTrue(until(3) { self.value(weekday) == "19:45" }, "the dial didn't step")
-        // Two hours before quiet hours is as late as it goes.
-        for _ in 0..<4 { el(app, "notify.weekday.plus").tap() }
-        XCTAssertTrue(until(3) { self.value(weekday) == "20:00" }, "the dial went past 20:00")
-    }
 
     func testRemindersOffAndBackOn() {
         let app = launch()
@@ -58,8 +42,6 @@ final class NotifyTests: XCTestCase {
     func testTeenDefaults() {
         let app = launch(["-age-band", "teen"])
         XCTAssertEqual(value(el(app, "notify.reminders")), "off")
-        XCTAssertEqual(value(el(app, "notify.auto")), "off")
-        XCTAssertEqual(value(el(app, "notify.lastChance")), "off")
         XCTAssertEqual(value(el(app, "notify.quietStart")), "21:00")
         XCTAssertEqual(value(el(app, "notify.weekday")), "19:00", "a teen's fixed time, clamped before 21:00 quiet")
     }
