@@ -219,6 +219,15 @@ describe("allows: the push gate (decision 16)", () => {
     expect(allows(on(), "pounce", [])).toBe(false);
   });
 
+  test("nudge: like a pounce, from an approved sender only; a sender with no player never", () => {
+    expect(allows(on(), "nudge", ["p_mia"])).toBe(true);
+    expect(allows(on(), "nudge", ["p_mom"])).toBe(true);
+    expect(allows(on(), "nudge", ["p_leo"])).toBe(false);
+    expect(allows(on(), "nudge", [null])).toBe(false);
+    expect(allows(on(), "nudge", [])).toBe(false);
+    expect(allows(fresh(), "nudge", ["p_mia"])).toBe(false);
+  });
+
   test("dismiss goes; every other kind stays off", () => {
     expect(allows(on(), "dismiss", [])).toBe(true);
     for (const kind of ["milestone", "reminder", "play_again", "pounce_answered", "nap", "widget", "live"]) {

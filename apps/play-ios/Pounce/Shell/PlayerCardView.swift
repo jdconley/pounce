@@ -10,6 +10,9 @@ struct PlayerCardOverlay: View {
     let card: PlayerCard
     /// The table as the scene drew it when the cat was tapped.
     let model: TableModel
+    /// The seat's Nudge button as the store has it now (nil: none), and what a tap on it does.
+    var nudge: () -> RoomStore.NudgeButton? = { nil }
+    var onNudge: () -> Void = {}
     let onClose: () -> Void
 
     @Environment(\.horizontalSizeClass) private var sizeClass
@@ -64,6 +67,10 @@ struct PlayerCardOverlay: View {
                     .accessibilityLabel(Text("Collecting \(text)", comment: "VoiceOver: what a player's phase needs"))
             }
             notes
+            if case .away = card.kind, nudge() != nil {
+                NudgeButton(name: name, state: nudge, onNudge: onNudge, scale: scale)
+                    .padding(.top, 2)
+            }
             connection
         }
         .padding(.horizontal, 18 * scale)

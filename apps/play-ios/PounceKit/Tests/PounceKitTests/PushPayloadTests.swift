@@ -60,6 +60,22 @@ import Testing
         #expect(try payload("play_again").kind == .playAgain)
     }
 
+    @Test func aNudgeOpensItsTableLikeYourMove() throws {
+        let nudge = try payload("nudge")
+        #expect(nudge.kind == .nudge)
+        #expect(nudge.category == .yourMove)
+        #expect(nudge.body == "Mia nudged you. Your move at Couch Cats.")
+        let tap = NotifyActions.defaultAction
+        #expect(NotifyActions.outcome(action: tap, payload: nudge) == .open("GH2VD"))
+        #expect(NotifyActions.outcome(action: "PLAY", payload: nudge) == .open("GH2VD"))
+        #expect(NotifyActions.outcome(action: "IN_AN_HOUR", payload: nudge) == .snooze(3600))
+        #expect(CommunicationPlan.make(nudge) == CommunicationPlan(sender: PushFace(name: "Mia", cat: 2), groupName: "JD", conversation: "GH2VD"))
+        // An app from before nudges reads it as unknown, and a tap still opens the table.
+        var old = try #require(Fixtures.pushPayloads().first { $0.name == "nudge" }).body
+        old["kind"] = "a_kind_from_later"
+        #expect(NotifyActions.outcome(action: tap, payload: try #require(PushPayload(userInfo: old))) == .open("GH2VD"))
+    }
+
     @Test func testUnknownKindIsUnknown() {
         let p = PushPayload(userInfo: ["kind": "space_cats", "aps": ["category": "LASERS"]])
         #expect(p?.kind == .unknown)

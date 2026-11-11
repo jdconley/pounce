@@ -54,8 +54,10 @@ afterEach(async () => {
   apnsDown.clear();
 });
 
-async function start(options: { twilio?: boolean; consentFlag?: boolean } = {}): Promise<Miniflare> {
-  const mf = await worker(script, { links: true, sent, consent: true, verify, apnsDown, ...options });
+async function start(options: { twilio?: boolean; consentFlag?: boolean; nudge?: boolean } = {}): Promise<Miniflare> {
+  // With nudges, at the dev server's top speed: a nudge's 2-minute wait is 1.2 s, its 10-minute cooldown 6 s.
+  const fast = options.nudge ? { devSpeed: 100 } : {};
+  const mf = await worker(script, { links: true, sent, consent: true, verify, apnsDown, ...fast, ...options });
   open.push(mf);
   return mf;
 }
@@ -522,6 +524,33 @@ describe("push gating (decision 16)", { timeout: 30_000 }, () => {
     await settle(200);
     expect(alertsTo(KID_TOKEN).every((s) => s.body.kind === "pounce")).toBe(true);
   });
+
+  test("nudges from approved people only; otherwise the kitten sees them in the app alone", async () => {
+    const mf = await start({ nudge: true });
+    const f = await family(mf);
+    const k = await consented(mf, f);
+    const { clients, pair } = await sharedTable(mf, f);
+    const [miaC, kidC] = clients as [Client, Client];
+    const nudge = async () => {
+      // Past the 2-minute wait and the 10-minute cooldown, both at speed.
+      await settle(6200);
+      miaC.received.length = 0;
+      miaC.send({ t: "nudge", seat: 1 });
+      await miaC.find((m) => m.t === "nudgeSent");
+    };
+
+    await miaMovesToKid(clients);
+    await nudge();
+    await settle(400);
+    expect(alertsTo(KID_TOKEN, "nudge")).toEqual([]);
+
+    await call(mf, f.momPhone, "PUT", `/v1/kittens/${k.id}/approved`, { approved: [pair] });
+    await miaMovesToKid(clients);
+    kidC.received.length = 0;
+    await nudge();
+    const [push] = (await eventually(() => alertsTo(KID_TOKEN, "nudge"), (l) => l.length === 1)) as [Sent];
+    expect(push.body).toMatchObject({ kind: "nudge", from: { name: "Mia" } });
+  }, 60_000);
 
   test("CONSENT off is today exactly: no kitten routes, and a kitten's device gets nothing", async () => {
     const mf = await start({ consentFlag: false });

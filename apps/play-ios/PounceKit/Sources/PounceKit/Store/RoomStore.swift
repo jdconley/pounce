@@ -24,6 +24,9 @@ import Observation
 /// - `closed`, `notFound` and `needsUpdate` are terminal: later messages are ignored.
 ///   `stalled` survives snapshots too (the bot clock stays stopped), but the room
 ///   keeps updating.
+/// - Nudges: `nudge(seat:)` sends one when `nudgeButton(for:)` is `.ready`. Its `nudgeSent` marks
+///   the turn's nudge sent; an error while it's pending (too soon, not their turn) only clears it.
+///   A `nudged` for one of this phone's seats becomes `nudgeNotice`.
 @MainActor @Observable public final class RoomStore {
     public let code: String
     public private(set) var room: RoomView?
@@ -61,6 +64,14 @@ import Observation
     public private(set) var forfeitNotice: ForfeitNotice?
     /// Play again's table (§10.4): from `{t:"rematch"}`, or a snapshot that already has one.
     public private(set) var rematch: String?
+    /// When this phone may nudge `room.nudge`'s seat: the snapshot's wait from when it arrived.
+    /// Nil when the room has nobody to nudge.
+    public private(set) var nudgeReadyAt: Date?
+    /// The seat of a nudge sent and not answered yet.
+    public private(set) var nudgePending: Seat?
+    /// The last `nudged` for one of this phone's seats: whose, and who nudged. `serial` goes up
+    /// with each. Nil until one arrives.
+    public private(set) var nudgeNotice: NudgeNotice?
     /// Each `{t:"streak"}` for this device's people: pair, person, view. Set by the session.
     @ObservationIgnored public var onStreak: ((String, String, StreakView) -> Void)?
 
@@ -92,6 +103,26 @@ import Observation
         public var seat: Seat
         public var serial: Int
     }
+
+    public struct NudgeNotice: Equatable, Sendable {
+        /// The nudged seat (this phone's).
+        public var seat: Seat
+        /// Who nudged.
+        public var from: Seat
+        public var serial: Int
+    }
+
+    /// The player card's Nudge button for a seat.
+    public enum NudgeButton: Equatable, Sendable {
+        /// Tap to nudge.
+        case ready
+        /// Not yet: the turn is too new, or this phone's last nudge here too recent.
+        case wait(until: Date)
+        /// Sent, not answered yet.
+        case sending
+        /// This turn's nudge went.
+        case sent
+    }
     /// Single consumer (the table scene). Unbounded, so no intent is ever dropped.
     @ObservationIgnored public let intents: AsyncStream<TableIntent>
 
@@ -109,11 +140,16 @@ import Observation
     /// Connections opened so far: a pending move sent on an older one goes again.
     @ObservationIgnored private var connections = 0
     @ObservationIgnored private let makeMoveID: () -> String
+    @ObservationIgnored private let clock: () -> Date
 
-    public init(code: String, socket: any RoomSocketing, makeMoveID: @escaping () -> String = { UUID().uuidString }) {
+    public init(
+        code: String, socket: any RoomSocketing, makeMoveID: @escaping () -> String = { UUID().uuidString },
+        clock: @escaping () -> Date = Date.init
+    ) {
         self.code = code
         self.socket = socket
         self.makeMoveID = makeMoveID
+        self.clock = clock
         (intents, continuation) = AsyncStream.makeStream(of: TableIntent.self, bufferingPolicy: .unbounded)
     }
 
@@ -165,6 +201,49 @@ import Observation
         if case .moveSeat = message { moveCode = nil }
         callSocket(inOrder: true) { socket in try? await socket.send(message) }
     }
+
+    // MARK: nudges
+
+    /// The Nudge button for `seat`, or nil when there's none: the server offers this phone a nudge
+    /// for exactly that seat (a person on another phone, on the move mid-round).
+    public func nudgeButton(for seat: Seat) -> NudgeButton? {
+        guard let room, room.status == .playing, let game = room.game, game.status == .playing, game.turn == seat,
+              room.seats.indices.contains(seat), room.seats[seat].kind == .human, !room.seats[seat].yours,
+              let nudge = room.nudge, nudge.seat == seat
+        else { return nil }
+        if nudgePending == seat { return .sending }
+        if nudge.sent { return .sent }
+        if let ready = nudgeReadyAt, ready > clock() { return .wait(until: ready) }
+        return .ready
+    }
+
+    /// Nudges the person in `seat`. Returns false, sending nothing, unless its button is `.ready`.
+    @discardableResult public func nudge(seat: Seat) -> Bool {
+        guard nudgeButton(for: seat) == .ready else { return false }
+        nudgePending = seat
+        callSocket(inOrder: true) { [weak self] socket in
+            do {
+                try await socket.send(.nudge(seat: seat))
+            } catch {
+                if self?.nudgePending == seat { self?.nudgePending = nil }
+            }
+        }
+        return true
+    }
+
+    private func applyNudgeSent(seat: Seat) {
+        if nudgePending == seat { nudgePending = nil }
+        guard room?.nudge?.seat == seat else { return }
+        room?.nudge?.sent = true
+    }
+
+    private func applyNudged(seat: Seat, from: Seat) {
+        guard let room, room.seats.indices.contains(seat), room.seats[seat].yours else { return }
+        nudgeNotice = NudgeNotice(seat: seat, from: from, serial: (nudgeNotice?.serial ?? 0) + 1)
+    }
+
+    /// The errors a refused nudge comes back with.
+    private static let nudgeRefusals: Set<ErrorCode> = [.tooSoon, .notTheirTurn, .badSeat, .notSeated, .notPlaying, .badMessage]
 
     // MARK: pass and play
 
@@ -245,6 +324,10 @@ import Observation
             rematch = code
         case .link(let seats):
             applyLinks(seats)
+        case .nudgeSent(let seat):
+            applyNudgeSent(seat: seat)
+        case .nudged(let seat, let from):
+            applyNudged(seat: seat, from: from)
         case .pong:
             break
         }
@@ -270,6 +353,10 @@ import Observation
         let previous = room?.status
         room = new
         if let code = new.rematch, rematch != code { rematch = code }
+        let readyAt = new.nudge.map { clock().addingTimeInterval(Double($0.wait) / 1000) }
+        if readyAt != nudgeReadyAt { nudgeReadyAt = readyAt }
+        // The move went on (or the nudge's answer is already in): nothing is waiting any more.
+        if let pending = nudgePending, new.nudge?.seat != pending || new.nudge?.sent == true { nudgePending = nil }
         lastSeq = seq
         settledSeq = seq
         settlePending(new)
@@ -367,6 +454,9 @@ import Observation
             actionInFlight = false
             pendingMove = nil
             continuation.yield(.rejected(code))
+        } else if nudgePending != nil, Self.nudgeRefusals.contains(code) {
+            // Refused (too soon, the move went on): the next snapshot says how things stand.
+            nudgePending = nil
         } else {
             continuation.yield(.lobbyNope(code))
         }

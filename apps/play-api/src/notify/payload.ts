@@ -11,6 +11,8 @@ const encoder = new TextEncoder();
 
 const CATEGORY: Partial<Record<NotifyKind, Category>> = {
   your_move: "YOUR_MOVE",
+  // Play and In an hour, like the move it asks for.
+  nudge: "YOUR_MOVE",
   reminder: "REMINDER",
   last_chance: "REMINDER",
   fresh_start: "REMINDER",

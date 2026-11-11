@@ -72,6 +72,21 @@ public struct SeatView: Codable, Equatable, Sendable {
     }
 }
 
+/// A server with nudges on, while a person on another phone holds the move: whether this phone may
+/// nudge them (`ClientMessage.nudge`). `sent`: it already did this turn. `wait`: ms until it may
+/// (0: now), counted from when the snapshot was sent.
+public struct NudgeView: Codable, Equatable, Sendable {
+    public var seat: Seat
+    public var sent: Bool
+    public var wait: Int
+
+    public init(seat: Seat, sent: Bool = false, wait: Int = 0) {
+        self.seat = seat
+        self.sent = sent
+        self.wait = wait
+    }
+}
+
 /// A server with links on: it takes `{"t":"ping"}` heartbeats every `ping` ms and move ids, and
 /// `acks` are the ids of this device's moves it applied lately (oldest first).
 public struct RoomLink: Codable, Equatable, Sendable {
@@ -250,10 +265,13 @@ public struct RoomView: Codable, Equatable, Sendable {
     public var rematch: String?
     /// Heartbeats and move acks; nil from a server without links (it takes neither).
     public var link: RoomLink?
+    /// Who this phone may nudge now; nil from a server without nudges, or with nobody to nudge.
+    public var nudge: NudgeView?
 
     public init(
         code: String, name: String? = nil, status: RoomStatus, youAreHost: Bool, seats: [SeatView],
-        game: GameView? = nil, look: Look? = nil, rematch: String? = nil, link: RoomLink? = nil
+        game: GameView? = nil, look: Look? = nil, rematch: String? = nil, link: RoomLink? = nil,
+        nudge: NudgeView? = nil
     ) {
         self.code = code
         self.name = name
@@ -264,6 +282,7 @@ public struct RoomView: Codable, Equatable, Sendable {
         self.look = look
         self.rematch = rematch
         self.link = link
+        self.nudge = nudge
     }
 
     /// The name to show: the table's own, or `TableName.fallback` from an older server.

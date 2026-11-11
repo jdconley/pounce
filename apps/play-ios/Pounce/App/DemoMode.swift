@@ -39,6 +39,11 @@ enum DemoMode: String {
     case weak, reconnecting, pending, seatLink
     /// Kiki (seat 2) forfeits a second in (§5.13): the pill, then her seat dimmed and tagged.
     case forfeited
+    /// Kiki's (seat 2, asleep) move: her player card offers a nudge (`nudgeWait`: not for a
+    /// minute and a half), which the demo server answers as sent.
+    case nudge, nudgeWait
+    /// This phone's move: five seconds in (past the push priming), Leo (seat 1) nudges it.
+    case nudged
 
     static func from(arguments: [String] = CommandLine.arguments) -> DemoMode? {
         guard let i = arguments.firstIndex(of: "-demo"), arguments.indices.contains(i + 1) else { return nil }
@@ -94,6 +99,12 @@ enum DemoMode: String {
             var room = DemoFixtures.table(seats: 4, mySeat: 0, phase: 2)
             room.game?.turn = 1
             return room
+        case .nudge, .nudgeWait:
+            var room = DemoFixtures.table(seats: 4, mySeat: 0, phase: 2)
+            room.game?.turn = 2
+            room.nudge = NudgeView(seat: 2, sent: false, wait: self == .nudgeWait ? 90_000 : 0)
+            return room
+        case .nudged: return DemoFixtures.table(seats: 4, mySeat: 0, phase: 2)
         case .seatLink:
             var room = DemoFixtures.table(seats: 4, mySeat: 0, phase: 2)
             room.game?.turn = 2
@@ -150,6 +161,7 @@ enum DemoMode: String {
         case .lay: DemoSocket(room: room, lays: true)
         case .weak: DemoSocket(room: room, script: [(.seconds(1), .link(.weak))])
         case .reconnecting: DemoSocket(room: room, script: [(.seconds(1), .disconnected), (.zero, .connecting)])
+        case .nudged: DemoSocket(room: room, script: [(.seconds(5), .message(.nudged(seat: 0, from: 1)))])
         default: DemoSocket(room: room)
         }
     }
@@ -332,6 +344,13 @@ actor DemoSocket: RoomSocketing {
         if hits, case .act(let seat, .hit(let card, let target, let side), _) = m { return hit(seat: seat, card: card, target: target, side: side) }
         if lays, case .act(let seat, .layDown(let groups), _) = m { return layDown(seat: seat, groups: groups) }
         if case .setLook(let rug, let back) = m { return setLook(rug: rug, back: back) }
+        if case .nudge(let seat) = m {
+            // As the server: the nudge went, and this turn's is spent.
+            try? await Task.sleep(for: Pace.duration(.milliseconds(300)))
+            room.nudge?.sent = true
+            continuation.yield(.message(.nudgeSent(seat: seat)))
+            return
+        }
         if case .rematch = m {
             try? await Task.sleep(for: Pace.duration(.milliseconds(300)))
             room.rematch = Self.rematchCode

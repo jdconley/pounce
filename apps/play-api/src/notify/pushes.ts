@@ -2,6 +2,7 @@ import {
   answeredBody,
   milestoneBody,
   napBody,
+  nudgeBody,
   pausedBody,
   playAgainBody,
   pounceBody,
@@ -53,6 +54,22 @@ export function yourMovePush(p: {
     collapse: p.code,
     ...(p.from ? { from: p.from } : {}),
     ...withStreak(p.streak),
+  };
+}
+
+/**
+ * A nudge: titled with the person it's for, like "your move" (a shared phone's people), and in the
+ * table's thread under its collapse id, so it takes the place of that table's "your move".
+ */
+export function nudgePush(p: { code: string; table: string; to: string; from: Face }): Outgoing {
+  return {
+    kind: "nudge",
+    title: p.to,
+    body: nudgeBody(p.from.name, p.table),
+    code: p.code,
+    thread: p.code,
+    collapse: p.code,
+    from: p.from,
   };
 }
 

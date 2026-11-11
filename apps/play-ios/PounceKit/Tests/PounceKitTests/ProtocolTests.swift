@@ -53,6 +53,7 @@ import Testing
         case "link-weak": return .link(.weak)
         case "link-good": return .link(.good)
         case "act-forfeit": return .act(seat: 1, action: .forfeit)
+        case "nudge": return .nudge(seat: 1)
         default: throw Fixtures.FixtureError.malformed("no sample for client fixture \(name)")
         }
     }
@@ -83,7 +84,7 @@ import Testing
 
     @Test func encodesEveryClientFixture() throws {
         let fixtures = try Fixtures.clientMessages()
-        #expect(fixtures.count == 26)
+        #expect(fixtures.count == 27)
         for (name, json) in fixtures {
             #expect(try jsonEqual(Codec.encode(sample(name)), json), "\(name)")
         }
@@ -111,6 +112,24 @@ import Testing
             Issue.record("not a snapshot"); return
         }
         #expect(plain.link == nil)
+    }
+
+    // MARK: nudges
+
+    @Test func nudgeSnapshotsAndMessagesDecode() throws {
+        guard case .snapshot(_, _, let wait) = try Codec.decode(fixture("snapshot-playing-nudge-wait")),
+              case .snapshot(_, _, let sent) = try Codec.decode(fixture("snapshot-playing-nudge-sent"))
+        else { Issue.record("not snapshots"); return }
+        #expect(wait.nudge == NudgeView(seat: 1, sent: false, wait: 30_000))
+        #expect(sent.nudge == NudgeView(seat: 1, sent: true, wait: 0))
+        #expect(try Codec.decode(fixture("nudgeSent")) == .nudgeSent(seat: 1))
+        #expect(try Codec.decode(fixture("nudged")) == .nudged(seat: 1, from: 0))
+        #expect(try Codec.decode(fixture("error-not_their_turn")) == .error(.notTheirTurn))
+        // Every other snapshot fixture comes from a server with nudges off.
+        guard case .snapshot(_, _, let plain) = try Codec.decode(fixture("snapshot-playing-with-hand")) else {
+            Issue.record("not a snapshot"); return
+        }
+        #expect(plain.nudge == nil)
     }
 
     @Test func pongAndLinkMessagesDecode() throws {

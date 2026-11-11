@@ -155,7 +155,7 @@ actor Device {
             case .link(let seats):
                 state.room?.seats.indices.forEach { state.room?.seats[$0].link = seats.indices.contains($0) ? seats[$0] : nil }
                 log("[\(name)] seats link \(seats.map { $0?.rawValue ?? "-" })")
-            case .streak, .rematch, .pong:
+            case .streak, .rematch, .pong, .nudgeSent, .nudged:
                 break
             }
         }

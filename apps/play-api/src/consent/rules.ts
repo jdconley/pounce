@@ -226,16 +226,20 @@ export function approvedSet(r: ConsentRecord): Set<string> {
   return new Set([...(r.apple ?? r.approved), ...r.parents]);
 }
 
+/** Pushes one person sends: they need a sender, and that sender approved. */
+const FROM_ONE: readonly string[] = ["pounce", "nudge"];
+
 /**
  * The push gate (decision 16). `senders` are the people behind the push:
  * the other human seats for "your move" (null for a seat with no player),
- * the sender for a pounce.
+ * the sender for a pounce or a nudge (a nudge asks for the move "your move"
+ * already allows, from one person, so it passes like a pounce).
  */
 export function allows(r: ConsentRecord | null, kind: string, senders: (string | null)[]): boolean {
   if (!r || r.state !== "consented") return false;
   if (kind === "dismiss") return true;
-  if (kind !== "your_move" && kind !== "pounce") return false;
-  if (kind === "pounce" && senders.length === 0) return false;
+  if (kind !== "your_move" && !FROM_ONE.includes(kind)) return false;
+  if (FROM_ONE.includes(kind) && senders.length === 0) return false;
   const ok = approvedSet(r);
   return senders.every((s) => s !== null && ok.has(s));
 }

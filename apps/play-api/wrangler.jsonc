@@ -36,7 +36,11 @@
     // move sent again after a reconnect lands once, and each seat's connection quality. Apps
     // before it never see the new fields (unknown keys and message types are ignored); off, the
     // server answers as before.
-    "LINK": "on"
+    "LINK": "on",
+    // Nudges: a player asks the one whose move it is to take it, in the app and (with NOTIFY) by
+    // push. Apps before it never send `nudge` and ignore the new fields and message types; off,
+    // the server answers as before.
+    "NUDGE": "on"
   },
   "durable_objects": {
     "bindings": [

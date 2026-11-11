@@ -5,7 +5,7 @@ import { expect, test } from "vitest";
 import { plusPush } from "../src/consent/pages";
 import { GOING_QUIET, freshStartBody } from "../src/notify/copy";
 import { apnsBody } from "../src/notify/payload";
-import { answeredPush, playAgainPush, pouncePush, statusPush, yourMovePush } from "../src/notify/pushes";
+import { answeredPush, nudgePush, playAgainPush, pouncePush, statusPush, yourMovePush } from "../src/notify/pushes";
 
 import type { Outgoing } from "../src/notify/types";
 
@@ -55,6 +55,7 @@ function samples(): { name: string; level: "active" | "passive"; push: Outgoing 
     { name: "paused", level: "passive", push: statusPush({ kind: "paused", pair, title: "Couch Cats", count: 3, who: mia, streak }) },
     { name: "milestone", level: "active", push: statusPush({ kind: "milestone", pair, title: "Couch Cats", count: 30, streak: { ...streak, count: 30 } }) },
     { name: "play_again", level: "active", push: playAgainPush({ code: "NWCDF", table: "Couch Cats", who: mia }) },
+    { name: "nudge", level: "active", push: nudgePush({ code: "GH2VD", table: "Couch Cats", to: "JD", from: mia }) },
     { name: "consent", level: "active", push: plusPush("k_demoMochiAAAAAAAAAAAAAA", "Mochi") },
   ];
 }
