@@ -5,6 +5,8 @@ import type { Env } from "../src/env";
 export { DeviceIndex } from "../src/room/device-index";
 export { GameRoom } from "../src/room/game-room";
 export { Identities } from "../src/players/identities";
+export { Limiter } from "../src/safety/limiter";
+export { Reports } from "../src/safety/reports";
 export { Player } from "../src/players/player";
 export { Pair } from "../src/streaks/pair";
 

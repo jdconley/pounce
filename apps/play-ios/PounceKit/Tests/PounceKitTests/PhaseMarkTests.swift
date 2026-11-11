@@ -3,10 +3,10 @@ import Testing
 
 @Suite struct PhaseMarkTests {
     @Test func numbersFromOne() {
-        #expect(PhaseMark(index: 0, laid: false).text == "P1")
-        #expect(PhaseMark(index: 3, laid: false).text == "P4")
-        #expect(PhaseMark(index: 9, laid: false).text == "P10")
-        #expect(PhaseMark(index: -2, laid: false).text == "P1", "a bad index reads as phase 1")
+        #expect(PhaseMark(index: 0, laid: false).text == "L1")
+        #expect(PhaseMark(index: 3, laid: false).text == "L4")
+        #expect(PhaseMark(index: 9, laid: false).text == "L10")
+        #expect(PhaseMark(index: -2, laid: false).text == "L1", "a bad index reads as phase 1")
     }
 
     @Test func pastTheLastPhaseIsDone() {
@@ -22,7 +22,7 @@ import Testing
     @Test func laidKeepsThePhase() {
         let mark = PhaseMark(index: 4, laid: true)
         #expect(mark.laid)
-        #expect(mark.text == "P5")
+        #expect(mark.text == "L5")
     }
 
     @Test func advancedOnlyForALaterPhase() {

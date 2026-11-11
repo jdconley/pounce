@@ -49,7 +49,7 @@ final class CelebrationTests: XCTestCase {
             XCTAssertTrue(notNow.waitForNonExistence(timeout: 3))
         }
         openTower(app)
-        XCTAssertTrue(value(tower)?.contains("Kiki, phase 7") ?? false, value(tower) ?? "-")
+        XCTAssertTrue(value(tower)?.contains("Kiki, level 7") ?? false, value(tower) ?? "-")
         // The rug, right of the open tower: folds it, no scoreboard.
         app.coordinate(withNormalizedOffset: CGVector(dx: 0.75, dy: 0.45)).tap()
         XCTAssertTrue(until(3) { value(tower) == nil }, "the tower didn't fold")

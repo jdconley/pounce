@@ -56,7 +56,8 @@ function zoneAt(hour: number): string {
 async function setUp(mf: Miniflare, options: { band?: string; zone?: string; startToken?: boolean } = {}) {
   const phone = await mint(mf);
   const tablet = await mint(mf);
-  const jd = newPerson("JD", 1);
+  // A kitten's name comes from the dice (the server takes no other from a kitten's device).
+  const jd = newPerson(options.band === "kitten" ? "Mochi" : "JD", 1);
   const mia = newPerson("Mia", 2);
   // Midday unless a test asks otherwise: outside an adult's 22:00–08:00 quiet hours whenever it runs. Both in one zone, so
   // they share a streak day.

@@ -43,14 +43,14 @@ enum SeatInfo {
         }
         if let phase {
             if let number = phase.number {
-                parts.append(String(localized: "phase \(number)", comment: "VoiceOver: a player's phase, 1 to 10"))
+                parts.append(String(localized: "level \(number)", comment: "VoiceOver: a player's level, 1 to 10"))
             } else {
                 parts.append(String(
-                    localized: "all \(Rules.phases.count) phases done",
-                    comment: "VoiceOver: a player who finished every phase"))
+                    localized: "all \(Rules.phases.count) levels done",
+                    comment: "VoiceOver: a player who finished every level"))
             }
             if phase.laid {
-                parts.append(String(localized: "laid down", comment: "VoiceOver: a player laid this round's phase down"))
+                parts.append(String(localized: "laid down", comment: "VoiceOver: a player laid this round's level down"))
             }
         }
         switch view?.kind == .bot ? nil : view?.presence {

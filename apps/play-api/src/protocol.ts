@@ -1,3 +1,4 @@
+import { nameAllowed } from "./names/filter";
 import { ROOM_CODE_ALPHABET } from "./room/codes";
 import { parseRoomName } from "./room/names";
 import { isBack, isRug } from "./streaks/catalog";
@@ -107,6 +108,12 @@ export type ClientMessage =
 export type ErrorCode =
   // Any message.
   | "bad_message"
+  // A person's or a table's name the name filter refuses (or, from a kitten, one that isn't generated).
+  | "bad_name"
+  // Not for this device: a kitten renaming the table.
+  | "not_allowed"
+  // The table's host blocked this player.
+  | "blocked"
   | "internal"
   // Lobby and seats.
   | "not_lobby"
@@ -153,9 +160,10 @@ export type ServerMessage =
   /** To the devices of the person in `seat`: the person in `from` nudged them (no seq). */
   | { t: "nudged"; seat: Seat; from: Seat };
 
-export type BadMessage = { error: "bad_message" };
+export type BadMessage = { error: "bad_message" | "bad_name" };
 
 const BAD: BadMessage = { error: "bad_message" };
+const BAD_NAME: BadMessage = { error: "bad_name" };
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const MOVE_CODE_LENGTH = 6;
 const MAX_CARD = 107;
@@ -234,11 +242,18 @@ function parseAction(a: unknown): Action | null {
   }
 }
 
-/** A person's name trimmed, or null when it is not a string of 1-20 characters after trimming. */
+/** Control characters, line and paragraph separators, and bidi overrides and isolates. */
+const FORBIDDEN = /[\p{Cc}\u2028\u2029\u202A-\u202E\u2066-\u2069]/u;
+
+/**
+ * A person's name trimmed, or null when it is not a string of 1-20 characters after trimming, or
+ * has a control character. The name filter (`nameAllowed`) is a separate check, so a refused name
+ * gets its own error.
+ */
 export function parseName(name: unknown): string | null {
   if (typeof name !== "string") return null;
   const trimmed = name.trim();
-  return trimmed.length < 1 || trimmed.length > MAX_NAME ? null : trimmed;
+  return trimmed.length < 1 || trimmed.length > MAX_NAME || FORBIDDEN.test(trimmed) ? null : trimmed;
 }
 
 function parsePerson(p: unknown): Person | null {
@@ -259,7 +274,12 @@ function isMoveCode(code: unknown): code is string {
   );
 }
 
-function parseObject(o: Obj): ClientMessage | null {
+/** `message` unless one of its names is refused by the name filter. */
+function named(message: ClientMessage | null, name: string | undefined): ClientMessage | BadMessage | null {
+  return message && name !== undefined && !nameAllowed(name) ? BAD_NAME : message;
+}
+
+function parseObject(o: Obj): ClientMessage | BadMessage | null {
   switch (o.t) {
     case "start":
       return hasKeys(o, ["t"]) ? { t: "start" } : null;
@@ -277,17 +297,17 @@ function parseObject(o: Obj): ClientMessage | null {
     case "claim": {
       if (!hasKeys(o, ["t", "seat", "person"]) || !isInt(o.seat, 0)) return null;
       const person = parsePerson(o.person);
-      return person ? { t: "claim", seat: o.seat, person } : null;
+      return named(person ? { t: "claim", seat: o.seat, person } : null, person?.name);
     }
     case "rename": {
       if (!hasKeys(o, ["t", "name"])) return null;
       const name = parseRoomName(o.name);
-      return name === null ? null : { t: "rename", name };
+      return named(name === null ? null : { t: "rename", name }, name ?? undefined);
     }
     case "renameSeat": {
       if (!hasKeys(o, ["t", "seat", "name"]) || !isInt(o.seat, 0)) return null;
       const name = parseName(o.name);
-      return name === null ? null : { t: "renameSeat", seat: o.seat, name };
+      return named(name === null ? null : { t: "renameSeat", seat: o.seat, name }, name ?? undefined);
     }
     case "rematch":
       return hasKeys(o, ["t"]) ? { t: "rematch" } : null;
@@ -329,6 +349,7 @@ function parseObject(o: Obj): ClientMessage | null {
 /**
  * Parses and fully validates a client frame. This is the only guard in front
  * of the rules engine, which trusts the shape of every action it receives.
+ * `bad_name`: well-formed, but a name in it is refused by the name filter.
  */
 export function parseClientMessage(raw: string): ClientMessage | BadMessage {
   if (new TextEncoder().encode(raw).length > MAX_MESSAGE_BYTES) return BAD;

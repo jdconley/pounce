@@ -5,7 +5,7 @@ import SwiftUI
 /// records, the shelf of everything you've earned across your pairs, the locked silhouettes still
 /// to earn (each with its progress ring and the numeral where it unlocks, D4), your connections
 /// (a tap opens Us on that pair) and the plus. On a roomy landscape screen it's two columns, as the
-/// Us screen is. No words but names and numerals.
+/// Us screen is. Each part has a short heading.
 struct TrophyRoomView: View {
     @Environment(AppModel.self) private var model
     @Environment(\.horizontalSizeClass) private var sizeClass
@@ -18,12 +18,12 @@ struct TrophyRoomView: View {
         GeometryReader { geo in
             if roomy && Roomy.sideBySide(geo.size) {
                 HStack(alignment: .top, spacing: 36) {
-                    column { header; records; shelf }
-                    column { locked; connections }
+                    column { header; records; shelfHeading; shelf }
+                    column { lockedHeading; locked; peopleHeading; connections }
                 }
                 .padding(.horizontal, 32)
             } else {
-                column { header; records; shelf; locked; connections }
+                column { header; records; shelfHeading; shelf; lockedHeading; locked; peopleHeading; connections }
                     .frame(maxWidth: 900)
                     .frame(maxWidth: .infinity)
             }
@@ -60,13 +60,20 @@ struct TrophyRoomView: View {
             CornerHomeButton { model.goHome() }
                 .accessibilityIdentifier("trophies.back")
             Spacer()
-            Image(ArtName.iconTrophy).resizable().scaledToFit().frame(width: 44, height: 44)
-                .accessibilityHidden(true)
+            VStack(spacing: 0) {
+                Image(ArtName.iconTrophy).resizable().scaledToFit().frame(width: 36, height: 36)
+                    .accessibilityHidden(true)
+                Text("Trophies", comment: "Trophy room: the screen's title")
+                    .font(.system(.headline, design: .rounded, weight: .black))
+                    .foregroundStyle(.white)
+                    .accessibilityAddTraits(.isHeader)
+            }
             Spacer()
             ArtIconButton(icon: ArtName.Habit.chipPlus, color: Palette.magenta, size: 52, label: "Add someone") {
                 model.showInvite()
             }
             .accessibilityIdentifier("trophies.add")
+            .captioned("Add someone")
         }
         .padding(.horizontal, 16)
         .padding(.top, 4)
@@ -97,6 +104,7 @@ struct TrophyRoomView: View {
                 .accessibilityIdentifier("trophies.count")
         }
         .padding(.top, 8)
+        StreakModeLine(mode: mode)
     }
 
     @ViewBuilder private var records: some View {
@@ -106,9 +114,20 @@ struct TrophyRoomView: View {
                 ForEach(tiles) { record in
                     StatTile(icon: Self.icon(record.kind), number: record.value, color: Self.color(record.kind),
                              id: "trophies.record.\(record.kind.rawValue)", scale: min(scale, 1.1))
+                        .captioned(Self.caption(record.kind))
                 }
             }
             .frame(maxWidth: 560 * scale)
+        }
+    }
+
+    static func caption(_ kind: TrophyRoom.RecordKind) -> LocalizedStringKey {
+        switch kind {
+        case .current: "Streak now"
+        case .best: "Best streak"
+        case .longestPair: "Longest pair"
+        case .totalDays: "Days played"
+        case .perfectWeeks: "Perfect weeks"
         }
     }
 
@@ -130,6 +149,22 @@ struct TrophyRoomView: View {
         case .totalDays: Palette.magenta
         case .perfectWeeks: Palette.teal
         }
+    }
+
+    @ViewBuilder private var shelfHeading: some View {
+        if let room, !room.shelf.isEmpty {
+            WordLabel(title: "Your trophies", detail: "You earn them by playing days in a row.", alignment: .center, speaks: true)
+        }
+    }
+
+    @ViewBuilder private var lockedHeading: some View {
+        if let room, !room.locked.isEmpty {
+            WordLabel(title: "Still to win", detail: "The number is the day it opens.", alignment: .center, speaks: true)
+        }
+    }
+
+    private var peopleHeading: some View {
+        WordLabel(title: "Your people", alignment: .center, speaks: true)
     }
 
     // MARK: the shelf

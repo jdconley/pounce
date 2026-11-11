@@ -80,6 +80,8 @@ function worker(
       DEVICES: { className: "DeviceIndex", useSQLite: true },
       PLAYERS: { className: "Player", useSQLite: true },
       IDENTITIES: { className: "Identities", useSQLite: true },
+      LIMITS: { className: "Limiter", useSQLite: true },
+      REPORTS: { className: "Reports", useSQLite: true },
     },
     bindings: {
       ...(secret === null ? {} : { TOKEN_SECRET: secret }),

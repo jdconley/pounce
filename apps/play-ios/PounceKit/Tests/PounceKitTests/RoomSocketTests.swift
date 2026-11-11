@@ -344,6 +344,19 @@ func eventually(_ condition: () -> Bool) async -> Bool {
         #expect(sleeper.backoffs.isEmpty)
     }
 
+    @Test func tooManyWrongCodesIsTerminal() async throws {
+        let connector = FakeConnector([.failure(.tooManyAttempts), .connection(FakeConnection())])
+        let sleeper = FakeSleeper()
+        let socket = makeSocket(connector, sleeper)
+        var reader = EventReader(socket.events)
+
+        await socket.start()
+
+        #expect(await reader.rest() == [.connecting, .locked])
+        #expect(connector.calls.count == 1)
+        #expect(sleeper.backoffs.isEmpty)
+    }
+
     @Test func roomClosedIsTerminal() async throws {
         let frame = try snapshotFrame()
         let conn = FakeConnection(frames: [frame, roomClosedFrame])

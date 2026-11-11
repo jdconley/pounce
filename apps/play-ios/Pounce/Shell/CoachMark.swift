@@ -181,7 +181,7 @@ enum CoachCopy {
             return (
                 String(localized: "Hi, \(coach.person.name)!", comment: "Coach: the first tip's title, with the player's name"),
                 String(
-                    localized: "Climb the cat tower. Lay down your phase in a round to go up a shelf. The first cat to finish all ten phases wins. Tap the tower to see every cat's shelf.",
+                    localized: "Climb the cat tower. Lay down your level in a round to go up a shelf. The first cat to finish all ten levels wins. Tap the tower to see every cat's shelf.",
                     comment: "Coach: the goal of Cat Tower, pointing at the tower"))
         case .draw:
             return (
@@ -193,7 +193,7 @@ enum CoachCopy {
             let kinds = Set(reqs.map(\.kind))
             var body = String(
                 localized: "This round you need \(phase(reqs)). Drag cards from your hand into these trays.",
-                comment: "Coach: the current phase, e.g. 'two sets of 3', pointing at the trays")
+                comment: "Coach: the current level, e.g. 'two sets of 3', pointing at the trays")
             if kinds.contains(.set) {
                 body += " " + String(localized: "A set is all the same number.", comment: "Coach: what a set is")
             }
@@ -203,25 +203,25 @@ enum CoachCopy {
             if kinds.contains(.coat) {
                 body += " " + String(localized: "One coat is the same cat on every card.", comment: "Coach: what a coat group is")
             }
-            return (String(localized: "Your phase", comment: "Coach: phase tip title"), body)
+            return (String(localized: "Your level", comment: "Coach: level tip title"), body)
         case .run:
             return (
                 String(localized: "Runs", comment: "Coach: run tip title"),
                 String(
                     localized: "A run is numbers in a row, like 4 5 6 7. The coats can be different.",
-                    comment: "Coach: explains runs when a phase first asks for one"))
+                    comment: "Coach: explains runs when a level first asks for one"))
         case .coat:
             let size = reqs.first { $0.kind == .coat }?.size ?? 7
             return (
                 String(localized: "One coat", comment: "Coach: coat tip title"),
                 String(
-                    localized: "This phase needs \(size) cards with the same cat on them. Any numbers will do.",
-                    comment: "Coach: explains a coat group when a phase first asks for one"))
+                    localized: "This level needs \(size) cards with the same cat on them. Any numbers will do.",
+                    comment: "Coach: explains a coat group when a level first asks for one"))
         case .layDown:
             return (
                 String(localized: "Ready!", comment: "Coach: lay-down tip title"),
                 String(
-                    localized: "Your phase is done. Tap the paw to lay it down on the table.",
+                    localized: "Your level is done. Tap the paw to lay it down on the table.",
                     comment: "Coach: pointing at the lay-down paw above the trays"))
         case .discard:
             return (
@@ -233,13 +233,13 @@ enum CoachCopy {
             return (
                 String(localized: "Add to the table", comment: "Coach: hit tip title"),
                 String(
-                    localized: "Your phase is down, so you can add cards to any laid group, yours or anyone's. Drop a card on one it fits.",
+                    localized: "Your level is down, so you can add cards to any laid group, yours or anyone's. Drop a card on one it fits.",
                     comment: "Coach: hitting, pointing at the laid-down groups"))
         case .goOut:
             return (
                 String(localized: "Almost out", comment: "Coach: going-out tip title"),
                 String(
-                    localized: "Play or discard your last card to end the round. Everyone who laid down their phase climbs a shelf.",
+                    localized: "Play or discard your last card to end the round. Everyone who laid down their level climbs a shelf.",
                     comment: "Coach: going out, pointing at the hand"))
         case .cucumber:
             return (
@@ -268,16 +268,16 @@ enum CoachCopy {
         }
         let words = parts.map { group($0.req, count: $0.count) }
         guard words.count == 2 else { return words.joined(separator: ", ") }
-        return String(localized: "\(words[0]) and \(words[1])", comment: "A phase of two different groups, e.g. 'a set of 3 and a run of 4'")
+        return String(localized: "\(words[0]) and \(words[1])", comment: "A level of two different groups, e.g. 'a set of 3 and a run of 4'")
     }
 
     private static func group(_ req: Requirement, count: Int) -> String {
         switch (req.kind, count) {
-        case (.set, 1): String(localized: "a set of \(req.size)", comment: "A phase group: one set")
-        case (.set, _): String(localized: "two sets of \(req.size)", comment: "A phase group: two sets of the same size")
-        case (.run, 1): String(localized: "a run of \(req.size)", comment: "A phase group: one run")
-        case (.run, _): String(localized: "two runs of \(req.size)", comment: "A phase group: two runs of the same size")
-        case (.coat, _): String(localized: "\(req.size) cards of one coat", comment: "A phase group: cards of one coat")
+        case (.set, 1): String(localized: "a set of \(req.size)", comment: "A level group: one set")
+        case (.set, _): String(localized: "two sets of \(req.size)", comment: "A level group: two sets of the same size")
+        case (.run, 1): String(localized: "a run of \(req.size)", comment: "A level group: one run")
+        case (.run, _): String(localized: "two runs of \(req.size)", comment: "A level group: two runs of the same size")
+        case (.coat, _): String(localized: "\(req.size) cards of one coat", comment: "A level group: cards of one coat")
         }
     }
 }

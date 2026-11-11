@@ -103,7 +103,7 @@ public actor SuspendableSocket: RoomSocketing {
         guard gen == generation, !finished else { return }
         continuation.yield(event)
         switch event {
-        case .notFound, .closed:
+        case .notFound, .locked, .closed:
             finished = true
             _ = drop()
             continuation.finish()
