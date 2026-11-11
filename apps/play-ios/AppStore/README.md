@@ -11,6 +11,8 @@ messages, no server); nothing is drawn by hand except the caption and the backgr
 | `previews/iphone-preview.mp4` | 886x1920, 25.4 s (recorded on an iPhone 17 Pro Max, cut to the size the iPhone slot takes) |
 | `previews/ipad-preview.mp4` | 1200x1600, 25.4 s |
 | `captions.json`, `captions.md` | The captions and what backs each one |
+| `creative/header.png` | 3840x1646 (21:9), the product page header |
+| `creative/search.jpg` | 3840x2560 (3:2), the search results image |
 
 Specs followed: Apple's "Screenshot specifications" and "App preview specifications" pages in App
 Store Connect Help, as read on 2026-11-11 (JPEG without alpha; previews H.264 High 4.0, 30 fps,
@@ -33,3 +35,40 @@ AppStore/preview.sh ipad <udid>
 `POUNCE_DEMO_CAST`, which renames the demo fixtures' people (`DemoFixtures.cast`, DEBUG only).
 The previews' sound is the game's own effects laid on the cut, since `simctl recordVideo`
 records no audio.
+
+## Header and search results images
+
+These two are Apple's "creative assets" (iOS 27 and later): key art, not screenshots. Each is the
+hero group on a procedural sunburst with the name and tagline in the app's type, composed by
+`creative.swift`. Sizes are from "Creative assets specifications" in App Store Connect Help, as
+read on 2026-11-11.
+
+```sh
+swift AppStore/creative.swift            # creative/header.png, creative/search.jpg
+swift AppStore/creative.swift --guides   # the same with each layout's safe box drawn
+```
+
+The search results image is shown whole on every device. The header is not: App Store Connect's
+Device Preview showed an iPhone trimming the sides and putting its back and share buttons over the
+top corners, and an iPad or an unfolded iPhone Duo in landscape keeping only the middle band. The
+header layout keeps the name, tagline and cats inside the part all of them show. After changing it,
+upload it and check Device Preview on each device and orientation.
+
+The hero group (`Art/store/store-hero.png`) was generated once with the art pipeline and is
+checked in, because a new generation would not match it:
+
+```sh
+cd Art
+A=../Pounce/Resources/Assets.xcassets
+tools/gen.sh prompts/store/store-hero.txt raw/store-hero.png \
+  "$A/AppIcon.appiconset/AppIcon.png" \
+  "$A/Cats.spriteatlas/cat0-celebrate.imageset/cat0-celebrate@3x.png" \
+  "$A/Cats.spriteatlas/cat1-idle.imageset/cat1-idle@3x.png" \
+  "$A/Cats.spriteatlas/cat2-idle.imageset/cat2-idle@3x.png" \
+  "$A/Cats.spriteatlas/cat3-idle.imageset/cat3-idle@3x.png"
+tools/cut.sh store-hero                  # cut/store-hero.png
+```
+
+The cutout kept two small patches of the gray background enclosed by the cats (between the
+tabby's tail and the tuxedo's ear). They were flood-filled to transparent with ImageMagick before
+the file went to `Art/store/`.
