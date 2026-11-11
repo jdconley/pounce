@@ -78,7 +78,7 @@ struct CheckBadge: View {
     }
 }
 
-/// "Keep this on all your devices": a cloud with a plus, then the provider buttons (v1: Apple).
+/// "Keep your streak if you change phones", then a cloud with a plus and the provider buttons (v1: Apple).
 struct SignInOffer: View {
     @Environment(AppModel.self) private var model
     let identifier: String
@@ -86,6 +86,17 @@ struct SignInOffer: View {
     let action: () -> Void
 
     var body: some View {
+        VStack(spacing: 10) {
+            WordLine(String(localized: "Keep your streak if you change phones",
+                            comment: "Sign-in offer: why to sign in with Apple"), size: 17)
+                .frame(maxWidth: width + 60)
+            offer
+        }
+        .padding(14)
+        .background(RoundedRectangle(cornerRadius: 28, style: .continuous).fill(Palette.ink.opacity(0.35)))
+    }
+
+    private var offer: some View {
         HStack(spacing: 14) {
             ZStack(alignment: .bottomTrailing) {
                 Image(systemName: "icloud.fill")
@@ -104,8 +115,6 @@ struct SignInOffer: View {
                 .disabled(model.account.busy)
                 .overlay { if model.account.busy { YarnIndicator() } }
         }
-        .padding(14)
-        .background(RoundedRectangle(cornerRadius: 28, style: .continuous).fill(Palette.ink.opacity(0.35)))
     }
 }
 

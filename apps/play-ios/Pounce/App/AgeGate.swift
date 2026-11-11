@@ -52,27 +52,37 @@ struct LiveAgeRange: AgeRangeAsking {
 
 #if DEBUG
 /// `-age-range <kitten|teen|adult|declined|unavailable>`: a canned answer, for tests and screenshots.
-/// `-communication-limits` reports Screen Time's Communication Limits on.
-struct StubAgeRange: AgeRangeAsking {
+/// `-communication-limits` reports Screen Time's Communication Limits on. `-age-range-later
+/// <answer>` answers that from the second ask on (the age screen's "Check with Apple").
+final class StubAgeRange: AgeRangeAsking {
     let answer: AgeAnswer
+    var later: AgeAnswer?
     var limits = CommandLine.arguments.contains("-communication-limits")
+    private var asked = 0
 
     init(answer: AgeAnswer) { self.answer = answer }
 
     func communicationLimits() async -> Bool { limits }
 
     init?(arguments: [String]) {
-        guard let i = arguments.firstIndex(of: "-age-range"), let raw = arguments[safe: i + 1] else { return nil }
+        guard let i = arguments.firstIndex(of: "-age-range"), let raw = arguments[safe: i + 1],
+              let first = Self.parse(raw) else { return nil }
+        answer = first
+        if let j = arguments.firstIndex(of: "-age-range-later"), let raw = arguments[safe: j + 1] { later = Self.parse(raw) }
+    }
+
+    private static func parse(_ raw: String) -> AgeAnswer? {
         switch raw {
-        case "declined": answer = .declined
-        case "unavailable": answer = .unavailable
-        default:
-            guard let band = AgeBand(rawValue: raw) else { return nil }
-            answer = .band(band)
+        case "declined": .declined
+        case "unavailable": .unavailable
+        default: AgeBand(rawValue: raw).map(AgeAnswer.band)
         }
     }
 
-    func ask() async -> AgeAnswer { answer }
+    func ask() async -> AgeAnswer {
+        asked += 1
+        return asked > 1 ? later ?? answer : answer
+    }
 }
 #endif
 

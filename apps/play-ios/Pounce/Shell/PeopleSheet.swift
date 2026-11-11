@@ -145,6 +145,18 @@ struct PeopleSheet: View {
                 model.addPerson(name: name, cat: cat, band: band)
                 self.editing = nil
             }
+            // Why a kid's name comes from the dice (spec §14.1; launch review).
+            .safeAreaInset(edge: .top, spacing: 0) {
+                if band == .kitten {
+                    WordLine(
+                        String(localized: "Kids under 13 get a made-up name to keep them private. Roll the dice for another.",
+                               comment: "People sheet: adding a kid, why the name is generated"),
+                        size: 16)
+                        .padding(.horizontal, 24)
+                        .padding(.top, 12)
+                        .accessibilityIdentifier("people.kittenNameHint")
+                }
+            }
         case .ageFor(let id):
             if let person = model.people.others.first(where: { $0.id == id }) {
                 AgeBandPicker(cat: person.cat, onBack: { self.editing = nil }) { band in

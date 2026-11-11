@@ -25,6 +25,14 @@ struct HomeView: View {
 
     @Environment(\.horizontalSizeClass) private var sizeClass
 
+    /// Home's one-time "Keep your streak if you change phones" card, under no other overlay.
+    private var showSignInPrompt: Bool {
+        !showPriming && !streakSignIn && model.people.owner != nil
+            && SignInPrompt.shows(
+                band: model.ageBand, signedIn: model.account.isSignedIn, offersSignIn: model.account.offersSignIn,
+                pairs: model.streaks.pairs.count, dismissed: settings.signInPromptSeen)
+    }
+
     var body: some View {
         GeometryReader { geo in
             Group {
@@ -132,6 +140,11 @@ struct HomeView: View {
             }
         }
         .animation(.easeOut(duration: 0.25).paced, value: streakSignIn)
+        // Once a pair formed, a signed-out adult is told in words what signing in keeps (launch review).
+        .overlay {
+            if showSignInPrompt { SignInPromptCard().transition(.opacity) }
+        }
+        .animation(.easeOut(duration: 0.25).paced, value: showSignInPrompt)
         .task { await checkPush() }
         #if DEBUG
         // `-show-rules` / `-show-people`: open that sheet at launch (iPad screenshots).

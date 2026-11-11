@@ -54,7 +54,29 @@ final class KittenTests: XCTestCase {
         let digits = (0..<6).map { el(app, "kitten.code.\($0)").label }.joined()
         XCTAssertEqual(digits, "482913")
         XCTAssertFalse(el(app, "gear.kittens").exists, "a kitten has no Kittens panel")
+        // The step in words: show the code to a grown-up.
+        XCTAssertTrue((label(el(app, "kitten.caption")) ?? "").contains("grown-up"), "the locked bell has no words")
         shot(app, "kitten-bell")
+    }
+
+    func testLobbyAsksAKittenToShowAGrownUpTheCode() {
+        let app = launch(["-age-band", "kitten", "-demo-kitten", "locked", "-demo", "lobby"])
+        let prompt = el(app, "table.kittenPrompt.go")
+        XCTAssertTrue(prompt.waitForExistence(timeout: Live.t(10)), "no turn-alerts card in the lobby")
+        prompt.tap()
+        XCTAssertTrue(el(app, "sheet-kittenCode").waitForExistence(timeout: Live.t(5)), "no code sheet")
+        XCTAssertTrue(el(app, "kitten.code.5").waitForExistence(timeout: Live.t(5)), "no code")
+        shot(app, "lobby-kitten-code")
+        el(app, "kittenCode.close").tap()
+        el(app, "table.kittenPrompt.close").tap()
+        XCTAssertTrue(until(3) { !self.el(app, "table.kittenPrompt").exists }, "the card didn't close")
+    }
+
+    func testNoLobbyCardOnceConsentIsOn() {
+        let app = launch(["-age-band", "kitten", "-demo-kitten", "on", "-demo", "lobby"])
+        XCTAssertTrue(el(app, "screen-lobby").waitForExistence(timeout: Live.t(10)), "no lobby")
+        Thread.sleep(forTimeInterval: Live.pace(1.5))
+        XCTAssertFalse(el(app, "table.kittenPrompt").exists, "a consented kitten was asked again")
     }
 
     func testHeldBellShowsNoCode() {
@@ -99,6 +121,8 @@ final class KittenTests: XCTestCase {
         kittens.tap()
         XCTAssertTrue(el(app, "sheet-kittens").waitForExistence(timeout: Live.t(5)), "no Kittens panel")
         XCTAssertTrue(el(app, "kittens.card.1").waitForExistence(timeout: Live.t(5)), "the kittens didn't load")
+        // Each kid's step in words.
+        XCTAssertTrue((label(el(app, "kittens.caption.0")) ?? "").contains("Next"), "a pending kid has no next step")
         return app
     }
 

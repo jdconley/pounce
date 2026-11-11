@@ -1217,9 +1217,10 @@ At family scale, all of this is a rounding error on Durable Objects pricing.
 **How the band is set:**
 - **The phone's owner,** at first launch, before anything is sent to the server:
   1. The app asks the **Declared Age Range** API (iOS 26) for ranges split at 13 and 18 [68]. This is the age signal the Texas, Utah and Louisiana app-store laws, and California's AB 1043 from 2027, expect developers to use. Apple says to check age where the law requires it [68][70][71][72].
-  2. If the person declines to share, or the API returns nothing, the app shows a **neutral age screen**. It's a numeral keypad (the room-code keypad's style) for the birth year:
+  2. If the person declines to share, or the API returns nothing, the app shows a **neutral age screen**. It's the question "What year were you born?" over a numeral keypad (the room-code keypad's style), then the year said back for a yes (launch review, 2026-11-10):
      - there's no default value and no hint about what's "allowed";
      - the result goes into the Keychain, so the back button can't retry it;
+     - a wrong band is put right only by a fresh Declared Age Range answer ("Check with Apple" in the gear, offered while the band is kitten or teen). The keypad never comes back, so a child can't retype their way out;
      - the year is turned into a band on the device and then discarded [65].
   3. The FTC's February 2026 policy statement covers data collected only to work out age, as long as it's deleted promptly and used only for that [66].
 - **Household people** (pass-and-play): the parent who adds someone taps kitten, young cat or grown cat. That's an adult declaring for a family member. Whether data a parent enters on their own phone counts as "collected from a child" is unsettled, so the design treats a parent-entered kitten exactly like a child [65] (unverified).
@@ -1232,7 +1233,7 @@ At family scale, all of this is a rounding error on Durable Objects pricing.
 | **Play** | Full games, seats and turns. The device id and seats are internal operations. |
 | **Streaks and rewards** | Yes. Streaks, rewards and the condo are game progress, which the FAQ counts as internal operations ("scores, character choices") [65]. The partner (Dad) sees the pair's streak, as with anyone. |
 | **Name** | **Generated, not typed.** The kitten picks one from the existing `NameGenerator` list (Mochi, Biscuit, Pickle…) with the dice. There's no free-text field, because a name plus an identifier is personal information [64]. The cat avatar is chosen as usual. |
-| **Push notifications** | **None from the server.** No "your move", reminders, pounces, milestones, widget pushes or push-started Live Activities. The FTC treats a push token as online contact information [65]. The narrow multiple-contact exception needs parent notice, which v1 has no way to give. Local, on-device reminders only: the existing 10-minute turn reminder, and a daily one at a fixed 17:00, both off by default. Nothing is sent anywhere. |
+| **Push notifications** | **None from the server.** No "your move", reminders, pounces, milestones, widget pushes or push-started Live Activities. The FTC treats a push token as online contact information [65]. The narrow multiple-contact exception needs parent notice, which v1 has no way to give. Local, on-device reminders only: the existing 10-minute turn reminder, on by default (launch review, 2026-11-10: it is "your move", the game, and nothing is sent or collected), and a daily one at a fixed 17:00, off by default. Nothing is sent anywhere. |
 | **Learned timing** | Off. There's no play-time histogram for kittens: no profiling. |
 | **Sign-in** | Not offered. Apple has said Sign in with Apple doesn't support under-13 accounts [73], and an account would collect more. |
 | **Pounce** | A kitten can **send** in-app pounces to people they already play with. Nothing is collected from them, and the push goes to the adult. They can't **receive** pushed pounces. They see waiting pounces in the app and on the widget's next refresh. |
