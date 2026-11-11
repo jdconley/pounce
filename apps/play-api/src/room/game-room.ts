@@ -7,7 +7,7 @@ import { isGeneratedName } from "../names/filter";
 import { yourMoveBody } from "../notify/copy";
 import { deliverToPlayer } from "../notify/deliver";
 import { gate } from "../notify/policy";
-import { nudgePush, playAgainPush, yourMoveContext, yourMovePush } from "../notify/pushes";
+import { nudgePush, playAgainPush, retirePush, yourMoveContext, yourMovePush } from "../notify/pushes";
 import { player as playerRpc } from "../players/accounts";
 import { PERSON_ID, PLAYER_ID } from "../players/ids";
 import { parseClientMessage } from "../protocol";
@@ -23,6 +23,7 @@ import {
   type LiveIntent,
   type Look,
   type NudgeIntent,
+  type RetireIntent,
   type Outbound,
   type PushIntent,
   type RematchIntent,
@@ -460,6 +461,29 @@ export class GameRoom extends DurableObject<Env> {
   }
 
   /**
+   * A stalled seat's pushes, under the holder's own rules like a nudge: nothing in a teen's night,
+   * silent in quiet hours. A kitten's device takes the warning only when everyone else at the
+   * table is approved (like "your move"), and the news only from an approved sender.
+   */
+  private async pushRetire(intent: RetireIntent): Promise<void> {
+    const profile = await playerRpc(this.env, intent.playerId).pushProfile();
+    if (!profile) return;
+    const g = gate({
+      kind: intent.kind === "soon" ? "retire_soon" : "retired",
+      band: profile.band,
+      zone: profile.zone ?? FALLBACK_ZONE,
+      settings: profile.settings,
+      now: Date.now(),
+      spacedAt: null,
+      remindersToday: 0,
+    });
+    if (!g.send) return;
+    const push = retirePush({ code: intent.code, table: intent.tableName, to: intent.personName, from: intent.from ?? null });
+    const senders = intent.kind === "soon" ? this.otherHumans(intent.playerId) : [intent.fromPlayer ?? null];
+    await deliverToPlayer(this.env, profile, push, g.level, intent.kind === "soon" ? intent.code : undefined, senders);
+  }
+
+  /**
    * The live table's pushes (§11.3), in order: the pair's paws from this
    * table's latest views, the player's toggle for a start, the copy for an
    * update that rings. A start that went nowhere is dropped so nothing
@@ -637,6 +661,9 @@ export class GameRoom extends DurableObject<Env> {
     for (const intent of core.drainNudgeIntents()) {
       if (notifyOn(this.env)) this.chain(() => this.pushNudge(intent));
     }
+    for (const intent of core.drainRetireIntents()) {
+      if (notifyOn(this.env)) this.chain(() => this.pushRetire(intent));
+    }
     const rematch = core.drainRematch();
     if (rematch) this.ctx.waitUntil(this.dealRematch(rematch));
 
@@ -690,7 +717,8 @@ export class GameRoom extends DurableObject<Env> {
     // Who sits where, and as whom: a join, a rename or a new cat reaches Home's cards.
     const faces = state.seats.map((s) => [s.kind, s.person?.id, s.person?.name, s.person?.cat, s.playerId ?? s.deviceId]);
     const out = state.gameState?.forfeited ?? [];
-    const fingerprint = JSON.stringify([state.status, actor, state.name, [...devices], [...players], faces, out, ...(next ? [next] : [])]);
+    const movedAt = core.waitingSince();
+    const fingerprint = JSON.stringify([state.status, actor, state.name, [...devices], [...players], faces, out, movedAt, ...(next ? [next] : [])]);
     if (fingerprint === this.tablesFingerprint) return;
     this.tablesFingerprint = fingerprint;
 
@@ -708,7 +736,14 @@ export class GameRoom extends DurableObject<Env> {
       JSON.stringify([...players]),
     );
     const updatedAt = Date.now();
-    const entry = { code: state.code, name: state.name, status: state.status, updatedAt, ...(next ? { next } : {}) };
+    const entry = {
+      code: state.code,
+      name: state.name,
+      status: state.status,
+      updatedAt,
+      ...(next ? { next } : {}),
+      ...(movedAt === null ? {} : { movedAt }),
+    };
     await Promise.all([
       ...[...devices].map((deviceId) =>
         this.index(deviceId).upsertTable({

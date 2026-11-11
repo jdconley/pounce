@@ -42,6 +42,9 @@ enum DemoMode: String {
     /// Kiki's (seat 2, asleep) move: her player card offers a nudge (`nudgeWait`: not for a
     /// minute and a half), which the demo server answers as sent.
     case nudge, nudgeWait
+    /// Kiki's (seat 2, asleep) move has waited its days: her card offers to play on without
+    /// her, which the demo server answers with her forfeit.
+    case retire
     /// This phone's move: five seconds in (past the push priming), Leo (seat 1) nudges it.
     case nudged
 
@@ -103,6 +106,12 @@ enum DemoMode: String {
             var room = DemoFixtures.table(seats: 4, mySeat: 0, phase: 2)
             room.game?.turn = 2
             room.nudge = NudgeView(seat: 2, sent: false, wait: self == .nudgeWait ? 90_000 : 0)
+            return room
+        case .retire:
+            var room = DemoFixtures.table(seats: 4, mySeat: 0, phase: 2)
+            room.game?.turn = 2
+            room.nudge = NudgeView(seat: 2, sent: false, wait: 0)
+            room.retire = RetireView(seat: 2, wait: 0)
             return room
         case .nudged: return DemoFixtures.table(seats: 4, mySeat: 0, phase: 2)
         case .seatLink:
@@ -349,6 +358,20 @@ actor DemoSocket: RoomSocketing {
             try? await Task.sleep(for: Pace.duration(.milliseconds(300)))
             room.nudge?.sent = true
             continuation.yield(.message(.nudgeSent(seat: seat)))
+            return
+        }
+        if case .retire(let seat) = m {
+            // As the server: the seat forfeits and the move goes on.
+            try? await Task.sleep(for: Pace.duration(.milliseconds(300)))
+            let next = (seat + 1) % room.seats.count
+            room.game?.forfeited[seat] = true
+            room.game?.handCounts[seat] = 0
+            room.game?.turn = next
+            room.nudge = nil
+            room.retire = nil
+            seq += 1
+            continuation.yield(.message(.event(seq: seq, event: .game(.forfeited(seat: seat)))))
+            continuation.yield(.message(.snapshot(protocol: PounceKit.protocolVersion, seq: seq, room: room)))
             return
         }
         if case .rematch = m {

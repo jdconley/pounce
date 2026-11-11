@@ -35,6 +35,26 @@ import Testing
         #expect(items.map(\.yourTurn) == [true, true, false, false, false])
     }
 
+    @Test func aGameInPlaySaysHowManyWholeDaysItsMoveHasWaited() throws {
+        let day = 24 * hour
+        func moved(_ code: String, _ status: String = "playing", ago: Double?) -> TableEntry {
+            TableEntry(code: code, status: status, yourTurn: false, updatedAt: nowMs, movedAt: ago.map { nowMs - $0 })
+        }
+        let items = HomeTables.merge(
+            entries: [
+                moved("FRESH", ago: day - 1), moved("DAY01", ago: day), moved("DAYS3", ago: 3 * day + hour),
+                moved("OLDSV", ago: nil), moved("LOBBY", "lobby", ago: 5 * day), moved("OVER1", "over", ago: 5 * day),
+            ],
+            cache: [:], now: now)
+        let days = Dictionary(uniqueKeysWithValues: items.map { ($0.id, $0.idleDays) })
+        #expect(days == ["FRESH": nil, "DAY01": 1, "DAYS3": 3, "OLDSV": nil, "LOBBY": nil, "OVER1": nil])
+        // The server's field decodes, and a list without it still does.
+        let json = #"{"code":"BCDFG","status":"playing","yourTurn":true,"updatedAt":5,"movedAt":4}"#
+        #expect(try JSONDecoder().decode(TableEntry.self, from: Data(json.utf8)).movedAt == 4)
+        let old = #"{"code":"BCDFG","status":"playing","yourTurn":true,"updatedAt":5}"#
+        #expect(try JSONDecoder().decode(TableEntry.self, from: Data(old.utf8)).movedAt == nil)
+    }
+
     @Test func nameComesFromTheServerListThenTheCacheThenTheCode() {
         var named = cached("CACH1")
         named.name = "Cached Name"

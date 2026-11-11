@@ -316,6 +316,7 @@ function clientSamples(): Sample<ClientMessage>[] {
     { name: "link-good", message: { t: "link", state: "good" } },
     { name: "act-forfeit", message: { t: "act", seat: 1, action: { type: "forfeit" } } },
     { name: "nudge", message: { t: "nudge", seat: 1 } },
+    { name: "retire", message: { t: "retire", seat: 1 } },
   ] satisfies Sample<ClientMessage>[];
 }
 

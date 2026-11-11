@@ -6,6 +6,8 @@ import {
   pausedBody,
   playAgainBody,
   pounceBody,
+  retiredBody,
+  retireSoonBody,
   winbackBody,
   yourMoveBody,
   type Answer,
@@ -70,6 +72,22 @@ export function nudgePush(p: { code: string; table: string; to: string; from: Fa
     thread: p.code,
     collapse: p.code,
     from: p.from,
+  };
+}
+
+/**
+ * A stalled seat's two pushes, in the table's thread under its collapse id like "your move":
+ * "soon" a day before the others may retire it, "done" (with who did it) once they have.
+ */
+export function retirePush(p: { code: string; table: string; to: string; from: Face | null }): Outgoing {
+  return {
+    kind: p.from ? "retired" : "retire_soon",
+    title: p.to,
+    body: p.from ? retiredBody(p.from.name, p.table) : retireSoonBody(p.table),
+    code: p.code,
+    thread: p.code,
+    collapse: p.code,
+    ...(p.from ? { from: p.from } : {}),
   };
 }
 

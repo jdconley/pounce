@@ -15,6 +15,7 @@ import type {
   NudgeView,
   Person,
   Presence,
+  RetireView,
   RoomEvent,
   RoomStatus,
   RoomView,
@@ -102,6 +103,8 @@ export type RoomState = {
   turnAt?: { turn: string; at: number };
   /** Each nudging seat's last nudge here (by seat index): its turn and when. Absent: none yet. */
   nudges?: Record<string, { turn: string; at: number }>;
+  /** The turn (`turnKey`) whose holder was last warned that their seat can soon be retired. */
+  retireWarned?: string;
 };
 
 export type Look = { rug: string; back: string };
@@ -192,6 +195,23 @@ export type NudgeIntent = {
   fromPlayer: string | null;
 };
 
+/**
+ * A push about retiring a stalled seat, to the seat's player under their own rules (quiet hours, a
+ * teen's night, a kitten's consent). "soon": a day before the others may retire it. "done": someone
+ * (`from`) did.
+ */
+export type RetireIntent = {
+  kind: "soon" | "done";
+  playerId: string;
+  seat: Seat;
+  personName: string;
+  tableName: string;
+  code: string;
+  /** "done" only: who retired the seat, and their player for a kitten's consent (null: none). */
+  from?: { name: string; cat: number };
+  fromPlayer?: string | null;
+};
+
 /** A background push telling a player's other devices to clear a table's notifications (§12.5). */
 export type DismissIntent = { kind: "dismiss"; playerId: string; exceptDeviceId: string; code: string };
 
@@ -207,7 +227,18 @@ type Snapshot = Extract<ServerMessage, { t: "snapshot" }>;
 
 const LOBBY_SEATS = 6;
 const MS_PER_MINUTE = 60_000;
-const CLEANUP_AFTER_MS = 7 * 24 * 60 * MS_PER_MINUTE;
+const MS_PER_DAY = 24 * 60 * MS_PER_MINUTE;
+/** A lobby nobody started, or a finished game, closes this long after the last thing that happened in it. */
+export const CLEANUP_AFTER_MS = 7 * MS_PER_DAY;
+/** A game in play closes only after this long with no move: a holiday doesn't end it. */
+export const GAME_CLEANUP_AFTER_MS = 30 * MS_PER_DAY;
+/**
+ * A turn this old makes its seat retirable: any other person still in the game may forfeit it for
+ * its holder (divided by the dev speed).
+ */
+export const RETIRE_AFTER_MS = 3 * MS_PER_DAY;
+/** The holder is warned by push this long before their seat becomes retirable. */
+export const RETIRE_WARNING_MS = MS_PER_DAY;
 const MOVE_CODE_TTL_MS = 10 * MS_PER_MINUTE;
 const MOVE_FAILURE_WINDOW_MS = 10 * MS_PER_MINUTE;
 const MAX_MOVE_FAILURES = 5;
@@ -246,6 +277,7 @@ export class RoomCore {
   private rematchIntent: RematchIntent | null = null;
   private liveIntents: LiveIntent[] = [];
   private nudgeIntents: NudgeIntent[] = [];
+  private retireIntents: RetireIntent[] = [];
   /** The player whose action is being applied ended their turn. */
   private turnBy: string | null = null;
   /** The person whose action is being applied ended their turn: "your move" names them. */
@@ -456,7 +488,10 @@ export class RoomCore {
 
     this.expireLive(this.now());
     out.push(...this.linkCheck());
+    this.warnStalled();
 
+    // A game dealt under the old 7-day limit gets the longer one.
+    timers.cleanupAt = Math.max(timers.cleanupAt, state.lastActivity + this.cleanupAfter());
     if (timers.cleanupAt <= this.now()) {
       for (const deviceId of Object.keys(state.live ?? {})) this.endLive(deviceId, "over");
       state.status = "over";
@@ -473,7 +508,7 @@ export class RoomCore {
       .map((device) => device.since + ASLEEP_AFTER_MS);
     const link = this.linkWatched() ? this.link.nextChange(this.now()) : null;
     return Math.min(
-      ...[botAt, nextRoundAt, cleanupAt, link, ...decays, ...Object.values(this.state.live ?? {}).map(deadline)].filter(
+      ...[botAt, nextRoundAt, cleanupAt, link, this.retireWarningAt(), ...decays, ...Object.values(this.state.live ?? {}).map(deadline)].filter(
         (t): t is number => t !== null,
       ),
     );
@@ -490,6 +525,13 @@ export class RoomCore {
   drainNudgeIntents(): NudgeIntent[] {
     const drained = this.nudgeIntents;
     this.nudgeIntents = [];
+    return drained;
+  }
+
+  /** Hands over and forgets the retire pushes queued since the last call. */
+  drainRetireIntents(): RetireIntent[] {
+    const drained = this.retireIntents;
+    this.retireIntents = [];
     return drained;
   }
 
@@ -742,6 +784,7 @@ export class RoomCore {
         ...(state.rematch?.code ? { rematch: state.rematch.code } : {}),
         ...(this.features.link ? { link: { ping: LINK_PING_MS, acks: [...(state.devices[deviceId]?.acks ?? [])] } } : {}),
         ...this.nudgeField(deviceId),
+        ...this.retireField(deviceId),
       },
     };
   }
@@ -830,6 +873,8 @@ export class RoomCore {
         return this.renameSeat(deviceId, msg.seat, msg.name);
       case "nudge":
         return this.features.nudge ? this.nudge(deviceId, msg.seat) : [this.fail(deviceId, "bad_message")];
+      case "retire":
+        return this.retire(deviceId, msg.seat);
       default:
         return [this.fail(deviceId, "bad_message")];
     }
@@ -931,6 +976,101 @@ export class RoomCore {
       });
     }
     return out;
+  }
+
+  // MARK: retiring a stalled seat
+
+  /** When the move has waited since: the current turn's start mid-round, else null. */
+  waitingSince(): number | null {
+    const { state } = this;
+    return state.status === "playing" && state.gameState?.status === "playing" ? this.turnStartedAt() : null;
+  }
+
+  /** Ms until the current turn's seat may be retired (0: now). */
+  private retireWait(now: number): number {
+    return Math.max(0, Math.ceil(this.turnStartedAt() + RETIRE_AFTER_MS / this.speed - now));
+  }
+
+  /** A snapshot's `retire` for this device: the stalled seat it may retire, and how long until it may. */
+  private retireField(deviceId: string): { retire?: RetireView } {
+    const target = this.nudgeTarget(deviceId);
+    return target ? { retire: { seat: target.seat, wait: this.retireWait(this.now()) } } : {};
+  }
+
+  /**
+   * The seat holding the move when someone could retire it: a person's, with a device at the
+   * table that doesn't control it and still has a seat in the game.
+   */
+  private stalledSeat(): Seat | null {
+    const { state } = this;
+    const game = state.gameState;
+    if (state.status !== "playing" || game?.status !== "playing") return null;
+    const seat = this.game.currentActor(game);
+    if (seat === null || state.seats[seat]?.kind !== "human") return null;
+    const other = Object.keys(state.devices).some((id) => !this.controls(id, seat) && this.nudger(id) !== null);
+    return other ? seat : null;
+  }
+
+  /** When the current turn's holder should be warned; null with nobody to warn, or once warned. */
+  private retireWarningAt(): number | null {
+    if (this.stalledSeat() === null || this.state.retireWarned === this.turnKey()) return null;
+    return this.turnStartedAt() + (RETIRE_AFTER_MS - RETIRE_WARNING_MS) / this.speed;
+  }
+
+  /** Once per turn, a day before the seat becomes retirable: a push to its holder. */
+  private warnStalled(): void {
+    const at = this.retireWarningAt();
+    if (at === null || at > this.now()) return;
+    const { state } = this;
+    const seat = this.stalledSeat() as Seat;
+    const holder = state.seats[seat] as SeatInfo;
+    state.retireWarned = this.turnKey();
+    if (!holder.playerId) return;
+    this.retireIntents.push({
+      kind: "soon",
+      playerId: holder.playerId,
+      seat,
+      personName: (holder.person as Person).name,
+      tableName: state.name,
+      code: state.code,
+    });
+  }
+
+  /**
+   * Retires a stalled seat: once the move has waited `RETIRE_AFTER_MS` on a person, anyone else
+   * still in the game (on another phone) forfeits that seat for them, under the forfeit's own
+   * rules (§5.13): out for the rest of the game, last place, the streak reports. One tap, no
+   * vote: a vote would stall again on the next slow person. The holder is told by push.
+   */
+  private retire(deviceId: string, seat: Seat): Outbound[] {
+    const { state } = this;
+    if (state.status !== "playing" || state.gameState?.status !== "playing") return [this.fail(deviceId, "not_playing")];
+    const target = state.seats[seat];
+    if (!target || target.kind !== "human" || this.controls(deviceId, seat)) return [this.fail(deviceId, "bad_seat")];
+    const from = this.nudger(deviceId);
+    if (from === null) return [this.fail(deviceId, "not_seated")];
+    if (this.game.currentActor(state.gameState) !== seat) return [this.fail(deviceId, "not_their_turn")];
+    if (this.retireWait(this.now()) > 0) return [this.fail(deviceId, "too_soon")];
+    // The seat on the move is in the game, so its forfeit is never refused.
+    const applied = this.applyGame(seat, { type: "forfeit" }) as { out: Outbound[]; events: GameEvent[] };
+    const sender = state.seats[from] as SeatInfo;
+    if (target.playerId) {
+      const person = sender.person as Person;
+      this.retireIntents.push({
+        kind: "done",
+        playerId: target.playerId,
+        seat,
+        personName: (target.person as Person).name,
+        tableName: state.name,
+        code: state.code,
+        from: { name: person.name, cat: person.cat },
+        fromPlayer: sender.playerId ?? null,
+      });
+    }
+    this.touch();
+    const woke = this.wake(deviceId);
+    this.afterGameChange();
+    return [...applied.out, ...woke, ...this.snapshots()];
   }
 
   /**
@@ -1256,6 +1396,8 @@ export class RoomCore {
 
     if (game.status === "gameOver") {
       state.status = "over";
+      // A finished game keeps the short limit, from its last move.
+      timers.cleanupAt = state.lastActivity + CLEANUP_AFTER_MS;
       timers.botAt = null;
       timers.nextRoundAt = null;
       return;
@@ -1363,10 +1505,15 @@ export class RoomCore {
       .map(([id]) => ({ to: id, message: { t: "event", seq, event: event(id) } }));
   }
 
+  /** How long the room lasts with nothing happening: longer once a game is in play. */
+  private cleanupAfter(): number {
+    return this.state.status === "playing" ? GAME_CLEANUP_AFTER_MS : CLEANUP_AFTER_MS;
+  }
+
   private touch(): void {
     const now = this.now();
     this.state.lastActivity = now;
-    this.state.timers.cleanupAt = now + CLEANUP_AFTER_MS;
+    this.state.timers.cleanupAt = now + this.cleanupAfter();
   }
 
   /** Records a state change and sends every connected device its own snapshot. */

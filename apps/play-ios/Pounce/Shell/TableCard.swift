@@ -56,10 +56,21 @@ struct TableCard: View {
                     PeopleLine(line: people)
                         .frame(height: 20)
                         .padding(.horizontal, 7)
-                    Text(verbatim: item.id)
-                        .font(.system(size: 12, weight: .heavy, design: .rounded))
-                        .tracking(1.5)
-                        .foregroundStyle(.white.opacity(0.8))
+                    if let idleText {
+                        // A game that has waited a day or more says so where its code sits.
+                        Text(idleText)
+                            .font(.system(size: 12, weight: .heavy, design: .rounded))
+                            .foregroundStyle(.white)
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.7)
+                            .padding(.horizontal, 6)
+                            .accessibilityIdentifier("home.table.\(item.id).idle")
+                    } else {
+                        Text(verbatim: item.id)
+                            .font(.system(size: 12, weight: .heavy, design: .rounded))
+                            .tracking(1.5)
+                            .foregroundStyle(.white.opacity(0.8))
+                    }
                     SeatPips(seats: item.seats)
                 }
                 .padding(.vertical, 8)
@@ -95,12 +106,21 @@ struct TableCard: View {
         .accessibilityIdentifier(identifier ?? "home.table.\(item.id)")
     }
 
+    /// "Last move 3 days ago", once a game in play has waited a day or more.
+    private var idleText: String? {
+        guard let days = item.idleDays, days >= 1 else { return nil }
+        return days == 1
+            ? String(localized: "Last move 1 day ago", comment: "Home table card: the game has waited a day")
+            : String(localized: "Last move \(days) days ago", comment: "Home table card: how long the game has waited")
+    }
+
     private var accessibilityText: Text {
         let table =
             item.yourTurn ? Text("Your turn, \(item.title), table \(item.id)") : Text("\(item.title), table \(item.id)")
         let names = people.faces.map(\.name).joined(separator: ", ")
-        guard !names.isEmpty else { return table }
-        return Text("\(table), with \(names)", comment: "VoiceOver: a Home table card, then who else plays there")
+        let who = names.isEmpty ? table : Text("\(table), with \(names)", comment: "VoiceOver: a Home table card, then who else plays there")
+        guard let idleText else { return who }
+        return Text("\(who), \(idleText)", comment: "VoiceOver: a Home table card, then how long its game has waited")
     }
 
     @ViewBuilder private var cat: some View {

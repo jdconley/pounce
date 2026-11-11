@@ -62,8 +62,8 @@ The point is shared play that feels alive: bright, chunky, juicy cartoon feel in
 - Each player's cat shows presence: **awake** (app open), **away** (backgrounded recently), **asleep** (offline). **(JD: should know if the person is online)**
 - Closing the app loses nothing; reopening resumes the exact table. If it becomes your turn while you're away, you get a "your turn" push — guest or signed in. **(JD)**
 - **No turn timer.** Others get a **nudge** button (rate-limited) that sends a gentle push/haptic. **(call)**
-- If a player is gone a long time, the remaining humans can vote to let a bot play that seat until they return. **(call)**
-- Games inactive for 7 days are closed and cleaned up. **(call)**
+- **Retiring a stalled seat** (launch review, 2026-11-10; replaces the earlier "vote in a bot" idea): once a person's move has waited 3 days, any other person still in the game (on another phone) can retire that seat from its player card, behind a confirmation. It is a forfeit on their behalf (see the Forfeit house rule). One tap, no vote: a vote would stall again on the next slow person. The holder gets a push a day before ("from tomorrow the others can play on without you") and after, under their own quiet hours, teen night and kitten consent.
+- A game in play with no move for 30 days is closed and cleaned up; a lobby nobody started, or a finished game, after 7. **(call; was 7 days for all until 2026-11-10, which ended a couple's game over a week's holiday)**
 - **Reactions:** a small wheel of custom-art cat reactions (purr/heart, hiss, laugh, shocked, sleepy) that pop over your cat. Not chat; no free text. **(call — couples will want this; cut if it bloats v1)**
 
 ### 3.4 Look, feel, motion
@@ -129,7 +129,7 @@ Set = same number (any coats). Run = consecutive numbers (any coats), no wraparo
 
 ### 5.2 Backend on Cloudflare **(JD: Cloudflare + Durable Objects)**
 - One TypeScript **Worker** (`play-api`) on `play.conleychaos.com` serving: HTTP API, WebSocket upgrades, Universal Links `apple-app-site-association`, and the `/j/<CODE>` landing page.
-- **`GameRoom` Durable Object** (SQLite-backed), one per game, addressed by room code. Uses the **WebSocket Hibernation API** so idle games cost nothing. Holds full state, validates every action, runs bots, tracks presence, uses alarms for bot turns, away/asleep transitions, and 7-day cleanup.
+- **`GameRoom` Durable Object** (SQLite-backed), one per game, addressed by room code. Uses the **WebSocket Hibernation API** so idle games cost nothing. Holds full state, validates every action, runs bots, tracks presence, uses alarms for bot turns, away/asleep transitions, the stalled-seat warning, and cleanup (7 days, 30 for a game in play).
 - **Game-type plugin interface** inside the DO (`init/applyAction/viewFor(seat)/botAction`) so future games slot in; Cat Tower is the only implementation.
 - **Accounts/groups/devices:** D1 (guests, Apple-linked users, cat avatars, groups, memberships, APNs device tokens, game history/stats). **(call)**
 - **Protocol:** JSON over WebSocket, versioned. Client sends intents; server replies with per-seat views plus an ordered event stream (sequence numbers) for animation and resume-after-disconnect. A connection can control multiple seats (shared phone). Server never sends another seat's hand.

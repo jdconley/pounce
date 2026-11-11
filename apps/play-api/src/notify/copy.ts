@@ -22,6 +22,13 @@ export function yourMoveBody(from: string | null, table: string, completesToday:
 /** A nudge: who asked, and the table. Gentle: no hurry, no count of how long it's been. */
 export const nudgeBody = (from: string, table: string): string => `${from} nudged you. Your move at ${table}.`;
 
+/** A day before a stalled seat can be retired: what happens, said plainly, with no blame. */
+export const retireSoonBody = (table: string): string =>
+  `Still your move at ${table}. From tomorrow the others can play on without you.`;
+/** A stalled seat was retired: who did it, and that the game is over for you. */
+export const retiredBody = (from: string, table: string): string =>
+  `${from} played on without you at ${table}. Your seat there is retired.`;
+
 export function pounceBody(from: string, target: PounceTarget): string {
   if (target === "new") return `${from} wants to play. New game?`;
   if (target === "pick") return `${from} wants to play. You pick.`;

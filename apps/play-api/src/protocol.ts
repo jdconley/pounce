@@ -61,9 +61,16 @@ export type RoomView = {
    * may (0: now), counted from when this snapshot was sent.
    */
   nudge?: NudgeView;
+  /**
+   * While a person on another phone holds the move: the seat this device may retire once the
+   * move has waited long enough (`ClientMessage` `retire`). `wait`: ms until it may (0: now),
+   * counted from when this snapshot was sent.
+   */
+  retire?: RetireView;
 };
 
 export type NudgeView = { seat: Seat; sent: boolean; wait: number };
+export type RetireView = { seat: Seat; wait: number };
 
 export type RoomEvent =
   | { kind: "presence"; seat: Seat; presence: Presence }
@@ -90,7 +97,12 @@ export type ClientMessage =
   /** The app's own view of its connection: round trips slow or not. */
   | { t: "link"; state: "weak" | "good" }
   /** Asks the person in `seat`, whose move it is, to take it (`NUDGE`). */
-  | { t: "nudge"; seat: Seat };
+  | { t: "nudge"; seat: Seat }
+  /**
+   * Forfeits `seat` for its holder, whose move has waited days: from anyone else still in the
+   * game. Errors: `not_their_turn`, `too_soon`.
+   */
+  | { t: "retire"; seat: Seat };
 
 /** Every `error` code the server sends. */
 export type ErrorCode =
@@ -323,6 +335,9 @@ function parseObject(o: Obj): ClientMessage | BadMessage | null {
     case "nudge":
       if (!hasKeys(o, ["t", "seat"]) || !isInt(o.seat, 0)) return null;
       return { t: "nudge", seat: o.seat };
+    case "retire":
+      if (!hasKeys(o, ["t", "seat"]) || !isInt(o.seat, 0)) return null;
+      return { t: "retire", seat: o.seat };
     case "link":
       if (!hasKeys(o, ["t", "state"]) || (o.state !== "weak" && o.state !== "good")) return null;
       return { t: "link", state: o.state };

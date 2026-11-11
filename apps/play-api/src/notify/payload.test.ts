@@ -32,6 +32,8 @@ describe("categories and relevance (§12.5)", () => {
       ["milestone", "STATUS", 0.2],
       ["play_again", "STATUS", 0.2],
       ["nudge", "YOUR_MOVE", 1],
+      ["retire_soon", "YOUR_MOVE", 1],
+      ["retired", "STATUS", 0.2],
     ];
     for (const [kind, cat, score] of expected) {
       expect(category(kind), kind).toBe(cat);

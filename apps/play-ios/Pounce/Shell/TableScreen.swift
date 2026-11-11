@@ -385,6 +385,12 @@ private struct TableStage: View {
                     card: card, model: tap.model,
                     nudge: { [store = session.store] in store.nudgeButton(for: tap.seat) },
                     onNudge: { [store = session.store] in store.nudge(seat: tap.seat) },
+                    canRetire: { [store = session.store] in store.canRetire(seat: tap.seat) },
+                    onRetire: { [store = session.store] in
+                        // The seat's `forfeited` event brings the pill; the card has nothing more to say.
+                        store.retire(seat: tap.seat)
+                        events.player = nil
+                    },
                     safety: (api: model.api, code: session.code, me: model.people.owner?.id)
                 ) { events.player = nil }
                     .transition(.opacity)
