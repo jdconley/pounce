@@ -1,7 +1,7 @@
 // Composes the App Store screenshot set: each raw capture (AppStore/raw/<set>/<shot>.png, from
 // capture.sh) on a branded background under its caption (captions.json), at the capture's own
-// pixel size, so the output is exactly a size App Store Connect accepts (1320x2868 for the 6.9"
-// iPhone set, 2064x2752 for the 13" iPad set). JPEG, no alpha, under 1.5 MB.
+// pixel size, so the output is exactly a size App Store Connect accepts (1206x2622 for the required
+// medium-display iPhone set, 2064x2752 for the 13" iPad set). JPEG, no alpha, under 1.5 MB.
 //   swift AppStore/compose.swift            # from apps/play-ios; writes AppStore/screenshots/
 // Type and palette are the app's: SF Rounded Black with the ink outline (OutlinedText), and the
 // Loud Toy colors (Palette.swift).

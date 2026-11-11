@@ -2,7 +2,7 @@
 # The App Store app preview: records the app's own play in a simulator and cuts it to Apple's
 # preview size. Footage is the Debug build's real table, fed by the scripted demo servers
 # (`-demo replay`, `-demo celebrate`) and the demo streaks (`-show-us`), with no overlays.
-#   AppStore/preview.sh iphone <udid>   # iPhone 17 Pro Max -> 886x1920
+#   AppStore/preview.sh iphone <udid>   # iPhone 17 Pro or Pro Max -> 886x1920
 #   AppStore/preview.sh ipad <udid>     # iPad Pro 13-inch (M5) -> 1200x1600
 # Writes AppStore/previews/<set>-preview.mp4: H.264 High 4.0, 30 fps, stereo AAC 256 kbps at
 # 48 kHz, 15 to 30 seconds. `simctl recordVideo` records no sound, and the run is silent

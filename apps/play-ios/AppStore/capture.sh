@@ -3,7 +3,7 @@
 # app's own demo modes (no server), on a simulator of the store's size. Writes
 # AppStore/raw/<set>/<n>-<name>.png at the device's native pixels; compose.swift adds the
 # caption and background.
-#   AppStore/capture.sh iphone <udid>   # iPhone 17 Pro Max: 1320x2868 (the 6.9" set)
+#   AppStore/capture.sh iphone <udid>   # iPhone 17 Pro: 1206x2622 (the required "Dynamic Island, medium display" set)
 #   AppStore/capture.sh ipad <udid>     # iPad Pro 13-inch (M5): 2064x2752 (the 13" set)
 # Build and install first:
 #   xcodebuild -project Pounce.xcodeproj -scheme Pounce -destination "platform=iOS Simulator,id=<udid>" build
