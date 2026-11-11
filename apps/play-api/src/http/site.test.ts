@@ -94,5 +94,10 @@ describe("robots.txt and the sitemap", () => {
       expect(text, s).toContain(s);
     }
     expect(text).not.toMatch(/\p{Extended_Pictographic}/u);
+    // Like the privacy policy, it mentions a parent's choice only when parent consent is on.
+    expect(text).toContain("a parent decides whether they get notifications");
+    const off = await llmsTxt("https://play.conleychaos.com", false).text();
+    expect(off).toContain("they get no push notifications from our server");
+    expect(off).not.toContain("a parent decides");
   });
 });

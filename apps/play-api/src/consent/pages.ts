@@ -10,7 +10,8 @@ import type { Outgoing } from "../notify/types";
  */
 
 function page(title: string, body: string): Response {
-  const html = docPage({ title, body, head: '<meta name="robots" content="noindex">\n' });
+  // The app shows this page inside the consent sheet, so it has no site header or footer.
+  const html = docPage({ title, body, head: '<meta name="robots" content="noindex">\n', embedded: true });
   return new Response(html, {
     headers: { "content-type": "text/html; charset=utf-8", "cache-control": CACHE, "content-security-policy": CSP },
   });

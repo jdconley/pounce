@@ -102,12 +102,13 @@ export function robotsTxt(origin: string): Response {
  * llms.txt (llmstxt.org): a plain summary for assistants asked what Pounce is. It says only what
  * the landing page and the privacy policy say.
  */
-export function llmsTxt(origin: string): Response {
+export function llmsTxt(origin: string, consent = true): Response {
+  const alerts = consent ? "a parent decides whether they get notifications" : "they get no push notifications from our server";
   const text = `# Pounce: Family Games
 
 > Pounce is a card game app for couples and families, for iPhone and iPad, made by Conley Chaos LLC. Its first game is Cat Tower, a rummy-style, turn-based card game for two to six players: take your turn when you have a minute, and the game waits for everyone else.
 
-Pounce is free. It has no chat, no ads, no analytics and no tracking, and nobody needs an account to play. Children under 13 get a simpler, limited version, and a parent decides whether they get turn alerts.
+Pounce is free. It has no chat, no ads, no analytics and no tracking, and nobody needs an account to play. Children under 13 get a simpler, limited version, and ${alerts}.
 
 ## Pages
 

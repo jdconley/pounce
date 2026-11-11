@@ -227,8 +227,9 @@ describe("homePage", () => {
       "No analytics and no third-party SDKs. We never sell your data.",
       "Signing in is never required to play.",
       "picks a name from Pounce's list of cat names and can't type one",
-      "A parent decides on turn alerts.",
-      "gets no notifications from our server unless a parent allows them",
+      "A parent decides on notifications.",
+      "A child under 13 gets none from our server unless a parent allows them",
+      "The people at your tables see your name and your cat, and so does anyone who opens an invite link you send.",
       "Report or block a player from their card at your table.",
       "made for adults playing with their families, not for children on their own",
       'href="/privacy#coppa"',
@@ -236,8 +237,11 @@ describe("homePage", () => {
       expect(withConsent, s).toContain(s);
     }
     const without = await html({}, false);
-    expect(without).toContain("A child under 13 gets no push notifications from our server.");
-    expect(without).not.toContain("A parent decides on turn alerts.");
+    expect(without).toContain("<strong>No push notifications for under-13s.</strong> A child under 13 gets none from our server.");
+    expect(without).toContain("The only reminders are ones the phone schedules for itself, and they start off.");
+    expect(without).not.toContain("A parent decides");
+    // Nothing here says a name is seen "only" by anyone: invites and notifications show it too.
+    expect(withConsent).not.toMatch(/[Oo]nly the people/);
     // No invented praise or numbers.
     expect(withConsent).not.toMatch(/\bstars?\b|rated|reviews|downloads|award|featured/i);
   });

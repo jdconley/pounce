@@ -52,7 +52,8 @@ describe("no page loads anything from another host", () => {
         ...[...html.matchAll(/\ssrcset="([^"]*)"/g)].flatMap((m) => (m[1] as string).split(",").map((part) => part.trim().split(" ")[0] as string)),
         ...[...html.matchAll(/<link\b[^>]*>/g)].filter((m) => !/rel="canonical"/.test(m[0])).map((m) => /\shref="([^"]*)"/.exec(m[0])?.[1] ?? ""),
       ];
-      expect(loads.length, name).toBeGreaterThan(1);
+      // At least the favicon; every page with a header also has the logo.
+      expect(loads.length, name).toBeGreaterThan(0);
       for (const url of loads) {
         expect(url, `${name}: ${url.slice(0, 60)}`).toMatch(/^(?:\/(?!\/)|data:image\/)/);
       }
@@ -82,20 +83,34 @@ describe("the shared look", () => {
   test("every page has the header, the footer with the copyright line, a favicon and no emoji", async () => {
     for (const [name, res] of pages()) {
       const html = await res.text();
+      expect(html, name).toContain(`<link rel="icon" href="${MEDIA.favicon}">`);
+      expect(html, name).toContain(BASE);
+      expect(html, name).toContain('<meta name="viewport" content="width=device-width, initial-scale=1">');
+      expect(html, name).not.toMatch(/\p{Extended_Pictographic}/u);
+      // The notice to parents is shown inside the app's consent sheet: see the next test.
+      if (name === "notice to parents") continue;
       expect(html, name).toContain('<header class="top">');
       expect(html, name).toContain(`<img src="${MEDIA.logo}" alt="" width="44" height="44">Pounce`);
       expect(html, name).toContain('<footer class="foot">');
       expect(html, name).toContain("&copy; 2026 Conley Chaos LLC");
-      expect(html, name).toContain(`<link rel="icon" href="${MEDIA.favicon}">`);
-      expect(html, name).toContain(BASE);
       expect(html, name).toContain('<html lang="en">');
-      expect(html, name).toContain('<meta name="viewport" content="width=device-width, initial-scale=1">');
-      expect(html, name).not.toMatch(/\p{Extended_Pictographic}/u);
     }
   });
 
+  test("the notice to parents, which the app shows in its consent sheet, has no header or footer and keeps the app's night colours", async () => {
+    const html = await noticePage().text();
+    expect(html).toContain('<html lang="en" class="night">');
+    expect(html).toContain('<body>\n<main id="main">');
+    expect(html).toContain("</main>\n</body>");
+    expect(html).not.toContain("<header");
+    expect(html).not.toContain("<footer");
+    expect(html).not.toContain('class="skip"');
+    // The only things to tap are the notice's own: our address, and the full policy.
+    expect([...new Set([...html.matchAll(/<a\b[^>]*\shref="([^"]*)"/g)].map((m) => m[1]))]).toEqual(["mailto:privacy@conleychaos.com", "/privacy"]);
+  });
+
   test("the text pages link home, support, privacy and Conley Chaos; the invite pages carry no links of their own", async () => {
-    for (const res of [supportPage(), privacyPage(), noticePage(), homePage({}, ORIGIN)]) {
+    for (const res of [supportPage(), privacyPage(), homePage({}, ORIGIN)]) {
       const html = await res.text();
       for (const s of ['<a class="brand" href="/"', '<a href="/support"', '<a href="/privacy"', '<a href="https://conleychaos.com">Conley Chaos LLC</a>', '<a class="skip" href="#main">']) {
         expect(html, s).toContain(s);
@@ -138,6 +153,12 @@ describe("the shared look", () => {
       ];
       for (const [what, fg, bg] of pairs) {
         expect(contrast(fg, bg), `${mode}: ${what} (${fg} on ${bg})`).toBeGreaterThanOrEqual(4.5);
+      }
+    }
+    // The keyboard focus ring (3:1 for a non-text mark): yellow on the page, the link colour on panels.
+    for (const t of Object.values(TOKENS)) {
+      for (const [ring, surface] of [["#FFD21F", t.bg], ["#FFD21F", t.deep], [t.link, t.panel], [t.link, t.inset]] as const) {
+        expect(contrast(ring, surface), `${ring} on ${surface}`).toBeGreaterThanOrEqual(3);
       }
     }
     // Ink on the candy colours: buttons, chips, the step numbers and the check marks.

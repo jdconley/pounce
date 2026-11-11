@@ -128,6 +128,8 @@ h1 span{display:block;color:var(--sun);text-wrap:balance}
 .phone video,.phone img{display:block;width:100%;height:100%;object-fit:cover}
 .phone .still{display:none}
 @media (prefers-reduced-motion:reduce){.phone .clip{display:none}.phone .still{display:block}}
+.phone video:focus-visible{outline-offset:-5px}
+@supports selector(:has(a)){.phone:has(video:focus-visible){outline:3px solid var(--focus);outline-offset:4px}.phone video:focus-visible{outline:none}}
 .hero-cat{position:absolute;z-index:2;left:calc(50% - min(48vw,236px));bottom:0;width:min(34vw,160px);height:auto}
 .strip{margin:0 auto;max-width:1140px;overflow-x:auto;scroll-snap-type:x proximity;-webkit-overflow-scrolling:touch}
 .strip ul{display:flex;gap:16px;width:max-content;margin:0;padding:6px 20px 22px;list-style:none}
@@ -228,8 +230,8 @@ function body(state: InstallState, consent: boolean): string {
   const install = installBlock(state);
   const last = LAST[state.kind];
   const alerts = consent
-    ? `<li><strong>A parent decides on turn alerts.</strong> A child under 13 gets no notifications from our server unless a parent allows them, and the parent confirms with a code texted to their own phone.</li>`
-    : `<li><strong>No notifications for under-13s.</strong> A child under 13 gets no push notifications from our server.</li>`;
+    ? `<li><strong>A parent decides on notifications.</strong> A child under 13 gets none from our server unless a parent allows them, and the parent confirms with a code texted to their own phone.</li>`
+    : `<li><strong>No push notifications for under-13s.</strong> A child under 13 gets none from our server. The only reminders are ones the phone schedules for itself, and they start off.</li>`;
   return `<main id="main">
 <section class="hero" aria-labelledby="top">
 <div class="wrap hero-grid">
@@ -299,7 +301,7 @@ ${art(MEDIA.art.asleep, "cat")}
 <p class="more"><a href="/privacy">Read the privacy policy</a><a href="/privacy#coppa">Notice for parents</a></p>
 </div>
 <ul class="checks">
-<li><strong>No chat. No public profiles.</strong> Only the people at your table see your name and your cat.</li>
+<li><strong>No chat. No public profiles.</strong> The people at your tables see your name and your cat, and so does anyone who opens an invite link you send.</li>
 <li><strong>No ads. No tracking.</strong> No analytics and no third-party SDKs. We never sell your data.</li>
 <li><strong>No account needed.</strong> Signing in is never required to play.</li>
 <li><strong>Simpler for under-13s.</strong> A child under 13 picks a name from Pounce's list of cat names and can't type one. No sign-in, and no invite links sent out.</li>

@@ -511,7 +511,7 @@ export default {
       if (pathname === "/get") return getRedirect(install(env), origin());
       if (pathname === "/robots.txt") return robotsTxt(origin());
       if (pathname === "/sitemap.xml") return sitemapXml(origin());
-      if (pathname === "/llms.txt") return llmsTxt(origin());
+      if (pathname === "/llms.txt") return llmsTxt(origin(), consentOn(env));
       if (pathname.startsWith("/media/")) return (await mediaFile(request, env.ASSETS)) ?? notFound();
     }
     const share = method === "GET" ? SHARE_PATH.exec(pathname) : null;

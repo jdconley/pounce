@@ -30,8 +30,14 @@ describe("byteRange", () => {
     expect(byteRange(" bytes=5-5 ", 100)).toEqual({ start: 5, end: 5 });
   });
 
-  test("refuses what it can't serve", () => {
-    for (const bad of ["bytes=100-", "bytes=50-40", "bytes=-0", "bytes=-", "bytes=0-1,5-6", "items=0-1", "bytes=a-b", ""]) {
+  test("a range it doesn't understand is ignored, so the whole file is served", () => {
+    for (const odd of ["bytes=50-40", "bytes=-", "bytes=0-1,5-6", "bytes=0-0,-1", "items=0-1", "bytes=a-b", ""]) {
+      expect(byteRange(odd, 100), odd).toBe("all");
+    }
+  });
+
+  test("a range that starts past the end can't be met", () => {
+    for (const bad of ["bytes=100-", "bytes=100-200", "bytes=-0"]) {
       expect(byteRange(bad, 100), bad).toBeNull();
     }
     expect(byteRange("bytes=-5", 0)).toBeNull();
@@ -64,10 +70,18 @@ describe("mediaFile", () => {
     expect(new Uint8Array(await (tail as Response).arrayBuffer())).toEqual(Uint8Array.of(95, 96, 97, 98, 99));
   });
 
-  test("a range past the end is 416 with the file's size", async () => {
+  test("a range past the end is 416 with the file's size, and the error is not cached as the file", async () => {
     const res = await mediaFile(get(NAME, "bytes=100-"), assets());
     expect(res?.status).toBe(416);
     expect(res?.headers.get("content-range")).toBe("bytes */100");
+    expect(res?.headers.get("cache-control")).toBe("no-store");
+    expect(res?.headers.get("content-type")).toBeNull();
+  });
+
+  test("several ranges at once get the whole file", async () => {
+    const res = await mediaFile(get(NAME, "bytes=0-0,-1"), assets());
+    expect(res?.status).toBe(200);
+    expect(res?.headers.get("content-length")).toBe("100");
   });
 
   test("anything else is not found: no assets, a missing file, or a path that isn't a hashed clip", async () => {

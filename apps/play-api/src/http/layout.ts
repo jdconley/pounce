@@ -55,8 +55,9 @@ const vars = (t: Theme): string =>
 const OUTLINE = "-2px -2px 0 var(--ink),2px -2px 0 var(--ink),-2px 2px 0 var(--ink),2px 2px 0 var(--ink),0 -2px 0 var(--ink),0 2px 0 var(--ink),-2px 0 0 var(--ink),2px 0 0 var(--ink)";
 
 export const BASE = css(`
-:root{--ink:#1B0B3A;--violet:#7B2FFF;--magenta:#FF2E9A;--teal:#00D1C1;--orange:#FF8A00;--sky:#2EB8FF;--lime:#9BE22E;--sun:#FFD21F;--round:ui-rounded,"SF Pro Rounded","Arial Rounded MT Bold",system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;${vars(TOKENS.light)}}
+:root{--focus:#FFD21F;--ink:#1B0B3A;--violet:#7B2FFF;--magenta:#FF2E9A;--teal:#00D1C1;--orange:#FF8A00;--sky:#2EB8FF;--lime:#9BE22E;--sun:#FFD21F;--round:ui-rounded,"SF Pro Rounded","Arial Rounded MT Bold",system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;${vars(TOKENS.light)}}
 @media (prefers-color-scheme:dark){:root{${vars(TOKENS.dark)}}}
+:root.night{${vars(TOKENS.dark)}}
 *,*::before,*::after{box-sizing:border-box}
 html{-webkit-text-size-adjust:100%;text-size-adjust:100%;scroll-behavior:smooth}
 @media (prefers-reduced-motion:reduce){html{scroll-behavior:auto}}
@@ -64,7 +65,8 @@ body{margin:0;min-height:100vh;display:flex;flex-direction:column;background:var
 main{flex:1}
 img,svg,video{max-width:100%}
 a{color:inherit}
-a:focus-visible,[tabindex]:focus-visible,video:focus-visible{outline:3px solid var(--sun);outline-offset:3px;border-radius:6px}
+a:focus-visible,[tabindex]:focus-visible,video:focus-visible{outline:3px solid var(--focus);outline-offset:3px}
+.doc,.panel,.card{--focus:var(--link)}
 h1,h2,h3{font-family:var(--round);font-weight:900;line-height:1.1;letter-spacing:-.01em;text-wrap:balance}
 .wrap{max-width:1140px;margin:0 auto;padding:0 20px}
 .skip{position:absolute;left:12px;top:-60px;z-index:5;padding:10px 16px;border-radius:12px;background:var(--sun);color:var(--ink);font-weight:800}
@@ -95,6 +97,7 @@ const DOC = css(`
 .doc section{background:var(--inset);border:3px solid var(--ink);border-radius:18px;padding:4px 18px 14px;margin-top:24px}
 .doc section h2{margin-top:16px}
 @media (min-width:700px){.doc{padding:36px 44px 44px}.doc h1{font-size:2.5rem}}
+.night .doc{width:100%;max-width:720px;margin:0 auto;padding:28px 20px 56px;border:0;border-radius:0;background:none;box-shadow:none}
 `);
 
 const LOGO = `<img src="${MEDIA.logo}" alt="" width="44" height="44">`;
@@ -133,13 +136,20 @@ export type Shell = {
   current?: Current;
   /** The Apple trademark credit, on pages that show Apple's badge. */
   credit?: boolean;
+  /**
+   * A page the app shows inside its own sheet (the notice to parents): no header or footer, so
+   * there is nothing to tap that leads away, and the app's night colours whatever the device's
+   * appearance, as the sheet around it has.
+   */
+  embedded?: boolean;
 };
 
 /** A whole page in the shared look. */
 export function shell(opts: Shell): string {
   const links = opts.links ?? true;
+  const chrome = !opts.embedded;
   return `<!doctype html>
-<html lang="en">
+<html lang="en"${chrome ? "" : ' class="night"'}>
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -151,19 +161,18 @@ export function shell(opts: Shell): string {
 ${opts.head ?? ""}<style>${BASE}${opts.style ?? ""}</style>
 </head>
 <body>
-${header(links, opts.current)}
-${opts.body}
-${footer(links, opts.credit ?? false)}
+${chrome ? `${header(links, opts.current)}\n` : ""}${opts.body}${chrome ? `\n${footer(links, opts.credit ?? false)}` : ""}
 </body>
 </html>
 `;
 }
 
 /** A text page (support, privacy, the notice to parents): one readable panel. */
-export function docPage(opts: { title: string; body: string; head?: string; current?: Current }): string {
+export function docPage(opts: { title: string; body: string; head?: string; current?: Current; embedded?: boolean }): string {
   return shell({
     title: opts.title,
     ...(opts.head === undefined ? {} : { head: opts.head }),
+    ...(opts.embedded ? { embedded: true } : {}),
     style: DOC,
     current: opts.current,
     body: `<main id="main">
