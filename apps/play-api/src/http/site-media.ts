@@ -9,7 +9,7 @@ export const MEDIA = {
     "height": 40
   },
   "og": {
-    "src": "/static/og.5baaf31c68.jpg",
+    "src": "/static/og.9cce277989.jpg",
     "width": 1200,
     "height": 630
   },
@@ -27,29 +27,29 @@ export const MEDIA = {
       "height": 696,
       "webp": [
         {
-          "src": "/static/shot-1-320.d7580a1fc2.webp",
+          "src": "/static/shot-1-320.fd0966b478.webp",
           "w": 320
         },
         {
-          "src": "/static/shot-1-440.c07c49be90.webp",
+          "src": "/static/shot-1-440.51a82667c5.webp",
           "w": 440
         },
         {
-          "src": "/static/shot-1-640.eab056daf1.webp",
+          "src": "/static/shot-1-640.75350b73b2.webp",
           "w": 640
         }
       ],
       "jpg": [
         {
-          "src": "/static/shot-1-320.a8966bdd9b.jpg",
+          "src": "/static/shot-1-320.b325909f46.jpg",
           "w": 320
         },
         {
-          "src": "/static/shot-1-440.47511752f1.jpg",
+          "src": "/static/shot-1-440.0e98865b2f.jpg",
           "w": 440
         },
         {
-          "src": "/static/shot-1-640.4fc9fe5318.jpg",
+          "src": "/static/shot-1-640.528e911bd0.jpg",
           "w": 640
         }
       ]

@@ -23,7 +23,7 @@ export const HOME_CSP =
 const NAME = "Pounce: Family Games";
 const SUBTITLE = "Card game for couples and kids";
 const DESCRIPTION =
-  "Game night, one turn at a time. Play Cat Tower with your partner, your kids or the whole family, on one phone or from anywhere.";
+  "Family game night, every night. Play Cat Tower with your partner, your kids or the whole family, on one phone or from anywhere.";
 
 /** How the page offers the app: the App Store, else the TestFlight beta, else "coming soon". */
 export type InstallState = { kind: "store"; url: string } | { kind: "beta"; url: string } | { kind: "soon" };
@@ -43,7 +43,7 @@ const art = (a: Art, cls = ""): string =>
 
 /** The App Store screenshots, in upload order, with what each one shows (AppStore/captions.md). */
 const SHOTS = [
-  "Game night, a turn at a time. The Cat Tower card table on your turn, with your hand of cards fanned along the bottom.",
+  "Family game night, every night. The Cat Tower card table on your turn, with your hand of cards fanned along the bottom.",
   "Play your person. Keep the streak. A 128-day streak with one person, with two cats beside a cat tower.",
   "Room for the whole family. A lobby with five people and a House Cat bot seated around the rug, under the room code.",
   "Climb all ten levels. The scoreboard above the list of levels, each level naming the sets and runs it needs.",
@@ -237,7 +237,7 @@ function body(state: InstallState, consent: boolean): string {
 <div class="wrap hero-grid">
 <div>
 <p class="chip">${SUBTITLE}</p>
-<h1 id="top">Game night, <span>one turn at a time.</span></h1>
+<h1 id="top">Family game night, <span>every night.</span></h1>
 <p class="lede">Pounce is a card game for couples and families. Play Cat Tower on one phone or from anywhere, and take your turn when you have a minute. The game waits for everyone else.</p>
 ${install}
 </div>
