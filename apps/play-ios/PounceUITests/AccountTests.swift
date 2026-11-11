@@ -104,6 +104,7 @@ final class AccountTests: XCTestCase {
         el(app, "gear.delete").tap()
         let back = el(app, "delete.back")
         XCTAssertTrue(back.waitForExistence(timeout: Live.t(5)), "no delete confirm")
+        XCTAssertEqual(el(app, "delete.title").label, "Delete your account?")
         back.tap()
         XCTAssertTrue(until(3) { !back.exists })
         XCTAssertTrue(el(app, "gear.account").exists, "back deleted anyway")
@@ -116,6 +117,23 @@ final class AccountTests: XCTestCase {
         XCTAssertTrue(el(app, "gear.signin").waitForExistence(timeout: Live.t(5)), "still signed in after deleting")
     }
 
+    func testAGuestCanDeleteToo() {
+        let app = launch("upgraded")
+        openGear(app)
+        XCTAssertTrue(el(app, "gear.signin").exists, "a guest still gets the sign-in offer")
+        let trash = el(app, "gear.delete")
+        XCTAssertTrue(trash.waitForExistence(timeout: Live.t(5)), "no delete for a guest (guideline 5.1.1(v))")
+        trash.tap()
+        XCTAssertTrue(el(app, "delete.title").waitForExistence(timeout: Live.t(5)), "no delete confirm")
+        XCTAssertEqual(el(app, "delete.title").label, "Delete your data?")
+        XCTAssertTrue(el(app, "delete.detail").label.contains("It can't be undone."), "the confirm says what happens in words")
+        el(app, "delete.confirm").tap()
+        XCTAssertTrue(el(app, "deleted.done").waitForExistence(timeout: Live.t(5)), "no done after a guest's delete")
+        XCTAssertFalse(el(app, "settings.path").exists, "a guest has no Apple sign-in to stop")
+        el(app, "deleted.done").tap()
+        XCTAssertTrue(el(app, "gear.signin").waitForExistence(timeout: Live.t(5)), "still a player who can sign in")
+    }
+
     func testKittenSeesNoSignIn() {
         let app = launch("upgraded", ["-age-band", "kitten"])
         openPeople(app)
@@ -125,6 +143,7 @@ final class AccountTests: XCTestCase {
         XCTAssertTrue(until(3) { !self.el(app, "sheet-people").exists })
         openGear(app)
         XCTAssertFalse(el(app, "gear.signin").exists, "a kitten was offered sign-in")
+        XCTAssertTrue(el(app, "gear.delete").exists, "a kitten's device can still delete its data")
     }
 
     func testHouseholdKittenPicksDiceName() {

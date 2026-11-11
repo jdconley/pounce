@@ -23,6 +23,8 @@ final class AccountModel {
     var merge: Merge?
     /// Deletion finished: show the picture of the iOS Settings path for stopping Apple sign-in.
     var showSettingsPath = false
+    /// A guest's (or kitten's) delete finished: say so in words.
+    var deletedGuest = false
     /// The significant-change approval is still owed (spec §14.1): accounts stay off until then.
     var heldForApproval = false
 
@@ -325,7 +327,9 @@ final class AccountModel {
     }
 
     /// Deletes the account (the device's, or a household person's own), then shows how to stop
-    /// Apple sign-in in Settings. False when the server didn't take it.
+    /// Apple sign-in in Settings. A player who isn't signed in (a guest, a kitten) can be deleted
+    /// too: everything the server holds for them goes, and the person stays on this phone, a new
+    /// player on the next upload. False when the server didn't take it.
     @discardableResult
     func deleteAccount(personId: String? = nil) async -> Bool {
         let target = personId ?? record.accountPersonId
@@ -333,6 +337,7 @@ final class AccountModel {
         busy = true
         defer { busy = false }
         let isAccount = target == record.accountPersonId
+        let wasSignedIn = isAccount || isSignedIn(target)
         do { try await service.deleteMe(person: isAccount ? nil : target) } catch { return false }
         if isAccount {
             forgetAccount()
@@ -340,7 +345,9 @@ final class AccountModel {
             record.signedIn.remove(target)
             save()
         }
-        showSettingsPath = true
+        // Only a signed-in player has an Apple sign-in to stop in Settings.
+        showSettingsPath = wasSignedIn
+        if !wasSignedIn { deletedGuest = true }
         app.streaks.reset()
         await uploadProfile()
         await app.refreshTables()

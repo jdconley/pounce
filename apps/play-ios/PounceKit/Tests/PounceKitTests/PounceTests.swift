@@ -95,9 +95,10 @@ import Testing
 
     @Test func theLinkPreview() async throws {
         let (api, server) = client { _ in Reply(200, #"{"id":"pc_1","from":{"name":"Mia","cat":2},"target":"pick"}"#) }
-        let link = try await api.linkPounce(token: "AAAAAAAAAAAAAAAAAAAAAA")
+        let link = try await api.linkPounce(token: "AAAAAAAAAAAAAAAAAAAAAA", person: me)
         #expect(link == LinkPounce(id: "pc_1", from: PushFace(name: "Mia", cat: 2), target: .pick))
         #expect(server.seen.last?.path == "/v1/pounces/links/AAAAAAAAAAAAAAAAAAAAAA")
+        #expect(server.seen.last?.query == "person=\(me)")
         #expect(server.seen.last?.method == "GET")
     }
 }
@@ -125,9 +126,11 @@ final class FakePounces: PounceService, Sendable {
         return try answerResult.withLock { $0 }.get()
     }
 
-    func linkPounce(token: String) async throws -> LinkPounce {
+    let linkResult: Mutex<Result<LinkPounce, APIError>> = Mutex(.success(LinkPounce(id: "pc_9", from: PushFace(name: "Mia", cat: 2), target: .new)))
+
+    func linkPounce(token: String, person: String?) async throws -> LinkPounce {
         calls.withLock { $0.append("link \(token)") }
-        return LinkPounce(id: "pc_9", from: PushFace(name: "Mia", cat: 2), target: .new)
+        return try linkResult.withLock { $0 }.get()
     }
 }
 
@@ -161,6 +164,18 @@ final class FakePounces: PounceService, Sendable {
         await next.retryPending()
         #expect(next.pending.isEmpty)
         #expect(online.calls.withLock { $0 } == ["answer pc_1 later"])
+    }
+
+    @Test func aLinkIsFoundExpiredOrUnreachable() async {
+        let fake = FakePounces()
+        let store = PounceStore(service: fake, file: file())
+        #expect(await store.link(token: "T", person: "me") == .found(LinkPounce(id: "pc_9", from: PushFace(name: "Mia", cat: 2), target: .new)))
+        fake.linkResult.withLock { $0 = .failure(.notFound) }
+        #expect(await store.link(token: "T", person: "me") == .expired)
+        fake.linkResult.withLock { $0 = .failure(.transport("offline")) }
+        #expect(await store.link(token: "T", person: "me") == .unreachable)
+        fake.linkResult.withLock { $0 = .failure(.server(503)) }
+        #expect(await store.link(token: "T", person: "me") == .unreachable)
     }
 
     @Test func aRefusedAnswerIsDropped() async {

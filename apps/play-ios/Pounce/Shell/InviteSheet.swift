@@ -5,7 +5,7 @@ import SwiftUI
 /// target "new") through the system share sheet, and its QR code for in person: the other phone's
 /// Camera opens Pounce through the universal link, and Play there makes the connection at once
 /// (D2). On a kitten's device no link ever goes out (§14.1): it shows a new table's room code and
-/// its QR instead, for in-person play only. No contacts, no usernames, no words.
+/// its QR instead, for in-person play only. No contacts, no usernames; one line says how long a link lasts.
 struct InviteSheet: View {
     @Environment(AppModel.self) private var model
     @Environment(\.horizontalSizeClass) private var sizeClass
@@ -77,7 +77,16 @@ struct InviteSheet: View {
                 .bounceLoop(active: true)
                 .frame(height: 260 * scale)
         case .link(let url):
-            qr(url.absoluteString)
+            VStack(spacing: 10 * scale) {
+                qr(url.absoluteString)
+                Text("Send the link, or let them scan this code. It works for 7 days, until you two play.",
+                     comment: "Invite sheet: how the invite link works")
+                    .font(.system(size: 17 * scale, weight: .bold, design: .rounded))
+                    .foregroundStyle(.white.opacity(0.92))
+                    .multilineTextAlignment(.center)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .accessibilityIdentifier("invite.note")
+            }
         case .code(let code):
             VStack(spacing: 14 * scale) {
                 codeCapsule(code)

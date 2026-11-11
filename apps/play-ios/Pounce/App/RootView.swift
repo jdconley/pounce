@@ -26,6 +26,14 @@ struct RootView: View {
         }
         .animation(.easeOut(duration: 0.25).paced, value: model.pick)
         .overlay {
+            // A Messages link that no longer works: say so in words.
+            if model.expiredInviteShown {
+                ExpiredInviteCard()
+                    .transition(.opacity)
+            }
+        }
+        .animation(.easeOut(duration: 0.25).paced, value: model.expiredInviteShown)
+        .overlay {
             // The plus (trophy room design §4): over Home or the trophy room.
             if model.inviteShown {
                 InviteSheet()

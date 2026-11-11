@@ -15,6 +15,10 @@
     "APNS_TOPIC": "com.conleychaos.play",
     "APNS_HOST": "api.push.apple.com",
     "SIWA_CLIENT_ID": "com.conleychaos.play",
+    // The App Store listing, "https://apps.apple.com/app/id<number>": the invite pages' "Get the
+    // app" link and Safari's Smart App Banner. Empty until App Store Connect gives the app its
+    // number (App Information, Apple ID); while empty there is no banner and no install link.
+    "APP_STORE_URL": "",
     // Shared streaks, table looks and Play again (daily habit §15 row 3), on since the app's
     // streak screens shipped (row 4).
     "STREAKS": "on",

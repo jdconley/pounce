@@ -458,6 +458,8 @@ struct PouncePickView: View {
                 Haptics.shared.thump()
             }
             model.pick = nil
+            // A link that ran out while the sheet was up: say so.
+            if result == .failed, request.link != nil { model.expiredInviteShown = true }
         }
     }
 }

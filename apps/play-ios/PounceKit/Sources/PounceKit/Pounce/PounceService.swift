@@ -8,8 +8,9 @@ public protocol PounceService: Sendable {
     func send(to pair: String?, target: PounceTarget, person: String?) async throws -> PounceSent
     /// Play (with `choice` for "you pick"), In a bit, or Not now; the table Play went to.
     func answer(id: String, answer: PounceAnswer, choice: String?, link: String?, person: String?) async throws -> String?
-    /// A Messages pounce's sender and target, before answering it.
-    func linkPounce(token: String) async throws -> LinkPounce
+    /// A Messages pounce's sender and target, before answering it. After someone answered In a
+    /// bit or Not now, only they (`person`) find it, until someone plays on it.
+    func linkPounce(token: String, person: String?) async throws -> LinkPounce
 }
 
 extension APIClient: PounceService {
@@ -54,8 +55,9 @@ extension APIClient: PounceService {
         return try decode(Reply.self, from: data, status: 200).code
     }
 
-    public func linkPounce(token: String) async throws -> LinkPounce {
-        let data = try await authenticated("GET", "/v1/pounces/links/\(Self.segment(token))", body: nil)
+    public func linkPounce(token: String, person: String?) async throws -> LinkPounce {
+        let data = try await authenticated(
+            "GET", "/v1/pounces/links/\(Self.segment(token))", body: nil, query: Self.query(person))
         return try decode(LinkPounce.self, from: data, status: 200)
     }
 }

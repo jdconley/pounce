@@ -269,21 +269,54 @@ describe("pounce through Messages (§12.4)", { timeout: 30_000 }, () => {
     expect(alertsTo(JD_TOKEN, "pounce_answered")).toHaveLength(1);
   });
 
-  test("links expire after 24 hours and pounces after 7 days", async () => {
+  test("links and pounces both last 7 days, long enough to install the app first", async () => {
     const mf = await start();
     const phone = await mint(mf);
     const jd = newPerson("JD", 1);
     const ids = await profile(mf, phone, [jd]);
     const { id, link } = (await (await pounce(mf, phone, jd, { target: "pick" })).json()) as { id: string; link: string };
     const token = link.split("/").at(-1) as string;
-    expect(await (await mf.dispatchFetch(`${BASE}/__test/link?key=${token}&now=${Date.now() + DAY_MS + 1}`)).json()).toBeNull();
-    await mf.dispatchFetch(`${BASE}/__test/links-prune?now=${Date.now() + DAY_MS + 1}`);
+    expect(await (await mf.dispatchFetch(`${BASE}/__test/link?key=${token}&now=${Date.now() + DAY_MS + 1}`)).json()).not.toBeNull();
+    expect(await (await mf.dispatchFetch(`${BASE}/__test/link?key=${token}&now=${Date.now() + 7 * DAY_MS + 1}`)).json()).toBeNull();
+    await mf.dispatchFetch(`${BASE}/__test/links-prune?now=${Date.now() + 7 * DAY_MS + 1}`);
     expect(await (await mf.dispatchFetch(`${BASE}/__test/link?key=${token}`)).json()).toBeNull();
-    expect(await (await mf.dispatchFetch(`${BASE}/__test/link?key=${id}`)).json()).not.toBeNull();
     const rows = () => mf.dispatchFetch(`${BASE}/__test/pounces?player=${ids[jd.id] as string}`).then((r) => r.json() as Promise<PounceRow[]>);
     expect(await rows()).toHaveLength(1);
     await mf.dispatchFetch(`${BASE}/__test/remind?player=${ids[jd.id] as string}&now=${Date.now() + 7 * DAY_MS + 1}`);
     expect(await rows()).toEqual([]);
+    expect(id).toMatch(/^pc_/);
+  });
+
+  test("Not now keeps the link for the one who said it: they can open it again and play; nobody else can", async () => {
+    const mf = await start();
+    const phone = await mint(mf);
+    const jd = newPerson("JD", 1);
+    await profile(mf, phone, [jd], { apns: JD_TOKEN });
+    const { id, link } = (await (await pounce(mf, phone, jd, { target: "new" })).json()) as { id: string; link: string };
+    const token = link.split("/").at(-1) as string;
+    const ipad = await mint(mf);
+    const kim = newPerson("Kim", 5);
+    await profile(mf, ipad, [kim]);
+    expect((await answer(mf, ipad, kim, id, { answer: "no", link: token })).status).toBe(200);
+
+    // Still Kim's to open, and the page still says who sent it.
+    expect((await call(mf, ipad, "GET", `/v1/pounces/links/${token}?person=${kim.id}`)).status).toBe(200);
+    expect((await call(mf, ipad, "GET", `/v1/pounces/links/${token}`)).status, "without ?person= it's nobody's").toBe(404);
+    expect((await mf.dispatchFetch(`${BASE}/p/${token}`)).status).toBe(200);
+    const other = await mint(mf);
+    const sam = newPerson("Sam", 3);
+    await profile(mf, other, [sam]);
+    expect((await call(mf, other, "GET", `/v1/pounces/links/${token}?person=${sam.id}`)).status).toBe(404);
+    expect((await answer(mf, other, sam, id, { answer: "play", link: token })).status).toBe(404);
+
+    // Kim changes her mind: Play deals a table, and then the link is used up.
+    const played = await answer(mf, ipad, kim, id, { answer: "play", link: token });
+    expect(played.status).toBe(200);
+    expect(((await played.json()) as { code?: string }).code).toMatch(/^[A-Z0-9]{5}$/);
+    expect((await call(mf, ipad, "GET", `/v1/pounces/links/${token}?person=${kim.id}`)).status).toBe(404);
+    const dead = await mf.dispatchFetch(`${BASE}/p/${token}`);
+    expect(dead.status).toBe(404);
+    expect(await dead.text()).toContain("This invite has expired");
   });
 });
 

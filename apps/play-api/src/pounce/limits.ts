@@ -28,10 +28,15 @@ export const UNANSWERED = 3;
 export const UNANSWERED_REST_MS = 3 * H;
 /** A pounce shows as sent, or waiting, for an hour (§11.1 "until it's answered or the hour passes"). */
 export const LIVE_MS = H;
-/** A pounce can be answered for a day, like a link. */
+/** A pounce to a partner can be answered for a day. */
 export const ANSWER_MS = 24 * H;
 /** Pounces are kept 7 days (§14). */
 export const KEEP_MS = 7 * 24 * H;
+/**
+ * A Messages link (the plus's invite) works for 7 days, as long as the pounce is kept: long
+ * enough to install the app first. It ends sooner when someone plays on it.
+ */
+export const LINK_MS = KEEP_MS;
 
 const newestFirst = (rows: PounceRow[]) => [...rows].sort((a, b) => b.at - a.at);
 
@@ -83,8 +88,9 @@ export function pounceView(mine: PounceRow[], theirs: PounceRow[], now: number):
   };
 }
 
-export function answerable(row: PounceRow, now: number): boolean {
-  return now - row.at < ANSWER_MS;
+/** `link`: a Messages link's pounce, answerable for `LINK_MS` instead of `ANSWER_MS`. */
+export function answerable(row: PounceRow, now: number, link = false): boolean {
+  return now - row.at < (link ? LINK_MS : ANSWER_MS);
 }
 
 /**
@@ -92,9 +98,9 @@ export function answerable(row: PounceRow, now: number): boolean {
  * records the answer in one step, so of two answers at once (a double tap,
  * two people on one link) exactly one claims it.
  */
-export function claimAnswer(row: PounceRow, by: string, answer: Answer, now: number): "claim" | "repeat" | "gone" | "expired" {
+export function claimAnswer(row: PounceRow, by: string, answer: Answer, now: number, link = false): "claim" | "repeat" | "gone" | "expired" {
   if (row.to !== null && row.to !== by) return "gone";
-  if (!answerable(row, now)) return "expired";
+  if (!answerable(row, now, link)) return "expired";
   return nextAnswer(row, answer) ? "claim" : "repeat";
 }
 
