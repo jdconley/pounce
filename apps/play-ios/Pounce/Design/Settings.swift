@@ -21,6 +21,7 @@ final class Settings {
         static let pushReoffered = "settings.pushReoffered"
         static let turnReminder = "settings.turnReminder"
         static let kittenDaily = "settings.kittenDaily"
+        static let signInPromptSeen = "settings.signInPromptSeen"
     }
 
     @ObservationIgnored private let defaults: UserDefaults
@@ -46,6 +47,9 @@ final class Settings {
     /// A kitten's local daily reminder at 17:00 (spec §14.1): off until they turn it on.
     var kittenDaily: Bool { didSet { defaults.set(kittenDaily, forKey: Key.kittenDaily) } }
 
+    /// Home's "Keep your streak if you change phones" card was answered (signed in or not now).
+    var signInPromptSeen: Bool { didSet { defaults.set(signInPromptSeen, forKey: Key.signInPromptSeen) } }
+
     init(defaults: UserDefaults = .standard) {
         self.defaults = defaults
         soundOn = defaults.object(forKey: Key.soundOn) as? Bool ?? true
@@ -55,6 +59,7 @@ final class Settings {
         pushReoffered = defaults.bool(forKey: Key.pushReoffered)
         turnReminderChoice = defaults.object(forKey: Key.turnReminder) as? Bool
         kittenDaily = defaults.bool(forKey: Key.kittenDaily)
+        signInPromptSeen = defaults.bool(forKey: Key.signInPromptSeen)
     }
 
     #if DEBUG

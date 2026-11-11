@@ -99,9 +99,12 @@ struct PawBadge: View {
     }
 }
 
-/// The little cloud with a plus on the badge (§10.5): keep this streak on all your devices.
+/// The little cloud with a plus and "Save" on the badge (§10.5): keep this streak on all your devices.
 struct CloudPlusBubble: View {
     var size: CGFloat = 40
+    /// "Save" beside the cloud. Off where the row has no room (the Us top bar); the offer it opens
+    /// says the rest in words.
+    var worded = true
     let action: () -> Void
 
     var body: some View {
@@ -110,16 +113,27 @@ struct CloudPlusBubble: View {
             Sound.shared.play(ArtName.Sound.sfxPop)
             action()
         } label: {
-            Image(ArtName.Habit.iconCloudPlus)
-                .resizable().scaledToFit()
-                .padding(size * 0.14)
-                .frame(width: size, height: size)
-                .background(Circle().fill(Palette.sky).overlay(Circle().strokeBorder(Palette.ink, lineWidth: 3)))
-                .shadow(color: Palette.ink.opacity(0.5), radius: 0, x: 0, y: 3)
+            HStack(spacing: size * 0.08) {
+                Image(ArtName.Habit.iconCloudPlus)
+                    .resizable().scaledToFit()
+                    .frame(width: size * 0.72, height: size * 0.72)
+                if worded {
+                    Text("Save", comment: "The streak badge's sign-in cloud: keep this streak with Sign in with Apple")
+                        .font(.system(size: size * 0.4, weight: .heavy, design: .rounded))
+                        .foregroundStyle(Palette.ink)
+                        .lineLimit(1)
+                        .fixedSize()
+                }
+            }
+            .padding(.leading, worded ? size * 0.12 : size * 0.14)
+            .padding(.trailing, worded ? size * 0.24 : size * 0.14)
+            .frame(height: size)
+            .background(Capsule().fill(Palette.sky).overlay(Capsule().strokeBorder(Palette.ink, lineWidth: 3)))
+            .shadow(color: Palette.ink.opacity(0.5), radius: 0, x: 0, y: 3)
         }
         .buttonStyle(.plain)
         .bounceLoop(active: true)
-        .accessibilityLabel(Text("Keep your streaks on all your devices", comment: "VoiceOver: the sign-in cloud on the streak badge"))
+        .accessibilityLabel(Text("Save your streak with Sign in with Apple", comment: "VoiceOver: the sign-in cloud on the streak badge"))
     }
 }
 

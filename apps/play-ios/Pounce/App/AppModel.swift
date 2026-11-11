@@ -213,6 +213,12 @@ final class AppModel {
             model.settings.pushPrimed = true
             if model.ageRecord != nil { model.route = .home }
         }
+        // Home's one-time sign-in card stays out of the way of every other test, unless
+        // `-signin-prompt` asks for it.
+        if arguments.contains("-uitest-reset") || DemoMode.from(arguments: arguments) != nil,
+           !arguments.contains("-signin-prompt") {
+            model.settings.signInPromptSeen = true
+        }
         // `-show-us`: open on the Us screen (UI tests, screenshots).
         if arguments.contains("-show-us"), model.people.owner != nil, model.ageRecord != nil { model.route = .us }
         // `-show-trophies` / `-show-invite`: the trophy room, or the invite sheet over Home (UI tests, screenshots).
@@ -442,6 +448,27 @@ final class AppModel {
         syncWidgets()
         await uploadWidgetToken()
         await liveTables.retry()
+    }
+
+    /// The age screen's "Check with Apple" (launch review): a band from the keypad, or a limited
+    /// one, put right by a fresh Declared Age Range answer. A decline or no answer changes nothing,
+    /// and the keypad never comes back. True when the band changed.
+    @discardableResult
+    func correctAge() async -> Bool {
+        guard let record = ageRecord, AgeCorrection.offered(record) else { return false }
+        let answer: AgeBand? = if case .band(let band) = await ageAsker.ask() { band } else { nil }
+        let fixed = AgeCorrection.corrected(record, answer: answer, now: .now)
+        guard fixed != record else { return false }
+        ageStore.save(fixed)
+        ageRecord = fixed
+        limitsAnswer = nil
+        applyAgeLimits()
+        push?.registerIfAllowed()
+        syncWidgets()
+        Task { await accountsAfterAge() }
+        await uploadWidgetToken()
+        await liveTables.retry()
+        return fixed.band != record.band
     }
 
     /// A kitten keeps no typed name (a name plus an identifier is personal information): an owner

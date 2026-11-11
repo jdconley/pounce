@@ -32,6 +32,10 @@ struct GearSheet: View {
                     if model.ageBand == .kitten {
                         KittenBellView()
                     }
+                    // A wrong age put right by Apple's answer (launch review).
+                    if AgeCorrection.offered(model.ageRecord) {
+                        AgeCorrectionRow()
+                    }
                     // The notification settings (§12.6), the same panel as the Us screen's gear.
                     NotifyPanel()
                         .padding(.vertical, 6)
@@ -49,13 +53,17 @@ struct GearSheet: View {
                             openURL(model.config.endpoint("/privacy"))
                         }
                         .accessibilityIdentifier("gear.privacy")
-                        // A signed-in adult's kittens (parent consent, PR 9).
-                        if model.isParent {
-                            ArtIconButton(icon: ArtName.Habit.iconKittens, color: Palette.teal, size: 52, label: "Kittens") {
-                                showingKittens = true
-                            }
-                            .accessibilityIdentifier("gear.kittens")
+                    }
+                    // A signed-in adult's kittens (parent consent, PR 9), behind words.
+                    if model.isParent {
+                        PillButton(
+                            icon: ArtName.Habit.iconKittens, color: Palette.teal, size: .small, width: 230,
+                            title: String(localized: "Add a child", comment: "Gear sheet: open the parent's kittens panel"),
+                            accessibilityLabel: "Add a child"
+                        ) {
+                            showingKittens = true
                         }
+                        .accessibilityIdentifier("gear.kittens")
                     }
                     account
                 }

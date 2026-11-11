@@ -125,7 +125,7 @@ struct UsView: View {
                 .accessibilityIdentifier("us.back")
             pairsRow
             if offerSignIn {
-                CloudPlusBubble(size: 44) { signIn = true }
+                CloudPlusBubble(size: 44, worded: false) { signIn = true }
                     .accessibilityIdentifier("us.cloud")
             }
             // The trophy room (trophy room design §3), when the server has it.

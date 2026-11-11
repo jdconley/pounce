@@ -70,7 +70,7 @@ Any of these turns the kitten back to today's no-push behavior at once. The serv
 - PR 2's `SignificantChangeGate` already does this for the accounts release; this reuses it with a new description.
 - Where that consent is required and the answer is a denial, the lock stays.
 
-### What the kitten sees (no words)
+### What the kitten sees (pictures, and one short line per step since the launch review, 2026-11-10)
 - The bell with a padlock and the six numerals to show a grown-up.
 - A sleeping bell while pending.
 - After consent, the normal bell.
@@ -78,7 +78,9 @@ Any of these turns the kitten back to today's no-push behavior at once. The serv
 - A PermissionKit ask shows Apple's own sheet.
 
 ### What the parent sees
-- **Kittens** in the gear sheet, for signed-in adults only.
+- **Add a child** in the gear sheet (a worded row since the launch review), for signed-in adults only.
+- Each step has one short line of words: type the code from your child's phone, read the notice and add your number, type the texted code, alerts on (and the confirmation to come).
+- In the lobby, a kitten's device without consent says to show a grown-up there the code; a signed-in parent at the table with a linked kitten whose consent isn't on is asked to set it up (matched by the kitten's generated name and cat).
 - For each kitten: their cat, the consent state (pending, waiting for the code, on, and on with a check once the confirmation push reached them), a toggle per person, and revoke.
 - The notice page and the phone number field. Those are the only words, and they are legal text, as with the privacy page. The code is numerals on a keypad, with pictures for another code and another number.
 - The confirmation push, with the kitten's name and a Revoke button (legal text, like the notice).
