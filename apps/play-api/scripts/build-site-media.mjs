@@ -107,8 +107,6 @@ const favPng = join(tmp, "fav.png");
 magick(icon, "-resize", "32x32", "-strip", "-colors", "128", `png8:${favPng}`);
 const icon192 = join(tmp, "icon-192.png");
 magick(icon, "-resize", "192x192", "-strip", "-colors", "255", `png8:${icon192}`);
-const iconHero = join(tmp, "icon-hero.png");
-magick(icon, "-resize", "256x256", "-strip", iconHero);
 
 // --- The gameplay clip: the first 12 seconds of the App Store preview (a turn at the table),
 // phone-sized, without sound. The poster is the "Your turn!" frame.
@@ -194,7 +192,6 @@ const manifest = {
   logo: dataUri(logoWebp, "image/webp"),
   favicon: dataUri(favPng, "image/png"),
   icon192: publish(icon192, "icon-192", "png"),
-  iconHero: { width: 256, height: 256, webp: webp(iconHero, "icon-256", 86), png: publish(iconHero, "icon-256", "png") },
   badge: { src: publish(badgeSrc, "app-store-badge", "svg"), width: 120, height: 40 },
   og: { src: jpeg(og, "og", 86), width: 1200, height: 630 },
   clip: { src: publish(clip, "clip", "mp4", "media"), poster: webp(posterPng, "poster", 74), posterJpg: jpeg(posterPng, "poster", 72), ...CLIP },
