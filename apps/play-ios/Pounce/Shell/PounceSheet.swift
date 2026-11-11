@@ -36,6 +36,9 @@ struct PounceSheetView: View {
             Palette.night.opacity(0.9).ignoresSafeArea().onTapGesture(perform: onClose)
             VStack(spacing: 18 * scale) {
                 header
+                WordLabel(title: view == nil ? "Ask someone to play" : "Ask to play",
+                          detail: "Pick a game, then tap Pounce.", alignment: .center)
+                    .padding(.horizontal, 20)
                 ScrollView(.horizontal, showsIndicators: false) {
                     HStack(spacing: 10 * scale) {
                         ForEach(Array(tiles.enumerated()), id: \.element) { i, tile in
@@ -64,6 +67,7 @@ struct PounceSheetView: View {
         }
         .onChange(of: shareShown) { _, shown in if !shown && sharing != nil { onClose() } }
         .accessibilityElement(children: .contain)
+        .dynamicTypeSize(...DynamicTypeSize.xxxLarge)
         .accessibilityIdentifier("sheet-pounce")
     }
 
@@ -123,6 +127,11 @@ struct PounceSheetView: View {
                 .frame(width: side, height: side)
                 if case .table(_, let name, _) = tile {
                     NameTag(name, maxWidth: side, active: on, size: 14 * scale)
+                } else {
+                    Text(tile == .new ? "New game" : "You pick", comment: "Pounce sheet: caption under a tile")
+                        .font(.system(.caption, design: .rounded, weight: .heavy))
+                        .foregroundStyle(.white)
+                        .accessibilityHidden(true)
                 }
             }
             .padding(8)
@@ -158,6 +167,7 @@ struct PounceSheetView: View {
         HStack(spacing: 16 * scale) {
             PillButton(icon: ArtName.iconBack, color: Palette.violet, size: .medium, accessibilityLabel: "Close", action: onClose)
                 .accessibilityIdentifier("pounce.close")
+                .captioned("Close")
             if model.limits.sharesLinks {
                 ArtIconButton(icon: ArtName.iconShare, color: Palette.sky, size: 64 * scale, label: "Send a link") {
                     Task {
@@ -170,6 +180,7 @@ struct PounceSheetView: View {
                     }
                 }
                 .accessibilityIdentifier("pounce.share")
+                .captioned("Link")
             }
             if view != nil {
                 PillButton(icon: locked ? ArtName.Habit.iconPadlock : ArtName.Habit.pounceBell,
@@ -181,6 +192,7 @@ struct PounceSheetView: View {
                 .bounceLoop(active: !locked)
                 .accessibilityValue(locked ? "locked" : "ready")
                 .accessibilityIdentifier("pounce.send")
+                .captioned(locked ? "Ask a grown-up first" : "Send it")
             }
         }
     }
@@ -303,6 +315,7 @@ struct WaitingPounceCard: View {
                 answer(.later)
             }
             .accessibilityIdentifier("waiting.later")
+            .captioned("In a bit")
             Button {
                 answer(.no)
             } label: {
@@ -313,6 +326,7 @@ struct WaitingPounceCard: View {
             .buttonStyle(.plain)
             .accessibilityLabel(Text("Not now", comment: "VoiceOver: answer a pounce, not now"))
             .accessibilityIdentifier("waiting.no")
+            .captioned("Not now")
             ArtIconButton(icon: ArtName.iconPlay, color: Palette.lime, size: 62 * scale, label: "Play") {
                 if waiting.target == .pick {
                     model.showPick(PickRequest(
@@ -323,6 +337,7 @@ struct WaitingPounceCard: View {
                 }
             }
             .accessibilityIdentifier("waiting.play")
+            .captioned("Play")
         }
     }
 
@@ -371,6 +386,8 @@ struct PouncePickView: View {
                         NameTag(from.name, maxWidth: 180, active: true, size: 18 * scale)
                     }
                 }
+                WordLabel(title: "Where do we play?", detail: "Pick a game, or start a new one.", alignment: .center)
+                    .padding(.horizontal, 20)
                 ScrollView(.horizontal, showsIndicators: false) {
                     HStack(spacing: 10 * scale) {
                         ForEach(Array(tiles.enumerated()), id: \.element) { i, tile in
@@ -388,10 +405,12 @@ struct PouncePickView: View {
                         model.pick = nil
                     }
                     .accessibilityIdentifier("pick.close")
+                    .captioned("Close")
                     ArtIconButton(icon: ArtName.Habit.iconClock, color: Palette.sky, size: 64 * scale, label: "In a bit") {
                         answer(.later, choice: nil)
                     }
                     .accessibilityIdentifier("pick.later")
+                    .captioned("In a bit")
                     Button {
                         answer(.no, choice: nil)
                     } label: {
@@ -402,6 +421,7 @@ struct PouncePickView: View {
                     .buttonStyle(.plain)
                     .accessibilityLabel(Text("Not now", comment: "VoiceOver: answer a pounce, not now"))
                     .accessibilityIdentifier("pick.no")
+                    .captioned("Not now")
                 }
             }
             .padding(.vertical, 24)
@@ -413,6 +433,7 @@ struct PouncePickView: View {
         }
         .accessibilityElement(children: .contain)
         .accessibilityValue(request.from?.name ?? "")
+        .dynamicTypeSize(...DynamicTypeSize.xxxLarge)
         .accessibilityIdentifier("sheet-pick")
     }
 
@@ -458,6 +479,8 @@ struct PouncePickView: View {
                 Haptics.shared.thump()
             }
             model.pick = nil
+            // A link that ran out while the sheet was up: say so.
+            if result == .failed, request.link != nil { model.expiredInviteShown = true }
         }
     }
 }

@@ -71,8 +71,8 @@ extension TableScene {
         if tower.isOpen {
             value = game.phase.indices.map { seat in
                 String(
-                    localized: "\(SeatInfo.name(model.room, seat)), phase \(min(game.phase[seat] + 1, 10))",
-                    comment: "VoiceOver: one seat on the open cat tower, e.g. 'Mia, phase 3'")
+                    localized: "\(SeatInfo.name(model.room, seat)), level \(min(game.phase[seat] + 1, 10))",
+                    comment: "VoiceOver: one seat on the open cat tower, e.g. 'Mia, level 3'")
             }.joined(separator: "; ")
         }
         let scores = UIAccessibilityCustomAction(
@@ -86,11 +86,11 @@ extension TableScene {
         }
         return TableAccessibility.Item(
             id: "table.tower",
-            label: String(localized: "Cat tower", comment: "VoiceOver: the cat tower; opens to show every player's phase"),
+            label: String(localized: "Cat tower", comment: "VoiceOver: the cat tower; opens to show every player's level"),
             value: value,
             hint: tower.isOpen
                 ? String(localized: "Opens the scoreboard", comment: "VoiceOver hint: the open cat tower")
-                : String(localized: "Shows every player's phase", comment: "VoiceOver hint: the folded cat tower"),
+                : String(localized: "Shows every player's level", comment: "VoiceOver hint: the folded cat tower"),
             frame: towerFrame, actions: [scores])
     }
 }

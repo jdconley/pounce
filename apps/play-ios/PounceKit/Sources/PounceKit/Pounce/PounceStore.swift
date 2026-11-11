@@ -64,8 +64,23 @@ import Observation
         return try? await service.send(to: nil, target: target, person: person).link
     }
 
-    public func link(token: String) async -> LinkPounce? {
-        try? await service.linkPounce(token: token)
+    /// What opening a Messages link found.
+    public enum LinkLookup: Equatable, Sendable {
+        case found(LinkPounce)
+        /// The server says no such link: it expired, someone played on it, or it was never ours.
+        case expired
+        /// Offline or the server is down: nothing to say about the link itself.
+        case unreachable
+    }
+
+    public func link(token: String, person: String?) async -> LinkLookup {
+        do {
+            return .found(try await service.linkPounce(token: token, person: person))
+        } catch APIError.notFound {
+            return .expired
+        } catch {
+            return .unreachable
+        }
     }
 
     // MARK: answering

@@ -19,6 +19,8 @@ export type TableEntry = {
   next?: string;
   /** Absent for tables last reported before lists carried seats. */
   seats?: TableSeat[];
+  /** While a game is mid-round: when the current turn began (epoch ms), so Home can say how long it has waited. */
+  movedAt?: number;
 };
 
 const MAX_TABLES = 50;
@@ -30,15 +32,16 @@ export function createTables(sql: SqlStorage): void {
   if (!columns.some((c) => c.name === "name")) sql.exec("ALTER TABLE tables ADD COLUMN name TEXT");
   if (!columns.some((c) => c.name === "next")) sql.exec("ALTER TABLE tables ADD COLUMN next TEXT");
   if (!columns.some((c) => c.name === "seats")) sql.exec("ALTER TABLE tables ADD COLUMN seats TEXT");
+  if (!columns.some((c) => c.name === "moved_at")) sql.exec("ALTER TABLE tables ADD COLUMN moved_at INTEGER");
 }
 
 /** An older report never overwrites a newer one. */
 export function upsertTable(sql: SqlStorage, entry: TableEntry): void {
   sql.exec(
-    `INSERT INTO tables (code, name, status, your_turn, updated_at, next, seats) VALUES (?, ?, ?, ?, ?, ?, ?)
+    `INSERT INTO tables (code, name, status, your_turn, updated_at, next, seats, moved_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
      ON CONFLICT (code) DO UPDATE SET name = excluded.name, status = excluded.status,
        your_turn = excluded.your_turn, updated_at = excluded.updated_at, next = excluded.next,
-       seats = excluded.seats
+       seats = excluded.seats, moved_at = excluded.moved_at
      WHERE excluded.updated_at >= tables.updated_at`,
     entry.code,
     entry.name ?? null,
@@ -47,6 +50,7 @@ export function upsertTable(sql: SqlStorage, entry: TableEntry): void {
     entry.updatedAt,
     entry.next ?? null,
     entry.seats ? JSON.stringify(entry.seats) : null,
+    entry.movedAt ?? null,
   );
 }
 
@@ -65,8 +69,9 @@ export function listTables(sql: SqlStorage): TableEntry[] {
       updated_at: number;
       next: string | null;
       seats: string | null;
+      moved_at: number | null;
     }>(
-      "SELECT code, name, status, your_turn, updated_at, next, seats FROM tables ORDER BY updated_at DESC LIMIT ?",
+      "SELECT code, name, status, your_turn, updated_at, next, seats, moved_at FROM tables ORDER BY updated_at DESC LIMIT ?",
       MAX_TABLES,
     )
     .toArray()
@@ -78,5 +83,6 @@ export function listTables(sql: SqlStorage): TableEntry[] {
       updatedAt: row.updated_at,
       ...(row.next === null ? {} : { next: row.next }),
       ...(row.seats === null ? {} : { seats: JSON.parse(row.seats) as TableSeat[] }),
+      ...(row.moved_at === null ? {} : { movedAt: row.moved_at }),
     }));
 }

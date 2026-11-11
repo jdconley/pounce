@@ -51,8 +51,9 @@ struct LobbyView: View {
     private var seated: Bool { !(table?.mySeats.isEmpty ?? true) }
     private var shareURL: URL { DeepLink.shareURL(code: session.code) }
     private var tableName: String { room?.title ?? TableName.fallback(code: session.code) }
-    /// The server takes a rename from the host or any seated phone.
-    private var canRename: Bool { seated || room?.youAreHost == true }
+    /// The server takes a rename from the host or any seated phone, never from a kitten's (a
+    /// kitten types no names, spec §14.1).
+    private var canRename: Bool { (seated || room?.youAreHost == true) && model.ageBand != .kitten }
 
     @Environment(\.horizontalSizeClass) private var sizeClass
 

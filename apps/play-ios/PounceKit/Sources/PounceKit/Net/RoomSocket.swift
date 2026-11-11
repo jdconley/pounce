@@ -10,6 +10,8 @@ public enum SocketEvent: Equatable, Sendable {
     case disconnected
     /// Terminal: the room does not exist (404 on connect).
     case notFound
+    /// Terminal: too many wrong room codes (429 on connect); the server takes no more for a while.
+    case locked
     /// Terminal: the server said `room_closed`.
     case closed
     /// The open connection's quality changed (`LinkMeter`). Every new connection starts `good`
@@ -34,7 +36,7 @@ public protocol RoomSocketing: Sendable {
 /// `start()` connects and keeps reconnecting after every loss, waiting
 /// `backoff[min(attempt, last)]` first; `attempt` goes back to 0 when a snapshot
 /// arrives or on `reconnectNow()`. Frames that don't decode are dropped. `events`
-/// finishes when the socket stops for good: 404 on connect (`.notFound`), a
+/// finishes when the socket stops for good: 404 on connect (`.notFound`), 429 (`.locked`), a
 /// `room_closed` error (`.closed`), or `stop()`. A stopped socket can't be restarted.
 ///
 /// Heartbeats: every `tick` the connection's `LinkMeter` is checked and, when due, a heartbeat
@@ -182,6 +184,11 @@ public actor RoomSocket: RoomSocketing {
             } catch SocketConnectError.notFound {
                 guard isCurrent(gen) else { return }
                 emit(.notFound)
+                _ = finish()
+                return
+            } catch SocketConnectError.tooManyAttempts {
+                guard isCurrent(gen) else { return }
+                emit(.locked)
                 _ = finish()
                 return
             } catch {

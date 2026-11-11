@@ -18,8 +18,8 @@ public struct InviteLink: Equatable, Sendable {
     public var pairs: Set<String>
 
     public static let keepFor: TimeInterval = 60 * 60
-    /// A link answers for a day (play-api `ANSWER_MS`).
-    public static let lifetime: TimeInterval = 24 * 60 * 60
+    /// A link answers for 7 days (play-api `LINK_MS`).
+    public static let lifetime: TimeInterval = 7 * 24 * 60 * 60
 
     public init(url: URL, at: Date, pairs: Set<String>) {
         self.url = url
@@ -43,7 +43,8 @@ public struct InviteLink: Equatable, Sendable {
     }
 
     /// The link's token (`/p/<token>`): the app asks the server whether it's still unused before
-    /// showing it again, since any answer (Play, In a bit, Not now) uses it up.
+    /// showing it again, since any answer takes it: Play uses it up, and In a bit or Not now
+    /// make it the answerer's.
     public var token: String? {
         let last = url.lastPathComponent
         return DeepLink.isPounceToken(last) ? last : nil

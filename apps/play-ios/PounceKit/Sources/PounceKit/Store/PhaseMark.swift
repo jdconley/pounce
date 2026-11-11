@@ -1,4 +1,4 @@
-/// What the phase chip on a seat's cat says (the table's top bar): "P4" on a gold pill, or a
+/// What the phase chip on a seat's cat says (the table's top bar): "L4" on a gold pill, or a
 /// trophy once every phase is done, with the "laid down" sticker while this round's phase is
 /// down. The card count rides on a mini card back on the other corner, so the two never read
 /// alike.
@@ -25,8 +25,8 @@ public struct PhaseMark: Hashable, Sendable {
     /// Every phase is done (the chip wears a trophy).
     public var isDone: Bool { number == nil }
 
-    /// "P4"; nil once every phase is done.
-    public var text: String? { number.map { "P\($0)" } }
+    /// "L4"; nil once every phase is done.
+    public var text: String? { number.map { "L\($0)" } }
 
     /// How far along: the phase number, one past the last phase once done.
     public var rank: Int { number ?? Rules.phases.count + 1 }

@@ -272,5 +272,12 @@
       "t": "nudge",
       "seat": 1
     }
+  },
+  {
+    "name": "retire",
+    "message": {
+      "t": "retire",
+      "seat": 1
+    }
   }
 ]

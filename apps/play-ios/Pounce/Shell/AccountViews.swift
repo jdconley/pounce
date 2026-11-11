@@ -235,41 +235,111 @@ struct MergeView: View {
     }
 }
 
-/// "Delete your account?": your cat over the trash can, back or the trash.
+/// The last step before deleting a player (App Store guideline 5.1.1(v)): the cat with a trash
+/// can on it, then in words what goes and that it can't be undone. `signedIn` says the account
+/// (on every device) goes; otherwise the player on this phone does, and the name and cat stay
+/// here to start fresh.
 struct DeleteConfirmView: View {
     let cat: Int
+    var name: String = ""
+    var signedIn = true
     let onBack: () -> Void
     let onDelete: () -> Void
+
+    static func title(signedIn: Bool) -> String {
+        signedIn
+            ? String(localized: "Delete your account?", comment: "Delete confirm: title for a signed-in account")
+            : String(localized: "Delete your data?", comment: "Delete confirm: title for a player who isn't signed in")
+    }
+
+    static func detail(signedIn: Bool, name: String) -> String {
+        let who = name.isEmpty ? String(localized: "this player", comment: "Delete confirm: when the player has no name") : name
+        return signedIn
+            ? String(localized: "This deletes \(who) from Pounce on every device: games, streaks, connections, invites and settings. It can't be undone.",
+                     comment: "Delete confirm: what deleting a signed-in account removes")
+            : String(localized: "This deletes \(who)'s games, streaks, connections, invites and notifications from our server. It can't be undone. The name and cat stay on this phone so you can keep playing.",
+                     comment: "Delete confirm: what deleting a guest's data removes")
+    }
 
     var body: some View {
         ZStack {
             Palette.night.ignoresSafeArea()
-            VStack(spacing: 30) {
-                ZStack(alignment: .bottom) {
-                    CatDisc(cat: cat, side: 170, color: Palette.magenta)
-                    Circle()
-                        .fill(LinearGradient(colors: [Palette.refuse.mix(with: .white, by: 0.25), Palette.refuse], startPoint: .top, endPoint: .bottom))
-                        .overlay(Circle().strokeBorder(Palette.ink, lineWidth: 5))
-                        .overlay { Image(ArtName.iconDelete).resizable().scaledToFit().padding(18) }
-                        .frame(width: 86, height: 86)
-                        .offset(y: 44)
-                }
-                .padding(.bottom, 44)
-                .accessibilityHidden(true)
-                HStack(spacing: 22) {
-                    PillButton(icon: ArtName.iconBack, color: Palette.sky, size: .large, width: 150, accessibilityLabel: "Back") {
-                        onBack()
+            ScrollView {
+                VStack(spacing: 24) {
+                    ZStack(alignment: .bottom) {
+                        CatDisc(cat: cat, side: 150, color: Palette.magenta)
+                        Circle()
+                            .fill(LinearGradient(colors: [Palette.refuse.mix(with: .white, by: 0.25), Palette.refuse], startPoint: .top, endPoint: .bottom))
+                            .overlay(Circle().strokeBorder(Palette.ink, lineWidth: 5))
+                            .overlay { Image(ArtName.iconDelete).resizable().scaledToFit().padding(18) }
+                            .frame(width: 80, height: 80)
+                            .offset(y: 40)
                     }
-                    .accessibilityIdentifier("delete.back")
-                    PillButton(icon: ArtName.iconDelete, color: Palette.refuse, size: .large, width: 150, accessibilityLabel: "Delete account") {
-                        onDelete()
+                    .padding(.bottom, 40)
+                    .accessibilityHidden(true)
+                    OutlinedText(Self.title(signedIn: signedIn), size: 30, fill: .white, width: 3, lines: 2)
+                        .accessibilityAddTraits(.isHeader)
+                        .accessibilityIdentifier("delete.title")
+                    Text(Self.detail(signedIn: signedIn, name: name))
+                        .font(.system(size: 18, weight: .bold, design: .rounded))
+                        .foregroundStyle(.white.opacity(0.92))
+                        .multilineTextAlignment(.center)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .frame(maxWidth: 420)
+                        .accessibilityIdentifier("delete.detail")
+                    HStack(spacing: 22) {
+                        PillButton(
+                            icon: ArtName.iconBack, color: Palette.sky, size: .large, width: 150,
+                            title: String(localized: "Keep", comment: "Delete confirm: don't delete"),
+                            accessibilityLabel: "Keep my data"
+                        ) {
+                            onBack()
+                        }
+                        .accessibilityIdentifier("delete.back")
+                        PillButton(
+                            icon: ArtName.iconDelete, color: Palette.refuse, size: .large, width: 150,
+                            title: String(localized: "Delete", comment: "Delete confirm: delete for good"),
+                            accessibilityLabel: signedIn ? "Delete account" : "Delete my data"
+                        ) {
+                            onDelete()
+                        }
+                        .accessibilityIdentifier("delete.confirm")
                     }
-                    .accessibilityIdentifier("delete.confirm")
                 }
+                .padding(.horizontal, 20)
+                .padding(.vertical, 40)
+                .frame(maxWidth: .infinity)
             }
+            .scrollBounceBehavior(.basedOnSize)
+            .defaultScrollAnchor(.center, for: .alignment)
         }
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("screen-delete")
+    }
+}
+
+/// The gear sheet's delete for a player who isn't signed in, a kitten's device included: the
+/// same server delete as an account's, from a worded button.
+struct GuestDeleteRow: View {
+    let onDelete: () -> Void
+
+    var body: some View {
+        Button {
+            Haptics.shared.tick()
+            onDelete()
+        } label: {
+            HStack(spacing: 10) {
+                Image(ArtName.iconDelete).resizable().scaledToFit().frame(width: 26, height: 26)
+                Text("Delete my data", comment: "Gear sheet: deletes a player who isn't signed in from the server")
+                    .font(.system(size: 18, weight: .black, design: .rounded))
+                    .foregroundStyle(.white)
+            }
+            .padding(.horizontal, 18)
+            .padding(.vertical, 10)
+            .background(Capsule().fill(Palette.refuse.opacity(0.85)).overlay(Capsule().strokeBorder(Palette.ink, lineWidth: 3)))
+        }
+        .buttonStyle(.plain)
+        .accessibilityIdentifier("gear.delete")
     }
 }
 
@@ -388,6 +458,37 @@ struct AgeBandPicker: View {
     }
 }
 
+/// After a guest's delete: done, in words.
+struct DeletedView: View {
+    let onDone: () -> Void
+
+    var body: some View {
+        ZStack {
+            Palette.night.ignoresSafeArea()
+            VStack(spacing: 22) {
+                OutlinedText(String(localized: "Your data is deleted", comment: "After deleting a guest's data"),
+                             size: 30, fill: .white, width: 3, lines: 2)
+                    .accessibilityAddTraits(.isHeader)
+                Text("Our server no longer has your games, streaks or invites. You can keep playing as a new player.",
+                     comment: "After deleting a guest's data: what happened")
+                    .font(.system(size: 18, weight: .bold, design: .rounded))
+                    .foregroundStyle(.white.opacity(0.92))
+                    .multilineTextAlignment(.center)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .frame(maxWidth: 420)
+                PillButton(icon: ArtName.iconCheck, color: Palette.lime, size: .large, width: 220,
+                           title: String(localized: "Done", comment: "After deleting: close"), accessibilityLabel: "Done") {
+                    onDone()
+                }
+                .accessibilityIdentifier("deleted.done")
+            }
+            .padding(24)
+        }
+        .accessibilityElement(children: .contain)
+        .accessibilityIdentifier("screen-deleted")
+    }
+}
+
 /// The merge picture and the Settings path, over whichever sheet started them.
 struct AccountOverlays: ViewModifier {
     @Environment(AppModel.self) private var model
@@ -399,8 +500,11 @@ struct AccountOverlays: ViewModifier {
                     MergeView(merge: merge).transition(.opacity)
                 } else if model.account.showSettingsPath {
                     SettingsPathView { model.account.showSettingsPath = false }.transition(.opacity)
+                } else if model.account.deletedGuest {
+                    DeletedView { model.account.deletedGuest = false }.transition(.opacity)
                 }
             }
+            .animation(.easeOut(duration: 0.25).paced, value: model.account.deletedGuest)
             .animation(.easeOut(duration: 0.25).paced, value: model.account.merge)
             .animation(.easeOut(duration: 0.25).paced, value: model.account.showSettingsPath)
     }

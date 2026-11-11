@@ -5,6 +5,8 @@ import type { Identities } from "./players/identities";
 import type { Player } from "./players/player";
 import type { DeviceIndex } from "./room/device-index";
 import type { GameRoom } from "./room/game-room";
+import type { Limiter } from "./safety/limiter";
+import type { Reports } from "./safety/reports";
 import type { Pair } from "./streaks/pair";
 
 export interface Env {
@@ -21,6 +23,15 @@ export interface Env {
   CONSENTS: DurableObjectNamespace<Consents>;
   /** One instance, named `KITTENS_NAME`: link codes, kitten ids, parents, text tokens, phone hashes, app transactions. */
   KITTENS: DurableObjectNamespace<KittenIndex>;
+  /** One instance per limited key (an address, a device): counters that hold across isolates. */
+  LIMITS: DurableObjectNamespace<Limiter>;
+  /** One instance, named `REPORTS_NAME`: every player report. */
+  REPORTS: DurableObjectNamespace<Reports>;
+  /**
+   * The owner's key for `GET /v1/admin/reports`. A secret, optional: without it that route is a
+   * 404 and reports are read in the Cloudflare dashboard instead.
+   */
+  REPORTS_KEY?: string;
   /**
    * Streaks, table looks and Play again (daily habit PR 3) when "on".
    * wrangler.jsonc turns it on in production (and for `wrangler dev`) since
@@ -67,8 +78,14 @@ export interface Env {
   TWILIO_VERIFY_SERVICE_SID?: string;
   /** HMAC key for device tokens. A secret; absent until configured. */
   TOKEN_SECRET?: string;
-  /** Public TestFlight link for the share page. Optional; the page omits the link when unset. */
+  /** Public TestFlight link for the share page. Optional; used only while `APP_STORE_URL` is empty. */
   TESTFLIGHT_URL?: string;
+  /**
+   * The App Store listing, `https://apps.apple.com/app/id<number>` (wrangler.jsonc). The invite
+   * pages' "Get the app" goes there, and its numeric id turns on Safari's Smart App Banner. Empty
+   * until the App Store id is known: no banner, and the button falls back to `TESTFLIGHT_URL`.
+   */
+  APP_STORE_URL?: string;
   /** APNs auth key, PEM PKCS#8 text. A secret; without it (and the key id) no push is sent. */
   APNS_KEY_P8?: string;
   /** APNs auth key id (the JWT `kid`). A secret. */

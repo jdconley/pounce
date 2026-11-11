@@ -4,8 +4,8 @@ import SwiftUI
 /// A player's card (tap their cat in the table's top bar), over the table like the scoreboard:
 /// their cat, name and who plays it (a person here or on their own phone, or a House Cat), their
 /// phase, cards in hand and points, and for a person whether you're connected and your streak
-/// together (the badge that used to sit on the table). Tap outside it, or its close button, to
-/// put it away.
+/// together (the badge that used to sit on the table), and Report and Block for a person on
+/// another phone. Tap outside it, or its close button, to put it away.
 struct PlayerCardOverlay: View {
     let card: PlayerCard
     /// The table as the scene drew it when the cat was tapped.
@@ -13,10 +13,17 @@ struct PlayerCardOverlay: View {
     /// The seat's Nudge button as the store has it now (nil: none), and what a tap on it does.
     var nudge: () -> RoomStore.NudgeButton? = { nil }
     var onNudge: () -> Void = {}
+    /// Whether this phone may retire the seat now (its move has waited days), and what confirming does.
+    var canRetire: () -> Bool = { false }
+    var onRetire: () -> Void = {}
+    /// Report and Block, for a person on another phone: the server to tell, the table's code and
+    /// the local person a block belongs to. Nil (a demo table): no such buttons.
+    var safety: (api: any SafetyService, code: String, me: String?)?
     let onClose: () -> Void
 
     @Environment(\.horizontalSizeClass) private var sizeClass
     @State private var appeared = false
+    @State private var confirmingRetire = false
 
     private var scale: CGFloat { sizeClass == .regular ? 1.2 : 1 }
     private var ring: Color { SeatInfo.ringColor(card.seat) }
@@ -64,14 +71,20 @@ struct PlayerCardOverlay: View {
             stats
             if let text = card.phaseText {
                 OutlinedText(text, size: 18 * scale, fill: .white, width: 3, lines: 2)
-                    .accessibilityLabel(Text("Collecting \(text)", comment: "VoiceOver: what a player's phase needs"))
+                    .accessibilityLabel(Text("Collecting \(text)", comment: "VoiceOver: what a player's level needs"))
             }
             notes
             if case .away = card.kind, nudge() != nil {
                 NudgeButton(name: name, state: nudge, onNudge: onNudge, scale: scale)
                     .padding(.top, 2)
             }
+            if case .away = card.kind, canRetire() {
+                retireButton
+            }
             connection
+            if case .away = card.kind, let safety, let person = card.person {
+                SafetyActions(api: safety.api, code: safety.code, person: person, me: safety.me, scale: scale)
+            }
         }
         .padding(.horizontal, 18 * scale)
         .padding(.top, 22 * scale)
@@ -108,6 +121,64 @@ struct PlayerCardOverlay: View {
         .buttonStyle(.plain)
         .accessibilityLabel(Text("Close", comment: "VoiceOver: close the player card"))
         .accessibilityIdentifier("player.close")
+    }
+
+    // MARK: retiring a stalled seat
+
+    /// For a person whose move has waited days: the others can play on without them. Small and
+    /// plain beside Nudge, and it asks first, saying what happens.
+    private var retireButton: some View {
+        Button {
+            Haptics.shared.tick()
+            confirmingRetire = true
+        } label: {
+            Text("Play on without \(name)", comment: "Player card: retire the seat of a person whose move has waited days (asks first)")
+                .font(.system(size: 16 * scale, weight: .black, design: .rounded))
+                .foregroundStyle(.white)
+                .lineLimit(1)
+                .minimumScaleFactor(0.7)
+                .padding(.horizontal, 18 * scale)
+                .frame(minHeight: 44 * scale)
+                .background(Capsule().fill(Palette.magenta).overlay(Capsule().strokeBorder(Palette.ink, lineWidth: 3)))
+                .shadow(color: Palette.ink.opacity(0.5), radius: 0, x: 0, y: 3)
+        }
+        .buttonStyle(.plain)
+        .accessibilityIdentifier("player.retire")
+        .alert(
+            String(localized: "Retire \(name)'s seat?", comment: "Retire confirmation title: whose stalled seat"),
+            isPresented: $confirmingRetire
+        ) {
+            Button(String(localized: "Retire seat", comment: "Retire confirmation: the destructive button"), role: .destructive) {
+                onRetire()
+            }
+            .accessibilityIdentifier("retire.confirm")
+            Button(String(localized: "Keep waiting", comment: "Retire confirmation: leave the seat be"), role: .cancel) {}
+                .accessibilityIdentifier("retire.cancel")
+        } message: {
+            Text(retireMessage)
+        }
+    }
+
+    /// Why it's offered and what happens (§5.13, as a forfeit): the game ends and the last player
+    /// wins, or they are out and the rest play on.
+    private var retireMessage: String {
+        let why = String(
+            localized: "It has been \(name)'s move for 3 days.",
+            comment: "Retire confirmation: why the seat can be retired")
+        let then: String
+        switch model.forfeitOutcome(card.seat) {
+        case .ends(let winner):
+            let other = SeatInfo.name(model.room, winner)
+            then = String(
+                localized: "The game ends now and \(other) wins.",
+                comment: "Retire confirmation: with one other player left, the game ends and they win")
+        case .out:
+            then = String(
+                localized: "\(name) will be out of this game and finish last. Everyone else keeps playing.",
+                comment: "Retire confirmation: that seat is out, the rest play on")
+        }
+        let last = String(localized: "This can't be undone.", comment: "Retire confirmation: it is final")
+        return "\(why) \(then) \(last)"
     }
 
     private var pose: CatPose {
@@ -176,7 +247,7 @@ struct PlayerCardOverlay: View {
     private var stats: some View {
         HStack(spacing: 10 * scale) {
             stat(
-                caption: String(localized: "Phase", comment: "Player card: the phase tile's caption"),
+                caption: String(localized: "Level", comment: "Player card: the level tile's caption"),
                 value: card.phaseText == nil ? "10" : String(card.phase + 1), id: "player.phase"
             ) {
                 ZStack {
@@ -231,7 +302,7 @@ struct PlayerCardOverlay: View {
         if card.laid || card.skipped {
             HStack(spacing: 14 * scale) {
                 if card.laid {
-                    note(ArtName.badgeLaid, String(localized: "Laid down", comment: "Player card: laid this round's phase down"))
+                    note(ArtName.badgeLaid, String(localized: "Laid down", comment: "Player card: laid this round's level down"))
                 }
                 if card.skipped {
                     note(ArtName.badgeSkip, String(localized: "Skip waiting", comment: "Player card: a skip waits on this player"))

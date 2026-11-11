@@ -18,6 +18,8 @@ struct JoinView: View {
     private var checking: Bool { model.probing != nil && model.probing == typed }
     /// The check's socket failed to connect several times: the server can't be reached.
     private var offline: Bool { checking && model.room?.offline == true }
+    /// The server refused the check: too many wrong codes from this phone or its network.
+    private var locked: Bool { checking && model.room?.store.phase == .locked }
 
     @Environment(\.horizontalSizeClass) private var sizeClass
 
@@ -43,12 +45,16 @@ struct JoinView: View {
         }
         .background { background }
         .overlay {
-            if offline {
+            if locked {
+                StateCard(kind: .locked) { model.goHome() }
+                    .transition(.opacity)
+            } else if offline {
                 StateCard(kind: .offline, onRetry: { model.room?.retry() }) { model.goHome() }
                     .transition(.opacity)
             }
         }
         .animation(.easeOut(duration: 0.25).paced, value: offline)
+        .animation(.easeOut(duration: 0.25).paced, value: locked)
         .onChange(of: model.joinNope) { nope() }
         .onAppear {
             if let bounced = model.takeBouncedCode() {

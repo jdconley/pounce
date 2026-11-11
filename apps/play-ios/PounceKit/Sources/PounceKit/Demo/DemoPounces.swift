@@ -35,7 +35,7 @@ public final class DemoPounceService: PounceService, Sendable {
         return choice.flatMap { $0 == "new" ? nil : $0 } ?? Self.newCode
     }
 
-    public func linkPounce(token: String) async throws -> LinkPounce {
+    public func linkPounce(token: String, person: String?) async throws -> LinkPounce {
         LinkPounce(id: "pc_demoLinkAAAAAAAAAAAAAA", from: PushFace(name: "Leo", cat: 1), target: .pick)
     }
 }

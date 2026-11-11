@@ -36,10 +36,23 @@ struct StateCard: View {
             case .closed: "This table is closed"
             case .stalled: "The House Cat got stuck"
             case .offline: "Can't reach the server"
-            case .full: "This table is full or already playing"
+            case .full: "This game already started"
             case .update: "Update the app to play"
             case .locked: "Too many wrong codes. Try again later"
-            case .out: "You forfeited this game. The others are still playing"
+            case .out: "You forfeited this game"
+            }
+        }
+
+        /// One plain line under the label.
+        var detail: LocalizedStringKey {
+            switch self {
+            case .closed: "Go home and start a new one."
+            case .stalled: "Go home and start a new game."
+            case .offline: "Check your internet, then try again."
+            case .full: "Every seat is taken. Ask for a new table."
+            case .update: "Get the newest Pounce from the App Store."
+            case .locked: "Wait a little, then try the code again."
+            case .out: "The others are still playing."
             }
         }
     }
@@ -49,16 +62,16 @@ struct StateCard: View {
     let onHome: () -> Void
 
     @State private var appeared = false
-    @Environment(\.horizontalSizeClass) private var sizeClass
 
     var body: some View {
         ZStack {
             RoomBackground()
-            VStack(spacing: 28) {
+            ScrollView {
+            VStack(spacing: 22) {
                 Image(kind.art)
                     .resizable()
                     .scaledToFit()
-                    .frame(width: 260, height: 260)
+                    .frame(width: 220, height: 220)
                     .background(
                         Circle()
                             .fill(RadialGradient(
@@ -69,24 +82,30 @@ struct StateCard: View {
                     .shadow(color: Palette.ink.opacity(0.5), radius: 0, x: 0, y: 8)
                     .scaleEffect(appeared ? 1 : 0.6)
                     .opacity(appeared ? 1 : 0)
-                    .accessibilityLabel(kind.label)
-                    .accessibilityAddTraits(.isImage)
+                    .accessibilityHidden(true)
                     .accessibilityIdentifier("state.art")
+                WordLabel(title: kind.label, detail: kind.detail, alignment: .center, speaks: true)
+                    .padding(.horizontal, 24)
+                    .accessibilityIdentifier("state.text")
                 HStack(spacing: 18) {
                     if let onRetry {
-                        PillButton(icon: ArtName.iconPlay, color: Palette.lime, size: .large, accessibilityLabel: "Try again") {
+                        PillButton(icon: ArtName.iconPlay, color: Palette.lime, size: .medium, width: 150,
+                                   title: String(localized: "Try again"), accessibilityLabel: "Try again") {
                             onRetry()
                         }
                         .accessibilityIdentifier("state.retry")
                     }
-                    PillButton(icon: ArtName.iconHome, color: Palette.orange, size: .large, accessibilityLabel: "Home") {
+                    PillButton(icon: ArtName.iconHome, color: Palette.orange, size: .medium, width: 150,
+                               title: String(localized: "Home"), accessibilityLabel: "Home") {
                         onHome()
                     }
                     .accessibilityIdentifier("state.home")
                 }
             }
-            // Bigger on a roomy (iPad) screen; the phone keeps its size.
-            .scaleEffect(sizeClass == .regular ? 1.3 : 1)
+            .padding(.vertical, 24)
+            .frame(maxWidth: .infinity)
+            }
+            .scrollBounceBehavior(.basedOnSize)
         }
         .onAppear {
             withAnimation(.spring(duration: 0.5, bounce: 0.45).paced) { appeared = true }

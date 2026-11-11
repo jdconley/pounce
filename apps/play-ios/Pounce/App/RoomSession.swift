@@ -346,7 +346,7 @@ final class RoomSession {
 
     private var isTerminal: Bool {
         switch store.phase {
-        case .closed, .notFound, .needsUpdate: true
+        case .closed, .notFound, .locked, .needsUpdate: true
         default: false
         }
     }

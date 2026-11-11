@@ -18,6 +18,13 @@ public struct ErrorCode: RawRepresentable, Codable, Hashable, Sendable {
     // Any message.
     public static let badMessage = ErrorCode(rawValue: "bad_message")
     public static let `internal` = ErrorCode(rawValue: "internal")
+    /// A person's or a table's name the server's name filter refuses (or, from a kitten's device,
+    /// one the dice didn't roll).
+    public static let badName = ErrorCode(rawValue: "bad_name")
+    /// Not for this device: a kitten renaming the table.
+    public static let notAllowed = ErrorCode(rawValue: "not_allowed")
+    /// The table's host blocked this player, so the seat is refused.
+    public static let blocked = ErrorCode(rawValue: "blocked")
     // Lobby and seats.
     public static let notLobby = ErrorCode(rawValue: "not_lobby")
     public static let inGame = ErrorCode(rawValue: "in_game")
@@ -203,6 +210,9 @@ public enum ClientMessage: Encodable, Equatable, Sendable {
     /// Asks the person in `seat`, whose move it is, to take it; only to a server whose snapshots
     /// carry `nudge` for that seat.
     case nudge(seat: Seat)
+    /// Forfeits `seat` for its holder, whose move has waited days; only when the snapshot's
+    /// `retire` names that seat with no wait left.
+    case retire(seat: Seat)
 
     private enum CodingKeys: String, CodingKey { case t, seat, person, kind, action, state, code, name, rug, back, id }
 
@@ -256,6 +266,9 @@ public enum ClientMessage: Encodable, Equatable, Sendable {
             try c.encode(report, forKey: .state)
         case .nudge(let seat):
             try c.encode("nudge", forKey: .t)
+            try c.encode(seat, forKey: .seat)
+        case .retire(let seat):
+            try c.encode("retire", forKey: .t)
             try c.encode(seat, forKey: .seat)
         }
     }

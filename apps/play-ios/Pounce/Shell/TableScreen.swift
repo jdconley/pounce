@@ -69,6 +69,9 @@ struct TableScreen: View {
         case .notFound:
             // A bad code bounces to Join; a known table that 404'd closed.
             return session.goneMeaning == .badCode ? .connecting : .state(.closed)
+        case .locked:
+            // Too many wrong room codes from this phone or its network.
+            return .state(.locked)
         case .needsUpdate:
             return .state(.update)
         }
@@ -411,7 +414,14 @@ private struct TableStage: View {
                 PlayerCardOverlay(
                     card: card, model: tap.model,
                     nudge: { [store = session.store] in store.nudgeButton(for: tap.seat) },
-                    onNudge: { [store = session.store] in store.nudge(seat: tap.seat) }
+                    onNudge: { [store = session.store] in store.nudge(seat: tap.seat) },
+                    canRetire: { [store = session.store] in store.canRetire(seat: tap.seat) },
+                    onRetire: { [store = session.store] in
+                        // The seat's `forfeited` event brings the pill; the card has nothing more to say.
+                        store.retire(seat: tap.seat)
+                        events.player = nil
+                    },
+                    safety: (api: model.api, code: session.code, me: model.people.owner?.id)
                 ) { events.player = nil }
                     .transition(.opacity)
                     .zIndex(TableLayer.scoreboard)
@@ -586,7 +596,9 @@ private struct TableStage: View {
                     events.menuOpen = false
                     events.scoreboard = scene?.model
                 },
-                forfeitSeat: table?.forfeitSeat(shown: events.shown),
+                // A kitten can't forfeit: giving up a game someone else is in is a grown-up's call,
+                // and there is no parent step on the kitten's own phone to ask for one.
+                forfeitSeat: model.ageBand == .kitten ? nil : table?.forfeitSeat(shown: events.shown),
                 onForfeit: { seat in
                     events.menuOpen = false
                     session.forfeit(seat: seat)

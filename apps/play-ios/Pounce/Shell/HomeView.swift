@@ -191,26 +191,54 @@ struct HomeView: View {
 
     private func hero(width: CGFloat, height: CGFloat) -> some View {
         let side = min(width * 0.74, height * 0.34)
-        return Image(ArtName.gameTile)
-            .resizable()
-            .scaledToFit()
-            .frame(width: side * 1.1, height: side)
-            .shadow(color: Palette.ink.opacity(0.55), radius: 0, x: 0, y: 8)
-            .onTapGesture {
-                heroWiggle += 1
-                Haptics.shared.tick()
-                Sound.shared.play(ArtName.Sound.sfxPop)
-            }
-            .wiggle(trigger: heroWiggle)
-            .accessibilityLabel("Cat Tower")
-            .accessibilityAddTraits(.isImage)
+        // The game tile opens How to play, with a word under it so it says what it does.
+        return Button {
+            heroWiggle += 1
+            Haptics.shared.tick()
+            Sound.shared.play(ArtName.Sound.sfxPop)
+            showRules = true
+        } label: {
+            Image(ArtName.gameTile)
+                .resizable()
+                .scaledToFit()
+                .frame(width: side * 1.1, height: side)
+                .shadow(color: Palette.ink.opacity(0.55), radius: 0, x: 0, y: 8)
+                .wiggle(trigger: heroWiggle)
+                .overlay(alignment: .bottom) {
+                    Text("How to play", comment: "Home: caption on the game tile, which opens the rules")
+                        .font(.system(.callout, design: .rounded, weight: .black))
+                        .foregroundStyle(.white)
+                        .padding(.horizontal, 14)
+                        .padding(.vertical, 5)
+                        .background(Capsule().fill(Palette.orange).overlay(Capsule().strokeBorder(Palette.ink, lineWidth: 3)))
+                        .offset(y: 16)
+                        .accessibilityHidden(true)
+                }
+                .padding(.bottom, 14)
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("Cat Tower")
+        .accessibilityHint("Opens how to play")
+        .accessibilityIdentifier("home.hero")
     }
 
     /// `wide`: each pill this wide, side by side (roomy portrait); else stacked.
     private func pills(width: CGFloat, wide: CGFloat? = nil) -> some View {
         let w = wide ?? min(width - 56, 360)
         let stack = wide == nil ? AnyLayout(VStackLayout(spacing: 12)) : AnyLayout(HStackLayout(spacing: 20))
-        return stack {
+        return VStack(spacing: 10) {
+            if let error = model.newGameError {
+                Text(Self.createFailedMessage(error))
+                    .font(.system(.callout, design: .rounded, weight: .heavy))
+                    .foregroundStyle(.white)
+                    .multilineTextAlignment(.center)
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 8)
+                    .background(Capsule().fill(Palette.magenta).overlay(Capsule().strokeBorder(Palette.ink, lineWidth: 3)))
+                    .transition(.scale.combined(with: .opacity))
+                    .accessibilityIdentifier("home.createError")
+            }
+            stack {
             PillButton(
                 icon: ArtName.iconPlus, color: Palette.violet, size: .large, width: w,
                 title: String(localized: "Create", comment: "Home: the pill that starts a new game"),
@@ -231,6 +259,20 @@ struct HomeView: View {
                 model.showJoin()
             }
             .accessibilityIdentifier("home.join")
+            }
+        }
+        .animation(.spring(duration: 0.35, bounce: 0.4).paced, value: model.newGameError)
+    }
+
+    /// Why a new game didn't start, in words.
+    static func createFailedMessage(_ error: APIError) -> String {
+        switch error {
+        case .transport:
+            String(localized: "No internet. Check your connection and try again.", comment: "Home: Create failed offline")
+        case .rateLimited:
+            String(localized: "Too many tries. Wait a little and try again.", comment: "Home: Create was rate limited")
+        default:
+            String(localized: "Couldn't start a game. Try again.", comment: "Home: Create failed")
         }
     }
 
@@ -438,7 +480,7 @@ struct HomeView: View {
         }
         return [
             HomeTableItem(id: "M3W7Z", name: "Friday Night Cats", yourTurn: true, status: "playing", seats: seats([("Mia", 2)]), turnCat: 2, updatedAt: 0),
-            HomeTableItem(id: "K9PQR", name: "Sunday Brunch", yourTurn: false, status: "playing", seats: seats([("Biscuit", 4), ("Kiki", 6)]), turnCat: 4, updatedAt: 0),
+            HomeTableItem(id: "K9PQR", name: "Sunday Brunch", yourTurn: false, status: "playing", seats: seats([("Biscuit", 4), ("Kiki", 6)]), turnCat: 4, updatedAt: 0, idleDays: 3),
             HomeTableItem(id: "TB4XN", name: "Couch League", yourTurn: false, status: "lobby", seats: seats([], open: 2), turnCat: nil, updatedAt: 0),
             HomeTableItem(id: "GH2VD", name: "Rematch", yourTurn: false, status: "over", seats: seats([], bots: 1), turnCat: 3, updatedAt: 0),
             HomeTableItem(id: "WZ8CM", name: "Road Trip", yourTurn: true, status: "playing", seats: seats([("Pickle", 1), ("Nova", 5), ("Clementine", 3)]), turnCat: 2, updatedAt: 0),

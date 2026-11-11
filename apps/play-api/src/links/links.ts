@@ -27,7 +27,7 @@ export type LinkRow = { kind: LinkKind; playerId: string; pounceId: string; expi
 /**
  * One instance (§13.2): finds a pounce's sender from its id or its link
  * token, so neither carries a player id. Rows are deleted when used or when
- * they expire: links after 24 hours, pounce ids after 7 days (§14).
+ * they expire: links and pounce ids after 7 days (§14, `LINK_MS`).
  */
 export class Links extends DurableObject<Env> {
   constructor(ctx: DurableObjectState, env: Env) {

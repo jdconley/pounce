@@ -21,7 +21,7 @@ import Observation
 ///   until a snapshot lists it in `link.acks` (or an error refuses it). A snapshot that doesn't
 ///   list it keeps the lock; the first snapshot on a newer connection sends it again, same id,
 ///   which the server applies once. Without links, any snapshot releases the lock as before.
-/// - `closed`, `notFound` and `needsUpdate` are terminal: later messages are ignored.
+/// - `closed`, `notFound`, `locked` and `needsUpdate` are terminal: later messages are ignored.
 ///   `stalled` survives snapshots too (the bot clock stays stopped), but the room
 ///   keeps updating.
 /// - Nudges: `nudge(seat:)` sends one when `nudgeButton(for:)` is `.ready`. Its `nudgeSent` marks
@@ -69,6 +69,9 @@ import Observation
     public private(set) var nudgeReadyAt: Date?
     /// The seat of a nudge sent and not answered yet.
     public private(set) var nudgePending: Seat?
+    /// When this phone may retire `room.retire`'s seat: the snapshot's wait from when it arrived.
+    /// Nil when the room has nobody to retire.
+    public private(set) var retireReadyAt: Date?
     /// The last `nudged` for one of this phone's seats: whose, and who nudged. `serial` goes up
     /// with each. Nil until one arrives.
     public private(set) var nudgeNotice: NudgeNotice?
@@ -231,6 +234,26 @@ import Observation
         return true
     }
 
+    // MARK: retiring a stalled seat
+
+    /// True when this phone may retire `seat` now: the server offers it (a person on another
+    /// phone, on the move mid-round) and the move has waited out its days.
+    public func canRetire(seat: Seat) -> Bool {
+        guard let room, room.status == .playing, let game = room.game, game.status == .playing, game.turn == seat,
+              room.seats.indices.contains(seat), room.seats[seat].kind == .human, !room.seats[seat].yours,
+              room.retire?.seat == seat, let ready = retireReadyAt
+        else { return false }
+        return ready <= clock()
+    }
+
+    /// Forfeits `seat` for its holder. Returns false, sending nothing, unless `canRetire(seat:)`.
+    /// The server answers with the seat's `forfeited` event, like a forfeit of their own.
+    @discardableResult public func retire(seat: Seat) -> Bool {
+        guard canRetire(seat: seat) else { return false }
+        send(.retire(seat: seat))
+        return true
+    }
+
     private func applyNudgeSent(seat: Seat) {
         if nudgePending == seat { nudgePending = nil }
         guard room?.nudge?.seat == seat else { return }
@@ -289,6 +312,9 @@ import Observation
         case .notFound:
             connected = false
             if !isTerminal { phase = .notFound }
+        case .locked:
+            connected = false
+            if !isTerminal { phase = .locked }
         case .closed:
             connected = false
             if !isTerminal { phase = .closed }
@@ -300,7 +326,7 @@ import Observation
 
     private var isTerminal: Bool {
         switch phase {
-        case .closed, .notFound, .needsUpdate: true
+        case .closed, .notFound, .locked, .needsUpdate: true
         default: false
         }
     }
@@ -355,6 +381,8 @@ import Observation
         if let code = new.rematch, rematch != code { rematch = code }
         let readyAt = new.nudge.map { clock().addingTimeInterval(Double($0.wait) / 1000) }
         if readyAt != nudgeReadyAt { nudgeReadyAt = readyAt }
+        let retireAt = new.retire.map { clock().addingTimeInterval(Double($0.wait) / 1000) }
+        if retireAt != retireReadyAt { retireReadyAt = retireAt }
         // The move went on (or the nudge's answer is already in): nothing is waiting any more.
         if let pending = nudgePending, new.nudge?.seat != pending || new.nudge?.sent == true { nudgePending = nil }
         lastSeq = seq

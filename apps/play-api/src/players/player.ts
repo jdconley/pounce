@@ -73,7 +73,14 @@ export type PlayerExport = {
   /** Your own streak and the longest pair streak seen (trophy room design §2, §3). Absent from older exports. */
   personal?: Personal | null;
   pairBest?: number;
+  /** The players this one blocked. Absent from older exports. */
+  blocks?: BlockRow[];
 };
+
+/** A player this one blocked: their id, the person and name they had at the table, and when. */
+export type BlockRow = { playerId: string; personId: string; name: string; at: number };
+/** More blocks than anyone needs; the oldest go first. */
+const MAX_BLOCKS = 200;
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 /** A merged guest's forwarding stub lives this long (§14). */
@@ -117,6 +124,8 @@ export class Player extends DurableObject<Env> {
     );
     // The old pair id of each tombstone: the handle the leaver's ghosted cat undoes it by.
     sql.exec("CREATE TABLE IF NOT EXISTS left_handles (pair_id TEXT PRIMARY KEY, partner_id TEXT UNIQUE)");
+    // Players this one blocked: their pounces and nudges are dropped, and they can't join its tables.
+    sql.exec("CREATE TABLE IF NOT EXISTS blocks (player_id TEXT PRIMARY KEY, person_id TEXT, name TEXT, at INTEGER)");
     createTables(sql);
   }
 
@@ -326,7 +335,46 @@ export class Player extends DurableObject<Env> {
         .map((r) => ({ deviceId: r.device_id, personId: r.person_id, playerId: r.player_id, name: r.name, cat: r.cat })),
       personal: this.personal(),
       pairBest: this.pairBest(),
+      blocks: this.blocks(),
     };
+  }
+
+  // MARK: blocks
+
+  /** Blocks `row.playerId` (never itself). False when this player doesn't exist. */
+  block(row: BlockRow): boolean {
+    if (!this.exists() || row.playerId === this.getMeta("id")) return false;
+    const { sql } = this.ctx.storage;
+    sql.exec(
+      `INSERT INTO blocks (player_id, person_id, name, at) VALUES (?, ?, ?, ?)
+       ON CONFLICT (player_id) DO UPDATE SET person_id = excluded.person_id, name = excluded.name`,
+      row.playerId,
+      row.personId,
+      row.name,
+      row.at,
+    );
+    sql.exec("DELETE FROM blocks WHERE player_id NOT IN (SELECT player_id FROM blocks ORDER BY at DESC LIMIT ?)", MAX_BLOCKS);
+    return true;
+  }
+
+  unblock(playerId: string): void {
+    this.ctx.storage.sql.exec("DELETE FROM blocks WHERE player_id = ?", playerId);
+  }
+
+  /** Newest first. */
+  blocks(): BlockRow[] {
+    return this.ctx.storage.sql
+      .exec<{ player_id: string; person_id: string; name: string; at: number }>(
+        "SELECT player_id, person_id, name, at FROM blocks ORDER BY at DESC",
+      )
+      .toArray()
+      .map((r) => ({ playerId: r.player_id, personId: r.person_id, name: r.name, at: r.at }));
+  }
+
+  /** Whether this player blocked any of `playerIds`. */
+  blocksAny(playerIds: string[]): boolean {
+    const blocked = new Set(this.blocks().map((b) => b.playerId));
+    return playerIds.some((id) => blocked.has(id));
   }
 
   /** Takes in a merged player's data. This player keeps its own name and cat. */
@@ -360,6 +408,7 @@ export class Player extends DurableObject<Env> {
     const merged = mergePersonal(this.personal(), e.personal ?? null, this.zone(), now);
     if (merged) this.setMeta("personal", JSON.stringify(merged));
     if ((e.pairBest ?? 0) > this.pairBest()) this.setMeta("pair_best", e.pairBest as number);
+    for (const row of e.blocks ?? []) this.block(row);
   }
 
   /** Empties a merged player, leaving a pointer to `to` for 30 days. */
@@ -733,7 +782,7 @@ export class Player extends DurableObject<Env> {
   ): { claimed: { answer: Answer | null; answeredAt: number | null; code: string | null } } | { repeat: StoredPounce } | { gone: true } | { expired: true } {
     const row = this.pounce(id);
     if (!row) return { gone: true };
-    const verdict = claimAnswer(row, by, answer, now);
+    const verdict = claimAnswer(row, by, answer, now, row.link !== null);
     if (verdict === "gone") return { gone: true };
     if (verdict === "expired") return { expired: true };
     if (verdict === "repeat") return { repeat: row };

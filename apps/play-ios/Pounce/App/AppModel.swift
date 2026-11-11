@@ -62,6 +62,8 @@ final class AppModel {
     let notify: NotifySettingsStore
     /// A pounce to answer by picking (a "you pick" push, or a Messages link): the pick sheet.
     var pick: PickRequest?
+    /// A Messages link that no longer works: the worded "This invite has expired" card.
+    var expiredInviteShown = false
     /// The widgets' snapshot, reloads and push token (spec §11.2).
     @ObservationIgnored let widgets: WidgetBridge
     /// The live table's tokens and ends (spec §11.3).
@@ -505,10 +507,12 @@ final class AppModel {
         return nil
     }
 
-    /// Any answer to a link (Play, In a bit, Not now) uses it up: the server's preview says so.
+    /// Any answer to a link (Play, or In a bit / Not now, which make it that person's) takes it
+    /// off the sender's hands: the server's preview says so.
     private func unused(_ link: InviteLink) async -> Bool {
         guard let token = link.token else { return false }
-        return await pounces.link(token: token) != nil
+        if case .found = await pounces.link(token: token, person: people.owner?.id) { return true }
+        return false
     }
 
     /// A kitten's invite (§14.1): a new table whose code and QR are for in-person play only, the
@@ -920,15 +924,21 @@ final class AppModel {
 
     // MARK: Pounce (spec §12.4)
 
-    /// A Messages pounce: who sent it and what it asks, then the pick sheet. A used or expired
-    /// link (or one that can't be checked offline) gets the nope thump and sound, and no sheet.
+    /// A Messages pounce: who sent it and what it asks, then the pick sheet. A link the server
+    /// doesn't know any more (expired, played on, or someone else's) gets the worded expired
+    /// card; one that can't be checked (offline) gets the nope thump and sound, and no sheet.
     private func openLink(_ token: String) async {
-        guard let found = await pounces.link(token: token) else {
+        switch await pounces.link(token: token, person: people.owner?.id) {
+        case .found(let found):
+            showPick(PickRequest(id: found.id, target: found.target, from: found.from, link: token, person: people.owner?.id))
+        case .expired:
+            Haptics.shared.thump()
+            if case .room = route { closeRoom(); route = .home }
+            expiredInviteShown = true
+        case .unreachable:
             Haptics.shared.thump()
             Sound.shared.play(ArtName.Sound.sfxNope)
-            return
         }
-        showPick(PickRequest(id: found.id, target: found.target, from: found.from, link: token, person: people.owner?.id))
     }
 
     /// The person on this phone a pounce push is for: its title is their name (§12.2).

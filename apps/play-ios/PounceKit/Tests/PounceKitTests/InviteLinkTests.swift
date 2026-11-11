@@ -30,8 +30,8 @@ import Testing
 
     @Test func whileTheBellRestsAnUnexpiredLinkNobodyUsedStillServes() {
         let kept = InviteLink(url: url, at: t0, pairs: ["pr_mia"])
-        #expect(kept.usableWhileResting(now: t0.addingTimeInterval(23 * 3600), pairs: ["pr_mia"]))
-        #expect(!kept.usableWhileResting(now: t0.addingTimeInterval(25 * 3600), pairs: ["pr_mia"]))
+        #expect(kept.usableWhileResting(now: t0.addingTimeInterval(6 * 24 * 3600), pairs: ["pr_mia"]))
+        #expect(!kept.usableWhileResting(now: t0.addingTimeInterval(7 * 24 * 3600 + 60), pairs: ["pr_mia"]))
         #expect(!kept.usableWhileResting(now: t0.addingTimeInterval(60), pairs: ["pr_mia", "pr_kim"]),
                 "a new connection probably used it")
     }

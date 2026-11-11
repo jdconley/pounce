@@ -234,7 +234,7 @@ final class CardFaceFactory {
         return t
     }
 
-    /// A seat's phase chip: "P4" in ink on a glossy gold pill (the tower's shelf-badge gold)
+    /// A seat's phase chip: "L4" in ink on a glossy gold pill (the tower's shelf-badge gold)
     /// inside an ink outline, with a hard shadow; a trophy on it once every phase is done. The
     /// "P" is small and the number big, cap heights at least 11 pt. Not a card shape and not
     /// white numerals, so it never reads as the card count. Cached by mark and height.
@@ -247,7 +247,7 @@ final class CardFaceFactory {
         let ink = UIColor(Palette.ink)
         let text = NSMutableAttributedString()
         if let number = mark.number {
-            text.append(NSAttributedString(string: "P", attributes: [
+            text.append(NSAttributedString(string: "L", attributes: [
                 .font: Self.numeralFont(size: letterSize), .foregroundColor: ink, .kern: 1,
             ]))
             text.append(NSAttributedString(string: String(number), attributes: [

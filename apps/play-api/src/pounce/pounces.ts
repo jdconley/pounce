@@ -12,7 +12,7 @@ import { FALLBACK_ZONE } from "../streaks/clock";
 import { connect } from "../streaks/pairs";
 import { liveOn, trophyOn } from "../streaks/profile";
 
-import { ANSWER_MS, KEEP_MS, type Target } from "./limits";
+import { KEEP_MS, LINK_MS, type Target } from "./limits";
 import { LINK_TOKEN, parseAnswer, parsePounce, POUNCE_ID } from "./parse";
 
 import type { Env } from "../env";
@@ -22,7 +22,6 @@ import type { SeatInfo } from "../room/core";
 
 const ID_BYTES = 16;
 const ROOM_CODE_ATTEMPTS = 5;
-const LINK_MS = ANSWER_MS;
 
 const fail = (status: number, error: string, extra?: Record<string, unknown>): Result<never> => ({ status, error, ...(extra ? { extra } : {}) });
 const links = (env: Env) => env.LINKS.get(env.LINKS.idFromName(LINKS_NAME));
@@ -84,6 +83,8 @@ export async function createPounce(
   if (typeof parsed.target === "object" && !facts.tables.includes(parsed.target.table)) return fail(409, "not_shared");
   const them = await player(env, row.partnerId).pushProfile();
   if (!them) return fail(404, "not_found");
+  // They blocked the sender: the pounce is dropped, and the sender is told nothing.
+  if (await player(env, row.partnerId).blocksAny([me])) return { ok: { id } };
   const g = gate({ kind: "pounce", band: them.band, zone: them.zone ?? FALLBACK_ZONE, settings: them.settings, now, spacedAt: null, remindersToday: 0 });
   const quiet = !g.send || g.level === "passive";
   const stored = await self.tryPounce({ ...base, to: row.partnerId, quiet, link: null }, now);
@@ -145,7 +146,9 @@ async function dealFor(env: Env, seats: SeatInfo[], sender: string, hostDeviceId
  * the one picked), In a bit, or Not now. Idempotent, so the app's background
  * retry is safe; Play is never taken back. The sender's `Player` claims the
  * answer in one step, so two answers at once deal one table and send one
- * push. A link pounce needs its token, and the first answer takes it.
+ * push. A link pounce needs its token. The first answer makes it that person's (nobody
+ * else can answer it), and only Play uses the link up: after "In a bit" or "Not now" the
+ * same person can tap the link again and play, while it lasts (`LINK_MS`).
  */
 export async function answerPounce(
   env: Env,
@@ -161,6 +164,8 @@ export async function answerPounce(
   if (!found || found.sender === me) return fail(404, "not_found");
   if (!parsed) return fail(400, "bad_request");
   const { sender, row } = found;
+  // A block either way: there is no such pounce (a link passed on to someone the sender blocked, or sent before the block).
+  if ((await player(env, sender).blocksAny([me])) || (await player(env, me).blocksAny([sender]))) return fail(404, "not_found");
   if (row.to === null) {
     const link = parsed.link === null ? null : await links(env).get(parsed.link, now);
     if (!link || link.kind !== "link" || link.pounceId !== id) return fail(404, "not_found");
@@ -188,7 +193,7 @@ export async function answerPounce(
   // Connections on accept (trophy room design D2): Play on a link makes the pair at once, at 0, before
   // the table is dealt, so the deal's report reaches it and both lists show the table as a move. A
   // failed connect still deals; a failed deal leaves the pair at 0 (a retried answer finds it).
-  if (row.to === null && parsed.answer === "play" && trophyOn(env)) await connect(env, me, sender, now).catch(() => null);
+  if (row.link !== null && parsed.answer === "play" && trophyOn(env)) await connect(env, me, sender, now).catch(() => null);
 
   let code = dealing ? null : choice;
   if (dealing) {
@@ -208,7 +213,7 @@ export async function answerPounce(
     }
     await player(env, sender).setPounceCode(id, code);
   }
-  if (row.to === null && parsed.link !== null) await links(env).take(parsed.link, now);
+  if (row.link !== null && parsed.link !== null && parsed.answer === "play") await links(env).take(parsed.link, now);
   // Play at a table you both sit at: leaving it soon makes it live for you (§11.3). A new
   // game's room marks it as it deals.
   if (parsed.answer === "play" && code && !dealing && liveOn(env)) {
@@ -225,13 +230,23 @@ export async function answerPounce(
   return done(code ?? claim.claimed.code);
 }
 
-/** `GET /v1/pounces/links/{token}` and the `/p/` page: an unused, unexpired link's pounce and sender. */
-export async function linkPounce(env: Env, token: string, now: number): Promise<{ id: string; from: Face; target: Target } | null> {
+/**
+ * `GET /v1/pounces/links/{token}` and the `/p/` page: an unexpired link's pounce and sender,
+ * until someone plays on it. Once someone has answered (In a bit, Not now), the app finds it
+ * only for them (`viewer`); the web page (`viewer` undefined) still shows who sent it.
+ */
+export async function linkPounce(
+  env: Env,
+  token: string,
+  now: number,
+  viewer?: string | null,
+): Promise<{ id: string; from: Face; target: Target } | null> {
   if (!LINK_TOKEN.test(token)) return null;
   const link = await links(env).get(token, now);
   if (!link || link.kind !== "link") return null;
   const row = await player(env, link.playerId).pounce(link.pounceId);
   const meta = await player(env, link.playerId).meta();
-  if (!row || row.to !== null || !meta || meta.forwardTo !== null) return null;
+  if (!row || row.answer === "play" || !meta || meta.forwardTo !== null) return null;
+  if (viewer !== undefined && row.to !== null && row.to !== viewer) return null;
   return { id: row.id, from: { name: meta.name, cat: meta.cat }, target: row.target };
 }
