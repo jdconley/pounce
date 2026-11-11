@@ -17,6 +17,7 @@
     "@vitest/coverage-v8": "catalog:",
     "esbuild": "0.27.7",
     "miniflare": "catalog:",
+    "qrcode-generator": "2.0.4",
     "typescript": "catalog:",
     "vitest": "catalog:",
     "wrangler": "catalog:"

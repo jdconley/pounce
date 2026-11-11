@@ -1,9 +1,7 @@
 import { ROOM_CODE } from "../room/codes";
 
+import { CACHE, CSP, css, escapeHtml, shell } from "./layout";
 import { OG_IMAGE_BASE64 } from "./og-image";
-
-const CACHE = "public, max-age=300";
-const CSP = "default-src 'none'; style-src 'unsafe-inline'; img-src data:";
 
 const association = (pounces: boolean) =>
   JSON.stringify({
@@ -16,19 +14,18 @@ const association = (pounces: boolean) =>
 
 const CAT = `<svg class="cat" viewBox="0 0 120 110" role="img" aria-hidden="true" xmlns="http://www.w3.org/2000/svg"><path fill="currentColor" d="M18 6 44 30q16-6 32 0L102 6q8 22 4 48 8 10 8 24 0 28-54 28T6 78q0-14 8-24Q10 28 18 6Z"/><circle cx="43" cy="62" r="6" fill="#fff"/><circle cx="77" cy="62" r="6" fill="#fff"/></svg>`;
 
-const STYLE = `body{margin:0;min-height:100vh;display:flex;align-items:center;justify-content:center;background:#fff7ec;color:#2b2118;font-family:system-ui,sans-serif;text-align:center}main{padding:24px}.cat{width:120px;height:auto;color:#2b2118}h1{margin:16px 0 8px;font-size:1.25rem;font-weight:600}p{max-width:32em;margin:0 auto 20px;line-height:1.45}.code{font-size:3.5rem;font-weight:800;letter-spacing:.15em;margin:0 auto 8px;font-family:ui-monospace,monospace}a{display:inline-block;padding:12px 24px;border-radius:999px;background:#2b2118;color:#fff7ec;text-decoration:none;font-weight:600}@media (prefers-color-scheme:dark){body{background:#1c1612;color:#fff7ec}.cat{color:#fff7ec}a{background:#fff7ec;color:#1c1612}}`;
-
-const ESCAPES: Record<string, string> = {
-  "&": "&amp;",
-  "<": "&lt;",
-  ">": "&gt;",
-  '"': "&quot;",
-  "'": "&#39;",
-};
-
-function escapeHtml(text: string): string {
-  return text.replace(/[&<>"']/g, (ch) => ESCAPES[ch] as string);
-}
+/** The invite card: one panel in the middle of the page, and the install link as the one button. */
+const STYLE = css(`
+.invite{display:flex;align-items:center;justify-content:center;padding:16px 12px 8px;text-align:center}
+.card{width:100%;max-width:460px;padding:28px 22px 32px;background:var(--panel);color:var(--text);border:3px solid var(--ink);border-radius:26px;box-shadow:0 8px 0 var(--ink)}
+.cat{width:104px;height:auto;color:var(--ink)}
+.card h1{margin:14px 0 8px;font-size:1.6rem;color:var(--h1)}
+.card p{max-width:30em;margin:0 auto 20px;line-height:1.45}
+.card .code{margin:0 auto 10px;font-family:var(--round);font-size:3.25rem;font-weight:900;letter-spacing:.14em;line-height:1.1;color:var(--text)}
+.card a{display:inline-block;padding:13px 28px;border:3px solid var(--ink);border-radius:999px;background:linear-gradient(#FFC21A,#FF8A00);box-shadow:0 5px 0 var(--ink);color:var(--ink);font-family:var(--round);font-size:1.15rem;font-weight:900;text-decoration:none}
+.card a:active{transform:translateY(3px);box-shadow:0 2px 0 var(--ink)}
+@media (prefers-color-scheme:dark){.cat{color:#fff}.cat circle{fill:var(--ink)}}
+`);
 
 /** Apple fetches this to bind `/j/*` links (and, with streaks on, `/p/*` pounce links) on our domain to the app. */
 export function appSiteAssociation(pounces = false): Response {
@@ -40,7 +37,7 @@ export function appSiteAssociation(pounces = false): Response {
 /** Where the pages send people without the app: the App Store listing, or before launch TestFlight. */
 export type Install = { appStoreUrl?: string | undefined; testflightUrl?: string | undefined };
 
-const https = (url: string | undefined): string | null => (url?.startsWith("https://") ? url : null);
+export const https = (url: string | undefined): string | null => (url?.startsWith("https://") ? url : null);
 
 /** The App Store app id in `https://apps.apple.com/.../id123456789`, or null. */
 export function appStoreId(url: string | undefined): string | null {
@@ -68,22 +65,18 @@ function getTheApp(install: Install): string {
 const NOINDEX = { "cache-control": "no-store", "referrer-policy": "no-referrer", "x-robots-tag": "noindex" };
 
 function page(opts: { title: string; head?: string; body: string }): string {
-  return `<!doctype html>
-<html lang="en">
-<head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>${opts.title}</title>
-${opts.head ?? ""}<style>${STYLE}</style>
-</head>
-<body>
-<main>
+  return shell({
+    title: opts.title,
+    ...(opts.head === undefined ? {} : { head: opts.head }),
+    style: STYLE,
+    links: false,
+    body: `<main class="invite">
+<div class="card">
 ${CAT}
 ${opts.body}
-</main>
-</body>
-</html>
-`;
+</div>
+</main>`,
+  });
 }
 
 /**

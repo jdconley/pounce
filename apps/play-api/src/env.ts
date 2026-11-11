@@ -10,6 +10,12 @@ import type { Reports } from "./safety/reports";
 import type { Pair } from "./streaks/pair";
 
 export interface Env {
+  /**
+   * The static assets in ./public (wrangler.jsonc `assets`). The Worker reads only the landing
+   * page's clip through it (`/media/*`, src/http/media.ts); images are served without the Worker.
+   * Absent in Miniflare tests that mount no assets.
+   */
+  ASSETS?: Fetcher;
   ROOMS: DurableObjectNamespace<GameRoom>;
   DEVICES: DurableObjectNamespace<DeviceIndex>;
   PLAYERS: DurableObjectNamespace<Player>;

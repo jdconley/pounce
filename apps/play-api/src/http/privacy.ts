@@ -5,22 +5,9 @@
  * docs/privacy/app-store-label.md.
  */
 
-export const CACHE = "public, max-age=300";
-export const CSP = "default-src 'none'; style-src 'unsafe-inline'; img-src data:";
+import { CACHE, CSP, docPage } from "./layout";
 
-export const STYLE = `body{margin:0;background:#2a0f5c;color:#fff;font-family:system-ui,sans-serif;line-height:1.55}main{max-width:720px;margin:0 auto;padding:28px 20px 56px}h1{font-size:2rem;margin:0 0 4px;color:#ff8a00}h2{font-size:1.25rem;margin:32px 0 8px;color:#00d1c1}p,li{font-size:1rem}ul{padding-left:22px}.updated{color:#9be22e;font-weight:600;margin:0 0 20px}a{color:#2eb8ff}section{background:#3a1a75;border:3px solid #1b0b3a;border-radius:18px;padding:4px 18px 14px;margin-top:24px}`;
-
-const HTML = `<!doctype html>
-<html lang="en">
-<head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Pounce privacy</title>
-<style>${STYLE}</style>
-</head>
-<body>
-<main>
-<h1>Pounce privacy policy</h1>
+const BODY = `<h1>Pounce privacy policy</h1>
 <p class="updated">Last updated 10 November 2026</p>
 <p>Pounce is a game app for couples and families, made by Conley Chaos LLC ("we"). This page says what the app and its server keep, why, who else handles it, for how long, and how to delete it. Pounce has no ads, no analytics, no tracking and no third-party SDKs. We never sell your data and never share it for advertising. The only companies that handle it are the service providers named below, and only to run Pounce.</p>
 
@@ -96,11 +83,15 @@ const HTML = `<!doctype html>
 </section>
 
 <h2>Changes</h2>
-<p>If this policy changes in a way that matters, the app will say so before the change applies to you.</p>
-</main>
-</body>
-</html>
-`;
+<p>If this policy changes in a way that matters, the app will say so before the change applies to you.</p>`;
+
+const HTML = docPage({
+  title: "Pounce privacy",
+  head: '<meta name="description" content="The Pounce privacy policy: what the app and its server keep, why, who else handles it, for how long, how to delete it, and the notice for parents of children under 13.">\n',
+  body: BODY,
+  current: "privacy",
+});
+
 
 /** With parent consent (`CONSENT` on) the policy says what it adds; off, the page is as before. */
 const WITH_CONSENT = HTML.replace(/<!--plain-->[\s\S]*?<!--\/plain-->/g, "").replace(/<!--\/?consent-->/g, "");
