@@ -243,12 +243,20 @@ export async function mint(mf: Miniflare): Promise<Device> {
   return (await res.json()) as Device;
 }
 
-export function call(mf: Miniflare, device: Device, method: string, path: string, body?: unknown): Promise<Response> {
-  return mf.dispatchFetch(`${BASE}${path}`, {
+/**
+ * One request as a device. The response's body is read into memory before it comes back, so a
+ * test may make other requests first and read it later. Miniflare's own response can't promise
+ * that: it wraps undici's and drops the original, and undici cancels an unread body once that
+ * original is garbage collected ("Body is unusable: Body has already been read").
+ */
+export async function call(mf: Miniflare, device: Device, method: string, path: string, body?: unknown): Promise<Response> {
+  const res = await mf.dispatchFetch(`${BASE}${path}`, {
     method,
     headers: { authorization: `Bearer ${device.token}`, "content-type": "application/json" },
     ...(body === undefined ? {} : { body: JSON.stringify(body) }),
-  }) as unknown as Promise<Response>;
+  });
+  if (res.body === null) return res as unknown as Response;
+  return new MiniflareResponse(await res.arrayBuffer(), res) as unknown as Response;
 }
 
 /** Uploads the device's profile and its APNs token; returns personId → playerId. */
