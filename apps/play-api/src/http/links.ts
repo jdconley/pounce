@@ -24,6 +24,7 @@ const STYLE = css(`
 .card .code{margin:0 auto 10px;font-family:var(--round);font-size:3.25rem;font-weight:900;letter-spacing:.14em;line-height:1.1;color:var(--text)}
 .card a{display:inline-block;padding:13px 28px;border:3px solid var(--ink);border-radius:999px;background:linear-gradient(#FFC21A,#FF8A00);box-shadow:0 5px 0 var(--ink);color:var(--ink);font-family:var(--round);font-size:1.15rem;font-weight:900;text-decoration:none}
 .card a:active{transform:translateY(3px);box-shadow:0 2px 0 var(--ink)}
+.card .note{margin:18px auto 0;color:var(--muted);font-size:.92rem}
 @media (prefers-color-scheme:dark){.cat{color:#fff}.cat circle{fill:var(--ink)}}
 `);
 
@@ -56,10 +57,15 @@ function banner(install: Install, pageUrl: string): string {
   return id ? `<meta name="apple-itunes-app" content="app-id=${id}, app-argument=${escapeHtml(pageUrl)}">\n` : "";
 }
 
-/** The install button: the App Store when it's set, else TestFlight, else nothing. */
+/**
+ * The install button: the App Store when it's set, else TestFlight, else nothing. A TestFlight
+ * link gets one line under it, so nobody is surprised to land on a beta page.
+ */
 function getTheApp(install: Install): string {
-  const url = https(install.appStoreUrl) ?? https(install.testflightUrl);
-  return url ? `<a href="${escapeHtml(url)}">Get the app</a>` : "";
+  const store = https(install.appStoreUrl);
+  if (store) return `<a href="${escapeHtml(store)}">Get the app</a>`;
+  const beta = https(install.testflightUrl);
+  return beta ? `<a href="${escapeHtml(beta)}">Get the app</a>\n<p class="note">Pounce is in beta. This opens TestFlight, Apple's app for trying apps early.</p>` : "";
 }
 
 const NOINDEX = { "cache-control": "no-store", "referrer-policy": "no-referrer", "x-robots-tag": "noindex" };

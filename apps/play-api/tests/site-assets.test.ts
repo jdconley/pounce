@@ -105,9 +105,9 @@ describe("the static assets config", () => {
     expect(readFileSync(`${PUBLIC}/_headers`, "utf8")).toContain("/static/*\n  Cache-Control: public, max-age=31536000, immutable");
   });
 
-  test("the install settings are left to the owner: APP_STORE_URL is listed, TESTFLIGHT_URL is not", () => {
-    expect(config.vars).toHaveProperty("APP_STORE_URL");
-    expect(config.vars).not.toHaveProperty("TESTFLIGHT_URL");
+  test("the install settings: the App Store link is empty until launch, so the site offers the TestFlight beta", () => {
+    expect(config.vars.APP_STORE_URL).toBe("");
+    expect(config.vars.TESTFLIGHT_URL).toMatch(/^https:\/\/testflight\.apple\.com\/join\/[A-Za-z0-9]{8}$/);
   });
 });
 

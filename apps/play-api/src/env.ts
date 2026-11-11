@@ -84,7 +84,10 @@ export interface Env {
   TWILIO_VERIFY_SERVICE_SID?: string;
   /** HMAC key for device tokens. A secret; absent until configured. */
   TOKEN_SECRET?: string;
-  /** Public TestFlight link for the share page. Optional; used only while `APP_STORE_URL` is empty. */
+  /**
+   * The public TestFlight beta (wrangler.jsonc). Used only while `APP_STORE_URL` is empty: the
+   * landing page's beta button, `/get`, and the invite pages' "Get the app". Optional.
+   */
   TESTFLIGHT_URL?: string;
   /**
    * The App Store listing, `https://apps.apple.com/app/id<number>` (wrangler.jsonc). The invite

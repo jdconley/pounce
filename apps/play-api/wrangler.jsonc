@@ -31,9 +31,14 @@
     "SIWA_CLIENT_ID": "com.conleychaos.play",
     // The App Store listing, "https://apps.apple.com/app/id<number>": the landing page's App Store
     // badge, /get, the invite pages' "Get the app" link and Safari's Smart App Banner. Empty until
-    // the app is on the App Store; while empty there is no banner, and the landing page says
-    // "Coming soon to the App Store" (or offers the TestFlight beta, if TESTFLIGHT_URL is set).
+    // the app is on the App Store; while empty there is no banner, and those links go to the
+    // TestFlight beta below.
     "APP_STORE_URL": "",
+    // The public TestFlight beta. Used only while APP_STORE_URL is empty: the landing page's
+    // "Join the beta on TestFlight" button, /get (and so the page's QR code), and the invite
+    // pages' "Get the app" link. Without either, the landing page says "Coming soon to the App
+    // Store". It can stay once APP_STORE_URL is set; nothing uses it then.
+    "TESTFLIGHT_URL": "https://testflight.apple.com/join/ABEeCJbe",
     // Shared streaks, table looks and Play again (daily habit §15 row 3), on since the app's
     // streak screens shipped (row 4).
     "STREAKS": "on",

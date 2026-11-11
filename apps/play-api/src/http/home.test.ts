@@ -91,7 +91,9 @@ describe("homePage", () => {
   test("TestFlight only: a labelled beta button at the top and the bottom, and the QR code for a computer", async () => {
     const page = await html({ testflightUrl: TESTFLIGHT });
     expect(page.match(new RegExp(`<a class="btn" href="${TESTFLIGHT}">Join the beta on TestFlight</a>`, "g"))).toHaveLength(2);
-    expect(page).toContain("<strong>This is a beta.</strong> Pounce is coming soon to the App Store.");
+    // One short line: it is free, it is a beta, it runs through TestFlight, and the App Store release is coming.
+    expect(page.match(/<p class="fine"><strong>Free beta<\/strong> through Apple's TestFlight app, for iPhone and iPad\. The App Store release is coming\.<\/p>/g)).toHaveLength(2);
+    expect(page).toContain('<h2 id="get">Join the beta</h2>');
     expect(page.match(/<div class="qr">/g)).toHaveLength(2);
     expect(page).not.toContain('class="badge"');
     expect(page).not.toContain("Download on the App Store");

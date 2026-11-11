@@ -50,8 +50,8 @@ How the landing page offers the app follows two settings, with no code change:
 
 | Setting | Where | Effect |
 | --- | --- | --- |
-| `APP_STORE_URL` | `vars` in `apps/play-api/wrangler.jsonc` | Set to `https://apps.apple.com/app/id<number>` once the app is on the App Store: the page shows Apple's "Download on the App Store" badge, Safari's Smart App Banner, and a QR code on desktop. |
-| `TESTFLIGHT_URL` | a `vars` entry or a Worker variable | Used only while `APP_STORE_URL` is empty: the page shows "Join the beta on TestFlight" and the QR code. |
+| `APP_STORE_URL` | `vars` in `apps/play-api/wrangler.jsonc`, empty today | Set to `https://apps.apple.com/app/id<number>` once the app is on the App Store: the page shows Apple's "Download on the App Store" badge, Safari's Smart App Banner, and a QR code on desktop. |
+| `TESTFLIGHT_URL` | the same `vars`, set to the public beta link | Used only while `APP_STORE_URL` is empty (today): the page shows "Join the beta on TestFlight" and the QR code. |
 | neither | | The page says "Coming soon to the App Store" and has no install button. |
 
 `/get` redirects to whichever link is set (or home), so other sites and the QR code can point at

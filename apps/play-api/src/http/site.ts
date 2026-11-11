@@ -114,7 +114,7 @@ Pounce is free. It has no chat, no ads, no analytics and no tracking, and nobody
 - [Home](${origin}/): what Pounce is, screenshots, and how to install it
 - [Support](${origin}/support): how to start a game, invite people, set reminders, report or block a player, and delete your data
 - [Privacy policy](${origin}/privacy): what the app and its server keep, for how long, and the notice for parents
-- [Get the app](${origin}/get): goes to the App Store listing once Pounce is available there
+- [Get the app](${origin}/get): goes to the App Store listing, or to the TestFlight beta before the App Store release
 `;
   return new Response(text, { headers: { "content-type": "text/plain; charset=utf-8", "cache-control": CACHE } });
 }

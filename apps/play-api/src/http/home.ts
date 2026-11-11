@@ -84,9 +84,9 @@ ${qr("Point your iPhone or iPad camera at this code.")}
   if (state.kind === "beta") {
     return `<div class="get">
 <a class="btn" href="${escapeHtml(state.url)}">Join the beta on TestFlight</a>
-${qr("Point your iPhone or iPad camera at this code to join the beta.")}
+${qr("Scan it with your iPhone or iPad to join the beta.")}
 </div>
-<p class="fine"><strong>This is a beta.</strong> Pounce is coming soon to the App Store. Until then it installs through TestFlight, Apple's app for trying apps early. Free, for iPhone and iPad.</p>`;
+<p class="fine"><strong>Free beta</strong> through Apple's TestFlight app, for iPhone and iPad. The App Store release is coming.</p>`;
   }
   return `<div class="get">
 <p class="soon">Coming soon to the App Store</p>
@@ -115,6 +115,7 @@ h1 span{display:block;color:var(--sun);text-wrap:balance}
 .btn:active{transform:translateY(3px);box-shadow:0 2px 0 var(--ink)}
 .soon{margin:0;padding:12px 20px;border:3px solid var(--ink);border-radius:18px;background:var(--deep);color:#fff;font-family:var(--round);font-size:1.1rem;font-weight:900}
 @media (min-width:420px){.btn,.soon{padding:14px 28px;font-size:1.25rem}}
+@media (min-width:900px){.btn{padding:16px 34px;font-size:1.35rem}}
 .qr{display:none;align-items:center;gap:14px;max-width:340px;padding:8px 18px 8px 8px;border:3px solid var(--ink);border-radius:18px;background:#fff;box-shadow:0 5px 0 var(--ink);color:var(--ink);font-size:.95rem;line-height:1.3}
 .qr svg{flex:none;display:block;border-radius:8px}
 .qr p{margin:0}
@@ -218,7 +219,7 @@ function head(state: InstallState, origin: string): string {
 
 const LAST: Record<InstallState["kind"], { title: string; line: string }> = {
   store: { title: "Get Pounce", line: "Start a table tonight. The first turn takes a minute." },
-  beta: { title: "Try the beta", line: "Pounce is in beta before it reaches the App Store. Start a table tonight." },
+  beta: { title: "Join the beta", line: "Pounce is in beta ahead of its App Store release. Start a table tonight." },
   soon: { title: "Almost here", line: "Pounce is on its way to the App Store, for iPhone and iPad." },
 };
 
