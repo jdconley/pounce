@@ -4,6 +4,7 @@ import { noticePage } from "./consent/pages";
 import { devSpeed } from "./env";
 import { appSiteAssociation, ogImage, pouncePage, sharePage } from "./http/links";
 import { privacyPage } from "./http/privacy";
+import { homePage, supportPage } from "./http/site";
 import {
   anyConsented,
   appStoreNotification,
@@ -502,6 +503,8 @@ export default {
     }
     if (method === "GET" && pathname === "/og/room.jpg") return ogImage();
     if (method === "GET" && pathname === "/privacy") return privacyPage(consentOn(env));
+    if (method === "GET" && pathname === "/support") return supportPage();
+    if (method === "GET" && pathname === "/") return homePage(env.APP_STORE_URL);
     const share = method === "GET" ? SHARE_PATH.exec(pathname) : null;
     if (share) return sharePage(share[1] as string, install(env), new URL(request.url).origin);
     if (notify && method === "GET") {
