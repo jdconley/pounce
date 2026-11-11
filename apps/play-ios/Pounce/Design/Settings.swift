@@ -22,6 +22,7 @@ final class Settings {
         static let turnReminder = "settings.turnReminder"
         static let kittenDaily = "settings.kittenDaily"
         static let archiveHintSeen = "settings.archiveHintSeen"
+        static let signInPromptSeen = "settings.signInPromptSeen"
     }
 
     @ObservationIgnored private let defaults: UserDefaults
@@ -49,6 +50,8 @@ final class Settings {
 
     /// Home's one-time "press and hold a table to archive it" hint was closed (or used).
     var archiveHintSeen: Bool { didSet { defaults.set(archiveHintSeen, forKey: Key.archiveHintSeen) } }
+    /// Home's "Keep your streak if you change phones" card was answered (signed in or not now).
+    var signInPromptSeen: Bool { didSet { defaults.set(signInPromptSeen, forKey: Key.signInPromptSeen) } }
 
     init(defaults: UserDefaults = .standard) {
         self.defaults = defaults
@@ -60,6 +63,7 @@ final class Settings {
         pushReoffered = defaults.bool(forKey: Key.pushReoffered)
         turnReminderChoice = defaults.object(forKey: Key.turnReminder) as? Bool
         kittenDaily = defaults.bool(forKey: Key.kittenDaily)
+        signInPromptSeen = defaults.bool(forKey: Key.signInPromptSeen)
     }
 
     #if DEBUG

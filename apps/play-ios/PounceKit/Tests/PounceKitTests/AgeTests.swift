@@ -119,13 +119,69 @@ import Testing
         let limits = AgeLimits(band: .kitten)
         #expect(!limits.signInOffered)
         #expect(!limits.uploadsPushToken)
-        #expect(!limits.turnReminderDefault)
+        // The local turn reminder is on the device only, so a kitten's starts on.
+        #expect(limits.turnReminderDefault)
         #expect(!limits.typedNames)
         #expect(!limits.sharesLinks)
     }
 
     @Test func testUnknownBandIsLimitedLikeAKitten() {
-        #expect(AgeLimits(band: nil) == AgeLimits(band: .kitten))
+        var unknown = AgeLimits(band: nil)
+        #expect(!unknown.turnReminderDefault)
+        unknown.turnReminderDefault = true
+        #expect(unknown == AgeLimits(band: .kitten))
+    }
+
+    // MARK: correction
+
+    @Test func testCorrectionOfferedOnlyWhileLimited() {
+        #expect(!AgeCorrection.offered(nil))
+        #expect(AgeCorrection.offered(AgeRecord(band: .kitten, source: .keypad, checkedAt: now)))
+        #expect(AgeCorrection.offered(AgeRecord(band: .teen, source: .keypad, checkedAt: now)))
+        #expect(AgeCorrection.offered(AgeRecord(band: .kitten, source: .declared, checkedAt: now)))
+        #expect(!AgeCorrection.offered(AgeRecord(band: .adult, source: .keypad, checkedAt: now)))
+    }
+
+    @Test func testOnlyTheSystemsAnswerChangesTheBand() {
+        let typed = AgeRecord(band: .kitten, source: .keypad, checkedAt: now)
+        let later = now.addingTimeInterval(60)
+        // Declined or unavailable: nothing changes, not even the date.
+        #expect(AgeCorrection.corrected(typed, answer: nil, now: later) == typed)
+        #expect(AgeCorrection.corrected(typed, answer: .adult, now: later)
+            == AgeRecord(band: .adult, source: .declared, checkedAt: later))
+        // Apple says kitten: still a kitten, now from the system.
+        #expect(AgeCorrection.corrected(typed, answer: .kitten, now: later).band == .kitten)
+    }
+
+    // MARK: prompts
+
+    @Test func testSignInPromptForSignedOutAdultsWithAPair() {
+        #expect(SignInPrompt.shows(band: .adult, signedIn: false, offersSignIn: true, pairs: 1, dismissed: false))
+        #expect(!SignInPrompt.shows(band: .adult, signedIn: false, offersSignIn: true, pairs: 0, dismissed: false))
+        #expect(!SignInPrompt.shows(band: .adult, signedIn: true, offersSignIn: true, pairs: 1, dismissed: false))
+        #expect(!SignInPrompt.shows(band: .adult, signedIn: false, offersSignIn: false, pairs: 1, dismissed: false))
+        #expect(!SignInPrompt.shows(band: .adult, signedIn: false, offersSignIn: true, pairs: 1, dismissed: true))
+        #expect(!SignInPrompt.shows(band: .teen, signedIn: false, offersSignIn: true, pairs: 1, dismissed: false))
+        #expect(!SignInPrompt.shows(band: .kitten, signedIn: false, offersSignIn: true, pairs: 1, dismissed: false))
+    }
+
+    @Test func testKittenTablePromptOnTheKittensDevice() {
+        #expect(KittenTablePrompt.forKitten(isKitten: true, consented: false, held: false) == .showCode)
+        #expect(KittenTablePrompt.forKitten(isKitten: true, consented: true, held: false) == nil)
+        #expect(KittenTablePrompt.forKitten(isKitten: true, consented: false, held: true) == nil)
+        #expect(KittenTablePrompt.forKitten(isKitten: false, consented: false, held: false) == nil)
+    }
+
+    @Test func testKittenTablePromptOnTheParentsDevice() {
+        let mochi = ParentKitten(id: "k_1", name: "Mochi", cat: 3, state: .pending, mode: .parent, people: [])
+        let on = ParentKitten(id: "k_2", name: "Pickle", cat: 5, state: .on, mode: .parent, people: [])
+        let seated = [Person(id: "p1", name: "Mochi", cat: 3), Person(id: "p2", name: "Pickle", cat: 5)]
+        #expect(KittenTablePrompt.forParent(isParent: true, kittens: [on, mochi], others: seated)
+            == .finish(kitten: "k_1", name: "Mochi"))
+        #expect(KittenTablePrompt.forParent(isParent: false, kittens: [mochi], others: seated) == nil)
+        #expect(KittenTablePrompt.forParent(isParent: true, kittens: [on], others: seated) == nil)
+        // Same name, another cat: not this kitten.
+        #expect(KittenTablePrompt.forParent(isParent: true, kittens: [mochi], others: [Person(id: "p", name: "Mochi", cat: 1)]) == nil)
     }
 
     @Test func testTeenAndAdultLimits() {

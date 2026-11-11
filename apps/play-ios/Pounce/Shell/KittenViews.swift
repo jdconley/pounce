@@ -3,8 +3,9 @@ import SwiftUI
 import WebKit
 
 // Parent consent (consent design §2 "What the kitten sees" and "What the parent sees", D6; plan
-// decisions 33–39, 50–55). Pictures, names and numerals only. The notice page and the phone field
-// are legal text, like the privacy page; the code from Twilio Verify is numerals and a keypad.
+// decisions 33–39, 50–55). Pictures and numerals, with one short line of words for each step on
+// both devices (launch review): the kitten shows a code, the parent types it, reads the notice and
+// gives a number, types the texted code, and later gets the confirmation push.
 
 /// The kitten's bell in the gear sheet: padlocked with six numerals for a grown-up, padlocked
 /// with no code while the significant change is owed, asleep while the parent is still to
@@ -59,6 +60,9 @@ struct KittenBellView: View {
                 .accessibilityIdentifier("kitten.code")
                 .transition(.scale(scale: 0.7).combined(with: .opacity))
             }
+            WordLine(Self.caption(bell, code: shownCode != nil), size: 16 * scale)
+                .frame(maxWidth: 360 * scale)
+                .accessibilityIdentifier("kitten.caption")
         }
         .animation(.spring(duration: 0.35, bounce: 0.4).paced, value: shownCode)
         .task { await loop() }
@@ -75,6 +79,26 @@ struct KittenBellView: View {
                 .overlay(alignment: .bottomTrailing) {
                     Image(ArtName.iconCheck).resizable().scaledToFit().frame(width: 40 * scale).offset(x: 4, y: 4)
                 }
+        }
+    }
+
+    /// The kitten's step in words.
+    static func caption(_ bell: KittenBell, code: Bool) -> String {
+        switch bell {
+        case .locked:
+            String(localized: "Turn alerts are off. Show this code to a grown-up. They type it in Pounce on their phone: Settings, then Add a child.",
+                   comment: "Kitten's gear: the locked bell with its code")
+        case .held:
+            String(localized: "A grown-up needs to approve this update first.",
+                   comment: "Kitten's gear: the bell held for the significant-change approval")
+        case .asleep:
+            code
+                ? String(localized: "Show this code to one more grown-up.", comment: "Kitten's gear: a code for another parent")
+                : String(localized: "Your grown-up is setting up your turn alerts.", comment: "Kitten's gear: linked, no consent yet")
+        case .on:
+            code
+                ? String(localized: "Show this code to one more grown-up.", comment: "Kitten's gear: a code for another parent")
+                : String(localized: "Turn alerts are on.", comment: "Kitten's gear: consent is on")
         }
     }
 
@@ -151,11 +175,23 @@ struct KittensSheet: View {
                             }
                             .accessibilityIdentifier("kittens.close")
                         }
+                        OutlinedText(
+                            String(localized: "Turn alerts for your kids", comment: "Parent's kittens panel: the title"),
+                            size: 26 * scale, lines: 2)
+                            .accessibilityAddTraits(.isHeader)
+                        WordLine(
+                            String(localized: "Kids under 13 get turn alerts on their own phone only after you allow it. On your child's phone, open Pounce, tap Settings, and type the code it shows here.",
+                                   comment: "Parent's kittens panel: how linking works"),
+                            size: 15 * scale)
                         ForEach(Array(model.kittens.kittens.enumerated()), id: \.element.id) { i, kitten in
                             KittenCard(kitten: kitten, index: i, scale: scale, focused: kitten.id == focus) { notice = kitten }
                                 .id(kitten.id)
                         }
-                        ArtIconButton(icon: ArtName.iconPlus, color: Palette.lime, size: 76 * scale, label: "Add a kitten") {
+                        PillButton(
+                            icon: ArtName.iconPlus, color: Palette.lime, size: .small, width: 240 * scale,
+                            title: String(localized: "Add a child", comment: "Parent's kittens panel: type a kid's code"),
+                            accessibilityLabel: "Add a child"
+                        ) {
                             linking = true
                         }
                         .bounceLoop(active: model.kittens.kittensLoaded && model.kittens.kittens.isEmpty)
@@ -219,7 +255,14 @@ private struct KittenCard: View {
                     .frame(width: 54 * scale, height: 54 * scale)
                     .accessibilityHidden(true)
             }
+            WordLine(Self.caption(kitten), size: 15 * scale)
+                .frame(maxWidth: .infinity)
+                .accessibilityIdentifier("kittens.caption.\(index)")
             if !kitten.people.isEmpty {
+                WordLine(kitten.mode == .apple
+                    ? String(localized: "Who can send alerts (set in Screen Time):", comment: "Parent's kitten card: Apple decides the people")
+                    : String(localized: "Who can send alerts. Tap to change:", comment: "Parent's kitten card: the people toggles"),
+                    size: 13 * scale, color: .white.opacity(0.85))
                 LazyVGrid(columns: columns, spacing: 12) {
                     ForEach(Array(kitten.people.enumerated()), id: \.element.pair) { j, person in
                         PersonToggle(person: person, apple: kitten.mode == .apple, scale: scale) {
@@ -231,17 +274,32 @@ private struct KittenCard: View {
             }
             HStack(spacing: 16 * scale) {
                 if kitten.state != .on {
-                    ArtIconButton(icon: ArtName.Habit.iconPhone, color: Palette.sky, size: 64 * scale, label: "Notice and phone", action: onPhone)
+                    PillButton(
+                        icon: ArtName.Habit.iconPhone, color: Palette.sky, size: .small, width: 170 * scale,
+                        title: kitten.state == .code
+                            ? String(localized: "Type code", comment: "Parent's kitten card: enter the texted code")
+                            : String(localized: "Next step", comment: "Parent's kitten card: open the notice and phone number"),
+                        accessibilityLabel: kitten.state == .code ? "Type code" : "Next step", action: onPhone)
                         .bounceLoop(active: true)
                         .accessibilityIdentifier("kittens.phone.\(index)")
                 } else {
-                    ArtIconButton(icon: ArtName.Habit.iconBellOff, color: Palette.violet, size: 64 * scale, label: "Turn off notifications") {
+                    PillButton(
+                        icon: ArtName.Habit.iconBellOff, color: Palette.violet, size: .small, width: 190 * scale,
+                        title: String(localized: "Turn off alerts", comment: "Parent's kitten card: revoke consent"),
+                        accessibilityLabel: "Turn off alerts"
+                    ) {
                         Task { await model.kittens.revoke(kitten: kitten.id) }
                     }
                     .accessibilityIdentifier("kittens.revoke.\(index)")
                 }
-                ArtIconButton(icon: ArtName.Habit.iconTrash, color: confirmUnlink ? Palette.magenta : Palette.night,
-                              size: 64 * scale, label: confirmUnlink ? "Remove, sure" : "Remove") {
+                PillButton(
+                    icon: ArtName.Habit.iconTrash, color: confirmUnlink ? Palette.magenta : Palette.night, size: .small,
+                    width: 150 * scale,
+                    title: confirmUnlink
+                        ? String(localized: "Sure?", comment: "Parent's kitten card: confirm unlinking")
+                        : String(localized: "Remove", comment: "Parent's kitten card: unlink this kid"),
+                    accessibilityLabel: confirmUnlink ? "Remove, sure" : "Remove"
+                ) {
                     if confirmUnlink {
                         Task { await model.kittens.unlink(kitten: kitten.id) }
                     } else {
@@ -266,6 +324,22 @@ private struct KittenCard: View {
         .accessibilityValue(Self.value(kitten))
         .accessibilityAddTraits(focused ? .isSelected : [])
         .accessibilityIdentifier("kittens.card.\(index)")
+    }
+
+    /// The kitten's step in words, on the parent's card.
+    static func caption(_ kitten: ParentKitten) -> String {
+        switch kitten.state {
+        case .pending:
+            String(localized: "Next: read the notice and add your mobile number. We text you a code.",
+                   comment: "Parent's kitten card: linked, consent not started")
+        case .code:
+            String(localized: "Next: type the code we texted you.", comment: "Parent's kitten card: the texted code is out")
+        case .on:
+            kitten.confirmed
+                ? String(localized: "Turn alerts are on.", comment: "Parent's kitten card: consent on and confirmed")
+                : String(localized: "Turn alerts are on. We'll send a confirmation to your phone in a day or two.",
+                         comment: "Parent's kitten card: consent on, confirmation push not yet received")
+        }
     }
 
     /// `pending`, `code`, `on`, or `confirmed` once the confirmation push reached the parent.
@@ -366,6 +440,10 @@ private struct LinkCodeOverlay: View {
                     PillButton(icon: ArtName.iconBack, color: Palette.sky, size: .small, accessibilityLabel: "Close", action: onClose)
                         .accessibilityIdentifier("link.close")
                 }
+                WordLine(
+                    String(localized: "Type the six numbers shown on your child's phone (in Pounce, under Settings).",
+                           comment: "Parent's link keypad: what to type"),
+                    size: 16)
                 tiles
                 DigitKeys(height: roomy ? 68 : 58, size: roomy ? 36 : 30, idPrefix: "link",
                           onDigit: { entry.type($0) }, onDelete: { entry.delete() }, onDone: confirm)
@@ -471,6 +549,11 @@ struct KittenNoticeSheet: View {
     // MARK: the notice and the number
 
     @ViewBuilder private var phoneStep: some View {
+        WordLine(
+            String(localized: "Read this notice, then enter your mobile number. We'll text you a code to prove you're the grown-up.",
+                   comment: "Parent's consent sheet: the notice and phone step"),
+            size: 15)
+            .accessibilityIdentifier("notice.caption")
         NoticeWebView(url: model.config.endpoint("/privacy/kitten-notice"))
             .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
             .overlay(RoundedRectangle(cornerRadius: 22, style: .continuous).strokeBorder(Palette.ink, lineWidth: 4))
@@ -507,6 +590,10 @@ struct KittenNoticeSheet: View {
             }
         }
         .shake(trigger: shake)
+        if waiting {
+            WordLine(String(localized: "We can't text a code right now. Try again later.",
+                            comment: "Parent's consent sheet: texting isn't set up on the server"), size: 14)
+        }
     }
 
     private func send() {
@@ -548,6 +635,12 @@ struct KittenNoticeSheet: View {
             Image(ArtName.Habit.iconPhone).resizable().scaledToFit().frame(width: roomy ? 96 : 76)
                 .bounceLoop(active: flow.entry.digits.isEmpty && !resting)
                 .accessibilityHidden(true)
+            WordLine(
+                resting
+                    ? String(localized: "Too many tries. Wait a bit, then try again.", comment: "Parent's consent code: resting")
+                    : String(localized: "Type the code we texted you.", comment: "Parent's consent code: what to type"),
+                size: 17)
+                .accessibilityIdentifier("consent.caption")
             HStack(spacing: 8) {
                 ForEach(0..<LinkCodeEntry.length, id: \.self) { i in
                     CodeTile(char: i < chars.count ? chars[i] : nil, active: i == min(chars.count, LinkCodeEntry.length - 1))
@@ -562,15 +655,23 @@ struct KittenNoticeSheet: View {
                 .disabled(busy || resting)
                 .opacity(resting ? 0.5 : 1)
             HStack(spacing: 18) {
-                ArtIconButton(icon: ArtName.Habit.iconResend, color: Palette.lime, size: 60, label: "Another code") { resend() }
-                    .opacity(ready ? 1 : 0.45)
-                    .bounceLoop(active: flow.expired && ready)
-                    .accessibilityValue(ready ? "ready" : "waiting")
-                    .accessibilityIdentifier("consent.resend")
-                ArtIconButton(icon: ArtName.Habit.iconPhone, color: Palette.sky, size: 60, label: "Another number") {
-                    flow.changeNumber()
+                VStack(spacing: 4) {
+                    ArtIconButton(icon: ArtName.Habit.iconResend, color: Palette.lime, size: 60, label: "Another code") { resend() }
+                        .opacity(ready ? 1 : 0.45)
+                        .bounceLoop(active: flow.expired && ready)
+                        .accessibilityValue(ready ? "ready" : "waiting")
+                        .accessibilityIdentifier("consent.resend")
+                    WordLine(String(localized: "New code", comment: "Parent's consent code: under the resend button"), size: 12)
+                        .accessibilityHidden(true)
                 }
-                .accessibilityIdentifier("consent.number")
+                VStack(spacing: 4) {
+                    ArtIconButton(icon: ArtName.Habit.iconPhone, color: Palette.sky, size: 60, label: "Another number") {
+                        flow.changeNumber()
+                    }
+                    .accessibilityIdentifier("consent.number")
+                    WordLine(String(localized: "Change number", comment: "Parent's consent code: under the number button"), size: 12)
+                        .accessibilityHidden(true)
+                }
                 if resting {
                     Image(ArtName.Habit.iconHourglass).resizable().scaledToFit().frame(width: 56)
                         .accessibilityIdentifier("consent.resting")
@@ -587,10 +688,16 @@ struct KittenNoticeSheet: View {
 
     /// Consent is on: the bell with a check, until the sheet closes.
     private var doneStep: some View {
-        Image(ArtName.Habit.pounceBell).resizable().scaledToFit().frame(width: 180)
-            .overlay(alignment: .bottomTrailing) {
-                Image(ArtName.iconCheck).resizable().scaledToFit().frame(width: 64).offset(x: 6, y: 6)
-            }
+        VStack(spacing: 16) {
+            Image(ArtName.Habit.pounceBell).resizable().scaledToFit().frame(width: 180)
+                .overlay(alignment: .bottomTrailing) {
+                    Image(ArtName.iconCheck).resizable().scaledToFit().frame(width: 64).offset(x: 6, y: 6)
+                }
+            WordLine(
+                String(localized: "Turn alerts are on. In a day or two we'll send a confirmation to this phone, with a button to turn them off.",
+                       comment: "Parent's consent sheet: consent finished"),
+                size: 16)
+        }
             .frame(maxHeight: .infinity)
             .accessibilityIdentifier("consent.done")
             .transition(.scale(scale: 0.6).combined(with: .opacity))

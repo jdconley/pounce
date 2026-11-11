@@ -115,7 +115,9 @@ public struct AgeLimits: Equatable, Sendable {
     public var signInOffered: Bool
     /// The APNs token goes to the server (a push token is online contact information).
     public var uploadsPushToken: Bool
-    /// The local "your turn" reminder starts on.
+    /// The local "your turn" reminder starts on. A kitten's too: it is scheduled on the device and
+    /// nothing is sent or collected (spec §14.1 allows local reminders; "your move" is the game,
+    /// not an engagement nudge). Unknown stays off until the age check ran.
     public var turnReminderDefault: Bool
     /// Names are typed; otherwise only the generated names, by the dice.
     public var typedNames: Bool
@@ -126,7 +128,7 @@ public struct AgeLimits: Equatable, Sendable {
         let grownUp = band == .teen || band == .adult
         signInOffered = grownUp
         uploadsPushToken = grownUp
-        turnReminderDefault = grownUp
+        turnReminderDefault = band != nil
         typedNames = grownUp
         sharesLinks = grownUp
     }
@@ -134,6 +136,24 @@ public struct AgeLimits: Equatable, Sendable {
     /// A kitten's name must be one of the generated ones.
     public static func needsGeneratedName(_ name: String) -> Bool {
         !NameGenerator.names.contains(name)
+    }
+}
+
+/// Putting a wrong age right (launch review). The keypad is never offered again, so a child can't
+/// retype their way out of the limits; only a fresh Declared Age Range answer from the system can
+/// change the band, and it is offered wherever the band limits the person.
+public enum AgeCorrection {
+    /// The age screen's "Check with Apple" is offered for this record.
+    public static func offered(_ record: AgeRecord?) -> Bool {
+        guard let record else { return false }
+        return record.band != .adult
+    }
+
+    /// The record after asking Declared Age Range again: the system's band when it gave one,
+    /// otherwise the record as it was (a decline or no answer never changes the band).
+    public static func corrected(_ record: AgeRecord, answer: AgeBand?, now: Date) -> AgeRecord {
+        guard let answer else { return record }
+        return AgeRecord(band: answer, source: .declared, checkedAt: now)
     }
 }
 

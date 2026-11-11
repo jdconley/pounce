@@ -137,6 +137,8 @@ struct TableScreen: View {
             ConnectingView()
         case .lobby:
             LobbyView(session: session, interactive: store.connected)
+                // A kitten's turn alerts, asked of the grown-up at this table (launch review).
+                .overlay(alignment: .bottom) { KittenTablePromptView(session: session).padding(.bottom, 96) }
         case .table:
             // No touches while the socket is down. Not `allowsHitTesting(false)`: that rehosts the
             // SpriteKit view with no safe area, and the whole table jumps under the status bar.
