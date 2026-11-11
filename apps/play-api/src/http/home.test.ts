@@ -45,7 +45,7 @@ describe("homePage", () => {
     for (const install of [{}, { testflightUrl: TESTFLIGHT }, { appStoreUrl: APP_STORE }]) {
       const page = await html(install);
       expect(page).toContain("<title>Pounce: Family Games | Card game for couples and kids</title>");
-      expect(page).toMatch(/<h1 id="top">Game night, <span>one turn at a time\.<\/span><\/h1>/);
+      expect(page).toMatch(/<h1 id="top">Family game night, <span>every night\.<\/span><\/h1>/);
       expect(page.match(/<h1/g)).toHaveLength(1);
       expect(page).toContain("Pounce is a card game for couples and families.");
       for (const s of ["How a game works", "Play it your way", "Made with kids in mind", "Cat Tower is the first game in Pounce, with more to come."]) {
@@ -136,7 +136,7 @@ describe("homePage", () => {
     const page = await html();
     const image = `${ORIGIN}${MEDIA.og.src}`;
     for (const tag of [
-      '<meta name="description" content="Game night, one turn at a time. Play Cat Tower with your partner, your kids or the whole family, on one phone or from anywhere.">',
+      '<meta name="description" content="Family game night, every night. Play Cat Tower with your partner, your kids or the whole family, on one phone or from anywhere.">',
       `<link rel="canonical" href="${ORIGIN}/">`,
       '<link rel="apple-touch-icon" href="/apple-touch-icon.png">',
       `<link rel="icon" type="image/png" sizes="192x192" href="${MEDIA.icon192}">`,

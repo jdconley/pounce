@@ -5,7 +5,7 @@ iPad (`ipad-N.jpg`). The source of truth is `captions.json`, which `compose.swif
 
 | # | Caption | Screen | What backs it |
 | --- | --- | --- | --- |
-| 1 | Game night, a turn at a time | The card table on your turn | Turn-based play; tables wait for each player's move |
+| 1 | Family game night, every night | The card table on your turn | Turn-based play: a table waits for each player's move, so a game can have a turn to take any night |
 | 2 | Play your person. Keep the streak. | The Us screen: a 128-day streak with one person | Pair streaks, gifts and the cat condo |
 | 3 | Room for the whole family | A full lobby: five people and a House Cat | Six seats; House Cat bots fill empty ones |
 | 4 | Climb all ten levels | The scoreboard with the level list | Cat Tower's ten levels |
