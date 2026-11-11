@@ -1,6 +1,6 @@
 import { describe, expect, test } from "vitest";
 
-import { ANSWER_MS, answerable, claimAnswer, LIVE_MS, nextAnswer, NO_REST_MS, pounceView, restingUntil, UNANSWERED_REST_MS, type PounceRow } from "./limits";
+import { ANSWER_MS, answerable, claimAnswer, LINK_MS, LIVE_MS, nextAnswer, NO_REST_MS, pounceView, restingUntil, UNANSWERED_REST_MS, type PounceRow } from "./limits";
 
 const M = 60_000;
 const H = 60 * M;
@@ -83,6 +83,15 @@ describe("answers", () => {
   test("answerable for 24 hours", () => {
     expect(answerable(row({ at: NOW }), NOW + ANSWER_MS - 1)).toBe(true);
     expect(answerable(row({ at: NOW }), NOW + ANSWER_MS)).toBe(false);
+  });
+
+  test("a Messages link's pounce is answerable for 7 days", () => {
+    expect(LINK_MS).toBe(7 * 24 * 60 * 60 * 1000);
+    expect(answerable(row({ at: NOW }), NOW + ANSWER_MS, true)).toBe(true);
+    expect(answerable(row({ at: NOW }), NOW + LINK_MS - 1, true)).toBe(true);
+    expect(answerable(row({ at: NOW }), NOW + LINK_MS, true)).toBe(false);
+    expect(claimAnswer(row({ at: NOW, to: null }), "p_kim", "play", NOW + 2 * ANSWER_MS, true)).toBe("claim");
+    expect(claimAnswer(row({ at: NOW, to: null }), "p_kim", "play", NOW + LINK_MS, true)).toBe("expired");
   });
 
   test("an answer changes the pounce unless it repeats or downgrades a Play", () => {
