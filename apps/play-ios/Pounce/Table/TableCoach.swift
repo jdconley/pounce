@@ -22,6 +22,12 @@ struct TableCoach: Equatable {
         var hand: CGRect
         var yarn: CGRect?
         var cucumber: CGRect?
+        /// The cats in the top bar, with their name pills.
+        var cats: CGRect?
+        /// The open tower.
+        var openTower: CGRect?
+        /// A strip down the screen's left edge, where the swipe home starts.
+        var edge: CGRect = .zero
     }
 }
 
@@ -46,14 +52,29 @@ extension TableScene {
             layDownReady: layDownShown, canHit: canHit,
             hasYarn: faces.contains { Card(id: $0) == .yarn },
             hasCucumber: faces.contains { Card(id: $0) == .cucumber },
-            handCount: game.hands[bottom]?.count ?? faces.count)
+            handCount: game.hands[bottom]?.count ?? faces.count,
+            others: !opponents.order.isEmpty, towerOpen: tower.isOpen)
+        let cats = opponents.order.compactMap { opponents.frame(of: $0) }.reduce(CGRect.null) { $0.union($1) }
+        let zone = layout.laidZone
         let anchors = TableCoach.Anchors(
             tower: layout.towerTab, deck: deck.hitFrame, discard: discard.hitFrame,
             trays: layout.traysFrame, layDown: layDownShown ? layDownFrame : nil,
             laid: laidFrames.isEmpty ? nil : laidFrames.reduce(CGRect.null) { $0.union($1) },
             hand: handFrame,
-            yarn: cardFrame { $0 == .yarn }, cucumber: cardFrame { $0 == .cucumber })
+            yarn: cardFrame { $0 == .yarn }, cucumber: cardFrame { $0 == .cucumber },
+            cats: cats.isNull ? nil : CGRect(x: cats.minX, y: cats.minY - 36, width: cats.width, height: cats.height + 38),
+            openTower: tower.isOpen ? TowerNode.openFrame(layout) : nil,
+            edge: CGRect(x: 0, y: zone.midY - 70, width: 26, height: 140))
         return TableCoach(
-            context: context, person: person, busy: animating || store.actionInFlight, anchors: anchors)
+            context: context, person: person, busy: animating || store.actionInFlight || discardHold != nil, anchors: anchors)
     }
+}
+
+/// A discard waiting on the pile, for the Undo pill the shell draws under it.
+struct UndoOffer: Equatable {
+    let serial: Int
+    /// The discard pile, in scene space.
+    let pile: CGRect
+    /// How long Undo is offered, at normal speed.
+    let seconds: Double
 }

@@ -87,6 +87,14 @@ final class TableSKView: SKView {
         tableScene?.safeInsets = safeAreaInsets
     }
 
+    /// The text size setting changed: the table's name pills and chips are drawn again.
+    override func traitCollectionDidChange(_ previous: UITraitCollection?) {
+        super.traitCollectionDidChange(previous)
+        if previous?.preferredContentSizeCategory != traitCollection.preferredContentSizeCategory {
+            tableScene?.refresh()
+        }
+    }
+
     override var isAccessibilityElement: Bool {
         get { false }
         set {}

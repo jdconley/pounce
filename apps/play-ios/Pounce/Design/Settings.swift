@@ -21,6 +21,7 @@ final class Settings {
         static let pushReoffered = "settings.pushReoffered"
         static let turnReminder = "settings.turnReminder"
         static let kittenDaily = "settings.kittenDaily"
+        static let archiveHintSeen = "settings.archiveHintSeen"
         static let signInPromptSeen = "settings.signInPromptSeen"
     }
 
@@ -47,11 +48,14 @@ final class Settings {
     /// A kitten's local daily reminder at 17:00 (spec §14.1): off until they turn it on.
     var kittenDaily: Bool { didSet { defaults.set(kittenDaily, forKey: Key.kittenDaily) } }
 
+    /// Home's one-time "press and hold a table to archive it" hint was closed (or used).
+    var archiveHintSeen: Bool { didSet { defaults.set(archiveHintSeen, forKey: Key.archiveHintSeen) } }
     /// Home's "Keep your streak if you change phones" card was answered (signed in or not now).
     var signInPromptSeen: Bool { didSet { defaults.set(signInPromptSeen, forKey: Key.signInPromptSeen) } }
 
     init(defaults: UserDefaults = .standard) {
         self.defaults = defaults
+        archiveHintSeen = defaults.bool(forKey: Key.archiveHintSeen)
         soundOn = defaults.object(forKey: Key.soundOn) as? Bool ?? true
         hapticsOn = defaults.object(forKey: Key.hapticsOn) as? Bool ?? true
         pushPrimed = defaults.bool(forKey: Key.pushPrimed)

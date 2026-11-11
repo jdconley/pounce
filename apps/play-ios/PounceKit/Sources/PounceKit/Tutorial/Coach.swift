@@ -17,10 +17,14 @@ public struct CoachContext: Equatable, Sendable {
     public var hasYarn: Bool
     public var hasCucumber: Bool
     public var handCount: Int
+    /// Other cats sit in the top bar (always, in a game; false keeps the cat tip away).
+    public var others: Bool
+    /// The cat tower is open over the table (one tap on its tab).
+    public var towerOpen: Bool
 
     public init(
         person: String, epoch: Int, myTurn: Bool, step: TurnStep, phase: [Requirement], layDownReady: Bool,
-        canHit: Bool, hasYarn: Bool, hasCucumber: Bool, handCount: Int
+        canHit: Bool, hasYarn: Bool, hasCucumber: Bool, handCount: Int, others: Bool = false, towerOpen: Bool = false
     ) {
         self.person = person
         self.epoch = epoch
@@ -32,6 +36,8 @@ public struct CoachContext: Equatable, Sendable {
         self.hasYarn = hasYarn
         self.hasCucumber = hasCucumber
         self.handCount = handCount
+        self.others = others
+        self.towerOpen = towerOpen
     }
 
     public var laid: Bool { phase.isEmpty }
@@ -40,9 +46,12 @@ public struct CoachContext: Equatable, Sendable {
 }
 
 /// One coaching tip for a first game. Declared in priority order: when several apply, the
-/// first one not seen yet shows.
+/// first one not seen yet shows. The last three point out gestures nothing on the table hints
+/// at: the open tower's second tap, a tap on a cat, and the swipe home. Those two wait for
+/// someone else's turn, when there is nothing to do but look around.
 public enum CoachTip: String, CaseIterable, Codable, Sendable {
     case goal, draw, layDown, phase, run, coat, discard, hit, goOut, cucumber, yarn
+    case scores, cats, swipeHome
 
     /// The tip fits the table as it is now.
     public func applies(_ c: CoachContext) -> Bool {
@@ -58,6 +67,9 @@ public enum CoachTip: String, CaseIterable, Codable, Sendable {
         case .goOut: c.playing && c.laid && c.handCount <= 2
         case .cucumber: c.playing && c.hasCucumber
         case .yarn: c.playing && c.hasYarn
+        case .scores: c.towerOpen
+        case .cats: c.others && !c.myTurn
+        case .swipeHome: !c.myTurn
         }
     }
 
@@ -70,9 +82,18 @@ public enum CoachTip: String, CaseIterable, Codable, Sendable {
         return tips
     }
 
+    /// Tips that come first: the gesture tips wait until a whole turn has been played, so a
+    /// first game opens with how to play, not with where the menus are.
+    var after: Set<CoachTip> {
+        switch self {
+        case .cats, .swipeHome: [.draw, .discard]
+        default: []
+        }
+    }
+
     /// The first tip that applies and hasn't been seen.
     public static func next(for c: CoachContext, seen: Set<CoachTip>) -> CoachTip? {
-        allCases.first { !seen.contains($0) && $0.applies(c) }
+        allCases.first { !seen.contains($0) && $0.applies(c) && $0.after.isSubset(of: seen) }
     }
 
     /// Tips a person showed they don't need by doing the thing, going from `old` to `new`

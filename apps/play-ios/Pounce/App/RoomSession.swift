@@ -39,6 +39,9 @@ final class RoomSession {
     }
     /// Non-nil from sending `claimMove` until the seat arrives or the server refuses the code.
     private(set) var move: MoveClaim?
+    /// Home's practice game: once this phone is seated in the new lobby, a House Cat joins and
+    /// the game starts (`TableModel.practiceMessages`), with no stop in the lobby.
+    @ObservationIgnored var practicePending = false
     @ObservationIgnored private var seatsBeforeMove: Set<Seat> = []
 
     // Hooks the app model fills in.
@@ -276,6 +279,10 @@ final class RoomSession {
             send(claim)
         }
         syncNames(model)
+        if practicePending, model.room.status != .lobby || !model.mySeats.isEmpty {
+            practicePending = false
+            for message in model.practiceMessages ?? [] { send(message) }
+        }
         if !model.mySeats.isEmpty { onSnapshot(room) }
     }
 

@@ -11,7 +11,7 @@ struct LobbyView: View {
     let interactive: Bool
 
     private enum Control: Hashable {
-        case seat(Int), start, share
+        case seat(Int), start, share, add, practice
     }
 
     /// Who the person picker seats, and how.
@@ -38,6 +38,8 @@ struct LobbyView: View {
     @State private var sharing = false
     @State private var showQR = false
     @State private var renaming = false
+    /// "Start with 3 players?": Start was tapped with seats still open (it closes them).
+    @State private var confirmingStart = false
     @State private var wiggles: [Control: Int] = [:]
     @State private var lastTapped: Control?
     @State private var rugFrame: CGRect = .zero
@@ -73,14 +75,31 @@ struct LobbyView: View {
                 .padding(.bottom, 10)
             }
             if let menuSeat, let room, room.seats.indices.contains(menuSeat) {
-                SeatMenu(center: cushionCenter(menuSeat), toward: rugCenter, items: menuItems(menuSeat, room.seats[menuSeat])) {
+                SeatMenu(
+                    title: seatTitle(menuSeat, room.seats[menuSeat]), center: cushionCenter(menuSeat), toward: rugCenter,
+                    items: menuItems(menuSeat, room.seats[menuSeat])
+                ) {
                     self.menuSeat = nil
+                }
+                .transition(.opacity)
+            }
+            if confirmingStart, let table, let messages = table.startClosingOpenSeats {
+                StartConfirm(players: table.playerCount, open: table.blockingSeats.count) {
+                    confirmingStart = false
+                    for message in messages { session.send(message) }
+                } onWait: {
+                    confirmingStart = false
                 }
                 .transition(.opacity)
             }
         }
         .coordinateSpace(.named("lobby"))
         .animation(.easeOut(duration: 0.15).paced, value: menuSeat)
+        .animation(.easeOut(duration: 0.15).paced, value: confirmingStart)
+        // Someone took the last open seat, or the game began: nothing left to confirm.
+        .onChange(of: table?.startClosingOpenSeats == nil) { _, gone in
+            if gone { confirmingStart = false }
+        }
         .background(ShareRoom(
             isPresented: $sharing, url: shareURL, tableName: tableName, inviteCode: session.code,
             catArt: ArtName.cat(hostCat, .idle)))
@@ -104,6 +123,7 @@ struct LobbyView: View {
             if !on {
                 menuSeat = nil
                 renaming = false
+                confirmingStart = false
             }
         }
         .accessibilityElement(children: .contain)
@@ -349,32 +369,89 @@ struct LobbyView: View {
         case .human where seat.yours: Text("Swap or stand up")
         case .human: Text("")
         case .open where !seated: Text("Sit here")
-        default: Text("Invite, sit here, add a bot or remove")
+        default: Text("Invite, sit here, add a House Cat, or close the seat")
         }
     }
 
     // MARK: start
 
+    /// Under the rug: what the table is waiting for in words, the worded seat controls (add a
+    /// player, a practice game against the House Cat) and the big Start pill.
     @ViewBuilder private var startRow: some View {
-        if let table, seated {
-            let ready = table.canStart
-            // Waiting: a muted violet pill, never a desaturated orange (that reads beige).
-            // Ready: hot orange with a white rim around the gold play icon so it reads.
-            PillButton(
-                icon: ArtName.iconPlay,
-                color: ready ? Palette.orange : Palette.violet.mix(with: Palette.night, by: 0.45),
-                size: .large, width: 300, iconOutline: ready ? .white : nil, accessibilityLabel: "Start"
-            ) {
-                start()
+        if let table {
+            VStack(spacing: 8) {
+                Text(verbatim: LobbyCopy.status(table))
+                    .font(.system(.subheadline, design: .rounded, weight: .heavy))
+                    .foregroundStyle(.white)
+                    .multilineTextAlignment(.center)
+                    .lineLimit(3)
+                    .minimumScaleFactor(0.8)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .padding(.horizontal, 14)
+                    .padding(.vertical, 7)
+                    .background(RoundedRectangle(cornerRadius: 16, style: .continuous).fill(Palette.ink.opacity(0.78)))
+                    .padding(.horizontal, 16)
+                    .wiggle(trigger: wiggles[.start, default: 0])
+                    .dynamicTypeSize(...DynamicTypeSize.accessibility1)
+                    .accessibilityIdentifier("lobby.status")
+                if seated {
+                    seatControls(table)
+                    let ready = table.canStart
+                    // Waiting: a muted violet pill, never a desaturated orange (that reads beige).
+                    // Ready: hot orange with a white rim around the gold play icon so it reads.
+                    PillButton(
+                        icon: ArtName.iconPlay,
+                        color: ready ? Palette.orange : Palette.violet.mix(with: Palette.night, by: 0.45),
+                        size: .large, width: 300, iconOutline: ready ? .white : nil,
+                        title: String(localized: "Start", comment: "Lobby: the pill that deals the game"),
+                        accessibilityLabel: "Start"
+                    ) {
+                        start()
+                    }
+                    .opacity(ready ? 1 : 0.8)
+                    .shadow(color: ready ? Palette.orange.opacity(0.8) : .clear, radius: 14)
+                    .wiggle(trigger: wiggles[.start, default: 0])
+                    .accessibilityValue(ready ? Text("") : Text(verbatim: LobbyCopy.status(table)))
+                    .accessibilityIdentifier("lobby.start")
+                    .transition(.scale.combined(with: .opacity))
+                }
             }
-            .opacity(ready ? 1 : 0.7)
-            .shadow(color: ready ? Palette.orange.opacity(0.8) : .clear, radius: 14)
-            .wiggle(trigger: wiggles[.start, default: 0])
-            .accessibilityValue(ready ? Text("") : Text("Waiting for players"))
-            .accessibilityIdentifier("lobby.start")
-            .transition(.scale.combined(with: .opacity))
         } else {
             Color.clear.frame(height: PillSize.large.height + 6)
+        }
+    }
+
+    /// "Add a player" (the choices for the next free seat) and, alone at the table, a practice
+    /// game against the House Cat.
+    @ViewBuilder private func seatControls(_ table: TableModel) -> some View {
+        let practice = table.practiceMessages
+        if table.seatToAdd != nil || practice != nil {
+            HStack(spacing: 10) {
+                if let seat = table.seatToAdd {
+                    PillButton(
+                        icon: ArtName.iconPlus, color: Palette.teal, size: .small, width: practice == nil ? 220 : 164,
+                        title: String(localized: "Add a player", comment: "Lobby: opens the choices for the next free seat"),
+                        accessibilityLabel: "Add a player"
+                    ) {
+                        lastTapped = .add
+                        menuSeat = seat
+                    }
+                    .wiggle(trigger: wiggles[.add, default: 0])
+                    .accessibilityIdentifier("lobby.add")
+                }
+                if let practice {
+                    PillButton(
+                        icon: ArtName.badgeBot, color: Palette.magenta, size: .small, width: 164,
+                        title: String(localized: "Practice", comment: "Lobby: starts a practice game against the House Cat bot"),
+                        accessibilityLabel: "Practice against the House Cat"
+                    ) {
+                        lastTapped = .practice
+                        for message in practice { session.send(message) }
+                    }
+                    .wiggle(trigger: wiggles[.practice, default: 0])
+                    .accessibilityIdentifier("lobby.practice")
+                }
+            }
         }
     }
 
@@ -385,13 +462,19 @@ struct LobbyView: View {
             session.send(.start)
             return
         }
-        // The wordless reason: the seats in the way wiggle (open ones, or closed ones when
-        // there just aren't enough players).
+        // Enough cats, but seats still open: offer to close them and deal.
+        if table.startClosingOpenSeats != nil {
+            confirmingStart = true
+            return
+        }
+        // Not enough cats. The status line says so; it and the seats that could take one wiggle.
         var blocking = table.blockingSeats
         if blocking.isEmpty, let room {
             blocking = room.seats.indices.filter { room.seats[$0].kind == .closed }
         }
         for s in blocking { wiggles[.seat(s), default: 0] += 1 }
+        wiggles[.start, default: 0] += 1
+        UIAccessibility.post(notification: .announcement, argument: LobbyCopy.status(table))
         Haptics.shared.thump()
         Sound.shared.play(ArtName.Sound.sfxNope)
     }
@@ -429,40 +512,76 @@ struct LobbyView: View {
         }
     }
 
+    /// The seat menu's heading: what the seat is now.
+    private func seatTitle(_ i: Int, _ seat: SeatView) -> String {
+        switch seat.kind {
+        case .human, .bot: room.map { SeatInfo.name($0, i) } ?? ""
+        case .open: String(localized: "Open seat", comment: "Seat menu heading: a seat anyone can take")
+        case .closed: String(localized: "Closed seat", comment: "Seat menu heading: a seat nobody can take")
+        }
+    }
+
     private func menuItems(_ i: Int, _ seat: SeatView) -> [SeatMenuItem] {
         if seat.kind == .human {
             return [
-                SeatMenuItem(id: "swap", icon: ArtName.iconSwap, color: Palette.sky, label: "Someone else sits here") {
+                SeatMenuItem(
+                    id: "swap", icon: ArtName.iconSwap, color: Palette.sky,
+                    label: String(localized: "Someone else sits here", comment: "Seat menu: swap the person in this seat")
+                ) {
                     menuSeat = nil
                     picker = .swap(i)
                 },
-                SeatMenuItem(id: "leave", icon: ArtName.iconLeave, color: Palette.magenta, label: "Stand up") {
+                SeatMenuItem(
+                    id: "leave", icon: ArtName.iconLeave, color: Palette.magenta,
+                    label: String(localized: "Stand up", comment: "Seat menu: leave this seat")
+                ) {
                     menuSeat = nil
                     session.send(.leave(seat: i))
                 },
             ]
         }
         var items: [SeatMenuItem] = [
-            SeatMenuItem(id: "invite", icon: ArtName.iconShare, color: Palette.sky, label: "Invite someone") {
+            SeatMenuItem(
+                id: "invite", icon: ArtName.iconShare, color: Palette.sky,
+                label: String(localized: "Invite someone", comment: "Seat menu: open the seat and share the table's link")
+            ) {
                 menuSeat = nil
                 if seat.kind != .open { session.send(.configure(seat: i, kind: .open)) }
                 lastTapped = .share
                 sharing = true
             },
-            SeatMenuItem(id: "here", icon: ArtName.badgePhone, color: Palette.teal, label: "Someone on this phone") {
+            SeatMenuItem(
+                id: "here", icon: ArtName.badgePhone, color: Palette.teal,
+                label: String(localized: "Pass and play", comment: "Seat menu: someone else plays this seat on this same phone")
+            ) {
                 menuSeat = nil
                 picker = .claim(i)
             },
         ]
         if !model.limits.sharesLinks { items.removeAll { $0.id == "invite" } }
         if seat.kind != .bot {
-            items.append(SeatMenuItem(id: "bot", icon: ArtName.badgeBot, color: Palette.orange, label: "Add a bot") {
+            items.append(SeatMenuItem(
+                id: "bot", icon: ArtName.badgeBot, color: Palette.orange,
+                label: String(localized: "Add a House Cat", comment: "Seat menu: put the computer player in this seat")
+            ) {
                 menuSeat = nil
                 session.send(.configure(seat: i, kind: .bot))
             })
         }
+        if seat.kind != .open {
+            items.append(SeatMenuItem(
+                id: "open", icon: ArtName.iconPlus, color: Palette.lime,
+                label: String(localized: "Open this seat", comment: "Seat menu: let someone with the code take this seat")
+            ) {
+                menuSeat = nil
+                session.send(.configure(seat: i, kind: .open))
+            })
+        }
         if seat.kind != .closed {
-            items.append(SeatMenuItem(id: "remove", icon: ArtName.iconRemove, color: Palette.magenta, label: "Remove seat") {
+            items.append(SeatMenuItem(
+                id: "remove", icon: ArtName.iconRemove, color: Palette.magenta,
+                label: String(localized: "Close this seat", comment: "Seat menu: nobody plays this seat")
+            ) {
                 menuSeat = nil
                 session.send(.configure(seat: i, kind: .closed))
             })
@@ -517,6 +636,82 @@ struct LobbyView: View {
 
     private func spelled(_ code: String) -> String {
         code.map(String.init).joined(separator: " ")
+    }
+}
+
+/// The lobby's words: what the table is waiting for, and what to do about it.
+enum LobbyCopy {
+    static func status(_ table: TableModel) -> String {
+        let players = table.playerCount
+        switch table.startBlock {
+        case nil:
+            return String(localized: "Ready! \(players) players. Tap Start.", comment: "Lobby status: the game can start; the number is 2 to 6")
+        case .notSeated:
+            return table.blockingSeats.isEmpty
+                ? String(localized: "No open seat. Ask someone at the table to add one.", comment: "Lobby status: this phone has no seat and none is open")
+                : String(localized: "Tap an open seat to sit down.", comment: "Lobby status: this phone has no seat yet")
+        case .openSeats(let open, let players) where players >= TableModel.minPlayers:
+            return open == 1
+                ? String(localized: "Waiting for 1 open seat. Close it, wait for them to join, or tap Start to play with \(players).", comment: "Lobby status: one seat still open, enough players to start without it")
+                : String(localized: "Waiting for \(open) open seats. Close them, wait for them to join, or tap Start to play with \(players).", comment: "Lobby status: several seats still open, enough players to start without them")
+        case .openSeats:
+            return String(localized: "You need 2 players. Invite someone to the open seat, or add a House Cat.", comment: "Lobby status: alone at the table with a seat open")
+        case .notEnoughPlayers:
+            return String(localized: "You need 2 players. Tap Add a player.", comment: "Lobby status: alone at the table with no open seat")
+        }
+    }
+}
+
+/// "Start with 3 players?": Start was tapped while seats were still open. Starting closes them.
+private struct StartConfirm: View {
+    let players: Int
+    let open: Int
+    let onStart: () -> Void
+    let onWait: () -> Void
+
+    var body: some View {
+        ZStack {
+            Palette.ink.opacity(0.55)
+                .ignoresSafeArea()
+                .contentShape(Rectangle())
+                .onTapGesture(perform: onWait)
+                .accessibilityHidden(true)
+            VStack(spacing: 12) {
+                Text("Start with \(players) players?", comment: "Start confirmation title; the number is 2 to 5")
+                    .font(.system(.title3, design: .rounded, weight: .black))
+                    .foregroundStyle(Palette.violet)
+                    .multilineTextAlignment(.center)
+                    .accessibilityAddTraits(.isHeader)
+                Text(open == 1
+                    ? String(localized: "1 seat is still open. Starting closes it, and nobody can join after the cards are dealt.", comment: "Start confirmation: one open seat")
+                    : String(localized: "\(open) seats are still open. Starting closes them, and nobody can join after the cards are dealt.", comment: "Start confirmation: several open seats"))
+                    .font(.system(.body, design: .rounded, weight: .bold))
+                    .foregroundStyle(Palette.ink)
+                    .multilineTextAlignment(.center)
+                    .fixedSize(horizontal: false, vertical: true)
+                PillButton(
+                    icon: ArtName.iconPlay, color: Palette.orange, size: .medium, width: 250, iconOutline: .white,
+                    title: String(localized: "Start now", comment: "Start confirmation: close the open seats and deal"),
+                    accessibilityLabel: "Start now", action: onStart)
+                    .accessibilityIdentifier("lobby.start.confirm")
+                PillButton(
+                    icon: nil, color: Palette.sky, size: .small, width: 250,
+                    title: String(localized: "Keep waiting", comment: "Start confirmation: don't start yet"),
+                    accessibilityLabel: "Keep waiting", action: onWait)
+                    .accessibilityIdentifier("lobby.start.wait")
+            }
+            .padding(20)
+            .frame(maxWidth: 330)
+            .background(
+                RoundedRectangle(cornerRadius: 28, style: .continuous).fill(.white)
+                    .shadow(color: Palette.ink.opacity(0.5), radius: 0, x: 0, y: 6))
+            .overlay(RoundedRectangle(cornerRadius: 28, style: .continuous).strokeBorder(Palette.ink, lineWidth: 4))
+            .padding(.horizontal, 20)
+            .dynamicTypeSize(...DynamicTypeSize.accessibility2)
+        }
+        .accessibilityElement(children: .contain)
+        .accessibilityIdentifier("lobby.start.sheet")
+        .accessibilityAction(.escape, onWait)
     }
 }
 
@@ -602,7 +797,7 @@ struct Cushion: View {
     }
 
     private var nameTag: some View {
-        NameTag(name, maxWidth: max(width * 1.2, 84))
+        NameTag(name, maxWidth: max(width * 1.5, 112))
             .offset(y: 20)
     }
 

@@ -10,7 +10,7 @@ final class OpponentsNode: SKNode {
     private var cats: [Seat: CatNode] = [:]
     private var tags: [Seat: SKSpriteNode] = [:]
     /// What each name pill shows (redrawn only when it changes).
-    private var tagText: [Seat: (name: String, width: CGFloat)] = [:]
+    private var tagText: [Seat: (name: String, width: CGFloat, size: CGFloat)] = [:]
     /// "Weak signal" / "Reconnecting" under a seat's name pill while its phone's link is bad.
     private var linkTags: [Seat: SKSpriteNode] = [:]
     /// Seat order left to right, as last laid out.
@@ -35,11 +35,16 @@ final class OpponentsNode: SKNode {
         }
         var changes = Changes()
         let slots = layout.opponentSlots
-        let spacing = slots.count > 1 ? slots[1].x - slots[0].x : layout.size.width
+        let spacing = layout.opponentSpacing
         // The cat sits high in its slot and its name pill under it, along the bar's bottom.
-        let diameter = min(layout.catDiameter, spacing - 12)
+        let diameter = layout.opponentDiameter
         let names = SeatInfo.names(model.room)
-        let tagWidth = min(spacing - 6, layout.arrangement == .phone ? 140 : 170)
+        // The words grow with the person's text size setting, as far as the bar has room: a
+        // name pill may nearly touch its neighbors, and with larger text it gets wider.
+        let textScale = TableText.scale
+        let tagWidth = min(spacing - 2, (layout.arrangement == .phone ? 140 : 170) * textScale)
+        let nameSize = TableTextScale.nameSize(scale: textScale)
+        let chipScale = TableTextScale.chips(scale: textScale, spacing: spacing, diameter: diameter)
 
         for (seat, tag) in tags where !seats.contains(seat) {
             tag.removeFromParent()
@@ -50,7 +55,7 @@ final class OpponentsNode: SKNode {
             tag.removeFromParent()
             linkTags[seat] = nil
         }
-        for (seat, node) in cats where !seats.contains(seat) || node.diameter != diameter
+        for (seat, node) in cats where !seats.contains(seat) || node.diameter != diameter || node.textScale != chipScale
             || node.cat != SeatInfo.catIndex(model.room.seats[safe: seat]) {
             node.removeFromParent()
             cats[seat] = nil
@@ -61,7 +66,7 @@ final class OpponentsNode: SKNode {
             if let existing = cats[seat] {
                 node = existing
             } else {
-                node = CatNode(cat: SeatInfo.catIndex(view), ringColor: SeatInfo.ringColor(seat), diameter: diameter)
+                node = CatNode(cat: SeatInfo.catIndex(view), ringColor: SeatInfo.ringColor(seat), diameter: diameter, textScale: chipScale)
                 cats[seat] = node
                 addChild(node)
             }
@@ -77,6 +82,7 @@ final class OpponentsNode: SKNode {
                 : view?.kind == .human ? LinkWords.seat(view?.link) : nil
             node.setLink(out ? nil : link?.level)
             node.setBadges(bot: view?.kind == .bot, skip: game.pendingSkip[safe: seat] ?? false)
+            node.slotWidth = spacing
             node.setCount(game.handCounts[safe: seat])
             if node.setPhase(PhaseMark.seat(seat, in: game)) { changes.movedOn.append(seat) }
             let active = game.status == .playing && game.turn == seat
@@ -89,17 +95,18 @@ final class OpponentsNode: SKNode {
                 addChild(t)
                 return t
             }()
-            let text = (name: names[safe: seat] ?? "", width: tagWidth)
-            if tagText[seat]?.name != text.name || tagText[seat]?.width != text.width || tag.texture == nil {
+            let text = (name: names[safe: seat] ?? "", width: tagWidth, size: nameSize)
+            if tagText[seat]?.name != text.name || tagText[seat]?.width != text.width || tagText[seat]?.size != text.size
+                || tag.texture == nil {
                 tagText[seat] = text
-                let texture = CardFaceFactory.shared.nameTag(text.name, maxWidth: text.width, active: false)
+                let texture = CardFaceFactory.shared.nameTag(text.name, maxWidth: text.width, active: false, size: text.size)
                 tag.texture = texture
                 tag.size = texture.size()
             }
             tag.position = CGPoint(x: slots[i].x, y: slots[i].y - layout.nameDrop)
             tag.zPosition = 20 + CGFloat(i)
             setLinkTag(
-                seat, link, under: tag, width: tagWidth, size: layout.arrangement == .phone ? 12 : 15,
+                seat, link, under: tag, width: tagWidth, size: ((layout.arrangement == .phone ? 13 : 15) * min(textScale, 1.25)).rounded(),
                 z: 30 + CGFloat(i))
         }
         order = Array(seats.prefix(slots.count))
@@ -148,7 +155,7 @@ final class OpponentsNode: SKNode {
     /// Touch / accessibility frame of a seat's cat, in this node's parent space.
     func frame(of seat: Seat) -> CGRect? {
         guard let node = cats[seat] else { return nil }
-        let d = max(node.diameter, 44)
+        let d = max(node.diameter, TableLayout.buttonHit)
         return CGRect(x: node.position.x - d / 2, y: node.position.y - d / 2, width: d, height: d)
     }
 }

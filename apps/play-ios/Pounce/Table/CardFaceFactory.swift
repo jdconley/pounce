@@ -197,14 +197,26 @@ final class CardFaceFactory {
     /// A player's name on a pill no wider than `maxWidth`, cut short with an ellipsis when it
     /// doesn't fit. At rest white on ink inside a white keyline (18:1, readable on the rug, the
     /// floor and card faces alike); `active` (whose turn it is) ink on orange (7.6:1). Cached.
-    func nameTag(_ name: String, maxWidth: CGFloat, active: Bool) -> SKTexture {
-        let size = Self.nameSize
-        let key = "name|\(name)|\(Int(maxWidth))|\(active)"
+    ///
+    /// `size` is the type size wanted (it grows with the person's text size setting,
+    /// `TableText`); a name too long for the pill gets smaller type, down to `nameSize`, before
+    /// it is cut short at a sensible place (`NameFit`).
+    func nameTag(_ name: String, maxWidth: CGFloat, active: Bool, size wanted: CGFloat = CardFaceFactory.nameSize) -> SKTexture {
+        let key = "name|\(name)|\(Int(maxWidth))|\(active)|\(Int(wanted))"
         if let cached = numerals[key] { return cached }
-        let attrs = Self.numeralAttributes(size: size)
-        let h = ceil(("Ag" as NSString).size(withAttributes: attrs).height + 4)
-        let pad = h * 0.24
-        let text = Self.truncated(name, toFit: max(maxWidth - 2 * pad, size), attributes: attrs)
+        let pads: (CGFloat) -> (h: CGFloat, pad: CGFloat) = { size in
+            let h = ceil(("Ag" as NSString).size(withAttributes: Self.numeralAttributes(size: size)).height + 4)
+            return (h, h * 0.24)
+        }
+        let fit = NameFit.fit(
+            name, width: maxWidth, sizes: NameFit.sizes(preferred: max(wanted, Self.nameSize), minimum: Self.nameSize),
+            wordFloor: TableTextScale.wordFloor
+        ) { text, size in
+            (text as NSString).size(withAttributes: Self.numeralAttributes(size: size)).width + 2 * pads(size).pad
+        }
+        let attrs = Self.numeralAttributes(size: fit.size)
+        let (h, pad) = pads(fit.size)
+        let text = fit.text
         let textSize = (text as NSString).size(withAttributes: attrs)
         let canvas = CGSize(width: max(h, ceil(textSize.width + 2 * pad)), height: h)
         let image = UIGraphicsImageRenderer(size: canvas).image { _ in

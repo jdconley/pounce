@@ -39,13 +39,22 @@ struct HomeView: View {
                 if sizeClass == .regular {
                     roomy(geo.size)
                 } else {
-                    VStack(spacing: 14) {
+                    // Empty Home on a short phone: tighter, so the practice pill clears the owner's cat.
+                    VStack(spacing: shownItems.isEmpty && geo.size.height < 700 ? 7 : 14) {
                         // Under the bell and gear row, the phone's full width, so a connection or two shows whole.
                         if showStrip { strip(scale: 1).padding(.top, 40) }
-                        hero(width: geo.size.width, height: geo.size.height * (showStrip ? 0.78 : 1))
+                        // With no tables the practice pill joins the two big ones: the hero gives
+                        // up a little height so all three clear the owner's cat on a short phone.
+                        hero(
+                            width: geo.size.width,
+                            height: geo.size.height * (showStrip ? 0.78 : 1)
+                                * (shownItems.isEmpty ? (geo.size.height < 700 ? 0.64 : 0.72) : 1))
                         pills(width: geo.size.width)
+                        practicePill(width: geo.size.width, short: geo.size.height < 700)
                         Spacer(minLength: 8)
+                        // The hint floats over the row's top edge: it never moves the cards.
                         tablesRow
+                            .overlay(alignment: .top) { archiveHint.offset(y: -34) }
                     }
                 }
             }
@@ -282,6 +291,36 @@ struct HomeView: View {
         }
     }
 
+    /// With no tables yet, a way to just try the game: a practice round against the House Cat.
+    @ViewBuilder private func practicePill(width: CGFloat, short: Bool = false) -> some View {
+        if shownItems.isEmpty {
+            PillButton(
+                icon: ArtName.badgeBot, color: Palette.magenta, size: short ? .small : .medium, width: min(width - 56, 360),
+                title: String(localized: "Practice with the House Cat", comment: "Home, with no tables: starts a game against the computer player"),
+                accessibilityLabel: "Practice with the House Cat"
+            ) {
+                Task { await model.newGame(practice: true) }
+            }
+            .disabled(model.isCreatingRoom)
+            .opacity(model.isCreatingRoom ? 0.7 : 1)
+            .accessibilityIdentifier("home.practice")
+            .transition(.scale.combined(with: .opacity))
+        }
+    }
+
+    /// Shown once, over the tables row: a table can be put away with a long press.
+    @ViewBuilder private var archiveHint: some View {
+        if !settings.archiveHintSeen, !shownItems.isEmpty {
+            HintBubble(
+                text: String(localized: "Press and hold a table to archive it.", comment: "Home: the one-time hint about the long-press menu on a table card")
+            ) {
+                settings.archiveHintSeen = true
+            }
+            .accessibilityIdentifier("home.hint.archive")
+            .transition(.scale(scale: 0.8, anchor: .bottom).combined(with: .opacity))
+        }
+    }
+
     @ViewBuilder private var tablesRow: some View {
         let items = shownItems
         let archivedCount = model.archivedItems.count
@@ -296,6 +335,7 @@ struct HomeView: View {
                         }
                         .contextMenu {
                             Button {
+                                settings.archiveHintSeen = true
                                 archive(item.id)
                             } label: {
                                 Label(
@@ -354,10 +394,12 @@ struct HomeView: View {
                 Spacer(minLength: 0)
                 hero(width: min(size.width, 640), height: size.height * (hasTables ? 0.8 : 1.25))
                 pills(width: 0, wide: min((width - 20) / 2, 340))
+                practicePill(width: 420)
                 if hasTables {
                     tablesPanel
                         .frame(width: width)
                         .padding(.top, 10)
+                        .overlay(alignment: .top) { archiveHint.frame(maxWidth: 460).offset(y: -18) }
                 }
                 Spacer(minLength: 0)
             }

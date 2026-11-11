@@ -82,7 +82,8 @@ extension TableScene {
     /// and no event still animating (the drawn table is about to change).
     var actingSeat: Seat? {
         guard !animating, let model, let bottom = bottomSeat, bottom == shownRevealed, model.isMyTurn,
-              model.currentSeat == bottom, !store.actionInFlight, store.phase == .playing else { return nil }
+              model.currentSeat == bottom, !store.actionInFlight, store.phase == .playing, discardHold == nil
+        else { return nil }
         return bottom
     }
 
@@ -235,7 +236,7 @@ extension TableScene {
     }
 
     private func source(at p: CGPoint) -> TableInputState.Source {
-        if !menuHidden, menuFrame.contains(p) { return .menu }
+        if !menuHidden, menuFrame.contains(p), !catWins(at: p) { return .menu }
         if towerFrame.contains(p), layout.map({ p.y > $0.traysFrame.maxY || !$0.traysFrame.contains(p) }) ?? false { return .tower }
         if !trays.isHidden, !trays.layDownButton.isHidden, layDownFrame.contains(p) { return .layDown }
         if let card = hand.card(at: p) { return .hand(card) }
@@ -244,6 +245,14 @@ extension TableScene {
         if deck.hitFrame.contains(p) { return .pile(.deck) }
         if discard.hitFrame.contains(p) { return .pile(.discard) }
         return .other
+    }
+
+    /// Where the menu button's touch target and a cat's overlap (a crowded bar on a small
+    /// phone), the tap goes to whichever is nearer: the paw never takes a cat's tap.
+    private func catWins(at p: CGPoint) -> Bool {
+        guard let layout, let slot = opponents.order.firstIndex(where: { opponents.frame(of: $0)?.contains(p) == true })
+        else { return false }
+        return !layout.menuWins(at: p, overCat: slot)
     }
 
     /// Turns the touch into a drag when its source can move; false keeps it a tap.
@@ -420,7 +429,7 @@ extension TableScene {
             guard let layout else { return refresh() }
             // Anywhere over the hand or the trays counts as "to the hand".
             if p.y < layout.traysFrame.maxY + 12 {
-                if !tryDraw(pile) { nope(pile: pile) }
+                if !tryDraw(pile) { nope(pile: pile, why: why { $0.whyNoDraw(pile, seat: $1) }) }
             } else {
                 refresh()
             }
@@ -433,11 +442,11 @@ extension TableScene {
         if discard.hitFrame.insetBy(dx: -12, dy: -12).contains(p) { return chooseDiscard(card) }
         if let seat = opponentSeat(at: p) { return aim(card, at: seat) }
         if !trays.isHidden, let tray = trays.tray(at: p) {
-            if !tryTray(card, tray, at: dropSlot(tray: tray, x: p.x)) { nope(card: card) }
+            if !tryTray(card, tray, at: dropSlot(tray: tray, x: p.x)) { nope(card: card, why: whyNoTray(card, tray)) }
             return
         }
         if let aim = laidDrop(at: p) {
-            if !tryHit(card, aim.target, toward: aim.toward) { nope(card: card) }
+            if !tryHit(card, aim.target, toward: aim.toward) { nope(card: card, why: whyNoHit(card, aim.target)) }
             return
         }
         if let layout, isOverHand(p, layout) {
@@ -457,7 +466,7 @@ extension TableScene {
                 refresh()
             } else if !tryTray(card, target, at: dropSlot(tray: target, x: p.x)) {
                 refresh()
-                nope(card: card)
+                nope(card: card, why: whyNoTray(card, target))
             }
             return
         }
@@ -504,13 +513,13 @@ extension TableScene {
         case .sort:
             cycleSort()
         case .layDown:
-            if !tryLayDown() { nope(node: trays.layDownButton) }
+            if !tryLayDown() { nope(node: trays.layDownButton, why: why { model, seat in model.whyNoPlay(seat) } ?? .notALevel) }
         case .hand(let card):
             liftedCard = liftedCard == card ? nil : card
             Haptics.shared.tick()
         case .tray(let card, let tray):
             if let held = liftedCard {
-                if !tryTray(held, tray) { nope(card: held) }
+                if !tryTray(held, tray) { nope(card: held, why: whyNoTray(held, tray)) }
             } else if let pick = trayYarn {
                 tapWithYarn(pick, on: card, in: tray)
             } else if trayState.canMoveYarn(card, inTray: tray) {
@@ -525,7 +534,10 @@ extension TableScene {
             if let seat = actingSeat, model?.drawSources(for: seat).contains(pile) == true {
                 _ = tryDraw(pile)
             } else if let held = liftedCard {
-                if pile == .discard { chooseDiscard(held) } else { nope(card: held) }
+                if pile == .discard { chooseDiscard(held) } else { nope(card: held, why: why { model, seat in model.whyNoPlay(seat) } ?? .discardOnDeck) }
+            } else if let note = why({ $0.whyNoDraw(pile, seat: $1) }) {
+                // A pile that can't be drawn from says why (it used to do nothing at all).
+                nope(pile: pile, why: note)
             }
         case .other:
             tapTarget(at: p)
@@ -546,7 +558,7 @@ extension TableScene {
         trayState.moveYarn(pick.card, inTray: tray, toIndex: index)
         refresh()
         if trayState == before {
-            nope(node: nil)  // no run puts the Yarn there
+            nope(node: nil, why: .yarnNoFit)  // no run puts the Yarn there
         } else {
             Haptics.shared.tick()
         }
@@ -564,11 +576,11 @@ extension TableScene {
         guard let held = liftedCard else { return }
         if let seat = opponentSeat(at: p) { return aim(held, at: seat) }
         if !trays.isHidden, let tray = trays.tray(at: p) {
-            if !tryTray(held, tray) { nope(card: held) }
+            if !tryTray(held, tray) { nope(card: held, why: whyNoTray(held, tray)) }
             return
         }
         if let aim = laidZone.drop(at: p) {
-            if !tryHit(held, aim.target, toward: aim.toward) { nope(card: held) }
+            if !tryHit(held, aim.target, toward: aim.toward) { nope(card: held, why: whyNoHit(held, aim.target)) }
             return
         }
         liftedCard = nil
@@ -594,22 +606,52 @@ extension TableScene {
     /// A card was dropped on (or tapped onto) the discard pile. A Cucumber with seats to aim
     /// at stays selected so the cats glow; it is sent only once a cat is picked.
     private func chooseDiscard(_ card: CardID) {
-        guard let seat = actingSeat, let model, model.canPlay(seat) else { return nope(card: card) }
+        guard let seat = actingSeat, let model, model.canPlay(seat) else {
+            return nope(card: card, why: why { model, seat in model.whyNoPlay(seat) })
+        }
         if Card(id: card) == .cucumber, !model.skipTargets(for: seat).isEmpty {
             if liftedCard == card { refresh() } else { liftedCard = card }
             Haptics.shared.tick()
+            onNote(.pickACat)  // not a refusal: the cats glow, and the words say what for
             return
         }
-        if !tryDiscard(card, target: nil) { nope(card: card) }
+        if !tryDiscard(card, target: nil, undoable: true) { nope(card: card) }
     }
 
     private func aim(_ card: CardID, at seat: Seat) {
-        guard Card(id: card) == .cucumber, tryDiscard(card, target: seat) else { return nope(card: card) }
+        guard Card(id: card) == .cucumber, tryDiscard(card, target: seat, undoable: true) else {
+            return nope(card: card, why: why { model, mine in model.whyNoAim(card: card, seat: mine, at: seat) })
+        }
     }
 
-    /// Sends the discard. A Cucumber needs a legal target whenever one exists; with none it
-    /// goes out plain (`TableModel.discardAction`).
-    @discardableResult func tryDiscard(_ card: CardID, target: Seat?) -> Bool {
+    // MARK: why not
+
+    /// The reason a move from the hand that is up didn't go, from `reason` (the table as drawn
+    /// and that hand's seat). Nil, so no words, while this phone can't tell: no hand is up, or
+    /// the table is about to change (a move in flight, an event still animating).
+    private func why(_ reason: (TableModel, Seat) -> MoveNote?) -> MoveNote? {
+        guard !animating, !store.actionInFlight, discardHold == nil, let model, let seat = bottomSeat,
+              seat == shownRevealed else { return nil }
+        return reason(model, seat)
+    }
+
+    private func whyNoTray(_ card: CardID, _ tray: Int) -> MoveNote? {
+        why { model, seat in
+            if let note = model.whyNoPlay(seat) { return note }
+            if model.trays(for: seat).isEmpty { return .alreadyLaid }
+            return trayState.isFull(tray) && trayState.tray(of: card) != tray ? .trayFull : nil
+        }
+    }
+
+    private func whyNoHit(_ card: CardID, _ target: HitTarget) -> MoveNote? {
+        why { model, seat in model.whyNoHit(card: card, seat: seat, target: target) }
+    }
+
+    /// Discards `card`. A Cucumber needs a legal target whenever one exists; with none it
+    /// goes out plain (`TableModel.discardAction`). `undoable` (a tap or a drop, where a slip
+    /// ends the turn): the card goes to the pile and waits there with an Undo for a moment
+    /// (`DiscardHold`) before the action is sent. Otherwise it is sent at once.
+    @discardableResult func tryDiscard(_ card: CardID, target: Seat?, undoable: Bool = false) -> Bool {
         guard let seat = actingSeat, let model, model.canPlay(seat) else { return false }
         if Card(id: card) == .cucumber {
             let aims = model.skipTargets(for: seat)
@@ -617,11 +659,67 @@ extension TableScene {
                 guard let target, aims.contains(target) else { return false }
             }
         }
+        if undoable {
+            holdDiscard(card, target: target, seat: seat)
+            return true
+        }
         guard store.act(seat: seat, model.discardAction(card: card, target: target)) else { return false }
         lastAct = .card(card)
         Haptics.shared.drop()
         provisionalMove(card: card, to: discard.position)
         return true
+    }
+
+    // MARK: discard undo
+
+    /// Puts `card` on the discard pile and offers Undo; the discard is sent when the window
+    /// closes (`sendHeldDiscard`). No other move goes out meanwhile (`actingSeat`).
+    private func holdDiscard(_ card: CardID, target: Seat?, seat: Seat) {
+        holdSerial += 1
+        let hold = DiscardHold(card: card, target: target, seat: seat, epoch: store.turnEpoch, serial: holdSerial)
+        discardHold = hold
+        liftedCard = nil
+        Haptics.shared.drop()
+        provisionalMove(card: card, to: discard.position)
+        let window = TableText.lingering(DiscardHold.window)
+        onUndo(UndoOffer(serial: hold.serial, pile: discard.hitFrame, seconds: window))
+        Task { [weak self] in
+            try? await Task.sleep(for: Pace.duration(.seconds(window)))
+            guard let self, self.discardHold?.serial == hold.serial else { return }
+            self.sendHeldDiscard()
+        }
+    }
+
+    /// The Undo window closed (or the table is going away): the held discard goes to the server
+    /// now. If the table moved on under it, the card just comes back.
+    func sendHeldDiscard() {
+        guard let hold = discardHold else { return }
+        discardHold = nil
+        onUndo(nil)
+        guard let model, hold.stands(model, epoch: store.turnEpoch),
+              store.act(seat: hold.seat, model.discardAction(card: hold.card, target: hold.target)) else {
+            rollbackProvisional(nope: false)
+            return
+        }
+        lastAct = .card(hold.card)
+        refresh()
+    }
+
+    /// Undo: the card flies back to the hand and the turn goes on. Nothing was sent.
+    func undoDiscard() {
+        guard discardHold != nil else { return }
+        discardHold = nil
+        onUndo(nil)
+        Haptics.shared.tick()
+        rollbackProvisional(nope: false)
+    }
+
+    /// A redraw found the held discard no longer stands (the turn moved on, the hand went face
+    /// down): it is dropped, unsent, and its card is drawn back in the hand.
+    func dropHeldDiscard() {
+        guard discardHold != nil else { return }
+        discardHold = nil
+        onUndo(nil)
     }
 
     /// Puts `card` in `tray`; `slot` is the display slot it was dropped on (nil on the tap
@@ -720,10 +818,13 @@ extension TableScene {
         refresh()
     }
 
-    /// The server refused the in-flight action.
-    func rejected() {
+    /// The server refused the in-flight action (`code` says why, in words on the table).
+    func rejected(_ code: ErrorCode) {
         let act = lastAct
         lastAct = nil
+        // `bad_step` is the wrong half of the turn either way: a refused draw means a card was
+        // already taken; anything else means one still has to be.
+        if code == .badStep, case .draw = act { onNote(.alreadyDrew) } else { onNote(MoveNote.server(code)) }
         if provisionalCard != nil {
             rollbackProvisional()
             return
@@ -738,16 +839,18 @@ extension TableScene {
 
     // MARK: nope
 
-    /// The Nope verb (spec §9.1) on a hand or tray card: three quick wiggles, a soft thud.
-    func nope(card: CardID?) {
-        nope(node: card.flatMap { hand.node(for: $0) })
+    /// The Nope verb (spec §9.1) on a hand or tray card: three quick wiggles, a soft thud, and
+    /// one line of words saying why (`why`, when this phone knows).
+    func nope(card: CardID?, why: MoveNote? = nil) {
+        nope(node: card.flatMap { hand.node(for: $0) }, why: why)
     }
 
-    private func nope(pile: DrawSource) {
-        nope(node: pile == .deck ? deck : discard)
+    private func nope(pile: DrawSource, why: MoveNote? = nil) {
+        nope(node: pile == .deck ? deck : discard, why: why)
     }
 
-    func nope(node: SKNode?) {
+    func nope(node: SKNode?, why: MoveNote? = nil) {
+        if let why { onNote(why) }
         Haptics.shared.drop()
         Sound.shared.play(ArtName.Sound.sfxNope)
         guard let node, !node.isHidden else { return }

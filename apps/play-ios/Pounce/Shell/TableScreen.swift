@@ -30,11 +30,21 @@ struct TableScreen: View {
 
     private enum Screen: Equatable {
         case connecting, lobby, table, state(StateCard.Kind)
+        /// The game goes on (or ended) without this phone: said in words (`NotPlayingCard`).
+        case notPlaying(NotPlayingCard.Reason)
         /// A seat is being moved here from another phone, which holds no seat yet.
         case moveClaim(String, refused: Bool)
     }
 
     private var screen: Screen {
+        #if DEBUG
+        // `-show-notplaying <out|started|over>` (screenshots): that card over any demo room.
+        let args = CommandLine.arguments
+        if let i = args.firstIndex(of: "-show-notplaying"), let reason = args[safe: i + 1].flatMap(NotPlayingCard.Reason.init),
+           store.room != nil {
+            return .notPlaying(reason)
+        }
+        #endif
         switch store.phase {
         case .connecting:
             return session.offline ? .state(.offline) : .connecting
@@ -49,9 +59,9 @@ struct TableScreen: View {
             }
             if store.phase == .lobby { return .lobby }
             // Every seat of this phone forfeited while the others play on (§5.13).
-            if session.model?.isOutForMe == true { return .state(.out) }
-            // No spectating in M1: a game this phone isn't in is "full".
-            return seated ? .table : .state(.full)
+            if session.model?.isOutForMe == true { return .notPlaying(.out) }
+            // No spectating in M1: a game this phone isn't in says so, and why.
+            return seated ? .table : .notPlaying(store.phase == .over ? .over : .started)
         case .stalled:
             return .state(.stalled)
         case .closed:
@@ -145,6 +155,10 @@ struct TableScreen: View {
             StateCard(kind: kind, onRetry: kind == .offline ? { session.retry() } : nil) {
                 model.goHome()
             }
+        case .notPlaying(let reason):
+            NotPlayingCard(
+                reason: reason, tableName: store.room?.title ?? TableName.fallback(code: session.code)
+            ) { model.goHome() }
         case .moveClaim(let code, let refused):
             MoveClaimView(moveCode: code, refused: refused) { model.goHome() }
         }
@@ -183,6 +197,8 @@ enum TableLayer {
     static let turnCue: Double = 4
     static let coach: Double = 5
     static let lookPill: Double = 6
+    /// Why a move didn't go, and the discard's Undo: over the coach, under the curtain.
+    static let note: Double = 7
     static let curtain: Double = 10
     static let priming: Double = 15
     static let gameOver: Double = 20
@@ -230,6 +246,8 @@ private struct TableStage: View {
     /// "Mia forfeited" floating down (§5.13).
     @State private var forfeitPill: RoomStore.ForfeitNotice?
     @State private var nudgePill: RoomStore.NudgeNotice?
+    /// Why the last refused move didn't go, for a moment (`MoveNoteView`).
+    @State private var moveNote: MoveNoteShown?
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.scenePhase) private var scenePhase
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
@@ -339,6 +357,18 @@ private struct TableStage: View {
                 .transition(.move(edge: .top).combined(with: .opacity))
                 .allowsHitTesting(false)
                 .zIndex(TableLayer.lookPill)
+            }
+            if let shown = moveNote, curtainSeat == nil, events.winners == nil, events.scoreboard == nil, events.player == nil {
+                MoveNoteView(text: noteText(shown.note))
+                    .id(shown.serial)
+                    .transition(.scale(scale: 0.85, anchor: .bottom).combined(with: .opacity))
+                    .zIndex(TableLayer.note)
+            }
+            if let offer = events.undo, curtainSeat == nil, events.winners == nil {
+                UndoPill(offer: offer) { scene?.undoDiscard() }
+                    .id(offer.serial)
+                    .transition(.scale(scale: 0.6).combined(with: .opacity))
+                    .zIndex(TableLayer.note)
             }
             probes
             if let shown = connectionPill {
@@ -463,6 +493,20 @@ private struct TableStage: View {
         // Out of the way fast once the table is touched.
         .animation(.easeOut(duration: 0.15).paced, value: turnCue)
         .animation(.spring(duration: 0.35, bounce: 0.3).paced, value: connectionPill)
+        .animation(.spring(duration: 0.3, bounce: 0.35).paced, value: moveNote)
+        .animation(.spring(duration: 0.3, bounce: 0.35).paced, value: events.undo)
+        .onChange(of: events.note) { _, note in
+            guard let note else { return }
+            moveNote = note
+            UIAccessibility.post(notification: .announcement, argument: noteText(note.note))
+        }
+        // Gone after a moment (longer under VoiceOver's announcement is fine: it is only words).
+        .task(id: moveNote) {
+            guard moveNote != nil else { return }
+            try? await Task.sleep(for: Pace.duration(.seconds(TableText.lingering(4))))
+            guard !Task.isCancelled else { return }
+            moveNote = nil
+        }
         .onAppear(perform: attach)
         .onDisappear { session.detachTable() }
         .onChange(of: StageInput(room: session.store.room, pass: session.store.pass), initial: true) {
@@ -526,6 +570,7 @@ private struct TableStage: View {
         .onChange(of: scenePhase) { _, phase in
             if phase == .background {
                 backgrounded = true
+                scene?.sendHeldDiscard()  // a discard waiting on its Undo goes now, not on return
             } else if phase == .active, backgrounded {
                 backgrounded = false
                 scene?.replayTurnCue()
@@ -546,6 +591,7 @@ private struct TableStage: View {
                 session: session,
                 onHome: {
                     events.menuOpen = false
+                    scene?.sendHeldDiscard()
                     model.goHome()
                 },
                 onScores: scene?.model?.game == nil ? nil : {
@@ -581,10 +627,18 @@ private struct TableStage: View {
         scene.onMenu = { [weak events] in events?.menuOpen = true }
         scene.onTower = { [weak events] drawn in events?.scoreboard = drawn }
         scene.onPlayer = { [weak events] drawn, seat in events?.player = PlayerTap(model: drawn, seat: seat) }
-        scene.onSwipeHome = { [weak model] in model?.goHome() }
+        scene.onSwipeHome = { [weak model, weak scene] in
+            scene?.sendHeldDiscard()  // before the room closes, so the discard isn't lost
+            model?.goHome()
+        }
         scene.onGameOver = { [weak events] seats in events?.winners = seats }
         scene.onShownRevealed = { [weak events] seat in events?.shown = seat }
         scene.onTableTap = { [weak events] in events?.tableTaps += 1 }
+        scene.onNote = { [weak events] note in
+            guard let events else { return }
+            events.note = MoveNoteShown(note: note, serial: (events.note?.serial ?? 0) + 1)
+        }
+        scene.onUndo = { [weak events] offer in events?.undo = offer }
         scene.onCoach = { [weak events] coach in
             if events?.coach != coach { events?.coach = coach }
         }
@@ -630,7 +684,14 @@ private struct TableStage: View {
     private func feedCoach(allowNew: Bool) {
         let shown = coachView
         let person = shown?.person.id
-        let seen = person.flatMap { model.tipsSeen[$0] } ?? []
+        var seen = person.flatMap { model.tipsSeen[$0] } ?? []
+        #if DEBUG
+        // `-tips-played` (screenshots): as if the how-to-play tips were seen, so the gesture
+        // tips (tap a cat, swipe home) come up.
+        if CommandLine.arguments.contains("-tips-played") {
+            seen.formUnion(Set(CoachTip.allCases).subtracting([.scores, .cats, .swipeHome]))
+        }
+        #endif
         let marked = coach.update(shown?.context, seen: seen, allowNew: allowNew && !(shown?.busy ?? true))
         if let person, !marked.isEmpty { model.markTipsSeen(marked, person: person) }
     }
@@ -648,6 +709,14 @@ private struct TableStage: View {
                 settings.pushPrimed = true
             }
         }
+    }
+
+    /// A move note's words, naming whoever has the move when it isn't this phone's.
+    private func noteText(_ note: MoveNote) -> String {
+        let turn = table.flatMap { table in
+            table.isMyTurn && !table.isMultiSeat ? nil : table.currentSeat.map { SeatInfo.name(table.room, $0) }
+        }
+        return MoveNoteCopy.text(note, turnName: turn)
     }
 
     // MARK: player cards and looks
@@ -805,6 +874,10 @@ private final class StageEvents {
     var coach: TableCoach?
     /// Whose turn the scene says to show.
     var turnCue: TurnCue?
+    /// The scene's latest "that move didn't go" reason.
+    var note: MoveNoteShown?
+    /// A discard waiting on the pile with its Undo.
+    var undo: UndoOffer?
 }
 
 /// The small cats of this phone's seats along the bottom, while another seat plays: tap one

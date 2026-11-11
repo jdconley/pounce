@@ -40,6 +40,13 @@ final class TableScene: SKScene {
     var onPlayer: (TableModel, Seat) -> Void = { _, _ in }
     /// A swipe in from the left edge: straight to Home (the paw menu's Home).
     var onSwipeHome: () -> Void = {}
+    /// A move didn't go: the reason, for one line of words over the table (`MoveNoteView`).
+    var onNote: (MoveNote) -> Void = { _ in }
+    /// A discard is waiting on the pile with an Undo (nil: no longer).
+    var onUndo: (UndoOffer?) -> Void = { _ in }
+    /// The discard held back for its Undo window (`TableInput`).
+    var discardHold: DiscardHold?
+    var holdSerial = 0
     /// The game is over and its celebration has played (or the table opened finished).
     var onGameOver: ([Seat]) -> Void = { _ in }
     /// The face-up hand changed (a reveal landed or the hand turned face down). The shell
@@ -277,6 +284,7 @@ final class TableScene: SKScene {
     /// intent returns, instead of the intent pipeline waiting forever. Decorative offsets go
     /// back to rest in case the scene is shown again.
     override func willMove(from view: SKView) {
+        sendHeldDiscard()  // leaving the table never loses a discard
         director.cancelAll()
         for l in [Layer.background, .rug, .piles, .laidZone, .tower, .opponents, .trays, .hand] {
             layer(l).position = .zero
@@ -410,7 +418,7 @@ final class TableScene: SKScene {
             // A snapshot is the truth: a provisional card is either gone from the hand or back.
             // Not while this phone's move is still pending (sent again after a reconnect): the
             // card stays where it was played, under its hourglass, until the server has it.
-            if store.pendingMove == nil {
+            if store.pendingMove == nil, discardHold == nil {
                 clearProvisional()
                 lastAct = nil
             }
@@ -419,9 +427,9 @@ final class TableScene: SKScene {
             #if DEBUG
             timelineLog("reconcile seq \(store.lastSeq) hand \(hand.cards.count) transients \(transients.count)")
             #endif
-        case .rejected:
+        case .rejected(let code):
             reconcileFromStore()
-            rejected()
+            rejected(code)
         case .game(let event, let seq):
             seenSeq = max(seenSeq, seq)
             guard seq > drawnSeq else {
@@ -497,7 +505,7 @@ final class TableScene: SKScene {
 
     /// The in-flight action was refused: the provisional card flies back to its place in the
     /// hand and nopes there.
-    func rollbackProvisional() {
+    func rollbackProvisional(nope: Bool = true) {
         guard let card = provisionalCard else { return }
         let flyer = provisionalNode
         provisionalNode = nil
@@ -506,7 +514,8 @@ final class TableScene: SKScene {
         redraw()
         guard let flyer, let home = hand.node(for: card), let parent = flyer.parent else {
             flyer?.removeFromParent()
-            return nope(card: card)
+            if nope { self.nope(card: card) }
+            return
         }
         let target = parent.convert(home.position, from: hand)
         home.alpha = 0
@@ -519,7 +528,7 @@ final class TableScene: SKScene {
             await director.run(back, on: flyer)
             flyer.removeFromParent()
             home.alpha = 1
-            self?.nope(card: card)
+            if nope { self?.nope(card: card) }
         }
     }
 
@@ -573,6 +582,12 @@ final class TableScene: SKScene {
         }
         let bottom = Self.bottomSeat(model, revealed: shownRevealed)
         bottomSeat = bottom
+        // A discard waiting on its Undo goes back to the hand, unsent, once its turn is gone or
+        // its hand is no longer the one face up.
+        if let hold = discardHold, !(hold.stands(model, epoch: store.turnEpoch) && hold.seat == bottom && bottom == shownRevealed) {
+            dropHeldDiscard()
+            clearProvisional()
+        }
         let barSeats = model.barSeats(bottom: bottom)
         let layout = TableLayout(
             size: size, safeTop: safeInsets.top, safeBottom: safeInsets.bottom, opponents: max(barSeats.count, 1))
@@ -674,7 +689,7 @@ final class TableScene: SKScene {
         sortButton.position = layout.sortButton
         let roomy = layout.arrangement != .phone
         sortButton.size = CGSize(width: roomy ? 44 : Self.sortSize, height: roomy ? 44 : Self.sortSize)
-        menuButton.size = CGSize(width: roomy ? 44 : Self.menuSize, height: roomy ? 44 : Self.menuSize)
+        menuButton.size = CGSize(width: layout.menuSide, height: layout.menuSide)
 
         // The hand's owner by name only on a shared phone while a hand is shown: it says whose
         // hand is up. A one-seat phone never names its own player on the table.
@@ -693,13 +708,7 @@ final class TableScene: SKScene {
         tower.showPhase(faceUp ? bottom.flatMap { game.phase[safe: $0] } : nil)
 
         menuButton.isHidden = false
-        // Top-right: in the status bar's right ear when the safe top is tall enough (notch /
-        // island phones), else tucked into the bar's corner.
-        let menuSide = menuButton.size.width
-        let menuY = safeInsets.top >= 44
-            ? layout.opponentsBar.maxY + menuSide / 2 - 6
-            : layout.opponentsBar.maxY - menuSide / 2 - (roomy ? 6 : 0)
-        menuButton.position = CGPoint(x: size.width - menuSide / 2 - (roomy ? 16 : 10), y: menuY)
+        menuButton.position = layout.menuButton
     }
 
     /// Draws ahead, a card per idle moment, the small faces a drag over the laid groups shows
@@ -824,7 +833,7 @@ final class TableScene: SKScene {
     }
 
     /// The shell's overlays over the table: the first-game coach and the turn cue.
-    private func publishOverlays() {
+    func publishOverlays() {
         onCoach(coachSnapshot())
         publishTurnCue()
     }
