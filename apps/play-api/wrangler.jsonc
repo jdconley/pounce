@@ -8,6 +8,19 @@
   "routes": [
     { "pattern": "play.conleychaos.com", "custom_domain": true }
   ],
+  // The landing page's images and clip (scripts/build-site-media.mjs writes ./public). The Worker
+  // answers every path first; only /static/* (images) and the two icon files are served straight
+  // from ./public, so no file there can stand in for the API, an invite or privacy page, or
+  // /.well-known/apple-app-site-association (tests/site-assets.test.ts holds this). The clip in
+  // ./public/media goes through the Worker (ASSETS), which answers the byte-range requests
+  // Safari needs to play it.
+  "assets": {
+    "directory": "./public",
+    "binding": "ASSETS",
+    "html_handling": "none",
+    "not_found_handling": "none",
+    "run_worker_first": ["/*", "!/static/*", "!/favicon.ico", "!/apple-touch-icon.png"]
+  },
   // TOKEN_SECRET, APNS_KEY_P8, APNS_KEY_ID, SIWA_KEY_P8, SIWA_KEY_ID and the four
   // TWILIO_* secrets (Twilio Verify) and REPORTS_KEY (the owner's key for reading player reports)
   // are set by the deploy pipeline, never listed here.
@@ -16,10 +29,16 @@
     "APNS_TOPIC": "com.conleychaos.play",
     "APNS_HOST": "api.push.apple.com",
     "SIWA_CLIENT_ID": "com.conleychaos.play",
-    // The App Store listing, "https://apps.apple.com/app/id<number>": the invite pages' "Get the
-    // app" link and Safari's Smart App Banner. Empty until App Store Connect gives the app its
-    // number (App Information, Apple ID); while empty there is no banner and no install link.
+    // The App Store listing, "https://apps.apple.com/app/id<number>": the landing page's App Store
+    // badge, /get, the invite pages' "Get the app" link and Safari's Smart App Banner. Empty until
+    // the app is on the App Store; while empty there is no banner, and those links go to the
+    // TestFlight beta below.
     "APP_STORE_URL": "",
+    // The public TestFlight beta. Used only while APP_STORE_URL is empty: the landing page's
+    // "Join the beta on TestFlight" button, /get (and so the page's QR code), and the invite
+    // pages' "Get the app" link. Without either, the landing page says "Coming soon to the App
+    // Store". It can stay once APP_STORE_URL is set; nothing uses it then.
+    "TESTFLIGHT_URL": "https://testflight.apple.com/join/ABEeCJbe",
     // Shared streaks, table looks and Play again (daily habit §15 row 3), on since the app's
     // streak screens shipped (row 4).
     "STREAKS": "on",

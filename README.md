@@ -13,7 +13,7 @@ the next cat skip a turn.
 
 | Path | What it is |
 | --- | --- |
-| `apps/play-api` | The game server: a Cloudflare Worker with one Durable Object per room. It owns the rules, the bots and the hidden hands. |
+| `apps/play-api` | The game server: a Cloudflare Worker with one Durable Object per room. It owns the rules, the bots and the hidden hands. It also serves the website (below). |
 | `apps/play-ios` | The iOS app (SwiftUI shell, SpriteKit table). See its [README](apps/play-ios/README.md). |
 | `docs/superpowers` | The design spec, implementation plans and follow-up notes. |
 
@@ -38,6 +38,31 @@ Run the game server on your machine (the iOS Debug build talks to it at
 cp apps/play-api/.dev.vars.example apps/play-api/.dev.vars   # gitignored
 # fill TOKEN_SECRET with the output of: openssl rand -hex 32
 pnpm --filter @pounce/play-api exec wrangler dev --port 8787
+```
+
+## The website
+
+The same Worker serves the public site at `play.conleychaos.com`: the landing page (`/`), help
+(`/support`), the privacy policy (`/privacy`) and the invite pages. They are plain HTML built in
+`apps/play-api/src/http`, with no scripts and nothing loaded from another host.
+
+How the landing page offers the app follows two settings, with no code change:
+
+| Setting | Where | Effect |
+| --- | --- | --- |
+| `APP_STORE_URL` | `vars` in `apps/play-api/wrangler.jsonc`, empty today | Set to `https://apps.apple.com/app/id<number>` once the app is on the App Store: the page shows Apple's "Download on the App Store" badge, Safari's Smart App Banner, and a QR code on desktop. |
+| `TESTFLIGHT_URL` | the same `vars`, set to the public beta link | Used only while `APP_STORE_URL` is empty (today): the page shows "Join the beta on TestFlight" and the QR code. |
+| neither | | The page says "Coming soon to the App Store" and has no install button. |
+
+`/get` redirects to whichever link is set (or home), so other sites and the QR code can point at
+`https://play.conleychaos.com/get`.
+
+The page's images and gameplay clip are built from the app icon, the cat art and the App Store
+screenshots and preview under `apps/play-ios`, and committed in `apps/play-api/public`. After any
+of those change, rebuild them (needs `ffmpeg`, `cwebp` and ImageMagick):
+
+```bash
+node apps/play-api/scripts/build-site-media.mjs
 ```
 
 ## Deploy

@@ -1,35 +1,23 @@
 /**
- * The public site: the home page at `/` and the help page at `/support`
- * (the App Store's Support URL). Static, no scripts; styled like /privacy.
+ * The public site besides the landing page (home.ts): the help page at `/support` (the App
+ * Store's Support URL), the short install address `/get`, and robots.txt, the sitemap and llms.txt.
  * Keep the support steps in step with docs/app-review-notes.md.
  */
-import { CACHE, CSP, STYLE } from "./privacy";
+import { CACHE, CSP, docPage } from "./layout";
+import { https } from "./links";
+
+import type { Install } from "./links";
+
+export { homePage } from "./home";
 
 const HEADERS = { "content-type": "text/html; charset=utf-8", "cache-control": CACHE, "content-security-policy": CSP };
 const CONTACT = "privacy@conleychaos.com";
 
-const ESCAPES: Record<string, string> = { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" };
-const escapeHtml = (text: string): string => text.replace(/[&<>"']/g, (ch) => ESCAPES[ch] as string);
-
-const page = (title: string, body: string): string => `<!doctype html>
-<html lang="en">
-<head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>${title}</title>
-<style>${STYLE}nav{margin-top:28px}nav a{margin-right:18px;font-weight:600}</style>
-</head>
-<body>
-<main>
-${body}
-</main>
-</body>
-</html>
-`;
-
-const SUPPORT = page(
-  "Pounce: Family Games support",
-  `<h1>Pounce: Family Games help</h1>
+const SUPPORT = docPage({
+  title: "Pounce: Family Games support",
+  head: '<meta name="description" content="Help for Pounce: Family Games. Start a game and invite people, play against the House Cat bot, set turn reminders, allow turn alerts for a child, report or block a player, and delete your data.">\n',
+  current: "support",
+  body: `<h1>Pounce: Family Games help</h1>
 <p>Pounce is a card game for couples and families. Here is how things work. If something isn't covered, write to us at the bottom of the page.</p>
 
 <section>
@@ -85,26 +73,59 @@ const SUPPORT = page(
 <section>
 <h2>Contact us</h2>
 <p>Write to <a href="mailto:${CONTACT}">${CONTACT}</a>. Pounce is made by Conley Chaos LLC.</p>
-</section>
-
-<nav><a href="/">Home</a><a href="/privacy">Privacy policy</a></nav>`,
-);
+</section>`,
+});
 
 /** The help page; public, static, no scripts. */
 export function supportPage(): Response {
   return new Response(SUPPORT, { headers: HEADERS });
 }
 
-/** The home page; shows an install link only when `appStoreUrl` is set. */
-export function homePage(appStoreUrl?: string): Response {
-  const install = appStoreUrl ? `<p><a href="${escapeHtml(appStoreUrl)}">Get the app</a></p>\n` : "";
-  return new Response(
-    page(
-      "Pounce: Family Games",
-      `<h1>Pounce: Family Games</h1>
-<p>A card game for couples and families. Play a turn whenever you have a minute, and the game waits for you.</p>
-${install}<nav><a href="/support">Support</a><a href="/privacy">Privacy policy</a></nav>`,
-    ),
-    { headers: HEADERS },
-  );
+/**
+ * `/get`: the one install address other sites and the landing page's QR code point at. It goes
+ * to the App Store when `APP_STORE_URL` is set, else to the TestFlight beta, else back home.
+ * Never cached, so a change to either setting takes effect at once.
+ */
+export function getRedirect(install: Install, origin: string): Response {
+  const location = https(install.appStoreUrl) ?? https(install.testflightUrl) ?? `${origin}/`;
+  return new Response(null, { status: 302, headers: { location, "cache-control": "no-store" } });
+}
+
+/** robots.txt: the pages are public; the API is not for crawlers. Invite links stay fetchable so their previews work. */
+export function robotsTxt(origin: string): Response {
+  return new Response(`User-agent: *\nAllow: /\nDisallow: /v1/\n\nSitemap: ${origin}/sitemap.xml\n`, {
+    headers: { "content-type": "text/plain; charset=utf-8", "cache-control": CACHE },
+  });
+}
+
+/**
+ * llms.txt (llmstxt.org): a plain summary for assistants asked what Pounce is. It says only what
+ * the landing page and the privacy policy say.
+ */
+export function llmsTxt(origin: string, consent = true): Response {
+  const alerts = consent ? "a parent decides whether they get notifications" : "they get no push notifications from our server";
+  const text = `# Pounce: Family Games
+
+> Pounce is a card game app for couples and families, for iPhone and iPad, made by Conley Chaos LLC. Its first game is Cat Tower, a rummy-style, turn-based card game for two to six players: take your turn when you have a minute, and the game waits for everyone else.
+
+Pounce is free. It has no chat, no ads, no analytics and no tracking, and nobody needs an account to play. Children under 13 get a simpler, limited version, and ${alerts}.
+
+## Pages
+
+- [Home](${origin}/): what Pounce is, screenshots, and how to install it
+- [Support](${origin}/support): how to start a game, invite people, set reminders, report or block a player, and delete your data
+- [Privacy policy](${origin}/privacy): what the app and its server keep, for how long, and the notice for parents
+- [Get the app](${origin}/get): goes to the App Store listing, or to the TestFlight beta before the App Store release
+`;
+  return new Response(text, { headers: { "content-type": "text/plain; charset=utf-8", "cache-control": CACHE } });
+}
+
+const escapeXml = (text: string): string => text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+
+/** The three public pages. */
+export function sitemapXml(origin: string): Response {
+  const urls = ["/", "/support", "/privacy"].map((path) => `<url><loc>${escapeXml(origin)}${path}</loc></url>`).join("\n");
+  return new Response(`<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n${urls}\n</urlset>\n`, {
+    headers: { "content-type": "application/xml; charset=utf-8", "cache-control": CACHE },
+  });
 }

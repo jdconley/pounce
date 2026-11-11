@@ -1,4 +1,4 @@
-import { CACHE, CSP, STYLE } from "../http/privacy";
+import { CACHE, CSP, docPage } from "../http/layout";
 
 import type { Outgoing } from "../notify/types";
 
@@ -10,22 +10,8 @@ import type { Outgoing } from "../notify/types";
  */
 
 function page(title: string, body: string): Response {
-  const html = `<!doctype html>
-<html lang="en">
-<head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<meta name="robots" content="noindex">
-<title>${title}</title>
-<style>${STYLE}</style>
-</head>
-<body>
-<main>
-${body}
-</main>
-</body>
-</html>
-`;
+  // The app shows this page inside the consent sheet, so it has no site header or footer.
+  const html = docPage({ title, body, head: '<meta name="robots" content="noindex">\n', embedded: true });
   return new Response(html, {
     headers: { "content-type": "text/html; charset=utf-8", "cache-control": CACHE, "content-security-policy": CSP },
   });

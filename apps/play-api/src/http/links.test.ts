@@ -178,6 +178,23 @@ describe("the App Store link and Smart App Banner", () => {
   });
 });
 
+describe("the beta note under Get the app", () => {
+  const NOTE = "Pounce is in beta. This opens TestFlight, Apple's app for trying apps early.";
+
+  test("a TestFlight link says it is a beta, on the room, pounce and expired pages", async () => {
+    for (const res of [sharePage("BCDFG", TF, ORIGIN), pouncePage({ name: "Mia", cat: 2 }, "A".repeat(22), TF, ORIGIN), deadLinkPage(TF)]) {
+      expect(await res.text()).toContain(`<a href="${TESTFLIGHT}">Get the app</a>\n<p class="note">${NOTE}</p>`);
+    }
+  });
+
+  test("an App Store link, or no link, has no such note", async () => {
+    for (const install of [NONE, { appStoreUrl: APP_STORE, testflightUrl: TESTFLIGHT }]) {
+      expect(await sharePage("BCDFG", install, ORIGIN).text()).not.toContain("beta");
+      expect(await deadLinkPage(install).text()).not.toContain("beta");
+    }
+  });
+});
+
 describe("ogImage", () => {
   test("is a cacheable jpeg", async () => {
     const res = ogImage();

@@ -3,8 +3,9 @@ import { APPLE_ROOTS } from "./consent/appstore";
 import { noticePage } from "./consent/pages";
 import { devSpeed } from "./env";
 import { appSiteAssociation, ogImage, pouncePage, sharePage } from "./http/links";
+import { mediaFile } from "./http/media";
 import { privacyPage } from "./http/privacy";
-import { homePage, supportPage } from "./http/site";
+import { getRedirect, homePage, llmsTxt, robotsTxt, sitemapXml, supportPage } from "./http/site";
 import {
   anyConsented,
   appStoreNotification,
@@ -100,7 +101,7 @@ const notFound = () => json(404, { error: "not_found" });
 const badRequest = () => json(400, { error: "bad_request" });
 const unauthorized = () => json(401, { error: "unauthorized" });
 const notConfigured = () => json(503, { error: "not_configured" });
-/** Where the invite pages send people without the app. */
+/** Where the landing page, `/get` and the invite pages send people without the app. */
 const install = (env: Env) => ({ appStoreUrl: env.APP_STORE_URL, testflightUrl: env.TESTFLIGHT_URL });
 
 function base64url(bytes: Uint8Array): string {
@@ -504,7 +505,15 @@ export default {
     if (method === "GET" && pathname === "/og/room.jpg") return ogImage();
     if (method === "GET" && pathname === "/privacy") return privacyPage(consentOn(env));
     if (method === "GET" && pathname === "/support") return supportPage();
-    if (method === "GET" && pathname === "/") return homePage(env.APP_STORE_URL);
+    if (method === "GET") {
+      const origin = () => new URL(request.url).origin;
+      if (pathname === "/") return homePage(install(env), origin(), consentOn(env));
+      if (pathname === "/get") return getRedirect(install(env), origin());
+      if (pathname === "/robots.txt") return robotsTxt(origin());
+      if (pathname === "/sitemap.xml") return sitemapXml(origin());
+      if (pathname === "/llms.txt") return llmsTxt(origin(), consentOn(env));
+      if (pathname.startsWith("/media/")) return (await mediaFile(request, env.ASSETS)) ?? notFound();
+    }
     const share = method === "GET" ? SHARE_PATH.exec(pathname) : null;
     if (share) return sharePage(share[1] as string, install(env), new URL(request.url).origin);
     if (notify && method === "GET") {
