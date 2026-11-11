@@ -82,6 +82,9 @@ func place(_ img: CGImage, cx: CGFloat, cy: CGFloat, height: CGFloat, rotate deg
     ctx.restoreGState()
 }
 
+/// The tagline, one entry per line: the first white, the second yellow.
+let tagline = ("Family game night,", "every night")
+
 struct Group { let art: String; let cx, cy, h: CGFloat }
 struct Layout {
     let name: String
@@ -136,7 +139,7 @@ func compose(_ L: Layout, guides: Bool) -> CGImage {
     let ctx = CGContext(data: nil, width: Int(L.W), height: Int(L.H), bitsPerComponent: 8, bytesPerRow: 0, space: sRGB,
                         bitmapInfo: CGImageAlphaInfo.noneSkipLast.rawValue)!
     background(L, in: ctx)
-    let nameWidth = textWidth("Pounce", L.nameSize, kern: -0.025), tagWidth = textWidth("one turn at a time", L.tagSize)
+    let nameWidth = textWidth("Pounce", L.nameSize, kern: -0.025), tagWidth = max(textWidth(tagline.0, L.tagSize), textWidth(tagline.1, L.tagSize))
     let textLeft = L.centered ? L.textX - max(nameWidth, tagWidth) / 2 : L.textX
     let textBox = CGRect(x: textLeft, y: L.nameBaseline - L.tagSize * 3.1, width: max(nameWidth, tagWidth), height: L.tagSize * 3.1 + L.nameSize * 0.95)
         .insetBy(dx: -L.nameSize * 0.22, dy: -L.nameSize * 0.2)
@@ -158,8 +161,8 @@ func compose(_ L: Layout, guides: Bool) -> CGImage {
     // Name and tagline.
     let tagX = L.centered ? L.textX : L.textX + L.nameSize * 0.035
     drawText("Pounce", size: L.nameSize, fill: color("FFFFFF"), x: L.textX, baseline: L.nameBaseline, centered: L.centered, kern: -0.025, stroke: 0.17, in: ctx)
-    drawText("Game night,", size: L.tagSize, fill: color("FFFFFF"), x: tagX, baseline: L.nameBaseline - L.tagSize * 1.62, centered: L.centered, in: ctx)
-    drawText("one turn at a time", size: L.tagSize, fill: color(sun), x: tagX, baseline: L.nameBaseline - L.tagSize * 2.74, centered: L.centered, in: ctx)
+    drawText(tagline.0, size: L.tagSize, fill: color("FFFFFF"), x: tagX, baseline: L.nameBaseline - L.tagSize * 1.62, centered: L.centered, in: ctx)
+    drawText(tagline.1, size: L.tagSize, fill: color(sun), x: tagX, baseline: L.nameBaseline - L.tagSize * 2.74, centered: L.centered, in: ctx)
     if guides {
         ctx.setStrokeColor(CGColor(srgbRed: 0, green: 1, blue: 0, alpha: 0.9)); ctx.setLineWidth(L.H * 0.003)
         ctx.stroke(L.safe)
