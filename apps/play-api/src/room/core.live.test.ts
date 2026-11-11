@@ -298,6 +298,7 @@ describe("when it ends (§11.3)", () => {
     r.drainLiveIntents();
     r.state.live = { phone: { startedAt: clock, movedAt: clock + 10 ** 12 } };
     r.state.timers.cleanupAt = clock;
+    r.state.lastActivity = clock - 30 * 24 * 60 * 60_000;
     r.tick();
     expect(r.drainLiveIntents()).toMatchObject([{ kind: "end", deviceId: "phone", reason: "over" }]);
   });

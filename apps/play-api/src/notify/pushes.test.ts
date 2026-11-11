@@ -2,7 +2,7 @@ import { describe, expect, test } from "vitest";
 
 import { newPair, view as viewOf, type StreakView } from "../streaks/pair-core";
 
-import { answeredPush, nudgePush, playAgainPush, pouncePush, statusPush, streakBlock, yourMoveContext, yourMovePush } from "./pushes";
+import { answeredPush, nudgePush, playAgainPush, pouncePush, retirePush, statusPush, streakBlock, yourMoveContext, yourMovePush } from "./pushes";
 
 const A = "p_aaaaaaaaaaaaaaaaaaaaaa";
 const personA = { id: A, name: "JD", cat: 1, zone: "America/Los_Angeles", quietStart: 1320 };
@@ -90,6 +90,26 @@ describe("push builders", () => {
       kind: "nudge",
       title: "JD",
       body: "Mia nudged you. Your move at Couch Cats.",
+      code: "NWCDF",
+      thread: "NWCDF",
+      collapse: "NWCDF",
+      from: { name: "Mia", cat: 2 },
+    });
+  });
+
+  test("a stalled seat: the warning a day before, then who retired it, both in the table's thread", () => {
+    expect(retirePush({ code: "NWCDF", table: "Couch Cats", to: "JD", from: null })).toEqual({
+      kind: "retire_soon",
+      title: "JD",
+      body: "Still your move at Couch Cats. From tomorrow the others can play on without you.",
+      code: "NWCDF",
+      thread: "NWCDF",
+      collapse: "NWCDF",
+    });
+    expect(retirePush({ code: "NWCDF", table: "Couch Cats", to: "JD", from: { name: "Mia", cat: 2 } })).toEqual({
+      kind: "retired",
+      title: "JD",
+      body: "Mia played on without you at Couch Cats. Your seat there is retired.",
       code: "NWCDF",
       thread: "NWCDF",
       collapse: "NWCDF",

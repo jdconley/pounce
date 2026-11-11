@@ -546,10 +546,10 @@ describe("worker", { timeout: 20_000 }, () => {
     // Each list carries who sits where, with the list owner's own seat marked.
     const seat = (person: typeof ALICE, yours: boolean) => ({ kind: "human", person, ...(yours ? { yours: true } : {}) });
     expect(ta).toEqual([
-      { code, name, status: "playing", yourTurn: turn === 0, updatedAt: expect.any(Number), seats: [seat(ALICE, true), seat(BOB, false)] },
+      { code, name, status: "playing", yourTurn: turn === 0, updatedAt: expect.any(Number), movedAt: expect.any(Number), seats: [seat(ALICE, true), seat(BOB, false)] },
     ]);
     expect(tb).toEqual([
-      { code, name, status: "playing", yourTurn: turn === 1, updatedAt: expect.any(Number), seats: [seat(ALICE, false), seat(BOB, true)] },
+      { code, name, status: "playing", yourTurn: turn === 1, updatedAt: expect.any(Number), movedAt: expect.any(Number), seats: [seat(ALICE, false), seat(BOB, true)] },
     ]);
   });
 
@@ -818,6 +818,9 @@ describe("worker", { timeout: 20_000 }, () => {
     // restart, and each presence change took a seq.
     const awayBob = structuredClone(before.room);
     (awayBob.seats[1] as { presence: string }).presence = "away";
+    // The wait to retire a stalled seat counts down between the two snapshots.
+    delete awayBob.retire;
+    delete after.room.retire;
     expect(after.room).toEqual(awayBob);
     expect(after.seq).toBeGreaterThan(before.seq);
     expect(after.room.status).toBe("playing");
@@ -901,6 +904,8 @@ describe("worker", { timeout: 20_000 }, () => {
     // alarm is re-armed from the stored timers on the next call into the room.
     await editStoredRoom(dir, (state) => {
       state.timers.cleanupAt = Date.now() + 2000;
+      // A game closes 30 days after its last move, whatever the stored timer says.
+      state.lastActivity = Date.now() + 2000 - 30 * 24 * 60 * 60_000;
     });
 
     const mf2 = worker({ persist: dir });

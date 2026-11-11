@@ -148,6 +148,10 @@
             false,
             false
           ]
+        },
+        "retire": {
+          "seat": 1,
+          "wait": 259200000
         }
       }
     }
@@ -667,6 +671,10 @@
           "acks": [
             "move-1"
           ]
+        },
+        "retire": {
+          "seat": 1,
+          "wait": 259200000
         }
       }
     }
@@ -973,6 +981,10 @@
           "seat": 1,
           "sent": false,
           "wait": 30000
+        },
+        "retire": {
+          "seat": 1,
+          "wait": 259110000
         }
       }
     }
@@ -1063,6 +1075,10 @@
           "seat": 1,
           "sent": true,
           "wait": 0
+        },
+        "retire": {
+          "seat": 1,
+          "wait": 259080000
         }
       }
     }

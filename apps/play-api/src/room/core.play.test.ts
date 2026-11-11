@@ -150,7 +150,7 @@ describe("act", () => {
 
     expect(game(room).step).toBe("play");
     expect(room.state.lastActivity).toBe(clock);
-    expect(room.state.timers.cleanupAt).toBe(clock + 7 * DAY);
+    expect(room.state.timers.cleanupAt).toBe(clock + 30 * DAY);
   });
 
   it("gives every event of a multi-event action its own seq", () => {
@@ -846,8 +846,8 @@ describe("presence", () => {
     ]);
     expect(eventsTo(out, "a")).toHaveLength(1);
     expect((room.snapshotFor("b") as Snapshot).room.seats[0]!.presence).toBe("asleep");
-    // Asleep devices no longer hold the alarm, and decay does not repeat.
-    expect(room.nextAlarm()).toBe(room.state.timers.cleanupAt);
+    // Asleep devices no longer hold the alarm (the next is the stalled-seat warning), and decay does not repeat.
+    expect(room.nextAlarm()).toBe(T0 + 2 * DAY);
     clock += MIN;
     expect(room.tick()).toEqual([]);
   });
@@ -875,10 +875,10 @@ describe("presence", () => {
 });
 
 describe("cleanup", () => {
-  it("closes an idle room after 7 days: status over and room_closed to everyone", () => {
+  it("closes a game after 30 days with no move: status over and room_closed to everyone", () => {
     const room = startedRoom(["a", "b"]);
     const { cleanupAt } = room.state.timers;
-    expect(cleanupAt).toBe(clock + 7 * DAY);
+    expect(cleanupAt).toBe(clock + 30 * DAY);
 
     clock = cleanupAt - 1;
     expect(room.tick().filter((o) => o.to === "all")).toEqual([]);
@@ -892,7 +892,7 @@ describe("cleanup", () => {
 
   it("activity pushes cleanup back", () => {
     const room = startedRoom(["a", "b"]);
-    clock += 6 * DAY;
+    clock += 29 * DAY;
     room.handle("b", { t: "act", seat: 1, action: { type: "draw", from: "deck" } });
     clock += DAY;
     expect(room.tick().filter((o) => o.to === "all")).toEqual([]);
@@ -904,6 +904,9 @@ describe("nextAlarm", () => {
   it("returns the earliest of botAt, nextRoundAt, cleanupAt and away decay", () => {
     const room = startedRoom(["a", "b"]);
     const { timers } = room.state;
+    // Two people on two phones: the stalled-seat warning comes before the cleanup.
+    expect(room.nextAlarm()).toBe(clock + 2 * DAY);
+    room.state.retireWarned = `${game(room).round}:${game(room).turn}:${room.state.turnSeq}`;
     expect(room.nextAlarm()).toBe(timers.cleanupAt);
 
     room.handle("a", { t: "presence", state: "background" });

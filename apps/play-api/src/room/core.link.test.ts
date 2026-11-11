@@ -158,7 +158,8 @@ describe("each seat's link", () => {
     // The cleanup is a week away; the first link change is the silence turning weak.
     expect(room.nextAlarm()).toBe(T0 + WEAK_AFTER_MS);
     const off = started({ streaks: false });
-    expect(off.nextAlarm()).toBe(off.state.timers.cleanupAt);
+    // With links off: the stalled-seat warning, two days into the turn.
+    expect(off.nextAlarm()).toBe(T0 + 2 * 24 * 60 * 60_000);
     const lobby = new RoomCore(RoomCore.create("BCDFG", "jd", clock), () => clock, () => 0.25, catTower, 1, ON);
     lobby.connect("jd");
     expect(lobby.nextAlarm()).toBe(lobby.state.timers.cleanupAt);
