@@ -203,9 +203,9 @@ final class AppModel {
         }
         // `-seed-people`: a fresh run starts with an owner and two others (screenshots).
         if arguments.contains("-uitest-reset"), arguments.contains("-seed-people"), model.people.owner == nil {
-            model.peopleStore.setOwner(name: "JD", cat: 4)
-            model.peopleStore.add(name: "Ella", cat: 2)
-            model.peopleStore.add(name: "Sam", cat: 6)
+            model.peopleStore.setOwner(name: DemoFixtures.castName(0, "JD"), cat: 4)
+            model.peopleStore.add(name: DemoFixtures.castName(1, "Ella"), cat: 2)
+            model.peopleStore.add(name: DemoFixtures.castName(2, "Sam"), cat: 6)
             model.people = model.peopleStore.load()
             model.streaks.person = model.people.owner?.id
             model.trophies.person = model.people.owner?.id
