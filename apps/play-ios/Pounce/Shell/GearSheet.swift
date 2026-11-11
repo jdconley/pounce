@@ -35,6 +35,7 @@ struct GearSheet: View {
                     // The notification settings (§12.6), the same panel as the Us screen's gear.
                     NotifyPanel()
                         .padding(.vertical, 6)
+                        .frame(maxWidth: .infinity, alignment: .leading)
                     HStack(spacing: 16) {
                         PillButton(
                             icon: nil, color: Palette.orange, size: .small, width: 156,
@@ -87,35 +88,41 @@ struct GearSheet: View {
     }
 
     private var toggles: some View {
-        HStack(spacing: 16) {
-            PillButton(
-                icon: settings.soundOn ? ArtName.iconSoundOn : ArtName.iconSoundOff,
-                color: settings.soundOn ? Palette.teal : Palette.violet, size: .small,
-                accessibilityLabel: settings.soundOn ? "Sound on" : "Sound off"
-            ) {
-                settings.soundOn.toggle()
-                model.settingsChanged()
+        VStack(alignment: .leading, spacing: 14) {
+            WordRow(title: "Sound", detail: settings.soundOn ? "Cat noises are on." : "Cat noises are off.") {
+                PillButton(
+                    icon: settings.soundOn ? ArtName.iconSoundOn : ArtName.iconSoundOff,
+                    color: settings.soundOn ? Palette.teal : Palette.violet, size: .small,
+                    accessibilityLabel: settings.soundOn ? "Sound on" : "Sound off"
+                ) {
+                    settings.soundOn.toggle()
+                    model.settingsChanged()
+                }
+                .accessibilityIdentifier("settings.sound")
             }
-            .accessibilityIdentifier("settings.sound")
-            PillButton(
-                icon: settings.hapticsOn ? ArtName.iconHapticsOn : ArtName.iconHapticsOff,
-                color: settings.hapticsOn ? Palette.orange : Palette.violet, size: .small,
-                accessibilityLabel: settings.hapticsOn ? "Haptics on" : "Haptics off"
-            ) {
-                settings.hapticsOn.toggle()
-                model.settingsChanged()
+            WordRow(title: "Buzz", detail: settings.hapticsOn ? "Your phone buzzes on plays." : "No buzzing.") {
+                PillButton(
+                    icon: settings.hapticsOn ? ArtName.iconHapticsOn : ArtName.iconHapticsOff,
+                    color: settings.hapticsOn ? Palette.orange : Palette.violet, size: .small,
+                    accessibilityLabel: settings.hapticsOn ? "Haptics on" : "Haptics off"
+                ) {
+                    settings.hapticsOn.toggle()
+                    model.settingsChanged()
+                }
+                .accessibilityIdentifier("settings.haptics")
             }
-            .accessibilityIdentifier("settings.haptics")
-            PillButton(
-                icon: ArtName.iconBell, color: model.turnReminderOn ? Palette.magenta : Palette.violet, size: .small,
-                accessibilityLabel: model.turnReminderOn ? "Turn reminder on" : "Turn reminder off"
-            ) {
-                settings.turnReminderChoice = !model.turnReminderOn
-                model.settingsChanged()
+            WordRow(title: "Your turn", detail: "A bell when a game is waiting on you.") {
+                PillButton(
+                    icon: ArtName.iconBell, color: model.turnReminderOn ? Palette.magenta : Palette.violet, size: .small,
+                    accessibilityLabel: model.turnReminderOn ? "Turn reminder on" : "Turn reminder off"
+                ) {
+                    settings.turnReminderChoice = !model.turnReminderOn
+                    model.settingsChanged()
+                }
+                .saturation(model.turnReminderOn ? 1 : 0.3)
+                .accessibilityValue(model.turnReminderOn ? "on" : "off")
+                .accessibilityIdentifier("settings.reminder")
             }
-            .saturation(model.turnReminderOn ? 1 : 0.3)
-            .accessibilityValue(model.turnReminderOn ? "on" : "off")
-            .accessibilityIdentifier("settings.reminder")
         }
     }
 

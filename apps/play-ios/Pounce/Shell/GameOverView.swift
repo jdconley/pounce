@@ -258,6 +258,9 @@ struct GameOverView: View {
             if let again {
                 PillButton(
                     icon: ArtName.Habit.iconReplay, color: Palette.lime, size: .large, width: 230,
+                    title: again == .waiting
+                        ? String(localized: "Waiting", comment: "Game over: play again was asked, waiting for the others")
+                        : String(localized: "Play again", comment: "Game over: deal the same table again"),
                     accessibilityLabel: "Play again"
                 ) {
                     onPlayAgain()
@@ -318,7 +321,7 @@ struct GameOverView: View {
         .accessibilityLabel(s.forfeited
             ? Text("\(s.name), forfeited", comment: "VoiceOver: a player who forfeited, on the game over screen")
             : Text(
-                "\(s.name), phase \(min(s.phase + 1, 10)), \(s.score) points",
+                "\(s.name), level \(min(s.phase + 1, 10)), \(s.score) points",
                 comment: "VoiceOver: a player's final standing on the game over screen"))
         .accessibilityIdentifier("gameover.standing.\(s.seat)")
     }
@@ -545,7 +548,7 @@ struct ScoreboardOverlay: View {
         )
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(Text(
-            "\(SeatInfo.name(model.room, seat)), phase \(min(phase + 1, 10)), \(score) points",
+            "\(SeatInfo.name(model.room, seat)), level \(min(phase + 1, 10)), \(score) points",
             comment: "VoiceOver: a scoreboard row"))
         .accessibilityIdentifier("scoreboard.\(seat)")
     }

@@ -64,7 +64,7 @@ struct PlayerCardOverlay: View {
             stats
             if let text = card.phaseText {
                 OutlinedText(text, size: 18 * scale, fill: .white, width: 3, lines: 2)
-                    .accessibilityLabel(Text("Collecting \(text)", comment: "VoiceOver: what a player's phase needs"))
+                    .accessibilityLabel(Text("Collecting \(text)", comment: "VoiceOver: what a player's level needs"))
             }
             notes
             if case .away = card.kind, nudge() != nil {
@@ -176,7 +176,7 @@ struct PlayerCardOverlay: View {
     private var stats: some View {
         HStack(spacing: 10 * scale) {
             stat(
-                caption: String(localized: "Phase", comment: "Player card: the phase tile's caption"),
+                caption: String(localized: "Level", comment: "Player card: the level tile's caption"),
                 value: card.phaseText == nil ? "10" : String(card.phase + 1), id: "player.phase"
             ) {
                 ZStack {
@@ -231,7 +231,7 @@ struct PlayerCardOverlay: View {
         if card.laid || card.skipped {
             HStack(spacing: 14 * scale) {
                 if card.laid {
-                    note(ArtName.badgeLaid, String(localized: "Laid down", comment: "Player card: laid this round's phase down"))
+                    note(ArtName.badgeLaid, String(localized: "Laid down", comment: "Player card: laid this round's level down"))
                 }
                 if card.skipped {
                     note(ArtName.badgeSkip, String(localized: "Skip waiting", comment: "Player card: a skip waits on this player"))
