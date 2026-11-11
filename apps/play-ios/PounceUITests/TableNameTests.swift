@@ -49,12 +49,9 @@ class TableNameTests: XCTestCase {
         XCTAssertEqual(menuName.label, "Table name, Taco Night")
         screenshot(app, "table-name-menu")
 
-        // Anyone seated renames it mid-game; the menu and then Home follow.
-        rename(app, from: menuName, to: "Second Helpings")
-        XCTAssertTrue(until(10) { menuName.label == "Table name, Second Helpings" }, "the menu kept \(menuName.label)")
-        el(app, "menu.home").tap()
-        XCTAssertTrue(card.waitForExistence(timeout: Live.t(15)), "the table isn't on Home")
-        XCTAssertTrue(until(10) { card.label.contains("Second Helpings") }, "Home's card: \(card.label)")
+        // The name is frozen once the game has started: tapping it opens no rename sheet.
+        menuName.tap()
+        XCTAssertFalse(el(app, "rename.field").waitForExistence(timeout: Live.t(2)), "the table can be renamed mid-game")
     }
 
     /// Taps the name, replaces the text in the rename sheet with `name`, and taps Done.

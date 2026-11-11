@@ -87,6 +87,7 @@ jobs:
           TWILIO_API_KEY_SID: ${{ secrets.PLAY_API_TWILIO_API_KEY_SID }}
           TWILIO_API_KEY_SECRET: ${{ secrets.PLAY_API_TWILIO_API_KEY_SECRET }}
           TWILIO_VERIFY_SERVICE_SID: ${{ secrets.PLAY_API_TWILIO_VERIFY_SERVICE_SID }}
+          REPORTS_KEY: ${{ secrets.PLAY_API_REPORTS_KEY }}
         run: |
           # After the deploy, because the Worker must exist before it can hold a
           # secret. Without TOKEN_SECRET the API stays dormant: device and room
@@ -141,6 +142,14 @@ jobs:
             echo "::warning title=Play API::Set all four PLAY_API_TWILIO_* secrets: ACCOUNT_SID, API_KEY_SID, API_KEY_SECRET and VERIFY_SERVICE_SID (some are missing). Parent consent can't send its code, so kittens stay without notifications."
           else
             echo "PLAY_API_TWILIO_* unset. Parent consent can't send its code, so kittens stay without notifications."
+          fi
+
+          # Optional: the owner's key for GET /v1/admin/reports (player reports). Without it that
+          # route is a 404 and reports are read in the Cloudflare dashboard.
+          if [ -n "$REPORTS_KEY" ]; then
+            put_secret REPORTS_KEY
+          else
+            echo "PLAY_API_REPORTS_KEY unset. Player reports are stored; read them in the Cloudflare dashboard (Durable Objects, Reports)."
           fi
       - name: Smoke check
         if: steps.creds.outputs.ready == 'true'

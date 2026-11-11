@@ -84,6 +84,8 @@ export async function createPounce(
   if (typeof parsed.target === "object" && !facts.tables.includes(parsed.target.table)) return fail(409, "not_shared");
   const them = await player(env, row.partnerId).pushProfile();
   if (!them) return fail(404, "not_found");
+  // They blocked the sender: the pounce is dropped, and the sender is told nothing.
+  if (await player(env, row.partnerId).blocksAny([me])) return { ok: { id } };
   const g = gate({ kind: "pounce", band: them.band, zone: them.zone ?? FALLBACK_ZONE, settings: them.settings, now, spacedAt: null, remindersToday: 0 });
   const quiet = !g.send || g.level === "passive";
   const stored = await self.tryPounce({ ...base, to: row.partnerId, quiet, link: null }, now);
@@ -161,6 +163,8 @@ export async function answerPounce(
   if (!found || found.sender === me) return fail(404, "not_found");
   if (!parsed) return fail(400, "bad_request");
   const { sender, row } = found;
+  // A block either way: there is no such pounce (a link passed on to someone the sender blocked, or sent before the block).
+  if ((await player(env, sender).blocksAny([me])) || (await player(env, me).blocksAny([sender]))) return fail(404, "not_found");
   if (row.to === null) {
     const link = parsed.link === null ? null : await links(env).get(parsed.link, now);
     if (!link || link.kind !== "link" || link.pounceId !== id) return fail(404, "not_found");

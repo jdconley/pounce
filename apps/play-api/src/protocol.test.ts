@@ -14,6 +14,9 @@ describe("ErrorCode", () => {
     // without updating this list, which the iOS client mirrors.
     const codes: Record<ErrorCode, true> = {
       bad_message: true,
+      bad_name: true,
+      not_allowed: true,
+      blocked: true,
       internal: true,
       not_lobby: true,
       in_game: true,
@@ -46,7 +49,7 @@ describe("ErrorCode", () => {
       not_unlocked: true,
       not_their_turn: true,
     };
-    expect(Object.keys(codes)).toHaveLength(32);
+    expect(Object.keys(codes)).toHaveLength(35);
   });
 });
 
@@ -163,6 +166,24 @@ describe("parseClientMessage", () => {
       expect(parse({ t: "claim", seat: 0, person: "me" })).toEqual(BAD);
       expect(parse({ t: "claim", seat: 0, person: { ...person, admin: true } })).toEqual(BAD);
       expect(parse({ t: "claim", seat: 0, person: { id: UUID, name: "Mo" } })).toEqual(BAD);
+    });
+  });
+
+  describe("the name filter", () => {
+    const BAD_NAME = { error: "bad_name" };
+
+    it("refuses a claim, a seat rename and a table rename whose name it catches, as bad_name", () => {
+      expect(parse({ t: "claim", seat: 0, person: { ...person, name: "sh1thead" } })).toEqual(BAD_NAME);
+      expect(parse({ t: "renameSeat", seat: 0, name: "f u c k" })).toEqual(BAD_NAME);
+      expect(parse({ t: "rename", name: "The Asshole Club" })).toEqual(BAD_NAME);
+    });
+
+    it("leaves ordinary names alone, and a malformed one is still bad_message", () => {
+      expect(parse({ t: "renameSeat", seat: 0, name: "Cassandra" })).toEqual({ t: "renameSeat", seat: 0, name: "Cassandra" });
+      expect(parse({ t: "rename", name: "Scunthorpe Cats" })).toEqual({ t: "rename", name: "Scunthorpe Cats" });
+      expect(parse({ t: "renameSeat", seat: 0, name: "" })).toEqual(BAD);
+      expect(parse({ t: "renameSeat", seat: 0, name: "Mi\u202Ea" })).toEqual(BAD);
+      expect(parse({ t: "claim", seat: 0, person: { ...person, name: "a\u0007b" } })).toEqual(BAD);
     });
   });
 

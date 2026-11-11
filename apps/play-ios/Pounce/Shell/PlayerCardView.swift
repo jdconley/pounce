@@ -4,8 +4,8 @@ import SwiftUI
 /// A player's card (tap their cat in the table's top bar), over the table like the scoreboard:
 /// their cat, name and who plays it (a person here or on their own phone, or a House Cat), their
 /// phase, cards in hand and points, and for a person whether you're connected and your streak
-/// together (the badge that used to sit on the table). Tap outside it, or its close button, to
-/// put it away.
+/// together (the badge that used to sit on the table), and Report and Block for a person on
+/// another phone. Tap outside it, or its close button, to put it away.
 struct PlayerCardOverlay: View {
     let card: PlayerCard
     /// The table as the scene drew it when the cat was tapped.
@@ -13,6 +13,9 @@ struct PlayerCardOverlay: View {
     /// The seat's Nudge button as the store has it now (nil: none), and what a tap on it does.
     var nudge: () -> RoomStore.NudgeButton? = { nil }
     var onNudge: () -> Void = {}
+    /// Report and Block, for a person on another phone: the server to tell, the table's code and
+    /// the local person a block belongs to. Nil (a demo table): no such buttons.
+    var safety: (api: any SafetyService, code: String, me: String?)?
     let onClose: () -> Void
 
     @Environment(\.horizontalSizeClass) private var sizeClass
@@ -64,7 +67,7 @@ struct PlayerCardOverlay: View {
             stats
             if let text = card.phaseText {
                 OutlinedText(text, size: 18 * scale, fill: .white, width: 3, lines: 2)
-                    .accessibilityLabel(Text("Collecting \(text)", comment: "VoiceOver: what a player's phase needs"))
+                    .accessibilityLabel(Text("Collecting \(text)", comment: "VoiceOver: what a player's level needs"))
             }
             notes
             if case .away = card.kind, nudge() != nil {
@@ -72,6 +75,9 @@ struct PlayerCardOverlay: View {
                     .padding(.top, 2)
             }
             connection
+            if case .away = card.kind, let safety, let person = card.person {
+                SafetyActions(api: safety.api, code: safety.code, person: person, me: safety.me, scale: scale)
+            }
         }
         .padding(.horizontal, 18 * scale)
         .padding(.top, 22 * scale)
@@ -176,7 +182,7 @@ struct PlayerCardOverlay: View {
     private var stats: some View {
         HStack(spacing: 10 * scale) {
             stat(
-                caption: String(localized: "Phase", comment: "Player card: the phase tile's caption"),
+                caption: String(localized: "Level", comment: "Player card: the level tile's caption"),
                 value: card.phaseText == nil ? "10" : String(card.phase + 1), id: "player.phase"
             ) {
                 ZStack {
@@ -231,7 +237,7 @@ struct PlayerCardOverlay: View {
         if card.laid || card.skipped {
             HStack(spacing: 14 * scale) {
                 if card.laid {
-                    note(ArtName.badgeLaid, String(localized: "Laid down", comment: "Player card: laid this round's phase down"))
+                    note(ArtName.badgeLaid, String(localized: "Laid down", comment: "Player card: laid this round's level down"))
                 }
                 if card.skipped {
                     note(ArtName.badgeSkip, String(localized: "Skip waiting", comment: "Player card: a skip waits on this player"))

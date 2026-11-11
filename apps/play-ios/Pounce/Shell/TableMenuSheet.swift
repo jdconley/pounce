@@ -1,12 +1,13 @@
 import PounceKit
 import SwiftUI
 
-/// The table's paw menu (`table.menu`): the table's name (tap to rename it), sound, haptics, the
+/// The table's paw menu (`table.menu`): the table's name (renamed in the lobby only), sound, haptics, the
 /// scores, how to play, names, move my seat, home, and forfeit (§5.13, behind a confirmation). Renaming the table grows the sheet into `RenameTableView`,
 /// names (this phone's players) into `RenameSheet`, move my seat into `MoveSeatSheet`, how to play
 /// into `HowToPlaySheet`.
 struct TableMenuSheet: View {
     @Environment(Settings.self) private var settings
+    @Environment(AppModel.self) private var model
     let session: RoomSession
     let onHome: () -> Void
     /// Closes the menu and shows the scoreboard (the open tower's tap does too).
@@ -44,8 +45,9 @@ struct TableMenuSheet: View {
         return room.seats.contains { $0.yours && $0.kind == .human }
     }
 
-    /// This phone's players can change their names until the game is over.
-    private var canRenamePeople: Bool { canMove }
+    /// This phone's players can change their names in the lobby; once the game has started the
+    /// server keeps every name as it is.
+    private var canRenamePeople: Bool { canMove && session.store.room?.status == .lobby }
 
     private var canMove: Bool {
         guard let table = session.model else { return false }
@@ -54,9 +56,10 @@ struct TableMenuSheet: View {
 
     private var tableName: String { session.store.room?.title ?? TableName.fallback(code: session.code) }
 
-    /// The server takes a rename from the host or any seated phone, until the game is over.
+    /// The server takes a rename from the host or any seated phone, in the lobby only, and never
+    /// from a kitten's phone (a kitten types no names, spec §14.1).
     private var canRename: Bool {
-        guard let room = session.store.room, room.status != .over else { return false }
+        guard let room = session.store.room, room.status == .lobby, model.ageBand != .kitten else { return false }
         return room.youAreHost || room.seats.contains { $0.yours }
     }
 

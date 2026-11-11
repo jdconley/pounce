@@ -73,6 +73,8 @@ export type RoomState = {
   moveCodes: Record<string, { seat: Seat; expires: number }>;
   /** Failed `claimMove` attempts per device, within a rolling window. */
   moveFailures: Record<string, { count: number; windowStart: number }>;
+  /** Lobby renames (table and seats) per device, within a rolling window. Absent: none yet. */
+  renames?: Record<string, { count: number; windowStart: number }>;
   timers: { botAt: number | null; nextRoundAt: number | null; cleanupAt: number };
   /** "<round>:<turn>:<turnSeq>" dedupe key for turn pushes. */
   pushedForTurn: string | null;
@@ -209,6 +211,9 @@ const CLEANUP_AFTER_MS = 7 * 24 * 60 * MS_PER_MINUTE;
 const MOVE_CODE_TTL_MS = 10 * MS_PER_MINUTE;
 const MOVE_FAILURE_WINDOW_MS = 10 * MS_PER_MINUTE;
 const MAX_MOVE_FAILURES = 5;
+/** Renames (the table's and its seats') one device may make in the lobby, per window. */
+export const RENAMES_PER_WINDOW = 5;
+export const RENAME_WINDOW_MS = MS_PER_MINUTE;
 const UINT32_RANGE = 2 ** 32;
 const BOT_DELAY_MS = 1200;
 const NEXT_ROUND_DELAY_MS = 6000;
@@ -928,28 +933,49 @@ export class RoomCore {
     return out;
   }
 
-  /** The host, or any phone holding a seat, names the table until the game is over. */
+  /**
+   * Whether `deviceId` may rename now: at most `RENAMES_PER_WINDOW` renames (the table's and its
+   * seats' together) every `RENAME_WINDOW_MS`. Counts the one being asked for.
+   */
+  private renameAllowed(deviceId: string): boolean {
+    const now = this.now();
+    const prior = this.state.renames?.[deviceId];
+    const window = prior && now - prior.windowStart < RENAME_WINDOW_MS ? prior : { count: 0, windowStart: now };
+    if (window.count >= RENAMES_PER_WINDOW) return false;
+    this.state.renames = { ...this.state.renames, [deviceId]: { count: window.count + 1, windowStart: window.windowStart } };
+    return true;
+  }
+
+  /**
+   * The host, or any phone holding a seat, names the table in the lobby. Once the game has
+   * started the name is frozen: it is on every phone and in push text, so it can't be changed
+   * under the people playing.
+   */
   private rename(deviceId: string, name: string): Outbound[] {
     const { state } = this;
     if (state.status === "over") return [this.fail(deviceId, "game_over")];
+    if (state.status !== "lobby") return [this.fail(deviceId, "in_game")];
     if (deviceId !== state.hostDeviceId && this.controlledSeats(deviceId).length === 0) {
       return [this.fail(deviceId, "not_seated")];
     }
     if (name === state.name) return [];
+    if (!this.renameAllowed(deviceId)) return [this.fail(deviceId, "too_soon")];
     state.name = name;
     return this.changed();
   }
 
   /**
-   * Renames the person in one of the device's seats, in the lobby or mid-game,
-   * so every phone at the table sees the new name in its next snapshot.
+   * Renames the person in one of the device's seats, in the lobby only (names are frozen once
+   * the game has started), so every phone at the table sees the new name in its next snapshot.
    */
   private renameSeat(deviceId: string, seat: Seat, name: string): Outbound[] {
     if (this.state.status === "over") return [this.fail(deviceId, "game_over")];
+    if (this.state.status !== "lobby") return [this.fail(deviceId, "in_game")];
     const target = this.state.seats[seat];
     if (!target) return [this.fail(deviceId, "bad_seat")];
     if (!this.controls(deviceId, seat) || !target.person) return [this.fail(deviceId, "not_your_seat")];
     if (target.person.name === name) return [];
+    if (!this.renameAllowed(deviceId)) return [this.fail(deviceId, "too_soon")];
     target.person = { ...target.person, name };
     return this.changed();
   }

@@ -131,7 +131,7 @@ actor Device {
             state.connected = false
         case .connected:
             state.connected = true
-        case .notFound, .closed:
+        case .notFound, .locked, .closed:
             state.gone = event
         case .link(let quality):
             state.link = quality
