@@ -299,7 +299,7 @@ struct HouseholdAccount: View {
         .frame(maxWidth: .infinity)
         .overlay {
             if confirming {
-                DeleteConfirmView(cat: person.cat, onBack: { confirming = false }) {
+                DeleteConfirmView(cat: person.cat, name: person.name, onBack: { confirming = false }) {
                     Task {
                         if await model.account.deleteAccount(personId: person.id) { onBack() }
                         confirming = false

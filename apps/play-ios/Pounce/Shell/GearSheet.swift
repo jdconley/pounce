@@ -68,12 +68,15 @@ struct GearSheet: View {
         }
         .overlay {
             if confirmingDelete {
+                let signedIn = model.account.isSignedIn
+                let person = model.account.accountPerson ?? model.people.owner
                 DeleteConfirmView(
-                    cat: model.account.accountPerson?.cat ?? model.people.owner?.cat ?? 0,
+                    cat: person?.cat ?? 0, name: person?.name ?? "", signedIn: signedIn,
                     onBack: { confirmingDelete = false },
                     onDelete: {
                         Task {
-                            await model.account.deleteAccount()
+                            // Signed in: the account. Otherwise the player on this phone (a kitten's too).
+                            await model.account.deleteAccount(personId: signedIn ? nil : model.people.owner?.id)
                             confirmingDelete = false
                         }
                     })
@@ -130,9 +133,18 @@ struct GearSheet: View {
         let account = model.account!
         if account.isSignedIn {
             AccountCard { confirmingDelete = true }
-        } else if account.offersSignIn, let owner = model.people.owner, account.canSignIn(owner.id) {
-            SignInOffer(identifier: "gear.signin", width: 230) {
-                Task { await account.signIn(owner) }
+        } else {
+            VStack(spacing: 14) {
+                if account.offersSignIn, let owner = model.people.owner, account.canSignIn(owner.id) {
+                    SignInOffer(identifier: "gear.signin", width: 230) {
+                        Task { await account.signIn(owner) }
+                    }
+                }
+                // Deleting isn't only for accounts (guideline 5.1.1(v)): a guest or a kitten's player too.
+                if model.people.owner != nil {
+                    GuestDeleteRow { confirmingDelete = true }
+                        .disabled(account.busy)
+                }
             }
         }
     }

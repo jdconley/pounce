@@ -99,6 +99,8 @@ const notFound = () => json(404, { error: "not_found" });
 const badRequest = () => json(400, { error: "bad_request" });
 const unauthorized = () => json(401, { error: "unauthorized" });
 const notConfigured = () => json(503, { error: "not_configured" });
+/** Where the invite pages send people without the app. */
+const install = (env: Env) => ({ appStoreUrl: env.APP_STORE_URL, testflightUrl: env.TESTFLIGHT_URL });
 
 function base64url(bytes: Uint8Array): string {
   let bin = "";
@@ -332,8 +334,10 @@ function pounceRoute(method: string, pathname: string): Route | null {
   }
   const link = method === "GET" ? POUNCE_LINK.exec(pathname) : null;
   if (link) {
-    return async (_r, env) => {
-      const found = await linkPounce(env, link[1] as string, Date.now());
+    return async (request, env, deviceId) => {
+      // Who's asking, when this device has a player: a link someone answered "Not now" to stays theirs.
+      const viewer = await me(request, env, deviceId);
+      const found = await linkPounce(env, link[1] as string, Date.now(), typeof viewer === "string" ? viewer : null);
       return found ? json(200, found) : notFound();
     };
   }
@@ -499,7 +503,7 @@ export default {
     if (method === "GET" && pathname === "/og/room.jpg") return ogImage();
     if (method === "GET" && pathname === "/privacy") return privacyPage(consentOn(env));
     const share = method === "GET" ? SHARE_PATH.exec(pathname) : null;
-    if (share) return sharePage(share[1] as string, env.TESTFLIGHT_URL, new URL(request.url).origin);
+    if (share) return sharePage(share[1] as string, install(env), new URL(request.url).origin);
     if (notify && method === "GET") {
       // The pounce card reuses the room card until the bell art lands (§9.6).
       if (pathname === "/og/pounce.jpg") return ogImage();
@@ -507,7 +511,7 @@ export default {
       if (p) {
         const token = p[1] as string;
         const found = await linkPounce(env, token, Date.now()).catch(() => null);
-        return pouncePage(found?.from ?? null, token, env.TESTFLIGHT_URL, new URL(request.url).origin);
+        return pouncePage(found?.from ?? null, token, install(env), new URL(request.url).origin);
       }
     }
     const consent = consentOn(env);

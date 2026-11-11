@@ -58,6 +58,7 @@ final class TrophyTests: XCTestCase {
         let add = el(app, "home.add")
         XCTAssertTrue(add.waitForExistence(timeout: Live.t(10)), "no plus on Home")
         XCTAssertEqual(value(add), "big")
+        XCTAssertEqual(add.label, "Invite someone", "the plus says what it does")
         XCTAssertTrue(el(app, "home.own").exists)
         XCTAssertFalse(el(app, "home.streak").exists)
         XCTAssertLessThan(el(app, "home.own").frame.minX, add.frame.minX, "the plus comes right after your own streak")

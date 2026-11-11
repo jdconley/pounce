@@ -782,7 +782,7 @@ export class Player extends DurableObject<Env> {
   ): { claimed: { answer: Answer | null; answeredAt: number | null; code: string | null } } | { repeat: StoredPounce } | { gone: true } | { expired: true } {
     const row = this.pounce(id);
     if (!row) return { gone: true };
-    const verdict = claimAnswer(row, by, answer, now);
+    const verdict = claimAnswer(row, by, answer, now, row.link !== null);
     if (verdict === "gone") return { gone: true };
     if (verdict === "expired") return { expired: true };
     if (verdict === "repeat") return { repeat: row };

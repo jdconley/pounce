@@ -1,7 +1,8 @@
 /**
  * The privacy policy and the COPPA direct notice (spec §14, §14.1), served at
  * /privacy and linked from the app's gear sheet. A draft for JD to review; it
- * is not legal advice. Keep it in step with docs/privacy/retention-policy.md.
+ * is not legal advice. Keep it in step with docs/privacy/retention-policy.md and
+ * docs/privacy/app-store-label.md.
  */
 
 export const CACHE = "public, max-age=300";
@@ -20,43 +21,53 @@ const HTML = `<!doctype html>
 <body>
 <main>
 <h1>Pounce privacy policy</h1>
-<p class="updated">Last updated 5 November 2026</p>
-<p>Pounce is a card game for couples and families, made by Conley Chaos LLC ("we"). This page says what the app and its server keep, why, for how long, and how to make it go away. Pounce has no ads, no analytics, no tracking and no third-party SDKs, and it never sells or shares your data.</p>
+<p class="updated">Last updated 10 November 2026</p>
+<p>Pounce is a game app for couples and families, made by Conley Chaos LLC ("we"). This page says what the app and its server keep, why, who else handles it, for how long, and how to delete it. Pounce has no ads, no analytics, no tracking and no third-party SDKs. We never sell your data and never share it for advertising. The only companies that handle it are the service providers named below, and only to run Pounce.</p>
 
 <h2>What we keep</h2>
 <ul>
 <li><strong>A device id</strong> made by our server the first time the app runs, so your phone can rejoin its tables.</li>
-<li><strong>Your name and cat</strong> as you choose them in the app, shown to the people at your tables. The same for anyone else you add to your phone for pass-and-play.</li>
+<li><strong>Your name and cat</strong> as you choose them in the app, shown to the people at your tables and in the notifications they get. The same for anyone else you add to your phone for pass-and-play, and the names you give your tables.</li>
 <li><strong>Games:</strong> your seats, turns, tables, the tables you archived, which tips you have seen, and your settings.</li>
 <li><strong>Your device's time zone</strong>, so a day ends at your midnight. We never collect your location.</li>
 <li><strong>An age band</strong> (under 13, 13 to 17, or 18 and over). The app works it out on your device; we never see or keep a birth date.</li>
-<li><strong>A push token</strong>, if you allow notifications, so we can tell you when it's your turn.</li>
+<li><strong>Push tokens</strong>, if you allow notifications, so we can tell you when it's your move, update the widget and show a game on the Lock Screen.</li>
+<li><strong>Streaks:</strong> the days you and another player both played, the days you played, lifetime counts and rewards, and, for players 13 and over, a count of the times of day you usually play, so reminders come at a good time.</li>
+<li><strong>Requests to play</strong> you send or answer, and the invite links you make.</li>
 <li><strong>Sign in with Apple</strong>, if you use it: a one-way hash of the id Apple gives us, and, when our revocation key is set up, Apple's refresh token, kept only so we can revoke it when you delete your account. We ask Apple for no email and no name.</li>
-<li><strong>Streaks</strong> (coming soon): the days you and another player both played, kept for 120 days, plus lifetime counts and rewards, and a count of the times of day you usually start playing.</li>
 </ul>
-<!--consent--><p>We never collect contacts, location, ad identifiers or messages, and no phone numbers except a parent's, given to us to consent for a child (below). Invites go through the share sheet; Pounce never reads your contacts.</p><!--/consent--><!--plain--><p>We never collect contacts, location, ad identifiers, phone numbers or messages. Invites go through the share sheet; Pounce never reads your contacts.</p><!--/plain-->
+<!--consent--><p>We never collect contacts, location, photos, ad identifiers or messages, and no phone numbers except a parent's, given to us to consent for a child (below). Invites go through the share sheet or a QR code; Pounce never reads your contacts.</p><!--/consent--><!--plain--><p>We never collect contacts, location, photos, ad identifiers, phone numbers or messages. Invites go through the share sheet or a QR code; Pounce never reads your contacts.</p><!--/plain-->
 
 <h2>Who sees what</h2>
 <ul>
-<li>The people at a table see the names and cats seated there.</li>
+<li>The people at a table see the names and cats seated there. Someone who opens an invite link you sent sees your name and cat.</li>
 <li>The other person in a streak sees that streak, never a record of who missed a day.</li>
-<li>Nobody else sees your settings, your play times or your history. Our server logs carry no names, player ids or tokens.</li>
-<li>Our server runs on Cloudflare. Notifications go through Apple. Neither may use your data for anything else.</li>
+<li>Nobody else sees your settings, your play times or your history.</li>
 </ul>
+
+<h2>Service providers</h2>
+<ul>
+<li><strong>Cloudflare</strong> runs our server and stores everything above. It sees your IP address when the app connects; we use it only for a moment, to limit how fast new devices can sign up, and never store it.</li>
+<li><strong>Apple</strong> delivers notifications (they carry names, cats and table names) and runs Sign in with Apple and the App Store.</li>
+<!--consent--><li><strong>Twilio Verify</strong> texts a code to a parent's mobile number when a parent consents for a child (below). It gets only that number.</li>
+<!--/consent--></ul>
+<p>Our server logs carry no names, phone numbers, player ids or tokens; an error log can carry a table's code.</p>
 
 <h2>How long we keep it</h2>
 <ul>
-<li>Daily streak history: 120 days.</li>
-<li>A guest player (not signed in) that no device has opened for 90 days: deleted.</li>
-<li>A guest player merged into an account: a forwarding record for 30 days.</li>
-<li>Invite links: 24 hours. Requests to play: 7 days.</li>
-<li>Everything else: until you delete your account, or until it expires as above.</li>
+<li>A table, with the names seated at it: until 7 days after its last move.</li>
+<li>Shared streak days: 120 days. Your own streak days: 8 days. Lifetime counts and rewards: until you leave that streak or delete your data.</li>
+<li>Requests to play and invite links: 7 days. A link stops working sooner once someone plays on it.</li>
+<li>A player who isn't signed in and that no device has opened for 90 days: deleted.</li>
+<li>A player merged into an account: a forwarding record for 30 days.</li>
+<li>A push token: until Apple tells us it no longer works, or the app sends a new one.</li>
+<li>Everything else: until you delete it, or until it expires as above.</li>
 </ul>
 
 <h2>Your choices</h2>
 <ul>
 <li>Signing in is never required. Without it, your data stays tied to your device.</li>
-<li>You can delete your account in the app: the gear, then your account, then the trash can. That deletes your player and everything about it on our server, and revokes Sign in with Apple when we hold a token. You can also stop Apple sign-in for Pounce in iOS Settings, under your name, then Sign in with Apple.</li>
+<li>You can delete your data in the app at any time, signed in or not: open the gear, then tap the trash can (signed in) or Delete my data. That deletes your player from our server with its games, streaks, connections, requests to play, invite links and settings, and, for a child's device, the parent's consent record and phone number. When you're signed in it is your account on every device, and it revokes Sign in with Apple when we hold a token; you can also stop Apple sign-in for Pounce in iOS Settings, under your name, then Sign in with Apple. Your name stays visible at tables you sat at until those tables are cleaned up, at most 7 days after their last move.</li>
 <li>You can turn notifications off in iOS Settings at any time.</li>
 <li>To see or delete anything else we hold, write to <a href="mailto:privacy@conleychaos.com">privacy@conleychaos.com</a>.</li>
 </ul>
@@ -67,7 +78,8 @@ const HTML = `<!doctype html>
 <ul>
 <li>a device id and the child's seats and turns;</li>
 <li>a name picked from Pounce's list of generated cat names (Mochi, Biscuit, Pickle and the like); a child cannot type a name;</li>
-<li>game progress such as streaks and rewards.</li>
+<li>game progress such as streaks and rewards;</li>
+<li>a time zone, so a day ends at the child's midnight.</li>
 </ul>
 <p>For a player under 13 there are no push notifications from our server, no sign-in, no invite links sent out, and no record of play times. The only reminders are ones the phone schedules for itself, and they start off.</p>
 <!--consent--><h2>With a parent's consent</h2>
@@ -79,7 +91,7 @@ const HTML = `<!doctype html>
 <li>Apple's app transaction id for the child's copy of Pounce, so that a parent withdrawing approval through Apple ends this consent too.</li>
 </ul>
 <p>The parent can take it back at any time: in the app, with the Revoke button on our notification, or through Apple. That stops every notification at once and deletes the push token and the number. It also ends when the child turns 13 or the child's player is deleted.</p>
-<!--/consent--><p>A parent may ask to review or delete a child's information, or to stop any further collection, by writing to <a href="mailto:privacy@conleychaos.com">privacy@conleychaos.com</a>. A child's player that no device has opened for 90 days is deleted from our server automatically, for example after the app is removed from the child's device.</p>
+<!--/consent--><p>A parent can delete a child's information at any time on the child's device: the gear, then Delete my data. A parent may also ask to review or delete it, or to stop any further collection, by writing to <a href="mailto:privacy@conleychaos.com">privacy@conleychaos.com</a>. A child's player that no device has opened for 90 days is deleted from our server automatically, for example after the app is removed from the child's device.</p>
 <p>Operator: Conley Chaos LLC, <a href="mailto:privacy@conleychaos.com">privacy@conleychaos.com</a>.</p>
 </section>
 

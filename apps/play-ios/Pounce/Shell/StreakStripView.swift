@@ -3,9 +3,9 @@ import SwiftUI
 
 /// Home's streak strip (trophy room design §1): your own streak (opens the trophy room), one chip
 /// per connection in top-pair order (opens Us on that pair), and the plus, always last (opens the
-/// invite sheet). With no connections the plus is the big, bouncing "add someone". The gift box
+/// invite sheet). With no connections the plus is the big, bouncing "Invite someone". The gift box
 /// sits before the first chip, the sign-in cloud on the top pair's chip and a waiting pounce's bell
-/// on its pair's chip, where PR 4 put them. No words.
+/// on its pair's chip, where PR 4 put them. The plus is the one chip with a word under it.
 struct StreakStripView: View {
     @Environment(AppModel.self) private var model
     var scale: CGFloat = 1
@@ -99,6 +99,8 @@ struct StreakStripView: View {
         .transition(.scale.combined(with: .opacity))
     }
 
+    static let inviteLabel = String(localized: "Invite someone", comment: "Home: the word under the plus that opens the invite sheet")
+
     private func plus(big: Bool) -> some View {
         let side = (big ? 76 : 54) * scale
         return Button {
@@ -106,15 +108,21 @@ struct StreakStripView: View {
             Sound.shared.play(ArtName.Sound.sfxPop)
             model.showInvite()
         } label: {
-            Image(ArtName.Habit.chipPlus)
-                .resizable().scaledToFit()
-                .frame(width: side, height: side)
-                .shadow(color: Palette.ink.opacity(0.5), radius: 0, x: 0, y: 4 * scale)
-                .contentShape(Circle())
+            // Worded, so it reads apart from Create and Join below: this one adds a person (a link
+            // or QR that makes you two a pair), they start or join a table.
+            VStack(spacing: 2 * scale) {
+                Image(ArtName.Habit.chipPlus)
+                    .resizable().scaledToFit()
+                    .frame(width: side, height: side)
+                    .shadow(color: Palette.ink.opacity(0.5), radius: 0, x: 0, y: 4 * scale)
+                OutlinedText(Self.inviteLabel, size: (big ? 17 : 14) * scale, fill: .white, width: 2.5)
+                    .fixedSize()
+            }
+            .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
         .bounceLoop(active: StreakStrip.bounces(big: big, band: model.ageBand))
-        .accessibilityLabel(Text("Add someone", comment: "VoiceOver: Home's plus; opens the invite sheet"))
+        .accessibilityLabel(Text(Self.inviteLabel))
         .accessibilityValue(big ? "big" : "small")
         .accessibilityIdentifier("home.add")
         .transition(.scale.combined(with: .opacity))
