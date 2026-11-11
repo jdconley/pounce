@@ -1,21 +1,24 @@
 import PounceKit
 import SwiftUI
 
-/// One choice in the seat bubble.
+/// One choice in the seat menu.
 struct SeatMenuItem: Identifiable {
     let id: String
     let icon: String
     let color: Color
-    let label: LocalizedStringKey
+    /// The words on the pill (and what VoiceOver reads).
+    let label: String
     let action: () -> Void
 }
 
-/// The radial bubble over a tapped cushion (spec §5.5): a dimmed backdrop (tap to dismiss)
-/// and the choices fanned in a half ring around the cushion, opening toward the rug's middle
-/// so it never runs off the screen edge.
+/// The menu for a tapped cushion (spec §5.5): a dimmed backdrop (tap to dismiss) and a card
+/// with what the seat is and one worded pill per choice. It sits beside the cushion, toward
+/// the rug's middle, and always whole on screen.
 struct SeatMenu: View {
+    /// What the seat is now ("Open seat", "Closed seat", a name).
+    let title: String
     let center: CGPoint
-    /// The fan opens toward this point.
+    /// The card sits on this side of the cushion.
     let toward: CGPoint
     let items: [SeatMenuItem]
     let onDismiss: () -> Void
@@ -23,33 +26,48 @@ struct SeatMenu: View {
     @State private var open = false
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
-    private static let radius: CGFloat = 84
+    private static let width: CGFloat = 268
 
     var body: some View {
         GeometryReader { geo in
-            let c = clamped(center, in: geo.size)
+            let height = CGFloat(items.count) * 56 + 58
+            let at = place(in: geo.size, height: height)
             ZStack {
-                Palette.ink.opacity(0.45)
+                Palette.ink.opacity(0.5)
                     .ignoresSafeArea()
                     .contentShape(Rectangle())
                     .onTapGesture(perform: onDismiss)
                     .accessibilityHidden(true)
-                ForEach(Array(items.enumerated()), id: \.element.id) { i, item in
-                    let p = offset(i, of: items.count)
-                    PillButton(icon: item.icon, color: item.color, size: .small, width: 64, accessibilityLabel: item.label) {
-                        item.action()
+                VStack(spacing: 10) {
+                    Text(verbatim: title)
+                        .font(.system(size: 18, weight: .black, design: .rounded))
+                        .foregroundStyle(Palette.violet)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.7)
+                        .accessibilityAddTraits(.isHeader)
+                        .accessibilityIdentifier("seatmenu.title")
+                    ForEach(items) { item in
+                        PillButton(
+                            icon: item.icon, color: item.color, size: .small, width: Self.width - 28,
+                            title: item.label, accessibilityLabel: LocalizedStringKey(item.label)
+                        ) {
+                            item.action()
+                        }
+                        .accessibilityIdentifier("seatmenu.\(item.id)")
                     }
-                    .accessibilityIdentifier("seatmenu.\(item.id)")
-                    .scaleEffect(open ? 1 : 0.2)
-                    .opacity(open ? 1 : 0)
-                    .position(
-                        x: c.x + (open || reduceMotion ? p.x : 0),
-                        y: c.y + (open || reduceMotion ? p.y : 0))
-                    .animation(
-                        reduceMotion ? .easeOut(duration: 0.15).paced
-                            : .spring(duration: 0.4, bounce: 0.5).delay(Double(i) * 0.04).paced,
-                        value: open)
                 }
+                .padding(.horizontal, 14)
+                .padding(.top, 12)
+                .padding(.bottom, 16)
+                .frame(width: Self.width)
+                .background(
+                    RoundedRectangle(cornerRadius: 26, style: .continuous).fill(.white)
+                        .shadow(color: Palette.ink.opacity(0.5), radius: 0, x: 0, y: 6))
+                .overlay(RoundedRectangle(cornerRadius: 26, style: .continuous).strokeBorder(Palette.ink, lineWidth: 4))
+                .scaleEffect(open || reduceMotion ? 1 : 0.6)
+                .opacity(open ? 1 : 0)
+                .position(at)
+                .animation(reduceMotion ? .easeOut(duration: 0.15).paced : .spring(duration: 0.35, bounce: 0.4).paced, value: open)
             }
         }
         .onAppear {
@@ -61,22 +79,14 @@ struct SeatMenu: View {
         .accessibilityAction(.escape, onDismiss)
     }
 
-    /// Spread over a half ring centered on the direction to `toward`.
-    private func offset(_ i: Int, of n: Int) -> CGPoint {
-        let dx = toward.x - center.x
-        let dy = toward.y - center.y
-        let facing = (dx == 0 && dy == 0) ? -Double.pi / 2 : atan2(Double(dy), Double(dx))
-        let spread = Double.pi * 0.9
-        let angle = n <= 1 ? facing : facing - spread / 2 + Double(i) * spread / Double(n - 1)
-        return CGPoint(x: cos(angle) * Self.radius, y: sin(angle) * Self.radius)
-    }
-
-    /// Keeps the pills on screen.
-    private func clamped(_ p: CGPoint, in size: CGSize) -> CGPoint {
-        let m: CGFloat = 40
+    /// The card's center: a little toward the rug's middle from the cushion, kept on screen.
+    private func place(in size: CGSize, height: CGFloat) -> CGPoint {
+        let x = center.x + (toward.x - center.x) * 0.5
+        let y = center.y + (toward.y - center.y) * 0.5
+        let mx = Self.width / 2 + 8, my = height / 2 + 8
         return CGPoint(
-            x: min(max(p.x, m), max(m, size.width - m)),
-            y: min(max(p.y, m), max(m, size.height - m)))
+            x: min(max(x, mx), max(mx, size.width - mx)),
+            y: min(max(y, my), max(my, size.height - my)))
     }
 }
 

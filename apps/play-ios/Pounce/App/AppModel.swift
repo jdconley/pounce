@@ -679,7 +679,8 @@ final class AppModel {
         }
     }
 
-    func newGame() async {
+    /// `practice`: a game against the House Cat that starts at once, with no stop in the lobby.
+    func newGame(practice: Bool = false) async {
         guard !isCreatingRoom else { return }
         isCreatingRoom = true
         newGameError = nil
@@ -687,6 +688,7 @@ final class AppModel {
         do {
             let code = try await api.createRoom()
             open(code: code, intent: .create)
+            if practice { room?.practicePending = true }
         } catch let error as APIError {
             newGameError = error
         } catch {

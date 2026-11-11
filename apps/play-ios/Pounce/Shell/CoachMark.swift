@@ -60,6 +60,9 @@ struct CoachMark: View {
         case .goOut: return (a.hand, a.hand, .above)
         case .cucumber: return (a.cucumber ?? a.hand, a.cucumber ?? a.hand, .above)
         case .yarn: return (a.yarn ?? a.hand, a.yarn ?? a.hand, .above)
+        case .scores: return (a.openTower ?? a.tower, a.openTower ?? a.tower, .beside)
+        case .cats: return (a.cats ?? a.hand, a.cats ?? a.hand, a.cats == nil ? .above : .below)
+        case .swipeHome: return (a.edge, a.edge, .beside)
         }
     }
 
@@ -253,6 +256,24 @@ enum CoachCopy {
                 String(
                     localized: "Yarn can stand in for any number in a set or a run.",
                     comment: "Coach: the Yarn wild card, pointing at it in the hand"))
+        case .scores:
+            return (
+                String(localized: "Scores", comment: "Coach: scoreboard tip title"),
+                String(
+                    localized: "This is every cat's shelf. Tap the tower again to see the scores and what each level needs.",
+                    comment: "Coach: the open tower's second tap, pointing at the open tower"))
+        case .cats:
+            return (
+                String(localized: "Tap a cat", comment: "Coach: player card tip title"),
+                String(
+                    localized: "Tap any cat up here to see how they're doing. If they're taking a while, you can nudge them from there.",
+                    comment: "Coach: tapping a player in the top bar opens their card, with Nudge"))
+        case .swipeHome:
+            return (
+                String(localized: "Going Home", comment: "Coach: swipe home tip title"),
+                String(
+                    localized: "Swipe in from the left edge to go Home. Your game is saved, and the paw at the top has Home too.",
+                    comment: "Coach: the left-edge swipe that leaves the table"))
         }
     }
 
@@ -279,5 +300,35 @@ enum CoachCopy {
         case (.run, _): String(localized: "two runs of \(req.size)", comment: "A phase group: two runs of the same size")
         case (.coat, _): String(localized: "\(req.size) cards of one coat", comment: "A phase group: cards of one coat")
         }
+    }
+}
+
+/// A one-time hint outside the table (Home's "press and hold to archive"): the words on a small
+/// bubble with a "Got it" that puts it away for good.
+struct HintBubble: View {
+    let text: String
+    let onOK: () -> Void
+
+    var body: some View {
+        HStack(spacing: 10) {
+            Text(verbatim: text)
+                .font(.system(.subheadline, design: .rounded, weight: .heavy))
+                .foregroundStyle(Palette.ink)
+                .fixedSize(horizontal: false, vertical: true)
+            PillButton(
+                icon: nil, color: Palette.lime, size: .small, width: 92,
+                title: String(localized: "Got it", comment: "Coach bubble: close this tip"),
+                accessibilityLabel: "Got it", action: onOK)
+        }
+        .padding(.leading, 16)
+        .padding(.trailing, 10)
+        .padding(.vertical, 8)
+        .background(
+            RoundedRectangle(cornerRadius: 22, style: .continuous).fill(.white)
+                .shadow(color: Palette.ink.opacity(0.5), radius: 0, x: 0, y: 5))
+        .overlay(RoundedRectangle(cornerRadius: 22, style: .continuous).strokeBorder(Palette.ink, lineWidth: 4))
+        .padding(.horizontal, 16)
+        .dynamicTypeSize(...DynamicTypeSize.accessibility1)
+        .accessibilityElement(children: .contain)
     }
 }

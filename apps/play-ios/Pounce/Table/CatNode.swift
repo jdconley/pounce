@@ -11,6 +11,13 @@ import SwiftUI
 final class CatNode: SKNode {
     let cat: Int
     let diameter: CGFloat
+    /// How much the card count and the level chip grow for the person's text size setting
+    /// (`TableTextScale.chips`: 1 at the default, more when the bar has room).
+    let textScale: CGFloat
+    /// The width this cat has to itself in the top bar: its chips stay inside it.
+    var slotWidth: CGFloat = .infinity {
+        didSet { if slotWidth != oldValue { placeChips() } }
+    }
     private let glow: SKSpriteNode
     private let ring: SKSpriteNode
     private let sprite: SKSpriteNode
@@ -35,9 +42,10 @@ final class CatNode: SKNode {
     private(set) var pose: CatPose = .idle
     private(set) var count: Int?
 
-    init(cat: Int, ringColor: Color, diameter: CGFloat = 72) {
+    init(cat: Int, ringColor: Color, diameter: CGFloat = 72, textScale: CGFloat = 1) {
         self.cat = cat
         self.diameter = diameter
+        self.textScale = textScale
         let k = diameter / 72
         glow = SKSpriteNode(texture: TableArt.table(ArtName.ringGlow), size: CGSize(width: 114 * k, height: 114 * k))
         ring = SKSpriteNode(texture: TableArt.table(ArtName.ring), size: CGSize(width: diameter, height: diameter))
@@ -49,7 +57,9 @@ final class CatNode: SKNode {
         laidBadge = SKSpriteNode(texture: TableArt.image(ArtName.badgeLaid), size: CGSize(width: sticker, height: sticker))
         phaseChip = SKSpriteNode()
         linkBadge = SKSpriteNode(color: .clear, size: CGSize(width: 32 * k, height: 32 * k))
-        bubble = SKSpriteNode(texture: CardFaceFactory.shared.back(), size: CGSize(width: 20 * k, height: 28 * k))
+        // The count's mini card: never smaller than its 16 pt numeral needs, and bigger with it.
+        let back = max(k, 0.8) * textScale
+        bubble = SKSpriteNode(texture: CardFaceFactory.shared.back(), size: CGSize(width: 20 * back, height: 28 * back))
         bubbleNumber = SKSpriteNode()
         paw = SKSpriteNode(texture: TableArt.image(ArtName.iconPawMenu), size: CGSize(width: 26 * k, height: 26 * k))
         targetGlow = SKSpriteNode(texture: TableArt.table(ArtName.ringGlow), size: CGSize(width: 116 * k, height: 116 * k))
@@ -122,7 +132,7 @@ final class CatNode: SKNode {
     }
 
     /// The phase chip's height: the card count's numeral size, never under 20 pt.
-    var phaseChipHeight: CGFloat { max((22 * diameter / 72).rounded(), 20) }
+    var phaseChipHeight: CGFloat { (max((22 * diameter / 72).rounded(), 20) * textScale).rounded() }
 
     /// The phase chip (nil hides it). Returns true when the seat moved on to a later phase
     /// than the chip showed (`phasePop`); a cat's first mark never counts.
@@ -138,18 +148,31 @@ final class CatNode: SKNode {
         let texture = CardFaceFactory.shared.phaseChip(mark, height: phaseChipHeight)
         phaseChip.texture = texture
         phaseChip.size = texture.size()
-        let r = diameter / 2
+        placeChips()
         let w = phaseChip.size.width
-        // Bottom left, its left end on the ring's edge, its right end clear of the card count
-        // (a wide "P10" pokes a little past the ring rather than touch the count).
-        let countLeft = bubble.position.x - bubble.size.width / 2
-        let right = min(-r + w - 2, countLeft - 3)
-        phaseChip.position = CGPoint(x: right - w / 2, y: -r * 0.7)
         laidBadge.isHidden = !mark.laid
         let s = laidBadge.size.width
         // The sticker sits on the chip's top left corner, over the ring, not over the number.
         laidBadge.position = CGPoint(x: -w / 2 + s * 0.12, y: phaseChip.size.height / 2 + s * 0.12)
         return advanced
+    }
+
+    /// The chip bottom left, its left end on the ring's edge, its right end clear of the card
+    /// count: a wide "10" pokes a little past the ring rather than touch the count, and in a
+    /// crowded bar chip and count move right together so neither leaves this cat's own slot.
+    private func placeChips() {
+        let r = diameter / 2
+        bubble.position.x = r * 0.62
+        guard !phaseChip.isHidden else { return }
+        let w = phaseChip.size.width
+        let countLeft = bubble.position.x - bubble.size.width / 2
+        var right = min(-r + w - 2, countLeft - 3)
+        let over = (-slotWidth / 2 + 1) - (right - w)
+        if over > 0 {
+            right += over
+            bubble.position.x = min(bubble.position.x + over, max(slotWidth / 2 - 1 - bubble.size.width / 2, bubble.position.x))
+        }
+        phaseChip.position = CGPoint(x: right - w / 2, y: -r * 0.7)
     }
 
     /// The finite pop for a seat that just moved on a phase: the chip bounces up big and back.
@@ -307,7 +330,7 @@ final class CatNode: SKNode {
         }
         bubble.isHidden = false
         // Never under an 11 pt cap height, however many cats share the bar.
-        let t = CardFaceFactory.shared.numeral(String(count), size: max(16 * diameter / 72, 16))
+        let t = CardFaceFactory.shared.numeral(String(count), size: (max(16 * diameter / 72, 16) * textScale).rounded())
         bubbleNumber.texture = t
         bubbleNumber.size = t.size()
     }

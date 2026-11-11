@@ -90,6 +90,16 @@ public struct TableLayout: Sendable {
     public let laidZone: CGRect
     /// Sort button center; laid rows stop short of its touch target (and the seat's name pill).
     public let sortButton: CGPoint
+    /// The paw menu button, top right: its center and drawn side. On a phone with a tall safe
+    /// top (a notch or island) it sits in the status bar's right ear, above the cats; with a
+    /// short one it is tucked into the opponents bar's corner, and from three cats up the cats
+    /// move over to leave that corner free (`menuReserve`).
+    public let menuButton: CGPoint
+    public let menuSide: CGFloat
+    /// The smallest touch target a table button gets.
+    public static let buttonHit: CGFloat = 44
+    /// Width kept free at the bar's right end for a tucked menu button.
+    public static let menuReserve: CGFloat = 48
 
     // Hand fan.
     private let handBaseY: CGFloat
@@ -138,6 +148,12 @@ public struct TableLayout: Sendable {
         opponentsBar = bar
         let n = min(max(opponents, 1), 6)  // 6: every seat, on a phone that holds none
         let towerW: CGFloat = roomy ? 56 : Self.towerWidth
+        let menuSide: CGFloat = roomy ? 44 : 32
+        self.menuSide = menuSide
+        let inEar = safeTop >= 44
+        menuButton = CGPoint(
+            x: width - menuSide / 2 - (roomy ? 16 : 10),
+            y: inEar ? bar.maxY + menuSide / 2 - 6 : bar.maxY - menuSide / 2 - (roomy ? 6 : 0))
         if roomy {
             let lo = towerW + 16, hi = width - 72  // clear of the tower and the menu button
             let spacing = min((hi - lo) / CGFloat(n), 260)
@@ -154,7 +170,10 @@ public struct TableLayout: Sendable {
             nameDrop = barH / 2 - 16
             towerHeadSize = 32
         } else {
-            opponentSlots = (0..<n).map { CGPoint(x: width * (CGFloat($0) + 0.5) / CGFloat(n), y: bar.midY) }
+            // Three or more cats reach the corner a tucked menu button sits in: they share the
+            // width left of it, so the button never lies over the last cat.
+            let span = !inEar && n >= 3 ? width - Self.menuReserve : width
+            opponentSlots = (0..<n).map { CGPoint(x: span * (CGFloat($0) + 0.5) / CGFloat(n), y: bar.midY) }
             catDiameter = 62
             catLift = 8
             nameDrop = barH / 2 - 12
@@ -255,6 +274,36 @@ public struct TableLayout: Sendable {
         }
         rowsAboveCapacity = rows(fitting: zone.maxY - pilesY - card.height / 2)
         rowsBelowCapacity = rows(fitting: pilesY - card.height / 2 - zone.minY)
+    }
+
+    /// The menu button's touch target.
+    public var menuButtonFrame: CGRect {
+        let d = max(menuSide, Self.buttonHit)
+        return CGRect(x: menuButton.x - d / 2, y: menuButton.y - d / 2, width: d, height: d)
+    }
+
+    /// The distance between neighboring cats in the top bar (the whole width for one).
+    public var opponentSpacing: CGFloat {
+        opponentSlots.count > 1 ? opponentSlots[1].x - opponentSlots[0].x : size.width
+    }
+
+    /// A cat's ring in the top bar: `catDiameter`, less when the bar is crowded.
+    public var opponentDiameter: CGFloat { min(catDiameter, opponentSpacing - 12) }
+
+    /// The touch target of the cat in slot `index` of the top bar (at least 44 pt).
+    public func opponentFrame(_ index: Int) -> CGRect {
+        guard opponentSlots.indices.contains(index) else { return .zero }
+        let d = max(opponentDiameter, Self.buttonHit)
+        let c = opponentSlots[index]
+        return CGRect(x: c.x - d / 2, y: c.y + catLift - d / 2, width: d, height: d)
+    }
+
+    /// Which of two overlapping touch targets a tap at `p` belongs to: the one whose center is
+    /// nearer. True when `p` is the menu button's rather than the cat's in slot `index`.
+    public func menuWins(at p: CGPoint, overCat index: Int) -> Bool {
+        guard opponentSlots.indices.contains(index) else { return true }
+        let cat = CGPoint(x: opponentSlots[index].x, y: opponentSlots[index].y + catLift)
+        return hypot(p.x - menuButton.x, p.y - menuButton.y) <= hypot(p.x - cat.x, p.y - cat.y)
     }
 
     public var sortButtonFrame: CGRect {

@@ -225,6 +225,40 @@ describe("start", () => {
     expect(errorsOf(out)).toEqual([{ to: "a", code: "seats_open" }]);
   });
 
+  // The app's "Start now" and "Practice" send these in order on one socket (no new message).
+  it("starts once the open seats are closed, the way the app's Start now does", () => {
+    const room = twoPlayerLobby();
+    room.handle("a", { t: "configure", seat: 2, kind: "open" });
+    expect(errorsOf(room.handle("a", { t: "start" }))).toEqual([{ to: "a", code: "seats_open" }]);
+    expect(errorsOf(room.handle("a", { t: "configure", seat: 2, kind: "closed" }))).toEqual([]);
+    expect(errorsOf(room.handle("a", { t: "start" }))).toEqual([]);
+    expect(room.state.status).toBe("playing");
+    expect(room.state.seats).toHaveLength(2);
+  });
+
+  it("deals in someone who took the open seat just before Start now closed it", () => {
+    const room = twoPlayerLobby();
+    room.connect("c");
+    room.handle("a", { t: "configure", seat: 2, kind: "open" });
+    room.handle("c", { t: "claim", seat: 2, person: person(3) });
+    // The close arrives late: refused, and the start that follows still deals, with all three.
+    expect(errorsOf(room.handle("a", { t: "configure", seat: 2, kind: "closed" }))).toEqual([
+      { to: "a", code: "seat_taken" },
+    ]);
+    expect(errorsOf(room.handle("a", { t: "start" }))).toEqual([]);
+    expect(room.state.seats.map((s) => s.kind)).toEqual(["human", "human", "human"]);
+  });
+
+  it("starts a practice game: a House Cat in the open seat, then start", () => {
+    const room = newRoom();
+    room.connect("a");
+    room.handle("a", { t: "claim", seat: 0, person: person(1) });
+    expect(errorsOf(room.handle("a", { t: "configure", seat: 1, kind: "bot" }))).toEqual([]);
+    expect(errorsOf(room.handle("a", { t: "start" }))).toEqual([]);
+    expect(room.state.status).toBe("playing");
+    expect(room.state.seats.map((s) => s.kind)).toEqual(["human", "bot"]);
+  });
+
   it("rejects starting twice with not_lobby", () => {
     const room = twoPlayerLobby();
     room.handle("a", { t: "start" });

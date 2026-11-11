@@ -35,6 +35,7 @@ extension TableScene {
         guard !tower.isOpen else { return }
         tower.setOpen(true, animated: true)
         invalidateAccessibility()
+        publishOverlays()  // the coach's "tap again for scores" goes with the open tower
     }
 
     /// Folds the open tower, unless a celebration has it in the spotlight.
@@ -42,6 +43,7 @@ extension TableScene {
         guard tower.isOpen, !celebration.focused else { return }
         tower.setOpen(false, animated: animated)
         invalidateAccessibility()
+        publishOverlays()
     }
 
     /// The scoreboard for the table as drawn.
