@@ -3,6 +3,7 @@ import { DurableObject } from "cloudflare:workers";
 import { devSpeed, linkOn, nudgeOn } from "../env";
 import { catTower } from "../games/cat-tower";
 import { endBody, startAlert, startBody, updateBody, type LiveState } from "../live/live";
+import { isGeneratedName } from "../names/filter";
 import { yourMoveBody } from "../notify/copy";
 import { deliverToPlayer } from "../notify/deliver";
 import { gate } from "../notify/policy";
@@ -10,6 +11,7 @@ import { nudgePush, playAgainPush, yourMoveContext, yourMovePush } from "../noti
 import { player as playerRpc } from "../players/accounts";
 import { PERSON_ID, PLAYER_ID } from "../players/ids";
 import { parseClientMessage } from "../protocol";
+import { anyBlocked } from "../safety/safety";
 import { FALLBACK_ZONE } from "../streaks/clock";
 import { myStreaks, rememberLook, reportTable, unlocksFor, type PairViews } from "../streaks/pairs";
 import { liveOn, notifyOn, streaksOn, trophyOn } from "../streaks/profile";
@@ -31,7 +33,7 @@ import {
 } from "./core";
 
 import type { Env } from "../env";
-import type { ClientMessage, ServerMessage } from "../protocol";
+import type { ClientMessage, ErrorCode, ServerMessage } from "../protocol";
 import type { TableSeat } from "./tables";
 
 /** Internal header the Worker sets to the verified device id. */
@@ -171,14 +173,81 @@ export class GameRoom extends DurableObject<Env> {
     }
     const parsed = typeof data === "string" ? parseClientMessage(data) : null;
     if (parsed === null || "error" in parsed) {
-      send(ws, BAD_MESSAGE);
+      send(ws, parsed === null ? BAD_MESSAGE : { t: "error", code: parsed.error });
       return;
     }
+    const refused = await this.refusal(deviceOf(ws), parsed).catch(() => null);
+    if (refused) {
+      send(ws, refused);
+      return;
+    }
+    if (!this.core) return;
     if (parsed.t === "setLook" && streaksOn(this.env)) {
       await this.setLook(deviceOf(ws), parsed);
       return;
     }
     await this.after(core.handle(deviceOf(ws), parsed));
+  }
+
+  /**
+   * What the room's own rules can't see (they know no ages and no blocks): the answer to send
+   * in place of handling `msg`, or null to handle it.
+   *
+   * A kitten's device types no names (spec §14.1): it can't rename the table, and a seat's
+   * name must be one the dice rolled. A player the host blocked can't take a seat. A nudge at
+   * someone who blocked the sender is dropped, and the sender is told it went.
+   */
+  private async refusal(deviceId: string, msg: ClientMessage): Promise<ServerMessage | null> {
+    const core = this.core as RoomCore;
+    const error = (code: ErrorCode): ServerMessage => ({ t: "error", code });
+    const mine = () => Object.values(core.state.devices[deviceId]?.players ?? {});
+    if (msg.t === "rename" || msg.t === "renameSeat" || msg.t === "claim") {
+      const kitten = (await this.index(deviceId).ageBand()) === "kitten";
+      if (kitten && msg.t === "rename") return error("not_allowed");
+      if (kitten && !isGeneratedName(msg.t === "claim" ? msg.person.name : msg.name)) return error("bad_name");
+    }
+    if (msg.t === "claim") {
+      const hosts = Object.values(core.state.devices[core.state.hostDeviceId]?.players ?? {});
+      if (deviceId !== core.state.hostDeviceId && (await anyBlocked(this.env, hosts, mine()))) return error("blocked");
+    }
+    if (msg.t === "nudge") {
+      const target = core.state.seats[msg.seat]?.playerId;
+      if (target && (await anyBlocked(this.env, [target], mine()))) return { t: "nudgeSent", seat: msg.seat };
+    }
+    return null;
+  }
+
+  /**
+   * How well the room knows a device, for the guard on joining by code: `member` (the host, a
+   * seat's device, or one that has been here before), `exists` (a stranger to a real room) or
+   * `none` (no such room).
+   */
+  knows(deviceId: string): "member" | "exists" | "none" {
+    const core = this.core;
+    if (!core) return "none";
+    const { state } = core;
+    const member = deviceId === state.hostDeviceId || state.devices[deviceId] !== undefined || core.controlledSeats(deviceId).length > 0;
+    return member ? "member" : "exists";
+  }
+
+  /**
+   * The person `personId` at this table, for a report or a block from `deviceId`: null unless
+   * the device is at the table (the host or seated) and the person sits in someone else's seat.
+   */
+  seatOf(
+    deviceId: string,
+    personId: string,
+  ): { table: string; name: string; playerId: string | null; deviceId: string | null; byPlayer: string | null } | null {
+    const core = this.core;
+    if (!core) return null;
+    const { state } = core;
+    const mine = core.controlledSeats(deviceId);
+    if (deviceId !== state.hostDeviceId && mine.length === 0) return null;
+    const index = state.seats.findIndex((s) => s.kind === "human" && s.person?.id.toLowerCase() === personId.toLowerCase());
+    const seat = state.seats[index];
+    if (!seat?.person || mine.includes(index)) return null;
+    const byPlayer = mine.map((i) => state.seats[i]?.playerId).find((id) => id !== undefined) ?? null;
+    return { table: state.name, name: seat.person.name, playerId: seat.playerId ?? null, deviceId: seat.deviceId ?? null, byPlayer };
   }
 
   async webSocketClose(ws: WebSocket, code: number, reason: string): Promise<void> {

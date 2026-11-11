@@ -9,7 +9,8 @@
     { "pattern": "play.conleychaos.com", "custom_domain": true }
   ],
   // TOKEN_SECRET, APNS_KEY_P8, APNS_KEY_ID, SIWA_KEY_P8, SIWA_KEY_ID and the four
-  // TWILIO_* secrets (Twilio Verify) are set by the deploy pipeline, never listed here.
+  // TWILIO_* secrets (Twilio Verify) and REPORTS_KEY (the owner's key for reading player reports)
+  // are set by the deploy pipeline, never listed here.
   "vars": {
     "APNS_TEAM_ID": "B222J9J7B8",
     "APNS_TOPIC": "com.conleychaos.play",
@@ -51,7 +52,9 @@
       { "name": "PAIRS", "class_name": "Pair" },
       { "name": "LINKS", "class_name": "Links" },
       { "name": "CONSENTS", "class_name": "Consents" },
-      { "name": "KITTENS", "class_name": "KittenIndex" }
+      { "name": "KITTENS", "class_name": "KittenIndex" },
+      { "name": "LIMITS", "class_name": "Limiter" },
+      { "name": "REPORTS", "class_name": "Reports" }
     ]
   },
   "migrations": [
@@ -59,7 +62,8 @@
     { "tag": "v2", "new_sqlite_classes": ["Player", "Identities"] },
     { "tag": "v3", "new_sqlite_classes": ["Pair"] },
     { "tag": "v4", "new_sqlite_classes": ["Links"] },
-    { "tag": "v5", "new_sqlite_classes": ["Consents", "KittenIndex"] }
+    { "tag": "v5", "new_sqlite_classes": ["Consents", "KittenIndex"] },
+    { "tag": "v6", "new_sqlite_classes": ["Limiter", "Reports"] }
   ],
   // Invocation logs would record each request URL, which carries room codes.
   "observability": { "enabled": true, "logs": { "invocation_logs": false } }
