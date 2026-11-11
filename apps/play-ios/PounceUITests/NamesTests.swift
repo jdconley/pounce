@@ -1,8 +1,7 @@
 import XCTest
 
 /// Names people set and see: first launch asks for a name (the random one is only a
-/// placeholder), the name is on the table, and a rename from the table menu reaches the server
-/// and comes back in the next snapshot.
+/// placeholder), the name is on the table, and once the game has started it can't be changed.
 class NamesTests: XCTestCase {
     override func setUp() {
         continueAfterFailure = false
@@ -10,7 +9,7 @@ class NamesTests: XCTestCase {
 
     /// Needs the dev server (a build of this branch's play-api, which knows `rename`).
     @MainActor
-    func testNameTypedAtFirstLaunchShowsAtTheTableAndRenames() throws {
+    func testNameTypedAtFirstLaunchShowsAtTheTableAndIsFrozenThere() throws {
         let app = Live.app()
         app.launch()
 
@@ -49,24 +48,11 @@ class NamesTests: XCTestCase {
         XCTAssertTrue(label(el(app, "table.opponent.1"))?.hasPrefix("House Cat") ?? false)
         screenshot(app, "names-at-the-table")
 
-        // Rename mid-game from the table menu; the server's next snapshot carries it.
+        // Names are frozen once the game has started: the table menu offers no rename.
         el(app, "table.menu").tap()
-        let names = el(app, "menu.names")
-        XCTAssertTrue(names.waitForExistence(timeout: Live.t(5)), "no Names in the table menu")
-        names.tap()
-        let rename = app.textFields["rename.name.0"]
-        XCTAssertTrue(rename.waitForExistence(timeout: Live.t(5)), "no rename field")
-        // Focusing selects the whole name: typing replaces it.
-        rename.tap()
-        Thread.sleep(forTimeInterval: Live.pace(0.5))
-        rename.typeText("Zed")
-        el(app, "rename.save.0").tap()
-        el(app, "rename.back").tap()
-        _ = el(app, "menu.home").waitForExistence(timeout: Live.t(3))
-        // Close the sheet (swipe it down) and look at the table.
-        app.swipeDown()
-        XCTAssertTrue(until(10) { label(me) == "Zed" }, "the rename never came back: \(label(me) ?? "-")")
-        screenshot(app, "names-renamed")
+        XCTAssertTrue(el(app, "menu.home").waitForExistence(timeout: Live.t(5)), "no table menu")
+        XCTAssertFalse(el(app, "menu.names").exists, "Names is offered mid-game")
+        screenshot(app, "names-frozen-in-game")
     }
 
     /// No server: every seat of a demo table has its name on the table.

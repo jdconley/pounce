@@ -8,7 +8,7 @@ import SwiftUI
 /// any gifts waiting, and the pause suitcase. The top bar's bell opens the Pounce sheet and its
 /// gear the notification settings (§12.4, §12.6); a pounce waiting on you shows as a card with
 /// the three answers. With no shared table in play a big Play pill opens Pounce with New game
-/// picked. No words but names and numerals.
+/// picked.
 struct UsView: View {
     @Environment(AppModel.self) private var model
     @Environment(\.horizontalSizeClass) private var sizeClass
@@ -231,8 +231,11 @@ struct UsView: View {
                 ForEach(Array(store.pairs.enumerated()), id: \.element.pair) { i, view in
                     pairCat(view, index: i)
                 }
-                ForEach(Array(store.left.enumerated()), id: \.element.pair) { i, ghost in
-                    ghostCat(ghost, index: i)
+                // Ghosted cats (start a left streak again) wait until there are two or more pairs.
+                if store.pairs.count >= 2 {
+                    ForEach(Array(store.left.enumerated()), id: \.element.pair) { i, ghost in
+                        ghostCat(ghost, index: i)
+                    }
                 }
             }
             .padding(.horizontal, 8)
@@ -282,24 +285,42 @@ struct UsView: View {
         .accessibilityValue(model.pounceLocked(view.pair) ? "locked" : "")
         .accessibilityAddTraits(on ? [.isButton, .isSelected] : .isButton)
         .accessibilityIdentifier("us.pair.\(index)")
-        .accessibilityAction(named: Text("Pin", comment: "VoiceOver: pin a pair as the top one")) { pin(view) }
+        .accessibilityAction(named: Text("Pin", comment: "VoiceOver: pin a pair as the top one")) {
+            if store.pairs.count >= 2 { pin(view) }
+        }
         .accessibilityAction(named: Text("Leave", comment: "VoiceOver: leave a streak")) { leaving = view }
     }
 
     /// Long-press: pin, or the trash can (§14).
     private func pairBubble(_ view: StreakView) -> some View {
         HStack(spacing: 10) {
-            ArtIconButton(icon: ArtName.Habit.iconPin, color: Palette.orange, size: 48, label: "Pin") { pin(view) }
-                .accessibilityIdentifier("us.pin")
-            ArtIconButton(icon: ArtName.Habit.iconTrash, color: Palette.magenta, size: 48, label: "Leave") {
-                bubble = nil
-                leaving = view
+            // Pinning picks the top pair, so it only matters with two or more.
+            if store.pairs.count >= 2 {
+                labeled("Pin to top") {
+                    ArtIconButton(icon: ArtName.Habit.iconPin, color: Palette.orange, size: 48, label: "Pin") { pin(view) }
+                        .accessibilityIdentifier("us.pin")
+                }
             }
-            .accessibilityIdentifier("us.leave")
+            labeled("Leave") {
+                ArtIconButton(icon: ArtName.Habit.iconTrash, color: Palette.magenta, size: 48, label: "Leave") {
+                    bubble = nil
+                    leaving = view
+                }
+                .accessibilityIdentifier("us.leave")
+            }
         }
         .padding(8)
         .background(Capsule().fill(Palette.night).overlay(Capsule().strokeBorder(Palette.ink, lineWidth: 3)))
         .transition(.scale(scale: 0.5, anchor: .top).combined(with: .opacity))
+    }
+
+    /// A control with its word under it.
+    private func labeled<C: View>(_ title: LocalizedStringKey, @ViewBuilder _ control: () -> C) -> some View {
+        VStack(spacing: 2) {
+            control()
+            WordLabel(title: title, alignment: .center)
+                .font(.caption)
+        }
     }
 
     private func ghostCat(_ ghost: LeftPair, index: Int) -> some View {
@@ -321,6 +342,10 @@ struct UsView: View {
                         .background(Circle().fill(Palette.lime).overlay(Circle().strokeBorder(Palette.ink, lineWidth: 2)))
                 }
                 NameTag(ghost.partner.name, maxWidth: 76 * rowScale, size: 13 * rowScale).opacity(0.6)
+                Text("Play again", comment: "Us: a cat who left; tap to start the streak again")
+                    .font(.system(.caption2, design: .rounded, weight: .heavy))
+                    .foregroundStyle(.white.opacity(0.8))
+                    .accessibilityHidden(true)
             }
         }
         .buttonStyle(.plain)
@@ -366,6 +391,7 @@ struct UsView: View {
                 pawCat(view.partner.cat, lit: view.them || view.kept, scale: side / 300)
             }
             .overlay { todayPaws(view) }
+            StreakModeLine(mode: StreakBadge.mode(view))
         }
     }
 
@@ -413,18 +439,28 @@ struct UsView: View {
             }
             WeekStrip(week: view.week, size: 34 * scale)
             HStack(spacing: 12 * scale) {
-                StatTile(icon: ArtName.iconTrophy, number: view.best, color: Palette.orange, id: "us.stat.best", scale: scale)
-                StatTile(icon: ArtName.Habit.iconDays, number: view.lifetimeKept, color: Palette.magenta, id: "us.stat.days", scale: scale)
-                StatTile(icon: ArtName.Habit.iconWeeks, number: view.perfectWeeks, color: Palette.teal, id: "us.stat.weeks", scale: scale)
+                statTile("Best streak", scale) {
+                    StatTile(icon: ArtName.iconTrophy, number: view.best, color: Palette.orange, id: "us.stat.best", scale: scale)
+                }
+                statTile("Days played", scale) {
+                    StatTile(icon: ArtName.Habit.iconDays, number: view.lifetimeKept, color: Palette.magenta, id: "us.stat.days", scale: scale)
+                }
+                statTile("Perfect weeks", scale) {
+                    StatTile(icon: ArtName.Habit.iconWeeks, number: view.perfectWeeks, color: Palette.teal, id: "us.stat.weeks", scale: scale)
+                }
             }
             HStack(spacing: 14 * scale) {
-                MilestoneArc(count: view.count, next: view.next, side: 84 * scale)
-                ForEach(view.gifts) { gift in
-                    giftTile(view, gift, scale: scale)
+                statTile("Next gift", scale) {
+                    MilestoneArc(count: view.count, next: view.next, side: 84 * scale)
                 }
-                ArtIconButton(icon: ArtName.Habit.iconPause, color: view.pausedUntil == nil ? Palette.sky : Palette.orange,
-                              size: 60 * scale, label: "Pause") { pausing = view }
-                    .accessibilityIdentifier("us.pause")
+                ForEach(view.gifts) { gift in
+                    statTile("Open me", scale) { giftTile(view, gift, scale: scale) }
+                }
+                statTile(view.pausedUntil == nil ? "Going away?" : "On a trip", scale) {
+                    ArtIconButton(icon: ArtName.Habit.iconPause, color: view.pausedUntil == nil ? Palette.sky : Palette.orange,
+                                  size: 60 * scale, label: "Pause") { pausing = view }
+                        .accessibilityIdentifier("us.pause")
+                }
             }
             if view.myMove.isEmpty && view.theirMove.isEmpty {
                 // No shared table in play (§10.2): Pounce, with New game picked.
@@ -436,6 +472,14 @@ struct UsView: View {
             }
         }
         .animation(.spring(duration: 0.4, bounce: 0.35).paced, value: view.pounce.waiting?.id)
+    }
+
+    private func statTile<C: View>(_ title: LocalizedStringKey, _ scale: CGFloat, @ViewBuilder _ tile: () -> C) -> some View {
+        VStack(spacing: 4) {
+            tile()
+            WordLabel(title: title, alignment: .center)
+                .font(.caption)
+        }
     }
 
     /// Today's two paws for VoiceOver and the tests: mine, then theirs.
@@ -585,6 +629,7 @@ private struct LeaveConfirm: View {
                         NameTag(name, maxWidth: 110)
                     }
                 }
+                WordLabel(title: "Leave this streak?", detail: "The days you played together go away.", alignment: .center)
                 HStack(spacing: 18) {
                     PillButton(icon: ArtName.iconBack, color: Palette.violet, size: .medium, accessibilityLabel: "Keep it") { onBack() }
                         .accessibilityIdentifier("leave.back")
@@ -615,6 +660,7 @@ private struct PauseDial: View {
             VStack(spacing: 18) {
                 Image(ArtName.Habit.pawSuitcase).resizable().scaledToFit().frame(width: 96)
                     .wiggle(trigger: days ?? 0)
+                WordLabel(title: "Going away?", detail: "Pick how many days. Your streak waits for you.", alignment: .center)
                 Grid(horizontalSpacing: 10, verticalSpacing: 10) {
                     ForEach(0..<2, id: \.self) { row in
                         GridRow {

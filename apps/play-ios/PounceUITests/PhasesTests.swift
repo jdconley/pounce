@@ -30,15 +30,15 @@ final class PhasesTests: XCTestCase {
         for n in 1...10 {
             let phase = app.descendants(matching: .any)["phase.\(n)"]
             XCTAssertTrue(phase.exists, "phase \(n) missing")
-            XCTAssertTrue(phase.label.hasPrefix("Phase \(n): "), phase.label)
+            XCTAssertTrue(phase.label.hasPrefix("Level \(n): "), phase.label)
             labels[n] = phase.label
         }
-        XCTAssertEqual(labels[1], "Phase 1: 2 sets of 3. Leo is here. Leo laid it down. Done.")
-        XCTAssertEqual(labels[2], "Phase 2: 1 set of 3 + 1 run of 4. Done.")
-        XCTAssertEqual(labels[3], "Phase 3: 1 set of 4 + 1 run of 4. Mia is here. Your phase.")
-        XCTAssertEqual(labels[4], "Phase 4: 1 run of 7. House Cat is here.")
-        XCTAssertEqual(labels[7], "Phase 7: 2 sets of 4. Kiki is here.")
-        XCTAssertEqual(labels[8], "Phase 8: 7 cards of one coat.")
+        XCTAssertEqual(labels[1], "Level 1: 2 sets of 3. Leo is here. Leo laid it down. Done.")
+        XCTAssertEqual(labels[2], "Level 2: 1 set of 3 + 1 run of 4. Done.")
+        XCTAssertEqual(labels[3], "Level 3: 1 set of 4 + 1 run of 4. Mia is here. Your level.")
+        XCTAssertEqual(labels[4], "Level 4: 1 run of 7. House Cat is here.")
+        XCTAssertEqual(labels[7], "Level 7: 2 sets of 4. Kiki is here.")
+        XCTAssertEqual(labels[8], "Level 8: 7 cards of one coat.")
         for n in [5, 6, 9, 10] {
             XCTAssertFalse(labels[n]!.contains(" here."), labels[n]!)
         }

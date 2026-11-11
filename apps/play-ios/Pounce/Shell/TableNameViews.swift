@@ -91,13 +91,17 @@ private struct Triangle: Shape {
 }
 
 /// Renames the table: a big name field with a dice for a fresh cat-themed name, Back and Done.
-/// Done is live only for a name the server will take (`TableName.clean`), and hands that back.
+/// Done is live only for a well-formed name (`TableName.clean`); the server's name filter is
+/// asked before it is handed back, and a refused name says so under the field.
 struct RenameTableView: View {
+    @Environment(AppModel.self) private var model
     let onCancel: () -> Void
     let onSave: (String) -> Void
 
     @State private var name: String
     @State private var diceSpin = 0
+    @State private var refusal: String?
+    @State private var checking = false
     @FocusState private var focused: Bool
 
     init(current: String, onCancel: @escaping () -> Void, onSave: @escaping (String) -> Void) {
@@ -126,6 +130,7 @@ struct RenameTableView: View {
                     .onChange(of: name) { _, new in
                         let clipped = TableName.clamp(new)
                         if clipped != new { name = clipped }
+                        refusal = nil
                     }
                     .padding(.horizontal, 16)
                     .frame(height: 58)
@@ -142,6 +147,7 @@ struct RenameTableView: View {
                 .wiggle(trigger: diceSpin)
                 .accessibilityIdentifier("rename.dice")
             }
+            if let refusal { NameRefusal(text: refusal) }
             HStack(spacing: 16) {
                 PillButton(icon: ArtName.iconBack, color: Palette.sky, size: .medium, accessibilityLabel: "Back") {
                     onCancel()
@@ -150,7 +156,7 @@ struct RenameTableView: View {
                 PillButton(icon: ArtName.iconCheck, color: Palette.lime, size: .large, width: 190, accessibilityLabel: "Done") {
                     save()
                 }
-                .disabled(cleaned == nil)
+                .disabled(cleaned == nil || checking)
                 .saturation(cleaned == nil ? 0 : 1)
                 .opacity(cleaned == nil ? 0.55 : 1)
                 .accessibilityIdentifier("rename.done")
@@ -161,13 +167,25 @@ struct RenameTableView: View {
         .frame(maxWidth: 520)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .onAppear { focused = true }
+        .animation(.spring(duration: 0.3, bounce: 0.3).paced, value: refusal)
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("sheet-rename")
     }
 
     private func save() {
-        guard let cleaned else { return }
-        focused = false
-        onSave(cleaned)
+        guard let cleaned, !checking else { return }
+        checking = true
+        Task {
+            let verdict = await NameGate.verdict(model.api, cleaned, kind: .table)
+            checking = false
+            if let words = NameGate.words(verdict) {
+                refusal = words
+                Haptics.shared.thump()
+                UIAccessibility.post(notification: .announcement, argument: words)
+            } else {
+                focused = false
+                onSave(cleaned)
+            }
+        }
     }
 }

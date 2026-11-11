@@ -23,6 +23,8 @@ public enum TableIntent: Equatable, Sendable {
 /// Which screen the room is on.
 public enum RoomPhase: Equatable, Sendable {
     case connecting, lobby, playing, over, closed, notFound, needsUpdate, stalled
+    /// The server refused the connection: too many wrong room codes lately.
+    case locked
 }
 
 /// A move code for handing `seat` to another device.

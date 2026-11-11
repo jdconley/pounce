@@ -21,6 +21,8 @@ public enum SocketConnectError: Error, Equatable {
     case notFound
     /// The upgrade got 401: the bearer token was rejected.
     case unauthorized
+    /// The upgrade got 429: too many wrong room codes from this phone or its network.
+    case tooManyAttempts
     case failed(String)
 }
 
@@ -39,7 +41,7 @@ public protocol WebSocketConnector: Sendable {
 /// two frames before the pong (the snapshot, then another seat's event or a bot
 /// step), the pong can sit behind them until the ping times out. If the handshake
 /// fails instead, the HTTP status of the refused upgrade decides the error: 404 is
-/// `.notFound`, 401 is `.unauthorized`.
+/// `.notFound`, 401 is `.unauthorized`, 429 is `.tooManyAttempts`.
 public struct URLSessionWebSocketConnector: WebSocketConnector {
     private let session: URLSession
     private let timeout: Duration
@@ -67,6 +69,7 @@ public struct URLSessionWebSocketConnector: WebSocketConnector {
             switch status {
             case 404: throw SocketConnectError.notFound
             case 401: throw SocketConnectError.unauthorized
+            case 429: throw SocketConnectError.tooManyAttempts
             case let code?: throw SocketConnectError.failed("upgrade refused with HTTP \(code)")
             case nil: throw SocketConnectError.failed(String(describing: error))
             }

@@ -67,6 +67,8 @@ function worker(push?: { p8: string }, siwa?: { p8: string }): Miniflare {
       DEVICES: { className: "DeviceIndex", useSQLite: true },
       PLAYERS: { className: "Player", useSQLite: true },
       IDENTITIES: { className: "Identities", useSQLite: true },
+      LIMITS: { className: "Limiter", useSQLite: true },
+      REPORTS: { className: "Reports", useSQLite: true },
     },
     bindings: {
       TOKEN_SECRET: SECRET,

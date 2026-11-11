@@ -66,7 +66,11 @@ private struct RenameRow: View {
     @State private var roll = 0
     @State private var selection: TextSelection?
     @State private var saved = 0
+    /// Why the server's name filter refused the typed name; nil while it hasn't.
+    @State private var refusal: String?
+    @State private var checking = false
     @FocusState private var focused: Bool
+    @Environment(AppModel.self) private var model
 
     init(seat: Seat, person: Person, typed: Bool, onSave: @escaping (String) -> Void) {
         self.seat = seat
@@ -80,6 +84,15 @@ private struct RenameRow: View {
     private var changed: Bool { !trimmed.isEmpty && trimmed != person.name }
 
     var body: some View {
+        VStack(spacing: 8) {
+            row
+            if let refusal { NameRefusal(text: refusal, size: 14) }
+        }
+        .animation(.spring(duration: 0.3, bounce: 0.3).paced, value: refusal)
+        .onChange(of: name) { refusal = nil }
+    }
+
+    private var row: some View {
         HStack(spacing: 12) {
             Image(ArtName.cat(person.cat, .idle))
                 .resizable()
@@ -155,8 +168,26 @@ private struct RenameRow: View {
 
     private func save() {
         focused = false
-        guard changed else { return }
-        onSave(trimmed)
+        guard changed, !checking else { return }
+        let name = trimmed
+        // A generated name needs no asking; a typed one is put to the server's name filter first.
+        guard typed, AgeLimits.needsGeneratedName(name) else { return saveChecked(name) }
+        checking = true
+        Task {
+            let verdict = await NameGate.verdict(model.api, name, kind: .person)
+            checking = false
+            if let words = NameGate.words(verdict) {
+                refusal = words
+                Haptics.shared.thump()
+                UIAccessibility.post(notification: .announcement, argument: words)
+            } else {
+                saveChecked(name)
+            }
+        }
+    }
+
+    private func saveChecked(_ name: String) {
+        onSave(name)
         saved += 1
         Haptics.shared.success()
         Sound.shared.play(ArtName.Sound.sfxPop)

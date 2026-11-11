@@ -22,68 +22,64 @@ struct NotifyPanel: View {
     }
 
     private var kitten: some View {
-        HStack(spacing: 14 * scale) {
+        WordRow(title: "Daily reminder", detail: "A bell at \(KittenReminder.time.text).") {
             FlagButton(icon: ArtName.iconBell, on: model.kittenDailyOn, color: Palette.magenta, size: 64 * scale,
                        label: "Daily reminder") {
                 model.setKittenDaily(!model.kittenDailyOn)
             }
             .accessibilityIdentifier("notify.kitten")
-            OutlinedText(KittenReminder.time.text, size: 30 * scale, fill: .white, width: 3)
-                .opacity(model.kittenDailyOn ? 1 : 0.55)
-                .accessibilityHidden(true)
         }
     }
 
+    /// One Reminders switch: the daily bell and the last-chance line before bed go together, and
+    /// the time is picked for you (a teen's fixed times still show their dials).
     private func full(_ s: NotifySettings) -> some View {
-        VStack(spacing: 16 * scale) {
-            HStack(spacing: 18 * scale) {
+        VStack(alignment: .leading, spacing: 16 * scale) {
+            WordRow(title: "Reminders", detail: "A nudge to play, and one last one before bed.") {
                 FlagButton(icon: ArtName.iconBell, on: s.reminders, color: Palette.magenta, size: 64 * scale,
                            label: "Reminders") {
-                    model.setNotify(NotifyKey.reminders, .bool(!s.reminders))
+                    let on = !s.reminders
+                    model.setNotify(NotifyKey.reminders, .bool(on))
+                    if on { model.setNotify(NotifyKey.lastChance, .bool(true)) }
                 }
                 .accessibilityIdentifier("notify.reminders")
-                // Last chance is a reminder too: dimmed while the bell is off.
-                FlagButton(icon: ArtName.Habit.iconLastChance, on: s.lastChance, color: Palette.violet,
-                           size: 64 * scale, label: "Last chance") {
-                    model.setNotify(NotifyKey.lastChance, .bool(!s.lastChance))
+            }
+            if !s.auto {
+                HStack(alignment: .top, spacing: 18 * scale) {
+                    ClockDial(icon: ArtName.Habit.iconWeekday, time: s.clamped(s.weekday), color: Palette.magenta,
+                              side: 120 * scale, label: "Weekday reminder", caption: "Weekdays", clamp: s.clamped,
+                              id: "notify.weekday") {
+                        model.setNotify(NotifyKey.weekday, $0.json)
+                    }
+                    ClockDial(icon: ArtName.Habit.iconWeekend, time: s.clamped(s.weekend), color: Palette.teal,
+                              side: 120 * scale, label: "Weekend reminder", caption: "Weekends", clamp: s.clamped,
+                              id: "notify.weekend") {
+                        model.setNotify(NotifyKey.weekend, $0.json)
+                    }
                 }
+                .frame(maxWidth: .infinity)
                 .opacity(s.reminders ? 1 : 0.55)
-                .accessibilityIdentifier("notify.lastChance")
-                FlagButton(icon: ArtName.Habit.iconAuto, on: s.auto, color: Palette.sky, size: 64 * scale, label: "Auto time") {
-                    model.setNotify(NotifyKey.auto, .bool(!s.auto))
-                }
-                .accessibilityIdentifier("notify.auto")
-                // The live table on the Lock Screen (§11.3): on by default, the game itself.
+            }
+            // The live table on the Lock Screen (§11.3): on by default, the game itself.
+            WordRow(title: "Live table", detail: "Show your game on the Lock Screen.") {
                 FlagButton(icon: ArtName.Habit.iconLiveTable, on: s.liveTable, color: Palette.teal, size: 64 * scale,
                            label: "Live table") {
                     model.setNotify(NotifyKey.liveTable, .bool(!s.liveTable))
                 }
                 .accessibilityIdentifier("notify.liveTable")
             }
-            if !s.auto {
-                HStack(spacing: 18 * scale) {
-                    ClockDial(icon: ArtName.Habit.iconWeekday, time: s.clamped(s.weekday), color: Palette.magenta,
-                              side: 120 * scale, label: "Weekday reminder", clamp: s.clamped, id: "notify.weekday") {
-                        model.setNotify(NotifyKey.weekday, $0.json)
-                    }
-                    ClockDial(icon: ArtName.Habit.iconWeekend, time: s.clamped(s.weekend), color: Palette.teal,
-                              side: 120 * scale, label: "Weekend reminder", clamp: s.clamped, id: "notify.weekend") {
-                        model.setNotify(NotifyKey.weekend, $0.json)
-                    }
-                }
-                .transition(.scale(scale: 0.6).combined(with: .opacity))
-                .opacity(s.reminders ? 1 : 0.55)
-            }
-            HStack(spacing: 18 * scale) {
+            WordLabel(title: "Quiet hours", detail: "No sounds or alerts between these times.")
+            HStack(alignment: .top, spacing: 18 * scale) {
                 ClockDial(icon: ArtName.Habit.iconMoon, time: s.quietStart, color: Palette.violet, side: 120 * scale,
-                          label: "Quiet hours start", id: "notify.quietStart") {
+                          label: "Quiet hours start", caption: "Starts", id: "notify.quietStart") {
                     model.setNotify(NotifyKey.quietStart, $0.json)
                 }
                 ClockDial(icon: ArtName.Habit.iconSun, time: s.quietEnd, color: Palette.orange, side: 120 * scale,
-                          label: "Quiet hours end", id: "notify.quietEnd") {
+                          label: "Quiet hours end", caption: "Ends", id: "notify.quietEnd") {
                     model.setNotify(NotifyKey.quietEnd, $0.json)
                 }
             }
+            .frame(maxWidth: .infinity)
         }
         .animation(.spring(duration: 0.35, bounce: 0.35).paced, value: s.auto)
     }
@@ -128,6 +124,8 @@ struct ClockDial: View {
     let color: Color
     var side: CGFloat = 120
     let label: LocalizedStringKey
+    /// The words under the dial.
+    var caption: LocalizedStringKey?
     /// Keeps a reminder where the server will use it (outside quiet hours).
     var clamp: (ClockTime) -> ClockTime = { $0 }
     /// The accessibility id: the face has it, the steppers `<id>.minus` and `<id>.plus`.
@@ -147,6 +145,7 @@ struct ClockDial: View {
                 stepper("chevron.left", -Self.step, id: "minus")
                 stepper("chevron.right", Self.step, id: "plus")
             }
+            if let caption { WordLabel(title: caption, alignment: .center) }
         }
     }
 

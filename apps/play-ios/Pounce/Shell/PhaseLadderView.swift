@@ -12,7 +12,7 @@ struct PhaseLadderView: View {
     var body: some View {
         VStack(spacing: 8) {
             OutlinedText(
-                String(localized: "Phases", comment: "Scoreboard: the heading over all ten phases"),
+                String(localized: "Levels", comment: "Scoreboard: the heading over all ten levels"),
                 size: 28, fill: Palette.orange, width: 4)
                 .accessibilityAddTraits(.isHeader)
             ForEach(ladder.rungs, id: \.index) { rung in
@@ -125,29 +125,29 @@ struct PhaseLadderView: View {
     /// whether it is done or the focus seat's phase.
     private func label(_ rung: PhaseLadder.Rung) -> String {
         let number = rung.index + 1
-        var parts = [String(localized: "Phase \(number): \(rung.text).", comment: "VoiceOver: a phase and what it needs")]
+        var parts = [String(localized: "Level \(number): \(rung.text).", comment: "VoiceOver: a level and what it needs")]
         let names = rung.seats.map { SeatInfo.name(model.room, $0) }
         switch names.count {
         case 0: break
-        case 1: parts.append(String(localized: "\(names[0]) is here.", comment: "VoiceOver: one player on this phase"))
+        case 1: parts.append(String(localized: "\(names[0]) is here.", comment: "VoiceOver: one player on this level"))
         default:
             let list = names.formatted(.list(type: .and))
-            parts.append(String(localized: "\(list) are here.", comment: "VoiceOver: players on this phase"))
+            parts.append(String(localized: "\(list) are here.", comment: "VoiceOver: players on this level"))
         }
         let laid = rung.seats.filter(ladder.laid.contains).map { SeatInfo.name(model.room, $0) }
         if !laid.isEmpty {
             let list = laid.formatted(.list(type: .and))
-            parts.append(String(localized: "\(list) laid it down.", comment: "VoiceOver: players who laid this phase this round"))
+            parts.append(String(localized: "\(list) laid it down.", comment: "VoiceOver: players who laid this level this round"))
         }
         if rung.isFocus {
             if model.isMultiSeat, let focus = ladder.focus {
                 let name = SeatInfo.name(model.room, focus)
-                parts.append(String(localized: "\(name)'s phase.", comment: "VoiceOver: the shown player's phase on a shared phone"))
+                parts.append(String(localized: "\(name)'s level.", comment: "VoiceOver: the shown player's level on a shared phone"))
             } else {
-                parts.append(String(localized: "Your phase.", comment: "VoiceOver: my current phase"))
+                parts.append(String(localized: "Your level.", comment: "VoiceOver: my current level"))
             }
         } else if rung.isDone {
-            parts.append(String(localized: "Done.", comment: "VoiceOver: a phase already climbed past"))
+            parts.append(String(localized: "Done.", comment: "VoiceOver: a level already climbed past"))
         }
         return parts.joined(separator: " ")
     }

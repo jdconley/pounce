@@ -20,6 +20,7 @@ import {
   unlinkKitten,
 } from "./kittens/kittens";
 import { parseLiveTokens } from "./live/live";
+import { nameAllowed } from "./names/filter";
 import {
   deleteMe,
   devicePlayers,
@@ -39,6 +40,7 @@ import { answerPounce, createPounce, linkPounce } from "./pounce/pounces";
 import { newRoomCode, ROOM_CODE } from "./room/codes";
 import { DEVICE_HEADER, PLAYER_HEADER } from "./room/game-room";
 import { parseRoomName } from "./room/names";
+import { blockPlayer, guardJoin, listBlocks, mayMint, nameCheck, ownerReports, reportPlayer, unblockPlayer } from "./safety/safety";
 import { creatorLook, isMine, leavePair, myLeft, myOwn, myStreaks, myTrophies, PAIR_ID, pairStub, rejoinPair, syncPairPeople } from "./streaks/pairs";
 import { consentOn, liveOn, notifyOn, streaksOn, trophyOn } from "./streaks/profile";
 
@@ -51,6 +53,8 @@ export { Identities } from "./players/identities";
 export { Player } from "./players/player";
 export { DeviceIndex } from "./room/device-index";
 export { GameRoom } from "./room/game-room";
+export { Limiter } from "./safety/limiter";
+export { Reports } from "./safety/reports";
 export { Pair } from "./streaks/pair";
 
 const SHARE_PATH = /^\/j\/([^/]+)$/;
@@ -58,6 +62,9 @@ const POUNCE_PAGE = /^\/p\/([^/]+)$/;
 const POUNCE_ANSWER = /^\/v1\/pounces\/([^/]+)\/answer$/;
 const POUNCE_LINK = /^\/v1\/pounces\/links\/([^/]+)$/;
 const ROOM_WS = /^\/v1\/rooms\/([^/]+)\/ws$/;
+/** `/v1/rooms/{code}/reports` or `/blocks`: report or block someone at that table. */
+const ROOM_SAFETY = /^\/v1\/rooms\/([^/]+)\/(reports|blocks)$/;
+const MY_BLOCK = /^\/v1\/me\/blocks\/([^/]+)$/;
 const SIGN_IN = /^\/v1\/identities\/([a-z]+)$/;
 const MY_IDENTITY = /^\/v1\/me\/identities\/([a-z]+)$/;
 /** `/v1/pairs/{pair}`, `/pause`, `/pin` or `/gifts/{id}/open` (§13.4). */
@@ -77,12 +84,6 @@ const MAX_PROFILE_BYTES = 2048;
 /** An Apple identity token alone is about 1 KB. */
 const MAX_PROOF_BYTES = 4096;
 const MAX_STATE_BYTES = 8192;
-const MINTS_PER_WINDOW = 10;
-const MINT_WINDOW_MS = 60_000;
-const MAX_TRACKED_IPS = 10_000;
-
-/** Ruling E: a per-isolate limiter, weak but enough for TestFlight. */
-const mints = new Map<string, { count: number; windowStart: number }>();
 
 const cryptoRng = (): number => (crypto.getRandomValues(new Uint32Array(1))[0] as number) / 2 ** 32;
 
@@ -107,21 +108,6 @@ function base64url(bytes: Uint8Array): string {
   return btoa(bin).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
 }
 
-function allowMint(ip: string, now: number): boolean {
-  if (mints.size > MAX_TRACKED_IPS) {
-    for (const [key, entry] of mints) {
-      if (now - entry.windowStart >= MINT_WINDOW_MS) mints.delete(key);
-    }
-  }
-  const entry = mints.get(ip);
-  if (!entry || now - entry.windowStart >= MINT_WINDOW_MS) {
-    mints.set(ip, { count: 1, windowStart: now });
-    return true;
-  }
-  entry.count += 1;
-  return entry.count <= MINTS_PER_WINDOW;
-}
-
 /** The parsed JSON object body, or null when it is missing, too big or not an object. */
 async function readObject(request: Request, maxBytes = MAX_BODY_BYTES): Promise<Record<string, unknown> | null> {
   const text = await request.text();
@@ -142,9 +128,11 @@ async function authenticate(request: Request, secret: string): Promise<string | 
   return verifyDeviceToken(secret, header.slice("Bearer ".length).trim());
 }
 
-async function mintDevice(request: Request, secret: string): Promise<Response> {
-  const ip = request.headers.get("cf-connecting-ip") ?? "unknown";
-  if (!allowMint(ip, Date.now())) return json(429, { error: "rate_limited" });
+const clientIp = (request: Request) => request.headers.get("cf-connecting-ip") ?? "unknown";
+
+async function mintDevice(request: Request, env: Env, secret: string): Promise<Response> {
+  // Counted in a Durable Object, so the limit holds across isolates.
+  if (!(await mayMint(env, clientIp(request), Date.now()))) return json(429, { error: "rate_limited" });
   const deviceId = base64url(crypto.getRandomValues(new Uint8Array(DEVICE_ID_BYTES)));
   return json(200, { deviceId, token: await issueDeviceToken(secret, deviceId) });
 }
@@ -156,6 +144,11 @@ async function createRoom(request: Request, env: Env, deviceId: string): Promise
   // Optional: without one the room gets its default name.
   const name = "name" in body ? parseRoomName(body.name) : undefined;
   if (name === null) return badRequest();
+  if (name !== undefined) {
+    if (!nameAllowed(name)) return json(400, { error: "bad_name" });
+    // A kitten's device types no names (spec §14.1): its tables keep the server's.
+    if ((await env.DEVICES.get(env.DEVICES.idFromName(deviceId)).ageBand()) === "kitten") return json(403, { error: "not_allowed" });
+  }
   let look;
   if (streaksOn(env)) {
     const { people, account } = await env.DEVICES.get(env.DEVICES.idFromName(deviceId)).players();
@@ -174,6 +167,14 @@ async function openSocket(request: Request, env: Env, deviceId: string, code: st
   if (request.headers.get("upgrade")?.toLowerCase() !== "websocket") {
     return json(426, { error: "upgrade_required" });
   }
+  // Joining by code (`guardJoin`): wrong guesses are counted, and too many lock the guesser out.
+  const guard = await guardJoin(env, code, deviceId, clientIp(request), Date.now());
+  if ("retryAfter" in guard) {
+    const response = json(429, { error: "too_many_attempts", retryAfter: guard.retryAfter });
+    response.headers.set("retry-after", String(guard.retryAfter));
+    return response;
+  }
+  if (!guard.exists) return notFound();
   // The room trusts these headers, so client-supplied ones must never reach it.
   const headers = new Headers(request.headers);
   headers.delete(DEVICE_HEADER);
@@ -211,6 +212,8 @@ function respond<T>(result: Result<T>, okStatus = 200): Response {
 async function putProfile(request: Request, env: Env, deviceId: string): Promise<Response> {
   const profile = parseProfile(await readObject(request, MAX_PROFILE_BYTES));
   if (!profile) return badRequest();
+  // A name the filter refuses never reaches a player, a table or a push.
+  if (!profile.people.every((p) => nameAllowed(p.name))) return json(400, { error: "bad_name" });
   return json(200, await uploadProfile(env, deviceId, profile, Date.now()));
 }
 
@@ -410,6 +413,21 @@ async function publicConsent(request: Request, env: Env, method: string, pathnam
   return null;
 }
 
+/** Name checks, reports and blocks (App Store guideline 1.2). */
+function safetyRoute(method: string, pathname: string): Route | null {
+  if (method === "POST" && pathname === "/v1/names/check") {
+    return async (r, env, id) => respond(await nameCheck(env, id, await readObject(r), Date.now()));
+  }
+  if (method === "GET" && pathname === "/v1/me/blocks") return asMe(async (_r, env, _d, me) => json(200, await listBlocks(env, me)));
+  const mine = method === "DELETE" ? MY_BLOCK.exec(pathname) : null;
+  if (mine) return asMe(async (_r, env, id, me) => respond(await unblockPlayer(env, id, me, mine[1] as string, Date.now())));
+  const at = method === "POST" ? ROOM_SAFETY.exec(pathname) : null;
+  if (!at) return null;
+  const code = at[1] as string;
+  if (at[2] === "reports") return async (r, env, id) => respond(await reportPlayer(env, id, code, await readObject(r), Date.now()));
+  return asMe(async (r, env, id, me) => respond(await blockPlayer(env, id, me, code, await readObject(r), Date.now())));
+}
+
 /** The authenticated route for this request, or null for a 404. */
 function route(
   method: string,
@@ -456,6 +474,8 @@ function route(
     );
   }
   if (method === "GET" && pathname === "/v1/devices/me/tables") return (_r, env, id) => listTables(env, id);
+  const safety = safetyRoute(method, pathname);
+  if (safety) return safety;
   if (method === "POST" && pathname === "/v1/rooms") return createRoom;
   const ws = method === "GET" ? ROOM_WS.exec(pathname) : null;
   if (ws) return (r, env, id) => openSocket(r, env, id, ws[1] as string);
@@ -499,9 +519,14 @@ export default {
       const answered = await publicConsent(request, env, method, pathname);
       if (answered) return answered;
     }
+    if (method === "GET" && pathname === "/v1/admin/reports") {
+      // The owner's list of player reports; without `REPORTS_KEY` (or the right one) there is no such page.
+      const found = await ownerReports(env, request);
+      return found === null ? notFound() : found === "bad" ? badRequest() : json(200, found);
+    }
     const secret = env.TOKEN_SECRET;
     if (method === "POST" && pathname === "/v1/devices") {
-      return secret ? mintDevice(request, secret) : notConfigured();
+      return secret ? mintDevice(request, env, secret) : notConfigured();
     }
     const handler = route(method, pathname, streaks, notify, liveOn(env), consent, trophyOn(env));
     if (!handler) return notFound();

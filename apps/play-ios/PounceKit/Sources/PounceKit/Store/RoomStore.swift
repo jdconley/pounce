@@ -21,7 +21,7 @@ import Observation
 ///   until a snapshot lists it in `link.acks` (or an error refuses it). A snapshot that doesn't
 ///   list it keeps the lock; the first snapshot on a newer connection sends it again, same id,
 ///   which the server applies once. Without links, any snapshot releases the lock as before.
-/// - `closed`, `notFound` and `needsUpdate` are terminal: later messages are ignored.
+/// - `closed`, `notFound`, `locked` and `needsUpdate` are terminal: later messages are ignored.
 ///   `stalled` survives snapshots too (the bot clock stays stopped), but the room
 ///   keeps updating.
 /// - Nudges: `nudge(seat:)` sends one when `nudgeButton(for:)` is `.ready`. Its `nudgeSent` marks
@@ -289,6 +289,9 @@ import Observation
         case .notFound:
             connected = false
             if !isTerminal { phase = .notFound }
+        case .locked:
+            connected = false
+            if !isTerminal { phase = .locked }
         case .closed:
             connected = false
             if !isTerminal { phase = .closed }
@@ -300,7 +303,7 @@ import Observation
 
     private var isTerminal: Bool {
         switch phase {
-        case .closed, .notFound, .needsUpdate: true
+        case .closed, .notFound, .locked, .needsUpdate: true
         default: false
         }
     }

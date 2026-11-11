@@ -5,6 +5,8 @@ import type { Identities } from "./players/identities";
 import type { Player } from "./players/player";
 import type { DeviceIndex } from "./room/device-index";
 import type { GameRoom } from "./room/game-room";
+import type { Limiter } from "./safety/limiter";
+import type { Reports } from "./safety/reports";
 import type { Pair } from "./streaks/pair";
 
 export interface Env {
@@ -21,6 +23,15 @@ export interface Env {
   CONSENTS: DurableObjectNamespace<Consents>;
   /** One instance, named `KITTENS_NAME`: link codes, kitten ids, parents, text tokens, phone hashes, app transactions. */
   KITTENS: DurableObjectNamespace<KittenIndex>;
+  /** One instance per limited key (an address, a device): counters that hold across isolates. */
+  LIMITS: DurableObjectNamespace<Limiter>;
+  /** One instance, named `REPORTS_NAME`: every player report. */
+  REPORTS: DurableObjectNamespace<Reports>;
+  /**
+   * The owner's key for `GET /v1/admin/reports`. A secret, optional: without it that route is a
+   * 404 and reports are read in the Cloudflare dashboard instead.
+   */
+  REPORTS_KEY?: string;
   /**
    * Streaks, table looks and Play again (daily habit PR 3) when "on".
    * wrangler.jsonc turns it on in production (and for `wrangler dev`) since
