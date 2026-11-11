@@ -12,6 +12,7 @@ import type { GameModule } from "../games/module";
 import type {
   ClientMessage,
   ErrorCode,
+  NudgeView,
   Person,
   Presence,
   RoomEvent,
@@ -95,6 +96,10 @@ export type RoomState = {
   livePounce?: Record<string, number>;
   /** The turn the live tables were last told about. */
   liveTurn?: string;
+  /** The current turn (`turnKey`) and when it began, for a nudge's wait. Absent in older rooms. */
+  turnAt?: { turn: string; at: number };
+  /** Each nudging seat's last nudge here (by seat index): its turn and when. Absent: none yet. */
+  nudges?: Record<string, { turn: string; at: number }>;
 };
 
 export type Look = { rug: string; back: string };
@@ -103,7 +108,7 @@ export type Look = { rug: string; back: string };
  * Which optional behaviour a room has. Streaks (and looks and Play again) stay off until `STREAKS` is set.
  * `link`: heartbeats, move acks and each seat's connection quality (`LINK`).
  */
-export type RoomFeatures = { streaks: boolean; live?: boolean; link?: boolean };
+export type RoomFeatures = { streaks: boolean; live?: boolean; link?: boolean; nudge?: boolean };
 
 /** Why a live table ended: the round or game is over, its device came back, or a limit passed (§11.3). */
 export type LiveEnd = "over" | "back" | "idle" | "cap" | "replaced";
@@ -169,6 +174,22 @@ export type YourTurnIntent = {
   from?: { name: string; cat: number };
 };
 
+/**
+ * A nudge to push (the person in `seat` isn't at the table): to the seat's player's devices, under
+ * their own rules (quiet hours, a teen's night, a kitten's consent for `fromPlayer`).
+ */
+export type NudgeIntent = {
+  /** The seat's player; a seat with none gets the nudge in the app only. */
+  playerId: string;
+  seat: Seat;
+  personName: string;
+  tableName: string;
+  code: string;
+  from: { name: string; cat: number };
+  /** The nudger's player, for a kitten's consent (null: a seat with none, which no consent approves). */
+  fromPlayer: string | null;
+};
+
 /** A background push telling a player's other devices to clear a table's notifications (§12.5). */
 export type DismissIntent = { kind: "dismiss"; playerId: string; exceptDeviceId: string; code: string };
 
@@ -197,6 +218,10 @@ const LOOK_EVERY_MS = 10_000;
 const NO_UNLOCKS: Unlocks = { backs: [], rugs: [] };
 /** Move ids remembered per device: far more than one app ever has in flight. */
 const ACKS_KEPT = 16;
+/** A turn has to be this old before anyone may nudge it (divided by the dev speed). */
+export const NUDGE_AFTER_MS = 2 * MS_PER_MINUTE;
+/** Between two nudges from the same seat at a table, on any turns (divided by the dev speed). */
+export const NUDGE_EVERY_MS = 10 * MS_PER_MINUTE;
 
 /**
  * The room state machine. Pure: it mutates `state` and returns the messages
@@ -215,6 +240,7 @@ export class RoomCore {
   private streakIntents: StreakIntent[] = [];
   private rematchIntent: RematchIntent | null = null;
   private liveIntents: LiveIntent[] = [];
+  private nudgeIntents: NudgeIntent[] = [];
   /** The player whose action is being applied ended their turn. */
   private turnBy: string | null = null;
   /** The person whose action is being applied ended their turn: "your move" names them. */
@@ -452,6 +478,13 @@ export class RoomCore {
   drainPushIntents(): PushIntent[] {
     const drained = this.pushIntents;
     this.pushIntents = [];
+    return drained;
+  }
+
+  /** Hands over and forgets the nudge pushes queued since the last call. */
+  drainNudgeIntents(): NudgeIntent[] {
+    const drained = this.nudgeIntents;
+    this.nudgeIntents = [];
     return drained;
   }
 
@@ -703,6 +736,7 @@ export class RoomCore {
         ...(this.features.streaks ? { look: this.look() } : {}),
         ...(state.rematch?.code ? { rematch: state.rematch.code } : {}),
         ...(this.features.link ? { link: { ping: LINK_PING_MS, acks: [...(state.devices[deviceId]?.acks ?? [])] } } : {}),
+        ...this.nudgeField(deviceId),
       },
     };
   }
@@ -789,6 +823,8 @@ export class RoomCore {
         return this.rename(deviceId, msg.name);
       case "renameSeat":
         return this.renameSeat(deviceId, msg.seat, msg.name);
+      case "nudge":
+        return this.features.nudge ? this.nudge(deviceId, msg.seat) : [this.fail(deviceId, "bad_message")];
       default:
         return [this.fail(deviceId, "bad_message")];
     }
@@ -805,6 +841,91 @@ export class RoomCore {
     }
     this.state.seats[seat] = { kind: "human", person, deviceId, ...(playerId ? { playerId } : {}) };
     return this.changed();
+  }
+
+  // MARK: nudges
+
+  /** The seat a device nudges as: its first seat still in the game (null: none). */
+  private nudger(deviceId: string): Seat | null {
+    const forfeited = this.state.gameState?.forfeited;
+    return this.controlledSeats(deviceId).find((seat) => forfeited?.[seat] !== true) ?? null;
+  }
+
+  /** When the current turn began; an older room's (no record) counts from its last activity. */
+  private turnStartedAt(): number {
+    const { turnAt } = this.state;
+    return turnAt && turnAt.turn === this.turnKey() ? turnAt.at : this.state.lastActivity;
+  }
+
+  /** Whether `from` may nudge this turn now: already did, or how long until it may (0: now). */
+  private nudgeState(from: Seat, now: number): { sent: boolean; wait: number } {
+    const last = this.state.nudges?.[String(from)];
+    if (last?.turn === this.turnKey()) return { sent: true, wait: 0 };
+    const ready = Math.max(
+      this.turnStartedAt() + NUDGE_AFTER_MS / this.speed,
+      last ? last.at + NUDGE_EVERY_MS / this.speed : -Infinity,
+    );
+    return { sent: false, wait: Math.max(0, Math.ceil(ready - now)) };
+  }
+
+  /**
+   * The seat this device could nudge now: mid-round, the move with a person on another phone
+   * (never a bot, never one of this device's seats), and this device still in the game.
+   */
+  private nudgeTarget(deviceId: string): { seat: Seat; from: Seat } | null {
+    const { state } = this;
+    const game = state.gameState;
+    if (state.status !== "playing" || game?.status !== "playing") return null;
+    const seat = this.game.currentActor(game);
+    if (seat === null || state.seats[seat]?.kind !== "human" || this.controls(deviceId, seat)) return null;
+    const from = this.nudger(deviceId);
+    return from === null ? null : { seat, from };
+  }
+
+  /** A snapshot's `nudge` for this device (`NUDGE` on): absent when there's nobody to nudge. */
+  private nudgeField(deviceId: string): { nudge?: NudgeView } {
+    if (!this.features.nudge) return {};
+    const target = this.nudgeTarget(deviceId);
+    if (!target) return {};
+    return { nudge: { seat: target.seat, ...this.nudgeState(target.from, this.now()) } };
+  }
+
+  /**
+   * Nudges the person whose move it is (`NUDGE`): once per turn per nudging seat, not before the
+   * turn is `NUDGE_AFTER_MS` old, and `NUDGE_EVERY_MS` after that seat's last nudge here. Their
+   * devices at the table get `nudged` (the app shows it); anyone not at the table gets a push.
+   */
+  private nudge(deviceId: string, seat: Seat): Outbound[] {
+    const { state } = this;
+    if (state.status !== "playing" || state.gameState?.status !== "playing") return [this.fail(deviceId, "not_playing")];
+    const target = state.seats[seat];
+    if (!target || target.kind !== "human" || this.controls(deviceId, seat)) return [this.fail(deviceId, "bad_seat")];
+    const from = this.nudger(deviceId);
+    if (from === null) return [this.fail(deviceId, "not_seated")];
+    if (this.game.currentActor(state.gameState) !== seat) return [this.fail(deviceId, "not_their_turn")];
+    const now = this.now();
+    const ready = this.nudgeState(from, now);
+    if (ready.sent || ready.wait > 0) return [this.fail(deviceId, "too_soon")];
+    state.nudges = { ...state.nudges, [String(from)]: { turn: this.turnKey(), at: now } };
+    const out: Outbound[] = [{ to: deviceId, message: { t: "nudgeSent", seat } }];
+    for (const [id, device] of Object.entries(state.devices)) {
+      if (device.connected && this.controls(id, seat)) out.push({ to: id, message: { t: "nudged", seat, from } });
+    }
+    const sender = state.seats[from] as SeatInfo;
+    // Someone at the table sees it there; a push would only say it twice.
+    if (this.seatPresence(seat) !== "awake" && target.playerId) {
+      const person = sender.person as Person;
+      this.nudgeIntents.push({
+        playerId: target.playerId,
+        seat,
+        personName: (target.person as Person).name,
+        tableName: state.name,
+        code: state.code,
+        from: { name: person.name, cat: person.cat },
+        fromPlayer: sender.playerId ?? null,
+      });
+    }
+    return out;
   }
 
   /** The host, or any phone holding a seat, names the table until the game is over. */
@@ -1120,6 +1241,8 @@ export class RoomCore {
     }
 
     timers.nextRoundAt = null;
+    const turn = this.turnKey();
+    if (state.turnAt?.turn !== turn) state.turnAt = { turn, at: now };
     const actor = this.game.currentActor(game) as Seat;
     const seat = state.seats[actor] as SeatInfo;
     if (seat.kind === "bot") {

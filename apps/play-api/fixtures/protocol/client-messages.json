@@ -265,5 +265,12 @@
         "type": "forfeit"
       }
     }
+  },
+  {
+    "name": "nudge",
+    "message": {
+      "t": "nudge",
+      "seat": 1
+    }
   }
 ]

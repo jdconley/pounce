@@ -12,6 +12,8 @@ public enum PushKind: String, Sendable {
     case playAgain = "play_again"
     case pounce
     case pounceAnswered = "pounce_answered"
+    /// Someone at the table asks for your move (YOUR_MOVE: Play, In an hour).
+    case nudge
     case dismiss
     /// Parent consent's confirmation on the parent's own device (consent design D6).
     case consent

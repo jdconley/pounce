@@ -53,6 +53,9 @@ public struct ErrorCode: RawRepresentable, Codable, Hashable, Sendable {
     public static let tooSoon = ErrorCode(rawValue: "too_soon")
     /// A rug or back the setter hasn't unlocked.
     public static let notUnlocked = ErrorCode(rawValue: "not_unlocked")
+    // Nudges (`tooSoon` too: the wait or the cooldown isn't over, or this turn's is sent).
+    /// A nudge to a seat that doesn't hold the move.
+    public static let notTheirTurn = ErrorCode(rawValue: "not_their_turn")
     // Sent to the whole room, unprompted.
     public static let botStalled = ErrorCode(rawValue: "bot_stalled")
     public static let roomClosed = ErrorCode(rawValue: "room_closed")
@@ -78,8 +81,12 @@ public enum ServerMessage: Decodable, Equatable, Sendable {
     case pong
     /// Every seat's link (nil: fine) whenever one changes. Not a state change: no seq.
     case link(seats: [SeatLink?])
+    /// To this phone: its nudge to `seat` went. Not a state change: no seq.
+    case nudgeSent(seat: Seat)
+    /// To the phones of the person in `seat`: the person in `from` nudged them. No seq.
+    case nudged(seat: Seat, from: Seat)
 
-    private enum CodingKeys: String, CodingKey { case t, `protocol`, seq, room, event, seat, code, pair, person, view, seats }
+    private enum CodingKeys: String, CodingKey { case t, `protocol`, seq, room, event, seat, code, pair, person, view, seats, from }
 
     public init(from decoder: any Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
@@ -112,6 +119,10 @@ public enum ServerMessage: Decodable, Equatable, Sendable {
             self = .pong
         case "link":
             self = .link(seats: try c.decode([SeatLink?].self, forKey: .seats))
+        case "nudgeSent":
+            self = .nudgeSent(seat: try c.decode(Seat.self, forKey: .seat))
+        case "nudged":
+            self = .nudged(seat: try c.decode(Seat.self, forKey: .seat), from: try c.decode(Seat.self, forKey: .from))
         default:
             throw DecodingError.dataCorruptedError(
                 forKey: .t, in: c, debugDescription: "unknown server message type: \(t)")
@@ -189,6 +200,9 @@ public enum ClientMessage: Encodable, Equatable, Sendable {
     case ping
     /// This phone's link turned weak or good again; only to a server with links.
     case link(LinkReport)
+    /// Asks the person in `seat`, whose move it is, to take it; only to a server whose snapshots
+    /// carry `nudge` for that seat.
+    case nudge(seat: Seat)
 
     private enum CodingKeys: String, CodingKey { case t, seat, person, kind, action, state, code, name, rug, back, id }
 
@@ -240,6 +254,9 @@ public enum ClientMessage: Encodable, Equatable, Sendable {
         case .link(let report):
             try c.encode("link", forKey: .t)
             try c.encode(report, forKey: .state)
+        case .nudge(let seat):
+            try c.encode("nudge", forKey: .t)
+            try c.encode(seat, forKey: .seat)
         }
     }
 }

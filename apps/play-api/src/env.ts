@@ -51,6 +51,12 @@ export interface Env {
   /** The bad connection indicator's server half (`linkOn`). */
   LINK?: string;
   /**
+   * Nudges (`nudgeOn`): a player asks the one whose move it is to take it, in the app and,
+   * with `NOTIFY` on too, by push. wrangler.jsonc turns it on; off, `nudge` is refused and
+   * snapshots carry no `nudge`, as before.
+   */
+  NUDGE?: string;
+  /**
    * Twilio Verify, for parent consent (consent design D1, D6). Secrets, optional: all four or
    * nothing is sent, so consent can't start. Verify texts a six-digit code from Twilio's own
    * pre-registered senders, so Pounce needs no phone number of its own and no 10DLC.
@@ -104,4 +110,9 @@ export function devSpeed(env: Pick<Env, "DEV_SPEED">): number {
  */
 export function linkOn(env: Pick<Env, "LINK">): boolean {
   return ["on", "1", "true"].includes((env.LINK ?? "").toLowerCase());
+}
+
+/** Nudges when "on" (see `Env.NUDGE`). The push half also needs `NOTIFY` (`notifyOn`). */
+export function nudgeOn(env: Pick<Env, "NUDGE">): boolean {
+  return ["on", "1", "true"].includes((env.NUDGE ?? "").toLowerCase());
 }

@@ -135,6 +135,10 @@ export async function worker(
     twilio?: boolean;
     /** Device tokens the fake APNs fails with a 500 (no device accepted the push). */
     apnsDown?: Set<string>;
+    /** `NUDGE` (a player asks the one with the move to take it). */
+    nudge?: boolean;
+    /** `DEV_SPEED`: divides the bots' think time, the next round's gap and a nudge's waits. */
+    devSpeed?: number;
   },
 ): Promise<Miniflare> {
   return new Miniflare({
@@ -165,6 +169,8 @@ export async function worker(
       ...(options.notify === false ? {} : { NOTIFY: "on" }),
       ...(options.live ? { LIVE: "on" } : {}),
       ...(options.trophy ? { TROPHY: "on" } : {}),
+      ...(options.nudge ? { NUDGE: "on" } : {}),
+      ...(options.devSpeed ? { DEV_SPEED: String(options.devSpeed) } : {}),
       ...(options.consent && options.consentFlag !== false ? { CONSENT: "on" } : {}),
       ...(options.consent && options.twilio !== false ? TWILIO : {}),
     },

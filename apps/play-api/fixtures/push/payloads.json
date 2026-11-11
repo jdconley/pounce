@@ -558,6 +558,32 @@
     }
   },
   {
+    "name": "nudge",
+    "collapseId": "GH2VD",
+    "priority": 10,
+    "body": {
+      "aps": {
+        "alert": {
+          "title": "JD",
+          "body": "Mia nudged you. Your move at Couch Cats."
+        },
+        "sound": "default",
+        "thread-id": "GH2VD",
+        "mutable-content": 1,
+        "category": "YOUR_MOVE",
+        "interruption-level": "active",
+        "relevance-score": 1,
+        "badge": 2
+      },
+      "code": "GH2VD",
+      "kind": "nudge",
+      "from": {
+        "name": "Mia",
+        "cat": 2
+      }
+    }
+  },
+  {
     "name": "consent",
     "collapseId": "consent:k_demoMochiAAAAAAAAAAAAAA",
     "priority": 10,

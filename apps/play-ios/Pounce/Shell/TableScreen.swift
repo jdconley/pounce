@@ -224,6 +224,7 @@ private struct TableStage: View {
     @State private var lookPill: RoomStore.LookChange?
     /// "Mia forfeited" floating down (§5.13).
     @State private var forfeitPill: RoomStore.ForfeitNotice?
+    @State private var nudgePill: RoomStore.NudgeNotice?
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.scenePhase) private var scenePhase
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
@@ -312,6 +313,17 @@ private struct TableStage: View {
                 .allowsHitTesting(false)
                 .zIndex(TableLayer.lookPill)
             }
+            if let pill = nudgePill, let table, let from = table.room.seats[safe: pill.from] {
+                VStack {
+                    // Under the top bar's cats and name tags, like the forfeit pill.
+                    NudgePill(name: SeatInfo.name(table.room, pill.from), cat: SeatInfo.catIndex(from))
+                        .padding(.top, horizontalSizeClass == .regular ? 236 : 136)
+                    Spacer()
+                }
+                .transition(.move(edge: .top).combined(with: .opacity))
+                .allowsHitTesting(false)
+                .zIndex(TableLayer.lookPill)
+            }
             if let pill = forfeitPill, let table, !table.mySeats.contains(pill.seat) || table.isMultiSeat {
                 VStack {
                     // Under the top bar's name tags and the "Forfeited" tag it brings.
@@ -366,7 +378,11 @@ private struct TableStage: View {
             if let tap = events.player, events.winners == nil, curtainSeat == nil,
                let card = PlayerCard.make(model: tap.model, seat: tap.seat, streaks: streakCandidates, reported: session.streakPairs) {
                 // The table as the scene drew it when the cat was tapped, like the scoreboard.
-                PlayerCardOverlay(card: card, model: tap.model) { events.player = nil }
+                PlayerCardOverlay(
+                    card: card, model: tap.model,
+                    nudge: { [store = session.store] in store.nudgeButton(for: tap.seat) },
+                    onNudge: { [store = session.store] in store.nudge(seat: tap.seat) }
+                ) { events.player = nil }
                     .transition(.opacity)
                     .zIndex(TableLayer.scoreboard)
             }
@@ -460,6 +476,19 @@ private struct TableStage: View {
             Task {
                 try? await Task.sleep(for: Pace.duration(.seconds(3)))
                 if forfeitPill == notice { withAnimation(.easeIn(duration: 0.3).paced) { forfeitPill = nil } }
+            }
+        }
+        .onChange(of: session.store.nudgeNotice) { _, notice in
+            // Someone nudged this phone's move: their cat taps at the top, a knock, and the "Your
+            // turn" cue plays again a beat later (it brings its own sound).
+            guard let notice else { return }
+            Haptics.shared.turn()
+            withAnimation(.spring(duration: 0.45, bounce: 0.45).paced) { nudgePill = notice }
+            Task {
+                try? await Task.sleep(for: Pace.duration(.milliseconds(600)))
+                scene?.replayTurnCue()
+                try? await Task.sleep(for: Pace.duration(.milliseconds(2400)))
+                if nudgePill == notice { withAnimation(.easeIn(duration: 0.3).paced) { nudgePill = nil } }
             }
         }
         .onChange(of: session.store.rematch) { _, code in

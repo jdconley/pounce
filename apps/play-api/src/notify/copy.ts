@@ -19,6 +19,9 @@ export function yourMoveBody(from: string | null, table: string, completesToday:
   return from === null ? tail : `${from} played. ${tail}`;
 }
 
+/** A nudge: who asked, and the table. Gentle: no hurry, no count of how long it's been. */
+export const nudgeBody = (from: string, table: string): string => `${from} nudged you. Your move at ${table}.`;
+
 export function pounceBody(from: string, target: PounceTarget): string {
   if (target === "new") return `${from} wants to play. New game?`;
   if (target === "pick") return `${from} wants to play. You pick.`;

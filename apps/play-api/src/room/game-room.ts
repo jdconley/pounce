@@ -1,12 +1,12 @@
 import { DurableObject } from "cloudflare:workers";
 
-import { devSpeed, linkOn } from "../env";
+import { devSpeed, linkOn, nudgeOn } from "../env";
 import { catTower } from "../games/cat-tower";
 import { endBody, startAlert, startBody, updateBody, type LiveState } from "../live/live";
 import { yourMoveBody } from "../notify/copy";
 import { deliverToPlayer } from "../notify/deliver";
 import { gate } from "../notify/policy";
-import { playAgainPush, yourMoveContext, yourMovePush } from "../notify/pushes";
+import { nudgePush, playAgainPush, yourMoveContext, yourMovePush } from "../notify/pushes";
 import { player as playerRpc } from "../players/accounts";
 import { PERSON_ID, PLAYER_ID } from "../players/ids";
 import { parseClientMessage } from "../protocol";
@@ -20,6 +20,7 @@ import {
   type AdoptRule,
   type LiveIntent,
   type Look,
+  type NudgeIntent,
   type Outbound,
   type PushIntent,
   type RematchIntent,
@@ -84,7 +85,7 @@ export class GameRoom extends DurableObject<Env> {
   }
 
   private features(): RoomFeatures {
-    return { streaks: streaksOn(this.env), live: liveOn(this.env), link: linkOn(this.env) };
+    return { streaks: streaksOn(this.env), live: liveOn(this.env), link: linkOn(this.env), nudge: nudgeOn(this.env) };
   }
 
   private createSchema(): void {
@@ -367,6 +368,29 @@ export class GameRoom extends DurableObject<Env> {
   }
 
   /**
+   * A nudge to someone away from the table, under their own rules like "your move": nothing in a
+   * teen's night, silent in quiet hours. A kitten's device takes it only from a sender their
+   * parent approved (consent design, plan decision 16); otherwise they see it only in the app.
+   */
+  private async pushNudge(intent: NudgeIntent): Promise<void> {
+    const profile = await playerRpc(this.env, intent.playerId).pushProfile();
+    if (!profile) return;
+    const now = Date.now();
+    const g = gate({
+      kind: "nudge",
+      band: profile.band,
+      zone: profile.zone ?? FALLBACK_ZONE,
+      settings: profile.settings,
+      now,
+      spacedAt: null,
+      remindersToday: 0,
+    });
+    if (!g.send) return;
+    const push = nudgePush({ code: intent.code, table: intent.tableName, to: intent.personName, from: intent.from });
+    await deliverToPlayer(this.env, profile, push, g.level, intent.code, [intent.fromPlayer]);
+  }
+
+  /**
    * The live table's pushes (§11.3), in order: the pair's paws from this
    * table's latest views, the player's toggle for a start, the copy for an
    * update that rings. A start that went nowhere is dropped so nothing
@@ -539,6 +563,10 @@ export class GameRoom extends DurableObject<Env> {
       } else {
         this.ctx.waitUntil(this.push(intent).catch(() => undefined));
       }
+    }
+    // Behind the turn's own pushes, so a nudge lands after the "your move" it stands in for.
+    for (const intent of core.drainNudgeIntents()) {
+      if (notifyOn(this.env)) this.chain(() => this.pushNudge(intent));
     }
     const rematch = core.drainRematch();
     if (rematch) this.ctx.waitUntil(this.dealRematch(rematch));

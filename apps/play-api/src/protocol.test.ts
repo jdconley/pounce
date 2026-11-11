@@ -44,8 +44,9 @@ describe("ErrorCode", () => {
       not_over: true,
       too_soon: true,
       not_unlocked: true,
+      not_their_turn: true,
     };
-    expect(Object.keys(codes)).toHaveLength(31);
+    expect(Object.keys(codes)).toHaveLength(32);
   });
 });
 
@@ -191,6 +192,17 @@ describe("parseClientMessage", () => {
         expect(parse({ t: "claimMove", code })).toEqual(BAD);
       }
       expect(parse({ t: "claimMove" })).toEqual(BAD);
+    });
+  });
+
+  describe("nudge", () => {
+    it("takes a seat and nothing else", () => {
+      expect(parse({ t: "nudge", seat: 2 })).toEqual({ t: "nudge", seat: 2 });
+      expect(parse({ t: "nudge" })).toEqual(BAD);
+      expect(parse({ t: "nudge", seat: -1 })).toEqual(BAD);
+      expect(parse({ t: "nudge", seat: 1.5 })).toEqual(BAD);
+      expect(parse({ t: "nudge", seat: "1" })).toEqual(BAD);
+      expect(parse({ t: "nudge", seat: 1, from: 0 })).toEqual(BAD);
     });
   });
 

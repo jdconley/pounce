@@ -98,7 +98,28 @@ function forfeitedSnapshot(): Snapshot {
   return room.snapshotFor("devA");
 }
 
+/** A room with `NUDGE` on, two minutes into bob's (devB) turn: alice's (devA) snapshot, before and after she nudged him. */
+function nudgeSnapshots(): { ready: Snapshot; sent: Snapshot } {
+  let now = 1_000;
+  const room = new RoomCore(RoomCore.create("BCDFG", "devA", now), () => now, createRng([1, 2, 3, 4]), undefined, 1, {
+    streaks: false,
+    nudge: true,
+  });
+  room.connect("devA");
+  room.connect("devB");
+  room.handle("devA", { t: "claim", seat: 0, person: alice });
+  room.handle("devB", { t: "claim", seat: 1, person: bob });
+  room.handle("devA", { t: "start" });
+  // Seat 1 plays first.
+  now += 90_000;
+  const ready = room.snapshotFor("devA");
+  now += 30_000;
+  room.handle("devA", { t: "nudge", seat: 1 });
+  return { ready, sent: room.snapshotFor("devA") };
+}
+
 function serverSamples(): Sample<ServerMessage>[] {
+  const nudge = nudgeSnapshots();
   const { lobby, withHand, noHand } = snapshots();
   return [
     { name: "snapshot-lobby", message: lobby },
@@ -232,6 +253,11 @@ function serverSamples(): Sample<ServerMessage>[] {
     { name: "event-forfeited", message: { t: "event", seq: 17, event: { kind: "game", event: { kind: "forfeited", seat: 1 } } } },
     { name: "snapshot-playing-forfeited", message: forfeitedSnapshot() },
     { name: "error-forfeited", message: { t: "error", code: "forfeited" } },
+    { name: "snapshot-playing-nudge-wait", message: nudge.ready },
+    { name: "snapshot-playing-nudge-sent", message: nudge.sent },
+    { name: "nudgeSent", message: { t: "nudgeSent", seat: 1 } },
+    { name: "nudged", message: { t: "nudged", seat: 1, from: 0 } },
+    { name: "error-not_their_turn", message: { t: "error", code: "not_their_turn" } },
   ] satisfies Sample<ServerMessage>[];
 }
 
@@ -289,6 +315,7 @@ function clientSamples(): Sample<ClientMessage>[] {
     { name: "link-weak", message: { t: "link", state: "weak" } },
     { name: "link-good", message: { t: "link", state: "good" } },
     { name: "act-forfeit", message: { t: "act", seat: 1, action: { type: "forfeit" } } },
+    { name: "nudge", message: { t: "nudge", seat: 1 } },
   ] satisfies Sample<ClientMessage>[];
 }
 

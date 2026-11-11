@@ -17,18 +17,20 @@ export type NotifyKind =
   | "paused"
   | "milestone"
   | "play_again"
+  /** Someone at the table asks the person whose move it is to take it. */
+  | "nudge"
   /** Parent consent's confirmation, on the consenting parent's own devices (consent design D6). */
   | "consent";
 
 export type Level = "active" | "passive";
 
-/** At most one push every 20 minutes, except your move and pounces (§12.1). */
+/** At most one push every 20 minutes, except your move, pounces and nudges (§12.1). */
 export const SPACING_MS = 20 * 60_000;
 /** Reminder-type pushes a day (§12.1). */
 export const MAX_REMINDERS = 2;
 
 const REMINDERS: readonly NotifyKind[] = ["reminder", "last_chance", "fresh_start", "going_quiet"];
-const UNSPACED: readonly NotifyKind[] = ["your_move", "pounce", "pounce_answered"];
+const UNSPACED: readonly NotifyKind[] = ["your_move", "pounce", "pounce_answered", "nudge"];
 const STATUS: readonly NotifyKind[] = ["nap", "winback", "paused", "pounce_answered"];
 /** A teen's device gets nothing in these local hours (§14.1). */
 const TEEN_NIGHT_END_MIN = 6 * 60;

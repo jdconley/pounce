@@ -2,7 +2,7 @@ import { describe, expect, test } from "vitest";
 
 import { newPair, view as viewOf, type StreakView } from "../streaks/pair-core";
 
-import { answeredPush, playAgainPush, pouncePush, statusPush, streakBlock, yourMoveContext, yourMovePush } from "./pushes";
+import { answeredPush, nudgePush, playAgainPush, pouncePush, statusPush, streakBlock, yourMoveContext, yourMovePush } from "./pushes";
 
 const A = "p_aaaaaaaaaaaaaaaaaaaaaa";
 const personA = { id: A, name: "JD", cat: 1, zone: "America/Los_Angeles", quietStart: 1320 };
@@ -83,6 +83,18 @@ describe("push builders", () => {
     expect(m).not.toHaveProperty("streak");
     const p = statusPush({ kind: "paused", pair: "pr_1", title: "Mia", count: 3, who: { name: "Mia", cat: 2 }, streak: null });
     expect(p).toMatchObject({ body: "Mia put the cats to bed for 3 days.", from: { name: "Mia", cat: 2 } });
+  });
+
+  test("a nudge is for the person on the move, in the table's thread, in place of its your move", () => {
+    expect(nudgePush({ code: "NWCDF", table: "Couch Cats", to: "JD", from: { name: "Mia", cat: 2 } })).toEqual({
+      kind: "nudge",
+      title: "JD",
+      body: "Mia nudged you. Your move at Couch Cats.",
+      code: "NWCDF",
+      thread: "NWCDF",
+      collapse: "NWCDF",
+      from: { name: "Mia", cat: 2 },
+    });
   });
 
   test("play again opens the new table", () => {

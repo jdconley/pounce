@@ -95,8 +95,8 @@ public struct CommunicationPlan: Equatable, Sendable {
         self.conversation = conversation
     }
 
-    /// Pushes a person sent: your move, a pounce, Play again and a pounce's answer.
-    static let kinds: Set<PushKind> = [.yourMove, .pounce, .playAgain, .pounceAnswered]
+    /// Pushes a person sent: your move, a pounce, Play again, a pounce's answer and a nudge.
+    static let kinds: Set<PushKind> = [.yourMove, .pounce, .playAgain, .pounceAnswered, .nudge]
     static let catCount = 8
 
     public static func make(_ payload: PushPayload) -> CommunicationPlan? {

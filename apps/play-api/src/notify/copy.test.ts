@@ -9,6 +9,7 @@ import {
   LAST_CHANCE_LINES,
   milestoneBody,
   napBody,
+  nudgeBody,
   pausedBody,
   pickLine,
   playAgainBody,
@@ -46,6 +47,7 @@ describe("the §12.2 copy", () => {
     expect(pausedBody("Mia", 1)).toBe("Mia put the cats to bed for 1 day.");
     expect(milestoneBody(30)).toBe("30 days together. There's a gift on the rug.");
     expect(playAgainBody("Mia")).toBe("Mia dealt a new game.");
+    expect(nudgeBody("Mia", "Couch Cats")).toBe("Mia nudged you. Your move at Couch Cats.");
     expect(freshStartBody("Mia", false)).toBe("New week, new deal. One turn starts a streak with Mia.");
     expect(freshStartBody("Mia", true)).toBe("New month, new deal. One turn starts a streak with Mia.");
     expect(GOING_QUIET).toBe("The cats will keep your seat warm.");
@@ -80,6 +82,7 @@ describe("the §12.2 copy", () => {
       pausedBody("Mia", 3),
       milestoneBody(3),
       playAgainBody("Mia"),
+      nudgeBody("Mia", "Couch Cats"),
       freshStartBody("Mia", true),
       GOING_QUIET,
     ];
