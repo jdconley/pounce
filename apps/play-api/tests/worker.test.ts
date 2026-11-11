@@ -335,6 +335,18 @@ describe("worker", { timeout: 20_000 }, () => {
     expect((await mf.dispatchFetch(`${BASE}/privacy/extra`)).status).toBe(404);
   });
 
+  test("the home and support pages are public and the home page hides the install link until configured", async () => {
+    const mf = worker({ secret: null });
+    const support = await mf.dispatchFetch(`${BASE}/support`);
+    expect(support.status).toBe(200);
+    expect(await support.text()).toContain("House Cat");
+    const home = await mf.dispatchFetch(`${BASE}/`);
+    expect(home.status).toBe(200);
+    expect(await home.text()).not.toContain("Get the app");
+    expect((await mf.dispatchFetch(`${BASE}/`, { method: "POST" })).status).toBe(404);
+    expect((await mf.dispatchFetch(`${BASE}/support/extra`)).status).toBe(404);
+  });
+
   test("the share image is served as a jpeg without a token", async () => {
     const res = await worker({ secret: null }).dispatchFetch(`${BASE}/og/room.jpg`);
     expect(res.status).toBe(200);
@@ -443,7 +455,7 @@ describe("worker", { timeout: 20_000 }, () => {
     expect(stored.status).toBe(204);
 
     for (const [method, path] of [
-      ["GET", "/"],
+      ["POST", "/"],
       ["GET", "/v1/rooms"],
       ["DELETE", "/v1/devices/me/push"],
     ] as const) {
