@@ -15,10 +15,12 @@ public struct HomeTableItem: Equatable, Sendable, Identifiable {
     public var turnCat: Int?
     /// Epoch milliseconds, as the server reports it.
     public var updatedAt: Double
+    /// Whole days the move has waited, once a game in play has waited at least one; nil otherwise.
+    public var idleDays: Int?
 
     public init(
         id: String, name: String? = nil, yourTurn: Bool, status: String, seats: [CachedSeat], turnCat: Int?,
-        updatedAt: Double
+        updatedAt: Double, idleDays: Int? = nil
     ) {
         self.id = id
         self.name = name
@@ -27,6 +29,7 @@ public struct HomeTableItem: Equatable, Sendable, Identifiable {
         self.seats = seats
         self.turnCat = turnCat
         self.updatedAt = updatedAt
+        self.idleDays = idleDays
     }
 
     /// The name to show on the card.
@@ -105,7 +108,14 @@ public enum HomeTables {
             if let turn = cached?.turn, seats.indices.contains(turn) { turnCat = seats[turn].cat }
             return HomeTableItem(
                 id: entry.code, name: entry.name ?? cached?.name, yourTurn: entry.yourTurn && !isOver, status: entry.status,
-                seats: seats, turnCat: turnCat, updatedAt: entry.updatedAt)
+                seats: seats, turnCat: turnCat, updatedAt: entry.updatedAt, idleDays: idleDays(entry, nowMs: nowMs))
         }
+    }
+
+    /// Whole days since the last move of a game in play (`movedAt`), from one day up.
+    static func idleDays(_ entry: TableEntry, nowMs: Double) -> Int? {
+        guard entry.status == RoomStatus.playing.rawValue, let movedAt = entry.movedAt else { return nil }
+        let days = Int(((nowMs - movedAt) / 86_400_000).rounded(.down))
+        return days >= 1 ? days : nil
     }
 }

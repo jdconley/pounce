@@ -203,6 +203,9 @@ public enum ClientMessage: Encodable, Equatable, Sendable {
     /// Asks the person in `seat`, whose move it is, to take it; only to a server whose snapshots
     /// carry `nudge` for that seat.
     case nudge(seat: Seat)
+    /// Forfeits `seat` for its holder, whose move has waited days; only when the snapshot's
+    /// `retire` names that seat with no wait left.
+    case retire(seat: Seat)
 
     private enum CodingKeys: String, CodingKey { case t, seat, person, kind, action, state, code, name, rug, back, id }
 
@@ -256,6 +259,9 @@ public enum ClientMessage: Encodable, Equatable, Sendable {
             try c.encode(report, forKey: .state)
         case .nudge(let seat):
             try c.encode("nudge", forKey: .t)
+            try c.encode(seat, forKey: .seat)
+        case .retire(let seat):
+            try c.encode("retire", forKey: .t)
             try c.encode(seat, forKey: .seat)
         }
     }

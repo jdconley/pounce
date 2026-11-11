@@ -381,7 +381,13 @@ private struct TableStage: View {
                 PlayerCardOverlay(
                     card: card, model: tap.model,
                     nudge: { [store = session.store] in store.nudgeButton(for: tap.seat) },
-                    onNudge: { [store = session.store] in store.nudge(seat: tap.seat) }
+                    onNudge: { [store = session.store] in store.nudge(seat: tap.seat) },
+                    canRetire: { [store = session.store] in store.canRetire(seat: tap.seat) },
+                    onRetire: { [store = session.store] in
+                        // The seat's `forfeited` event brings the pill; the card has nothing more to say.
+                        store.retire(seat: tap.seat)
+                        events.player = nil
+                    }
                 ) { events.player = nil }
                     .transition(.opacity)
                     .zIndex(TableLayer.scoreboard)

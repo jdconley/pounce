@@ -13,10 +13,13 @@ public struct TableEntry: Codable, Equatable, Sendable {
     /// Who sits where, for Home's names; nil from a server (or an entry) older than that, or
     /// when the field can't be read: the list itself never fails over it.
     public let seats: [TableSeat]?
+    /// While a game is mid-round: when the current turn began (epoch ms), so Home can say how
+    /// long the move has waited. Nil otherwise, and from an older server.
+    public let movedAt: Double?
 
     public init(
         code: String, name: String? = nil, status: String, yourTurn: Bool, updatedAt: Double, next: String? = nil,
-        seats: [TableSeat]? = nil
+        seats: [TableSeat]? = nil, movedAt: Double? = nil
     ) {
         self.code = code
         self.name = name
@@ -25,9 +28,10 @@ public struct TableEntry: Codable, Equatable, Sendable {
         self.updatedAt = updatedAt
         self.next = next
         self.seats = seats
+        self.movedAt = movedAt
     }
 
-    private enum CodingKeys: String, CodingKey { case code, name, status, yourTurn, updatedAt, next, seats }
+    private enum CodingKeys: String, CodingKey { case code, name, status, yourTurn, updatedAt, next, seats, movedAt }
 
     public init(from decoder: any Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
@@ -38,6 +42,7 @@ public struct TableEntry: Codable, Equatable, Sendable {
         updatedAt = try c.decode(Double.self, forKey: .updatedAt)
         next = try c.decodeIfPresent(String.self, forKey: .next)
         seats = (try? c.decodeIfPresent([TableSeat].self, forKey: .seats)) ?? nil
+        movedAt = (try? c.decodeIfPresent(Double.self, forKey: .movedAt)) ?? nil
     }
 }
 

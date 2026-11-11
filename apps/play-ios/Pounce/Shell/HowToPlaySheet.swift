@@ -153,6 +153,13 @@ struct HowToPlaySheet: View {
                     String(localized: "The round ends when someone plays or discards their last card.", comment: "Rules: round end"),
                     String(localized: "Cards left in your hand score points: 5 for 1 to 9, 10 for 10 to 12, 15 for a Cucumber, 25 for Yarn. Low is good.", comment: "Rules: scoring"),
                 ]),
+            Section(
+                title: String(localized: "Ending early", comment: "Rules sheet section"), color: Palette.teal,
+                lines: [
+                    String(localized: "Forfeit from the paw menu to leave a game. You finish last and everyone else plays on.", comment: "Rules: forfeit"),
+                    String(localized: "If someone hasn't moved for 3 days, anyone else can retire their seat from their player card. It counts as a forfeit.", comment: "Rules: retiring an absent player"),
+                    String(localized: "The game ends early once the rest of the hand can't change who wins.", comment: "Rules: the early end"),
+                ]),
         ]
     }
 }

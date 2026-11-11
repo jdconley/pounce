@@ -69,6 +69,9 @@ import Observation
     public private(set) var nudgeReadyAt: Date?
     /// The seat of a nudge sent and not answered yet.
     public private(set) var nudgePending: Seat?
+    /// When this phone may retire `room.retire`'s seat: the snapshot's wait from when it arrived.
+    /// Nil when the room has nobody to retire.
+    public private(set) var retireReadyAt: Date?
     /// The last `nudged` for one of this phone's seats: whose, and who nudged. `serial` goes up
     /// with each. Nil until one arrives.
     public private(set) var nudgeNotice: NudgeNotice?
@@ -231,6 +234,26 @@ import Observation
         return true
     }
 
+    // MARK: retiring a stalled seat
+
+    /// True when this phone may retire `seat` now: the server offers it (a person on another
+    /// phone, on the move mid-round) and the move has waited out its days.
+    public func canRetire(seat: Seat) -> Bool {
+        guard let room, room.status == .playing, let game = room.game, game.status == .playing, game.turn == seat,
+              room.seats.indices.contains(seat), room.seats[seat].kind == .human, !room.seats[seat].yours,
+              room.retire?.seat == seat, let ready = retireReadyAt
+        else { return false }
+        return ready <= clock()
+    }
+
+    /// Forfeits `seat` for its holder. Returns false, sending nothing, unless `canRetire(seat:)`.
+    /// The server answers with the seat's `forfeited` event, like a forfeit of their own.
+    @discardableResult public func retire(seat: Seat) -> Bool {
+        guard canRetire(seat: seat) else { return false }
+        send(.retire(seat: seat))
+        return true
+    }
+
     private func applyNudgeSent(seat: Seat) {
         if nudgePending == seat { nudgePending = nil }
         guard room?.nudge?.seat == seat else { return }
@@ -355,6 +378,8 @@ import Observation
         if let code = new.rematch, rematch != code { rematch = code }
         let readyAt = new.nudge.map { clock().addingTimeInterval(Double($0.wait) / 1000) }
         if readyAt != nudgeReadyAt { nudgeReadyAt = readyAt }
+        let retireAt = new.retire.map { clock().addingTimeInterval(Double($0.wait) / 1000) }
+        if retireAt != retireReadyAt { retireReadyAt = retireAt }
         // The move went on (or the nudge's answer is already in): nothing is waiting any more.
         if let pending = nudgePending, new.nudge?.seat != pending || new.nudge?.sent == true { nudgePending = nil }
         lastSeq = seq

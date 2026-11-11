@@ -54,6 +54,7 @@ import Testing
         case "link-good": return .link(.good)
         case "act-forfeit": return .act(seat: 1, action: .forfeit)
         case "nudge": return .nudge(seat: 1)
+        case "retire": return .retire(seat: 1)
         default: throw Fixtures.FixtureError.malformed("no sample for client fixture \(name)")
         }
     }
@@ -84,7 +85,7 @@ import Testing
 
     @Test func encodesEveryClientFixture() throws {
         let fixtures = try Fixtures.clientMessages()
-        #expect(fixtures.count == 27)
+        #expect(fixtures.count == 28)
         for (name, json) in fixtures {
             #expect(try jsonEqual(Codec.encode(sample(name)), json), "\(name)")
         }
