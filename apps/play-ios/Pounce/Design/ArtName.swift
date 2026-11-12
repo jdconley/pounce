@@ -233,6 +233,26 @@ enum ArtName {
         static let iconRecordWeeks = "icon-record-weeks"
     }
 
+    // MARK: The tile game (tile game spec §3)
+    enum Tiles {
+        /// The four toys as glossy white glyphs (44x44 pt), drawn on a piece in its toy's colour.
+        static func glyph(_ suit: TileSuit) -> String {
+            switch suit {
+            case .fish: "tile-fish"
+            case .mouse: "tile-mouse"
+            case .feather: "tile-feather"
+            case .bell: "tile-bell"
+            }
+        }
+
+        /// The toy box (96x96 pt): open in the rug's corner, closed on a seat that hasn't opened.
+        static let toyBox = "toy-box"
+        static let toyBoxClosed = "toy-box-closed"
+        /// The tile game's rug (132x176 pt, stretched from its middle): a calm violet field for
+        /// the sets inside a braided candy border.
+        static let rug = "rug-play"
+    }
+
     // MARK: Sounds (Resources/Sounds/<name>.caf, 44.1 kHz mono)
     enum Sound {
         static let sfxPop = "sfx-pop"
