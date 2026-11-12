@@ -36,8 +36,8 @@ struct PounceSheetView: View {
             Palette.night.opacity(0.9).ignoresSafeArea().onTapGesture(perform: onClose)
             VStack(spacing: 18 * scale) {
                 header
-                WordLabel(title: view == nil ? "Ask someone to play" : "Ask to play",
-                          detail: "Pick a game, then tap Pounce.", alignment: .center)
+                WordLabel(title: LocalizedStringResource("Ask to play", comment: "Pounce sheet: the title over the game tiles"),
+                          alignment: .center)
                     .padding(.horizontal, 20)
                 ScrollView(.horizontal, showsIndicators: false) {
                     HStack(spacing: 10 * scale) {
@@ -192,7 +192,9 @@ struct PounceSheetView: View {
                 .bounceLoop(active: !locked)
                 .accessibilityValue(locked ? "locked" : "ready")
                 .accessibilityIdentifier("pounce.send")
-                .captioned(locked ? "Ask a grown-up first" : "Send it")
+                .captioned(locked
+                    ? LocalizedStringResource("Ask a grown-up", comment: "Pounce sheet: under the padlocked send button on a kitten's device")
+                    : LocalizedStringResource("Send", comment: "Pounce sheet: under the send button"))
             }
         }
     }
@@ -386,7 +388,7 @@ struct PouncePickView: View {
                         NameTag(from.name, maxWidth: 180, active: true, size: 18 * scale)
                     }
                 }
-                WordLabel(title: "Where do we play?", detail: "Pick a game, or start a new one.", alignment: .center)
+                WordLabel(title: "Where do we play?", alignment: .center)
                     .padding(.horizontal, 20)
                 ScrollView(.horizontal, showsIndicators: false) {
                     HStack(spacing: 10 * scale) {

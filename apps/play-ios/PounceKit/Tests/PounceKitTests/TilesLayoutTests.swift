@@ -31,6 +31,25 @@ import Testing
         }
     }
 
+    /// The paw menu is below the safe top (never under the status bar) and clear of every cat.
+    @Test(arguments: screens.indices)
+    func thePawMenuIsBelowTheStatusBarAndClearOfTheCats(_ i: Int) {
+        let s = Self.screens[i]
+        for n in 1...3 {
+            let l = layout(i, opponents: n)
+            let paw = CGRect(
+                x: l.menuButton.x - l.menuSide / 2, y: l.menuButton.y - l.menuSide / 2, width: l.menuSide, height: l.menuSide)
+            #expect(paw.maxY <= s.size.height - s.top, "\(s.size) \(n) cats: the paw reaches into the status bar")
+            #expect(paw.maxX <= s.size.width && paw.minX >= 0)
+            let d = l.catDiameter
+            for (j, slot) in l.opponentSlots.enumerated() {
+                let cat = CGRect(x: slot.x - d / 2, y: slot.y + l.catLift - d / 2, width: d, height: d)
+                let shared = paw.intersection(cat)
+                #expect(shared.isNull || shared.width * shared.height <= 12, "\(s.size) \(n) cats, slot \(j): \(shared)")
+            }
+        }
+    }
+
     @Test(arguments: screens.indices)
     func everyControlIsOnScreenBigEnoughAndClearOfTheOthers(_ i: Int) {
         let l = layout(i, meter: true)

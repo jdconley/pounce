@@ -34,7 +34,7 @@ private struct UpdateButton: View {
 
 /// "Ask a grown-up to update Pounce.": a child's device has no link to the store.
 private let askGrownUp = String(
-    localized: "Ask a grown-up to update Pounce.", comment: "Update screens on a child's device: there is no button, a parent updates the app")
+    localized: "Ask a grown-up to update.", comment: "Update screens on a child's device: there is no button, a parent updates the app")
 
 // MARK: - the hard moment
 
@@ -52,13 +52,13 @@ struct UpdateRequiredScreen: View {
     private var detail: String {
         switch model.updates.action(band: model.ageBand, need: need) {
         case .store:
-            String(localized: "This version is too old to play. Get the newest Pounce from the App Store.",
-                   comment: "The full-screen update notice: why, and where to update")
+            String(localized: "This version is too old.",
+                   comment: "The full-screen update notice: why; the Update button below opens the App Store")
         case .testFlight:
-            String(localized: "This version is too old to play. Get the newest Pounce in TestFlight.",
+            String(localized: "This version is too old.",
                    comment: "The full-screen update notice on a TestFlight install")
         case .askGrownUp:
-            String(localized: "This version is too old to play. Ask a grown-up to update Pounce.",
+            String(localized: "Ask a grown-up to update.",
                    comment: "The full-screen update notice on a child's device: no button")
         }
     }
@@ -71,7 +71,7 @@ struct UpdateRequiredScreen: View {
                     UpdateArt(appeared: appeared)
                     VStack(spacing: 10) {
                         OutlinedText(
-                            String(localized: "Update Pounce to keep playing", comment: "The full-screen update notice: the headline"),
+                            String(localized: "Update to keep playing", comment: "The full-screen update notice: the headline"),
                             size: 30, lines: 3)
                             .accessibilityAddTraits(.isHeader)
                         WordLine(detail, size: 17)
@@ -84,7 +84,7 @@ struct UpdateRequiredScreen: View {
                         UpdateButton(need: need, identifier: "update.required.update")
                         if let onHome {
                             PillButton(icon: ArtName.iconHome, color: Palette.orange, size: .medium, width: 150,
-                                       title: String(localized: "Home"), accessibilityLabel: "Home", action: onHome)
+                                       title: String(localized: "Home", comment: "Update screens: the pill that goes Home"), accessibilityLabel: "Home", action: onHome)
                                 .accessibilityIdentifier("update.required.home")
                         }
                     }
@@ -167,9 +167,9 @@ struct TableNeedsUpdateCard: View {
 
     private var headline: String {
         if let title {
-            return String(localized: "This table is playing \(title)", comment: "A table whose game this version can't draw: the headline, with the game's name")
+            return String(localized: "This table plays \(title)", comment: "A table whose game this version can't draw: the headline, with the game's name")
         }
-        return String(localized: "This table is playing a newer game", comment: "A table whose game this version can't draw, and has no name for")
+        return String(localized: "This table plays a newer game", comment: "A table whose game this version can't draw, and has no name for")
     }
 
     private var advice: UpdatePolicy.TableAdvice { model.updates.tableAdvice(band: model.ageBand) }
@@ -177,16 +177,16 @@ struct TableNeedsUpdateCard: View {
     private var detail: String {
         switch advice {
         case .update:
-            String(localized: "Update Pounce to join.", comment: "A table whose game needs a newer app: what to do")
+            String(localized: "Update to join.", comment: "A table whose game needs a newer app: what to do")
         case .updateInTestFlight:
-            String(localized: "Update Pounce in TestFlight to join.", comment: "A table whose game needs a newer app, on a TestFlight install")
+            String(localized: "Update in TestFlight to join.", comment: "A table whose game needs a newer app, on a TestFlight install")
         case .askGrownUp:
             askGrownUp
         case .notYet:
             if let title {
-                String(localized: "\(title) isn't in this version of Pounce yet.", comment: "A table whose game needs a newer app, when no newer app is out")
+                String(localized: "\(title) isn't in this version yet.", comment: "A table whose game needs a newer app, when no newer app is out")
             } else {
-                String(localized: "It isn't in this version of Pounce yet.", comment: "A table whose game needs a newer app, when no newer app is out and the game has no name here")
+                String(localized: "Not in this version yet.", comment: "A table whose game needs a newer app, when no newer app is out and the game has no name here")
             }
         }
     }
@@ -211,7 +211,7 @@ struct TableNeedsUpdateCard: View {
                             UpdateButton(identifier: "update.table.update")
                         }
                         PillButton(icon: ArtName.iconHome, color: Palette.orange, size: .medium, width: 150,
-                                   title: String(localized: "Home"), accessibilityLabel: "Home", action: onHome)
+                                   title: String(localized: "Home", comment: "Update screens: the pill that goes Home"), accessibilityLabel: "Home", action: onHome)
                             .accessibilityIdentifier("update.table.home")
                     }
                 }

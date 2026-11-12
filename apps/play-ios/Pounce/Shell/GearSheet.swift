@@ -111,7 +111,7 @@ struct GearSheet: View {
 
     private var toggles: some View {
         VStack(alignment: .leading, spacing: 14) {
-            WordRow(title: "Sound", detail: settings.soundOn ? "Cat noises are on." : "Cat noises are off.") {
+            WordRow(title: LocalizedStringResource("Sound", comment: "Gear sheet: the sound toggle's label")) {
                 PillButton(
                     icon: settings.soundOn ? ArtName.iconSoundOn : ArtName.iconSoundOff,
                     color: settings.soundOn ? Palette.teal : Palette.violet, size: .small,
@@ -122,7 +122,7 @@ struct GearSheet: View {
                 }
                 .accessibilityIdentifier("settings.sound")
             }
-            WordRow(title: "Buzz", detail: settings.hapticsOn ? "Your phone buzzes on plays." : "No buzzing.") {
+            WordRow(title: LocalizedStringResource("Buzz", comment: "Gear sheet: the haptics toggle's label")) {
                 PillButton(
                     icon: settings.hapticsOn ? ArtName.iconHapticsOn : ArtName.iconHapticsOff,
                     color: settings.hapticsOn ? Palette.orange : Palette.violet, size: .small,
@@ -133,7 +133,7 @@ struct GearSheet: View {
                 }
                 .accessibilityIdentifier("settings.haptics")
             }
-            WordRow(title: "Your turn", detail: "A bell when a game is waiting on you.") {
+            WordRow(title: LocalizedStringResource("Turn alerts", comment: "Gear sheet: the toggle for a notification when a game waits on you")) {
                 PillButton(
                     icon: ArtName.iconBell, color: model.turnReminderOn ? Palette.magenta : Palette.violet, size: .small,
                     accessibilityLabel: model.turnReminderOn ? "Turn reminder on" : "Turn reminder off"

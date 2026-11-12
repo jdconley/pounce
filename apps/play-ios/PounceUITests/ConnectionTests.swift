@@ -40,7 +40,7 @@ class ConnectionTests: XCTestCase {
         let kiki = el(app, "table.opponent.2")
         XCTAssertTrue(kiki.waitForExistence(timeout: Live.t(10)), "no seat 2")
         XCTAssertTrue(until(3) { self.label(kiki)?.hasSuffix("Weak signal") == true }, label(kiki) ?? "-")
-        XCTAssertTrue(label(el(app, "table.opponent.1"))?.hasSuffix("Reconnecting") == true, label(el(app, "table.opponent.1")) ?? "-")
+        XCTAssertTrue(label(el(app, "table.opponent.1"))?.hasSuffix("Offline") == true, label(el(app, "table.opponent.1")) ?? "-")
         XCTAssertFalse(label(el(app, "table.opponent.3"))?.contains("signal") == true)
         XCTAssertFalse(el(app, "table.connection").exists, "this phone's own link is fine")
         screenshot(app, "connection-seat-link")

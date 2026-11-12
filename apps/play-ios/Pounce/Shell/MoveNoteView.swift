@@ -8,45 +8,45 @@ enum MoveNoteCopy {
         switch note {
         case .notYourTurn:
             if let turnName, !turnName.isEmpty {
-                return String(localized: "It's \(turnName)'s turn. Wait for yours.", comment: "Table note: a move out of turn, with the name of the player whose turn it is")
+                return String(localized: "It's \(turnName)'s turn.", comment: "Table note: a move out of turn, with the name of the player whose turn it is")
             }
-            return String(localized: "Wait for your turn.", comment: "Table note: a move out of turn")
+            return String(localized: "Not your turn.", comment: "Table note: a move out of turn")
         case .drawFirst:
-            return String(localized: "Take a card first. Tap the deck or the discard pile.", comment: "Table note: tried to play before drawing")
+            return String(localized: "Take a card first.", comment: "Table note: tried to play before drawing")
         case .alreadyDrew:
-            return String(localized: "You already took a card. Play, or discard to end your turn.", comment: "Table note: tried to draw twice")
+            return String(localized: "You already took a card.", comment: "Table note: tried to draw twice")
         case .cucumberOnDiscard:
-            return String(localized: "You can't take a Cucumber. Take a card from the deck.", comment: "Table note: the discard pile's top card is a Cucumber")
+            return String(localized: "A Cucumber can't be taken.", comment: "Table note: the discard pile's top card is a Cucumber")
         case .emptyDiscard:
-            return String(localized: "The discard pile is empty. Take a card from the deck.", comment: "Table note: nothing to take from the discard pile")
+            return String(localized: "The discard pile is empty.", comment: "Table note: nothing to take from the discard pile")
         case .discardOnDeck:
-            return String(localized: "To discard, put the card on the face-up pile.", comment: "Table note: a card was put on the deck")
+            return String(localized: "Discard on the face-up pile.", comment: "Table note: a card was put on the deck")
         case .trayFull:
             return String(localized: "That tray is full.", comment: "Table note: a lay-down tray has all its cards")
         case .layDownFirst:
-            return String(localized: "Lay down your own level first. Then you can add cards to groups.", comment: "Table note: tried to add to a laid group before laying down")
+            return String(localized: "Lay down your level first.", comment: "Table note: tried to add to a laid group before laying down")
         case .noFit:
-            return String(localized: "That card doesn't fit this group.", comment: "Table note: a card that can't extend a laid group")
+            return String(localized: "That card doesn't fit.", comment: "Table note: a card that can't extend a laid group")
         case .notALevel:
-            return String(localized: "These groups aren't a whole level yet.", comment: "Table note: the trays don't hold a valid level")
+            return String(localized: "Not a whole level yet.", comment: "Table note: the trays don't hold a valid level")
         case .alreadyLaid:
-            return String(localized: "Your level is already down. Add cards to groups on the table.", comment: "Table note: tried to lay down twice")
+            return String(localized: "Your level is already down.", comment: "Table note: tried to lay down twice")
         case .cucumberOnly:
             return String(localized: "Only a Cucumber can go on a cat.", comment: "Table note: a number card was dropped on another player")
         case .pickACat:
-            return String(localized: "Tap a cat to skip their next turn.", comment: "Table note: a Cucumber needs a player to aim at")
+            return String(localized: "Tap a cat to skip.", comment: "Table note: a Cucumber needs a player to aim at")
         case .catSkipped:
-            return String(localized: "That cat can't be skipped right now. Pick another.", comment: "Table note: a Cucumber aimed at a player already skipped or out")
+            return String(localized: "That cat can't be skipped now.", comment: "Table note: a Cucumber aimed at a player already skipped or out")
         case .yarnNoFit:
-            return String(localized: "The Yarn can't go there in this run.", comment: "Table note: a wild card moved to a place it can't stand")
+            return String(localized: "Yarn can't go there.", comment: "Table note: a wild card moved to a place it can't stand")
         case .roundOver:
             return String(localized: "This round is over.", comment: "Table note: a move after the round ended")
         case .forfeited:
             return String(localized: "You left this game.", comment: "Table note: a move from a seat that forfeited")
         case .notSent:
-            return String(localized: "That didn't send. Check your connection and try again.", comment: "Table note: the move never reached the server")
+            return String(localized: "Didn't send. Try again.", comment: "Table note: the move never reached the server")
         case .unknown:
-            return String(localized: "That move didn't work. Try again.", comment: "Table note: a move refused for a reason the app has no words for")
+            return String(localized: "That move didn't work.", comment: "Table note: a move refused for a reason the app has no words for")
         }
     }
 }
@@ -127,7 +127,7 @@ struct UndoPill: View {
             withAnimation(.linear(duration: offer.seconds).paced) { left = 0 }
             UIAccessibility.post(
                 notification: .announcement,
-                argument: String(localized: "Discarded. Undo is available for a moment.", comment: "VoiceOver: a discard can still be taken back"))
+                argument: String(localized: "Discarded. Undo for a moment.", comment: "VoiceOver: a discard can still be taken back"))
         }
     }
 }
@@ -167,15 +167,15 @@ struct NotPlayingCard: View {
         switch reason {
         case .out:
             String(
-                localized: "You forfeited, so the others are finishing without you. You can't rejoin this game, but you can start a new one from Home.",
+                localized: "The others play on without you.",
                 comment: "Not-playing card: after a forfeit")
         case .started:
             String(
-                localized: "\(tableName) started before you sat down, and seats can't be added once the cards are dealt. Ask them to invite you to the next game, or start your own from Home.",
+                localized: "\(tableName) started before you sat down.",
                 comment: "Not-playing card: arrived after the deal; the table's name comes first")
         case .over:
             String(
-                localized: "\(tableName) finished before you sat down. Ask them to invite you to the next game, or start your own from Home.",
+                localized: "\(tableName) finished before you sat down.",
                 comment: "Not-playing card: arrived after the end; the table's name comes first")
         }
     }
@@ -183,6 +183,10 @@ struct NotPlayingCard: View {
     var body: some View {
         ZStack {
             RoomBackground()
+            // Scrolls when it can't fit (the largest text sizes on a small phone), so the title
+            // never truncates and Home never leaves the screen.
+            GeometryReader { geo in
+            ScrollView {
             VStack(spacing: 18) {
                 Image(art)
                     .resizable()
@@ -223,6 +227,11 @@ struct NotPlayingCard: View {
             }
             .dynamicTypeSize(...DynamicTypeSize.accessibility2)
             .scaleEffect(sizeClass == .regular ? 1.2 : 1)
+            .padding(.vertical, 24)
+            .frame(maxWidth: .infinity, minHeight: geo.size.height)
+            }
+            .scrollBounceBehavior(.basedOnSize)
+            }
         }
         .onAppear {
             withAnimation(.spring(duration: 0.5, bounce: 0.45).paced) { appeared = true }

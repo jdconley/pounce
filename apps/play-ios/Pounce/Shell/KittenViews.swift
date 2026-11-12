@@ -86,15 +86,15 @@ struct KittenBellView: View {
     static func caption(_ bell: KittenBell, code: Bool) -> String {
         switch bell {
         case .locked:
-            String(localized: "Turn alerts are off. Show this code to a grown-up. They type it in Pounce on their phone: Settings, then Add a child.",
+            String(localized: "Show this code to a grown-up to turn on alerts.",
                    comment: "Kitten's gear: the locked bell with its code")
         case .held:
-            String(localized: "A grown-up needs to approve this update first.",
+            String(localized: "A grown-up must approve this update.",
                    comment: "Kitten's gear: the bell held for the significant-change approval")
         case .asleep:
             code
                 ? String(localized: "Show this code to one more grown-up.", comment: "Kitten's gear: a code for another parent")
-                : String(localized: "Your grown-up is setting up your turn alerts.", comment: "Kitten's gear: linked, no consent yet")
+                : String(localized: "A grown-up is setting up alerts.", comment: "Kitten's gear: linked, no consent yet")
         case .on:
             code
                 ? String(localized: "Show this code to one more grown-up.", comment: "Kitten's gear: a code for another parent")
@@ -176,12 +176,12 @@ struct KittensSheet: View {
                             .accessibilityIdentifier("kittens.close")
                         }
                         OutlinedText(
-                            String(localized: "Turn alerts for your kids", comment: "Parent's kittens panel: the title"),
+                            String(localized: "Kids' turn alerts", comment: "Parent's kittens panel: the title"),
                             size: 26 * scale, lines: 2)
                             .accessibilityAddTraits(.isHeader)
                         WordLine(
-                            String(localized: "Kids under 13 get turn alerts on their own phone only after you allow it. On your child's phone, open Pounce, tap Settings, and type the code it shows here.",
-                                   comment: "Parent's kittens panel: how linking works"),
+                            String(localized: "Kids under 13 get turn alerts only with your consent.",
+                                   comment: "Parent's kittens panel: under-13 turn alerts need the parent's consent (legal text)"),
                             size: 15 * scale)
                         ForEach(Array(model.kittens.kittens.enumerated()), id: \.element.id) { i, kitten in
                             KittenCard(kitten: kitten, index: i, scale: scale, focused: kitten.id == focus) { notice = kitten }
@@ -260,8 +260,8 @@ private struct KittenCard: View {
                 .accessibilityIdentifier("kittens.caption.\(index)")
             if !kitten.people.isEmpty {
                 WordLine(kitten.mode == .apple
-                    ? String(localized: "Who can send alerts (set in Screen Time):", comment: "Parent's kitten card: Apple decides the people")
-                    : String(localized: "Who can send alerts. Tap to change:", comment: "Parent's kitten card: the people toggles"),
+                    ? String(localized: "Who can alert them (Screen Time)", comment: "Parent's kitten card: Apple decides the people")
+                    : String(localized: "Who can alert them", comment: "Parent's kitten card: the people toggles"),
                     size: 13 * scale, color: .white.opacity(0.85))
                 LazyVGrid(columns: columns, spacing: 12) {
                     ForEach(Array(kitten.people.enumerated()), id: \.element.pair) { j, person in
@@ -330,14 +330,14 @@ private struct KittenCard: View {
     static func caption(_ kitten: ParentKitten) -> String {
         switch kitten.state {
         case .pending:
-            String(localized: "Next: read the notice and add your mobile number. We text you a code.",
+            String(localized: "Next: read the notice and verify your phone.",
                    comment: "Parent's kitten card: linked, consent not started")
         case .code:
             String(localized: "Next: type the code we texted you.", comment: "Parent's kitten card: the texted code is out")
         case .on:
             kitten.confirmed
                 ? String(localized: "Turn alerts are on.", comment: "Parent's kitten card: consent on and confirmed")
-                : String(localized: "Turn alerts are on. We'll send a confirmation to your phone in a day or two.",
+                : String(localized: "Alerts are on. A confirmation comes in a day or two.",
                          comment: "Parent's kitten card: consent on, confirmation push not yet received")
         }
     }
@@ -441,7 +441,7 @@ private struct LinkCodeOverlay: View {
                         .accessibilityIdentifier("link.close")
                 }
                 WordLine(
-                    String(localized: "Type the six numbers shown on your child's phone (in Pounce, under Settings).",
+                    String(localized: "Type the code from your child's Settings.",
                            comment: "Parent's link keypad: what to type"),
                     size: 16)
                 tiles
@@ -550,7 +550,7 @@ struct KittenNoticeSheet: View {
 
     @ViewBuilder private var phoneStep: some View {
         WordLine(
-            String(localized: "Read this notice, then enter your mobile number. We'll text you a code to prove you're the grown-up.",
+            String(localized: "Read the notice, then verify your mobile number by text.",
                    comment: "Parent's consent sheet: the notice and phone step"),
             size: 15)
             .accessibilityIdentifier("notice.caption")
@@ -591,7 +591,7 @@ struct KittenNoticeSheet: View {
         }
         .shake(trigger: shake)
         if waiting {
-            WordLine(String(localized: "We can't text a code right now. Try again later.",
+            WordLine(String(localized: "Can't send texts now. Try later.",
                             comment: "Parent's consent sheet: texting isn't set up on the server"), size: 14)
         }
     }
@@ -637,7 +637,7 @@ struct KittenNoticeSheet: View {
                 .accessibilityHidden(true)
             WordLine(
                 resting
-                    ? String(localized: "Too many tries. Wait a bit, then try again.", comment: "Parent's consent code: resting")
+                    ? String(localized: "Too many tries. Try again soon.", comment: "Parent's consent code: resting")
                     : String(localized: "Type the code we texted you.", comment: "Parent's consent code: what to type"),
                 size: 17)
                 .accessibilityIdentifier("consent.caption")
@@ -694,7 +694,7 @@ struct KittenNoticeSheet: View {
                     Image(ArtName.iconCheck).resizable().scaledToFit().frame(width: 64).offset(x: 6, y: 6)
                 }
             WordLine(
-                String(localized: "Turn alerts are on. In a day or two we'll send a confirmation to this phone, with a button to turn them off.",
+                String(localized: "Alerts are on. A confirmation with an off button arrives in a day or two.",
                        comment: "Parent's consent sheet: consent finished"),
                 size: 16)
         }

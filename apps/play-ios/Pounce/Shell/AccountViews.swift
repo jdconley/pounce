@@ -78,7 +78,7 @@ struct CheckBadge: View {
     }
 }
 
-/// "Keep your streak if you change phones", then a cloud with a plus and the provider buttons (v1: Apple).
+/// "Keep your streak on a new phone", then a cloud with a plus and the provider buttons (v1: Apple).
 struct SignInOffer: View {
     @Environment(AppModel.self) private var model
     let identifier: String
@@ -87,7 +87,7 @@ struct SignInOffer: View {
 
     var body: some View {
         VStack(spacing: 10) {
-            WordLine(String(localized: "Keep your streak if you change phones",
+            WordLine(String(localized: "Keep your streak on a new phone",
                             comment: "Sign-in offer: why to sign in with Apple"), size: 17)
                 .frame(maxWidth: width + 60)
             offer
@@ -264,9 +264,9 @@ struct DeleteConfirmView: View {
     static func detail(signedIn: Bool, name: String) -> String {
         let who = name.isEmpty ? String(localized: "this player", comment: "Delete confirm: when the player has no name") : name
         return signedIn
-            ? String(localized: "This deletes \(who) from Pounce on every device: games, streaks, connections, invites and settings. It can't be undone.",
+            ? String(localized: "Deletes \(who)'s account and data on every device. It can't be undone.",
                      comment: "Delete confirm: what deleting a signed-in account removes")
-            : String(localized: "This deletes \(who)'s games, streaks, connections, invites and notifications from our server. It can't be undone. The name and cat stay on this phone so you can keep playing.",
+            : String(localized: "Deletes \(who)'s data from our server. It can't be undone.",
                      comment: "Delete confirm: what deleting a guest's data removes")
     }
 
@@ -478,7 +478,7 @@ struct DeletedView: View {
                 OutlinedText(String(localized: "Your data is deleted", comment: "After deleting a guest's data"),
                              size: 30, fill: .white, width: 3, lines: 2)
                     .accessibilityAddTraits(.isHeader)
-                Text("Our server no longer has your games, streaks or invites. You can keep playing as a new player.",
+                Text("Keep playing as a new player.",
                      comment: "After deleting a guest's data: what happened")
                     .font(.system(size: 18, weight: .bold, design: .rounded))
                     .foregroundStyle(.white.opacity(0.92))

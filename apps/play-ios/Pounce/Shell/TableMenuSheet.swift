@@ -154,14 +154,14 @@ struct TableMenuSheet: View {
             }
             HStack(spacing: 18) {
                 if canMove {
-                    PillButton(icon: ArtName.iconMove, color: Palette.magenta, size: .medium, accessibilityLabel: "Move my seat to another phone") {
+                    PillButton(icon: ArtName.iconMove, color: Palette.magenta, size: .medium, accessibilityLabel: "Move my seat") {
                         show(.moving)
                     }
                     .accessibilityIdentifier("menu.move")
                 }
                 if canChangeLook {
                     PillButton(icon: ArtName.Habit.iconRug, color: Palette.orange, size: .medium,
-                               accessibilityLabel: "Change the rug and card backs") {
+                               accessibilityLabel: "Change the look") {
                         show(.look)
                     }
                     .accessibilityIdentifier("menu.look")
@@ -217,15 +217,15 @@ struct TableMenuSheet: View {
         case .ends(let winner):
             let other = SeatInfo.name(table.room, winner)
             return String(
-                localized: "The game ends now and \(other) wins.",
+                localized: "\(other) wins.",
                 comment: "Forfeit confirmation: with one other player left, the game ends and they win")
         case .out:
             return shared
                 ? String(
-                    localized: "\(name) is out and finishes last. Everyone else keeps playing.",
+                    localized: "\(name) finishes last. The rest play on.",
                     comment: "Forfeit confirmation on a shared phone: that seat is out, the rest play on")
                 : String(
-                    localized: "You're out and finish last. Everyone else keeps playing.",
+                    localized: "You finish last. The rest play on.",
                     comment: "Forfeit confirmation: you are out, the rest play on")
         }
     }

@@ -31,28 +31,28 @@ struct StateCard: View {
             }
         }
 
-        var label: LocalizedStringKey {
+        var label: LocalizedStringResource {
             switch self {
-            case .closed: "This table is closed"
-            case .stalled: "The House Cat got stuck"
-            case .offline: "Can't reach the server"
-            case .full: "This game already started"
-            case .update: "Update the app to play"
-            case .locked: "Too many wrong codes. Try again later"
-            case .out: "You forfeited this game"
+            case .closed: LocalizedStringResource("Table closed", comment: "State card title: the table no longer exists")
+            case .stalled: LocalizedStringResource("The House Cat got stuck", comment: "State card title: the bot stopped playing")
+            case .offline: LocalizedStringResource("Can't reach the server", comment: "State card title: no connection")
+            case .full: LocalizedStringResource("Game already started", comment: "State card title: every seat is taken")
+            case .update: LocalizedStringResource("Update Pounce to play", comment: "State card title: this app version is too old")
+            case .locked: LocalizedStringResource("Too many wrong codes", comment: "State card title: room code tries are resting")
+            case .out: LocalizedStringResource("You forfeited", comment: "State card title: this phone left the game")
             }
         }
 
         /// One plain line under the label.
-        var detail: LocalizedStringKey {
+        var detail: LocalizedStringResource {
             switch self {
-            case .closed: "Go home and start a new one."
-            case .stalled: "Go home and start a new game."
-            case .offline: "Check your internet, then try again."
-            case .full: "Every seat is taken. Ask for a new table."
-            case .update: "Get the newest Pounce from the App Store."
-            case .locked: "Wait a little, then try the code again."
-            case .out: "The others are still playing."
+            case .closed: LocalizedStringResource("Start a new one.", comment: "State card: under Table closed")
+            case .stalled: LocalizedStringResource("Start a new game.", comment: "State card: under The House Cat got stuck")
+            case .offline: LocalizedStringResource("Check your internet.", comment: "State card: under Can't reach the server")
+            case .full: LocalizedStringResource("Every seat is taken.", comment: "State card: under Game already started")
+            case .update: LocalizedStringResource("Get it from the App Store.", comment: "State card: under Update Pounce to play")
+            case .locked: LocalizedStringResource("Wait, then try again.", comment: "State card: under Too many wrong codes")
+            case .out: LocalizedStringResource("The others play on.", comment: "State card: under You forfeited")
             }
         }
     }
@@ -90,13 +90,13 @@ struct StateCard: View {
                 HStack(spacing: 18) {
                     if let onRetry {
                         PillButton(icon: ArtName.iconPlay, color: Palette.lime, size: .medium, width: 150,
-                                   title: String(localized: "Try again"), accessibilityLabel: "Try again") {
+                                   title: String(localized: "Try again", comment: "State card: retry pill"), accessibilityLabel: "Try again") {
                             onRetry()
                         }
                         .accessibilityIdentifier("state.retry")
                     }
                     PillButton(icon: ArtName.iconHome, color: Palette.orange, size: .medium, width: 150,
-                               title: String(localized: "Home"), accessibilityLabel: "Home") {
+                               title: String(localized: "Home", comment: "State card: the pill that goes Home"), accessibilityLabel: "Home") {
                         onHome()
                     }
                     .accessibilityIdentifier("state.home")

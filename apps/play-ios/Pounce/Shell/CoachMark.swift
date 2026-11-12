@@ -184,95 +184,95 @@ enum CoachCopy {
             return (
                 String(localized: "Hi, \(coach.person.name)!", comment: "Coach: the first tip's title, with the player's name"),
                 String(
-                    localized: "Climb the cat tower. Lay down your level in a round to go up a shelf. The first cat to finish all ten levels wins. Tap the tower to see every cat's shelf.",
+                    localized: "Lay down your level each round to climb. First to finish all ten wins.",
                     comment: "Coach: the goal of Cat Tower, pointing at the tower"))
         case .draw:
             return (
                 String(localized: "Your turn", comment: "Coach: draw tip title"),
                 String(
-                    localized: "Start by taking a card. Tap the deck, or the discard pile to take its top card.",
+                    localized: "Take a card from the deck or the discard pile.",
                     comment: "Coach: how to draw, pointing at the two piles"))
         case .phase:
             let kinds = Set(reqs.map(\.kind))
             var body = String(
-                localized: "This round you need \(phase(reqs)). Drag cards from your hand into these trays.",
+                localized: "This round: \(phase(reqs)). Drag cards into the trays.",
                 comment: "Coach: the current level, e.g. 'two sets of 3', pointing at the trays")
             if kinds.contains(.set) {
-                body += " " + String(localized: "A set is all the same number.", comment: "Coach: what a set is")
+                body += " " + String(localized: "Set: all one number.", comment: "Coach: what a set is")
             }
             if kinds.contains(.run) {
-                body += " " + String(localized: "A run is numbers in a row.", comment: "Coach: what a run is")
+                body += " " + String(localized: "Run: numbers in a row.", comment: "Coach: what a run is")
             }
             if kinds.contains(.coat) {
-                body += " " + String(localized: "One coat is the same cat on every card.", comment: "Coach: what a coat group is")
+                body += " " + String(localized: "One coat: the same cat on every card.", comment: "Coach: what a coat group is")
             }
             return (String(localized: "Your level", comment: "Coach: level tip title"), body)
         case .run:
             return (
                 String(localized: "Runs", comment: "Coach: run tip title"),
                 String(
-                    localized: "A run is numbers in a row, like 4 5 6 7. The coats can be different.",
+                    localized: "Numbers in a row, like 4 5 6 7. Any coats.",
                     comment: "Coach: explains runs when a level first asks for one"))
         case .coat:
             let size = reqs.first { $0.kind == .coat }?.size ?? 7
             return (
                 String(localized: "One coat", comment: "Coach: coat tip title"),
                 String(
-                    localized: "This level needs \(size) cards with the same cat on them. Any numbers will do.",
+                    localized: "\(size) cards with the same cat. Any numbers.",
                     comment: "Coach: explains a coat group when a level first asks for one"))
         case .layDown:
             return (
                 String(localized: "Ready!", comment: "Coach: lay-down tip title"),
                 String(
-                    localized: "Your level is done. Tap the paw to lay it down on the table.",
+                    localized: "Tap the paw to lay down your level.",
                     comment: "Coach: pointing at the lay-down paw above the trays"))
         case .discard:
             return (
                 String(localized: "End your turn", comment: "Coach: discard tip title"),
                 String(
-                    localized: "Put one card on the discard pile. Drag it there, or tap the card and then the pile.",
+                    localized: "Drag one card to the discard pile.",
                     comment: "Coach: how to end a turn, pointing at the discard pile"))
         case .hit:
             return (
                 String(localized: "Add to the table", comment: "Coach: hit tip title"),
                 String(
-                    localized: "Your level is down, so you can add cards to any laid group, yours or anyone's. Drop a card on one it fits.",
+                    localized: "Drop cards on any laid group they fit.",
                     comment: "Coach: hitting, pointing at the laid-down groups"))
         case .goOut:
             return (
                 String(localized: "Almost out", comment: "Coach: going-out tip title"),
                 String(
-                    localized: "Play or discard your last card to end the round. Everyone who laid down their level climbs a shelf.",
+                    localized: "Play or discard your last card to end the round.",
                     comment: "Coach: going out, pointing at the hand"))
         case .cucumber:
             return (
                 String(localized: "Cucumber!", comment: "Coach: Cucumber tip title"),
                 String(
-                    localized: "Drop it on another cat to make them skip their next turn. Cats hate cucumbers.",
+                    localized: "Drop it on a cat to skip their next turn.",
                     comment: "Coach: the Cucumber skip card, pointing at it in the hand"))
         case .yarn:
             return (
                 String(localized: "Yarn is wild", comment: "Coach: Yarn tip title"),
                 String(
-                    localized: "Yarn can stand in for any number in a set or a run.",
+                    localized: "Yarn stands in for any number.",
                     comment: "Coach: the Yarn wild card, pointing at it in the hand"))
         case .scores:
             return (
                 String(localized: "Scores", comment: "Coach: scoreboard tip title"),
                 String(
-                    localized: "This is every cat's shelf. Tap the tower again to see the scores and what each level needs.",
+                    localized: "Tap the tower again for scores and levels.",
                     comment: "Coach: the open tower's second tap, pointing at the open tower"))
         case .cats:
             return (
                 String(localized: "Tap a cat", comment: "Coach: player card tip title"),
                 String(
-                    localized: "Tap any cat up here to see how they're doing. If they're taking a while, you can nudge them from there.",
+                    localized: "See how they're doing, or nudge them.",
                     comment: "Coach: tapping a player in the top bar opens their card, with Nudge"))
         case .swipeHome:
             return (
                 String(localized: "Going Home", comment: "Coach: swipe home tip title"),
                 String(
-                    localized: "Swipe in from the left edge to go Home. Your game is saved, and the paw at the top has Home too.",
+                    localized: "Swipe in from the left edge. Your game is saved.",
                     comment: "Coach: the left-edge swipe that leaves the table"))
         }
     }

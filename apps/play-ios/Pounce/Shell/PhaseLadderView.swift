@@ -99,7 +99,7 @@ struct PhaseLadderView: View {
     private func cat(_ seat: Seat) -> some View {
         VStack(spacing: -4) {
             catFace(seat)
-            NameTag(SeatInfo.name(model.room, seat), maxWidth: 76, active: seat == ladder.focus && model.isMultiSeat)
+            NameTag(SeatInfo.name(model.room, seat), maxWidth: 110, active: seat == ladder.focus && model.isMultiSeat)
         }
     }
 

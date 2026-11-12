@@ -80,12 +80,25 @@ public struct TilesLayout: Equatable, Sendable {
         // The top bar: Cat Tower's, so the two tables seat their cats alike.
         let base = TableLayout(size: size, safeTop: safeTop, safeBottom: safeBottom, opponents: max(opponents, 1))
         opponentsBar = base.opponentsBar
-        opponentSlots = base.opponentSlots
         catDiameter = base.catDiameter
         catLift = base.catLift
         nameDrop = base.nameDrop
-        menuButton = base.menuButton
         menuSide = base.menuSide
+        // The paw menu sits inside the bar's top right corner, below the safe top on every
+        // device: never up in the status bar's ear (Cat Tower's spot), where it hid partly under
+        // the status bar. On a phone, three cats share the width left of it, as Cat Tower's do
+        // when the paw is tucked.
+        let bar = base.opponentsBar
+        menuButton = CGPoint(x: base.menuButton.x, y: bar.maxY - base.menuSide / 2 - (roomy ? 6 : 2))
+        if !roomy, base.opponentSlots.count >= 3 {
+            let n = base.opponentSlots.count
+            let span = width - TableLayout.menuReserve
+            opponentSlots = base.opponentSlots.enumerated().map { i, slot in
+                CGPoint(x: span * (CGFloat(i) + 0.5) / CGFloat(n), y: slot.y)
+            }
+        } else {
+            opponentSlots = base.opponentSlots
+        }
 
         // The stash. Phone: seven across, 48 pt at 393 wide. Roomy: fourteen across, bigger.
         let gap: CGFloat = roomy ? 6 : 4

@@ -369,7 +369,7 @@ struct LobbyView: View {
         case .human where seat.yours: Text("Swap or stand up")
         case .human: Text("")
         case .open where !seated: Text("Sit here")
-        default: Text("Invite, sit here, add a House Cat, or close the seat")
+        default: Text("Seat options", comment: "VoiceOver hint: a lobby seat opens its menu")
         }
     }
 
@@ -380,6 +380,9 @@ struct LobbyView: View {
     @ViewBuilder private var startRow: some View {
         if let table {
             VStack(spacing: 8) {
+                // A kitten's turn alerts, asked of the grown-up at this table (launch review): in the
+                // column over the status, so it never covers the status or the seat controls.
+                KittenTablePromptView(session: session)
                 Text(verbatim: LobbyCopy.status(table))
                     .font(.system(.subheadline, design: .rounded, weight: .heavy))
                     .foregroundStyle(.white)
@@ -526,7 +529,7 @@ struct LobbyView: View {
             return [
                 SeatMenuItem(
                     id: "swap", icon: ArtName.iconSwap, color: Palette.sky,
-                    label: String(localized: "Someone else sits here", comment: "Seat menu: swap the person in this seat")
+                    label: String(localized: "Swap player", comment: "Seat menu: swap the person in this seat")
                 ) {
                     menuSeat = nil
                     picker = .swap(i)
@@ -543,7 +546,7 @@ struct LobbyView: View {
         var items: [SeatMenuItem] = [
             SeatMenuItem(
                 id: "invite", icon: ArtName.iconShare, color: Palette.sky,
-                label: String(localized: "Invite someone", comment: "Seat menu: open the seat and share the table's link")
+                label: String(localized: "Invite", comment: "Seat menu: open the seat and share the table's link")
             ) {
                 menuSeat = nil
                 if seat.kind != .open { session.send(.configure(seat: i, kind: .open)) }
@@ -562,7 +565,7 @@ struct LobbyView: View {
         if seat.kind != .bot {
             items.append(SeatMenuItem(
                 id: "bot", icon: ArtName.badgeBot, color: Palette.orange,
-                label: String(localized: "Add a House Cat", comment: "Seat menu: put the computer player in this seat")
+                label: String(localized: "Add House Cat", comment: "Seat menu: put the computer player in this seat")
             ) {
                 menuSeat = nil
                 session.send(.configure(seat: i, kind: .bot))
@@ -571,7 +574,7 @@ struct LobbyView: View {
         if seat.kind != .open {
             items.append(SeatMenuItem(
                 id: "open", icon: ArtName.iconPlus, color: Palette.lime,
-                label: String(localized: "Open this seat", comment: "Seat menu: let someone with the code take this seat")
+                label: String(localized: "Open seat", comment: "Seat menu: let someone with the code take this seat")
             ) {
                 menuSeat = nil
                 session.send(.configure(seat: i, kind: .open))
@@ -580,7 +583,7 @@ struct LobbyView: View {
         if seat.kind != .closed {
             items.append(SeatMenuItem(
                 id: "remove", icon: ArtName.iconRemove, color: Palette.magenta,
-                label: String(localized: "Close this seat", comment: "Seat menu: nobody plays this seat")
+                label: String(localized: "Close seat", comment: "Seat menu: nobody plays this seat")
             ) {
                 menuSeat = nil
                 session.send(.configure(seat: i, kind: .closed))
@@ -645,19 +648,19 @@ enum LobbyCopy {
         let players = table.playerCount
         switch table.startBlock {
         case nil:
-            return String(localized: "Ready! \(players) players. Tap Start.", comment: "Lobby status: the game can start; the number is 2 to 6")
+            return String(localized: "Ready: \(players) players.", comment: "Lobby status: the game can start; the number is 2 to 6")
         case .notSeated:
             return table.blockingSeats.isEmpty
-                ? String(localized: "No open seat. Ask someone at the table to add one.", comment: "Lobby status: this phone has no seat and none is open")
-                : String(localized: "Tap an open seat to sit down.", comment: "Lobby status: this phone has no seat yet")
+                ? String(localized: "No open seat.", comment: "Lobby status: this phone has no seat and none is open")
+                : String(localized: "Tap an open seat.", comment: "Lobby status: this phone has no seat yet")
         case .openSeats(let open, let players) where players >= TableModel.minPlayers:
             return open == 1
-                ? String(localized: "Waiting for 1 open seat. Close it, wait for them to join, or tap Start to play with \(players).", comment: "Lobby status: one seat still open, enough players to start without it")
-                : String(localized: "Waiting for \(open) open seats. Close them, wait for them to join, or tap Start to play with \(players).", comment: "Lobby status: several seats still open, enough players to start without them")
+                ? String(localized: "Waiting for 1 seat.", comment: "Lobby status: one seat still open, enough players to start without it")
+                : String(localized: "Waiting for \(open) seats.", comment: "Lobby status: several seats still open, enough players to start without them")
         case .openSeats:
-            return String(localized: "You need 2 players. Invite someone to the open seat, or add a House Cat.", comment: "Lobby status: alone at the table with a seat open")
+            return String(localized: "Needs 2 players.", comment: "Lobby status: alone at the table with a seat open")
         case .notEnoughPlayers:
-            return String(localized: "You need 2 players. Tap Add a player.", comment: "Lobby status: alone at the table with no open seat")
+            return String(localized: "Needs 2 players.", comment: "Lobby status: alone at the table with no open seat")
         }
     }
 }
@@ -683,8 +686,8 @@ private struct StartConfirm: View {
                     .multilineTextAlignment(.center)
                     .accessibilityAddTraits(.isHeader)
                 Text(open == 1
-                    ? String(localized: "1 seat is still open. Starting closes it, and nobody can join after the cards are dealt.", comment: "Start confirmation: one open seat")
-                    : String(localized: "\(open) seats are still open. Starting closes them, and nobody can join after the cards are dealt.", comment: "Start confirmation: several open seats"))
+                    ? String(localized: "The open seat closes.", comment: "Start confirmation: one open seat")
+                    : String(localized: "\(open) open seats close.", comment: "Start confirmation: several open seats"))
                     .font(.system(.body, design: .rounded, weight: .bold))
                     .foregroundStyle(Palette.ink)
                     .multilineTextAlignment(.center)

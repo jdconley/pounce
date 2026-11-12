@@ -154,10 +154,10 @@ struct KittenTablePromptView: View {
     private func line(_ ask: KittenTablePrompt.Ask) -> String {
         switch ask {
         case .showCode:
-            String(localized: "Want turn alerts? Show a grown-up here your code.",
+            String(localized: "Turn alerts are off.",
                    comment: "Lobby card on a kitten's device without parent consent")
         case .finish(_, let name):
-            String(localized: "\(name)'s turn alerts aren't set up yet.",
+            String(localized: "\(name)'s turn alerts are off.",
                    comment: "Lobby card on a parent's device: a linked kid at this table has no consent yet")
         }
     }

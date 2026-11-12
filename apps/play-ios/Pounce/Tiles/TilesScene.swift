@@ -594,6 +594,8 @@ final class TilesScene: SKScene {
         for seat in turned { pulse(seat) }
         menuButton.size = CGSize(width: layout.menuSide, height: layout.menuSide)
         menuButton.position = layout.menuButton
+        // `clearTable` hides it while there's no table yet; the table is here now.
+        menuButton.isHidden = false
         publishProbe()
     }
 

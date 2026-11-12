@@ -5,8 +5,8 @@ import SwiftUI
 /// under it. Text styles, so it follows Dynamic Type. VoiceOver skips it by default because the
 /// control it sits beside already speaks (pass `speaks: true` when it stands alone).
 struct WordLabel: View {
-    let title: LocalizedStringKey
-    var detail: LocalizedStringKey?
+    let title: LocalizedStringResource
+    var detail: LocalizedStringResource?
     var alignment: HorizontalAlignment = .leading
     var speaks = false
 
@@ -27,24 +27,35 @@ struct WordLabel: View {
     }
 }
 
-/// A control with its words beside it, for settings lists.
+/// A control with its words beside it, for settings lists. At the accessibility text sizes the
+/// words go under the control, so they get the row's whole width and never break mid-word.
 struct WordRow<Control: View>: View {
-    let title: LocalizedStringKey
-    var detail: LocalizedStringKey?
+    let title: LocalizedStringResource
+    var detail: LocalizedStringResource?
     @ViewBuilder let control: Control
 
+    @Environment(\.dynamicTypeSize) private var typeSize
+
     var body: some View {
-        HStack(spacing: 14) {
-            control
-            WordLabel(title: title, detail: detail)
-            Spacer(minLength: 0)
+        if typeSize.isAccessibilitySize {
+            VStack(alignment: .leading, spacing: 8) {
+                control
+                WordLabel(title: title, detail: detail)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+        } else {
+            HStack(spacing: 14) {
+                control
+                WordLabel(title: title, detail: detail)
+                Spacer(minLength: 0)
+            }
         }
     }
 }
 
 extension View {
     /// A short word under a control. Hidden from VoiceOver (the control's own label speaks).
-    func captioned(_ title: LocalizedStringKey) -> some View {
+    func captioned(_ title: LocalizedStringResource) -> some View {
         VStack(spacing: 3) {
             self
             Text(title)
@@ -66,14 +77,14 @@ struct StreakModeLine: View {
     var body: some View {
         switch mode {
         case .normal: EmptyView()
-        case .winback: line("Bandaged paw. Play two days in a row to win your days back.")
-        case .paused: line("On a trip. Your days are safe.")
-        case .napped: line("A cat nap saved yesterday.")
-        case .fresh: line("A fresh start. One turn each day builds it.")
+        case .winback: line(LocalizedStringResource("Play two days in a row to win it back.", comment: "Streak line: the bandaged paw, a streak that can still be won back"))
+        case .paused: line(LocalizedStringResource("Paused for a trip.", comment: "Streak line: the suitcase, a paused streak"))
+        case .napped: line(LocalizedStringResource("A cat nap saved yesterday.", comment: "Streak line: a missed day the nap covered"))
+        case .fresh: line(LocalizedStringResource("A fresh start.", comment: "Streak line: a new streak"))
         }
     }
 
-    private func line(_ text: LocalizedStringKey) -> some View {
+    private func line(_ text: LocalizedStringResource) -> some View {
         WordLabel(title: text, alignment: .center)
             .font(.callout)
             .padding(.horizontal, 24)

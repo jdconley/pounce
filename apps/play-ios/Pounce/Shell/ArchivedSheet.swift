@@ -71,7 +71,7 @@ struct ArchivedSheet: View {
             .padding(.horizontal, 24)
             .padding(.top, 20)
 
-            Text("Tap a table to put it back on Home.", comment: "Archived sheet: how to restore a table")
+            Text("Tap a table to restore it.", comment: "Archived sheet: a tap puts a table back on Home")
                 .font(.system(size: 16, weight: .bold, design: .rounded))
                 .foregroundStyle(.white.opacity(0.8))
                 .frame(maxWidth: .infinity, alignment: .leading)

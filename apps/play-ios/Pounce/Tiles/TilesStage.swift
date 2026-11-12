@@ -511,7 +511,7 @@ struct TilesOverView: View {
     let onHome: () -> Void
 
     static var offWords: String {
-        String(localized: "This game is switched off for now, so a new table can't be dealt.", comment: "Tile game over: Play again was refused because the server stopped dealing this game")
+        String(localized: "This game is off for now.", comment: "Tile game over: Play again was refused because the server stopped dealing this game")
     }
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -526,8 +526,8 @@ struct TilesOverView: View {
 
     private var reason: String {
         switch table.view.endReason {
-        case .blocked: String(localized: "Nobody could move. Fewest toys left wins.", comment: "Tile game over: the game was blocked")
-        case .forfeit: String(localized: "Everyone else left the game.", comment: "Tile game over: won by forfeit")
+        case .blocked: String(localized: "Nobody could move.", comment: "Tile game over: the game was blocked")
+        case .forfeit: String(localized: "Everyone else left.", comment: "Tile game over: won by forfeit")
         default: String(localized: "Stash empty!", comment: "Tile game over: someone emptied their rack")
         }
     }
@@ -535,53 +535,12 @@ struct TilesOverView: View {
     var body: some View {
         ZStack {
             Palette.ink.opacity(0.72).ignoresSafeArea()
-            ScrollView {
-                VStack(spacing: 14) {
-                    HStack(spacing: -18) {
-                        ForEach(winners, id: \.self) { seat in
-                            Image(ArtName.cat(SeatInfo.catIndex(table.room.seats[safe: seat]), .celebrate))
-                                .resizable().scaledToFit().frame(width: 150, height: 150)
-                        }
-                    }
-                    .scaleEffect(appeared || reduceMotion ? 1 : 0.6)
-                    .accessibilityHidden(true)
-                    OutlinedText(title, size: 38, fill: Palette.orange, width: 5, lines: 2)
-                        .accessibilityAddTraits(.isHeader)
-                        .accessibilityIdentifier("tiles.over.title")
-                    OutlinedText(reason, size: 18, lines: 2)
-                    VStack(spacing: 8) {
-                        ForEach(Array(table.standings.enumerated()), id: \.element) { place, seat in
-                            row(place: place + 1, seat: seat)
-                        }
-                    }
-                    .padding(14)
-                    .background(RoundedRectangle(cornerRadius: 22).fill(Palette.night).overlay(RoundedRectangle(cornerRadius: 22).strokeBorder(Palette.ink, lineWidth: 4)))
-                    if again == .off {
-                        OutlinedText(Self.offWords, size: 17, fill: Palette.orange, lines: 3)
-                            .accessibilityIdentifier("tiles.over.off")
-                            .padding(.top, 4)
-                    } else if let again {
-                        PillButton(
-                            icon: ArtName.iconPlay, color: again == .waiting ? Palette.violet : Palette.orange, size: .medium, width: 240,
-                            title: again == .go
-                                ? String(localized: "Join the new game", comment: "Game over: someone dealt the next table")
-                                : again == .waiting
-                                    ? String(localized: "Dealing…", comment: "Game over: Play again was asked and the server hasn't answered")
-                                    : String(localized: "Play again", comment: "Game over: deal a new table with the same players"),
-                            accessibilityLabel: again == .go ? "Join the new game" : "Play again", action: onPlayAgain)
-                            .accessibilityIdentifier("tiles.over.again")
-                            .padding(.top, 6)
-                    }
-                    PillButton(
-                        icon: ArtName.iconHome, color: Palette.sky, size: .medium, width: 200,
-                        title: String(localized: "Home", comment: "Game over: go home"), accessibilityLabel: "Home", action: onHome)
-                        .accessibilityIdentifier("tiles.over.home")
-                        .padding(.top, 6)
-                }
-                .padding(.horizontal, 24)
-                .padding(.vertical, 32)
-                .frame(maxWidth: 520)
-                .frame(maxWidth: .infinity)
+            // The winners shrink on a short screen (an iPhone SE) before Home leaves it; at the
+            // largest text sizes the column scrolls.
+            ViewThatFits(in: .vertical) {
+                column(cat: 150, vertical: 32)
+                column(cat: 96, vertical: 16)
+                ScrollView { column(cat: 96, vertical: 16) }
             }
         }
         .onAppear {
@@ -591,6 +550,62 @@ struct TilesOverView: View {
         }
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("screen-tiles-over")
+    }
+
+    private func column(cat: CGFloat, vertical: CGFloat) -> some View {
+        VStack(spacing: 14) {
+            HStack(spacing: -18) {
+                ForEach(winners, id: \.self) { seat in
+                    Image(ArtName.cat(SeatInfo.catIndex(table.room.seats[safe: seat]), .celebrate))
+                        .resizable().scaledToFit().frame(width: cat, height: cat)
+                }
+            }
+            .scaleEffect(appeared || reduceMotion ? 1 : 0.6)
+            .accessibilityHidden(true)
+            OutlinedText(title, size: 38, fill: Palette.orange, width: 5, lines: 2)
+                .accessibilityAddTraits(.isHeader)
+                .accessibilityIdentifier("tiles.over.title")
+            OutlinedText(reason, size: 18, lines: 2)
+            VStack(spacing: 8) {
+                ForEach(Array(table.standings.enumerated()), id: \.element) { place, seat in
+                    row(place: place + 1, seat: seat)
+                }
+            }
+            .padding(14)
+            .background(RoundedRectangle(cornerRadius: 22).fill(Palette.night).overlay(RoundedRectangle(cornerRadius: 22).strokeBorder(Palette.ink, lineWidth: 4)))
+            if again == .off {
+                OutlinedText(Self.offWords, size: 17, fill: Palette.orange, lines: 3)
+                    .accessibilityIdentifier("tiles.over.off")
+                    .padding(.top, 4)
+            }
+            // Play again and Home on one row (Home as its icon alone beside Play again), so
+            // both fit a small phone without scrolling.
+            HStack(spacing: 14) {
+                if let again, again != .off {
+                    PillButton(
+                        icon: ArtName.iconPlay, color: again == .waiting ? Palette.violet : Palette.orange, size: .medium, width: 210,
+                        title: again == .go
+                            ? String(localized: "Join", comment: "Game over: someone dealt the next table; join it")
+                            : again == .waiting
+                                ? String(localized: "Dealing…", comment: "Game over: Play again was asked and the server hasn't answered")
+                                : String(localized: "Play again", comment: "Game over: deal a new table with the same players"),
+                        accessibilityLabel: again == .go ? "Join the new game" : "Play again", action: onPlayAgain)
+                        .accessibilityIdentifier("tiles.over.again")
+                    PillButton(icon: ArtName.iconHome, color: Palette.sky, size: .medium, width: 84, accessibilityLabel: "Home", action: onHome)
+                        .accessibilityIdentifier("tiles.over.home")
+                } else {
+                    PillButton(
+                        icon: ArtName.iconHome, color: Palette.sky, size: .medium, width: 200,
+                        title: String(localized: "Home", comment: "Game over: go home"), accessibilityLabel: "Home", action: onHome)
+                        .accessibilityIdentifier("tiles.over.home")
+                }
+            }
+            .padding(.top, 6)
+        }
+        .padding(.horizontal, 24)
+        .padding(.vertical, vertical)
+        .frame(maxWidth: 520)
+        .frame(maxWidth: .infinity)
     }
 
     private func row(place: Int, seat: Seat) -> some View {
@@ -728,11 +743,11 @@ struct TilesMenuSheet: View {
     private func forfeitMessage(_ forfeit: (seat: Seat, table: TilesTableModel)) -> String {
         switch forfeit.table.forfeitOutcome(forfeit.seat) {
         case .ends(let winner):
-            return String(localized: "The game ends now and \(SeatInfo.name(forfeit.table.room, winner)) wins.", comment: "Forfeit confirmation: with one other player left, the game ends and they win")
+            return String(localized: "\(SeatInfo.name(forfeit.table.room, winner)) wins.", comment: "Forfeit confirmation: with one other player left, the game ends and they win")
         case .out:
             return forfeit.table.isMultiSeat
-                ? String(localized: "\(SeatInfo.name(forfeit.table.room, forfeit.seat)) is out and finishes last. Everyone else keeps playing.", comment: "Forfeit confirmation on a shared phone: that seat is out, the rest play on")
-                : String(localized: "You're out and finish last. Everyone else keeps playing.", comment: "Forfeit confirmation: you are out, the rest play on")
+                ? String(localized: "\(SeatInfo.name(forfeit.table.room, forfeit.seat)) finishes last. The rest play on.", comment: "Forfeit confirmation on a shared phone: that seat is out, the rest play on")
+                : String(localized: "You finish last. The rest play on.", comment: "Forfeit confirmation: you are out, the rest play on")
         }
     }
 }
