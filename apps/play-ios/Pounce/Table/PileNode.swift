@@ -29,7 +29,7 @@ final class PileNode: SKNode {
         glow = SKSpriteNode(texture: TableArt.cards(ArtName.cardGlow))
         sparkle = SKSpriteNode(texture: TableArt.texture(ArtName.fxSparkle, atlas: ArtName.Atlas.fx))
         super.init()
-        empty.alpha = 0.35
+        empty.alpha = 0.35  // fade-ok: the empty pile's outline, alone
         empty.zPosition = 0
         addChild(empty)
         glow.zPosition = 0.05
@@ -104,6 +104,7 @@ final class PileNode: SKNode {
     /// Turn start: the glow flares up and settles twice (the reconcile that follows decides
     /// whether it stays lit).
     func flare() -> (SKAction, SKNode) {
+        // fade-ok: the glow sits alone under the pile's cards
         (.sequence([
             .unhide(), .fadeAlpha(to: 0.2, duration: 0),
             .fadeAlpha(to: 1, duration: 0.15), .fadeAlpha(to: 0.45, duration: 0.18), .fadeAlpha(to: 1, duration: 0.18),

@@ -405,7 +405,7 @@ private struct PersonToggle: View {
             }
         }
         .buttonStyle(.plain)
-        .opacity(fixed && !person.approved ? 0.8 : 1)
+        .groupOpacity(fixed && !person.approved ? 0.8 : 1)
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(Text(verbatim: person.name))
         .accessibilityValue(person.approved ? "on" : "off")
@@ -585,7 +585,7 @@ struct KittenNoticeSheet: View {
                     .accessibilityIdentifier("notice.waiting")
             } else {
                 ArtIconButton(icon: ArtName.iconCheck, color: Palette.lime, size: 60, label: "Send") { send() }
-                    .opacity(PhoneEntry.plausible(phone) ? 1 : 0.5)
+                    .groupOpacity(PhoneEntry.plausible(phone) ? 1 : 0.5)
                     .accessibilityIdentifier("notice.send")
             }
         }
@@ -653,11 +653,11 @@ struct KittenNoticeSheet: View {
             DigitKeys(height: roomy ? 68 : 58, size: roomy ? 36 : 30, idPrefix: "consent",
                       onDigit: type, onDelete: { flow.entry.delete() }, onDone: check)
                 .disabled(busy || resting)
-                .opacity(resting ? 0.5 : 1)
+                .groupOpacity(resting ? 0.5 : 1)
             HStack(spacing: 18) {
                 VStack(spacing: 4) {
                     ArtIconButton(icon: ArtName.Habit.iconResend, color: Palette.lime, size: 60, label: "Another code") { resend() }
-                        .opacity(ready ? 1 : 0.45)
+                        .groupOpacity(ready ? 1 : 0.45)
                         .bounceLoop(active: flow.expired && ready)
                         .accessibilityValue(ready ? "ready" : "waiting")
                         .accessibilityIdentifier("consent.resend")

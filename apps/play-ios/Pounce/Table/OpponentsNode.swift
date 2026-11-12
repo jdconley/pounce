@@ -76,7 +76,7 @@ final class OpponentsNode: SKNode {
             node.setPresence(view?.kind == .bot ? nil : view?.presence)
             // A seat that forfeited (§5.13): dimmed, with "Forfeited" where a bad link would show.
             let out = game.isOut(seat)
-            node.alpha = out ? 0.45 : 1
+            node.alpha = out ? 0.45 : 1  // fade-ok: CatNode is a FadeGroup
             let link = out
                 ? (level: SignalGlyph.Level.lost, text: String(localized: "Forfeited", comment: "Under a player's name: they left the game"))
                 : view?.kind == .human ? LinkWords.seat(view?.link) : nil

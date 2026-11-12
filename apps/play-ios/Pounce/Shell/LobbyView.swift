@@ -408,7 +408,7 @@ struct LobbyView: View {
                     ) {
                         start()
                     }
-                    .opacity(ready ? 1 : 0.8)
+                    .groupOpacity(ready ? 1 : 0.8)
                     .shadow(color: ready ? Palette.orange.opacity(0.8) : .clear, radius: 14)
                     .wiggle(trigger: wiggles[.start, default: 0])
                     .accessibilityValue(ready ? Text("") : Text(verbatim: LobbyCopy.status(table)))
@@ -785,7 +785,7 @@ struct Cushion: View {
                 .overlay { Image(ArtName.iconPlus).resizable().scaledToFit().padding(9) }
                 .frame(width: width * 0.42, height: width * 0.42)
                 .scaleEffect(reduceMotion ? 1 : (pulse ? 1.12 : 0.94))
-                .opacity(reduceMotion && pulse ? 0.7 : 1)
+                .groupOpacity(reduceMotion && pulse ? 0.7 : 1)
                 .frame(maxHeight: .infinity, alignment: .bottom)
                 .padding(.bottom, height * 0.3)
                 .onAppear {

@@ -55,7 +55,7 @@ struct CodeKeypad: View {
         }
         .buttonStyle(KeyStyle(color: Palette.magenta, height: keyHeight))
         .disabled(!enabled)
-        .opacity(enabled ? 1 : 0.6)
+        .groupOpacity(enabled ? 1 : 0.6)
         .accessibilityLabel(Text(verbatim: String(c)))
         .accessibilityIdentifier("join.key.\(c)")
     }
@@ -73,7 +73,7 @@ struct CodeKeypad: View {
         }
         .buttonStyle(KeyStyle(color: Palette.teal, height: keyHeight))
         .disabled(!(deleteEnabled ?? enabled))
-        .opacity(deleteEnabled ?? enabled ? 1 : 0.6)
+        .groupOpacity(deleteEnabled ?? enabled ? 1 : 0.6)
         .accessibilityLabel("Delete")
         .accessibilityIdentifier("join.key.delete")
     }

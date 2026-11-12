@@ -158,7 +158,7 @@ struct RenameTableView: View {
                 }
                 .disabled(cleaned == nil || checking)
                 .saturation(cleaned == nil ? 0 : 1)
-                .opacity(cleaned == nil ? 0.55 : 1)
+                .groupOpacity(cleaned == nil ? 0.55 : 1)
                 .accessibilityIdentifier("rename.done")
             }
             Spacer(minLength: 0)

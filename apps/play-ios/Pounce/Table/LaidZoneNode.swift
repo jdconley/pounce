@@ -9,7 +9,7 @@ import SpriteKit
 ///
 /// While a hand card is dragged over a group (`setPreview`), that group is ringed, the others
 /// that could take the card fade back, and the group opens a gap at the end the card will land
-/// on, with a see-through copy of the card there (a Yarn shows the number it stands for). A
+/// on, with a washed-out copy of the card there (a Yarn shows the number it stands for). A
 /// group that can't take it is ringed in red and darkened.
 @MainActor
 final class LaidZoneNode: SKNode {
@@ -252,6 +252,20 @@ final class LaidZoneNode: SKNode {
         }
     }
 
+    private static let ghostVeil = "ghostVeil"
+
+    /// The preview's copy of the held card: solid, washed out by a pale card face on top, so it
+    /// reads as not yet played without the card it overlaps showing through it.
+    private static func makeGhost(_ card: CardID, size: CGSize) -> CardNode {
+        let ghost = CardNode(card: card, size: size, shadow: false, compact: true)
+        let veil = SKSpriteNode(texture: CardFaceFactory.shared.blank(), size: size)
+        veil.name = ghostVeil
+        veil.alpha = 0.4  // fade-ok: over the ghost's own face only, nothing behind shows
+        veil.zPosition = 0.001
+        ghost.addChild(veil)
+        return ghost
+    }
+
     /// The groups `row` draws: its laid groups, with the preview's group in place of its own.
     private func shownGroups(_ row: Row, seat: Seat) -> [Group] {
         var groups = row.groups
@@ -272,12 +286,12 @@ final class LaidZoneNode: SKNode {
             for (j, card) in group.cards.enumerated() {
                 let to = place.cards[g][j]
                 if card == ghostCard, let p = preview, p.target.group == g {
-                    let ghost = row.ghost ?? CardNode(card: card, size: row.miniSize, shadow: false, compact: true)
+                    let ghost = row.ghost ?? Self.makeGhost(card, size: row.miniSize)
                     if ghost.parent == nil { row.node.addChild(ghost) }
                     ghost.setCard(card)
                     ghost.size = row.miniSize
+                    (ghost.childNode(withName: Self.ghostVeil) as? SKSpriteNode)?.size = row.miniSize
                     ghost.position = to
-                    ghost.alpha = 0.8
                     // Under the next card at the start (its corner index stays readable), on top at the end.
                     ghost.zPosition = j == 0 ? 0.095 : 2
                     ghost.isHidden = !place.shown[g][j]

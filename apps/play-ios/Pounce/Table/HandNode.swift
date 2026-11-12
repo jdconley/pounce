@@ -3,9 +3,10 @@ import SpriteKit
 
 /// The fanned hand at the bottom. Face cards exist only for the revealed seat; otherwise the
 /// fan is face-down backs (a multi-seat phone between reveals) or empty. Reconciling is
-/// idempotent: nodes are matched by card id and moved to their layout placement.
+/// idempotent: nodes are matched by card id and moved to their layout placement. Dimmed off
+/// turn as one layer (`FadeGroup`), so no card shows through the one on top of it.
 @MainActor
-final class HandNode: SKNode {
+final class HandNode: FadeGroup {
     enum Content: Equatable {
         case faces([CardID])
         case backs(Int)
@@ -74,7 +75,7 @@ final class HandNode: SKNode {
             node.alpha = 1
             node.zPosition = i == liftedIndex ? Self.liftedZ : Self.z(p)
         }
-        alpha = dimmed ? 0.82 : 1
+        alpha = dimmed ? 0.82 : 1  // fade-ok: the hand is a FadeGroup
     }
 
     /// Opens the fan at `gap` (or closes it, nil) without snapping: the moves that slide each

@@ -226,7 +226,7 @@ struct AgeCorrectionRow: View {
                     if changed { Haptics.shared.success() } else { Haptics.shared.thump() }
                 }
             }
-            .opacity(busy ? 0.5 : 1)
+            .groupOpacity(busy ? 0.5 : 1)
             .accessibilityIdentifier("gear.ageCheck")
             if noAnswer {
                 WordLine(

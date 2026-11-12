@@ -6,9 +6,9 @@ import SwiftUI
 /// badges (bot, skip pending), and along the bottom its two numbers: the phase on a gold "P4"
 /// chip at the left (wearing the "laid down" sticker once this round's phase is down) and the
 /// card count on a mini card back at the right. Static by default; every motion goes through
-/// the `AnimationDirector`.
+/// the `AnimationDirector`. Dimmed (a forfeited seat) as one layer: `FadeGroup`.
 @MainActor
-final class CatNode: SKNode {
+final class CatNode: FadeGroup {
     let cat: Int
     let diameter: CGFloat
     /// How much the card count and the level chip grow for the person's text size setting
@@ -69,7 +69,7 @@ final class CatNode: SKNode {
             n.position = CGPoint(x: x * diameter / 2, y: y * diameter / 2)
             return n
         }
-        super.init()
+        super.init(rasterize: false)
         targetGlow.zPosition = 0.5
         targetGlow.isHidden = true
         addChild(targetGlow)
@@ -180,7 +180,7 @@ final class CatNode: SKNode {
     /// a short fade in instead.
     func phasePop(reduceMotion: Bool) -> [(SKAction, SKNode)] {
         if reduceMotion {
-            phaseChip.alpha = 0.2
+            phaseChip.alpha = 0.2  // fade-ok: the chip alone, a 0.25 s fade in
             return [(.fadeIn(withDuration: 0.25), phaseChip)]
         }
         phaseChip.setScale(0.4)
@@ -243,7 +243,7 @@ final class CatNode: SKNode {
             .scale(to: 1.12, duration: 0.12), .scale(to: 1.0, duration: 0.12),
             .scale(to: 1.08, duration: 0.12), .scale(to: 1.0, duration: 0.12),
         ])
-        glow.alpha = 0.4
+        glow.alpha = 0.4  // fade-ok: the glow sits alone behind the cat
         let flare = SKAction.group([
             .sequence([
                 .fadeAlpha(to: 1, duration: 0.24), .fadeAlpha(to: 0.6, duration: 0.24),

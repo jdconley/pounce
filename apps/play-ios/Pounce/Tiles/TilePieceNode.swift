@@ -96,7 +96,7 @@ final class TilePieceNode: SKSpriteNode {
 /// a check paw when it was changed this turn and is fine, a dashed outline that breathes with
 /// one glyph for why when it isn't a set yet, a thin ring while the rug is locked.
 @MainActor
-final class TileSetNode: SKNode {
+final class TileSetNode: FadeGroup {
     enum Look: Equatable {
         case plain, locked, changed, target, refused
         case broken(TilesDraft.Problem)
@@ -108,8 +108,8 @@ final class TileSetNode: SKNode {
     private(set) var look: Look?
     private(set) var boxSize = CGSize.zero
 
-    override init() {
-        super.init()
+    init() {
+        super.init(rasterize: false)
         plate.centerRect = TilePieceFactory.plateCenter
         plate.zPosition = 0
         dashes.zPosition = 1
@@ -157,6 +157,7 @@ final class TileSetNode: SKNode {
             dashes.isHidden = false
             mark = .problem(problem)
             if !reduceMotion {
+                // fade-ok: the dashed outline alone, breathing
                 dashes.run(.repeatForever(.sequence([
                     .fadeAlpha(to: 0.45, duration: 0.7).eased(.easeInEaseOut), .fadeAlpha(to: 1, duration: 0.7).eased(.easeInEaseOut),
                 ])), withKey: "breathe")
@@ -236,7 +237,7 @@ final class TilesOpponentsNode: SKNode {
             node.position = CGPoint(x: slots[i].x, y: slots[i].y + layout.catLift)
             node.zPosition = CGFloat(i)
             node.setPresence(view?.kind == .bot ? nil : view?.presence)
-            node.alpha = marks.forfeited ? 0.45 : 1
+            node.alpha = marks.forfeited ? 0.45 : 1  // fade-ok: CatNode is a FadeGroup
             node.setLink(marks.forfeited ? nil : (view?.kind == .human ? LinkWords.seat(view?.link)?.level : nil))
             node.setBadges(bot: marks.bot, skip: false)
             node.slotWidth = spacing

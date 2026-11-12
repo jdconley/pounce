@@ -293,9 +293,10 @@ struct CatEditorView: View {
                 }
                 .padding(.horizontal, 16)
                 .frame(height: 60)
-                .background(Capsule().fill(.white))
+                // The drop shadow on the pill alone: on the field it would sit under the faint
+                // placeholder letters and show through them.
+                .background(Capsule().fill(.white).shadow(color: Palette.ink.opacity(0.5), radius: 0, x: 0, y: 5))
                 .overlay(Capsule().strokeBorder(Palette.ink, lineWidth: 4))
-                .shadow(color: Palette.ink.opacity(0.5), radius: 0, x: 0, y: 5)
                 .wiggle(trigger: nameNope)
                 .accessibilityLabel(Text("Your name"))
                 .accessibilityIdentifier("pickcat.name")
@@ -338,7 +339,7 @@ struct CatEditorView: View {
             }
             .disabled(checking)
             .saturation(canConfirm ? 1 : 0)
-            .opacity(canConfirm ? 1 : 0.55)
+            .groupOpacity(canConfirm ? 1 : 0.55)
             .accessibilityHint(canConfirm ? Text("") : Text("Type your name first"))
             .accessibilityIdentifier("pickcat.confirm")
             if let onDelete {

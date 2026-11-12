@@ -58,7 +58,7 @@ struct NotifyPanel: View {
                     }
                 }
                 .frame(maxWidth: .infinity)
-                .opacity(s.reminders ? 1 : 0.55)
+                .groupOpacity(s.reminders ? 1 : 0.55)
             }
             // The live table on the Lock Screen (§11.3): on by default, the game itself.
             WordRow(title: "Live table", detail: "Show your game on the Lock Screen.") {

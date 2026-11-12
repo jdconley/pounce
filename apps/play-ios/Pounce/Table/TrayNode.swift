@@ -23,7 +23,8 @@ final class TrayNode: SKNode {
     @MainActor private final class Slot {
         let node = SKNode()
         let tray: SKSpriteNode
-        let example = SKNode()
+        /// The see-through example fan, faded as one layer (it never moves while shown).
+        let example = FadeGroup(rasterize: true)
         let cards = SKNode()
         let sparkle: SKSpriteNode
         var frame: CGRect = .zero
@@ -77,6 +78,7 @@ final class TrayNode: SKNode {
             slot.node.position = CGPoint(x: f.midX, y: f.midY)
             slot.node.addChild(tray)
             slot.example.zPosition = 1
+            slot.example.alpha = 0.75  // fade-ok: a FadeGroup
             slot.cards.zPosition = 1
             slot.node.addChild(slot.example)
             slot.node.addChild(slot.cards)
@@ -214,7 +216,6 @@ final class TrayNode: SKNode {
             let n = CardNode(card: id, size: card, shadow: false, compact: true)
             n.position = CGPoint(x: start + CGFloat(j) * step, y: 0)
             n.zPosition = CGFloat(j) * 0.01
-            n.alpha = 0.75
             slot.example.addChild(n)
         }
     }

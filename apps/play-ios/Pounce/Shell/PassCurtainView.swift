@@ -56,7 +56,7 @@ struct PassCurtainView: View {
                     .shadow(color: Palette.ink.opacity(0.5), radius: 0, x: 0, y: 6)
                     .scaleEffect(breathe ? 1.03 : 1, anchor: .bottom)
                     .scaleEffect(appeared || reduceMotion ? 1 : 0.5, anchor: .bottom)
-                    .opacity(appeared ? 1 : 0)
+                    .groupOpacity(appeared ? 1 : 0)
                     .position(x: w / 2, y: h * 0.47)
                     .accessibilityHidden(true)
 
@@ -71,7 +71,7 @@ struct PassCurtainView: View {
                     .scaleEffect(scale)
                     .position(x: w / 2, y: h * 0.47 + catSide * 0.5 + 92 * scale)
                     .offset(y: appeared || reduceMotion ? 0 : 120)
-                    .opacity(appeared ? 1 : 0)
+                    .groupOpacity(appeared ? 1 : 0)
 
                 CardBacksPeek(width: w)
                     .position(x: w / 2, y: h - 22)
