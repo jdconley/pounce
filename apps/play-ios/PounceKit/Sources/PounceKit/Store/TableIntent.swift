@@ -11,6 +11,8 @@ public enum TableIntent: Equatable, Sendable {
     /// every action, at the same seq as its last event, carries the truth (drawn
     /// cards, discard top, counts, a finished room) and follows as `.reconcile`.
     case game(GameEvent, seq: Int)
+    /// Animate one tile game event, under the same rules as `game`.
+    case tiles(TilesEvent, seq: Int)
     case presence(seat: Seat, presence: Presence)
     /// Some seat's connection quality changed (`SeatView.link`): redraw the seats.
     case link

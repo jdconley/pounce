@@ -239,8 +239,8 @@ public struct GameView: Codable, Equatable, Sendable {
     }
 }
 
-/// `[Seat: [CardID]]` as a JSON object with string keys.
-private struct StringKeyedSeats: Codable {
+/// `[Seat: [CardID]]` as a JSON object with string keys (a tile game's racks too: a piece id is an `Int`).
+struct StringKeyedSeats: Codable {
     var hands: [Seat: [CardID]]
 
     init(hands: [Seat: [CardID]]) { self.hands = hands }
@@ -271,7 +271,14 @@ public struct RoomView: Codable, Equatable, Sendable {
     public var status: RoomStatus
     public var youAreHost: Bool
     public var seats: [SeatView]
+    /// Cat Tower's view. Nil in the lobby, and in a room playing another game.
     public var game: GameView?
+    /// Which game the room plays (`GameID`). Nil from a server older than the second game, which
+    /// reads as Cat Tower.
+    public var gameId: String?
+    /// The tile game's view, in a room playing it (tile game spec §9.3). One key per game: the two
+    /// games share event names with different payloads, so nothing here is decoded by `gameId`.
+    public var tiles: TilesView?
     /// The table's rug and card back; nil from a server without looks (streaks off).
     public var look: Look?
     /// The Play again table's code, once someone dealt it (§10.4).
@@ -286,7 +293,7 @@ public struct RoomView: Codable, Equatable, Sendable {
     public init(
         code: String, name: String? = nil, status: RoomStatus, youAreHost: Bool, seats: [SeatView],
         game: GameView? = nil, look: Look? = nil, rematch: String? = nil, link: RoomLink? = nil,
-        nudge: NudgeView? = nil, retire: RetireView? = nil
+        nudge: NudgeView? = nil, retire: RetireView? = nil, gameId: String? = nil, tiles: TilesView? = nil
     ) {
         self.code = code
         self.name = name
@@ -299,7 +306,23 @@ public struct RoomView: Codable, Equatable, Sendable {
         self.link = link
         self.nudge = nudge
         self.retire = retire
+        self.gameId = gameId
+        self.tiles = tiles
     }
+
+    /// The room plays the tile game. Decided by `gameId` alone, so a room in its lobby says so too.
+    public var isTiles: Bool { gameId == GameID.tiles }
+
+    /// The seat on the move while the room and its game (either one) are playing; nil otherwise.
+    public var liveTurn: Seat? {
+        guard status == .playing else { return nil }
+        if let game { return game.status == .playing ? game.turn : nil }
+        if let tiles { return tiles.status == .playing ? tiles.turn : nil }
+        return nil
+    }
+
+    /// True when `seat` forfeited, in either game.
+    public func isOut(_ seat: Seat) -> Bool { game?.isOut(seat) ?? tiles?.isOut(seat) ?? false }
 
     /// The name to show: the table's own, or `TableName.fallback` from an older server.
     public var title: String { name ?? TableName.fallback(code: code) }

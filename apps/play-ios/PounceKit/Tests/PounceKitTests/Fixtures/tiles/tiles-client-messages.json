@@ -1,0 +1,73 @@
+[
+  {
+    "name": "act-draw",
+    "message": {
+      "t": "act",
+      "seat": 1,
+      "action": {
+        "type": "draw"
+      }
+    }
+  },
+  {
+    "name": "act-pass",
+    "message": {
+      "t": "act",
+      "seat": 1,
+      "action": {
+        "type": "pass"
+      }
+    }
+  },
+  {
+    "name": "act-forfeit",
+    "message": {
+      "t": "act",
+      "seat": 1,
+      "action": {
+        "type": "forfeit"
+      }
+    }
+  },
+  {
+    "name": "act-play-opening",
+    "message": {
+      "t": "act",
+      "seat": 0,
+      "action": {
+        "type": "play",
+        "table": [
+          [
+            8,
+            9,
+            10
+          ]
+        ]
+      }
+    }
+  },
+  {
+    "name": "act-play-id",
+    "message": {
+      "t": "act",
+      "seat": 1,
+      "action": {
+        "type": "play",
+        "table": [
+          [
+            8,
+            9,
+            10,
+            11
+          ],
+          [
+            3,
+            42,
+            55
+          ]
+        ]
+      },
+      "id": "0f8fad5b-d9cb-469f-a165-70867728950e"
+    }
+  }
+]

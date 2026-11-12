@@ -43,8 +43,8 @@ public struct PassAndPlay: Equatable, Sendable {
         let moved = epoch != self.epoch || seats != mySeats
         mySeats = seats
         self.epoch = epoch
-        live = model.room.status == .playing && model.game?.status == .playing
-        activeTurn = model.isMyTurn ? model.game?.turn : nil
+        live = model.isLive
+        activeTurn = model.isMyTurn ? model.currentSeat : nil
 
         if mySeats.count == 1, let only = mySeats.first {
             revealed = only

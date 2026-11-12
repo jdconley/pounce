@@ -123,6 +123,8 @@ public enum GameEvent: Codable, Equatable, Sendable {
 public enum RoomEvent: Codable, Equatable, Sendable {
     case presence(seat: Seat, presence: Presence)
     case game(GameEvent)
+    /// A tile game event (`{"kind":"tiles","event":{…}}`), beside Cat Tower's `game`.
+    case tiles(TilesEvent)
     /// Someone at the table changed its rug or card back (§9.4); `look` is the whole new look.
     case look(seat: Seat, look: Look)
 
@@ -137,6 +139,8 @@ public enum RoomEvent: Codable, Equatable, Sendable {
                              presence: try c.decode(Presence.self, forKey: .presence))
         case "game":
             self = .game(try c.decode(GameEvent.self, forKey: .event))
+        case "tiles":
+            self = .tiles(try c.decode(TilesEvent.self, forKey: .event))
         case "look":
             self = .look(seat: try c.decode(Seat.self, forKey: .seat),
                          look: Look(rug: try c.decode(String.self, forKey: .rug), back: try c.decode(String.self, forKey: .back)))
@@ -155,6 +159,9 @@ public enum RoomEvent: Codable, Equatable, Sendable {
             try c.encode(presence, forKey: .presence)
         case .game(let event):
             try c.encode("game", forKey: .kind)
+            try c.encode(event, forKey: .event)
+        case .tiles(let event):
+            try c.encode("tiles", forKey: .kind)
             try c.encode(event, forKey: .event)
         case .look(let seat, let look):
             try c.encode("look", forKey: .kind)

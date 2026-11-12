@@ -17,6 +17,25 @@ enum Fixtures {
             .appendingPathComponent(relative)
     }
 
+    /// Resolves `relative` under this test target's own `Fixtures/` folder.
+    static func localURL(_ relative: String) -> URL {
+        URL(fileURLWithPath: #filePath).deletingLastPathComponent()
+            .appendingPathComponent("Fixtures").appendingPathComponent(relative)
+    }
+
+    /// The tile game's protocol fixtures (`Fixtures/tiles/tiles-*-messages.json`): copies of the
+    /// server's `apps/play-api/fixtures/protocol/tiles-server-messages.json` and
+    /// `tiles-client-messages.json` as of commit a97ddd6 on `claude/tiles-rooms` (the server's
+    /// rooms and wire for the game, PR 64), generated there from a real room. Once that branch is
+    /// on main these two read the shared files (`url("protocol/tiles-…")`) and the copies go.
+    static func tilesServerMessages() throws -> [(name: String, json: String)] {
+        try messages(at: localURL("tiles/tiles-server-messages.json"))
+    }
+
+    static func tilesClientMessages() throws -> [(name: String, json: String)] {
+        try messages(at: localURL("tiles/tiles-client-messages.json"))
+    }
+
     static func serverMessages() throws -> [(name: String, json: String)] {
         try messages(in: "protocol/server-messages.json")
     }
@@ -51,7 +70,12 @@ enum Fixtures {
     }
 
     private static func messages(in relative: String) throws -> [(name: String, json: String)] {
-        let data = try Data(contentsOf: url(relative))
+        try messages(at: url(relative))
+    }
+
+    private static func messages(at file: URL) throws -> [(name: String, json: String)] {
+        let relative = file.lastPathComponent
+        let data = try Data(contentsOf: file)
         guard let entries = try JSONSerialization.jsonObject(with: data) as? [[String: Any]] else {
             throw FixtureError.malformed(relative)
         }
