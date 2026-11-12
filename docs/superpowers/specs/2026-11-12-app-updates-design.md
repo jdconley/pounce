@@ -56,7 +56,7 @@ A separate route is the cheapest: it touches no Durable Object, the app asks it 
 
 `latest` is newer than the running app. Home shows a small card, "A new Pounce is ready", with Update and a close button. Never on a table, never an alert.
 
-Schedule (`UpdatePolicy.soft`, PounceKit): once per new version, and after any dismissal nothing for seven days, whatever version comes out. Hidden on a TestFlight install (the App Store can't update it), in demos and in UI tests.
+Schedule (`UpdatePolicy.soft`, PounceKit): once per new version, and after any dismissal nothing for seven days, whatever version comes out. Hidden on a TestFlight install (the App Store can't update it), in demos and in UI tests. On a child's device the card has no button and says "Ask a grown-up to update Pounce."
 
 ### 4.2 This table needs a newer app
 
@@ -86,7 +86,7 @@ X-Pounce-Update: required
 {"error":"update_required","minimum":"1.2","storeUrl":"…","testflightUrl":"…"}
 ```
 
-The app shows a full screen, "Update Pounce to keep playing", with Update and nothing else. `GET /v1/app` still answers, so the app can also raise the screen at launch. The public pages, `/healthz` and Apple's notification route are untouched. (The existing 426 `upgrade_required`, for asking the socket route without a WebSocket upgrade, is a different answer and unchanged.)
+The app shows a full screen, "Update Pounce to keep playing", with Update and nothing else. `GET /v1/app` still answers, so the app can also raise the screen at launch, and takes it down again if the minimum is taken back. It waits for the age screen on a device that hasn't answered it, since the button depends on the age and that screen needs no server. The public pages, `/healthz` and Apple's notification route are untouched. (The existing 426 `upgrade_required`, for asking the socket route without a WebSocket upgrade, is a different answer and unchanged.)
 
 ### 4.4 The Update button (`UpdatePolicy.action`)
 
@@ -117,6 +117,8 @@ It fits the notification policy, under these rules (`DeviceIndex.pushUpdate`, `n
 **What 1.0 does with it** (read at `268262c`): the payload's `kind` is `update`, which 1.0 has no name for, its category is `STATUS` (no buttons), and it has no top-level `code`, no badge and no `streak`. `PushCoordinator.presentation` shows it as a banner, in the foreground too, and refreshes the tables list. A tap opens the app and nothing else (`NotifyActions.outcome` is `.none` without a `code`). The Notification Service Extension delivers it as it came (not a communication kind) and the widgets' snapshot is unchanged (no `streak`). A top-level `code` is what must never be there: 1.0 would open the table and be told it doesn't exist.
 
 For someone on 1.0 tapping a link to a tile game table this is the one thing that explains what they see: the app bounces to Join, and the banner says why.
+
+From 1.1 on the app knows the kind: a tap opens the table in `update.code`, which answers as §4.2 says, or deals them in once they have updated.
 
 ## 6. What a 1.0 app does, and retiring it
 
@@ -153,7 +155,12 @@ How safely 1.0 can be retired:
 
 **How 1.0 is kept safe.** With `APP_MINIMUM` empty, as shipped, nothing a request without `X-Pounce-App` sends or receives changes. `tests/app-updates.test.ts` runs the requests 1.0 makes against a server with no update setting and against servers with all of them, and compares every status, header and body; it checks the Worker's calls to the device's index are the same calls with the same arguments; and it holds the tables body to `{"tables":[…]}` and the tile table's 404 to an empty body with no new header. The pinned fixtures (`tests/fixtures-pinned.test.ts`) are untouched. The one thing that reaches 1.0 unasked is the update push, and only once `latest` is above 1.0.
 
-## 8. Open questions for JD
+## 8. Where it lives
+
+- Server: `src/app/` (`version.ts`, `status.ts`, `memory.ts`, `live.ts`), `src/notify/update.ts`, `lockedFor` in `src/room/tables.ts`, the gate in `src/index.ts`, the room's answer and `askToUpdate` in `src/room/game-room.ts`, `DeviceIndex.pushUpdate`. Tests: beside each, and `tests/app-updates.test.ts`.
+- App: `PounceKit/Sources/PounceKit/Update/` (pure, unit tested), `Pounce/App/UpdateModel.swift`, `Pounce/Shell/UpdateViews.swift`. Demo arguments: `-demo-update <soft|locked|table|required>`, `-update-channel testflight`. Screenshots: `apps/play-ios/Art/screenshots/app-updates/`.
+
+## 9. Open questions for JD
 
 1. **1.0 at a tile game table.** It gets the 404, as asked. But 1.0 has a better card built in: answering that socket with the protocol-0 frame of §6 would show "Update the app to play" instead of a shaking Join screen. It is a one-line change in the room, it is what 1.0 was written to handle, and I think it is the better answer. Not built, because 1.0's answers were to stay exactly as they are.
 2. **The soft card's schedule.** Built as: once per version, and seven quiet days after any dismissal. If you meant "show again after a week for the same version", it is one line in `UpdatePolicy.soft`.
