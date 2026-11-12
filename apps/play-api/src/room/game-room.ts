@@ -1,6 +1,6 @@
 import { DurableObject } from "cloudflare:workers";
 
-import { storeLatest } from "../app/live";
+import { servedAt, storeKnown } from "../app/live";
 import { gameUnsupported } from "../app/status";
 import { APP_HEADER, parseApp } from "../app/version";
 import { devSpeed, linkOn, nudgeOn } from "../env";
@@ -169,6 +169,7 @@ export class GameRoom extends DurableObject<Env> {
   /** WebSocket upgrade only. The Worker has verified the device token. */
   async fetch(request: Request): Promise<Response> {
     const deviceId = request.headers.get(DEVICE_HEADER);
+    servedAt(request.url);
     if (!this.core) return new Response(null, { status: 404 });
     // An app that can't draw this room's game (it lists its games; one that lists none draws Cat
     // Tower) is told there is no such table, which every version of the app knows how to show.
@@ -503,7 +504,8 @@ export class GameRoom extends DurableObject<Env> {
     await this.index(deviceId).pushUpdate(
       { code: state.code, title: state.name, from: { name: seat.person.name, cat: seat.person.cat }, game: state.game, gameTitle: gameTitle(state.game) },
       level,
-      await storeLatest(this.env),
+      // What Apple last said is live; a lookup that is due runs after this, for the next time.
+      (await storeKnown(this.env, (work) => this.ctx.waitUntil(work))).store,
     );
   }
 

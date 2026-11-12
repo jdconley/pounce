@@ -1,4 +1,4 @@
-import { storeLatest } from "./app/live";
+import { servedAt, storeKnown } from "./app/live";
 import { appStatus, refusalFor, RETIRED_SNAPSHOT, UPDATE_HEADER, UPDATE_REQUIRED, type UpdateRequired } from "./app/status";
 import { APP_HEADER, parseApp } from "./app/version";
 import { issueDeviceToken, verifyDeviceToken } from "./auth";
@@ -162,10 +162,25 @@ const declared = (request: Request): GameId[] => appGames(request).filter((id) =
  */
 const appVersion = (request: Request): string | undefined => parseApp(request.headers.get(APP_HEADER))?.version;
 
-/** `GET /v1/app`: the version live on the App Store, the oldest one still supported, and where to update. Public. */
-async function getApp(env: Env): Promise<Response> {
-  return json(200, appStatus(env, await storeLatest(env).catch(() => null)));
+/** Work that outlives the answer (a lookup of the App Store's version): `ctx.waitUntil`, when there is a context. */
+type Later = (work: Promise<unknown>) => void;
+
+/**
+ * `GET /v1/app`: the version live on the App Store, the oldest one still supported, and where to
+ * update. Public, and answered from what is known: it never waits on Apple, and however often it
+ * is asked, Apple is asked at most once per freshness window (`storeVersion`).
+ */
+async function getApp(env: Env, later: Later): Promise<Response> {
+  return json(200, appStatus(env, await storeKnown(env, later)));
 }
+
+/**
+ * The two calls an app that is too old may still make (design §4.3): deleting the account, which
+ * Apple requires an app to offer for as long as it runs, and signing out. Everything else is
+ * refused, including every other `/v1/me` route.
+ */
+const leavesAnyway = (method: string, pathname: string): boolean =>
+  (method === "DELETE" && pathname === "/v1/me") || (method === "POST" && pathname === "/v1/me/signout");
 
 /** 426 for an app that said what it is and is too old (design §4.3). The header is for a refused socket upgrade, whose body the app can't read. */
 function updateRequired(refusal: UpdateRequired): Response {
@@ -550,8 +565,11 @@ function route(
 }
 
 export default {
-  async fetch(request: Request, env: Env): Promise<Response> {
+  async fetch(request: Request, env: Env, ctx?: ExecutionContext): Promise<Response> {
     const { pathname } = new URL(request.url);
+    // Where this Worker is served, for its cache entries; and how work outlives an answer.
+    servedAt(request.url);
+    const later: Later = (work) => ctx?.waitUntil(work);
     const { method } = request;
     if (method === "GET" && pathname === "/healthz") {
       const speed = devSpeed(env);
@@ -601,7 +619,7 @@ export default {
       const found = await ownerReports(env, request);
       return found === null ? notFound() : found === "bad" ? badRequest() : json(200, found);
     }
-    if (method === "GET" && pathname === "/v1/app") return getApp(env);
+    if (method === "GET" && pathname === "/v1/app") return getApp(env, later);
     const secret = env.TOKEN_SECRET;
     const mints = method === "POST" && pathname === "/v1/devices";
     const handler = mints ? null : route(method, pathname, streaks, notify, liveOn(env), consent, trophyOn(env));
@@ -609,9 +627,10 @@ export default {
     // Too old to be served (`APP_MINIMUM`, or a protocol the server dropped)? Nobody is while
     // there is no minimum, and then this asks nothing and costs nothing.
     const app = parseApp(request.headers.get(APP_HEADER));
-    const refusal = await refusalFor(app, env, MIN_PROTOCOL, () => storeLatest(env).catch(() => null));
-    // An app that said what it is gets a plain answer on every route.
-    if (refusal && app) return updateRequired(refusal);
+    // What is known of the App Store is all this reads: no request ever waits on Apple.
+    const refusal = await refusalFor(app, env, MIN_PROTOCOL, async () => (await storeKnown(env, later)).store);
+    // An app that said what it is gets a plain answer on every route but the two that let someone leave.
+    if (refusal && app && !leavesAnyway(method, pathname)) return updateRequired(refusal);
     if (mints) return secret ? mintDevice(request, env, secret) : notConfigured();
     if (!secret) return notConfigured();
     const deviceId = await authenticate(request, secret);

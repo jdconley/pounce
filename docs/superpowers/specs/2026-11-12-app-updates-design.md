@@ -41,10 +41,14 @@ Public, no credential, `no-store`. Every key is left out when it isn't known.
 { "latest": "1.2", "minimum": "1.1", "storeUrl": "https://apps.apple.com/app/id6829560061", "testflightUrl": "https://testflight.apple.com/join/…" }
 ```
 
-- **`latest`** is the version live on the App Store. The server asks Apple's public lookup (`https://itunes.apple.com/lookup?id=6829560061`, or the id in `APP_STORE_URL`) and keeps the answer six hours (15 minutes for "not listed" or a failure), in the isolate and in the data centre's cache. The request to Apple carries nothing of the asking app: no header, no address, no id. `APP_LATEST` overrides it (a version, or `off`); `APP_LOOKUP=off` never asks.
-- **`minimum`** is `APP_MINIMUM` (empty in `wrangler.jsonc`: none), but only once `latest` is at least that. A minimum set early, or mistyped, locks nobody out.
-- **`storeUrl`** only while there is a listing (`latest` is known). The app falls back to the built-in id.
+- **`latest`** is the version live on the App Store, as Apple's public lookup last said (`https://itunes.apple.com/lookup?id=6829560061`, or the id in `APP_STORE_URL`). The request to Apple carries nothing of the asking app: no header, no address, no id.
+- **`minimum`** is `APP_MINIMUM` (empty in `wrangler.jsonc`: none), but only once Apple has named a version at least that new. A minimum set early, or mistyped, locks nobody out, and one set ahead of a release starts by itself when the release is live.
+- **`storeUrl`** only while there is a listing. The app falls back to the built-in id.
 - Today, before release, the lookup finds nothing and the answer is `{"testflightUrl": …}`.
+
+**No request ever waits on Apple.** Every path, this route included, reads what is remembered (this isolate, then the data centre's cache, keyed on a path of the Worker's own host) and answers from it, however old. When the answer has had its time (six hours; 15 minutes after "not listed" or a failure) one lookup goes out in the background (`ctx.waitUntil`) for the next asker. One at a time per isolate, and Apple is marked as asked before the request leaves, so no number of requests, with or without a credential, whatever they claim to be, causes a second lookup in the same window. A lookup that fails changes nothing: the last version Apple named stays known, so a minimum that was being enforced goes on being enforced. A cold server that knows nothing enforces nothing, and says nothing.
+
+**`APP_LATEST` and `APP_MINIMUM_FORCE`.** `APP_LATEST` (a version, or `off`) overrides only what apps are told is newest, which is the soft card. It is the server's word, not Apple's: it never lets the minimum turn anyone away, and no update push goes by it. Paired with `APP_MINIMUM` for a version that isn't out, it locks nobody out. The one way to enforce a minimum without Apple's word is `APP_MINIMUM_FORCE=on`, which is the owner saying "that version is out". `APP_LOOKUP=off` never asks Apple.
 
 One rule runs through all of it: **nobody is told to update to a version they can't download.** When the lookup fails or the app isn't listed, the server says nothing, the soft card never shows, nobody is refused, and no update push is sent.
 
@@ -86,7 +90,9 @@ X-Pounce-Update: required
 {"error":"update_required","minimum":"1.2","storeUrl":"…","testflightUrl":"…"}
 ```
 
-The app shows a full screen, "Update Pounce to keep playing", with Update and nothing else. `GET /v1/app` still answers, so the app can also raise the screen at launch, and takes it down again if the minimum is taken back. It waits for the age screen on a device that hasn't answered it, since the button depends on the age and that screen needs no server. The public pages, `/healthz` and Apple's notification route are untouched. (The existing 426 `upgrade_required`, for asking the socket route without a WebSocket upgrade, is a different answer and unchanged.)
+Two routes are exempt, so that someone can always leave: `DELETE /v1/me` (Apple requires account deletion for as long as the app runs) and `POST /v1/me/signout`. Every other route is refused, the other `/v1/me` routes included.
+
+The app shows a full screen, "Update Pounce to keep playing", with Update and, for a signed-in person, a quiet way to their account (sign out, delete). `GET /v1/app` still answers, so the app can also raise the screen at launch, and takes it down again if the minimum is taken back. It waits for the age screen on a device that hasn't answered it, since the button depends on the age and that screen needs no server. The public pages, `/healthz` and Apple's notification route are untouched. (The existing 426 `upgrade_required`, for asking the socket route without a WebSocket upgrade, is a different answer and unchanged.)
 
 ### 4.4 The Update button (`UpdatePolicy.action`)
 
@@ -107,7 +113,7 @@ A kitten's device sends nobody to the store: it shares no links, and Rate Pounce
 
 It fits the notification policy, under these rules (`DeviceIndex.pushUpdate`, `notify/update.ts`):
 
-- Only when `latest` is newer than the device's app (1.0 for one that never said). Unknown: nothing.
+- Only when the version Apple last said is live is newer than the device's app (1.0 for one that never said). Unknown: nothing. `APP_LATEST` doesn't count. The push never waits on Apple either: it goes by what is known when it is due.
 - Once per table per device, ever, and no more than one per device every 20 minutes (the spacing every other unasked push keeps).
 - Never to a kitten's device, with or without consent: a child isn't sent to the App Store, and consent covers "your move", pounces and nudges only.
 - Never in a teen's night. Quiet (no sound) in the recipient's quiet hours.
@@ -141,6 +147,7 @@ How safely 1.0 can be retired:
 - Its widgets, live table and "your move" pushes keep arriving, and each leads to the same card.
 - A new game still creates a table on the server that nobody then enters.
 - Before setting `APP_MINIMUM`, look at how many requests still come with no `X-Pounce-App`. Setting it is one line in `wrangler.jsonc`, and taking it back is the same line.
+- Its account deletion and sign-out keep working: its API calls are answered as ever.
 
 ## 7. What each version experiences
 
@@ -169,4 +176,3 @@ How safely 1.0 can be retired:
 5. **Which version draws which game.** The server doesn't know, so "there is something to update to" means "the store has a newer version than yours". If 1.2 ships without the tile game while `GAMES` lists it, people would be asked to update to a version that still can't join. Turn `GAMES` on only once the store version draws the game, or add a per-game minimum.
 6. **TestFlight.** The soft card is hidden there. The other two moments say "Open TestFlight". The fallback `itms-beta://` link is from memory and untested on a device.
 7. **The lookup is the US storefront's.** A phased release counts as live from its first day, since anyone can update by hand.
-8. **Account deletion behind the hard screen.** A walled app can't reach the gear sheet. Apple asks for deletion in the app; a version that old can update first, but say if `DELETE /v1/me` should stay open.

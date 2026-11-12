@@ -252,8 +252,9 @@ export class DeviceIndex extends DurableObject<Env> {
    * whose app can't draw the table's game, in place of a push it was not sent, or of a table it
    * was told doesn't exist.
    *
-   * Only when there is something to update to: `latest`, the version live on the App Store, must
-   * be newer than this device's app (null: unknown, so nothing is said). Once per table, and no
+   * Only when there is something to update to: `latest`, the version Apple last said is live on
+   * the App Store (never `APP_LATEST`'s word for it), must be newer than this device's app (null:
+   * unknown, so nothing is said). Once per table, and no
    * more than one every 20 minutes. Never to a kitten's device, consent or not: a child is not
    * sent to the App Store. Never in a teen's night.
    */

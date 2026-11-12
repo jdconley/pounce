@@ -143,8 +143,9 @@ export async function worker(
     reportsKey?: string;
     /** `GAMES`: the games beyond Cat Tower that rooms may be created for (e.g. "tiles"). Off unless given. */
     games?: string;
-    /** `APP_MINIMUM`, `APP_LATEST` and `APP_STORE_URL` (app updates). Unset unless given. */
+    /** `APP_MINIMUM`, `APP_MINIMUM_FORCE`, `APP_LATEST` and `APP_STORE_URL` (app updates). Unset unless given. */
     appMinimum?: string;
+    appMinimumForce?: string;
     appLatest?: string;
     appStoreUrl?: string;
     /** Apple's public lookup (itunes.apple.com). Without it the lookup fails, as for any host a test doesn't fake. */
@@ -186,6 +187,7 @@ export async function worker(
       ...(options.reportsKey ? { REPORTS_KEY: options.reportsKey } : {}),
       ...(options.games ? { GAMES: options.games } : {}),
       ...(options.appMinimum === undefined ? {} : { APP_MINIMUM: options.appMinimum }),
+      ...(options.appMinimumForce === undefined ? {} : { APP_MINIMUM_FORCE: options.appMinimumForce }),
       ...(options.appLatest === undefined ? {} : { APP_LATEST: options.appLatest }),
       ...(options.appStoreUrl === undefined ? {} : { APP_STORE_URL: options.appStoreUrl }),
       ...(options.consent && options.consentFlag !== false ? { CONSENT: "on" } : {}),

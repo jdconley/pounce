@@ -43,7 +43,7 @@ function watched(devices: Env["DEVICES"]): Env["DEVICES"] {
  * are not counted. Also `/__test/remind?player=&now=`, as in the notification suites.
  */
 export default {
-  async fetch(request: Request, env: Env): Promise<Response> {
+  async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
     const url = new URL(request.url);
     if (url.pathname === "/__test/device-calls") {
       const log = calls;
@@ -54,6 +54,6 @@ export default {
       await env.PLAYERS.get(env.PLAYERS.idFromName(url.searchParams.get("player") ?? "")).remind(Number(url.searchParams.get("now")));
       return new Response(null, { status: 204 });
     }
-    return worker.fetch(request, { ...env, DEVICES: watched(env.DEVICES) });
+    return worker.fetch(request, { ...env, DEVICES: watched(env.DEVICES) }, ctx);
   },
 };

@@ -1,4 +1,4 @@
-import { storeLatest } from "../app/live";
+import { storeKnown } from "../app/live";
 import { gameTitle } from "../games";
 import { deviceView } from "../players/accounts";
 import { tablesFor, type TableEntry } from "../room/tables";
@@ -61,9 +61,10 @@ export async function deliverToPlayer(
   game?: string,
 ): Promise<boolean> {
   const gate = senders ? { recipient: profile.id, senders } : undefined;
-  // Asked at most once, and only if some device is held back from a push a person sent.
+  // Read at most once, and only if some device is held back from a push a person sent. What is
+  // known is all it reads (what Apple itself last said): no push waits on Apple.
   let live: Promise<string | null> | undefined;
-  const latest = () => (live ??= storeLatest(env).catch(() => null));
+  const latest = () => (live ??= storeKnown(env).then((k) => k.store));
   const results = await Promise.all(
     profile.devices.map(async (d) => {
       try {
