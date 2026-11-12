@@ -533,7 +533,7 @@ struct ScoreboardOverlay: View {
     private func row(_ seat: Seat) -> some View {
         ViewThatFits(in: .horizontal) {
             row(seat, spacing: 16, cat: 48, badge: 44, name: 160)
-            row(seat, spacing: 8, cat: 44, badge: 36, name: 120)
+            row(seat, spacing: 8, cat: 44, badge: 36, name: 132)
         }
     }
 
