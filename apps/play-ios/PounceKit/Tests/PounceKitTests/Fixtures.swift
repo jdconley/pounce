@@ -17,6 +17,23 @@ enum Fixtures {
             .appendingPathComponent(relative)
     }
 
+    /// Resolves `relative` under this test target's own `Fixtures/` folder.
+    static func localURL(_ relative: String) -> URL {
+        URL(fileURLWithPath: #filePath).deletingLastPathComponent()
+            .appendingPathComponent("Fixtures").appendingPathComponent(relative)
+    }
+
+    /// Tile game wire samples (`Fixtures/tiles/`), made by running play-api's merged tiles module
+    /// and wrapping its views and events as design spec §9.3 says the room will. They stand in
+    /// for the server's shared protocol fixtures until those exist.
+    static func tilesServerMessages() throws -> [(name: String, json: String)] {
+        try messages(at: localURL("tiles/server-messages.json"))
+    }
+
+    static func tilesClientMessages() throws -> [(name: String, json: String)] {
+        try messages(at: localURL("tiles/client-messages.json"))
+    }
+
     static func serverMessages() throws -> [(name: String, json: String)] {
         try messages(in: "protocol/server-messages.json")
     }
@@ -51,7 +68,12 @@ enum Fixtures {
     }
 
     private static func messages(in relative: String) throws -> [(name: String, json: String)] {
-        let data = try Data(contentsOf: url(relative))
+        try messages(at: url(relative))
+    }
+
+    private static func messages(at file: URL) throws -> [(name: String, json: String)] {
+        let relative = file.lastPathComponent
+        let data = try Data(contentsOf: file)
         guard let entries = try JSONSerialization.jsonObject(with: data) as? [[String: Any]] else {
             throw FixtureError.malformed(relative)
         }

@@ -18,7 +18,7 @@ public struct TableModel: Equatable, Sendable {
 
     /// This device's seats still in the game: `mySeats` less any that forfeited (§5.13).
     public var myActiveSeats: [Seat] {
-        mySeats.filter { !(game?.isOut($0) ?? false) }
+        mySeats.filter { !room.isOut($0) }
     }
 
     /// Every seat this device holds forfeited while the others play on (§5.13): the game is over
@@ -46,14 +46,14 @@ public struct TableModel: Equatable, Sendable {
         return .out
     }
 
-    public var currentSeat: Seat? { game?.turn }
+    /// The seat on the move, in either game.
+    public var currentSeat: Seat? { game?.turn ?? room.tiles?.turn }
 
-    private var isLive: Bool {
-        room.status == .playing && game?.status == .playing
-    }
+    /// The room and its game (either one) are both playing.
+    var isLive: Bool { room.liveTurn != nil }
 
     public var isMyTurn: Bool {
-        guard isLive, let turn = game?.turn else { return false }
+        guard let turn = room.liveTurn else { return false }
         return mySeats.contains(turn)
     }
 

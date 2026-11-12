@@ -53,6 +53,26 @@ public struct ErrorCode: RawRepresentable, Codable, Hashable, Sendable {
     public static let roundNotOver = ErrorCode(rawValue: "round_not_over")
     /// The seat already forfeited (§5.13).
     public static let forfeited = ErrorCode(rawValue: "forfeited")
+    // The tile game (tile game spec §8). It shares `notYourTurn`, `forfeited`, `badSeat` and `gameOver`.
+    /// Not one of the game's actions.
+    public static let badAction = ErrorCode(rawValue: "bad_action")
+    /// A draw with nothing left in the toy box.
+    public static let poolEmpty = ErrorCode(rawValue: "pool_empty")
+    /// A pass while the toy box still has pieces.
+    public static let poolNotEmpty = ErrorCode(rawValue: "pool_not_empty")
+    /// The submitted rug is not a list of sets of piece ids.
+    public static let badPiece = ErrorCode(rawValue: "bad_piece")
+    public static let duplicatePiece = ErrorCode(rawValue: "duplicate_piece")
+    /// A piece that was on the rug is not on the submitted rug.
+    public static let missingPiece = ErrorCode(rawValue: "missing_piece")
+    public static let notYourPiece = ErrorCode(rawValue: "not_your_piece")
+    public static let nothingPlayed = ErrorCode(rawValue: "nothing_played")
+    /// A set on the submitted rug is not a row or a match.
+    public static let badSet = ErrorCode(rawValue: "bad_set")
+    /// Before opening: a set that was on the rug was changed.
+    public static let tableTouched = ErrorCode(rawValue: "table_touched")
+    /// Before opening: the new sets are worth less than 30.
+    public static let openingTooLow = ErrorCode(rawValue: "opening_too_low")
     // Table looks and Play again (daily habit §9.4, §10.4).
     /// Play again before the game is over.
     public static let notOver = ErrorCode(rawValue: "not_over")
@@ -190,6 +210,8 @@ public enum ClientMessage: Encodable, Equatable, Sendable {
     /// `id`: the move's id, so a server with links applies it once even if it is sent again
     /// after a reconnect. Omitted when nil (a server without links refuses unknown keys).
     case act(seat: Seat, action: Action, id: String? = nil)
+    /// A turn in the tile game: the same `{"t":"act"}` envelope around a `TilesAction`.
+    case actTiles(seat: Seat, action: TilesAction, id: String? = nil)
     case presence(PresenceState)
     case moveSeat(seat: Seat)
     case claimMove(code: String)
@@ -230,6 +252,11 @@ public enum ClientMessage: Encodable, Equatable, Sendable {
         case .start:
             try c.encode("start", forKey: .t)
         case .act(let seat, let action, let id):
+            try c.encode("act", forKey: .t)
+            try c.encode(seat, forKey: .seat)
+            try c.encode(action, forKey: .action)
+            try c.encodeIfPresent(id, forKey: .id)
+        case .actTiles(let seat, let action, let id):
             try c.encode("act", forKey: .t)
             try c.encode(seat, forKey: .seat)
             try c.encode(action, forKey: .action)

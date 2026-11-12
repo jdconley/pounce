@@ -1,0 +1,7 @@
+[
+  {"name":"act-tiles-draw","message":{"t":"act","seat":0,"action":{"type":"draw"}}},
+  {"name":"act-tiles-pass","message":{"t":"act","seat":1,"action":{"type":"pass"}}},
+  {"name":"act-tiles-forfeit","message":{"t":"act","seat":2,"action":{"type":"forfeit"}}},
+  {"name":"act-tiles-play","message":{"t":"act","seat":0,"action":{"type":"play","table":[[8,34,86],[9,10,11]]}}},
+  {"name":"act-tiles-play-id","message":{"t":"act","seat":0,"action":{"type":"play","table":[[104,105,35]]},"id":"0F8C1D2E-3A4B-4C5D-8E6F-7A8B9C0D1E2F"}}
+]

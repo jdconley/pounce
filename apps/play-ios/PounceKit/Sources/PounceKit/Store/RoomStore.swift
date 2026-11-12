@@ -92,8 +92,27 @@ import Observation
     public struct PendingMove: Equatable, Sendable {
         public let id: String
         public let seat: Seat
-        public let action: Action
+        public let move: Move
         fileprivate var connection: Int
+
+        /// Cat Tower's action; nil for a tile game turn.
+        public var action: Action? {
+            if case .catTower(let action) = move { return action }
+            return nil
+        }
+    }
+
+    /// One game action of either game, as `act` sends it.
+    public enum Move: Equatable, Sendable {
+        case catTower(Action)
+        case tiles(TilesAction)
+
+        func message(seat: Seat, id: String?) -> ClientMessage {
+            switch self {
+            case .catTower(let action): .act(seat: seat, action: action, id: id)
+            case .tiles(let action): .actTiles(seat: seat, action: action, id: id)
+            }
+        }
     }
 
     public struct LookChange: Equatable, Sendable {
@@ -174,13 +193,22 @@ import Observation
     /// Returns false, sending nothing, while another action is in flight or
     /// outside play.
     @discardableResult public func act(seat: Seat, _ action: Action) -> Bool {
+        act(seat: seat, move: .catTower(action))
+    }
+
+    /// `act` for a turn in the tile game: the same lock, move id and resend rules.
+    @discardableResult public func actTiles(seat: Seat, _ action: TilesAction) -> Bool {
+        act(seat: seat, move: .tiles(action))
+    }
+
+    private func act(seat: Seat, move: Move) -> Bool {
         guard !actionInFlight, phase == .playing else { return false }
         actionInFlight = true
         actToken += 1
         let token = actToken
         let id = room?.link != nil ? makeMoveID() : nil
-        if let id { pendingMove = PendingMove(id: id, seat: seat, action: action, connection: connections) }
-        let message = ClientMessage.act(seat: seat, action: action, id: id)
+        if let id { pendingMove = PendingMove(id: id, seat: seat, move: move, connection: connections) }
+        let message = move.message(seat: seat, id: id)
         callSocket(inOrder: true) { [weak self] socket in
             do {
                 try await socket.send(message)
@@ -210,7 +238,7 @@ import Observation
     /// The Nudge button for `seat`, or nil when there's none: the server offers this phone a nudge
     /// for exactly that seat (a person on another phone, on the move mid-round).
     public func nudgeButton(for seat: Seat) -> NudgeButton? {
-        guard let room, room.status == .playing, let game = room.game, game.status == .playing, game.turn == seat,
+        guard let room, room.liveTurn == seat,
               room.seats.indices.contains(seat), room.seats[seat].kind == .human, !room.seats[seat].yours,
               let nudge = room.nudge, nudge.seat == seat
         else { return nil }
@@ -239,7 +267,7 @@ import Observation
     /// True when this phone may retire `seat` now: the server offers it (a person on another
     /// phone, on the move mid-round) and the move has waited out its days.
     public func canRetire(seat: Seat) -> Bool {
-        guard let room, room.status == .playing, let game = room.game, game.status == .playing, game.turn == seat,
+        guard let room, room.liveTurn == seat,
               room.seats.indices.contains(seat), room.seats[seat].kind == .human, !room.seats[seat].yours,
               room.retire?.seat == seat, let ready = retireReadyAt
         else { return false }
@@ -417,7 +445,7 @@ import Observation
         guard pending.connection < connections else { return }
         pending.connection = connections
         pendingMove = pending
-        let message = ClientMessage.act(seat: pending.seat, action: pending.action, id: pending.id)
+        let message = pending.move.message(seat: pending.seat, id: pending.id)
         callSocket(inOrder: true) { socket in try? await socket.send(message) }
     }
 
@@ -453,6 +481,20 @@ import Observation
             noteTurn()
             // actionInFlight stays: that snapshot releases it.
             continuation.yield(.game(game, seq: seq))
+        case .tiles(let event):
+            // As for Cat Tower: only the turn and the status are folded in, for timing.
+            switch event {
+            case .turn(let seat):
+                room?.tiles?.turn = seat
+            case .gameOver:
+                room?.tiles?.status = .gameOver
+            case .forfeited(let seat):
+                forfeitNotice = ForfeitNotice(seat: seat, serial: (forfeitNotice?.serial ?? 0) + 1)
+            default:
+                break  // the snapshot that follows this action carries the rest
+            }
+            noteTurn()
+            continuation.yield(.tiles(event, seq: seq))
         case .look(let seat, let look):
             // Folded in whole, like presence: the snapshot that follows says the same.
             room?.look = look

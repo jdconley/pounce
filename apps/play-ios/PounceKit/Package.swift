@@ -11,7 +11,8 @@ let package = Package(
     targets: [
         .target(name: "PounceKit"),
         .executableTarget(name: "pounce-e2e", dependencies: ["PounceKit"]),
-        .testTarget(name: "PounceKitTests", dependencies: ["PounceKit"]),
+        // `Fixtures/` holds JSON the tests read by path (like `apps/play-api/fixtures`), not bundle resources.
+        .testTarget(name: "PounceKitTests", dependencies: ["PounceKit"], exclude: ["Fixtures"]),
     ],
     swiftLanguageModes: [.v6]
 )
