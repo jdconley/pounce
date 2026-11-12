@@ -143,7 +143,7 @@ struct TableScreen: View {
         case .table:
             // No touches while the socket is down. Not `allowsHitTesting(false)`: that rehosts the
             // SpriteKit view with no safe area, and the whole table jumps under the status bar.
-            TableStage(session: session, connection: shownConnection)
+            stage
                 .overlay {
                     if !store.connected {
                         Color.clear
@@ -162,6 +162,20 @@ struct TableScreen: View {
             ) { model.goHome() }
         case .moveClaim(let code, let refused):
             MoveClaimView(moveCode: code, refused: refused) { model.goHome() }
+        }
+    }
+}
+
+extension TableScreen {
+    /// The table for the game the room plays: the tile game's (tile game spec §9.4), or Cat Tower's.
+    @ViewBuilder fileprivate var stage: some View {
+        if session.store.room?.isTiles == true {
+            TilesStage(session: session, connection: shownConnection)
+            #if DEBUG
+                .overlay { if CommandLine.arguments.contains("-tiles-sheet") { TilesPieceSheet() } }
+            #endif
+        } else {
+            TableStage(session: session, connection: shownConnection)
         }
     }
 }

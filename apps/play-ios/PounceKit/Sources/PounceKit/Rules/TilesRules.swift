@@ -48,6 +48,11 @@ public struct TilesPlay: Equatable, Sendable {
 public struct TileStanding: Equatable, Sendable {
     public var value: Int
     public var suit: TileSuit?
+
+    public init(value: Int, suit: TileSuit?) {
+        self.value = value
+        self.suit = suit
+    }
 }
 
 /// Port of `apps/play-api/src/tiles/sets.ts` and `checkPlay` from `engine.ts`: reading sets and

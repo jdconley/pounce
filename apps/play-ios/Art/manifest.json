@@ -2000,5 +2000,68 @@
    1024
   ],
   "batch": "ui"
+ },
+ {
+  "name": "tile-fish",
+  "dest": "imageset",
+  "points": [
+   44,
+   44
+  ],
+  "batch": "tiles"
+ },
+ {
+  "name": "tile-mouse",
+  "dest": "imageset",
+  "points": [
+   44,
+   44
+  ],
+  "batch": "tiles"
+ },
+ {
+  "name": "tile-feather",
+  "dest": "imageset",
+  "points": [
+   44,
+   44
+  ],
+  "batch": "tiles"
+ },
+ {
+  "name": "tile-bell",
+  "dest": "imageset",
+  "points": [
+   44,
+   44
+  ],
+  "batch": "tiles"
+ },
+ {
+  "name": "toy-box",
+  "dest": "imageset",
+  "points": [
+   96,
+   96
+  ],
+  "batch": "tiles"
+ },
+ {
+  "name": "toy-box-closed",
+  "dest": "imageset",
+  "points": [
+   96,
+   96
+  ],
+  "batch": "tiles"
+ },
+ {
+  "name": "rug-play",
+  "dest": "imageset",
+  "points": [
+   132,
+   176
+  ],
+  "batch": "tiles"
  }
 ]

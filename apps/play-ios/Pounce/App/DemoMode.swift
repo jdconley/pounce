@@ -47,6 +47,16 @@ enum DemoMode: String {
     case retire
     /// This phone's move: five seconds in (past the push priming), Leo (seat 1) nudges it.
     case nudged
+    /// The tile game's table (`TilesDemo` has what each one shows). The only way into the game
+    /// until Home offers it.
+    case tiles
+    case tilesEarly = "tiles-early", tilesOpened = "tiles-opened", tilesDraft = "tiles-draft"
+    case tilesInvalid = "tiles-invalid", tilesLoupe = "tiles-loupe", tilesLate = "tiles-late"
+    case tilesLong = "tiles-long", tilesPass = "tiles-pass", tilesOther = "tiles-other"
+    case tilesCurtain = "tiles-curtain", tilesOver = "tiles-over", tilesPlay = "tiles-play"
+
+    /// A tile game demo.
+    var isTiles: Bool { rawValue.hasPrefix("tiles") }
 
     static func from(arguments: [String] = CommandLine.arguments) -> DemoMode? {
         guard let i = arguments.firstIndex(of: "-demo"), arguments.indices.contains(i + 1) else { return nil }
@@ -63,6 +73,9 @@ enum DemoMode: String {
 
     private var baseRoom: RoomView {
         switch self {
+        case .tiles, .tilesEarly, .tilesOpened, .tilesDraft, .tilesInvalid, .tilesLoupe, .tilesLate, .tilesLong,
+             .tilesPass, .tilesOther, .tilesCurtain, .tilesOver, .tilesPlay:
+            return TilesDemo.room(self)
         case .lobby: return DemoFixtures.lobby()
         case .lobbyFamily: return DemoFixtures.familyLobby()
         case .lobbyReady:
@@ -161,7 +174,8 @@ enum DemoMode: String {
 
     /// The fake socket behind this demo.
     func makeSocket() -> any RoomSocketing {
-        switch self {
+        if isTiles { return TilesDemo.socket(self) }
+        return switch self {
         case .replay: ReplaySocket(start: DemoFixtures.replayStart(), steps: DemoFixtures.replay(), loops: 2)
         case .handoff: ReplaySocket(start: room, steps: Self.handoffSteps(), loops: 1)
         case .forfeited: ReplaySocket(start: room, steps: Self.forfeitSteps(room), loops: 1)

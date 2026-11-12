@@ -18,6 +18,10 @@ with a SpriteKit table. Apple frameworks only, no third-party packages.
   when you leave a table someone else is at, updates on each turn and ends on its own. The app
   (`Pounce/App/LiveTableBridge.swift`) uploads its tokens (never from a kitten's device) and ends a
   table's activity when the table opens; the settings panel's live table toggle turns it off.
+- `Pounce/Tiles/` the tile game's table: `TilesScene` (the rug, the stash, the action strip, the loupe)
+  with its input, animations and VoiceOver elements, `TilePieceFactory` (the toy tokens, drawn in code
+  over the glyph art), `TilesStage` (the SwiftUI shell: curtain, menu, game over) and the demos. Its
+  rules, draft model and layout are in PounceKit (`TilesRules`, `TilesDraft`, `TilesLayout`).
 - `PounceKit/` local Swift package (game model, networking, `pounce-e2e` CLI) with Swift Testing tests.
 - `Config/` xcconfigs. `Debug.xcconfig` points at `http://localhost:8787` and registers the
   `pounce-dev` URL scheme; `Release.xcconfig` points at `https://play.conleychaos.com` and registers no
@@ -80,6 +84,17 @@ then the build setting (Debug: `http://localhost:8787`, optionally overridden by
   The bad connection indicator has four: `weak`, `reconnecting`, `pending` (a move the server never
   answers) and `seatLink` (other players' weak and reconnecting phones). Screenshots of each are in
   `Art/screenshots/connection/`.
+- The tile game (working title "Tuna Tiles", game id `tiles`; `docs/superpowers/specs/2026-11-11-tile-game-design.md`)
+  has its table but nothing in Home starts it yet: `-demo tiles…` is the only way in. `tiles` (mid game,
+  my move), `tiles-early` / `tiles-opened` (before and after my opening), `tiles-draft`, `tiles-invalid`,
+  `tiles-loupe` (a turn half built: valid, with a broken set, with a set open), `tiles-late` (25 sets and a
+  22-piece stash), `tiles-long` (a row of thirteen), `tiles-pass` (the toy box empty), `tiles-other` (watch
+  the other seats play), `tiles-curtain` (two seats on this phone), `tiles-over`, and `tiles-play` (a fresh
+  game against a House Cat that runs on the device). Every one is fed by `TilesDemoSocket`, which runs the
+  game locally (`TilesLocalGame`), so turns can be played. Add `-tiles-easy` for easy mode (a kitten's
+  default), `-tiles-tricks`, `-tiles-hint`, `-tiles-recap`, `-tiles-sheet` (every piece at stash and rug
+  size, both designs tried) and `-tiles-game-off` (with `tiles-over`: Play again refused with `game_off`).
+  See `Pounce/Tiles/TilesDemo.swift`; screenshots are in `Art/screenshots/tiles/`.
 - `-anim-speed <n>` (or `POUNCE_ANIM_SPEED=<n>` in the environment) runs the whole app n times faster
   and marks the run as a test: sound and haptics go to silent stand-ins. See [Test speed](#test-speed).
 - `-show-join` opens the Join screen. `-open-link <url>` handles a link as if it was tapped.
@@ -301,6 +316,10 @@ Art is generated, cut out and built into the asset catalog; every name lives in 
    toys, card backs, rugs, the gift box, paw badges, streak icons) from the existing art; they carry
    `_ph` like every placeholder, so real art replaces them by name.
 4. `scripts/check-assets.sh` verifies the catalog and sounds against the manifest.
+
+The tile game's art (manifest batch `tiles`, prompts in `Art/prompts/tiles/`) came through the same
+pipeline: the four toy glyphs (`tile-fish`, `tile-mouse`, `tile-feather`, `tile-bell`), the toy box open
+and closed, and its rug (`rug-play`). The tokens themselves are drawn in code around the glyphs.
 
 The art style is "Loud Toy": saturated violet, hot magenta, electric teal, sunny orange, sky blue,
 thick dark outlines. Never beige or muted.
