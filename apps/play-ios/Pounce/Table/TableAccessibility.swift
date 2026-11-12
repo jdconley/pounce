@@ -59,7 +59,8 @@ enum SeatInfo {
         case .asleep: parts.append(String(localized: "asleep", comment: "VoiceOver: presence"))
         case nil: if view?.kind == .bot { parts.append(String(localized: "bot", comment: "VoiceOver: a bot player")) }
         }
-        if let link = LinkWords.seat(view?.link) { parts.append(link.text) }
+        // VoiceOver hears "Weak signal" in full; the tag on screen is one word.
+        if let link = LinkWords.seat(view?.link) { parts.append(link.level == .weak ? LinkWords.weak() : link.text) }
         return parts.joined(separator: ", ")
     }
 }

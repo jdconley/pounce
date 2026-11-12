@@ -105,8 +105,8 @@ struct AgeGateView: View {
                 .accessibilityIdentifier("age.change")
                 PillButton(
                     icon: nil, color: Palette.lime, size: .small, width: roomy ? 220 : 170,
-                    title: String(localized: "Yes, that's right", comment: "Age screen: confirm the birth year said back"),
-                    accessibilityLabel: "Yes, that's right"
+                    title: String(localized: "Yes", comment: "Age screen: confirm the birth year said back"),
+                    accessibilityLabel: "Yes"
                 ) {
                     finish(year)
                 }
@@ -182,7 +182,7 @@ struct AgeGateView: View {
             Sound.shared.play(ArtName.Sound.sfxNope)
             UIAccessibility.post(
                 notification: .announcement,
-                argument: String(localized: "Check the year and try again", comment: "VoiceOver: the birth year wasn't taken"))
+                argument: String(localized: "Check the year", comment: "VoiceOver: the birth year wasn't taken"))
             return
         }
         Haptics.shared.tick()
@@ -230,7 +230,7 @@ struct AgeCorrectionRow: View {
             .accessibilityIdentifier("gear.ageCheck")
             if noAnswer {
                 WordLine(
-                    String(localized: "Apple didn't share a different age. You can allow age sharing for Pounce in the Settings app, then try again.",
+                    String(localized: "No new age from Apple. Allow age sharing in Settings, then try again.",
                            comment: "Gear sheet: Declared Age Range gave no new band"),
                     size: 14)
                     .accessibilityIdentifier("gear.ageCheck.none")

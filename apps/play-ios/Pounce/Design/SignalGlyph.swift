@@ -126,12 +126,14 @@ enum LinkWords {
         String(localized: "Reconnecting", comment: "Bad connection: the connection dropped and the app is getting it back")
     }
 
-    /// A seat's link as words, or nil when it is fine.
+    /// A seat's link as words, or nil when it is fine. One short word: the tag sits under a cat
+    /// in the top bar, as wide as the seat.
     static func seat(_ link: SeatLink?) -> (level: SignalGlyph.Level, text: String)? {
         switch link {
-        case .some(.weak): (.weak, weak())
-        case .some(.lost): (.lost, reconnecting())
-        case .some(let other) where !other.rawValue.isEmpty: (.weak, weak())  // a future value: say something mild
+        case .some(.weak): (.weak, String(localized: "Weak", comment: "A seat's tag in the top bar: that player's connection is slow"))
+        case .some(.lost): (.lost, String(localized: "Offline", comment: "A seat's tag in the top bar: that player's connection dropped"))
+        case .some(let other) where !other.rawValue.isEmpty:  // a future value: say something mild
+            (.weak, String(localized: "Weak", comment: "A seat's tag in the top bar: that player's connection is slow"))
         default: nil
         }
     }

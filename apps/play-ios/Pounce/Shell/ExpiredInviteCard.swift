@@ -16,10 +16,10 @@ struct ExpiredInviteCard: View {
                     .frame(width: 120 * scale, height: 120 * scale)
                     .accessibilityHidden(true)
                 OutlinedText(
-                    String(localized: "This invite has expired", comment: "Card: a Messages invite link that no longer works"),
+                    String(localized: "Invite expired", comment: "Card: a Messages invite link that no longer works"),
                     size: 30 * scale, fill: .white, width: 3, lines: 2)
                     .accessibilityAddTraits(.isHeader)
-                Text("Ask the person who sent it for a new one.", comment: "Card: what to do about an expired invite link")
+                Text("Ask for a new one.", comment: "Card: what to do about an expired invite link")
                     .font(.system(size: 19 * scale, weight: .bold, design: .rounded))
                     .foregroundStyle(.white.opacity(0.92))
                     .multilineTextAlignment(.center)

@@ -1,7 +1,7 @@
 import XCTest
 
 /// Retiring a stalled seat (PlayerCardView.swift): on the card of a person whose move has waited
-/// its days, "Play on without <name>" asks first, saying what happens, then their seat forfeits.
+/// its days, "Retire seat" asks first, saying what happens, then their seat forfeits.
 /// No server: `-demo retire` is Kiki's (seat 2, asleep) move with the wait over, which the demo
 /// server answers with her forfeit. Home's "N days ago" comes from `-demo-home`.
 @MainActor
@@ -32,16 +32,14 @@ final class RetireTests: XCTestCase {
         openCard(app, seat: 2)
         let retire = el(app, "player.retire")
         XCTAssertTrue(retire.waitForExistence(timeout: Live.t(5)), "no retire on Kiki's card")
-        XCTAssertEqual(retire.label, "Play on without Kiki")
+        XCTAssertEqual(retire.label, "Retire seat")
         screenshot(app, "retire-card")
 
         // Keep waiting: nothing happens.
         retire.tap()
         let alert = app.alerts["Retire Kiki's seat?"]
         XCTAssertTrue(alert.waitForExistence(timeout: Live.t(5)), "no confirmation")
-        let message = "It has been Kiki's move for 3 days. Kiki will be out of this game and finish last. "
-            + "Everyone else keeps playing. This can't be undone."
-        // Longer than a query by identifier allows (128 characters).
+        let message = "Kiki finishes last. The rest play on. It can't be undone."
         XCTAssertTrue(
             alert.staticTexts.matching(NSPredicate(format: "label == %@", message)).firstMatch.exists,
             "the confirmation doesn't say what happens")

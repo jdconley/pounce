@@ -79,8 +79,8 @@ struct InviteSheet: View {
         case .link(let url):
             VStack(spacing: 10 * scale) {
                 qr(url.absoluteString)
-                Text("Send the link, or let them scan this code. It works for 7 days, until you two play.",
-                     comment: "Invite sheet: how the invite link works")
+                Text("Works for 7 days, or until you play.",
+                     comment: "Invite sheet: under the QR code, how long the invite link lasts")
                     .font(.system(size: 17 * scale, weight: .bold, design: .rounded))
                     .foregroundStyle(.white.opacity(0.92))
                     .multilineTextAlignment(.center)

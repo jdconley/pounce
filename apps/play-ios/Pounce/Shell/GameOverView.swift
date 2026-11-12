@@ -115,37 +115,51 @@ struct GameOverView: View {
         .accessibilityIdentifier("screen-gameover")
     }
 
+    /// The phone's column: the stage shrinks on a short screen (an iPhone SE) before anything
+    /// is pushed off it, and at large text sizes the whole column scrolls.
     private var phone: some View {
-        VStack(spacing: 30) {
+        ViewThatFits(in: .vertical) {
+            phoneColumn(stage: 300, spacing: 30, bottom: 36)
+            phoneColumn(stage: 220, spacing: 16, bottom: 20)
+            ScrollView {
+                phoneColumn(stage: 200, spacing: 16, bottom: 20)
+            }
+            .scrollBounceBehavior(.basedOnSize)
+        }
+    }
+
+    private func phoneColumn(stage: CGFloat, spacing: CGFloat, bottom: CGFloat) -> some View {
+        let shrink = stage / 300
+        return VStack(spacing: spacing) {
             title
             Spacer(minLength: 0)
             ZStack {
                 Image(ArtName.sunburst)
                     .resizable()
                     .scaledToFit()
-                    .frame(width: 420, height: 420)
+                    .frame(width: 420 * shrink, height: 420 * shrink)
                     .rotationEffect(.degrees(turned ? -90 : 0))
                     .scaleEffect(appeared ? 1 : 0.3)
                     .opacity(appeared ? 1 : 0)
                     .accessibilityHidden(true)
                 HStack(spacing: 10) {
                     ForEach(Array(winners.enumerated()), id: \.offset) { _, winner in
-                        WinnerCat(person: winner, size: catSize, crowned: crowned, reduceMotion: reduceMotion)
+                        WinnerCat(person: winner, size: catSize * shrink, crowned: crowned, reduceMotion: reduceMotion)
                     }
                 }
                 .scaleEffect(appeared ? 1 : 0.5)
                 .opacity(appeared ? 1 : 0)
             }
-            .frame(height: standings.isEmpty ? 360 : 300)
+            .frame(height: (standings.isEmpty ? 360 : 300) * shrink)
             if !standings.isEmpty {
                 standingsFlow
                     // The sunburst is wider than a small phone: wrap to the screen, not to it.
                     .containerRelativeFrame(.horizontal) { width, _ in width - 32 }
             }
             endNote
-            Spacer()
+            Spacer(minLength: 0)
             pills
-                .padding(.bottom, 36)
+                .padding(.bottom, bottom)
         }
     }
 
@@ -240,7 +254,7 @@ struct GameOverView: View {
         switch reason {
         case .decided:
             String(
-                localized: "The rest of the hand couldn't change the result.",
+                localized: "Nobody could change the result.",
                 comment: "Game over: the game ended early because no one could still change a finishing place")
         case .forfeit, nil:
             // A forfeit says so on the forfeiter's standing ("Forfeited").
@@ -279,10 +293,19 @@ struct GameOverView: View {
         .offset(y: appeared ? 0 : 160)
     }
 
+    /// Home and Create side by side, narrower on a small phone so they keep a margin.
     private var homeAndNew: some View {
+        ViewThatFits(in: .horizontal) {
+            homeAndNew(width: 176)
+            homeAndNew(width: 150)
+        }
+        .padding(.horizontal, 16)
+    }
+
+    private func homeAndNew(width: CGFloat) -> some View {
         HStack(spacing: 18) {
             PillButton(
-                icon: ArtName.iconHome, color: Palette.orange, size: .large, width: 176,
+                icon: ArtName.iconHome, color: Palette.orange, size: .large, width: width,
                 title: String(localized: "Home", comment: "Game over: the pill back to Home"),
                 accessibilityLabel: "Home"
             ) {
@@ -290,7 +313,7 @@ struct GameOverView: View {
             }
             .accessibilityIdentifier("gameover.home")
             PillButton(
-                icon: ArtName.iconPlus, color: Palette.magenta, size: .large, width: 176,
+                icon: ArtName.iconPlus, color: Palette.magenta, size: .large, width: width,
                 title: String(localized: "Create", comment: "Game over: the pill that starts a new game"),
                 accessibilityLabel: "Create a game"
             ) {
@@ -505,17 +528,26 @@ struct ScoreboardOverlay: View {
         model.game?.status == .playing && model.game?.turn == seat
     }
 
+    /// A seat's row: roomy spacing when it fits, tighter on a small phone so a long name and a
+    /// big score still fit the screen.
     private func row(_ seat: Seat) -> some View {
+        ViewThatFits(in: .horizontal) {
+            row(seat, spacing: 16, cat: 48, badge: 44, name: 160)
+            row(seat, spacing: 8, cat: 44, badge: 36, name: 120)
+        }
+    }
+
+    private func row(_ seat: Seat, spacing: CGFloat, cat: CGFloat, badge: CGFloat, name: CGFloat) -> some View {
         let view = model.room.seats[safe: seat]
         let phase = model.game?.phase[safe: seat] ?? 0
         let score = model.game?.scores[safe: seat] ?? 0
         let ring = SeatInfo.ringColor(seat)
-        return HStack(spacing: 16) {
+        return HStack(spacing: spacing) {
             ZStack(alignment: .topTrailing) {
                 Image(ArtName.cat(SeatInfo.catIndex(view), .idle))
                     .resizable()
                     .scaledToFit()
-                    .frame(width: 48, height: 48)
+                    .frame(width: cat, height: cat)
                     .background(Circle().fill(ring.mix(with: .white, by: 0.25)))
                     .overlay(Circle().strokeBorder(Palette.ink, lineWidth: 4))
                 if view?.kind == .bot {
@@ -528,7 +560,7 @@ struct ScoreboardOverlay: View {
             ZStack {
                 Image(ArtName.shelfBadge)
                     .resizable()
-                    .frame(width: 44, height: 44)
+                    .frame(width: badge, height: badge)
                 if phase >= TableLayout.shelfCount {
                     Image(ArtName.iconTrophy).resizable().scaledToFit().frame(width: 24, height: 24).offset(y: 3)
                 } else {
@@ -536,8 +568,8 @@ struct ScoreboardOverlay: View {
                         .offset(y: 3)
                 }
             }
-            NameTag(SeatInfo.name(model.room, seat), maxWidth: 160, active: isTurn(seat), size: 20)
-            Spacer(minLength: 8)
+            NameTag(SeatInfo.name(model.room, seat), maxWidth: name, active: isTurn(seat), size: 20)
+            Spacer(minLength: 0)
             OutlinedText(String(score), size: 32, fill: .white, width: 4)
                 .fixedSize()
         }

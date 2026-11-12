@@ -22,7 +22,7 @@ struct NotifyPanel: View {
     }
 
     private var kitten: some View {
-        WordRow(title: "Daily reminder", detail: "A bell at \(KittenReminder.time.text).") {
+        WordRow(title: "Daily reminder", detail: LocalizedStringResource("At \(KittenReminder.time.text)", comment: "Kitten's notification panel: the daily reminder's time, e.g. 5:00 PM")) {
             FlagButton(icon: ArtName.iconBell, on: model.kittenDailyOn, color: Palette.magenta, size: 64 * scale,
                        label: "Daily reminder") {
                 model.setKittenDaily(!model.kittenDailyOn)
@@ -35,7 +35,7 @@ struct NotifyPanel: View {
     /// the time is picked for you (a teen's fixed times still show their dials).
     private func full(_ s: NotifySettings) -> some View {
         VStack(alignment: .leading, spacing: 16 * scale) {
-            WordRow(title: "Reminders", detail: "A nudge to play, and one last one before bed.") {
+            WordRow(title: "Reminders", detail: LocalizedStringResource("Daily, plus one before bed", comment: "Notification panel: what the reminders toggle sends")) {
                 FlagButton(icon: ArtName.iconBell, on: s.reminders, color: Palette.magenta, size: 64 * scale,
                            label: "Reminders") {
                     let on = !s.reminders
@@ -61,14 +61,14 @@ struct NotifyPanel: View {
                 .groupOpacity(s.reminders ? 1 : 0.55)
             }
             // The live table on the Lock Screen (§11.3): on by default, the game itself.
-            WordRow(title: "Live table", detail: "Show your game on the Lock Screen.") {
+            WordRow(title: "Live table", detail: LocalizedStringResource("Your game on the Lock Screen", comment: "Notification panel: what the live table toggle shows")) {
                 FlagButton(icon: ArtName.Habit.iconLiveTable, on: s.liveTable, color: Palette.teal, size: 64 * scale,
                            label: "Live table") {
                     model.setNotify(NotifyKey.liveTable, .bool(!s.liveTable))
                 }
                 .accessibilityIdentifier("notify.liveTable")
             }
-            WordLabel(title: "Quiet hours", detail: "No sounds or alerts between these times.")
+            WordLabel(title: "Quiet hours", detail: LocalizedStringResource("No alerts between these times", comment: "Notification panel: under the quiet hours heading"))
             HStack(alignment: .top, spacing: 18 * scale) {
                 ClockDial(icon: ArtName.Habit.iconMoon, time: s.quietStart, color: Palette.violet, side: 120 * scale,
                           label: "Quiet hours start", caption: "Starts", id: "notify.quietStart") {
@@ -125,7 +125,7 @@ struct ClockDial: View {
     var side: CGFloat = 120
     let label: LocalizedStringKey
     /// The words under the dial.
-    var caption: LocalizedStringKey?
+    var caption: LocalizedStringResource?
     /// Keeps a reminder where the server will use it (outside quiet hours).
     var clamp: (ClockTime) -> ClockTime = { $0 }
     /// The accessibility id: the face has it, the steppers `<id>.minus` and `<id>.plus`.

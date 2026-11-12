@@ -121,7 +121,7 @@ struct TrophyRoomView: View {
         }
     }
 
-    static func caption(_ kind: TrophyRoom.RecordKind) -> LocalizedStringKey {
+    static func caption(_ kind: TrophyRoom.RecordKind) -> LocalizedStringResource {
         switch kind {
         case .current: "Streak now"
         case .best: "Best streak"
@@ -153,13 +153,13 @@ struct TrophyRoomView: View {
 
     @ViewBuilder private var shelfHeading: some View {
         if let room, !room.shelf.isEmpty {
-            WordLabel(title: "Your trophies", detail: "You earn them by playing days in a row.", alignment: .center, speaks: true)
+            WordLabel(title: "Your trophies", alignment: .center, speaks: true)
         }
     }
 
     @ViewBuilder private var lockedHeading: some View {
         if let room, !room.locked.isEmpty {
-            WordLabel(title: "Still to win", detail: "The number is the day it opens.", alignment: .center, speaks: true)
+            WordLabel(title: "Still to win", alignment: .center, speaks: true)
         }
     }
 

@@ -511,7 +511,7 @@ struct TilesOverView: View {
     let onHome: () -> Void
 
     static var offWords: String {
-        String(localized: "This game is switched off for now, so a new table can't be dealt.", comment: "Tile game over: Play again was refused because the server stopped dealing this game")
+        String(localized: "This game is off for now.", comment: "Tile game over: Play again was refused because the server stopped dealing this game")
     }
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -526,8 +526,8 @@ struct TilesOverView: View {
 
     private var reason: String {
         switch table.view.endReason {
-        case .blocked: String(localized: "Nobody could move. Fewest toys left wins.", comment: "Tile game over: the game was blocked")
-        case .forfeit: String(localized: "Everyone else left the game.", comment: "Tile game over: won by forfeit")
+        case .blocked: String(localized: "Nobody could move.", comment: "Tile game over: the game was blocked")
+        case .forfeit: String(localized: "Everyone else left.", comment: "Tile game over: won by forfeit")
         default: String(localized: "Stash empty!", comment: "Tile game over: someone emptied their rack")
         }
     }
@@ -560,23 +560,30 @@ struct TilesOverView: View {
                         OutlinedText(Self.offWords, size: 17, fill: Palette.orange, lines: 3)
                             .accessibilityIdentifier("tiles.over.off")
                             .padding(.top, 4)
-                    } else if let again {
-                        PillButton(
-                            icon: ArtName.iconPlay, color: again == .waiting ? Palette.violet : Palette.orange, size: .medium, width: 240,
-                            title: again == .go
-                                ? String(localized: "Join the new game", comment: "Game over: someone dealt the next table")
-                                : again == .waiting
-                                    ? String(localized: "Dealing…", comment: "Game over: Play again was asked and the server hasn't answered")
-                                    : String(localized: "Play again", comment: "Game over: deal a new table with the same players"),
-                            accessibilityLabel: again == .go ? "Join the new game" : "Play again", action: onPlayAgain)
-                            .accessibilityIdentifier("tiles.over.again")
-                            .padding(.top, 6)
                     }
-                    PillButton(
-                        icon: ArtName.iconHome, color: Palette.sky, size: .medium, width: 200,
-                        title: String(localized: "Home", comment: "Game over: go home"), accessibilityLabel: "Home", action: onHome)
-                        .accessibilityIdentifier("tiles.over.home")
-                        .padding(.top, 6)
+                    // Play again and Home on one row (Home as its icon alone beside Play again), so
+                    // both fit a small phone without scrolling.
+                    HStack(spacing: 14) {
+                        if let again, again != .off {
+                            PillButton(
+                                icon: ArtName.iconPlay, color: again == .waiting ? Palette.violet : Palette.orange, size: .medium, width: 210,
+                                title: again == .go
+                                    ? String(localized: "Join", comment: "Game over: someone dealt the next table; join it")
+                                    : again == .waiting
+                                        ? String(localized: "Dealing…", comment: "Game over: Play again was asked and the server hasn't answered")
+                                        : String(localized: "Play again", comment: "Game over: deal a new table with the same players"),
+                                accessibilityLabel: again == .go ? "Join the new game" : "Play again", action: onPlayAgain)
+                                .accessibilityIdentifier("tiles.over.again")
+                            PillButton(icon: ArtName.iconHome, color: Palette.sky, size: .medium, width: 84, accessibilityLabel: "Home", action: onHome)
+                                .accessibilityIdentifier("tiles.over.home")
+                        } else {
+                            PillButton(
+                                icon: ArtName.iconHome, color: Palette.sky, size: .medium, width: 200,
+                                title: String(localized: "Home", comment: "Game over: go home"), accessibilityLabel: "Home", action: onHome)
+                                .accessibilityIdentifier("tiles.over.home")
+                        }
+                    }
+                    .padding(.top, 6)
                 }
                 .padding(.horizontal, 24)
                 .padding(.vertical, 32)
@@ -728,11 +735,11 @@ struct TilesMenuSheet: View {
     private func forfeitMessage(_ forfeit: (seat: Seat, table: TilesTableModel)) -> String {
         switch forfeit.table.forfeitOutcome(forfeit.seat) {
         case .ends(let winner):
-            return String(localized: "The game ends now and \(SeatInfo.name(forfeit.table.room, winner)) wins.", comment: "Forfeit confirmation: with one other player left, the game ends and they win")
+            return String(localized: "\(SeatInfo.name(forfeit.table.room, winner)) wins.", comment: "Forfeit confirmation: with one other player left, the game ends and they win")
         case .out:
             return forfeit.table.isMultiSeat
-                ? String(localized: "\(SeatInfo.name(forfeit.table.room, forfeit.seat)) is out and finishes last. Everyone else keeps playing.", comment: "Forfeit confirmation on a shared phone: that seat is out, the rest play on")
-                : String(localized: "You're out and finish last. Everyone else keeps playing.", comment: "Forfeit confirmation: you are out, the rest play on")
+                ? String(localized: "\(SeatInfo.name(forfeit.table.room, forfeit.seat)) finishes last. The rest play on.", comment: "Forfeit confirmation on a shared phone: that seat is out, the rest play on")
+                : String(localized: "You finish last. The rest play on.", comment: "Forfeit confirmation: you are out, the rest play on")
         }
     }
 }

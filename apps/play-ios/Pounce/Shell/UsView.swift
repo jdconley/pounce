@@ -119,11 +119,41 @@ struct UsView: View {
         }
     }
 
+    /// Back, the pairs and the buttons on one line when they all fit; on a narrow phone (or with
+    /// many pairs) the pairs get a scrolling line of their own under the buttons, so no cat sits
+    /// on a button.
     private var topRow: some View {
+        ViewThatFits(in: .horizontal) {
+            HStack(alignment: .center, spacing: 10) {
+                backButton
+                pairs
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 12)
+                    .fixedSize()
+                Spacer(minLength: 0)
+                actionButtons
+            }
+            VStack(spacing: 0) {
+                HStack(alignment: .center, spacing: 10) {
+                    backButton
+                    Spacer(minLength: 0)
+                    actionButtons
+                }
+                pairsRow
+            }
+        }
+        .padding(.horizontal, 16)
+        .padding(.top, 4)
+        .padding(.bottom, 6)
+    }
+
+    private var backButton: some View {
+        CornerHomeButton { model.goHome() }
+            .accessibilityIdentifier("us.back")
+    }
+
+    @ViewBuilder private var actionButtons: some View {
         HStack(alignment: .center, spacing: 10) {
-            CornerHomeButton { model.goHome() }
-                .accessibilityIdentifier("us.back")
-            pairsRow
             if offerSignIn {
                 CloudPlusBubble(size: 44, worded: false) { signIn = true }
                     .accessibilityIdentifier("us.cloud")
@@ -141,9 +171,6 @@ struct UsView: View {
             }
             .accessibilityIdentifier("us.gear")
         }
-        .padding(.horizontal, 16)
-        .padding(.top, 4)
-        .padding(.bottom, 6)
     }
 
     /// The Pounce bell (§12.4) for the pair on screen: ringing while my pounce is out, a moon when
@@ -227,22 +254,25 @@ struct UsView: View {
 
     private var pairsRow: some View {
         ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 12) {
-                ForEach(Array(store.pairs.enumerated()), id: \.element.pair) { i, view in
-                    pairCat(view, index: i)
-                }
-                // Ghosted cats (start a left streak again) wait until there are two or more pairs.
-                if store.pairs.count >= 2 {
-                    ForEach(Array(store.left.enumerated()), id: \.element.pair) { i, ghost in
-                        ghostCat(ghost, index: i)
-                    }
+            pairs
+                .padding(.horizontal, 8)
+                .padding(.vertical, 12)
+        }
+        .frame(maxWidth: .infinity)
+    }
+
+    private var pairs: some View {
+        HStack(spacing: 12) {
+            ForEach(Array(store.pairs.enumerated()), id: \.element.pair) { i, view in
+                pairCat(view, index: i)
+            }
+            // Ghosted cats (start a left streak again) wait until there are two or more pairs.
+            if store.pairs.count >= 2 {
+                ForEach(Array(store.left.enumerated()), id: \.element.pair) { i, ghost in
+                    ghostCat(ghost, index: i)
                 }
             }
-            .padding(.horizontal, 8)
-            .padding(.vertical, 12)
         }
-        .scrollClipDisabled()
-        .frame(maxWidth: .infinity)
     }
 
     private func pairCat(_ view: StreakView, index: Int) -> some View {
@@ -315,7 +345,7 @@ struct UsView: View {
     }
 
     /// A control with its word under it.
-    private func labeled<C: View>(_ title: LocalizedStringKey, @ViewBuilder _ control: () -> C) -> some View {
+    private func labeled<C: View>(_ title: LocalizedStringResource, @ViewBuilder _ control: () -> C) -> some View {
         VStack(spacing: 2) {
             control()
             WordLabel(title: title, alignment: .center)
@@ -456,7 +486,9 @@ struct UsView: View {
                 ForEach(view.gifts) { gift in
                     statTile("Open me", scale) { giftTile(view, gift, scale: scale) }
                 }
-                statTile(view.pausedUntil == nil ? "Going away?" : "On a trip", scale) {
+                statTile(view.pausedUntil == nil
+                         ? LocalizedStringResource("Pause", comment: "Us: under the suitcase button that pauses the streak")
+                         : LocalizedStringResource("Paused", comment: "Us: under the suitcase button while the streak is paused"), scale) {
                     ArtIconButton(icon: ArtName.Habit.iconPause, color: view.pausedUntil == nil ? Palette.sky : Palette.orange,
                                   size: 60 * scale, label: "Pause") { pausing = view }
                         .accessibilityIdentifier("us.pause")
@@ -474,7 +506,7 @@ struct UsView: View {
         .animation(.spring(duration: 0.4, bounce: 0.35).paced, value: view.pounce.waiting?.id)
     }
 
-    private func statTile<C: View>(_ title: LocalizedStringKey, _ scale: CGFloat, @ViewBuilder _ tile: () -> C) -> some View {
+    private func statTile<C: View>(_ title: LocalizedStringResource, _ scale: CGFloat, @ViewBuilder _ tile: () -> C) -> some View {
         VStack(spacing: 4) {
             tile()
             WordLabel(title: title, alignment: .center)
@@ -629,7 +661,7 @@ private struct LeaveConfirm: View {
                         NameTag(name, maxWidth: 110)
                     }
                 }
-                WordLabel(title: "Leave this streak?", detail: "The days you played together go away.", alignment: .center)
+                WordLabel(title: "Leave this streak?", detail: LocalizedStringResource("Your days together go away.", comment: "Leave streak confirmation: what leaving does"), alignment: .center)
                 HStack(spacing: 18) {
                     PillButton(icon: ArtName.iconBack, color: Palette.violet, size: .medium, accessibilityLabel: "Keep it") { onBack() }
                         .accessibilityIdentifier("leave.back")
@@ -660,7 +692,7 @@ private struct PauseDial: View {
             VStack(spacing: 18) {
                 Image(ArtName.Habit.pawSuitcase).resizable().scaledToFit().frame(width: 96)
                     .wiggle(trigger: days ?? 0)
-                WordLabel(title: "Going away?", detail: "Pick how many days. Your streak waits for you.", alignment: .center)
+                WordLabel(title: "Going away?", detail: LocalizedStringResource("Your streak waits.", comment: "Pause dial: under the title, the streak is kept while paused"), alignment: .center)
                 Grid(horizontalSpacing: 10, verticalSpacing: 10) {
                     ForEach(0..<2, id: \.self) { row in
                         GridRow {

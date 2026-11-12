@@ -149,7 +149,7 @@ struct PeopleSheet: View {
             .safeAreaInset(edge: .top, spacing: 0) {
                 if band == .kitten {
                     WordLine(
-                        String(localized: "Kids under 13 get a made-up name to keep them private. Roll the dice for another.",
+                        String(localized: "Kids under 13 get a made-up name, for privacy.",
                                comment: "People sheet: adding a kid, why the name is generated"),
                         size: 16)
                         .padding(.horizontal, 24)

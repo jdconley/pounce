@@ -12,7 +12,7 @@ class ForfeitTests: XCTestCase {
     func testForfeitAgainstOneBotEndsTheGame() throws {
         let app = start(bots: 1)
         openForfeit(app, "forfeit-confirm-2p")
-        XCTAssertTrue(app.alerts.staticTexts["The game ends now and House Cat wins."].exists, "wrong message")
+        XCTAssertTrue(app.alerts.staticTexts["House Cat wins."].exists, "wrong message")
         app.alerts.buttons["Forfeit"].firstMatch.tap()
 
         let over = el(app, "screen-gameover")
@@ -31,7 +31,7 @@ class ForfeitTests: XCTestCase {
         let code = el(app, "table.code").value as? String ?? ""
         openForfeit(app, "forfeit-confirm-3p")
         XCTAssertTrue(
-            app.alerts.staticTexts["You're out and finish last. Everyone else keeps playing."].exists, "wrong message")
+            app.alerts.staticTexts["You finish last. The rest play on."].exists, "wrong message")
         app.alerts.buttons["Forfeit"].firstMatch.tap()
 
         XCTAssertTrue(el(app, "home.newGame").waitForExistence(timeout: Live.t(20)), "not Home after forfeiting")

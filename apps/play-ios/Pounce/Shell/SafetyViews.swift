@@ -24,7 +24,7 @@ enum NameGate {
     static func words(_ verdict: NameVerdict) -> String? {
         switch verdict {
         case .ok: nil
-        case .badName: String(localized: "That name isn't allowed. Try another.", comment: "Under a name field: the server's name filter refused it")
+        case .badName: String(localized: "Name not allowed. Try another.", comment: "Under a name field: the server's name filter refused it")
         case .notAllowed: String(localized: "Ask a grown-up to change this.", comment: "Under a name field: a kitten can't type names")
         }
     }
@@ -67,11 +67,11 @@ struct SafetyActions: View {
 
         var text: String {
             switch self {
-            case .reported: String(localized: "Thanks. We'll take a look.", comment: "Player card: after a report was sent")
-            case .blocked: String(localized: "Blocked. They can't join your tables or reach you.", comment: "Player card: after blocking")
+            case .reported: String(localized: "Report sent.", comment: "Player card: after a report was sent")
+            case .blocked: String(localized: "Blocked.", comment: "Player card: after blocking")
             case .unblocked: String(localized: "Unblocked.", comment: "Player card: after unblocking")
-            case .failed: String(localized: "That didn't go through. Try again.", comment: "Player card: a report or block failed")
-            case .tooMany: String(localized: "That's a lot for now. Try again later.", comment: "Player card: too many reports or blocks")
+            case .failed: String(localized: "Didn't go through. Try again.", comment: "Player card: a report or block failed")
+            case .tooMany: String(localized: "Too many. Try again later.", comment: "Player card: too many reports or blocks")
             }
         }
     }
@@ -133,7 +133,7 @@ struct SafetyActions: View {
                 .accessibilityIdentifier("report.other")
             Button(String(localized: "Cancel", comment: "Report picker: never mind"), role: .cancel) {}
         } message: {
-            Text("Tell us why. We look at every report.", comment: "Report picker: under the title")
+            Text("Tell us why.", comment: "Report picker: under the title")
         }
         .alert(
             String(localized: "Block \(person.name)?", comment: "Block confirmation title: whom"),
@@ -144,7 +144,7 @@ struct SafetyActions: View {
             Button(String(localized: "Cancel", comment: "Block confirmation: never mind"), role: .cancel) {}
         } message: {
             Text(
-                "They can't join tables you start, and their pounces and nudges won't reach you. You can unblock them here.",
+                "They can't join your tables or send you nudges and pounces.",
                 comment: "Block confirmation: what blocking does")
         }
     }

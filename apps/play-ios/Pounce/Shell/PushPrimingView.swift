@@ -41,12 +41,11 @@ struct PushPrimingView: View {
                         "Get a notification when it's your turn",
                         comment: "VoiceOver: push priming art, a cat ringing a bell"))
                     .accessibilityAddTraits(.isImage)
-                WordLabel(title: "Know when it's your turn", detail: "Pounce can tell you when a game is waiting for you.",
-                          alignment: .center)
+                WordLabel(title: "Know when it's your turn", alignment: .center)
                     .padding(.horizontal, 28)
                 PillButton(
                     icon: ArtName.iconPawMenu, color: Palette.orange, size: .large, width: 260,
-                    title: String(localized: "Turn on"), accessibilityLabel: "Turn on notifications"
+                    title: String(localized: "Turn on", comment: "Push priming: the pill that asks iOS for notifications"), accessibilityLabel: "Turn on notifications"
                 ) {
                     onAllow()
                 }

@@ -132,7 +132,7 @@ struct PlayerCardOverlay: View {
             Haptics.shared.tick()
             confirmingRetire = true
         } label: {
-            Text("Play on without \(name)", comment: "Player card: retire the seat of a person whose move has waited days (asks first)")
+            Text("Retire seat", comment: "Player card: retire the seat of a person whose move has waited days (asks first)")
                 .font(.system(size: 16 * scale, weight: .black, design: .rounded))
                 .foregroundStyle(.white)
                 .lineLimit(1)
@@ -162,23 +162,20 @@ struct PlayerCardOverlay: View {
     /// Why it's offered and what happens (§5.13, as a forfeit): the game ends and the last player
     /// wins, or they are out and the rest play on.
     private var retireMessage: String {
-        let why = String(
-            localized: "It has been \(name)'s move for 3 days.",
-            comment: "Retire confirmation: why the seat can be retired")
         let then: String
         switch model.forfeitOutcome(card.seat) {
         case .ends(let winner):
             let other = SeatInfo.name(model.room, winner)
             then = String(
-                localized: "The game ends now and \(other) wins.",
+                localized: "\(other) wins.",
                 comment: "Retire confirmation: with one other player left, the game ends and they win")
         case .out:
             then = String(
-                localized: "\(name) will be out of this game and finish last. Everyone else keeps playing.",
+                localized: "\(name) finishes last. The rest play on.",
                 comment: "Retire confirmation: that seat is out, the rest play on")
         }
-        let last = String(localized: "This can't be undone.", comment: "Retire confirmation: it is final")
-        return "\(why) \(then) \(last)"
+        let last = String(localized: "It can't be undone.", comment: "Retire confirmation: it is final")
+        return "\(then) \(last)"
     }
 
     private var pose: CatPose {
@@ -357,8 +354,8 @@ struct PlayerCardOverlay: View {
             VStack(spacing: 6 * scale) {
                 Image(ArtName.Habit.pawGrey).resizable().scaledToFit().frame(width: 40 * scale)
                 caption(String(localized: "Not connected yet", comment: "Player card: nobody here has a streak with this person"))
-                Text("Take a turn each and you connect, with a streak of your own.",
-                     comment: "Player card: how playing together connects you")
+                Text("Take a turn each to start a streak.",
+                     comment: "Player card: how playing together starts a streak")
                     .font(.system(size: 15 * scale, weight: .bold, design: .rounded))
                     .foregroundStyle(.white.opacity(0.85))
                     .multilineTextAlignment(.center)
