@@ -1,7 +1,10 @@
 import { DurableObject } from "cloudflare:workers";
 
+import { storeLatest } from "../app/live";
+import { gameUnsupported } from "../app/status";
+import { APP_HEADER, parseApp } from "../app/version";
 import { devSpeed, linkOn, nudgeOn } from "../env";
-import { DEFAULT_GAME, GAMES_HEADER, gamesListed, gamesOn, type GameId } from "../games";
+import { DEFAULT_GAME, GAMES_HEADER, gamesListed, gamesOn, gameTitle, type GameId } from "../games";
 import { endBody, startAlert, startBody, updateBody, type LiveState } from "../live/live";
 import { isGeneratedName } from "../names/filter";
 import { yourMoveBody } from "../notify/copy";
@@ -169,7 +172,23 @@ export class GameRoom extends DurableObject<Env> {
     if (!this.core) return new Response(null, { status: 404 });
     // An app that can't draw this room's game (it lists its games; one that lists none draws Cat
     // Tower) is told there is no such table, which every version of the app knows how to show.
-    if (!gamesListed(request.headers.get(GAMES_HEADER)).includes(this.core.state.game)) return new Response(null, { status: 404 });
+    if (!gamesListed(request.headers.get(GAMES_HEADER)).includes(this.core.state.game)) {
+      const { game } = this.core.state;
+      // An app that said what it is (1.1 on) is told why instead: the game, by id and by name,
+      // in headers too, since the app can't read a refused upgrade's body.
+      if (parseApp(request.headers.get(APP_HEADER))) {
+        const refusal = gameUnsupported(game, gameTitle(game));
+        return new Response(JSON.stringify(refusal.body), {
+          status: 426,
+          headers: { ...refusal.headers, "content-type": "application/json", "cache-control": "no-store" },
+        });
+      }
+      // Version 1.0 can only be told there is no such table. A push can say the rest (design §5).
+      if (deviceId && notifyOn(this.env)) {
+        this.ctx.waitUntil(this.askToUpdate(deviceId, parsePlayers(request.headers.get(PLAYER_HEADER))).catch(() => undefined));
+      }
+      return new Response(null, { status: 404 });
+    }
     if (!deviceId) return new Response(null, { status: 400 });
     if (request.headers.get("upgrade")?.toLowerCase() !== "websocket") {
       return new Response(null, { status: 426 });
@@ -451,6 +470,41 @@ export class GameRoom extends DurableObject<Env> {
     // A live table's held-back move goes quietly, to that device only (§11.3).
     const to = only ? { ...profile, devices: [only] } : profile;
     await deliverToPlayer(this.env, to, push, only ? "passive" : g.level, intent.code, this.otherHumans(intent.playerId), this.otherGame());
+  }
+
+  /**
+   * A device whose app can't draw this table's game just tried to open it: someone asked it
+   * here. It is pushed, once, who that was and that Pounce needs an update, under the rules of
+   * the people on it: nothing in a teen's night, quiet in quiet hours, nothing between people
+   * who blocked each other. The someone is the host, as the table shows them; a table whose host
+   * has no seat yet names nobody, so nothing is sent.
+   */
+  private async askToUpdate(deviceId: string, players: Record<string, string>): Promise<void> {
+    const core = this.core;
+    if (!core) return;
+    const { state } = core;
+    if (deviceId === state.hostDeviceId) return;
+    const hosts = Object.values(state.devices[state.hostDeviceId]?.players ?? {});
+    const seat = state.seats.find(
+      (s) => s.kind === "human" && s.person && (s.deviceId === state.hostDeviceId || (s.playerId !== undefined && hosts.includes(s.playerId))),
+    );
+    if (!seat?.person) return;
+    const mine = Object.values(players);
+    const theirs = seat.playerId ? [seat.playerId] : hosts;
+    if (theirs.some((id) => mine.includes(id))) return;
+    if ((await anyBlocked(this.env, mine, theirs)) || (await anyBlocked(this.env, theirs, mine))) return;
+    let level: "active" | "passive" = "active";
+    const profile = mine[0] === undefined ? null : await playerRpc(this.env, mine[0]).pushProfile();
+    if (profile) {
+      const g = gate({ kind: "update", band: profile.band, zone: profile.zone ?? FALLBACK_ZONE, settings: profile.settings, now: Date.now(), spacedAt: null, remindersToday: 0 });
+      if (!g.send) return;
+      level = g.level;
+    }
+    await this.index(deviceId).pushUpdate(
+      { code: state.code, title: state.name, from: { name: seat.person.name, cat: seat.person.cat }, game: state.game, gameTitle: gameTitle(state.game) },
+      level,
+      await storeLatest(this.env),
+    );
   }
 
   /**

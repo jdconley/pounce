@@ -15,6 +15,12 @@ import type { TilesView } from "./tiles/view";
 export { ROOM_CODE_ALPHABET };
 
 export const PROTOCOL_VERSION = 1;
+/**
+ * The oldest protocol this server still speaks. An app that says it speaks an older one
+ * (`X-Pounce-App`'s `protocol`) is told to update (app updates design §4.3). Raise it only
+ * together with `PROTOCOL_VERSION`, when the old shape is really gone.
+ */
+export const MIN_PROTOCOL = 1;
 
 /** Largest accepted client message, in UTF-8 bytes. */
 const MAX_MESSAGE_BYTES = 8192;

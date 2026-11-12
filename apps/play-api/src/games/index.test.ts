@@ -1,9 +1,9 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, test } from "vitest";
 
 import { catTower } from "./cat-tower";
 import { tiles } from "./tiles";
 
-import { DEFAULT_GAME, GAMES, GAMES_HEADER, gameModule, gamesListed, gamesOn, isGameId } from "./index";
+import { DEFAULT_GAME, GAMES, GAMES_HEADER, gameModule, gamesListed, gamesOn, gameTitle, isGameId } from "./index";
 
 describe("the games a room can hold", () => {
   it("are Cat Tower and the tile game, each under its own id", () => {
@@ -63,5 +63,17 @@ describe("the GAMES flag", () => {
   it("turns on the games it lists", () => {
     expect(gamesOn({ GAMES: "tiles" })).toEqual(["cat-tower", "tiles"]);
     expect(gamesOn({ GAMES: "cat-tower, tiles" })).toEqual(["cat-tower", "tiles"]);
+  });
+});
+
+describe("a game's name, for an app that can't draw it", () => {
+  test("is the one the app's shelf uses", () => {
+    expect(gameTitle("cat-tower")).toBe("Cat Tower");
+    expect(gameTitle("tiles")).toBe("Tuna Tiles");
+  });
+
+  test("a game this server has no name for is a newer game", () => {
+    expect(gameTitle("chess")).toBe("a newer game");
+    expect(gameTitle("toString")).toBe("a newer game");
   });
 });

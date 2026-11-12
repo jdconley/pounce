@@ -15,6 +15,15 @@ export const DEFAULT_GAME: GameId = "cat-tower";
 
 export const isGameId = (v: unknown): v is GameId => typeof v === "string" && Object.hasOwn(GAMES, v);
 
+/**
+ * Each game's name, as the app's shelf says it (`GameCatalog` in PounceKit): what an app that
+ * can't draw a game is told the table is playing, in a card or a push. Names, so not translated.
+ */
+const TITLES: Record<GameId, string> = { "cat-tower": "Cat Tower", tiles: "Tuna Tiles" };
+
+/** The name of a table's game. One this server has no name for (never stored today) is "a newer game". */
+export const gameTitle = (id: string): string => (isGameId(id) ? TITLES[id] : "a newer game");
+
 export type GameAction = Action | TilesAction;
 export type GameError = ApplyError | TilesError;
 export type AnyGameEvent = GameEvent | TilesEvent;

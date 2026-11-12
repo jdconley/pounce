@@ -143,6 +143,12 @@ export async function worker(
     reportsKey?: string;
     /** `GAMES`: the games beyond Cat Tower that rooms may be created for (e.g. "tiles"). Off unless given. */
     games?: string;
+    /** `APP_MINIMUM`, `APP_LATEST` and `APP_STORE_URL` (app updates). Unset unless given. */
+    appMinimum?: string;
+    appLatest?: string;
+    appStoreUrl?: string;
+    /** Apple's public lookup (itunes.apple.com). Without it the lookup fails, as for any host a test doesn't fake. */
+    lookup?: (request: MiniflareRequest) => MiniflareResponse | Promise<MiniflareResponse>;
   },
 ): Promise<Miniflare> {
   return new Miniflare({
@@ -179,6 +185,9 @@ export async function worker(
       ...(options.devSpeed ? { DEV_SPEED: String(options.devSpeed) } : {}),
       ...(options.reportsKey ? { REPORTS_KEY: options.reportsKey } : {}),
       ...(options.games ? { GAMES: options.games } : {}),
+      ...(options.appMinimum === undefined ? {} : { APP_MINIMUM: options.appMinimum }),
+      ...(options.appLatest === undefined ? {} : { APP_LATEST: options.appLatest }),
+      ...(options.appStoreUrl === undefined ? {} : { APP_STORE_URL: options.appStoreUrl }),
       ...(options.consent && options.consentFlag !== false ? { CONSENT: "on" } : {}),
       ...(options.consent && options.twilio !== false ? TWILIO : {}),
     },
@@ -197,6 +206,7 @@ export async function worker(
         return new MiniflareResponse(null, { status: 200 });
       }
       if (new URL(request.url).host === "verify.twilio.com" && options.verify) return options.verify.answer(request);
+      if (new URL(request.url).host === "itunes.apple.com" && options.lookup) return options.lookup(request);
       return new MiniflareResponse(null, { status: 599 });
     },
   });

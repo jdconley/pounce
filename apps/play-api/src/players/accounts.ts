@@ -116,11 +116,21 @@ export async function uploadProfile(
 }
 
 /**
+ * `DeviceIndex.players`, saying what the asking app said of itself. `app`, the version in its
+ * `X-Pounce-App`, goes along only when it sent one, so the call an app that sends none makes is
+ * the call it always made.
+ */
+function heard(env: Env, deviceId: string, declared?: readonly string[], app?: string) {
+  const index = device(env, deviceId);
+  return app === undefined ? index.players(declared) : index.players(declared, app);
+}
+
+/**
  * personId → playerId for everyone the device speaks for: its own people, plus its account's household.
  * `declared`: the games the asking app listed, when this answers the app itself (`DeviceIndex.players`).
  */
-export async function devicePlayers(env: Env, deviceId: string, declared?: readonly string[]): Promise<Record<string, string>> {
-  const { people, account } = await device(env, deviceId).players(declared);
+export async function devicePlayers(env: Env, deviceId: string, declared?: readonly string[], app?: string): Promise<Record<string, string>> {
+  const { people, account } = await heard(env, deviceId, declared, app);
   const map = { ...people };
   if (account) {
     for (const h of await player(env, account).household()) map[h.personId] ??= h.playerId;
@@ -140,8 +150,13 @@ export async function resolveMe(env: Env, deviceId: string, personId: string | n
  * asking app listed, when this answers the app itself (`DeviceIndex.players`); the answer then
  * says the same.
  */
-export async function deviceView(env: Env, deviceId: string, declared?: readonly string[]): Promise<{ tables: TableEntry[]; games: string[] }> {
-  const { people, account, games } = await device(env, deviceId).players(declared);
+export async function deviceView(
+  env: Env,
+  deviceId: string,
+  declared?: readonly string[],
+  app?: string,
+): Promise<{ tables: TableEntry[]; games: string[] }> {
+  const { people, account, games } = await heard(env, deviceId, declared, app);
   const ids = new Set([...Object.values(people), ...(account ? [account] : [])]);
   const lists = await Promise.all([device(env, deviceId).listTables(), ...[...ids].map((id) => player(env, id).listTables())]);
   const byCode = new Map<string, TableEntry>();
@@ -158,9 +173,22 @@ export async function deviceView(env: Env, deviceId: string, declared?: readonly
  * header), which is what it is shown by, and what the device is remembered by from here on.
  */
 export async function deviceTables(env: Env, deviceId: string, listed: readonly string[]): Promise<TableEntry[]> {
-  const view = await deviceView(env, deviceId, listed);
+  return (await deviceTableLists(env, deviceId, listed)).tables;
+}
+
+/**
+ * The same, with the tables left out of it (`all`), for an app that said what it is and can be
+ * shown them locked (app updates design §4.2). `app`: the version it said, when it said.
+ */
+export async function deviceTableLists(
+  env: Env,
+  deviceId: string,
+  listed: readonly string[],
+  app?: string,
+): Promise<{ tables: TableEntry[]; all: TableEntry[] }> {
+  const view = await deviceView(env, deviceId, listed, app);
   // By the request's own list, whatever was stored: the answer never depends on that write.
-  return tablesFor(view.tables, listed).slice(0, 50);
+  return { tables: tablesFor(view.tables, listed).slice(0, 50), all: view.tables };
 }
 
 /**

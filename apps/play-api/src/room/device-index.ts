@@ -1,6 +1,9 @@
 import { DurableObject } from "cloudflare:workers";
 
+import { cleanVersion, olderThan, UNIDENTIFIED_VERSION } from "../app/version";
 import { CAP_MS, IDLE_MS, endBody, type LiveState, type LiveTokens } from "../live/live";
+import { collapseId } from "../notify/payload";
+import { noteUpdate, parseSent, updateAlert, updateCollapse, updateDue, type UpdatePush } from "../notify/update";
 import { nightBlocked, pushBlocked } from "../players/age";
 import { pushAlert, pushDismiss, pushLive, pushWidget, pushYourTurn } from "../push/apns";
 import { consentOn, liveOn } from "../streaks/profile";
@@ -101,9 +104,31 @@ export class DeviceIndex extends DurableObject<Env> {
    * build put back on the device) stops being told of tables it can't open. Left out, by callers
    * that are not answering the app, nothing changes.
    */
-  players(declared?: readonly string[]): { people: Record<string, string>; account: string | null; games: string[] } {
-    if (declared !== undefined) this.declareGames(declared);
+  players(declared?: readonly string[], appVersion?: string): { people: Record<string, string>; account: string | null; games: string[] } {
+    if (declared !== undefined) {
+      this.declareGames(declared);
+      this.declareApp(appVersion);
+    }
     return { people: this.people(), account: this.getMeta("account"), games: this.games() };
+  }
+
+  /**
+   * Remembers the version the device's app said it is (`X-Pounce-App`), heard with `declared` on
+   * the same call. An app that says nothing is version 1.0, and saying nothing again forgets a
+   * newer one: an older build is back on the device. Written only when it changed; never fatal.
+   */
+  private declareApp(version: string | undefined): void {
+    try {
+      const said = cleanVersion(version);
+      if (said !== this.getMeta("app_version")) this.setMeta("app_version", said);
+    } catch {
+      // Only the update push reads it; this request doesn't depend on it.
+    }
+  }
+
+  /** The version of the app last heard from on this device: 1.0 for one that never said. */
+  appVersion(): string {
+    return this.getMeta("app_version") ?? UNIDENTIFIED_VERSION;
   }
 
   /**
@@ -219,6 +244,33 @@ export class DeviceIndex extends DurableObject<Env> {
     const { sent, unregistered } = await pushAlert(this.env, token, body, collapseId, level);
     if (unregistered) this.ctx.storage.sql.exec("DELETE FROM meta WHERE k = 'apns_token' AND v = ?", token);
     if (sent) this.setMeta("last_alert_at", String(now));
+    return { sent };
+  }
+
+  /**
+   * "Mia wants to play Tuna Tiles. Update Pounce to join." (app updates design §5): for a device
+   * whose app can't draw the table's game, in place of a push it was not sent, or of a table it
+   * was told doesn't exist.
+   *
+   * Only when there is something to update to: `latest`, the version live on the App Store, must
+   * be newer than this device's app (null: unknown, so nothing is said). Once per table, and no
+   * more than one every 20 minutes. Never to a kitten's device, consent or not: a child is not
+   * sent to the App Store. Never in a teen's night.
+   */
+  async pushUpdate(p: UpdatePush, level: Level, latest: string | null): Promise<{ sent: boolean }> {
+    if (drawable(p.game, this.games())) return { sent: false };
+    if (!olderThan(this.appVersion(), latest)) return { sent: false };
+    const now = Date.now();
+    const band = this.ageBand();
+    if (pushBlocked(band) || nightBlocked(band, this.getMeta("time_zone"), now)) return { sent: false };
+    const told = parseSent(this.getMeta("update_pushes"));
+    if (!updateDue(told, p.code, now)) return { sent: false };
+    const token = this.getMeta("apns_token");
+    if (token === null) return { sent: false };
+    // Written down first: two asks at once send one push.
+    this.setMeta("update_pushes", JSON.stringify(noteUpdate(told, p.code, now)));
+    const { sent, unregistered } = await pushAlert(this.env, token, updateAlert(p, level), collapseId(updateCollapse(p.code)), level);
+    if (unregistered) this.ctx.storage.sql.exec("DELETE FROM meta WHERE k = 'apns_token' AND v = ?", token);
     return { sent };
   }
 

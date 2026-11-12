@@ -1,6 +1,6 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, test } from "vitest";
 
-import { drawable, tablesFor, withoutUndrawable, type TableEntry } from "./tables";
+import { drawable, lockedFor, tablesFor, withoutUndrawable, type TableEntry } from "./tables";
 
 const entry = (code: string, game?: string): TableEntry => ({
   code,
@@ -48,5 +48,35 @@ describe("a streak's table codes", () => {
   it("does not change the view it is given", () => {
     withoutUndrawable(view, tables, []);
     expect(view.myMove).toEqual(["AAAAA", "BBBBB"]);
+  });
+});
+
+describe("lockedFor", () => {
+  const title = (game: string) => (game === "tiles" ? "Tuna Tiles" : "a newer game");
+  const tower: TableEntry = { code: "BCDFG", name: "Couch Cats", status: "playing", yourTurn: true, updatedAt: 3 };
+  const tiles: TableEntry = { code: "GH2VD", name: "Taco Night", status: "playing", yourTurn: false, updatedAt: 2, game: "tiles", seats: [{ kind: "bot" }], movedAt: 1 };
+
+  test("is empty for a device with no table of another game", () => {
+    expect(lockedFor([tower], [], title)).toEqual([]);
+    expect(lockedFor([], [], title)).toEqual([]);
+  });
+
+  test("is the tables the app can't draw, each with its game's name and none of a turn's details", () => {
+    expect(lockedFor([tower, tiles], [], title)).toEqual([
+      { code: "GH2VD", name: "Taco Night", game: "tiles", title: "Tuna Tiles", updatedAt: 2, seats: [{ kind: "bot" }] },
+    ]);
+    expect(lockedFor([{ code: "KLMNP", status: "lobby", yourTurn: false, updatedAt: 1, game: "chess" }], ["tiles"], title)).toEqual([
+      { code: "KLMNP", game: "chess", title: "a newer game", updatedAt: 1 },
+    ]);
+  });
+
+  test("nothing is locked for an app that can draw it, and a finished table isn't worth an update", () => {
+    expect(lockedFor([tower, tiles], ["tiles"], title)).toEqual([]);
+    expect(lockedFor([{ ...tiles, status: "over" }], [], title)).toEqual([]);
+  });
+
+  test("at most ten", () => {
+    const many = Array.from({ length: 14 }, (_, i) => ({ ...tiles, code: `T${i}` }));
+    expect(lockedFor(many, [], title)).toHaveLength(10);
   });
 });

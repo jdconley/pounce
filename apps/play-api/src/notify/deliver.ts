@@ -1,8 +1,11 @@
+import { storeLatest } from "../app/live";
+import { gameTitle } from "../games";
 import { deviceView } from "../players/accounts";
 import { tablesFor, type TableEntry } from "../room/tables";
 
 import { forDevice } from "./audience";
 import { apnsBody, collapseId } from "./payload";
+import { updateFor } from "./update";
 
 import type { Level } from "./policy";
 import type { NotifySettings } from "./settings";
@@ -43,6 +46,10 @@ function badge(tables: readonly TableEntry[], also?: string): number {
  * is not sent to it, unless the push says what such a device gets instead (a streak reminder).
  * `game` is the table's game when the sender knows it (the room itself). Tables an app can't
  * draw never count toward its badge, nor appear in its streak block.
+ *
+ * A device not sent a push a person made about such a table gets the update push in its place
+ * (`DeviceIndex.pushUpdate`: once per table, only when the App Store has a newer version than
+ * its app, never a kitten's device). It doesn't count as this push having been delivered.
  */
 export async function deliverToPlayer(
   env: Env,
@@ -54,12 +61,20 @@ export async function deliverToPlayer(
   game?: string,
 ): Promise<boolean> {
   const gate = senders ? { recipient: profile.id, senders } : undefined;
+  // Asked at most once, and only if some device is held back from a push a person sent.
+  let live: Promise<string | null> | undefined;
+  const latest = () => (live ??= storeLatest(env).catch(() => null));
   const results = await Promise.all(
     profile.devices.map(async (d) => {
       try {
         const { tables, games } = await deviceView(env, d);
         const shown = forDevice(o, tables, games, game);
-        if (shown === null) return false;
+        if (shown === null) {
+          const held = game ?? tables.find((t) => t.code === o.code)?.game;
+          const update = held === undefined ? null : updateFor(o, held, gameTitle(held));
+          if (update) await device(env, d).pushUpdate(update, level, await latest());
+          return false;
+        }
         const body = apnsBody(shown, level, badge(tablesFor(tables, games).slice(0, 50), also));
         return (await device(env, d).pushAlert(body, collapseId(o.collapse), level, gate)).sent;
       } catch {

@@ -24,7 +24,9 @@ export type NotifyKind =
   /** Someone retired your stalled seat. */
   | "retired"
   /** Parent consent's confirmation, on the consenting parent's own devices (consent design D6). */
-  | "consent";
+  | "consent"
+  /** Someone asked you to a table your version of Pounce can't draw (app updates design §5). */
+  | "update";
 
 export type Level = "active" | "passive";
 
@@ -34,7 +36,8 @@ export const SPACING_MS = 20 * 60_000;
 export const MAX_REMINDERS = 2;
 
 const REMINDERS: readonly NotifyKind[] = ["reminder", "last_chance", "fresh_start", "going_quiet"];
-const UNSPACED: readonly NotifyKind[] = ["your_move", "pounce", "pounce_answered", "nudge", "retire_soon", "retired"];
+// "update" keeps a spacing of its own, per device (`updateDue`), since it answers one person's ask like a pounce.
+const UNSPACED: readonly NotifyKind[] = ["your_move", "pounce", "pounce_answered", "nudge", "retire_soon", "retired", "update"];
 const STATUS: readonly NotifyKind[] = ["nap", "winback", "paused", "pounce_answered"];
 /** A teen's device gets nothing in these local hours (§14.1). */
 const TEEN_NIGHT_END_MIN = 6 * 60;

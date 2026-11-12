@@ -70,7 +70,17 @@
     // as it always was. It stays empty until an app that can draw the tile game is in TestFlight:
     // apps before it never ask for another game, and are told a table of one doesn't exist. Local
     // dev turns it on in .dev.vars (see .dev.vars.example); tests set it themselves.
-    "GAMES": ""
+    "GAMES": "",
+    // App updates (docs/superpowers/specs/2026-11-12-app-updates-design.md). The oldest app
+    // version the server still supports, e.g. "1.1": an app below it is told to update, once the
+    // App Store has a version at least that new. Empty: every version is supported, and nothing
+    // changes for any app. Version 1.0 sends no version; it counts as "1.0" (design §6 says what
+    // it then shows, and why to wait before setting this).
+    "APP_MINIMUM": "",
+    // Overrides the version the server believes is live on the App Store ("1.2"), or "off" for
+    // none. Empty: Apple's public lookup for the app's id says, kept for six hours. Until the app
+    // is listed the lookup finds nothing, and no app is told a newer version exists.
+    "APP_LATEST": ""
   },
   "durable_objects": {
     "bindings": [

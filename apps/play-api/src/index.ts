@@ -1,8 +1,11 @@
+import { storeLatest } from "./app/live";
+import { appStatus, refusalFor, RETIRED_SNAPSHOT, UPDATE_HEADER, UPDATE_REQUIRED, type UpdateRequired } from "./app/status";
+import { APP_HEADER, parseApp } from "./app/version";
 import { issueDeviceToken, verifyDeviceToken } from "./auth";
 import { APPLE_ROOTS } from "./consent/appstore";
 import { noticePage } from "./consent/pages";
 import { devSpeed } from "./env";
-import { DEFAULT_GAME, GAMES_HEADER, gamesListed, gamesOn, isGameId, type GameId } from "./games";
+import { DEFAULT_GAME, GAMES_HEADER, gamesListed, gamesOn, gameTitle, isGameId, type GameId } from "./games";
 import { appSiteAssociation, ogImage, pouncePage, sharePage } from "./http/links";
 import { mediaFile } from "./http/media";
 import { privacyPage } from "./http/privacy";
@@ -27,7 +30,7 @@ import { nameAllowed } from "./names/filter";
 import {
   deleteMe,
   devicePlayers,
-  deviceTables,
+  deviceTableLists,
   linkIdentity,
   player,
   resolveMe,
@@ -40,10 +43,11 @@ import {
 import { PERSON_ID } from "./players/ids";
 import { parseProfile, parseStatePatch } from "./players/parse";
 import { answerPounce, createPounce, linkPounce } from "./pounce/pounces";
+import { MIN_PROTOCOL } from "./protocol";
 import { newRoomCode, ROOM_CODE } from "./room/codes";
 import { DEVICE_HEADER, PLAYER_HEADER } from "./room/game-room";
 import { parseRoomName } from "./room/names";
-import { withoutUndrawable } from "./room/tables";
+import { lockedFor, withoutUndrawable } from "./room/tables";
 import { blockPlayer, guardJoin, listBlocks, mayMint, nameCheck, ownerReports, reportPlayer, unblockPlayer } from "./safety/safety";
 import { creatorLook, isMine, leavePair, myLeft, myOwn, myStreaks, myTrophies, PAIR_ID, pairStub, rejoinPair, syncPairPeople } from "./streaks/pairs";
 import { consentOn, liveOn, notifyOn, streaksOn, trophyOn } from "./streaks/profile";
@@ -152,6 +156,38 @@ const appGames = (request: Request): GameId[] => gamesListed(request.headers.get
  */
 const declared = (request: Request): GameId[] => appGames(request).filter((id) => id !== DEFAULT_GAME);
 
+/**
+ * The version in this request's `X-Pounce-App`, for the device's index to remember alongside its
+ * games. Undefined for an app that sent none (version 1.0), which changes nothing about the call.
+ */
+const appVersion = (request: Request): string | undefined => parseApp(request.headers.get(APP_HEADER))?.version;
+
+/** `GET /v1/app`: the version live on the App Store, the oldest one still supported, and where to update. Public. */
+async function getApp(env: Env): Promise<Response> {
+  return json(200, appStatus(env, await storeLatest(env).catch(() => null)));
+}
+
+/** 426 for an app that said what it is and is too old (design §4.3). The header is for a refused socket upgrade, whose body the app can't read. */
+function updateRequired(refusal: UpdateRequired): Response {
+  const response = json(426, refusal);
+  response.headers.set(UPDATE_HEADER, UPDATE_REQUIRED);
+  return response;
+}
+
+/**
+ * Version 1.0, once it is no longer supported, opening a table: the socket opens, says one thing
+ * and closes. The one thing is a snapshot of a protocol 1.0 doesn't speak, which it answers with
+ * its own "Update the app to play" card. Any other answer here it shows as a lost connection.
+ */
+function retiredSocket(): Response {
+  const pair = new WebSocketPair();
+  const [client, server] = Object.values(pair) as [WebSocket, WebSocket];
+  server.accept();
+  server.send(RETIRED_SNAPSHOT);
+  server.close(1000, "update required");
+  return new Response(null, { status: 101, webSocket: client });
+}
+
 async function createRoom(request: Request, env: Env, deviceId: string): Promise<Response> {
   const body = await readObject(request);
   // Only a game the `GAMES` flag has turned on, and only for an app that can draw it.
@@ -200,7 +236,7 @@ async function openSocket(request: Request, env: Env, deviceId: string, code: st
   headers.delete(PLAYER_HEADER);
   headers.set(DEVICE_HEADER, deviceId);
   // The same call tells the device's index what this app can draw, before the room can push to it.
-  headers.set(PLAYER_HEADER, JSON.stringify(await devicePlayers(env, deviceId, declared(request))));
+  headers.set(PLAYER_HEADER, JSON.stringify(await devicePlayers(env, deviceId, declared(request), appVersion(request))));
   return env.ROOMS.get(env.ROOMS.idFromName(code)).fetch(new Request(request, { headers }));
 }
 
@@ -222,7 +258,12 @@ async function setPushToken(request: Request, env: Env, deviceId: string): Promi
 
 /** The device's tables, less any table of a game the asking app can't draw. */
 async function listTables(request: Request, env: Env, deviceId: string): Promise<Response> {
-  return json(200, { tables: await deviceTables(env, deviceId, declared(request)) });
+  const app = appVersion(request);
+  const { tables, all } = await deviceTableLists(env, deviceId, declared(request), app);
+  // An app that said what it is also hears of the tables it was left out of, as `locked`: there
+  // to say "update to join", never to open. An app that didn't gets the body it always got.
+  const locked = app === undefined ? [] : lockedFor(all, declared(request), gameTitle);
+  return json(200, locked.length > 0 ? { tables, locked } : { tables });
 }
 
 function respond<T>(result: Result<T>, okStatus = 200): Response {
@@ -560,15 +601,24 @@ export default {
       const found = await ownerReports(env, request);
       return found === null ? notFound() : found === "bad" ? badRequest() : json(200, found);
     }
+    if (method === "GET" && pathname === "/v1/app") return getApp(env);
     const secret = env.TOKEN_SECRET;
-    if (method === "POST" && pathname === "/v1/devices") {
-      return secret ? mintDevice(request, env, secret) : notConfigured();
-    }
-    const handler = route(method, pathname, streaks, notify, liveOn(env), consent, trophyOn(env));
-    if (!handler) return notFound();
+    const mints = method === "POST" && pathname === "/v1/devices";
+    const handler = mints ? null : route(method, pathname, streaks, notify, liveOn(env), consent, trophyOn(env));
+    if (!mints && !handler) return notFound();
+    // Too old to be served (`APP_MINIMUM`, or a protocol the server dropped)? Nobody is while
+    // there is no minimum, and then this asks nothing and costs nothing.
+    const app = parseApp(request.headers.get(APP_HEADER));
+    const refusal = await refusalFor(app, env, MIN_PROTOCOL, () => storeLatest(env).catch(() => null));
+    // An app that said what it is gets a plain answer on every route.
+    if (refusal && app) return updateRequired(refusal);
+    if (mints) return secret ? mintDevice(request, env, secret) : notConfigured();
     if (!secret) return notConfigured();
     const deviceId = await authenticate(request, secret);
     if (!deviceId) return unauthorized();
-    return handler(request, env, deviceId);
+    // Version 1.0 says nothing of itself, and reads no answer but a table's: its HTTP calls are
+    // answered as ever, and a table it opens tells it to update (design §6).
+    if (refusal && ROOM_WS.test(pathname) && request.headers.get("upgrade")?.toLowerCase() === "websocket") return retiredSocket();
+    return (handler as Route)(request, env, deviceId);
   },
 } satisfies ExportedHandler<Env>;
