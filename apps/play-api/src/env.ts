@@ -102,6 +102,25 @@ export interface Env {
    * until the App Store id is known: no banner, and the button falls back to `TESTFLIGHT_URL`.
    */
   APP_STORE_URL?: string;
+  /**
+   * The oldest app version the server still supports (app updates design §3), e.g. "1.1". Empty
+   * or unset, as in wrangler.jsonc today: every version. An app below it is told to update, but
+   * only once the App Store has a version at least this new (`enforcedMinimum`).
+   */
+  APP_MINIMUM?: string;
+  /**
+   * `on`: enforce `APP_MINIMUM` whatever Apple's lookup says. Unset, as in wrangler.jsonc: the
+   * minimum waits for Apple to name a version that new, and `APP_LATEST` can't stand in for that.
+   */
+  APP_MINIMUM_FORCE?: string;
+  /**
+   * Overrides the version apps are told is the newest (`GET /v1/app`'s `latest`, for the soft
+   * card): a version ("1.2"), or "off" for "say nothing". Empty or unset: what Apple's public
+   * lookup last said. It never lets `APP_MINIMUM` turn anyone away, and no update push goes by it.
+   */
+  APP_LATEST?: string;
+  /** "off": never ask Apple's lookup (then only `APP_LATEST` says what is live). */
+  APP_LOOKUP?: string;
   /** APNs auth key, PEM PKCS#8 text. A secret; without it (and the key id) no push is sent. */
   APNS_KEY_P8?: string;
   /** APNs auth key id (the JWT `kid`). A secret. */

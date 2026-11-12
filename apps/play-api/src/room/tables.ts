@@ -57,6 +57,34 @@ export function tablesFor(tables: readonly TableEntry[], games: readonly string[
   return tables.filter((t) => drawable(t.game, games));
 }
 
+/**
+ * A table an app can't draw, as its tables list shows it locked (app updates design §4.2): enough
+ * to say "Mia's table is playing Tuna Tiles. Update Pounce to join." and nothing an older decoder
+ * would trip on, since it is never in `tables`.
+ */
+export type LockedTable = { code: string; name?: string; game: string; title: string; updatedAt: number; seats?: TableSeat[] };
+
+const MAX_LOCKED = 10;
+
+/**
+ * The tables an app that lists `games` can't draw and that aren't over, newest first, each with
+ * its game's name (`titleOf`). Empty for a device with no table of another game, which is
+ * everyone until a second game is turned on.
+ */
+export function lockedFor(tables: readonly TableEntry[], games: readonly string[], titleOf: (game: string) => string): LockedTable[] {
+  return tables
+    .filter((t) => !drawable(t.game, games) && t.status !== "over")
+    .slice(0, MAX_LOCKED)
+    .map((t) => ({
+      code: t.code,
+      ...(t.name === undefined ? {} : { name: t.name }),
+      game: t.game as string,
+      title: titleOf(t.game as string),
+      updatedAt: t.updatedAt,
+      ...(t.seats === undefined ? {} : { seats: t.seats }),
+    }));
+}
+
 const MAX_TABLES = 50;
 
 /** The tables list in a Durable Object's SQLite: the same schema for devices and players. */

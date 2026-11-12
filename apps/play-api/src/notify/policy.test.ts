@@ -38,7 +38,7 @@ describe("kinds", () => {
     const kinds: NotifyKind[] = ["reminder", "last_chance", "fresh_start", "going_quiet"];
     for (const k of kinds) expect(isReminder(k)).toBe(true);
     expect(isReminder("nap")).toBe(false);
-    for (const k of ["your_move", "pounce", "pounce_answered", "nudge", "retire_soon", "retired"] as NotifyKind[]) expect(isSpaced(k)).toBe(false);
+    for (const k of ["your_move", "pounce", "pounce_answered", "nudge", "retire_soon", "retired", "update"] as NotifyKind[]) expect(isSpaced(k)).toBe(false);
     for (const k of ["reminder", "nap", "milestone", "play_again", "paused", "winback"] as NotifyKind[]) expect(isSpaced(k)).toBe(true);
   });
 });

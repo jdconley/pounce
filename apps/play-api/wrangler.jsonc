@@ -70,7 +70,25 @@
     // as it always was. It stays empty until an app that can draw the tile game is in TestFlight:
     // apps before it never ask for another game, and are told a table of one doesn't exist. Local
     // dev turns it on in .dev.vars (see .dev.vars.example); tests set it themselves.
-    "GAMES": ""
+    "GAMES": "",
+    // App updates (docs/superpowers/specs/2026-11-12-app-updates-design.md). The oldest app
+    // version the server still supports, e.g. "1.1": an app below it is told to update, once the
+    // App Store has a version at least that new. Empty: every version is supported, and nothing
+    // changes for any app. Version 1.0 sends no version; it counts as "1.0" (design §6 says what
+    // it then shows, and why to wait before setting this).
+    "APP_MINIMUM": "",
+    // The minimum is guarded: it turns nobody away until Apple's own lookup names a version at
+    // least that new, so it can be set ahead of a release and starts by itself when the release
+    // is live. APP_LATEST (below) does NOT satisfy the guard. To enforce a minimum without
+    // waiting for Apple, add "APP_MINIMUM_FORCE": "on" as well, and only when that version
+    // really can be downloaded: everyone below it is locked out until they update.
+    //
+    // Overrides the version apps are told is the newest, for the soft "a new Pounce is ready"
+    // card only ("1.2"), or "off" to say nothing. Empty: what Apple's public lookup for the
+    // app's id last said (asked in the background at most every six hours, never while a
+    // request waits). Until the app is listed the lookup finds nothing, and no app is told a
+    // newer version exists. It never enforces the minimum and no update push goes by it.
+    "APP_LATEST": ""
   },
   "durable_objects": {
     "bindings": [
