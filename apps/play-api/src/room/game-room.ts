@@ -1,7 +1,7 @@
 import { DurableObject } from "cloudflare:workers";
 
 import { devSpeed, linkOn, nudgeOn } from "../env";
-import { catTower } from "../games/cat-tower";
+import { DEFAULT_GAME, GAMES_HEADER, gamesListed, gamesOn, type GameId } from "../games";
 import { endBody, startAlert, startBody, updateBody, type LiveState } from "../live/live";
 import { isGeneratedName } from "../names/filter";
 import { yourMoveBody } from "../notify/copy";
@@ -37,6 +37,9 @@ import type { Env } from "../env";
 import type { ClientMessage, ErrorCode, ServerMessage } from "../protocol";
 import type { TableSeat } from "./tables";
 
+/** A room of whichever game: this class persists and delivers, and never looks inside the game's state. */
+type Room = RoomCore<unknown>;
+
 /** Internal header the Worker sets to the verified device id. */
 export const DEVICE_HEADER = "x-play-device";
 /** Internal header the Worker sets to the device's people and their players, as JSON `{personId: playerId}`. */
@@ -62,7 +65,7 @@ const cryptoRng = (): number => (crypto.getRandomValues(new Uint32Array(1))[0] a
  * logic lives in `RoomCore`; this class persists and delivers.
  */
 export class GameRoom extends DurableObject<Env> {
-  private core: RoomCore | null = null;
+  private core: Room | null = null;
   /**
    * Status, actor, name and seat holders when the tables index was last updated,
    * and the devices it listed this room for. Persisted in `listed` so an
@@ -88,7 +91,7 @@ export class GameRoom extends DurableObject<Env> {
   }
 
   private features(): RoomFeatures {
-    return { streaks: streaksOn(this.env), live: liveOn(this.env), link: linkOn(this.env), nudge: nudgeOn(this.env) };
+    return { streaks: streaksOn(this.env), live: liveOn(this.env), link: linkOn(this.env), nudge: nudgeOn(this.env), games: gamesOn(this.env) };
   }
 
   private createSchema(): void {
@@ -104,14 +107,22 @@ export class GameRoom extends DurableObject<Env> {
    * Creates the room, or reports that the code is already taken. `name` is
    * already validated; `look` is the creator's last-used one (§9.4).
    */
-  async init(code: string, hostDeviceId: string, name?: string, look?: Look): Promise<{ ok: true } | { exists: true }> {
+  async init(
+    code: string,
+    hostDeviceId: string,
+    name?: string,
+    look?: Look,
+    game?: GameId,
+  ): Promise<{ ok: true } | { exists: true } | { off: true }> {
     if (this.core) return { exists: true };
+    // The Worker has checked; the room checks again, so no caller can deal a game the flag doesn't list.
+    if (!gamesOn(this.env).includes(game ?? DEFAULT_GAME)) return { off: true };
     this.createSchema();
-    this.core = new RoomCore(
-      RoomCore.create(code, hostDeviceId, Date.now(), name, look),
+    this.core = new RoomCore<unknown>(
+      RoomCore.create(code, hostDeviceId, Date.now(), name, look, game),
       Date.now,
       cryptoRng,
-      catTower,
+      undefined,
       devSpeed(this.env),
       this.features(),
     );
@@ -129,15 +140,17 @@ export class GameRoom extends DurableObject<Env> {
     spec: RematchIntent,
     /** A pounce's answerer, who is opening this table now: no "your move" push for them (§12.4). */
     quietFor?: string,
-  ): Promise<{ ok: true; first: string | null } | { exists: true }> {
+  ): Promise<{ ok: true; first: string | null } | { exists: true } | { off: true }> {
     if (this.core) return { exists: true };
+    // No new table of a game the `GAMES` flag doesn't list, whoever asks (the room that asked checks too).
+    if (!gamesOn(this.env).includes(spec.game ?? DEFAULT_GAME)) return { off: true };
     this.quietFor = quietFor ?? null;
     this.createSchema();
-    this.core = new RoomCore(
+    this.core = new RoomCore<unknown>(
       RoomCore.rematchState(code, spec, Date.now()),
       Date.now,
       cryptoRng,
-      catTower,
+      undefined,
       devSpeed(this.env),
       this.features(),
     );
@@ -146,7 +159,7 @@ export class GameRoom extends DurableObject<Env> {
     await this.after(this.core.deal());
     this.quietFor = null;
     const { state } = this.core;
-    const actor = state.gameState ? catTower.currentActor(state.gameState) : null;
+    const actor = this.core.actor();
     return { ok: true, first: actor === null ? null : (state.seats[actor]?.playerId ?? null) };
   }
 
@@ -154,6 +167,9 @@ export class GameRoom extends DurableObject<Env> {
   async fetch(request: Request): Promise<Response> {
     const deviceId = request.headers.get(DEVICE_HEADER);
     if (!this.core) return new Response(null, { status: 404 });
+    // An app that can't draw this room's game (it lists its games; one that lists none draws Cat
+    // Tower) is told there is no such table, which every version of the app knows how to show.
+    if (!gamesListed(request.headers.get(GAMES_HEADER)).includes(this.core.state.game)) return new Response(null, { status: 404 });
     if (!deviceId) return new Response(null, { status: 400 });
     if (request.headers.get("upgrade")?.toLowerCase() !== "websocket") {
       return new Response(null, { status: 426 });
@@ -172,7 +188,7 @@ export class GameRoom extends DurableObject<Env> {
       ws.close(NORMAL_CLOSURE);
       return;
     }
-    const parsed = typeof data === "string" ? parseClientMessage(data) : null;
+    const parsed = typeof data === "string" ? parseClientMessage(data, core.parseAction) : null;
     if (parsed === null || "error" in parsed) {
       send(ws, parsed === null ? BAD_MESSAGE : { t: "error", code: parsed.error });
       return;
@@ -199,7 +215,7 @@ export class GameRoom extends DurableObject<Env> {
    * someone who blocked the sender is dropped, and the sender is told it went.
    */
   private async refusal(deviceId: string, msg: ClientMessage): Promise<ServerMessage | null> {
-    const core = this.core as RoomCore;
+    const core = this.core as Room;
     const error = (code: ErrorCode): ServerMessage => ({ t: "error", code });
     const mine = () => Object.values(core.state.devices[deviceId]?.players ?? {});
     if (msg.t === "rename" || msg.t === "renameSeat" || msg.t === "claim") {
@@ -271,7 +287,7 @@ export class GameRoom extends DurableObject<Env> {
   }
 
   /** Each open socket's last auto-answered ping, for the seats' links. */
-  private heardPings(core: RoomCore): void {
+  private heardPings(core: Room): void {
     for (const ws of this.ctx.getWebSockets()) {
       const at = this.ctx.getWebSocketAutoResponseTimestamp(ws);
       if (at && ws.readyState === WebSocket.OPEN) core.heard(deviceOf(ws), at.getTime());
@@ -306,7 +322,7 @@ export class GameRoom extends DurableObject<Env> {
 
   /** A look from the setter's own unlocks (§9.4, §17); the new look becomes their last-used one. */
   private async setLook(deviceId: string, msg: Extract<ClientMessage, { t: "setLook" }>): Promise<void> {
-    const players = (this.core as RoomCore).lookPlayers(deviceId);
+    const players = (this.core as Room).lookPlayers(deviceId);
     const unlocks = await unlocksFor(this.env, players).catch(() => ({ backs: [], rugs: [] }));
     const core = this.core;
     if (!core) return;
@@ -326,7 +342,7 @@ export class GameRoom extends DurableObject<Env> {
   private reportStreak(intent: StreakIntent): void {
     if (new Set(intent.players).size < 2) return;
     // Who is looking at the table now: a milestone isn't pushed to them (§12.1).
-    const awake = (this.core as RoomCore).awakePlayers();
+    const awake = (this.core as Room).awakePlayers();
     const run = async () => {
       // Your own streak (trophy room design D1): a turn at a table with another person counts, once per report.
       // Someone who forfeited (§5.13) no longer counts as that other person.
@@ -370,7 +386,7 @@ export class GameRoom extends DurableObject<Env> {
       const made = await this.env.ROOMS.get(this.env.ROOMS.idFromName(code))
         .initRematch(code, spec)
         .catch(() => null);
-      if (made === null) break;
+      if (made === null || "off" in made) break;
       if ("ok" in made) {
         if (this.core) {
           if (notifyOn(this.env)) this.ctx.waitUntil(this.pushPlayAgain(spec, code, made.first).catch(() => undefined));
@@ -392,7 +408,7 @@ export class GameRoom extends DurableObject<Env> {
    * anyone looking at this table, who has just seen it.
    */
   private async pushPlayAgain(spec: RematchIntent, code: string, first: string | null): Promise<void> {
-    const core = this.core as RoomCore;
+    const core = this.core as Room;
     const asked = core.controlledSeats(spec.hostDeviceId)[0];
     const who = asked === undefined ? undefined : core.state.seats[asked]?.person;
     if (!who) return;
@@ -434,7 +450,7 @@ export class GameRoom extends DurableObject<Env> {
     });
     // A live table's held-back move goes quietly, to that device only (§11.3).
     const to = only ? { ...profile, devices: [only] } : profile;
-    await deliverToPlayer(this.env, to, push, only ? "passive" : g.level, intent.code, this.otherHumans(intent.playerId));
+    await deliverToPlayer(this.env, to, push, only ? "passive" : g.level, intent.code, this.otherHumans(intent.playerId), this.otherGame());
   }
 
   /**
@@ -457,7 +473,7 @@ export class GameRoom extends DurableObject<Env> {
     });
     if (!g.send) return;
     const push = nudgePush({ code: intent.code, table: intent.tableName, to: intent.personName, from: intent.from });
-    await deliverToPlayer(this.env, profile, push, g.level, intent.code, [intent.fromPlayer]);
+    await deliverToPlayer(this.env, profile, push, g.level, intent.code, [intent.fromPlayer], this.otherGame());
   }
 
   /**
@@ -480,7 +496,7 @@ export class GameRoom extends DurableObject<Env> {
     if (!g.send) return;
     const push = retirePush({ code: intent.code, table: intent.tableName, to: intent.personName, from: intent.from ?? null });
     const senders = intent.kind === "soon" ? this.otherHumans(intent.playerId) : [intent.fromPlayer ?? null];
-    await deliverToPlayer(this.env, profile, push, g.level, intent.kind === "soon" ? intent.code : undefined, senders);
+    await deliverToPlayer(this.env, profile, push, g.level, intent.kind === "soon" ? intent.code : undefined, senders, this.otherGame());
   }
 
   /**
@@ -524,7 +540,7 @@ export class GameRoom extends DurableObject<Env> {
     const held = intent.yourMove;
     if (!held) return;
     if (held.playerId) await this.pushYourMove({ ...held, playerId: held.playerId }, intent.deviceId);
-    else await device.push(held);
+    else await device.push(held, undefined, this.otherGame());
   }
 
   /** The paws: the device player's pair at this table, from the latest report or (first) from the pairs. */
@@ -566,14 +582,14 @@ export class GameRoom extends DurableObject<Env> {
     this.persist(this.core);
   }
 
-  private persist(core: RoomCore): void {
+  private persist(core: Room): void {
     this.ctx.storage.sql.exec(
       "INSERT INTO room (id, json) VALUES (1, ?) ON CONFLICT (id) DO UPDATE SET json = excluded.json",
       JSON.stringify(core.state),
     );
   }
 
-  private load(): RoomCore | null {
+  private load(): Room | null {
     const sql = this.ctx.storage.sql;
     // Reading sqlite_master creates nothing, so probing an unused code leaves
     // no storage behind.
@@ -594,11 +610,11 @@ export class GameRoom extends DurableObject<Env> {
       this.tableDevices = new Set(JSON.parse(listed.devices) as string[]);
       this.tablePlayers = new Set(JSON.parse(listed.players ?? "[]") as string[]);
     }
-    return new RoomCore(
-      JSON.parse(row.json) as RoomState,
+    return new RoomCore<unknown>(
+      JSON.parse(row.json) as RoomState<unknown>,
       Date.now,
       cryptoRng,
-      catTower,
+      undefined,
       devSpeed(this.env),
       this.features(),
     );
@@ -609,7 +625,7 @@ export class GameRoom extends DurableObject<Env> {
    * as connected may have none left. Mark those away; the events reach only
    * sockets that still exist.
    */
-  private async dropStaleDevices(core: RoomCore): Promise<void> {
+  private async dropStaleDevices(core: Room): Promise<void> {
     const stale = Object.entries(core.state.devices)
       .filter(([id, device]) => device.connected && !this.hasOpenSocket(id))
       .map(([id]) => id);
@@ -632,7 +648,7 @@ export class GameRoom extends DurableObject<Env> {
 
   /** Delivers, pushes, persists, re-arms the alarm and updates the tables index. */
   private async after(out: Outbound[]): Promise<void> {
-    const core = this.core as RoomCore;
+    const core = this.core as Room;
     const { state } = core;
 
     for (const { to, message } of out) {
@@ -693,7 +709,17 @@ export class GameRoom extends DurableObject<Env> {
         : new Set(playerDevices.filter((d) => d !== intent.exceptDeviceId));
     // A consented kitten's device takes a dismiss (no alert); "your move" comes the rich way (plan decision 16).
     const gate = intent.kind === "dismiss" ? { recipient: intent.playerId, senders: [] } : undefined;
-    await Promise.all([...targets].map((deviceId) => this.index(deviceId).push(intent, gate).catch(() => undefined)));
+    await Promise.all([...targets].map((deviceId) => this.index(deviceId).push(intent, gate, this.otherGame()).catch(() => undefined)));
+  }
+
+  /**
+   * The room's game when it isn't Cat Tower, for everything sent beyond the room's own sockets
+   * (pushes, the tables lists): only an app that can draw the game hears of the table. Undefined
+   * for a Cat Tower room, which sends exactly what it always did.
+   */
+  private otherGame(): GameId | undefined {
+    const game = this.core?.state.game;
+    return game === undefined || game === DEFAULT_GAME ? undefined : game;
   }
 
   /**
@@ -708,15 +734,15 @@ export class GameRoom extends DurableObject<Env> {
     return seats.flatMap((s) => (s.kind !== "human" || s.playerId === playerId ? [] : [s.playerId ?? null]));
   }
 
-  private async updateTables(core: RoomCore): Promise<void> {
+  private async updateTables(core: Room): Promise<void> {
     const { state } = core;
-    const actor = state.status === "playing" && state.gameState ? catTower.currentActor(state.gameState) : null;
+    const actor = state.status === "playing" ? core.actor() : null;
     const devices = tableDevices(state);
     const players = new Set(core.seatPlayers());
     const next = state.rematch?.code ?? null;
     // Who sits where, and as whom: a join, a rename or a new cat reaches Home's cards.
     const faces = state.seats.map((s) => [s.kind, s.person?.id, s.person?.name, s.person?.cat, s.playerId ?? s.deviceId]);
-    const out = state.gameState?.forfeited ?? [];
+    const out = core.outSeats();
     const movedAt = core.waitingSince();
     const fingerprint = JSON.stringify([state.status, actor, state.name, [...devices], [...players], faces, out, movedAt, ...(next ? [next] : [])]);
     if (fingerprint === this.tablesFingerprint) return;
@@ -743,6 +769,7 @@ export class GameRoom extends DurableObject<Env> {
       updatedAt,
       ...(next ? { next } : {}),
       ...(movedAt === null ? {} : { movedAt }),
+      ...(this.otherGame() ? { game: this.otherGame() } : {}),
     };
     await Promise.all([
       ...[...devices].map((deviceId) =>
@@ -774,7 +801,7 @@ export class GameRoom extends DurableObject<Env> {
   }
 
   /** The room has expired: tell everyone, forget it everywhere, delete it. */
-  private async close(core: RoomCore): Promise<void> {
+  private async close(core: Room): Promise<void> {
     const { code } = core.state;
     for (const ws of this.ctx.getWebSockets()) {
       try {
@@ -827,7 +854,7 @@ function parsePlayers(header: string | null): Record<string, string> {
 
 /** Every device holding a seat, plus the host. */
 /** The seats as a tables list shows them, with `yours` on the list owner's (`mine`). */
-function tableSeats(state: RoomState, mine: number[]): TableSeat[] {
+function tableSeats(state: RoomState<unknown>, mine: number[]): TableSeat[] {
   return state.seats.map((s, i) => ({
     kind: s.kind,
     ...(s.person ? { person: { id: s.person.id, name: s.person.name, cat: s.person.cat } } : {}),
@@ -835,7 +862,7 @@ function tableSeats(state: RoomState, mine: number[]): TableSeat[] {
   }));
 }
 
-function tableDevices(state: RoomState): Set<string> {
+function tableDevices(state: RoomState<unknown>): Set<string> {
   const out = new Set<string>([state.hostDeviceId]);
   for (const seat of state.seats) if (seat.deviceId) out.add(seat.deviceId);
   return out;

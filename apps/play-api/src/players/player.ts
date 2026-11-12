@@ -8,7 +8,7 @@ import { streakBlock } from "../notify/pushes";
 import { decide, dueSlots, emptyNotifyState, nextWake, noteSent, noteTurn, type NotifyState, type PairFacts, type ReminderInput } from "../notify/reminders";
 import { notifySettings, type NotifySettings } from "../notify/settings";
 import { claimAnswer, KEEP_MS, restingUntil, type Answer, type PounceRow, type Target } from "../pounce/limits";
-import { createTables, listTables, removeTable, upsertTable, type TableEntry } from "../room/tables";
+import { createTables, drawable, listTables, removeTable, upsertTable, type TableEntry } from "../room/tables";
 import { FALLBACK_ZONE } from "../streaks/clock";
 import { leaveAllPairs } from "../streaks/pairs";
 import { mergePersonal, ownView, recordTurn, type OwnStreak, type Personal } from "../streaks/personal";
@@ -835,6 +835,8 @@ export class Player extends DurableObject<Env> {
   }
 
   private reminderInput(now: number): ReminderInput {
+    // Tables only a newer app can open: a reminder that points at one says what an older app gets.
+    const newerOnly = this.listTables().flatMap((t) => (drawable(t.game, []) ? [] : [t.code]));
     return {
       now,
       zone: this.getMeta("time_zone"),
@@ -844,6 +846,7 @@ export class Player extends DurableObject<Env> {
       lastOpenAt: this.getMeta("last_touch") === null ? null : Number(this.getMeta("last_touch")),
       pairs: [],
       tableNames: Object.fromEntries(this.listTables().flatMap((t) => (t.name ? [[t.code, t.name]] : []))),
+      ...(newerOnly.length > 0 ? { newerOnly } : {}),
     };
   }
 

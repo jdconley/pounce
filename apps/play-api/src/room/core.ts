@@ -1,7 +1,6 @@
-import { catTower } from "../games/cat-tower";
+import { DEFAULT_GAME, gameModule, type AnyGameEvent, type GameAction, type GameError, type GameId, type RoomGame } from "../games";
 import { POUNCE_LIVE_MS, deadline, expired, liveState, type LiveRecord, type LiveState } from "../live/live";
 import { PROTOCOL_VERSION } from "../protocol";
-import { card } from "../rules/cards";
 import { DEFAULT_BACK, DEFAULT_RUG } from "../streaks/catalog";
 
 import { newMoveCode } from "./codes";
@@ -26,6 +25,8 @@ import type {
 import type { Action, ApplyError, CatTowerState, GameEvent, Seat } from "../rules/engine";
 import type { Rng, Seed } from "../rules/rng";
 import type { CatTowerView } from "../rules/view";
+import type { TilesEvent } from "../tiles/engine";
+import type { TilesView } from "../tiles/view";
 
 export type CatTowerModule = GameModule<CatTowerState, Action, CatTowerView, GameEvent, ApplyError>;
 
@@ -58,16 +59,21 @@ export type DeviceRecord = {
  */
 export type AdoptRule = { person: Record<string, string>; deviceId: string } | { from: string; to: string | null };
 
-export type RoomState = {
+/**
+ * `S` is the state of the room's game. It defaults to Cat Tower's, which is what every room held
+ * before rooms had a choice of game; a room of another game is a `RoomState<ItsState>`.
+ */
+export type RoomState<S = CatTowerState> = {
   code: string;
   /** Rooms saved before tables had names lack it; `RoomCore` fills in the default. */
   name: string;
-  game: "cat-tower";
+  /** The room's game, for good. Every room saved before there was a second game says "cat-tower". */
+  game: GameId;
   hostDeviceId: string;
   status: RoomStatus;
-  /** Length 6 in the lobby; compacted to the game's seats on start. */
+  /** As many as the game seats at most in the lobby (6 for Cat Tower); compacted to the game's seats on start. */
   seats: SeatInfo[];
-  gameState: CatTowerState | null;
+  gameState: S | null;
   seq: number;
   lastActivity: number;
   devices: Record<string, DeviceRecord>;
@@ -113,7 +119,17 @@ export type Look = { rug: string; back: string };
  * Which optional behaviour a room has. Streaks (and looks and Play again) stay off until `STREAKS` is set.
  * `link`: heartbeats, move acks and each seat's connection quality (`LINK`).
  */
-export type RoomFeatures = { streaks: boolean; live?: boolean; link?: boolean; nudge?: boolean };
+export type RoomFeatures = {
+  streaks: boolean;
+  live?: boolean;
+  link?: boolean;
+  nudge?: boolean;
+  /**
+   * The games new tables may be dealt for (the `GAMES` flag, `gamesOn`). Absent: Cat Tower only.
+   * A room of a game that is no longer listed plays on, but "Play again" there deals nothing.
+   */
+  games?: readonly GameId[];
+};
 
 /** Why a live table ended: the round or game is over, its device came back, or a limit passed (§11.3). */
 export type LiveEnd = "over" | "back" | "idle" | "cap" | "replaced";
@@ -157,8 +173,11 @@ export type StreakIntent = {
   out?: string[];
 };
 
-/** What "Play again" needs to deal the new table: the same people and bots, name and look. */
-export type RematchIntent = { name: string; look: Look; seats: SeatInfo[]; hostDeviceId: string };
+/**
+ * What "Play again" needs to deal the new table: the same people and bots, name and look, and
+ * the same game (absent: Cat Tower, which is also what a pounce's new table is).
+ */
+export type RematchIntent = { name: string; look: Look; seats: SeatInfo[]; hostDeviceId: string; game?: GameId };
 
 /** The card backs and rugs the people a device speaks for have unlocked. */
 export type Unlocks = { backs: readonly string[]; rugs: readonly string[] };
@@ -225,7 +244,6 @@ export type Outbound = {
 
 type Snapshot = Extract<ServerMessage, { t: "snapshot" }>;
 
-const LOBBY_SEATS = 6;
 const MS_PER_MINUTE = 60_000;
 const MS_PER_DAY = 24 * 60 * MS_PER_MINUTE;
 /** A lobby nobody started, or a finished game, closes this long after the last thing that happened in it. */
@@ -249,6 +267,8 @@ const UINT32_RANGE = 2 ** 32;
 const BOT_DELAY_MS = 1200;
 const NEXT_ROUND_DELAY_MS = 6000;
 const ASLEEP_AFTER_MS = 5 * MS_PER_MINUTE;
+/** A game's phase as a room's saved `streakKey` has always spelled it (Cat Tower's own status words). */
+const STREAK_STATUS = { playing: "playing", between: "roundOver", over: "gameOver" } as const;
 const PRESENCE_RANK: Record<Presence, number> = { asleep: 0, away: 1, awake: 2 };
 const LOOK_EVERY_MS = 10_000;
 const NO_UNLOCKS: Unlocks = { backs: [], rugs: [] };
@@ -263,11 +283,12 @@ export const NUDGE_EVERY_MS = 10 * MS_PER_MINUTE;
  * The room state machine. Pure: it mutates `state` and returns the messages
  * to deliver; the Durable Object persists the state and does the delivery.
  */
-export class RoomCore {
-  state: RoomState;
+export class RoomCore<S = CatTowerState> {
+  state: RoomState<S>;
   private readonly now: () => number;
   private readonly rng: Rng;
-  private readonly game: CatTowerModule;
+  /** The room's game. Everything the room needs to know about a game it asks here. */
+  private readonly game: RoomGame<S>;
   /** Divides the bot and next-round delays (`DEV_SPEED` on the dev server; 1 everywhere else). */
   private readonly speed: number;
   private readonly features: RoomFeatures;
@@ -285,33 +306,43 @@ export class RoomCore {
   /** Each device's connection quality (not persisted). */
   private readonly link = new LinkTracker();
 
+  /** `game`: left out, the module `state.game` names; tests pass a stand-in. */
   constructor(
-    state: RoomState,
+    state: RoomState<S>,
     now: () => number,
     rng: Rng,
-    game: CatTowerModule = catTower,
+    game?: RoomGame<S>,
     speed = 1,
     features: RoomFeatures = { streaks: false },
   ) {
     this.state = state;
     (state as Partial<RoomState>).name ??= defaultRoomName(state.code);
+    // Every saved room names its game; one that somehow doesn't is Cat Tower, the only game there was.
+    (state as Partial<RoomState>).game ??= DEFAULT_GAME;
     this.now = now;
     this.rng = rng;
-    this.game = game;
+    this.game = game ?? (gameModule(state.game) as RoomGame<S>);
     this.speed = speed;
     this.features = features;
   }
 
-  /** A new lobby; `name` is already validated (`parseRoomName`) when given. */
-  static create(code: string, hostDeviceId: string, now: number, name?: string, look?: Look): RoomState {
+  /** A new lobby; `name` is already validated (`parseRoomName`) when given. `game`: left out, Cat Tower. */
+  static create<S = CatTowerState>(
+    code: string,
+    hostDeviceId: string,
+    now: number,
+    name?: string,
+    look?: Look,
+    game: GameId = DEFAULT_GAME,
+  ): RoomState<S> {
     return {
       ...(look ? { look } : {}),
       code,
       name: name ?? defaultRoomName(code),
-      game: "cat-tower",
+      game,
       hostDeviceId,
       status: "lobby",
-      seats: Array.from({ length: LOBBY_SEATS }, (_, i): SeatInfo => ({
+      seats: Array.from({ length: gameModule(game).maxSeats }, (_, i): SeatInfo => ({
         kind: i < 2 ? "open" : "closed",
       })),
       gameState: null,
@@ -330,13 +361,34 @@ export class RoomCore {
    * The new table "Play again" deals (§10.4): the old seats as they were,
    * then `deal()` starts it with no lobby.
    */
-  static rematchState(code: string, spec: RematchIntent, now: number): RoomState {
-    const state = RoomCore.create(code, spec.hostDeviceId, now, spec.name, spec.look);
+  static rematchState<S = CatTowerState>(code: string, spec: RematchIntent, now: number): RoomState<S> {
+    const state = RoomCore.create<S>(code, spec.hostDeviceId, now, spec.name, spec.look, spec.game);
     state.seats = [
       ...spec.seats.map((s) => ({ ...s })),
-      ...Array.from({ length: LOBBY_SEATS - spec.seats.length }, (): SeatInfo => ({ kind: "closed" })),
+      ...Array.from({ length: state.seats.length - spec.seats.length }, (): SeatInfo => ({ kind: "closed" })),
     ];
     return state;
+  }
+
+  /** The room's game's own check of an `act` message's action (`parseClientMessage`). */
+  parseAction = (raw: unknown): GameAction | null => this.game.parseAction(raw) as GameAction | null;
+
+  /** The seat that must act next; null in the lobby and whenever nobody is to act. */
+  actor(): Seat | null {
+    const game = this.state.gameState;
+    return game === null ? null : this.game.currentActor(game);
+  }
+
+  /** Per seat: forfeited, out of the game for good. Empty until someone is. */
+  outSeats(): readonly boolean[] {
+    const game = this.state.gameState;
+    return game === null ? [] : this.game.forfeited(game);
+  }
+
+  /** Dealt and in play: not the lobby, not between two deals, not over. */
+  private midGame(): boolean {
+    const { state } = this;
+    return state.status === "playing" && state.gameState !== null && this.game.phase(state.gameState) === "playing";
   }
 
   /**
@@ -467,7 +519,8 @@ export class RoomCore {
 
     if (timers.nextRoundAt !== null && timers.nextRoundAt <= this.now()) {
       timers.nextRoundAt = null;
-      out.push(...this.applyAndAfter(0, { type: "nextRound" }));
+      const next = this.game.betweenAction;
+      if (next !== null) out.push(...this.applyAndAfter(0, next));
     }
 
     if (timers.botAt !== null && timers.botAt <= this.now()) {
@@ -592,7 +645,7 @@ export class RoomCore {
   private maybeStartLive(deviceId: string): void {
     const { state } = this;
     if (!this.features.live || state.live?.[deviceId]) return;
-    if (state.status !== "playing" || state.gameState?.status !== "playing") return;
+    if (!this.midGame()) return;
     const mine = this.controlledSeats(deviceId);
     if (mine.length === 0) return;
     const now = this.now();
@@ -647,14 +700,15 @@ export class RoomCore {
   /** The device's live table as it should look now. */
   private liveView(deviceId: string): LiveState {
     const { state } = this;
-    const game = state.gameState as CatTowerState;
-    const playing = state.status === "playing" && game.status === "playing";
+    const game = state.gameState as S;
+    const marks = this.game.progress(game);
     return liveState({
       table: state.name,
-      seats: state.seats.slice(0, game.phase.length),
-      phases: game.phase,
+      seats: state.seats.slice(0, marks.length),
+      // Cat Tower's state is the shelves, as it always was; another game's adds its own count beside them.
+      ...(this.game.progressKind === "shelf" ? { phases: marks } : { phases: [], pieces: marks }),
       controlled: this.controlledSeats(deviceId),
-      turn: playing ? this.game.currentActor(game) : null,
+      turn: this.midGame() ? this.game.currentActor(game) : null,
       streak: null,
     });
   }
@@ -667,8 +721,8 @@ export class RoomCore {
   private liveAfterGame(from: Person | null): void {
     const { state } = this;
     if (!this.features.live) return;
-    const game = state.gameState as CatTowerState;
-    if (game.status !== "playing") {
+    const game = state.gameState as S;
+    if (this.game.phase(game) !== "playing") {
       for (const deviceId of Object.keys(state.live ?? {})) this.endLive(deviceId, "over");
       return;
     }
@@ -779,7 +833,7 @@ export class RoomCore {
         status: state.status,
         youAreHost: deviceId === state.hostDeviceId,
         seats,
-        game: state.gameState ? this.game.view(state.gameState, controlled) : null,
+        ...this.gameFields(controlled),
         ...(this.features.streaks ? { look: this.look() } : {}),
         ...(state.rematch?.code ? { rematch: state.rematch.code } : {}),
         ...(this.features.link ? { link: { ping: LINK_PING_MS, acks: [...(state.devices[deviceId]?.acks ?? [])] } } : {}),
@@ -787,6 +841,25 @@ export class RoomCore {
         ...this.retireField(deviceId),
       },
     };
+  }
+
+  /**
+   * A snapshot's view of the game. Cat Tower's is under `game`, as it always was. Any other
+   * game's is under the key of its own id, with `gameId` saying which and `game` null, so an app
+   * never has to guess what it is decoding.
+   */
+  private gameFields(controlled: Seat[]): Pick<RoomView, "game" | "gameId" | "tiles"> {
+    const { state } = this;
+    const view = state.gameState === null ? null : this.game.view(state.gameState, controlled);
+    if (state.game !== "tiles") return { game: view as CatTowerView | null };
+    return { game: null, gameId: "tiles", ...(view === null ? {} : { tiles: view as TilesView }) };
+  }
+
+  /** A game event as the room sends it: Cat Tower's as `game`, any other game's under its own id. */
+  private gameEvent(event: unknown): RoomEvent {
+    return this.state.game === "tiles"
+      ? { kind: "tiles", event: event as TilesEvent }
+      : { kind: "game", event: event as GameEvent };
   }
 
   /** Links are watched while a game is on with the feature on. */
@@ -897,8 +970,8 @@ export class RoomCore {
 
   /** The seat a device nudges as: its first seat still in the game (null: none). */
   private nudger(deviceId: string): Seat | null {
-    const forfeited = this.state.gameState?.forfeited;
-    return this.controlledSeats(deviceId).find((seat) => forfeited?.[seat] !== true) ?? null;
+    const out = this.outSeats();
+    return this.controlledSeats(deviceId).find((seat) => out[seat] !== true) ?? null;
   }
 
   /** When the current turn began; an older room's (no record) counts from its last activity. */
@@ -924,9 +997,8 @@ export class RoomCore {
    */
   private nudgeTarget(deviceId: string): { seat: Seat; from: Seat } | null {
     const { state } = this;
-    const game = state.gameState;
-    if (state.status !== "playing" || game?.status !== "playing") return null;
-    const seat = this.game.currentActor(game);
+    if (!this.midGame()) return null;
+    const seat = this.actor();
     if (seat === null || state.seats[seat]?.kind !== "human" || this.controls(deviceId, seat)) return null;
     const from = this.nudger(deviceId);
     return from === null ? null : { seat, from };
@@ -947,12 +1019,12 @@ export class RoomCore {
    */
   private nudge(deviceId: string, seat: Seat): Outbound[] {
     const { state } = this;
-    if (state.status !== "playing" || state.gameState?.status !== "playing") return [this.fail(deviceId, "not_playing")];
+    if (!this.midGame()) return [this.fail(deviceId, "not_playing")];
     const target = state.seats[seat];
     if (!target || target.kind !== "human" || this.controls(deviceId, seat)) return [this.fail(deviceId, "bad_seat")];
     const from = this.nudger(deviceId);
     if (from === null) return [this.fail(deviceId, "not_seated")];
-    if (this.game.currentActor(state.gameState) !== seat) return [this.fail(deviceId, "not_their_turn")];
+    if (this.actor() !== seat) return [this.fail(deviceId, "not_their_turn")];
     const now = this.now();
     const ready = this.nudgeState(from, now);
     if (ready.sent || ready.wait > 0) return [this.fail(deviceId, "too_soon")];
@@ -982,8 +1054,7 @@ export class RoomCore {
 
   /** When the move has waited since: the current turn's start mid-round, else null. */
   waitingSince(): number | null {
-    const { state } = this;
-    return state.status === "playing" && state.gameState?.status === "playing" ? this.turnStartedAt() : null;
+    return this.midGame() ? this.turnStartedAt() : null;
   }
 
   /** Ms until the current turn's seat may be retired (0: now). */
@@ -1003,9 +1074,8 @@ export class RoomCore {
    */
   private stalledSeat(): Seat | null {
     const { state } = this;
-    const game = state.gameState;
-    if (state.status !== "playing" || game?.status !== "playing") return null;
-    const seat = this.game.currentActor(game);
+    if (!this.midGame()) return null;
+    const seat = this.actor();
     if (seat === null || state.seats[seat]?.kind !== "human") return null;
     const other = Object.keys(state.devices).some((id) => !this.controls(id, seat) && this.nudger(id) !== null);
     return other ? seat : null;
@@ -1044,15 +1114,15 @@ export class RoomCore {
    */
   private retire(deviceId: string, seat: Seat): Outbound[] {
     const { state } = this;
-    if (state.status !== "playing" || state.gameState?.status !== "playing") return [this.fail(deviceId, "not_playing")];
+    if (!this.midGame()) return [this.fail(deviceId, "not_playing")];
     const target = state.seats[seat];
     if (!target || target.kind !== "human" || this.controls(deviceId, seat)) return [this.fail(deviceId, "bad_seat")];
     const from = this.nudger(deviceId);
     if (from === null) return [this.fail(deviceId, "not_seated")];
-    if (this.game.currentActor(state.gameState) !== seat) return [this.fail(deviceId, "not_their_turn")];
+    if (this.actor() !== seat) return [this.fail(deviceId, "not_their_turn")];
     if (this.retireWait(this.now()) > 0) return [this.fail(deviceId, "too_soon")];
     // The seat on the move is in the game, so its forfeit is never refused.
-    const applied = this.applyGame(seat, { type: "forfeit" }) as { out: Outbound[]; events: GameEvent[] };
+    const applied = this.applyGame(seat, this.game.forfeitAction) as { out: Outbound[] };
     const sender = state.seats[from] as SeatInfo;
     if (target.playerId) {
       const person = sender.person as Person;
@@ -1167,6 +1237,8 @@ export class RoomCore {
       const { code } = state.rematch;
       return code ? [{ to: deviceId, message: { t: "rematch", code } }] : [];
     }
+    // The game was turned off since this table was dealt: it plays on to the end, and no new one is dealt.
+    if (state.game !== DEFAULT_GAME && !this.features.games?.includes(state.game)) return [this.fail(deviceId, "game_off")];
     state.rematch = { code: null };
     this.rematchIntent = {
       name: state.name,
@@ -1174,6 +1246,8 @@ export class RoomCore {
       // The first seat rotates: everyone moves one on.
       seats: [...state.seats.slice(1), ...state.seats.slice(0, 1)].map((s) => ({ ...s })),
       hostDeviceId: deviceId,
+      // The same game again. Cat Tower's intent is as it always was.
+      ...(state.game === DEFAULT_GAME ? {} : { game: state.game }),
     };
     return [];
   }
@@ -1246,7 +1320,7 @@ export class RoomCore {
     }
   }
 
-  private act(deviceId: string, seat: Seat, action: Action, id?: string): Outbound[] {
+  private act(deviceId: string, seat: Seat, action: GameAction, id?: string): Outbound[] {
     const device = this.state.devices[deviceId];
     // Sent again after a reconnect, already applied: the snapshot says so.
     if (id !== undefined && device?.acks?.includes(id)) return [{ to: deviceId, message: this.snapshotFor(deviceId) }];
@@ -1281,8 +1355,7 @@ export class RoomCore {
   }
 
   private turnKey(): string {
-    const game = this.state.gameState as CatTowerState;
-    return `${game.round}:${game.turn}:${this.state.turnSeq}`;
+    return `${this.game.turnKey(this.state.gameState as S)}:${this.state.turnSeq}`;
   }
 
   /** Marks a device awake; returns the presence events if that was a change. */
@@ -1318,39 +1391,36 @@ export class RoomCore {
    * (`snapshots()`), which carries the truth (drawn cards, a fresh deal, the
    * new discard top, a finished room).
    */
-  private applyGame(seat: Seat, action: Action): { out: Outbound[]; events: GameEvent[] } | { error: ApplyError } {
+  private applyGame(seat: Seat, action: unknown): { out: Outbound[]; events: AnyGameEvent[] } | { error: GameError } {
     const { state } = this;
-    const result = this.game.apply(state.gameState as CatTowerState, seat, action);
+    const result = this.game.apply(state.gameState as S, seat, action);
     if (!result.ok) return { error: result.error };
     state.gameState = result.state;
     const out = result.events.flatMap((event) => {
-      if (event.kind === "turn" || event.kind === "roundStarted") state.turnSeq = state.seq + 1;
-      return this.broadcast((deviceId) => ({
-        kind: "game",
-        event: this.game.filterEvent(event, this.controlledSeats(deviceId)),
-      }));
+      if (this.game.startsTurn(event)) state.turnSeq = state.seq + 1;
+      return this.broadcast((deviceId) => this.gameEvent(this.game.filterEvent(event, this.controlledSeats(deviceId))));
     });
-    return { out, events: result.events };
+    return { out, events: result.events as AnyGameEvent[] };
   }
 
   /**
    * A tick's own action: applied, then timers and pushes follow the new state
    * and, on success, every device gets its snapshot.
    */
-  private applyAndAfter(seat: Seat, action: Action): Outbound[] {
+  private applyAndAfter(seat: Seat, action: unknown): Outbound[] {
     const applied = this.applyGame(seat, action);
     this.afterGameChange();
     return "out" in applied ? [...applied.out, ...this.snapshots()] : [];
   }
 
   private botStep(): Outbound[] {
-    const game = this.state.gameState as CatTowerState;
+    const game = this.state.gameState as S;
     const actor = this.game.currentActor(game) as Seat;
     const action = this.game.botAction(game, actor, this.rng);
     let applied = this.applyGame(actor, action);
-    // The bot should never be rejected. If it is, make a plain legal move so
-    // the game cannot stall.
-    if ("error" in applied) applied = this.applyGame(actor, this.fallbackAction(game, actor));
+    // The bot should never be rejected. If it is, make a plain legal move (the
+    // game's own `fallbackAction`) so the game cannot stall.
+    if ("error" in applied) applied = this.applyGame(actor, this.game.fallbackAction(game, actor));
     if ("error" in applied) {
       // Retrying would spin forever: stop the bot clock and report it.
       this.state.timers.botAt = null;
@@ -1361,25 +1431,6 @@ export class RoomCore {
   }
 
   /**
-   * Draw from the deck; when playing, discard a number card, else Yarn, else
-   * whatever is left (a Cucumber, aimed the way the engine requires).
-   */
-  private fallbackAction(game: CatTowerState, seat: Seat): Action {
-    if (game.step === "draw") return { type: "draw", from: "deck" };
-    const hand = game.hands[seat] as number[];
-    const pick =
-      hand.find((id) => card(id).kind === "number") ??
-      hand.find((id) => card(id).kind === "yarn") ??
-      (hand[0] as number);
-    const target = Array.from({ length: game.seats }, (_, i) => i).find(
-      (i) => i !== seat && !game.pendingSkip[i] && game.forfeited?.[i] !== true,
-    );
-    return card(pick).kind === "cucumber" && target !== undefined
-      ? { type: "discard", card: pick, skipTarget: target }
-      : { type: "discard", card: pick };
-  }
-
-  /**
    * Re-derives the timers after any game change, closes the room when the
    * game is over, and queues a push when a human's turn begins while their
    * device is not awake.
@@ -1387,14 +1438,14 @@ export class RoomCore {
   private afterGameChange(): void {
     const { state } = this;
     const { timers } = state;
-    const game = state.gameState as CatTowerState;
+    const phase = this.game.phase(state.gameState as S);
     const now = this.now();
-    this.queueStreak(game.status === "gameOver");
+    this.queueStreak(phase === "over");
     const from = this.movedBy;
     this.movedBy = null;
     this.liveAfterGame(from);
 
-    if (game.status === "gameOver") {
+    if (phase === "over") {
       state.status = "over";
       // A finished game keeps the short limit, from its last move.
       timers.cleanupAt = state.lastActivity + CLEANUP_AFTER_MS;
@@ -1402,7 +1453,7 @@ export class RoomCore {
       timers.nextRoundAt = null;
       return;
     }
-    if (game.status === "roundOver") {
+    if (phase === "between") {
       timers.nextRoundAt = now + NEXT_ROUND_DELAY_MS / this.speed;
       timers.botAt = null;
       return;
@@ -1411,7 +1462,7 @@ export class RoomCore {
     timers.nextRoundAt = null;
     const turn = this.turnKey();
     if (state.turnAt?.turn !== turn) state.turnAt = { turn, at: now };
-    const actor = this.game.currentActor(game) as Seat;
+    const actor = this.actor() as Seat;
     const seat = state.seats[actor] as SeatInfo;
     if (seat.kind === "bot") {
       timers.botAt = now + BOT_DELAY_MS / this.speed;
@@ -1445,15 +1496,15 @@ export class RoomCore {
     if (!this.features.streaks) return;
     const { state } = this;
     const now = this.now();
-    // Only a closing lobby reports with no game, and that report is `over`.
-    const game = state.gameState as CatTowerState;
     const out = this.outPlayers();
+    // Only a closing lobby reports with no game, and that report is `over`.
+    const status = over ? "over" : STREAK_STATUS[this.game.phase(state.gameState as S)];
     // A forfeit is news to the pairs even when the move stays put.
-    const key = `${state.turnSeq}:${over ? "over" : game.status}${out.length > 0 ? `:out${out.length}` : ""}`;
+    const key = `${state.turnSeq}:${status}${out.length > 0 ? `:out${out.length}` : ""}`;
     if (by === null && key === state.streakKey) return;
     state.streakKey = key;
     if (by) state.streakTurns = { ...state.streakTurns, [by]: now };
-    const actor = over ? null : this.game.currentActor(game);
+    const actor = over ? null : this.actor();
     const holder = actor === null ? null : (state.seats[actor]?.playerId ?? null);
     this.streakIntents.push({
       code: state.code,
@@ -1469,17 +1520,14 @@ export class RoomCore {
 
   /** The players at the table whose every seat forfeited (§5.13). */
   outPlayers(): string[] {
-    const game = this.state.gameState;
-    if (!game?.forfeited) return [];
-    return this.seatPlayers().filter((playerId) =>
-      this.state.seats.every((s, i) => s.playerId !== playerId || game.forfeited?.[i] === true),
-    );
+    const out = this.outSeats();
+    return this.seatPlayers().filter((playerId) => this.state.seats.every((s, i) => s.playerId !== playerId || out[i] === true));
   }
 
   /** True when the seats `seats` all forfeited: the game is over for whoever holds them (§5.13). */
   allOut(seats: readonly Seat[]): boolean {
-    const forfeited = this.state.gameState?.forfeited;
-    return seats.length > 0 && forfeited !== undefined && seats.every((seat) => forfeited[seat] === true);
+    const out = this.outSeats();
+    return seats.length > 0 && seats.every((seat) => out[seat] === true);
   }
 
   /**

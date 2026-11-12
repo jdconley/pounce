@@ -1,0 +1,67 @@
+{
+  "tables": [
+    {
+      "code": "BCDFG",
+      "name": "Couch Cats",
+      "status": "playing",
+      "yourTurn": true,
+      "updatedAt": 1793815200000,
+      "seats": [
+        {
+          "kind": "human",
+          "person": {
+            "id": "11111111-1111-4111-8111-111111111111",
+            "name": "Alice",
+            "cat": 0
+          },
+          "yours": true
+        },
+        {
+          "kind": "human",
+          "person": {
+            "id": "22222222-2222-4222-8222-222222222222",
+            "name": "Bob",
+            "cat": 3
+          }
+        },
+        {
+          "kind": "bot"
+        }
+      ],
+      "movedAt": 1793811600000
+    },
+    {
+      "code": "GH2VD",
+      "name": "Taco Night",
+      "status": "over",
+      "yourTurn": false,
+      "updatedAt": 1793793600000,
+      "next": "NWCDF",
+      "seats": [
+        {
+          "kind": "human",
+          "person": {
+            "id": "11111111-1111-4111-8111-111111111111",
+            "name": "Alice",
+            "cat": 0
+          },
+          "yours": true
+        },
+        {
+          "kind": "human",
+          "person": {
+            "id": "22222222-2222-4222-8222-222222222222",
+            "name": "Bob",
+            "cat": 3
+          }
+        }
+      ]
+    },
+    {
+      "code": "KLMNP",
+      "status": "lobby",
+      "yourTurn": false,
+      "updatedAt": 1793782800000
+    }
+  ]
+}

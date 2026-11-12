@@ -1,5 +1,7 @@
-import { deviceTables } from "../players/accounts";
+import { deviceView } from "../players/accounts";
+import { tablesFor, type TableEntry } from "../room/tables";
 
+import { forDevice } from "./audience";
 import { apnsBody, collapseId } from "./payload";
 
 import type { Level } from "./policy";
@@ -22,11 +24,11 @@ const device = (env: Env, id: string) => env.DEVICES.get(env.DEVICES.idFromName(
 
 /**
  * The badge (§12.5): tables where it's this device's move, as the app's own
- * tables list counts them. `also` counts a table whose index may not have
- * caught up with the move yet: only for "your move", whose table it is.
+ * tables list counts them (`tables`: the ones its app is shown). `also` counts
+ * a table whose index may not have caught up with the move yet: only for "your
+ * move", whose table it is.
  */
-export async function badgeFor(env: Env, deviceId: string, also?: string): Promise<number> {
-  const tables = await deviceTables(env, deviceId);
+function badge(tables: readonly TableEntry[], also?: string): number {
   const mine = new Set(tables.filter((t) => t.yourTurn && t.status === "playing").map((t) => t.code));
   if (also) mine.add(also);
   return mine.size;
@@ -36,6 +38,11 @@ export async function badgeFor(env: Env, deviceId: string, also?: string): Promi
  * Sends one push to every device of a player, each with its own badge. True if any device got it.
  * `senders` are the people behind it, which a consented kitten's device checks (parent consent,
  * plan decision 16); without them a kitten's device refuses it.
+ *
+ * Each device gets the push as `forDevice` says: one about a table of a game its app can't draw
+ * is not sent to it, unless the push says what such a device gets instead (a streak reminder).
+ * `game` is the table's game when the sender knows it (the room itself). Tables an app can't
+ * draw never count toward its badge, nor appear in its streak block.
  */
 export async function deliverToPlayer(
   env: Env,
@@ -44,12 +51,16 @@ export async function deliverToPlayer(
   level: Level,
   also?: string,
   senders?: (string | null)[],
+  game?: string,
 ): Promise<boolean> {
   const gate = senders ? { recipient: profile.id, senders } : undefined;
   const results = await Promise.all(
     profile.devices.map(async (d) => {
       try {
-        const body = apnsBody(o, level, await badgeFor(env, d, also));
+        const { tables, games } = await deviceView(env, d);
+        const shown = forDevice(o, tables, games, game);
+        if (shown === null) return false;
+        const body = apnsBody(shown, level, badge(tablesFor(tables, games).slice(0, 50), also));
         return (await device(env, d).pushAlert(body, collapseId(o.collapse), level, gate)).sent;
       } catch {
         return false;

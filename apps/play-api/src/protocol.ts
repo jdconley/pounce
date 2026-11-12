@@ -1,11 +1,16 @@
+import { parseAction as parseCatTowerAction } from "./games/cat-tower";
 import { nameAllowed } from "./names/filter";
 import { ROOM_CODE_ALPHABET } from "./room/codes";
 import { parseRoomName } from "./room/names";
+import { hasKeys, isInt, isObj, type Obj } from "./shape";
 import { isBack, isRug } from "./streaks/catalog";
 
-import type { Action, ApplyError, GameEvent, Seat } from "./rules/engine";
+import type { GameAction, GameError, GameId } from "./games";
+import type { GameEvent, Seat } from "./rules/engine";
 import type { CatTowerView } from "./rules/view";
 import type { StreakView } from "./streaks/pair-core";
+import type { TilesEvent } from "./tiles/engine";
+import type { TilesView } from "./tiles/view";
 
 export { ROOM_CODE_ALPHABET };
 
@@ -43,7 +48,16 @@ export type RoomView = {
     /** Only with `LINK` on, while playing, and only when not fine. */
     link?: SeatLink;
   }[];
+  /** Cat Tower's view of the game. Null in the lobby, and in a room of any other game. */
   game: CatTowerView | null;
+  /**
+   * The room's game, in a room of any game but Cat Tower: its view is then under the key of the
+   * same name (`tiles`), never under `game`. Absent in a Cat Tower room, whose snapshots are as
+   * they always were. Only an app that lists the game (`X-Pounce-Games`) is let into such a room.
+   */
+  gameId?: Exclude<GameId, "cat-tower">;
+  /** The tile game's view, in a `tiles` room once it is dealt. */
+  tiles?: TilesView;
   /** The table's rug and card back (§9.4). Only while streaks are on. */
   look?: { rug: string; back: string };
   /** The code of the table "Play again" dealt (§10.4), once there is one. */
@@ -74,7 +88,10 @@ export type RetireView = { seat: Seat; wait: number };
 
 export type RoomEvent =
   | { kind: "presence"; seat: Seat; presence: Presence }
+  /** A Cat Tower event. */
   | { kind: "game"; event: GameEvent }
+  /** A tile game event. The two games share event names, so each has a kind of its own. */
+  | { kind: "tiles"; event: TilesEvent }
   /** Someone at the table changed its look; `seat` is theirs, for the pill with their cat (§9.4). */
   | { kind: "look"; seat: Seat; rug: string; back: string };
 
@@ -83,7 +100,7 @@ export type ClientMessage =
   | { t: "configure"; seat: Seat; kind: "open" | "bot" | "closed" }
   | { t: "start" }
   /** `id`: the app's move id, so a move sent twice (after a reconnect) is applied once. */
-  | { t: "act"; seat: Seat; action: Action; id?: string }
+  | { t: "act"; seat: Seat; action: GameAction; id?: string }
   | { t: "presence"; state: "active" | "background" }
   | { t: "moveSeat"; seat: Seat }
   | { t: "claimMove"; code: string }
@@ -131,7 +148,7 @@ export type ErrorCode =
   | "too_many_attempts"
   // Playing.
   | "not_playing"
-  | ApplyError
+  | GameError
   // Sent to the whole room, unprompted.
   | "bot_stalled"
   | "room_closed"
@@ -139,6 +156,8 @@ export type ErrorCode =
   | "not_over"
   | "too_soon"
   | "not_unlocked"
+  // "Play again" at a table whose game is no longer dealt (the `GAMES` flag was turned off). Never at a Cat Tower table.
+  | "game_off"
   // Nudges ("too_soon" too: the wait or the cooldown isn't over, or this turn's is sent).
   | "not_their_turn";
 
@@ -166,81 +185,10 @@ const BAD: BadMessage = { error: "bad_message" };
 const BAD_NAME: BadMessage = { error: "bad_name" };
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const MOVE_CODE_LENGTH = 6;
-const MAX_CARD = 107;
-const MAX_GROUPS = 2;
-const MAX_GROUP_CARDS = 12;
 const MAX_NAME = 20;
 const MAX_CAT = 7;
 /** A move id: what the app makes (a UUID), or anything short and plain. */
 const MOVE_ID = /^[A-Za-z0-9_-]{1,64}$/;
-
-type Obj = Record<string, unknown>;
-
-const isObj = (v: unknown): v is Obj =>
-  typeof v === "object" && v !== null && !Array.isArray(v);
-
-/** True when `o` has every `required` key and no keys beyond `required` + `optional`. */
-function hasKeys(o: Obj, required: string[], optional: string[] = []): boolean {
-  const keys = Object.keys(o);
-  return (
-    required.every((k) => keys.includes(k)) &&
-    keys.every((k) => required.includes(k) || optional.includes(k))
-  );
-}
-
-const isInt = (v: unknown, min: number, max = Number.MAX_SAFE_INTEGER): v is number =>
-  typeof v === "number" && Number.isInteger(v) && v >= min && v <= max;
-
-const isCard = (v: unknown): v is number => isInt(v, 0, MAX_CARD);
-
-function parseGroup(g: unknown): { cards: number[]; runStart?: number } | null {
-  if (!isObj(g) || !hasKeys(g, ["cards"], ["runStart"])) return null;
-  const { cards, runStart } = g;
-  if (!Array.isArray(cards) || cards.length < 1 || cards.length > MAX_GROUP_CARDS) return null;
-  if (!cards.every(isCard)) return null;
-  if (!("runStart" in g)) return { cards: [...cards] };
-  if (!isInt(runStart, 1, 12)) return null;
-  return { cards: [...cards], runStart };
-}
-
-function parseAction(a: unknown): Action | null {
-  if (!isObj(a)) return null;
-  switch (a.type) {
-    case "draw":
-      if (!hasKeys(a, ["type", "from"]) || (a.from !== "deck" && a.from !== "discard")) return null;
-      return { type: "draw", from: a.from };
-    case "nextRound":
-      return hasKeys(a, ["type"]) ? { type: "nextRound" } : null;
-    case "forfeit":
-      return hasKeys(a, ["type"]) ? { type: "forfeit" } : null;
-    case "discard": {
-      if (!hasKeys(a, ["type", "card"], ["skipTarget"]) || !isCard(a.card)) return null;
-      if (!("skipTarget" in a)) return { type: "discard", card: a.card };
-      if (!isInt(a.skipTarget, 0)) return null;
-      return { type: "discard", card: a.card, skipTarget: a.skipTarget };
-    }
-    case "hit": {
-      if (!hasKeys(a, ["type", "card", "target"], ["side"]) || !isCard(a.card)) return null;
-      const t = a.target;
-      if (!isObj(t) || !hasKeys(t, ["seat", "group"]) || !isInt(t.seat, 0) || !isInt(t.group, 0)) return null;
-      const hit = { type: "hit" as const, card: a.card, target: { seat: t.seat, group: t.group } };
-      if (!("side" in a)) return hit;
-      // Which end of a run the card goes on; older clients leave it out.
-      if (a.side !== "start" && a.side !== "end") return null;
-      return { ...hit, side: a.side };
-    }
-    case "layDown": {
-      if (!hasKeys(a, ["type", "groups"])) return null;
-      const { groups } = a;
-      if (!Array.isArray(groups) || groups.length < 1 || groups.length > MAX_GROUPS) return null;
-      const parsed = groups.map(parseGroup);
-      if (parsed.some((g) => g === null)) return null;
-      return { type: "layDown", groups: parsed as { cards: number[]; runStart?: number }[] };
-    }
-    default:
-      return null;
-  }
-}
 
 /** Control characters, line and paragraph separators, and bidi overrides and isolates. */
 const FORBIDDEN = /[\p{Cc}\u2028\u2029\u202A-\u202E\u2066-\u2069]/u;
@@ -279,7 +227,7 @@ function named(message: ClientMessage | null, name: string | undefined): ClientM
   return message && name !== undefined && !nameAllowed(name) ? BAD_NAME : message;
 }
 
-function parseObject(o: Obj): ClientMessage | BadMessage | null {
+function parseObject(o: Obj, parseAction: ActionParser): ClientMessage | BadMessage | null {
   switch (o.t) {
     case "start":
       return hasKeys(o, ["t"]) ? { t: "start" } : null;
@@ -346,12 +294,17 @@ function parseObject(o: Obj): ClientMessage | BadMessage | null {
   }
 }
 
+/** A game's own check of an `act` message's `action` (`GameModule.parseAction`). */
+export type ActionParser = (raw: unknown) => GameAction | null;
+
 /**
  * Parses and fully validates a client frame. This is the only guard in front
  * of the rules engine, which trusts the shape of every action it receives.
+ * An `act` message's action is checked by `parseAction`, the room's game's own
+ * parser; left out, Cat Tower's.
  * `bad_name`: well-formed, but a name in it is refused by the name filter.
  */
-export function parseClientMessage(raw: string): ClientMessage | BadMessage {
+export function parseClientMessage(raw: string, parseAction: ActionParser = parseCatTowerAction): ClientMessage | BadMessage {
   if (new TextEncoder().encode(raw).length > MAX_MESSAGE_BYTES) return BAD;
   let value: unknown;
   try {
@@ -360,5 +313,5 @@ export function parseClientMessage(raw: string): ClientMessage | BadMessage {
     return BAD;
   }
   if (!isObj(value)) return BAD;
-  return parseObject(value) ?? BAD;
+  return parseObject(value, parseAction) ?? BAD;
 }

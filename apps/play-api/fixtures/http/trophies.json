@@ -1,0 +1,586 @@
+{
+  "own": {
+    "count": 3,
+    "best": 3,
+    "kept": true,
+    "naps": 0,
+    "winback": null,
+    "lifetimeKept": 3,
+    "perfectWeeks": 0,
+    "week": [
+      {
+        "day": "2026-10-31",
+        "state": "none"
+      },
+      {
+        "day": "2026-11-01",
+        "state": "none"
+      },
+      {
+        "day": "2026-11-02",
+        "state": "none"
+      },
+      {
+        "day": "2026-11-03",
+        "state": "none"
+      },
+      {
+        "day": "2026-11-04",
+        "state": "kept"
+      },
+      {
+        "day": "2026-11-05",
+        "state": "kept"
+      },
+      {
+        "day": "2026-11-06",
+        "state": "kept"
+      }
+    ]
+  },
+  "records": {
+    "current": 3,
+    "best": 3,
+    "longestPair": 3,
+    "totalDays": 3,
+    "perfectWeeks": 0
+  },
+  "earned": {
+    "toys": [
+      "toy-laser-dot",
+      "toy-golden-fish",
+      "toy-golden-mouse"
+    ],
+    "backs": [],
+    "rugs": [],
+    "condoStage": 2
+  },
+  "catalog": [
+    {
+      "id": "condo-1",
+      "kind": "condo",
+      "at": 1,
+      "progress": 1
+    },
+    {
+      "id": "condo-2",
+      "kind": "condo",
+      "at": 3,
+      "progress": 1
+    },
+    {
+      "id": "condo-3",
+      "kind": "condo",
+      "at": 7,
+      "progress": 0.42857142857142855
+    },
+    {
+      "id": "condo-4",
+      "kind": "condo",
+      "at": 14,
+      "progress": 0.21428571428571427
+    },
+    {
+      "id": "condo-5",
+      "kind": "condo",
+      "at": 30,
+      "progress": 0.1
+    },
+    {
+      "id": "condo-6",
+      "kind": "condo",
+      "at": 50,
+      "progress": 0.06
+    },
+    {
+      "id": "condo-7",
+      "kind": "condo",
+      "at": 100,
+      "progress": 0.03
+    },
+    {
+      "id": "condo-8",
+      "kind": "condo",
+      "at": 150,
+      "progress": 0.02
+    },
+    {
+      "id": "condo-9",
+      "kind": "condo",
+      "at": 200,
+      "progress": 0.015
+    },
+    {
+      "id": "condo-10",
+      "kind": "condo",
+      "at": 365,
+      "progress": 0.00821917808219178
+    },
+    {
+      "id": "back-yarn-swirl",
+      "kind": "back",
+      "at": 14,
+      "progress": 0.21428571428571427
+    },
+    {
+      "id": "back-moonlit-fish",
+      "kind": "back",
+      "at": 14,
+      "progress": 0.21428571428571427
+    },
+    {
+      "id": "back-cucumber-chaos",
+      "kind": "back",
+      "at": 14,
+      "progress": 0.21428571428571427
+    },
+    {
+      "id": "back-crown",
+      "kind": "back",
+      "at": 7,
+      "progress": 0.42857142857142855
+    },
+    {
+      "id": "back-heart-paws",
+      "kind": "back",
+      "at": 7,
+      "progress": 0.42857142857142855
+    },
+    {
+      "id": "back-golden-yarn",
+      "kind": "back",
+      "at": 24,
+      "progress": 0.16666666666666666
+    },
+    {
+      "id": "rug-night-sky",
+      "kind": "rug",
+      "at": 7,
+      "progress": 0.42857142857142855
+    },
+    {
+      "id": "rug-candy-stripe",
+      "kind": "rug",
+      "at": 7,
+      "progress": 0.42857142857142855
+    },
+    {
+      "id": "rug-fish-pond",
+      "kind": "rug",
+      "at": 7,
+      "progress": 0.42857142857142855
+    },
+    {
+      "id": "rug-royal-violet",
+      "kind": "rug",
+      "at": 7,
+      "progress": 0.42857142857142855
+    },
+    {
+      "id": "toy-yarn-ball",
+      "kind": "toy",
+      "at": 1,
+      "progress": 0
+    },
+    {
+      "id": "toy-feather-wand",
+      "kind": "toy",
+      "at": 1,
+      "progress": 0
+    },
+    {
+      "id": "toy-cardboard-box",
+      "kind": "toy",
+      "at": 1,
+      "progress": 0
+    },
+    {
+      "id": "toy-mouse",
+      "kind": "toy",
+      "at": 1,
+      "progress": 0
+    },
+    {
+      "id": "toy-fish",
+      "kind": "toy",
+      "at": 1,
+      "progress": 0
+    },
+    {
+      "id": "toy-bell",
+      "kind": "toy",
+      "at": 1,
+      "progress": 0
+    },
+    {
+      "id": "toy-laser-dot",
+      "kind": "toy",
+      "at": 1,
+      "progress": 1
+    },
+    {
+      "id": "toy-catnip-sack",
+      "kind": "toy",
+      "at": 1,
+      "progress": 0
+    },
+    {
+      "id": "toy-sock",
+      "kind": "toy",
+      "at": 1,
+      "progress": 0
+    },
+    {
+      "id": "toy-bottle-cap",
+      "kind": "toy",
+      "at": 1,
+      "progress": 0
+    },
+    {
+      "id": "toy-crinkle-ball",
+      "kind": "toy",
+      "at": 1,
+      "progress": 0
+    },
+    {
+      "id": "toy-spring",
+      "kind": "toy",
+      "at": 1,
+      "progress": 0
+    },
+    {
+      "id": "toy-ribbon",
+      "kind": "toy",
+      "at": 1,
+      "progress": 0
+    },
+    {
+      "id": "toy-paper-bag",
+      "kind": "toy",
+      "at": 1,
+      "progress": 0
+    },
+    {
+      "id": "toy-pom-pom",
+      "kind": "toy",
+      "at": 1,
+      "progress": 0
+    },
+    {
+      "id": "toy-cork",
+      "kind": "toy",
+      "at": 1,
+      "progress": 0
+    },
+    {
+      "id": "toy-rainbow-yarn",
+      "kind": "toy",
+      "at": 7,
+      "progress": 0.14285714285714285
+    },
+    {
+      "id": "toy-glitter-mouse",
+      "kind": "toy",
+      "at": 7,
+      "progress": 0.14285714285714285
+    },
+    {
+      "id": "toy-silver-bell",
+      "kind": "toy",
+      "at": 7,
+      "progress": 0.14285714285714285
+    },
+    {
+      "id": "toy-moon-fish",
+      "kind": "toy",
+      "at": 7,
+      "progress": 0.14285714285714285
+    },
+    {
+      "id": "toy-star-wand",
+      "kind": "toy",
+      "at": 7,
+      "progress": 0.14285714285714285
+    },
+    {
+      "id": "toy-disco-ball",
+      "kind": "toy",
+      "at": 7,
+      "progress": 0.14285714285714285
+    },
+    {
+      "id": "toy-golden-fish",
+      "kind": "toy",
+      "at": 30,
+      "progress": 1
+    },
+    {
+      "id": "toy-golden-mouse",
+      "kind": "toy",
+      "at": 30,
+      "progress": 1
+    }
+  ],
+  "connections": [
+    {
+      "pair": "pair_3f9cAAAAAAAAAAAAAAAAAA",
+      "partner": {
+        "name": "Bob",
+        "cat": 3
+      },
+      "count": 3,
+      "me": true,
+      "them": true,
+      "kept": true,
+      "naps": 0,
+      "winback": null,
+      "pausedUntil": null,
+      "best": 3,
+      "lifetimeKept": 3,
+      "perfectWeeks": 0,
+      "week": [
+        {
+          "day": "2026-10-31",
+          "state": "none"
+        },
+        {
+          "day": "2026-11-01",
+          "state": "none"
+        },
+        {
+          "day": "2026-11-02",
+          "state": "none"
+        },
+        {
+          "day": "2026-11-03",
+          "state": "none"
+        },
+        {
+          "day": "2026-11-04",
+          "state": "kept"
+        },
+        {
+          "day": "2026-11-05",
+          "state": "kept"
+        },
+        {
+          "day": "2026-11-06",
+          "state": "kept"
+        }
+      ],
+      "next": 7,
+      "condoStage": 2,
+      "toys": [
+        "toy-golden-fish",
+        "toy-golden-mouse",
+        "toy-laser-dot",
+        "toy-sock"
+      ],
+      "todayToy": "toy-laser-dot",
+      "unlocked": {
+        "backs": [
+          "back-violet-paw"
+        ],
+        "rugs": [
+          "rug-classic"
+        ]
+      },
+      "gifts": [
+        {
+          "id": "g1",
+          "milestone": 3,
+          "item": "toy-sock"
+        }
+      ],
+      "myMove": [
+        "BCDFG"
+      ],
+      "theirMove": [],
+      "pounce": {
+        "sent": true,
+        "resting": true,
+        "quiet": false,
+        "answer": null,
+        "code": null,
+        "waiting": null
+      },
+      "pinned": true
+    },
+    {
+      "pair": "pair_7b2dBBBBBBBBBBBBBBBBBB",
+      "partner": {
+        "name": "Bob",
+        "cat": 3
+      },
+      "count": 3,
+      "me": true,
+      "them": true,
+      "kept": true,
+      "naps": 0,
+      "winback": null,
+      "pausedUntil": null,
+      "best": 3,
+      "lifetimeKept": 3,
+      "perfectWeeks": 0,
+      "week": [
+        {
+          "day": "2026-10-31",
+          "state": "none"
+        },
+        {
+          "day": "2026-11-01",
+          "state": "none"
+        },
+        {
+          "day": "2026-11-02",
+          "state": "none"
+        },
+        {
+          "day": "2026-11-03",
+          "state": "none"
+        },
+        {
+          "day": "2026-11-04",
+          "state": "kept"
+        },
+        {
+          "day": "2026-11-05",
+          "state": "kept"
+        },
+        {
+          "day": "2026-11-06",
+          "state": "kept"
+        }
+      ],
+      "next": 7,
+      "condoStage": 2,
+      "toys": [
+        "toy-golden-fish",
+        "toy-golden-mouse",
+        "toy-laser-dot",
+        "toy-sock"
+      ],
+      "todayToy": "toy-laser-dot",
+      "unlocked": {
+        "backs": [
+          "back-violet-paw"
+        ],
+        "rugs": [
+          "rug-classic"
+        ]
+      },
+      "gifts": [
+        {
+          "id": "g1",
+          "milestone": 3,
+          "item": "toy-sock"
+        }
+      ],
+      "myMove": [],
+      "theirMove": [
+        "GH2VD"
+      ],
+      "pounce": {
+        "sent": false,
+        "resting": false,
+        "quiet": true,
+        "answer": "play",
+        "code": "NWCDF",
+        "waiting": {
+          "id": "pc_AAAAAAAAAAAAAAAAAAAAAA",
+          "target": {
+            "table": "BCDFG"
+          }
+        }
+      },
+      "pinned": false
+    },
+    {
+      "pair": "pair_5c8eDDDDDDDDDDDDDDDDDD",
+      "partner": {
+        "name": "Bob",
+        "cat": 3
+      },
+      "count": 3,
+      "me": true,
+      "them": true,
+      "kept": true,
+      "naps": 0,
+      "winback": null,
+      "pausedUntil": null,
+      "best": 3,
+      "lifetimeKept": 3,
+      "perfectWeeks": 0,
+      "week": [
+        {
+          "day": "2026-10-31",
+          "state": "none"
+        },
+        {
+          "day": "2026-11-01",
+          "state": "none"
+        },
+        {
+          "day": "2026-11-02",
+          "state": "none"
+        },
+        {
+          "day": "2026-11-03",
+          "state": "none"
+        },
+        {
+          "day": "2026-11-04",
+          "state": "kept"
+        },
+        {
+          "day": "2026-11-05",
+          "state": "kept"
+        },
+        {
+          "day": "2026-11-06",
+          "state": "kept"
+        }
+      ],
+      "next": 7,
+      "condoStage": 2,
+      "toys": [
+        "toy-golden-fish",
+        "toy-golden-mouse",
+        "toy-laser-dot",
+        "toy-sock"
+      ],
+      "todayToy": "toy-laser-dot",
+      "unlocked": {
+        "backs": [
+          "back-violet-paw"
+        ],
+        "rugs": [
+          "rug-classic"
+        ]
+      },
+      "gifts": [
+        {
+          "id": "g1",
+          "milestone": 3,
+          "item": "toy-sock"
+        }
+      ],
+      "myMove": [
+        "BCDFG"
+      ],
+      "theirMove": [],
+      "pounce": {
+        "sent": false,
+        "resting": false,
+        "quiet": false,
+        "answer": "later",
+        "code": null,
+        "waiting": {
+          "id": "pc_CCCCCCCCCCCCCCCCCCCCCC",
+          "target": "new"
+        }
+      },
+      "pinned": false
+    }
+  ]
+}

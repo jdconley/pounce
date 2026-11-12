@@ -74,6 +74,13 @@ export interface Env {
    */
   NUDGE?: string;
   /**
+   * The games rooms may be created for beyond Cat Tower: a comma-separated list of game ids
+   * (`gamesOn` in src/games, e.g. "tiles"). Empty or unset, as in production's wrangler.jsonc
+   * today, only Cat Tower: asking for any other game is refused, as it always was. Tests and
+   * local dev (`.dev.vars`) turn the tile game on.
+   */
+  GAMES?: string;
+  /**
    * Twilio Verify, for parent consent (consent design D1, D6). Secrets, optional: all four or
    * nothing is sent, so consent can't start. Verify texts a six-digit code from Twilio's own
    * pre-registered senders, so Pounce needs no phone number of its own and no 10DLC.

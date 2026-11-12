@@ -25,4 +25,11 @@ export type Outgoing = {
   from?: { name: string; cat: number };
   streak?: StreakBlock;
   data?: Record<string, Json>;
+  /**
+   * The same push for a device whose app can't open `code`'s table (a game it doesn't draw): the
+   * copy, and a table it can open instead when there is one. Only on a push that isn't solely
+   * about that table (a streak reminder). Without it, such a device isn't sent the push at all.
+   * Never part of the payload (`forDevice` applies it).
+   */
+  otherwise?: { body: string; code?: string };
 };

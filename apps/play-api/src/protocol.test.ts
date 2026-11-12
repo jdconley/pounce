@@ -48,8 +48,22 @@ describe("ErrorCode", () => {
       too_soon: true,
       not_unlocked: true,
       not_their_turn: true,
+      // The tile game's own (it shares game_over, not_your_turn, bad_seat and forfeited).
+      bad_action: true,
+      pool_empty: true,
+      pool_not_empty: true,
+      bad_piece: true,
+      duplicate_piece: true,
+      missing_piece: true,
+      not_your_piece: true,
+      nothing_played: true,
+      bad_set: true,
+      table_touched: true,
+      opening_too_low: true,
+      // Play again at a table whose game was turned off.
+      game_off: true,
     };
-    expect(Object.keys(codes)).toHaveLength(35);
+    expect(Object.keys(codes)).toHaveLength(47);
   });
 });
 

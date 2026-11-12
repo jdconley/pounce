@@ -40,6 +40,11 @@ cp apps/play-api/.dev.vars.example apps/play-api/.dev.vars   # gitignored
 pnpm --filter @pounce/play-api exec wrangler dev --port 8787
 ```
 
+The example `.dev.vars` sets `GAMES=tiles`, which lets the local server deal the second game (the
+tile game) as well as Cat Tower. Production's `GAMES` in `apps/play-api/wrangler.jsonc` is empty,
+so the deployed server deals Cat Tower only. An existing `.dev.vars` needs the `GAMES=tiles` line
+added by hand, or pass `--var GAMES:tiles` to `wrangler dev`.
+
 ## The website
 
 The same Worker serves the public site at `play.conleychaos.com`: the landing page (`/`), help

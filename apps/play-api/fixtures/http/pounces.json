@@ -1,0 +1,21 @@
+{
+  "created": {
+    "id": "pc_AAAAAAAAAAAAAAAAAAAAAA"
+  },
+  "createdLink": {
+    "id": "pc_BBBBBBBBBBBBBBBBBBBBBB",
+    "link": "https://play.conleychaos.com/p/AAAAAAAAAAAAAAAAAAAAAA"
+  },
+  "answeredPlay": {
+    "code": "NWCDF"
+  },
+  "answeredLater": {},
+  "link": {
+    "id": "pc_BBBBBBBBBBBBBBBBBBBBBB",
+    "from": {
+      "name": "Alice",
+      "cat": 0
+    },
+    "target": "new"
+  }
+}
