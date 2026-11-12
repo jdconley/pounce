@@ -98,7 +98,8 @@ then the build setting (Debug: `http://localhost:8787`, optionally overridden by
 - `-anim-speed <n>` (or `POUNCE_ANIM_SPEED=<n>` in the environment) runs the whole app n times faster
   and marks the run as a test: sound and haptics go to silent stand-ins. See [Test speed](#test-speed).
 - `-show-join` opens the Join screen. `-open-link <url>` handles a link as if it was tapped.
-- For screenshots: `-demo-home` puts sample tables on Home, `-show-rules` / `-show-people` open
+- For screenshots: `-demo-home` puts sample tables on Home (`-demo-home calm`: the same tables, none
+  waiting on you), `-show-rules` / `-show-people` open
   those sheets over Home, and `-show-scoreboard` opens the scoreboard over a table. `-shelf all`
   shows every game on Home's shelf as playable and `-shelf six` fills the shelf with six games
   (four of them made up), to look at its layouts.
@@ -133,7 +134,7 @@ then the build setting (Debug: `http://localhost:8787`, optionally overridden by
   Play again deals a demo table under `NWCDF`.
 - The strip, the trophy room and adding people (trophy room design): with `-demo-streaks` the list also
   carries your own streak (12, a nap yesterday) and `DemoTrophyService` serves the trophy room from
-  the demo pairs; `-demo-streaks empty` has nobody connected yet (Home's big plus). `-show-trophies`
+  the demo pairs; `-demo-streaks empty` has nobody connected yet (Home's bouncing Invite). `-show-trophies`
   opens the trophy room and `-show-invite` the invite sheet over Home; a kitten's invite under
   `-demo-streaks` shows the room code `TB4XN`. `TrophyTests` takes the screenshots
   (`TEST_RUNNER_TROPHY_SHOTS_DIR`, `TEST_RUNNER_TROPHY_SHOTS_ORIENTATION=landscape` on an iPad).
@@ -155,7 +156,7 @@ then the build setting (Debug: `http://localhost:8787`, optionally overridden by
   `LiveShotTests` takes the screenshots (`TEST_RUNNER_POUNCE_SHOTS_DIR`); the previews are in
   `PounceWidgets/Previews.swift`. iPad shows the live table on its Lock Screen too (no Dynamic Island).
 - App updates (`docs/superpowers/specs/2026-11-12-app-updates-design.md`): `-demo-update <soft|locked|table|required>`
-  is one of the update moments with no server (`UpdateDemo`). `soft`: Home with "A new Pounce is ready".
+  is one of the update moments with no server (`UpdateDemo`). `soft`: Home with "Update ready".
   `locked`: Home with a table behind a padlock. `table`: a table that answers "this game needs a newer
   app"; add `-update-latest none` for the wording when the App Store has nothing newer. `required`: the
   full "Update Pounce to keep playing" screen. `-update-channel testflight` makes any run a TestFlight
@@ -312,6 +313,13 @@ Home's shelf shows one card per entry in `PounceKit/Sources/PounceKit/Games/Game
 `GameShelfTests` covers the shelf with no server, and saves screenshots when the runner sets
 `TEST_RUNNER_SHELF_SHOTS_DIR` (`TEST_RUNNER_SHELF_SHOTS_ORIENTATION=landscape` on an iPad). The
 set from this change is in `Art/screenshots/game-picker/`.
+
+Home is a hub: a player bar (the owner's cat, the streak strip, the gear), a column that leads with
+your tables while a game is going and with the games otherwise, and a dock with Join (and Practice
+before your first table). `HomeShotTests` saves Home in every state (new player, tables, the
+sign-in card, the update card, a locked table, a child's device, six games, the biggest text) when
+the runner sets `TEST_RUNNER_HOME_SHOTS_DIR`; an iPad takes each in portrait and landscape. Before
+and after shots of the redesign are in `Art/screenshots/home-redesign/`.
 
 ## Art pipeline
 

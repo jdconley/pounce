@@ -93,11 +93,15 @@ struct TableCard: View {
                 }
             }
             .frame(width: Self.size.width, height: Self.size.height)
+            // One shadow for the whole card, not one under each word on it.
+            .compositingGroup()
             .shadow(
                 color: item.yourTurn ? Palette.orange.opacity(0.95) : Palette.ink.opacity(0.5),
                 radius: item.yourTurn ? 14 : 0, x: 0, y: item.yourTurn ? 0 : 5)
             .saturation(item.yourTurn ? 1 : 0.75)
             .brightness(item.yourTurn || isOver ? 0 : -0.1)
+            // Reduce Motion's bounce is a fade: the card fades as one, nothing shows through.
+            .compositingGroup()
             .bounceLoop(active: item.yourTurn)
             .contentShape(Rectangle())
         }
@@ -106,12 +110,12 @@ struct TableCard: View {
         .accessibilityIdentifier(identifier ?? "home.table.\(item.id)")
     }
 
-    /// "Last move 3 days ago", once a game in play has waited a day or more.
+    /// "3 days ago", once a game in play has waited a day or more since its last move.
     private var idleText: String? {
         guard let days = item.idleDays, days >= 1 else { return nil }
         return days == 1
-            ? String(localized: "Last move 1 day ago", comment: "Home table card: the game has waited a day")
-            : String(localized: "Last move \(days) days ago", comment: "Home table card: how long the game has waited")
+            ? String(localized: "1 day ago", comment: "Home table card: the last move was a day ago")
+            : String(localized: "\(days) days ago", comment: "Home table card: how long ago the last move was")
     }
 
     private var accessibilityText: Text {
@@ -120,7 +124,7 @@ struct TableCard: View {
         let names = people.faces.map(\.name).joined(separator: ", ")
         let who = names.isEmpty ? table : Text("\(table), with \(names)", comment: "VoiceOver: a Home table card, then who else plays there")
         guard let idleText else { return who }
-        return Text("\(who), \(idleText)", comment: "VoiceOver: a Home table card, then how long its game has waited")
+        return Text("\(who), last move \(idleText)", comment: "VoiceOver: a Home table card, then how long ago its last move was")
     }
 
     @ViewBuilder private var cat: some View {

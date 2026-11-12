@@ -1,11 +1,14 @@
 import PounceKit
 import SwiftUI
 
-/// Home's one-time sign-in card (launch review, `SignInPrompt`): a signed-out adult with a pair is
-/// told in words that a new phone loses the streak, with Sign in with Apple and "Not now".
+/// Home's sign-in card (launch review, `SignInPrompt`; the streak's Save, §10.5): your streaks,
+/// kept on a new phone, with Sign in with Apple and "Not now". `onDone` closes it, after a
+/// sign-in or a "Not now".
 struct SignInPromptCard: View {
     @Environment(AppModel.self) private var model
-    @Environment(Settings.self) private var settings
+    var identifier = "home.signinPrompt"
+    var appleIdentifier = "home.signinPrompt.apple"
+    let onDone: () -> Void
 
     var body: some View {
         ZStack {
@@ -16,19 +19,17 @@ struct SignInPromptCard: View {
                         .accessibilityHidden(true)
                 }
                 OutlinedText(
-                    String(localized: "Keep your streak if you change phones",
-                           comment: "Home's sign-in card: the headline"),
+                    String(localized: "Save your streaks", comment: "Home's sign-in card: the headline"),
                     size: 28, lines: 2)
                     .accessibilityAddTraits(.isHeader)
                 WordLine(
-                    String(localized: "Your streaks live on this phone. Sign in with Apple to keep them on a new one.",
-                           comment: "Home's sign-in card: why"),
-                    size: 16)
+                    String(localized: "Keep them on a new phone.", comment: "Home's sign-in card: what signing in does"),
+                    size: 17)
                 if let owner = model.people.owner {
-                    AppleSignInButton(identifier: "home.signinPrompt.apple") {
+                    AppleSignInButton(identifier: appleIdentifier) {
                         Task {
                             await model.account.signIn(owner)
-                            if model.account.isSignedIn { settings.signInPromptSeen = true }
+                            if model.account.isSignedIn { onDone() }
                         }
                     }
                     .frame(width: 260, height: 54)
@@ -48,12 +49,14 @@ struct SignInPromptCard: View {
                 .overlay(RoundedRectangle(cornerRadius: 34, style: .continuous).strokeBorder(Palette.ink, lineWidth: 5)))
             .padding(16)
         }
+        // The card and its backdrop fade in and out as one.
+        .compositingGroup()
         .accessibilityElement(children: .contain)
-        .accessibilityIdentifier("home.signinPrompt")
+        .accessibilityIdentifier(identifier)
     }
 
     private func notNow() {
-        settings.signInPromptSeen = true
+        onDone()
     }
 }
 

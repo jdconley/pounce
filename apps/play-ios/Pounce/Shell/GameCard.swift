@@ -7,8 +7,9 @@ import SwiftUI
 ///
 /// Two layouts. `poster`: the cover across the top, the words on a band in the game's colour
 /// under it. `ticket`: a square of the cover on the left, the words beside it (a phone's games on
-/// the way, so the ones you can play stay the biggest things on the shelf). At the accessibility
-/// text sizes a ticket turns into a poster, so the words get the card's whole width.
+/// the way, and every game while your tables lead Home); a game you can start wears its play
+/// button on the cover. At the accessibility text sizes a ticket turns into a poster, so the
+/// words get the card's whole width.
 struct GameCard: View {
     enum Layout { case poster, ticket }
 
@@ -63,6 +64,8 @@ struct GameCard: View {
         }
         .buttonStyle(GameCardStyle(shape: shape, lipColor: bandColors.last ?? tint))
         .disabled(busy)
+        // The cover, band and lip dim as one card.
+        .compositingGroup()
         .opacity(busy ? 0.7 : 1)
         // One button to VoiceOver: the words in order, then what a double tap does.
         .accessibilityLabel(label)
@@ -97,6 +100,7 @@ struct GameCard: View {
         case .ticket:
             HStack(spacing: 0) {
                 cover.frame(width: 108)
+                    .overlay { if !soon { PlayDisc() } }
                 Rectangle().fill(Palette.ink).frame(width: Self.outline)
                 band(titleSize: ticketTitleSize)
                     .overlay(alignment: .bottom) { note.padding(.bottom, 8) }
@@ -145,6 +149,8 @@ struct GameCard: View {
                 } else {
                     words.frame(maxWidth: .infinity, alignment: .leading)
                 }
+            } else if shownLayout == .ticket {
+                words.frame(maxWidth: .infinity, alignment: .leading)
             } else {
                 if playUnder || bigType {
                     VStack(alignment: .leading, spacing: 12) {
@@ -224,8 +230,7 @@ struct GameCard: View {
 
     static let soonWords = String(localized: "Coming soon", comment: "Game shelf: the sticker on a game that can't be played yet")
     static let noteWords = String(
-        localized: "Not ready yet. We're still making it.",
-        comment: "Game shelf: the short note after a tap on a game that can't be played yet")
+        localized: "Not ready yet.", comment: "Game shelf: the short note after a tap on a game that can't be played yet")
 
     // MARK: words for VoiceOver
 
@@ -350,18 +355,15 @@ private struct PlayMark: View {
     static let word = String(localized: "Play", comment: "Game shelf: the mark on a game you can start")
 }
 
-/// Where the play mark would be on a game that is on its way: a flat, sunken bar. Nothing to press.
+/// Where the play mark would be on a game that is on its way: a flat, sunken bar with a padlock.
+/// Nothing to press; the sticker says "Coming soon".
 private struct NotYetMark: View {
     var roomy = false
-    @ScaledMetric(relativeTo: .headline) private var wordSize: CGFloat = 17
 
     var body: some View {
-        Text(Self.word)
-            .font(.system(size: min(wordSize, 28) * (roomy ? 1.2 : 1), weight: .black, design: .rounded))
+        Image(systemName: "lock.fill")
+            .font(.system(size: roomy ? 24 : 20, weight: .black))
             .foregroundStyle(.white.opacity(0.8))
-            .lineLimit(1)
-            .minimumScaleFactor(0.7)
-            .padding(.horizontal, 14)
             .frame(maxWidth: .infinity)
             .frame(height: 58)
             .background(
@@ -370,8 +372,29 @@ private struct NotYetMark: View {
             .padding(.bottom, 5)
             .accessibilityHidden(true)
     }
+}
 
-    static let word = String(localized: "Not ready yet", comment: "Game shelf: where the play mark would be on a game that can't be played yet")
+/// A ticket's play button, on its cover: an orange disc with the play mark. A picture, not a
+/// button: the whole card is the button.
+private struct PlayDisc: View {
+    var body: some View {
+        Circle()
+            .fill(LinearGradient(
+                colors: [Palette.orange.mix(with: .white, by: 0.35), Palette.orange, Palette.orange.mix(with: Palette.ink, by: 0.15)],
+                startPoint: .top, endPoint: .bottom))
+            .overlay(Circle().strokeBorder(Palette.ink, lineWidth: 4))
+            .overlay {
+                Image(ArtName.iconPlay)
+                    .resizable().scaledToFit()
+                    .padding(13)
+                    .offset(x: 2)
+                    .shadow(color: Palette.ink.opacity(0.5), radius: 0, x: 0, y: 2)
+            }
+            .frame(width: 54, height: 54)
+            .compositingGroup()
+            .shadow(color: Palette.ink.opacity(0.55), radius: 0, x: 0, y: 4)
+            .accessibilityHidden(true)
+    }
 }
 
 extension Palette {
@@ -397,6 +420,8 @@ private struct ShelfEntrance: ViewModifier {
 
     func body(content: Content) -> some View {
         content
+            // The card's layers fade in as one.
+            .compositingGroup()
             .opacity(shown ? 1 : 0)
             .offset(y: shown || reduceMotion ? 0 : 28)
             .scaleEffect(shown || reduceMotion ? 1 : 0.94)

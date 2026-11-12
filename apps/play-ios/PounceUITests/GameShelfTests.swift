@@ -55,7 +55,7 @@ final class GameShelfTests: XCTestCase {
         XCTAssertTrue(tiles.waitForExistence(timeout: Live.t(10)), "no card for the game on the way")
         XCTAssertEqual(value(tiles) ?? "", "", "the note before any tap")
         tiles.tap()
-        XCTAssertTrue(until(3) { self.value(tiles) == "Not ready yet. We're still making it." }, "no note after the tap")
+        XCTAssertTrue(until(3) { self.value(tiles) == "Not ready yet." }, "no note after the tap")
         shot(app, "coming-soon-tap")
         XCTAssertTrue(el(app, "screen-home").exists, "the tap left Home")
         XCTAssertFalse(el(app, "home.createError").exists, "the tap tried to start a table")
@@ -67,7 +67,7 @@ final class GameShelfTests: XCTestCase {
         let app = launch(["-demo-streaks", "-demo-home"])
         let tables = el(app, "home.tables")
         XCTAssertTrue(tables.waitForExistence(timeout: Live.t(10)), "no tables")
-        XCTAssertEqual(label(el(app, "home.yourTurn")), "Your turn at 2 tables")
+        XCTAssertEqual(label(el(app, "home.yourTurn")), "2 turns")
         XCTAssertFalse(el(app, "home.practice").exists, "practice with tables in progress")
         XCTAssertTrue(el(app, "home.join").isHittable, "Join can't be reached with tables on Home")
         let catTower = el(app, "home.newGame")
@@ -80,12 +80,12 @@ final class GameShelfTests: XCTestCase {
         shot(app, "tables")
     }
 
-    /// VoiceOver's order is the accessibility tree's: the top bar, the column from the top
-    /// (strip, tables, shelf), then the bottom bar.
+    /// VoiceOver's order is the accessibility tree's: the player bar (the owner's cat, the strip,
+    /// the gear), the column from the top (tables, shelf), then the dock.
     func testVoiceOverReadsHomeTopToBottom() throws {
         let app = launch(["-demo-streaks", "-demo-home"])
         XCTAssertTrue(el(app, "home.newGame").waitForExistence(timeout: Live.t(10)), "no Cat Tower card")
-        let wanted = ["home.name", "home.settings", "home.own", "home.table.M3W7Z", "home.newGame", "home.game.tiles", "home.people", "home.join"]
+        let wanted = ["home.people", "home.own", "home.settings", "home.table.M3W7Z", "home.newGame", "home.game.tiles", "home.join"]
         var seen: [String] = []
         func walk(_ node: XCUIElementSnapshot) {
             if wanted.contains(node.identifier), !seen.contains(node.identifier) { seen.append(node.identifier) }
@@ -93,6 +93,31 @@ final class GameShelfTests: XCTestCase {
         }
         walk(try el(app, "screen-home").snapshot())
         XCTAssertEqual(seen, wanted)
+    }
+
+    /// The player bar, the column and the dock never overlap: the owner's cat sits in the player
+    /// bar, clear of the tables and the shelf, and the column ends where the dock begins.
+    func testNothingOverlapsTheBars() {
+        for extra in [["-demo-streaks", "empty"], ["-demo-streaks", "-demo-home"]] {
+            let app = launch(extra)
+            XCTAssertTrue(el(app, "home.newGame").waitForExistence(timeout: Live.t(10)), "no Cat Tower card")
+            let cat = el(app, "home.people").frame
+            let gear = el(app, "home.settings").frame
+            let dock = el(app, "home.dock").frame
+            let shelf = el(app, "home.shelf").frame
+            XCTAssertLessThanOrEqual(cat.maxY, shelf.minY, "the cat reaches into the shelf")
+            XCTAssertFalse(cat.intersects(el(app, "home.strip").frame), "the cat covers the strip")
+            XCTAssertFalse(gear.intersects(el(app, "home.strip").frame), "the gear covers the strip")
+            if el(app, "home.tables").exists {
+                XCTAssertLessThanOrEqual(cat.maxY, el(app, "home.tables").frame.minY + 20, "the cat reaches into the tables")
+            }
+            XCTAssertLessThan(cat.minY, dock.minY - 200, "the cat isn't up top")
+            // Everything the column shows ends at the dock's edge.
+            let catTower = el(app, "home.newGame")
+            if catTower.isHittable { XCTAssertLessThanOrEqual(catTower.frame.minY, dock.minY) }
+            XCTAssertTrue(el(app, "home.join").isHittable, "Join can't be reached")
+            app.terminate()
+        }
     }
 
     func testTheRulesChipOpensHowToPlay() {
