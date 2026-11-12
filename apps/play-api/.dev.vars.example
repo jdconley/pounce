@@ -1,2 +1,5 @@
 # Copy to .dev.vars (gitignored). Any 64+ hex chars.
 TOKEN_SECRET=
+# Games beyond Cat Tower that rooms may be created for, comma separated. Production leaves this
+# empty (wrangler.jsonc); local dev turns the tile game on.
+GAMES=tiles

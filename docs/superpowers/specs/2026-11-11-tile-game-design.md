@@ -1,10 +1,12 @@
 # Pounce tile game (working title "Tuna Tiles"): design
 
-Date: 2026-11-11 · Owner: JD Conley (Conley Chaos LLC) · Status: draft for approval · Lives in `github.com/jdconley/pounce`
+Date: 2026-11-11 · Owner: JD Conley (Conley Chaos LLC) · Status: rules approved by JD (2026-11-11); server built behind the `GAMES` flag, off in production; iOS not built · Lives in `github.com/jdconley/pounce`
 
 Parent specs: `2026-10-31-pounce-cat-tower-design.md` (product principles, architecture), `2026-10-31-pounce-ios-design.md` (art direction, table, pass-and-play, forfeit), `2026-11-04-daily-habit-design.md` (streaks, notifications, minors). Where this document is silent, they apply.
 
-Marks: **(JD)** = decided by JD in the brief for this work. **(call)** = builder call made while writing this, open to override. **(built)** = in the rules module that ships with this spec (`apps/play-api/src/tiles`, `src/games/tiles.ts`, `src/bots/house-cat-tiles.ts`).
+Marks: **(JD)** = decided by JD, in the brief for this work or on reading the first draft. **(call)** = builder call made while writing this, open to override. **(built)** = in the server: the rules module (`apps/play-api/src/tiles`, `src/games/tiles.ts`, `src/bots/house-cat-tiles.ts`) and the rooms and protocol that carry it (§9).
+
+**JD's decisions on the first draft (2026-11-11).** The game keeps the full rules and the full length: 106 pieces, 14 dealt, no short variant. He likes the game as it is. The builder calls on forfeited racks (§4.8), a draw or a pass counting for streaks (§6), a random first player (§4.1) and the score of a blocked game (§4.6) stand. The name is still open: the working title and the id `tiles` stay.
 
 ## 1. What this is and why
 
@@ -24,8 +26,10 @@ Cat Tower is a race you run side by side. This game is a shared puzzle. Every pi
 - A simplified mode for players under 13, and for anyone who wants it (§5.10).
 - Streaks, turn reminders, nudges, retiring a stalled seat and forfeit work as they do in Cat Tower (§6).
 
-**Non-goals (this PR)** **(JD)**
-- Registering the game with rooms, any change to `room/core.ts`, `protocol.ts`, the HTTP layer, notifications or `apps/play-ios`. The module ships with nothing calling it. §9 proposes the wiring.
+**Non-goals (server work so far)** **(JD)**
+- Any change under `apps/play-ios`: the app half is separate work, against §9.3 and §9.4.
+- Turning the game on in production. Rooms deal it only while the `GAMES` flag lists it, and production's is empty (§9.3).
+- A short variant. **(JD: the game stays full length)**
 - Art, sounds, the iOS scene.
 
 **Anti-goals**
@@ -93,7 +97,7 @@ Rules aren't copyrightable. The wording below is ours and is what the in-app hel
 
 ### 4.1 Pieces and deal **(JD, built)**
 
-106 pieces: the numbers 1 to 13 in four suits, two of every piece, and 2 Yarn. Each player is dealt 14 onto their rack. The rest is the pool, face down. Who moves first is picked at random by the game's seed **(call)**, because seats keep their order across "Play again" and a fixed first seat would always favour the host.
+106 pieces: the numbers 1 to 13 in four suits, two of every piece, and 2 Yarn. Each player is dealt 14 onto their rack. The rest is the pool, face down. Who moves first is picked at random by the game's seed **(JD)**, because seats keep their order across "Play again" and a fixed first seat would always favour the host.
 
 ### 4.2 Sets **(JD, built)**
 
@@ -128,7 +132,7 @@ A Yarn stands for any one piece.
 - Once on the table it stays on the table. A player who has opened may move it to any set, like any other piece. Nobody takes it back to a rack. **(JD: simplified for a phone)**
 - One number piece with both Yarn can be read two ways: 5, Yarn, Yarn is the run 5, 6, 7 and also a group of 5s. It counts as whichever is worth more, and as a run on a tie. **(call)** Yarn, Yarn, 10 is therefore a group worth exactly 30, and it opens.
 
-### 4.6 The end and the score **(JD, built; the blocked score and shared wins are calls)**
+### 4.6 The end and the score **(JD, built)**
 
 - The first player to empty their rack wins. The game ends there.
 - If the pool is empty and every player still in passes in a row, nobody can move. The game ends and the lowest rack total wins. Equal lowest totals share the win.
@@ -145,7 +149,7 @@ A Yarn stands for any one piece.
 - The game can't run forever. Draws are limited by the pool, plays by the 106 pieces, and passes end the game once everyone has made one in a row.
 - Nobody's leftover rack is ever shown, even after the game. Only the totals are.
 
-### 4.8 Forfeit **(JD: like Cat Tower's; where the pieces go is a call, built)**
+### 4.8 Forfeit **(JD, built)**
 
 Any player may forfeit until the game is over, on anyone's turn. Bots never do. Retiring a stalled seat (Cat Tower spec §3.3) is a forfeit on that seat's behalf.
 
@@ -272,11 +276,11 @@ As the iOS spec §13: every action has a tap path, VoiceOver reads sets and piec
 
 ## 6. Streaks, reminders and nudges
 
-- **`endsTurn` (built):** true for a play, a draw and a pass. Each is a whole turn ended by the seat's own action, which is the daily habit spec's definition (§6.1). False for a forfeit, though it moves the turn on.
+- **`endsTurn` (JD, built):** true for a play, a draw and a pass. Each is a whole turn ended by the seat's own action, which is the daily habit spec's definition (§6.1). False for a forfeit, though it moves the turn on.
 - **Streaks:** a turn at a shared table counts exactly as in Cat Tower. A draw counts. That is deliberate. Drawing is often the right move, and the late move pass (§6.1 there) exists so nobody loses a day for lack of a move.
 - **"Your move" pushes, the local reminder, nudges, retiring a stalled seat:** unchanged. They key off the `turn` event and `currentActor`, which this module provides. Kitten and teen limits apply as they do now.
-- **More turns per game than Cat Tower.** Every turn hands the move on, including a one-tap draw. The existing push backoff and quiet hours cover this, but see open question 1.
-- **Live table (Live Activity):** shows each seat's phase today. For this game it should show pieces left on each rack. That needs the change in §9.
+- **More turns per game than Cat Tower.** Every turn hands the move on, including a one-tap draw. The existing push backoff and quiet hours cover this. The length is decided: the game stays as it is. **(JD)**
+- **Live table (Live Activity):** shows each seat's phase at a Cat Tower table. At a tile game table its state also carries the pieces left on each rack (§9.2). **(built)**
 
 ## 7. The House Cat **(built)**
 
@@ -327,62 +331,84 @@ Hidden information: a view holds the table, the counts and the controlled racks.
 
 `checkPlay(table, rack, opened, submitted)` is exported so a bot, a hint or a test can ask whether a play is legal without a state.
 
-## 9. Making rooms and the protocol multi-game (proposal, not in this PR)
+## 9. Rooms and the protocol for more than one game
 
-Today rooms are hard-wired to Cat Tower in more places than the type parameter: `room/core.ts` reads `CatTowerState` fields directly, `protocol.ts` parses Cat Tower actions, and the app decodes one `GameView`. The plan below is additive, keeps version 1.0 of the app working untouched, and can ship behind a flag.
+The server half is built **(built)**: §9.1 to §9.3 below describe it as it is. §9.4 is the app half, still to do. Everything is additive. Version 1.0 of the app sends and receives exactly what it did, byte for byte: tests pin the Cat Tower fixtures by hash and regenerate them from the server (`tests/fixtures-pinned.test.ts`, `tests/protocol-fixtures.test.ts`).
 
-### 9.1 `games/module.ts`: what a room needs that it reads from Cat Tower today
+Where this section differs from the first draft's proposal, it says **Changed from the proposal**. Each change keeps a Cat Tower payload exactly as it was.
 
-Add to `GameModule`, with Cat Tower's implementations moved out of `core.ts` and `protocol.ts`:
+### 9.1 `games/module.ts`: what a room asks of a game
 
-| New member | Replaces | Tiles |
-| --- | --- | --- |
-| `parseAction(raw: unknown): A \| null` | `parseAction` in `protocol.ts` | object with a known `type`; `table` at most 35 sets and 106 ids |
-| `phase(s): "playing" \| "between" \| "over"` | `game.status` reads in `liveAfterGame`, `afterGameChange`, `retire` | never `between` |
-| `betweenAction: A \| null` | the room's `{ type: "nextRound" }` on a timer | `null` |
-| `forfeitAction: A`, `forfeited(s): boolean[]` | `{ type: "forfeit" }` in `retire`, `game.forfeited` in `outPlayers`, `allOut`, `game-room.ts` | as built |
-| `turnKey(s): string` | `${game.round}:${game.turn}` in `turnKey()` | `${s.turns}` |
-| `startsTurn(e: E): boolean` | `event.kind === "turn" \|\| "roundStarted"` in `applyGame` | `e.kind === "turn"` |
-| `fallbackAction(s, seat): A` | `fallbackAction` in `core.ts` | draw, or pass |
-| `progress(s): number[]` and a `progressKind` | `game.phase` in `liveView` | pieces left per seat |
+`GameModule` gained these members. Cat Tower's logic moved out of `room/core.ts` and `protocol.ts` into `games/cat-tower.ts`.
 
-Add `games/index.ts` with `GAMES = { "cat-tower": catTower, tiles }` and `type GameId = keyof typeof GAMES`.
+| Member | Replaced | Cat Tower | Tiles |
+| --- | --- | --- | --- |
+| `parseAction(raw: unknown): A \| null` | `parseAction` in `protocol.ts` | the same parser, moved | object with a known `type`; `table` at most 35 sets, 13 pieces a set and 106 pieces in all (`src/tiles/parse.ts`) |
+| `phase(s): "playing" \| "between" \| "over"` | `game.status` reads in the room | `roundOver` is `between` | never `between` |
+| `betweenAction: A \| null` | the room's `{ type: "nextRound" }` on a timer | `{ type: "nextRound" }` | `null` |
+| `forfeitAction: A`, `forfeited(s): readonly boolean[]` | `{ type: "forfeit" }` in `retire`, `game.forfeited` reads | as before | as built |
+| `turnKey(s): string` | `${game.round}:${game.turn}` | the same string, so saved rooms keep their keys | `${s.turns}` |
+| `startsTurn(e: E): boolean` | `event.kind === "turn" \|\| "roundStarted"` | the same | `e.kind === "turn"` |
+| `fallbackAction(s, seat): A` | `fallbackAction` in `core.ts` | the same, moved | draw, or pass on an empty pool |
+| `progress(s): number[]`, `progressKind` | `game.phase` in the live table | the phases, `"shelf"` | pieces left per rack, `"pieces"` |
 
-### 9.2 `room/core.ts`
+`games/index.ts` has `GAMES = { "cat-tower": catTower, tiles }`, `type GameId`, `gameModule(id)` (a room that names no game is Cat Tower), `gamesListed(header)` and `gamesOn(env)`.
 
-- `RoomState.game: GameId` (today the literal `"cat-tower"`). Every stored room already has `game: "cat-tower"`, so there is no migration.
-- `gameState` becomes the module's state type. `RoomCore` takes its module from `GAMES[state.game]` in place of the `catTower` default parameter, and every `as CatTowerState` cast goes away with the members above.
-- `RoomCore.create(..., game: GameId = "cat-tower")`. `LOBBY_SEATS` (6) becomes `module.maxSeats`, so a tiles lobby has 4 seats. `start` already checks `minSeats`.
-- "Play again" copies `game` to the new table.
-- `room/tables.ts`: `TableEntry.game?: GameId` and a `game` column, so Home can show the right art per table.
-- `live/live.ts`: `LiveSeat.phase` becomes a `progress` number plus the kind, so the Live Activity can show a shelf or a piece count.
+### 9.2 Rooms, tables and the live table
 
-### 9.3 `protocol.ts`
+- `RoomState<S>` and `RoomCore<S>` are generic over the game's state, defaulting to Cat Tower's. `RoomState.game` is a `GameId`. Every stored room already says `"cat-tower"`, so nothing is migrated, and a room that somehow names none is read as Cat Tower.
+- A room takes its module from `state.game`. `RoomCore.create(..., game = "cat-tower")`. A lobby has the game's `maxSeats` seats: 6 for Cat Tower as before, 4 for tiles.
+- "Play again" deals the same game: `RematchIntent.game` is set for any game but Cat Tower, and absent for Cat Tower, whose intent is unchanged. A pounce's new table is Cat Tower.
+- Bots, "your move", nudges, retiring a stalled seat, forfeit, streak reports and cleanup all run through the module, so they work at a tile game table as they do at Cat Tower's.
+- **Tables lists** (`room/tables.ts`): `TableEntry.game` is set for a table of any game but Cat Tower and absent otherwise. The SQL column is `game TEXT`, added to an existing table with no default to fill in: null reads as Cat Tower.
+- **Live table** (`live/live.ts`). **Changed from the proposal:** `LiveSeat.phase` is not renamed, because the app decodes it as it is. A Cat Tower table's state is exactly what it was. A tile game table's state adds `progress` on each seat (pieces left) and `progressKind: "pieces"` on the state, and sends `phase: 1` for a reader that expects one.
 
-- **Creating:** `POST /v1/rooms` already takes `game`. It accepts any id in `GAMES` that the `GAMES` env flag turns on (the same pattern as `STREAKS`, `LINK` and `NUDGE`).
-- **Old apps must never land in a room they can't draw.** Version 1.0 decodes `room.game` strictly as a Cat Tower view. The app says which games it can play in a header on the socket upgrade, `X-Pounce-Games: cat-tower,tiles`. No header means `cat-tower`. For a room whose game isn't listed the Worker answers 404, which the 1.0 app already treats as a table that doesn't exist. The `/j/<CODE>` page for such a room says the table needs the newest Pounce.
-- **One key per game, no polymorphic decoding.** `RoomView.game` stays Cat Tower's view and is `null` in other games. Add `RoomView.gameId: GameId` and `RoomView.tiles?: TilesView`. `RoomEvent` gains `{ kind: "tiles"; event: TilesEvent }` beside `{ kind: "game"; event: GameEvent }`. This matters because the two games share event names (`drew`, `turn`, `forfeited`, `gameOver`) with different payloads, and a Swift `Codable` enum can't choose by a sibling field without custom context.
-- **Actions:** `ClientMessage.act.action` is validated by `parseClientMessage` only as a JSON object, then by the room through `module.parseAction`. `MAX_MESSAGE_BYTES` (8192) is enough, since a full 106-piece table is under 1 KB.
-- **Errors:** `ErrorCode` gains `TilesError`. It reuses `not_your_turn`, `forfeited`, `bad_seat` and `game_over`, which already exist.
-- `PROTOCOL_VERSION` stays 1. Everything is additive.
-- **Fixtures:** `fixtures/protocol/` gains tiles snapshots and events for the Swift tests, beside `fixtures/tiles-sets.json`, which this PR adds.
+### 9.3 The wire
 
-### 9.4 iOS client (`apps/play-ios`)
+**The flag.** `GAMES` is a comma-separated list of game ids rooms may be created for beyond Cat Tower. It is `""` in `apps/play-api/wrangler.jsonc`, so production deals Cat Tower only and refuses any other game with the same 400 as before. Local dev turns it on in `.dev.vars` (`GAMES=tiles`, see `.dev.vars.example`), and tests set it themselves.
 
-- `Protocol/Models.swift`: `RoomView` gains `gameId: String?` (nil reads as Cat Tower) and `tiles: TilesView?`. `GameView` keeps its wire shape.
-- `Protocol/Messages.swift`: `Action` stays Cat Tower's. Add `TilesAction` and `ClientMessage.actTiles(seat:action:id:)`, which encodes the same `{"t":"act"}` envelope. `GameEvent.swift`: `RoomEvent` gains `.tiles(TilesEvent)`. Unknown kinds are already dropped.
-- `Net/APIClient.swift`: `createRoom(game:)` (today it sends the literal `"cat-tower"`), and the socket upgrade sends `X-Pounce-Games`.
+**What an app says.** An app that can draw more than Cat Tower sends `X-Pounce-Games: cat-tower,tiles` on every request: creating a room, the socket upgrade, the tables list and the streaks list. No header means Cat Tower only, which is every app before this. The server remembers the last list each device sent, for pushes.
+
+**Creating.** `POST /v1/rooms` with `{"game":"tiles"}` works when `GAMES` lists the game and the request's header does too. Otherwise 400.
+
+**An app that can't draw a table's game never meets it:**
+
+- **Joining.** The room answers the socket upgrade with 404, the answer for a table that doesn't exist, which every version of the app shows as a closed table. This holds for a stranger, for a member and for the host.
+- **Lists.** `GET /v1/devices/me/tables` leaves the table out, even when the asking device's player sits at it on another device. `GET /v1/me/streaks` leaves its code out of `myMove` and `theirMove`.
+- **Pushes.** A push about the table (`your_move`, nudge, retire, play again, a pounce aimed at it) goes only to devices whose app has listed the game. The badge counts only tables the device can open, and the push's streak block lists only those.
+- **One gap, accepted.** A `streak` message on a Cat Tower table's socket can still name a tile game table's code in `myMove` or `theirMove`, for a player who also plays the tile game on a newer device. Opening it gets the 404 above.
+
+**Snapshots.** `RoomView.game` is Cat Tower's view and stays so. In a tile game room it is `null`, `gameId` is `"tiles"`, and `tiles` holds the `TilesView` once the game is dealt. **Changed from the proposal:** `gameId` is absent in a Cat Tower room (the proposal had it always present), so a Cat Tower snapshot has not gained a key. Absent reads as Cat Tower.
+
+**Events.** A tile game event is `{ "kind": "tiles", "event": TilesEvent }`. `{ "kind": "game" }` stays Cat Tower's. The two games share event names with different payloads, so each has its own kind.
+
+**Actions.** `{"t":"act","seat":n,"action":…,"id":…}` as before. The room's own game parses the action (`parseClientMessage(raw, room.parseAction)`), so a tile game room refuses Cat Tower's actions as `bad_message`, and the other way round. A full table is under 1 KB, well inside the 8 KB message limit.
+
+**Errors.** `ErrorCode` gains the tile game's: `bad_action`, `pool_empty`, `pool_not_empty`, `bad_piece`, `duplicate_piece`, `missing_piece`, `not_your_piece`, `nothing_played`, `bad_set`, `table_touched`, `opening_too_low`. It reuses `game_over`, `not_your_turn`, `bad_seat` and `forfeited`.
+
+**The invite page.** **Changed from the proposal:** `/j/<CODE>` does not look the table up, because a page that differed by table would tell a guesser which codes are real. While `GAMES` lists another game, every invite page adds one line: "Pounce can't find this table? It may be a newer game. Update Pounce, then tap this link again."
+
+`PROTOCOL_VERSION` stays 1.
+
+**Fixtures for the Swift tests:** `fixtures/protocol/tiles-server-messages.json` (9 snapshots, every event, every error) and `tiles-client-messages.json`, generated from a real room by `tests/tiles-protocol-fixtures.test.ts`, beside `fixtures/tiles-sets.json`.
+
+### 9.4 iOS client (`apps/play-ios`), still to do
+
+- Send `X-Pounce-Games: cat-tower,tiles` on every API request and socket upgrade. Without it the server shows the app no tile game table at all.
+- `Protocol/Models.swift`: `RoomView` gains `gameId: String?` (nil is Cat Tower) and `tiles: TilesView?`. `GameView` keeps its wire shape.
+- `Protocol/Messages.swift`: `Action` stays Cat Tower's. Add `TilesAction` and a way to send it in the same `{"t":"act"}` envelope. `GameEvent.swift`: `RoomEvent` gains `.tiles(TilesEvent)`.
+- `Net/APIClient.swift`: `createRoom(game:)` (today it sends the literal `"cat-tower"`). `TableEntry` gains `game: String?` (nil is Cat Tower).
 - `TilesRules.swift`: a port of `readSet` and `checkPlay`, tested against `fixtures/tiles-sets.json`, to drive §5.5.
 - A `TilesTableModel` and `TilesScene` beside the Cat Tower ones, chosen by `gameId`. The draft model of §5 lives in `TilesTableModel`.
 - Home: a game picker on Play, and per-table art from the tables list's `game`.
-- Widgets and the Live Activity: read `progress` and its kind.
+- The Live Activity: `LiveTableState.Seat` gains `progress: Int?` and the state `progressKind: String?`. Nil means a Cat Tower table: read `phase`.
 
 ### 9.5 Order of work
 
-1. Server: the module members and `GAMES`, with Cat Tower behaviour unchanged and its tests green. No wire change.
-2. Server: the wire additions behind the `GAMES` flag and the header gate.
+1. Server: the module members and `GAMES`, with Cat Tower behaviour unchanged. **Done.**
+2. Server: the wire additions behind the `GAMES` flag and the header gate. **Done.**
 3. iOS: rules port and protocol types, then the scene, then the picker.
-4. Turn the flag on once a build with the game is in TestFlight.
+4. Set `GAMES` to `"tiles"` in `wrangler.jsonc` once a build with the game is in TestFlight.
 
 ## 10. Testing **(built)**
 
@@ -396,16 +422,16 @@ Vitest, beside the code, 100% statement and branch coverage of `src/tiles/**` en
 - **Views and events:** no other rack and no pool piece, with a helper that fails on any field it hasn't been told about.
 - **Conservation:** all 106 pieces are in exactly one place after every action.
 - **House Cat:** each behaviour in §7, and every action accepted by the engine.
+- **Rooms and the wire:** a tile game room in `RoomCore` (lobby, snapshots, events, bots, streak reports, pushes, retire, nudge, the live table, play again), the action parser, the games registry and the tables list's SQL against a real SQLite with an old schema. Through Miniflare (`tests/tiles.test.ts`): a whole game between a person and a House Cat over real sockets, creation with the flag off and on, and an app without the header never joining, listing or being pushed a tile game table.
 - **Soak** (`tests/tiles-sim.test.ts`): 300 seeded bot-only games, 100 each at 2, 3 and 4 seats. Every action accepted, every invariant above checked after every action, every game finished. Result: 79 turns a game on average (102, 77 and 58 for 2, 3 and 4 seats), longest 132, 56% of turns draws, 299 won by going out and 1 blocked.
 
 ## 11. Open questions for JD
 
-1. **Is the game too long for play over days?** Bot games run about 100 turns at two seats, 50 each, and 56% of all turns are draws. People rearrange better than the House Cat and will finish sooner, but this is still several times a Cat Tower hand. Options if a playtest agrees: a short game (one copy of each piece, 54 pieces, deal 10), or leave it. The engine would need the set size and deal as parameters. Nothing is built for this.
-2. **Scoring a blocked game and a shared win** (§4.6). I chose "winner collects the others' totals less their own" and "each winner collects in full". Scores are also shown once and recorded nowhere. Do they need to exist beyond the standings?
-3. **A forfeited rack leaves play** (§4.8), not back to the pool. Agree?
-4. **A draw or a pass counts as a streak turn** (§6). Agree, or should only a play count?
-5. **First player is random per game**, not the host (§4.1). Agree?
-6. **One piece with two Yarn reads as whichever is worth more** (§4.5). The alternative is to make the player say which, which is more interface for a rare case.
-7. **Wire shape** (§9.3): a key per game and a 404 for apps that don't list the game, or a protocol version 2. I recommend the first.
-8. **"What changed since my turn"** (§5.7) leans on events the app may have missed. Should the view carry the last move of each seat?
-9. **The name** (§3.4), after a trademark and App Store search.
+Answered on the first draft and recorded above: the game stays full length with no short variant, a blocked game's score and a shared win stand as built (§4.6), a forfeited rack leaves play (§4.8), a draw or a pass counts as a streak turn (§6), the first player is random (§4.1), and the wire shape is a key per game with a 404 for an app that can't draw it (§9.3).
+
+Still open:
+
+1. **The name** (§3.4), after a trademark and App Store search. Until then the working title and the id `tiles` stay.
+2. **One piece with two Yarn reads as whichever is worth more** (§4.5). The alternative is to make the player say which, which is more interface for a rare case.
+3. **"What changed since my turn"** (§5.7) leans on events the app may have missed. Should the view carry the last move of each seat?
+4. **A streak message can name a tile game table to an older app** on a Cat Tower table's socket (§9.3, the accepted gap). Closing it means each room knowing every other table's game. Worth it?

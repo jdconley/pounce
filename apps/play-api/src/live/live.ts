@@ -21,8 +21,12 @@ const BOT_CAT = 3;
 const BOT_NAME = "House Cat";
 const FINAL_PHASE = 10;
 
-/** One seat on the rug strip: its cat, the phase it's working on (1–10), and whether this device holds it. */
-export type LiveSeat = { cat: number; phase: number; name?: string; bot: boolean; me: boolean };
+/**
+ * One seat on the rug strip: its cat, the phase it's working on (1–10), and whether this device
+ * holds it. `progress` is only on a table of a game other than Cat Tower (see `LiveState.progressKind`);
+ * `phase` is then 1, there for an app that reads it.
+ */
+export type LiveSeat = { cat: number; phase: number; name?: string; bot: boolean; me: boolean; progress?: number };
 
 /**
  * The Live Activity's `content-state`, from one device's point of view. The
@@ -37,6 +41,12 @@ export type LiveState = {
   mine: boolean;
   /** The device player's pair at this table: the numeral and today's paws. */
   streak: { count: number; me: boolean; them: boolean } | null;
+  /**
+   * Only on a table of a game other than Cat Tower: what each seat's `progress` counts. `pieces`:
+   * the pieces left on its rack (the tile game). A Cat Tower table's state has neither key and is
+   * exactly what it always was.
+   */
+  progressKind?: "pieces";
 };
 
 /** One device's live table at a room. */
@@ -55,7 +65,10 @@ export function expired(r: LiveRecord, now: number): "idle" | "cap" | null {
 
 type SeatIn = { kind: string; person?: { name: string; cat: number } };
 
-/** The content state for a device controlling `controlled`, from the room's seats and phases. */
+/**
+ * The content state for a device controlling `controlled`, from the room's seats and phases.
+ * `pieces`: for a table whose game counts pieces left instead of shelves (one number per seat).
+ */
 export function liveState(i: {
   table: string;
   seats: SeatIn[];
@@ -63,15 +76,24 @@ export function liveState(i: {
   controlled: number[];
   turn: number | null;
   streak: LiveState["streak"];
+  pieces?: number[];
 }): LiveState {
   const seats = i.seats.map((s, n): LiveSeat => {
     const phase = Math.min((i.phases[n] ?? 0) + 1, FINAL_PHASE);
     const me = i.controlled.includes(n);
+    const progress = i.pieces ? { progress: i.pieces[n] ?? 0 } : {};
     return s.kind === "bot" || !s.person
-      ? { cat: BOT_CAT, phase, bot: true, me }
-      : { cat: s.person.cat, phase, name: s.person.name, bot: false, me };
+      ? { cat: BOT_CAT, phase, bot: true, me, ...progress }
+      : { cat: s.person.cat, phase, name: s.person.name, bot: false, me, ...progress };
   });
-  return { table: i.table, seats, turn: i.turn, mine: i.turn !== null && i.controlled.includes(i.turn), streak: i.streak };
+  return {
+    table: i.table,
+    seats,
+    turn: i.turn,
+    mine: i.turn !== null && i.controlled.includes(i.turn),
+    streak: i.streak,
+    ...(i.pieces ? { progressKind: "pieces" as const } : {}),
+  };
 }
 
 const seconds = (ms: number) => Math.floor(ms / 1000);

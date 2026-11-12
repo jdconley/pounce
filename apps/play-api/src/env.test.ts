@@ -3,6 +3,7 @@ import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 
 import { devSpeed } from "./env";
+import { gamesOn } from "./games";
 import { liveOn, notifyOn, streaksOn, trophyOn } from "./streaks/profile";
 
 describe("devSpeed", () => {
@@ -24,6 +25,21 @@ describe("devSpeed", () => {
   it("is never configured for deploys", () => {
     const config = readFileSync(new URL("../wrangler.jsonc", import.meta.url), "utf8");
     expect(config).not.toMatch(/DEV_SPEED/);
+  });
+});
+
+describe("GAMES in production", () => {
+  it("is listed in wrangler.jsonc and turns on no game but Cat Tower", () => {
+    const config = readFileSync(new URL("../wrangler.jsonc", import.meta.url), "utf8");
+    const value = /"GAMES"\s*:\s*"([^"]*)"/.exec(config)?.[1];
+    expect(value).toBe("");
+    expect(gamesOn({ GAMES: value })).toEqual(["cat-tower"]);
+  });
+
+  it("is on for local dev, in the example .dev.vars", () => {
+    const vars = readFileSync(new URL("../.dev.vars.example", import.meta.url), "utf8");
+    const value = /^GAMES=(.*)$/m.exec(vars)?.[1];
+    expect(gamesOn({ GAMES: value })).toEqual(["cat-tower", "tiles"]);
   });
 });
 

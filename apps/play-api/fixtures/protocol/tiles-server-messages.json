@@ -1,0 +1,1088 @@
+[
+  {
+    "name": "snapshot-lobby",
+    "message": {
+      "t": "snapshot",
+      "protocol": 1,
+      "seq": 3,
+      "room": {
+        "code": "BCDFG",
+        "name": "The Fancy Sunbeams",
+        "status": "lobby",
+        "youAreHost": false,
+        "seats": [
+          {
+            "kind": "human",
+            "person": {
+              "id": "11111111-1111-4111-8111-111111111111",
+              "name": "Alice",
+              "cat": 0
+            },
+            "yours": false,
+            "presence": "awake"
+          },
+          {
+            "kind": "human",
+            "person": {
+              "id": "22222222-2222-4222-8222-222222222222",
+              "name": "Bob",
+              "cat": 3
+            },
+            "yours": true,
+            "presence": "awake"
+          },
+          {
+            "kind": "bot",
+            "yours": false,
+            "presence": null
+          },
+          {
+            "kind": "closed",
+            "yours": false,
+            "presence": null
+          }
+        ],
+        "game": null,
+        "gameId": "tiles"
+      }
+    }
+  },
+  {
+    "name": "snapshot-playing-with-rack",
+    "message": {
+      "t": "snapshot",
+      "protocol": 1,
+      "seq": 4,
+      "room": {
+        "code": "BCDFG",
+        "name": "The Fancy Sunbeams",
+        "status": "playing",
+        "youAreHost": true,
+        "seats": [
+          {
+            "kind": "human",
+            "person": {
+              "id": "11111111-1111-4111-8111-111111111111",
+              "name": "Alice",
+              "cat": 0
+            },
+            "yours": true,
+            "presence": "awake"
+          },
+          {
+            "kind": "human",
+            "person": {
+              "id": "22222222-2222-4222-8222-222222222222",
+              "name": "Bob",
+              "cat": 3
+            },
+            "yours": false,
+            "presence": "awake"
+          },
+          {
+            "kind": "bot",
+            "yours": false,
+            "presence": null
+          }
+        ],
+        "game": null,
+        "gameId": "tiles",
+        "tiles": {
+          "status": "playing",
+          "turn": 1,
+          "turns": 0,
+          "table": [],
+          "poolCount": 64,
+          "rackCounts": [
+            14,
+            14,
+            14
+          ],
+          "racks": {
+            "0": [
+              82,
+              45,
+              87,
+              23,
+              17,
+              29,
+              99,
+              50,
+              10,
+              61,
+              39,
+              68,
+              19,
+              44
+            ]
+          },
+          "opened": [
+            false,
+            false,
+            false
+          ],
+          "passed": [
+            false,
+            false,
+            false
+          ],
+          "winners": [],
+          "scores": [
+            0,
+            0,
+            0
+          ],
+          "forfeited": [
+            false,
+            false,
+            false
+          ]
+        },
+        "retire": {
+          "seat": 1,
+          "wait": 259200000
+        }
+      }
+    }
+  },
+  {
+    "name": "snapshot-playing-no-rack",
+    "message": {
+      "t": "snapshot",
+      "protocol": 1,
+      "seq": 4,
+      "room": {
+        "code": "BCDFG",
+        "name": "The Fancy Sunbeams",
+        "status": "playing",
+        "youAreHost": false,
+        "seats": [
+          {
+            "kind": "human",
+            "person": {
+              "id": "11111111-1111-4111-8111-111111111111",
+              "name": "Alice",
+              "cat": 0
+            },
+            "yours": false,
+            "presence": "awake"
+          },
+          {
+            "kind": "human",
+            "person": {
+              "id": "22222222-2222-4222-8222-222222222222",
+              "name": "Bob",
+              "cat": 3
+            },
+            "yours": false,
+            "presence": "awake"
+          },
+          {
+            "kind": "bot",
+            "yours": false,
+            "presence": null
+          }
+        ],
+        "game": null,
+        "gameId": "tiles",
+        "tiles": {
+          "status": "playing",
+          "turn": 1,
+          "turns": 0,
+          "table": [],
+          "poolCount": 64,
+          "rackCounts": [
+            14,
+            14,
+            14
+          ],
+          "racks": {},
+          "opened": [
+            false,
+            false,
+            false
+          ],
+          "passed": [
+            false,
+            false,
+            false
+          ],
+          "winners": [],
+          "scores": [
+            0,
+            0,
+            0
+          ],
+          "forfeited": [
+            false,
+            false,
+            false
+          ]
+        }
+      }
+    }
+  },
+  {
+    "name": "snapshot-playing-opened",
+    "message": {
+      "t": "snapshot",
+      "protocol": 1,
+      "seq": 5,
+      "room": {
+        "code": "BCDFG",
+        "name": "The Fancy Sunbeams",
+        "status": "playing",
+        "youAreHost": false,
+        "seats": [
+          {
+            "kind": "human",
+            "person": {
+              "id": "11111111-1111-4111-8111-111111111111",
+              "name": "Alice",
+              "cat": 0
+            },
+            "yours": false,
+            "presence": "awake"
+          },
+          {
+            "kind": "human",
+            "person": {
+              "id": "22222222-2222-4222-8222-222222222222",
+              "name": "Bob",
+              "cat": 3
+            },
+            "yours": true,
+            "presence": "awake"
+          }
+        ],
+        "game": null,
+        "gameId": "tiles",
+        "tiles": {
+          "status": "playing",
+          "turn": 1,
+          "turns": 1,
+          "table": [
+            [
+              8,
+              9,
+              10
+            ]
+          ],
+          "poolCount": 78,
+          "rackCounts": [
+            11,
+            14
+          ],
+          "racks": {
+            "1": [
+              103,
+              11,
+              80,
+              78,
+              38,
+              51,
+              22,
+              69,
+              65,
+              86,
+              96,
+              28,
+              60,
+              2
+            ]
+          },
+          "opened": [
+            true,
+            false
+          ],
+          "passed": [
+            false,
+            false
+          ],
+          "winners": [],
+          "scores": [
+            0,
+            0
+          ],
+          "forfeited": [
+            false,
+            false
+          ]
+        }
+      }
+    }
+  },
+  {
+    "name": "snapshot-playing-rearranged",
+    "message": {
+      "t": "snapshot",
+      "protocol": 1,
+      "seq": 7,
+      "room": {
+        "code": "BCDFG",
+        "name": "The Fancy Sunbeams",
+        "status": "playing",
+        "youAreHost": true,
+        "seats": [
+          {
+            "kind": "human",
+            "person": {
+              "id": "11111111-1111-4111-8111-111111111111",
+              "name": "Alice",
+              "cat": 0
+            },
+            "yours": true,
+            "presence": "awake"
+          },
+          {
+            "kind": "human",
+            "person": {
+              "id": "22222222-2222-4222-8222-222222222222",
+              "name": "Bob",
+              "cat": 3
+            },
+            "yours": false,
+            "presence": "awake"
+          }
+        ],
+        "game": null,
+        "gameId": "tiles",
+        "tiles": {
+          "status": "playing",
+          "turn": 0,
+          "turns": 2,
+          "table": [
+            [
+              8,
+              9,
+              10,
+              11
+            ],
+            [
+              3,
+              42,
+              55
+            ]
+          ],
+          "poolCount": 78,
+          "rackCounts": [
+            11,
+            10
+          ],
+          "racks": {
+            "0": [
+              87,
+              23,
+              17,
+              29,
+              99,
+              50,
+              61,
+              39,
+              68,
+              19,
+              44
+            ]
+          },
+          "opened": [
+            true,
+            true
+          ],
+          "passed": [
+            false,
+            false
+          ],
+          "winners": [],
+          "scores": [
+            0,
+            0
+          ],
+          "forfeited": [
+            false,
+            false
+          ]
+        }
+      }
+    }
+  },
+  {
+    "name": "snapshot-playing-passed",
+    "message": {
+      "t": "snapshot",
+      "protocol": 1,
+      "seq": 5,
+      "room": {
+        "code": "BCDFG",
+        "name": "The Fancy Sunbeams",
+        "status": "playing",
+        "youAreHost": false,
+        "seats": [
+          {
+            "kind": "human",
+            "person": {
+              "id": "11111111-1111-4111-8111-111111111111",
+              "name": "Alice",
+              "cat": 0
+            },
+            "yours": false,
+            "presence": "awake"
+          },
+          {
+            "kind": "human",
+            "person": {
+              "id": "22222222-2222-4222-8222-222222222222",
+              "name": "Bob",
+              "cat": 3
+            },
+            "yours": true,
+            "presence": "awake"
+          }
+        ],
+        "game": null,
+        "gameId": "tiles",
+        "tiles": {
+          "status": "playing",
+          "turn": 1,
+          "turns": 1,
+          "table": [],
+          "poolCount": 0,
+          "rackCounts": [
+            14,
+            14
+          ],
+          "racks": {
+            "1": [
+              103,
+              11,
+              80,
+              78,
+              38,
+              51,
+              22,
+              69,
+              65,
+              86,
+              96,
+              28,
+              60,
+              2
+            ]
+          },
+          "opened": [
+            false,
+            false
+          ],
+          "passed": [
+            true,
+            false
+          ],
+          "winners": [],
+          "scores": [
+            0,
+            0
+          ],
+          "forfeited": [
+            false,
+            false
+          ]
+        }
+      }
+    }
+  },
+  {
+    "name": "snapshot-playing-forfeited",
+    "message": {
+      "t": "snapshot",
+      "protocol": 1,
+      "seq": 6,
+      "room": {
+        "code": "BCDFG",
+        "name": "The Fancy Sunbeams",
+        "status": "playing",
+        "youAreHost": true,
+        "seats": [
+          {
+            "kind": "human",
+            "person": {
+              "id": "11111111-1111-4111-8111-111111111111",
+              "name": "Alice",
+              "cat": 0
+            },
+            "yours": true,
+            "presence": "awake"
+          },
+          {
+            "kind": "human",
+            "person": {
+              "id": "22222222-2222-4222-8222-222222222222",
+              "name": "Bob",
+              "cat": 3
+            },
+            "yours": false,
+            "presence": "awake"
+          },
+          {
+            "kind": "bot",
+            "yours": false,
+            "presence": null
+          }
+        ],
+        "game": null,
+        "gameId": "tiles",
+        "tiles": {
+          "status": "playing",
+          "turn": 2,
+          "turns": 0,
+          "table": [],
+          "poolCount": 64,
+          "rackCounts": [
+            14,
+            0,
+            14
+          ],
+          "racks": {
+            "0": [
+              82,
+              45,
+              87,
+              23,
+              17,
+              29,
+              99,
+              50,
+              10,
+              61,
+              39,
+              68,
+              19,
+              44
+            ]
+          },
+          "opened": [
+            false,
+            false,
+            false
+          ],
+          "passed": [
+            false,
+            false,
+            false
+          ],
+          "winners": [],
+          "scores": [
+            0,
+            0,
+            0
+          ],
+          "forfeited": [
+            false,
+            true,
+            false
+          ]
+        }
+      }
+    }
+  },
+  {
+    "name": "snapshot-over-out",
+    "message": {
+      "t": "snapshot",
+      "protocol": 1,
+      "seq": 7,
+      "room": {
+        "code": "BCDFG",
+        "name": "The Fancy Sunbeams",
+        "status": "over",
+        "youAreHost": true,
+        "seats": [
+          {
+            "kind": "human",
+            "person": {
+              "id": "11111111-1111-4111-8111-111111111111",
+              "name": "Alice",
+              "cat": 0
+            },
+            "yours": true,
+            "presence": "awake"
+          },
+          {
+            "kind": "human",
+            "person": {
+              "id": "22222222-2222-4222-8222-222222222222",
+              "name": "Bob",
+              "cat": 3
+            },
+            "yours": false,
+            "presence": "awake"
+          }
+        ],
+        "game": null,
+        "gameId": "tiles",
+        "tiles": {
+          "status": "gameOver",
+          "turn": 1,
+          "turns": 2,
+          "table": [
+            [
+              8,
+              9,
+              10
+            ]
+          ],
+          "poolCount": 88,
+          "rackCounts": [
+            15,
+            0
+          ],
+          "racks": {
+            "0": [
+              82,
+              45,
+              87,
+              23,
+              17,
+              29,
+              99,
+              50,
+              80,
+              61,
+              39,
+              68,
+              19,
+              44,
+              0
+            ]
+          },
+          "opened": [
+            false,
+            true
+          ],
+          "passed": [
+            false,
+            false
+          ],
+          "winners": [
+            1
+          ],
+          "scores": [
+            -95,
+            95
+          ],
+          "forfeited": [
+            false,
+            false
+          ],
+          "endReason": "out"
+        }
+      }
+    }
+  },
+  {
+    "name": "snapshot-over-blocked",
+    "message": {
+      "t": "snapshot",
+      "protocol": 1,
+      "seq": 7,
+      "room": {
+        "code": "BCDFG",
+        "name": "The Fancy Sunbeams",
+        "status": "over",
+        "youAreHost": true,
+        "seats": [
+          {
+            "kind": "human",
+            "person": {
+              "id": "11111111-1111-4111-8111-111111111111",
+              "name": "Alice",
+              "cat": 0
+            },
+            "yours": true,
+            "presence": "awake"
+          },
+          {
+            "kind": "human",
+            "person": {
+              "id": "22222222-2222-4222-8222-222222222222",
+              "name": "Bob",
+              "cat": 3
+            },
+            "yours": false,
+            "presence": "awake"
+          }
+        ],
+        "game": null,
+        "gameId": "tiles",
+        "tiles": {
+          "status": "gameOver",
+          "turn": 1,
+          "turns": 2,
+          "table": [],
+          "poolCount": 0,
+          "rackCounts": [
+            14,
+            14
+          ],
+          "racks": {
+            "0": [
+              82,
+              45,
+              87,
+              23,
+              17,
+              29,
+              99,
+              50,
+              10,
+              61,
+              39,
+              68,
+              19,
+              44
+            ]
+          },
+          "opened": [
+            false,
+            false
+          ],
+          "passed": [
+            true,
+            true
+          ],
+          "winners": [
+            1
+          ],
+          "scores": [
+            -102,
+            1
+          ],
+          "forfeited": [
+            false,
+            false
+          ],
+          "endReason": "blocked"
+        }
+      }
+    }
+  },
+  {
+    "name": "event-drew-own",
+    "message": {
+      "t": "event",
+      "seq": 4,
+      "event": {
+        "kind": "tiles",
+        "event": {
+          "kind": "drew",
+          "seat": 1,
+          "tile": 17,
+          "poolCount": 77
+        }
+      }
+    }
+  },
+  {
+    "name": "event-drew-other",
+    "message": {
+      "t": "event",
+      "seq": 5,
+      "event": {
+        "kind": "tiles",
+        "event": {
+          "kind": "drew",
+          "seat": 0,
+          "poolCount": 76
+        }
+      }
+    }
+  },
+  {
+    "name": "event-played-opening",
+    "message": {
+      "t": "event",
+      "seq": 6,
+      "event": {
+        "kind": "tiles",
+        "event": {
+          "kind": "played",
+          "seat": 0,
+          "table": [
+            [
+              8,
+              9,
+              10
+            ]
+          ],
+          "placed": [
+            8,
+            9,
+            10
+          ],
+          "opened": true
+        }
+      }
+    }
+  },
+  {
+    "name": "event-played",
+    "message": {
+      "t": "event",
+      "seq": 7,
+      "event": {
+        "kind": "tiles",
+        "event": {
+          "kind": "played",
+          "seat": 1,
+          "table": [
+            [
+              8,
+              9,
+              10,
+              11
+            ],
+            [
+              104,
+              32,
+              58
+            ]
+          ],
+          "placed": [
+            11
+          ],
+          "opened": false
+        }
+      }
+    }
+  },
+  {
+    "name": "event-passed",
+    "message": {
+      "t": "event",
+      "seq": 8,
+      "event": {
+        "kind": "tiles",
+        "event": {
+          "kind": "passed",
+          "seat": 1
+        }
+      }
+    }
+  },
+  {
+    "name": "event-turn",
+    "message": {
+      "t": "event",
+      "seq": 9,
+      "event": {
+        "kind": "tiles",
+        "event": {
+          "kind": "turn",
+          "seat": 0
+        }
+      }
+    }
+  },
+  {
+    "name": "event-forfeited",
+    "message": {
+      "t": "event",
+      "seq": 10,
+      "event": {
+        "kind": "tiles",
+        "event": {
+          "kind": "forfeited",
+          "seat": 1
+        }
+      }
+    }
+  },
+  {
+    "name": "event-gameOver-out",
+    "message": {
+      "t": "event",
+      "seq": 11,
+      "event": {
+        "kind": "tiles",
+        "event": {
+          "kind": "gameOver",
+          "winners": [
+            1
+          ],
+          "reason": "out",
+          "scores": [
+            -35,
+            60,
+            -25
+          ],
+          "left": [
+            35,
+            0,
+            25
+          ]
+        }
+      }
+    }
+  },
+  {
+    "name": "event-gameOver-blocked",
+    "message": {
+      "t": "event",
+      "seq": 12,
+      "event": {
+        "kind": "tiles",
+        "event": {
+          "kind": "gameOver",
+          "winners": [
+            0,
+            1
+          ],
+          "reason": "blocked",
+          "scores": [
+            2,
+            2,
+            -9
+          ],
+          "left": [
+            7,
+            7,
+            9
+          ]
+        }
+      }
+    }
+  },
+  {
+    "name": "event-gameOver-forfeit",
+    "message": {
+      "t": "event",
+      "seq": 13,
+      "event": {
+        "kind": "tiles",
+        "event": {
+          "kind": "gameOver",
+          "winners": [
+            0
+          ],
+          "reason": "forfeit",
+          "scores": [
+            0,
+            0
+          ],
+          "left": [
+            41,
+            0
+          ]
+        }
+      }
+    }
+  },
+  {
+    "name": "event-presence",
+    "message": {
+      "t": "event",
+      "seq": 14,
+      "event": {
+        "kind": "presence",
+        "seat": 1,
+        "presence": "away"
+      }
+    }
+  },
+  {
+    "name": "error-bad_action",
+    "message": {
+      "t": "error",
+      "code": "bad_action"
+    }
+  },
+  {
+    "name": "error-pool_empty",
+    "message": {
+      "t": "error",
+      "code": "pool_empty"
+    }
+  },
+  {
+    "name": "error-pool_not_empty",
+    "message": {
+      "t": "error",
+      "code": "pool_not_empty"
+    }
+  },
+  {
+    "name": "error-bad_piece",
+    "message": {
+      "t": "error",
+      "code": "bad_piece"
+    }
+  },
+  {
+    "name": "error-duplicate_piece",
+    "message": {
+      "t": "error",
+      "code": "duplicate_piece"
+    }
+  },
+  {
+    "name": "error-missing_piece",
+    "message": {
+      "t": "error",
+      "code": "missing_piece"
+    }
+  },
+  {
+    "name": "error-not_your_piece",
+    "message": {
+      "t": "error",
+      "code": "not_your_piece"
+    }
+  },
+  {
+    "name": "error-nothing_played",
+    "message": {
+      "t": "error",
+      "code": "nothing_played"
+    }
+  },
+  {
+    "name": "error-bad_set",
+    "message": {
+      "t": "error",
+      "code": "bad_set"
+    }
+  },
+  {
+    "name": "error-table_touched",
+    "message": {
+      "t": "error",
+      "code": "table_touched"
+    }
+  },
+  {
+    "name": "error-opening_too_low",
+    "message": {
+      "t": "error",
+      "code": "opening_too_low"
+    }
+  },
+  {
+    "name": "error-not_your_turn",
+    "message": {
+      "t": "error",
+      "code": "not_your_turn"
+    }
+  },
+  {
+    "name": "error-game_over",
+    "message": {
+      "t": "error",
+      "code": "game_over"
+    }
+  },
+  {
+    "name": "error-forfeited",
+    "message": {
+      "t": "error",
+      "code": "forfeited"
+    }
+  }
+]

@@ -141,6 +141,8 @@ export async function worker(
     devSpeed?: number;
     /** `REPORTS_KEY`: the owner's key for `GET /v1/admin/reports`. */
     reportsKey?: string;
+    /** `GAMES`: the games beyond Cat Tower that rooms may be created for (e.g. "tiles"). Off unless given. */
+    games?: string;
   },
 ): Promise<Miniflare> {
   return new Miniflare({
@@ -176,6 +178,7 @@ export async function worker(
       ...(options.nudge ? { NUDGE: "on" } : {}),
       ...(options.devSpeed ? { DEV_SPEED: String(options.devSpeed) } : {}),
       ...(options.reportsKey ? { REPORTS_KEY: options.reportsKey } : {}),
+      ...(options.games ? { GAMES: options.games } : {}),
       ...(options.consent && options.consentFlag !== false ? { CONSENT: "on" } : {}),
       ...(options.consent && options.twilio !== false ? TWILIO : {}),
     },
@@ -249,10 +252,18 @@ export async function mint(mf: Miniflare): Promise<Device> {
  * that: it wraps undici's and drops the original, and undici cancels an unread body once that
  * original is garbage collected ("Body is unusable: Body has already been read").
  */
-export async function call(mf: Miniflare, device: Device, method: string, path: string, body?: unknown): Promise<Response> {
+export async function call(
+  mf: Miniflare,
+  device: Device,
+  method: string,
+  path: string,
+  body?: unknown,
+  /** Extra request headers, e.g. `x-pounce-games` for an app that can draw more than Cat Tower. */
+  headers: Record<string, string> = {},
+): Promise<Response> {
   const res = await mf.dispatchFetch(`${BASE}${path}`, {
     method,
-    headers: { authorization: `Bearer ${device.token}`, "content-type": "application/json" },
+    headers: { authorization: `Bearer ${device.token}`, "content-type": "application/json", ...headers },
     ...(body === undefined ? {} : { body: JSON.stringify(body) }),
   });
   if (res.body === null) return res as unknown as Response;
@@ -336,9 +347,9 @@ export class Client {
   }
 }
 
-export async function connect(mf: Miniflare, code: string, device: Device): Promise<Client> {
+export async function connect(mf: Miniflare, code: string, device: Device, headers: Record<string, string> = {}): Promise<Client> {
   const res = await mf.dispatchFetch(`${BASE}/v1/rooms/${code}/ws`, {
-    headers: { authorization: `Bearer ${device.token}`, upgrade: "websocket" },
+    headers: { authorization: `Bearer ${device.token}`, upgrade: "websocket", ...headers },
   });
   expect(res.status).toBe(101);
   const ws = res.webSocket as unknown as WebSocket & { accept(): void };

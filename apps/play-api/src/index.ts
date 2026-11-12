@@ -2,6 +2,7 @@ import { issueDeviceToken, verifyDeviceToken } from "./auth";
 import { APPLE_ROOTS } from "./consent/appstore";
 import { noticePage } from "./consent/pages";
 import { devSpeed } from "./env";
+import { DEFAULT_GAME, GAMES_HEADER, gamesListed, gamesOn, isGameId, type GameId } from "./games";
 import { appSiteAssociation, ogImage, pouncePage, sharePage } from "./http/links";
 import { mediaFile } from "./http/media";
 import { privacyPage } from "./http/privacy";
@@ -42,6 +43,7 @@ import { answerPounce, createPounce, linkPounce } from "./pounce/pounces";
 import { newRoomCode, ROOM_CODE } from "./room/codes";
 import { DEVICE_HEADER, PLAYER_HEADER } from "./room/game-room";
 import { parseRoomName } from "./room/names";
+import { withoutUndrawable } from "./room/tables";
 import { blockPlayer, guardJoin, listBlocks, mayMint, nameCheck, ownerReports, reportPlayer, unblockPlayer } from "./safety/safety";
 import { creatorLook, isMine, leavePair, myLeft, myOwn, myStreaks, myTrophies, PAIR_ID, pairStub, rejoinPair, syncPairPeople } from "./streaks/pairs";
 import { consentOn, liveOn, notifyOn, streaksOn, trophyOn } from "./streaks/profile";
@@ -139,9 +141,24 @@ async function mintDevice(request: Request, env: Env, secret: string): Promise<R
   return json(200, { deviceId, token: await issueDeviceToken(secret, deviceId) });
 }
 
+/**
+ * The games this request's app can draw (`X-Pounce-Games`); when it says, the device's index
+ * remembers, so pushes and lists made later for this device know too. An app that sends no
+ * header (every app before there was a second game) costs nothing here.
+ */
+async function appGames(request: Request, env: Env, deviceId: string): Promise<GameId[]> {
+  const header = request.headers.get(GAMES_HEADER);
+  const games = gamesListed(header);
+  if (header !== null) await env.DEVICES.get(env.DEVICES.idFromName(deviceId)).declareGames(games.filter((id) => id !== DEFAULT_GAME));
+  return games;
+}
+
 async function createRoom(request: Request, env: Env, deviceId: string): Promise<Response> {
   const body = await readObject(request);
-  if (!body || body.game !== "cat-tower") return badRequest();
+  // Only a game the `GAMES` flag has turned on, and only for an app that can draw it.
+  if (!body || !isGameId(body.game) || !gamesOn(env).includes(body.game)) return badRequest();
+  const game = body.game;
+  if (game !== DEFAULT_GAME && !(await appGames(request, env, deviceId)).includes(game)) return badRequest();
   if (Object.keys(body).some((key) => key !== "game" && key !== "name")) return badRequest();
   // Optional: without one the room gets its default name.
   const name = "name" in body ? parseRoomName(body.name) : undefined;
@@ -158,7 +175,7 @@ async function createRoom(request: Request, env: Env, deviceId: string): Promise
   }
   for (let i = 0; i < ROOM_CODE_ATTEMPTS; i++) {
     const code = newRoomCode(cryptoRng);
-    const result = await env.ROOMS.get(env.ROOMS.idFromName(code)).init(code, deviceId, name, look);
+    const result = await env.ROOMS.get(env.ROOMS.idFromName(code)).init(code, deviceId, name, look, game);
     if ("ok" in result) return json(201, { code });
   }
   return json(503, { error: "no_room_code" });
@@ -177,6 +194,8 @@ async function openSocket(request: Request, env: Env, deviceId: string, code: st
     return response;
   }
   if (!guard.exists) return notFound();
+  // Before the room hears of this device: what its app can draw, for anything pushed to it later.
+  await appGames(request, env, deviceId);
   // The room trusts these headers, so client-supplied ones must never reach it.
   const headers = new Headers(request.headers);
   headers.delete(DEVICE_HEADER);
@@ -202,8 +221,9 @@ async function setPushToken(request: Request, env: Env, deviceId: string): Promi
   return noContent();
 }
 
-async function listTables(env: Env, deviceId: string): Promise<Response> {
-  return json(200, { tables: await deviceTables(env, deviceId) });
+/** The device's tables, less any table of a game the asking app can't draw. */
+async function listTables(request: Request, env: Env, deviceId: string): Promise<Response> {
+  return json(200, { tables: await deviceTables(env, deviceId, await appGames(request, env, deviceId)) });
 }
 
 function respond<T>(result: Result<T>, okStatus = 200): Response {
@@ -252,9 +272,14 @@ const deleteAccount = asMe(async (_r, env, _d, playerId) => {
 
 type Route = (request: Request, env: Env, deviceId: string) => Promise<Response> | Response;
 
-const getStreaks = asMe(async (_r, env, _d, me) => {
+const getStreaks = asMe(async (request, env, deviceId, me) => {
   const now = Date.now();
-  const [pairs, left] = await Promise.all([myStreaks(env, me, now), myLeft(env, me)]);
+  const [all, left] = await Promise.all([myStreaks(env, me, now), myLeft(env, me)]);
+  // While another game is on: a streak names its tables by code, and an app is told only of the
+  // ones it can draw. Off, nothing is looked up and the answer is what it always was.
+  const other = gamesOn(env).length > 1;
+  const [tables, games] = other ? await Promise.all([player(env, me).listTables(), appGames(request, env, deviceId)]) : [[], []];
+  const pairs = all.map((view) => withoutUndrawable(view, tables, games));
   // Your own streak, for Home's strip (trophy room design §1): only with TROPHY on.
   const own = trophyOn(env) ? await myOwn(env, me, now, pairs) : null;
   return json(200, own ? { own, pairs, left } : { pairs, left });
@@ -475,7 +500,7 @@ function route(
       respond(await unlinkIdentity(env, id, playerId, mine[1] as string, Date.now(), fetch)),
     );
   }
-  if (method === "GET" && pathname === "/v1/devices/me/tables") return (_r, env, id) => listTables(env, id);
+  if (method === "GET" && pathname === "/v1/devices/me/tables") return listTables;
   const safety = safetyRoute(method, pathname);
   if (safety) return safety;
   if (method === "POST" && pathname === "/v1/rooms") return createRoom;
@@ -515,7 +540,7 @@ export default {
       if (pathname.startsWith("/media/")) return (await mediaFile(request, env.ASSETS)) ?? notFound();
     }
     const share = method === "GET" ? SHARE_PATH.exec(pathname) : null;
-    if (share) return sharePage(share[1] as string, install(env), new URL(request.url).origin);
+    if (share) return sharePage(share[1] as string, install(env), new URL(request.url).origin, gamesOn(env).length > 1);
     if (notify && method === "GET") {
       // The pounce card reuses the room card until the bell art lands (§9.6).
       if (pathname === "/og/pounce.jpg") return ogImage();

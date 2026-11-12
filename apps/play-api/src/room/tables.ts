@@ -21,7 +21,41 @@ export type TableEntry = {
   seats?: TableSeat[];
   /** While a game is mid-round: when the current turn began (epoch ms), so Home can say how long it has waited. */
   movedAt?: number;
+  /**
+   * The table's game, for a table of any game but Cat Tower. Absent: Cat Tower, as every table was
+   * before there was a second game. A list only shows such a table to an app that can draw it.
+   */
+  game?: string;
 };
+
+/** The game a table without a `game` plays. */
+const DEFAULT_GAME = "cat-tower";
+
+/** Whether an app that lists `games` can draw a table of `game`. Every app draws Cat Tower (and a table that names no game is one). */
+export function drawable(game: string | undefined, games: readonly string[]): boolean {
+  return game === undefined || game === DEFAULT_GAME || games.includes(game);
+}
+
+/**
+ * `lists` (a streak's `myMove` and `theirMove`: table codes) less the tables an app that lists
+ * `games` can't draw. The same object when there is nothing to leave out, which is always so for
+ * a player with no table of another game.
+ */
+export function withoutUndrawable<T extends { myMove: string[]; theirMove: string[] }>(
+  lists: T,
+  tables: readonly TableEntry[],
+  games: readonly string[],
+): T {
+  const hidden = new Set(tables.filter((t) => !drawable(t.game, games)).map((t) => t.code));
+  if (hidden.size === 0) return lists;
+  const shown = (codes: string[]) => codes.filter((code) => !hidden.has(code));
+  return { ...lists, myMove: shown(lists.myMove), theirMove: shown(lists.theirMove) };
+}
+
+/** The tables an app that lists `games` can draw: every other table is left out. */
+export function tablesFor(tables: readonly TableEntry[], games: readonly string[]): TableEntry[] {
+  return tables.filter((t) => drawable(t.game, games));
+}
 
 const MAX_TABLES = 50;
 
@@ -33,15 +67,17 @@ export function createTables(sql: SqlStorage): void {
   if (!columns.some((c) => c.name === "next")) sql.exec("ALTER TABLE tables ADD COLUMN next TEXT");
   if (!columns.some((c) => c.name === "seats")) sql.exec("ALTER TABLE tables ADD COLUMN seats TEXT");
   if (!columns.some((c) => c.name === "moved_at")) sql.exec("ALTER TABLE tables ADD COLUMN moved_at INTEGER");
+  // Null for every row there already is, and for every Cat Tower table from here on.
+  if (!columns.some((c) => c.name === "game")) sql.exec("ALTER TABLE tables ADD COLUMN game TEXT");
 }
 
 /** An older report never overwrites a newer one. */
 export function upsertTable(sql: SqlStorage, entry: TableEntry): void {
   sql.exec(
-    `INSERT INTO tables (code, name, status, your_turn, updated_at, next, seats, moved_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    `INSERT INTO tables (code, name, status, your_turn, updated_at, next, seats, moved_at, game) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
      ON CONFLICT (code) DO UPDATE SET name = excluded.name, status = excluded.status,
        your_turn = excluded.your_turn, updated_at = excluded.updated_at, next = excluded.next,
-       seats = excluded.seats, moved_at = excluded.moved_at
+       seats = excluded.seats, moved_at = excluded.moved_at, game = excluded.game
      WHERE excluded.updated_at >= tables.updated_at`,
     entry.code,
     entry.name ?? null,
@@ -51,6 +87,7 @@ export function upsertTable(sql: SqlStorage, entry: TableEntry): void {
     entry.next ?? null,
     entry.seats ? JSON.stringify(entry.seats) : null,
     entry.movedAt ?? null,
+    entry.game ?? null,
   );
 }
 
@@ -70,8 +107,9 @@ export function listTables(sql: SqlStorage): TableEntry[] {
       next: string | null;
       seats: string | null;
       moved_at: number | null;
+      game: string | null;
     }>(
-      "SELECT code, name, status, your_turn, updated_at, next, seats, moved_at FROM tables ORDER BY updated_at DESC LIMIT ?",
+      "SELECT code, name, status, your_turn, updated_at, next, seats, moved_at, game FROM tables ORDER BY updated_at DESC LIMIT ?",
       MAX_TABLES,
     )
     .toArray()
@@ -84,5 +122,6 @@ export function listTables(sql: SqlStorage): TableEntry[] {
       ...(row.next === null ? {} : { next: row.next }),
       ...(row.seats === null ? {} : { seats: JSON.parse(row.seats) as TableSeat[] }),
       ...(row.moved_at === null ? {} : { movedAt: row.moved_at }),
+      ...(row.game === null ? {} : { game: row.game }),
     }));
 }

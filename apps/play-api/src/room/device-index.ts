@@ -5,7 +5,7 @@ import { nightBlocked, pushBlocked } from "../players/age";
 import { pushAlert, pushDismiss, pushLive, pushWidget, pushYourTurn } from "../push/apns";
 import { consentOn, liveOn } from "../streaks/profile";
 
-import { createTables, listTables, removeTable, upsertTable, type TableEntry } from "./tables";
+import { createTables, drawable, listTables, removeTable, upsertTable, type TableEntry } from "./tables";
 
 import type { Env } from "../env";
 import type { DismissIntent, YourTurnIntent } from "./core";
@@ -90,8 +90,23 @@ export class DeviceIndex extends DurableObject<Env> {
     this.setMeta("account", playerId);
   }
 
-  players(): { people: Record<string, string>; account: string | null } {
-    return { people: this.people(), account: this.getMeta("account") };
+  /** `games`: what `declareGames` last heard, for the callers that list or push tables to this device. */
+  players(): { people: Record<string, string>; account: string | null; games: string[] } {
+    return { people: this.people(), account: this.getMeta("account"), games: this.games() };
+  }
+
+  /**
+   * The games this device's app says it can draw (its `X-Pounce-Games` header), as the Worker
+   * last heard them. An app that never said draws Cat Tower only, so nothing about a table of
+   * another game is listed or pushed to it.
+   */
+  declareGames(games: string[]): void {
+    const listed = games.join(",");
+    if (listed !== (this.getMeta("games") ?? "")) this.setMeta("games", listed === "" ? null : listed);
+  }
+
+  private games(): string[] {
+    return (this.getMeta("games") ?? "").split(",").filter((id) => id !== "");
   }
 
   /** Stops speaking for a player: its people mappings go, and the account if it is that player. */
@@ -129,7 +144,9 @@ export class DeviceIndex extends DurableObject<Env> {
    * device may have registered a new one while the push was in flight. A
    * kitten's device gets nothing, and a teen's nothing overnight (§14.1).
    */
-  async push(intent: YourTurnIntent | DismissIntent, gate?: PushGate): Promise<{ sent: boolean }> {
+  async push(intent: YourTurnIntent | DismissIntent, gate?: PushGate, game?: string): Promise<{ sent: boolean }> {
+    // A table of a game this device's app can't draw (`game`: any but Cat Tower): it hears nothing of it.
+    if (!drawable(game, this.games())) return { sent: false };
     const band = this.ageBand();
     if (nightBlocked(band, this.getMeta("time_zone"), Date.now())) return { sent: false };
     if (pushBlocked(band) && !(await this.kittenAllows(intent.kind === "dismiss" ? "dismiss" : "your_move", gate))) return { sent: false };

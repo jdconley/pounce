@@ -64,7 +64,13 @@
     // Nudges: a player asks the one whose move it is to take it, in the app and (with NOTIFY) by
     // push. Apps before it never send `nudge` and ignore the new fields and message types; off,
     // the server answers as before.
-    "NUDGE": "on"
+    "NUDGE": "on",
+    // The games rooms may be created for beyond Cat Tower: a comma-separated list of game ids
+    // (src/games, e.g. "tiles"). Empty: Cat Tower only, and asking for any other game is refused,
+    // as it always was. It stays empty until an app that can draw the tile game is in TestFlight:
+    // apps before it never ask for another game, and are told a table of one doesn't exist. Local
+    // dev turns it on in .dev.vars (see .dev.vars.example); tests set it themselves.
+    "GAMES": ""
   },
   "durable_objects": {
     "bindings": [

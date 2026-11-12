@@ -7,11 +7,12 @@ import {
   type TilesEvent,
   type TilesState,
 } from "../tiles/engine";
+import { parseAction } from "../tiles/parse";
 import { eventFor, viewFor, type TilesView } from "../tiles/view";
 
 import type { GameModule } from "./module";
 
-/** The tile game (working title "Tuna Tiles"). Not registered with rooms yet: nothing calls it. */
+/** The tile game (working title "Tuna Tiles"). Rooms deal it only while the `GAMES` flag lists it. */
 export const tiles: GameModule<TilesState, TilesAction, TilesView, TilesEvent, TilesError> = {
   id: "tiles",
   minSeats: 2,
@@ -27,4 +28,16 @@ export const tiles: GameModule<TilesState, TilesAction, TilesView, TilesEvent, T
   endsTurn: (a, events, seat) =>
     a.type !== "forfeit" &&
     events.some((e) => (e.kind === "played" || e.kind === "drew" || e.kind === "passed") && e.seat === seat),
+  parseAction,
+  // One round is one game: there is never a deal to wait for.
+  phase: (s) => (s.status === "playing" ? "playing" : "over"),
+  betweenAction: null,
+  forfeitAction: { type: "forfeit" },
+  forfeited: (s) => s.forfeited,
+  // A forfeit on the seat's own turn moves the move on without a turn; the room's own count tells those apart.
+  turnKey: (s) => String(s.turns),
+  startsTurn: (e) => e.kind === "turn",
+  fallbackAction: (s) => (s.pool.length > 0 ? { type: "draw" } : { type: "pass" }),
+  progress: (s) => s.racks.map((rack) => rack.length),
+  progressKind: "pieces",
 };

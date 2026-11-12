@@ -133,7 +133,13 @@ ${getTheApp(install)}`,
 }
 
 /** The landing page for a shared room link, for people without the app. */
-export function sharePage(code: string, install: Install, origin: string): Response {
+/**
+ * `newest`: some tables need the newest app (a game an older one can't draw, turned on by the
+ * `GAMES` flag), so the page says what to do when the app can't find the table. Every invite
+ * page says it then, whatever its table: the page never asks whether a code is a table, or of
+ * which game, so it tells a guesser nothing.
+ */
+export function sharePage(code: string, install: Install, origin: string, newest = false): Response {
   if (!ROOM_CODE.test(code)) return deadLinkPage(install);
   const safeCode = escapeHtml(code);
   const url = `${origin}/j/${code}`;
@@ -153,7 +159,7 @@ export function sharePage(code: string, install: Install, origin: string): Respo
     body: `<h1>Join the game</h1>
 <p class="code">${safeCode}</p>
 <p>No app yet? Install Pounce, then tap this link again. Or open Pounce, tap Join and enter the code ${safeCode}.</p>
-${getTheApp(install)}`,
+${newest ? "<p>Pounce can't find this table? It may be a newer game. Update Pounce, then tap this link again.</p>\n" : ""}${getTheApp(install)}`,
   });
   return new Response(html, {
     headers: {
