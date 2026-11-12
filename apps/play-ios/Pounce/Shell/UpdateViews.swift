@@ -39,8 +39,9 @@ private let askGrownUp = String(
 // MARK: - the hard moment
 
 /// The server no longer supports this version (design §4.3): one full screen, over everything,
-/// with Update and nothing else. `onHome`: only when a single table asked (a snapshot of a
-/// newer protocol), where going home is still possible.
+/// with Update and, quietly under it, the way to the account (`UpdateAccountLink`: deleting it
+/// must stay possible). `onHome`: only when a single table asked (a snapshot of a newer
+/// protocol), where going home, and so the gear, is still possible.
 struct UpdateRequiredScreen: View {
     @Environment(AppModel.self) private var model
     var need: UpdateRequirement?
@@ -87,6 +88,8 @@ struct UpdateRequiredScreen: View {
                                 .accessibilityIdentifier("update.required.home")
                         }
                     }
+                    // Over everything, the gear is out of reach: the account stays reachable from here.
+                    if onHome == nil { UpdateAccountLink().padding(.top, 6) }
                 }
                 .padding(.vertical, 28)
                 .frame(maxWidth: .infinity)

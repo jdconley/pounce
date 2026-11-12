@@ -33,12 +33,17 @@ public enum UpdatePolicy {
     public static let quietAfterDismiss: TimeInterval = 7 * 24 * 60 * 60
     /// How often the app asks the server what is current.
     public static let refreshEvery: TimeInterval = 6 * 60 * 60
+    /// How soon it asks again when the last answer named no version. The server never waits on
+    /// Apple: one that had just started may know nothing yet, and will a moment later.
+    public static let retryEvery: TimeInterval = 60 * 60
 
-    /// The server should be asked again: never asked, or long enough ago. A clock set back counts as long ago.
-    public static func shouldRefresh(fetchedAt: Date?, now: Date) -> Bool {
+    /// The server should be asked again: never asked, or long enough ago (sooner when its last
+    /// answer named no `latest`). A clock set back counts as long ago.
+    public static func shouldRefresh(fetchedAt: Date?, now: Date, status: AppStatus? = nil) -> Bool {
         guard let fetchedAt else { return true }
         let age = now.timeIntervalSince(fetchedAt)
-        return age < 0 || age >= refreshEvery
+        let knows = status == nil || AppVersion(status?.latest) != nil
+        return age < 0 || age >= (knows ? refreshEvery : retryEvery)
     }
 
     // MARK: the three moments
