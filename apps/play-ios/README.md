@@ -160,7 +160,10 @@ then the build setting (Debug: `http://localhost:8787`, optionally overridden by
   app"; add `-update-latest none` for the wording when the App Store has nothing newer. `required`: the
   full "Update Pounce to keep playing" screen. `-update-channel testflight` makes any run a TestFlight
   install (Update becomes "Open TestFlight"; the soft card never shows there), and `-age-band kitten`
-  (with `-uitest-reset`) a child's device (no button: "Ask a grown-up to update Pounce."). Use them with
+  (with `-uitest-reset`) a child's device (no button: "Ask a grown-up to update Pounce."). Under the
+  `required` screen's button a quiet "Account" (or "Your data", signed out) opens sign out and delete,
+  which the server still answers for a version it refuses; `-stub-accounts signed-in` signs the demo in
+  and `-show-update-account` opens that sheet at launch. Use them with
   `-uitest-reset -seed-people -age-band adult`. Screenshots are in `Art/screenshots/app-updates/`. What
   it remembers is in `updates.json`, next to `people.json`.
 - Parent consent (daily habit PR 9): `-demo-kitten locked|held|pending|on` is a kitten's own device

@@ -84,7 +84,7 @@ final class UpdateModel {
     /// Asks what is current, at most every six hours (or now, with `force`). A failure keeps
     /// the last answer: nobody is told anything new on a guess.
     func refresh(force: Bool = false) async {
-        guard !staged, force || required != nil || UpdatePolicy.shouldRefresh(fetchedAt: record.fetchedAt, now: .now) else { return }
+        guard !staged, force || required != nil || UpdatePolicy.shouldRefresh(fetchedAt: record.fetchedAt, now: .now, status: record.status ?? AppStatus()) else { return }
         do {
             let status = try await api.appStatus()
             record = store.update { record in

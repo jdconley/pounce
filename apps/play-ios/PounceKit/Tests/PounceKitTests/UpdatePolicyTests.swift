@@ -111,6 +111,17 @@ private let t0 = Date(timeIntervalSince1970: 1_800_000_000)
         // A clock set back: ask again rather than wait for it to catch up.
         #expect(UpdatePolicy.shouldRefresh(fetchedAt: t0 + 3600, now: t0))
     }
+
+    /// The server answers from what it knows and never waits on Apple, so a first answer can be empty.
+    @Test func anAnswerThatNamedNoVersionIsAskedForAgainWithinTheHour() {
+        let nothing = AppStatus(testflightUrl: "https://testflight.apple.com/join/abc")
+        #expect(!UpdatePolicy.shouldRefresh(fetchedAt: t0, now: t0 + 3600 - 1, status: nothing))
+        #expect(UpdatePolicy.shouldRefresh(fetchedAt: t0, now: t0 + 3600, status: nothing))
+        #expect(UpdatePolicy.shouldRefresh(fetchedAt: t0, now: t0 + 3600, status: AppStatus(latest: "soon")))
+        // One that named a version keeps its six hours.
+        #expect(!UpdatePolicy.shouldRefresh(fetchedAt: t0, now: t0 + 3600, status: AppStatus(latest: "1.1")))
+        #expect(UpdatePolicy.shouldRefresh(fetchedAt: t0, now: t0 + 6 * 3600, status: AppStatus(latest: "1.1")))
+    }
 }
 
 @Suite struct UpdateActionTests {

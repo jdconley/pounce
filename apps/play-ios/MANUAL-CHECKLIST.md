@@ -222,6 +222,8 @@ None of this runs in a simulator: it has no App Store, no TestFlight and no prod
       to join.", and the table is on Home behind a padlock afterwards. Typed on Join, the same.
 - [ ] With `APP_MINIMUM` above the installed version on a test server: the full "Update Pounce to keep
       playing" screen at launch, over everything, and it goes away once the minimum is taken back.
+- [ ] Behind that full screen, "Account" opens sign out and delete, and both work: the account is
+      gone on the server although every other call is refused.
 - [ ] A child's device (under 13): none of these has a button, only "Ask a grown-up to update Pounce."
 - [ ] The update push on a version 1.0 build: it shows as a banner, and a tap only opens the app.
 
