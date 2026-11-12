@@ -1,0 +1,61 @@
+{
+  "size": [496, 1080],
+  "titleSeconds": 2.6,
+  "games": {
+    "cat-tower": {
+      "test": "testCatTower",
+      "title": "Cat Tower",
+      "cover": "Pounce/Resources/Assets.xcassets/game-cat-tower.imageset/game-cat-tower@3x.png",
+      "tint": "FF2E9A",
+      "captionY": 0.245,
+      "segments": [
+        { "id": "cattower-turn", "from": "-start", "to": "-end" },
+        { "id": "cattower-end", "from": "roundover", "lead": 2.4, "to": "-end" }
+      ],
+      "beats": [
+        { "seg": "cattower-turn", "beat": "goal", "caption": "Climb all ten levels of the tower." },
+        { "seg": "cattower-turn", "beat": "level", "caption": "This round: a set and a run." },
+        { "seg": "cattower-turn", "beat": "draw", "caption": "Start your turn: draw a card." },
+        { "seg": "cattower-turn", "beat": "trays", "caption": "Tap a card, then a tray." },
+        { "seg": "cattower-turn", "beat": "yarn", "caption": "Yarn is wild. It fills any gap." },
+        { "seg": "cattower-turn", "beat": "laydown", "y": 0.6, "caption": "Level done? Lay it down." },
+        { "seg": "cattower-turn", "beat": "hit", "y": 0.6, "caption": "Then add to any laid group." },
+        { "seg": "cattower-turn", "beat": "discard", "y": 0.6, "caption": "End your turn with one discard." },
+        { "seg": "cattower-turn", "beat": "cucumber", "y": 0.6, "caption": "A Cucumber makes a cat skip a turn." },
+        { "seg": "cattower-turn", "beat": "others", "y": 0.6, "caption": "Then the next cat plays." },
+        { "seg": "cattower-end", "beat": "roundover", "shift": -1.6, "caption": "Out of cards? The round ends." },
+        { "seg": "cattower-end", "beat": "score", "shift": -1.6, "caption": "Cards left in hand cost points." },
+        { "seg": "cattower-end", "beat": "climb", "shift": -2.8, "caption": "Made your level? Climb a shelf." },
+        { "seg": "cattower-end", "beat": "lastround", "caption": "New round, next level." },
+        { "seg": "cattower-end", "beat": "win", "caption": "Finish level 10 first to win!" }
+      ]
+    },
+    "tiles": {
+      "test": "testTiles",
+      "title": "Tuna Tiles",
+      "cover": "Pounce/Resources/Assets.xcassets/game-tiles.imageset/game-tiles@3x.png",
+      "tint": "00D1C1",
+      "captionY": 0.55,
+      "segments": [
+        { "id": "tiles-open", "from": "-start", "to": "-end" },
+        { "id": "tiles-mid", "from": "-start", "to": "-end" },
+        { "id": "tiles-win", "from": "-start", "to": "-end" }
+      ],
+      "beats": [
+        { "seg": "tiles-open", "beat": "goal", "caption": "Empty your stash onto the rug." },
+        { "seg": "tiles-open", "beat": "match", "caption": "A match: one number, different toys." },
+        { "seg": "tiles-open", "beat": "opening", "caption": "Your first play must add up to 30." },
+        { "seg": "tiles-open", "beat": "row", "caption": "A row: one toy, counting up." },
+        { "seg": "tiles-open", "beat": "play", "caption": "48 points. Tap Play!" },
+        { "seg": "tiles-open", "beat": "others", "caption": "Then everyone else takes a turn." },
+        { "seg": "tiles-open", "beat": "draw", "caption": "Nothing to play? Hold Draw." },
+        { "seg": "tiles-mid", "beat": "add", "caption": "After that, add to any set." },
+        { "seg": "tiles-mid", "beat": "yarn", "caption": "Yarn is wild. Swap in the real toy." },
+        { "seg": "tiles-mid", "beat": "rearrange", "caption": "Move anything on the rug." },
+        { "seg": "tiles-mid", "beat": "play2", "caption": "Every set good? Tap Play." },
+        { "seg": "tiles-win", "beat": "last", "caption": "Play your last toys..." },
+        { "seg": "tiles-win", "beat": "win", "y": 0.125, "caption": "Stash empty first? You win!" }
+      ]
+    }
+  }
+}

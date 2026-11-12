@@ -95,6 +95,11 @@ then the build setting (Debug: `http://localhost:8787`, optionally overridden by
   default), `-tiles-tricks`, `-tiles-hint`, `-tiles-recap`, `-tiles-sheet` (every piece at stash and rug
   size, both designs tried) and `-tiles-game-off` (with `tiles-over`: Play again refused with `game_off`).
   See `Pounce/Tiles/TilesDemo.swift`; screenshots are in `Art/screenshots/tiles/`.
+- How to play's videos (`HowTo/README.md`): `-demo howto` is Cat Tower's video table (my whole turn,
+  taken by `HowToSocket` as the server would, then the other seats), `-demo tiles-last` the tile
+  game's last turn (three pieces left, each fits a row), `-show-touches` draws a ring under every
+  finger, and `-timecode` (with it) the wall clock in a strip along the top edge, for recordings.
+  `HowTo/make.sh` records and cuts both videos.
 - `-anim-speed <n>` (or `POUNCE_ANIM_SPEED=<n>` in the environment) runs the whole app n times faster
   and marks the run as a test: sound and haptics go to silent stand-ins. See [Test speed](#test-speed).
 - `-show-join` opens the Join screen. `-open-link <url>` handles a link as if it was tapped.

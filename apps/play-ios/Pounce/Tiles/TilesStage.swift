@@ -637,7 +637,7 @@ struct TilesMenuSheet: View {
     var body: some View {
         Group {
             if rules {
-                TilesRulesView { rules = false }
+                HowToPlaySheet(game: GameCatalog.tiles) { rules = false }
             } else {
                 menu
             }
@@ -734,79 +734,5 @@ struct TilesMenuSheet: View {
                 ? String(localized: "\(SeatInfo.name(forfeit.table.room, forfeit.seat)) is out and finishes last. Everyone else keeps playing.", comment: "Forfeit confirmation on a shared phone: that seat is out, the rest play on")
                 : String(localized: "You're out and finish last. Everyone else keeps playing.", comment: "Forfeit confirmation: you are out, the rest play on")
         }
-    }
-}
-
-/// How to play, in our own words (tile game spec §4).
-struct TilesRulesView: View {
-    let onClose: () -> Void
-
-    private var sections: [(title: String, color: Color, lines: [String])] {
-        [
-            (String(localized: "Tidy up", comment: "Tile game rules: the goal"), Palette.orange, [
-                String(localized: "The cats tipped the toy box onto the rug. Be the first to put every toy from your stash onto the rug.", comment: "Tile game rules"),
-                String(localized: "There are 106 toys: 1 to 13 in four kinds (fish, mouse, feather, bell), two of each, and 2 Yarn. Everyone starts with 14.", comment: "Tile game rules"),
-            ]),
-            (String(localized: "Sets", comment: "Tile game rules: sets"), Palette.teal, [
-                String(localized: "Everything on the rug sits in a set of three or more.", comment: "Tile game rules"),
-                String(localized: "A row is one kind of toy with numbers that climb by one: 4, 5, 6. A 1 is only ever low, and nothing comes after 13.", comment: "Tile game rules"),
-                String(localized: "A match is three or four toys with the same number, each a different kind.", comment: "Tile game rules"),
-            ]),
-            (String(localized: "Your turn", comment: "Tile game rules: a turn"), Palette.magenta, [
-                String(localized: "Play: put one or more toys from your stash on the rug, then press Play. Or draw one toy from the toy box. That is your whole turn.", comment: "Tile game rules"),
-                String(localized: "When the toy box is empty you may pass.", comment: "Tile game rules"),
-            ]),
-            (String(localized: "Opening", comment: "Tile game rules: the first play"), Palette.violet, [
-                String(localized: "Your first play has to stand on its own: new sets from your stash only, worth 30 or more when you add up their numbers.", comment: "Tile game rules"),
-                String(localized: "After that you can take the whole rug apart and rebuild it, as long as every toy is back in a set when you press Play.", comment: "Tile game rules"),
-            ]),
-            (String(localized: "Yarn", comment: "Tile game rules: the wild piece"), Palette.sky, [
-                String(localized: "Yarn stands for any one toy. In a row it is the number its place gives it. In a match it is that number in a kind that isn't there yet.", comment: "Tile game rules"),
-                String(localized: "Once it is on the rug it stays on the rug, but you can move it to another set.", comment: "Tile game rules"),
-            ]),
-            (String(localized: "The end", comment: "Tile game rules: scoring"), Palette.lime, [
-                String(localized: "Empty your stash and you win. Everyone else is charged the numbers left in theirs, 30 for a Yarn, and you collect it all.", comment: "Tile game rules"),
-                String(localized: "If the toy box is empty and everyone passes, the smallest stash total wins.", comment: "Tile game rules"),
-            ]),
-        ]
-    }
-
-    var body: some View {
-        VStack(spacing: 0) {
-            HStack {
-                CornerHomeButton(label: "Back", action: onClose)
-                    .accessibilityIdentifier("rules.close")
-                Spacer()
-            }
-            .padding(.horizontal, 16)
-            .padding(.top, 14)
-            ScrollView {
-                VStack(spacing: 16) {
-                    OutlinedText(String(localized: "How to play", comment: "Rules sheet title"), size: 34, fill: Palette.orange)
-                        .accessibilityAddTraits(.isHeader)
-                    ForEach(sections, id: \.title) { section in
-                        VStack(alignment: .leading, spacing: 8) {
-                            OutlinedText(section.title, size: 22, fill: section.color)
-                            ForEach(section.lines, id: \.self) { line in
-                                Text(line)
-                                    .font(.system(.body, design: .rounded).weight(.semibold))
-                                    .foregroundStyle(.white)
-                                    .fixedSize(horizontal: false, vertical: true)
-                            }
-                        }
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .padding(16)
-                        .background(RoundedRectangle(cornerRadius: 20).fill(Palette.ink.opacity(0.55)).overlay(RoundedRectangle(cornerRadius: 20).strokeBorder(section.color, lineWidth: 3)))
-                    }
-                }
-                .padding(.horizontal, 20)
-                .padding(.bottom, 32)
-                .frame(maxWidth: 640)
-                .frame(maxWidth: .infinity)
-            }
-        }
-        .background(Palette.night.ignoresSafeArea())
-        .accessibilityElement(children: .contain)
-        .accessibilityIdentifier("sheet-tiles-rules")
     }
 }

@@ -54,6 +54,11 @@ enum DemoMode: String {
     case tilesInvalid = "tiles-invalid", tilesLoupe = "tiles-loupe", tilesLate = "tiles-late"
     case tilesLong = "tiles-long", tilesPass = "tiles-pass", tilesOther = "tiles-other"
     case tilesCurtain = "tiles-curtain", tilesOver = "tiles-over", tilesPlay = "tiles-play"
+    /// The How to play videos' tables (`apps/play-ios/HowTo/`): `howto` is Cat Tower's
+    /// (`HowToSocket`: one whole turn of mine, then the other seats), `tiles-last` the tile game's
+    /// last turn (three pieces left, each fits a row).
+    case howto
+    case tilesLast = "tiles-last"
 
     /// A tile game demo.
     var isTiles: Bool { rawValue.hasPrefix("tiles") }
@@ -74,8 +79,9 @@ enum DemoMode: String {
     private var baseRoom: RoomView {
         switch self {
         case .tiles, .tilesEarly, .tilesOpened, .tilesDraft, .tilesInvalid, .tilesLoupe, .tilesLate, .tilesLong,
-             .tilesPass, .tilesOther, .tilesCurtain, .tilesOver, .tilesPlay:
+             .tilesPass, .tilesOther, .tilesCurtain, .tilesOver, .tilesPlay, .tilesLast:
             return TilesDemo.room(self)
+        case .howto: return DemoFixtures.howTo()
         case .lobby: return DemoFixtures.lobby()
         case .lobbyFamily: return DemoFixtures.familyLobby()
         case .lobbyReady:
@@ -180,6 +186,7 @@ enum DemoMode: String {
         case .handoff: ReplaySocket(start: room, steps: Self.handoffSteps(), loops: 1)
         case .forfeited: ReplaySocket(start: room, steps: Self.forfeitSteps(room), loops: 1)
         case .celebrate: CelebrateSocket()
+        case .howto: HowToSocket(room: room)
         case .nope: DemoSocket(room: room, refusing: true)
         case .hit, .crowdedHit: DemoSocket(room: room, hits: true)
         case .lay: DemoSocket(room: room, lays: true)

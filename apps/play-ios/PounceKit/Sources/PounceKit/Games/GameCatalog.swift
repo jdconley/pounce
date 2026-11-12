@@ -33,10 +33,14 @@ public enum GameCatalog {
         public let art: String
         public let tint: Tint
         public let availability: Availability
+        /// How to play's video: the base name of `<howTo>.mp4` and its poster `<howTo>.jpg` in the
+        /// app bundle (`Pounce/Resources/HowTo/`, made by `HowTo/make.sh`). Nil: text only. The
+        /// text is the app's `HowToGuide` for this entry's `id`.
+        public let howTo: String?
 
         public init(
             id: String, title: String, pitch: String, minPlayers: Int, maxPlayers: Int, art: String, tint: Tint,
-            availability: Availability
+            availability: Availability, howTo: String? = nil
         ) {
             self.id = id
             self.title = title
@@ -46,6 +50,7 @@ public enum GameCatalog {
             self.art = art
             self.tint = tint
             self.availability = availability
+            self.howTo = howTo
         }
 
         public var isAvailable: Bool { availability == .available }
@@ -54,18 +59,20 @@ public enum GameCatalog {
         public func unlocked() -> Entry {
             Entry(
                 id: id, title: title, pitch: pitch, minPlayers: minPlayers, maxPlayers: maxPlayers, art: art, tint: tint,
-                availability: .available)
+                availability: .available, howTo: howTo)
         }
     }
 
     public static let catTower = Entry(
         id: "cat-tower", title: "Cat Tower", pitch: "Rummy up a ten-shelf tower.",
-        minPlayers: 2, maxPlayers: 6, art: "game-cat-tower", tint: .violet, availability: .available)
+        minPlayers: 2, maxPlayers: 6, art: "game-cat-tower", tint: .violet, availability: .available,
+        howTo: "howto-cat-tower")
 
     /// Working title. Flip `availability` to `.available` here when the game can be dealt.
     public static let tiles = Entry(
         id: "tiles", title: "Tuna Tiles", pitch: "Tile rummy. Yarn is wild.",
-        minPlayers: 2, maxPlayers: 4, art: "game-tiles", tint: .sky, availability: .comingSoon)
+        minPlayers: 2, maxPlayers: 4, art: "game-tiles", tint: .sky, availability: .comingSoon,
+        howTo: "howto-tiles")
 
     /// Catalog order: the order games were added, oldest first.
     public static let all: [Entry] = [catTower, tiles]
