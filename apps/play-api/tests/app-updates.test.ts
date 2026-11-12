@@ -270,9 +270,13 @@ describe("GET /v1/app says what is current", { timeout: 30_000 }, () => {
   test("it never waits on Apple: with Apple hanging, a cold server answers at once with what it knows, which is nothing", async () => {
     const { asked, lookup } = apple("1.1", 2500);
     const mf = await start({ lookup, appMinimum: "1.1" });
+    // Warm the Worker first (a headerless health check starts no lookup; the count below would
+    // show it if it did), so the timing is the answer's own and not a cold start on a busy runner.
+    expect((await ask(mf, "GET", "/healthz", {})).status).toBe(200);
     const started = Date.now();
     expect(await status(mf)).toEqual({ testflightUrl: BETA });
-    expect(Date.now() - started).toBeLessThan(1000);
+    // Apple takes 2.5 s here: answering well before that means nothing waited on it.
+    expect(Date.now() - started).toBeLessThan(2000);
     // The lookup it started is for whoever asks next.
     await eventually(() => status(mf), (b) => b.latest === "1.1");
     expect(asked).toHaveLength(1);
