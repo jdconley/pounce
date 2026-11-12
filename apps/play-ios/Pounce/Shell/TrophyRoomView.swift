@@ -55,25 +55,25 @@ struct TrophyRoomView: View {
         .ignoresSafeArea()
     }
 
+    /// Back, the title and the plus on one line; at the largest text sizes the title gets a line
+    /// of its own under the buttons rather than breaking mid-word between them.
     private var topBar: some View {
-        HStack(spacing: 10) {
-            CornerHomeButton { model.goHome() }
-                .accessibilityIdentifier("trophies.back")
-            Spacer()
-            VStack(spacing: 0) {
-                Image(ArtName.iconTrophy).resizable().scaledToFit().frame(width: 36, height: 36)
-                    .accessibilityHidden(true)
-                Text("Trophies", comment: "Trophy room: the screen's title")
-                    .font(.system(.headline, design: .rounded, weight: .black))
-                    .foregroundStyle(.white)
-                    .accessibilityAddTraits(.isHeader)
+        ViewThatFits(in: .horizontal) {
+            HStack(spacing: 10) {
+                backButton
+                Spacer()
+                title
+                Spacer()
+                addButton
             }
-            Spacer()
-            ArtIconButton(icon: ArtName.Habit.chipPlus, color: Palette.magenta, size: 52, label: "Add someone") {
-                model.showInvite()
+            VStack(spacing: 4) {
+                HStack {
+                    backButton
+                    Spacer()
+                    addButton
+                }
+                title
             }
-            .accessibilityIdentifier("trophies.add")
-            .captioned("Add someone")
         }
         .padding(.horizontal, 16)
         .padding(.top, 4)
@@ -83,6 +83,31 @@ struct TrophyRoomView: View {
             LinearGradient(colors: [Palette.night, Palette.night.opacity(0.85), Palette.night.opacity(0)], startPoint: .top, endPoint: .bottom)
                 .ignoresSafeArea(edges: .top)
         }
+    }
+
+    private var backButton: some View {
+        CornerHomeButton { model.goHome() }
+            .accessibilityIdentifier("trophies.back")
+    }
+
+    private var title: some View {
+        VStack(spacing: 0) {
+            Image(ArtName.iconTrophy).resizable().scaledToFit().frame(width: 36, height: 36)
+                .accessibilityHidden(true)
+            Text("Trophies", comment: "Trophy room: the screen's title")
+                .font(.system(.headline, design: .rounded, weight: .black))
+                .foregroundStyle(.white)
+                .fixedSize()
+                .accessibilityAddTraits(.isHeader)
+        }
+    }
+
+    private var addButton: some View {
+        ArtIconButton(icon: ArtName.Habit.chipPlus, color: Palette.magenta, size: 52, label: "Add someone") {
+            model.showInvite()
+        }
+        .accessibilityIdentifier("trophies.add")
+        .captioned("Add someone")
     }
 
     // MARK: your own streak and the records

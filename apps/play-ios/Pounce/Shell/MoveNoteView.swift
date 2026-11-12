@@ -183,6 +183,10 @@ struct NotPlayingCard: View {
     var body: some View {
         ZStack {
             RoomBackground()
+            // Scrolls when it can't fit (the largest text sizes on a small phone), so the title
+            // never truncates and Home never leaves the screen.
+            GeometryReader { geo in
+            ScrollView {
             VStack(spacing: 18) {
                 Image(art)
                     .resizable()
@@ -223,6 +227,11 @@ struct NotPlayingCard: View {
             }
             .dynamicTypeSize(...DynamicTypeSize.accessibility2)
             .scaleEffect(sizeClass == .regular ? 1.2 : 1)
+            .padding(.vertical, 24)
+            .frame(maxWidth: .infinity, minHeight: geo.size.height)
+            }
+            .scrollBounceBehavior(.basedOnSize)
+            }
         }
         .onAppear {
             withAnimation(.spring(duration: 0.5, bounce: 0.45).paced) { appeared = true }
