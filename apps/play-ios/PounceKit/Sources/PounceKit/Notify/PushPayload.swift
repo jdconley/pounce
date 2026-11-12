@@ -17,6 +17,8 @@ public enum PushKind: String, Sendable {
     case dismiss
     /// Parent consent's confirmation on the parent's own device (consent design D6).
     case consent
+    /// Someone asked this device to a table its version can't draw (app updates design §5).
+    case update
     case unknown
 }
 
@@ -122,6 +124,9 @@ public struct PushPayload: Equatable, Sendable {
     public var pair: String?
     /// A consent push's kitten (`k_…`), the public id the Kittens panel uses.
     public var kitten: String?
+    /// An update push's table (`update.code`). Never the top-level `code`: an app from before
+    /// update pushes would open it, and be told there is no such table.
+    public var updateCode: String?
 
     /// Nil only when `userInfo` has nothing of ours at all.
     public init?(userInfo: [AnyHashable: Any]) {
@@ -140,6 +145,7 @@ public struct PushPayload: Equatable, Sendable {
         streak = Self.streak(userInfo["streak"])
         pair = userInfo["pair"] as? String
         kitten = (userInfo["kitten"] as? String).flatMap { Self.isKittenId($0) ? $0 : nil }
+        updateCode = ((userInfo["update"] as? [String: Any])?["code"] as? String).flatMap { RoomCode.isValid($0) ? $0 : nil }
     }
 
     /// `k_` and base64url characters (play-api's `KID` has 22; the server checks it again).

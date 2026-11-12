@@ -590,6 +590,8 @@ struct HomeView: View {
         ScrollView(.vertical, showsIndicators: false) {
             VStack(spacing: 14) {
                 if showStrip { strip(scale: 1).padding(.top, -16).padding(.bottom, -6) }
+                // A newer version, or a table waiting behind one (app updates design §4.1, §4.2).
+                HomeUpdates()
                 if lead == .tables { tablesSection }
                 shelfColumn
                 if lead == .shelf { tablesSection }
@@ -610,6 +612,9 @@ struct HomeView: View {
     /// leads, then the other. It scrolls when it has to and sits in the middle when it doesn't.
     private func roomy(_ size: CGSize, bar: CGFloat) -> some View {
         ScrollView(.vertical, showsIndicators: false) {
+            // A newer version, or a table waiting behind one, over the columns (app updates design).
+            VStack(spacing: 24) {
+            HomeUpdates(roomy: true)
             Group {
                 if Roomy.sideBySide(size) && hasTables {
                     let tablesWidth = min(size.width * 0.44, 602)
@@ -629,6 +634,7 @@ struct HomeView: View {
                     }
                     .frame(width: width)
                 }
+            }
             }
             .padding(.top, 10)
             .padding(.bottom, bar + 10)

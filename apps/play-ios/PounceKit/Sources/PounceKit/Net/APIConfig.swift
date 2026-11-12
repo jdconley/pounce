@@ -2,8 +2,13 @@ import Foundation
 
 public struct APIConfig: Sendable {
     public let baseURL: URL
+    /// Sent with every request and socket upgrade to this server: who is asking (`ClientHeaders`).
+    public let headers: [String: String]
 
-    public init(baseURL: URL) { self.baseURL = baseURL }
+    public init(baseURL: URL, headers: [String: String] = ClientHeaders.standard) {
+        self.baseURL = baseURL
+        self.headers = headers
+    }
 
     /// `host:port` (lowercased host, the scheme's default port when none is given): names this
     /// server for anything kept per server, so the dev server and production never share it.

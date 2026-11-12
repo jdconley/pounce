@@ -37,6 +37,9 @@ final class AppModel {
     /// What the App Store rating ask remembers (`RatingPrompt`): the first launch, finished games,
     /// the last ask.
     @ObservationIgnored let ratingStore: RatingStore
+    /// Update awareness (app updates design): what is current, Home's card, tables behind an
+    /// update, and the screen for a version the server no longer supports.
+    let updates: UpdateModel
     /// The coaching tips each person on this phone has seen (first-game tutorial).
     private(set) var tipsSeen: TipsSeen
     /// Coaching tips show on the table. Off for the UI tests and demos, which never expect a
@@ -118,6 +121,7 @@ final class AppModel {
         tutorialStore = TutorialStore(directory: dataDirectory)
         tipsSeen = tutorialStore.load()
         ratingStore = RatingStore(directory: dataDirectory)
+        updates = UpdateModel(api: api, directory: dataDirectory)
         // The first launch is written down now: the rating ask waits days after it.
         ratingStore.load()
         self.ageStore = ageStore
@@ -235,6 +239,10 @@ final class AppModel {
             model.account.merge = .init(mine: 4, theirs: 2, theirName: StubAccountService.other.name, asking: true)
         }
         if let demo = DemoMode.from(arguments: arguments) { model.openDemo(demo) }
+        // `-demo-update table`: a table that answers "this game needs a newer app" (`UpdateDemo`).
+        if UpdateDemo.from(arguments: arguments) == .table, model.people.owner != nil, model.ageRecord != nil {
+            model.openDemoSocket(code: UpdateDemo.code) { UpdateDemo.refusingSocket() }
+        }
         if arguments.contains("-uitest-reset") || DemoMode.from(arguments: arguments) != nil {
             model.tipsEnabled = arguments.contains("-tips")
         }
@@ -316,6 +324,17 @@ final class AppModel {
     #endif
 
     #if DEBUG
+    /// A room on a canned socket, opened as a link would open it (`-demo-update table`).
+    func openDemoSocket(code: String, make: @escaping @Sendable () -> any RoomSocketing) {
+        closeRoom()
+        let session = RoomSession(code: code, intent: .join, socket: SuspendableSocket(make: make))
+        session.owner = { [weak self] in self?.people.owner }
+        session.people = { [weak self] in self?.everyone ?? [] }
+        room = session
+        session.start()
+        route = .room(code: code, intent: .join)
+    }
+
     /// `-demo <screen>`: the room screen fed by one fixture snapshot, no server, nothing cached.
     func openDemo(_ demo: DemoMode, code: String? = nil) {
         closeRoom()
@@ -383,6 +402,8 @@ final class AppModel {
         // `-request-push`: the system prompt at launch (the notification screenshots).
         if CommandLine.arguments.contains("-request-push") { _ = await push?.requestAuthorization() }
         #endif
+        // Hears "this version is too old" from the first call on, and asks what is current.
+        Task { await updates.start() }
         _ = try? await api.credential()
         #if DEBUG
         await account.applyDebugPreset()
@@ -694,8 +715,11 @@ final class AppModel {
     func refreshTables() async {
         cache = tableCache.all()
         do {
-            let listed = try await api.listTables()
+            let reply = try await api.listTablesAndLocked()
+            let listed = reply.tables
             tables = listed
+            // The tables this version was left out of, for Home's padlocked rows.
+            updates.serverLocked = reply.locked
             // The icon's badge: tables where it's your move (spec §12.5), on every device.
             push?.setBadge(PushPolicy.badgeCount(listed))
             // A snoozed "your move" for a table that no longer waits on you goes.
@@ -829,6 +853,7 @@ final class AppModel {
         switch phase {
         case .active:
             room?.foreground()
+            Task { await updates.refresh() }
             Task {
                 await account.uploadProfile()
                 await account.sync()
@@ -909,6 +934,8 @@ final class AppModel {
             meaning = RoomEntry.notFoundMeaning(code: session.code, known: known)
         }
         session.goneMeaning = meaning
+        // Closed or never there: nothing left to update for.
+        updates.forget(code: session.code)
         switch meaning {
         case .roomClosed:
             forget(session.code)

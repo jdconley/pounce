@@ -14,6 +14,9 @@ public enum SocketEvent: Equatable, Sendable {
     case locked
     /// Terminal: the server said `room_closed`.
     case closed
+    /// Terminal: the server turned this app away and said why (426 on connect): the app is too
+    /// old, or the table's game needs a newer one.
+    case refused(UpdateRefusal)
     /// The open connection's quality changed (`LinkMeter`). Every new connection starts `good`
     /// without one.
     case link(LinkQuality)
@@ -189,6 +192,17 @@ public actor RoomSocket: RoomSocketing {
             } catch SocketConnectError.tooManyAttempts {
                 guard isCurrent(gen) else { return }
                 emit(.locked)
+                _ = finish()
+                return
+            } catch SocketConnectError.refused(let refusal) {
+                guard isCurrent(gen) else { return }
+                emit(.refused(refusal))
+                _ = finish()
+                return
+            } catch APIError.updateRequired(let need) {
+                // Even a device credential is refused: the app is too old for everything.
+                guard isCurrent(gen) else { return }
+                emit(.refused(.required(need)))
                 _ = finish()
                 return
             } catch {

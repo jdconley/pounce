@@ -41,6 +41,15 @@ struct RootView: View {
             }
         }
         .animation(.easeOut(duration: 0.25).paced, value: model.inviteShown)
+        .overlay {
+            // The server no longer supports this version (app updates design §4.3): over everything.
+            // Once the age is known: the screen's button depends on it, and the age screen needs no server.
+            if let need = model.updates.required, model.ageRecord != nil {
+                UpdateRequiredScreen(need: need)
+                    .transition(.opacity)
+            }
+        }
+        .animation(.easeOut(duration: 0.25).paced, value: model.updates.required)
         // A consent notification's tap (consent design D6): the Kittens panel on that kitten.
         .sheet(item: Binding(get: { model.kittensPanel }, set: { model.kittensPanel = $0 })) { request in
             KittensSheet(focus: request.focus)

@@ -154,6 +154,15 @@ then the build setting (Debug: `http://localhost:8787`, optionally overridden by
   demo fixture at launch (no server, no push), for the Lock Screen and the Dynamic Island.
   `LiveShotTests` takes the screenshots (`TEST_RUNNER_POUNCE_SHOTS_DIR`); the previews are in
   `PounceWidgets/Previews.swift`. iPad shows the live table on its Lock Screen too (no Dynamic Island).
+- App updates (`docs/superpowers/specs/2026-11-12-app-updates-design.md`): `-demo-update <soft|locked|table|required>`
+  is one of the update moments with no server (`UpdateDemo`). `soft`: Home with "A new Pounce is ready".
+  `locked`: Home with a table behind a padlock. `table`: a table that answers "this game needs a newer
+  app"; add `-update-latest none` for the wording when the App Store has nothing newer. `required`: the
+  full "Update Pounce to keep playing" screen. `-update-channel testflight` makes any run a TestFlight
+  install (Update becomes "Open TestFlight"; the soft card never shows there), and `-age-band kitten`
+  (with `-uitest-reset`) a child's device (no button: "Ask a grown-up to update Pounce."). Use them with
+  `-uitest-reset -seed-people -age-band adult`. Screenshots are in `Art/screenshots/app-updates/`. What
+  it remembers is in `updates.json`, next to `people.json`.
 - Parent consent (daily habit PR 9): `-demo-kitten locked|held|pending|on` is a kitten's own device
   (with `-age-band kitten`; `-kitten-held` keeps the significant change owed) and `-demo-kittens` a
   parent's Kittens panel (with `-stub-accounts signed-in`), both from `DemoKittenService` with no
