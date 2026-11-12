@@ -38,7 +38,8 @@ struct StreakStripView: View {
             HStack(spacing: 0) {
                 LinearGradient(colors: [.clear, .black], startPoint: .leading, endPoint: .trailing).frame(width: 8)
                 Color.black
-                LinearGradient(colors: [.black, .clear], startPoint: .leading, endPoint: .trailing).frame(width: 8)
+                // Wide at the trailing end, so a chip cut there reads as "more", never as a number.
+                LinearGradient(colors: [.black, .clear], startPoint: .leading, endPoint: .trailing).frame(width: 34)
             }
         }
         .animation(.spring(duration: 0.4, bounce: 0.35).paced, value: chips.map(\.id))

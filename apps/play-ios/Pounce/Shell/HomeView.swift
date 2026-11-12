@@ -377,8 +377,9 @@ struct HomeView: View {
     /// A section's name in toy lettering, with room for a chip after it.
     private func sectionTitle(_ title: String, @ViewBuilder chip: () -> some View = { EmptyView() }) -> some View {
         HStack(alignment: .center, spacing: 10) {
+            // Big text grows a title, up to a size that still leaves the cards room.
             OutlinedText(
-                title, size: roomy ? roomyTitleSize : sectionTitleSize, width: roomy ? 3.5 : 3,
+                title, size: min(roomy ? roomyTitleSize : sectionTitleSize, 38), width: roomy ? 3.5 : 3,
                 lines: 2, alignment: .leading)
                 .accessibilityAddTraits(.isHeader)
             chip()
