@@ -27,17 +27,28 @@ struct WordLabel: View {
     }
 }
 
-/// A control with its words beside it, for settings lists.
+/// A control with its words beside it, for settings lists. At the accessibility text sizes the
+/// words go under the control, so they get the row's whole width and never break mid-word.
 struct WordRow<Control: View>: View {
     let title: LocalizedStringResource
     var detail: LocalizedStringResource?
     @ViewBuilder let control: Control
 
+    @Environment(\.dynamicTypeSize) private var typeSize
+
     var body: some View {
-        HStack(spacing: 14) {
-            control
-            WordLabel(title: title, detail: detail)
-            Spacer(minLength: 0)
+        if typeSize.isAccessibilitySize {
+            VStack(alignment: .leading, spacing: 8) {
+                control
+                WordLabel(title: title, detail: detail)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+        } else {
+            HStack(spacing: 14) {
+                control
+                WordLabel(title: title, detail: detail)
+                Spacer(minLength: 0)
+            }
         }
     }
 }
