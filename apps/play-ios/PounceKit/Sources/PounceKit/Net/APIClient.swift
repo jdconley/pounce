@@ -80,6 +80,8 @@ public enum APIError: Error, Equatable {
     case conflict(String)
     /// 409 `merge_needed`: the identity belongs to another player, shown as these two cats merging.
     case mergeNeeded(name: String, cat: Int)
+    /// 426 `update_required`: this version of the app is no longer supported (app updates design §4.3).
+    case updateRequired(UpdateRequirement)
     case server(Int)
     case transport(String)
 }
@@ -96,6 +98,7 @@ public actor APIClient {
     private var cached: DeviceCredential?
     private var minting: Task<DeviceCredential, any Error>?
     private var onCredentialChange: (@Sendable (DeviceCredential) -> Void)?
+    private var onUpdateRequired: (@Sendable (UpdateRequirement) -> Void)?
     private let mints: Bool
     private let timeout: TimeInterval
 
@@ -129,6 +132,18 @@ public actor APIClient {
     /// that makes a new device on the server), after it is stored.
     public func setCredentialChangeHandler(_ handler: (@Sendable (DeviceCredential) -> Void)?) {
         onCredentialChange = handler
+    }
+
+    /// Called whenever the server answers any call with "this version is no longer supported".
+    public func setUpdateRequiredHandler(_ handler: (@Sendable (UpdateRequirement) -> Void)?) {
+        onUpdateRequired = handler
+    }
+
+    /// A call that needs no device credential (`GET /v1/app`).
+    func open(_ method: String, _ path: String) async throws -> Data {
+        try await Self.send(
+            session: session, method: method, url: config.endpoint(path), headers: config.headers, bearer: nil, body: nil,
+            timeout: timeout)
     }
 
     /// Uploads the APNs token; returns the device id the server stored it for.
@@ -178,8 +193,10 @@ public actor APIClient {
         let session = session
         let url = config.endpoint("/v1/devices")
         let timeout = timeout
+        let headers = config.headers
         let task = Task { () throws -> DeviceCredential in
-            let data = try await Self.send(session: session, method: "POST", url: url, bearer: nil, body: nil, timeout: timeout)
+            let data = try await Self.send(
+                session: session, method: "POST", url: url, headers: headers, bearer: nil, body: nil, timeout: timeout)
             return try Self.decode(DeviceCredential.self, from: data, status: 200)
         }
         minting = task
@@ -214,10 +231,22 @@ public actor APIClient {
         try await authenticatedCall(method, path, body: body, query: query, noPlayer: noPlayer).data
     }
 
-    /// The reply and the credential that got it.
+    /// The reply and the credential that got it. A call the server refuses because this version
+    /// is too old tells the update handler before it throws.
     private func authenticatedCall(
         _ method: String, _ path: String, body: (any Encodable & Sendable)?, query: [URLQueryItem] = [],
         noPlayer: Bool = false
+    ) async throws -> (data: Data, credential: DeviceCredential) {
+        do {
+            return try await attempt(method, path, body: body, query: query, noPlayer: noPlayer)
+        } catch APIError.updateRequired(let need) {
+            onUpdateRequired?(need)
+            throw APIError.updateRequired(need)
+        }
+    }
+
+    private func attempt(
+        _ method: String, _ path: String, body: (any Encodable & Sendable)?, query: [URLQueryItem], noPlayer: Bool
     ) async throws -> (data: Data, credential: DeviceCredential) {
         let url = config.endpoint(path, query: query)
         let payload = try body.map { try JSONEncoder().encode($0) }
@@ -225,8 +254,8 @@ public actor APIClient {
         for attempt in 0..<2 {
             do {
                 let data = try await Self.send(
-                    session: session, method: method, url: url, bearer: cred.token, body: payload, noPlayer: noPlayer,
-                    timeout: timeout)
+                    session: session, method: method, url: url, headers: config.headers, bearer: cred.token, body: payload,
+                    noPlayer: noPlayer, timeout: timeout)
                 return (data, cred)
             } catch APIError.unauthorized where attempt == 0 && mints {
                 cred = try await replacement(for: cred)
@@ -236,12 +265,13 @@ public actor APIClient {
     }
 
     private static func send(
-        session: URLSession, method: String, url: URL, bearer: String?, body: Data?, noPlayer: Bool = false,
-        timeout: TimeInterval
+        session: URLSession, method: String, url: URL, headers: [String: String], bearer: String?, body: Data?,
+        noPlayer: Bool = false, timeout: TimeInterval
     ) async throws -> Data {
         var request = URLRequest(url: url)
         request.httpMethod = method
         request.timeoutInterval = timeout
+        for (name, value) in headers { request.setValue(value, forHTTPHeaderField: name) }
         if let bearer { request.setValue("Bearer \(bearer)", forHTTPHeaderField: "Authorization") }
         if let body {
             request.httpBody = body
@@ -264,6 +294,12 @@ public actor APIClient {
         case 404: throw APIError.notFound
         case 409: throw conflict(in: data)
         case 429: throw APIError.rateLimited
+        case UpdateRefusal.status:
+            // Too old for the server; any other 426 is the plain server error it always was.
+            if case .required(let need)? = UpdateRefusal.read(status: http.statusCode, headers: http.allHeaderFields, body: data) {
+                throw APIError.updateRequired(need)
+            }
+            throw APIError.server(http.statusCode)
         case 503 where errorCode(in: data) == "not_configured": throw APIError.notConfigured
         default: throw APIError.server(http.statusCode)
         }

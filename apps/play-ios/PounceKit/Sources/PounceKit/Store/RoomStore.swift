@@ -31,6 +31,9 @@ import Observation
     public let code: String
     public private(set) var room: RoomView?
     public private(set) var phase: RoomPhase = .connecting
+    /// Why the phase is `needsUpdate`, when the server said (app updates design §4): the app is
+    /// too old, or this table's game needs a newer one. Nil for a snapshot of another protocol.
+    public private(set) var refusal: UpdateRefusal?
     /// -1 before the first snapshot.
     public private(set) var lastSeq = -1
     /// The seq up to which `room` holds every event's full effect (-1 before the first
@@ -346,6 +349,12 @@ import Observation
         case .closed:
             connected = false
             if !isTerminal { phase = .closed }
+        case .refused(let why):
+            connected = false
+            if !isTerminal {
+                refusal = why
+                phase = .needsUpdate
+            }
         case .message(let message):
             guard !isTerminal else { return }
             apply(message)

@@ -210,6 +210,21 @@ remembers is `rating.json` next to `people.json`.
 - [ ] First-game tips with a real first-timer: the bubbles read well, point at the right thing, and
       never get in the way of a move. VoiceOver reads each tip when it appears.
 
+## App updates (needs a device and a server with the update routes)
+
+None of this runs in a simulator: it has no App Store, no TestFlight and no production StoreKit.
+
+- [ ] An App Store install with an older version, once a newer one is live: Home shows "A new Pounce is
+      ready" once, Update opens Pounce's App Store page, and the card doesn't return for that version.
+- [ ] A TestFlight install: no soft card. The table card and the full screen say "Open TestFlight", and
+      it opens Pounce in TestFlight (with no beta link from the server it falls back to `itms-beta://`).
+- [ ] A link to a table of a game this version can't draw: "This table is playing <game>. Update Pounce
+      to join.", and the table is on Home behind a padlock afterwards. Typed on Join, the same.
+- [ ] With `APP_MINIMUM` above the installed version on a test server: the full "Update Pounce to keep
+      playing" screen at launch, over everything, and it goes away once the minimum is taken back.
+- [ ] A child's device (under 13): none of these has a button, only "Ask a grown-up to update Pounce."
+- [ ] The update push on a version 1.0 build: it shows as a banner, and a tap only opens the app.
+
 ## Rerun on a quiet Mac
 
 These were not proven. On the shared development Mac, other projects' simulators starved the

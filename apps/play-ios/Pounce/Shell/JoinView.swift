@@ -56,6 +56,10 @@ struct JoinView: View {
         .animation(.easeOut(duration: 0.25).paced, value: offline)
         .animation(.easeOut(duration: 0.25).paced, value: locked)
         .onChange(of: model.joinNope) { nope() }
+        // The table is there, but this version can't join it: the table's own screen says why.
+        .onChange(of: model.room?.store.phase) { _, phase in
+            if checking, phase == .needsUpdate, let code = model.probing { model.open(code: code, intent: .join) }
+        }
         .onAppear {
             if let bounced = model.takeBouncedCode() {
                 typed = bounced

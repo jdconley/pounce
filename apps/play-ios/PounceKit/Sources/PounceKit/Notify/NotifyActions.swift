@@ -77,6 +77,8 @@ public enum NotifyActions {
         }
         if chosen == .inAnHour { return .snooze(snoozeSeconds) }
         if chosen == .later || chosen == .notNow { return .none }
+        // An update push: its table opens, and says what it needs (or, after the update, deals you in).
+        if payload.kind == .update, let code = payload.updateCode { return .open(code) }
         return payload.code.map(NotifyOutcome.open) ?? .none
     }
 }

@@ -152,6 +152,9 @@ struct TableScreen: View {
                             .accessibilityHidden(true)
                     }
                 }
+        case .state(.update):
+            // The server said why (the game, or the app's age), and what to do about it.
+            TableUpdateView(session: session)
         case .state(let kind):
             StateCard(kind: kind, onRetry: kind == .offline ? { session.retry() } : nil) {
                 model.goHome()

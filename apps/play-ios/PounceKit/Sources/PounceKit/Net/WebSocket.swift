@@ -23,6 +23,9 @@ public enum SocketConnectError: Error, Equatable {
     case unauthorized
     /// The upgrade got 429: too many wrong room codes from this phone or its network.
     case tooManyAttempts
+    /// The upgrade got 426 with a reason: this version is too old, or the table's game needs a
+    /// newer app (app updates design §4.2, §4.3).
+    case refused(UpdateRefusal)
     case failed(String)
 }
 
@@ -45,15 +48,19 @@ public protocol WebSocketConnector: Sendable {
 public struct URLSessionWebSocketConnector: WebSocketConnector {
     private let session: URLSession
     private let timeout: Duration
+    private let headers: [String: String]
 
-    /// `timeout` bounds the opening handshake and every later ping.
-    public init(session: URLSession = .shared, timeout: Duration = .seconds(15)) {
+    /// `timeout` bounds the opening handshake and every later ping. `headers` go with the upgrade:
+    /// who is asking, as on every API call.
+    public init(session: URLSession = .shared, timeout: Duration = .seconds(15), headers: [String: String] = ClientHeaders.standard) {
         self.session = session
         self.timeout = timeout
+        self.headers = headers
     }
 
     public func connect(url: URL, token: String) async throws -> any WebSocketConnection {
         var request = URLRequest(url: url)
+        for (name, value) in headers { request.setValue(value, forHTTPHeaderField: name) }
         request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
         let task = session.webSocketTask(with: request)
         let connection = URLSessionWebSocketConnection(task: task, pingTimeout: timeout)
@@ -62,10 +69,15 @@ public struct URLSessionWebSocketConnector: WebSocketConnector {
         do {
             try await connection.handshake()
         } catch {
-            let status = (task.response as? HTTPURLResponse)?.statusCode
+            let response = task.response as? HTTPURLResponse
+            let status = response?.statusCode
             task.cancel()
             connection.dropPrefetch()
             if error is CancellationError { throw error }
+            // A refused upgrade's body never arrives; its status and headers say why.
+            if let response, let refusal = UpdateRefusal.read(status: response.statusCode, headers: response.allHeaderFields, body: nil) {
+                throw SocketConnectError.refused(refusal)
+            }
             switch status {
             case 404: throw SocketConnectError.notFound
             case 401: throw SocketConnectError.unauthorized
