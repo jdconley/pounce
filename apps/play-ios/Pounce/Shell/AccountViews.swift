@@ -182,7 +182,7 @@ struct AccountCard: View {
         }
         .padding(16)
         .background(RoundedRectangle(cornerRadius: 28, style: .continuous).fill(Palette.ink.opacity(0.35)))
-        .opacity(account.busy ? 0.6 : 1)
+        .groupOpacity(account.busy ? 0.6 : 1)
     }
 }
 

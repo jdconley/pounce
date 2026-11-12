@@ -36,7 +36,7 @@ struct LiveTableWidget: Widget {
                 }
                 DynamicIslandExpandedRegion(.bottom) {
                     RugStrip(look: look, cat: 38)
-                        .opacity(context.isStale ? 0.55 : 1)
+                        .groupOpacity(context.isStale ? 0.55 : 1)
                         .saturation(context.isStale ? 0 : 1)
                 }
             } compactLeading: {
@@ -76,7 +76,7 @@ struct LiveTableLockView: View {
         .padding(.vertical, 12)
         // Shapes, not the big backdrop art: a Live Activity draws an oversized image as a grey box.
         .background(LinearGradient(colors: [Palette.violet, Palette.magenta], startPoint: .topLeading, endPoint: .bottomTrailing))
-        .opacity(stale ? 0.6 : 1)
+        .groupOpacity(stale ? 0.6 : 1)
         .saturation(stale ? 0 : 1)
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(Text(verbatim: look.spoken))

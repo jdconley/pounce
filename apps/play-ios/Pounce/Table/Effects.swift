@@ -117,6 +117,7 @@ enum Effects {
     /// Nope: three quick ±6° wiggles that end at the starting angle. Reduce Motion: a dim blink.
     static func nope() -> SKAction {
         if reduceMotion {
+            // fade-ok: a 0.16 s blink, Reduce Motion only (a pile's cards show through for that long)
             return .sequence([.fadeAlpha(by: -0.5, duration: 0.08), .fadeAlpha(by: 0.5, duration: 0.08)])
         }
         let d = CGFloat.pi / 30

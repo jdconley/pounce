@@ -110,7 +110,7 @@ private struct RenameRow: View {
                 save()
             }
             .saturation(changed ? 1 : 0)
-            .opacity(changed ? 1 : 0.55)
+            .groupOpacity(changed ? 1 : 0.55)
             .wiggle(trigger: saved)
             .accessibilityIdentifier("rename.save.\(seat)")
         }

@@ -1,7 +1,8 @@
 import SwiftUI
 
 /// Chunky toy lettering: SF Pro Rounded Black with a thick dark outline, drawn as
-/// 8 offset copies behind the fill.
+/// 8 offset copies behind the fill, composited as one layer (faded, the copies would show
+/// through each other).
 struct OutlinedText: View {
     let text: String
     let size: CGFloat
@@ -46,6 +47,8 @@ struct OutlinedText: View {
             }
             label.foregroundStyle(fill)
         }
+        // One layer, so a fade on any parent fades the lettering whole, not each copy.
+        .compositingGroup()
         .lineLimit(lines)
         .multilineTextAlignment(alignment)
         .minimumScaleFactor(0.5)

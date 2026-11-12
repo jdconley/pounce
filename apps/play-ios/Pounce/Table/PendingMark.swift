@@ -3,7 +3,7 @@ import SpriteKit
 
 /// A move this phone sent that the server hasn't answered yet: after a moment (a normal answer
 /// comes well before), an hourglass sits on the card where it was played, or on the pile drawn
-/// from or the lay-down button, and the played card dims. It stays while the move is pending,
+/// from or the lay-down button, and the played card darkens. It stays while the move is pending,
 /// across a reconnect (`RoomStore.pendingMove`), and goes with the snapshot or refusal that
 /// answers it.
 extension TableScene {
@@ -24,7 +24,7 @@ extension TableScene {
         pendingMarkTask = nil
         guard pendingMark.parent != nil else { return }
         pendingMark.removeFromParent()
-        provisionalNode?.alpha = 1
+        provisionalNode?.colorBlendFactor = 0
         director.wake()
     }
 
@@ -37,7 +37,9 @@ extension TableScene {
         pendingMark.size = CGSize(width: side, height: side)
         pendingMark.zPosition = 50
         pendingMark.position = CGPoint(x: anchor.x + size.width / 2 - side * 0.3, y: anchor.y + size.height / 2 - side * 0.3)
-        provisionalNode?.alpha = 0.6
+        // Darkened, not faded: the card it rests on would show through a see-through one.
+        provisionalNode?.color = UIColor(white: 0.08, alpha: 1)
+        provisionalNode?.colorBlendFactor = 0.4
         pendingMark.accessibilityLabel = String(
             localized: "Sending your move", comment: "VoiceOver: the hourglass on a move the server hasn't answered yet")
         director.wake()

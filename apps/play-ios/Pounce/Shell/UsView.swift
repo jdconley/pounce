@@ -341,7 +341,7 @@ struct UsView: View {
                     Image(ArtName.iconPlus).resizable().scaledToFit().frame(width: 22)
                         .background(Circle().fill(Palette.lime).overlay(Circle().strokeBorder(Palette.ink, lineWidth: 2)))
                 }
-                NameTag(ghost.partner.name, maxWidth: 76 * rowScale, size: 13 * rowScale).opacity(0.6)
+                NameTag(ghost.partner.name, maxWidth: 76 * rowScale, size: 13 * rowScale).groupOpacity(0.6)
                 Text("Play again", comment: "Us: a cat who left; tap to start the streak again")
                     .font(.system(.caption2, design: .rounded, weight: .heavy))
                     .foregroundStyle(.white.opacity(0.8))
@@ -680,7 +680,7 @@ private struct PauseDial: View {
                     PillButton(icon: ArtName.iconCheck, color: Palette.teal, size: .medium, accessibilityLabel: "Pause") {
                         if let days { onPause(days) }
                     }
-                    .opacity(days == nil ? 0.5 : 1)
+                    .groupOpacity(days == nil ? 0.5 : 1)
                     .disabled(days == nil)
                     .accessibilityIdentifier("pause.confirm")
                 }

@@ -127,6 +127,7 @@ targets:
           - PounceWidgets.entitlements
       - path: Pounce/Design/Palette.swift
       - path: Pounce/Design/OutlinedText.swift
+      - path: Pounce/Design/GroupOpacity.swift
       - path: Pounce/Design/ArtName.swift
     settings:
       base:

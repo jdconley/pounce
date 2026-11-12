@@ -269,7 +269,7 @@ struct GameOverView: View {
                 ) {
                     onPlayAgain()
                 }
-                .opacity(again == .waiting ? 0.7 : 1)
+                .groupOpacity(again == .waiting ? 0.7 : 1)
                 .overlay { if again == .waiting { YarnIndicator() } }
                 .bounceLoop(active: again == .go)
                 .accessibilityIdentifier("gameover.again")
@@ -320,7 +320,7 @@ struct GameOverView: View {
                     .fixedSize()
             }
         }
-        .opacity(s.forfeited ? 0.75 : 1)
+        .groupOpacity(s.forfeited ? 0.75 : 1)
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(s.forfeited
             ? Text("\(s.name), forfeited", comment: "VoiceOver: a player who forfeited, on the game over screen")

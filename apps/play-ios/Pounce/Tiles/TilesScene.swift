@@ -113,7 +113,8 @@ final class TilesScene: SKScene {
     /// Holds the sets and their pieces; moved by the scroll. Its children use the flow's
     /// coordinates with y turned over.
     let rugContent = SKNode()
-    let rackLayer = SKNode()
+    /// The stash; dimmed as one layer while a turn is on its way.
+    let rackLayer = FadeGroup()
     let loupeLayer = SKNode()
     private let dim = SKSpriteNode(color: UIColor(Palette.ink), size: .zero)
     var pieces: [TileID: TilePieceNode] = [:]
@@ -131,6 +132,8 @@ final class TilesScene: SKScene {
     let sortToyButton = SKSpriteNode()
     let tidyButton = SKSpriteNode()
     let turnPill = SKSpriteNode()
+    /// The turn button with its icon and label, dimmed as one layer.
+    private let turnPillGroup = FadeGroup()
     private let turnIcon = SKSpriteNode()
     private let turnLabel = SKSpriteNode()
     let holdFill = SKSpriteNode(color: UIColor.white.withAlphaComponent(0.4), size: .zero)
@@ -188,9 +191,11 @@ final class TilesScene: SKScene {
         layer(.opponents).addChild(opponents)
         menuButton.zPosition = 9
         layer(.opponents).addChild(menuButton)
-        for node in [undoButton, resetButton, sortNumberButton, sortToyButton, tidyButton, turnPill] {
+        for node in [undoButton, resetButton, sortNumberButton, sortToyButton, tidyButton] {
             layer(.strip).addChild(node)
         }
+        turnPillGroup.addChild(turnPill)
+        layer(.strip).addChild(turnPillGroup)
         holdFill.anchorPoint = CGPoint(x: 0, y: 0.5)
         holdFill.zPosition = 1
         holdFill.isHidden = true
@@ -491,7 +496,7 @@ final class TilesScene: SKScene {
             }
             place(node, at: center, animated: animated && node.look != nil)
             node.show(look(for: set, model: model), size: placement.frame.size, reduceMotion: reduce)
-            node.alpha = inLoupe ? 0.5 : 1
+            node.alpha = inLoupe ? 0.5 : 1  // fade-ok: TileSetNode is a FadeGroup
             node.setScale(swell)
             node.zPosition = swell > 1 ? 40 : 5
             guard !inLoupe else {
@@ -541,6 +546,7 @@ final class TilesScene: SKScene {
 
         // The stash.
         rackLayer.position = CGPoint(x: -rackScroll, y: 0)
+        rackLayer.alpha = sending ? 0.6 : 1  // fade-ok: a FadeGroup
         if let seat, model.rack(seat) != nil {
             let gapSlot = input.isDragging && input.target == .rack ? input.rackSlot : nil
             let slotCount = rackTiles.count + (gapSlot == nil ? 0 : input.dragTiles.count)
@@ -565,7 +571,7 @@ final class TilesScene: SKScene {
                 node.zPosition = lifted ? 5 : 1 + CGFloat(i) * 0.01
                 node.setPlaced(false)
                 node.setRing(lifted ? .white : hintRing(tile))
-                node.alpha = sending ? 0.6 : 1
+                node.alpha = 1  // the stash dims as a whole (`rackLayer`)
                 settle(node, at: target, scale: lifted ? 1.08 : 1, animated: animated)
                 slot += 1
             }
@@ -713,7 +719,7 @@ final class TilesScene: SKScene {
         poolSprite.isHidden = false
         poolSprite.size = layout.pool.size
         poolSprite.position = CGPoint(x: layout.pool.midX, y: layout.pool.midY)
-        poolSprite.alpha = model.view.poolCount == 0 ? 0.55 : 1
+        poolSprite.alpha = model.view.poolCount == 0 ? 0.55 : 1  // fade-ok: the toy box alone
         let count = TilePieceFactory.shared.count(model.view.poolCount, size: layout.arrangement == .phone ? 15 : 18)
         poolCount.isHidden = false
         poolCount.texture = count
@@ -792,7 +798,7 @@ final class TilesScene: SKScene {
         turnPill.texture = factory.pill(pill, size: size, pressed: input.pressed == .turn)
         turnPill.size = CGSize(width: size.width, height: size.height + 4)
         turnPill.position = CGPoint(x: layout.turn.midX, y: layout.turn.midY)
-        turnPill.alpha = turnButton == nil ? 0.75 : 1
+        turnPillGroup.alpha = turnButton == nil ? 0.75 : 1  // fade-ok: a FadeGroup
         let label = factory.label(text, size: (size.height * 0.46).rounded(), outline: 2.5)
         turnLabel.texture = label
         turnLabel.size = label.size()
@@ -802,7 +808,7 @@ final class TilesScene: SKScene {
         let total = iconSide + 6 + label.size().width
         turnIcon.position = CGPoint(x: -total / 2 + iconSide / 2, y: 2)
         turnLabel.position = CGPoint(x: total / 2 - label.size().width / 2, y: 2)
-        turnIcon.alpha = pill == .blocked ? 0.6 : 1
+        turnIcon.alpha = pill == .blocked ? 0.6 : 1  // fade-ok: the icon alone on its pill
         holdFill.size = CGSize(width: size.width - 10, height: size.height - 10)
         holdFill.position = CGPoint(x: -size.width / 2 + 5, y: 2)
         if input.hold == nil { holdFill.isHidden = true }
@@ -875,7 +881,7 @@ final class TilesScene: SKScene {
         let floor = layout.strip.height > 0 ? (layout.meter == .zero ? layout.strip.maxY : layout.meter.maxY) : 0
         dim.position = CGPoint(x: 0, y: floor)
         dim.size = CGSize(width: size.width, height: size.height - floor)
-        dim.alpha = 0.55
+        dim.alpha = 0.55  // fade-ok: the veil, one sprite over the rug
         loupeLayer.isHidden = false
 
         // Rows of up to seven at stash size, near where the set sits on the rug.

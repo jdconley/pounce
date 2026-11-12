@@ -51,7 +51,7 @@ extension TableScene {
         let total = CelebrationTiming.versusIntro
         let out = 0.25
         var items: [(SKAction, SKNode)] = [(.sequence([
-            .fadeAlpha(to: 0.6, duration: 0.15), .wait(forDuration: total - 0.15 - out), .fadeOut(withDuration: out),
+            .fadeAlpha(to: 0.6, duration: 0.15), .wait(forDuration: total - 0.15 - out), .fadeOut(withDuration: out),  // fade-ok: the veil, one sprite
         ]), veil)]
         veil.alpha = 0
         var nodes: [SKNode] = [veil]
@@ -225,6 +225,7 @@ extension TableScene {
         var items: [(SKAction, SKNode)] = []
         for (i, card) in hand.cards.enumerated() {
             let flip: SKAction = reduceMotion
+                // fade-ok: a 0.25 s blink in place of the flip, Reduce Motion only
                 ? .sequence([.fadeAlpha(to: 0.4, duration: 0.1), .fadeAlpha(to: 1, duration: 0.15)])
                 : .sequence([
                     .wait(forDuration: Double(i) * 0.03),

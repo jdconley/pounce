@@ -156,7 +156,7 @@ struct YarnIndicator: View {
                 .rotationEffect(.degrees(spin && !reduceMotion ? 360 : 0))
         }
         .frame(width: 48, height: 48)
-        .opacity(reduceMotion && spin ? 0.6 : 1)
+        .groupOpacity(reduceMotion && spin ? 0.6 : 1)
         .onAppear {
             withAnimation(
                 reduceMotion
