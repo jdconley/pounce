@@ -186,6 +186,19 @@ final class StubProtocol: URLProtocol, @unchecked Sendable {  // URLProtocol is 
         #expect(json == ["game": "cat-tower", "name": "Taco Night"])
     }
 
+    /// A shelf card asks for its own game; Cat Tower, the one the server deals, is the default.
+    @Test func createRoomAsksForTheGameItIsGiven() async throws {
+        let server = StubServer { req in
+            req.path == "/v1/devices" ? Reply(200, #"{"deviceId":"dev1","token":"tok1"}"#) : Reply(201, #"{"code":"K7QM4"}"#)
+        }
+        let (api, _) = client(server)
+        _ = try await api.createRoom(game: GameCatalog.tiles.id)
+        let post = try #require(server.seen.last)
+        let json = try #require(try JSONSerialization.jsonObject(with: post.body) as? [String: String])
+        #expect(json == ["game": "tiles"])
+        #expect(GameCatalog.dealt.id == "cat-tower")
+    }
+
     @Test func listTablesDecodesTheNameWhenPresent() async throws {
         let server = StubServer { req in
             req.path == "/v1/devices"

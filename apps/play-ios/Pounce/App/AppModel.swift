@@ -717,13 +717,14 @@ final class AppModel {
     }
 
     /// `practice`: a game against the House Cat that starts at once, with no stop in the lobby.
-    func newGame(practice: Bool = false) async {
-        guard !isCreatingRoom else { return }
+    func newGame(_ game: GameCatalog.Entry = GameCatalog.dealt, practice: Bool = false) async {
+        // A game still on its way has a card on the shelf but no table to start.
+        guard game.isAvailable, !isCreatingRoom else { return }
         isCreatingRoom = true
         newGameError = nil
         defer { isCreatingRoom = false }
         do {
-            let code = try await api.createRoom()
+            let code = try await api.createRoom(game: game.id)
             open(code: code, intent: .create)
             if practice { room?.practicePending = true }
         } catch let error as APIError {

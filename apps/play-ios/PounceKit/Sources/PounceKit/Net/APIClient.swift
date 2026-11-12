@@ -159,11 +159,12 @@ public actor APIClient {
         return try decode(Reply.self, from: data, status: 200).tables
     }
 
-    /// Creates a Cat Tower room and returns its code. Without a `name` (`TableName.clean`ed) the
+    /// Creates a room for `game` (a `GameCatalog` id; Cat Tower unless told otherwise, the one game
+    /// the server deals today) and returns its code. Without a `name` (`TableName.clean`ed) the
     /// server picks one.
-    public func createRoom(name: String? = nil) async throws -> String {
+    public func createRoom(name: String? = nil, game: String = GameCatalog.dealt.id) async throws -> String {
         struct Reply: Decodable { let code: String }
-        var body = ["game": "cat-tower"]
+        var body = ["game": game]
         if let name { body["name"] = name }
         let data = try await authenticated("POST", "/v1/rooms", body: body)
         return try decode(Reply.self, from: data, status: 201).code
