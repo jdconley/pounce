@@ -10,17 +10,21 @@ import ActivityKit
 public struct LiveTableState: Codable, Hashable, Sendable {
     public struct Seat: Codable, Hashable, Sendable {
         public var cat: Int
-        /// The phase this seat is working on, 1 to 10.
+        /// The phase this seat is working on, 1 to 10. A tile game table sends 1 and `progress`.
         public var phase: Int
+        /// Only at a table of a game other than Cat Tower: what `LiveTableState.progressKind`
+        /// counts for this seat (pieces left on its rack). Nil: read `phase`.
+        public var progress: Int?
         /// Absent for a bot (the House Cat).
         public var name: String?
         public var bot: Bool
         /// This device holds the seat.
         public var me: Bool
 
-        public init(cat: Int, phase: Int, name: String?, bot: Bool, me: Bool) {
+        public init(cat: Int, phase: Int, name: String?, bot: Bool, me: Bool, progress: Int? = nil) {
             self.cat = cat
             self.phase = phase
+            self.progress = progress
             self.name = name
             self.bot = bot
             self.me = me
@@ -47,8 +51,15 @@ public struct LiveTableState: Codable, Hashable, Sendable {
     /// The move is one of this device's seats.
     public var mine: Bool
     public var streak: Paws?
+    /// Only at a table of a game other than Cat Tower: what each seat's `progress` counts.
+    /// `"pieces"`: the pieces left on its rack (the tile game). Nil: a Cat Tower table.
+    public var progressKind: String?
 
-    public init(table: String, seats: [Seat], turn: Int?, mine: Bool, streak: Paws?) {
+    /// The seats show pieces left, not a phase: a tile game table.
+    public var countsPieces: Bool { progressKind == "pieces" }
+
+    public init(table: String, seats: [Seat], turn: Int?, mine: Bool, streak: Paws?, progressKind: String? = nil) {
+        self.progressKind = progressKind
         self.table = table
         self.seats = seats
         self.turn = turn

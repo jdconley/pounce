@@ -23,15 +23,17 @@ enum Fixtures {
             .appendingPathComponent("Fixtures").appendingPathComponent(relative)
     }
 
-    /// Tile game wire samples (`Fixtures/tiles/`), made by running play-api's merged tiles module
-    /// and wrapping its views and events as design spec §9.3 says the room will. They stand in
-    /// for the server's shared protocol fixtures until those exist.
+    /// The tile game's protocol fixtures (`Fixtures/tiles/tiles-*-messages.json`): copies of the
+    /// server's `apps/play-api/fixtures/protocol/tiles-server-messages.json` and
+    /// `tiles-client-messages.json` as of commit 2bb0cee on `claude/tiles-rooms` (the server's
+    /// rooms and wire for the game, PR 64), generated there from a real room. Once that branch is
+    /// on main these two read the shared files (`url("protocol/tiles-…")`) and the copies go.
     static func tilesServerMessages() throws -> [(name: String, json: String)] {
-        try messages(at: localURL("tiles/server-messages.json"))
+        try messages(at: localURL("tiles/tiles-server-messages.json"))
     }
 
     static func tilesClientMessages() throws -> [(name: String, json: String)] {
-        try messages(at: localURL("tiles/client-messages.json"))
+        try messages(at: localURL("tiles/tiles-client-messages.json"))
     }
 
     static func serverMessages() throws -> [(name: String, json: String)] {
