@@ -68,6 +68,7 @@ struct PounceSheetView: View {
         .onChange(of: shareShown) { _, shown in if !shown && sharing != nil { onClose() } }
         .accessibilityElement(children: .contain)
         .dynamicTypeSize(...DynamicTypeSize.xxxLarge)
+        .tipHost(.pounce, paused: shareShown)
         .accessibilityIdentifier("sheet-pounce")
     }
 
@@ -106,6 +107,7 @@ struct PounceSheetView: View {
         return Button {
             Haptics.shared.tick()
             Sound.shared.play(ArtName.Sound.sfxPop)
+            model.tips.used("pounce.tile")
             selected = tile
         } label: {
             VStack(spacing: 6) {
@@ -145,6 +147,7 @@ struct PounceSheetView: View {
         .accessibilityValue(Self.value(tile))
         .accessibilityAddTraits(on ? [.isButton, .isSelected] : .isButton)
         .accessibilityIdentifier("pounce.tile.\(index)")
+        .tipTarget("pounce.tile.\(index)")
     }
 
     static func label(_ tile: PounceTile) -> Text {
@@ -186,6 +189,7 @@ struct PounceSheetView: View {
                 PillButton(icon: locked ? ArtName.Habit.iconPadlock : ArtName.Habit.pounceBell,
                            color: locked ? Palette.violet : Palette.orange, size: .large, width: 170 * scale,
                            accessibilityLabel: "Pounce") {
+                    model.tips.used("pounce.send")
                     if locked { fail() } else { send() }
                 }
                 .saturation(locked ? 0.4 : 1)

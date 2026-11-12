@@ -514,6 +514,8 @@ private struct TableStage: View {
         .animation(.easeOut(duration: 0.2).paced, value: events.scoreboard != nil)
         .animation(.easeOut(duration: 0.2).paced, value: events.player != nil)
         .animation(.easeOut(duration: 0.3).paced, value: events.winners)
+        // A finished game: Home's Invite tip can come up next.
+        .onChange(of: events.winners != nil) { _, over in if over { model.tips.note(.gameOver) } }
         .animation(.spring(duration: 0.45, bounce: 0.15).paced, value: curtainSeat)
         .animation(.easeOut(duration: 0.2).paced, value: localCats.map(\.seat))
         .animation(.easeOut(duration: 0.25).paced, value: priming)

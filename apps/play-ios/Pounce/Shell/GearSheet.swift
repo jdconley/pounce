@@ -13,6 +13,8 @@ struct GearSheet: View {
     let onRules: () -> Void
 
     @State private var confirmingDelete = false
+    /// Reset tips was just tapped: the pill says Done for a moment.
+    @State private var tipsReset = false
     @State private var showingKittens = false
 
     var body: some View {
@@ -46,6 +48,7 @@ struct GearSheet: View {
                             title: String(localized: "How to play", comment: "Home settings: open the rules"),
                             accessibilityLabel: "How to play"
                         ) {
+                            model.tips.used("settings.rules")
                             onRules()
                         }
                         .accessibilityIdentifier("settings.rules")
@@ -54,6 +57,25 @@ struct GearSheet: View {
                         }
                         .accessibilityIdentifier("gear.privacy")
                     }
+                    // Every tip on this phone comes back, for everyone (`Tips.swift`, the table coach).
+                    PillButton(
+                        icon: tipsReset ? ArtName.iconCheck : nil, color: Palette.sky, size: .small, width: 156,
+                        title: tipsReset
+                            ? String(localized: "Done", comment: "Gear sheet: Reset tips, just tapped")
+                            : String(localized: "Reset tips", comment: "Gear sheet: show every tip again"),
+                        accessibilityLabel: "Reset tips"
+                    ) {
+                        guard !tipsReset else { return }
+                        model.replayTips()
+                        tipsReset = true
+                        UIAccessibility.post(notification: .announcement, argument: String(
+                            localized: "Tips are back.", comment: "VoiceOver: after Reset tips"))
+                        Task {
+                            try? await Task.sleep(for: Pace.duration(.seconds(2)))
+                            tipsReset = false
+                        }
+                    }
+                    .accessibilityIdentifier("gear.resetTips")
                     // An adult's way to the App Store's review page (never shown to a kitten or a teen).
                     if model.offersRating {
                         PillButton(
@@ -103,6 +125,7 @@ struct GearSheet: View {
             }
         }
         .animation(.easeOut(duration: 0.25).paced, value: confirmingDelete)
+        .tipHost(.gear, paused: confirmingDelete || showingKittens)
         .accountOverlays()
         .sheet(isPresented: $showingKittens) { KittensSheet() }
         .accessibilityElement(children: .contain)
@@ -139,11 +162,13 @@ struct GearSheet: View {
                     accessibilityLabel: model.turnReminderOn ? "Turn reminder on" : "Turn reminder off"
                 ) {
                     settings.turnReminderChoice = !model.turnReminderOn
+                    model.tips.used("settings.reminder")
                     model.settingsChanged()
                 }
                 .saturation(model.turnReminderOn ? 1 : 0.3)
                 .accessibilityValue(model.turnReminderOn ? "on" : "off")
                 .accessibilityIdentifier("settings.reminder")
+                .tipTarget("settings.reminder")
             }
         }
     }

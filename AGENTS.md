@@ -35,7 +35,8 @@ The UI is not where we explain things. Every word costs attention.
 
 ## Guiding people
 
-First-time guidance uses the tip system (`PounceKit/Tutorial`, `Pounce/Shell/CoachMark.swift`): one
+First-time guidance uses the tip system (`PounceKit/Tutorial`, `Pounce/Shell/CoachMark.swift` for
+the game's rules, `Pounce/Shell/Tips.swift` and `UITips.swift` for the app's controls): one
 short tip at a time, pointing at the thing it's about, shown when it's relevant, dismissed by using
 the thing or a tap, and never shown again once learned. A new feature that needs explaining gets a
 tip, not more text on the screen.

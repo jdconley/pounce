@@ -53,6 +53,7 @@ struct StreakStripView: View {
         Button {
             Haptics.shared.tick()
             Sound.shared.play(ArtName.Sound.sfxPop)
+            model.tips.used("home.own")
             model.showTrophies()
         } label: {
             OwnChip(own: own, cat: model.people.owner?.cat ?? 0, scale: scale)
@@ -61,6 +62,7 @@ struct StreakStripView: View {
         .accessibilityLabel(Text("Your streak, \(own.count)", comment: "VoiceOver: Home's own-streak chip; opens the trophy room"))
         .accessibilityValue("\(own.count)|\(own.kept ? 1 : 0)|\(PawBadge.modeName(StreakStrip.mode(own)))")
         .accessibilityIdentifier("home.own")
+        .tipTarget("home.own")
         // A chip's layers come and go as one.
         .compositingGroup()
         .transition(.scale.combined(with: .opacity))
@@ -119,6 +121,7 @@ struct StreakStripView: View {
         return Button {
             Haptics.shared.tick()
             Sound.shared.play(ArtName.Sound.sfxPop)
+            model.tips.used("home.add")
             model.showInvite()
         } label: {
             // Worded, so it reads apart from Join: this one adds a person (a link or QR that makes
@@ -140,6 +143,7 @@ struct StreakStripView: View {
         .accessibilityLabel(Text("Invite someone", comment: "VoiceOver: Home's plus that opens the invite sheet"))
         .accessibilityValue(big ? "big" : "small")
         .accessibilityIdentifier("home.add")
+        .tipTarget("home.add")
         .transition(.scale.combined(with: .opacity))
     }
 
@@ -147,6 +151,7 @@ struct StreakStripView: View {
         Button {
             Haptics.shared.tick()
             Sound.shared.play(ArtName.Sound.sfxPop)
+            model.tips.used("home.gift")
             model.showUs(openingGift: gift.id)
         } label: {
             Image(ArtName.Habit.giftBox)
@@ -158,6 +163,7 @@ struct StreakStripView: View {
         .bounceLoop(active: true)
         .accessibilityLabel(Text("Open the gift", comment: "VoiceOver: a milestone gift waiting on Home"))
         .accessibilityIdentifier("home.gift")
+        .tipTarget("home.gift")
     }
 }
 

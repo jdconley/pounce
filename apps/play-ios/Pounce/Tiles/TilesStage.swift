@@ -15,6 +15,8 @@ final class TilesStageEvents {
     /// A piece one of this phone's seats drew on a shared phone, shown once before it is passed on.
     var drew: Drew?
     var tableTaps = 0
+    /// Where the scene's tip anchors are, in its view's points (`TilesScene.onTipSpots`).
+    var tipSpots: [String: CGRect] = [:]
 
     struct Drew: Equatable {
         var seat: Seat
@@ -112,6 +114,8 @@ struct TilesStage: View {
             if let scene {
                 TilesTableView(scene: scene)
                     .ignoresSafeArea()
+                    // The scene's controls, as anchors for the tips (nothing drawn, nothing to tap).
+                    .overlay { TipSpots(spots: events.tipSpots).ignoresSafeArea() }
             } else {
                 RoomBackground()
             }
@@ -178,6 +182,11 @@ struct TilesStage: View {
         .animation(.spring(duration: 0.4, bounce: 0.15).paced, value: curtainSeat)
         .animation(.easeOut(duration: 0.2).paced, value: localCats.map(\.seat))
         .animation(.easeOut(duration: 0.3).paced, value: events.winners)
+        // A finished game: Home's Invite tip can come up next.
+        .onChange(of: events.winners != nil) { _, over in if over { model.tips.note(.gameOver) } }
+        // The face-up stash's person gets the tips; none while a curtain, the menu or game over is up.
+        .tipHost(.tiles, paused: curtainSeat != nil || events.menuOpen || events.winners != nil,
+                 person: events.shown.flatMap { table?.room.seats[safe: $0]?.person?.id })
         .animation(.easeOut(duration: 0.2).paced, value: events.drew)
         .animation(.spring(duration: 0.35, bounce: 0.3).paced, value: connection)
         .onAppear(perform: attach)
@@ -291,6 +300,8 @@ struct TilesStage: View {
         scene.onShownSeat = { [weak events] seat in events?.shown = seat }
         scene.onTableTap = { [weak events] in events?.tableTaps += 1 }
         scene.onBand = { [weak events] top in if events?.bandTop != top { events?.bandTop = top } }
+        scene.onTipSpots = { [weak events] spots in events?.tipSpots = spots }
+        scene.onTipUsed = { [weak model] control in model?.tips.used(control) }
         scene.onDrew = { [weak events] seat, tile in
             events?.drew = .init(seat: seat, tile: tile, serial: (events?.drew?.serial ?? 0) + 1)
         }

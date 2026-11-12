@@ -25,6 +25,8 @@ struct GameCard: View {
     /// A table is being made: the card waits, dimmed.
     var busy = false
     var identifier: String?
+    /// The tip anchor on the play mark (`Tips.swift`).
+    var playAnchor: String?
     let action: () -> Void
 
     @Environment(\.dynamicTypeSize) private var typeSize
@@ -100,7 +102,7 @@ struct GameCard: View {
         case .ticket:
             HStack(spacing: 0) {
                 cover.frame(width: 108)
-                    .overlay { if !soon { PlayDisc() } }
+                    .overlay { if !soon { PlayDisc().tipTarget(playAnchor) } }
                 Rectangle().fill(Palette.ink).frame(width: Self.outline)
                 band(titleSize: ticketTitleSize)
                     .overlay(alignment: .bottom) { note.padding(.bottom, 8) }
@@ -155,12 +157,12 @@ struct GameCard: View {
                 if playUnder || bigType {
                     VStack(alignment: .leading, spacing: 12) {
                         words.frame(maxWidth: .infinity, alignment: .leading)
-                        PlayMark(wide: true, roomy: roomy)
+                        PlayMark(wide: true, roomy: roomy).tipTarget(playAnchor)
                     }
                 } else {
                     HStack(alignment: .center, spacing: 10) {
                         words.frame(maxWidth: .infinity, alignment: .leading)
-                        PlayMark(roomy: roomy)
+                        PlayMark(roomy: roomy).tipTarget(playAnchor)
                     }
                 }
             }

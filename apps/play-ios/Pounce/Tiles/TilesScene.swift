@@ -49,6 +49,12 @@ final class TilesScene: SKScene {
     var onBand: (CGFloat) -> Void = { _ in }
     /// What VoiceOver should say.
     var onAnnounce: (String) -> Void = { UIAccessibility.post(notification: .announcement, argument: $0) }
+    /// Where UI tips can point (`Tips.swift`), in the view's points from its top-left corner:
+    /// `tiles.draw` or `tiles.play` (the turn button), `tiles.sort`, `tiles.meter`, `tiles.set`.
+    var onTipSpots: ([String: CGRect]) -> Void = { _ in }
+    /// A control a tip teaches was used (`tiles.turn`, `tiles.sort`, `tiles.loupe`).
+    var onTipUsed: (String) -> Void = { _ in }
+    private var lastTipSpots: [String: CGRect] = [:]
 
     // Drawn state.
     var model: TilesTableModel?
@@ -472,6 +478,8 @@ final class TilesScene: SKScene {
 
         var live: Set<TileID> = []
         var liveSets: Set<Int> = []
+        /// The first set on the rug that opens in the loupe (the loupe tip points at it).
+        var firstOpenSet: CGRect?
         let small: TilePieceFactory.Size = flow.pieceSize.width >= 42 ? .large : .small
         let reduce = Effects.reduceMotion
         for (index, set) in sets.enumerated() {
@@ -487,6 +495,11 @@ final class TilesScene: SKScene {
                 return n
             }()
             var center = CGPoint(x: placement.frame.midX, y: -placement.frame.midY)
+            if firstOpenSet == nil, draft.map({ !$0.isLocked(set.id) }) == true {
+                let a = rugContent.convert(CGPoint(x: placement.frame.minX, y: -placement.frame.maxY), to: self)
+                let b = rugContent.convert(CGPoint(x: placement.frame.maxX, y: -placement.frame.minY), to: self)
+                firstOpenSet = CGRect(x: min(a.x, b.x), y: min(a.y, b.y), width: abs(b.x - a.x), height: abs(b.y - a.y))
+            }
             // The set a dragged piece is over swells toward stash size, so the target is large.
             var swell: CGFloat = 1
             if input.isDragging, case .set(let aimed) = input.target, aimed == set.id {
@@ -597,6 +610,31 @@ final class TilesScene: SKScene {
         // `clearTable` hides it while there's no table yet; the table is here now.
         menuButton.isHidden = false
         publishProbe()
+        publishTipSpots(firstSet: firstOpenSet.flatMap { layout.rug.contains(CGPoint(x: $0.midX, y: $0.midY)) ? $0 : nil })
+    }
+
+    /// Tells the shell where the tips' controls are now (only when that changed).
+    private func publishTipSpots(firstSet: CGRect?) {
+        guard view != nil, let layout else { return }
+        var spots: [String: CGRect] = [:]
+        func put(_ id: String, _ r: CGRect) {
+            let a = convertPoint(toView: CGPoint(x: r.minX, y: r.maxY))
+            let b = convertPoint(toView: CGPoint(x: r.maxX, y: r.minY))
+            spots[id] = CGRect(x: min(a.x, b.x), y: min(a.y, b.y), width: abs(b.x - a.x), height: abs(b.y - a.y)).integral
+        }
+        if !turnPill.isHidden {
+            switch turnButton {
+            case .draw: put("tiles.draw", layout.turn)
+            case .play: put("tiles.play", layout.turn)
+            default: break
+            }
+        }
+        if !sortToyButton.isHidden { put("tiles.sort", layout.sortNumber.union(layout.sortToy)) }
+        if !meterNode.isHidden, layout.meter != .zero { put("tiles.meter", layout.meter) }
+        if loupe == nil, selection.isEmpty, tricksAllowed, let firstSet { put("tiles.set", firstSet) }
+        guard spots != lastTipSpots else { return }
+        lastTipSpots = spots
+        onTipSpots(spots)
     }
 
     var maxScroll: CGFloat {
@@ -605,6 +643,10 @@ final class TilesScene: SKScene {
     }
 
     private func clearTable() {
+        if !lastTipSpots.isEmpty {
+            lastTipSpots = [:]
+            onTipSpots([:])
+        }
         for node in pieces.values { node.removeFromParent() }
         pieces.removeAll()
         for node in setNodes.values { node.removeFromParent() }
@@ -852,6 +894,7 @@ final class TilesScene: SKScene {
         guard let draft, draft.set(id) != nil, !draft.isLocked(id) else { return }
         loupe = id
         selection = []
+        onTipUsed("tiles.loupe")
         Sound.shared.play(ArtName.Sound.sfxPop, volume: 0.5)
         Haptics.shared.tick()
         redraw(animated: true)

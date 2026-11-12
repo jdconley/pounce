@@ -50,6 +50,8 @@ struct LobbyView: View {
     private var table: TableModel? { session.model }
     private var seated: Bool { !(table?.mySeats.isEmpty ?? true) }
     private var shareURL: URL { DeepLink.shareURL(code: session.code) }
+    /// The first open seat (where the seat tip points), if this phone is seated.
+    private var firstOpenSeat: Int? { seated ? room?.seats.firstIndex { $0.kind == .open } : nil }
     private var tableName: String { room?.title ?? TableName.fallback(code: session.code) }
     /// The server takes a rename from the host or any seated phone, never from a kitten's (a
     /// kitten types no names, spec §14.1).
@@ -94,6 +96,8 @@ struct LobbyView: View {
             }
         }
         .coordinateSpace(.named("lobby"))
+        // Tips wait while a seat menu, a sheet or the start question is up.
+        .tipHost(.lobby, paused: menuSeat != nil || picker != nil || sharing || renaming || confirmingStart || !interactive)
         .animation(.easeOut(duration: 0.15).paced, value: menuSeat)
         .animation(.easeOut(duration: 0.15).paced, value: confirmingStart)
         // Someone took the last open seat, or the game began: nothing left to confirm.
@@ -266,10 +270,12 @@ struct LobbyView: View {
         if model.limits.sharesLinks {
             PillButton(icon: ArtName.iconShare, color: Palette.magenta, size: .small, width: 54, accessibilityLabel: "Invite") {
                 lastTapped = .share
+                model.tips.used("lobby.share")
                 sharing = true
             }
             .wiggle(trigger: wiggles[.share, default: 0])
             .accessibilityIdentifier("lobby.share")
+            .tipTarget("lobby.share")
         }
     }
 
@@ -344,6 +350,8 @@ struct LobbyView: View {
         .accessibilityLabel(seatLabel(seat))
         .accessibilityHint(seatHint(seat))
         .accessibilityIdentifier("lobby.seat.\(i)")
+        // The seat tip points at the first open cushion.
+        .tipTarget(i == firstOpenSeat ? "lobby.openSeat" : nil)
     }
 
     private func seatLabel(_ seat: SeatView) -> Text {
@@ -416,6 +424,7 @@ struct LobbyView: View {
                     .wiggle(trigger: wiggles[.start, default: 0])
                     .accessibilityValue(ready ? Text("") : Text(verbatim: LobbyCopy.status(table)))
                     .accessibilityIdentifier("lobby.start")
+                    .tipTarget(ready ? "lobby.startReady" : nil)
                     .transition(.scale.combined(with: .opacity))
                 }
             }
@@ -437,10 +446,12 @@ struct LobbyView: View {
                         accessibilityLabel: "Add a player"
                     ) {
                         lastTapped = .add
+                        model.tips.used("lobby.add")
                         menuSeat = seat
                     }
                     .wiggle(trigger: wiggles[.add, default: 0])
                     .accessibilityIdentifier("lobby.add")
+                    .tipTarget("lobby.add")
                 }
                 if let practice {
                     PillButton(
@@ -461,6 +472,7 @@ struct LobbyView: View {
     private func start() {
         guard let table else { return }
         lastTapped = .start
+        model.tips.used("lobby.start")
         if table.canStart {
             session.send(.start)
             return
@@ -487,6 +499,7 @@ struct LobbyView: View {
     private func tapSeat(_ i: Int) {
         guard let room, room.seats.indices.contains(i) else { return }
         lastTapped = .seat(i)
+        model.tips.used("lobby.seat")
         let seat = room.seats[i]
         Haptics.shared.tick()
         switch seat.kind {

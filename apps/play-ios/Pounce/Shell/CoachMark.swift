@@ -302,33 +302,3 @@ enum CoachCopy {
         }
     }
 }
-
-/// A one-time hint outside the table (Home's "press and hold to archive"): the words on a small
-/// bubble with a "Got it" that puts it away for good.
-struct HintBubble: View {
-    let text: String
-    let onOK: () -> Void
-
-    var body: some View {
-        HStack(spacing: 10) {
-            Text(verbatim: text)
-                .font(.system(.subheadline, design: .rounded, weight: .heavy))
-                .foregroundStyle(Palette.ink)
-                .fixedSize(horizontal: false, vertical: true)
-            PillButton(
-                icon: nil, color: Palette.lime, size: .small, width: 92,
-                title: String(localized: "Got it", comment: "Coach bubble: close this tip"),
-                accessibilityLabel: "Got it", action: onOK)
-        }
-        .padding(.leading, 16)
-        .padding(.trailing, 10)
-        .padding(.vertical, 8)
-        .background(
-            RoundedRectangle(cornerRadius: 22, style: .continuous).fill(.white)
-                .shadow(color: Palette.ink.opacity(0.5), radius: 0, x: 0, y: 5))
-        .overlay(RoundedRectangle(cornerRadius: 22, style: .continuous).strokeBorder(Palette.ink, lineWidth: 4))
-        .padding(.horizontal, 16)
-        .dynamicTypeSize(...DynamicTypeSize.accessibility1)
-        .accessibilityElement(children: .contain)
-    }
-}

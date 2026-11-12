@@ -350,6 +350,7 @@ struct SoftUpdateCard: View {
 
             let update = UpdateButton(size: .small, width: roomy ? 140 : 112, identifier: "home.update.update") {
                 // Off to the store: this version's card has done its job.
+                model.tips.used("home.update")
                 model.updates.dismissSoft()
             }
             let close = RoundIconButton(systemName: "xmark", color: Palette.sky, side: 38, accessibilityLabel: "Not now") {
@@ -394,6 +395,7 @@ struct SoftUpdateCard: View {
         }
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("home.update")
+        .tipTarget("home.update")
     }
 }
 
