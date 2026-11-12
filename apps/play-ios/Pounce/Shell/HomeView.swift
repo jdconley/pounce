@@ -1,17 +1,23 @@
 import PounceKit
 import SwiftUI
 
-/// Home: the game shelf (one card per `GameCatalog` game; a card you can play starts a table),
-/// your tables, the streak strip, Join, the owner's cat bottom-left (people on this phone) and a
-/// small gear (sound, haptics, how to play). After a "not now" to push, a small bell by the name
-/// offers it once more (spec §10). Long-press a table to archive it; the sleeping-cat tile at
-/// the end of the tables opens the archived ones.
+/// Home, laid out like a game's hub: a player bar on top, what to play in the middle, the dock
+/// at the bottom.
 ///
-/// What leads (`HomeLead`): with a game going your tables sit above the shelf, and the ones
-/// waiting on you glow; with no table, or only finished ones, the shelf leads.
+/// - The player bar: the owner's cat on its cushion (the people on this phone), the streak strip
+///   (your streak, your connections, the gift, Save, Invite), the bell when push is on offer again
+///   (spec §10), and the gear (sound, haptics, how to play). One row, no wordmark.
+/// - The middle scrolls: Home's notices (a newer version, a table behind one, why a game didn't
+///   start), then what leads (`HomeLead`). With a game going your tables lead and the games sit
+///   under them as compact tickets; with no table, or only finished ones, the games lead as
+///   posters. An iPad lays the games out as a grid, beside your tables when it is on its side.
+/// - The dock: Join, and Practice while there is no table. Its own band: nothing scrolls under it.
 ///
-/// A phone scrolls one column: games you can play as posters, games on the way as tickets. An
-/// iPad lays the shelf out as a grid of posters, beside your tables when it is on its side.
+/// Long-press a table to archive it; the sleeping-cat tile at the end of the tables opens the
+/// archived ones.
+///
+/// Tips (`CoachMark`) can point at the stable ids: `home.people`, `home.strip`, `home.add`,
+/// `home.settings`, `home.tables`, `home.shelf`, `home.practice`, `home.join`.
 struct HomeView: View {
     @Environment(AppModel.self) private var model
     @Environment(Settings.self) private var settings
@@ -26,19 +32,17 @@ struct HomeView: View {
     /// Notifications are fully allowed (no bell then; provisional still gets it, §12.5); nil until checked.
     @State private var pushAllowed: Bool?
     @State private var showPriming = false
-    /// The streak badge's cloud was tapped: the sign-in offer is up (§10.5).
+    /// The streak badge's Save was tapped: the sign-in card is up (§10.5).
     @State private var streakSignIn = false
-    /// The column has scrolled up past the top bar (it fades out there), or runs on under the
-    /// bottom bar (which gets a shade behind it), so neither tangles with it.
-    @State private var shadeTop = false
-    @State private var shadeBottom = false
+    /// The column has scrolled up under the player bar, where it fades out.
+    @State private var scrolled = false
 
     @Environment(\.horizontalSizeClass) private var sizeClass
     @Environment(\.dynamicTypeSize) private var typeSize
     @ScaledMetric(relativeTo: .title3) private var sectionTitleSize: CGFloat = 22
     @ScaledMetric(relativeTo: .title3) private var roomyTitleSize: CGFloat = 30
 
-    /// Home's one-time "Keep your streak if you change phones" card, under no other overlay.
+    /// Home's one-time sign-in card, under no other overlay.
     private var showSignInPrompt: Bool {
         !showPriming && !streakSignIn && model.people.owner != nil
             && SignInPrompt.shows(
@@ -46,33 +50,23 @@ struct HomeView: View {
                 pairs: model.streaks.pairs.count, dismissed: settings.signInPromptSeen)
     }
 
+    private var roomy: Bool { sizeClass == .regular }
+
     var body: some View {
         GeometryReader { geo in
-            // A short window (a small phone, a small iPad on its side) gets a smaller bottom bar,
-            // so more of the column shows.
-            let bar = Self.bottomBarHeight(short: geo.size.height < (sizeClass == .regular ? 760 : 700))
-            let top = topBarHeight
-            let room = CGSize(width: geo.size.width, height: max(0, geo.size.height - top))
-            // In reading order, which is VoiceOver's: the top bar, the column, the bottom bar.
+            // In reading order, which is VoiceOver's: the player bar, the column, the dock.
             VStack(spacing: 0) {
-                topBar.frame(height: top)
-                // The column fades out under the top bar once it has scrolled, and runs on under
-                // the bottom bar, where its own padding keeps it clear at rest.
+                playerBar
                 Group {
-                    if sizeClass == .regular {
-                        roomy(room, bar: bar)
+                    if roomy {
+                        roomyColumn(geo.size)
                     } else {
-                        compact(room, bar: bar)
+                        compactColumn
                     }
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
                 .mask { columnMask }
-            }
-            .overlay(alignment: .bottom) {
-                ZStack(alignment: .bottom) {
-                    bottomShade(bar: bar, beyond: geo.safeAreaInsets.bottom)
-                    bottomBar(width: geo.size.width, height: bar)
-                }
+                dock(width: geo.size.width, bottomInset: geo.safeAreaInsets.bottom)
             }
         }
         // Under the bars, the status bar and the home indicator too.
@@ -127,34 +121,30 @@ struct HomeView: View {
                         }
                     },
                     onNotNow: { showPriming = false })
+                    .compositingGroup()
                     .transition(.opacity)
             }
         }
         .animation(.easeOut(duration: 0.25).paced, value: showPriming)
         .animation(.spring(duration: 0.4, bounce: 0.4).paced, value: showBell)
-        .animation(.easeOut(duration: 0.2).paced, value: shadeTop)
-        .animation(.easeOut(duration: 0.2).paced, value: shadeBottom)
+        .animation(.easeOut(duration: 0.2).paced, value: scrolled)
         .task { await model.refreshTables() }
         .task { await model.refreshStreaks() }
+        // Save on the top pair's streak, or once a pair formed: one sign-in card (§10.5, launch review).
         .overlay {
-            if streakSignIn, let owner = model.people.owner {
-                ZStack {
-                    Palette.night.opacity(0.85).ignoresSafeArea().onTapGesture { streakSignIn = false }
-                    SignInOffer(identifier: "home.streak.signin") {
-                        Task {
-                            await model.account.signIn(owner)
-                            streakSignIn = false
-                        }
-                    }
+            if streakSignIn {
+                SignInPromptCard(identifier: "home.streak.signinCard", appleIdentifier: "home.streak.signin") {
+                    streakSignIn = false
+                }
+                .transition(.opacity)
+            } else if showSignInPrompt {
+                SignInPromptCard(identifier: "home.signinPrompt", appleIdentifier: "home.signinPrompt.apple") {
+                    settings.signInPromptSeen = true
                 }
                 .transition(.opacity)
             }
         }
         .animation(.easeOut(duration: 0.25).paced, value: streakSignIn)
-        // Once a pair formed, a signed-out adult is told in words what signing in keeps (launch review).
-        .overlay {
-            if showSignInPrompt { SignInPromptCard().transition(.opacity) }
-        }
         .animation(.easeOut(duration: 0.25).paced, value: showSignInPrompt)
         .task { await checkPush() }
         #if DEBUG
@@ -184,17 +174,6 @@ struct HomeView: View {
         .accessibilityIdentifier("screen-home")
     }
 
-    // MARK: pieces
-
-    /// The streak strip (trophy room design §1), once the server said streaks are on: your own
-    /// streak, your connections and the plus, which is there even before anyone is connected.
-    private var showStrip: Bool { model.streaks.enabled == true }
-
-    private func strip(scale: CGFloat) -> some View {
-        StreakStripView(scale: scale) { streakSignIn = true }
-            .transition(.scale.combined(with: .opacity))
-    }
-
     private var background: some View {
         ZStack {
             Palette.night
@@ -209,106 +188,165 @@ struct HomeView: View {
     private var hasTables: Bool { !shownItems.isEmpty || model.archivedItems.count > 0 }
     private var lead: HomeLead { HomeLead.pick(shownItems) }
 
-    // MARK: bars
+    // MARK: the player bar
 
-    /// The top bar: the name and the gear, and on an iPad the streak strip between them.
-    private var topBarHeight: CGFloat { sizeClass == .regular && showStrip ? 112 : 58 }
-    /// How much of the column the bottom bar covers: the owner's cat on its cushion.
-    private static func bottomBarHeight(short: Bool) -> CGFloat { short ? 108 : 144 }
+    /// The streak strip (trophy room design §1), once the server said streaks are on.
+    private var showStrip: Bool { model.streaks.enabled == true }
 
-    /// Pinned to the top: the app's name, the bell when push is on offer again, the gear. On an
-    /// iPad the streak strip sits in the middle of it.
-    private var topBar: some View {
-        let roomy = sizeClass == .regular
-        return HStack(spacing: 4) {
-            OutlinedText("Pounce", size: roomy ? 38 : 30, width: roomy ? 4 : 3.5)
-                .fixedSize()
-                .accessibilityAddTraits(.isHeader)
-                .accessibilityIdentifier("home.name")
-            if showBell { bell.transition(.scale.combined(with: .opacity)) }
-            Spacer(minLength: 0)
-            gear
-        }
-        .padding(.leading, roomy ? 22 : 16)
-        .padding(.trailing, roomy ? 14 : 8)
-        .padding(.top, 2)
-        .frame(height: 58)
-        .frame(maxHeight: .infinity, alignment: .top)
-        .overlay(alignment: .top) {
-            if roomy, showStrip {
-                strip(scale: 1.3)
-                    .padding(.leading, 170)
-                    .padding(.trailing, 84)
-                    .padding(.top, -6)
-            }
-        }
-    }
-
-    /// Pinned to the bottom: the owner's cat on its cushion, and Join across from it, where a
-    /// thumb is. With no tables yet, practice sits by Join (over it on a phone).
-    private func bottomBar(width: CGFloat, height: CGFloat) -> some View {
-        let short = height < 140
-        return HStack(alignment: .bottom, spacing: 0) {
-            ownerCorner
-                .scaleEffect(short ? 0.74 : 1, anchor: .bottomLeading)
-                .frame(width: short ? 111 : 150, height: height - 2, alignment: .bottomLeading)
-            Spacer(minLength: 12)
+    /// One row across the top: who you are (the owner's cat), your streaks and connections, then
+    /// the bell and the gear. The strip scrolls sideways when it outgrows the row.
+    private var playerBar: some View {
+        HStack(spacing: roomy ? 14 : 6) {
+            ownerBadge
             Group {
-                if sizeClass == .regular {
-                    HStack(alignment: .bottom, spacing: 16) {
-                        practicePill(width: 360, size: .medium)
-                        joinPill(size: .large, width: 250)
-                    }
-                    .padding(.bottom, 6)
+                if showStrip {
+                    StreakStripView(scale: roomy ? 1.15 : 0.85) { streakSignIn = true }
+                        .transition(.opacity)
                 } else {
-                    // What the cushion leaves, up to a comfortable pill.
-                    let pill = max(120, min(230, width - (short ? 151 : 190)))
-                    VStack(spacing: short ? 6 : 8) {
-                        practicePill(width: pill, size: .small, short: true)
-                        joinPill(size: short ? .small : .medium, width: pill)
-                    }
-                    .padding(.bottom, 1)
+                    Color.clear
                 }
             }
-            .animation(.spring(duration: 0.35, bounce: 0.4).paced, value: shownItems.isEmpty)
+            .frame(maxWidth: .infinity)
+            if showBell { bell.transition(.scale.combined(with: .opacity)) }
+            gear
         }
-        .padding(.leading, 12)
-        .padding(.trailing, sizeClass == .regular ? 24 : 16)
-        .padding(.bottom, 2)
+        .padding(.leading, roomy ? 20 : 8)
+        .padding(.trailing, roomy ? 16 : 6)
+        .frame(height: roomy ? 92 : 68)
+        .accessibilityElement(children: .contain)
+        .accessibilityIdentifier("home.playerBar")
     }
 
-    /// What shows of the column. At rest, all of it and a little more (a strip badge may poke up
-    /// past its edge); once it has scrolled, it fades out under the top bar.
+    /// The owner's cat on its cushion: the people on this phone.
+    private var ownerBadge: some View {
+        let side: CGFloat = roomy ? 76 : 58
+        return Button {
+            ownerWiggle += 1
+            Haptics.shared.tick()
+            Sound.shared.play(ArtName.Sound.sfxPop)
+            showPeople = true
+        } label: {
+            ZStack(alignment: .bottom) {
+                Capsule()
+                    .fill(
+                        LinearGradient(
+                            colors: [Palette.magenta.mix(with: .white, by: 0.25), Palette.magenta,
+                                     Palette.magenta.mix(with: Palette.ink, by: 0.3)],
+                            startPoint: .top, endPoint: .bottom)
+                    )
+                    .overlay(Capsule().strokeBorder(Palette.ink, lineWidth: roomy ? 4 : 3.5))
+                    .frame(width: side, height: side * 0.36)
+                    .shadow(color: Palette.ink.opacity(0.5), radius: 0, x: 0, y: 3)
+                Image(ArtName.cat(model.people.owner?.cat ?? 0, .idle))
+                    .resizable().scaledToFit()
+                    .frame(width: side * 0.86, height: side * 0.86)
+                    .shadow(color: Palette.ink.opacity(0.35), radius: 0, x: 0, y: 3)
+                    .padding(.bottom, side * 0.14)
+                    .wiggle(trigger: ownerWiggle)
+            }
+            .frame(width: side, height: side, alignment: .bottom)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(Text("People on this phone"))
+        .accessibilityIdentifier("home.people")
+    }
+
+    /// Re-offers push once: the priming screen again, then the system prompt (or its settings page).
+    private var bell: some View {
+        Button {
+            Haptics.shared.tick()
+            Sound.shared.play(ArtName.Sound.sfxPop)
+            settings.pushReoffered = true
+            showPriming = true
+        } label: {
+            roundFace(Palette.magenta, icon: ArtName.iconBell, inset: 8)
+        }
+        .buttonStyle(.plain)
+        .compositingGroup()
+        .bounceLoop(active: true)
+        .accessibilityLabel(Text("Turn on turn notifications", comment: "VoiceOver: Home's bell that offers push again"))
+        .accessibilityIdentifier("home.bell")
+    }
+
+    private var gear: some View {
+        Button {
+            Haptics.shared.tick()
+            showSettings = true
+        } label: {
+            roundFace(Palette.sky, icon: ArtName.iconGear, inset: 9)
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("Settings")
+        .accessibilityIdentifier("home.settings")
+    }
+
+    /// A round toy button's face: the colour, the ink ring, the icon, a lip of shadow.
+    private func roundFace(_ color: Color, icon: String, inset: CGFloat) -> some View {
+        let side: CGFloat = roomy ? 56 : 46
+        return Circle()
+            .fill(LinearGradient(colors: [color.mix(with: .white, by: 0.3), color], startPoint: .top, endPoint: .bottom))
+            .overlay(Circle().strokeBorder(Palette.ink, lineWidth: 4))
+            .overlay { Image(icon).resizable().scaledToFit().padding(inset * side / 48) }
+            .frame(width: side, height: side)
+            .compositingGroup()
+            .shadow(color: Palette.ink.opacity(0.5), radius: 0, x: 0, y: 4)
+            .frame(width: max(side, 48), height: max(side + 4, 52))
+            .contentShape(Rectangle())
+    }
+
+    /// What shows of the column. At rest, all of it (a card's glow may poke up past its edge);
+    /// once it has scrolled, it fades out under the player bar.
     private var columnMask: some View {
         VStack(spacing: 0) {
-            LinearGradient(colors: [.black.opacity(shadeTop ? 0 : 1), .black], startPoint: .top, endPoint: .bottom)
-                .frame(height: 20)
+            LinearGradient(colors: [.black.opacity(scrolled ? 0 : 1), .black], startPoint: .top, endPoint: .bottom)
+                .frame(height: 18)
             Color.black
         }
-        .padding(.top, shadeTop ? 0 : -60)
+        .padding(.top, scrolled ? 0 : -40)
         .padding(.horizontal, -60)
-        .padding(.bottom, -400)
     }
 
-    /// Behind the bottom bar while the column runs on under it: it fades out above the cat.
-    private func bottomShade(bar: CGFloat, beyond: CGFloat) -> some View {
-        LinearGradient(
-            stops: [
-                .init(color: Palette.night.opacity(0), location: 0),
-                .init(color: Palette.night.opacity(0.9), location: 0.22),
-                .init(color: Palette.night, location: 0.36),
-                .init(color: Palette.night, location: 1),
-            ],
-            startPoint: .top, endPoint: .bottom)
-            .frame(height: bar + 64 + beyond)
-            .offset(y: beyond)
-            .opacity(shadeBottom ? 1 : 0)
-            .allowsHitTesting(false)
+    // MARK: the dock
+
+    /// Pinned to the bottom, on a band of its own: Join, and Practice beside it while there is no
+    /// table yet. The column ends at its edge.
+    private func dock(width: CGFloat, bottomInset: CGFloat) -> some View {
+        let practice = shownItems.isEmpty
+        let gap: CGFloat = 12
+        let pill: CGFloat =
+            roomy
+            ? 300
+            : practice ? max(120, min(220, (width - 32 - gap) / 2)) : max(160, min(280, width - 32))
+        return HStack(spacing: gap) {
+            if practice { practicePill(width: pill) }
+            joinPill(width: pill)
+        }
+        .animation(.spring(duration: 0.35, bounce: 0.4).paced, value: practice)
+        .padding(.top, 12)
+        // Above the home indicator there is room already; a phone with a button needs a margin.
+        .padding(.bottom, bottomInset > 0 ? 2 : 10)
+        .frame(maxWidth: .infinity)
+        .background {
+            let shape = UnevenRoundedRectangle(topLeadingRadius: 30, topTrailingRadius: 30, style: .continuous)
+            shape
+                .fill(LinearGradient(
+                    colors: [Palette.violet.mix(with: Palette.ink, by: 0.35), Palette.night.mix(with: Palette.ink, by: 0.3)],
+                    startPoint: .top, endPoint: .bottom))
+                .overlay(shape.strokeBorder(Palette.ink, lineWidth: 5))
+                .overlay(shape.strokeBorder(Palette.violet.mix(with: .white, by: 0.2).opacity(0.6), lineWidth: 2).padding(5))
+                // The sides and the bottom edge run off the screen; only the top outline shows.
+                .padding(.horizontal, -8)
+                .padding(.bottom, -60)
+                .ignoresSafeArea(edges: .bottom)
+        }
+        .accessibilityElement(children: .contain)
+        .accessibilityIdentifier("home.dock")
     }
 
-    private func joinPill(size: PillSize, width: CGFloat) -> some View {
+    private func joinPill(width: CGFloat) -> some View {
         PillButton(
-            icon: ArtName.iconKeypad, color: Palette.teal, size: size, width: width,
+            icon: ArtName.iconKeypad, color: Palette.teal, size: roomy ? .large : .medium, width: width,
             title: String(localized: "Join", comment: "Home: the pill that joins a game by code"),
             accessibilityLabel: "Join a game"
         ) {
@@ -317,13 +355,31 @@ struct HomeView: View {
         .accessibilityIdentifier("home.join")
     }
 
+    /// With no tables yet, a way to just try the game: a practice round against the House Cat.
+    private func practicePill(width: CGFloat) -> some View {
+        PillButton(
+            icon: ArtName.badgeBot, color: Palette.magenta, size: roomy ? .large : .medium, width: width,
+            title: String(localized: "Practice", comment: "Home, with no tables: starts a game against the computer player"),
+            accessibilityLabel: "Practice with the House Cat"
+        ) {
+            Task { await model.newGame(practice: true) }
+        }
+        .disabled(model.isCreatingRoom)
+        // The pill's lip and face fade as one.
+        .compositingGroup()
+        .opacity(model.isCreatingRoom ? 0.7 : 1)
+        .accessibilityIdentifier("home.practice")
+        .transition(.scale.combined(with: .opacity))
+    }
+
     // MARK: sections
 
     /// A section's name in toy lettering, with room for a chip after it.
     private func sectionTitle(_ title: String, @ViewBuilder chip: () -> some View = { EmptyView() }) -> some View {
         HStack(alignment: .center, spacing: 10) {
+            // Big text grows a title, up to a size that still leaves the cards room.
             OutlinedText(
-                title, size: sizeClass == .regular ? roomyTitleSize : sectionTitleSize, width: sizeClass == .regular ? 3.5 : 3,
+                title, size: min(roomy ? roomyTitleSize : sectionTitleSize, 38), width: roomy ? 3.5 : 3,
                 lines: 2, alignment: .leading)
                 .accessibilityAddTraits(.isHeader)
             chip()
@@ -333,8 +389,8 @@ struct HomeView: View {
 
     private var shelfTitle: String {
         hasTables
-            ? String(localized: "Start a new game", comment: "Home: the game shelf's title when you already have tables")
-            : String(localized: "Pick a game", comment: "Home: the game shelf's title with no tables yet")
+            ? String(localized: "New game", comment: "Home: the game shelf's title when you already have tables")
+            : String(localized: "Games", comment: "Home: the game shelf's title with no tables yet")
     }
 
     private static let tablesTitle = String(localized: "Your tables", comment: "Home: the title over your tables")
@@ -346,9 +402,9 @@ struct HomeView: View {
             Text(
                 waiting == 1
                     ? String(localized: "Your turn", comment: "Home: one table waits on you")
-                    : String(localized: "Your turn at \(waiting) tables", comment: "Home: this many tables wait on you")
+                    : String(localized: "\(waiting) turns", comment: "Home: this many tables wait on your turn")
             )
-            .font(.system(sizeClass == .regular ? .headline : .footnote, design: .rounded, weight: .black))
+            .font(.system(roomy ? .headline : .footnote, design: .rounded, weight: .black))
             .foregroundStyle(.white)
             .lineLimit(1)
             .padding(.horizontal, 11)
@@ -356,11 +412,12 @@ struct HomeView: View {
             .background(Capsule().fill(Palette.orange).overlay(Capsule().strokeBorder(Palette.ink, lineWidth: 3)))
             .fixedSize()
             .accessibilityIdentifier("home.yourTurn")
+            .compositingGroup()
             .transition(.scale.combined(with: .opacity))
         }
     }
 
-    /// Why Create failed, over the shelf.
+    /// Why a new game didn't start, over the shelf.
     @ViewBuilder private var createError: some View {
         if let error = model.newGameError {
             Text(Self.createFailedMessage(error))
@@ -371,6 +428,7 @@ struct HomeView: View {
                 .padding(.vertical, 8)
                 .background(Capsule().fill(Palette.magenta).overlay(Capsule().strokeBorder(Palette.ink, lineWidth: 3)))
                 .frame(maxWidth: .infinity)
+                .compositingGroup()
                 .transition(.scale.combined(with: .opacity))
                 .accessibilityIdentifier("home.createError")
         }
@@ -380,11 +438,11 @@ struct HomeView: View {
     static func createFailedMessage(_ error: APIError) -> String {
         switch error {
         case .transport:
-            String(localized: "No internet. Check your connection and try again.", comment: "Home: Create failed offline")
+            String(localized: "No internet.", comment: "Home: Create failed offline")
         case .rateLimited:
-            String(localized: "Too many tries. Wait a little and try again.", comment: "Home: Create was rate limited")
+            String(localized: "Too many tries. Wait a bit.", comment: "Home: Create was rate limited")
         default:
-            String(localized: "Couldn't start a game. Try again.", comment: "Home: Create failed")
+            String(localized: "Couldn't start. Try again.", comment: "Home: Create failed")
         }
     }
 
@@ -411,6 +469,8 @@ struct HomeView: View {
     ) -> some View {
         let dealt = game.id == GameCatalog.dealt.id
         let bigType = typeSize.isAccessibilitySize
+        // How to play rides on a poster's cover; a ticket's cover is too small (the gear has it too).
+        let rules = dealt && (layout == .poster || bigType)
         return VStack(spacing: 10) {
             ZStack(alignment: .topLeading) {
                 GameCard(
@@ -419,11 +479,10 @@ struct HomeView: View {
                 ) {
                     Task { await model.newGame(game) }
                 }
-                // Cat Tower's rules, where the old hero tile had them.
-                if dealt, !bigType { rulesChip(roomy: roomy).padding(roomy ? 16 : 12) }
+                if rules, !bigType { rulesChip(roomy: roomy).padding(roomy ? 16 : 12) }
             }
             // At a big text size the chip would hide the cover, so it gets a row of its own.
-            if dealt, bigType { rulesChip(roomy: roomy, wide: true) }
+            if rules, bigType { rulesChip(roomy: roomy, wide: true) }
         }
         .shake(trigger: dealt ? newGameShake : 0)
         .shelfEntrance(index: index)
@@ -455,17 +514,20 @@ struct HomeView: View {
         .accessibilityIdentifier("home.hero")
     }
 
-    /// A phone's shelf: one column. Games you can play are posters; games on the way are tickets.
-    private var shelfColumn: some View {
+    /// A phone's shelf: one column. When it leads, games you can play are posters and games on
+    /// the way tickets; under your tables, every game is a ticket, so the tables stay on top.
+    private func shelfColumn(leads: Bool) -> some View {
         VStack(alignment: .leading, spacing: 12) {
             sectionTitle(shelfTitle)
             createError
             ForEach(Array(shelf.enumerated()), id: \.element.id) { index, game in
-                gameCard(game, index: index, layout: game.isAvailable ? .poster : .ticket, coverRatio: 2.3)
+                gameCard(game, index: index, layout: leads && game.isAvailable ? .poster : .ticket, coverRatio: 2.3)
             }
         }
-        .padding(.horizontal, 20)
+        .padding(.horizontal, 16)
         .animation(.spring(duration: 0.35, bounce: 0.4).paced, value: model.newGameError)
+        .accessibilityElement(children: .contain)
+        .accessibilityIdentifier("home.shelf")
     }
 
     /// An iPad's shelf: posters in as many columns as fit `width` (three at most), each row as
@@ -504,55 +566,20 @@ struct HomeView: View {
         // As wide as its columns, so the title lines up with the first card.
         .frame(width: gridWidth)
         .animation(.spring(duration: 0.35, bounce: 0.4).paced, value: model.newGameError)
-    }
-
-    /// With no tables yet, a way to just try the game: a practice round against the House Cat.
-    /// `short`: the one word, for the phone's bottom bar (VoiceOver still hears it all).
-    @ViewBuilder private func practicePill(width: CGFloat, size: PillSize = .medium, short: Bool = false) -> some View {
-        if shownItems.isEmpty {
-            PillButton(
-                icon: ArtName.badgeBot, color: Palette.magenta, size: size, width: width,
-                title: short
-                    ? String(localized: "Practice", comment: "Home, with no tables, on a phone: starts a game against the computer player")
-                    : String(localized: "Practice with the House Cat", comment: "Home, with no tables: starts a game against the computer player"),
-                accessibilityLabel: "Practice with the House Cat"
-            ) {
-                Task { await model.newGame(practice: true) }
-            }
-            .disabled(model.isCreatingRoom)
-            .opacity(model.isCreatingRoom ? 0.7 : 1)
-            .accessibilityIdentifier("home.practice")
-            .transition(.scale.combined(with: .opacity))
-        }
+        .accessibilityElement(children: .contain)
+        .accessibilityIdentifier("home.shelf")
     }
 
     // MARK: your tables
-
-    /// Shown once, by the tables: a table can be put away with a long press.
-    @ViewBuilder private var archiveHint: some View {
-        if !settings.archiveHintSeen, !shownItems.isEmpty {
-            HintBubble(
-                text: String(localized: "Press and hold a table to archive it.", comment: "Home: the one-time hint about the long-press menu on a table card")
-            ) {
-                settings.archiveHintSeen = true
-            }
-            .accessibilityIdentifier("home.hint.archive")
-            .transition(.scale(scale: 0.8, anchor: .bottom).combined(with: .opacity))
-        }
-    }
 
     /// A phone's tables: their title, then one row that scrolls sideways.
     @ViewBuilder private var tablesSection: some View {
         if hasTables {
             VStack(alignment: .leading, spacing: 0) {
                 sectionTitle(Self.tablesTitle) { turnChip }
-                    .padding(.horizontal, 20)
-                archiveHint
-                    .padding(.top, 8)
-                    .padding(.horizontal, 4)
+                    .padding(.horizontal, 16)
                 tablesRow
             }
-            .animation(.spring(duration: 0.4, bounce: 0.35).paced, value: settings.archiveHintSeen)
             .animation(.spring(duration: 0.4, bounce: 0.35).paced, value: HomeLead.waiting(shownItems))
         }
     }
@@ -567,13 +594,14 @@ struct HomeView: View {
                 }
                 if archivedCount > 0 {
                     ArchivedTile(count: archivedCount, cat: model.people.owner?.cat ?? 0) { showArchived = true }
+                        .compositingGroup()
                         .transition(.scale(scale: 0.6).combined(with: .opacity))
                 }
             }
             .animation(.spring(duration: 0.4, bounce: 0.35), value: items.map(\.id))
             .animation(.spring(duration: 0.4, bounce: 0.35), value: archivedCount)
             // Room for the glow and the bounce so neither is clipped by the scroll view.
-            .padding(.horizontal, 22)
+            .padding(.horizontal, 18)
             .padding(.top, 20)
             .padding(.bottom, 14)
         }
@@ -584,81 +612,81 @@ struct HomeView: View {
 
     // MARK: compact (iPhone)
 
-    /// A phone, or a narrow iPad window: one scrolling column between the two bars. The strip
-    /// first, then whatever leads.
-    private func compact(_ size: CGSize, bar: CGFloat) -> some View {
+    /// A phone, or a narrow iPad window: one scrolling column between the player bar and the
+    /// dock. Notices first, then whatever leads.
+    private var compactColumn: some View {
         ScrollView(.vertical, showsIndicators: false) {
-            VStack(spacing: 14) {
-                if showStrip { strip(scale: 1).padding(.top, -16).padding(.bottom, -6) }
+            VStack(spacing: 16) {
                 // A newer version, or a table waiting behind one (app updates design §4.1, §4.2).
                 HomeUpdates()
                 if lead == .tables { tablesSection }
-                shelfColumn
+                shelfColumn(leads: lead == .shelf)
                 if lead == .shelf { tablesSection }
             }
-            .padding(.top, 4)
-            .padding(.bottom, bar + 8)
+            .padding(.top, 6)
+            .padding(.bottom, 18)
             .frame(maxWidth: .infinity)
         }
         .scrollBounceBehavior(.basedOnSize)
-        .scrollClipDisabled()
-        .shadesBars(top: $shadeTop, bottom: $shadeBottom)
+        .tracksScroll($scrolled)
     }
 
     // MARK: roomy (iPad)
 
     /// A regular-width window. Wide (landscape) with tables: two columns, your tables in a panel
     /// and the shelf beside it, whichever leads on the leading side. Otherwise one column: what
-    /// leads, then the other. It scrolls when it has to and sits in the middle when it doesn't.
-    private func roomy(_ size: CGSize, bar: CGFloat) -> some View {
-        ScrollView(.vertical, showsIndicators: false) {
-            // A newer version, or a table waiting behind one, over the columns (app updates design).
+    /// leads, then the other. It scrolls when it has to and sits at the top when it doesn't.
+    private func roomyColumn(_ size: CGSize) -> some View {
+        let height = max(0, size.height - 92 - 90)
+        return ScrollView(.vertical, showsIndicators: false) {
             VStack(spacing: 24) {
-            HomeUpdates(roomy: true)
-            Group {
-                if Roomy.sideBySide(size) && hasTables {
-                    let tablesWidth = min(size.width * 0.44, 602)
-                    let shelfWidth = size.width - 96 - 36 - tablesWidth
-                    HStack(alignment: .top, spacing: 36) {
-                        if lead == .tables { tablesColumn.frame(width: tablesWidth) }
-                        shelfGrid(width: shelfWidth)
-                            .frame(width: shelfWidth)
-                        if lead == .shelf { tablesColumn.frame(width: tablesWidth) }
+                HomeUpdates(roomy: true)
+                Group {
+                    if Roomy.sideBySide(size) && hasTables {
+                        let tablesWidth = min(size.width * 0.44, 602)
+                        let shelfWidth = size.width - 96 - 36 - tablesWidth
+                        HStack(alignment: .top, spacing: 36) {
+                            if lead == .tables { tablesColumn.frame(width: tablesWidth) }
+                            shelfGrid(width: shelfWidth)
+                                .frame(width: shelfWidth)
+                            if lead == .shelf { tablesColumn.frame(width: tablesWidth) }
+                        }
+                    } else {
+                        let width = min(size.width - 80, 900)
+                        VStack(spacing: 30) {
+                            if lead == .tables { tablesColumn }
+                            shelfGrid(width: width, height: height)
+                            if lead == .shelf, hasTables { tablesColumn }
+                        }
+                        .frame(width: width)
                     }
-                } else {
-                    let width = min(size.width - 80, 900)
-                    VStack(spacing: 30) {
-                        if lead == .tables { tablesColumn }
-                        shelfGrid(width: width, height: size.height - bar - 20)
-                        if lead == .shelf, hasTables { tablesColumn }
-                    }
-                    .frame(width: width)
                 }
             }
-            }
             .padding(.top, 10)
-            .padding(.bottom, bar + 10)
-            .frame(maxWidth: .infinity, minHeight: size.height)
+            .padding(.bottom, 24)
+            .frame(maxWidth: .infinity)
         }
         .scrollBounceBehavior(.basedOnSize)
-        .scrollClipDisabled()
-        .shadesBars(top: $shadeTop, bottom: $shadeBottom)
+        .tracksScroll($scrolled)
     }
 
     /// Your tables on an iPad: their title over the panel.
     private var tablesColumn: some View {
         VStack(alignment: .leading, spacing: 14) {
             sectionTitle(Self.tablesTitle) { turnChip }
-            archiveHint.frame(maxWidth: 460)
             tablesPanel
         }
-        .animation(.spring(duration: 0.4, bounce: 0.35).paced, value: settings.archiveHintSeen)
     }
 
-    /// The tables Home shows (DEBUG: `-demo-home` puts sample tables here for screenshots).
+    /// The tables Home shows (DEBUG: `-demo-home` puts sample tables here for screenshots;
+    /// `-demo-home calm` the same tables with none waiting on you).
     private var shownItems: [HomeTableItem] {
         #if DEBUG
-        if CommandLine.arguments.contains("-demo-home") { return Self.demoItems }
+        let args = CommandLine.arguments
+        if let i = args.firstIndex(of: "-demo-home") {
+            if args.indices.contains(i + 1), args[i + 1] == "calm" { return Self.calmDemoItems }
+            return Self.demoItems
+        }
         #endif
         return model.homeItems
     }
@@ -685,6 +713,7 @@ struct HomeView: View {
             }
             if archivedCount > 0 {
                 Self.roomyScaled(ArchivedTile(count: archivedCount, cat: model.people.owner?.cat ?? 0) { showArchived = true })
+                    .compositingGroup()
                     .transition(.scale(scale: 0.6).combined(with: .opacity))
             }
         }
@@ -725,6 +754,8 @@ struct HomeView: View {
         .accessibilityAction(named: Text("Archive", comment: "VoiceOver: hides a table from Home")) {
             archive(item.id)
         }
+        // The card's layers come and go as one.
+        .compositingGroup()
         .transition(.scale(scale: 0.6).combined(with: .opacity))
     }
 
@@ -763,6 +794,14 @@ struct HomeView: View {
             HomeTableItem(id: "WZ8CM", name: "Road Trip", yourTurn: true, status: "playing", seats: seats([("Pickle", 1), ("Nova", 5), ("Clementine", 3)]), turnCat: 2, updatedAt: 0),
         ]
     }()
+
+    /// `-demo-home calm`: the same tables, none waiting on you.
+    private static let calmDemoItems: [HomeTableItem] = demoItems.map { item in
+        var calm = item
+        calm.yourTurn = false
+        if item.status == "playing" { calm.turnCat = 4 }
+        return calm
+    }
     #endif
 
     private func archive(_ code: String) {
@@ -779,124 +818,24 @@ struct HomeView: View {
         guard let push = model.push else { return }
         pushAllowed = !PushPolicy.offersFullPrompt(PushCoordinator.mirror(await push.authorizationStatus()))
     }
-
-    /// Re-offers push once: the priming screen again, then the system prompt (or its settings page).
-    private var bell: some View {
-        Button {
-            Haptics.shared.tick()
-            Sound.shared.play(ArtName.Sound.sfxPop)
-            settings.pushReoffered = true
-            showPriming = true
-        } label: {
-            Circle()
-                .fill(
-                    LinearGradient(
-                        colors: [Palette.magenta.mix(with: .white, by: 0.3), Palette.magenta],
-                        startPoint: .top, endPoint: .bottom)
-                )
-                .overlay(Circle().strokeBorder(Palette.ink, lineWidth: 4))
-                .overlay {
-                    Image(ArtName.iconBell)
-                        .resizable().scaledToFit()
-                        .padding(8)
-                }
-                .frame(width: 48, height: 48)
-                .shadow(color: Palette.ink.opacity(0.5), radius: 0, x: 0, y: 4)
-                .frame(width: 56, height: 56)
-                .contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
-        .bounceLoop(active: true)
-        .accessibilityLabel(Text("Turn on turn notifications", comment: "VoiceOver: Home's bell that offers push again"))
-        .accessibilityIdentifier("home.bell")
-    }
-
-    private var gear: some View {
-        Button {
-            Haptics.shared.tick()
-            showSettings = true
-        } label: {
-            Circle()
-                .fill(
-                    LinearGradient(
-                        colors: [Palette.sky.mix(with: .white, by: 0.3), Palette.sky],
-                        startPoint: .top, endPoint: .bottom)
-                )
-                .overlay(Circle().strokeBorder(Palette.ink, lineWidth: 4))
-                .overlay {
-                    Image(ArtName.iconGear)
-                        .resizable().scaledToFit()
-                        .padding(9)
-                }
-                .frame(width: 48, height: 48)
-                .shadow(color: Palette.ink.opacity(0.5), radius: 0, x: 0, y: 4)
-                .frame(width: 56, height: 56)
-                .contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
-        .accessibilityLabel("Settings")
-        .accessibilityIdentifier("home.settings")
-    }
-
-    /// The owner's cat on a cushion, bottom-left. Tap for the people on this phone.
-    private var ownerCorner: some View {
-        Button {
-            ownerWiggle += 1
-            Haptics.shared.tick()
-            Sound.shared.play(ArtName.Sound.sfxPop)
-            showPeople = true
-        } label: {
-            ZStack(alignment: .bottom) {
-                Capsule()
-                    .fill(
-                        LinearGradient(
-                            colors: [Palette.magenta.mix(with: .white, by: 0.25), Palette.magenta,
-                                     Palette.magenta.mix(with: Palette.ink, by: 0.3)],
-                            startPoint: .top, endPoint: .bottom)
-                    )
-                    .overlay(Capsule().strokeBorder(Palette.ink, lineWidth: 5))
-                    .frame(width: 150, height: 58)
-                    .shadow(color: Palette.ink.opacity(0.5), radius: 0, x: 0, y: 5)
-                Image(ArtName.cat(model.people.owner?.cat ?? 0, .idle))
-                    .resizable().scaledToFit()
-                    .frame(width: 112, height: 112)
-                    .shadow(color: Palette.ink.opacity(0.35), radius: 0, x: 0, y: 4)
-                    .offset(y: -22)
-                    .wiggle(trigger: ownerWiggle)
-            }
-            .frame(width: 150, height: 142, alignment: .bottom)
-            .contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
-        .accessibilityLabel(Text("People on this phone"))
-        .accessibilityIdentifier("home.people")
-    }
 }
 
-/// Tells Home when its scrolling column runs under the top bar or on under the bottom one.
-private struct BarShades: ViewModifier {
-    @Binding var top: Bool
-    @Binding var bottom: Bool
-
-    private struct Edges: Equatable {
-        var top: Bool
-        var bottom: Bool
-    }
+/// Tells Home when its column has scrolled up under the player bar.
+private struct ScrollTracker: ViewModifier {
+    @Binding var scrolled: Bool
 
     func body(content: Content) -> some View {
-        content.onScrollGeometryChange(for: Edges.self) { geo in
+        content.onScrollGeometryChange(for: Bool.self) { geo in
             // The offset counts the safe area's insets; the container is what shows inside them.
-            let scrolled = geo.contentOffset.y + geo.contentInsets.top
-            return Edges(top: scrolled > 6, bottom: scrolled + geo.containerSize.height < geo.contentSize.height - 6)
-        } action: { _, edges in
-            top = edges.top
-            bottom = edges.bottom
+            geo.contentOffset.y + geo.contentInsets.top > 6
+        } action: { _, value in
+            scrolled = value
         }
     }
 }
 
 private extension View {
-    func shadesBars(top: Binding<Bool>, bottom: Binding<Bool>) -> some View {
-        modifier(BarShades(top: top, bottom: bottom))
+    func tracksScroll(_ scrolled: Binding<Bool>) -> some View {
+        modifier(ScrollTracker(scrolled: scrolled))
     }
 }

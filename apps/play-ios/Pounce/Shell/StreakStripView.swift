@@ -1,11 +1,12 @@
 import PounceKit
 import SwiftUI
 
-/// Home's streak strip (trophy room design §1): your own streak (opens the trophy room), one chip
-/// per connection in top-pair order (opens Us on that pair), and the plus, always last (opens the
-/// invite sheet). With no connections the plus is the big, bouncing "Invite someone". The gift box
-/// sits before the first chip, the sign-in cloud on the top pair's chip and a waiting pounce's bell
-/// on its pair's chip, where PR 4 put them. The plus is the one chip with a word under it.
+/// Home's streak strip (trophy room design §1), in the player bar: your own streak (opens the
+/// trophy room), one chip per connection in top-pair order (opens Us on that pair), and Invite,
+/// always last (opens the invite sheet; it bounces while nobody is connected). The gift box sits
+/// before the first chip, Save (sign in to keep the streak) right after the top pair's chip, and
+/// a waiting pounce's bell on its pair's chip. Everything sits in line, so nothing pokes out of
+/// the bar; the row scrolls sideways once it outgrows it.
 struct StreakStripView: View {
     @Environment(AppModel.self) private var model
     var scale: CGFloat = 1
@@ -16,7 +17,7 @@ struct StreakStripView: View {
 
     var body: some View {
         ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 12 * scale) {
+            HStack(spacing: 10 * scale) {
                 if let waiting = store.waitingGift { giftBox(waiting.gift) }
                 ForEach(chips) { chip in
                     switch chip {
@@ -26,13 +27,21 @@ struct StreakStripView: View {
                     }
                 }
             }
-            .padding(.horizontal, 20 * scale)
-            .padding(.top, 16 * scale)
+            // Room for the bounce and the bell, inside the strip's own frame.
+            .padding(.horizontal, 8 * scale)
+            .padding(.top, 10 * scale)
             .padding(.bottom, 8 * scale)
         }
-        .scrollClipDisabled()
         .scrollBounceBehavior(.basedOnSize, axes: .horizontal)
-        .defaultScrollAnchor(.center, for: .alignment)
+        // Chips scrolling past an end fade out there, instead of being cut.
+        .mask {
+            HStack(spacing: 0) {
+                LinearGradient(colors: [.clear, .black], startPoint: .leading, endPoint: .trailing).frame(width: 8)
+                Color.black
+                // Wide at the trailing end, so a chip cut there reads as "more", never as a number.
+                LinearGradient(colors: [.black, .clear], startPoint: .leading, endPoint: .trailing).frame(width: 34)
+            }
+        }
         .animation(.spring(duration: 0.4, bounce: 0.35).paced, value: chips.map(\.id))
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("home.strip")
@@ -52,77 +61,83 @@ struct StreakStripView: View {
         .accessibilityLabel(Text("Your streak, \(own.count)", comment: "VoiceOver: Home's own-streak chip; opens the trophy room"))
         .accessibilityValue("\(own.count)|\(own.kept ? 1 : 0)|\(PawBadge.modeName(StreakStrip.mode(own)))")
         .accessibilityIdentifier("home.own")
+        // A chip's layers come and go as one.
+        .compositingGroup()
         .transition(.scale.combined(with: .opacity))
     }
 
     private func pairChip(_ view: StreakView) -> some View {
         let index = store.pairs.firstIndex { $0.pair == view.pair } ?? 0
         let badge = StreakBadge.make(view, all: store.pairs, signedIn: model.account.isSignedIn, offersSignIn: model.account.offersSignIn)
-        return Button {
-            Haptics.shared.tick()
-            Sound.shared.play(ArtName.Sound.sfxPop)
-            model.showUs(pair: view.pair)
-        } label: {
-            PairChip(view: view, scale: scale)
-        }
-        .buttonStyle(.plain)
-        .accessibilityLabel(Text("\(view.partner.name), \(view.count)", comment: "VoiceOver: a connection's chip on Home; opens the Us screen"))
-        .accessibilityValue(badge.map(PawBadge.value) ?? "")
-        // The top pair keeps PR 4's badge id; the rest by position.
-        .accessibilityIdentifier(index == 0 ? "home.streak" : "home.pair.\(index)")
-        .overlay(alignment: .topTrailing) {
+        return HStack(spacing: 8 * scale) {
+            Button {
+                Haptics.shared.tick()
+                Sound.shared.play(ArtName.Sound.sfxPop)
+                model.showUs(pair: view.pair)
+            } label: {
+                PairChip(view: view, scale: scale)
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel(Text("\(view.partner.name), \(view.count)", comment: "VoiceOver: a connection's chip on Home; opens the Us screen"))
+            .accessibilityValue(badge.map(PawBadge.value) ?? "")
+            // The top pair keeps PR 4's badge id; the rest by position.
+            .accessibilityIdentifier(index == 0 ? "home.streak" : "home.pair.\(index)")
+            .overlay(alignment: .bottomTrailing) {
+                // A pounce waiting on you (§12.4): their bell rings on their chip; it opens their pair on Us.
+                if view.pounce.waiting != nil {
+                    Button {
+                        Haptics.shared.tick()
+                        Sound.shared.play(ArtName.Sound.sfxPop)
+                        model.showUs(pair: view.pair)
+                    } label: {
+                        Image(ArtName.Habit.pounceBell).resizable().scaledToFit()
+                            .frame(width: 30 * scale, height: 30 * scale)
+                            .shadow(color: Palette.ink.opacity(0.5), radius: 0, x: 0, y: 3)
+                    }
+                    .buttonStyle(.plain)
+                    .bounceLoop(active: true)
+                    .offset(x: 6 * scale, y: 6 * scale)
+                    .accessibilityLabel(Text("\(view.partner.name) wants to play", comment: "VoiceOver: a pounce waiting on Home"))
+                    .accessibilityIdentifier("home.pounce")
+                }
+            }
+            // Save: keep this streak on a new phone (§10.5), in line after the top pair.
             if index == 0, badge?.offerSignIn == true {
-                CloudPlusBubble(size: 34 * scale, action: onCloud)
-                    .offset(x: 14 * scale, y: -16 * scale)
+                CloudPlusBubble(size: 36 * scale, action: onCloud)
                     .accessibilityIdentifier("home.streak.cloud")
             }
         }
-        .overlay(alignment: .bottomTrailing) {
-            // A pounce waiting on you (§12.4): their bell rings on their chip; it opens their pair on Us.
-            if view.pounce.waiting != nil {
-                Button {
-                    Haptics.shared.tick()
-                    Sound.shared.play(ArtName.Sound.sfxPop)
-                    model.showUs(pair: view.pair)
-                } label: {
-                    Image(ArtName.Habit.pounceBell).resizable().scaledToFit()
-                        .frame(width: 34 * scale, height: 34 * scale)
-                        .shadow(color: Palette.ink.opacity(0.5), radius: 0, x: 0, y: 3)
-                }
-                .buttonStyle(.plain)
-                .bounceLoop(active: true)
-                .offset(x: 10 * scale, y: 10 * scale)
-                .accessibilityLabel(Text("\(view.partner.name) wants to play", comment: "VoiceOver: a pounce waiting on Home"))
-                .accessibilityIdentifier("home.pounce")
-            }
-        }
+        .compositingGroup()
         .transition(.scale.combined(with: .opacity))
     }
 
-    static let inviteLabel = String(localized: "Invite someone", comment: "Home: the word under the plus that opens the invite sheet")
+    /// The word beside the plus. VoiceOver hears who it adds.
+    static let inviteLabel = String(localized: "Invite", comment: "Home: the word beside the plus that opens the invite sheet")
 
     private func plus(big: Bool) -> some View {
-        let side = (big ? 76 : 54) * scale
+        let side = (big ? 50 : 42) * scale
         return Button {
             Haptics.shared.tick()
             Sound.shared.play(ArtName.Sound.sfxPop)
             model.showInvite()
         } label: {
-            // Worded, so it reads apart from Create and Join below: this one adds a person (a link
-            // or QR that makes you two a pair), they start or join a table.
-            VStack(spacing: 2 * scale) {
+            // Worded, so it reads apart from Join: this one adds a person (a link or QR that makes
+            // you two a pair), Join sits you at a table.
+            HStack(spacing: 4 * scale) {
                 Image(ArtName.Habit.chipPlus)
                     .resizable().scaledToFit()
                     .frame(width: side, height: side)
-                    .shadow(color: Palette.ink.opacity(0.5), radius: 0, x: 0, y: 4 * scale)
-                OutlinedText(Self.inviteLabel, size: (big ? 17 : 14) * scale, fill: .white, width: 2.5)
+                    .shadow(color: Palette.ink.opacity(0.5), radius: 0, x: 0, y: 3 * scale)
+                OutlinedText(Self.inviteLabel, size: (big ? 20 : 16) * scale, fill: .white, width: 2.5)
                     .fixedSize()
             }
+            .padding(.trailing, 4 * scale)
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
+        .compositingGroup()
         .bounceLoop(active: StreakStrip.bounces(big: big, band: model.ageBand))
-        .accessibilityLabel(Text(Self.inviteLabel))
+        .accessibilityLabel(Text("Invite someone", comment: "VoiceOver: Home's plus that opens the invite sheet"))
         .accessibilityValue(big ? "big" : "small")
         .accessibilityIdentifier("home.add")
         .transition(.scale.combined(with: .opacity))
@@ -136,7 +151,7 @@ struct StreakStripView: View {
         } label: {
             Image(ArtName.Habit.giftBox)
                 .resizable().scaledToFit()
-                .frame(width: 50 * scale, height: 50 * scale)
+                .frame(width: 46 * scale, height: 46 * scale)
                 .shadow(color: Palette.ink.opacity(0.5), radius: 0, x: 0, y: 3)
         }
         .buttonStyle(.plain)
@@ -182,6 +197,7 @@ struct OwnChip: View {
                 .overlay(Capsule().strokeBorder(Palette.ink, lineWidth: 4 * scale))
                 .shadow(color: own.kept ? Palette.lime.opacity(0.9) : .clear, radius: 10 * scale)
         }
+        .compositingGroup()
         .shadow(color: Palette.ink.opacity(0.5), radius: 0, x: 0, y: 4 * scale)
     }
 }

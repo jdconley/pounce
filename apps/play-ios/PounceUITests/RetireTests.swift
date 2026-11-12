@@ -3,7 +3,7 @@ import XCTest
 /// Retiring a stalled seat (PlayerCardView.swift): on the card of a person whose move has waited
 /// its days, "Play on without <name>" asks first, saying what happens, then their seat forfeits.
 /// No server: `-demo retire` is Kiki's (seat 2, asleep) move with the wait over, which the demo
-/// server answers with her forfeit. Home's "Last move N days ago" comes from `-demo-home`.
+/// server answers with her forfeit. Home's "N days ago" comes from `-demo-home`.
 @MainActor
 final class RetireTests: XCTestCase {
     override func setUp() {

@@ -320,7 +320,8 @@ private struct UpdatePanel<Content: View>: View {
     }
 }
 
-/// "A new Pounce is ready": small, friendly, closed with one tap, and gone for that version.
+/// "Update ready": one small row, closed with one tap, and gone for that version. A child's
+/// device has no button, only "Ask a grown-up."
 struct SoftUpdateCard: View {
     @Environment(AppModel.self) private var model
     @Environment(\.dynamicTypeSize) private var typeSize
@@ -330,15 +331,15 @@ struct SoftUpdateCard: View {
 
     var body: some View {
         UpdatePanel(tint: Palette.violet) {
-            let words = VStack(alignment: .leading, spacing: 3) {
-                Text("A new Pounce is ready", comment: "Home's update card: the headline")
+            let words = VStack(alignment: .leading, spacing: 2) {
+                Text("Update ready", comment: "Home's update card: the headline")
                     .font(.system(roomy ? .title3 : .headline, design: .rounded, weight: .black))
                     .accessibilityAddTraits(.isHeader)
-                Text(verbatim: asksGrownUp
-                    ? askGrownUp
-                    : String(localized: "Update for the newest games and fixes.", comment: "Home's update card: why update"))
-                    .font(.system(roomy ? .body : .subheadline, design: .rounded, weight: .bold))
-                    .opacity(0.9)
+                if asksGrownUp {
+                    Text("Ask a grown-up.", comment: "Home's update card on a child's device: a parent updates the app")
+                        .font(.system(roomy ? .body : .subheadline, design: .rounded, weight: .bold))
+                        .opacity(0.9)
+                }
             }
             .foregroundStyle(.white)
             .shadow(color: Palette.ink.opacity(0.55), radius: 0, x: 0, y: 1.5)
@@ -347,11 +348,11 @@ struct SoftUpdateCard: View {
             .accessibilityElement(children: .combine)
             .accessibilityIdentifier("home.update.text")
 
-            let update = UpdateButton(size: .small, width: roomy ? 130 : 150, identifier: "home.update.update") {
+            let update = UpdateButton(size: .small, width: roomy ? 140 : 112, identifier: "home.update.update") {
                 // Off to the store: this version's card has done its job.
                 model.updates.dismissSoft()
             }
-            let close = RoundIconButton(systemName: "xmark", color: Palette.sky, side: 40, accessibilityLabel: "Not now") {
+            let close = RoundIconButton(systemName: "xmark", color: Palette.sky, side: 38, accessibilityLabel: "Not now") {
                 model.updates.dismissSoft()
             }
             .accessibilityIdentifier("home.update.close")
@@ -359,32 +360,34 @@ struct SoftUpdateCard: View {
             let art = Image(ArtName.stateUpdate)
                 .resizable()
                 .scaledToFit()
-                .frame(width: roomy ? 64 : 50, height: roomy ? 64 : 50)
+                .frame(width: roomy ? 56 : 40, height: roomy ? 56 : 40)
                 .accessibilityHidden(true)
 
-            if roomy, !typeSize.isAccessibilitySize {
-                // An iPad's wide card: one row.
-                HStack(spacing: 12) {
-                    art
-                    words
-                    Spacer(minLength: 0)
-                    update.padding(.bottom, 6)
-                    close
-                }
-            } else {
-                // A phone: the words get the card's width, and Update a row of its own under them.
+            if typeSize.isAccessibilitySize {
+                // Big text: the words over the button.
                 VStack(alignment: .leading, spacing: 10) {
                     HStack(alignment: .top, spacing: 10) {
-                        if !typeSize.isAccessibilitySize { art }
                         words
                         Spacer(minLength: 0)
                         close
                     }
-                    if !asksGrownUp {
-                        // Under the words, with room for the pill's lip.
-                        update
-                            .padding(.leading, typeSize.isAccessibilitySize ? 0 : 60)
-                            .padding(.bottom, 6)
+                    update.padding(.bottom, 6)
+                }
+            } else {
+                // One row; the cat steps aside where the row is short.
+                ViewThatFits(in: .horizontal) {
+                    HStack(spacing: 10) {
+                        art
+                        words
+                        Spacer(minLength: 0)
+                        update.padding(.bottom, 6)
+                        close
+                    }
+                    HStack(spacing: 10) {
+                        words
+                        Spacer(minLength: 0)
+                        update.padding(.bottom, 6)
+                        close
                     }
                 }
             }
@@ -401,27 +404,22 @@ struct LockedTableRow: View {
     let row: LockedTables.Row
     var roomy = false
 
-    private var gameTitle: String? { UpdatePolicy.gameTitle(id: row.invite.game, serverTitle: row.invite.title) }
-
     private var title: String {
         row.invite.name ?? TableName.fallback(code: row.invite.code)
     }
 
+    /// What to do, in a few words (the game's colour is on the row).
     private var detail: String {
         if row.opens {
-            return gameTitle.map { String(localized: "Playing \($0). Tap to join.", comment: "Home, a table that needed an update and can be opened now") }
-                ?? String(localized: "Tap to join.", comment: "Home, a table that needed an update and can be opened now, with no game name")
+            return String(localized: "Ready to join", comment: "Home, a table that needed an update and can be opened now")
         }
         switch model.updates.tableAdvice(band: model.ageBand) {
         case .update, .updateInTestFlight:
-            return gameTitle.map { String(localized: "Playing \($0). Update Pounce to join.", comment: "Home, a table behind a padlock: the game, and what to do") }
-                ?? String(localized: "Playing a newer game. Update Pounce to join.", comment: "Home, a table behind a padlock, with no game name")
+            return String(localized: "Update to join", comment: "Home, a table behind a padlock: what to do")
         case .askGrownUp:
-            return gameTitle.map { String(localized: "Playing \($0). Ask a grown-up to update Pounce.", comment: "Home, a table behind a padlock, on a child's device") }
-                ?? askGrownUp
+            return String(localized: "Ask a grown-up", comment: "Home, a table behind a padlock, on a child's device")
         case .notYet:
-            return gameTitle.map { String(localized: "Playing \($0). It isn't in this version of Pounce yet.", comment: "Home, a table behind a padlock, when no newer app is out") }
-                ?? String(localized: "Playing a newer game. It isn't in this version of Pounce yet.", comment: "Home, a table behind a padlock, no newer app out, no game name")
+            return String(localized: "Not out yet", comment: "Home, a table behind a padlock, when no newer app is out")
         }
     }
 
