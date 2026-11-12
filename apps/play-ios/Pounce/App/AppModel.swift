@@ -34,6 +34,9 @@ final class AppModel {
     @ObservationIgnored let tableCache: TableCache
     @ObservationIgnored let tableArchive: TableArchive
     @ObservationIgnored let tutorialStore: TutorialStore
+    /// What the App Store rating ask remembers (`RatingPrompt`): the first launch, finished games,
+    /// the last ask.
+    @ObservationIgnored let ratingStore: RatingStore
     /// The coaching tips each person on this phone has seen (first-game tutorial).
     private(set) var tipsSeen: TipsSeen
     /// Coaching tips show on the table. Off for the UI tests and demos, which never expect a
@@ -114,6 +117,9 @@ final class AppModel {
         archived = tableArchive.all()
         tutorialStore = TutorialStore(directory: dataDirectory)
         tipsSeen = tutorialStore.load()
+        ratingStore = RatingStore(directory: dataDirectory)
+        // The first launch is written down now: the rating ask waits days after it.
+        ratingStore.load()
         self.ageStore = ageStore
         self.ageAsker = ageAsker
         let age = ageStore.load()

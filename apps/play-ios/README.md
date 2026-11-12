@@ -89,6 +89,10 @@ then the build setting (Debug: `http://localhost:8787`, optionally overridden by
   taps); add `-tips` to turn them on there (`TutorialTests`), or `-no-tips` to turn them off on
   a phone's own data (`MultiSimTests`). Tips seen are kept per person in `tutorial.json`, next to
   `people.json`; How to play (Home's gear, the table's paw menu) can bring them back.
+- The App Store rating ask (`RatingPrompt` in PounceKit) never runs, and no finished game is counted
+  for it, in a run with `-demo`, `-uitest-reset`, `-anim-speed`, `-slowmo`, `-age-band`,
+  `-age-range`, or any `-demo-…`, `-show-…`, `-stub-…`, `-seed-…` argument. What it remembers is in
+  `rating.json`, next to `people.json`.
 - The `pounce-dev://j/<CODE>[?move=<MOVECODE>]` URL scheme is registered in Debug only, for
   `xcrun simctl openurl booted ...` (universal links need the deployed server). Release builds
   never register or accept it.

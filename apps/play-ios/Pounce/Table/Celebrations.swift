@@ -11,6 +11,9 @@ struct CelebrationState {
     var focused = false
     /// `onGameOver` was called for this table.
     var announced = false
+    /// The game-over celebration played here: the game ended while this phone was at the table
+    /// (a table opened after it ended is announced with no celebration).
+    var playedGameOver = false
 }
 
 /// The table's big moments (spec §5.10, §9.1): the versus intro before the first deal, round
@@ -264,6 +267,7 @@ extension TableScene {
     /// the fanfare; then `onGameOver` brings up the game-over overlay.
     func playGameOver(winners: [Seat]) async {
         let t = CelebrationTiming.self
+        celebration.playedGameOver = true
         let top = TableLayout.shelfCount
         await focusTower(on: tower.focusRect(low: top - 2, high: top))
         Sound.shared.play(ArtName.Sound.sfxFanfare)
