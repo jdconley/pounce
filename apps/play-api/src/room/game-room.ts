@@ -1,7 +1,7 @@
 import { DurableObject } from "cloudflare:workers";
 
 import { devSpeed, linkOn, nudgeOn } from "../env";
-import { DEFAULT_GAME, GAMES_HEADER, gamesListed, type GameId } from "../games";
+import { DEFAULT_GAME, GAMES_HEADER, gamesListed, gamesOn, type GameId } from "../games";
 import { endBody, startAlert, startBody, updateBody, type LiveState } from "../live/live";
 import { isGeneratedName } from "../names/filter";
 import { yourMoveBody } from "../notify/copy";
@@ -91,7 +91,7 @@ export class GameRoom extends DurableObject<Env> {
   }
 
   private features(): RoomFeatures {
-    return { streaks: streaksOn(this.env), live: liveOn(this.env), link: linkOn(this.env), nudge: nudgeOn(this.env) };
+    return { streaks: streaksOn(this.env), live: liveOn(this.env), link: linkOn(this.env), nudge: nudgeOn(this.env), games: gamesOn(this.env) };
   }
 
   private createSchema(): void {
@@ -107,8 +107,16 @@ export class GameRoom extends DurableObject<Env> {
    * Creates the room, or reports that the code is already taken. `name` is
    * already validated; `look` is the creator's last-used one (§9.4).
    */
-  async init(code: string, hostDeviceId: string, name?: string, look?: Look, game?: GameId): Promise<{ ok: true } | { exists: true }> {
+  async init(
+    code: string,
+    hostDeviceId: string,
+    name?: string,
+    look?: Look,
+    game?: GameId,
+  ): Promise<{ ok: true } | { exists: true } | { off: true }> {
     if (this.core) return { exists: true };
+    // The Worker has checked; the room checks again, so no caller can deal a game the flag doesn't list.
+    if (!gamesOn(this.env).includes(game ?? DEFAULT_GAME)) return { off: true };
     this.createSchema();
     this.core = new RoomCore<unknown>(
       RoomCore.create(code, hostDeviceId, Date.now(), name, look, game),
@@ -132,8 +140,10 @@ export class GameRoom extends DurableObject<Env> {
     spec: RematchIntent,
     /** A pounce's answerer, who is opening this table now: no "your move" push for them (§12.4). */
     quietFor?: string,
-  ): Promise<{ ok: true; first: string | null } | { exists: true }> {
+  ): Promise<{ ok: true; first: string | null } | { exists: true } | { off: true }> {
     if (this.core) return { exists: true };
+    // No new table of a game the `GAMES` flag doesn't list, whoever asks (the room that asked checks too).
+    if (!gamesOn(this.env).includes(spec.game ?? DEFAULT_GAME)) return { off: true };
     this.quietFor = quietFor ?? null;
     this.createSchema();
     this.core = new RoomCore<unknown>(
@@ -376,7 +386,7 @@ export class GameRoom extends DurableObject<Env> {
       const made = await this.env.ROOMS.get(this.env.ROOMS.idFromName(code))
         .initRematch(code, spec)
         .catch(() => null);
-      if (made === null) break;
+      if (made === null || "off" in made) break;
       if ("ok" in made) {
         if (this.core) {
           if (notifyOn(this.env)) this.ctx.waitUntil(this.pushPlayAgain(spec, code, made.first).catch(() => undefined));

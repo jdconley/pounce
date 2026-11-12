@@ -194,6 +194,7 @@ function serverSamples(): Sample<ServerMessage>[] {
         "not_your_turn",
         "game_over",
         "forfeited",
+        "game_off",
       ] as const
     ).map((code): Sample<ServerMessage> => ({ name: `error-${code}`, message: { t: "error", code } })),
   ];

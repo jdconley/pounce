@@ -365,9 +365,11 @@ Where this section differs from the first draft's proposal, it says **Changed fr
 
 ### 9.3 The wire
 
-**The flag.** `GAMES` is a comma-separated list of game ids rooms may be created for beyond Cat Tower. It is `""` in `apps/play-api/wrangler.jsonc`, so production deals Cat Tower only and refuses any other game with the same 400 as before. Local dev turns it on in `.dev.vars` (`GAMES=tiles`, see `.dev.vars.example`), and tests set it themselves.
+**The flag.** `GAMES` is a comma-separated list of game ids rooms may be created for beyond Cat Tower. It is `""` in `apps/play-api/wrangler.jsonc`, so production deals Cat Tower only and refuses any other game with the same 400 as before. Local dev turns it on in `.dev.vars` (`GAMES=tiles`, see `.dev.vars.example`), and tests set it themselves. Turning it off stops new tile game tables everywhere: `POST /v1/rooms` answers 400, "Play again" at a tile game table answers the error `game_off`, and the room itself refuses to be created whoever asks. A table already dealt plays on to its end.
 
-**What an app says.** An app that can draw more than Cat Tower sends `X-Pounce-Games: cat-tower,tiles` on every request: creating a room, the socket upgrade, the tables list and the streaks list. No header means Cat Tower only, which is every app before this. The server remembers the last list each device sent, for pushes.
+**What an app says.** An app that can draw more than Cat Tower sends `X-Pounce-Games: cat-tower,tiles` on every request: creating a room, the socket upgrade, the tables list and the streaks list. No header means Cat Tower only, which is every app before this.
+
+The server remembers, per device, what its app said the last time it opened a socket or fetched its tables, and uses that for pushes. It hears this inside the call those two requests always made to the device's index, so it costs no call of its own, and a request is always answered by its own header. A socket or tables request with no header clears what was remembered: a device put back on an older build stops being pushed tables it can't open. So every part of the app that makes those two requests, extensions included, must send the header.
 
 **Creating.** `POST /v1/rooms` with `{"game":"tiles"}` works when `GAMES` lists the game and the request's header does too. Otherwise 400.
 
@@ -375,7 +377,8 @@ Where this section differs from the first draft's proposal, it says **Changed fr
 
 - **Joining.** The room answers the socket upgrade with 404, the answer for a table that doesn't exist, which every version of the app shows as a closed table. This holds for a stranger, for a member and for the host.
 - **Lists.** `GET /v1/devices/me/tables` leaves the table out, even when the asking device's player sits at it on another device. `GET /v1/me/streaks` leaves its code out of `myMove` and `theirMove`.
-- **Pushes.** A push about the table (`your_move`, nudge, retire, play again, a pounce aimed at it) goes only to devices whose app has listed the game. The badge counts only tables the device can open, and the push's streak block lists only those.
+- **Pushes.** A push that is only about the table (`your_move`, nudge, retire, play again, a pounce aimed at it) goes only to devices whose app has listed the game. The badge counts only tables the device can open, and the push's streak block lists only those.
+- **Streak reminders still arrive.** The daily and last-chance reminders are about the streak, and point at one of the pair's tables. When that table is a tile game's, a device that can't open it gets the same reminder worded and pointed at a Cat Tower table the pair shares, or with no table when there is none (`Outgoing.otherwise`, applied per device by `forDevice`).
 - **One gap, accepted.** A `streak` message on a Cat Tower table's socket can still name a tile game table's code in `myMove` or `theirMove`, for a player who also plays the tile game on a newer device. Opening it gets the 404 above.
 
 **Snapshots.** `RoomView.game` is Cat Tower's view and stays so. In a tile game room it is `null`, `gameId` is `"tiles"`, and `tiles` holds the `TilesView` once the game is dealt. **Changed from the proposal:** `gameId` is absent in a Cat Tower room (the proposal had it always present), so a Cat Tower snapshot has not gained a key. Absent reads as Cat Tower.
@@ -384,7 +387,7 @@ Where this section differs from the first draft's proposal, it says **Changed fr
 
 **Actions.** `{"t":"act","seat":n,"action":…,"id":…}` as before. The room's own game parses the action (`parseClientMessage(raw, room.parseAction)`), so a tile game room refuses Cat Tower's actions as `bad_message`, and the other way round. A full table is under 1 KB, well inside the 8 KB message limit.
 
-**Errors.** `ErrorCode` gains the tile game's: `bad_action`, `pool_empty`, `pool_not_empty`, `bad_piece`, `duplicate_piece`, `missing_piece`, `not_your_piece`, `nothing_played`, `bad_set`, `table_touched`, `opening_too_low`. It reuses `game_over`, `not_your_turn`, `bad_seat` and `forfeited`.
+**Errors.** `ErrorCode` gains the tile game's: `bad_action`, `pool_empty`, `pool_not_empty`, `bad_piece`, `duplicate_piece`, `missing_piece`, `not_your_piece`, `nothing_played`, `bad_set`, `table_touched`, `opening_too_low`. It reuses `game_over`, `not_your_turn`, `bad_seat` and `forfeited`. One more is the room's: `game_off`, for "Play again" at a table whose game the flag no longer lists. It is never sent at a Cat Tower table.
 
 **The invite page.** **Changed from the proposal:** `/j/<CODE>` does not look the table up, because a page that differed by table would tell a guesser which codes are real. While `GAMES` lists another game, every invite page adds one line: "Pounce can't find this table? It may be a newer game. Update Pounce, then tap this link again."
 
@@ -392,9 +395,12 @@ Where this section differs from the first draft's proposal, it says **Changed fr
 
 **Fixtures for the Swift tests:** `fixtures/protocol/tiles-server-messages.json` (9 snapshots, every event, every error) and `tiles-client-messages.json`, generated from a real room by `tests/tiles-protocol-fixtures.test.ts`, beside `fixtures/tiles-sets.json`.
 
+**Samples of the HTTP bodies** an app decodes had none before: `fixtures/http/tables.json`, `streaks.json`, `trophies.json`, `state.json` and `pounces.json`. They are Cat Tower's, as version 1.0 reads them, built from the server's own code with fixed inputs and pinned by hash. `tests/http-fixtures.test.ts` also asks the real Worker for each body and fails if it sends a key, or a kind of value, the sample lacks.
+
 ### 9.4 iOS client (`apps/play-ios`), still to do
 
-- Send `X-Pounce-Games: cat-tower,tiles` on every API request and socket upgrade. Without it the server shows the app no tile game table at all.
+- Send `X-Pounce-Games: cat-tower,tiles` on every API request and socket upgrade, from the app and from every extension that fetches tables. Without it the server shows the app no tile game table at all, and a tables fetch or socket without it makes the server forget the device can draw the game until the next one with it.
+- Handle the error `game_off` on "Play again": the game was turned off, so say no new table can be dealt.
 - `Protocol/Models.swift`: `RoomView` gains `gameId: String?` (nil is Cat Tower) and `tiles: TilesView?`. `GameView` keeps its wire shape.
 - `Protocol/Messages.swift`: `Action` stays Cat Tower's. Add `TilesAction` and a way to send it in the same `{"t":"act"}` envelope. `GameEvent.swift`: `RoomEvent` gains `.tiles(TilesEvent)`.
 - `Net/APIClient.swift`: `createRoom(game:)` (today it sends the literal `"cat-tower"`). `TableEntry` gains `game: String?` (nil is Cat Tower).

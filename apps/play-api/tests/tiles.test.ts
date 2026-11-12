@@ -1,7 +1,13 @@
+import { mkdtempSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join as joinPath } from "node:path";
+
 import { afterEach, beforeAll, describe, expect, test } from "vitest";
 
 import { chooseAction } from "../src/bots/house-cat-tiles";
+import { slotAt } from "../src/notify/schedule";
 import { createRng } from "../src/rules/rng";
+import { addDays, dayKey } from "../src/streaks/clock";
 import { readSet } from "../src/tiles/sets";
 
 import {
@@ -12,6 +18,7 @@ import {
   Client,
   connect,
   eventually,
+  LA,
   mint,
   newPerson,
   profile,
@@ -45,6 +52,7 @@ const PAD_TOKEN = tokenOf(3);
 let script = "";
 let sent: Sent[] = [];
 const open: Miniflare[] = [];
+const dirs: string[] = [];
 
 beforeAll(async () => {
   script = await bundle("./notify-entry.ts");
@@ -52,12 +60,16 @@ beforeAll(async () => {
 
 afterEach(async () => {
   await Promise.all(open.splice(0).map((mf) => mf.dispose()));
+  for (const dir of dirs.splice(0)) rmSync(dir, { recursive: true, force: true });
   sent = [];
 });
 
-/** The Worker with the tile game on (`GAMES=tiles`) unless `games` says otherwise, at the dev server's top speed. */
-async function start(games: string | null = "tiles"): Promise<Miniflare> {
-  const mf = await worker(script, { sent, devSpeed: 100, ...(games === null ? {} : { games }) });
+/**
+ * The Worker with the tile game on (`GAMES=tiles`) unless `games` says otherwise, at the dev
+ * server's top speed. `persist`: a directory its rooms are kept in, so a second Worker can load them.
+ */
+async function start(games: string | null = "tiles", persist?: string): Promise<Miniflare> {
+  const mf = await worker(script, { sent, devSpeed: 100, ...(games === null ? {} : { games }), ...(persist ? { persist } : {}) });
   open.push(mf);
   return mf;
 }
@@ -322,6 +334,70 @@ describe("an app that can't draw the tile game", { timeout: 60_000 }, () => {
     expect(JSON.stringify(onPad)).not.toContain(code);
   });
 
+  /** A streak between JD and Mia from a turn each at the tile game, with the move back with whoever moved first. */
+  async function streakAtTiles(mf: Miniflare) {
+    const f = await family(mf);
+    const first = tilesOf(f.clients[0] as Client).turn;
+    await draw(f.clients, first);
+    await draw(f.clients, 1 - first);
+    await (f.clients[1] as Client).find((m) => m.t === "streak");
+    // Mia is to move at the tile game: JD plays on if the move is his.
+    if (tilesOf(f.clients[0] as Client).turn === 0) await draw(f.clients, 0);
+    // The device's people as the server knows them now: Mia's phone and tablet are one player.
+    const players = await profile(mf, f.miaPhone, [f.mia]);
+    const miaId = players[f.mia.id] as string;
+    expect((await profile(mf, f.miaPad, [f.miaOnPad]))[f.miaOnPad.id]).toBe(miaId);
+    const tomorrow = slotAt(addDays(dayKey(Date.now(), LA), 1), 19 * 60 + 30, LA);
+    const remind = async () => {
+      await settle(300);
+      sent.length = 0;
+      await mf.dispatchFetch(`${BASE}/__test/remind?player=${miaId}&now=${tomorrow}`);
+    };
+    return { ...f, remind };
+  }
+
+  type Alert = { aps: { alert: { title: string; body: string } }; code?: string; kind: string; streak?: { myMove: string[]; theirMove: string[] } };
+
+  test("still gets the streak reminder when the only table to play at is a tile game: with no table to open", async () => {
+    const mf = await start();
+    const { code, remind } = await streakAtTiles(mf);
+    await remind();
+    const [onPhone] = await eventually(() => alertsTo(MIA_TOKEN, "reminder"), (l) => l.length === 1);
+    const [onPad] = await eventually(() => alertsTo(PAD_TOKEN, "reminder"), (l) => l.length === 1);
+    // The phone's opens the tile game's table.
+    expect((onPhone as Sent).body).toMatchObject({ kind: "reminder", code });
+    // The tablet's is the same reminder for the same streak, pointing nowhere, and never naming the table.
+    const pad = (onPad as Sent).body as Alert;
+    expect("code" in pad).toBe(false);
+    expect(pad.aps.alert.title).toBe(((onPhone as Sent).body as Alert).aps.alert.title);
+    expect(pad.streak).toMatchObject({ myMove: [], theirMove: [] });
+    expect(JSON.stringify(pad)).not.toContain(code);
+    expect(alertsTo(PAD_TOKEN)).toHaveLength(1);
+  });
+
+  test("gets it pointing at the Cat Tower table when the pair shares one too", async () => {
+    const mf = await start();
+    const { code, remind, jdPhone, miaPhone, jd, mia } = await streakAtTiles(mf);
+    // The same two at a Cat Tower table, with the move at Mia's seat there as well.
+    const tower = await table(mf, [
+      [jdPhone, jd],
+      [miaPhone, mia],
+    ]);
+    for (let i = 0; i < 4 && (tower.clients[0] as Client).game().turn !== 1; i++) await takeTurn(tower.clients);
+    await eventually(() => tablesOf(mf, miaPhone, NEW_APP), (l) => l.some((t) => t.code === tower.code && t.yourTurn));
+    await remind();
+    const [onPad] = await eventually(() => alertsTo(PAD_TOKEN, "reminder"), (l) => l.length === 1);
+    const [onPhone] = await eventually(() => alertsTo(MIA_TOKEN, "reminder"), (l) => l.length === 1);
+    const pad = (onPad as Sent).body as Alert;
+    expect(pad.code).toBe(tower.code);
+    expect(pad.streak?.myMove).toEqual([tower.code]);
+    expect(JSON.stringify(pad)).not.toContain(code);
+    // The phone's may point at either: both are tables it can open, and both are in its streak block.
+    const phone = (onPhone as Sent).body as Alert;
+    expect([code, tower.code]).toContain(phone.code);
+    expect([...(phone.streak?.myMove ?? [])].sort()).toEqual([code, tower.code].sort());
+  });
+
   test("still gets everything about a Cat Tower table, with a badge that counts only what it can open", async () => {
     const mf = await start();
     const { code, clients, jdPhone, miaPhone, jd, mia } = await family(mf);
@@ -335,6 +411,9 @@ describe("an app that can't draw the tile game", { timeout: 60_000 }, () => {
     ]);
     for (let i = 0; i < 4 && (tower.clients[0] as Client).game().turn !== 0; i++) await takeTurn(tower.clients);
     (tower.clients[1] as Client).away();
+    // The shared helper opened that socket with no header, as an older app would, and the server
+    // took it at its word. Mia's phone is a newer app: its next request says so again.
+    await tablesOf(mf, miaPhone, NEW_APP);
     await settle(100);
     sent.length = 0;
     await takeTurn(tower.clients);
@@ -392,6 +471,38 @@ describe("streaks and play again at a tile game table", { timeout: 60_000 }, () 
     expect(tilesOf(again).rackCounts).toEqual([14, 14]);
     const listed = await eventually(() => tablesOf(mf, tablet, NEW_APP), (l) => l.some((t) => t.code === dealt.code));
     expect(listed.find((t) => t.code === dealt.code)).toMatchObject({ game: "tiles", status: "playing" });
+  });
+
+  test("once GAMES is turned off, a tile game table plays to its end but play again deals nothing, and none can be made", async () => {
+    const dir = mkdtempSync(joinPath(tmpdir(), "play-api-tiles-"));
+    dirs.push(dir);
+    const on = await start("tiles", dir);
+    const made = await couple(on);
+    const { code, phone, tablet } = made;
+    await draw(made.clients, tilesOf(made.clients[0] as Client).turn);
+    await on.dispose();
+    open.splice(open.indexOf(on), 1);
+
+    // The same rooms, under a Worker whose flag lists no game but Cat Tower: production after a kill switch.
+    const off = await start(null, dir);
+    expect((await create(off, phone, "tiles", NEW_APP)).status).toBe(400);
+    // The table that was dealt is still there for the apps that can draw it, and still plays.
+    const a = await connect(off, code, phone, NEW_APP);
+    const b = await connect(off, code, tablet, NEW_APP);
+    expect((a.last as Snapshot).room).toMatchObject({ status: "playing", gameId: "tiles" });
+    await draw([a, b], tilesOf(a).turn);
+    b.send({ t: "act", seat: 1, action: { type: "forfeit" } });
+    await a.until((s) => s.room.status === "over");
+    // Play again is refused in so many words, for both, and no table is dealt.
+    for (const c of [a, b]) {
+      c.send({ t: "rematch" });
+      await c.find((m) => m.t === "error" && m.code === "game_off");
+    }
+    await settle(300);
+    expect([...a.received, ...b.received].some((m) => m.t === "rematch")).toBe(false);
+    expect((a.last as Snapshot).room.rematch).toBeUndefined();
+    // Cat Tower is dealt as ever.
+    expect((await create(off, phone, "cat-tower", OLD_APP)).status).toBe(201);
   });
 
   test("a move the room's parser can't read is a bad message, and Cat Tower's moves are not this game's", async () => {

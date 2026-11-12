@@ -63,6 +63,11 @@ export type ReminderInput = {
   lastOpenAt: number | null;
   pairs: PairFacts[];
   tableNames: Record<string, string>;
+  /**
+   * The codes of the player's tables that only a newer app can open (a game other than Cat
+   * Tower). Absent: none. A reminder that points at one says what an older app gets instead.
+   */
+  newerOnly?: readonly string[];
 };
 
 export type Slot = "daily" | "lastChance";
@@ -171,26 +176,36 @@ const byTop = (x: PairFacts, y: PairFacts) =>
 
 type Candidate = { push: Outgoing; commit: () => void };
 
-/** The line, and the table the push opens: the one the line names, else the first where it's your move. */
-function lineFor(st: NotifyState, i: ReminderInput, p: PairFacts, slot: Slot, lines: readonly Line[]) {
-  const named = p.myMove.find((c) => i.tableNames[c] !== undefined);
+/**
+ * The line, and the table the push opens: the one the line names, else the first of `myMove`
+ * (the tables where it's your move), else none.
+ */
+function lineFor(st: NotifyState, i: ReminderInput, p: PairFacts, slot: Slot, lines: readonly Line[], myMove: readonly string[]) {
+  const named = myMove.find((c) => i.tableNames[c] !== undefined);
   const ctx = { table: named === undefined ? null : (i.tableNames[named] as string), partner: p.partner, count: p.count };
-  const line = pickLine(lines, ctx, st.lines, st.cursor[slot], i.now);
-  return line && { ...line, code: named ?? (p.myMove[0] as string) };
+  // Every list has lines that need neither a table name nor a count.
+  const line = pickLine(lines, ctx, st.lines, st.cursor[slot], i.now) as NonNullable<ReturnType<typeof pickLine>>;
+  return { ...line, code: named ?? myMove[0] };
 }
 
 function rotated(st: NotifyState, i: ReminderInput, p: PairFacts, slot: Slot, kind: NotifyKind): Candidate {
-  // Every list has lines that need neither a table name nor a count.
-  const line = lineFor(st, i, p, slot, slot === "daily" ? DAILY_LINES : LAST_CHANCE_LINES) as NonNullable<ReturnType<typeof lineFor>>;
+  const lines = slot === "daily" ? DAILY_LINES : LAST_CHANCE_LINES;
+  const line = lineFor(st, i, p, slot, lines, p.myMove);
+  // A reminder is about the streak, not one table. When the table it points at is one only a
+  // newer app can open, an older app still gets it: worded and pointed as if that table (and any
+  // like it) weren't there, at a table it can open if the pair has one.
+  const newerOnly = i.newerOnly ?? [];
+  const older = newerOnly.includes(line.code as string) ? lineFor(st, i, p, slot, lines, p.myMove.filter((c) => !newerOnly.includes(c))) : null;
   return {
     push: {
       kind,
       title: i.name,
       body: line.text,
-      code: line.code,
+      code: line.code as string,
       thread: `pair:${p.pair}`,
       collapse: `${kind}:${p.pair}`,
       streak: p.streak,
+      ...(older ? { otherwise: { body: older.text, ...(older.code === undefined ? {} : { code: older.code }) } } : {}),
     },
     commit: () => {
       st.lines[line.id] = i.now;

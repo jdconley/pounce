@@ -54,9 +54,12 @@ function snapshotTo(out: Outbound[], to: string): Snapshot {
   return hit.message as Snapshot;
 }
 
+/** The `GAMES` flag with the tile game on, as a room is told of it. */
+const ON = ["cat-tower", "tiles"] as const;
+
 function lobby(features: RoomFeatures = { streaks: true }, module?: RoomGame<TilesState>): Room {
   const state = RoomCore.create<TilesState>("BCDFG", "phone", clock, undefined, undefined, "tiles");
-  return new RoomCore<TilesState>(state, () => clock, rng, module, 1, features);
+  return new RoomCore<TilesState>(state, () => clock, rng, module, 1, { games: ON, ...features });
 }
 
 /** Seat 0 is person 1 (player A) on the phone, seat 1 person 2 (player B) on the tablet, then `bots` bots. */
@@ -407,6 +410,58 @@ describe("play again at a tile game", () => {
     expect(next.state.status).toBe("playing");
     expect((next.state.gameState as TilesState).racks).toHaveLength(2);
     expect(next.snapshotFor("phone").room.gameId).toBe("tiles");
+  });
+
+  it("is refused once the game is turned off, though the table that was dealt plays to its end", () => {
+    // Dealt while the flag listed the game, then loaded by a server whose flag no longer does.
+    const live = started();
+    const off = new RoomCore<TilesState>(live.state, () => clock, rng, undefined, 1, { streaks: true, games: ["cat-tower"] });
+    // The game in hand goes on as it was.
+    const seat = game(off).turn;
+    expect(errorsOf(act(off, seat, { type: "draw" }))).toEqual([]);
+    expect(errorsOf(act(off, 1, { type: "forfeit" }))).toEqual([]);
+    expect(off.state.status).toBe("over");
+    // But no new one is dealt, for either player, and nothing is queued.
+    expect(errorsOf(off.handle("phone", { t: "rematch" }))).toEqual(["game_off"]);
+    expect(errorsOf(off.handle("tablet", { t: "rematch" }))).toEqual(["game_off"]);
+    expect(off.drainRematch()).toBeNull();
+    expect(off.state.rematch).toBeUndefined();
+  });
+
+  it("is refused the same way by a room that was never told of any game but Cat Tower", () => {
+    const r = new RoomCore<TilesState>(finished().state, () => clock, rng, undefined, 1, { streaks: true });
+    expect(errorsOf(r.handle("phone", { t: "rematch" }))).toEqual(["game_off"]);
+  });
+
+  it("a table already dealt before the flag went off is still handed out", () => {
+    const r = finished();
+    r.handle("phone", { t: "rematch" });
+    r.drainRematch();
+    r.rematchDealt("CDFGH");
+    const off = new RoomCore<TilesState>(r.state, () => clock, rng, undefined, 1, { streaks: true, games: ["cat-tower"] });
+    expect(off.handle("tablet", { t: "rematch" })).toEqual([{ to: "tablet", message: { t: "rematch", code: "CDFGH" } }]);
+  });
+
+  it("the order of refusals is unchanged: not over, then not seated, then the game", () => {
+    const off = new RoomCore<TilesState>(started().state, () => clock, rng, undefined, 1, { streaks: true, games: ["cat-tower"] });
+    expect(errorsOf(off.handle("phone", { t: "rematch" }))).toEqual(["not_over"]);
+    act(off, 1, { type: "forfeit" });
+    off.connect("watcher");
+    expect(errorsOf(off.handle("watcher", { t: "rematch" }))).toEqual(["not_seated"]);
+  });
+
+  it("a Cat Tower table's play again never depends on the flag", () => {
+    for (const games of [undefined, [], ["tiles"]] as const) {
+      const r = new RoomCore(RoomCore.create("BCDFG", "phone", clock), () => clock, rng, catTower, 1, { streaks: true, ...(games ? { games } : {}) });
+      r.connect("phone");
+      r.connect("tablet");
+      r.handle("phone", { t: "claim", seat: 0, person: person(1) });
+      r.handle("tablet", { t: "claim", seat: 1, person: person(2) });
+      r.handle("phone", { t: "start" });
+      r.handle("tablet", { t: "act", seat: 1, action: { type: "forfeit" } });
+      expect(errorsOf(r.handle("phone", { t: "rematch" }))).toEqual([]);
+      expect(r.drainRematch()).not.toBeNull();
+    }
   });
 
   it("a Cat Tower table's play again says nothing of a game, and deals Cat Tower", () => {

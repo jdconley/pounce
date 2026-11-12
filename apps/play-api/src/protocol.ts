@@ -156,6 +156,8 @@ export type ErrorCode =
   | "not_over"
   | "too_soon"
   | "not_unlocked"
+  // "Play again" at a table whose game is no longer dealt (the `GAMES` flag was turned off). Never at a Cat Tower table.
+  | "game_off"
   // Nudges ("too_soon" too: the wait or the cooldown isn't over, or this turn's is sent).
   | "not_their_turn";
 

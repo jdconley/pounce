@@ -141,24 +141,23 @@ async function mintDevice(request: Request, env: Env, secret: string): Promise<R
   return json(200, { deviceId, token: await issueDeviceToken(secret, deviceId) });
 }
 
+/** The games this request's app can draw (`X-Pounce-Games`): always Cat Tower, plus what it lists. */
+const appGames = (request: Request): GameId[] => gamesListed(request.headers.get(GAMES_HEADER));
+
 /**
- * The games this request's app can draw (`X-Pounce-Games`); when it says, the device's index
- * remembers, so pushes and lists made later for this device know too. An app that sends no
- * header (every app before there was a second game) costs nothing here.
+ * The same, less Cat Tower: what the device's index is told when the app opens a socket or
+ * fetches its tables (`DeviceIndex.players`). It rides on the call those requests always made,
+ * so no request waits on, or fails by, a call of its own. Empty for an app that sent no header,
+ * which is then what the device is known by.
  */
-async function appGames(request: Request, env: Env, deviceId: string): Promise<GameId[]> {
-  const header = request.headers.get(GAMES_HEADER);
-  const games = gamesListed(header);
-  if (header !== null) await env.DEVICES.get(env.DEVICES.idFromName(deviceId)).declareGames(games.filter((id) => id !== DEFAULT_GAME));
-  return games;
-}
+const declared = (request: Request): GameId[] => appGames(request).filter((id) => id !== DEFAULT_GAME);
 
 async function createRoom(request: Request, env: Env, deviceId: string): Promise<Response> {
   const body = await readObject(request);
   // Only a game the `GAMES` flag has turned on, and only for an app that can draw it.
   if (!body || !isGameId(body.game) || !gamesOn(env).includes(body.game)) return badRequest();
   const game = body.game;
-  if (game !== DEFAULT_GAME && !(await appGames(request, env, deviceId)).includes(game)) return badRequest();
+  if (!appGames(request).includes(game)) return badRequest();
   if (Object.keys(body).some((key) => key !== "game" && key !== "name")) return badRequest();
   // Optional: without one the room gets its default name.
   const name = "name" in body ? parseRoomName(body.name) : undefined;
@@ -177,6 +176,7 @@ async function createRoom(request: Request, env: Env, deviceId: string): Promise
     const code = newRoomCode(cryptoRng);
     const result = await env.ROOMS.get(env.ROOMS.idFromName(code)).init(code, deviceId, name, look, game);
     if ("ok" in result) return json(201, { code });
+    if ("off" in result) return badRequest();
   }
   return json(503, { error: "no_room_code" });
 }
@@ -194,14 +194,13 @@ async function openSocket(request: Request, env: Env, deviceId: string, code: st
     return response;
   }
   if (!guard.exists) return notFound();
-  // Before the room hears of this device: what its app can draw, for anything pushed to it later.
-  await appGames(request, env, deviceId);
   // The room trusts these headers, so client-supplied ones must never reach it.
   const headers = new Headers(request.headers);
   headers.delete(DEVICE_HEADER);
   headers.delete(PLAYER_HEADER);
   headers.set(DEVICE_HEADER, deviceId);
-  headers.set(PLAYER_HEADER, JSON.stringify(await devicePlayers(env, deviceId)));
+  // The same call tells the device's index what this app can draw, before the room can push to it.
+  headers.set(PLAYER_HEADER, JSON.stringify(await devicePlayers(env, deviceId, declared(request))));
   return env.ROOMS.get(env.ROOMS.idFromName(code)).fetch(new Request(request, { headers }));
 }
 
@@ -223,7 +222,7 @@ async function setPushToken(request: Request, env: Env, deviceId: string): Promi
 
 /** The device's tables, less any table of a game the asking app can't draw. */
 async function listTables(request: Request, env: Env, deviceId: string): Promise<Response> {
-  return json(200, { tables: await deviceTables(env, deviceId, await appGames(request, env, deviceId)) });
+  return json(200, { tables: await deviceTables(env, deviceId, declared(request)) });
 }
 
 function respond<T>(result: Result<T>, okStatus = 200): Response {
@@ -272,13 +271,13 @@ const deleteAccount = asMe(async (_r, env, _d, playerId) => {
 
 type Route = (request: Request, env: Env, deviceId: string) => Promise<Response> | Response;
 
-const getStreaks = asMe(async (request, env, deviceId, me) => {
+const getStreaks = asMe(async (request, env, _d, me) => {
   const now = Date.now();
   const [all, left] = await Promise.all([myStreaks(env, me, now), myLeft(env, me)]);
   // While another game is on: a streak names its tables by code, and an app is told only of the
   // ones it can draw. Off, nothing is looked up and the answer is what it always was.
   const other = gamesOn(env).length > 1;
-  const [tables, games] = other ? await Promise.all([player(env, me).listTables(), appGames(request, env, deviceId)]) : [[], []];
+  const [tables, games] = other ? [await player(env, me).listTables(), appGames(request)] : [[], []];
   const pairs = all.map((view) => withoutUndrawable(view, tables, games));
   // Your own streak, for Home's strip (trophy room design §1): only with TROPHY on.
   const own = trophyOn(env) ? await myOwn(env, me, now, pairs) : null;

@@ -115,9 +115,12 @@ export async function uploadProfile(
   return { players, rejected };
 }
 
-/** personId → playerId for everyone the device speaks for: its own people, plus its account's household. */
-export async function devicePlayers(env: Env, deviceId: string): Promise<Record<string, string>> {
-  const { people, account } = await device(env, deviceId).players();
+/**
+ * personId → playerId for everyone the device speaks for: its own people, plus its account's household.
+ * `declared`: the games the asking app listed, when this answers the app itself (`DeviceIndex.players`).
+ */
+export async function devicePlayers(env: Env, deviceId: string, declared?: readonly string[]): Promise<Record<string, string>> {
+  const { people, account } = await device(env, deviceId).players(declared);
   const map = { ...people };
   if (account) {
     for (const h of await player(env, account).household()) map[h.personId] ??= h.playerId;
@@ -133,10 +136,12 @@ export async function resolveMe(env: Env, deviceId: string, personId: string | n
 
 /**
  * The device's own tables and every one of its players', newest report per table first, whatever
- * their game; and the games the device's app has said it can draw (`DeviceIndex.declareGames`).
+ * their game; and the games the device's app can draw beyond Cat Tower. `declared`: what the
+ * asking app listed, when this answers the app itself (`DeviceIndex.players`); the answer then
+ * says the same.
  */
-export async function deviceView(env: Env, deviceId: string): Promise<{ tables: TableEntry[]; games: string[] }> {
-  const { people, account, games } = await device(env, deviceId).players();
+export async function deviceView(env: Env, deviceId: string, declared?: readonly string[]): Promise<{ tables: TableEntry[]; games: string[] }> {
+  const { people, account, games } = await device(env, deviceId).players(declared);
   const ids = new Set([...Object.values(people), ...(account ? [account] : [])]);
   const lists = await Promise.all([device(env, deviceId).listTables(), ...[...ids].map((id) => player(env, id).listTables())]);
   const byCode = new Map<string, TableEntry>();
@@ -149,11 +154,13 @@ export async function deviceView(env: Env, deviceId: string): Promise<{ tables: 
 
 /**
  * The tables a device's app is shown: its own and its players', less any table of a game the app
- * can't draw. `games`: what the asking app listed just now; left out, what the device last declared.
+ * can't draw. `listed`: the games the asking app listed just now (none for an app that sent no
+ * header), which is what it is shown by, and what the device is remembered by from here on.
  */
-export async function deviceTables(env: Env, deviceId: string, games?: readonly string[]): Promise<TableEntry[]> {
-  const view = await deviceView(env, deviceId);
-  return tablesFor(view.tables, games ?? view.games).slice(0, 50);
+export async function deviceTables(env: Env, deviceId: string, listed: readonly string[]): Promise<TableEntry[]> {
+  const view = await deviceView(env, deviceId, listed);
+  // By the request's own list, whatever was stored: the answer never depends on that write.
+  return tablesFor(view.tables, listed).slice(0, 50);
 }
 
 /**

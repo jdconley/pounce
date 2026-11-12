@@ -1,6 +1,7 @@
 import { deviceView } from "../players/accounts";
-import { drawable, tablesFor, withoutUndrawable, type TableEntry } from "../room/tables";
+import { tablesFor, type TableEntry } from "../room/tables";
 
+import { forDevice } from "./audience";
 import { apnsBody, collapseId } from "./payload";
 
 import type { Level } from "./policy";
@@ -38,10 +39,10 @@ function badge(tables: readonly TableEntry[], also?: string): number {
  * `senders` are the people behind it, which a consented kitten's device checks (parent consent,
  * plan decision 16); without them a kitten's device refuses it.
  *
- * A push about a table (`o.code`) of a game other than Cat Tower goes only to the devices whose
- * app has said it can draw that game: an older app could not open the table. `game` is the
- * table's game when the sender knows it (the room itself); otherwise the device's tables list
- * says. Tables an app can't draw never count toward its badge, nor appear in its streak block.
+ * Each device gets the push as `forDevice` says: one about a table of a game its app can't draw
+ * is not sent to it, unless the push says what such a device gets instead (a streak reminder).
+ * `game` is the table's game when the sender knows it (the room itself). Tables an app can't
+ * draw never count toward its badge, nor appear in its streak block.
  */
 export async function deliverToPlayer(
   env: Env,
@@ -57,9 +58,8 @@ export async function deliverToPlayer(
     profile.devices.map(async (d) => {
       try {
         const { tables, games } = await deviceView(env, d);
-        if (!drawable(game ?? tables.find((t) => t.code === o.code)?.game, games)) return false;
-        // The streak block lists tables by code: this device hears only of the ones it can draw.
-        const shown = o.streak ? { ...o, streak: withoutUndrawable(o.streak, tables, games) } : o;
+        const shown = forDevice(o, tables, games, game);
+        if (shown === null) return false;
         const body = apnsBody(shown, level, badge(tablesFor(tables, games).slice(0, 50), also));
         return (await device(env, d).pushAlert(body, collapseId(o.collapse), level, gate)).sent;
       } catch {

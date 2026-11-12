@@ -2,23 +2,14 @@ import { DatabaseSync } from "node:sqlite";
 
 import { describe, expect, it } from "vitest";
 
+import { storage } from "../../tests/sqlite-storage";
+
 import { createTables, listTables, upsertTable, type TableEntry } from "./tables";
 
-/**
- * The tables list's SQL against a real SQLite (Node's own), behind the one method of a Durable
- * Object's `SqlStorage` the code uses. What matters here is a list saved before tables had a
- * game: it must load as it is, with no step that can fail.
+/*
+ * The tables list's SQL against a real SQLite (`tests/sqlite-storage.ts`). What matters here is a
+ * list saved before tables had a game: it must load as it is, with no step that can fail.
  */
-function storage(db: DatabaseSync): SqlStorage {
-  return {
-    exec(query: string, ...params: unknown[]) {
-      const statement = db.prepare(query);
-      const reads = /^\s*(SELECT|PRAGMA)/i.test(query);
-      const rows = reads ? statement.all(...(params as never[])) : (statement.run(...(params as never[])), []);
-      return { toArray: () => rows };
-    },
-  } as unknown as SqlStorage;
-}
 
 const entry = (code: string, over: Partial<TableEntry> = {}): TableEntry => ({
   code,

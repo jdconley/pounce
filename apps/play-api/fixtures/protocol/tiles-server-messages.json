@@ -1084,5 +1084,12 @@
       "t": "error",
       "code": "forfeited"
     }
+  },
+  {
+    "name": "error-game_off",
+    "message": {
+      "t": "error",
+      "code": "game_off"
+    }
   }
 ]

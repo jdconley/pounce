@@ -90,19 +90,34 @@ export class DeviceIndex extends DurableObject<Env> {
     this.setMeta("account", playerId);
   }
 
-  /** `games`: what `declareGames` last heard, for the callers that list or push tables to this device. */
-  players(): { people: Record<string, string>; account: string | null; games: string[] } {
+  /**
+   * Who the device speaks for, and the games its app can draw beyond Cat Tower (`games`), for the
+   * callers that list or push tables to it.
+   *
+   * `declared`: what the app said in the request being answered (its `X-Pounce-Games` header,
+   * less Cat Tower; empty when it sent none). The Worker passes it when the app itself opens a
+   * socket or fetches its tables, the calls that were always made here, so hearing it costs no
+   * call of its own. It replaces what was known: an app that stops sending the header (an older
+   * build put back on the device) stops being told of tables it can't open. Left out, by callers
+   * that are not answering the app, nothing changes.
+   */
+  players(declared?: readonly string[]): { people: Record<string, string>; account: string | null; games: string[] } {
+    if (declared !== undefined) this.declareGames(declared);
     return { people: this.people(), account: this.getMeta("account"), games: this.games() };
   }
 
   /**
-   * The games this device's app says it can draw (its `X-Pounce-Games` header), as the Worker
-   * last heard them. An app that never said draws Cat Tower only, so nothing about a table of
-   * another game is listed or pushed to it.
+   * Remembers the games the device's app can draw. Written only when they changed, so a device
+   * that never listed any costs one read. Never fatal: a write that fails leaves the last list,
+   * and the request it rode on is answered from its own header.
    */
-  declareGames(games: string[]): void {
-    const listed = games.join(",");
-    if (listed !== (this.getMeta("games") ?? "")) this.setMeta("games", listed === "" ? null : listed);
+  private declareGames(games: readonly string[]): void {
+    try {
+      const listed = games.join(",");
+      if (listed !== (this.getMeta("games") ?? "")) this.setMeta("games", listed === "" ? null : listed);
+    } catch {
+      // The list is a convenience for later pushes; this request doesn't depend on it.
+    }
   }
 
   private games(): string[] {

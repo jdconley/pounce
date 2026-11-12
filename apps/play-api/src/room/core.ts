@@ -119,7 +119,17 @@ export type Look = { rug: string; back: string };
  * Which optional behaviour a room has. Streaks (and looks and Play again) stay off until `STREAKS` is set.
  * `link`: heartbeats, move acks and each seat's connection quality (`LINK`).
  */
-export type RoomFeatures = { streaks: boolean; live?: boolean; link?: boolean; nudge?: boolean };
+export type RoomFeatures = {
+  streaks: boolean;
+  live?: boolean;
+  link?: boolean;
+  nudge?: boolean;
+  /**
+   * The games new tables may be dealt for (the `GAMES` flag, `gamesOn`). Absent: Cat Tower only.
+   * A room of a game that is no longer listed plays on, but "Play again" there deals nothing.
+   */
+  games?: readonly GameId[];
+};
 
 /** Why a live table ended: the round or game is over, its device came back, or a limit passed (§11.3). */
 export type LiveEnd = "over" | "back" | "idle" | "cap" | "replaced";
@@ -1227,6 +1237,8 @@ export class RoomCore<S = CatTowerState> {
       const { code } = state.rematch;
       return code ? [{ to: deviceId, message: { t: "rematch", code } }] : [];
     }
+    // The game was turned off since this table was dealt: it plays on to the end, and no new one is dealt.
+    if (state.game !== DEFAULT_GAME && !this.features.games?.includes(state.game)) return [this.fail(deviceId, "game_off")];
     state.rematch = { code: null };
     this.rematchIntent = {
       name: state.name,

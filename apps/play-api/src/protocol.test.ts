@@ -60,8 +60,10 @@ describe("ErrorCode", () => {
       bad_set: true,
       table_touched: true,
       opening_too_low: true,
+      // Play again at a table whose game was turned off.
+      game_off: true,
     };
-    expect(Object.keys(codes)).toHaveLength(46);
+    expect(Object.keys(codes)).toHaveLength(47);
   });
 });
 
