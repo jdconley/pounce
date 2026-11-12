@@ -647,5 +647,17 @@ describe("the update push, for a device whose app can't draw the table", { timeo
     // Apple was asked once, behind all of it; nothing was known yet, so nothing was said.
     await eventually(() => asked, (a) => a.length === 1);
     expect(alertsTo(MIA_TOKEN, "update")).toEqual([]);
+    // The lookup the delivery started was kept alive to its end (the room's waitUntil), not cut
+    // short with Apple already marked as asked: its answer is there for the next held push.
+    await eventually(async () => JSON.parse((await ask(mf, "GET", "/v1/app", {})).body) as { latest?: string }, (b) => b.latest === "1.2");
+    expect(asked).toHaveLength(1);
+    await draw(clients, 1);
+    // Mia puts the phone down again, and JD moves.
+    (clients[1] as Client).away();
+    await settle(100);
+    await draw(clients, 0);
+    const [push] = await eventually(() => alertsTo(MIA_TOKEN, "update"), (l) => l.length === 1);
+    expect((push as Sent).body).toMatchObject({ kind: "update", from: { name: "JD", cat: 1 } });
+    expect(asked).toHaveLength(1);
   });
 });

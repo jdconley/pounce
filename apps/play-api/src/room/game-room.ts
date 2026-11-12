@@ -470,8 +470,11 @@ export class GameRoom extends DurableObject<Env> {
     });
     // A live table's held-back move goes quietly, to that device only (§11.3).
     const to = only ? { ...profile, devices: [only] } : profile;
-    await deliverToPlayer(this.env, to, push, only ? "passive" : g.level, intent.code, this.otherHumans(intent.playerId), this.otherGame());
+    await deliverToPlayer(this.env, to, push, only ? "passive" : g.level, intent.code, this.otherHumans(intent.playerId), this.otherGame(), this.later);
   }
+
+  /** Work that outlives a delivery (a lookup of the App Store's version): kept alive until it ends. */
+  private later = (work: Promise<unknown>): void => this.ctx.waitUntil(work);
 
   /**
    * A device whose app can't draw this table's game just tried to open it: someone asked it
@@ -505,7 +508,7 @@ export class GameRoom extends DurableObject<Env> {
       { code: state.code, title: state.name, from: { name: seat.person.name, cat: seat.person.cat }, game: state.game, gameTitle: gameTitle(state.game) },
       level,
       // What Apple last said is live; a lookup that is due runs after this, for the next time.
-      (await storeKnown(this.env, (work) => this.ctx.waitUntil(work))).store,
+      (await storeKnown(this.env, this.later)).store,
     );
   }
 
@@ -529,7 +532,7 @@ export class GameRoom extends DurableObject<Env> {
     });
     if (!g.send) return;
     const push = nudgePush({ code: intent.code, table: intent.tableName, to: intent.personName, from: intent.from });
-    await deliverToPlayer(this.env, profile, push, g.level, intent.code, [intent.fromPlayer], this.otherGame());
+    await deliverToPlayer(this.env, profile, push, g.level, intent.code, [intent.fromPlayer], this.otherGame(), this.later);
   }
 
   /**
@@ -552,7 +555,7 @@ export class GameRoom extends DurableObject<Env> {
     if (!g.send) return;
     const push = retirePush({ code: intent.code, table: intent.tableName, to: intent.personName, from: intent.from ?? null });
     const senders = intent.kind === "soon" ? this.otherHumans(intent.playerId) : [intent.fromPlayer ?? null];
-    await deliverToPlayer(this.env, profile, push, g.level, intent.kind === "soon" ? intent.code : undefined, senders, this.otherGame());
+    await deliverToPlayer(this.env, profile, push, g.level, intent.kind === "soon" ? intent.code : undefined, senders, this.otherGame(), this.later);
   }
 
   /**

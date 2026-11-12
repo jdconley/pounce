@@ -50,6 +50,10 @@ function badge(tables: readonly TableEntry[], also?: string): number {
  * A device not sent a push a person made about such a table gets the update push in its place
  * (`DeviceIndex.pushUpdate`: once per table, only when the App Store has a newer version than
  * its app, never a kitten's device). It doesn't count as this push having been delivered.
+ *
+ * `later`: the caller's `waitUntil`, when it has one (a room does). With it, a lookup of the App
+ * Store's version that is due is started and allowed to finish after the delivery; without it
+ * nothing is looked up, only read.
  */
 export async function deliverToPlayer(
   env: Env,
@@ -59,12 +63,13 @@ export async function deliverToPlayer(
   also?: string,
   senders?: (string | null)[],
   game?: string,
+  later?: (work: Promise<unknown>) => void,
 ): Promise<boolean> {
   const gate = senders ? { recipient: profile.id, senders } : undefined;
   // Read at most once, and only if some device is held back from a push a person sent. What is
   // known is all it reads (what Apple itself last said): no push waits on Apple.
   let live: Promise<string | null> | undefined;
-  const latest = () => (live ??= storeKnown(env).then((k) => k.store));
+  const latest = () => (live ??= storeKnown(env, later).then((k) => k.store));
   const results = await Promise.all(
     profile.devices.map(async (d) => {
       try {

@@ -19,15 +19,13 @@ export function servedAt(url: string): void {
 
 /**
  * What this Worker (or Durable Object) knows of the App Store right now. Never waits on Apple:
- * a lookup that is due goes to `background` (`ctx.waitUntil`), or runs unawaited without one,
- * and its answer is for the next asker. Never throws.
+ * a lookup that is due goes to `background` (`ctx.waitUntil`, which lets it finish), and its
+ * answer is for the next asker. Without a `background` nothing is looked up, only read: a lookup
+ * nobody keeps alive could be cut short after Apple was marked as asked. Never throws.
  */
 export async function storeKnown(env: LatestEnv, background?: (work: Promise<unknown>) => void): Promise<Known> {
   const cache = (globalThis as { caches?: { default?: CacheLike } }).caches?.default;
-  const later = (work: Promise<void>) => {
-    const safe = work.catch(() => undefined);
-    if (background) background(safe);
-  };
+  const later = background && ((work: Promise<void>) => background(work.catch(() => undefined)));
   try {
     return known(env, await storeVersion(env, remembered(cache, origin, Date.now, LOCAL), fetch, Date.now, later));
   } catch {

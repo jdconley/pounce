@@ -215,6 +215,28 @@ describe("storeVersion never waits on Apple", () => {
     expect(asked).toHaveLength(2);
   });
 
+  test("a caller with nowhere to finish a lookup only reads: Apple is not asked, and not marked as asked", async () => {
+    const { asked, fetcher } = apple(listing("1.2"));
+    const kept = memory();
+    const c = clock();
+    // Cold: nothing known, nothing started, nothing written.
+    expect(await storeVersion({}, kept, fetcher, c.now)).toBeNull();
+    expect(asked).toEqual([]);
+    expect(kept.kept.size).toBe(0);
+    // So the next caller that can finish one asks at once, not a quarter of an hour later.
+    const bg = later();
+    await storeVersion({}, kept, fetcher, c.now, bg.background);
+    await bg.settle();
+    expect(asked).toHaveLength(1);
+    // Stale: the reader gets the old answer and leaves the record exactly as it was.
+    c.pass(FOUND_TTL_S * 1000);
+    const before = kept.kept.get(KEY)?.value;
+    expect(await storeVersion({}, kept, fetcher, c.now)).toBe("1.2");
+    expect(asked).toHaveLength(1);
+    expect(kept.kept.get(KEY)?.value).toBe(before);
+    expect(lookupDue(recordIn(kept), c.now())).toBe(true);
+  });
+
   test("APP_LOOKUP=off never asks Apple and knows nothing", async () => {
     const { asked, fetcher } = apple(listing("1.1"));
     const bg = later();

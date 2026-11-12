@@ -118,17 +118,21 @@ export function refreshLookup(env: LatestEnv, memory: Remembered, fetcher: typeo
  * listed yet, or Apple hasn't been reached. **Never waits on Apple**: it answers from what is
  * remembered, however old, and when that has had its time it hands a lookup to `background`
  * (`ctx.waitUntil` in the Worker) for the next asker. `APP_LOOKUP=off` never asks.
+ *
+ * Without a `background` it only reads. A caller that can't promise the lookup will be let
+ * finish must not start one: Apple is marked as asked before the request leaves, and a lookup
+ * cut short after that would leave nobody asking again for a quarter of an hour.
  */
 export async function storeVersion(
   env: LatestEnv,
   memory: Remembered,
   fetcher: typeof fetch,
   now: () => number,
-  background: (work: Promise<void>) => void,
+  background?: (work: Promise<void>) => void,
 ): Promise<string | null> {
   if ((env.APP_LOOKUP ?? "").trim().toLowerCase() === "off") return null;
   const record = await readRecord(memory, storeId(env));
-  if (lookupDue(record, now())) background(refreshLookup(env, memory, fetcher, now));
+  if (background && lookupDue(record, now())) background(refreshLookup(env, memory, fetcher, now));
   return record?.version ?? null;
 }
 
