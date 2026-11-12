@@ -79,6 +79,9 @@ enum ArtName {
     static let homeBg = "home-bg"
     static let curtainStage = "curtain-stage"
     static let gameTile = "game-tile"
+    /// Game shelf covers (384x256 pt, 3:2, the subject in the middle): `GameCatalog` names them.
+    static let gameCatTower = "game-cat-tower"
+    static let gameTiles = "game-tiles"
     static let stateClosed = "state-closed"
     static let stateStalled = "state-stalled"
     static let stateOffline = "state-offline"

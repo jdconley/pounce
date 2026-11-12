@@ -8,12 +8,13 @@ struct OutlinedText: View {
     let fill: Color
     let outline: Color
     let width: CGFloat
-    /// Wraps onto up to this many centered lines before shrinking.
+    /// Wraps onto up to this many lines (centered unless `alignment` says otherwise) before shrinking.
     let lines: Int
+    let alignment: TextAlignment
 
     init(
         _ text: String, size: CGFloat, fill: Color = .white, outline: Color = Palette.ink, width: CGFloat = 3,
-        lines: Int = 1
+        lines: Int = 1, alignment: TextAlignment = .center
     ) {
         self.text = text
         self.size = size
@@ -21,6 +22,7 @@ struct OutlinedText: View {
         self.outline = outline
         self.width = width
         self.lines = lines
+        self.alignment = alignment
     }
 
     private static let directions: [CGSize] = [
@@ -35,7 +37,7 @@ struct OutlinedText: View {
     }
 
     var body: some View {
-        ZStack {
+        ZStack(alignment: alignment == .leading ? .leading : alignment == .trailing ? .trailing : .center) {
             ForEach(Self.directions.indices, id: \.self) { i in
                 label
                     .foregroundStyle(outline)
@@ -45,7 +47,7 @@ struct OutlinedText: View {
             label.foregroundStyle(fill)
         }
         .lineLimit(lines)
-        .multilineTextAlignment(.center)
+        .multilineTextAlignment(alignment)
         .minimumScaleFactor(0.5)
         .padding(width)
         .accessibilityElement(children: .ignore)

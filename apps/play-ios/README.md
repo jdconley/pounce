@@ -84,7 +84,9 @@ then the build setting (Debug: `http://localhost:8787`, optionally overridden by
   and marks the run as a test: sound and haptics go to silent stand-ins. See [Test speed](#test-speed).
 - `-show-join` opens the Join screen. `-open-link <url>` handles a link as if it was tapped.
 - For screenshots: `-demo-home` puts sample tables on Home, `-show-rules` / `-show-people` open
-  those sheets over Home, and `-show-scoreboard` opens the scoreboard over a table.
+  those sheets over Home, and `-show-scoreboard` opens the scoreboard over a table. `-shelf all`
+  shows every game on Home's shelf as playable and `-shelf six` fills the shelf with six games
+  (four of them made up), to look at its layouts.
 - First-game coaching tips are off under `-uitest-reset` and `-demo` (no bubble over a test's
   taps); add `-tips` to turn them on there (`TutorialTests`), or `-no-tips` to turn them off on
   a phone's own data (`MultiSimTests`). Tips seen are kept per person in `tutorial.json`, next to
@@ -248,6 +250,41 @@ SPEED=20 DEV_SERVER_URL=http://localhost:8788 scripts/ui-tests.sh   # faster, wi
   A script that starts its own dev server starts it at `SPEED`; one that finds a server already up
   uses it as it is and prints its speed. To get fast bots next to a shared normal-speed server on
   8787, give the script another port with `DEV_SERVER_URL=http://localhost:8788`.
+
+## Games
+
+Home's shelf shows one card per entry in `PounceKit/Sources/PounceKit/Games/GameCatalog.swift`
+(id, title, one-line pitch, players, cover art, tint, availability) and nothing else.
+
+- **A new game** is one `GameCatalog.Entry` in `all` plus its cover: a 3:2 painting with the
+  subject in the middle (Home shows it whole on an iPad, as a wide banner on a phone and as a
+  centred square on a "Coming soon" ticket). Add the prompt under `Art/prompts/ui/`, a manifest
+  entry (`"points": [384, 256], "fit": "cover"`), the name in `ArtName.swift`, then copy the raw
+  painting to `Art/cut/` and run `Art/tools/build-assets.sh <name>`.
+- **Turning the second game on** is one line: `GameCatalog.tiles`' `availability: .comingSoon`
+  becomes `.available`. Its card then starts a table by asking the create route for
+  `"game": "tiles"`, so the server has to deal that game first; until it does, a tap shows
+  Home's "Couldn't start a game" message. `-shelf all` previews the shelf with every game on.
+- The two covers were made with the art pipeline below:
+
+  ```sh
+  cd Art
+  A=../Pounce/Resources/Assets.xcassets
+  tools/gen.sh prompts/ui/game-cat-tower.txt raw/game-cat-tower.png "$A/game-tile.imageset/game-tile@3x.png" \
+    "$A/Cats.spriteatlas/cat0-celebrate.imageset/cat0-celebrate@3x.png" "$A/AppIcon.appiconset/AppIcon.png"
+  tools/gen.sh prompts/ui/game-tiles.txt raw/game-tiles.png "$A/Cats.spriteatlas/cat1-idle.imageset/cat1-idle@3x.png" \
+    "$A/Cats.spriteatlas/cat1-celebrate.imageset/cat1-celebrate@3x.png" "$A/Cards.spriteatlas/card-yarn.imageset/card-yarn@3x.png"
+  cp raw/game-cat-tower.png raw/game-tiles.png cut/
+  tools/build-assets.sh game-cat-tower game-tiles
+  ```
+
+  The tile game's cover took two passes: the second had the first as one more reference and
+  the tile design spec's four toys (fish, mouse, feather, bell) in its prompt. A new generation
+  won't match either cover, so keep the checked-in art unless the game's look changes.
+
+`GameShelfTests` covers the shelf with no server, and saves screenshots when the runner sets
+`TEST_RUNNER_SHELF_SHOTS_DIR` (`TEST_RUNNER_SHELF_SHOTS_ORIENTATION=landscape` on an iPad). The
+set from this change is in `Art/screenshots/game-picker/`.
 
 ## Art pipeline
 
