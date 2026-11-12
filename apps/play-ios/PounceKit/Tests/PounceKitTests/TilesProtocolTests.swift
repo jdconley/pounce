@@ -28,7 +28,7 @@ import Testing
 
     @Test func decodesEveryTilesFixture() throws {
         let fixtures = try Fixtures.tilesServerMessages()
-        #expect(fixtures.count == 34)
+        #expect(fixtures.count == 35)
         for (name, json) in fixtures {
             #expect(throws: Never.self, "\(name)") { _ = try Codec.decode(json) }
         }
@@ -156,6 +156,8 @@ import Testing
         let codes: [ErrorCode] = [
             .badAction, .poolEmpty, .poolNotEmpty, .badPiece, .duplicatePiece, .missingPiece, .notYourPiece,
             .nothingPlayed, .badSet, .tableTouched, .openingTooLow, .notYourTurn, .gameOver, .forfeited,
+            // The room's own: Play again at a table whose game the server no longer deals.
+            .gameOff,
         ]
         let fixtures = try Fixtures.tilesServerMessages().filter { $0.name.hasPrefix("error-") }
         #expect(fixtures.count == codes.count)

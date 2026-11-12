@@ -73,6 +73,9 @@ public struct ErrorCode: RawRepresentable, Codable, Hashable, Sendable {
     public static let tableTouched = ErrorCode(rawValue: "table_touched")
     /// Before opening: the new sets are worth less than 30.
     public static let openingTooLow = ErrorCode(rawValue: "opening_too_low")
+    /// Play again at a tile game table after the server stopped dealing that game: no new table
+    /// can be dealt. Never sent at a Cat Tower table.
+    public static let gameOff = ErrorCode(rawValue: "game_off")
     // Table looks and Play again (daily habit §9.4, §10.4).
     /// Play again before the game is over.
     public static let notOver = ErrorCode(rawValue: "not_over")

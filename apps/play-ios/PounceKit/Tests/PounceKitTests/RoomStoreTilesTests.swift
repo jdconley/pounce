@@ -165,6 +165,19 @@ import Testing
         #expect(store.pass.state == .revealed(0))
     }
 
+    @Test func aRefusedPlayAgainComesBackAsALobbyNopeWithItsCode() async {
+        // The server stopped dealing the game: `rematch` at a finished tile table answers `game_off`.
+        let (store, socket) = store(DemoFixtures.tilesOver())
+        #expect(store.phase == .over)
+        store.send(.rematch)
+        await store.settle()
+        #expect(socket.calls.sends == [.rematch])
+        store.handle(.message(.error(.gameOff)))
+        #expect(store.lastError == .gameOff)
+        #expect(store.rematch == nil)
+        #expect(await intents(store).last == .lobbyNope(.gameOff))
+    }
+
     @Test func nudgesAndRetiringFollowTheTilesTurn() {
         var room = DemoFixtures.tilesOther()
         room.nudge = NudgeView(seat: 2)
