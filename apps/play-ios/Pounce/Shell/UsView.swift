@@ -94,6 +94,24 @@ struct UsView: View {
         .accessibilityIdentifier("screen-us")
     }
 
+    private var notifyCard: some View {
+        VStack(spacing: 18) {
+            HStack {
+                Spacer()
+                PillButton(icon: ArtName.iconBack, color: Palette.sky, size: .small, accessibilityLabel: "Close") {
+                    settingsShown = false
+                }
+                .accessibilityIdentifier("notify.close")
+            }
+            NotifyPanel(scale: sizeClass == .regular ? 1.3 : 1)
+        }
+        .padding(22)
+        .frame(maxWidth: 560)
+        .background(RoundedRectangle(cornerRadius: 36, style: .continuous).fill(Palette.night)
+            .overlay(RoundedRectangle(cornerRadius: 36, style: .continuous).strokeBorder(Palette.ink, lineWidth: 5)))
+        .padding(16)
+    }
+
     private var overlayKey: String {
         "\(leaving?.pair ?? "")|\(pausing?.pair ?? "")|\(opening?.gift.id ?? "")|\(signIn)|\(bubble ?? "")"
             + "|\(pouncing.map { $0.view?.pair ?? "share" } ?? "")|\(settingsShown)"
@@ -350,6 +368,8 @@ struct UsView: View {
             control()
             WordLabel(title: title, alignment: .center)
                 .font(.caption)
+                // Under a fixed-size control, like every caption under a button (`captioned`).
+                .dynamicTypeSize(...DynamicTypeSize.xxxLarge)
         }
     }
 
@@ -375,6 +395,8 @@ struct UsView: View {
                 Text("Play again", comment: "Us: a cat who left; tap to start the streak again")
                     .font(.system(.caption2, design: .rounded, weight: .heavy))
                     .foregroundStyle(.white.opacity(0.8))
+                    // Under a fixed-size cat, like every caption under a button (`captioned`).
+                    .dynamicTypeSize(...DynamicTypeSize.xxxLarge)
                     .accessibilityHidden(true)
             }
         }
@@ -511,6 +533,8 @@ struct UsView: View {
             tile()
             WordLabel(title: title, alignment: .center)
                 .font(.caption)
+                // Under a fixed-size control, like every caption under a button (`captioned`).
+                .dynamicTypeSize(...DynamicTypeSize.xxxLarge)
         }
     }
 
@@ -574,21 +598,12 @@ struct UsView: View {
         } else if settingsShown {
             ZStack {
                 Palette.night.opacity(0.9).ignoresSafeArea().onTapGesture { settingsShown = false }
-                VStack(spacing: 18) {
-                    HStack {
-                        Spacer()
-                        PillButton(icon: ArtName.iconBack, color: Palette.sky, size: .small, accessibilityLabel: "Close") {
-                            settingsShown = false
-                        }
-                        .accessibilityIdentifier("notify.close")
-                    }
-                    NotifyPanel(scale: sizeClass == .regular ? 1.3 : 1)
+                // The panel scrolls when it can't fit (the largest text sizes on a small phone).
+                ViewThatFits(in: .vertical) {
+                    notifyCard
+                    ScrollView { notifyCard }
+                        .scrollBounceBehavior(.basedOnSize)
                 }
-                .padding(22)
-                .frame(maxWidth: 560)
-                .background(RoundedRectangle(cornerRadius: 36, style: .continuous).fill(Palette.night)
-                    .overlay(RoundedRectangle(cornerRadius: 36, style: .continuous).strokeBorder(Palette.ink, lineWidth: 5)))
-                .padding(16)
             }
             .accessibilityElement(children: .contain)
             .accessibilityIdentifier("sheet-notify")
