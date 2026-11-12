@@ -29,6 +29,9 @@ final class AppDelegate: NSObject, UIApplicationDelegate {
         model = AppModel.shared
         // A reminder left from before the app was terminated must not fire now that it's open.
         push.cancelAllTurnReminders()
+        #if DEBUG
+        TouchMarks.installIfAsked()
+        #endif
         return true
     }
 

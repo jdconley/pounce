@@ -17,6 +17,8 @@ import SwiftUI
 /// - `tiles-pass`: the toy box empty; `tiles-other`: Kiki's move, then the House Cat's (watch
 ///   other seats play); `tiles-curtain`: two seats on this phone; `tiles-over`: a finished game.
 /// - `tiles-play`: a fresh two-seat game against the local House Cat, from the deal.
+/// - `tiles-last`: my last three pieces, each of which fits a row: play them all and win (the How
+///   to play video's ending).
 ///
 /// `tiles-over -tiles-game-off`: Play again is refused with `game_off` (the server stopped dealing
 /// the game), and the card says no new table can be dealt.
@@ -37,6 +39,7 @@ enum TilesDemo {
         case .tilesCurtain: DemoFixtures.tilesCurtain()
         case .tilesOver: DemoFixtures.tilesOver()
         case .tilesPlay: fresh()
+        case .tilesLast: DemoFixtures.tilesLast()
         default: DemoFixtures.tilesMid()
         }
     }

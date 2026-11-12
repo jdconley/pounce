@@ -44,6 +44,16 @@ import Testing
         #expect(Set(GameCatalog.all.map(\.title)).count == GameCatalog.all.count)
     }
 
+    /// Each game names its own How to play video, and a made-up entry has none.
+    @Test func everyGameHasItsOwnHowToVideo() {
+        let videos = GameCatalog.all.compactMap(\.howTo)
+        #expect(videos.count == GameCatalog.all.count)
+        #expect(Set(videos).count == videos.count)
+        #expect(GameCatalog.catTower.howTo == "howto-cat-tower")
+        #expect(GameCatalog.Entry(id: "x", title: "X", pitch: "p", minPlayers: 2, maxPlayers: 4, art: "a", tint: .sky,
+                                  availability: .comingSoon).howTo == nil)
+    }
+
     @Test func entriesAreFoundById() {
         #expect(GameCatalog.entry(id: "cat-tower") == GameCatalog.catTower)
         #expect(GameCatalog.entry(id: "tiles") == GameCatalog.tiles)
@@ -70,6 +80,7 @@ import Testing
         #expect(open.id == GameCatalog.tiles.id)
         #expect(open.title == GameCatalog.tiles.title)
         #expect(open.art == GameCatalog.tiles.art)
+        #expect(open.howTo == GameCatalog.tiles.howTo)
         #expect(GameCatalog.shelf([GameCatalog.tiles.unlocked(), GameCatalog.catTower]).map(\.id) == ["tiles", "cat-tower"])
     }
 

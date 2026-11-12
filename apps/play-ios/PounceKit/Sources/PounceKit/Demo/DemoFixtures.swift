@@ -290,7 +290,7 @@ public enum DemoFixtures {
     }
 
     /// Sets the deck count so every card is accounted for.
-    private static func balance(_ g: inout GameView) {
+    static func balance(_ g: inout GameView) {
         let laid = g.laid.compactMap { $0 }.flatMap { $0 }.reduce(0) { $0 + $1.cards.count }
         g.deckCount = Card.deckSize - g.discardCount - g.handCounts.reduce(0, +) - laid
     }
