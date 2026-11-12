@@ -47,6 +47,8 @@ final class AppModel {
     var tipsEnabled = true
     /// Bumped by "Show the tips again": tables turn tips back on for everyone.
     private(set) var tipsReplays = 0
+    /// Tips about the app's own controls (`Tips.swift`), one at a time over the top screen.
+    let tips: TipCenter
     /// The owner's shared streaks (spec §7–§10), and what each table socket says about them.
     let streaks: StreakStore
     /// The owner's trophy room (trophy room design §3).
@@ -120,6 +122,7 @@ final class AppModel {
         archived = tableArchive.all()
         tutorialStore = TutorialStore(directory: dataDirectory)
         tipsSeen = tutorialStore.load()
+        tips = TipCenter(store: tutorialStore, pacing: TipPacingStore(directory: dataDirectory))
         ratingStore = RatingStore(directory: dataDirectory)
         updates = UpdateModel(api: api, directory: dataDirectory)
         // The first launch is written down now: the rating ask waits days after it.
@@ -264,10 +267,39 @@ final class AppModel {
            let url = URL(string: text), let link = WidgetLink.parse(url) {
             model.handle(link)
         }
+        model.startTips(arguments: arguments, env: env)
         return model
         #else
-        return real(config: config)
+        let model = real(config: config)
+        model.startTips(arguments: arguments, env: env)
+        return model
         #endif
+    }
+
+    /// UI tips are off wherever a run is staged (demos, UI tests, screenshots and videos: the
+    /// same runs the rating ask stays out of), unless `-ui-tips` asks for them; `-no-tips` turns
+    /// them off on a phone's own data too.
+    private func startTips(arguments: [String], env: [String: String]) {
+        tips.enabled = (!RatingPrompt.isStaged(arguments: arguments, env: env) || arguments.contains("-ui-tips"))
+            && !arguments.contains("-no-tips")
+        tips.who = { [weak self] in
+            guard let self else { return (nil, nil, false) }
+            return (people.owner?.id, ageBand, !people.others.isEmpty)
+        }
+        tips.blocked = { [weak self] in
+            guard let self else { return true }
+            return pick != nil || inviteShown || expiredInviteShown || updates.required != nil || kittensPanel != nil
+        }
+        tips.onChange = { [weak self] in self?.account.noteLocalChanges() }
+        // Home's old one-time archive hint: whoever closed it has learned the tip.
+        if settings.archiveHintSeen, let owner = people.owner?.id { tips.learn([.homeArchive], person: owner) }
+        #if DEBUG
+        // `-tips-seen ui.home.shelf,ui.home.join`: the owner has had these (screenshots of later tips).
+        if let i = arguments.firstIndex(of: "-tips-seen"), let list = arguments[safe: i + 1], let owner = people.owner?.id {
+            tips.learn(Set(list.split(separator: ",").compactMap { UITip(rawValue: String($0)) }), person: owner)
+        }
+        #endif
+        tips.launched()
     }
 
     private static func real(config: APIConfig, ageAsker: AgeRangeAsking = LiveAgeRange()) -> AppModel {
@@ -850,6 +882,7 @@ final class AppModel {
     /// Going away mid-turn also schedules the local "your turn" reminder (spec §7.5): the server
     /// only pushes when a turn starts. Coming back cancels it and retries a held push token.
     func scenePhaseChanged(_ phase: ScenePhase) {
+        tips.scenePhaseChanged(phase)
         switch phase {
         case .active:
             room?.foreground()
@@ -1216,6 +1249,7 @@ final class AppModel {
     func peopleRenamed() {
         people = peopleStore.load()
         tipsSeen = tutorialStore.load()
+        tips.reload()
         streaks.person = people.owner?.id
     }
 
@@ -1259,7 +1293,9 @@ final class AppModel {
             return tableArchive.all().mapValues { .number($0) }
         case .tutorial:
             guard let id = accountPersonId else { return [:] }
-            return Dictionary(uniqueKeysWithValues: (tipsSeen[id] ?? []).map { ($0.rawValue, JSONValue.bool(true)) })
+            // The game's tips and the UI tips, by name.
+            let names = (tipsSeen[id] ?? []).map(\.rawValue) + (tips.seen[id] ?? []).map(\.rawValue)
+            return Dictionary(uniqueKeysWithValues: names.map { ($0, JSONValue.bool(true)) })
         }
     }
 
@@ -1288,13 +1324,13 @@ final class AppModel {
             archived = tableArchive.all()
         case .tutorial:
             guard let id = accountPersonId else { return }
-            var all = tutorialStore.load()
-            for (key, entry) in entries {
-                guard let tip = CoachTip(rawValue: key) else { continue }
-                if entry.v.boolValue == true { all[id, default: []].insert(tip) } else { all[id]?.remove(tip) }
+            var all = tutorialStore.loadNames()
+            for (key, entry) in entries where CoachTip(rawValue: key) != nil || UITip(rawValue: key) != nil {
+                if entry.v.boolValue == true { all[id, default: []].insert(key) } else { all[id]?.remove(key) }
             }
-            tutorialStore.replace(all)
-            tipsSeen = all
+            tutorialStore.replaceNames(all)
+            tipsSeen = tutorialStore.load()
+            tips.reload()
         }
     }
 
@@ -1310,6 +1346,7 @@ final class AppModel {
     func replayTips() {
         tutorialStore.reset()
         tipsSeen = [:]
+        tips.reset()
         tipsReplays += 1
         account.noteLocalChanges()
     }

@@ -49,6 +49,8 @@ struct UsView: View {
         }
         .safeAreaInset(edge: .top, spacing: 0) { topBar }
         .background { background }
+        // Tips wait under the screen's own overlays (the Pounce sheet has tips of its own).
+        .tipHost(.us, paused: settingsShown || signIn || leaving != nil || pausing != nil || opening != nil || pouncing != nil)
         .overlay { overlays }
         .animation(.easeOut(duration: 0.25).paced, value: overlayKey)
         .animation(.spring(duration: 0.4, bounce: 0.3).paced, value: current?.pair)
@@ -179,9 +181,11 @@ struct UsView: View {
             // The trophy room (trophy room design §3), when the server has it.
             if store.own != nil {
                 ArtIconButton(icon: ArtName.iconTrophy, color: Palette.orange, size: 48, label: "Trophies") {
+                    model.tips.used("us.trophies")
                     model.showTrophies()
                 }
                 .accessibilityIdentifier("us.trophies")
+                .tipTarget("us.trophies")
             }
             bell
             ArtIconButton(icon: ArtName.iconGear, color: Palette.violet, size: 48, label: "Settings") {
@@ -219,6 +223,7 @@ struct UsView: View {
             .accessibilityLabel(Text("Pounce", comment: "VoiceOver: the Us screen's bell, ask them to come play"))
             .accessibilityValue(state.name)
             .accessibilityIdentifier("us.bell")
+            .tipTarget("us.bell")
         }
     }
 
@@ -247,6 +252,7 @@ struct UsView: View {
     }
 
     private func tapBell(_ state: BellState) {
+        model.tips.used("us.bell")
         switch state {
         case .resting, .answered(.no):
             bellShake += 1

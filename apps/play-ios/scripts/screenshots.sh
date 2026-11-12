@@ -39,7 +39,8 @@ shot() {
   local name="$1" wait="$2"
   shift 2
   xcrun simctl terminate "$DEVICE" "$BUNDLE" >/dev/null 2>&1 || true
-  xcrun simctl launch "$DEVICE" "$BUNDLE" "$@" >/dev/null
+  # `-no-tips`: Home's shot runs on the device's own data, where UI tips would otherwise show.
+  xcrun simctl launch "$DEVICE" "$BUNDLE" -no-tips "$@" >/dev/null
   sleep "$wait"
   xcrun simctl io "$DEVICE" screenshot --type=png "$RAW_DIR/$name.png" >/dev/null 2>&1
   sips -s format jpeg -s formatOptions 82 --resampleHeight 1400 "$RAW_DIR/$name.png" --out "$OUT/$name.jpg" >/dev/null

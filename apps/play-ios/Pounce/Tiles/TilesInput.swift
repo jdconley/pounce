@@ -610,6 +610,7 @@ extension TilesScene {
         case .sortNumber, .sortToy:
             guard let seat = shownSeat else { return }
             orders[seat]?.toggle(control == .sortNumber ? .number : .toy)
+            onTipUsed("tiles.sort")
             Haptics.shared.tick()
             Sound.shared.play(ArtName.Sound.sfxFlip, volume: 0.4)
             saveDraft()
@@ -635,6 +636,7 @@ extension TilesScene {
 
     /// The turn button, tapped (or held to the end, for Draw and Pass).
     func pressTurn(held: Bool) {
+        onTipUsed("tiles.turn")
         guard let seat = shownSeat, let draft, !sending else { return nope(turnPill) }
         switch draft.turnButton {
         case .play:

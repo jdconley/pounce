@@ -16,8 +16,9 @@ import SwiftUI
 /// Long-press a table to archive it; the sleeping-cat tile at the end of the tables opens the
 /// archived ones.
 ///
-/// Tips (`CoachMark`) can point at the stable ids: `home.people`, `home.strip`, `home.add`,
-/// `home.settings`, `home.tables`, `home.shelf`, `home.practice`, `home.join`.
+/// Home hosts UI tips (`Tips.swift`, `.tipHost(.home)`); the anchors are `home.play` (Cat Tower's
+/// play mark), `home.practice`, `home.join`, `home.tables`, `home.idleTable`, `home.hero`,
+/// `home.people`, `home.update`, and the strip's `home.own`, `home.add` and `home.gift`.
 struct HomeView: View {
     @Environment(AppModel.self) private var model
     @Environment(Settings.self) private var settings
@@ -71,6 +72,9 @@ struct HomeView: View {
         }
         // Under the bars, the status bar and the home indicator too.
         .background { background }
+        // Tips wait while a sheet or a card covers Home.
+        .tipHost(.home, paused: showPeople || showSettings || showArchived || showRules || showPriming || streakSignIn
+            || showSignInPrompt)
         .sheet(isPresented: $showPeople) {
             PeopleSheet()
                 .environment(model)
@@ -185,6 +189,9 @@ struct HomeView: View {
         .ignoresSafeArea()
     }
 
+    /// The first table that has waited a day or more.
+    private var firstIdle: String? { shownItems.first { ($0.idleDays ?? 0) >= 1 }?.id }
+
     private var hasTables: Bool { !shownItems.isEmpty || model.archivedItems.count > 0 }
     private var lead: HomeLead { HomeLead.pick(shownItems) }
 
@@ -222,6 +229,7 @@ struct HomeView: View {
         let side: CGFloat = roomy ? 76 : 58
         return Button {
             ownerWiggle += 1
+            model.tips.used("home.people")
             Haptics.shared.tick()
             Sound.shared.play(ArtName.Sound.sfxPop)
             showPeople = true
@@ -250,6 +258,7 @@ struct HomeView: View {
         .buttonStyle(.plain)
         .accessibilityLabel(Text("People on this phone"))
         .accessibilityIdentifier("home.people")
+        .tipTarget("home.people")
     }
 
     /// Re-offers push once: the priming screen again, then the system prompt (or its settings page).
@@ -350,9 +359,11 @@ struct HomeView: View {
             title: String(localized: "Join", comment: "Home: the pill that joins a game by code"),
             accessibilityLabel: "Join a game"
         ) {
+            model.tips.used("home.join")
             model.showJoin()
         }
         .accessibilityIdentifier("home.join")
+        .tipTarget("home.join")
     }
 
     /// With no tables yet, a way to just try the game: a practice round against the House Cat.
@@ -362,6 +373,7 @@ struct HomeView: View {
             title: String(localized: "Practice", comment: "Home, with no tables: starts a game against the computer player"),
             accessibilityLabel: "Practice with the House Cat"
         ) {
+            model.tips.used("home.practice")
             Task { await model.newGame(practice: true) }
         }
         .disabled(model.isCreatingRoom)
@@ -369,6 +381,7 @@ struct HomeView: View {
         .compositingGroup()
         .opacity(model.isCreatingRoom ? 0.7 : 1)
         .accessibilityIdentifier("home.practice")
+        .tipTarget("home.practice")
         .transition(.scale.combined(with: .opacity))
     }
 
@@ -475,8 +488,10 @@ struct HomeView: View {
             ZStack(alignment: .topLeading) {
                 GameCard(
                     game: game, layout: layout, coverRatio: coverRatio, roomy: roomy, playUnder: playUnder,
-                    busy: model.isCreatingRoom && game.isAvailable, identifier: dealt ? "home.newGame" : nil
+                    busy: model.isCreatingRoom && game.isAvailable, identifier: dealt ? "home.newGame" : nil,
+                    playAnchor: dealt ? "home.play" : nil
                 ) {
+                    if dealt { model.tips.used("home.newGame") }
                     Task { await model.newGame(game) }
                 }
                 if rules, !bigType { rulesChip(roomy: roomy).padding(roomy ? 16 : 12) }
@@ -492,6 +507,7 @@ struct HomeView: View {
         Button {
             Haptics.shared.tick()
             Sound.shared.play(ArtName.Sound.sfxPop)
+            model.tips.used("home.hero")
             showRules = true
         } label: {
             Text("How to play", comment: "Home: the chip on Cat Tower's card that opens the rules")
@@ -512,6 +528,7 @@ struct HomeView: View {
         .buttonStyle(.plain)
         .accessibilityHint("Opens how to play")
         .accessibilityIdentifier("home.hero")
+        .tipTarget("home.hero")
     }
 
     /// A phone's shelf: one column. When it leads, games you can play are posters and games on
@@ -608,6 +625,7 @@ struct HomeView: View {
         .scrollClipDisabled()
         .frame(height: TableCard.size.height + 34)
         .accessibilityIdentifier("home.tables")
+        .tipTarget("home.tables")
     }
 
     // MARK: compact (iPhone)
@@ -698,6 +716,7 @@ struct HomeView: View {
                 .frame(maxWidth: .infinity)
                 .accessibilityElement(children: .contain)
                 .accessibilityIdentifier("home.tables")
+                .tipTarget("home.tables")
         }
     }
 
@@ -737,11 +756,15 @@ struct HomeView: View {
 
     private func tableCard(_ item: HomeTableItem) -> some View {
         TableCard(item: item, people: model.tablePeople(item), streakPaw: model.streaks.completesToday(code: item.id)) {
+            model.tips.used("home.table")
             model.open(code: item.id, intent: .rejoin)
         }
+        // The archive tip points at the first table that has waited a day.
+        .tipTarget(item.id == firstIdle ? "home.idleTable" : nil)
         .contextMenu {
             Button {
                 settings.archiveHintSeen = true
+                model.tips.used("home.table.archive")
                 archive(item.id)
             } label: {
                 Label(
@@ -752,6 +775,7 @@ struct HomeView: View {
         }
         .contentShape(.contextMenuPreview, RoundedRectangle(cornerRadius: 26, style: .continuous))
         .accessibilityAction(named: Text("Archive", comment: "VoiceOver: hides a table from Home")) {
+            model.tips.used("home.table.archive")
             archive(item.id)
         }
         // The card's layers come and go as one.

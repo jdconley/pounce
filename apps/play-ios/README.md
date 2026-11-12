@@ -112,6 +112,15 @@ then the build setting (Debug: `http://localhost:8787`, optionally overridden by
   taps); add `-tips` to turn them on there (`TutorialTests`), or `-no-tips` to turn them off on
   a phone's own data (`MultiSimTests`). Tips seen are kept per person in `tutorial.json`, next to
   `people.json`; How to play (Home's gear, the table's paw menu) can bring them back.
+- UI tips (`Pounce/Shell/Tips.swift`, rules in PounceKit's `Tutorial/UITips.swift`) teach the
+  app's own controls: one yellow bubble at a time, pointing at a control marked `.tipTarget(id)`
+  and drawn by the screen's `.tipHost(screen)`. They are off in every staged run (the same rule
+  as the rating ask: `-demo`, `-uitest-…`, `-anim-speed`, `-show-…`, `-seed-…`, `-stub-…`,
+  `-age-band`, …) and under `-no-tips`; `-ui-tips` turns them on there (`UITipsTests`), and
+  `-tips-seen ui.home.shelf,ui.home.join` marks some as seen for the owner (screenshots of later
+  tips). They share `tutorial.json` with the game's tips ("ui." names) and pace themselves with
+  `tip-pacing.json` (app opens, tips per person per day). Settings' Reset tips brings every tip
+  back.
 - The App Store rating ask (`RatingPrompt` in PounceKit) never runs, and no finished game is counted
   for it, in a run with `-demo`, `-uitest-reset`, `-anim-speed`, `-slowmo`, `-age-band`,
   `-age-range`, or any `-demo-…`, `-show-…`, `-stub-…`, `-seed-…` argument. What it remembers is in

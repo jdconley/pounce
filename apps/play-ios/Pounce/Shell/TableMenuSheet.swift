@@ -94,6 +94,7 @@ struct TableMenuSheet: View {
             }
         }
         .animation(.spring(duration: 0.4, bounce: 0.25).paced, value: page)
+        .tipHost(.tableMenu, paused: page != .menu || confirmingForfeit)
         .presentationDetents(page == .menu ? [menuDetent] : page == .look ? [Self.lookDetent] : [.large], selection: $detent)
         .onAppear { if page == .menu { detent = menuDetent } }
         .onChange(of: forfeitSeat == nil) { if page == .menu { detent = menuDetent } }
@@ -139,6 +140,7 @@ struct TableMenuSheet: View {
                 title: String(localized: "How to play", comment: "Table menu: open the rules"),
                 accessibilityLabel: "How to play"
             ) {
+                model.tips.used("menu.rules")
                 show(.rules)
             }
             .accessibilityIdentifier("menu.rules")
@@ -155,16 +157,20 @@ struct TableMenuSheet: View {
             HStack(spacing: 18) {
                 if canMove {
                     PillButton(icon: ArtName.iconMove, color: Palette.magenta, size: .medium, accessibilityLabel: "Move my seat") {
+                        model.tips.used("menu.move")
                         show(.moving)
                     }
                     .accessibilityIdentifier("menu.move")
+                    .tipTarget("menu.move")
                 }
                 if canChangeLook {
                     PillButton(icon: ArtName.Habit.iconRug, color: Palette.orange, size: .medium,
                                accessibilityLabel: "Change the look") {
+                        model.tips.used("menu.look")
                         show(.look)
                     }
                     .accessibilityIdentifier("menu.look")
+                    .tipTarget("menu.look")
                 }
                 PillButton(icon: ArtName.iconHome, color: Palette.sky, size: .medium, accessibilityLabel: "Home") {
                     onHome()
