@@ -40,6 +40,10 @@ struct GameOverView: View {
         var id: Seat { seat }
     }
 
+    /// When every one-shot motion here has stopped, from when the screen appears: the sunburst's
+    /// turn is the longest (the last confetti lands at 3.5 s).
+    static let settles: TimeInterval = CelebrationTiming.sunburstLoop
+
     /// The person id a House Cat bot wins under (the gray cat with the bot badge).
     static let botID = "bot"
 

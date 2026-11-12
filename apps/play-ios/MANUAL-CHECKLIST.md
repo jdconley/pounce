@@ -184,6 +184,22 @@ send leaves the kitten on the hourglass.
 - [ ] A kitten's phone: the plus shows a room code and its QR, no share button; scanning it with
       another phone's Camera opens that table's lobby.
 
+## Rating ask (version 1.1)
+
+No script reaches this: the ask never runs under a demo, a UI test or any debug launch argument.
+The rules are in `PounceKit/Sources/PounceKit/Store/RatingPrompt.swift`; what the device
+remembers is `rating.json` next to `people.json`.
+
+- [ ] An adult's phone, at least three days after its first launch of 1.1, with one finished game
+      behind it: win a game against a House Cat and stay on the game over screen. Apple's rating
+      sheet comes up about five seconds after the screen appears (a TestFlight build shows the
+      sheet but can't submit).
+- [ ] It doesn't come up after a loss, after a win by forfeit, with two people sharing the phone, or
+      on a table that was already over when it was opened.
+- [ ] Win again the same day: no second sheet.
+- [ ] Gear, Rate Pounce (an adult's phone only) opens the App Store's review page for Pounce. A
+      kitten's and a teen's gear has no such row.
+
 ## Performance and accessibility
 
 - [ ] Instruments idle-CPU check on the oldest iPhone available: the table scene should pause when

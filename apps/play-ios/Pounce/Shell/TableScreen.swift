@@ -1,4 +1,5 @@
 import PounceKit
+import StoreKit
 import SwiftUI
 
 /// The room route. Makes sure the app model holds the live session for `code` (one socket for
@@ -251,6 +252,8 @@ private struct TableStage: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.scenePhase) private var scenePhase
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
+    /// The system's App Store rating sheet (`RatingPrompt` decides when).
+    @Environment(\.requestReview) private var requestReview
 
     private var table: TableModel? { session.store.room.map(TableModel.init(room:)) }
     private var pass: PassAndPlay { session.store.pass }
@@ -305,6 +308,16 @@ private struct TableStage: View {
         guard connection != .good, curtainSeat == nil, events.scoreboard == nil, events.player == nil,
               events.winners == nil, !priming, !events.menuOpen else { return nil }
         return connection
+    }
+
+    /// The rating ask could go up: the game over screen is on after a game that ended here, the
+    /// app is in front, and nothing is over the screen or about to replace it (the paw menu, one
+    /// of the app's cards, a Play again on its way). Never in a demo, a UI test or a screenshot
+    /// run. `RatingPrompt` has the rest of the rules.
+    private var ratingMoment: Bool {
+        guard !AppModel.stagedRun, events.winners != nil, events.sawGameEnd, scenePhase == .active,
+              !events.menuOpen, !model.overlayShown else { return false }
+        return againState == nil || againState == .ask
     }
 
     var body: some View {
@@ -555,6 +568,21 @@ private struct TableStage: View {
             // A refused Play again (the server said no): it can be asked again.
             if playAgain.waiting { playAgain.refused() }
         }
+        .onChange(of: events.winners) { _, winners in
+            // A finished game on this phone, counted once per table (the rating ask's rules).
+            if winners != nil, let table { model.noteGameOver(table, code: session.code) }
+        }
+        // The App Store rating sheet: once the game over screen has stopped moving and held
+        // still a moment more, with nothing over it. Anything that comes up starts the wait again.
+        .task(id: ratingMoment) {
+            guard ratingMoment else { return }
+            try? await Task.sleep(for: Pace.duration(.seconds(GameOverView.settles) + RatingPrompt.settleDelay))
+            guard !Task.isCancelled, ratingMoment, !AppModel.presentingSomething, let table,
+                  model.shouldAskForRating(table, sawItEnd: events.sawGameEnd) else { return }
+            // Written down as asked now: the system may still decide not to show its sheet.
+            model.noteRatingAsked()
+            requestReview()
+        }
         // A new tip waits until the table has held still for a moment (and the last tip is gone).
         .task(id: CoachWait(table: coachView, tip: coach.tip)) {
             try? await Task.sleep(for: Pace.duration(.milliseconds(900)))
@@ -631,7 +659,10 @@ private struct TableStage: View {
             scene?.sendHeldDiscard()  // before the room closes, so the discard isn't lost
             model?.goHome()
         }
-        scene.onGameOver = { [weak events] seats in events?.winners = seats }
+        scene.onGameOver = { [weak events, weak scene] seats in
+            events?.sawGameEnd = scene?.celebration.playedGameOver ?? false
+            events?.winners = seats
+        }
         scene.onShownRevealed = { [weak events] seat in events?.shown = seat }
         scene.onTableTap = { [weak events] in events?.tableTaps += 1 }
         scene.onNote = { [weak events] note in
@@ -866,6 +897,8 @@ private final class StageEvents {
     var player: PlayerTap?
     /// Set by the scene when the game-over celebration is done.
     var winners: [Seat]?
+    /// The game ended while this phone was at the table: its celebration played here.
+    var sawGameEnd = false
     /// The seat whose hand the scene shows face up right now (its `shownRevealed`).
     var shown: Seat?
     /// Bumped by a tap on the table itself while this phone can't act.

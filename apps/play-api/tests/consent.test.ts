@@ -391,8 +391,11 @@ describe("the plus: a push to the parent's own devices (D6)", { timeout: 30_000 
     while (localTime(evening, LA) !== "19:30") evening += 60_000;
     expect(evening).toBeLessThan(due + 24 * H);
     await tick(mf, kitten, evening);
-    const morning = (await alarm(mf, kitten)) as number;
-    expect(hourIn(morning, LA)).toBe(10);
+    const next = (await alarm(mf, kitten)) as number;
+    // The plus is due at the time of day the test's consent was given (inside the window), so
+    // when that is after 19:30 the day is up before the morning: the last try is exactly then.
+    if (localTime(due, LA) > "19:30") expect(next).toBe(due + 24 * H);
+    else expect(hourIn(next, LA)).toBe(10);
     await tick(mf, kitten, due + 24 * H);
     expect(await record(mf, kitten)).toMatchObject({ state: "pending", phone: null });
     expect(await tokens(mf, f.kidPad)).toMatchObject({ apns: false });

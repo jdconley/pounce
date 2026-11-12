@@ -3,8 +3,8 @@ import SwiftUI
 
 /// Home's gear (spec §10.5, §12.6): sound, haptics and the turn reminder, the notification
 /// settings panel (reminders, their time, quiet hours, last chance), How to play, the
-/// privacy page, and the account: signed out, the sign-in offer; signed in, your cat with a
-/// check, the linked providers, sign out and the trash can.
+/// privacy page, Rate Pounce (an adult's device only), and the account: signed out, the sign-in
+/// offer; signed in, your cat with a check, the linked providers, sign out and the trash can.
 struct GearSheet: View {
     @Environment(AppModel.self) private var model
     @Environment(Settings.self) private var settings
@@ -53,6 +53,17 @@ struct GearSheet: View {
                             openURL(model.config.endpoint("/privacy"))
                         }
                         .accessibilityIdentifier("gear.privacy")
+                    }
+                    // An adult's way to the App Store's review page (never shown to a kitten or a teen).
+                    if model.offersRating {
+                        PillButton(
+                            icon: nil, color: Palette.magenta, size: .small, width: 230,
+                            title: String(localized: "Rate Pounce", comment: "Gear sheet: open the App Store's review page for the app"),
+                            accessibilityLabel: "Rate Pounce"
+                        ) {
+                            openURL(RatingPrompt.writeReviewURL)
+                        }
+                        .accessibilityIdentifier("gear.rate")
                     }
                     // A signed-in adult's kittens (parent consent, PR 9), behind words.
                     if model.isParent {
