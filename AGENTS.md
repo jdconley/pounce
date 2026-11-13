@@ -40,3 +40,11 @@ the game's rules, `Pounce/Shell/Tips.swift` and `UITips.swift` for the app's con
 short tip at a time, pointing at the thing it's about, shown when it's relevant, dismissed by using
 the thing or a tap, and never shown again once learned. A new feature that needs explaining gets a
 tip, not more text on the screen.
+
+## Releases
+
+Every merge to `main` that touches `apps/play-ios` uploads a TestFlight build and sends it to the
+Family and Friends group as well as the internal testers. The build's "What to Test" notes are the
+squash-merge commit subjects since the group's last build, so a PR that changes the app gets a title
+a family member can read: what changed for them, in plain words ("Draw is a tap; the toy box moved
+off the rug"), not how it was built.

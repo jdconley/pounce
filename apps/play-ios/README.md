@@ -383,9 +383,11 @@ contents); until they exist the upload is skipped with a notice.
 
 ### Sending a build to testers
 
-A push to `main` uploads for **internal testers only**, so merging a burst of PRs doesn't spam
-anyone. To send a build to the external group, run the workflow by hand: Actions → iOS → Run
-workflow on `main` (or `gh workflow run ios.yml --ref main`). Its inputs:
+A push to `main` that touches `apps/play-ios` uploads a build and sends it to **Family and Friends**
+(the external group) as well as the internal testers: every change reaches the family. Later builds
+of an approved version usually clear beta app review in minutes. To pick another group or resend a
+build, run the workflow by hand: Actions → iOS → Run workflow on `main` (or
+`gh workflow run ios.yml --ref main`). Its inputs:
 
 - `distribute` (default on): after the upload, run `scripts/distribute.swift` for that build. Off
   means upload only.

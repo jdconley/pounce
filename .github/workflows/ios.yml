@@ -8,8 +8,9 @@ on:
     paths:
       - apps/play-ios/**
       - .github/workflows/ios.yml
-  # A push uploads for internal testers only. Running the workflow by hand from main also sends the
-  # build to a beta group, so external testers get one build per release, not one per merged PR.
+  # A push to main uploads the build and sends it to Family and Friends as well as the internal
+  # testers (JD, 2026-11-13: every change goes to the family). Running it by hand picks the group,
+  # or redistributes an already-uploaded build.
   workflow_dispatch:
     inputs:
       distribute:
@@ -119,10 +120,10 @@ jobs:
           if [ ${#serials[@]} -eq 0 ]; then echo "no development certificate on this runner"; exit 0; fi
           scripts/certs.swift --revoke "${serials[@]}"
       - name: Distribute to the TestFlight group
-        if: steps.creds.outputs.ready == 'true' && github.event_name == 'workflow_dispatch' && inputs.distribute
+        if: steps.creds.outputs.ready == 'true' && (github.event_name == 'push' || inputs.distribute)
         env:
           BUILD: ${{ inputs.build || steps.upload.outputs.build }}
-          GROUP: ${{ inputs.group }}
+          GROUP: ${{ inputs.group || 'Family and Friends' }}
         run: |
           export ASC_KEY_PATH="$RUNNER_TEMP/AuthKey_$ASC_KEY_ID.p8"
           (umask 077; printenv ASC_KEY_P8 > "$ASC_KEY_PATH")
