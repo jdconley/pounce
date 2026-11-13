@@ -184,6 +184,13 @@ extension XCTestCase {
     }
 
     /// Opens the seat bubble on `seat` and taps `item` (bot, here, invite, remove).
+    /// Shows the lobby's QR code: the table's invite is out, so Home lists it while you sit alone.
+    func showInvite(_ app: XCUIApplication) {
+        let qr = el(app, "lobby.qr")
+        XCTAssertTrue(qr.waitForExistence(timeout: Live.t(10)), "no QR button in the lobby")
+        qr.tap()
+    }
+
     func seatMenu(_ app: XCUIApplication, seat: Int, _ item: String) {
         el(app, "lobby.seat.\(seat)").tap()
         let button = el(app, "seatmenu.\(item)")

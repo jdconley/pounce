@@ -190,4 +190,41 @@ import Testing
             archived: archived)
         #expect(kept == ["STAY1": nowMs - 3 * hour])
     }
+
+    // MARK: a table you sit at alone
+
+    private func lobby(_ code: String, _ seats: [TableSeat]) -> TableEntry {
+        TableEntry(code: code, status: "lobby", yourTurn: false, updatedAt: nowMs, seats: seats)
+    }
+
+    private let me = TableSeat(kind: .human, person: Person(id: "a", name: "Mochi", cat: 2), yours: true)
+    private let open = TableSeat(kind: .open)
+
+    @Test func aNewTableNobodyWasInvitedToStaysOffHome() {
+        let entries = [lobby("ALONE", [me, open, open])]
+        #expect(HomeTables.merge(entries: entries, cache: [:], now: now).isEmpty)
+        #expect(HomeTables.archivedItems(entries: entries, cache: [:], archived: ["ALONE": nowMs], now: now).isEmpty)
+    }
+
+    @Test func anInviteKeepsItOnHomeForADay() {
+        let entries = [lobby("ALONE", [me, open])]
+        let hourAgo = nowMs - 3_600_000
+        #expect(HomeTables.merge(entries: entries, cache: [:], invited: ["ALONE": hourAgo], now: now).map(\.id) == ["ALONE"])
+        let dayAgo = nowMs - 24 * 3_600_000
+        #expect(HomeTables.merge(entries: entries, cache: [:], invited: ["ALONE": dayAgo], now: now).isEmpty)
+    }
+
+    @Test func anyoneSittingDownMakesItATable() {
+        let bot = TableSeat(kind: .bot)
+        let mia = TableSeat(kind: .human, person: Person(id: "m", name: "Mia", cat: 4))
+        let sam = TableSeat(kind: .human, person: Person(id: "s", name: "Sam", cat: 6), yours: true)
+        let entries = [lobby("BOT01", [me, bot]), lobby("MIA01", [me, mia]), lobby("PASS1", [me, sam])]
+        #expect(HomeTables.merge(entries: entries, cache: [:], now: now).map(\.id).sorted() == ["BOT01", "MIA01", "PASS1"])
+    }
+
+    @Test func aTableInPlayOrWithUnknownSeatsIsNeverHidden() {
+        let playing = TableEntry(code: "PLAY1", status: "playing", yourTurn: false, updatedAt: nowMs, seats: [me, open])
+        let unknown = TableEntry(code: "OLD01", status: "lobby", yourTurn: false, updatedAt: nowMs)
+        #expect(HomeTables.merge(entries: [playing, unknown], cache: [:], now: now).map(\.id).sorted() == ["OLD01", "PLAY1"])
+    }
 }

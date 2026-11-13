@@ -18,6 +18,8 @@ struct ShareRoom: UIViewControllerRepresentable {
     var inviteCode: String?
     /// Asset name of the cat drawn in the share sheet header.
     let catArt: String
+    /// The sheet sent it somewhere (not cancelled).
+    var onSent: (() -> Void)?
 
     func makeUIViewController(context: Context) -> UIViewController {
         let controller = UIViewController()
@@ -33,7 +35,9 @@ struct ShareRoom: UIViewControllerRepresentable {
         let sheet = UIActivityViewController(activityItems: invite + [item], applicationActivities: nil)
         let coordinator = context.coordinator
         let binding = $isPresented
-        sheet.completionWithItemsHandler = { _, _, _, _ in
+        let onSent = onSent
+        sheet.completionWithItemsHandler = { _, completed, _, _ in
+            if completed { onSent?() }
             coordinator.presenting = false
             binding.wrappedValue = false
         }

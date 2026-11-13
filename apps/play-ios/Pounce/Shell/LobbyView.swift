@@ -106,7 +106,12 @@ struct LobbyView: View {
         }
         .background(ShareRoom(
             isPresented: $sharing, url: shareURL, tableName: tableName, inviteCode: session.code,
-            catArt: ArtName.cat(hostCat, .idle)))
+            catArt: ArtName.cat(hostCat, .idle),
+            onSent: { model.noteInvited(code: session.code) }))
+        // A QR code on screen is an invite too: someone can scan it.
+        .onChange(of: showQR) { _, shown in
+            if shown { model.noteInvited(code: session.code) }
+        }
         .sheet(isPresented: $renaming) {
             RenameTableView(current: tableName, onCancel: { renaming = false }) { name in
                 renaming = false
