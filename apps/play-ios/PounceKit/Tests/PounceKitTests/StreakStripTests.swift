@@ -2,31 +2,31 @@ import Testing
 @testable import PounceKit
 
 /// Home's streak strip (trophy room design §1): your own streak, then each connection in
-/// top-pair order, then the plus, always last.
+/// top-pair order. Invite lives in the dock.
 @Suite struct StreakStripTests {
     private let own = OwnStreak(count: 12, best: 12)
 
-    @Test func ownThenPairsInOrderThenThePlus() {
+    @Test func ownThenPairsInOrder() {
         let pairs = [streakView("pr_mia", count: 128), streakView("pr_kiki", count: 9), streakView("pr_nova", count: 41)]
         let chips = StreakStrip.chips(own: own, pairs: pairs)
-        #expect(chips == [.own(own), .pair(pairs[0]), .pair(pairs[1]), .pair(pairs[2]), .plus(big: false)])
+        #expect(chips == [.own(own), .pair(pairs[0]), .pair(pairs[1]), .pair(pairs[2])])
     }
 
-    @Test func noConnectionsMakesThePlusBigRightAfterYourOwnStreak() {
-        #expect(StreakStrip.chips(own: own, pairs: []) == [.own(own), .plus(big: true)])
+    @Test func noConnectionsLeavesYourOwnStreak() {
+        #expect(StreakStrip.chips(own: own, pairs: []) == [.own(own)])
     }
 
-    @Test func withoutTheOwnStreakItsPairsAndThePlus() {
+    @Test func withoutTheOwnStreakJustThePairs() {
         let mia = streakView("pr_mia")
-        #expect(StreakStrip.chips(own: nil, pairs: [mia]) == [.pair(mia), .plus(big: false)])
-        #expect(StreakStrip.chips(own: nil, pairs: []) == [.plus(big: true)])
+        #expect(StreakStrip.chips(own: nil, pairs: [mia]) == [.pair(mia)])
+        #expect(StreakStrip.chips(own: nil, pairs: []).isEmpty)
     }
 
-    @Test func theBigPlusBouncesExceptForATeen() {
-        #expect(StreakStrip.bounces(big: true, band: .adult))
-        #expect(StreakStrip.bounces(big: true, band: .kitten))
-        #expect(!StreakStrip.bounces(big: true, band: .teen))
-        #expect(!StreakStrip.bounces(big: false, band: .adult))
+    @Test func inviteBouncesUntilSomeoneIsConnectedExceptForATeen() {
+        #expect(StreakStrip.inviteBounces(connected: false, band: .adult))
+        #expect(StreakStrip.inviteBounces(connected: false, band: .kitten))
+        #expect(!StreakStrip.inviteBounces(connected: false, band: .teen))
+        #expect(!StreakStrip.inviteBounces(connected: true, band: .adult))
     }
 
     @Test func ownModeUsesThePairMarks() {

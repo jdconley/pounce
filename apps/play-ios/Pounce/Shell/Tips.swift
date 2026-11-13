@@ -219,7 +219,7 @@ enum UITipCopy {
         case .homeArchive: String(localized: "Press and hold a table to archive it.", comment: "Tip on Home: a table that has waited a day")
         case .homeRules: String(localized: "New to Cat Tower? Learn it here.", comment: "Tip on Home: the How to play chip")
         case .homeStreak: String(localized: "Your streak: days in a row you played.", comment: "Tip on Home: your streak in the strip")
-        case .homeInvite: String(localized: "Invite someone to start a streak together.", comment: "Tip on Home: the Invite button in the strip")
+        case .homeInvite: String(localized: "Invite someone to start a streak together.", comment: "Tip on Home: the Invite pill in the dock")
         case .homeGift: String(localized: "A gift for your streak. Tap to open.", comment: "Tip on Home: a streak gift waiting in the strip")
         case .homePeople: String(localized: "Tap your cat to add family.", comment: "Tip on Home: the owner's cat opens People")
         case .homeUpdate: String(localized: "New games and fixes are ready.", comment: "Tip on Home: the update card")

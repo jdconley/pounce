@@ -1,8 +1,9 @@
 import PounceKit
 import SwiftUI
 
-/// One table on Home: its game on a tab at the top, its name, who you're playing with, the seats as
-/// pips, and its code only while it waits for players (a started game can't be joined by code).
+/// One table on Home: its game on a tab at the top, its name, who you're playing with, then one
+/// footer line: how long the move has waited, the code while it gathers players (a started game
+/// can't be joined by code), or the seats as pips.
 /// Your-turn cards glow orange and bounce with the waiting player's cat awake; the rest are
 /// dimmed with the current player's cat. Finished games carry a trophy.
 struct TableCard: View {
@@ -42,44 +43,43 @@ struct TableCard: View {
         } label: {
             ZStack {
                 shape.fill(fill)
-                VStack(spacing: 3) {
-                    ZStack(alignment: .topTrailing) {
-                        cat
-                        if isOver {
-                            Image(ArtName.iconTrophy)
-                                .resizable().scaledToFit()
-                                .frame(width: 32, height: 32)
-                                .offset(x: 6, y: -4)
+                // Fixed card, any content: the cat is the part that gives way, so the name, the
+                // people and the footer always keep the card's padding.
+                VStack(spacing: 4) {
+                    cat
+                        .frame(minHeight: 36, maxHeight: 64)
+                        .overlay(alignment: .topTrailing) {
+                            if isOver {
+                                Image(ArtName.iconTrophy)
+                                    .resizable().scaledToFit()
+                                    .frame(width: 30, height: 30)
+                                    .offset(x: 18, y: -4)
+                            }
                         }
-                    }
-                    .frame(height: 66)
                     OutlinedText(item.title, size: 15, fill: .white, width: 2, lines: 2)
-                        .frame(height: 40)
-                        .padding(.horizontal, 6)
-                    PeopleLine(line: people)
-                        .frame(height: 20)
-                        .padding(.horizontal, 7)
-                    if let idleText {
-                        // A game that has waited a day or more says so where its code sits.
-                        Text(idleText)
-                            .font(.system(size: 12, weight: .heavy, design: .rounded))
-                            .foregroundStyle(.white)
-                            .lineLimit(1)
-                            .minimumScaleFactor(0.7)
-                            .padding(.horizontal, 6)
-                            .accessibilityIdentifier("home.table.\(item.id).idle")
-                    } else if isLobby {
-                        // Still gathering players: the code is how they join.
-                        Text(verbatim: item.id)
-                            .font(.system(size: 12, weight: .heavy, design: .rounded))
-                            .tracking(1.5)
-                            .foregroundStyle(.white.opacity(0.8))
+                        .fixedSize(horizontal: false, vertical: true)
+                        .padding(.horizontal, 8)
+                        .layoutPriority(1)
+                    if !people.isEmpty {
+                        PeopleLine(line: people)
+                            .frame(height: 18)
+                            .padding(.horizontal, 8)
+                            .layoutPriority(1)
                     }
-                    SeatPips(seats: item.seats)
+                    footer
+                        .frame(height: 14)
+                        .layoutPriority(1)
                 }
-                .padding(.vertical, 8)
+                .padding(.top, 16)
+                .padding(.bottom, 13)
             }
             .overlay(shape.strokeBorder(Palette.ink, lineWidth: 5))
+            .overlay {
+                if item.yourTurn {
+                    shape.strokeBorder(.white.opacity(0.85), lineWidth: 2).padding(6)
+                }
+            }
+            // The tab and the paw ride on top of every outline.
             .overlay(alignment: .topTrailing) { gameTab }
             .overlay(alignment: .topLeading) {
                 if streakPaw {
@@ -90,11 +90,6 @@ struct TableCard: View {
                         .background(Circle().fill(Palette.violet).overlay(Circle().strokeBorder(Palette.ink, lineWidth: 3)))
                         .offset(x: -10, y: -10)
                         .accessibilityHidden(true)
-                }
-            }
-            .overlay {
-                if item.yourTurn {
-                    shape.strokeBorder(.white.opacity(0.85), lineWidth: 2).padding(6)
                 }
             }
             .frame(width: Self.size.width, height: Self.size.height)
@@ -133,6 +128,27 @@ struct TableCard: View {
         }
     }
 
+    /// The card's last line, one thing only: how long a game in play has waited (a day or more),
+    /// the code while it gathers players (how they join), else the seats as pips.
+    @ViewBuilder private var footer: some View {
+        if let idleText {
+            Text(idleText)
+                .font(.system(size: 12, weight: .heavy, design: .rounded))
+                .foregroundStyle(.white)
+                .lineLimit(1)
+                .minimumScaleFactor(0.7)
+                .padding(.horizontal, 8)
+                .accessibilityIdentifier("home.table.\(item.id).idle")
+        } else if isLobby {
+            Text(verbatim: item.id)
+                .font(.system(size: 12, weight: .heavy, design: .rounded))
+                .tracking(1.5)
+                .foregroundStyle(.white.opacity(0.8))
+        } else {
+            SeatPips(seats: item.seats)
+        }
+    }
+
     /// "3 days ago", once a game in play has waited a day or more since its last move.
     private var idleText: String? {
         guard let days = item.idleDays, days >= 1 else { return nil }
@@ -148,7 +164,9 @@ struct TableCard: View {
                 ? Text("Your turn, \(item.title), \(gameName)", comment: "VoiceOver: a Home table card on your turn: its name, its game")
                 : Text("\(item.title), \(gameName)", comment: "VoiceOver: a Home table card: its name, its game")
         let names = people.faces.map(\.name).joined(separator: ", ")
-        let who = names.isEmpty ? table : Text("\(table), with \(names)", comment: "VoiceOver: a Home table card, then who else plays there")
+        var who = names.isEmpty ? table : Text("\(table), with \(names)", comment: "VoiceOver: a Home table card, then who else plays there")
+        // While it gathers players the code is on the card, so VoiceOver says it too.
+        if isLobby { who = Text("\(who), code \(item.id)", comment: "VoiceOver: a Home table card still gathering players, then its room code") }
         guard let idleText else { return who }
         return Text("\(who), last move \(idleText)", comment: "VoiceOver: a Home table card, then how long ago its last move was")
     }
@@ -157,13 +175,13 @@ struct TableCard: View {
         if let shownCat {
             Image(ArtName.cat(shownCat, pose))
                 .resizable().scaledToFit()
-                .frame(width: 64, height: 64)
+                .frame(maxWidth: 64, maxHeight: 64)
                 .shadow(color: Palette.ink.opacity(0.35), radius: 0, x: 0, y: 3)
         } else {
             // A table with no cached cats yet: a plain paw mark keeps the card from looking empty.
             Image(ArtName.iconPawMenu)
                 .resizable().scaledToFit()
-                .frame(width: 50, height: 50)
+                .frame(maxWidth: 50, maxHeight: 50)
                 .opacity(0.8)
         }
     }

@@ -11,14 +11,16 @@ import SwiftUI
 ///   start), then what leads (`HomeLead`). With a game going your tables lead and the games sit
 ///   under them as compact tickets; with no table, or only finished ones, the games lead as
 ///   posters. An iPad lays the games out as a grid, beside your tables when it is on its side.
-/// - The dock: Join, and Practice while there is no table. Its own band: nothing scrolls under it.
+/// - The dock: Invite and Join. Its own band: nothing scrolls under it. With no table yet,
+///   Practice sits under the game posters.
 ///
 /// Long-press a table to archive it; the sleeping-cat tile at the end of the tables opens the
 /// archived ones.
 ///
 /// Home hosts UI tips (`Tips.swift`, `.tipHost(.home)`); the anchors are `home.play` (Cat Tower's
 /// play mark), `home.practice`, `home.join`, `home.tables`, `home.idleTable`, `home.hero`,
-/// `home.people`, `home.update`, and the strip's `home.own`, `home.add` and `home.gift`.
+/// `home.people`, `home.update`, the dock's `home.add` (Invite), and the strip's `home.own` and
+/// `home.gift`.
 struct HomeView: View {
     @Environment(AppModel.self) private var model
     @Environment(Settings.self) private var settings
@@ -55,7 +57,7 @@ struct HomeView: View {
         GeometryReader { geo in
             // In reading order, which is VoiceOver's: the player bar, the column, the dock.
             VStack(spacing: 0) {
-                playerBar
+                playerBar(width: geo.size.width)
                 Group {
                     if roomy {
                         roomyColumn(geo.size)
@@ -207,12 +209,14 @@ struct HomeView: View {
 
     /// One row across the top: who you are (the owner's cat), your streaks and connections, then
     /// the bell and the gear. The strip scrolls sideways when it outgrows the row.
-    private var playerBar: some View {
-        HStack(spacing: roomy ? 14 : 6) {
+    private func playerBar(width: CGFloat) -> some View {
+        // An SE-width phone gets a smaller strip, so your streak and a connection both fit.
+        let stripScale: CGFloat = roomy ? 1.15 : width < 400 ? 0.74 : 0.85
+        return HStack(spacing: roomy ? 14 : 6) {
             ownerBadge
             Group {
                 if showStrip {
-                    StreakStripView(scale: roomy ? 1.15 : 0.85) { streakSignIn = true }
+                    StreakStripView(scale: stripScale) { streakSignIn = true }
                         .transition(.opacity)
                 } else {
                     Color.clear
@@ -323,20 +327,20 @@ struct HomeView: View {
 
     // MARK: the dock
 
-    /// Pinned to the bottom, on a band of its own: Join, and Practice beside it while there is no
-    /// table yet. The column ends at its edge.
+    /// Pinned to the bottom, on a band of its own: Invite and Join, the two ways to bring people
+    /// to a game (Invite once the server has connections). The column ends at its edge.
     private func dock(width: CGFloat, bottomInset: CGFloat) -> some View {
-        let practice = shownItems.isEmpty && lead != nil
+        let invite = showStrip
         let gap: CGFloat = 12
         let pill: CGFloat =
             roomy
             ? 300
-            : practice ? max(120, min(220, (width - 32 - gap) / 2)) : max(160, min(280, width - 32))
+            : invite ? max(130, min(220, (width - 32 - gap) / 2)) : max(160, min(280, width - 32))
         return HStack(spacing: gap) {
-            if practice { practicePill(width: pill) }
+            if invite { invitePill(width: pill) }
             joinPill(width: pill)
         }
-        .animation(.spring(duration: 0.35, bounce: 0.4).paced, value: practice)
+        .animation(.spring(duration: 0.35, bounce: 0.4).paced, value: invite)
         .padding(.top, 12)
         // Above the home indicator there is room already; a phone with a button needs a margin.
         .padding(.bottom, bottomInset > 0 ? 2 : 10)
@@ -371,10 +375,33 @@ struct HomeView: View {
         .tipTarget("home.join")
     }
 
-    /// With no tables yet, a way to just try the game: a practice round against the House Cat.
+    /// Adds a person: a link or QR that makes you two a pair (Join sits you at a table). It bounces
+    /// while nobody is connected, except for a teen (§14.1).
+    private func invitePill(width: CGFloat) -> some View {
+        let connected = !model.streaks.pairs.isEmpty
+        return PillButton(
+            icon: ArtName.iconInvite, color: Palette.magenta, size: roomy ? .large : .medium, width: width,
+            title: String(localized: "Invite", comment: "Home: the dock pill that opens the invite sheet"),
+            accessibilityLabel: "Invite someone"
+        ) {
+            model.tips.used("home.add")
+            model.showInvite()
+        }
+        .compositingGroup()
+        .bounceLoop(active: StreakStrip.inviteBounces(connected: connected, band: model.ageBand))
+        .accessibilityValue(connected ? "small" : "big")
+        .accessibilityIdentifier("home.add")
+        .tipTarget("home.add")
+        .transition(.scale.combined(with: .opacity))
+    }
+
+    /// With no tables yet, a way to just try the game: a practice round against the House Cat,
+    /// under the game posters.
+    private var showPractice: Bool { shownItems.isEmpty && lead != nil }
+
     private func practicePill(width: CGFloat) -> some View {
         PillButton(
-            icon: ArtName.badgeBot, color: Palette.magenta, size: roomy ? .large : .medium, width: width,
+            icon: ArtName.badgeBot, color: Palette.orange, size: roomy ? .large : .medium, width: width,
             title: String(localized: "Practice", comment: "Home, with no tables: starts a game against the computer player"),
             accessibilityLabel: "Practice with the House Cat"
         ) {
@@ -610,6 +637,7 @@ struct HomeView: View {
                 HomeUpdates()
                 if lead == .tables { tablesSection }
                 if lead != nil { shelfColumn(leads: lead == .shelf) }
+                if showPractice { practicePill(width: 240) }
                 if lead == .shelf { tablesSection }
             }
             .padding(.top, 6)
@@ -647,6 +675,7 @@ struct HomeView: View {
                         VStack(spacing: 30) {
                             if lead == .tables { tablesColumn }
                             shelfGrid(width: width, height: height)
+                            if showPractice { practicePill(width: 300) }
                             if lead == .shelf, hasTables { tablesColumn }
                         }
                         .frame(width: width)
@@ -784,6 +813,8 @@ struct HomeView: View {
         }
         return [
             HomeTableItem(id: "M3W7Z", name: "Friday Night Cats", yourTurn: true, status: "playing", seats: seats([("Mia", 2)]), turnCat: 2, updatedAt: 0),
+            // The fullest card: a two-line name, people and how long the move has waited.
+            HomeTableItem(id: "F4NCY", name: "The Fancy Sardines", yourTurn: false, status: "playing", seats: seats([("Kiki", 6)]), turnCat: 6, updatedAt: 0, idleDays: 7),
             HomeTableItem(id: "K9PQR", name: "Sunday Brunch", yourTurn: false, status: "playing", seats: seats([("Biscuit", 4), ("Kiki", 6)]), turnCat: 4, updatedAt: 0, idleDays: 3, game: "tiles"),
             HomeTableItem(id: "TB4XN", name: "Couch League", yourTurn: false, status: "lobby", seats: seats([], open: 2), turnCat: nil, updatedAt: 0),
             HomeTableItem(id: "GH2VD", name: "Rematch", yourTurn: false, status: "over", seats: seats([], bots: 1), turnCat: 3, updatedAt: 0),
