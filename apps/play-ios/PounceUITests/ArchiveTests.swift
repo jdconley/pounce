@@ -15,6 +15,7 @@ final class ArchiveTests: XCTestCase {
         newGame(app)
         let code = lobbyCode(app)
         XCTAssertEqual(code.count, 5, "no room code")
+        showInvite(app)
         el(app, "lobby.home").tap()
 
         let card = el(app, "home.table.\(code)")

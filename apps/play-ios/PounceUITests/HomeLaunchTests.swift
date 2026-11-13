@@ -18,6 +18,7 @@ final class HomeLaunchTests: XCTestCase {
         onboard(app)
         newGame(app)
         let code = lobbyCode(app)
+        showInvite(app)
         el(app, "lobby.home").tap()
         XCTAssertTrue(el(app, "home.table.\(code)").waitForExistence(timeout: Live.t(15)), "the new table isn't on Home")
         app.terminate()

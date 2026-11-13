@@ -42,16 +42,23 @@ public struct HomeTableItem: Equatable, Sendable, Identifiable {
 public enum HomeTables {
     /// Finished tables stay on Home this long after their last update.
     static let finishedLifetimeMs: Double = 24 * 3_600_000
+    /// A table you sit at alone stays on Home this long after its invite went out.
+    static let inviteLifetimeMs: Double = 24 * 3_600_000
 
     /// The server's list is the truth for which tables exist (and, when it has one, the table's
     /// name, and who sits where); the cache only adds the turn, and seats or a name the list lacks.
     /// Order: your-turn tables (newest first), then playing/lobby tables by recency, then finished
     /// tables from the last 24 hours. Older finished tables are dropped, as is any cached code the
-    /// server no longer lists, and any table archived on this phone (`archived`, see `isArchived`).
+    /// server no longer lists, any table archived on this phone (`archived`, see `isArchived`), and
+    /// a new table nobody else is at that wasn't invited to in the last day (`invited`, see
+    /// `isWaitingAlone`).
     public static func merge(
-        entries: [TableEntry], cache: [String: CachedTable], archived: [String: Double] = [:], now: Date
+        entries: [TableEntry], cache: [String: CachedTable], archived: [String: Double] = [:],
+        invited: [String: Double] = [:], now: Date
     ) -> [HomeTableItem] {
-        let shown = entries.filter { !isArchived($0, mark: archived[$0.code]) }
+        let shown = entries.filter {
+            !isArchived($0, mark: archived[$0.code]) && !isWaitingAlone($0, cache: cache, invited: invited[$0.code], now: now)
+        }
         var mine: [HomeTableItem] = []
         var live: [HomeTableItem] = []
         var finished: [HomeTableItem] = []
@@ -70,9 +77,12 @@ public enum HomeTables {
     /// The archived tables the server still lists, newest first (Home's Archived sheet). Finished
     /// ones leave after 24 hours here too.
     public static func archivedItems(
-        entries: [TableEntry], cache: [String: CachedTable], archived: [String: Double], now: Date
+        entries: [TableEntry], cache: [String: CachedTable], archived: [String: Double],
+        invited: [String: Double] = [:], now: Date
     ) -> [HomeTableItem] {
-        let hidden = entries.filter { isArchived($0, mark: archived[$0.code]) }
+        let hidden = entries.filter {
+            isArchived($0, mark: archived[$0.code]) && !isWaitingAlone($0, cache: cache, invited: invited[$0.code], now: now)
+        }
         return items(hidden, cache: cache, now: now).sorted(by: newestFirst)
     }
 
@@ -83,6 +93,20 @@ public enum HomeTables {
         guard let mark else { return false }
         let isOver = entry.status == RoomStatus.over.rawValue
         return !(entry.yourTurn && !isOver && entry.updatedAt > mark)
+    }
+
+    /// A table still gathering players with only this phone's one seat taken (no one else, no
+    /// House Cat) and no invite out in the last day (`invited`: when this phone last sent it).
+    /// Like a game in a turn-based app before you pick who to play: it isn't on Home yet. Inviting
+    /// puts it there while people accept; anyone sitting down, a bot too, makes it a table.
+    public static func isWaitingAlone(_ entry: TableEntry, cache: [String: CachedTable], invited: Double?, now: Date) -> Bool {
+        guard entry.status == RoomStatus.lobby.rawValue else { return false }
+        let seats = entry.seats.map { $0.map(CachedSeat.init) } ?? cache[entry.code]?.seats ?? []
+        let taken = seats.filter { $0.kind == .human || $0.kind == .bot }
+        // Seats unknown (an old list, never opened here): not enough to hide it.
+        guard taken.count == 1, taken.allSatisfy({ $0.kind == .human && $0.yours }) else { return false }
+        guard let invited else { return true }
+        return now.timeIntervalSince1970 * 1000 - invited >= inviteLifetimeMs
     }
 
     /// The archive worth keeping after a fresh `/tables`: codes the server still lists that are

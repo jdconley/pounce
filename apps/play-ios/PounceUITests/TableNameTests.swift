@@ -27,6 +27,7 @@ class TableNameTests: XCTestCase {
         screenshot(app, "table-name-lobby")
 
         // Home's card shows it, the code still under it.
+        showInvite(app)
         el(app, "lobby.home").tap()
         let card = el(app, "home.table.\(code)")
         XCTAssertTrue(card.waitForExistence(timeout: Live.t(15)), "the table isn't on Home")

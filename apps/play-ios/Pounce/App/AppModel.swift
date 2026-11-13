@@ -17,6 +17,9 @@ final class AppModel {
     var cache: [String: CachedTable]
     /// Tables archived off Home on this phone: room code to the server's `updatedAt` then.
     private(set) var archived: [String: Double]
+    /// When this phone last sent each table's invite (epoch ms): a table you sit at alone is on
+    /// Home only for a day after (`HomeTables.isWaitingAlone`).
+    private(set) var invited: [String: Double]
     /// Set when creating a room failed; cleared by the next attempt.
     var newGameError: APIError?
     private(set) var isCreatingRoom = false
@@ -37,6 +40,7 @@ final class AppModel {
     @ObservationIgnored let tableCache: TableCache
     @ObservationIgnored let tableArchive: TableArchive
     @ObservationIgnored let tableList: TableList
+    @ObservationIgnored let tableInvites: TableInvites
     @ObservationIgnored let tutorialStore: TutorialStore
     /// What the App Store rating ask remembers (`RatingPrompt`): the first launch, finished games,
     /// the last ask.
@@ -121,6 +125,8 @@ final class AppModel {
         tableCache = TableCache(directory: dataDirectory, fileName: TableCache.fileName(for: config))
         tableArchive = TableArchive(directory: dataDirectory, fileName: TableArchive.fileName(for: config))
         tableList = TableList(directory: dataDirectory, fileName: TableList.fileName(for: config))
+        tableInvites = TableInvites(directory: dataDirectory, fileName: TableInvites.fileName(for: config))
+        invited = tableInvites.all()
         let loaded = peopleStore.load()
         people = loaded
         cache = tableCache.all()
@@ -725,7 +731,7 @@ final class AppModel {
 
     /// Home's cards: the server's list joined with the local cache, less what's archived.
     var homeItems: [HomeTableItem] {
-        HomeTables.merge(entries: tables, cache: cache, archived: archived, now: .now)
+        HomeTables.merge(entries: tables, cache: cache, archived: archived, invited: invited, now: .now)
     }
 
     /// Who's at a table besides you, for its card: your connections and the people sharing this
@@ -738,7 +744,7 @@ final class AppModel {
 
     /// Home's Archived sheet.
     var archivedItems: [HomeTableItem] {
-        HomeTables.archivedItems(entries: tables, cache: cache, archived: archived, now: .now)
+        HomeTables.archivedItems(entries: tables, cache: cache, archived: archived, invited: invited, now: .now)
     }
 
     /// Hides a table from Home. The seat stays: links, pushes and Join still open it, and it
@@ -748,6 +754,13 @@ final class AppModel {
         tableArchive.archive(code: code, updatedAt: updatedAt)
         archived = tableArchive.all()
         account.noteLocalChanges()
+    }
+
+    /// A table's invite went out (the share sheet sent it, or its QR code showed): it can wait on
+    /// Home for people to accept.
+    func noteInvited(code: String) {
+        tableInvites.note(code: code)
+        invited = tableInvites.all()
     }
 
     func restore(code: String) {
@@ -783,6 +796,8 @@ final class AppModel {
             // Forget archived rooms that closed, and ones a new turn brought back.
             tableArchive.replace(with: HomeTables.keptArchive(entries: listed, archived: tableArchive.all()))
             archived = tableArchive.all()
+            tableInvites.keep(live)
+            invited = tableInvites.all()
             // Table names for the medium widget.
             syncWidgets()
         } catch {
@@ -1075,6 +1090,8 @@ final class AppModel {
     /// Sends a pounce to a pair's partner; the bell's state comes back with the streaks.
     func sendPounce(pair: String, target: PounceTarget) async -> PounceStore.SendResult {
         let result = await pounces.send(pair: pair, target: target, person: people.owner?.id)
+        // A pounce to a table invites them to it.
+        if case .sent = result, case .table(let code) = target { noteInvited(code: code) }
         await refreshStreaks()
         return result
     }
