@@ -14,9 +14,9 @@ import Testing
         #expect(GameCatalog.catTower.maxPlayers == 6)
     }
 
-    @Test func tilesIsOnTheShelfButNotStartableYet() {
-        #expect(GameCatalog.tiles.availability == .comingSoon)
-        #expect(!GameCatalog.tiles.isAvailable)
+    @Test func tilesIsOnTheShelfAndStartable() {
+        #expect(GameCatalog.tiles.availability == .available)
+        #expect(GameCatalog.tiles.isAvailable)
         #expect(GameCatalog.tiles.minPlayers == 2)
         #expect(GameCatalog.tiles.maxPlayers == 4)
     }

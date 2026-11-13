@@ -6,6 +6,8 @@
 # DEV_SERVER_PORT picks another port (a second server next to a shared one on 8787).
 # DEV_SERVER_SPEED=10 (dev only) divides the House Cat's think time and the gap before the next
 # round by 10, for fast end-to-end tests (the worker's DEV_SPEED var; production never sets it).
+# DEV_SERVER_GAMES (default "tiles") is the worker's GAMES: the games the local server deals
+# besides Cat Tower. Empty deals Cat Tower only, as production did before the tile game.
 set -euo pipefail
 REPO="$(cd "$(dirname "$0")/../../.." && pwd)"
 API="$REPO/apps/play-api"
@@ -16,4 +18,4 @@ fi
 speed=()
 if [ "${DEV_SERVER_SPEED:-1}" != 1 ]; then speed=(--var "DEV_SPEED:$DEV_SERVER_SPEED"); fi
 exec pnpm --dir "$API" exec wrangler dev --port "${DEV_SERVER_PORT:-8787}" --ip "${DEV_SERVER_IP:-127.0.0.1}" \
-  "${speed[@]+"${speed[@]}"}"
+  --var "GAMES:${DEV_SERVER_GAMES-tiles}" "${speed[@]+"${speed[@]}"}"
