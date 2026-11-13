@@ -1,31 +1,28 @@
 import Foundation
 
 /// Home's streak strip (trophy room design §1): your own streak, then one chip per connection in
-/// top-pair order, then the plus, always last. With no connections the plus is the big "add
-/// someone" entry right after your own streak.
+/// top-pair order. Invite has its own pill in Home's dock, beside Join.
 public enum StreakStrip {
     public enum Chip: Equatable, Sendable, Identifiable {
         case own(OwnStreak)
         case pair(StreakView)
-        case plus(big: Bool)
 
         public var id: String {
             switch self {
             case .own: "own"
             case .pair(let view): view.pair
-            case .plus: "plus"
             }
         }
     }
 
     /// `own` is nil while the server has no trophy room; `pairs` come in the server's order.
     public static func chips(own: OwnStreak?, pairs: [StreakView]) -> [Chip] {
-        (own.map { [Chip.own($0)] } ?? []) + pairs.map(Chip.pair) + [.plus(big: pairs.isEmpty)]
+        (own.map { [Chip.own($0)] } ?? []) + pairs.map(Chip.pair)
     }
 
-    /// The big plus bounces, except for a teen: no nudges to share links (§14.1).
-    public static func bounces(big: Bool, band: AgeBand?) -> Bool {
-        big && band != .teen
+    /// Invite bounces while nobody is connected, except for a teen: no nudges to share links (§14.1).
+    public static func inviteBounces(connected: Bool, band: AgeBand?) -> Bool {
+        !connected && band != .teen
     }
 
     /// Your own streak's mark, by the pair badge's rules: the bandage, the fresh sparkle, the nap blanket.

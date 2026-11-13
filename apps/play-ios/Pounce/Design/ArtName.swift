@@ -91,6 +91,7 @@ enum ArtName {
     static let iconPlus = "icon-plus"
     static let iconKeypad = "icon-keypad"
     static let iconShare = "icon-share"
+    static let iconInvite = "icon-invite"
     static let iconQr = "icon-qr"
     static let iconPlay = "icon-play"
     static let iconBack = "icon-back"

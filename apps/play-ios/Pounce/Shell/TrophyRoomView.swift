@@ -103,11 +103,11 @@ struct TrophyRoomView: View {
     }
 
     private var addButton: some View {
-        ArtIconButton(icon: ArtName.Habit.chipPlus, color: Palette.magenta, size: 52, label: "Add someone") {
+        ArtIconButton(icon: ArtName.iconInvite, color: Palette.magenta, size: 52, label: "Invite") {
             model.showInvite()
         }
         .accessibilityIdentifier("trophies.add")
-        .captioned("Add someone")
+        .captioned("Invite")
     }
 
     // MARK: your own streak and the records
@@ -239,7 +239,7 @@ struct TrophyRoomView: View {
         }
     }
 
-    // MARK: connections and the plus
+    // MARK: connections and Invite
 
     private var connections: some View {
         let views = room?.connections ?? model.streaks.pairs
@@ -269,13 +269,13 @@ struct TrophyRoomView: View {
                     Sound.shared.play(ArtName.Sound.sfxPop)
                     model.showInvite()
                 } label: {
-                    Image(ArtName.Habit.chipPlus).resizable().scaledToFit()
+                    Image(ArtName.iconInvite).resizable().scaledToFit()
                         .frame(width: (views.isEmpty ? 84 : 62) * scale, height: (views.isEmpty ? 84 : 62) * scale)
                         .shadow(color: Palette.ink.opacity(0.5), radius: 0, x: 0, y: 4)
                 }
                 .buttonStyle(.plain)
-                .bounceLoop(active: StreakStrip.bounces(big: views.isEmpty, band: model.ageBand))
-                .accessibilityLabel(Text("Add someone", comment: "VoiceOver: the trophy room's plus; opens the invite sheet"))
+                .bounceLoop(active: StreakStrip.inviteBounces(connected: !views.isEmpty, band: model.ageBand))
+                .accessibilityLabel(Text("Invite someone", comment: "VoiceOver: the trophy room's envelope; opens the invite sheet"))
                 .accessibilityIdentifier("trophies.plus")
             }
             .padding(.horizontal, 14)

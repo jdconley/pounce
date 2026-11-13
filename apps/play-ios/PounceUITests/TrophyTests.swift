@@ -46,22 +46,30 @@ final class TrophyTests: XCTestCase {
         let add = el(app, "home.add")
         XCTAssertTrue(add.exists)
         XCTAssertEqual(value(add), "small")
-        let xs = ["home.own", "home.streak", "home.pair.1", "home.pair.2", "home.add"].map { el(app, $0).frame.minX }
-        XCTAssertEqual(xs, xs.sorted(), "own, then the pairs in order, then the plus: \(xs)")
+        let xs = ["home.own", "home.streak", "home.pair.1", "home.pair.2"].map { el(app, $0).frame.minX }
+        XCTAssertEqual(xs, xs.sorted(), "own, then the pairs in order: \(xs)")
+        // Invite is in the dock, beside Join, not in the strip.
+        XCTAssertTrue(el(app, "home.dock").frame.contains(add.frame), "Invite isn't in the dock")
+        XCTAssertFalse(el(app, "home.strip").frame.contains(add.frame), "Invite is still in the strip")
         XCTAssertTrue(el(app, "home.gift").exists, "the gift still waits on Home")
         XCTAssertTrue(el(app, "home.pounce").exists, "Kiki's pounce still rings on Home")
         shot(app, "strip")
     }
 
-    func testEmptyStripShowsTheBigPlus() {
+    func testWithNobodyConnectedInviteSitsBesideJoin() {
         let app = launch(streaks: "empty")
         let add = el(app, "home.add")
-        XCTAssertTrue(add.waitForExistence(timeout: Live.t(10)), "no plus on Home")
-        XCTAssertEqual(value(add), "big")
-        XCTAssertEqual(add.label, "Invite someone", "the plus says what it does")
+        XCTAssertTrue(add.waitForExistence(timeout: Live.t(10)), "no Invite on Home")
+        XCTAssertEqual(value(add), "big", "Invite doesn't call out while nobody is connected")
+        XCTAssertEqual(add.label, "Invite someone", "Invite says what it does")
         XCTAssertTrue(el(app, "home.own").exists)
         XCTAssertFalse(el(app, "home.streak").exists)
-        XCTAssertLessThan(el(app, "home.own").frame.minX, add.frame.minX, "the plus comes right after your own streak")
+        let join = el(app, "home.join")
+        // It bounces while nobody is connected, so: inside the dock, beside Join.
+        let dock = el(app, "home.dock").frame
+        XCTAssertTrue(dock.contains(CGPoint(x: add.frame.midX, y: add.frame.midY)), "Invite isn't in the dock")
+        XCTAssertTrue(dock.contains(CGPoint(x: join.frame.midX, y: join.frame.midY)), "Join isn't in the dock")
+        XCTAssertLessThan(add.frame.maxX, join.frame.minX, "Invite comes before Join")
         shot(app, "strip-empty")
     }
 
@@ -124,13 +132,10 @@ final class TrophyTests: XCTestCase {
 
     // MARK: adding someone (§4)
 
-    func testPlusOpensTheInviteWithItsQR() {
+    func testInviteOpensTheInviteWithItsQR() {
         let app = launch()
         let add = el(app, "home.add")
         XCTAssertTrue(add.waitForExistence(timeout: Live.t(10)))
-        // On a phone the plus is last in a strip that scrolls sideways.
-        let screen = app.windows.firstMatch.frame
-        for _ in 0..<4 where !screen.contains(add.frame) { el(app, "home.strip").swipeLeft() }
         add.tap()
         XCTAssertTrue(el(app, "sheet-invite").waitForExistence(timeout: Live.t(5)), "no invite sheet")
         let qr = el(app, "invite.qr")

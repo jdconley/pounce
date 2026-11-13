@@ -63,8 +63,8 @@ struct InviteSheet: View {
         HStack(spacing: 10 * scale) {
             Image(ArtName.cat(model.people.owner?.cat ?? 0, .awake)).resizable().scaledToFit()
                 .frame(width: 96 * scale, height: 96 * scale)
-            Image(ArtName.Habit.chipPlus).resizable().scaledToFit()
-                .frame(width: 56 * scale, height: 56 * scale)
+            Image(ArtName.iconInvite).resizable().scaledToFit()
+                .frame(width: 64 * scale, height: 64 * scale)
                 .accessibilityHidden(true)
         }
     }

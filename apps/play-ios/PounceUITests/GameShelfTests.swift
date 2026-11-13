@@ -58,6 +58,12 @@ final class GameShelfTests: XCTestCase {
         XCTAssertTrue((label(el(app, "home.table.M3W7Z")) ?? "").hasPrefix("Your turn, Friday Night Cats, Cat Tower"), "no game on a card")
         XCTAssertTrue((label(el(app, "home.table.K9PQR")) ?? "").hasPrefix("Sunday Brunch, Tuna Tiles"), "no game on a tile table's card")
         XCTAssertFalse(el(app, "home.practice").exists, "practice with tables in progress")
+        // The fullest card keeps its padding: a two-line name, a name pill and "7 days ago".
+        let full = el(app, "home.table.F4NCY")
+        let idle = el(app, "home.table.F4NCY.idle")
+        XCTAssertTrue(idle.exists, "no idle line on the fullest card")
+        XCTAssertLessThanOrEqual(idle.frame.maxY, full.frame.maxY - 10, "the card's last line runs into its border")
+        XCTAssertGreaterThanOrEqual(idle.frame.minX, full.frame.minX + 6, "the card's last line runs into its border")
         XCTAssertTrue(el(app, "home.join").isHittable, "Join can't be reached with tables on Home")
         let catTower = el(app, "home.newGame")
         XCTAssertTrue(catTower.exists, "no Cat Tower card under the tables")

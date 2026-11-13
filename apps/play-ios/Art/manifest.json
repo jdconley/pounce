@@ -925,6 +925,15 @@
   "batch": "ui"
  },
  {
+  "name": "icon-invite",
+  "dest": "imageset",
+  "points": [
+   28,
+   28
+  ],
+  "batch": "ui"
+ },
+ {
   "name": "icon-qr",
   "dest": "imageset",
   "points": [
