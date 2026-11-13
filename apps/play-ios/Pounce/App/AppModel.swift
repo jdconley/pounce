@@ -8,8 +8,11 @@ import SwiftUI
 final class AppModel {
     var route: Route
     var people: LocalPeople
-    /// The server's list of this device's tables (Home).
+    /// The server's list of this device's tables (Home); at launch, the list saved last time.
     var tables: [TableEntry] = []
+    /// There is a list to draw Home from: one was saved on this phone, or the server answered
+    /// (or failed to) this launch. Until then Home doesn't guess (`HomeLead.pick(_:known:hadTables:)`).
+    private(set) var tablesKnown = false
     /// Locally cached table summaries by room code, so Home can draw before sockets connect.
     var cache: [String: CachedTable]
     /// Tables archived off Home on this phone: room code to the server's `updatedAt` then.
@@ -33,6 +36,7 @@ final class AppModel {
     @ObservationIgnored let peopleStore: PeopleStore
     @ObservationIgnored let tableCache: TableCache
     @ObservationIgnored let tableArchive: TableArchive
+    @ObservationIgnored let tableList: TableList
     @ObservationIgnored let tutorialStore: TutorialStore
     /// What the App Store rating ask remembers (`RatingPrompt`): the first launch, finished games,
     /// the last ask.
@@ -116,9 +120,15 @@ final class AppModel {
         peopleStore = PeopleStore(directory: dataDirectory)
         tableCache = TableCache(directory: dataDirectory, fileName: TableCache.fileName(for: config))
         tableArchive = TableArchive(directory: dataDirectory, fileName: TableArchive.fileName(for: config))
+        tableList = TableList(directory: dataDirectory, fileName: TableList.fileName(for: config))
         let loaded = peopleStore.load()
         people = loaded
         cache = tableCache.all()
+        // Last launch's list, so Home opens on your tables; the server's answer replaces it.
+        if let saved = tableList.load() {
+            tables = saved
+            tablesKnown = true
+        }
         archived = tableArchive.all()
         tutorialStore = TutorialStore(directory: dataDirectory)
         tipsSeen = tutorialStore.load()
@@ -206,8 +216,10 @@ final class AppModel {
         let model: AppModel
         let asker = debugAgeAsker(arguments: arguments, env: env)
         if arguments.contains("-uitest-reset") {
+            // `-uitest-data <name>`: the same data directory on each launch, for tests that relaunch.
+            let name = arguments.firstIndex(of: "-uitest-data").flatMap { arguments[safe: $0 + 1] } ?? UUID().uuidString
             let dir = FileManager.default.temporaryDirectory
-                .appendingPathComponent("pounce-uitest-\(UUID().uuidString)", isDirectory: true)
+                .appendingPathComponent("pounce-uitest-\(name)", isDirectory: true)
             model = AppModel(
                 config: config, credentials: MemoryCredentialStore(), dataDirectory: dir,
                 ageStore: debugAgeStore(arguments: arguments), ageAsker: asker, personKeys: MemoryPersonKeyStore())
@@ -746,10 +758,16 @@ final class AppModel {
 
     func refreshTables() async {
         cache = tableCache.all()
+        #if DEBUG
+        // `-tables-offline`: the server never answers, so Home stays as it is at launch.
+        if CommandLine.arguments.contains("-tables-offline") { return }
+        #endif
         do {
             let reply = try await api.listTablesAndLocked()
             let listed = reply.tables
             tables = listed
+            tablesKnown = true
+            tableList.save(listed)
             // The tables this version was left out of, for Home's padlocked rows.
             updates.serverLocked = reply.locked
             // The icon's badge: tables where it's your move (spec §12.5), on every device.
@@ -769,6 +787,7 @@ final class AppModel {
             syncWidgets()
         } catch {
             // Offline or server down: keep the last list; Home still draws from the cache.
+            tablesKnown = true
         }
     }
 
@@ -993,6 +1012,7 @@ final class AppModel {
         cache[code] = nil
         restore(code: code)
         tables.removeAll { $0.code == code }
+        if tablesKnown { tableList.save(tables) }
     }
 
     /// A share or move link arrived. Without a local owner, onboarding comes first and the link
