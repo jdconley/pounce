@@ -68,10 +68,10 @@ public enum GameCatalog {
         minPlayers: 2, maxPlayers: 6, art: "game-cat-tower", tint: .violet, availability: .available,
         howTo: "howto-cat-tower")
 
-    /// Working title. Flip `availability` to `.available` here when the game can be dealt.
+    /// Working title.
     public static let tiles = Entry(
         id: "tiles", title: "Tuna Tiles", pitch: "Tile rummy. Yarn is wild.",
-        minPlayers: 2, maxPlayers: 4, art: "game-tiles", tint: .sky, availability: .comingSoon,
+        minPlayers: 2, maxPlayers: 4, art: "game-tiles", tint: .sky, availability: .available,
         howTo: "howto-tiles")
 
     /// Catalog order: the order games were added, oldest first.

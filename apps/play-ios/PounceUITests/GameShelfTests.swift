@@ -1,8 +1,8 @@
 import XCTest
 
 /// Home's game shelf (game picker): one card per `GameCatalog` game. Cat Tower can be started
-/// (its card keeps Create's id, `home.newGame`); the tile game is on the shelf as "Coming soon"
-/// and answers a tap with a note, never a table. No server needed: `-demo-home` puts sample
+/// (its card keeps Create's id, `home.newGame`), and so can the tile game (`home.game.tiles`;
+/// `TilesLiveTests` deals one against the dev server). No server needed: `-demo-home` puts sample
 /// tables on Home and `-demo-streaks` the strip.
 /// `SHELF_SHOTS_DIR` in the runner's environment (`TEST_RUNNER_SHELF_SHOTS_DIR`) also saves each
 /// screen as `<name>-<orientation>.png`; `SHELF_SHOTS_ORIENTATION=landscape` turns an iPad.
@@ -38,8 +38,8 @@ final class GameShelfTests: XCTestCase {
         XCTAssertTrue(catTower.waitForExistence(timeout: Live.t(10)), "no Cat Tower card")
         XCTAssertEqual(label(catTower), "Cat Tower. Rummy up a ten-shelf tower. 2 to 6 players.")
         let tiles = el(app, "home.game.tiles")
-        XCTAssertTrue(tiles.exists, "no card for the game on the way")
-        XCTAssertEqual(label(tiles), "Tuna Tiles, coming soon. Tile rummy. Yarn is wild. 2 to 4 players.")
+        XCTAssertTrue(tiles.exists, "no card for the tile game")
+        XCTAssertEqual(label(tiles), "Tuna Tiles. Tile rummy. Yarn is wild. 2 to 4 players.")
         XCTAssertFalse(el(app, "home.tables").exists, "tables with no table")
         // Everything Home did before is still here.
         for id in ["home.join", "home.practice", "home.people", "home.settings", "home.hero", "home.own", "home.add"] {
@@ -47,20 +47,6 @@ final class GameShelfTests: XCTestCase {
         }
         XCTAssertTrue(catTower.isHittable, "Cat Tower's card can't be tapped as Home opens")
         shot(app, "empty")
-    }
-
-    func testAGameOnTheWayAnswersATapAndStartsNothing() {
-        let app = launch()
-        let tiles = el(app, "home.game.tiles")
-        XCTAssertTrue(tiles.waitForExistence(timeout: Live.t(10)), "no card for the game on the way")
-        XCTAssertEqual(value(tiles) ?? "", "", "the note before any tap")
-        tiles.tap()
-        XCTAssertTrue(until(3) { self.value(tiles) == "Not ready yet." }, "no note after the tap")
-        shot(app, "coming-soon-tap")
-        XCTAssertTrue(el(app, "screen-home").exists, "the tap left Home")
-        XCTAssertFalse(el(app, "home.createError").exists, "the tap tried to start a table")
-        XCTAssertTrue(until(8) { (self.value(tiles) ?? "") == "" }, "the note never went away")
-        XCTAssertTrue(el(app, "screen-home").exists, "left Home after the note")
     }
 
     func testTablesLeadWhileAGameIsGoing() {

@@ -57,7 +57,10 @@ import Testing
         let app = AppIdentity(platform: "ios", version: "1.1", build: "57")
         #expect(AppIdentity.header == "X-Pounce-App")
         #expect(app.headerValue == "platform=ios; version=1.1; build=57; protocol=1")
-        #expect(ClientHeaders.headers(for: app) == ["X-Pounce-App": "platform=ios; version=1.1; build=57; protocol=1"])
+        #expect(ClientHeaders.headers(for: app) == [
+            "X-Pounce-App": "platform=ios; version=1.1; build=57; protocol=1",
+            "X-Pounce-Games": "cat-tower,tiles",
+        ])
     }
 
     @Test func itSaysTheProtocolThisBuildSpeaks() {

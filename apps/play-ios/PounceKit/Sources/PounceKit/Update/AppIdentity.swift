@@ -53,11 +53,19 @@ public struct AppIdentity: Equatable, Sendable {
 }
 
 /// The headers every request to play-api carries, from the app and from its extensions: who is
-/// asking (`AppIdentity`). One place, so the API client and the room socket can't drift apart.
+/// asking (`AppIdentity`) and the games it can draw (`X-Pounce-Games`). One place, so the API
+/// client, the room socket and the widgets can't drift apart: the server takes a request without
+/// the games header to mean "Cat Tower only" and stops showing that device its other tables.
 public enum ClientHeaders {
+    /// The games this build can draw, as the server reads them (tile game design §9.3).
+    public static let gamesHeader = "X-Pounce-Games"
+
     public static let standard: [String: String] = headers(for: AppIdentity.current)
 
+    /// Every game in the catalog, whether or not it is on the shelf yet: this build can draw them all.
+    public static var drawable: String { GameCatalog.all.map(\.id).joined(separator: ",") }
+
     public static func headers(for app: AppIdentity?) -> [String: String] {
-        app.map { [AppIdentity.header: $0.headerValue] } ?? [:]
+        app.map { [AppIdentity.header: $0.headerValue, gamesHeader: drawable] } ?? [:]
     }
 }
