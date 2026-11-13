@@ -16,10 +16,12 @@ public struct TableEntry: Codable, Equatable, Sendable {
     /// While a game is mid-round: when the current turn began (epoch ms), so Home can say how
     /// long the move has waited. Nil otherwise, and from an older server.
     public let movedAt: Double?
+    /// The game's id (`GameCatalog`); the server sends it only for a game other than Cat Tower.
+    public let game: String?
 
     public init(
         code: String, name: String? = nil, status: String, yourTurn: Bool, updatedAt: Double, next: String? = nil,
-        seats: [TableSeat]? = nil, movedAt: Double? = nil
+        seats: [TableSeat]? = nil, movedAt: Double? = nil, game: String? = nil
     ) {
         self.code = code
         self.name = name
@@ -29,9 +31,10 @@ public struct TableEntry: Codable, Equatable, Sendable {
         self.next = next
         self.seats = seats
         self.movedAt = movedAt
+        self.game = game
     }
 
-    private enum CodingKeys: String, CodingKey { case code, name, status, yourTurn, updatedAt, next, seats, movedAt }
+    private enum CodingKeys: String, CodingKey { case code, name, status, yourTurn, updatedAt, next, seats, movedAt, game }
 
     public init(from decoder: any Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
@@ -43,6 +46,7 @@ public struct TableEntry: Codable, Equatable, Sendable {
         next = try c.decodeIfPresent(String.self, forKey: .next)
         seats = (try? c.decodeIfPresent([TableSeat].self, forKey: .seats)) ?? nil
         movedAt = (try? c.decodeIfPresent(Double.self, forKey: .movedAt)) ?? nil
+        game = (try? c.decodeIfPresent(String.self, forKey: .game)) ?? nil
     }
 }
 
