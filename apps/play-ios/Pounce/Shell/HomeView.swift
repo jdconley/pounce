@@ -40,8 +40,6 @@ struct HomeView: View {
 
     @Environment(\.horizontalSizeClass) private var sizeClass
     @Environment(\.dynamicTypeSize) private var typeSize
-    @ScaledMetric(relativeTo: .title3) private var sectionTitleSize: CGFloat = 22
-    @ScaledMetric(relativeTo: .title3) private var roomyTitleSize: CGFloat = 30
 
     /// Home's one-time sign-in card, under no other overlay.
     private var showSignInPrompt: Bool {
@@ -387,18 +385,8 @@ struct HomeView: View {
 
     // MARK: sections
 
-    /// A section's name in toy lettering, with room for a chip after it.
-    private func sectionTitle(_ title: String, @ViewBuilder chip: () -> some View = { EmptyView() }) -> some View {
-        HStack(alignment: .center, spacing: 10) {
-            // Big text grows a title, up to a size that still leaves the cards room.
-            OutlinedText(
-                title, size: min(roomy ? roomyTitleSize : sectionTitleSize, 38), width: roomy ? 3.5 : 3,
-                lines: 2, alignment: .leading)
-                .accessibilityAddTraits(.isHeader)
-            chip()
-            Spacer(minLength: 0)
-        }
-    }
+    // No titles over the sections: the cards say what they are, and a your-turn card glows and
+    // bounces on its own (JD, 2026-11-13). Each group keeps its name for VoiceOver, on its container.
 
     private var shelfTitle: String {
         hasTables
@@ -408,27 +396,6 @@ struct HomeView: View {
 
     private static let tablesTitle = String(localized: "Your tables", comment: "Home: the title over your tables")
 
-    /// "Your turn" beside the tables' title while any of them waits on this phone.
-    @ViewBuilder private var turnChip: some View {
-        let waiting = HomeLead.waiting(shownItems)
-        if waiting > 0 {
-            Text(
-                waiting == 1
-                    ? String(localized: "Your turn", comment: "Home: one table waits on you")
-                    : String(localized: "\(waiting) turns", comment: "Home: this many tables wait on your turn")
-            )
-            .font(.system(roomy ? .headline : .footnote, design: .rounded, weight: .black))
-            .foregroundStyle(.white)
-            .lineLimit(1)
-            .padding(.horizontal, 11)
-            .padding(.vertical, 4)
-            .background(Capsule().fill(Palette.orange).overlay(Capsule().strokeBorder(Palette.ink, lineWidth: 3)))
-            .fixedSize()
-            .accessibilityIdentifier("home.yourTurn")
-            .compositingGroup()
-            .transition(.scale.combined(with: .opacity))
-        }
-    }
 
     /// Why a new game didn't start, over the shelf.
     @ViewBuilder private var createError: some View {
@@ -535,7 +502,6 @@ struct HomeView: View {
     /// the way tickets; under your tables, every game is a ticket, so the tables stay on top.
     private func shelfColumn(leads: Bool) -> some View {
         VStack(alignment: .leading, spacing: 12) {
-            sectionTitle(shelfTitle)
             createError
             ForEach(Array(shelf.enumerated()), id: \.element.id) { index, game in
                 gameCard(game, index: index, layout: leads && game.isAvailable ? .poster : .ticket, coverRatio: 2.3)
@@ -544,6 +510,7 @@ struct HomeView: View {
         .padding(.horizontal, 16)
         .animation(.spring(duration: 0.35, bounce: 0.4).paced, value: model.newGameError)
         .accessibilityElement(children: .contain)
+        .accessibilityLabel(shelfTitle)
         .accessibilityIdentifier("home.shelf")
     }
 
@@ -565,7 +532,6 @@ struct HomeView: View {
         let gridWidth: CGFloat = column * CGFloat(columns) + gap * CGFloat(columns - 1)
         let rows = stride(from: 0, to: games.count, by: columns).map { Array(games[$0..<min($0 + columns, games.count)]) }
         return VStack(alignment: .leading, spacing: 16) {
-            sectionTitle(shelfTitle)
             createError
             Grid(alignment: .top, horizontalSpacing: gap, verticalSpacing: gap) {
                 ForEach(Array(rows.enumerated()), id: \.offset) { row, games in
@@ -584,20 +550,18 @@ struct HomeView: View {
         .frame(width: gridWidth)
         .animation(.spring(duration: 0.35, bounce: 0.4).paced, value: model.newGameError)
         .accessibilityElement(children: .contain)
+        .accessibilityLabel(shelfTitle)
         .accessibilityIdentifier("home.shelf")
     }
 
     // MARK: your tables
 
-    /// A phone's tables: their title, then one row that scrolls sideways.
+    /// A phone's tables: one row that scrolls sideways.
     @ViewBuilder private var tablesSection: some View {
         if hasTables {
-            VStack(alignment: .leading, spacing: 0) {
-                sectionTitle(Self.tablesTitle) { turnChip }
-                    .padding(.horizontal, 16)
-                tablesRow
-            }
-            .animation(.spring(duration: 0.4, bounce: 0.35).paced, value: HomeLead.waiting(shownItems))
+            tablesRow
+                .accessibilityElement(children: .contain)
+                .accessibilityLabel(Self.tablesTitle)
         }
     }
 
@@ -688,12 +652,11 @@ struct HomeView: View {
         .tracksScroll($scrolled)
     }
 
-    /// Your tables on an iPad: their title over the panel.
+    /// Your tables on an iPad: the panel.
     private var tablesColumn: some View {
-        VStack(alignment: .leading, spacing: 14) {
-            sectionTitle(Self.tablesTitle) { turnChip }
-            tablesPanel
-        }
+        tablesPanel
+            .accessibilityElement(children: .contain)
+            .accessibilityLabel(Self.tablesTitle)
     }
 
     /// The tables Home shows (DEBUG: `-demo-home` puts sample tables here for screenshots;
@@ -812,10 +775,10 @@ struct HomeView: View {
         }
         return [
             HomeTableItem(id: "M3W7Z", name: "Friday Night Cats", yourTurn: true, status: "playing", seats: seats([("Mia", 2)]), turnCat: 2, updatedAt: 0),
-            HomeTableItem(id: "K9PQR", name: "Sunday Brunch", yourTurn: false, status: "playing", seats: seats([("Biscuit", 4), ("Kiki", 6)]), turnCat: 4, updatedAt: 0, idleDays: 3),
+            HomeTableItem(id: "K9PQR", name: "Sunday Brunch", yourTurn: false, status: "playing", seats: seats([("Biscuit", 4), ("Kiki", 6)]), turnCat: 4, updatedAt: 0, idleDays: 3, game: "tiles"),
             HomeTableItem(id: "TB4XN", name: "Couch League", yourTurn: false, status: "lobby", seats: seats([], open: 2), turnCat: nil, updatedAt: 0),
             HomeTableItem(id: "GH2VD", name: "Rematch", yourTurn: false, status: "over", seats: seats([], bots: 1), turnCat: 3, updatedAt: 0),
-            HomeTableItem(id: "WZ8CM", name: "Road Trip", yourTurn: true, status: "playing", seats: seats([("Pickle", 1), ("Nova", 5), ("Clementine", 3)]), turnCat: 2, updatedAt: 0),
+            HomeTableItem(id: "WZ8CM", name: "Road Trip", yourTurn: true, status: "playing", seats: seats([("Pickle", 1), ("Nova", 5), ("Clementine", 3)]), turnCat: 2, updatedAt: 0, game: "tiles"),
         ]
     }()
 

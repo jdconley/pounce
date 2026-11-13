@@ -1,8 +1,9 @@
 import PounceKit
 import SwiftUI
 
-/// One table on Home: its name, who you're playing with, its code small beneath, the seats as
-/// pips. Your-turn cards glow orange and bounce with the waiting player's cat awake; the rest are
+/// One table on Home: its game on a tab at the top, its name, who you're playing with, the seats as
+/// pips, and its code only while it waits for players (a started game can't be joined by code).
+/// Your-turn cards glow orange and bounce with the waiting player's cat awake; the rest are
 /// dimmed with the current player's cat. Finished games carry a trophy.
 struct TableCard: View {
     let item: HomeTableItem
@@ -17,6 +18,8 @@ struct TableCard: View {
     static let size = CGSize(width: 132, height: 180)
 
     private var isOver: Bool { item.status == RoomStatus.over.rawValue }
+    private var isLobby: Bool { item.status == RoomStatus.lobby.rawValue }
+    private var game: GameCatalog.Entry? { GameCatalog.entry(id: item.game) }
 
     /// Whose cat to show: the player on turn, else this phone's seat, else the first seat with a cat.
     private var shownCat: Int? {
@@ -65,7 +68,8 @@ struct TableCard: View {
                             .minimumScaleFactor(0.7)
                             .padding(.horizontal, 6)
                             .accessibilityIdentifier("home.table.\(item.id).idle")
-                    } else {
+                    } else if isLobby {
+                        // Still gathering players: the code is how they join.
                         Text(verbatim: item.id)
                             .font(.system(size: 12, weight: .heavy, design: .rounded))
                             .tracking(1.5)
@@ -76,6 +80,7 @@ struct TableCard: View {
                 .padding(.vertical, 8)
             }
             .overlay(shape.strokeBorder(Palette.ink, lineWidth: 5))
+            .overlay(alignment: .topTrailing) { gameTab }
             .overlay(alignment: .topLeading) {
                 if streakPaw {
                     Image(ArtName.Habit.pawOne)
@@ -110,6 +115,24 @@ struct TableCard: View {
         .accessibilityIdentifier(identifier ?? "home.table.\(item.id)")
     }
 
+    /// Which game this table plays, as a tab in the game's color across the card's top edge
+    /// (clear of the streak paw on the other corner).
+    @ViewBuilder private var gameTab: some View {
+        if let game {
+            Text(verbatim: game.title)
+                .font(.system(size: 11, weight: .black, design: .rounded))
+                .foregroundStyle(.white)
+                .lineLimit(1)
+                .minimumScaleFactor(0.8)
+                .padding(.horizontal, 8)
+                .padding(.vertical, 3)
+                .background(Capsule().fill(Palette.tint(game.tint)).overlay(Capsule().strokeBorder(Palette.ink, lineWidth: 2.5)))
+                .fixedSize()
+                .offset(x: -10, y: -9)
+                .accessibilityHidden(true)
+        }
+    }
+
     /// "3 days ago", once a game in play has waited a day or more since its last move.
     private var idleText: String? {
         guard let days = item.idleDays, days >= 1 else { return nil }
@@ -119,8 +142,11 @@ struct TableCard: View {
     }
 
     private var accessibilityText: Text {
+        let gameName = game?.title ?? ""
         let table =
-            item.yourTurn ? Text("Your turn, \(item.title), table \(item.id)") : Text("\(item.title), table \(item.id)")
+            item.yourTurn
+                ? Text("Your turn, \(item.title), \(gameName)", comment: "VoiceOver: a Home table card on your turn: its name, its game")
+                : Text("\(item.title), \(gameName)", comment: "VoiceOver: a Home table card: its name, its game")
         let names = people.faces.map(\.name).joined(separator: ", ")
         let who = names.isEmpty ? table : Text("\(table), with \(names)", comment: "VoiceOver: a Home table card, then who else plays there")
         guard let idleText else { return who }

@@ -53,7 +53,10 @@ final class GameShelfTests: XCTestCase {
         let app = launch(["-demo-streaks", "-demo-home"])
         let tables = el(app, "home.tables")
         XCTAssertTrue(tables.waitForExistence(timeout: Live.t(10)), "no tables")
-        XCTAssertEqual(label(el(app, "home.yourTurn")), "2 turns")
+        // No titles and no turn count over the cards: a your-turn card says so itself.
+        XCTAssertFalse(el(app, "home.yourTurn").exists, "a turn count over the tables")
+        XCTAssertTrue((label(el(app, "home.table.M3W7Z")) ?? "").hasPrefix("Your turn, Friday Night Cats, Cat Tower"), "no game on a card")
+        XCTAssertTrue((label(el(app, "home.table.K9PQR")) ?? "").hasPrefix("Sunday Brunch, Tuna Tiles"), "no game on a tile table's card")
         XCTAssertFalse(el(app, "home.practice").exists, "practice with tables in progress")
         XCTAssertTrue(el(app, "home.join").isHittable, "Join can't be reached with tables on Home")
         let catTower = el(app, "home.newGame")
