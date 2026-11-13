@@ -32,7 +32,7 @@ func fail(_ message: String) -> Never {
 }
 
 func usage() -> Never {
-  FileHandle.standardError.write(Data("usage: scripts/distribute.swift [--dry-run] [--build N] [--group NAME] [--since DATE] [--timeout MIN]\n".utf8))
+  FileHandle.standardError.write(Data("usage: scripts/distribute.swift [--dry-run] [--build N] [--group NAME] [--since DATE | --from SHA] [--timeout MIN]\n".utf8))
   exit(64)
 }
 
@@ -42,6 +42,8 @@ var dryRun = false
 var buildNumber: String?
 var groupName = "Family and Friends"
 var since: String?
+/// `--from SHA`: list the app's commits after SHA (the push's previous main) in What to Test.
+var fromCommit: String?
 var timeoutMinutes = 30.0
 var arguments = CommandLine.arguments.dropFirst().makeIterator()
 func value() -> String {
@@ -54,12 +56,14 @@ while let arg = arguments.next() {
   case "--build": buildNumber = value()
   case "--group": groupName = value()
   case "--since": since = value()
+  case "--from": fromCommit = value()
   case "--timeout":
     guard let minutes = Double(value()) else { usage() }
     timeoutMinutes = minutes
   case "-h", "--help":
     print("""
-      scripts/distribute.swift [--dry-run] [--build N] [--group NAME] [--since DATE] [--timeout MIN]
+      scripts/distribute.swift [--dry-run] [--build N] [--group NAME] [--since DATE | --from SHA] [--timeout MIN]
+      --from SHA lists the app's own commits after SHA (CI passes the push's previous main).
       Waits for the build to process, sets What to Test, adds it to the TestFlight group and, for an
       external group, submits it for beta app review. Needs ASC_KEY_ID, ASC_ISSUER_ID, ASC_KEY_PATH.
       """)
@@ -73,10 +77,21 @@ while let arg = arguments.next() {
 // The commit subjects on this branch after `since`, minus CI/docs/chore-only changes, without
 // conventional-commit prefixes or PR numbers. Empty means "use the default notes".
 func changes(since: String) -> [String] {
+  subjects(["--since=\(since)", "HEAD"])
+}
+
+/// The commits after `commit` that change the app itself (not its scripts, docs or art): a date
+/// can't say which commits a build holds when two merges land minutes apart.
+func changes(from commit: String) -> [String] {
+  let app = ["Pounce", "PounceKit", "PounceWidgets", "PounceNotify", "project.yml"].map { ":(top)apps/play-ios/\($0)" }
+  return subjects(["\(commit)..HEAD", "--"] + app)
+}
+
+func subjects(_ selection: [String]) -> [String] {
   let repo = URL(fileURLWithPath: #filePath).deletingLastPathComponent().path
   let git = Process()
   git.executableURL = URL(fileURLWithPath: "/usr/bin/env")
-  git.arguments = ["git", "-C", repo, "log", "--first-parent", "--no-merges", "--since=\(since)", "--format=%s", "HEAD"]
+  git.arguments = ["git", "-C", repo, "log", "--first-parent", "--no-merges", "--format=%s"] + selection
   let pipe = Pipe()
   git.standardOutput = pipe
   do { try git.run() } catch { fail("can't run git: \(error)") }
@@ -87,10 +102,13 @@ func changes(since: String) -> [String] {
   let prefix = try! Regex(#"^(\w+)(\([^)]*\))?!?:\s*"#)
   let prNumber = try! Regex(#"\s*\(#\d+\)$"#)
   let hidden: Set = ["ci", "chore", "docs", "test", "build", "style"]
+  let conventional: Set = ["feat", "fix", "perf", "refactor", "revert"]
   return output.split(separator: "\n").compactMap { line in
     var subject = String(line)
-    if let match = subject.firstMatch(of: prefix) {
-      if let type = match.output[1].substring, hidden.contains(type.lowercased()) { return nil }
+    // Only conventional-commit types are prefixes; "Home: …" or "Tuna Tiles: …" is part of the note.
+    if let match = subject.firstMatch(of: prefix), let type = match.output[1].substring?.lowercased(),
+       hidden.contains(type) || conventional.contains(type) {
+      if hidden.contains(type) { return nil }
       subject.removeSubrange(match.range)
     }
     subject = subject.replacing(prNumber, with: "").trimmingCharacters(in: .whitespaces)
@@ -103,8 +121,14 @@ func changes(since: String) -> [String] {
 }
 
 func notes(since: String?) -> String {
-  guard let since else { return defaultNotes }
-  let lines = changes(since: since)
+  let lines: [String]
+  if let fromCommit {
+    lines = changes(from: fromCommit)
+  } else if let since {
+    lines = changes(since: since)
+  } else {
+    return defaultNotes
+  }
   guard !lines.isEmpty else { return defaultNotes }
   var text = "New in this build:"
   for line in lines {
@@ -280,7 +304,7 @@ do {
   }
 
   // 3. What to Test: the commits since the group's previous build was uploaded.
-  if since == nil {
+  if since == nil, fromCommit == nil {
     do {
       let previous = list(try await asc.get("/v1/builds", [
         "filter[app]": appID, "filter[betaGroups]": groupID, "sort": "-uploadedDate", "limit": "5",
