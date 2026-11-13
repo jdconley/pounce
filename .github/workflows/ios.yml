@@ -124,8 +124,20 @@ jobs:
         env:
           BUILD: ${{ inputs.build || steps.upload.outputs.build }}
           GROUP: ${{ inputs.group || 'Family and Friends' }}
+          # A push lists the app's commits since the previous main; a manual run, since the group's last build.
+          FROM: ${{ github.event_name == 'push' && github.event.before || '' }}
         run: |
           export ASC_KEY_PATH="$RUNNER_TEMP/AuthKey_$ASC_KEY_ID.p8"
           (umask 077; printenv ASC_KEY_P8 > "$ASC_KEY_PATH")
           trap 'rm -f "$ASC_KEY_PATH"' EXIT
-          scripts/distribute.swift --build "$BUILD" --group "$GROUP"
+          if [ -n "$FROM" ] && git cat-file -e "$FROM^{commit}" 2>/dev/null; then
+            # A push that doesn't change the app itself (scripts, docs, this workflow) uploads for
+            # the internal testers only: the family never gets an identical build.
+            if git diff --quiet "$FROM" HEAD -- Pounce PounceKit PounceWidgets PounceNotify project.yml; then
+              echo "no app change since $FROM: not sending this build to \"$GROUP\""
+              exit 0
+            fi
+            scripts/distribute.swift --build "$BUILD" --group "$GROUP" --from "$FROM"
+          else
+            scripts/distribute.swift --build "$BUILD" --group "$GROUP"
+          fi
