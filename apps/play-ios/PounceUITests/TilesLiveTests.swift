@@ -2,7 +2,7 @@ import XCTest
 
 /// The tile game against a real server (the dev server, with `GAMES=tiles`): Home's tile card
 /// deals a table, a House Cat takes a seat, and the game is played to its end with the same
-/// holds and taps a person makes. Nothing here is canned: every snapshot, move and the game over
+/// taps a person makes. Nothing here is canned: every snapshot, move and the game over
 /// come from play-api over the room socket.
 /// `TILES_LIVE_SHOTS_DIR` in the runner's environment (`TEST_RUNNER_TILES_LIVE_SHOTS_DIR`) also
 /// saves each step as a PNG there.
@@ -59,7 +59,7 @@ final class TilesLiveTests: XCTestCase {
                       "no deal: \(probe(app))")
         shot(app, "3-dealt")
 
-        // Play it out: on my turn, hold the turn button (Draw, or Pass once the box is empty); the
+        // Play it out: on my turn, tap the turn button (Draw, or Pass once the box is empty); the
         // House Cat plays its own turns. The game ends when someone empties their stash or nobody
         // can move.
         let over = el(app, "tiles.over.title")
@@ -72,7 +72,7 @@ final class TilesLiveTests: XCTestCase {
             if p["sets"] != lastSets { sawBotMove = true; lastSets = p["sets"] ?? lastSets }
             if p["turn"] == "draw" || p["turn"] == "pass" {
                 let before = p["rack"]
-                el(app, "tiles.turn").press(forDuration: Live.pace(1.2, floor: 0.9))
+                el(app, "tiles.turn").tap()
                 myTurns += 1
                 if myTurns == 1 { shot(app, "4-first-draw") }
                 // The move went: the rack grew (a draw), or the turn moved on (a pass).

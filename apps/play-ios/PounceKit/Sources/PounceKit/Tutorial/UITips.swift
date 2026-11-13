@@ -102,6 +102,8 @@ public enum UITip: String, CaseIterable, Codable, Sendable {
     case tilesPlay = "ui.tiles.play"
     case tilesDraw = "ui.tiles.draw"
     case tilesSort = "ui.tiles.sort"
+    case tilesUndo = "ui.tiles.undo"
+    case tilesHint = "ui.tiles.hint"
     case tilesLoupe = "ui.tiles.loupe"
 
     public var rule: UITipRule {
@@ -133,7 +135,10 @@ public enum UITip: String, CaseIterable, Codable, Sendable {
         case .tilesMeter: r(.tiles, "tiles.meter", 100)
         case .tilesPlay: r(.tiles, "tiles.play", 95, learnedBy: ["tiles.turn"])
         case .tilesDraw: r(.tiles, "tiles.draw", 90, learnedBy: ["tiles.turn"])
-        case .tilesSort: r(.tiles, "tiles.sort", 70, .after(.tilesDraw))
+        // The small buttons say nothing on their own, so they are taught early (JD, 2026-11-13).
+        case .tilesSort: r(.tiles, "tiles.sort", 92)
+        case .tilesHint: r(.tiles, "tiles.hint", 94)
+        case .tilesUndo: r(.tiles, "tiles.undo", 65, .after(.tilesSort), learnedBy: ["tiles.undo"])
         case .tilesLoupe: r(.tiles, "tiles.set", 60, learnedBy: ["tiles.loupe"])
         }
     }

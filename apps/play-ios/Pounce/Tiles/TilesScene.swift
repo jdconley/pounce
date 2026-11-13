@@ -325,7 +325,8 @@ final class TilesScene: SKScene {
         if let seat, model.canCompose(seat), !sending {
             let saved = draft == nil ? memory?.memory(code: store.code).draft(seat: seat, turns: model.view.turns) : nil
             var next = model.draft(for: seat, keeping: draft, saved: saved)
-            next?.tidy = draft?.tidy ?? saved?.tidy ?? tidyPreference
+            // Sets stay in the order they were laid (the tidy toggle is gone).
+            next?.tidy = false
             draft = next
             if let next, let open = loupe, next.set(open) == nil { closeLoupe(animated: false) }
         } else if !sending {
@@ -471,7 +472,7 @@ final class TilesScene: SKScene {
         let flow = RugFlow.fit(
             lengths: sets.map(\.tiles.count), width: layout.rug.width, height: layout.rug.height,
             maxPiece: layout.rugPieceMax, minPiece: layout.rugPieceMin,
-            corner: CGSize(width: layout.pool.width + 2, height: layout.pool.height - 6), zoom: zoom)
+            zoom: zoom)
         self.flow = flow
         scroll = min(max(scroll, 0), maxScroll)
         rugContent.position = CGPoint(x: layout.rug.minX, y: layout.rug.maxY + scroll)
@@ -630,6 +631,8 @@ final class TilesScene: SKScene {
             }
         }
         if !sortToyButton.isHidden { put("tiles.sort", layout.sortNumber.union(layout.sortToy)) }
+        if !undoButton.isHidden, layout.undo != .zero { put("tiles.undo", layout.undo.union(layout.reset)) }
+        if easy, !tidyButton.isHidden, layout.tidy != .zero { put("tiles.hint", layout.tidy) }
         if !meterNode.isHidden, layout.meter != .zero { put("tiles.meter", layout.meter) }
         if loupe == nil, selection.isEmpty, tricksAllowed, let firstSet { put("tiles.set", firstSet) }
         guard spots != lastTipSpots else { return }
@@ -760,21 +763,23 @@ final class TilesScene: SKScene {
     }
 
     private func drawPool(_ model: TilesTableModel, layout: TilesLayout) {
+        // Under the paw menu, off the rug.
         poolSprite.isHidden = false
         poolSprite.size = layout.pool.size
         poolSprite.position = CGPoint(x: layout.pool.midX, y: layout.pool.midY)
         poolSprite.alpha = model.view.poolCount == 0 ? 0.55 : 1  // fade-ok: the toy box alone
-        let count = TilePieceFactory.shared.count(model.view.poolCount, size: layout.arrangement == .phone ? 15 : 18)
+        let count = TilePieceFactory.shared.count(model.view.poolCount, size: layout.arrangement == .phone ? 14 : 18)
         poolCount.isHidden = false
         poolCount.texture = count
         poolCount.size = count.size()
-        poolCount.position = CGPoint(x: layout.pool.minX + count.size().width / 2 - 2, y: layout.pool.minY + count.size().height / 2 - 2)
-        // The "what changed" paw, under the toy box, while there is something to show again.
-        let side: CGFloat = layout.arrangement == .phone ? 34 : 44
-        recapButton.isHidden = recap.isEmpty
+        poolCount.position = CGPoint(x: layout.pool.minX + count.size().width / 2 - 6, y: layout.pool.minY + count.size().height / 2 - 4)
+        // The "what changed" paw, at the strip's right end, while there is something to show again.
+        // Easy mode's hint has that slot, and the rings on the rug show what changed there.
+        let side = layout.arrangement == .phone ? CGFloat(40) : 50
+        recapButton.isHidden = recap.isEmpty || easy || layout.recap == .zero || turnPill.isHidden
         recapButton.texture = TilePieceFactory.shared.button(.changed, side: side)
         recapButton.size = CGSize(width: side, height: side + 3)
-        recapButton.position = CGPoint(x: layout.pool.maxX - side / 2 - 2, y: layout.pool.minY - side / 2 - 6)
+        recapButton.position = CGPoint(x: layout.recap.midX, y: layout.recap.midY)
     }
 
     /// The turn button as it stands: one of four things, always (tile game spec §5.5).
@@ -807,7 +812,7 @@ final class TilesScene: SKScene {
         if easy {
             button(tidyButton, layout.tidy, factory.button(.hint, side: drawn, on: hint != nil, dim: !composing))
         } else {
-            button(tidyButton, layout.tidy, factory.button(.tidy, side: drawn, on: draft?.tidy ?? tidyPreference))
+            tidyButton.isHidden = true
         }
 
         // The turn button.
