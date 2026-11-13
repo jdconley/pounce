@@ -66,11 +66,12 @@
     // the server answers as before.
     "NUDGE": "on",
     // The games rooms may be created for beyond Cat Tower: a comma-separated list of game ids
-    // (src/games, e.g. "tiles"). Empty: Cat Tower only, and asking for any other game is refused,
-    // as it always was. It stays empty until an app that can draw the tile game is in TestFlight:
-    // apps before it never ask for another game, and are told a table of one doesn't exist. Local
-    // dev turns it on in .dev.vars (see .dev.vars.example); tests set it themselves.
-    "GAMES": "",
+    // (src/games, e.g. "tiles"). Empty: Cat Tower only, and asking for any other game is refused.
+    // "tiles" since version 1.1 can draw the tile game: only an app that lists a game in
+    // X-Pounce-Games is let into, shown or pushed about its tables; version 1.0 lists none and is
+    // told a tile table doesn't exist. Emptying it again stops new tile tables (Play again
+    // answers `game_off`); tables already dealt play to their end.
+    "GAMES": "tiles",
     // App updates (docs/superpowers/specs/2026-11-12-app-updates-design.md). The oldest app
     // version the server still supports, e.g. "1.1": an app below it is told to update, once the
     // App Store has a version at least that new. Empty: every version is supported, and nothing

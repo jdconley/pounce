@@ -29,11 +29,11 @@ describe("devSpeed", () => {
 });
 
 describe("GAMES in production", () => {
-  it("is listed in wrangler.jsonc and turns on no game but Cat Tower", () => {
+  it("is listed in wrangler.jsonc and deals Cat Tower and the tile game", () => {
     const config = readFileSync(new URL("../wrangler.jsonc", import.meta.url), "utf8");
     const value = /"GAMES"\s*:\s*"([^"]*)"/.exec(config)?.[1];
-    expect(value).toBe("");
-    expect(gamesOn({ GAMES: value })).toEqual(["cat-tower"]);
+    expect(value).toBe("tiles");
+    expect(gamesOn({ GAMES: value })).toEqual(["cat-tower", "tiles"]);
   });
 
   it("is on for local dev, in the example .dev.vars", () => {

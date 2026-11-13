@@ -41,9 +41,9 @@ pnpm --filter @pounce/play-api exec wrangler dev --port 8787
 ```
 
 The example `.dev.vars` sets `GAMES=tiles`, which lets the local server deal the second game (the
-tile game) as well as Cat Tower. Production's `GAMES` in `apps/play-api/wrangler.jsonc` is empty,
-so the deployed server deals Cat Tower only. An existing `.dev.vars` needs the `GAMES=tiles` line
-added by hand, or pass `--var GAMES:tiles` to `wrangler dev`.
+tile game) as well as Cat Tower; `apps/play-ios/scripts/dev-server.sh` passes it too. Production's
+`GAMES` in `apps/play-api/wrangler.jsonc` is `tiles` as well: apps from version 1.1 deal and play
+the tile game, and version 1.0 never sees a tile table.
 
 ## The website
 
