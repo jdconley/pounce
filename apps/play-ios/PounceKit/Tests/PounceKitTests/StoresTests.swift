@@ -192,6 +192,32 @@ import Testing
         #expect(dev != prod)
     }
 
+    // MARK: TableList
+
+    @Test func tableListSavesTheServersLastAnswerPerServer() throws {
+        let dir = try tempDir()
+        let dev = APIConfig(baseURL: URL(string: "http://localhost:8787")!)
+        let prod = APIConfig(baseURL: URL(string: "https://play.conleychaos.com")!)
+        #expect(TableList.fileName(for: prod) == "table-list.play.conleychaos.com_443.json")
+        let list = TableList(directory: dir, fileName: TableList.fileName(for: dev))
+        #expect(list.load() == nil)
+
+        let entries = [
+            TableEntry(
+                code: "K7QM4", name: "Taco Night", status: "playing", yourTurn: true, updatedAt: 1_700_000_000_000,
+                seats: [TableSeat(kind: .human, person: Person(id: "a", name: "Mochi", cat: 2), yours: true)],
+                movedAt: 1_699_999_000_000, game: "tiles"),
+            TableEntry(code: "Z9XY2", status: "over", yourTurn: false, updatedAt: 1_600_000_000_000, next: "B4CD5"),
+        ]
+        list.save(entries)
+        #expect(TableList(directory: dir, fileName: TableList.fileName(for: dev)).load() == entries)
+        #expect(TableList(directory: dir, fileName: TableList.fileName(for: prod)).load() == nil)
+
+        // No tables is an answer too: Home leads with the shelf at once next launch.
+        list.save([])
+        #expect(TableList(directory: dir, fileName: TableList.fileName(for: dev)).load() == [])
+    }
+
     @Test func tableCacheFilePerServer() throws {
         let dir = try tempDir()
         let dev = APIConfig(baseURL: URL(string: "http://localhost:8787")!)

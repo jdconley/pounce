@@ -100,6 +100,14 @@ public enum HomeLead: Equatable, Sendable {
         items.contains { $0.status != RoomStatus.over.rawValue } ? .tables : .shelf
     }
 
+    /// The lead at launch. `known`: the phone has a saved table list or the server answered.
+    /// Until then a phone that has played (`hadTables`, from its room cache) leads with nothing,
+    /// so a returning player never sees the first-visit posters flash before their tables.
+    public static func pick(_ items: [HomeTableItem], known: Bool, hadTables: Bool) -> HomeLead? {
+        if items.isEmpty, !known, hadTables { return nil }
+        return pick(items)
+    }
+
     /// How many tables wait on this phone's move.
     public static func waiting(_ items: [HomeTableItem]) -> Int {
         items.count { $0.yourTurn }

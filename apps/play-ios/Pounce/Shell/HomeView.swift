@@ -191,7 +191,14 @@ struct HomeView: View {
     private var firstIdle: String? { shownItems.first { ($0.idleDays ?? 0) >= 1 }?.id }
 
     private var hasTables: Bool { !shownItems.isEmpty || model.archivedItems.count > 0 }
-    private var lead: HomeLead { HomeLead.pick(shownItems) }
+    /// Nil for a moment at launch on a phone that has played but has no saved list yet: Home
+    /// waits for the server rather than flash the first-visit posters.
+    private var lead: HomeLead? {
+        #if DEBUG
+        if CommandLine.arguments.contains("-demo-home") { return HomeLead.pick(shownItems) }
+        #endif
+        return HomeLead.pick(shownItems, known: model.tablesKnown, hadTables: !model.cache.isEmpty)
+    }
 
     // MARK: the player bar
 
@@ -319,7 +326,7 @@ struct HomeView: View {
     /// Pinned to the bottom, on a band of its own: Join, and Practice beside it while there is no
     /// table yet. The column ends at its edge.
     private func dock(width: CGFloat, bottomInset: CGFloat) -> some View {
-        let practice = shownItems.isEmpty
+        let practice = shownItems.isEmpty && lead != nil
         let gap: CGFloat = 12
         let pill: CGFloat =
             roomy
@@ -602,7 +609,7 @@ struct HomeView: View {
                 // A newer version, or a table waiting behind one (app updates design §4.1, §4.2).
                 HomeUpdates()
                 if lead == .tables { tablesSection }
-                shelfColumn(leads: lead == .shelf)
+                if lead != nil { shelfColumn(leads: lead == .shelf) }
                 if lead == .shelf { tablesSection }
             }
             .padding(.top, 6)
@@ -624,7 +631,9 @@ struct HomeView: View {
             VStack(spacing: 24) {
                 HomeUpdates(roomy: true)
                 Group {
-                    if Roomy.sideBySide(size) && hasTables {
+                    if lead == nil {
+                        EmptyView()
+                    } else if Roomy.sideBySide(size) && hasTables {
                         let tablesWidth = min(size.width * 0.44, 602)
                         let shelfWidth = size.width - 96 - 36 - tablesWidth
                         HStack(alignment: .top, spacing: 36) {

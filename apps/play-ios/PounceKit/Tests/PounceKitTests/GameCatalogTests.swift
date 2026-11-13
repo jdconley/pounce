@@ -98,6 +98,16 @@ import Testing
         #expect(HomeLead.pick([table("MINE1", "playing", turn: true)]) == .tables)
     }
 
+    /// At launch, before the server answers: a phone that has played but saved no list yet leads
+    /// with nothing rather than the first-visit posters; a saved list or a new phone decides at once.
+    @Test func homeWaitsAtLaunchRatherThanFlashThePosters() {
+        #expect(HomeLead.pick([], known: false, hadTables: true) == nil)
+        #expect(HomeLead.pick([], known: false, hadTables: false) == .shelf)
+        #expect(HomeLead.pick([], known: true, hadTables: true) == .shelf)
+        #expect(HomeLead.pick([table("PLAY1", "playing")], known: false, hadTables: true) == .tables)
+        #expect(HomeLead.pick([table("PLAY1", "playing")], known: true, hadTables: false) == .tables)
+    }
+
     @Test func homeCountsTheTablesWaitingOnYou() {
         #expect(HomeLead.waiting([]) == 0)
         #expect(HomeLead.waiting([table("A", "playing", turn: true), table("B", "playing"), table("C", "playing", turn: true)]) == 2)
