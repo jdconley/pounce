@@ -130,7 +130,7 @@ final class TutorialTests: XCTestCase {
         onboard(app)
         el(app, "home.settings").tap()
         let rules = el(app, "settings.rules")
-        XCTAssertTrue(rules.waitForExistence(timeout: Live.t(5)), "no How to play in the gear")
+        XCTAssertTrue(reveal(app, rules, in: "sheet-gear"), "no How to play in the gear")
         rules.tap()
         XCTAssertTrue(el(app, "sheet-rules").waitForExistence(timeout: Live.t(5)), "no rules sheet")
         screenshot(app, "rules")

@@ -23,9 +23,11 @@ final class AccountTests: XCTestCase {
         XCTAssertTrue(el(app, "sheet-people").waitForExistence(timeout: Live.t(5)), "no people sheet")
     }
 
+    /// Settings, on its Account page.
     private func openGear(_ app: XCUIApplication) {
         el(app, "home.settings").tap()
         XCTAssertTrue(el(app, "sheet-gear").waitForExistence(timeout: Live.t(5)), "no gear sheet")
+        openSettingsAccount(app)
     }
 
     private func signedIn(_ e: XCUIElement) -> Bool { value(e) == "signed in" }

@@ -168,7 +168,7 @@ struct PounceSheetView: View {
 
     private var buttons: some View {
         HStack(spacing: 16 * scale) {
-            PillButton(icon: ArtName.iconBack, color: Palette.violet, size: .medium, accessibilityLabel: "Close", action: onClose)
+            PillButton(icon: ArtName.iconClose, color: Palette.violet, size: .medium, accessibilityLabel: "Close", action: onClose)
                 .accessibilityIdentifier("pounce.close")
                 .captioned("Close")
             if model.limits.sharesLinks {
@@ -407,7 +407,7 @@ struct PouncePickView: View {
                 .frame(maxWidth: 720)
                 HStack(spacing: 16 * scale) {
                     // Closing answers nothing (a link opened by mistake keeps its token).
-                    PillButton(icon: ArtName.iconBack, color: Palette.violet, size: .medium, accessibilityLabel: "Close") {
+                    PillButton(icon: ArtName.iconClose, color: Palette.violet, size: .medium, accessibilityLabel: "Close") {
                         model.pick = nil
                     }
                     .accessibilityIdentifier("pick.close")

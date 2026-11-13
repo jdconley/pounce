@@ -117,7 +117,7 @@ final class KittenTests: XCTestCase {
         XCTAssertTrue(el(app, "screen-home").waitForExistence(timeout: Live.t(10)), "no Home")
         openGear(app)
         let kittens = el(app, "gear.kittens")
-        XCTAssertTrue(kittens.waitForExistence(timeout: Live.t(5)), "no Kittens button for a signed-in adult")
+        XCTAssertTrue(reveal(app, kittens, in: "sheet-gear"), "no Kittens button for a signed-in adult")
         kittens.tap()
         XCTAssertTrue(el(app, "sheet-kittens").waitForExistence(timeout: Live.t(5)), "no Kittens panel")
         XCTAssertTrue(el(app, "kittens.card.1").waitForExistence(timeout: Live.t(5)), "the kittens didn't load")

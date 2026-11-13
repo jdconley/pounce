@@ -23,7 +23,7 @@ struct LookTraySheet: View {
     var body: some View {
         VStack(spacing: 18) {
             HStack {
-                CornerHomeButton(label: "Back", action: onBack)
+                SheetBackButton(action: onBack)
                     .accessibilityIdentifier("look.back")
                 Spacer()
                 Image(ArtName.Habit.iconRug).resizable().scaledToFit().frame(width: 44)

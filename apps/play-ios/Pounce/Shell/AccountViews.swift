@@ -141,7 +141,7 @@ struct ProviderIcon: View {
     }
 }
 
-/// The gear sheet's account panel: you (your cat with a check), linked providers, sign out and
+/// The update screen's account panel (`UpdateAccountSheet`): you (your cat with a check), linked providers, sign out and
 /// the trash can for deleting the account.
 struct AccountCard: View {
     @Environment(AppModel.self) private var model
@@ -327,7 +327,7 @@ struct DeleteConfirmView: View {
     }
 }
 
-/// The gear sheet's delete for a player who isn't signed in, a kitten's device included: the
+/// The update screen's delete for a player who isn't signed in, a kitten's device included: the
 /// same server delete as an account's, from a worded button.
 struct GuestDeleteRow: View {
     let onDelete: () -> Void

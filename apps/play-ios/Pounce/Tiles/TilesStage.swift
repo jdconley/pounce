@@ -663,7 +663,7 @@ struct TilesMenuSheet: View {
     var body: some View {
         Group {
             if rules {
-                HowToPlaySheet(game: GameCatalog.tiles) { rules = false }
+                HowToPlaySheet(game: GameCatalog.tiles, exit: .back) { rules = false }
             } else {
                 menu
             }
@@ -675,8 +675,16 @@ struct TilesMenuSheet: View {
 
     private var menu: some View {
         VStack(spacing: 18) {
-            OutlinedText(tableName, size: 26, fill: Palette.orange, lines: 2)
-                .padding(.horizontal, 20)
+            // The name in the middle, the X that closes the menu top trailing.
+            HStack(spacing: 8) {
+                Color.clear.frame(width: SheetBar.side, height: 1)
+                Spacer(minLength: 0)
+                OutlinedText(tableName, size: 26, fill: Palette.orange, lines: 2)
+                Spacer(minLength: 0)
+                SheetCloseButton(action: onClose)
+                    .accessibilityIdentifier("menu.close")
+            }
+            .padding(.horizontal, 16)
             HStack(spacing: 18) {
                 PillButton(
                     icon: settings.soundOn ? ArtName.iconSoundOn : ArtName.iconSoundOff,

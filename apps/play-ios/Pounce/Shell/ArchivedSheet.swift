@@ -63,7 +63,7 @@ struct ArchivedSheet: View {
                 OutlinedText(
                     String(localized: "Archived", comment: "Archived sheet: title"), size: 28, fill: .white)
                 Spacer()
-                PillButton(icon: ArtName.iconBack, color: Palette.sky, size: .small, accessibilityLabel: "Close") {
+                SheetCloseButton() {
                     dismiss()
                 }
                 .accessibilityIdentifier("archived.close")

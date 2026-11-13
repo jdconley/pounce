@@ -74,7 +74,7 @@ struct TableMenuSheet: View {
                     onClose: onClose)
                     .transition(.move(edge: .trailing).combined(with: .opacity))
             case .rules:
-                HowToPlaySheet { show(.menu) }
+                HowToPlaySheet(exit: .back) { show(.menu) }
                     .transition(.move(edge: .trailing).combined(with: .opacity))
             case .renaming:
                 RenameTableView(current: tableName, onCancel: { show(.menu) }) { name in
@@ -104,9 +104,17 @@ struct TableMenuSheet: View {
 
     private var menu: some View {
         VStack(spacing: 22) {
-            TableNameTitle(name: tableName, editable: canRename) { show(.renaming) }
-                .padding(.horizontal, 20)
-                .accessibilityIdentifier("menu.name")
+            // The name in the middle, the X that closes the menu top trailing.
+            HStack(spacing: 8) {
+                Color.clear.frame(width: SheetBar.side, height: 1)
+                Spacer(minLength: 0)
+                TableNameTitle(name: tableName, editable: canRename) { show(.renaming) }
+                    .accessibilityIdentifier("menu.name")
+                Spacer(minLength: 0)
+                SheetCloseButton(action: onClose)
+                    .accessibilityIdentifier("menu.close")
+            }
+            .padding(.horizontal, 16)
             HStack(spacing: 18) {
                 PillButton(
                     icon: settings.soundOn ? ArtName.iconSoundOn : ArtName.iconSoundOff,
