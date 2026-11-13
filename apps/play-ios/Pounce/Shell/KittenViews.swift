@@ -170,7 +170,7 @@ struct KittensSheet: View {
                             Image(ArtName.Habit.iconKittens).resizable().scaledToFit().frame(width: 64 * scale)
                                 .accessibilityHidden(true)
                             Spacer()
-                            PillButton(icon: ArtName.iconBack, color: Palette.sky, size: .small, accessibilityLabel: "Close") {
+                            SheetCloseButton() {
                                 dismiss()
                             }
                             .accessibilityIdentifier("kittens.close")
@@ -437,7 +437,7 @@ private struct LinkCodeOverlay: View {
                         Image(ArtName.Habit.iconHourglass).resizable().scaledToFit().frame(width: 52)
                             .accessibilityIdentifier("link.resting")
                     }
-                    PillButton(icon: ArtName.iconBack, color: Palette.sky, size: .small, accessibilityLabel: "Close", action: onClose)
+                    SheetCloseButton(action: onClose)
                         .accessibilityIdentifier("link.close")
                 }
                 WordLine(
@@ -529,7 +529,7 @@ struct KittenNoticeSheet: View {
                     Image(ArtName.cat(kitten.cat, .idle)).resizable().scaledToFit().frame(width: 56)
                     NameTag(kitten.name, maxWidth: 160, active: true, size: 18)
                     Spacer()
-                    PillButton(icon: ArtName.iconBack, color: Palette.sky, size: .small, accessibilityLabel: "Close") { dismiss() }
+                    SheetCloseButton() { dismiss() }
                         .accessibilityIdentifier("notice.close")
                 }
                 switch flow.phase {

@@ -100,7 +100,7 @@ struct UsView: View {
         VStack(spacing: 18) {
             HStack {
                 Spacer()
-                PillButton(icon: ArtName.iconBack, color: Palette.sky, size: .small, accessibilityLabel: "Close") {
+                SheetCloseButton() {
                     settingsShown = false
                 }
                 .accessibilityIdentifier("notify.close")

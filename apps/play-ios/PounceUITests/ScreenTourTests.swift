@@ -109,14 +109,26 @@ final class ScreenTourTests: XCTestCase {
             // Settings and account.
             Stop(name: "gear", args: r + ["-show-gear"]),
             Stop(name: "gear-signedin", args: r + ["-stub-accounts", "signed-in", "-show-gear"]),
+            Stop(name: "gear-account", args: r + ["-stub-accounts", "signed-in", "-show-gear"]) { t, app in
+                t.tapId(app, "settings.page.account")
+            },
+            Stop(name: "gear-quiet", args: r + ["-show-gear"]) { t, app in t.tapId(app, "settings.page.quietHours") },
             Stop(name: "gear-merge", args: r + ["-stub-accounts", "merged", "-show-gear", "-show-merge"]),
-            Stop(name: "delete-account", args: r + ["-stub-accounts", "signed-in", "-show-gear"]) { t, app in t.tapId(app, "gear.delete") },
-            Stop(name: "delete-guest", args: r + ["-stub-accounts", "upgraded", "-show-gear"]) { t, app in t.tapId(app, "gear.delete") },
+            Stop(name: "delete-account", args: r + ["-stub-accounts", "signed-in", "-show-gear"]) { t, app in
+                t.tapId(app, "settings.page.account")
+                t.tapId(app, "gear.delete")
+            },
+            Stop(name: "delete-guest", args: r + ["-stub-accounts", "upgraded", "-show-gear"]) { t, app in
+                t.tapId(app, "settings.page.account")
+                t.tapId(app, "gear.delete")
+            },
             Stop(name: "deleted-guest", args: r + ["-stub-accounts", "upgraded", "-show-gear"]) { t, app in
+                t.tapId(app, "settings.page.account")
                 t.tapId(app, "gear.delete")
                 t.tapId(app, "delete.confirm")
             },
             Stop(name: "settings-path", args: r + ["-stub-accounts", "signed-in", "-show-gear"]) { t, app in
+                t.tapId(app, "settings.page.account")
                 t.tapId(app, "gear.delete")
                 t.tapId(app, "delete.confirm")
             },

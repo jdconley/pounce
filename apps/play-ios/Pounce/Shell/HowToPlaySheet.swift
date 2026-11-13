@@ -5,15 +5,20 @@ import SwiftUI
 /// (`HowToVideoView`), then its rules in loud cards that follow the video's steps
 /// (`HowToGuide`). Cat Tower also lists its ten levels and can bring the first-game tips back.
 /// Opens on `game`: Home's chip and gear open Cat Tower, a table's menu opens its own game.
+/// Its own sheet (from Home) closes with the X, top trailing; a page in a table's menu goes back
+/// to the menu with the back arrow, top leading.
 struct HowToPlaySheet: View {
+    enum Exit { case close, back }
+
     @Environment(AppModel.self) private var model
     @Environment(\.horizontalSizeClass) private var sizeClass
+    let exit: Exit
     let onClose: () -> Void
 
     @State private var game: GameCatalog.Entry
     @State private var replayed = false
 
-    init(game: GameCatalog.Entry = GameCatalog.dealt, onClose: @escaping () -> Void) {
+    init(game: GameCatalog.Entry = GameCatalog.dealt, exit: Exit = .close, onClose: @escaping () -> Void) {
         var game = game
         #if DEBUG
         // `-show-rules -rules-game tiles`: open on that game (screenshots).
@@ -23,6 +28,7 @@ struct HowToPlaySheet: View {
         }
         #endif
         _game = State(initialValue: game)
+        self.exit = exit
         self.onClose = onClose
     }
 
@@ -30,19 +36,15 @@ struct HowToPlaySheet: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            HStack {
-                CornerHomeButton(label: "Back") { onClose() }
-                    .accessibilityIdentifier("rules.close")
-                Spacer()
+            switch exit {
+            case .close: SheetBar(title: title, onClose: onClose, closeID: "rules.close")
+            case .back: SheetBar(title: title, onBack: onClose, backID: "rules.close")
             }
-            .padding(.horizontal, 16)
-            .padding(.top, 14)
             GeometryReader { geo in
                 let roomy = sizeClass == .regular && geo.size.width >= 760
                 let width = min(geo.size.width - (roomy ? 64 : 40), roomy ? 1080 : sizeClass == .regular ? 640 : .infinity)
                 ScrollView {
                     VStack(spacing: roomy ? 22 : 18) {
-                        title
                         if GameCatalog.all.count > 1 { picker }
                         HowToVideoView(game: game, bounds: CGSize(width: width, height: geo.size.height * (roomy ? 0.66 : 0.72)))
                             .id(game.id)
@@ -63,10 +65,7 @@ struct HowToPlaySheet: View {
         .accessibilityIdentifier("sheet-rules")
     }
 
-    private var title: some View {
-        OutlinedText(String(localized: "How to play", comment: "Rules sheet title"), size: 34, fill: Palette.orange)
-            .accessibilityAddTraits(.isHeader)
-    }
+    private var title: String { String(localized: "How to play", comment: "Rules sheet title") }
 
     /// One chip per game in the catalog; the chosen one is lit in its own tint.
     private var picker: some View {

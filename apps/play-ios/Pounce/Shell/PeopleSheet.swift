@@ -56,7 +56,7 @@ struct PeopleSheet: View {
         VStack(spacing: 0) {
             HStack {
                 Spacer()
-                PillButton(icon: ArtName.iconBack, color: Palette.sky, size: .small, accessibilityLabel: "Close") {
+                SheetCloseButton() {
                     dismiss()
                 }
                 .accessibilityIdentifier("people.close")

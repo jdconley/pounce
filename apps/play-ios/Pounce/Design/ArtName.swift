@@ -119,6 +119,8 @@ enum ArtName {
     static let iconDelete = "icon-delete"
     /// Lobby seat bubble: close the seat.
     static let iconRemove = "icon-remove"
+    /// A sheet's close control (`SheetCloseButton`): the same chunky X as removing a seat.
+    static let iconClose = iconRemove
     /// Lobby seat bubble on your own cat: stand up.
     static let iconLeave = "icon-leave"
     /// Lobby seat bubble on your own cat: someone else on this phone sits here.

@@ -17,7 +17,7 @@ struct RenameSheet: View {
     var body: some View {
         VStack(spacing: 18) {
             HStack {
-                CornerHomeButton(icon: ArtName.iconBack, label: "Back") { onBack() }
+                SheetBackButton { onBack() }
                     .accessibilityIdentifier("rename.back")
                 Spacer()
             }

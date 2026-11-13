@@ -180,7 +180,7 @@ struct KittenCodeSheet: View {
             VStack(spacing: 18) {
                 HStack {
                     Spacer()
-                    PillButton(icon: ArtName.iconBack, color: Palette.sky, size: .small, accessibilityLabel: "Close") { dismiss() }
+                    SheetCloseButton() { dismiss() }
                         .accessibilityIdentifier("kittenCode.close")
                 }
                 KittenBellView()

@@ -140,6 +140,26 @@ extension XCTestCase {
         TableDebug(value(el(app, "table.debug")))
     }
 
+    /// Swipes the sheet `container` up until `e` can be tapped (a row below the fold of a
+    /// scrolling sheet). False if it never shows.
+    @discardableResult
+    func reveal(_ app: XCUIApplication, _ e: XCUIElement, in container: String, tries: Int = 6) -> Bool {
+        guard e.waitForExistence(timeout: Live.t(5)) else { return false }
+        for _ in 0..<tries where !e.isHittable {
+            el(app, container).swipeUp(velocity: .slow)
+            Thread.sleep(forTimeInterval: Live.pace(0.4))
+        }
+        return e.isHittable
+    }
+
+    /// Opens Settings' Account page from the Settings list.
+    func openSettingsAccount(_ app: XCUIApplication) {
+        let row = el(app, "settings.page.account")
+        XCTAssertTrue(reveal(app, row, in: "sheet-gear"), "no Account row in Settings")
+        row.tap()
+        XCTAssertTrue(el(app, "settings.back").waitForExistence(timeout: Live.t(5)), "the Account page didn't open")
+    }
+
     func screenshot(_ app: XCUIApplication, _ name: String) {
         let shot = XCTAttachment(screenshot: app.screenshot())
         shot.name = name

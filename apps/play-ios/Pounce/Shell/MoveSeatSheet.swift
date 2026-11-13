@@ -40,7 +40,7 @@ struct MoveSeatSheet: View {
     var body: some View {
         VStack(spacing: 20) {
             HStack {
-                CornerHomeButton(icon: ArtName.iconBack, label: "Back") { onBack() }
+                SheetBackButton { onBack() }
                     .accessibilityIdentifier("move.back")
                 Spacer()
             }

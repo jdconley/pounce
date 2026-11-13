@@ -1,8 +1,8 @@
 import PounceKit
 import SwiftUI
 
-/// The notification settings (spec §12.6), in pictures and numerals, shared by the gear sheet and
-/// the Us screen's gear: the bell for reminders ("your move" is unaffected), the last-chance
+/// The notification settings (spec §12.6), in pictures and numerals, on the Us screen's gear
+/// (Settings lays the same switches and dials out as rows and pages, `GearSheet`): the bell for reminders ("your move" is unaffected), the last-chance
 /// moon, the Auto chip and the live table (§11.3); the reminder time as two clock dials (weekdays,
 /// weekends) when not Auto; quiet hours as a moon dial and a sun dial. Each band's defaults show until someone changes them (§14.1). A
 /// kitten's device has only the local 17:00 reminder's bell.

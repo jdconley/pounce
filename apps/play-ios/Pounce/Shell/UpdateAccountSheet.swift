@@ -19,7 +19,7 @@ struct UpdateAccountSheet: View {
                 VStack(spacing: 22) {
                     HStack {
                         Spacer()
-                        PillButton(icon: ArtName.iconBack, color: Palette.sky, size: .small, accessibilityLabel: "Close") {
+                        SheetCloseButton() {
                             dismiss()
                         }
                         .accessibilityIdentifier("update.account.close")

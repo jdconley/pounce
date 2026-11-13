@@ -132,7 +132,7 @@ struct PersonPicker: View {
         VStack(spacing: 0) {
             HStack {
                 Spacer()
-                PillButton(icon: ArtName.iconBack, color: Palette.sky, size: .small, accessibilityLabel: "Close") {
+                SheetCloseButton() {
                     onClose()
                 }
                 .accessibilityIdentifier("picker.close")

@@ -146,7 +146,7 @@ struct InviteSheet: View {
 
     private var buttons: some View {
         HStack(spacing: 16 * scale) {
-            PillButton(icon: ArtName.iconBack, color: Palette.violet, size: .medium, accessibilityLabel: "Close", action: close)
+            PillButton(icon: ArtName.iconClose, color: Palette.violet, size: .medium, accessibilityLabel: "Close", action: close)
                 .accessibilityIdentifier("invite.close")
             switch loaded {
             case .link:
