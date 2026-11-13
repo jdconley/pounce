@@ -161,7 +161,7 @@ final class HowToVideoTests: XCTestCase {
 
         mark("draw")
         if let button = UISnap(app)?.frame("tiles.turn") {
-            app.coordinate(withNormalizedOffset: .zero).withOffset(CGVector(dx: button.midX, dy: button.midY)).press(forDuration: 1.0)
+            app.coordinate(withNormalizedOffset: .zero).withOffset(CGVector(dx: button.midX, dy: button.midY)).tap()
         }
         hold(3.0)
         mark("-end")

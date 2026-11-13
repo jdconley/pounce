@@ -48,7 +48,7 @@ struct TilesInputState {
     var side: TilesDraft.Side?
     /// The control held down (drawn pressed in).
     var pressed: Control?
-    /// A press and hold in progress (Draw, Pass, Reset) and when it began.
+    /// A press and hold in progress (Reset) and when it began.
     var hold: Control?
     var holdStart: TimeInterval?
     var lastPill: TilePieceFactory.Pill?
@@ -64,7 +64,8 @@ struct TilesInputState {
 
 extension TilesScene {
     private static let slop: CGFloat = 9
-    /// Draw, Pass and Reset end or throw away a turn, so each takes a short hold (spec §5.5).
+    /// Reset throws away a turn's work, so it takes a short hold. Draw and Pass are a tap: a hold
+    /// there read as a button that didn't work (JD, 2026-11-13).
     static let holdSeconds = 0.4
 
     private var composing: Bool { draft != nil && !sending }
@@ -91,7 +92,7 @@ extension TilesScene {
             if layout.reset.contains(point) { return .control(.reset) }
             if layout.sortNumber.contains(point) { return .control(.sortNumber) }
             if layout.sortToy.contains(point) { return .control(.sortToy) }
-            if layout.tidy.contains(point) { return .control(.tidy) }
+            if easy, layout.tidy.contains(point) { return .control(.tidy) }
         }
         if shownSeat != nil, layout.rack.height > 0, point.y < layout.strip.minY {
             let local = CGPoint(x: point.x + rackScroll, y: point.y)
@@ -144,8 +145,7 @@ extension TilesScene {
         input.what = hit(point)
         if case .control(let control) = input.what {
             input.pressed = control
-            let holds = control == .reset ? (composing && draft?.isUntouched == false)
-                : control == .turn ? (turnButton == .draw || turnButton == .pass) : false
+            let holds = control == .reset && composing && draft?.isUntouched == false
             if holds {
                 input.hold = control
                 input.holdStart = nil
@@ -595,12 +595,14 @@ extension TilesScene {
         case .loupeClose:
             closeLoupe()
         case .undo:
+            onTipUsed("tiles.undo")
             guard composing, var next = draft, next.undo() else { return nope(undoButton) }
             Sound.shared.play(ArtName.Sound.sfxFlip, volume: 0.5)
             Haptics.shared.tick()
             commit(next)
         case .reset:
             // Reached by its hold, or by VoiceOver.
+            onTipUsed("tiles.undo")
             guard composing, var next = draft, !next.isUntouched else { return nope(resetButton) }
             next.reset()
             Sound.shared.play(ArtName.Sound.sfxWhoosh, volume: 0.5)
@@ -616,16 +618,10 @@ extension TilesScene {
             saveDraft()
             redraw(animated: true)
         case .tidy:
+            // The slot holds easy mode's hint; the tidy toggle is gone (it only reordered sets).
             if easy {
+                onTipUsed("tiles.hint")
                 showHint()
-            } else {
-                let on = !(draft?.tidy ?? tidyPreference)
-                tidyPreference = on
-                draft?.tidy = on
-                Haptics.shared.tick()
-                Sound.shared.play(ArtName.Sound.sfxFlip, volume: 0.4)
-                saveDraft()
-                redraw(animated: true)
             }
         case .recap:
             showRecap()
@@ -634,7 +630,7 @@ extension TilesScene {
         }
     }
 
-    /// The turn button, tapped (or held to the end, for Draw and Pass).
+    /// The turn button, tapped.
     func pressTurn(held: Bool) {
         onTipUsed("tiles.turn")
         guard let seat = shownSeat, let draft, !sending else { return nope(turnPill) }
@@ -642,7 +638,7 @@ extension TilesScene {
         case .play:
             if let action = draft.action { send(action, seat: seat) }
         case .draw, .pass:
-            guard held || UIAccessibility.isVoiceOverRunning, let action = draft.action else { return holdHint(turnPill) }
+            guard let action = draft.action else { return nope(turnPill) }
             send(action, seat: seat)
         case .blocked(.brokenSet(let id)):
             reveal(set: id)

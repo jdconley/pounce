@@ -25,7 +25,11 @@ import Testing
             if meter { #expect(l.rugArt.minY >= l.meter.maxY) } else { #expect(l.meter == .zero) }
             #expect(l.rugArt.maxY <= l.opponentsBar.minY)
             #expect(l.rugArt.contains(l.rug))
-            #expect(l.rug.contains(l.pool))
+            // Nothing is drawn on the rug: the toy box sits under the paw menu, above the rug, and
+            // "what changed" takes the strip's right end.
+            #expect(!l.rugArt.intersects(l.pool) && !l.rugArt.intersects(l.recap))
+            #expect(l.pool.minY >= l.rugArt.maxY && l.pool.maxX <= l.size.width)
+            #expect(l.recap == l.tidy)
             #expect(l.rug.height > 180, "the rug is too short to play on: \(l.rug.height)")
             #expect(l.rugArt.minX >= 0 && l.rugArt.maxX <= l.size.width)
         }
@@ -42,10 +46,14 @@ import Testing
             #expect(paw.maxY <= s.size.height - s.top, "\(s.size) \(n) cats: the paw reaches into the status bar")
             #expect(paw.maxX <= s.size.width && paw.minX >= 0)
             let d = l.catDiameter
+            #expect(!l.pool.intersects(paw), "\(s.size) \(n) cats: the toy box sits on the paw")
             for (j, slot) in l.opponentSlots.enumerated() {
                 let cat = CGRect(x: slot.x - d / 2, y: slot.y + l.catLift - d / 2, width: d, height: d)
                 let shared = paw.intersection(cat)
                 #expect(shared.isNull || shared.width * shared.height <= 12, "\(s.size) \(n) cats, slot \(j): \(shared)")
+                // The toy box, and the cat's name under it (about 90 pt wide), stay apart.
+                let name = CGRect(x: slot.x - 45, y: slot.y - d / 2 - 22, width: 90, height: 22)
+                #expect(!l.pool.intersects(cat) && !l.pool.intersects(name), "\(s.size) \(n) cats, slot \(j): the toy box on a cat")
             }
         }
     }

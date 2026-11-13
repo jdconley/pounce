@@ -203,13 +203,10 @@ final class TilesTests: XCTestCase {
 
     // MARK: draw, pass, sort
 
-    func testDrawTakesAHold() {
-        // At normal speed: the hold's length is what this checks.
+    func testDrawIsATap() {
+        // At normal speed: a plain tap, as a person makes it, must draw (a hold read as a broken button).
         let app = launch("tiles", speed: 1)
         el(app, "tiles.turn").tap()
-        Thread.sleep(forTimeInterval: 0.6)
-        XCTAssertEqual(probe(app)["sent"], "-", "a tap drew a piece")
-        el(app, "tiles.turn").press(forDuration: 0.9)
         XCTAssertTrue(until(5) { self.probe(app)["sent"] == "draw" }, "\(probe(app))")
         // The piece lands at the right end of the stash.
         XCTAssertTrue(until(8) { self.probe(app)["rack"] == "10" }, "\(probe(app))")

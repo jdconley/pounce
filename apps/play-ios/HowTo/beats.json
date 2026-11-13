@@ -48,7 +48,7 @@
         { "seg": "tiles-open", "beat": "row", "caption": "A row: one toy, counting up." },
         { "seg": "tiles-open", "beat": "play", "caption": "48 points. Tap Play!" },
         { "seg": "tiles-open", "beat": "others", "caption": "Then everyone else takes a turn." },
-        { "seg": "tiles-open", "beat": "draw", "caption": "Nothing to play? Hold Draw." },
+        { "seg": "tiles-open", "beat": "draw", "caption": "Nothing to play? Tap Draw." },
         { "seg": "tiles-mid", "beat": "add", "caption": "After that, add to any set." },
         { "seg": "tiles-mid", "beat": "yarn", "caption": "Yarn is wild. Swap in the real toy." },
         { "seg": "tiles-mid", "beat": "rearrange", "caption": "Move anything on the rug." },

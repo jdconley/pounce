@@ -132,7 +132,7 @@ extension TilesScene {
             id: "tiles.pool",
             label: String(localized: "Toy box, \(model.view.poolCount) toys", comment: "VoiceOver: the pool and its count"),
             frame: layout.pool, traits: .staticText))
-        if !recap.isEmpty {
+        if !recap.isEmpty, !recapButton.isHidden {
             items.append(Item(
                 id: "tiles.recap", label: String(localized: "What changed", comment: "VoiceOver: replay what others placed since my turn"),
                 frame: square(recapButton.position)))
@@ -234,9 +234,6 @@ extension TilesScene {
                               traits: sort == .toy ? [.button, .selected] : .button))
             if easy {
                 items.append(Item(id: "tiles.hint", label: String(localized: "Show me", comment: "VoiceOver: the hint button"), frame: layout.tidy))
-            } else {
-                items.append(Item(id: "tiles.tidy", label: String(localized: "Tidy the rug", comment: "VoiceOver: the tidy toggle"), frame: layout.tidy,
-                                  traits: (draft?.tidy ?? tidyPreference) ? [.button, .selected] : .button))
             }
         }
 

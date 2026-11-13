@@ -3,8 +3,8 @@ import CoreGraphics
 /// Pure geometry for the tile game's table (tile game spec §5.2), in SpriteKit scene points
 /// (origin bottom-left, y up), computed for the real view size.
 ///
-/// Bands, top to bottom: the opponents bar (as Cat Tower's), the rug where the sets flow in rows
-/// with the toy box in its top right corner, the action strip (undo, reset, the turn button,
+/// Bands, top to bottom: the opponents bar (as Cat Tower's, with the toy box under the paw menu),
+/// the rug where the sets flow in rows (nothing is ever drawn on it), the action strip (undo, reset, the turn button,
 /// the sort and tidy toggles, with the opening meter riding on its top edge before the seat has
 /// opened), and the stash: rows of seven pieces 48 pt wide on a phone.
 public struct TilesLayout: Equatable, Sendable {
@@ -34,8 +34,11 @@ public struct TilesLayout: Equatable, Sendable {
     public let rug: CGRect
     /// How much larger than its art the rug's border is drawn (bigger on a roomy screen).
     public let rugBorderScale: CGFloat
-    /// The toy box, in the rug's top right corner.
+    /// The toy box and its count, under the paw menu in the opponents bar's right column (clear of
+    /// the cats). Never on the rug: anything drawn over the sets hid pieces (JD, 2026-11-13).
     public let pool: CGRect
+    /// The "what changed" button: the strip's right end (the slot easy mode's hint uses).
+    public let recap: CGRect
     /// A rug piece at its largest (a small table) and smallest (a full one).
     public let rugPieceMax: CGFloat
     public let rugPieceMin: CGFloat
@@ -146,6 +149,8 @@ public struct TilesLayout: Equatable, Sendable {
             ? CGRect(x: turnMid - meterW / 2 + meterH * 0.5, y: strip.maxY - 2, width: meterW, height: meterH)
             : .zero
 
+        recap = tidy
+
         // The rug: everything between the strip (and the meter) and the opponents bar.
         let rugBottom = (meter && controls ? self.meter.maxY : strip.maxY) + (controls ? 6 : safeBottom + 12)
         let rugTop = opponentsBar.minY - (roomy ? 10 : 6)
@@ -156,8 +161,9 @@ public struct TilesLayout: Equatable, Sendable {
         rugBorderScale = roomy ? 2.4 : 1.5
         let border: CGFloat = roomy ? 26 : 14
         rug = art.insetBy(dx: border - 1, dy: border + 3)
-        let poolSide: CGFloat = roomy ? 84 : 58
-        pool = CGRect(x: rug.maxX - poolSide, y: rug.maxY - poolSide, width: poolSide, height: poolSide)
+        let poolSide: CGFloat = roomy ? 48 : 36
+        let poolY = max(menuButton.y - base.menuSide / 2 - (roomy ? 8 : 4) - poolSide / 2, art.maxY + poolSide / 2 + 2)
+        pool = CGRect(x: menuButton.x - poolSide / 2, y: poolY - poolSide / 2, width: poolSide, height: poolSide)
 
         // Rug pieces: 30 pt on a 393 pt phone, shrinking to 24 as the table fills (spec §5.7).
         let scale = roomy ? min(max(min(size.width, size.height) / 500, 1.3), 1.7) : min(max(width / 393, 0.94), 1.12)
