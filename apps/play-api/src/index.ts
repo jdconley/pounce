@@ -48,7 +48,7 @@ import { newRoomCode, ROOM_CODE } from "./room/codes";
 import { DEVICE_HEADER, PLAYER_HEADER } from "./room/game-room";
 import { parseRoomName } from "./room/names";
 import { lockedFor, withoutUndrawable } from "./room/tables";
-import { blockPlayer, guardJoin, listBlocks, mayMint, nameCheck, ownerReports, reportPlayer, unblockPlayer } from "./safety/safety";
+import { blockPlayer, guardJoin, listBlocks, mayMint, nameCheck, ownerReports, peekInvite, reportPlayer, unblockPlayer } from "./safety/safety";
 import { creatorLook, isMine, leavePair, myLeft, myOwn, myStreaks, myTrophies, PAIR_ID, pairStub, rejoinPair, syncPairPeople } from "./streaks/pairs";
 import { consentOn, liveOn, notifyOn, streaksOn, trophyOn } from "./streaks/profile";
 
@@ -598,7 +598,12 @@ export default {
       if (pathname.startsWith("/media/")) return (await mediaFile(request, env.ASSETS)) ?? notFound();
     }
     const share = method === "GET" ? SHARE_PATH.exec(pathname) : null;
-    if (share) return sharePage(share[1] as string, install(env), new URL(request.url).origin, gamesOn(env).length > 1);
+    if (share) {
+      const code = share[1] as string;
+      // Who invited, to what: only for a well-formed code, and guarded like a guess at it.
+      const peek = ROOM_CODE.test(code) ? await peekInvite(env, code, clientIp(request), Date.now()) : "hidden";
+      return sharePage(code, install(env), new URL(request.url).origin, peek, gamesOn(env).length > 1);
+    }
     if (notify && method === "GET") {
       // The pounce card reuses the room card until the bell art lands (§9.6).
       if (pathname === "/og/pounce.jpg") return ogImage();

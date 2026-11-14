@@ -167,7 +167,14 @@ describe("version 1.0 sends no X-Pounce-App, and is answered exactly as before",
     await add("GET", `/v1/rooms/${tiles}/ws`, socket(phone));
     await add("GET", `/j/${tiles}`, {});
     await add("GET", "/healthz", {});
-    const scrub = (text: string) => text.replaceAll(code, "CODE1").replaceAll(tiles, "CODE2").replace(/"(deviceId|token)":"[^"]+"/g, '"$1":"…"');
+    // A table's generated name differs from one run to the next (the invite page shows it).
+    const scrub = (text: string) =>
+      text
+        .replaceAll(code, "CODE1")
+        .replaceAll(tiles, "CODE2")
+        .replace(/"(deviceId|token)":"[^"]+"/g, '"$1":"…"')
+        .replace(/(<p class="table">)[^<]*/g, "$1…")
+        .replace(/(og:description" content="[^"·]*· )[^"]*/g, "$1…");
     return answers.map((a) => ({ status: a.status, body: scrub(a.body), headers: Object.fromEntries(Object.entries(a.headers).filter(([k]) => k !== "date" && k !== "sec-websocket-accept")) }));
   }
 

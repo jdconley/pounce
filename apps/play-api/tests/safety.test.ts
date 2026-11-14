@@ -333,3 +333,82 @@ describe("joining by code", { timeout: 60_000 }, () => {
     expect(statuses).toEqual([...Array.from({ length: 10 }, () => 200), 429]);
   });
 });
+
+describe("the invite page's look at a table (/j/<code>)", { timeout: 60_000 }, () => {
+  const page = (mf: Miniflare, code: string, ip = "198.51.100.20") =>
+    mf.dispatchFetch(`${BASE}/j/${code}`, { headers: { "cf-connecting-ip": ip } }) as unknown as Promise<Response>;
+
+  /** A lobby with `person` in the host's seat. */
+  async function lobby(mf: Miniflare, device: Device, person: Person): Promise<{ code: string; name: string }> {
+    const code = await createRoom(mf, device);
+    const c = await connect(mf, code, device);
+    c.send({ t: "claim", seat: 0, person: face(person) });
+    const s = await c.until((m) => m.room.seats[0]?.person?.name === person.name);
+    c.ws.close();
+    return { code, name: s.room.name as string };
+  }
+
+  test("names who saved the seat, the game and the table", async () => {
+    const mf = await start();
+    const phone = await mint(mf);
+    const jd = newPerson("JD", 1);
+    await profile(mf, phone, [jd]);
+    const { code, name } = await lobby(mf, phone, jd);
+    const res = await page(mf, code);
+    expect(res.status).toBe(200);
+    expect(res.headers.get("cache-control")).toBe("no-store");
+    const html = await res.text();
+    expect(html).toContain("<h1>JD saved you a seat</h1>");
+    expect(html).toContain('<p class="game cat-tower">Cat Tower</p>');
+    expect(html).toContain(`<p class="table">${name}</p>`);
+    expect(html).toContain(`<meta property="og:title" content="JD saved you a seat">`);
+    expect(html).toContain(`<strong>${code}</strong>`);
+  });
+
+  test("a code with no table is the expired page, and counts as a wrong guess", async () => {
+    const mf = await start();
+    const phone = await mint(mf);
+    const jd = newPerson("JD", 1);
+    await profile(mf, phone, [jd]);
+    const { code } = await lobby(mf, phone, jd);
+    const ip = "198.51.100.21";
+    const unknown = await page(mf, "BCDFG", ip);
+    expect(unknown.status).toBe(404);
+    expect(await unknown.text()).toContain("This invite has expired");
+    // 20 wrong guesses an hour are free; the next locks the address out.
+    for (let i = 0; i < 20; i++) await (await page(mf, "BCDFG", ip)).arrayBuffer();
+    // Locked out: every code, real or not, gets the same page, naming nobody.
+    const real = await (await page(mf, code, ip)).text();
+    const none = await page(mf, "BCDFH", ip);
+    expect(none.status).toBe(200);
+    expect(real).toContain("<h1>Come play Pounce</h1>");
+    expect(real).not.toContain("JD saved");
+    expect(real).not.toContain('class="game');
+    expect(real.replaceAll(code, "BCDFH")).toBe(await none.text());
+    // Another address still sees the table.
+    expect(await (await page(mf, code, "198.51.100.22")).text()).toContain("JD saved you a seat");
+  });
+
+  test("a real table is never a wrong guess", async () => {
+    const mf = await start();
+    const phone = await mint(mf);
+    const jd = newPerson("JD", 1);
+    await profile(mf, phone, [jd]);
+    const { code } = await lobby(mf, phone, jd);
+    for (let i = 0; i < 25; i++) await (await page(mf, code, "198.51.100.23")).arrayBuffer();
+    expect(await (await page(mf, code, "198.51.100.23")).text()).toContain("JD saved you a seat");
+  });
+
+  test("a kitten's table names nobody and keeps its name", async () => {
+    const mf = await start();
+    const kid = await mint(mf);
+    const mochi = newPerson("Mochi", 3);
+    await profile(mf, kid, [mochi], { band: "kitten" });
+    const { code, name } = await lobby(mf, kid, mochi);
+    const html = await (await page(mf, code)).text();
+    expect(html).toContain("<h1>Come play Pounce</h1>");
+    expect(html).toContain('<p class="game cat-tower">Cat Tower</p>');
+    expect(html).not.toContain("Mochi");
+    expect(html).not.toContain(name);
+  });
+});

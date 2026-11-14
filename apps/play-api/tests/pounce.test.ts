@@ -214,8 +214,11 @@ describe("pounce through Messages (§12.4)", { timeout: 30_000 }, () => {
     const page = await mf.dispatchFetch(`${BASE}/p/${token}`);
     expect(page.status).toBe(200);
     const html = await page.text();
-    expect(html).toContain("JD wants to play");
-    expect(html).toContain(`${BASE}/og/pounce.jpg`);
+    expect(html).toContain("<h1>JD wants to play</h1>");
+    expect(html).toContain('<p class="game cat-tower">Cat Tower</p>');
+    expect(html).toContain(`data-invite="${link}"`);
+    expect(html).toMatch(new RegExp(`<meta property="og:image" content="${BASE}/static/invite-cat-tower\\.[a-f0-9]{10}\\.jpg">`));
+    // Previews made before the per-game art still find their card.
     const card = await mf.dispatchFetch(`${BASE}/og/pounce.jpg`);
     expect(card.headers.get("content-type")).toBe("image/jpeg");
     expect((await card.arrayBuffer()).byteLength).toBeGreaterThan(10_000);
