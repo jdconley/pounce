@@ -12,7 +12,8 @@ import SwiftUI
 ///   under them as compact tickets; with no table, or only finished ones, the games lead as
 ///   posters. An iPad lays the games out as a grid, beside your tables when it is on its side.
 /// - The dock: Invite and Join. Its own band: nothing scrolls under it. With no table yet,
-///   Practice takes Invite's place (the strip has Invite too), so it is never under the dock.
+///   Practice joins the dock too (its own row over Invite and Join when both show), so it is
+///   never under the dock.
 ///
 /// Long-press a table to archive it; the sleeping-cat tile at the end of the tables opens the
 /// archived ones.
@@ -331,17 +332,22 @@ struct HomeView: View {
     /// to a game (Invite once the server has connections). The column ends at its edge.
     private func dock(width: CGFloat, bottomInset: CGFloat) -> some View {
         let practice = showPractice
-        let invite = showStrip && !practice
+        let invite = showStrip
+        // Practice beside Join, or on a row of its own over Invite and Join.
+        let ownRow = practice && invite
         let pair = invite || practice
         let gap: CGFloat = 12
         let pill: CGFloat =
             roomy
             ? 300
             : pair ? max(130, min(220, (width - 32 - gap) / 2)) : max(160, min(280, width - 32))
-        return HStack(spacing: gap) {
-            if practice { practicePill(width: pill) }
-            if invite { invitePill(width: pill) }
-            joinPill(width: pill)
+        return VStack(spacing: roomy ? 14 : 10) {
+            if ownRow { practicePill(width: pill * 2 + gap, size: .small) }
+            HStack(spacing: gap) {
+                if practice && !ownRow { practicePill(width: pill) }
+                if invite { invitePill(width: pill) }
+                joinPill(width: pill)
+            }
         }
         .animation(.spring(duration: 0.35, bounce: 0.4).paced, value: invite)
         .animation(.spring(duration: 0.35, bounce: 0.4).paced, value: practice)
@@ -403,9 +409,9 @@ struct HomeView: View {
     /// in the dock beside Join.
     private var showPractice: Bool { shownItems.isEmpty && lead != nil }
 
-    private func practicePill(width: CGFloat) -> some View {
+    private func practicePill(width: CGFloat, size: PillSize? = nil) -> some View {
         PillButton(
-            icon: ArtName.badgeBot, color: Palette.orange, size: roomy ? .large : .medium, width: width,
+            icon: ArtName.badgeBot, color: Palette.orange, size: size ?? (roomy ? .large : .medium), width: width,
             title: String(localized: "Practice", comment: "Home, with no tables: starts a game against the computer player"),
             accessibilityLabel: "Practice with the House Cat"
         ) {

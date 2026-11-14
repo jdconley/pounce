@@ -54,15 +54,17 @@ final class UITipsTests: XCTestCase {
         XCTAssertTrue(until(10) { self.tip(app) == "ui.home.shelf" })
         el(app, "tip").tap()
         XCTAssertTrue(until(2) { self.tip(app) != "ui.home.shelf" }, "the bubble stayed after a tap")
-        XCTAssertTrue(until(10) { self.tip(app) == "ui.home.practice" }, "no Practice tip next: \(String(describing: tip(app)))")
+        // One tip a visit to Home (first-run funnel): nothing follows it.
+        Thread.sleep(forTimeInterval: Live.pace(3, floor: 0.6))
+        XCTAssertNil(tip(app), "a second tip on the same visit")
         // Join used before its tip ever showed: learned, so it never comes.
         el(app, "home.join").tap()
         XCTAssertTrue(el(app, "screen-join").waitForExistence(timeout: Live.t(5)), "no Join screen")
         XCTAssertNil(tip(app), "a Home tip over Join")
         el(app, "join.back").tap()
         XCTAssertTrue(el(app, "screen-home").waitForExistence(timeout: Live.t(5)))
-        Thread.sleep(forTimeInterval: Live.pace(3, floor: 0.6))
-        XCTAssertNotEqual(tip(app), "ui.home.join", "Join's tip showed after Join was used")
+        // The next visit gets the next tip, never Join's.
+        XCTAssertTrue(until(10) { self.tip(app) == "ui.home.practice" }, "no Practice tip next visit: \(String(describing: tip(app)))")
     }
 
     /// Off unless asked: a UI test run (and every demo) shows no tips.

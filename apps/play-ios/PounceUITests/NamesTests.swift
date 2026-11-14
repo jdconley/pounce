@@ -13,20 +13,16 @@ class NamesTests: XCTestCase {
         let app = Live.app()
         app.launch()
 
-        // The name is the obvious step: asked for, the field focused, nothing filled in yet.
+        // A name is suggested and the keyboard waits, so every cat shows (first-run funnel).
         let confirm = el(app, "pickcat.confirm")
         XCTAssertTrue(confirm.waitForExistence(timeout: Live.t(15)), "no pick-a-cat screen")
         XCTAssertTrue(el(app, "pickcat.prompt").exists, "no name prompt")
         let field = app.textFields["pickcat.name"]
+        XCTAssertEqual(app.keyboards.count, 0, "the keyboard came up on its own")
+        XCTAssertFalse((value(field) ?? "").isEmpty, "no suggested name")
+        // Tapping the name selects it: typing replaces it.
+        field.tap()
         XCTAssertTrue(until(5) { app.keyboards.count > 0 }, "the name field isn't focused")
-        let suggestion = field.placeholderValue ?? ""
-        XCTAssertFalse(suggestion.isEmpty, "no suggested name")
-        let typed = value(field) ?? ""
-        XCTAssertTrue(typed.isEmpty || typed == suggestion, "the field isn't empty: \(typed)")
-        // The suggestion is a placeholder: the check won't take it.
-        confirm.tap()
-        XCTAssertFalse(el(app, "home.newGame").waitForExistence(timeout: Live.t(2)), "an empty name went through")
-        XCTAssertTrue(confirm.exists)
 
         field.typeText("Zelda Q")
         screenshot(app, "names-first-launch")

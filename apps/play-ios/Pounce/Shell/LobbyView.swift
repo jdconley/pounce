@@ -92,6 +92,8 @@ struct LobbyView: View {
             if confirmingStart, let table, let messages = table.startClosingOpenSeats {
                 StartConfirm(players: table.playerCount, open: table.blockingSeats.count) {
                     confirmingStart = false
+                    // The QR code goes, or it would open a seat again as the others close.
+                    showQR = false
                     for message in messages { session.send(message) }
                 } onWait: {
                     confirmingStart = false
@@ -505,6 +507,7 @@ struct LobbyView: View {
         lastTapped = .start
         model.tips.used("lobby.start")
         if table.canStart {
+            showQR = false
             session.send(.start)
             return
         }
