@@ -79,7 +79,7 @@ describe("sharePage: a table that says who invited", () => {
   test("the one button copies the page's link and opens the store, and says what to do next", async () => {
     const html = await sharePage("BCDFG", TF, ORIGIN, GRANDMA).text();
     expect(html).toContain(
-      `<a class="go" id="get" href="${TESTFLIGHT}" data-invite="${ORIGIN}/j/BCDFG" data-copied="Invite copied">Get Pounce</a>\n<p class="next">Then open Pounce and tap Paste invite.</p>`,
+      `<a class="go" id="get" href="${TESTFLIGHT}" data-invite="${ORIGIN}/j/BCDFG" data-copied="Invite copied">Get Pounce</a>\n<p class="next">Then open Pounce and tap Paste.</p>`,
     );
     expect(html.match(/<a /g)).toHaveLength(1);
   });
@@ -171,7 +171,7 @@ describe("sharePage: a table it can't speak of", () => {
   test("without a store link there is no button, only the code", async () => {
     const html = await sharePage("BCDFG", NONE, ORIGIN, GRANDMA).text();
     expect(html).not.toContain("<a ");
-    expect(html).not.toContain("Paste invite");
+    expect(html).not.toContain("tap Paste");
     expect(html).toContain("<strong>BCDFG</strong>");
   });
 
@@ -217,7 +217,7 @@ describe("with pounce links (§12.4)", () => {
     expect(meta(html, "og:url")).toBe(`${ORIGIN}/p/${token}`);
     expect(meta(html, "og:image")).toBe(`${ORIGIN}${MEDIA.invite.previews["cat-tower"]}`);
     expect(html).toContain(`id="get" href="${TESTFLIGHT}" data-invite="${ORIGIN}/p/${token}"`);
-    expect(html).toContain("Then open Pounce and tap Paste invite.");
+    expect(html).toContain("Then open Pounce and tap Paste.");
     expect(html).not.toContain('class="code"');
     expect(html).not.toMatch(/\p{Extended_Pictographic}/u);
   });

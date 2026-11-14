@@ -106,7 +106,7 @@ function getButton(install: Install, invite: string | null): string {
   const href = escapeHtml(to.url);
   const button = invite
     ? `<a class="go" id="get" href="${href}" data-invite="${escapeHtml(invite)}" data-copied="Invite copied">Get Pounce</a>
-<p class="next">Then open Pounce and tap Paste invite.</p>`
+<p class="next">Then open Pounce and tap Paste.</p>`
     : `<a class="go" href="${href}">Get Pounce</a>`;
   return `${button}${to.beta ? `\n${BETA_NOTE}` : ""}`;
 }
