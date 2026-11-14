@@ -168,14 +168,14 @@ describe("creating a tile game table", { timeout: 30_000 }, () => {
     expect(room.seats).toHaveLength(4);
   });
 
-  test("the invite page says what to do when the app can't find a table, for every code alike", async () => {
+  test("the invite page names the game, and tells someone with an older app to update", async () => {
     const mf = await start();
     const phone = await mint(mf);
     const code = await tilesRoom(mf, phone);
     const real = await (await mf.dispatchFetch(`${BASE}/j/${code}`)).text();
-    const none = await (await mf.dispatchFetch(`${BASE}/j/BCDFG`)).text();
-    expect(real).toContain("It may be a newer game. Update Pounce, then tap this link again.");
-    expect(real.replaceAll(code, "BCDFG")).toBe(none);
+    expect(real).toContain('<p class="game tiles">Tuna Tiles</p>');
+    expect(real).toContain("Have Pounce? Update it first.");
+    expect((await mf.dispatchFetch(`${BASE}/j/BCDFG`)).status).toBe(404);
   });
 });
 

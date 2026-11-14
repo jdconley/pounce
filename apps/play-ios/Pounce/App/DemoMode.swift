@@ -35,6 +35,9 @@ import PounceKit
 /// step; a card is discarded by itself and the server never answers, so it waits under its
 /// hourglass) and `seatLink` (Kiki's turn, Kiki's phone weak, Leo's reconnecting).
 enum DemoMode: String {
+    /// `lobbyFirst`: a host's first table, a House Cat already seated (first-run funnel).
+    /// `lobbyGuest`: a guest's lobby at Grandma's table (no host controls up front).
+    case lobbyFirst, lobbyGuest
     case lobby, lobbyReady, lobbyFamily, table, other, replay, nope, celebrate, curtain, handoff, peek, crowded, crowdedHit, hit, lay, over
     case weak, reconnecting, pending, seatLink
     /// Kiki (seat 2) forfeits a second in (§5.13): the pill, then her seat dimmed and tagged.
@@ -83,6 +86,21 @@ enum DemoMode: String {
             return TilesDemo.room(self)
         case .howto: return DemoFixtures.howTo()
         case .lobby: return DemoFixtures.lobby()
+        case .lobbyFirst:
+            var room = DemoFixtures.lobby()
+            room.seats = [room.seats[0], SeatView(kind: .bot), SeatView(kind: .closed), SeatView(kind: .closed),
+                          SeatView(kind: .closed), SeatView(kind: .closed)]
+            return room
+        case .lobbyGuest:
+            var room = DemoFixtures.lobby()
+            room.youAreHost = false
+            let me = room.seats[0].person
+            room.seats = [
+                SeatView(kind: .human, person: Person(id: "demo-grandma", name: "Grandma", cat: 4), presence: .awake),
+                SeatView(kind: .human, person: me, yours: true, presence: .awake),
+                SeatView(kind: .closed), SeatView(kind: .closed), SeatView(kind: .closed), SeatView(kind: .closed),
+            ]
+            return room
         case .lobbyFamily: return DemoFixtures.familyLobby()
         case .lobbyReady:
             var room = DemoFixtures.lobby()

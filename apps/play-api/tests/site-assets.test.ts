@@ -159,7 +159,6 @@ describe("the Worker with its static assets", () => {
       ["/", "<h1 id=\"top\">"],
       ["/support", "House Cat"],
       ["/privacy", 'id="coppa"'],
-      ["/j/BCDFG", "Join the game"],
       ["/healthz", '"service":"play-api"'],
       ["/robots.txt", "Sitemap:"],
       ["/sitemap.xml", "<urlset"],
@@ -168,6 +167,10 @@ describe("the Worker with its static assets", () => {
       expect(res.status, path).toBe(200);
       expect(await res.text(), path).toContain(marker);
     }
+    // An invite to no table is the Worker's expired page, not a file.
+    const invite = await mf.dispatchFetch(`${BASE}/j/BCDFG`);
+    expect(invite.status).toBe(404);
+    expect(await invite.text()).toContain("This invite has expired");
     // Paths with no route are the Worker's JSON 404, never a file listing or a file.
     for (const path of ["/_headers", "/static", "/static/", "/media", "/index.html", "/v1/rooms", "/.well-known/", "/favicon.ico/x"]) {
       const res = await mf.dispatchFetch(`${BASE}${path}`);

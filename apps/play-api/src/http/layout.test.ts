@@ -5,7 +5,7 @@ import { noticePage } from "../consent/pages";
 
 import { homePage } from "./home";
 import { BASE, TOKENS, docPage, shell } from "./layout";
-import { deadLinkPage, pouncePage, sharePage } from "./links";
+import { deadLinkPage, INVITE_SCRIPT, pouncePage, sharePage } from "./links";
 import { privacyPage } from "./privacy";
 import { supportPage } from "./site";
 import { MEDIA } from "./site-media";
@@ -25,6 +25,7 @@ const pages = (): [string, Response][] => [
   ["privacy, no consent", privacyPage(false)],
   ["notice to parents", noticePage()],
   ["room invite", sharePage("BCDFG", { appStoreUrl: APP_STORE }, ORIGIN)],
+  ["room invite, named", sharePage("BCDFG", { appStoreUrl: APP_STORE }, ORIGIN, { table: "Kitchen", game: "tiles", host: { name: "Mia", cat: 2 } })],
   ["pounce invite", pouncePage({ name: "Mia", cat: 2 }, "A".repeat(22), { testflightUrl: TESTFLIGHT }, ORIGIN)],
   ["expired invite", deadLinkPage({})],
 ];
@@ -59,8 +60,10 @@ describe("no page loads anything from another host", () => {
       }
       // No stylesheet, font or import by URL, and no CSS url() at all.
       expect(html, name).not.toMatch(/url\(|@import|@font-face|<link[^>]+rel="stylesheet"|<iframe|<object|<embed/i);
-      // No script that runs: the landing page's structured data is the only script element anywhere.
-      expect((html.match(/<script[^>]*>/g) ?? []).filter((tag) => tag !== '<script type="application/ld+json">'), name).toEqual([]);
+      // No script that runs but the invite pages' one (it copies the invite, `INVITE_SCRIPT`,
+      // allowed by its hash alone); the landing page's structured data is the only other script element.
+      const scripts = [...html.matchAll(/<script[^>]*>([^<]*)<\/script>/g)].filter((m) => !m[0].startsWith('<script type="application/ld+json">'));
+      for (const m of scripts) expect(m[1], name).toBe(INVITE_SCRIPT);
       // The policy the browser enforces says the same.
       const csp = res.headers.get("content-security-policy") ?? "";
       expect(csp, name).toContain("default-src 'none'");

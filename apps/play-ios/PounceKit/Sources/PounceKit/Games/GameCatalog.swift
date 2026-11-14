@@ -84,6 +84,12 @@ public enum GameCatalog {
         all.first { $0.id == id }
     }
 
+    /// A table's game by name, for share text and titles: a game this app doesn't know, or a
+    /// table from before tables had a game (nil), is the one the server dealt then.
+    public static func title(of id: String?) -> String {
+        id.flatMap { entry(id: $0) }?.title ?? dealt.title
+    }
+
     /// The shelf, top to bottom: the games you can start, then the ones on the way, each group in
     /// catalog order.
     public static func shelf(_ entries: [Entry] = all) -> [Entry] {

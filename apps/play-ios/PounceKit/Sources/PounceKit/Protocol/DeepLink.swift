@@ -86,3 +86,19 @@ public enum DeepLink: Equatable, Sendable {
         }
     }
 }
+
+extension DeepLink {
+    /// What "Paste invite" found in the pasteboard's text: the first share, move or pounce link
+    /// in it (a whole invite message works, links in it may be wrapped in punctuation), or a room
+    /// code on its own. The invite pages copy the bare link; Messages and notes add words around it.
+    public static func pasted(_ text: String, allowDevScheme: Bool = false) -> DeepLink? {
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        if RoomCode.isValid(trimmed.uppercased()) { return .join(code: trimmed.uppercased()) }
+        let wrapping = CharacterSet(charactersIn: "<>()[]{}\"'\u{201C}\u{201D}\u{2018}\u{2019}.,;:!?")
+        for word in trimmed.split(whereSeparator: { $0.isWhitespace }) {
+            let candidate = String(word).trimmingCharacters(in: wrapping)
+            if let url = URL(string: candidate), let link = parse(url, allowDevScheme: allowDevScheme) { return link }
+        }
+        return nil
+    }
+}

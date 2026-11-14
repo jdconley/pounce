@@ -28,7 +28,8 @@ final class FunnelShotTests: XCTestCase {
 
     private func launch(_ extra: [String]) -> XCUIApplication {
         let app = XCUIApplication()
-        app.launchArguments = Live.arguments() + ["-uitest-reset", "-age-range", "declined", "-tips", "-ui-tips"] + extra
+        app.launchArguments = Live.arguments() + ["-uitest-reset", "-age-range", "declined", "-tips", "-ui-tips", "-house-cat"]
+            + extra
         app.launchEnvironment["POUNCE_API_BASE_URL"] = Live.baseURL
         app.launch()
         return app
@@ -43,6 +44,8 @@ final class FunnelShotTests: XCTestCase {
         save("\(prefix)-age-confirm")
         el(app, "age.yes").tap()
         XCTAssertTrue(el(app, "screen-pickCat").waitForExistence(timeout: Live.t(10)), "no pick-a-cat")
+        // An invited guest's line comes from a peek at the table.
+        _ = el(app, "pickcat.invite").waitForExistence(timeout: prefix == "invited" ? Live.t(8) : 0.5)
         save("\(prefix)-pickcat")
         let name = el(app, "pickcat.name")
         name.tap()
@@ -59,16 +62,21 @@ final class FunnelShotTests: XCTestCase {
         age(app, prefix: "new")
         XCTAssertTrue(el(app, "screen-home").waitForExistence(timeout: Live.t(15)), "no Home")
         save("new-home", settle: 2.5)
-        // The first tip, dismissed, shows the next.
-        for i in 0..<3 {
-            let tip = app.descendants(matching: .any).matching(identifier: "tip").firstMatch
-            guard tip.waitForExistence(timeout: 2) else { break }
+        // One tip on the first visit: dismissed, no other follows.
+        let tip = app.descendants(matching: .any).matching(identifier: "tip").firstMatch
+        if tip.waitForExistence(timeout: 2) {
             tip.tap()
-            save("new-home-tip\(i + 2)")
+            save("new-home-after-tip", settle: 3.5)
         }
         el(app, "home.newGame").tap()
         _ = el(app, "lobby.seat.0").waitForExistence(timeout: Live.t(20))
         save("new-lobby", settle: 2.5)
+        let qr = el(app, "lobby.qr")
+        if qr.exists {
+            qr.tap()
+            save("new-lobby-same-room", settle: 1.5)
+            qr.tap()
+        }
         el(app, "lobby.home").tap()
         XCTAssertTrue(el(app, "screen-home").waitForExistence(timeout: Live.t(10)))
         let practice = el(app, "home.practice")

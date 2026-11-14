@@ -25,6 +25,9 @@ final class AppModel {
     /// Set when creating a room failed; cleared by the next attempt.
     var newGameError: APIError?
     private(set) var isCreatingRoom = false
+    /// A first table gets a House Cat (first-run funnel). Off in staged runs (UI tests,
+    /// screenshots), like the tips, unless `-house-cat` turns it on.
+    @ObservationIgnored private var firstTableCat = true
     /// The one live room connection (spec §7.2): the room on screen, or a typed code being
     /// checked from Join. Replaced or closed whenever the route leaves it.
     private(set) var room: RoomSession?
@@ -84,6 +87,12 @@ final class AppModel {
     var pick: PickRequest?
     /// A Messages link that no longer works: the worded "This invite has expired" card.
     var expiredInviteShown = false
+    /// A Messages link that couldn't be looked up (no connection): its token, for the card's Try again.
+    var offlineInvite: String?
+    /// Whether the pasteboard looks like it holds a link, for "Paste invite" (first-run funnel, part 2).
+    let pasteboard = PasteboardWatch()
+    /// Bumped when what was pasted isn't an invite: the paste card shakes and says so.
+    private(set) var pasteNope = 0
     /// The widgets' snapshot, reloads and push token (spec §11.2).
     @ObservationIgnored let widgets: WidgetBridge
     /// The live table's tokens and ends (spec §11.3).
@@ -291,12 +300,21 @@ final class AppModel {
             model.handle(link)
         }
         model.startTips(arguments: arguments, env: env)
+        model.startPasteboard(arguments: arguments, env: env)
         return model
         #else
         let model = real(config: config)
         model.startTips(arguments: arguments, env: env)
+        model.startPasteboard(arguments: arguments, env: env)
         return model
         #endif
+    }
+
+    /// "Paste invite" is off wherever a run is staged (UI tests, demos, screenshots: a link left
+    /// in the simulator's pasteboard must not cover their Home), unless `-paste-invite` asks for it.
+    private func startPasteboard(arguments: [String], env: [String: String]) {
+        pasteboard.enabled = !RatingPrompt.isStaged(arguments: arguments, env: env) || arguments.contains("-paste-invite")
+        pasteboard.refresh()
     }
 
     /// UI tips are off wherever a run is staged (demos, UI tests, screenshots and videos: the
@@ -305,13 +323,15 @@ final class AppModel {
     private func startTips(arguments: [String], env: [String: String]) {
         tips.enabled = (!RatingPrompt.isStaged(arguments: arguments, env: env) || arguments.contains("-ui-tips"))
             && !arguments.contains("-no-tips")
+        firstTableCat = !RatingPrompt.isStaged(arguments: arguments, env: env) || arguments.contains("-house-cat")
         tips.who = { [weak self] in
             guard let self else { return (nil, nil, false) }
             return (people.owner?.id, ageBand, !people.others.isEmpty)
         }
         tips.blocked = { [weak self] in
             guard let self else { return true }
-            return pick != nil || inviteShown || expiredInviteShown || updates.required != nil || kittensPanel != nil
+            return pick != nil || inviteShown || expiredInviteShown || offlineInvite != nil || offersPasteInvite
+                || updates.required != nil || kittensPanel != nil
         }
         tips.onChange = { [weak self] in self?.account.noteLocalChanges() }
         // Home's old one-time archive hint: whoever closed it has learned the tip.
@@ -823,15 +843,25 @@ final class AppModel {
         newGameError = nil
         defer { isCreatingRoom = false }
         do {
+            // Before `open`, which caches the new table.
+            let first = isFirstTable
             let code = try await api.createRoom(game: game.id)
             open(code: code, intent: .create)
-            if practice { room?.practicePending = true }
+            if practice {
+                room?.practicePending = true
+            } else if first && firstTableCat {
+                room?.firstTablePending = true
+            }
         } catch let error as APIError {
             newGameError = error
         } catch {
             newGameError = .transport(String(describing: error))
         }
     }
+
+    /// No table on this phone, listed, cached or archived: whoever starts one now is a
+    /// first-time host, and their lobby opens with a House Cat so Start is lit.
+    var isFirstTable: Bool { tables.isEmpty && cache.isEmpty && archived.isEmpty }
 
     func open(code: String, intent: RoomIntent) {
         // A push tap or a link while the invite sheet is up: the table, not the sheet over it.
@@ -1041,6 +1071,18 @@ final class AppModel {
         if tablesKnown { tableList.save(tables) }
     }
 
+    /// The game at the table a share or move link is for, for its share text: the open room's
+    /// game, else Home's list's. A pounce link deals a new Cat Tower table (play-api `dealFor`).
+    func gameID(for url: URL) -> String? {
+        let code: String
+        switch DeepLink.parse(url, allowDevScheme: true) {
+        case .join(let c), .move(let c, _): code = c
+        case .pounce, nil: return GameCatalog.dealt.id
+        }
+        if let room, room.code == code, let id = room.store.room?.gameId { return id }
+        return homeItems.first { $0.id == code }?.game
+    }
+
     /// A share or move link arrived. Without a local owner, onboarding comes first and the link
     /// is remembered. A join link for a table already on this device rejoins it.
     func handle(_ link: DeepLink) {
@@ -1059,6 +1101,8 @@ final class AppModel {
         case .move(let code, let moveCode):
             open(code: code, intent: .move(moveCode: moveCode))
         case .pounce(let token):
+            // Onboarding is done: the pick sheet (or its card) opens over Home, not the name screen.
+            if case .pickCat = route { route = .home }
             Task { await openLink(token) }
         }
     }
@@ -1079,7 +1123,43 @@ final class AppModel {
         case .unreachable:
             Haptics.shared.thump()
             Sound.shared.play(ArtName.Sound.sfxNope)
+            offlineInvite = token
         }
+    }
+
+    /// The offline card's Try again.
+    func retryInvite(_ token: String) {
+        offlineInvite = nil
+        Task { await openLink(token) }
+    }
+
+    // MARK: Paste invite (first-run funnel, part 2)
+
+    /// Home's first visit offers to paste an invite: this phone has no table yet, the pasteboard
+    /// looks like it holds a link, and nothing else is on screen.
+    var offersPasteInvite: Bool {
+        route == .home && people.owner != nil && pasteboard.hasLink && tables.isEmpty && cache.isEmpty
+            && pick == nil && !inviteShown && !expiredInviteShown && offlineInvite == nil && updates.required == nil
+            && kittensPanel == nil
+    }
+
+    /// What the system paste control handed over (a tap, so no "Allow paste?"): an invite opens
+    /// its table exactly as the tapped link would; anything else says so.
+    func pasteInvite(_ text: String) {
+        #if DEBUG
+        let dev = true
+        #else
+        let dev = false
+        #endif
+        guard let link = DeepLink.pasted(text, allowDevScheme: dev) else {
+            pasteNope += 1
+            Haptics.shared.thump()
+            Sound.shared.play(ArtName.Sound.sfxNope)
+            return
+        }
+        pasteboard.settle()
+        Haptics.shared.success()
+        handle(link)
     }
 
     /// The person on this phone a pounce push is for: its title is their name (§12.2).

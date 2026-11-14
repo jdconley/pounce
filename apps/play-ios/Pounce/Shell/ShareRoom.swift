@@ -1,27 +1,32 @@
 import CoreImage
 import CoreImage.CIFilterBuiltins
 import LinkPresentation
+import PounceKit
 import SwiftUI
 import UIKit
 
-/// Presents the system share sheet for a room link while `isPresented` is true (spec §5.6).
-/// The item carries `LPLinkMetadata` (the table's name and "Cat Tower", the host's cat as icon
-/// and image), so the share sheet's header shows cat art; a short invite with the name and the
-/// room code goes along as text. Put it in a `.background`.
+/// Presents the system share sheet for a table's link, a seat's move link or a Messages pounce
+/// link while `isPresented` is true (spec §5.6). The item carries `LPLinkMetadata` (a title that
+/// names the table's real game, the cat as icon and image), so the share sheet's header shows
+/// cat art; an invite says in one line what it's for, and a table's invite spells out its code.
+/// Put it in a `.background`.
 struct ShareRoom: UIViewControllerRepresentable {
+    @Environment(AppModel.self) private var model
     @Binding var isPresented: Bool
     let url: URL
-    /// The table's name, for the invite text and the link title.
+    /// The table's name for a table's link; the sender's name for a pounce link.
     let tableName: String
     /// The room code, spelled out in an invite for anyone joining by typing it. Nil sends the
-    /// link alone (moving a seat is not an invite).
+    /// link alone (moving a seat is not an invite), except a pounce link's invite line.
     var inviteCode: String?
     /// Asset name of the cat drawn in the share sheet header.
     let catArt: String
+    /// The table's game (`GameCatalog` id). Nil: the open room's, as the link's code says.
+    var game: String?
     /// The sheet sent it somewhere (not cancelled).
     var onSent: (() -> Void)?
 
-    func makeUIViewController(context: Context) -> UIViewController {
+        func makeUIViewController(context: Context) -> UIViewController {
         let controller = UIViewController()
         controller.view.isUserInteractionEnabled = false
         return controller
@@ -30,8 +35,12 @@ struct ShareRoom: UIViewControllerRepresentable {
     func updateUIViewController(_ controller: UIViewController, context: Context) {
         guard isPresented, !context.coordinator.presenting else { return }
         context.coordinator.presenting = true
-        let item = RoomShareItem(url: url, title: RoomShareItem.title(tableName), image: UIImage(named: catArt))
-        let invite: [Any] = inviteCode.map { [RoomShareItem.invite(tableName: tableName, code: $0)] } ?? []
+        let game = GameCatalog.title(of: game ?? model.gameID(for: url))
+        let pounce: Bool = if case .pounce = DeepLink.parse(url, allowDevScheme: true) { true } else { false }
+        let title = pounce ? RoomShareItem.pounceTitle(from: tableName, game: game) : RoomShareItem.title(tableName, game: game)
+        let item = RoomShareItem(url: url, title: title, image: UIImage(named: catArt))
+        let text = pounce ? RoomShareItem.pounceInvite(game: game) : inviteCode.map { RoomShareItem.invite(tableName: tableName, game: game, code: $0) }
+        let invite: [Any] = text.map { [$0] } ?? []
         let sheet = UIActivityViewController(activityItems: invite + [item], applicationActivities: nil)
         let coordinator = context.coordinator
         let binding = $isPresented
@@ -78,16 +87,26 @@ final class RoomShareItem: NSObject, UIActivityItemSource {
         self.metadata = metadata
     }
 
-    /// The link's title: the table's name, then the game.
-    static func title(_ tableName: String) -> String {
-        String(localized: "\(tableName) - Cat Tower", comment: "Share sheet: link title, the table's name then the game")
+    /// A table's link title: the table's name, then its game.
+    static func title(_ tableName: String, game: String) -> String {
+        String(localized: "\(tableName) - \(game)", comment: "Share sheet: link title, the table's name then its game (Cat Tower, Tuna Tiles)")
     }
 
-    /// The text that goes with the link: the table's name and its room code.
-    static func invite(tableName: String, code: String) -> String {
+    /// A pounce link's title: who asks, and the game a new table will be.
+    static func pounceTitle(from name: String, game: String) -> String {
+        String(localized: "\(name) wants to play \(game)", comment: "Share sheet: a Messages invite's link title, the sender then the game")
+    }
+
+    /// The text that goes with a table's link: the game, the table and its code.
+    static func invite(tableName: String, game: String, code: String) -> String {
         String(
-            localized: "Come play Cat Tower at \(tableName)! Room code \(code)",
-            comment: "Share sheet: the invite text sent with the link")
+            localized: "Come play \(game) at \(tableName). Code \(code)",
+            comment: "Share sheet: the invite text sent with a table's link: the game, the table's name, the room code")
+    }
+
+    /// The text that goes with a pounce link.
+    static func pounceInvite(game: String) -> String {
+        String(localized: "Play \(game) with me on Pounce.", comment: "Share sheet: the invite text sent with a Messages invite link")
     }
 
     func activityViewController(

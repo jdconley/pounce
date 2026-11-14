@@ -62,7 +62,8 @@ struct PounceSheetView: View {
         .background {
             if let sharing {
                 ShareRoom(isPresented: $shareShown, url: sharing, tableName: model.people.owner?.name ?? "",
-                          catArt: ArtName.Habit.pounceBell)
+                          // The sender's own cat, as the invite page shows it.
+                          catArt: ArtName.cat(model.people.owner?.cat ?? 0, .awake))
             }
         }
         .onChange(of: shareShown) { _, shown in if !shown && sharing != nil { onClose() } }

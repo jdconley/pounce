@@ -28,11 +28,23 @@ struct RootView: View {
         .overlay {
             // A Messages link that no longer works: say so in words.
             if model.expiredInviteShown {
-                ExpiredInviteCard()
+                InviteCard(kind: .expired)
+                    .transition(.opacity)
+            } else if let token = model.offlineInvite {
+                InviteCard(kind: .offline(token: token))
                     .transition(.opacity)
             }
         }
         .animation(.easeOut(duration: 0.25).paced, value: model.expiredInviteShown)
+        .animation(.easeOut(duration: 0.25).paced, value: model.offlineInvite)
+        .overlay {
+            // First launch after an invite page copied the invite: offer to paste it (first-run funnel, part 2).
+            if model.offersPasteInvite {
+                PasteInviteCard()
+                    .transition(.opacity)
+            }
+        }
+        .animation(.easeOut(duration: 0.25).paced, value: model.offersPasteInvite)
         .overlay {
             // The plus (trophy room design §4): over Home or the trophy room.
             if model.inviteShown {
