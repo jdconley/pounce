@@ -17,7 +17,7 @@ extension AppModel {
 
     /// One of the app's own cards is over whatever screen is up (`RootView`'s overlays).
     var overlayShown: Bool {
-        pick != nil || expiredInviteShown || inviteShown || kittensPanel != nil
+        pick != nil || expiredInviteShown || offlineInvite != nil || offersPasteInvite || inviteShown || kittensPanel != nil
     }
 
     /// The table `code` is over on this phone: a game played to its end counts once.

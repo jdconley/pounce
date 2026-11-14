@@ -311,12 +311,12 @@ describe("worker", { timeout: 20_000 }, () => {
     });
 
     const page = await mf.dispatchFetch(`${BASE}/j/BCDFG`);
-    expect(page.status).toBe(200);
     expect(page.headers.get("content-type")).toBe("text/html; charset=utf-8");
     const html = await page.text();
-    expect(html).toContain("BCDFG");
-    expect(html).toContain('<a href="https://testflight.apple.com/join/abc123">Get the app</a>');
-    expect(html).toContain('<meta property="og:image" content="https://play.conleychaos.com/og/room.jpg">');
+    // No such table: the expired page, which needs no token either.
+    expect(page.status).toBe(404);
+    expect(html).toContain("This invite has expired");
+    expect(html).toContain('<a class="go" href="https://testflight.apple.com/join/abc123">Get Pounce</a>');
 
     for (const path of ["/j/bad!", "/j/BCDFG/extra", "/j/", "/j/%E0%A4%A"]) {
       expect((await mf.dispatchFetch(`${BASE}${path}`)).status, path).toBe(404);

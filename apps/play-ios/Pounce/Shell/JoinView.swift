@@ -1,10 +1,13 @@
 import PounceKit
 import SwiftUI
+import UIKit
 
 /// Join by code (spec §5.4): the gray cat peeking over five chunky tiles and the room-code
 /// keypad. The fifth character submits. A code that doesn't exist shakes the tiles clear while
-/// the cat shakes its head; no text. While a code is being checked delete stays live (it
-/// cancels the check), and a check whose socket can't connect shows the offline card.
+/// the cat shakes its head, and one line under the tiles says so until the next key. While a
+/// code is being checked delete stays live (it cancels the check), and a check whose socket
+/// can't connect shows the offline card. With a link copied (an invite page copies one), the
+/// top bar offers the system paste control, which opens the invite as a tapped link would.
 struct JoinView: View {
     @Environment(AppModel.self) private var model
 
@@ -12,6 +15,8 @@ struct JoinView: View {
     @State private var tilesShake = 0
     @State private var headShake = 0
     @State private var sad = false
+    /// The last code was wrong: the line under the tiles says so until the next key.
+    @State private var wrong = false
 
     private static let length = 5
 
@@ -34,9 +39,9 @@ struct JoinView: View {
                     tiles
                         .padding(.horizontal, 16)
                         .zIndex(1)
+                    message(height: 40)
                     CodeKeypad(enabled: !checking, deleteEnabled: true, onKey: type, onDelete: delete)
                         .padding(.horizontal, 14)
-                        .padding(.top, 22)
                     Spacer(minLength: 8)
                 }
                 .frame(maxWidth: 560)
@@ -87,6 +92,7 @@ struct JoinView: View {
                         cat(height: min(size.height * 0.36, 300))
                         tiles
                             .zIndex(1)
+                        message(height: 48)
                     }
                     .frame(width: min(size.width * 0.4, 500))
                     keypad
@@ -103,8 +109,8 @@ struct JoinView: View {
                 cat(height: min(max(160, size.height * 0.24), 300))
                 tiles
                     .zIndex(1)
+                message(height: 56)
                 keypad
-                    .padding(.top, 34)
                 Spacer(minLength: 0)
                 Spacer(minLength: 0)
             }
@@ -137,10 +143,39 @@ struct JoinView: View {
                     .transition(.scale.combined(with: .opacity))
             }
         }
+        // A copied link: paste it instead of typing (the invite page's "tap Paste").
+        .overlay {
+            if model.pasteboard.hasLink && !checking {
+                InvitePasteButton(size: .large, textSizes: sizeClass == .regular ? .xxLarge ... .xxxLarge : .large ... .xLarge)
+                    .accessibilityIdentifier("join.paste")
+                    .transition(.scale.combined(with: .opacity))
+            }
+        }
         .padding(.horizontal, 16)
         .padding(.top, 4)
         .frame(height: 64)
         .animation(.spring(duration: 0.3).paced, value: checking)
+        .animation(.spring(duration: 0.3).paced, value: model.pasteboard.hasLink)
+    }
+
+    /// Under the tiles: why they shook, in a few words; empty space otherwise, so nothing moves.
+    private func message(height: CGFloat) -> some View {
+        ZStack {
+            if wrong {
+                Text("No table with that code.", comment: "Join: a code with no table behind it")
+                    .font(.system(size: 18, weight: .heavy, design: .rounded))
+                    .foregroundStyle(Palette.yellow)
+                    .multilineTextAlignment(.center)
+                    .minimumScaleFactor(0.6)
+                    .lineLimit(2)
+                    .transition(.opacity)
+                    .accessibilityIdentifier("join.wrong")
+            }
+        }
+        .frame(height: height)
+        .frame(maxWidth: .infinity)
+        .padding(.horizontal, 16)
+        .animation(.easeOut(duration: 0.2).paced, value: wrong)
     }
 
     private func cat(height: CGFloat) -> some View {
@@ -182,6 +217,7 @@ struct JoinView: View {
 
     private func type(_ c: Character) {
         guard typed.count < Self.length else { return }
+        wrong = false
         typed.append(c)
         if typed.count == Self.length {
             model.joinTyped(typed)
@@ -199,6 +235,10 @@ struct JoinView: View {
         tilesShake += 1
         headShake += 1
         sad = true
+        wrong = true
+        UIAccessibility.post(
+            notification: .announcement,
+            argument: String(localized: "No table with that code.", comment: "Join: a code with no table behind it"))
         Haptics.shared.thump()
         Sound.shared.play(ArtName.Sound.sfxNope)
         Task {

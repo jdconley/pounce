@@ -51,6 +51,28 @@ export async function guardJoin(env: Env, code: string, deviceId: string, ip: st
   return { exists: !failed };
 }
 
+/** What an invite page says of a table: its name, its game, and who invited (null: nobody named). */
+export type InvitePeek = { table: string | null; game: string; host: { name: string; cat: number } | null };
+
+/**
+ * The invite page's look at a table (`/j/<code>`), guarded like joining by code: a code with no
+ * table is a wrong guess against the address, and an address locked out learns nothing
+ * (`hidden`: the page names nobody and says nothing of whether the table is there). `gone`: no
+ * such table, or its game is over. A kitten's table names nobody and keeps its name to itself.
+ */
+export async function peekInvite(env: Env, code: string, ip: string, now: number): Promise<InvitePeek | "gone" | "hidden"> {
+  try {
+    const found = await room(env, code).invite();
+    const { retryAt } = await limiter(env, `ip:${ip}`).guess(found === null, IP_JOIN_RULE, now);
+    if (retryAt !== null) return "hidden";
+    if (!found || found.over) return "gone";
+    const kitten = (await env.DEVICES.get(env.DEVICES.idFromName(found.hostDeviceId)).ageBand()) === "kitten";
+    return kitten ? { table: null, game: found.game, host: null } : { table: found.table, game: found.game, host: found.host };
+  } catch {
+    return "hidden";
+  }
+}
+
 /** `POST /v1/names/check`: whether the server would take this name, so the app can say so as it's typed. */
 export async function nameCheck(env: Env, deviceId: string, body: Obj | null, now: number): Promise<Result<{ ok: boolean; reason?: string }>> {
   if (!(await limiter(env, `device:${deviceId}`).take("names", NAME_CHECKS_PER_MINUTE, MINUTE, now))) return fail(429, "rate_limited");

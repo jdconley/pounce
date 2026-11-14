@@ -268,6 +268,21 @@ export class GameRoom extends DurableObject<Env> {
   }
 
   /**
+   * What an invite page (`/j/<code>`) may say of this table: its name, its game, whether it's
+   * over, and who invited, meaning the person in the host's seat, else the first person seated.
+   * Null: no such table. The Worker guards this like a guess at the code (`peekInvite`).
+   */
+  invite(): { table: string; game: GameId; over: boolean; host: { name: string; cat: number } | null; hostDeviceId: string } | null {
+    const core = this.core;
+    if (!core) return null;
+    const { state } = core;
+    const people = state.seats.filter((s) => s.kind === "human" && s.person);
+    const seat = people.find((s) => s.deviceId === state.hostDeviceId) ?? people[0];
+    const host = seat?.person ? { name: seat.person.name, cat: seat.person.cat } : null;
+    return { table: state.name, game: state.game, over: state.status === "over", host, hostDeviceId: state.hostDeviceId };
+  }
+
+  /**
    * The person `personId` at this table, for a report or a block from `deviceId`: null unless
    * the device is at the table (the host or seated) and the person sits in someone else's seat.
    */

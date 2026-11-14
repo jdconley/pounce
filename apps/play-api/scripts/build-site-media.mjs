@@ -170,6 +170,26 @@ magick(
   og,
 );
 
+// --- The invite pages (src/http/links.ts): each of the app's eight cats as the person who
+// invited (WebP only: every Safari that runs Pounce reads it), and each game's cover as the link
+// preview, 1200x630, no words in it (Apple TN3156). The preview's title names the person.
+const CATS = 8;
+const COVERS = { "cat-tower": "game-cat-tower", tiles: "game-tiles" };
+const invitePreviews = Object.fromEntries(
+  Object.entries(COVERS).map(([game, asset]) => {
+    const file = join(tmp, `invite-${game}.png`);
+    magick(join(catalog, `${asset}.imageset/${asset}@3x.png`), "-resize", "1200x800", "-gravity", "center", "-crop", "1200x630+0+0", "+repage", file);
+    return [game, jpeg(file, `invite-${game}`, 80)];
+  }),
+);
+const inviteCats = Array.from({ length: CATS }, (_, cat) => {
+  const png = join(tmp, `inviter-${cat}.png`);
+  magick(join(catalog, `Cats.spriteatlas/cat${cat}-awake.imageset/cat${cat}-awake@3x.png`), "-filter", "Lanczos", "-resize", "300x", "-strip", png);
+  const file = join(tmp, `inviter-${cat}.webp`);
+  run("cwebp", ["-quiet", "-q", "86", "-alpha_q", "90", "-m", "6", png, "-o", file]);
+  return publish(file, `inviter-${cat}`, "webp");
+});
+
 // --- The QR code for GET_URL, as one SVG path on a `size` x `size` module grid (quiet zone excluded).
 const qr = qrcode(0, "M");
 qr.addData(GET_URL);
@@ -210,6 +230,7 @@ const manifest = {
     condo: art("condo-10.imageset/condo-10@3x.png", "condo", 480),
   },
   qr: { url: GET_URL, size: modules, path: qrPath },
+  invite: { cats: inviteCats, previews: invitePreviews },
 };
 
 writeFileSync(
