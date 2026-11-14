@@ -70,8 +70,10 @@ import UIKit
 struct InvitePasteButton: View {
     @Environment(AppModel.self) private var model
     var size: ControlSize = .extraLarge
-    /// The label's size in points at the default text size; it grows with Dynamic Type, to a cap.
-    var points: CGFloat = 24
+    /// The system control sizes its label by Dynamic Type alone (it ignores `.font`), so its size
+    /// is set by clamping the text size: big enough to be a main action, never past the screen's
+    /// other controls.
+    var textSizes: ClosedRange<DynamicTypeSize> = .xxxLarge ... .accessibility2
 
     var body: some View {
         PasteButton(payloadType: String.self) { strings in
@@ -81,10 +83,8 @@ struct InvitePasteButton: View {
         .buttonBorderShape(.capsule)
         .labelStyle(.titleAndIcon)
         .controlSize(size)
-        .font(.system(size: points, weight: .heavy, design: .rounded))
         .tint(Palette.magenta)
-        // Big text grows it a little, never past the screen's other controls.
-        .dynamicTypeSize(...DynamicTypeSize.xxLarge)
+        .dynamicTypeSize(textSizes)
     }
 }
 
@@ -119,7 +119,7 @@ struct PasteInviteCard: View {
                     .multilineTextAlignment(.center)
                     .fixedSize(horizontal: false, vertical: true)
                     .accessibilityIdentifier("pasteInvite.line")
-                InvitePasteButton(points: 24 * scale)
+                InvitePasteButton(textSizes: sizeClass == .regular ? .accessibility1 ... .accessibility3 : .xxxLarge ... .accessibility2)
                     .accessibilityIdentifier("pasteInvite.paste")
                 Button(action: notNow) {
                     Text("Not now", comment: "Paste invite card: closes it")
