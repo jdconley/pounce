@@ -75,7 +75,7 @@ final class FunnelShotTests: XCTestCase {
         if qr.exists {
             qr.tap()
             save("new-lobby-same-room", settle: 1.5)
-            el(app, "lobby.qrcode").tap()
+            qr.tap()
         }
         el(app, "lobby.home").tap()
         XCTAssertTrue(el(app, "screen-home").waitForExistence(timeout: Live.t(10)))

@@ -123,7 +123,8 @@ public enum UITip: String, CaseIterable, Codable, Sendable {
             r(.home, "home.people", 50, .opens(3), audience: TipAudience(passAndPlay: false))
         case .lobbyStart: r(.lobby, "lobby.startReady", 100, learnedBy: ["lobby.start"])
         case .lobbyShare: r(.lobby, "lobby.share", 90)
-        case .lobbyAdd: r(.lobby, "lobby.add", 80, learnedBy: ["lobby.seat"])
+        // The host's tray first: how the next player joins (first-run funnel).
+        case .lobbyAdd: r(.lobby, "lobby.add", 95, learnedBy: ["lobby.seat"])
         case .lobbySeat: r(.lobby, "lobby.openSeat", 70, .after(.lobbyAdd), learnedBy: ["lobby.seat", "lobby.add"])
         case .menuLook: r(.tableMenu, "menu.look", 80)
         case .menuMove: r(.tableMenu, "menu.move", 70)

@@ -324,6 +324,7 @@ struct LobbyView: View {
                         .onTapGesture { withAnimation(.spring(duration: 0.3).paced) { showQR = false } }
                         .position(x: geo.size.width / 2, y: geo.size.height / 2 - 10)
                         .transition(.scale(scale: 0.3).combined(with: .opacity))
+                        .accessibilityElement(children: .ignore)
                         .accessibilityLabel("QR code for this table")
                         .accessibilityAddTraits(.isImage)
                         .accessibilityIdentifier("lobby.qrcode")
@@ -441,7 +442,9 @@ struct LobbyView: View {
                     .wiggle(trigger: wiggles[.start, default: 0])
                     .accessibilityValue(table.canStart ? Text("") : Text(verbatim: LobbyCopy.status(table)))
                     .accessibilityIdentifier("lobby.start")
-                    .tipTarget(table.canStart ? "lobby.startReady" : nil)
+                    // With the host's tray up, its tip goes first: the bubble over Start would
+                    // cover the tray, and a lit Start says what it does.
+                    .tipTarget(table.canStart && !hostTray(table) ? "lobby.startReady" : nil)
                     .transition(.scale.combined(with: .opacity))
                 }
             }
@@ -455,7 +458,7 @@ struct LobbyView: View {
     /// (the seat menu for that seat). Nothing when every seat holds a person.
     @ViewBuilder private func seatControls(_ table: TableModel) -> some View {
         if let seat = table.seatToAdd {
-            if room?.youAreHost == true {
+            if hostTray(table) {
                 AddPlayerTray(
                     sharesLinks: model.limits.sharesLinks, scanning: showQR,
                     wiggles: { wiggles[$0, default: 0] }
@@ -478,6 +481,11 @@ struct LobbyView: View {
                 .tipTarget("lobby.add")
             }
         }
+    }
+
+    /// The host's tray shows: this phone is the host and a seat is free.
+    private func hostTray(_ table: TableModel) -> Bool {
+        room?.youAreHost == true && table.seatToAdd != nil
     }
 
     /// One of the tray's ways, for `seat` (the next free one).
