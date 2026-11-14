@@ -71,7 +71,7 @@ struct InviteCard: View {
                 PillButton(icon: ArtName.iconClose, color: Palette.violet, size: .medium, accessibilityLabel: "Close", action: close)
                     .accessibilityIdentifier("offlineInvite.close")
                 PillButton(
-                    icon: ArtName.Habit.iconReplay, color: Palette.lime, size: .medium,
+                    icon: ArtName.Habit.iconReplay, color: Palette.lime, size: .medium, width: 150,
                     title: String(localized: "Try again", comment: "Card: looks up an invite link again after no connection"),
                     accessibilityLabel: "Try again") {
                         model.retryInvite(token)

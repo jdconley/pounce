@@ -146,7 +146,7 @@ struct JoinView: View {
         // A copied link: paste it instead of typing (the invite page's "tap Paste").
         .overlay {
             if model.pasteboard.hasLink && !checking {
-                InvitePasteButton(size: .large)
+                InvitePasteButton(size: .large, points: sizeClass == .regular ? 24 : 18)
                     .accessibilityIdentifier("join.paste")
                     .transition(.scale.combined(with: .opacity))
             }
