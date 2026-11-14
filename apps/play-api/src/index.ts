@@ -5,7 +5,7 @@ import { issueDeviceToken, verifyDeviceToken } from "./auth";
 import { APPLE_ROOTS } from "./consent/appstore";
 import { noticePage } from "./consent/pages";
 import { devSpeed } from "./env";
-import { active, forget, minted, pageView, parseReport, reached, report } from "./funnel/funnel";
+import { active, forget, minted, pageView, parseReport, prune, reached, report } from "./funnel/funnel";
 import { DEFAULT_GAME, GAMES_HEADER, gamesListed, gamesOn, gameTitle, isGameId, type GameId } from "./games";
 import { appSiteAssociation, ogImage, pouncePage, sharePage } from "./http/links";
 import { mediaFile } from "./http/media";
@@ -93,6 +93,8 @@ const MAX_PROFILE_BYTES = 2048;
 /** An Apple identity token alone is about 1 KB. */
 const MAX_PROOF_BYTES = 4096;
 const MAX_STATE_BYTES = 8192;
+/** One minting in this many also prunes the funnel (`prune`). */
+const PRUNE_CHANCE = 1 / 50;
 
 const cryptoRng = (): number => (crypto.getRandomValues(new Uint32Array(1))[0] as number) / 2 ** 32;
 
@@ -144,6 +146,8 @@ async function mintDevice(request: Request, env: Env, secret: string, later: Lat
   if (!(await mayMint(env, clientIp(request), Date.now()))) return json(429, { error: "rate_limited" });
   const deviceId = base64url(crypto.getRandomValues(new Uint8Array(DEVICE_ID_BYTES)));
   later(minted(env, deviceId, Date.now(), parseApp(request.headers.get(APP_HEADER))).catch(() => undefined));
+  // Now and then, the funnel drops what it keeps no longer (a year), so no schedule is needed.
+  if (Math.random() < PRUNE_CHANCE) later(prune(env, Date.now()).catch(() => undefined));
   return json(200, { deviceId, token: await issueDeviceToken(secret, deviceId) });
 }
 

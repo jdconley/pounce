@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, test } from "vitest";
 
 import { d1, importSqlite } from "../../tests/d1-sqlite";
 
-import { active, forget, funnelId, minted, pageView, parseReport, reached, report, resetActivity, SCHEMA } from "./funnel";
+import { active, forget, funnelId, KEEP_MS, minted, pageView, parseReport, prune, reached, report, resetActivity, SCHEMA } from "./funnel";
 import { APP_MILESTONES, isAppMilestone, isSource, SERVER_MILESTONES } from "./milestones";
 
 import type { FunnelEnv } from "./funnel";
@@ -73,6 +73,7 @@ describe("minted", () => {
     await active({ TOKEN_SECRET: SECRET }, "dev1", T0);
     await pageView({ TOKEN_SECRET: SECRET }, "j", null, T0);
     await forget({ TOKEN_SECRET: SECRET }, "dev1");
+    await prune({ TOKEN_SECRET: SECRET }, T0);
     expect(rows("SELECT name FROM sqlite_master WHERE type = 'table'")).toEqual([]);
   });
 
@@ -242,5 +243,23 @@ describe("forget", () => {
     expect(rows("SELECT id FROM devices")).toEqual([{ id }]);
     expect(rows("SELECT id FROM milestones")).toEqual([{ id }]);
     expect(rows("SELECT id FROM device_days")).toEqual([{ id }]);
+  });
+});
+
+describe("prune", () => {
+  test("deletes devices a year past their last use, old steps without a device, and old page counts", async () => {
+    await minted(env, "gone", T0, IOS);
+    await minted(env, "kept", T0, IOS);
+    await active(env, "kept", T0 + 200 * DAY);
+    await reached(env, [{ deviceId: "untracked", milestone: "first_move" }], T0);
+    await reached(env, [{ deviceId: "untracked-new", milestone: "first_move" }], T0 + 300 * DAY);
+    await pageView(env, "j", null, T0);
+    await pageView(env, "j", null, T0 + 300 * DAY);
+    await prune(env, T0 + KEEP_MS + DAY);
+    const kept = await idOf("kept");
+    expect(rows("SELECT id FROM devices")).toEqual([{ id: kept }]);
+    expect(rows("SELECT DISTINCT id FROM device_days")).toEqual([{ id: kept }]);
+    expect(rows("SELECT id FROM milestones ORDER BY at")).toEqual([{ id: kept }, { id: await idOf("untracked-new") }]);
+    expect(rows("SELECT day FROM page_views")).toEqual([{ day: "2027-09-09" }]);
   });
 });

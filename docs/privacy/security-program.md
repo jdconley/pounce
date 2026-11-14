@@ -26,7 +26,7 @@ Written each review. Current risks and how they are handled:
 
 ## Safeguards
 
-- **Minimization:** no email, no Apple name, no location, no contacts, no analytics, no third-party SDKs. Ages are kept as a band; birth years never leave the device.
+- **Minimization:** no email, no Apple name, no location, no contacts, no third-party analytics or SDKs. The first-run funnel (`docs/funnel.md`) keeps anonymous getting-started steps on our own server, keyed by a hash of the device id. Ages are kept as a band; birth years never leave the device.
 - **Transport:** HTTPS only in Release builds (`https://play.conleychaos.com`); App Transport Security allows plain HTTP only for local networking in Debug.
 - **Storage:** device credential, person keys and the age record in the Keychain, not synchronizable, readable after first unlock on this device only. Server data in SQLite-backed Durable Objects, encrypted at rest by Cloudflare.
 - **Access:** only JD holds the Cloudflare, Apple Developer, App Store Connect and GitHub admin accounts, each with two-factor authentication. CI uses an App Store Connect API key and a Cloudflare API token scoped to this worker, both kept as GitHub environment secrets for `production`.

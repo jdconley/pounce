@@ -247,6 +247,28 @@ export async function forget(env: FunnelEnv, deviceId: string): Promise<void> {
   );
 }
 
+/** How long the funnel keeps a device after it was last in use, and a day's invite page counts. */
+export const KEEP_MS = 365 * DAY_MS;
+
+/**
+ * Deletes what is past `KEEP_MS`: devices last in use over a year ago with their steps and days,
+ * steps of devices the funnel has no row for (minted before tracking began) over a year old,
+ * and invite page counts over a year old. Run now and then, after a minting (`index.ts`).
+ */
+export async function prune(env: FunnelEnv, now: number): Promise<void> {
+  const on = await open(env);
+  if (!on) return;
+  const cut = now - KEEP_MS;
+  const old = "SELECT id FROM devices WHERE last_seen < ?1";
+  await on.db.batch([
+    on.db.prepare(`DELETE FROM milestones WHERE id IN (${old})`).bind(cut),
+    on.db.prepare(`DELETE FROM device_days WHERE id IN (${old})`).bind(cut),
+    on.db.prepare("DELETE FROM devices WHERE last_seen < ?1").bind(cut),
+    on.db.prepare("DELETE FROM milestones WHERE at < ?1 AND id NOT IN (SELECT id FROM devices)").bind(cut),
+    on.db.prepare("DELETE FROM page_views WHERE day < ?1").bind(new Date(cut).toISOString().slice(0, 10)),
+  ]);
+}
+
 /** Drops this isolate's memory of activity (tests). */
 export function resetActivity(): void {
   lastActive.clear();

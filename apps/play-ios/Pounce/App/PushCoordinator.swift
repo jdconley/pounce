@@ -105,6 +105,7 @@ final class PushCoordinator: NSObject, UNUserNotificationCenterDelegate {
     /// The system prompt (after the priming screen). Registers on yes.
     func requestAuthorization() async -> Bool {
         let granted = await NotificationCenterQueue.requestAuthorization([.alert, .sound, .badge])
+        model?.funnel.answeredPush(allowed: granted)
         if granted { registerIfAllowed() }
         return granted
     }

@@ -302,7 +302,7 @@ ${art(MEDIA.art.asleep, "cat")}
 </div>
 <ul class="checks">
 <li><strong>No chat. No public profiles.</strong> The people at your tables see your name and your cat, and so does anyone who opens an invite link you send.</li>
-<li><strong>No ads. No tracking.</strong> No analytics and no third-party SDKs. We never sell your data.</li>
+<li><strong>No ads. No tracking.</strong> No third-party analytics or SDKs. We never sell your data.</li>
 <li><strong>No account needed.</strong> Signing in is never required to play.</li>
 <li><strong>Simpler for under-13s.</strong> A child under 13 picks a name from Pounce's list of cat names and can't type one. No sign-in, and no invite links sent out.</li>
 ${alerts}

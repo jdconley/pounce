@@ -90,7 +90,7 @@ describe("robots.txt and the sitemap", () => {
     expect(res.headers.get("content-type")).toBe("text/plain; charset=utf-8");
     const text = await res.text();
     expect(text.startsWith("# Pounce: Family Games\n")).toBe(true);
-    for (const s of ["Cat Tower", "no chat, no ads, no analytics and no tracking", "(https://play.conleychaos.com/support)", "(https://play.conleychaos.com/privacy)", "(https://play.conleychaos.com/get)"]) {
+    for (const s of ["Cat Tower", "no chat, no ads, no tracking and no third-party analytics", "(https://play.conleychaos.com/support)", "(https://play.conleychaos.com/privacy)", "(https://play.conleychaos.com/get)"]) {
       expect(text, s).toContain(s);
     }
     expect(text).not.toMatch(/\p{Extended_Pictographic}/u);
