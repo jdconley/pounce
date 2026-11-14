@@ -50,7 +50,8 @@ struct InviteSheet: View {
         .background {
             if case .link(let url) = loaded {
                 ShareRoom(isPresented: $shareShown, url: url, tableName: model.people.owner?.name ?? "",
-                          catArt: ArtName.Habit.pounceBell)
+                          // The sender's own cat, as the invite page shows it.
+                          catArt: ArtName.cat(model.people.owner?.cat ?? 0, .awake))
             }
         }
         .task(id: attempt) { await load() }

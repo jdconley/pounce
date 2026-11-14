@@ -14,6 +14,13 @@ import Testing
         #expect(GameCatalog.catTower.maxPlayers == 6)
     }
 
+    @Test func aTablesGameIsNamedForShareTextAndUnknownOnesAreTheDealtGame() {
+        #expect(GameCatalog.title(of: "tiles") == "Tuna Tiles")
+        #expect(GameCatalog.title(of: "cat-tower") == "Cat Tower")
+        #expect(GameCatalog.title(of: nil) == "Cat Tower")
+        #expect(GameCatalog.title(of: "chess") == "Cat Tower")
+    }
+
     @Test func tilesIsOnTheShelfAndStartable() {
         #expect(GameCatalog.tiles.availability == .available)
         #expect(GameCatalog.tiles.isAvailable)
