@@ -5,6 +5,7 @@ import { issueDeviceToken, verifyDeviceToken } from "./auth";
 import { APPLE_ROOTS } from "./consent/appstore";
 import { noticePage } from "./consent/pages";
 import { devSpeed } from "./env";
+import { active, forget, minted, pageView, parseReport, reached, report } from "./funnel/funnel";
 import { DEFAULT_GAME, GAMES_HEADER, gamesListed, gamesOn, gameTitle, isGameId, type GameId } from "./games";
 import { appSiteAssociation, ogImage, pouncePage, sharePage } from "./http/links";
 import { mediaFile } from "./http/media";
@@ -48,7 +49,7 @@ import { newRoomCode, ROOM_CODE } from "./room/codes";
 import { DEVICE_HEADER, PLAYER_HEADER } from "./room/game-room";
 import { parseRoomName } from "./room/names";
 import { lockedFor, withoutUndrawable } from "./room/tables";
-import { blockPlayer, guardJoin, listBlocks, mayMint, nameCheck, ownerReports, reportPlayer, unblockPlayer } from "./safety/safety";
+import { blockPlayer, guardJoin, listBlocks, mayMint, mayReportFunnel, nameCheck, ownerReports, reportPlayer, unblockPlayer } from "./safety/safety";
 import { creatorLook, isMine, leavePair, myLeft, myOwn, myStreaks, myTrophies, PAIR_ID, pairStub, rejoinPair, syncPairPeople } from "./streaks/pairs";
 import { consentOn, liveOn, notifyOn, streaksOn, trophyOn } from "./streaks/profile";
 
@@ -138,10 +139,11 @@ async function authenticate(request: Request, secret: string): Promise<string | 
 
 const clientIp = (request: Request) => request.headers.get("cf-connecting-ip") ?? "unknown";
 
-async function mintDevice(request: Request, env: Env, secret: string): Promise<Response> {
+async function mintDevice(request: Request, env: Env, secret: string, later: Later): Promise<Response> {
   // Counted in a Durable Object, so the limit holds across isolates.
   if (!(await mayMint(env, clientIp(request), Date.now()))) return json(429, { error: "rate_limited" });
   const deviceId = base64url(crypto.getRandomValues(new Uint8Array(DEVICE_ID_BYTES)));
+  later(minted(env, deviceId, Date.now(), parseApp(request.headers.get(APP_HEADER))).catch(() => undefined));
   return json(200, { deviceId, token: await issueDeviceToken(secret, deviceId) });
 }
 
@@ -203,7 +205,7 @@ function retiredSocket(): Response {
   return new Response(null, { status: 101, webSocket: client });
 }
 
-async function createRoom(request: Request, env: Env, deviceId: string): Promise<Response> {
+async function createRoom(request: Request, env: Env, deviceId: string, later: Later): Promise<Response> {
   const body = await readObject(request);
   // Only a game the `GAMES` flag has turned on, and only for an app that can draw it.
   if (!body || !isGameId(body.game) || !gamesOn(env).includes(body.game)) return badRequest();
@@ -226,13 +228,16 @@ async function createRoom(request: Request, env: Env, deviceId: string): Promise
   for (let i = 0; i < ROOM_CODE_ATTEMPTS; i++) {
     const code = newRoomCode(cryptoRng);
     const result = await env.ROOMS.get(env.ROOMS.idFromName(code)).init(code, deviceId, name, look, game);
-    if ("ok" in result) return json(201, { code });
+    if ("ok" in result) {
+      later(reached(env, [{ deviceId, milestone: "table_created", game }], Date.now()).catch(() => undefined));
+      return json(201, { code });
+    }
     if ("off" in result) return badRequest();
   }
   return json(503, { error: "no_room_code" });
 }
 
-async function openSocket(request: Request, env: Env, deviceId: string, code: string): Promise<Response> {
+async function openSocket(request: Request, env: Env, deviceId: string, code: string, later: Later): Promise<Response> {
   if (!ROOM_CODE.test(code)) return notFound();
   if (request.headers.get("upgrade")?.toLowerCase() !== "websocket") {
     return json(426, { error: "upgrade_required" });
@@ -245,6 +250,7 @@ async function openSocket(request: Request, env: Env, deviceId: string, code: st
     return response;
   }
   if (!guard.exists) return notFound();
+  later(active(env, deviceId, Date.now()).catch(() => undefined));
   // The room trusts these headers, so client-supplied ones must never reach it.
   const headers = new Headers(request.headers);
   headers.delete(DEVICE_HEADER);
@@ -272,7 +278,8 @@ async function setPushToken(request: Request, env: Env, deviceId: string): Promi
 }
 
 /** The device's tables, less any table of a game the asking app can't draw. */
-async function listTables(request: Request, env: Env, deviceId: string): Promise<Response> {
+async function listTables(request: Request, env: Env, deviceId: string, later: Later): Promise<Response> {
+  later(active(env, deviceId, Date.now()).catch(() => undefined));
   const app = appVersion(request);
   const { tables, all } = await deviceTableLists(env, deviceId, declared(request), app);
   // An app that said what it is also hears of the tables it was left out of, as `locked`: there
@@ -320,12 +327,26 @@ const patchState = asMe(async (request, env, _d, playerId) => {
   return noContent();
 });
 
-const deleteAccount = asMe(async (_r, env, _d, playerId) => {
+const deleteAccount = asMe(async (_r, env, deviceId, playerId) => {
   await deleteMe(env, playerId, Date.now(), fetch);
+  // The device's funnel steps go with its data.
+  await forget(env, deviceId).catch(() => undefined);
   return noContent();
 });
 
-type Route = (request: Request, env: Env, deviceId: string) => Promise<Response> | Response;
+/**
+ * `POST /v1/funnel`: the steps only the app sees (first-run funnel design, Part 3), sent after
+ * the age check. 204 whatever the database does: an app never retries over the funnel's own trouble.
+ */
+async function postFunnel(request: Request, env: Env, deviceId: string, later: Later): Promise<Response> {
+  const sent = parseReport(await readObject(request));
+  if (!sent) return badRequest();
+  if (!(await mayReportFunnel(env, deviceId, Date.now()))) return json(429, { error: "rate_limited" });
+  later(report(env, deviceId, sent, Date.now(), parseApp(request.headers.get(APP_HEADER))).catch(() => undefined));
+  return noContent();
+}
+
+type Route = (request: Request, env: Env, deviceId: string, later: Later) => Promise<Response> | Response;
 
 const getStreaks = asMe(async (request, env, _d, me) => {
   const now = Date.now();
@@ -559,8 +580,9 @@ function route(
   const safety = safetyRoute(method, pathname);
   if (safety) return safety;
   if (method === "POST" && pathname === "/v1/rooms") return createRoom;
+  if (method === "POST" && pathname === "/v1/funnel") return postFunnel;
   const ws = method === "GET" ? ROOM_WS.exec(pathname) : null;
-  if (ws) return (r, env, id) => openSocket(r, env, id, ws[1] as string);
+  if (ws) return (r, env, id, later) => openSocket(r, env, id, ws[1] as string, later);
   return null;
 }
 
@@ -598,13 +620,17 @@ export default {
       if (pathname.startsWith("/media/")) return (await mediaFile(request, env.ASSETS)) ?? notFound();
     }
     const share = method === "GET" ? SHARE_PATH.exec(pathname) : null;
-    if (share) return sharePage(share[1] as string, install(env), new URL(request.url).origin, gamesOn(env).length > 1);
+    if (share) {
+      later(pageView(env, "j", request.headers.get("user-agent"), Date.now()).catch(() => undefined));
+      return sharePage(share[1] as string, install(env), new URL(request.url).origin, gamesOn(env).length > 1);
+    }
     if (notify && method === "GET") {
       // The pounce card reuses the room card until the bell art lands (§9.6).
       if (pathname === "/og/pounce.jpg") return ogImage();
       const p = POUNCE_PAGE.exec(pathname);
       if (p) {
         const token = p[1] as string;
+        later(pageView(env, "p", request.headers.get("user-agent"), Date.now()).catch(() => undefined));
         const found = await linkPounce(env, token, Date.now()).catch(() => null);
         return pouncePage(found?.from ?? null, token, install(env), new URL(request.url).origin);
       }
@@ -631,13 +657,13 @@ export default {
     const refusal = await refusalFor(app, env, MIN_PROTOCOL, async () => (await storeKnown(env, later)).store);
     // An app that said what it is gets a plain answer on every route but the two that let someone leave.
     if (refusal && app && !leavesAnyway(method, pathname)) return updateRequired(refusal);
-    if (mints) return secret ? mintDevice(request, env, secret) : notConfigured();
+    if (mints) return secret ? mintDevice(request, env, secret, later) : notConfigured();
     if (!secret) return notConfigured();
     const deviceId = await authenticate(request, secret);
     if (!deviceId) return unauthorized();
     // Version 1.0 says nothing of itself, and reads no answer but a table's: its HTTP calls are
     // answered as ever, and a table it opens tells it to update (design §6).
     if (refusal && ROOM_WS.test(pathname) && request.headers.get("upgrade")?.toLowerCase() === "websocket") return retiredSocket();
-    return (handler as Route)(request, env, deviceId);
+    return (handler as Route)(request, env, deviceId, later);
   },
 } satisfies ExportedHandler<Env>;

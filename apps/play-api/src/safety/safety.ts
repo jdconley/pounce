@@ -19,6 +19,8 @@ const BLOCKS_PER_HOUR = 30;
 const NAME_CHECKS_PER_MINUTE = 30;
 /** New devices one address may mint. */
 const MINTS_PER_MINUTE = 10;
+/** Funnel reports one device may send (the app sends a handful a day). */
+const FUNNEL_REPORTS_PER_HOUR = 30;
 
 const fail = (status: number, error: string, extra?: Record<string, unknown>): Result<never> => ({ status, error, ...(extra ? { extra } : {}) });
 const limiter = (env: Env, key: string) => env.LIMITS.get(env.LIMITS.idFromName(key));
@@ -30,6 +32,11 @@ type Obj = Record<string, unknown>;
 /** Whether one address may mint another device now. */
 export function mayMint(env: Env, ip: string, now: number): Promise<boolean> {
   return limiter(env, `mint:${ip}`).take("mint", MINTS_PER_MINUTE, MINUTE, now);
+}
+
+/** Whether one device may send another funnel report now. */
+export function mayReportFunnel(env: Env, deviceId: string, now: number): Promise<boolean> {
+  return limiter(env, `funnel:${deviceId}`).take("funnel", FUNNEL_REPORTS_PER_HOUR, HOUR, now);
 }
 
 /**

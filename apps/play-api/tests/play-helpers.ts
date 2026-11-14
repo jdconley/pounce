@@ -148,6 +148,8 @@ export async function worker(
     appMinimumForce?: string;
     appLatest?: string;
     appStoreUrl?: string;
+    /** The first-run funnel's database (`FUNNEL`, D1). Unbound unless asked for, as in most tests. */
+    funnel?: boolean;
     /** Apple's public lookup (itunes.apple.com). Without it the lookup fails, as for any host a test doesn't fake. */
     lookup?: (request: MiniflareRequest) => MiniflareResponse | Promise<MiniflareResponse>;
   },
@@ -194,6 +196,7 @@ export async function worker(
       ...(options.consent && options.twilio !== false ? TWILIO : {}),
     },
     ...(options.persist ? { durableObjectsPersist: options.persist } : {}),
+    ...(options.funnel ? { d1Databases: { FUNNEL: "funnel" } } : {}),
     outboundService: async (request: MiniflareRequest) => {
       if (request.url === "https://appleid.apple.com/auth/keys") {
         return new MiniflareResponse(JSON.stringify({ keys: [(await appleKeys()).jwk] }), { headers: { "content-type": "application/json" } });

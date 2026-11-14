@@ -91,6 +91,12 @@
     // newer version exists. It never enforces the minimum and no update push goes by it.
     "APP_LATEST": ""
   },
+  // The first-run funnel (src/funnel, docs/funnel.md): anonymous devices and when each first
+  // reached each step, queried by hand with `wrangler d1 execute conleychaos-play-funnel --remote`.
+  // The Worker creates its tables itself; there is no migration to run.
+  "d1_databases": [
+    { "binding": "FUNNEL", "database_name": "conleychaos-play-funnel", "database_id": "d98407eb-e0ce-447e-890c-0d647015882d" }
+  ],
   "durable_objects": {
     "bindings": [
       { "name": "ROOMS", "class_name": "GameRoom" },
