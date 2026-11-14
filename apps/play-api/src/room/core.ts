@@ -957,7 +957,8 @@ export class RoomCore<S = CatTowerState> {
     const target = this.state.seats[seat];
     if (this.state.status !== "lobby") return [this.fail(deviceId, "not_lobby")];
     if (!target) return [this.fail(deviceId, "bad_seat")];
-    if (target.kind !== "open") return [this.fail(deviceId, "seat_taken")];
+    // A person takes over a House Cat's seat (a first table's cat holds it for whoever comes).
+    if (target.kind !== "open" && target.kind !== "bot") return [this.fail(deviceId, "seat_taken")];
     const playerId = this.state.devices[deviceId]?.players?.[person.id];
     if (this.state.seats.some((s) => s.person?.id === person.id || (playerId && s.playerId === playerId))) {
       return [this.fail(deviceId, "person_seated")];

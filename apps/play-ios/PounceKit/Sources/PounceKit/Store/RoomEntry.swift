@@ -9,10 +9,11 @@ public enum NotFoundMeaning: Equatable, Sendable {
 /// Decisions made when a room screen opens (spec §5.4, §5.5, §7.3).
 public enum RoomEntry {
     /// The claim that seats the phone's owner when it arrives at a lobby holding no seat:
-    /// the first open seat, so an invitee is one tap from the table. Nil outside the lobby,
-    /// when this device already holds a seat, or when no seat is open.
+    /// the first open seat, else the first House Cat's (a person takes it over), so an invitee
+    /// is never a tap from the table. Nil outside the lobby, when this device already holds a
+    /// seat, or when no seat is open or held by a House Cat.
     public static func autoClaim(model: TableModel, owner: Person) -> ClientMessage? {
-        guard model.room.status == .lobby, model.mySeats.isEmpty, let seat = model.firstOpenSeat else {
+        guard model.room.status == .lobby, model.mySeats.isEmpty, let seat = model.takeableSeats.first else {
             return nil
         }
         return .claim(seat: seat, person: owner)

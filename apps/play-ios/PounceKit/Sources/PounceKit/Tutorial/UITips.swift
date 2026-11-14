@@ -191,12 +191,21 @@ public struct TipPacing: Equatable, Sendable {
     public var perVisit: Int
     public var perSession: Int
     public var perDay: Int
+    /// Screens that take fewer tips per visit than `perVisit`. Home and the lobby are where a new
+    /// player is in a hurry to play: one tip each visit, never three in a row (first-run funnel).
+    public var perVisitOn: [TipScreen: Int]
 
-    public init(perVisit: Int = 3, perSession: Int = 4, perDay: Int = 6) {
+    public init(
+        perVisit: Int = 3, perSession: Int = 4, perDay: Int = 6, perVisitOn: [TipScreen: Int] = [.home: 1, .lobby: 1]
+    ) {
         self.perVisit = perVisit
         self.perSession = perSession
         self.perDay = perDay
+        self.perVisitOn = perVisitOn
     }
+
+    /// How many tips one visit to `screen` may show.
+    public func perVisit(on screen: TipScreen) -> Int { perVisitOn[screen] ?? perVisit }
 
     public static let standard = TipPacing()
 }
@@ -249,7 +258,7 @@ public struct TipDirector: Equatable, Sendable {
         if let tip, tip.rule.screen != facts.screen || person != facts.person || !facts.visible.contains(tip.rule.anchor) {
             dismiss()
         }
-        guard tip == nil, shownThisVisit < pacing.perVisit,
+        guard tip == nil, shownThisVisit < pacing.perVisit(on: facts.screen),
               shownThisSession[facts.person, default: 0] < pacing.perSession, today < pacing.perDay,
               let next = Self.candidate(facts, seen: seen) else { return nil }
         tip = next

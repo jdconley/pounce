@@ -35,10 +35,17 @@ private let host = Person(id: "host", name: "JD", cat: 0)
     @Test func noAutoClaimWhenFullOrPlaying() {
         let full = lobby([
             SeatView(kind: .human, person: host, presence: .awake),
-            SeatView(kind: .bot),
+            SeatView(kind: .human, person: Person(id: "p2", name: "Ben", cat: 5), presence: .awake),
             SeatView(kind: .closed),
         ])
         #expect(RoomEntry.autoClaim(model: TableModel(room: full), owner: owner) == nil)
+        // A House Cat's seat is not full: a person takes it over (first-run funnel).
+        let withCat = lobby([
+            SeatView(kind: .human, person: host, presence: .awake),
+            SeatView(kind: .bot),
+            SeatView(kind: .closed),
+        ])
+        #expect(RoomEntry.autoClaim(model: TableModel(room: withCat), owner: owner) == .claim(seat: 1, person: owner))
     }
 
     @Test func noAutoClaimWhenPlaying() {

@@ -12,7 +12,7 @@ import SwiftUI
 ///   under them as compact tickets; with no table, or only finished ones, the games lead as
 ///   posters. An iPad lays the games out as a grid, beside your tables when it is on its side.
 /// - The dock: Invite and Join. Its own band: nothing scrolls under it. With no table yet,
-///   Practice sits under the game posters.
+///   Practice takes Invite's place (the strip has Invite too), so it is never under the dock.
 ///
 /// Long-press a table to archive it; the sleeping-cat tile at the end of the tables opens the
 /// archived ones.
@@ -330,17 +330,21 @@ struct HomeView: View {
     /// Pinned to the bottom, on a band of its own: Invite and Join, the two ways to bring people
     /// to a game (Invite once the server has connections). The column ends at its edge.
     private func dock(width: CGFloat, bottomInset: CGFloat) -> some View {
-        let invite = showStrip
+        let practice = showPractice
+        let invite = showStrip && !practice
+        let pair = invite || practice
         let gap: CGFloat = 12
         let pill: CGFloat =
             roomy
             ? 300
-            : invite ? max(130, min(220, (width - 32 - gap) / 2)) : max(160, min(280, width - 32))
+            : pair ? max(130, min(220, (width - 32 - gap) / 2)) : max(160, min(280, width - 32))
         return HStack(spacing: gap) {
+            if practice { practicePill(width: pill) }
             if invite { invitePill(width: pill) }
             joinPill(width: pill)
         }
         .animation(.spring(duration: 0.35, bounce: 0.4).paced, value: invite)
+        .animation(.spring(duration: 0.35, bounce: 0.4).paced, value: practice)
         .padding(.top, 12)
         // Above the home indicator there is room already; a phone with a button needs a margin.
         .padding(.bottom, bottomInset > 0 ? 2 : 10)
@@ -396,7 +400,7 @@ struct HomeView: View {
     }
 
     /// With no tables yet, a way to just try the game: a practice round against the House Cat,
-    /// under the game posters.
+    /// in the dock beside Join.
     private var showPractice: Bool { shownItems.isEmpty && lead != nil }
 
     private func practicePill(width: CGFloat) -> some View {
@@ -637,7 +641,6 @@ struct HomeView: View {
                 HomeUpdates()
                 if lead == .tables { tablesSection }
                 if lead != nil { shelfColumn(leads: lead == .shelf) }
-                if showPractice { practicePill(width: 240) }
                 if lead == .shelf { tablesSection }
             }
             .padding(.top, 6)
@@ -675,7 +678,6 @@ struct HomeView: View {
                         VStack(spacing: 30) {
                             if lead == .tables { tablesColumn }
                             shelfGrid(width: width, height: height)
-                            if showPractice { practicePill(width: 300) }
                             if lead == .shelf, hasTables { tablesColumn }
                         }
                         .frame(width: width)

@@ -10,6 +10,9 @@
 //   pounce-e2e scenario presence|reconnect|move|stall [--stall 20]
 //       (stall: one phone's network goes dead as it plays; prints when each phone shows it)
 //   pounce-e2e peek <CODE>            (one snapshot as a seatless device: turn, step, seats)
+//   pounce-e2e host [--name Grandma] [--cat 4] [--house-cat] [--timeout 900]
+//       (makes a Cat Tower table, prints "room <CODE>", sits there; --house-cat seats a House Cat
+//        as a first table does, which a guest takes over; logs "guest seated <seat>")
 //
 // Every mode takes `--base <url>` (default http://localhost:8787). Exit 0 on success, 1 with a
 // one-line reason on failure, 2 on bad usage.
@@ -404,7 +407,8 @@ func joinMode(_ base: APIConfig, _ o: Options) async throws {
     _ = try await join(remote, code)
     log("joined \(code)")
 
-    // Claim the first open seat; a refusal (someone else took it) retries on the next snapshot.
+    // Claim the first open seat, else a House Cat's (as the app does); a refusal (someone else
+    // took it) retries on the next snapshot.
     var claimed = false
     let claimDeadline = Date().addingTimeInterval(120)
     while !claimed {
@@ -412,7 +416,7 @@ func joinMode(_ base: APIConfig, _ o: Options) async throws {
         guard let room = v.room else { throw Failure("no room") }
         if !v.mySeats.isEmpty { claimed = true; break }
         guard room.status == .lobby else { throw Failure("the game started without a seat for \(name)") }
-        if let open = room.seats.firstIndex(where: { $0.kind == .open }) {
+        if let open = TableModel(room: room).takeableSeats.first {
             if try await request(remote, .claim(seat: open, person: me)) == nil {
                 log("claimed seat \(open) as \(name)")
                 claimed = true
@@ -593,6 +597,27 @@ func peek(_ base: APIConfig, _ o: Options) async throws {
     await d.drop()
 }
 
+/// A host at a new table (first-run funnel): seat 0 as `--name`, a House Cat beside them with
+/// `--house-cat`, then waits for a guest to sit and stays until `--timeout` (or killed).
+func hostMode(_ base: APIConfig, _ o: Options) async throws {
+    let me = person(o.string("name", "Grandma"), cat: o.int("cat", 4))
+    let timeout = Double(o.int("timeout", 900))
+    let host = Device("host", config: base)
+    let code = try await host.createRoom()
+    log("room \(code)")
+    _ = try await join(host, code)
+    try await claim(host, seat: 0, me)
+    if o.flags["house-cat"] != nil { try await configure(host, seat: 1, .bot) }
+    log("seated as \(me.name)")
+    try await wait(host, "a guest", timeout: timeout) { v in
+        v.room?.seats.contains { $0.kind == .human && !$0.yours } ?? false
+    }
+    let guest = await host.view.room?.seats.firstIndex { $0.kind == .human && !$0.yours } ?? -1
+    log("guest seated \(guest)")
+    try? await Task.sleep(for: .seconds(timeout))
+    await host.drop()
+}
+
 // MARK: main
 
 let args = CommandLine.arguments
@@ -608,6 +633,7 @@ do {
     case "join": try await joinMode(config, options)
     case "scenario": try await scenario(config, options)
     case "peek": try await peek(config, options)
+    case "host": try await hostMode(config, options)
     default:
         log("unknown mode \(mode)")
         exit(2)

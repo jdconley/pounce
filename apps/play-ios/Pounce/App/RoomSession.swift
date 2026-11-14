@@ -42,6 +42,9 @@ final class RoomSession {
     /// Home's practice game: once this phone is seated in the new lobby, a House Cat joins and
     /// the game starts (`TableModel.practiceMessages`), with no stop in the lobby.
     @ObservationIgnored var practicePending = false
+    /// A host's first table (first-run funnel): a House Cat goes in the first open seat once this
+    /// phone sits down, so Start is lit (`TableModel.firstTableMessages`).
+    @ObservationIgnored var firstTablePending = false
     @ObservationIgnored private var seatsBeforeMove: Set<Seat> = []
 
     // Hooks the app model fills in.
@@ -282,6 +285,10 @@ final class RoomSession {
         if practicePending, model.room.status != .lobby || !model.mySeats.isEmpty {
             practicePending = false
             for message in model.practiceMessages ?? [] { send(message) }
+        }
+        if firstTablePending, model.room.status != .lobby || !model.mySeats.isEmpty {
+            firstTablePending = false
+            for message in model.firstTableMessages ?? [] { send(message) }
         }
         if !model.mySeats.isEmpty { onSnapshot(room) }
     }
