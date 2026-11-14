@@ -1,4 +1,4 @@
--- The first-run funnel's saved queries (docs/funnel.md says how to run them).
+-- The first-run funnel's saved queries. Run them with funnel/query.sh (docs/funnel.md).
 --
 -- Each query starts with a "-- name:" line. They look at devices minted in the last 30 days;
 -- change '-30 days' (every query has it once) for another window. Times are epoch milliseconds.

@@ -76,20 +76,22 @@ devices minted in the last 30 days (change `'-30 days'` for another window).
 | `invite_pages` | Invite pages opened per day, and link previews. |
 
 From `apps/play-api`, with Wrangler signed in to the Conley Chaos Cloudflare account
-(`pnpm exec wrangler login` once):
+(`pnpm exec wrangler login` once). `funnel/query.sh` runs saved queries by name (none: all of
+them) and prints each as a table:
 
 ```bash
-pnpm exec wrangler d1 execute conleychaos-play-funnel --remote --file funnel/queries.sql
+funnel/query.sh funnel by_source retention
 ```
 
-That runs all of them. One at a time, copy it into `--command`, or for ad hoc questions:
+Ad hoc questions go straight to Wrangler (add `--json` for JSON):
 
 ```bash
 pnpm exec wrangler d1 execute conleychaos-play-funnel --remote --command "SELECT milestone, COUNT(*) AS devices FROM milestones GROUP BY milestone ORDER BY devices DESC"
 ```
 
-Add `--json` for JSON instead of a table. The Cloudflare dashboard (Storage and databases, D1,
-`conleychaos-play-funnel`, Console) runs the same SQL in a browser.
+`--file` runs SQL too, but against the remote database it prints only a summary, not rows. The
+Cloudflare dashboard (Storage and databases, D1, `conleychaos-play-funnel`, Console) runs the same
+SQL in a browser.
 
 ### Locally
 
@@ -97,7 +99,7 @@ Add `--json` for JSON instead of a table. The Cloudflare dashboard (Storage and 
 `apps/play-api/.wrangler/state`. After a simulator run against it:
 
 ```bash
-pnpm exec wrangler d1 execute conleychaos-play-funnel --local --file funnel/queries.sql
+funnel/query.sh --local
 ```
 
 ## Changing it
