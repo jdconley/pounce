@@ -1159,6 +1159,7 @@ final class AppModel {
         }
         pasteboard.settle()
         Haptics.shared.success()
+        funnel.pasted()
         handle(link)
     }
 
