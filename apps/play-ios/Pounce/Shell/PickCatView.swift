@@ -1,20 +1,31 @@
 import PounceKit
 import SwiftUI
 
-/// First launch: pick a cat and type your name. A hero cat over "What's your name?", the name
-/// field (focused, empty, a random name as its placeholder; the dice fills one in), the 4x2 cat
-/// grid and one big check. Everyone at the table sees this name.
+/// First launch: who you are at the table. A cat and a suggested name are already chosen, so the
+/// check works in one tap; tapping the name types your own (first-run funnel, part 1). A guest
+/// who came by a table link sees who saved them a seat, from a peek at that table once the age
+/// check is done.
 struct PickCatView: View {
     @Environment(AppModel.self) private var model
+    /// Who saved this guest a seat; nil until the peek answers, or with no table link.
+    @State private var host: InviteHost?
+    /// A cat to start with. Staged runs (UI tests, screenshots) always start on the first one.
+    @State private var startCat = AppModel.stagedRun ? 0 : Int.random(in: 0..<ArtName.catCount)
 
     var body: some View {
         CatEditorView(
-            initialName: "", initialCat: 0, asksName: true, typedNames: model.limits.typedNames
+            initialName: "", initialCat: startCat, asksName: true, typedNames: model.limits.typedNames,
+            suggestsName: true, invite: host
         ) { name, cat in
             model.finishPickCat(name: name, cat: cat)
         }
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("screen-pickCat")
+        .task {
+            guard case .pickCat(let link?) = model.route else { return }
+            let found = await model.inviteHost(for: link)
+            withAnimation(.spring(duration: 0.45, bounce: 0.3).paced) { host = found }
+        }
     }
 }
 
@@ -36,16 +47,28 @@ enum CatNames {
 }
 
 /// Hero cat + name field + dice + cat grid + check. Used for the first launch and for editing a
-/// person in the People sheet. A new person starts with an empty name: a random one shows as
-/// the placeholder, never taken unless the dice puts it in the field, and the check sends you
-/// back to the field until it holds a name.
+/// person in the People sheet.
+///
+/// - First launch (`suggestsName`): the field already holds a suggested name and a cat is
+///   picked, so the check works in one tap. The keyboard stays down so every cat shows; tapping
+///   the name selects it, so typing replaces it. An emptied field takes the suggestion back.
+/// - Elsewhere a new person starts with an empty name: a random one shows as the placeholder,
+///   never taken unless the dice puts it in the field, and the check sends you back to the field
+///   until it holds a name.
+///
+/// While the keyboard is up on a phone the hero steps aside, so the cats stay above it. Typed
+/// names go to the server's name filter as you type, so the check rarely waits on it.
 struct CatEditorView: View {
     let initialName: String
     let initialCat: Int
-    /// Ask for the name out loud ("What's your name?") and focus the field at once.
+    /// Ask for the name out loud ("What's your name?").
     let asksName: Bool
     /// Names are typed. Off (a kitten, spec §14.1): only the generated names, by the dice.
     let typedNames: Bool
+    /// The first launch: start with a suggested name, keyboard down.
+    let suggestsName: Bool
+    /// An invited guest's host: the hero shows their cat beside yours ("Grandma saved you a seat").
+    let invite: InviteHost?
     /// Show the extra delete button (people other than the owner).
     var onDelete: (() -> Void)?
     var onCancel: (() -> Void)?
@@ -59,21 +82,29 @@ struct CatEditorView: View {
     /// Why the server's name filter refused the typed name; nil while it hasn't.
     @State private var refusal: String?
     @State private var checking = false
+    /// The name filter's answers so far, by name (asked while typing).
+    @State private var verdicts: [String: NameVerdict] = [:]
+    @State private var selection: TextSelection?
     @Environment(AppModel.self) private var model
     /// The placeholder: a name to type over (or roll with the dice).
     @State private var suggestion = CatEditorView.randomName()
     @FocusState private var nameFocused: Bool
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.dynamicTypeSize) private var typeSize
 
     init(
         initialName: String, initialCat: Int, asksName: Bool = false, typedNames: Bool = true,
+        suggestsName: Bool = false, invite: InviteHost? = nil,
         onCancel: (() -> Void)? = nil, onDelete: (() -> Void)? = nil, onConfirm: @escaping (String, Int) -> Void
     ) {
-        let start = typedNames || !AgeLimits.needsGeneratedName(initialName) ? initialName : Self.randomName()
+        var start = typedNames || !AgeLimits.needsGeneratedName(initialName) ? initialName : Self.randomName()
+        if suggestsName && start.isEmpty { start = Self.randomName() }
         self.initialName = start
         self.initialCat = initialCat
         self.asksName = asksName
         self.typedNames = typedNames
+        self.suggestsName = suggestsName
+        self.invite = invite
         self.onCancel = onCancel
         self.onDelete = onDelete
         self.onConfirm = onConfirm
@@ -87,9 +118,16 @@ struct CatEditorView: View {
     }
 
     private var trimmed: String { name.trimmingCharacters(in: .whitespacesAndNewlines) }
-    private var canConfirm: Bool { !trimmed.isEmpty }
+    /// The name the check takes: what's typed, or on the first launch the suggestion.
+    private var chosen: String { trimmed.isEmpty && suggestsName ? suggestion : trimmed }
+    private var canConfirm: Bool { !chosen.isEmpty }
 
     @Environment(\.horizontalSizeClass) private var sizeClass
+    /// A short phone (an SE): the hero shrinks so the check shows without scrolling.
+    @State private var short = false
+
+    /// A phone with the keyboard up: the hero steps aside so the cats show above the keyboard.
+    private var typing: Bool { nameFocused && sizeClass != .regular }
 
     var body: some View {
         ZStack {
@@ -98,8 +136,8 @@ struct CatEditorView: View {
                 roomy
             } else {
                 ScrollView {
-                    VStack(spacing: 18) {
-                        hero
+                    VStack(spacing: short ? 12 : invite == nil ? 18 : 14) {
+                        if !typing { hero }
                         prompt
                         nameRow
                         catGrid
@@ -110,19 +148,36 @@ struct CatEditorView: View {
                     .padding(.bottom, 24)
                     .frame(maxWidth: 520)
                     .frame(maxWidth: .infinity)
+                    .animation(reduceMotion ? nil : .spring(duration: 0.35, bounce: 0.2).paced, value: typing)
                 }
                 .scrollBounceBehavior(.basedOnSize)
                 .scrollDismissesKeyboard(.interactively)
             }
         }
+        .onGeometryChange(for: Bool.self) { $0.size.height < 700 } action: { short = $0 }
         .task { await blinkLoop() }
         .task {
-            // A new name is the first thing to fill in: the keyboard comes up with the screen.
-            guard typedNames, asksName || initialName.isEmpty else { return }
+            // A new name with nothing in the field is the first thing to fill in: the keyboard
+            // comes up with the screen. A suggested name waits for a tap.
+            guard typedNames, !suggestsName, asksName || initialName.isEmpty else { return }
             try? await Task.sleep(for: Pace.duration(.milliseconds(350)))
             // Not if a name went in meanwhile (the dice), which would only cover the check.
             guard trimmed.isEmpty else { return }
             nameFocused = true
+        }
+        // Typed names go to the filter as they're typed, so the check doesn't wait on it.
+        .task(id: trimmed) {
+            let name = trimmed
+            guard typedNames, !name.isEmpty, AgeLimits.needsGeneratedName(name), verdicts[name] == nil else { return }
+            try? await Task.sleep(for: .milliseconds(450))
+            guard !Task.isCancelled else { return }
+            let verdict = await NameGate.verdict(model.api, name, kind: .person)
+            verdicts[name] = verdict
+        }
+        .onChange(of: nameFocused) { _, focused in
+            // Tapping a suggested name selects it, so typing replaces it.
+            guard focused, suggestsName, !name.isEmpty else { return }
+            selection = TextSelection(range: name.startIndex..<name.endIndex)
         }
     }
 
@@ -174,14 +229,42 @@ struct CatEditorView: View {
 
     // MARK: pieces
 
+    /// "What's your name?", or for an invited guest who saved them a seat.
     @ViewBuilder private var prompt: some View {
-        if asksName && typedNames {
+        if let invite {
+            VStack(spacing: 6) {
+                OutlinedText(Self.inviteLine(invite), size: sizeClass == .regular ? 34 : 26, fill: .white, width: 3.5, lines: 2)
+                    .accessibilityAddTraits(.isHeader)
+                    .accessibilityIdentifier("pickcat.invite")
+                if !typing {
+                    Text(verbatim: invite.table)
+                        .font(.system(.subheadline, design: .rounded, weight: .heavy))
+                        .foregroundStyle(.white)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.7)
+                        .padding(.horizontal, 14)
+                        .padding(.vertical, 5)
+                        .background(Capsule().fill(Palette.ink.opacity(0.45)))
+                        .dynamicTypeSize(...DynamicTypeSize.accessibility1)
+                        .accessibilityLabel(Text("Table name, \(invite.table)", comment: "VoiceOver: the table's name"))
+                        .accessibilityIdentifier("pickcat.invite.table")
+                }
+            }
+            .transition(.scale(scale: 0.8).combined(with: .opacity))
+        } else if asksName && typedNames {
             OutlinedText(
                 String(localized: "What's your name?", comment: "First launch: the prompt over the name field"),
                 size: sizeClass == .regular ? 38 : 30, fill: .white, width: 4)
                 .accessibilityAddTraits(.isHeader)
                 .accessibilityIdentifier("pickcat.prompt")
         }
+    }
+
+    /// "Grandma saved you a seat", or just "Grandma invited you" when no seat waits.
+    static func inviteLine(_ invite: InviteHost) -> String {
+        invite.seatWaits
+            ? String(localized: "\(invite.name) saved you a seat", comment: "First launch, invited: who saved this guest a seat at their table")
+            : String(localized: "\(invite.name) invited you", comment: "First launch, invited: who sent the table link (no seat free)")
     }
 
     private var background: some View {
@@ -195,7 +278,45 @@ struct CatEditorView: View {
         .ignoresSafeArea()
     }
 
-    private var hero: some View {
+    @ViewBuilder private var hero: some View {
+        if let invite {
+            inviteHero(invite)
+        } else {
+            soloHero
+        }
+    }
+
+    /// An invited guest: the host's cat on a cushion beside yours, on the rug, as at the table.
+    private func inviteHero(_ invite: InviteHost) -> some View {
+        let cushion: CGFloat = sizeClass == .regular ? 172 : short ? 108 : 132
+        let host = SeatView(kind: .human, person: Person(id: "host", name: invite.name, cat: invite.cat), presence: .awake)
+        let me = SeatView(kind: .human, person: Person(id: "me", name: chosen, cat: cat), yours: true, presence: blink ? .awake : nil)
+        return ZStack {
+            Image(ArtName.rug)
+                .resizable()
+                .frame(width: cushion * 2.75, height: cushion * 1.2)
+                .shadow(color: Palette.ink.opacity(0.4), radius: 0, x: 0, y: 6)
+                .offset(y: cushion * 0.22)
+                .accessibilityHidden(true)
+            HStack(spacing: cushion * 0.32) {
+                Cushion(seat: host, index: 0, width: cushion, name: invite.name)
+                    .accessibilityElement()
+                    .accessibilityLabel(Text(verbatim: invite.name))
+                Cushion(seat: me, index: 1, width: cushion, name: chosen)
+                    .id(cat)
+                    .transition(.scale(scale: 0.6).combined(with: .opacity))
+                    .accessibilityElement()
+                    .accessibilityLabel(CatNames.label(cat))
+            }
+            .padding(.bottom, 20)
+        }
+        .frame(height: cushion * 1.15 + 24)
+        .animation(reduceMotion ? nil : .spring(duration: 0.4, bounce: 0.4).paced, value: cat)
+        .accessibilityElement(children: .contain)
+        .accessibilityIdentifier("pickcat.invite.hero")
+    }
+
+    private var soloHero: some View {
         ZStack {
             Circle()
                 .fill(
@@ -215,7 +336,7 @@ struct CatEditorView: View {
                 .transition(.scale(scale: 0.6).combined(with: .opacity))
                 .accessibilityLabel(CatNames.label(cat))
         }
-        // Smaller while typing, so the prompt, the field and the check stay above the keyboard.
+        // Smaller while typing on iPad, so the prompt, the field and the check stay above the keyboard.
         .scaleEffect(nameFocused ? Self.typingScale : 1, anchor: .bottom)
         .frame(height: 246 * heroScale * (nameFocused ? Self.typingScale : 1))
         .animation(reduceMotion ? nil : .spring(duration: 0.4, bounce: 0.4).paced, value: cat)
@@ -223,8 +344,11 @@ struct CatEditorView: View {
     }
 
     private static let typingScale: CGFloat = 0.5
-    /// The hero cat is bigger on a roomy screen.
-    private var heroScale: CGFloat { sizeClass == .regular ? 1.3 : 1 }
+    /// The hero cat is bigger on a roomy screen, and smaller on a phone at a big text size.
+    private var heroScale: CGFloat {
+        if sizeClass == .regular { return 1.3 }
+        return typeSize.isAccessibilitySize || short ? 0.8 : 1
+    }
 
     private var nameRow: some View {
         HStack(spacing: 12) {
@@ -274,7 +398,7 @@ struct CatEditorView: View {
 
     private var nameField: some View {
             TextField(
-                "", text: $name,
+                "", text: $name, selection: $selection,
                 prompt: Text(verbatim: suggestion).foregroundStyle(Palette.ink.opacity(0.4))
             )
                 .focused($nameFocused)
@@ -291,12 +415,23 @@ struct CatEditorView: View {
                     if clipped != new { name = clipped }
                     refusal = nil
                 }
-                .padding(.horizontal, 16)
+                .padding(.leading, 16)
+                // Room for the pencil, which says the suggested name can be changed.
+                .padding(.trailing, suggestsName ? 40 : 16)
                 .frame(height: 60)
                 // The drop shadow on the pill alone: on the field it would sit under the faint
                 // placeholder letters and show through them.
                 .background(Capsule().fill(.white).shadow(color: Palette.ink.opacity(0.5), radius: 0, x: 0, y: 5))
                 .overlay(Capsule().strokeBorder(Palette.ink, lineWidth: 4))
+                .overlay(alignment: .trailing) {
+                    if suggestsName && !nameFocused {
+                        PencilMark()
+                            .frame(width: 24, height: 24)
+                            .padding(.trailing, 16)
+                            .allowsHitTesting(false)
+                            .transition(.opacity)
+                    }
+                }
                 .wiggle(trigger: nameNope)
                 .accessibilityLabel(Text("Your name"))
                 .accessibilityIdentifier("pickcat.name")
@@ -350,23 +485,31 @@ struct CatEditorView: View {
         .padding(.top, 6)
     }
 
-    /// A typed name is put to the server's name filter first; a generated one needs no asking.
+    /// A typed name is put to the server's name filter first (usually already asked while it was
+    /// typed); a generated one needs no asking.
     private func confirm() {
-        let name = trimmed, cat = cat
+        let name = chosen, cat = cat
+        nameFocused = false
         guard typedNames, AgeLimits.needsGeneratedName(name) else { return onConfirm(name, cat) }
+        if let verdict = verdicts[name] { return settle(verdict, name: name, cat: cat) }
         guard !checking else { return }
         checking = true
         Task {
             let verdict = await NameGate.verdict(model.api, name, kind: .person)
             checking = false
-            if let words = NameGate.words(verdict) {
-                refusal = words
-                nameNope += 1
-                Haptics.shared.thump()
-                UIAccessibility.post(notification: .announcement, argument: words)
-            } else {
-                onConfirm(name, cat)
-            }
+            verdicts[name] = verdict
+            settle(verdict, name: name, cat: cat)
+        }
+    }
+
+    private func settle(_ verdict: NameVerdict, name: String, cat: Int) {
+        if let words = NameGate.words(verdict) {
+            refusal = words
+            nameNope += 1
+            Haptics.shared.thump()
+            UIAccessibility.post(notification: .announcement, argument: words)
+        } else {
+            onConfirm(name, cat)
         }
     }
 

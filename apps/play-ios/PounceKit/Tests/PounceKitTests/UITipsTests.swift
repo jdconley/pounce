@@ -91,24 +91,44 @@ import Testing
     @Test func oneAtATimeAndAFewPerVisit() {
         var director = TipDirector()
         var seen: Set<UITip> = []
-        let all = newHome.union(["home.update", "home.gift", "home.tables", "home.own"])
+        let tiles: Set<String> = ["tiles.meter", "tiles.play", "tiles.draw", "tiles.sort", "tiles.hint"]
         var shown: [UITip] = []
         for _ in 0..<10 {
-            if let tip = director.update(home(all), seen: seen, today: shown.count) {
+            let facts = TipFacts(screen: .tiles, person: "a", visible: tiles)
+            if let tip = director.update(facts, seen: seen, today: shown.count) {
                 #expect(director.tip == tip)
                 // While it's up, nothing else goes up.
-                #expect(director.update(home(all), seen: seen.union([tip]), today: shown.count + 1) == nil)
+                #expect(director.update(facts, seen: seen.union([tip]), today: shown.count + 1) == nil)
                 shown.append(tip)
                 seen.insert(tip)
                 director.dismiss()
             }
         }
-        #expect(shown == [.homeShelf, .homeUpdate, .homeGift])
+        #expect(shown == [.tilesMeter, .tilesPlay, .tilesHint])
         // A new visit to the same screen gets more, up to the session's limit.
-        director.visit(.home)
-        #expect(director.update(home(all), seen: seen, today: 3) == .homePractice)
+        director.visit(.tiles)
+        #expect(director.update(TipFacts(screen: .tiles, person: "a", visible: tiles), seen: seen, today: 3) == .tilesSort)
         director.dismiss()
-        #expect(director.update(home(all), seen: seen.union([.homePractice]), today: 4) == nil, "four a session")
+        #expect(director.update(TipFacts(screen: .tiles, person: "a", visible: tiles), seen: seen.union([.tilesSort]), today: 4) == nil, "four a session")
+    }
+
+    /// First-run funnel: a new player's Home shows one tip, not three in a row. The next waits
+    /// for the next visit.
+    @Test func homeAndTheLobbyShowOneTipAVisit() {
+        var director = TipDirector()
+        let all = newHome.union(["home.update", "home.gift"])
+        #expect(director.update(home(all), seen: [], today: 0) == .homeShelf)
+        director.dismiss()
+        #expect(director.update(home(all), seen: [.homeShelf], today: 1) == nil, "one a visit")
+        director.visit(.lobby)
+        let lobby = TipFacts(screen: .lobby, person: "a", visible: ["lobby.startReady", "lobby.share"])
+        #expect(director.update(lobby, seen: [], today: 1) == .lobbyStart)
+        director.dismiss()
+        #expect(director.update(lobby, seen: [.lobbyStart], today: 2) == nil, "one a visit")
+        director.visit(.home)
+        #expect(director.update(home(all), seen: [.homeShelf], today: 2) == .homeUpdate)
+        #expect(TipPacing.standard.perVisit(on: .home) == 1)
+        #expect(TipPacing.standard.perVisit(on: .tiles) == 3)
     }
 
     @Test func theDailyLimitHolds() {

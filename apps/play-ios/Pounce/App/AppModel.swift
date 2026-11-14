@@ -23,6 +23,9 @@ final class AppModel {
     /// Set when creating a room failed; cleared by the next attempt.
     var newGameError: APIError?
     private(set) var isCreatingRoom = false
+    /// A first table gets a House Cat (first-run funnel). Off in staged runs (UI tests,
+    /// screenshots), like the tips, unless `-house-cat` turns it on.
+    @ObservationIgnored private var firstTableCat = true
     /// The one live room connection (spec §7.2): the room on screen, or a typed code being
     /// checked from Join. Replaced or closed whenever the route leaves it.
     private(set) var room: RoomSession?
@@ -300,6 +303,7 @@ final class AppModel {
     private func startTips(arguments: [String], env: [String: String]) {
         tips.enabled = (!RatingPrompt.isStaged(arguments: arguments, env: env) || arguments.contains("-ui-tips"))
             && !arguments.contains("-no-tips")
+        firstTableCat = !RatingPrompt.isStaged(arguments: arguments, env: env) || arguments.contains("-house-cat")
         tips.who = { [weak self] in
             guard let self else { return (nil, nil, false) }
             return (people.owner?.id, ageBand, !people.others.isEmpty)
@@ -814,15 +818,25 @@ final class AppModel {
         newGameError = nil
         defer { isCreatingRoom = false }
         do {
+            // Before `open`, which caches the new table.
+            let first = isFirstTable
             let code = try await api.createRoom(game: game.id)
             open(code: code, intent: .create)
-            if practice { room?.practicePending = true }
+            if practice {
+                room?.practicePending = true
+            } else if first && firstTableCat {
+                room?.firstTablePending = true
+            }
         } catch let error as APIError {
             newGameError = error
         } catch {
             newGameError = .transport(String(describing: error))
         }
     }
+
+    /// No table on this phone, listed, cached or archived: whoever starts one now is a
+    /// first-time host, and their lobby opens with a House Cat so Start is lit.
+    var isFirstTable: Bool { tables.isEmpty && cache.isEmpty && archived.isEmpty }
 
     func open(code: String, intent: RoomIntent) {
         // A push tap or a link while the invite sheet is up: the table, not the sheet over it.

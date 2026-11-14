@@ -131,6 +131,18 @@ describe("claim", () => {
     expect(errorsOf(out)).toEqual([{ to: "a", code: "seat_taken" }]);
   });
 
+  it("lets a person take over a House Cat's seat in the lobby", () => {
+    const room = newRoom();
+    room.connect("a");
+    room.connect("b");
+    room.handle("a", { t: "claim", seat: 0, person: person(1) });
+    room.handle("a", { t: "configure", seat: 1, kind: "bot" });
+    const out = room.handle("b", { t: "claim", seat: 1, person: person(2) });
+    expect(errorsOf(out)).toEqual([]);
+    expect(room.state.seats[1]).toMatchObject({ kind: "human", deviceId: "b", person: person(2) });
+    expect(room.controlledSeats("b")).toEqual([1]);
+  });
+
   it("rejects the same Person.id seated twice with person_seated", () => {
     const room = newRoom();
     room.handle("a", { t: "claim", seat: 0, person: person(1) });

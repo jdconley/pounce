@@ -78,7 +78,7 @@ then the build setting (Debug: `http://localhost:8787`, optionally overridden by
 
 ### Debug-only launch arguments
 
-- `-demo <lobby|lobbyReady|table|other|replay|nope|celebrate|curtain|handoff|peek|crowded|hit|lay|over>` opens a room fed by
+- `-demo <lobby|lobbyReady|lobbyFirst|lobbyGuest|table|other|replay|nope|celebrate|curtain|handoff|peek|crowded|hit|lay|over>` opens a room fed by
   a fake socket and canned snapshots, so the real screens render with no server. `-slowmo <factor>`
   (at most 1) runs a demo in slow motion. See `Pounce/App/DemoMode.swift` for what each demo shows.
   The bad connection indicator has four: `weak`, `reconnecting`, `pending` (a move the server never
@@ -103,6 +103,10 @@ then the build setting (Debug: `http://localhost:8787`, optionally overridden by
 - `-anim-speed <n>` (or `POUNCE_ANIM_SPEED=<n>` in the environment) runs the whole app n times faster
   and marks the run as a test: sound and haptics go to silent stand-ins. See [Test speed](#test-speed).
 - `-show-join` opens the Join screen. `-open-link <url>` handles a link as if it was tapped.
+  `-invite-host <name>` makes the name screen's "saved you a seat" peek answer with a made-up host
+  (no server).
+- A host's first table opens with a House Cat in the first open seat (first-run funnel). Like the
+  tips it is off in staged runs; `-house-cat` turns it on there (`FirstRunTests`, `FunnelShotTests`).
 - For screenshots: `-demo-home` puts sample tables on Home (`-demo-home calm`: the same tables, none
   waiting on you), `-show-rules` / `-show-people` open
   those sheets over Home, and `-show-scoreboard` opens the scoreboard over a table. `-shelf all`

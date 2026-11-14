@@ -1,18 +1,24 @@
 import PounceKit
 import SwiftUI
 
-/// The lobby, one screen for host and guests (spec §5.5, mock m3-lobby): the table's name up top
-/// (the host or anyone seated taps it to rename the table), the room code huge with share and QR, the rug with six cushions (the server's six seats), and the big orange
-/// start pill for every seated phone.
+/// The lobby, one screen for host and guests (spec §5.5, first-run funnel part 1): the table's
+/// name up top (the host or anyone seated taps it to rename the table) with the room code beside
+/// it, the rug and its cushions (the server's seats) as the hero, then the ways a family plays
+/// together for the next free seat, and the big orange start pill for every seated phone.
+///
+/// The host's tray under the rug fills the next free seat four ways: people in the same room on
+/// their own phones (the QR code and the room code, over the rug), family far away (the share
+/// sheet, Messages first), someone on this phone (pass and play) and a House Cat. A host's first
+/// table opens with a House Cat already seated, so Start is lit; a person who joins takes the
+/// House Cat's seat. A guest's lobby keeps the rug and its people up front, with one small
+/// "Add a player" pill. Tapping a cushion opens the seat menu for everything else.
 struct LobbyView: View {
     @Environment(AppModel.self) private var model
     let session: RoomSession
     /// False while the socket is reconnecting: the seats and buttons don't take taps.
     let interactive: Bool
 
-    private enum Control: Hashable {
-        case seat(Int), start, share, add, practice
-    }
+    private typealias Control = LobbyWiggle
 
     /// Who the person picker seats, and how.
     private enum PickerTarget: Identifiable {
@@ -67,8 +73,6 @@ struct LobbyView: View {
             } else {
                 VStack(spacing: 6) {
                     topBar
-                    codeRow
-                        .allowsHitTesting(interactive)
                     rug
                         .allowsHitTesting(interactive)
                     startRow
@@ -88,6 +92,8 @@ struct LobbyView: View {
             if confirmingStart, let table, let messages = table.startClosingOpenSeats {
                 StartConfirm(players: table.playerCount, open: table.blockingSeats.count) {
                     confirmingStart = false
+                    // The QR code goes, or it would open a seat again as the others close.
+                    showQR = false
                     for message in messages { session.send(message) }
                 } onWait: {
                     confirmingStart = false
@@ -108,9 +114,16 @@ struct LobbyView: View {
             isPresented: $sharing, url: shareURL, tableName: tableName, inviteCode: session.code,
             catArt: ArtName.cat(hostCat, .idle),
             onSent: { model.noteInvited(code: session.code) }))
-        // A QR code on screen is an invite too: someone can scan it.
+        // A QR code on screen is an invite too: someone can scan it. While it shows, a seat stays
+        // open for the next phone in the room (one after another, they all sit down).
         .onChange(of: showQR) { _, shown in
-            if shown { model.noteInvited(code: session.code) }
+            if shown {
+                model.noteInvited(code: session.code)
+                openASeat()
+            }
+        }
+        .onChange(of: table?.firstOpenSeat == nil) { _, none in
+            if none && showQR { openASeat() }
         }
         .sheet(isPresented: $renaming) {
             RenameTableView(current: tableName, onCancel: { renaming = false }) { name in
@@ -169,14 +182,13 @@ struct LobbyView: View {
                 } else {
                     VStack(spacing: 14) {
                         topBar
-                        codeRow
-                            .scaleEffect(1.2)
-                            .padding(.vertical, 8)
-                            .allowsHitTesting(interactive)
+                            .padding(.horizontal, 12)
+                            .padding(.vertical, 6)
                         rug
                             .frame(maxWidth: 820)
                             .allowsHitTesting(interactive)
                         startRow
+                            .frame(maxWidth: 560)
                             .allowsHitTesting(interactive)
                     }
                     .padding(.bottom, 24)
@@ -186,7 +198,8 @@ struct LobbyView: View {
         }
     }
 
-    /// The landscape lobby's left panel: name, code, invite and QR, start.
+    /// The landscape lobby's left panel: name and code, the QR code when it's up, the ways to
+    /// add a player, start.
     private func infoPanel(height: CGFloat) -> some View {
         RoomyPanel {
             VStack(spacing: 22) {
@@ -195,16 +208,8 @@ struct LobbyView: View {
                 }
                 .accessibilityIdentifier("lobby.name")
                 .padding(.top, 8)
-                codeCapsule
-                    .scaleEffect(1.25)
-                    .padding(.vertical, 8)
-                HStack(spacing: 18) {
-                    shareButton
-                    qrButton
-                }
-                .scaleEffect(1.2)
-                .padding(.vertical, 4)
-                .allowsHitTesting(interactive)
+                codeChip(size: 30)
+                    .allowsHitTesting(interactive)
                 if showQR {
                     QRTile(text: shareURL.absoluteString, side: min(220, height * 0.3))
                         .onTapGesture { withAnimation(.spring(duration: 0.3).paced) { showQR = false } }
@@ -226,69 +231,63 @@ struct LobbyView: View {
 
     // MARK: header
 
+    /// Home, the table's name, and the room code: small, readable across a room, and a tap
+    /// shows the QR code for phones in the room.
     private var topBar: some View {
         HStack(spacing: 8) {
             CornerHomeButton { model.goHome() }
                 .accessibilityIdentifier("lobby.home")
-            Spacer(minLength: 0)
-            TableNameTitle(name: tableName, editable: canRename && interactive) {
+            TableNameTitle(name: tableName, size: sizeClass == .regular ? 26 : 20, editable: canRename && interactive) {
                 renaming = true
             }
             .accessibilityIdentifier("lobby.name")
-            Spacer(minLength: 0)
-            // Balances the home button so the name sits in the middle.
-            Color.clear.frame(width: 52, height: 1)
+            .frame(maxWidth: .infinity)
+            codeChip(size: sizeClass == .regular ? 28 : 20)
+                .allowsHitTesting(interactive)
         }
-        .padding(.horizontal, 16)
+        .padding(.horizontal, 12)
         .frame(height: 56)
     }
 
-    private var codeRow: some View {
-        HStack(spacing: 10) {
-            codeCapsule
-            shareButton
-            qrButton
-        }
-        .padding(.horizontal, 12)
-    }
-
-    private var codeCapsule: some View {
-        OutlinedText(session.code, size: 44, fill: .white, width: 3.5)
-                .padding(.horizontal, 20)
-                .padding(.vertical, 6)
+    /// The room code on a violet capsule. Seated, a tap shows (or hides) the QR code.
+    private func codeChip(size: CGFloat) -> some View {
+        Button {
+            guard seated else { return }
+            toggleQR()
+        } label: {
+            OutlinedText(session.code, size: size, fill: .white, width: size * 0.09)
+                .fixedSize()
+                .padding(.horizontal, size * 0.55)
+                .padding(.vertical, size * 0.22)
                 .background(
                     Capsule()
                         .fill(LinearGradient(
                             colors: [Palette.violet.mix(with: .white, by: 0.25), Palette.violet,
                                      Palette.violet.mix(with: Palette.ink, by: 0.35)],
                             startPoint: .top, endPoint: .bottom))
-                        .overlay(Capsule().strokeBorder(Palette.ink, lineWidth: 5))
-                        .shadow(color: Palette.ink.opacity(0.5), radius: 0, x: 0, y: 6)
-                )
-                .accessibilityElement()
-                .accessibilityLabel(Text("Room code \(spelled(session.code))"))
-                .accessibilityIdentifier("lobby.code")
+                        .overlay(Capsule().strokeBorder(Palette.ink, lineWidth: max(3, size * 0.14)))
+                        .shadow(color: Palette.ink.opacity(0.5), radius: 0, x: 0, y: 4))
+                .frame(minHeight: 44)
+                .contentShape(Capsule())
+        }
+        .buttonStyle(.plain)
+        .dynamicTypeSize(...DynamicTypeSize.accessibility1)
+        .accessibilityElement()
+        .accessibilityLabel(Text("Room code \(spelled(session.code))"))
+        .accessibilityHint(seated ? Text(showQR ? "Hide QR code" : "Show QR code") : Text(""))
+        .accessibilityAddTraits(seated ? .isButton : .isStaticText)
+        .accessibilityIdentifier("lobby.code")
     }
 
-    /// No share-sheet links out from a kitten's device (spec §14.1): the code and QR still show.
-    @ViewBuilder private var shareButton: some View {
-        if model.limits.sharesLinks {
-            PillButton(icon: ArtName.iconShare, color: Palette.magenta, size: .small, width: 54, accessibilityLabel: "Invite") {
-                lastTapped = .share
-                model.tips.used("lobby.share")
-                sharing = true
-            }
-            .wiggle(trigger: wiggles[.share, default: 0])
-            .accessibilityIdentifier("lobby.share")
-            .tipTarget("lobby.share")
-        }
+    private func toggleQR() {
+        lastTapped = .scan
+        Haptics.shared.tick()
+        withAnimation(.spring(duration: 0.4, bounce: 0.4).paced) { showQR.toggle() }
     }
 
-    private var qrButton: some View {
-        PillButton(icon: ArtName.iconQr, color: Palette.teal, size: .small, width: 54, accessibilityLabel: showQR ? "Hide QR code" : "Show QR code") {
-            withAnimation(.spring(duration: 0.4, bounce: 0.4).paced) { showQR.toggle() }
-        }
-        .accessibilityIdentifier("lobby.qr")
+    /// Someone is coming: a seat for them, unless one is open already (`inviteMessages`).
+    private func openASeat() {
+        for message in table?.inviteMessages ?? [] { session.send(message) }
     }
 
     // MARK: rug and cushions
@@ -311,10 +310,21 @@ struct LobbyView: View {
                     }
                 }
                 if showQR && !qrInPanel {
-                    QRTile(text: shareURL.absoluteString, side: min(side * 0.58, 240))
+                    QRTile(text: shareURL.absoluteString, side: min(side * 0.5, 240))
+                        .overlay(alignment: .bottom) {
+                            // The code too, for a phone that types it into Join.
+                            OutlinedText(session.code, size: 26, fill: .white, width: 3)
+                                .fixedSize()
+                                .padding(.horizontal, 14)
+                                .padding(.vertical, 3)
+                                .background(Capsule().fill(Palette.violet).overlay(Capsule().strokeBorder(Palette.ink, lineWidth: 4)))
+                                .offset(y: 22)
+                                .accessibilityHidden(true)
+                        }
                         .onTapGesture { withAnimation(.spring(duration: 0.3).paced) { showQR = false } }
-                        .position(x: geo.size.width / 2, y: geo.size.height / 2)
+                        .position(x: geo.size.width / 2, y: geo.size.height / 2 - 10)
                         .transition(.scale(scale: 0.3).combined(with: .opacity))
+                        .accessibilityElement(children: .ignore)
                         .accessibilityLabel("QR code for this table")
                         .accessibilityAddTraits(.isImage)
                         .accessibilityIdentifier("lobby.qrcode")
@@ -381,38 +391,41 @@ struct LobbyView: View {
         switch seat.kind {
         case .human where seat.yours: Text("Swap or stand up")
         case .human: Text("")
-        case .open where !seated: Text("Sit here")
+        case .open where !seated, .bot where !seated: Text("Sit here")
         default: Text("Seat options", comment: "VoiceOver hint: a lobby seat opens its menu")
         }
     }
 
     // MARK: start
 
-    /// Under the rug: what the table is waiting for in words, the worded seat controls (add a
-    /// player, a practice game against the House Cat) and the big Start pill.
+    /// Under the rug: what the table is waiting for in words (nothing when it's ready), the ways
+    /// to fill the next seat, and the big Start pill.
     @ViewBuilder private var startRow: some View {
         if let table {
-            VStack(spacing: 8) {
+            VStack(spacing: 10) {
                 // A kitten's turn alerts, asked of the grown-up at this table (launch review): in the
                 // column over the status, so it never covers the status or the seat controls.
                 KittenTablePromptView(session: session)
-                Text(verbatim: LobbyCopy.status(table))
-                    .font(.system(.subheadline, design: .rounded, weight: .heavy))
-                    .foregroundStyle(.white)
-                    .multilineTextAlignment(.center)
-                    .lineLimit(3)
-                    .minimumScaleFactor(0.8)
-                    .fixedSize(horizontal: false, vertical: true)
-                    .padding(.horizontal, 14)
-                    .padding(.vertical, 7)
-                    .background(RoundedRectangle(cornerRadius: 16, style: .continuous).fill(Palette.ink.opacity(0.78)))
-                    .padding(.horizontal, 16)
-                    .wiggle(trigger: wiggles[.start, default: 0])
-                    .dynamicTypeSize(...DynamicTypeSize.accessibility1)
-                    .accessibilityIdentifier("lobby.status")
+                if !table.canStart {
+                    Text(verbatim: LobbyCopy.status(table))
+                        .font(.system(.subheadline, design: .rounded, weight: .heavy))
+                        .foregroundStyle(.white)
+                        .multilineTextAlignment(.center)
+                        .lineLimit(3)
+                        .minimumScaleFactor(0.8)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .padding(.horizontal, 14)
+                        .padding(.vertical, 7)
+                        .background(RoundedRectangle(cornerRadius: 16, style: .continuous).fill(Palette.ink.opacity(0.78)))
+                        .padding(.horizontal, 16)
+                        .wiggle(trigger: wiggles[.start, default: 0])
+                        .dynamicTypeSize(...DynamicTypeSize.accessibility1)
+                        .accessibilityIdentifier("lobby.status")
+                        .transition(.scale.combined(with: .opacity))
+                }
                 if seated {
                     seatControls(table)
-                    let ready = table.canStart
+                    let ready = table.startLit
                     // Waiting: a muted violet pill, never a desaturated orange (that reads beige).
                     // Ready: hot orange with a white rim around the gold play icon so it reads.
                     PillButton(
@@ -427,50 +440,73 @@ struct LobbyView: View {
                     .groupOpacity(ready ? 1 : 0.8)
                     .shadow(color: ready ? Palette.orange.opacity(0.8) : .clear, radius: 14)
                     .wiggle(trigger: wiggles[.start, default: 0])
-                    .accessibilityValue(ready ? Text("") : Text(verbatim: LobbyCopy.status(table)))
+                    .accessibilityValue(table.canStart ? Text("") : Text(verbatim: LobbyCopy.status(table)))
                     .accessibilityIdentifier("lobby.start")
-                    .tipTarget(ready ? "lobby.startReady" : nil)
+                    // With the host's tray up, its tip goes first: the bubble over Start would
+                    // cover the tray, and a lit Start says what it does.
+                    .tipTarget(table.canStart && !hostTray(table) ? "lobby.startReady" : nil)
                     .transition(.scale.combined(with: .opacity))
                 }
             }
+            .animation(.spring(duration: 0.35, bounce: 0.3).paced, value: table.canStart)
         } else {
             Color.clear.frame(height: PillSize.large.height + 6)
         }
     }
 
-    /// "Add a player" (the choices for the next free seat) and, alone at the table, a practice
-    /// game against the House Cat.
+    /// The host's tray of ways to fill the next free seat; a guest's one "Add a player" pill
+    /// (the seat menu for that seat). Nothing when every seat holds a person.
     @ViewBuilder private func seatControls(_ table: TableModel) -> some View {
-        let practice = table.practiceMessages
-        if table.seatToAdd != nil || practice != nil {
-            HStack(spacing: 10) {
-                if let seat = table.seatToAdd {
-                    PillButton(
-                        icon: ArtName.iconPlus, color: Palette.teal, size: .small, width: practice == nil ? 220 : 164,
-                        title: String(localized: "Add a player", comment: "Lobby: opens the choices for the next free seat"),
-                        accessibilityLabel: "Add a player"
-                    ) {
-                        lastTapped = .add
-                        model.tips.used("lobby.add")
-                        menuSeat = seat
-                    }
-                    .wiggle(trigger: wiggles[.add, default: 0])
-                    .accessibilityIdentifier("lobby.add")
-                    .tipTarget("lobby.add")
+        if let seat = table.seatToAdd {
+            if hostTray(table) {
+                AddPlayerTray(
+                    sharesLinks: model.limits.sharesLinks, scanning: showQR,
+                    wiggles: { wiggles[$0, default: 0] }
+                ) { way in
+                    add(way, seat: seat)
                 }
-                if let practice {
-                    PillButton(
-                        icon: ArtName.badgeBot, color: Palette.magenta, size: .small, width: 164,
-                        title: String(localized: "Practice", comment: "Lobby: starts a practice game against the House Cat bot"),
-                        accessibilityLabel: "Practice against the House Cat"
-                    ) {
-                        lastTapped = .practice
-                        for message in practice { session.send(message) }
-                    }
-                    .wiggle(trigger: wiggles[.practice, default: 0])
-                    .accessibilityIdentifier("lobby.practice")
+                .tipTarget("lobby.add")
+            } else {
+                PillButton(
+                    icon: ArtName.iconPlus, color: Palette.teal, size: .small, width: 220,
+                    title: String(localized: "Add a player", comment: "Lobby: opens the choices for the next free seat"),
+                    accessibilityLabel: "Add a player"
+                ) {
+                    lastTapped = .add
+                    model.tips.used("lobby.add")
+                    menuSeat = seat
                 }
+                .wiggle(trigger: wiggles[.add, default: 0])
+                .accessibilityIdentifier("lobby.add")
+                .tipTarget("lobby.add")
             }
+        }
+    }
+
+    /// The host's tray shows: this phone is the host and a seat is free.
+    private func hostTray(_ table: TableModel) -> Bool {
+        room?.youAreHost == true && table.seatToAdd != nil
+    }
+
+    /// One of the tray's ways, for `seat` (the next free one).
+    private func add(_ way: AddPlayerTray.Way, seat: Int) {
+        model.tips.used("lobby.add")
+        switch way {
+        case .room:
+            toggleQR()
+        case .away:
+            lastTapped = .share
+            model.tips.used("lobby.share")
+            openASeat()
+            sharing = true
+        case .here:
+            lastTapped = .here
+            picker = .claim(seat)
+        case .bot:
+            lastTapped = .bot
+            Haptics.shared.tick()
+            Sound.shared.play(ArtName.Sound.sfxPop)
+            session.send(.configure(seat: seat, kind: .bot))
         }
     }
 
@@ -479,6 +515,7 @@ struct LobbyView: View {
         lastTapped = .start
         model.tips.used("lobby.start")
         if table.canStart {
+            showQR = false
             session.send(.start)
             return
         }
@@ -517,8 +554,8 @@ struct LobbyView: View {
                 wiggles[.seat(i), default: 0] += 1
                 Sound.shared.play(ArtName.Sound.sfxPop)
             }
-        case .open where !seated:
-            // Not at the table yet: one tap sits the owner here.
+        case .open where !seated, .bot where !seated:
+            // Not at the table yet: one tap sits the owner here (a House Cat gives up its seat).
             if let owner = model.people.owner {
                 Sound.shared.play(ArtName.Sound.sfxPop)
                 session.send(.claim(seat: i, person: owner))

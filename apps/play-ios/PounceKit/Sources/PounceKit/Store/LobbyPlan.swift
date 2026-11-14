@@ -52,3 +52,41 @@ extension TableModel {
         return [.configure(seat: seat, kind: .bot)] + others.map { .configure(seat: $0, kind: .closed) } + [.start]
     }
 }
+
+// MARK: - The first game (first-run funnel design, part 1)
+
+extension TableModel {
+    /// Start deals now, or after one question (open seats close): two or more cats are here.
+    /// The lobby lights Start for both.
+    public var startLit: Bool { canStart || startClosingOpenSeats != nil }
+
+    /// A host's first table: a House Cat in the first open seat, so Start is lit the moment the
+    /// lobby opens. Nil unless this phone is seated in the lobby, nobody else (a person on
+    /// another phone, a House Cat) is at the table and a seat is open. A person who arrives
+    /// later takes the House Cat's seat (`RoomEntry.autoClaim`).
+    public var firstTableMessages: [ClientMessage]? {
+        guard room.status == .lobby, !mySeats.isEmpty,
+              !room.seats.contains(where: { $0.kind == .bot || ($0.kind == .human && !$0.yours) }),
+              let seat = firstOpenSeat else { return nil }
+        return [.configure(seat: seat, kind: .bot)]
+    }
+
+    /// Someone is being invited (a QR code on screen, a link sent): the seat they will take. An
+    /// open seat if there is one (nothing to send), else the first closed seat, opened. Nil
+    /// when every seat is taken by a person, or outside the lobby. A House Cat's seat counts
+    /// as free too (a person takes it over), but one more open seat lets two arrive.
+    public var inviteMessages: [ClientMessage]? {
+        guard room.status == .lobby, !mySeats.isEmpty, firstOpenSeat == nil,
+              let closed = room.seats.firstIndex(where: { $0.kind == .closed }) else { return nil }
+        return [.configure(seat: closed, kind: .open)]
+    }
+
+    /// The seats a person arriving could sit in: open ones, then House Cats' (the server lets a
+    /// person take over a House Cat in the lobby).
+    public var takeableSeats: [Seat] {
+        guard room.status == .lobby else { return [] }
+        let open = room.seats.indices.filter { room.seats[$0].kind == .open }
+        let bots = room.seats.indices.filter { room.seats[$0].kind == .bot }
+        return open + bots
+    }
+}
