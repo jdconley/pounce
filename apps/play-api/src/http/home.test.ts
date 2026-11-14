@@ -224,7 +224,7 @@ describe("homePage", () => {
     for (const s of [
       "No chat. No public profiles.",
       "No ads. No tracking.",
-      "No analytics and no third-party SDKs. We never sell your data.",
+      "No third-party analytics or SDKs. We never sell your data.",
       "Signing in is never required to play.",
       "picks a name from Pounce's list of cat names and can't type one",
       "A parent decides on notifications.",

@@ -1,6 +1,6 @@
 # Pounce: App Store Connect privacy and age rating answers
 
-Draft for JD Conley (Conley Chaos LLC) to review, 10 November 2026. This is not legal advice and needs legal review before submission. It is a checklist for entering the App Privacy "nutrition label" and the age rating questionnaire by hand in App Store Connect. Every answer comes from what the code does today (app `apps/play-ios`, server `apps/play-api`). It must agree with the app's privacy manifest (`apps/play-ios/Pounce/Resources/PrivacyInfo.xcprivacy`), the public policy (`apps/play-api/src/http/privacy.ts`, served at `https://play.conleychaos.com/privacy`) and `docs/privacy/retention-policy.md`. A test (`apps/play-api/src/http/privacy-label.test.ts`) checks that the manifest and this file list the same data types. Change all four together when a feature adds data.
+Draft for JD Conley (Conley Chaos LLC) to review, 10 November 2026; updated 13 November 2026 for the first-run funnel (`docs/funnel.md`). This is not legal advice and needs legal review before submission. It is a checklist for entering the App Privacy "nutrition label" and the age rating questionnaire by hand in App Store Connect. Every answer comes from what the code does today (app `apps/play-ios`, server `apps/play-api`). It must agree with the app's privacy manifest (`apps/play-ios/Pounce/Resources/PrivacyInfo.xcprivacy`), the public policy (`apps/play-api/src/http/privacy.ts`, served at `https://play.conleychaos.com/privacy`) and `docs/privacy/retention-policy.md`. A test (`apps/play-api/src/http/privacy-label.test.ts`) checks that the manifest and this file list the same data types. Change all four together when a feature adds data.
 
 ## Before you start
 
@@ -37,18 +37,18 @@ Tick exactly these 9 boxes and nothing else.
 | Browsing History | Browsing History | No | |
 | Search History | Search History | No | |
 | Identifiers | **User ID** | **Yes** | The server's player id, and a one-way hash of the Sign in with Apple id. |
-| Identifiers | **Device ID** | **Yes** | The server-made device id, plus the push tokens for notifications, the widget and Live Activities. Not the IDFA or IDFV. |
+| Identifiers | **Device ID** | **Yes** | The server-made device id, plus the push tokens for notifications, the widget and Live Activities. Not the IDFA or IDFV. The first-run funnel keys its rows by a keyed hash of the device id. |
 | Purchases | Purchase History | No | Pounce sells nothing. |
-| Usage Data | **Product Interaction** | **Yes** | Which tips were seen, archived tables, settings, and for players 13 and over a count of the times of day they play (for reminder timing). |
+| Usage Data | **Product Interaction** | **Yes** | Which tips were seen, archived tables, settings, and for players 13 and over a count of the times of day they play (for reminder timing). The first-run funnel: when the device first reached each getting-started step (age check, name, Home, first table, first move, first finished game, notifications answer) and the days it was used. |
 | Usage Data | Advertising Data | No | |
-| Usage Data | **Other Usage Data** | **Yes** | Requests to play, invite links and their answers, nudges. |
-| Diagnostics | Crash Data, Performance Data, Other Diagnostic Data | No | No crash or analytics SDK. Server error logs carry no device data. |
+| Usage Data | **Other Usage Data** | **Yes** | Requests to play, invite links and their answers, nudges. The first-run funnel: invites sent and opened, and how the device first came (on its own, an invite link, a pasted invite). |
+| Diagnostics | Crash Data, Performance Data, Other Diagnostic Data | No | No crash or analytics SDK. Server error logs carry no device data. The funnel's app version is declared under Other Data. |
 | Surroundings, Body | (all) | No | |
-| Other Data | **Other Data Types** | **Yes** | The age band (under 13, 13 to 17, 18 and over; never a birth date), the time zone, the App Store app transaction id of a child's copy (to honor a parent withdrawing consent through Apple), and which people a parent approved. |
+| Other Data | **Other Data Types** | **Yes** | The age band (under 13, 13 to 17, 18 and over; never a birth date), the time zone, the App Store app transaction id of a child's copy (to honor a parent withdrawing consent through Apple), and which people a parent approved. For the first-run funnel: the app version and the phone's language and region setting (like en-US; not a location). |
 
 ### Question 3: for each ticked type
 
-Give the same three answers for all 9 types.
+Linked and tracking are the same for all 9 types. Four of them are also used for Analytics: the first-run funnel on our own server (first-run funnel design, Part 3).
 
 | Data type | Purposes (tick only these) | Linked to the user's identity? | Used for tracking? |
 |---|---|---|---|
@@ -57,12 +57,13 @@ Give the same three answers for all 9 types.
 | Gameplay Content | App Functionality | Yes | No |
 | Other User Content | App Functionality | Yes | No |
 | User ID | App Functionality | Yes | No |
-| Device ID | App Functionality | Yes | No |
-| Product Interaction | App Functionality | Yes | No |
-| Other Usage Data | App Functionality | Yes | No |
-| Other Data Types | App Functionality | Yes | No |
+| Device ID | App Functionality, Analytics | Yes | No |
+| Product Interaction | App Functionality, Analytics | Yes | No |
+| Other Usage Data | App Functionality, Analytics | Yes | No |
+| Other Data Types | App Functionality, Analytics | Yes | No |
 
-- Do **not** tick Third-Party Advertising, Developer's Advertising or Marketing, Analytics, Product Personalization or Other Purposes for any type.
+- Tick **Analytics** only for Device ID, Product Interaction, Other Usage Data and Other Data Types. Do **not** tick Third-Party Advertising, Developer's Advertising or Marketing, Product Personalization or Other Purposes for any type.
+- Analytics here is first-party only: the funnel runs on our own server (Cloudflare D1), with no analytics SDK and no other company receiving it.
 - "Linked" is Yes because the server keys everything to a player id, even for guests who never sign in.
 - Tracking is No. There is no ad SDK, no IDFA, no data broker and no sharing with other companies' apps.
 - The parent's phone number may qualify for Apple's "optional disclosure" exception, but it is not infrequent for a parent. Declare it.

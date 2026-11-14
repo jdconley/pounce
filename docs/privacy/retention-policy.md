@@ -1,10 +1,10 @@
 # Pounce data retention policy
 
-Draft for JD Conley (Conley Chaos LLC) to review, 4 November 2026; updated 10 November 2026 to match the code before the App Store launch (needs legal review). Written to meet the written-retention requirement of the amended COPPA Rule, 16 CFR § 312.10, and the retention rules in the daily habit design (`docs/superpowers/specs/2026-11-04-daily-habit-design.md` §14, §14.1). This is not legal advice. The public summary is the privacy page served by `apps/play-api/src/http/privacy.ts` at `play.conleychaos.com/privacy`, and the App Store Connect answers are in `docs/privacy/app-store-label.md`; keep all three in step.
+Draft for JD Conley (Conley Chaos LLC) to review, 4 November 2026; updated 10 November 2026 to match the code before the App Store launch, and 13 November 2026 for the first-run funnel (needs legal review). Written to meet the written-retention requirement of the amended COPPA Rule, 16 CFR § 312.10, and the retention rules in the daily habit design (`docs/superpowers/specs/2026-11-04-daily-habit-design.md` §14, §14.1). This is not legal advice. The public summary is the privacy page served by `apps/play-api/src/http/privacy.ts` at `play.conleychaos.com/privacy`, and the App Store Connect answers are in `docs/privacy/app-store-label.md`; keep all three in step.
 
 ## Principles
 
-- Keep data only as long as the game needs it to run. Nothing is kept for analytics, ads or resale, because Pounce collects none of those.
+- Keep data only as long as the game needs it to run, plus the first-run funnel (below): anonymous getting-started steps on our own server, to see where new players get stuck. Nothing is kept for ads or resale, and no analytics goes to any other company.
 - Delete automatically wherever the server can (Durable Object alarms), so retention never depends on someone remembering.
 - A child's data (age band `kitten`, under 13) gets no longer retention than anyone else's, and the same 90-day guest expiry applies.
 
@@ -35,13 +35,15 @@ Draft for JD Conley (Conley Chaos LLC) to review, 4 November 2026; updated 10 No
 | Consent record: linked parents, state, approved people (PR 9) | `Consents` DO | Which parents may manage a kitten, and who may reach it | While at least one parent stays linked and the kitten is under 13 | Deleted when the last parent unlinks, the kitten turns 13, or the kitten's player is deleted or expires. Revocation keeps parents and approvals (no contact information) so consent can be given again. |
 | Link codes (PR 9) | `KittenIndex` | Linking a kitten's device to a parent | 10 minutes, or once used | Alarm and use delete them. Failed tries: 10 minutes. |
 | Wrong-code tries (PR 9) | `Consents` DO | At most 5 wrong codes in 10 minutes | 10 minutes | Dropped with the code state, on consent, or on revocation. |
+| First-run funnel: per device, the first time it reached each getting-started step, the days it was used, app version, platform, language and region, how it came (`docs/funnel.md`) | D1 database `conleychaos-play-funnel` (`FUNNEL`) | Seeing where new players get stuck (first-run funnel design, Part 3). Keyed by an HMAC of the device id under `TOKEN_SECRET`: no device id, name, player, account, table code or address | A year after the device was last used | `prune` (`src/funnel/funnel.ts`), run after about one minting in 50; and `forget` when the device's player is deleted in the app (`DELETE /v1/me`). |
+| Invite page counts | D1 `page_views` | How many invite pages are opened (and previewed) a day | A year | `prune`. A count per day and page; nothing about the viewer. |
 | App transaction id (PR 9) | `Consents`, `KittenIndex` | Matching Apple's `RESCIND_CONSENT` to the kitten | With the consent record | Deleted with the record. |
 
 ## Expiry rules
 
 - **Guest players:** a player with no sign-in identity that no device has touched for 90 days is deleted, together with its identities, device links and seats (seats fall back to the device). Implemented by `Player.alarm` (`GUEST_TTL_MS`).
 - **Merged guest stubs:** 30 days after a merge (`STUB_TTL_MS`).
-- **Deletion in the app:** any player can delete their server data from the gear sheet, signed in or not (App Store guideline 5.1.1(v)). A signed-in player deletes the account (trash can); a guest or a child's device uses Delete my data, which runs the same `DELETE /v1/me` for that person. `deleteMe` revokes Sign in with Apple, removes identities, leaves and deletes every pair, forgets links and pounce ids, ends a child's consent record (phone number, link codes, kid ids, parents, transaction id, push tokens) and unlinks a parent from their children, removes the player from the device and from every seat's player id, and deletes the `Player`. Left behind: seated names until each room closes; partners' pounce rows naming the player for up to 7 days; the `phone_texts` hash and `texts` rate-limit rows for up to a day; the device's own tokens and time zone; Cloudflare's 30-day point-in-time recovery.
+- **Deletion in the app:** any player can delete their server data from the gear sheet, signed in or not (App Store guideline 5.1.1(v)). A signed-in player deletes the account (trash can); a guest or a child's device uses Delete my data, which runs the same `DELETE /v1/me` for that person. `deleteMe` revokes Sign in with Apple, removes identities, leaves and deletes every pair, forgets links and pounce ids, ends a child's consent record (phone number, link codes, kid ids, parents, transaction id, push tokens) and unlinks a parent from their children, removes the player from the device and from every seat's player id, and deletes the `Player`. Left behind: seated names until each room closes; partners' pounce rows naming the player for up to 7 days; the `phone_texts` hash and `texts` rate-limit rows for up to a day; the device's own tokens and time zone; Cloudflare's 30-day point-in-time recovery (Durable Objects and D1 alike). The device's funnel rows are deleted with it.
 - **Accounts:** kept until the person deletes the account in the app, which runs `deleteMe` (§14). There is no inactivity expiry for signed-in accounts yet; decide one before the App Store launch.
 
 ## Logs
@@ -52,7 +54,7 @@ Draft for JD Conley (Conley Chaos LLC) to review, 4 November 2026; updated 10 No
 
 ## Backups
 
-- Durable Object storage has Cloudflare's point-in-time recovery (30 days). We take no other backups, so a deletion is final once that window passes.
+- Durable Object storage and D1 have Cloudflare's point-in-time recovery (30 days, D1's Time Travel). We take no other backups, so a deletion is final once that window passes.
 
 ## Requests
 

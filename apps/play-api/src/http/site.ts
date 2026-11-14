@@ -108,7 +108,7 @@ export function llmsTxt(origin: string, consent = true): Response {
 
 > Pounce is a card game app for couples and families, for iPhone and iPad, made by Conley Chaos LLC. Its first game is Cat Tower, a rummy-style, turn-based card game for two to six players: take your turn when you have a minute, and the game waits for everyone else.
 
-Pounce is free. It has no chat, no ads, no analytics and no tracking, and nobody needs an account to play. Children under 13 get a simpler, limited version, and ${alerts}.
+Pounce is free. It has no chat, no ads, no tracking and no third-party analytics, and nobody needs an account to play. Children under 13 get a simpler, limited version, and ${alerts}.
 
 ## Pages
 

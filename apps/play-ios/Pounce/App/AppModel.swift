@@ -6,7 +6,9 @@ import SwiftUI
 
 @MainActor @Observable
 final class AppModel {
-    var route: Route
+    var route: Route {
+        didSet { if case .home = route { funnel.reach(.homeSeen) } }
+    }
     var people: LocalPeople
     /// The server's list of this device's tables (Home); at launch, the list saved last time.
     var tables: [TableEntry] = []
@@ -51,6 +53,8 @@ final class AppModel {
     /// Update awareness (app updates design): what is current, Home's card, tables behind an
     /// update, and the screen for a version the server no longer supports.
     let updates: UpdateModel
+    /// The first-run funnel's steps only the app sees, for our own server (`Funnel`).
+    @ObservationIgnored let funnel: Funnel
     /// The coaching tips each person on this phone has seen (first-game tutorial).
     private(set) var tipsSeen: TipsSeen
     /// Coaching tips show on the table. Off for the UI tests and demos, which never expect a
@@ -150,6 +154,7 @@ final class AppModel {
         tips = TipCenter(store: tutorialStore, pacing: TipPacingStore(directory: dataDirectory))
         ratingStore = RatingStore(directory: dataDirectory)
         updates = UpdateModel(api: api, directory: dataDirectory)
+        funnel = Funnel(sender: api, file: dataDirectory.appendingPathComponent("funnel-\(config.serverKey).json"))
         // The first launch is written down now: the rating ask waits days after it.
         ratingStore.load()
         self.ageStore = ageStore
@@ -468,6 +473,7 @@ final class AppModel {
     /// then refresh Home's table list. Never blocks the first frame.
     func bootstrap() async {
         reloadLocal()
+        if ageRecord != nil { funnel.allow() }
         #if DEBUG
         // `-request-push`: the system prompt at launch (the notification screenshots).
         if CommandLine.arguments.contains("-request-push") { _ = await push?.requestAuthorization() }
@@ -514,6 +520,7 @@ final class AppModel {
         let record = AgeRecord(band: band, source: source, checkedAt: .now)
         ageStore.save(record)
         ageRecord = record
+        funnel.ageChecked()
         applyAgeLimits()
         push?.registerIfAllowed()
         syncWidgets()
@@ -734,6 +741,7 @@ final class AppModel {
     /// Saves the owner, then continues to the link that interrupted onboarding, or Home.
     func finishPickCat(name: String, cat: Int) {
         let owner = peopleStore.setOwner(name: name, cat: cat)
+        funnel.reach(.named)
         people = peopleStore.load()
         streaks.person = owner.id
         account.noteChanged(owner.id)
@@ -779,6 +787,7 @@ final class AppModel {
     /// A table's invite went out (the share sheet sent it, or its QR code showed): it can wait on
     /// Home for people to accept.
     func noteInvited(code: String) {
+        funnel.reach(.inviteSent)
         tableInvites.note(code: code)
         invited = tableInvites.all()
     }
@@ -860,6 +869,7 @@ final class AppModel {
         push?.cancelSnoozes(codes: [code])
         // Back at this table in the app: its live table goes now (spec §11.3).
         Task { await liveTables.sweep(entering: code) }
+        funnel.tableOpened()
         let session = ensureRoom(code: code, intent: intent)
         // A move link for the room already open: its first snapshot is long gone, so claim now.
         if case .move(let moveCode) = intent, session.intent != intent { session.claimMove(moveCode) }
@@ -950,6 +960,7 @@ final class AppModel {
         switch phase {
         case .active:
             room?.foreground()
+            funnel.flush()
             Task { await updates.refresh() }
             Task {
                 await account.uploadProfile()
@@ -1075,6 +1086,7 @@ final class AppModel {
     /// A share or move link arrived. Without a local owner, onboarding comes first and the link
     /// is remembered. A join link for a table already on this device rejoins it.
     func handle(_ link: DeepLink) {
+        funnel.opened(link)
         guard ageRecord != nil else {
             route = .age(then: link)
             return
@@ -1147,6 +1159,7 @@ final class AppModel {
         }
         pasteboard.settle()
         Haptics.shared.success()
+        funnel.pasted()
         handle(link)
     }
 

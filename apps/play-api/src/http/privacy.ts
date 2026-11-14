@@ -8,8 +8,8 @@
 import { CACHE, CSP, docPage } from "./layout";
 
 const BODY = `<h1>Pounce privacy policy</h1>
-<p class="updated">Last updated 10 November 2026</p>
-<p>Pounce is a game app for couples and families, made by Conley Chaos LLC ("we"). This page says what the app and its server keep, why, who else handles it, for how long, and how to delete it. Pounce has no ads, no analytics, no tracking and no third-party SDKs. We never sell your data and never share it for advertising. The only companies that handle it are the service providers named below, and only to run Pounce.</p>
+<p class="updated">Last updated 13 November 2026</p>
+<p>Pounce is a game app for couples and families, made by Conley Chaos LLC ("we"). This page says what the app and its server keep, why, who else handles it, for how long, and how to delete it. Pounce has no ads, no tracking, no third-party analytics and no third-party SDKs. We never sell your data and never share it for advertising. The only companies that handle it are the service providers named below, and only to run Pounce.</p>
 
 <h2>What we keep</h2>
 <ul>
@@ -21,6 +21,7 @@ const BODY = `<h1>Pounce privacy policy</h1>
 <li><strong>Push tokens</strong>, if you allow notifications, so we can tell you when it's your move, update the widget and show a game on the Lock Screen.</li>
 <li><strong>Streaks:</strong> the days you and another player both played, the days you played, lifetime counts and rewards, and, for players 13 and over, a count of the times of day you usually play, so reminders come at a good time.</li>
 <li><strong>Requests to play</strong> you send or answer, and the invite links you make.</li>
+<li><strong>How new players get started:</strong> for each device, the first time it reached each step of getting started (the age check, picking a name, Home, a first table, a first move, a first finished game, an invite sent or opened, the notifications question), which days it was used, the app version, the phone's language and region (like en-US), and whether an invite brought it. It is kept under a scrambled form of the device id, with no names, players, accounts or tables. We use it only to see where new players get stuck, on our own server. We also count how many times a day invite pages are opened, with nothing about who opened them.</li>
 <li><strong>Sign in with Apple</strong>, if you use it: a one-way hash of the id Apple gives us, and, when our revocation key is set up, Apple's refresh token, kept only so we can revoke it when you delete your account. We ask Apple for no email and no name.</li>
 </ul>
 <!--consent--><p>We never collect contacts, location, photos, ad identifiers or messages, and no phone numbers except a parent's, given to us to consent for a child (below). Invites go through the share sheet or a QR code; Pounce never reads your contacts.</p><!--/consent--><!--plain--><p>We never collect contacts, location, photos, ad identifiers, phone numbers or messages. Invites go through the share sheet or a QR code; Pounce never reads your contacts.</p><!--/plain-->
@@ -48,13 +49,14 @@ const BODY = `<h1>Pounce privacy policy</h1>
 <li>A player who isn't signed in and that no device has opened for 90 days: deleted.</li>
 <li>A player merged into an account: a forwarding record for 30 days.</li>
 <li>A push token: until Apple tells us it no longer works, or the app sends a new one.</li>
+<li>Getting-started steps: a year after the device was last used. Invite page counts: a year.</li>
 <li>Everything else: until you delete it, or until it expires as above.</li>
 </ul>
 
 <h2>Your choices</h2>
 <ul>
 <li>Signing in is never required. Without it, your data stays tied to your device.</li>
-<li>You can delete your data in the app at any time, signed in or not: open the gear, then tap the trash can (signed in) or Delete my data. That deletes your player from our server with its games, streaks, connections, requests to play, invite links and settings, and, for a child's device, the parent's consent record and phone number. When you're signed in it is your account on every device, and it revokes Sign in with Apple when we hold a token; you can also stop Apple sign-in for Pounce in iOS Settings, under your name, then Sign in with Apple. Your name stays visible at tables you sat at until those tables are cleaned up, at most 7 days after their last move.</li>
+<li>You can delete your data in the app at any time, signed in or not: open the gear, then tap the trash can (signed in) or Delete my data. That deletes your player from our server with its games, streaks, connections, requests to play, invite links and settings, this device's getting-started steps, and, for a child's device, the parent's consent record and phone number. When you're signed in it is your account on every device, and it revokes Sign in with Apple when we hold a token; you can also stop Apple sign-in for Pounce in iOS Settings, under your name, then Sign in with Apple. Your name stays visible at tables you sat at until those tables are cleaned up, at most 7 days after their last move.</li>
 <li>You can turn notifications off in iOS Settings at any time.</li>
 <li>To see or delete anything else we hold, write to <a href="mailto:privacy@conleychaos.com">privacy@conleychaos.com</a>.</li>
 </ul>
@@ -66,7 +68,8 @@ const BODY = `<h1>Pounce privacy policy</h1>
 <li>a device id and the child's seats and turns;</li>
 <li>a name picked from Pounce's list of generated cat names (Mochi, Biscuit, Pickle and the like); a child cannot type a name;</li>
 <li>game progress such as streaks and rewards;</li>
-<li>a time zone, so a day ends at the child's midnight.</li>
+<li>a time zone, so a day ends at the child's midnight;</li>
+<li>the getting-started steps above, which say nothing about who the child is, used only to make the game easier to start.</li>
 </ul>
 <p>For a player under 13 there are no push notifications from our server, no sign-in, no invite links sent out, and no record of play times. The only reminders are ones the phone schedules for itself, and they start off.</p>
 <!--consent--><h2>With a parent's consent</h2>

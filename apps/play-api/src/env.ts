@@ -39,6 +39,11 @@ export interface Env {
    */
   REPORTS_KEY?: string;
   /**
+   * The first-run funnel's database (src/funnel, docs/funnel.md): when each anonymous device first
+   * reached each step. Optional: without it (Miniflare tests that bind none) nothing is recorded.
+   */
+  FUNNEL?: D1Database;
+  /**
    * Streaks, table looks and Play again (daily habit PR 3) when "on".
    * wrangler.jsonc turns it on in production (and for `wrangler dev`) since
    * the app shipped them (PR 4); Miniflare tests set it themselves.

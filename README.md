@@ -29,6 +29,12 @@ pnpm check   # lint, typecheck and tests
 `apps/play-api` tests include a 300-game bot simulation and Miniflare
 integration tests for the Worker and Durable Objects.
 
+## First-run funnel data
+
+Where new players get stuck: anonymous, per-device first times for each getting-started step, in
+the D1 database `conleychaos-play-funnel` on our own Cloudflare account. `docs/funnel.md` says what
+is kept and how to query it (`apps/play-api/funnel/query.sh`).
+
 ## Local dev server
 
 Run the game server on your machine (the iOS Debug build talks to it at

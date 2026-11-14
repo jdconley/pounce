@@ -4,6 +4,8 @@ import { servedAt, storeKnown } from "../app/live";
 import { gameUnsupported } from "../app/status";
 import { APP_HEADER, parseApp } from "../app/version";
 import { devSpeed, linkOn, nudgeOn } from "../env";
+import { reached } from "../funnel/funnel";
+import { roomSteps } from "../funnel/room";
 import { DEFAULT_GAME, GAMES_HEADER, gamesListed, gamesOn, gameTitle, type GameId } from "../games";
 import { endBody, startAlert, startBody, updateBody, type LiveState } from "../live/live";
 import { isGeneratedName } from "../names/filter";
@@ -83,6 +85,9 @@ export class GameRoom extends DurableObject<Env> {
   private lastViews = new Map<string, PairViews[string]>();
   /** While dealing a pounce's table: the player whose deal-time "your move" is skipped. */
   private quietFor: string | null = null;
+  /** The funnel steps this instance already reported (`roomSteps`), and the device whose move was just accepted. */
+  private funnelTold = new Set<string>();
+  private movedNow: string | null = null;
 
   constructor(ctx: DurableObjectState, env: Env) {
     super(ctx, env);
@@ -223,7 +228,9 @@ export class GameRoom extends DurableObject<Env> {
       await this.setLook(deviceOf(ws), parsed);
       return;
     }
-    await this.after(core.handle(deviceOf(ws), parsed));
+    const out = core.handle(deviceOf(ws), parsed);
+    if (parsed.t === "act" && !out.some(({ message }) => message.t === "error")) this.movedNow = deviceOf(ws);
+    await this.after(out);
   }
 
   /**
@@ -767,7 +774,15 @@ export class GameRoom extends DurableObject<Env> {
       await this.close(core);
       return;
     }
+    this.reportFunnel(core);
     await this.updateTables(core);
+  }
+
+  /** Seats, a first move and a finished game, for the first-run funnel. Never waits, never fails the turn. */
+  private reportFunnel(core: Room): void {
+    const steps = roomSteps(core.state, this.funnelTold, this.movedNow);
+    this.movedNow = null;
+    if (steps.length > 0) this.ctx.waitUntil(reached(this.env, steps, Date.now()).catch(() => undefined));
   }
 
   /**
