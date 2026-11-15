@@ -189,7 +189,13 @@ export class RoomStore {
   private listeners = new Set<RoomListener>();
   private queue: Paced[] = [];
   private playing = false;
-  private pendingSnapshot: { seq: number; room: RoomView; settles: boolean } | null = null;
+  private pendingSnapshot: { seq: number; room: RoomView } | null = null;
+  /**
+   * The move the server applied (or, without move ids, answered) while events were still queued,
+   * and the seq of that answer: the move settles the moment the event at that seq is shown, so a
+   * tap the table shows as live after it always counts, however much else is queued behind.
+   */
+  private settle: { id: string; seq: number } | null = null;
   private errorCount = 0;
   private timer: unknown = null;
   private readonly setTimer: (fn: () => void, ms: number) => unknown;
@@ -345,10 +351,11 @@ export class RoomStore {
     if (pending && (!room.link || room.link.acks.includes(pending.id))) stillPending = null;
     const resend = stillPending !== null && this.sentOn !== this.connection;
     if (this.playing || this.queue.length > 0) {
-      // Let the events play out first; this snapshot lands after them.
-      // The move stays in flight until then too, so a second tap can't send a second move
-      // while its answer is still playing out.
-      this.pendingSnapshot = { seq, room, settles: stillPending !== pending || this.pendingSnapshot?.settles === true };
+      // Let the events play out first; this snapshot lands after them. The move stays in flight
+      // until its own answer has been shown, so a second tap can't send it twice; it settles as
+      // soon as it has, even with later events (the next player's turn) still queued.
+      if (pending && stillPending === null) this.settle = { id: pending.id, seq };
+      this.pendingSnapshot = { seq, room };
       this.seq = Math.max(this.seq, seq);
       return;
     }
@@ -358,6 +365,14 @@ export class RoomStore {
       // Reconnected before the server heard it: send it again, with the same id.
       if (this.socket.send({ t: "act", seat: pending.seat, action: pending.action, id: pending.id })) this.sentOn = this.connection;
     }
+  }
+
+  /** True when showing `seq` settles the move in flight (and forgets that it was due). */
+  private settled(seq: number): boolean {
+    const due = this.settle;
+    if (!due || seq < due.seq) return false;
+    this.settle = null;
+    return this.state.pending?.id === due.id;
   }
 
   private pump(): void {
@@ -372,14 +387,14 @@ export class RoomStore {
           room: snap.room,
           phase: phaseOf(snap.room),
           rematch: snap.room.rematch ?? this.state.rematch,
-          ...(snap.settles ? { pending: null } : {}),
+          ...(this.settled(snap.seq) ? { pending: null } : {}),
         });
       }
       return;
     }
     this.playing = true;
     const room = this.state.room ? foldEvent(this.state.room, next.event) : null;
-    this.set({ room });
+    this.set({ room, ...(this.settled(next.seq) ? { pending: null } : {}) });
     for (const l of [...this.listeners]) l.event?.(next, room);
     // Others' moves get their moment on stage; our own were seen as they were made, so they
     // settle at once and the next tap counts.

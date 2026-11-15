@@ -31,7 +31,8 @@ jobs:
       - run: pnpm --filter @pounce/play-web build
 
   # The web player end to end: two browsers at one table, pass and play, practice, in Chrome
-  # (an Android phone and a laptop) and WebKit (an iPhone), against the real Worker (wrangler dev).
+  # (an Android phone and a laptop) and WebKit (an iPhone), and the tables in Firefox and desktop
+  # Safari too, against the real Worker (wrangler dev).
   e2e-web:
     runs-on: ubuntu-latest
     timeout-minutes: 25
@@ -45,7 +46,7 @@ jobs:
           node-version-file: .nvmrc
           cache: pnpm
       - run: pnpm install --frozen-lockfile
-      - run: pnpm --filter @pounce/play-web exec playwright install --with-deps chromium webkit
+      - run: pnpm --filter @pounce/play-web exec playwright install --with-deps chromium webkit firefox
       - run: pnpm --filter @pounce/play-web build
       - run: pnpm --filter @pounce/play-web e2e
       - if: failure()
