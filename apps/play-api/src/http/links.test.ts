@@ -253,7 +253,7 @@ describe("the App Store link and Smart App Banner", () => {
   });
 
   test("with APP_STORE_URL: the banner carries the page's own link, and the button goes to the App Store", async () => {
-    const install = { appStoreUrl: APP_STORE, testflightUrl: TESTFLIGHT };
+    const install = { appStoreUrl: APP_STORE, testflightUrl: TESTFLIGHT, storeVersion: "1.1" };
     const room = await sharePage("BCDFG", install, ORIGIN, GRANDMA).text();
     expect(room).toContain(`<meta name="apple-itunes-app" content="app-id=1234567890, app-argument=${ORIGIN}/j/BCDFG">`);
     expect(room).toContain(`<a class="go" id="get" href="${APP_STORE}"`);
@@ -283,10 +283,54 @@ describe("the beta note under the button", () => {
   });
 
   test("an App Store link, or no link, has no such note", async () => {
-    for (const install of [NONE, { appStoreUrl: APP_STORE, testflightUrl: TESTFLIGHT }]) {
+    for (const install of [NONE, { appStoreUrl: APP_STORE, testflightUrl: TESTFLIGHT, storeVersion: "1.1" }]) {
       expect(await sharePage("BCDFG", install, ORIGIN, GRANDMA).text()).not.toContain("beta");
       expect(await deadLinkPage(install).text()).not.toContain("beta");
     }
+  });
+});
+
+describe("what the App Store's version can do", () => {
+  const OLD = { appStoreUrl: APP_STORE, testflightUrl: TESTFLIGHT, storeVersion: "1.0" };
+  const NEW = { ...OLD, storeVersion: "1.2" };
+  const UNKNOWN = { ...OLD, storeVersion: null };
+
+  test("a Cat Tower table on the App Store's 1.0: the App Store, with Join (1.0 can't paste)", async () => {
+    const html = await sharePage("BCDFG", OLD, ORIGIN, TOWER).text();
+    expect(html).toContain(`<a class="go" id="get" href="${APP_STORE}"`);
+    expect(html).toContain("apple-itunes-app");
+    expect(html).toContain('<p class="next">Then open Pounce and tap Join.</p>');
+    expect(html).not.toContain("Paste");
+  });
+
+  test("a tile table on the App Store's 1.0: the beta, which can open it, and no App Store banner", async () => {
+    const html = await sharePage("BCDFG", OLD, ORIGIN, GRANDMA).text();
+    expect(html).toContain(`<a class="go" id="get" href="${TESTFLIGHT}"`);
+    expect(html).not.toContain("apple-itunes-app");
+    expect(html).toContain('<p class="next">Then open Pounce and tap Paste.</p>');
+    expect(html).toContain("Pounce is in beta. This opens TestFlight.");
+  });
+
+  test("a pounce link on the App Store's 1.0: tap the link again", async () => {
+    const html = await pouncePage({ name: "Mia", cat: 2 }, "C".repeat(22), OLD, ORIGIN).text();
+    expect(html).toContain(`href="${APP_STORE}"`);
+    expect(html).toContain('<p class="next">Then tap this link again.</p>');
+  });
+
+  test("once the App Store has 1.1 or newer: the App Store and Paste, for every game", async () => {
+    for (const peek of [TOWER, GRANDMA]) {
+      const html = await sharePage("BCDFG", NEW, ORIGIN, peek).text();
+      expect(html).toContain(`<a class="go" id="get" href="${APP_STORE}"`);
+      expect(html).toContain("apple-itunes-app");
+      expect(html).toContain('<p class="next">Then open Pounce and tap Paste.</p>');
+    }
+  });
+
+  test("before Apple's version is known: the safe way, never a promise the store can't keep", async () => {
+    const tower = await sharePage("BCDFG", UNKNOWN, ORIGIN, TOWER).text();
+    expect(tower).toContain(`href="${APP_STORE}"`);
+    expect(tower).toContain("Then open Pounce and tap Join.");
+    expect(await sharePage("BCDFG", UNKNOWN, ORIGIN, GRANDMA).text()).toContain(`href="${TESTFLIGHT}"`);
   });
 });
 

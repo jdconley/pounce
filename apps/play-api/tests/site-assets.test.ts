@@ -105,8 +105,8 @@ describe("the static assets config", () => {
     expect(readFileSync(`${PUBLIC}/_headers`, "utf8")).toContain("/static/*\n  Cache-Control: public, max-age=31536000, immutable");
   });
 
-  test("the install settings: the App Store link is empty until launch, so the site offers the TestFlight beta", () => {
-    expect(config.vars.APP_STORE_URL).toBe("");
+  test("the install settings: Pounce's App Store listing (released 1.0, November 2026), and the beta for newer tables", () => {
+    expect(config.vars.APP_STORE_URL).toBe("https://apps.apple.com/app/id6829560061");
     expect(config.vars.TESTFLIGHT_URL).toMatch(/^https:\/\/testflight\.apple\.com\/join\/[A-Za-z0-9]{8}$/);
   });
 });
