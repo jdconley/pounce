@@ -629,7 +629,8 @@ export default {
       const code = share[1] as string;
       // Who invited, to what: only for a well-formed code, and guarded like a guess at it.
       const peek = ROOM_CODE.test(code) ? await peekInvite(env, code, clientIp(request), Date.now()) : "hidden";
-      return sharePage(code, install(env), new URL(request.url).origin, peek, gamesOn(env).length > 1);
+      const store = (await storeKnown(env, later)).store;
+      return sharePage(code, { ...install(env), storeVersion: store }, new URL(request.url).origin, peek, gamesOn(env).length > 1);
     }
     if (notify && method === "GET") {
       // The pounce card reuses the room card until the bell art lands (§9.6).
@@ -639,7 +640,8 @@ export default {
         const token = p[1] as string;
         later(pageView(env, "p", request.headers.get("user-agent"), Date.now()).catch(() => undefined));
         const found = await linkPounce(env, token, Date.now()).catch(() => null);
-        return pouncePage(found?.from ?? null, token, install(env), new URL(request.url).origin);
+        const store = (await storeKnown(env, later)).store;
+        return pouncePage(found?.from ?? null, token, { ...install(env), storeVersion: store }, new URL(request.url).origin);
       }
     }
     const consent = consentOn(env);

@@ -1,3 +1,4 @@
+import { olderThan } from "../app/version";
 import { DEFAULT_GAME, gameTitle, isGameId } from "../games";
 import { ROOM_CODE } from "../room/codes";
 
@@ -63,8 +64,33 @@ export function appSiteAssociation(pounces = false): Response {
   });
 }
 
-/** Where the pages send people without the app: the App Store listing, or before launch TestFlight. */
-export type Install = { appStoreUrl?: string | undefined; testflightUrl?: string | undefined };
+/**
+ * Where the pages send people without the app: the App Store listing, or before launch TestFlight.
+ * `storeVersion` is the version the App Store gives out right now (Apple's lookup, null when not
+ * known yet): a page only promises what that version can do.
+ */
+export type Install = { appStoreUrl?: string | undefined; testflightUrl?: string | undefined; storeVersion?: string | null };
+
+/** The first app version that pastes an invite (first-run funnel, Part 2). */
+export const PASTE_SINCE = "1.1";
+
+/** The first app version that can play each game, for games newer than the first release. */
+export const GAME_SINCE: Readonly<Record<string, string>> = { tiles: "1.1" };
+
+/**
+ * Whether the App Store's current version is at least `since`. Unknown counts as no: a page
+ * then sends people to the beta or says the older way, and corrects itself once Apple answers.
+ */
+export function storeHas(install: Install, since: string): boolean {
+  if (!https(install.appStoreUrl) || !install.storeVersion) return false;
+  return !olderThan(install.storeVersion, since);
+}
+
+/** Whether the App Store's version can open a table of `game`. */
+function storePlays(install: Install, game: string): boolean {
+  const since = GAME_SINCE[game];
+  return since === undefined || storeHas(install, since);
+}
 
 export const https = (url: string | undefined): string | null => (url?.startsWith("https://") ? url : null);
 
@@ -80,15 +106,20 @@ export function appStoreId(url: string | undefined): string | null {
  * people without, and the app gets this page's link back as `app-argument`. Only once the App
  * Store id is known (`APP_STORE_URL`); without it there is no banner.
  */
-function banner(install: Install, pageUrl: string): string {
+function banner(install: Install, pageUrl: string, game: string = DEFAULT_GAME): string {
+  // No "Get" for a table the App Store's version can't open: the button goes to the beta then.
+  if (!storePlays(install, game)) return "";
   const id = appStoreId(install.appStoreUrl);
   return id ? `<meta name="apple-itunes-app" content="app-id=${id}, app-argument=${escapeHtml(pageUrl)}">\n` : "";
 }
 
-/** The store the button opens: the App Store when it's set, else TestFlight, else none. */
-function store(install: Install): { url: string; beta: boolean } | null {
+/**
+ * The store the button opens: the App Store when it's set and its version plays `game`, else
+ * TestFlight, else none.
+ */
+function store(install: Install, game: string = DEFAULT_GAME): { url: string; beta: boolean } | null {
   const listing = https(install.appStoreUrl);
-  if (listing) return { url: listing, beta: false };
+  if (listing && storePlays(install, game)) return { url: listing, beta: false };
   const beta = https(install.testflightUrl);
   return beta ? { url: beta, beta: true } : null;
 }
@@ -100,13 +131,16 @@ const BETA_NOTE = `<p class="note">Pounce is in beta. This opens TestFlight.</p>
  * The button: copies `invite` (the page's own link) and opens the store; with nothing to copy,
  * just the store. Then the one line that says what to do once it's installed.
  */
-function getButton(install: Install, invite: string | null): string {
-  const to = store(install);
+function getButton(install: Install, invite: string | null, opts: { game?: string; code?: boolean } = {}): string {
+  const to = store(install, opts.game);
   if (!to) return "";
   const href = escapeHtml(to.url);
+  // The beta is always the newest app; the App Store's version may not paste yet.
+  const paste = to.beta || storeHas(install, PASTE_SINCE);
+  const next = paste ? "Then open Pounce and tap Paste." : opts.code ? "Then open Pounce and tap Join." : "Then tap this link again.";
   const button = invite
     ? `<a class="go" id="get" href="${href}" data-invite="${escapeHtml(invite)}" data-copied="Invite copied">Get Pounce</a>
-<p class="next">Then open Pounce and tap Paste.</p>`
+<p class="next">${next}</p>`
     : `<a class="go" href="${href}">Get Pounce</a>`;
   return `${button}${to.beta ? `\n${BETA_NOTE}` : ""}`;
 }
@@ -189,9 +223,9 @@ export function pouncePage(
   const url = `${origin}/p/${token}`;
   const html = page({
     title: escapeHtml(title),
-    head: `${banner(install, url)}${previewTags({ title, description: gameTitle(game), url, origin, game })}\n`,
+    head: `${banner(install, url, game)}${previewTags({ title, description: gameTitle(game), url, origin, game })}\n`,
     script: true,
-    body: [face(from.cat), `<h1>${escapeHtml(title)}</h1>`, gameChip(game), getButton(install, url)].filter(Boolean).join("\n"),
+    body: [face(from.cat), `<h1>${escapeHtml(title)}</h1>`, gameChip(game), getButton(install, url, { game })].filter(Boolean).join("\n"),
   });
   return new Response(html, { headers: { ...HTML, "content-security-policy": INVITE_CSP } });
 }
@@ -215,14 +249,14 @@ export function sharePage(code: string, install: Install, origin: string, peek: 
   const update = known ? game !== DEFAULT_GAME : newest;
   const html = page({
     title: escapeHtml(title),
-    head: `${banner(install, url)}${previewTags({ title, description, url, origin, game: known ? game : "" })}\n`,
+    head: `${banner(install, url, game)}${previewTags({ title, description, url, origin, game: known ? game : "" })}\n`,
     script: true,
     body: [
       face(host?.cat ?? null),
       `<h1>${escapeHtml(title)}</h1>`,
       known ? gameChip(game) : "",
       known?.table ? `<p class="table">${escapeHtml(known.table)}</p>` : "",
-      getButton(install, url),
+      getButton(install, url, { game, code: true }),
       `<div class="code"><span>Table code</span><strong>${escapeHtml(code)}</strong></div>`,
       update ? `<p class="note">Have Pounce? Update it first.</p>` : "",
     ]
