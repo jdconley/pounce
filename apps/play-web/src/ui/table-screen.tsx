@@ -19,7 +19,7 @@ import { CatTowerTable } from "../table/cattower";
 import { seatCat, seatName } from "../table/seat";
 import { TilesTable } from "../table/tiles";
 
-import { Button, Cat, Icon, IconButton } from "./common";
+import { Button, Cat, Icon, IconButton, Sheet } from "./common";
 import { Lobby } from "./lobby";
 
 import type { RoomView } from "@pounce/play-api/protocol";
@@ -119,6 +119,7 @@ export function TableScreen(props: { code: string; intent: TableIntent }) {
   const wantRematch = useRef(false);
 
   const home = () => navigate({ kind: "home" });
+  const [menu, setMenu] = useState<null | "menu" | "scores" | "forfeit">(null);
   const offline = state.everConnected && !state.online && ["lobby", "playing", "over", "connecting"].includes(state.phase);
 
   let body;
@@ -155,8 +156,17 @@ export function TableScreen(props: { code: string; intent: TableIntent }) {
         room={room}
         kitten={people.band === "kitten"}
         onHome={home}
-        onAddLocal={async (name, cat, seat) => {
+        onAddLocal={async (name, cat) => {
           const person = await addPerson(name, cat);
+          // An open seat, else a House Cat's (a person takes it over), else a closed one, opened.
+          const truth = store.state.truth ?? room;
+          let seat = truth.seats.findIndex((s) => s.kind === "open");
+          if (seat < 0) seat = truth.seats.findIndex((s) => s.kind === "bot");
+          if (seat < 0) {
+            seat = truth.seats.findIndex((s) => s.kind === "closed");
+            if (seat < 0) return;
+            store.send({ t: "configure", seat, kind: "open" });
+          }
           store.send({ t: "claim", seat, person: { id: person.id, name: person.name, cat: person.cat } });
         }}
       />
@@ -168,8 +178,54 @@ export function TableScreen(props: { code: string; intent: TableIntent }) {
         <div class="room-bg" style={{ backgroundImage: `url(${art("room-bg")})` }} />
         {isTiles && room.tiles ? <TilesTable store={store} state={state} /> : room.game ? <CatTowerTable store={store} state={state} /> : null}
         <div class="table-menu">
-          <IconButton icon="icon-home" label="Home" plain onClick={home} />
+          <IconButton icon="icon-paw-menu" label="Menu" plain onClick={() => setMenu("menu")} id="table-menu" />
         </div>
+        {menu === "menu" ? (
+          <Sheet title={room.name} onClose={() => setMenu(null)}>
+            <div class="settings">
+              <button type="button" class="row" onClick={() => setMenu("scores")}>
+                <Icon name="icon-trophy" size={32} />
+                <span class="grow">Scores</span>
+              </button>
+              <a class="row" href="/support" target="_blank" rel="noopener">
+                <Icon name="icon-play" size={32} />
+                <span class="grow">How to play</span>
+              </a>
+              <button type="button" class="row" onClick={home}>
+                <Icon name="icon-home" size={32} />
+                <span class="grow">Home</span>
+              </button>
+              {room.status === "playing" && liveSeats(room).length > 0 ? (
+                <button type="button" class="row danger" onClick={() => setMenu("forfeit")}>
+                  <Icon name="icon-leave" size={32} />
+                  <span class="grow">Forfeit</span>
+                </button>
+              ) : null}
+            </div>
+          </Sheet>
+        ) : null}
+        {menu === "scores" ? <ScoresSheet room={room} onClose={() => setMenu(null)} /> : null}
+        {menu === "forfeit" ? (
+          <Sheet title="Forfeit this game?" onClose={() => setMenu(null)}>
+            <div class="sheet-actions">
+              <p class="fine">{forfeitWords(room)}</p>
+              <Button
+                wide
+                variant="magenta"
+                id="forfeit"
+                onClick={() => {
+                  for (const seat of liveSeats(room)) store.forfeit(seat);
+                  setMenu(null);
+                }}
+              >
+                Forfeit
+              </Button>
+              <Button wide variant="violet" onClick={() => setMenu(null)}>
+                Keep playing
+              </Button>
+            </div>
+          </Sheet>
+        ) : null}
         {room.status === "over" ? (
           <GameOver
             room={room}
@@ -255,5 +311,43 @@ function GameOver(props: { room: RoomView; onHome: () => void; onAgain: () => vo
         </div>
       </div>
     </div>
+  );
+}
+
+/** This device's seats still in the game. */
+function liveSeats(room: RoomView): number[] {
+  const out = room.game?.forfeited ?? room.tiles?.forfeited ?? [];
+  return mySeats(room).filter((s) => !out[s]);
+}
+
+/** What a forfeit means here, in the words iOS uses (TableMenuSheet.swift). */
+function forfeitWords(room: RoomView): string {
+  const out = room.game?.forfeited ?? room.tiles?.forfeited ?? [];
+  const mine = new Set(liveSeats(room));
+  const rest = room.seats.flatMap((s, i) => ((s.kind === "human" || s.kind === "bot") && !out[i] && !mine.has(i) ? [i] : []));
+  if (rest.length === 1) return `${seatName(room.seats[rest[0]!])} wins.`;
+  return "You finish last. The rest play on.";
+}
+
+/** Everyone's standing (Scores in the iOS table menu). */
+function ScoresSheet(props: { room: RoomView; onClose: () => void }) {
+  const { room } = props;
+  const g = room.game;
+  const t = room.tiles;
+  const seats = room.seats.flatMap((s, i) => (s.kind === "human" || s.kind === "bot" ? [i] : []));
+  return (
+    <Sheet title="Scores" onClose={props.onClose}>
+      <ol class="ranks">
+        {seats.map((s) => (
+          <li>
+            <Cat cat={seatCat(room.seats[s])} size={40} />
+            <span class="who">{seatName(room.seats[s])}</span>
+            <span class="detail">
+              {g ? `Level ${Math.min((g.phase[s] ?? 0) + 1, 10)} · ${g.scores[s] ?? 0}` : `${t?.rackCounts[s] ?? 0} pieces`}
+            </span>
+          </li>
+        ))}
+      </ol>
+    </Sheet>
   );
 }

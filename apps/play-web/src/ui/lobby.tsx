@@ -32,7 +32,7 @@ export function Lobby(props: {
   room: RoomView;
   kitten: boolean;
   onHome: () => void;
-  onAddLocal: (name: string, cat: number, seat: number) => Promise<void>;
+  onAddLocal: (name: string, cat: number) => Promise<void>;
 }) {
   const { store, room } = props;
   const [sheet, setSheet] = useState<null | "add" | "qr" | "local" | "rename" | { seat: number }>(null);
@@ -150,7 +150,7 @@ export function Lobby(props: {
             <Icon name="icon-share" size={40} />
             <span>{copied ? "Link copied" : "Far away"}</span>
           </button>
-          <button type="button" class="choice" onClick={() => setSheet("local")} disabled={!seated || add === null}>
+          <button type="button" class="choice" onClick={() => setSheet("local")} disabled={!seated || room.seats.every((s) => s.kind === "human")}>
             <Icon name="icon-phone" size={40} />
             <span>This device</span>
           </button>
@@ -201,7 +201,7 @@ export function Lobby(props: {
           </div>
         </Sheet>
       ) : null}
-      {sheet === "local" && add !== null ? (
+      {sheet === "local" ? (
         <div class="overlay-screen">
           <NameScreen
             kitten={props.kitten}
@@ -209,7 +209,7 @@ export function Lobby(props: {
             title="Who's playing here?"
             onCancel={() => setSheet(null)}
             onDone={async (name, cat) => {
-              await props.onAddLocal(name, cat, add);
+              await props.onAddLocal(name, cat);
               setSheet(null);
             }}
           />

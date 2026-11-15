@@ -70,7 +70,7 @@ webp("game-tiles", 768, "game-tiles", 78);
 for (const name of [
   "icon-back", "icon-gear", "icon-plus", "icon-qr", "icon-share", "icon-phone", "icon-sound-on", "icon-sound-off",
   "icon-haptics-on", "icon-haptics-off", "icon-home", "icon-invite", "icon-dice", "icon-check", "icon-play", "icon-replay",
-  "icon-keypad", "icon-leave", "icon-paw-menu", "icon-sort", "icon-remove", "icon-swap", "icon-hourglass", "icon-zzz", "icon-padlock", "icon-trash",
+  "icon-keypad", "icon-leave", "icon-paw-menu", "icon-sort", "icon-remove", "icon-swap", "icon-hourglass", "icon-zzz", "icon-padlock", "icon-trash", "icon-trophy",
 ]) webp(name, 96);
 for (const name of ["badge-bot", "badge-phone", "badge-remote", "badge-laid", "badge-skip"]) webp(name, 80);
 for (const name of ["chip-plus", "toy-box", "toy-box-closed", "qr-frame", "push-priming"]) webp(name, 256);

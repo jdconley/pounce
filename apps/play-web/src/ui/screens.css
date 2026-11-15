@@ -885,3 +885,7 @@
 .bob {
   animation: hop 800ms ease-in-out infinite alternate;
 }
+
+.row.danger {
+  background: rgba(255, 59, 78, 0.35);
+}

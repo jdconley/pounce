@@ -42,6 +42,8 @@ export type FunnelReport = { reached: Record<string, number>; source?: string; l
 export class Api {
   private cached: Credential | null = null;
   private minting: Promise<Credential> | null = null;
+  /** How long to wait after the sign-up limit (tests shorten it). */
+  mintRetryMs = 8000;
   /** Called when the server refuses this build: the page reloads for the new one. */
   onUpdateRequired: () => void = () => undefined;
 
@@ -67,7 +69,16 @@ export class Api {
   }
 
   private async mint(): Promise<Credential> {
-    const res = await this.send("POST", "/v1/devices", undefined, null);
+    // A household behind one address can briefly meet the server's sign-up limit: wait it out.
+    let res: Response | null = null;
+    for (let attempt = 0; !res; attempt++) {
+      try {
+        res = await this.send("POST", "/v1/devices", undefined, null);
+      } catch (error) {
+        if (!(error instanceof ApiError) || error.status !== 429 || attempt >= 6) throw error;
+        await new Promise((r) => setTimeout(r, this.mintRetryMs));
+      }
+    }
     const minted = (await res.json()) as Credential;
     store.set(CREDENTIAL_KEY, JSON.stringify(minted));
     this.cached = minted;
