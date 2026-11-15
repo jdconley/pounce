@@ -1,6 +1,7 @@
 import { useEffect, useState } from "preact/hooks";
 
 
+import { turnOffAlerts, turnOnAlerts, useAlerts } from "./alerts";
 import { art } from "./lib/art";
 import { currentRoute, navigate, onRoute, type Route } from "./lib/router";
 import { onSettings, setSettings, settings } from "./lib/settings";
@@ -226,6 +227,7 @@ function SettingsSheet(props: { onClose: () => void }) {
   const [failed, setFailed] = useState(false);
   const [store, setStore] = useState<string | null>(null);
   const install = useInstall();
+  const alerts = useAlerts();
   useEffect(() => onSettings(setS), []);
   useEffect(() => {
     fetch("/v1/app", { cache: "no-store" })
@@ -261,6 +263,7 @@ function SettingsSheet(props: { onClose: () => void }) {
             variant="magenta"
             onClick={async () => {
               setFailed(false);
+              await turnOffAlerts();
               if (await deleteMyData()) location.replace("/play/");
               else setFailed(true);
             }}
@@ -288,6 +291,9 @@ function SettingsSheet(props: { onClose: () => void }) {
         <Toggle label="Sound" icon={s.sound ? "icon-sound-on" : "icon-sound-off"} on={s.sound} onChange={(v) => setSettings({ sound: v })} />
         {typeof navigator.vibrate === "function" ? (
           <Toggle label="Vibration" icon={s.haptics ? "icon-haptics-on" : "icon-haptics-off"} on={s.haptics} onChange={(v) => setSettings({ haptics: v })} />
+        ) : null}
+        {people.band !== "kitten" && (alerts === "on" || alerts === "off") ? (
+          <Toggle label="Turn alerts" icon={alerts === "on" ? "icon-bell" : "icon-bell-off"} on={alerts === "on"} onChange={(v) => void (v ? turnOnAlerts() : turnOffAlerts())} />
         ) : null}
         {install === "available" ? (
           <button type="button" class="row" onClick={() => void promptInstall()}>

@@ -6,6 +6,7 @@ import { collapseId } from "../notify/payload";
 import { noteUpdate, parseSent, updateAlert, updateCollapse, updateDue, type UpdatePush } from "../notify/update";
 import { nightBlocked, pushBlocked } from "../players/age";
 import { pushAlert, pushDismiss, pushLive, pushWidget, pushYourTurn } from "../push/apns";
+import { sendWebPush, webMessage, type WebPushSubscription } from "../push/webpush";
 import { consentOn, liveOn } from "../streaks/profile";
 
 import { createTables, drawable, listTables, removeTable, upsertTable, type TableEntry } from "./tables";
@@ -51,6 +52,19 @@ export class DeviceIndex extends DurableObject<Env> {
 
   setApnsToken(token: string): void {
     this.setMeta("apns_token", token);
+  }
+
+  /** The web player's push subscription (web player design, "Web Push"); null forgets it. */
+  setWebPush(sub: WebPushSubscription | null): void {
+    this.setMeta("web_push", sub ? JSON.stringify(sub) : null);
+  }
+
+  private webPush(): WebPushSubscription | null {
+    try {
+      return JSON.parse(this.getMeta("web_push") ?? "null") as WebPushSubscription | null;
+    } catch {
+      return null;
+    }
   }
 
   /**
@@ -216,13 +230,18 @@ export class DeviceIndex extends DurableObject<Env> {
   }
 
   /** Which push tokens this device holds, for tests and support (never the tokens themselves). */
-  tokens(): { apns: boolean; widget: boolean; live: boolean } {
-    return { apns: this.getMeta("apns_token") !== null, widget: this.getMeta("widget_token") !== null, live: this.getMeta("live_start_token") !== null };
+  tokens(): { apns: boolean; widget: boolean; live: boolean; web: boolean } {
+    return {
+      apns: this.getMeta("apns_token") !== null,
+      widget: this.getMeta("widget_token") !== null,
+      live: this.getMeta("live_start_token") !== null,
+      web: this.getMeta("web_push") !== null,
+    };
   }
 
   /** Revocation (plan decision 9): every push token this device holds goes, and any live table. */
   dropPushTokens(): void {
-    for (const k of ["apns_token", "widget_token", "live_start_token"]) this.setMeta(k, null);
+    for (const k of ["apns_token", "widget_token", "live_start_token", "web_push"]) this.setMeta(k, null);
     this.clearLive();
   }
 
@@ -243,8 +262,13 @@ export class DeviceIndex extends DurableObject<Env> {
     const token = this.getMeta("apns_token");
     const { sent, unregistered } = await pushAlert(this.env, token, body, collapseId, level);
     if (unregistered) this.ctx.storage.sql.exec("DELETE FROM meta WHERE k = 'apns_token' AND v = ?", token);
-    if (sent) this.setMeta("last_alert_at", String(now));
-    return { sent };
+    // A browser gets the same alert by Web Push, under the same rules (they were applied above).
+    const sub = this.webPush();
+    const message = sub ? webMessage(body, collapseId) : null;
+    const web = sub && message ? await sendWebPush(this.env, sub, message, level === "active") : { sent: false, unregistered: false };
+    if (web.unregistered) this.ctx.storage.sql.exec("DELETE FROM meta WHERE k = 'web_push' AND v = ?", JSON.stringify(sub));
+    if (sent || web.sent) this.setMeta("last_alert_at", String(now));
+    return { sent: sent || web.sent };
   }
 
   /**

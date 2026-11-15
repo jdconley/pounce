@@ -206,3 +206,50 @@ describe("the invite page's way into the web player", () => {
     expect(iphone).not.toContain('class="go web"');
   });
 });
+
+describe("turn alerts by web push", () => {
+  test("off without the VAPID keys: no key to subscribe with, and no route", async () => {
+    expect((await mf.dispatchFetch(`${BASE}/v1/push/web`)).status).toBe(404);
+    const token = await mint();
+    const res = await mf.dispatchFetch(`${BASE}/v1/devices/me/webpush`, { method: "PUT", headers: { ...webHeaders, authorization: `Bearer ${token}` }, body: "{}" });
+    expect(res.status).toBe(404);
+  });
+
+  test("with the keys: the public key is public, and a browser's subscription is kept until it says stop", async () => {
+    const pair = (await crypto.subtle.generateKey({ name: "ECDSA", namedCurve: "P-256" }, true, ["sign"])) as CryptoKeyPair;
+    const b64 = (b: ArrayBuffer) => Buffer.from(b).toString("base64url");
+    const publicKey = b64(await crypto.subtle.exportKey("raw", pair.publicKey));
+    const privateKey = (await crypto.subtle.exportKey("jwk", pair.privateKey)).d as string;
+    const push = new Miniflare({
+      modules: true,
+      script,
+      compatibilityDate: "2026-08-01",
+      durableObjects: {
+        ROOMS: { className: "GameRoom", useSQLite: true },
+        DEVICES: { className: "DeviceIndex", useSQLite: true },
+        PLAYERS: { className: "Player", useSQLite: true },
+        IDENTITIES: { className: "Identities", useSQLite: true },
+        LIMITS: { className: "Limiter", useSQLite: true },
+        REPORTS: { className: "Reports", useSQLite: true },
+      },
+      bindings: { TOKEN_SECRET: SECRET, VAPID_PUBLIC_KEY: publicKey, VAPID_PRIVATE_KEY: privateKey },
+    });
+    try {
+      expect(await (await push.dispatchFetch(`${BASE}/v1/push/web`)).json()).toEqual({ publicKey });
+      const minted = (await (await push.dispatchFetch(`${BASE}/v1/devices`, { method: "POST", headers: webHeaders })).json()) as { token: string };
+      const auth = { ...webHeaders, authorization: `Bearer ${minted.token}` };
+      const browser = (await crypto.subtle.generateKey({ name: "ECDH", namedCurve: "P-256" }, true, ["deriveBits"])) as CryptoKeyPair;
+      const sub = {
+        endpoint: "https://fcm.googleapis.com/fcm/send/abc",
+        expirationTime: null,
+        keys: { p256dh: b64(await crypto.subtle.exportKey("raw", browser.publicKey)), auth: b64(crypto.getRandomValues(new Uint8Array(16)).buffer) },
+      };
+      const put = (body: unknown) => push.dispatchFetch(`${BASE}/v1/devices/me/webpush`, { method: "PUT", headers: auth, body: JSON.stringify(body) });
+      expect((await put(sub)).status).toBe(204);
+      expect((await put({ ...sub, endpoint: "https://evil.example/x" })).status).toBe(400);
+      expect((await push.dispatchFetch(`${BASE}/v1/devices/me/webpush`, { method: "DELETE", headers: auth })).status).toBe(204);
+    } finally {
+      await push.dispose();
+    }
+  });
+});

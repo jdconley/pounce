@@ -122,6 +122,8 @@ jobs:
           TWILIO_API_KEY_SECRET: ${{ secrets.PLAY_API_TWILIO_API_KEY_SECRET }}
           TWILIO_VERIFY_SERVICE_SID: ${{ secrets.PLAY_API_TWILIO_VERIFY_SERVICE_SID }}
           REPORTS_KEY: ${{ secrets.PLAY_API_REPORTS_KEY }}
+          VAPID_PUBLIC_KEY: ${{ secrets.PLAY_API_VAPID_PUBLIC_KEY }}
+          VAPID_PRIVATE_KEY: ${{ secrets.PLAY_API_VAPID_PRIVATE_KEY }}
         run: |
           # After the deploy, because the Worker must exist before it can hold a
           # secret. Without TOKEN_SECRET the API stays dormant: device and room
@@ -184,6 +186,17 @@ jobs:
             put_secret REPORTS_KEY
           else
             echo "PLAY_API_REPORTS_KEY unset. Player reports are stored; read them in the Cloudflare dashboard (Durable Objects, Reports)."
+          fi
+
+          # Both or neither: the web player's push keys (apps/play-api/scripts/vapid-keys.mjs).
+          # Without them browsers are never asked to notify.
+          if [ -n "$VAPID_PUBLIC_KEY" ] && [ -n "$VAPID_PRIVATE_KEY" ]; then
+            put_secret VAPID_PUBLIC_KEY
+            put_secret VAPID_PRIVATE_KEY
+          elif [ -n "$VAPID_PUBLIC_KEY" ] || [ -n "$VAPID_PRIVATE_KEY" ]; then
+            echo "::warning title=Play API::Set both PLAY_API_VAPID_PUBLIC_KEY and PLAY_API_VAPID_PRIVATE_KEY (one is missing). Web push stays off."
+          else
+            echo "PLAY_API_VAPID_* unset. Web push stays off (run apps/play-api/scripts/vapid-keys.mjs)."
           fi
       - name: Smoke check
         if: steps.creds.outputs.ready == 'true'

@@ -47,6 +47,7 @@ import { PERSON_ID } from "./players/ids";
 import { parseProfile, parseStatePatch } from "./players/parse";
 import { answerPounce, createPounce, linkPounce } from "./pounce/pounces";
 import { MIN_PROTOCOL } from "./protocol";
+import { parseSubscription, webPushOn } from "./push/webpush";
 import { newRoomCode, ROOM_CODE } from "./room/codes";
 import { DEVICE_HEADER, PLAYER_HEADER } from "./room/game-room";
 import { parseRoomName } from "./room/names";
@@ -280,6 +281,28 @@ async function setPushToken(request: Request, env: Env, deviceId: string): Promi
     if (!(await anyConsented(env, Object.values(people)))) return json(403, { error: "not_allowed" });
   }
   await index.setApnsToken(token);
+  return noContent();
+}
+
+/**
+ * `PUT /v1/devices/me/webpush`: the web player's push subscription (web player design, "Web
+ * Push"). Only while the VAPID keys are set, and for a kitten's device only with a parent's
+ * consent, as for an APNs token. `DELETE` forgets it.
+ */
+async function setWebPush(request: Request, env: Env, deviceId: string): Promise<Response> {
+  if (!webPushOn(env)) return notFound();
+  const index = env.DEVICES.get(env.DEVICES.idFromName(deviceId));
+  if (request.method === "DELETE") {
+    await index.setWebPush(null);
+    return noContent();
+  }
+  const sub = parseSubscription(await readObject(request));
+  if (!sub) return badRequest();
+  if ((await index.ageBand()) === "kitten") {
+    const { people } = await index.players();
+    if (!consentOn(env) || !(await anyConsented(env, Object.values(people)))) return json(403, { error: "not_allowed" });
+  }
+  await index.setWebPush(sub);
   return noContent();
 }
 
@@ -556,6 +579,7 @@ function route(
     if (streak) return streak;
   }
   if (method === "PUT" && pathname === "/v1/devices/me/push") return setPushToken;
+  if ((method === "PUT" || method === "DELETE") && pathname === "/v1/devices/me/webpush") return setWebPush;
   if (method === "PUT" && pathname === "/v1/devices/me/profile") return putProfile;
   if (method === "GET" && pathname === "/v1/me/state") return getState;
   if (method === "PATCH" && pathname === "/v1/me/state") return patchState;
@@ -667,6 +691,8 @@ async function handle(request: Request, env: Env, ctx?: ExecutionContext): Promi
     return found === null ? notFound() : found === "bad" ? badRequest() : json(200, found);
   }
   if (method === "GET" && pathname === "/v1/app") return getApp(env, later);
+  // The key a browser subscribes with; a 404 while web push is off, so the web player never asks.
+  if (method === "GET" && pathname === "/v1/push/web") return webPushOn(env) && env.VAPID_PUBLIC_KEY ? json(200, { publicKey: env.VAPID_PUBLIC_KEY }) : notFound();
   const secret = env.TOKEN_SECRET;
   const mints = method === "POST" && pathname === "/v1/devices";
   const handler = mints ? null : route(method, pathname, streaks, notify, liveOn(env), consent, trophyOn(env));

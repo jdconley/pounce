@@ -32,7 +32,7 @@ const BODY = `<h1>Pounce privacy policy</h1>
 <li>The browser keeps the device id and the names and cats of the people playing on it in its own local storage, with your sound and tip settings. Pounce sets no cookies.</li>
 <li>The browser saves the game's own files so it opens quickly and offline. They hold nothing about you.</li>
 <li>The age check asks the year you were born and keeps only the age band, as the app does.</li>
-<li>The browser gets no push notifications.</li>
+<li>If you turn on alerts, we keep the address your browser gives us for its push service (Google for Chrome, Mozilla for Firefox, Apple for Safari, Microsoft for Edge) and send alerts there. Each alert is encrypted for your browser alone: the push service delivers it but can't read it. Turning alerts off, or Delete my data, forgets the address.</li>
 <li>Getting-started steps record that the device is a browser, the page's version and the browser's language.</li>
 </ul>
 <p>Nothing on the page comes from any other company: no third-party analytics, fonts, ads or scripts.</p>
@@ -48,6 +48,7 @@ const BODY = `<h1>Pounce privacy policy</h1>
 <ul>
 <li><strong>Cloudflare</strong> runs our server and stores everything above. It sees your IP address when the app connects; we use it only for a moment, to limit how fast new devices can sign up, and never store it.</li>
 <li><strong>Apple</strong> delivers notifications (they carry names, cats and table names) and runs Sign in with Apple and the App Store.</li>
+<li><strong>Your browser's push service</strong> (Google, Mozilla, Apple or Microsoft) delivers alerts to the web player, if you turn them on. It sees when an alert is sent, never what it says.</li>
 <!--consent--><li><strong>Twilio Verify</strong> texts a code to a parent's mobile number when a parent consents for a child (below). It gets only that number.</li>
 <!--/consent--></ul>
 <p>Our server logs carry no names, phone numbers, player ids or tokens; an error log can carry a table's code.</p>

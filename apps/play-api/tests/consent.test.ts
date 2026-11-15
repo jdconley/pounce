@@ -370,7 +370,7 @@ describe("the plus: a push to the parent's own devices (D6)", { timeout: 30_000 
     const kid = alertsTo(MOM_TOKEN, "consent")[0]?.body.kitten as string;
     expect((await call(mf, f.momPhone, "DELETE", `/v1/kittens/${kid}/consent`)).status).toBe(204);
     expect(await record(mf, kitten)).toMatchObject({ state: "pending", phone: null });
-    expect(await tokens(mf, f.kidPad)).toEqual({ apns: false, widget: false, live: false });
+    expect(await tokens(mf, f.kidPad)).toEqual({ apns: false, widget: false, live: false, web: false });
   });
 
   test("no device of the parent's accepted it: retried hourly inside the window, and a day of that revokes", async () => {
@@ -425,7 +425,7 @@ describe("revoke (consent design §2 Revocation)", { timeout: 30_000 }, () => {
     const k = await consented(mf, f);
     expect(await tokens(mf, f.kidPad)).toMatchObject({ apns: true });
     expect((await call(mf, f.momPhone, "DELETE", `/v1/kittens/${k.id}/consent`)).status).toBe(204);
-    expect(await tokens(mf, f.kidPad)).toEqual({ apns: false, widget: false, live: false });
+    expect(await tokens(mf, f.kidPad)).toEqual({ apns: false, widget: false, live: false, web: false });
     expect(await json(kidCall(mf, f, "GET", "/v1/kittens/me"))).toMatchObject({ state: "pending", linked: true });
     expect((await call(mf, f.kidPad, "PUT", "/v1/devices/me/push", { apnsToken: KID_TOKEN })).status).toBe(403);
     // Someone else's kitten id is a 404.

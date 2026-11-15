@@ -22,9 +22,15 @@ export default defineConfig({
   reporter: process.env.CI ? [["list"], ["html", { open: "never" }]] : "list",
   use: { baseURL: BASE, trace: "retain-on-failure", serviceWorkers: "block" },
   projects: [
-    { name: "android-chrome", use: { ...devices["Pixel 7"] } },
-    { name: "iphone-safari", use: { ...devices["iPhone 13"] } },
-    { name: "laptop-chrome", use: { ...devices["Desktop Chrome"], viewport: { width: 1440, height: 900 } } },
+    { name: "android-chrome", use: { ...devices["Pixel 7"] }, testIgnore: /alerts\.spec/ },
+    { name: "iphone-safari", use: { ...devices["iPhone 13"] }, testIgnore: /alerts\.spec/ },
+    { name: "laptop-chrome", use: { ...devices["Desktop Chrome"], viewport: { width: 1440, height: 900 } }, testIgnore: /alerts\.spec/ },
+    // Turn alerts need full Chromium in its headless mode: the lighter headless shell refuses notifications.
+    {
+      name: "laptop-chromium-alerts",
+      testMatch: /alerts\.spec/,
+      use: { ...devices["Desktop Chrome"], channel: "chromium", permissions: ["notifications"], serviceWorkers: "allow" },
+    },
   ],
   webServer: process.env.E2E_BASE
     ? undefined

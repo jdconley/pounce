@@ -91,3 +91,43 @@ sw.addEventListener("fetch", (event: FetchEvent) => {
     event.respondWith(asset(request));
   }
 });
+
+// Turn alerts (Web Push): show the alert; a tap opens its table.
+type Alert = { title: string; body: string; code?: string; tag?: string };
+
+sw.addEventListener("push", (event: PushEvent) => {
+  let alert: Alert;
+  try {
+    alert = event.data?.json() as Alert;
+  } catch {
+    return;
+  }
+  if (!alert?.title) return;
+  event.waitUntil(
+    sw.registration.showNotification(alert.title, {
+      body: alert.body,
+      tag: alert.tag ?? alert.code ?? "pounce",
+      icon: "/play/icons/icon-192.png",
+      badge: "/play/icons/favicon-32.png",
+      data: { code: alert.code ?? null },
+    }),
+  );
+});
+
+sw.addEventListener("notificationclick", (event: NotificationEvent) => {
+  event.notification.close();
+  const code = (event.notification.data as { code?: string | null } | null)?.code;
+  const url = code ? `/play/t/${code}` : "/play/";
+  event.waitUntil(
+    (async () => {
+      const open = await sw.clients.matchAll({ type: "window", includeUncontrolled: true });
+      const here = open.find((c) => new URL(c.url).pathname.startsWith("/play/"));
+      if (here) {
+        await here.focus();
+        await (here as WindowClient).navigate(url).catch(() => undefined);
+        return;
+      }
+      await sw.clients.openWindow(url);
+    })(),
+  );
+});

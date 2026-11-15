@@ -1,5 +1,6 @@
 import { useEffect, useState } from "preact/hooks";
 
+import { alertsCardDismissed, dismissAlertsCard, turnOnAlerts, useAlerts } from "../alerts";
 import { art, RINGS } from "../lib/art";
 import { CATALOG, GAME_IDS, titleOf, type GameId } from "../lib/catalog";
 import { isRoomCode, navigate } from "../lib/router";
@@ -7,7 +8,7 @@ import { api, type TableEntry } from "../net/api";
 import { promptInstall, useInstall } from "../pwa";
 import { knownTables, reach, useApp } from "../store/app";
 
-import { Button, Cat, Icon, IconButton, Tip } from "./common";
+import { Button, Cat, CloseMark, Icon, IconButton, Tip } from "./common";
 
 
 function Dots(props: { n: number }) {
@@ -63,6 +64,8 @@ export function Home(props: { onSettings: () => void; onPractice: (game: GameId)
 
   const open = (tables ?? []).filter((t) => t.status !== "over").sort((a, b) => Number(b.yourTurn) - Number(a.yourTurn) || b.updatedAt - a.updatedAt);
   const turns = open.filter((t) => t.yourTurn && t.status === "playing").length;
+  const alerts = useAlerts();
+  const askAlerts = alerts === "off" && open.length > 0 && people.band !== "kitten" && !alertsCardDismissed();
   const owner = people.owner;
 
   return (
@@ -88,6 +91,18 @@ export function Home(props: { onSettings: () => void; onPractice: (game: GameId)
           <h2 class="outlined section-h" id="tables-h">
             Your tables {turns > 0 ? <span class="chip turns">{turns === 1 ? "1 turn" : `${turns} turns`}</span> : null}
           </h2>
+          {askAlerts ? (
+            <div class="alerts-card panel" role="group" aria-label="Turn alerts">
+              <Icon name="icon-bell" size={36} />
+              <span class="grow">A ping when it's your move.</span>
+              <Button size="small" variant="ok" onClick={() => void turnOnAlerts().then(() => dismissAlertsCard())}>
+                Turn on
+              </Button>
+              <button type="button" class="icon-btn plain small-x" aria-label="Not now" onClick={dismissAlertsCard}>
+                <CloseMark />
+              </button>
+            </div>
+          ) : null}
           <div class="table-strip" id="tables">
             {open.map((t) => (
               <TableCard t={t} />
