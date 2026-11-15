@@ -1,13 +1,32 @@
-# Pounce
+# Pounce: Family Games
 
-Little games for couples, families and friends. Everyone can be on one phone,
-on their own phone in the same room, or across the world, all in the same game.
+**Family game night, every night.** Little games for couples and families. Everyone can be on one
+phone, on their own phone in the same room, or across the world, all in the same game. Play live,
+or take your turn whenever you have a minute.
 
-The first game is **Cat Tower**: a set-collecting rummy game where cats climb a
-ten-shelf cat tower, one phase per shelf. Yarn is wild, and a Cucumber makes
-the next cat skip a turn.
+[Pounce on the App Store](https://apps.apple.com/app/id6829560061) (free, iPhone and iPad) ·
+[play.conleychaos.com](https://play.conleychaos.com) · made by Conley Chaos LLC.
 
-"Pounce" is a code name.
+The games:
+
+- **Cat Tower**: a set-collecting rummy game where cats climb a ten-shelf cat tower, one phase per
+  shelf. Yarn is wild, and a Cucumber makes the next cat skip a turn.
+- **Tuna Tiles**: tile rummy for two to four. Yarn is wild here too.
+
+No ads, no chat, no public profiles, and no account needed to play. Children under 13 get a limited
+version, and a parent decides whether they get turn alerts.
+
+## Releases
+
+| Version | Status | What's in it |
+| --- | --- | --- |
+| 1.0 | On the App Store since November 2026 | Cat Tower, live and turn-based tables, House Cat bots, streaks, widgets, the live table on the Lock Screen, parent consent for kids. |
+| 1.1 | In App Review (submitted 15 November 2026, build 202611140254) | Tuna Tiles. A faster first game: a House Cat holds a seat. Add players your way: Same room (scan a QR code), Far away (send a link) or This phone (pass and play). Invites that survive installing the app (Paste). A new Home, How to play videos, clearer Settings, tips. |
+
+Every merge to `main` that touches the app builds to TestFlight and goes to the Family and Friends
+group (`apps/play-ios/README.md`, TestFlight). What each App Store version says is kept in the
+repo: What's New and the listing in `docs/whats-new/`, the reviewer notes in
+`docs/app-review-notes.md`, and the App Privacy answers in `docs/privacy/app-store-label.md`.
 
 ## Layout
 
@@ -57,13 +76,20 @@ The same Worker serves the public site at `play.conleychaos.com`: the landing pa
 (`/support`), the privacy policy (`/privacy`) and the invite pages. They are plain HTML built in
 `apps/play-api/src/http`, with no scripts and nothing loaded from another host.
 
-How the landing page offers the app follows two settings, with no code change:
+How the site offers the app follows two settings, with no code change:
 
 | Setting | Where | Effect |
 | --- | --- | --- |
-| `APP_STORE_URL` | `vars` in `apps/play-api/wrangler.jsonc`, empty today | Set to `https://apps.apple.com/app/id<number>` once the app is on the App Store: the page shows Apple's "Download on the App Store" badge, Safari's Smart App Banner, and a QR code on desktop. |
-| `TESTFLIGHT_URL` | the same `vars`, set to the public beta link | Used only while `APP_STORE_URL` is empty (today): the page shows "Join the beta on TestFlight" and the QR code. |
+| `APP_STORE_URL` | `vars` in `apps/play-api/wrangler.jsonc`, set to `https://apps.apple.com/app/id6829560061` since 1.0 was released | The landing page shows Apple's "Download on the App Store" badge and a QR code on desktop; every page gets Safari's Smart App Banner; `/get` goes to the App Store. |
+| `TESTFLIGHT_URL` | the same `vars`, the public beta link | Before release, used in place of the App Store. Now only for an invite to a table the App Store's version can't open yet (below). |
 | neither | | The page says "Coming soon to the App Store" and has no install button. |
+
+The invite pages (`/j/<code>`, `/p/<token>`) promise only what the App Store's current version can
+do, using the version Apple's public lookup reports (cached, never waited on). Paste invite and Tuna
+Tiles arrived in 1.1. So while the App Store still has 1.0, a Tuna Tiles invite's button goes to the
+TestFlight beta, and other invites say "tap Join" (or "tap this link again") instead of "tap
+Paste". Once the App Store has 1.1, every invite goes to the App Store with Paste, by itself
+(`GAME_SINCE` and `PASTE_SINCE` in `apps/play-api/src/http/links.ts`).
 
 `/get` redirects to whichever link is set (or home), so other sites and the QR code can point at
 `https://play.conleychaos.com/get`.
@@ -89,7 +115,7 @@ secrets exist:
 | `PLAY_API_TOKEN_SECRET` | yes | Signs device tokens. Generate with `openssl rand -hex 32`. Without it the API answers 503 and the smoke check fails. |
 | `PLAY_API_APNS_KEY_P8` | no | APNs auth key (.p8 contents) for "your turn" pushes. Set it together with the key ID. |
 | `PLAY_API_APNS_KEY_ID` | no | The APNs key's ID. |
-| `PLAY_API_SIWA_KEY_P8` | no, until App Store submission | Sign in with Apple key (.p8 contents). Sign-in works without it, but the API keeps no Apple tokens, so it can't revoke them on account deletion as App Review requires. One key with both APNs and Sign in with Apple enabled can serve both pairs. Set it together with the key ID. |
+| `PLAY_API_SIWA_KEY_P8` | yes for the App Store | Sign in with Apple key (.p8 contents). Sign-in works without it, but the API keeps no Apple tokens, so it can't revoke them on account deletion as App Review requires. One key with both APNs and Sign in with Apple enabled can serve both pairs. Set it together with the key ID. |
 | `PLAY_API_SIWA_KEY_ID` | no | The Sign in with Apple key's ID. |
 | `PLAY_API_TWILIO_ACCOUNT_SID` | no | Twilio account SID (`AC…`), for parent consent (daily habit PR 9). Set all four Twilio secrets or none: without them no code is sent and a kitten's consent can't start. |
 | `PLAY_API_TWILIO_API_KEY_SID` | no | A Twilio API key's SID (`SK…`): signs in to Verify (basic auth). |
@@ -112,7 +138,6 @@ senders, so Pounce needs no phone number of its own, no Messaging Service, no we
 5. In GitHub, add the four secrets above (Settings, then Secrets and variables, then Actions). The
    next deploy syncs them; a partial set is skipped with a warning.
 
-## License
 ## License
 
 [MIT](LICENSE)
