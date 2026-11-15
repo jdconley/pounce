@@ -14,3 +14,6 @@ xcuserdata/
 DerivedData/
 *.xcuserstate
 build/
+
+# The web player build (apps/play-web), deployed with the Worker
+apps/play-api/public/play/

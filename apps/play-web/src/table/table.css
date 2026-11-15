@@ -1,0 +1,860 @@
+/* The tables. Everything on a table is absolutely placed at (0, 0) and moved by its transform
+   alone; nothing here animates layout or paint. */
+
+.table-screen {
+  padding: 0;
+  overflow: hidden;
+}
+
+.ct-table,
+.tt-table {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+  contain: layout size;
+}
+
+.ct-table > *,
+.tt-table > *,
+.cards > *,
+.pieces > * {
+  position: absolute;
+  top: 0;
+  left: 0;
+  transform-origin: 50% 50%;
+}
+
+.cards,
+.pieces {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.table-menu {
+  position: absolute;
+  z-index: 40;
+  top: calc(var(--safe-top) + 8px);
+  right: calc(var(--safe-right) + 8px);
+}
+
+.table-menu .icon-btn {
+  width: 44px;
+  height: 44px;
+}
+
+.table-menu .icon-btn img {
+  width: 26px;
+  height: 26px;
+}
+
+.rug-art {
+  pointer-events: none;
+  object-fit: contain;
+  opacity: 0.96;
+}
+
+/* Cards. */
+.card {
+  width: var(--cw);
+  height: var(--ch);
+  pointer-events: auto;
+  will-change: auto;
+}
+
+.card .card-inner {
+  display: block;
+  width: 100%;
+  height: 100%;
+  padding: 0;
+  border: 0;
+  border-radius: 12%/9%;
+  background: none;
+  transition: transform 140ms var(--ease-out);
+}
+
+.card.mine {
+  cursor: grab;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .card.mine:hover .card-inner {
+    transform: translateY(-9%);
+  }
+}
+
+.card.picked .card-inner {
+  transform: translateY(-16%);
+  filter: drop-shadow(0 0 6px var(--yellow)) drop-shadow(0 0 2px var(--yellow));
+}
+
+.card.dragging {
+  cursor: grabbing;
+  z-index: 999 !important;
+  will-change: transform;
+}
+
+.card.dragging .card-inner {
+  filter: drop-shadow(0 10px 8px rgba(27, 11, 58, 0.45));
+}
+
+.face {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  background-repeat: no-repeat;
+  /* glyph, cat, face (CardFaceFactory.swift: glyph 8,y 14pt; cat 13,37 44pt; on a 64x90 card). */
+  background-size: 21.9% auto, 68.75% auto, 100% 100%;
+  background-position: 12.5% 40%, 70% 88%, 0 0;
+  filter: drop-shadow(0 2px 0 rgba(27, 11, 58, 0.55));
+}
+
+.face.compact {
+  background-size: 23.4% auto, 53% auto, 100% 100%;
+  background-position: 12.5% 44%, 88% 92%, 0 0;
+}
+
+.face.yarn,
+.face.cucumber {
+  background-size: 75% auto, 100% 100%;
+  background-position: 50% 52%, 0 0;
+}
+
+.face.compact.yarn,
+.face.compact.cucumber {
+  background-size: 69% auto, 100% 100%;
+  background-position: 50% 26%, 0 0;
+}
+
+.face.back,
+.face.blank {
+  background-size: 100% 100%;
+}
+
+.face .num {
+  position: absolute;
+  top: 5%;
+  left: 11%;
+  font-family: var(--round);
+  font-weight: 900;
+  font-size: calc(var(--cw) * 0.39);
+  line-height: 1;
+  letter-spacing: -0.02em;
+  -webkit-text-stroke: calc(var(--cw) * 0.07) var(--ink);
+  paint-order: stroke fill;
+}
+
+.face .num.two {
+  font-size: calc(var(--cw) * 0.33);
+  letter-spacing: -0.06em;
+}
+
+.face.compact .num {
+  font-size: calc(var(--cw) * 0.53);
+  top: 3%;
+  left: 9%;
+}
+
+.face.compact .num.two {
+  font-size: calc(var(--cw) * 0.46);
+}
+
+.num.tabby {
+  color: #c24400;
+}
+
+.num.tuxedo {
+  color: #d1006b;
+}
+
+.num.calico {
+  color: #00788a;
+}
+
+.num.gray {
+  color: var(--violet);
+}
+
+/* The piles. */
+.deck,
+.discard {
+  width: var(--cw);
+  height: var(--ch);
+  padding: 0;
+  border: 0;
+  background: none;
+  border-radius: 12%/9%;
+}
+
+.deck-card {
+  position: absolute;
+  inset: 0;
+  background-size: 100% 100%;
+  border-radius: 12%/9%;
+  filter: drop-shadow(0 2px 0 rgba(27, 11, 58, 0.55));
+}
+
+.deck-card.d2 {
+  transform: translate(3px, 3px);
+}
+
+.deck-card.d3 {
+  transform: translate(6px, 6px);
+}
+
+.deck.live,
+.discard.live,
+.discard.aim {
+  animation: glow 1.2s ease-in-out infinite alternate;
+}
+
+@keyframes glow {
+  from {
+    filter: drop-shadow(0 0 0 rgba(255, 210, 31, 0));
+  }
+  to {
+    filter: drop-shadow(0 0 14px rgba(255, 210, 31, 0.95));
+  }
+}
+
+.discard {
+  outline: 3px dashed rgba(255, 255, 255, 0.35);
+  outline-offset: -3px;
+}
+
+.discard.hot {
+  outline: 4px solid var(--yellow);
+}
+
+.discard .under {
+  position: absolute;
+  inset: 0;
+}
+
+.pile-count {
+  position: absolute;
+  right: -8px;
+  bottom: -8px;
+  z-index: 2;
+  min-width: 30px;
+  padding: 1px 7px;
+  border: 2.5px solid var(--ink);
+  border-radius: 999px;
+  background: var(--ink);
+  color: var(--white);
+  font: 900 0.85rem var(--round);
+  text-align: center;
+}
+
+/* Avatars. */
+.avatar-at {
+  z-index: 20;
+}
+
+.seat-avatar {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+}
+
+.seat-avatar .ring {
+  position: relative;
+  display: block;
+  border: 3px solid var(--ink);
+  border-radius: 50%;
+  background: radial-gradient(circle at 50% 35%, color-mix(in srgb, var(--ring) 60%, white), var(--ring));
+  box-shadow: 0 4px 0 var(--ink);
+}
+
+.seat-avatar .ring > img:first-child {
+  position: absolute;
+  inset: 4% 4% 0;
+  width: 92%;
+  height: 96%;
+  object-fit: contain;
+}
+
+.seat-avatar.turn .ring {
+  animation: turn-ring 1s ease-in-out infinite alternate;
+}
+
+@keyframes turn-ring {
+  from {
+    box-shadow: 0 4px 0 var(--ink), 0 0 0 0 rgba(255, 210, 31, 0.9);
+  }
+  to {
+    box-shadow: 0 4px 0 var(--ink), 0 0 0 7px rgba(255, 210, 31, 0.9);
+  }
+}
+
+.seat-avatar.out {
+  opacity: 0.45;
+}
+
+.seat-avatar.target .ring {
+  outline: 4px solid var(--lime);
+  outline-offset: 2px;
+}
+
+.seat-avatar .badge {
+  position: absolute;
+  top: -6%;
+  right: -10%;
+  width: 36%;
+}
+
+.seat-avatar .count {
+  position: absolute;
+  right: -12%;
+  bottom: -6%;
+  min-width: 42%;
+  padding: 0 5px;
+  border: 2.5px solid var(--ink);
+  border-radius: 9px;
+  background: linear-gradient(180deg, #9d63ff, var(--violet));
+  color: var(--white);
+  font: 900 calc(var(--avatar, 64px) * 0.24) / 1.25 var(--round);
+  text-align: center;
+  -webkit-text-stroke: 0.12em var(--ink);
+  paint-order: stroke fill;
+}
+
+.seat-avatar .skip,
+.seat-avatar .laid {
+  position: absolute;
+  left: -10%;
+  width: 36%;
+}
+
+.seat-avatar .skip {
+  bottom: -4%;
+}
+
+.seat-avatar .laid {
+  top: -4%;
+}
+
+.seat-avatar .link {
+  position: absolute;
+  top: 2%;
+  left: 2%;
+  width: 22%;
+  height: 22%;
+  border: 2px solid var(--ink);
+  border-radius: 50%;
+  background: var(--yellow);
+}
+
+.seat-avatar .link.lost {
+  background: var(--refuse);
+}
+
+.seat-avatar .name-tag {
+  max-width: calc(var(--avatar, 64px) * 2.2);
+  margin-top: -8px;
+  position: relative;
+}
+
+.laid-owner .seat-avatar .ring {
+  border-width: 2px;
+  box-shadow: none;
+}
+
+/* The tower. */
+.tower {
+  pointer-events: none;
+}
+
+.tower .shelf {
+  position: absolute;
+  left: 0;
+  width: 100%;
+  border: 2.5px solid var(--ink);
+  border-radius: 10px;
+  background: linear-gradient(180deg, #4ff2e4, #00a99c);
+  box-shadow: 0 3px 0 var(--ink);
+}
+
+.tower .shelf i {
+  position: absolute;
+  right: -10px;
+  bottom: -10px;
+  display: grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  border: 2px solid var(--ink);
+  border-radius: 50%;
+  background: var(--yellow);
+  color: var(--ink);
+  font: 900 0.7rem var(--round);
+  font-style: normal;
+}
+
+.tower-cat {
+  position: absolute;
+  top: 0;
+  left: 0;
+  border: 2.5px solid var(--ink);
+  border-radius: 50%;
+  background: var(--ring);
+  transition: transform 600ms var(--ease-spring);
+}
+
+.tower-cat img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+
+.tower-cat.turn {
+  outline: 3px solid var(--yellow);
+}
+
+/* Laid groups and trays. */
+.group-zone {
+  z-index: 8;
+  padding: 0;
+  border: 0;
+  border-radius: 12px;
+  background: none;
+  pointer-events: auto;
+}
+
+.group-zone.good {
+  box-shadow: 0 0 0 3px var(--lime), 0 0 16px var(--lime);
+}
+
+.group-zone.bad {
+  box-shadow: 0 0 0 3px var(--refuse);
+}
+
+.tray {
+  z-index: 4;
+  padding: 0;
+  border: 3px solid var(--ink);
+  border-radius: 18px;
+  background: linear-gradient(180deg, #b183ff, #7b2fff);
+  box-shadow: inset 0 6px 0 rgba(27, 11, 58, 0.35), 0 4px 0 var(--ink);
+}
+
+.tray.hot {
+  outline: 4px solid var(--yellow);
+}
+
+.tray.good {
+  background: linear-gradient(180deg, #c6f76a, #7cc51c);
+}
+
+.tray.bad {
+  background: linear-gradient(180deg, #ff8a95, var(--refuse));
+}
+
+.tray-label {
+  position: absolute;
+  left: 10px;
+  top: 50%;
+  translate: 0 -50%;
+  font: 900 clamp(0.85rem, 3.6vw, 1.05rem) var(--round);
+  color: var(--white);
+  -webkit-text-stroke: 0.15em var(--ink);
+  paint-order: stroke fill;
+  pointer-events: none;
+}
+
+.hand-zone {
+  pointer-events: none;
+}
+
+.action-at {
+  z-index: 300;
+  translate: -50% -100%;
+}
+
+.cue {
+  z-index: 30;
+  left: 50% !important;
+  margin: 0;
+  padding: 4px 16px;
+  border: 2.5px solid var(--ink);
+  border-radius: 999px;
+  background: rgba(27, 11, 58, 0.75);
+  font: 900 clamp(0.85rem, 3.4vw, 1rem) var(--round);
+  white-space: nowrap;
+  pointer-events: none;
+}
+
+.cue.mine {
+  background: var(--orange);
+  color: var(--white);
+  -webkit-text-stroke: 0.14em var(--ink);
+  paint-order: stroke fill;
+}
+
+/* Overlays on the table. */
+.skip-pick,
+.curtain,
+.round-over {
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 400;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  padding: 24px;
+  background: rgba(27, 11, 58, 0.7);
+  animation: fade-in 200ms ease-out both;
+}
+
+.skip-pick p {
+  margin: 0;
+  font-size: 1.6rem;
+}
+
+.skip-seats {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 18px;
+}
+
+.curtain {
+  background: var(--night) center / cover no-repeat;
+}
+
+.hold {
+  position: relative;
+  overflow: hidden;
+  max-width: 360px;
+}
+
+.hold .fill {
+  position: absolute;
+  inset: 0;
+  background: rgba(255, 255, 255, 0.45);
+  transform: scaleX(0);
+  transform-origin: left;
+}
+
+.hold.holding .fill {
+  animation: fill linear forwards;
+}
+
+@keyframes fill {
+  to {
+    transform: scaleX(1);
+  }
+}
+
+.hold .label {
+  position: relative;
+}
+
+.round-over {
+  pointer-events: none;
+  background: rgba(27, 11, 58, 0.45);
+}
+
+.round-card {
+  width: min(100%, 420px);
+  padding: 16px;
+  animation: sheet-in 320ms var(--ease-spring) both;
+}
+
+.round-card ul {
+  margin: 10px 0 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.round-card li {
+  display: grid;
+  grid-template-columns: 44px 1fr auto auto;
+  align-items: center;
+  gap: 10px;
+  padding: 2px 12px 2px 2px;
+  border-radius: 999px;
+  background: rgba(27, 11, 58, 0.45);
+  font: 900 1rem var(--round);
+}
+
+.round-card li.up {
+  background: rgba(155, 226, 46, 0.35);
+}
+
+.round-card .who {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Tuna Tiles. */
+.board {
+  border: 6px solid transparent;
+  border-radius: 34px;
+  background:
+    linear-gradient(#3d0fa6, #3d0fa6) padding-box,
+    repeating-linear-gradient(45deg, var(--magenta) 0 10px, var(--teal) 10px 20px, var(--orange) 20px 30px) border-box;
+  box-shadow: 0 0 0 3px var(--ink), inset 0 0 0 3px var(--ink), inset 0 8px 24px rgba(0, 0, 0, 0.35);
+}
+
+.pool {
+  z-index: 30;
+}
+
+.pool img {
+  width: 100%;
+  height: auto;
+}
+
+.tile {
+  width: var(--pw);
+  height: var(--ph);
+  pointer-events: auto;
+}
+
+.tile.mine {
+  cursor: grab;
+}
+
+.tile .tile-inner {
+  display: block;
+  width: 100%;
+  height: 100%;
+  padding: 0;
+  border: 0;
+  background: none;
+  transition: transform 140ms var(--ease-out);
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .tile.mine:hover .tile-inner {
+    transform: translateY(-6%);
+  }
+}
+
+.tile.picked .tile-inner {
+  transform: translateY(-14%);
+  filter: drop-shadow(0 0 6px var(--yellow));
+}
+
+.tile.dragging {
+  z-index: 999 !important;
+  cursor: grabbing;
+}
+
+.piece {
+  --top: #9d63ff;
+  --base: var(--violet);
+  --side: #4e13c4;
+  position: relative;
+  width: 100%;
+  height: 100%;
+  border: 2.5px solid var(--ink);
+  border-radius: 18%;
+  background: linear-gradient(180deg, var(--top), var(--base) 70%);
+  box-shadow: inset 0 calc(var(--ph) * -0.12) 0 var(--side), 0 2px 0 var(--ink);
+}
+
+.piece.fish {
+  --top: #4ff2e4;
+  --base: var(--teal);
+  --side: #008f8a;
+}
+
+.piece.mouse {
+  --top: #9d63ff;
+  --base: var(--violet);
+  --side: #4e13c4;
+}
+
+.piece.feather {
+  --top: #ffae3d;
+  --base: var(--orange);
+  --side: #c85a00;
+}
+
+.piece.bell {
+  --top: #ffe66b;
+  --base: #ffd21f;
+  --side: #d99a00;
+}
+
+.piece.yarn {
+  --top: #fff;
+  --base: #fff;
+  --side: #ffc2e1;
+}
+
+.piece .n {
+  position: absolute;
+  top: 2%;
+  left: 0;
+  right: 0;
+  text-align: center;
+  font: 900 calc(var(--pw) * 0.54) / 1 var(--round);
+  color: var(--white);
+  -webkit-text-stroke: calc(var(--pw) * 0.1) var(--ink);
+  paint-order: stroke fill;
+  letter-spacing: -0.04em;
+}
+
+.piece .n.two {
+  font-size: calc(var(--pw) * 0.46);
+}
+
+.piece .toy {
+  position: absolute;
+  left: 30%;
+  bottom: 14%;
+  width: 40%;
+  height: 30%;
+  background-size: contain;
+  background-repeat: no-repeat;
+  background-position: center;
+}
+
+.piece.yarn .toy {
+  left: 14%;
+  bottom: 14%;
+  width: 72%;
+  height: 72%;
+}
+
+.piece .ghost {
+  position: absolute;
+  top: 2%;
+  left: 6%;
+  z-index: 1;
+  font: 900 calc(var(--pw) * 0.36) / 1 var(--round);
+  color: var(--magenta);
+  -webkit-text-stroke: calc(var(--pw) * 0.06) var(--white);
+  paint-order: stroke fill;
+}
+
+.set-zone {
+  z-index: 2;
+  padding: 0;
+  border: 0;
+  border-radius: 12px;
+  background: none;
+}
+
+.set-zone.good {
+  box-shadow: 0 0 0 3px var(--lime);
+}
+
+.set-zone.bad {
+  box-shadow: 0 0 0 3px var(--refuse);
+}
+
+.set-zone.hot {
+  background: rgba(255, 210, 31, 0.25);
+}
+
+.set-zone .mark {
+  position: absolute;
+  top: -12px;
+  right: -12px;
+  width: 26px;
+  height: 26px;
+  z-index: 50;
+  border-radius: 50%;
+}
+
+.set-zone .mark.bad {
+  border: 2.5px solid var(--ink);
+  background: var(--refuse);
+}
+
+.new-set {
+  z-index: 2;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  border: 3px dashed rgba(255, 255, 255, 0.85);
+  border-radius: 14px;
+  background: rgba(27, 11, 58, 0.3);
+}
+
+.new-set.hot {
+  background: rgba(255, 210, 31, 0.35);
+}
+
+.controls {
+  z-index: 60;
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 0 calc(var(--safe-right) + 12px) 0 calc(var(--safe-left) + 12px);
+}
+
+.controls .side {
+  display: flex;
+  gap: 6px;
+}
+
+.controls .middle {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+/* The opening's points ride above Play, so the row never grows. */
+.controls .middle .opening {
+  position: absolute;
+  bottom: calc(100% + 6px);
+  left: 50%;
+  translate: -50% 0;
+}
+
+.controls .icon-btn {
+  width: 46px;
+  height: 46px;
+}
+
+.controls .icon-btn img {
+  width: 28px;
+  height: 28px;
+}
+
+.num-icon {
+  font: 900 0.8rem var(--round);
+  color: var(--white);
+}
+
+.chip.opening {
+  background: var(--refuse);
+}
+
+.chip.opening.good {
+  background: var(--lime);
+  color: var(--ink);
+}
+
+@media (max-width: 380px) {
+  .controls .icon-btn {
+    width: 40px;
+    height: 40px;
+  }
+
+  .controls .side {
+    gap: 4px;
+  }
+}

@@ -26,6 +26,10 @@ export default defineConfig({
         "src/safety/limiter.ts",
         "src/safety/reports.ts",
         "src/index.ts",
+        // The web player's socket and files: workerd-only (WebSocketPair, 101s), so
+        // tests/web-player.test.ts covers them in Miniflare.
+        "src/http/browser-socket.ts",
+        "src/http/web-player.ts",
       ],
       reporter: ["text", "json-summary"],
       thresholds: {

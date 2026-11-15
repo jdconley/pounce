@@ -7,10 +7,12 @@ import { noticePage } from "./consent/pages";
 import { devSpeed } from "./env";
 import { active, forget, minted, pageView, parseReport, prune, reached, report } from "./funnel/funnel";
 import { DEFAULT_GAME, GAMES_HEADER, gamesListed, gamesOn, gameTitle, isGameId, type GameId } from "./games";
+import { asAppSocket, browserAnswer, isBrowserSocket } from "./http/browser-socket";
 import { appSiteAssociation, ogImage, pouncePage, sharePage } from "./http/links";
 import { mediaFile } from "./http/media";
 import { privacyPage } from "./http/privacy";
 import { getRedirect, homePage, llmsTxt, robotsTxt, sitemapXml, supportPage } from "./http/site";
+import { isWebPlayerPath, webPlayer } from "./http/web-player";
 import {
   anyConsented,
   appStoreNotification,
@@ -592,87 +594,94 @@ function route(
 
 export default {
   async fetch(request: Request, env: Env, ctx?: ExecutionContext): Promise<Response> {
-    const { pathname } = new URL(request.url);
-    // Where this Worker is served, for its cache entries; and how work outlives an answer.
-    servedAt(request.url);
-    const later: Later = (work) => ctx?.waitUntil(work);
-    const { method } = request;
-    if (method === "GET" && pathname === "/healthz") {
-      const speed = devSpeed(env);
-      return json(200, {
-        ok: true,
-        service: "play-api",
-        configured: Boolean(env.TOKEN_SECRET),
-        ...(speed === 1 ? {} : { speed }),
-      });
-    }
-    const streaks = streaksOn(env);
-    const notify = notifyOn(env);
-    if (method === "GET" && pathname === "/.well-known/apple-app-site-association") {
-      return appSiteAssociation(notify);
-    }
-    if (method === "GET" && pathname === "/og/room.jpg") return ogImage();
-    if (method === "GET" && pathname === "/privacy") return privacyPage(consentOn(env));
-    if (method === "GET" && pathname === "/support") return supportPage();
-    if (method === "GET") {
-      const origin = () => new URL(request.url).origin;
-      if (pathname === "/") return homePage(install(env), origin(), consentOn(env));
-      if (pathname === "/get") return getRedirect(install(env), origin());
-      if (pathname === "/robots.txt") return robotsTxt(origin());
-      if (pathname === "/sitemap.xml") return sitemapXml(origin());
-      if (pathname === "/llms.txt") return llmsTxt(origin(), consentOn(env));
-      if (pathname.startsWith("/media/")) return (await mediaFile(request, env.ASSETS)) ?? notFound();
-    }
-    const share = method === "GET" ? SHARE_PATH.exec(pathname) : null;
-    if (share) {
-      later(pageView(env, "j", request.headers.get("user-agent"), Date.now()).catch(() => undefined));
-      const code = share[1] as string;
-      // Who invited, to what: only for a well-formed code, and guarded like a guess at it.
-      const peek = ROOM_CODE.test(code) ? await peekInvite(env, code, clientIp(request), Date.now()) : "hidden";
-      const store = (await storeKnown(env, later)).store;
-      return sharePage(code, { ...install(env), storeVersion: store }, new URL(request.url).origin, peek, gamesOn(env).length > 1);
-    }
-    if (notify && method === "GET") {
-      // The pounce card reuses the room card until the bell art lands (§9.6).
-      if (pathname === "/og/pounce.jpg") return ogImage();
-      const p = POUNCE_PAGE.exec(pathname);
-      if (p) {
-        const token = p[1] as string;
-        later(pageView(env, "p", request.headers.get("user-agent"), Date.now()).catch(() => undefined));
-        const found = await linkPounce(env, token, Date.now()).catch(() => null);
-        const store = (await storeKnown(env, later)).store;
-        return pouncePage(found?.from ?? null, token, { ...install(env), storeVersion: store }, new URL(request.url).origin);
-      }
-    }
-    const consent = consentOn(env);
-    if (consent) {
-      const answered = await publicConsent(request, env, method, pathname);
-      if (answered) return answered;
-    }
-    if (method === "GET" && pathname === "/v1/admin/reports") {
-      // The owner's list of player reports; without `REPORTS_KEY` (or the right one) there is no such page.
-      const found = await ownerReports(env, request);
-      return found === null ? notFound() : found === "bad" ? badRequest() : json(200, found);
-    }
-    if (method === "GET" && pathname === "/v1/app") return getApp(env, later);
-    const secret = env.TOKEN_SECRET;
-    const mints = method === "POST" && pathname === "/v1/devices";
-    const handler = mints ? null : route(method, pathname, streaks, notify, liveOn(env), consent, trophyOn(env));
-    if (!mints && !handler) return notFound();
-    // Too old to be served (`APP_MINIMUM`, or a protocol the server dropped)? Nobody is while
-    // there is no minimum, and then this asks nothing and costs nothing.
-    const app = parseApp(request.headers.get(APP_HEADER));
-    // What is known of the App Store is all this reads: no request ever waits on Apple.
-    const refusal = await refusalFor(app, env, MIN_PROTOCOL, async () => (await storeKnown(env, later)).store);
-    // An app that said what it is gets a plain answer on every route but the two that let someone leave.
-    if (refusal && app && !leavesAnyway(method, pathname)) return updateRequired(refusal);
-    if (mints) return secret ? mintDevice(request, env, secret, later) : notConfigured();
-    if (!secret) return notConfigured();
-    const deviceId = await authenticate(request, secret);
-    if (!deviceId) return unauthorized();
-    // Version 1.0 says nothing of itself, and reads no answer but a table's: its HTTP calls are
-    // answered as ever, and a table it opens tells it to update (design §6).
-    if (refusal && ROOM_WS.test(pathname) && request.headers.get("upgrade")?.toLowerCase() === "websocket") return retiredSocket();
-    return (handler as Route)(request, env, deviceId, later);
+    // A game socket from the web player: told in the browser's way, answered in a way it can read.
+    if (isBrowserSocket(request)) return browserAnswer(await handle(asAppSocket(request), env, ctx));
+    return handle(request, env, ctx);
   },
 } satisfies ExportedHandler<Env>;
+
+async function handle(request: Request, env: Env, ctx?: ExecutionContext): Promise<Response> {
+  const { pathname } = new URL(request.url);
+  // Where this Worker is served, for its cache entries; and how work outlives an answer.
+  servedAt(request.url);
+  const later: Later = (work) => ctx?.waitUntil(work);
+  const { method } = request;
+  if (method === "GET" && pathname === "/healthz") {
+    const speed = devSpeed(env);
+    return json(200, {
+      ok: true,
+      service: "play-api",
+      configured: Boolean(env.TOKEN_SECRET),
+      ...(speed === 1 ? {} : { speed }),
+    });
+  }
+  const streaks = streaksOn(env);
+  const notify = notifyOn(env);
+  if (method === "GET" && pathname === "/.well-known/apple-app-site-association") {
+    return appSiteAssociation(notify);
+  }
+  if (method === "GET" && pathname === "/og/room.jpg") return ogImage();
+  if ((method === "GET" || method === "HEAD") && isWebPlayerPath(pathname)) return (await webPlayer(request, env.ASSETS)) ?? notFound();
+  if (method === "GET" && pathname === "/privacy") return privacyPage(consentOn(env));
+  if (method === "GET" && pathname === "/support") return supportPage();
+  if (method === "GET") {
+    const origin = () => new URL(request.url).origin;
+    if (pathname === "/") return homePage(install(env), origin(), consentOn(env));
+    if (pathname === "/get") return getRedirect(install(env), origin());
+    if (pathname === "/robots.txt") return robotsTxt(origin());
+    if (pathname === "/sitemap.xml") return sitemapXml(origin());
+    if (pathname === "/llms.txt") return llmsTxt(origin(), consentOn(env));
+    if (pathname.startsWith("/media/")) return (await mediaFile(request, env.ASSETS)) ?? notFound();
+  }
+  const share = method === "GET" ? SHARE_PATH.exec(pathname) : null;
+  if (share) {
+    later(pageView(env, "j", request.headers.get("user-agent"), Date.now()).catch(() => undefined));
+    const code = share[1] as string;
+    // Who invited, to what: only for a well-formed code, and guarded like a guess at it.
+    const peek = ROOM_CODE.test(code) ? await peekInvite(env, code, clientIp(request), Date.now()) : "hidden";
+    const store = (await storeKnown(env, later)).store;
+    return sharePage(code, { ...install(env), storeVersion: store }, new URL(request.url).origin, peek, gamesOn(env).length > 1);
+  }
+  if (notify && method === "GET") {
+    // The pounce card reuses the room card until the bell art lands (§9.6).
+    if (pathname === "/og/pounce.jpg") return ogImage();
+    const p = POUNCE_PAGE.exec(pathname);
+    if (p) {
+      const token = p[1] as string;
+      later(pageView(env, "p", request.headers.get("user-agent"), Date.now()).catch(() => undefined));
+      const found = await linkPounce(env, token, Date.now()).catch(() => null);
+      const store = (await storeKnown(env, later)).store;
+      return pouncePage(found?.from ?? null, token, { ...install(env), storeVersion: store }, new URL(request.url).origin);
+    }
+  }
+  const consent = consentOn(env);
+  if (consent) {
+    const answered = await publicConsent(request, env, method, pathname);
+    if (answered) return answered;
+  }
+  if (method === "GET" && pathname === "/v1/admin/reports") {
+    // The owner's list of player reports; without `REPORTS_KEY` (or the right one) there is no such page.
+    const found = await ownerReports(env, request);
+    return found === null ? notFound() : found === "bad" ? badRequest() : json(200, found);
+  }
+  if (method === "GET" && pathname === "/v1/app") return getApp(env, later);
+  const secret = env.TOKEN_SECRET;
+  const mints = method === "POST" && pathname === "/v1/devices";
+  const handler = mints ? null : route(method, pathname, streaks, notify, liveOn(env), consent, trophyOn(env));
+  if (!mints && !handler) return notFound();
+  // Too old to be served (`APP_MINIMUM`, or a protocol the server dropped)? Nobody is while
+  // there is no minimum, and then this asks nothing and costs nothing.
+  const app = parseApp(request.headers.get(APP_HEADER));
+  // What is known of the App Store is all this reads: no request ever waits on Apple.
+  const refusal = await refusalFor(app, env, MIN_PROTOCOL, async () => (await storeKnown(env, later)).store);
+  // An app that said what it is gets a plain answer on every route but the two that let someone leave.
+  if (refusal && app && !leavesAnyway(method, pathname)) return updateRequired(refusal);
+  if (mints) return secret ? mintDevice(request, env, secret, later) : notConfigured();
+  if (!secret) return notConfigured();
+  const deviceId = await authenticate(request, secret);
+  if (!deviceId) return unauthorized();
+  // Version 1.0 says nothing of itself, and reads no answer but a table's: its HTTP calls are
+  // answered as ever, and a table it opens tells it to update (design §6).
+  if (refusal && ROOM_WS.test(pathname) && request.headers.get("upgrade")?.toLowerCase() === "websocket") return retiredSocket();
+  return (handler as Route)(request, env, deviceId, later);
+}

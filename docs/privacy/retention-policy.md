@@ -8,6 +8,10 @@ Draft for JD Conley (Conley Chaos LLC) to review, 4 November 2026; updated 10 No
 - Delete automatically wherever the server can (Durable Object alarms), so retention never depends on someone remembering.
 - A child's data (age band `kitten`, under 13) gets no longer retention than anyone else's, and the same 90-day guest expiry applies.
 
+## The web player
+
+The web player (`apps/play-web`, at `play.conleychaos.com/play`, from 15 November 2026) keeps the same server data as the app, under the same rules. On the device, in place of the Keychain and the app's files, it uses the browser's local storage: `pounce.device` (device id and token), `pounce.people` (each person's id, name, cat and key, and the age band; never a birth year), `pounce.settings`, `pounce.tips`, `pounce.tables` (codes and names of tables it opened, at most 30), `pounce.funnel` and `pounce.source` (getting-started steps until sent). The service worker caches the page's own files (no personal data). No cookies. Settings, then Delete my data, deletes each person's player on the server (`DELETE /v1/me`) and clears all of it from the browser; clearing site data in the browser clears the browser's copy only.
+
 ## What is kept, why, and for how long
 
 | Data | Where | Purpose | Kept for | How it is deleted |
