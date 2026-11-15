@@ -194,3 +194,15 @@ describe("the web player's files", () => {
     expect((await mf.dispatchFetch(`${BASE}/play/`, { method: "POST" })).status).toBe(404);
   });
 });
+
+describe("the invite page's way into the web player", () => {
+  test("off an iPhone the browser is the button; on one, the app is, with the browser under it", async () => {
+    const token = await mint();
+    const code = await newTable(token, "cat-tower");
+    const android = await (await mf.dispatchFetch(`${BASE}/j/${code}`, { headers: { "user-agent": "Mozilla/5.0 (Linux; Android 15; Pixel 9) Chrome/140" } })).text();
+    expect(android).toContain(`<a class="go web" href="/play/j/${code}">Play in your browser</a>`);
+    const iphone = await (await mf.dispatchFetch(`${BASE}/j/${code}`, { headers: { "user-agent": "Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X)" } })).text();
+    expect(iphone).toContain(`<p class="alt"><a href="/play/j/${code}">Play in your browser</a></p>`);
+    expect(iphone).not.toContain('class="go web"');
+  });
+});
