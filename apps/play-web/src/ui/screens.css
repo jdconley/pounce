@@ -249,7 +249,9 @@
   align-items: center;
 }
 
-.home > * {
+.home > header,
+.home > section,
+.home > nav {
   width: 100%;
   max-width: 1100px;
 }
@@ -496,7 +498,9 @@
   gap: 10px;
 }
 
-.lobby > * {
+.lobby > header,
+.lobby > section,
+.lobby > div:not(.room-bg) {
   width: 100%;
   max-width: 720px;
 }
@@ -888,4 +892,25 @@
 
 .row.danger {
   background: rgba(255, 59, 78, 0.35);
+}
+
+/* A laptop or a monitor: Home's shelf sits in the middle of the room, not at its top. */
+@media (min-width: 900px) and (min-height: 640px) {
+  .home {
+    justify-content: center;
+    gap: 28px;
+  }
+
+  .home .room-bg {
+    background-position: center 30%;
+  }
+
+  .home .dock {
+    position: static;
+    margin-top: 8px;
+  }
+
+  .poster-art {
+    min-height: 190px;
+  }
 }

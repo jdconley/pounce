@@ -94,7 +94,7 @@ export function Lobby(props: {
         <button type="button" class="chip table-name" onClick={() => !props.kitten && seated && setSheet("rename")} aria-label={`Table: ${room.name}${props.kitten ? "" : ". Rename"}`}>
           <span>{room.name}</span>
         </button>
-        <button type="button" class="chip code-chip outlined" onClick={() => setSheet("qr")} aria-label={`Table code ${room.code.split("").join(" ")}. Show QR code`}>
+        <button type="button" class="chip code-chip outlined" onClick={() => setSheet("qr")} aria-label={`${room.code}: table code. Show QR code`}>
           {room.code}
         </button>
       </header>

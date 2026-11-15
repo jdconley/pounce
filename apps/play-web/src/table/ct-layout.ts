@@ -209,7 +209,8 @@ function layoutOn(input: CtInput): CtLayout {
   const cy = pileTop + Math.max(pileSpace, ch) / 2;
   const deck = { x: cx - cw - gap / 2, y: cy - ch / 2, r: 0, s: 1, z: 5 };
   const discard = { x: cx + gap / 2, y: cy - ch / 2, r: 0, s: 1, z: 6 };
-  const rugSize = Math.min(Math.max(pileSpace + ch * 0.6, ch * 2), (cw * 2 + gap) * 2.3, landscape ? usable : W);
+  // The rug sits under the piles and never runs under the tower.
+  const rugSize = Math.min(Math.max(pileSpace + ch * 0.6, ch * 2), (cw * 2 + gap) * 2.3, landscape ? usable : W, (cx - (towerLeft + towerW + 4)) * 2);
   const rug = { x: cx - rugSize / 2, y: cy - rugSize / 2, w: rugSize, h: rugSize };
 
   const lastTray = trays[trays.length - 1];

@@ -15,7 +15,7 @@ import { buzz } from "../lib/haptics";
 import { reducedMotion } from "../lib/settings";
 import { play } from "../lib/sound";
 import { mySeats } from "../store/lobby";
-import { Button, Icon, learnTip, Tip, tipLearned, useSize } from "../ui/common";
+import { Button, Icon, learnTip, Tip, tipLearned, useMedia, useSize } from "../ui/common";
 
 import { ctLayout, trayPoses, type Insets } from "./ct-layout";
 import { inside, press, type Point } from "./drag";
@@ -464,6 +464,7 @@ export function CatTowerTable(props: { store: RoomStore; state: RoomState }) {
         ? "Play or discard"
         : phaseWords(phaseIndex);
 
+  const fineMouse = useMedia("(hover: hover) and (pointer: fine)");
   const style = { ["--cw" as string]: `${L.cw}px`, ["--ch" as string]: `${L.ch}px`, ["--avatar" as string]: `${L.avatar}px` };
   const canDrawDiscard = myTurn && g.step === "draw" && g.discardTop !== null && card(g.discardTop).kind !== "cucumber";
 
@@ -566,7 +567,7 @@ export function CatTowerTable(props: { store: RoomStore; state: RoomState }) {
           })
         : null}
 
-      <div class="hand-zone" style={{ transform: `translate3d(${L.handRect.x}px, ${L.handRect.y}px, 0)`, width: `${L.handRect.w}px`, height: `${L.handRect.h}px` }} />
+      <div class="hand-zone" id="hand" style={{ transform: `translate3d(${L.handRect.x}px, ${L.handRect.y}px, 0)`, width: `${L.handRect.w}px`, height: `${L.handRect.h}px` }} />
 
       <div class="cards" role="group" aria-label="Your hand">
         {[...poses.keys()].map((key) => {
@@ -644,6 +645,7 @@ export function CatTowerTable(props: { store: RoomStore; state: RoomState }) {
       <Tip id="ct.trays" anchor="tray-0" text={`This round: ${phaseWords(phaseIndex)}. Drag cards into the trays.`} show={myTurn && g.step === "play" && showTrays && tipLearned("ct.draw")} />
       <Tip id="ct.discard" anchor="discard" text="Drag one card to the discard pile." show={myTurn && g.step === "play" && tipLearned("ct.trays") && !groupsReady} />
       <Tip id="ct.lay" anchor="lay" text="Tap the paw to lay down your level." show={groupsReady && myTurn} />
+      <Tip id="ct.keys" anchor="hand" text="Keys: D draws, X discards, arrows pick a card." show={fineMouse && myTurn && tipLearned("ct.discard") && !state.pending} />
       <Tip id="ct.hit" anchor="discard" text="Drop cards on any laid group they fit." show={myTurn && g.step === "play" && laidMine && tipLearned("ct.discard")} />
     </div>
   );

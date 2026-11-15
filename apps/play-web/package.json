@@ -19,6 +19,7 @@
     "qrcode-generator": "2.0.4"
   },
   "devDependencies": {
+    "@axe-core/playwright": "4.14.0",
     "@playwright/test": "1.65.0",
     "@types/node": "catalog:",
     "esbuild": "0.27.7",
