@@ -84,8 +84,8 @@ then the build setting (Debug: `http://localhost:8787`, optionally overridden by
   The bad connection indicator has four: `weak`, `reconnecting`, `pending` (a move the server never
   answers) and `seatLink` (other players' weak and reconnecting phones). Screenshots of each are in
   `Art/screenshots/connection/`.
-- The tile game (working title "Tuna Tiles", game id `tiles`; `docs/superpowers/specs/2026-11-11-tile-game-design.md`)
-  has its table but nothing in Home starts it yet: `-demo tiles…` is the only way in. `tiles` (mid game,
+- The tile game (Tuna Tiles, game id `tiles`; `docs/superpowers/specs/2026-11-11-tile-game-design.md`)
+  is on from 1.1: its card on Home deals a table. Its demos, offline: `tiles` (mid game,
   my move), `tiles-early` / `tiles-opened` (before and after my opening), `tiles-draft`, `tiles-invalid`,
   `tiles-loupe` (a turn half built: valid, with a broken set, with a set open), `tiles-late` (25 sets and a
   22-piece stash), `tiles-long` (a row of thirteen), `tiles-pass` (the toy box empty), `tiles-other` (watch
@@ -308,10 +308,12 @@ Home's shelf shows one card per entry in `PounceKit/Sources/PounceKit/Games/Game
   centred square on a "Coming soon" ticket). Add the prompt under `Art/prompts/ui/`, a manifest
   entry (`"points": [384, 256], "fit": "cover"`), the name in `ArtName.swift`, then copy the raw
   painting to `Art/cut/` and run `Art/tools/build-assets.sh <name>`.
-- **Turning the second game on** is one line: `GameCatalog.tiles`' `availability: .comingSoon`
-  becomes `.available`. Its card then starts a table by asking the create route for
-  `"game": "tiles"`, so the server has to deal that game first; until it does, a tap shows
-  Home's "Couldn't start a game" message. `-shelf all` previews the shelf with every game on.
+- **Turning a new game on** is one line: its `GameCatalog` entry's `availability: .comingSoon`
+  becomes `.available` (Tuna Tiles went on this way in 1.1). Its card then starts a table by asking
+  the create route for its game id, so the server has to deal that game first (`GAMES` in
+  `apps/play-api/wrangler.jsonc`); until it does, a tap shows Home's "Couldn't start a game"
+  message. `-shelf all` previews the shelf with every game on. Tell the invite pages which app
+  version first plays it (`GAME_SINCE` in `apps/play-api/src/http/links.ts`).
 - The two covers were made with the art pipeline below:
 
   ```sh
