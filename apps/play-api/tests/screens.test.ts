@@ -86,9 +86,15 @@ describe("a TV through the Worker", { timeout: 30_000 }, () => {
     const mf = await start();
     const [tv, a] = [await mint(mf), await mint(mf)];
     const code = await tvTable(mf, tv);
-    await asScreen(mf, code, tv);
+    const screen = await asScreen(mf, code, tv);
+    const name = screen.last?.room.name as string;
     const page = async () => (await mf.dispatchFetch(`${BASE}/j/${code}`)).text();
-    const before = await page();
+    const res = await mf.dispatchFetch(`${BASE}/j/${code}`);
+    expect(res.status).toBe(200);
+    const before = await res.text();
+    // The table is shown (not the hidden fallback), and nobody is named.
+    expect(before).toContain(name);
+    expect(before).not.toContain("wants to play");
     expect(before).not.toContain("Alice");
     await sit(mf, code, a, 0, newPerson("Alice", 1));
     expect(await page()).toContain("Alice");
@@ -192,9 +198,16 @@ describe("a TV through the Worker", { timeout: 30_000 }, () => {
     await pa.until((s) => s.room.status === "over");
     pa.send({ t: "rematch" });
     const told = await screen.find<Extract<ServerMessage, { t: "rematch" }>>((m) => m.t === "rematch");
-    const next = await asScreen(mf, told.code, tv);
+    // The TV comes in with no role of its own: the new room already lists it as a screen.
+    const next = await connect(mf, told.code, tv);
     expect(next.last?.room.screen).toBe(true);
     expect(next.last?.room.status).toBe("playing");
+    next.send({ t: "claim", seat: 0, person: face(newPerson("Tom", 3)) });
+    await next.find((m) => m.t === "error");
+    expect(errors(next)).toEqual(["not_allowed"]);
+    // The one who asked hosts the new table.
+    const asker = await connect(mf, told.code, a);
+    expect(asker.last?.room.youAreHost).toBe(true);
   });
 
   test("with TV off, role=screen is refused and screen:true rooms are a bad request", async () => {
