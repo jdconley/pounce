@@ -297,10 +297,12 @@
 }
 
 /* Waiting on the network: small, at the top, out of the way. */
+/* Top left: the lobby's QR column starts below it, and it sits over game over and the menu. */
 .tv-note {
   position: absolute;
+  z-index: 900;
   top: calc(var(--u) * 28);
-  left: 50%;
+  left: calc(var(--u) * 28);
   display: flex;
   align-items: center;
   gap: calc(var(--u) * 14);
@@ -309,7 +311,6 @@
   border-radius: 999px;
   background: var(--ink);
   font: 900 calc(var(--u) * 32) var(--round);
-  transform: translateX(-50%);
   animation: fade-in 200ms ease-out both;
   white-space: nowrap;
 }
@@ -320,6 +321,12 @@
   border-radius: 50%;
   background: var(--refuse);
   animation: pulse 1s ease-in-out infinite alternate;
+}
+
+/* A table: its screens, the menu's paw and the notes, on one frame. */
+.tv-room {
+  position: absolute;
+  inset: 0;
 }
 
 /* A table on its way: finding it, or finding it again. */
@@ -365,7 +372,8 @@
   box-shadow:
     0 calc(var(--u) * 8) 0 var(--ink),
     inset 0 calc(var(--u) * 5) 0 rgba(255, 255, 255, 0.4);
-  z-index: 60;
+  position: absolute;
+  z-index: 600;
 }
 
 .tv .tv-menu-btn img {
@@ -374,17 +382,12 @@
   object-fit: contain;
 }
 
+/* Focused only when a remote goes to it: the shared ring and lift, still over game over. */
 .tv .tv-menu-btn:focus {
+  z-index: 600;
   outline-width: calc(var(--u) * 7);
   outline-offset: calc(var(--u) * 6);
-}
-
-.tv .tv-corner {
-  position: absolute;
-  top: calc(var(--u) * 28);
-  right: calc(var(--u) * 28);
-  width: calc(var(--u) * 104);
-  height: calc(var(--u) * 104);
+  transform: scale(1.1);
 }
 
 /* ---- The lobby: the invite on the left, the rug and its cushions on the right. ---- */
@@ -550,19 +553,24 @@
   font-size: calc(var(--u) * 32);
 }
 
-.tv-lobby-start {
+/* What happens next, said on the TV and done on a phone: a flat label, not a button. */
+.tv-label {
+  display: flex;
+  align-items: center;
+  gap: calc(var(--u) * 22);
   margin: 0;
-  padding: calc(var(--u) * 12) calc(var(--u) * 52) calc(var(--u) * 16);
-  border: calc(var(--u) * 6) solid var(--ink);
+  padding: calc(var(--u) * 10) calc(var(--u) * 44) calc(var(--u) * 12) calc(var(--u) * 28);
   border-radius: 999px;
-  background: linear-gradient(180deg, #ffb13d, var(--orange));
-  box-shadow:
-    0 calc(var(--u) * 10) 0 var(--ink),
-    inset 0 calc(var(--u) * 5) 0 rgba(255, 255, 255, 0.45);
-  font-size: calc(var(--u) * 58);
+  background: rgba(27, 11, 58, 0.62);
+  font-size: calc(var(--u) * 56);
   line-height: 1.1;
   white-space: nowrap;
-  animation: tv-breathe 1.6s ease-in-out infinite alternate;
+}
+
+.tv-label img {
+  width: calc(var(--u) * 72);
+  height: calc(var(--u) * 72);
+  object-fit: contain;
 }
 
 .tv .tv-change {
@@ -599,12 +607,6 @@
 @keyframes tv-hop {
   to {
     translate: 0 calc(var(--u) * -26);
-  }
-}
-
-@keyframes tv-breathe {
-  to {
-    scale: 1.04;
   }
 }
 
@@ -707,10 +709,16 @@
 }
 
 /* "<Name>'s turn": the seat's colour, their cat leaning in, popping in as the turn moves. */
-.tv-table .tv-banner {
+/* The banner's place (centred on the layout's banner); the banner in it pops about its own centre. */
+.tv-table .tv-banner-at {
   z-index: 40;
   translate: -50% 0;
   width: max-content;
+}
+
+.tv-table .tv-banner {
+  position: relative;
+  box-sizing: border-box;
   max-width: calc(var(--u) * 1400);
   display: flex;
   align-items: center;
@@ -982,13 +990,24 @@
 }
 
 .tv-over-title {
+  display: flex;
+  justify-content: center;
   margin: 0;
   font-size: calc(var(--u) * 104);
   line-height: 1.05;
-  text-align: center;
   white-space: nowrap;
+}
+
+.tv-over-title.long {
+  font-size: calc(var(--u) * 62);
+}
+
+/* A long winner's name ends in "..."; "wins" always shows. */
+.tv-over-name {
+  min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
+  padding-left: 0.08em;
 }
 
 .tv-over-ranks {
@@ -1062,18 +1081,6 @@
 
 .tv-over-again {
   position: relative;
-  margin: 0;
-  padding: calc(var(--u) * 12) calc(var(--u) * 56) calc(var(--u) * 16);
-  border: calc(var(--u) * 6) solid var(--ink);
-  border-radius: 999px;
-  background: linear-gradient(180deg, #c6f76a, #7cc51c);
-  box-shadow:
-    0 calc(var(--u) * 10) 0 var(--ink),
-    inset 0 calc(var(--u) * 5) 0 rgba(255, 255, 255, 0.45);
-  font-size: calc(var(--u) * 58);
-  line-height: 1.1;
-  white-space: nowrap;
-  animation: tv-breathe 1.6s ease-in-out infinite alternate;
 }
 
 @keyframes tv-rank-in {
@@ -1200,10 +1207,8 @@
   .tv-logo,
   .tv-room-cat,
   .tv-seat-cat,
-  .tv-lobby-start,
   .tv-over-burst,
   .tv-over-winner,
-  .tv-over-again,
   .tv-moment-burst,
   .tv-moment-cat,
   .tv-moment-title,

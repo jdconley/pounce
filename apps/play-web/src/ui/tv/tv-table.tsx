@@ -8,7 +8,7 @@ import { useEffect, useMemo, useState } from "preact/hooks";
 import { art, RINGS } from "../../lib/art";
 import { reducedMotion } from "../../lib/settings";
 import { play } from "../../lib/sound";
-import { ctLayout, tvFrame } from "../../table/ct-layout";
+import { ctLayout } from "../../table/ct-layout";
 import { CtPublic, ctStyle } from "../../table/ct-public";
 import { Motion } from "../../table/motion";
 import { seatCat, seatName } from "../../table/seat";
@@ -26,7 +26,7 @@ const NO_INSETS = { top: 0, right: 0, bottom: 0, left: 0 };
 /** The public table's own cue is the phone's; the TV draws its banner instead. */
 const NO_CUE = { text: "", mine: false, y: 0 };
 
-type TableProps = { store: RoomStore; state: RoomState; offline: boolean; live: boolean; onMenu: () => void };
+type TableProps = { store: RoomStore; state: RoomState; offline: boolean };
 
 /** The table as the TV draws it, for either game. */
 export function TvTable(props: TableProps) {
@@ -47,15 +47,12 @@ function TvCatTower(props: TableProps) {
     () => ctLayout({ width: size.width || 1920, height: size.height || 1080, insets: NO_INSETS, opponents: seats, handCount: 0, trays: 0, laid, tv: true }),
     [size.width, size.height, seats.join(), JSON.stringify(laid)],
   );
-  const u = tvFrame(size.width || 1920, size.height || 1080, NO_INSETS).unit;
-  const menuAt = { x: L.tower.x + L.tower.w + 24 * u, y: L.banner.y, w: L.banner.h, h: L.banner.h };
   return (
     <div class="ct-table landscape tv-table" ref={rootRef} style={ctStyle(L)}>
       <CtPublic store={store} room={room} layout={L} motion={motion} aims={state.aims} scores haptics={false} cue={NO_CUE}>
-        <Banner room={room} rect={L.banner} offline={props.offline} />
+        <Banner store={store} room={room} rect={L.banner} offline={props.offline} />
         <Moments store={store} room={room} />
       </CtPublic>
-      <MenuButton rect={menuAt} live={props.live} onMenu={props.onMenu} />
     </div>
   );
 }
@@ -72,44 +69,59 @@ function TvTiles(props: TableProps) {
     () => tilesLayout({ width: size.width || 1920, height: size.height || 1080, insets: NO_INSETS, opponents: seats, sets, rack: 0, tv: true }),
     [size.width, size.height, seats.join(), sets.join()],
   );
-  const menuAt = { x: L.board.x, y: L.banner.y, w: L.banner.h, h: L.banner.h };
   return (
     <div class="tt-table landscape tv-table" ref={rootRef} style={tilesStyle(L)}>
       <TilesPublic store={store} room={room} layout={L} motion={motion} aims={state.aims} scores haptics={false} cue={NO_CUE}>
-        <Banner room={room} rect={L.banner} offline={props.offline} />
+        <Banner store={store} room={room} rect={L.banner} offline={props.offline} />
       </TilesPublic>
-      <MenuButton rect={menuAt} live={props.live} onMenu={props.onMenu} />
     </div>
   );
 }
 
 /**
- * "<Name>'s turn", big, in the seat's colour, with their cat leaning in. It pops each time the
- * turn moves on. While the TV has lost the table it says so here, over the last table shown.
+ * "<Name>'s turn", big, in the seat's colour, with their cat leaning in. It pops as each turn
+ * starts (a `turn` event), not when the player draws or plays. While the TV has lost the table it
+ * says so here, over the last table shown. The outer box holds the place; the inner one pops, so
+ * its scale never moves the place.
  */
-function Banner(props: { room: RoomView; rect: Rect; offline: boolean }) {
+function Banner(props: { store: RoomStore; room: RoomView; rect: Rect; offline: boolean }) {
   const { room, rect } = props;
   const seat = turnSeat(room);
-  // Centred on its place, at least as wide, and wider for a long name (tv.css caps it).
-  const place = { transform: `translate3d(${rect.x + rect.w / 2}px, ${rect.y}px, 0)`, minWidth: `${rect.w}px`, height: `${rect.h}px` };
+  const [turns, setTurns] = useState(0);
+  useEffect(
+    () =>
+      props.store.subscribe({
+        event: ({ event: e }) => {
+          if ((e.kind === "game" || e.kind === "tiles") && e.event.kind === "turn") setTurns((n) => n + 1);
+        },
+      }),
+    [props.store],
+  );
+  // Centred on its place, at least as wide, and wider for a long name (tv.css caps it at the
+  // layout's `bannerRoom`).
+  const at = { transform: `translate3d(${rect.x + rect.w / 2}px, ${rect.y}px, 0)`, height: `${rect.h}px` };
+  const size = { minWidth: `${rect.w}px`, height: `${rect.h}px` };
   if (props.offline) {
     return (
-      <div class="tv-banner lost" style={place} role="status">
-        <span class="tv-banner-words">
-          <span class="dot" /> Reconnecting
-        </span>
+      <div class="tv-banner-at" style={at}>
+        <div class="tv-banner lost" style={size} role="status">
+          <span class="tv-banner-words">
+            <span class="dot" /> Reconnecting
+          </span>
+        </div>
       </div>
     );
   }
   if (seat === null) return null;
-  const turns = room.game ? `${room.game.round}:${room.game.turn}:${room.game.deckCount}` : `${room.tiles?.turns ?? 0}`;
   return (
-    <div key={`${seat}:${turns}`} class="tv-banner" style={{ ...place, ["--ring" as string]: RINGS[seat % RINGS.length] }} role="status" aria-live="polite">
-      <Cat cat={seatCat(room.seats[seat])} pose="awake" class="tv-banner-cat" size="calc(var(--u) * 132)" />
-      <span class="tv-banner-words outlined">
-        <span class="tv-banner-name">{seatName(room.seats[seat])}</span>
-        <span>'s turn</span>
-      </span>
+    <div class="tv-banner-at" style={at}>
+      <div key={`${seat}:${turns}`} class="tv-banner" style={{ ...size, ["--ring" as string]: RINGS[seat % RINGS.length] }} role="status" aria-live="polite">
+        <Cat cat={seatCat(room.seats[seat])} pose="awake" class="tv-banner-cat" size="calc(var(--u) * 132)" />
+        <span class="tv-banner-words outlined">
+          <span class="tv-banner-name">{seatName(room.seats[seat])}</span>
+          <span>'s turn</span>
+        </span>
+      </div>
     </div>
   );
 }
@@ -147,17 +159,22 @@ function Moments(props: { store: RoomStore; room: RoomView }) {
   );
 }
 
-/** The menu, for a mouse (a remote's Back opens it too): beside the banner, where nothing else sits. */
-function MenuButton(props: { rect?: Rect; live: boolean; onMenu: () => void }) {
+/**
+ * The menu's paw, one for every screen at a table, in the corner every TV layout keeps free
+ * (`tvMenu`). A remote reaches it with the arrows (it is idle: focus never rests on it by itself)
+ * or opens the menu with Back.
+ */
+export function MenuButton(props: { rect: Rect; live: boolean; onMenu: () => void }) {
   const { rect } = props;
   return (
     <button
       type="button"
-      class={`tv-menu-btn ${rect ? "" : "tv-corner"}`}
+      class="tv-menu-btn"
       data-tv={props.live ? true : undefined}
+      data-tv-idle
       tabIndex={props.live ? 0 : -1}
       aria-label="Menu"
-      style={rect ? { transform: `translate3d(${rect.x}px, ${rect.y}px, 0)`, width: `${rect.w}px`, height: `${rect.h}px` } : undefined}
+      style={{ left: `${rect.x}px`, top: `${rect.y}px`, width: `${rect.w}px`, height: `${rect.h}px` }}
       onClick={() => {
         play("pop", 0.5);
         props.onMenu();
@@ -169,14 +186,14 @@ function MenuButton(props: { rect?: Rect; live: boolean; onMenu: () => void }) {
 }
 
 /** Game over on the TV: the winners celebrating, everyone's place, and how to play again. */
-export function TvOver(props: { room: RoomView; live: boolean; onMenu: () => void }) {
+export function TvOver(props: { room: RoomView; cheered: boolean }) {
   const { room } = props;
   const rows = standings(room);
   const winners = rows.filter((r) => r.won);
   const title = overTitle(room);
   useEffect(() => {
-    // Tuna Tiles' own game over event already cheered at the table.
-    if (room.gameId !== "tiles") play(winners.length > 0 ? "fanfare" : "leap");
+    // One cheer per game end: none here when the table already gave it (`cheerStep`).
+    if (!props.cheered) play(winners.length > 0 ? "fanfare" : "leap");
   }, []);
   return (
     <div class="tv-over" role="dialog" aria-label={title}>
@@ -189,7 +206,16 @@ export function TvOver(props: { room: RoomView; live: boolean; onMenu: () => voi
             </span>
           ))}
         </div>
-        <h2 class="tv-over-title outlined">{title}</h2>
+        <h2 class={`tv-over-title outlined ${title.length > 18 ? "long" : ""}`}>
+          {winners.length === 1 ? (
+            <>
+              <span class="tv-over-name">{seatName(room.seats[winners[0]!.seat])}</span>
+              <span>&nbsp;wins</span>
+            </>
+          ) : (
+            title
+          )}
+        </h2>
         <ol class="tv-over-ranks">
           {rows.map((r, i) => (
             <li class={`${r.won ? "won" : ""} ${r.out ? "out" : ""}`} style={{ ["--ring" as string]: RINGS[r.seat % RINGS.length], animationDelay: `${240 + i * 90}ms` }}>
@@ -203,8 +229,10 @@ export function TvOver(props: { room: RoomView; live: boolean; onMenu: () => voi
           ))}
         </ol>
       </div>
-      <p class="tv-over-again outlined">Play again on any phone</p>
-      <MenuButton live={props.live} onMenu={props.onMenu} />
+      <p class="tv-over-again tv-label outlined">
+        <img src={art("icon-phone")} alt="" />
+        Play again on any phone
+      </p>
     </div>
   );
 }

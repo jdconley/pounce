@@ -15,14 +15,15 @@ import { tvApi } from "../../net/api";
 import { ScreenLink } from "../../net/screen-link";
 import { reloadForUpdate } from "../../pwa";
 import { RoomStore, type RoomPhase, type RoomState } from "../../store/room";
-import { Button, Cat } from "../common";
+import { tvMenu } from "../../table/ct-layout";
+import { Button, Cat, useSize } from "../common";
 import { QrCode } from "../qr";
 
 import { isBack, useDpad } from "./focus";
 import { NOPE, TvLobby } from "./tv-lobby";
 import { TvMenu } from "./tv-menu";
-import { back, gameOf, otherGame, type MenuView } from "./tv-model";
-import { TvOver, TvTable } from "./tv-table";
+import { back, cheerStep, gameOf, NO_CHEER, otherGame, type MenuView } from "./tv-model";
+import { MenuButton, TvOver, TvTable } from "./tv-table";
 import "./tv.css";
 
 /** The table this TV shows, so a reload goes back to it. */
@@ -237,6 +238,8 @@ function TvHome(props: { onLinked: (room: string) => void; onMade: (room: string
   );
 }
 
+const NO_INSETS = { top: 0, right: 0, bottom: 0, left: 0 };
+
 function useRoom(room: RoomStore): RoomState {
   const [state, setState] = useState(room.state);
   useEffect(() => room.subscribe({ change: setState }), [room]);
@@ -265,6 +268,10 @@ function TvRoom(props: { code: string; onPhase: (p: TvPhase) => void; onGone: ()
   const state = useRoom(room);
   const view = state.room;
   const [menu, setMenu] = useState<MenuView>("closed");
+  const [frameRef, frame] = useSize<HTMLDivElement>();
+  // Whether the table already cheered the game's end, so game over cheers only if it didn't.
+  const cheer = useRef(NO_CHEER);
+  useEffect(() => room.subscribe({ event: ({ event }) => void (cheer.current = cheerStep(cheer.current, event)) }), [room]);
   const latest = useRef(props);
   latest.current = props;
 
@@ -345,25 +352,26 @@ function TvRoom(props: { code: string; onPhase: (p: TvPhase) => void; onGone: ()
       </section>
     );
   } else if (view.status === "lobby") {
-    body = <TvLobby room={view} live={live} onChangeGame={(b) => void changeGame(b)} onMenu={openMenu} />;
+    body = <TvLobby room={view} live={live} onChangeGame={(b) => void changeGame(b)} />;
   } else {
     body = (
       <>
-        <TvTable store={room} state={state} offline={offline} live={live && view.status !== "over"} onMenu={openMenu} />
-        {view.status === "over" ? <TvOver room={view} live={live} onMenu={openMenu} /> : null}
+        <TvTable store={room} state={state} offline={offline && view.status === "playing"} />
+        {view.status === "over" ? <TvOver room={view} cheered={cheer.current.cheered} /> : null}
       </>
     );
   }
 
   return (
-    <>
+    <div class="tv-room" ref={frameRef}>
       {body}
+      {view ? <MenuButton rect={tvMenu(frame.width || 1920, frame.height || 1080, NO_INSETS)} live={live} onMenu={openMenu} /> : null}
       {offline && view?.status !== "playing" ? (
         <div class="tv-note" role="status">
           <span class="dot" /> Reconnecting
         </div>
       ) : null}
       {menu !== "closed" ? <TvMenu view={menu} code={code} onView={setMenu} onLeave={() => latest.current.onGone()} onLinked={moveTo} /> : null}
-    </>
+    </div>
   );
 }

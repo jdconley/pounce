@@ -52,6 +52,10 @@ export type CtLayout = {
   banner: Rect;
   /** TV only: each seat in `opponents`, its cat with its name and score under it. On a phone, a placeholder: each cat's circle. */
   seats: Map<number, Rect>;
+  /** TV only: as wide as the banner may grow for a long name, centred on it. On a phone, the banner. */
+  bannerRoom: Rect;
+  /** TV only: the menu's button, in a corner every TV screen keeps free. On a phone, nothing (zero size). */
+  menu: Rect;
 };
 
 const clamp = (v: number, lo: number, hi: number) => Math.min(Math.max(v, lo), hi);
@@ -107,6 +111,8 @@ function shift(L: CtLayout, dx: number): CtLayout {
     centre: p(L.centre),
     banner: p(L.banner),
     seats: new Map([...L.seats].map(([k, v]) => [k, p(v)])),
+    bannerRoom: p(L.bannerRoom),
+    menu: p(L.menu),
   };
 }
 
@@ -247,6 +253,8 @@ function layoutOn(input: CtInput): CtLayout {
     // The cue the phone table draws today, centred over the trays or the hand.
     banner: { x: W / 2 - 160, y: (lastTray ? trayTop : handRect.y) - 34, w: 320, h: 30 },
     seats: new Map([...opponents].map(([k, at]) => [k, { x: at.x - avatar / 2, y: at.y - avatar / 2, w: avatar, h: avatar }])),
+    bannerRoom: { x: W / 2 - 160, y: (lastTray ? trayTop : handRect.y) - 34, w: 320, h: 30 },
+    menu: { x: 0, y: 0, w: 0, h: 0 },
   };
 }
 
@@ -271,7 +279,20 @@ export const TV = {
   seatMaxW: 560,
   seatH: 136 + 96,
   banner: { w: 760, h: 88 },
+  /** The widest the banner grows for a long name ("Great Aunt Josephine's turn"). */
+  bannerMaxW: 1400,
+  /** The menu's button, a square in the bottom-right corner. */
+  menu: 88,
 } as const;
+
+/** The menu's button on the 1920 x 1080 plan: the bottom-right corner, kept free by every TV screen. */
+export const TV_MENU: Rect = { x: TV_W - TV.edge - TV.menu, y: TV_H - TV.edge - TV.menu, w: TV.menu, h: TV.menu };
+
+/** Where the menu's button sits on a screen of this size. */
+export const tvMenu = (width: number, height: number, insets: Insets): Rect => tvMap(width, height, insets).box(TV_MENU);
+
+/** The room a TV banner has to grow into, centred on it. */
+export const bannerRoomOf = (banner: Rect): Rect => ({ x: banner.x + banner.w / 2 - TV.bannerMaxW / 2, y: banner.y, w: TV.bannerMaxW, h: banner.h });
 
 /** Where the 1920 x 1080 plan lands on a screen: its scale and its top-left corner. */
 export function tvFrame(width: number, height: number, insets: Insets): { unit: number; x: number; y: number } {
@@ -444,6 +465,8 @@ function tvLayoutOn(input: CtInput): CtLayout {
     centre: { x: cx, y: cy },
     banner,
     seats,
+    bannerRoom: bannerRoomOf(banner),
+    menu: TV_MENU,
   };
 }
 
@@ -468,6 +491,8 @@ function onTv(L: CtLayout, input: CtInput): CtLayout {
     centre: at(L.centre),
     banner: box(L.banner),
     seats: new Map([...L.seats].map(([k, v]) => [k, box(v)])),
+    bannerRoom: box(L.bannerRoom),
+    menu: box(L.menu),
   };
 }
 

@@ -1,7 +1,9 @@
 /**
  * A TV is driven by a remote: arrow keys move focus to the nearest thing in that direction,
  * Enter presses it. Everything a remote can reach is marked `data-tv`; the one to land on when
- * nothing else has focus is marked `data-tv-default`.
+ * nothing else has focus is marked `data-tv-default`. One marked `data-tv-idle` (the menu's paw)
+ * is reached only by the arrows: focus never comes to rest on it by itself, so it shows no ring
+ * until a remote goes to it.
  */
 import { useEffect } from "preact/hooks";
 
@@ -53,10 +55,15 @@ function reachable(root: HTMLElement): HTMLElement[] {
   return [...root.querySelectorAll<HTMLElement>("[data-tv]")].filter((el) => !(el as HTMLButtonElement).disabled && el.getClientRects().length > 0);
 }
 
-function focusDefault(root: HTMLElement): void {
-  const all = reachable(root);
+/**
+ * Focuses the `[data-tv-default]` element, else the first. `auto` (nobody pressed anything) passes
+ * over idle ones, and with nothing else to rest on lets go of focus a remote can't use.
+ */
+function focusDefault(root: HTMLElement, auto: boolean): void {
+  const all = reachable(root).filter((el) => !auto || !el.hasAttribute("data-tv-idle"));
   const target = all.find((el) => el.hasAttribute("data-tv-default")) ?? all[0];
-  target?.focus({ preventScroll: true });
+  if (target) target.focus({ preventScroll: true });
+  else if (auto && document.activeElement instanceof HTMLElement && root.contains(document.activeElement)) document.activeElement.blur();
 }
 
 /**
@@ -83,7 +90,7 @@ export function useDpad(root: RefObject<HTMLElement | null>): void {
       if (frame) return;
       frame = requestAnimationFrame(() => {
         frame = 0;
-        if (!held(el)) focusDefault(el);
+        if (!held(el)) focusDefault(el, true);
       });
     };
     const onKey = (e: KeyboardEvent) => {
@@ -93,7 +100,7 @@ export function useDpad(root: RefObject<HTMLElement | null>): void {
       const all = reachable(el);
       const active = document.activeElement as HTMLElement | null;
       if (!active || !all.includes(active)) {
-        focusDefault(el);
+        focusDefault(el, false);
         return;
       }
       const candidates = all.filter((c) => c !== active).map((c, n) => ({ id: String(n), rect: c.getBoundingClientRect(), el: c }));
@@ -106,7 +113,7 @@ export function useDpad(root: RefObject<HTMLElement | null>): void {
       if (target && el.contains(target) && target !== document.activeElement && !(target as HTMLButtonElement).disabled) target.focus({ preventScroll: true });
     };
     const watcher = new MutationObserver(keep);
-    watcher.observe(el, { childList: true, subtree: true, attributes: true, attributeFilter: ["disabled", "data-tv"] });
+    watcher.observe(el, { childList: true, subtree: true, attributes: true, attributeFilter: ["disabled", "data-tv", "data-tv-idle"] });
     window.addEventListener("keydown", onKey);
     el.addEventListener("focusout", keep);
     el.addEventListener("pointerover", onPointer);

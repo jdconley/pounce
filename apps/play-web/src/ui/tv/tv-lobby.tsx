@@ -36,7 +36,7 @@ export const NOPE: Keyframe[] = [
   { translate: "0" },
 ];
 
-export function TvLobby(props: { room: RoomView; live: boolean; onChangeGame: (button: HTMLElement) => void; onMenu: () => void }) {
+export function TvLobby(props: { room: RoomView; live: boolean; onChangeGame: (button: HTMLElement) => void }) {
   const { room } = props;
   const game = gameOf(room);
   const seats = lobbySeats(room);
@@ -99,7 +99,10 @@ export function TvLobby(props: { room: RoomView; live: boolean; onChangeGame: (b
             );
           })}
         </div>
-        <p class="tv-lobby-start outlined">Press Start on any phone</p>
+        <p class="tv-lobby-start tv-label outlined">
+          <img src={art("icon-phone")} alt="" />
+          Press Start on any phone
+        </p>
         {!anyoneSeated(room) ? (
           <button
             type="button"
@@ -116,20 +119,6 @@ export function TvLobby(props: { room: RoomView; live: boolean; onChangeGame: (b
         ) : null}
       </div>
 
-      <button
-        type="button"
-        class="tv-menu-btn tv-corner"
-        data-tv={props.live ? true : undefined}
-        data-tv-default={props.live ? true : undefined}
-        tabIndex={props.live ? 0 : -1}
-        aria-label="Menu"
-        onClick={() => {
-          play("pop", 0.5);
-          props.onMenu();
-        }}
-      >
-        <img src={art("icon-paw-menu")} alt="" />
-      </button>
     </section>
   );
 }

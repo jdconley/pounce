@@ -1,6 +1,6 @@
 import { describe, expect, test } from "vitest";
 
-import { anyoneSeated, back, gameOf, lobbySeats, momentFor, otherGame, overTitle, standings, turnSeat, turnWords } from "../src/ui/tv/tv-model";
+import { anyoneSeated, back, cheerStep, gameOf, lobbySeats, momentFor, otherGame, overTitle, standings, NO_CHEER, turnSeat, turnWords } from "../src/ui/tv/tv-model";
 
 import type { RoomView } from "@pounce/play-api/protocol";
 
@@ -140,5 +140,31 @@ describe("Back", () => {
     expect(back("closed")).toBe("items");
     expect(back("items")).toBe("closed");
     expect(back("link")).toBe("items");
+  });
+});
+
+describe("one cheer per game end", () => {
+  const ct = (event: object) => ({ kind: "game", event }) as never;
+  const tt = (event: object) => ({ kind: "tiles", event }) as never;
+  const run = (events: never[]) => events.reduce(cheerStep, NO_CHEER).cheered;
+
+  test("a Cat Tower game that ends with its last round was cheered by that round: game over stays quiet", () => {
+    expect(run([ct({ kind: "turn", seat: 0 }), ct({ kind: "roundOver", advanced: [0] }), ct({ kind: "gameOver", winners: [0] })])).toBe(true);
+  });
+
+  test("a presence change between the round and the end changes nothing", () => {
+    expect(run([ct({ kind: "roundOver", advanced: [] }), { kind: "presence", seat: 1, presence: "away" } as never, ct({ kind: "gameOver", winners: [0] })])).toBe(true);
+  });
+
+  test("a forfeit ends it without a round: game over cheers", () => {
+    expect(run([ct({ kind: "roundOver", advanced: [1] }), ct({ kind: "roundStarted" }), ct({ kind: "turn", seat: 0 }), ct({ kind: "forfeited", seat: 1 }), ct({ kind: "gameOver", winners: [0] })])).toBe(false);
+  });
+
+  test("Tuna Tiles' own game over event cheers at the table: game over stays quiet", () => {
+    expect(run([tt({ kind: "forfeited", seat: 1 }), tt({ kind: "gameOver", winners: [0], scores: [] })])).toBe(true);
+  });
+
+  test("a TV that arrives after the end (a snapshot, no events) cheers once itself", () => {
+    expect(run([])).toBe(false);
   });
 });

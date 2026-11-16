@@ -3,7 +3,7 @@
  * flowing in rows inside the rope, the toy box, the controls and the rack. Pure geometry, like
  * ct-layout.ts.
  */
-import { TV, TV_H, TV_SEATS, TV_W, tvMap, type Insets } from "./ct-layout";
+import { bannerRoomOf, TV, TV_H, TV_MENU, TV_SEATS, TV_W, tvMap, type Insets } from "./ct-layout";
 
 import type { Rect } from "./drag";
 import type { Pose } from "./motion";
@@ -36,6 +36,10 @@ export type TilesLayout = {
   banner: Rect;
   /** TV only: each seat in `opponents`, its cat with its name and score under it. On a phone, a placeholder: each cat's circle. */
   seats: Map<number, Rect>;
+  /** TV only: as wide as the banner may grow for a long name, centred on it. On a phone, the banner. */
+  bannerRoom: Rect;
+  /** TV only: the menu's button, in a corner every TV screen keeps free. On a phone, nothing (zero size). */
+  menu: Rect;
 };
 
 const clamp = (v: number, lo: number, hi: number) => Math.min(Math.max(v, lo), hi);
@@ -148,6 +152,8 @@ export function tilesLayout(input: TilesInput): TilesLayout {
     // The cue the phone table draws today, at the foot of the board.
     banner: { x: W / 2 - 160, y: board.y + board.h - 40, w: 320, h: 30 },
     seats: new Map([...opponents].map(([k, at]) => [k, { x: at.x - avatar / 2, y: at.y - avatar / 2, w: avatar, h: avatar }])),
+    bannerRoom: { x: W / 2 - 160, y: board.y + board.h - 40, w: 320, h: 30 },
+    menu: { x: 0, y: 0, w: 0, h: 0 },
   };
 }
 
@@ -201,7 +207,8 @@ function tvTiles(input: TilesInput): TilesLayout {
     avatar: Math.round(avatar * u),
     opponents: new Map([...opponents].map(([k, v]) => [k, at(v)])),
     board: box(board),
-    pool: { ...at({ x: board.x + board.w - stripH, y: stripY }), size: stripH * u },
+    // The toy box at the strip's left end; its right end is the menu's corner.
+    pool: { ...at({ x: board.x, y: stripY }), size: stripH * u },
     sets: sets.map((s) => ({ rect: box(s.rect), poses: s.poses.map(at) })),
     newSet: box({ x: inner.x, y: inner.y, w: 0, h: 0 }),
     controls: { y: at({ x: 0, y: board.y + board.h }).y, h: 0 },
@@ -209,5 +216,7 @@ function tvTiles(input: TilesInput): TilesLayout {
     rackRect: box({ x: board.x, y: board.y + board.h, w: 0, h: 0 }),
     banner: box(banner),
     seats: new Map([...seats].map(([k, v]) => [k, box(v)])),
+    bannerRoom: box(bannerRoomOf(banner)),
+    menu: box(TV_MENU),
   };
 }

@@ -1,6 +1,6 @@
 import { describe, expect, test } from "vitest";
 
-import { ctLayout, fan } from "../src/table/ct-layout";
+import { ctLayout, fan, tvMenu } from "../src/table/ct-layout";
 import { tilesLayout } from "../src/table/tiles-layout";
 
 const portrait = { top: 47, right: 0, bottom: 34, left: 0 };
@@ -112,7 +112,7 @@ describe("Cat Tower on a TV", () => {
 
   test.each(CASES)("at %i x %i, overscan %i, with %i seats, %s table: everything is inside the frame", (width, height, edge, n, table) => {
     const L = tv(width, height, n, edge, table);
-    const rects: Box[] = [L.tower, L.rug, L.deckRect, L.discardRect, L.banner, ...L.seats.values(), ...[...L.opponents.values()].map((at) => circle(at, L.avatar)), ...groupsOf(L)];
+    const rects: Box[] = [L.tower, L.rug, L.deckRect, L.discardRect, L.banner, L.bannerRoom, L.menu, ...L.seats.values(), ...[...L.opponents.values()].map((at) => circle(at, L.avatar)), ...groupsOf(L)];
     for (const row of L.laid.values()) for (const g of row.groups) for (const p of g.poses) rects.push(visual(p, L.cw, L.ch));
     for (const r of rects) expect(within(r, width, height, edge), JSON.stringify(r)).toBe(true);
   });
@@ -135,6 +135,12 @@ describe("Cat Tower on a TV", () => {
     for (const s of seats) for (const other of [...piles, L.tower]) expect(overlaps(s, other)).toBe(false);
     // The rug under the piles stays clear of the banner.
     expect(overlaps(L.rug, L.banner)).toBe(false);
+    // A long name's banner, as wide as it may grow, keeps clear of everything.
+    for (const other of [...piles, ...groups, ...seats, L.tower, L.rug, L.menu]) expect(overlaps(L.bannerRoom, other), JSON.stringify(other)).toBe(false);
+    // The menu's corner is free of everything on the table.
+    const cats = [...L.opponents.values()].map((at) => circle(at, L.avatar));
+    for (const other of [...piles, ...groups, ...seats, ...cats, L.tower, L.rug, L.banner]) expect(overlaps(L.menu, other), JSON.stringify(other)).toBe(false);
+    expect(L.menu.w).toBeGreaterThan(0);
   });
 
   test.each([2, 3, 4, 5, 6])("at 1920 x 1080 with %i seats: big enough to read from the couch", (n) => {
@@ -172,6 +178,13 @@ describe("Cat Tower on a TV", () => {
   });
 });
 
+test.each(TV_FRAMES)("at %i x %i, overscan %i: both games put the menu in the same corner", (width, height, edge) => {
+  const ct = ctLayout({ width, height, insets: inset(edge), opponents: seatsOf(4), handCount: 0, trays: 0, laid: [], tv: true });
+  const tt = tilesLayout({ width, height, insets: inset(edge), opponents: seatsOf(4), sets: [3], rack: 0, tv: true });
+  expect(ct.menu).toEqual(tt.menu);
+  expect(ct.menu).toEqual(tvMenu(width, height, inset(edge)));
+});
+
 describe("Tuna Tiles on a TV", () => {
   /** The worst board: thirty sets of three. */
   const tv = (width: number, height: number, n: number, edge = 0) => tilesLayout({ width, height, insets: inset(edge), opponents: seatsOf(n), sets: Array.from({ length: 30 }, () => 3), rack: 0, tv: true });
@@ -182,7 +195,7 @@ describe("Tuna Tiles on a TV", () => {
     expect(L.rack).toEqual([]);
     expect([...L.seats.keys()].sort()).toEqual(seatsOf(n));
     const pool = { x: L.pool.x, y: L.pool.y, w: L.pool.size, h: L.pool.size };
-    const rects: Box[] = [L.board, pool, L.banner, ...L.seats.values(), ...[...L.opponents.values()].map((at) => circle(at, L.avatar))];
+    const rects: Box[] = [L.board, pool, L.banner, L.bannerRoom, L.menu, ...L.seats.values(), ...[...L.opponents.values()].map((at) => circle(at, L.avatar))];
     for (const set of L.sets) {
       rects.push(set.rect);
       for (const p of set.poses) rects.push(visual(p, L.pw, L.ph));
@@ -206,6 +219,9 @@ describe("Tuna Tiles on a TV", () => {
     for (const set of sets) for (const other of [...seats, pool, L.banner]) expect(overlaps(set, other)).toBe(false);
     for (const other of [...seats, pool]) expect(overlaps(L.banner, other)).toBe(false);
     for (const s of seats) expect(overlaps(s, L.board)).toBe(false);
+    for (const other of [...seats, ...sets, pool, L.board, L.menu]) expect(overlaps(L.bannerRoom, other), JSON.stringify(other)).toBe(false);
+    const cats = [...L.opponents.values()].map((at) => circle(at, L.avatar));
+    for (const other of [...seats, ...cats, ...sets, pool, L.board, L.banner]) expect(overlaps(L.menu, other), JSON.stringify(other)).toBe(false);
   });
 
   test.each([2, 3, 4])("at 1920 x 1080 with %i seats: big enough to read from the couch", (n) => {

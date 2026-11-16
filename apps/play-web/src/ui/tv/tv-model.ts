@@ -88,3 +88,21 @@ export type MenuView = "closed" | "items" | "link";
 
 /** Back on a remote: opens the menu, goes back from the link to the choices, closes the menu. */
 export const back = (menu: MenuView): MenuView => (menu === "closed" ? "items" : menu === "link" ? "items" : "closed");
+
+/**
+ * Whether the table already cheered the game's end, so game over doesn't cheer again: a Cat
+ * Tower game that ends with its last round got that round's fanfare (or leap), and Tuna Tiles'
+ * own game over event gets its fanfare at the table. A forfeit, or a TV that only sees the end in
+ * a snapshot, leaves the cheer to game over.
+ */
+export type Cheer = { roundJustEnded: boolean; cheered: boolean };
+
+export const NO_CHEER: Cheer = { roundJustEnded: false, cheered: false };
+
+export function cheerStep(s: Cheer, e: RoomEvent): Cheer {
+  if (e.kind === "tiles") return e.event.kind === "gameOver" ? { roundJustEnded: false, cheered: true } : s;
+  if (e.kind !== "game") return s;
+  if (e.event.kind === "roundOver") return { roundJustEnded: true, cheered: false };
+  if (e.event.kind === "gameOver") return { roundJustEnded: false, cheered: s.roundJustEnded };
+  return { roundJustEnded: false, cheered: false };
+}
