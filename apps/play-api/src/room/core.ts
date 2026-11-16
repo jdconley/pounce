@@ -111,6 +111,10 @@ export type RoomState<S = CatTowerState> = {
   nudges?: Record<string, { turn: string; at: number }>;
   /** The turn (`turnKey`) whose holder was last warned that their seat can soon be retired. */
   retireWarned?: string;
+  /** Devices that are screens here (a TV), for good: one listed is a screen on every connect. Absent: none. */
+  screens?: string[];
+  /** When the last connected screen went, while within the grace. A screen back by then changes nothing. */
+  screenLeftAt?: number;
 };
 
 export type Look = { rug: string; back: string };
@@ -129,6 +133,8 @@ export type RoomFeatures = {
    * A room of a game that is no longer listed plays on, but "Play again" there deals nothing.
    */
   games?: readonly GameId[];
+  /** Screens (a TV) may join: snapshots say when one is showing the table (the `TV` flag, `tvOn`). */
+  tv?: boolean;
 };
 
 /** Why a live table ended: the round or game is over, its device came back, or a limit passed (§11.3). */
@@ -177,7 +183,15 @@ export type StreakIntent = {
  * What "Play again" needs to deal the new table: the same people and bots, name and look, and
  * the same game (absent: Cat Tower, which is also what a pounce's new table is).
  */
-export type RematchIntent = { name: string; look: Look; seats: SeatInfo[]; hostDeviceId: string; game?: GameId };
+export type RematchIntent = {
+  name: string;
+  look: Look;
+  seats: SeatInfo[];
+  hostDeviceId: string;
+  game?: GameId;
+  /** The table's screens, so a TV stays on the new table. Absent: none. */
+  screens?: string[];
+};
 
 /** The card backs and rugs the people a device speaks for have unlocked. */
 export type Unlocks = { backs: readonly string[]; rugs: readonly string[] };
@@ -257,6 +271,11 @@ export const GAME_CLEANUP_AFTER_MS = 30 * MS_PER_DAY;
 export const RETIRE_AFTER_MS = 3 * MS_PER_DAY;
 /** The holder is warned by push this long before their seat becomes retirable. */
 export const RETIRE_WARNING_MS = MS_PER_DAY;
+/**
+ * A screen that closes (a TV going to sleep, a flaky network) is still counted this long, so the
+ * phones aren't told and told again (divided by the dev speed).
+ */
+export const SCREEN_GRACE_MS = 10_000;
 const MOVE_CODE_TTL_MS = 10 * MS_PER_MINUTE;
 const MOVE_FAILURE_WINDOW_MS = 10 * MS_PER_MINUTE;
 const MAX_MOVE_FAILURES = 5;
@@ -326,7 +345,10 @@ export class RoomCore<S = CatTowerState> {
     this.features = features;
   }
 
-  /** A new lobby; `name` is already validated (`parseRoomName`) when given. `game`: left out, Cat Tower. */
+  /**
+   * A new lobby; `name` is already validated (`parseRoomName`) when given. `game`: left out, Cat Tower.
+   * `screen`: a TV made it, so it has no host (`hostDeviceId` is "") until the first phone sits.
+   */
   static create<S = CatTowerState>(
     code: string,
     hostDeviceId: string,
@@ -334,8 +356,10 @@ export class RoomCore<S = CatTowerState> {
     name?: string,
     look?: Look,
     game: GameId = DEFAULT_GAME,
+    screen?: string,
   ): RoomState<S> {
     return {
+      ...(screen === undefined ? {} : { screens: [screen] }),
       ...(look ? { look } : {}),
       code,
       name: name ?? defaultRoomName(code),
@@ -363,6 +387,7 @@ export class RoomCore<S = CatTowerState> {
    */
   static rematchState<S = CatTowerState>(code: string, spec: RematchIntent, now: number): RoomState<S> {
     const state = RoomCore.create<S>(code, spec.hostDeviceId, now, spec.name, spec.look, spec.game);
+    if (spec.screens) state.screens = [...spec.screens];
     state.seats = [
       ...spec.seats.map((s) => ({ ...s })),
       ...Array.from({ length: state.seats.length - spec.seats.length }, (): SeatInfo => ({ kind: "closed" })),
@@ -405,8 +430,43 @@ export class RoomCore<S = CatTowerState> {
     }
   }
 
-  /** `players`: the people this device speaks for, mapped to their players. Old apps send none. */
-  connect(deviceId: string, players: Record<string, string> = {}): Outbound[] {
+  /** A screen (a TV): seatless, so it can only watch. Listed for good once it connects as one. */
+  isScreen(deviceId: string): boolean {
+    return this.state.screens?.includes(deviceId) ?? false;
+  }
+
+  /** Whether the device may become a screen: not while it holds a seat or hosts the table. */
+  mayScreen(deviceId: string): boolean {
+    return deviceId !== this.state.hostDeviceId && this.controlledSeats(deviceId).length === 0;
+  }
+
+  /** Whether the device may link a screen to this table: the host or a seated device, never a screen. */
+  mayLink(deviceId: string): boolean {
+    return !this.isScreen(deviceId) && (deviceId === this.state.hostDeviceId || this.controlledSeats(deviceId).length > 0);
+  }
+
+  /** Lists a device as a screen here before it connects (a link). */
+  addScreen(deviceId: string): void {
+    if (!this.isScreen(deviceId)) this.state.screens = [...(this.state.screens ?? []), deviceId];
+  }
+
+  private screenConnected(): boolean {
+    return Object.entries(this.state.devices).some(([id, device]) => device.connected && this.isScreen(id));
+  }
+
+  /** A screen is here, or only just left: the phones show the table as on a screen. */
+  screenShown(): boolean {
+    const { screenLeftAt } = this.state;
+    return this.screenConnected() || (screenLeftAt !== undefined && this.now() < screenLeftAt + SCREEN_GRACE_MS / this.speed);
+  }
+
+  /**
+   * `players`: the people this device speaks for, mapped to their players. Old apps send none.
+   * `role`: "screen" makes the device a screen here for good; callers check `mayScreen` first.
+   */
+  connect(deviceId: string, players: Record<string, string> = {}, role?: "screen"): Outbound[] {
+    if (role === "screen") this.addScreen(deviceId);
+    const wasShown = this.screenShown();
     // Everyone else hears about the seat holder waking up; the connecting
     // device gets a snapshot that already includes those events' seq.
     const events = this.presenceChange(
@@ -424,6 +484,15 @@ export class RoomCore<S = CatTowerState> {
     this.link.connected(deviceId, this.now());
     // Back at the table in the app: its live table goes (§11.3).
     this.endLive(deviceId, "back");
+    if (this.isScreen(deviceId)) {
+      // Not `touch`: a TV looking in doesn't keep the table from closing.
+      if (!wasShown) {
+        this.state.seq += 1;
+        return [...events, ...this.linkCheck(deviceId), ...this.snapshots()];
+      }
+      // Back within the grace: the phones were never told it went.
+      delete this.state.screenLeftAt;
+    }
     return [...events, ...this.linkCheck(deviceId), { to: deviceId, message: this.snapshotFor(deviceId) }];
   }
 
@@ -444,12 +513,15 @@ export class RoomCore<S = CatTowerState> {
   disconnect(deviceId: string, asked = true): Outbound[] {
     const device = this.state.devices[deviceId];
     if (!device) return [];
+    const wasConnected = device.connected;
     this.link.disconnected(deviceId, this.now(), asked);
     const out = this.presenceChange(deviceId, () => {
       device.connected = false;
       if (device.presence !== "away") device.since = this.now();
       device.presence = "away";
     });
+    // The phones hear nothing yet: the grace lets a screen come straight back.
+    if (wasConnected && this.isScreen(deviceId) && !this.screenConnected()) this.state.screenLeftAt = this.now();
     return [...out, ...this.linkCheck()];
   }
 
@@ -539,6 +611,12 @@ export class RoomCore<S = CatTowerState> {
       }
     }
 
+    if (state.screenLeftAt !== undefined && !this.screenShown()) {
+      delete state.screenLeftAt;
+      state.seq += 1;
+      out.push(...this.snapshots());
+    }
+
     this.expireLive(this.now());
     out.push(...this.linkCheck());
     this.warnStalled();
@@ -560,8 +638,10 @@ export class RoomCore<S = CatTowerState> {
       .filter((device) => device.presence === "away")
       .map((device) => device.since + ASLEEP_AFTER_MS);
     const link = this.linkWatched() ? this.link.nextChange(this.now()) : null;
+    const { screenLeftAt } = this.state;
+    const screenGone = screenLeftAt === undefined ? null : screenLeftAt + SCREEN_GRACE_MS / this.speed;
     return Math.min(
-      ...[botAt, nextRoundAt, cleanupAt, link, this.retireWarningAt(), ...decays, ...Object.values(this.state.live ?? {}).map(deadline)].filter(
+      ...[botAt, nextRoundAt, cleanupAt, link, screenGone, this.retireWarningAt(), ...decays, ...Object.values(this.state.live ?? {}).map(deadline)].filter(
         (t): t is number => t !== null,
       ),
     );
@@ -836,6 +916,7 @@ export class RoomCore<S = CatTowerState> {
         ...this.gameFields(controlled),
         ...(this.features.streaks ? { look: this.look() } : {}),
         ...(state.rematch?.code ? { rematch: state.rematch.code } : {}),
+        ...(this.features.tv && this.screenShown() ? { screen: true as const } : {}),
         ...(this.features.link ? { link: { ping: LINK_PING_MS, acks: [...(state.devices[deviceId]?.acks ?? [])] } } : {}),
         ...this.nudgeField(deviceId),
         ...this.retireField(deviceId),
@@ -913,6 +994,10 @@ export class RoomCore<S = CatTowerState> {
   }
 
   private dispatch(deviceId: string, msg: ClientMessage, unlocks: Unlocks): Outbound[] {
+    // A screen only watches: it has no seat, no say, and no aim of its own.
+    if (this.isScreen(deviceId) && msg.t !== "ping" && msg.t !== "presence" && msg.t !== "link") {
+      return [this.fail(deviceId, "not_allowed")];
+    }
     switch (msg.t) {
       case "rematch":
         return this.features.streaks ? this.rematch(deviceId) : [this.fail(deviceId, "bad_message")];
@@ -964,6 +1049,8 @@ export class RoomCore<S = CatTowerState> {
       return [this.fail(deviceId, "person_seated")];
     }
     this.state.seats[seat] = { kind: "human", person, deviceId, ...(playerId ? { playerId } : {}) };
+    // A table made on a TV has no host: the first phone to sit is it.
+    if (this.state.hostDeviceId === "") this.state.hostDeviceId = deviceId;
     return this.changed();
   }
 
@@ -1247,6 +1334,7 @@ export class RoomCore<S = CatTowerState> {
       // The first seat rotates: everyone moves one on.
       seats: [...state.seats.slice(1), ...state.seats.slice(0, 1)].map((s) => ({ ...s })),
       hostDeviceId: deviceId,
+      ...(state.screens?.length ? { screens: [...state.screens] } : {}),
       // The same game again. Cat Tower's intent is as it always was.
       ...(state.game === DEFAULT_GAME ? {} : { game: state.game }),
     };
