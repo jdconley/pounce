@@ -332,7 +332,8 @@ h1.title {
   font: 900 clamp(0.95rem, 3.8vw, 1.05rem) / 1.25 var(--round);
   box-shadow: 0 5px 0 var(--ink);
   animation: tip-in 280ms var(--ease-spring) both;
-  pointer-events: auto;
+  /* A tip never takes a tap meant for what is under it; only its X does. */
+  pointer-events: none;
 }
 
 .tip::after {
@@ -360,6 +361,7 @@ h1.title {
 }
 
 .tip button {
+  pointer-events: auto;
   flex: none;
   display: grid;
   place-items: center;

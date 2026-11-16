@@ -145,3 +145,27 @@ describe("the room socket (RoomSocket.swift)", () => {
     expect(m.tick(22_000)).toBe("dead");
   });
 });
+
+describe("the API client", () => {
+  test("a sign-up limit is waited out; a token the server refuses is replaced once", async () => {
+    const { Api } = await import("../src/net/api");
+    let mints = 0;
+    let calls = 0;
+    const fetcher = (async (url: string, init?: RequestInit) => {
+      if (String(url).endsWith("/v1/devices")) {
+        mints++;
+        if (mints === 1) return new Response(JSON.stringify({ error: "rate_limited" }), { status: 429 });
+        return new Response(JSON.stringify({ deviceId: `d${mints}`, token: `t${mints}` }), { status: 200 });
+      }
+      calls++;
+      const auth = (init?.headers as Record<string, string>).authorization;
+      if (auth === "Bearer t2") return new Response(JSON.stringify({ error: "unauthorized" }), { status: 401 });
+      return new Response(JSON.stringify({ tables: [] }), { status: 200 });
+    }) as typeof fetch;
+    const api = new Api("http://x", fetcher);
+    api.mintRetryMs = 1;
+    await expect(api.listTables()).resolves.toEqual([]);
+    expect(mints).toBe(3);
+    expect(calls).toBe(2);
+  });
+});

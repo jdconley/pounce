@@ -105,6 +105,25 @@ describe("the room store (RoomStore.swift)", () => {
     expect(store.state.pending).toBeNull();
   });
 
+  test("a move stays in flight until its whole answer has played, so it can't be sent twice", async () => {
+    const { clock, sockets, store } = setup();
+    store.start();
+    await flush();
+    sockets[0]!.open();
+    sockets[0]!.receive({ t: "snapshot", protocol: 1, seq: 1, room: room({ link: { ping: 3000, acks: [] } }) });
+    store.act(0, { type: "discard", card: 1 });
+    const id = store.state.pending!.id;
+    sockets[0]!.receive({ t: "event", seq: 2, event: { kind: "game", event: { kind: "discarded", seat: 0, card: 1 } } });
+    sockets[0]!.receive({ t: "event", seq: 3, event: { kind: "game", event: { kind: "turn", seat: 1 } } });
+    sockets[0]!.receive({ t: "snapshot", protocol: 1, seq: 3, room: room({ link: { ping: 3000, acks: [id] } }) });
+    expect(store.state.pending).not.toBeNull();
+    expect(store.act(0, { type: "discard", card: 2 })).toBe(false);
+    clock.advance(420);
+    expect(store.state.pending).not.toBeNull();
+    clock.advance(200);
+    expect(store.state.pending).toBeNull();
+  });
+
   test("a refused move clears; another protocol asks for the new build", async () => {
     const { sockets, store } = setup();
     store.start();

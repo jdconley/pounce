@@ -189,7 +189,7 @@ export class RoomStore {
   private listeners = new Set<RoomListener>();
   private queue: Paced[] = [];
   private playing = false;
-  private pendingSnapshot: { seq: number; room: RoomView } | null = null;
+  private pendingSnapshot: { seq: number; room: RoomView; settles: boolean } | null = null;
   private errorCount = 0;
   private timer: unknown = null;
   private readonly setTimer: (fn: () => void, ms: number) => unknown;
@@ -255,6 +255,11 @@ export class RoomStore {
     this.set({ pending: { id, seat, action } });
     if (this.socket.send({ t: "act", seat, action, id })) this.sentOn = this.connection;
     return true;
+  }
+
+  /** Leaves the game for good for `seat` (any time, anyone's turn), with a move id like any move. */
+  forfeit(seat: number): boolean {
+    return this.socket.send({ t: "act", seat, action: { type: "forfeit" }, id: newMoveId() });
   }
 
   private onSocket(e: SocketEvent): void {
@@ -341,9 +346,10 @@ export class RoomStore {
     const resend = stillPending !== null && this.sentOn !== this.connection;
     if (this.playing || this.queue.length > 0) {
       // Let the events play out first; this snapshot lands after them.
-      this.pendingSnapshot = { seq, room };
+      // The move stays in flight until then too, so a second tap can't send a second move
+      // while its answer is still playing out.
+      this.pendingSnapshot = { seq, room, settles: stillPending !== pending || this.pendingSnapshot?.settles === true };
       this.seq = Math.max(this.seq, seq);
-      if (stillPending !== pending) this.set({ pending: stillPending });
       return;
     }
     this.seq = Math.max(this.seq, seq);
@@ -361,16 +367,19 @@ export class RoomStore {
       const snap = this.pendingSnapshot;
       this.pendingSnapshot = null;
       if (snap) {
-        this.set({ truth: snap.room, room: snap.room, phase: phaseOf(snap.room), rematch: snap.room.rematch ?? this.state.rematch });
+        this.set({
+          truth: snap.room,
+          room: snap.room,
+          phase: phaseOf(snap.room),
+          rematch: snap.room.rematch ?? this.state.rematch,
+          ...(snap.settles ? { pending: null } : {}),
+        });
       }
       return;
     }
     this.playing = true;
     const room = this.state.room ? foldEvent(this.state.room, next.event) : null;
-    // Our own move is answered by its first event.
-    const pending = this.state.pending;
-    const ours = pending && "event" in next.event && "seat" in next.event.event && next.event.event.seat === pending.seat;
-    this.set({ room, ...(ours ? { pending: null } : {}) });
+    this.set({ room });
     for (const l of [...this.listeners]) l.event?.(next, room);
     const pause = this.reducedMotion() ? Math.min(eventPause(next.event), 200) : eventPause(next.event);
     this.timer = this.setTimer(() => {
