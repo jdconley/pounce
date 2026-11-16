@@ -7,6 +7,7 @@ import type { DeviceIndex } from "./room/device-index";
 import type { GameRoom } from "./room/game-room";
 import type { Limiter } from "./safety/limiter";
 import type { Reports } from "./safety/reports";
+import type { ScreenLinks } from "./screens/screen-links";
 import type { Pair } from "./streaks/pair";
 
 export interface Env {
@@ -33,6 +34,8 @@ export interface Env {
   LIMITS: DurableObjectNamespace<Limiter>;
   /** One instance, named `REPORTS_NAME`: every player report. */
   REPORTS: DurableObjectNamespace<Reports>;
+  /** Screen links (`TV`): one instance per link, `token:<token>`, and one per backup code, `code:<code>`. */
+  SCREEN_LINKS: DurableObjectNamespace<ScreenLinks>;
   /**
    * The owner's key for `GET /v1/admin/reports`. A secret, optional: without it that route is a
    * 404 and reports are read in the Cloudflare dashboard instead.

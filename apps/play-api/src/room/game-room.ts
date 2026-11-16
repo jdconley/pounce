@@ -66,6 +66,9 @@ const STREAK_ATTEMPTS = 2;
 
 const cryptoRng = (): number => (crypto.getRandomValues(new Uint32Array(1))[0] as number) / 2 ** 32;
 
+/** A refused upgrade: the status and `{ "error" }`, which a browser hears as close code 4000 + status. */
+const refuse = (status: number, error: string): Response => new Response(JSON.stringify({ error }), { status, headers: { "content-type": "application/json" } });
+
 /**
  * One instance per room code. Holds the room's state in SQLite, the devices'
  * hibernatable WebSockets, and the alarm that drives bots and timers. All game
@@ -205,12 +208,15 @@ export class GameRoom extends DurableObject<Env> {
     }
     const pair = new WebSocketPair();
     const [client, server] = Object.values(pair) as [WebSocket, WebSocket];
-    // A device that sits or hosts is no screen. Asked before the socket exists, so the refusal is a plain 409.
+    // A device that sits or hosts is no screen, and only a device the room lists is one: it made
+    // the table, a phone linked it, or it followed Play again. Asked before the socket exists, so
+    // each refusal is a plain status.
     const screen = tvOn(this.env) && request.headers.get(ROLE_HEADER) === "screen";
-    if (screen && !this.core.mayScreen(deviceId)) return new Response(JSON.stringify({ error: "seated" }), { status: 409, headers: { "content-type": "application/json" } });
+    if (screen && !this.core.mayScreen(deviceId)) return refuse(409, "seated");
+    if (screen && !this.core.isScreen(deviceId)) return refuse(403, "not_screen");
     this.ctx.acceptWebSocket(server, [deviceId]);
     server.serializeAttachment({ deviceId });
-    await this.after(this.core.connect(deviceId, parsePlayers(request.headers.get(PLAYER_HEADER)), screen ? "screen" : undefined));
+    await this.after(this.core.connect(deviceId, parsePlayers(request.headers.get(PLAYER_HEADER))));
     return new Response(null, { status: 101, webSocket: client });
   }
 
@@ -295,11 +301,16 @@ export class GameRoom extends DurableObject<Env> {
     return core.mayLink(deviceId) ? "ok" : "not_seated";
   }
 
-  /** Lists `deviceId` as a screen here before it connects (a link). */
-  async addScreen(deviceId: string): Promise<void> {
-    if (!this.core) return;
+  /**
+   * Lists `deviceId` as a screen here before it connects (a link). Nothing changes when there is
+   * no table (`none`) or the device sits or hosts here (`seated`): a seat's device is never a screen.
+   */
+  async addScreen(deviceId: string): Promise<"ok" | "seated" | "none"> {
+    if (!this.core) return "none";
+    if (!this.core.mayScreen(deviceId)) return "seated";
     this.core.addScreen(deviceId);
     await this.after([]);
+    return "ok";
   }
 
   /**

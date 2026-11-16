@@ -168,6 +168,7 @@ export async function worker(
       LIMITS: { className: "Limiter", useSQLite: true },
       REPORTS: { className: "Reports", useSQLite: true },
       PAIRS: { className: "Pair", useSQLite: true },
+      SCREEN_LINKS: { className: "ScreenLinks", useSQLite: true },
       ...(options.links ? { LINKS: { className: "Links", useSQLite: true } } : {}),
       ...(options.consent
         ? { CONSENTS: { className: "Consents", useSQLite: true }, KITTENS: { className: "KittenIndex", useSQLite: true } }

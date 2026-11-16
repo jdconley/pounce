@@ -98,7 +98,8 @@ function playGame(game: GameId, n: number, min: number, max: number): { over: bo
     return out;
   };
 
-  send(room.connect("tv", {}, "screen"));
+  room.addScreen("tv");
+  send(room.connect("tv"));
   send(room.connect("spectator"));
   const devices = [...new Set(kinds.flatMap((k, i) => (k === "bot" ? [] : [deviceOf(i)])))];
   for (const d of devices) send(room.connect(d));
@@ -138,7 +139,7 @@ function playGame(game: GameId, n: number, min: number, max: number): { over: bo
     steps += 1;
     if (rng() < 0.03) {
       if (tvOnline) room.disconnect("tv");
-      else send(room.connect("tv", {}, "screen"));
+      else send(room.connect("tv"));
       tvOnline = !tvOnline;
     }
     const actor = room.actor();
@@ -156,7 +157,7 @@ function playGame(game: GameId, n: number, min: number, max: number): { over: bo
       send(room.tick());
     }
   }
-  if (!tvOnline) send(room.connect("tv", {}, "screen"));
+  if (!tvOnline) send(room.connect("tv"));
   return { over: room.state.status === "over", steps, tvMessages: tvSeen.length, counts };
 }
 

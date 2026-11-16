@@ -52,7 +52,8 @@ import { newRoomCode, ROOM_CODE } from "./room/codes";
 import { DEVICE_HEADER, PLAYER_HEADER, ROLE_HEADER } from "./room/game-room";
 import { parseRoomName } from "./room/names";
 import { lockedFor, withoutUndrawable } from "./room/tables";
-import { blockPlayer, guardJoin, listBlocks, mayMint, mayReportFunnel, nameCheck, ownerReports, peekInvite, reportPlayer, unblockPlayer } from "./safety/safety";
+import { blockPlayer, guardJoin, guardScreenCode, listBlocks, mayMakeScreenLink, mayMint, mayReportFunnel, nameCheck, ownerReports, peekInvite, reportPlayer, unblockPlayer } from "./safety/safety";
+import { LINK_TOKEN, newLinkCode, newLinkToken, parseLinkBody, parseScreenBody, SCREEN_LINK_TTL_MS } from "./screens/screens";
 import { creatorLook, isMine, leavePair, myLeft, myOwn, myStreaks, myTrophies, PAIR_ID, pairStub, rejoinPair, syncPairPeople } from "./streaks/pairs";
 import { consentOn, liveOn, notifyOn, streaksOn, trophyOn } from "./streaks/profile";
 
@@ -67,6 +68,7 @@ export { DeviceIndex } from "./room/device-index";
 export { GameRoom } from "./room/game-room";
 export { Limiter } from "./safety/limiter";
 export { Reports } from "./safety/reports";
+export { ScreenLinks } from "./screens/screen-links";
 export { Pair } from "./streaks/pair";
 
 const SHARE_PATH = /^\/j\/([^/]+)$/;
@@ -74,6 +76,10 @@ const POUNCE_PAGE = /^\/p\/([^/]+)$/;
 const POUNCE_ANSWER = /^\/v1\/pounces\/([^/]+)\/answer$/;
 const POUNCE_LINK = /^\/v1\/pounces\/links\/([^/]+)$/;
 const ROOM_WS = /^\/v1\/rooms\/([^/]+)\/ws$/;
+/** `/v1/screens/{token}/ws`: a TV waits on its link. */
+const SCREEN_WS = /^\/v1\/screens\/([^/]+)\/ws$/;
+/** `/tv/{token}`: a link's QR, opened by a phone's camera. */
+const TV_PATH = /^\/tv\/([^/]+)$/;
 /** `/v1/rooms/{code}/reports` or `/blocks`: report or block someone at that table. */
 const ROOM_SAFETY = /^\/v1\/rooms\/([^/]+)\/(reports|blocks)$/;
 const MY_BLOCK = /^\/v1\/me\/blocks\/([^/]+)$/;
@@ -91,6 +97,9 @@ const MAX_PAUSE_DAYS = 14;
 const APNS_TOKEN = /^[0-9a-fA-F]{64,200}$/;
 const DEVICE_ID_BYTES = 18; // 24 base64url characters.
 const ROOM_CODE_ATTEMPTS = 5;
+/** Tries at a backup code no other live link holds. */
+const LINK_CODE_ATTEMPTS = 5;
+const LINK_TOKEN_BYTES = 16;
 const MAX_BODY_BYTES = 1024;
 const MAX_PROFILE_BYTES = 2048;
 /** An Apple identity token alone is about 1 KB. */
@@ -263,7 +272,8 @@ async function openSocket(request: Request, env: Env, deviceId: string, code: st
   // A screen (a TV) is only a role while `TV` is on; off, there is no such thing to ask for.
   const screen = new URL(request.url).searchParams.get("role") === "screen";
   if (screen && !tvOn(env)) return notFound();
-  later(active(env, deviceId, Date.now()).catch(() => undefined));
+  // A TV is no player: it is never counted as an active device.
+  if (!screen) later(active(env, deviceId, Date.now()).catch(() => undefined));
   // The room trusts these headers, so client-supplied ones must never reach it.
   const headers = new Headers(request.headers);
   headers.delete(DEVICE_HEADER);
@@ -274,6 +284,70 @@ async function openSocket(request: Request, env: Env, deviceId: string, code: st
   // The same call tells the device's index what this app can draw, before the room can push to it.
   headers.set(PLAYER_HEADER, JSON.stringify(await devicePlayers(env, deviceId, declared(request), appVersion(request))));
   return env.ROOMS.get(env.ROOMS.idFromName(code)).fetch(new Request(request, { headers }));
+}
+
+const screenLinks = (env: Env, name: string) => env.SCREEN_LINKS.get(env.SCREEN_LINKS.idFromName(name));
+
+/** `POST /v1/screens`: a TV asks for a link to show as a QR, with a backup code to type. */
+async function newScreenLink(request: Request, env: Env, deviceId: string): Promise<Response> {
+  const body = parseScreenBody(await readObject(request));
+  if (!body) return badRequest();
+  const now = Date.now();
+  // Each link is two Durable Objects for ten minutes: rationed per device and per address.
+  if (!(await mayMakeScreenLink(env, deviceId, clientIp(request), now))) return json(429, { error: "rate_limited" });
+  const token = newLinkToken(crypto.getRandomValues(new Uint8Array(LINK_TOKEN_BYTES)));
+  for (let i = 0; i < LINK_CODE_ATTEMPTS; i++) {
+    const code = newLinkCode(cryptoRng);
+    // Another live link holds this code: try another.
+    if (!(await screenLinks(env, `code:${code}`).reserve(token, now))) continue;
+    await screenLinks(env, `token:${token}`).open(deviceId, token, code, body.showing, now);
+    // The clock the TV renews on, which is the link's own (shorter on a fast dev server).
+    const expiresIn = SCREEN_LINK_TTL_MS / devSpeed(env);
+    return json(201, { token, code, url: `${new URL(request.url).origin}/tv/${token}`, expiresIn });
+  }
+  return json(503, { error: "no_link_code" });
+}
+
+/** `GET /v1/screens/{token}/ws`: the TV's socket, told when a phone links it and when the link expires. */
+async function waitOnScreenLink(request: Request, env: Env, deviceId: string, token: string): Promise<Response> {
+  if (!LINK_TOKEN.test(token)) return notFound();
+  if (request.headers.get("upgrade")?.toLowerCase() !== "websocket") return json(426, { error: "upgrade_required" });
+  // The link checks this header against the TV that made it, so a client's own never reaches it.
+  const headers = new Headers(request.headers);
+  headers.delete(DEVICE_HEADER);
+  headers.set(DEVICE_HEADER, deviceId);
+  return screenLinks(env, `token:${token}`).fetch(new Request(request, { headers }));
+}
+
+/** `POST /v1/screens/link`: a phone at a table opens it on the TV whose QR it scanned or whose code it typed. */
+async function linkScreen(request: Request, env: Env, deviceId: string): Promise<Response> {
+  const body = parseLinkBody(await readObject(request));
+  if (!body) return badRequest();
+  const now = Date.now();
+  // Only the host or someone seated, and a table that doesn't exist says the same, so the
+  // route tells nobody which tables exist.
+  if ((await env.ROOMS.get(env.ROOMS.idFromName(body.room)).mayLink(deviceId)) !== "ok") return json(403, { error: "not_seated" });
+  let token: string | null;
+  if ("code" in body) {
+    // Six characters can be guessed: wrong codes back off like room codes. A 128-bit token can't.
+    token = await screenLinks(env, `code:${body.code}`).tokenFor(now);
+    const retryAfter = await guardScreenCode(env, token === null, deviceId, clientIp(request), now);
+    if (retryAfter !== null) {
+      const response = json(429, { error: "too_many_attempts", retryAfter });
+      response.headers.set("retry-after", String(retryAfter));
+      return response;
+    }
+  } else {
+    token = body.token;
+  }
+  if (token === null) return notFound();
+  const decision = await screenLinks(env, `token:${token}`).link(body.room, body.move, now);
+  if (decision === "link" || decision === "already") return json(200, { linked: true });
+  if (decision === "showing") return json(409, { error: "showing" });
+  if (decision === "seated") return json(409, { error: "seated" });
+  // The table went after the check above: as for one that never was.
+  if (decision === "none") return json(403, { error: "not_seated" });
+  return notFound();
 }
 
 async function setPushToken(request: Request, env: Env, deviceId: string): Promise<Response> {
@@ -577,6 +651,7 @@ function route(
   live: boolean,
   consent: boolean,
   trophy: boolean,
+  tv: boolean,
 ): Route | null {
   if (consent) {
     const kitten = kittenRoute(method, pathname);
@@ -618,6 +693,12 @@ function route(
   const safety = safetyRoute(method, pathname);
   if (safety) return safety;
   if (method === "POST" && pathname === "/v1/rooms") return createRoom;
+  if (tv) {
+    if (method === "POST" && pathname === "/v1/screens") return newScreenLink;
+    if (method === "POST" && pathname === "/v1/screens/link") return linkScreen;
+    const waits = method === "GET" ? SCREEN_WS.exec(pathname) : null;
+    if (waits) return (r, env, id) => waitOnScreenLink(r, env, id, waits[1] as string);
+  }
   if (method === "POST" && pathname === "/v1/funnel") return postFunnel;
   const ws = method === "GET" ? ROOM_WS.exec(pathname) : null;
   if (ws) return (r, env, id, later) => openSocket(r, env, id, ws[1] as string, later);
@@ -665,6 +746,14 @@ async function handle(request: Request, env: Env, ctx?: ExecutionContext): Promi
     if (pathname === "/llms.txt") return llmsTxt(origin(), consentOn(env));
     if (pathname.startsWith("/media/")) return (await mediaFile(request, env.ASSETS)) ?? notFound();
   }
+  // A TV's QR on a phone without the app: the web player links the table. (The app takes these
+  // links once the site association lists /tv/*, a later stage.)
+  const tvLink = method === "GET" && tvOn(env) ? TV_PATH.exec(pathname) : null;
+  if (tvLink) {
+    const token = tvLink[1] as string;
+    if (!LINK_TOKEN.test(token)) return notFound();
+    return new Response(null, { status: 302, headers: { location: `${new URL(request.url).origin}/play/tv-link/${token}`, "cache-control": "no-store" } });
+  }
   const share = method === "GET" ? SHARE_PATH.exec(pathname) : null;
   if (share) {
     later(pageView(env, "j", request.headers.get("user-agent"), Date.now()).catch(() => undefined));
@@ -703,7 +792,7 @@ async function handle(request: Request, env: Env, ctx?: ExecutionContext): Promi
   if (method === "GET" && pathname === "/v1/push/web") return webPushOn(env) && env.VAPID_PUBLIC_KEY ? json(200, { publicKey: env.VAPID_PUBLIC_KEY }) : notFound();
   const secret = env.TOKEN_SECRET;
   const mints = method === "POST" && pathname === "/v1/devices";
-  const handler = mints ? null : route(method, pathname, streaks, notify, liveOn(env), consent, trophyOn(env));
+  const handler = mints ? null : route(method, pathname, streaks, notify, liveOn(env), consent, trophyOn(env), tvOn(env));
   if (!mints && !handler) return notFound();
   // Too old to be served (`APP_MINIMUM`, or a protocol the server dropped)? Nobody is while
   // there is no minimum, and then this asks nothing and costs nothing.

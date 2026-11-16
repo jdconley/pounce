@@ -48,7 +48,8 @@ describe("a screen", () => {
     const room = build();
     phones(room);
     room.handle("a", { t: "start" });
-    const out = room.connect("tv", {}, "screen");
+    room.addScreen("tv");
+    const out = room.connect("tv");
     expect(snapshotOf(out, "tv").room.game?.hands).toEqual({});
     const messages: ClientMessage[] = [
       { t: "claim", seat: 0, person: person(3) },
@@ -74,7 +75,8 @@ describe("a screen", () => {
   it("may still ping, report presence and link", () => {
     const room = build();
     phones(room);
-    room.connect("tv", {}, "screen");
+    room.addScreen("tv");
+    room.connect("tv");
     expect(room.handle("tv", { t: "ping" })).toEqual([{ to: "tv", message: { t: "pong" } }]);
     expect(errorsOf(room.handle("tv", { t: "presence", state: "active" }))).toEqual([]);
     expect(errorsOf(room.handle("tv", { t: "link", state: "weak" }))).toEqual([]);
@@ -101,7 +103,8 @@ describe("a screen", () => {
     phones(room);
     expect(snapshotOf(room.connect("c"), "c").room).not.toHaveProperty("screen");
     const seq = room.state.seq;
-    const out = room.connect("tv", {}, "screen");
+    room.addScreen("tv");
+    const out = room.connect("tv");
     for (const to of ["a", "b", "c", "tv"]) {
       const snap = snapshotOf(out, to);
       expect(snap.room.screen).toBe(true);
@@ -113,7 +116,8 @@ describe("a screen", () => {
   it("coming back within the grace changes nothing for the phones", () => {
     const room = build();
     phones(room);
-    room.connect("tv", {}, "screen");
+    room.addScreen("tv");
+    room.connect("tv");
     room.disconnect("tv");
     const seq = room.state.seq;
     clock += SCREEN_GRACE_MS - 1;
@@ -129,7 +133,8 @@ describe("a screen", () => {
   it("goes after the grace", () => {
     const room = build();
     phones(room);
-    room.connect("tv", {}, "screen");
+    room.addScreen("tv");
+    room.connect("tv");
     room.disconnect("tv");
     expect(room.nextAlarm()).toBe(clock + SCREEN_GRACE_MS);
     const activity = room.state.lastActivity;
@@ -150,8 +155,10 @@ describe("a screen", () => {
   it("stays while another screen is connected", () => {
     const room = build();
     phones(room);
-    room.connect("tv", {}, "screen");
-    room.connect("tv2", {}, "screen");
+    room.addScreen("tv");
+    room.connect("tv");
+    room.addScreen("tv2");
+    room.connect("tv2");
     room.disconnect("tv");
     expect(room.state.screenLeftAt).toBeUndefined();
     expect(snapshotOf(room.connect("c"), "c").room.screen).toBe(true);
@@ -160,7 +167,8 @@ describe("a screen", () => {
   it("a second close of the same screen doesn't restart the grace", () => {
     const room = build();
     phones(room);
-    room.connect("tv", {}, "screen");
+    room.addScreen("tv");
+    room.connect("tv");
     room.disconnect("tv");
     const left = room.state.screenLeftAt;
     clock += 1_000;
@@ -171,7 +179,8 @@ describe("a screen", () => {
   it("back after the grace but before the tick leaves no overdue alarm", () => {
     const room = build();
     phones(room);
-    room.connect("tv", {}, "screen");
+    room.addScreen("tv");
+    room.connect("tv");
     room.disconnect("tv");
     clock += SCREEN_GRACE_MS;
     const out = room.connect("tv");
@@ -189,8 +198,9 @@ describe("a screen", () => {
     room.connect("b");
     room.handle("b", { t: "claim", seat: 1, person: person(2) });
     room.handle("a", { t: "start" });
-    for (const role of ["screen" as const, undefined]) {
-      const out = room.connect("tv", { [p1]: "p_A" }, role);
+    room.addScreen("tv");
+    for (let i = 0; i < 2; i++) {
+      const out = room.connect("tv", { [p1]: "p_A" });
       expect(room.controlledSeats("tv")).toEqual([]);
       const snap = snapshotOf(out, "tv");
       expect(snap.room.game?.hands).toEqual({});
@@ -201,7 +211,8 @@ describe("a screen", () => {
   it("never gains a player by adopt, even one signed in to a seated player's account", () => {
     const room = build(true, "tv");
     phones(room);
-    room.connect("tv", {}, "screen");
+    room.addScreen("tv");
+    room.connect("tv");
     room.handle("a", { t: "start" });
     room.adopt({ person: { [person(1).id]: "p_A" }, deviceId: "tv" });
     expect(room.controlledSeats("tv")).toEqual([]);
@@ -212,7 +223,8 @@ describe("a screen", () => {
     const state = RoomCore.create("BCDFG", "host", clock);
     const room = new RoomCore(state, () => clock, rng, undefined, 10, { streaks: true, tv: true });
     room.connect("a");
-    room.connect("tv", {}, "screen");
+    room.addScreen("tv");
+    room.connect("tv");
     room.disconnect("tv");
     expect(room.nextAlarm()).toBe(clock + SCREEN_GRACE_MS / 10);
   });
@@ -229,7 +241,8 @@ describe("a screen", () => {
   it("stays a screen without the role", () => {
     const room = build();
     phones(room);
-    room.connect("tv", {}, "screen");
+    room.addScreen("tv");
+    room.connect("tv");
     room.disconnect("tv");
     room.connect("tv");
     expect(room.isScreen("tv")).toBe(true);
@@ -238,13 +251,17 @@ describe("a screen", () => {
     ]);
   });
 
-  it("isn't a screen unless it said so", () => {
+  it("isn't a screen unless the room lists it", () => {
     const room = build();
     phones(room);
     expect(room.isScreen("a")).toBe(false);
-    room.connect("tv", {}, "screen");
-    room.connect("tv", {}, "screen");
-    expect(room.state.screens).toEqual(["tv"]);
+    const seq = room.state.seq;
+    const out = room.connect("tv");
+    expect(room.isScreen("tv")).toBe(false);
+    expect(room.state.screens).toBeUndefined();
+    expect(snapshotsTo(out)).toEqual(["tv"]);
+    expect(snapshotOf(out, "tv").room).not.toHaveProperty("screen");
+    expect(room.state.seq).toBe(seq);
   });
 
   it("is listed by addScreen before it connects", () => {
@@ -258,6 +275,21 @@ describe("a screen", () => {
     expect(snapshotOf(out, "tv").room.screen).toBe(true);
     expect(snapshotOf(out, "a").room.screen).toBe(true);
   });
+
+  it("listed while it watches, it speaks for nobody from then on", () => {
+    const room = build();
+    const p1 = person(1).id;
+    room.connect("a");
+    room.handle("a", { t: "claim", seat: 0, person: person(1) });
+    room.connect("tv", { [p1]: "p_other" });
+    expect(room.state.devices.tv?.players).toEqual({ [p1]: "p_other" });
+    expect(room.mayScreen("tv")).toBe(true);
+    room.addScreen("tv");
+    expect(room.state.devices.tv?.players).toBeUndefined();
+    // Even once a seat is backfilled to that player, the TV holds none of it.
+    room.state.seats[0] = { ...room.state.seats[0], playerId: "p_other" } as (typeof room.state.seats)[number];
+    expect(room.controlledSeats("tv")).toEqual([]);
+  });
 });
 
 describe("linking", () => {
@@ -266,7 +298,8 @@ describe("linking", () => {
     const room = new RoomCore(state, () => clock, rng, undefined, 1, { streaks: true, tv: true });
     room.connect("a");
     room.connect("watcher");
-    room.connect("tv", {}, "screen");
+    room.addScreen("tv");
+    room.connect("tv");
     room.handle("a", { t: "claim", seat: 0, person: person(1) });
     expect(room.mayLink("host")).toBe(true);
     expect(room.mayLink("a")).toBe(true);
@@ -309,9 +342,34 @@ describe("without the TV feature", () => {
     const room = build(false);
     phones(room);
     const seq = room.state.seq;
-    const out = room.connect("tv", {}, "screen");
+    room.addScreen("tv");
+    const out = room.connect("tv");
     expect(snapshotsTo(out)).toEqual(["tv"]);
     expect(snapshotOf(out, "tv").room).not.toHaveProperty("screen");
+    expect(room.state.seq).toBe(seq);
+  });
+
+  it("a screen's close starts no grace and sends nothing", () => {
+    const room = build(false, "tv");
+    phones(room);
+    room.connect("tv");
+    const seq = room.state.seq;
+    expect(room.disconnect("tv")).toEqual([]);
+    expect(room.state.screenLeftAt).toBeUndefined();
+    expect(room.state.seq).toBe(seq);
+    clock += SCREEN_GRACE_MS;
+    expect(room.tick()).toEqual([]);
+    expect(room.state.seq).toBe(seq);
+  });
+
+  it("a grace left from when TV was on ends quietly", () => {
+    const room = build(false, "tv");
+    phones(room);
+    room.state.screenLeftAt = clock;
+    const seq = room.state.seq;
+    clock += SCREEN_GRACE_MS;
+    expect(room.tick()).toEqual([]);
+    expect(room.state.screenLeftAt).toBeUndefined();
     expect(room.state.seq).toBe(seq);
   });
 });

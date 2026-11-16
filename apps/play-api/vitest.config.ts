@@ -21,6 +21,7 @@ export default defineConfig({
         "src/notify/deliver.ts",
         "src/pounce/pounces.ts",
         "src/links/links.ts",
+        "src/screens/screen-links.ts",
         "src/kittens/**",
         "src/safety/safety.ts",
         "src/safety/limiter.ts",
