@@ -26,7 +26,7 @@ seats gets: no hand, no rack, no drawn card or tile.
   - Asking for `role=screen` never lists a device. Knowing a room's code is not enough.
 - **Refused:**
   - 409 `{ "error": "seated" }` (close code 4409 for a browser) when the device holds a seat in that room or hosts it.
-  - 403 `{ "error": "not_screen" }` (close code 4403 for a browser) when the room doesn't list the device as a screen.
+  - 403 `{ "error": "not_screen" }` (close code 4403 for a browser) when the room doesn't list the device as a screen. A TV that hears it, or 404, forgets the room it kept and goes home.
   - Use a device of its own for the TV. The web TV page keeps its credential under `pounce.tv.device`.
 - **What a screen may send.** Only `ping`, `presence` and `link`. Every other message is answered `{ "t": "error", "code": "not_allowed" }`.
 - **Membership.**
