@@ -86,14 +86,18 @@ export function nameAllowed(name: string): boolean {
   return !words.some((word) => !FINE.has(word) && BAD.test(word)) && !BAD_PHRASE.test(words.join(""));
 }
 
-/** The app's generated cat names (play-ios `NameGenerator.names`): all a kitten's name may be. */
-const GENERATED: ReadonlySet<string> = new Set([
+/**
+ * The app's generated cat names (play-ios `NameGenerator.names`): all a kitten's name may be. The
+ * web player's dice roll from this list itself.
+ */
+export const GENERATED_NAMES: readonly string[] = [
   "Mochi", "Biscuit", "Pickle", "Waffles", "Noodle", "Muffin", "Pudding", "Tofu", "Peanut", "Pepper",
   "Ginger", "Whiskers", "Bean", "Cocoa", "Sprout", "Dumpling", "Nugget", "Pretzel", "Sushi", "Toast",
   "Cricket", "Maple", "Olive", "Pumpkin", "Marble", "Button", "Clover", "Pixel", "Meatball", "Oreo",
   "Taco", "Mango", "Kiwi", "Biggles", "Fluffy", "Sprinkles", "Turnip", "Bagel", "Cinnamon", "Pancake",
   "Zigzag", "Mittens", "Snickers", "Gizmo", "Pebbles", "Truffle", "Jellybean", "Churro",
-]);
+];
+const GENERATED: ReadonlySet<string> = new Set(GENERATED_NAMES);
 
 /** A kitten keeps no typed name (spec §14.1): only one the dice rolled. */
 export function isGeneratedName(name: string): boolean {

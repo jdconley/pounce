@@ -27,6 +27,8 @@ jobs:
       - run: pnpm lint
       - run: pnpm typecheck
       - run: pnpm test
+      # The web player builds (it ships inside the Worker's assets; see the deploy below).
+      - run: pnpm --filter @pounce/play-web build
 
   deploy-play-api:
     needs: check
@@ -67,6 +69,13 @@ jobs:
           cache: pnpm
       - if: steps.creds.outputs.ready == 'true'
         run: pnpm install --frozen-lockfile
+      - name: Build the web player
+        if: steps.creds.outputs.ready == 'true'
+        # Built from this commit into ./public/play, so the Worker and the web player always
+        # deploy together and never drift apart.
+        env:
+          WEB_BUILD: ${{ github.sha }}
+        run: pnpm --filter @pounce/play-web build
       - name: Deploy
         if: steps.creds.outputs.ready == 'true'
         run: |
@@ -161,4 +170,15 @@ jobs:
             sleep 10
           done
           echo "::error title=Play API::healthz never reported \"configured\":true"
+          exit 1
+      - name: Web player smoke check
+        if: steps.creds.outputs.ready == 'true'
+        run: |
+          for attempt in $(seq 1 12); do
+            body=$(curl -fsS https://play.conleychaos.com/play/version.json || true)
+            echo "attempt $attempt: $body"
+            case "$body" in *'"build":"${{ github.sha }}"'*) exit 0 ;; esac
+            sleep 10
+          done
+          echo "::error title=Web player::/play/version.json never reported this commit"
           exit 1
