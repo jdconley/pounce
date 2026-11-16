@@ -32,6 +32,7 @@ final class AppDelegate: NSObject, UIApplicationDelegate {
         push.cancelAllTurnReminders()
         #if DEBUG
         TouchMarks.installIfAsked()
+        MainThreadWatchdog.startIfAsked()
         #endif
         return true
     }

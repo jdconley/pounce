@@ -153,6 +153,8 @@ targets:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.conleychaos.play.uitests
         GENERATE_INFOPLIST_FILE: YES
+        # Sees every test start, to gate each app's gameplay frames and hangs when it ends.
+        INFOPLIST_KEY_NSPrincipalClass: GameplayGate
         TARGETED_DEVICE_FAMILY: "1,2"
         TEST_TARGET_NAME: Pounce
 schemes:
@@ -164,8 +166,9 @@ schemes:
       config: Debug
     test:
       config: Debug
-      targets:
-        - PounceUITests
+      testPlans:
+        - path: Pounce.xctestplan
+          defaultPlan: true
     profile:
       config: Release
     archive:
