@@ -51,14 +51,21 @@ describe("table layouts fit every screen", () => {
 type Box = { x: number; y: number; w: number; h: number };
 const none = { top: 0, right: 0, bottom: 0, left: 0 };
 const seatsOf = (n: number) => Array.from({ length: n }, (_, i) => i);
+/** TV frames: width, height and overscan on every side. Not all 16:9, as browsers on TVs and laptops aren't. */
 const TV_FRAMES = [
-  [1280, 720],
-  [1920, 1080],
-  [3840, 2160],
+  [1280, 720, 0],
+  [1440, 900, 0],
+  [1920, 1080, 0],
+  [1920, 1200, 0],
+  [2560, 1080, 0],
+  [3840, 2160, 0],
+  [1920, 1080, 54],
 ] as const;
+const inset = (n: number) => ({ top: n, right: n, bottom: n, left: n });
 /** Two boxes overlap when they share more than a hair (half a pixel) of area. */
 const overlaps = (a: Box, b: Box) => Math.min(a.x + a.w, b.x + b.w) - Math.max(a.x, b.x) > 0.5 && Math.min(a.y + a.h, b.y + b.h) - Math.max(a.y, b.y) > 0.5;
-const within = (r: Box, width: number, height: number) => r.x >= -0.5 && r.y >= -0.5 && r.x + r.w <= width + 0.5 && r.y + r.h <= height + 0.5;
+/** Inside the frame, and clear of `edge` (overscan) on every side. */
+const within = (r: Box, width: number, height: number, edge = 0) => r.x >= edge - 0.5 && r.y >= edge - 0.5 && r.x + r.w <= width - edge + 0.5 && r.y + r.h <= height - edge + 0.5;
 const circle = (at: { x: number; y: number }, size: number): Box => ({ x: at.x - size / 2, y: at.y - size / 2, w: size, h: size });
 /** A pose's visual box: a scaled element shrinks about its centre. */
 const visual = (p: { x: number; y: number; s?: number }, w: number, h: number): Box => {
@@ -82,32 +89,36 @@ const expectDoubled = (small: unknown, big: unknown) => {
 };
 
 describe("Cat Tower on a TV", () => {
-  /** The worst table: every seat laid down with three groups of ten. */
-  const tv = (width: number, height: number, n: number) => {
+  /**
+   * The worst table, every seat laid down with three groups of ten, or a sparse one: two seats
+   * down with a phase's groups, nobody else.
+   */
+  const tv = (width: number, height: number, n: number, edge = 0, table: "full" | "sparse" = "full") => {
     const seats = seatsOf(n);
-    return ctLayout({ width, height, insets: none, opponents: seats, handCount: 0, trays: 0, laid: seats.map((seat) => ({ seat, groups: [10, 10, 10] })), tv: true });
+    const laid = table === "full" ? seats.map((seat) => ({ seat, groups: [10, 10, 10] })) : [0, n - 1].map((seat) => ({ seat, groups: [4, 7] }));
+    return ctLayout({ width, height, insets: inset(edge), opponents: seats, handCount: 0, trays: 0, laid, tv: true });
   };
-  const CASES = TV_FRAMES.flatMap(([w, h]) => [2, 3, 4, 5, 6].map((n) => [w, h, n] as const));
+  const CASES = TV_FRAMES.flatMap(([w, h, e]) => [2, 3, 4, 5, 6].flatMap((n) => (["full", "sparse"] as const).map((t) => [w, h, e, n, t] as const)));
   const groupsOf = (L: ReturnType<typeof tv>) => [...L.laid.values()].flatMap((row) => row.groups.map((g) => g.rect));
 
-  test.each(CASES)("at %i x %i with %i seats: nothing private, every seat around the table", (width, height, n) => {
-    const L = tv(width, height, n);
+  test.each(CASES)("at %i x %i, overscan %i, with %i seats, %s table: nothing private, every seat around the table", (width, height, edge, n, table) => {
+    const L = tv(width, height, n, edge, table);
     expect(L.hand).toEqual([]);
     expect(L.trays).toEqual([]);
     expect([...L.opponents.keys()].sort()).toEqual(seatsOf(n));
     expect([...L.seats.keys()].sort()).toEqual(seatsOf(n));
-    expect([...L.laid.keys()].sort()).toEqual(seatsOf(n));
+    expect([...L.laid.keys()].sort()).toEqual(table === "full" ? seatsOf(n) : [0, n - 1]);
   });
 
-  test.each(CASES)("at %i x %i with %i seats: everything is inside the frame", (width, height, n) => {
-    const L = tv(width, height, n);
+  test.each(CASES)("at %i x %i, overscan %i, with %i seats, %s table: everything is inside the frame", (width, height, edge, n, table) => {
+    const L = tv(width, height, n, edge, table);
     const rects: Box[] = [L.tower, L.rug, L.deckRect, L.discardRect, L.banner, ...L.seats.values(), ...[...L.opponents.values()].map((at) => circle(at, L.avatar)), ...groupsOf(L)];
     for (const row of L.laid.values()) for (const g of row.groups) for (const p of g.poses) rects.push(visual(p, L.cw, L.ch));
-    for (const r of rects) expect(within(r, width, height), JSON.stringify(r)).toBe(true);
+    for (const r of rects) expect(within(r, width, height, edge), JSON.stringify(r)).toBe(true);
   });
 
-  test.each(CASES)("at %i x %i with %i seats: seats, cats, groups, piles and the banner never overlap", (width, height, n) => {
-    const L = tv(width, height, n);
+  test.each(CASES)("at %i x %i, overscan %i, with %i seats, %s table: seats, cats, groups, piles and the banner never overlap", (width, height, edge, n, table) => {
+    const L = tv(width, height, n, edge, table);
     const seats = [...L.seats.values()];
     for (const [a, b] of pairs(seats)) expect(overlaps(a, b), `${JSON.stringify(a)} ${JSON.stringify(b)}`).toBe(false);
     // Each cat sits inside its own seat.
@@ -122,6 +133,8 @@ describe("Cat Tower on a TV", () => {
     for (const g of groups) for (const other of [...piles, ...seats, L.tower]) expect(overlaps(g, other), `${JSON.stringify(g)} ${JSON.stringify(other)}`).toBe(false);
     for (const other of [...piles, ...groups, ...seats, L.tower]) expect(overlaps(L.banner, other), JSON.stringify(other)).toBe(false);
     for (const s of seats) for (const other of [...piles, L.tower]) expect(overlaps(s, other)).toBe(false);
+    // The rug under the piles stays clear of the banner.
+    expect(overlaps(L.rug, L.banner)).toBe(false);
   });
 
   test.each([2, 3, 4, 5, 6])("at 1920 x 1080 with %i seats: big enough to read from the couch", (n) => {
@@ -145,15 +158,27 @@ describe("Cat Tower on a TV", () => {
     expect(L.deckRect).toEqual(M.deckRect);
     expect([...L.laid.keys()]).toEqual([2]);
   });
+
+  test.each([2, 3, 4, 5, 6])("at 1920 x 1080 with %i seats: a seat across the top is as wide as its room allows, up to 560", (n) => {
+    const L = tv(1920, 1080, n);
+    const top = [...L.seats.values()].filter((r) => r.y < 100);
+    for (const r of top) expect(r.w).toBeGreaterThanOrEqual(372);
+    if (n === 3 || n === 4) for (const r of top) expect(r.w).toBe(560);
+    for (const r of L.seats.values()) expect(r.w).toBeLessThanOrEqual(560);
+  });
+
+  test("more seats than the game has is refused, never a seat left out", () => {
+    expect(() => tv(1920, 1080, 7)).toThrow(RangeError);
+  });
 });
 
 describe("Tuna Tiles on a TV", () => {
   /** The worst board: thirty sets of three. */
-  const tv = (width: number, height: number, n: number) => tilesLayout({ width, height, insets: none, opponents: seatsOf(n), sets: Array.from({ length: 30 }, () => 3), rack: 0, tv: true });
-  const CASES = TV_FRAMES.flatMap(([w, h]) => [2, 3, 4].map((n) => [w, h, n] as const));
+  const tv = (width: number, height: number, n: number, edge = 0) => tilesLayout({ width, height, insets: inset(edge), opponents: seatsOf(n), sets: Array.from({ length: 30 }, () => 3), rack: 0, tv: true });
+  const CASES = TV_FRAMES.flatMap(([w, h, e]) => [2, 3, 4].map((n) => [w, h, e, n] as const));
 
-  test.each(CASES)("at %i x %i with %i seats: everything is inside the frame, nothing private", (width, height, n) => {
-    const L = tv(width, height, n);
+  test.each(CASES)("at %i x %i, overscan %i, with %i seats: everything is inside the frame, nothing private", (width, height, edge, n) => {
+    const L = tv(width, height, n, edge);
     expect(L.rack).toEqual([]);
     expect([...L.seats.keys()].sort()).toEqual(seatsOf(n));
     const pool = { x: L.pool.x, y: L.pool.y, w: L.pool.size, h: L.pool.size };
@@ -162,12 +187,12 @@ describe("Tuna Tiles on a TV", () => {
       rects.push(set.rect);
       for (const p of set.poses) rects.push(visual(p, L.pw, L.ph));
     }
-    for (const r of rects) expect(within(r, width, height), JSON.stringify(r)).toBe(true);
+    for (const r of rects) expect(within(r, width, height, edge), JSON.stringify(r)).toBe(true);
     for (const set of L.sets) for (const p of set.poses) expect(within(visual(p, L.pw, L.ph), L.board.x + L.board.w, L.board.y + L.board.h) && p.y >= L.board.y && p.x >= L.board.x).toBe(true);
   });
 
-  test.each(CASES)("at %i x %i with %i seats: seats, sets, the toy box and the banner never overlap", (width, height, n) => {
-    const L = tv(width, height, n);
+  test.each(CASES)("at %i x %i, overscan %i, with %i seats: seats, sets, the toy box and the banner never overlap", (width, height, edge, n) => {
+    const L = tv(width, height, n, edge);
     const seats = [...L.seats.values()];
     const pool = { x: L.pool.x, y: L.pool.y, w: L.pool.size, h: L.pool.size };
     for (const [a, b] of pairs(seats)) expect(overlaps(a, b)).toBe(false);
@@ -192,6 +217,19 @@ describe("Tuna Tiles on a TV", () => {
 
   test.each([2, 3, 4])("at 3840 x 2160 with %i seats: everything is twice the size", (n) => {
     expectDoubled(tv(1920, 1080, n), tv(3840, 2160, n));
+  });
+
+  test.each([2, 3, 4])("at 1920 x 1080 with %i seats: a seat is as wide as its room allows, up to 560", (n) => {
+    const L = tv(1920, 1080, n);
+    for (const r of L.seats.values()) {
+      expect(r.w).toBeGreaterThanOrEqual(372);
+      expect(r.w).toBeLessThanOrEqual(560);
+      if (n <= 3) expect(r.w).toBe(560);
+    }
+  });
+
+  test("more seats than the game has is refused, never a seat left out", () => {
+    expect(() => tv(1920, 1080, 5)).toThrow(RangeError);
   });
 
   test("a near-empty board draws its pieces bigger", () => {

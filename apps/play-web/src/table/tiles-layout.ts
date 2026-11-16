@@ -3,7 +3,7 @@
  * flowing in rows inside the rope, the toy box, the controls and the rack. Pure geometry, like
  * ct-layout.ts.
  */
-import { TV, TV_H, TV_W, tvMap, type Insets } from "./ct-layout";
+import { TV, TV_H, TV_SEATS, TV_W, tvMap, type Insets } from "./ct-layout";
 
 import type { Rect } from "./drag";
 import type { Pose } from "./motion";
@@ -32,9 +32,9 @@ export type TilesLayout = {
   controls: { y: number; h: number };
   rack: Pose[];
   rackRect: Rect;
-  /** Where "<Name>'s turn" sits. */
+  /** TV only: where "<Name>'s turn" sits. On a phone, a placeholder where today's cue is. */
   banner: Rect;
-  /** Each seat in `opponents`: its cat, and on a TV its name and score under it. */
+  /** TV only: each seat in `opponents`, its cat with its name and score under it. On a phone, a placeholder: each cat's circle. */
   seats: Map<number, Rect>;
 };
 
@@ -160,10 +160,12 @@ const bottomOf = (sets: { rect: Rect }[], top: number) => sets.reduce((b, s) => 
  * banner and the toy box.
  */
 function tvTiles(input: TilesInput): TilesLayout {
-  const { edge, gap, avatar, seatW, seatH, banner: bannerSize } = TV;
+  const { edge, gap, avatar, seatMaxW, seatH, banner: bannerSize } = TV;
+  // Planned for the game's four seats; refuse more rather than leave a player off the table.
+  if (input.opponents.length > TV_SEATS.tiles) throw new RangeError(`A Tuna Tiles TV table seats ${TV_SEATS.tiles}, not ${input.opponents.length}`);
   const n = Math.max(input.opponents.length, 1);
   const slot = (TV_W - 2 * edge) / n;
-  const w = Math.min(seatW, slot - gap);
+  const w = Math.min(seatMaxW, slot - gap);
   const opponents = new Map<number, { x: number; y: number }>();
   const seats = new Map<number, Rect>();
   input.opponents.forEach((s, i) => {

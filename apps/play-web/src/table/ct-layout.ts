@@ -48,9 +48,9 @@ export type CtLayout = {
   action: { x: number; y: number };
   /** The centre of the table, for effects. */
   centre: { x: number; y: number };
-  /** Where "<Name>'s turn" sits. */
+  /** TV only: where "<Name>'s turn" sits. On a phone, a placeholder where today's cue is. */
   banner: Rect;
-  /** Each seat in `opponents`: its cat, and on a TV its name and score under it. */
+  /** TV only: each seat in `opponents`, its cat with its name and score under it. On a phone, a placeholder: each cat's circle. */
   seats: Map<number, Rect>;
 };
 
@@ -257,14 +257,18 @@ function layoutOn(input: CtInput): CtLayout {
  */
 export const TV_W = 1920;
 export const TV_H = 1080;
+/** The most seats a TV table places: Cat Tower's six and Tuna Tiles' four (`maxSeats`). */
+export const TV_SEATS = { catTower: 6, tiles: 4 } as const;
 
 /** What both games' TV tables share, in 1080p pixels. */
 export const TV = {
   edge: 24,
   gap: 24,
   avatar: 136,
-  /** A seat is its cat with its name and score under it: room for a 20-character name. */
+  /** A seat is its cat with its name and score under it: at least room for a 20-character name... */
   seatW: 372,
+  /** ...and wider where its place on the table has the room, for fewer cut-off names. */
+  seatMaxW: 560,
   seatH: 136 + 96,
   banner: { w: 760, h: 88 },
 } as const;
@@ -347,8 +351,10 @@ function placeGroups(area: Rect, counts: number[], cw: number, ch: number, lw0: 
  * it and the piles; the piles in the middle; the turn banner along the bottom.
  */
 function tvLayoutOn(input: CtInput): CtLayout {
-  const { edge, gap, avatar, seatW, seatH, banner: bannerSize } = TV;
+  const { edge, gap, avatar, seatW, seatMaxW, seatH, banner: bannerSize } = TV;
   const n = input.opponents.length;
+  // Planned for the game's six seats; refuse more rather than leave a player off the table.
+  if (n > TV_SEATS.catTower) throw new RangeError(`A Cat Tower TV table seats ${TV_SEATS.catTower}, not ${n}`);
   const sides = n >= 4;
   const across = Math.max(sides ? n - 2 : n, 1);
   const cw = TV_CARD;
@@ -390,7 +396,7 @@ function tvLayoutOn(input: CtInput): CtLayout {
   if (sides) cells.push({ seat: { x: x0, y: cy - seatH / 2, w: seatW, h: seatH }, area: { x: x0 + seatW + GROUP_GAP, y: cy - sideH / 2, w: sideW, h: sideH }, align: { x: "start", y: "centre" } });
   for (let i = 0; i < across; i++) {
     const x = x0 + i * (cellW + gap);
-    const w = Math.min(seatW, cellW);
+    const w = Math.min(seatMaxW, cellW);
     cells.push({ seat: { x: x + (cellW - w) / 2, y: edge, w, h: seatH }, area: { x, y: edge + seatH + ROW_GAP, w: cellW, h: topH }, align: { x: "centre", y: "top" } });
   }
   if (sides) cells.push({ seat: { x: x1 - seatW, y: cy - seatH / 2, w: seatW, h: seatH }, area: { x: cx + pileW / 2 + gap, y: cy - sideH / 2, w: sideW, h: sideH }, align: { x: "end", y: "centre" } });
@@ -399,14 +405,15 @@ function tvLayoutOn(input: CtInput): CtLayout {
   const seats = new Map<number, Rect>();
   const cellOf = new Map<number, (typeof cells)[number]>();
   input.opponents.forEach((s, i) => {
-    const cell = cells[i];
-    if (!cell) return;
+    // One cell for every seat: the guard above keeps `n` within the plan.
+    const cell = cells[i]!;
     cellOf.set(s, cell);
     seats.set(s, cell.seat);
     opponents.set(s, { x: cell.seat.x + cell.seat.w / 2, y: cell.seat.y + avatar / 2 });
   });
   const laid: CtLayout["laid"] = new Map();
   for (const row of input.laid) {
+    // Groups of a seat that isn't playing (none on a TV, as `opponents` is everyone) aren't drawn.
     const cell = cellOf.get(row.seat);
     if (!cell) continue;
     laid.set(row.seat, { avatar: { ...opponents.get(row.seat)!, size: avatar }, groups: placeGroups(cell.area, row.groups, cw, ch, lw, cell.align) });
@@ -414,8 +421,8 @@ function tvLayoutOn(input: CtInput): CtLayout {
 
   const deck = { x: cx - cw - pileGap / 2, y: cy - ch / 2, r: 0, s: 1, z: 5 };
   const discard = { x: cx + pileGap / 2, y: cy - ch / 2, r: 0, s: 1, z: 6 };
-  // The rug sits under the piles, clear of the side seats' groups.
-  const rugSize = Math.min(Math.max(midH, pileW + 48), sides ? pileW + gap : pileW * 2);
+  // The rug sits under the piles, clear of the side seats' groups and the banner.
+  const rugSize = Math.min(Math.max(midH, pileW + 48), midH + gap, sides ? pileW + gap : pileW * 2);
   return {
     landscape: true,
     cw,
