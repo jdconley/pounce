@@ -8,7 +8,7 @@ import { devSpeed } from "./env";
 import { active, forget, minted, pageView, parseReport, prune, reached, report } from "./funnel/funnel";
 import { DEFAULT_GAME, GAMES_HEADER, gamesListed, gamesOn, gameTitle, isGameId, type GameId } from "./games";
 import { asAppSocket, browserAnswer, isBrowserSocket } from "./http/browser-socket";
-import { appSiteAssociation, ogImage, pouncePage, sharePage } from "./http/links";
+import { appSiteAssociation, ogImage, pouncePage, sharePage, viewerOf } from "./http/links";
 import { mediaFile } from "./http/media";
 import { privacyPage } from "./http/privacy";
 import { getRedirect, homePage, llmsTxt, robotsTxt, sitemapXml, supportPage } from "./http/site";
@@ -640,7 +640,8 @@ async function handle(request: Request, env: Env, ctx?: ExecutionContext): Promi
     // Who invited, to what: only for a well-formed code, and guarded like a guess at it.
     const peek = ROOM_CODE.test(code) ? await peekInvite(env, code, clientIp(request), Date.now()) : "hidden";
     const store = (await storeKnown(env, later)).store;
-    return sharePage(code, { ...install(env), storeVersion: store }, new URL(request.url).origin, peek, gamesOn(env).length > 1);
+    const viewer = viewerOf(request.headers.get("user-agent"));
+    return sharePage(code, { ...install(env), storeVersion: store, viewer }, new URL(request.url).origin, peek, gamesOn(env).length > 1);
   }
   if (notify && method === "GET") {
     // The pounce card reuses the room card until the bell art lands (§9.6).
@@ -651,7 +652,8 @@ async function handle(request: Request, env: Env, ctx?: ExecutionContext): Promi
       later(pageView(env, "p", request.headers.get("user-agent"), Date.now()).catch(() => undefined));
       const found = await linkPounce(env, token, Date.now()).catch(() => null);
       const store = (await storeKnown(env, later)).store;
-      return pouncePage(found?.from ?? null, token, { ...install(env), storeVersion: store }, new URL(request.url).origin);
+      const viewer = viewerOf(request.headers.get("user-agent"));
+      return pouncePage(found?.from ?? null, token, { ...install(env), storeVersion: store, viewer }, new URL(request.url).origin);
     }
   }
   const consent = consentOn(env);

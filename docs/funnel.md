@@ -11,7 +11,7 @@ creates its tables the first time it needs them; there is no migration to run.
 
 | Table | One row per | Columns |
 |---|---|---|
-| `devices` | device | `id` (a keyed hash of the device id, never the id itself), `created_at` (when `POST /v1/devices` minted it; null for a device minted before tracking began), `first_seen`, `last_seen`, `platform`, `app_version`, `locale` ("en-US"), `source` |
+| `devices` | device | `id` (a keyed hash of the device id, never the id itself), `created_at` (when `POST /v1/devices` minted it; null for a device minted before tracking began), `first_seen`, `last_seen`, `platform` (`ios`, `web` for the web player, or null for app 1.0, which counts as iOS), `app_version` (the web player's is its build time, like `2026.1115.1432`), `locale` ("en-US"), `source` |
 | `milestones` | device and step | `id`, `milestone`, `at` (the first time), `game` (for table steps), `app_version` |
 | `device_days` | device and day of its life it was used | `id`, `day` (0 is the day it was minted, up to 90) |
 | `page_views` | UTC day and invite page | `day`, `page` (`j`, `p`, `j_preview`, `p_preview`), `views` |
@@ -71,6 +71,7 @@ devices minted in the last 30 days (change `'-30 days'` for another window).
 | `side_steps` | Tables made, invites sent and opened, joins, notifications. |
 | `median_times` | Median seconds between two steps (install to first move, link to joined, ...). |
 | `by_source` | The main path by how devices came. |
+| `by_platform` | The main path for the iOS app (`ios`) and the web player (`web`) side by side. |
 | `retention` | Day 1, day 7 and any return in days 1 to 7, per weekly cohort. |
 | `by_game` | Which game devices first played and finished. |
 | `invite_pages` | Invite pages opened per day, and link previews. |
@@ -80,7 +81,7 @@ From `apps/play-api`, with Wrangler signed in to the Conley Chaos Cloudflare acc
 them) and prints each as a table:
 
 ```bash
-funnel/query.sh funnel by_source retention
+funnel/query.sh funnel by_source by_platform retention
 ```
 
 Ad hoc questions go straight to Wrangler (add `--json` for JSON):
