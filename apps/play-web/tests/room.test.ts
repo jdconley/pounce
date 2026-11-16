@@ -118,9 +118,10 @@ describe("the room store (RoomStore.swift)", () => {
     sockets[0]!.receive({ t: "snapshot", protocol: 1, seq: 3, room: room({ link: { ping: 3000, acks: [id] } }) });
     expect(store.state.pending).not.toBeNull();
     expect(store.act(0, { type: "discard", card: 2 })).toBe(false);
-    clock.advance(420);
+    // Our own move settles quickly; the turn event that follows keeps its short pause.
+    clock.advance(80);
     expect(store.state.pending).not.toBeNull();
-    clock.advance(200);
+    clock.advance(120);
     expect(store.state.pending).toBeNull();
   });
 

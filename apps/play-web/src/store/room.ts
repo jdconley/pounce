@@ -381,7 +381,11 @@ export class RoomStore {
     const room = this.state.room ? foldEvent(this.state.room, next.event) : null;
     this.set({ room });
     for (const l of [...this.listeners]) l.event?.(next, room);
-    const pause = this.reducedMotion() ? Math.min(eventPause(next.event), 200) : eventPause(next.event);
+    // Others' moves get their moment on stage; our own were seen as they were made, so they
+    // settle at once and the next tap counts.
+    const ours = this.state.pending !== null && "event" in next.event && "seat" in next.event.event && next.event.event.seat === this.state.pending.seat;
+    const full = ours ? Math.min(eventPause(next.event), 80) : eventPause(next.event);
+    const pause = this.reducedMotion() ? Math.min(full, 200) : full;
     this.timer = this.setTimer(() => {
       this.timer = null;
       this.playing = false;

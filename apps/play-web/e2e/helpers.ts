@@ -39,10 +39,11 @@ export const deckCount = async (page: Page) => Number(await page.locator("#deck 
 export async function catTowerTurn(page: Page): Promise<boolean> {
   const deck = page.locator("#deck:not([disabled])");
   if (!(await deck.isVisible())) return false;
+  const cards = page.locator(".card.mine .card-inner");
+  const before = await cards.count();
   await deck.click();
   // The drawn card arrives; then pick the right-most card and tap the discard pile.
-  await page.waitForTimeout(400);
-  const cards = page.locator(".card.mine .card-inner");
+  await expect(cards).toHaveCount(before + 1);
   await cards.last().click();
   await page.locator("#discard").click();
   return true;

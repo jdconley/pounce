@@ -410,7 +410,7 @@ export function TilesTable(props: { store: RoomStore; state: RoomState }) {
           </div>
           <div class="side">
             {/* One button, two sorts: by number, then by toy, then by number again. */}
-            <button type="button" class="icon-btn" aria-label={sortBy === "number" ? "Sort by toy" : "Sort by number"} title={sortBy === "number" ? "Sort by toy" : "Sort by number"} onClick={() => sort(sortBy === "number" ? "toy" : "number")} id="sort">
+            <button type="button" class="icon-btn" aria-label={sortBy === "number" ? "Sort by toy" : "123: sort by number"} title={sortBy === "number" ? "Sort by toy" : "Sort by number"} onClick={() => sort(sortBy === "number" ? "toy" : "number")} id="sort">
               {sortBy === "number" ? <img src={art("tile-fish")} alt="" width={28} height={28} /> : <span class="num-icon">123</span>}
             </button>
             <IconButton icon="fx-sparkle" label="Hint" onClick={hint} id="hint" />
