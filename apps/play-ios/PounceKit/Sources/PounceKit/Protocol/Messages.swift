@@ -115,8 +115,11 @@ public enum ServerMessage: Decodable, Equatable, Sendable {
     case nudgeSent(seat: Seat)
     /// To the phones of the person in `seat`: the person in `from` nudged them. No seq.
     case nudged(seat: Seat, from: Seat)
+    /// Where `seat`'s player is pointing now, relayed to every other device; nil: cleared. Not a
+    /// state change: no seq, never replayed. An app that predates it skips the unknown type.
+    case aim(seat: Seat, aim: GameAim?)
 
-    private enum CodingKeys: String, CodingKey { case t, `protocol`, seq, room, event, seat, code, pair, person, view, seats, from }
+    private enum CodingKeys: String, CodingKey { case t, `protocol`, seq, room, event, seat, code, pair, person, view, seats, from, aim }
 
     public init(from decoder: any Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
@@ -153,9 +156,46 @@ public enum ServerMessage: Decodable, Equatable, Sendable {
             self = .nudgeSent(seat: try c.decode(Seat.self, forKey: .seat))
         case "nudged":
             self = .nudged(seat: try c.decode(Seat.self, forKey: .seat), from: try c.decode(Seat.self, forKey: .from))
+        case "aim":
+            self = .aim(seat: try c.decode(Seat.self, forKey: .seat),
+                        aim: try c.decodeIfPresent(GameAim.self, forKey: .aim))
         default:
             throw DecodingError.dataCorruptedError(
                 forKey: .t, in: c, debugDescription: "unknown server message type: \(t)")
+        }
+    }
+}
+
+/// What a player points at, live, for the TV: Cat Tower's laid group, or Tuna Tiles' draft of the
+/// whole table (docs/tv-protocol.md, `aim`).
+public enum GameAim: Codable, Equatable, Sendable {
+    /// `laid[seat][group]`.
+    case target(seat: Seat, group: Int)
+    /// The draft table, set by set.
+    case table([[TileID]])
+
+    private enum CodingKeys: String, CodingKey { case target, table }
+    private enum TargetKeys: String, CodingKey { case seat, group }
+
+    public init(from decoder: any Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        if c.contains(.target) {
+            let t = try c.nestedContainer(keyedBy: TargetKeys.self, forKey: .target)
+            self = .target(seat: try t.decode(Seat.self, forKey: .seat), group: try t.decode(Int.self, forKey: .group))
+        } else {
+            self = .table(try c.decode([[TileID]].self, forKey: .table))
+        }
+    }
+
+    public func encode(to encoder: any Encoder) throws {
+        var c = encoder.container(keyedBy: CodingKeys.self)
+        switch self {
+        case .target(let seat, let group):
+            var t = c.nestedContainer(keyedBy: TargetKeys.self, forKey: .target)
+            try t.encode(seat, forKey: .seat)
+            try t.encode(group, forKey: .group)
+        case .table(let sets):
+            try c.encode(sets, forKey: .table)
         }
     }
 }
@@ -238,8 +278,10 @@ public enum ClientMessage: Encodable, Equatable, Sendable {
     /// Forfeits `seat` for its holder, whose move has waited days; only when the snapshot's
     /// `retire` names that seat with no wait left.
     case retire(seat: Seat)
+    /// Live pointing for the TV; nil clears it (`{"t":"aim","seat":n}`).
+    case aim(seat: Seat, aim: GameAim?)
 
-    private enum CodingKeys: String, CodingKey { case t, seat, person, kind, action, state, code, name, rug, back, id }
+    private enum CodingKeys: String, CodingKey { case t, seat, person, kind, action, state, code, name, rug, back, id, aim }
 
     public func encode(to encoder: any Encoder) throws {
         var c = encoder.container(keyedBy: CodingKeys.self)
@@ -300,6 +342,10 @@ public enum ClientMessage: Encodable, Equatable, Sendable {
         case .retire(let seat):
             try c.encode("retire", forKey: .t)
             try c.encode(seat, forKey: .seat)
+        case .aim(let seat, let aim):
+            try c.encode("aim", forKey: .t)
+            try c.encode(seat, forKey: .seat)
+            try c.encodeIfPresent(aim, forKey: .aim)
         }
     }
 }

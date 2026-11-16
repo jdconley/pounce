@@ -1116,7 +1116,7 @@ final class AppModel {
         let code: String
         switch DeepLink.parse(url, allowDevScheme: true) {
         case .join(let c), .move(let c, _): code = c
-        case .pounce, nil: return GameCatalog.dealt.id
+        case .pounce, .tv, nil: return GameCatalog.dealt.id
         }
         if let room, room.code == code, let id = room.store.room?.gameId { return id }
         return homeItems.first { $0.id == code }?.game
@@ -1143,6 +1143,8 @@ final class AppModel {
             // Onboarding is done: the pick sheet (or its card) opens over Home, not the name screen.
             if case .pickCat = route { route = .home }
             Task { await openLink(token) }
+        case .tv:
+            break  // Task 4 links the TV.
         }
     }
 

@@ -1,11 +1,13 @@
 import Foundation
 
-/// A parsed share, move or pounce link.
+/// A parsed share, move, pounce or TV link.
 public enum DeepLink: Equatable, Sendable {
     case join(code: String)
     case move(code: String, moveCode: String)
     /// A Messages pounce (§12.4): `https://play.conleychaos.com/p/<token>`.
     case pounce(token: String)
+    /// A TV's link (docs/tv-protocol.md): `https://play.conleychaos.com/tv/<token>`.
+    case tv(token: String)
 
     private static let host = "play.conleychaos.com"
     private static let devScheme = "pounce-dev"
@@ -35,6 +37,15 @@ public enum DeepLink: Equatable, Sendable {
         return parts.url!
     }
 
+    /// The link a TV shows: `https://play.conleychaos.com/tv/<TOKEN>`.
+    public static func tvURL(token: String) -> URL {
+        var parts = URLComponents()
+        parts.scheme = "https"
+        parts.host = host
+        parts.path = "/tv/\(token)"
+        return parts.url!
+    }
+
     /// 16 random bytes, base64url (play-api `LINK_TOKEN`).
     public static func isPounceToken(_ s: String) -> Bool {
         s.utf8.count == 22 && s.unicodeScalars.allSatisfy { tokenScalars.contains($0) }
@@ -59,17 +70,20 @@ public enum DeepLink: Equatable, Sendable {
         case "https":
             guard parts.host?.lowercased() == host, parts.port == nil else { return nil }
             let path = parts.path.split(separator: "/", omittingEmptySubsequences: false).map(String.init)
-            guard path.count == 3, path[0].isEmpty, path[1] == "j" || path[1] == "p" else { return nil }
+            guard path.count == 3, path[0].isEmpty, path[1] == "j" || path[1] == "p" || path[1] == "tv" else { return nil }
             kind = path[1]
             code = path[2]
         case devScheme where allowDevScheme:
-            guard let h = parts.host, h == "j" || h == "p" else { return nil }
+            guard let h = parts.host, h == "j" || h == "p" || h == "tv" else { return nil }
             let path = parts.path.split(separator: "/", omittingEmptySubsequences: false).map(String.init)
             guard path.count == 2, path[0].isEmpty else { return nil }
             kind = h
             code = path[1]
         default:
             return nil
+        }
+        if kind == "tv" {
+            return isPounceToken(code) && (parts.queryItems ?? []).isEmpty ? .tv(token: code) : nil
         }
         if kind == "p" {
             return isPounceToken(code) && (parts.queryItems ?? []).isEmpty ? .pounce(token: code) : nil

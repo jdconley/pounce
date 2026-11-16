@@ -47,3 +47,36 @@ import Testing
         #expect(!code.reusable(now: t0.addingTimeInterval(61 * 60)))
     }
 }
+
+@Suite struct TVLinkTests {
+    private let token = "dXEFk25T_lIQ7aDyHSVP2w"
+
+    @Test func aTVLinkParses() throws {
+        #expect(DeepLink.parse(try #require(URL(string: "https://play.conleychaos.com/tv/\(token)"))) == .tv(token: token))
+        #expect(DeepLink.tvURL(token: token).absoluteString == "https://play.conleychaos.com/tv/\(token)")
+    }
+
+    @Test func theDevSchemeIsDebugOnly() throws {
+        let url = try #require(URL(string: "pounce-dev://tv/\(token)"))
+        #expect(DeepLink.parse(url) == nil)
+        #expect(DeepLink.parse(url, allowDevScheme: true) == .tv(token: token))
+    }
+
+    @Test func aWrongTokenOrHostIsNoLink() throws {
+        for text in [
+            "https://play.conleychaos.com/tv/\(token.dropLast())",
+            "https://play.conleychaos.com/tv/\(token)x",
+            "https://play.conleychaos.com/tv/dXEFk25T+lIQ7aDyHSVP2w",
+            "https://play.conleychaos.com/tv/",
+            "https://play.conleychaos.com/tv/\(token)?x=1",
+            "https://example.com/tv/\(token)",
+            "http://play.conleychaos.com/tv/\(token)",
+        ] {
+            #expect(DeepLink.parse(try #require(URL(string: text)), allowDevScheme: true) == nil, "\(text)")
+        }
+    }
+
+    @Test func aPastedTVLinkIsFound() {
+        #expect(DeepLink.pasted("scan this: https://play.conleychaos.com/tv/\(token)") == .tv(token: token))
+    }
+}
