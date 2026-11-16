@@ -102,8 +102,10 @@ final class MainThreadWatchdog {
     private weak var tableView: SKView?
     private var tableSince: CFTimeInterval?
 
-    private let probe = Probe()
+    private let probe = Probe(id: "watchdog") { MainThreadWatchdog.shared?.summary() }
+    private let framesProbe = Probe(id: "watchdog.frames") { MainThreadWatchdog.shared?.recentFrames() }
     private var windowObserver: NSObjectProtocol?
+    private var sceneObserver: NSObjectProtocol?
     private var displayLink: CADisplayLink?
     private var lastTick: CFTimeInterval?
     private var observers: [CFRunLoopObserver] = []
@@ -116,6 +118,20 @@ final class MainThreadWatchdog {
     private var stretch = 0.0
     /// Slow frames, each with the main thread's share: printed as `[frame] slow …`.
     private(set) var slowFrames: [String] = []
+    /// The last `[frame]` lines (slow frames and frames over the work budget), with when, for a
+    /// test to print (`watchdog.frames`): on a phone the unified log is out of reach.
+    private var recentLines: [String] = []
+
+    private func remember(_ line: String) {
+        recentLines.append(String(format: "t=%.2f ", CACurrentMediaTime()) + line)
+        if recentLines.count > 40 { recentLines.removeFirst(recentLines.count - 40) }
+    }
+
+    /// `recentLines`, one per line (the `watchdog.frames` element's value).
+    func recentFrames() -> String {
+        noteQuery()
+        return recentLines.joined(separator: "\n")
+    }
     private static let logsSummary = CommandLine.arguments.contains("-watchdog-log")
     private var lastSummary: CFTimeInterval = 0
     /// `FrameWork` pieces since the last tick that took a millisecond or more (for the log), and
@@ -164,6 +180,9 @@ final class MainThreadWatchdog {
         if view.window != nil {
             if tableView !== view { tableSince = CACurrentMediaTime() }
             tableView = view
+            // The table's screen is known now (at launch there may be none yet, and the link
+            // fell back to 60): judge the main thread's frames at that screen's top rate.
+            matchScreenRate(view.window)
         } else if tableView === view {
             tableView = nil
             tableSince = nil
@@ -237,6 +256,12 @@ final class MainThreadWatchdog {
         link.preferredFrameRateRange = CAFrameRateRange(minimum: top, maximum: top, preferred: top)
         link.add(to: .main, forMode: .common)
         displayLink = link
+        // A window's screen, once there is one.
+        sceneObserver = NotificationCenter.default.addObserver(
+            forName: UIScene.didActivateNotification, object: nil, queue: .main
+        ) { _ in
+            MainActor.assumeIsolated { MainThreadWatchdog.shared?.matchScreenRate(nil) }
+        }
 
         // The thread wakes (first in line), and finishes each step (last in line, so a step's
         // Core Animation commit and SwiftUI layout count with it) or goes to sleep.
@@ -252,6 +277,16 @@ final class MainThreadWatchdog {
             observers.append(observer)
         }
         print("[watchdog] on: screen \(Self.screenRate(nil)) fps, thread performance checker \(checkerLoaded ? "loaded" : "not loaded")")
+    }
+
+    /// Asks the display link for the screen's top rate (120 on ProMotion), so a frame is judged
+    /// against that screen's frame time.
+    private func matchScreenRate(_ window: UIWindow?) {
+        guard let link = displayLink else { return }
+        let top = Float(Self.screenRate(window))
+        guard link.preferredFrameRateRange.maximum != top else { return }
+        link.preferredFrameRateRange = CAFrameRateRange(minimum: top, maximum: top, preferred: top)
+        lastTick = nil
     }
 
     private func tick(_ link: CADisplayLink) {
@@ -285,6 +320,7 @@ final class MainThreadWatchdog {
             let line = String(
                 format: "[frame] work %.1f ms over the 8.3 ms budget (frame %.1f ms%@): %@",
                 frameWork, gap, nearRead ? ", near a screen read: not counted" : "", pieces)
+            remember(line)
             print(line)
             Self.log.notice("\(line, privacy: .public)")
         }
@@ -301,6 +337,7 @@ final class MainThreadWatchdog {
                 format: "[frame] slow %.1f ms: main thread busy %.1f ms, longest stretch %.1f ms; app work %.1f ms: %@",
                 gap, busy, longest, frameWork, pieces.isEmpty ? "none" : pieces)
             slowFrames.append(line)
+            remember(line)
             print(line)
             Self.log.notice("\(line, privacy: .public)")
         }
@@ -347,17 +384,22 @@ final class MainThreadWatchdog {
         let windows = UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }.flatMap(\.windows)
         guard let window = windows.first(where: { $0.windowLevel == .normal && !$0.isHidden }) else { return }
         window.insertSubview(probe, at: 0)
+        window.insertSubview(framesProbe, at: 0)
     }
 
-    /// The `watchdog` element: draws nothing, takes no touches, reads `summary()` live.
+    /// The `watchdog` and `watchdog.frames` elements: draw nothing, take no touches, read
+    /// their value live.
     private final class Probe: UIView {
-        init() {
+        private let read: @MainActor () -> String?
+
+        init(id: String, read: @escaping @MainActor () -> String?) {
+            self.read = read
             super.init(frame: CGRect(x: 0, y: 0, width: 1, height: 1))
             isUserInteractionEnabled = false
             backgroundColor = .clear
             isAccessibilityElement = true
-            accessibilityIdentifier = "watchdog"
-            accessibilityLabel = "watchdog"
+            accessibilityIdentifier = id
+            accessibilityLabel = id
             accessibilityTraits = .staticText
         }
 
@@ -365,7 +407,7 @@ final class MainThreadWatchdog {
         required init?(coder: NSCoder) { fatalError("init(coder:) is not used") }
 
         override var accessibilityValue: String? {
-            get { MainThreadWatchdog.shared?.summary() }
+            get { read() }
             set {}
         }
     }

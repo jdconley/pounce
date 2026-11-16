@@ -190,3 +190,27 @@ extension XCTestCase {
         return reading
     }
 }
+
+/// The machine the app runs on: the Mac under a simulator (which shares its kernel), or the phone.
+enum Host {
+    /// Over this many runnable threads per core (the 1-minute load average), the simulator's own
+    /// frames are held up by the rest of the Mac, and its main thread runs on efficiency cores:
+    /// frame and work times are reported, not enforced.
+    static let busyLoadPerCore = 0.5
+
+    static func loadPerCore() -> Double {
+        var loads = [Double](repeating: 0, count: 3)
+        guard getloadavg(&loads, 3) > 0 else { return 0 }
+        return loads[0] / Double(cores())
+    }
+
+    /// The machine's CPUs (`hw.ncpu`): in a simulator `ProcessInfo.activeProcessorCount` can say 1.
+    static func cores() -> Int {
+        var count: Int32 = 0
+        var size = MemoryLayout<Int32>.size
+        guard sysctlbyname("hw.ncpu", &count, &size, nil, 0) == 0, count > 0 else {
+            return max(ProcessInfo.processInfo.activeProcessorCount, 1)
+        }
+        return Int(count)
+    }
+}

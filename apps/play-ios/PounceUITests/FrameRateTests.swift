@@ -13,11 +13,13 @@ import XCTest
 ///
 /// It fails when:
 /// - the table doesn't ask for the screen's top rate (120 on ProMotion),
-/// - any frame held over 8.3 ms of the app's own work (its `FrameWork` pieces),
 /// - the main thread hung over 100 ms,
-/// - any table or main-thread frame took over 16.7 ms. On a Mac so busy that the simulator itself
-///   is held up (a load average over half its cores) this last check is reported, not enforced:
-///   frames slip there with none of the app's work in them.
+/// - any frame held over 8.3 ms of the app's own work (its `FrameWork` pieces, in CPU time),
+/// - any table or main-thread frame took over 16.7 ms.
+/// On a Mac so busy that the simulator itself is held up (a load average over half its cores) the
+/// last two are reported, not enforced: frames slip with none of the app's work in them, and the
+/// main thread lands on efficiency cores, where the same work takes two to three times the CPU
+/// time. On a phone, or a quiet Mac, they are enforced.
 ///
 /// `scripts/frame-rate.sh` runs these on a simulator or a plugged-in iPhone (the 120 Hz numbers).
 @MainActor
@@ -69,6 +71,10 @@ final class FrameRateTests: XCTestCase {
         let window = after - before
         let report = window.report(name) + String(format: " | host load %.2f per core", load)
         print(report)
+        // What the slow frames held (the app's own work, or none), read once, after the window.
+        for frame in (value(el(app, "watchdog.frames")) ?? "").split(separator: "\n") {
+            print("FRAMES \(name) \(frame)")
+        }
         let note = XCTAttachment(string: report)
         note.name = "frames-\(name)"
         note.lifetime = .keepAlways
@@ -77,26 +83,13 @@ final class FrameRateTests: XCTestCase {
         XCTAssertGreaterThan(window.screen, 0, report, file: file, line: line)
         XCTAssertEqual(window.table, window.screen, "the table doesn't ask for the screen's top rate: \(report)", file: file, line: line)
         XCTAssertGreaterThanOrEqual(window.tableFrames.count, Int(seconds) * window.screen / 2, "the table hardly rendered while it played: \(report)", file: file, line: line)
-        XCTAssertEqual(window.workOver, 0, "a frame held over 8.3 ms of the app's own work: \(report)", file: file, line: line)
         XCTAssertFalse(window.hangs > 0, "the main thread hung during gameplay: \(report)", file: file, line: line)
         if load > Host.busyLoadPerCore {
-            print("FRAMES \(name): the host is busy (load \(String(format: "%.2f", load)) per core), so frames over 16.7 ms are reported, not enforced")
+            print("FRAMES \(name): the host is busy (load \(String(format: "%.2f", load)) per core), so frame and work times are reported, not enforced")
         } else {
+            XCTAssertEqual(window.workOver, 0, "a frame held over 8.3 ms of the app's own work: \(report)", file: file, line: line)
             XCTAssertEqual(window.tableFrames.slow, 0, "the table drew a frame over 16.7 ms: \(report)", file: file, line: line)
             XCTAssertEqual(window.link.slow, 0, "the main thread missed a frame by over 16.7 ms: \(report)", file: file, line: line)
         }
-    }
-}
-
-/// The machine the app runs on: the Mac under a simulator (which shares its kernel), or the phone.
-enum Host {
-    /// Over this many runnable threads per core (the 1-minute load average), the simulator's own
-    /// frames are held up by the rest of the Mac.
-    static let busyLoadPerCore = 0.5
-
-    static func loadPerCore() -> Double {
-        var loads = [Double](repeating: 0, count: 3)
-        guard getloadavg(&loads, 3) > 0 else { return 0 }
-        return loads[0] / Double(max(ProcessInfo.processInfo.activeProcessorCount, 1))
     }
 }

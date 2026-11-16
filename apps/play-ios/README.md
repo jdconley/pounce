@@ -316,8 +316,10 @@ when nothing moves. The UI suite checks that the main thread only draws:
   stretch over 100 ms (logged as `[watchdog] hang …`, on stdout and in the unified log). Only
   gameplay counts: a table on screen, from a second after it appeared. Gaps that held a read of
   the accessibility tree (the test's own queries) are counted apart. The counts are the value of
-  the `watchdog` element, a 1-point view at the back of the window. `-watchdog-log` also logs the
-  counts every 10 s.
+  the `watchdog` element, a 1-point view at the back of the window. Its display link asks for the
+  table's screen's top rate (120 on ProMotion), so frames are judged at that screen's frame time.
+  `-watchdog-log` also logs the counts every 10 s, and the `watchdog.frames` element holds the last
+  `[frame]` lines (a test prints them; on a phone the unified log is out of reach).
 - **`FrameWork`** times the app's own pieces of a frame's work (redraws, reconciles, touches,
   textures) in the main thread's CPU time, as signposts (Instruments' Points of Interest) and for
   the watchdog, which logs any frame with over 8.3 ms of them (`[frame] work …`) and any slow frame
@@ -339,10 +341,15 @@ when nothing moves. The UI suite checks that the main thread only draws:
   busiest table (`-demo tiles-late`) play themselves for 20 s each (`POUNCE_FRAMES_SECONDS`) and
   prints a `FRAMES` line per table. It fails if the table doesn't ask for the screen's top rate,
   any frame holds over 8.3 ms of the app's own work, the main thread hangs, or any frame takes over
-  16.7 ms; that last one is reported, not enforced, while the Mac's load is over half its cores.
+  16.7 ms, and prints every slow or over-budget frame with the app's share. While the Mac's load is
+  over half its cores, frame and work times are reported, not enforced (frames slip with none of
+  the app's work in them, and its main thread lands on efficiency cores); so are `GameplayGate`'s.
   `scripts/frame-rate.sh <device>` runs it on a simulator (by UDID) or a plugged-in iPhone, and
   prints the lines: simulators run at 60 Hz whatever the device, so the 120 Hz numbers come from a
-  ProMotion iPhone (Developer Mode on; it signs with the team's automatic signing).
+  ProMotion iPhone (Developer Mode on; it signs with the team's automatic signing; if signing
+  fails on a stale profile, open the project in Xcode once with the phone connected). It builds
+  Debug with the compiler's optimizations on (`OPTIMIZE=0` for a plain Debug build), so the numbers
+  are the shipped code's.
 - **Thread Performance Checker** is on in the `Pounce` scheme's test plan (`Pounce.xctestplan`),
   with its reports as test failures (priority inversions and its other default checks). Its
   main-thread file IO check is off: iOS itself reads and writes files on the main thread at every
