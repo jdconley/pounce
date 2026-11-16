@@ -1,0 +1,198 @@
+{
+  "snapshot": {
+    "t": "snapshot",
+    "protocol": 1,
+    "seq": 4,
+    "room": {
+      "code": "BCDFG",
+      "name": "The Fancy Sunbeams",
+      "status": "playing",
+      "youAreHost": true,
+      "seats": [
+        {
+          "kind": "human",
+          "person": {
+            "id": "11111111-1111-4111-8111-111111111111",
+            "name": "Alice",
+            "cat": 0
+          },
+          "yours": true,
+          "presence": "awake"
+        },
+        {
+          "kind": "human",
+          "person": {
+            "id": "22222222-2222-4222-8222-222222222222",
+            "name": "Bob",
+            "cat": 3
+          },
+          "yours": false,
+          "presence": "awake"
+        }
+      ],
+      "game": {
+        "round": 1,
+        "dealer": 0,
+        "turn": 1,
+        "step": "draw",
+        "status": "playing",
+        "deckCount": 87,
+        "discardTop": 88,
+        "discardCount": 1,
+        "phase": [
+          0,
+          0
+        ],
+        "scores": [
+          0,
+          0
+        ],
+        "laid": [
+          null,
+          null
+        ],
+        "handCounts": [
+          10,
+          10
+        ],
+        "hands": {
+          "0": [
+            47,
+            101,
+            74,
+            29,
+            71,
+            63,
+            18,
+            20,
+            92,
+            89
+          ]
+        },
+        "pendingSkip": [
+          false,
+          false
+        ],
+        "winners": [],
+        "forfeited": [
+          false,
+          false
+        ]
+      },
+      "screen": true,
+      "retire": {
+        "seat": 1,
+        "wait": 259200000
+      }
+    }
+  },
+  "tilesSnapshot": {
+    "t": "snapshot",
+    "protocol": 1,
+    "seq": 4,
+    "room": {
+      "code": "BCDFG",
+      "name": "The Fancy Sunbeams",
+      "status": "playing",
+      "youAreHost": true,
+      "seats": [
+        {
+          "kind": "human",
+          "person": {
+            "id": "11111111-1111-4111-8111-111111111111",
+            "name": "Alice",
+            "cat": 0
+          },
+          "yours": true,
+          "presence": "awake"
+        },
+        {
+          "kind": "human",
+          "person": {
+            "id": "22222222-2222-4222-8222-222222222222",
+            "name": "Bob",
+            "cat": 3
+          },
+          "yours": false,
+          "presence": "awake"
+        }
+      ],
+      "game": null,
+      "gameId": "tiles",
+      "tiles": {
+        "status": "playing",
+        "turn": 0,
+        "turns": 0,
+        "table": [],
+        "poolCount": 78,
+        "rackCounts": [
+          14,
+          14
+        ],
+        "racks": {
+          "0": [
+            82,
+            45,
+            87,
+            23,
+            17,
+            29,
+            99,
+            50,
+            10,
+            61,
+            39,
+            68,
+            19,
+            44
+          ]
+        },
+        "opened": [
+          false,
+          false
+        ],
+        "passed": [
+          false,
+          false
+        ],
+        "winners": [],
+        "scores": [
+          0,
+          0
+        ],
+        "forfeited": [
+          false,
+          false
+        ]
+      },
+      "screen": true
+    }
+  },
+  "aim": {
+    "t": "aim",
+    "seat": 0,
+    "aim": {
+      "target": {
+        "seat": 1,
+        "group": 0
+      }
+    }
+  },
+  "tilesAim": {
+    "t": "aim",
+    "seat": 0,
+    "aim": {
+      "table": [
+        [
+          82,
+          45,
+          87
+        ]
+      ]
+    }
+  },
+  "aimClear": {
+    "t": "aim",
+    "seat": 0
+  }
+}
