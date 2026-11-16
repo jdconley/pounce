@@ -104,7 +104,7 @@ run_role() {  # <sim> <seats> <log> <result bundle> [orientation]
     TEST_RUNNER_POUNCE_LOG_TIMELINE="${LOG_TIMELINE:-0}" TEST_RUNNER_POUNCE_SPEED="$SPEED" \
     TEST_RUNNER_POUNCE_ORIENTATION="${5:-}" \
     exec xcodebuild test-without-building -project Pounce.xcodeproj -scheme Pounce -derivedDataPath "$DD" \
-    -destination "id=$1" -only-testing:PounceUITests/MultiSimTests/testMovedSeats \
+    -destination "id=$1" -only-testing:PounceUITests/MultiSimTests/testMovedSeats -collect-test-diagnostics never \
     -resultBundlePath "$4" >"$3" 2>&1
 }
 if [ "${LOG_TIMELINE:-0}" = 1 ]; then

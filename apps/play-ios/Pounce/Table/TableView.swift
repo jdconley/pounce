@@ -2,7 +2,8 @@ import SpriteKit
 import SwiftUI
 
 /// Hosts the table scene in one `SKView` (not `SpriteView`), so the director controls
-/// `isPaused` directly (spec §8). 60 fps cap, sibling order ignored, off-screen nodes culled.
+/// `isPaused` directly (spec §8). The screen's top frame rate (120 on ProMotion), sibling order
+/// ignored, off-screen nodes culled.
 struct TableView: UIViewRepresentable {
     let scene: TableScene
     /// The pass-and-play curtain is over the table: no touches reach the scene and VoiceOver
@@ -11,7 +12,7 @@ struct TableView: UIViewRepresentable {
 
     func makeUIView(context: Context) -> TableSKView {
         let view = TableSKView(frame: .zero)
-        view.preferredFramesPerSecond = 60
+        view.runAtTopFrameRate()
         view.ignoresSiblingOrder = true
         view.shouldCullNonVisibleNodes = true
         view.isMultipleTouchEnabled = false
@@ -78,9 +79,38 @@ extension TableView {
     }
 }
 
+extension UIScreen {
+    /// The most frames a second `window`'s screen shows (120 on ProMotion), or before there is a
+    /// window, the app's first screen's; 60 if there is no screen yet.
+    static func topFrameRate(for window: UIWindow?) -> Int {
+        let screen = window?.windowScene?.screen
+            ?? UIApplication.shared.connectedScenes.lazy.compactMap { ($0 as? UIWindowScene)?.screen }.first
+        return screen?.maximumFramesPerSecond ?? 60
+    }
+}
+
+extension SKView {
+    /// Asks for the most frames a second the view's screen shows: 120 on ProMotion (the
+    /// Info.plist's `CADisableMinimumFrameDurationOnPhone` lets an iPhone go over 60), else 60.
+    /// Called again when the view moves to a window, whose screen is the one that counts. While
+    /// the table is idle the director pauses the view, so it draws nothing at all.
+    func runAtTopFrameRate() {
+        let top = UIScreen.topFrameRate(for: window)
+        if preferredFramesPerSecond != top { preferredFramesPerSecond = top }
+    }
+}
+
 /// Forwards safe-area changes to the scene and exposes the scene's accessibility elements.
 final class TableSKView: SKView {
     private var tableScene: TableScene? { scene as? TableScene }
+
+    override func didMoveToWindow() {
+        super.didMoveToWindow()
+        runAtTopFrameRate()
+        #if DEBUG
+        MainThreadWatchdog.shared?.watch(self)
+        #endif
+    }
 
     override func safeAreaInsetsDidChange() {
         super.safeAreaInsetsDidChange()
@@ -102,7 +132,12 @@ final class TableSKView: SKView {
 
     override var accessibilityElements: [Any]? {
         // Under the curtain the table has no elements at all, not just hidden ones.
-        get { accessibilityElementsHidden ? [] : tableScene?.accessibilityElements(in: self) }
+        get {
+            #if DEBUG
+            MainThreadWatchdog.shared?.noteQuery()
+            #endif
+            return accessibilityElementsHidden ? [] : tableScene?.accessibilityElements(in: self)
+        }
         set {}
     }
 }

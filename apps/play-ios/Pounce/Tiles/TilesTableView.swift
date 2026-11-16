@@ -2,15 +2,15 @@ import PounceKit
 import SpriteKit
 import SwiftUI
 
-/// Hosts the tile game's scene in one `SKView`, like `TableView` does Cat Tower's: 60 fps cap,
-/// the director controls `isPaused`. It adds the rug's pinch and double tap (tile game spec
+/// Hosts the tile game's scene in one `SKView`, like `TableView` does Cat Tower's: the screen's
+/// top frame rate, the director controls `isPaused`. It adds the rug's pinch and double tap (tile game spec
 /// §5.7) and the swipe home from the left edge.
 struct TilesTableView: UIViewRepresentable {
     let scene: TilesScene
 
     func makeUIView(context: Context) -> TilesSKView {
         let view = TilesSKView(frame: .zero)
-        view.preferredFramesPerSecond = 60
+        view.runAtTopFrameRate()
         view.ignoresSiblingOrder = true
         view.shouldCullNonVisibleNodes = true
         view.isMultipleTouchEnabled = false
@@ -88,6 +88,14 @@ struct TilesTableView: UIViewRepresentable {
 final class TilesSKView: SKView {
     private var tilesScene: TilesScene? { scene as? TilesScene }
 
+    override func didMoveToWindow() {
+        super.didMoveToWindow()
+        runAtTopFrameRate()
+        #if DEBUG
+        MainThreadWatchdog.shared?.watch(self)
+        #endif
+    }
+
     override func safeAreaInsetsDidChange() {
         super.safeAreaInsetsDidChange()
         tilesScene?.safeInsets = safeAreaInsets
@@ -106,7 +114,12 @@ final class TilesSKView: SKView {
     }
 
     override var accessibilityElements: [Any]? {
-        get { tilesScene?.accessibilityElements(in: self) }
+        get {
+            #if DEBUG
+            MainThreadWatchdog.shared?.noteQuery()
+            #endif
+            return tilesScene?.accessibilityElements(in: self)
+        }
         set {}
     }
 }
