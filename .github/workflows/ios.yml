@@ -50,6 +50,17 @@ jobs:
       - run: xcodebuild -version
       # The main thread draws, nothing else (docs/main-thread.md): no blocking call outside
       # PounceKit's IO layer. The checker checks itself against planted violations first.
+      # How busy the runner is, against FrameRateTests' line for trusting a simulator's frame
+      # times (a 1-minute load average over half the cores). The UI tests don't run in CI; this
+      # says whether they could get trustworthy frame times here.
+      - name: Runner load
+        working-directory: .
+        run: |
+          read -r one five fifteen <<<"$(sysctl -n vm.loadavg | tr -d '{}')"
+          cores=$(sysctl -n hw.ncpu)
+          per=$(echo "$one $cores" | awk '{ printf "%.2f", $1 / $2 }')
+          verdict=$(echo "$per" | awk '{ print ($1 > 0.5) ? "over" : "under" }')
+          echo "::notice title=Runner load::1-minute load $one on $cores cores: $per per core, $verdict the 0.5 FrameRateTests threshold"
       - name: Main-thread check
         run: |
           swift scripts/main-thread-lint.swift --self-test
@@ -60,6 +71,15 @@ jobs:
         run: >
           xcodebuild build -project Pounce.xcodeproj -scheme Pounce -configuration Release
           -destination generic/platform=iOS CODE_SIGNING_ALLOWED=NO -quiet
+      - name: Runner load after building
+        if: always()
+        working-directory: .
+        run: |
+          read -r one five fifteen <<<"$(sysctl -n vm.loadavg | tr -d '{}')"
+          cores=$(sysctl -n hw.ncpu)
+          per=$(echo "$one $cores" | awk '{ printf "%.2f", $1 / $2 }')
+          verdict=$(echo "$per" | awk '{ print ($1 > 0.5) ? "over" : "under" }')
+          echo "::notice title=Runner load after building::1-minute load $one on $cores cores: $per per core, $verdict the 0.5 FrameRateTests threshold"
 
   testflight:
     needs: build

@@ -341,9 +341,10 @@ when nothing moves. The UI suite checks that the main thread only draws:
   busiest table (`-demo tiles-late`) play themselves for 20 s each (`POUNCE_FRAMES_SECONDS`) and
   prints a `FRAMES` line per table. It fails if the table doesn't ask for the screen's top rate,
   any frame holds over 8.3 ms of the app's own work, the main thread hangs, or any frame takes over
-  16.7 ms, and prints every slow or over-budget frame with the app's share. While the Mac's load is
-  over half its cores, frame and work times are reported, not enforced (frames slip with none of
-  the app's work in them, and its main thread lands on efficiency cores); so are `GameplayGate`'s.
+  16.7 ms, and prints every slow or over-budget frame with the app's share. The app's work is CPU
+  time and always enforced. Only on a simulator whose Mac's load is over half its cores are frames
+  over 16.7 ms reported instead of enforced (they slip there with none of the app's work in them);
+  on a phone everything is enforced.
   `scripts/frame-rate.sh <device>` runs it on a simulator (by UDID) or a plugged-in iPhone, and
   prints the lines: simulators run at 60 Hz whatever the device, so the 120 Hz numbers come from a
   ProMotion iPhone (Developer Mode on; it signs with the team's automatic signing; if signing
