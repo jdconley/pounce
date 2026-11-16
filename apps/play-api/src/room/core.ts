@@ -467,6 +467,8 @@ export class RoomCore<S = CatTowerState> {
   connect(deviceId: string, players: Record<string, string> = {}, role?: "screen"): Outbound[] {
     if (role === "screen") this.addScreen(deviceId);
     const wasShown = this.screenShown();
+    // A screen speaks for nobody: a seat's player in its map would hand it that seat's hand.
+    const speaksFor = this.isScreen(deviceId) ? {} : players;
     // Everyone else hears about the seat holder waking up; the connecting
     // device gets a snapshot that already includes those events' seq.
     const events = this.presenceChange(
@@ -476,7 +478,7 @@ export class RoomCore<S = CatTowerState> {
           presence: "awake",
           since: this.now(),
           connected: true,
-          ...(Object.keys(players).length > 0 ? { players } : {}),
+          ...(Object.keys(speaksFor).length > 0 ? { players: speaksFor } : {}),
         };
       },
       deviceId,
@@ -485,13 +487,14 @@ export class RoomCore<S = CatTowerState> {
     // Back at the table in the app: its live table goes (§11.3).
     this.endLive(deviceId, "back");
     if (this.isScreen(deviceId)) {
+      // Always: a mark left past the grace would keep an overdue alarm.
+      delete this.state.screenLeftAt;
       // Not `touch`: a TV looking in doesn't keep the table from closing.
-      if (!wasShown) {
+      // Back within the grace, the phones were never told it went.
+      if (!wasShown && this.features.tv) {
         this.state.seq += 1;
         return [...events, ...this.linkCheck(deviceId), ...this.snapshots()];
       }
-      // Back within the grace: the phones were never told it went.
-      delete this.state.screenLeftAt;
     }
     return [...events, ...this.linkCheck(deviceId), { to: deviceId, message: this.snapshotFor(deviceId) }];
   }

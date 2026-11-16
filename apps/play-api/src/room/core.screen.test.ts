@@ -168,6 +168,36 @@ describe("a screen", () => {
     expect(room.state.screenLeftAt).toBe(left);
   });
 
+  it("back after the grace but before the tick leaves no overdue alarm", () => {
+    const room = build();
+    phones(room);
+    room.connect("tv", {}, "screen");
+    room.disconnect("tv");
+    clock += SCREEN_GRACE_MS;
+    const out = room.connect("tv");
+    expect(snapshotsTo(out).sort()).toEqual(["a", "b", "tv"]);
+    expect(room.state.screenLeftAt).toBeUndefined();
+    expect(room.nextAlarm()).toBeGreaterThan(clock);
+    expect(room.tick()).toEqual([]);
+  });
+
+  it("speaks for nobody, whatever players it sends", () => {
+    const room = build();
+    const p1 = person(1).id;
+    room.connect("a", { [p1]: "p_A" });
+    room.handle("a", { t: "claim", seat: 0, person: person(1) });
+    room.connect("b");
+    room.handle("b", { t: "claim", seat: 1, person: person(2) });
+    room.handle("a", { t: "start" });
+    for (const role of ["screen" as const, undefined]) {
+      const out = room.connect("tv", { [p1]: "p_A" }, role);
+      expect(room.controlledSeats("tv")).toEqual([]);
+      const snap = snapshotOf(out, "tv");
+      expect(snap.room.game?.hands).toEqual({});
+      expect(snap.room.seats.some((s) => s.yours)).toBe(false);
+    }
+  });
+
   it("the grace shrinks with the dev speed", () => {
     const state = RoomCore.create("BCDFG", "host", clock);
     const room = new RoomCore(state, () => clock, rng, undefined, 10, { streaks: true, tv: true });
@@ -268,8 +298,10 @@ describe("without the TV feature", () => {
   it("nothing says screen", () => {
     const room = build(false);
     phones(room);
+    const seq = room.state.seq;
     const out = room.connect("tv", {}, "screen");
+    expect(snapshotsTo(out)).toEqual(["tv"]);
     expect(snapshotOf(out, "tv").room).not.toHaveProperty("screen");
-    expect(snapshotOf(out, "a").room).not.toHaveProperty("screen");
+    expect(room.state.seq).toBe(seq);
   });
 });
