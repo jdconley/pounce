@@ -36,7 +36,7 @@ enum TilePieceStyle: String {
 final class TilePieceFactory {
     static let shared = TilePieceFactory()
 
-    enum Size: Hashable {
+    enum Size: Hashable, Sendable, CaseIterable {
         case large, small
 
         /// The point size a face is drawn at; sprites scale it to the layout's piece size.
@@ -48,7 +48,7 @@ final class TilePieceFactory {
         }
     }
 
-    private struct FaceKey: Hashable {
+    private struct FaceKey: Hashable, Sendable {
         let tile: TileID
         let size: Size
         /// What a Yarn stands for where it sits (nil on a rack, and for number pieces).
@@ -60,10 +60,16 @@ final class TilePieceFactory {
     private var faces: [FaceKey: SKTexture] = [:]
     private var misc: [String: SKTexture] = [:]
     var style = TilePieceStyle.current
+    private var warming: Task<Void, Never>?
+    /// Textures being drawn off the main thread, by key.
+    private var drawing: Set<String> = []
+
+    /// The scale textures are drawn at: the screen's, at least 2.
+    static var scale: CGFloat { max(UIScreen.main.scale, 2) }
 
     // MARK: colours
 
-    static func color(_ suit: TileSuit) -> UIColor {
+    nonisolated static func color(_ suit: TileSuit) -> UIColor {
         switch suit {
         case .fish: UIColor(Palette.teal)
         case .mouse: UIColor(Palette.violet)
@@ -73,7 +79,7 @@ final class TilePieceFactory {
     }
 
     /// The darker tone of a toy's colour: the token's side, its band and the flat style's foot.
-    static func shade(_ suit: TileSuit) -> UIColor {
+    nonisolated static func shade(_ suit: TileSuit) -> UIColor {
         switch suit {
         case .fish: UIColor(Color(hex: 0x008F8A))
         case .mouse: UIColor(Color(hex: 0x4E13C4))
@@ -83,7 +89,7 @@ final class TilePieceFactory {
     }
 
     /// The lighter tone at the top of the token's face.
-    static func light(_ suit: TileSuit) -> UIColor {
+    nonisolated static func light(_ suit: TileSuit) -> UIColor {
         switch suit {
         case .fish: UIColor(Color(hex: 0x4FF2E4))
         case .mouse: UIColor(Color(hex: 0x9D63FF))
@@ -93,7 +99,7 @@ final class TilePieceFactory {
     }
 
     /// A Yarn's ghost numeral: the toy's colour, dark enough to read on the white token (3.5:1 or more).
-    static func ghostColor(_ suit: TileSuit) -> UIColor {
+    nonisolated static func ghostColor(_ suit: TileSuit) -> UIColor {
         switch suit {
         case .fish: UIColor(Color(hex: 0x00807A))
         case .mouse: UIColor(Color(hex: 0x5A1FD6))
@@ -102,8 +108,8 @@ final class TilePieceFactory {
         }
     }
 
-    static let ink = UIColor(Palette.ink)
-    static let yarn = UIColor(Palette.magenta)
+    nonisolated static let ink = UIColor(Palette.ink)
+    nonisolated static let yarn = UIColor(Palette.magenta)
 
     // MARK: faces
 
@@ -116,12 +122,67 @@ final class TilePieceFactory {
             tile: canonical, size: size, ghostValue: isYarn ? standing?.value : nil,
             ghostSuit: isYarn ? standing?.suit : nil, style: style)
         if let cached = faces[key] { return cached }
-        let image = Self.render(size.canvas) { rect in
+        let image = drawTexture("tiles.texture.face", size.canvas) { rect in
             Self.drawFace(key, in: rect)
         }
         let texture = SKTexture(image: image)
         faces[key] = texture
         return texture
+    }
+
+    /// Draws every number piece's face at both sizes, and the plain Yarn, off the main thread
+    /// (`docs/main-thread.md`). The tile table waits for this before it draws its first frame
+    /// (`TilesStage`), so it never draws a face itself, and never waits on the font cache while
+    /// the faces are being drawn elsewhere. Once a launch; later calls return at once.
+    func prewarm() async {
+        if warming == nil {
+            var keys: [FaceKey] = []
+            for size in Size.allCases {
+                for suit in TileSuit.allCases {
+                    for value in 1...Tile.maxValue {
+                        keys.append(FaceKey(tile: Tile.id(value, suit), size: size, ghostValue: nil, ghostSuit: nil, style: style))
+                    }
+                }
+                keys.append(FaceKey(tile: Tile.yarnIDs[0], size: size, ghostValue: nil, ghostSuit: nil, style: style))
+            }
+            keys.removeAll { faces[$0] != nil }
+            let scale = Self.scale
+            warming = Task {
+                let made = await Self.drawFaces(keys, scale: scale)
+                for (key, texture) in made where faces[key] == nil { faces[key] = texture }
+            }
+        }
+        await warming?.value
+    }
+
+    @concurrent
+    private static func drawFaces(_ keys: [FaceKey], scale: CGFloat) async -> sending [(FaceKey, SKTexture)] {
+        let made = keys.map { key in
+            (key, SKTexture(image: render(key.size.canvas, scale: scale) { rect in drawFace(key, in: rect) }))
+        }
+        await SKTexture.preload(made.map(\.1))
+        return made
+    }
+
+    /// A Yarn's face showing what it stands for, if drawn already. Otherwise nil, and it is
+    /// drawn off the main thread and handed to `then` (there are 52 of them a size: too many to
+    /// draw ahead, and several can change in one move).
+    func yarnFaceIfReady(
+        _ tile: TileID, size: Size, standing: TileStanding, then: @escaping @MainActor (SKTexture) -> Void
+    ) -> SKTexture? {
+        let key = FaceKey(tile: Tile.yarnIDs[0], size: size, ghostValue: standing.value, ghostSuit: standing.suit, style: style)
+        if let cached = faces[key] { return cached }
+        let name = "face|\(key)"
+        guard drawing.insert(name).inserted else { return nil }
+        let scale = Self.scale
+        Task {
+            if let (_, texture) = await Self.drawFaces([key], scale: scale).first {
+                faces[key] = faces[key] ?? texture
+            }
+            drawing.remove(name)
+            if let texture = faces[key] { then(texture) }
+        }
+        return nil
     }
 
     /// A face as an image, for SwiftUI (the game over card, previews).
@@ -134,7 +195,7 @@ final class TilePieceFactory {
     func back(size: Size = .small) -> SKTexture {
         let key = "back|\(size)"
         if let cached = misc[key] { return cached }
-        let image = Self.render(size.canvas) { rect in
+        let image = drawTexture("tiles.texture.back", size.canvas) { rect in
             let face = Self.drawBody(in: rect, top: UIColor(Color(hex: 0x9D63FF)), base: UIColor(Palette.violet), side: UIColor(Color(hex: 0x4E13C4)))
             let side = face.width * 0.62
             UIImage(named: ArtName.iconPawMenu)?.draw(
@@ -145,9 +206,17 @@ final class TilePieceFactory {
         return texture
     }
 
-    private static func render(_ size: CGSize, _ draw: (CGRect) -> Void) -> UIImage {
+    /// Draws a texture's image on the main actor, timed (`FrameWork`): a texture the table hasn't
+    /// drawn before costs a frame its drawing.
+    private func drawTexture(_ name: StaticString, _ size: CGSize, _ draw: (CGRect) -> Void) -> UIImage {
+        let work = FrameWork(name); defer { work.end() }
+        return Self.render(size, scale: Self.scale, draw)
+    }
+
+    /// Draws one texture's image at `scale` (the screen's, at least 2). Safe off the main thread.
+    nonisolated private static func render(_ size: CGSize, scale: CGFloat, _ draw: (CGRect) -> Void) -> UIImage {
         let format = UIGraphicsImageRendererFormat.preferred()
-        format.scale = max(UIScreen.main.scale, 2)
+        format.scale = scale
         return UIGraphicsImageRenderer(size: size, format: format).image { _ in
             draw(CGRect(origin: .zero, size: size))
         }
@@ -156,7 +225,7 @@ final class TilePieceFactory {
     /// The token's body: an ink outline, a darker side showing along the bottom (so the piece
     /// has thickness), and the face on top, lit from above. Returns the face's rect.
     @discardableResult
-    private static func drawBody(in rect: CGRect, top: UIColor, base: UIColor, side: UIColor) -> CGRect {
+    nonisolated private static func drawBody(in rect: CGRect, top: UIColor, base: UIColor, side: UIColor) -> CGRect {
         let w = rect.width
         let line = max(w * 0.055, 1.6)
         let radius = w * 0.25
@@ -185,7 +254,7 @@ final class TilePieceFactory {
         return face
     }
 
-    private static func drawFace(_ key: FaceKey, in rect: CGRect) {
+    nonisolated private static func drawFace(_ key: FaceKey, in rect: CGRect) {
         guard case .number(let value, let suit)? = Tile.decode(key.tile) else {
             return drawYarn(key, in: rect)
         }
@@ -239,7 +308,7 @@ final class TilePieceFactory {
 
     /// Yarn: the magenta yarn ball from Cat Tower on a white token inside a magenta rim, so it
     /// never passes for a toy. In a set, a small ghost of the piece it stands for rides on top.
-    private static func drawYarn(_ key: FaceKey, in rect: CGRect) {
+    nonisolated private static func drawYarn(_ key: FaceKey, in rect: CGRect) {
         let w = rect.width
         let small = key.size == .small
         let face = drawBody(in: rect, top: .white, base: .white, side: UIColor(Color(hex: 0xC2187A)))
@@ -274,7 +343,7 @@ final class TilePieceFactory {
     }
 
     /// Each toy's texture, in its darker tone: scallop scales, dots, diagonal stripes, bands.
-    private static func drawBand(_ suit: TileSuit, in band: CGRect, small: Bool) {
+    nonisolated private static func drawBand(_ suit: TileSuit, in band: CGRect, small: Bool) {
         guard let ctx = UIGraphicsGetCurrentContext() else { return }
         ctx.saveGState()
         ctx.clip(to: band)
@@ -324,7 +393,7 @@ final class TilePieceFactory {
     }
 
     /// A toy as a flat shape, for the flat style, a Yarn's ghost and the "why not" badges.
-    static func silhouette(_ suit: TileSuit, in r: CGRect) -> UIBezierPath {
+    nonisolated static func silhouette(_ suit: TileSuit, in r: CGRect) -> UIBezierPath {
         func p(_ x: CGFloat, _ y: CGFloat) -> CGPoint { CGPoint(x: r.minX + r.width * x, y: r.minY + r.height * y) }
         let path = UIBezierPath()
         switch suit {
@@ -361,13 +430,13 @@ final class TilePieceFactory {
 
     // MARK: numerals
 
-    static func numeralFont(size: CGFloat) -> UIFont {
+    nonisolated static func numeralFont(size: CGFloat) -> UIFont {
         let base = UIFont.systemFont(ofSize: size, weight: .black)
         return base.fontDescriptor.withDesign(.rounded).map { UIFont(descriptor: $0, size: size) } ?? base
     }
 
     /// White in the app's ink outline, its cap height centred on `center`.
-    static func drawNumeral(
+    nonisolated static func drawNumeral(
         _ text: String, centeredAt center: CGPoint, size: CGFloat, outline: CGFloat, kern: CGFloat = 0, fill: UIColor = .white
     ) {
         let font = numeralFont(size: size)
@@ -386,7 +455,7 @@ final class TilePieceFactory {
         let font = Self.numeralFont(size: size)
         let measured = (text as NSString).size(withAttributes: [.font: font])
         let canvas = CGSize(width: ceil(measured.width + outline * 2 + 2), height: ceil(font.capHeight + outline * 2 + 4))
-        let image = Self.render(canvas) { rect in
+        let image = drawTexture("tiles.texture.label", canvas) { rect in
             Self.drawNumeral(text, centeredAt: CGPoint(x: rect.midX, y: rect.midY), size: size, outline: outline, fill: fill)
         }
         let texture = SKTexture(image: image)
@@ -396,7 +465,7 @@ final class TilePieceFactory {
 
     // MARK: set plates and badges
 
-    enum Plate: String {
+    enum Plate: String, CaseIterable {
         /// A set at rest: a soft dark bed that gathers its pieces.
         case plain
         /// Changed this turn and fine: a solid lime glow.
@@ -414,7 +483,7 @@ final class TilePieceFactory {
         let key = "plate|\(plate.rawValue)|\(tint?.description ?? "")"
         if let cached = misc[key] { return cached }
         let side: CGFloat = 36
-        let image = Self.render(CGSize(width: side, height: side)) { rect in
+        let image = drawTexture("tiles.texture.plate", CGSize(width: side, height: side)) { rect in
             let radius: CGFloat = 10
             switch plate {
             case .plain:
@@ -454,7 +523,7 @@ final class TilePieceFactory {
         let key = "panel"
         if let cached = misc[key] { return cached }
         let side: CGFloat = 36
-        let image = Self.render(CGSize(width: side, height: side)) { rect in
+        let image = drawTexture("tiles.texture.panel", CGSize(width: side, height: side)) { rect in
             Self.ink.setFill()
             UIBezierPath(roundedRect: rect, cornerRadius: 12).fill()
             UIColor(Palette.teal).setFill()
@@ -483,7 +552,7 @@ final class TilePieceFactory {
         let key = "badge|\(badge)"
         if let cached = misc[key] { return cached }
         let side: CGFloat = 26
-        let image = Self.render(CGSize(width: side, height: side)) { rect in
+        let image = drawTexture("tiles.texture.badge", CGSize(width: side, height: side)) { rect in
             let fill: UIColor
             switch badge {
             case .check: fill = UIColor(Palette.lime)
@@ -550,7 +619,7 @@ final class TilePieceFactory {
         let key = "button|\(symbol?.rawValue ?? "")|\(suit?.rawValue ?? "")|\(side)|\(on)|\(dim)"
         if let cached = misc[key] { return cached }
         let shadow: CGFloat = on ? 1 : 3
-        let image = Self.render(CGSize(width: side, height: side + 3)) { _ in
+        let image = drawTexture("tiles.texture.button", CGSize(width: side, height: side + 3)) { _ in
             let disc = CGRect(x: 0, y: 3 - shadow, width: side, height: side)
             Self.ink.withAlphaComponent(0.6).setFill()
             UIBezierPath(ovalIn: disc.offsetBy(dx: 0, dy: shadow)).fill()
@@ -577,8 +646,8 @@ final class TilePieceFactory {
         return texture
     }
 
-    private static func dimmed(_ image: UIImage) -> UIImage {
-        render(image.size) { rect in image.draw(in: rect, blendMode: .normal, alpha: 0.4) }
+    nonisolated private static func dimmed(_ image: UIImage) -> UIImage {
+        Self.render(image.size, scale: image.scale) { rect in image.draw(in: rect, blendMode: .normal, alpha: 0.4) }
     }
 
     enum Pill: String {
@@ -591,7 +660,7 @@ final class TilePieceFactory {
         let key = "pill|\(pill.rawValue)|\(size.width)x\(size.height)|\(pressed)"
         if let cached = misc[key] { return cached }
         let shadow: CGFloat = pressed ? 1 : 4
-        let image = Self.render(CGSize(width: size.width, height: size.height + 4)) { _ in
+        let image = drawTexture("tiles.texture.pill", CGSize(width: size.width, height: size.height + 4)) { _ in
             let body = CGRect(x: 0, y: 4 - shadow, width: size.width, height: size.height)
             let radius = size.height / 2
             Self.ink.withAlphaComponent(0.6).setFill()
@@ -630,7 +699,7 @@ final class TilePieceFactory {
         let step = (min(max(fraction, 0), 1) * 30).rounded()
         let key = "meter|\(size.width)x\(size.height)|\(step)|\(gold)"
         if let cached = misc[key] { return cached }
-        let image = Self.render(size) { rect in
+        let image = drawTexture("tiles.texture.meter", size) { rect in
             let radius = rect.height / 2
             UIColor.white.setFill()
             UIBezierPath(roundedRect: rect, cornerRadius: radius).fill()
@@ -661,23 +730,52 @@ final class TilePieceFactory {
     /// A dashed outline for a set that isn't one yet, or the "new row" slot: drawn per size,
     /// since a stretched dash would smear.
     func dashed(_ size: CGSize, color: UIColor, fill: UIColor = .clear) -> SKTexture {
-        let key = "dashed|\(Int(size.width))x\(Int(size.height))|\(color.description)|\(fill.description)"
+        let key = Self.dashedKey(size, color: color, fill: fill)
         if let cached = misc[key] { return cached }
-        let image = Self.render(size) { rect in
-            let path = UIBezierPath(roundedRect: rect.insetBy(dx: 2, dy: 2), cornerRadius: 9)
-            fill.setFill()
-            path.fill()
-            path.lineWidth = 4.5
-            Self.ink.setStroke()
-            path.setLineDash([7, 5], count: 2, phase: 0)
-            path.lineCapStyle = .round
-            path.stroke()
-            path.lineWidth = 2.5
-            color.setStroke()
-            path.stroke()
-        }
+        let image = drawTexture("tiles.texture.dashed", size) { rect in Self.drawDashed(in: rect, color: color, fill: fill) }
         let texture = SKTexture(image: image)
         misc[key] = texture
         return texture
+    }
+
+    /// The dashed outline if it is drawn already. Otherwise nil, and it is drawn off the main
+    /// thread (a big dashed path takes several milliseconds) and handed to `then` when done.
+    func dashedIfReady(
+        _ size: CGSize, color: UIColor, fill: UIColor = .clear, then: @escaping @MainActor (SKTexture) -> Void
+    ) -> SKTexture? {
+        let key = Self.dashedKey(size, color: color, fill: fill)
+        if let cached = misc[key] { return cached }
+        guard drawing.insert(key).inserted else { return nil }
+        let scale = Self.scale
+        Task {
+            let texture = await Self.renderDashed(size, color: color, fill: fill, scale: scale)
+            misc[key] = texture
+            drawing.remove(key)
+            then(texture)
+        }
+        return nil
+    }
+
+    nonisolated private static func dashedKey(_ size: CGSize, color: UIColor, fill: UIColor) -> String {
+        "dashed|\(Int(size.width))x\(Int(size.height))|\(color.description)|\(fill.description)"
+    }
+
+    @concurrent
+    private static func renderDashed(_ size: CGSize, color: UIColor, fill: UIColor, scale: CGFloat) async -> sending SKTexture {
+        SKTexture(image: render(size, scale: scale) { rect in drawDashed(in: rect, color: color, fill: fill) })
+    }
+
+    nonisolated private static func drawDashed(in rect: CGRect, color: UIColor, fill: UIColor) {
+        let path = UIBezierPath(roundedRect: rect.insetBy(dx: 2, dy: 2), cornerRadius: 9)
+        fill.setFill()
+        path.fill()
+        path.lineWidth = 4.5
+        ink.setStroke()
+        path.setLineDash([7, 5], count: 2, phase: 0)
+        path.lineCapStyle = .round
+        path.stroke()
+        path.lineWidth = 2.5
+        color.setStroke()
+        path.stroke()
     }
 }

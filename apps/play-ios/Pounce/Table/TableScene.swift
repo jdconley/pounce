@@ -74,6 +74,9 @@ final class TableScene: SKScene {
     /// The seat drawn at the bottom (hand, trays); others go in the opponents bar.
     private(set) var bottomSeat: Seat?
     private(set) var layout: TableLayout?
+    #if DEBUG
+    var autoplay: Autoplay?
+    #endif
     /// The selected hand card (tap-tap: select, then tap a target); drawn lifted above its
     /// neighbors. Cleared when it leaves the hand.
     var liftedCard: CardID? {
@@ -275,6 +278,7 @@ final class TableScene: SKScene {
         redraw()
         #if DEBUG
         if [.replay, .celebrate].contains(DemoMode.from()) { startFrameLog() }
+        if autoplay == nil { autoplay = Autoplay.start(self) }
         #endif
         speed = CGFloat(Pace.factor)
     }
@@ -299,6 +303,7 @@ final class TableScene: SKScene {
     }
 
     override func update(_ currentTime: TimeInterval) {
+        let work = FrameWork("table.update"); defer { work.end() }
         if input.source != .none { stepDrag() }
         #if DEBUG
         if input.dragging { dragPerf.frame(currentTime, drawn: input.dragNode?.position) }
@@ -317,6 +322,7 @@ final class TableScene: SKScene {
     /// to another seat hides the shown hand at once (backs, on the table as drawn). Only a new
     /// face-up reveal waits for the timeline.
     func reconcile(_ model: TableModel, revealed: Seat?, epoch: Int) {
+        let work = FrameWork("table.reconcile"); defer { work.end() }
         #if DEBUG
         timelineLog("reconcile turn \(model.currentSeat ?? -1) revealed \(String(describing: revealed)) epoch \(epoch)/\(store.turnEpoch) animating \(animating) lastSeq \(store.lastSeq) seen \(seenSeq) pending \(String(describing: pendingReveal))")
         #endif
@@ -564,6 +570,7 @@ final class TableScene: SKScene {
 
     /// Lays every node out for the current model, size and insets.
     private func redraw() {
+        let work = FrameWork("table.redraw"); defer { work.end() }
         defer {
             accessibilityVersion += 1
             director.wake()
@@ -808,23 +815,35 @@ final class TableScene: SKScene {
     // MARK: touches
 
     override func touchesBegan(_ touches: Set<UITouch>, with event: UIEvent?) {
-        dismissTurnCue()
-        Haptics.shared.prepare()
-        for touch in touches {
-            director.touchBegan()
-            inputBegan(touch.location(in: self))
-        }
+        for touch in touches { pressBegan(at: touch.location(in: self)) }
     }
 
     override func touchesMoved(_ touches: Set<UITouch>, with event: UIEvent?) {
-        for touch in touches { inputMoved(touch.location(in: self)) }
+        for touch in touches { pressMoved(to: touch.location(in: self)) }
     }
 
     override func touchesEnded(_ touches: Set<UITouch>, with event: UIEvent?) {
-        for touch in touches {
-            director.touchEnded()
-            inputEnded(touch.location(in: self))
-        }
+        for touch in touches { pressEnded(at: touch.location(in: self)) }
+    }
+
+    /// A finger went down at `point` (the touch handlers, and the DEBUG autoplay).
+    func pressBegan(at point: CGPoint) {
+        let work = FrameWork("table.touchBegan"); defer { work.end() }
+        dismissTurnCue()
+        Haptics.shared.prepare()
+        director.touchBegan()
+        inputBegan(point)
+    }
+
+    func pressMoved(to point: CGPoint) {
+        let work = FrameWork("table.touchMoved"); defer { work.end() }
+        inputMoved(point)
+    }
+
+    func pressEnded(at point: CGPoint) {
+        let work = FrameWork("table.touchEnded"); defer { work.end() }
+        director.touchEnded()
+        inputEnded(point)
     }
 
     override func touchesCancelled(_ touches: Set<UITouch>, with event: UIEvent?) {
@@ -872,6 +891,7 @@ final class TableScene: SKScene {
 
     /// The table's accessibility elements for `view`, rebuilt after each redraw.
     func accessibilityElements(in view: SKView) -> [UIAccessibilityElement] {
+        let work = FrameWork("table.accessibility", read: true); defer { work.end() }
         if let cache = accessibilityCache, cache.version == accessibilityVersion { return cache.elements }
         let elements = TableAccessibility.elements(accessibilityItems(), scene: self, view: view)
         accessibilityCache = (accessibilityVersion, elements)

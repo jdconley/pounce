@@ -59,12 +59,21 @@ final class CardFaceFactory {
     static let shared = CardFaceFactory()
 
     /// Card art is drawn at this point size (the manifest's `card-face`).
-    static let cardSize = CGSize(width: 64, height: 90)
+    nonisolated static let cardSize = CGSize(width: 64, height: 90)
 
-    private struct FaceKey: Hashable {
+    private struct FaceKey: Hashable, Sendable {
+        /// The first id of the card's kind: the two copies of a number look the same, as do the
+        /// Yarns and the Cucumbers, so they share a face.
         let card: CardID
         let compact: Bool
+
+        init(card: CardID, compact: Bool) {
+            self.card = card < 96 ? card / 24 * 24 + card % 12 : card < 104 ? 96 : 104
+            self.compact = compact
+        }
     }
+
+    private var warming: Task<Void, Never>?
 
     private var faces: [FaceKey: SKTexture] = [:]
     private var numerals: [String: SKTexture] = [:]
@@ -76,9 +85,40 @@ final class CardFaceFactory {
     func texture(for card: CardID, compact: Bool = false) -> SKTexture {
         let key = FaceKey(card: card, compact: compact)
         if let cached = faces[key] { return cached }
-        let t = SKTexture(image: Self.renderFace(card, compact: compact))
+        let work = FrameWork("table.texture.face"); defer { work.end() }
+        let t = SKTexture(image: Self.renderFace(card, compact: compact, detail: Self.detail))
         faces[key] = t
         return t
+    }
+
+    /// Draws every card face, full and compact, off the main thread (`docs/main-thread.md`), so
+    /// no frame of play (a reveal at game over, a card coming into the hand) stops to draw one.
+    /// Started as a table opens; once a launch.
+    func prewarm() async {
+        if warming == nil {
+            var keys: [FaceKey] = []
+            for compact in [false, true] {
+                for card in 0..<Card.deckSize {
+                    let key = FaceKey(card: card, compact: compact)
+                    if key.card == card, faces[key] == nil { keys.append(key) }
+                }
+            }
+            let detail = Self.detail
+            warming = Task {
+                let made = await Self.drawFaces(keys, detail: detail)
+                for (key, texture) in made where faces[key] == nil { faces[key] = texture }
+            }
+        }
+        await warming?.value
+    }
+
+    @concurrent
+    private static func drawFaces(_ keys: [FaceKey], detail: CGFloat) async -> sending [(FaceKey, SKTexture)] {
+        let made = keys.map { key in
+            (key, SKTexture(image: renderFace(key.card, compact: key.compact, detail: detail)))
+        }
+        await SKTexture.preload(made.map(\.1))
+        return made
     }
 
     /// The face is already drawn (`texture(for:compact:)` returns it at once).
@@ -116,7 +156,7 @@ final class CardFaceFactory {
 
     /// A card back's art in the card frame, for SwiftUI (the look tray).
     static func backImage(_ name: String) -> UIImage {
-        render(scale: 1) { inner in
+        render(scale: 1, detail: detail) { inner in
             UIImage(named: name)?.draw(in: inner.insetBy(dx: -1.5, dy: -1.5))
         }
     }
@@ -124,13 +164,13 @@ final class CardFaceFactory {
     /// A face with nothing on it (the discard pile's under-cards).
     func blank() -> SKTexture {
         if let blankTexture { return blankTexture }
-        let t = SKTexture(image: Self.render(scale: 1) { inner in Self.drawFace(in: inner) })
+        let t = SKTexture(image: Self.render(scale: 1, detail: Self.detail) { inner in Self.drawFace(in: inner) })
         blankTexture = t
         return t
     }
 
     /// The card back in its frame, for SwiftUI screens too.
-    static let backImage: UIImage = render(scale: 1) { inner in
+    static let backImage: UIImage = render(scale: 1, detail: detail) { inner in
         // A little larger than the hole so the art's own rim tucks under the ink.
         UIImage(named: ArtName.cardBack)?.draw(in: inner.insetBy(dx: -1.5, dy: -1.5))
     }
@@ -344,10 +384,10 @@ final class CardFaceFactory {
     // MARK: drawing
 
     /// White keyline, then the ink outline, then whatever `inside` draws, clipped to the hole.
-    private static let keyline: CGFloat = 2
-    private static let inkLine: CGFloat = 3
-    private static let corner: CGFloat = 10
-    private static let indexOutline: CGFloat = 3
+    nonisolated private static let keyline: CGFloat = 2
+    nonisolated private static let inkLine: CGFloat = 3
+    nonisolated private static let corner: CGFloat = 10
+    nonisolated private static let indexOutline: CGFloat = 3
 
     /// Where and how big the corner index is drawn (card points).
     private enum IndexStyle {
@@ -378,7 +418,7 @@ final class CardFaceFactory {
     }()
 
     /// Compact faces are only ever drawn small, so they render at three quarters the pixels.
-    private static func render(scale: CGFloat, _ inside: (CGRect) -> Void) -> UIImage {
+    nonisolated private static func render(scale: CGFloat, detail: CGFloat, _ inside: (CGRect) -> Void) -> UIImage {
         let format = UIGraphicsImageRendererFormat.preferred()
         format.scale *= scale * detail
         let bounds = CGRect(origin: .zero, size: cardSize)
@@ -396,7 +436,7 @@ final class CardFaceFactory {
     }
 
     /// Plain white where the numerals sit; a soft lilac toward the bottom for a little gloss.
-    private static func drawFace(in inner: CGRect) {
+    nonisolated private static func drawFace(in inner: CGRect) {
         UIColor.white.setFill()
         UIRectFill(inner)
         let colors = [UIColor.white.cgColor, UIColor(red: 0.93, green: 0.89, blue: 1, alpha: 1).cgColor] as CFArray
@@ -407,7 +447,7 @@ final class CardFaceFactory {
         }
     }
 
-    static func numeralColor(_ coat: Coat) -> UIColor {
+    nonisolated static func numeralColor(_ coat: Coat) -> UIColor {
         switch coat {
         case .tabby: UIColor(Palette.numeralTabby)
         case .tuxedo: UIColor(Palette.numeralTuxedo)
@@ -416,8 +456,8 @@ final class CardFaceFactory {
         }
     }
 
-    private static func renderFace(_ card: CardID, compact: Bool) -> UIImage {
-        render(scale: compact ? 0.75 : 1) { _ in
+    nonisolated private static func renderFace(_ card: CardID, compact: Bool, detail: CGFloat) -> UIImage {
+        render(scale: compact ? 0.75 : 1, detail: detail) { _ in
             drawFace(in: CGRect(origin: .zero, size: cardSize))
             switch Card(id: card) {
             case .yarn:
@@ -443,7 +483,7 @@ final class CardFaceFactory {
 
     /// Draws the corner index with its outlined cap top-left at the style's corner; returns
     /// the cap height.
-    private static func drawIndex(_ text: String, style: IndexStyle, fill: UIColor) -> CGFloat {
+    nonisolated private static func drawIndex(_ text: String, style: IndexStyle, fill: UIColor) -> CGFloat {
         let size = style.size(text)
         let font = numeralFont(size: size)
         let origin = CGPoint(
@@ -453,18 +493,18 @@ final class CardFaceFactory {
         return font.capHeight
     }
 
-    private static func numeralFont(size: CGFloat) -> UIFont {
+    nonisolated private static func numeralFont(size: CGFloat) -> UIFont {
         let base = UIFont.systemFont(ofSize: size, weight: .black)
         return base.fontDescriptor.withDesign(.rounded).map { UIFont(descriptor: $0, size: size) } ?? base
     }
 
-    private static func numeralAttributes(size: CGFloat) -> [NSAttributedString.Key: Any] {
+    nonisolated private static func numeralAttributes(size: CGFloat) -> [NSAttributedString.Key: Any] {
         [.font: numeralFont(size: size)]
     }
 
     /// Stroke first (centered on the glyph edge), then the fill on top, so the outline only
     /// grows outward and the numeral keeps its weight.
-    private static func drawOutlined(
+    nonisolated private static func drawOutlined(
         _ text: String, at origin: CGPoint, size: CGFloat, fill: UIColor, outline: CGFloat, kern: CGFloat = 0
     ) {
         var attrs = numeralAttributes(size: size)

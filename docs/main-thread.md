@@ -138,12 +138,19 @@ they are allowed for small settings. `synchronize()` is not.
 | Compiler: Swift 6 strict concurrency | The IO layer is actors and `@concurrent` functions, so it can never run on the main actor. | every build |
 | Runtime: Thread Performance Checker | Priority inversions and hang risks, reported as test failures. Its main-thread IO check stays off by default: iOS's own launch code (MobileGestalt, GraphicsServices) trips it in every test, with no app frame to blame. `POUNCE_TPC_IO=1 scripts/ui-tests.sh` turns it on to read the log; the app's own IO is the static check's job. | `apps/play-ios/Pounce.xctestplan`, the `Pounce` scheme's test plan |
 | Runtime: `MainThreadWatchdog` (Debug, `-watchdog`) | Every table frame and display-link frame over budget, and every main-thread stall over 100 ms (run loop observers, no lock or extra thread), during gameplay: a table on screen, from a second after it appears. Each hang is logged as `[watchdog] hang`. Its numbers are the `watchdog` accessibility element's value. | Debug builds; `Live.app()` and `Live.demo()` launch with it |
-| Tests: `GameplayGate` | Every UI test that reached a table fails on a gameplay hang over 100 ms, or when more than 5% of its table frames (and more than 10) take over 16.7 ms. | the UI test bundle's principal class, `scripts/ui-tests.sh` |
-| Tests: `FrameRateTests` | Cat Tower and Tuna Tiles played at normal speed: the table asks for the screen's top rate, p95 frame time within 1.5 frames, at most 2% of frames over 16.7 ms, no hang. Prints `FRAMES` lines. | `scripts/ui-tests.sh` |
+| Runtime: `FrameWork` (Debug) | The app's own work in each frame: redraws, reconciles, touches, textures, each timed in the main thread's CPU time (a busy Mac doesn't inflate it) and marked as a signpost (Instruments' Points of Interest). The watchdog adds up each frame's, and logs any frame over the budget, or any slow frame, with its pieces (`[frame] work …`, `[frame] slow …`). Accessibility rebuilds (`read: true`) are timed apart: VoiceOver and a test's query wait for them. | Debug builds |
+| Tests: `GameplayGate` | Every UI test that reached a table fails on a gameplay hang over 100 ms, or on any gameplay frame with over 8.3 ms of the app's own work (frames that held, or came within 0.25 s of, a read of the screen are reported apart: the test's accessibility runtime runs inside the app's work then). It doesn't gate frame times: a UI test's reads of the screen stall the app (each one snapshots the accessibility tree on the main thread) and cost frames the app doesn't. | the UI test bundle's principal class, `scripts/ui-tests.sh` |
+| Tests: `FrameRateTests` | Cat Tower, Tuna Tiles and Tuna Tiles' busiest table play themselves (DEBUG `-autoplay`: drags out and back through the same code a finger runs) for 20 s with nothing reading the screen. Fails when the table doesn't ask for the screen's top rate, any frame holds over 8.3 ms of the app's own work, the main thread hangs, or any frame takes over 16.7 ms. The last two are reported, not enforced, when the Mac's load is over half its cores: the simulator itself is held up then, and its main thread lands on efficiency cores. Prints a `FRAMES` line per table, and each slow or over-budget frame with the app's share. | `scripts/frame-rate.sh <device>` on a simulator or a plugged-in iPhone, and `scripts/ui-tests.sh` |
 
 **When the lint is wrong**, put the call in the IO layer. If it truly cannot move (a system API that
 has no async form, and is documented as fast), mark the line with `// main-thread-ok: <why>`. The
 lint counts these, and review should push back on every one.
+
+**Textures:** a table's textures are drawn before they are needed, never several in one frame:
+the tile faces off the main thread before the tile table first draws (`TilePieceFactory.prewarm`),
+the strip's, sets' and loupe's controls about one a frame once the table is up
+(`TilesScene.warmTextures`), and a size-dependent outline off the main thread while the last one
+stands in (`dashedIfReady`).
 
 **Frame rate:** the SpriteKit tables ask for their window's screen's maximum
 (`SKView.runAtTopFrameRate()`, `maximumFramesPerSecond`: 120 on ProMotion), again whenever the view
@@ -229,6 +236,6 @@ When the Android app starts, it starts with these in place:
 
 | Platform | Rule | Static check | Runtime gate | Top frame rate |
 | --- | --- | --- | --- | --- |
-| iOS | this doc | in CI, every existing violation fixed | in the UI tests (not CI: they need a simulator and a dev server) | asks for 120 on ProMotion; measured at 60 only (simulators report 60), a 120 Hz device run is still owed |
-| Web | this doc | to do in `apps/play-web` | to do in `apps/play-web` | rAF, by design |
+| iOS | this doc | in CI, every existing violation fixed | in the UI tests (not CI: they need a simulator and a dev server) | asks for 120 on ProMotion; simulators report 60, so the 120 Hz numbers come from `scripts/frame-rate.sh` on a ProMotion iPhone |
+| Web | this doc | in CI (`apps/play-web/eslint.main-thread.mjs`, through the root ESLint config): bans `localStorage` and `sessionStorage` outside `src/lib/kv.ts`, `document.cookie`, `XMLHttpRequest`, `alert`, `confirm`, `prompt`, `Atomics.wait` and `importScripts`; timers in screen and table code; hard-coded 60 Hz frame times; and importing the solver, bots or game engines on the rendering thread, whose search runs in a Web Worker (`src/workers/hint.worker.ts`) | in CI (`e2e/main-thread.spec.ts`, the `e2e-web` job): fails on any long task or Long Animation Frame over 50 ms, and on p95 per-frame main-thread work over 8.3 ms on a laptop or 16.7 ms on a phone profile with a 4x slower CPU | `requestAnimationFrame`, CSS and `element.animate`, timed in ms. Headless Chrome draws at 60 Hz, so the gate measures work per frame, not frames |
 | Android | this doc | when the app starts | when the app starts | when the app starts |

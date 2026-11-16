@@ -98,10 +98,18 @@ final class TilesScene: SKScene {
     var drawnSeq = -1
     var playChain: Task<Void, Never>?
     private var reportedOver = false
+    /// Whether the "new row" slot's outline was last asked for lit (a piece aimed at it).
+    var newSlotAimed = false
+    /// The strip size `warmTextures` last drew for, and its drawing.
+    var warmedFor: CGSize?
+    var warmup: Task<Void, Never>?
+    /// The last `fitRug` answer and what it was for.
+    var fitCache: (key: RugFitKey, flow: RugFlow)?
     var accessibilityVersion = 0
     var accessibilityCache: (version: Int, elements: [UIAccessibilityElement])?
     #if DEBUG
     var dragPerf = DragPerf()
+    var autoplay: Autoplay?
     /// Counts for the UI tests' probe (`tiles.debug`).
     var probe = (redraws: 0, sent: "-", refused: "-", perf: "-")
     #endif
@@ -245,6 +253,9 @@ final class TilesScene: SKScene {
     // MARK: lifecycle
 
     override func didMove(to view: SKView) {
+        #if DEBUG
+        if autoplay == nil { autoplay = Autoplay.start(self) }
+        #endif
         director.view = view
         safeInsets = view.safeAreaInsets
         redraw()
@@ -254,6 +265,7 @@ final class TilesScene: SKScene {
     override func willMove(from view: SKView) {
         saveDraft()
         director.cancelAll()
+        warmup?.cancel()
     }
 
     override func didChangeSize(_ oldSize: CGSize) {
@@ -262,6 +274,7 @@ final class TilesScene: SKScene {
     }
 
     override func update(_ currentTime: TimeInterval) {
+        let work = FrameWork("tiles.update"); defer { work.end() }
         stepInput(currentTime)
         // A set that isn't one yet breathes, so the view stays awake while one is on the rug.
         if breathing { director.wake() }
@@ -285,6 +298,7 @@ final class TilesScene: SKScene {
 
     /// Draws the store's room exactly, without animation: the snapshot is the truth.
     func reconcileFromStore() {
+        let work = FrameWork("tiles.reconcile"); defer { work.end() }
         guard let room = store.room, let model = TilesTableModel(room: room) else {
             self.model = nil
             draft = nil
@@ -423,6 +437,7 @@ final class TilesScene: SKScene {
     /// Lays everything out for the drawn state. `animated` slides pieces to their places;
     /// otherwise they snap.
     func redraw(animated: Bool = false) {
+        let work = FrameWork("tiles.redraw"); defer { work.end() }
         guard size.width > 0, size.height > 0 else { return }
         director.wake()
         accessibilityVersion += 1
@@ -441,6 +456,7 @@ final class TilesScene: SKScene {
         let seat = shownSeat
         let sets = currentSets()
         shown = sets
+        let placed = draft?.placedTiles ?? []
         let rackTiles: [TileID]
         if let seat, let order = orders[seat] {
             let rack = draft?.rack ?? model.rack(seat) ?? []
@@ -469,10 +485,7 @@ final class TilesScene: SKScene {
         rugSprite.yScale = layout.rugArt.height / rugBase.height
         rugMask.size = CGSize(width: layout.rugArt.width - 8, height: layout.rugArt.height - 8)
         rugMask.position = CGPoint(x: layout.rugArt.midX, y: layout.rugArt.midY)
-        let flow = RugFlow.fit(
-            lengths: sets.map(\.tiles.count), width: layout.rug.width, height: layout.rug.height,
-            maxPiece: layout.rugPieceMax, minPiece: layout.rugPieceMin,
-            zoom: zoom)
+        let flow = fitRug(lengths: sets.map(\.tiles.count), layout: layout, zoom: zoom)
         self.flow = flow
         scroll = min(max(scroll, 0), maxScroll)
         rugContent.position = CGPoint(x: layout.rug.minX, y: layout.rug.maxY + scroll)
@@ -529,7 +542,7 @@ final class TilesScene: SKScene {
                 node.isPrivate = false
                 node.show(size: flow.pieceSize, face: swell > 1.2 ? .large : small, standing: standings?[i])
                 node.zPosition = (swell > 1 ? 45 : 10) + CGFloat(i) * 0.01
-                node.setPlaced(draft?.isPlaced(tile) ?? false)
+                node.setPlaced(placed.contains(tile))
                 node.setRing(rings[tile] ?? (selection.contains(tile) ? .white : hintRing(tile)))
                 node.alpha = 1
                 settle(node, at: target, scale: selection.contains(tile) ? 1.12 : swell, animated: animated)
@@ -548,9 +561,21 @@ final class TilesScene: SKScene {
         if composing {
             let frame = flow.newSlot
             let aimed = input.target == .newSet
-            newSlot.texture = TilePieceFactory.shared.dashed(
-                frame.size, color: aimed ? UIColor(Palette.lime) : UIColor.white.withAlphaComponent(0.9),
-                fill: UIColor(Palette.ink).withAlphaComponent(0.2))
+            let color = aimed ? UIColor(Palette.lime) : UIColor.white.withAlphaComponent(0.9)
+            let fill = UIColor(Palette.ink).withAlphaComponent(0.2)
+            let factory = TilePieceFactory.shared
+            if newSlot.texture == nil {
+                // The table opening: drawn now, so the slot never shows empty.
+                newSlot.texture = factory.dashed(frame.size, color: color, fill: fill)
+            } else if let ready = factory.dashedIfReady(frame.size, color: color, fill: fill, then: { [weak self] texture in
+                // Still the slot that asked for it (no newer size or colour since).
+                guard let self, self.newSlot.size == frame.size, self.newSlotAimed == aimed else { return }
+                self.newSlot.texture = texture
+            }) {
+                newSlot.texture = ready
+            }
+            // A new size keeps the last outline, stretched, until its own is drawn (a frame or two).
+            newSlotAimed = aimed
             newSlot.size = frame.size
             newSlot.position = CGPoint(x: frame.midX, y: -frame.midY)
             let plus = TilePieceFactory.shared.label("+", size: min(frame.height * 0.6, 24), outline: 2)
@@ -611,6 +636,7 @@ final class TilesScene: SKScene {
         // `clearTable` hides it while there's no table yet; the table is here now.
         menuButton.isHidden = false
         publishProbe()
+        if controls { warmTextures(layout: layout) }
         publishTipSpots(firstSet: firstOpenSet.flatMap { layout.rug.contains(CGPoint(x: $0.midX, y: $0.midY)) ? $0 : nil })
     }
 
@@ -692,8 +718,7 @@ final class TilesScene: SKScene {
         let action = Effects.reduceMotion
             ? SKAction.move(to: target, duration: 0.01)
             : SKAction.move(to: target, duration: 0.2).eased(.easeOut)
-        let director = director
-        Task { await director.run(action, on: node) }
+        director.play(action, on: node)
     }
 
     private func settle(_ node: TilePieceNode, at target: CGPoint, scale: CGFloat, animated: Bool) {
@@ -714,9 +739,22 @@ final class TilesScene: SKScene {
         var actions: [SKAction] = []
         if moved { actions.append(SKAction.move(to: target, duration: reduce ? 0.01 : flight).eased(.easeOut)) }
         if scaled { actions.append(SKAction.scale(to: scale, duration: reduce ? 0.01 : 0.14).eased(.easeOut)) }
-        let director = director
-        let action = SKAction.group(actions)
-        Task { await director.run(action, on: node) }
+        // Nothing waits for a settle: started now, without a task per piece.
+        director.play(SKAction.group(actions), on: node)
+    }
+
+    /// The rug's flow for these set lengths, from the last redraw's when nothing it depends on
+    /// changed: `RugFlow.fit` lays the whole rug out at every size it tries, and a drag redraws
+    /// every time its aim moves.
+    func fitRug(lengths: [Int], layout: TilesLayout, zoom: CGFloat?) -> RugFlow {
+        let key = RugFitKey(
+            lengths: lengths, width: layout.rug.width, height: layout.rug.height,
+            maxPiece: layout.rugPieceMax, minPiece: layout.rugPieceMin, zoom: zoom)
+        if let fitCache, fitCache.key == key { return fitCache.flow }
+        let flow = RugFlow.fit(
+            lengths: lengths, width: key.width, height: key.height, maxPiece: key.maxPiece, minPiece: key.minPiece, zoom: zoom)
+        fitCache = (key, flow)
+        return flow
     }
 
     private func hintRing(_ tile: TileID) -> UIColor? {
@@ -782,6 +820,19 @@ final class TilesScene: SKScene {
         recapButton.position = CGPoint(x: layout.recap.midX, y: layout.recap.midY)
     }
 
+    /// The turn button's word.
+    static func turnText(_ button: TilesDraft.TurnButton?, sending: Bool) -> String {
+        switch button {
+        case .draw: String(localized: "Draw", comment: "Tile game turn button: take a piece from the toy box")
+        case .pass: String(localized: "Pass", comment: "Tile game turn button: the toy box is empty and nothing fits")
+        case .play, .blocked: String(localized: "Play", comment: "Tile game turn button: send the turn")
+        case nil:
+            sending
+                ? String(localized: "Sent", comment: "Tile game turn button while the turn is on its way")
+                : String(localized: "Wait", comment: "Tile game turn button when it is not this player's turn")
+        }
+    }
+
     /// The turn button as it stands: one of four things, always (tile game spec §5.5).
     var turnButton: TilesDraft.TurnButton? {
         sending ? nil : draft?.turnButton
@@ -817,32 +868,25 @@ final class TilesScene: SKScene {
 
         // The turn button.
         let pill: TilePieceFactory.Pill
-        let text: String
         let icon: SKTexture?
         switch turnButton {
         case .draw:
             pill = .draw
-            text = String(localized: "Draw", comment: "Tile game turn button: take a piece from the toy box")
             icon = TableArt.image(ArtName.Tiles.toyBox)
         case .pass:
             pill = .pass
-            text = String(localized: "Pass", comment: "Tile game turn button: the toy box is empty and nothing fits")
             icon = TableArt.image(ArtName.iconZzz)
         case .play:
             pill = .play
-            text = String(localized: "Play", comment: "Tile game turn button: send the turn")
             icon = TableArt.image(ArtName.iconPawMenu)
         case .blocked:
             pill = .blocked
-            text = String(localized: "Play", comment: "Tile game turn button: send the turn")
             icon = TableArt.image(ArtName.iconPawMenu)
         case nil:
             pill = .blocked
-            text = sending
-                ? String(localized: "Sent", comment: "Tile game turn button while the turn is on its way")
-                : String(localized: "Wait", comment: "Tile game turn button when it is not this player's turn")
             icon = sending ? TableArt.image(ArtName.Habit.iconHourglass) : TableArt.image(ArtName.iconZzz)
         }
+        let text = Self.turnText(turnButton, sending: sending)
         let size = layout.turn.size
         turnPill.texture = factory.pill(pill, size: size, pressed: input.pressed == .turn)
         turnPill.size = CGSize(width: size.width, height: size.height + 4)
@@ -924,6 +968,7 @@ final class TilesScene: SKScene {
             loupeFrame = .zero
             return
         }
+        let placed = draft?.placedTiles ?? []
         let tiles = shown[index].tiles.filter { !(input.isDragging && input.dragTiles.contains($0)) }
         let all = shown[index].tiles
         // The rug and the top bar dim; the stash and the strip stay lit, since pieces go there too.
@@ -990,7 +1035,7 @@ final class TilesScene: SKScene {
             node.isPrivate = false
             node.show(size: pieceSize, face: .large, standing: standings?[i])
             node.zPosition = lifted ? 6 : 2 + CGFloat(i) * 0.01
-            node.setPlaced(draft?.isPlaced(tile) ?? false)
+            node.setPlaced(placed.contains(tile))
             node.setRing(lifted ? .white : nil)
             node.alpha = 1
             settle(node, at: target, scale: lifted ? 1.08 : 1, animated: animated)
@@ -1051,4 +1096,14 @@ final class TilesScene: SKScene {
     }
 
     private func publishProbe() {}
+}
+
+/// What `RugFlow.fit` depends on (`TilesScene.fitRug`).
+struct RugFitKey: Equatable {
+    var lengths: [Int]
+    var width: CGFloat
+    var height: CGFloat
+    var maxPiece: CGFloat
+    var minPiece: CGFloat
+    var zoom: CGFloat?
 }

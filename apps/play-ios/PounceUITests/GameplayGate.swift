@@ -3,17 +3,21 @@ import XCTest
 /// The gameplay gate on every UI test (`docs/main-thread.md`): when a test ends, each app it
 /// launched through `Live` (`Live.app()`, `Live.demo(...)`) has its watchdog read, and the test
 /// fails if, while a table was on screen (from a second after it appeared), the main thread hung
-/// for over 100 ms, or the table dropped frames beyond `GameplayGate.slowShare`. Launch, the way
-/// into a table and the test's own accessibility reads don't count (the watchdog sets those apart).
+/// for over 100 ms, or any frame held more than 8.3 ms (a 120 Hz frame) of the app's own work:
+/// its `FrameWork` pieces (redraws, reconciles, touches, textures). Launch and the way into a
+/// table don't count, nor do frames that held, or came within 0.25 s of, a read of the screen:
+/// the accessibility runtime a UI test loads into the app runs inside the app's work then (a
+/// drag's redraw that takes 5 ms takes 12 to 16 ms in the frame a query lands in).
+///
+/// It doesn't gate the frame times themselves: a UI test's own reads of the screen stall the app
+/// (each one snapshots the accessibility tree on the main thread), and on the simulator they cost
+/// frames over 16.7 ms that the app doesn't. `FrameRateTests` gates frame times, on tables that
+/// play themselves with nothing reading the screen.
 ///
 /// The test bundle's principal class (`INFOPLIST_KEY_NSPrincipalClass` in `project.yml`), so it
 /// sees every test start.
 @objc(GameplayGate)
 final class GameplayGate: NSObject, XCTestObservation {
-    /// At most this share of the table's gameplay frames may be over 16.7 ms, beyond `slowFloor`.
-    nonisolated static let slowShare = 0.05
-    nonisolated static let slowFloor = 10
-
     nonisolated(unsafe) private static var current: XCTestCase?
     nonisolated(unsafe) private static var watched: Set<ObjectIdentifier> = []
 
@@ -58,7 +62,7 @@ final class GameplayGate: NSObject, XCTestObservation {
 
 @MainActor
 extension XCTestCase {
-    /// Fails the test on a gameplay hang or too many slow table frames (see `GameplayGate`).
+    /// Fails the test on a gameplay hang or a frame over the app's work budget (see `GameplayGate`).
     /// Nothing to check when the app isn't running or never reached a table.
     func checkGameplay(_ app: XCUIApplication) {
         guard app.state == .runningForeground, let dog = watchdog(app) else { return }
@@ -72,7 +76,12 @@ extension XCTestCase {
         // On a busy Mac (`POUNCE_UITEST_TIMEOUT_SCALE` over 1) a hang has to be that much longer.
         let hung = dog.hangs > 0 && dog.hangMaxMs > 100 * Live.scale
         XCTAssertFalse(hung, "the main thread hung during gameplay (\(dog.hangs) over 100 ms, worst \(Int(dog.hangMaxMs)) ms): \(report)")
-        let allowed = max(GameplayGate.slowFloor, Int(Double(dog.tableFrames.count) * GameplayGate.slowShare))
-        XCTAssertLessThanOrEqual(dog.tableFrames.slow, allowed, "the table dropped frames during gameplay (over 16.7 ms): \(report)")
+        // On an overloaded Mac the same work takes two to three times the CPU time (see `Host`).
+        let load = Host.loadPerCore()
+        if load > Host.busyLoadPerCore {
+            if dog.workOver > 0 { print("FRAMES gameplay: the host is busy (load \(String(format: "%.2f", load)) per core), so work times are reported, not enforced") }
+        } else {
+            XCTAssertEqual(dog.workOver, 0, "a gameplay frame held over 8.3 ms of the app's own work (worst \(String(format: "%.1f", dog.workMaxMs)) ms): \(report)")
+        }
     }
 }

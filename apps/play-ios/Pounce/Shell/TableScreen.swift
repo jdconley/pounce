@@ -665,6 +665,8 @@ private struct TableStage: View {
     }
 
     private func attach() {
+        // Every card face, drawn off the main thread now, so no frame of play draws one later.
+        Task { await CardFaceFactory.shared.prewarm() }
         let scene = self.scene ?? TableScene(store: session.store)
         // The callbacks hold `events` weakly and never this view: its `@State` owns the scene,
         // so capturing the view would keep the scene alive after leaving the table.

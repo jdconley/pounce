@@ -2,8 +2,8 @@ import XCTest
 
 /// The app's DEBUG `MainThreadWatchdog`, read from the tables' `watchdog` element (every test app
 /// runs with `-watchdog`, through `Live.arguments()`):
-/// `screen=<fps> table=<fps> tpc=<0|1> hangs=<n> hangmax=<ms> other=<n> othermax=<ms>
-/// | link <frames> | table <frames>`, each `<frames>` being
+/// `screen=<fps> table=<fps> tpc=<0|1> hangs=<n> hangmax=<ms> other=<n> othermax=<ms> work=<ms>
+/// workover=<n> readwork=<ms> readframe=<ms> | link <frames> | table <frames>`, each `<frames>` being
 /// `n=<count> frame=<ms> over=<n> slow=<n> max=<ms> ax=<n> h=<bucket>:<count>,…`.
 ///
 /// Counts are cumulative over gameplay (a table on screen for over a second), so a window is one
@@ -97,6 +97,16 @@ struct Watchdog {
     var hangMaxMs = 0.0
     var otherHangs = 0
     var otherMaxMs = 0.0
+    /// The most app work (the app's `FrameWork` pieces) in one gameplay frame so far, and the
+    /// frames whose app work went over the 120 Hz budget, 8.3 ms.
+    var workMaxMs = 0.0
+    var workOver = 0
+    /// The longest accessibility rebuild (what VoiceOver and a test's query wait for).
+    var readWorkMs = 0.0
+    /// The most app work in a frame that held, or came just after, a read of the screen (not
+    /// gated: the reader's accessibility runtime runs inside it).
+    var readFrameWorkMs = 0.0
+    static let workBudgetMs = 1000.0 / 120
     var link = Frames()
     var tableFrames = Frames()
 
@@ -115,6 +125,10 @@ struct Watchdog {
             case "hangmax": hangMaxMs = Double(pair[1]) ?? 0
             case "other": otherHangs = Int(pair[1]) ?? 0
             case "othermax": otherMaxMs = Double(pair[1]) ?? 0
+            case "work": workMaxMs = Double(pair[1]) ?? 0
+            case "workover": workOver = Int(pair[1]) ?? 0
+            case "readwork": readWorkMs = Double(pair[1]) ?? 0
+            case "readframe": readFrameWorkMs = Double(pair[1]) ?? 0
             default: break
             }
         }
@@ -135,6 +149,11 @@ struct Watchdog {
         out.hangMaxMs = out.hangs > 0 ? a.hangMaxMs : 0
         out.otherHangs = a.otherHangs - b.otherHangs
         out.otherMaxMs = out.otherHangs > 0 ? a.otherMaxMs : 0
+        // The worst frame's work is over all of gameplay (a maximum doesn't subtract).
+        out.workMaxMs = a.workMaxMs
+        out.workOver = a.workOver - b.workOver
+        out.readWorkMs = a.readWorkMs
+        out.readFrameWorkMs = a.readFrameWorkMs
         out.link = a.link - b.link
         out.tableFrames = a.tableFrames - b.tableFrames
         return out
@@ -142,8 +161,8 @@ struct Watchdog {
 
     /// The `FRAMES` line the frame-rate tests print.
     func report(_ name: String) -> String {
-        String(format: "FRAMES %@ screen=%dfps table=%dfps tpc=%d | table %@ | main %@ | hangs=%d (worst %.0fms) ax-or-outside-hangs=%d",
-               name, screen, table, checkerLoaded ? 1 : 0, tableFrames.line, link.line, hangs, hangMaxMs, otherHangs)
+        String(format: "FRAMES %@ screen=%dfps table=%dfps tpc=%d | table %@ | main %@ | app work worst %.1fms, over 8.3ms=%d, accessibility rebuild worst %.1fms, near a screen read worst %.1fms | hangs=%d (worst %.0fms) ax-or-outside-hangs=%d",
+               name, screen, table, checkerLoaded ? 1 : 0, tableFrames.line, link.line, workMaxMs, workOver, readWorkMs, readFrameWorkMs, hangs, hangMaxMs, otherHangs)
     }
 }
 
@@ -169,5 +188,29 @@ extension XCTestCase {
             return Watchdog("screen=0 table=0 | link n=0 | table n=0")!
         }
         return reading
+    }
+}
+
+/// The machine the app runs on: the Mac under a simulator (which shares its kernel), or the phone.
+enum Host {
+    /// Over this many runnable threads per core (the 1-minute load average), the simulator's own
+    /// frames are held up by the rest of the Mac, and its main thread runs on efficiency cores:
+    /// frame and work times are reported, not enforced.
+    static let busyLoadPerCore = 0.5
+
+    static func loadPerCore() -> Double {
+        var loads = [Double](repeating: 0, count: 3)
+        guard getloadavg(&loads, 3) > 0 else { return 0 }
+        return loads[0] / Double(cores())
+    }
+
+    /// The machine's CPUs (`hw.ncpu`): in a simulator `ProcessInfo.activeProcessorCount` can say 1.
+    static func cores() -> Int {
+        var count: Int32 = 0
+        var size = MemoryLayout<Int32>.size
+        guard sysctlbyname("hw.ncpu", &count, &size, nil, 0) == 0, count > 0 else {
+            return max(ProcessInfo.processInfo.activeProcessorCount, 1)
+        }
+        return Int(count)
     }
 }
