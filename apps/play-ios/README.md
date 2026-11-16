@@ -338,8 +338,8 @@ when nothing moves. The UI suite checks that the main thread only draws:
   0.25 s of, the test's own read of the screen: the accessibility runtime runs inside the app's
   work then). It doesn't gate frame times: a UI test's queries
   snapshot the accessibility tree on the main thread and cost the app frames (on the simulator, 19
-  to 22 frames over 16.7 ms in 15 s of querying twice a second, against none without). With
-  `POUNCE_UITEST_TIMEOUT_SCALE` over 1 (a busy Mac) only a hang that many times 100 ms fails.
+  to 22 frames over 16.7 ms in 15 s of querying twice a second, against none without). `POUNCE_UITEST_TIMEOUT_SCALE`
+  lengthens the tests' waits only, never these budgets.
 - **`FrameRateTests`** lets Cat Tower (`-demo hit`), Tuna Tiles (`-demo tiles`) and Tuna Tiles'
   busiest table (`-demo tiles-late`) play themselves for 20 s each (`POUNCE_FRAMES_SECONDS`) and
   prints a `FRAMES` line per table. It fails if the table doesn't ask for the screen's top rate,

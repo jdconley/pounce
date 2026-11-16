@@ -136,6 +136,9 @@ jobs:
       - name: Frame and main-thread gates
         env:
           TEST_RUNNER_POUNCE_FRAMES_SECONDS: "12"
+          # Waits only (a runner's first launch can take over 20 s to show a table); the time
+          # budgets fit the machine on their own.
+          TEST_RUNNER_POUNCE_UITEST_TIMEOUT_SCALE: "3"
         run: |
           set -o pipefail
           xcodebuild test-without-building -project Pounce.xcodeproj -scheme Pounce \
