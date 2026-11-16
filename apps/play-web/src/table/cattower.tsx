@@ -147,7 +147,7 @@ export function CatTowerTable(props: { store: RoomStore; state: RoomState }) {
   }, [state.pending]);
 
   // The discard's card underneath stays a moment while the new one lands on it: its own CSS
-  // animation (`.under.leaving`) times that, and its end lets it go.
+  // animation (`.discard-under.leaving`) times that, and its end lets it go.
   const prevTop = useRef<CardId | null>(g.discardTop);
   useEffect(() => {
     if (prevTop.current === g.discardTop) return;
@@ -544,6 +544,18 @@ export function CatTowerTable(props: { store: RoomStore; state: RoomState }) {
         <span class="deck-card" />
         <span class="pile-count">{g.deckCount}</span>
       </button>
+      {/* The card underneath the top one: art beside the pile, not inside it, so the pile's name is
+          only ever its top card (the old top shows here while the new one lands). */}
+      {under !== null || g.discardCount > 1 ? (
+        <div
+          class={`discard-under ${under !== null ? "leaving" : ""}`}
+          style={{ transform: transformOf(L.discard) }}
+          aria-hidden="true"
+          onAnimationEnd={() => setUnder(null)}
+        >
+          {under !== null ? <CardFace id={under} /> : <div class="face blank" />}
+        </div>
+      ) : null}
       <button
         type="button"
         id="discard"
@@ -552,11 +564,6 @@ export function CatTowerTable(props: { store: RoomStore; state: RoomState }) {
         aria-label={g.discardTop === null ? "Discard pile, empty" : `Discard pile: ${cardLabel(g.discardTop)}. ${canDrawDiscard ? "Take it" : selected !== null ? "Discard here" : ""}`}
         onClick={() => (selected !== null ? tapTarget({ kind: "discard" }) : draw("discard"))}
       >
-        {under !== null || g.discardCount > 1 ? (
-          <span class={`under ${under !== null ? "leaving" : ""}`} aria-hidden="true" onAnimationEnd={() => setUnder(null)}>
-            {under !== null ? <CardFace id={under} /> : <div class="face blank" />}
-          </span>
-        ) : null}
       </button>
 
       {showTrays

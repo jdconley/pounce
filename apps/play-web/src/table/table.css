@@ -249,13 +249,15 @@
   outline: 4px solid var(--yellow);
 }
 
-.discard .under {
-  position: absolute;
-  inset: 0;
+/* Drawn beside the pile button, at its pose, so the button's name is only its top card. */
+.discard-under {
+  width: var(--cw);
+  height: var(--ch);
+  pointer-events: none;
 }
 
 /* The old top card lasts as long as the new one takes to land, then goes (cattower.tsx). */
-.discard .under.leaving {
+.discard-under.leaving {
   animation: under-stays 420ms linear;
 }
 
@@ -400,7 +402,10 @@
   background: var(--refuse);
 }
 
+/* Written before the ring, so a seat's name is read first; drawn under it, over its edge. */
 .seat-avatar .name-tag {
+  order: 1;
+  z-index: 1;
   max-width: calc(var(--avatar, 64px) * 2.2);
   margin-top: -8px;
   position: relative;
