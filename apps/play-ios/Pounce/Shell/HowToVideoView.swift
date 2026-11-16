@@ -21,8 +21,6 @@ struct HowToVideoView: View {
     private var video: URL? { game.howTo.flatMap { Bundle.main.url(forResource: $0, withExtension: "mp4") } }
     /// The poster, read and decoded off the main thread when the view appears.
     @State private var poster: UIImage?
-    // Planted to show CI catching it; reverted in the next commit.
-    private var planted: Data? { try? Data(contentsOf: URL(fileURLWithPath: "/planted")) }
 
     @concurrent
     private static func loadPoster(_ name: String) async -> UIImage? {
