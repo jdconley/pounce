@@ -105,9 +105,29 @@ describe("aim", () => {
       expect(aimsTo(room.handle("a", { t: "aim", seat: 0, aim: at }))).toHaveLength(2);
     }
     expect(room.handle("a", { t: "aim", seat: 0, aim: at })).toEqual([]);
-    expect(room.handle("a", { t: "aim", seat: 0 })).toEqual([]);
     clock += 1001;
     expect(aimsTo(room.handle("a", { t: "aim", seat: 0, aim: at }))).toHaveLength(2);
+  });
+
+  it("relays one clear over the limit, to undo the last aim, and no more", () => {
+    const room = table();
+    for (let i = 0; i < AIM_PER_SECOND; i++) room.handle("a", { t: "aim", seat: 0, aim: at });
+    expect(aimsTo(room.handle("a", { t: "aim", seat: 0 })).map((o) => o.to)).toEqual(["b", "tv"]);
+    expect(room.handle("a", { t: "aim", seat: 0 })).toEqual([]);
+    expect(room.handle("a", { t: "aim", seat: 0, aim: at })).toEqual([]);
+  });
+
+  it("drops a clear over the limit when the last thing relayed was a clear", () => {
+    const room = table();
+    for (let i = 0; i < AIM_PER_SECOND - 1; i++) room.handle("a", { t: "aim", seat: 0, aim: at });
+    room.handle("a", { t: "aim", seat: 0 });
+    expect(room.handle("a", { t: "aim", seat: 0 })).toEqual([]);
+  });
+
+  it("answers a screen's aim with not_allowed", () => {
+    const room = table();
+    const out = room.handle("tv", { t: "aim", seat: 0, aim: at });
+    expect(out).toEqual([{ to: "tv", message: { t: "error", code: "not_allowed" } }]);
   });
 
   it("drops an aim between rounds and in the lobby", () => {

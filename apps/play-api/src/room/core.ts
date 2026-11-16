@@ -331,6 +331,8 @@ export class RoomCore<S = CatTowerState> {
   private readonly link = new LinkTracker();
   /** When each device's recent aims were sent (not persisted: aim is not state). */
   private readonly aimTimes = new Map<string, number[]>();
+  /** Per device and seat (not persisted): the last aim message relayed was an aim, not a clear. */
+  private readonly lastWasAim = new Map<string, boolean>();
 
   /** `game`: left out, the module `state.game` names; tests pass a stand-in. */
   constructor(
@@ -1064,11 +1066,15 @@ export class RoomCore<S = CatTowerState> {
     if (aim !== undefined && !this.game.aimAllowed(game, seat, aim)) return [];
     const now = this.now();
     const recent = (this.aimTimes.get(deviceId) ?? []).filter((at) => at > now - AIM_WINDOW_MS);
+    const key = `${deviceId}/${seat}`;
     if (recent.length >= AIM_PER_SECOND) {
       this.aimTimes.set(deviceId, recent);
-      return [];
+      // A clear is never left stuck: one over the limit still goes, but only to undo an aim.
+      if (aim !== undefined || this.lastWasAim.get(key) !== true) return [];
+    } else {
+      this.aimTimes.set(deviceId, [...recent, now]);
     }
-    this.aimTimes.set(deviceId, [...recent, now]);
+    this.lastWasAim.set(key, aim !== undefined);
     const message: ServerMessage = aim === undefined ? { t: "aim", seat } : { t: "aim", seat, aim };
     return Object.entries(this.state.devices)
       .filter(([id, device]) => device.connected && id !== deviceId)
