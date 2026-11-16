@@ -1,8 +1,14 @@
 import { expect, type Browser, type BrowserContext, type Page } from "@playwright/test";
 
+let addresses = 0;
+const nextAddress = () => `10.${(process.pid % 200) + 1}.${Math.floor(++addresses / 250)}.${(addresses % 250) + 1}`;
+
 /** A new player in a fresh browser profile: the age check and a name, then Home. */
 export async function newPlayer(browser: Browser, name: string, opts: { path?: string; year?: string; context?: Parameters<Browser["newContext"]>[0] } = {}) {
-  const context = await browser.newContext(opts.context);
+  // Each player comes from an address of its own, as family members' phones do: a full run signs
+  // up more devices than the server's per-address limit allows from one (10 a minute). Only
+  // wrangler dev believes this header; Cloudflare sets it itself in production.
+  const context = await browser.newContext({ ...opts.context, extraHTTPHeaders: { "cf-connecting-ip": nextAddress() } });
   const page = await context.newPage();
   page.on("pageerror", (e) => console.log(name, "pageerror", e.message));
   if (process.env.E2E_DEBUG) {

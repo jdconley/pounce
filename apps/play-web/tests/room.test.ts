@@ -118,11 +118,54 @@ describe("the room store (RoomStore.swift)", () => {
     sockets[0]!.receive({ t: "snapshot", protocol: 1, seq: 3, room: room({ link: { ping: 3000, acks: [id] } }) });
     expect(store.state.pending).not.toBeNull();
     expect(store.act(0, { type: "discard", card: 2 })).toBe(false);
-    // Our own move settles quickly; the turn event that follows keeps its short pause.
-    clock.advance(80);
+    // Our own discard shows quickly (80 ms); the move settles when its answer's last event (the
+    // turn passing) is shown, not before.
+    clock.advance(79);
     expect(store.state.pending).not.toBeNull();
-    clock.advance(120);
+    clock.advance(1);
     expect(store.state.pending).toBeNull();
+  });
+
+  test("once the server has applied our move, a tap the table shows as live counts, even with events still playing", async () => {
+    const { clock, sockets, store } = setup();
+    store.start();
+    await flush();
+    sockets[0]!.open();
+    const linked = (acks: string[], over: Partial<RoomView> = {}) => room({ link: { ping: 3000, acks }, ...over });
+    sockets[0]!.receive({ t: "snapshot", protocol: 1, seq: 1, room: linked([], { game: { ...game, turn: 0, step: "play" } }) });
+    expect(store.act(0, { type: "discard", card: 1 })).toBe(true);
+    const id = store.state.pending!.id;
+    // Our discard and its ack, then the House Cat's whole turn, all before the queue has played.
+    sockets[0]!.receive({ t: "event", seq: 2, event: { kind: "game", event: { kind: "discarded", seat: 0, card: 1 } } });
+    sockets[0]!.receive({ t: "event", seq: 3, event: { kind: "game", event: { kind: "turn", seat: 1 } } });
+    sockets[0]!.receive({ t: "snapshot", protocol: 1, seq: 3, room: linked([id], { game: { ...game, turn: 1 } }) });
+    sockets[0]!.receive({ t: "event", seq: 4, event: { kind: "game", event: { kind: "drew", seat: 1, from: "deck" } } });
+    sockets[0]!.receive({ t: "event", seq: 5, event: { kind: "game", event: { kind: "discarded", seat: 1, card: 9 } } });
+    sockets[0]!.receive({ t: "event", seq: 6, event: { kind: "game", event: { kind: "turn", seat: 0 } } });
+    sockets[0]!.receive({ t: "snapshot", protocol: 1, seq: 6, room: linked([id], { game: { ...game, turn: 0, discardTop: 9 } }) });
+    // Play until the turn comes back to us: the table now shows our deck as live.
+    clock.advance(80 + 120 + 420 + 420);
+    expect(store.state.room?.game?.turn).toBe(0);
+    expect(store.state.room?.game?.step).toBe("draw");
+    const sent = sockets[0]!.sent.length;
+    expect(store.act(0, { type: "draw", from: "deck" })).toBe(true);
+    expect(sockets[0]!.sent.length).toBe(sent + 1);
+    const draw = store.state.pending!;
+    expect(draw.action).toEqual({ type: "draw", from: "deck" });
+    // The deferred snapshot landing settles the old move, never the new one.
+    clock.advance(500);
+    expect(store.state.pending?.id).toBe(draw.id);
+  });
+
+  test("a move the server hasn't applied still blocks a second one", async () => {
+    const { sockets, store } = setup();
+    store.start();
+    await flush();
+    sockets[0]!.open();
+    sockets[0]!.receive({ t: "snapshot", protocol: 1, seq: 1, room: room({ link: { ping: 3000, acks: [] }, game: { ...game, turn: 0 } }) });
+    expect(store.act(0, { type: "draw", from: "deck" })).toBe(true);
+    sockets[0]!.receive({ t: "event", seq: 2, event: { kind: "game", event: { kind: "drew", seat: 0, from: "deck", card: 50 } } });
+    expect(store.act(0, { type: "draw", from: "deck" })).toBe(false);
   });
 
   test("a refused move clears; another protocol asks for the new build", async () => {

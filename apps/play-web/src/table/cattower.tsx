@@ -542,7 +542,7 @@ export function CatTowerTable(props: { store: RoomStore; state: RoomState }) {
         onClick={() => (selected !== null ? tapTarget({ kind: "discard" }) : draw("discard"))}
       >
         {under !== null || g.discardCount > 1 ? (
-          <span class="under">{under !== null ? <CardFace id={under} /> : <div class="face blank" />}</span>
+          <span class="under" aria-hidden="true">{under !== null ? <CardFace id={under} /> : <div class="face blank" />}</span>
         ) : null}
       </button>
 

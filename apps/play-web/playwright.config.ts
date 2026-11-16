@@ -25,6 +25,9 @@ export default defineConfig({
     { name: "android-chrome", use: { ...devices["Pixel 7"] }, testIgnore: /alerts\.spec/ },
     { name: "iphone-safari", use: { ...devices["iPhone 13"] }, testIgnore: /alerts\.spec/ },
     { name: "laptop-chrome", use: { ...devices["Desktop Chrome"], viewport: { width: 1440, height: 900 } }, testIgnore: /alerts\.spec/ },
+    // Gecko and desktop WebKit play the two-browser tables only, to keep CI quick.
+    { name: "laptop-firefox", testMatch: /tables\.spec/, use: { ...devices["Desktop Firefox"], viewport: { width: 1440, height: 900 } } },
+    { name: "laptop-safari", testMatch: /tables\.spec/, use: { ...devices["Desktop Safari"], viewport: { width: 1440, height: 900 } } },
     // Turn alerts need full Chromium in its headless mode: the lighter headless shell refuses notifications.
     {
       name: "laptop-chromium-alerts",
