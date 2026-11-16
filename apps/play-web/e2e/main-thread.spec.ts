@@ -17,16 +17,21 @@ import { firstRun } from "./helpers";
 const LONG_MS = 50;
 const BUDGET = { "laptop-chrome": 1000 / 120, "android-chrome": 1000 / 60 } as const;
 /**
- * The phone is a fixed speed, not "4x slower than whatever runs the test": a reference Mac (Apple
- * silicon) slowed 4x. Each run benchmarks its own machine and picks the slowdown that lands on
- * that speed, so a slower CI runner gets less throttling, never a slower phone than intended.
+ * The profiles are fixed speeds, not "whatever runs the test": the laptop is a reference Mac
+ * (Apple silicon) and the phone is that Mac slowed 4x. Each run benchmarks its own machine at
+ * plain JavaScript and at style and layout (a Linux CI runner can match the Mac at one and be half
+ * its speed at the other) and takes the slower of the two as its speed factor `f`:
+ * - the phone's CPU slowdown is 4 / f (from 1 to 4), so it lands on the same phone everywhere;
+ * - whatever a machine is slower than its target even unthrottled (`residual`, 1 on the reference)
+ *   divides the measured times, which are reported raw beside the result.
  */
 const PHONE_SLOWDOWN = 4;
-const REFERENCE_BENCH_MS = 14.5;
+const REFERENCE = { jsMs: 14.5, renderMs: 13.7 };
 
-/** A fixed piece of JavaScript work: its median time says how fast this machine is. */
-function bench(): number {
-  const runs: number[] = [];
+/** Fixed work in JavaScript, and in style and layout over a table-sized page: medians of 9. */
+function bench(): { jsMs: number; renderMs: number } {
+  const median = (runs: number[]) => runs.sort((p, q) => p - q)[Math.floor(runs.length / 2)] as number;
+  const js: number[] = [];
   for (let r = 0; r < 9; r++) {
     const t0 = performance.now();
     let x = 0;
@@ -36,18 +41,47 @@ function bench(): number {
       if (i % 100 === 0) a.push({ i, s: String(x) });
     }
     a.sort((p, q) => p.s.localeCompare(q.s));
-    runs.push(performance.now() - t0);
+    js.push(performance.now() - t0);
   }
-  runs.sort((p, q) => p - q);
-  return runs[4] as number;
+  const host = document.createElement("div");
+  host.style.cssText = "position:fixed;inset:0;contain:layout size;overflow:hidden;visibility:hidden";
+  document.body.append(host);
+  const els: HTMLElement[] = [];
+  for (let i = 0; i < 160; i++) {
+    const el = document.createElement("div");
+    el.style.cssText = "position:absolute;left:0;top:0;width:60px;height:84px;border:3px solid #1b0b3a;border-radius:10px;background:linear-gradient(#fff,#eee);font:900 22px system-ui";
+    el.innerHTML = `<span>${i % 13}</span><i style="display:block;width:20px;height:20px;background:#7b2fff"></i>`;
+    host.append(el);
+    els.push(el);
+  }
+  const render: number[] = [];
+  for (let r = 0; r < 9; r++) {
+    const t0 = performance.now();
+    for (let k = 0; k < 20; k++) {
+      els.forEach((el, i) => {
+        el.style.transform = `translate(${(i * 7 + k * 13) % 900}px, ${(i * 11 + k * 5) % 600}px)`;
+        el.className = (i + k) % 3 ? "a" : "b";
+        (el.firstChild as Text).textContent = String((i + k) % 13);
+        el.style.width = `${58 + ((i + k) % 5)}px`;
+      });
+      void host.offsetHeight;
+    }
+    render.push(performance.now() - t0);
+  }
+  host.remove();
+  return { jsMs: median(js), renderMs: median(render) };
 }
 
 type Gate = keyof typeof BUDGET;
 
-async function throttleFor(page: Page, gate: Gate): Promise<{ rate: number; benchMs: number }> {
-  const benchMs = await page.evaluate(bench);
-  if (gate !== "android-chrome") return { rate: 1, benchMs };
-  return { rate: Math.min(PHONE_SLOWDOWN, Math.max(1, (PHONE_SLOWDOWN * REFERENCE_BENCH_MS) / benchMs)), benchMs };
+type Speed = { rate: number; residual: number; f: number; jsMs: number; renderMs: number };
+
+async function speedFor(page: Page, gate: Gate): Promise<Speed> {
+  const b = await page.evaluate(bench);
+  const f = Math.max(b.jsMs / REFERENCE.jsMs, b.renderMs / REFERENCE.renderMs);
+  if (gate !== "android-chrome") return { rate: 1, residual: Math.max(1, f), f, ...b };
+  const rate = Math.min(PHONE_SLOWDOWN, Math.max(1, PHONE_SLOWDOWN / f));
+  return { rate, residual: Math.max(1, (f * rate) / PHONE_SLOWDOWN), f, ...b };
 }
 
 /** Long tasks and Long Animation Frames, as the page sees them. */
@@ -65,6 +99,7 @@ const RECORDER = `
             style: e.styleAndLayoutStart ? Math.round(e.startTime + e.duration - e.styleAndLayoutStart) : 0,
             step: (performance.getEntriesByType("mark").filter((m) => m.startTime <= e.startTime).at(-1) || {}).name || "-",
             blocking: Math.round(e.blockingDuration ?? 0),
+            scriptMs: Math.round((e.scripts ?? []).reduce((n, x) => n + x.duration, 0)),
             scripts: (e.scripts ?? []).slice(0, 3).map((s) => (s.sourceFunctionName || s.invoker || "") + " " + (s.sourceURL || "").split("/").pop()),
           });
         }
@@ -153,9 +188,9 @@ async function playTiles(page: Page) {
 }
 
 async function measure(browser: Browser, page: Page, gate: Gate) {
-  const { rate, benchMs } = await throttleFor(page, gate);
+  const speed = await speedFor(page, gate);
   const cdp = await page.context().newCDPSession(page);
-  await cdp.send("Emulation.setCPUThrottlingRate", { rate });
+  await cdp.send("Emulation.setCPUThrottlingRate", { rate: speed.rate });
   // Only gameplay counts: entries that started before it (the page loading) are set aside, even
   // when the observer delivers them late.
   const since = await page.evaluate(() => performance.now());
@@ -164,7 +199,14 @@ async function measure(browser: Browser, page: Page, gate: Gate) {
   await playTiles(page);
   const trace = JSON.parse((await browser.stopTracing()).toString()) as { traceEvents: TraceEvent[] };
   await cdp.send("Emulation.setCPUThrottlingRate", { rate: 1 });
-  const all = (await page.evaluate(() => (window as unknown as { __long: unknown[] }).__long)) as { type: string; duration: number; at: number; scripts: string[] }[];
+  const all = (await page.evaluate(() => (window as unknown as { __long: unknown[] }).__long)) as {
+    type: string;
+    duration: number;
+    at: number;
+    blocking: number;
+    scriptMs: number;
+    scripts: string[];
+  }[];
   const long = all.filter((e) => e.at >= since);
   const atLoad = all.filter((e) => e.at < since).map((e) => e.duration);
   const { costs, longest } = frameCosts(trace.traceEvents);
@@ -180,7 +222,7 @@ async function measure(browser: Browser, page: Page, gate: Gate) {
       console.log("LONG", ((t.dur as number) / 1000).toFixed(1), near(t.ts), what, inside.slice(0, 8).map((e) => `${e.name}:${((e.dur as number) / 1000).toFixed(1)}${(e.args as { data?: { url?: string; functionName?: string } })?.data?.functionName ? "(" + (e.args as { data: { functionName: string } }).data.functionName + ")" : ""}${(e.args as { data?: { url?: string } })?.data?.url ? "[" + String((e.args as { data: { url: string } }).data.url).split("/").pop() + "]" : ""}`).join(" "));
     }
   }
-  return { frames: costs.length, p95: p95(costs), longest, long, rate, benchMs, atLoad };
+  return { frames: costs.length, p95: p95(costs), longest, long, speed, atLoad };
 }
 
 test("the rendering thread keeps every frame: no long task, frame work within budget", async ({ browser, page, context }, info) => {
@@ -194,21 +236,33 @@ test("the rendering thread keeps every frame: no long task, frame work within bu
   await expect(page.getByRole("button", { name: "Practice" })).toBeVisible();
 
   const r = await measure(browser, page, gate);
-  const sorted = [...r.long].sort((a, b) => b.duration - a.duration);
+  // On a machine slower than the profile even unthrottled, times are scaled to the profile's speed.
+  const k = r.speed.residual;
+  const round = (n: number, d = 10) => Math.round(n * d) / d;
+  const long = r.long.map((e) => ({ ...e, duration: round(e.duration / k) })).sort((a, b) => b.duration - a.duration) as (typeof r.long[number] & { blocking: number; scriptMs: number })[];
   const summary = {
-    profile: `${gate} (CPU x${r.rate.toFixed(2)}; machine bench ${r.benchMs.toFixed(1)} ms, reference ${REFERENCE_BENCH_MS} ms)`,
+    profile: gate,
+    machine: `js ${round(r.speed.jsMs)} ms, render ${round(r.speed.renderMs)} ms (reference ${REFERENCE.jsMs}, ${REFERENCE.renderMs}): ${round(r.speed.f, 100)}x the reference's time`,
+    cpuSlowdown: round(r.speed.rate, 100),
+    scaledBy: round(k, 100),
     frames: r.frames,
-    p95FrameWorkMs: Math.round(r.p95 * 100) / 100,
-    budgetMs: Math.round(BUDGET[gate] * 100) / 100,
-    longestTaskMs: Math.round(r.longest * 10) / 10,
-    longEntries: sorted.slice(0, 5),
+    p95FrameWorkMs: round(r.p95 / k, 100),
+    rawP95FrameWorkMs: round(r.p95, 100),
+    budgetMs: round(BUDGET[gate], 100),
+    longestTaskMs: round(r.longest / k),
+    rawLongestTaskMs: round(r.longest),
+    longEntries: long.slice(0, 5),
     loadLongFramesMs: r.atLoad,
   };
   console.log(`main thread: ${JSON.stringify(summary)}`);
   await info.attach("main-thread.json", { body: JSON.stringify(summary, null, 2), contentType: "application/json" });
 
   expect(r.frames, "frames traced").toBeGreaterThan(200);
-  expect(sorted.filter((e) => e.duration > LONG_MS), "tasks and animation frames over 50 ms").toEqual([]);
-  expect(r.longest, "longest main-thread task, ms").toBeLessThanOrEqual(LONG_MS);
-  expect(r.p95, `p95 main-thread work per frame, ms (budget ${summary.budgetMs})`).toBeLessThanOrEqual(BUDGET[gate]);
+  // A long task, or a long animation frame whose time was the rendering thread's (blocked, or
+  // running script). A frame that was long while that thread sat idle (waiting on a worker or the
+  // GPU) isn't the thread's doing; it is reported above, not failed.
+  const ours = long.filter((e) => e.type === "longtask" ? e.duration > LONG_MS : e.blocking / k > 0 || e.scriptMs / k > LONG_MS);
+  expect(ours, "tasks and animation frames over 50 ms on the rendering thread").toEqual([]);
+  expect(r.longest / k, "longest main-thread task, ms").toBeLessThanOrEqual(LONG_MS);
+  expect(r.p95 / k, `p95 main-thread work per frame, ms (budget ${summary.budgetMs})`).toBeLessThanOrEqual(BUDGET[gate]);
 });
