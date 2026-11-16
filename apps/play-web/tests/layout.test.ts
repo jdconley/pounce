@@ -279,7 +279,7 @@ describe("Cat Tower on a phone controller", () => {
     ),
   );
   const layout = (width: number, height: number, step: (typeof STEPS)[number], trays: number, insets: typeof portrait, hits = 0) =>
-    ctControllerLayout({ width, height, insets, handCount: 11, trays: step === "off" ? 0 : trays, step, hits: step === "play" && trays === 0 ? hits : 0 });
+    ctControllerLayout({ width, height, insets, handCount: 11, trays, step, hits: step === "play" && trays === 0 ? hits : 0 });
   /** A card's box as drawn: turned about its centre and scaled. */
   const turned = (p: { x: number; y: number; r?: number; s?: number }, w: number, h: number): Box => {
     const s = p.s ?? 1;
@@ -301,12 +301,10 @@ describe("Cat Tower on a phone controller", () => {
       ["status", L.status],
       ["hand", union(L.hand.map((p) => turned(p, L.cw, L.ch)))],
     ];
-    if (L.piles) out.push(["deck", L.piles.deckRect], ["discard", L.piles.discardRect]);
-    if (L.actions) out.push(["actions", L.actions]);
+    out.push(["deck", L.piles.deckRect], ["discard", L.piles.discardRect], ["actions", L.actions]);
     L.trays.forEach((t, i) => out.push([`tray ${i}`, t]));
     if (L.hits) out.push(["hit list", L.hits]);
     if (L.hitClose) out.push(["hit list's X", L.hitClose]);
-    if (L.hero) out.push(["hero", L.hero]);
     return out;
   };
   /** The hit list opens over the piles' room, and its X sits inside it: those may overlap. */
@@ -350,7 +348,7 @@ describe("Cat Tower on a phone controller", () => {
       expect(x.x + x.w).toBeLessThanOrEqual(width - insets.right);
       expect(x.w).toBeGreaterThanOrEqual(32);
       // The list sits on the buttons, under the status.
-      expect(list.y + list.h).toBeLessThanOrEqual(L.actions!.y);
+      expect(list.y + list.h).toBeLessThanOrEqual(L.actions.y);
       expect(list.y).toBeGreaterThanOrEqual(L.switch.y + L.switch.h);
     }
   });
@@ -361,11 +359,11 @@ describe("Cat Tower on a phone controller", () => {
     expect(open.piles).toEqual(shut.piles);
     expect(open.hand).toEqual(shut.hand);
     expect(open.actions).toEqual(shut.actions);
-    const { deckRect } = shut.piles!;
+    const { deckRect } = shut.piles;
     // As big as the room allows: never under a hand card, and either the width or the height is used up.
     expect(deckRect.w).toBeGreaterThanOrEqual(shut.cw);
     const stageTop = shut.switch.y + shut.switch.h;
-    const roomH = shut.landscape ? shut.handRect.y - stageTop : shut.actions!.y - stageTop;
+    const roomH = shut.landscape ? shut.handRect.y - stageTop : shut.actions.y - stageTop;
     const roomW = shut.landscape ? (shut.handRect.w - 10) / 2 : shut.handRect.w;
     expect(Math.max(deckRect.h / roomH, (2 * deckRect.w) / roomW)).toBeGreaterThan(0.7);
   });
@@ -382,25 +380,23 @@ describe("Cat Tower on a phone controller", () => {
   test.each(CTL_SIZES)("at %i x %i: your turn's piles are bigger than a card in the hand, and the same in both steps", (width, height, insets) => {
     const draw = layout(width, height, "draw", 3, insets);
     const play = layout(width, height, "play", 3, insets);
-    expect(draw.piles!.deckRect.w).toBeGreaterThanOrEqual(draw.cw * 0.9);
+    expect(draw.piles.deckRect.w).toBeGreaterThanOrEqual(draw.cw * 0.9);
     expect(play.piles).toEqual(draw.piles);
     expect(play.hand).toEqual(draw.hand);
   });
 
-  test.each(CTL_SIZES)("at %i x %i: off turn there are no piles, trays or buttons, just the hand and whose turn", (width, height, insets) => {
-    const L = layout(width, height, "off", 0, insets);
-    expect(L.piles).toBeNull();
-    expect(L.actions).toBeNull();
-    expect(L.hits).toBeNull();
-    expect(L.trays).toEqual([]);
-    expect(L.hero).not.toBeNull();
+  test.each(CTL_SIZES)("at %i x %i: off turn is the same frame as your turn, so nothing jumps when it comes", (width, height, insets) => {
+    for (const trays of [0, 2, 3]) {
+      const off = layout(width, height, "off", trays, insets);
+      for (const step of ["draw", "play"] as const) expect(layout(width, height, step, trays, insets)).toEqual(off);
+    }
   });
 
   test("buttons are big enough to tap: the switch, the actions and each tray", () => {
     for (const [w, h, insets] of CTL_SIZES) {
       const L = layout(w, h, "play", 3, insets);
       expect(L.switch.h).toBeGreaterThanOrEqual(44);
-      expect(L.actions!.h).toBeGreaterThanOrEqual(44);
+      expect(L.actions.h).toBeGreaterThanOrEqual(44);
       for (const t of L.trays) expect(t.h).toBeGreaterThanOrEqual(44);
     }
   });

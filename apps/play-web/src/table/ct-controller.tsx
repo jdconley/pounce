@@ -63,9 +63,11 @@ export function CtController(props: { store: RoomStore; state: RoomState; onView
   // Hit: the places the picked card fits. The list of them opens over the bottom of the piles' room.
   const targets = step === "play" && laidMine && selected !== null ? hitTargets(selected, g.laid) : [];
 
+  // The trays' room is kept until this player lays down, between rounds too: the frame never jumps.
+  const trayRoom = seat !== null && !laidMine ? reqs.length : 0;
   const L: CtlLayout = useMemo(
-    () => ctControllerLayout({ width: size.width || 360, height: size.height || 640, insets, handCount: ordered.length, trays: showTrays ? reqs.length : 0, step, hits: targets.length }),
-    [size.width, size.height, insets, ordered.length, showTrays, reqs.length, step, targets.length],
+    () => ctControllerLayout({ width: size.width || 360, height: size.height || 640, insets, handCount: ordered.length, trays: trayRoom, step, hits: targets.length }),
+    [size.width, size.height, insets, ordered.length, trayRoom, step, targets.length],
   );
 
   // The table menu's paw is the table screen's: it grows with this screen's top bar.
@@ -98,7 +100,7 @@ export function CtController(props: { store: RoomStore; state: RoomState; onView
             // A shared device's seats each have their own: the TV shows them all.
             const own = mine.length === 1 ? mine[0]! : null;
             if (own !== null) setResult({ up: ev.advanced.includes(own), points: ev.points[own] ?? 0 });
-          } else if (ev.kind === "drew" && ev.card !== undefined && ev.from === "deck" && L.piles) motion.spawnFrom(`c${ev.card}`, L.piles.deck);
+          } else if (ev.kind === "drew" && ev.card !== undefined && ev.from === "deck") motion.spawnFrom(`c${ev.card}`, L.piles.deck);
         },
       }),
     [store, mine.join(), L, motion],
@@ -113,7 +115,7 @@ export function CtController(props: { store: RoomStore; state: RoomState; onView
     wiggle(rootRef.current?.querySelector(".ctl-hand") as HTMLElement | null);
   }, [state.error?.n]);
 
-  const moves = ctMoves({ store, state, room, seat, myTurn, hand, motion, discardPose: L.piles?.discard ?? null, setHeld, setSelected, setSkipPick, quiet: true });
+  const moves = ctMoves({ store, state, room, seat, myTurn, hand, motion, discardPose: L.piles.discard, setHeld, setSelected, setSkipPick, quiet: true });
   const { nope, draw, discard, toTray, outOfTray, groups, layDown, hit, skipCandidates } = moves;
   const groupsReady = groups !== null;
 
@@ -148,15 +150,15 @@ export function CtController(props: { store: RoomStore; state: RoomState; onView
     const base = L.hand[i];
     if (base) poses.set(`c${c}`, held.get(c) ?? base);
   });
-  if (showTrays && step !== "off") {
+  if (showTrays) {
     trayCards.forEach((cards, i) => {
       const tray = L.trays[i];
       if (!tray) return;
       trayPoses(tray, cards.length, reqs[i]?.size ?? cards.length, L.cw, L.ch, L.small).forEach((p, j) => poses.set(`c${cards[j]}`, held.get(cards[j] as CardId) ?? { ...p, z: 50 + j }));
     });
   }
-  const pileTop = L.piles && g.discardTop !== null && !poses.has(`c${g.discardTop}`) ? g.discardTop : null;
-  if (pileTop !== null) poses.set(`c${pileTop}`, L.piles!.discard);
+  const pileTop = g.discardTop !== null && !poses.has(`c${g.discardTop}`) ? g.discardTop : null;
+  if (pileTop !== null) poses.set(`c${pileTop}`, L.piles.discard);
 
   const moveStyle = (key: string) => {
     const i = ordered.indexOf(Number(key.slice(1)));
@@ -172,7 +174,7 @@ export function CtController(props: { store: RoomStore; state: RoomState; onView
 
   // Dragging: to the discard, into a tray, or to a new place in the hand.
   const overAt = (p: Point): Over => {
-    if (L.piles && inside(p, L.piles.discardRect, 14)) return { kind: "discard" };
+    if (step === "play" && inside(p, L.piles.discardRect, 14)) return { kind: "discard" };
     for (const [i, t] of L.trays.entries()) if (showTrays && inside(p, t, 6)) return { kind: "tray", i };
     if (inside(p, L.handRect, 10)) {
       let index = L.hand.findIndex((h) => p.x < h.x + L.cw / 2);
@@ -266,7 +268,7 @@ export function CtController(props: { store: RoomStore; state: RoomState; onView
   // The discard's top card is the pile's to show, not yours to move: a tap goes through to the pile.
   const renderCard = (id: CardId, p: Pose) =>
     id === pileTop ? (
-      <div key={`c${id}`} ref={setEl(`c${id}`)} class="card" style={{ transform: transformOf(p), zIndex: p.z ?? 1 }}>
+      <div key={`c${id}`} ref={setEl(`c${id}`)} class={`card ${step === "off" ? "rest" : ""}`} style={{ transform: transformOf(p), zIndex: p.z ?? 1 }}>
         <div class="card-inner">
           <CardFace id={id} />
         </div>
@@ -308,13 +310,15 @@ export function CtController(props: { store: RoomStore; state: RoomState; onView
         </div>
       ) : null}
 
-      {L.hero && g.status === "playing" ? (
-        <div class="ctl-hero" style={{ ...box(L.hero), ["--avatar" as string]: `${Math.round(L.hero.w * 0.72)}px` }}>
-          <SeatAvatar seat={g.turn} info={turnSeat} size={Math.round(L.hero.w * 0.72)} turn count={g.handCounts[g.turn]} />
-        </div>
-      ) : null}
-
-      {L.piles ? (
+      {/* Off turn the piles rest where they sit on your turn, for anyone to see: nothing to tap. */}
+      {step === "off" ? (
+        <>
+          <div class="deck rest" style={box(L.piles.deckRect)} role="img" aria-label={`Deck, ${g.deckCount} cards`}>
+            <DeckCards count={g.deckCount} />
+          </div>
+          <div class="discard rest" style={box(L.piles.discardRect)} role="img" aria-label={discardName} />
+        </>
+      ) : (
         <>
           <button
             type="button"
@@ -336,9 +340,9 @@ export function CtController(props: { store: RoomStore; state: RoomState; onView
             onClick={() => (selected !== null && step === "play" ? discard(selected) : draw("discard"))}
           />
         </>
-      ) : null}
+      )}
 
-      {showTrays && step !== "off"
+      {showTrays
         ? L.trays.map((t, i) => {
             const cards = trayCards[i] ?? [];
             const req = reqs[i]!;
@@ -394,7 +398,7 @@ export function CtController(props: { store: RoomStore; state: RoomState; onView
         </>
       ) : null}
 
-      {L.actions ? (
+      {step !== "off" ? (
         <div class="ctl-actions" style={box(L.actions)}>
           {step === "draw" ? (
             <p class="ctl-cue outlined">Draw a card</p>

@@ -1069,30 +1069,18 @@
   }
 }
 
-/* Off turn: the cat whose turn it is, big, breathing. Its name is the status's. */
-.ctl-hero {
-  display: grid;
-  place-items: center;
-  pointer-events: none;
-}
-
-.ctl-hero .name-tag {
-  display: none;
-}
-
-.ctl-hero .seat-avatar {
-  animation: hero-bob 1.6s ease-in-out infinite alternate;
-}
-
-@keyframes hero-bob {
-  to {
-    translate: 0 -6px;
-  }
-}
-
-/* After the draw the deck rests. */
-.ctl .deck:disabled .deck-card {
+/* After the draw the deck rests; off turn both piles do, in the place they have on your turn. */
+.ctl .deck:disabled .deck-card,
+.ctl .deck.rest .deck-card {
   filter: drop-shadow(0 2px 0 rgba(27, 11, 58, 0.55)) saturate(0.6) brightness(0.8);
+}
+
+.ctl .card.rest .card-inner {
+  filter: saturate(0.6) brightness(0.8);
+}
+
+.ctl .discard.rest {
+  outline-color: rgba(255, 255, 255, 0.2);
 }
 
 .ctl .pile-count {

@@ -1,8 +1,9 @@
 /**
  * Where everything sits on a phone that is a Cat Tower controller (the table is on a TV): the
- * Cards/Table switch, whose turn it is and the menu along the top, the two piles on your turn (or
- * the cat whose turn it is), the trays, the buttons, and the hand, big, along the bottom. Once laid
- * down, the list of places to hit opens over the bottom of the piles' room, so nothing moves.
+ * Cards/Table switch, whose turn it is and the menu along the top, the two piles, the trays, the
+ * buttons, and the hand, big, along the bottom. It is one frame on your turn and off it (the piles
+ * only rest off turn), so nothing jumps when your turn comes. Once laid down, the list of places to
+ * hit opens over the bottom of the piles' room, so nothing moves then either.
  * Everything along the top grows with the cards (`unit`) on a tablet. Pure geometry, tested at
  * every size it runs on.
  */
@@ -10,7 +11,7 @@ import type { Insets } from "./ct-layout";
 import type { Rect } from "./drag";
 import type { Pose } from "./motion";
 
-/** Off turn; your turn, before the draw; your turn, after it. */
+/** Off turn; your turn, before the draw; your turn, after it. The frame is the same in all three. */
 export type CtlStep = "off" | "draw" | "play";
 
 export type CtlInput = {
@@ -40,17 +41,15 @@ export type CtlLayout = {
   switch: Rect;
   /** "Your turn" or "<Name>'s turn": in the top bar, beside the menu (or between the switch and the menu where there is room). */
   status: Rect;
-  /** Off turn: the cat whose turn it is. */
-  hero: Rect | null;
-  /** Your turn: the deck and the discard, as big as fit. Each pose is a hand card's, scaled. */
-  piles: { deck: Pose; discard: Pose; deckRect: Rect; discardRect: Rect } | null;
+  /** The deck and the discard, as big as fit (resting off turn). Each pose is a hand card's, scaled. */
+  piles: { deck: Pose; discard: Pose; deckRect: Rect; discardRect: Rect };
   trays: Rect[];
   /** The open hit list, as tall as its rows: over the bottom of the piles' room, sitting on the buttons. */
   hits: Rect | null;
   /** The hit list's X, inside it. */
   hitClose: Rect | null;
-  /** Your turn: the row of buttons (Lay down, Discard, Hit). */
-  actions: Rect | null;
+  /** The row of buttons (Lay down, Discard, Hit), or a line of words off turn. */
+  actions: Rect;
   hand: Pose[];
   /** The hand and the room a picked card rises into: drops here reorder. */
   handRect: Rect;
@@ -152,7 +151,6 @@ function layoutAt(input: CtlInput, cw: number, u: number, force = false): CtlLay
   const landscape = landscapeOf(input);
   const ch = Math.round(cw * 1.406);
   const cx = col.x + col.w / 2;
-  const mine = input.step !== "off";
   const bar = BAR * u;
 
   // The top bar: the status beside the menu, the switch under it; or all three in a row when wide.
@@ -178,16 +176,9 @@ function layoutAt(input: CtlInput, cw: number, u: number, force = false): CtlLay
   const pileFor = (area: Rect) => Math.floor(Math.min((area.w - 3 * GAP) / 2, (area.h - 16) / 1.406, 360));
   const actionsH = ACTIONS * u;
 
-  if (!mine) {
-    const size = Math.min(col.w, middle.h, 240 * u);
-    if (size < 72 && !force) return null;
-    const hero = { x: cx - size / 2, y: middle.y + middle.h / 2 - size / 2, w: size, h: size };
-    return { landscape, unit: u, cw, ch, small, menu, switch: sw, status, hero, piles: null, trays: [], hits: null, hitClose: null, actions: null, hand, handRect };
-  }
-
-  // Your turn: the piles, the trays, the buttons; the trays and buttons beside the piles when wide.
+  // The piles, the trays, the buttons; the trays and buttons beside the piles when wide.
   const half = (col.w - GAP) / 2;
-  const rows = Math.min(input.hits ?? 0, MAX_HITS);
+  const rows = input.step === "play" ? Math.min(input.hits ?? 0, MAX_HITS) : 0;
   let actions: Rect;
   let stage: Rect;
   let trayRow: Rect | null = null;
@@ -246,7 +237,6 @@ function layoutAt(input: CtlInput, cw: number, u: number, force = false): CtlLay
     menu,
     switch: sw,
     status,
-    hero: null,
     piles: { deck: pose(deckRect, 5), discard: pose(discardRect, 6), deckRect, discardRect },
     trays,
     hits,
