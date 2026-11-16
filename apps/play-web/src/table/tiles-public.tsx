@@ -9,6 +9,7 @@ import { useEffect, useLayoutEffect, useRef } from "preact/hooks";
 import { art } from "../lib/art";
 import { buzz } from "../lib/haptics";
 import { play } from "../lib/sound";
+import { mySeats } from "../store/lobby";
 
 import { PieceFace, pieceLabel } from "./faces";
 import { transformOf, type Motion, type Pose } from "./motion";
@@ -42,49 +43,80 @@ export type TilesHand = {
 /** The sizes the table's CSS reads, for the `.tt-table` it is drawn into. */
 export const tilesStyle = (L: TilesLayout) => ({ ["--pw" as string]: `${L.pw}px`, ["--ph" as string]: `${L.ph}px`, ["--avatar" as string]: `${L.avatar}px` });
 
-/** The sets on show: this device's own draft, else the acting player's aim, else the table as played. */
-export function tilesShown(v: TilesView, aims: Record<number, GameAim>, draft?: TileId[][]): TileId[][] {
-  if (draft) return draft;
-  const aim = v.status === "playing" ? aims[v.turn] : undefined;
-  return aim && "table" in aim ? aim.table : v.table;
+/**
+ * The acting player's arrangement of the table, while they make it, or null. Never a seat this
+ * device holds: its own aim is its draft, already here.
+ */
+export function aimTable(room: RoomView, aims: Record<number, GameAim>): TileId[][] | null {
+  const v = room.tiles;
+  if (!v || v.status !== "playing" || mySeats(room).includes(v.turn)) return null;
+  const aim = aims[v.turn];
+  return aim && "table" in aim ? aim.table : null;
 }
 
-export function TilesPublic(props: {
+/** The sets on show: this device's own draft, else the acting player's aim, else the table as played. */
+export function tilesShown(room: RoomView, aims: Record<number, GameAim>, draft?: TileId[][]): TileId[][] {
+  return draft ?? aimTable(room, aims) ?? (room.tiles as TilesView).table;
+}
+
+/** What the table shows, for anyone: a TV gives only this. */
+export type TilesPublicProps = {
   store: RoomStore;
   room: RoomView;
   layout: TilesLayout;
   motion: Motion;
   aims: Record<number, GameAim>;
+  sounds?: boolean;
+  /** Haptics for what happens at the table (a phone's; nothing elsewhere). */
+  haptics?: boolean;
+  /** Each seat's score under its name. */
+  scores?: boolean;
+  /** The line under the sets; by default whose turn it is. */
+  cue?: { text: string; mine: boolean };
+  /** Drawn over the pieces. */
+  children?: ComponentChildren;
+};
+
+/** A rack on top of the table, and what it can do to the table: only a phone's full table has these. */
+export type TilesHandProps = {
+  /** The seats this device holds (none for a spectator). */
+  mine: number[];
+  hand: TilesHand;
   /** This device's own arrangement of the table, shown instead of anyone's aim. */
   draft?: TileId[][];
   /** Each set's check while drafting: good, bad or kept. */
   marks?: (string | undefined)[];
-  sounds?: boolean;
-  /** The seats this device holds (none for a spectator); absent on a TV. */
-  mine?: number[];
-  /** Each seat's score under its name. */
-  scores?: boolean;
-  hand?: TilesHand;
   hover?: TilesHover;
   setsFocusable?: boolean;
   onSet?: (set: number) => void;
-  /** The line under the sets; by default whose turn it is. */
-  cue?: { text: string; mine: boolean };
   /** Drawn under the pieces: the hand layer's new-set target. */
   under?: ComponentChildren;
-  /** Drawn over the pieces: the hand layer's controls, curtain and tips. */
-  children?: ComponentChildren;
-}) {
+};
+
+/**
+ * The table for a TV: what anyone may see, with no rack and nothing to touch. Its props have no
+ * room for a rack or a move (they are `never`), so a TV can't be handed one by mistake.
+ */
+export function TilesPublic(props: TilesPublicProps & { [K in keyof TilesHandProps]?: never }) {
+  return <TilesTableBase {...props} />;
+}
+
+/** The table with a rack on top (the phone's full table, tiles.tsx), or without one (TilesPublic). */
+export function TilesTableBase(props: TilesPublicProps & Partial<TilesHandProps>) {
   const { store, room, layout: L, motion, aims, hover = null } = props;
   const v = room.tiles as TilesView;
   const sounds = props.sounds ?? true;
+  const haptics = props.haptics ?? true;
   const mine = props.mine ?? [];
   const sound: typeof play = (...a) => {
     if (sounds) play(...a);
   };
+  const feel: typeof buzz = (...a) => {
+    if (haptics) buzz(...a);
+  };
   const ownEls = useRef(new Map<string, HTMLElement>());
   const els = props.hand?.els ?? ownEls.current;
-  const table = tilesShown(v, aims, props.draft);
+  const table = tilesShown(room, aims, props.draft);
   const onTable = new Set(v.table.flat());
   const fromAim = props.draft === undefined && table !== v.table;
 
@@ -106,16 +138,16 @@ export function TilesPublic(props: {
           } else if (ev.kind === "played") {
             if (!mine.includes(ev.seat)) for (const id of ev.placed) motion.spawnFrom(`p${id}`, avatarPose(ev.seat));
             sound("sparkle", 0.7);
-            buzz("drop");
+            feel("drop");
           } else if (ev.kind === "passed") {
             sound("tick", 0.5);
           } else if (ev.kind === "gameOver") {
             sound("fanfare");
-            buzz("win");
+            feel("win");
           }
         },
       }),
-    [store, L, mine.join(), sounds],
+    [store, motion, L, mine.join(), sounds, haptics],
   );
 
   // Poses: the table's pieces, then the rack's.

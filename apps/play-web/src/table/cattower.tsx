@@ -19,7 +19,7 @@ import { Button, Icon, learnTip, Tip, tipLearned, useMedia, useSize } from "../u
 
 import { ctLayout, trayPoses, type Insets } from "./ct-layout";
 import { discardNeedsTarget, hitTargets, layDownGroups, skipTargets } from "./ct-moves";
-import { CtPublic, ctStyle, type CtHover } from "./ct-public";
+import { CtTable, ctStyle, type CtHover } from "./ct-public";
 import { inside, press, useLatest, type Point } from "./drag";
 import { CardFace, cardLabel } from "./faces";
 import { Motion, MOVE, transformOf, wiggle, type Pose } from "./motion";
@@ -67,8 +67,10 @@ export function useInsets(): Insets {
   return insets;
 }
 
-export function CatTowerTable(props: { store: RoomStore; state: RoomState }) {
+/** `sounds: false` silences the game's own events (a phone whose table is on a TV); taps still sound. */
+export function CatTowerTable(props: { store: RoomStore; state: RoomState; sounds?: boolean }) {
   const { store, state } = props;
+  const sounds = props.sounds ?? true;
   const room = state.room!;
   const g = room.game!;
   const [rootRef, size] = useSize<HTMLDivElement>();
@@ -150,12 +152,12 @@ export function CatTowerTable(props: { store: RoomStore; state: RoomState }) {
           if (e.kind !== "game") return;
           const ev = e.event;
           if (ev.kind === "turn" && mine.includes(ev.seat)) {
-            play("tick", 0.6);
+            if (sounds) play("tick", 0.6);
             buzz("turn");
           } else if (ev.kind === "roundStarted") setTrays([]);
         },
       }),
-    [store, mine.join()],
+    [store, mine.join(), sounds],
   );
 
   // A refused move: back where it was, with a shake.
@@ -193,7 +195,7 @@ export function CatTowerTable(props: { store: RoomStore; state: RoomState }) {
     if (seat === null) return false;
     return store.act(seat, action);
   };
-  const skipCandidates = seat === null ? [] : skipTargets(g, seat).filter((i) => room.seats[i]?.kind === "human" || room.seats[i]?.kind === "bot");
+  const skipCandidates = seat === null ? [] : skipTargets(g, seat, room.seats);
 
   const draw = (from: "deck" | "discard") => {
     if (!myTurn || g.step !== "draw" || state.pending) return nope();
@@ -413,12 +415,13 @@ export function CatTowerTable(props: { store: RoomStore; state: RoomState }) {
 
   return (
     <div class={`ct-table ${L.landscape ? "landscape" : ""} ${myTurn ? "my-turn" : ""}`} ref={rootRef} style={ctStyle(L)}>
-      <CtPublic
+      <CtTable
         store={store}
         room={room}
         layout={L}
         motion={motion}
         aims={state.aims}
+        sounds={sounds}
         mine={mine}
         hand={{ poses, els: els.current, render: renderCard, style: moveStyle }}
         hover={hover}
@@ -493,7 +496,7 @@ export function CatTowerTable(props: { store: RoomStore; state: RoomState }) {
         <Tip id="ct.lay" anchor="lay" text="Tap the paw to lay down your level." show={groupsReady && myTurn} />
         <Tip id="ct.keys" anchor="hand" text="Keys: D draws, X discards, arrows pick a card." show={fineMouse && myTurn && tipLearned("ct.discard") && !state.pending} />
         <Tip id="ct.hit" anchor="discard" text="Drop cards on any laid group they fit." show={myTurn && g.step === "play" && laidMine && tipLearned("ct.discard")} />
-      </CtPublic>
+      </CtTable>
     </div>
   );
 }

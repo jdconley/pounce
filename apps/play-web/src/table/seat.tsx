@@ -1,15 +1,8 @@
 import { art, catArt, RINGS, type CatPose } from "../lib/art";
 
-import type { RoomView } from "@pounce/play-api/protocol";
+import { seatCat, seatName, type SeatInfo } from "./seat-names";
 
-
-export type SeatInfo = RoomView["seats"][number];
-
-/** A seat's display name: the person's, "House Cat", or nothing for an empty seat. */
-export const seatName = (s: SeatInfo | undefined): string => (s?.kind === "bot" ? "House Cat" : (s?.person?.name ?? ""));
-
-/** The House Cat is the gray cat. */
-export const seatCat = (s: SeatInfo | undefined): number => (s?.kind === "bot" ? 3 : (s?.person?.cat ?? 0));
+export { seatCat, seatName, type SeatInfo } from "./seat-names";
 
 export function seatPose(s: SeatInfo | undefined, turn: boolean): CatPose {
   if (s?.presence === "asleep") return "asleep";

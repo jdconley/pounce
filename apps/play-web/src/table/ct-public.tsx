@@ -11,6 +11,7 @@ import { art, catArt, RINGS } from "../lib/art";
 import { buzz } from "../lib/haptics";
 import { play } from "../lib/sound";
 
+import { aimedGroup } from "./ct-moves";
 import { CardFace, cardLabel } from "./faces";
 import { transformOf, type Motion, type MoveStyle, type Pose } from "./motion";
 import { seatCat, seatName, SeatAvatar } from "./seat";
@@ -47,7 +48,8 @@ export type CtHand = {
 /** The sizes the table's CSS reads, for the `.ct-table` it is drawn into. */
 export const ctStyle = (L: CtLayout) => ({ ["--cw" as string]: `${L.cw}px`, ["--ch" as string]: `${L.ch}px`, ["--avatar" as string]: `${L.avatar}px` });
 
-export function CtPublic(props: {
+/** What the table shows, for anyone: a TV gives only this. */
+export type CtPublicProps = {
   store: RoomStore;
   room: RoomView;
   layout: CtLayout;
@@ -55,11 +57,21 @@ export function CtPublic(props: {
   aims: Record<number, GameAim>;
   /** Game sounds for what happens at the table. */
   sounds?: boolean;
-  /** The seats this device holds (none for a spectator); absent on a TV. */
-  mine?: number[];
+  /** Haptics for what happens at the table (a phone's; nothing elsewhere). */
+  haptics?: boolean;
   /** Each seat's score under its name. */
   scores?: boolean;
-  hand?: CtHand;
+  /** The line under the table; by default whose turn it is, where the layout puts the banner. */
+  cue?: { text: string; mine: boolean; y: number };
+  /** Drawn over the cards. */
+  children?: ComponentChildren;
+};
+
+/** A hand on top of the table, and what it can do to the table: only a phone's full table has these. */
+export type CtHandProps = {
+  /** The seats this device holds (none for a spectator). */
+  mine: number[];
+  hand: CtHand;
   hover?: CtHover;
   /** The picked card fits this group. */
   fits?: (seat: number, group: number) => boolean;
@@ -76,19 +88,30 @@ export function CtPublic(props: {
   discardAim?: boolean;
   /** What a tap on the discard does, after its card in its name ("Take it"). */
   discardHint?: string;
-  /** The line under the table; by default whose turn it is, where the layout puts the banner. */
-  cue?: { text: string; mine: boolean; y: number };
   /** Drawn under the cards: the hand layer's trays and zones. */
   under?: ComponentChildren;
-  /** Drawn over the cards: the hand layer's buttons, dialogs and tips. */
-  children?: ComponentChildren;
-}) {
+};
+
+/**
+ * The table for a TV: what anyone may see, with no hand and nothing to touch. Its props have no
+ * room for a hand or a move (they are `never`), so a TV can't be handed one by mistake.
+ */
+export function CtPublic(props: CtPublicProps & { [K in keyof CtHandProps]?: never }) {
+  return <CtTable {...props} />;
+}
+
+/** The table with a hand on top (the phone's full table, cattower.tsx), or without one (CtPublic). */
+export function CtTable(props: CtPublicProps & Partial<CtHandProps>) {
   const { store, room, layout: L, motion, aims, hover = null } = props;
   const g = room.game!;
   const sounds = props.sounds ?? true;
+  const haptics = props.haptics ?? true;
   const mine = props.mine;
   const sound: typeof play = (...a) => {
     if (sounds) play(...a);
+  };
+  const feel: typeof buzz = (...a) => {
+    if (haptics) buzz(...a);
   };
   const ownEls = useRef(new Map<string, HTMLElement>());
   const els = props.hand?.els ?? ownEls.current;
@@ -135,12 +158,12 @@ export function CtPublic(props: {
             case "discarded":
               motion.spawnFrom(`c${ev.card}`, avatarPose(ev.seat));
               sound(card(ev.card).kind === "cucumber" ? "scream" : "thud", 0.6);
-              buzz("drop");
+              feel("drop");
               break;
             case "laidDown":
               for (const grp of ev.groups) for (const c of grp.cards) motion.spawnFrom(`c${c}`, avatarPose(ev.seat));
               sound("sparkle");
-              buzz("drop");
+              feel("drop");
               break;
             case "hit":
               motion.spawnFrom(`c${ev.card}`, avatarPose(ev.seat));
@@ -156,7 +179,7 @@ export function CtPublic(props: {
               setRound(ev);
               // A device's own player climbing gets the fanfare; a TV cheers anyone who climbs.
               sound((mine ? ev.advanced.some((s) => mine.includes(s)) : ev.advanced.length > 0) ? "fanfare" : "leap");
-              buzz("win");
+              feel("win");
               break;
             case "roundStarted":
               setRound(null);
@@ -165,7 +188,7 @@ export function CtPublic(props: {
           }
         },
       }),
-    [store, L, g.discardTop, mine?.join(), sounds],
+    [store, motion, L, g.discardTop, mine?.join(), sounds, haptics],
   );
 
   // Poses for the table's cards, after the hand's.
@@ -192,8 +215,7 @@ export function CtPublic(props: {
     else els.delete(key);
   };
 
-  const aim = g.status === "playing" ? aims[g.turn] : undefined;
-  const aimed = aim && "target" in aim ? aim.target : null;
+  const aimed = aimedGroup(room, aims);
   const cue = props.cue ?? { text: g.status === "playing" ? `${seatName(room.seats[g.turn])}'s turn` : "", mine: false, y: L.banner.y };
   const discardName = g.discardTop === null ? "Discard pile, empty" : `Discard pile: ${cardLabel(g.discardTop)}${props.onDiscard ? `. ${props.discardHint ?? ""}` : ""}`;
 

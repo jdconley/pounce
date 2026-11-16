@@ -23,14 +23,16 @@ import { seatName } from "./seat";
 import { Curtain } from "./shared";
 import { checkDraft, OPENING_POINTS, placedThisTurn, sameDraft, sortRack, toNewSet, toRack, toSet, type Draft } from "./tiles-draft";
 import { tilesLayout } from "./tiles-layout";
-import { TilesPublic, tilesStyle, type PieceLook, type TilesHover } from "./tiles-public";
+import { aimTable as aimOf, TilesTableBase, tilesStyle, type PieceLook, type TilesHover } from "./tiles-public";
 
 import type { RoomState, RoomStore } from "../store/room";
 import type { TileId } from "@pounce/play-api/tiles/pieces";
 import type { TilesView } from "@pounce/play-api/tiles/view";
 
-export function TilesTable(props: { store: RoomStore; state: RoomState }) {
+/** `sounds: false` silences the game's own events (a phone whose table is on a TV); taps still sound. */
+export function TilesTable(props: { store: RoomStore; state: RoomState; sounds?: boolean }) {
   const { store, state } = props;
+  const sounds = props.sounds ?? true;
   const room = state.room!;
   const v = room.tiles as TilesView;
   const [rootRef, size] = useSize<HTMLDivElement>();
@@ -78,8 +80,7 @@ export function TilesTable(props: { store: RoomStore; state: RoomState }) {
   const opponents = room.seats.flatMap((s, i) => ((s.kind === "human" || s.kind === "bot") && i !== seat ? [i] : []));
 
   // Watching someone else's turn, the sets are theirs as they arrange them (their aim).
-  const aim = !myTurn && v.status === "playing" ? state.aims[v.turn] : undefined;
-  const aimTable = aim && "table" in aim ? aim.table : null;
+  const aimTable = myTurn ? null : aimOf(room, state.aims);
   const shownTable = aimTable ?? draft.table;
 
   const L = useMemo(
@@ -101,12 +102,12 @@ export function TilesTable(props: { store: RoomStore; state: RoomState }) {
       store.subscribe({
         event: ({ event: e }) => {
           if (e.kind === "tiles" && e.event.kind === "turn" && mine.includes(e.event.seat)) {
-            play("tick", 0.6);
+            if (sounds) play("tick", 0.6);
             buzz("turn");
           }
         },
       }),
-    [store, mine.join()],
+    [store, mine.join(), sounds],
   );
 
   useEffect(() => {
@@ -317,12 +318,13 @@ export function TilesTable(props: { store: RoomStore; state: RoomState }) {
 
   return (
     <div class={`tt-table ${myTurn ? "my-turn" : ""}`} ref={rootRef} style={tilesStyle(L)}>
-      <TilesPublic
+      <TilesTableBase
         store={store}
         room={room}
         layout={L}
         motion={motion}
         aims={state.aims}
+        sounds={sounds}
         draft={aimTable ? undefined : draft.table}
         marks={aimTable ? undefined : result.marks}
         mine={mine}
@@ -379,7 +381,7 @@ export function TilesTable(props: { store: RoomStore; state: RoomState }) {
         <Tip id="tt.play" anchor="play-btn" text="Tap Play to send your turn." show={playable && tipLearned("tt.open")} />
         <Tip id="tt.draw" anchor="play-btn" text="Nothing to play? Draw a toy." show={myTurn && !result.changed && tipLearned("tt.drag")} />
         <Tip id="tt.hint" anchor="hint" text="Stuck? Tap for a hint." show={myTurn && tipLearned("tt.draw") && !result.changed} />
-      </TilesPublic>
+      </TilesTableBase>
     </div>
   );
 }

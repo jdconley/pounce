@@ -1,7 +1,7 @@
 import { canHit, type Group } from "@pounce/play-api/rules/groups";
 import { describe, expect, test } from "vitest";
 
-import { discardNeedsTarget, hitTargets, layDownGroups, skipTargets, targetLabel } from "../src/table/ct-moves";
+import { aimedGroup, discardNeedsTarget, hitTargets, layDownGroups, skipTargets, targetLabel } from "../src/table/ct-moves";
 
 import type { RoomView } from "@pounce/play-api/protocol";
 import type { CatTowerView } from "@pounce/play-api/rules/view";
@@ -117,11 +117,18 @@ describe("discards", () => {
     expect(discardNeedsTarget(0)).toBe(false);
   });
 
+  const four = [human("Mom", true), human("Ava", false), { kind: "bot", yours: false, presence: null } as const, human("Grandpa", false)];
+
   test("a skip goes to anyone else not already skipped and still playing", () => {
     const v = game({ pendingSkip: [false, true, false, false], forfeited: [false, false, true, false] });
-    expect(skipTargets(v, 0)).toEqual([3]);
-    expect(skipTargets(v, 3)).toEqual([0]);
-    expect(skipTargets(game({}), 2)).toEqual([0, 1, 3]);
+    expect(skipTargets(v, 0, four)).toEqual([3]);
+    expect(skipTargets(v, 3, four)).toEqual([0]);
+    expect(skipTargets(game({}), 2, four)).toEqual([0, 1, 3]);
+  });
+
+  test("a House Cat can be skipped; an open or closed seat can't", () => {
+    const seats = [human("Mom", true), { kind: "open", yours: false, presence: null } as const, { kind: "bot", yours: false, presence: null } as const, { kind: "closed", yours: false, presence: null } as const];
+    expect(skipTargets(game({}), 0, seats)).toEqual([2]);
   });
 });
 
@@ -145,5 +152,24 @@ describe("targetLabel: a laid group in words", () => {
     const both = room(g, [human("Mom", true), human("Ava", true), seats[2]!, seats[3]!]);
     expect(targetLabel(both, 0, 0)).toBe("Mom's 3s");
     expect(targetLabel(both, 1, 0)).toBe("Ava's run from 7");
+  });
+});
+
+describe("aimedGroup: the group the acting player points at", () => {
+  const g = game({ turn: 1, laid: [[threes], [sevenToTen], null, null] });
+  const aims = { 1: { target: { seat: 0, group: 0 } } };
+
+  test("someone else's aim glows", () => {
+    expect(aimedGroup(room(g, [human("Mom", true), human("Ava", false), human("Theo", false), human("Mia", false)]), aims)).toEqual({ seat: 0, group: 0 });
+  });
+
+  test("a seat this device holds never shows its own aim", () => {
+    expect(aimedGroup(room(g, [human("Mom", false), human("Ava", true), human("Theo", false), human("Mia", false)]), aims)).toBeNull();
+  });
+
+  test("nothing between rounds, and nothing from a seat not acting", () => {
+    const seats = [human("Mom", true), human("Ava", false), human("Theo", false), human("Mia", false)];
+    expect(aimedGroup(room({ ...g, status: "roundOver" } as CatTowerView, seats), aims)).toBeNull();
+    expect(aimedGroup(room({ ...g, turn: 2 }, seats), aims)).toBeNull();
   });
 });

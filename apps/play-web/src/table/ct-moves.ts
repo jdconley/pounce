@@ -9,9 +9,9 @@ import { matchPhase } from "@pounce/play-api/rules/phases";
 
 import { mySeats } from "../store/lobby";
 
-import { seatName } from "./seat";
+import { playing, seatName } from "./seat-names";
 
-import type { RoomView } from "@pounce/play-api/protocol";
+import type { GameAim, RoomView } from "@pounce/play-api/protocol";
 import type { CatTowerView } from "@pounce/play-api/rules/view";
 
 export type HitTarget = { seat: number; group: number; side?: HitSide };
@@ -44,9 +44,23 @@ export function layDownGroups(trays: CardId[][], phase: number): { cards: CardId
 /** A Cucumber skips someone: discarding one asks whose turn it skips. */
 export const discardNeedsTarget = (id: CardId): boolean => card(id).kind === "cucumber";
 
-/** The seats `seat` can skip with a Cucumber: everyone else not already skipped and still in the game. */
-export function skipTargets(view: CatTowerView, seat: number): number[] {
-  return view.forfeited.flatMap((out, i) => (i !== seat && !out && !view.pendingSkip[i] ? [i] : []));
+/**
+ * The seats `seat` can skip with a Cucumber: everyone else at the table (a person or a House Cat,
+ * from the room's `seats`) not already skipped and still in the game.
+ */
+export function skipTargets(view: CatTowerView, seat: number, seats: RoomView["seats"]): number[] {
+  return view.forfeited.flatMap((out, i) => (i !== seat && playing(seats[i]) && !out && !view.pendingSkip[i] ? [i] : []));
+}
+
+/**
+ * The laid group the player whose turn it is points at, mid-round, or null. Never a seat this
+ * device holds: it is pointing from here.
+ */
+export function aimedGroup(room: RoomView, aims: Record<number, GameAim>): { seat: number; group: number } | null {
+  const g = room.game;
+  if (!g || g.status !== "playing" || mySeats(room).includes(g.turn)) return null;
+  const aim = aims[g.turn];
+  return aim && "target" in aim ? aim.target : null;
 }
 
 const COAT_WORDS: Record<string, string> = { tabby: "tabbies", tuxedo: "tuxedos", calico: "calicos", gray: "grays" };
