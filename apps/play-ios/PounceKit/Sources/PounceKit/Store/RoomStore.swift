@@ -259,7 +259,16 @@ import Observation
     /// Tells the table where `seat`'s player is pointing; nil clears it. At most one goes out per
     /// 120 ms, the latest trailing. A clear goes at once and drops any aim still held. Tuna Tiles'
     /// empty sets are dropped first, as the contract asks of clients.
+    /// Nothing goes unless the table has a TV (`room.screen`): a server without TV answers an
+    /// aim `bad_message`, which would read as a refused move. Nor does a draft over the contract's
+    /// limits (`trimmed`): the TV keeps the last good aim.
     public func aim(seat: Seat, _ aim: GameAim?) {
+        guard room?.screen == true else {
+            aimTask?.cancel()
+            aimTask = nil
+            heldAim = nil
+            return
+        }
         guard let raw = aim else {
             aimTask?.cancel()
             aimTask = nil
@@ -268,7 +277,7 @@ import Observation
             send(.aim(seat: seat, aim: nil))
             return
         }
-        let aim = Self.trimmed(raw)
+        guard let aim = Self.trimmed(raw) else { return }
         let now = clock()
         let wait = aimSentAt.map { Self.aimInterval - .seconds(now.timeIntervalSince($0)) } ?? .zero
         guard wait > .zero else {
@@ -286,7 +295,7 @@ import Observation
             await sleep(wait)
             guard !Task.isCancelled, let self else { return }
             self.aimTask = nil
-            guard let held = self.heldAim else { return }
+            guard let held = self.heldAim, self.room?.screen == true else { return }
             self.heldAim = nil
             self.aimSentAt = self.clock()
             self.send(.aim(seat: held.seat, aim: held.aim))
@@ -296,9 +305,15 @@ import Observation
     /// An aim is waiting for the end of the 120 ms (tests).
     var hasHeldAim: Bool { heldAim != nil }
 
-    private static func trimmed(_ aim: GameAim) -> GameAim {
-        guard case .table(let sets) = aim else { return aim }
-        return .table(sets.filter { !$0.isEmpty })
+    /// The aim as it may be sent: a draft loses its empty sets; nil when it still breaks the
+    /// contract's limits (60 sets, 1 to 13 pieces a set, ids 0 to 105, none twice).
+    private static func trimmed(_ aim: GameAim) -> GameAim? {
+        guard case .table(let all) = aim else { return aim }
+        let sets = all.filter { !$0.isEmpty }
+        guard sets.count <= 60, sets.allSatisfy({ $0.count <= 13 }) else { return nil }
+        let ids = sets.flatMap { $0 }
+        guard ids.allSatisfy({ (0...105).contains($0) }), Set(ids).count == ids.count else { return nil }
+        return .table(sets)
     }
 
     // MARK: nudges
@@ -457,7 +472,7 @@ import Observation
         case .nudged(let seat, let from):
             applyNudged(seat: seat, from: from)
         case .aim(let seat, let aim):
-            if let aim { aims[seat] = aim } else { aims[seat] = nil }
+            aims[seat] = aim
         case .pong:
             break
         }

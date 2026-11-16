@@ -32,17 +32,26 @@ private final class AimClock: Sendable {
         let socket = FakeSocket()
         let clock = AimClock()
         let store = RoomStore(code: "BCDFG", socket: socket, clock: { clock.now }, aimSleep: { await clock.sleep($0) })
+        // A table with a TV: aims go only then.
+        if let room = try? room() { store.handle(.message(.snapshot(protocol: 1, seq: 1, room: room))) }
         return (store, socket, clock)
     }
 
     private func room(turn: Seat = 0) throws -> RoomView {
         var room = try fixtureRoom("snapshot-playing-with-hand")
         room.game?.turn = turn
+        room.screen = true
         return room
     }
 
     private func aims(_ socket: FakeSocket) -> [ClientMessage] {
         socket.calls.sends.filter { if case .aim = $0 { true } else { false } }
+    }
+
+    /// Yields up to 1000 times for `done`, then fails the test instead of hanging.
+    private func yields(until done: () -> Bool) async throws {
+        for _ in 0..<1000 where !done() { await Task.yield() }
+        try #require(done(), "never happened")
     }
 
     private func target(_ group: Int) -> GameAim { .target(seat: 1, group: group) }
@@ -68,12 +77,12 @@ private final class AimClock: Sendable {
         #expect(aims(socket) == [.aim(seat: 0, aim: target(0))], "held back")
 
         // One wait for the rest of the 120 ms, from the first held aim (30 ms in), however many came.
-        while clock.requested.isEmpty { await Task.yield() }
+        try await yields(until: { !clock.requested.isEmpty })
         #expect(clock.requested.count == 1)
         #expect(abs(clock.requested[0] / .milliseconds(90) - 1) < 0.01, "90 ms: \(clock.requested)")
         clock.advance(0.06)
         clock.release()
-        while store.hasHeldAim { await Task.yield() }
+        try await yields(until: { !store.hasHeldAim })
         await settled(store)
         #expect(aims(socket) == [.aim(seat: 0, aim: target(0)), .aim(seat: 0, aim: target(2))])
     }
@@ -100,7 +109,7 @@ private final class AimClock: Sendable {
         // Letting the cancelled wait go sends nothing more.
         clock.release()
         clock.advance(1)
-        await Task.yield()
+        for _ in 0..<50 { await Task.yield() }
         await settled(store)
         #expect(aims(socket).count == 2)
     }
@@ -110,6 +119,48 @@ private final class AimClock: Sendable {
         store.aim(seat: 1, .table([[1, 2, 3], [], [40, 41]]))
         await settled(store)
         #expect(aims(socket) == [.aim(seat: 1, aim: .table([[1, 2, 3], [40, 41]]))])
+    }
+
+    @Test func aTableWithoutATVSendsNoAimAndNoClear() async throws {
+        let (store, socket, _) = makeStore()
+        var room = try room()
+        room.screen = nil
+        store.handle(.message(.snapshot(protocol: 1, seq: 2, room: room)))
+        store.aim(seat: 0, target(0))
+        store.aim(seat: 0, target(1))
+        store.aim(seat: 0, nil)
+        await settled(store)
+        #expect(aims(socket).isEmpty)
+        #expect(!store.hasHeldAim)
+    }
+
+    @Test func aDraftOverTheLimitsIsNotSentAndTheNextGoodOneIs() async {
+        let (store, socket, clock) = makeStore()
+        let good: GameAim = .table([[1, 2, 3]])
+        store.aim(seat: 1, good)
+        let tooMany: [[TileID]] = (0..<61).map { [$0] }
+        let tooLong: [[TileID]] = [Array(0..<14)]
+        let twice: [[TileID]] = [[5, 6], [6, 7]]
+        let outOfRange: [[TileID]] = [[104, 106]]
+        let negative: [[TileID]] = [[-1]]
+        for bad in [tooMany, tooLong, twice, outOfRange, negative] {
+            clock.advance(1)
+            store.aim(seat: 1, .table(bad))
+        }
+        await settled(store)
+        #expect(aims(socket) == [.aim(seat: 1, aim: good)])
+        #expect(!store.hasHeldAim)
+        clock.advance(1)
+        store.aim(seat: 1, .table([[7, 8, 9]]))
+        await settled(store)
+        #expect(aims(socket).count == 2)
+        // The limits themselves are fine: 60 sets, 13 pieces, ids 0 and 105.
+        clock.advance(1)
+        store.aim(seat: 1, .table((0..<60).map { [$0] }))
+        clock.advance(1)
+        store.aim(seat: 1, .table([Array(0..<12) + [105]]))
+        await settled(store)
+        #expect(aims(socket).count == 4)
     }
 
     @Test func receivedAimsAreShownAndAClearDropsOne() throws {
