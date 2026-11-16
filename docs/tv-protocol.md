@@ -6,23 +6,27 @@ is additive. `PROTOCOL_VERSION` stays 1, and an app that knows none of it plays 
 as before.
 
 Everything here requires the server flag `TV` (`"on"` in `wrangler.jsonc`). With it off:
-- every route below is a 404;
+- every `/v1/screens` route and `/tv/{token}` is a 404;
+- `POST /v1/rooms` with `"screen": true` is a 400 `{ "error": "bad_request" }`;
 - `role=screen` is refused (404);
 - `screen` and `aim` are never sent;
 - an `aim` from a client is `bad_message`.
 
 ## A screen
 
-A screen is a device that connects to a room with `role=screen`. It holds no seat, so it
-gets exactly the view and events a device with no seats gets: no hand, no rack, no drawn card
-or tile.
+A screen is a device the room lists as one: it made the table (`"screen": true`), a phone
+linked it (TV links, below), or it followed Play again from a table that listed it. It connects
+with `role=screen`. It holds no seat, so it gets exactly the view and events a device with no
+seats gets: no hand, no rack, no drawn card or tile.
 
 - **Connecting.**
   - Apps: `GET /v1/rooms/{code}/ws?role=screen`, with the usual `Authorization` and `X-Pounce-*` headers.
   - Browsers: the same URL plus `games` and `app`, with subprotocols `pounce` and `pounce.token.<device token>`.
-  - Once a device has been a screen in a room, it stays one there, with or without the query.
+  - A listed device is a screen there for good, with or without the query.
+  - Asking for `role=screen` never lists a device. Knowing a room's code is not enough.
 - **Refused:**
   - 409 `{ "error": "seated" }` (close code 4409 for a browser) when the device holds a seat in that room or hosts it.
+  - 403 `{ "error": "not_screen" }` (close code 4403 for a browser) when the room doesn't list the device as a screen.
   - Use a device of its own for the TV. The web TV page keeps its credential under `pounce.tv.device`.
 - **What a screen may send.** Only `ping`, `presence` and `link`. Every other message is answered `{ "t": "error", "code": "not_allowed" }`.
 - **Membership.**
@@ -57,9 +61,14 @@ The last form clears it.
 
 - **Cat Tower:** `target` is a laid group, `laid[seat][group]`.
 - **Tuna Tiles:** `table` is the player's draft of the whole table. Every piece must be on the table or in the sender's own rack.
+- **The exact shape.** Anything else is answered `{ "t": "error", "code": "bad_message" }`, not dropped:
+  - The message is exactly `t`, `seat` (an integer, 0 or more) and, unless it clears, `aim`.
+  - Cat Tower: `aim` is exactly `{ "target": { "seat", "group" } }`, both integers 0 or more, no other keys.
+  - Tuna Tiles: `aim` is exactly `{ "table" }`: at most 60 sets (an empty table is fine). Each set holds 1 to 13 piece ids (integers 0 to 105). No id appears twice in the whole table. No other keys.
+  - Clients drop empty sets before sending, and never send a draft over these limits.
 - **Who may send it:**
   - Only the device that controls `seat`, while `seat` is the one to act, mid-round.
-  - Anything else (a seat that isn't acting, a group that isn't there, another seat's piece, between rounds) is dropped silently.
+  - A well-formed aim that doesn't fit the table (a seat that isn't acting, a group that isn't there, another seat's piece, between rounds) is dropped silently.
   - A screen's `aim` is `not_allowed`.
 - **Rate limit.**
   - At most 10 per device per rolling second; extras are dropped.
@@ -90,13 +99,17 @@ Body `{}`, or `{ "showing": "<ROOM CODE>" }` from a TV that is showing that tabl
   { "token": "<22 base64url chars>", "code": "<6 chars>", "url": "https://play.conleychaos.com/tv/<token>", "expiresIn": 600000 }
   ```
 
+- 400 `{ "error": "bad_request" }` for any other body, or a `showing` that isn't a room code.
 - 429 `{ "error": "rate_limited" }` beyond 30 per 10 minutes per device, or 120 per 10 minutes per address.
+- 503 `{ "error": "no_link_code" }` when no free backup code was found. Ask again.
 - The token is 128 random bits. The code uses the room-code alphabet.
 - Both expire after `expiresIn` ms (10 minutes; less on a fast dev server). The TV asks again at 80% and shows the new link. The old one simply expires.
 
 ### `GET /v1/screens/{token}/ws` (the TV's device token)
 
-Only the device that made the link may wait on it; anyone else gets 404. Messages:
+Only the device that made the link may wait on it; anyone else gets 404 (close code 4404 for a
+browser), as does a link that has expired. A request that isn't a socket upgrade gets 426
+`{ "error": "upgrade_required" }`. Messages:
 
 - `{ "t": "linked", "room": "<ROOM CODE>" }`. The link is spent. The TV is already listed as a screen there, so it opens `/v1/rooms/{room}/ws?role=screen`.
   - A socket that connects after the link happened hears this at once, until the link expires.
@@ -112,7 +125,7 @@ the phone has confirmed "Move the TV to this table?".
 | Answer | When |
 |---|---|
 | 200 `{ "linked": true }` | Linked, or the TV already shows this table |
-| 403 `{ "error": "not_seated" }` | The phone is not the host and holds no seat there. Also for a room that doesn't exist |
+| 403 `{ "error": "not_seated" }` | The phone is not the host and holds no seat there, or is itself a screen there. Also for a room that doesn't exist, or that went while linking |
 | 404 `{ "error": "not_found" }` | No live link with that token or code, or it is spent |
 | 409 `{ "error": "showing" }` | The TV shows another table and `move` wasn't sent |
 | 409 `{ "error": "seated" }` | The TV's device holds a seat at this table |
