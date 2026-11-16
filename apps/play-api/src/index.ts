@@ -52,7 +52,7 @@ import { newRoomCode, ROOM_CODE } from "./room/codes";
 import { DEVICE_HEADER, PLAYER_HEADER, ROLE_HEADER } from "./room/game-room";
 import { parseRoomName } from "./room/names";
 import { lockedFor, withoutUndrawable } from "./room/tables";
-import { blockPlayer, guardJoin, guardScreenCode, listBlocks, mayMint, mayReportFunnel, nameCheck, ownerReports, peekInvite, reportPlayer, unblockPlayer } from "./safety/safety";
+import { blockPlayer, guardJoin, guardScreenCode, listBlocks, mayMakeScreenLink, mayMint, mayReportFunnel, nameCheck, ownerReports, peekInvite, reportPlayer, unblockPlayer } from "./safety/safety";
 import { LINK_TOKEN, newLinkCode, newLinkToken, parseLinkBody, parseScreenBody, SCREEN_LINK_TTL_MS } from "./screens/screens";
 import { creatorLook, isMine, leavePair, myLeft, myOwn, myStreaks, myTrophies, PAIR_ID, pairStub, rejoinPair, syncPairPeople } from "./streaks/pairs";
 import { consentOn, liveOn, notifyOn, streaksOn, trophyOn } from "./streaks/profile";
@@ -292,6 +292,8 @@ async function newScreenLink(request: Request, env: Env, deviceId: string): Prom
   const body = parseScreenBody(await readObject(request));
   if (!body) return badRequest();
   const now = Date.now();
+  // Each link is two Durable Objects for ten minutes: rationed per device and per address.
+  if (!(await mayMakeScreenLink(env, deviceId, clientIp(request), now))) return json(429, { error: "rate_limited" });
   const token = newLinkToken(crypto.getRandomValues(new Uint8Array(LINK_TOKEN_BYTES)));
   for (let i = 0; i < LINK_CODE_ATTEMPTS; i++) {
     const code = newLinkCode(cryptoRng);

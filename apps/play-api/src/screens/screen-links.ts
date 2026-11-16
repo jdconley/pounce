@@ -95,15 +95,17 @@ export class ScreenLinks extends DurableObject<Env> {
     const row = this.row();
     const decision = linkDecision(row && { showing: row.showing, spent: row.spent === 1, expires: row.expires }, room, move, now);
     if (decision !== "link" || !row) return decision;
-    // Spent before anything is awaited, so two phones can't both use it.
-    this.ctx.storage.sql.exec("UPDATE link SET spent = 1, room = ? WHERE id = 1", room);
+    // Spent before anything is awaited, so two phones can't both use it. The room is kept only
+    // once it lists the TV, so a socket that connects meanwhile is never told too soon.
+    this.ctx.storage.sql.exec("UPDATE link SET spent = 1 WHERE id = 1");
     let added = false;
     try {
       added = await this.env.ROOMS.get(this.env.ROOMS.idFromName(room)).addScreen(row.owner);
     } finally {
-      if (!added) this.ctx.storage.sql.exec("UPDATE link SET spent = 0, room = NULL WHERE id = 1");
+      if (!added) this.ctx.storage.sql.exec("UPDATE link SET spent = 0 WHERE id = 1");
     }
     if (!added) return "seated";
+    this.ctx.storage.sql.exec("UPDATE link SET room = ? WHERE id = 1", room);
     const linked = JSON.stringify({ t: "linked", room });
     for (const ws of this.ctx.getWebSockets()) send(ws, linked);
     return "link";

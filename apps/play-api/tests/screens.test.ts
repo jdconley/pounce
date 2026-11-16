@@ -385,6 +385,32 @@ describe("screen links through the Worker", { timeout: 30_000 }, () => {
     expect(await linkedTo(next.heard, code)).toBe(true);
   });
 
+  test("two phones racing for one link: one wins", async () => {
+    const mf = await start();
+    const [tv, a, b] = [await mint(mf), await mint(mf), await mint(mf)];
+    const link = await newLink(mf, tv);
+    const waiting = await waitOn(mf, link.token, tv);
+    const x = await seated(mf, a);
+    const y = await seated(mf, b, "Bob");
+    const statuses = (await Promise.all([linkTv(mf, a, { token: link.token, room: x.code }), linkTv(mf, b, { token: link.token, room: y.code })])).map((r) => r.status);
+    expect([...statuses].sort()).toEqual([200, 404]);
+    const winner = statuses[0] === 200 ? x.code : y.code;
+    expect(await linkedTo(waiting.heard, winner)).toBe(true);
+    await settle();
+    expect(waiting.heard.filter((m) => m.t === "linked")).toEqual([{ t: "linked", room: winner }]);
+  });
+
+  test("a device makes at most 30 links in ten minutes", { timeout: 60_000 }, async () => {
+    const mf = await start();
+    const tv = await mint(mf);
+    for (let i = 0; i < 30; i++) await newLink(mf, tv);
+    const res = await call(mf, tv, "POST", "/v1/screens", {});
+    expect(res.status).toBe(429);
+    expect(await res.json()).toEqual({ error: "rate_limited" });
+    // Another device at the same address still can.
+    expect((await call(mf, await mint(mf), "POST", "/v1/screens", {})).status).toBe(201);
+  });
+
   test("only a phone at the table may link it", async () => {
     const mf = await start();
     const [tv, a, watcher] = [await mint(mf), await mint(mf), await mint(mf)];

@@ -21,6 +21,10 @@ const NAME_CHECKS_PER_MINUTE = 30;
 const MINTS_PER_MINUTE = 10;
 /** Funnel reports one device may send (the app sends a handful a day). */
 const FUNNEL_REPORTS_PER_HOUR = 30;
+/** Screen links one device, and one address, may make (a TV renews one every few minutes). */
+const SCREEN_LINKS_PER_DEVICE = 30;
+const SCREEN_LINKS_PER_IP = 120;
+const SCREEN_LINK_WINDOW = 10 * MINUTE;
 
 const fail = (status: number, error: string, extra?: Record<string, unknown>): Result<never> => ({ status, error, ...(extra ? { extra } : {}) });
 const limiter = (env: Env, key: string) => env.LIMITS.get(env.LIMITS.idFromName(key));
@@ -37,6 +41,15 @@ export function mayMint(env: Env, ip: string, now: number): Promise<boolean> {
 /** Whether one device may send another funnel report now. */
 export function mayReportFunnel(env: Env, deviceId: string, now: number): Promise<boolean> {
   return limiter(env, `funnel:${deviceId}`).take("funnel", FUNNEL_REPORTS_PER_HOUR, HOUR, now);
+}
+
+/** Whether one device, at its address, may make another screen link now. */
+export async function mayMakeScreenLink(env: Env, deviceId: string, ip: string, now: number): Promise<boolean> {
+  const [byDevice, byIp] = await Promise.all([
+    limiter(env, `screen-make:device:${deviceId}`).take("screen-make", SCREEN_LINKS_PER_DEVICE, SCREEN_LINK_WINDOW, now),
+    limiter(env, `screen-make:ip:${ip}`).take("screen-make", SCREEN_LINKS_PER_IP, SCREEN_LINK_WINDOW, now),
+  ]);
+  return byDevice && byIp;
 }
 
 /**
