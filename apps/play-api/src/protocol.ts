@@ -1,4 +1,4 @@
-import { parseAction as parseCatTowerAction } from "./games/cat-tower";
+import { parseAction as parseCatTowerAction, parseAim as parseCatTowerAim } from "./games/cat-tower";
 import { nameAllowed } from "./names/filter";
 import { ROOM_CODE_ALPHABET } from "./room/codes";
 import { parseRoomName } from "./room/names";
@@ -10,6 +10,7 @@ import type { GameEvent, Seat } from "./rules/engine";
 import type { CatTowerView } from "./rules/view";
 import type { StreakView } from "./streaks/pair-core";
 import type { TilesEvent } from "./tiles/engine";
+import type { TileId } from "./tiles/pieces";
 import type { TilesView } from "./tiles/view";
 
 export { ROOM_CODE_ALPHABET };
@@ -87,7 +88,16 @@ export type RoomView = {
    * counted from when this snapshot was sent.
    */
   retire?: RetireView;
+  /** With `TV` on: present only while a screen shows the table, or is within its grace. */
+  screen?: true;
 };
+
+/** Where a Cat Tower player is pointing: a group laid on the table. */
+export type CatTowerAim = { target: { seat: Seat; group: number } };
+/** Where a tile player is pointing: the table as they are arranging it, not yet played. */
+export type TilesAim = { table: TileId[][] };
+/** A player's live aim, for a screen to show. Each game says what its own looks like. */
+export type GameAim = CatTowerAim | TilesAim;
 
 export type NudgeView = { seat: Seat; sent: boolean; wait: number };
 export type RetireView = { seat: Seat; wait: number };
@@ -125,7 +135,9 @@ export type ClientMessage =
    * Forfeits `seat` for its holder, whose move has waited days: from anyone else still in the
    * game. Errors: `not_their_turn`, `too_soon`.
    */
-  | { t: "retire"; seat: Seat };
+  | { t: "retire"; seat: Seat }
+  /** Where `seat` is pointing, for a screen. No `aim` clears it. */
+  | { t: "aim"; seat: Seat; aim?: GameAim };
 
 /** Every `error` code the server sends. */
 export type ErrorCode =
@@ -183,7 +195,9 @@ export type ServerMessage =
   /** To the nudging device: the nudge to `seat` went (not a state change, so no seq). */
   | { t: "nudgeSent"; seat: Seat }
   /** To the devices of the person in `seat`: the person in `from` nudged them (no seq). */
-  | { t: "nudged"; seat: Seat; from: Seat };
+  | { t: "nudged"; seat: Seat; from: Seat }
+  /** Where `seat` is pointing; no `aim` means it stopped. Not a state change, so no seq. */
+  | { t: "aim"; seat: Seat; aim?: GameAim };
 
 export type BadMessage = { error: "bad_message" | "bad_name" };
 
@@ -233,7 +247,7 @@ function named(message: ClientMessage | null, name: string | undefined): ClientM
   return message && name !== undefined && !nameAllowed(name) ? BAD_NAME : message;
 }
 
-function parseObject(o: Obj, parseAction: ActionParser): ClientMessage | BadMessage | null {
+function parseObject(o: Obj, parseAction: ActionParser, parseAim: AimParser): ClientMessage | BadMessage | null {
   switch (o.t) {
     case "start":
       return hasKeys(o, ["t"]) ? { t: "start" } : null;
@@ -292,6 +306,12 @@ function parseObject(o: Obj, parseAction: ActionParser): ClientMessage | BadMess
     case "retire":
       if (!hasKeys(o, ["t", "seat"]) || !isInt(o.seat, 0)) return null;
       return { t: "retire", seat: o.seat };
+    case "aim": {
+      if (!hasKeys(o, ["t", "seat"], ["aim"]) || !isInt(o.seat, 0)) return null;
+      if (!("aim" in o)) return { t: "aim", seat: o.seat };
+      const aim = parseAim(o.aim);
+      return aim ? { t: "aim", seat: o.seat, aim } : null;
+    }
     case "link":
       if (!hasKeys(o, ["t", "state"]) || (o.state !== "weak" && o.state !== "good")) return null;
       return { t: "link", state: o.state };
@@ -303,14 +323,21 @@ function parseObject(o: Obj, parseAction: ActionParser): ClientMessage | BadMess
 /** A game's own check of an `act` message's `action` (`GameModule.parseAction`). */
 export type ActionParser = (raw: unknown) => GameAction | null;
 
+/** A game's own check of an `aim` message's `aim` (`GameModule.parseAim`). */
+export type AimParser = (raw: unknown) => GameAim | null;
+
 /**
  * Parses and fully validates a client frame. This is the only guard in front
  * of the rules engine, which trusts the shape of every action it receives.
  * An `act` message's action is checked by `parseAction`, the room's game's own
- * parser; left out, Cat Tower's.
+ * parser; left out, Cat Tower's. An `aim` message's aim likewise goes to `parseAim`.
  * `bad_name`: well-formed, but a name in it is refused by the name filter.
  */
-export function parseClientMessage(raw: string, parseAction: ActionParser = parseCatTowerAction): ClientMessage | BadMessage {
+export function parseClientMessage(
+  raw: string,
+  parseAction: ActionParser = parseCatTowerAction,
+  parseAim: AimParser = parseCatTowerAim,
+): ClientMessage | BadMessage {
   if (new TextEncoder().encode(raw).length > MAX_MESSAGE_BYTES) return BAD;
   let value: unknown;
   try {
@@ -319,5 +346,5 @@ export function parseClientMessage(raw: string, parseAction: ActionParser = pars
     return BAD;
   }
   if (!isObj(value)) return BAD;
-  return parseObject(value, parseAction) ?? BAD;
+  return parseObject(value, parseAction, parseAim) ?? BAD;
 }

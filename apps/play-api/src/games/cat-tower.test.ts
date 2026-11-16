@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest";
 import { seedOf } from "../../tests/seeds";
 import { createRng } from "../rules/rng";
 
-import { catTower } from "./cat-tower";
+import { catTower, parseAim } from "./cat-tower";
 
 describe("catTower module", () => {
   it("declares id and seat bounds", () => {
@@ -68,5 +68,34 @@ describe("catTower module", () => {
       { kind: "turn" as const, seat: 2 },
     ];
     expect(catTower.endsTurn({ type: "nextRound" }, dealt, 0)).toBe(false);
+  });
+});
+
+describe("cat tower aim", () => {
+  it("parseAim takes exactly a target seat and group", () => {
+    expect(parseAim({ target: { seat: 1, group: 0 } })).toEqual({ target: { seat: 1, group: 0 } });
+    expect(catTower.parseAim({ target: { seat: 1, group: 0 } })).toEqual({ target: { seat: 1, group: 0 } });
+    for (const bad of [
+      { target: { seat: 1 } },
+      { target: { seat: 1, group: 0 }, x: 1 },
+      { target: { seat: 1, group: 0, x: 1 } },
+      { target: { seat: -1, group: 0 } },
+      { target: { seat: 1, group: 0.5 } },
+      {},
+      null,
+      [],
+      5,
+    ])
+      expect(parseAim(bad)).toBeNull();
+  });
+
+  it("aimAllowed only for a group another seat has laid", () => {
+    const s = catTower.create(3, seedOf(42));
+    s.laid[1] = [{ kind: "set", cards: [8, 32, 56], value: 9 }];
+    const at = (seat: number, group: number) => ({ target: { seat, group } });
+    expect(catTower.aimAllowed(s, 0, at(1, 0))).toBe(true);
+    expect(catTower.aimAllowed(s, 0, at(2, 0))).toBe(false);
+    expect(catTower.aimAllowed(s, 0, at(1, 1))).toBe(false);
+    expect(catTower.aimAllowed(s, 0, at(3, 0))).toBe(false);
   });
 });

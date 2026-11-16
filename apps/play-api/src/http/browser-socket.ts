@@ -2,10 +2,10 @@
  * Game sockets from a browser (web player design, "Talking to the server"). A browser's
  * WebSocket can send no `Authorization` or custom header, and can't read a refused upgrade's
  * status. So a browser offers the subprotocols `pounce` and `pounce.token.<device token>`, and
- * puts what the app headers would say in the query (`games`, `app`). The Worker moves them into
- * the headers the rest of the server reads, and answers with the `pounce` subprotocol. A refusal
- * becomes a socket that opens and closes at once with a code the page can read: 4000 plus the
- * HTTP status (4404, 4429, 4426, 4401).
+ * puts what the app headers would say in the query (`games`, `app`), and a TV its `role`. The
+ * Worker moves them into the headers the rest of the server reads, and answers with the `pounce`
+ * subprotocol. A refusal becomes a socket that opens and closes at once with a code the page can
+ * read: 4000 plus the HTTP status (4404, 4429, 4426, 4401).
  *
  * Only a request offering `pounce` is a browser's: the iOS app's sockets never reach here.
  */
@@ -51,7 +51,9 @@ export function asAppSocket(request: Request): Request {
   if (games !== null && games.length <= MAX_QUERY_VALUE) headers.set(GAMES_HEADER, games);
   const app = url.searchParams.get("app");
   if (app !== null && app.length <= MAX_QUERY_VALUE) headers.set(APP_HEADER, app);
-  url.search = "";
+  // The one thing a socket's query says that no header does: a TV asking to be a screen.
+  const role = url.searchParams.get("role");
+  url.search = role === "screen" ? "?role=screen" : "";
   return new Request(url.toString(), { method: request.method, headers });
 }
 

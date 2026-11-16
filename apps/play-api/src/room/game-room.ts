@@ -3,7 +3,7 @@ import { DurableObject } from "cloudflare:workers";
 import { servedAt, storeKnown } from "../app/live";
 import { gameUnsupported } from "../app/status";
 import { APP_HEADER, parseApp } from "../app/version";
-import { devSpeed, linkOn, nudgeOn } from "../env";
+import { devSpeed, linkOn, nudgeOn, tvOn } from "../env";
 import { reached } from "../funnel/funnel";
 import { roomSteps } from "../funnel/room";
 import { DEFAULT_GAME, GAMES_HEADER, gamesListed, gamesOn, gameTitle, type GameId } from "../games";
@@ -47,6 +47,8 @@ type Room = RoomCore<unknown>;
 
 /** Internal header the Worker sets to the verified device id. */
 export const DEVICE_HEADER = "x-play-device";
+/** Internal header the Worker sets to `screen` for a socket that asked to be a screen (a TV), only while `TV` is on. */
+export const ROLE_HEADER = "x-play-role";
 /** Internal header the Worker sets to the device's people and their players, as JSON `{personId: playerId}`. */
 export const PLAYER_HEADER = "x-play-player";
 
@@ -63,6 +65,9 @@ const ROOM_CODE_ATTEMPTS = 5;
 const STREAK_ATTEMPTS = 2;
 
 const cryptoRng = (): number => (crypto.getRandomValues(new Uint32Array(1))[0] as number) / 2 ** 32;
+
+/** A refused upgrade: the status and `{ "error" }`, which a browser hears as close code 4000 + status. */
+const refuse = (status: number, error: string): Response => new Response(JSON.stringify({ error }), { status, headers: { "content-type": "application/json" } });
 
 /**
  * One instance per room code. Holds the room's state in SQLite, the devices'
@@ -99,7 +104,7 @@ export class GameRoom extends DurableObject<Env> {
   }
 
   private features(): RoomFeatures {
-    return { streaks: streaksOn(this.env), live: liveOn(this.env), link: linkOn(this.env), nudge: nudgeOn(this.env), games: gamesOn(this.env) };
+    return { streaks: streaksOn(this.env), live: liveOn(this.env), link: linkOn(this.env), nudge: nudgeOn(this.env), games: gamesOn(this.env), tv: tvOn(this.env) };
   }
 
   private createSchema(): void {
@@ -121,13 +126,15 @@ export class GameRoom extends DurableObject<Env> {
     name?: string,
     look?: Look,
     game?: GameId,
+    /** A TV made this table: it is the screen, and `hostDeviceId` is "" until the first phone sits. */
+    screen?: string,
   ): Promise<{ ok: true } | { exists: true } | { off: true }> {
     if (this.core) return { exists: true };
     // The Worker has checked; the room checks again, so no caller can deal a game the flag doesn't list.
     if (!gamesOn(this.env).includes(game ?? DEFAULT_GAME)) return { off: true };
     this.createSchema();
     this.core = new RoomCore<unknown>(
-      RoomCore.create(code, hostDeviceId, Date.now(), name, look, game),
+      RoomCore.create(code, hostDeviceId, Date.now(), name, look, game, screen),
       Date.now,
       cryptoRng,
       undefined,
@@ -201,6 +208,12 @@ export class GameRoom extends DurableObject<Env> {
     }
     const pair = new WebSocketPair();
     const [client, server] = Object.values(pair) as [WebSocket, WebSocket];
+    // A device that sits or hosts is no screen, and only a device the room lists is one: it made
+    // the table, a phone linked it, or it followed Play again. Asked before the socket exists, so
+    // each refusal is a plain status.
+    const screen = tvOn(this.env) && request.headers.get(ROLE_HEADER) === "screen";
+    if (screen && !this.core.mayScreen(deviceId)) return refuse(409, "seated");
+    if (screen && !this.core.isScreen(deviceId)) return refuse(403, "not_screen");
     this.ctx.acceptWebSocket(server, [deviceId]);
     server.serializeAttachment({ deviceId });
     await this.after(this.core.connect(deviceId, parsePlayers(request.headers.get(PLAYER_HEADER))));
@@ -213,9 +226,16 @@ export class GameRoom extends DurableObject<Env> {
       ws.close(NORMAL_CLOSURE);
       return;
     }
-    const parsed = typeof data === "string" ? parseClientMessage(data, core.parseAction) : null;
+    const parsed = typeof data === "string" ? parseClientMessage(data, core.parseAction, core.parseAim) : null;
     if (parsed === null || "error" in parsed) {
       send(ws, parsed === null ? BAD_MESSAGE : { t: "error", code: parsed.error });
+      return;
+    }
+    // Where a player points: delivered live, never kept. No save, no alarm, no tables list.
+    if (parsed.t === "aim") {
+      for (const { to, message } of core.handle(deviceOf(ws), parsed)) {
+        for (const socket of to === "all" ? this.ctx.getWebSockets() : this.ctx.getWebSockets(to)) send(socket, message);
+      }
       return;
     }
     const refused = await this.refusal(deviceOf(ws), parsed).catch(() => null);
@@ -270,8 +290,27 @@ export class GameRoom extends DurableObject<Env> {
     const core = this.core;
     if (!core) return "none";
     const { state } = core;
-    const member = deviceId === state.hostDeviceId || state.devices[deviceId] !== undefined || core.controlledSeats(deviceId).length > 0;
+    const member = core.isScreen(deviceId) || deviceId === state.hostDeviceId || state.devices[deviceId] !== undefined || core.controlledSeats(deviceId).length > 0;
     return member ? "member" : "exists";
+  }
+
+  /** Whether `deviceId` may link a screen to this table (Task 7): the host or someone seated, never a screen. */
+  mayLink(deviceId: string): "ok" | "not_seated" | "none" {
+    const core = this.core;
+    if (!core) return "none";
+    return core.mayLink(deviceId) ? "ok" : "not_seated";
+  }
+
+  /**
+   * Lists `deviceId` as a screen here before it connects (a link). Nothing changes when there is
+   * no table (`none`) or the device sits or hosts here (`seated`): a seat's device is never a screen.
+   */
+  async addScreen(deviceId: string): Promise<"ok" | "seated" | "none"> {
+    if (!this.core) return "none";
+    if (!this.core.mayScreen(deviceId)) return "seated";
+    this.core.addScreen(deviceId);
+    await this.after([]);
+    return "ok";
   }
 
   /**
@@ -952,7 +991,8 @@ function tableSeats(state: RoomState<unknown>, mine: number[]): TableSeat[] {
 }
 
 function tableDevices(state: RoomState<unknown>): Set<string> {
-  const out = new Set<string>([state.hostDeviceId]);
+  // A TV's table has no host until the first phone sits.
+  const out = new Set<string>(state.hostDeviceId === "" ? [] : [state.hostDeviceId]);
   for (const seat of state.seats) if (seat.deviceId) out.add(seat.deviceId);
   return out;
 }

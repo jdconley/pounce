@@ -141,6 +141,8 @@ export async function worker(
     devSpeed?: number;
     /** `REPORTS_KEY`: the owner's key for `GET /v1/admin/reports`. */
     reportsKey?: string;
+    /** `TV`: Pounce on the TV (screens). Off unless asked for. */
+    tv?: boolean;
     /** `GAMES`: the games beyond Cat Tower that rooms may be created for (e.g. "tiles"). Off unless given. */
     games?: string;
     /** `APP_MINIMUM`, `APP_MINIMUM_FORCE`, `APP_LATEST` and `APP_STORE_URL` (app updates). Unset unless given. */
@@ -166,6 +168,7 @@ export async function worker(
       LIMITS: { className: "Limiter", useSQLite: true },
       REPORTS: { className: "Reports", useSQLite: true },
       PAIRS: { className: "Pair", useSQLite: true },
+      SCREEN_LINKS: { className: "ScreenLinks", useSQLite: true },
       ...(options.links ? { LINKS: { className: "Links", useSQLite: true } } : {}),
       ...(options.consent
         ? { CONSENTS: { className: "Consents", useSQLite: true }, KITTENS: { className: "KittenIndex", useSQLite: true } }
@@ -188,6 +191,7 @@ export async function worker(
       ...(options.devSpeed ? { DEV_SPEED: String(options.devSpeed) } : {}),
       ...(options.reportsKey ? { REPORTS_KEY: options.reportsKey } : {}),
       ...(options.games ? { GAMES: options.games } : {}),
+      ...(options.tv ? { TV: "on" } : {}),
       ...(options.appMinimum === undefined ? {} : { APP_MINIMUM: options.appMinimum }),
       ...(options.appMinimumForce === undefined ? {} : { APP_MINIMUM_FORCE: options.appMinimumForce }),
       ...(options.appLatest === undefined ? {} : { APP_LATEST: options.appLatest }),

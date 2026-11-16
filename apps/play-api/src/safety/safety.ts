@@ -21,6 +21,10 @@ const NAME_CHECKS_PER_MINUTE = 30;
 const MINTS_PER_MINUTE = 10;
 /** Funnel reports one device may send (the app sends a handful a day). */
 const FUNNEL_REPORTS_PER_HOUR = 30;
+/** Screen links one device, and one address, may make (a TV renews one every few minutes). */
+const SCREEN_LINKS_PER_DEVICE = 30;
+const SCREEN_LINKS_PER_IP = 120;
+const SCREEN_LINK_WINDOW = 10 * MINUTE;
 
 const fail = (status: number, error: string, extra?: Record<string, unknown>): Result<never> => ({ status, error, ...(extra ? { extra } : {}) });
 const limiter = (env: Env, key: string) => env.LIMITS.get(env.LIMITS.idFromName(key));
@@ -37,6 +41,15 @@ export function mayMint(env: Env, ip: string, now: number): Promise<boolean> {
 /** Whether one device may send another funnel report now. */
 export function mayReportFunnel(env: Env, deviceId: string, now: number): Promise<boolean> {
   return limiter(env, `funnel:${deviceId}`).take("funnel", FUNNEL_REPORTS_PER_HOUR, HOUR, now);
+}
+
+/** Whether one device, at its address, may make another screen link now. */
+export async function mayMakeScreenLink(env: Env, deviceId: string, ip: string, now: number): Promise<boolean> {
+  const [byDevice, byIp] = await Promise.all([
+    limiter(env, `screen-make:device:${deviceId}`).take("screen-make", SCREEN_LINKS_PER_DEVICE, SCREEN_LINK_WINDOW, now),
+    limiter(env, `screen-make:ip:${ip}`).take("screen-make", SCREEN_LINKS_PER_IP, SCREEN_LINK_WINDOW, now),
+  ]);
+  return byDevice && byIp;
 }
 
 /**
@@ -58,6 +71,20 @@ export async function guardJoin(env: Env, code: string, deviceId: string, ip: st
   return { exists: !failed };
 }
 
+/**
+ * The guard on linking a TV by its backup code: a wrong code is counted against the device and
+ * its address under their own keys (joining a table by code is counted apart), with the same
+ * backoff. Returns the seconds to wait when locked out, right code or wrong; else null.
+ */
+export async function guardScreenCode(env: Env, failed: boolean, deviceId: string, ip: string, now: number): Promise<number | null> {
+  const [byDevice, byIp] = await Promise.all([
+    limiter(env, `screen:device:${deviceId}`).guess(failed, DEVICE_JOIN_RULE, now),
+    limiter(env, `screen:ip:${ip}`).guess(failed, IP_JOIN_RULE, now),
+  ]);
+  const retryAt = Math.max(byDevice.retryAt ?? 0, byIp.retryAt ?? 0);
+  return retryAt > 0 ? Math.max(1, Math.ceil((retryAt - now) / 1000)) : null;
+}
+
 /** What an invite page says of a table: its name, its game, and who invited (null: nobody named). */
 export type InvitePeek = { table: string | null; game: string; host: { name: string; cat: number } | null };
 
@@ -73,7 +100,8 @@ export async function peekInvite(env: Env, code: string, ip: string, now: number
     const { retryAt } = await limiter(env, `ip:${ip}`).guess(found === null, IP_JOIN_RULE, now);
     if (retryAt !== null) return "hidden";
     if (!found || found.over) return "gone";
-    const kitten = (await env.DEVICES.get(env.DEVICES.idFromName(found.hostDeviceId)).ageBand()) === "kitten";
+    // A TV's table with nobody seated has no host to ask about: it names nobody.
+    const kitten = found.hostDeviceId !== "" && (await env.DEVICES.get(env.DEVICES.idFromName(found.hostDeviceId)).ageBand()) === "kitten";
     return kitten ? { table: null, game: found.game, host: null } : { table: found.table, game: found.game, host: found.host };
   } catch {
     return "hidden";

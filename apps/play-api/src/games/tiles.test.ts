@@ -71,3 +71,44 @@ describe("tiles module", () => {
     expect(tiles.endsTurn({ type: "draw" }, [], 0)).toBe(false);
   });
 });
+
+describe("tiles aim", () => {
+  it("parseAim takes a table of sets of distinct piece ids, and nothing else", () => {
+    expect(tiles.parseAim({ table: [[1, 2, 3], [4]] })).toEqual({ table: [[1, 2, 3], [4]] });
+    expect(tiles.parseAim({ table: [] })).toEqual({ table: [] });
+    const sets61 = Array.from({ length: 61 }, (_, i) => [i]);
+    const fourteen = [Array.from({ length: 14 }, (_, i) => i)];
+    for (const bad of [
+      { table: [[1, 2], [2, 3]] },
+      { table: sets61 },
+      { table: [[]] },
+      { table: [[9999]] },
+      { table: fourteen },
+      { table: [["a"]] },
+      { table: "x" },
+      { table: [[1]], x: 1 },
+      null,
+      [],
+    ])
+      expect(tiles.parseAim(bad)).toBeNull();
+    // 61 sets of one are refused for their count, and 60 are fine.
+    expect(tiles.parseAim({ table: sets61.slice(0, 60) })).not.toBeNull();
+  });
+
+  it("aimAllowed only for pieces on the table or this seat's own rack", () => {
+    const s = tiles.create(3, seedOf(42));
+    const onTable = s.racks[1]!.slice(0, 2);
+    s.racks[1] = s.racks[1]!.slice(2);
+    s.table = [onTable];
+    const mine = s.racks[0]!.slice(0, 2);
+    expect(tiles.aimAllowed(s, 0, { table: [onTable, mine] })).toBe(true);
+    expect(tiles.aimAllowed(s, 0, { table: [[...onTable, s.racks[1]![0]!]] })).toBe(false);
+    expect(tiles.aimAllowed(s, 0, { table: [[s.pool[0]!]] })).toBe(false);
+  });
+
+  it("aimAllowed is false, not a throw, for a seat that isn't there", () => {
+    const s = tiles.create(2, seedOf(42));
+    expect(tiles.aimAllowed(s, 7, { table: [[s.racks[0]![0]!]] })).toBe(false);
+    expect(tiles.aimAllowed(s, 7, { table: [] })).toBe(true);
+  });
+});

@@ -2,7 +2,7 @@ import { readFileSync } from "node:fs";
 
 import { describe, expect, it } from "vitest";
 
-import { devSpeed } from "./env";
+import { devSpeed, tvOn } from "./env";
 import { gamesOn } from "./games";
 import { liveOn, notifyOn, streaksOn, trophyOn } from "./streaks/profile";
 
@@ -77,5 +77,14 @@ describe("TROPHY in production", () => {
     const read = (key: string) => new RegExp(`"${key}"\\s*:\\s*"([^"]*)"`).exec(config)?.[1];
     expect(read("TROPHY")).toBeDefined();
     expect(trophyOn({ STREAKS: read("STREAKS"), TROPHY: read("TROPHY") })).toBe(true);
+  });
+});
+
+describe("tvOn", () => {
+  it("is on for the same words as the other flags, and off otherwise", () => {
+    expect(tvOn({ TV: "on" })).toBe(true);
+    expect(tvOn({ TV: "ON" })).toBe(true);
+    expect(tvOn({})).toBe(false);
+    expect(tvOn({ TV: "off" })).toBe(false);
   });
 });
