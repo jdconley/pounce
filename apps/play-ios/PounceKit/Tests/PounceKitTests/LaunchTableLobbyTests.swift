@@ -336,10 +336,13 @@ private func lobby(_ kinds: [SeatKind], mine: Set<Seat> = [0]) -> TableModel {
         #expect(seen.isSuperset(of: [.cats, .swipeHome]))
     }
 
-    @Test func gestureTipsSurviveTheTutorialFile() throws {
+    @Test func gestureTipsSurviveTheTutorialFile() async throws {
         let dir = FileManager.default.temporaryDirectory.appendingPathComponent("pounce-tests-\(UUID().uuidString)")
-        let store = TutorialStore(directory: dir)
+        let store = await TutorialStore.open(directory: dir)
         store.markSeen([.scores, .cats, .swipeHome], person: "a")
         #expect(store.load()["a"] == [.scores, .cats, .swipeHome])
+        // The file has them too: memory is the truth, and the disk follows.
+        await store.flush()
+        #expect(await TutorialStore.open(directory: dir).load()["a"] == [.scores, .cats, .swipeHome])
     }
 }

@@ -165,24 +165,39 @@ public struct RatingRecord: Codable, Equatable, Sendable {
     }
 }
 
-/// `rating.json` in the given directory (next to `people.json`), rewritten atomically on every
-/// change. Not thread-safe by itself; callers use it from one actor (the app model).
+/// `rating.json` in the given directory (next to `people.json`), kept in memory and written behind
+/// (`JSONFile`), atomically, on every change. Not thread-safe by itself; callers use it from one
+/// actor (the app model).
 public final class RatingStore {
-    private let fileURL: URL
+    private let file: JSONFile<RatingRecord>
+    private var record: RatingRecord?
 
-    public init(directory: URL) {
-        fileURL = directory.appendingPathComponent("rating.json")
+    /// `loaded` is what `file.read()` returned, read off the main actor at launch.
+    public init(file: JSONFile<RatingRecord>, loaded: RatingRecord?) {
+        self.file = file
+        record = loaded
     }
+
+    public static func file(directory: URL) -> JSONFile<RatingRecord> {
+        JSONFile(url: directory.appendingPathComponent("rating.json"), coding: .sorted)
+    }
+
+    /// Reads the file (off the caller's actor) and opens the store on it.
+    public static func open(directory: URL) async -> sending RatingStore {
+        let file = file(directory: directory)
+        return RatingStore(file: file, loaded: await file.read())
+    }
+
+    /// Waits for every save so far to reach the disk.
+    public nonisolated(nonsending) func flush() async { await file.flush() }
 
     /// The record; the first call on a device makes it, with `now` as the first launch.
     @discardableResult
     public func load(now: Date = .now) -> RatingRecord {
-        if let data = try? Data(contentsOf: fileURL), let record = try? JSONDecoder().decode(RatingRecord.self, from: data) {
-            return record
-        }
-        let record = RatingRecord(firstLaunch: now)
-        save(record)
-        return record
+        if let record { return record }
+        let made = RatingRecord(firstLaunch: now)
+        save(made)
+        return made
     }
 
     /// Counts the finished table `code` once, however often it is opened.
@@ -208,12 +223,8 @@ public final class RatingStore {
         return record
     }
 
-    private func save(_ record: RatingRecord) {
-        let encoder = JSONEncoder()
-        encoder.outputFormatting = .sortedKeys
-        guard let data = try? encoder.encode(record) else { return }
-        try? FileManager.default.createDirectory(
-            at: fileURL.deletingLastPathComponent(), withIntermediateDirectories: true)
-        try? data.write(to: fileURL, options: .atomic)
+    private func save(_ next: RatingRecord) {
+        record = next
+        file.save(next)
     }
 }

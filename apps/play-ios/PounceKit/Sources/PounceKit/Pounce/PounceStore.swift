@@ -28,17 +28,22 @@ import Observation
     public private(set) var pending: [PendingAnswer] = []
 
     @ObservationIgnored private let service: any PounceService
-    @ObservationIgnored private let file: URL?
+    @ObservationIgnored private let file: JSONFile<[PendingAnswer]>?
     @ObservationIgnored private var inFlight: Set<String> = []
 
-    public init(service: any PounceService, file: URL?) {
+    /// `pounce-answers.json` at `url`, written behind.
+    public nonisolated static func file(at url: URL) -> JSONFile<[PendingAnswer]> { JSONFile(url: url) }
+
+    /// `loaded` is what `file.read()` returned, read off the main actor at launch. No file keeps
+    /// the queue in memory only (the widgets' one-shot send).
+    public init(service: any PounceService, file: JSONFile<[PendingAnswer]>?, loaded: [PendingAnswer]? = nil) {
         self.service = service
         self.file = file
-        if let file, let data = try? Data(contentsOf: file),
-           let saved = try? JSONDecoder().decode([PendingAnswer].self, from: data) {
-            pending = saved
-        }
+        pending = loaded ?? []
     }
+
+    /// Waits for every save so far to reach the disk.
+    public func flushFile() async { await file?.flush() }
 
     // MARK: sending
 
@@ -93,6 +98,8 @@ import Observation
             pending.append(answer)
         }
         save()
+        // On disk before the request goes out, so a kill mid-request still retries it.
+        await file?.flush()
         return await flush(answer.id)
     }
 
@@ -139,9 +146,6 @@ import Observation
     }
 
     private func save() {
-        guard let file else { return }
-        guard let data = try? JSONEncoder().encode(pending) else { return }
-        try? FileManager.default.createDirectory(at: file.deletingLastPathComponent(), withIntermediateDirectories: true)
-        try? data.write(to: file, options: .atomic)
+        file?.save(pending)
     }
 }

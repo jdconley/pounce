@@ -73,6 +73,10 @@ public enum TilesHints {
     /// on the end of a set on the rug. Before opening only new sets count, and only once the
     /// rack's sets (with the ones already drafted) reach 30. Nil when the finder comes up empty:
     /// time to draw.
+    /// `next(_:)` off the caller's actor, for the table (the main thread draws, nothing else).
+    @concurrent
+    public static func nextOffMain(_ draft: TilesDraft) async -> Hint? { next(draft) }
+
     public static func next(_ draft: TilesDraft) -> Hint? {
         let rack = draft.rack
         let sets = bestSets(rack)

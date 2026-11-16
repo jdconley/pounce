@@ -154,10 +154,12 @@ struct QRTile: View {
         .background(RoundedRectangle(cornerRadius: 28, style: .continuous).fill(.white))
         .overlay(RoundedRectangle(cornerRadius: 28, style: .continuous).strokeBorder(Palette.ink, lineWidth: 5))
         .shadow(color: Palette.ink.opacity(0.55), radius: 0, x: 0, y: 7)
-        .task(id: text) { image = Self.render(text) }
+        .task(id: text) { image = await Self.render(text) }
     }
 
-    static func render(_ text: String) -> CGImage? {
+    /// Off the main thread: a Core Image context is slow to make and the render is real work.
+    @concurrent
+    static func render(_ text: String) async -> CGImage? {
         let filter = CIFilter.qrCodeGenerator()
         filter.message = Data(text.utf8)
         filter.correctionLevel = "M"

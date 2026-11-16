@@ -28,28 +28,37 @@ public struct UpdateRecord: Codable, Equatable, Sendable {
     }
 }
 
-/// `updates.json` in the given directory (next to `people.json`), rewritten atomically on every
-/// change. Not thread-safe by itself; callers use it from one actor (the app's update model).
+/// `updates.json` in the given directory (next to `people.json`), kept in memory and written
+/// behind (`JSONFile`), atomically, on every change. Not thread-safe by itself; callers use it from
+/// one actor (the app's update model).
 public final class UpdateStore {
-    private let fileURL: URL
+    private let file: JSONFile<UpdateRecord>
+    private var record: UpdateRecord
 
-    public init(directory: URL) {
-        fileURL = directory.appendingPathComponent("updates.json")
+    /// `loaded` is what `file.read()` returned, read off the main actor at launch.
+    public init(file: JSONFile<UpdateRecord>, loaded: UpdateRecord?) {
+        self.file = file
+        record = loaded ?? UpdateRecord()
     }
 
-    public func load() -> UpdateRecord {
-        guard let data = try? Data(contentsOf: fileURL), let record = try? JSONDecoder().decode(UpdateRecord.self, from: data) else {
-            return UpdateRecord()
-        }
-        return record
+    public static func file(directory: URL) -> JSONFile<UpdateRecord> {
+        JSONFile(url: directory.appendingPathComponent("updates.json"), coding: .sorted)
     }
 
-    public func save(_ record: UpdateRecord) {
-        let encoder = JSONEncoder()
-        encoder.outputFormatting = .sortedKeys
-        guard let data = try? encoder.encode(record) else { return }
-        try? FileManager.default.createDirectory(at: fileURL.deletingLastPathComponent(), withIntermediateDirectories: true)
-        try? data.write(to: fileURL, options: .atomic)
+    /// Reads the file (off the caller's actor) and opens the store on it.
+    public static func open(directory: URL) async -> sending UpdateStore {
+        let file = file(directory: directory)
+        return UpdateStore(file: file, loaded: await file.read())
+    }
+
+    /// Waits for every save so far to reach the disk.
+    public nonisolated(nonsending) func flush() async { await file.flush() }
+
+    public func load() -> UpdateRecord { record }
+
+    public func save(_ next: UpdateRecord) {
+        record = next
+        file.save(next)
     }
 
     /// Changes the record and writes it down; returns what it is now.

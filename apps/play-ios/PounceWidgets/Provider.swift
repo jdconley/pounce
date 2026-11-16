@@ -16,7 +16,7 @@ struct UsProvider: AppIntentTimelineProvider {
     }
 
     func snapshot(for configuration: PartnerIntent, in context: Context) async -> UsEntry {
-        let stored = WidgetData.load()
+        let stored = await WidgetData.load()
         let snapshot = stored?.pairs.isEmpty == false ? stored : (context.isPreview ? .sample : stored)
         return UsEntry(date: .now, state: .make(snapshot, pair: configuration.partner?.id, at: .now))
     }
@@ -37,7 +37,7 @@ enum WidgetData {
     /// The widget's fetch gives up after this (spec §11.2).
     static let fetchTimeout: TimeInterval = 5
 
-    static func load() -> WidgetSnapshot? { WidgetSnapshotStore.shared?.load() }
+    static func load() async -> WidgetSnapshot? { await WidgetSnapshotStore.shared()?.load() }
 
     /// A client for the snapshot's server, or nil under demos and UI tests (no server).
     static func client(_ snapshot: WidgetSnapshot, timeout: TimeInterval = fetchTimeout) -> APIClient? {
@@ -54,7 +54,7 @@ enum WidgetData {
     /// when offline (or anything else fails), or when its pairs are news from the last minute (the
     /// app just wrote and reloaded). A 404 is a server with streaks off: no pairs.
     static func fresh() async -> WidgetSnapshot? {
-        guard let store = WidgetSnapshotStore.shared, let snapshot = store.load() else { return nil }
+        guard let store = await WidgetSnapshotStore.shared(), let snapshot = await store.load() else { return nil }
         guard snapshot.needsFetch(now: .now), let api = client(snapshot), let person = snapshot.owner?.person
         else { return snapshot }
         let pairs: [StreakView]
@@ -66,21 +66,21 @@ enum WidgetData {
             return snapshot
         }
         let now = Date.now
-        store.update { $0.withPairs(pairs, now: now) }
-        return store.load() ?? snapshot.withPairs(pairs, now: now)
+        await store.update { $0.withPairs(pairs, now: now) }
+        return await store.load() ?? snapshot.withPairs(pairs, now: now)
     }
 
     /// The widget push token, from a teen's or an adult's device only, once per token and device.
     static func uploadToken(_ hex: String) async {
-        guard let store = WidgetSnapshotStore.shared, let snapshot = store.load(),
+        guard let store = await WidgetSnapshotStore.shared(), let snapshot = await store.load(),
               WidgetPushToken.uploads(band: snapshot.band), let api = client(snapshot, timeout: 15),
               let server = snapshot.server, let url = URL(string: server)
         else { return }
-        let device = credentials(APIConfig(baseURL: url)).load()?.deviceId
-        guard WidgetPushToken.needsUpload(token: hex, deviceId: device, last: store.uploadedToken, band: snapshot.band)
+        let device = await credentials(APIConfig(baseURL: url)).load()?.deviceId
+        guard WidgetPushToken.needsUpload(token: hex, deviceId: device, last: await store.uploadedToken(), band: snapshot.band)
         else { return }
         if let deviceId = try? await api.setWidgetPushToken(hex) {
-            store.uploadedToken = .init(deviceId: deviceId, token: hex)
+            await store.setUploadedToken(.init(deviceId: deviceId, token: hex))
         }
     }
 }

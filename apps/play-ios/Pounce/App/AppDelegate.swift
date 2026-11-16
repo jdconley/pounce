@@ -24,9 +24,10 @@ final class AppDelegate: NSObject, UIApplicationDelegate {
         UNUserNotificationCenter.current().delegate = push
         push.registerCategories()
         Sound.shared.preload()
-        // The one app model, attached now so a notification button that launched the app in the
-        // background (a pounce's In a bit) can answer before any scene connects.
-        model = AppModel.shared
+        // The one app model, attached as soon as its files are read (off the main actor), so a
+        // notification button that launched the app in the background (a pounce's In a bit) can
+        // answer before any scene connects; the coordinator holds a tap that arrives first.
+        Task { model = await AppModel.launch.value }
         // A reminder left from before the app was terminated must not fire now that it's open.
         push.cancelAllTurnReminders()
         #if DEBUG

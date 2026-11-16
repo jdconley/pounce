@@ -11,21 +11,36 @@ public typealias UITipsSeen = [String: Set<UITip>]
 /// The file is the same shape it always was, person to tip names: the game's tips (`CoachTip`)
 /// and the UI tips (`UITip`, "ui." names) share it, and names this build doesn't know (from a
 /// newer one) are kept as they are, so nothing anyone has seen is ever lost.
-/// Not thread-safe by itself; callers use it from one actor (the app model).
+/// Kept in memory and written behind (`JSONFile`). Not thread-safe by itself; callers use it from
+/// one actor (the app model).
 public final class TutorialStore {
-    private let fileURL: URL
+    /// The file's shape: person to sorted tip names.
+    public typealias Saved = [String: [String]]
 
-    public init(directory: URL) {
-        fileURL = directory.appendingPathComponent("tutorial.json")
+    private let file: JSONFile<Saved>
+    private var names: [String: Set<String>]
+
+    /// `loaded` is what `file.read()` returned, read off the main actor at launch.
+    public init(file: JSONFile<Saved>, loaded: Saved?) {
+        self.file = file
+        names = (loaded ?? [:]).mapValues(Set.init)
     }
+
+    public static func file(directory: URL) -> JSONFile<Saved> {
+        JSONFile(url: directory.appendingPathComponent("tutorial.json"), coding: .sorted)
+    }
+
+    /// Reads the file (off the caller's actor) and opens the store on it.
+    public static func open(directory: URL) async -> sending TutorialStore {
+        let file = file(directory: directory)
+        return TutorialStore(file: file, loaded: await file.read())
+    }
+
+    /// Waits for every save so far to reach the disk.
+    public nonisolated(nonsending) func flush() async { await file.flush() }
 
     /// Every name in the file, known or not.
-    public func loadNames() -> [String: Set<String>] {
-        guard let data = try? Data(contentsOf: fileURL),
-              let raw = try? JSONDecoder().decode([String: [String]].self, from: data)
-        else { return [:] }
-        return raw.mapValues(Set.init)
-    }
+    public func loadNames() -> [String: Set<String>] { names }
 
     /// The game's tips. Other names are left out here (and kept in the file).
     public func load() -> TipsSeen {
@@ -81,22 +96,19 @@ public final class TutorialStore {
 
     /// Everyone sees the tips again.
     public func reset() {
-        try? FileManager.default.removeItem(at: fileURL)
+        names = [:]
+        file.remove()
     }
 
     private func save(_ all: [String: Set<String>]) {
-        let raw = all.mapValues { $0.sorted() }
-        let encoder = JSONEncoder()
-        encoder.outputFormatting = .sortedKeys
-        guard let data = try? encoder.encode(raw) else { return }
-        try? FileManager.default.createDirectory(
-            at: fileURL.deletingLastPathComponent(), withIntermediateDirectories: true)
-        try? data.write(to: fileURL, options: .atomic)
+        names = all
+        file.save(all.mapValues { $0.sorted() })
     }
 }
 
 /// How often UI tips have shown, for pacing: the app opens on this phone and, per person, how
-/// many tips they had today. `tip-pacing.json`, next to `tutorial.json`.
+/// many tips they had today. `tip-pacing.json`, next to `tutorial.json`, kept in memory and
+/// written behind (`JSONFile`).
 public final class TipPacingStore {
     public struct Record: Codable, Equatable, Sendable {
         public var opens: Int = 0
@@ -111,19 +123,31 @@ public final class TipPacingStore {
         public init() {}
     }
 
-    private let fileURL: URL
+    private let file: JSONFile<Record>
+    private var record: Record
     private let calendar: Calendar
 
-    public init(directory: URL, calendar: Calendar = .current) {
-        fileURL = directory.appendingPathComponent("tip-pacing.json")
+    /// `loaded` is what `file.read()` returned, read off the main actor at launch.
+    public init(file: JSONFile<Record>, loaded: Record?, calendar: Calendar = .current) {
+        self.file = file
+        record = loaded ?? Record()
         self.calendar = calendar
     }
 
-    public func load() -> Record {
-        guard let data = try? Data(contentsOf: fileURL),
-              let record = try? JSONDecoder().decode(Record.self, from: data) else { return Record() }
-        return record
+    public static func file(directory: URL) -> JSONFile<Record> {
+        JSONFile(url: directory.appendingPathComponent("tip-pacing.json"), coding: .sorted)
     }
+
+    /// Reads the file (off the caller's actor) and opens the store on it.
+    public static func open(directory: URL, calendar: Calendar = .current) async -> sending TipPacingStore {
+        let file = file(directory: directory)
+        return TipPacingStore(file: file, loaded: await file.read(), calendar: calendar)
+    }
+
+    /// Waits for every save so far to reach the disk.
+    public nonisolated(nonsending) func flush() async { await file.flush() }
+
+    public func load() -> Record { record }
 
     /// One more app open; returns the count, this one included.
     @discardableResult
@@ -160,12 +184,8 @@ public final class TipPacingStore {
         return String(format: "%04d-%02d-%02d", c.year ?? 0, c.month ?? 0, c.day ?? 0)
     }
 
-    private func save(_ record: Record) {
-        let encoder = JSONEncoder()
-        encoder.outputFormatting = .sortedKeys
-        guard let data = try? encoder.encode(record) else { return }
-        try? FileManager.default.createDirectory(
-            at: fileURL.deletingLastPathComponent(), withIntermediateDirectories: true)
-        try? data.write(to: fileURL, options: .atomic)
+    private func save(_ next: Record) {
+        record = next
+        file.save(next)
     }
 }

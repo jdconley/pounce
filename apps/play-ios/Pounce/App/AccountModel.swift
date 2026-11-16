@@ -59,6 +59,9 @@ final class AccountModel {
 
     private func save() { store.save(record) }
 
+    /// Waits for the account file's writes.
+    func flushToDisk() async { await store.flush() }
+
     private static var nowMs: Int64 { Int64(Date.now.timeIntervalSince1970 * 1000) }
 
     // MARK: who
@@ -135,7 +138,8 @@ final class AccountModel {
         record.changedAt[personId] = nil
         record.signedIn.remove(personId)
         save()
-        keys.remove(personId)
+        let keys = keys
+        Task { await keys.remove(personId) }
         uploadState.noteChange()
         scheduleUpload()
     }
@@ -230,7 +234,7 @@ final class AccountModel {
         let reply: SignInReply
         do {
             reply = try await service.signIn(
-                provider: "apple", proof: proof, personId: person.id, personKey: keys.key(for: person.id))
+                provider: "apple", proof: proof, personId: person.id, personKey: await keys.key(for: person.id))
         } catch APIError.forbidden {
             return .refused
         } catch {
