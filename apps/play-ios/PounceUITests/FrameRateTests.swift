@@ -17,9 +17,9 @@ import XCTest
 /// - any frame held over 8.3 ms of the app's own work (its `FrameWork` pieces, in CPU time),
 /// - any table or main-thread frame took over 16.7 ms.
 /// Time budgets fit the machine (`Watchdog.timeFailures`): on a phone or the reference Mac, no frame
-/// over 8.3 ms of the app's own work; on a machine measured several times slower (a CI virtual
-/// machine), p95 within 8.3 ms times its slowdown and no frame over three times that. Hangs count
-/// when the app's own work filled them. Frames over 16.7 ms are enforced only near the
+/// over 8.3 ms of the app's own work and no hang over 100 ms that it filled; on a machine measured
+/// slower (a CI virtual machine), the app's work at p95 within 8.3 ms times its slowdown and at p99
+/// within three times that, and no hang over 250 ms times the slowdown that its work filled. Frames over 16.7 ms are enforced only near the
 /// reference's speed and on a quiet machine: on a phone always.
 ///
 /// `scripts/frame-rate.sh` runs these on a simulator or a plugged-in iPhone (the 120 Hz numbers).
@@ -83,7 +83,8 @@ final class FrameRateTests: XCTestCase {
 
         XCTAssertGreaterThan(window.screen, 0, report, file: file, line: line)
         XCTAssertEqual(window.table, window.screen, "the table doesn't ask for the screen's top rate: \(report)", file: file, line: line)
-        XCTAssertGreaterThanOrEqual(window.tableFrames.count, Int(seconds) * window.screen / 2, "the table hardly rendered while it played: \(report)", file: file, line: line)
+        // It rests between drags (the view pauses), so a quarter of the window's frames at least.
+        XCTAssertGreaterThanOrEqual(window.tableFrames.count, Int(seconds) * window.screen / 4, "the table hardly rendered while it played: \(report)", file: file, line: line)
         // The app's time budgets, as fits this machine (`Watchdog.timeFailures`).
         for failure in window.timeFailures() { XCTFail("\(failure): \(report)", file: file, line: line) }
         if window.hangs > window.appHangs {

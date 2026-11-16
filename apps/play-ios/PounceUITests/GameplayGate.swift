@@ -5,8 +5,8 @@ import XCTest
 /// fails if, while a table was on screen (from a second after it appeared), the app's own work
 /// hung the main thread for over 100 ms, or a frame held more than 8.3 ms (a 120 Hz frame) of the
 /// app's own work: its `FrameWork` pieces (redraws, reconciles, touches, textures). On a machine
-/// measured several times slower than the reference (a CI virtual machine) those budgets scale
-/// and the work is judged at p95, with a cap on the worst frame (`Watchdog.timeFailures`). A hang
+/// measured slower than the reference (a CI virtual machine) the work is judged at p95 and p99 and
+/// only longer hangs count, all scaled by its slowdown (`Watchdog.timeFailures`). A hang
 /// the app's work didn't fill is reported, not gated. Launch and the way into a table don't count, nor do frames that held, or came within 0.25 s of, a read of the screen:
 /// the accessibility runtime a UI test loads into the app runs inside the app's work then (a
 /// drag's redraw that takes 5 ms takes 12 to 16 ms in the frame a query lands in).

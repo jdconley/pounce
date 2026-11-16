@@ -143,29 +143,40 @@ struct Watchdog {
         return workMaxMs
     }
 
-    /// Why the app's time budgets fail on this machine, or nothing (see `nearReference`). Hangs
-    /// count only when the app's own work filled them; the rest are reported.
+    /// Why the app's time budgets fail on this machine, or nothing (see `nearReference`).
+    ///
+    /// Near the reference's speed (a phone, the Mac the budgets were set on): no frame over 8.3 ms
+    /// of the app's own work, and no hang over 100 ms that the app's work filled.
+    ///
+    /// On a slower machine (a CI virtual machine, whose host steals time that the guest counts as
+    /// its own, so that single frames of 100 to 160 ms land inside the app's work at random): the
+    /// app's work at p95 within 8.3 ms times the slowdown and at p99 within three times that, which
+    /// catches a regression in many frames; and no hang over 250 ms times the slowdown that the
+    /// app's work filled, which catches a single long block. A single slow frame under that is
+    /// left to a phone or the reference Mac (`scripts/frame-rate.sh`).
     func timeFailures() -> [String] {
         var out: [String] = []
         let f = slowdown
-        if appHangs > 0, appHangMaxMs > 100 * f {
-            out.append(String(format: "the app's own work hung the main thread (%d, worst %.0f ms, budget %.0f ms)", appHangs, appHangMaxMs, 100 * f))
+        let hangLimit = nearReference ? 100 : 250 * f
+        if appHangs > 0, appHangMaxMs > hangLimit {
+            out.append(String(format: "the app's own work hung the main thread (%d, worst %.0f ms, budget %.0f ms)", appHangs, appHangMaxMs, hangLimit))
         }
         if nearReference {
             if workMaxMs > Self.workBudgetMs {
                 out.append(String(format: "a frame held %.1f ms of the app's own work, over 8.3 ms", workMaxMs))
             }
         } else {
-            let p95 = workPercentile(0.95)
+            let p95 = workPercentile(0.95), p99 = workPercentile(0.99)
             if p95 > workBudgetMs {
                 out.append(String(format: "the app's work per frame at p95 was %.1f ms, over %.1f ms (8.3 ms at the reference's speed)", p95, workBudgetMs))
             }
-            if workMaxMs > 3 * workBudgetMs {
-                out.append(String(format: "a frame held %.1f ms of the app's own work, over %.1f ms (three frames at the reference's speed)", workMaxMs, 3 * workBudgetMs))
+            if p99 > 3 * workBudgetMs {
+                out.append(String(format: "the app's work per frame at p99 was %.1f ms, over %.1f ms (three frames at the reference's speed)", p99, 3 * workBudgetMs))
             }
         }
         return out
     }
+
     var link = Frames()
     var tableFrames = Frames()
 
@@ -235,9 +246,9 @@ struct Watchdog {
 
     /// The `FRAMES` line the frame-rate tests print.
     func report(_ name: String) -> String {
-        String(format: "FRAMES %@ screen=%dfps table=%dfps tpc=%d | table %@ | main %@ | app work worst %.1fms, over 8.3ms=%d, accessibility rebuild worst %.1fms, near a screen read worst %.1fms | hangs=%d (worst %.0fms) ax-or-outside-hangs=%d | speed %.2fms, %.2fx the reference | app work p95 %.1fms, app hangs %d (worst %.0fms)",
+        String(format: "FRAMES %@ screen=%dfps table=%dfps tpc=%d | table %@ | main %@ | app work worst %.1fms, over 8.3ms=%d, accessibility rebuild worst %.1fms, near a screen read worst %.1fms | hangs=%d (worst %.0fms) ax-or-outside-hangs=%d | speed %.2fms, %.2fx the reference | app work p95 %.1fms p99 %.1fms, app hangs %d (worst %.0fms)",
                name, screen, table, checkerLoaded ? 1 : 0, tableFrames.line, link.line, workMaxMs, workOver, readWorkMs, readFrameWorkMs, hangs, hangMaxMs, otherHangs, speedMs, slowdown,
-               workPercentile(0.95), appHangs, appHangMaxMs)
+               workPercentile(0.95), workPercentile(0.99), appHangs, appHangMaxMs)
     }
 }
 
