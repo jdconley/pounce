@@ -97,13 +97,18 @@ function wholeNumber(text: string | undefined): number | null {
 /** What the server still supports: the oldest app version (null: every one) and the oldest protocol. */
 export type Supported = { minimum: string | null; minProtocol: number };
 
+/** The web player (web player design): deployed with the server, so always as new as it. */
+export const WEB_PLATFORM = "web";
+
 /**
  * Whether this app is too old to be served (the hard moment, design §4.3). An app that didn't
- * say what it is counts as version 1.0 speaking protocol 1, the only app that doesn't say.
+ * say what it is counts as version 1.0 speaking protocol 1, the only app that doesn't say. The
+ * web player's version is its build, never an App Store version: only its protocol counts.
  */
 export function tooOld(app: AppIdentity | null, supported: Supported): boolean {
   const version = app?.version ?? UNIDENTIFIED_VERSION;
   const protocol = app === null ? UNIDENTIFIED_PROTOCOL : app.protocol;
   if (protocol !== null && protocol < supported.minProtocol) return true;
+  if (app?.platform === WEB_PLATFORM) return false;
   return olderThan(version, supported.minimum);
 }

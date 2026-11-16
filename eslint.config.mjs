@@ -6,12 +6,12 @@ import tseslint from "typescript-eslint";
 export default tseslint.config(
   {
     // Keep in step with .gitignore.
-    ignores: ["**/dist/**", "**/node_modules/**", "**/.wrangler/**", "**/coverage/**", "apps/play-ios/**"]
+    ignores: ["**/dist/**", "**/node_modules/**", "**/.wrangler/**", "**/coverage/**", "apps/play-ios/**", "apps/play-api/public/play/**", "apps/play-web/test-results/**", "apps/play-web/playwright-report/**"]
   },
   js.configs.recommended,
   ...tseslint.configs.recommended,
   {
-    files: ["**/*.{ts,js,mjs}"],
+    files: ["**/*.{ts,tsx,js,mjs}"],
     languageOptions: {
       ecmaVersion: "latest",
       sourceType: "module",

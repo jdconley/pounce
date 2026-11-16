@@ -34,6 +34,7 @@ repo: What's New and the listing in `docs/whats-new/`, the reviewer notes in
 | --- | --- |
 | `apps/play-api` | The game server: a Cloudflare Worker with one Durable Object per room. It owns the rules, the bots and the hidden hands. It also serves the website (below). |
 | `apps/play-ios` | The iOS app (SwiftUI shell, SpriteKit table). See its [README](apps/play-ios/README.md). |
+| `apps/play-web` | Pounce in a browser, at `play.conleychaos.com/play`: both games for Android, laptops and anyone without an iPhone, installable as an app. It imports the server's rules and protocol from `apps/play-api`, so it can't drift from the game. |
 | `docs/superpowers` | The design spec, implementation plans and follow-up notes. |
 
 ## Develop
@@ -102,6 +103,22 @@ of those change, rebuild them (needs `ffmpeg`, `cwebp` and ImageMagick):
 node apps/play-api/scripts/build-site-media.mjs
 ```
 
+## The web player
+
+`apps/play-web` (Vite, Preact, the table in plain DOM moved by transforms) builds into
+`apps/play-api/public/play` and ships inside the Worker, from the same commit: the deploy job
+builds it right before `wrangler deploy`. Design: `docs/superpowers/specs/2026-11-15-web-player-design.md`.
+
+```bash
+pnpm --filter @pounce/play-web build                       # into apps/play-api/public/play
+pnpm --filter @pounce/play-api exec wrangler dev --port 8790 # then open http://localhost:8790/play/
+```
+
+For quick edits, `pnpm --filter @pounce/play-web dev` serves it at `http://localhost:5180/play/`
+with the API proxied to `DEV_SERVER_URL` (default `http://localhost:8787`). Its tests
+(`pnpm --filter @pounce/play-web test`) include a contract test of the web client against the
+real Worker. The art and sounds are built from the iOS app's (`node apps/play-web/scripts/build-art.mjs`).
+
 ## Deploy
 
 Every push to `main` that passes CI deploys `apps/play-api` to
@@ -117,6 +134,8 @@ secrets exist:
 | `PLAY_API_APNS_KEY_ID` | no | The APNs key's ID. |
 | `PLAY_API_SIWA_KEY_P8` | yes for the App Store | Sign in with Apple key (.p8 contents). Sign-in works without it, but the API keeps no Apple tokens, so it can't revoke them on account deletion as App Review requires. One key with both APNs and Sign in with Apple enabled can serve both pairs. Set it together with the key ID. |
 | `PLAY_API_SIWA_KEY_ID` | no | The Sign in with Apple key's ID. |
+| `PLAY_API_VAPID_PUBLIC_KEY` | no | The web player's push key pair (Web Push, VAPID). Set both at once with `node apps/play-api/scripts/vapid-keys.mjs`, which makes the pair and stores it with `gh secret set` (the private key is never shown). Without them browsers are never asked to notify. |
+| `PLAY_API_VAPID_PRIVATE_KEY` | no | Its private half (made by the same script). |
 | `PLAY_API_TWILIO_ACCOUNT_SID` | no | Twilio account SID (`AC…`), for parent consent (daily habit PR 9). Set all four Twilio secrets or none: without them no code is sent and a kitten's consent can't start. |
 | `PLAY_API_TWILIO_API_KEY_SID` | no | A Twilio API key's SID (`SK…`): signs in to Verify (basic auth). |
 | `PLAY_API_TWILIO_API_KEY_SECRET` | no | That API key's secret. |
