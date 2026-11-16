@@ -330,8 +330,10 @@ when nothing moves. The UI suite checks that the main thread only draws:
   through the same code a finger runs, from 3 s after it appears. Nothing reads the screen while
   it plays, so its frame times are the app's own.
 - **`GameplayGate`** (the test bundle's principal class) reads the watchdog of every app a test
-  launched through `Live` when the test ends, and fails it on a gameplay hang, or on any gameplay
-  frame with over 8.3 ms of the app's own work (not counting frames that held, or came within
+  launched through `Live` when the test ends, and fails it on a gameplay hang the app's own work
+  filled at least half of, or on any gameplay frame with over 8.3 ms of the app's own work (on a
+  machine the app measured over 1.25 times slower than the reference Mac, such as a CI virtual
+  machine, at p95 within 8.3 ms times that slowdown, and no frame over three times that) (not counting frames that held, or came within
   0.25 s of, the test's own read of the screen: the accessibility runtime runs inside the app's
   work then). It doesn't gate frame times: a UI test's queries
   snapshot the accessibility tree on the main thread and cost the app frames (on the simulator, 19
@@ -351,6 +353,10 @@ when nothing moves. The UI suite checks that the main thread only draws:
   fails on a stale profile, open the project in Xcode once with the phone connected). It builds
   Debug with the compiler's optimizations on (`OPTIMIZE=0` for a plain Debug build), so the numbers
   are the shipped code's.
+- **In CI**, the `ui-gates` job ("Smooth play gates (iOS simulator)" in `.github/workflows/ios.yml`)
+  runs `FrameRateTests`, `HitTests` and two `TilesTests` drags on every pull request: an optimized
+  Debug build on a fresh simulator, demo tables, no server, about 17 minutes. The job summary has
+  the `FRAMES` lines, and a failure keeps the log and result bundle.
 - **Thread Performance Checker** is on in the `Pounce` scheme's test plan (`Pounce.xctestplan`),
   with its reports as test failures (priority inversions and its other default checks). Its
   main-thread file IO check is off: iOS itself reads and writes files on the main thread at every
