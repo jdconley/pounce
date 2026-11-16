@@ -7,7 +7,28 @@ import CoreGraphics
 /// the rug where the sets flow in rows (nothing is ever drawn on it), the action strip (undo, reset, the turn button,
 /// the sort and tidy toggles, with the opening meter riding on its top edge before the seat has
 /// opened), and the stash: rows of seven pieces 48 pt wide on a phone.
+///
+/// A controller (a phone whose table is on a TV) passes a `Controller`. Off turn, `.rackOnly`:
+/// the switch band (the paw menu at its right end), the status line, and the stash alone, large
+/// and centred in the room left; there is no table, so `opponentsBar`, `rugArt`, `rug`, `pool`,
+/// `strip`, its buttons, `meter` and `recap` are `.zero` and `opponentSlots` is empty, and the
+/// arrangement is `.controller`. On its turn, `.fullTable`: the table as ever (its arrangement
+/// from the size), under the switch band, with the paw menu moved up into the band.
 public struct TilesLayout: Equatable, Sendable {
+    /// How a controller shows the tile game.
+    public enum Controller: Equatable, Sendable {
+        /// Off turn: just the stash, under the switch band and the status line.
+        case rackOnly(ControllerChrome)
+        /// On the seat's turn: the full table, under the switch band (no status line).
+        case fullTable(ControllerChrome)
+
+        public var chrome: ControllerChrome {
+            switch self {
+            case .rackOnly(let chrome), .fullTable(let chrome): chrome
+            }
+        }
+    }
+
     /// A piece is this much taller than it is wide.
     public static let pieceAspect: CGFloat = 1.2
     /// The smallest touch target a control gets.
@@ -19,6 +40,15 @@ public struct TilesLayout: Equatable, Sendable {
     public let safeTop: CGFloat
     public let safeBottom: CGFloat
     public let arrangement: TableLayout.Arrangement
+    /// How a controller shows the game; nil on a table.
+    public let controller: Controller?
+    /// A controller's switch band under the safe top (the paw menu at its right end) and, off
+    /// turn, the status line under it. `.zero` where absent.
+    public let switchBand: CGRect
+    public let statusLine: CGRect
+
+    /// The view is big enough for a roomy table (an iPad window), whatever the arrangement.
+    public var roomy: Bool { TableLayout.arrangement(for: size) != .phone }
 
     public let opponentsBar: CGRect
     public let opponentSlots: [CGPoint]
@@ -67,10 +97,22 @@ public struct TilesLayout: Equatable, Sendable {
     ///   - meter: the opening meter is showing.
     ///   - controls: false when no stash is drawn (a shared phone with nothing revealed, or a
     ///     phone holding no seat): the rug takes the room.
+    ///   - controller: how a controller shows the game; nil for a table. Off turn (`.rackOnly`)
+    ///     the stash is always drawn and `meter` and `controls` are ignored.
     public init(
         size: CGSize, safeTop: CGFloat, safeBottom: CGFloat, opponents: Int, rackCount: Int, meter: Bool = false,
-        controls: Bool = true
+        controls: Bool = true, controller: Controller? = nil
     ) {
+        if case .rackOnly(let chrome) = controller {
+            self = Self(rackOnly: chrome, size: size, safeTop: safeTop, safeBottom: safeBottom, rackCount: rackCount)
+            return
+        }
+        self.controller = controller
+        // On its turn a controller's table starts under the switch band.
+        let top = controller.map { TableLayout.controllerTop(size: size, safeTop: safeTop, chrome: $0.chrome) }
+        switchBand = top?.switchBand ?? .zero
+        statusLine = .zero
+        let tableTop = safeTop + switchBand.height
         self.size = size
         self.safeTop = safeTop
         self.safeBottom = safeBottom
@@ -81,7 +123,7 @@ public struct TilesLayout: Equatable, Sendable {
         let roomy = arrangement != .phone
 
         // The top bar: Cat Tower's, so the two tables seat their cats alike.
-        let base = TableLayout(size: size, safeTop: safeTop, safeBottom: safeBottom, opponents: max(opponents, 1))
+        let base = TableLayout(size: size, safeTop: tableTop, safeBottom: safeBottom, opponents: max(opponents, 1))
         opponentsBar = base.opponentsBar
         catDiameter = base.catDiameter
         catLift = base.catLift
@@ -92,7 +134,9 @@ public struct TilesLayout: Equatable, Sendable {
         // the status bar. On a phone, three cats share the width left of it, as Cat Tower's do
         // when the paw is tucked.
         let bar = base.opponentsBar
-        menuButton = CGPoint(x: base.menuButton.x, y: bar.maxY - base.menuSide / 2 - (roomy ? 6 : 2))
+        // A controller's paw is up in the switch band; the toy box stays where it is.
+        let barMenu = CGPoint(x: base.menuButton.x, y: bar.maxY - base.menuSide / 2 - (roomy ? 6 : 2))
+        menuButton = top?.menuButton ?? barMenu
         if !roomy, base.opponentSlots.count >= 3 {
             let n = base.opponentSlots.count
             let span = width - TableLayout.menuReserve
@@ -162,13 +206,88 @@ public struct TilesLayout: Equatable, Sendable {
         let border: CGFloat = roomy ? 26 : 14
         rug = art.insetBy(dx: border - 1, dy: border + 3)
         let poolSide: CGFloat = roomy ? 48 : 36
-        let poolY = max(menuButton.y - base.menuSide / 2 - (roomy ? 8 : 4) - poolSide / 2, art.maxY + poolSide / 2 + 2)
-        pool = CGRect(x: menuButton.x - poolSide / 2, y: poolY - poolSide / 2, width: poolSide, height: poolSide)
+        let poolY = max(barMenu.y - base.menuSide / 2 - (roomy ? 8 : 4) - poolSide / 2, art.maxY + poolSide / 2 + 2)
+        pool = CGRect(x: barMenu.x - poolSide / 2, y: poolY - poolSide / 2, width: poolSide, height: poolSide)
 
         // Rug pieces: 30 pt on a 393 pt phone, shrinking to 24 as the table fills (spec §5.7).
         let scale = roomy ? min(max(min(size.width, size.height) / 500, 1.3), 1.7) : min(max(width / 393, 0.94), 1.12)
         rugPieceMax = (30 * scale).rounded()
         rugPieceMin = (24 * scale).rounded()
+    }
+
+    /// A controller off turn: the switch band, the status line and the stash, its pieces as big
+    /// as fit (up to 76 pt on a phone, 96 on an iPad) in up to `rackRowLimit` rows, centred in
+    /// what is left. Only past that (more pieces than fit at 40 pt, 44 on an iPad) does it scroll.
+    private init(rackOnly chrome: ControllerChrome, size: CGSize, safeTop: CGFloat, safeBottom: CGFloat, rackCount: Int) {
+        self.size = size
+        self.safeTop = safeTop
+        self.safeBottom = safeBottom
+        self.rackCount = rackCount
+        controller = .rackOnly(chrome)
+        arrangement = .controller
+        let width = size.width
+        let roomy = TableLayout.arrangement(for: size) != .phone
+        let top = TableLayout.controllerTop(size: size, safeTop: safeTop, chrome: chrome)
+        switchBand = top.switchBand
+        statusLine = top.statusLine
+        menuButton = top.menuButton
+        menuSide = roomy ? 44 : 32
+
+        // No table.
+        opponentsBar = .zero
+        opponentSlots = []
+        catDiameter = roomy ? 74 : 62
+        catLift = roomy ? 10 : 8
+        nameDrop = roomy ? 44 : 36
+        rugArt = .zero
+        rug = .zero
+        rugBorderScale = roomy ? 2.4 : 1.5
+        pool = .zero
+        recap = .zero
+        strip = .zero
+        undo = .zero
+        reset = .zero
+        turn = .zero
+        sortNumber = .zero
+        sortToy = .zero
+        tidy = .zero
+        meter = .zero
+        let scale = roomy ? min(max(min(size.width, size.height) / 500, 1.3), 1.7) : min(max(width / 393, 0.94), 1.12)
+        rugPieceMax = (30 * scale).rounded()
+        rugPieceMin = (24 * scale).rounded()
+
+        // The stash: the rows and columns that give the biggest pieces, fewer rows on a tie.
+        let gap: CGFloat = roomy ? 6 : 4
+        rackGap = gap
+        let pad: CGFloat = 8  // inside the stash, above and below its rows (as `rackSlots` takes it)
+        let roomTop = statusLine.minY - (roomy ? 12 : 8), roomBottom = safeBottom + (roomy ? 10 : 4)
+        let availW = width - 2 * (roomy ? 24 : 8), availH = roomTop - roomBottom - 2 * pad
+        let largest: CGFloat = roomy ? 96 : 76, smallest: CGFloat = roomy ? 44 : 40
+        func height(_ w: CGFloat) -> CGFloat { (w * Self.pieceAspect).rounded() }
+        func fit(rows: Int, columns: Int) -> CGFloat {
+            var w = min(((availW - gap * CGFloat(columns - 1)) / CGFloat(columns)).rounded(.down), largest)
+            while w > 1, CGFloat(rows) * height(w) + CGFloat(rows - 1) * gap > availH { w -= 1 }
+            return w
+        }
+        let n = max(rackCount, 1)
+        var best: (w: CGFloat, rows: Int, columns: Int) = (0, 1, n)
+        for rows in 1...Self.rackRowLimit {
+            let columns = (n + rows - 1) / rows
+            let w = fit(rows: rows, columns: columns)
+            if w > best.w { best = (w, rows, columns) }
+        }
+        if best.w < smallest {
+            // Too many to show at once: the most columns that fit at the smallest size, and scroll.
+            let rows = Self.rackRowLimit
+            let columns = max(Int(((availW + gap) / (smallest + gap)).rounded(.down)), 1)
+            best = (max(fit(rows: rows, columns: columns), smallest), rows, columns)
+        }
+        let piece = CGSize(width: best.w, height: height(best.w))
+        rackPiece = piece
+        rackColumns = best.columns
+        rackRows = best.rows
+        let rackH = CGFloat(best.rows) * piece.height + CGFloat(best.rows - 1) * gap + 2 * pad
+        rack = CGRect(x: 0, y: ((roomTop + roomBottom - rackH) / 2).rounded(), width: width, height: rackH)
     }
 
     // MARK: the stash

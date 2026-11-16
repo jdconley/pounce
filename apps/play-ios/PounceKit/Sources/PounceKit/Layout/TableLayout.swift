@@ -14,6 +14,28 @@ public struct CardPlacement: Equatable, Sendable {
     }
 }
 
+/// The SwiftUI chrome a controller layout leaves room for (heights in points). The shell measures
+/// it (it grows with Dynamic Type) and passes it in; the cards shrink to make room, never below
+/// their minimum.
+public struct ControllerChrome: Equatable, Sendable {
+    /// The strip under the safe top holding the "Cards" | "Table" switch, with the paw menu at its
+    /// right end. Never under 44 (the paw's touch target).
+    public var switchBand: CGFloat
+    /// The status line under the switch ("Your turn", "Ava's turn").
+    public var status: CGFloat
+    /// Cat Tower's action row between the piles and the trays (the hit list, Confirm, Lay down).
+    public var actions: CGFloat
+
+    public init(switchBand: CGFloat = 44, status: CGFloat = 28, actions: CGFloat = 52) {
+        self.switchBand = switchBand
+        self.status = status
+        self.actions = actions
+    }
+
+    /// The chrome at the default text size.
+    public static let standard = ControllerChrome()
+}
+
 /// Pure geometry for the table, in SpriteKit scene points (origin bottom-left, y up).
 /// The scene uses `.resizeFill`, so this is computed for the real view size.
 ///
@@ -34,6 +56,13 @@ public struct CardPlacement: Equatable, Sendable {
 /// bottom-left corner, and seats laid
 /// rows in columns left and right of the piles when a row per seat doesn't fit above and
 /// below them.
+///
+/// A controller (a phone whose table is on a TV) asks for `.controller` by passing its chrome;
+/// it is never chosen from the size. Top to bottom: the switch band (the paw menu at its right
+/// end), the status line, the deck and discard, room left over, the action row, the sort
+/// button's line (the seat's name pill left of it), the trays, and the hand, large, at the
+/// bottom. The table around the hand is absent: `opponentsBar`, `towerFrame`, `towerTab` and
+/// `laidZone` are `.zero`, `opponentSlots` is empty and `laidRow` is `.zero`.
 public struct TableLayout: Sendable {
     /// How the table is arranged for the space it has.
     public enum Arrangement: Sendable, Equatable {
@@ -43,11 +72,15 @@ public struct TableLayout: Sendable {
         case tall
         /// Roomy and landscape-shaped.
         case wide
+        /// A phone or iPad whose table is on a TV: only its own cards (asked for, never chosen
+        /// from the size).
+        case controller
     }
 
     /// The shorter side a view needs for a roomy arrangement.
     public static let roomyMinSide: CGFloat = 640
 
+    /// The arrangement a table (not a controller) gets for `size`: never `.controller`.
     public static func arrangement(for size: CGSize) -> Arrangement {
         guard min(size.width, size.height) >= roomyMinSide else { return .phone }
         return size.width > size.height * 1.1 ? .wide : .tall
@@ -101,6 +134,19 @@ public struct TableLayout: Sendable {
     /// Width kept free at the bar's right end for a tucked menu button.
     public static let menuReserve: CGFloat = 48
 
+    /// A controller's strips for the SwiftUI chrome (`.zero` on a table): the switch band under
+    /// the safe top (the paw menu at its right end, the switch centred clear of it), the status
+    /// line under it, and the action row between the piles and the sort button's line. Each spans
+    /// the width less a margin.
+    public let switchBand: CGRect
+    public let statusLine: CGRect
+    public let actionRow: CGRect
+    /// A controller's hand cards are never narrower than this on a phone (72 on an iPad).
+    public static let controllerCardMin: CGFloat = 64
+
+    /// The view is big enough for a roomy table (an iPad window), whatever the arrangement.
+    public var roomy: Bool { Self.arrangement(for: size) != .phone }
+
     // Hand fan.
     private let handBaseY: CGFloat
     private let fanRadius: CGFloat
@@ -121,7 +167,16 @@ public struct TableLayout: Sendable {
     private static let liftHeight: CGFloat = 30
     private static let designWidth: CGFloat = 390
 
-    public init(size: CGSize, safeTop: CGFloat, safeBottom: CGFloat, opponents: Int) {
+    /// - Parameter controller: the chrome of a controller (a phone whose table is on a TV); nil
+    ///   for a table.
+    public init(size: CGSize, safeTop: CGFloat, safeBottom: CGFloat, opponents: Int, controller: ControllerChrome? = nil) {
+        if let controller {
+            self = Self(controller: controller, size: size, safeTop: safeTop, safeBottom: safeBottom)
+            return
+        }
+        switchBand = .zero
+        statusLine = .zero
+        actionRow = .zero
         self.size = size
         self.safeTop = safeTop
         self.safeBottom = safeBottom
@@ -188,16 +243,9 @@ public struct TableLayout: Sendable {
             : width / 2 - Self.handSidePad
         let radius = roomy ? handHalf * 3 : width * 1.5
         fanRadius = radius
-        var edge = handHalf - cardW / 2
-        for _ in 0..<6 {
-            let t = edge / radius
-            edge = handHalf - (cardW / 2 * cos(t) + card.height / 2 * sin(t))
-        }
-        handSpan = edge
-        let tMax = edge / radius
-        let drop = edge * edge / (2 * radius)
-        let edgeHalfHeight = card.height / 2 * cos(tMax) + cardW / 2 * sin(tMax)
-        let baseY = safeBottom + (roomy ? 12 : Self.handBottomPad) + drop + edgeHalfHeight
+        let fan = Self.fan(card: card, half: handHalf, radius: radius)
+        handSpan = fan.span
+        let baseY = safeBottom + (roomy ? 12 : Self.handBottomPad) + fan.rise
         handBaseY = baseY
         let handTop = baseY + card.height / 2 + 4
 
@@ -205,7 +253,7 @@ public struct TableLayout: Sendable {
         // room left for the name pill and right for the sort button beside them).
         let trays: CGRect
         switch arrangement {
-        case .phone:
+        case .phone, .controller:  // a controller never comes this way
             trays = CGRect(x: 8, y: handTop + 6, width: width - 16, height: Self.traysHeight)
             sortButton = CGPoint(x: width - 26, y: trays.maxY + 24)
         case .tall:
@@ -227,7 +275,7 @@ public struct TableLayout: Sendable {
         towerFrame = CGRect(x: 0, y: towerBottom, width: towerW, height: bar.minY - 4 - towerBottom)
         let tab = Self.sortButtonHit
         switch arrangement {
-        case .phone:
+        case .phone, .controller:
             towerTab = CGRect(x: width - sortButton.x - tab / 2, y: sortButton.y - tab / 2, width: tab, height: tab)
         case .tall:
             towerTab = CGRect(x: trays.minX, y: sortButton.y - tab / 2, width: tab, height: tab)
@@ -239,7 +287,7 @@ public struct TableLayout: Sendable {
         // strip).
         let zone: CGRect
         switch arrangement {
-        case .phone:
+        case .phone, .controller:
             zone = CGRect(x: 8, y: towerBottom, width: width - 16, height: bar.minY - 8 - towerBottom)
         case .tall, .wide:
             let zoneMinY = arrangement == .tall ? sortButton.y + Self.sortButtonHit / 2 + 6 : trays.maxY + 12
@@ -274,6 +322,123 @@ public struct TableLayout: Sendable {
         }
         rowsAboveCapacity = rows(fitting: zone.maxY - pilesY - card.height / 2)
         rowsBelowCapacity = rows(fitting: pilesY - card.height / 2 - zone.minY)
+    }
+
+    /// A controller: only its own cards (see the type's notes). The cards are as big as the
+    /// width allows eleven to fan, smaller when the chrome is tall, never under the minimum.
+    private init(controller chrome: ControllerChrome, size: CGSize, safeTop: CGFloat, safeBottom: CGFloat) {
+        self.size = size
+        self.safeTop = safeTop
+        self.safeBottom = safeBottom
+        arrangement = .controller
+        let width = size.width
+        let roomy = Self.arrangement(for: size) != .phone
+        let side: CGFloat = roomy ? 16 : 8
+        let gap: CGFloat = roomy ? 12 : 8  // between the status line, the piles and the action row
+
+        // The chrome's strips, under the safe top.
+        let top = Self.controllerTop(size: size, safeTop: safeTop, chrome: chrome)
+        let switchH = top.switchBand.height, statusH = top.statusLine.height, actionsH = max(chrome.actions, 0)
+        switchBand = top.switchBand
+        statusLine = top.statusLine
+        menuSide = roomy ? 44 : 32
+        menuButton = top.menuButton
+
+        // Cards: 72 pt wide on a 375 pt phone, scaled with the width up to 88; roomy, 0.12 of the
+        // shorter side, 88...120. Taller chrome takes a point at a time off them.
+        let preferred = roomy
+            ? min(max((min(width, size.height) * 0.12).rounded(), 88), 120)
+            : min(max((72 * width / 375).rounded(), Self.controllerCardMin), 88)
+        let floor: CGFloat = roomy ? 72 : Self.controllerCardMin
+        let bottomPad: CGFloat = roomy ? 12 : Self.handBottomPad
+        let traysPad: CGFloat = roomy ? 8 : 6
+        let sortLine = Self.sortButtonHit + 4  // the sort button and the gap under it
+        func card(_ w: CGFloat) -> CGSize { CGSize(width: w, height: (w * 90 / 64).rounded()) }
+        func handHalf(_ w: CGFloat) -> CGFloat {
+            roomy ? min(width / 2 - Self.handSidePad, (w + w * 0.72 * 11) / 2) : width / 2 - Self.handSidePad
+        }
+        func radius(_ w: CGFloat) -> CGFloat { roomy ? handHalf(w) * 3 : width * 1.5 }
+        func traysHeight(_ w: CGFloat) -> CGFloat { min(max((w * 0.84).rounded(), 64), 88) }
+        /// The height everything takes with cards `w` wide.
+        func needed(_ w: CGFloat) -> CGFloat {
+            let c = card(w)
+            let hand = bottomPad + Self.fan(card: c, half: handHalf(w), radius: radius(w)).rise + c.height / 2 + 4
+            let middle = traysPad + traysHeight(w) + sortLine + 6 + actionsH + gap
+            let top = c.height + gap + statusH + switchH
+            return safeBottom + hand + middle + top + safeTop
+        }
+        var cardW = preferred
+        while cardW > floor, needed(cardW) > size.height { cardW -= 1 }
+        let c = card(cardW)
+        cardSize = c
+        miniCardSize = CGSize(width: (cardW * 0.66).rounded(), height: (c.height * 0.66).rounded())
+
+        // The hand, at the bottom.
+        let half = handHalf(cardW)
+        fanRadius = radius(cardW)
+        let fan = Self.fan(card: c, half: half, radius: fanRadius)
+        handSpan = fan.span
+        handBaseY = safeBottom + bottomPad + fan.rise
+        let handTop = handBaseY + c.height / 2 + 4
+
+        // The trays just above it; the sort button above their right end; the action row above.
+        let traysW = roomy ? min(width - 32, max(half * 2 + 40, 560), 820) : width - 16
+        let trays = CGRect(x: (width - traysW) / 2, y: handTop + traysPad, width: traysW, height: traysHeight(cardW))
+        traysFrame = trays
+        sortButton = CGPoint(x: trays.maxX - Self.sortButtonHit / 2, y: trays.maxY + sortLine - Self.sortButtonHit / 2)
+        actionRow = CGRect(x: side, y: trays.maxY + sortLine + 6, width: width - 2 * side, height: actionsH)
+
+        // The piles, under the status line.
+        let pilesY = statusLine.minY - gap - c.height / 2
+        let pileOffset = cardW / 2 + (roomy ? 12 : 8)
+        deck = CGPoint(x: width / 2 - pileOffset, y: pilesY)
+        discard = CGPoint(x: width / 2 + pileOffset, y: pilesY)
+
+        // No table around the hand.
+        opponentsBar = .zero
+        opponentSlots = []
+        towerFrame = .zero
+        towerTab = .zero
+        laidZone = .zero
+        catDiameter = roomy ? 74 : 62
+        catLift = roomy ? 10 : 8
+        nameDrop = roomy ? 44 : 36
+        towerHeadSize = roomy ? 32 : 26
+        rowHeight = miniCardSize.height + 8
+        columnWidth = 0
+        columnGap = 8
+        rowGap = 8
+        rowsAboveCapacity = 0
+        rowsBelowCapacity = 0
+        rowMaxWidth = .infinity
+    }
+
+    /// A controller's switch band and status line, under the safe top and a side margin, and the
+    /// paw menu's center at the band's right end (its 44 pt target inside the band). Shared with
+    /// the tile game's controller.
+    static func controllerTop(size: CGSize, safeTop: CGFloat, chrome: ControllerChrome)
+        -> (switchBand: CGRect, statusLine: CGRect, menuButton: CGPoint)
+    {
+        let side: CGFloat = arrangement(for: size) != .phone ? 16 : 8
+        let switchH = max(chrome.switchBand, buttonHit)
+        let band = CGRect(x: side, y: size.height - safeTop - switchH, width: size.width - 2 * side, height: switchH)
+        let status = CGRect(x: side, y: band.minY - max(chrome.status, 0), width: band.width, height: max(chrome.status, 0))
+        return (band, status, CGPoint(x: band.maxX - buttonHit / 2, y: band.midY))
+    }
+
+    /// A fan of `card`s whose outermost card reaches `half` from the middle (rotated corners
+    /// counted) on an arc of `radius`: how far the outermost card's center is from the middle,
+    /// and how far the middle card's center sits above the fan's lowest point.
+    private static func fan(card: CGSize, half: CGFloat, radius: CGFloat) -> (span: CGFloat, rise: CGFloat) {
+        var edge = half - card.width / 2
+        for _ in 0..<6 {
+            let t = edge / radius
+            edge = half - (card.width / 2 * cos(t) + card.height / 2 * sin(t))
+        }
+        let tMax = edge / radius
+        let drop = edge * edge / (2 * radius)
+        let edgeHalfHeight = card.height / 2 * cos(tMax) + card.width / 2 * sin(tMax)
+        return (edge, drop + edgeHalfHeight)
     }
 
     /// The menu button's touch target.
@@ -415,6 +580,7 @@ public struct TableLayout: Sendable {
     /// Wide (landscape) tables that can't give each seat a full row put the rows in a column
     /// on each side of the piles instead, seats alternating left and right, top to bottom.
     public func laidRow(slot: Int, of total: Int) -> CGRect {
+        guard arrangement != .controller else { return .zero }  // a controller lays nothing out
         let total = max(total, 1)
         let slot = min(max(slot, 0), total - 1)
         let r: Int, rowsAbove: Int, x: CGFloat, width: CGFloat
