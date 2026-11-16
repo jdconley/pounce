@@ -226,7 +226,7 @@ export function CtTable(props: CtPublicProps & Partial<CtHandProps>) {
       <Tower seats={room.seats} phase={g.phase} rect={L.tower} turn={g.turn} />
 
       {[...L.opponents].map(([s, at]) => (
-        <div class="avatar-at" style={{ transform: `translate3d(${at.x - L.avatar / 2}px, ${at.y - L.avatar / 2}px, 0)` }}>
+        <div class="avatar-at" style={{ transform: `translate3d(${at.x - L.avatar / 2}px, ${at.y - L.avatar / 2}px, 0)`, ["--seat-w" as string]: `${L.seats.get(s)?.w ?? L.avatar}px` }}>
           <SeatAvatar
             seat={s}
             info={room.seats[s]}

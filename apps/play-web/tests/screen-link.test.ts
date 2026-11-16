@@ -59,6 +59,21 @@ describe("a credential key", () => {
   });
 });
 
+describe("a socket's refused token", () => {
+  test("forget() drops the kept credential (only its own key), and the next call mints a new one", async () => {
+    store.set("pounce.device", JSON.stringify({ deviceId: "phone", token: "phone-token" }));
+    store.set("pounce.tv.device", JSON.stringify({ deviceId: "tv", token: "old" }));
+    const { calls, fetcher } = fakeFetch(() => ({ status: 201, body: { deviceId: "tv2", token: "new" } }));
+    const tv = new Api("http://x", fetcher, "pounce.tv.device");
+    expect((await tv.credential()).token).toBe("old");
+    tv.forget();
+    expect(store.json("pounce.tv.device")).toBeNull();
+    expect(store.json<{ token: string }>("pounce.device")?.token).toBe("phone-token");
+    expect((await tv.credential()).token).toBe("new");
+    expect(calls.map((c) => c.url)).toEqual(["/v1/devices"]);
+  });
+});
+
 describe("screens and links", () => {
   const api = (respond: Parameters<typeof fakeFetch>[0]) => {
     store.set("pounce.device", JSON.stringify(CRED));

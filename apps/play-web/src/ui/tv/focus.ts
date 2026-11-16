@@ -59,10 +59,13 @@ function focusDefault(root: HTMLElement): void {
   target?.focus({ preventScroll: true });
 }
 
-/** Whether focus is somewhere a remote can act on. */
+/**
+ * Whether focus is somewhere a remote can act on: a `[data-tv]` element in `root`. One that has
+ * left the remote's reach (a table's button under an open menu) doesn't count.
+ */
 const held = (root: HTMLElement): boolean => {
   const active = document.activeElement;
-  return active instanceof HTMLElement && active !== document.body && root.contains(active);
+  return active instanceof HTMLElement && root.contains(active) && active.hasAttribute("data-tv") && !(active as HTMLButtonElement).disabled;
 };
 
 /**
@@ -103,7 +106,7 @@ export function useDpad(root: RefObject<HTMLElement | null>): void {
       if (target && el.contains(target) && target !== document.activeElement && !(target as HTMLButtonElement).disabled) target.focus({ preventScroll: true });
     };
     const watcher = new MutationObserver(keep);
-    watcher.observe(el, { childList: true, subtree: true, attributes: true, attributeFilter: ["disabled"] });
+    watcher.observe(el, { childList: true, subtree: true, attributes: true, attributeFilter: ["disabled", "data-tv"] });
     window.addEventListener("keydown", onKey);
     el.addEventListener("focusout", keep);
     el.addEventListener("pointerover", onPointer);

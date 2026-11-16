@@ -89,6 +89,12 @@ export class Api {
     return minted;
   }
 
+  /** Forget this device's credential (a socket's 4401): the next call mints a fresh one. */
+  forget(): void {
+    const kept = this.stored();
+    if (kept) this.drop(kept);
+  }
+
   /** Forget a token the server refused, so the next call mints a fresh one. */
   private drop(failed: Credential): void {
     if (this.cached?.token === failed.token) {

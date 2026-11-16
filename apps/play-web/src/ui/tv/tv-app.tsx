@@ -4,7 +4,7 @@
  * posters. It runs on its own device credential (`tvApi`), never runs first run, and is driven by
  * a remote: arrow keys, Enter and Back, with the mouse as well.
  */
-import { useEffect, useRef, useState } from "preact/hooks";
+import { useEffect, useMemo, useRef, useState } from "preact/hooks";
 
 import { art, RINGS } from "../../lib/art";
 import { CATALOG, GAME_IDS, type GameId } from "../../lib/catalog";
@@ -13,11 +13,16 @@ import { isRoomCode } from "../../lib/router";
 import { play, unlockAudio } from "../../lib/sound";
 import { tvApi } from "../../net/api";
 import { ScreenLink } from "../../net/screen-link";
-import { RoomStore, type RoomPhase } from "../../store/room";
+import { reloadForUpdate } from "../../pwa";
+import { RoomStore, type RoomPhase, type RoomState } from "../../store/room";
 import { Button, Cat } from "../common";
 import { QrCode } from "../qr";
 
 import { isBack, useDpad } from "./focus";
+import { NOPE, TvLobby } from "./tv-lobby";
+import { TvMenu } from "./tv-menu";
+import { back, gameOf, otherGame, type MenuView } from "./tv-model";
+import { TvOver, TvTable } from "./tv-table";
 import "./tv.css";
 
 /** The table this TV shows, so a reload goes back to it. */
@@ -41,15 +46,19 @@ function useWakeLock(on: boolean): void {
     if (!on || !("wakeLock" in navigator)) return;
     let live = true;
     let held: WakeLockSentinel | null = null;
+    // One request at a time: a second visibilitychange while one is out asks for nothing.
+    let asking = false;
     const take = () => {
-      if (document.visibilityState !== "visible" || (held && !held.released)) return;
+      if (asking || document.visibilityState !== "visible" || (held && !held.released)) return;
+      asking = true;
       navigator.wakeLock
         .request("screen")
         .then((sentinel) => {
           if (live) held = sentinel;
           else void sentinel.release();
         })
-        .catch(() => undefined);
+        .catch(() => undefined)
+        .finally(() => (asking = false));
     };
     take();
     document.addEventListener("visibilitychange", take);
@@ -92,24 +101,33 @@ export function TvApp() {
     else setPhase("home");
   };
 
-  // Back leaves a table for the home screen.
+  // Back never leaves the app. A key's default is stopped (a table's own Back opens its menu);
+  // a remote whose Back goes back in history finds an entry of ours there, and it acts as a Back
+  // key would.
   useEffect(() => {
-    if (phase === "start" || phase === "home") return;
     const onKey = (e: KeyboardEvent) => {
-      if (!isBack(e)) return;
-      e.preventDefault();
-      goHome();
+      if (isBack(e)) e.preventDefault();
+    };
+    history.pushState({ tv: true }, "");
+    const onPop = () => {
+      history.pushState({ tv: true }, "");
+      window.dispatchEvent(new KeyboardEvent("keydown", { key: "GoBack", cancelable: true }));
     };
     window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [phase]);
+    window.addEventListener("popstate", onPop);
+    return () => {
+      window.removeEventListener("keydown", onKey);
+      window.removeEventListener("popstate", onPop);
+    };
+  }, []);
 
+  const atHome = phase === "start" || phase === "home";
   return (
-    <main class={`tv tv-${phase}`} ref={root}>
-      <div class="tv-bg" style={{ backgroundImage: `url(${art("home-bg")})` }} aria-hidden="true" />
+    <main class={`tv tv-at-${phase}`} ref={root}>
+      <div class="tv-bg" style={{ backgroundImage: `url(${art(atHome ? "home-bg" : "room-bg")})` }} aria-hidden="true" />
       {phase === "start" ? <TvStart onStart={start} /> : null}
       {phase === "home" ? <TvHome onLinked={openRoom} onMade={openRoom} /> : null}
-      {room && phase !== "start" && phase !== "home" ? <TvRoom key={room} code={room} phase={phase} onPhase={setPhase} onGone={goHome} /> : null}
+      {room && !atHome ? <TvRoom key={room} code={room} onPhase={setPhase} onGone={goHome} onMove={openRoom} /> : null}
     </main>
   );
 }
@@ -130,16 +148,6 @@ function TvStart(props: { onStart: () => void }) {
 }
 
 type Link = { code: string; url: string };
-
-/** A refused press (Juice.swift's nope), as a shake that leaves the focus ring's scale alone. */
-const NOPE: Keyframe[] = [
-  { translate: "0" },
-  { translate: "-14px 0" },
-  { translate: "12px 0" },
-  { translate: "-8px 0" },
-  { translate: "4px 0" },
-  { translate: "0" },
-];
 
 function TvHome(props: { onLinked: (room: string) => void; onMade: (room: string) => void }) {
   const [link, setLink] = useState<Link | null>(null);
@@ -229,57 +237,133 @@ function TvHome(props: { onLinked: (room: string) => void; onMade: (room: string
   );
 }
 
+function useRoom(room: RoomStore): RoomState {
+  const [state, setState] = useState(room.state);
+  useEffect(() => room.subscribe({ change: setState }), [room]);
+  return state;
+}
+
 /**
- * The table this TV shows, connected as its screen. For now a card with the table's code: the
- * lobby, the table and game over come later (stage 2, tasks 5 and 6).
+ * The table this TV shows, connected as its screen: the lobby, the table and game over, with the
+ * menu over them. It goes home when the table is gone or no longer lists this TV, and moves to
+ * another table when a phone links one, Play again deals one, or the TV changes the game.
  */
-function TvRoom(props: { code: string; phase: TvPhase; onPhase: (p: TvPhase) => void; onGone: () => void }) {
-  const [lost, setLost] = useState(false);
-  const gone = useRef(props.onGone);
-  gone.current = props.onGone;
-  const onPhase = useRef(props.onPhase);
-  onPhase.current = props.onPhase;
+function TvRoom(props: { code: string; onPhase: (p: TvPhase) => void; onGone: () => void; onMove: (code: string) => void }) {
+  const { code } = props;
+  const room = useMemo(
+    () =>
+      new RoomStore({
+        code,
+        role: "screen",
+        token: async () => (await tvApi.credential()).token,
+        // A refused token (4401) is forgotten, so the next connect mints a fresh one.
+        dropToken: () => tvApi.forget(),
+        reducedMotion: () => matchMedia("(prefers-reduced-motion: reduce)").matches,
+      }),
+    [code],
+  );
+  const state = useRoom(room);
+  const view = state.room;
+  const [menu, setMenu] = useState<MenuView>("closed");
+  const latest = useRef(props);
+  latest.current = props;
+
+  // Before the TV moves, the table it leaves lets it go: its socket closes first.
+  const moveTo = (next: string) => {
+    if (next === code) {
+      setMenu("closed");
+      return;
+    }
+    room.stop();
+    latest.current.onMove(next);
+  };
 
   useEffect(() => {
-    const room = new RoomStore({
-      code: props.code,
-      role: "screen",
-      token: async () => (await tvApi.credential()).token,
-      dropToken: () => undefined,
-      reducedMotion: () => matchMedia("(prefers-reduced-motion: reduce)").matches,
-    });
-    const shown: Partial<Record<RoomPhase, TvPhase>> = { lobby: "lobby", playing: "table", over: "over" };
-    const off = room.subscribe({
-      change: (s) => {
-        setLost(s.everConnected && !s.online);
-        // The room is gone (4404), closed, or no longer lists this TV (4403, which the socket
-        // reports as not found): forget it and go home.
-        if (s.phase === "notFound" || s.phase === "closed") gone.current();
-        else if (shown[s.phase]) onPhase.current(shown[s.phase]!);
-      },
-    });
     room.start();
+    const visible = () => {
+      if (document.visibilityState === "visible" && !room.socket.connected) room.socket.reconnectNow();
+    };
+    const online = () => room.socket.reconnectNow();
+    document.addEventListener("visibilitychange", visible);
+    window.addEventListener("online", online);
     return () => {
-      off();
+      document.removeEventListener("visibilitychange", visible);
+      window.removeEventListener("online", online);
       room.stop();
     };
-  }, [props.code]);
+  }, [room]);
+
+  useEffect(() => {
+    const shown: Partial<Record<RoomPhase, TvPhase>> = { lobby: "lobby", playing: "table", over: "over" };
+    // The table is gone (4404), closed, no longer lists this TV (4403, reported as not found), or
+    // this device is locked out of it: forget it and go home. A newer server: reload for it.
+    if (state.phase === "notFound" || state.phase === "closed" || state.phase === "locked") latest.current.onGone();
+    else if (state.phase === "needsUpdate") reloadForUpdate();
+    else if (shown[state.phase]) latest.current.onPhase(shown[state.phase]!);
+  }, [state.phase]);
+
+  // Play again: the TV follows to the new table, as its screen there.
+  useEffect(() => {
+    if (state.rematch && state.rematch !== code) moveTo(state.rematch);
+  }, [state.rematch]);
+
+  // A remote's Back opens the menu, and goes back through it.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (!isBack(e)) return;
+      e.preventDefault();
+      setMenu((m) => back(m));
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
+
+  const busy = useRef(false);
+  const changeGame = async (button: HTMLElement) => {
+    if (busy.current || !view) return;
+    busy.current = true;
+    try {
+      moveTo(await tvApi.createRoom(otherGame(gameOf(view)), { screen: true }));
+    } catch {
+      play("nope");
+      button.animate(NOPE, { duration: 360, easing: "ease-in-out" });
+      busy.current = false;
+    }
+  };
+
+  const offline = state.everConnected && !state.online;
+  const live = menu === "closed";
+  const openMenu = () => setMenu("items");
+  let body;
+  if (!view) {
+    body = (
+      <section class="tv-room-screen">
+        <div class="tv-room-card panel">
+          <Cat cat={0} pose="awake" size="calc(var(--u) * 220)" class="tv-room-cat" />
+          <p class="tv-room-words outlined">{state.everConnected ? "Reconnecting" : "Finding your table"}</p>
+        </div>
+      </section>
+    );
+  } else if (view.status === "lobby") {
+    body = <TvLobby room={view} live={live} onChangeGame={(b) => void changeGame(b)} onMenu={openMenu} />;
+  } else {
+    body = (
+      <>
+        <TvTable store={room} state={state} offline={offline} live={live && view.status !== "over"} onMenu={openMenu} />
+        {view.status === "over" ? <TvOver room={view} live={live} onMenu={openMenu} /> : null}
+      </>
+    );
+  }
 
   return (
-    <section class="tv-room-screen">
-      <div class="tv-room-card panel">
-        <Cat cat={0} pose={props.phase === "over" ? "celebrate" : "awake"} size="calc(var(--u) * 220)" class="tv-room-cat" />
-        <span class="tv-room-label outlined">Table</span>
-        <strong class="tv-room-code outlined" aria-label={`Table ${props.code.split("").join(" ")}`}>
-          {props.code}
-        </strong>
-        {props.phase === "lobby" ? <p class="tv-room-words outlined">Press Start on any phone</p> : null}
-      </div>
-      {lost ? (
+    <>
+      {body}
+      {offline && view?.status !== "playing" ? (
         <div class="tv-note" role="status">
           <span class="dot" /> Reconnecting
         </div>
       ) : null}
-    </section>
+      {menu !== "closed" ? <TvMenu view={menu} code={code} onView={setMenu} onLeave={() => latest.current.onGone()} onLinked={moveTo} /> : null}
+    </>
   );
 }

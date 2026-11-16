@@ -71,8 +71,8 @@ export type TilesPublicProps = {
   haptics?: boolean;
   /** Each seat's score under its name. */
   scores?: boolean;
-  /** The line under the sets; by default whose turn it is. */
-  cue?: { text: string; mine: boolean };
+  /** The line under the sets; by default whose turn it is. Nothing is drawn for no words. */
+  cue?: { text: string; mine: boolean; y?: number };
   /** Drawn over the pieces. */
   children?: ComponentChildren;
 };
@@ -174,7 +174,7 @@ export function TilesTableBase(props: TilesPublicProps & Partial<TilesHandProps>
   return (
     <>
       {[...L.opponents].map(([s, at]) => (
-        <div class="avatar-at" style={{ transform: `translate3d(${at.x - L.avatar / 2}px, ${at.y - L.avatar / 2}px, 0)` }}>
+        <div class="avatar-at" style={{ transform: `translate3d(${at.x - L.avatar / 2}px, ${at.y - L.avatar / 2}px, 0)`, ["--seat-w" as string]: `${L.seats.get(s)?.w ?? L.avatar}px` }}>
           <SeatAvatar seat={s} info={room.seats[s]} size={L.avatar} turn={v.turn === s && v.status === "playing"} count={v.rackCounts[s]} score={props.scores ? v.scores[s] : undefined} out={v.forfeited[s]} />
         </div>
       ))}
@@ -223,9 +223,11 @@ export function TilesTableBase(props: TilesPublicProps & Partial<TilesHandProps>
 
       {props.children}
 
-      <p class={`cue ${cue.mine ? "mine" : ""}`} aria-live="polite" style={{ transform: `translate3d(-50%, ${L.board.y + L.board.h - 40}px, 0)` }}>
-        {cue.text}
-      </p>
+      {cue.text ? (
+        <p class={`cue ${cue.mine ? "mine" : ""}`} aria-live="polite" style={{ transform: `translate3d(-50%, ${cue.y ?? L.board.y + L.board.h - 40}px, 0)` }}>
+          {cue.text}
+        </p>
+      ) : null}
     </>
   );
 }
