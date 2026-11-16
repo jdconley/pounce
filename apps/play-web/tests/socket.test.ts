@@ -99,6 +99,17 @@ describe("the room socket (RoomSocket.swift)", () => {
     expect(sockets.length).toBe(2);
   });
 
+  test("4403 (a room that doesn't list this screen) is final: not found, never reconnects", async () => {
+    const { sockets, events, socket, clock } = setup();
+    socket.start();
+    await flush();
+    sockets[0]!.drop(4403);
+    expect(events.at(-1)).toBe("notFound");
+    clock.advance(60_000);
+    await flush();
+    expect(sockets.length).toBe(1);
+  });
+
   test("heartbeats once the server takes them; silence for 10 s reconnects", async () => {
     const { clock, sockets, events, socket } = setup();
     socket.start();

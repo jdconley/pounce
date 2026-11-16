@@ -67,7 +67,7 @@ describe("screens and links", () => {
   };
 
   test("screens() posts an empty body, or the room it shows", async () => {
-    const out = { token: "t", code: "ABCD", url: "https://x/tv/t", expiresIn: 600 };
+    const out = { token: "t", code: "ABCD", url: "https://x/tv/t", expiresIn: 600_000 };
     const { api: a, calls } = api(() => ({ status: 201, body: out }));
     expect(await a.screens()).toEqual(out);
     await a.screens("BCDFG");
@@ -117,7 +117,8 @@ describe("screens and links", () => {
 });
 
 describe("the screen link (a TV waiting to be linked)", () => {
-  function setup(expiresIn = 100) {
+  /** `expiresIn` is in milliseconds, as the server sends it. */
+  function setup(expiresIn = 100_000) {
     const release = { hold: false, fail: false, go: () => undefined as void, waiting: null as null | (() => void) };
     const clock = new Clock();
     const sockets: FakeSocket[] = [];
@@ -169,7 +170,7 @@ describe("the screen link (a TV waiting to be linked)", () => {
   });
 
   test("renews at 80%: a new code, a new socket, the old one closed", async () => {
-    const { clock, sockets, events, link } = setup(100);
+    const { clock, sockets, events, link } = setup(100_000);
     link.start();
     await flush();
     sockets[0]!.open();
@@ -185,6 +186,19 @@ describe("the screen link (a TV waiting to be linked)", () => {
     expect(new URL(sockets[1]!.url).pathname).toBe("/v1/screens/tok2/ws");
   });
 
+  test("a 600000 ms link (the server's 10 minutes) renews at 480000 ms", async () => {
+    const { clock, sockets, events, link } = setup(600_000);
+    link.start();
+    await flush();
+    sockets[0]!.open();
+    clock.advance(479_999);
+    await flush();
+    expect(events.filter((e) => e.kind === "code")).toHaveLength(1);
+    clock.advance(1);
+    await flush();
+    expect(events.filter((e) => e.kind === "code")).toHaveLength(2);
+  });
+
   test("the server's expired message renews at once", async () => {
     const { sockets, events, link } = setup();
     link.start();
@@ -197,7 +211,7 @@ describe("the screen link (a TV waiting to be linked)", () => {
   });
 
   test("linked is passed on, and the link stops (no renewal, no reconnect)", async () => {
-    const { clock, sockets, events, link } = setup(100);
+    const { clock, sockets, events, link } = setup(100_000);
     link.start();
     await flush();
     sockets[0]!.open();
@@ -210,7 +224,7 @@ describe("the screen link (a TV waiting to be linked)", () => {
   });
 
   test("a code linked while its renewal is still asking is not lost", async () => {
-    const { clock, sockets, events, link, release } = setup(100);
+    const { clock, sockets, events, link, release } = setup(100_000);
     link.start();
     await flush();
     sockets[0]!.open();
@@ -226,7 +240,7 @@ describe("the screen link (a TV waiting to be linked)", () => {
   });
 
   test("a renewal that fails leaves the old socket open", async () => {
-    const { clock, sockets, events, link, release } = setup(100);
+    const { clock, sockets, events, link, release } = setup(100_000);
     link.start();
     await flush();
     sockets[0]!.open();
@@ -240,7 +254,7 @@ describe("the screen link (a TV waiting to be linked)", () => {
   });
 
   test("the old socket closes once the new one is open, and a link on either wins", async () => {
-    const { clock, sockets, events, link } = setup(100);
+    const { clock, sockets, events, link } = setup(100_000);
     link.start();
     await flush();
     sockets[0]!.open();
@@ -254,7 +268,7 @@ describe("the screen link (a TV waiting to be linked)", () => {
   });
 
   test("the old socket is closed when the new one opens", async () => {
-    const { clock, sockets, link } = setup(100);
+    const { clock, sockets, link } = setup(100_000);
     link.start();
     await flush();
     sockets[0]!.open();
@@ -294,7 +308,7 @@ describe("the screen link (a TV waiting to be linked)", () => {
   });
 
   test("stop closes the socket and ends renewals", async () => {
-    const { clock, sockets, link } = setup(100);
+    const { clock, sockets, link } = setup(100_000);
     link.start();
     await flush();
     sockets[0]!.open();

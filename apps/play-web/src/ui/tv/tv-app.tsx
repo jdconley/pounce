@@ -252,9 +252,8 @@ function TvRoom(props: { code: string; phase: TvPhase; onPhase: (p: TvPhase) => 
     const off = room.subscribe({
       change: (s) => {
         setLost(s.everConnected && !s.online);
-        // The room is gone, or no longer lists this TV: forget it and go home.
-        // TODO(tv stage 2): a 403 `not_screen` (close 4403) should land here too, once the socket
-        // ends on it; today it only reconnects.
+        // The room is gone (4404), closed, or no longer lists this TV (4403, which the socket
+        // reports as not found): forget it and go home.
         if (s.phase === "notFound" || s.phase === "closed") gone.current();
         else if (shown[s.phase]) onPhase.current(shown[s.phase]!);
       },

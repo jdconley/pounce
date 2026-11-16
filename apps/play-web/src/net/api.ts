@@ -156,7 +156,7 @@ export class Api {
     return ((await res.json()) as { code: string }).code;
   }
 
-  /** A TV asks for a link: a token (the QR's) and a short code, good for `expiresIn` seconds. */
+  /** A TV asks for a link: a token (the QR's) and a short code, good for `expiresIn` milliseconds. */
   async screens(showing?: string): Promise<{ token: string; code: string; url: string; expiresIn: number }> {
     const res = await this.call("POST", "/v1/screens", showing ? { showing } : {});
     return (await res.json()) as { token: string; code: string; url: string; expiresIn: number };

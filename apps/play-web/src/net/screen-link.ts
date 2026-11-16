@@ -120,7 +120,7 @@ export class ScreenLink {
     if (gen !== this.generation || this.stopped) return;
     this.token = made.token;
     this.emit({ kind: "code", token: made.token, code: made.code, url: made.url });
-    this.renewTimer = this.setTimer(() => void this.renew(true), Math.round(made.expiresIn * 1000 * RENEW_AT));
+    this.renewTimer = this.setTimer(() => void this.renew(true), Math.round(made.expiresIn * RENEW_AT));
     void this.connect(gen);
   }
 

@@ -49,6 +49,19 @@ describe("a TV table, to the store as it is", () => {
     expect(store.state.error).toBeNull();
   });
 
+  test("a table that doesn't list this screen (4403) ends it: not found, no reconnect", async () => {
+    const { clock, sockets, store } = setup();
+    store.start();
+    await flush();
+    sockets[0]!.open();
+    sockets[0]!.receive(samples.snapshot);
+    sockets[0]!.drop(4403);
+    expect(store.state.phase).toBe("notFound");
+    clock.advance(60_000);
+    await flush();
+    expect(sockets).toHaveLength(1);
+  });
+
   test("an aim sets only aims; a snapshot after it lands; a clear removes it", async () => {
     const { sockets, store } = setup();
     store.start();

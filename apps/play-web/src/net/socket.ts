@@ -16,7 +16,10 @@ export type SocketEvent =
   | { kind: "connected" }
   | { kind: "message"; message: ServerMessage }
   | { kind: "disconnected" }
-  /** No such table (a bad code, or a table that closed and was deleted). */
+  /**
+   * No such table (a bad code, or a table that closed and was deleted), or, for a screen, a table
+   * that doesn't list this device as its screen (4403 `not_screen`).
+   */
   | { kind: "notFound" }
   /** Too many wrong codes from this device lately. */
   | { kind: "locked" }
@@ -295,7 +298,8 @@ export class RoomSocket {
       if (gen !== this.generation) return;
       this.clearTimer(timeout);
       const code = ev.code;
-      if (code === 4404) return this.end({ kind: "notFound" });
+      // 4403: the room doesn't list this device as its screen. As final as a room that's gone.
+      if (code === 4404 || code === 4403) return this.end({ kind: "notFound" });
       if (code === 4429) return this.end({ kind: "locked" });
       if (code === 4426) return this.end({ kind: "refused" });
       if (code === 4401) this.options.dropToken?.();
