@@ -29,6 +29,7 @@ struct TableLayoutControllerTests {
         let table = TableLayout(size: s.size, safeTop: s.top, safeBottom: s.bottom, opponents: 3)
         #expect(table.arrangement == TableLayout.arrangement(for: s.size))
         #expect(table.switchBand == .zero && table.statusLine == .zero && table.actionRow == .zero)
+        #expect(table.pileSize == table.cardSize && table.chromeOverflow == 0 && table.fits)
         #expect(l.roomy == table.roomy)
     }
 
@@ -65,33 +66,16 @@ struct TableLayoutControllerTests {
     func nothingOverlaps(_ i: Int) {
         for chrome in [ControllerChrome.standard, Self.tall] {
             let l = layout(i, chrome)
-            let all = frames(l)
-            for (a, (nameA, frameA)) in all.enumerated() {
-                for (nameB, frameB) in all[(a + 1)...] {
-                    // The paw sits at the switch band's right end.
-                    if Set([nameA, nameB]) == ["switch", "menu"] { continue }
-                    #expect(!overlaps(frameA, frameB), "\(l.size): \(nameA) \(frameA) overlaps \(nameB) \(frameB)")
-                }
-            }
-            for n in 1...11 {
-                for c in l.hand(count: n, lifted: nil) {
-                    let r = rotatedBounds(c, l.cardSize)
-                    for (name, frame) in all {
-                        #expect(!overlaps(r, frame), "\(l.size): a card of \(n) overlaps \(name)")
-                    }
-                }
-            }
-            // The trays don't overlap each other either.
-            let trays = l.trayFrames(count: 3)
-            for (a, b) in zip(trays, trays.dropFirst()) { #expect(!overlaps(a, b)) }
+            #expect(l.fits, "\(l.size): \(l.chromeOverflow) pt over")
+            expectNothingOverlaps(l)
         }
     }
 
     @Test(arguments: screens.indices)
     func topToBottom(_ i: Int) {
         let l = layout(i)
-        let pileTop = l.deck.y + l.cardSize.height / 2
-        let pileBottom = l.deck.y - l.cardSize.height / 2
+        let pileTop = l.deck.y + l.pileSize.height / 2
+        let pileBottom = l.deck.y - l.pileSize.height / 2
         #expect(l.switchBand.maxY <= l.size.height - l.safeTop + 0.01)
         #expect(l.statusLine.maxY <= l.switchBand.minY + 0.01)
         #expect(pileTop <= l.statusLine.minY)
@@ -104,11 +88,32 @@ struct TableLayoutControllerTests {
         #expect(l.actionRow.minY - l.traysFrame.maxY <= TableLayout.sortButtonHit + 16)
     }
 
+    /// No dead band: the piles grow into the room, then sit in its middle, so the gap from the
+    /// action row up to the piles (the discard is a drag from the hand) is the same as the gap
+    /// above them, and at most a sixth of the safe height (the tallest phones, whose cards the
+    /// width caps, come nearest).
+    @Test(arguments: screens.indices)
+    func thePilesFillTheRoomBetweenTheStatusLineAndTheActionRow(_ i: Int) {
+        for chrome in [ControllerChrome.standard, Self.tall] {
+            let l = layout(i, chrome)
+            let below = (l.deck.y - l.pileSize.height / 2) - l.actionRow.maxY
+            let above = l.statusLine.minY - (l.deck.y + l.pileSize.height / 2)
+            let safeHeight = l.size.height - l.safeTop - l.safeBottom
+            #expect(below >= 8 && above >= 8, "\(l.size): \(above) above, \(below) below")
+            #expect(abs(above - below) < 0.5, "\(l.size): \(above) above, \(below) below")
+            #expect(below <= safeHeight / 6, "\(l.size): \(below) pt between the action row and the piles")
+            // The piles are never smaller than the hand while there is room.
+            #expect(l.pileSize.width >= l.cardSize.width)
+            #expect(l.pileSize.height == (l.pileSize.width * 90 / 64).rounded())
+        }
+    }
+
     @Test(arguments: screens.indices)
     func theMinimumsHold(_ i: Int) {
         for chrome in [ControllerChrome.standard, Self.tall] {
             let l = layout(i, chrome)
             #expect(l.cardSize.width >= 64, "\(l.size): cards \(l.cardSize.width) wide")
+            #expect(l.pileSize.width >= 44)
             #expect(l.menuButtonFrame.width >= 44 && l.menuButtonFrame.height >= 44)
             #expect(l.sortButtonFrame.width >= 44 && l.sortButtonFrame.height >= 44)
             #expect(l.switchBand.height >= max(chrome.switchBand, 44))
@@ -134,21 +139,68 @@ struct TableLayoutControllerTests {
         let l = layout(0, Self.tall)
         #expect(l.cardSize.width >= 64)
         #expect(l.switchBand.height == 64 && l.statusLine.height == 56 && l.actionRow.height == 96)
-        let pileBottom = l.deck.y - l.cardSize.height / 2
+        let pileBottom = l.deck.y - l.pileSize.height / 2
         #expect(l.actionRow.maxY <= pileBottom)
+        #expect(l.fits)
         // The chrome grew, so the cards are no bigger than with the standard chrome.
         #expect(l.cardSize.width <= layout(0).cardSize.width)
     }
 
-    @Test func tallChromeShrinksTheCardsWhenItMustButNeverBelowTheMinimum() {
+    @Test func tallChromeShrinksTheHandToItsFloorAndThenThePiles() {
         // A short window: the chrome takes most of it.
         let huge = ControllerChrome(switchBand: 80, status: 80, actions: 140)
         let roomy = TableLayout(size: CGSize(width: 375, height: 667), safeTop: 20, safeBottom: 0, opponents: 3, controller: .standard)
         let squeezed = TableLayout(size: CGSize(width: 375, height: 667), safeTop: 20, safeBottom: 0, opponents: 3, controller: huge)
         #expect(squeezed.cardSize.width < roomy.cardSize.width)
-        #expect(squeezed.cardSize.width >= 64)
-        #expect(squeezed.actionRow.maxY <= squeezed.deck.y - squeezed.cardSize.height / 2)
+        #expect(squeezed.cardSize.width == TableLayout.controllerCardMin)
+        #expect(squeezed.pileSize.width < squeezed.cardSize.width && squeezed.pileSize.width >= 44)
+        #expect(squeezed.fits)
+        expectNothingOverlaps(squeezed)
     }
+
+    /// Chrome too tall for the screen (the largest text, a status line that wraps): the layout
+    /// says by how much, and with that much taken off the chrome everything fits again.
+    @Test func chromeTooTallSaysByHowMuch() {
+        let size = CGSize(width: 375, height: 667)
+        let over = ControllerChrome(switchBand: 80, status: 112, actions: 140)
+        let l = TableLayout(size: size, safeTop: 20, safeBottom: 0, opponents: 3, controller: over)
+        #expect(!l.fits)
+        #expect(l.chromeOverflow > 0)
+        #expect(l.cardSize.width == TableLayout.controllerCardMin && l.pileSize.width == 44)
+        // Everything but the piles still stays clear.
+        #expect(l.actionRow.minY >= l.traysFrame.maxY && l.statusLine.minY >= l.actionRow.maxY)
+        var capped = over
+        capped.status -= l.chromeOverflow.rounded(.up)
+        let again = TableLayout(size: size, safeTop: 20, safeBottom: 0, opponents: 3, controller: capped)
+        #expect(again.fits)
+        expectNothingOverlaps(again)
+    }
+}
+
+/// Nothing a controller shows overlaps, but the paw in its band and the fanned cards with each
+/// other; every frame and card inside the safe area.
+private func expectNothingOverlaps(_ l: TableLayout) {
+    let all = frames(l)
+    let safe = safeArea(l).insetBy(dx: -0.01, dy: -0.01)
+    for (a, (nameA, frameA)) in all.enumerated() {
+        #expect(safe.contains(frameA), "\(l.size): \(nameA) \(frameA) outside the safe area")
+        for (nameB, frameB) in all[(a + 1)...] {
+            // The paw sits at the switch band's right end.
+            if Set([nameA, nameB]) == ["switch", "menu"] { continue }
+            #expect(!overlaps(frameA, frameB), "\(l.size): \(nameA) \(frameA) overlaps \(nameB) \(frameB)")
+        }
+    }
+    for n in 1...11 {
+        for c in l.hand(count: n, lifted: nil) {
+            let r = rotatedBounds(c, l.cardSize)
+            #expect(safe.contains(r))
+            for (name, frame) in all {
+                #expect(!overlaps(r, frame), "\(l.size): a card of \(n) overlaps \(name)")
+            }
+        }
+    }
+    let trays = l.trayFrames(count: 3)
+    for (a, b) in zip(trays, trays.dropFirst()) { #expect(!overlaps(a, b)) }
 }
 
 // MARK: helpers
@@ -165,7 +217,7 @@ private func cardRect(_ p: CGPoint, _ s: CGSize) -> CGRect {
 private func frames(_ l: TableLayout) -> [(String, CGRect)] {
     [
         ("switch", l.switchBand), ("menu", l.menuButtonFrame), ("status", l.statusLine),
-        ("deck", cardRect(l.deck, l.cardSize)), ("discard", cardRect(l.discard, l.cardSize)),
+        ("deck", cardRect(l.deck, l.pileSize)), ("discard", cardRect(l.discard, l.pileSize)),
         ("actions", l.actionRow), ("sort", l.sortButtonFrame), ("seat tag", l.seatTagFrame),
         ("trays", l.traysFrame),
     ]

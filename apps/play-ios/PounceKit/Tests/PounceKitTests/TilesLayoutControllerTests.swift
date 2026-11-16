@@ -11,8 +11,9 @@ import Testing
         (CGSize(width: 440, height: 956), 62, 34), (CGSize(width: 820, height: 1180), 24, 20),
         (CGSize(width: 1180, height: 820), 24, 20),
     ]
-    /// 14 is the deal; 21 fills the stash's row limit on a phone.
-    static let counts = [14, TilesLayout.rackRowLimit * 7]
+    /// 14 is the deal; 21 fills the stash's row limit on a phone; 22 and 28 are ordinary racks
+    /// later in a game; 40 scrolls even on an iPad's off-turn rack.
+    static let counts = [14, TilesLayout.rackRowLimit * 7, 22, 28, 40]
     static let tall = ControllerChrome(switchBand: 64, status: 56, actions: 96)
 
     private func rackOnly(_ i: Int, _ count: Int, _ chrome: ControllerChrome = .standard) -> TilesLayout {
@@ -58,13 +59,26 @@ import Testing
             #expect(!overlaps(l.switchBand, l.statusLine) && !overlaps(l.statusLine, l.rack) && !overlaps(l.switchBand, l.rack))
             let pieces = l.rackSlots(count: count).centers.map { pieceRect($0, l.rackPiece) }
             #expect(pieces.count == count)
+            let scrolls = l.rackScrollLimit(count: count) > 0
             for (a, piece) in pieces.enumerated() {
-                #expect(l.rack.contains(piece), "\(l.size) \(count): piece \(a) \(piece) outside the rack \(l.rack)")
-                #expect(safe.contains(piece))
+                // A scrolling stash runs off the right edge (it scrolls sideways), never up or down.
+                let inside = scrolls
+                    ? piece.minY >= l.rack.minY && piece.maxY <= l.rack.maxY && piece.minX >= 0
+                    : l.rack.contains(piece) && safe.contains(piece)
+                #expect(inside, "\(l.size) \(count): piece \(a) \(piece) outside the rack \(l.rack)")
                 for other in pieces[(a + 1)...] { #expect(!overlaps(piece, other)) }
             }
-            // All of it on screen: nothing to scroll.
-            #expect(l.rackScrollLimit(count: count) == 0, "\(l.size) \(count)")
+            // The deal and a full phone stash: all of it on screen, nothing to scroll.
+            if count <= TilesLayout.rackRowLimit * 7 { #expect(!scrolls, "\(l.size) \(count)") }
+            // It scrolls only when the rows are full at no smaller than the table stash's size,
+            // as many to a row as fit at that size.
+            if scrolls {
+                let stash = table(i, count).rackPiece.width
+                #expect(l.rackPiece.width >= stash, "\(l.size) \(count)")
+                let gap: CGFloat = l.roomy ? 6 : 4, side: CGFloat = l.roomy ? 24 : 8
+                #expect(CGFloat(l.rackColumns + 1) * (stash + gap) - gap > l.size.width - 2 * side, "\(l.size) \(count): room for another column")
+                #expect(l.rackRows == TilesLayout.rackRowLimit)
+            }
             #expect(l.rackRows <= TilesLayout.rackRowLimit)
             #expect(menu.width >= 44 && menu.height >= 44)
             #expect(l.switchBand.height >= max(chrome.switchBand, 44) && l.statusLine.height >= chrome.status)
@@ -94,7 +108,7 @@ import Testing
             let l = rackOnly(0, count, Self.tall)
             #expect(l.rack.maxY <= l.statusLine.minY)
             #expect(l.rack.minY >= l.safeBottom)
-            #expect(l.rackScrollLimit(count: count) == 0)
+            if count <= TilesLayout.rackRowLimit * 7 { #expect(l.rackScrollLimit(count: count) == 0) }
             #expect(l.rackPiece.width >= table(0, count).rackPiece.width)
         }
     }

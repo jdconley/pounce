@@ -152,10 +152,7 @@ public struct TilesLayout: Equatable, Sendable {
         rackGap = gap
         let columns = roomy ? 14 : 7
         rackColumns = columns
-        let side: CGFloat = roomy ? 24 : 8
-        let fit = ((width - 2 * side - gap * CGFloat(columns - 1)) / CGFloat(columns)).rounded(.down)
-        // 48 pt on the spec's 393 pt phone, a little more on a wider one, what fits on a narrower.
-        let pieceW = roomy ? min(max(fit, 44), 64) : min(max(fit, 40), (48 * max(width / 393, 1)).rounded(.down))
+        let pieceW = Self.stashPieceWidth(width: width, roomy: roomy)
         let piece = CGSize(width: pieceW, height: (pieceW * Self.pieceAspect).rounded())
         rackPiece = piece
         let needed = Int((Double(max(rackCount, 1)) / Double(columns)).rounded(.up))
@@ -215,9 +212,20 @@ public struct TilesLayout: Equatable, Sendable {
         rugPieceMin = (24 * scale).rounded()
     }
 
+    /// A table stash's piece width: seven across a phone, fourteen across a roomy screen.
+    private static func stashPieceWidth(width: CGFloat, roomy: Bool) -> CGFloat {
+        let gap: CGFloat = roomy ? 6 : 4
+        let columns = roomy ? 14 : 7
+        let side: CGFloat = roomy ? 24 : 8
+        let fit = ((width - 2 * side - gap * CGFloat(columns - 1)) / CGFloat(columns)).rounded(.down)
+        // 48 pt on the spec's 393 pt phone, a little more on a wider one, what fits on a narrower.
+        return roomy ? min(max(fit, 44), 64) : min(max(fit, 40), (48 * max(width / 393, 1)).rounded(.down))
+    }
+
     /// A controller off turn: the switch band, the status line and the stash, its pieces as big
     /// as fit (up to 76 pt on a phone, 96 on an iPad) in up to `rackRowLimit` rows, centred in
-    /// what is left. Only past that (more pieces than fit at 40 pt, 44 on an iPad) does it scroll.
+    /// what is left. Never smaller than a table stash's pieces on this screen: when that many
+    /// don't fit at that size, the rows hold as many as fit and the stash scrolls.
     private init(rackOnly chrome: ControllerChrome, size: CGSize, safeTop: CGFloat, safeBottom: CGFloat, rackCount: Int) {
         self.size = size
         self.safeTop = safeTop
@@ -262,7 +270,7 @@ public struct TilesLayout: Equatable, Sendable {
         let pad: CGFloat = 8  // inside the stash, above and below its rows (as `rackSlots` takes it)
         let roomTop = statusLine.minY - (roomy ? 12 : 8), roomBottom = safeBottom + (roomy ? 10 : 4)
         let availW = width - 2 * (roomy ? 24 : 8), availH = roomTop - roomBottom - 2 * pad
-        let largest: CGFloat = roomy ? 96 : 76, smallest: CGFloat = roomy ? 44 : 40
+        let largest: CGFloat = roomy ? 96 : 76, smallest = Self.stashPieceWidth(width: width, roomy: roomy)
         func height(_ w: CGFloat) -> CGFloat { (w * Self.pieceAspect).rounded() }
         func fit(rows: Int, columns: Int) -> CGFloat {
             var w = min(((availW - gap * CGFloat(columns - 1)) / CGFloat(columns)).rounded(.down), largest)
@@ -277,7 +285,7 @@ public struct TilesLayout: Equatable, Sendable {
             if w > best.w { best = (w, rows, columns) }
         }
         if best.w < smallest {
-            // Too many to show at once: the most columns that fit at the smallest size, and scroll.
+            // Too many to show at once: the most columns that fit at the table's size, and scroll.
             let rows = Self.rackRowLimit
             let columns = max(Int(((availW + gap) / (smallest + gap)).rounded(.down)), 1)
             best = (max(fit(rows: rows, columns: columns), smallest), rows, columns)
