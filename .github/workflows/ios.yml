@@ -48,6 +48,12 @@ jobs:
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
       - run: xcodebuild -version
+      # The main thread draws, nothing else (docs/main-thread.md): no blocking call outside
+      # PounceKit's IO layer. The checker checks itself against planted violations first.
+      - name: Main-thread check
+        run: |
+          swift scripts/main-thread-lint.swift --self-test
+          swift scripts/main-thread-lint.swift
       - run: swift test --package-path PounceKit
       - run: scripts/bootstrap.sh
       - name: Build Release (unsigned)

@@ -135,9 +135,11 @@ final class FakePounces: PounceService, Sendable {
 }
 
 @MainActor @Suite struct PounceStoreTests {
-    private func file() -> URL {
+    private func url() -> URL {
         FileManager.default.temporaryDirectory.appendingPathComponent("pounce-\(UUID().uuidString).json")
     }
+
+    private func file() -> JSONFile<[PendingAnswer]> { PounceStore.file(at: url()) }
 
     private func pending(_ answer: PounceAnswer, id: String = "pc_1") -> PendingAnswer {
         PendingAnswer(id: id, answer: answer, choice: nil, link: nil, person: "me")
@@ -151,14 +153,17 @@ final class FakePounces: PounceService, Sendable {
     }
 
     @Test func testFailedAnswerRetriesOnce() async {
-        let url = file()
+        let url = url()
         let offline = FakePounces(answer: .failure(.transport("offline")))
-        let first = PounceStore(service: offline, file: url)
+        let firstFile = PounceStore.file(at: url)
+        let first = PounceStore(service: offline, file: firstFile)
         #expect(await first.answer(pending(.later)) == .queued)
         #expect(first.pending == [pending(.later)])
+        await firstFile.flush()
         // Next launch: a new store on the same file sends it once.
         let online = FakePounces(answer: .success(nil))
-        let next = PounceStore(service: online, file: url)
+        let nextFile = PounceStore.file(at: url)
+        let next = PounceStore(service: online, file: nextFile, loaded: await nextFile.read())
         #expect(next.pending == [pending(.later)])
         await next.retryPending()
         await next.retryPending()
@@ -218,7 +223,8 @@ final class FakePounces: PounceService, Sendable {
         let fake = FakePounces(answer: .success(nil))
         let store = PounceStore(service: fake, file: file())
         async let first = store.answer(pending(.later))
-        try? await Task.sleep(for: .milliseconds(5))
+        // In a bit is on disk first, then goes out: wait until its request is really in flight.
+        for _ in 0..<2_000 where fake.calls.withLock({ $0 }).isEmpty { try? await Task.sleep(for: .milliseconds(1)) }
         let second = await store.answer(pending(.play))
         _ = await first
         #expect(second == .queued)

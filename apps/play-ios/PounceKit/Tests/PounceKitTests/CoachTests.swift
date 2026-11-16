@@ -183,30 +183,32 @@ import Testing
 
     // MARK: TutorialStore
 
-    @Test func seenTipsArePerPersonAndSurviveARelaunch() throws {
+    @Test func seenTipsArePerPersonAndSurviveARelaunch() async throws {
         let dir = try tempDir()
-        let store = TutorialStore(directory: dir)
+        let store = await TutorialStore.open(directory: dir)
         #expect(store.load().isEmpty)
         store.markSeen([.goal, .draw], person: "a")
         store.markSeen([.phase], person: "b")
         store.markSeen([.discard], person: "a")
-        let reloaded = TutorialStore(directory: dir).load()
+        await store.flush()
+        let reloaded = await TutorialStore.open(directory: dir).load()
         #expect(reloaded["a"] == [.goal, .draw, .discard])
         #expect(reloaded["b"] == [.phase])
         #expect(FileManager.default.fileExists(atPath: dir.appendingPathComponent("tutorial.json").path))
     }
 
-    @Test func resetForgetsEveryone() throws {
+    @Test func resetForgetsEveryone() async throws {
         let dir = try tempDir()
-        let store = TutorialStore(directory: dir)
+        let store = await TutorialStore.open(directory: dir)
         store.markSeen([.goal], person: "a")
         store.reset()
-        #expect(TutorialStore(directory: dir).load().isEmpty)
+        await store.flush()
+        #expect(await TutorialStore.open(directory: dir).load().isEmpty)
     }
 
-    @Test func unknownTipsInTheFileAreIgnored() throws {
+    @Test func unknownTipsInTheFileAreIgnored() async throws {
         let dir = try tempDir()
         try Data(#"{"a":["goal","someday"]}"#.utf8).write(to: dir.appendingPathComponent("tutorial.json"))
-        #expect(TutorialStore(directory: dir).load()["a"] == [.goal])
+        #expect(await TutorialStore.open(directory: dir).load()["a"] == [.goal])
     }
 }

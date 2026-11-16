@@ -1,6 +1,5 @@
 #if DEBUG
 import Foundation
-import Synchronization
 
 extension DemoFixtures {
     /// The Us screen with no server (`-demo-streaks`): a long pinned streak with Mia (a big condo,
@@ -61,27 +60,25 @@ extension DemoFixtures {
 
 /// `-demo-streaks`: the streak routes in memory, acting on `DemoFixtures.streaks()` the way the
 /// server would (gifts open into unlocks, pause, pin, leave and the ghosted cat's rejoin).
-public final class DemoStreakService: StreakService, Sendable {
-    private let list: Mutex<StreakList>
+public actor DemoStreakService: StreakService {
+    private var list: StreakList
 
     public init(_ list: StreakList = DemoFixtures.streaks()) {
-        self.list = Mutex(list)
+        self.list = list
     }
 
-    public func streaks(person: String?) async throws -> StreakList { list.withLock { $0 } }
+    public func streaks(person: String?) async throws -> StreakList { list }
 
     private func update(_ pair: String, _ change: (inout StreakView) -> Void) {
-        list.withLock { l in
-            if let i = l.pairs.firstIndex(where: { $0.pair == pair }) { change(&l.pairs[i]) }
-        }
+        if let i = list.pairs.firstIndex(where: { $0.pair == pair }) { change(&list.pairs[i]) }
     }
 
     /// Changes one pair's view in place (the demo pounce routes).
-    public func edit(_ pair: String, _ change: (inout StreakView) -> Void) { update(pair, change) }
+    public func edit(_ pair: String, _ change: @Sendable (inout StreakView) -> Void) { update(pair, change) }
 
     /// The pair whose view matches, if any.
-    public func first(where match: (StreakView) -> Bool) -> StreakView? {
-        list.withLock { $0.pairs.first(where: match) }
+    public func first(where match: @Sendable (StreakView) -> Bool) -> StreakView? {
+        list.pairs.first(where: match)
     }
 
     public func pause(pair: String, days: Int, person: String?) async throws {
@@ -104,28 +101,22 @@ public final class DemoStreakService: StreakService, Sendable {
     }
 
     public func pin(pair: String, person: String?) async throws {
-        list.withLock { l in
-            for i in l.pairs.indices { l.pairs[i].pinned = l.pairs[i].pair == pair }
-            l.pairs.sort { ($0.pinned ? 1 : 0, $0.count) > ($1.pinned ? 1 : 0, $1.count) }
-        }
+        for i in list.pairs.indices { list.pairs[i].pinned = list.pairs[i].pair == pair }
+        list.pairs.sort { ($0.pinned ? 1 : 0, $0.count) > ($1.pinned ? 1 : 0, $1.count) }
     }
 
     public func leave(pair: String, person: String?) async throws {
-        list.withLock { l in
-            guard let gone = l.pairs.first(where: { $0.pair == pair }) else { return }
-            l.pairs.removeAll { $0.pair == pair }
-            l.left.append(LeftPair(pair: pair, partner: gone.partner))
-        }
+        guard let gone = list.pairs.first(where: { $0.pair == pair }) else { return }
+        list.pairs.removeAll { $0.pair == pair }
+        list.left.append(LeftPair(pair: pair, partner: gone.partner))
     }
 
     public func rejoin(pair: String, person: String?) async throws {
-        list.withLock { l in
-            guard let ghost = l.left.first(where: { $0.pair == pair }) else { return }
-            l.left.removeAll { $0.pair == pair }
-            l.pairs.append(StreakView(
-                pair: pair + "x", partner: ghost.partner, count: 0,
-                unlocked: .init(backs: [StreakCatalog.defaultBack], rugs: [StreakCatalog.defaultRug])))
-        }
+        guard let ghost = list.left.first(where: { $0.pair == pair }) else { return }
+        list.left.removeAll { $0.pair == pair }
+        list.pairs.append(StreakView(
+            pair: pair + "x", partner: ghost.partner, count: 0,
+            unlocked: .init(backs: [StreakCatalog.defaultBack], rugs: [StreakCatalog.defaultRug])))
     }
 }
 #endif

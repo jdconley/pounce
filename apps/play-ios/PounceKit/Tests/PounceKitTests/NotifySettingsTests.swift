@@ -115,9 +115,11 @@ import Testing
 }
 
 @MainActor @Suite struct NotifySettingsStoreTests {
-    private func file() -> URL {
+    private func url() -> URL {
         FileManager.default.temporaryDirectory.appendingPathComponent("notify-\(UUID().uuidString).json")
     }
+
+    private func file() -> JSONFile<NotifySettingsStore.Saved> { NotifySettingsStore.file(at: url()) }
 
     @Test func setWritesAnEntryAndMarksItUnsent() {
         let store = NotifySettingsStore(file: file())
@@ -139,14 +141,16 @@ import Testing
         #expect(store.pendingPatch(band: .adult)?.settings?[NotifyKey.auto]?.v == .bool(true))
     }
 
-    @Test func testUnsentSurvivesFailure() {
-        let url = file()
+    @Test func testUnsentSurvivesFailure() async {
+        let url = url()
         do {
-            let store = NotifySettingsStore(file: url)
+            let store = NotifySettingsStore(file: NotifySettingsStore.file(at: url))
             store.set(NotifyKey.weekday, ClockTime(h: 7, m: 0).json, now: 10)
             store.set(NotifyKey.weekday, ClockTime(h: 7, m: 30).json, now: 11)
+            await store.flush()
         }
-        let again = NotifySettingsStore(file: url)
+        let file = NotifySettingsStore.file(at: url)
+        let again = NotifySettingsStore(file: file, loaded: await file.read())
         #expect(again.pendingPatch(band: .teen)?.settings?[NotifyKey.weekday] == SyncEntry(v: ClockTime(h: 7, m: 30).json, at: 11))
         #expect(again.settings(band: .teen).weekday == ClockTime(h: 7, m: 30))
     }

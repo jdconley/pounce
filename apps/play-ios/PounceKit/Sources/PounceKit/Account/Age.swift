@@ -1,5 +1,4 @@
 import Foundation
-import Synchronization
 
 // Age screening (spec §14.1): the band only, never a birth date. Where an answer leaves the age
 // open (an open lower bound, a birth year without a month), the youngest the person can be
@@ -78,16 +77,17 @@ public struct AgeRecord: Codable, Equatable, Sendable {
     }
 }
 
+/// Where the owner's age record is kept. Async: the real one is the Keychain, which is IO.
 public protocol AgeRecordStore: Sendable {
-    func load() -> AgeRecord?
-    func save(_ record: AgeRecord)
+    func load() async -> AgeRecord?
+    func save(_ record: AgeRecord) async
 }
 
-public final class MemoryAgeRecordStore: AgeRecordStore {
-    private let record = Mutex<AgeRecord?>(nil)
-    public init(_ initial: AgeRecord? = nil) { record.withLock { $0 = initial } }
-    public func load() -> AgeRecord? { record.withLock { $0 } }
-    public func save(_ r: AgeRecord) { record.withLock { $0 = r } }
+public actor MemoryAgeRecordStore: AgeRecordStore {
+    private var record: AgeRecord?
+    public init(_ initial: AgeRecord? = nil) { record = initial }
+    public func load() -> AgeRecord? { record }
+    public func save(_ r: AgeRecord) { record = r }
 }
 
 /// The age record in the Keychain, on this device only. It outlives the app's files, so
@@ -100,12 +100,12 @@ public final class KeychainAgeRecordStore: AgeRecordStore {
         item = KeychainItem(service: service, account: "owner")
     }
 
-    public func load() -> AgeRecord? {
-        item.load().flatMap { try? JSONDecoder().decode(AgeRecord.self, from: $0) }
+    public func load() async -> AgeRecord? {
+        await item.load().flatMap { try? JSONDecoder().decode(AgeRecord.self, from: $0) }
     }
 
-    public func save(_ record: AgeRecord) {
-        if let data = try? JSONEncoder().encode(record) { item.save(data) }
+    public func save(_ record: AgeRecord) async {
+        if let data = try? JSONEncoder().encode(record) { await item.save(data) }
     }
 }
 

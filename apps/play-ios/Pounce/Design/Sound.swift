@@ -1,4 +1,5 @@
 import AVFoundation
+import PounceKit
 import Foundation
 
 /// Plays the app's sound effects. `Sound.shared` is the real one, or under a UI test
@@ -28,26 +29,34 @@ final class AudioSound: SoundPlaying {
     private static let voicesPerEffect = 3
     private let settings: Settings
     private var pools: [String: [AVAudioPlayer]] = [:]
+    private var loading: Set<String> = []
     private var cursor: [String: Int] = [:]
-    private var sessionReady = false
+    private var session: Task<Void, Never>?
 
     init(settings: Settings = .shared) {
         self.settings = settings
     }
 
+    /// Starts loading every effect, off the main thread (docs/main-thread.md); each is ready a
+    /// moment after launch.
     func preload() {
-        prepareSession()
         let a = ArtName.Sound.self
         for name in [
             a.sfxPop, a.sfxFlip, a.sfxBat, a.sfxThud, a.sfxNope, a.sfxSparkle, a.sfxWhoosh, a.sfxScream,
             a.sfxLeap, a.sfxFanfare, a.sfxTick,
         ] {
-            _ = pool(for: name)
+            load(name)
         }
     }
 
+    /// Plays `name`. One still loading (a moment after launch, or an effect `preload` doesn't
+    /// list) is skipped this once and loads for next time.
     func play(_ name: String, volume: Float) {
-        guard settings.soundOn, let players = pool(for: name), !players.isEmpty else { return }
+        guard settings.soundOn else { return }
+        guard let players = pools[name], !players.isEmpty else {
+            load(name)
+            return
+        }
         let i = cursor[name, default: 0] % players.count
         cursor[name] = i + 1
         let player = players[i]
@@ -56,27 +65,17 @@ final class AudioSound: SoundPlaying {
         player.play()
     }
 
-    private func prepareSession() {
-        guard !sessionReady else { return }
-        sessionReady = true
-        let session = AVAudioSession.sharedInstance()
-        try? session.setCategory(.ambient, mode: .default, options: [.mixWithOthers])
-        try? session.setActive(true)
-    }
-
-    private func pool(for name: String) -> [AVAudioPlayer]? {
-        if let existing = pools[name] { return existing }
-        prepareSession()
-        // Xcode copies Resources/Sounds/*.caf flat into the bundle root.
-        guard let url = Bundle.main.url(forResource: name, withExtension: "caf") else { return nil }
-        var players: [AVAudioPlayer] = []
-        for _ in 0..<Self.voicesPerEffect {
-            guard let player = try? AVAudioPlayer(contentsOf: url) else { continue }
-            player.prepareToPlay()
-            players.append(player)
+    private func load(_ name: String) {
+        guard pools[name] == nil, !loading.contains(name) else { return }
+        loading.insert(name)
+        if session == nil { session = Task { await SoundFiles.activateAmbientSession() } }
+        let session = session
+        Task {
+            await session?.value
+            let players = await SoundFiles.players(named: name, voices: Self.voicesPerEffect)
+            pools[name] = players
+            loading.remove(name)
         }
-        pools[name] = players
-        return players
     }
 }
 

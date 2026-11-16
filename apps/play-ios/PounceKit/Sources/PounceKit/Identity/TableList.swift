@@ -2,14 +2,31 @@ import Foundation
 
 /// The server's last answer to `/tables`: `table-list.json` (or a per-server `fileName`) in the
 /// given directory. Home draws from it at launch, so someone with tables sees them at once
-/// instead of the first-visit game posters until the server answers. Not thread-safe by itself;
+/// instead of the first-visit game posters until the server answers. The list is kept in memory
+/// and written behind (`JSONFile`), so nothing here touches the disk. Not thread-safe by itself;
 /// callers use it from one actor (the app model).
 public final class TableList {
-    private let fileURL: URL
+    private let file: JSONFile<[TableEntry]>
+    private var saved: [TableEntry]?
 
-    public init(directory: URL, fileName: String = "table-list.json") {
-        fileURL = directory.appendingPathComponent(fileName)
+    /// `loaded` is what `file.read()` returned, read off the main actor at launch.
+    public init(file: JSONFile<[TableEntry]>, loaded: [TableEntry]?) {
+        self.file = file
+        saved = loaded
     }
+
+    public static func file(directory: URL, fileName: String = "table-list.json") -> JSONFile<[TableEntry]> {
+        JSONFile(url: directory.appendingPathComponent(fileName))
+    }
+
+    /// Reads the file (off the caller's actor) and opens the list on it.
+    public static func open(directory: URL, fileName: String = "table-list.json") async -> sending TableList {
+        let file = file(directory: directory, fileName: fileName)
+        return TableList(file: file, loaded: await file.read())
+    }
+
+    /// Waits for every save so far to reach the disk.
+    public nonisolated(nonsending) func flush() async { await file.flush() }
 
     /// One server's list, `table-list.<host>_<port>.json`: room codes belong to a server.
     public static func fileName(for config: APIConfig) -> String {
@@ -17,15 +34,11 @@ public final class TableList {
     }
 
     /// The saved list; nil when this phone never saved one (or it can't be read).
-    public func load() -> [TableEntry]? {
-        guard let data = try? Data(contentsOf: fileURL) else { return nil }
-        return try? JSONDecoder().decode([TableEntry].self, from: data)
-    }
+    public func load() -> [TableEntry]? { saved }
 
     public func save(_ entries: [TableEntry]) {
-        guard entries != load() else { return }
-        guard let data = try? JSONEncoder().encode(entries) else { return }
-        try? FileManager.default.createDirectory(at: fileURL.deletingLastPathComponent(), withIntermediateDirectories: true)
-        try? data.write(to: fileURL, options: .atomic)
+        guard entries != saved else { return }
+        saved = entries
+        file.save(entries)
     }
 }

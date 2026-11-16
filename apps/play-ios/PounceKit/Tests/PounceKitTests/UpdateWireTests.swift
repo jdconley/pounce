@@ -194,17 +194,17 @@ private final class RawServer: Sendable {
 private let v11 = ["X-Pounce-App": "platform=ios; version=1.1; build=57; protocol=1"]
 
 @Suite(.timeLimit(.minutes(1))) struct UpdateWireOverHTTPTests {
-    private func client(port: UInt16, headers: [String: String]) -> APIClient {
+    private func client(port: UInt16, headers: [String: String]) async -> APIClient {
         let config = APIConfig(baseURL: URL(string: "http://127.0.0.1:\(port)")!, headers: headers)
         let store = MemoryCredentialStore()
-        store.save(DeviceCredential(deviceId: "dev-1", token: "tok-1"))
+        await store.save(DeviceCredential(deviceId: "dev-1", token: "tok-1"))
         return APIClient(config: config, credentials: store, session: URLSession(configuration: .ephemeral))
     }
 
     @Test func everyCallSaysWhatTheAppIs() async throws {
         let server = try RawServer(response: RawServer.response("200 OK", body: #"{"tables":[]}"#))
         defer { server.stop() }
-        let api = client(port: try await server.start(), headers: v11)
+        let api = await client(port: try await server.start(), headers: v11)
         _ = try await api.listTables()
         _ = try await api.listTablesAndLocked()
         _ = try? await api.appStatus()
@@ -221,7 +221,7 @@ private let v11 = ["X-Pounce-App": "platform=ios; version=1.1; build=57; protoco
     @Test func withNoIdentityNothingIsSaid() async throws {
         let server = try RawServer(response: RawServer.response("200 OK", body: #"{"tables":[]}"#))
         defer { server.stop() }
-        let api = client(port: try await server.start(), headers: [:])
+        let api = await client(port: try await server.start(), headers: [:])
         _ = try await api.listTables()
         #expect(server.requests.count == 1)
         #expect(!server.requests[0].keys.contains { $0.hasPrefix("x-pounce") })
@@ -231,7 +231,7 @@ private let v11 = ["X-Pounce-App": "platform=ios; version=1.1; build=57; protoco
         let body = #"{"error":"update_required","minimum":"1.2","storeUrl":"https://apps.apple.com/app/id6829560061"}"#
         let server = try RawServer(response: RawServer.response("426 Upgrade Required", headers: ["X-Pounce-Update": "required"], body: body))
         defer { server.stop() }
-        let api = client(port: try await server.start(), headers: v11)
+        let api = await client(port: try await server.start(), headers: v11)
         let heard = Mutex<[UpdateRequirement]>([])
         await api.setUpdateRequiredHandler { need in heard.withLock { $0.append(need) } }
         let need = UpdateRequirement(minimum: "1.2", storeUrl: "https://apps.apple.com/app/id6829560061")
@@ -255,7 +255,7 @@ private let v11 = ["X-Pounce-App": "platform=ios; version=1.1; build=57; protoco
     @Test func anyOther426IsTheServerErrorItAlwaysWas() async throws {
         let server = try RawServer(response: RawServer.response("426 Upgrade Required", body: #"{"error":"upgrade_required"}"#))
         defer { server.stop() }
-        let api = client(port: try await server.start(), headers: v11)
+        let api = await client(port: try await server.start(), headers: v11)
         await #expect(throws: APIError.server(426)) { _ = try await api.listTables() }
     }
 

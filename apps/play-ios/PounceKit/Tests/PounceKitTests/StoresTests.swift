@@ -12,36 +12,37 @@ import Testing
 
     // MARK: PeopleStore
 
-    @Test func peopleStartEmpty() throws {
-        let store = PeopleStore(directory: try tempDir())
+    @Test func peopleStartEmpty() async throws {
+        let store = try await PeopleStore.open(directory: tempDir())
         #expect(store.load() == LocalPeople(owner: nil, others: []))
     }
 
-    @Test func peopleRoundTripThroughDisk() throws {
+    @Test func peopleRoundTripThroughDisk() async throws {
         let dir = try tempDir()
-        let store = PeopleStore(directory: dir)
+        let store = await PeopleStore.open(directory: dir)
         let me = store.setOwner(name: "Mochi", cat: 2)
         let pal = store.add(name: "Biscuit", cat: 5)
         #expect(me.id == me.id.lowercased())
         #expect(UUID(uuidString: me.id) != nil)
         #expect(me.id != pal.id)
 
-        let reloaded = PeopleStore(directory: dir).load()
+        await store.flush()
+        let reloaded = await PeopleStore.open(directory: dir).load()
         #expect(reloaded.owner == me)
         #expect(reloaded.others == [pal])
         #expect(FileManager.default.fileExists(atPath: dir.appendingPathComponent("people.json").path))
     }
 
-    @Test func setOwnerAgainKeepsTheIdentity() throws {
-        let store = PeopleStore(directory: try tempDir())
+    @Test func setOwnerAgainKeepsTheIdentity() async throws {
+        let store = try await PeopleStore.open(directory: tempDir())
         let first = store.setOwner(name: "Mochi", cat: 2)
         let second = store.setOwner(name: "Pickle", cat: 4)
         #expect(second.id == first.id)
         #expect(store.load().owner == Person(id: first.id, name: "Pickle", cat: 4))
     }
 
-    @Test func namesAreTrimmedAndClampedTo20() throws {
-        let store = PeopleStore(directory: try tempDir())
+    @Test func namesAreTrimmedAndClampedTo20() async throws {
+        let store = try await PeopleStore.open(directory: tempDir())
         let long = store.add(name: String(repeating: "x", count: 30), cat: 0)
         #expect(long.name.count == 20)
         let padded = store.add(name: "   Pickle \n", cat: 1)
@@ -54,8 +55,8 @@ import Testing
         #expect(store.load().others.first { $0.id == padded.id }?.name.count == 20)
     }
 
-    @Test func emojiNamesClampToTheServersUTF16LimitWithoutSplittingCharacters() throws {
-        let store = PeopleStore(directory: try tempDir())
+    @Test func emojiNamesClampToTheServersUTF16LimitWithoutSplittingCharacters() async throws {
+        let store = try await PeopleStore.open(directory: tempDir())
         // Family emoji is one Character but 11 UTF-16 units; two of them are 22 units.
         let family = "\u{1F468}\u{200D}\u{1F469}\u{200D}\u{1F467}\u{200D}\u{1F466}"
         #expect(family.count == 1)
@@ -75,8 +76,8 @@ import Testing
         #expect(stored.name.count == 10)
     }
 
-    @Test func blankNamesBecomeGeneratedNames() throws {
-        let store = PeopleStore(directory: try tempDir())
+    @Test func blankNamesBecomeGeneratedNames() async throws {
+        let store = try await PeopleStore.open(directory: tempDir())
         let added = store.add(name: "  \n\t ", cat: 0)
         #expect(NameGenerator.names.contains(added.name))
         let owner = store.setOwner(name: "", cat: 1)
@@ -88,8 +89,8 @@ import Testing
         #expect(NameGenerator.names.contains(stored.name))
     }
 
-    @Test func updateAndRemove() throws {
-        let store = PeopleStore(directory: try tempDir())
+    @Test func updateAndRemove() async throws {
+        let store = try await PeopleStore.open(directory: tempDir())
         let a = store.add(name: "A", cat: 0)
         let b = store.add(name: "B", cat: 1)
         store.update(Person(id: a.id, name: "Aa", cat: 3))
@@ -104,17 +105,18 @@ import Testing
         #expect(store.load().owner == Person(id: me.id, name: "Moi", cat: 6))
     }
 
-    @Test func corruptPeopleFileLoadsEmpty() throws {
+    @Test func corruptPeopleFileLoadsEmpty() async throws {
         let dir = try tempDir()
         try Data("not json".utf8).write(to: dir.appendingPathComponent("people.json"))
-        #expect(PeopleStore(directory: dir).load() == LocalPeople(owner: nil, others: []))
+        #expect(await PeopleStore.open(directory: dir).load() == LocalPeople(owner: nil, others: []))
     }
 
-    @Test func createsMissingDirectory() throws {
+    @Test func createsMissingDirectory() async throws {
         let dir = try tempDir().appendingPathComponent("nested/deeper", isDirectory: true)
-        let store = PeopleStore(directory: dir)
+        let store = await PeopleStore.open(directory: dir)
         let p = store.add(name: "Zed", cat: 0)
-        #expect(PeopleStore(directory: dir).load().others == [p])
+        await store.flush()
+        #expect(await PeopleStore.open(directory: dir).load().others == [p])
     }
 
     // MARK: TableCache
@@ -137,9 +139,9 @@ import Testing
             hands: [0: [1, 2, 3]], pendingSkip: [false, false], winners: [])
     }
 
-    @Test func tableCacheStoresReloadsAndRemoves() throws {
+    @Test func tableCacheStoresReloadsAndRemoves() async throws {
         let dir = try tempDir()
-        let cache = TableCache(directory: dir)
+        let cache = await TableCache.open(directory: dir)
         #expect(cache.all().isEmpty)
         #expect(!cache.contains(code: "K7QM4"))
 
@@ -158,20 +160,22 @@ import Testing
             turn: 1, phase: [0, 2], updatedAt: now)
         #expect(cache.all()["K7QM4"] == expected)
 
-        let reloaded = TableCache(directory: dir)
+        await cache.flush()
+        let reloaded = await TableCache.open(directory: dir)
         #expect(reloaded.all() == ["K7QM4": expected])
         #expect(FileManager.default.fileExists(atPath: dir.appendingPathComponent("tables.json").path))
 
         reloaded.remove(code: "K7QM4")
         #expect(!reloaded.contains(code: "K7QM4"))
-        #expect(TableCache(directory: dir).all().isEmpty)
+        await reloaded.flush()
+        #expect(await TableCache.open(directory: dir).all().isEmpty)
     }
 
-    @Test func aCacheWrittenBeforeSeatIdsStillLoads() throws {
+    @Test func aCacheWrittenBeforeSeatIdsStillLoads() async throws {
         let dir = try tempDir()
         try Data(#"{"K7QM4":{"code":"K7QM4","status":"playing","phase":[],"updatedAt":1,"seats":[{"kind":"human","name":"Mochi","cat":2,"yours":true},{"kind":"bot","yours":false}]}}"#.utf8)
             .write(to: dir.appendingPathComponent("tables.json"))
-        let seats = TableCache(directory: dir).all()["K7QM4"]?.seats
+        let seats = await TableCache.open(directory: dir).all()["K7QM4"]?.seats
         #expect(seats == [CachedSeat(kind: .human, name: "Mochi", cat: 2, yours: true), CachedSeat(kind: .bot)])
     }
 
@@ -194,12 +198,12 @@ import Testing
 
     // MARK: TableList
 
-    @Test func tableListSavesTheServersLastAnswerPerServer() throws {
+    @Test func tableListSavesTheServersLastAnswerPerServer() async throws {
         let dir = try tempDir()
         let dev = APIConfig(baseURL: URL(string: "http://localhost:8787")!)
         let prod = APIConfig(baseURL: URL(string: "https://play.conleychaos.com")!)
         #expect(TableList.fileName(for: prod) == "table-list.play.conleychaos.com_443.json")
-        let list = TableList(directory: dir, fileName: TableList.fileName(for: dev))
+        let list = await TableList.open(directory: dir, fileName: TableList.fileName(for: dev))
         #expect(list.load() == nil)
 
         let entries = [
@@ -210,29 +214,32 @@ import Testing
             TableEntry(code: "Z9XY2", status: "over", yourTurn: false, updatedAt: 1_600_000_000_000, next: "B4CD5"),
         ]
         list.save(entries)
-        #expect(TableList(directory: dir, fileName: TableList.fileName(for: dev)).load() == entries)
-        #expect(TableList(directory: dir, fileName: TableList.fileName(for: prod)).load() == nil)
+        await list.flush()
+        #expect(await TableList.open(directory: dir, fileName: TableList.fileName(for: dev)).load() == entries)
+        #expect(await TableList.open(directory: dir, fileName: TableList.fileName(for: prod)).load() == nil)
 
         // No tables is an answer too: Home leads with the shelf at once next launch.
         list.save([])
-        #expect(TableList(directory: dir, fileName: TableList.fileName(for: dev)).load() == [])
+        await list.flush()
+        #expect(await TableList.open(directory: dir, fileName: TableList.fileName(for: dev)).load() == [])
     }
 
-    @Test func tableCacheFilePerServer() throws {
+    @Test func tableCacheFilePerServer() async throws {
         let dir = try tempDir()
         let dev = APIConfig(baseURL: URL(string: "http://localhost:8787")!)
         let prod = APIConfig(baseURL: URL(string: "https://play.conleychaos.com")!)
         #expect(TableCache.fileName(for: dev) == "tables.localhost_8787.json")
         #expect(TableCache.fileName(for: prod) == "tables.play.conleychaos.com_443.json")
-        let devCache = TableCache(directory: dir, fileName: TableCache.fileName(for: dev))
+        let devCache = await TableCache.open(directory: dir, fileName: TableCache.fileName(for: dev))
         devCache.store(fixtureRoom(game: fixtureGame()))
         #expect(devCache.contains(code: "K7QM4"))
-        #expect(!TableCache(directory: dir, fileName: TableCache.fileName(for: prod)).contains(code: "K7QM4"))
+        await devCache.flush()
+        #expect(!(await TableCache.open(directory: dir, fileName: TableCache.fileName(for: prod)).contains(code: "K7QM4")))
         #expect(FileManager.default.fileExists(atPath: dir.appendingPathComponent("tables.localhost_8787.json").path))
     }
 
-    @Test func tableCacheLobbyHasNoTurnOrPhase() throws {
-        let cache = TableCache(directory: try tempDir())
+    @Test func tableCacheLobbyHasNoTurnOrPhase() async throws {
+        let cache = try await TableCache.open(directory: tempDir())
         cache.store(fixtureRoom(status: .lobby, game: nil))
         let t = cache.all()["K7QM4"]
         #expect(t?.turn == nil)
@@ -240,39 +247,39 @@ import Testing
         #expect(t?.status == .lobby)
     }
 
-    @Test func tableCacheStoreReplacesSameCode() throws {
-        let cache = TableCache(directory: try tempDir())
+    @Test func tableCacheStoreReplacesSameCode() async throws {
+        let cache = try await TableCache.open(directory: tempDir())
         cache.store(fixtureRoom(status: .lobby))
         cache.store(fixtureRoom(status: .over))
         #expect(cache.all().count == 1)
         #expect(cache.all()["K7QM4"]?.status == .over)
     }
 
-    @Test func tableCacheFromBeforeNamesLoadsWithoutOne() throws {
+    @Test func tableCacheFromBeforeNamesLoadsWithoutOne() async throws {
         let dir = try tempDir()
         let old = #"{"K7QM4":{"code":"K7QM4","phase":[],"seats":[],"status":"lobby","updatedAt":1700000000}}"#
         try Data(old.utf8).write(to: dir.appendingPathComponent("tables.json"))
-        let table = try #require(TableCache(directory: dir).all()["K7QM4"])
+        let table = try #require(await TableCache.open(directory: dir).all()["K7QM4"])
         #expect(table.name == nil)
         #expect(table.status == .lobby)
     }
 
-    @Test func corruptTableFileLoadsEmpty() throws {
+    @Test func corruptTableFileLoadsEmpty() async throws {
         let dir = try tempDir()
         try Data("{".utf8).write(to: dir.appendingPathComponent("tables.json"))
-        #expect(TableCache(directory: dir).all().isEmpty)
+        #expect(await TableCache.open(directory: dir).all().isEmpty)
     }
 
     // MARK: Credentials
 
-    @Test func memoryCredentialStore() {
+    @Test func memoryCredentialStore() async {
         let store = MemoryCredentialStore()
-        #expect(store.load() == nil)
+        #expect(await store.load() == nil)
         let c = DeviceCredential(deviceId: "d", token: "t")
-        store.save(c)
-        #expect(store.load() == c)
-        store.clear()
-        #expect(store.load() == nil)
+        await store.save(c)
+        #expect(await store.load() == c)
+        await store.clear()
+        #expect(await store.load() == nil)
     }
 
     @Test func memoryCredentialStoreIsThreadSafe() async {
@@ -280,9 +287,9 @@ import Testing
         await withTaskGroup(of: Void.self) { group in
             for i in 0..<200 {
                 group.addTask {
-                    store.save(DeviceCredential(deviceId: "d\(i)", token: "t\(i)"))
-                    _ = store.load()
-                    if i % 7 == 0 { store.clear() }
+                    await store.save(DeviceCredential(deviceId: "d\(i)", token: "t\(i)"))
+                    _ = await store.load()
+                    if i % 7 == 0 { await store.clear() }
                 }
             }
         }
@@ -296,17 +303,20 @@ import Testing
 
     // MARK: TableArchive
 
-    @Test func archiveRoundTripsThroughDisk() throws {
+    @Test func archiveRoundTripsThroughDisk() async throws {
         let dir = try tempDir()
-        let archive = TableArchive(directory: dir)
+        let archive = await TableArchive.open(directory: dir)
         #expect(archive.all().isEmpty)
         archive.archive(code: "BCDFG", updatedAt: 1_000)
         archive.archive(code: "HJKLM", updatedAt: 2_000)
-        #expect(TableArchive(directory: dir).all() == ["BCDFG": 1_000, "HJKLM": 2_000])
+        await archive.flush()
+        #expect(await TableArchive.open(directory: dir).all() == ["BCDFG": 1_000, "HJKLM": 2_000])
         archive.restore(code: "BCDFG")
-        #expect(TableArchive(directory: dir).all() == ["HJKLM": 2_000])
+        await archive.flush()
+        #expect(await TableArchive.open(directory: dir).all() == ["HJKLM": 2_000])
         archive.replace(with: [:])
-        #expect(TableArchive(directory: dir).all().isEmpty)
+        await archive.flush()
+        #expect(await TableArchive.open(directory: dir).all().isEmpty)
     }
 
     @Test func archiveFileIsPerServer() {

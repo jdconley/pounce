@@ -19,14 +19,14 @@ public final class DemoPounceService: PounceService, Sendable {
         guard let pair else {
             return PounceSent(id: "pc_demoLinkAAAAAAAAAAAAAA", link: DeepLink.pounceURL(token: Self.linkToken))
         }
-        if streaks.first(where: { $0.pair == pair })?.pounce.resting == true { throw APIError.rateLimited }
-        streaks.edit(pair) { $0.pounce.sent = true }
+        if await streaks.first(where: { $0.pair == pair })?.pounce.resting == true { throw APIError.rateLimited }
+        await streaks.edit(pair) { $0.pounce.sent = true }
         return PounceSent(id: "pc_demoSentAAAAAAAAAAAAAA", link: nil)
     }
 
     public func answer(id: String, answer: PounceAnswer, choice: String?, link: String?, person: String?) async throws -> String? {
-        if let view = streaks.first(where: { $0.pounce.waiting?.id == id }), let waiting = view.pounce.waiting {
-            streaks.edit(view.pair) { $0.pounce.waiting = nil }
+        if let view = await streaks.first(where: { $0.pounce.waiting?.id == id }), let waiting = view.pounce.waiting {
+            await streaks.edit(view.pair) { $0.pounce.waiting = nil }
             guard answer == .play else { return nil }
             if case .table(let code) = waiting.target { return code }
             return choice.flatMap { $0 == "new" ? nil : $0 } ?? Self.newCode

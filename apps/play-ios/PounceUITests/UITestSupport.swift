@@ -29,15 +29,18 @@ enum Live {
     /// starves the table's SpriteKit frames.
     nonisolated static func poll(_ seconds: TimeInterval) -> TimeInterval { pace(seconds, floor: 0.25) }
 
-    /// The launch arguments every test app gets (see `Live.speed`).
+    /// The launch arguments every test app gets: its speed (see `Live.speed`), and `-watchdog`,
+    /// the app's frame and hang counter (`Watchdog`), which the gameplay gates read.
     nonisolated static func arguments(speed: Double = speed) -> [String] {
-        ["-anim-speed", String(speed)]
+        ["-anim-speed", String(speed), "-watchdog"]
     }
 
-    /// An app on a `-demo` screen (no server) at `speed`.
+    /// An app on a `-demo` screen (no server) at `speed`. Its gameplay is checked when the test
+    /// ends (`GameplayGate`), as is `app()`'s.
     static func demo(_ name: String, speed: Double = speed) -> XCUIApplication {
         let app = XCUIApplication()
         app.launchArguments = arguments(speed: speed) + ["-demo", name]
+        GameplayGate.watch(app)
         return app
     }
 
@@ -61,6 +64,7 @@ enum Live {
         let app = XCUIApplication()
         app.launchArguments = arguments() + ["-uitest-reset"]
         app.launchEnvironment["POUNCE_API_BASE_URL"] = baseURL
+        GameplayGate.watch(app)
         return app
     }
 }

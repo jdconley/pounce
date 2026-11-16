@@ -46,6 +46,10 @@ final class AnimationDirector {
 
     /// Frames the scene has updated since launch (DEBUG: `table.frames`).
     private(set) var framesRendered = 0
+    #if DEBUG
+    /// The view was paused since the last frame (`MainThreadWatchdog` measures no gap across it).
+    private var resumed = true
+    #endif
 
     init(view: SKView?) {
         self.view = view
@@ -58,7 +62,12 @@ final class AnimationDirector {
     /// Unpauses the view; it pauses again once the table has been idle for a moment.
     func wake() {
         gate.wake()
-        if let view, view.isPaused { view.isPaused = false }
+        if let view, view.isPaused {
+            view.isPaused = false
+            #if DEBUG
+            resumed = true
+            #endif
+        }
     }
 
     func touchBegan() {
@@ -181,6 +190,10 @@ final class AnimationDirector {
     /// Called by the scene once per frame.
     func frame(_ time: TimeInterval) {
         framesRendered += 1
+        #if DEBUG
+        MainThreadWatchdog.shared?.tableFrame(time, resumed: resumed)
+        resumed = false
+        #endif
         let result = gate.frame(time)
         for token in result.expired { finish(token, removeAction: true, gateEnded: true) }
         if result.pause { view?.isPaused = true }

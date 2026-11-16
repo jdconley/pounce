@@ -55,7 +55,8 @@ extension APIClient: FunnelSending {
 /// calls once the age check is done: a step reached earlier (a link that opened the app) waits.
 /// Calls return at once; sending never holds up the screen.
 @MainActor public final class Funnel {
-    struct Saved: Codable, Equatable {
+    /// The file's shape.
+    public struct Saved: Codable, Equatable, Sendable {
         /// Step → when it was first reached (seconds since 1970).
         var reached: [String: Double] = [:]
         var sent: Set<String> = []
@@ -67,22 +68,30 @@ extension APIClient: FunnelSending {
 
     private(set) var saved: Saved
     private let sender: any FunnelSending
-    private let file: URL?
+    private let file: JSONFile<Saved>?
     private let now: @Sendable () -> Date
     private let locale: String?
     private var sending: Task<Void, Never>?
     private var again = false
 
+    /// `funnel-<server>.json` at `url`, written behind.
+    public nonisolated static func file(at url: URL) -> JSONFile<Saved> { JSONFile(url: url) }
+
+    /// `loaded` is what `file.read()` returned, read off the main actor at launch. No file keeps
+    /// the steps in memory only.
     public init(
-        sender: any FunnelSending, file: URL?, now: @escaping @Sendable () -> Date = { .now },
-        locale: String? = Funnel.locale(.current)
+        sender: any FunnelSending, file: JSONFile<Saved>?, loaded: Saved? = nil,
+        now: @escaping @Sendable () -> Date = { .now }, locale: String? = Funnel.locale(.current)
     ) {
         self.sender = sender
         self.file = file
         self.now = now
         self.locale = locale
-        saved = file.flatMap { try? Data(contentsOf: $0) }.flatMap { try? JSONDecoder().decode(Saved.self, from: $0) } ?? Saved()
+        saved = loaded ?? Saved()
     }
+
+    /// Waits for every save so far to reach the disk.
+    public func flushFile() async { await file?.flush() }
 
     /// "en-US": the language, and the region when there is one. Nil for anything else.
     public nonisolated static func locale(_ locale: Locale) -> String? {
@@ -209,7 +218,6 @@ extension APIClient: FunnelSending {
     }
 
     private func save() {
-        guard let file, let data = try? JSONEncoder().encode(saved) else { return }
-        try? data.write(to: file, options: .atomic)
+        file?.save(saved)
     }
 }

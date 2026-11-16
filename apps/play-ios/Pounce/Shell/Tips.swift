@@ -53,6 +53,9 @@ final class TipCenter {
         seen = store.loadUI()
     }
 
+    /// Waits for the pacing file's writes (the tips file is the app model's to flush).
+    func flushToDisk() async { await pacing.flush() }
+
     /// A launch: one more app open.
     func launched() {
         guard enabled else { return }

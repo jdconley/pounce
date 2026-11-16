@@ -1,0 +1,28 @@
+{
+  "configurations" : [
+    {
+      "id" : "5B5D2A5E-5C55-4E4B-9C61-7E1F3B0A0001",
+      "name" : "Default",
+      "options" : {
+
+      }
+    }
+  ],
+  "defaultOptions" : {
+    "performanceAntipatternCheckerEnabled" : true,
+    "threadPerformanceCheckerRuntimeIssueDetection" : {
+      "severity" : "failure"
+    }
+  },
+  "testTargets" : [
+    {
+      "parallelizable" : false,
+      "target" : {
+        "containerPath" : "container:Pounce.xcodeproj",
+        "identifier" : "609594E94B7AA9B1D461EA8A",
+        "name" : "PounceUITests"
+      }
+    }
+  ],
+  "version" : 1
+}

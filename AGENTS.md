@@ -21,6 +21,24 @@ whole screen it lands on.
   `.compositingGroup()` in SwiftUI, a flattened or rasterized node in SpriteKit. Never fade the
   overlapping pieces one by one.
 
+## The main thread draws, nothing else
+
+Pounce runs at 60 frames a second or better, always, and at 120 where the screen can. So on every
+platform (iOS, web, Android) the main, UI or render thread does UI work only: layout, drawing,
+input, animation and small state updates. It never touches the disk or the Keychain, never waits on
+the network, never sleeps, locks or blocks, never dispatches synchronously, and never runs heavy
+compute (the solver, bots, hint search, big encodes or decodes). Main-thread work stays under 8.3 ms
+a frame and is never over 16.7 ms.
+
+- Blocking calls live in each platform's one IO layer, off the main thread by construction, with an
+  async API. Everything else reads memory and hands changes to that layer.
+- The static checks fail the build on a violation (iOS: `apps/play-ios/scripts/main-thread-lint.swift`
+  in CI). Don't silence one; move the call.
+- The UI tests fail on a main-thread hang or frames over budget.
+
+[docs/main-thread.md](docs/main-thread.md) has the full rule, each platform's checks and the allowed
+pattern.
+
 ## Words in the UI
 
 The UI is not where we explain things. Every word costs attention.

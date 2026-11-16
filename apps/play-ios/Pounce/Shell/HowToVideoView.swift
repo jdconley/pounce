@@ -19,8 +19,13 @@ struct HowToVideoView: View {
     static let aspect: CGFloat = 496.0 / 1080.0
 
     private var video: URL? { game.howTo.flatMap { Bundle.main.url(forResource: $0, withExtension: "mp4") } }
-    private var poster: UIImage? {
-        game.howTo.flatMap { Bundle.main.path(forResource: $0, ofType: "jpg") }.flatMap(UIImage.init(contentsOfFile:))
+    /// The poster, read and decoded off the main thread when the view appears.
+    @State private var poster: UIImage?
+
+    @concurrent
+    private static func loadPoster(_ name: String) async -> UIImage? {
+        guard let data = await Disk.resource(name, ofType: "jpg") else { return nil }
+        return UIImage(data: data)?.preparingForDisplay()
     }
 
     var body: some View {
@@ -30,6 +35,7 @@ struct HowToVideoView: View {
                 .frame(width: (height * Self.aspect).rounded(), height: height.rounded())
                 .frame(maxWidth: .infinity)
                 .task(id: game.id) {
+                    if let name = game.howTo { poster = await Self.loadPoster(name) }
                     let duration = try? await AVURLAsset(url: video).load(.duration)
                     seconds = duration.map { Int($0.seconds.rounded()) }
                 }
