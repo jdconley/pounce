@@ -16,10 +16,11 @@ import XCTest
 /// - the main thread hung over 100 ms,
 /// - any frame held over 8.3 ms of the app's own work (its `FrameWork` pieces, in CPU time),
 /// - any table or main-thread frame took over 16.7 ms.
-/// The app's work is CPU time and always enforced. On a simulator whose Mac is so busy that the
-/// simulator itself is held up (a load average over half its cores), frames over 16.7 ms are
-/// reported, not enforced: they slip with none of the app's work in them. On a phone everything
-/// is enforced.
+/// Time budgets fit the machine (`Watchdog.timeFailures`): on a phone or the reference Mac, no frame
+/// over 8.3 ms of the app's own work and no hang over 100 ms that it filled; on a machine measured
+/// slower (a CI virtual machine), the app's work at p95 within 8.3 ms times its slowdown and at p99
+/// within three times that, and no hang over 250 ms times the slowdown that its work filled. Frames over 16.7 ms are enforced only near the
+/// reference's speed and on a quiet machine: on a phone always.
 ///
 /// `scripts/frame-rate.sh` runs these on a simulator or a plugged-in iPhone (the 120 Hz numbers).
 @MainActor
@@ -82,11 +83,15 @@ final class FrameRateTests: XCTestCase {
 
         XCTAssertGreaterThan(window.screen, 0, report, file: file, line: line)
         XCTAssertEqual(window.table, window.screen, "the table doesn't ask for the screen's top rate: \(report)", file: file, line: line)
-        XCTAssertGreaterThanOrEqual(window.tableFrames.count, Int(seconds) * window.screen / 2, "the table hardly rendered while it played: \(report)", file: file, line: line)
-        XCTAssertFalse(window.hangs > 0, "the main thread hung during gameplay: \(report)", file: file, line: line)
-        XCTAssertEqual(window.workOver, 0, "a frame held over 8.3 ms of the app's own work: \(report)", file: file, line: line)
-        if host.busy {
-            print("FRAMES \(name): the simulator's Mac is busy (load \(String(format: "%.2f", host.load)) per core), so frames over 16.7 ms are reported, not enforced")
+        // It rests between drags (the view pauses), so a quarter of the window's frames at least.
+        XCTAssertGreaterThanOrEqual(window.tableFrames.count, Int(seconds) * window.screen / 4, "the table hardly rendered while it played: \(report)", file: file, line: line)
+        // The app's time budgets, as fits this machine (`Watchdog.timeFailures`).
+        for failure in window.timeFailures() { XCTFail("\(failure): \(report)", file: file, line: line) }
+        if window.hangs > window.appHangs {
+            print("FRAMES \(name): \(window.hangs - window.appHangs) main-thread hang(s) the app's own work didn't fill: reported, not gated")
+        }
+        if host.busy || !window.nearReference {
+            print("FRAMES \(name): frames over 16.7 ms are reported, not enforced: \(host.busy ? "the simulator's Mac is busy" : String(format: "this machine is %.2fx slower than the reference", window.slowdown))")
         } else {
             XCTAssertEqual(window.tableFrames.slow, 0, "the table drew a frame over 16.7 ms: \(report)", file: file, line: line)
             XCTAssertEqual(window.link.slow, 0, "the main thread missed a frame by over 16.7 ms: \(report)", file: file, line: line)

@@ -81,6 +81,94 @@ jobs:
           verdict=$(echo "$per" | awk '{ print ($1 > 0.5) ? "over" : "under" }')
           echo "::notice title=Runner load after building::1-minute load $one on $cores cores: $per per core, $verdict the 0.5 FrameRateTests threshold"
 
+  # JD's rule (docs/main-thread.md): the main thread draws, nothing else, 60 fps or better. This
+  # runs the runtime gates on a simulator: FrameRateTests (tables that play themselves, nothing
+  # reading the screen) and a few Cat Tower and Tuna Tiles UI tests under GameplayGate. All on
+  # demo tables, no server. A virtual machine is several times slower per thread than the Mac
+  # the budgets were set on, and its host's stolen time counts as the guest's own: the app
+  # measures its machine's speed, and the tests scale the app-work budget by it and judge it at
+  # p95 with a cap on the worst frame; hangs fail when the app's own work filled them. Frames
+  # over 16.7 ms are reported here, enforced on a phone (scripts/frame-rate.sh).
+  ui-gates:
+    name: Smooth play gates (iOS simulator)
+    runs-on: macos-26
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+      - run: xcodebuild -version
+      # XcodeGen from its pinned, checksummed release: seconds, where Homebrew takes over three
+      # minutes. scripts/bootstrap.sh finds it on the path.
+      - name: Install XcodeGen
+        run: |
+          curl -fsSL -o "$RUNNER_TEMP/xcodegen.zip" https://github.com/yonaskolb/XcodeGen/releases/download/2.46.0/xcodegen.zip
+          echo "4d9e34b62172d645eed6457cac13fc222569974098ef4ee9c3368bedf0196806  $RUNNER_TEMP/xcodegen.zip" | shasum -a 256 -c -
+          unzip -q "$RUNNER_TEMP/xcodegen.zip" -d "$RUNNER_TEMP"
+          echo "$RUNNER_TEMP/xcodegen/bin" >> "$GITHUB_PATH"
+      - name: Make a simulator
+        id: sim
+        run: |
+          runtime=$(xcrun simctl list runtimes -j | jq -r '[.runtimes[] | select(.platform == "iOS" and .isAvailable)] | sort_by(.version | split(".") | map(tonumber)) | last | .identifier')
+          udid=$(xcrun simctl create "Pounce gates" "iPhone 17 Pro" "$runtime")
+          # It boots while the app builds; the tests wait for it.
+          xcrun simctl boot "$udid"
+          echo "simulator $udid on $runtime"
+          echo "udid=$udid" >> "$GITHUB_OUTPUT"
+      - run: scripts/bootstrap.sh
+      # Debug (the demos and -autoplay are Debug only) with the compiler's optimizations on, as
+      # the shipped app has them (per file rather than whole module, so it builds in parallel).
+      - name: Build for testing
+        run: >
+          xcodebuild build-for-testing -project Pounce.xcodeproj -scheme Pounce -configuration Debug
+          -destination "id=${{ steps.sim.outputs.udid }}" -derivedDataPath build/dd-gates
+          SWIFT_OPTIMIZATION_LEVEL=-O GCC_OPTIMIZATION_LEVEL=s -quiet
+      # A fresh simulator's first launches pay one-time costs (caches, shaders) that aren't the
+      # app's: one untimed run of a table that plays itself takes them first.
+      - name: Warm the simulator
+        run: |
+          xcrun simctl bootstatus "${{ steps.sim.outputs.udid }}" -b >/dev/null
+          app=$(find build/dd-gates/Build/Products -maxdepth 2 -name Pounce.app -path '*iphonesimulator*' | head -1)
+          xcrun simctl install "${{ steps.sim.outputs.udid }}" "$app"
+          for demo in tiles hit; do
+            xcrun simctl launch "${{ steps.sim.outputs.udid }}" com.conleychaos.play -demo "$demo" -anim-speed 1 -autoplay >/dev/null
+            sleep 8
+            xcrun simctl terminate "${{ steps.sim.outputs.udid }}" com.conleychaos.play || true
+          done
+      - name: Frame and main-thread gates
+        env:
+          TEST_RUNNER_POUNCE_FRAMES_SECONDS: "12"
+          # Waits only (a runner's first launch can take over 20 s to show a table); the time
+          # budgets fit the machine on their own.
+          TEST_RUNNER_POUNCE_UITEST_TIMEOUT_SCALE: "3"
+        run: |
+          set -o pipefail
+          xcodebuild test-without-building -project Pounce.xcodeproj -scheme Pounce \
+            -destination "id=${{ steps.sim.outputs.udid }}" -derivedDataPath build/dd-gates \
+            -collect-test-diagnostics never -resultBundlePath build/ui-gates.xcresult \
+            -only-testing:PounceUITests/FrameRateTests \
+            -only-testing:PounceUITests/HitTests \
+            -only-testing:PounceUITests/TilesTests/testDragPathPlacesAPieceAndDragsItBack \
+            -only-testing:PounceUITests/TilesTests/testSeveralPiecesMakeANewSetAndABrokenSetBlocksPlay \
+            2>&1 | tee build/ui-gates.log | grep -E '^(FRAMES|Test Case|\s+Executed)|error:'
+      - name: Frame summary
+        if: always()
+        run: |
+          {
+            echo "### Smooth play gates"
+            echo
+            echo '```'
+            grep -E '^FRAMES ' build/ui-gates.log || echo "no FRAMES lines"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+      - name: Keep the results
+        if: failure()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: ui-gates
+          path: |
+            apps/play-ios/build/ui-gates.log
+            apps/play-ios/build/ui-gates.xcresult
+          retention-days: 7
+
   testflight:
     needs: build
     if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'

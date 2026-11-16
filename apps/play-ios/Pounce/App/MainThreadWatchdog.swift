@@ -133,6 +133,48 @@ final class MainThreadWatchdog {
         return recentLines.joined(separator: "\n")
     }
     private static let logsSummary = CommandLine.arguments.contains("-watchdog-log")
+
+    /// How long this machine's main thread takes for a fixed piece of frame-like work (median of
+    /// 9, in CPU time, measured once before any table): Swift collections, SpriteKit node changes
+    /// and a small texture with a numeral drawn. A test divides it by the reference Mac's to get
+    /// the machine's speed factor, and scales its time budgets by it (a CI virtual machine is
+    /// several times slower per thread than the Mac the budgets were set on).
+    private(set) var speedMs = 0.0
+
+    /// The fixed work, its CPU time in ms.
+    private static func benchOnce() -> Double {
+        let start = Double(clock_gettime_nsec_np(CLOCK_THREAD_CPUTIME_ID))
+        // Collections, as a redraw's bookkeeping.
+        var groups: [Int: [Int]] = [:]
+        for i in 0..<3000 { groups[i % 97, default: []].append((i * 7919) % 1013) }
+        var seen = Set<Int>()
+        for (_, values) in groups { for v in values.sorted() where v % 3 == 0 { seen.insert(v) } }
+        // Node changes, as a redraw's settling.
+        let parent = SKNode()
+        for i in 0..<120 {
+            let node = SKSpriteNode(color: .white, size: CGSize(width: 30, height: 36))
+            node.position = CGPoint(x: i % 12 * 31, y: i / 12 * 37)
+            node.zPosition = CGFloat(i % 7)
+            node.setScale(seen.contains(i) ? 1.1 : 1)
+            parent.addChild(node)
+        }
+        parent.removeAllChildren()
+        // A small texture with a numeral, as a piece face.
+        let format = UIGraphicsImageRendererFormat.preferred()
+        format.scale = 2
+        _ = UIGraphicsImageRenderer(size: CGSize(width: 36, height: 43), format: format).image { _ in
+            UIColor.orange.setFill()
+            UIBezierPath(roundedRect: CGRect(x: 1, y: 1, width: 34, height: 41), cornerRadius: 8).fill()
+            ("13" as NSString).draw(at: CGPoint(x: 6, y: 4), withAttributes: [.font: UIFont.systemFont(ofSize: 20, weight: .black)])
+        }
+        return (Double(clock_gettime_nsec_np(CLOCK_THREAD_CPUTIME_ID)) - start) / 1e6
+    }
+
+    private func measureSpeed() {
+        _ = Self.benchOnce()  // warm: the first run pays one-time setup
+        let runs = (0..<9).map { _ in Self.benchOnce() }.sorted()
+        speedMs = runs[runs.count / 2]
+    }
     private var lastSummary: CFTimeInterval = 0
     /// `FrameWork` pieces since the last tick that took a millisecond or more (for the log), and
     /// the outermost pieces' total: the app's own main-thread work in this frame.
@@ -155,6 +197,7 @@ final class MainThreadWatchdog {
             worstReadWorkMs = max(worstReadWorkMs, ms)
         } else if outermost {
             frameWorkSinceTick += ms
+            workSinceStep += ms
         }
         if ms >= 0.5 { workSinceTick.append(("\(name)", ms)) }
     }
@@ -222,6 +265,16 @@ final class MainThreadWatchdog {
     static let readGraceSeconds: CFTimeInterval = 0.25
     /// The most app work in a frame that held, or came just after, a read of the screen.
     private(set) var worstReadFrameWorkMs = 0.0
+    /// The app's own work (outermost `FrameWork` pieces) since the last run loop step: how much of
+    /// a hang was the app's.
+    private var workSinceStep = 0.0
+    /// Gameplay hangs the app's own work filled at least half of.
+    private(set) var appHangs = 0
+    private(set) var worstAppHangMs = 0.0
+    /// The app's work in each gameplay frame (not near a screen read), in 0.5 ms buckets (the
+    /// last, 100, holds 50 ms and up): percentiles over a window, on a machine too noisy to
+    /// judge by its single worst frame.
+    private(set) var workHistogram = [Int](repeating: 0, count: Frames.buckets + 1)
 
     // MARK: the probe
 
@@ -233,9 +286,11 @@ final class MainThreadWatchdog {
         let screen = Self.screenRate(tableView?.window)
         let rate = tableView?.preferredFramesPerSecond ?? 0
         let head = String(
-            format: "screen=%d table=%d tpc=%d hangs=%d hangmax=%.1f other=%d othermax=%.1f work=%.1f workover=%d readwork=%.1f readframe=%.1f",
+            format: "screen=%d table=%d tpc=%d hangs=%d hangmax=%.1f other=%d othermax=%.1f work=%.1f workover=%d readwork=%.1f readframe=%.1f speed=%.3f",
             screen, rate, checkerLoaded ? 1 : 0, hangs, worstHangMs, otherHangs, worstOtherHangMs, worstFrameWorkMs,
-            framesOverWorkBudget, worstReadWorkMs, worstReadFrameWorkMs)
+            framesOverWorkBudget, worstReadWorkMs, worstReadFrameWorkMs, speedMs)
+            + String(format: " apphangs=%d apphangmax=%.1f workh=%@", appHangs, worstAppHangMs,
+                     workHistogram.enumerated().filter { $0.element > 0 }.map { "\($0.offset):\($0.element)" }.joined(separator: ","))
         return "\(head) | link \(link.summary) | table \(table.summary)"
     }
 
@@ -276,7 +331,10 @@ final class MainThreadWatchdog {
             CFRunLoopAddObserver(CFRunLoopGetMain(), observer, .commonModes)
             observers.append(observer)
         }
-        print("[watchdog] on: screen \(Self.screenRate(nil)) fps, thread performance checker \(checkerLoaded ? "loaded" : "not loaded")")
+        measureSpeed()
+        let on = "[watchdog] on: screen \(Self.screenRate(nil)) fps, thread performance checker \(checkerLoaded ? "loaded" : "not loaded"), speed \(String(format: "%.3f", speedMs)) ms"
+        print(on)
+        Self.log.notice("\(on, privacy: .public)")
     }
 
     /// Asks the display link for the screen's top rate (120 on ProMotion), so a frame is judged
@@ -313,6 +371,7 @@ final class MainThreadWatchdog {
             worstReadFrameWorkMs = max(worstReadFrameWorkMs, frameWork)
         } else {
             worstFrameWorkMs = max(worstFrameWorkMs, frameWork)
+            workHistogram[min(Int(frameWork / Frames.bucketMs), Frames.buckets)] += 1
             if frameWork > Self.workBudgetMs { framesOverWorkBudget += 1 }
         }
         if frameWork > Self.workBudgetMs {
@@ -350,8 +409,9 @@ final class MainThreadWatchdog {
             let ms = (now - last) * 1000
             busySinceTick += ms
             stretch += ms
-            if ms > Self.hangSeconds * 1000 { hang(ms, queried: queries != queriesAtStep) }
+            if ms > Self.hangSeconds * 1000 { hang(ms, queried: queries != queriesAtStep, appWork: workSinceStep) }
         }
+        workSinceStep = 0
         if sleeping {
             stretchSinceTick = max(stretchSinceTick, stretch)
             stretch = 0
@@ -360,17 +420,22 @@ final class MainThreadWatchdog {
         queriesAtStep = queries
     }
 
-    private func hang(_ ms: Double, queried: Bool) {
+    private func hang(_ ms: Double, queried: Bool, appWork: Double) {
         let gameplay = inGameplay
         if gameplay, !queried {
             hangs += 1
             worstHangMs = max(worstHangMs, ms)
+            // The app's own: its timed work fills at least half the stretch.
+            if appWork >= ms / 2 {
+                appHangs += 1
+                worstAppHangMs = max(worstAppHangMs, ms)
+            }
         } else {
             otherHangs += 1
             worstOtherHangMs = max(worstOtherHangMs, ms)
         }
         let why = queried ? ", during an accessibility read" : gameplay ? "" : ", outside gameplay"
-        let line = String(format: "[watchdog] hang %.0f ms on the main thread%@", ms, why)
+        let line = String(format: "[watchdog] hang %.0f ms on the main thread%@ (app work %.1f ms)", ms, why, appWork)
         print(line)
         // Also in the unified log, where a UI test's app output can be read back
         // (`xcrun simctl spawn <device> log show --predicate 'category == "watchdog"'`).
