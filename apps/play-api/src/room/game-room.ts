@@ -295,11 +295,15 @@ export class GameRoom extends DurableObject<Env> {
     return core.mayLink(deviceId) ? "ok" : "not_seated";
   }
 
-  /** Lists `deviceId` as a screen here before it connects (a link). */
-  async addScreen(deviceId: string): Promise<void> {
-    if (!this.core) return;
+  /**
+   * Lists `deviceId` as a screen here before it connects (a link). False, and nothing changes,
+   * when there is no table or the device sits or hosts here: a seat's device is never a screen.
+   */
+  async addScreen(deviceId: string): Promise<boolean> {
+    if (!this.core || !this.core.mayScreen(deviceId)) return false;
     this.core.addScreen(deviceId);
     await this.after([]);
+    return true;
   }
 
   /**

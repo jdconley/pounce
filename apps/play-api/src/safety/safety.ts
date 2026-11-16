@@ -58,6 +58,20 @@ export async function guardJoin(env: Env, code: string, deviceId: string, ip: st
   return { exists: !failed };
 }
 
+/**
+ * The guard on linking a TV by its backup code: a wrong code is counted against the device and
+ * its address under their own keys (joining a table by code is counted apart), with the same
+ * backoff. Returns the seconds to wait when locked out, right code or wrong; else null.
+ */
+export async function guardScreenCode(env: Env, failed: boolean, deviceId: string, ip: string, now: number): Promise<number | null> {
+  const [byDevice, byIp] = await Promise.all([
+    limiter(env, `screen:device:${deviceId}`).guess(failed, DEVICE_JOIN_RULE, now),
+    limiter(env, `screen:ip:${ip}`).guess(failed, IP_JOIN_RULE, now),
+  ]);
+  const retryAt = Math.max(byDevice.retryAt ?? 0, byIp.retryAt ?? 0);
+  return retryAt > 0 ? Math.max(1, Math.ceil((retryAt - now) / 1000)) : null;
+}
+
 /** What an invite page says of a table: its name, its game, and who invited (null: nobody named). */
 export type InvitePeek = { table: string | null; game: string; host: { name: string; cat: number } | null };
 
