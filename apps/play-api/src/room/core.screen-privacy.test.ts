@@ -41,7 +41,9 @@ function withoutScreen(snap: Snapshot): unknown {
   return { ...snap, room };
 }
 
-function playGame(game: GameId, n: number, min: number, max: number): { over: boolean; steps: number; tvMessages: number } {
+type Counts = { draws: number; compared: number };
+
+function playGame(game: GameId, n: number, min: number, max: number): { over: boolean; steps: number; tvMessages: number; counts: Counts } {
   const rng = createRng(seedOf(n * 7919 + (game === "tiles" ? 1 : 0)));
   const pick = (count: number) => Math.floor(rng() * count);
   let clock = T0;
@@ -62,6 +64,7 @@ function playGame(game: GameId, n: number, min: number, max: number): { over: bo
   const deviceOf = (seat: number) => (kinds[seat] === "pp" ? "pp" : `phone${seat}`);
 
   const tvSeen: Outbound[] = [];
+  const counts: Counts = { draws: 0, compared: 0 };
   const check = (out: Outbound[]): void => {
     for (const o of out) {
       if (o.to !== "tv" && o.to !== "all") continue;
@@ -73,13 +76,18 @@ function playGame(game: GameId, n: number, min: number, max: number): { over: bo
         expect(view.tiles?.racks ?? {}).toEqual({});
         expect(view.seats.every((s) => !s.yours)).toBe(true);
         expect(view.youAreHost).toBe(false);
-        if (m.seq === room.state.seq) expect(withoutScreen(m)).toEqual(withoutScreen(room.snapshotFor("spectator")));
+        if (m.seq === room.state.seq) {
+          counts.compared += 1;
+          expect(withoutScreen(m)).toEqual(withoutScreen(room.snapshotFor("spectator")));
+        }
       }
       // A card taken from the discard pile was face up, so it is public; one from the deck is not.
       if (m.t === "event" && m.event.kind === "game" && m.event.event.kind === "drew" && m.event.event.from === "deck") {
+        counts.draws += 1;
         expect(Object.hasOwn(m.event.event, "card")).toBe(false);
       }
       if (m.t === "event" && m.event.kind === "tiles" && m.event.event.kind === "drew") {
+        counts.draws += 1;
         expect(Object.hasOwn(m.event.event, "tile")).toBe(false);
       }
       if (o.to === "tv") tvSeen.push(o);
@@ -138,7 +146,9 @@ function playGame(game: GameId, n: number, min: number, max: number): { over: bo
       const device = deviceOf(actor);
       if (rng() < 0.3) send(room.handle(device, { t: "aim", seat: actor, ...(rng() < 0.7 ? { aim: aimFor(actor) } : {}) }));
       const action = module.botAction(room.state.gameState, actor, rng);
-      send(room.handle(device, { t: "act", seat: actor, action } as never));
+      const acted = send(room.handle(device, { t: "act", seat: actor, action } as never));
+      const refused = acted.flatMap((o) => (o.to === device && o.message.t === "error" ? [o.message.code] : []));
+      expect({ game, seed: n, action, refused }).toEqual({ game, seed: n, action, refused: [] });
       clock += 1000;
     } else {
       clock = Math.max(clock, room.nextAlarm());
@@ -147,17 +157,23 @@ function playGame(game: GameId, n: number, min: number, max: number): { over: bo
     }
   }
   if (!tvOnline) send(room.connect("tv", {}, "screen"));
-  return { over: room.state.status === "over", steps, tvMessages: tvSeen.length };
+  return { over: room.state.status === "over", steps, tvMessages: tvSeen.length, counts };
 }
 
 describe("a screen never sees a private piece", () => {
   for (const { game, seeds, min, max } of CASES) {
     it(`${game}: ${seeds} random whole games`, () => {
+      const total: Counts = { draws: 0, compared: 0 };
       for (let n = 1; n <= seeds; n++) {
         const result = playGame(game, n, min, max);
         expect({ game, seed: n, over: result.over }).toEqual({ game, seed: n, over: true });
         expect(result.tvMessages).toBeGreaterThan(0);
+        total.draws += result.counts.draws;
+        total.compared += result.counts.compared;
       }
+      // Each check must have run, or it proves nothing.
+      expect(total.draws).toBeGreaterThan(0);
+      expect(total.compared).toBeGreaterThan(0);
     }, 60_000);
   }
 });
