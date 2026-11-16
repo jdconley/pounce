@@ -20,6 +20,8 @@ export type CtInput = {
   trays: number;
   /** For each seat with groups laid down: how many cards in each group. */
   laid: { seat: number; groups: number[] }[];
+  /** A TV across the room: every seat in `opponents`, no hand or trays, sized for the couch. */
+  tv?: boolean;
 };
 
 export type CtLayout = {
@@ -46,6 +48,10 @@ export type CtLayout = {
   action: { x: number; y: number };
   /** The centre of the table, for effects. */
   centre: { x: number; y: number };
+  /** Where "<Name>'s turn" sits. */
+  banner: Rect;
+  /** Each seat in `opponents`: its cat, and on a TV its name and score under it. */
+  seats: Map<number, Rect>;
 };
 
 const clamp = (v: number, lo: number, hi: number) => Math.min(Math.max(v, lo), hi);
@@ -99,6 +105,8 @@ function shift(L: CtLayout, dx: number): CtLayout {
     laid: new Map([...L.laid].map(([k, v]) => [k, { avatar: p(v.avatar), groups: v.groups.map((g) => ({ poses: g.poses.map(p), rect: p(g.rect) })) }])),
     action: p(L.action),
     centre: p(L.centre),
+    banner: p(L.banner),
+    seats: new Map([...L.seats].map(([k, v]) => [k, p(v)])),
   };
 }
 
@@ -107,6 +115,7 @@ function shift(L: CtLayout, dx: number): CtLayout {
  * on either side: a monitor gets a table, not a stretched one.
  */
 export function ctLayout(input: CtInput): CtLayout {
+  if (input.tv) return onTv(tvLayoutOn(input), input);
   const stage = Math.min(input.width, Math.max(input.height * 1.75, 360), 1500);
   if (stage >= input.width - 1) return layoutOn(input);
   const dx = (input.width - stage) / 2;
@@ -235,6 +244,223 @@ function layoutOn(input: CtInput): CtLayout {
     laid,
     action,
     centre: { x: cx, y: cy },
+    // The cue the phone table draws today, centred over the trays or the hand.
+    banner: { x: W / 2 - 160, y: (lastTray ? trayTop : handRect.y) - 34, w: 320, h: 30 },
+    seats: new Map([...opponents].map(([k, at]) => [k, { x: at.x - avatar / 2, y: at.y - avatar / 2, w: avatar, h: avatar }])),
+  };
+}
+
+/*
+ * The TV: a table seen from the couch, about three metres away. Each layout is planned on a
+ * 1920 x 1080 frame and drawn at `unit = min(width / 1920, height / 1080)`, centred, so a 4K TV
+ * draws exactly twice a 1080p one and a 720p one two thirds of it.
+ */
+export const TV_W = 1920;
+export const TV_H = 1080;
+
+/** What both games' TV tables share, in 1080p pixels. */
+export const TV = {
+  edge: 24,
+  gap: 24,
+  avatar: 136,
+  /** A seat is its cat with its name and score under it: room for a 20-character name. */
+  seatW: 372,
+  seatH: 136 + 96,
+  banner: { w: 760, h: 88 },
+} as const;
+
+/** Where the 1920 x 1080 plan lands on a screen: its scale and its top-left corner. */
+export function tvFrame(width: number, height: number, insets: Insets): { unit: number; x: number; y: number } {
+  const w = width - insets.left - insets.right;
+  const h = height - insets.top - insets.bottom;
+  const unit = Math.min(w / TV_W, h / TV_H);
+  return { unit, x: insets.left + (w - TV_W * unit) / 2, y: insets.top + (h - TV_H * unit) / 2 };
+}
+
+/** Maps points and rectangles of the plan onto the screen. */
+export function tvMap(width: number, height: number, insets: Insets) {
+  const f = tvFrame(width, height, insets);
+  const u = f.unit;
+  return {
+    unit: u,
+    at: <T extends { x: number; y: number }>(v: T): T => ({ ...v, x: f.x + v.x * u, y: f.y + v.y * u }),
+    box: (r: Rect): Rect => ({ x: f.x + r.x * u, y: f.y + r.y * u, w: r.w * u, h: r.h * u }),
+  };
+}
+
+const TV_CARD = 128;
+const TV_TOWER = 96;
+const ROW_GAP = 12;
+const GROUP_GAP = 16;
+/** How much of a laid card shows under the next: as much as there is room for, never less than tight in the plan. */
+const ROOMY = 0.5;
+const TIGHT = 0.42;
+/** The table every seat is planned for: three groups of ten, so laying down never moves anything. */
+const PLAN = { groups: 3, cards: 10 };
+
+type Align = { x: "start" | "centre" | "end"; y: "top" | "centre" };
+
+/**
+ * Rows of laid groups in `area`, cards `lw` wide: spread out if they fit, closer if that is what
+ * fits, and smaller only if even that would not.
+ */
+function placeGroups(area: Rect, counts: number[], cw: number, ch: number, lw0: number, align: Align): { poses: Pose[]; rect: Rect }[] {
+  for (let k = 0; ; k++) {
+    const lw = lw0 - 2 * Math.floor(k / 2);
+    const spread = k % 2 === 0 ? ROOMY : TIGHT;
+    const lh = (ch * lw) / cw;
+    const sized = counts.map((c) => {
+      const count = Math.max(c, 1);
+      const step = count === 1 ? 0 : Math.max(6, Math.min(lw * spread, (area.w - lw) / (count - 1)));
+      return { count: c, step, w: lw + step * (count - 1) };
+    });
+    const rows: (typeof sized)[] = [];
+    let used = Infinity;
+    for (const g of sized) {
+      if (used + GROUP_GAP + g.w > area.w) {
+        rows.push([]);
+        used = -GROUP_GAP;
+      }
+      rows[rows.length - 1]!.push(g);
+      used += GROUP_GAP + g.w;
+    }
+    const h = rows.length * lh + Math.max(rows.length - 1, 0) * ROW_GAP;
+    if (h > area.h + 0.01 && lw > 24) continue;
+    const out: { poses: Pose[]; rect: Rect }[] = [];
+    let y = area.y + (align.y === "centre" ? Math.max(area.h - h, 0) / 2 : 0);
+    for (const row of rows) {
+      const rowW = row.reduce((sum, g) => sum + g.w, 0) + GROUP_GAP * (row.length - 1);
+      let x = align.x === "start" ? area.x : align.x === "end" ? area.x + area.w - rowW : area.x + (area.w - rowW) / 2;
+      for (const g of row) {
+        out.push({ poses: overlap(g.count, x, y, cw, ch, lw / cw, g.step), rect: { x: x - 4, y: y - 4, w: g.w + 8, h: lh + 8 } });
+        x += g.w + GROUP_GAP;
+      }
+      y += lh + ROW_GAP;
+    }
+    return out;
+  }
+}
+
+/**
+ * The Cat Tower table on a TV, planned at 1920 x 1080. The tower down the left; seats across the
+ * top, and from four players one more down each side; each seat's laid groups beside it, between
+ * it and the piles; the piles in the middle; the turn banner along the bottom.
+ */
+function tvLayoutOn(input: CtInput): CtLayout {
+  const { edge, gap, avatar, seatW, seatH, banner: bannerSize } = TV;
+  const n = input.opponents.length;
+  const sides = n >= 4;
+  const across = Math.max(sides ? n - 2 : n, 1);
+  const cw = TV_CARD;
+  const ch = Math.round(cw * 1.406);
+  const pileGap = Math.round(cw * 0.22);
+  const pileW = cw * 2 + pileGap;
+  const tower = { x: edge, y: edge, w: TV_TOWER, h: TV_H - 2 * edge };
+  const x0 = edge + TV_TOWER + gap;
+  const x1 = TV_W - edge;
+  const cx = (x0 + x1) / 2;
+  const banner = { x: cx - bannerSize.w / 2, y: TV_H - edge - bannerSize.h, w: bannerSize.w, h: bannerSize.h };
+  const midBottom = banner.y - gap;
+  const cellW = (x1 - x0 - (across - 1) * gap) / across;
+  const sideW = cx - pileW / 2 - gap - (x0 + seatW + GROUP_GAP);
+
+  // The biggest laid cards with which the planned table fits: rows under the top seats, the piles
+  // and the side seats' rows in what is left, above the banner.
+  const rowsFor = (w: number, lw: number) => {
+    const long = lw * (1 + (PLAN.cards - 1) * TIGHT);
+    if (w < long) return Infinity;
+    return Math.ceil(PLAN.groups / Math.max(1, Math.floor((w + GROUP_GAP) / (long + GROUP_GAP))));
+  };
+  const heightOf = (rows: number, lw: number) => rows * ((ch * lw) / cw) + (rows - 1) * ROW_GAP;
+  let lw = 96;
+  let topH = 0;
+  let sideH = 0;
+  for (; lw > 48; lw -= 2) {
+    topH = heightOf(rowsFor(cellW, lw), lw);
+    sideH = sides ? heightOf(rowsFor(sideW, lw), lw) : 0;
+    const midH = midBottom - (edge + seatH + ROW_GAP + topH + gap);
+    if (midH >= ch + 96 && midH >= Math.max(sideH, sides ? seatH : 0)) break;
+  }
+  const midTop = edge + seatH + ROW_GAP + topH + gap;
+  const midH = midBottom - midTop;
+  const cy = midTop + midH / 2;
+
+  // Seats clockwise from the left side: the left, the top from the left, the right.
+  const cells: { seat: Rect; area: Rect; align: Align }[] = [];
+  if (sides) cells.push({ seat: { x: x0, y: cy - seatH / 2, w: seatW, h: seatH }, area: { x: x0 + seatW + GROUP_GAP, y: cy - sideH / 2, w: sideW, h: sideH }, align: { x: "start", y: "centre" } });
+  for (let i = 0; i < across; i++) {
+    const x = x0 + i * (cellW + gap);
+    const w = Math.min(seatW, cellW);
+    cells.push({ seat: { x: x + (cellW - w) / 2, y: edge, w, h: seatH }, area: { x, y: edge + seatH + ROW_GAP, w: cellW, h: topH }, align: { x: "centre", y: "top" } });
+  }
+  if (sides) cells.push({ seat: { x: x1 - seatW, y: cy - seatH / 2, w: seatW, h: seatH }, area: { x: cx + pileW / 2 + gap, y: cy - sideH / 2, w: sideW, h: sideH }, align: { x: "end", y: "centre" } });
+
+  const opponents = new Map<number, { x: number; y: number }>();
+  const seats = new Map<number, Rect>();
+  const cellOf = new Map<number, (typeof cells)[number]>();
+  input.opponents.forEach((s, i) => {
+    const cell = cells[i];
+    if (!cell) return;
+    cellOf.set(s, cell);
+    seats.set(s, cell.seat);
+    opponents.set(s, { x: cell.seat.x + cell.seat.w / 2, y: cell.seat.y + avatar / 2 });
+  });
+  const laid: CtLayout["laid"] = new Map();
+  for (const row of input.laid) {
+    const cell = cellOf.get(row.seat);
+    if (!cell) continue;
+    laid.set(row.seat, { avatar: { ...opponents.get(row.seat)!, size: avatar }, groups: placeGroups(cell.area, row.groups, cw, ch, lw, cell.align) });
+  }
+
+  const deck = { x: cx - cw - pileGap / 2, y: cy - ch / 2, r: 0, s: 1, z: 5 };
+  const discard = { x: cx + pileGap / 2, y: cy - ch / 2, r: 0, s: 1, z: 6 };
+  // The rug sits under the piles, clear of the side seats' groups.
+  const rugSize = Math.min(Math.max(midH, pileW + 48), sides ? pileW + gap : pileW * 2);
+  return {
+    landscape: true,
+    cw,
+    ch,
+    small: lw / cw,
+    avatar,
+    opponents,
+    tower,
+    rug: { x: cx - rugSize / 2, y: cy - rugSize / 2, w: rugSize, h: rugSize },
+    deck,
+    discard,
+    deckRect: { x: deck.x, y: deck.y, w: cw, h: ch },
+    discardRect: { x: discard.x, y: discard.y, w: cw, h: ch },
+    hand: [],
+    handRect: { x: cx, y: cy, w: 0, h: 0 },
+    trays: [],
+    laid,
+    action: { x: cx, y: cy },
+    centre: { x: cx, y: cy },
+    banner,
+    seats,
+  };
+}
+
+/** The 1920 x 1080 plan drawn on the screen it is for. */
+function onTv(L: CtLayout, input: CtInput): CtLayout {
+  const { unit: u, at, box } = tvMap(input.width, input.height, input.insets);
+  return {
+    ...L,
+    cw: Math.round(L.cw * u),
+    ch: Math.round(L.ch * u),
+    avatar: Math.round(L.avatar * u),
+    opponents: new Map([...L.opponents].map(([k, v]) => [k, at(v)])),
+    tower: box(L.tower),
+    rug: box(L.rug),
+    deck: at(L.deck),
+    discard: at(L.discard),
+    deckRect: box(L.deckRect),
+    discardRect: box(L.discardRect),
+    handRect: box(L.handRect),
+    laid: new Map([...L.laid].map(([k, v]) => [k, { avatar: { ...at(v.avatar), size: v.avatar.size * u }, groups: v.groups.map((g) => ({ poses: g.poses.map(at), rect: box(g.rect) })) }])),
+    action: at(L.action),
+    centre: at(L.centre),
+    banner: box(L.banner),
+    seats: new Map([...L.seats].map(([k, v]) => [k, box(v)])),
   };
 }
 

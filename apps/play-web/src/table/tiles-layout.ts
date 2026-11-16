@@ -3,7 +3,8 @@
  * flowing in rows inside the rope, the toy box, the controls and the rack. Pure geometry, like
  * ct-layout.ts.
  */
-import type { Insets } from "./ct-layout";
+import { TV, TV_H, TV_W, tvMap, type Insets } from "./ct-layout";
+
 import type { Rect } from "./drag";
 import type { Pose } from "./motion";
 
@@ -14,6 +15,8 @@ export type TilesInput = {
   opponents: number[];
   sets: number[];
   rack: number;
+  /** A TV across the room: every seat in `opponents`, no rack, sized for the couch. */
+  tv?: boolean;
 };
 
 export type TilesLayout = {
@@ -29,6 +32,10 @@ export type TilesLayout = {
   controls: { y: number; h: number };
   rack: Pose[];
   rackRect: Rect;
+  /** Where "<Name>'s turn" sits. */
+  banner: Rect;
+  /** Each seat in `opponents`: its cat, and on a TV its name and score under it. */
+  seats: Map<number, Rect>;
 };
 
 const clamp = (v: number, lo: number, hi: number) => Math.min(Math.max(v, lo), hi);
@@ -73,6 +80,7 @@ function flow(sets: number[], area: Rect, pw: number, ph: number) {
 }
 
 export function tilesLayout(input: TilesInput): TilesLayout {
+  if (input.tv) return tvTiles(input);
   const { width: W, height: H, insets } = input;
   const landscape = W > H * 1.15;
   const pad = 10;
@@ -137,5 +145,67 @@ export function tilesLayout(input: TilesInput): TilesLayout {
     // Rack pieces are table pieces scaled up about their centre: shift so they sit where planned.
     rack: rack.map((p) => ({ ...p, x: p.x - (pw - rackPw) / 2, y: p.y - (ph - rh) / 2, s: rackPw / pw })),
     rackRect,
+    // The cue the phone table draws today, at the foot of the board.
+    banner: { x: W / 2 - 160, y: board.y + board.h - 40, w: 320, h: 30 },
+    seats: new Map([...opponents].map(([k, at]) => [k, { x: at.x - avatar / 2, y: at.y - avatar / 2, w: avatar, h: avatar }])),
+  };
+}
+
+/** The bottom of the lowest set `flow` placed. */
+const bottomOf = (sets: { rect: Rect }[], top: number) => sets.reduce((b, s) => Math.max(b, s.rect.y + s.rect.h), top);
+
+/**
+ * The Tuna Tiles table on a TV, planned at 1920 x 1080 like Cat Tower's: the seats across the
+ * top, the board filling the rest with pieces as big as it allows, and along the bottom the turn
+ * banner and the toy box.
+ */
+function tvTiles(input: TilesInput): TilesLayout {
+  const { edge, gap, avatar, seatW, seatH, banner: bannerSize } = TV;
+  const n = Math.max(input.opponents.length, 1);
+  const slot = (TV_W - 2 * edge) / n;
+  const w = Math.min(seatW, slot - gap);
+  const opponents = new Map<number, { x: number; y: number }>();
+  const seats = new Map<number, Rect>();
+  input.opponents.forEach((s, i) => {
+    const x = edge + slot * (i + 0.5);
+    seats.set(s, { x: x - w / 2, y: edge, w, h: seatH });
+    opponents.set(s, { x, y: edge + avatar / 2 });
+  });
+
+  const stripH = bannerSize.h + 16;
+  const stripY = TV_H - edge - stripH;
+  const banner = { x: TV_W / 2 - bannerSize.w / 2, y: stripY + (stripH - bannerSize.h) / 2, w: bannerSize.w, h: bannerSize.h };
+  const board = { x: edge, y: edge + seatH + gap, w: TV_W - 2 * edge, h: stripY - gap - (edge + seatH + gap) };
+  const inner = { x: board.x + gap, y: board.y + gap, w: board.w - 2 * gap, h: board.h - 2 * gap };
+
+  // The biggest pieces with which every set fits; no new-set spot, nobody drops on a TV.
+  let pw = 128;
+  let laid = flow(input.sets, inner, pw, Math.round(pw * 1.2));
+  while (bottomOf(laid.sets, inner.y) > inner.y + inner.h && pw > 20) {
+    pw -= 2;
+    laid = flow(input.sets, inner, pw, Math.round(pw * 1.2));
+  }
+  const ph = Math.round(pw * 1.2);
+  // The sets centred across the board, not hugging its left edge.
+  const right = laid.sets.reduce((r, s) => Math.max(r, s.rect.x + s.rect.w), inner.x);
+  const dx = (inner.x + inner.w - right) / 2;
+  const sets = laid.sets.map((s) => ({ rect: { ...s.rect, x: s.rect.x + dx }, poses: s.poses.map((p) => ({ ...p, x: p.x + dx })) }));
+
+  const { unit: u, at, box } = tvMap(input.width, input.height, input.insets);
+  return {
+    landscape: true,
+    pw: Math.round(pw * u),
+    ph: Math.round(ph * u),
+    avatar: Math.round(avatar * u),
+    opponents: new Map([...opponents].map(([k, v]) => [k, at(v)])),
+    board: box(board),
+    pool: { ...at({ x: board.x + board.w - stripH, y: stripY }), size: stripH * u },
+    sets: sets.map((s) => ({ rect: box(s.rect), poses: s.poses.map(at) })),
+    newSet: box({ x: inner.x, y: inner.y, w: 0, h: 0 }),
+    controls: { y: at({ x: 0, y: board.y + board.h }).y, h: 0 },
+    rack: [],
+    rackRect: box({ x: board.x, y: board.y + board.h, w: 0, h: 0 }),
+    banner: box(banner),
+    seats: new Map([...seats].map(([k, v]) => [k, box(v)])),
   };
 }

@@ -47,3 +47,155 @@ describe("table layouts fit every screen", () => {
     for (let i = 1; i < poses.length; i++) expect(poses[i]!.x - poses[i - 1]!.x).toBeGreaterThan(20);
   });
 });
+
+type Box = { x: number; y: number; w: number; h: number };
+const none = { top: 0, right: 0, bottom: 0, left: 0 };
+const seatsOf = (n: number) => Array.from({ length: n }, (_, i) => i);
+const TV_FRAMES = [
+  [1280, 720],
+  [1920, 1080],
+  [3840, 2160],
+] as const;
+/** Two boxes overlap when they share more than a hair (half a pixel) of area. */
+const overlaps = (a: Box, b: Box) => Math.min(a.x + a.w, b.x + b.w) - Math.max(a.x, b.x) > 0.5 && Math.min(a.y + a.h, b.y + b.h) - Math.max(a.y, b.y) > 0.5;
+const within = (r: Box, width: number, height: number) => r.x >= -0.5 && r.y >= -0.5 && r.x + r.w <= width + 0.5 && r.y + r.h <= height + 0.5;
+const circle = (at: { x: number; y: number }, size: number): Box => ({ x: at.x - size / 2, y: at.y - size / 2, w: size, h: size });
+/** A pose's visual box: a scaled element shrinks about its centre. */
+const visual = (p: { x: number; y: number; s?: number }, w: number, h: number): Box => {
+  const s = p.s ?? 1;
+  return { x: p.x + (w * (1 - s)) / 2, y: p.y + (h * (1 - s)) / 2, w: w * s, h: h * s };
+};
+const pairs = <T>(xs: T[]) => xs.flatMap((a, i) => xs.slice(i + 1).map((b) => [a, b] as const));
+/** Every number in a layout by its path, but a pose's turn, scale and stacking, which don't scale with the screen. */
+function numbers(v: unknown, path = "", out = new Map<string, number>()): Map<string, number> {
+  if (typeof v === "number") out.set(path, v);
+  else if (v instanceof Map) for (const [k, x] of v) numbers(x, `${path}.${String(k)}`, out);
+  else if (Array.isArray(v)) v.forEach((x, i) => numbers(x, `${path}[${i}]`, out));
+  else if (v && typeof v === "object") for (const [k, x] of Object.entries(v)) if (k !== "r" && k !== "s" && k !== "z") numbers(x, `${path}.${k}`, out);
+  return out;
+}
+const expectDoubled = (small: unknown, big: unknown) => {
+  const a = numbers(small);
+  const b = numbers(big);
+  expect([...b.keys()]).toEqual([...a.keys()]);
+  for (const [k, x] of a) expect(Math.abs(b.get(k)! - 2 * x), k).toBeLessThanOrEqual(1);
+};
+
+describe("Cat Tower on a TV", () => {
+  /** The worst table: every seat laid down with three groups of ten. */
+  const tv = (width: number, height: number, n: number) => {
+    const seats = seatsOf(n);
+    return ctLayout({ width, height, insets: none, opponents: seats, handCount: 0, trays: 0, laid: seats.map((seat) => ({ seat, groups: [10, 10, 10] })), tv: true });
+  };
+  const CASES = TV_FRAMES.flatMap(([w, h]) => [2, 3, 4, 5, 6].map((n) => [w, h, n] as const));
+  const groupsOf = (L: ReturnType<typeof tv>) => [...L.laid.values()].flatMap((row) => row.groups.map((g) => g.rect));
+
+  test.each(CASES)("at %i x %i with %i seats: nothing private, every seat around the table", (width, height, n) => {
+    const L = tv(width, height, n);
+    expect(L.hand).toEqual([]);
+    expect(L.trays).toEqual([]);
+    expect([...L.opponents.keys()].sort()).toEqual(seatsOf(n));
+    expect([...L.seats.keys()].sort()).toEqual(seatsOf(n));
+    expect([...L.laid.keys()].sort()).toEqual(seatsOf(n));
+  });
+
+  test.each(CASES)("at %i x %i with %i seats: everything is inside the frame", (width, height, n) => {
+    const L = tv(width, height, n);
+    const rects: Box[] = [L.tower, L.rug, L.deckRect, L.discardRect, L.banner, ...L.seats.values(), ...[...L.opponents.values()].map((at) => circle(at, L.avatar)), ...groupsOf(L)];
+    for (const row of L.laid.values()) for (const g of row.groups) for (const p of g.poses) rects.push(visual(p, L.cw, L.ch));
+    for (const r of rects) expect(within(r, width, height), JSON.stringify(r)).toBe(true);
+  });
+
+  test.each(CASES)("at %i x %i with %i seats: seats, cats, groups, piles and the banner never overlap", (width, height, n) => {
+    const L = tv(width, height, n);
+    const seats = [...L.seats.values()];
+    for (const [a, b] of pairs(seats)) expect(overlaps(a, b), `${JSON.stringify(a)} ${JSON.stringify(b)}`).toBe(false);
+    // Each cat sits inside its own seat.
+    for (const [s, at] of L.opponents) {
+      const c = circle(at, L.avatar);
+      const r = L.seats.get(s)!;
+      expect(c.x >= r.x - 0.5 && c.y >= r.y - 0.5 && c.x + c.w <= r.x + r.w + 0.5 && c.y + c.h <= r.y + r.h + 0.5).toBe(true);
+    }
+    const groups = groupsOf(L);
+    const piles = [L.deckRect, L.discardRect];
+    for (const [a, b] of pairs(groups)) expect(overlaps(a, b)).toBe(false);
+    for (const g of groups) for (const other of [...piles, ...seats, L.tower]) expect(overlaps(g, other), `${JSON.stringify(g)} ${JSON.stringify(other)}`).toBe(false);
+    for (const other of [...piles, ...groups, ...seats, L.tower]) expect(overlaps(L.banner, other), JSON.stringify(other)).toBe(false);
+    for (const s of seats) for (const other of [...piles, L.tower]) expect(overlaps(s, other)).toBe(false);
+  });
+
+  test.each([2, 3, 4, 5, 6])("at 1920 x 1080 with %i seats: big enough to read from the couch", (n) => {
+    const L = tv(1920, 1080, n);
+    expect(L.cw).toBeGreaterThanOrEqual(112);
+    expect(L.avatar).toBeGreaterThanOrEqual(132);
+    expect(L.banner.h).toBeGreaterThanOrEqual(64);
+    // A laid card's two-digit numeral (46% of its width) is at least 28 px.
+    for (const row of L.laid.values()) for (const g of row.groups) for (const p of g.poses) expect(L.cw * (p.s ?? 1) * 0.46).toBeGreaterThanOrEqual(28);
+  });
+
+  test.each([2, 3, 4, 5, 6])("at 3840 x 2160 with %i seats: everything is twice the size", (n) => {
+    expectDoubled(tv(1920, 1080, n), tv(3840, 2160, n));
+  });
+
+  test("a seat with no groups down yet keeps its place", () => {
+    const seats = seatsOf(4);
+    const L = ctLayout({ width: 1920, height: 1080, insets: none, opponents: seats, handCount: 0, trays: 0, laid: [{ seat: 2, groups: [3, 4] }], tv: true });
+    const M = tv(1920, 1080, 4);
+    expect(L.seats).toEqual(M.seats);
+    expect(L.deckRect).toEqual(M.deckRect);
+    expect([...L.laid.keys()]).toEqual([2]);
+  });
+});
+
+describe("Tuna Tiles on a TV", () => {
+  /** The worst board: thirty sets of three. */
+  const tv = (width: number, height: number, n: number) => tilesLayout({ width, height, insets: none, opponents: seatsOf(n), sets: Array.from({ length: 30 }, () => 3), rack: 0, tv: true });
+  const CASES = TV_FRAMES.flatMap(([w, h]) => [2, 3, 4].map((n) => [w, h, n] as const));
+
+  test.each(CASES)("at %i x %i with %i seats: everything is inside the frame, nothing private", (width, height, n) => {
+    const L = tv(width, height, n);
+    expect(L.rack).toEqual([]);
+    expect([...L.seats.keys()].sort()).toEqual(seatsOf(n));
+    const pool = { x: L.pool.x, y: L.pool.y, w: L.pool.size, h: L.pool.size };
+    const rects: Box[] = [L.board, pool, L.banner, ...L.seats.values(), ...[...L.opponents.values()].map((at) => circle(at, L.avatar))];
+    for (const set of L.sets) {
+      rects.push(set.rect);
+      for (const p of set.poses) rects.push(visual(p, L.pw, L.ph));
+    }
+    for (const r of rects) expect(within(r, width, height), JSON.stringify(r)).toBe(true);
+    for (const set of L.sets) for (const p of set.poses) expect(within(visual(p, L.pw, L.ph), L.board.x + L.board.w, L.board.y + L.board.h) && p.y >= L.board.y && p.x >= L.board.x).toBe(true);
+  });
+
+  test.each(CASES)("at %i x %i with %i seats: seats, sets, the toy box and the banner never overlap", (width, height, n) => {
+    const L = tv(width, height, n);
+    const seats = [...L.seats.values()];
+    const pool = { x: L.pool.x, y: L.pool.y, w: L.pool.size, h: L.pool.size };
+    for (const [a, b] of pairs(seats)) expect(overlaps(a, b)).toBe(false);
+    for (const [s, at] of L.opponents) {
+      const c = circle(at, L.avatar);
+      const r = L.seats.get(s)!;
+      expect(c.x >= r.x - 0.5 && c.y >= r.y - 0.5 && c.x + c.w <= r.x + r.w + 0.5 && c.y + c.h <= r.y + r.h + 0.5).toBe(true);
+    }
+    const sets = L.sets.map((s) => s.rect);
+    for (const [a, b] of pairs(sets)) expect(overlaps(a, b)).toBe(false);
+    for (const set of sets) for (const other of [...seats, pool, L.banner]) expect(overlaps(set, other)).toBe(false);
+    for (const other of [...seats, pool]) expect(overlaps(L.banner, other)).toBe(false);
+    for (const s of seats) expect(overlaps(s, L.board)).toBe(false);
+  });
+
+  test.each([2, 3, 4])("at 1920 x 1080 with %i seats: big enough to read from the couch", (n) => {
+    const L = tv(1920, 1080, n);
+    expect(L.pw).toBeGreaterThanOrEqual(52);
+    expect(L.avatar).toBeGreaterThanOrEqual(132);
+    expect(L.banner.h).toBeGreaterThanOrEqual(64);
+  });
+
+  test.each([2, 3, 4])("at 3840 x 2160 with %i seats: everything is twice the size", (n) => {
+    expectDoubled(tv(1920, 1080, n), tv(3840, 2160, n));
+  });
+
+  test("a near-empty board draws its pieces bigger", () => {
+    const few = tilesLayout({ width: 1920, height: 1080, insets: none, opponents: seatsOf(4), sets: [3, 4], rack: 0, tv: true });
+    expect(few.pw).toBeGreaterThan(tv(1920, 1080, 4).pw);
+  });
+});
