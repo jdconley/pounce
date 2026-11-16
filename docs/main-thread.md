@@ -136,18 +136,21 @@ they are allowed for small settings. `synchronize()` is not.
 | --- | --- | --- |
 | Static: `apps/play-ios/scripts/main-thread-lint.swift` | In the app, its extensions and PounceKit (not the e2e CLI or tests): file IO (`Data(contentsOf:)`, `String(contentsOf:)`, `contentsOfFile:`, `AVAudioPlayer(contentsOf:)`, `.write(to:)`, `FileManager`, file handles, POSIX file calls, archive `withFile:`) and the Keychain (`SecItem*`) anywhere outside the IO layer; sleeps, semaphores, `.wait()`, `sync` dispatch, locks and `Mutex`, `RunLoop.run` and `synchronize()` everywhere, the IO layer too; the solver, the hint search and `CIContext` in the app's UI code unless inside a `@concurrent` function. In the IO layer, IO in anything not on an actor and not `@concurrent`, and any `@MainActor`. It strips comments and strings (but checks code inside string interpolation), so a mention in a doc comment is fine. | the `build` job in `.github/workflows/ios.yml`, a required check on every pull request. `--self-test` first runs it against planted violations and look-alikes in `scripts/main-thread-lint-fixtures/`. |
 | Compiler: Swift 6 strict concurrency | The IO layer is actors and `@concurrent` functions, so it can never run on the main actor. | every build |
-| Runtime: Thread Performance Checker | Main-thread IO and priority inversions the static check can't see (system frameworks). | the `Pounce` scheme's test action |
-| Runtime: `MainThreadWatchdog` (Debug) | Every frame over budget and every main-thread stall over 100 ms, from a display link and a run loop observer. | Debug builds; `PounceUITests` read it and fail |
-| Tests: `FrameRateTests` | Frame times while playing Cat Tower and Tuna Tiles, and that the tables run at the screen's top rate. | `scripts/ui-tests.sh` |
+| Runtime: Thread Performance Checker | Priority inversions and hang risks, reported as test failures. Its main-thread IO check stays off by default: iOS's own launch code (MobileGestalt, GraphicsServices) trips it in every test, with no app frame to blame. `POUNCE_TPC_IO=1 scripts/ui-tests.sh` turns it on to read the log; the app's own IO is the static check's job. | `apps/play-ios/Pounce.xctestplan`, the `Pounce` scheme's test plan |
+| Runtime: `MainThreadWatchdog` (Debug, `-watchdog`) | Every table frame and display-link frame over budget, and every main-thread stall over 100 ms (run loop observers, no lock or extra thread), during gameplay: a table on screen, from a second after it appears. Each hang is logged as `[watchdog] hang`. Its numbers are the `watchdog` accessibility element's value. | Debug builds; `Live.app()` and `Live.demo()` launch with it |
+| Tests: `GameplayGate` | Every UI test that reached a table fails on a gameplay hang over 100 ms, or when more than 5% of its table frames (and more than 10) take over 16.7 ms. | the UI test bundle's principal class, `scripts/ui-tests.sh` |
+| Tests: `FrameRateTests` | Cat Tower and Tuna Tiles played at normal speed: the table asks for the screen's top rate, p95 frame time within 1.5 frames, at most 2% of frames over 16.7 ms, no hang. Prints `FRAMES` lines. | `scripts/ui-tests.sh` |
 
 **When the lint is wrong**, put the call in the IO layer. If it truly cannot move (a system API that
 has no async form, and is documented as fast), mark the line with `// main-thread-ok: <why>`. The
 lint counts these, and review should push back on every one.
 
-**Frame rate:** the SpriteKit tables ask for the screen's maximum (`UIScreen.maximumFramesPerSecond`,
-120 on ProMotion), and the Info.plist sets `CADisableMinimumFrameDurationOnPhone` so iPhones may
-use it. While a table is idle (nothing moving, no finger down), it drops to a low rate to save
-battery, and goes back up on the next touch or animation.
+**Frame rate:** the SpriteKit tables ask for their window's screen's maximum
+(`SKView.runAtTopFrameRate()`, `maximumFramesPerSecond`: 120 on ProMotion), again whenever the view
+moves to a window, and the Info.plist sets `CADisableMinimumFrameDurationOnPhone` so iPhones may
+use it. All motion is time-based, so nothing moves faster at 120. While a table is idle (nothing
+moving, no finger down) its director pauses the view, so it draws nothing at all, and the next
+touch, action or redraw wakes it.
 
 ## Web (`apps/play-web`)
 
@@ -226,6 +229,6 @@ When the Android app starts, it starts with these in place:
 
 | Platform | Rule | Static check | Runtime gate | Top frame rate |
 | --- | --- | --- | --- | --- |
-| iOS | this doc | in CI, every existing violation fixed | in progress | in progress |
+| iOS | this doc | in CI, every existing violation fixed | in the UI tests (not CI: they need a simulator and a dev server) | asks for 120 on ProMotion; measured at 60 only (simulators report 60), a 120 Hz device run is still owed |
 | Web | this doc | to do in `apps/play-web` | to do in `apps/play-web` | rAF, by design |
 | Android | this doc | when the app starts | when the app starts | when the app starts |
