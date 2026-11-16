@@ -3,8 +3,6 @@
  * with the toy box, the controls, and the rack. A turn is built on this device (tiles-draft.ts)
  * and sent whole with Play; with nothing changed the button draws instead.
  */
-import { chooseAction } from "@pounce/play-api/bots/house-cat-tiles";
-import { createRng } from "@pounce/play-api/rules/rng";
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "preact/hooks";
 
 
@@ -14,6 +12,7 @@ import { reducedMotion } from "../lib/settings";
 import { play } from "../lib/sound";
 import { mySeats } from "../store/lobby";
 import { Button, Icon, IconButton, learnTip, Tip, tipLearned, useSize } from "../ui/common";
+import { hint as askHint } from "../workers/hint";
 
 import { useInsets } from "./cattower";
 import { inside, press, type Point } from "./drag";
@@ -282,13 +281,17 @@ export function TilesTable(props: { store: RoomStore; state: RoomState }) {
     learnTip("tt.sort");
     play("whoosh", 0.4);
   };
-  const hint = () => {
-    if (!myTurn || seat === null) return;
+  const [thinking, setThinking] = useState(false);
+  const hint = async () => {
+    if (!myTurn || seat === null || thinking) return;
     learnTip("tt.hint");
-    // The House Cat's own move, from this device's view of the table.
+    // The House Cat's own move, from this device's view of the table, worked out off the
+    // rendering thread (workers/hint.worker.ts).
+    setThinking(true);
     const fresh: TilesView = { ...v, table: v.table, racks: { ...v.racks, [seat]: serverRack } };
-    const action = chooseAction(fresh, seat, createRng([1, 2, 3, Date.now() >>> 0]));
-    if (action.type !== "play") {
+    const action = await askHint(fresh, seat);
+    setThinking(false);
+    if (action?.type !== "play") {
       play("nope", 0.5);
       wiggle(document.getElementById("play-btn"));
       return;
@@ -413,7 +416,7 @@ export function TilesTable(props: { store: RoomStore; state: RoomState }) {
             <button type="button" class="icon-btn" aria-label={sortBy === "number" ? "Sort by toy" : "123: sort by number"} title={sortBy === "number" ? "Sort by toy" : "Sort by number"} onClick={() => sort(sortBy === "number" ? "toy" : "number")} id="sort">
               {sortBy === "number" ? <img src={art("tile-fish")} alt="" width={28} height={28} /> : <span class="num-icon">123</span>}
             </button>
-            <IconButton icon="fx-sparkle" label="Hint" onClick={hint} id="hint" />
+            <IconButton icon="fx-sparkle" label="Hint" onClick={() => void hint()} id="hint" />
           </div>
         </div>
       ) : null}

@@ -96,7 +96,30 @@ Bundle budget: the first load (HTML, CSS, JS) under 90 KB compressed; art loads 
 paint and is cached by the service worker. The rules and protocol from `play-api` are about 25 KB
 of it.
 
-### Talking to the server
+#### The rendering thread does UI work only
+
+JD's rule for every platform (`docs/main-thread.md`): the thread that draws never waits on IO or
+runs long, so every frame lands at 60 Hz and at 120 Hz where the screen has it. On the web:
+
+- **Statically** (`apps/play-web/eslint.main-thread.mjs`, failing `pnpm lint`): no
+  `localStorage`, `sessionStorage`, `document.cookie`, `XMLHttpRequest`, `alert`, `confirm`,
+  `prompt`, `Atomics.wait` or `importScripts` on the page's thread; no `setTimeout` or
+  `setInterval` in screen and table code (animation is CSS, `element.animate()` or
+  `requestAnimationFrame`, timed in milliseconds); no hard-coded 60 Hz frame (16.7 ms, 1000 / 60);
+  no move search (the solvers, the House Cat) outside `src/workers`.
+- **Storage** is one module (`src/lib/kv.ts`): read once, into memory, the first time anything
+  asks; written in idle time and when the page hides.
+- **The Tuna Tiles hint** runs the House Cat's search in a Web Worker (`src/workers`).
+- **At run time** (`e2e/main-thread.spec.ts`, in CI): while both games are played, no task or
+  animation frame may pass 50 ms, and the main thread's work per frame (from a DevTools trace) must
+  stay at p95 under 8.3 ms (one 120 Hz frame) on a laptop and 16.7 ms on a phone. The phone is a
+  fixed speed: the run benchmarks its machine and picks the CPU slowdown that matches a reference
+  Mac slowed 4x, so a slower CI runner never means a slower phone.
+- **120 Hz** can't be counted in headless Chrome, which draws at 60 Hz whatever the flags. It is
+  shown instead by frame work: a frame whose work fits in 8.3 ms is a frame a 120 Hz screen gets.
+  Nothing is timed in frames (all in milliseconds), so animations take the same time at any rate.
+
+## Talking to the server
 
 The web player speaks the iOS protocol unchanged. Two things a browser can't do, the Worker now
 meets halfway (for browser sockets only; iOS is untouched):

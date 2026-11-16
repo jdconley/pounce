@@ -526,4 +526,11 @@ h1.title {
     animation-iteration-count: 1 !important;
     transition-duration: 1ms !important;
   }
+
+  /* Timers made of animations keep their time: a hold is still a hold, a toast still lasts. */
+  .hold .fill,
+  .toast,
+  .flash-life {
+    animation-duration: var(--life) !important;
+  }
 }

@@ -41,9 +41,11 @@ export function SeatAvatar(props: {
   const name = seatName(info);
   const badge = info?.kind === "bot" ? "badge-bot" : info?.yours ? null : info?.kind === "human" ? "badge-remote" : null;
   const parts = [
+    // The name and the count first, in the order they're written in the markup: a seat that is a
+    // button says its visible text before anything else (WCAG 2.5.3).
     name,
-    props.turn ? "their turn" : "",
     props.count !== undefined ? `${props.count} ${props.count === 1 ? "card" : "cards"}` : "",
+    props.turn ? "their turn" : "",
     props.laid ? "laid down" : "",
     props.skip ? "skips next turn" : "",
     props.out ? "out of the game" : "",
@@ -60,6 +62,9 @@ export function SeatAvatar(props: {
       aria-label={props.label ?? parts.join(", ")}
       role={(props.onClick ? undefined : "img") as "button" | undefined}
     >
+      {/* First in the markup, drawn under the ring (CSS order). The space keeps the name and the
+          count two words when read together; a flex box draws no space. */}
+      {name ? <span class="name-tag">{name}</span> : null}{" "}
       <span class="ring" style={{ width: `${size}px`, height: `${size}px` }}>
         <img src={catArt(seatCat(info), seatPose(info, props.turn))} alt="" width={size} height={size} draggable={false} decoding="async" />
         {badge ? <img class="badge" src={art(badge)} alt="" /> : null}
@@ -68,7 +73,6 @@ export function SeatAvatar(props: {
         {props.laid ? <img class="laid" src={art("badge-laid")} alt="" /> : null}
         {info?.link ? <span class={`link ${info.link}`} /> : null}
       </span>
-      {name ? <span class="name-tag">{name}</span> : null}
     </Tag>
   );
 }

@@ -74,7 +74,6 @@ export function Lobby(props: {
     try {
       await navigator.clipboard.writeText(url);
       setCopied(true);
-      setTimeout(() => setCopied(false), 1800);
     } catch {
       setSheet("qr");
     }
@@ -148,7 +147,13 @@ export function Lobby(props: {
           </button>
           <button type="button" class="choice" onClick={() => void share()} disabled={!seated}>
             <Icon name="icon-share" size={40} />
-            <span>{copied ? "Link copied" : "Far away"}</span>
+            {copied ? (
+              <span class="flash-life" onAnimationEnd={() => setCopied(false)}>
+                Link copied
+              </span>
+            ) : (
+              <span>Far away</span>
+            )}
           </button>
           <button type="button" class="choice" onClick={() => setSheet("local")} disabled={!seated || room.seats.every((s) => s.kind === "human")}>
             <Icon name="icon-phone" size={40} />
@@ -175,7 +180,14 @@ export function Lobby(props: {
         <Sheet title="Scan to join" onClose={() => setSheet(null)}>
           <QrCard code={room.code} />
           <Button wide variant="teal" onClick={() => void share()}>
-            <Icon name="icon-share" size={28} /> {copied ? "Link copied" : "Send link"}
+            <Icon name="icon-share" size={28} />{" "}
+            {copied ? (
+              <span class="flash-life" onAnimationEnd={() => setCopied(false)}>
+                Link copied
+              </span>
+            ) : (
+              "Send link"
+            )}
           </Button>
         </Sheet>
       ) : null}

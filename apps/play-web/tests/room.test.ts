@@ -157,6 +157,22 @@ describe("the room store (RoomStore.swift)", () => {
     expect(store.state.pending?.id).toBe(draw.id);
   });
 
+  test("an answer already on stage settles the move at once, so a quick next move counts", async () => {
+    const { sockets, store } = setup();
+    store.start();
+    await flush();
+    sockets[0]!.open();
+    sockets[0]!.receive({ t: "snapshot", protocol: 1, seq: 1, room: room({ link: { ping: 3000, acks: [] }, game: { ...game, turn: 0 } }) });
+    store.act(0, { type: "draw", from: "deck" });
+    const id = store.state.pending!.id;
+    sockets[0]!.receive({ t: "event", seq: 2, event: { kind: "game", event: { kind: "drew", seat: 0, from: "deck", card: 50 } } });
+    // The drawn card is on stage; the server's answer follows before its pause ends.
+    expect(store.state.room?.game?.hands[0]).toContain(50);
+    sockets[0]!.receive({ t: "snapshot", protocol: 1, seq: 2, room: room({ link: { ping: 3000, acks: [id] }, game: { ...game, turn: 0, step: "play" } }) });
+    expect(store.state.pending).toBeNull();
+    expect(store.act(0, { type: "discard", card: 50 })).toBe(true);
+  });
+
   test("a move the server hasn't applied still blocks a second one", async () => {
     const { sockets, store } = setup();
     store.start();

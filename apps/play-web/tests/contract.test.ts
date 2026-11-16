@@ -8,6 +8,7 @@ import { build } from "esbuild";
 import { Miniflare } from "miniflare";
 import { afterAll, beforeAll, describe, expect, test } from "vitest";
 
+import { store } from "../src/lib/kv";
 import { Api } from "../src/net/api";
 import { RoomSocket, type SocketLike } from "../src/net/socket";
 import { profileBody, makePerson } from "../src/store/identity";
@@ -128,6 +129,8 @@ describe("the web player against the real server", () => {
   test("the server never holds the web player to an app minimum", async () => {
     const res = await fetch(`${base}/v1/app`);
     expect(res.status).toBe(200);
+    // A new device: the store keeps the last one, as a browser would.
+    store.remove("pounce.device");
     const api = new Api(base);
     await expect(api.listTables()).resolves.toEqual([]);
   });
