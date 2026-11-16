@@ -537,7 +537,13 @@ private struct TableStage: View {
             guard !Task.isCancelled else { return }
             moveNote = nil
         }
-        .onAppear(perform: attach)
+        // Every card face is drawn off the main thread first (a moment, once a launch), so the
+        // table never draws one in a frame, nor waits on the font cache while they are drawn.
+        .task {
+            await CardFaceFactory.shared.prewarm()
+            guard !Task.isCancelled else { return }
+            attach()
+        }
         .onDisappear { session.detachTable() }
         .onChange(of: StageInput(room: session.store.room, pass: session.store.pass), initial: true) {
             // Can be skipped (at most one call per frame): the curtain doesn't depend on it, and
@@ -665,8 +671,6 @@ private struct TableStage: View {
     }
 
     private func attach() {
-        // Every card face, drawn off the main thread now, so no frame of play draws one later.
-        Task { await CardFaceFactory.shared.prewarm() }
         let scene = self.scene ?? TableScene(store: session.store)
         // The callbacks hold `events` weakly and never this view: its `@State` owns the scene,
         // so capturing the view would keep the scene alive after leaving the table.

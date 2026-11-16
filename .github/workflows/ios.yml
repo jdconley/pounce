@@ -98,18 +98,30 @@ jobs:
         run: |
           runtime=$(xcrun simctl list runtimes -j | jq -r '[.runtimes[] | select(.platform == "iOS" and .isAvailable)] | sort_by(.version | split(".") | map(tonumber)) | last | .identifier')
           udid=$(xcrun simctl create "Pounce gates" "iPhone 17 Pro" "$runtime")
+          # It boots while the app builds; the tests wait for it.
           xcrun simctl boot "$udid"
-          xcrun simctl bootstatus "$udid" -b >/dev/null
           echo "simulator $udid on $runtime"
           echo "udid=$udid" >> "$GITHUB_OUTPUT"
       - run: scripts/bootstrap.sh
       # Debug (the demos and -autoplay are Debug only) with the compiler's optimizations on, as
-      # the shipped app has them and scripts/frame-rate.sh builds.
+      # the shipped app has them (per file rather than whole module, so it builds in parallel).
       - name: Build for testing
         run: >
           xcodebuild build-for-testing -project Pounce.xcodeproj -scheme Pounce -configuration Debug
           -destination "id=${{ steps.sim.outputs.udid }}" -derivedDataPath build/dd-gates
-          SWIFT_OPTIMIZATION_LEVEL=-O SWIFT_COMPILATION_MODE=wholemodule GCC_OPTIMIZATION_LEVEL=s -quiet
+          SWIFT_OPTIMIZATION_LEVEL=-O GCC_OPTIMIZATION_LEVEL=s -quiet
+      # A fresh simulator's first launches pay one-time costs (caches, shaders) that aren't the
+      # app's: one untimed run of a table that plays itself takes them first.
+      - name: Warm the simulator
+        run: |
+          xcrun simctl bootstatus "${{ steps.sim.outputs.udid }}" -b >/dev/null
+          app=$(find build/dd-gates/Build/Products -maxdepth 2 -name Pounce.app -path '*iphonesimulator*' | head -1)
+          xcrun simctl install "${{ steps.sim.outputs.udid }}" "$app"
+          for demo in tiles hit; do
+            xcrun simctl launch "${{ steps.sim.outputs.udid }}" com.conleychaos.play -demo "$demo" -anim-speed 1 -autoplay >/dev/null
+            sleep 8
+            xcrun simctl terminate "${{ steps.sim.outputs.udid }}" com.conleychaos.play || true
+          done
       - name: Frame and main-thread gates
         env:
           TEST_RUNNER_POUNCE_FRAMES_SECONDS: "15"
