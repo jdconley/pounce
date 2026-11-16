@@ -93,13 +93,17 @@ jobs:
     name: Smooth play gates (iOS simulator)
     runs-on: macos-26
     timeout-minutes: 30
-    env:
-      # XcodeGen comes from Homebrew; updating Homebrew first is most of the install's time.
-      HOMEBREW_NO_AUTO_UPDATE: "1"
-      HOMEBREW_NO_INSTALL_CLEANUP: "1"
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
       - run: xcodebuild -version
+      # XcodeGen from its pinned, checksummed release: seconds, where Homebrew takes over three
+      # minutes. scripts/bootstrap.sh finds it on the path.
+      - name: Install XcodeGen
+        run: |
+          curl -fsSL -o "$RUNNER_TEMP/xcodegen.zip" https://github.com/yonaskolb/XcodeGen/releases/download/2.46.0/xcodegen.zip
+          echo "4d9e34b62172d645eed6457cac13fc222569974098ef4ee9c3368bedf0196806  $RUNNER_TEMP/xcodegen.zip" | shasum -a 256 -c -
+          unzip -q "$RUNNER_TEMP/xcodegen.zip" -d "$RUNNER_TEMP"
+          echo "$RUNNER_TEMP/xcodegen/bin" >> "$GITHUB_PATH"
       - name: Make a simulator
         id: sim
         run: |
