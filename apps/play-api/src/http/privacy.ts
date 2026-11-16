@@ -8,7 +8,7 @@
 import { CACHE, CSP, docPage } from "./layout";
 
 const BODY = `<h1>Pounce privacy policy</h1>
-<p class="updated">Last updated 13 November 2026</p>
+<p class="updated">Last updated 15 November 2026</p>
 <p>Pounce is a game app for couples and families, made by Conley Chaos LLC ("we"). This page says what the app and its server keep, why, who else handles it, for how long, and how to delete it. Pounce has no ads, no tracking, no third-party analytics and no third-party SDKs. We never sell your data and never share it for advertising. The only companies that handle it are the service providers named below, and only to run Pounce.</p>
 
 <h2>What we keep</h2>
@@ -26,6 +26,17 @@ const BODY = `<h1>Pounce privacy policy</h1>
 </ul>
 <!--consent--><p>We never collect contacts, location, photos, ad identifiers or messages, and no phone numbers except a parent's, given to us to consent for a child (below). Invites go through the share sheet or a QR code; Pounce never reads your contacts.</p><!--/consent--><!--plain--><p>We never collect contacts, location, photos, ad identifiers, phone numbers or messages. Invites go through the share sheet or a QR code; Pounce never reads your contacts.</p><!--/plain-->
 
+<h2 id="web">Playing in a browser</h2>
+<p>Pounce also plays in a web browser at play.conleychaos.com/play. It keeps the same things as the app, in the same places, with these differences:</p>
+<ul>
+<li>The browser keeps the device id and the names and cats of the people playing on it in its own local storage, with your sound and tip settings. Pounce sets no cookies.</li>
+<li>The browser saves the game's own files so it opens quickly and offline. They hold nothing about you.</li>
+<li>The age check asks the year you were born and keeps only the age band, as the app does.</li>
+<li>If you turn on alerts, we keep the address your browser gives us for its push service (Google for Chrome, Mozilla for Firefox, Apple for Safari, Microsoft for Edge) and send alerts there. Each alert is encrypted for your browser alone: the push service delivers it but can't read it. Turning alerts off, or Delete my data, forgets the address.</li>
+<li>Getting-started steps record that the device is a browser, the page's version and the browser's language.</li>
+</ul>
+<p>Nothing on the page comes from any other company: no third-party analytics, fonts, ads or scripts.</p>
+
 <h2>Who sees what</h2>
 <ul>
 <li>The people at a table see the names and cats seated there. Someone who opens an invite link you sent sees your name and cat.</li>
@@ -37,6 +48,7 @@ const BODY = `<h1>Pounce privacy policy</h1>
 <ul>
 <li><strong>Cloudflare</strong> runs our server and stores everything above. It sees your IP address when the app connects; we use it only for a moment, to limit how fast new devices can sign up, and never store it.</li>
 <li><strong>Apple</strong> delivers notifications (they carry names, cats and table names) and runs Sign in with Apple and the App Store.</li>
+<li><strong>Your browser's push service</strong> (Google, Mozilla, Apple or Microsoft) delivers alerts to the web player, if you turn them on. It sees when an alert is sent, never what it says.</li>
 <!--consent--><li><strong>Twilio Verify</strong> texts a code to a parent's mobile number when a parent consents for a child (below). It gets only that number.</li>
 <!--/consent--></ul>
 <p>Our server logs carry no names, phone numbers, player ids or tokens; an error log can carry a table's code.</p>
@@ -58,6 +70,7 @@ const BODY = `<h1>Pounce privacy policy</h1>
 <li>Signing in is never required. Without it, your data stays tied to your device.</li>
 <li>You can delete your data in the app at any time, signed in or not: open the gear, then tap the trash can (signed in) or Delete my data. That deletes your player from our server with its games, streaks, connections, requests to play, invite links and settings, this device's getting-started steps, and, for a child's device, the parent's consent record and phone number. When you're signed in it is your account on every device, and it revokes Sign in with Apple when we hold a token; you can also stop Apple sign-in for Pounce in iOS Settings, under your name, then Sign in with Apple. Your name stays visible at tables you sat at until those tables are cleaned up, at most 7 days after their last move.</li>
 <li>You can turn notifications off in iOS Settings at any time.</li>
+<li>In a browser, Settings, then Delete my data, deletes the same from our server and clears it from the browser. Clearing the site's data in your browser's settings clears it from the browser only.</li>
 <li>To see or delete anything else we hold, write to <a href="mailto:privacy@conleychaos.com">privacy@conleychaos.com</a>.</li>
 </ul>
 

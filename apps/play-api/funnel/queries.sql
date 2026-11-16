@@ -102,6 +102,35 @@ FROM reached
 GROUP BY source
 ORDER BY installs DESC, source;
 
+-- name: by_platform
+-- The main path split by where a device plays: the iOS app ("ios"; version 1.0 says nothing,
+-- and counts as iOS) or a web browser ("web", the web player at /play).
+WITH cohort AS (
+  SELECT id, COALESCE(platform, 'ios') AS platform FROM devices
+  WHERE created_at IS NOT NULL AND created_at >= unixepoch('now', '-30 days') * 1000
+),
+reached AS (
+  SELECT c.platform, c.id,
+    MAX(m.milestone = 'age_done') AS aged,
+    MAX(m.milestone = 'named') AS named,
+    MAX(m.milestone = 'seat_taken') AS seated,
+    MAX(m.milestone = 'first_move') AS moved,
+    MAX(m.milestone = 'game_finished') AS finished,
+    MAX(m.milestone = 'game_with_human') AS with_human,
+    MAX(m.milestone = 'game_with_device') AS with_device
+  FROM cohort c
+  LEFT JOIN milestones m ON m.id = c.id
+  GROUP BY c.platform, c.id
+)
+SELECT platform, COUNT(*) AS installs,
+  SUM(aged) AS age_done, SUM(named) AS named, SUM(seated) AS seated, SUM(moved) AS first_move,
+  SUM(finished) AS game_finished, SUM(with_human) AS game_with_human, SUM(with_device) AS game_with_device,
+  ROUND(100.0 * SUM(moved) / COUNT(*), 1) AS pct_first_move,
+  ROUND(100.0 * SUM(with_human) / COUNT(*), 1) AS pct_with_human
+FROM reached
+GROUP BY platform
+ORDER BY installs DESC, platform;
+
 -- name: retention
 -- Day 1 and day 7 return per weekly cohort (weeks start on Monday, UTC): the share of devices
 -- that were in use on that day of their life. The latest weeks haven't had their day 7 yet.

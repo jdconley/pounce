@@ -77,7 +77,7 @@ beforeAll(async () => {
 
 describe("saved funnel queries", () => {
   test("the file holds the queries docs/funnel.md names, and they name every step", () => {
-    expect(Object.keys(QUERIES)).toEqual(["funnel", "side_steps", "median_times", "by_source", "retention", "by_game", "invite_pages"]);
+    expect(Object.keys(QUERIES)).toEqual(["funnel", "side_steps", "median_times", "by_source", "by_platform", "retention", "by_game", "invite_pages"]);
     for (const step of [...SERVER_MILESTONES, ...APP_MILESTONES]) expect(FILE).toContain(`'${step}'`);
   });
 
@@ -121,6 +121,29 @@ describe("saved funnel queries", () => {
       ["organic", 2, 1, 0],
       ["join_link", 1, 1, 1],
       ["paste", 1, 1, 0],
+    ]);
+  });
+
+  test("by platform: every device here is the iOS app", () => {
+    expect(run("by_platform").map((r) => [r.platform, r.installs, r.first_move, r.game_with_human])).toEqual([["ios", 4, 3, 1]]);
+  });
+
+  test("by platform splits the web player from the app", async () => {
+    const { DatabaseSync } = await importSqlite();
+    const db = new DatabaseSync(":memory:");
+    const env = { FUNNEL: d1(db), TOKEN_SECRET: SECRET };
+    const t0 = Date.now() - 2 * DAY;
+    const WEB = { platform: "web", version: "2026.1115.1200", build: null, protocol: 1 };
+    await minted(env, "ios-1", t0, IOS);
+    await minted(env, "ios-old", t0, null);
+    await minted(env, "web-1", t0, WEB);
+    await minted(env, "web-2", t0, WEB);
+    await report(env, "web-1", { reached: [["age_done", 5], ["named", 1]], source: "join_link", locale: "en-GB" }, t0 + 20_000, WEB);
+    await reached(env, [{ deviceId: "web-1", milestone: "seat_taken" }, { deviceId: "web-1", milestone: "first_move" }], t0 + 40_000);
+    const rows = db.prepare(QUERIES.by_platform as string).all() as Record<string, unknown>[];
+    expect(rows.map((r) => [r.platform, r.installs, r.age_done, r.named, r.first_move])).toEqual([
+      ["ios", 2, 0, 0, 0],
+      ["web", 2, 1, 1, 1],
     ]);
   });
 

@@ -8,6 +8,12 @@ import { MEDIA } from "./site-media";
 export const CACHE = "public, max-age=300";
 /** Pages that load nothing at all: the logo and favicon are inlined as data: images. */
 export const CSP = "default-src 'none'; style-src 'unsafe-inline'; img-src data:";
+/**
+ * The web player (`/play/`): its own scripts, styles, art, sounds and service worker, and its own
+ * server for the API and the game sockets. Nothing from any other host.
+ */
+export const WEB_PLAYER_CSP =
+  "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self'; font-src 'self'; connect-src 'self'; worker-src 'self'; manifest-src 'self'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'; object-src 'none'";
 
 const ESCAPES: Record<string, string> = { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" };
 export const escapeHtml = (text: string): string => text.replace(/[&<>"']/g, (ch) => ESCAPES[ch] as string);

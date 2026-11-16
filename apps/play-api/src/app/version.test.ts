@@ -142,6 +142,13 @@ describe("tooOld", () => {
     expect(tooOld(app("1.10"), supported)).toBe(false);
   });
 
+  test("the web player is never too old by version, only by protocol: it ships with the server", () => {
+    const web = (protocol: number | null) => ({ platform: "web", version: "2026.1115.1200", build: 7, protocol });
+    expect(tooOld(web(1), { minimum: "9.0", minProtocol: 1 })).toBe(false);
+    expect(tooOld(web(null), { minimum: "9.0", minProtocol: 1 })).toBe(false);
+    expect(tooOld(web(1), { minimum: null, minProtocol: 2 })).toBe(true);
+  });
+
   test("an app that didn't say is version 1.0", () => {
     expect(tooOld(null, { minimum: "1.0", minProtocol: 1 })).toBe(false);
     expect(tooOld(null, { minimum: "1.0.1", minProtocol: 1 })).toBe(true);

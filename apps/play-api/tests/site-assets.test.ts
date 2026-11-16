@@ -24,10 +24,14 @@ const config = JSON.parse(
     .join("\n"),
 ) as { assets: Assets; vars: Record<string, string> };
 
-/** Every file under ./public, as the path it is served at. */
+/**
+ * Every file under ./public, as the path it is served at, less the web player's build
+ * (./public/play, written by apps/play-web and never committed; tests/web-player.test.ts).
+ */
 const files = (readdirSync(PUBLIC, { recursive: true, withFileTypes: true }) as { name: string; parentPath: string; isFile(): boolean }[])
   .filter((entry) => entry.isFile())
-  .map((entry) => `${entry.parentPath.slice(PUBLIC.length)}/${entry.name}`);
+  .map((entry) => `${entry.parentPath.slice(PUBLIC.length)}/${entry.name}`)
+  .filter((file) => !file.startsWith("/play/"));
 
 let script = "";
 const open: Miniflare[] = [];
@@ -93,7 +97,7 @@ describe("the static assets config", () => {
   });
 
   test("./public holds only those files, the clip and the headers file: nothing that could be a page or a route", () => {
-    expect(readdirSync(PUBLIC).sort()).toEqual(["_headers", "apple-touch-icon.png", "favicon.ico", "media", "static"]);
+    expect(readdirSync(PUBLIC).filter((name) => name !== "play").sort()).toEqual(["_headers", "apple-touch-icon.png", "favicon.ico", "media", "static"]);
     expect(readdirSync(`${PUBLIC}/media`)).toEqual([MEDIA.clip.src.replace("/media/", "")]);
     for (const file of files) {
       expect(file, file).toMatch(/^\/(?:_headers|favicon\.ico|apple-touch-icon\.png|media\/[a-z0-9-]+\.[a-f0-9]{10}\.mp4|static\/[a-z0-9-]+\.[a-f0-9]{10}\.(?:webp|jpg|png|svg))$/);

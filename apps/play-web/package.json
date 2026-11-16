@@ -1,0 +1,32 @@
+{
+  "name": "@pounce/play-web",
+  "private": true,
+  "type": "module",
+  "sideEffects": [
+    "*.css"
+  ],
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build && node scripts/build-sw.mjs",
+    "typecheck": "tsc --noEmit && tsc --noEmit -p tsconfig.sw.json",
+    "test": "vitest run",
+    "e2e": "playwright test"
+  },
+  "dependencies": {
+    "@fontsource/nunito": "5.3.0",
+    "@pounce/play-api": "workspace:*",
+    "preact": "11.2.0",
+    "qrcode-generator": "2.0.4"
+  },
+  "devDependencies": {
+    "@axe-core/playwright": "4.14.0",
+    "@playwright/test": "1.65.0",
+    "@types/node": "catalog:",
+    "esbuild": "0.27.7",
+    "happy-dom": "21.0.4",
+    "miniflare": "catalog:",
+    "typescript": "catalog:",
+    "vite": "8.3.6",
+    "vitest": "catalog:"
+  }
+}
