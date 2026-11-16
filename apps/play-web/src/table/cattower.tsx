@@ -553,7 +553,7 @@ export function CatTowerTable(props: { store: RoomStore; state: RoomState }) {
         onClick={() => (selected !== null ? tapTarget({ kind: "discard" }) : draw("discard"))}
       >
         {under !== null || g.discardCount > 1 ? (
-          <span class={`under ${under !== null ? "leaving" : ""}`} onAnimationEnd={() => setUnder(null)}>
+          <span class={`under ${under !== null ? "leaving" : ""}`} aria-hidden="true" onAnimationEnd={() => setUnder(null)}>
             {under !== null ? <CardFace id={under} /> : <div class="face blank" />}
           </span>
         ) : null}
