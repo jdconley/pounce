@@ -193,10 +193,22 @@ extension XCTestCase {
 
 /// The machine the app runs on: the Mac under a simulator (which shares its kernel), or the phone.
 enum Host {
-    /// Over this many runnable threads per core (the 1-minute load average), the simulator's own
-    /// frames are held up by the rest of the Mac, and its main thread runs on efficiency cores:
-    /// frame and work times are reported, not enforced.
+    /// Over this many runnable threads per core (the 1-minute load average), a simulator's own
+    /// frames are held up by the rest of the Mac: frame times are reported, not enforced. The
+    /// app's work per frame is CPU time and is always enforced, and so is everything on a phone.
     static let busyLoadPerCore = 0.5
+
+    /// The frame-time check can't be trusted here: a simulator on a Mac over `busyLoadPerCore`.
+    /// Never on a phone, whose own load average says nothing about its frames (a ProMotion phone
+    /// reads 0.75 to 1.3 per core while it holds 121 fps).
+    static func framesUnreliable() -> (busy: Bool, load: Double) {
+        #if targetEnvironment(simulator)
+        let load = loadPerCore()
+        return (load > busyLoadPerCore, load)
+        #else
+        return (false, loadPerCore())
+        #endif
+    }
 
     static func loadPerCore() -> Double {
         var loads = [Double](repeating: 0, count: 3)
