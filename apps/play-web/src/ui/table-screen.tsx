@@ -21,6 +21,7 @@ import { CtController } from "../table/ct-controller";
 import { seatCat, seatName } from "../table/seat";
 import { SwitchView } from "../table/shared";
 import { TilesTable } from "../table/tiles";
+import { TilesController } from "../table/tiles-controller";
 
 import { Button, Cat, Icon, IconButton, Sheet } from "./common";
 import { Lobby } from "./lobby";
@@ -184,23 +185,32 @@ export function TableScreen(props: { code: string; intent: TableIntent }) {
     );
   } else {
     const isTiles = room.gameId === "tiles";
-    // Tuna Tiles keeps its full table for now.
-    const tvSwitch = !isTiles && room.game !== null && showSwitch(room);
+    const tvSwitch = (isTiles ? Boolean(room.tiles) : room.game !== null) && showSwitch(room);
+    const cards = tvSwitch && showController(room, view);
+    // Tuna Tiles on Cards: the rack off turn; on your turn the full table, as rearranging it needs
+    // it (the same element as on Table, so a draft survives the switch).
+    const t = room.tiles;
+    const tilesTurn = t !== undefined && t.status === "playing" && mySeats(room).some((s) => s === t.turn && !t.forfeited[s]);
+    const controller = cards && (!isTiles || !tilesTurn);
     body = (
       <main class="screen table-screen">
         <div class="room-bg" style={{ backgroundImage: `url(${art("room-bg")})` }} />
         {isTiles && room.tiles ? (
-          <TilesTable store={store} state={state} />
+          controller ? (
+            <TilesController store={store} state={state} onView={changeView} />
+          ) : (
+            <TilesTable store={store} state={state} sounds={!cards} topInset={tvSwitch ? SWITCH_STRIP : 0} />
+          )
         ) : room.game ? (
-          tvSwitch && showController(room, view) ? (
+          controller ? (
             <CtController store={store} state={state} onView={changeView} />
           ) : (
             <CatTowerTable store={store} state={state} topInset={tvSwitch ? SWITCH_STRIP : 0} />
           )
         ) : null}
-        {tvSwitch && !showController(room, view) ? (
+        {tvSwitch && !controller ? (
           <div class="view-bar">
-            <SwitchView view="table" onChange={changeView} />
+            <SwitchView view={view} onChange={changeView} />
           </div>
         ) : null}
         <div class="table-menu">
@@ -255,7 +265,7 @@ export function TableScreen(props: { code: string; intent: TableIntent }) {
         {room.status === "over" ? (
           <GameOver
             room={room}
-            quiet={tvSwitch && showController(room, view)}
+            quiet={cards}
             onHome={home}
             onAgain={() => {
               wantRematch.current = true;

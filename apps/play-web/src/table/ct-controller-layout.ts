@@ -114,7 +114,25 @@ export function ctControllerLayout(input: CtlInput): CtlLayout {
   return layoutAt(input, MIN_CW, unit, true)!;
 }
 
-const frameOf = (input: CtlInput) => {
+/** The safe frame's edges. */
+export type Frame = { l: number; r: number; t: number; b: number };
+
+/**
+ * A controller's top bar, at `u` (ctControllerLayout's unit): the status beside the table menu's
+ * paw and the switch under it; or all three in a row when wide. `top` is where the rest begins.
+ * Shared by both games' controllers, so they read as one.
+ */
+export function controllerBar(f: Frame, u: number): { menu: Rect; switch: Rect; status: Rect; top: number } {
+  const bar = BAR * u;
+  const menu = { x: f.r - EDGE - 44 * u, y: f.t + EDGE, w: 44 * u, h: 44 * u };
+  const inline = menu.x - GAP - (f.l + EDGE + SWITCH_W * u + GAP) >= STATUS_INLINE * u;
+  const sw = { x: f.l + EDGE, y: inline ? f.t + EDGE : f.t + EDGE + bar + GAP, w: SWITCH_W * u, h: bar };
+  const statusX = inline ? sw.x + sw.w + GAP : f.l + EDGE;
+  const status = { x: statusX, y: f.t + EDGE, w: menu.x - GAP - statusX, h: bar };
+  return { menu, switch: sw, status, top: sw.y + sw.h + GAP };
+}
+
+const frameOf = (input: CtlInput): Frame => {
   const { width: W, height: H, insets } = input;
   return { l: insets.left, r: W - insets.right, t: insets.top, b: H - insets.bottom };
 };
@@ -151,15 +169,8 @@ function layoutAt(input: CtlInput, cw: number, u: number, force = false): CtlLay
   const landscape = landscapeOf(input);
   const ch = Math.round(cw * 1.406);
   const cx = col.x + col.w / 2;
-  const bar = BAR * u;
 
-  // The top bar: the status beside the menu, the switch under it; or all three in a row when wide.
-  const menu = { x: f.r - EDGE - 44 * u, y: f.t + EDGE, w: 44 * u, h: 44 * u };
-  const inline = menu.x - GAP - (f.l + EDGE + SWITCH_W * u + GAP) >= STATUS_INLINE * u;
-  const sw = { x: f.l + EDGE, y: inline ? f.t + EDGE : f.t + EDGE + bar + GAP, w: SWITCH_W * u, h: bar };
-  const statusX = inline ? sw.x + sw.w + GAP : f.l + EDGE;
-  const status = { x: statusX, y: f.t + EDGE, w: menu.x - GAP - statusX, h: bar };
-  const top = sw.y + sw.h + GAP;
+  const { menu, switch: sw, status, top } = controllerBar(f, u);
 
   // The hand along the bottom.
   const baseY = f.b - EDGE;

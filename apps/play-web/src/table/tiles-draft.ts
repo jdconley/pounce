@@ -7,6 +7,8 @@ import { checkPlay, OPENING_POINTS, type PlayCheck } from "@pounce/play-api/tile
 import { tile, type TileId } from "@pounce/play-api/tiles/pieces";
 import { readSet, sameSet } from "@pounce/play-api/tiles/sets";
 
+import type { TilesAim } from "@pounce/play-api/protocol";
+
 export type Draft = { table: TileId[][]; rack: TileId[] };
 
 export const sameDraft = (a: Draft, b: Draft): boolean => JSON.stringify(a) === JSON.stringify(b);
@@ -89,4 +91,31 @@ export function ghostOf(set: readonly TileId[], index: number): number | null {
   const reading = readSet(set);
   if (!reading) return null;
   return reading.kind === "run" ? reading.start + index : reading.value;
+}
+
+/** The most sets, and pieces in a set, an aim may carry (docs/tv-protocol.md, `aim`). */
+export const AIM_MAX_SETS = 60;
+export const AIM_MAX_SET = 13;
+/** Piece ids run 0 to this. */
+const MAX_ID = 105;
+
+/**
+ * What the draft tells the TV: the whole table as the player is arranging it, without empty
+ * sets. Null when it is the table as played (nothing to show), and null for anything the wire
+ * refuses: more than 60 sets, a set over 13, a piece twice or no piece at all. Such a draft is
+ * never sent; the last one sent stands.
+ */
+export function tilesAimOf(draft: readonly (readonly TileId[])[], server: readonly (readonly TileId[])[]): TilesAim | null {
+  const table = draft.filter((set) => set.length > 0).map((set) => [...set]);
+  if (JSON.stringify(table) === JSON.stringify(tidy(server.map((s) => [...s])))) return null;
+  if (table.length > AIM_MAX_SETS) return null;
+  const seen = new Set<TileId>();
+  for (const set of table) {
+    if (set.length > AIM_MAX_SET) return null;
+    for (const id of set) {
+      if (!Number.isInteger(id) || id < 0 || id > MAX_ID || seen.has(id)) return null;
+      seen.add(id);
+    }
+  }
+  return { table };
 }

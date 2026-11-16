@@ -3,6 +3,8 @@
  * with the toy box, the controls, and the rack. A turn is built on this device (tiles-draft.ts)
  * and sent whole with Play; with nothing changed the button draws instead. The table anyone may
  * see is TilesPublic (tiles-public.tsx), shared with the TV; this is the rack and the turn on top.
+ * While a TV shows the table, every change to the draft is sent as an aim, so the room watches the
+ * player work it out (off turn, that phone shows tiles-controller.tsx instead).
  */
 import { useEffect, useMemo, useRef, useState } from "preact/hooks";
 
@@ -21,22 +23,27 @@ import { PieceFace, pieceLabel } from "./faces";
 import { Motion, transformOf, wiggle, type Pose } from "./motion";
 import { seatName } from "./seat";
 import { Curtain } from "./shared";
-import { checkDraft, OPENING_POINTS, placedThisTurn, sameDraft, sortRack, toNewSet, toRack, toSet, type Draft } from "./tiles-draft";
+import { checkDraft, OPENING_POINTS, placedThisTurn, sameDraft, sortRack, tilesAimOf, toNewSet, toRack, toSet, type Draft } from "./tiles-draft";
 import { tilesLayout } from "./tiles-layout";
 import { aimTable as aimOf, TilesTableBase, tilesStyle, type PieceLook, type TilesHover } from "./tiles-public";
+import { rackInOrder, useRackOrder } from "./tiles-rack";
 
 import type { RoomState, RoomStore } from "../store/room";
 import type { TileId } from "@pounce/play-api/tiles/pieces";
 import type { TilesView } from "@pounce/play-api/tiles/view";
 
-/** `sounds: false` silences the game's own events (a phone whose table is on a TV); taps still sound. */
-export function TilesTable(props: { store: RoomStore; state: RoomState; sounds?: boolean }) {
+/**
+ * `sounds: false` silences the game's own events (a phone whose table is on a TV); taps still sound.
+ * `topInset` keeps a strip along the top clear (the Cards/Table switch, while a TV shows the table).
+ */
+export function TilesTable(props: { store: RoomStore; state: RoomState; sounds?: boolean; topInset?: number }) {
   const { store, state } = props;
   const sounds = props.sounds ?? true;
   const room = state.room!;
   const v = room.tiles as TilesView;
   const [rootRef, size] = useSize<HTMLDivElement>();
-  const insets = useInsets();
+  const safe = useInsets();
+  const insets = useMemo(() => ({ ...safe, top: safe.top + (props.topInset ?? 0) }), [safe, props.topInset]);
   const motion = useMemo(() => new Motion(reducedMotion), []);
   const els = useRef(new Map<string, HTMLElement>());
 
@@ -57,7 +64,8 @@ export function TilesTable(props: { store: RoomStore; state: RoomState; sounds?:
   const baseKey = JSON.stringify([v.table, serverRack, v.turns, seat]);
   const [draft, setDraft] = useState<Draft>(base);
   const [history, setHistory] = useState<Draft[]>([]);
-  const [rackOrder, setRackOrder] = useState<TileId[]>([]);
+  // The player's rack order, shared with the controller this phone shows off turn.
+  const { order: rackOrder, setOrder: setRackOrder, sortBy, setSortBy } = useRackOrder(`${room.code}:${seat}`);
   const lastBase = useRef(baseKey);
   useEffect(() => {
     if (lastBase.current === baseKey) return;
@@ -67,13 +75,35 @@ export function TilesTable(props: { store: RoomStore; state: RoomState; sounds?:
   }, [baseKey]);
 
   // The rack keeps the player's order; new pieces go on the end.
-  const rackIds = [...rackOrder.filter((id) => draft.rack.includes(id)), ...draft.rack.filter((id) => !rackOrder.includes(id))];
+  const rackIds = rackInOrder(rackOrder, draft.rack);
   useEffect(() => {
     if (rackIds.join() !== rackOrder.join()) setRackOrder(rackIds);
   });
 
   const result = checkDraft(v.table, serverRack, opened, { table: draft.table, rack: rackIds });
   const playable = myTurn && result.changed && result.check?.ok === true;
+
+  // While a TV shows the table, the draft goes to it as an aim on every change (the store sends
+  // at most one each 120 ms, the latest last). Back to the table as played, it is cleared; a draft
+  // the wire won't carry is never sent, and the last one sent stands.
+  const aiming = room.screen === true && myTurn && showRack && seat !== null && !state.pending;
+  const aimNow = aiming ? tilesAimOf(draft.table, v.table) : null;
+  const asPlayed = JSON.stringify(draft.table.filter((set) => set.length > 0)) === JSON.stringify(v.table);
+  const aimKey = !aiming || asPlayed ? "" : aimNow ? JSON.stringify(aimNow.table) : "keep";
+  const aimSent = useRef<{ seat: number; key: string } | null>(null);
+  const clearAim = () => {
+    if (aimSent.current) store.aim(aimSent.current.seat, null);
+    aimSent.current = null;
+  };
+  useEffect(() => {
+    if (aimKey === "keep") return;
+    if (aimNow && seat !== null) {
+      if (aimSent.current?.key === aimKey) return;
+      store.aim(seat, aimNow);
+      aimSent.current = { seat, key: aimKey };
+    } else clearAim();
+  }, [aimKey]);
+  useEffect(() => clearAim, [store]);
 
   const [selected, setSelected] = useState<TileId | null>(null);
   const [hover, setHover] = useState<TilesHover>(null);
@@ -230,6 +260,8 @@ export function TilesTable(props: { store: RoomStore; state: RoomState; sounds?:
       }
       learnTip("tt.play");
       store.act(seat, { type: "play", table: draft.table });
+      // After the play, so the TV never shows the table without it in between.
+      clearAim();
       return;
     }
     learnTip("tt.draw");
@@ -249,7 +281,6 @@ export function TilesTable(props: { store: RoomStore; state: RoomState; sounds?:
     setDraft({ table: v.table, rack: serverRack });
     play("whoosh", 0.5);
   };
-  const [sortBy, setSortBy] = useState<"number" | "toy" | null>(null);
   const sort = (by: "number" | "toy") => {
     setSortBy(by);
     setRackOrder(sortRack(rackIds, by));
@@ -292,6 +323,7 @@ export function TilesTable(props: { store: RoomStore; state: RoomState; sounds?:
   });
 
   const turnName = seatName(room.seats[v.turn]);
+  const openingShown = showRack && !opened && myTurn && result.changed;
   const label = result.changed ? "Play" : v.poolCount > 0 ? "Draw" : "Pass";
 
   const renderPiece = (id: TileId, p: Pose, ref: (el: HTMLElement | null) => void, look: PieceLook) => {
@@ -332,7 +364,12 @@ export function TilesTable(props: { store: RoomStore; state: RoomState; sounds?:
         hover={hover}
         setsFocusable={selected !== null}
         onSet={tapSet}
-        cue={{ text: v.status !== "playing" ? "" : myTurn ? (result.changed ? (playable ? "Tap Play" : "Not a play yet") : "Your turn") : `${turnName}'s turn`, mine: myTurn }}
+        cue={{
+          text: v.status !== "playing" ? "" : myTurn ? (result.changed ? (playable ? "Tap Play" : "Not a play yet") : "Your turn") : `${turnName}'s turn`,
+          mine: myTurn,
+          // Above the opening's points, which ride over Play into the foot of the board.
+          y: openingShown ? L.board.y + L.board.h - 80 : undefined,
+        }}
         under={
           myTurn ? (
             <button
@@ -355,7 +392,7 @@ export function TilesTable(props: { store: RoomStore; state: RoomState; sounds?:
               <IconButton icon="icon-remove" label="Start over" onClick={reset} />
             </div>
             <div class="middle">
-              {!opened && myTurn && result.changed ? (
+              {openingShown ? (
                 <span class={`chip opening ${result.opening !== null && result.opening >= OPENING_POINTS ? "good" : ""}`} id="opening">
                   {result.opening ?? 0}/{OPENING_POINTS}
                 </span>

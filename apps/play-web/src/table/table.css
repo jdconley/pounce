@@ -1213,3 +1213,30 @@
   max-width: min(calc(340px * var(--k, 1)), calc(100vw - 32px));
   font-size: calc(clamp(0.95rem, 3.8vw, 1.05rem) * var(--k, 1));
 }
+
+/* Tuna Tiles on the controller, off turn (tiles-controller.tsx): the toy box big with its count,
+   the sort button and the rack, placed by tiles-controller-layout.ts. */
+.tcl .pool .pile-count {
+  right: -8px;
+  bottom: 0;
+  min-width: calc(44px * var(--k, 1));
+  padding: calc(2px * var(--k, 1)) calc(10px * var(--k, 1));
+  font-size: calc(1.35rem * var(--k, 1));
+}
+
+.tcl #sort {
+  z-index: 30;
+}
+
+.tcl #sort img {
+  width: 60%;
+  height: 60%;
+}
+
+.tcl #sort .num-icon {
+  font-size: calc(0.85rem * var(--k, 1));
+}
+
+.tcl-rack {
+  pointer-events: none;
+}
