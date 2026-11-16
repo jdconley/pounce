@@ -76,7 +76,9 @@ final class AppModel {
     @ObservationIgnored private var inviteCode: InviteCode?
     /// The condo stage this phone last showed per pair, so a new stage drops in once (§9.5).
     private(set) var condoSeen: [String: Int]
-    @ObservationIgnored private let condoSeenURL: URL
+    @ObservationIgnored private let condoSeenFile: JSONFile<[String: Int]>
+    /// Keychain saves of the age record, in order and off the main actor.
+    @ObservationIgnored private let ageSaves = InOrder()
     /// Push and local notifications; attached by the app delegate at launch.
     @ObservationIgnored weak var push: PushCoordinator?
     /// Pounces sent from here and answers owed to the server (spec §12.4).
@@ -126,19 +128,22 @@ final class AppModel {
     /// The local "your turn" reminder: the person's choice, else the band's default.
     var turnReminderOn: Bool { settings.turnReminderChoice ?? limits.turnReminderDefault }
 
+    /// Builds the model from what `LaunchData.load` read off the main actor: nothing here touches
+    /// the disk or the Keychain (docs/main-thread.md).
     init(
-        config: APIConfig, credentials: CredentialStore, dataDirectory: URL, settings: Settings = .shared,
-        ageStore: AgeRecordStore = KeychainAgeRecordStore(), ageAsker: AgeRangeAsking = LiveAgeRange(),
+        config: APIConfig, credentials: CredentialStore, launch data: LaunchData, settings: Settings = .shared,
+        ageStore: AgeRecordStore, ageAsker: AgeRangeAsking = LiveAgeRange(),
         personKeys: PersonKeyStore = KeychainPersonKeyStore()
     ) {
         api = APIClient(config: config, credentials: credentials)
         self.config = config
         self.settings = settings
-        peopleStore = PeopleStore(directory: dataDirectory)
-        tableCache = TableCache(directory: dataDirectory, fileName: TableCache.fileName(for: config))
-        tableArchive = TableArchive(directory: dataDirectory, fileName: TableArchive.fileName(for: config))
-        tableList = TableList(directory: dataDirectory, fileName: TableList.fileName(for: config))
-        tableInvites = TableInvites(directory: dataDirectory, fileName: TableInvites.fileName(for: config))
+        TilesMemory.opened(data.tiles)
+        peopleStore = PeopleStore(file: data.people.file, loaded: data.people.value)
+        tableCache = TableCache(file: data.cache.file, loaded: data.cache.value)
+        tableArchive = TableArchive(file: data.archive.file, loaded: data.archive.value)
+        tableList = TableList(file: data.list.file, loaded: data.list.value)
+        tableInvites = TableInvites(file: data.invites.file, loaded: data.invites.value)
         invited = tableInvites.all()
         let loaded = peopleStore.load()
         people = loaded
@@ -149,17 +154,17 @@ final class AppModel {
             tablesKnown = true
         }
         archived = tableArchive.all()
-        tutorialStore = TutorialStore(directory: dataDirectory)
+        tutorialStore = TutorialStore(file: data.tutorial.file, loaded: data.tutorial.value)
         tipsSeen = tutorialStore.load()
-        tips = TipCenter(store: tutorialStore, pacing: TipPacingStore(directory: dataDirectory))
-        ratingStore = RatingStore(directory: dataDirectory)
-        updates = UpdateModel(api: api, directory: dataDirectory)
-        funnel = Funnel(sender: api, file: dataDirectory.appendingPathComponent("funnel-\(config.serverKey).json"))
+        tips = TipCenter(store: tutorialStore, pacing: TipPacingStore(file: data.pacing.file, loaded: data.pacing.value))
+        ratingStore = RatingStore(file: data.rating.file, loaded: data.rating.value)
+        updates = UpdateModel(api: api, store: UpdateStore(file: data.updates.file, loaded: data.updates.value))
+        funnel = Funnel(sender: api, file: data.funnel.file, loaded: data.funnel.value)
         // The first launch is written down now: the rating ask waits days after it.
         ratingStore.load()
         self.ageStore = ageStore
         self.ageAsker = ageAsker
-        let age = ageStore.load()
+        let age = data.age
         ageRecord = age
         hadOwnerBeforeThisVersion = age == nil && loaded.owner != nil
         route = age == nil ? .age(then: nil) : loaded.owner == nil ? .pickCat(then: nil) : .home
@@ -176,15 +181,15 @@ final class AppModel {
         let trophyService: any TrophyService = api
         #endif
         trophies = TrophyStore(service: trophyService)
-        pounces = PounceStore(service: pounceService, file: dataDirectory.appendingPathComponent("pounce-answers.json"))
+        pounces = PounceStore(service: pounceService, file: data.pounces.file, loaded: data.pounces.value)
         #if DEBUG
         let kittenService: any KittenService = Self.debugKittens(arguments: CommandLine.arguments) ?? api
         #else
         let kittenService: any KittenService = api
         #endif
-        kittens = KittenStore(service: kittenService, file: dataDirectory.appendingPathComponent("kitten.json"))
+        kittens = KittenStore(service: kittenService, file: data.kitten.file, loaded: data.kitten.value)
         if age?.band == .kitten { kittens.person = loaded.owner?.id }
-        notify = NotifySettingsStore(file: dataDirectory.appendingPathComponent("notify-settings.json"))
+        notify = NotifySettingsStore(file: data.notify.file, loaded: data.notify.value)
         streaks.person = loaded.owner?.id
         trophies.person = loaded.owner?.id
         #if DEBUG
@@ -195,8 +200,8 @@ final class AppModel {
         #else
         widgets = WidgetBridge(server: config.baseURL)
         #endif
-        condoSeenURL = dataDirectory.appendingPathComponent("streak-seen.json")
-        condoSeen = (try? JSONDecoder().decode([String: Int].self, from: Data(contentsOf: condoSeenURL))) ?? [:]
+        condoSeenFile = data.condoSeen.file
+        condoSeen = data.condoSeen.value ?? [:]
         #if DEBUG
         let stub = StubScenario.from(arguments: CommandLine.arguments)
         let service: AccountService = stub.map { StubAccountService(scenario: $0) } ?? api
@@ -207,7 +212,7 @@ final class AppModel {
         #endif
         account = AccountModel(
             app: self, service: service, apple: apple, keys: personKeys,
-            store: AccountStore(directory: dataDirectory, fileName: AccountStore.fileName(for: config)))
+            store: AccountStore(file: data.account.file, loaded: data.account.value))
         // Before anything can upload: hold accounts while this update's approval may be owed.
         SignificantChangeGate.prepare(self)
         KittenPushChange.prepare(self)
@@ -219,9 +224,10 @@ final class AppModel {
         liveTables.start()
     }
 
-    /// The app's one model: SwiftUI shows it and the app delegate attaches it at launch, so a
-    /// notification button that launched the app in the background can use it before any scene.
-    static let shared = makeDefault()
+    /// The app's one model, built once its files and Keychain items were read off the main actor:
+    /// SwiftUI shows it and the app delegate attaches it at launch, so a notification button that
+    /// launched the app in the background can use it before any scene.
+    static let launch = Task { await makeDefault() }
 
     /// The real app model, or (DEBUG only) the throwaway one for `-uitest-reset` (fresh temp data
     /// directory, in-memory credential, scratch settings). The real one keeps its Keychain
@@ -230,7 +236,7 @@ final class AppModel {
     static func makeDefault(
         arguments: [String] = CommandLine.arguments,
         env: [String: String] = ProcessInfo.processInfo.environment
-    ) -> AppModel {
+    ) async -> AppModel {
         let config = AppConfig.load(env: env)
         #if DEBUG
         let model: AppModel
@@ -238,13 +244,14 @@ final class AppModel {
         if arguments.contains("-uitest-reset") {
             // `-uitest-data <name>`: the same data directory on each launch, for tests that relaunch.
             let name = arguments.firstIndex(of: "-uitest-data").flatMap { arguments[safe: $0 + 1] } ?? UUID().uuidString
-            let dir = FileManager.default.temporaryDirectory
-                .appendingPathComponent("pounce-uitest-\(name)", isDirectory: true)
+            let dir = URL.temporaryDirectory.appendingPathComponent("pounce-uitest-\(name)", isDirectory: true)
+            let ageStore = debugAgeStore(arguments: arguments)
+            let data = await LaunchData.load(directory: dir, config: config, ageStore: ageStore)
             model = AppModel(
-                config: config, credentials: MemoryCredentialStore(), dataDirectory: dir,
-                ageStore: debugAgeStore(arguments: arguments), ageAsker: asker, personKeys: MemoryPersonKeyStore())
+                config: config, credentials: MemoryCredentialStore(), launch: data,
+                ageStore: ageStore, ageAsker: asker, personKeys: MemoryPersonKeyStore())
         } else {
-            model = real(config: config, ageAsker: asker)
+            model = await real(config: config, ageAsker: asker)
         }
         // `-seed-people`: a fresh run starts with an owner and two others (screenshots).
         if arguments.contains("-uitest-reset"), arguments.contains("-seed-people"), model.people.owner == nil {
@@ -303,7 +310,7 @@ final class AppModel {
         model.startPasteboard(arguments: arguments, env: env)
         return model
         #else
-        let model = real(config: config)
+        let model = await real(config: config)
         model.startTips(arguments: arguments, env: env)
         model.startPasteboard(arguments: arguments, env: env)
         return model
@@ -345,13 +352,14 @@ final class AppModel {
         tips.launched()
     }
 
-    private static func real(config: APIConfig, ageAsker: AgeRangeAsking = LiveAgeRange()) -> AppModel {
-        let support = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
+    private static func real(config: APIConfig, ageAsker: AgeRangeAsking = LiveAgeRange()) async -> AppModel {
+        let directory = URL.applicationSupportDirectory.appendingPathComponent("Pounce", isDirectory: true)
+        let ageStore = KeychainAgeRecordStore()
+        let data = await LaunchData.load(directory: directory, config: config, ageStore: ageStore)
         return AppModel(
             config: config,
             credentials: KeychainCredentialStore(service: KeychainCredentialStore.serviceName(for: config)),
-            dataDirectory: support.appendingPathComponent("Pounce", isDirectory: true),
-            ageAsker: ageAsker)
+            launch: data, ageStore: ageStore, ageAsker: ageAsker)
     }
 
     #if DEBUG
@@ -506,6 +514,33 @@ final class AppModel {
 
     // MARK: Age check (spec §14.1)
 
+    /// The age record to the Keychain, in order, off the main actor.
+    private func saveAge(_ record: AgeRecord) {
+        let store = ageStore
+        ageSaves.run { await store.save(record) }
+    }
+
+    /// Waits until every file and Keychain write so far is down (going to the background, tests).
+    func flushToDisk() async {
+        await ageSaves.settle()
+        await peopleStore.flush()
+        await tableCache.flush()
+        await tableArchive.flush()
+        await tableList.flush()
+        await tableInvites.flush()
+        await tutorialStore.flush()
+        await tips.flushToDisk()
+        await ratingStore.flush()
+        await updates.flushToDisk()
+        await funnel.flushFile()
+        await pounces.flushFile()
+        await kittens.flushFile()
+        await notify.flush()
+        await condoSeenFile.flush()
+        await account.flushToDisk()
+        await widgets.settle()
+    }
+
     /// The age screen's first step: Declared Age Range. True when it gave a band (and the
     /// screen moved on); false sends the person to the birth-year keypad.
     func askDeclaredAge() async -> Bool {
@@ -518,7 +553,7 @@ final class AppModel {
     /// Keeps the band (only the band) and goes on to pick-a-cat, the link that was waiting, or Home.
     func finishAge(_ band: AgeBand, source: AgeRecord.Source) {
         let record = AgeRecord(band: band, source: source, checkedAt: .now)
-        ageStore.save(record)
+        saveAge(record)
         ageRecord = record
         funnel.ageChecked()
         applyAgeLimits()
@@ -545,7 +580,7 @@ final class AppModel {
             record.source = .declared
         }
         record.checkedAt = .now
-        ageStore.save(record)
+        saveAge(record)
         ageRecord = record
         applyAgeLimits()
         push?.registerIfAllowed()
@@ -563,7 +598,7 @@ final class AppModel {
         let answer: AgeBand? = if case .band(let band) = await ageAsker.ask() { band } else { nil }
         let fixed = AgeCorrection.corrected(record, answer: answer, now: .now)
         guard fixed != record else { return false }
-        ageStore.save(fixed)
+        saveAge(fixed)
         ageRecord = fixed
         limitsAnswer = nil
         applyAgeLimits()
@@ -732,10 +767,7 @@ final class AppModel {
     func noteCondoSeen(pair: String, stage: Int) {
         guard condoSeen[pair] != stage else { return }
         condoSeen[pair] = stage
-        if let data = try? JSONEncoder().encode(condoSeen) {
-            try? FileManager.default.createDirectory(at: condoSeenURL.deletingLastPathComponent(), withIntermediateDirectories: true)
-            try? data.write(to: condoSeenURL, options: .atomic)
-        }
+        condoSeenFile.save(condoSeen)
     }
 
     /// Saves the owner, then continues to the link that interrupted onboarding, or Home.
@@ -981,6 +1013,13 @@ final class AppModel {
         case .background:
             // One last reload on the way out (spec §11.2), with whatever changed meanwhile.
             syncWidgets(reload: true)
+            // Writes go behind (docs/main-thread.md): finish them before iOS suspends the app.
+            let task = BackgroundTask()
+            task.id = UIApplication.shared.beginBackgroundTask(withName: "pounce-flush") { task.end() }
+            Task {
+                await flushToDisk()
+                task.end()
+            }
             #if DEBUG
             // `-demo-communication`: once the app is away, a pounce from Mia lands, drawn exactly as
             // PounceNotify draws a push (the simulator's `simctl push` skips service extensions).

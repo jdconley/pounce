@@ -28,15 +28,15 @@ func widgetSnapshot(
         #expect(s.pair("pr_mia")?.pair == "pr_mia")
     }
 
-    @Test func roundTripsThroughTheStore() throws {
+    @Test func roundTripsThroughTheStore() async throws {
         let dir = FileManager.default.temporaryDirectory.appendingPathComponent("widget-\(UUID().uuidString)")
         let store = WidgetSnapshotStore(directory: dir)
-        #expect(store.load() == nil)
+        #expect(await store.load() == nil)
         let s = widgetSnapshot([streakView(count: 9, me: true)])
-        store.save(s)
-        #expect(store.load() == s)
-        store.update { var n = $0; n.band = .teen; return n }
-        #expect(store.load()?.band == .teen)
+        await store.save(s)
+        #expect(await store.load() == s)
+        await store.update { var n = $0; n.band = .teen; return n }
+        #expect(await store.load()?.band == .teen)
     }
 
     @Test func testVisibleChange() {
@@ -219,17 +219,19 @@ func widgetSnapshot(
         #expect(s.mergingPounce("pr_3f9cAAAAAAAAAAAAAAAAAA", from: s, now: at(2026, 11, 5, 13)).band == .kitten)
     }
 
-    @Test func storeUpdatesUnderALockAndCreates() {
+    @Test func storeUpdatesUnderALockAndCreates() async {
         let store = WidgetSnapshotStore(directory: FileManager.default.temporaryDirectory.appendingPathComponent("w-\(UUID().uuidString)"))
-        #expect(!store.update { $0 }, "nothing to update yet")
+        #expect(!(await store.update { $0 }), "nothing to update yet")
         let s = widgetSnapshot([streakView()])
-        #expect(store.write { old in old == nil ? s : nil })
-        #expect(store.load() == s)
-        #expect(!store.write { _ in nil }, "nil writes nothing")
-        DispatchQueue.concurrentPerform(iterations: 20) { _ in
-            store.update { var n = $0; n.pairs[0].count += 1; return n }
+        #expect(await store.write { old in old == nil ? s : nil })
+        #expect(await store.load() == s)
+        #expect(!(await store.write { _ in nil }), "nil writes nothing")
+        await withTaskGroup(of: Void.self) { group in
+            for _ in 0..<20 {
+                group.addTask { await store.update { var n = $0; n.pairs[0].count += 1; return n } }
+            }
         }
-        #expect(store.load()?.pairs[0].count == s.pairs[0].count + 20, "no lost updates")
+        #expect(await store.load()?.pairs[0].count == s.pairs[0].count + 20, "no lost updates")
     }
 
     static func payloadFor(_ pair: String) -> PushPayload? {

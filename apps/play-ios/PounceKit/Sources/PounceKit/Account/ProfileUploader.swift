@@ -10,19 +10,20 @@ public enum ProfileUploader {
     /// added before ages were asked, until a band is picked for them). Nil without an owner.
     public static func body(
         people: LocalPeople, record: AccountRecord, ownerBand: AgeBand?, timeZone: String, keys: PersonKeyStore
-    ) -> ProfileBody? {
+    ) async -> ProfileBody? {
         guard let owner = people.owner else { return nil }
         let imported = Set(record.imported)
         let others = people.others.filter { !imported.contains($0.id) && record.bands[$0.id] != nil }
-        let sent = ([owner] + others).prefix(maxPeople).map { p in
-            ProfilePerson(
-                id: p.id, name: p.name, cat: p.cat, key: keys.key(for: p.id),
+        var sent: [ProfilePerson] = []
+        for p in ([owner] + others).prefix(maxPeople) {
+            sent.append(ProfilePerson(
+                id: p.id, name: p.name, cat: p.cat, key: await keys.key(for: p.id),
                 // The owner's band goes at profile level; the server gives it to anyone without one.
                 ageBand: p.id == owner.id ? nil : record.bands[p.id],
                 // A change the device never recorded loses to any recorded one.
-                at: record.changedAt[p.id] ?? 1)
+                at: record.changedAt[p.id] ?? 1))
         }
-        return ProfileBody(timeZone: timeZone, ageBand: ownerBand, people: Array(sent))
+        return ProfileBody(timeZone: timeZone, ageBand: ownerBand, people: sent)
     }
 
     /// One upload. It reads the live record when it builds a body and writes back only what the
@@ -39,7 +40,7 @@ public enum ProfileUploader {
     ) async throws -> [String: String] {
         var renamed: [String: String] = [:]
         for attempt in 0..<2 {
-            guard let body = body(
+            guard let body = await body(
                 people: people.load(), record: record(), ownerBand: ownerBand, timeZone: timeZone, keys: keys)
             else { return renamed }
             let reply = try await upload(body)
@@ -49,7 +50,7 @@ public enum ProfileUploader {
                 let new = UUID().uuidString.lowercased()
                 people.replaceID(old, with: new)
                 tutorial.moveTips(from: old, to: new)
-                keys.remove(old)
+                await keys.remove(old)
                 update { $0.rename(old, to: new) }
                 renamed[old] = new
             }

@@ -10,7 +10,7 @@ import WidgetKit
 /// Every push's `streak` block (and a pounce's answer) also goes into the widgets' snapshot in
 /// the App Group, and the widgets reload (spec §11.2).
 final class NotificationService: UNNotificationServiceExtension {
-    private var handler: ((UNNotificationContent) -> Void)?
+    private var delivery: Delivery?
     private var original: UNNotificationContent?
 
     /// The app bundle around this extension (`Pounce.app/PlugIns/PounceNotify.appex`), whose
@@ -22,33 +22,51 @@ final class NotificationService: UNNotificationServiceExtension {
     override func didReceive(
         _ request: UNNotificationRequest, withContentHandler contentHandler: @escaping (UNNotificationContent) -> Void
     ) {
-        handler = contentHandler
+        // UserNotifications takes the handler back on any thread; it just isn't marked Sendable.
+        nonisolated(unsafe) let handler = contentHandler
+        let delivery = Delivery { handler($0) }
+        self.delivery = delivery
         original = request.content
-        Self.updateWidgets(request.content.userInfo)
-        deliver(Communication.content(for: request.content, art: Self.appBundle) ?? request.content)
+        let payload = PushPayload(userInfo: request.content.userInfo)
+        let content = Communication.content(for: request.content, art: Self.appBundle) ?? request.content
+        // The snapshot is written (by the IO layer's actor) before the notification is handed
+        // back, so the extension isn't torn down mid-write.
+        Task {
+            await Self.updateWidgets(payload)
+            await delivery.deliver(content)
+        }
     }
 
     override func serviceExtensionTimeWillExpire() {
-        if let original { deliver(original) }
+        guard let original, let delivery else { return }
+        Task { await delivery.deliver(original) }
     }
 
     /// Folds the push into the widgets' snapshot. Reloads at once when a paw, the numeral or the
     /// bell changed, and for moved tables alone at most every 15 minutes: reloads from an
     /// extension spend the widgets' daily budget.
-    private static func updateWidgets(_ userInfo: [AnyHashable: Any]) {
-        guard let payload = PushPayload(userInfo: userInfo), let store = WidgetSnapshotStore.shared else { return }
+    private static func updateWidgets(_ payload: PushPayload?) async {
+        guard let payload, let store = await WidgetSnapshotStore.shared() else { return }
         let now = Date.now
-        var reload = false
-        store.update { old in
+        let reload = await store.update(noting: { old in
             var next = old.applying(payload, now: now)
-            reload = WidgetSnapshot.reloadsAfterPush(old: old, new: next, now: now)
+            let reload = WidgetSnapshot.reloadsAfterPush(old: old, new: next, now: now)
             if reload { next.pushReloadAt = now }
-            return next
-        }
-        if reload { WidgetCenter.shared.reloadAllTimelines() }
+            return (next, reload)
+        })
+        if reload == true { WidgetCenter.shared.reloadAllTimelines() }
+    }
+}
+
+/// Hands the content back once, whichever comes first: the finished content or the time limit.
+private actor Delivery {
+    private var handler: (@Sendable (UNNotificationContent) -> Void)?
+
+    init(_ handler: @escaping @Sendable (UNNotificationContent) -> Void) {
+        self.handler = handler
     }
 
-    private func deliver(_ content: UNNotificationContent) {
+    func deliver(_ content: UNNotificationContent) {
         handler?(content)
         handler = nil
     }

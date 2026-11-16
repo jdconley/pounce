@@ -394,6 +394,8 @@ final class PushCoordinator: NSObject, UNUserNotificationCenterDelegate {
                 // request) keeps the answer for the next launch if that isn't enough.
                 let task = BackgroundTask()
                 task.id = UIApplication.shared.beginBackgroundTask(withName: "pounce-answer") { task.end() }
+                // A cold start: the model is still reading its files (off the main actor).
+                if model == nil { model = await AppModel.launch.value }
                 await routePending()
                 task.end()
             }
@@ -411,6 +413,7 @@ final class PushCoordinator: NSObject, UNUserNotificationCenterDelegate {
             // or foreground.
             let task = BackgroundTask()
             task.id = UIApplication.shared.beginBackgroundTask(withName: "pounce-revoke") { task.end() }
+            if model == nil { model = await AppModel.launch.value }
             if let model {
                 await model.kittens.revoke(kitten: kitten)
             } else {
@@ -523,7 +526,7 @@ private struct Unchecked<Value>: @unchecked Sendable {
 }
 
 /// A background task ended once: when its work is done, or when iOS says time is up.
-@MainActor private final class BackgroundTask {
+@MainActor final class BackgroundTask {
     var id = UIBackgroundTaskIdentifier.invalid
 
     func end() {

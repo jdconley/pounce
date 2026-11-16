@@ -684,8 +684,17 @@ extension TilesScene {
     /// Easy mode's "show me": lights the next thing to do, or says it is time to draw.
     func showHint() {
         guard composing, let draft else { return }
-        hint = TilesHints.next(draft)
         Haptics.shared.tick()
+        // The search runs off the main thread (docs/main-thread.md); a turn that moved on drops it.
+        Task { [weak self] in
+            let hint = await TilesHints.nextOffMain(draft)
+            guard let self, self.composing, self.draft == draft else { return }
+            self.show(hint: hint)
+        }
+    }
+
+    private func show(hint next: TilesHints.Hint?) {
+        hint = next
         switch hint {
         case .newSet(let tiles):
             Sound.shared.play(ArtName.Sound.sfxSparkle, volume: 0.5)

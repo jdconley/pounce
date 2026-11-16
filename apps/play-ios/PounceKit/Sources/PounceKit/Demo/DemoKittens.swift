@@ -1,11 +1,10 @@
 #if DEBUG
 import Foundation
-import Synchronization
 
 /// `-demo-kitten <locked|held|pending|on>` (the kitten's side) and `-demo-kittens` (a parent's):
 /// the consent routes in memory, as the server would answer. The kitten's pairs are the demo
 /// streaks' (`DemoFixtures.streaks()`), and only Mia is approved, so Kiki and Nova show padlocks.
-public final class DemoKittenService: KittenService, Sendable {
+public actor DemoKittenService: KittenService {
     public enum Scenario: String, Sendable {
         case locked, held, pending, on
     }
@@ -16,14 +15,14 @@ public final class DemoKittenService: KittenService, Sendable {
     public static let mochi = "k_demoMochiAAAAAAAAAAAAAA"
     public static let biscuit = "k_demoBiscuitAAAAAAAAAAAA"
 
-    private let state: Mutex<(status: KittenStatus, kittens: [ParentKitten])>
+    private var state: (status: KittenStatus, kittens: [ParentKitten])
 
     public init(scenario: Scenario) {
         let linked = scenario == .pending || scenario == .on
         let status = KittenStatus(
             state: scenario == .on ? .consented : linked ? .pending : .none, linked: linked,
             approved: linked ? ["pr_demoMiaAAAAAAAAAAAAAAA"] : [])
-        state = Mutex((status, Self.parentKittens()))
+        state = (status, Self.parentKittens())
     }
 
     /// Mochi waits on the parent's number; Biscuit is on and confirmed, with Apple's Communication
@@ -46,23 +45,23 @@ public final class DemoKittenService: KittenService, Sendable {
         ]
     }
 
-    public func kittenStatus(person: String) async throws -> KittenStatus { state.withLock { $0.status } }
+    public func kittenStatus(person: String) async throws -> KittenStatus { state.status }
 
     public func linkCode(person: String, appTransactionId: String?) async throws -> LinkCode {
         LinkCode(code: Self.code, expiresAt: (Date.now.timeIntervalSince1970 + 600) * 1000)
     }
 
     public func mirrorApple(person: String, mirror: KittenApprovals.Mirror) async throws {
-        state.withLock { $0.status.approved = mirror.apple ?? $0.status.approved }
+        state.status.approved = mirror.apple ?? state.status.approved
     }
 
-    public func kittens() async throws -> [ParentKitten] { state.withLock { $0.kittens } }
+    public func kittens() async throws -> [ParentKitten] { state.kittens }
 
     /// The demo code links a third kitten; any other is wrong.
     public func link(code: String) async throws -> ParentKitten {
         guard code == Self.code else { throw APIError.notFound }
         let pickle = ParentKitten(id: "k_demoPickleAAAAAAAAAAAAA", name: "Pickle", cat: 3, state: .pending, mode: .parent, people: [])
-        state.withLock { $0.kittens.append(pickle) }
+        state.kittens.append(pickle)
         return pickle
     }
 
@@ -86,12 +85,10 @@ public final class DemoKittenService: KittenService, Sendable {
             $0.confirmed = false
         }
     }
-    public func unlink(kitten: String) async throws { state.withLock { $0.kittens.removeAll { $0.id == kitten } } }
+    public func unlink(kitten: String) async throws { state.kittens.removeAll { $0.id == kitten } }
 
     private func edit(_ id: String, _ change: (inout ParentKitten) -> Void) {
-        state.withLock { s in
-            if let i = s.kittens.firstIndex(where: { $0.id == id }) { change(&s.kittens[i]) }
-        }
+        if let i = state.kittens.firstIndex(where: { $0.id == id }) { change(&state.kittens[i]) }
     }
 }
 #endif

@@ -37,8 +37,8 @@ import Observation
         case failed
     }
 
-    /// What survives a launch on the kitten's device.
-    struct Saved: Codable, Equatable {
+    /// What survives a launch on the kitten's device: the file's shape.
+    public struct Saved: Codable, Equatable, Sendable {
         var consented = false
         var asked: [String] = []
         var mirror: KittenApprovals.Mirror?
@@ -52,7 +52,7 @@ import Observation
         private enum CodingKeys: String, CodingKey { case consented, asked, mirror, registered, revokes }
 
         /// Fields an older build didn't write read as their defaults.
-        init(from decoder: any Decoder) throws {
+        public init(from decoder: any Decoder) throws {
             let c = try decoder.container(keyedBy: CodingKeys.self)
             consented = try c.decodeIfPresent(Bool.self, forKey: .consented) ?? false
             asked = try c.decodeIfPresent([String].self, forKey: .asked) ?? []
@@ -75,14 +75,22 @@ import Observation
     public private(set) var kittensLoaded = false
 
     @ObservationIgnored private let service: any KittenService
-    @ObservationIgnored private let file: URL?
+    @ObservationIgnored private let file: JSONFile<Saved>?
     @ObservationIgnored private var saved: Saved
 
-    public init(service: any KittenService, file: URL?) {
+    /// `kitten.json` at `url`, written behind.
+    public nonisolated static func file(at url: URL) -> JSONFile<Saved> { JSONFile(url: url) }
+
+    /// `loaded` is what `file.read()` returned, read off the main actor at launch. No file keeps
+    /// everything in memory only.
+    public init(service: any KittenService, file: JSONFile<Saved>?, loaded: Saved? = nil) {
         self.service = service
         self.file = file
-        saved = file.flatMap { try? Data(contentsOf: $0) }.flatMap { try? JSONDecoder().decode(Saved.self, from: $0) } ?? Saved()
+        saved = loaded ?? Saved()
     }
+
+    /// Waits for every save so far to reach the disk.
+    public func flushFile() async { await file?.flush() }
 
     /// Consent is on: from the server's last answer, else what the device last knew.
     public var consented: Bool { status?.consented ?? saved.consented }
@@ -242,6 +250,8 @@ import Observation
             saved.revokes.append(id)
             save()
         }
+        // On disk before the request goes out, so a kill mid-request still retries it.
+        await file?.flush()
         return await sendRevoke(id)
     }
 
@@ -273,8 +283,6 @@ import Observation
     }
 
     private func save() {
-        guard let file, let data = try? JSONEncoder().encode(saved) else { return }
-        try? FileManager.default.createDirectory(at: file.deletingLastPathComponent(), withIntermediateDirectories: true)
-        try? data.write(to: file, options: .atomic)
+        file?.save(saved)
     }
 }

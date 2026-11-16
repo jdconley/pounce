@@ -11,20 +11,29 @@ import Observation
     public private(set) var entries: SyncSection = [:]
     /// Keys a guest device hasn't sent yet.
     @ObservationIgnored private var unsent: Set<String> = []
-    @ObservationIgnored private let file: URL?
+    @ObservationIgnored private let file: JSONFile<Saved>?
 
-    private struct Saved: Codable {
+    /// The file's shape.
+    public struct Saved: Codable, Sendable {
         var entries: SyncSection
         var unsent: [String]
     }
 
-    public init(file: URL?) {
+    /// `notify-settings.json` at `url`, written behind.
+    public nonisolated static func file(at url: URL) -> JSONFile<Saved> { JSONFile(url: url) }
+
+    /// `loaded` is what `file.read()` returned, read off the main actor at launch. No file keeps the
+    /// settings in memory only.
+    public init(file: JSONFile<Saved>?, loaded: Saved? = nil) {
         self.file = file
-        if let file, let data = try? Data(contentsOf: file), let saved = try? JSONDecoder().decode(Saved.self, from: data) {
+        if let saved = loaded {
             entries = saved.entries.filter { NotifyKey.all.contains($0.key) }
             unsent = Set(saved.unsent).intersection(entries.keys)
         }
     }
+
+    /// Waits for every save so far to reach the disk.
+    public func flush() async { await file?.flush() }
 
     public func settings(band: AgeBand?) -> NotifySettings {
         NotifySettings.resolve(entries, band: band)
@@ -72,9 +81,6 @@ import Observation
 
     private func save() {
         guard let file else { return }
-        let saved = Saved(entries: entries, unsent: unsent.sorted())
-        guard let data = try? JSONEncoder().encode(saved) else { return }
-        try? FileManager.default.createDirectory(at: file.deletingLastPathComponent(), withIntermediateDirectories: true)
-        try? data.write(to: file, options: .atomic)
+        file.save(Saved(entries: entries, unsent: unsent.sorted()))
     }
 }

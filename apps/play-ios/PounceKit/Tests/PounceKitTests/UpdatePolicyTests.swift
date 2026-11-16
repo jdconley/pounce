@@ -262,10 +262,10 @@ private let t0 = Date(timeIntervalSince1970: 1_800_000_000)
         FileManager.default.temporaryDirectory.appendingPathComponent("pounce-updates-\(UUID().uuidString)")
     }
 
-    @Test func startsEmptyAndKeepsWhatItIsTold() {
+    @Test func startsEmptyAndKeepsWhatItIsTold() async {
         let dir = directory()
         defer { try? FileManager.default.removeItem(at: dir) }
-        let store = UpdateStore(directory: dir)
+        let store = await UpdateStore.open(directory: dir)
         #expect(store.load() == UpdateRecord())
         store.update { record in
             record.status = AppStatus(latest: "1.2", storeUrl: "https://apps.apple.com/app/id6829560061")
@@ -273,22 +273,23 @@ private let t0 = Date(timeIntervalSince1970: 1_800_000_000)
             record.soft = SoftPromptState(dismissedVersion: "1.2", dismissedAt: t0)
             record.locked = [LockedInvite(code: "GH2VD", game: "tiles", title: "Tuna Tiles", at: t0)]
         }
-        let again = UpdateStore(directory: dir).load()
+        await store.flush()
+        let again = await UpdateStore.open(directory: dir).load()
         #expect(again.status?.latest == "1.2")
         #expect(again.fetchedAt == t0)
         #expect(again.soft.dismissedVersion == "1.2")
         #expect(again.locked.map(\.code) == ["GH2VD"])
     }
 
-    @Test func aFileItCannotReadIsAnEmptyRecordAndAPartItCannotReadIsAnEmptyPart() throws {
+    @Test func aFileItCannotReadIsAnEmptyRecordAndAPartItCannotReadIsAnEmptyPart() async throws {
         let dir = directory()
         defer { try? FileManager.default.removeItem(at: dir) }
         try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
         let file = dir.appendingPathComponent("updates.json")
         try Data("not json".utf8).write(to: file)
-        #expect(UpdateStore(directory: dir).load() == UpdateRecord())
+        #expect(await UpdateStore.open(directory: dir).load() == UpdateRecord())
         try Data(#"{"soft":{"dismissedVersion":"1.2"},"locked":"what","status":{"latest":7}}"#.utf8).write(to: file)
-        let record = UpdateStore(directory: dir).load()
+        let record = await UpdateStore.open(directory: dir).load()
         #expect(record.soft.dismissedVersion == "1.2")
         #expect(record.locked.isEmpty)
         #expect(record.status == AppStatus())

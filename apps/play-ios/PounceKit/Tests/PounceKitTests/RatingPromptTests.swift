@@ -208,36 +208,41 @@ import Testing
         return dir
     }
 
-    @Test func theFirstLoadIsTheFirstLaunch() throws {
+    @Test func theFirstLoadIsTheFirstLaunch() async throws {
         let dir = try tempDir()
-        let first = RatingStore(directory: dir).load(now: now)
+        let firstStore = await RatingStore.open(directory: dir)
+        let first = firstStore.load(now: now)
         #expect(first == RatingRecord(firstLaunch: now))
+        await firstStore.flush()
         #expect(FileManager.default.fileExists(atPath: dir.appendingPathComponent("rating.json").path))
         // Later launches keep it.
-        let later = RatingStore(directory: dir).load(now: now.addingTimeInterval(9 * Self.day))
+        let later = await RatingStore.open(directory: dir).load(now: now.addingTimeInterval(9 * Self.day))
         #expect(later.firstLaunch == now)
     }
 
-    @Test func theDirectoryIsMadeWhenMissing() throws {
+    @Test func theDirectoryIsMadeWhenMissing() async throws {
         let dir = try tempDir().appendingPathComponent("Pounce", isDirectory: true)
-        RatingStore(directory: dir).load(now: now)
-        #expect(RatingStore(directory: dir).load(now: now.addingTimeInterval(Self.day)).firstLaunch == now)
+        let store = await RatingStore.open(directory: dir)
+        store.load(now: now)
+        await store.flush()
+        #expect(await RatingStore.open(directory: dir).load(now: now.addingTimeInterval(Self.day)).firstLaunch == now)
     }
 
-    @Test func aFinishedTableIsCountedOnce() throws {
+    @Test func aFinishedTableIsCountedOnce() async throws {
         let dir = try tempDir()
-        let store = RatingStore(directory: dir)
+        let store = await RatingStore.open(directory: dir)
         #expect(store.noteCompleted(code: "BCDFG", now: now).completedGames == 1)
         #expect(store.noteCompleted(code: "BCDFG", now: now).completedGames == 1)
         #expect(store.noteCompleted(code: "HJKLM", now: now).completedGames == 2)
-        let reloaded = RatingStore(directory: dir).load(now: now)
+        await store.flush()
+        let reloaded = await RatingStore.open(directory: dir).load(now: now)
         #expect(reloaded.completedGames == 2)
         #expect(reloaded.counted == ["BCDFG", "HJKLM"])
         #expect(reloaded.firstLaunch == now)
     }
 
-    @Test func onlyTheNewestCodesAreKept() throws {
-        let store = RatingStore(directory: try tempDir())
+    @Test func onlyTheNewestCodesAreKept() async throws {
+        let store = try await RatingStore.open(directory: tempDir())
         let total = RatingRecord.countedLimit + 5
         for i in 0..<total { store.noteCompleted(code: "T\(i)", now: now) }
         let record = store.load(now: now)
@@ -247,22 +252,23 @@ import Testing
         #expect(record.counted.last == "T\(total - 1)")
     }
 
-    @Test func anAskIsRememberedWithItsVersion() throws {
+    @Test func anAskIsRememberedWithItsVersion() async throws {
         let dir = try tempDir()
-        let store = RatingStore(directory: dir)
+        let store = await RatingStore.open(directory: dir)
         store.noteCompleted(code: "BCDFG", now: now)
         let asked = now.addingTimeInterval(5 * Self.day)
         store.noteRequested(version: "1.1", now: asked)
-        let record = RatingStore(directory: dir).load(now: asked)
+        await store.flush()
+        let record = await RatingStore.open(directory: dir).load(now: asked)
         #expect(record.lastRequest == RatingRecord.Request(at: asked, version: "1.1"))
         #expect(record.completedGames == 1)
         #expect(record.firstLaunch == now)
     }
 
-    @Test func aBrokenFileStartsOver() throws {
+    @Test func aBrokenFileStartsOver() async throws {
         let dir = try tempDir()
         try Data("not json".utf8).write(to: dir.appendingPathComponent("rating.json"))
         // Starting over is the quiet side: the three days count from now again.
-        #expect(RatingStore(directory: dir).load(now: now) == RatingRecord(firstLaunch: now))
+        #expect(await RatingStore.open(directory: dir).load(now: now) == RatingRecord(firstLaunch: now))
     }
 }

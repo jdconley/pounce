@@ -164,15 +164,15 @@ import Testing
 }
 
 @Suite struct LiveTableClientTests {
-    private func stored() -> MemoryCredentialStore {
+    private func stored() async -> MemoryCredentialStore {
         let s = MemoryCredentialStore()
-        s.save(DeviceCredential(deviceId: "dev1", token: "tok1"))
+        await s.save(DeviceCredential(deviceId: "dev1", token: "tok1"))
         return s
     }
 
     @Test func pushToStartTokenGoesUp() async throws {
         let server = StubServer { _ in Reply(204, "") }
-        let api = APIClient(config: server.config(), credentials: stored(), session: server.session())
+        let api = APIClient(config: server.config(), credentials: await stored(), session: server.session())
         let hex = String(repeating: "ab", count: 40)
         #expect(try await api.setLivePushToStart(hex) == "dev1")
         let put = try #require(server.seen.last)
@@ -183,7 +183,7 @@ import Testing
 
     @Test func anActivityTokenGoesUpAndNullClearsIt() async throws {
         let server = StubServer { _ in Reply(204, "") }
-        let api = APIClient(config: server.config(), credentials: stored(), session: server.session())
+        let api = APIClient(config: server.config(), credentials: await stored(), session: server.session())
         let hex = String(repeating: "cd", count: 40)
         try await api.setLiveActivityToken(code: "GH2VD", token: hex)
         try await api.setLiveActivityToken(code: "GH2VD", token: nil)

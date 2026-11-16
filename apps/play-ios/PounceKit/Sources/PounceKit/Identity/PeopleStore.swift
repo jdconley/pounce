@@ -12,23 +12,35 @@ public struct LocalPeople: Codable, Equatable, Sendable {
     }
 }
 
-/// `people.json` in the given directory, rewritten atomically on every change.
-/// Not thread-safe by itself; callers use it from one actor (the app model).
+/// `people.json` in the given directory, kept in memory and written behind (`JSONFile`),
+/// atomically, on every change. Not thread-safe by itself; callers use it from one actor (the app
+/// model).
 public final class PeopleStore {
     public static let maxNameLength = 20
 
-    private let fileURL: URL
+    private let file: JSONFile<LocalPeople>
+    private var people: LocalPeople
 
-    public init(directory: URL) {
-        fileURL = directory.appendingPathComponent("people.json")
+    /// `loaded` is what `file.read()` returned, read off the main actor at launch.
+    public init(file: JSONFile<LocalPeople>, loaded: LocalPeople?) {
+        self.file = file
+        people = loaded ?? LocalPeople()
     }
 
-    public func load() -> LocalPeople {
-        guard let data = try? Data(contentsOf: fileURL),
-              let people = try? JSONDecoder().decode(LocalPeople.self, from: data)
-        else { return LocalPeople() }
-        return people
+    public static func file(directory: URL) -> JSONFile<LocalPeople> {
+        JSONFile(url: directory.appendingPathComponent("people.json"))
     }
+
+    /// Reads the file (off the caller's actor) and opens the store on it.
+    public static func open(directory: URL) async -> sending PeopleStore {
+        let file = file(directory: directory)
+        return PeopleStore(file: file, loaded: await file.read())
+    }
+
+    /// Waits for every save so far to reach the disk.
+    public nonisolated(nonsending) func flush() async { await file.flush() }
+
+    public func load() -> LocalPeople { people }
 
     /// Creates the owner, or edits the existing one in place so the identity the
     /// server knows (the person id) stays stable.
@@ -114,10 +126,8 @@ public final class PeopleStore {
         return trimmed
     }
 
-    private func save(_ people: LocalPeople) {
-        guard let data = try? JSONEncoder().encode(people) else { return }
-        try? FileManager.default.createDirectory(
-            at: fileURL.deletingLastPathComponent(), withIntermediateDirectories: true)
-        try? data.write(to: fileURL, options: .atomic)
+    private func save(_ next: LocalPeople) {
+        people = next
+        file.save(next)
     }
 }

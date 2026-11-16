@@ -124,7 +124,7 @@ public actor APIClient {
     /// The device credential, minting one through `POST /v1/devices` if none is stored.
     public func credential() async throws -> DeviceCredential {
         if let cached { return cached }
-        if let stored = credentials.load() {
+        if let stored = await credentials.load() {
             cached = stored
             return stored
         }
@@ -206,7 +206,7 @@ public actor APIClient {
         minting = task
         defer { minting = nil }
         let minted = try await task.value
-        credentials.save(minted)
+        await credentials.save(minted)
         cached = minted
         onCredentialChange?(minted)
         return minted
@@ -218,7 +218,7 @@ public actor APIClient {
     private func replacement(for failed: DeviceCredential) async throws -> DeviceCredential {
         if let cached, cached != failed { return cached }
         if cached == failed {
-            credentials.clear()
+            await credentials.clear()
             cached = nil
         }
         return try await mint()

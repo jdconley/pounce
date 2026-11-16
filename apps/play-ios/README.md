@@ -23,6 +23,11 @@ with a SpriteKit table. Apple frameworks only, no third-party packages.
   over the glyph art), `TilesStage` (the SwiftUI shell: curtain, menu, game over) and the demos. Its
   rules, draft model and layout are in PounceKit (`TilesRules`, `TilesDraft`, `TilesLayout`).
 - `PounceKit/` local Swift package (game model, networking, `pounce-e2e` CLI) with Swift Testing tests.
+  `PounceKit/Sources/PounceKit/IO/` is the only code that touches the disk or the Keychain: actors
+  and `@concurrent` functions, so none of it runs on the main thread. Stores keep their data in
+  memory and write behind; the launch reads them all off the main thread (`Pounce/App/LaunchData.swift`).
+  `scripts/main-thread-lint.swift` (in CI) fails the build on a blocking call anywhere else. See
+  [docs/main-thread.md](../../docs/main-thread.md).
 - `Config/` xcconfigs. `Debug.xcconfig` points at `http://localhost:8787` and registers the
   `pounce-dev` URL scheme; `Release.xcconfig` points at `https://play.conleychaos.com` and registers no
   custom scheme (a build phase strips the URL type from the built Info.plist).
@@ -34,6 +39,7 @@ with a SpriteKit table. Apple frameworks only, no third-party packages.
 
 ```sh
 scripts/bootstrap.sh
+swift scripts/main-thread-lint.swift   # no blocking call on the main thread (docs/main-thread.md)
 swift test --package-path PounceKit
 xcodebuild -project Pounce.xcodeproj -scheme Pounce \
   -destination 'platform=iOS Simulator,name=iPhone 17 Pro,OS=26.2' build-for-testing

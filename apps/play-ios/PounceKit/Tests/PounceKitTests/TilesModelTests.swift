@@ -357,10 +357,10 @@ import Testing
         FileManager.default.temporaryDirectory.appendingPathComponent("tiles-store-\(UUID().uuidString)")
     }
 
-    @Test func remembersOrdersDraftsAndTheLastRugAcrossInstances() throws {
+    @Test func remembersOrdersDraftsAndTheLastRugAcrossInstances() async throws {
         let dir = directory()
         defer { try? FileManager.default.removeItem(at: dir) }
-        let store = TilesDeviceStore(directory: dir)
+        let store = await TilesDeviceStore.open(directory: dir)
         #expect(store.memory(code: "BCDFG") == TilesTableMemory())
 
         var order = RackOrder()
@@ -375,7 +375,8 @@ import Testing
             memory.easy = true
         }
 
-        let again = TilesDeviceStore(directory: dir).memory(code: "BCDFG")
+        await store.flush()
+        let again = await TilesDeviceStore.open(directory: dir).memory(code: "BCDFG")
         #expect(again.orders[0] == order)
         #expect(again.draft(seat: 0, turns: 12) == draft)
         #expect(again.lastTable == [[0, 1, 2]])
@@ -384,38 +385,41 @@ import Testing
         // The turn moved on, or it is another seat's: no draft.
         #expect(again.draft(seat: 0, turns: 13) == nil)
         #expect(again.draft(seat: 1, turns: 12) == nil)
-        #expect(TilesDeviceStore(directory: dir).memory(code: "OTHER") == TilesTableMemory())
+        #expect(await TilesDeviceStore.open(directory: dir).memory(code: "OTHER") == TilesTableMemory())
     }
 
-    @Test func removingATableForgetsIt() {
+    @Test func removingATableForgetsIt() async {
         let dir = directory()
         defer { try? FileManager.default.removeItem(at: dir) }
-        let store = TilesDeviceStore(directory: dir)
+        let store = await TilesDeviceStore.open(directory: dir)
         store.update(code: "BCDFG") { $0.easy = true }
         store.remove(code: "BCDFG")
-        #expect(TilesDeviceStore(directory: dir).memory(code: "BCDFG") == TilesTableMemory())
+        await store.flush()
+        #expect(await TilesDeviceStore.open(directory: dir).memory(code: "BCDFG") == TilesTableMemory())
     }
 
-    @Test func keepsOnlyTheNewestTables() {
+    @Test func keepsOnlyTheNewestTables() async {
         let dir = directory()
         defer { try? FileManager.default.removeItem(at: dir) }
-        let store = TilesDeviceStore(directory: dir)
+        let store = await TilesDeviceStore.open(directory: dir)
         for i in 0..<(TilesDeviceStore.limit + 5) { store.update(code: "T\(i)") { $0.easy = true } }
-        let again = TilesDeviceStore(directory: dir)
+        await store.flush()
+        let again = await TilesDeviceStore.open(directory: dir)
         #expect(again.memory(code: "T0").easy == nil)
         #expect(again.memory(code: "T4").easy == nil)
         #expect(again.memory(code: "T5").easy == true)
         #expect(again.memory(code: "T\(TilesDeviceStore.limit + 4)").easy == true)
     }
 
-    @Test func aBrokenFileReadsAsEmpty() throws {
+    @Test func aBrokenFileReadsAsEmpty() async throws {
         let dir = directory()
         defer { try? FileManager.default.removeItem(at: dir) }
         try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
         try Data("not json".utf8).write(to: dir.appendingPathComponent("tiles.json"))
-        let store = TilesDeviceStore(directory: dir)
+        let store = await TilesDeviceStore.open(directory: dir)
         #expect(store.memory(code: "BCDFG") == TilesTableMemory())
         store.update(code: "BCDFG") { $0.tricks = true }
-        #expect(TilesDeviceStore(directory: dir).memory(code: "BCDFG").tricks == true)
+        await store.flush()
+        #expect(await TilesDeviceStore.open(directory: dir).memory(code: "BCDFG").tricks == true)
     }
 }

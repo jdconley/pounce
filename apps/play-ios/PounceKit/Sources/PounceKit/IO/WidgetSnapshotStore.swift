@@ -3,13 +3,16 @@ import Foundation
 /// The widgets' files in the App Group `group.com.conleychaos.play` (spec §11): the snapshot
 /// (`widgets.json`) and the last widget push token upload (`widget-push.json`). The app,
 /// the widget extension and `PounceNotify` each read and write them; every write is atomic, and
-/// a file that doesn't decode reads as nothing.
-public final class WidgetSnapshotStore: Sendable {
+/// a file that doesn't decode reads as nothing. An actor in the IO layer: every read and write
+/// happens off the caller's actor, one at a time in this process, under the group's file lock
+/// across processes.
+public actor WidgetSnapshotStore {
     public static let appGroup = "group.com.conleychaos.play"
 
     /// The App Group's store, or nil where the group isn't available (an unsigned build, tests).
-    public static var shared: WidgetSnapshotStore? {
-        FileManager.default.containerURL(forSecurityApplicationGroupIdentifier: appGroup).map {
+    @concurrent
+    public static func shared() async -> WidgetSnapshotStore? {
+        await Disk.appGroupDirectory(appGroup).map {
             WidgetSnapshotStore(directory: $0.appendingPathComponent("Widgets", isDirectory: true))
         }
     }
@@ -24,24 +27,34 @@ public final class WidgetSnapshotStore: Sendable {
         lockURL = directory.appendingPathComponent("widgets.lock")
     }
 
-    public func load() -> WidgetSnapshot? { Self.read(WidgetSnapshot.self, at: snapshotURL) }
+    public func load() -> WidgetSnapshot? { readFile(WidgetSnapshot.self, at: snapshotURL) }
 
-    public func save(_ snapshot: WidgetSnapshot) { locked { Self.write(snapshot, to: snapshotURL) } }
+    public func save(_ snapshot: WidgetSnapshot) { locked { writeFile(snapshot, to: snapshotURL) } }
 
     /// Read, change, write, under the group's lock so the app, the widget and `PounceNotify` never
     /// lose each other's writes. Without a snapshot there is nothing to change. True when it changed.
     @discardableResult
-    public func update(_ change: (WidgetSnapshot) -> WidgetSnapshot) -> Bool {
+    public func update(_ change: @Sendable (WidgetSnapshot) -> WidgetSnapshot) -> Bool {
         write { current in current.map(change) }
+    }
+
+    /// Like `update`, handing back what `change` noted alongside its snapshot (nil without one).
+    public func update<Note: Sendable>(noting change: @Sendable (WidgetSnapshot) -> (WidgetSnapshot, Note)) -> Note? {
+        locked {
+            guard let current = load() else { return nil }
+            let (next, note) = change(current)
+            if next != current { writeFile(next, to: snapshotURL) }
+            return note
+        }
     }
 
     /// Like `update`, but from nothing too; `nil` from `change` writes nothing.
     @discardableResult
-    public func write(_ change: (WidgetSnapshot?) -> WidgetSnapshot?) -> Bool {
+    public func write(_ change: @Sendable (WidgetSnapshot?) -> WidgetSnapshot?) -> Bool {
         locked {
             let current = load()
             guard let next = change(current), next != current else { return false }
-            Self.write(next, to: snapshotURL)
+            writeFile(next, to: snapshotURL)
             return true
         }
     }
@@ -59,33 +72,22 @@ public final class WidgetSnapshotStore: Sendable {
     }
 
     /// The last widget push token the server took, and for which device.
-    public var uploadedToken: WidgetPushToken.Uploaded? {
-        get { Self.read(WidgetPushToken.Uploaded.self, at: tokenURL) }
-        set {
-            if let newValue { Self.write(newValue, to: tokenURL) } else { try? FileManager.default.removeItem(at: tokenURL) }
-        }
+    public func uploadedToken() -> WidgetPushToken.Uploaded? { readFile(WidgetPushToken.Uploaded.self, at: tokenURL) }
+
+    public func setUploadedToken(_ value: WidgetPushToken.Uploaded?) {
+        if let value { writeFile(value, to: tokenURL) } else { try? FileManager.default.removeItem(at: tokenURL) }
     }
 
-    private static func read<T: Decodable>(_ type: T.Type, at url: URL) -> T? {
+    private func readFile<T: Decodable>(_ type: T.Type, at url: URL) -> T? {
         guard let data = try? Data(contentsOf: url) else { return nil }
-        return try? decoder.decode(type, from: data)
+        return try? Self.coding.decoder.decode(type, from: data)
     }
 
-    private static func write<T: Encodable>(_ value: T, to url: URL) {
-        guard let data = try? encoder.encode(value) else { return }
+    private func writeFile<T: Encodable>(_ value: T, to url: URL) {
+        guard let data = try? Self.coding.encoder.encode(value) else { return }
         try? FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
         try? data.write(to: url, options: .atomic)
     }
 
-    private static var encoder: JSONEncoder {
-        let e = JSONEncoder()
-        e.dateEncodingStrategy = .millisecondsSince1970
-        return e
-    }
-
-    private static var decoder: JSONDecoder {
-        let d = JSONDecoder()
-        d.dateDecodingStrategy = .millisecondsSince1970
-        return d
-    }
+    private static let coding = JSONCoding(dates: .millisecondsSince1970)
 }

@@ -70,11 +70,19 @@ checking (Swift 6 language mode, `SWIFT_STRICT_CONCURRENCY = complete`, in the a
 and PounceKit) then guarantees none of it runs on the main actor: an actor runs on its own
 executor, and a `@concurrent` function always leaves the caller's actor. Its pieces:
 
-- `Disk`: read, write (atomic), remove, for whole files.
-- `JSONFile<Value>`: a file's write-behind writer. `save(_:)` returns at once; a background task
-  encodes and writes each value in order. `flush()` waits for the writes (tests, and the app going
-  to the background).
-- `Keychain`: the Keychain calls, async.
+- `Disk`: read, write (atomic), remove, a bundled resource, the App Group's folder.
+- `JSONFile<Value>`: a file's write-behind queue. `save(_:)` and `remove()` return at once; a
+  background task encodes and writes each change in order. `read()` waits its turn in the same
+  queue; `flush()` waits for the writes (tests, and the app going to the background).
+- `Loaded<Value>`: a file and what it held, read at launch.
+- `KeychainItem`: the Keychain calls, async. `CredentialStore`, `AgeRecordStore` and
+  `PersonKeyStore` are async protocols on top of it.
+- `WidgetSnapshotStore`: an actor for the App Group's widget files, shared with the widgets and
+  `PounceNotify` under a file lock.
+- `SoundFiles`: the sound effects' players and the audio session.
+
+Outside the folder, `InOrder` (PounceKit) runs work handed over from the main actor one piece at a
+time without the main actor waiting (a Keychain save, a widget snapshot write).
 
 **Allowed pattern**, a store kept on disk:
 
@@ -95,9 +103,12 @@ executor, and a `@concurrent` function always leaves the caller's actor. Its pie
 }
 ```
 
-Launch reads every store at once, off the main actor (`AppLaunch.load`), then builds the app model
-from the values. Compute that may be heavy is a `@concurrent` function that takes a value and
-returns one:
+Launch reads every store at once, off the main actor (`LaunchData.load` in `Pounce/App`), then
+builds the app model from the values (`AppModel.launch`); the window shows the launch screen's
+violet for those few milliseconds. When the app goes to the background it flushes every queued
+write (`AppModel.flushToDisk`). A store that promises "on disk before the request" (pounce
+answers, a parent's revoke) awaits its file's `flush()` before it sends. Compute that may be heavy
+is a `@concurrent` function that takes a value and returns one:
 
 ```swift
 let draft = self.draft
@@ -112,8 +123,9 @@ cached by the system) or are built ahead of time (`prewarm`), never decoded from
 
 **SwiftUI:** a view's `body` and its `task`, `onAppear` and `onChange` closures run on the main
 actor. Await the IO layer there; never call it synchronously. Images from the asset catalog
-(`Image("name")`) are fine; a bundled file that is not in the catalog is loaded with
-`Disk`/`ImageFile` off the main actor first.
+(`Image("name")`) are fine; a bundled file that is not in the catalog is read with
+`Disk.resource` and decoded (`preparingForDisplay()`) in a `@concurrent` function first, like How
+to play's poster.
 
 **`UserDefaults`** reads are served from memory and writes are handed off to a system process, so
 they are allowed for small settings. `synchronize()` is not.
@@ -122,7 +134,7 @@ they are allowed for small settings. `synchronize()` is not.
 
 | Check | What it catches | Where |
 | --- | --- | --- |
-| Static: `scripts/main-thread-lint.swift` | Blocking APIs anywhere in the app, its extensions and PounceKit outside the IO layer: file IO, `FileManager`, the Keychain, sleeps, semaphores, locks, `sync` dispatch, `synchronize()`, `contentsOf:` loaders. It strips comments and strings, so a mention in a doc comment is fine. A planted violation fails the build. | the `build` job in `.github/workflows/ios.yml`, on every pull request |
+| Static: `apps/play-ios/scripts/main-thread-lint.swift` | In the app, its extensions and PounceKit (not the e2e CLI or tests): file IO (`Data(contentsOf:)`, `String(contentsOf:)`, `contentsOfFile:`, `AVAudioPlayer(contentsOf:)`, `.write(to:)`, `FileManager`, file handles, POSIX file calls, archive `withFile:`) and the Keychain (`SecItem*`) anywhere outside the IO layer; sleeps, semaphores, `.wait()`, `sync` dispatch, locks and `Mutex`, `RunLoop.run` and `synchronize()` everywhere, the IO layer too; the solver, the hint search and `CIContext` in the app's UI code unless inside a `@concurrent` function. In the IO layer, IO in anything not on an actor and not `@concurrent`, and any `@MainActor`. It strips comments and strings (but checks code inside string interpolation), so a mention in a doc comment is fine. | the `build` job in `.github/workflows/ios.yml`, a required check on every pull request. `--self-test` first runs it against planted violations and look-alikes in `scripts/main-thread-lint-fixtures/`. |
 | Compiler: Swift 6 strict concurrency | The IO layer is actors and `@concurrent` functions, so it can never run on the main actor. | every build |
 | Runtime: Thread Performance Checker | Main-thread IO and priority inversions the static check can't see (system frameworks). | the `Pounce` scheme's test action |
 | Runtime: `MainThreadWatchdog` (Debug) | Every frame over budget and every main-thread stall over 100 ms, from a display link and a run loop observer. | Debug builds; `PounceUITests` read it and fail |
@@ -214,6 +226,6 @@ When the Android app starts, it starts with these in place:
 
 | Platform | Rule | Static check | Runtime gate | Top frame rate |
 | --- | --- | --- | --- | --- |
-| iOS | this doc | in progress | in progress | in progress |
+| iOS | this doc | in CI, every existing violation fixed | in progress | in progress |
 | Web | this doc | to do in `apps/play-web` | to do in `apps/play-web` | rAF, by design |
 | Android | this doc | when the app starts | when the app starts | when the app starts |

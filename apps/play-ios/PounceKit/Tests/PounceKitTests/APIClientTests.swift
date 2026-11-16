@@ -136,7 +136,7 @@ final class StubProtocol: URLProtocol, @unchecked Sendable {  // URLProtocol is 
         let b = try await api.credential()
         #expect(a == DeviceCredential(deviceId: "dev1", token: "tok1"))
         #expect(a == b)
-        #expect(store.load() == a)
+        #expect(await store.load() == a)
         #expect(server.seen.count == 1)
         #expect(server.seen[0].method == "POST")
         #expect(server.seen[0].path == "/v1/devices")
@@ -145,7 +145,9 @@ final class StubProtocol: URLProtocol, @unchecked Sendable {  // URLProtocol is 
     @Test func usesAStoredCredentialWithoutMinting() async throws {
         let server = StubServer { _ in Reply(500) }
         let stored = DeviceCredential(deviceId: "d", token: "t")
-        let (api, _) = client(server, store: { let s = MemoryCredentialStore(); s.save(stored); return s }())
+        let store = MemoryCredentialStore()
+        await store.save(stored)
+        let (api, _) = client(server, store: store)
         #expect(try await api.credential() == stored)
         #expect(server.seen.isEmpty)
     }
@@ -246,14 +248,14 @@ final class StubProtocol: URLProtocol, @unchecked Sendable {  // URLProtocol is 
             return req.authorization == "Bearer good" ? Reply(200, #"{"tables":[]}"#) : Reply(401, #"{"error":"unauthorized"}"#)
         }
         let store = MemoryCredentialStore()
-        store.save(DeviceCredential(deviceId: "old", token: "stale"))
+        await store.save(DeviceCredential(deviceId: "old", token: "stale"))
         let (api, _) = client(server, store: store)
         let tables = try await api.listTables()
         #expect(tables.isEmpty)
         #expect(server.seen.map { "\($0.method) \($0.path)" } == [
             "GET /v1/devices/me/tables", "POST /v1/devices", "GET /v1/devices/me/tables",
         ])
-        #expect(store.load() == DeviceCredential(deviceId: "fresh", token: "good"))
+        #expect(await store.load() == DeviceCredential(deviceId: "fresh", token: "good"))
     }
 
     /// M-8: a re-mint after a 401 reports the new credential, and the push token upload says
@@ -264,7 +266,7 @@ final class StubProtocol: URLProtocol, @unchecked Sendable {  // URLProtocol is 
             return req.authorization == "Bearer good" ? Reply(204, "") : Reply(401, #"{"error":"unauthorized"}"#)
         }
         let store = MemoryCredentialStore()
-        store.save(DeviceCredential(deviceId: "old", token: "stale"))
+        await store.save(DeviceCredential(deviceId: "old", token: "stale"))
         let (api, _) = client(server, store: store)
         let changes = Mutex<[String]>([])
         await api.setCredentialChangeHandler { cred in changes.withLock { $0.append(cred.deviceId) } }
@@ -294,7 +296,7 @@ final class StubProtocol: URLProtocol, @unchecked Sendable {  // URLProtocol is 
             return Reply(401, #"{"error":"unauthorized"}"#, delay: 0.5)
         }
         let store = MemoryCredentialStore()
-        store.save(DeviceCredential(deviceId: "old", token: "stale"))
+        await store.save(DeviceCredential(deviceId: "old", token: "stale"))
         let (api, _) = client(server, store: store)
         try await withThrowingTaskGroup(of: [TableEntry].self) { group in
             for _ in 0..<2 { group.addTask { try await api.listTables() } }
@@ -302,7 +304,7 @@ final class StubProtocol: URLProtocol, @unchecked Sendable {  // URLProtocol is 
         }
         #expect(staleSeen.withLock { $0 } == 2)  // both really went out stale
         #expect(server.seen.filter { $0.path == "/v1/devices" }.count == 1)
-        #expect(store.load() == DeviceCredential(deviceId: "fresh", token: "good"))
+        #expect(await store.load() == DeviceCredential(deviceId: "fresh", token: "good"))
     }
 
     @Test func aSecond401AfterRetryIsUnauthorizedAndDoesNotLoop() async throws {
@@ -373,18 +375,18 @@ final class StubProtocol: URLProtocol, @unchecked Sendable {  // URLProtocol is 
     // entitlement, so the data-protection keychain refuses it (errSecMissingEntitlement).
     // Probe once; run the round trip only where the keychain is usable, otherwise the
     // logic is covered through MemoryCredentialStore and the store is exercised on device.
-    @Test func keychainRoundTripWhereAvailable() throws {
+    @Test func keychainRoundTripWhereAvailable() async throws {
         let store = KeychainCredentialStore(service: "com.conleychaos.play.device.tests-\(UUID().uuidString)")
         let c = DeviceCredential(deviceId: "d", token: "t")
-        store.save(c)
-        guard store.load() != nil else {
-            store.clear()
+        await store.save(c)
+        guard await store.load() != nil else {
+            await store.clear()
             try Test.cancel("data-protection keychain unavailable to this test host (unsigned, no entitlements)")
         }
-        #expect(store.load() == c)
-        store.save(DeviceCredential(deviceId: "d2", token: "t2"))
-        #expect(store.load() == DeviceCredential(deviceId: "d2", token: "t2"))
-        store.clear()
-        #expect(store.load() == nil)
+        #expect(await store.load() == c)
+        await store.save(DeviceCredential(deviceId: "d2", token: "t2"))
+        #expect(await store.load() == DeviceCredential(deviceId: "d2", token: "t2"))
+        await store.clear()
+        #expect(await store.load() == nil)
     }
 }
