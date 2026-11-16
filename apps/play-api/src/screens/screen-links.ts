@@ -89,22 +89,23 @@ export class ScreenLinks extends DurableObject<Env> {
   /**
    * Token instance: a phone at `room` links it. On `link` the room lists the TV as a screen
    * first, so the socket the TV opens next is a member's, and then the TV is told. `seated`:
-   * the TV's device sits or hosts at that table, so it can't be its screen.
+   * the TV's device sits or hosts at that table, so it can't be its screen. `none`: the table went
+   * between the phone's check and the link.
    */
-  async link(room: string, move: boolean, now: number): Promise<"link" | "already" | "showing" | "gone" | "seated"> {
+  async link(room: string, move: boolean, now: number): Promise<"link" | "already" | "showing" | "gone" | "seated" | "none"> {
     const row = this.row();
     const decision = linkDecision(row && { showing: row.showing, spent: row.spent === 1, expires: row.expires }, room, move, now);
     if (decision !== "link" || !row) return decision;
     // Spent before anything is awaited, so two phones can't both use it. The room is kept only
     // once it lists the TV, so a socket that connects meanwhile is never told too soon.
     this.ctx.storage.sql.exec("UPDATE link SET spent = 1 WHERE id = 1");
-    let added = false;
+    let added: "ok" | "seated" | "none" | null = null;
     try {
       added = await this.env.ROOMS.get(this.env.ROOMS.idFromName(room)).addScreen(row.owner);
     } finally {
-      if (!added) this.ctx.storage.sql.exec("UPDATE link SET spent = 0 WHERE id = 1");
+      if (added !== "ok") this.ctx.storage.sql.exec("UPDATE link SET spent = 0 WHERE id = 1");
     }
-    if (!added) return "seated";
+    if (added !== "ok") return added;
     this.ctx.storage.sql.exec("UPDATE link SET room = ? WHERE id = 1", room);
     const linked = JSON.stringify({ t: "linked", room });
     for (const ws of this.ctx.getWebSockets()) send(ws, linked);

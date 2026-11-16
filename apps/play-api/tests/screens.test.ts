@@ -1,6 +1,8 @@
 import { afterEach, beforeAll, describe, expect, test } from "vitest";
 
-import { BASE, bundle, call, Client, connect, createRoom, eventually, mint, newPerson, profile, settle, worker, type Device, type Person } from "./play-helpers";
+import { funnelId } from "../src/funnel/funnel";
+
+import { BASE, bundle, call, Client, connect, createRoom, eventually, mint, newPerson, profile, SECRET, settle, worker, type Device, type Person } from "./play-helpers";
 
 import type { ServerMessage } from "../src/protocol";
 import type { Miniflare } from "miniflare";
@@ -17,8 +19,14 @@ afterEach(async () => {
   await Promise.all(open.splice(0).map((mf) => mf.dispose()));
 });
 
-async function start(options: { tv?: boolean; devSpeed?: number; games?: string } = {}): Promise<Miniflare> {
-  const mf = await worker(script, { sent: [], tv: options.tv ?? true, ...(options.devSpeed ? { devSpeed: options.devSpeed } : {}), ...(options.games ? { games: options.games } : {}) });
+async function start(options: { tv?: boolean; devSpeed?: number; games?: string; funnel?: boolean } = {}): Promise<Miniflare> {
+  const mf = await worker(script, {
+    sent: [],
+    tv: options.tv ?? true,
+    ...(options.devSpeed ? { devSpeed: options.devSpeed } : {}),
+    ...(options.games ? { games: options.games } : {}),
+    ...(options.funnel ? { funnel: true } : {}),
+  });
   open.push(mf);
   return mf;
 }
@@ -100,16 +108,72 @@ describe("a TV through the Worker", { timeout: 30_000 }, () => {
     expect(await page()).toContain("Alice");
   });
 
+  test("a kitten who sits first at a TV table hosts a table that names nobody", async () => {
+    const mf = await start();
+    const [tv, kid] = [await mint(mf), await mint(mf)];
+    const mochi = newPerson("Mochi", 3);
+    await profile(mf, kid, [mochi], { band: "kitten" });
+    const code = await tvTable(mf, tv);
+    const screen = await asScreen(mf, code, tv);
+    const name = screen.last?.room.name as string;
+    const phone = await sit(mf, code, kid, 0, mochi);
+    expect(phone.last?.room.youAreHost).toBe(true);
+    const res = await mf.dispatchFetch(`${BASE}/j/${code}`);
+    expect(res.status).toBe(200);
+    const html = await res.text();
+    expect(html).not.toContain("Mochi");
+    expect(html).not.toContain(name);
+  });
+
   test("a seated phone can't open the same table as a screen", async () => {
     const mf = await start();
-    const [tv, a, b] = [await mint(mf), await mint(mf), await mint(mf)];
+    const [tv, a] = [await mint(mf), await mint(mf)];
     const code = await tvTable(mf, tv);
     await sit(mf, code, a, 0, newPerson("Alice", 1));
     const res = await upgrade(mf, code, a, "?role=screen");
     expect(res.status).toBe(409);
     expect(await res.json()).toEqual({ error: "seated" });
-    // Someone who only watched can still become the screen.
-    expect((await upgrade(mf, code, b, "?role=screen")).status).toBe(101);
+  });
+
+  test("only a device the room lists may be its screen", async () => {
+    const mf = await start();
+    const [a, b] = [await mint(mf), await mint(mf)];
+    const code = await createRoom(mf, a);
+    const phone = await sit(mf, code, a, 0, newPerson("Alice", 1));
+    // A device that knows the code, watching or not, is no screen: it was never made, linked or followed here.
+    const watcher = await connect(mf, code, b);
+    const res = await upgrade(mf, code, b, "?role=screen");
+    expect(res.status).toBe(403);
+    expect(await res.json()).toEqual({ error: "not_screen" });
+    // It flips nobody's layout.
+    await settle();
+    expect(phone.last?.room.screen).toBeUndefined();
+    expect(watcher.last?.room.screen).toBeUndefined();
+    // Nor through a browser, which hears 4403.
+    const browser = await mf.dispatchFetch(`${BASE}/v1/rooms/${code}/ws?role=screen`, {
+      headers: { upgrade: "websocket", "sec-websocket-protocol": `pounce, pounce.token.${b.token}` },
+    });
+    const ws = browser.webSocket as unknown as WebSocket & { accept(): void };
+    const closed = new Promise<number>((resolve) => ws.addEventListener("close", (e) => resolve(e.code)));
+    ws.accept();
+    expect(await closed).toBe(4403);
+  });
+
+  test("a TV is never counted as an active device", async () => {
+    const mf = await start({ funnel: true });
+    const [tv, a] = [await mint(mf), await mint(mf)];
+    const code = await tvTable(mf, tv);
+    const db = await mf.getD1Database("FUNNEL");
+    const seen = async (d: Device) => (await db.prepare("SELECT last_seen FROM devices WHERE id = ?").bind(await funnelId(SECRET, d.deviceId)).first<{ last_seen: number }>())?.last_seen ?? 0;
+    // Each was seen when it was made.
+    const [tvMade, aMade] = [await eventually(() => seen(tv), (at) => at > 0), await eventually(() => seen(a), (at) => at > 0)];
+    await settle(50);
+    await asScreen(mf, code, tv);
+    await sit(mf, code, a, 0, newPerson("Alice", 1));
+    // The phone's socket counts it as active; the TV's doesn't.
+    await eventually(() => seen(a), (at) => at > aMade);
+    await settle();
+    expect(await seen(tv)).toBe(tvMade);
   });
 
   test("a browser screen says role in the query", async () => {
@@ -170,6 +234,8 @@ describe("a TV through the Worker", { timeout: 30_000 }, () => {
     const pb = await sit(mf, code, b, 1, newPerson("Bob", 2), TILES);
     pa.send({ t: "start" });
     await pa.until((s) => s.room.status === "playing");
+    await pb.until((s) => s.room.status === "playing");
+    const seq = pa.last?.seq as number;
     const seat = (pa.last?.room.tiles as { turn: number }).turn;
     const [mover, other] = seat === 0 ? [pa, pb] : [pb, pa];
     mover.send({ t: "aim", seat, aim: { table: [] } });
@@ -181,6 +247,26 @@ describe("a TV through the Worker", { timeout: 30_000 }, () => {
     const again = await connect(mf, code, seat === 0 ? b : a, TILES);
     await settle();
     expect(aims(again)).toEqual([]);
+    // Nor is the room's state: the next snapshot's seq is the one before the aims.
+    const watcher = await connect(mf, code, await mint(mf), TILES);
+    expect(watcher.last?.seq).toBe(seq);
+    expect(again.last?.seq).toBe(seq);
+  });
+
+  test("a link to a table that went lists nothing", async () => {
+    const mf = await start();
+    const [tv, a] = [await mint(mf), await mint(mf)];
+    const code = await createRoom(mf, a);
+    await sit(mf, code, a, 0, newPerson("Alice", 1));
+    const rooms = await mf.getDurableObjectNamespace("ROOMS");
+    type Rooms = { addScreen(deviceId: string): Promise<"ok" | "seated" | "none"> };
+    const stub = (name: string) => rooms.get(rooms.idFromName(name)) as unknown as Rooms;
+    const missing = ["BBBBB", "CCCCC"].find((c) => c !== code) as string;
+    // A table that is gone lists nothing, and a link to it is refused as not_seated.
+    expect(await stub(missing).addScreen(tv.deviceId)).toBe("none");
+    expect(await stub(code).addScreen(a.deviceId)).toBe("seated");
+    expect(await stub(code).addScreen(tv.deviceId)).toBe("ok");
+    expect((await asScreen(mf, code, tv)).last?.room.screen).toBe(true);
   });
 
   test("play again takes the TV along", async () => {

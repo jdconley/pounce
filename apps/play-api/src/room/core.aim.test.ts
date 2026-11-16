@@ -33,7 +33,8 @@ function table(tv = true): RoomCore {
   room.connect("b");
   room.handle("a", { t: "claim", seat: 0, person: person(1) });
   room.handle("b", { t: "claim", seat: 1, person: person(2) });
-  room.connect("tv", {}, "screen");
+  room.addScreen("tv");
+  room.connect("tv");
   expect(errorsOf(room.handle("a", { t: "start" }))).toEqual([]);
   const g = room.state.gameState as CatTowerState;
   g.turn = 0;
@@ -83,7 +84,8 @@ describe("aim", () => {
     const state = RoomCore.create("BCDFG", "a", clock);
     const room = new RoomCore(state, () => clock, rng, undefined, 1, { streaks: true, tv: true });
     room.connect("a");
-    room.connect("tv", {}, "screen");
+    room.addScreen("tv");
+    room.connect("tv");
     room.handle("a", { t: "claim", seat: 0, person: person(1) });
     room.handle("a", { t: "claim", seat: 1, person: person(2) });
     room.handle("a", { t: "start" });
@@ -165,7 +167,8 @@ describe("a tile draft", () => {
     room.connect("b");
     room.handle("a", { t: "claim", seat: 0, person: person(1) });
     room.handle("b", { t: "claim", seat: 1, person: person(2) });
-    room.connect("tv", {}, "screen");
+    room.addScreen("tv");
+    room.connect("tv");
     expect(errorsOf(room.handle("a", { t: "start" }))).toEqual([]);
     (room.state.gameState as TilesState).turn = 0;
     return room;

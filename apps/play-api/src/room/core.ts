@@ -112,7 +112,11 @@ export type RoomState<S = CatTowerState> = {
   nudges?: Record<string, { turn: string; at: number }>;
   /** The turn (`turnKey`) whose holder was last warned that their seat can soon be retired. */
   retireWarned?: string;
-  /** Devices that are screens here (a TV), for good: one listed is a screen on every connect. Absent: none. */
+  /**
+   * Devices that are screens here (a TV), for good: one listed is a screen on every connect. Only a
+   * listed device may connect as one: it made the table, a phone linked it, or it followed Play again.
+   * Absent: none.
+   */
   screens?: string[];
   /** When the last connected screen went, while within the grace. A screen back by then changes nothing. */
   screenLeftAt?: number;
@@ -442,7 +446,7 @@ export class RoomCore<S = CatTowerState> {
     }
   }
 
-  /** A screen (a TV): seatless, so it can only watch. Listed for good once it connects as one. */
+  /** A screen (a TV): seatless, so it can only watch. Listed for good (`create`, `addScreen`, Play again). */
   isScreen(deviceId: string): boolean {
     return this.state.screens?.includes(deviceId) ?? false;
   }
@@ -457,9 +461,14 @@ export class RoomCore<S = CatTowerState> {
     return !this.isScreen(deviceId) && (deviceId === this.state.hostDeviceId || this.controlledSeats(deviceId).length > 0);
   }
 
-  /** Lists a device as a screen here before it connects (a link). */
+  /**
+   * Lists a device as a screen here before it connects (a link); callers check `mayScreen` first.
+   * A device already here as a watcher loses the players it sent: a screen speaks for nobody.
+   */
   addScreen(deviceId: string): void {
     if (!this.isScreen(deviceId)) this.state.screens = [...(this.state.screens ?? []), deviceId];
+    const device = this.state.devices[deviceId];
+    if (device) delete device.players;
   }
 
   private screenConnected(): boolean {
@@ -474,10 +483,9 @@ export class RoomCore<S = CatTowerState> {
 
   /**
    * `players`: the people this device speaks for, mapped to their players. Old apps send none.
-   * `role`: "screen" makes the device a screen here for good; callers check `mayScreen` first.
+   * A device the room lists as a screen connects as one, whatever it asks for.
    */
-  connect(deviceId: string, players: Record<string, string> = {}, role?: "screen"): Outbound[] {
-    if (role === "screen") this.addScreen(deviceId);
+  connect(deviceId: string, players: Record<string, string> = {}): Outbound[] {
     const wasShown = this.screenShown();
     // A screen speaks for nobody: a seat's player in its map would hand it that seat's hand.
     const speaksFor = this.isScreen(deviceId) ? {} : players;
@@ -535,8 +543,9 @@ export class RoomCore<S = CatTowerState> {
       if (device.presence !== "away") device.since = this.now();
       device.presence = "away";
     });
-    // The phones hear nothing yet: the grace lets a screen come straight back.
-    if (wasConnected && this.isScreen(deviceId) && !this.screenConnected()) this.state.screenLeftAt = this.now();
+    // The phones hear nothing yet: the grace lets a screen come straight back. With TV off, no
+    // snapshot says screen, so there is nothing to take back.
+    if (this.features.tv && wasConnected && this.isScreen(deviceId) && !this.screenConnected()) this.state.screenLeftAt = this.now();
     return [...out, ...this.linkCheck()];
   }
 
@@ -629,8 +638,11 @@ export class RoomCore<S = CatTowerState> {
 
     if (state.screenLeftAt !== undefined && !this.screenShown()) {
       delete state.screenLeftAt;
-      state.seq += 1;
-      out.push(...this.snapshots());
+      // A mark left from when TV was on goes quietly: no snapshot said screen.
+      if (this.features.tv) {
+        state.seq += 1;
+        out.push(...this.snapshots());
+      }
     }
 
     this.expireLive(this.now());

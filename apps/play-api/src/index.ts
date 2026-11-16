@@ -272,7 +272,8 @@ async function openSocket(request: Request, env: Env, deviceId: string, code: st
   // A screen (a TV) is only a role while `TV` is on; off, there is no such thing to ask for.
   const screen = new URL(request.url).searchParams.get("role") === "screen";
   if (screen && !tvOn(env)) return notFound();
-  later(active(env, deviceId, Date.now()).catch(() => undefined));
+  // A TV is no player: it is never counted as an active device.
+  if (!screen) later(active(env, deviceId, Date.now()).catch(() => undefined));
   // The room trusts these headers, so client-supplied ones must never reach it.
   const headers = new Headers(request.headers);
   headers.delete(DEVICE_HEADER);
@@ -344,6 +345,8 @@ async function linkScreen(request: Request, env: Env, deviceId: string): Promise
   if (decision === "link" || decision === "already") return json(200, { linked: true });
   if (decision === "showing") return json(409, { error: "showing" });
   if (decision === "seated") return json(409, { error: "seated" });
+  // The table went after the check above: as for one that never was.
+  if (decision === "none") return json(403, { error: "not_seated" });
   return notFound();
 }
 

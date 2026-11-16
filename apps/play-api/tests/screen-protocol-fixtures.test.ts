@@ -5,6 +5,7 @@ import { expect, test } from "vitest";
 import { RoomCore } from "../src/room/core";
 import { createRng } from "../src/rules/rng";
 
+import type { GameId } from "../src/games";
 import type { Person, ServerMessage } from "../src/protocol";
 import type { Outbound } from "../src/room/core";
 import type { CatTowerState } from "../src/rules/engine";
@@ -34,14 +35,15 @@ const alice: Person = { id: "11111111-1111-4111-8111-111111111111", name: "Alice
 const bob: Person = { id: "22222222-2222-4222-8222-222222222222", name: "Bob", cat: 3 };
 
 /** A started two-seat table with a TV on (alice on devA, bob on devB, the screen "tv"). */
-function table<S>(game?: string): RoomCore<S> {
+function table<S>(game?: GameId): RoomCore<S> {
   const state = RoomCore.create<S>("BCDFG", "devA", 1_000, undefined, undefined, game);
   const room = new RoomCore<S>(state, () => 1_000, createRng([1, 2, 3, 4]), undefined, 1, { streaks: false, tv: true });
   room.connect("devA");
   room.connect("devB");
   room.handle("devA", { t: "claim", seat: 0, person: alice });
   room.handle("devB", { t: "claim", seat: 1, person: bob });
-  room.connect("tv", {}, "screen");
+  room.addScreen("tv");
+  room.connect("tv");
   const refused = room.handle("devA", { t: "start" }).filter((o) => o.message.t === "error");
   expect(refused).toEqual([]);
   return room;
