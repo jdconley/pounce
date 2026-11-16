@@ -43,6 +43,22 @@ export function openTable(code: string, intent: TableIntent, replace = false): v
   navigate({ kind: "table", code }, replace);
 }
 
+/** The TV page loads only on a TV: phones never download it. */
+type TvModule = typeof import("./ui/tv/tv-app");
+
+function LazyTv() {
+  const [mod, setMod] = useState<TvModule | null>(null);
+  useEffect(() => {
+    let live = true;
+    void import("./ui/tv/tv-app").then((m) => live && setMod(m));
+    return () => {
+      live = false;
+    };
+  }, []);
+  if (!mod) return <main class="screen violet-bg" aria-busy="true" />;
+  return <mod.TvApp />;
+}
+
 function useRoute(): Route {
   const [route, setRoute] = useState(currentRoute);
   useEffect(() => onRoute(setRoute), []);
@@ -51,6 +67,13 @@ function useRoute(): Route {
 
 export function App() {
   const route = useRoute();
+  // A TV is no one's device: no first run, no profile, no funnel.
+  if (route.kind === "tv") return <LazyTv />;
+  return <PlayerApp route={route} />;
+}
+
+function PlayerApp(props: { route: Route }) {
+  const { route } = props;
   const { people } = useApp();
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [invite, setInvite] = useState<InviteBanner | null>(null);

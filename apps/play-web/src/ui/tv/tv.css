@@ -1,0 +1,377 @@
+/* Pounce on the TV: read from across the room. Everything is laid out on a 1920 x 1080 stage and
+   scales with the screen through --u (one stage pixel), so 720p and 4K show the same picture with
+   nothing clipped and nothing to scroll. */
+
+.tv {
+  --u: min(calc(100vh / 1080), calc(100vw / 1920));
+  --ring: calc(var(--u) * 10);
+  position: fixed;
+  inset: 0;
+  overflow: hidden;
+  font-family: var(--round);
+  color: var(--white);
+  background: var(--night);
+}
+
+.tv-bg {
+  position: absolute;
+  inset: 0;
+  background: var(--night) center 34% / cover no-repeat;
+  pointer-events: none;
+}
+
+.tv-bg::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background:
+    radial-gradient(ellipse at 50% 50%, rgba(27, 11, 58, 0.15) 30%, rgba(27, 11, 58, 0.7) 100%),
+    linear-gradient(180deg, rgba(42, 15, 92, 0.35), rgba(27, 11, 58, 0.55));
+}
+
+/* A remote's focus: a thick bright ring and a lift, readable from the couch. */
+.tv [data-tv] {
+  transition:
+    transform 160ms var(--ease-spring),
+    box-shadow 160ms var(--ease-out),
+    filter 120ms;
+}
+
+.tv [data-tv]:focus {
+  outline: var(--ring) solid var(--yellow);
+  outline-offset: calc(var(--u) * 8);
+  transform: scale(1.06);
+  z-index: 1;
+}
+
+/* Start: the title, and one button. */
+.tv-start-screen {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: calc(var(--u) * 64);
+}
+
+.tv-sunburst {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: calc(var(--u) * 1500);
+  height: calc(var(--u) * 1500);
+  margin: calc(var(--u) * -750) 0 0 calc(var(--u) * -750);
+  opacity: 0.6;
+  animation: spin 40s linear infinite;
+  pointer-events: none;
+}
+
+.tv-brand {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.tv-logo {
+  width: calc(var(--u) * 340);
+  height: calc(var(--u) * 340);
+  border: calc(var(--u) * 9) solid var(--ink);
+  border-radius: calc(var(--u) * 76);
+  box-shadow: 0 calc(var(--u) * 14) 0 var(--ink);
+  animation: tv-bob 2.4s ease-in-out infinite alternate;
+}
+
+.tv-wordmark {
+  margin: calc(var(--u) * -36) 0 0;
+  font-size: calc(var(--u) * 210);
+  line-height: 1;
+  letter-spacing: 0.02em;
+  transform: rotate(-3deg);
+}
+
+.tv .tv-start-btn {
+  position: relative;
+  min-height: calc(var(--u) * 150);
+  padding: 0 calc(var(--u) * 150) calc(var(--u) * 8);
+  border-width: calc(var(--u) * 6);
+  font-size: calc(var(--u) * 84);
+  box-shadow:
+    0 calc(var(--u) * 12) 0 var(--ink),
+    inset 0 calc(var(--u) * 6) 0 rgba(255, 255, 255, 0.45);
+}
+
+.tv .tv-start-btn:focus {
+  outline-offset: calc(var(--u) * 12);
+  transform: scale(1.08);
+}
+
+@keyframes tv-bob {
+  to {
+    transform: translateY(calc(var(--u) * -14)) rotate(2deg);
+  }
+}
+
+/* Home: the link on the left, the two games on the right. */
+.tv-home-screen {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: calc(var(--u) * 110);
+  padding: calc(var(--u) * 40) calc(var(--u) * 80);
+}
+
+.tv-link {
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: calc(var(--u) * 760);
+}
+
+.tv-scan {
+  margin: 0;
+  font-size: calc(var(--u) * 50);
+  line-height: 1.12;
+  text-align: center;
+  text-wrap: balance;
+}
+
+/* The QR in a cat-eared frame (the app's qr-frame art, drawn here so it stays sharp at 4K). */
+.tv-qr-frame {
+  position: relative;
+  margin-top: calc(var(--u) * 92);
+  padding: calc(var(--u) * 24);
+  border: calc(var(--u) * 6) solid var(--ink);
+  border-radius: calc(var(--u) * 64);
+  background: linear-gradient(180deg, #a35cff, #7b2fff 40%, #6a22e0);
+  box-shadow:
+    0 calc(var(--u) * 14) 0 var(--ink),
+    inset 0 calc(var(--u) * 6) 0 rgba(255, 255, 255, 0.35);
+}
+
+.tv-ear {
+  position: absolute;
+  bottom: calc(100% - var(--u) * 4);
+  width: calc(var(--u) * 126);
+  height: calc(var(--u) * 84);
+  background: var(--ink);
+}
+
+.tv-ear::after {
+  content: "";
+  position: absolute;
+  inset: calc(var(--u) * 20) calc(var(--u) * 26) 0;
+  background: #f04aa5;
+  clip-path: inherit;
+}
+
+.tv-ear.left {
+  left: calc(var(--u) * 70);
+  clip-path: polygon(0 100%, 14% 0, 100% 100%);
+}
+
+.tv-ear.right {
+  right: calc(var(--u) * 70);
+  clip-path: polygon(0 100%, 86% 0, 100% 100%);
+}
+
+.tv-qr-window {
+  padding: calc(var(--u) * 16);
+  border: calc(var(--u) * 5) solid var(--ink);
+  border-radius: calc(var(--u) * 36);
+  background: var(--white);
+}
+
+.tv .tv-qr {
+  width: calc(var(--u) * 560);
+  height: calc(var(--u) * 560);
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: var(--white);
+}
+
+.tv .tv-qr svg {
+  width: 100%;
+  height: 100%;
+}
+
+.tv-code {
+  position: relative;
+  min-width: calc(var(--u) * 460);
+  min-height: calc(var(--u) * 112);
+  margin: calc(var(--u) * -34) 0 0;
+  padding: calc(var(--u) * 6) calc(var(--u) * 36) calc(var(--u) * 10) calc(var(--u) * 50);
+  border: calc(var(--u) * 6) solid var(--ink);
+  border-radius: 999px;
+  background: var(--yellow);
+  box-shadow: 0 calc(var(--u) * 10) 0 var(--ink);
+  color: var(--ink);
+  font: 900 calc(var(--u) * 80) / 1.1 var(--round);
+  letter-spacing: 0.16em;
+  text-align: center;
+  white-space: nowrap;
+}
+
+.tv-games {
+  flex: 0 1 calc(var(--u) * 900);
+  display: flex;
+  flex-direction: column;
+  gap: calc(var(--u) * 64);
+}
+
+.tv-poster {
+  display: grid;
+  grid-template-columns: 46% 1fr;
+  height: calc(var(--u) * 400);
+  padding: 0;
+  overflow: hidden;
+  border: calc(var(--u) * 6) solid var(--ink);
+  border-radius: calc(var(--u) * 48);
+  background: linear-gradient(180deg, #a35cff, #6a22e0 55%, #4e13c4);
+  box-shadow:
+    0 calc(var(--u) * 14) 0 var(--ink),
+    inset 0 calc(var(--u) * 5) 0 rgba(255, 255, 255, 0.35);
+  color: var(--white);
+  text-align: left;
+}
+
+.tv-poster.tiles {
+  background: linear-gradient(180deg, #5ad7ff, #1c9be8 55%, #0e6fc0);
+}
+
+.tv .tv-poster:focus {
+  box-shadow:
+    0 calc(var(--u) * 14) 0 var(--ink),
+    inset 0 calc(var(--u) * 5) 0 rgba(255, 255, 255, 0.35),
+    0 0 calc(var(--u) * 70) calc(var(--u) * 14) rgba(255, 210, 31, 0.55);
+}
+
+.tv-poster-art {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  border-right: calc(var(--u) * 6) solid var(--ink);
+}
+
+.tv-poster-body {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: flex-start;
+  gap: calc(var(--u) * 28);
+  padding: calc(var(--u) * 28) calc(var(--u) * 36);
+  min-width: 0;
+}
+
+.tv-poster-title {
+  font-size: calc(var(--u) * 96);
+  line-height: 0.98;
+}
+
+.tv-players {
+  display: inline-flex;
+  align-items: center;
+  gap: calc(var(--u) * 14);
+  padding: calc(var(--u) * 8) calc(var(--u) * 22);
+  border-radius: 999px;
+  background: rgba(27, 11, 58, 0.5);
+  font: 800 calc(var(--u) * 30) var(--round);
+  white-space: nowrap;
+}
+
+.tv-dots {
+  display: inline-flex;
+  gap: calc(var(--u) * 6);
+}
+
+.tv-dots i {
+  width: calc(var(--u) * 18);
+  height: calc(var(--u) * 18);
+  border: calc(var(--u) * 3) solid var(--ink);
+  border-radius: 50%;
+}
+
+/* Waiting on the network: small, at the top, out of the way. */
+.tv-note {
+  position: absolute;
+  top: calc(var(--u) * 28);
+  left: 50%;
+  display: flex;
+  align-items: center;
+  gap: calc(var(--u) * 14);
+  padding: calc(var(--u) * 10) calc(var(--u) * 28);
+  border: calc(var(--u) * 4) solid var(--ink);
+  border-radius: 999px;
+  background: var(--ink);
+  font: 900 calc(var(--u) * 32) var(--round);
+  transform: translateX(-50%);
+  animation: fade-in 200ms ease-out both;
+  white-space: nowrap;
+}
+
+.tv-note .dot {
+  width: calc(var(--u) * 18);
+  height: calc(var(--u) * 18);
+  border-radius: 50%;
+  background: var(--refuse);
+  animation: pulse 1s ease-in-out infinite alternate;
+}
+
+/* A table, until its lobby and table screens are built: its code. */
+.tv-room-screen {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+}
+
+.tv-room-card {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: calc(var(--u) * 12);
+  width: calc(var(--u) * 900);
+  padding: calc(var(--u) * 150) calc(var(--u) * 60) calc(var(--u) * 60);
+  border-width: calc(var(--u) * 6);
+  border-radius: calc(var(--u) * 56);
+  box-shadow: 0 calc(var(--u) * 14) 0 var(--ink);
+}
+
+.tv-room-cat {
+  position: absolute;
+  top: calc(var(--u) * -110);
+}
+
+.tv-room-label {
+  font-size: calc(var(--u) * 56);
+}
+
+.tv-room-code {
+  font-size: calc(var(--u) * 150);
+  line-height: 1;
+  letter-spacing: 0.14em;
+  margin-right: -0.14em;
+}
+
+.tv-room-words {
+  margin: calc(var(--u) * 24) 0 0;
+  font-size: calc(var(--u) * 48);
+  text-align: center;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tv [data-tv]:focus {
+    transform: none;
+  }
+
+  .tv-sunburst,
+  .tv-logo {
+    animation: none;
+  }
+}

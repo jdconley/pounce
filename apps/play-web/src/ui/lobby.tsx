@@ -1,5 +1,5 @@
 import { parseRoomName } from "@pounce/play-api/room/names";
-import { useEffect, useState } from "preact/hooks";
+import { useState } from "preact/hooks";
 
 
 import { art, RINGS } from "../lib/art";
@@ -12,6 +12,7 @@ import { seatCat, seatName, seatPose } from "../table/seat";
 
 import { Button, Cat, Icon, IconButton, Sheet, Tip } from "./common";
 import { NameScreen } from "./firstrun";
+import { QrCode } from "./qr";
 
 import type { RoomStore } from "../store/room";
 import type { RoomView } from "@pounce/play-api/protocol";
@@ -248,19 +249,9 @@ export function Lobby(props: {
 }
 
 function QrCard(props: { code: string }) {
-  const [svg, setSvg] = useState("");
-  useEffect(() => {
-    // The QR library loads only when a code is shown.
-    void import("qrcode-generator").then(({ default: qrcode }) => {
-      const qr = qrcode(0, "M");
-      qr.addData(inviteLink(props.code));
-      qr.make();
-      setSvg(qr.createSvgTag({ cellSize: 6, margin: 2, scalable: true }));
-    });
-  }, [props.code]);
   return (
     <div class="qr-card">
-      <div class="qr" role="img" aria-label="QR code for this table" dangerouslySetInnerHTML={{ __html: svg }} />
+      <QrCode url={inviteLink(props.code)} label="QR code for this table" />
       <p class="qr-code outlined" aria-label={`Code ${props.code.split("").join(" ")}`}>
         {props.code}
       </p>

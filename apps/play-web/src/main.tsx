@@ -8,12 +8,13 @@ import { render } from "preact";
 
 import { App } from "./app";
 import { unlockAudio } from "./lib/sound";
-import { api } from "./net/api";
+import { api, tvApi } from "./net/api";
 import { reloadForUpdate, startPwa } from "./pwa";
 import { injectFaceStyles } from "./table/faces";
 
 injectFaceStyles();
 api.onUpdateRequired = reloadForUpdate;
+tvApi.onUpdateRequired = reloadForUpdate;
 startPwa();
 
 // Browsers start audio only after a tap or a key.

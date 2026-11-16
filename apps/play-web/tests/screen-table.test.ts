@@ -9,12 +9,12 @@ import { Clock, FakeSocket, flush } from "./fake-socket";
 
 /**
  * A TV table, read by the store as it is today: a snapshot says `screen: true` (applied as any
- * other), and the server relays `aim` messages, which the store skips. The samples are play-api's
- * `fixtures/protocol/screen-server-messages.json`.
+ * other), and the server relays `aim` messages, which the store keeps in `aims` and nowhere else.
+ * The samples are play-api's `fixtures/protocol/screen-server-messages.json`.
  */
 const samples = JSON.parse(
   readFileSync(new URL("../../play-api/fixtures/protocol/screen-server-messages.json", import.meta.url), "utf8"),
-) as Record<"snapshot" | "tilesSnapshot" | "aim" | "tilesAim" | "aimClear", { t: string; room?: { screen?: boolean; code: string } }>;
+) as Record<"snapshot" | "tilesSnapshot" | "aim" | "tilesAim" | "aimClear", { t: string; seat?: number; aim?: unknown; room?: { screen?: boolean; code: string } }>;
 
 function setup() {
   const clock = new Clock();
@@ -49,21 +49,28 @@ describe("a TV table, to the store as it is", () => {
     expect(store.state.error).toBeNull();
   });
 
-  test("aims change nothing, and break nothing after them", async () => {
+  test("an aim sets only aims; a snapshot after it lands; a clear removes it", async () => {
     const { sockets, store } = setup();
     store.start();
     await flush();
     sockets[0]!.open();
     sockets[0]!.receive(samples.snapshot);
     const before = structuredClone(store.state);
-    for (const name of ["aim", "tilesAim", "aimClear"] as const) {
+    for (const name of ["aim", "tilesAim"] as const) {
       expect(samples[name].t).toBe("aim");
-      expect(() => sockets[0]!.receive(samples[name])).not.toThrow();
-      expect(store.state, name).toEqual(before);
+      sockets[0]!.receive(samples[name]);
+      expect(store.state, name).toEqual({ ...before, aims: { [samples[name].seat!]: samples[name].aim } });
     }
     // Still reading: the next snapshot lands.
     sockets[0]!.receive(samples.tilesSnapshot);
     expect(store.state.room).toEqual(samples.tilesSnapshot.room);
     expect(store.state.error).toBeNull();
+    // A clear takes the seat's aim away, and nothing else.
+    sockets[0]!.receive(samples.tilesAim);
+    const aimed = structuredClone(store.state);
+    expect(aimed.aims[0]).toEqual(samples.tilesAim.aim);
+    expect(samples.aimClear.aim).toBeUndefined();
+    sockets[0]!.receive(samples.aimClear);
+    expect(store.state).toEqual({ ...aimed, aims: {} });
   });
 });
