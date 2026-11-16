@@ -15,8 +15,11 @@ import { noteGameFinished, reloadForUpdate, setSafeToReload } from "../pwa";
 import { addPerson, forgetTable, rememberTable, useApp } from "../store/app";
 import { autoClaimSeat, firstTableMessages, mySeats, practiceMessages } from "../store/lobby";
 import { RoomStore, type RoomState } from "../store/room";
+import { setView, showController, showSwitch, viewOf, type View } from "../store/views";
 import { CatTowerTable } from "../table/cattower";
+import { CtController } from "../table/ct-controller";
 import { seatCat, seatName } from "../table/seat";
+import { SwitchView } from "../table/shared";
 import { TilesTable } from "../table/tiles";
 
 import { Button, Cat, Icon, IconButton, Sheet } from "./common";
@@ -118,6 +121,14 @@ export function TableScreen(props: { code: string; intent: TableIntent }) {
   }, [state.rematch]);
   const wantRematch = useRef(false);
 
+  // Cards (just this phone's hand, the controller) or Table, while a TV shows the table.
+  const [view, setViewNow] = useState<View>(() => viewOf(props.code));
+  useEffect(() => setViewNow(viewOf(props.code)), [props.code]);
+  const changeView = (next: View) => {
+    setView(props.code, next);
+    setViewNow(next);
+  };
+
   const home = () => navigate({ kind: "home" });
   const [menu, setMenu] = useState<null | "menu" | "scores" | "forfeit">(null);
   const offline = state.everConnected && !state.online && ["lobby", "playing", "over", "connecting"].includes(state.phase);
@@ -173,10 +184,25 @@ export function TableScreen(props: { code: string; intent: TableIntent }) {
     );
   } else {
     const isTiles = room.gameId === "tiles";
+    // Tuna Tiles keeps its full table for now.
+    const tvSwitch = !isTiles && room.game !== null && showSwitch(room);
     body = (
       <main class="screen table-screen">
         <div class="room-bg" style={{ backgroundImage: `url(${art("room-bg")})` }} />
-        {isTiles && room.tiles ? <TilesTable store={store} state={state} /> : room.game ? <CatTowerTable store={store} state={state} /> : null}
+        {isTiles && room.tiles ? (
+          <TilesTable store={store} state={state} />
+        ) : room.game ? (
+          tvSwitch && showController(room, view) ? (
+            <CtController store={store} state={state} onView={changeView} />
+          ) : (
+            <CatTowerTable store={store} state={state} topInset={tvSwitch ? SWITCH_STRIP : 0} />
+          )
+        ) : null}
+        {tvSwitch && !showController(room, view) ? (
+          <div class="view-bar">
+            <SwitchView view="table" onChange={changeView} />
+          </div>
+        ) : null}
         <div class="table-menu">
           <IconButton icon="icon-paw-menu" label="Menu" plain onClick={() => setMenu("menu")} id="table-menu" />
         </div>
@@ -256,6 +282,9 @@ export function TableScreen(props: { code: string; intent: TableIntent }) {
     </>
   );
 }
+
+/** The strip along the top of the full table the Cards/Table switch takes: the switch and its margin. */
+const SWITCH_STRIP = 52;
 
 /** Who won, everyone's place, and Play again (GameOverView.swift). */
 function GameOver(props: { room: RoomView; onHome: () => void; onAgain: () => void }) {

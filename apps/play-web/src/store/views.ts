@@ -1,6 +1,10 @@
 /** Which view a table shows, Cards or Table, remembered per table (the newest 30 tables). */
 import { store } from "../lib/kv";
 
+import { mySeats } from "./lobby";
+
+import type { RoomView } from "@pounce/play-api/protocol";
+
 export type View = "cards" | "table";
 
 const KEY = "pounce.views";
@@ -24,3 +28,12 @@ export function setView(code: string, view: View): void {
   for (const old of keys.slice(0, Math.max(0, keys.length - KEEP))) delete all[old];
   store.set(KEY, JSON.stringify(all));
 }
+
+/** The Cards/Table switch shows while a TV shows the table and this phone holds a seat at it. */
+export const showSwitch = (room: RoomView): boolean => room.screen === true && mySeats(room).length > 0;
+
+/**
+ * A phone is a controller (just its cards) while a TV shows the table, it holds a seat, and it is
+ * on Cards. Otherwise it shows the full table: with no TV every phone does, whatever the switch says.
+ */
+export const showController = (room: RoomView, view: View): boolean => showSwitch(room) && view === "cards";

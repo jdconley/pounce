@@ -1,7 +1,9 @@
 import { beforeEach, describe, expect, test } from "vitest";
 
 import { store } from "../src/lib/kv";
-import { setView, viewOf } from "../src/store/views";
+import { setView, showController, showSwitch, viewOf } from "../src/store/views";
+
+import type { RoomView } from "@pounce/play-api/protocol";
 
 beforeEach(() => store.remove("pounce.views"));
 
@@ -30,5 +32,48 @@ describe("the Cards or Table view, kept per table", () => {
     setView("NEW", "table");
     expect(viewOf("T0")).toBe("table");
     expect(viewOf("T1")).toBe("cards");
+  });
+});
+
+describe("the controller or the full table", () => {
+  /** A table with seat 0 this device's (or nobody's), and a TV showing it (or not). */
+  const room = (opts: { screen?: boolean; seated?: boolean }): RoomView =>
+    ({
+      code: "BCDFG",
+      ...(opts.screen ? { screen: true } : {}),
+      seats: [
+        { kind: "human", yours: opts.seated ?? true, person: { id: "a", name: "Mo", cat: 1 } },
+        { kind: "human", yours: false, person: { id: "b", name: "Ava", cat: 2 } },
+      ],
+    }) as unknown as RoomView;
+
+  test("a seated phone shows the controller while a TV shows the table and it is on Cards", () => {
+    expect(showController(room({ screen: true }), "cards")).toBe(true);
+  });
+
+  test("Table is the full table, TV or not", () => {
+    expect(showController(room({ screen: true }), "table")).toBe(false);
+  });
+
+  test("with no TV every phone shows the full table, whatever the switch says", () => {
+    expect(showController(room({}), "cards")).toBe(false);
+    expect(showSwitch(room({}))).toBe(false);
+  });
+
+  test("a phone with no seat (watching) shows the full table and no switch", () => {
+    expect(showController(room({ screen: true, seated: false }), "cards")).toBe(false);
+    expect(showSwitch(room({ screen: true, seated: false }))).toBe(false);
+  });
+
+  test("the switch shows in both views while the TV is on", () => {
+    expect(showSwitch(room({ screen: true }))).toBe(true);
+  });
+
+  test("a phone on Table when the TV comes back stays on Table", () => {
+    setView("BCDFG", "table");
+    expect(showController(room({}), viewOf("BCDFG"))).toBe(false);
+    expect(showController(room({ screen: true }), viewOf("BCDFG"))).toBe(false);
+    setView("BCDFG", "cards");
+    expect(showController(room({ screen: true }), viewOf("BCDFG"))).toBe(true);
   });
 });

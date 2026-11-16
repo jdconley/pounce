@@ -14,11 +14,11 @@ import { useEffect, useMemo, useRef, useState } from "preact/hooks";
 import { buzz } from "../lib/haptics";
 import { reducedMotion } from "../lib/settings";
 import { play } from "../lib/sound";
-import { mySeats } from "../store/lobby";
 import { Button, Icon, learnTip, Tip, tipLearned, useMedia, useSize } from "../ui/common";
 
+import { ctMoves, useCtHand, useCtSeat } from "./ct-hand";
 import { ctLayout, trayPoses, type Insets } from "./ct-layout";
-import { discardNeedsTarget, hitTargets, layDownGroups, skipTargets } from "./ct-moves";
+import { discardNeedsTarget, hitTargets } from "./ct-moves";
 import { CtTable, ctStyle, type CtHover } from "./ct-public";
 import { inside, press, useLatest, type Point } from "./drag";
 import { CardFace, cardLabel } from "./faces";
@@ -27,7 +27,6 @@ import { seatName, SeatAvatar } from "./seat";
 import { Curtain } from "./shared";
 
 import type { RoomState, RoomStore } from "../store/room";
-import type { Action } from "@pounce/play-api/rules/engine";
 
 const REQ_WORDS = (r: Requirement): string => (r.kind === "set" ? `Set of ${r.size}` : r.kind === "run" ? `Run of ${r.size}` : `${r.size} of one coat`);
 
@@ -67,54 +66,24 @@ export function useInsets(): Insets {
   return insets;
 }
 
-/** `sounds: false` silences the game's own events (a phone whose table is on a TV); taps still sound. */
-export function CatTowerTable(props: { store: RoomStore; state: RoomState; sounds?: boolean }) {
+/**
+ * `sounds: false` silences the game's own events (a phone whose table is on a TV); taps still sound.
+ * `topInset` keeps a strip along the top clear (the Cards/Table switch, while a TV shows the table).
+ */
+export function CatTowerTable(props: { store: RoomStore; state: RoomState; sounds?: boolean; topInset?: number }) {
   const { store, state } = props;
   const sounds = props.sounds ?? true;
   const room = state.room!;
   const g = room.game!;
   const [rootRef, size] = useSize<HTMLDivElement>();
-  const insets = useInsets();
+  const safe = useInsets();
+  const insets = useMemo(() => ({ ...safe, top: safe.top + (props.topInset ?? 0) }), [safe, props.topInset]);
   const motion = useMemo(() => new Motion(reducedMotion), []);
   const els = useRef(new Map<string, HTMLElement>());
 
-  // Whose hand is on show: the only seat on this device, or on a shared device the seat whose
-  // turn it is, once its holder has taken the device (PassAndPlay.swift).
-  const mine = mySeats(room).filter((s) => !g.forfeited[s]);
-  const turnKey = `${g.round}:${g.turn}`;
-  const [revealed, setRevealed] = useState<{ seat: number; key: string } | null>(null);
-  const shared = mine.length > 1;
-  const acting = !shared ? (mine[0] ?? null) : mine.includes(g.turn) && g.status === "playing" ? g.turn : null;
-  const showHand = acting !== null && (!shared || (revealed?.seat === acting && revealed.key === turnKey));
-  const curtainSeat = shared && acting !== null && !showHand ? acting : null;
-  const seat = acting;
-  const myTurn = seat !== null && g.turn === seat && g.status === "playing";
-
-  // The hand's order and the trays are this device's own.
-  const serverHand = showHand && seat !== null ? (g.hands[seat] ?? []) : [];
-  const [order, setOrder] = useState<CardId[]>([]);
-  const [trays, setTrays] = useState<CardId[][]>([]);
-  const trayKey = `${g.round}:${seat}:${g.phase[seat ?? 0]}`;
-  const lastTrayKey = useRef(trayKey);
-  const phaseIndex = seat === null ? 0 : (g.phase[seat] ?? 0);
-  const reqs = PHASES[phaseIndex] ?? [];
-  const laidMine = seat !== null && g.laid[seat] !== null && g.laid[seat] !== undefined;
-  const showTrays = showHand && !laidMine && g.status === "playing" && reqs.length > 0;
-
-  useEffect(() => {
-    if (lastTrayKey.current !== trayKey) {
-      lastTrayKey.current = trayKey;
-      setTrays([]);
-    }
-  }, [trayKey]);
-
-  const inHand = new Set(serverHand);
-  const trayCards = (trays.length === reqs.length ? trays : reqs.map((_, i) => trays[i] ?? [])).map((t) => t.filter((c) => inHand.has(c)));
-  const inTrays = new Set(showTrays ? trayCards.flat() : []);
-  const ordered = [...order.filter((c) => inHand.has(c) && !inTrays.has(c)), ...serverHand.filter((c) => !order.includes(c) && !inTrays.has(c))];
-  useEffect(() => {
-    if (ordered.join() !== order.filter((c) => inHand.has(c) && !inTrays.has(c)).join()) setOrder((o) => [...o.filter((c) => inHand.has(c)), ...serverHand.filter((c) => !o.includes(c))]);
-  });
+  const { mine, seat, showHand, curtainSeat, myTurn, reveal } = useCtSeat(room);
+  const hand = useCtHand(room, seat, showHand);
+  const { ordered, trayCards, inTrays, reqs, phaseIndex, laidMine, showTrays } = hand;
 
   const [selected, setSelected] = useState<CardId | null>(null);
   const [hover, setHover] = useState<CtHover>(null);
@@ -154,7 +123,7 @@ export function CatTowerTable(props: { store: RoomStore; state: RoomState; sound
           if (ev.kind === "turn" && mine.includes(ev.seat)) {
             if (sounds) play("tick", 0.6);
             buzz("turn");
-          } else if (ev.kind === "roundStarted") setTrays([]);
+          } else if (ev.kind === "roundStarted") hand.setTrays([]);
         },
       }),
     [store, mine.join(), sounds],
@@ -191,83 +160,20 @@ export function CatTowerTable(props: { store: RoomStore; state: RoomState; sound
   };
 
   // Moves.
-  const act = (action: Action) => {
-    if (seat === null) return false;
-    return store.act(seat, action);
-  };
-  const skipCandidates = seat === null ? [] : skipTargets(g, seat, room.seats);
-
-  const draw = (from: "deck" | "discard") => {
-    if (!myTurn || g.step !== "draw" || state.pending) return nope();
-    if (from === "discard" && (g.discardTop === null || card(g.discardTop).kind === "cucumber")) return nope();
-    learnTip("ct.draw");
-    buzz("pick");
-    act({ type: "draw", from });
-  };
-
-  const discard = (c: CardId, skipTarget?: number) => {
-    if (!myTurn || g.step !== "play" || state.pending) return nope();
-    if (discardNeedsTarget(c) && skipTarget === undefined && skipCandidates.length > 0) {
-      if (skipCandidates.length === 1) skipTarget = skipCandidates[0];
-      else {
-        setSkipPick(c);
-        return;
-      }
-    }
-    learnTip("ct.discard");
-    setHeld(new Map([[c, L.discard]]));
-    setSelected(null);
-    play("thud", 0.5);
-    act(skipTarget === undefined ? { type: "discard", card: c } : { type: "discard", card: c, skipTarget });
-  };
-
-  const toTray = (c: CardId, i: number) => {
-    if (!showTrays || i >= reqs.length) return nope();
-    learnTip("ct.trays");
-    setTrays(() => {
-      const next = reqs.map((_, k) => (trayCards[k] ?? []).filter((x) => x !== c));
-      if ((next[i]?.length ?? 0) >= (reqs[i]?.size ?? 0)) return trayCards;
-      next[i] = [...(next[i] ?? []), c];
-      return next;
-    });
-    setSelected(null);
-    play("pop", 0.5);
-  };
-
-  const outOfTray = (c: CardId) => {
-    setTrays(trayCards.map((t) => t.filter((x) => x !== c)));
-    play("pop", 0.4);
-  };
-
-  const groups = showTrays && trayCards.length === reqs.length ? layDownGroups(trayCards, phaseIndex) : null;
+  const { nope, draw, discard, toTray, outOfTray, groups, layDown, hitOk, hit, skipCandidates } = ctMoves({
+    store,
+    state,
+    room,
+    seat,
+    myTurn,
+    hand,
+    motion,
+    discardPose: L.discard,
+    setHeld,
+    setSelected,
+    setSkipPick,
+  });
   const groupsReady = groups !== null;
-  const layDown = () => {
-    if (!myTurn || g.step !== "play" || groups === null || state.pending) return nope();
-    learnTip("ct.lay");
-    const holdAt = new Map<CardId, Pose>();
-    for (const c of trayCards.flat()) {
-      const p = motion.last(`c${c}`);
-      if (p) holdAt.set(c, p);
-    }
-    setHeld(holdAt);
-    act({ type: "layDown", groups });
-  };
-
-  /** Whether `c` can be hit on seat `s`'s group `gi`: on that end, or on either for a run. */
-  const hitOk = (c: CardId, s: number, gi: number, side?: HitSide) =>
-    laidMine && hitTargets(c, g.laid).some((t) => t.seat === s && t.group === gi && (side === undefined || t.side === undefined || t.side === side));
-  const hit = (c: CardId, s: number, gi: number, side?: HitSide) => {
-    if (!myTurn || g.step !== "play" || state.pending || !hitOk(c, s, gi, side)) return nope();
-    learnTip("ct.hit");
-    setSelected(null);
-    act(side ? { type: "hit", card: c, target: { seat: s, group: gi }, side } : { type: "hit", card: c, target: { seat: s, group: gi } });
-  };
-
-  function nope() {
-    play("nope", 0.6);
-    buzz("nope");
-    return undefined;
-  }
 
   // Where a card dropped at `p` would go.
   const targetAt = (p: Point, c: CardId): CtHover => {
@@ -307,11 +213,7 @@ export function CatTowerTable(props: { store: RoomStore; state: RoomState; sound
     if (t.kind === "seat" && discardNeedsTarget(c)) return discard(c, t.seat);
     if (t.kind === "hand") {
       if (inTrays.has(c)) outOfTray(c);
-      const without = ordered.filter((x) => x !== c);
-      const before = ordered.indexOf(c);
-      const at = t.index > before && before >= 0 ? t.index - 1 : t.index;
-      without.splice(Math.min(at, without.length), 0, c);
-      setOrder(without);
+      hand.reorder(c, t.index);
     }
   };
 
@@ -488,7 +390,7 @@ export function CatTowerTable(props: { store: RoomStore; state: RoomState; sound
           </div>
         ) : null}
 
-        {curtainSeat !== null ? <Curtain name={seatName(room.seats[curtainSeat])} cat={room.seats[curtainSeat]?.person?.cat ?? 0} onReveal={() => setRevealed({ seat: curtainSeat, key: turnKey })} /> : null}
+        {curtainSeat !== null ? <Curtain name={seatName(room.seats[curtainSeat])} cat={room.seats[curtainSeat]?.person?.cat ?? 0} onReveal={() => reveal(curtainSeat)} /> : null}
 
         <Tip id="ct.draw" anchor="deck" text="Take a card from the deck or the discard pile." show={myTurn && g.step === "draw" && !state.pending} />
         <Tip id="ct.trays" anchor="tray-0" text={`This round: ${phaseWords(phaseIndex)}. Drag cards into the trays.`} show={myTurn && g.step === "play" && showTrays && tipLearned("ct.draw")} />

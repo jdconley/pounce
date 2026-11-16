@@ -1,4 +1,7 @@
-/** Pieces both tables use: cards in flight, the pass-the-device curtain, the round's results. */
+/**
+ * Pieces both tables use: cards in flight, the pass-the-device curtain, the round's results, and the
+ * Cards/Table switch of a phone whose table is on a TV.
+ */
 import { useLayoutEffect, useRef, useState } from "preact/hooks";
 
 
@@ -6,12 +9,13 @@ import { art } from "../lib/art";
 import { buzz } from "../lib/haptics";
 import { reducedMotion } from "../lib/settings";
 import { play } from "../lib/sound";
-import { Cat } from "../ui/common";
+import { Cat, learnTip } from "../ui/common";
 
 import { CardBack, CardFace } from "./faces";
 import { MOVE, transformOf, type Pose } from "./motion";
 import { seatCat, seatName } from "./seat";
 
+import type { View } from "../store/views";
 import type { RoomView } from "@pounce/play-api/protocol";
 import type { CardId } from "@pounce/play-api/rules/cards";
 import type { GameEvent } from "@pounce/play-api/rules/engine";
@@ -121,6 +125,32 @@ export function RoundOver(props: { seats: RoomView["seats"]; ev: Extract<GameEve
           })}
         </ul>
       </div>
+    </div>
+  );
+}
+
+/**
+ * Cards or Table, one tap, for a phone whose table is on a TV: just this player's cards (the
+ * controller), or the whole table as it is without a TV. It sits at the top of both.
+ */
+export function SwitchView(props: { view: View; onChange: (view: View) => void; style?: Record<string, string> }) {
+  return (
+    <div id="view-switch" class="view-switch" role="group" aria-label="View" style={props.style}>
+      {(["cards", "table"] as const).map((v) => (
+        <button
+          type="button"
+          class={props.view === v ? "on" : ""}
+          aria-pressed={props.view === v}
+          onClick={() => {
+            play("pop", 0.4);
+            buzz("tap");
+            learnTip("tv.switch");
+            if (v !== props.view) props.onChange(v);
+          }}
+        >
+          {v === "cards" ? "Cards" : "Table"}
+        </button>
+      ))}
     </div>
   );
 }

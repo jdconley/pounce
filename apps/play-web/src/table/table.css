@@ -933,3 +933,253 @@
     gap: 4px;
   }
 }
+
+/* A phone whose table is on a TV. The Cards/Table switch: on the controller, and over the full
+   table's top strip (table-screen.tsx). */
+.view-switch {
+  z-index: 40;
+  display: flex;
+  padding: 3px;
+  border: 3px solid var(--ink);
+  border-radius: 999px;
+  background: rgba(27, 11, 58, 0.78);
+  box-shadow: 0 4px 0 var(--ink);
+}
+
+.view-switch button {
+  flex: 1;
+  min-width: 0;
+  padding: 0 8px;
+  border: 0;
+  border-radius: 999px;
+  background: none;
+  color: rgba(255, 255, 255, 0.82);
+  font: 900 1.05rem var(--round);
+}
+
+.view-switch button.on {
+  background: linear-gradient(180deg, #ffc21a, #ff8a00);
+  color: var(--white);
+  -webkit-text-stroke: 0.16em var(--ink);
+  paint-order: stroke fill;
+  box-shadow: 0 0 0 2.5px var(--ink), inset 0 2px 0 rgba(255, 255, 255, 0.45);
+}
+
+.view-bar {
+  position: absolute;
+  z-index: 40;
+  top: calc(var(--safe-top) + 8px);
+  left: calc(var(--safe-left) + 8px);
+}
+
+.view-bar .view-switch {
+  width: 164px;
+  height: 44px;
+}
+
+/* The controller (ct-controller.tsx): placed by ct-controller-layout.ts like the table's pieces. */
+.ctl-status {
+  z-index: 30;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+}
+
+.ctl-status-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  max-width: 100%;
+  height: 100%;
+  margin: 0;
+  padding: 0 20px 0 3px;
+  border: 3px solid var(--ink);
+  border-radius: 999px;
+  background: rgba(27, 11, 58, 0.8);
+  box-shadow: 0 4px 0 var(--ink);
+  color: var(--white);
+  font: 900 clamp(1rem, 4.6vw, 1.4rem) var(--round);
+  -webkit-text-stroke: 0.14em var(--ink);
+  paint-order: stroke fill;
+  white-space: nowrap;
+}
+
+.ctl-status-pill img {
+  flex: none;
+  height: calc(100% - 4px);
+  aspect-ratio: 1;
+  border: 2.5px solid var(--ink);
+  border-radius: 50%;
+  background: var(--ring);
+  object-fit: contain;
+}
+
+.ctl-status-pill span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.ctl-status-pill.mine {
+  background: linear-gradient(180deg, #ffc21a, #ff8a00);
+  animation: status-pop 420ms var(--ease-spring) both;
+}
+
+@keyframes status-pop {
+  from {
+    scale: 0.8;
+  }
+  to {
+    scale: 1;
+  }
+}
+
+/* Off turn: the cat whose turn it is, big, breathing. Its name is the status's. */
+.ctl-hero {
+  display: grid;
+  place-items: center;
+  pointer-events: none;
+}
+
+.ctl-hero .name-tag {
+  display: none;
+}
+
+.ctl-hero .seat-avatar {
+  animation: hero-bob 1.6s ease-in-out infinite alternate;
+}
+
+@keyframes hero-bob {
+  to {
+    translate: 0 -6px;
+  }
+}
+
+/* After the draw the deck rests. */
+.ctl .deck:disabled .deck-card {
+  filter: drop-shadow(0 2px 0 rgba(27, 11, 58, 0.55)) saturate(0.6) brightness(0.8);
+}
+
+.ctl .pile-count {
+  min-width: 36px;
+  font-size: 1.05rem;
+}
+
+/* Where the picked card can be hit: a short list, the chosen one lit (and lit on the TV). */
+.ctl-hits-at {
+  z-index: 30;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  pointer-events: none;
+}
+
+.ctl-hits {
+  position: relative;
+  display: flex;
+  max-height: 100%;
+  padding: 8px;
+  pointer-events: auto;
+  animation: sheet-in 260ms var(--ease-spring) both;
+}
+
+.ctl-hits ul {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  touch-action: pan-y;
+}
+
+.ctl-hit {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  min-height: 44px;
+  padding: 2px 16px 2px 3px;
+  border: 3px solid var(--ink);
+  border-radius: 999px;
+  background: linear-gradient(180deg, #b183ff, #7b2fff);
+  box-shadow: 0 3px 0 var(--ink);
+  color: var(--white);
+  font: 900 1.05rem var(--round);
+  -webkit-text-stroke: 0.14em var(--ink);
+  paint-order: stroke fill;
+  text-align: left;
+}
+
+.ctl-hit img {
+  flex: none;
+  width: 34px;
+  height: 34px;
+  border: 2.5px solid var(--ink);
+  border-radius: 50%;
+  background: var(--ring);
+  object-fit: contain;
+}
+
+.ctl-hit .label {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ctl-hit .end {
+  font-size: 0.85rem;
+}
+
+.ctl-hit.on {
+  background: linear-gradient(180deg, #ffe66b, #ffd21f);
+  box-shadow: 0 0 0 3px var(--yellow), 0 3px 0 var(--ink);
+  color: var(--ink);
+  -webkit-text-stroke: 0;
+}
+
+.ctl-hits-close {
+  position: absolute;
+  top: -12px;
+  right: -12px;
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border: 2.5px solid var(--ink);
+  border-radius: 50%;
+  background: var(--ink);
+  color: var(--white);
+}
+
+.ctl-actions {
+  z-index: 30;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  pointer-events: none;
+}
+
+.ctl-actions > * {
+  pointer-events: auto;
+}
+
+.ctl-cue {
+  margin: 0;
+  padding: 6px 18px;
+  border: 2.5px solid var(--ink);
+  border-radius: 999px;
+  background: rgba(27, 11, 58, 0.78);
+  color: var(--white);
+  font: 900 1.1rem var(--round);
+}
+
+.ctl-hand {
+  pointer-events: none;
+}

@@ -331,7 +331,8 @@ export function CtTable(props: CtPublicProps & Partial<CtHandProps>) {
   );
 }
 
-function DeckCards(props: { count: number }) {
+/** The deck: three backs and its count. */
+export function DeckCards(props: { count: number }) {
   return (
     <>
       <span class="deck-card d3" />

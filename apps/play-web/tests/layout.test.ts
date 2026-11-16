@@ -1,5 +1,6 @@
 import { describe, expect, test } from "vitest";
 
+import { ctControllerLayout } from "../src/table/ct-controller-layout";
 import { ctLayout, fan, tvMenu } from "../src/table/ct-layout";
 import { tilesLayout } from "../src/table/tiles-layout";
 
@@ -251,5 +252,114 @@ describe("Tuna Tiles on a TV", () => {
   test("a near-empty board draws its pieces bigger", () => {
     const few = tilesLayout({ width: 1920, height: 1080, insets: none, opponents: seatsOf(4), sets: [3, 4], rack: 0, tv: true });
     expect(few.pw).toBeGreaterThan(tv(1920, 1080, 4).pw);
+  });
+});
+
+describe("Cat Tower on a phone controller", () => {
+  /** The safe areas of each frame: notched phones, a home-bar iPad, a phone held sideways. */
+  const ipad = { top: 24, right: 0, bottom: 20, left: 0 };
+  const CTL_SIZES = [
+    [320, 568, portrait],
+    [375, 667, portrait],
+    [390, 844, portrait],
+    [430, 932, portrait],
+    [820, 1180, ipad],
+    [1180, 820, ipad],
+    [844, 390, sideways],
+  ] as const;
+  const STEPS = ["off", "draw", "play"] as const;
+  const CASES = CTL_SIZES.flatMap(([w, h, insets]) => STEPS.flatMap((step) => [0, 3].map((trays) => [w, h, step, trays, insets] as const)));
+  const layout = (width: number, height: number, step: (typeof STEPS)[number], trays: number, insets: typeof portrait) =>
+    ctControllerLayout({ width, height, insets, handCount: 11, trays: step === "off" ? 0 : trays, step });
+  /** A card's box as drawn: turned about its centre and scaled. */
+  const turned = (p: { x: number; y: number; r?: number; s?: number }, w: number, h: number): Box => {
+    const s = p.s ?? 1;
+    const a = ((p.r ?? 0) * Math.PI) / 180;
+    const bw = (Math.abs(Math.cos(a)) * w + Math.abs(Math.sin(a)) * h) * s;
+    const bh = (Math.abs(Math.sin(a)) * w + Math.abs(Math.cos(a)) * h) * s;
+    return { x: p.x + w / 2 - bw / 2, y: p.y + h / 2 - bh / 2, w: bw, h: bh };
+  };
+  const union = (bs: Box[]): Box => {
+    const x = Math.min(...bs.map((b) => b.x));
+    const y = Math.min(...bs.map((b) => b.y));
+    return { x, y, w: Math.max(...bs.map((b) => b.x + b.w)) - x, h: Math.max(...bs.map((b) => b.y + b.h)) - y };
+  };
+  /** Everything the controller draws, by name. */
+  const parts = (L: ReturnType<typeof ctControllerLayout>) => {
+    const out: [string, Box][] = [
+      ["switch", L.switch],
+      ["menu", L.menu],
+      ["status", L.status],
+      ["hand", union(L.hand.map((p) => turned(p, L.cw, L.ch)))],
+    ];
+    if (L.piles) out.push(["deck", L.piles.deckRect], ["discard", L.piles.discardRect]);
+    if (L.actions) out.push(["actions", L.actions]);
+    if (L.trays.length > 0) L.trays.forEach((t, i) => out.push([`tray ${i}`, t]));
+    else if (L.work) out.push(["hit list", L.work]);
+    if (L.hero) out.push(["hero", L.hero]);
+    return out;
+  };
+
+  test.each(CASES)("at %i x %i, %s step, %i trays: everything is inside the safe frame", (width, height, step, trays, insets) => {
+    const L = layout(width, height, step, trays, insets);
+    const frame = { x: insets.left, y: insets.top, w: width - insets.left - insets.right, h: height - insets.top - insets.bottom };
+    for (const [name, r] of parts(L)) {
+      expect(within({ x: r.x - frame.x, y: r.y - frame.y, w: r.w, h: r.h }, frame.w, frame.h), `${name} ${JSON.stringify(r)}`).toBe(true);
+      expect(r.w, name).toBeGreaterThan(0);
+      expect(r.h, name).toBeGreaterThan(0);
+    }
+    for (const p of L.hand) expect(within(turned(p, L.cw, L.ch), width, height)).toBe(true);
+  });
+
+  test.each(CASES)("at %i x %i, %s step, %i trays: nothing overlaps", (width, height, step, trays, insets) => {
+    const L = layout(width, height, step, trays, insets);
+    for (const [[a, ra], [b, rb]] of pairs(parts(L))) expect(overlaps(ra, rb), `${a} and ${b}`).toBe(false);
+  });
+
+  test.each(CASES)("at %i x %i, %s step, %i trays: the hand is big, and every card's corner shows", (width, height, step, trays, insets) => {
+    const L = layout(width, height, step, trays, insets);
+    expect(L.hand).toHaveLength(11);
+    expect(L.cw).toBeGreaterThanOrEqual(56);
+    for (let i = 1; i < L.hand.length; i++) expect(L.hand[i]!.x - L.hand[i - 1]!.x).toBeGreaterThanOrEqual(L.cw * 0.4);
+  });
+
+  test("at 320 wide a card is at least 56 px, and grows with the screen", () => {
+    const small = layout(320, 568, "play", 3, portrait);
+    const big = layout(430, 932, "play", 3, portrait);
+    const ipadL = layout(820, 1180, "play", 3, ipad);
+    expect(small.cw).toBeGreaterThanOrEqual(56);
+    expect(big.cw).toBeGreaterThan(small.cw);
+    expect(ipadL.cw).toBeGreaterThan(big.cw);
+  });
+
+  test.each(CTL_SIZES)("at %i x %i: your turn's piles are bigger than a card in the hand, and the same in both steps", (width, height, insets) => {
+    const draw = layout(width, height, "draw", 3, insets);
+    const play = layout(width, height, "play", 3, insets);
+    expect(draw.piles!.deckRect.w).toBeGreaterThanOrEqual(draw.cw * 0.9);
+    expect(play.piles).toEqual(draw.piles);
+    expect(play.hand).toEqual(draw.hand);
+  });
+
+  test.each(CTL_SIZES)("at %i x %i: off turn there are no piles, trays or buttons, just the hand and whose turn", (width, height, insets) => {
+    const L = layout(width, height, "off", 0, insets);
+    expect(L.piles).toBeNull();
+    expect(L.actions).toBeNull();
+    expect(L.work).toBeNull();
+    expect(L.trays).toEqual([]);
+    expect(L.hero).not.toBeNull();
+  });
+
+  test("buttons are big enough to tap: the switch, the actions and each tray", () => {
+    for (const [w, h, insets] of CTL_SIZES) {
+      const L = layout(w, h, "play", 3, insets);
+      expect(L.switch.h).toBeGreaterThanOrEqual(44);
+      expect(L.actions!.h).toBeGreaterThanOrEqual(44);
+      for (const t of L.trays) expect(t.h).toBeGreaterThanOrEqual(44);
+    }
+  });
+
+  test("the menu's place is the table menu's: the top-right corner of the safe area", () => {
+    const L = layout(390, 844, "draw", 3, portrait);
+    expect(L.menu).toEqual({ x: 390 - 8 - 44, y: portrait.top + 8, w: 44, h: 44 });
   });
 });
