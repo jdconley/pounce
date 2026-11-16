@@ -1,3 +1,4 @@
+import type { GameAim } from "../protocol";
 import type { Seat } from "../rules/engine";
 import type { Rng, Seed } from "../rules/rng";
 
@@ -31,9 +32,9 @@ export interface GameModule<S, A, V, E, Err extends string = string> {
    * A client's live `aim` as it came off the wire, fully validated, or null when it is not this
    * game's kind of aim. Whether it points at real things is `aimAllowed`'s to say.
    */
-  parseAim(raw: unknown): object | null;
+  parseAim(raw: unknown): GameAim | null;
   /** True when `aim` points only at things every seat can see (never at another seat's hand or the pool). */
-  aimAllowed(s: S, seat: Seat, aim: object): boolean;
+  aimAllowed(s: S, seat: Seat, aim: GameAim): boolean;
   phase(s: S): GamePhase;
   /** What the room applies, for seat 0, once the game has sat `between` for a moment; null for a game that never is. */
   betweenAction: A | null;

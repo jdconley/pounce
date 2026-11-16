@@ -11,6 +11,7 @@ import type { GameModule } from "../games/module";
 import type {
   ClientMessage,
   ErrorCode,
+  GameAim,
   NudgeView,
   Person,
   Presence,
@@ -276,6 +277,10 @@ export const RETIRE_WARNING_MS = MS_PER_DAY;
  * phones aren't told and told again (divided by the dev speed).
  */
 export const SCREEN_GRACE_MS = 10_000;
+
+/** Most aims a device may send in a second; more are dropped. */
+export const AIM_PER_SECOND = 10;
+const AIM_WINDOW_MS = 1000;
 const MOVE_CODE_TTL_MS = 10 * MS_PER_MINUTE;
 const MOVE_FAILURE_WINDOW_MS = 10 * MS_PER_MINUTE;
 const MAX_MOVE_FAILURES = 5;
@@ -324,6 +329,8 @@ export class RoomCore<S = CatTowerState> {
   private movedBy: Person | null = null;
   /** Each device's connection quality (not persisted). */
   private readonly link = new LinkTracker();
+  /** When each device's recent aims were sent (not persisted: aim is not state). */
+  private readonly aimTimes = new Map<string, number[]>();
 
   /** `game`: left out, the module `state.game` names; tests pass a stand-in. */
   constructor(
@@ -397,6 +404,9 @@ export class RoomCore<S = CatTowerState> {
 
   /** The room's game's own check of an `act` message's action (`parseClientMessage`). */
   parseAction = (raw: unknown): GameAction | null => this.game.parseAction(raw) as GameAction | null;
+
+  /** The room's game's own check of an `aim` message's aim (`parseClientMessage`). */
+  parseAim = (raw: unknown): GameAim | null => this.game.parseAim(raw);
 
   /** The seat that must act next; null in the lobby and whenever nobody is to act. */
   actor(): Seat | null {
@@ -559,7 +569,8 @@ export class RoomCore<S = CatTowerState> {
   private adoptDevices(rule: AdoptRule): void {
     if ("person" in rule) {
       const device = this.state.devices[rule.deviceId];
-      if (device) device.players = { ...device.players, ...rule.person };
+      // A screen speaks for nobody, whoever's account it is signed in to.
+      if (device && !this.isScreen(rule.deviceId)) device.players = { ...device.players, ...rule.person };
       return;
     }
     for (const device of Object.values(this.state.devices)) {
@@ -1036,9 +1047,32 @@ export class RoomCore<S = CatTowerState> {
         return this.features.nudge ? this.nudge(deviceId, msg.seat) : [this.fail(deviceId, "bad_message")];
       case "retire":
         return this.retire(deviceId, msg.seat);
+      case "aim":
+        return this.features.tv ? this.aim(deviceId, msg.seat, msg.aim) : [this.fail(deviceId, "bad_message")];
       default:
         return [this.fail(deviceId, "bad_message")];
     }
+  }
+
+  /**
+   * Where the acting player is pointing, passed on to every other connected device. Not state: no
+   * seq, no save. Anything that isn't a live, allowed, unhurried aim by the acting seat is dropped.
+   */
+  private aim(deviceId: string, seat: Seat, aim: GameAim | undefined): Outbound[] {
+    const game = this.state.gameState;
+    if (!this.midGame() || game === null || this.actor() !== seat || !this.controls(deviceId, seat)) return [];
+    if (aim !== undefined && !this.game.aimAllowed(game, seat, aim)) return [];
+    const now = this.now();
+    const recent = (this.aimTimes.get(deviceId) ?? []).filter((at) => at > now - AIM_WINDOW_MS);
+    if (recent.length >= AIM_PER_SECOND) {
+      this.aimTimes.set(deviceId, recent);
+      return [];
+    }
+    this.aimTimes.set(deviceId, [...recent, now]);
+    const message: ServerMessage = aim === undefined ? { t: "aim", seat } : { t: "aim", seat, aim };
+    return Object.entries(this.state.devices)
+      .filter(([id, device]) => device.connected && id !== deviceId)
+      .map(([id]) => ({ to: id, message }));
   }
 
   private claim(deviceId: string, seat: Seat, person: Person): Outbound[] {

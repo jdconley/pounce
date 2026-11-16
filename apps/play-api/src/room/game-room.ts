@@ -213,7 +213,7 @@ export class GameRoom extends DurableObject<Env> {
       ws.close(NORMAL_CLOSURE);
       return;
     }
-    const parsed = typeof data === "string" ? parseClientMessage(data, core.parseAction) : null;
+    const parsed = typeof data === "string" ? parseClientMessage(data, core.parseAction, core.parseAim) : null;
     if (parsed === null || "error" in parsed) {
       send(ws, parsed === null ? BAD_MESSAGE : { t: "error", code: parsed.error });
       return;

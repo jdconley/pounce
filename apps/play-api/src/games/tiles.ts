@@ -59,7 +59,7 @@ export const tiles: GameModule<TilesState, TilesAction, TilesView, TilesEvent, T
   parseAim,
   // A draft may use the table and this seat's own rack: never another seat's rack or the pool.
   aimAllowed: (s, seat, aim) => {
-    const here = new Set<TileId>([...s.table.flat(), ...(s.racks[seat] as TileId[])]);
+    const here = new Set<TileId>([...s.table.flat(), ...(s.racks[seat] ?? [])]);
     return (aim as TilesAim).table.every((set) => set.every((id) => here.has(id)));
   },
   // One round is one game: there is never a deal to wait for.

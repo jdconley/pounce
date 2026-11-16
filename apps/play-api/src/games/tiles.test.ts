@@ -105,4 +105,10 @@ describe("tiles aim", () => {
     expect(tiles.aimAllowed(s, 0, { table: [[...onTable, s.racks[1]![0]!]] })).toBe(false);
     expect(tiles.aimAllowed(s, 0, { table: [[s.pool[0]!]] })).toBe(false);
   });
+
+  it("aimAllowed is false, not a throw, for a seat that isn't there", () => {
+    const s = tiles.create(2, seedOf(42));
+    expect(tiles.aimAllowed(s, 7, { table: [[s.racks[0]![0]!]] })).toBe(false);
+    expect(tiles.aimAllowed(s, 7, { table: [] })).toBe(true);
+  });
 });

@@ -198,6 +198,16 @@ describe("a screen", () => {
     }
   });
 
+  it("never gains a player by adopt, even one signed in to a seated player's account", () => {
+    const room = build(true, "tv");
+    phones(room);
+    room.connect("tv", {}, "screen");
+    room.handle("a", { t: "start" });
+    room.adopt({ person: { [person(1).id]: "p_A" }, deviceId: "tv" });
+    expect(room.controlledSeats("tv")).toEqual([]);
+    expect(room.state.devices.tv?.players).toBeUndefined();
+  });
+
   it("the grace shrinks with the dev speed", () => {
     const state = RoomCore.create("BCDFG", "host", clock);
     const room = new RoomCore(state, () => clock, rng, undefined, 10, { streaks: true, tv: true });
