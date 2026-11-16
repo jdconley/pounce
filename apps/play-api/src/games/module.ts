@@ -27,6 +27,13 @@ export interface GameModule<S, A, V, E, Err extends string = string> {
    * this game's actions. The only guard in front of `apply`, which trusts the shape it is given.
    */
   parseAction(raw: unknown): A | null;
+  /**
+   * A client's live `aim` as it came off the wire, fully validated, or null when it is not this
+   * game's kind of aim. Whether it points at real things is `aimAllowed`'s to say.
+   */
+  parseAim(raw: unknown): object | null;
+  /** True when `aim` points only at things every seat can see (never at another seat's hand or the pool). */
+  aimAllowed(s: S, seat: Seat, aim: object): boolean;
   phase(s: S): GamePhase;
   /** What the room applies, for seat 0, once the game has sat `between` for a moment; null for a game that never is. */
   betweenAction: A | null;

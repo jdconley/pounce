@@ -79,6 +79,11 @@ export interface Env {
    */
   NUDGE?: string;
   /**
+   * Pounce on the TV (docs/superpowers/specs/2026-11-16-tv-table-design.md, `tvOn`): screens,
+   * live aim and screen links. wrangler.jsonc turns it on; off, the server answers as before.
+   */
+  TV?: string;
+  /**
    * The games rooms may be created for beyond Cat Tower: a comma-separated list of game ids
    * (`gamesOn` in src/games, e.g. "tiles"). Empty or unset, as in production's wrangler.jsonc
    * today, only Cat Tower: asking for any other game is refused, as it always was. Tests and
@@ -174,6 +179,11 @@ export function devSpeed(env: Pick<Env, "DEV_SPEED">): number {
  */
 export function linkOn(env: Pick<Env, "LINK">): boolean {
   return ["on", "1", "true"].includes((env.LINK ?? "").toLowerCase());
+}
+
+/** Pounce on the TV when "on" (see `Env.TV`). */
+export function tvOn(env: Pick<Env, "TV">): boolean {
+  return ["on", "1", "true"].includes((env.TV ?? "").toLowerCase());
 }
 
 /** Nudges when "on" (see `Env.NUDGE`). The push half also needs `NOTIFY` (`notifyOn`). */

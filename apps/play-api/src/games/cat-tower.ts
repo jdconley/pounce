@@ -13,6 +13,7 @@ import { eventFor, viewFor, type CatTowerView } from "../rules/view";
 import { hasKeys, isInt, isObj } from "../shape";
 
 import type { GameModule } from "./module";
+import type { CatTowerAim } from "../protocol";
 
 const MAX_CARD = 107;
 const MAX_GROUPS = 2;
@@ -70,6 +71,14 @@ export function parseAction(a: unknown): Action | null {
   }
 }
 
+/** A Cat Tower aim off the wire, or null: a group laid on the table, and nothing else. */
+export function parseAim(raw: unknown): CatTowerAim | null {
+  if (!isObj(raw) || !hasKeys(raw, ["target"])) return null;
+  const t = raw.target;
+  if (!isObj(t) || !hasKeys(t, ["seat", "group"]) || !isInt(t.seat, 0) || !isInt(t.group, 0)) return null;
+  return { target: { seat: t.seat, group: t.group } };
+}
+
 /**
  * Draw from the deck; when playing, discard a number card, else Yarn, else
  * whatever is left (a Cucumber, aimed the way the engine requires).
@@ -105,6 +114,12 @@ export const catTower: GameModule<CatTowerState, Action, CatTowerView, GameEvent
     a.type !== "nextRound" &&
     a.type !== "forfeit" && events.some((e) => e.kind === "turn" || (e.kind === "roundOver" && e.wentOut === seat)),
   parseAction,
+  parseAim,
+  // Only a group that is laid face up is public.
+  aimAllowed: (s, _seat, aim) => {
+    const { seat, group } = (aim as CatTowerAim).target;
+    return seat < s.seats && group < (s.laid[seat]?.length ?? 0);
+  },
   phase: (s) => (s.status === "playing" ? "playing" : s.status === "roundOver" ? "between" : "over"),
   // Any seat may deal the next round; the room does it after a pause.
   betweenAction: { type: "nextRound" },

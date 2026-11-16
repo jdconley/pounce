@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 import { PROTOCOL_VERSION, parseClientMessage, type ErrorCode } from "./protocol";
 
@@ -411,5 +411,37 @@ describe("streak additions", () => {
     ]) {
       expect(parse(bad)).toEqual(BAD);
     }
+  });
+});
+
+describe("aim", () => {
+  it("parses aim with a game's aim, and with none (clears)", () => {
+    expect(parseClientMessage('{"t":"aim","seat":1,"aim":{"target":{"seat":0,"group":1}}}')).toEqual({
+      t: "aim",
+      seat: 1,
+      aim: { target: { seat: 0, group: 1 } },
+    });
+    expect(parseClientMessage('{"t":"aim","seat":1}')).toEqual({ t: "aim", seat: 1 });
+  });
+
+  it("refuses a malformed aim", () => {
+    for (const raw of [
+      '{"t":"aim"}',
+      '{"t":"aim","seat":-1}',
+      '{"t":"aim","seat":0,"aim":5}',
+      '{"t":"aim","seat":0,"aim":{"target":{"seat":0}}}',
+      '{"t":"aim","seat":0,"x":1}',
+    ])
+      expect(parseClientMessage(raw)).toEqual({ error: "bad_message" });
+  });
+
+  it("passes aim to the room's own aim parser", () => {
+    const parseAim = vi.fn(() => ({ table: [[1, 2, 3]] }));
+    expect(parseClientMessage('{"t":"aim","seat":0,"aim":{"table":[[1,2,3]]}}', undefined, parseAim)).toEqual({
+      t: "aim",
+      seat: 0,
+      aim: { table: [[1, 2, 3]] },
+    });
+    expect(parseAim).toHaveBeenCalledWith({ table: [[1, 2, 3]] });
   });
 });

@@ -66,6 +66,10 @@
     // push. Apps before it never send `nudge` and ignore the new fields and message types; off,
     // the server answers as before.
     "NUDGE": "on",
+    // Pounce on the TV (docs/superpowers/specs/2026-11-16-tv-table-design.md): screens, live aim
+    // and screen links. Apps before it ignore the new fields and message types; off, the server
+    // answers as before.
+    "TV": "on",
     // The games rooms may be created for beyond Cat Tower: a comma-separated list of game ids
     // (src/games, e.g. "tiles"). Empty: Cat Tower only, and asking for any other game is refused.
     // "tiles" since version 1.1 can draw the tile game: only an app that lists a game in
