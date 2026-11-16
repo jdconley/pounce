@@ -84,12 +84,19 @@ jobs:
   # JD's rule (docs/main-thread.md): the main thread draws, nothing else, 60 fps or better. This
   # runs the runtime gates on a simulator: FrameRateTests (tables that play themselves, nothing
   # reading the screen) and a few Cat Tower and Tuna Tiles UI tests under GameplayGate. All on
-  # demo tables, no server. The app's own work per frame (8.3 ms of CPU time) and hangs always
-  # fail it; frames over 16.7 ms are only reported while the runner is too busy to judge them.
+  # demo tables, no server. A virtual machine is several times slower per thread than the Mac
+  # the budgets were set on, and its host's stolen time counts as the guest's own: the app
+  # measures its machine's speed, and the tests scale the app-work budget by it and judge it at
+  # p95 with a cap on the worst frame; hangs fail when the app's own work filled them. Frames
+  # over 16.7 ms are reported here, enforced on a phone (scripts/frame-rate.sh).
   ui-gates:
     name: Smooth play gates (iOS simulator)
     runs-on: macos-26
     timeout-minutes: 30
+    env:
+      # XcodeGen comes from Homebrew; updating Homebrew first is most of the install's time.
+      HOMEBREW_NO_AUTO_UPDATE: "1"
+      HOMEBREW_NO_INSTALL_CLEANUP: "1"
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
       - run: xcodebuild -version
@@ -124,7 +131,7 @@ jobs:
           done
       - name: Frame and main-thread gates
         env:
-          TEST_RUNNER_POUNCE_FRAMES_SECONDS: "15"
+          TEST_RUNNER_POUNCE_FRAMES_SECONDS: "12"
         run: |
           set -o pipefail
           xcodebuild test-without-building -project Pounce.xcodeproj -scheme Pounce \

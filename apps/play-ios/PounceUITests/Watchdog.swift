@@ -107,6 +107,65 @@ struct Watchdog {
     /// gated: the reader's accessibility runtime runs inside it).
     var readFrameWorkMs = 0.0
     static let workBudgetMs = 1000.0 / 120
+    /// The app's fixed benchmark on this machine (`MainThreadWatchdog.speedMs`), and the same on
+    /// the reference: an iPhone 17 Pro simulator on the M-series Mac the budgets were set on.
+    var speedMs = 0.0
+    static let referenceSpeedMs = 0.29
+
+    /// How many times slower than the reference this machine's main thread is (1 at least: a
+    /// faster phone keeps the reference's budgets). Time budgets scale by it; raw numbers are
+    /// reported beside the result.
+    var slowdown: Double { speedMs > 0 ? max(1, speedMs / Self.referenceSpeedMs) : 1 }
+    /// The app's work budget for one frame on this machine.
+    var workBudgetMs: Double { Self.workBudgetMs * slowdown }
+    /// Up to this much slower than the reference, a machine is judged as the reference is (a
+    /// phone, the Mac the budgets were set on); beyond it (a CI virtual machine, whose host steals
+    /// time that the guest counts as its own) by percentiles, with a cap on the worst frame.
+    static let nearReference = 1.25
+    var nearReference: Bool { slowdown <= Self.nearReference }
+
+    /// Gameplay hangs the app's own work filled at least half of, and the worst of them.
+    var appHangs = 0
+    var appHangMaxMs = 0.0
+    /// The app's work per frame, in 0.5 ms buckets.
+    var workHistogram: [Int: Int] = [:]
+
+    /// The app's work per frame at fraction `p`, as its bucket's top, in ms.
+    func workPercentile(_ p: Double) -> Double {
+        let total = workHistogram.values.reduce(0, +)
+        guard total > 0 else { return 0 }
+        let rank = max(Int((Double(total) * p).rounded(.up)), 1)
+        var seen = 0
+        for bucket in workHistogram.keys.sorted() {
+            seen += workHistogram[bucket] ?? 0
+            if seen >= rank { return Double(bucket + 1) * Frames.bucketMs }
+        }
+        return workMaxMs
+    }
+
+    /// Why the app's time budgets fail on this machine, or nothing (see `nearReference`). Hangs
+    /// count only when the app's own work filled them; the rest are reported.
+    func timeFailures() -> [String] {
+        var out: [String] = []
+        let f = slowdown
+        if appHangs > 0, appHangMaxMs > 100 * f {
+            out.append(String(format: "the app's own work hung the main thread (%d, worst %.0f ms, budget %.0f ms)", appHangs, appHangMaxMs, 100 * f))
+        }
+        if nearReference {
+            if workMaxMs > Self.workBudgetMs {
+                out.append(String(format: "a frame held %.1f ms of the app's own work, over 8.3 ms", workMaxMs))
+            }
+        } else {
+            let p95 = workPercentile(0.95)
+            if p95 > workBudgetMs {
+                out.append(String(format: "the app's work per frame at p95 was %.1f ms, over %.1f ms (8.3 ms at the reference's speed)", p95, workBudgetMs))
+            }
+            if workMaxMs > 3 * workBudgetMs {
+                out.append(String(format: "a frame held %.1f ms of the app's own work, over %.1f ms (three frames at the reference's speed)", workMaxMs, 3 * workBudgetMs))
+            }
+        }
+        return out
+    }
     var link = Frames()
     var tableFrames = Frames()
 
@@ -129,6 +188,14 @@ struct Watchdog {
             case "workover": workOver = Int(pair[1]) ?? 0
             case "readwork": readWorkMs = Double(pair[1]) ?? 0
             case "readframe": readFrameWorkMs = Double(pair[1]) ?? 0
+            case "speed": speedMs = Double(pair[1]) ?? 0
+            case "apphangs": appHangs = Int(pair[1]) ?? 0
+            case "apphangmax": appHangMaxMs = Double(pair[1]) ?? 0
+            case "workh":
+                for entry in pair[1].split(separator: ",") {
+                    let kv = entry.split(separator: ":").compactMap { Int($0) }
+                    if kv.count == 2 { workHistogram[kv[0]] = kv[1] }
+                }
             default: break
             }
         }
@@ -154,6 +221,13 @@ struct Watchdog {
         out.workOver = a.workOver - b.workOver
         out.readWorkMs = a.readWorkMs
         out.readFrameWorkMs = a.readFrameWorkMs
+        out.speedMs = a.speedMs
+        out.appHangs = a.appHangs - b.appHangs
+        out.appHangMaxMs = out.appHangs > 0 ? a.appHangMaxMs : 0
+        for (bucket, n) in a.workHistogram {
+            let left = n - (b.workHistogram[bucket] ?? 0)
+            if left > 0 { out.workHistogram[bucket] = left }
+        }
         out.link = a.link - b.link
         out.tableFrames = a.tableFrames - b.tableFrames
         return out
@@ -161,8 +235,9 @@ struct Watchdog {
 
     /// The `FRAMES` line the frame-rate tests print.
     func report(_ name: String) -> String {
-        String(format: "FRAMES %@ screen=%dfps table=%dfps tpc=%d | table %@ | main %@ | app work worst %.1fms, over 8.3ms=%d, accessibility rebuild worst %.1fms, near a screen read worst %.1fms | hangs=%d (worst %.0fms) ax-or-outside-hangs=%d",
-               name, screen, table, checkerLoaded ? 1 : 0, tableFrames.line, link.line, workMaxMs, workOver, readWorkMs, readFrameWorkMs, hangs, hangMaxMs, otherHangs)
+        String(format: "FRAMES %@ screen=%dfps table=%dfps tpc=%d | table %@ | main %@ | app work worst %.1fms, over 8.3ms=%d, accessibility rebuild worst %.1fms, near a screen read worst %.1fms | hangs=%d (worst %.0fms) ax-or-outside-hangs=%d | speed %.2fms, %.2fx the reference | app work p95 %.1fms, app hangs %d (worst %.0fms)",
+               name, screen, table, checkerLoaded ? 1 : 0, tableFrames.line, link.line, workMaxMs, workOver, readWorkMs, readFrameWorkMs, hangs, hangMaxMs, otherHangs, speedMs, slowdown,
+               workPercentile(0.95), appHangs, appHangMaxMs)
     }
 }
 

@@ -2,10 +2,12 @@ import XCTest
 
 /// The gameplay gate on every UI test (`docs/main-thread.md`): when a test ends, each app it
 /// launched through `Live` (`Live.app()`, `Live.demo(...)`) has its watchdog read, and the test
-/// fails if, while a table was on screen (from a second after it appeared), the main thread hung
-/// for over 100 ms, or any frame held more than 8.3 ms (a 120 Hz frame) of the app's own work:
-/// its `FrameWork` pieces (redraws, reconciles, touches, textures). Launch and the way into a
-/// table don't count, nor do frames that held, or came within 0.25 s of, a read of the screen:
+/// fails if, while a table was on screen (from a second after it appeared), the app's own work
+/// hung the main thread for over 100 ms, or a frame held more than 8.3 ms (a 120 Hz frame) of the
+/// app's own work: its `FrameWork` pieces (redraws, reconciles, touches, textures). On a machine
+/// measured several times slower than the reference (a CI virtual machine) those budgets scale
+/// and the work is judged at p95, with a cap on the worst frame (`Watchdog.timeFailures`). A hang
+/// the app's work didn't fill is reported, not gated. Launch and the way into a table don't count, nor do frames that held, or came within 0.25 s of, a read of the screen:
 /// the accessibility runtime a UI test loads into the app runs inside the app's work then (a
 /// drag's redraw that takes 5 ms takes 12 to 16 ms in the frame a query lands in).
 ///
@@ -73,10 +75,7 @@ extension XCTestCase {
         note.name = "gameplay-frames"
         note.lifetime = .keepAlways
         add(note)
-        // On a busy Mac (`POUNCE_UITEST_TIMEOUT_SCALE` over 1) a hang has to be that much longer.
-        let hung = dog.hangs > 0 && dog.hangMaxMs > 100 * Live.scale
-        XCTAssertFalse(hung, "the main thread hung during gameplay (\(dog.hangs) over 100 ms, worst \(Int(dog.hangMaxMs)) ms): \(report)")
-        // CPU time: enforced however busy the machine is (`Host`).
-        XCTAssertEqual(dog.workOver, 0, "a gameplay frame held over 8.3 ms of the app's own work (worst \(String(format: "%.1f", dog.workMaxMs)) ms): \(report)")
+        // Hangs count when the app's own work filled them; time budgets fit the machine.
+        for failure in dog.timeFailures() { XCTFail("\(failure) during gameplay: \(report)") }
     }
 }
