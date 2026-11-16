@@ -34,6 +34,7 @@ repo: What's New and the listing in `docs/whats-new/`, the reviewer notes in
 | --- | --- |
 | `apps/play-api` | The game server: a Cloudflare Worker with one Durable Object per room. It owns the rules, the bots and the hidden hands. It also serves the website (below). |
 | `apps/play-ios` | The iOS app (SwiftUI shell, SpriteKit table). See its [README](apps/play-ios/README.md). |
+| `apps/play-web` | Pounce in a browser, at `play.conleychaos.com/play`: both games for Android, laptops and anyone without an iPhone, installable as an app. It imports the server's rules and protocol from `apps/play-api`, so it can't drift from the game. |
 | `docs/superpowers` | The design spec, implementation plans and follow-up notes. |
 
 ## Develop
@@ -101,6 +102,22 @@ of those change, rebuild them (needs `ffmpeg`, `cwebp` and ImageMagick):
 ```bash
 node apps/play-api/scripts/build-site-media.mjs
 ```
+
+## The web player
+
+`apps/play-web` (Vite, Preact, the table in plain DOM moved by transforms) builds into
+`apps/play-api/public/play` and ships inside the Worker, from the same commit: the deploy job
+builds it right before `wrangler deploy`. Design: `docs/superpowers/specs/2026-11-15-web-player-design.md`.
+
+```bash
+pnpm --filter @pounce/play-web build                       # into apps/play-api/public/play
+pnpm --filter @pounce/play-api exec wrangler dev --port 8790 # then open http://localhost:8790/play/
+```
+
+For quick edits, `pnpm --filter @pounce/play-web dev` serves it at `http://localhost:5180/play/`
+with the API proxied to `DEV_SERVER_URL` (default `http://localhost:8787`). Its tests
+(`pnpm --filter @pounce/play-web test`) include a contract test of the web client against the
+real Worker. The art and sounds are built from the iOS app's (`node apps/play-web/scripts/build-art.mjs`).
 
 ## Deploy
 

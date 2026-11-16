@@ -41,6 +41,9 @@ const STYLE = css(`
 .code span{display:block;color:var(--muted);font-size:.9rem;font-weight:800;letter-spacing:.06em;text-transform:uppercase}
 .code strong{display:block;font-family:var(--round);font-size:clamp(2.4rem,13vw,3.2rem);font-weight:900;letter-spacing:.14em;line-height:1.1;user-select:all;-webkit-user-select:all}
 .note{margin:14px auto 0;color:var(--muted);font-size:.92rem}
+.go.web{background:linear-gradient(#6AF5EA,#00B3A6)}
+.alt{margin:14px auto 0;font-weight:800}
+.alt a{color:var(--link);font-family:var(--round);font-size:1.1rem;font-weight:900}
 .card p.lead{max-width:24em;margin:0 auto}
 @media (prefers-color-scheme:dark){.cat{color:#fff}.cat circle{fill:var(--ink)}}
 `);
@@ -69,7 +72,22 @@ export function appSiteAssociation(pounces = false): Response {
  * `storeVersion` is the version the App Store gives out right now (Apple's lookup, null when not
  * known yet): a page only promises what that version can do.
  */
-export type Install = { appStoreUrl?: string | undefined; testflightUrl?: string | undefined; storeVersion?: string | null };
+export type Install = {
+  appStoreUrl?: string | undefined;
+  testflightUrl?: string | undefined;
+  storeVersion?: string | null;
+  /**
+   * Who is looking (web player design, "The way in"): "apple" for an iPhone or iPad, where the
+   * app stays the big button and the browser is a link under it; "other" for everyone else,
+   * where playing in the browser is the big button. Unset: as "apple".
+   */
+  viewer?: "apple" | "other";
+};
+
+/** The viewer from a request's user agent: only an iPhone, iPad or iPod is "apple". */
+export function viewerOf(userAgent: string | null): "apple" | "other" {
+  return /\b(iPhone|iPad|iPod)\b/.test(userAgent ?? "") ? "apple" : "other";
+}
 
 /** The first app version that pastes an invite (first-run funnel, Part 2). */
 export const PASTE_SINCE = "1.1";
@@ -131,9 +149,16 @@ const BETA_NOTE = `<p class="note">Pounce is in beta. This opens TestFlight.</p>
  * The button: copies `invite` (the page's own link) and opens the store; with nothing to copy,
  * just the store. Then the one line that says what to do once it's installed.
  */
-function getButton(install: Install, invite: string | null, opts: { game?: string; code?: boolean } = {}): string {
+function getButton(install: Install, invite: string | null, opts: { game?: string; code?: boolean; web?: string } = {}): string {
   const to = store(install, opts.game);
-  if (!to) return "";
+  const web = opts.web ? escapeHtml(opts.web) : null;
+  if (web && install.viewer === "other") {
+    // Not an iPhone: the browser is the way in; the app is for later.
+    const app = to ? `\n<p class="alt"><a href="${escapeHtml(to.url)}">Get the iPhone app</a></p>` : "";
+    return `<a class="go web" href="${web}">Play in your browser</a>${app}`;
+  }
+  const browser = web ? `\n<p class="alt"><a href="${web}">Play in your browser</a></p>` : "";
+  if (!to) return browser.trimStart();
   const href = escapeHtml(to.url);
   // The beta is always the newest app; the App Store's version may not paste yet.
   const paste = to.beta || storeHas(install, PASTE_SINCE);
@@ -142,7 +167,7 @@ function getButton(install: Install, invite: string | null, opts: { game?: strin
     ? `<a class="go" id="get" href="${href}" data-invite="${escapeHtml(invite)}" data-copied="Invite copied">Get Pounce</a>
 <p class="next">${next}</p>`
     : `<a class="go" href="${href}">Get Pounce</a>`;
-  return `${button}${to.beta ? `\n${BETA_NOTE}` : ""}`;
+  return `${button}${to.beta ? `\n${BETA_NOTE}` : ""}${browser}`;
 }
 
 const NOINDEX = { "cache-control": "no-store", "referrer-policy": "no-referrer", "x-robots-tag": "noindex" };
@@ -225,7 +250,9 @@ export function pouncePage(
     title: escapeHtml(title),
     head: `${banner(install, url, game)}${previewTags({ title, description: gameTitle(game), url, origin, game })}\n`,
     script: true,
-    body: [face(from.cat), `<h1>${escapeHtml(title)}</h1>`, gameChip(game), getButton(install, url, { game })].filter(Boolean).join("\n"),
+    body: [face(from.cat), `<h1>${escapeHtml(title)}</h1>`, gameChip(game), getButton(install, url, { game, web: `/play/p/${token}` })]
+      .filter(Boolean)
+      .join("\n"),
   });
   return new Response(html, { headers: { ...HTML, "content-security-policy": INVITE_CSP } });
 }
@@ -256,7 +283,7 @@ export function sharePage(code: string, install: Install, origin: string, peek: 
       `<h1>${escapeHtml(title)}</h1>`,
       known ? gameChip(game) : "",
       known?.table ? `<p class="table">${escapeHtml(known.table)}</p>` : "",
-      getButton(install, url, { game, code: true }),
+      getButton(install, url, { game, code: true, web: `/play/j/${code}` }),
       `<div class="code"><span>Table code</span><strong>${escapeHtml(code)}</strong></div>`,
       update ? `<p class="note">Have Pounce? Update it first.</p>` : "",
     ]

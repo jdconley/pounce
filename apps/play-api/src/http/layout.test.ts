@@ -112,7 +112,7 @@ describe("the shared look", () => {
     expect([...new Set([...html.matchAll(/<a\b[^>]*\shref="([^"]*)"/g)].map((m) => m[1]))]).toEqual(["mailto:privacy@conleychaos.com", "/privacy"]);
   });
 
-  test("the text pages link home, support, privacy and Conley Chaos; the invite pages carry no links of their own", async () => {
+  test("the text pages link home, support, privacy and Conley Chaos; the invite pages link only to the web player", async () => {
     for (const res of [supportPage(), privacyPage(), homePage({}, ORIGIN)]) {
       const html = await res.text();
       for (const s of ['<a class="brand" href="/"', '<a href="/support"', '<a href="/privacy"', '<a href="https://conleychaos.com">Conley Chaos LLC</a>', '<a class="skip" href="#main">']) {
@@ -121,9 +121,9 @@ describe("the shared look", () => {
     }
     expect(await supportPage().text()).toContain('<a href="/support" aria-current="page">Support</a>');
     expect(await privacyPage().text()).toContain('<a href="/privacy" aria-current="page">Privacy</a>');
-    for (const res of [sharePage("BCDFG", {}, ORIGIN), deadLinkPage({}), pouncePage({ name: "Mia", cat: 2 }, "A".repeat(22), {}, ORIGIN)]) {
-      expect(await res.text()).not.toContain("<a ");
-    }
+    expect((await sharePage("BCDFG", {}, ORIGIN).text()).match(/<a [^>]*>/g)).toEqual(['<a href="/play/j/BCDFG">']);
+    expect((await pouncePage({ name: "Mia", cat: 2 }, "A".repeat(22), {}, ORIGIN).text()).match(/<a [^>]*>/g)).toEqual([`<a href="/play/p/${"A".repeat(22)}">`]);
+    expect(await deadLinkPage({}).text()).not.toContain("<a ");
   });
 
   test("shell and docPage put the page's own head and styles after the shared ones", () => {

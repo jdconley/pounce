@@ -2,7 +2,7 @@ import { createHash } from "node:crypto";
 
 import { describe, expect, test } from "vitest";
 
-import { appSiteAssociation, appStoreId, deadLinkPage, INVITE_CSP, INVITE_SCRIPT, INVITE_SCRIPT_HASH, ogImage, pouncePage, sharePage } from "./links";
+import { appSiteAssociation, appStoreId, deadLinkPage, INVITE_CSP, INVITE_SCRIPT, INVITE_SCRIPT_HASH, ogImage, pouncePage, sharePage, viewerOf } from "./links";
 import { MEDIA } from "./site-media";
 
 import type { InvitePeek } from "../safety/safety";
@@ -81,7 +81,27 @@ describe("sharePage: a table that says who invited", () => {
     expect(html).toContain(
       `<a class="go" id="get" href="${TESTFLIGHT}" data-invite="${ORIGIN}/j/BCDFG" data-copied="Invite copied">Get Pounce</a>\n<p class="next">Then open Pounce and tap Paste.</p>`,
     );
-    expect(html.match(/<a /g)).toHaveLength(1);
+    // The app's button, then the way to play without it.
+    expect(html.match(/<a /g)).toHaveLength(2);
+    expect(html).toContain(`<p class="alt"><a href="/play/j/BCDFG">Play in your browser</a></p>`);
+  });
+
+  test("off an iPhone, playing in the browser is the button and the app a link under it", async () => {
+    const html = await sharePage("BCDFG", { ...TF, viewer: "other" }, ORIGIN, GRANDMA).text();
+    expect(html).toContain(`<a class="go web" href="/play/j/BCDFG">Play in your browser</a>\n<p class="alt"><a href="${TESTFLIGHT}">Get the iPhone app</a></p>`);
+    expect(html).not.toContain("tap Paste");
+    expect(html).not.toContain('id="get"');
+    expect(html).toContain("<strong>BCDFG</strong>");
+    const none = await sharePage("BCDFG", { ...NONE, viewer: "other" }, ORIGIN, GRANDMA).text();
+    expect(none.match(/<a /g)).toHaveLength(1);
+  });
+
+  test("only an iPhone, iPad or iPod is an Apple viewer", () => {
+    expect(viewerOf("Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X)")).toBe("apple");
+    expect(viewerOf("Mozilla/5.0 (iPad; CPU OS 18_0 like Mac OS X)")).toBe("apple");
+    expect(viewerOf("Mozilla/5.0 (Linux; Android 15; Pixel 9) Chrome/140")).toBe("other");
+    expect(viewerOf("Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)")).toBe("other");
+    expect(viewerOf(null)).toBe("other");
   });
 
   test("Messages' preview names the person and the game, on the game's art", async () => {
@@ -168,9 +188,9 @@ describe("sharePage: a table it can't speak of", () => {
     }
   });
 
-  test("without a store link there is no button, only the code", async () => {
+  test("without a store link there is no app button: the browser link and the code", async () => {
     const html = await sharePage("BCDFG", NONE, ORIGIN, GRANDMA).text();
-    expect(html).not.toContain("<a ");
+    expect(html.match(/<a [^>]*>/g)).toEqual([`<a href="/play/j/BCDFG">`]);
     expect(html).not.toContain("tap Paste");
     expect(html).toContain("<strong>BCDFG</strong>");
   });

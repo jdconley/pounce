@@ -27,9 +27,36 @@ jobs:
       - run: pnpm lint
       - run: pnpm typecheck
       - run: pnpm test
+      # The web player builds (it ships inside the Worker's assets; see the deploy below).
+      - run: pnpm --filter @pounce/play-web build
+
+  # The web player end to end: two browsers at one table, pass and play, practice, in Chrome
+  # (an Android phone and a laptop) and WebKit (an iPhone), against the real Worker (wrangler dev).
+  e2e-web:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    env:
+      WRANGLER_SEND_METRICS: "false"
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+      - uses: pnpm/action-setup@fc06bc1257f339d1d5d8b3a19a8cae5388b55320 # v4.4.0
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm --filter @pounce/play-web exec playwright install --with-deps chromium webkit
+      - run: pnpm --filter @pounce/play-web build
+      - run: pnpm --filter @pounce/play-web e2e
+      - if: failure()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: playwright-report
+          path: apps/play-web/playwright-report
+          retention-days: 7
 
   deploy-play-api:
-    needs: check
+    needs: [check, e2e-web]
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     timeout-minutes: 15
@@ -67,6 +94,13 @@ jobs:
           cache: pnpm
       - if: steps.creds.outputs.ready == 'true'
         run: pnpm install --frozen-lockfile
+      - name: Build the web player
+        if: steps.creds.outputs.ready == 'true'
+        # Built from this commit into ./public/play, so the Worker and the web player always
+        # deploy together and never drift apart.
+        env:
+          WEB_BUILD: ${{ github.sha }}
+        run: pnpm --filter @pounce/play-web build
       - name: Deploy
         if: steps.creds.outputs.ready == 'true'
         run: |
@@ -161,4 +195,15 @@ jobs:
             sleep 10
           done
           echo "::error title=Play API::healthz never reported \"configured\":true"
+          exit 1
+      - name: Web player smoke check
+        if: steps.creds.outputs.ready == 'true'
+        run: |
+          for attempt in $(seq 1 12); do
+            body=$(curl -fsS https://play.conleychaos.com/play/version.json || true)
+            echo "attempt $attempt: $body"
+            case "$body" in *'"build":"${{ github.sha }}"'*) exit 0 ;; esac
+            sleep 10
+          done
+          echo "::error title=Web player::/play/version.json never reported this commit"
           exit 1
