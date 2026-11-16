@@ -22,24 +22,25 @@ final class NotificationService: UNNotificationServiceExtension {
     override func didReceive(
         _ request: UNNotificationRequest, withContentHandler contentHandler: @escaping (UNNotificationContent) -> Void
     ) {
-        // UserNotifications takes the handler back on any thread; it just isn't marked Sendable.
-        nonisolated(unsafe) let handler = contentHandler
-        let delivery = Delivery { handler($0) }
+        let delivery = Delivery(Handler(call: contentHandler))
         self.delivery = delivery
         original = request.content
         let payload = PushPayload(userInfo: request.content.userInfo)
-        let content = Communication.content(for: request.content, art: Self.appBundle) ?? request.content
+        let content = Content(Communication.content(for: request.content, art: Self.appBundle) ?? request.content)
         // The snapshot is written (by the IO layer's actor) before the notification is handed
         // back, so the extension isn't torn down mid-write.
-        Task {
-            await Self.updateWidgets(payload)
-            await delivery.deliver(content)
-        }
+        Task.detached { await NotificationService.finish(payload, content, delivery) }
+    }
+
+    private static func finish(_ payload: PushPayload?, _ content: Content, _ delivery: Delivery) async {
+        await updateWidgets(payload)
+        await delivery.deliver(content)
     }
 
     override func serviceExtensionTimeWillExpire() {
         guard let original, let delivery else { return }
-        Task { await delivery.deliver(original) }
+        let content = Content(original)
+        Task.detached { await delivery.deliver(content) }
     }
 
     /// Folds the push into the widgets' snapshot. Reloads at once when a paw, the numeral or the
@@ -58,16 +59,29 @@ final class NotificationService: UNNotificationServiceExtension {
     }
 }
 
+/// A notification's content, carried across actors. `UNNotificationContent` is immutable (the
+/// mutable kind is a subclass this never holds after building it); it just isn't marked Sendable.
+private struct Content: @unchecked Sendable {
+    let value: UNNotificationContent
+    init(_ value: UNNotificationContent) { self.value = value }
+}
+
+/// The content handler. UserNotifications takes it back on any thread; it just isn't marked
+/// Sendable.
+private struct Handler: @unchecked Sendable {
+    let call: (UNNotificationContent) -> Void
+}
+
 /// Hands the content back once, whichever comes first: the finished content or the time limit.
 private actor Delivery {
-    private var handler: (@Sendable (UNNotificationContent) -> Void)?
+    private var handler: Handler?
 
-    init(_ handler: @escaping @Sendable (UNNotificationContent) -> Void) {
+    init(_ handler: Handler) {
         self.handler = handler
     }
 
-    func deliver(_ content: UNNotificationContent) {
-        handler?(content)
+    func deliver(_ content: Content) {
+        handler?.call(content.value)
         handler = nil
     }
 }
