@@ -73,7 +73,8 @@ export async function peekInvite(env: Env, code: string, ip: string, now: number
     const { retryAt } = await limiter(env, `ip:${ip}`).guess(found === null, IP_JOIN_RULE, now);
     if (retryAt !== null) return "hidden";
     if (!found || found.over) return "gone";
-    const kitten = (await env.DEVICES.get(env.DEVICES.idFromName(found.hostDeviceId)).ageBand()) === "kitten";
+    // A TV's table with nobody seated has no host to ask about: it names nobody.
+    const kitten = found.hostDeviceId !== "" && (await env.DEVICES.get(env.DEVICES.idFromName(found.hostDeviceId)).ageBand()) === "kitten";
     return kitten ? { table: null, game: found.game, host: null } : { table: found.table, game: found.game, host: found.host };
   } catch {
     return "hidden";

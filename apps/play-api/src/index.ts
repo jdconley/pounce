@@ -4,7 +4,7 @@ import { APP_HEADER, parseApp } from "./app/version";
 import { issueDeviceToken, verifyDeviceToken } from "./auth";
 import { APPLE_ROOTS } from "./consent/appstore";
 import { noticePage } from "./consent/pages";
-import { devSpeed } from "./env";
+import { devSpeed, tvOn } from "./env";
 import { active, forget, minted, pageView, parseReport, prune, reached, report } from "./funnel/funnel";
 import { DEFAULT_GAME, GAMES_HEADER, gamesListed, gamesOn, gameTitle, isGameId, type GameId } from "./games";
 import { asAppSocket, browserAnswer, isBrowserSocket } from "./http/browser-socket";
@@ -49,7 +49,7 @@ import { answerPounce, createPounce, linkPounce } from "./pounce/pounces";
 import { MIN_PROTOCOL } from "./protocol";
 import { parseSubscription, webPushOn } from "./push/webpush";
 import { newRoomCode, ROOM_CODE } from "./room/codes";
-import { DEVICE_HEADER, PLAYER_HEADER } from "./room/game-room";
+import { DEVICE_HEADER, PLAYER_HEADER, ROLE_HEADER } from "./room/game-room";
 import { parseRoomName } from "./room/names";
 import { lockedFor, withoutUndrawable } from "./room/tables";
 import { blockPlayer, guardJoin, listBlocks, mayMint, mayReportFunnel, nameCheck, ownerReports, peekInvite, reportPlayer, unblockPlayer } from "./safety/safety";
@@ -218,7 +218,10 @@ async function createRoom(request: Request, env: Env, deviceId: string, later: L
   if (!body || !isGameId(body.game) || !gamesOn(env).includes(body.game)) return badRequest();
   const game = body.game;
   if (!appGames(request).includes(game)) return badRequest();
-  if (Object.keys(body).some((key) => key !== "game" && key !== "name")) return badRequest();
+  if (Object.keys(body).some((key) => key !== "game" && key !== "name" && key !== "screen")) return badRequest();
+  // A TV makes a table with no host: the caller is its screen, and the first phone to sit hosts it.
+  const screen = "screen" in body;
+  if (screen && (body.screen !== true || !tvOn(env) || "name" in body)) return badRequest();
   // Optional: without one the room gets its default name.
   const name = "name" in body ? parseRoomName(body.name) : undefined;
   if (name === null) return badRequest();
@@ -228,15 +231,15 @@ async function createRoom(request: Request, env: Env, deviceId: string, later: L
     if ((await env.DEVICES.get(env.DEVICES.idFromName(deviceId)).ageBand()) === "kitten") return json(403, { error: "not_allowed" });
   }
   let look;
-  if (streaksOn(env)) {
+  if (streaksOn(env) && !screen) {
     const { people, account } = await env.DEVICES.get(env.DEVICES.idFromName(deviceId)).players();
     look = (await creatorLook(env, people, account)) ?? undefined;
   }
   for (let i = 0; i < ROOM_CODE_ATTEMPTS; i++) {
     const code = newRoomCode(cryptoRng);
-    const result = await env.ROOMS.get(env.ROOMS.idFromName(code)).init(code, deviceId, name, look, game);
+    const result = await env.ROOMS.get(env.ROOMS.idFromName(code)).init(code, screen ? "" : deviceId, name, look, game, screen ? deviceId : undefined);
     if ("ok" in result) {
-      later(reached(env, [{ deviceId, milestone: "table_created", game }], Date.now()).catch(() => undefined));
+      if (!screen) later(reached(env, [{ deviceId, milestone: "table_created", game }], Date.now()).catch(() => undefined));
       return json(201, { code });
     }
     if ("off" in result) return badRequest();
@@ -257,12 +260,17 @@ async function openSocket(request: Request, env: Env, deviceId: string, code: st
     return response;
   }
   if (!guard.exists) return notFound();
+  // A screen (a TV) is only a role while `TV` is on; off, there is no such thing to ask for.
+  const screen = new URL(request.url).searchParams.get("role") === "screen";
+  if (screen && !tvOn(env)) return notFound();
   later(active(env, deviceId, Date.now()).catch(() => undefined));
   // The room trusts these headers, so client-supplied ones must never reach it.
   const headers = new Headers(request.headers);
   headers.delete(DEVICE_HEADER);
   headers.delete(PLAYER_HEADER);
+  headers.delete(ROLE_HEADER);
   headers.set(DEVICE_HEADER, deviceId);
+  if (screen) headers.set(ROLE_HEADER, "screen");
   // The same call tells the device's index what this app can draw, before the room can push to it.
   headers.set(PLAYER_HEADER, JSON.stringify(await devicePlayers(env, deviceId, declared(request), appVersion(request))));
   return env.ROOMS.get(env.ROOMS.idFromName(code)).fetch(new Request(request, { headers }));
