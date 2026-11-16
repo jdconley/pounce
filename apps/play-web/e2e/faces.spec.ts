@@ -1,9 +1,9 @@
 import AxeBuilder from "@axe-core/playwright";
-import { expect, test, type Page, type WebSocketRoute } from "@playwright/test";
+import { expect, test, type Page } from "@playwright/test";
 
-import { firstRun } from "./helpers";
+import { firstRun, ownAddress, standInServer } from "./helpers";
 
-import type { RoomView, ServerMessage } from "@pounce/play-api/protocol";
+import type { RoomView } from "@pounce/play-api/protocol";
 import type { CatTowerView } from "@pounce/play-api/rules/view";
 
 /**
@@ -50,18 +50,6 @@ const room = (g: CatTowerView): RoomView => ({
   game: g,
 });
 
-/** The room's socket, played by the test: a snapshot on open, then whatever the test sends. */
-async function standInServer(page: Page): Promise<(m: ServerMessage) => void> {
-  let socket: WebSocketRoute | null = null;
-  const queued: ServerMessage[] = [];
-  await page.routeWebSocket(/\/v1\/rooms\/[A-Z0-9]+\/ws/, (ws) => {
-    socket = ws;
-    ws.onMessage(() => undefined);
-    for (const m of queued.splice(0)) ws.send(JSON.stringify(m));
-  });
-  return (m) => (socket ? socket.send(JSON.stringify(m)) : queued.push(m));
-}
-
 async function nameMismatches(page: Page, include: string[]) {
   let axe = new AxeBuilder({ page }).withRules(["label-content-name-mismatch"]);
   for (const s of include) axe = axe.include(s);
@@ -69,10 +57,11 @@ async function nameMismatches(page: Page, include: string[]) {
   return r.violations.flatMap((v) => v.nodes.map((n) => n.html));
 }
 
-test("every card face's visible text is in its control's name", async ({ page }, info) => {
+test("every card face's visible text is in its control's name", async ({ page, context }, info) => {
   test.skip(info.project.name !== "laptop-chrome", "one pass is enough");
+  await ownAddress(context);
   test.setTimeout(120_000);
-  const send = await standInServer(page);
+  const { send } = await standInServer(page);
   // The card underneath stays for as long as its animation runs: hold it there.
   await page.addInitScript(() => {
     addEventListener("DOMContentLoaded", () => {

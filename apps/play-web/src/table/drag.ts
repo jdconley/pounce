@@ -3,12 +3,25 @@
  * point, and one animation frame writes one transform. A press that doesn't travel is a tap.
  * Drop targets are hit-tested against the layout's own rectangles: nothing is measured.
  */
+import { useRef } from "preact/hooks";
+
 import { transformOf, type Pose } from "./motion";
 
 export type Point = { x: number; y: number };
 export type Rect = { x: number; y: number; w: number; h: number };
 
 export const inside = (p: Point, r: Rect, pad = 0): boolean => p.x >= r.x - pad && p.x <= r.x + r.w + pad && p.y >= r.y - pad && p.y <= r.y + r.h + pad;
+
+/**
+ * The latest render's value, read when it is called. A drag outlives the render it started in:
+ * its handlers go through this, so a drop is judged on the table as it is now (our draw answered,
+ * our turn come), never as it was when the card was picked up.
+ */
+export function useLatest<T>(value: T): { readonly current: T } {
+  const ref = useRef(value);
+  ref.current = value;
+  return ref;
+}
 
 /** Pixels a press may travel and still be a tap. */
 const TAP_SLOP = 7;
