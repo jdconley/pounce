@@ -255,6 +255,7 @@ export function TableScreen(props: { code: string; intent: TableIntent }) {
         {room.status === "over" ? (
           <GameOver
             room={room}
+            quiet={tvSwitch && showController(room, view)}
             onHome={home}
             onAgain={() => {
               wantRematch.current = true;
@@ -287,7 +288,8 @@ export function TableScreen(props: { code: string; intent: TableIntent }) {
 const SWITCH_STRIP = 52;
 
 /** Who won, everyone's place, and Play again (GameOverView.swift). */
-function GameOver(props: { room: RoomView; onHome: () => void; onAgain: () => void }) {
+/** `quiet`: no fanfare, as the TV cheers (a phone on Cards); the buzz stays. */
+function GameOver(props: { room: RoomView; onHome: () => void; onAgain: () => void; quiet?: boolean }) {
   const { room } = props;
   const g = room.game;
   const t = room.tiles;
@@ -305,7 +307,7 @@ function GameOver(props: { room: RoomView; onHome: () => void; onAgain: () => vo
   const mine = mySeats(room);
   const won = winners.some((w) => mine.includes(w));
   useEffect(() => {
-    play(won ? "fanfare" : "leap");
+    if (!props.quiet) play(won ? "fanfare" : "leap");
     buzz("win");
   }, []);
   const title = winners.length === 1 ? `${seatName(room.seats[winners[0]!])} wins` : winners.length > 1 ? "A tie" : "Game over";

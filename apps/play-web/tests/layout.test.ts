@@ -268,9 +268,18 @@ describe("Cat Tower on a phone controller", () => {
     [844, 390, sideways],
   ] as const;
   const STEPS = ["off", "draw", "play"] as const;
-  const CASES = CTL_SIZES.flatMap(([w, h, insets]) => STEPS.flatMap((step) => [0, 3].map((trays) => [w, h, step, trays, insets] as const)));
-  const layout = (width: number, height: number, step: (typeof STEPS)[number], trays: number, insets: typeof portrait) =>
-    ctControllerLayout({ width, height, insets, handCount: 11, trays: step === "off" ? 0 : trays, step });
+  /** Each size and step, with three trays, or laid down with the hit list shut or open (three rows). */
+  const CASES = CTL_SIZES.flatMap(([w, h, insets]) =>
+    STEPS.flatMap((step) =>
+      [
+        [3, 0],
+        [0, 0],
+        [0, 3],
+      ].map(([trays, hits]) => [w, h, step, trays!, hits!, insets] as const),
+    ),
+  );
+  const layout = (width: number, height: number, step: (typeof STEPS)[number], trays: number, insets: typeof portrait, hits = 0) =>
+    ctControllerLayout({ width, height, insets, handCount: 11, trays: step === "off" ? 0 : trays, step, hits: step === "play" && trays === 0 ? hits : 0 });
   /** A card's box as drawn: turned about its centre and scaled. */
   const turned = (p: { x: number; y: number; r?: number; s?: number }, w: number, h: number): Box => {
     const s = p.s ?? 1;
@@ -294,14 +303,20 @@ describe("Cat Tower on a phone controller", () => {
     ];
     if (L.piles) out.push(["deck", L.piles.deckRect], ["discard", L.piles.discardRect]);
     if (L.actions) out.push(["actions", L.actions]);
-    if (L.trays.length > 0) L.trays.forEach((t, i) => out.push([`tray ${i}`, t]));
-    else if (L.work) out.push(["hit list", L.work]);
+    L.trays.forEach((t, i) => out.push([`tray ${i}`, t]));
+    if (L.hits) out.push(["hit list", L.hits]);
+    if (L.hitClose) out.push(["hit list's X", L.hitClose]);
     if (L.hero) out.push(["hero", L.hero]);
     return out;
   };
+  /** The hit list opens over the piles' room, and its X sits inside it: those may overlap. */
+  const mayOverlap = (a: string, b: string) => {
+    const pair = [a, b].sort().join(" and ");
+    return ["deck and hit list", "discard and hit list", "deck and hit list's X", "discard and hit list's X", "hit list and hit list's X"].includes(pair);
+  };
 
-  test.each(CASES)("at %i x %i, %s step, %i trays: everything is inside the safe frame", (width, height, step, trays, insets) => {
-    const L = layout(width, height, step, trays, insets);
+  test.each(CASES)("at %i x %i, %s step, %i trays, %i hit rows: everything is inside the safe frame", (width, height, step, trays, hits, insets) => {
+    const L = layout(width, height, step, trays, insets, hits);
     const frame = { x: insets.left, y: insets.top, w: width - insets.left - insets.right, h: height - insets.top - insets.bottom };
     for (const [name, r] of parts(L)) {
       expect(within({ x: r.x - frame.x, y: r.y - frame.y, w: r.w, h: r.h }, frame.w, frame.h), `${name} ${JSON.stringify(r)}`).toBe(true);
@@ -311,16 +326,48 @@ describe("Cat Tower on a phone controller", () => {
     for (const p of L.hand) expect(within(turned(p, L.cw, L.ch), width, height)).toBe(true);
   });
 
-  test.each(CASES)("at %i x %i, %s step, %i trays: nothing overlaps", (width, height, step, trays, insets) => {
-    const L = layout(width, height, step, trays, insets);
-    for (const [[a, ra], [b, rb]] of pairs(parts(L))) expect(overlaps(ra, rb), `${a} and ${b}`).toBe(false);
+  test.each(CASES)("at %i x %i, %s step, %i trays, %i hit rows: nothing overlaps", (width, height, step, trays, hits, insets) => {
+    const L = layout(width, height, step, trays, insets, hits);
+    for (const [[a, ra], [b, rb]] of pairs(parts(L))) if (!mayOverlap(a, b)) expect(overlaps(ra, rb), `${a} and ${b}`).toBe(false);
   });
 
-  test.each(CASES)("at %i x %i, %s step, %i trays: the hand is big, and every card's corner shows", (width, height, step, trays, insets) => {
-    const L = layout(width, height, step, trays, insets);
+  test.each(CASES)("at %i x %i, %s step, %i trays, %i hit rows: the hand is big, and every card's corner shows", (width, height, step, trays, hits, insets) => {
+    const L = layout(width, height, step, trays, insets, hits);
     expect(L.hand).toHaveLength(11);
     expect(L.cw).toBeGreaterThanOrEqual(56);
-    for (let i = 1; i < L.hand.length; i++) expect(L.hand[i]!.x - L.hand[i - 1]!.x).toBeGreaterThanOrEqual(L.cw * 0.4);
+    for (let i = 1; i < L.hand.length; i++) expect(L.hand[i]!.x - L.hand[i - 1]!.x).toBeGreaterThanOrEqual(L.cw * 0.38 - 0.01);
+  });
+
+  test.each(CTL_SIZES)("at %i x %i: the hit list's X is inside the list and the safe frame, and a hit row is tall enough to tap", (width, height, insets) => {
+    for (const rows of [1, 2, 3]) {
+      const L = layout(width, height, "play", 0, insets, rows);
+      const x = L.hitClose!;
+      const list = L.hits!;
+      expect(x.x).toBeGreaterThanOrEqual(list.x);
+      expect(x.y).toBeGreaterThanOrEqual(list.y);
+      expect(x.x + x.w).toBeLessThanOrEqual(list.x + list.w);
+      expect(x.y + x.h).toBeLessThanOrEqual(list.y + list.h);
+      expect(x.x + x.w).toBeLessThanOrEqual(width - insets.right);
+      expect(x.w).toBeGreaterThanOrEqual(32);
+      // The list sits on the buttons, under the status.
+      expect(list.y + list.h).toBeLessThanOrEqual(L.actions!.y);
+      expect(list.y).toBeGreaterThanOrEqual(L.switch.y + L.switch.h);
+    }
+  });
+
+  test.each(CTL_SIZES)("at %i x %i: the piles stay put when the hit list opens, and fill their room", (width, height, insets) => {
+    const shut = layout(width, height, "play", 0, insets, 0);
+    const open = layout(width, height, "play", 0, insets, 3);
+    expect(open.piles).toEqual(shut.piles);
+    expect(open.hand).toEqual(shut.hand);
+    expect(open.actions).toEqual(shut.actions);
+    const { deckRect } = shut.piles!;
+    // As big as the room allows: never under a hand card, and either the width or the height is used up.
+    expect(deckRect.w).toBeGreaterThanOrEqual(shut.cw);
+    const stageTop = shut.switch.y + shut.switch.h;
+    const roomH = shut.landscape ? shut.handRect.y - stageTop : shut.actions!.y - stageTop;
+    const roomW = shut.landscape ? (shut.handRect.w - 10) / 2 : shut.handRect.w;
+    expect(Math.max(deckRect.h / roomH, (2 * deckRect.w) / roomW)).toBeGreaterThan(0.7);
   });
 
   test("at 320 wide a card is at least 56 px, and grows with the screen", () => {
@@ -344,7 +391,7 @@ describe("Cat Tower on a phone controller", () => {
     const L = layout(width, height, "off", 0, insets);
     expect(L.piles).toBeNull();
     expect(L.actions).toBeNull();
-    expect(L.work).toBeNull();
+    expect(L.hits).toBeNull();
     expect(L.trays).toEqual([]);
     expect(L.hero).not.toBeNull();
   });
@@ -358,8 +405,52 @@ describe("Cat Tower on a phone controller", () => {
     }
   });
 
-  test("the menu's place is the table menu's: the top-right corner of the safe area", () => {
-    const L = layout(390, 844, "draw", 3, portrait);
-    expect(L.menu).toEqual({ x: 390 - 8 - 44, y: portrait.top + 8, w: 44, h: 44 });
+  test("the menu's place is the table menu's: the top-right corner of the safe area, at the unit", () => {
+    for (const [w, h, insets] of CTL_SIZES) {
+      const L = layout(w, h, "draw", 3, insets);
+      expect(L.menu).toEqual({ x: w - insets.right - 8 - 44 * L.unit, y: insets.top + 8, w: 44 * L.unit, h: 44 * L.unit });
+    }
+  });
+
+  test("a phone's top bar is phone-sized; a tablet's grows with its cards, up to 1.6", () => {
+    for (const [w, h] of [
+      [320, 568],
+      [390, 844],
+      [430, 932],
+    ] as const)
+      expect(layout(w, h, "draw", 3, portrait).unit).toBe(1);
+    for (const [w, h] of [
+      [820, 1180],
+      [1180, 820],
+    ] as const) {
+      const L = layout(w, h, "draw", 3, ipad);
+      expect(L.unit).toBeGreaterThan(1.3);
+      expect(L.unit).toBeLessThanOrEqual(1.6);
+      expect(L.switch.h).toBeCloseTo(44 * L.unit);
+    }
+  });
+
+  test("on a tablet the hand is bigger than a phone's, and a tray's cards are big too", () => {
+    for (const [w, h] of [
+      [820, 1180],
+      [1180, 820],
+    ] as const) {
+      const L = layout(w, h, "play", 2, ipad);
+      expect(L.cw).toBeGreaterThan(132);
+      expect(L.cw * L.small).toBeGreaterThanOrEqual(70);
+      for (const t of L.trays) expect(t.w).toBeLessThanOrEqual(L.cw * 4.6 + 0.5);
+    }
+  });
+
+  test("off turn on a phone, the status is in the top bar beside the menu, so a tip under the switch never covers it", () => {
+    for (const [w, h] of [
+      [320, 568],
+      [390, 844],
+      [430, 932],
+    ] as const) {
+      const L = layout(w, h, "off", 0, portrait);
+      expect(L.status.y).toBe(L.menu.y);
+      expect(L.switch.y).toBeGreaterThan(L.status.y + L.status.h);
+    }
   });
 });

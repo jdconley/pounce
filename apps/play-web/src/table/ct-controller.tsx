@@ -60,10 +60,23 @@ export function CtController(props: { store: RoomStore; state: RoomState; onView
   const [target, setTarget] = useState<HitTarget | null>(null);
   const [focusIndex, setFocusIndex] = useState(0);
 
+  // Hit: the places the picked card fits. The list of them opens over the bottom of the piles' room.
+  const targets = step === "play" && laidMine && selected !== null ? hitTargets(selected, g.laid) : [];
+
   const L: CtlLayout = useMemo(
-    () => ctControllerLayout({ width: size.width || 360, height: size.height || 640, insets, handCount: ordered.length, trays: showTrays ? reqs.length : 0, step }),
-    [size.width, size.height, insets, ordered.length, showTrays, reqs.length, step],
+    () => ctControllerLayout({ width: size.width || 360, height: size.height || 640, insets, handCount: ordered.length, trays: showTrays ? reqs.length : 0, step, hits: targets.length }),
+    [size.width, size.height, insets, ordered.length, showTrays, reqs.length, step, targets.length],
   );
+
+  // The table menu's paw is the table screen's: it grows with this screen's top bar.
+  useLayoutEffect(() => {
+    const screen = rootRef.current?.parentElement;
+    screen?.style.setProperty("--k", String(L.unit));
+    return () => screen?.style.removeProperty("--k");
+  }, [L.unit]);
+
+  // This player's round, for a moment in the status: whether they climbed, and the points.
+  const [result, setResult] = useState<{ up: boolean; points: number } | null>(null);
 
   useEffect(() => {
     if (!state.pending) setHeld(new Map());
@@ -78,8 +91,14 @@ export function CtController(props: { store: RoomStore; state: RoomState; onView
           if (e.kind !== "game") return;
           const ev = e.event;
           if (ev.kind === "turn" && mine.includes(ev.seat)) buzz("turn");
-          else if (ev.kind === "roundStarted") hand.setTrays([]);
-          else if (ev.kind === "drew" && ev.card !== undefined && ev.from === "deck" && L.piles) motion.spawnFrom(`c${ev.card}`, L.piles.deck);
+          else if (ev.kind === "roundStarted") {
+            hand.setTrays([]);
+            setResult(null);
+          } else if (ev.kind === "roundOver") {
+            // A shared device's seats each have their own: the TV shows them all.
+            const own = mine.length === 1 ? mine[0]! : null;
+            if (own !== null) setResult({ up: ev.advanced.includes(own), points: ev.points[own] ?? 0 });
+          } else if (ev.kind === "drew" && ev.card !== undefined && ev.from === "deck" && L.piles) motion.spawnFrom(`c${ev.card}`, L.piles.deck);
         },
       }),
     [store, mine.join(), L, motion],
@@ -98,8 +117,7 @@ export function CtController(props: { store: RoomStore; state: RoomState; onView
   const { nope, draw, discard, toTray, outOfTray, groups, layDown, hit, skipCandidates } = moves;
   const groupsReady = groups !== null;
 
-  // Hit: the places the picked card fits, and the one chosen (lit on the TV while it is).
-  const targets = step === "play" && laidMine && selected !== null ? hitTargets(selected, g.laid) : [];
+  // The place chosen to hit, lit on the TV while it is.
   const chosen = targets.find((t) => sameTarget(target, t)) ?? null;
   useEffect(() => setTarget(null), [selected]);
   const aimKey = seat !== null && chosen ? `${seat}:${chosen.seat}:${chosen.group}` : "";
@@ -228,7 +246,18 @@ export function CtController(props: { store: RoomStore; state: RoomState; onView
 
   const canDrawDiscard = step === "draw" && g.discardTop !== null && card(g.discardTop).kind !== "cucumber";
   const turnSeat = room.seats[g.turn];
-  const status = g.status === "playing" ? (myTurn ? "Your turn" : `${seatName(turnSeat)}'s turn`) : g.status === "roundOver" ? "Round over" : "";
+  // The status: a name (cut short only if it must be) and the words after it.
+  const status: { who?: string; words: string; tone: "" | "mine" | "up" | "same" } =
+    result !== null
+      ? { words: `${result.up ? "Level up" : "Same level"} · +${result.points}`, tone: result.up ? "up" : "same" }
+      : g.status === "playing"
+        ? myTurn
+          ? { words: "Your turn", tone: "mine" }
+          : { who: seatName(turnSeat), words: "'s turn", tone: "" }
+        : g.status === "roundOver"
+          ? { words: "Round over", tone: "" }
+          : { words: "", tone: "" };
+  const statusLong = (status.who ?? "").length + status.words.length > 18;
   const statusCat = seatCat(myTurn && seat !== null ? room.seats[seat] : turnSeat);
   const discardName =
     g.discardTop === null ? "Discard pile, empty" : `Discard pile: ${cardLabel(g.discardTop)}${canDrawDiscard ? ". Take it" : selected !== null && step === "play" ? ". Discard here" : ""}`;
@@ -264,14 +293,17 @@ export function CtController(props: { store: RoomStore; state: RoomState; onView
     );
 
   return (
-    <div class={`ct-table ctl ${L.landscape ? "landscape" : ""} ${myTurn ? "my-turn" : ""}`} ref={rootRef} style={{ ["--cw" as string]: `${L.cw}px`, ["--ch" as string]: `${L.ch}px` }}>
+    <div class={`ct-table ctl ${L.landscape ? "landscape" : ""} ${myTurn ? "my-turn" : ""}`} ref={rootRef} style={{ ["--cw" as string]: `${L.cw}px`, ["--ch" as string]: `${L.ch}px`, ["--k" as string]: String(L.unit) }}>
       <SwitchView view="cards" onChange={props.onView} style={box(L.switch)} />
 
-      {status ? (
-        <div class="ctl-status" style={box(L.status)}>
-          <p class={`ctl-status-pill ${myTurn ? "mine" : ""}`} aria-live="polite" style={{ ["--ring" as string]: RINGS[g.turn % RINGS.length] }}>
+      {status.words ? (
+        <div class={`ctl-status ${L.status.y === L.switch.y ? "inline" : ""}`} style={box(L.status)}>
+          <p class={`ctl-status-pill ${status.tone} ${statusLong ? "long" : ""}`} aria-live="polite" style={{ ["--ring" as string]: RINGS[g.turn % RINGS.length] }}>
             <img src={catArt(statusCat, myTurn ? "awake" : "idle")} alt="" />
-            <span>{status}</span>
+            <span class="words">
+              {status.who ? <span class="who">{status.who}</span> : null}
+              {status.words}
+            </span>
           </p>
         </div>
       ) : null}
@@ -327,46 +359,45 @@ export function CtController(props: { store: RoomStore; state: RoomState; onView
           })
         : null}
 
-      {targets.length > 0 && L.work && !showTrays ? (
-        // As tall as its rows, up to the room there is, sitting on the buttons.
-        <div class="ctl-hits-at" style={box(L.work)}>
-        <div class="ctl-hits panel" role="group" aria-label={`Hit with ${cardLabel(selected!)}`}>
-          <ul>
-            {targets.map((t) => {
-              const both = targets.filter((x) => x.seat === t.seat && x.group === t.group).length > 1;
-              const on = sameTarget(chosen, t);
-              return (
-                <li>
-                  <button
-                    type="button"
-                    class={`ctl-hit ${on ? "on" : ""}`}
-                    aria-pressed={on}
-                    style={{ ["--ring" as string]: RINGS[t.seat % RINGS.length] }}
-                    onClick={() => {
-                      play("tick", 0.4);
-                      buzz("tap");
-                      setTarget(on ? null : t);
-                    }}
-                  >
-                    <img src={catArt(seatCat(room.seats[t.seat]), "idle")} alt="" />
-                    <span class="label">{targetLabel(room, t.seat, t.group)}</span>
-                    {both ? <span class="end">{t.side === "start" ? "Low end" : "High end"}</span> : null}
-                  </button>
-                </li>
-              );
-            })}
-          </ul>
-          <button type="button" class="ctl-hits-close" aria-label="Cancel" onClick={() => setSelected(null)}>
-            <CloseMark size={12} />
+      {targets.length > 0 && L.hits && L.hitClose ? (
+        <>
+          <div class="ctl-hits panel" style={{ ...box(L.hits), ["--close" as string]: `${L.hitClose.w}px` }} role="group" aria-label={`Hit with ${cardLabel(selected!)}`}>
+            <ul>
+              {targets.map((t) => {
+                const both = targets.filter((x) => x.seat === t.seat && x.group === t.group).length > 1;
+                const on = sameTarget(chosen, t);
+                return (
+                  <li key={`${t.seat}:${t.group}:${t.side ?? ""}`}>
+                    <button
+                      type="button"
+                      class={`ctl-hit ${on ? "on" : ""}`}
+                      aria-pressed={on}
+                      style={{ ["--ring" as string]: RINGS[t.seat % RINGS.length] }}
+                      onClick={() => {
+                        play("tick", 0.4);
+                        buzz("tap");
+                        setTarget(on ? null : t);
+                      }}
+                    >
+                      <img src={catArt(seatCat(room.seats[t.seat]), "idle")} alt="" />
+                      <span class="label">{targetLabel(room, t.seat, t.group)}</span>
+                      {both ? <span class="end">{t.side === "start" ? "Low end" : "High end"}</span> : null}
+                    </button>
+                  </li>
+                );
+              })}
+            </ul>
+          </div>
+          <button type="button" class="ctl-hits-close" style={box(L.hitClose)} aria-label="Cancel" onClick={() => setSelected(null)}>
+            <CloseMark size={Math.round(12 * L.unit)} />
           </button>
-        </div>
-        </div>
+        </>
       ) : null}
 
       {L.actions ? (
         <div class="ctl-actions" style={box(L.actions)}>
           {step === "draw" ? (
-            <p class="ctl-cue">Draw a card</p>
+            <p class="ctl-cue outlined">Draw a card</p>
           ) : (
             <>
               {showTrays && groupsReady ? (

@@ -41,14 +41,15 @@
   right: calc(var(--safe-right) + 8px);
 }
 
+/* `--k` grows it with the controller's top bar on a tablet (ct-controller.tsx); 1 elsewhere. */
 .table-menu .icon-btn {
-  width: 44px;
-  height: 44px;
+  width: calc(44px * var(--k, 1));
+  height: calc(44px * var(--k, 1));
 }
 
 .table-menu .icon-btn img {
-  width: 26px;
-  height: 26px;
+  width: calc(26px * var(--k, 1));
+  height: calc(26px * var(--k, 1));
 }
 
 .rug-art {
@@ -954,7 +955,7 @@
   border-radius: 999px;
   background: none;
   color: rgba(255, 255, 255, 0.82);
-  font: 900 1.05rem var(--round);
+  font: 900 calc(1.05rem * var(--k, 1)) var(--round);
 }
 
 .view-switch button.on {
@@ -982,8 +983,13 @@
   z-index: 30;
   display: flex;
   align-items: center;
-  justify-content: center;
+  justify-content: flex-start;
   pointer-events: none;
+}
+
+/* Between the switch and the menu, on a tablet. */
+.ctl-status.inline {
+  justify-content: center;
 }
 
 .ctl-status-pill {
@@ -999,10 +1005,25 @@
   background: rgba(27, 11, 58, 0.8);
   box-shadow: 0 4px 0 var(--ink);
   color: var(--white);
-  font: 900 clamp(1rem, 4.6vw, 1.4rem) var(--round);
+  font: 900 calc(clamp(1rem, 4.6vw, 1.4rem) * var(--k, 1)) var(--round);
   -webkit-text-stroke: 0.14em var(--ink);
   paint-order: stroke fill;
   white-space: nowrap;
+}
+
+/* A long name: one step smaller, then only the name is cut short ("Great Aunt Jos…'s turn"). */
+.ctl-status-pill.long {
+  font-size: calc(clamp(0.9rem, 4vw, 1.15rem) * var(--k, 1));
+}
+
+.ctl-status-pill .words {
+  display: flex;
+  min-width: 0;
+}
+
+.ctl-status-pill .who {
+  flex: 0 1 auto;
+  min-width: 0;
 }
 
 .ctl-status-pill img {
@@ -1020,9 +1041,23 @@
   text-overflow: ellipsis;
 }
 
+.ctl-status-pill.mine,
+.ctl-status-pill.up,
+.ctl-status-pill.same {
+  animation: status-pop 420ms var(--ease-spring) both;
+}
+
 .ctl-status-pill.mine {
   background: linear-gradient(180deg, #ffc21a, #ff8a00);
-  animation: status-pop 420ms var(--ease-spring) both;
+}
+
+/* The round's result: climbed a shelf, or stayed. */
+.ctl-status-pill.up {
+  background: linear-gradient(180deg, #c6f76a, #7cc51c);
+}
+
+.ctl-status-pill.same {
+  background: linear-gradient(180deg, #b183ff, #7b2fff);
 }
 
 @keyframes status-pop {
@@ -1061,29 +1096,31 @@
 }
 
 .ctl .pile-count {
-  min-width: 36px;
-  font-size: 1.05rem;
+  min-width: calc(36px * var(--k, 1));
+  font-size: calc(1.05rem * var(--k, 1));
+}
+
+.ctl .tray-label {
+  font-size: calc(clamp(0.85rem, 3.6vw, 1.05rem) * var(--k, 1));
+}
+
+/* A hand card shows as little as 38% of itself (ct-controller-layout.ts, SHOWS): a two-digit
+   number closes up to fit there. */
+.ctl .card.mine .face .num.two {
+  left: 7%;
+  letter-spacing: -0.1em;
 }
 
 /* Where the picked card can be hit: a short list, the chosen one lit (and lit on the TV). */
-.ctl-hits-at {
+.ctl-hits {
   z-index: 30;
   display: flex;
-  flex-direction: column;
-  justify-content: flex-end;
-  pointer-events: none;
-}
-
-.ctl-hits {
-  position: relative;
-  display: flex;
-  max-height: 100%;
-  padding: 8px;
-  pointer-events: auto;
-  animation: sheet-in 260ms var(--ease-spring) both;
+  padding: 8px calc(var(--close) + 16px) 8px 8px;
+  animation: fade-in 160ms ease-out both;
 }
 
 .ctl-hits ul {
+  animation: sheet-in 260ms var(--ease-spring) both;
   flex: 1;
   display: flex;
   flex-direction: column;
@@ -1101,14 +1138,14 @@
   align-items: center;
   gap: 10px;
   width: 100%;
-  min-height: 44px;
+  min-height: calc(44px * var(--k, 1));
   padding: 2px 16px 2px 3px;
   border: 3px solid var(--ink);
   border-radius: 999px;
   background: linear-gradient(180deg, #b183ff, #7b2fff);
   box-shadow: 0 3px 0 var(--ink);
   color: var(--white);
-  font: 900 1.05rem var(--round);
+  font: 900 calc(1.05rem * var(--k, 1)) var(--round);
   -webkit-text-stroke: 0.14em var(--ink);
   paint-order: stroke fill;
   text-align: left;
@@ -1116,8 +1153,8 @@
 
 .ctl-hit img {
   flex: none;
-  width: 34px;
-  height: 34px;
+  width: calc(34px * var(--k, 1));
+  height: calc(34px * var(--k, 1));
   border: 2.5px solid var(--ink);
   border-radius: 50%;
   background: var(--ring);
@@ -1142,14 +1179,11 @@
   -webkit-text-stroke: 0;
 }
 
+/* Inside the list's top-right corner, beside its first row (ct-controller-layout.ts, hitClose). */
 .ctl-hits-close {
-  position: absolute;
-  top: -12px;
-  right: -12px;
+  z-index: 31;
   display: grid;
   place-items: center;
-  width: 32px;
-  height: 32px;
   padding: 0;
   border: 2.5px solid var(--ink);
   border-radius: 50%;
@@ -1170,16 +1204,24 @@
   pointer-events: auto;
 }
 
+/* A label, not a button: outlined words on the rug. */
 .ctl-cue {
   margin: 0;
-  padding: 6px 18px;
-  border: 2.5px solid var(--ink);
-  border-radius: 999px;
-  background: rgba(27, 11, 58, 0.78);
-  color: var(--white);
-  font: 900 1.1rem var(--round);
+  font-size: calc(1.35rem * var(--k, 1));
+}
+
+.ctl-actions .btn.small {
+  min-height: calc(44px * var(--k, 1));
+  padding: calc(6px * var(--k, 1)) calc(18px * var(--k, 1)) calc(8px * var(--k, 1));
+  font-size: calc(1.05rem * var(--k, 1));
 }
 
 .ctl-hand {
   pointer-events: none;
+}
+
+/* A tip on the controller grows with its top bar on a tablet. */
+.ctl .tip {
+  max-width: min(calc(340px * var(--k, 1)), calc(100vw - 32px));
+  font-size: calc(clamp(0.95rem, 3.8vw, 1.05rem) * var(--k, 1));
 }
