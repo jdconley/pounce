@@ -228,6 +228,8 @@ export class RoomStore {
   private lastAimAt = -Infinity;
   private trailingAim: { seat: number; aim: GameAim } | null = null;
   private aimTimer: unknown = null;
+  /** A clear that couldn't be sent: sent as soon as the socket is back. */
+  private clearsOwed = new Set<number>();
 
   constructor(options: RoomStoreOptions) {
     this.state = {
@@ -301,10 +303,14 @@ export class RoomStore {
    * drops any aim still waiting.
    */
   aim(seat: number, aim: GameAim | null): void {
+    // The throttle is per device (the server limits one pointer per device), so a later seat's
+    // aim replaces an earlier one still waiting.
+    if (aim !== null) this.clearsOwed.delete(seat);
     if (aim === null) {
       if (this.aimTimer !== null) this.clearTimer(this.aimTimer);
       this.aimTimer = this.trailingAim = null;
-      this.socket.send({ t: "aim", seat });
+      if (!this.socket.send({ t: "aim", seat })) this.clearsOwed.add(seat);
+      else this.clearsOwed.delete(seat);
       return;
     }
     const wait = this.lastAimAt + AIM_EVERY_MS - this.now();
@@ -339,6 +345,8 @@ export class RoomStore {
       case "connected":
         this.connection += 1;
         this.set({ online: true, everConnected: true, link: "good" });
+        for (const seat of this.clearsOwed) this.socket.send({ t: "aim", seat });
+        this.clearsOwed.clear();
         return;
       case "disconnected":
       case "connecting":

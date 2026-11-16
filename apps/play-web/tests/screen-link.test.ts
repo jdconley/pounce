@@ -118,6 +118,7 @@ describe("screens and links", () => {
 
 describe("the screen link (a TV waiting to be linked)", () => {
   function setup(expiresIn = 100) {
+    const release = { hold: false, fail: false, go: () => undefined as void, waiting: null as null | (() => void) };
     const clock = new Clock();
     const sockets: FakeSocket[] = [];
     let n = 0;
@@ -125,6 +126,8 @@ describe("the screen link (a TV waiting to be linked)", () => {
     const api = {
       credential: async () => ({ deviceId: "tv", token: "tvtok" }),
       screens: async (showing?: string) => {
+        if (release.fail) throw new Error("offline");
+        if (release.hold) await new Promise<void>((r) => (release.waiting = r));
         asked.push(showing);
         n += 1;
         return { token: `tok${n}`, code: `CODE${n}`, url: `https://x/tv/tok${n}`, expiresIn };
@@ -143,7 +146,8 @@ describe("the screen link (a TV waiting to be linked)", () => {
       clearTimer: clock.clear,
     });
     link.on((e) => events.push(e));
-    return { clock, sockets, events, link, asked };
+    release.go = () => release.waiting?.();
+    return { clock, sockets, events, link, asked, release };
   }
 
   test("emits the code, and listens on the token's socket as the device", async () => {
@@ -175,6 +179,7 @@ describe("the screen link (a TV waiting to be linked)", () => {
     clock.advance(1);
     await flush();
     expect(sockets).toHaveLength(2);
+    sockets[1]!.open();
     expect(sockets[0]!.readyState).toBe(3);
     expect(events.map((e) => e.kind === "code" && e.token)).toEqual(["tok1", "tok2"]);
     expect(new URL(sockets[1]!.url).pathname).toBe("/v1/screens/tok2/ws");
@@ -202,6 +207,61 @@ describe("the screen link (a TV waiting to be linked)", () => {
     clock.advance(200_000);
     await flush();
     expect(sockets).toHaveLength(1);
+  });
+
+  test("a code linked while its renewal is still asking is not lost", async () => {
+    const { clock, sockets, events, link, release } = setup(100);
+    link.start();
+    await flush();
+    sockets[0]!.open();
+    release.hold = true;
+    clock.advance(80_000);
+    await flush();
+    expect(sockets).toHaveLength(1);
+    sockets[0]!.receive({ t: "linked", room: "BCDFG" });
+    expect(events.at(-1)).toEqual({ kind: "linked", room: "BCDFG" });
+    release.go();
+    await flush();
+    expect(sockets).toHaveLength(1);
+  });
+
+  test("a renewal that fails leaves the old socket open", async () => {
+    const { clock, sockets, events, link, release } = setup(100);
+    link.start();
+    await flush();
+    sockets[0]!.open();
+    release.fail = true;
+    clock.advance(80_000);
+    await flush();
+    expect(sockets[0]!.readyState).toBe(1);
+    expect(events.filter((e) => e.kind === "offline")).toHaveLength(0);
+    sockets[0]!.receive({ t: "linked", room: "BCDFG" });
+    expect(events.at(-1)).toEqual({ kind: "linked", room: "BCDFG" });
+  });
+
+  test("the old socket closes once the new one is open, and a link on either wins", async () => {
+    const { clock, sockets, events, link } = setup(100);
+    link.start();
+    await flush();
+    sockets[0]!.open();
+    clock.advance(80_000);
+    await flush();
+    expect(sockets).toHaveLength(2);
+    expect(sockets[0]!.readyState).toBe(1);
+    sockets[0]!.receive({ t: "linked", room: "BCDFG" });
+    expect(events.at(-1)).toEqual({ kind: "linked", room: "BCDFG" });
+    expect(sockets[1]!.readyState).toBe(3);
+  });
+
+  test("the old socket is closed when the new one opens", async () => {
+    const { clock, sockets, link } = setup(100);
+    link.start();
+    await flush();
+    sockets[0]!.open();
+    clock.advance(80_000);
+    await flush();
+    sockets[1]!.open();
+    expect(sockets[0]!.readyState).toBe(3);
   });
 
   test("a dropped socket reconnects to the same token with backoff", async () => {

@@ -28,6 +28,8 @@ const RENEW_AT = 0.8;
 export class ScreenLink {
   private listeners = new Set<(e: ScreenLinkEvent) => void>();
   private ws: SocketLike | null = null;
+  /** The socket of the code being replaced: kept listening until the new one is open. */
+  private old: SocketLike | null = null;
   private generation = 0;
   private attempt = 0;
   private stopped = true;
@@ -79,9 +81,15 @@ export class ScreenLink {
   }
 
   private closeSocket(): void {
+    const old = this.old;
+    this.old = null;
+    if (old) this.detach(old);
     const ws = this.ws;
     this.ws = null;
-    if (!ws) return;
+    if (ws) this.detach(ws);
+  }
+
+  private detach(ws: SocketLike): void {
     ws.onopen = ws.onmessage = ws.onclose = ws.onerror = null;
     try {
       ws.close(1000);
@@ -90,25 +98,29 @@ export class ScreenLink {
     }
   }
 
-  /** A new token and code, a new socket, the old socket closed. */
-  private async renew(): Promise<void> {
+  /**
+   * A new token and code, a new socket, the old socket closed. A timed renewal keeps the old
+   * socket listening (a phone may link the old code meanwhile) until the new one is open.
+   */
+  private async renew(timed = false): Promise<void> {
     this.clearTimers();
-    this.closeSocket();
+    if (!timed) this.closeSocket();
     const gen = ++this.generation;
     let made: Awaited<ReturnType<Api["screens"]>>;
     try {
       made = await this.options.api.screens(this.showing);
     } catch {
       if (gen === this.generation && !this.stopped) {
-        this.emit({ kind: "offline" });
-        this.retry(gen, () => void this.renew());
+        // A timed renewal that failed still has its old code and socket: try again, quietly.
+        if (!timed) this.emit({ kind: "offline" });
+        this.retry(gen, () => void this.renew(timed));
       }
       return;
     }
     if (gen !== this.generation || this.stopped) return;
     this.token = made.token;
     this.emit({ kind: "code", token: made.token, code: made.code, url: made.url });
-    this.renewTimer = this.setTimer(() => void this.renew(), Math.round(made.expiresIn * 1000 * RENEW_AT));
+    this.renewTimer = this.setTimer(() => void this.renew(true), Math.round(made.expiresIn * 1000 * RENEW_AT));
     void this.connect(gen);
   }
 
@@ -129,13 +141,18 @@ export class ScreenLink {
       this.retry(gen, () => void this.connect(gen));
       return;
     }
+    if (this.old) this.detach(this.old);
+    this.old = this.ws;
     this.ws = ws;
     ws.onopen = () => {
-      if (gen === this.generation) this.attempt = 0;
+      if (ws !== this.ws) return;
+      this.attempt = 0;
+      if (this.old) this.detach(this.old);
+      this.old = null;
     };
     ws.onerror = () => undefined;
     ws.onmessage = (ev) => {
-      if (gen !== this.generation) return;
+      if (ws !== this.ws && ws !== this.old) return;
       let message: { t?: string; room?: string };
       try {
         message = JSON.parse(String(ev.data)) as { t?: string; room?: string };
@@ -156,7 +173,8 @@ export class ScreenLink {
       }
     };
     ws.onclose = (ev) => {
-      if (gen !== this.generation) return;
+      if (ws !== this.ws) return;
+      const now = this.generation;
       this.closeSocket();
       // A token the server no longer knows (or a device token it refused) is replaced, not retried.
       if (ev.code === 4404 || ev.code === 4401) {
@@ -164,7 +182,7 @@ export class ScreenLink {
         return;
       }
       this.emit({ kind: "offline" });
-      this.retry(gen, () => void this.connect(gen));
+      this.retry(now, () => void this.connect(now));
     };
   }
 

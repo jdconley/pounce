@@ -272,6 +272,21 @@ describe("the room store (RoomStore.swift)", () => {
       expect(aimSent(sockets[0]!)).toHaveLength(2);
     });
 
+    test("a clear sent while offline goes once when the socket is back", async () => {
+      const { clock, sockets, store } = await open();
+      sockets[0]!.drop();
+      store.aim(0, null);
+      clock.advance(250);
+      await flush();
+      sockets[1]!.open();
+      expect(aimSent(sockets[1]!)).toEqual([{ t: "aim", seat: 0 }]);
+      sockets[1]!.drop();
+      clock.advance(500);
+      await flush();
+      sockets[2]!.open();
+      expect(aimSent(sockets[2]!)).toEqual([]);
+    });
+
     test("aims from the server are kept per seat, and a clearing aim removes only that seat's", async () => {
       const { sockets, store } = await open();
       sockets[0]!.receive({ t: "aim", seat: 0, aim: t(1) });
