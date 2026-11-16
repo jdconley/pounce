@@ -166,30 +166,41 @@ export function Tip(props: { id: string; anchor: string; text: string; show: boo
   const ref = useRef<HTMLDivElement>(null);
   const [pos, setPos] = useState<{ left: number; top: number; arrow: number; place: "above" | "below" } | null>(null);
   const visible = props.show && !tipLearned(props.id);
+  const place = () => {
+    const target = document.getElementById(props.anchor);
+    const tip = ref.current;
+    if (!target || !tip) return;
+    const t = target.getBoundingClientRect();
+    const w = tip.offsetWidth;
+    const h = tip.offsetHeight;
+    const vw = window.innerWidth;
+    const below = props.place ? props.place === "below" : t.top - h - 16 < 8;
+    const left = Math.min(Math.max(t.left + t.width / 2 - w / 2, 12), vw - w - 12);
+    const top = below ? t.bottom + 14 : t.top - h - 14;
+    const next = { left, top, arrow: Math.min(Math.max(t.left + t.width / 2 - left, 22), w - 22), place: below ? ("below" as const) : ("above" as const) };
+    setPos((p) => (p && Math.abs(p.left - next.left) < 0.5 && Math.abs(p.top - next.top) < 0.5 && p.place === next.place ? p : next));
+  };
+  // When the screen around it re-renders (a table's layout changed): once, in the next frame, so a
+  // tip never forces a layout inside the render that moved its anchor.
+  useEffect(() => {
+    if (!visible) return;
+    const frame = requestAnimationFrame(place);
+    return () => cancelAnimationFrame(frame);
+  });
   useLayoutEffect(() => {
     if (!visible) return;
-    const place = () => {
-      const target = document.getElementById(props.anchor);
-      const tip = ref.current;
-      if (!target || !tip) return;
-      const t = target.getBoundingClientRect();
-      const w = tip.offsetWidth;
-      const h = tip.offsetHeight;
-      const vw = window.innerWidth;
-      const below = props.place ? props.place === "below" : t.top - h - 16 < 8;
-      const left = Math.min(Math.max(t.left + t.width / 2 - w / 2, 12), vw - w - 12);
-      const top = below ? t.bottom + 14 : t.top - h - 14;
-      setPos({ left, top, arrow: Math.min(Math.max(t.left + t.width / 2 - left, 22), w - 22), place: below ? "below" : "above" });
-    };
-    place();
-    const ro = new ResizeObserver(place);
+    const anchor = document.getElementById(props.anchor);
+    const ro = new ResizeObserver(() => place());
     ro.observe(document.body);
+    if (anchor) ro.observe(anchor);
+    // The anchor moving (a new transform) or changing size.
+    const mo = new MutationObserver(() => place());
+    if (anchor) mo.observe(anchor, { attributes: true, attributeFilter: ["style", "class"] });
     window.addEventListener("resize", place);
-    const id = window.setInterval(place, 600);
     return () => {
       ro.disconnect();
+      mo.disconnect();
       window.removeEventListener("resize", place);
-      window.clearInterval(id);
     };
   }, [visible, props.anchor]);
   if (!visible) return null;
@@ -238,16 +249,19 @@ export function useMedia(query: string): boolean {
 /** The element's size, read once per resize (one layout read, never per frame). */
 export function useSize<T extends HTMLElement>(): [RefObject<T | null>, { width: number; height: number }] {
   const ref = useRef<T>(null);
-  const [size, setSize] = useState({ width: 0, height: 0 });
+  // Tables fill the window: start from its size, which costs no layout, and let ResizeObserver
+  // (which reports after the browser's own layout, never forcing one) correct it.
+  const [size, setSize] = useState(() =>
+    typeof window === "undefined" ? { width: 0, height: 0 } : { width: window.innerWidth, height: window.innerHeight },
+  );
   useLayoutEffect(() => {
     const el = ref.current;
     if (!el) return;
-    const read = () => {
-      const r = el.getBoundingClientRect();
-      setSize((s) => (Math.abs(s.width - r.width) < 0.5 && Math.abs(s.height - r.height) < 0.5 ? s : { width: r.width, height: r.height }));
-    };
-    read();
-    const ro = new ResizeObserver(read);
+    const ro = new ResizeObserver(([entry]) => {
+      const box = entry?.contentRect;
+      if (!box) return;
+      setSize((s) => (Math.abs(s.width - box.width) < 0.5 && Math.abs(s.height - box.height) < 0.5 ? s : { width: box.width, height: box.height }));
+    });
     ro.observe(el);
     return () => ro.disconnect();
   }, []);

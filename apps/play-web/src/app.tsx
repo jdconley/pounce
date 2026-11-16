@@ -3,13 +3,13 @@ import { useEffect, useState } from "preact/hooks";
 
 import { turnOffAlerts, turnOnAlerts, useAlerts } from "./alerts";
 import { art } from "./lib/art";
+import { flushNow } from "./lib/kv";
 import { currentRoute, navigate, onRoute, type Route } from "./lib/router";
 import { onSettings, setSettings, settings } from "./lib/settings";
 import { api, ApiError } from "./net/api";
-import { RoomSocket } from "./net/socket";
 import { installState, promptInstall, useInstall } from "./pwa";
 import { app, deleteMyData, finishAge, noteSource, reach, setOwner, syncProfile, useApp } from "./store/app";
-import { inviteHost } from "./store/lobby";
+import { peekInvite as peek } from "./store/peek";
 import { Button, Cat, Icon, Sheet } from "./ui/common";
 import { AgeScreen, NameScreen, type InviteBanner } from "./ui/firstrun";
 import { Home, JoinScreen } from "./ui/home";
@@ -43,24 +43,6 @@ export function openTable(code: string, intent: TableIntent, replace = false): v
   navigate({ kind: "table", code }, replace);
 }
 
-/** A seatless look at an invite's table: who saved a seat (InviteHost.swift). Null after 6 s or on any trouble. */
-function peek(code: string): Promise<InviteBanner | null> {
-  return new Promise((resolve) => {
-    const socket = new RoomSocket({ code, token: async () => (await api.credential()).token, backoff: [] });
-    const done = (value: InviteBanner | null) => {
-      clearTimeout(timer);
-      socket.stop();
-      resolve(value);
-    };
-    const timer = setTimeout(() => done(null), 6000);
-    socket.on((e) => {
-      if (e.kind === "message" && e.message.t === "snapshot") done(inviteHost(e.message.room));
-      else if (e.kind === "notFound" || e.kind === "locked" || e.kind === "closed" || e.kind === "refused" || e.kind === "disconnected") done(null);
-    });
-    socket.start();
-  });
-}
-
 function useRoute(): Route {
   const [route, setRoute] = useState(currentRoute);
   useEffect(() => onRoute(setRoute), []);
@@ -77,8 +59,9 @@ export function App() {
 
   // Once the first screen is up, fetch the tables' code in the background.
   useEffect(() => {
-    const t = setTimeout(() => void loadTables(), 1500);
-    return () => clearTimeout(t);
+    const idle = (globalThis as { requestIdleCallback?: (fn: () => void, o?: { timeout: number }) => number }).requestIdleCallback;
+    if (idle) idle(() => void loadTables(), { timeout: 4000 });
+    else void loadTables();
   }, []);
 
   // Where this device came from, the first time.
@@ -102,10 +85,7 @@ export function App() {
     }
   }, [route, people.owner]);
 
-  const say = (words: string) => {
-    setToast(words);
-    setTimeout(() => setToast(null), 2600);
-  };
+  const say = (words: string) => setToast(words);
 
   const newTable = async (game: GameId, practice: boolean) => {
     if (busy) return;
@@ -157,7 +137,7 @@ export function App() {
       {screen}
       {settingsOpen ? <SettingsSheet onClose={() => setSettingsOpen(false)} /> : null}
       {toast ? (
-        <div class="banner toast" role="alert">
+        <div class="banner toast" role="alert" key={toast} onAnimationEnd={() => setToast(null)}>
           {toast}
         </div>
       ) : null}
@@ -264,7 +244,10 @@ function SettingsSheet(props: { onClose: () => void }) {
             onClick={async () => {
               setFailed(false);
               await turnOffAlerts();
-              if (await deleteMyData()) location.replace("/play/");
+              if (await deleteMyData()) {
+                flushNow();
+                location.replace("/play/");
+              }
               else setFailed(true);
             }}
           >

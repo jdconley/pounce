@@ -254,6 +254,17 @@
   inset: 0;
 }
 
+/* The old top card lasts as long as the new one takes to land, then goes (cattower.tsx). */
+.discard .under.leaving {
+  animation: under-stays 420ms linear;
+}
+
+@keyframes under-stays {
+  to {
+    opacity: 0.99;
+  }
+}
+
 .pile-count {
   position: absolute;
   right: -8px;
@@ -572,6 +583,7 @@
 }
 
 .hold .fill {
+  --life: 650ms;
   position: absolute;
   inset: 0;
   background: rgba(255, 255, 255, 0.45);

@@ -196,6 +196,8 @@ export class RoomStore {
    * tap the table shows as live after it always counts, however much else is queued behind.
    */
   private settle: { id: string; seq: number } | null = null;
+  /** The seq of the last event put on stage. */
+  private shownSeq = -1;
   private errorCount = 0;
   private timer: unknown = null;
   private readonly setTimer: (fn: () => void, ms: number) => unknown;
@@ -354,9 +356,13 @@ export class RoomStore {
       // Let the events play out first; this snapshot lands after them. The move stays in flight
       // until its own answer has been shown, so a second tap can't send it twice; it settles as
       // soon as it has, even with later events (the next player's turn) still queued.
-      if (pending && stillPending === null) this.settle = { id: pending.id, seq };
       this.pendingSnapshot = { seq, room };
       this.seq = Math.max(this.seq, seq);
+      if (pending && stillPending === null) {
+        // Already shown (its last event is on stage now): settled at once.
+        if (seq <= this.shownSeq) this.set({ pending: null });
+        else this.settle = { id: pending.id, seq };
+      }
       return;
     }
     this.seq = Math.max(this.seq, seq);
@@ -393,6 +399,7 @@ export class RoomStore {
       return;
     }
     this.playing = true;
+    this.shownSeq = next.seq;
     const room = this.state.room ? foldEvent(this.state.room, next.event) : null;
     this.set({ room, ...(this.settled(next.seq) ? { pending: null } : {}) });
     for (const l of [...this.listeners]) l.event?.(next, room);

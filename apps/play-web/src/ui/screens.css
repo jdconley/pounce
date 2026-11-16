@@ -880,10 +880,38 @@
   gap: 12px;
 }
 
+/* A toast lasts as long as its own animation; its end takes it away (app.tsx). */
 .toast {
+  --life: 2600ms;
   top: auto;
   bottom: calc(var(--safe-bottom) + 90px);
   background: var(--refuse);
+  animation: toast-life var(--life) ease-out both;
+}
+
+@keyframes toast-life {
+  from {
+    opacity: 0;
+  }
+  8%,
+  88% {
+    opacity: 1;
+  }
+  to {
+    opacity: 0;
+  }
+}
+
+/* A word that shows for a moment ("Link copied"), timed by its animation (lobby.tsx). */
+.flash-life {
+  --life: 1800ms;
+  animation: flash-life var(--life) linear;
+}
+
+@keyframes flash-life {
+  to {
+    opacity: 0.99;
+  }
 }
 
 .bob {

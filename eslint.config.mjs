@@ -3,6 +3,8 @@ import importX from "eslint-plugin-import-x";
 import globals from "globals";
 import tseslint from "typescript-eslint";
 
+import webMainThread from "./apps/play-web/eslint.main-thread.mjs";
+
 export default tseslint.config(
   {
     // Keep in step with .gitignore.
@@ -33,5 +35,7 @@ export default tseslint.config(
         }
       ]
     }
-  }
+  },
+  // The web player's rendering thread does UI work only (docs/main-thread.md).
+  ...webMainThread
 );

@@ -17,36 +17,5 @@ export const GAMES = "cat-tower,tiles";
 /** `X-Pounce-App`: who is asking. The server never holds the web player to an app minimum. */
 export const APP_HEADER = `platform=web; version=${VERSION}; protocol=${PROTOCOL}`;
 
-/** Local storage that never throws: a private window or blocked storage just forgets. */
-export const store = {
-  get(key: string): string | null {
-    try {
-      return localStorage.getItem(key);
-    } catch {
-      return null;
-    }
-  },
-  set(key: string, value: string): void {
-    try {
-      localStorage.setItem(key, value);
-    } catch {
-      // Not kept: the next visit starts fresh.
-    }
-  },
-  remove(key: string): void {
-    try {
-      localStorage.removeItem(key);
-    } catch {
-      // Nothing to do.
-    }
-  },
-  json<T>(key: string): T | null {
-    const raw = store.get(key);
-    if (raw === null) return null;
-    try {
-      return JSON.parse(raw) as T;
-    } catch {
-      return null;
-    }
-  },
-};
+/** Pounce's own keys: in memory, written in idle time (lib/kv.ts). */
+export { store } from "./kv";

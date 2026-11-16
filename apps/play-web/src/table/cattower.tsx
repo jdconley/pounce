@@ -32,24 +32,36 @@ const REQ_WORDS = (r: Requirement): string => (r.kind === "set" ? `Set of ${r.si
 
 export const phaseWords = (phase: number): string => (PHASES[phase] ?? []).map(REQ_WORDS).join(" + ");
 
-/** Reads the safe-area insets once per resize, from CSS. */
+/** The safe-area insets, read from CSS once (and again on a resize), shared by every table. */
+let insetsNow: Insets | null = null;
+const insetListeners = new Set<(i: Insets) => void>();
+
+function readInsets(): Insets {
+  const probe = document.createElement("div");
+  probe.style.cssText =
+    "position:fixed;visibility:hidden;pointer-events:none;padding:env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left)";
+  document.body.append(probe);
+  const cs = getComputedStyle(probe);
+  const out = { top: parseFloat(cs.paddingTop) || 0, right: parseFloat(cs.paddingRight) || 0, bottom: parseFloat(cs.paddingBottom) || 0, left: parseFloat(cs.paddingLeft) || 0 };
+  probe.remove();
+  return out;
+}
+
+if (typeof window !== "undefined") {
+  window.addEventListener("resize", () => {
+    // In the next frame, after the browser's own layout.
+    requestAnimationFrame(() => {
+      insetsNow = readInsets();
+      for (const l of [...insetListeners]) l(insetsNow);
+    });
+  });
+}
+
 export function useInsets(): Insets {
-  const [insets, setInsets] = useState<Insets>({ top: 0, right: 0, bottom: 0, left: 0 });
-  useLayoutEffect(() => {
-    const probe = document.createElement("div");
-    probe.style.cssText =
-      "position:fixed;visibility:hidden;pointer-events:none;padding:env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left)";
-    document.body.append(probe);
-    const read = () => {
-      const cs = getComputedStyle(probe);
-      setInsets({ top: parseFloat(cs.paddingTop) || 0, right: parseFloat(cs.paddingRight) || 0, bottom: parseFloat(cs.paddingBottom) || 0, left: parseFloat(cs.paddingLeft) || 0 });
-    };
-    read();
-    window.addEventListener("resize", read);
-    return () => {
-      window.removeEventListener("resize", read);
-      probe.remove();
-    };
+  const [insets, setInsets] = useState<Insets>(() => (insetsNow ??= typeof document === "undefined" ? { top: 0, right: 0, bottom: 0, left: 0 } : readInsets()));
+  useEffect(() => {
+    insetListeners.add(setInsets);
+    return () => void insetListeners.delete(setInsets);
   }, []);
   return insets;
 }
@@ -134,15 +146,14 @@ export function CatTowerTable(props: { store: RoomStore; state: RoomState }) {
     if (!state.pending) setHeld(new Map());
   }, [state.pending]);
 
-  // The discard's card underneath stays a moment while the new one lands on it.
+  // The discard's card underneath stays a moment while the new one lands on it: its own CSS
+  // animation (`.under.leaving`) times that, and its end lets it go.
   const prevTop = useRef<CardId | null>(g.discardTop);
   useEffect(() => {
-    if (prevTop.current !== g.discardTop) {
-      setUnder(prevTop.current);
-      prevTop.current = g.discardTop;
-      const t = setTimeout(() => setUnder(null), 420);
-      return () => clearTimeout(t);
-    }
+    if (prevTop.current === g.discardTop) return;
+    const was = prevTop.current;
+    prevTop.current = g.discardTop;
+    if (was !== null) setUnder(was);
   }, [g.discardTop]);
 
   const avatarPose = (s: number, scale = 0.35): Pose => {
@@ -542,7 +553,9 @@ export function CatTowerTable(props: { store: RoomStore; state: RoomState }) {
         onClick={() => (selected !== null ? tapTarget({ kind: "discard" }) : draw("discard"))}
       >
         {under !== null || g.discardCount > 1 ? (
-          <span class="under">{under !== null ? <CardFace id={under} /> : <div class="face blank" />}</span>
+          <span class={`under ${under !== null ? "leaving" : ""}`} onAnimationEnd={() => setUnder(null)}>
+            {under !== null ? <CardFace id={under} /> : <div class="face blank" />}
+          </span>
         ) : null}
       </button>
 

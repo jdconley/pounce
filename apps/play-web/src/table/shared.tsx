@@ -63,19 +63,17 @@ const HOLD_MS = 650;
  */
 export function Curtain(props: { name: string; cat: number; onReveal: () => void }) {
   const [holding, setHolding] = useState(false);
-  const timer = useRef<number | null>(null);
+  // The hold is the fill animation itself: its end reveals the hand, so no timer runs beside it.
   const start = () => {
     setHolding(true);
     buzz("tap");
-    timer.current = window.setTimeout(() => {
-      play("whoosh", 0.6);
-      buzz("pick");
-      props.onReveal();
-    }, HOLD_MS);
   };
-  const stop = () => {
-    setHolding(false);
-    if (timer.current !== null) window.clearTimeout(timer.current);
+  const stop = () => setHolding(false);
+  const filled = () => {
+    if (!holding) return;
+    play("whoosh", 0.6);
+    buzz("pick");
+    props.onReveal();
   };
   return (
     <div class="curtain" role="dialog" aria-label={`Pass to ${props.name}`} style={{ backgroundImage: `url(${art("curtain-stage")})` }}>
@@ -94,7 +92,7 @@ export function Curtain(props: { name: string; cat: number; onReveal: () => void
         onKeyUp={stop}
         onContextMenu={(e) => e.preventDefault()}
       >
-        <span class="fill" style={{ animationDuration: `${HOLD_MS}ms` }} />
+        <span class="fill" style={{ animationDuration: `${HOLD_MS}ms` }} onAnimationEnd={filled} />
         <span class="label">Hold to see your hand</span>
       </button>
     </div>
