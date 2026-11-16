@@ -23,8 +23,14 @@ final class TilePieceNode: SKSpriteNode {
         self.tile = tile
         faceSize = face
         self.standing = standing
-        let texture = TilePieceFactory.shared.face(tile, size: face, standing: standing)
+        // A Yarn with a ghost starts as the plain Yarn; `show` puts the ghost on once it is drawn.
+        let ghost = Tile.isYarn(tile) ? nil : standing
+        let texture = TilePieceFactory.shared.face(tile, size: face, standing: ghost)
         super.init(texture: texture, color: .clear, size: size)
+        if Tile.isYarn(tile), let standing {
+            self.standing = nil
+            show(size: size, face: face, standing: standing)
+        }
         pieceSize = size
         dot.zPosition = 2
         dot.isHidden = true
@@ -45,7 +51,16 @@ final class TilePieceNode: SKSpriteNode {
         if face != faceSize || standing != self.standing {
             faceSize = face
             self.standing = standing
-            texture = TilePieceFactory.shared.face(tile, size: face, standing: standing)
+            let factory = TilePieceFactory.shared
+            if Tile.isYarn(tile), let standing {
+                // Drawn off the main thread the first time; the plain Yarn stands in meanwhile.
+                texture = factory.yarnFaceIfReady(tile, size: face, standing: standing) { [weak self] ghost in
+                    guard let self, self.faceSize == face, self.standing == standing else { return }
+                    self.texture = ghost
+                } ?? factory.face(tile, size: face, standing: nil)
+            } else {
+                texture = factory.face(tile, size: face, standing: standing)
+            }
         }
         if pieceSize != size {
             // Sized at scale 1: a sprite's size and its scale are not independent.

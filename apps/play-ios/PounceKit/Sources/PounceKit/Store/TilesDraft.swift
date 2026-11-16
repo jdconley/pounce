@@ -135,7 +135,14 @@ public struct TilesDraft: Equatable, Sendable, Codable {
         return sets.flatMap(\.tiles).filter { !was.contains($0) }
     }
 
-    public func isPlaced(_ tile: TileID) -> Bool { !baseTiles.contains(tile) && onRug.contains(tile) }
+    /// Plain scans, no sets built: a redraw asks this of every piece on the rug.
+    public func isPlaced(_ tile: TileID) -> Bool {
+        !base.contains { $0.contains(tile) } && sets.contains { $0.tiles.contains(tile) }
+    }
+
+    /// Every piece placed this turn: on the rug now, and not at the start of the turn. One pass,
+    /// for a redraw that asks about every piece.
+    public var placedTiles: Set<TileID> { onRug.subtracting(baseTiles) }
 
     /// Nothing has moved: the rug is the snapshot's, set for set.
     public var isUntouched: Bool { sets.map(\.tiles) == base }
@@ -151,7 +158,7 @@ public struct TilesDraft: Equatable, Sendable, Codable {
     /// doesn't open in the loupe.
     public func isLocked(_ id: Int) -> Bool {
         guard !opened, let set = set(id) else { return false }
-        return baseSets.contains(set.tiles)
+        return base.contains(set.tiles)
     }
 
     /// The sets in the order shown and submitted: as made, or tidied.
@@ -178,7 +185,7 @@ public struct TilesDraft: Equatable, Sendable, Codable {
     }
 
     func state(of tiles: [TileID]) -> SetState {
-        if baseSets.contains(tiles) { return .unchanged }
+        if base.contains(tiles) { return .unchanged }
         if TilesRules.readSet(tiles) != nil { return .changed }
         return .broken(Self.problem(tiles))
     }
@@ -202,7 +209,7 @@ public struct TilesDraft: Equatable, Sendable, Codable {
     /// opening meter never promises more than the server will accept.
     public var newPoints: Int {
         sets.reduce(0) { sum, set in
-            guard !baseSets.contains(set.tiles), let reading = TilesRules.readSet(set.tiles) else { return sum }
+            guard !base.contains(set.tiles), let reading = TilesRules.readSet(set.tiles) else { return sum }
             return sum + reading.points
         }
     }
@@ -250,7 +257,7 @@ public struct TilesDraft: Equatable, Sendable, Codable {
     public func sets(refusedBy error: TilesPlayError) -> [Int] {
         switch error {
         case .badSet: shownSets.filter { TilesRules.readSet($0.tiles) == nil }.map(\.id)
-        case .tableTouched: shownSets.filter { !baseSets.contains($0.tiles) }.map(\.id)
+        case .tableTouched: shownSets.filter { !base.contains($0.tiles) }.map(\.id)
         default: []
         }
     }
@@ -452,5 +459,4 @@ public struct TilesDraft: Equatable, Sendable, Codable {
 
     private var onRug: Set<TileID> { Set(sets.flatMap(\.tiles)) }
     private var baseTiles: Set<TileID> { Set(base.joined()) }
-    private var baseSets: Set<[TileID]> { Set(base) }
 }

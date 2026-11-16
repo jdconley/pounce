@@ -109,6 +109,39 @@ final class MainThreadWatchdog {
     private var observers: [CFRunLoopObserver] = []
     /// When the main thread last woke or passed a run loop step, nil while it sleeps.
     private var lastStep: CFTimeInterval?
+    /// Since the last display link tick: the main thread's busy time, and its longest stretch of
+    /// work without sleeping. A slow frame with little busy time wasn't the main thread's doing.
+    private var busySinceTick = 0.0
+    private var stretchSinceTick = 0.0
+    private var stretch = 0.0
+    /// Slow frames, each with the main thread's share: printed as `[frame] slow …`.
+    private(set) var slowFrames: [String] = []
+    private static let logsSummary = CommandLine.arguments.contains("-watchdog-log")
+    private var lastSummary: CFTimeInterval = 0
+    /// `FrameWork` pieces since the last tick that took a millisecond or more (for the log), and
+    /// the outermost pieces' total: the app's own main-thread work in this frame.
+    private var workSinceTick: [(name: String, ms: Double)] = []
+    private var frameWorkSinceTick = 0.0
+    /// The most app work (`FrameWork`, outermost pieces) in any one gameplay frame, and how many
+    /// frames went over the 120 Hz budget, 8.3 ms.
+    private(set) var worstFrameWorkMs = 0.0
+    private(set) var framesOverWorkBudget = 0
+    nonisolated static let workBudgetMs = 1000.0 / 120
+
+    /// The longest accessibility rebuild (`FrameWork(read: true)`) in gameplay: VoiceOver waits
+    /// for it, and so does a UI test's query.
+    private(set) var worstReadWorkMs = 0.0
+
+    /// One piece of the table's main-thread work (`FrameWork`) took `ms`.
+    func noteWork(_ name: StaticString, ms: Double, outermost: Bool, read: Bool) {
+        guard inGameplay else { return }
+        if read {
+            worstReadWorkMs = max(worstReadWorkMs, ms)
+        } else if outermost {
+            frameWorkSinceTick += ms
+        }
+        if ms >= 0.5 { workSinceTick.append(("\(name)", ms)) }
+    }
 
     /// Accessibility reads so far, and the count when each clock last ticked: a change means
     /// the gap held one.
@@ -159,7 +192,17 @@ final class MainThreadWatchdog {
     }
 
     /// The accessibility tree is being read (a UI test's query, or VoiceOver).
-    func noteQuery() { queries += 1 }
+    func noteQuery() {
+        queries += 1
+        lastQueryAt = CACurrentMediaTime()
+    }
+
+    /// When the accessibility tree was last read, and how long after that a frame's work is
+    /// counted apart.
+    private var lastQueryAt: CFTimeInterval = 0
+    static let readGraceSeconds: CFTimeInterval = 0.25
+    /// The most app work in a frame that held, or came just after, a read of the screen.
+    private(set) var worstReadFrameWorkMs = 0.0
 
     // MARK: the probe
 
@@ -171,8 +214,9 @@ final class MainThreadWatchdog {
         let screen = Self.screenRate(tableView?.window)
         let rate = tableView?.preferredFramesPerSecond ?? 0
         let head = String(
-            format: "screen=%d table=%d tpc=%d hangs=%d hangmax=%.1f other=%d othermax=%.1f",
-            screen, rate, checkerLoaded ? 1 : 0, hangs, worstHangMs, otherHangs, worstOtherHangMs)
+            format: "screen=%d table=%d tpc=%d hangs=%d hangmax=%.1f other=%d othermax=%.1f work=%.1f workover=%d readwork=%.1f readframe=%.1f",
+            screen, rate, checkerLoaded ? 1 : 0, hangs, worstHangMs, otherHangs, worstOtherHangMs, worstFrameWorkMs,
+            framesOverWorkBudget, worstReadWorkMs, worstReadFrameWorkMs)
         return "\(head) | link \(link.summary) | table \(table.summary)"
     }
 
@@ -215,9 +259,51 @@ final class MainThreadWatchdog {
             lastTick = link.timestamp
             queriesAtTick = queries
         }
+        let busy = busySinceTick, longest = max(stretchSinceTick, stretch)
+        let work = workSinceTick, frameWork = frameWorkSinceTick
+        busySinceTick = 0
+        stretchSinceTick = 0
+        workSinceTick = []
+        frameWorkSinceTick = 0
         guard let last = lastTick, inGameplay else { return }
         let frameMs = max(link.targetTimestamp - link.timestamp, 0.001) * 1000
-        self.link.add((link.timestamp - last) * 1000, frameMs: frameMs, queried: queries != queriesAtTick)
+        let gap = (link.timestamp - last) * 1000
+        let queried = queries != queriesAtTick
+        self.link.add(gap, frameMs: frameMs, queried: queried)
+        // A frame that held a read of the accessibility tree (a UI test's query, VoiceOver), or
+        // came just after one, is counted apart: the accessibility runtime the reader loads runs
+        // inside the app's own work then, and inflates it.
+        let nearRead = queried || link.timestamp - lastQueryAt < Self.readGraceSeconds
+        if nearRead {
+            worstReadFrameWorkMs = max(worstReadFrameWorkMs, frameWork)
+        } else {
+            worstFrameWorkMs = max(worstFrameWorkMs, frameWork)
+            if frameWork > Self.workBudgetMs { framesOverWorkBudget += 1 }
+        }
+        if frameWork > Self.workBudgetMs {
+            let pieces = work.sorted { $0.ms > $1.ms }.prefix(9).map { String(format: "%@ %.1f", $0.name, $0.ms) }.joined(separator: ", ")
+            let line = String(
+                format: "[frame] work %.1f ms over the 8.3 ms budget (frame %.1f ms%@): %@",
+                frameWork, gap, nearRead ? ", near a screen read: not counted" : "", pieces)
+            print(line)
+            Self.log.notice("\(line, privacy: .public)")
+        }
+        // `-watchdog-log`: the summary in the log every 10 s, for runs no UI test reads.
+        if Self.logsSummary, link.timestamp - lastSummary >= 10 {
+            lastSummary = link.timestamp
+            let line = "[watchdog] summary " + summary()
+            print(line)
+            Self.log.notice("\(line, privacy: .public)")
+        }
+        if gap > Self.slowFrameMs, !queried {
+            let pieces = work.sorted { $0.ms > $1.ms }.prefix(4).map { String(format: "%@ %.1f", $0.name, $0.ms) }.joined(separator: ", ")
+            let line = String(
+                format: "[frame] slow %.1f ms: main thread busy %.1f ms, longest stretch %.1f ms; app work %.1f ms: %@",
+                gap, busy, longest, frameWork, pieces.isEmpty ? "none" : pieces)
+            slowFrames.append(line)
+            print(line)
+            Self.log.notice("\(line, privacy: .public)")
+        }
     }
 
     /// A run loop step: times the work since the last one, unless the thread was asleep.
@@ -225,7 +311,13 @@ final class MainThreadWatchdog {
         let now = CACurrentMediaTime()
         if !woke, let last = lastStep {
             let ms = (now - last) * 1000
+            busySinceTick += ms
+            stretch += ms
             if ms > Self.hangSeconds * 1000 { hang(ms, queried: queries != queriesAtStep) }
+        }
+        if sleeping {
+            stretchSinceTick = max(stretchSinceTick, stretch)
+            stretch = 0
         }
         lastStep = sleeping ? nil : now
         queriesAtStep = queries

@@ -316,17 +316,33 @@ when nothing moves. The UI suite checks that the main thread only draws:
   stretch over 100 ms (logged as `[watchdog] hang …`, on stdout and in the unified log). Only
   gameplay counts: a table on screen, from a second after it appeared. Gaps that held a read of
   the accessibility tree (the test's own queries) are counted apart. The counts are the value of
-  the `watchdog` element, a 1-point view at the back of the window.
+  the `watchdog` element, a 1-point view at the back of the window. `-watchdog-log` also logs the
+  counts every 10 s.
+- **`FrameWork`** times the app's own pieces of a frame's work (redraws, reconciles, touches,
+  textures) in the main thread's CPU time, as signposts (Instruments' Points of Interest) and for
+  the watchdog, which logs any frame with over 8.3 ms of them (`[frame] work …`) and any slow frame
+  with the main thread's share and its pieces (`[frame] slow …`). Read them with `xcrun simctl
+  spawn <device> log show --last 5m --predicate 'process == "Pounce" AND eventMessage CONTAINS
+  "[frame]"'`.
+- **`-autoplay`** (Debug only): a Cat Tower or Tuna Tiles table plays its own drags, out and back,
+  through the same code a finger runs, from 3 s after it appears. Nothing reads the screen while
+  it plays, so its frame times are the app's own.
 - **`GameplayGate`** (the test bundle's principal class) reads the watchdog of every app a test
-  launched through `Live` when the test ends, and fails it on a gameplay hang, or when over 5% (and
-  over 10) of the table's frames took longer than 16.7 ms. With `POUNCE_UITEST_TIMEOUT_SCALE` over
-  1 (a busy Mac) only a hang that many times 100 ms fails.
-- **`FrameRateTests`** plays Cat Tower (`-demo hit`) and Tuna Tiles (`-demo tiles`, `-demo
-  tiles-late` with `tiles.perf`) at normal speed and prints a `FRAMES` line per game. It fails if
-  the table doesn't ask for the screen's top rate, if the 95th percentile frame (table or main
-  thread) is over 1.5 frame times, if over 2% of frames (3 at least) take longer than 16.7 ms, or on
-  any hang. Simulators run at 60 Hz whatever the device, so 120 shows only on a real ProMotion
-  device.
+  launched through `Live` when the test ends, and fails it on a gameplay hang, or on any gameplay
+  frame with over 8.3 ms of the app's own work (not counting frames that held, or came within
+  0.25 s of, the test's own read of the screen: the accessibility runtime runs inside the app's
+  work then). It doesn't gate frame times: a UI test's queries
+  snapshot the accessibility tree on the main thread and cost the app frames (on the simulator, 19
+  to 22 frames over 16.7 ms in 15 s of querying twice a second, against none without). With
+  `POUNCE_UITEST_TIMEOUT_SCALE` over 1 (a busy Mac) only a hang that many times 100 ms fails.
+- **`FrameRateTests`** lets Cat Tower (`-demo hit`), Tuna Tiles (`-demo tiles`) and Tuna Tiles'
+  busiest table (`-demo tiles-late`) play themselves for 20 s each (`POUNCE_FRAMES_SECONDS`) and
+  prints a `FRAMES` line per table. It fails if the table doesn't ask for the screen's top rate,
+  any frame holds over 8.3 ms of the app's own work, the main thread hangs, or any frame takes over
+  16.7 ms; that last one is reported, not enforced, while the Mac's load is over half its cores.
+  `scripts/frame-rate.sh <device>` runs it on a simulator (by UDID) or a plugged-in iPhone, and
+  prints the lines: simulators run at 60 Hz whatever the device, so the 120 Hz numbers come from a
+  ProMotion iPhone (Developer Mode on; it signs with the team's automatic signing).
 - **Thread Performance Checker** is on in the `Pounce` scheme's test plan (`Pounce.xctestplan`),
   with its reports as test failures (priority inversions and its other default checks). Its
   main-thread file IO check is off: iOS itself reads and writes files on the main thread at every

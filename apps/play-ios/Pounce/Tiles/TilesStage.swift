@@ -195,7 +195,13 @@ struct TilesStage: View {
                  person: events.shown.flatMap { table?.room.seats[safe: $0]?.person?.id })
         .animation(.easeOut(duration: 0.2).paced, value: events.drew)
         .animation(.spring(duration: 0.35, bounce: 0.3).paced, value: connection)
-        .onAppear(perform: attach)
+        // The piece faces are drawn off the main thread first (a moment, once a launch), so the
+        // table never draws one in a frame.
+        .task {
+            await TilePieceFactory.shared.prewarm()
+            guard !Task.isCancelled else { return }
+            attach()
+        }
         .onDisappear {
             scene?.saveDraft()
             session.detachTable()

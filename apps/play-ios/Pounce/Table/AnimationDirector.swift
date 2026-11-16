@@ -39,10 +39,15 @@ final class AnimationDirector {
         /// Decorative actions only touch properties reconcile never sets, so they survive it.
         let decorative: Bool
         let finish: () -> Void
+        /// The node's identity, for `keyedTokens` (kept even after the node goes away).
+        var id: ObjectIdentifier?
     }
 
     private var gate = RenderGate()
     private var pending: [Int: Pending] = [:]
+    /// The keyed actions in `pending` by node, so stopping one node's actions doesn't scan them
+    /// all (a redraw settles every piece on the table).
+    private var keyedTokens: [ObjectIdentifier: [Int]] = [:]
 
     /// Frames the scene has updated since launch (DEBUG: `table.frames`).
     private(set) var framesRendered = 0
@@ -86,6 +91,12 @@ final class AnimationDirector {
         await runAll([(action, node)], decorative: decorative)
     }
 
+    /// Starts `action` on `node` now, for a caller that doesn't wait for it (a piece settling into
+    /// place). Like `run`, a reconcile or `cancelActions` stops it, and the view stays awake for it.
+    func play(_ action: SKAction, on node: SKNode, decorative: Bool = false) {
+        start(action, on: node, decorative: decorative) {}
+    }
+
     /// Runs every action on its node at once and returns when the last one is done (finished,
     /// cancelled or timed out), so one intent can move many nodes on one timeline.
     func runAll(_ items: [(SKAction, SKNode)], decorative: Bool = false) async {
@@ -106,7 +117,9 @@ final class AnimationDirector {
         guard view != nil else { return finish() }  // never rendered: don't wait on it
         let token = gate.begin(duration: RenderGate.sanitize(action.duration) / Self.effectiveSpeed(node))
         let key = "director.\(token)"
-        pending[token] = Pending(node: node, key: key, decorative: decorative, finish: finish)
+        let id = ObjectIdentifier(node)
+        pending[token] = Pending(node: node, key: key, decorative: decorative, finish: finish, id: id)
+        keyedTokens[id, default: []].append(token)
         node.run(.sequence([action, .run { [weak self] in self?.finish(token, removeAction: false) }]), withKey: key)
         wake()
     }
@@ -144,8 +157,9 @@ final class AnimationDirector {
     /// Stops every director action on `node` itself, decorative ones too (a motion about to be
     /// turned around), and releases whoever awaits them.
     func cancelActions(on node: SKNode) {
-        let tokens = pending.compactMap { token, p -> Int? in p.key != "" && p.node === node ? token : nil }
-        for token in tokens { finish(token, removeAction: true) }
+        guard let tokens = keyedTokens[ObjectIdentifier(node)] else { return }
+        // A token whose node went away (and whose address a new node took) isn't this node's.
+        for token in tokens where pending[token]?.node === node { finish(token, removeAction: true) }
     }
 
     /// The view is going away (or already gone): every action and emitter is given up on now.
@@ -213,6 +227,10 @@ final class AnimationDirector {
 
     private func finish(_ token: Int, removeAction: Bool, gateEnded: Bool = false) {
         guard let p = pending.removeValue(forKey: token) else { return }
+        if let id = p.id {
+            keyedTokens[id]?.removeAll { $0 == token }
+            if keyedTokens[id]?.isEmpty == true { keyedTokens[id] = nil }
+        }
         if !gateEnded { gate.end(token) }
         if removeAction, !p.key.isEmpty { p.node?.removeAction(forKey: p.key) }
         p.finish()

@@ -94,6 +94,7 @@ extension TilesScene {
     /// the action strip and the stash, with custom actions for every move a drag can make
     /// (tile game spec §5.11).
     func accessibilityElements(in view: SKView) -> [UIAccessibilityElement] {
+        let work = FrameWork("tiles.accessibility", read: true); defer { work.end() }
         if let cached = accessibilityCache, cached.version == accessibilityVersion { return cached.elements }
         let elements = TableAccessibility.elements(accessibilityItems(), scene: self, view: view)
         accessibilityCache = (accessibilityVersion, elements)

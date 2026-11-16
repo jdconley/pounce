@@ -136,9 +136,25 @@ extension TilesScene {
     // MARK: touches
 
     override func touchesBegan(_ touches: Set<UITouch>, with event: UIEvent?) {
-        guard input.phase == .idle, let touch = touches.first else { return }
+        guard let touch = touches.first else { return }
+        pressBegan(at: touch.location(in: self))
+    }
+
+    override func touchesMoved(_ touches: Set<UITouch>, with event: UIEvent?) {
+        guard let touch = touches.first else { return }
+        pressMoved(to: touch.location(in: self))
+    }
+
+    override func touchesEnded(_ touches: Set<UITouch>, with event: UIEvent?) {
+        guard let touch = touches.first else { return }
+        pressEnded(at: touch.location(in: self))
+    }
+
+    /// A finger went down at `point` (the touch handlers, and the DEBUG autoplay).
+    func pressBegan(at point: CGPoint) {
+        let work = FrameWork("tiles.touchBegan"); defer { work.end() }
+        guard input.phase == .idle else { return }
         director.touchBegan()
-        let point = touch.location(in: self)
         input.phase = .press
         input.start = point
         input.last = point
@@ -154,9 +170,8 @@ extension TilesScene {
         }
     }
 
-    override func touchesMoved(_ touches: Set<UITouch>, with event: UIEvent?) {
-        guard let touch = touches.first else { return }
-        let point = touch.location(in: self)
+    func pressMoved(to point: CGPoint) {
+        let work = FrameWork("tiles.touchMoved"); defer { work.end() }
         #if DEBUG
         let began = CACurrentMediaTime()
         defer { if input.isDragging { dragPerf.move(CACurrentMediaTime() - began) } }
@@ -181,9 +196,8 @@ extension TilesScene {
         input.last = point
     }
 
-    override func touchesEnded(_ touches: Set<UITouch>, with event: UIEvent?) {
-        guard let touch = touches.first else { return }
-        let point = touch.location(in: self)
+    func pressEnded(at point: CGPoint) {
+        let work = FrameWork("tiles.touchEnded"); defer { work.end() }
         let phase = input.phase
         let what = input.what
         let held = input.hold
@@ -761,9 +775,7 @@ extension TilesScene {
     func pinch(scale: CGFloat, began: Bool) {
         guard let layout, let flow, loupe == nil, !input.isDragging else { return }
         if began { input.pinchBase = zoom ?? flow.pieceSize.width }
-        let fit = RugFlow.fit(
-            lengths: shown.map(\.tiles.count), width: layout.rug.width, height: layout.rug.height,
-            maxPiece: layout.rugPieceMax, minPiece: layout.rugPieceMin).pieceSize.width
+        let fit = fitRug(lengths: shown.map(\.tiles.count), layout: layout, zoom: nil).pieceSize.width
         let wanted = min(max(input.pinchBase * scale, fit), layout.rackPiece.width)
         zoom = wanted <= fit + 0.5 ? nil : wanted
         redraw()
