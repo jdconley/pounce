@@ -6,7 +6,7 @@
 import { PROTOCOL } from "../lib/env";
 import { RoomSocket, type LinkQuality, type SocketEvent } from "../net/socket";
 
-import type { ClientMessage, ErrorCode, RoomEvent, RoomView, ServerMessage } from "@pounce/play-api/protocol";
+import type { ClientMessage, ErrorCode, GameAim, RoomEvent, RoomView, ServerMessage } from "@pounce/play-api/protocol";
 import type { GameEvent, Action } from "@pounce/play-api/rules/engine";
 import type { TilesAction, TilesEvent } from "@pounce/play-api/tiles/engine";
 
@@ -32,7 +32,14 @@ export type RoomState = {
   error: { code: ErrorCode; n: number } | null;
   moveCode: { seat: number; code: string } | null;
   rematch: string | null;
+  /** Where each seat is pointing right now, for a screen to show. */
+  aims: Record<number, GameAim>;
+  /** A TV is showing this table. */
+  screen: boolean;
 };
+
+/** The most aims sent: one per this many milliseconds (the server relays 10 a second). */
+export const AIM_EVERY_MS = 120;
 
 export type RoomListener = {
   /** A room event, as it is played (after the ones before it have had their moment). */
@@ -166,6 +173,12 @@ export function phaseOf(room: RoomView | null): RoomPhase {
   return "playing";
 }
 
+/** A room's turn and status, as one comparable value: when it changes, shown aims are stale. */
+function turnAndStatus(room: RoomView): string {
+  const g = room.game ?? room.tiles;
+  return `${room.status}|${g?.status ?? ""}|${g?.turn ?? ""}`;
+}
+
 export function newMoveId(): string {
   if (typeof crypto.randomUUID === "function") return crypto.randomUUID();
   return [...crypto.getRandomValues(new Uint8Array(16))].map((b) => b.toString(16).padStart(2, "0")).join("");
@@ -181,6 +194,9 @@ export type RoomStoreOptions = {
   setTimer?: (fn: () => void, ms: number) => unknown;
   clearTimer?: (id: unknown) => void;
   reducedMotion?: () => boolean;
+  /** "screen": this device is the table's TV, not a seat at it. */
+  role?: "screen";
+  now?: () => number;
 };
 
 export class RoomStore {
@@ -208,6 +224,10 @@ export class RoomStore {
   /** Counts connections, so a move is sent again only on a connection that didn't carry it. */
   private connection = 0;
   private sentOn = -1;
+  private readonly now: () => number;
+  private lastAimAt = -Infinity;
+  private trailingAim: { seat: number; aim: GameAim } | null = null;
+  private aimTimer: unknown = null;
 
   constructor(options: RoomStoreOptions) {
     this.state = {
@@ -222,13 +242,16 @@ export class RoomStore {
       error: null,
       moveCode: null,
       rematch: null,
+      aims: {},
+      screen: false,
     };
+    this.now = options.now ?? (() => performance.now());
     this.setTimer = options.setTimer ?? ((fn, ms) => setTimeout(fn, ms));
     this.clearTimer = options.clearTimer ?? ((id) => clearTimeout(id as ReturnType<typeof setTimeout>));
     this.reducedMotion = options.reducedMotion ?? (() => false);
     this.socket =
       options.socket ??
-      new RoomSocket({ code: options.code, token: options.token, dropToken: options.dropToken, origin: options.origin });
+      new RoomSocket({ code: options.code, token: options.token, dropToken: options.dropToken, origin: options.origin, role: options.role });
     this.socket.on((e) => this.onSocket(e));
   }
 
@@ -243,6 +266,8 @@ export class RoomStore {
 
   stop(): void {
     if (this.timer !== null) this.clearTimer(this.timer);
+    if (this.aimTimer !== null) this.clearTimer(this.aimTimer);
+    this.aimTimer = this.trailingAim = null;
     this.socket.stop();
   }
 
@@ -268,6 +293,45 @@ export class RoomStore {
   /** Leaves the game for good for `seat` (any time, anyone's turn), with a move id like any move. */
   forfeit(seat: number): boolean {
     return this.socket.send({ t: "act", seat, action: { type: "forfeit" }, id: newMoveId() });
+  }
+
+  /**
+   * Tells the table's TV where `seat` is pointing, or (null) that it stopped. The first aim goes at
+   * once, then at most one per `AIM_EVERY_MS` with the latest value last; a clear goes at once and
+   * drops any aim still waiting.
+   */
+  aim(seat: number, aim: GameAim | null): void {
+    if (aim === null) {
+      if (this.aimTimer !== null) this.clearTimer(this.aimTimer);
+      this.aimTimer = this.trailingAim = null;
+      this.socket.send({ t: "aim", seat });
+      return;
+    }
+    const wait = this.lastAimAt + AIM_EVERY_MS - this.now();
+    if (wait <= 0 && this.aimTimer === null) {
+      this.sendAim(seat, aim);
+      return;
+    }
+    this.trailingAim = { seat, aim };
+    if (this.aimTimer !== null) return;
+    this.aimTimer = this.setTimer(() => {
+      this.aimTimer = null;
+      const last = this.trailingAim;
+      this.trailingAim = null;
+      if (last) this.sendAim(last.seat, last.aim);
+    }, Math.max(0, wait));
+  }
+
+  private sendAim(seat: number, aim: GameAim): void {
+    this.lastAimAt = this.now();
+    this.socket.send({ t: "aim", seat, aim });
+  }
+
+  /** The aims that survive a new snapshot: all of them, unless the turn or status moved on. */
+  private aimsAfter(next: RoomView): Record<number, GameAim> {
+    const prev = this.state.truth;
+    if (!prev || Object.keys(this.state.aims).length === 0) return this.state.aims;
+    return turnAndStatus(prev) === turnAndStatus(next) ? this.state.aims : {};
   }
 
   private onSocket(e: SocketEvent): void {
@@ -327,6 +391,13 @@ export class RoomStore {
       case "rematch":
         this.set({ rematch: m.code });
         return;
+      case "aim": {
+        const aims = { ...this.state.aims };
+        if (m.aim) aims[m.seat] = m.aim;
+        else delete aims[m.seat];
+        this.set({ aims });
+        return;
+      }
       case "link": {
         const room = this.state.room;
         if (!room) return;
@@ -366,7 +437,7 @@ export class RoomStore {
       return;
     }
     this.seq = Math.max(this.seq, seq);
-    this.set({ truth: room, room, phase: phaseOf(room), pending: stillPending, rematch: room.rematch ?? this.state.rematch });
+    this.set({ truth: room, room, phase: phaseOf(room), pending: stillPending, rematch: room.rematch ?? this.state.rematch, aims: this.aimsAfter(room), screen: room.screen === true });
     if (resend && pending) {
       // Reconnected before the server heard it: send it again, with the same id.
       if (this.socket.send({ t: "act", seat: pending.seat, action: pending.action, id: pending.id })) this.sentOn = this.connection;
@@ -393,6 +464,8 @@ export class RoomStore {
           room: snap.room,
           phase: phaseOf(snap.room),
           rematch: snap.room.rematch ?? this.state.rematch,
+          aims: this.aimsAfter(snap.room),
+          screen: snap.room.screen === true,
           ...(this.settled(snap.seq) ? { pending: null } : {}),
         });
       }

@@ -46,6 +46,8 @@ describe("the room socket (RoomSocket.swift)", () => {
     expect(url.searchParams.get("games")).toBe("cat-tower,tiles");
     expect(url.searchParams.get("app")).toMatch(/^platform=web; version=\d{4}\.\d{4}\.\d{4}; protocol=1$/);
     expect(socketUrl("http://localhost:8787", "BCDFG")).toMatch(/^ws:\/\/localhost:8787\//);
+    expect(socketUrl("http://localhost:8787", "BCDFG")).not.toContain("role=");
+    expect(socketUrl("http://localhost:8787", "BCDFG", "screen")).toMatch(/&role=screen$/);
   });
 
   test("reconnects with backoff after a drop, and resets it on a snapshot", async () => {
