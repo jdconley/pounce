@@ -136,24 +136,62 @@ first class support with apple tv."
 
 ### 2. Getting everyone to the TV table
 
-The TV makes the table. This is the main path.
+**Nothing is ever typed on the TV.** JD: "i dont want to have to input anything on the tv, only on
+the app. we can have some controls there but no code or text entry at all." The TV has a few big
+buttons. Every code or name is entered on a phone.
 
-1. **Pick a game.** The TV opens to a big two-card picker, Cat Tower or Tuna Tiles, navigated with
-   the remote (arrow keys or click on the web).
-2. **Show the room.** The TV creates the room (with no host yet; see above) and shows the room code huge plus a
-   QR of `https://play.conleychaos.com/j/<CODE>`.
-3. **Phones join.** Scanning opens the iPhone app through the existing universal link, or the
-   invite page with "Play in your browser" on other phones. Phones join and claim seats exactly as
-   today, including adding people for pass and play.
-4. **The lobby fills.** Each player's cat walks onto the TV as they sit.
-5. **Start.** Anyone seated presses Start on their phone.
+**The TV's home** shows two things:
+- **A link QR.** It is big, with a short backup code under it, and the line "Scan with your phone
+  to put your table here".
+- **Two buttons:** "Cat Tower" and "Tuna Tiles", to start a new table on this TV.
 
-Second path: the TV joins an existing table. "Show a table" on the TV takes the 5-letter room code,
-typed with the remote on Apple TV or the keyboard on the web. Phones in that room switch to
-controller mode when the TV arrives.
+**Linking a phone's table to the TV**, the main path for a table that already exists:
 
-Phones get a "Show on TV" row in the lobby and table menus. It explains how to open Pounce on the
-TV and shows this room's code big, for typing on the TV.
+1. **The TV shows its link.** At home, the TV asks the server for a screen link: `POST /v1/screens`
+   with its device token.
+   - The server returns an unguessable token (at least 128 bits) and a 6-character backup code
+     from the room-code alphabet.
+   - Both expire after 10 minutes, and the TV renews them before then.
+   - The TV holds a socket on its link (`/v1/screens/{token}/ws`) and waits.
+2. **The QR opens the phone's app.** The QR encodes `https://play.conleychaos.com/tv/<token>`.
+   - Scanned with the iPhone camera, it opens the app through a universal link. `/tv/` is added to
+     the app site association.
+   - On other phones it opens the web player at `/play/tv-link/<token>`.
+   - Inside the app, "Show on TV" in the lobby and table menus opens a scanner. There is a "Type the
+     TV's code" fallback for the backup code.
+3. **The phone sends its table.** It calls `POST /v1/screens/link` with the token or code and its
+   room code.
+   - Only a device in that room (seated, or the host) may link it.
+   - The server tells the waiting TV which room. The TV connects to it as a screen, and the link
+     token is spent.
+   - The TV shows the table at once. The phone shows "On the TV" and switches to Cards.
+4. **A phone that isn't at a table** gets the phone's game picker when it scans the TV's QR. It makes
+   the table, and the TV is linked to it as soon as it exists.
+
+**Making a table on the TV:**
+
+1. Press "Cat Tower" or "Tuna Tiles".
+2. The TV creates the room (with no host yet; see above). It shows the room's invite QR
+   (`https://play.conleychaos.com/j/<CODE>`) big, with the room code under it for anyone typing it
+   into their phone.
+3. Phones join and claim seats exactly as today, including adding people for pass and play. Each
+   player's cat walks onto the TV as they sit.
+4. Anyone seated presses Start on their phone.
+
+**Switching tables or leaving.**
+- The TV's menu has two big buttons: "Link another table", which shows the link QR again, and "Leave
+  table", which goes back home.
+- Linking a new table to a TV that is showing one moves it, after a "Move the TV to this table?"
+  confirm on the phone.
+
+**Guessing the backup code.**
+- Wrong codes count against the phone, using the same backoff as joining by code (`DEVICE_JOIN_RULE`).
+- The worst a guess can do is put a table on a stranger's TV that is sitting on its home screen. The
+  short expiry and the backoff make that impractical.
+
+**Camera.** The iPhone scanner needs camera permission, asked only when "Show on TV" is tapped.
+Frames never leave the phone and only the QR's text is read. The App Store privacy answers stay
+"not collected", and the purpose string says so.
 
 ### 3. The phone as a controller
 
@@ -248,11 +286,12 @@ Tiles board.
 **If the TV drops,** phones switch back to the full table after the grace period and the game
 goes on. If the TV comes back, it rejoins and the phones switch to controller mode again.
 
-**TV menus** are made for the remote: big focusable cards, few choices.
+**TV menus** are made for the remote: big focusable buttons, few choices, no text entry
+anywhere.
 
-- Home: "Cat Tower", "Tuna Tiles", "Show a table".
-- The lobby: the code and QR, the seats, and "Change game" before start.
-- In a game: leave the table, sound on or off.
+- Home: the link QR, "Cat Tower", "Tuna Tiles".
+- The lobby: the invite QR and code, the seats, and "Change game" before start.
+- In a game: "Link another table", "Leave table", sound on or off.
 
 ### 5. The Apple TV app
 
@@ -269,8 +308,8 @@ goes on. If the TV comes back, it rejoins and the phones switch to controller mo
     cross-platform seam.
   - Where the code lives (a shared module, or files in both targets) is the builder's call. The
     rule is one copy of the drawing code.
-- **The shell** is a small SwiftUI app with focus-engine navigation: home, game picker, show a
-  table by code, lobby, table, game over. None of the iPhone shell's onboarding (age check, name,
+- **The shell** is a small SwiftUI app with focus-engine navigation: home (link QR and game buttons),
+  lobby, table, game over. None of the iPhone shell's onboarding (age check, name,
   cat, sign-in) runs on the TV, because the TV has no player.
 - **Frame rate.** It asks for the display's top rate, with the same idle behavior as the iPhone
   tables. The main-thread lint covers the tvOS target, and `FrameRateTests` gets a tvOS variant on
@@ -288,8 +327,8 @@ goes on. If the TV comes back, it rejoins and the phones switch to controller mo
 - **Address.** `play.conleychaos.com/play/tv`, in the same web build and deploy.
 - **Skips first run.** No age check, name or cat: a screen has no player. The page's code must not
   create a person.
-- **Home** is the same as the Apple TV: game picker, "Show a table" with keyboard entry. It works
-  by arrow keys, Enter and mouse, so a smart TV remote's d-pad works.
+- **Home** is the same as the Apple TV's: the link QR and the two game buttons, with no text
+  entry. It works by arrow keys, Enter and mouse, so a smart TV remote's d-pad works.
 - **Audio.** One "Start" press before the table unlocks audio. It's needed anyway for full screen
   (`requestFullscreen`). The page offers full screen and keeps the screen awake with the Wake Lock
   API where available.
@@ -316,11 +355,14 @@ These must pass before anything merges:
   - `aim` relay rules.
   - The host is the first phone to sit, and the host-based safety rules work at a TV table.
   - An old client still decodes snapshots and skips `aim`.
+  - Screen links: by token and by backup code, expiry and renewal, only room members may link,
+    wrong-code backoff, and moving a TV between tables.
 - **Web e2e:**
   - A TV page plus two browser phones play each game to the end.
   - A pass-and-play phone with a TV.
   - The Cards/Table switch, including that it survives the TV leaving and coming back.
   - The TV dropping and coming back mid-hand.
+  - Linking a phone's existing table to a TV on its home screen, by QR link and by backup code.
   - The controller layout on phone sizes.
   - A TV project for the main-thread gates.
 - **Mixed:**
@@ -332,10 +374,12 @@ These must pass before anything merges:
 
 ## Order of work
 
-1. **Server:** the screen role, the `screen` flag, `aim` relay, the first-phone host rule and tests.
+1. **Server:** the screen role, screen links (`/v1/screens`), the `screen` flag, `aim` relay, the
+   first-phone host rule and tests.
 2. **Web:** split the public table, the TV page, and the phone controller layout. This proves the
    whole loop in the browser first.
-3. **iPhone:** the controller layout, "Show on TV", aim sending, and quieting sounds with a screen
+3. **iPhone:** the controller layout, "Show on TV" with the QR scanner and backup code, `/tv/`
+   universal links, aim sending, and quieting sounds with a screen
    present.
 4. **Apple TV:** PounceKit on tvOS, the shared table code, the tvOS shell, the frame-rate gates,
    TestFlight.
