@@ -52,32 +52,40 @@ public struct AccountRecord: Codable, Equatable, Sendable {
     }
 }
 
-/// `account.<host>_<port>.json` next to `people.json`, rewritten atomically on every save. Not
-/// thread-safe by itself; callers use it from one actor (the app model).
+/// `account.<host>_<port>.json` next to `people.json`, kept in memory and written behind
+/// (`JSONFile`), atomically, on every save. Not thread-safe by itself; callers use it from one
+/// actor (the app model).
 public final class AccountStore {
-    private let fileURL: URL
+    private let file: JSONFile<AccountRecord>
+    private var record: AccountRecord
 
-    public init(directory: URL, fileName: String = "account.json") {
-        fileURL = directory.appendingPathComponent(fileName)
+    /// `loaded` is what `file.read()` returned, read off the main actor at launch.
+    public init(file: JSONFile<AccountRecord>, loaded: AccountRecord?) {
+        self.file = file
+        record = loaded ?? AccountRecord()
     }
+
+    public static func file(directory: URL, fileName: String = "account.json") -> JSONFile<AccountRecord> {
+        JSONFile(url: directory.appendingPathComponent(fileName), coding: .sorted)
+    }
+
+    /// Reads the file (off the caller's actor) and opens the store on it.
+    public static func open(directory: URL, fileName: String = "account.json") async -> sending AccountStore {
+        let file = file(directory: directory, fileName: fileName)
+        return AccountStore(file: file, loaded: await file.read())
+    }
+
+    /// Waits for every save so far to reach the disk.
+    public nonisolated(nonsending) func flush() async { await file.flush() }
 
     public static func fileName(for config: APIConfig) -> String {
         "account.\(config.serverKey.replacingOccurrences(of: ":", with: "_")).json"
     }
 
-    public func load() -> AccountRecord {
-        guard let data = try? Data(contentsOf: fileURL),
-              let record = try? JSONDecoder().decode(AccountRecord.self, from: data)
-        else { return AccountRecord() }
-        return record
-    }
+    public func load() -> AccountRecord { record }
 
-    public func save(_ record: AccountRecord) {
-        let encoder = JSONEncoder()
-        encoder.outputFormatting = .sortedKeys
-        guard let data = try? encoder.encode(record) else { return }
-        try? FileManager.default.createDirectory(
-            at: fileURL.deletingLastPathComponent(), withIntermediateDirectories: true)
-        try? data.write(to: fileURL, options: .atomic)
+    public func save(_ next: AccountRecord) {
+        record = next
+        file.save(next)
     }
 }

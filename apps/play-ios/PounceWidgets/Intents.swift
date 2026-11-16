@@ -29,11 +29,11 @@ struct PartnerEntity: AppEntity {
 /// so pinning another pair in the app moves the widget with it.
 struct PartnerQuery: EntityQuery {
     func entities(for identifiers: [PartnerEntity.ID]) async throws -> [PartnerEntity] {
-        (WidgetData.load()?.pairs ?? []).filter { identifiers.contains($0.pair) }.map(PartnerEntity.init)
+        (await WidgetData.load()?.pairs ?? []).filter { identifiers.contains($0.pair) }.map(PartnerEntity.init)
     }
 
     func suggestedEntities() async throws -> [PartnerEntity] {
-        (WidgetData.load()?.pairs ?? []).map(PartnerEntity.init)
+        (await WidgetData.load()?.pairs ?? []).map(PartnerEntity.init)
     }
 
     func defaultResult() async -> PartnerEntity? { nil }
@@ -71,7 +71,7 @@ struct PounceIntent: AppIntent {
 
     @MainActor
     func perform() async throws -> some IntentResult {
-        guard let store = WidgetSnapshotStore.shared, let snapshot = store.load() else { return .result() }
+        guard let store = await WidgetSnapshotStore.shared(), let snapshot = await store.load() else { return .result() }
         let now = Date.now
         let (next, result) = await WidgetPounce.send(
             snapshot: snapshot, pair: pair, service: WidgetData.client(snapshot, timeout: 15), now: now)
@@ -79,7 +79,7 @@ struct PounceIntent: AppIntent {
         case .sent?, .resting?:
             // Only this pair's bell: the app, the widget or PounceNotify may have written meanwhile.
             let id = pair
-            store.update { $0.mergingPounce(id, from: next, now: now) }
+            await store.update { $0.mergingPounce(id, from: next, now: now) }
         default:
             break
         }

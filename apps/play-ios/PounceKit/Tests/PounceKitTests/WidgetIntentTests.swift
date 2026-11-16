@@ -4,9 +4,9 @@ import Testing
 @testable import PounceKit
 
 @Suite struct WidgetClientTests {
-    private func stored() -> MemoryCredentialStore {
+    private func stored() async -> MemoryCredentialStore {
         let s = MemoryCredentialStore()
-        s.save(DeviceCredential(deviceId: "dev1", token: "tok1"))
+        await s.save(DeviceCredential(deviceId: "dev1", token: "tok1"))
         return s
     }
 
@@ -19,23 +19,23 @@ import Testing
 
     @Test func testNoMintClientKeepsCredentialOn401() async throws {
         let server = StubServer { _ in Reply(401) }
-        let store = stored()
+        let store = await stored()
         let api = APIClient(config: server.config(), credentials: store, session: server.session(), mints: false)
         await #expect(throws: APIError.unauthorized) { try await api.streaks(person: "me") }
-        #expect(store.load() == DeviceCredential(deviceId: "dev1", token: "tok1"), "the app's credential stays")
+        #expect(await store.load() == DeviceCredential(deviceId: "dev1", token: "tok1"), "the app's credential stays")
         #expect(server.seen.map(\.path) == ["/v1/me/streaks"], "no re-mint, no retry")
     }
 
     @Test func noMintClientUsesTheStoredCredential() async throws {
         let server = StubServer { _ in Reply(200, #"{"pairs":[]}"#) }
-        let api = APIClient(config: server.config(), credentials: stored(), session: server.session(), mints: false)
+        let api = APIClient(config: server.config(), credentials: await stored(), session: server.session(), mints: false)
         #expect(try await api.streaks(person: "me").pairs.isEmpty)
         #expect(server.seen.first?.authorization == "Bearer tok1")
     }
 
     @Test func setWidgetPushTokenPutsTheToken() async throws {
         let server = StubServer { _ in Reply(204, "") }
-        let api = APIClient(config: server.config(), credentials: stored(), session: server.session(), mints: false)
+        let api = APIClient(config: server.config(), credentials: await stored(), session: server.session(), mints: false)
         let hex = String(repeating: "cd", count: 32)
         #expect(try await api.setWidgetPushToken(hex) == "dev1")
         let put = try #require(server.seen.last)
@@ -72,13 +72,13 @@ import Testing
         #expect(!WidgetPushToken.needsUpload(token: token, deviceId: "dev1", last: nil, band: nil))
     }
 
-    @Test func storeKeepsTheLastUpload() {
+    @Test func storeKeepsTheLastUpload() async {
         let store = WidgetSnapshotStore(directory: FileManager.default.temporaryDirectory.appendingPathComponent("wp-\(UUID().uuidString)"))
-        #expect(store.uploadedToken == nil)
-        store.uploadedToken = .init(deviceId: "dev1", token: token)
-        #expect(store.uploadedToken == .init(deviceId: "dev1", token: token))
-        store.uploadedToken = nil
-        #expect(store.uploadedToken == nil)
+        #expect(await store.uploadedToken() == nil)
+        await store.setUploadedToken(.init(deviceId: "dev1", token: token))
+        #expect(await store.uploadedToken() == .init(deviceId: "dev1", token: token))
+        await store.setUploadedToken(nil)
+        #expect(await store.uploadedToken() == nil)
     }
 }
 

@@ -23,6 +23,11 @@ with a SpriteKit table. Apple frameworks only, no third-party packages.
   over the glyph art), `TilesStage` (the SwiftUI shell: curtain, menu, game over) and the demos. Its
   rules, draft model and layout are in PounceKit (`TilesRules`, `TilesDraft`, `TilesLayout`).
 - `PounceKit/` local Swift package (game model, networking, `pounce-e2e` CLI) with Swift Testing tests.
+  `PounceKit/Sources/PounceKit/IO/` is the only code that touches the disk or the Keychain: actors
+  and `@concurrent` functions, so none of it runs on the main thread. Stores keep their data in
+  memory and write behind; the launch reads them all off the main thread (`Pounce/App/LaunchData.swift`).
+  `scripts/main-thread-lint.swift` (in CI) fails the build on a blocking call anywhere else. See
+  [docs/main-thread.md](../../docs/main-thread.md).
 - `Config/` xcconfigs. `Debug.xcconfig` points at `http://localhost:8787` and registers the
   `pounce-dev` URL scheme; `Release.xcconfig` points at `https://play.conleychaos.com` and registers no
   custom scheme (a build phase strips the URL type from the built Info.plist).
@@ -34,6 +39,7 @@ with a SpriteKit table. Apple frameworks only, no third-party packages.
 
 ```sh
 scripts/bootstrap.sh
+swift scripts/main-thread-lint.swift   # no blocking call on the main thread (docs/main-thread.md)
 swift test --package-path PounceKit
 xcodebuild -project Pounce.xcodeproj -scheme Pounce \
   -destination 'platform=iOS Simulator,name=iPhone 17 Pro,OS=26.2' build-for-testing
@@ -297,6 +303,40 @@ SPEED=20 DEV_SERVER_URL=http://localhost:8788 scripts/ui-tests.sh   # faster, wi
   A script that starts its own dev server starts it at `SPEED`; one that finds a server already up
   uses it as it is and prints its speed. To get fast bots next to a shared normal-speed server on
   8787, give the script another port with `DEV_SERVER_URL=http://localhost:8788`.
+
+### Frame rate and main-thread gates
+
+The tables ask for the screen's top frame rate (`SKView.runAtTopFrameRate()`: 120 on ProMotion,
+which the Info.plist's `CADisableMinimumFrameDurationOnPhone` allows on iPhone, else 60) and pause
+when nothing moves. The UI suite checks that the main thread only draws:
+
+- **`-watchdog`** (Debug only; every test app gets it through `Live.arguments()`) starts
+  `MainThreadWatchdog`: a display link that counts every frame over 1.5 frame times and over
+  16.7 ms, the table's own rendered frames, and run loop observers that count every main-thread
+  stretch over 100 ms (logged as `[watchdog] hang …`, on stdout and in the unified log). Only
+  gameplay counts: a table on screen, from a second after it appeared. Gaps that held a read of
+  the accessibility tree (the test's own queries) are counted apart. The counts are the value of
+  the `watchdog` element, a 1-point view at the back of the window.
+- **`GameplayGate`** (the test bundle's principal class) reads the watchdog of every app a test
+  launched through `Live` when the test ends, and fails it on a gameplay hang, or when over 5% (and
+  over 10) of the table's frames took longer than 16.7 ms. With `POUNCE_UITEST_TIMEOUT_SCALE` over
+  1 (a busy Mac) only a hang that many times 100 ms fails.
+- **`FrameRateTests`** plays Cat Tower (`-demo hit`) and Tuna Tiles (`-demo tiles`, `-demo
+  tiles-late` with `tiles.perf`) at normal speed and prints a `FRAMES` line per game. It fails if
+  the table doesn't ask for the screen's top rate, if the 95th percentile frame (table or main
+  thread) is over 1.5 frame times, if over 2% of frames (3 at least) take longer than 16.7 ms, or on
+  any hang. Simulators run at 60 Hz whatever the device, so 120 shows only on a real ProMotion
+  device.
+- **Thread Performance Checker** is on in the `Pounce` scheme's test plan (`Pounce.xctestplan`),
+  with its reports as test failures (priority inversions and its other default checks). Its
+  main-thread file IO check is off: iOS itself reads and writes files on the main thread at every
+  launch (MobileGestalt through ManagedConfiguration, and UIKit), so with it on every test fails;
+  the app's own IO is caught by `scripts/main-thread-lint.swift`. To look anyway,
+  `POUNCE_TPC_IO=1 scripts/ui-tests.sh …` turns it on (`PERFC_ENABLE_IO_ON_MAIN_THREAD`); a failure
+  reads "Doing file I/O on the main thread …" with no location, and the unified log names the call
+  ("antipattern trigger", e.g. `-[NSData writeToFile:options:error:]`): `xcrun simctl spawn
+  <device> log show --last 10m --predicate 'process == "Pounce" AND subsystem ==
+  "com.apple.runtime-issues"'`.
 
 ## Games
 

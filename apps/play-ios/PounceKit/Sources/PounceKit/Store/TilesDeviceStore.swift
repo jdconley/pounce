@@ -35,23 +35,42 @@ public struct TilesTableMemory: Codable, Equatable, Sendable {
     }
 }
 
-/// `tiles.json` (or a per-server `fileName`) in the given directory, keyed by room code, written
-/// atomically. Not thread-safe by itself; callers use it from one actor.
+/// `tiles.json` (or a per-server `fileName`) in the given directory, keyed by room code. Kept in
+/// memory and written behind (`JSONFile`), atomically. Not thread-safe by itself; callers use it
+/// from one actor.
 public final class TilesDeviceStore {
-    private let fileURL: URL
-    private var cache: [String: TilesTableMemory]?
+    private let file: JSONFile<File>
+    private var tables: [String: TilesTableMemory]
     /// Tables kept at most; the least recently written go first.
     static let limit = 40
     private var recency: [String] = []
 
-    public init(directory: URL, fileName: String = "tiles.json") {
-        fileURL = directory.appendingPathComponent(fileName)
-    }
-
-    private struct File: Codable {
+    public struct File: Codable, Sendable {
         var tables: [String: TilesTableMemory]
         var recency: [String]
     }
+
+    /// `loaded` is what `file.read()` returned, read off the main actor.
+    public init(file: JSONFile<File>, loaded: File?) {
+        self.file = file
+        let loaded = loaded ?? File(tables: [:], recency: [])
+        tables = loaded.tables
+        recency = loaded.recency.filter { loaded.tables[$0] != nil }
+        recency += loaded.tables.keys.filter { !recency.contains($0) }.sorted()
+    }
+
+    public static func file(directory: URL, fileName: String = "tiles.json") -> JSONFile<File> {
+        JSONFile(url: directory.appendingPathComponent(fileName), coding: .sorted)
+    }
+
+    /// Reads the file (off the caller's actor) and opens the store on it.
+    public static func open(directory: URL, fileName: String = "tiles.json") async -> sending TilesDeviceStore {
+        let file = file(directory: directory, fileName: fileName)
+        return TilesDeviceStore(file: file, loaded: await file.read())
+    }
+
+    /// Waits for every save so far to reach the disk.
+    public nonisolated(nonsending) func flush() async { await file.flush() }
 
     public func memory(code: String) -> TilesTableMemory {
         load()[code] ?? TilesTableMemory()
@@ -70,7 +89,6 @@ public final class TilesDeviceStore {
         while recency.count > Self.limit {
             tables[recency.removeFirst()] = nil
         }
-        cache = tables
         save(tables)
     }
 
@@ -78,27 +96,13 @@ public final class TilesDeviceStore {
         var tables = load()
         guard tables.removeValue(forKey: code) != nil else { return }
         recency.removeAll { $0 == code }
-        cache = tables
         save(tables)
     }
 
-    private func load() -> [String: TilesTableMemory] {
-        if let cache { return cache }
-        guard let data = try? Data(contentsOf: fileURL), let file = try? JSONDecoder().decode(File.self, from: data) else {
-            cache = [:]
-            return [:]
-        }
-        recency = file.recency.filter { file.tables[$0] != nil }
-        recency += file.tables.keys.filter { !recency.contains($0) }.sorted()
-        cache = file.tables
-        return file.tables
-    }
+    private func load() -> [String: TilesTableMemory] { tables }
 
-    private func save(_ tables: [String: TilesTableMemory]) {
-        let encoder = JSONEncoder()
-        encoder.outputFormatting = [.sortedKeys]
-        guard let data = try? encoder.encode(File(tables: tables, recency: recency)) else { return }
-        try? FileManager.default.createDirectory(at: fileURL.deletingLastPathComponent(), withIntermediateDirectories: true)
-        try? data.write(to: fileURL, options: .atomic)
+    private func save(_ next: [String: TilesTableMemory]) {
+        tables = next
+        file.save(File(tables: next, recency: recency))
     }
 }

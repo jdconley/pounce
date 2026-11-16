@@ -27,8 +27,14 @@ final class TestClock: Sendable {
     let sender = FakeFunnelSender()
     let clock = TestClock()
 
-    private func funnel(file: URL? = nil) -> Funnel {
-        Funnel(sender: sender, file: file, now: clock.now, locale: "en-US")
+    private func funnel() -> Funnel {
+        Funnel(sender: sender, file: nil, now: clock.now, locale: "en-US")
+    }
+
+    /// A funnel on `url` as a launch opens it: the file read off the main actor, then handed in.
+    private func funnel(file url: URL) async -> Funnel {
+        let file = Funnel.file(at: url)
+        return Funnel(sender: sender, file: file, loaded: await file.read(), now: clock.now, locale: "en-US")
     }
 
     @Test func nothingGoesOutBeforeTheAgeCheck() async {
@@ -134,13 +140,14 @@ final class TestClock: Sendable {
         let file = FileManager.default.temporaryDirectory.appendingPathComponent("funnel-\(UUID().uuidString).json")
         defer { try? FileManager.default.removeItem(at: file) }
         sender.failures.withLock { $0 = [.transport("offline")] }
-        let first = funnel(file: file)
+        let first = await funnel(file: file)
         first.came(from: .joinLink)
         first.reach(.linkOpened)
         first.allow()
         await first.settle()
         clock.advance(60)
-        let second = funnel(file: file)
+        await first.flushFile()
+        let second = await funnel(file: file)
         #expect(second.saved == first.saved)
         second.flush()
         await second.settle()

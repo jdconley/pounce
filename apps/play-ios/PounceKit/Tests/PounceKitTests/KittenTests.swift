@@ -282,25 +282,33 @@ final class FakeKittens: KittenService, Sendable {
         FileManager.default.temporaryDirectory.appendingPathComponent("kitten-\(UUID().uuidString).json")
     }
 
+    /// A store on `url` as a launch opens it: the file read off the main actor, then handed in.
+    private func open(_ fake: FakeKittens, _ url: URL) async -> KittenStore {
+        let file = KittenStore.file(at: url)
+        return KittenStore(service: fake, file: file, loaded: await file.read())
+    }
+
     /// A revoke (the panel's, or the notification's in the background) is kept on disk until the
     /// server has it, and tried again on the next launch or foreground (review I1).
     @Test func aFailedRevokeIsKeptAndTriedAgain() async {
         let fake = FakeKittens()
         let url = file()
-        let store = KittenStore(service: fake, file: url)
+        let store = await open(fake, url)
         await store.refreshKittens()
         fake.fail.withLock { $0 = .transport("offline") }
         #expect(await store.revoke(kitten: DemoKittenService.biscuit) == false)
         #expect(store.pendingRevokes == [DemoKittenService.biscuit])
         #expect(store.kittens[1].state == .on)
-        let next = KittenStore(service: fake, file: url)
+        await store.flushFile()
+        let next = await open(fake, url)
         #expect(next.pendingRevokes == [DemoKittenService.biscuit])
         await next.drainRevokes()
         #expect(next.pendingRevokes == [DemoKittenService.biscuit], "still offline")
         fake.fail.withLock { $0 = nil }
         await next.drainRevokes()
         #expect(next.pendingRevokes.isEmpty)
-        #expect(KittenStore(service: fake, file: url).pendingRevokes.isEmpty)
+        await next.flushFile()
+        #expect(await open(fake, url).pendingRevokes.isEmpty)
         #expect(fake.calls.withLock { $0 }.filter { $0.hasPrefix("revoke") }.count == 3)
     }
 
@@ -318,24 +326,32 @@ final class FakeKittens: KittenService, Sendable {
         FileManager.default.temporaryDirectory.appendingPathComponent("kitten-\(UUID().uuidString).json")
     }
 
+    /// A store on `url` as a launch opens it: the file read off the main actor, then handed in.
+    private func open(_ fake: FakeKittens, _ url: URL) async -> KittenStore {
+        let file = KittenStore.file(at: url)
+        return KittenStore(service: fake, file: file, loaded: await file.read())
+    }
+
     @Test func remembersConsentAcrossLaunches() async {
         let fake = FakeKittens()
         let url = file()
-        let store = KittenStore(service: fake, file: url)
+        let store = await open(fake, url)
         #expect(!store.consented)
         store.person = "me"
         fake.status.withLock { $0 = KittenStatus(state: .consented, linked: true, approved: []) }
         await store.refreshStatus()
         #expect(store.consented)
         store.noteRegistered(true)
-        let next = KittenStore(service: fake, file: url)
+        await store.flushFile()
+        let next = await open(fake, url)
         #expect(next.consented)
         #expect(next.registeredAsKitten)
         fake.status.withLock { $0 = KittenStatus(state: .pending, linked: true, approved: []) }
         next.person = "me"
         await next.refreshStatus()
         #expect(!next.consented)
-        #expect(!KittenStore(service: fake, file: url).consented)
+        await next.flushFile()
+        #expect(!(await open(fake, url).consented))
     }
 
     @Test func offlineKeepsWhatItKnew() async {
@@ -365,7 +381,7 @@ final class FakeKittens: KittenService, Sendable {
     @Test func mirrorsOnceAndRemembersWhoWasAsked() async {
         let fake = FakeKittens()
         let url = file()
-        let store = KittenStore(service: fake, file: url)
+        let store = await open(fake, url)
         store.person = "me"
         let ask = await store.mirror(limits: true, partners: ["pr_a", "pr_b"], known: ["pr_a"])
         #expect(ask == ["pr_b"])
@@ -373,7 +389,8 @@ final class FakeKittens: KittenService, Sendable {
         #expect(await store.mirror(limits: true, partners: ["pr_a", "pr_b"], known: ["pr_a"]) == [])
         #expect(fake.calls.withLock { $0 }.filter { $0.hasPrefix("mirror") } == ["mirror pr_a"])
         // The kitten taps a padlocked person: asked again.
-        let reopened = KittenStore(service: fake, file: url)
+        await store.flushFile()
+        let reopened = await open(fake, url)
         reopened.person = "me"
         reopened.forgetAsked("pr_b")
         #expect(await reopened.mirror(limits: true, partners: ["pr_a", "pr_b"], known: ["pr_a"]) == ["pr_b"])

@@ -105,12 +105,12 @@ import Testing
         #expect(record.needsRecheck(now: now.addingTimeInterval(7 * 86_400)))
     }
 
-    @Test func testMemoryStoreKeepsTheRecord() {
+    @Test func testMemoryStoreKeepsTheRecord() async {
         let store = MemoryAgeRecordStore()
-        #expect(store.load() == nil)
+        #expect(await store.load() == nil)
         let record = AgeRecord(band: .teen, source: .declared, checkedAt: now)
-        store.save(record)
-        #expect(store.load() == record)
+        await store.save(record)
+        #expect(await store.load() == record)
     }
 
     // MARK: limits

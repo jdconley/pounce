@@ -26,21 +26,27 @@ final class TilesStageEvents {
 }
 
 /// The device's memory of tile game tables: stash orders, half-built turns, the last rug seen.
-/// A demo or a UI test keeps its own, so nothing leaks between runs.
+/// Read off the main thread at launch (`AppModel.makeDefault`), kept in memory, written behind. A
+/// demo or a UI test keeps its own, so nothing leaks between runs.
 @MainActor
 enum TilesMemory {
-    static let store: TilesDeviceStore = {
+    static private(set) var store = TilesDeviceStore(file: TilesDeviceStore.file(directory: directory), loaded: nil)
+
+    /// Where the file lives: Application Support, or a per-run folder for demos and UI tests.
+    nonisolated static var directory: URL {
         #if DEBUG
         let args = CommandLine.arguments
         if args.contains("-uitest-reset") || args.contains("-demo") {
-            let dir = FileManager.default.temporaryDirectory.appendingPathComponent("tiles-\(ProcessInfo.processInfo.processIdentifier)")
-            return TilesDeviceStore(directory: dir)
+            return URL.temporaryDirectory.appendingPathComponent("tiles-\(ProcessInfo.processInfo.processIdentifier)")
         }
         #endif
-        let support = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first
-            ?? FileManager.default.temporaryDirectory
-        return TilesDeviceStore(directory: support.appendingPathComponent("Pounce", isDirectory: true))
-    }()
+        return URL.applicationSupportDirectory.appendingPathComponent("Pounce", isDirectory: true)
+    }
+
+    /// The launch's read of the file.
+    static func opened(_ loaded: Loaded<TilesDeviceStore.File>) {
+        store = TilesDeviceStore(file: loaded.file, loaded: loaded.value)
+    }
 }
 
 /// The tile game's table for one session (tile game spec §5): the SpriteKit scene, and over it

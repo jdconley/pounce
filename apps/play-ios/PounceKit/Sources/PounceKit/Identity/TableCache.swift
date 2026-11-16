@@ -47,26 +47,38 @@ public struct CachedTable: Codable, Equatable, Sendable {
     }
 }
 
-/// `tables.json` (or a per-server `fileName`) in the given directory, keyed by room code,
-/// written atomically. Not thread-safe by itself; callers use it from one actor (the app model).
+/// `tables.json` (or a per-server `fileName`) in the given directory, keyed by room code. Kept in
+/// memory and written behind (`JSONFile`), atomically. Not thread-safe by itself; callers use it
+/// from one actor (the app model).
 public final class TableCache {
-    private let fileURL: URL
+    private let file: JSONFile<[String: CachedTable]>
+    private var tables: [String: CachedTable]
 
-    public init(directory: URL, fileName: String = "tables.json") {
-        fileURL = directory.appendingPathComponent(fileName)
+    /// `loaded` is what `file.read()` returned, read off the main actor at launch.
+    public init(file: JSONFile<[String: CachedTable]>, loaded: [String: CachedTable]?) {
+        self.file = file
+        tables = loaded ?? [:]
     }
+
+    public static func file(directory: URL, fileName: String = "tables.json") -> JSONFile<[String: CachedTable]> {
+        JSONFile(url: directory.appendingPathComponent(fileName), coding: JSONCoding(dates: .secondsSince1970, sortedKeys: true))
+    }
+
+    /// Reads the file (off the caller's actor) and opens the cache on it.
+    public static func open(directory: URL, fileName: String = "tables.json") async -> sending TableCache {
+        let file = file(directory: directory, fileName: fileName)
+        return TableCache(file: file, loaded: await file.read())
+    }
+
+    /// Waits for every save so far to reach the disk.
+    public nonisolated(nonsending) func flush() async { await file.flush() }
 
     /// One server's cache file, `tables.<host>_<port>.json`: room codes belong to a server.
     public static func fileName(for config: APIConfig) -> String {
         "tables.\(config.serverKey.replacingOccurrences(of: ":", with: "_")).json"
     }
 
-    public func all() -> [String: CachedTable] {
-        guard let data = try? Data(contentsOf: fileURL) else { return [:] }
-        let decoder = JSONDecoder()
-        decoder.dateDecodingStrategy = .secondsSince1970
-        return (try? decoder.decode([String: CachedTable].self, from: data)) ?? [:]
-    }
+    public func all() -> [String: CachedTable] { tables }
 
     public func store(_ room: RoomView, now: Date = .now) {
         var tables = all()
@@ -86,13 +98,8 @@ public final class TableCache {
 
     public func contains(code: String) -> Bool { all()[code] != nil }
 
-    private func save(_ tables: [String: CachedTable]) {
-        let encoder = JSONEncoder()
-        encoder.dateEncodingStrategy = .secondsSince1970
-        encoder.outputFormatting = [.sortedKeys]
-        guard let data = try? encoder.encode(tables) else { return }
-        try? FileManager.default.createDirectory(
-            at: fileURL.deletingLastPathComponent(), withIntermediateDirectories: true)
-        try? data.write(to: fileURL, options: .atomic)
+    private func save(_ next: [String: CachedTable]) {
+        tables = next
+        file.save(next)
     }
 }

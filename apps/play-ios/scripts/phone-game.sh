@@ -34,7 +34,7 @@ trap cleanup EXIT
 TEST_RUNNER_POUNCE_PHONE_GAME=1 TEST_RUNNER_POUNCE_PHONE_BOTS="${BOTS:-1}" TEST_RUNNER_POUNCE_SPEED="${SPEED:-10}" \
   TEST_RUNNER_POUNCE_API_BASE_URL="$BASE" \
   xcodebuild test-without-building -project Pounce.xcodeproj -scheme Pounce -derivedDataPath "$DD" \
-  -destination "id=$DEVICE" -only-testing:PounceUITests/PhoneGameTests/testHostOnPhone \
+  -destination "id=$DEVICE" -only-testing:PounceUITests/PhoneGameTests/testHostOnPhone -collect-test-diagnostics never \
   -resultBundlePath "$OUT/phone.xcresult" >"$OUT/phone.log" 2>&1 & pids+=($!); phone_pid=$!
 echo "phone test log: $OUT/phone.log"
 

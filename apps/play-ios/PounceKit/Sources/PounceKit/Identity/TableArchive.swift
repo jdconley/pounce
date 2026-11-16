@@ -2,24 +2,38 @@ import Foundation
 
 /// The tables archived off Home on this phone: `archived.json` (or a per-server `fileName`) in
 /// the given directory, room code to the server's `updatedAt` (epoch ms) when it was archived.
-/// Archiving only hides a table; the seat, links and pushes keep working. Not thread-safe by
-/// itself; callers use it from one actor (the app model).
+/// Archiving only hides a table; the seat, links and pushes keep working. Kept in memory and
+/// written behind (`JSONFile`). Not thread-safe by itself; callers use it from one actor (the app
+/// model).
 public final class TableArchive {
-    private let fileURL: URL
+    private let file: JSONFile<[String: Double]>
+    private var marks: [String: Double]
 
-    public init(directory: URL, fileName: String = "archived.json") {
-        fileURL = directory.appendingPathComponent(fileName)
+    /// `loaded` is what `file.read()` returned, read off the main actor at launch.
+    public init(file: JSONFile<[String: Double]>, loaded: [String: Double]?) {
+        self.file = file
+        marks = loaded ?? [:]
     }
+
+    public static func file(directory: URL, fileName: String = "archived.json") -> JSONFile<[String: Double]> {
+        JSONFile(url: directory.appendingPathComponent(fileName), coding: .sorted)
+    }
+
+    /// Reads the file (off the caller's actor) and opens the store on it.
+    public static func open(directory: URL, fileName: String = "archived.json") async -> sending TableArchive {
+        let file = file(directory: directory, fileName: fileName)
+        return TableArchive(file: file, loaded: await file.read())
+    }
+
+    /// Waits for every save so far to reach the disk.
+    public nonisolated(nonsending) func flush() async { await file.flush() }
 
     /// One server's archive file, `archived.<host>_<port>.json`: room codes belong to a server.
     public static func fileName(for config: APIConfig) -> String {
         "archived.\(config.serverKey.replacingOccurrences(of: ":", with: "_")).json"
     }
 
-    public func all() -> [String: Double] {
-        guard let data = try? Data(contentsOf: fileURL) else { return [:] }
-        return (try? JSONDecoder().decode([String: Double].self, from: data)) ?? [:]
-    }
+    public func all() -> [String: Double] { marks }
 
     /// Hides `code`, remembering how fresh the table was (`updatedAt`) so a later turn can bring it back.
     public func archive(code: String, updatedAt: Double) {
@@ -39,12 +53,8 @@ public final class TableArchive {
         save(marks)
     }
 
-    private func save(_ marks: [String: Double]) {
-        let encoder = JSONEncoder()
-        encoder.outputFormatting = [.sortedKeys]
-        guard let data = try? encoder.encode(marks) else { return }
-        try? FileManager.default.createDirectory(
-            at: fileURL.deletingLastPathComponent(), withIntermediateDirectories: true)
-        try? data.write(to: fileURL, options: .atomic)
+    private func save(_ next: [String: Double]) {
+        marks = next
+        file.save(next)
     }
 }

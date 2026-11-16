@@ -33,9 +33,12 @@ final class UpdateModel {
     @ObservationIgnored private let staged: Bool
     @ObservationIgnored private var started = false
 
-    init(api: APIClient, directory: URL, arguments: [String] = CommandLine.arguments, env: [String: String] = ProcessInfo.processInfo.environment) {
+    /// `store` was opened from what the launch read off the main actor.
+    func flushToDisk() async { await store.flush() }
+
+    init(api: APIClient, store: UpdateStore, arguments: [String] = CommandLine.arguments, env: [String: String] = ProcessInfo.processInfo.environment) {
         self.api = api
-        store = UpdateStore(directory: directory)
+        self.store = store
         current = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? ""
         var staged = RatingPrompt.isStaged(arguments: arguments, env: env)
         var record = store.load()

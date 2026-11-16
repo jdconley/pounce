@@ -190,11 +190,11 @@ import Testing
 
     // MARK: storage
 
-    @Test func aFileFromBeforeUITipsKeepsEveryGameTip() throws {
+    @Test func aFileFromBeforeUITipsKeepsEveryGameTip() async throws {
         let dir = try tempDir()
         // What earlier builds wrote: person to game tip names.
         try Data(#"{"a":["draw","goal"],"b":["cats"]}"#.utf8).write(to: dir.appendingPathComponent("tutorial.json"))
-        let store = TutorialStore(directory: dir)
+        let store = await TutorialStore.open(directory: dir)
         #expect(store.loadUI().isEmpty)
         store.markSeen([UITip.homeShelf], person: "a")
         #expect(store.load()["a"] == [.goal, .draw])
@@ -203,20 +203,21 @@ import Testing
         // And the other way: a game tip doesn't drop the UI tips.
         store.markSeen([CoachTip.discard], person: "a")
         #expect(store.loadUI()["a"] == [.homeShelf])
-        #expect(TutorialStore(directory: dir).load()["a"] == [.goal, .draw, .discard])
+        await store.flush()
+        #expect(await TutorialStore.open(directory: dir).load()["a"] == [.goal, .draw, .discard])
     }
 
-    @Test func namesFromANewerBuildAreKept() throws {
+    @Test func namesFromANewerBuildAreKept() async throws {
         let dir = try tempDir()
         try Data(#"{"a":["goal","ui.someday"]}"#.utf8).write(to: dir.appendingPathComponent("tutorial.json"))
-        let store = TutorialStore(directory: dir)
+        let store = await TutorialStore.open(directory: dir)
         store.markSeen([UITip.homeJoin], person: "a")
         #expect(store.loadNames()["a"] == ["goal", "ui.someday", "ui.home.join"])
     }
 
-    @Test func syncReplacingGameTipsKeepsUITipsAndMovesFollowThePerson() throws {
+    @Test func syncReplacingGameTipsKeepsUITipsAndMovesFollowThePerson() async throws {
         let dir = try tempDir()
-        let store = TutorialStore(directory: dir)
+        let store = await TutorialStore.open(directory: dir)
         store.markSeen([CoachTip.goal], person: "a")
         store.markSeen([UITip.lobbyStart], person: "a")
         store.replace(["a": [.draw]])
@@ -230,18 +231,19 @@ import Testing
         #expect(store.loadNames().isEmpty)
     }
 
-    @Test func pacingCountsPerPersonPerDayAndOpensPerPhone() throws {
+    @Test func pacingCountsPerPersonPerDayAndOpensPerPhone() async throws {
         let dir = try tempDir()
         var calendar = Calendar(identifier: .gregorian)
         calendar.timeZone = TimeZone(identifier: "UTC")!
-        let store = TipPacingStore(directory: dir, calendar: calendar)
+        let store = await TipPacingStore.open(directory: dir, calendar: calendar)
         #expect(store.opened() == 1)
         #expect(store.opened() == 2)
         let monday = Date(timeIntervalSince1970: 1_762_732_800)  // 2025-11-10 00:00 UTC
         store.noteShown(person: "a", on: monday)
         store.noteShown(person: "a", on: monday.addingTimeInterval(3600))
         store.noteShown(person: "b", on: monday)
-        let reloaded = TipPacingStore(directory: dir, calendar: calendar)
+        await store.flush()
+        let reloaded = await TipPacingStore.open(directory: dir, calendar: calendar)
         #expect(reloaded.shown(person: "a", on: monday) == 2)
         #expect(reloaded.shown(person: "b", on: monday) == 1)
         #expect(reloaded.shown(person: "a", on: monday.addingTimeInterval(86_400)) == 0, "a new day starts at zero")

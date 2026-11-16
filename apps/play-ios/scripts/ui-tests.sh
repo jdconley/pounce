@@ -8,6 +8,11 @@
 # with silent sound and haptics; SPEED=1 is a normal-speed run. A dev server this script starts
 # also runs its bots at SPEED (see lib-dev-server.sh).
 # POUNCE_UITEST_TIMEOUT_SCALE (default 1) multiplies every live-test timeout; use 3 on a busy Mac.
+# Gates (README "Frame rate and main-thread gates"): every test fails on a Thread Performance
+# Checker report (the test plan) and on a gameplay hang over 100 ms or too many slow table frames
+# (`GameplayGate`). POUNCE_TPC_IO=1 also turns on the checker's main-thread file IO check (iOS's
+# own launch trips it, so every test fails; for reading the log). A failure doesn't stop for a
+# sysdiagnose (minutes).
 set -euo pipefail
 cd "$(dirname "$0")/.."
 SPEED="${SPEED:-10}"
@@ -24,5 +29,6 @@ trap 'stop_host_broker; stop_dev_server' EXIT
 status=0
 TEST_RUNNER_POUNCE_BROKER_DIR="$HOST_BROKER_DIR" TEST_RUNNER_POUNCE_API_BASE_URL="$DEV_SERVER_URL" \
   TEST_RUNNER_POUNCE_UITEST_TIMEOUT_SCALE="${POUNCE_UITEST_TIMEOUT_SCALE:-1}" TEST_RUNNER_POUNCE_SPEED="$SPEED" \
-  xcodebuild test -project Pounce.xcodeproj -scheme Pounce -destination "$DESTINATION" "$@" || status=$?
+  TEST_RUNNER_POUNCE_TPC_IO="${POUNCE_TPC_IO:-0}" \
+  xcodebuild test -project Pounce.xcodeproj -scheme Pounce -destination "$DESTINATION" -collect-test-diagnostics never "$@" || status=$?
 exit $status
