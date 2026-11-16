@@ -15,7 +15,7 @@ import { Button, Icon, IconButton, learnTip, Tip, tipLearned, useSize } from "..
 import { hint as askHint } from "../workers/hint";
 
 import { useInsets } from "./cattower";
-import { inside, press, type Point } from "./drag";
+import { inside, press, useLatest, type Point } from "./drag";
 import { PieceFace, pieceLabel } from "./faces";
 import { Motion, transformOf, wiggle, type Pose } from "./motion";
 import { seatName, SeatAvatar } from "./seat";
@@ -210,6 +210,7 @@ export function TilesTable(props: { store: RoomStore; state: RoomState }) {
     return change(toNewSet(draft, id));
   };
 
+  const live = useLatest({ targetAt, dropAt });
   const onDown = (id: TileId) => (e: PointerEvent) => {
     const el = els.current.get(`p${id}`);
     if (!el || (!movable(id) && !draft.rack.includes(id))) return;
@@ -229,8 +230,8 @@ export function TilesTable(props: { store: RoomStore; state: RoomState }) {
         play("tick", 0.4);
         buzz("pick");
       },
-      onMove: (p) => setHover(targetAt(p, id)),
-      onDrop: (p, pose) => dropAt(id, p, pose),
+      onMove: (p) => setHover(live.current.targetAt(p, id)),
+      onDrop: (p, pose) => live.current.dropAt(id, p, pose),
       onCancel: () => setHover(null),
     });
   };

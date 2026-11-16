@@ -18,7 +18,7 @@ import { mySeats } from "../store/lobby";
 import { Button, Icon, learnTip, Tip, tipLearned, useMedia, useSize } from "../ui/common";
 
 import { ctLayout, trayPoses, type Insets } from "./ct-layout";
-import { inside, press, type Point } from "./drag";
+import { inside, press, useLatest, type Point } from "./drag";
 import { CardFace, cardLabel } from "./faces";
 import { Motion, MOVE, transformOf, wiggle, type Pose } from "./motion";
 import { seatCat, seatName, SeatAvatar } from "./seat";
@@ -402,6 +402,7 @@ export function CatTowerTable(props: { store: RoomStore; state: RoomState }) {
     setSelected((s) => (s === c ? null : c));
   };
 
+  const live = useLatest({ targetAt, dropAt, tapCard });
   const onCardDown = (c: CardId) => (e: PointerEvent) => {
     if (!showHand) return;
     const el = els.current.get(`c${c}`);
@@ -412,14 +413,14 @@ export function CatTowerTable(props: { store: RoomStore; state: RoomState }) {
         return { x: r.left, y: r.top };
       },
       pose: () => motion.last(`c${c}`) ?? { x: 0, y: 0 },
-      onTap: () => tapCard(c),
+      onTap: () => live.current.tapCard(c),
       onStart: () => {
         play("tick", 0.4);
         buzz("pick");
         setSelected(null);
       },
-      onMove: (p) => setHover(targetAt(p, c)),
-      onDrop: (p, pose) => dropAt(c, p, pose),
+      onMove: (p) => setHover(live.current.targetAt(p, c)),
+      onDrop: (p, pose) => live.current.dropAt(c, p, pose),
       onCancel: () => setHover(null),
     });
   };

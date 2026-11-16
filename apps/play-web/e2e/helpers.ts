@@ -1,7 +1,14 @@
-import { expect, type Browser, type BrowserContext, type Page } from "@playwright/test";
+import { expect, type Browser, type BrowserContext, type Page, type WebSocketRoute } from "@playwright/test";
+
+import type { ClientMessage, ServerMessage } from "@pounce/play-api/protocol";
 
 let addresses = 0;
 const nextAddress = () => `10.${(process.pid % 200) + 1}.${Math.floor(++addresses / 250)}.${(addresses % 250) + 1}`;
+
+/** Makes `context` a device of its own address, so sign-ups never run into the per-address limit. */
+export async function ownAddress(context: BrowserContext): Promise<void> {
+  await context.setExtraHTTPHeaders({ "cf-connecting-ip": nextAddress() });
+}
 
 /** A new player in a fresh browser profile: the age check and a name, then Home. */
 export async function newPlayer(browser: Browser, name: string, opts: { path?: string; year?: string; context?: Parameters<Browser["newContext"]>[0] } = {}) {
@@ -57,4 +64,33 @@ export async function catTowerTurn(page: Page): Promise<boolean> {
 
 export async function closeAll(...contexts: BrowserContext[]) {
   for (const c of contexts) await c.close();
+}
+
+/**
+ * A room's socket played by the test, so no deal or bot decides what the table shows: what the
+ * test sends, and what the table sent back. Like the room, it greets every connection (the table
+ * may open more than one) with everything so far; the table already ignores what it has seen.
+ */
+export async function standInServer(page: Page): Promise<{ send: (m: ServerMessage) => void; sent: ClientMessage[] }> {
+  const open = new Set<WebSocketRoute>();
+  const said: ServerMessage[] = [];
+  const sent: ClientMessage[] = [];
+  await page.routeWebSocket(/\/v1\/rooms\/[A-Z0-9]+\/ws/, (ws) => {
+    open.add(ws);
+    ws.onClose(() => open.delete(ws));
+    ws.onMessage((m) => {
+      const message = JSON.parse(String(m)) as ClientMessage;
+      // Heartbeats are answered, as the room does, so the table never thinks the link died.
+      if (message.t === "ping") ws.send(JSON.stringify({ t: "pong" }));
+      else sent.push(message);
+    });
+    for (const m of said) ws.send(JSON.stringify(m));
+  });
+  return {
+    send: (m) => {
+      said.push(m);
+      for (const ws of open) ws.send(JSON.stringify(m));
+    },
+    sent,
+  };
 }
