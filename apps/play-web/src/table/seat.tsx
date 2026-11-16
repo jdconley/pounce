@@ -28,6 +28,8 @@ export function SeatAvatar(props: {
   size: number;
   turn: boolean;
   count?: number;
+  /** Points so far, under the name (a TV's seats). */
+  score?: number;
   laid?: boolean;
   skip?: boolean;
   out?: boolean;
@@ -45,6 +47,7 @@ export function SeatAvatar(props: {
     // button says its visible text before anything else (WCAG 2.5.3).
     name,
     props.count !== undefined ? `${props.count} ${props.count === 1 ? "card" : "cards"}` : "",
+    props.score !== undefined ? `${props.score} ${props.score === 1 ? "point" : "points"}` : "",
     props.turn ? "their turn" : "",
     props.laid ? "laid down" : "",
     props.skip ? "skips next turn" : "",
@@ -65,6 +68,7 @@ export function SeatAvatar(props: {
       {/* First in the markup, drawn under the ring (CSS order). The space keeps the name and the
           count two words when read together; a flex box draws no space. */}
       {name ? <span class="name-tag">{name}</span> : null}{" "}
+      {props.score !== undefined ? <span class="score">{props.score}</span> : null}
       <span class="ring" style={{ width: `${size}px`, height: `${size}px` }}>
         <img src={catArt(seatCat(info), seatPose(info, props.turn))} alt="" width={size} height={size} draggable={false} decoding="async" />
         {badge ? <img class="badge" src={art(badge)} alt="" /> : null}

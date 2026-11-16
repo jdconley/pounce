@@ -165,8 +165,14 @@
   left: 9%;
 }
 
+/* A laid card shows only its left edge under the next one (as little as 42% of its width): a
+   two-digit numeral keeps its height and closes up to fit there (ct-layout.ts, TIGHT). */
 .face.compact .num.two {
+  left: 4%;
   font-size: calc(var(--cw) * 0.46);
+  letter-spacing: -0.1em;
+  transform: scaleX(0.82);
+  transform-origin: 0 50%;
 }
 
 .num.tabby {
@@ -411,6 +417,15 @@
   position: relative;
 }
 
+/* Points so far, under the name (a TV's seats). */
+.seat-avatar .score {
+  order: 2;
+  font: 900 calc(var(--avatar, 64px) * 0.2) / 1.1 var(--round);
+  color: var(--yellow);
+  -webkit-text-stroke: 0.12em var(--ink);
+  paint-order: stroke fill;
+}
+
 .laid-owner .seat-avatar .ring {
   border-width: 2px;
   box-shadow: none;
@@ -483,6 +498,11 @@
 
 .group-zone.bad {
   box-shadow: 0 0 0 3px var(--refuse);
+}
+
+/* The group the player whose turn it is is pointing at, from their phone (ct-public.tsx). */
+.group-zone.aimed {
+  box-shadow: 0 0 0 4px var(--yellow), 0 0 20px 4px var(--yellow);
 }
 
 .tray {
@@ -699,6 +719,12 @@
 .tile.picked .tile-inner {
   transform: translateY(-14%);
   filter: drop-shadow(0 0 6px var(--yellow));
+}
+
+/* A piece the player whose turn it is is adding, as they arrange it (tiles-public.tsx). */
+.tile.draft .tile-inner {
+  transform: translateY(-10%);
+  filter: drop-shadow(0 0 5px var(--yellow)) drop-shadow(0 0 2px var(--yellow));
 }
 
 .tile.dragging {
