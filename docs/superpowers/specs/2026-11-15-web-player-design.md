@@ -187,13 +187,22 @@ a tip the first time a keyboard is used.
 
 ## Web Push
 
-The server's push path (`notify/deliver.ts`) sends APNs to each device's token. Web Push fits the
-same shape: a device keeps a push subscription instead of an APNs token, and delivery encrypts
-the same "your move" payload (RFC 8291, `aes128gcm`, with WebCrypto in the Worker) and signs a
-VAPID JWT. It needs a VAPID key pair: a secret JD makes once with
-`apps/play-api/scripts/vapid-keys.mjs` and stores as `PLAY_API_VAPID_PRIVATE_KEY` /
-`PLAY_API_VAPID_PUBLIC_KEY`; until then the web player doesn't ask. Shipped as its own PR, last,
-because it changes delivery for every push and needs JD's secret first.
+The server's push path (`notify/deliver.ts`) builds one alert per device and sends it by APNs.
+Web Push fits the same shape, so the web player gets turn alerts too:
+
+- A device keeps a browser push subscription (`PUT /v1/devices/me/webpush`) beside any APNs
+  token, under the same rules: never for a kitten's device without a parent's consent, nothing
+  overnight for a teen, gone when consent ends.
+- `DeviceIndex.pushAlert` sends the same alert to it (`src/push/webpush.ts`): encrypted for the
+  browser alone (RFC 8291, `aes128gcm`, WebCrypto), signed with our VAPID key (RFC 8292). A 404
+  or 410 forgets the subscription. Only the big browsers' push services are accepted.
+- The service worker shows it and a tap opens the table.
+- The web player asks only from Settings (Turn alerts) or from a one-time card on Home once
+  there are tables to be alerted about, never on first load. On an iPhone, browsers can only
+  receive push once Pounce is added to the Home Screen; there the app is the better choice.
+- It needs a VAPID key pair: JD runs `node apps/play-api/scripts/vapid-keys.mjs` once, which makes
+  it and stores it with `gh secret set` (the private key is never shown); the next deploy syncs
+  it. Until then `GET /v1/push/web` is a 404 and the web player never asks.
 
 ## Testing
 

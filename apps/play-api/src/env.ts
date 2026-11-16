@@ -126,6 +126,13 @@ export interface Env {
   APP_LATEST?: string;
   /** "off": never ask Apple's lookup (then only `APP_LATEST` says what is live). */
   APP_LOOKUP?: string;
+  /**
+   * The web player's push key pair (src/push/webpush.ts): the public key (base64url, raw P-256
+   * point) and the private key's `d` (base64url). Secrets, made by scripts/vapid-keys.mjs. Without
+   * both, browsers are never asked to notify.
+   */
+  VAPID_PUBLIC_KEY?: string;
+  VAPID_PRIVATE_KEY?: string;
   /** APNs auth key, PEM PKCS#8 text. A secret; without it (and the key id) no push is sent. */
   APNS_KEY_P8?: string;
   /** APNs auth key id (the JWT `kid`). A secret. */

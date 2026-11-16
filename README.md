@@ -134,6 +134,8 @@ secrets exist:
 | `PLAY_API_APNS_KEY_ID` | no | The APNs key's ID. |
 | `PLAY_API_SIWA_KEY_P8` | yes for the App Store | Sign in with Apple key (.p8 contents). Sign-in works without it, but the API keeps no Apple tokens, so it can't revoke them on account deletion as App Review requires. One key with both APNs and Sign in with Apple enabled can serve both pairs. Set it together with the key ID. |
 | `PLAY_API_SIWA_KEY_ID` | no | The Sign in with Apple key's ID. |
+| `PLAY_API_VAPID_PUBLIC_KEY` | no | The web player's push key pair (Web Push, VAPID). Set both at once with `node apps/play-api/scripts/vapid-keys.mjs`, which makes the pair and stores it with `gh secret set` (the private key is never shown). Without them browsers are never asked to notify. |
+| `PLAY_API_VAPID_PRIVATE_KEY` | no | Its private half (made by the same script). |
 | `PLAY_API_TWILIO_ACCOUNT_SID` | no | Twilio account SID (`AC…`), for parent consent (daily habit PR 9). Set all four Twilio secrets or none: without them no code is sent and a kitten's consent can't start. |
 | `PLAY_API_TWILIO_API_KEY_SID` | no | A Twilio API key's SID (`SK…`): signs in to Verify (basic auth). |
 | `PLAY_API_TWILIO_API_KEY_SECRET` | no | That API key's secret. |

@@ -914,3 +914,23 @@
     min-height: 190px;
   }
 }
+
+.alerts-card {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 12px;
+  padding: 8px 8px 8px 12px;
+  font: 900 1rem var(--round);
+}
+
+.alerts-card .grow {
+  flex: 1;
+  min-width: 0;
+}
+
+.small-x {
+  width: 38px;
+  height: 38px;
+  color: var(--white);
+}
