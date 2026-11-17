@@ -11,6 +11,8 @@ export class ApiError extends Error {
   constructor(
     readonly status: number,
     readonly code: string,
+    /** Seconds until a limit lifts (a 429 that says). */
+    readonly retryAfter?: number,
   ) {
     super(`${status} ${code}`);
   }
@@ -19,7 +21,7 @@ export class ApiError extends Error {
 /** The server said this client is too old: reload for the new build. */
 export const UPDATE_REQUIRED = "update_required";
 
-const CREDENTIAL_KEY = "pounce.device";
+const DEVICE_KEY = "pounce.device";
 
 export type ProfileBody = {
   timeZone: string;
@@ -50,12 +52,14 @@ export class Api {
   constructor(
     private readonly base: string = typeof location === "undefined" ? "" : location.origin,
     private readonly fetcher: typeof fetch = (...args) => fetch(...args),
+    /** Where this device's token is kept: a TV keeps its own, apart from the phone's on the same origin. */
+    private readonly credentialKey: string = DEVICE_KEY,
   ) {}
 
   /** The kept credential, without minting one. */
   stored(): Credential | null {
     if (this.cached) return this.cached;
-    const kept = store.json<Credential>(CREDENTIAL_KEY);
+    const kept = store.json<Credential>(this.credentialKey);
     if (kept && typeof kept.token === "string" && typeof kept.deviceId === "string") this.cached = kept;
     return this.cached;
   }
@@ -80,16 +84,22 @@ export class Api {
       }
     }
     const minted = (await res.json()) as Credential;
-    store.set(CREDENTIAL_KEY, JSON.stringify(minted));
+    store.set(this.credentialKey, JSON.stringify(minted));
     this.cached = minted;
     return minted;
+  }
+
+  /** Forget this device's credential (a socket's 4401): the next call mints a fresh one. */
+  forget(): void {
+    const kept = this.stored();
+    if (kept) this.drop(kept);
   }
 
   /** Forget a token the server refused, so the next call mints a fresh one. */
   private drop(failed: Credential): void {
     if (this.cached?.token === failed.token) {
       this.cached = null;
-      store.remove(CREDENTIAL_KEY);
+      store.remove(this.credentialKey);
     }
   }
 
@@ -110,8 +120,11 @@ export class Api {
     }
     if (res.ok) return res;
     let code = "";
+    let retryAfter: number | undefined;
     try {
-      code = ((await res.json()) as { error?: string }).error ?? "";
+      const body = (await res.json()) as { error?: string; retryAfter?: number };
+      code = body.error ?? "";
+      if (typeof body.retryAfter === "number") retryAfter = body.retryAfter;
     } catch {
       // No JSON body.
     }
@@ -119,7 +132,7 @@ export class Api {
       this.onUpdateRequired();
       throw new ApiError(426, UPDATE_REQUIRED);
     }
-    throw new ApiError(res.status, code || String(res.status));
+    throw new ApiError(res.status, code || String(res.status), retryAfter);
   }
 
   /** An authenticated call; a 401 replaces the token once. */
@@ -135,9 +148,39 @@ export class Api {
     }
   }
 
-  async createRoom(game: string, name?: string): Promise<string> {
-    const res = await this.call("POST", "/v1/rooms", name ? { game, name } : { game });
+  /** A new table. `{ screen: true }` makes this device the table's screen (a TV), with no name. */
+  async createRoom(game: string, nameOrOptions?: string | { screen?: true }): Promise<string> {
+    const body =
+      typeof nameOrOptions === "string"
+        ? nameOrOptions
+          ? { game, name: nameOrOptions }
+          : { game }
+        : nameOrOptions?.screen
+          ? { game, screen: true }
+          : { game };
+    const res = await this.call("POST", "/v1/rooms", body);
     return ((await res.json()) as { code: string }).code;
+  }
+
+  /** A TV asks for a link: a token (the QR's) and a short code, good for `expiresIn` milliseconds. */
+  async screens(showing?: string): Promise<{ token: string; code: string; url: string; expiresIn: number }> {
+    const res = await this.call("POST", "/v1/screens", showing ? { showing } : {});
+    return (await res.json()) as { token: string; code: string; url: string; expiresIn: number };
+  }
+
+  /**
+   * A phone sends a table to the TV that showed `body`'s token or code. "showing" when that TV
+   * already shows another table (link again with `move` to take it over); 404, 403 (not seated)
+   * and 429 (`retryAfter`) throw.
+   */
+  async linkScreen(body: { token: string } | { code: string }, room: string, move?: boolean): Promise<"linked" | "showing"> {
+    try {
+      await this.call("POST", "/v1/screens/link", { ...body, room, ...(move ? { move: true } : {}) });
+      return "linked";
+    } catch (error) {
+      if (error instanceof ApiError && error.status === 409 && error.code === "showing") return "showing";
+      throw error;
+    }
   }
 
   async uploadProfile(profile: ProfileBody): Promise<{ players: Record<string, string>; rejected: string[] }> {
@@ -182,3 +225,6 @@ export class Api {
 }
 
 export const api = new Api();
+
+/** A TV's own device: its token never mixes with a phone's kept on the same origin. */
+export const tvApi = new Api(undefined, undefined, "pounce.tv.device");

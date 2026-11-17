@@ -1,17 +1,21 @@
-/** Pieces both tables use: cards in flight, the pass-the-device curtain, the round's results. */
-import { useLayoutEffect, useRef, useState } from "preact/hooks";
+/**
+ * Pieces both tables use: cards in flight, the pass-the-device curtain, the round's results, and the
+ * Cards/Table switch of a phone whose table is on a TV.
+ */
+import { useEffect, useLayoutEffect, useRef, useState } from "preact/hooks";
 
 
 import { art } from "../lib/art";
 import { buzz } from "../lib/haptics";
 import { reducedMotion } from "../lib/settings";
 import { play } from "../lib/sound";
-import { Cat } from "../ui/common";
+import { Cat, learnTip } from "../ui/common";
 
 import { CardBack, CardFace } from "./faces";
 import { MOVE, transformOf, type Pose } from "./motion";
 import { seatCat, seatName } from "./seat";
 
+import type { View } from "../store/views";
 import type { RoomView } from "@pounce/play-api/protocol";
 import type { CardId } from "@pounce/play-api/rules/cards";
 import type { GameEvent } from "@pounce/play-api/rules/engine";
@@ -121,6 +125,56 @@ export function RoundOver(props: { seats: RoomView["seats"]; ev: Extract<GameEve
           })}
         </ul>
       </div>
+    </div>
+  );
+}
+
+let textNow: number | null = null;
+const textListeners = new Set<(t: number) => void>();
+const readText = () => (parseFloat(getComputedStyle(document.documentElement).fontSize) || 16) / 16;
+
+if (typeof window !== "undefined") {
+  window.addEventListener("resize", () => {
+    // In the next frame, after the browser's own layout (a zoom resizes too).
+    requestAnimationFrame(() => {
+      textNow = readText();
+      for (const l of [...textListeners]) l(textNow);
+    });
+  });
+}
+
+/** The reader's text size against the default: the root font over 16 px (2 at 200%). */
+export function useTextScale(): number {
+  const [text, setText] = useState(() => (textNow ??= typeof document === "undefined" ? 1 : readText()));
+  useEffect(() => {
+    textListeners.add(setText);
+    return () => void textListeners.delete(setText);
+  }, []);
+  return text;
+}
+
+/**
+ * Cards or Table, one tap, for a phone whose table is on a TV: just this player's cards (the
+ * controller), or the whole table as it is without a TV. It sits at the top of both.
+ */
+export function SwitchView(props: { view: View; onChange: (view: View) => void; style?: Record<string, string> }) {
+  return (
+    <div id="view-switch" class="view-switch" role="group" aria-label="View" style={props.style}>
+      {(["cards", "table"] as const).map((v) => (
+        <button
+          type="button"
+          class={props.view === v ? "on" : ""}
+          aria-pressed={props.view === v}
+          onClick={() => {
+            play("pop", 0.4);
+            buzz("tap");
+            learnTip("tv.switch");
+            if (v !== props.view) props.onChange(v);
+          }}
+        >
+          {v === "cards" ? "Cards" : "Table"}
+        </button>
+      ))}
     </div>
   );
 }

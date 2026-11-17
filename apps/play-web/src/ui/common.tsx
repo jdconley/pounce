@@ -197,10 +197,22 @@ export function Tip(props: { id: string; anchor: string; text: string; show: boo
     const mo = new MutationObserver(() => place());
     if (anchor) mo.observe(anchor, { attributes: true, attributeFilter: ["style", "class"] });
     window.addEventListener("resize", place);
+    // A screen that scrolls (large text) carries the anchor with it: once a frame, the tip follows.
+    let frame = 0;
+    const onScroll = () => {
+      if (frame) return;
+      frame = requestAnimationFrame(() => {
+        frame = 0;
+        place();
+      });
+    };
+    window.addEventListener("scroll", onScroll, { capture: true, passive: true });
     return () => {
       ro.disconnect();
       mo.disconnect();
       window.removeEventListener("resize", place);
+      window.removeEventListener("scroll", onScroll, { capture: true });
+      cancelAnimationFrame(frame);
     };
   }, [visible, props.anchor]);
   if (!visible) return null;

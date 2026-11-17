@@ -1,15 +1,8 @@
 import { art, catArt, RINGS, type CatPose } from "../lib/art";
 
-import type { RoomView } from "@pounce/play-api/protocol";
+import { seatCat, seatName, type SeatInfo } from "./seat-names";
 
-
-export type SeatInfo = RoomView["seats"][number];
-
-/** A seat's display name: the person's, "House Cat", or nothing for an empty seat. */
-export const seatName = (s: SeatInfo | undefined): string => (s?.kind === "bot" ? "House Cat" : (s?.person?.name ?? ""));
-
-/** The House Cat is the gray cat. */
-export const seatCat = (s: SeatInfo | undefined): number => (s?.kind === "bot" ? 3 : (s?.person?.cat ?? 0));
+export { seatCat, seatName, type SeatInfo } from "./seat-names";
 
 export function seatPose(s: SeatInfo | undefined, turn: boolean): CatPose {
   if (s?.presence === "asleep") return "asleep";
@@ -28,6 +21,8 @@ export function SeatAvatar(props: {
   size: number;
   turn: boolean;
   count?: number;
+  /** Points so far, under the name (a TV's seats). */
+  score?: number;
   laid?: boolean;
   skip?: boolean;
   out?: boolean;
@@ -45,6 +40,7 @@ export function SeatAvatar(props: {
     // button says its visible text before anything else (WCAG 2.5.3).
     name,
     props.count !== undefined ? `${props.count} ${props.count === 1 ? "card" : "cards"}` : "",
+    props.score !== undefined ? `${props.score} ${props.score === 1 ? "point" : "points"}` : "",
     props.turn ? "their turn" : "",
     props.laid ? "laid down" : "",
     props.skip ? "skips next turn" : "",
@@ -65,6 +61,7 @@ export function SeatAvatar(props: {
       {/* First in the markup, drawn under the ring (CSS order). The space keeps the name and the
           count two words when read together; a flex box draws no space. */}
       {name ? <span class="name-tag">{name}</span> : null}{" "}
+      {props.score !== undefined ? <span class="score">{props.score}</span> : null}
       <span class="ring" style={{ width: `${size}px`, height: `${size}px` }}>
         <img src={catArt(seatCat(info), seatPose(info, props.turn))} alt="" width={size} height={size} draggable={false} decoding="async" />
         {badge ? <img class="badge" src={art(badge)} alt="" /> : null}

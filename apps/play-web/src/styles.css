@@ -508,7 +508,7 @@ h1.title {
   text-align: center;
 }
 
-.state img {
+.state > img {
   width: min(220px, 55vw);
   height: auto;
 }

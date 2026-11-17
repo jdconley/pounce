@@ -46,6 +46,8 @@ describe("the room socket (RoomSocket.swift)", () => {
     expect(url.searchParams.get("games")).toBe("cat-tower,tiles");
     expect(url.searchParams.get("app")).toMatch(/^platform=web; version=\d{4}\.\d{4}\.\d{4}; protocol=1$/);
     expect(socketUrl("http://localhost:8787", "BCDFG")).toMatch(/^ws:\/\/localhost:8787\//);
+    expect(socketUrl("http://localhost:8787", "BCDFG")).not.toContain("role=");
+    expect(socketUrl("http://localhost:8787", "BCDFG", "screen")).toMatch(/&role=screen$/);
   });
 
   test("reconnects with backoff after a drop, and resets it on a snapshot", async () => {
@@ -95,6 +97,17 @@ describe("the room socket (RoomSocket.swift)", () => {
     clock.advance(250);
     await flush();
     expect(sockets.length).toBe(2);
+  });
+
+  test("4403 (a room that doesn't list this screen) is final: not found, never reconnects", async () => {
+    const { sockets, events, socket, clock } = setup();
+    socket.start();
+    await flush();
+    sockets[0]!.drop(4403);
+    expect(events.at(-1)).toBe("notFound");
+    clock.advance(60_000);
+    await flush();
+    expect(sockets.length).toBe(1);
   });
 
   test("heartbeats once the server takes them; silence for 10 s reconnects", async () => {

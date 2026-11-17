@@ -15,12 +15,17 @@ import { noteGameFinished, reloadForUpdate, setSafeToReload } from "../pwa";
 import { addPerson, forgetTable, rememberTable, useApp } from "../store/app";
 import { autoClaimSeat, firstTableMessages, mySeats, practiceMessages } from "../store/lobby";
 import { RoomStore, type RoomState } from "../store/room";
+import { carryView, setView, showController, showSwitch, viewOf, type View } from "../store/views";
 import { CatTowerTable } from "../table/cattower";
+import { CtController } from "../table/ct-controller";
 import { seatCat, seatName } from "../table/seat";
+import { SwitchView } from "../table/shared";
 import { TilesTable } from "../table/tiles";
+import { TilesController } from "../table/tiles-controller";
 
 import { Button, Cat, Icon, IconButton, Sheet } from "./common";
 import { Lobby } from "./lobby";
+import { ShowOnTvSheet, TvIcon } from "./show-on-tv";
 
 import type { RoomView } from "@pounce/play-api/protocol";
 
@@ -32,7 +37,8 @@ function useRoom(store: RoomStore): RoomState {
   return state;
 }
 
-export function TableScreen(props: { code: string; intent: TableIntent }) {
+/** `say`: a toast over every screen (app.tsx's), as "On the TV" outlives the sheet that linked it. */
+export function TableScreen(props: { code: string; intent: TableIntent; say?: (words: string) => void }) {
   const { people } = useApp();
   const store = useMemo(
     () =>
@@ -112,14 +118,27 @@ export function TableScreen(props: { code: string; intent: TableIntent }) {
   }, [state.phase]);
   useEffect(() => () => setSafeToReload(true), []);
 
-  // Play again: the new table.
+  // Play again: the new table, on the view (Cards or Table) this one was on.
+  const playAgain = (code: string) => {
+    carryView(props.code, code);
+    navigate({ kind: "table", code });
+  };
   useEffect(() => {
-    if (state.rematch && state.phase === "over" && wantRematch.current) navigate({ kind: "table", code: state.rematch });
+    if (state.rematch && state.phase === "over" && wantRematch.current) playAgain(state.rematch);
   }, [state.rematch]);
   const wantRematch = useRef(false);
 
+  // Cards (just this phone's hand, the controller) or Table, while a TV shows the table.
+  const [view, setViewNow] = useState<View>(() => viewOf(props.code));
+  useEffect(() => setViewNow(viewOf(props.code)), [props.code]);
+  const changeView = (next: View) => {
+    setView(props.code, next);
+    setViewNow(next);
+  };
+
   const home = () => navigate({ kind: "home" });
   const [menu, setMenu] = useState<null | "menu" | "scores" | "forfeit">(null);
+  const [showOnTv, setShowOnTv] = useState(false);
   const offline = state.everConnected && !state.online && ["lobby", "playing", "over", "connecting"].includes(state.phase);
 
   let body;
@@ -156,6 +175,7 @@ export function TableScreen(props: { code: string; intent: TableIntent }) {
         room={room}
         kitten={people.band === "kitten"}
         onHome={home}
+        onShowOnTv={() => setShowOnTv(true)}
         onAddLocal={async (name, cat) => {
           const person = await addPerson(name, cat);
           // An open seat, else a House Cat's (a person takes it over), else a closed one, opened.
@@ -173,10 +193,34 @@ export function TableScreen(props: { code: string; intent: TableIntent }) {
     );
   } else {
     const isTiles = room.gameId === "tiles";
+    const tvSwitch = (isTiles ? Boolean(room.tiles) : room.game !== null) && showSwitch(room);
+    const cards = tvSwitch && showController(room, view);
+    // Tuna Tiles on Cards: the rack off turn; on your turn the full table, as rearranging it needs
+    // it (the same element as on Table, so a draft survives the switch).
+    const t = room.tiles;
+    const tilesTurn = t !== undefined && t.status === "playing" && mySeats(room).some((s) => s === t.turn && !t.forfeited[s]);
+    const controller = cards && (!isTiles || !tilesTurn);
     body = (
       <main class="screen table-screen">
         <div class="room-bg" style={{ backgroundImage: `url(${art("room-bg")})` }} />
-        {isTiles && room.tiles ? <TilesTable store={store} state={state} /> : room.game ? <CatTowerTable store={store} state={state} /> : null}
+        {isTiles && room.tiles ? (
+          controller ? (
+            <TilesController store={store} state={state} onView={changeView} />
+          ) : (
+            <TilesTable store={store} state={state} sounds={!cards} topInset={tvSwitch ? SWITCH_STRIP : 0} />
+          )
+        ) : room.game ? (
+          controller ? (
+            <CtController store={store} state={state} onView={changeView} />
+          ) : (
+            <CatTowerTable store={store} state={state} topInset={tvSwitch ? SWITCH_STRIP : 0} />
+          )
+        ) : null}
+        {tvSwitch && !controller ? (
+          <div class="view-bar">
+            <SwitchView view={view} onChange={changeView} />
+          </div>
+        ) : null}
         <div class="table-menu">
           <IconButton icon="icon-paw-menu" label="Menu" plain onClick={() => setMenu("menu")} id="table-menu" />
         </div>
@@ -187,6 +231,20 @@ export function TableScreen(props: { code: string; intent: TableIntent }) {
                 <Icon name="icon-trophy" size={32} />
                 <span class="grow">Scores</span>
               </button>
+              {mySeats(room).length > 0 ? (
+                <button
+                  type="button"
+                  class="row"
+                  id="menu-show-on-tv"
+                  onClick={() => {
+                    setMenu(null);
+                    setShowOnTv(true);
+                  }}
+                >
+                  <TvIcon size={32} />
+                  <span class="grow">Show on TV</span>
+                </button>
+              ) : null}
               <a class="row" href="/support" target="_blank" rel="noopener">
                 <Icon name="icon-play" size={32} />
                 <span class="grow">How to play</span>
@@ -229,10 +287,11 @@ export function TableScreen(props: { code: string; intent: TableIntent }) {
         {room.status === "over" ? (
           <GameOver
             room={room}
+            quiet={cards}
             onHome={home}
             onAgain={() => {
               wantRematch.current = true;
-              if (state.rematch) navigate({ kind: "table", code: state.rematch });
+              if (state.rematch) playAgain(state.rematch);
               else store.send({ t: "rematch" });
             }}
           />
@@ -244,6 +303,16 @@ export function TableScreen(props: { code: string; intent: TableIntent }) {
   return (
     <>
       {body}
+      {showOnTv && room ? (
+        <ShowOnTvSheet
+          room={room.code}
+          onClose={() => setShowOnTv(false)}
+          onShown={() => {
+            setShowOnTv(false);
+            props.say?.("On the TV");
+          }}
+        />
+      ) : null}
       {offline ? (
         <div class="banner offline" role="status">
           <span class="dot" /> {navigator.onLine ? "Reconnecting" : "Offline"}
@@ -257,8 +326,12 @@ export function TableScreen(props: { code: string; intent: TableIntent }) {
   );
 }
 
+/** The strip along the top of the full table the Cards/Table switch takes: the switch and its margin. */
+const SWITCH_STRIP = 52;
+
 /** Who won, everyone's place, and Play again (GameOverView.swift). */
-function GameOver(props: { room: RoomView; onHome: () => void; onAgain: () => void }) {
+/** `quiet`: no fanfare, as the TV cheers (a phone on Cards); the buzz stays. */
+function GameOver(props: { room: RoomView; onHome: () => void; onAgain: () => void; quiet?: boolean }) {
   const { room } = props;
   const g = room.game;
   const t = room.tiles;
@@ -276,7 +349,7 @@ function GameOver(props: { room: RoomView; onHome: () => void; onAgain: () => vo
   const mine = mySeats(room);
   const won = winners.some((w) => mine.includes(w));
   useEffect(() => {
-    play(won ? "fanfare" : "leap");
+    if (!props.quiet) play(won ? "fanfare" : "leap");
     buzz("win");
   }, []);
   const title = winners.length === 1 ? `${seatName(room.seats[winners[0]!])} wins` : winners.length > 1 ? "A tie" : "Game over";
