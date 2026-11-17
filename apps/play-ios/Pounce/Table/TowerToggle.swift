@@ -38,9 +38,9 @@ extension TableScene {
         publishOverlays()  // the coach's "tap again for scores" goes with the open tower
     }
 
-    /// Folds the open tower, unless a celebration has it in the spotlight.
+    /// Folds the open tower, unless a celebration has it in the spotlight. A TV's stays open.
     func foldTower(animated: Bool = true) {
-        guard tower.isOpen, !celebration.focused else { return }
+        guard tower.isOpen, !celebration.focused, !isScreen else { return }
         tower.setOpen(false, animated: animated)
         invalidateAccessibility()
         publishOverlays()

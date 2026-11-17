@@ -238,8 +238,9 @@ struct TableLayoutTVTests {
     }
 
     /// A fold is the phone's: the first cards and the last, so a run keeps both ends (the cards a
-    /// hit extends), the rest under the last card, and a "+n" badge on the seam before it.
-    @Test(arguments: [0, 1, 2], 2...6)
+    /// hit extends), the rest under the last card, and a "+n" badge on the seam before it. On every
+    /// frame: 1080 and 720 with and without insets, 4K and an overscanning TV.
+    @Test(arguments: G.frames.indices, 2...6)
     func aFoldKeepsBothEnds(_ f: Int, _ n: Int) {
         let l = layout(f, n)
         for s in 0..<n {
@@ -259,6 +260,25 @@ struct TableLayoutTVTests {
                         #expect(abs(g.badge.x - (last.x - g.cardSize.width / 2)) < 0.01)
                         #expect(g.badge.y < last.y)  // low on the cards, under the corner numerals
                     }
+                }
+            }
+        }
+    }
+
+    /// A seat's groups are its own: laying down or hitting at one seat never moves, folds or
+    /// shrinks another seat's groups (the TV draws each seat from its own counts alone).
+    @Test(arguments: G.frames.indices, 2...6)
+    func oneSeatsGroupsNeverMoveAnothers(_ f: Int, _ n: Int) {
+        let l = layout(f, n)
+        let before = (0..<n).map { s in l.tvGroups(seat: s, counts: s.isMultiple(of: 2) ? [3, 3] : [4]) }
+        for s in 0..<n {
+            for changed in [[], [12, 12], [7], [3, 12], [1]] {
+                var after: [[TVLaidGroup]] = []
+                for t in 0..<n {
+                    after.append(l.tvGroups(seat: t, counts: t == s ? changed : (t.isMultiple(of: 2) ? [3, 3] : [4])))
+                }
+                for t in 0..<n where t != s {
+                    #expect(after[t] == before[t], "\(G.frames[f].name), \(n) seats: seat \(s) at \(changed) moved seat \(t)")
                 }
             }
         }

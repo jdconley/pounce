@@ -517,6 +517,13 @@ catalog and sounds. `project.yml` lists them. There is one copy of the drawing c
 calls in it (touches, the edge swipe, the pinch, haptics, the ambient audio session) sit behind
 `#if os(iOS)`, and on the TV `Haptics.shared` is silent. Build both schemes after changing it.
 
+A scene whose store joined as a screen (`RoomStore.isScreen`) draws the TV's table: the TV
+arrangement from PounceKit (`TableLayout(tv:)`, `TilesLayout(tv:)`), every seat around it, the turn
+banner, the acting player's aim, and never a hand or a stash (`Pounce/Table/TVTable.swift`). In a
+Debug build, `-tv-preview cattower|tiles -seats N` (with `-aim`, `-moment`, `-lost` or `-busy`)
+shows it full screen for a hand-made room, no server. `PounceTVTests` checks it on an Apple TV
+simulator: `xcodebuild test -scheme PounceTV -destination 'platform=tvOS Simulator,name=<yours>'`.
+
 ```sh
 PLATFORM=tvOS scripts/testflight.sh --dry-run    # scheme PounceTV, generic/platform=tvOS
 PLATFORM=tvOS scripts/testflight.sh              # build/PounceTV.xcarchive, build/export-tv

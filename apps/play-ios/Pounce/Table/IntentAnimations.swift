@@ -294,6 +294,8 @@ extension TableScene {
             .flatMap { $0 }.map { fx.convert($0, from: laidZone.parent ?? self) }
         let endScale = laidZone.miniScale(layout: layout)
         let mine = seat == bottomSeat
+        // A TV makes a moment of it, big over the table.
+        if isScreen { showMoment(laidDown: seat) }
         // Just my cards: someone else's lay-down is the TV's to show; mine flies up to it.
         if controllerShown, !mine { return }
         let targets = controllerShown ? Array(repeating: tvPoint, count: cards.count) : landings
@@ -403,6 +405,8 @@ extension TableScene {
             await director.runAll(cat.turnOut(reduceMotion: reduceMotion), decorative: true)
         }
         setBottomTag(active: seat == bottomSeat)
+        // The TV's banner pops for the new turn now, not at the snapshot after it.
+        if isScreen { showBanner(turn: seat) }
         var items: [(SKAction, SKNode)] = []
         if seat != bottomSeat, let cat = opponents.node(for: seat), cat.setActive(true) {
             items += cat.turnPulse(reduceMotion: reduceMotion)

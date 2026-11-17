@@ -104,13 +104,14 @@ extension TilesScene {
             ringSerial += 1
             let serial = ringSerial
             rings = [:]
+            // Every placed piece wears the colour, those a TV already showed in the draft too.
+            for tile in placed { rings[tile] = color }
             for tile in placed where pieces[tile] == nil {
                 let size = flow?.pieceSize ?? CGSize(width: layout.rugPieceMax, height: layout.rugPieceMax * TilesLayout.pieceAspect)
                 let node = piece(tile, in: rugContent, size: size, face: .small, at: from)
                 node.setScale(reduce ? 1 : 0.5)
                 node.alpha = reduce ? 0 : 1
                 node.zPosition = 60
-                rings[tile] = color
             }
             flight = reduce ? 0.01 : 0.42
             redraw(animated: true)
@@ -183,7 +184,8 @@ extension TilesScene {
             let words = String(localized: "\(SeatInfo.name(model.room, seat)) passed", comment: "VoiceOver: a player passed")
             guard !stashOnly else { return onAnnounce(words) }
             // A sleepy Zzz over the cat that passed.
-            let nap = SKSpriteNode(texture: TableArt.image(ArtName.iconZzz), size: CGSize(width: 34, height: 34))
+            let side = 34 * director.fxScale
+            let nap = SKSpriteNode(texture: TableArt.image(ArtName.iconZzz), size: CGSize(width: side, height: side))
             let at = seatPoint(seat)
             nap.position = CGPoint(x: at.x, y: at.y + (opponents.node(for: seat) == nil ? 60 : 0))
             nap.zPosition = 5
@@ -198,6 +200,8 @@ extension TilesScene {
             nap.removeFromParent()
             onAnnounce(words)
         case .turn(let seat):
+            // A TV's banner pops for the new turn now, not at the snapshot after it.
+            if isScreen { return showBanner(turn: seat) }
             guard model.mySeats.contains(seat) else { return }
             Haptics.shared.turn()
             if !model.isMultiSeat {

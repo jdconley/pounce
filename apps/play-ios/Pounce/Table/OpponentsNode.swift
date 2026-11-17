@@ -5,6 +5,9 @@ import SpriteKit
 /// seat on a phone holding none), with its phase chip, card count, presence pose and badges, and
 /// its name on a plain pill under it. The current player's ring glows; nothing else says whose
 /// turn it is. A tap on a cat opens that player's card (`TableScene.onPlayer`).
+///
+/// On a TV (`TableLayout.Arrangement.tv`) every seat sits around the table in its own place
+/// (`seatFrames`), its name in 28-point type or more and its score under it.
 @MainActor
 final class OpponentsNode: SKNode {
     private var cats: [Seat: CatNode] = [:]
@@ -13,6 +16,8 @@ final class OpponentsNode: SKNode {
     private var tagText: [Seat: (name: String, width: CGFloat, size: CGFloat)] = [:]
     /// "Weak signal" / "Reconnecting" under a seat's name pill while its phone's link is bad.
     private var linkTags: [Seat: SKSpriteNode] = [:]
+    /// A TV's scores, under the names.
+    private var scores: [Seat: SKSpriteNode] = [:]
     /// Seat order left to right, as last laid out.
     private(set) var order: [Seat] = []
 
@@ -41,10 +46,12 @@ final class OpponentsNode: SKNode {
         let names = SeatInfo.names(model.room)
         // The words grow with the person's text size setting, as far as the bar has room: a
         // name pill may nearly touch its neighbors, and with larger text it gets wider.
-        let textScale = TableText.scale
+        // A TV's words are sized for the couch (`TVSeatWords`), not by the text size setting.
+        let onTV = layout.arrangement == .tv
+        let textScale = onTV ? 1 : TableText.scale
         let tagWidth = min(spacing - 2, (!layout.roomy ? 140 : 170) * textScale)
         let nameSize = TableTextScale.nameSize(scale: textScale)
-        let chipScale = TableTextScale.chips(scale: textScale, spacing: spacing, diameter: diameter)
+        let chipScale = onTV ? 1 : TableTextScale.chips(scale: textScale, spacing: spacing, diameter: diameter)
 
         for (seat, tag) in tags where !seats.contains(seat) {
             tag.removeFromParent()
@@ -54,6 +61,10 @@ final class OpponentsNode: SKNode {
         for (seat, tag) in linkTags where !seats.contains(seat) {
             tag.removeFromParent()
             linkTags[seat] = nil
+        }
+        for (seat, score) in scores where !seats.contains(seat) || !onTV {
+            score.removeFromParent()
+            scores[seat] = nil
         }
         for (seat, node) in cats where !seats.contains(seat) || node.diameter != diameter || node.textScale != chipScale
             || node.cat != SeatInfo.catIndex(model.room.seats[safe: seat]) {
@@ -82,7 +93,7 @@ final class OpponentsNode: SKNode {
                 : view?.kind == .human ? LinkWords.seat(view?.link) : nil
             node.setLink(out ? nil : link?.level)
             node.setBadges(bot: view?.kind == .bot, skip: game.pendingSkip[safe: seat] ?? false)
-            node.slotWidth = spacing
+            node.slotWidth = onTV ? layout.seatFrames[safe: i]?.width ?? spacing : spacing
             node.setCount(game.handCounts[safe: seat])
             if node.setPhase(PhaseMark.seat(seat, in: game)) { changes.movedOn.append(seat) }
             let active = game.status == .playing && game.turn == seat
@@ -95,19 +106,37 @@ final class OpponentsNode: SKNode {
                 addChild(t)
                 return t
             }()
-            let text = (name: names[safe: seat] ?? "", width: tagWidth, size: nameSize)
+            let words = onTV ? TVSeatWords(layout.seatFrames[safe: i] ?? .zero, unit: layout.tvUnit) : nil
+            let text = (name: names[safe: seat] ?? "", width: words?.nameWidth ?? tagWidth, size: words?.nameSize ?? nameSize)
             if tagText[seat]?.name != text.name || tagText[seat]?.width != text.width || tagText[seat]?.size != text.size
                 || tag.texture == nil {
                 tagText[seat] = text
-                let texture = CardFaceFactory.shared.nameTag(text.name, maxWidth: text.width, active: false, size: text.size)
+                let texture = CardFaceFactory.shared.nameTag(
+                    text.name, maxWidth: text.width, active: false, size: text.size,
+                    minimum: words?.nameMinimum ?? CardFaceFactory.nameSize)
                 tag.texture = texture
                 tag.size = texture.size()
             }
             tag.position = CGPoint(x: slots[i].x, y: slots[i].y - layout.nameDrop)
             tag.zPosition = 20 + CGFloat(i)
-            setLinkTag(
-                seat, link, under: tag, width: tagWidth, size: ((!layout.roomy ? 13 : 15) * min(textScale, 1.25)).rounded(),
-                z: 30 + CGFloat(i))
+            if let words {
+                // A TV: the score under the name, or in its place a bad link or "Forfeited".
+                setLinkTag(seat, link, under: tag, width: words.nameWidth, size: words.linkSize, z: 30 + CGFloat(i))
+                let score = scores[seat] ?? {
+                    let n = SKSpriteNode()
+                    n.name = "score"
+                    scores[seat] = n
+                    addChild(n)
+                    return n
+                }()
+                words.place(score: game.scores[safe: seat], on: score, under: tag)
+                score.isHidden = score.isHidden || link != nil
+                score.zPosition = 30 + CGFloat(i)
+            } else {
+                setLinkTag(
+                    seat, link, under: tag, width: tagWidth, size: ((!layout.roomy ? 13 : 15) * min(textScale, 1.25)).rounded(),
+                    z: 30 + CGFloat(i))
+            }
         }
         order = Array(seats.prefix(slots.count))
         return changes
@@ -146,11 +175,15 @@ final class OpponentsNode: SKNode {
         tags.removeAll()
         linkTags.removeAll()
         tagText.removeAll()
+        scores.removeAll()
         order = []
     }
 
     /// A seat's name pill (tests and screenshots).
     func tag(for seat: Seat) -> SKSpriteNode? { tags[seat] }
+
+    /// A TV seat's score (tests and screenshots).
+    func score(for seat: Seat) -> SKSpriteNode? { scores[seat] }
 
     /// Touch / accessibility frame of a seat's cat, in this node's parent space.
     func frame(of seat: Seat) -> CGRect? {

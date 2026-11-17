@@ -208,6 +208,20 @@ targets:
             echo "error: PrivacyInfo.xcprivacy is missing from the app bundle: $manifest"
             exit 1
           fi
+  # The Apple TV app's unit tests, hosted in PounceTV on an Apple TV simulator: the TV's table (the
+  # iPhone's scenes in the TV's arrangement) and, from stage 4's shell on, the TV's model.
+  PounceTVTests:
+    type: bundle.unit-test
+    platform: tvOS
+    sources:
+      - PounceTVTests
+    dependencies:
+      - target: PounceTV
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.conleychaos.play.tvtests
+        GENERATE_INFOPLIST_FILE: YES
+        TARGETED_DEVICE_FAMILY: "3"
   PounceUITests:
     type: bundle.ui-testing
     platform: iOS
@@ -245,6 +259,10 @@ schemes:
         PounceTV: all
     run:
       config: Debug
+    test:
+      config: Debug
+      targets:
+        - PounceTVTests
     profile:
       config: Release
     archive:

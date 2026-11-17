@@ -6,7 +6,15 @@ import SwiftUI
 struct PounceTVApp: App {
     var body: some Scene {
         WindowGroup {
+            #if DEBUG
+            if let preview = TVTablePreview.from() {
+                TVTablePreviewView(game: preview.game, seats: preview.seats, aim: preview.aim)
+            } else {
+                TitleCard()
+            }
+            #else
             TitleCard()
+            #endif
         }
     }
 }

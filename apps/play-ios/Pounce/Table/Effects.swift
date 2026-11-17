@@ -89,6 +89,9 @@ enum Effects {
         e.particleColorBlendFactor = 0
         e.particleBlendMode = .alpha
         e.zPosition = 5
+        // A TV's bursts are bigger (`AnimationDirector.fxScale`): the particles live in the
+        // emitter's own space, so its scale grows their size, speed and spread together.
+        if director.fxScale != 1 { e.setScale(director.fxScale) }
         let emitting = TimeInterval(CGFloat(count) / maxBirthRate)
         director.emit(e, at: point, in: parent, lifetime: emitting + TimeInterval(maxLifetime)) { [weak director] in
             director?.releaseParticles(count)
