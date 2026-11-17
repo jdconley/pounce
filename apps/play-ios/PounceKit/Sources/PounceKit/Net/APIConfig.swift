@@ -1,5 +1,11 @@
 import Foundation
 
+/// How a device joins a room's socket other than as a player: `screen` is a TV that shows the
+/// table and holds no seat.
+public enum RoomRole: String, Sendable {
+    case screen
+}
+
 public struct APIConfig: Sendable {
     public let baseURL: URL
     /// Sent with every request and socket upgrade to this server: who is asking (`ClientHeaders`).
@@ -18,12 +24,22 @@ public struct APIConfig: Sendable {
         return "\(host):\(port)"
     }
 
-    /// `http` becomes `ws`, `https` becomes `wss`; the path is `/v1/rooms/<code>/ws`.
-    public func socketURL(code: String) -> URL {
+    /// `http` becomes `ws`, `https` becomes `wss`; the path is `/v1/rooms/<code>/ws`, with
+    /// `?role=screen` for a TV showing the table (docs/tv-protocol.md, "A screen").
+    public func socketURL(code: String, role: RoomRole? = nil) -> URL {
+        socket(path: "/v1/rooms/\(code)/ws", query: role.map { [URLQueryItem(name: "role", value: $0.rawValue)] } ?? [])
+    }
+
+    /// The socket a TV waits on for a phone to link its code: `/v1/screens/<token>/ws`.
+    public func screenSocketURL(token: String) -> URL {
+        socket(path: "/v1/screens/\(token)/ws")
+    }
+
+    private func socket(path: String, query: [URLQueryItem] = []) -> URL {
         var parts = URLComponents(url: baseURL, resolvingAgainstBaseURL: false) ?? URLComponents()
         parts.scheme = parts.scheme?.lowercased() == "https" ? "wss" : "ws"
-        parts.path = "/v1/rooms/\(code)/ws"
-        parts.query = nil
+        parts.path = path
+        parts.queryItems = query.isEmpty ? nil : query
         parts.fragment = nil
         return parts.url ?? baseURL
     }

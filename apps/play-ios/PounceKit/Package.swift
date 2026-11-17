@@ -3,7 +3,7 @@ import PackageDescription
 
 let package = Package(
     name: "PounceKit",
-    platforms: [.iOS(.v26), .macOS(.v26)],
+    platforms: [.iOS(.v26), .tvOS(.v26), .macOS(.v26)],
     products: [
         .library(name: "PounceKit", targets: ["PounceKit"]),
         .executable(name: "pounce-e2e", targets: ["pounce-e2e"]),

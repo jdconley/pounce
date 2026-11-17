@@ -189,6 +189,24 @@ public actor APIClient {
         return try decode(Reply.self, from: data, status: 201).code
     }
 
+    /// Creates a room for `game` with this device as its screen (a TV's own table): it has no name
+    /// and no host until the first phone sits down. `screen: false` is a plain `createRoom(game:)`.
+    public func createRoom(game: String, screen: Bool) async throws -> String {
+        guard screen else { return try await createRoom(game: game) }
+        struct Body: Encodable, Sendable { let game: String; let screen = true }
+        struct Reply: Decodable { let code: String }
+        let data = try await authenticated("POST", "/v1/rooms", body: Body(game: game))
+        return try decode(Reply.self, from: data, status: 201).code
+    }
+
+    /// A new TV link for this device: a token and code a phone can link (`POST /v1/screens`).
+    /// `showing` is the table this TV already shows, when it asks to link another.
+    public func screens(showing: String? = nil) async throws -> ScreenLinkOffer {
+        let body = showing.map { ["showing": $0] } ?? [:]
+        let data = try await authenticated("POST", "/v1/screens", body: body)
+        return try decode(ScreenLinkOffer.self, from: data, status: 201)
+    }
+
     // MARK: minting
 
     private func mint() async throws -> DeviceCredential {
