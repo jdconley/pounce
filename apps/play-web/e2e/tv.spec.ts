@@ -4,6 +4,7 @@ import { catTowerTurn, closeAll, deckCount, newPlayer, tableCode } from "./helpe
 import {
   controllerTurn,
   forfeit,
+  handEverOnTv,
   noHandOnTv,
   openTv,
   outsideViewport,
@@ -401,6 +402,8 @@ test.describe("a TV and two browser phones", () => {
     await forfeit(ava!.page);
     await expect(tv.page.getByRole("dialog", { name: "Ben wins" })).toBeVisible();
     await noHandOnTv(tv.page);
+    // Not even for a frame between the checks: the page watched its own DOM throughout.
+    expect(await handEverOnTv(tv.page)).toEqual([]);
     await closeAll(tv.context, ava!.context, ben!.context);
   });
 });

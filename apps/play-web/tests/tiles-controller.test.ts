@@ -80,6 +80,16 @@ describe("Tuna Tiles on a phone controller", () => {
       for (let j = i + 1; j < all.length; j++) expect(overlaps(all[i]![1], all[j]![1]), `${all[i]![0]} and ${all[j]![0]}`).toBe(false);
   });
 
+  test.each(CASES)("at %i x %i with %i pieces and text at 200%%: a wider switch, all inside, nothing overlaps", (width, height, n, insets) => {
+    const L = tilesControllerLayout({ width, height, insets, rack: n, text: 2 });
+    const frame = { x: insets.left, y: insets.top, w: width - insets.left - insets.right, h: height - insets.top - insets.bottom };
+    expect(L.switch.w).toBeGreaterThan(layout(width, height, n, insets).switch.w * 1.8);
+    const all = parts(L);
+    for (const [name, r] of all) expect(inside(r, frame), `${name} ${JSON.stringify(r)}`).toBe(true);
+    for (let i = 0; i < all.length; i++)
+      for (let j = i + 1; j < all.length; j++) expect(overlaps(all[i]![1], all[j]![1]), `${all[i]![0]} and ${all[j]![0]}`).toBe(false);
+  });
+
   test.each(CASES)("at %i x %i with %i pieces: the pieces are big, and the rack fills its room", (width, height, n, insets) => {
     const L = layout(width, height, n, insets);
     expect(L.pw).toBeGreaterThanOrEqual(44);

@@ -11,7 +11,8 @@ import type { Insets } from "./ct-layout";
 import type { Point, Rect } from "./drag";
 import type { Pose } from "./motion";
 
-export type TclInput = { width: number; height: number; insets: Insets; rack: number };
+/** `text`: the reader's text size against the default (2 at 200%), for the top bar's switch. */
+export type TclInput = { width: number; height: number; insets: Insets; rack: number; text?: number };
 
 export type TclLayout = {
   landscape: boolean;
@@ -67,7 +68,7 @@ export function tilesControllerLayout(input: TclInput): TclLayout {
   const fh = f.b - f.t;
   const landscape = W > H * 1.15;
   const unit = Math.round(clamp(Math.min(fw, fh) / 512, 1, 1.6) * 100) / 100;
-  const bar = controllerBar(f, unit);
+  const bar = controllerBar(f, unit, input.text);
   const colW = Math.min(fw - 2 * PAD, 1000);
   const cx = (f.l + f.r) / 2;
   const bottom = f.b - EDGE;

@@ -939,6 +939,7 @@
    table's top strip (table-screen.tsx). */
 .view-switch {
   z-index: 40;
+  container-type: inline-size;
   display: flex;
   padding: 3px;
   border: 3px solid var(--ink);
@@ -955,7 +956,9 @@
   border-radius: 999px;
   background: none;
   color: rgba(255, 255, 255, 0.82);
-  font: 900 calc(1.05rem * var(--k, 1)) var(--round);
+  /* The reader's size, never wider than its half of the switch ("Cards" is about 3.1 em). */
+  font: 900 min(calc(1.05rem * var(--k, 1)), calc((50cqi - 22px) / 3.1)) var(--round);
+  white-space: nowrap;
 }
 
 .view-switch button.on {
@@ -973,8 +976,9 @@
   left: calc(var(--safe-left) + 8px);
 }
 
+/* Wider with large text (10.25rem is 164 px at the default size), short of the paw on the right. */
 .view-bar .view-switch {
-  width: 164px;
+  width: clamp(164px, 10.25rem, calc(100vw - var(--safe-left) - var(--safe-right) - 80px));
   height: 44px;
 }
 

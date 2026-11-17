@@ -25,6 +25,8 @@ export type CtlInput = {
   step: CtlStep;
   /** Rows in the open hit list (places the picked card fits); 0 or none when it is closed. */
   hits?: number;
+  /** The reader's text size against the default (the root font over 16 px): 2 at 200%. */
+  text?: number;
 };
 
 export type CtlLayout = {
@@ -120,13 +122,15 @@ export type Frame = { l: number; r: number; t: number; b: number };
 /**
  * A controller's top bar, at `u` (ctControllerLayout's unit): the status beside the table menu's
  * paw and the switch under it; or all three in a row when wide. `top` is where the rest begins.
- * Shared by both games' controllers, so they read as one.
+ * Shared by both games' controllers, so they read as one. With large text (`text` over 1) the
+ * switch widens with its words, up to the frame's width.
  */
-export function controllerBar(f: Frame, u: number): { menu: Rect; switch: Rect; status: Rect; top: number } {
+export function controllerBar(f: Frame, u: number, text = 1): { menu: Rect; switch: Rect; status: Rect; top: number } {
   const bar = BAR * u;
   const menu = { x: f.r - EDGE - 44 * u, y: f.t + EDGE, w: 44 * u, h: 44 * u };
-  const inline = menu.x - GAP - (f.l + EDGE + SWITCH_W * u + GAP) >= STATUS_INLINE * u;
-  const sw = { x: f.l + EDGE, y: inline ? f.t + EDGE : f.t + EDGE + bar + GAP, w: SWITCH_W * u, h: bar };
+  const swW = Math.min(SWITCH_W * u * clamp(text, 1, 2), f.r - f.l - 2 * EDGE);
+  const inline = menu.x - GAP - (f.l + EDGE + swW + GAP) >= STATUS_INLINE * u * clamp(text, 1, 2);
+  const sw = { x: f.l + EDGE, y: inline ? f.t + EDGE : f.t + EDGE + bar + GAP, w: swW, h: bar };
   const statusX = inline ? sw.x + sw.w + GAP : f.l + EDGE;
   const status = { x: statusX, y: f.t + EDGE, w: menu.x - GAP - statusX, h: bar };
   return { menu, switch: sw, status, top: sw.y + sw.h + GAP };
@@ -170,7 +174,7 @@ function layoutAt(input: CtlInput, cw: number, u: number, force = false): CtlLay
   const ch = Math.round(cw * 1.406);
   const cx = col.x + col.w / 2;
 
-  const { menu, switch: sw, status, top } = controllerBar(f, u);
+  const { menu, switch: sw, status, top } = controllerBar(f, u, input.text);
 
   // The hand along the bottom.
   const baseY = f.b - EDGE;

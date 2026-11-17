@@ -2,7 +2,7 @@
  * Pieces both tables use: cards in flight, the pass-the-device curtain, the round's results, and the
  * Cards/Table switch of a phone whose table is on a TV.
  */
-import { useLayoutEffect, useRef, useState } from "preact/hooks";
+import { useEffect, useLayoutEffect, useRef, useState } from "preact/hooks";
 
 
 import { art } from "../lib/art";
@@ -127,6 +127,30 @@ export function RoundOver(props: { seats: RoomView["seats"]; ev: Extract<GameEve
       </div>
     </div>
   );
+}
+
+let textNow: number | null = null;
+const textListeners = new Set<(t: number) => void>();
+const readText = () => (parseFloat(getComputedStyle(document.documentElement).fontSize) || 16) / 16;
+
+if (typeof window !== "undefined") {
+  window.addEventListener("resize", () => {
+    // In the next frame, after the browser's own layout (a zoom resizes too).
+    requestAnimationFrame(() => {
+      textNow = readText();
+      for (const l of [...textListeners]) l(textNow);
+    });
+  });
+}
+
+/** The reader's text size against the default: the root font over 16 px (2 at 200%). */
+export function useTextScale(): number {
+  const [text, setText] = useState(() => (textNow ??= typeof document === "undefined" ? 1 : readText()));
+  useEffect(() => {
+    textListeners.add(setText);
+    return () => void textListeners.delete(setText);
+  }, []);
+  return text;
 }
 
 /**

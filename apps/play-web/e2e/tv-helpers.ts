@@ -36,6 +36,7 @@ export async function tvPage(context: BrowserContext, before?: (page: Page) => v
   before?.(page);
   // Full screen would change the viewport under the test; the TV plays the same without it.
   await page.addInitScript(() => (Element.prototype.requestFullscreen = () => Promise.resolve()));
+  await page.addInitScript(WATCH_HANDS);
   page.on("pageerror", (e) => console.log("TV pageerror", e.message));
   await page.goto("/play/tv");
   await page.getByRole("button", { name: "Start" }).click();
@@ -259,6 +260,21 @@ export async function forfeit(page: Page): Promise<void> {
   await page.getByRole("button", { name: "Forfeit" }).click();
   await page.locator("#forfeit").click();
 }
+
+/**
+ * Watches the TV page from its first paint: any hand card or rack piece ever put in its DOM, even
+ * for a frame, is noted (`handEverOnTv` reads it).
+ */
+const WATCH_HANDS = `
+  window.__handSeen = [];
+  const look = () => {
+    for (const el of document.querySelectorAll(".card.mine, .tile.mine")) window.__handSeen.push(el.className);
+  };
+  new MutationObserver(look).observe(document, { subtree: true, childList: true, attributes: true, attributeFilter: ["class"] });
+`;
+
+/** Every hand card or rack piece the TV page ever had in its DOM (none, for a TV). */
+export const handEverOnTv = (tv: Page): Promise<string[]> => tv.evaluate(() => (window as unknown as { __handSeen: string[] }).__handSeen.slice(0, 10));
 
 /** What a TV must never show: anyone's hand or rack. */
 export async function noHandOnTv(tv: Page): Promise<void> {

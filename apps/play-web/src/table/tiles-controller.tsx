@@ -19,7 +19,7 @@ import { inside, press, useLatest, type Point, type Rect } from "./drag";
 import { PieceFace, pieceLabel } from "./faces";
 import { Motion, MOVE, transformOf, wiggle, type Pose } from "./motion";
 import { seatCat, seatName } from "./seat";
-import { SwitchView } from "./shared";
+import { SwitchView, useTextScale } from "./shared";
 import { tilesControllerLayout, type TclLayout } from "./tiles-controller-layout";
 import { sortRack } from "./tiles-draft";
 import { rackInOrder, useRackOrder } from "./tiles-rack";
@@ -37,6 +37,7 @@ export function TilesController(props: { store: RoomStore; state: RoomState; onV
   const v = room.tiles as TilesView;
   const [rootRef, size] = useSize<HTMLDivElement>();
   const insets = useInsets();
+  const text = useTextScale();
   const motion = useMemo(() => new Motion(reducedMotion), []);
   const els = useRef(new Map<string, HTMLElement>());
 
@@ -51,8 +52,8 @@ export function TilesController(props: { store: RoomStore; state: RoomState; onV
   });
 
   const L: TclLayout = useMemo(
-    () => tilesControllerLayout({ width: size.width || 360, height: size.height || 640, insets, rack: rackIds.length }),
-    [size.width, size.height, insets, rackIds.length],
+    () => tilesControllerLayout({ width: size.width || 360, height: size.height || 640, insets, rack: rackIds.length, text }),
+    [size.width, size.height, insets, rackIds.length, text],
   );
 
   // The table menu's paw is the table screen's: it grows with this screen's top bar.

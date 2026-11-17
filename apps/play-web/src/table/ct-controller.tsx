@@ -26,7 +26,7 @@ import { inside, press, useLatest, type Point, type Rect } from "./drag";
 import { CardFace, cardLabel } from "./faces";
 import { Motion, MOVE, transformOf, wiggle, type Pose } from "./motion";
 import { seatCat, seatName, SeatAvatar } from "./seat";
-import { Curtain, SwitchView } from "./shared";
+import { Curtain, SwitchView, useTextScale } from "./shared";
 
 import type { RoomState, RoomStore } from "../store/room";
 import type { View } from "../store/views";
@@ -45,6 +45,7 @@ export function CtController(props: { store: RoomStore; state: RoomState; onView
   const g = room.game!;
   const [rootRef, size] = useSize<HTMLDivElement>();
   const insets = useInsets();
+  const text = useTextScale();
   const motion = useMemo(() => new Motion(reducedMotion), []);
   const els = useRef(new Map<string, HTMLElement>());
 
@@ -66,8 +67,8 @@ export function CtController(props: { store: RoomStore; state: RoomState; onView
   // The trays' room is kept until this player lays down, between rounds too: the frame never jumps.
   const trayRoom = seat !== null && !laidMine ? reqs.length : 0;
   const L: CtlLayout = useMemo(
-    () => ctControllerLayout({ width: size.width || 360, height: size.height || 640, insets, handCount: ordered.length, trays: trayRoom, step, hits: targets.length }),
-    [size.width, size.height, insets, ordered.length, trayRoom, step, targets.length],
+    () => ctControllerLayout({ width: size.width || 360, height: size.height || 640, insets, handCount: ordered.length, trays: trayRoom, step, hits: targets.length, text }),
+    [size.width, size.height, insets, ordered.length, trayRoom, step, targets.length, text],
   );
 
   // The table menu's paw is the table screen's: it grows with this screen's top bar.

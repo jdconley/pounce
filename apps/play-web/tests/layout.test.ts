@@ -329,6 +329,18 @@ describe("Cat Tower on a phone controller", () => {
     for (const [[a, ra], [b, rb]] of pairs(parts(L))) if (!mayOverlap(a, b)) expect(overlaps(ra, rb), `${a} and ${b}`).toBe(false);
   });
 
+  /** Large text (a 200% root font): the switch widens with its words and the bar still fits. */
+  test.each(CTL_SIZES)("at %i x %i with text at 200%%: the switch is wider, inside the frame, and nothing overlaps", (width, height, insets) => {
+    for (const step of STEPS) {
+      const normal = layout(width, height, step, 3, insets);
+      const L = ctControllerLayout({ width, height, insets, handCount: 11, trays: 3, step, text: 2 });
+      const frame = { x: insets.left, y: insets.top, w: width - insets.left - insets.right, h: height - insets.top - insets.bottom };
+      expect(L.switch.w).toBeGreaterThan(normal.switch.w * 1.8);
+      for (const [name, r] of parts(L)) expect(within({ x: r.x - frame.x, y: r.y - frame.y, w: r.w, h: r.h }, frame.w, frame.h), `${name} ${JSON.stringify(r)}`).toBe(true);
+      for (const [[a, ra], [b, rb]] of pairs(parts(L))) if (!mayOverlap(a, b)) expect(overlaps(ra, rb), `${a} and ${b}`).toBe(false);
+    }
+  });
+
   test.each(CASES)("at %i x %i, %s step, %i trays, %i hit rows: the hand is big, and every card's corner shows", (width, height, step, trays, hits, insets) => {
     const L = layout(width, height, step, trays, insets, hits);
     expect(L.hand).toHaveLength(11);
