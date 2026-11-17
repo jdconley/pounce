@@ -8,7 +8,7 @@ import { currentRoute, navigate, onRoute, type Route } from "./lib/router";
 import { keepTvSettings, onSettings, setSettings, settings } from "./lib/settings";
 import { api, ApiError } from "./net/api";
 import { installState, promptInstall, useInstall } from "./pwa";
-import { app, deleteMyData, finishAge, noteSource, reach, setOwner, syncProfile, useApp } from "./store/app";
+import { app, deleteMyData, finishAge, noteSource, reach, rememberTable, setOwner, syncProfile, useApp } from "./store/app";
 import { peekInvite as peek } from "./store/peek";
 import { Button, Cat, Icon, Sheet } from "./ui/common";
 import { AgeScreen, NameScreen, type InviteBanner } from "./ui/firstrun";
@@ -127,6 +127,8 @@ function PlayerApp(props: { route: Route }) {
     setBusy(true);
     try {
       const code = await api.createRoom(game);
+      // Known here at once: the TV-link page offers it even before the table has loaded.
+      rememberTable({ code, game, at: Date.now() });
       openTable(code, practice ? "practice" : "host");
     } catch (error) {
       say(error instanceof ApiError && error.status === 0 ? "You're offline." : "Couldn't make a table. Try again.");
