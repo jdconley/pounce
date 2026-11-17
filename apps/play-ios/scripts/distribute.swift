@@ -99,11 +99,21 @@ func changes(since: String) -> [String] {
 /// can't say which commits a build holds when two merges land minutes apart.
 func changes(from commit: String) -> [String] {
   // These match ios.yml's distribute filters. The Apple TV list is what PounceTV compiles
-  // (project.yml's PounceTV sources); add a folder here and in ios.yml when the target gains one.
+  // (project.yml's PounceTV sources), less the iPhone-only files in those folders; add a folder or
+  // file here and in ios.yml when the target gains one.
   let paths = isTV
-    ? ["PounceTV", "PounceKit", "Config", "project.yml"]
+    ? [
+      "PounceTV", "PounceKit", "Config", "project.yml",
+      "Pounce/Table", "Pounce/Tiles",
+      "Pounce/App/FrameWork.swift", "Pounce/App/MainThreadWatchdog.swift", "Pounce/App/Autoplay.swift",
+      "Pounce/Design/ArtName.swift", "Pounce/Design/FadeGroup.swift", "Pounce/Design/Haptics.swift",
+      "Pounce/Design/Pace.swift", "Pounce/Design/Palette.swift", "Pounce/Design/Settings.swift",
+      "Pounce/Design/SignalGlyph.swift", "Pounce/Design/Sound.swift",
+      "Pounce/Resources/Assets.xcassets", "Pounce/Resources/Sounds",
+    ]
     : ["Pounce", "PounceKit", "PounceWidgets", "PounceNotify", "Config", "project.yml"]
-  let app = paths.map { ":(top)apps/play-ios/\($0)" }
+  let skipped = isTV ? ["Pounce/Tiles/TilesStage.swift", "Pounce/Tiles/TilesChrome.swift", "Pounce/Tiles/TilesDemo.swift"] : []
+  let app = paths.map { ":(top)apps/play-ios/\($0)" } + skipped.map { ":(top,exclude)apps/play-ios/\($0)" }
   return subjects(["\(commit)..HEAD", "--"] + app)
 }
 

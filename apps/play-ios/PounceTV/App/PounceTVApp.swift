@@ -14,19 +14,12 @@ struct PounceTVApp: App {
 /// The name in the app's lettering (SF Rounded Black with the chunky ink outline) and the tagline,
 /// centered on the violet-to-magenta brand background. Laid out for 1920x1080 points.
 struct TitleCard: View {
-    // The Loud Toy palette (Pounce/Design/Palette.swift), until the TV shares that file.
-    private static let ink = Color(red: 0x1B / 255, green: 0x0B / 255, blue: 0x3A / 255)
-    private static let night = Color(red: 0x2A / 255, green: 0x0F / 255, blue: 0x5C / 255)
-    private static let violet = Color(red: 0x7B / 255, green: 0x2F / 255, blue: 0xFF / 255)
-    private static let magenta = Color(red: 0xFF / 255, green: 0x2E / 255, blue: 0x9A / 255)
-    private static let yellow = Color(red: 0xFF / 255, green: 0xD2 / 255, blue: 0x1F / 255)
-
     var body: some View {
         ZStack {
-            LinearGradient(colors: [Self.night, Self.violet, Self.magenta], startPoint: .bottomLeading, endPoint: .topTrailing)
+            LinearGradient(colors: [Palette.night, Palette.violet, Palette.magenta], startPoint: .bottomLeading, endPoint: .topTrailing)
             VStack(spacing: 24) {
                 outlined("Pounce", size: 220, fill: .white)
-                outlined("Family game night, every night", size: 64, fill: Self.yellow)
+                outlined("Family game night, every night", size: 64, fill: Palette.yellow)
             }
             .accessibilityElement(children: .combine)
         }
@@ -43,7 +36,7 @@ struct TitleCard: View {
         }
         return ZStack {
             ForEach(offsets.indices, id: \.self) { i in
-                Text(text).font(font).foregroundStyle(Self.ink).offset(offsets[i])
+                Text(text).font(font).foregroundStyle(Palette.ink).offset(offsets[i])
             }
             Text(text).font(font).foregroundStyle(fill)
         }

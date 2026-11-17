@@ -267,10 +267,8 @@ writeJSON(["assets": [
     ["filename": "Top Shelf Image.imageset", "idiom": "tv", "role": "top-shelf-image", "size": "1920x720"],
 ], "info": info], brand.appendingPathComponent("Contents.json"))
 
-// The launch screen's color (Info.plist UILaunchScreen), the same violet as the iPhone's.
-writeJSON(["colors": [["color": ["color-space": "srgb", "components": ["red": "0.427", "green": "0.133", "blue": "1.000", "alpha": "1.000"]],
-                       "idiom": "universal"]], "info": info],
-          out.appendingPathComponent("LaunchViolet.colorset/Contents.json"))
+// The launch screen's color (Info.plist UILaunchScreen) is the iPhone's own LaunchViolet: the TV
+// shares Pounce/Resources/Assets.xcassets, so it is not written here.
 
 // --preview <dir>: each icon flattened as the TV draws it at rest, to look at.
 if let i = CommandLine.arguments.firstIndex(of: "--preview"), i + 1 < CommandLine.arguments.count {

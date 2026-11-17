@@ -299,7 +299,9 @@ final class TableScene: SKScene {
         safeInsets = view.safeAreaInsets
         redraw()
         #if DEBUG
+        #if os(iOS)
         if [.replay, .celebrate].contains(DemoMode.from()) { startFrameLog() }
+        #endif
         if autoplay == nil { autoplay = Autoplay.start(self) }
         #endif
         speed = CGFloat(Pace.factor)
@@ -864,6 +866,9 @@ final class TableScene: SKScene {
 
     // MARK: touches
 
+    // The iPhone's fingers. The Apple TV's table takes no touches: the Siri Remote's touch surface
+    // moves focus, it never drags a card.
+    #if os(iOS)
     override func touchesBegan(_ touches: Set<UITouch>, with event: UIEvent?) {
         for touch in touches { pressBegan(at: touch.location(in: self)) }
     }
@@ -875,6 +880,7 @@ final class TableScene: SKScene {
     override func touchesEnded(_ touches: Set<UITouch>, with event: UIEvent?) {
         for touch in touches { pressEnded(at: touch.location(in: self)) }
     }
+    #endif
 
     /// A finger went down at `point` (the touch handlers, and the DEBUG autoplay).
     func pressBegan(at point: CGPoint) {
@@ -896,12 +902,14 @@ final class TableScene: SKScene {
         inputEnded(point)
     }
 
+    #if os(iOS)
     override func touchesCancelled(_ touches: Set<UITouch>, with event: UIEvent?) {
         for _ in touches {
             director.touchEnded()
             inputCancelled()
         }
     }
+    #endif
 
     /// The shell's overlays over the table: the first-game coach, the turn cue and, showing just
     /// my cards, the action row.

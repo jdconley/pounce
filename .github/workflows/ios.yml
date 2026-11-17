@@ -319,7 +319,8 @@ jobs:
             scripts/distribute.swift --build "$BUILD" --group "$GROUP"
           fi
       # The Apple TV build, when this run uploaded one. Its paths are what PounceTV compiles
-      # (project.yml's PounceTV sources, PounceKit, the build configs); keep them in step with
+      # (project.yml's PounceTV sources: its own folder, the shared table code and art, PounceKit,
+      # the build configs), less the iPhone-only files those folders hold; keep them in step with
       # project.yml and distribute.swift.
       - name: Distribute the Apple TV build to the TestFlight group
         if: >-
@@ -333,8 +334,15 @@ jobs:
           export ASC_KEY_PATH="$RUNNER_TEMP/AuthKey_$ASC_KEY_ID.p8"
           (umask 077; printenv ASC_KEY_P8 > "$ASC_KEY_PATH")
           trap 'rm -f "$ASC_KEY_PATH"' EXIT
+          tv=(PounceTV PounceKit Config project.yml
+            Pounce/Table Pounce/Tiles
+            ':!Pounce/Tiles/TilesStage.swift' ':!Pounce/Tiles/TilesChrome.swift' ':!Pounce/Tiles/TilesDemo.swift'
+            Pounce/App/FrameWork.swift Pounce/App/MainThreadWatchdog.swift Pounce/App/Autoplay.swift
+            Pounce/Design/ArtName.swift Pounce/Design/FadeGroup.swift Pounce/Design/Haptics.swift Pounce/Design/Pace.swift
+            Pounce/Design/Palette.swift Pounce/Design/Settings.swift Pounce/Design/SignalGlyph.swift Pounce/Design/Sound.swift
+            Pounce/Resources/Assets.xcassets Pounce/Resources/Sounds)
           if [ -n "$FROM" ] && git cat-file -e "$FROM^{commit}" 2>/dev/null; then
-            if git diff --quiet "$FROM" HEAD -- PounceTV PounceKit Config project.yml; then
+            if git diff --quiet "$FROM" HEAD -- "${tv[@]}"; then
               echo "no Apple TV app change since $FROM: not sending this build to \"$GROUP\""
               exit 0
             fi

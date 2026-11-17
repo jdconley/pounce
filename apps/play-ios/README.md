@@ -510,6 +510,13 @@ submission fails with Apple's message in the log.
 purchase) and its marketing version, so it is the same app on another platform with its own build
 train.
 
+It also shares the iPhone's table: `Pounce/Table` and `Pounce/Tiles` (less the tile game's iPhone
+screens, `TilesStage` and `TilesChrome`, and its demo), the frame tooling the scenes report to
+(`FrameWork`, `MainThreadWatchdog`, `Autoplay`), the `Pounce/Design` files they use, and the art
+catalog and sounds. `project.yml` lists them. There is one copy of the drawing code: iPhone-only
+calls in it (touches, the edge swipe, the pinch, haptics, the ambient audio session) sit behind
+`#if os(iOS)`, and on the TV `Haptics.shared` is silent. Build both schemes after changing it.
+
 ```sh
 PLATFORM=tvOS scripts/testflight.sh --dry-run    # scheme PounceTV, generic/platform=tvOS
 PLATFORM=tvOS scripts/testflight.sh              # build/PounceTV.xcarchive, build/export-tv
@@ -527,8 +534,9 @@ In CI, the `build` job also builds `PounceTV` for generic tvOS, unsigned. The `t
 archives and uploads both apps with one build number, the iPhone app first. An Apple TV failure
 (or one stalled past 30 minutes) doesn't hold up the iPhone build; the job still fails at the end.
 The Apple TV build goes to the group only when a push changes what `PounceTV` compiles: `PounceTV`,
-`PounceKit`, `Config` or `project.yml` (the iPhone filter also has `Config`). When the target
-compiles another folder, add it to both TV filters (`ios.yml` and `distribute.swift`). To resend an
+`PounceKit`, `Config`, `project.yml` and the shared table files above (the iPhone filter also has
+`Config`). When the target compiles another folder or file, add it to both TV filters (`ios.yml`
+and `distribute.swift`). To resend an
 Apple TV build, run `scripts/distribute.swift --platform TV_OS --build N` from a Mac; the workflow's
 `build` input is for the iPhone app.
 

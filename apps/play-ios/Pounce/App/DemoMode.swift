@@ -370,37 +370,6 @@ actor ReplaySocket: RoomSocketing {
     }
 }
 
-extension TableScene {
-    private static let logsTimeline = [.replay, .nope, .celebrate, .handoff].contains(DemoMode.from())
-    /// `-log-timeline` (any table, e.g. a UI test against the dev server): the same lines to the
-    /// unified log (`log stream --predicate 'eventMessage CONTAINS "[timeline]"'`).
-    static let logsTimelineToSystem = CommandLine.arguments.contains("-log-timeline")
-
-    /// `-demo replay`: one line per game intent (played with its duration, or skipped).
-    func timelineLog(_ line: @autoclosure () -> String) {
-        if Self.logsTimeline { print("[timeline] \(line())") }
-        if Self.logsTimelineToSystem { NSLog("[timeline] %@", line()) }
-    }
-
-    /// `-demo replay`: prints the rendered frame count once a second (a Task, so it never
-    /// wakes the view itself).
-    func startFrameLog() {
-        let director = director
-        let clock = ContinuousClock()
-        let start = clock.now
-        Task { [weak self] in
-            var last = director.framesRendered
-            while self != nil {
-                try? await Task.sleep(for: .seconds(1))
-                let frames = director.framesRendered
-                let t = (clock.now - start).components.seconds
-                print("[replay] t=\(t)s frames=\(frames) +\(frames - last) paused=\(self?.view?.isPaused ?? true)")
-                last = frames
-            }
-        }
-    }
-}
-
 /// A room socket that connects at once, sends one snapshot and ignores everything sent to it
 /// (or, `refusing`, answers every game action with `bad_step` after a moment).
 actor DemoSocket: RoomSocketing {

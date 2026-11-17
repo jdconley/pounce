@@ -149,14 +149,39 @@ targets:
   PounceTV:
     type: application
     platform: tvOS
-    # When this target starts compiling another folder (Pounce/Table, Pounce/Tiles, ...), add it
-    # to the Apple TV distribute filter in .github/workflows/ios.yml and to the TV paths in
-    # scripts/distribute.swift, or a change there won't reach the family's Apple TVs.
+    # Its own shell, plus the iPhone's table: one copy of the drawing code, built for both. The
+    # SpriteKit table (Pounce/Table, Pounce/Tiles) without the tile game's iPhone screens around it
+    # (TilesStage, TilesChrome) or its iPhone demo (TilesDemo); the frame-budget tooling the
+    # scenes report to (FrameWork, MainThreadWatchdog, Autoplay); the Design files they use; and the
+    # iPhone's art catalog and sounds (its AppIcon set is unused here: the icon is the TV's own).
+    # iOS-only calls in the shared files are behind `#if os(iOS)`.
+    # When this target starts compiling another folder or file, add it to the Apple TV distribute
+    # filter in .github/workflows/ios.yml and to the TV paths in scripts/distribute.swift (and an
+    # exclude here to their excludes), or a change there won't reach the family's Apple TVs.
     sources:
       - path: PounceTV
         excludes:
           - Info.plist
           - PounceTV.entitlements
+      - path: Pounce/Table
+      - path: Pounce/Tiles
+        excludes:
+          - TilesStage.swift
+          - TilesChrome.swift
+          - TilesDemo.swift
+      - path: Pounce/App/FrameWork.swift
+      - path: Pounce/App/MainThreadWatchdog.swift
+      - path: Pounce/App/Autoplay.swift
+      - path: Pounce/Design/ArtName.swift
+      - path: Pounce/Design/FadeGroup.swift
+      - path: Pounce/Design/Haptics.swift
+      - path: Pounce/Design/Pace.swift
+      - path: Pounce/Design/Palette.swift
+      - path: Pounce/Design/Settings.swift
+      - path: Pounce/Design/SignalGlyph.swift
+      - path: Pounce/Design/Sound.swift
+      - path: Pounce/Resources/Assets.xcassets
+      - path: Pounce/Resources/Sounds
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.conleychaos.play

@@ -15,14 +15,18 @@ struct TableView: UIViewRepresentable {
         view.runAtTopFrameRate()
         view.ignoresSiblingOrder = true
         view.shouldCullNonVisibleNodes = true
+        #if os(iOS)
         view.isMultipleTouchEnabled = false
+        #endif
         view.backgroundColor = UIColor(Palette.night)
         view.presentScene(scene)
         scene.director.view = view
+        #if os(iOS)
         let swipe = UIScreenEdgePanGestureRecognizer(target: context.coordinator, action: #selector(Coordinator.swiped))
         swipe.edges = .left
         swipe.delegate = context.coordinator
         view.addGestureRecognizer(swipe)
+        #endif
         cover(view)
         return view
     }
@@ -53,9 +57,10 @@ struct TableView: UIViewRepresentable {
 extension TableView {
     /// The swipe in from the left edge that goes Home. It starts only while no card can be under
     /// the finger (`TableScene.allowsSwipeHome`), so it never takes a card drag over; once it
-    /// starts, the scene's touch is cancelled.
+    /// starts, the scene's touch is cancelled. The Apple TV has no touches and no swipe.
     @MainActor
     final class Coordinator: NSObject, UIGestureRecognizerDelegate {
+        #if os(iOS)
         /// How far, or how fast, the swipe has to go right to count.
         static let distance: CGFloat = 70
         static let speed: CGFloat = 600
@@ -76,6 +81,7 @@ extension TableView {
             Haptics.shared.tick()
             scene(recognizer)?.onSwipeHome()
         }
+        #endif
     }
 }
 
