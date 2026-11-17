@@ -1,4 +1,5 @@
 #if DEBUG
+import notify
 import Foundation
 import PounceKit
 import SwiftUI
@@ -23,6 +24,8 @@ import SwiftUI
 /// - `controller-tiles`, `controller-tiles-off`, `controller-tiles-curtain`: `tiles`, `tiles-other`
 ///   and `tiles-curtain` with a TV showing the table (`screen: true`), so this phone is a
 ///   controller (Cards: just the stash off turn, the table on its turn).
+///
+/// `-tiles-hold-bots`: the House Cats don't play until a UI test posts `DemoRelease`.
 ///
 /// `tiles-over -tiles-game-off`: Play again is refused with `game_off` (the server stopped dealing
 /// the game), and the card says no new table can be dealt.
@@ -70,8 +73,7 @@ enum TilesDemo {
     static func socket(_ mode: DemoMode) -> any RoomSocketing {
         let room = room(mode)
         let game = mode == .tilesPlay ? TilesLocalGame(seats: 2, seed: 20261111) : room.tiles.map { TilesLocalGame(view: $0, seed: 7) }
-        // Off turn at a TV: a while on just the stash before the House Cats play on to my move.
-        return TilesDemoSocket(room: room, game: game, firstWait: mode == .controllerTilesOff ? .seconds(12) : nil)
+        return TilesDemoSocket(room: room, game: game, held: CommandLine.arguments.contains("-tiles-hold-bots"))
     }
 
     /// Sets a demo's turn up once the table is on screen.
@@ -125,14 +127,13 @@ actor TilesDemoSocket: RoomSocketing {
     private var seq = 1
     private var bots: Task<Void, Never>?
     private var started = false
-    /// How long the House Cat waits before the first move it plays, in real time (then as the
-    /// server's does).
-    private var firstWait: Duration?
+    /// `-tiles-hold-bots`: the House Cat plays nothing until a UI test lets it (`DemoRelease`).
+    private var held: Bool
 
-    init(room: RoomView, game: TilesLocalGame?, firstWait: Duration? = nil) {
+    init(room: RoomView, game: TilesLocalGame?, held: Bool = false) {
         self.room = room
         self.game = game
-        self.firstWait = firstWait
+        self.held = held
         (events, continuation) = AsyncStream.makeStream(of: SocketEvent.self)
     }
 
@@ -204,23 +205,39 @@ actor TilesDemoSocket: RoomSocketing {
         bots = Task {
             while !Task.isCancelled {
                 guard let game = await self.game, game.status == .playing, !(await self.mine).contains(game.turn) else { return }
-                // The first wait is real time at any speed (a UI test looks at the stash first).
-                let wait = await self.takeFirstWait() ?? Pace.duration(.milliseconds(1400))
-                try? await Task.sleep(for: wait)
+                if await self.takeHold() { await DemoRelease.awaited() }
+                try? await Task.sleep(for: Pace.duration(.milliseconds(1400)))
                 guard !Task.isCancelled else { return }
                 await self.botTurn()
             }
         }
     }
 
-    private func takeFirstWait() -> Duration? {
-        defer { firstWait = nil }
-        return firstWait
+    private func takeHold() -> Bool {
+        defer { held = false }
+        return held
     }
 
     private func botTurn() {
         guard let game, game.status == .playing, !mine.contains(game.turn) else { return }
         act(seat: game.turn, game.botAction(game.turn))
+    }
+}
+
+/// A UI test's go-ahead to a held demo (`-tiles-hold-bots`): a Darwin notification the test
+/// posts (`Live.releaseDemo`), so a test decides when the other seats play, whatever the speed.
+enum DemoRelease {
+    static let name = "com.conleychaos.play.demo.release"
+
+    /// Returns once the test posts the go-ahead.
+    static func awaited() async {
+        await withCheckedContinuation { (done: CheckedContinuation<Void, Never>) in
+            var token: Int32 = 0
+            notify_register_dispatch(name, &token, DispatchQueue.main) { token in
+                notify_cancel(token)
+                done.resume()
+            }
+        }
     }
 }
 

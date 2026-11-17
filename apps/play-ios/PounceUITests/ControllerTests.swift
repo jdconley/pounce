@@ -169,12 +169,12 @@ class ControllerTests: XCTestCase {
 
     // MARK: Tuna Tiles
 
-    /// Kiki's move at a TV (`-demo controller-tiles-off`; the House Cats wait 12 s, then play on to
-    /// my move): just my stash, the switch and whose turn it is; no rug, cats or strip. Table shows
+    /// Kiki's move at a TV (`-demo controller-tiles-off -tiles-hold-bots`: the House Cats wait for
+    /// the test, then play on to my move): just my stash, the switch and whose turn it is; no rug, cats or strip. Table shows
     /// the whole table; back on Cards, the stash again; my move brings the table.
     @MainActor
     func testTilesOffTurnShowsJustTheStashAndTheTableOnMyTurn() throws {
-        let app = launchTiles("controller-tiles-off")
+        let app = launchTiles("controller-tiles-off", ["-tiles-hold-bots"])
         XCTAssertEqual(tilesProbe(app)["tv"], "stash")
         XCTAssertEqual(label(el(app, "table.status")), "Kiki's turn")
         XCTAssertTrue(el(app, "tiles.rack.0").exists, "no stash")
@@ -198,6 +198,7 @@ class ControllerTests: XCTestCase {
         XCTAssertTrue(el(app, "table.status").waitForExistence(timeout: Live.t(2)))
 
         // The House Cats play on to my move: the table opens, on Cards.
+        Live.releaseDemo()
         XCTAssertTrue(until(20) { self.tilesProbe(app)["tv"] == "table" }, "my move never opened the table: \(tilesProbe(app))")
         XCTAssertTrue(el(app, "tiles.turn").waitForExistence(timeout: Live.t(3)))
         XCTAssertTrue(el(app, "tiles.seat.1").exists)
@@ -259,8 +260,9 @@ class ControllerTests: XCTestCase {
 
     // MARK: helpers
 
-    @MainActor private func launchTiles(_ demo: String) -> XCUIApplication {
+    @MainActor private func launchTiles(_ demo: String, _ extra: [String] = []) -> XCUIApplication {
         let app = Live.demo(demo)
+        app.launchArguments += extra
         app.launch()
         XCTAssertTrue(el(app, "tiles.debug").waitForExistence(timeout: Live.t(20)), "the tile game's table never came up")
         XCTAssertTrue(el(app, "table.view.cards").waitForExistence(timeout: Live.t(5)), "no Cards/Table switch")

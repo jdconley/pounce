@@ -1,3 +1,4 @@
+import notify
 import XCTest
 
 /// Shared helpers for the UI tests that play against the local dev server (Task 24).
@@ -42,6 +43,12 @@ enum Live {
         app.launchArguments = arguments(speed: speed) + ["-demo", name]
         GameplayGate.watch(app)
         return app
+    }
+
+    /// Lets a held demo go on (`-tiles-hold-bots`: the House Cats wait for this). A Darwin
+    /// notification: it reads nothing from the app's screen.
+    nonisolated static func releaseDemo() {
+        notify_post("com.conleychaos.play.demo.release")
     }
 
     /// Multiplies every live timeout (`POUNCE_UITEST_TIMEOUT_SCALE` in the runner's environment,

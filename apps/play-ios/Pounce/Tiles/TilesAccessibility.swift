@@ -115,7 +115,7 @@ extension TilesScene {
         }
 
         items.append(Item(id: "table.menu", label: String(localized: "Menu", comment: "VoiceOver: the table's paw menu"), frame: square(layout.menuButton)))
-        for seat in opponents.order {
+        for seat in opponents.order where tableUp {
             guard let frame = opponents.frame(of: seat) else { continue }
             let marks = model.marks(seat)
             var parts = [SeatInfo.name(model.room, seat), String(localized: "\(marks.count) toys", comment: "VoiceOver: pieces left on a player's rack")]
@@ -135,7 +135,7 @@ extension TilesScene {
                 label: String(localized: "Toy box, \(model.view.poolCount) toys", comment: "VoiceOver: the pool and its count"),
                 frame: layout.pool, traits: .staticText))
         }
-        if !recap.isEmpty, !recapButton.isHidden {
+        if tableUp, !recap.isEmpty, !recapButton.isHidden {
             items.append(Item(
                 id: "tiles.recap", label: String(localized: "What changed", comment: "VoiceOver: replay what others placed since my turn"),
                 frame: square(recapButton.position)))
@@ -217,8 +217,8 @@ extension TilesScene {
             items.append(Item(id: "tiles.loupe.close", label: String(localized: "Close", comment: "VoiceOver: close the opened set"), frame: square(loupeClose.position)))
         }
 
-        // The action strip.
-        if !turnPill.isHidden {
+        // The action strip (hidden with the table while the stash is alone).
+        if tableUp, !turnPill.isHidden {
             if let meter = draft?.openingMeter, layout.meter != .zero {
                 items.append(Item(
                     id: "tiles.meter",

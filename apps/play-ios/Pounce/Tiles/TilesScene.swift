@@ -77,6 +77,20 @@ final class TilesScene: SKScene {
     /// The stash is sliding between the stash-alone layout and the table's: its pieces' size
     /// changes over the same time as their place.
     var morphing = false
+    /// When the stash's slide between the two layouts ends (media time). Redraws until then (the
+    /// shell refreshes right after the snapshot that started it) let it finish instead of snapping.
+    var slideEnds: CFTimeInterval = 0
+    /// The table around the stash (rug, sets, toy box, top bar, strip): hidden, not torn down,
+    /// while the stash is alone (TilesController.swift).
+    let tableGroup = SKNode()
+    /// The room's floor laid over the table, faded to bring the table in or take it away as one
+    /// layer (`setTable(up:animated:)`): one opaque sprite, so nothing is drawn offscreen.
+    let tableVeil = SKSpriteNode(texture: TableArt.image(ArtName.roomBg))
+    /// The paw menu and the sort toggles: drawn with the stash alone too, so outside `tableGroup`
+    /// and over the veil.
+    let controlsLayer = SKNode()
+    /// Whether the table was last asked to show (`setTable(up:animated:)`).
+    var tableUpTarget: Bool?
 
     // Drawn state.
     var model: TilesTableModel?
@@ -210,11 +224,20 @@ final class TilesScene: SKScene {
         anchorPoint = .zero
         backgroundColor = UIColor(Palette.night)
         TableArt.preload()
+        // Everything but the stash and what floats over it is the table (`tableGroup`).
+        tableGroup.zPosition = 1
+        addChild(tableGroup)
+        // Over every table layer (the strip's meter reaches about 67), under the stash (70).
+        tableVeil.zPosition = Layer.rack.rawValue - 2
+        tableVeil.isHidden = true
+        addChild(tableVeil)
+        controlsLayer.zPosition = Layer.rack.rawValue - 1
+        addChild(controlsLayer)
         for layer in Layer.allCases {
             let node = SKNode()
             node.zPosition = layer.rawValue
             layers[layer] = node
-            addChild(node)
+            if [.rug, .sets, .pool, .opponents, .strip].contains(layer) { tableGroup.addChild(node) } else { addChild(node) }
         }
         layer(.background).addChild(background)
         layer(.rug).addChild(rugSprite)
@@ -233,11 +256,11 @@ final class TilesScene: SKScene {
         recapButton.zPosition = 3
         layer(.pool).addChild(recapButton)
         layer(.opponents).addChild(opponents)
-        menuButton.zPosition = 9
-        layer(.opponents).addChild(menuButton)
-        for node in [undoButton, resetButton, sortNumberButton, sortToyButton, tidyButton] {
+        controlsLayer.addChild(menuButton)
+        for node in [undoButton, resetButton, tidyButton] {
             layer(.strip).addChild(node)
         }
+        for node in [sortNumberButton, sortToyButton] { controlsLayer.addChild(node) }
         turnPillGroup.addChild(turnPill)
         layer(.strip).addChild(turnPillGroup)
         holdFill.anchorPoint = CGPoint(x: 0, y: 0.5)
@@ -457,7 +480,7 @@ final class TilesScene: SKScene {
     }
 
     /// The seat the bottom band is laid out for: the one shown, else the one behind the curtain.
-    private func bandSeat(_ model: TilesTableModel) -> Seat? {
+    func bandSeat(_ model: TilesTableModel) -> Seat? {
         if let shownSeat { return shownSeat }
         switch store.pass.state {
         case .curtain(let seat), .revealed(let seat): return seat
@@ -478,6 +501,8 @@ final class TilesScene: SKScene {
         background.position = CGPoint(x: size.width / 2, y: size.height / 2)
         let bgScale = max(size.width / 390, size.height / 844)
         background.size = CGSize(width: 390 * bgScale, height: 844 * bgScale)
+        tableVeil.position = background.position
+        tableVeil.size = background.size
         guard let model else {
             clearTable()
             return
@@ -514,7 +539,13 @@ final class TilesScene: SKScene {
             onStashOnly(stashOnly)
         }
         let savedFlight = flight
-        if morph { flight = max(flight, 0.32) }
+        if morph {
+            flight = max(flight, 0.32)
+            slideEnds = CACurrentMediaTime() + flight / max(Double(speed), 0.01)
+        }
+        // Scene time left of a slide under way (the whole of it on the redraw that starts it).
+        let slideLeft = max(slideEnds - CACurrentMediaTime(), 0) * Double(speed)
+        let sliding = slideLeft > 0
         morphing = morph
         defer {
             flight = savedFlight
@@ -522,20 +553,14 @@ final class TilesScene: SKScene {
         }
         onBand(controls ? (stashOnly ? layout.statusLine.minY : (layout.meter == .zero ? layout.strip.maxY : layout.meter.maxY) + 2) : 0)
 
+        // With just the stash the table stays drawn, hidden, as it will show on this phone's turn
+        // (`tableLayout`), so the turn's first frame only shows it: no nodes, flows or textures
+        // made then.
+        let table = stashOnly ? tableLayout(model, seat: seat, stash: layout) : layout
+        setTable(up: !stashOnly, animated: morph)
         var live: Set<TileID> = []
         /// The first set on the rug that opens in the loupe (the loupe tip points at it).
-        var firstOpenSet: CGRect?
-        if stashOnly {
-            // The rug is the TV's.
-            flow = nil
-            rugSprite.isHidden = true
-            newSlot.isHidden = true
-            for node in setNodes.values { node.removeFromParent() }
-            setNodes.removeAll()
-            breathing = false
-        } else {
-            firstOpenSet = drawRug(sets, model: model, layout: layout, placed: placed, live: &live, animated: animated)
-        }
+        let firstOpenSet = drawRug(sets, model: model, layout: table, placed: placed, live: &live, animated: animated && !stashOnly)
         if input.isDragging { live.formUnion(input.dragTiles) }
 
         // The stash.
@@ -570,10 +595,12 @@ final class TilesScene: SKScene {
                 node.setPlaced(false)
                 node.setRing(lifted ? .white : hintRing(tile))
                 node.alpha = 1  // the stash dims as a whole (`rackLayer`)
-                settle(node, at: target, scale: lifted ? 1.08 : 1, animated: animated || morph)
+                // Already sliding to this very place: let it get there.
+                let onItsWay = sliding && !morph && !animated && node.home == target && !lifted
+                if !onItsWay { settle(node, at: target, scale: lifted ? 1.08 : 1, animated: animated || morph) }
                 slot += 1
             }
-            drawUnderlines(ready, tiles: rackTiles, layout: layout, after: morph ? flight : nil)
+            drawUnderlines(ready, tiles: rackTiles, layout: layout, after: sliding ? slideLeft : nil)
         } else {
             drawUnderlines([], tiles: [], layout: layout, after: nil)
         }
@@ -585,21 +612,16 @@ final class TilesScene: SKScene {
         }
 
         drawLoupe(layout: layout, animated: animated)
-        drawPool(model, layout: layout)
-        drawStrip(model, layout: layout, controls: controls && seat != nil, animated: morph)
-        if stashOnly {
-            opponents.clear()
-        } else {
-            let bar = model.barSeats(bottom: seat)
-            let turned = opponents.update(model: model, seats: bar, layout: layout)
-            for seat in turned { pulse(seat) }
-        }
+        drawPool(model, layout: table)
+        drawStrip(model, layout: table, toggles: layout, controls: controls && seat != nil, animated: sliding)
+        let turned = opponents.update(model: model, seats: model.barSeats(bottom: seat), layout: table)
+        if !stashOnly { for seat in turned { pulse(seat) } }
         menuButton.size = CGSize(width: layout.menuSide, height: layout.menuSide)
         menuButton.position = layout.menuButton
         // `clearTable` hides it while there's no table yet; the table is here now.
         menuButton.isHidden = false
         publishProbe()
-        if controls { warmTextures(layout: layout) }
+        if controls { warmTextures(layout: table) }
         publishTipSpots(firstSet: firstOpenSet.flatMap { layout.rug.contains(CGPoint(x: $0.midX, y: $0.midY)) ? $0 : nil })
     }
 
@@ -620,7 +642,7 @@ final class TilesScene: SKScene {
         rugMask.position = CGPoint(x: layout.rugArt.midX, y: layout.rugArt.midY)
         let flow = fitRug(lengths: sets.map(\.tiles.count), layout: layout, zoom: zoom)
         self.flow = flow
-        scroll = min(max(scroll, 0), maxScroll)
+        scroll = min(max(scroll, 0), max(flow.contentHeight - layout.rug.height, 0))
         rugContent.position = CGPoint(x: layout.rug.minX, y: layout.rug.maxY + scroll)
 
         var liveSets: Set<Int> = []
@@ -711,6 +733,14 @@ final class TilesScene: SKScene {
             let plus = TilePieceFactory.shared.label("+", size: min(frame.height * 0.6, 24), outline: 2)
             newSlotPlus.texture = plus
             newSlotPlus.size = plus.size()
+        } else if newSlot.texture == nil {
+            // Off turn: the slot's outline is drawn off the main thread now, for the turn's first frame.
+            let size = flow.newSlot.size
+            newSlot.texture = TilePieceFactory.shared.dashedIfReady(
+                size, color: UIColor.white.withAlphaComponent(0.9), fill: UIColor(Palette.ink).withAlphaComponent(0.2)
+            ) { [weak self] texture in
+                if self?.newSlot.texture == nil { self?.newSlot.texture = texture }
+            }
         }
         return firstOpenSet
     }
@@ -724,7 +754,7 @@ final class TilesScene: SKScene {
             let b = convertPoint(toView: CGPoint(x: r.maxX, y: r.minY))
             spots[id] = CGRect(x: min(a.x, b.x), y: min(a.y, b.y), width: abs(b.x - a.x), height: abs(b.y - a.y)).integral
         }
-        if !turnPill.isHidden {
+        if tableUp, !turnPill.isHidden {
             switch turnButton {
             case .draw: put("tiles.draw", layout.turn)
             case .play: put("tiles.play", layout.turn)
@@ -732,9 +762,9 @@ final class TilesScene: SKScene {
             }
         }
         if !sortToyButton.isHidden { put("tiles.sort", layout.sortNumber.union(layout.sortToy)) }
-        if !undoButton.isHidden, layout.undo != .zero { put("tiles.undo", layout.undo.union(layout.reset)) }
-        if easy, !tidyButton.isHidden, layout.tidy != .zero { put("tiles.hint", layout.tidy) }
-        if !meterNode.isHidden, layout.meter != .zero { put("tiles.meter", layout.meter) }
+        if tableUp, !undoButton.isHidden, layout.undo != .zero { put("tiles.undo", layout.undo.union(layout.reset)) }
+        if tableUp, easy, !tidyButton.isHidden, layout.tidy != .zero { put("tiles.hint", layout.tidy) }
+        if tableUp, !meterNode.isHidden, layout.meter != .zero { put("tiles.meter", layout.meter) }
         if loupe == nil, selection.isEmpty, tricksAllowed, let firstSet { put("tiles.set", firstSet) }
         guard spots != lastTipSpots else { return }
         lastTipSpots = spots
@@ -742,7 +772,7 @@ final class TilesScene: SKScene {
     }
 
     var maxScroll: CGFloat {
-        guard let flow, let layout else { return 0 }
+        guard let flow, let layout, tableUp else { return 0 }
         return max(flow.contentHeight - layout.rug.height, 0)
     }
 
@@ -925,9 +955,10 @@ final class TilesScene: SKScene {
         sending ? nil : draft?.turnButton
     }
 
-    /// The action strip; with just the stash (Cards, off turn), only its sort toggles, over the
-    /// stash. `animated`: the toggles slide to their new place (the stash is sliding too).
-    private func drawStrip(_ model: TilesTableModel, layout: TilesLayout, controls: Bool, animated: Bool) {
+    /// The action strip, and its sort toggles at `toggles`' place for them: the strip's, or with
+    /// just the stash (Cards, off turn) over the stash, while the rest of the strip waits hidden
+    /// with the table. `animated`: the toggles slide to their new place (the stash is sliding too).
+    private func drawStrip(_ model: TilesTableModel, layout: TilesLayout, toggles: TilesLayout, controls: Bool, animated: Bool) {
         let factory = TilePieceFactory.shared
         let nodes = [undoButton, resetButton, sortNumberButton, sortToyButton, tidyButton, turnPill]
         guard controls, let seat = shownSeat else {
@@ -935,8 +966,7 @@ final class TilesScene: SKScene {
             meterNode.isHidden = true
             return
         }
-        let stashOnly = layout.arrangement == .controller
-        for node in nodes { node.isHidden = stashOnly && node !== sortNumberButton && node !== sortToyButton }
+        nodes.forEach { $0.isHidden = false }
         let drawn: CGFloat = layout.roomy ? 50 : 40
         func button(_ node: SKSpriteNode, _ frame: CGRect, _ texture: SKTexture) {
             node.texture = texture
@@ -948,12 +978,8 @@ final class TilesScene: SKScene {
         button(undoButton, layout.undo, factory.button(.undo, side: drawn, dim: !(composing && draft?.canUndo == true)))
         button(resetButton, layout.reset, factory.button(.reset, side: drawn, dim: !(composing && draft?.isUntouched == false)))
         let sort = orders[seat]?.sort
-        button(sortNumberButton, layout.sortNumber, factory.button(.sortNumber, side: drawn, on: sort == .number))
-        button(sortToyButton, layout.sortToy, factory.button(suit: .fish, side: drawn, on: sort == .toy))
-        guard !stashOnly else {
-            meterNode.isHidden = true
-            return
-        }
+        button(sortNumberButton, toggles.sortNumber, factory.button(.sortNumber, side: drawn, on: sort == .number))
+        button(sortToyButton, toggles.sortToy, factory.button(suit: .fish, side: drawn, on: sort == .toy))
         if easy {
             button(tidyButton, layout.tidy, factory.button(.hint, side: drawn, on: hint != nil, dim: !composing))
         } else {

@@ -61,7 +61,7 @@ enum DemoMode: String {
     case controllerLay = "controller-lay", controllerSkip = "controller-skip"
     /// The tile game at a TV (`screen: true`): `controller-tiles` is `tiles` (my move, opened),
     /// `controller-tiles-off` Kiki's move (just my stash on Cards; the House Cats play on until
-    /// it is mine), `controller-tiles-curtain` two seats on this phone, the curtain up for seat 0.
+    /// it is mine, or with `-tiles-hold-bots` once a UI test lets them), `controller-tiles-curtain` two seats on this phone, the curtain up for seat 0.
     case controllerTiles = "controller-tiles", controllerTilesOff = "controller-tiles-off"
     case controllerTilesCurtain = "controller-tiles-curtain"
     /// The tile game's table (`TilesDemo` has what each one shows). The only way into the game

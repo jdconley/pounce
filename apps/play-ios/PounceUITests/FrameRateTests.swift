@@ -56,6 +56,13 @@ final class FrameRateTests: XCTestCase {
         play("controller-tiles", as: "tuna-tiles-cards", ready: "tiles.debug")
     }
 
+    /// Tuna Tiles off turn on Cards, then the turn coming (`-demo controller-tiles-off`, the House
+    /// Cats held until 6 s into the window): stash drags along the stash alone, then the table
+    /// opening around it, then the usual drags.
+    func testTunaTilesTurnComingOnCardsPlaysAtTheTopFrameRate() {
+        play("controller-tiles-off", as: "tuna-tiles-turn", ready: "tiles.debug", extra: ["-tiles-hold-bots"], release: 6)
+    }
+
     /// Tuna Tiles' busiest table (`-demo tiles-late`: 25 sets, 22 pieces in the stash): each drop
     /// reflows the whole rug.
     func testTunaTilesLateTablePlaysAtTheTopFrameRate() {
@@ -64,9 +71,13 @@ final class FrameRateTests: XCTestCase {
 
     // MARK: playing and the gate
 
-    private func play(_ demo: String, as name: String, ready: String, file: StaticString = #filePath, line: UInt = #line) {
+    /// `release`: seconds into the window when a held demo goes on (`Live.releaseDemo`).
+    private func play(
+        _ demo: String, as name: String, ready: String, extra: [String] = [], release: TimeInterval? = nil,
+        file: StaticString = #filePath, line: UInt = #line
+    ) {
         let app = Live.demo(demo, speed: 1)
-        app.launchArguments += ["-autoplay"]
+        app.launchArguments += ["-autoplay"] + extra
         app.launch()
         XCTAssertTrue(el(app, ready).waitForExistence(timeout: Live.t(20)), "the \(name) table never came up", file: file, line: line)
         // Cat Tower's first table asks about notifications; out of the way, as a player would.
@@ -78,7 +89,13 @@ final class FrameRateTests: XCTestCase {
         let before = gameplayBaseline(app)
         // Only waiting: nothing reads the screen while the table plays (its first drag starts 3 s
         // after the table appears, once the baseline is taken).
-        Thread.sleep(forTimeInterval: seconds)
+        if let release {
+            Thread.sleep(forTimeInterval: min(release, seconds))
+            Live.releaseDemo()
+            Thread.sleep(forTimeInterval: max(seconds - release, 0))
+        } else {
+            Thread.sleep(forTimeInterval: seconds)
+        }
         let host = Host.framesUnreliable()
         guard let after = watchdog(app) else { return XCTFail("the watchdog went away", file: file, line: line) }
         let window = after - before

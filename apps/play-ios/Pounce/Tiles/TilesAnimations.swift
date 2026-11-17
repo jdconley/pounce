@@ -93,6 +93,12 @@ extension TilesScene {
             // the rug slides to its new shape.
             draft = nil
             pendingTable = table
+            let name = SeatInfo.name(model.room, seat)
+            let words = opened
+                ? String(localized: "\(name) opened with \(placed.count) toys", comment: "VoiceOver: another player made their opening play")
+                : String(localized: "\(name) placed \(placed.count) toys", comment: "VoiceOver: another player played pieces")
+            // Just the stash: the play is the TV's to show; the rug takes it with its snapshot.
+            guard !stashOnly else { return onAnnounce(words) }
             let from = rugContent.convert(seatPoint(seat), from: self)
             let color = UIColor(SeatInfo.ringColor(seat))
             ringSerial += 1
@@ -113,10 +119,7 @@ extension TilesScene {
                 for tile in placed { pieces[tile]?.run(.fadeIn(withDuration: 0.2), withKey: "fade") }
             }
             Sound.shared.play(ArtName.Sound.sfxThud, volume: 0.5, kind: .game)
-            let name = SeatInfo.name(model.room, seat)
-            onAnnounce(opened
-                ? String(localized: "\(name) opened with \(placed.count) toys", comment: "VoiceOver: another player made their opening play")
-                : String(localized: "\(name) placed \(placed.count) toys", comment: "VoiceOver: another player played pieces"))
+            onAnnounce(words)
             await wait(0.6)
             // The placing cat's colour stays on its pieces for a few seconds.
             Task { [weak self] in

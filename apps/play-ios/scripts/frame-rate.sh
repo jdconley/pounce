@@ -60,9 +60,9 @@ TEST_RUNNER_POUNCE_FRAMES_SECONDS="${SECONDS_PER_TABLE:-20}" TEST_RUNNER_POUNCE_
   -resultBundlePath "$OUT/frames.xcresult" >"$OUT/frames.log" 2>&1 || status=$?
 
 echo "frame times on the $KIND $DEVICE (log: $OUT/frames.log)"
-grep -E '^FRAMES (cat-tower|cat-tower-cards|tuna-tiles|tuna-tiles-cards|tuna-tiles-late) screen=' "$OUT/frames.log" | sed -E 's/^FRAMES /  /' || true
+grep -E '^FRAMES (cat-tower|cat-tower-cards|tuna-tiles|tuna-tiles-cards|tuna-tiles-turn|tuna-tiles-late) screen=' "$OUT/frames.log" | sed -E 's/^FRAMES /  /' || true
 echo "each slow or over-budget frame, with the app's share (t= is seconds since the phone booted):"
-grep -E '^FRAMES (cat-tower|cat-tower-cards|tuna-tiles|tuna-tiles-cards|tuna-tiles-late) t=' "$OUT/frames.log" | sed -E 's/^FRAMES /  /' || echo "  none"
+grep -E '^FRAMES (cat-tower|cat-tower-cards|tuna-tiles|tuna-tiles-cards|tuna-tiles-turn|tuna-tiles-late) t=' "$OUT/frames.log" | sed -E 's/^FRAMES /  /' || echo "  none"
 grep -E '^FRAMES .*host is busy' "$OUT/frames.log" | sed -E 's/^FRAMES /  /' || true
 grep -E 'error: .*FrameRateTests' "$OUT/frames.log" | sed -E 's/.*error: -\[PounceUITests\.FrameRateTests /  failed: /' || true
 exit $status
