@@ -27,7 +27,7 @@ SIGN IN WITH APPLE (optional)
 Signing in keeps your streaks if you change phones. Find it in Settings (the gear on Home), or on Home after you have played with someone. Adults and teens only. Settings also has the privacy policy and account deletion.
 
 APPLE TV (no iPhone needed)
-The Apple TV app has no age check and no sign-in. On Home, select Cat Tower or Tuna Tiles. The TV shows a table code and a QR code ("Scan to join"). On any browser, open play.conleychaos.com/play, tap "Join a table" and type the code (or scan the QR code). In the browser, tap "Add a player", then "House Cat", then Start. The TV shows the whole table; the browser holds the cards. Menu on the remote opens the TV's menu.
+The Apple TV app has no age check and no sign-in. On Home, select Cat Tower or Tuna Tiles. The TV shows a table code and a QR code ("Scan to join"). On any browser, open play.conleychaos.com/play. A new browser asks the birth year (type 1980) and a name. Then tap "Join" and type the code (or scan the QR code). Tap "Add a player", then "House Cat", then Start. The TV shows the whole table; the browser holds the cards. Menu (Back) on the remote opens the TV's menu.
 
 UNDER 13 ("kittens") AND PARENT CONSENT
 If the year typed means under 13, the device is limited: the name comes from a list (dice), there is no sign-in, no share links, and no push notifications from the server. Local turn reminders still work, because nothing leaves the device.

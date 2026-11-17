@@ -1,7 +1,7 @@
 #!/bin/bash
 # Raw captures for the Apple TV App Store screenshots: the Debug PounceTV build on an Apple TV 4K
 # simulator at 1080p, so every PNG is 1920x1080 (App Store Connect takes 1920x1080 or 3840x2160).
-# Writes AppStore/raw/tv/<name>.png; `swift`-free: the PNGs become JPEGs with sips (see README).
+# Writes AppStore/raw/tv/<name>.png; the PNGs become JPEGs with sips (see README).
 #   AppStore/capture-tv.sh <udid>
 # Build and install first (an "Apple TV 4K (3rd generation) (at 1080p)" simulator):
 #   xcodebuild -project Pounce.xcodeproj -scheme PounceTV -destination "platform=tvOS Simulator,id=<udid>" build

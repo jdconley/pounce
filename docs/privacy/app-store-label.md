@@ -134,10 +134,12 @@ What the TV app does, from the code (`PounceTV/`, `PounceKit/Net`, and the files
 
 - **Device ID.** On first launch it asks the server for a device id (`APIClient.mint`, `POST /v1/devices`) and keeps it in the Keychain (`KeychainCredentialStore`, `PounceTV/App/TVServices.swift`). It is used to open a screen link (`POST /v1/screens`) and the table's screen socket (`role=screen`). Not the IDFA or IDFV. App Functionality.
 - **Analytics (first party).** The server's first-run funnel records the new device when it is made (`apps/play-api/src/index.ts`, `minted`): a keyed hash of the device id, the platform (`tvos`) and the app version, which the TV sends in `X-Pounce-App`. The TV opens no `Funnel` or profile calls, and a screen socket is not counted as the device being active (`if (!screen)` in `index.ts`). So the TV adds `tvos` and its version to the rows already declared under Device ID, Product Interaction and Other Data Types.
+- **Gameplay Content.** The TV makes tables (`APIClient.createRoom(game:screen:)`, `POST /v1/rooms` with `screen: true`), and the server keeps its device id in the table's `screens` (`apps/play-api/src/index.ts:249`, `room/core.ts:374`). Tables are what the iPhone label means by Gameplay Content. App Functionality.
+- **App version.** The server's device index keeps `app_version` from the screen socket (`index.ts:285`, `room/device-index.ts:134`), so Other Data Types also has App Functionality.
 - **Nothing else.** The TV has no player name, age band, phone number, push token, camera, microphone, location or time zone. It asks for no permissions. It sends no table names or text. It keeps a table code and the sound setting on the device only (`UserDefaults`, `DefaultsScreenKeep`).
 - **Not tracking.** No ad SDK, no IDFA, no tracking domains.
 
-The TV's manifest declares Device ID (App Functionality, Analytics), Product Interaction (Analytics) and Other Data Types (App Functionality, Analytics), all linked and none for tracking, plus these required-reason APIs:
+The TV's manifest declares Device ID (App Functionality, Analytics), Gameplay Content (App Functionality), Product Interaction (Analytics) and Other Data Types (App Functionality, Analytics), all linked and none for tracking, plus these required-reason APIs:
 
 - `NSPrivacyAccessedAPICategoryUserDefaults`, reason `CA92.1`: the app's own settings and table code (`Pounce/Design/Settings.swift`, `PounceKit/IO/ScreenKeep.swift`).
 - `NSPrivacyAccessedAPICategorySystemBootTime`, reason `35F9.1`: elapsed time for animation and the frame budget (`CACurrentMediaTime`, `ContinuousClock`, `clock_gettime_nsec_np` in `Pounce/Table`, `Pounce/Tiles` and `Pounce/App/FrameWork.swift`).

@@ -1,26 +1,30 @@
-// Plays the Apple TV's home, lobby and game over for the App Store screenshots: the Debug PounceTV
-// app on an Apple TV simulator is the TV, and browser phones (Playwright) link it, join, start and
-// leave, against your own dev server. Writes PNGs to RAW (default AppStore/raw/tv).
-// Not part of any suite; copy it into apps/play-web/ (it imports ../e2e) and run:
-//   pnpm --filter @pounce/play-api exec wrangler dev --port 8820 --ip 127.0.0.1 --persist-to .wrangler/tv-shots \
-//     --var TOKEN_SECRET:<random> --var GAMES:tiles --var LINK:on --var TV:on --var DEV_SPEED:5
-//   TV_SIM=<udid> RAW=<dir> APP=<PounceTV.app> npx playwright test -c <a config with baseURL http://127.0.0.1:8820>
-// Never port 4343. The home shot shows the link code of that dev server.
-import { execFileSync, execSync } from "node:child_process";
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+// Plays the Apple TV's home and lobby for the App Store screenshots: the Debug PounceTV app on an
+// Apple TV simulator is the TV, and browser phones (Playwright) link it and join, against your own
+// dev server. Writes PNGs to RAW (default apps/play-ios/AppStore/raw/tv). Not part of any suite.
+// Run from the repo root, never on port 4343:
+//   pnpm --filter @pounce/play-web build        # the web player, into apps/play-api/public/play
+//   cd apps/play-web && cp ../play-ios/AppStore/tv-live.spec.ts e2e/tv-live.spec.ts
+//   (cd ../play-api && pnpm exec wrangler dev --port 8820 --ip 127.0.0.1 --persist-to .wrangler/tv-shots \
+//     --var TOKEN_SECRET:$(openssl rand -hex 32) --var GAMES:tiles --var LINK:on --var TV:on --var DEV_SPEED:5) &
+//   E2E_BASE=http://127.0.0.1:8820 TV_SIM=<udid> APP=<path to PounceTV.app> \
+//     npx playwright test e2e/tv-live.spec.ts --project=laptop-chrome
+//   rm e2e/tv-live.spec.ts    # then stop wrangler and delete .wrangler/tv-shots
+// The home shot shows the link code of that dev server.
+import { execFileSync } from "node:child_process";
+import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 
 import { devices, expect, test, type Browser, type Page } from "@playwright/test";
 
-import { newPlayer } from "../e2e/helpers";
-import { controllerTurn, forfeit, startFromPhone, tilesTurn } from "../e2e/tv-helpers";
+import { ownAddress } from "./helpers";
 
 const SHOTS = process.env.RAW ?? join(process.cwd(), "../play-ios/AppStore/raw/tv");
 const APP = process.env.APP!;
 const BUNDLE = "com.conleychaos.play";
 const TV4K = process.env.TV_SIM!;
 
-const LOGS = join(process.env.TMPDIR ?? "/tmp", "tv-shots-logs");
+// The app writes its `[tv] link` lines to a file here: not /tmp, which the simulator will not write to.
+const LOGS = join(process.cwd(), "../play-ios/build/tv-shots-logs");
 mkdirSync(SHOTS, { recursive: true });
 mkdirSync(LOGS, { recursive: true });
 
@@ -63,25 +67,7 @@ async function tvLine(tv: Tv, kind: "link" | "table", after = 0): Promise<string
   return found!;
 }
 
-const count = (tv: Tv, kind: string) => readFileSync(tv.err, "utf8").split("\n").filter((l) => l.startsWith(`[tv] ${kind} `)).length;
-
 const pause = (ms: number) => new Promise((r) => setTimeout(r, ms));
-
-/** Holds the dev server's worker still (no frames either way) for `ms`: the TV loses the table. */
-async function serverStall(ms: number, during: () => Promise<void>) {
-  const pids = execSync(`lsof -nP -iTCP -sTCP:LISTEN | awk '$2 ~ /^[0-9]+$/ && $9 ~ /:8800$/ {print $2}' | sort -u`, { encoding: "utf8" }).trim().split("\n").filter(Boolean);
-  // wrangler's own process, and the workerd it runs (its child).
-  const all = new Set<string>(pids);
-  for (const pid of pids) for (const c of execSync(`pgrep -P ${pid} || true`, { encoding: "utf8" }).trim().split("\n").filter(Boolean)) all.add(c);
-  console.log("stalling", [...all].join(","));
-  for (const p of all) execSync(`kill -STOP ${p}`);
-  try {
-    await pause(ms);
-    await during();
-  } finally {
-    for (const p of all) execSync(`kill -CONT ${p}`);
-  }
-}
 
 async function addHouseCats(page: Page, n: number) {
   for (let i = 0; i < n; i++) {
@@ -100,40 +86,47 @@ async function removeHouseCats(page: Page) {
   }
 }
 
-async function phone(browser: Browser, name: string, path: string, device = devices["Pixel 7"]) {
-  return newPlayer(browser, name, { path, context: { ...device } });
+/** A new player in a browser of their own: the age check, a name and the cat at `cat` (0 to 7). */
+async function phone(browser: Browser, name: string, path: string, cat: number, device = devices["Pixel 7"]) {
+  const context = await browser.newContext({ ...device });
+  await ownAddress(context);
+  const page = await context.newPage();
+  await page.goto(path);
+  await expect(page.getByRole("heading", { name: "What year were you born?" })).toBeVisible();
+  for (const d of "1985") await page.getByRole("button", { name: d, exact: true }).click();
+  await page.getByRole("button", { name: "Done" }).click();
+  await page.getByLabel("Your name").fill(name);
+  await page.getByRole("radiogroup", { name: "Your cat" }).getByRole("radio").nth(cat).click();
+  await page.getByRole("button", { name: "Done" }).click();
+  return { context, page };
 }
 
-
-test("store shots: home, lobby, game over", async ({ browser }) => {
+test("store shots: home and lobby", async ({ browser }) => {
   tvReset(TV4K);
   const tv = tvLaunch(TV4K);
   const [, linkURL] = await tvLine(tv, "link");
   await pause(2500);
   shot(tv, "home");
-  const jo = await phone(browser, "Great Aunt Josephine", "/play/");
+  // Great Aunt Josephine scans the TV's code and makes a Cat Tower table on it.
+  const jo = await phone(browser, "Great Aunt Josephine", "/play/", 0);
   await jo.page.goto(new URL(linkURL).pathname);
   await jo.page.getByRole("button", { name: "Play Cat Tower" }).click();
   await expect(jo.page).toHaveURL(/\/play\/t\/[A-Z0-9]{5}$/);
   const code = jo.page.url().split("/").at(-1)!;
   await tvLine(tv, "table");
+  // A first table gets a House Cat a moment after its phone sits: take it off. Open three seats
+  // (a House Cat each), then three more people join, each with a different cat, and take them.
   await expect(jo.page.locator(".lobby-seat.bot")).toBeVisible({ timeout: 8000 }).catch(() => undefined);
   await removeHouseCats(jo.page);
-  const ben = await phone(browser, "Ben", `/play/j/${code}`, devices["iPhone 13"]);
-  await expect(ben.page).toHaveURL(new RegExp(`/play/t/${code}$`));
-  await addHouseCats(jo.page, 2);
-  await pause(3000);
+  await addHouseCats(jo.page, 3);
+  const others = [
+    await phone(browser, "Ben", `/play/j/${code}`, 2, devices["iPhone 13"]),
+    await phone(browser, "Kiki", `/play/j/${code}`, 4),
+    await phone(browser, "Theo", `/play/j/${code}`, 6, devices["iPhone 13"]),
+  ];
+  for (const o of others) await expect(o.page).toHaveURL(new RegExp(`/play/t/${code}$`));
+  await expect(jo.page.locator(".lobby-seat.human")).toHaveCount(4, { timeout: 15_000 });
+  await pause(4000);
   shot(tv, "lobby");
-  await removeHouseCats(jo.page);
-  await addHouseCats(jo.page, 1);
-  await startFromPhone(jo.page, ben.page);
-  await pause(5000);
-  shot(tv, "table-live");
-  await forfeit(ben.page);
-  await pause(1500);
-  await forfeit(jo.page);
-  await pause(9000);
-  shot(tv, "game-over");
-  await jo.context.close();
-  await ben.context.close();
+  for (const o of [jo, ...others]) await o.context.close();
 });
