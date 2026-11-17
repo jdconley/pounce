@@ -118,6 +118,8 @@ final class AppModel {
     var ageBand: AgeBand? { ageRecord?.band }
     /// What the owner's band allows on this device. Unknown counts as the most limited.
     var limits: AgeLimits { AgeLimits(band: ageBand) }
+    /// Each table's Cards/Table pick while a TV shows it (spec §3).
+    @ObservationIgnored let tableViews: TableViewChoices
     /// Players, Sign in with Apple and sync (spec §10.5, §13.1).
     @ObservationIgnored private(set) var account: AccountModel!
 
@@ -139,6 +141,7 @@ final class AppModel {
         self.config = config
         self.settings = settings
         TilesMemory.opened(data.tiles)
+        tableViews = TableViewChoices(data.tableViews)
         peopleStore = PeopleStore(file: data.people.file, loaded: data.people.value)
         tableCache = TableCache(file: data.cache.file, loaded: data.cache.value)
         tableArchive = TableArchive(file: data.archive.file, loaded: data.archive.value)
@@ -530,6 +533,7 @@ final class AppModel {
         await tableInvites.flush()
         await tutorialStore.flush()
         await tips.flushToDisk()
+        await tableViews.flush()
         await ratingStore.flush()
         await updates.flushToDisk()
         await funnel.flushFile()

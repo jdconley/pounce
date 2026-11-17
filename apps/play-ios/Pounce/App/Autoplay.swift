@@ -91,13 +91,18 @@ extension TilesScene: Autoplaying {
 
 extension TableScene: Autoplaying {
     /// The hand's first card into the middle of the laid zone (a hit, or back to the hand), then
-    /// the last card dragged along the hand.
+    /// the last card dragged along the hand. On Cards, the first card up to the action row.
     func autoplayPath(out: Bool) -> (CGPoint, CGPoint)? {
         guard let layout, !hand.cards.isEmpty else { return nil }
         let index = out ? 0 : hand.cards.count - 1
         guard let frame = hand.frame(at: index) else { return nil }
         let start = convert(CGPoint(x: frame.midX, y: frame.midY), from: hand)
-        if out { return (start, CGPoint(x: layout.laidZone.midX, y: layout.laidZone.midY)) }
+        // Just my cards (`-demo controller`): up to the action row, where it lands on nothing and
+        // goes back.
+        let away = layout.arrangement == .controller
+            ? CGPoint(x: layout.actionRow.midX, y: layout.actionRow.midY)
+            : CGPoint(x: layout.laidZone.midX, y: layout.laidZone.midY)
+        if out { return (start, away) }
         return (start, convert(CGPoint(x: (hand.frame(at: 0) ?? frame).midX, y: frame.midY), from: hand))
     }
 }

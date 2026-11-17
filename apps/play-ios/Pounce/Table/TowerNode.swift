@@ -219,7 +219,7 @@ final class TowerNode: SKNode {
         let reduce = UIAccessibility.isReduceMotionEnabled
         var items: [(SKAction, SKNode)] = []
         if open {
-            Sound.shared.play(ArtName.Sound.sfxPop, volume: 0.6)
+            Sound.shared.play(ArtName.Sound.sfxPop, volume: 0.6, kind: .game)
             let wasHidden = body.isHidden
             body.isHidden = false
             if reduce {
@@ -296,7 +296,7 @@ final class TowerNode: SKNode {
         let t = CelebrationTiming.self
         head.zPosition = 1  // over its shelf-mates while it flies
 
-        Sound.shared.play(ArtName.Sound.sfxLeap)
+        Sound.shared.play(ArtName.Sound.sfxLeap, kind: .game)
         if reduce {
             await director.run(.sequence([
                 .fadeOut(withDuration: 0.15), .move(to: end, duration: 0), .fadeIn(withDuration: 0.15),

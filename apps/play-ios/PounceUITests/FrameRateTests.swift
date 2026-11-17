@@ -38,6 +38,12 @@ final class FrameRateTests: XCTestCase {
         play("hit", as: "cat-tower", ready: "table.deck")
     }
 
+    /// Cat Tower on Cards (`-demo controller`: the hit table with a TV showing it): the hand's
+    /// first card up to the action row and back, and the last card along the hand.
+    func testCatTowerCardsPlaysAtTheTopFrameRate() {
+        play("controller", as: "cat-tower-cards", ready: "table.deck")
+    }
+
     /// Tuna Tiles mid game (`-demo tiles`): the stash's first piece onto the rug's first set, and
     /// back to the stash, over and over.
     func testTunaTilesPlaysAtTheTopFrameRate() {

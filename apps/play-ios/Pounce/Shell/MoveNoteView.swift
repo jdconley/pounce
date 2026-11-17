@@ -61,6 +61,8 @@ struct MoveNoteShown: Equatable {
 /// just wiggled didn't go. It never takes a touch, so play goes on under it.
 struct MoveNoteView: View {
     let text: String
+    /// The table's frame at a TV: on Cards the note sits over the action row, not the trays.
+    var tv: TVFrame?
 
     var body: some View {
         GeometryReader { geo in
@@ -69,7 +71,8 @@ struct MoveNoteView: View {
                 width: geo.size.width + insets.leading + insets.trailing,
                 height: geo.size.height + insets.top + insets.bottom)
             // Scene space (y up from the bottom of the screen): the strip above the trays.
-            let trays = TableLayout(size: full, safeTop: insets.top, safeBottom: insets.bottom, opponents: 1).traysFrame
+            let layout = TableLayout(full: full, insets: insets, tv: tv)
+            let trays = layout.arrangement == .controller ? layout.actionRow : layout.traysFrame
             Text(verbatim: text)
                 .font(.system(.callout, design: .rounded, weight: .heavy))
                 .foregroundStyle(.white)

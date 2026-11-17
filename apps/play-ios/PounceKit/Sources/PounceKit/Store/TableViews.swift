@@ -6,6 +6,10 @@ public enum TableView: String, Codable, Equatable, Sendable {
     case cards, table
 }
 
+/// `TableView` by a name the app can use: its own `TableView` is the SpriteKit table's host
+/// view, and `PounceKit.TableView` reads as a member of the `PounceKit` enum there.
+public typealias TablePick = TableView
+
 /// The Cards/Table choice per table, keyed by room code, kept for the newest 30 tables. A table
 /// with no choice shows Cards. `tableviews.json` in the given directory, kept in memory and written
 /// behind (`JSONFile`). Not thread-safe by itself; callers use it from one actor.

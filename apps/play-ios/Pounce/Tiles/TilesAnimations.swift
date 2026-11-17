@@ -51,7 +51,7 @@ extension TilesScene {
         let error = TilesPlayError(rawValue: code.rawValue)
         input.wiggling = Set(error.map(draft.sets(refusedBy:)) ?? [])
         redraw()
-        Sound.shared.play(ArtName.Sound.sfxNope)
+        Sound.shared.play(ArtName.Sound.sfxNope)  // this phone's own move refused: its own sound
         Haptics.shared.thump()
         if error == .openingTooLow {
             shakeMeter()
@@ -110,7 +110,7 @@ extension TilesScene {
             if reduce {
                 for tile in placed { pieces[tile]?.run(.fadeIn(withDuration: 0.2), withKey: "fade") }
             }
-            Sound.shared.play(ArtName.Sound.sfxThud, volume: 0.5)
+            Sound.shared.play(ArtName.Sound.sfxThud, volume: 0.5, kind: .game)
             let name = SeatInfo.name(model.room, seat)
             onAnnounce(opened
                 ? String(localized: "\(name) opened with \(placed.count) toys", comment: "VoiceOver: another player made their opening play")
@@ -136,7 +136,7 @@ extension TilesScene {
                 node.setScale(0.6)
                 fx.addChild(node)
                 transients.append(node)
-                Sound.shared.play(ArtName.Sound.sfxFlip)
+                Sound.shared.play(ArtName.Sound.sfxFlip, kind: .game)
                 let face = TilePieceFactory.shared.face(tile, size: .large)
                 if reduce {
                     node.texture = face
@@ -161,7 +161,7 @@ extension TilesScene {
                 let node = SKSpriteNode(texture: TilePieceFactory.shared.back(), size: size)
                 node.position = box
                 fx.addChild(node)
-                Sound.shared.play(ArtName.Sound.sfxFlip, volume: 0.5)
+                Sound.shared.play(ArtName.Sound.sfxFlip, volume: 0.5, kind: .game)
                 let to = seatPoint(seat)
                 let action = reduce
                     ? SKAction.sequence([.fadeOut(withDuration: 0.25), .removeFromParent()])
@@ -224,7 +224,7 @@ extension TilesScene {
                         Task { await director.run(pop, on: node, decorative: true) }
                     }
                 }
-                Sound.shared.play(ArtName.Sound.sfxTick, volume: 0.4)
+                Sound.shared.play(ArtName.Sound.sfxTick, volume: 0.4, kind: .game)
                 try? await Task.sleep(for: Pace.duration(.milliseconds(550)))
             }
             try? await Task.sleep(for: Pace.duration(.seconds(TableText.lingering(3.5))))

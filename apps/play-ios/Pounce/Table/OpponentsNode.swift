@@ -42,7 +42,7 @@ final class OpponentsNode: SKNode {
         // The words grow with the person's text size setting, as far as the bar has room: a
         // name pill may nearly touch its neighbors, and with larger text it gets wider.
         let textScale = TableText.scale
-        let tagWidth = min(spacing - 2, (layout.arrangement == .phone ? 140 : 170) * textScale)
+        let tagWidth = min(spacing - 2, (!layout.roomy ? 140 : 170) * textScale)
         let nameSize = TableTextScale.nameSize(scale: textScale)
         let chipScale = TableTextScale.chips(scale: textScale, spacing: spacing, diameter: diameter)
 
@@ -106,7 +106,7 @@ final class OpponentsNode: SKNode {
             tag.position = CGPoint(x: slots[i].x, y: slots[i].y - layout.nameDrop)
             tag.zPosition = 20 + CGFloat(i)
             setLinkTag(
-                seat, link, under: tag, width: tagWidth, size: ((layout.arrangement == .phone ? 13 : 15) * min(textScale, 1.25)).rounded(),
+                seat, link, under: tag, width: tagWidth, size: ((!layout.roomy ? 13 : 15) * min(textScale, 1.25)).rounded(),
                 z: 30 + CGFloat(i))
         }
         order = Array(seats.prefix(slots.count))

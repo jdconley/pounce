@@ -50,6 +50,14 @@ enum DemoMode: String {
     case retire
     /// This phone's move: five seconds in (past the push priming), Leo (seat 1) nudges it.
     case nudged
+    /// A TV shows the table (`screen: true`), so this phone shows just its cards (spec §3).
+    /// `controller`: the `hit` table, my play step with groups to hit through the list; the fake
+    /// server takes each hit. `controller-off`: Kiki's turn. `controller-curtain`: two seats on
+    /// this phone (pass and play), the curtain up for seat 0.
+    case controller
+    case controllerOff = "controller-off", controllerCurtain = "controller-curtain"
+    /// `controller-lay`: the `lay` table on Cards (Lay down in the action row).
+    case controllerLay = "controller-lay"
     /// The tile game's table (`TilesDemo` has what each one shows). The only way into the game
     /// until Home offers it.
     case tiles
@@ -125,6 +133,23 @@ enum DemoMode: String {
         case .crowded: return DemoFixtures.crowded()
         case .crowdedHit: return DemoFixtures.crowdedHit()
         case .hit: return DemoFixtures.hitTable()
+        case .controller:
+            var room = DemoFixtures.hitTable()
+            room.screen = true
+            return room
+        case .controllerOff:
+            var room = DemoFixtures.table(seats: 4, mySeat: 0, phase: 2)
+            room.game?.turn = 2
+            room.screen = true
+            return room
+        case .controllerLay:
+            var room = DemoFixtures.layTable()
+            room.screen = true
+            return room
+        case .controllerCurtain:
+            var room = DemoFixtures.curtain()
+            room.screen = true
+            return room
         case .lay: return DemoFixtures.layTable()
         case .over: return DemoFixtures.celebration().last?.room ?? DemoFixtures.lobby()
         case .weak, .reconnecting:
@@ -206,8 +231,8 @@ enum DemoMode: String {
         case .celebrate: CelebrateSocket()
         case .howto: HowToSocket(room: room)
         case .nope: DemoSocket(room: room, refusing: true)
-        case .hit, .crowdedHit: DemoSocket(room: room, hits: true)
-        case .lay: DemoSocket(room: room, lays: true)
+        case .hit, .crowdedHit, .controller: DemoSocket(room: room, hits: true)
+        case .lay, .controllerLay: DemoSocket(room: room, lays: true)
         case .weak: DemoSocket(room: room, script: [(.seconds(1), .link(.weak))])
         case .reconnecting: DemoSocket(room: room, script: [(.seconds(1), .disconnected), (.zero, .connecting)])
         case .nudged: DemoSocket(room: room, script: [(.seconds(5), .message(.nudged(seat: 0, from: 1)))])

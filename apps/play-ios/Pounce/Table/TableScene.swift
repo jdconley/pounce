@@ -60,6 +60,24 @@ final class TableScene: SKScene {
     var onCoach: (TableCoach?) -> Void = { _ in }
     /// Whose turn the shell's overlay should show (TurnCue.swift); nil for none.
     var onTurnCue: (TurnCue?) -> Void = { _ in }
+    /// Just this phone's cards are shown (a TV shows the table): what the shell's action row
+    /// offers now (`ControllerOffer`).
+    var onController: (ControllerOffer) -> Void = { _ in }
+    private var publishedOffer = ControllerOffer()
+    /// How a table a TV shows is drawn here (`TableScreen` decides); nil: no TV, today's table.
+    var tv: TVFrame? {
+        didSet {
+            guard tv != oldValue else { return }
+            if case .cards = tv {
+                // The table's own pieces are the TV's now: the tower goes back down, unseen.
+                tower.setOpen(false, animated: false)
+                showHitPreview(nil)
+            }
+            redraw()
+        }
+    }
+    /// The lay-down trays are all valid and nothing is held over them (the button would show).
+    private(set) var layDownReady = false
     var turnCue = TurnCueState()
     /// Spotlight and game-over bookkeeping (Celebrations.swift).
     var celebration = CelebrationState()
@@ -598,11 +616,26 @@ final class TableScene: SKScene {
             clearProvisional()
         }
         let barSeats = model.barSeats(bottom: bottom)
-        let layout = TableLayout(
-            size: size, safeTop: safeInsets.top, safeBottom: safeInsets.bottom, opponents: max(barSeats.count, 1))
+        let layout: TableLayout
+        switch tv {
+        case .cards(let chrome):
+            layout = TableLayout(
+                size: size, safeTop: safeInsets.top, safeBottom: safeInsets.bottom, opponents: max(barSeats.count, 1),
+                controller: chrome)
+        case .table(let band):
+            // The whole table, under the switch's band.
+            layout = TableLayout(
+                size: size, safeTop: safeInsets.top + band, safeBottom: safeInsets.bottom, opponents: max(barSeats.count, 1))
+        case nil:
+            layout = TableLayout(
+                size: size, safeTop: safeInsets.top, safeBottom: safeInsets.bottom, opponents: max(barSeats.count, 1))
+        }
         self.layout = layout
-        for l in [Layer.rug, .piles, .laidZone, .tower] { layer(l).isHidden = false }
-        opponents.isHidden = false
+        // Just my cards: the rug, the laid groups, the tower and the other seats are on the TV.
+        let cards = layout.arrangement == .controller
+        layer(.piles).isHidden = false
+        for l in [Layer.rug, .laidZone, .tower] { layer(l).isHidden = cards }
+        opponents.isHidden = cards
 
         // Room and rug. The room art is portrait; a wide table turns it on its side (the floor
         // seen from above, planks running across) so it fills the view with less zoom.
@@ -616,26 +649,31 @@ final class TableScene: SKScene {
         let zone = layout.laidZone
         // Roomy: the rug reaches a little past the zone's top and bottom, under the trays' and
         // the bar's edges, so it reads as the table everyone sits around.
-        let rugSide = layout.arrangement == .phone
+        let rugSide = !layout.roomy
             ? min(zone.width + 36, zone.height * 0.92)
             : min(zone.width, zone.height * 1.12)
-        rug.isHidden = false
+        rug.isHidden = cards
         rug.size = CGSize(width: rugSide, height: rugSide)
         rug.position = CGPoint(x: zone.midX, y: (layout.deck.y + zone.midY) / 2)
 
         // Piles.
         deck.position = layout.deck
-        deck.update(count: game.deckCount, top: nil, cardSize: layout.cardSize)
+        deck.update(count: game.deckCount, top: nil, cardSize: layout.pileSize)
         discard.position = layout.discard
-        discard.update(count: game.discardCount, top: game.discardTop, cardSize: layout.cardSize)
+        discard.update(count: game.discardCount, top: game.discardTop, cardSize: layout.pileSize)
 
-        laidZone.update(model: model, layout: layout)
-        tower.update(model: model, layout: layout)
-        foldOnTurnChange(game)
-        // A phone holding no seat shows every seat in the bar.
-        let barChanges = opponents.update(model: model, seats: barSeats, layout: layout)
-        for seat in barChanges.turnedOn { pulseTurn(seat) }
-        for seat in barChanges.movedOn { popPhase(seat) }
+        if cards {
+            // Nothing of theirs here: no cat to tap, pulse or fly a card to.
+            opponents.clear()
+        } else {
+            laidZone.update(model: model, layout: layout)
+            tower.update(model: model, layout: layout)
+            foldOnTurnChange(game)
+            // A phone holding no seat shows every seat in the bar.
+            let barChanges = opponents.update(model: model, seats: barSeats, layout: layout)
+            for seat in barChanges.turnedOn { pulseTurn(seat) }
+            for seat in barChanges.movedOn { popPhase(seat) }
+        }
 
         // Hand: faces only for the revealed seat; backs for a seat of mine that isn't revealed.
         // Cards in trays, in flight or under the finger are left out of the fan.
@@ -689,14 +727,18 @@ final class TableScene: SKScene {
             if let dragCard { hidden.insert(dragCard) }
             trays.show(trayState, hidden: hidden, targets: glows.trays, lifted: trayYarn?.card)
             if !glows.layDown { trays.layDownButton.isHidden = true }
+            layDownReady = !trays.layDownButton.isHidden
+            // Just my cards: Lay down is a word in the shell's action row, not the paw here.
+            if cards { trays.layDownButton.isHidden = true }
         } else {
+            layDownReady = false
             trays.isHidden = true
             trays.update(requirements: [], layout: layout)
             trays.layDownButton.isHidden = true
         }
         sortButton.isHidden = !faceUp || hand.cards.count < 2
         sortButton.position = layout.sortButton
-        let roomy = layout.arrangement != .phone
+        let roomy = layout.roomy
         sortButton.size = CGSize(width: roomy ? 44 : Self.sortSize, height: roomy ? 44 : Self.sortSize)
         menuButton.size = CGSize(width: layout.menuSide, height: layout.menuSide)
 
@@ -853,10 +895,32 @@ final class TableScene: SKScene {
         }
     }
 
-    /// The shell's overlays over the table: the first-game coach and the turn cue.
+    /// The shell's overlays over the table: the first-game coach, the turn cue and, showing just
+    /// my cards, the action row.
     func publishOverlays() {
         onCoach(coachSnapshot())
         publishTurnCue()
+        publishController()
+    }
+
+    /// Just my cards are shown (`TVFrame.cards`): the layout is the controller's.
+    var controllerShown: Bool { layout?.arrangement == .controller }
+
+    /// What the action row offers, sent to the shell when it changes: the groups the picked card
+    /// can hit (the table's own rule, `HitAims`), or Lay down.
+    private func publishController() {
+        var offer = ControllerOffer()
+        if controllerShown, let seat = actingSeat, let model, model.canPlay(seat) {
+            offer.layDown = layDownReady
+            if let card = liftedCard, let aims = heldAims(card), !aims.targets.isEmpty {
+                offer.hit = ControllerOffer.Hit(
+                    seat: seat, card: card, choices: HitChoices.choices(model: model, targets: Array(aims.targets), seat: seat),
+                    model: model)
+            }
+        }
+        guard offer != publishedOffer else { return }
+        publishedOffer = offer
+        onController(offer)
     }
 
     /// Asks for a redraw after an input change (selection, trays, order).
@@ -930,7 +994,7 @@ final class TableScene: SKScene {
             label: String(localized: "Discard pile, \(discardLabel)", comment: "VoiceOver: the discard pile and its top card"),
             value: discard.highlighted ? Self.targetValue : nil,
             frame: discard.hitFrame, actions: drawActions(.discard)))
-        for seat in laidZone.laidSeats {
+        for seat in controllerShown ? [] : laidZone.laidSeats {
             let name = SeatInfo.name(model.room, seat)
             let groups = (game.laid[safe: seat] ?? nil) ?? []
             for (g, frame) in laidZone.groupFrames(seat: seat).enumerated() {
@@ -994,15 +1058,19 @@ final class TableScene: SKScene {
         items.append(Item(
             id: "table.menu", label: String(localized: "Table menu", comment: "VoiceOver: the paw menu button"),
             frame: menuFrame))
-        items.append(towerAccessibilityItem(model, game))
+        if !controllerShown { items.append(towerAccessibilityItem(model, game)) }
         let mine = model.isMyTurn
         let whose = mine
             ? String(localized: "Your turn", comment: "VoiceOver: it is this phone's turn")
             : String(localized: "\(SeatInfo.name(model.room, game.turn))'s turn", comment: "VoiceOver: whose turn it is")
         let bar = layout.opponentsBar
+        // Just my cards: where the shell's status line says it.
+        let turnFrame = controllerShown
+            ? CGRect(x: layout.statusLine.midX - 22, y: layout.statusLine.minY, width: 44, height: max(layout.statusLine.height, 20))
+            : CGRect(x: bar.midX - 22, y: bar.maxY, width: 44, height: min(44, max(safeInsets.top, 20)))
         items.append(Item(
             id: "table.turn", label: whose, value: mine ? "mine" : "other",
-            frame: CGRect(x: bar.midX - 22, y: bar.maxY, width: 44, height: min(44, max(safeInsets.top, 20))),
+            frame: turnFrame,
             traits: [.staticText, .updatesFrequently]))
         return items + debugItems()
     }
@@ -1076,3 +1144,42 @@ struct StageProbe {
     }
 }
 #endif
+
+/// How a table a TV shows is drawn on this phone (`TableShown`, decided by `TableScreen`).
+enum TVFrame: Equatable {
+    /// Just this phone's cards, around the shell's chrome (the controller layout).
+    case cards(ControllerChrome)
+    /// The whole table, laid out under the switch's band.
+    case table(switchBand: CGFloat)
+}
+
+/// What the action row on Cards offers right now: Lay down, or the picked card's hits.
+struct ControllerOffer: Equatable {
+    struct Hit: Equatable {
+        /// The seat playing, and the picked card.
+        var seat: Seat
+        var card: CardID
+        /// Its legal targets, in list order, with what each label needs to say.
+        var choices: [HitChoice]
+        /// The table as drawn (for the owners' names).
+        var model: TableModel
+    }
+
+    var hit: Hit?
+    var layDown = false
+}
+
+extension TableLayout {
+    /// The layout the scene draws in a view of `full` size with these safe insets, for the shell's
+    /// overlays (the scene's own `redraw` makes the same one).
+    init(full: CGSize, insets: EdgeInsets, tv: TVFrame?) {
+        switch tv {
+        case .cards(let chrome):
+            self.init(size: full, safeTop: insets.top, safeBottom: insets.bottom, opponents: 1, controller: chrome)
+        case .table(let band):
+            self.init(size: full, safeTop: insets.top + band, safeBottom: insets.bottom, opponents: 1)
+        case nil:
+            self.init(size: full, safeTop: insets.top, safeBottom: insets.bottom, opponents: 1)
+        }
+    }
+}

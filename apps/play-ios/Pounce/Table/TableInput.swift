@@ -390,6 +390,8 @@ extension TableScene {
     /// The laid group (and its end) a hand card let go at `p` would hit: nothing where the
     /// discard pile, a cat or a tray takes the drop first.
     private func laidDrop(at p: CGPoint) -> (target: HitTarget, toward: HitSide)? {
+        // Just my cards: the groups are on the TV, hit from the shell's list.
+        if controllerShown { return nil }
         if discard.hitFrame.insetBy(dx: -12, dy: -12).contains(p) || opponentSeat(at: p) != nil { return nil }
         if !trays.isHidden, trays.tray(at: p) != nil { return nil }
         return laidZone.drop(at: p)
@@ -513,7 +515,7 @@ extension TableScene {
         case .sort:
             cycleSort()
         case .layDown:
-            if !tryLayDown() { nope(node: trays.layDownButton, why: why { model, seat in model.whyNoPlay(seat) } ?? .notALevel) }
+            layDownTapped()
         case .hand(let card):
             liftedCard = liftedCard == card ? nil : card
             Haptics.shared.tick()
@@ -564,6 +566,21 @@ extension TableScene {
         }
     }
 
+    /// Lay down (the paw over the trays, or the action row's word on Cards).
+    func layDownTapped() {
+        if !tryLayDown() { nope(node: trays.layDownButton, why: why { model, seat in model.whyNoPlay(seat) } ?? .notALevel) }
+    }
+
+    /// The hit list's Hit (Cards): `card` onto `target`, a Yarn on a run's high end where it fits
+    /// (as VoiceOver's single action does). False, with a nope and its reason, if it didn't go.
+    @discardableResult func hitFromList(_ card: CardID, _ target: HitTarget) -> Bool {
+        guard tryHit(card, target, toward: .end) else {
+            nope(card: card, why: whyNoHit(card, target))
+            return false
+        }
+        return true
+    }
+
     /// A cat tap: that player's card for the table as drawn.
     func showPlayer(_ seat: Seat) {
         guard let model, model.game?.phase.indices.contains(seat) == true else { return }
@@ -579,7 +596,7 @@ extension TableScene {
             if !tryTray(held, tray) { nope(card: held, why: whyNoTray(held, tray)) }
             return
         }
-        if let aim = laidZone.drop(at: p) {
+        if !controllerShown, let aim = laidZone.drop(at: p) {
             if !tryHit(held, aim.target, toward: aim.toward) { nope(card: held, why: whyNoHit(held, aim.target)) }
             return
         }
@@ -745,11 +762,29 @@ extension TableScene {
         #if DEBUG
         if case .hit(_, _, let side) = plan.action { hitProbe.sent = "\(target.seat).\(target.group).\(side?.rawValue ?? "-")" }
         #endif
+        if controllerShown {
+            // The group is on the TV: the card leaves the hand upward, toward it, and waits out
+            // of sight until the server answers (a refusal flies it back).
+            sendUp(card)
+            return true
+        }
         showHitPreview(HitPreview(target: target, card: card, plan: plan, ghost: false))
         let spot = laidZone.landing(hit: card, seat: target.seat, index: target.group, group: plan.group)
         let f = laidZone.groupFrames(seat: target.seat)[safe: target.group] ?? .zero
         provisionalMove(card: card, to: spot ?? CGPoint(x: f.maxX, y: f.midY), scale: layout.map { laidZone.miniScale(layout: $0) } ?? 0.6)
         return true
+    }
+
+    /// Just my cards: a played card flies up off the top of the screen (to the TV).
+    private func sendUp(_ card: CardID) {
+        guard let layout else { return }
+        let start = hand.node(for: card).map { layer(.drag).convert($0.position, from: hand) }
+            ?? CGPoint(x: size.width / 2, y: layout.traysFrame.maxY)
+        provisionalMove(card: card, to: start)
+        guard let node = provisionalNode else { return }
+        let away = CGPoint(x: size.width / 2, y: size.height + layout.cardSize.height)
+        let director = director
+        Task { await director.run(Effects.fly(from: start, to: away, duration: 0.32, lift: 0, scale: 0.6), on: node) }
     }
 
     @discardableResult func tryLayDown() -> Bool {

@@ -4,6 +4,8 @@ import Foundation
 /// teaches on the Cat Tower table). One screen hosts tips at a time: the one on top.
 public enum TipScreen: String, CaseIterable, Codable, Sendable {
     case home, lobby, tableMenu, pounce, us, gear, tiles
+    /// Cat Tower's table (so far only while a TV shows it: the Cards/Table switch).
+    case table
 }
 
 /// What makes a tip worth showing, beyond its control being on screen.
@@ -105,6 +107,8 @@ public enum UITip: String, CaseIterable, Codable, Sendable {
     case tilesUndo = "ui.tiles.undo"
     case tilesHint = "ui.tiles.hint"
     case tilesLoupe = "ui.tiles.loupe"
+    // A table a TV shows
+    case tableView = "ui.table.view"
 
     public var rule: UITipRule {
         switch self {
@@ -141,6 +145,9 @@ public enum UITip: String, CaseIterable, Codable, Sendable {
         case .tilesHint: r(.tiles, "tiles.hint", 94)
         case .tilesUndo: r(.tiles, "tiles.undo", 65, .after(.tilesSort), learnedBy: ["tiles.undo"])
         case .tilesLoupe: r(.tiles, "tiles.set", 60, learnedBy: ["tiles.loupe"])
+        // The switch shows only while a TV shows the table, so this comes up the first time the
+        // phone becomes a controller; tapping either side learns it.
+        case .tableView: r(.table, "table.view", 100)
         }
     }
 
