@@ -129,8 +129,7 @@ final class OpponentsNode: SKNode {
                     addChild(n)
                     return n
                 }()
-                words.place(score: game.scores[safe: seat], on: score, under: tag)
-                score.isHidden = score.isHidden || link != nil
+                words.place(score: link == nil ? game.scores[safe: seat] : nil, on: score, under: tag)
                 score.zPosition = 30 + CGFloat(i)
             } else {
                 setLinkTag(

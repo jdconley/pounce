@@ -48,6 +48,8 @@ final class TableScene: SKScene {
     /// The seat the banner names: the drawn table's turn, or a turn that just started (its
     /// snapshot not drawn yet).
     private var bannerTurn: Seat?
+    /// The "+N" size last warmed for this table (`CardFaceFactory.warmBadges`).
+    private var warmedBadges: CGFloat?
     /// The paw button top-right (`table.menu`).
     var onMenu: () -> Void = {}
     /// The open tower was tapped (`table.tower`, TowerToggle.swift): the shell shows the
@@ -323,6 +325,7 @@ final class TableScene: SKScene {
             // The game's sounds are the TV's; its card faces are drawn ahead, off the main thread.
             Sound.shared.preload()
             Task { await CardFaceFactory.shared.prewarm() }
+            TVArt.shared.scale = max(view.traitCollection.displayScale, 1)
             watchStore()
         }
         redraw()
@@ -426,6 +429,7 @@ final class TableScene: SKScene {
         markDrawn()
         pendingReveal = nil
         self.model = model
+        bannerTurn = model.room.liveTurn
         revealed = valid(reveal, in: model)
         revealedEpoch = reveal.epoch
         shownRevealed = revealed
@@ -615,6 +619,7 @@ final class TableScene: SKScene {
         if let reveal = pendingReveal { return apply(next, reveal) }
         settle()
         model = next
+        bannerTurn = next.room.liveTurn
         revealed = valid(Reveal(seat: revealed, epoch: revealedEpoch), in: next)
         shownRevealed = revealed
         redraw()
@@ -775,7 +780,17 @@ final class TableScene: SKScene {
         discard.setHighlighted(glows.piles.contains(.discard) || glows.discard)
         for seat in opponents.order { opponents.node(for: seat)?.setTarget(glows.cats.contains(seat)) }
         laidZone.setTargets(glows.groups, enlarged: glows.enlarge, about: CGPoint(x: zone.midX, y: layout.deck.y))
-        if onTV { showAim() } else { _ = laidZone.setAim(nil) }
+        if onTV {
+            showAim()
+            // A fold's "+N" at the TV's size, drawn off the main thread.
+            let badge = layout.tvLaidNumeral.rounded()
+            if warmedBadges != badge {
+                warmedBadges = badge
+                Task { await CardFaceFactory.shared.warmBadges(size: badge) }
+            }
+        } else {
+            _ = laidZone.setAim(nil)
+        }
 
         // Phase goal trays above a revealed hand; before laying down they take cards.
         if faceUp {
@@ -818,7 +833,6 @@ final class TableScene: SKScene {
 
         menuButton.isHidden = false
         menuButton.position = layout.menuButton
-        bannerTurn = model.room.liveTurn
         showBanner(pop: false)
     }
 
@@ -879,12 +893,14 @@ final class TableScene: SKScene {
         let names = SeatInfo.names(model.room)
         let u = layout.tvUnit
         // Every seat's banner and lay-down moment, and each level's words, drawn ahead.
+        let words = TVSeatWords(layout.seatFrames.first ?? .zero, unit: u)
         let pieces = names.indices.flatMap {
             [
                 TVBanner.piece(name: names[$0], seat: $0, banner: layout.banner, room: layout.bannerRoom, unit: u),
                 TVMoment.title(name: names[$0], seat: $0, unit: u),
             ]
-        } + (1...10).map { TVMoment.level($0, unit: u) }
+        } + (1...10).map { TVMoment.level($0, unit: u) } + [TVBanner.lost(banner: layout.banner, unit: u)]
+            + (model.game?.scores ?? []).map(words.piece)
         if pieces != warmedBanners {
             warmedBanners = pieces
             TVArt.shared.warm(pieces)
@@ -912,16 +928,25 @@ final class TableScene: SKScene {
     func showMoment(laidDown seat: Seat) {
         guard isScreen, let model, let game = model.game, let layout, layout.arrangement == .tv else { return }
         let u = layout.tvUnit
-        let (node, action) = TVMoment.make(
-            name: SeatInfo.name(model.room, seat), seat: seat, cat: SeatInfo.catIndex(model.room.seats[safe: seat]),
-            level: min((game.phase[safe: seat] ?? 0) + 1, 10), center: CGPoint(x: layout.rug.midX, y: layout.rug.midY),
-            unit: u, reduceMotion: UIAccessibility.isReduceMotionEnabled)
-        node.zPosition = 20
-        layer(.fx).addChild(node)
-        let director = director
-        Task {
-            await director.run(action, on: node, decorative: true)
-            node.removeFromParent()
+        let cat = SeatInfo.catIndex(model.room.seats[safe: seat])
+        let center = CGPoint(x: layout.rug.midX, y: layout.rug.midY)
+        let pieces = [
+            TVMoment.title(name: SeatInfo.name(model.room, seat), seat: seat, unit: u),
+            TVMoment.level(min((game.phase[safe: seat] ?? 0) + 1, 10), unit: u),
+        ]
+        // Warmed as the table opened; were they not, the moment shows once they're drawn.
+        TVArt.shared.whenReady(pieces) { [weak self] textures in
+            guard let self, self.view != nil, textures.count == 2 else { return }
+            let (node, action) = TVMoment.make(
+                titleTexture: textures[0], subTexture: textures[1], cat: cat, center: center, unit: u,
+                reduceMotion: UIAccessibility.isReduceMotionEnabled)
+            node.zPosition = 20
+            self.layer(.fx).addChild(node)
+            let director = self.director
+            Task {
+                await director.run(action, on: node, decorative: true)
+                node.removeFromParent()
+            }
         }
     }
 

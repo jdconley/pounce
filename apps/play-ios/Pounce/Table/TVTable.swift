@@ -18,35 +18,43 @@ extension TVInsets {
 
 /// The TV's own words, exactly as the web's TV page says them.
 enum TVWords {
-    /// The turn banner: "<Name>'s turn".
-    static func turn(_ name: String) -> String {
+    /// The turn banner: "<Name>'s turn". The banner's only source of its words.
+    nonisolated static func turn(_ name: String) -> String {
         String(localized: "\(name)'s turn", comment: "TV banner: whose turn it is")
     }
 
-    /// The name's part of `turn`: what comes after it.
-    static var turnTail: String { String(localized: "'s turn", comment: "TV banner, after the name: whose turn it is") }
-
-    static var reconnecting: String { String(localized: "Reconnecting", comment: "TV banner: the TV lost the table and is finding it again") }
+    nonisolated static var reconnecting: String { String(localized: "Reconnecting", comment: "TV banner: the TV lost the table and is finding it again") }
 
     /// Someone laid their level down: "<Name> laid down", "Level 4".
-    static func laidDown(_ name: String) -> String {
+    nonisolated static func laidDown(_ name: String) -> String {
         String(localized: "\(name) laid down", comment: "TV, big over the table: a player laid their level down")
     }
 
-    static func level(_ level: Int) -> String {
+    nonisolated static func level(_ level: Int) -> String {
         String(localized: "Level \(level)", comment: "TV, under '<Name> laid down': the level they laid down")
     }
 }
 
-/// The TV's banners and moments, drawn once per name, colour and size and kept. A table warms every
-/// seat's banner off the main thread as it opens (`warm`), so a turn changing never stops a frame
-/// to draw one; one not ready yet is drawn on the spot (a few milliseconds, once).
+/// The TV's banners, moments and scores, drawn once per words, colour and size and kept. Every
+/// picture is drawn off the main thread (`docs/main-thread.md`): a table warms what it will show as
+/// it opens (`warm`), and anything not ready yet is handed over when it is (`whenReady`), never
+/// drawn on the spot.
 @MainActor
 final class TVArt {
     static let shared = TVArt()
 
     private var textures: [String: SKTexture] = [:]
-    private var drawing: Set<String> = []
+    /// Pictures being drawn, and who is waiting for each.
+    private var waiting: [String: [() -> Void]] = [:]
+
+    /// The display's pixels per point (2 at 4K), from the table's view (`TableScene`,
+    /// `TilesScene` set it as they're shown), so words stay sharp. A change drops what was drawn.
+    var scale: CGFloat = 1 {
+        didSet {
+            guard scale != oldValue else { return }
+            textures.removeAll()
+        }
+    }
 
     /// What a picture is: the words, their colour and the room they have, at a plan unit.
     enum Piece: Hashable, Sendable {
@@ -72,28 +80,52 @@ final class TVArt {
         }
     }
 
-    func texture(_ piece: Piece) -> SKTexture {
-        let key = piece.key
-        if let cached = textures[key] { return cached }
-        let work = FrameWork("tv.art"); defer { work.end() }
-        let t = SKTexture(image: Self.image(piece, scale: Self.scale))
-        textures[key] = t
-        return t
+    /// The picture if it is drawn already.
+    func ready(_ piece: Piece) -> SKTexture? { textures[piece.key] }
+
+    /// Calls `then` with the pictures: at once when every one is drawn, else once the missing ones
+    /// are, off the main thread.
+    func whenReady(_ pieces: [Piece], _ then: @escaping ([SKTexture]) -> Void) {
+        let deliver = { [weak self] in
+            guard let self else { return }
+            let made = pieces.compactMap { self.textures[$0.key] }
+            if made.count == pieces.count { then(made) }
+        }
+        let missing = pieces.filter { textures[$0.key] == nil }
+        guard !missing.isEmpty else { return deliver() }
+        // Called back once the last missing picture lands.
+        var left = Set(missing.map(\.key))
+        for piece in missing {
+            let key = piece.key
+            waiting[key, default: []].append {
+                left.remove(key)
+                if left.isEmpty { deliver() }
+            }
+        }
+        warm(missing)
     }
 
-    /// Draws `pieces` off the main thread (`docs/main-thread.md`) for the next time they show.
+    /// Draws `pieces` off the main thread for the next time they show.
     func warm(_ pieces: [Piece]) {
-        let missing = Array(Set(pieces.filter { textures[$0.key] == nil && !drawing.contains($0.key) }))
+        var seen: Set<String> = []
+        let missing = pieces.filter { textures[$0.key] == nil && !drawingKeys.contains($0.key) && seen.insert($0.key).inserted }
         guard !missing.isEmpty else { return }
-        missing.forEach { drawing.insert($0.key) }
-        let scale = Self.scale
+        missing.forEach { drawingKeys.insert($0.key) }
+        let scale = scale
         Task {
-            for (key, texture) in await Self.draw(missing, scale: scale) {
-                drawing.remove(key)
-                if textures[key] == nil { textures[key] = texture }
+            let made = await Self.draw(missing, scale: scale)
+            for (key, texture) in made {
+                drawingKeys.remove(key)
+                if textures[key] == nil, scale == self.scale { textures[key] = texture }
+            }
+            for (key, _) in made {
+                let calls = waiting.removeValue(forKey: key) ?? []
+                calls.forEach { $0() }
             }
         }
     }
+
+    private var drawingKeys: Set<String> = []
 
     @concurrent
     private static func draw(_ pieces: [Piece], scale: CGFloat) async -> sending [(String, SKTexture)] {
@@ -101,9 +133,6 @@ final class TVArt {
         await SKTexture.preload(made.map(\.1))
         return made
     }
-
-    /// The display's pixels per point (2 at 4K), so words stay sharp.
-    private static var scale: CGFloat { max(UITraitCollection.current.displayScale, 1) }
 
     // MARK: drawing (safe off the main thread)
 
@@ -179,10 +208,9 @@ final class TVArt {
             // The cat leans in on the left (drawn over it by `TVBanner`), the words after it.
             let size = 54 * u, line = 6 * u, halo = 6 * u, drop = 12 * u, height = TVBanner.height * u
             let lead = 150 * u, trail = 36 * u
-            let tail = TVWords.turnTail
-            let room = maxWidth - 2 * halo - lead - trail - width(tail, size)
-            let shown = cut(name, size: size, toFit: room)
-            let words = shown + tail
+            // The words around the name, measured with an empty one.
+            let room = maxWidth - 2 * halo - lead - trail - width(TVWords.turn(""), size)
+            let words = TVWords.turn(cut(name, size: size, toFit: room))
             let w = min(max(minWidth - 2 * halo, lead + width(words, size) + trail), maxWidth - 2 * halo)
             let canvas = CGSize(width: w + 2 * halo, height: height + 2 * halo + drop)
             return UIGraphicsImageRenderer(size: canvas, format: format).image { ctx in
@@ -266,47 +294,54 @@ final class TVBanner: SKNode {
     }
 
     /// Shows `next` centred on `banner` (no wider than `room`); `pop` springs it in, as a new turn
-    /// does. Returns the motion to run, if any.
+    /// does. Returns the motion to run, if any. The banner's picture is drawn off the main thread:
+    /// one not drawn yet shows the moment it is (a table warms them all as it opens).
     func show(_ next: Shown?, banner: CGRect, room: CGRect, unit: CGFloat, pop: Bool, reduceMotion: Bool) -> (SKAction, SKNode)? {
-        let changed = next != shown
         shown = next
         guard let next, banner.width > 0 else {
             isHidden = true
             return nil
         }
-        isHidden = false
         position = CGPoint(x: banner.midX, y: banner.midY)
-        let texture: SKTexture
+        let piece: TVArt.Piece
         switch next {
         case .turn(let seat, let name, let catIndex):
-            texture = TVArt.shared.texture(Self.piece(name: name, seat: seat, banner: banner, room: room, unit: unit))
+            piece = Self.piece(name: name, seat: seat, banner: banner, room: room, unit: unit)
             let side = 132 * unit
-            cat.isHidden = false
             cat.texture = TableArt.cat(catIndex, .awake)
             cat.size = CGSize(width: side, height: side)
         case .reconnecting:
-            texture = TVArt.shared.texture(.reconnecting(unit: unit, minWidth: banner.width))
-            cat.isHidden = true
+            piece = Self.lost(banner: banner, unit: unit)
         }
-        pill.texture = texture
-        pill.size = texture.size()
-        // The texture holds the halo and the shadow below the pill: line the pill itself up on the
-        // banner's place.
-        let halo: CGFloat = next == .reconnecting ? 0 : 6 * unit
-        let drop = pill.size.height - Self.height * unit - 2 * halo
-        pill.position = CGPoint(x: 0, y: -drop / 2)
-        // The cat sits on the pill's left end, its feet a little below the pill's bottom edge.
-        cat.position = CGPoint(x: -pill.size.width / 2 + halo + 6 * unit + cat.size.width / 2, y: -Self.height * unit / 2 + cat.size.height / 2 - 4 * unit)
-        guard pop || changed, !reduceMotion else {
-            setScale(1)
-            return nil
+        TVArt.shared.whenReady([piece]) { [weak self] textures in
+            // Still what the banner shows (nothing newer asked for since).
+            guard let self, self.shown == next, let texture = textures.first else { return }
+            self.apply(texture, next, unit: unit)
         }
-        guard pop else { return nil }
+        guard pop, !reduceMotion else { return nil }
         setScale(0.7)
         return (.sequence([
             .scale(to: 1.06, duration: 0.25).eased(.easeOut),
             .scale(to: 1, duration: 0.17).eased(.easeInEaseOut),
         ]), self)
+    }
+
+    /// "Reconnecting", for `warm`.
+    static func lost(banner: CGRect, unit: CGFloat) -> TVArt.Piece { .reconnecting(unit: unit, minWidth: banner.width) }
+
+    private func apply(_ texture: SKTexture, _ shown: Shown, unit: CGFloat) {
+        isHidden = false
+        pill.texture = texture
+        pill.size = texture.size()
+        cat.isHidden = shown == .reconnecting
+        // The texture holds the halo and the shadow below the pill: line the pill itself up on the
+        // banner's place.
+        let halo: CGFloat = shown == .reconnecting ? 0 : 6 * unit
+        let drop = pill.size.height - Self.height * unit - 2 * halo
+        pill.position = CGPoint(x: 0, y: -drop / 2)
+        // The cat sits on the pill's left end, its feet a little below the pill's bottom edge.
+        cat.position = CGPoint(
+            x: -pill.size.width / 2 + halo + 6 * unit + cat.size.width / 2, y: -Self.height * unit / 2 + cat.size.height / 2 - 4 * unit)
     }
 }
 
@@ -328,7 +363,10 @@ enum TVMoment {
         .words(TVWords.level(level), size: (60 * u).rounded(), yellow: true)
     }
 
-    static func make(name: String, seat: Seat, cat: Int, level: Int, center: CGPoint, unit u: CGFloat, reduceMotion: Bool) -> (FadeGroup, SKAction) {
+    /// `titleTexture` and `subTexture`: `title` and `level`, drawn (`TVArt.whenReady`).
+    static func make(
+        titleTexture: SKTexture, subTexture: SKTexture, cat: Int, center: CGPoint, unit u: CGFloat, reduceMotion: Bool
+    ) -> (FadeGroup, SKAction) {
         let group = FadeGroup()
         group.position = center
         let burst = SKSpriteNode(texture: TableArt.table(ArtName.sunburst), size: CGSize(width: 1100 * u, height: 1100 * u))
@@ -339,12 +377,10 @@ enum TVMoment {
         face.position = CGPoint(x: 0, y: 120 * u)
         face.zPosition = 1
         group.addChild(face)
-        let titleTexture = TVArt.shared.texture(Self.title(name: name, seat: seat, unit: u))
         let title = SKSpriteNode(texture: titleTexture, size: titleTexture.size())
         title.position = CGPoint(x: 0, y: -50 * u)
         title.zPosition = 2
         group.addChild(title)
-        let subTexture = TVArt.shared.texture(Self.level(level, unit: u))
         let sub = SKSpriteNode(texture: subTexture, size: subTexture.size())
         sub.position = CGPoint(x: 0, y: title.position.y - title.size.height / 2 - 18 * u - sub.size.height / 2)
         sub.zPosition = 3
@@ -392,19 +428,30 @@ struct TVSeatWords {
         linkSize = (28 * u).rounded()
     }
 
-    /// Puts `score` (nil hides it) on `node`, just under `tag`.
+    /// A score's picture, for `warm`.
+    func piece(_ score: Int) -> TVArt.Piece { .words(String(score), size: scoreSize, yellow: false) }
+
+    /// Puts `score` (nil hides it) on `node`, just under `tag`. A score whose picture isn't drawn yet
+    /// shows the moment it is (the last one stays till then).
     @MainActor
     func place(score: Int?, on node: SKSpriteNode, under tag: SKSpriteNode) {
         guard let score else {
             node.isHidden = true
+            node.name = nil
             return
         }
-        node.isHidden = false
-        let texture = TVArt.shared.texture(.words(String(score), size: scoreSize, yellow: false))
-        if node.texture !== texture {
-            node.texture = texture
-            node.size = texture.size()
+        let want = "score|\(score)"
+        node.name = want
+        let below = CGPoint(x: tag.position.x, y: tag.position.y - tag.size.height / 2)
+        let unit = unit
+        TVArt.shared.whenReady([piece(score)]) { [weak node] textures in
+            guard let node, node.name == want, let texture = textures.first else { return }
+            node.isHidden = false
+            if node.texture !== texture {
+                node.texture = texture
+                node.size = texture.size()
+            }
+            node.position = CGPoint(x: below.x, y: below.y - node.size.height / 2 + 2 * unit)
         }
-        node.position = CGPoint(x: tag.position.x, y: tag.position.y - tag.size.height / 2 - node.size.height / 2 + 2 * unit)
     }
 }

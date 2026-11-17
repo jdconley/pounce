@@ -48,6 +48,12 @@ final class TilesScene: SKScene {
     private var warmedBanners: [TVArt.Piece] = []
     /// The seat the banner names (the drawn table's turn, or one that just started).
     private var bannerTurn: Seat?
+    /// A TV: the acting player's draft as last seen, for their seat and turn. Their phone takes it
+    /// back as it commits (that clear comes before `played`), so the board keeps it until the play
+    /// lands (`pendingTable`) or the turn moves on, rather than the pieces leaving and flying back.
+    private var keptAim: (seat: Seat, turns: Int, sets: [[TileID]])?
+    /// The draft the board last drew (a TV): a store change that leaves it as it is draws nothing.
+    private var drawnAim: [[TileID]]?
     /// Rack orders, half-built drafts and the last rug seen, per table on this device.
     var memory: TilesDeviceStore?
 
@@ -334,6 +340,7 @@ final class TilesScene: SKScene {
             // The game's sounds are the TV's; its pieces are drawn ahead, off the main thread.
             Sound.shared.preload()
             Task { await TilePieceFactory.shared.prewarm() }
+            TVArt.shared.scale = max(view.traitCollection.displayScale, 1)
             watchStore()
         }
         redraw()
@@ -386,6 +393,8 @@ final class TilesScene: SKScene {
             return
         }
         self.model = model
+        bannerTurn = model.room.liveTurn
+        if let kept = keptAim, !model.isLive || kept.seat != model.view.turn || kept.turns != model.view.turns { keptAim = nil }
         drawnSeq = store.settledSeq
         pendingTable = nil
         for node in transients { node.removeFromParent() }
@@ -507,9 +516,18 @@ final class TilesScene: SKScene {
 
     /// A TV: the acting player's draft of the table, while they make it on their phone
     /// (`RoomStore.aims`); nil for none, and always nil off a TV.
+    /// A clear from their phone doesn't take it off the board while the turn lasts (`keptAim`).
     var aimTable: [[TileID]]? {
-        guard isScreen, let model, model.isLive, case .table(let sets)? = store.aims[model.view.turn] else { return nil }
-        return sets
+        guard isScreen, let model, model.isLive else { return nil }
+        if case .table(let sets)? = store.aims[model.view.turn] { return sets }
+        guard let kept = keptAim, kept.seat == model.view.turn, kept.turns == model.view.turns else { return nil }
+        return kept.sets
+    }
+
+    /// Keeps the acting player's draft as their phone last sent it (`keptAim`).
+    private func keepAim() {
+        guard isScreen, let model, model.isLive, case .table(let sets)? = store.aims[model.view.turn] else { return }
+        keptAim = (model.view.turn, model.view.turns, sets)
     }
 
     /// The pieces the acting player's draft adds to the table (a TV marks them).
@@ -552,6 +570,10 @@ final class TilesScene: SKScene {
         if !animated { director.cancelActions(under: rugContent) }
 
         let seat = shownSeat
+        if isScreen {
+            keepAim()
+            drawnAim = aimTable
+        }
         let sets = currentSets()
         // A TV marks what the acting player's draft adds (a paw and a yellow ring, lifted a little).
         let added = isScreen ? aimAdded() : []
@@ -671,7 +693,6 @@ final class TilesScene: SKScene {
         publishProbe()
         if controls { warmTextures(layout: table) }
         if isScreen {
-            bannerTurn = model.room.liveTurn
             showBanner(pop: false)
         } else {
             publishTipSpots(firstSet: firstOpenSet.flatMap { layout.rug.contains(CGPoint(x: $0.midX, y: $0.midY)) ? $0 : nil })
@@ -854,7 +875,8 @@ final class TilesScene: SKScene {
     // MARK: a TV's table
 
     /// A TV watches what its store hears between snapshots: the acting player's draft and whether
-    /// the TV still has the table. A new draft slides the board's pieces to it.
+    /// the TV still has the table. A new draft slides the board's pieces to it (and only a new
+    /// one: anything else the store changes redraws nothing); the connection redraws the banner.
     private func watchStore() {
         guard isScreen, !watching else { return }
         watching = true
@@ -866,7 +888,9 @@ final class TilesScene: SKScene {
                 guard let self else { return }
                 self.watching = false
                 guard self.view != nil else { return }
-                self.redraw(animated: true)
+                self.keepAim()
+                if self.aimTable != self.drawnAim { self.redraw(animated: true) }
+                self.showBanner(pop: false)
                 self.watchStore()
             }
         }
@@ -886,9 +910,10 @@ final class TilesScene: SKScene {
             return
         }
         let names = SeatInfo.names(model.room)
+        let words = TVSeatWords(.zero, unit: layout.tvUnit)
         let pieces = names.indices.map {
             TVBanner.piece(name: names[$0], seat: $0, banner: layout.banner, room: layout.bannerRoom, unit: layout.tvUnit)
-        }
+        } + [TVBanner.lost(banner: layout.banner, unit: layout.tvUnit)] + model.view.scores.map(words.piece)
         if pieces != warmedBanners {
             warmedBanners = pieces
             TVArt.shared.warm(pieces)

@@ -25,6 +25,12 @@ struct TVTableTests {
 
     private static let tv = CGSize(width: 1920, height: 1080)
 
+    /// Waits up to two seconds for `done` (the TV's pictures are drawn off the main thread).
+    private static func soon(_ done: () -> Bool) async -> Bool {
+        for _ in 0..<40 where !done() { try? await Task.sleep(for: .milliseconds(50)) }
+        return done()
+    }
+
     // MARK: Cat Tower
 
     /// My play step at `hitTable`: seat 0 is "mine", with four cards in hand and two sets laid.
@@ -71,8 +77,8 @@ struct TVTableTests {
         scene.size = Self.tv
         store.handle(.message(.snapshot(protocol: PounceKit.protocolVersion, seq: 1, room: room)))
         await scene.play(.reconcile)
-        #expect(!scene.banner.isHidden)
         #expect(scene.banner.shown == .turn(seat: 1, name: SeatInfo.name(room, 1), cat: SeatInfo.catIndex(room.seats[1])))
+        #expect(await Self.soon { !scene.banner.isHidden }, "the banner's picture never came")
         #expect(scene.tower.isOpen)
 
         store.handle(.message(.aim(seat: 1, aim: .target(seat: 1, group: 1))))
@@ -152,7 +158,7 @@ struct TVTableTests {
     // MARK: Tuna Tiles
 
     /// `tilesMid`: seat 0 is "mine", with nine pieces in its stash.
-    @Test func tilesNeverDrawsAStashEvenWhenTheRoomHasOne() {
+    @Test func tilesNeverDrawsAStashEvenWhenTheRoomHasOne() async {
         let store = Self.screenStore()
         let room = DemoFixtures.tilesMid()
         let rack = Set(room.tiles!.racks[0] ?? [])
@@ -172,6 +178,28 @@ struct TVTableTests {
         #expect(rack.isDisjoint(with: scene.pieces.keys), "a stash piece is drawn")
         #expect(scene.turnPill.isHidden && scene.undoButton.isHidden && scene.sortNumberButton.isHidden)
         for seat in room.seats.indices { #expect(scene.opponents.node(for: seat) != nil, "seat \(seat) has no cat") }
+
+        // A draw that names the piece (as only the drawing seat's phone should hear it).
+        let drawn = DemoFixtures.tile(13, .bell, 1)
+        var shownToShell: [TileID] = []
+        scene.onDrew = { _, tile in shownToShell.append(tile) }
+        scene.enqueue(.tiles(.drew(seat: 0, tile: drawn, poolCount: room.tiles!.poolCount - 1), seq: 2))
+        await scene.playChain?.value
+        var after = room
+        after.tiles!.racks[0] = (after.tiles!.racks[0] ?? []) + [drawn]
+        after.tiles!.rackCounts[0] += 1
+        store.handle(.message(.snapshot(protocol: PounceKit.protocolVersion, seq: 2, room: after)))
+        scene.reconcileFromStore()
+        #expect(shownToShell.isEmpty, "the TV handed a drawn piece to its shell")
+        #expect(scene.shownSeat == nil && scene.rackShown.isEmpty)
+        #expect(!scene.pieces.values.contains { $0.isPrivate })
+        #expect(scene.pieces[drawn] == nil, "the drawn piece is on the TV")
+        #expect(rack.union([drawn]).isDisjoint(with: scene.pieces.keys), "a stash piece is drawn")
+        // Nothing anywhere shows the drawn piece's face.
+        let face = TilePieceFactory.shared.face(drawn, size: .large)
+        let small = TilePieceFactory.shared.face(drawn, size: .small)
+        let sprites = Self.all(scene).compactMap { $0 as? SKSpriteNode }
+        #expect(!sprites.contains { $0.texture === face || $0.texture === small }, "the drawn piece shows face up")
     }
 
     /// The acting player's draft shows on the board as they make it, what it adds marked.
@@ -193,11 +221,37 @@ struct TVTableTests {
         scene.redraw()
         #expect(scene.shown.map(\.tiles) == draft)
         #expect(scene.aimAdded() == Set(added))
-        // Another seat's aim is not the table's.
+        // Their phone takes the draft back as it commits: the board keeps it until the play lands.
         store.handle(.message(.aim(seat: 2, aim: nil)))
+        scene.redraw()
+        #expect(scene.shown.map(\.tiles) == draft, "the draft left the board before the play")
+        // Another seat's aim is not the table's.
         store.handle(.message(.aim(seat: 1, aim: .table([added]))))
         scene.redraw()
-        #expect(scene.shown.map(\.tiles) == room.tiles!.table)
+        #expect(scene.shown.map(\.tiles) == draft)
+        // The turn moves on: the board is the room's again.
+        var next = room
+        next.tiles!.turn = 3
+        next.tiles!.turns += 1
+        store.handle(.message(.snapshot(protocol: PounceKit.protocolVersion, seq: 2, room: next)))
+        scene.reconcileFromStore()
+        #expect(scene.shown.map(\.tiles) == next.tiles!.table)
+    }
+
+    /// A turn that just started stays on the banner when the board redraws from the table as drawn.
+    @Test func tilesBannerKeepsATurnThatJustStarted() {
+        let store = Self.screenStore()
+        var room = DemoFixtures.tilesOther()
+        room.seats = room.seats.map { var s = $0; s.yours = false; return s }
+        room.tiles!.racks = [:]
+        let scene = TilesScene(store: store)
+        scene.size = Self.tv
+        store.handle(.message(.snapshot(protocol: PounceKit.protocolVersion, seq: 1, room: room)))
+        scene.reconcileFromStore()
+        #expect(scene.banner.shown == .turn(seat: 2, name: SeatInfo.name(room, 2), cat: SeatInfo.catIndex(room.seats[2])))
+        scene.showBanner(turn: 3)
+        scene.redraw(animated: true)
+        #expect(scene.banner.shown == .turn(seat: 3, name: SeatInfo.name(room, 3), cat: SeatInfo.catIndex(room.seats[3])))
     }
 }
 

@@ -35,7 +35,9 @@ extension TableScene {
             await animateReshuffle()
         case .roundStarted(_, let dealer):
             await animateDeal(dealer: dealer)
-        case .roundOver(let wentOut, let points, let advanced, _, _):
+        case .roundOver(let wentOut, let points, let advanced, let scores, _):
+            // A TV's new scores under the names, drawn off the main thread while the round plays out.
+            if isScreen, let layout { TVArt.shared.warm(scores.map(TVSeatWords(.zero, unit: layout.tvUnit).piece)) }
             await playRoundOver(wentOut: wentOut, points: points, advanced: advanced)
         case .gameOver(let winners):
             await playGameOver(winners: winners)

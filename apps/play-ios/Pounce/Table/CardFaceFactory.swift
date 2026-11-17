@@ -149,6 +149,13 @@ final class CardFaceFactory {
         for (key, texture) in await Self.drawPieces(missing) where numerals[key] == nil { numerals[key] = texture }
     }
 
+    /// The "+1" to "+12" fold badges at `size` (a TV's), drawn off the main thread.
+    func warmBadges(size: CGFloat) async {
+        let missing = (1...12).map { PreviewPiece.badge("+\($0)", size) }.filter { numerals[$0.key] == nil }
+        guard !missing.isEmpty else { return }
+        for (key, texture) in await Self.drawPieces(missing) where numerals[key] == nil { numerals[key] = texture }
+    }
+
     /// A preview ring or badge, as `ring(_:)` and `badge(_:size:)` cache it.
     private enum PreviewPiece: Sendable {
         case ring(UIColor)

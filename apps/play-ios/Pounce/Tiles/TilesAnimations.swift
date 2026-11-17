@@ -162,8 +162,9 @@ extension TilesScene {
                 Haptics.shared.drop()
                 onAnnounce(String(localized: "You drew \(TilesWords.piece(tile))", comment: "VoiceOver: this player drew a piece"))
             } else {
-                // Someone else's draw: a piece goes from the toy box to that cat, face down.
-                if let tile, model.mySeats.contains(seat) { onDrew(seat, tile) }
+                // Someone else's draw: a piece goes from the toy box to that cat, face down. (A
+                // shared phone shows its own seat's piece for a beat; a TV never does.)
+                if let tile, model.mySeats.contains(seat), !isScreen { onDrew(seat, tile) }
                 guard !stashOnly else { return }
                 let size = CGSize(width: layout.rugPieceMax, height: layout.rugPieceMax * TilesLayout.pieceAspect)
                 let node = SKSpriteNode(texture: TilePieceFactory.shared.back(), size: size)
@@ -209,7 +210,9 @@ extension TilesScene {
             }
         case .forfeited(let seat):
             onAnnounce(String(localized: "\(SeatInfo.name(model.room, seat)) forfeited", comment: "VoiceOver announcement: a player forfeited"))
-        case .gameOver:
+        case .gameOver(_, _, let scores, _):
+            // A TV's final scores under the names, drawn off the main thread meanwhile.
+            if isScreen { TVArt.shared.warm(scores.map(TVSeatWords(.zero, unit: layout.tvUnit).piece)) }
             // The snapshot that follows ends the game on this table (`onGameOver`).
             await wait(0.4)
         }

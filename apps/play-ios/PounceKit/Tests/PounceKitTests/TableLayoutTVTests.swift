@@ -265,20 +265,23 @@ struct TableLayoutTVTests {
         }
     }
 
-    /// A seat's groups are its own: laying down or hitting at one seat never moves, folds or
-    /// shrinks another seat's groups (the TV draws each seat from its own counts alone).
+    /// Every seat at its worst ([12, 12]) at once: each seat's groups stay in that seat's own room
+    /// (`laidRow`, plus the 4-point outline the frames draw round their cards) and clear of every
+    /// other seat's groups, on every frame and at every seat count.
     @Test(arguments: G.frames.indices, 2...6)
-    func oneSeatsGroupsNeverMoveAnothers(_ f: Int, _ n: Int) {
+    func eachSeatsWorstGroupsStayInItsRoomAndClearOfOthers(_ f: Int, _ n: Int) {
         let l = layout(f, n)
-        let before = (0..<n).map { s in l.tvGroups(seat: s, counts: s.isMultiple(of: 2) ? [3, 3] : [4]) }
+        let outline = 4 * l.tvUnit + 0.01
+        let placed = (0..<n).map { l.tvGroups(seat: $0, counts: [12, 12]).map(\.frame) }
         for s in 0..<n {
-            for changed in [[], [12, 12], [7], [3, 12], [1]] {
-                var after: [[TVLaidGroup]] = []
-                for t in 0..<n {
-                    after.append(l.tvGroups(seat: t, counts: t == s ? changed : (t.isMultiple(of: 2) ? [3, 3] : [4])))
-                }
+            #expect(placed[s].count == 2, "\(G.frames[f].name), \(n) seats: seat \(s) placed \(placed[s].count) groups")
+            let room = l.laidRow(slot: s, of: n).insetBy(dx: -outline, dy: -outline)
+            for frame in placed[s] {
+                #expect(G.inside(frame, room), "\(G.frames[f].name), \(n) seats: seat \(s)'s group \(frame) leaves its room \(room)")
                 for t in 0..<n where t != s {
-                    #expect(after[t] == before[t], "\(G.frames[f].name), \(n) seats: seat \(s) at \(changed) moved seat \(t)")
+                    for other in placed[t] {
+                        #expect(!G.overlap(frame, other), "\(G.frames[f].name), \(n) seats: seat \(s) \(frame) meets seat \(t) \(other)")
+                    }
                 }
             }
         }
