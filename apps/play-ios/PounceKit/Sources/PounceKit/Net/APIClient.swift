@@ -88,6 +88,35 @@ public enum APIError: Error, Equatable {
     case updateRequired(UpdateRequirement)
     case server(Int)
     case transport(String)
+    /// 429 `too_many_attempts`: wrong codes, backed off; try again in `retryAfter` seconds (nil: not said).
+    case tooManyAttempts(retryAfter: Int?)
+}
+
+/// Which TV link a phone is putting a table on: the scanned or tapped link's token, or the code
+/// typed from the TV (any case).
+public enum ScreenKey: Equatable, Sendable {
+    case token(String)
+    case code(String)
+}
+
+/// `POST /v1/screens/link` worked, or the TV is busy.
+public enum ScreenLinkResult: Equatable, Sendable {
+    /// Linked, or the TV already shows this table.
+    case linked
+    /// The TV shows another table: ask "Move the TV to this table?", then call again with `move`.
+    case showing
+}
+
+/// Why a TV link was refused. Anything else (the network, an update needed) is the `APIError`.
+public enum ScreenLinkError: Error, Equatable, Sendable {
+    /// 404: no live link with that token or code, or the server has no TV (an old server, or the flag off).
+    case notFound
+    /// 429: too many wrong codes; `retryAfter` seconds, when the server said.
+    case tooManyAttempts(retryAfter: Int?)
+    /// 403: this phone is not the host and holds no seat there, or is itself a screen.
+    case notSeated
+    /// 409 `seated`: the TV's device holds a seat at this table.
+    case seated
 }
 
 /// HTTP client for the `play-api` worker. It owns the device credential: it mints
@@ -207,6 +236,31 @@ public actor APIClient {
         return try decode(ScreenLinkOffer.self, from: data, status: 201)
     }
 
+    /// Puts `room` on the TV that `key` names. Throws `ScreenLinkError` for the server's refusals.
+    /// Send `move: true` only after the phone confirmed moving a TV that answered `.showing`.
+    public func linkScreen(_ by: ScreenKey, room: String, move: Bool = false) async throws -> ScreenLinkResult {
+        var body: [String: ScreenLinkValue] = ["room": .text(room)]
+        switch by {
+        case .token(let token): body["token"] = .text(token)
+        case .code(let code): body["code"] = .text(code)
+        }
+        if move { body["move"] = .flag(true) }
+        do {
+            _ = try await authenticated("POST", "/v1/screens/link", body: body)
+            return .linked
+        } catch APIError.notFound {
+            throw ScreenLinkError.notFound
+        } catch APIError.forbidden {
+            throw ScreenLinkError.notSeated
+        } catch APIError.tooManyAttempts(let after) {
+            throw ScreenLinkError.tooManyAttempts(retryAfter: after)
+        } catch APIError.conflict("showing") {
+            return .showing
+        } catch APIError.conflict("seated") {
+            throw ScreenLinkError.seated
+        }
+    }
+
     // MARK: minting
 
     private func mint() async throws -> DeviceCredential {
@@ -315,7 +369,9 @@ public actor APIClient {
         case 404 where noPlayer && errorCode(in: data) == "no_player": throw APIError.noPlayer
         case 404: throw APIError.notFound
         case 409: throw conflict(in: data)
-        case 429: throw APIError.rateLimited
+        case 429:
+            if errorCode(in: data) == "too_many_attempts" { throw APIError.tooManyAttempts(retryAfter: retryAfter(in: data)) }
+            throw APIError.rateLimited
         case UpdateRefusal.status:
             // Too old for the server; any other 426 is the plain server error it always was.
             if case .required(let need)? = UpdateRefusal.read(status: http.statusCode, headers: http.allHeaderFields, body: data) {
@@ -340,6 +396,10 @@ public actor APIClient {
         return .conflict(body?.error ?? "")
     }
 
+    private static func retryAfter(in data: Data) -> Int? {
+        (try? JSONSerialization.jsonObject(with: data) as? [String: Any])?["retryAfter"] as? Int
+    }
+
     private static func errorCode(in data: Data) -> String? {
         (try? JSONSerialization.jsonObject(with: data) as? [String: Any])?["error"] as? String
     }
@@ -350,6 +410,20 @@ public actor APIClient {
 
     private static func decode<T: Decodable>(_ type: T.Type, from data: Data, status: Int) throws -> T {
         do { return try JSONDecoder().decode(type, from: data) } catch { throw APIError.server(status) }
+    }
+}
+
+/// A `linkScreen` body: text, and the `move` flag.
+enum ScreenLinkValue: Encodable, Sendable {
+    case text(String)
+    case flag(Bool)
+
+    func encode(to encoder: any Encoder) throws {
+        var c = encoder.singleValueContainer()
+        switch self {
+        case .text(let s): try c.encode(s)
+        case .flag(let b): try c.encode(b)
+        }
     }
 }
 

@@ -51,7 +51,7 @@ extension TilesScene {
         let error = TilesPlayError(rawValue: code.rawValue)
         input.wiggling = Set(error.map(draft.sets(refusedBy:)) ?? [])
         redraw()
-        Sound.shared.play(ArtName.Sound.sfxNope)
+        Sound.shared.play(ArtName.Sound.sfxNope)  // this phone's own move refused: its own sound
         Haptics.shared.thump()
         if error == .openingTooLow {
             shakeMeter()
@@ -77,6 +77,8 @@ extension TilesScene {
     private func animate(_ event: TilesEvent) async {
         guard let model, let layout else { return }
         let reduce = Effects.reduceMotion
+        // Just the stash (Cards, off turn): the others' moves play on the TV.
+        let stashOnly = layout.arrangement == .controller
         switch event {
         case .played(let seat, let table, let placed, let opened):
             recap.note(event, mine: model.mySeats)
@@ -91,6 +93,12 @@ extension TilesScene {
             // the rug slides to its new shape.
             draft = nil
             pendingTable = table
+            let name = SeatInfo.name(model.room, seat)
+            let words = opened
+                ? String(localized: "\(name) opened with \(placed.count) toys", comment: "VoiceOver: another player made their opening play")
+                : String(localized: "\(name) placed \(placed.count) toys", comment: "VoiceOver: another player played pieces")
+            // Just the stash: the play is the TV's to show; the rug takes it with its snapshot.
+            guard !stashOnly else { return onAnnounce(words) }
             let from = rugContent.convert(seatPoint(seat), from: self)
             let color = UIColor(SeatInfo.ringColor(seat))
             ringSerial += 1
@@ -110,11 +118,8 @@ extension TilesScene {
             if reduce {
                 for tile in placed { pieces[tile]?.run(.fadeIn(withDuration: 0.2), withKey: "fade") }
             }
-            Sound.shared.play(ArtName.Sound.sfxThud, volume: 0.5)
-            let name = SeatInfo.name(model.room, seat)
-            onAnnounce(opened
-                ? String(localized: "\(name) opened with \(placed.count) toys", comment: "VoiceOver: another player made their opening play")
-                : String(localized: "\(name) placed \(placed.count) toys", comment: "VoiceOver: another player played pieces"))
+            Sound.shared.play(ArtName.Sound.sfxThud, volume: 0.5, kind: .game)
+            onAnnounce(words)
             await wait(0.6)
             // The placing cat's colour stays on its pieces for a few seconds.
             Task { [weak self] in
@@ -124,7 +129,8 @@ extension TilesScene {
                 self.redraw()
             }
         case .drew(let seat, let tile, _):
-            let box = CGPoint(x: layout.pool.midX, y: layout.pool.midY)
+            // From the toy box; with just the stash, down from the top (the TV).
+            let box = layout.pool == .zero ? CGPoint(x: size.width / 2, y: size.height) : CGPoint(x: layout.pool.midX, y: layout.pool.midY)
             let fx = layer(.fx)
             if let tile, seat == shownSeat {
                 // My draw: the piece comes out of the toy box, turns over and lands at the
@@ -136,7 +142,7 @@ extension TilesScene {
                 node.setScale(0.6)
                 fx.addChild(node)
                 transients.append(node)
-                Sound.shared.play(ArtName.Sound.sfxFlip)
+                Sound.shared.play(ArtName.Sound.sfxFlip, kind: .game)
                 let face = TilePieceFactory.shared.face(tile, size: .large)
                 if reduce {
                     node.texture = face
@@ -157,11 +163,12 @@ extension TilesScene {
             } else {
                 // Someone else's draw: a piece goes from the toy box to that cat, face down.
                 if let tile, model.mySeats.contains(seat) { onDrew(seat, tile) }
+                guard !stashOnly else { return }
                 let size = CGSize(width: layout.rugPieceMax, height: layout.rugPieceMax * TilesLayout.pieceAspect)
                 let node = SKSpriteNode(texture: TilePieceFactory.shared.back(), size: size)
                 node.position = box
                 fx.addChild(node)
-                Sound.shared.play(ArtName.Sound.sfxFlip, volume: 0.5)
+                Sound.shared.play(ArtName.Sound.sfxFlip, volume: 0.5, kind: .game)
                 let to = seatPoint(seat)
                 let action = reduce
                     ? SKAction.sequence([.fadeOut(withDuration: 0.25), .removeFromParent()])
@@ -173,6 +180,8 @@ extension TilesScene {
                 node.removeFromParent()
             }
         case .passed(let seat):
+            let words = String(localized: "\(SeatInfo.name(model.room, seat)) passed", comment: "VoiceOver: a player passed")
+            guard !stashOnly else { return onAnnounce(words) }
             // A sleepy Zzz over the cat that passed.
             let nap = SKSpriteNode(texture: TableArt.image(ArtName.iconZzz), size: CGSize(width: 34, height: 34))
             let at = seatPoint(seat)
@@ -187,7 +196,7 @@ extension TilesScene {
                 ])
             await director.run(action, on: nap)
             nap.removeFromParent()
-            onAnnounce(String(localized: "\(SeatInfo.name(model.room, seat)) passed", comment: "VoiceOver: a player passed"))
+            onAnnounce(words)
         case .turn(let seat):
             guard model.mySeats.contains(seat) else { return }
             Haptics.shared.turn()
@@ -224,7 +233,7 @@ extension TilesScene {
                         Task { await director.run(pop, on: node, decorative: true) }
                     }
                 }
-                Sound.shared.play(ArtName.Sound.sfxTick, volume: 0.4)
+                Sound.shared.play(ArtName.Sound.sfxTick, volume: 0.4, kind: .game)
                 try? await Task.sleep(for: Pace.duration(.milliseconds(550)))
             }
             try? await Task.sleep(for: Pace.duration(.seconds(TableText.lingering(3.5))))

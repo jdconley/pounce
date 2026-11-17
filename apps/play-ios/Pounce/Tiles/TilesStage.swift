@@ -17,6 +17,8 @@ final class TilesStageEvents {
     var tableTaps = 0
     /// Where the scene's tip anchors are, in its view's points (`TilesScene.onTipSpots`).
     var tipSpots: [String: CGRect] = [:]
+    /// At a TV on Cards, off turn: the scene draws just the stash (the status line shows).
+    var stashOnly = false
 
     struct Drew: Equatable {
         var seat: Seat
@@ -70,9 +72,35 @@ struct TilesStage: View {
     @State private var playAgain = PlayAgain()
     @State private var againTick = 0
     @State private var gameOff = false
+    /// How the scene draws a table a TV shows (measured by `TilesChrome`); nil without a TV.
+    @State private var tvFrame: TVFrame?
 
     private var table: TilesTableModel? { session.store.room.flatMap(TilesTableModel.init(room:)) }
     private var pass: PassAndPlay { session.store.pass }
+
+    /// The whole table, or (Cards, off turn) just this phone's stash while a TV shows it (spec §3).
+    private var shown: TableShown {
+        TableShown.of(
+            screen: session.store.room?.screen, seated: !(table?.mySeats.isEmpty ?? true),
+            choice: model.tableViews.view(code: session.code))
+    }
+
+    /// The status line over the stash: whose turn it is.
+    private var status: (text: String, mine: Bool)? {
+        guard events.stashOnly, let table, let seat = table.currentSeat else { return nil }
+        return StatusLine.turn(name: SeatInfo.name(table.room, seat), mine: table.mySeats.contains(seat), shared: table.isMultiSeat)
+    }
+
+    /// A floating pill's distance from the safe top: under the top bar, which a TV's switch band
+    /// pushes down; with just the stash, under the status line.
+    private func pillTop(_ standard: CGFloat) -> CGFloat {
+        switch tvFrame {
+        case .cards(let chrome) where events.stashOnly: max(chrome.switchBand, TilesLayout.buttonHit) + chrome.status + 8
+        case .cards(let chrome): standard + max(chrome.switchBand, TilesLayout.buttonHit)
+        case .table(let band): standard + band
+        case nil: standard
+        }
+    }
 
     /// Easy mode (§5.10): on for a kitten unless they turned it off, off for everyone else
     /// unless they turned it on.
@@ -160,10 +188,15 @@ struct TilesStage: View {
             .ignoresSafeArea()
             .zIndex(TableLayer.curtain)
 
+            if shown.hasSwitch {
+                TilesChrome(shown: shown, status: status, onSwitch: pickView) { tvFrame = $0 }
+                    .zIndex(TableLayer.controls)
+            }
+
             if let pill = forfeitPill, let table, !table.mySeats.contains(pill.seat) || table.isMultiSeat {
                 VStack {
                     ForfeitPill(name: SeatInfo.name(table.room, pill.seat), cat: SeatInfo.catIndex(table.room.seats[safe: pill.seat]))
-                        .padding(.top, horizontalSizeClass == .regular ? 236 : 136)
+                        .padding(.top, pillTop(horizontalSizeClass == .regular ? 236 : 136))
                     Spacer()
                 }
                 .transition(.move(edge: .top).combined(with: .opacity))
@@ -173,7 +206,7 @@ struct TilesStage: View {
             if connection != .good, events.winners == nil, !events.menuOpen {
                 VStack {
                     ConnectionPill(connection: connection)
-                        .padding(.top, horizontalSizeClass == .regular ? 196 : 104)
+                        .padding(.top, pillTop(horizontalSizeClass == .regular ? 196 : 104))
                     Spacer()
                 }
                 .transition(.move(edge: .top).combined(with: .opacity))
@@ -204,14 +237,20 @@ struct TilesStage: View {
         }
         .onDisappear {
             scene?.saveDraft()
+            scene?.clearAim()
             session.detachTable()
         }
+        .onChange(of: shown, initial: true) { _, shown in
+            // (On Cards the game's sounds are the TV's: `AppModel.gameSoundsOnTV`.)
+            if !shown.hasSwitch { tvFrame = nil }
+        }
+        .onChange(of: tvFrame) { _, frame in scene?.tv = frame }
         .onChange(of: TilesStageInput(room: session.store.room, pass: pass), initial: true) {
             scene?.refresh()
         }
         .onChange(of: session.store.forfeitNotice) { _, notice in
             guard let notice else { return }
-            Sound.shared.play(ArtName.Sound.sfxThud, volume: 0.7)
+            Sound.shared.play(ArtName.Sound.sfxThud, volume: 0.7, kind: .game)
             withAnimation(.spring(duration: 0.45, bounce: 0.4).paced) { forfeitPill = notice }
             Task {
                 try? await Task.sleep(for: Pace.duration(.seconds(3)))
@@ -220,7 +259,7 @@ struct TilesStage: View {
         }
         .onChange(of: session.store.rematch) { _, code in
             // The phone that asked goes to the new table; the others' pill now jumps there.
-            if let code, let go = playAgain.arrived(code: code) { model.openRematch(code: go) }
+            if let code, let go = playAgain.arrived(code: code) { model.openRematch(code: go, from: session.code) }
         }
         .onChange(of: session.lobbyNope) {
             // A refused Play again. `game_off`: the server no longer deals this game, so no new
@@ -240,8 +279,11 @@ struct TilesStage: View {
         .onChange(of: scenePhase) { _, phase in
             if phase != .active { scene?.saveDraft() }
         }
+        // A TV's link opened over the table: its sheet, not the menu.
+        .onChange(of: model.tvSheet?.id) { _, id in if id != nil { events.menuOpen = false } }
         .sheet(isPresented: $events.menuOpen) {
             TilesMenuSheet(
+                code: session.code,
                 tableName: session.store.room?.title ?? TableName.fallback(code: session.code),
                 easy: easy, tricks: tricks,
                 // A kitten can't forfeit: giving up a game someone else is in is a grown-up's call.
@@ -266,6 +308,7 @@ struct TilesStage: View {
                 },
                 onClose: { events.menuOpen = false })
                 .environment(settings)
+                .environment(model)
         }
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("screen-tiles")
@@ -288,9 +331,15 @@ struct TilesStage: View {
                 try? await Task.sleep(for: .seconds(PlayAgain.wait + 0.2))
                 againTick += 1
             }
-        case .jump(let code): model.openRematch(code: code)
+        case .jump(let code): model.openRematch(code: code, from: session.code)
         case .none: break
         }
+    }
+
+    /// The switch was tapped: this table's pick, kept on this phone.
+    private func pickView(_ view: TablePick) {
+        model.tips.used("table.view")
+        withAnimation(.easeOut(duration: 0.15).paced) { model.tableViews.set(view, code: session.code) }
     }
 
     private func applyModes() {
@@ -307,6 +356,15 @@ struct TilesStage: View {
         scene.easy = easy
         scene.tricks = tricks
         scene.onMenu = { [weak events] in events?.menuOpen = true }
+        #if DEBUG
+        // `-show-menu` (screenshots): the menu open.
+        if self.scene == nil, CommandLine.arguments.contains("-show-menu") {
+            Task { [weak events] in
+                try? await Task.sleep(for: .milliseconds(900))
+                events?.menuOpen = true
+            }
+        }
+        #endif
         scene.onSwipeHome = { [weak model] in model?.goHome() }
         scene.onGameOver = { [weak events] winners in events?.winners = winners }
         scene.onShownSeat = { [weak events] seat in events?.shown = seat }
@@ -314,6 +372,8 @@ struct TilesStage: View {
         scene.onBand = { [weak events] top in if events?.bandTop != top { events?.bandTop = top } }
         scene.onTipSpots = { [weak events] spots in events?.tipSpots = spots }
         scene.onTipUsed = { [weak model] control in model?.tips.used(control) }
+        scene.onStashOnly = { [weak events] only in if events?.stashOnly != only { events?.stashOnly = only } }
+        scene.tv = tvFrame
         scene.onDrew = { [weak events] seat, tile in
             events?.drew = .init(seat: seat, tile: tile, serial: (events?.drew?.serial ?? 0) + 1)
         }
@@ -567,7 +627,7 @@ struct TilesOverView: View {
             }
         }
         .onAppear {
-            Sound.shared.play(ArtName.Sound.sfxFanfare)
+            Sound.shared.play(ArtName.Sound.sfxFanfare, kind: .game)
             Haptics.shared.celebrate()
             withAnimation(.spring(duration: 0.5, bounce: 0.45).paced) { appeared = true }
         }
@@ -655,10 +715,14 @@ struct TilesOverView: View {
     }
 }
 
-/// The tile game's paw menu: sound, haptics, easy mode and its tricks, how to play, home and
-/// forfeit (behind a confirmation).
+/// The tile game's paw menu: sound, haptics and home in one row, then Show on TV, easy mode and
+/// its tricks, how to play, and forfeit (behind a confirmation). Show on TV and how to play are
+/// pages inside the sheet.
 struct TilesMenuSheet: View {
     @Environment(Settings.self) private var settings
+    @Environment(AppModel.self) private var model
+    /// The table's room code (Show on TV puts this table on the TV).
+    let code: String
     let tableName: String
     @State var easy: Bool
     @State var tricks: Bool
@@ -670,17 +734,23 @@ struct TilesMenuSheet: View {
     let onClose: () -> Void
 
     @State private var rules = false
+    @State private var tv = false
     @State private var confirming = false
 
     var body: some View {
         Group {
             if rules {
                 HowToPlaySheet(game: GameCatalog.tiles, exit: .back) { rules = false }
+            } else if tv {
+                ShowOnTVSheet(code: code, onBack: { tv = false }, onClose: onClose)
+                    .transition(.move(edge: .trailing).combined(with: .opacity))
             } else {
                 menu
+                    .transition(.move(edge: .leading).combined(with: .opacity))
             }
         }
-        .presentationDetents(rules ? [.large] : [.height(forfeit == nil ? 520 : 600)])
+        .animation(.spring(duration: 0.4, bounce: 0.25).paced, value: tv)
+        .presentationDetents(rules || tv ? [.large] : [.height(forfeit == nil ? 520 : 600)])
         .presentationDragIndicator(.visible)
         .presentationBackground(Palette.night)
     }
@@ -697,6 +767,7 @@ struct TilesMenuSheet: View {
                     .accessibilityIdentifier("menu.close")
             }
             .padding(.horizontal, 16)
+            // The toggles and Home, icons in one row.
             HStack(spacing: 18) {
                 PillButton(
                     icon: settings.soundOn ? ArtName.iconSoundOn : ArtName.iconSoundOff,
@@ -710,7 +781,15 @@ struct TilesMenuSheet: View {
                     accessibilityLabel: settings.hapticsOn ? "Haptics on" : "Haptics off"
                 ) { settings.hapticsOn.toggle() }
                     .accessibilityIdentifier("menu.haptics")
+                PillButton(icon: ArtName.iconHome, color: Palette.sky, size: .medium, accessibilityLabel: "Home", action: onHome)
+                    .accessibilityIdentifier("menu.home")
             }
+            PillButton(
+                icon: ArtName.iconTV, color: Palette.magenta, size: .medium, width: 250,
+                title: String(localized: "Show on TV", comment: "Table menu: put this table on a TV"),
+                accessibilityLabel: "Show on TV"
+            ) { tv = true }
+                .accessibilityIdentifier("menu.tv")
             PillButton(
                 icon: nil, color: easy ? Palette.lime : Palette.violet, size: .medium, width: 250,
                 title: easy
@@ -740,8 +819,6 @@ struct TilesMenuSheet: View {
                 title: String(localized: "How to play", comment: "Table menu: open the rules"), accessibilityLabel: "How to play"
             ) { rules = true }
                 .accessibilityIdentifier("menu.rules")
-            PillButton(icon: ArtName.iconHome, color: Palette.sky, size: .medium, accessibilityLabel: "Home", action: onHome)
-                .accessibilityIdentifier("menu.home")
             if let forfeit {
                 PillButton(
                     icon: nil, color: Palette.refuse, size: .medium, width: 250,

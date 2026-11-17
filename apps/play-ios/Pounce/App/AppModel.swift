@@ -7,7 +7,10 @@ import SwiftUI
 @MainActor @Observable
 final class AppModel {
     var route: Route {
-        didSet { if case .home = route { funnel.reach(.homeSeen) } }
+        didSet {
+            if case .home = route { funnel.reach(.homeSeen) }
+            routeChangedForTV()
+        }
     }
     var people: LocalPeople
     /// The server's list of this device's tables (Home); at launch, the list saved last time.
@@ -118,6 +121,16 @@ final class AppModel {
     var ageBand: AgeBand? { ageRecord?.band }
     /// What the owner's band allows on this device. Unknown counts as the most limited.
     var limits: AgeLimits { AgeLimits(band: ageBand) }
+    /// Each table's Cards/Table pick while a TV shows it (spec §3).
+    @ObservationIgnored let tableViews: TableViewChoices
+
+    /// The table on screen shows just this phone's cards while a TV shows it: the game's sounds
+    /// are the TV's ("one table, one sound", spec §3). Read by `Sound` on every game sound.
+    var gameSoundsOnTV: Bool {
+        guard case .room(let code, _) = route, let session = room, session.code == code, let r = session.store.room
+        else { return false }
+        return TableShown.of(screen: r.screen, seated: r.seats.contains { $0.yours }, choice: tableViews.view(code: code)).quiet
+    }
     /// Players, Sign in with Apple and sync (spec §10.5, §13.1).
     @ObservationIgnored private(set) var account: AccountModel!
 
@@ -139,6 +152,7 @@ final class AppModel {
         self.config = config
         self.settings = settings
         TilesMemory.opened(data.tiles)
+        tableViews = TableViewChoices(data.tableViews)
         peopleStore = PeopleStore(file: data.people.file, loaded: data.people.value)
         tableCache = TableCache(file: data.cache.file, loaded: data.cache.value)
         tableArchive = TableArchive(file: data.archive.file, loaded: data.archive.value)
@@ -306,11 +320,13 @@ final class AppModel {
            let url = URL(string: text), let link = WidgetLink.parse(url) {
             model.handle(link)
         }
+        Sound.gameOnTV = { [weak model] in model?.gameSoundsOnTV ?? false }
         model.startTips(arguments: arguments, env: env)
         model.startPasteboard(arguments: arguments, env: env)
         return model
         #else
         let model = await real(config: config)
+        Sound.gameOnTV = { [weak model] in model?.gameSoundsOnTV ?? false }
         model.startTips(arguments: arguments, env: env)
         model.startPasteboard(arguments: arguments, env: env)
         return model
@@ -530,6 +546,7 @@ final class AppModel {
         await tableInvites.flush()
         await tutorialStore.flush()
         await tips.flushToDisk()
+        await tableViews.flush()
         await ratingStore.flush()
         await updates.flushToDisk()
         await funnel.flushFile()
@@ -868,7 +885,8 @@ final class AppModel {
     }
 
     /// `practice`: a game against the House Cat that starts at once, with no stop in the lobby.
-    func newGame(_ game: GameCatalog.Entry = GameCatalog.dealt, practice: Bool = false) async {
+    /// `fromHome`: made from Home's games, so a TV link waiting there goes on this table.
+    func newGame(_ game: GameCatalog.Entry = GameCatalog.dealt, practice: Bool = false, fromHome: Bool = false) async {
         // A game still on its way has a card on the shelf but no table to start.
         guard game.isAvailable, !isCreatingRoom else { return }
         isCreatingRoom = true
@@ -878,7 +896,11 @@ final class AppModel {
             // Before `open`, which caches the new table.
             let first = isFirstTable
             let code = try await api.createRoom(game: game.id)
-            open(code: code, intent: .create)
+            if fromHome {
+                openFromHome(code: code, intent: .create)
+            } else {
+                open(code: code, intent: .create)
+            }
             if practice {
                 room?.practicePending = true
             } else if first && firstTableCat {
@@ -908,8 +930,10 @@ final class AppModel {
         route = .room(code: code, intent: intent)
     }
 
-    /// Play again's table (§10.4): open it as one this phone sits at.
-    func openRematch(code: String) {
+    /// Play again's table (§10.4): open it as one this phone sits at, shown as the old table
+    /// (`from`) was: Table at a TV stays Table.
+    func openRematch(code: String, from: String) {
+        tableViews.carry(from: from, to: code)
         #if DEBUG
         // A demo's Play again deals a demo table under the new code.
         if DemoMode.from() != nil {
@@ -1116,14 +1140,14 @@ final class AppModel {
         let code: String
         switch DeepLink.parse(url, allowDevScheme: true) {
         case .join(let c), .move(let c, _): code = c
-        case .pounce, nil: return GameCatalog.dealt.id
+        case .pounce, .tv, nil: return GameCatalog.dealt.id
         }
         if let room, room.code == code, let id = room.store.room?.gameId { return id }
         return homeItems.first { $0.id == code }?.game
     }
 
-    /// A share or move link arrived. Without a local owner, onboarding comes first and the link
-    /// is remembered. A join link for a table already on this device rejoins it.
+    /// A share, move, pounce or TV link arrived. Without a local owner, onboarding comes first and
+    /// the link is remembered. A join link for a table already on this device rejoins it.
     func handle(_ link: DeepLink) {
         funnel.opened(link)
         guard ageRecord != nil else {
@@ -1143,7 +1167,78 @@ final class AppModel {
             // Onboarding is done: the pick sheet (or its card) opens over Home, not the name screen.
             if case .pickCat = route { route = .home }
             Task { await openLink(token) }
+        case .tv(let token):
+            openTV(token)
         }
+    }
+
+    // MARK: Show on TV (docs/tv-protocol.md, TV links)
+
+    /// "Show on TV" is up over the table it names (the table screen presents it).
+    var tvSheet: TVSheetRequest?
+    /// A TV's link opened away from a table: Home says "Pick a table for the TV." and the table
+    /// picked from Home's list or made from its games goes on that TV. Any other way to a table (a
+    /// push, Play again, an invite link) drops it, and so do a tap on the cue and the link's 10
+    /// minutes running out.
+    private(set) var pendingTV: String?
+    @ObservationIgnored private var pendingTVExpiry: Task<Void, Never>?
+    private static let tvLinkLife: Duration = .seconds(10 * 60)
+
+    /// A TV's link (its QR scanned with the Camera app, or pasted). At a table, that table goes on
+    /// the TV; anywhere else Home, with nothing over it, waits for a table to be picked or made.
+    private func openTV(_ token: String) {
+        if case .room(let code, _) = route {
+            tvSheet = TVSheetRequest(code: code, key: .token(token))
+            return
+        }
+        inviteShown = false
+        pick = nil
+        expiredInviteShown = false
+        offlineInvite = nil
+        kittensPanel = nil
+        route = .home
+        pendingTV = token
+        pendingTVExpiry?.cancel()
+        pendingTVExpiry = Task { [weak self] in
+            try? await Task.sleep(for: Self.tvLinkLife)
+            guard !Task.isCancelled else { return }
+            self?.pendingTV = nil
+        }
+    }
+
+    /// The waiting TV link, taken by the table Home is about to open or has just made.
+    private func takePendingTV() -> String? {
+        defer {
+            pendingTV = nil
+            pendingTVExpiry?.cancel()
+        }
+        return pendingTV
+    }
+
+    /// Home's cue was tapped: the waiting TV link goes.
+    func dropPendingTV() { _ = takePendingTV() }
+
+    /// A table picked from Home's list: the waiting TV link, if any, goes with it.
+    func openFromHome(code: String, intent: RoomIntent) {
+        let tv = takePendingTV()
+        open(code: code, intent: intent)
+        if let tv { tvSheet = TVSheetRequest(code: code, key: .token(tv)) }
+    }
+
+    /// Leaving a table drops its sheet. Reaching a table any other way than from Home drops a
+    /// waiting TV link: it was for the table picked there.
+    private func routeChangedForTV() {
+        guard case .room(let code, _) = route else {
+            tvSheet = nil
+            return
+        }
+        if let sheet = tvSheet, sheet.code != code { tvSheet = nil }
+        if pendingTV != nil { _ = takePendingTV() }
+    }
+
+    /// The table's Show on TV button (the lobby, the table menus).
+    func showOnTV(code: String) {
+        tvSheet = TVSheetRequest(code: code, key: nil)
     }
 
     // MARK: Pounce (spec §12.4)
@@ -1198,7 +1293,8 @@ final class AppModel {
         }
         pasteboard.settle()
         Haptics.shared.success()
-        funnel.pasted()
+        // A TV's link isn't an invite: it opens as the tapped link would, and isn't counted as one.
+        if link.isInvite { funnel.pasted() }
         handle(link)
     }
 

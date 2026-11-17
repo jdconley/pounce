@@ -38,7 +38,7 @@ extension TableScene {
         let n = max(seats.count, 1)
         let reduce = reduceMotion
         let fx = fxLayer
-        Sound.shared.play(ArtName.Sound.sfxWhoosh)
+        Sound.shared.play(ArtName.Sound.sfxWhoosh, kind: .game)
         let veil = makeVeil(in: fx, alpha: 0.6)
         hand.isHidden = true
         laidZone.isHidden = true
@@ -96,7 +96,7 @@ extension TableScene {
                 ]), slash))
                 items.append((.sequence([
                     .wait(forDuration: delay), .move(to: spot, duration: catIn).eased(.easeOut),
-                    .run { Sound.shared.play(ArtName.Sound.sfxPop, volume: 0.7) },
+                    .run { Sound.shared.play(ArtName.Sound.sfxPop, volume: 0.7, kind: .game) },
                     Effects.squash(), .wait(forDuration: hold), away,
                 ]), cat))
             }
@@ -161,7 +161,8 @@ extension TableScene {
         let stagger = t.pointsStagger(seats: points.count)
         var pops: [(SKAction, SKNode)] = []
         var squashes: [(SKAction, SKNode)] = []
-        for (seat, value) in points.enumerated() {
+        // Just my cards: only my own points pop here; the others' are on the TV.
+        for (seat, value) in points.enumerated() where !controllerShown || seat == bottomSeat {
             let node = pointsNode(value, wentOut: seat == wentOut)
             node.position = pointsSpot(seat)
             node.zPosition = 8
@@ -175,7 +176,7 @@ extension TableScene {
             let fx = fxLayer
             let director = director
             let land = SKAction.run {
-                Sound.shared.play(ArtName.Sound.sfxPop, volume: 0.8)
+                Sound.shared.play(ArtName.Sound.sfxPop, volume: 0.8, kind: .game)
                 if seat == wentOut { Effects.burst(.sparkle, at: spot, in: fx, director: director) }
             }
             let tail = SKAction.group([
@@ -190,7 +191,8 @@ extension TableScene {
         runInBackground(pops, decorative: true)
         runInBackground(squashes, decorative: false)  // a snap resets the cats' scale
         let popped = Double(max(points.count - 1, 0)) * stagger + t.pop
-        guard !advanced.isEmpty else {
+        // The shelf leaps are the TV's on Cards (the tower isn't here).
+        guard !advanced.isEmpty, !controllerShown else {
             await pause(popped + t.pointsTail)
             return
         }
@@ -236,7 +238,7 @@ extension TableScene {
             items.append((flip, card))
         }
         items.append((.fadeAlpha(to: 1, duration: 0.2), hand))
-        Sound.shared.play(ArtName.Sound.sfxFlip)
+        Sound.shared.play(ArtName.Sound.sfxFlip, kind: .game)
         runInBackground(items, decorative: false)
     }
 
@@ -269,9 +271,20 @@ extension TableScene {
     func playGameOver(winners: [Seat]) async {
         let t = CelebrationTiming.self
         celebration.playedGameOver = true
+        if controllerShown {
+            // Just my cards: the crowning is the TV's; a burst of confetti here, then the overlay.
+            Haptics.shared.celebrate()
+            let center = CGPoint(x: size.width / 2, y: size.height * 0.55)
+            for (i, kind) in [BurstKind.confetti, .stars, .confetti].enumerated() {
+                await pause(i == 0 ? 0.1 : 0.4)
+                Effects.burst(kind, at: CGPoint(x: center.x + CGFloat([0, -70, 70][i]), y: center.y + CGFloat(i * 40)), in: fxLayer, director: director)
+            }
+            await pause(1.2)
+            return announceGameOver(winners)
+        }
         let top = TableLayout.shelfCount
         await focusTower(on: tower.focusRect(low: top - 2, high: top))
-        Sound.shared.play(ArtName.Sound.sfxFanfare)
+        Sound.shared.play(ArtName.Sound.sfxFanfare, kind: .game)
         Haptics.shared.celebrate()
         tower.spinSunburst()
         let crowned = Task { @MainActor in await self.tower.crown(winners) }

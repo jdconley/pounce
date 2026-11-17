@@ -77,9 +77,18 @@ final class Autoplay: NSObject {
 
 extension TilesScene: Autoplaying {
     /// The stash's first piece to the last piece of the rug's first set, or that piece back to
-    /// the middle of the stash.
+    /// the middle of the stash. With just the stash (Cards, off turn), its first piece along to
+    /// its last piece's place, and the last back to the first's.
     func autoplayPath(out: Bool) -> (CGPoint, CGPoint)? {
-        guard let layout, let flow, let last = flow.sets.first?.pieces.last else { return nil }
+        guard let layout else { return nil }
+        if layout.arrangement == .controller {
+            guard rackShown.count > 1, let first = rackShown.first.flatMap({ pieces[$0] }), let last = rackShown.last.flatMap({ pieces[$0] })
+            else { return nil }
+            let a = CGPoint(x: first.position.x - rackScroll, y: first.position.y)
+            let b = CGPoint(x: last.position.x - rackScroll, y: last.position.y)
+            return out ? (a, b) : (b, a)
+        }
+        guard let flow, let last = flow.sets.first?.pieces.last else { return nil }
         let onRug = CGPoint(x: layout.rug.minX + last.x, y: layout.rug.maxY + scroll - last.y)
         if out {
             guard let tile = rackShown.first, let node = pieces[tile] else { return nil }
@@ -91,13 +100,18 @@ extension TilesScene: Autoplaying {
 
 extension TableScene: Autoplaying {
     /// The hand's first card into the middle of the laid zone (a hit, or back to the hand), then
-    /// the last card dragged along the hand.
+    /// the last card dragged along the hand. On Cards, the first card up to the action row.
     func autoplayPath(out: Bool) -> (CGPoint, CGPoint)? {
         guard let layout, !hand.cards.isEmpty else { return nil }
         let index = out ? 0 : hand.cards.count - 1
         guard let frame = hand.frame(at: index) else { return nil }
         let start = convert(CGPoint(x: frame.midX, y: frame.midY), from: hand)
-        if out { return (start, CGPoint(x: layout.laidZone.midX, y: layout.laidZone.midY)) }
+        // Just my cards (`-demo controller`): up to the action row, where it lands on nothing and
+        // goes back.
+        let away = layout.arrangement == .controller
+            ? CGPoint(x: layout.actionRow.midX, y: layout.actionRow.midY)
+            : CGPoint(x: layout.laidZone.midX, y: layout.laidZone.midY)
+        if out { return (start, away) }
         return (start, convert(CGPoint(x: (hand.frame(at: 0) ?? frame).midX, y: frame.midY), from: hand))
     }
 }

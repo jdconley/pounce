@@ -51,3 +51,39 @@ export function linkableTables(list: TableEntry[]): TableEntry[] {
     .filter((t) => (t.status === "lobby" || t.status === "playing") && (t.seats ?? []).some((s) => s.yours === true))
     .sort((a, b) => b.updatedAt - a.updatedAt);
 }
+
+/** What this device remembers opening (the store's `pounce.tables`). */
+export type LocalTable = { code: string; game: string; name?: string; at: number };
+
+/**
+ * How long a table this device opened still counts when the server's list doesn't show this
+ * phone's seat there (or doesn't list it at all): a room updates the tables lists after it
+ * answers, so a table made or joined a moment ago can lag for a few seconds. Older than this and
+ * the server's word stands: it is gone, or was only watched here.
+ */
+export const JUST_OPENED_MS = 10 * 60_000;
+
+/**
+ * "Your tables" on the TV-link page: the server's `linkableTables`, plus the tables this device
+ * opened in the last `JUST_OPENED_MS` that the server lists as waiting or playing but without this
+ * phone's seat yet (the claim hasn't reached the list), or doesn't list at all.
+ * One card per code, the server's entry when it has one, newest first. The server still decides:
+ * a phone with no seat there is told "Sit at this table first." (403).
+ */
+export function mergeLinkable(server: TableEntry[], local: LocalTable[], now: number): TableEntry[] {
+  const shown = linkableTables(server);
+  const codes = new Set(shown.map((t) => t.code));
+  const listed = new Map(server.map((t) => [t.code, t]));
+  const extra: TableEntry[] = [];
+  for (const k of local) {
+    if (codes.has(k.code) || now - k.at >= JUST_OPENED_MS) continue;
+    codes.add(k.code);
+    const s = listed.get(k.code);
+    if (s) {
+      if (s.status === "lobby" || s.status === "playing") extra.push(s);
+    } else {
+      extra.push({ code: k.code, ...(k.name === undefined ? {} : { name: k.name }), game: k.game, status: "lobby", yourTurn: false, updatedAt: k.at });
+    }
+  }
+  return [...shown, ...extra].sort((a, b) => b.updatedAt - a.updatedAt);
+}

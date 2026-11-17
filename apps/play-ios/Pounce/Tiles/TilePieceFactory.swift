@@ -63,6 +63,9 @@ final class TilePieceFactory {
     private var warming: Task<Void, Never>?
     /// Textures being drawn off the main thread, by key.
     private var drawing: Set<String> = []
+    /// Yarn faces being drawn off the main thread. By the key itself: a string of it
+    /// (`"\(key)"`) is Swift's reflection, which costs a frame 10 to 18 ms the first time it runs.
+    private var drawingFaces: Set<FaceKey> = []
 
     /// The scale textures are drawn at: the screen's, at least 2.
     static var scale: CGFloat { max(UIScreen.main.scale, 2) }
@@ -130,8 +133,8 @@ final class TilePieceFactory {
         return texture
     }
 
-    /// Draws every number piece's face at both sizes, and the plain Yarn, off the main thread
-    /// (`docs/main-thread.md`). The tile table waits for this before it draws its first frame
+    /// Draws every number piece's face at both sizes, the plain Yarn and the sort toggles, off the
+    /// main thread (`docs/main-thread.md`). The tile table waits for this before it draws its first frame
     /// (`TilesStage`), so it never draws a face itself, and never waits on the font cache while
     /// the faces are being drawn elsewhere. Once a launch; later calls return at once.
     func prewarm() async {
@@ -150,6 +153,18 @@ final class TilePieceFactory {
             warming = Task {
                 let made = await Self.drawFaces(keys, scale: scale)
                 for (key, texture) in made where faces[key] == nil { faces[key] = texture }
+                // The sort toggles at the strip's sizes (phone, iPad): they stand in while the
+                // larger ones over an iPad's stash alone are drawn (`buttonIfReady`).
+                for side: CGFloat in [40, 50] {
+                    for (symbol, suit) in [(Symbol.sortNumber, TileSuit?.none), (nil, .fish)] {
+                        let keys = [false, true].map { Self.buttonKey(symbol, suit: suit, side: side, on: $0, dim: false) }
+                        guard keys.contains(where: { misc[$0] == nil }) else { continue }
+                        for (on, texture) in await Self.renderButtons(symbol, suit: suit, side: side, states: [false, true], scale: scale) {
+                            let key = Self.buttonKey(symbol, suit: suit, side: side, on: on, dim: false)
+                            misc[key] = misc[key] ?? texture
+                        }
+                    }
+                }
             }
         }
         await warming?.value
@@ -172,14 +187,13 @@ final class TilePieceFactory {
     ) -> SKTexture? {
         let key = FaceKey(tile: Tile.yarnIDs[0], size: size, ghostValue: standing.value, ghostSuit: standing.suit, style: style)
         if let cached = faces[key] { return cached }
-        let name = "face|\(key)"
-        guard drawing.insert(name).inserted else { return nil }
+        guard drawingFaces.insert(key).inserted else { return nil }
         let scale = Self.scale
         Task {
             if let (_, texture) = await Self.drawFaces([key], scale: scale).first {
                 faces[key] = faces[key] ?? texture
             }
-            drawing.remove(name)
+            drawingFaces.remove(key)
             if let texture = faces[key] { then(texture) }
         }
         return nil
@@ -601,7 +615,7 @@ final class TilePieceFactory {
 
     // MARK: the action strip
 
-    enum Symbol: String {
+    enum Symbol: String, Sendable {
         case undo = "arrow.uturn.backward"
         case reset = "arrow.counterclockwise"
         case sortNumber = "textformat.123"
@@ -616,34 +630,80 @@ final class TilePieceFactory {
     /// (or a toy's glyph) on it. `on` is a toggle that is set: orange, so state is not hue alone
     /// (the shell also draws it pressed in). `dim` is a control with nothing to do.
     func button(_ symbol: Symbol? = nil, suit: TileSuit? = nil, side: CGFloat, on: Bool = false, dim: Bool = false) -> SKTexture {
-        let key = "button|\(symbol?.rawValue ?? "")|\(suit?.rawValue ?? "")|\(side)|\(on)|\(dim)"
+        let key = Self.buttonKey(symbol, suit: suit, side: side, on: on, dim: dim)
         if let cached = misc[key] { return cached }
-        let shadow: CGFloat = on ? 1 : 3
         let image = drawTexture("tiles.texture.button", CGSize(width: side, height: side + 3)) { _ in
-            let disc = CGRect(x: 0, y: 3 - shadow, width: side, height: side)
-            Self.ink.withAlphaComponent(0.6).setFill()
-            UIBezierPath(ovalIn: disc.offsetBy(dx: 0, dy: shadow)).fill()
-            Self.ink.setFill()
-            UIBezierPath(ovalIn: disc).fill()
-            (on ? UIColor(Palette.orange) : UIColor(Palette.violet)).setFill()
-            UIBezierPath(ovalIn: disc.insetBy(dx: 2.5, dy: 2.5)).fill()
-            UIColor.white.withAlphaComponent(0.22).setFill()
-            UIBezierPath(ovalIn: CGRect(x: disc.minX + side * 0.2, y: disc.minY + side * 0.1, width: side * 0.6, height: side * 0.3)).fill()
-            let inner = disc.insetBy(dx: side * 0.24, dy: side * 0.24)
-            if let suit {
-                UIImage(named: ArtName.Tiles.glyph(suit))?.draw(in: disc.insetBy(dx: side * 0.17, dy: side * 0.17))
-            } else if let symbol {
-                let config = UIImage.SymbolConfiguration(pointSize: inner.height * 0.78, weight: .black)
-                if let glyph = UIImage(systemName: symbol.rawValue, withConfiguration: config)?.withTintColor(.white, renderingMode: .alwaysOriginal) {
-                    let fit = min(inner.width / glyph.size.width, inner.height / glyph.size.height, 1.25)
-                    let size = CGSize(width: glyph.size.width * fit, height: glyph.size.height * fit)
-                    glyph.draw(in: CGRect(x: disc.midX - size.width / 2, y: disc.midY - size.height / 2, width: size.width, height: size.height))
-                }
-            }
+            Self.drawButton(symbol, suit: suit, side: side, on: on)
         }
         let texture = SKTexture(image: dim ? Self.dimmed(image) : image)
         misc[key] = texture
         return texture
+    }
+
+    /// A button (never dim) if it is drawn already. Otherwise nil, and it is drawn off the main
+    /// thread, with the same button's other state (`on`), and handed to `then` when done: a size
+    /// the table shows only now and then (the sort toggles over an iPad's stash alone).
+    func buttonIfReady(
+        _ symbol: Symbol? = nil, suit: TileSuit? = nil, side: CGFloat, on: Bool,
+        then: @escaping @MainActor (SKTexture) -> Void
+    ) -> SKTexture? {
+        let key = Self.buttonKey(symbol, suit: suit, side: side, on: on, dim: false)
+        if let cached = misc[key] { return cached }
+        guard drawing.insert(key).inserted else { return nil }
+        let other = Self.buttonKey(symbol, suit: suit, side: side, on: !on, dim: false)
+        let drawOther = misc[other] == nil && drawing.insert(other).inserted
+        let scale = Self.scale
+        Task {
+            let made = await Self.renderButtons(symbol, suit: suit, side: side, states: drawOther ? [on, !on] : [on], scale: scale)
+            for (state, texture) in made {
+                let key = Self.buttonKey(symbol, suit: suit, side: side, on: state, dim: false)
+                misc[key] = misc[key] ?? texture
+                drawing.remove(key)
+            }
+            if let texture = misc[key] { then(texture) }
+        }
+        return nil
+    }
+
+    nonisolated private static func buttonKey(_ symbol: Symbol?, suit: TileSuit?, side: CGFloat, on: Bool, dim: Bool) -> String {
+        "button|\(symbol?.rawValue ?? "")|\(suit?.rawValue ?? "")|\(side)|\(on)|\(dim)"
+    }
+
+    @concurrent
+    private static func renderButtons(
+        _ symbol: Symbol?, suit: TileSuit?, side: CGFloat, states: [Bool], scale: CGFloat
+    ) async -> sending [(Bool, SKTexture)] {
+        let made = states.map { on in
+            (on, SKTexture(image: render(CGSize(width: side, height: side + 3), scale: scale) { _ in
+                drawButton(symbol, suit: suit, side: side, on: on)
+            }))
+        }
+        await SKTexture.preload(made.map(\.1))
+        return made
+    }
+
+    nonisolated private static func drawButton(_ symbol: Symbol?, suit: TileSuit?, side: CGFloat, on: Bool) {
+        let shadow: CGFloat = on ? 1 : 3
+        let disc = CGRect(x: 0, y: 3 - shadow, width: side, height: side)
+        ink.withAlphaComponent(0.6).setFill()
+        UIBezierPath(ovalIn: disc.offsetBy(dx: 0, dy: shadow)).fill()
+        ink.setFill()
+        UIBezierPath(ovalIn: disc).fill()
+        (on ? UIColor(Palette.orange) : UIColor(Palette.violet)).setFill()
+        UIBezierPath(ovalIn: disc.insetBy(dx: 2.5, dy: 2.5)).fill()
+        UIColor.white.withAlphaComponent(0.22).setFill()
+        UIBezierPath(ovalIn: CGRect(x: disc.minX + side * 0.2, y: disc.minY + side * 0.1, width: side * 0.6, height: side * 0.3)).fill()
+        let inner = disc.insetBy(dx: side * 0.24, dy: side * 0.24)
+        if let suit {
+            UIImage(named: ArtName.Tiles.glyph(suit))?.draw(in: disc.insetBy(dx: side * 0.17, dy: side * 0.17))
+        } else if let symbol {
+            let config = UIImage.SymbolConfiguration(pointSize: inner.height * 0.78, weight: .black)
+            if let glyph = UIImage(systemName: symbol.rawValue, withConfiguration: config)?.withTintColor(.white, renderingMode: .alwaysOriginal) {
+                let fit = min(inner.width / glyph.size.width, inner.height / glyph.size.height, 1.25)
+                let size = CGSize(width: glyph.size.width * fit, height: glyph.size.height * fit)
+                glyph.draw(in: CGRect(x: disc.midX - size.width / 2, y: disc.midY - size.height / 2, width: size.width, height: size.height))
+            }
+        }
     }
 
     nonisolated private static func dimmed(_ image: UIImage) -> UIImage {

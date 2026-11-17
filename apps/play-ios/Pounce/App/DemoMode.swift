@@ -50,6 +50,20 @@ enum DemoMode: String {
     case retire
     /// This phone's move: five seconds in (past the push priming), Leo (seat 1) nudges it.
     case nudged
+    /// A TV shows the table (`screen: true`), so this phone shows just its cards (spec §3).
+    /// `controller`: the `hit` table, my play step with groups to hit through the list; the fake
+    /// server takes each hit. `controller-off`: Kiki's turn. `controller-curtain`: two seats on
+    /// this phone (pass and play), the curtain up for seat 0.
+    case controller
+    case controllerOff = "controller-off", controllerCurtain = "controller-curtain"
+    /// `controller-lay`: the `lay` table on Cards (Lay down in the action row). `controller-skip`:
+    /// my play step on Cards with a Cucumber in hand (Leo and the House Cat can be skipped).
+    case controllerLay = "controller-lay", controllerSkip = "controller-skip"
+    /// The tile game at a TV (`screen: true`): `controller-tiles` is `tiles` (my move, opened),
+    /// `controller-tiles-off` Kiki's move (just my stash on Cards; the House Cats play on until
+    /// it is mine, or with `-tiles-hold-bots` once a UI test lets them), `controller-tiles-curtain` two seats on this phone, the curtain up for seat 0.
+    case controllerTiles = "controller-tiles", controllerTilesOff = "controller-tiles-off"
+    case controllerTilesCurtain = "controller-tiles-curtain"
     /// The tile game's table (`TilesDemo` has what each one shows). The only way into the game
     /// until Home offers it.
     case tiles
@@ -64,7 +78,7 @@ enum DemoMode: String {
     case tilesLast = "tiles-last"
 
     /// A tile game demo.
-    var isTiles: Bool { rawValue.hasPrefix("tiles") }
+    var isTiles: Bool { rawValue.hasPrefix("tiles") || rawValue.hasPrefix("controller-tiles") }
 
     static func from(arguments: [String] = CommandLine.arguments) -> DemoMode? {
         guard let i = arguments.firstIndex(of: "-demo"), arguments.indices.contains(i + 1) else { return nil }
@@ -76,13 +90,31 @@ enum DemoMode: String {
     var room: RoomView {
         var room = baseRoom
         if room.look == nil, ![.replay, .celebrate, .handoff].contains(self) { room.look = .standard }
+        return Self.longNames(room)
+    }
+
+    /// `-demo-long-names` (any demo, for the fit screenshots): every seat a person with a
+    /// 20-character name, two of them alike up to the last word, and every score in three digits.
+    static func longNames(_ room: RoomView, arguments: [String] = CommandLine.arguments) -> RoomView {
+        guard arguments.contains("-demo-long-names") else { return room }
+        let names = ["Christopher Albright", "Maximiliana Winthrop", "Maximiliana Wellesly",
+                     "Bartholomew Fernando", "Josephine Abernathey", "Guinevere Montgomery"]
+        var room = room
+        for i in room.seats.indices where room.seats[i].kind == .human || room.seats[i].kind == .bot {
+            let cat = room.seats[i].person?.cat ?? i
+            room.seats[i].kind = .human
+            room.seats[i].person = Person(id: room.seats[i].person?.id ?? "demo-long-\(i)", name: names[i % names.count], cat: cat)
+        }
+        if let scores = room.game?.scores { room.game?.scores = scores.indices.map { 100 + $0 * 287 % 900 } }
+        if let scores = room.tiles?.scores { room.tiles?.scores = scores.indices.map { 100 + $0 * 287 % 900 } }
         return room
     }
 
     private var baseRoom: RoomView {
         switch self {
         case .tiles, .tilesEarly, .tilesOpened, .tilesDraft, .tilesInvalid, .tilesLoupe, .tilesLate, .tilesLong,
-             .tilesPass, .tilesOther, .tilesCurtain, .tilesOver, .tilesPlay, .tilesLast:
+             .tilesPass, .tilesOther, .tilesCurtain, .tilesOver, .tilesPlay, .tilesLast,
+             .controllerTiles, .controllerTilesOff, .controllerTilesCurtain:
             return TilesDemo.room(self)
         case .howto: return DemoFixtures.howTo()
         case .lobby: return DemoFixtures.lobby()
@@ -125,6 +157,28 @@ enum DemoMode: String {
         case .crowded: return DemoFixtures.crowded()
         case .crowdedHit: return DemoFixtures.crowdedHit()
         case .hit: return DemoFixtures.hitTable()
+        case .controller:
+            var room = DemoFixtures.hitTable()
+            room.screen = true
+            return room
+        case .controllerOff:
+            var room = DemoFixtures.table(seats: 4, mySeat: 0, phase: 2)
+            room.game?.turn = 2
+            room.screen = true
+            return room
+        case .controllerLay:
+            var room = DemoFixtures.layTable()
+            room.screen = true
+            return room
+        case .controllerSkip:
+            var room = DemoFixtures.table(seats: 4, mySeat: 0, phase: 2)
+            room.game?.step = .play
+            room.screen = true
+            return room
+        case .controllerCurtain:
+            var room = DemoFixtures.curtain()
+            room.screen = true
+            return room
         case .lay: return DemoFixtures.layTable()
         case .over: return DemoFixtures.celebration().last?.room ?? DemoFixtures.lobby()
         case .weak, .reconnecting:
@@ -206,8 +260,8 @@ enum DemoMode: String {
         case .celebrate: CelebrateSocket()
         case .howto: HowToSocket(room: room)
         case .nope: DemoSocket(room: room, refusing: true)
-        case .hit, .crowdedHit: DemoSocket(room: room, hits: true)
-        case .lay: DemoSocket(room: room, lays: true)
+        case .hit, .crowdedHit, .controller: DemoSocket(room: room, hits: true)
+        case .lay, .controllerLay: DemoSocket(room: room, lays: true)
         case .weak: DemoSocket(room: room, script: [(.seconds(1), .link(.weak))])
         case .reconnecting: DemoSocket(room: room, script: [(.seconds(1), .disconnected), (.zero, .connecting)])
         case .nudged: DemoSocket(room: room, script: [(.seconds(5), .message(.nudged(seat: 0, from: 1)))])

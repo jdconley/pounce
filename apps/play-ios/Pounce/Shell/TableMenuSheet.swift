@@ -2,9 +2,9 @@ import PounceKit
 import SwiftUI
 
 /// The table's paw menu (`table.menu`): the table's name (renamed in the lobby only), sound, haptics, the
-/// scores, how to play, names, move my seat, home, and forfeit (§5.13, behind a confirmation). Renaming the table grows the sheet into `RenameTableView`,
+/// scores, Show on TV, how to play, names, move my seat, home, and forfeit (§5.13, behind a confirmation). Renaming the table grows the sheet into `RenameTableView`,
 /// names (this phone's players) into `RenameSheet`, move my seat into `MoveSeatSheet`, how to play
-/// into `HowToPlaySheet`.
+/// into `HowToPlaySheet`, Show on TV into `ShowOnTVSheet`.
 struct TableMenuSheet: View {
     @Environment(Settings.self) private var settings
     @Environment(AppModel.self) private var model
@@ -19,7 +19,7 @@ struct TableMenuSheet: View {
     var onForfeit: (Seat) -> Void = { _ in }
     let onClose: () -> Void
 
-    private enum Page { case menu, moving, rules, renaming, names, look }
+    private enum Page { case menu, moving, rules, renaming, names, look, tv }
 
     @State private var page = Self.firstPage
     @State private var confirmingForfeit = false
@@ -33,9 +33,9 @@ struct TableMenuSheet: View {
         return .menu
     }
 
-    static let menuDetent = PresentationDetent.height(510)
+    static let menuDetent = PresentationDetent.height(560)
     /// Room for the Forfeit row.
-    static let menuForfeitDetent = PresentationDetent.height(590)
+    static let menuForfeitDetent = PresentationDetent.height(640)
     private var menuDetent: PresentationDetent { forfeitSeat == nil ? Self.menuDetent : Self.menuForfeitDetent }
     static let lookDetent = PresentationDetent.height(380)
 
@@ -88,6 +88,9 @@ struct TableMenuSheet: View {
             case .look:
                 LookTraySheet(session: session) { show(.menu) }
                     .transition(.move(edge: .trailing).combined(with: .opacity))
+            case .tv:
+                ShowOnTVSheet(code: session.code, onBack: { show(.menu) }, onClose: onClose)
+                    .transition(.move(edge: .trailing).combined(with: .opacity))
             case .menu:
                 menu
                     .transition(.move(edge: .leading).combined(with: .opacity))
@@ -103,7 +106,7 @@ struct TableMenuSheet: View {
     }
 
     private var menu: some View {
-        VStack(spacing: 22) {
+        VStack(spacing: 16) {
             // The name in the middle, the X that closes the menu top trailing.
             HStack(spacing: 8) {
                 Color.clear.frame(width: SheetBar.side, height: 1)
@@ -143,6 +146,14 @@ struct TableMenuSheet: View {
                 }
                 .accessibilityIdentifier("menu.scores")
             }
+            PillButton(
+                icon: ArtName.iconTV, color: Palette.magenta, size: .medium, width: 230,
+                title: String(localized: "Show on TV", comment: "Table menu: put this table on a TV"),
+                accessibilityLabel: "Show on TV"
+            ) {
+                show(.tv)
+            }
+            .accessibilityIdentifier("menu.tv")
             PillButton(
                 icon: nil, color: Palette.orange, size: .medium, width: 230,
                 title: String(localized: "How to play", comment: "Table menu: open the rules"),

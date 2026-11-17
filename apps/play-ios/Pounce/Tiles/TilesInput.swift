@@ -86,15 +86,18 @@ extension TilesScene {
             if let gap = loupeGapFrames.first(where: { $0.frame.contains(point) }) { return .loupeGap(gap.index) }
             if loupeFrame.contains(point) { return .loupePanel }
         }
-        if !turnPill.isHidden {
+        if tableUp, !turnPill.isHidden {
             if layout.turn.insetBy(dx: -4, dy: -6).contains(point) { return .control(.turn) }
             if layout.undo.contains(point) { return .control(.undo) }
             if layout.reset.contains(point) { return .control(.reset) }
-            if layout.sortNumber.contains(point) { return .control(.sortNumber) }
-            if layout.sortToy.contains(point) { return .control(.sortToy) }
             if easy, layout.tidy.contains(point) { return .control(.tidy) }
         }
-        if shownSeat != nil, layout.rack.height > 0, point.y < layout.strip.minY {
+        // On the strip, or over the stash when it is all there is.
+        if !sortToyButton.isHidden {
+            if layout.sortNumber.contains(point) { return .control(.sortNumber) }
+            if layout.sortToy.contains(point) { return .control(.sortToy) }
+        }
+        if shownSeat != nil, layout.rack.height > 0, point.y < rackTop {
             let local = CGPoint(x: point.x + rackScroll, y: point.y)
             // Lifted pieces first, then the nearest piece under the finger.
             var best: (TileID, CGFloat)?
@@ -108,6 +111,7 @@ extension TilesScene {
             if let best { return .rackPiece(best.0) }
             return .rackArea
         }
+        guard tableUp else { return .nothing }
         if near(recapButton) { return .control(.recap) }
         if layout.rugArt.contains(point), let flow {
             let content = rugPoint(point)
@@ -335,17 +339,17 @@ extension TilesScene {
 
     /// Works out what the finger is over. The table is only laid out again when that changes.
     private func aim(at point: CGPoint) {
-        guard let layout, let flow else { return }
+        guard let layout else { return }
         var target: TilesInputState.Target?
         var refused = false
         var slot: Int?
         var side: TilesDraft.Side?
-        if shownSeat != nil, layout.rack.height > 0, point.y < layout.strip.minY + 6 {
+        if shownSeat != nil, layout.rack.height > 0, point.y < rackTop + 6 {
             target = .rack
             slot = layout.rackSlot(at: CGPoint(x: point.x + rackScroll, y: point.y), count: rackShown.count)
             // A piece that was on the rug when the turn began can't come to the stash.
             if input.origin != .rack, let draft { refused = input.dragTiles.contains { !draft.isPlaced($0) } }
-        } else if composing, layout.rugArt.insetBy(dx: 0, dy: -10).contains(point) {
+        } else if composing, let flow, layout.rugArt.insetBy(dx: 0, dy: -10).contains(point) {
             let content = rugPoint(point)
             if let index = flow.set(at: content, slop: 12), shown.indices.contains(index) {
                 let id = shown[index].id
@@ -773,7 +777,7 @@ extension TilesScene {
 
     /// Pinch: from the fit size up to stash size (tile game spec §5.7).
     func pinch(scale: CGFloat, began: Bool) {
-        guard let layout, let flow, loupe == nil, !input.isDragging else { return }
+        guard let layout, let flow, tableUp, loupe == nil, !input.isDragging else { return }
         if began { input.pinchBase = zoom ?? flow.pieceSize.width }
         let fit = fitRug(lengths: shown.map(\.tiles.count), layout: layout, zoom: nil).pieceSize.width
         let wanted = min(max(input.pinchBase * scale, fit), layout.rackPiece.width)

@@ -70,6 +70,9 @@
     // and screen links. Apps before it ignore the new fields and message types; off, the server
     // answers as before.
     "TV": "on",
+    // TV links (/tv/*) open the app. Turn on once the 1.2 app is live on the App Store: a 1.1 app
+    // opened by a /tv/ link does nothing, while the web page works.
+    "TV_APPLINKS": "off",
     // The games rooms may be created for beyond Cat Tower: a comma-separated list of game ids
     // (src/games, e.g. "tiles"). Empty: Cat Tower only, and asking for any other game is refused.
     // "tiles" since version 1.1 can draw the tile game: only an app that lists a game in

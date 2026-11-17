@@ -21,7 +21,7 @@ version, and a parent decides whether they get turn alerts.
 | Version | Status | What's in it |
 | --- | --- | --- |
 | 1.0 | On the App Store since November 2026 | Cat Tower, live and turn-based tables, House Cat bots, streaks, widgets, the live table on the Lock Screen, parent consent for kids. |
-| 1.1 | In App Review (submitted 15 November 2026, build 202611140254) | Tuna Tiles. A faster first game: a House Cat holds a seat. Add players your way: Same room (scan a QR code), Far away (send a link) or This phone (pass and play). Invites that survive installing the app (Paste). A new Home, How to play videos, clearer Settings, tips. |
+| 1.1 | Released on the App Store on 16 November 2026 | Tuna Tiles. A faster first game: a House Cat holds a seat. Add players your way: Same room (scan a QR code), Far away (send a link) or This phone (pass and play). Invites that survive installing the app (Paste). A new Home, How to play videos, clearer Settings, tips. |
 
 Every merge to `main` that touches the app builds to TestFlight and goes to the Family and Friends
 group (`apps/play-ios/README.md`, TestFlight). What each App Store version says is kept in the

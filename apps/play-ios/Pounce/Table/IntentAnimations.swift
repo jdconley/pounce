@@ -59,7 +59,7 @@ extension TableScene {
         let node = flyer(face, at: start, z: 1)
 
         guard seat == bottomSeat else {
-            Sound.shared.play(ArtName.Sound.sfxFlip, volume: 0.4)
+            Sound.shared.play(ArtName.Sound.sfxFlip, volume: 0.4, kind: .game)
             await director.run(.sequence([
                 Effects.fly(from: start, to: seatPoint(seat), duration: 0.34, lift: 30, scale: 0.32),
                 .fadeOut(withDuration: 0.08),
@@ -71,7 +71,7 @@ extension TableScene {
         let land = handLanding(layout)
         let faceUp = seat == shownRevealed
         if faceUp, fromDeck, let card {
-            Sound.shared.play(ArtName.Sound.sfxFlip)
+            Sound.shared.play(ArtName.Sound.sfxFlip, kind: .game)
             node.isPrivate = true
             let flip = SKAction.sequence([
                 .scaleX(to: 0, duration: 0.15).eased(.easeIn),
@@ -87,10 +87,10 @@ extension TableScene {
             await director.run(.group([flip, lift]), on: node)
             switch Card(id: card) {
             case .yarn:
-                Sound.shared.play(ArtName.Sound.sfxSparkle)
+                Sound.shared.play(ArtName.Sound.sfxSparkle, kind: .game)
                 Effects.burst(.sparkle, at: node.position, in: fx, director: director)
             case .cucumber:
-                Sound.shared.play(ArtName.Sound.sfxScream, volume: 0.35)
+                Sound.shared.play(ArtName.Sound.sfxScream, volume: 0.35, kind: .game)
                 if !reduceMotion { await director.run(wobble(), on: node) }
             case .number:
                 break
@@ -99,7 +99,7 @@ extension TableScene {
                 Effects.fly(from: node.position, to: land.position, duration: 0.22, lift: 12, rotation: land.rotation),
                 on: node)
         } else {
-            Sound.shared.play(ArtName.Sound.sfxFlip, volume: 0.6)
+            Sound.shared.play(ArtName.Sound.sfxFlip, volume: 0.6, kind: .game)
             await director.run(
                 Effects.fly(from: start, to: land.position, duration: 0.32, lift: 30, rotation: land.rotation),
                 on: node)
@@ -149,7 +149,7 @@ extension TableScene {
     private func bat(_ node: CardNode) async {
         let pile = point(of: discard)
         let landing = local(pile, for: node)
-        Sound.shared.play(ArtName.Sound.sfxBat)
+        Sound.shared.play(ArtName.Sound.sfxBat, kind: .game)
         let flight: SKAction
         if hypot(node.position.x - landing.x, node.position.y - landing.y) < 6 {
             // Already on the pile (my own discard, shown there while in flight): a hop and spin.
@@ -201,12 +201,14 @@ extension TableScene {
     /// fur puff, a 4 pt screen shake for 0.2 s, a scream and a thump. Returns the decorative
     /// motion to run.
     private func terror(_ seat: Seat, at spot: CGPoint) -> [(SKAction, SKNode)] {
-        Sound.shared.play(ArtName.Sound.sfxScream)
+        Sound.shared.play(ArtName.Sound.sfxScream, kind: .game)
         Haptics.shared.thump()
         Effects.burst(.fur, at: spot, in: fx, director: director)
         var items: [(SKAction, SKNode)] = []
         if seat != bottomSeat, let cat = opponents.node(for: seat) {
             items.append(cat.terror(reduceMotion: reduceMotion))
+        } else if seat != bottomSeat {
+            // Just my cards: their cat is on the TV.
         } else if !reduceMotion {
             items.append((hop(height: 24), hand))
         } else {
@@ -262,7 +264,7 @@ extension TableScene {
         badge.position = spot
         badge.zPosition = 4
         fx.addChild(badge)
-        Sound.shared.play(ArtName.Sound.sfxThud, volume: 0.7)
+        Sound.shared.play(ArtName.Sound.sfxThud, volume: 0.7, kind: .game)
         let appear: SKAction
         if reduceMotion {
             badge.alpha = 0
@@ -288,10 +290,13 @@ extension TableScene {
         guard let layout, let game = model?.game else { return }
         let fx = self.fx
         let cards = groups.flatMap(\.cards)
-        let targets = laidZone.landing(groups: groups, seat: seat, total: game.laid.count, layout: layout)
+        let landings = laidZone.landing(groups: groups, seat: seat, total: game.laid.count, layout: layout)
             .flatMap { $0 }.map { fx.convert($0, from: laidZone.parent ?? self) }
         let endScale = laidZone.miniScale(layout: layout)
         let mine = seat == bottomSeat
+        // Just my cards: someone else's lay-down is the TV's to show; mine flies up to it.
+        if controllerShown, !mine { return }
+        let targets = controllerShown ? Array(repeating: tvPoint, count: cards.count) : landings
 
         // Starting points first (tray frames are gone once those cards hide).
         var starts: [(point: CGPoint, scale: CGFloat, rotation: CGFloat)] = []
@@ -319,7 +324,7 @@ extension TableScene {
             let land = SKAction.run { [weak node] in
                 guard let node else { return }
                 node.compact = true  // the face the row draws it with
-                Sound.shared.play(ArtName.Sound.sfxPop, volume: 0.8)
+                Sound.shared.play(ArtName.Sound.sfxPop, volume: 0.8, kind: .game)
                 Effects.burst(.stars, at: node.position, in: fx, director: director)
             }
             items.append((.sequence([
@@ -352,7 +357,15 @@ extension TableScene {
         }
         let zoneSpace = laidZone.parent ?? self
         let end: CGPoint
-        if let p = laidZone.landing(hit: card, seat: target.seat, index: target.group, group: group) {
+        if controllerShown {
+            // Just my cards: the group is on the TV. Someone else's hit isn't shown here; mine
+            // (already on its way up, `sendUp`) finishes leaving.
+            guard owned || seat == bottomSeat else {
+                node.removeFromParent()
+                return
+            }
+            end = tvPoint
+        } else if let p = laidZone.landing(hit: card, seat: target.seat, index: target.group, group: group) {
             end = fx.convert(p, from: zoneSpace)
         } else if let f = laidZone.groupFrames(seat: target.seat)[safe: target.group] {
             end = fx.convert(CGPoint(x: f.maxX, y: f.midY), from: zoneSpace)
@@ -364,7 +377,7 @@ extension TableScene {
                         scale: laidZone.miniScale(layout: layout)),
             on: node)
         node.compact = true
-        Sound.shared.play(ArtName.Sound.sfxPop)
+        Sound.shared.play(ArtName.Sound.sfxPop, kind: .game)
         Haptics.shared.drop()
         Effects.burst(.stars, at: end, in: fx, director: director)
         var items: [(SKAction, SKNode)] = [(Effects.squash(), node)]
@@ -408,7 +421,7 @@ extension TableScene {
     private func animateReshuffle() async {
         let from = point(of: discard)
         let to = point(of: deck)
-        Sound.shared.play(ArtName.Sound.sfxWhoosh)
+        Sound.shared.play(ArtName.Sound.sfxWhoosh, kind: .game)
         var items: [(SKAction, SKNode)] = []
         var nodes: [CardNode] = []
         for i in 0..<(reduceMotion ? 3 : 5) {
@@ -437,7 +450,7 @@ extension TableScene {
         let slots = layout.hand(count: perSeat, lifted: nil).map { (fx.convert($0.position, from: hand), $0.rotation) }
         hand.isHidden = true
         laidZone.isHidden = true
-        Sound.shared.play(ArtName.Sound.sfxWhoosh)
+        Sound.shared.play(ArtName.Sound.sfxWhoosh, kind: .game)
 
         var items: [(SKAction, SKNode)] = []
         var landed: [CardNode] = []
@@ -447,7 +460,7 @@ extension TableScene {
             for seat in order {
                 let node = flyer(nil, at: start, z: 0.3 + CGFloat(i) * 0.001)
                 let sound: SKAction = i.isMultiple(of: 4)
-                    ? .run { Sound.shared.play(ArtName.Sound.sfxFlip, volume: 0.35) } : .wait(forDuration: 0)
+                    ? .run { Sound.shared.play(ArtName.Sound.sfxFlip, volume: 0.35, kind: .game) } : .wait(forDuration: 0)
                 let lead = SKAction.sequence([.wait(forDuration: Double(i) * 0.025), sound])
                 if seat == bottomSeat {
                     let (p, r) = slots[round]
@@ -503,8 +516,14 @@ extension TableScene {
         return parent.convert(p, from: fx)
     }
 
-    /// A seat's spot in fx space: its cat in the bar, or the middle of the hand.
+    /// Just my cards: where the rest of the table is, off the top of the screen (the TV).
+    var tvPoint: CGPoint {
+        CGPoint(x: size.width / 2, y: size.height + (layout?.cardSize.height ?? 90))
+    }
+
+    /// A seat's spot in fx space: its cat in the bar (off the top on Cards), or the middle of the hand.
     private func seatPoint(_ seat: Seat) -> CGPoint {
+        if seat != bottomSeat, controllerShown { return tvPoint }
         if seat != bottomSeat, let cat = opponents.node(for: seat) {
             return fx.convert(cat.position, from: opponents)
         }

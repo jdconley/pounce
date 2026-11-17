@@ -289,11 +289,15 @@ public struct RoomView: Codable, Equatable, Sendable {
     public var nudge: NudgeView?
     /// The stalled seat this phone may retire, and how soon; nil with nobody to retire (or from an older server).
     public var retire: RetireView?
+    /// A TV is showing this table (at least one screen is connected, or was in the last 10
+    /// seconds); nil otherwise, and from a server without TV. The phone switches to the controller.
+    public var screen: Bool?
 
     public init(
         code: String, name: String? = nil, status: RoomStatus, youAreHost: Bool, seats: [SeatView],
         game: GameView? = nil, look: Look? = nil, rematch: String? = nil, link: RoomLink? = nil,
-        nudge: NudgeView? = nil, retire: RetireView? = nil, gameId: String? = nil, tiles: TilesView? = nil
+        nudge: NudgeView? = nil, retire: RetireView? = nil, gameId: String? = nil, tiles: TilesView? = nil,
+        screen: Bool? = nil
     ) {
         self.code = code
         self.name = name
@@ -306,6 +310,7 @@ public struct RoomView: Codable, Equatable, Sendable {
         self.link = link
         self.nudge = nudge
         self.retire = retire
+        self.screen = screen
         self.gameId = gameId
         self.tiles = tiles
     }

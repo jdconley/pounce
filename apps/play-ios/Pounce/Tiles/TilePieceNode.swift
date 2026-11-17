@@ -209,6 +209,11 @@ final class TilesOpponentsNode: SKNode {
 
     func node(for seat: Seat) -> CatNode? { cats[seat] }
 
+    /// Above the cats (each up to 3 + its own parts' 7) and below the scene's veil over the table
+    /// (`TilesScene.tableVeil`, 17 over the bar's layer): name tags, then the boxes and naps.
+    static let tagZ: CGFloat = 11
+    static let boxZ: CGFloat = 15
+
     /// Seats whose ring just became the current player's.
     @discardableResult
     func update(model: TilesTableModel, seats: [Seat], layout: TilesLayout) -> [Seat] {
@@ -218,7 +223,7 @@ final class TilesOpponentsNode: SKNode {
         let names = SeatInfo.names(model.room)
         let textScale = TableText.scale
         let spacing = slots.count > 1 ? abs(slots[1].x - slots[0].x) : layout.size.width
-        let tagWidth = min(spacing - 2, (layout.arrangement == .phone ? 140 : 170) * textScale)
+        let tagWidth = min(spacing - 2, (layout.roomy ? 170 : 140) * textScale)
         let nameSize = TableTextScale.nameSize(scale: textScale)
         let chipScale = TableTextScale.chips(scale: textScale, spacing: spacing, diameter: diameter)
 
@@ -263,7 +268,7 @@ final class TilesOpponentsNode: SKNode {
             let r = diameter / 2
             let box = boxes[seat] ?? {
                 let n = SKSpriteNode(texture: TableArt.image(ArtName.Tiles.toyBoxClosed))
-                n.zPosition = 40
+                n.zPosition = Self.boxZ
                 boxes[seat] = n
                 addChild(n)
                 return n
@@ -274,7 +279,7 @@ final class TilesOpponentsNode: SKNode {
             box.isHidden = !marks.notOpened
             let nap = naps[seat] ?? {
                 let n = SKSpriteNode(texture: TableArt.image(ArtName.iconZzz))
-                n.zPosition = 41
+                n.zPosition = Self.boxZ + 1
                 naps[seat] = n
                 addChild(n)
                 return n
@@ -301,7 +306,7 @@ final class TilesOpponentsNode: SKNode {
                 tag.size = texture.size()
             }
             tag.position = CGPoint(x: slots[i].x, y: slots[i].y - layout.nameDrop)
-            tag.zPosition = 20 + CGFloat(i)
+            tag.zPosition = Self.tagZ + CGFloat(i)
         }
         order = Array(seats.prefix(slots.count))
         return turnedOn

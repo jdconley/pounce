@@ -2,23 +2,39 @@ import AVFoundation
 import PounceKit
 import Foundation
 
+/// What a sound is for. A phone showing just its cards while a TV shows the table (spec §3,
+/// "one table, one sound") keeps its own `ui` sounds and leaves `game` ones to the TV.
+enum SoundKind {
+    /// This phone's own controls and feedback: a button, a tip, a move this phone was refused.
+    case ui
+    /// Something that happened in the game (a draw, a hit, a celebration): the table's sound.
+    case game
+}
+
 /// Plays the app's sound effects. `Sound.shared` is the real one, or under a UI test
 /// (`Pace.underTest`) a silent stand-in that never touches the audio session.
 @MainActor
 protocol SoundPlaying: AnyObject {
     /// Loads every effect up front so the first play has no hitch.
     func preload()
-    /// Plays `name` at `volume` (0–1; a quiet variant of an effect, say).
-    func play(_ name: String, volume: Float)
+    /// Plays `name` at `volume` (0–1; a quiet variant of an effect, say), unless it is a `game`
+    /// sound while `gameMuted`.
+    func play(_ name: String, volume: Float, kind: SoundKind)
 }
 
 extension SoundPlaying {
-    func play(_ name: String) { play(name, volume: 1) }
+    func play(_ name: String) { play(name, volume: 1, kind: .ui) }
+    func play(_ name: String, volume: Float) { play(name, volume: volume, kind: .ui) }
+    func play(_ name: String, kind: SoundKind) { play(name, volume: 1, kind: kind) }
 }
 
 @MainActor
 enum Sound {
     static let shared: any SoundPlaying = Pace.underTest ? SilentSound() : AudioSound()
+    /// Whether game sounds are the TV's right now (this phone shows just its cards). One owner:
+    /// the app model, which derives it from the table on screen (`AppModel.gameSoundsOnTV`), so
+    /// two table screens coming and going never leave it set wrong.
+    static var gameOnTV: () -> Bool = { false }
 }
 
 /// Sound effects from a small pool of pre-loaded `AVAudioPlayer`s per effect, so rapid repeats
@@ -51,8 +67,8 @@ final class AudioSound: SoundPlaying {
 
     /// Plays `name`. One still loading (a moment after launch, or an effect `preload` doesn't
     /// list) is skipped this once and loads for next time.
-    func play(_ name: String, volume: Float) {
-        guard settings.soundOn else { return }
+    func play(_ name: String, volume: Float, kind: SoundKind) {
+        guard settings.soundOn, kind == .ui || !Sound.gameOnTV() else { return }
         guard let players = pools[name], !players.isEmpty else {
             load(name)
             return
@@ -86,5 +102,7 @@ final class SilentSound: SoundPlaying {
 
     func preload() {}
 
-    func play(_ name: String, volume: Float) { played += 1 }
+    func play(_ name: String, volume: Float, kind: SoundKind) {
+        if kind == .ui || !Sound.gameOnTV() { played += 1 }
+    }
 }

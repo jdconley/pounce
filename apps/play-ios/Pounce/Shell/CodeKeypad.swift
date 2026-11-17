@@ -2,7 +2,8 @@ import PounceKit
 import SwiftUI
 
 /// A chunky 3D keypad holding only the room-code alphabet: letters wrapped five to a row (the
-/// last letter row ends with delete), digits on the last row.
+/// last letter row ends with delete), digits on the last row. Join types a room code (five
+/// characters) with it, and Show on TV a TV's code (six); `CodeTiles` shows what was typed.
 struct CodeKeypad: View {
     /// The character keys take taps.
     var enabled = true
@@ -13,6 +14,8 @@ struct CodeKeypad: View {
     var keyHeight: CGFloat = 54
     var keySize: CGFloat = 30
     var spacing: CGFloat = 8
+    /// The keys' identifiers: `join.key.B`, `join.key.delete` (Show on TV's: `tv.key.B`).
+    var idPrefix = "join.key"
     let onKey: (Character) -> Void
     let onDelete: () -> Void
 
@@ -57,7 +60,7 @@ struct CodeKeypad: View {
         .disabled(!enabled)
         .groupOpacity(enabled ? 1 : 0.6)
         .accessibilityLabel(Text(verbatim: String(c)))
-        .accessibilityIdentifier("join.key.\(c)")
+        .accessibilityIdentifier("\(idPrefix).\(c)")
     }
 
     private var deleteKey: some View {
@@ -75,7 +78,38 @@ struct CodeKeypad: View {
         .disabled(!(deleteEnabled ?? enabled))
         .groupOpacity(deleteEnabled ?? enabled ? 1 : 0.6)
         .accessibilityLabel("Delete")
-        .accessibilityIdentifier("join.key.delete")
+        .accessibilityIdentifier("\(idPrefix).delete")
+    }
+}
+
+/// A code's tiles on their panel, one per character: five for a room code (Join), six for a
+/// TV's code (Show on TV). The next slot to fill glows unless `busy` (the code is being checked).
+struct CodeTiles: View {
+    let typed: String
+    let length: Int
+    var busy = false
+    /// The tiles' identifiers: `join.tile.0` … (Show on TV's: `tv.tile.0` …).
+    var idPrefix = "join.tile"
+
+    var body: some View {
+        let chars = Array(typed)
+        HStack(spacing: length > 5 ? 6 : 8) {
+            ForEach(0..<length, id: \.self) { i in
+                CodeTile(
+                    char: i < chars.count ? chars[i] : nil,
+                    active: i == min(chars.count, length - 1) && !busy)
+                    .accessibilityIdentifier("\(idPrefix).\(i)")
+            }
+        }
+        .padding(length > 5 ? 10 : 12)
+        .background(
+            RoundedRectangle(cornerRadius: 26, style: .continuous)
+                .fill(LinearGradient(
+                    colors: [Palette.violet.mix(with: Palette.ink, by: 0.25), Palette.night],
+                    startPoint: .top, endPoint: .bottom))
+                .overlay(RoundedRectangle(cornerRadius: 26, style: .continuous).strokeBorder(Palette.ink, lineWidth: 5))
+                .shadow(color: Palette.ink.opacity(0.5), radius: 0, x: 0, y: 6)
+        )
     }
 }
 

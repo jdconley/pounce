@@ -1,4 +1,5 @@
 #if DEBUG
+import notify
 import Foundation
 import PounceKit
 import SwiftUI
@@ -20,6 +21,12 @@ import SwiftUI
 /// - `tiles-last`: my last three pieces, each of which fits a row: play them all and win (the How
 ///   to play video's ending).
 ///
+/// - `controller-tiles`, `controller-tiles-off`, `controller-tiles-curtain`: `tiles`, `tiles-other`
+///   and `tiles-curtain` with a TV showing the table (`screen: true`), so this phone is a
+///   controller (Cards: just the stash off turn, the table on its turn).
+///
+/// `-tiles-hold-bots`: the House Cats don't play until a UI test posts `DemoRelease`.
+///
 /// `tiles-over -tiles-game-off`: Play again is refused with `game_off` (the server stopped dealing
 /// the game), and the card says no new table can be dealt.
 ///
@@ -30,6 +37,9 @@ import SwiftUI
 enum TilesDemo {
     static func room(_ mode: DemoMode) -> RoomView {
         switch mode {
+        case .controllerTiles: atTV(DemoFixtures.tilesMid())
+        case .controllerTilesOff: atTV(DemoFixtures.tilesOther())
+        case .controllerTilesCurtain: atTV(DemoFixtures.tilesCurtain())
         case .tilesEarly: DemoFixtures.tilesEarly()
         case .tilesOpened: DemoFixtures.tilesEarly(opened: true)
         case .tilesLate: DemoFixtures.tilesLate()
@@ -44,6 +54,13 @@ enum TilesDemo {
         }
     }
 
+    /// `room` with a TV showing it.
+    private static func atTV(_ room: RoomView) -> RoomView {
+        var room = room
+        room.screen = true
+        return room
+    }
+
     /// A new two-seat game against the House Cat, dealt the same way every time.
     static func fresh() -> RoomView {
         let game = TilesLocalGame(seats: 2, seed: 20261111)
@@ -54,9 +71,9 @@ enum TilesDemo {
     }
 
     static func socket(_ mode: DemoMode) -> any RoomSocketing {
-        let room = room(mode)
+        let room = DemoMode.longNames(room(mode))
         let game = mode == .tilesPlay ? TilesLocalGame(seats: 2, seed: 20261111) : room.tiles.map { TilesLocalGame(view: $0, seed: 7) }
-        return TilesDemoSocket(room: room, game: game)
+        return TilesDemoSocket(room: room, game: game, held: CommandLine.arguments.contains("-tiles-hold-bots"))
     }
 
     /// Sets a demo's turn up once the table is on screen.
@@ -110,10 +127,13 @@ actor TilesDemoSocket: RoomSocketing {
     private var seq = 1
     private var bots: Task<Void, Never>?
     private var started = false
+    /// `-tiles-hold-bots`: the House Cat plays nothing until a UI test lets it (`DemoRelease`).
+    private var held: Bool
 
-    init(room: RoomView, game: TilesLocalGame?) {
+    init(room: RoomView, game: TilesLocalGame?, held: Bool = false) {
         self.room = room
         self.game = game
+        self.held = held
         (events, continuation) = AsyncStream.makeStream(of: SocketEvent.self)
     }
 
@@ -185,6 +205,7 @@ actor TilesDemoSocket: RoomSocketing {
         bots = Task {
             while !Task.isCancelled {
                 guard let game = await self.game, game.status == .playing, !(await self.mine).contains(game.turn) else { return }
+                if await self.takeHold() { await DemoRelease.awaited() }
                 try? await Task.sleep(for: Pace.duration(.milliseconds(1400)))
                 guard !Task.isCancelled else { return }
                 await self.botTurn()
@@ -192,9 +213,31 @@ actor TilesDemoSocket: RoomSocketing {
         }
     }
 
+    private func takeHold() -> Bool {
+        defer { held = false }
+        return held
+    }
+
     private func botTurn() {
         guard let game, game.status == .playing, !mine.contains(game.turn) else { return }
         act(seat: game.turn, game.botAction(game.turn))
+    }
+}
+
+/// A UI test's go-ahead to a held demo (`-tiles-hold-bots`): a Darwin notification the test
+/// posts (`Live.releaseDemo`), so a test decides when the other seats play, whatever the speed.
+enum DemoRelease {
+    static let name = "com.conleychaos.play.demo.release"
+
+    /// Returns once the test posts the go-ahead.
+    static func awaited() async {
+        await withCheckedContinuation { (done: CheckedContinuation<Void, Never>) in
+            var token: Int32 = 0
+            notify_register_dispatch(name, &token, DispatchQueue.main) { token in
+                notify_cancel(token)
+                done.resume()
+            }
+        }
     }
 }
 

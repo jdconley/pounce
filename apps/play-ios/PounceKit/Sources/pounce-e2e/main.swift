@@ -2,7 +2,9 @@
 // over the same PounceKit networking the app uses. macOS only; credentials live in memory.
 //
 //   pounce-e2e full [--local 2] [--bots 2] [--timeout 1800]
-//                   [--move-seats 1,2 --move-at-phase 8 --move-file PATH]
+//                   [--move-seats 1,2 --move-at-phase 8 --move-file PATH] [--screen-code TVCODE]
+//       (--screen-code: before the start the host links that TV (see `screen link`) to the room
+//        and logs "screen linked <CODE>"; the game is Cat Tower, there is no Tuna Tiles bot)
 //       (once any seat reaches that phase index, those local seats are offered to other phones
 //        with moveSeat; one line per seat goes to PATH: "<seat> pounce-dev://j/<CODE>?move=<M>")
 //   pounce-e2e join <CODE> [--name Remote] [--cat 4] [--drop-after N [--reconnect-after 3 | --reconnect-file PATH]] [--quit-after N] [--timeout 1800]
@@ -13,6 +15,11 @@
 //   pounce-e2e host [--name Grandma] [--cat 4] [--house-cat] [--timeout 900]
 //       (makes a Cat Tower table, prints "room <CODE>", sits there; --house-cat seats a House Cat
 //        as a first table does, which a guest takes over; logs "guest seated <seat>")
+//   pounce-e2e screen link [--again] [--timeout 600]
+//       (a TV, docs/tv-protocol.md: prints "link <token> <code>", waits for a phone to link it,
+//        prints "linked <CODE>", then watches that table as its screen, one line per snapshot and
+//        event; fails if anything it hears carries a hand, a rack, or a drawn card or tile.
+//        --again: "Link another table" after each link, so a phone can move the TV)
 //
 // Every mode takes `--base <url>` (default http://localhost:8787). Exit 0 on success, 1 with a
 // one-line reason on failure, 2 on bad usage.
@@ -158,7 +165,7 @@ actor Device {
             case .link(let seats):
                 state.room?.seats.indices.forEach { state.room?.seats[$0].link = seats.indices.contains($0) ? seats[$0] : nil }
                 log("[\(name)] seats link \(seats.map { $0?.rawValue ?? "-" })")
-            case .streak, .rematch, .pong, .nudgeSent, .nudged:
+            case .streak, .rematch, .pong, .nudgeSent, .nudged, .aim:
                 break
             }
         }
@@ -364,6 +371,12 @@ func full(_ base: APIConfig, _ o: Options) async throws {
     for seat in local..<(local + bots) { try await configure(host, seat: seat, .bot) }
     for seat in (local + bots)..<6 where await host.view.room?.seats[seat].kind == .open {
         try await configure(host, seat: seat, .closed)
+    }
+    if let screenCode = o.flags["screen-code"] {
+        var result = try await host.api.linkScreen(.code(screenCode), room: code)
+        if result == .showing { result = try await host.api.linkScreen(.code(screenCode), room: code, move: true) }
+        guard result == .linked else { throw Failure("the TV \(screenCode) wouldn't link") }
+        log("screen linked \(code)")
     }
     try await start(host)
     log("started: \(local) local, \(bots) bots")
@@ -618,6 +631,101 @@ func hostMode(_ base: APIConfig, _ o: Options) async throws {
     await host.drop()
 }
 
+// MARK: a TV
+
+/// A TV (docs/tv-protocol.md): its own device, a TV link a phone can scan or type, then the
+/// linked table as its screen. See the usage at the top.
+func screenMode(_ base: APIConfig, _ o: Options) async throws {
+    guard o.positional.first == "link" else { throw Failure("usage: screen link [--again] [--timeout 600]") }
+    let again = o.flags["again"] != nil
+    let timeout = Double(o.int("timeout", 600))
+    let tv = APIClient(config: base, credentials: MemoryCredentialStore())
+    let credential = try await tv.credential()
+    let connector = URLSessionWebSocketConnector(headers: base.headers)
+
+    /// `POST /v1/screens`: a link to show ("Link another table" while `showing` a table).
+    func newLink(showing: String?) async throws -> (token: String, code: String) {
+        var request = URLRequest(url: base.endpoint("/v1/screens"))
+        request.httpMethod = "POST"
+        for (name, value) in base.headers { request.setValue(value, forHTTPHeaderField: name) }
+        request.setValue("Bearer \(credential.token)", forHTTPHeaderField: "Authorization")
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.httpBody = try JSONSerialization.data(withJSONObject: showing.map { ["showing": $0] } ?? [String: String]())
+        let (data, response) = try await URLSession.shared.data(for: request)
+        let status = (response as? HTTPURLResponse)?.statusCode ?? 0
+        guard status == 201, let body = try JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let token = body["token"] as? String, let code = body["code"] as? String
+        else { throw Failure("POST /v1/screens answered \(status): \(String(decoding: data, as: UTF8.self))") }
+        return (token, code)
+    }
+
+    /// The link's socket until a phone links it: the room it put on this TV.
+    func linked(_ token: String) async throws -> String {
+        var parts = URLComponents(url: base.endpoint("/v1/screens/\(token)/ws"), resolvingAgainstBaseURL: false)!
+        parts.scheme = parts.scheme == "https" ? "wss" : "ws"
+        let socket = try await connector.connect(url: parts.url!, token: credential.token)
+        defer { Task { await socket.close() } }
+        while true {
+            let text = try await socket.receive()
+            let message = try JSONSerialization.jsonObject(with: Data(text.utf8)) as? [String: Any] ?? [:]
+            switch message["t"] as? String {
+            case "linked": if let room = message["room"] as? String { return room }
+            case "expired": throw Failure("the link expired before a phone linked it")
+            default: break
+            }
+        }
+    }
+
+    /// Watches `room` as its screen until cancelled. Anything private in what it hears fails the run.
+    func watch(_ room: String) async throws {
+        var parts = URLComponents(url: base.socketURL(code: room), resolvingAgainstBaseURL: false)!
+        parts.queryItems = [URLQueryItem(name: "role", value: "screen")]
+        let socket = try await connector.connect(url: parts.url!, token: credential.token)
+        defer { Task { await socket.close() } }
+        while !Task.isCancelled {
+            let text = try await socket.receive()
+            let message = try JSONSerialization.jsonObject(with: Data(text.utf8)) as? [String: Any] ?? [:]
+            if let leak = ScreenPrivacy.leak(inJSON: text) {
+                log("FAIL the TV heard something private: \(leak)")
+                exit(1)
+            }
+            switch message["t"] as? String {
+            case "snapshot":
+                let view = message["room"] as? [String: Any] ?? [:]
+                let seats = (view["seats"] as? [[String: Any]] ?? []).map { $0["kind"] as? String ?? "?" }
+                log("snapshot \(message["seq"] ?? "-") \(room) \(view["status"] ?? "-") screen=\(view["screen"] as? Bool ?? false) seats=\(seats.joined(separator: ","))")
+            case "event":
+                let event = message["event"] as? [String: Any] ?? [:]
+                let inner = (event["event"] as? [String: Any])?["kind"] as? String
+                log("event \(message["seq"] ?? "-") \(event["kind"] ?? "-")\(inner.map { ".\($0)" } ?? "")")
+            case "error":
+                log("error \(message["code"] ?? "-")")
+            default:
+                break
+            }
+        }
+    }
+
+    var showing: String?
+    var watching: Task<Void, Never>?
+    let started = Date()
+    repeat {
+        let link = try await newLink(showing: showing)
+        log("link \(link.token) \(link.code)")
+        let room = try await linked(link.token)
+        log("linked \(room)")
+        watching?.cancel()
+        showing = room
+        watching = Task {
+            do { try await watch(room) } catch is CancellationError {} catch {
+                if !Task.isCancelled { log("watch \(room) ended: \(error)") }
+            }
+        }
+    } while again && Date().timeIntervalSince(started) < timeout
+    try? await Task.sleep(for: .seconds(max(1, timeout - Date().timeIntervalSince(started))))
+    watching?.cancel()
+}
+
 // MARK: main
 
 let args = CommandLine.arguments
@@ -634,6 +742,7 @@ do {
     case "scenario": try await scenario(config, options)
     case "peek": try await peek(config, options)
     case "host": try await hostMode(config, options)
+    case "screen": try await screenMode(config, options)
     default:
         log("unknown mode \(mode)")
         exit(2)
