@@ -816,11 +816,23 @@ public struct TableLayout: Sendable {
     }
 }
 
-/// One of a TV's laid groups: its frame (the cards with a 4-point outline, for the glow), its
-/// cards' centers left to right, and the size its cards are drawn at.
+/// One of a TV's laid groups, placed as the phone's laid rows place theirs
+/// (`LaidZoneNode.placement`): a group too long for its room folds, showing its first cards and
+/// its last (a run keeps both ends, the cards a hit extends), with a "+n" badge for the rest.
 public struct TVLaidGroup: Equatable, Sendable {
+    /// The visible cards with a 4-point outline (the glow, the hit target).
     public var frame: CGRect
+    /// Every card's center, left to right in group order; a folded-away card sits under the last
+    /// card (drawn hidden), so it slides out from there when the fold opens.
     public var cards: [CGPoint]
+    /// Per card: drawn (true) or folded away under the last card.
+    public var shown: [Bool]
+    /// How many cards are folded away (0: none, and no badge).
+    public var folded: Int
+    /// Where the "+n" badge's center goes: on the seam before the last card, low on the cards,
+    /// clear of the corner numerals (as the phone puts it).
+    public var badge: CGPoint
+    /// The size the cards are drawn at.
     public var cardSize: CGSize
 }
 
@@ -847,10 +859,13 @@ extension TableLayout {
     /// As much as shows when a seat's groups have the room.
     static let tvRoomy: CGFloat = 0.85
     /// The table every seat is planned for, so laying down and hitting never move anything: two
-    /// groups (every phase lays down at most two) of twelve (a run's longest; a set can grow past
-    /// it, and then that seat's cards shrink).
+    /// groups (every phase lays down at most two) of twelve (a run's longest), as big as fits
+    /// unfolded, but never with corner numerals under 28 points (`tvLaidMin`): short of that room,
+    /// the plan keeps 28-point numerals and folds each group to the cards that fit.
     static let tvPlanGroups = 2
     static let tvPlanCards = 12
+    /// The narrowest laid card: its two-digit numeral is 28 points at 1080p.
+    static let tvLaidMin: CGFloat = (28 / laidNumeralRatio / 2).rounded(.up) * 2
     /// A laid group's outline around its cards.
     static let tvOutline: CGFloat = 4
     /// A laid card's corner numeral (its font size) per point of card width: the compact face's
@@ -886,9 +901,10 @@ extension TableLayout {
         let sideAreaW = cx - pileW / 2 - gap - x0 - 2 * Self.tvOutline
 
         // The biggest laid cards with which the planned table fits: rows under the top seats, then
-        // the piles beside the side seats with their rows under them, above the banner.
-        func rows(_ w: CGFloat, _ lw: CGFloat) -> Int? {
-            let long = lw * (1 + CGFloat(Self.tvPlanCards - 1) * Self.tvTight)
+        // the piles beside the side seats with their rows under them, above the banner. Groups of
+        // `cards` cards, showing `tvTight` of each but the last.
+        func rows(_ w: CGFloat, _ lw: CGFloat, _ cards: Int) -> Int? {
+            let long = lw * (1 + CGFloat(cards - 1) * Self.tvTight)
             guard w >= long else { return nil }
             let perRow = max(1, Int(((w + Self.tvGroupGap) / (long + Self.tvGroupGap)).rounded(.down)))
             return (Self.tvPlanGroups + perRow - 1) / perRow
@@ -898,16 +914,20 @@ extension TableLayout {
             return CGFloat(rows) * (ch * lw / cw) + CGFloat(rows - 1) * Self.tvRowGap
         }
         func midHeight(_ topH: CGFloat) -> CGFloat { midBottom - (plan.top + seatH + Self.tvRowGap + topH + gap) }
-        var lw: CGFloat = 96
-        while lw > 24 {
-            let topH = height(rows(topAreaW, lw), lw)
-            let sideH = sides ? seatH + Self.tvRowGap + height(rows(sideAreaW, lw), lw) : 0
-            if midHeight(topH) >= max(ch + 96, sideH) { break }
-            lw -= 2
+        func fits(_ lw: CGFloat, _ cards: Int) -> Bool {
+            let topH = height(rows(topAreaW, lw, cards), lw)
+            let sideH = sides ? seatH + Self.tvRowGap + height(rows(sideAreaW, lw, cards), lw) : 0
+            return midHeight(topH) >= max(ch + 96, sideH)
         }
-        // Short of room even at the smallest (a frame no TV has), the rows shrink their cards.
-        let topH = min(height(rows(topAreaW, lw), lw), height(Self.tvPlanGroups, lw))
-        let sideH = sides ? min(height(rows(sideAreaW, lw), lw), height(Self.tvPlanGroups, lw)) : 0
+        // Unfolded at the biggest size that fits, down to 28-point numerals; then folded, keeping
+        // them; and only on a frame no TV has (two cards a group won't fit), smaller.
+        var lw: CGFloat = 96
+        var visible = Self.tvPlanCards
+        while lw > Self.tvLaidMin, !fits(lw, visible) { lw -= 2 }
+        while visible > 2, !fits(lw, visible) { visible -= 1 }
+        while lw > 24, !fits(lw, visible) { lw -= 2 }
+        let topH = min(height(rows(topAreaW, lw, visible), lw), height(Self.tvPlanGroups, lw))
+        let sideH = sides ? min(height(rows(sideAreaW, lw, visible), lw), height(Self.tvPlanGroups, lw)) : 0
         let midTop = plan.top + seatH + Self.tvRowGap + topH + gap
         let midH = midBottom - midTop
         let cy = midTop + midH / 2
@@ -995,28 +1015,26 @@ extension TableLayout {
         rowMaxWidth = .infinity
     }
 
-    /// Where a TV places `seat`'s laid groups of `counts` cards each, in its room (`laidRow`):
-    /// spread out if they fit, closer (never past each card's corner numeral) if that is what
-    /// fits, and smaller only if even that would not (more than the planned two groups of twelve).
-    /// Empty off a TV or for a seat not at the table.
+    /// Where a TV places `seat`'s laid groups of `counts` cards each, in its room (`laidRow`), at
+    /// `miniCardSize`: spread out if they fit, closer (never past a card's corner numeral) if that
+    /// is what fits, and then folded as the phone folds a laid row: the group showing the most
+    /// cards gives up one at a time, down to its first card and its last. The planned table (two
+    /// groups of up to twelve) always fits this way with 28-point numerals at 1080p; only more
+    /// than that shrinks the cards. Empty off a TV or for a seat not at the table.
+    ///
+    /// The scene draws each card at `cards[i]` when `shown[i]`, hides the rest (they sit under the
+    /// last card), and for `folded > 0` a "+\(folded)" badge at `badge`, in the corner numerals'
+    /// size (`tvLaidNumeral`) over the cards.
     public func tvGroups(seat: Int, counts: [Int]) -> [TVLaidGroup] {
         guard arrangement == .tv, let tvPlan, tvAreas.indices.contains(seat), !counts.isEmpty else { return [] }
         let a = tvAreas[seat]
         let area = a.area
         let cw = Self.tvCard, ch = (Self.tvCard * 90 / 64).rounded()
-        var k = 0
-        while true {
-            let lw = tvLaidWidth - 2 * CGFloat(k / 2)
-            let spread = k % 2 == 0 ? Self.tvRoomy : Self.tvTight
-            let lh = ch * lw / cw
-            // Never closer than `tvTight`, so every numeral stays whole: short of room, the cards
-            // shrink instead.
-            let sized = counts.map { c -> (count: Int, step: CGFloat, w: CGFloat) in
-                let count = max(c, 1)
-                let step = count == 1 ? 0 : max(lw * Self.tvTight, min(lw * spread, (area.width - lw) / CGFloat(count - 1)))
-                return (c, step, lw + step * CGFloat(count - 1))
-            }
-            var rows: [[(count: Int, step: CGFloat, w: CGFloat)]] = []
+        typealias Sized = (count: Int, visible: Int, step: CGFloat, w: CGFloat)
+        /// Rows of `sized` groups, or nil when they don't fit the room.
+        func pack(_ sized: [Sized], _ lh: CGFloat) -> [[Sized]]? {
+            guard !sized.contains(where: { $0.w > area.width + 0.01 }) else { return nil }
+            var rows: [[Sized]] = []
             var used = CGFloat.infinity
             for g in sized {
                 if used + Self.tvGroupGap + g.w > area.width {
@@ -1027,31 +1045,72 @@ extension TableLayout {
                 used += Self.tvGroupGap + g.w
             }
             let h = CGFloat(rows.count) * lh + CGFloat(max(rows.count - 1, 0)) * Self.tvRowGap
-            k += 1
-            let wide = sized.contains { $0.w > area.width + 0.01 }
-            if h > area.height + 0.01 || wide, lw > 12 { continue }
-            var out: [TVLaidGroup] = []
-            var y = area.minY
-            let card = CGSize(width: tvPlan.len(lw), height: tvPlan.len(lh))
-            for row in rows {
-                let rowW = row.reduce(0) { $0 + $1.w } + Self.tvGroupGap * CGFloat(row.count - 1)
-                var x: CGFloat = switch a.align {
-                case .start: area.minX
-                case .centre: area.minX + (area.width - rowW) / 2
-                case .end: area.maxX - rowW
-                }
-                for g in row {
-                    let o = Self.tvOutline
-                    let frame = CGRect(x: x - o, y: y - o, width: g.w + 2 * o, height: lh + 2 * o)
-                    let cards = (0..<g.count).map { i in
-                        tvPlan.point(CGPoint(x: x + CGFloat(i) * g.step + lw / 2, y: y + lh / 2))
-                    }
-                    out.append(TVLaidGroup(frame: tvPlan.rect(frame), cards: cards, cardSize: card))
-                    x += g.w + Self.tvGroupGap
-                }
-                y += lh + Self.tvRowGap
-            }
-            return out
+            return h <= area.height + 0.01 ? rows : nil
         }
+        var lw = tvLaidWidth
+        var placed: (rows: [[Sized]], lw: CGFloat)?
+        while placed == nil {
+            let lh = ch * lw / cw
+            func sized(_ visible: [Int], _ spread: CGFloat) -> [Sized] {
+                zip(counts, visible).map { c, v in
+                    let shown = max(v, 1)
+                    let step = shown == 1 ? 0 : max(lw * Self.tvTight, min(lw * spread, (area.width - lw) / CGFloat(shown - 1)))
+                    return (c, v, step, lw + step * CGFloat(shown - 1))
+                }
+            }
+            var visible = counts.map { max($0, 0) }
+            while placed == nil {
+                if let rows = pack(sized(visible, Self.tvRoomy), lh) ?? pack(sized(visible, Self.tvTight), lh) {
+                    placed = (rows, lw)
+                } else if let g = visible.indices.filter({ visible[$0] > 2 }).max(by: { visible[$0] < visible[$1] }) {
+                    visible[g] -= 1  // fold one more card of the group showing the most
+                } else {
+                    break
+                }
+            }
+            if placed == nil {
+                guard lw > 12 else { placed = (pack(sized(visible, Self.tvTight), .zero) ?? [sized(visible, Self.tvTight)], lw); break }
+                lw -= 2  // more than the planned table: smaller cards
+            }
+        }
+        guard let placed else { return [] }
+        let lw2 = placed.lw, lh = ch * lw2 / cw
+        let o = Self.tvOutline
+        let card = CGSize(width: tvPlan.len(lw2), height: tvPlan.len(lh))
+        var out: [TVLaidGroup] = []
+        var y = area.minY
+        for row in placed.rows {
+            let rowW = row.reduce(0) { $0 + $1.w } + Self.tvGroupGap * CGFloat(row.count - 1)
+            var x: CGFloat = switch a.align {
+            case .start: area.minX
+            case .centre: area.minX + (area.width - rowW) / 2
+            case .end: area.maxX - rowW
+            }
+            for g in row {
+                // The phone's fold: the first cards and the last; the rest under the last.
+                let n = g.count
+                let vis: [Int] = g.visible >= n ? Array(0..<n) : (g.visible <= 1 ? [0] : Array(0..<(g.visible - 1)) + [n - 1])
+                var centers = Array(repeating: CGPoint.zero, count: n)
+                var shown = Array(repeating: false, count: n)
+                for (k, j) in vis.enumerated() {
+                    centers[j] = CGPoint(x: x + CGFloat(k) * g.step + lw2 / 2, y: y + lh / 2)
+                    shown[j] = true
+                }
+                let last = vis.last.map { centers[$0] } ?? CGPoint(x: x + lw2 / 2, y: y + lh / 2)
+                for j in centers.indices where !shown[j] { centers[j] = last }
+                let badge = CGPoint(x: vis.count > 1 ? last.x - lw2 / 2 : last.x + lw2 * 0.2, y: y + lh / 2 + lh * 0.24)
+                out.append(TVLaidGroup(
+                    frame: tvPlan.rect(CGRect(x: x - o, y: y - o, width: g.w + 2 * o, height: lh + 2 * o)),
+                    cards: centers.map(tvPlan.point), shown: shown, folded: n - vis.count,
+                    badge: tvPlan.point(badge), cardSize: card))
+                x += g.w + Self.tvGroupGap
+            }
+            y += lh + Self.tvRowGap
+        }
+        return out
     }
+
+    /// TV only: a laid card's corner numeral size (`laidNumeralRatio` of `miniCardSize`), the size
+    /// a fold's "+n" badge is drawn at too.
+    public var tvLaidNumeral: CGFloat { arrangement == .tv ? miniCardSize.width * Self.laidNumeralRatio : 0 }
 }

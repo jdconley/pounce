@@ -186,24 +186,35 @@ struct TableLayoutTVTests {
         }
     }
 
-    /// The table is planned for every seat down with two groups of twelve, so laying down and
+    /// The visible cards of a placed group, left to right.
+    static func visible(_ g: TVLaidGroup) -> [CGPoint] { zip(g.cards, g.shown).filter(\.1).map(\.0) }
+
+    /// Every pair of group sizes a seat can have down (a phase's two groups, hits growing each to
+    /// twelve), and one group alone.
+    static let pairs: [[Int]] = (1...12).flatMap { a in [[a]] + (1...12).map { [a, $0] } }
+
+    /// The table is planned for every seat down with two groups of up to twelve, so laying down and
     /// hitting never move anything: each seat's groups stay in its own place, at the planned size,
     /// and no card covers the corner numeral of the card under it.
     @Test(arguments: G.frames.indices, 2...6)
-    func aFullTableFitsAtThePlannedSize(_ f: Int, _ n: Int) {
+    func everySeatsGroupsFitAtThePlannedSize(_ f: Int, _ n: Int) {
         let l = layout(f, n)
+        // The groups' frames reach at most their 4-point outline past the area.
+        let outline = 4 * l.tvUnit + 0.5
         for s in 0..<n {
             let area = l.laidRow(slot: s, of: n)
-            // The groups' frames reach at most their 4-point outline past the area.
-            let outline = 4 * l.tvUnit + 0.5
-            let groups = l.tvGroups(seat: s, counts: [12, 12])
-            #expect(groups.count == 2)
-            for g in groups {
-                #expect(G.inside(g.frame, area.insetBy(dx: -outline, dy: -outline)))
-                #expect(abs(g.cardSize.width - l.miniCardSize.width) <= 0.5, "a full table shrinks its cards")
-                #expect(g.cards.count == 12)
-                for (a, b) in zip(g.cards, g.cards.dropFirst()) {
-                    #expect(b.x - a.x >= g.cardSize.width * 48 / 64 - 0.01, "a card covers its neighbour's numeral")
+            for counts in Self.pairs {
+                let groups = l.tvGroups(seat: s, counts: counts)
+                #expect(groups.map(\.cards.count) == counts)
+                G.clear(groups.map(\.frame), groups.map(\.frame), "\(counts) groups")
+                for g in groups {
+                    #expect(G.inside(g.frame, area.insetBy(dx: -outline, dy: -outline)), "\(counts): \(g.frame) outside \(area)")
+                    #expect(abs(g.cardSize.width - l.miniCardSize.width) <= 0.5, "\(counts) shrinks its cards")
+                    let shown = Self.visible(g)
+                    for (a, b) in zip(shown, shown.dropFirst()) {
+                        #expect(b.x - a.x >= g.cardSize.width * 48 / 64 - 0.01, "a card covers its neighbour's numeral")
+                    }
+                    for p in shown { #expect(G.inside(G.box(p, g.cardSize), g.frame)) }
                 }
             }
         }
@@ -211,19 +222,69 @@ struct TableLayoutTVTests {
 
     /// The plan's rule: nothing that matters is under 28 pt at 1080p. A laid card's corner
     /// numeral is `laidNumeralRatio` of its width (the compact face's two-digit index, 30 pt on
-    /// the 64 pt face), on a full table (two groups of twelve a seat) inside the TV-safe insets.
-    /// Four seats and up can't make it with two groups of twelve and every numeral whole: those
-    /// are known issues until the plan's trade-off is ruled on (the task 3 report).
-    @Test(arguments: 2...6)
-    func laidNumeralsAreAtLeast28Points(_ n: Int) {
-        let l = layout(0, n)
-        let numerals = (0..<n).flatMap { l.tvGroups(seat: $0, counts: [12, 12]) }.map { $0.cardSize.width * TableLayout.laidNumeralRatio }
-        let smallest = numerals.min() ?? 0
-        if n <= 3 {
-            #expect(smallest >= 28)
-        } else {
-            withKnownIssue("\(n) seats: laid numerals are \(smallest) pt, short of 28") { #expect(smallest >= 28) }
+    /// the 64 pt face), measured on every visible card of every seat's groups (two of up to twelve
+    /// a seat), inside the TV-safe insets and without them; long groups fold to keep it.
+    @Test(arguments: G.hd, 2...6)
+    func laidNumeralsAreAtLeast28Points(_ f: Int, _ n: Int) {
+        let l = layout(f, n)
+        #expect(l.tvLaidNumeral >= 28)
+        for s in 0..<n {
+            for counts in Self.pairs {
+                for g in l.tvGroups(seat: s, counts: counts) where g.shown.contains(true) {
+                    #expect(g.cardSize.width * TableLayout.laidNumeralRatio >= 28, "\(n) seats, \(counts)")
+                }
+            }
         }
+    }
+
+    /// A fold is the phone's: the first cards and the last, so a run keeps both ends (the cards a
+    /// hit extends), the rest under the last card, and a "+n" badge on the seam before it.
+    @Test(arguments: [0, 1, 2], 2...6)
+    func aFoldKeepsBothEnds(_ f: Int, _ n: Int) {
+        let l = layout(f, n)
+        for s in 0..<n {
+            for counts in Self.pairs {
+                for g in l.tvGroups(seat: s, counts: counts) {
+                    let count = g.cards.count
+                    let shown = g.shown.filter { $0 }.count
+                    #expect(g.folded == count - shown)
+                    #expect(g.shown.first == true && g.shown.last == true, "\(counts): an end is folded away")
+                    // The first `shown - 1` cards, then the last.
+                    #expect(g.shown == (0..<count).map { $0 < shown - 1 || $0 == count - 1 })
+                    #expect(count < 2 || shown >= 2)
+                    if g.folded > 0 {
+                        let last = g.cards[count - 1]
+                        for j in 0..<count where !g.shown[j] { #expect(g.cards[j] == last) }
+                        #expect(g.frame.contains(g.badge))
+                        #expect(abs(g.badge.x - (last.x - g.cardSize.width / 2)) < 0.01)
+                        #expect(g.badge.y < last.y)  // low on the cards, under the corner numerals
+                    }
+                }
+            }
+        }
+    }
+
+    @Test func roomForTwelveFoldsNothing() {
+        // Two seats have the room for two unfolded groups of twelve.
+        let l = layout(0, 2)
+        for s in 0..<2 { #expect(l.tvGroups(seat: s, counts: [12, 12]).allSatisfy { $0.folded == 0 }) }
+        // A phase's groups never fold as they are laid down, at any seat count, but for a run of
+        // nine at a six-seat table's top seats (376 points of room; nine need 420): it hides one.
+        for n in 2...6 {
+            let m = layout(0, n)
+            for s in 0..<n {
+                for phase in [[3, 3], [3, 4], [4, 4], [7], [8], [9], [5, 2], [5, 3]] {
+                    let most = n == 6 && phase == [9] ? 1 : 0
+                    #expect(m.tvGroups(seat: s, counts: phase).allSatisfy { $0.folded <= most }, "\(n) seats: \(phase) folds")
+                }
+            }
+        }
+    }
+
+    @Test func sixSeatsFoldTwoGroupsOfTwelve() {
+        let l = layout(0, 6)
+        let folded = (0..<6).flatMap { l.tvGroups(seat: $0, counts: [12, 12]) }.filter { $0.folded > 0 }
+        #expect(!folded.isEmpty)
     }
 
     @Test(arguments: 2...6)
