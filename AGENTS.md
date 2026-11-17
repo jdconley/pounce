@@ -66,3 +66,35 @@ Family and Friends group as well as the internal testers. The build's "What to T
 squash-merge commit subjects since the group's last build, so a PR that changes the app gets a title
 a family member can read: what changed for them, in plain words ("Draw is a tap; the toy box moved
 off the rug"), not how it was built.
+
+### Every release updates the websites
+
+The websites say what Pounce does today, never what it did two releases ago. When a release goes
+out, the same change (or a follow-up PR you open right after it lands) updates every page that
+describes Pounce. Don't hand it to someone else, and don't wait to be asked.
+
+A release is any of these:
+- An App Store version goes live. Check with
+  `curl -s "https://itunes.apple.com/lookup?id=6829560061&country=us"`.
+- A change people can see reaches production on the web. Every merge to `main` deploys
+  `play.conleychaos.com`, the web player and the TV page.
+- A new game, platform or way to play: a browser player, a TV, a new device.
+
+Update each place that the release makes out of date:
+
+| Where | Files |
+|---|---|
+| play.conleychaos.com, the game's own site | `apps/play-api/src/http/home.ts`, its screenshots in `apps/play-api/public/media`, its OG text and structured data, and the `/j/` and `/p/` invite pages in `apps/play-api/src/http/links.ts` |
+| conleychaos.com, the studio site | repo `jdconley/conleychaos`: `apps/conleychaos-site/src/data/games.ts`, `public/llms.txt`, screenshots in `public/media/pounce/`, and that repo's tests |
+| This repo | the version table and feature list in `README.md`, and `docs/whats-new/<version>.md` |
+| JD's GitHub profile | repo `jdconley/jdconley`, `README.md`, for App Store releases |
+
+Rules for that copy:
+- Claim only what people can use today. TestFlight-only and in-development features (for example
+  an app that hasn't passed review) are not "available". Leave them out, or say "coming".
+- Keep the parents' notice and the privacy facts true. App Review reads them.
+- Use plain words with no emoji. Keep the tagline "Family game night, every night". conleychaos.com
+  never mentions Meanwhile.
+- After the deploy, open the live pages and check them. If a deploy can't run (for example GitHub
+  Actions billing on `jdconley/conleychaos`), say so in the PR and tell JD; never call the site
+  updated until it is live.
