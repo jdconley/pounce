@@ -174,9 +174,14 @@ targets:
       - path: Pounce/App/Autoplay.swift
       - path: Pounce/Design/ArtName.swift
       - path: Pounce/Design/FadeGroup.swift
+      - path: Pounce/Design/GroupOpacity.swift
       - path: Pounce/Design/Haptics.swift
+      - path: Pounce/Design/Juice.swift
+      - path: Pounce/Design/NameTag.swift
+      - path: Pounce/Design/OutlinedText.swift
       - path: Pounce/Design/Pace.swift
       - path: Pounce/Design/Palette.swift
+      - path: Pounce/Design/QRTile.swift
       - path: Pounce/Design/Settings.swift
       - path: Pounce/Design/SignalGlyph.swift
       - path: Pounce/Design/Sound.swift

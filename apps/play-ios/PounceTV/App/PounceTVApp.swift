@@ -1,55 +1,52 @@
+import PounceKit
 import SwiftUI
 
-/// Pounce on the Apple TV. For now the title card only: the name and tagline on the brand
-/// background. The home, lobby and table screens come with the shared table code.
+/// Pounce on the Apple TV: a TV is no one's seat. It shows a link a phone scans to put its table
+/// here, or makes a table from one of the two game posters, and then shows that table for the
+/// whole room: the lobby, the game and game over (`TVModel`, `TVRoot`).
 @main
 struct PounceTVApp: App {
+    @State private var model: TVModel? = Self.makeModel()
+
     var body: some Scene {
         WindowGroup {
             #if DEBUG
             if let preview = TVTablePreview.from() {
                 TVTablePreviewView(game: preview.game, seats: preview.seats, aim: preview.aim)
-            } else {
-                TitleCard()
+            } else if let model {
+                TVRoot(model: model)
             }
             #else
-            TitleCard()
+            if let model { TVRoot(model: model) }
             #endif
         }
     }
+
+    /// The TV against the server this build points at, as its own device.
+    private static func makeModel() -> TVModel? {
+        #if DEBUG
+        if TVTablePreview.from() != nil { return nil }
+        // Hosting the unit tests: no server, no Keychain, nothing on screen.
+        if ProcessInfo.processInfo.environment["XCTestConfigurationFilePath"] != nil { return nil }
+        MainThreadWatchdog.startIfAsked()
+        #endif
+        return TVModel(services: .live(config: TVConfig.load()))
+    }
 }
 
-/// The name in the app's lettering (SF Rounded Black with the chunky ink outline) and the tagline,
-/// centered on the violet-to-magenta brand background. Laid out for 1920x1080 points.
-struct TitleCard: View {
-    var body: some View {
-        ZStack {
-            LinearGradient(colors: [Palette.night, Palette.violet, Palette.magenta], startPoint: .bottomLeading, endPoint: .topTrailing)
-            VStack(spacing: 24) {
-                outlined("Pounce", size: 220, fill: .white)
-                outlined("Family game night, every night", size: 64, fill: Palette.yellow)
-            }
-            .accessibilityElement(children: .combine)
+/// The server: `POUNCE_API_BASE_URL` in the environment wins over the Info.plist's
+/// `PounceAPIBaseURL` (from the build's xcconfig), as on the iPhone (`AppConfig`).
+enum TVConfig {
+    static func load(bundle: Bundle = .main, env: [String: String] = ProcessInfo.processInfo.environment) -> APIConfig {
+        if let url = ConfigResolver.baseURL(info: bundle.infoDictionary ?? [:], env: env) {
+            return APIConfig(baseURL: url)
         }
-        .ignoresSafeArea()
+        return APIConfig(baseURL: fallbackURL)
     }
 
-    /// Text with an ink outline: the ink copy offset round the fill, then the fill on top.
-    private func outlined(_ text: String, size: CGFloat, fill: Color) -> some View {
-        let font = Font.system(size: size, weight: .black, design: .rounded)
-        let w = size * 0.07
-        let offsets: [CGSize] = (0..<12).map { i in
-            let a = Double(i) / 12 * 2 * .pi
-            return CGSize(width: cos(a) * w, height: sin(a) * w + size * 0.03)
-        }
-        return ZStack {
-            ForEach(offsets.indices, id: \.self) { i in
-                Text(text).font(font).foregroundStyle(Palette.ink).offset(offsets[i])
-            }
-            Text(text).font(font).foregroundStyle(fill)
-        }
-        .compositingGroup()
-        .accessibilityElement(children: .ignore)
-        .accessibilityLabel(text)
-    }
+    #if DEBUG
+    private static let fallbackURL = URL(string: "http://localhost:8787")!
+    #else
+    private static let fallbackURL = URL(string: "https://play.conleychaos.com")!
+    #endif
 }

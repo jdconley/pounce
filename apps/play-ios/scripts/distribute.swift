@@ -106,9 +106,11 @@ func changes(from commit: String) -> [String] {
       "PounceTV", "PounceKit", "Config", "project.yml",
       "Pounce/Table", "Pounce/Tiles",
       "Pounce/App/FrameWork.swift", "Pounce/App/MainThreadWatchdog.swift", "Pounce/App/Autoplay.swift",
-      "Pounce/Design/ArtName.swift", "Pounce/Design/FadeGroup.swift", "Pounce/Design/Haptics.swift",
-      "Pounce/Design/Pace.swift", "Pounce/Design/Palette.swift", "Pounce/Design/Settings.swift",
-      "Pounce/Design/SignalGlyph.swift", "Pounce/Design/Sound.swift",
+      "Pounce/Design/ArtName.swift", "Pounce/Design/FadeGroup.swift", "Pounce/Design/GroupOpacity.swift",
+      "Pounce/Design/Haptics.swift", "Pounce/Design/Juice.swift", "Pounce/Design/NameTag.swift",
+      "Pounce/Design/OutlinedText.swift", "Pounce/Design/Pace.swift", "Pounce/Design/Palette.swift",
+      "Pounce/Design/QRTile.swift", "Pounce/Design/Settings.swift", "Pounce/Design/SignalGlyph.swift",
+      "Pounce/Design/Sound.swift",
       "Pounce/Resources/Assets.xcassets", "Pounce/Resources/Sounds",
     ]
     : ["Pounce", "PounceKit", "PounceWidgets", "PounceNotify", "Config", "project.yml"]

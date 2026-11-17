@@ -524,6 +524,18 @@ Debug build, `-tv-preview cattower|tiles -seats N` (with `-aim`, `-moment`, `-lo
 shows it full screen for a hand-made room, no server. `PounceTVTests` checks it on an Apple TV
 simulator: `xcodebuild test -scheme PounceTV -destination 'platform=tvOS Simulator,name=<yours>'`.
 
+The TV's shell (`PounceTV/App`, `PounceTV/Shell`) mirrors the web TV page's phases and words. `TVModel`
+holds them: home (a link a phone scans or types, `ScreenLink`, and the two game posters), the lobby,
+the table and game over, with the menu over a table ("Link another table", "Sound on", "Leave
+table"). It joins tables as their screen, keeps the table it shows and its sound setting in
+`UserDefaults` through PounceKit's `ScreenKeep` actor (never on the main thread), goes home on 404 or
+`not_screen`, follows Play again, closes the old table's socket before opening a new one, and drops
+the socket in the background and joins again on return. Everything is reached with the Siri Remote;
+Menu leaves the app from home and opens the menu at a table. Point a Debug build at a dev server
+with `SIMCTL_CHILD_POUNCE_API_BASE_URL=http://127.0.0.1:<port> xcrun simctl launch <sim>
+com.conleychaos.play`; `-tv-make cat-tower|tiles` presses a poster and `-tv-show-menu [link]` opens
+the menu, for screenshots without a remote. `PounceTVTests` covers the model with a fake server.
+
 ```sh
 PLATFORM=tvOS scripts/testflight.sh --dry-run    # scheme PounceTV, generic/platform=tvOS
 PLATFORM=tvOS scripts/testflight.sh              # build/PounceTV.xcarchive, build/export-tv
