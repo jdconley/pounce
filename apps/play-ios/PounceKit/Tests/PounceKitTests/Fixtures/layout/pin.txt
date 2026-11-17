@@ -25,6 +25,14 @@ statusLine (0.0000, 0.0000, 0.0000, 0.0000)
 actionRow (0.0000, 0.0000, 0.0000, 0.0000)
 pileSize (61.5385, 87.0000)
 chromeOverflow 0.0000
+tvUnit 1.0000
+seatFrames []
+banner (0.0000, 0.0000, 0.0000, 0.0000)
+bannerRoom (0.0000, 0.0000, 0.0000, 0.0000)
+rug (0.0000, 0.0000, 0.0000, 0.0000)
+tvAreas []
+tvPlan nil
+tvLaidWidth 0.0000
 handBaseY 71.9573
 fanRadius 562.5000
 handSpan 142.7925
@@ -71,6 +79,14 @@ statusLine (0.0000, 0.0000, 0.0000, 0.0000)
 actionRow (0.0000, 0.0000, 0.0000, 0.0000)
 pileSize (61.5385, 87.0000)
 chromeOverflow 0.0000
+tvUnit 1.0000
+seatFrames []
+banner (0.0000, 0.0000, 0.0000, 0.0000)
+bannerRoom (0.0000, 0.0000, 0.0000, 0.0000)
+rug (0.0000, 0.0000, 0.0000, 0.0000)
+tvAreas []
+tvPlan nil
+tvLaidWidth 0.0000
 handBaseY 71.9573
 fanRadius 562.5000
 handSpan 142.7925
@@ -117,6 +133,14 @@ statusLine (0.0000, 0.0000, 0.0000, 0.0000)
 actionRow (0.0000, 0.0000, 0.0000, 0.0000)
 pileSize (61.5385, 87.0000)
 chromeOverflow 0.0000
+tvUnit 1.0000
+seatFrames []
+banner (0.0000, 0.0000, 0.0000, 0.0000)
+bannerRoom (0.0000, 0.0000, 0.0000, 0.0000)
+rug (0.0000, 0.0000, 0.0000, 0.0000)
+tvAreas []
+tvPlan nil
+tvLaidWidth 0.0000
 handBaseY 71.9573
 fanRadius 562.5000
 handSpan 142.7925
@@ -163,6 +187,14 @@ statusLine (8.0000, 575.0000, 359.0000, 28.0000)
 actionRow (8.0000, 241.2513, 311.0000, 52.0000)
 pileSize (117.0000, 165.0000)
 chromeOverflow 0.0000
+tvUnit 1.0000
+seatFrames []
+banner (0.0000, 0.0000, 0.0000, 0.0000)
+bannerRoom (0.0000, 0.0000, 0.0000, 0.0000)
+rug (0.0000, 0.0000, 0.0000, 0.0000)
+tvAreas []
+tvPlan nil
+tvLaidWidth 0.0000
 handBaseY 82.2513
 fanRadius 562.5000
 handSpan 132.7233
@@ -209,6 +241,14 @@ statusLine (8.0000, 575.0000, 359.0000, 28.0000)
 actionRow (8.0000, 206.7152, 311.0000, 52.0000)
 pileSize (150.0000, 211.0000)
 chromeOverflow 0.0000
+tvUnit 1.0000
+seatFrames []
+banner (0.0000, 0.0000, 0.0000, 0.0000)
+bannerRoom (0.0000, 0.0000, 0.0000, 0.0000)
+rug (0.0000, 0.0000, 0.0000, 0.0000)
+tvAreas []
+tvPlan nil
+tvLaidWidth 0.0000
 handBaseY 96.2152
 fanRadius 562.5000
 handSpan 119.7348
@@ -255,6 +295,14 @@ statusLine (8.0000, 527.0000, 359.0000, 56.0000)
 actionRow (8.0000, 234.2513, 311.0000, 96.0000)
 pileSize (117.0000, 165.0000)
 chromeOverflow 0.0000
+tvUnit 1.0000
+seatFrames []
+banner (0.0000, 0.0000, 0.0000, 0.0000)
+bannerRoom (0.0000, 0.0000, 0.0000, 0.0000)
+rug (0.0000, 0.0000, 0.0000, 0.0000)
+tvAreas []
+tvPlan nil
+tvLaidWidth 0.0000
 handBaseY 82.2513
 fanRadius 562.5000
 handSpan 132.7233
@@ -301,6 +349,14 @@ statusLine (8.0000, 527.0000, 359.0000, 56.0000)
 actionRow (8.0000, 206.7152, 311.0000, 96.0000)
 pileSize (148.0000, 208.0000)
 chromeOverflow 0.0000
+tvUnit 1.0000
+seatFrames []
+banner (0.0000, 0.0000, 0.0000, 0.0000)
+bannerRoom (0.0000, 0.0000, 0.0000, 0.0000)
+rug (0.0000, 0.0000, 0.0000, 0.0000)
+tvAreas []
+tvPlan nil
+tvLaidWidth 0.0000
 handBaseY 96.2152
 fanRadius 562.5000
 handSpan 119.7348
@@ -335,6 +391,10 @@ catLift 8.0000
 nameDrop 36.0000
 menuButton (349.0000, 629.0000)
 menuSide 32.0000
+tvUnit 1.0000
+seatFrames []
+banner (0.0000, 0.0000, 0.0000, 0.0000)
+bannerRoom (0.0000, 0.0000, 0.0000, 0.0000)
 rugArt (4.0000, 228.0000, 367.0000, 317.0000)
 rug (17.0000, 245.0000, 341.0000, 283.0000)
 rugBorderScale 1.5000
@@ -373,6 +433,10 @@ catLift 8.0000
 nameDrop 36.0000
 menuButton (349.0000, 629.0000)
 menuSide 32.0000
+tvUnit 1.0000
+seatFrames []
+banner (0.0000, 0.0000, 0.0000, 0.0000)
+bannerRoom (0.0000, 0.0000, 0.0000, 0.0000)
 rugArt (4.0000, 262.0000, 367.0000, 283.0000)
 rug (17.0000, 279.0000, 341.0000, 249.0000)
 rugBorderScale 1.5000
@@ -411,6 +475,10 @@ catLift 8.0000
 nameDrop 36.0000
 menuButton (349.0000, 629.0000)
 menuSide 32.0000
+tvUnit 1.0000
+seatFrames []
+banner (0.0000, 0.0000, 0.0000, 0.0000)
+bannerRoom (0.0000, 0.0000, 0.0000, 0.0000)
 rugArt (4.0000, 16.0000, 367.0000, 529.0000)
 rug (17.0000, 33.0000, 341.0000, 495.0000)
 rugBorderScale 1.5000
@@ -449,6 +517,10 @@ catLift 8.0000
 nameDrop 36.0000
 menuButton (345.0000, 625.0000)
 menuSide 32.0000
+tvUnit 1.0000
+seatFrames []
+banner (0.0000, 0.0000, 0.0000, 0.0000)
+bannerRoom (0.0000, 0.0000, 0.0000, 0.0000)
 rugArt (0.0000, 0.0000, 0.0000, 0.0000)
 rug (0.0000, 0.0000, 0.0000, 0.0000)
 rugBorderScale 1.5000
@@ -487,6 +559,10 @@ catLift 8.0000
 nameDrop 36.0000
 menuButton (345.0000, 625.0000)
 menuSide 32.0000
+tvUnit 1.0000
+seatFrames []
+banner (0.0000, 0.0000, 0.0000, 0.0000)
+bannerRoom (0.0000, 0.0000, 0.0000, 0.0000)
 rugArt (0.0000, 0.0000, 0.0000, 0.0000)
 rug (0.0000, 0.0000, 0.0000, 0.0000)
 rugBorderScale 1.5000
@@ -525,6 +601,10 @@ catLift 8.0000
 nameDrop 36.0000
 menuButton (345.0000, 615.0000)
 menuSide 32.0000
+tvUnit 1.0000
+seatFrames []
+banner (0.0000, 0.0000, 0.0000, 0.0000)
+bannerRoom (0.0000, 0.0000, 0.0000, 0.0000)
 rugArt (0.0000, 0.0000, 0.0000, 0.0000)
 rug (0.0000, 0.0000, 0.0000, 0.0000)
 rugBorderScale 1.5000
@@ -563,6 +643,10 @@ catLift 8.0000
 nameDrop 36.0000
 menuButton (345.0000, 615.0000)
 menuSide 32.0000
+tvUnit 1.0000
+seatFrames []
+banner (0.0000, 0.0000, 0.0000, 0.0000)
+bannerRoom (0.0000, 0.0000, 0.0000, 0.0000)
 rugArt (0.0000, 0.0000, 0.0000, 0.0000)
 rug (0.0000, 0.0000, 0.0000, 0.0000)
 rugBorderScale 1.5000
@@ -601,6 +685,10 @@ catLift 8.0000
 nameDrop 36.0000
 menuButton (345.0000, 625.0000)
 menuSide 32.0000
+tvUnit 1.0000
+seatFrames []
+banner (0.0000, 0.0000, 0.0000, 0.0000)
+bannerRoom (0.0000, 0.0000, 0.0000, 0.0000)
 rugArt (4.0000, 202.0000, 367.0000, 299.0000)
 rug (17.0000, 219.0000, 341.0000, 265.0000)
 rugBorderScale 1.5000
@@ -639,6 +727,10 @@ catLift 8.0000
 nameDrop 36.0000
 menuButton (345.0000, 625.0000)
 menuSide 32.0000
+tvUnit 1.0000
+seatFrames []
+banner (0.0000, 0.0000, 0.0000, 0.0000)
+bannerRoom (0.0000, 0.0000, 0.0000, 0.0000)
 rugArt (4.0000, 262.0000, 367.0000, 239.0000)
 rug (17.0000, 279.0000, 341.0000, 205.0000)
 rugBorderScale 1.5000
@@ -689,6 +781,14 @@ statusLine (0.0000, 0.0000, 0.0000, 0.0000)
 actionRow (0.0000, 0.0000, 0.0000, 0.0000)
 pileSize (65.9692, 93.0000)
 chromeOverflow 0.0000
+tvUnit 1.0000
+seatFrames []
+banner (0.0000, 0.0000, 0.0000, 0.0000)
+bannerRoom (0.0000, 0.0000, 0.0000, 0.0000)
+rug (0.0000, 0.0000, 0.0000, 0.0000)
+tvAreas []
+tvPlan nil
+tvLaidWidth 0.0000
 handBaseY 110.8096
 fanRadius 603.0000
 handSpan 153.3762
@@ -735,6 +835,14 @@ statusLine (0.0000, 0.0000, 0.0000, 0.0000)
 actionRow (0.0000, 0.0000, 0.0000, 0.0000)
 pileSize (65.9692, 93.0000)
 chromeOverflow 0.0000
+tvUnit 1.0000
+seatFrames []
+banner (0.0000, 0.0000, 0.0000, 0.0000)
+bannerRoom (0.0000, 0.0000, 0.0000, 0.0000)
+rug (0.0000, 0.0000, 0.0000, 0.0000)
+tvAreas []
+tvPlan nil
+tvLaidWidth 0.0000
 handBaseY 110.8096
 fanRadius 603.0000
 handSpan 153.3762
@@ -781,6 +889,14 @@ statusLine (0.0000, 0.0000, 0.0000, 0.0000)
 actionRow (0.0000, 0.0000, 0.0000, 0.0000)
 pileSize (65.9692, 93.0000)
 chromeOverflow 0.0000
+tvUnit 1.0000
+seatFrames []
+banner (0.0000, 0.0000, 0.0000, 0.0000)
+bannerRoom (0.0000, 0.0000, 0.0000, 0.0000)
+rug (0.0000, 0.0000, 0.0000, 0.0000)
+tvAreas []
+tvPlan nil
+tvLaidWidth 0.0000
 handBaseY 110.8096
 fanRadius 603.0000
 handSpan 153.3762
@@ -827,6 +943,14 @@ statusLine (8.0000, 740.0000, 386.0000, 28.0000)
 actionRow (8.0000, 284.0470, 338.0000, 52.0000)
 pileSize (124.0000, 174.0000)
 chromeOverflow 0.0000
+tvUnit 1.0000
+seatFrames []
+banner (0.0000, 0.0000, 0.0000, 0.0000)
+bannerRoom (0.0000, 0.0000, 0.0000, 0.0000)
+rug (0.0000, 0.0000, 0.0000, 0.0000)
+tvAreas []
+tvPlan nil
+tvLaidWidth 0.0000
 handBaseY 121.5470
 fanRadius 603.0000
 handSpan 142.9240
@@ -873,6 +997,14 @@ statusLine (8.0000, 740.0000, 386.0000, 28.0000)
 actionRow (8.0000, 251.3965, 338.0000, 52.0000)
 pileSize (160.0000, 225.0000)
 chromeOverflow 0.0000
+tvUnit 1.0000
+seatFrames []
+banner (0.0000, 0.0000, 0.0000, 0.0000)
+bannerRoom (0.0000, 0.0000, 0.0000, 0.0000)
+rug (0.0000, 0.0000, 0.0000, 0.0000)
+tvAreas []
+tvPlan nil
+tvLaidWidth 0.0000
 handBaseY 136.3965
 fanRadius 603.0000
 handSpan 128.8158
@@ -919,6 +1051,14 @@ statusLine (8.0000, 692.0000, 386.0000, 56.0000)
 actionRow (8.0000, 284.0470, 338.0000, 96.0000)
 pileSize (124.0000, 174.0000)
 chromeOverflow 0.0000
+tvUnit 1.0000
+seatFrames []
+banner (0.0000, 0.0000, 0.0000, 0.0000)
+bannerRoom (0.0000, 0.0000, 0.0000, 0.0000)
+rug (0.0000, 0.0000, 0.0000, 0.0000)
+tvAreas []
+tvPlan nil
+tvLaidWidth 0.0000
 handBaseY 121.5470
 fanRadius 603.0000
 handSpan 142.9240
@@ -965,6 +1105,14 @@ statusLine (8.0000, 692.0000, 386.0000, 56.0000)
 actionRow (8.0000, 251.3965, 338.0000, 96.0000)
 pileSize (160.0000, 225.0000)
 chromeOverflow 0.0000
+tvUnit 1.0000
+seatFrames []
+banner (0.0000, 0.0000, 0.0000, 0.0000)
+bannerRoom (0.0000, 0.0000, 0.0000, 0.0000)
+rug (0.0000, 0.0000, 0.0000, 0.0000)
+tvAreas []
+tvPlan nil
+tvLaidWidth 0.0000
 handBaseY 136.3965
 fanRadius 603.0000
 handSpan 128.8158
@@ -999,6 +1147,10 @@ catLift 8.0000
 nameDrop 36.0000
 menuButton (376.0000, 794.0000)
 menuSide 32.0000
+tvUnit 1.0000
+seatFrames []
+banner (0.0000, 0.0000, 0.0000, 0.0000)
+bannerRoom (0.0000, 0.0000, 0.0000, 0.0000)
 rugArt (4.0000, 268.0000, 394.0000, 442.0000)
 rug (17.0000, 285.0000, 368.0000, 408.0000)
 rugBorderScale 1.5000
@@ -1037,6 +1189,10 @@ catLift 8.0000
 nameDrop 36.0000
 menuButton (376.0000, 794.0000)
 menuSide 32.0000
+tvUnit 1.0000
+seatFrames []
+banner (0.0000, 0.0000, 0.0000, 0.0000)
+bannerRoom (0.0000, 0.0000, 0.0000, 0.0000)
 rugArt (4.0000, 305.0000, 394.0000, 405.0000)
 rug (17.0000, 322.0000, 368.0000, 371.0000)
 rugBorderScale 1.5000
@@ -1075,6 +1231,10 @@ catLift 8.0000
 nameDrop 36.0000
 menuButton (376.0000, 794.0000)
 menuSide 32.0000
+tvUnit 1.0000
+seatFrames []
+banner (0.0000, 0.0000, 0.0000, 0.0000)
+bannerRoom (0.0000, 0.0000, 0.0000, 0.0000)
 rugArt (4.0000, 84.0000, 394.0000, 626.0000)
 rug (17.0000, 101.0000, 368.0000, 592.0000)
 rugBorderScale 1.5000
@@ -1113,6 +1273,10 @@ catLift 8.0000
 nameDrop 36.0000
 menuButton (372.0000, 790.0000)
 menuSide 32.0000
+tvUnit 1.0000
+seatFrames []
+banner (0.0000, 0.0000, 0.0000, 0.0000)
+bannerRoom (0.0000, 0.0000, 0.0000, 0.0000)
 rugArt (0.0000, 0.0000, 0.0000, 0.0000)
 rug (0.0000, 0.0000, 0.0000, 0.0000)
 rugBorderScale 1.5000
@@ -1151,6 +1315,10 @@ catLift 8.0000
 nameDrop 36.0000
 menuButton (372.0000, 790.0000)
 menuSide 32.0000
+tvUnit 1.0000
+seatFrames []
+banner (0.0000, 0.0000, 0.0000, 0.0000)
+bannerRoom (0.0000, 0.0000, 0.0000, 0.0000)
 rugArt (0.0000, 0.0000, 0.0000, 0.0000)
 rug (0.0000, 0.0000, 0.0000, 0.0000)
 rugBorderScale 1.5000
@@ -1189,6 +1357,10 @@ catLift 8.0000
 nameDrop 36.0000
 menuButton (372.0000, 780.0000)
 menuSide 32.0000
+tvUnit 1.0000
+seatFrames []
+banner (0.0000, 0.0000, 0.0000, 0.0000)
+bannerRoom (0.0000, 0.0000, 0.0000, 0.0000)
 rugArt (0.0000, 0.0000, 0.0000, 0.0000)
 rug (0.0000, 0.0000, 0.0000, 0.0000)
 rugBorderScale 1.5000
@@ -1227,6 +1399,10 @@ catLift 8.0000
 nameDrop 36.0000
 menuButton (372.0000, 780.0000)
 menuSide 32.0000
+tvUnit 1.0000
+seatFrames []
+banner (0.0000, 0.0000, 0.0000, 0.0000)
+bannerRoom (0.0000, 0.0000, 0.0000, 0.0000)
 rugArt (0.0000, 0.0000, 0.0000, 0.0000)
 rug (0.0000, 0.0000, 0.0000, 0.0000)
 rugBorderScale 1.5000
@@ -1265,6 +1441,10 @@ catLift 8.0000
 nameDrop 36.0000
 menuButton (372.0000, 790.0000)
 menuSide 32.0000
+tvUnit 1.0000
+seatFrames []
+banner (0.0000, 0.0000, 0.0000, 0.0000)
+bannerRoom (0.0000, 0.0000, 0.0000, 0.0000)
 rugArt (4.0000, 242.0000, 394.0000, 424.0000)
 rug (17.0000, 259.0000, 368.0000, 390.0000)
 rugBorderScale 1.5000
@@ -1303,6 +1483,10 @@ catLift 8.0000
 nameDrop 36.0000
 menuButton (372.0000, 790.0000)
 menuSide 32.0000
+tvUnit 1.0000
+seatFrames []
+banner (0.0000, 0.0000, 0.0000, 0.0000)
+bannerRoom (0.0000, 0.0000, 0.0000, 0.0000)
 rugArt (4.0000, 305.0000, 394.0000, 361.0000)
 rug (17.0000, 322.0000, 368.0000, 327.0000)
 rugBorderScale 1.5000
@@ -1353,6 +1537,14 @@ statusLine (0.0000, 0.0000, 0.0000, 0.0000)
 actionRow (0.0000, 0.0000, 0.0000, 0.0000)
 pileSize (72.2051, 102.0000)
 chromeOverflow 0.0000
+tvUnit 1.0000
+seatFrames []
+banner (0.0000, 0.0000, 0.0000, 0.0000)
+bannerRoom (0.0000, 0.0000, 0.0000, 0.0000)
+rug (0.0000, 0.0000, 0.0000, 0.0000)
+tvAreas []
+tvPlan nil
+tvLaidWidth 0.0000
 handBaseY 117.8887
 fanRadius 660.0000
 handSpan 168.2061
@@ -1399,6 +1591,14 @@ statusLine (0.0000, 0.0000, 0.0000, 0.0000)
 actionRow (0.0000, 0.0000, 0.0000, 0.0000)
 pileSize (72.2051, 102.0000)
 chromeOverflow 0.0000
+tvUnit 1.0000
+seatFrames []
+banner (0.0000, 0.0000, 0.0000, 0.0000)
+bannerRoom (0.0000, 0.0000, 0.0000, 0.0000)
+rug (0.0000, 0.0000, 0.0000, 0.0000)
+tvAreas []
+tvPlan nil
+tvLaidWidth 0.0000
 handBaseY 117.8887
 fanRadius 660.0000
 handSpan 168.2061
@@ -1445,6 +1645,14 @@ statusLine (0.0000, 0.0000, 0.0000, 0.0000)
 actionRow (0.0000, 0.0000, 0.0000, 0.0000)
 pileSize (72.2051, 102.0000)
 chromeOverflow 0.0000
+tvUnit 1.0000
+seatFrames []
+banner (0.0000, 0.0000, 0.0000, 0.0000)
+bannerRoom (0.0000, 0.0000, 0.0000, 0.0000)
+rug (0.0000, 0.0000, 0.0000, 0.0000)
+tvAreas []
+tvPlan nil
+tvLaidWidth 0.0000
 handBaseY 117.8887
 fanRadius 660.0000
 handSpan 168.2061
@@ -1491,6 +1699,14 @@ statusLine (8.0000, 822.0000, 424.0000, 28.0000)
 actionRow (8.0000, 297.5146, 376.0000, 52.0000)
 pileSize (136.0000, 191.0000)
 chromeOverflow 0.0000
+tvUnit 1.0000
+seatFrames []
+banner (0.0000, 0.0000, 0.0000, 0.0000)
+bannerRoom (0.0000, 0.0000, 0.0000, 0.0000)
+rug (0.0000, 0.0000, 0.0000, 0.0000)
+tvAreas []
+tvPlan nil
+tvLaidWidth 0.0000
 handBaseY 129.5146
 fanRadius 660.0000
 handSpan 156.7219
@@ -1537,6 +1753,14 @@ statusLine (8.0000, 822.0000, 424.0000, 28.0000)
 actionRow (8.0000, 269.6198, 376.0000, 52.0000)
 pileSize (177.0000, 249.0000)
 chromeOverflow 0.0000
+tvUnit 1.0000
+seatFrames []
+banner (0.0000, 0.0000, 0.0000, 0.0000)
+bannerRoom (0.0000, 0.0000, 0.0000, 0.0000)
+rug (0.0000, 0.0000, 0.0000, 0.0000)
+tvAreas []
+tvPlan nil
+tvLaidWidth 0.0000
 handBaseY 146.6198
 fanRadius 660.0000
 handSpan 140.7682
@@ -1583,6 +1807,14 @@ statusLine (8.0000, 774.0000, 424.0000, 56.0000)
 actionRow (8.0000, 297.5146, 376.0000, 96.0000)
 pileSize (136.0000, 191.0000)
 chromeOverflow 0.0000
+tvUnit 1.0000
+seatFrames []
+banner (0.0000, 0.0000, 0.0000, 0.0000)
+bannerRoom (0.0000, 0.0000, 0.0000, 0.0000)
+rug (0.0000, 0.0000, 0.0000, 0.0000)
+tvAreas []
+tvPlan nil
+tvLaidWidth 0.0000
 handBaseY 129.5146
 fanRadius 660.0000
 handSpan 156.7219
@@ -1629,6 +1861,14 @@ statusLine (8.0000, 774.0000, 424.0000, 56.0000)
 actionRow (8.0000, 269.6198, 376.0000, 96.0000)
 pileSize (177.0000, 249.0000)
 chromeOverflow 0.0000
+tvUnit 1.0000
+seatFrames []
+banner (0.0000, 0.0000, 0.0000, 0.0000)
+bannerRoom (0.0000, 0.0000, 0.0000, 0.0000)
+rug (0.0000, 0.0000, 0.0000, 0.0000)
+tvAreas []
+tvPlan nil
+tvLaidWidth 0.0000
 handBaseY 146.6198
 fanRadius 660.0000
 handSpan 140.7682
@@ -1663,6 +1903,10 @@ catLift 8.0000
 nameDrop 36.0000
 menuButton (414.0000, 876.0000)
 menuSide 32.0000
+tvUnit 1.0000
+seatFrames []
+banner (0.0000, 0.0000, 0.0000, 0.0000)
+bannerRoom (0.0000, 0.0000, 0.0000, 0.0000)
 rugArt (4.0000, 278.0000, 432.0000, 514.0000)
 rug (17.0000, 295.0000, 406.0000, 480.0000)
 rugBorderScale 1.5000
@@ -1701,6 +1945,10 @@ catLift 8.0000
 nameDrop 36.0000
 menuButton (414.0000, 876.0000)
 menuSide 32.0000
+tvUnit 1.0000
+seatFrames []
+banner (0.0000, 0.0000, 0.0000, 0.0000)
+bannerRoom (0.0000, 0.0000, 0.0000, 0.0000)
 rugArt (4.0000, 320.0000, 432.0000, 472.0000)
 rug (17.0000, 337.0000, 406.0000, 438.0000)
 rugBorderScale 1.5000
@@ -1739,6 +1987,10 @@ catLift 8.0000
 nameDrop 36.0000
 menuButton (414.0000, 876.0000)
 menuSide 32.0000
+tvUnit 1.0000
+seatFrames []
+banner (0.0000, 0.0000, 0.0000, 0.0000)
+bannerRoom (0.0000, 0.0000, 0.0000, 0.0000)
 rugArt (4.0000, 84.0000, 432.0000, 708.0000)
 rug (17.0000, 101.0000, 406.0000, 674.0000)
 rugBorderScale 1.5000
@@ -1777,6 +2029,10 @@ catLift 8.0000
 nameDrop 36.0000
 menuButton (410.0000, 872.0000)
 menuSide 32.0000
+tvUnit 1.0000
+seatFrames []
+banner (0.0000, 0.0000, 0.0000, 0.0000)
+bannerRoom (0.0000, 0.0000, 0.0000, 0.0000)
 rugArt (0.0000, 0.0000, 0.0000, 0.0000)
 rug (0.0000, 0.0000, 0.0000, 0.0000)
 rugBorderScale 1.5000
@@ -1815,6 +2071,10 @@ catLift 8.0000
 nameDrop 36.0000
 menuButton (410.0000, 872.0000)
 menuSide 32.0000
+tvUnit 1.0000
+seatFrames []
+banner (0.0000, 0.0000, 0.0000, 0.0000)
+bannerRoom (0.0000, 0.0000, 0.0000, 0.0000)
 rugArt (0.0000, 0.0000, 0.0000, 0.0000)
 rug (0.0000, 0.0000, 0.0000, 0.0000)
 rugBorderScale 1.5000
@@ -1853,6 +2113,10 @@ catLift 8.0000
 nameDrop 36.0000
 menuButton (410.0000, 862.0000)
 menuSide 32.0000
+tvUnit 1.0000
+seatFrames []
+banner (0.0000, 0.0000, 0.0000, 0.0000)
+bannerRoom (0.0000, 0.0000, 0.0000, 0.0000)
 rugArt (0.0000, 0.0000, 0.0000, 0.0000)
 rug (0.0000, 0.0000, 0.0000, 0.0000)
 rugBorderScale 1.5000
@@ -1891,6 +2155,10 @@ catLift 8.0000
 nameDrop 36.0000
 menuButton (410.0000, 862.0000)
 menuSide 32.0000
+tvUnit 1.0000
+seatFrames []
+banner (0.0000, 0.0000, 0.0000, 0.0000)
+bannerRoom (0.0000, 0.0000, 0.0000, 0.0000)
 rugArt (0.0000, 0.0000, 0.0000, 0.0000)
 rug (0.0000, 0.0000, 0.0000, 0.0000)
 rugBorderScale 1.5000
@@ -1929,6 +2197,10 @@ catLift 8.0000
 nameDrop 36.0000
 menuButton (410.0000, 872.0000)
 menuSide 32.0000
+tvUnit 1.0000
+seatFrames []
+banner (0.0000, 0.0000, 0.0000, 0.0000)
+bannerRoom (0.0000, 0.0000, 0.0000, 0.0000)
 rugArt (4.0000, 252.0000, 432.0000, 496.0000)
 rug (17.0000, 269.0000, 406.0000, 462.0000)
 rugBorderScale 1.5000
@@ -1967,6 +2239,10 @@ catLift 8.0000
 nameDrop 36.0000
 menuButton (410.0000, 872.0000)
 menuSide 32.0000
+tvUnit 1.0000
+seatFrames []
+banner (0.0000, 0.0000, 0.0000, 0.0000)
+bannerRoom (0.0000, 0.0000, 0.0000, 0.0000)
 rugArt (4.0000, 320.0000, 432.0000, 428.0000)
 rug (17.0000, 337.0000, 406.0000, 394.0000)
 rugBorderScale 1.5000
@@ -2017,6 +2293,14 @@ statusLine (0.0000, 0.0000, 0.0000, 0.0000)
 actionRow (0.0000, 0.0000, 0.0000, 0.0000)
 pileSize (76.0000, 107.0000)
 chromeOverflow 0.0000
+tvUnit 1.0000
+seatFrames []
+banner (0.0000, 0.0000, 0.0000, 0.0000)
+bannerRoom (0.0000, 0.0000, 0.0000, 0.0000)
+rug (0.0000, 0.0000, 0.0000, 0.0000)
+tvAreas []
+tvPlan nil
+tvLaidWidth 0.0000
 handBaseY 149.3503
 fanRadius 1434.0000
 handSpan 422.1126
@@ -2063,6 +2347,14 @@ statusLine (0.0000, 0.0000, 0.0000, 0.0000)
 actionRow (0.0000, 0.0000, 0.0000, 0.0000)
 pileSize (76.0000, 107.0000)
 chromeOverflow 0.0000
+tvUnit 1.0000
+seatFrames []
+banner (0.0000, 0.0000, 0.0000, 0.0000)
+bannerRoom (0.0000, 0.0000, 0.0000, 0.0000)
+rug (0.0000, 0.0000, 0.0000, 0.0000)
+tvAreas []
+tvPlan nil
+tvLaidWidth 0.0000
 handBaseY 149.3503
 fanRadius 1434.0000
 handSpan 422.1126
@@ -2109,6 +2401,14 @@ statusLine (0.0000, 0.0000, 0.0000, 0.0000)
 actionRow (0.0000, 0.0000, 0.0000, 0.0000)
 pileSize (76.0000, 107.0000)
 chromeOverflow 0.0000
+tvUnit 1.0000
+seatFrames []
+banner (0.0000, 0.0000, 0.0000, 0.0000)
+bannerRoom (0.0000, 0.0000, 0.0000, 0.0000)
+rug (0.0000, 0.0000, 0.0000, 0.0000)
+tvAreas []
+tvPlan nil
+tvLaidWidth 0.0000
 handBaseY 149.3503
 fanRadius 1434.0000
 handSpan 422.1126
@@ -2155,6 +2455,14 @@ statusLine (8.0000, 368.0000, 940.0000, 28.0000)
 actionRow (8.0000, 266.9557, 892.0000, 52.0000)
 pileSize (44.0000, 62.0000)
 chromeOverflow 28.9557
+tvUnit 1.0000
+seatFrames []
+banner (0.0000, 0.0000, 0.0000, 0.0000)
+bannerRoom (0.0000, 0.0000, 0.0000, 0.0000)
+rug (0.0000, 0.0000, 0.0000, 0.0000)
+tvAreas []
+tvPlan nil
+tvLaidWidth 0.0000
 handBaseY 141.9557
 fanRadius 1434.0000
 handSpan 430.1324
@@ -2201,6 +2509,14 @@ statusLine (8.0000, 368.0000, 940.0000, 28.0000)
 actionRow (8.0000, 229.7583, 892.0000, 52.0000)
 pileSize (49.0000, 69.0000)
 chromeOverflow 0.0000
+tvUnit 1.0000
+seatFrames []
+banner (0.0000, 0.0000, 0.0000, 0.0000)
+bannerRoom (0.0000, 0.0000, 0.0000, 0.0000)
+rug (0.0000, 0.0000, 0.0000, 0.0000)
+tvAreas []
+tvPlan nil
+tvLaidWidth 0.0000
 handBaseY 143.2583
 fanRadius 1434.0000
 handSpan 428.7669
@@ -2247,6 +2563,14 @@ statusLine (8.0000, 320.0000, 940.0000, 56.0000)
 actionRow (8.0000, 266.9557, 892.0000, 96.0000)
 pileSize (44.0000, 62.0000)
 chromeOverflow 120.9557
+tvUnit 1.0000
+seatFrames []
+banner (0.0000, 0.0000, 0.0000, 0.0000)
+bannerRoom (0.0000, 0.0000, 0.0000, 0.0000)
+rug (0.0000, 0.0000, 0.0000, 0.0000)
+tvAreas []
+tvPlan nil
+tvLaidWidth 0.0000
 handBaseY 141.9557
 fanRadius 1434.0000
 handSpan 430.1324
@@ -2293,6 +2617,14 @@ statusLine (8.0000, 320.0000, 940.0000, 56.0000)
 actionRow (8.0000, 226.9557, 892.0000, 96.0000)
 pileSize (44.0000, 62.0000)
 chromeOverflow 80.9557
+tvUnit 1.0000
+seatFrames []
+banner (0.0000, 0.0000, 0.0000, 0.0000)
+bannerRoom (0.0000, 0.0000, 0.0000, 0.0000)
+rug (0.0000, 0.0000, 0.0000, 0.0000)
+tvAreas []
+tvPlan nil
+tvLaidWidth 0.0000
 handBaseY 141.9557
 fanRadius 1434.0000
 handSpan 430.1324
@@ -2327,6 +2659,10 @@ catLift 8.0000
 nameDrop 36.0000
 menuButton (930.0000, 422.0000)
 menuSide 32.0000
+tvUnit 1.0000
+seatFrames []
+banner (0.0000, 0.0000, 0.0000, 0.0000)
+bannerRoom (0.0000, 0.0000, 0.0000, 0.0000)
 rugArt (4.0000, 415.0000, 948.0000, 60.0000)
 rug (17.0000, 432.0000, 922.0000, 26.0000)
 rugBorderScale 1.5000
@@ -2365,6 +2701,10 @@ catLift 8.0000
 nameDrop 36.0000
 menuButton (930.0000, 422.0000)
 menuSide 32.0000
+tvUnit 1.0000
+seatFrames []
+banner (0.0000, 0.0000, 0.0000, 0.0000)
+bannerRoom (0.0000, 0.0000, 0.0000, 0.0000)
 rugArt (4.0000, 532.0000, 948.0000, 60.0000)
 rug (17.0000, 549.0000, 922.0000, 26.0000)
 rugBorderScale 1.5000
@@ -2403,6 +2743,10 @@ catLift 8.0000
 nameDrop 36.0000
 menuButton (930.0000, 422.0000)
 menuSide 32.0000
+tvUnit 1.0000
+seatFrames []
+banner (0.0000, 0.0000, 0.0000, 0.0000)
+bannerRoom (0.0000, 0.0000, 0.0000, 0.0000)
 rugArt (4.0000, 58.0000, 948.0000, 280.0000)
 rug (17.0000, 75.0000, 922.0000, 246.0000)
 rugBorderScale 1.5000
@@ -2441,6 +2785,10 @@ catLift 8.0000
 nameDrop 36.0000
 menuButton (926.0000, 418.0000)
 menuSide 32.0000
+tvUnit 1.0000
+seatFrames []
+banner (0.0000, 0.0000, 0.0000, 0.0000)
+bannerRoom (0.0000, 0.0000, 0.0000, 0.0000)
 rugArt (0.0000, 0.0000, 0.0000, 0.0000)
 rug (0.0000, 0.0000, 0.0000, 0.0000)
 rugBorderScale 1.5000
@@ -2479,6 +2827,10 @@ catLift 8.0000
 nameDrop 36.0000
 menuButton (926.0000, 418.0000)
 menuSide 32.0000
+tvUnit 1.0000
+seatFrames []
+banner (0.0000, 0.0000, 0.0000, 0.0000)
+bannerRoom (0.0000, 0.0000, 0.0000, 0.0000)
 rugArt (0.0000, 0.0000, 0.0000, 0.0000)
 rug (0.0000, 0.0000, 0.0000, 0.0000)
 rugBorderScale 1.5000
@@ -2517,6 +2869,10 @@ catLift 8.0000
 nameDrop 36.0000
 menuButton (926.0000, 408.0000)
 menuSide 32.0000
+tvUnit 1.0000
+seatFrames []
+banner (0.0000, 0.0000, 0.0000, 0.0000)
+bannerRoom (0.0000, 0.0000, 0.0000, 0.0000)
 rugArt (0.0000, 0.0000, 0.0000, 0.0000)
 rug (0.0000, 0.0000, 0.0000, 0.0000)
 rugBorderScale 1.5000
@@ -2555,6 +2911,10 @@ catLift 8.0000
 nameDrop 36.0000
 menuButton (926.0000, 408.0000)
 menuSide 32.0000
+tvUnit 1.0000
+seatFrames []
+banner (0.0000, 0.0000, 0.0000, 0.0000)
+bannerRoom (0.0000, 0.0000, 0.0000, 0.0000)
 rugArt (0.0000, 0.0000, 0.0000, 0.0000)
 rug (0.0000, 0.0000, 0.0000, 0.0000)
 rugBorderScale 1.5000
@@ -2593,6 +2953,10 @@ catLift 8.0000
 nameDrop 36.0000
 menuButton (926.0000, 418.0000)
 menuSide 32.0000
+tvUnit 1.0000
+seatFrames []
+banner (0.0000, 0.0000, 0.0000, 0.0000)
+bannerRoom (0.0000, 0.0000, 0.0000, 0.0000)
 rugArt (4.0000, 389.0000, 948.0000, 60.0000)
 rug (17.0000, 406.0000, 922.0000, 26.0000)
 rugBorderScale 1.5000
@@ -2631,6 +2995,10 @@ catLift 8.0000
 nameDrop 36.0000
 menuButton (926.0000, 418.0000)
 menuSide 32.0000
+tvUnit 1.0000
+seatFrames []
+banner (0.0000, 0.0000, 0.0000, 0.0000)
+bannerRoom (0.0000, 0.0000, 0.0000, 0.0000)
 rugArt (4.0000, 532.0000, 948.0000, 60.0000)
 rug (17.0000, 549.0000, 922.0000, 26.0000)
 rugBorderScale 1.5000
@@ -2681,6 +3049,14 @@ statusLine (0.0000, 0.0000, 0.0000, 0.0000)
 actionRow (0.0000, 0.0000, 0.0000, 0.0000)
 pileSize (82.0000, 115.0000)
 chromeOverflow 0.0000
+tvUnit 1.0000
+seatFrames []
+banner (0.0000, 0.0000, 0.0000, 0.0000)
+bannerRoom (0.0000, 0.0000, 0.0000, 0.0000)
+rug (0.0000, 0.0000, 0.0000, 0.0000)
+tvAreas []
+tvPlan nil
+tvLaidWidth 0.0000
 handBaseY 142.5378
 fanRadius 1097.1600
 handSpan 310.3025
@@ -2727,6 +3103,14 @@ statusLine (0.0000, 0.0000, 0.0000, 0.0000)
 actionRow (0.0000, 0.0000, 0.0000, 0.0000)
 pileSize (82.0000, 115.0000)
 chromeOverflow 0.0000
+tvUnit 1.0000
+seatFrames []
+banner (0.0000, 0.0000, 0.0000, 0.0000)
+bannerRoom (0.0000, 0.0000, 0.0000, 0.0000)
+rug (0.0000, 0.0000, 0.0000, 0.0000)
+tvAreas []
+tvPlan nil
+tvLaidWidth 0.0000
 handBaseY 142.5378
 fanRadius 1097.1600
 handSpan 310.3025
@@ -2773,6 +3157,14 @@ statusLine (0.0000, 0.0000, 0.0000, 0.0000)
 actionRow (0.0000, 0.0000, 0.0000, 0.0000)
 pileSize (82.0000, 115.0000)
 chromeOverflow 0.0000
+tvUnit 1.0000
+seatFrames []
+banner (0.0000, 0.0000, 0.0000, 0.0000)
+bannerRoom (0.0000, 0.0000, 0.0000, 0.0000)
+rug (0.0000, 0.0000, 0.0000, 0.0000)
+tvAreas []
+tvPlan nil
+tvLaidWidth 0.0000
 handBaseY 142.5378
 fanRadius 1097.1600
 handSpan 310.3025
@@ -2819,6 +3211,14 @@ statusLine (16.0000, 1084.0000, 788.0000, 28.0000)
 actionRow (16.0000, 421.8463, 728.0000, 52.0000)
 pileSize (210.0000, 295.0000)
 chromeOverflow 0.0000
+tvUnit 1.0000
+seatFrames []
+banner (0.0000, 0.0000, 0.0000, 0.0000)
+bannerRoom (0.0000, 0.0000, 0.0000, 0.0000)
+rug (0.0000, 0.0000, 0.0000, 0.0000)
+tvAreas []
+tvPlan nil
+tvLaidWidth 0.0000
 handBaseY 185.3463
 fanRadius 1218.0000
 handSpan 313.2481
@@ -2865,6 +3265,14 @@ statusLine (16.0000, 1084.0000, 788.0000, 28.0000)
 actionRow (16.0000, 375.8959, 728.0000, 52.0000)
 pileSize (268.0000, 377.0000)
 chromeOverflow 0.0000
+tvUnit 1.0000
+seatFrames []
+banner (0.0000, 0.0000, 0.0000, 0.0000)
+bannerRoom (0.0000, 0.0000, 0.0000, 0.0000)
+rug (0.0000, 0.0000, 0.0000, 0.0000)
+tvAreas []
+tvPlan nil
+tvLaidWidth 0.0000
 handBaseY 209.8959
 fanRadius 1218.0000
 handSpan 289.3607
@@ -2911,6 +3319,14 @@ statusLine (16.0000, 1036.0000, 788.0000, 56.0000)
 actionRow (16.0000, 421.8463, 728.0000, 96.0000)
 pileSize (210.0000, 295.0000)
 chromeOverflow 0.0000
+tvUnit 1.0000
+seatFrames []
+banner (0.0000, 0.0000, 0.0000, 0.0000)
+bannerRoom (0.0000, 0.0000, 0.0000, 0.0000)
+rug (0.0000, 0.0000, 0.0000, 0.0000)
+tvAreas []
+tvPlan nil
+tvLaidWidth 0.0000
 handBaseY 185.3463
 fanRadius 1218.0000
 handSpan 313.2481
@@ -2957,6 +3373,14 @@ statusLine (16.0000, 1036.0000, 788.0000, 56.0000)
 actionRow (16.0000, 375.8959, 728.0000, 96.0000)
 pileSize (268.0000, 377.0000)
 chromeOverflow 0.0000
+tvUnit 1.0000
+seatFrames []
+banner (0.0000, 0.0000, 0.0000, 0.0000)
+bannerRoom (0.0000, 0.0000, 0.0000, 0.0000)
+rug (0.0000, 0.0000, 0.0000, 0.0000)
+tvAreas []
+tvPlan nil
+tvLaidWidth 0.0000
 handBaseY 209.8959
 fanRadius 1218.0000
 handSpan 289.3607
@@ -2991,6 +3415,10 @@ catLift 10.0000
 nameDrop 44.0000
 menuButton (782.0000, 1128.0000)
 menuSide 44.0000
+tvUnit 1.0000
+seatFrames []
+banner (0.0000, 0.0000, 0.0000, 0.0000)
+bannerRoom (0.0000, 0.0000, 0.0000, 0.0000)
 rugArt (24.0000, 215.0000, 772.0000, 811.0000)
 rug (49.0000, 244.0000, 722.0000, 753.0000)
 rugBorderScale 2.4000
@@ -3029,6 +3457,10 @@ catLift 10.0000
 nameDrop 44.0000
 menuButton (782.0000, 1128.0000)
 menuSide 44.0000
+tvUnit 1.0000
+seatFrames []
+banner (0.0000, 0.0000, 0.0000, 0.0000)
+bannerRoom (0.0000, 0.0000, 0.0000, 0.0000)
 rugArt (24.0000, 313.0000, 772.0000, 713.0000)
 rug (49.0000, 342.0000, 722.0000, 655.0000)
 rugBorderScale 2.4000
@@ -3067,6 +3499,10 @@ catLift 10.0000
 nameDrop 44.0000
 menuButton (782.0000, 1128.0000)
 menuSide 44.0000
+tvUnit 1.0000
+seatFrames []
+banner (0.0000, 0.0000, 0.0000, 0.0000)
+bannerRoom (0.0000, 0.0000, 0.0000, 0.0000)
 rugArt (24.0000, 62.0000, 772.0000, 964.0000)
 rug (49.0000, 91.0000, 722.0000, 906.0000)
 rugBorderScale 2.4000
@@ -3105,6 +3541,10 @@ catLift 10.0000
 nameDrop 44.0000
 menuButton (782.0000, 1134.0000)
 menuSide 44.0000
+tvUnit 1.0000
+seatFrames []
+banner (0.0000, 0.0000, 0.0000, 0.0000)
+bannerRoom (0.0000, 0.0000, 0.0000, 0.0000)
 rugArt (0.0000, 0.0000, 0.0000, 0.0000)
 rug (0.0000, 0.0000, 0.0000, 0.0000)
 rugBorderScale 2.4000
@@ -3143,6 +3583,10 @@ catLift 10.0000
 nameDrop 44.0000
 menuButton (782.0000, 1134.0000)
 menuSide 44.0000
+tvUnit 1.0000
+seatFrames []
+banner (0.0000, 0.0000, 0.0000, 0.0000)
+bannerRoom (0.0000, 0.0000, 0.0000, 0.0000)
 rugArt (0.0000, 0.0000, 0.0000, 0.0000)
 rug (0.0000, 0.0000, 0.0000, 0.0000)
 rugBorderScale 2.4000
@@ -3181,6 +3625,10 @@ catLift 10.0000
 nameDrop 44.0000
 menuButton (782.0000, 1124.0000)
 menuSide 44.0000
+tvUnit 1.0000
+seatFrames []
+banner (0.0000, 0.0000, 0.0000, 0.0000)
+bannerRoom (0.0000, 0.0000, 0.0000, 0.0000)
 rugArt (0.0000, 0.0000, 0.0000, 0.0000)
 rug (0.0000, 0.0000, 0.0000, 0.0000)
 rugBorderScale 2.4000
@@ -3219,6 +3667,10 @@ catLift 10.0000
 nameDrop 44.0000
 menuButton (782.0000, 1124.0000)
 menuSide 44.0000
+tvUnit 1.0000
+seatFrames []
+banner (0.0000, 0.0000, 0.0000, 0.0000)
+bannerRoom (0.0000, 0.0000, 0.0000, 0.0000)
 rugArt (0.0000, 0.0000, 0.0000, 0.0000)
 rug (0.0000, 0.0000, 0.0000, 0.0000)
 rugBorderScale 2.4000
@@ -3257,6 +3709,10 @@ catLift 10.0000
 nameDrop 44.0000
 menuButton (782.0000, 1134.0000)
 menuSide 44.0000
+tvUnit 1.0000
+seatFrames []
+banner (0.0000, 0.0000, 0.0000, 0.0000)
+bannerRoom (0.0000, 0.0000, 0.0000, 0.0000)
 rugArt (24.0000, 183.0000, 772.0000, 799.0000)
 rug (49.0000, 212.0000, 722.0000, 741.0000)
 rugBorderScale 2.4000
@@ -3295,6 +3751,10 @@ catLift 10.0000
 nameDrop 44.0000
 menuButton (782.0000, 1134.0000)
 menuSide 44.0000
+tvUnit 1.0000
+seatFrames []
+banner (0.0000, 0.0000, 0.0000, 0.0000)
+bannerRoom (0.0000, 0.0000, 0.0000, 0.0000)
 rugArt (24.0000, 313.0000, 772.0000, 669.0000)
 rug (49.0000, 342.0000, 722.0000, 611.0000)
 rugBorderScale 2.4000
@@ -3345,6 +3805,14 @@ statusLine (0.0000, 0.0000, 0.0000, 0.0000)
 actionRow (0.0000, 0.0000, 0.0000, 0.0000)
 pileSize (82.0000, 115.0000)
 chromeOverflow 0.0000
+tvUnit 1.0000
+seatFrames []
+banner (0.0000, 0.0000, 0.0000, 0.0000)
+bannerRoom (0.0000, 0.0000, 0.0000, 0.0000)
+rug (0.0000, 0.0000, 0.0000, 0.0000)
+tvAreas []
+tvPlan nil
+tvLaidWidth 0.0000
 handBaseY 142.5378
 fanRadius 1097.1600
 handSpan 310.3025
@@ -3391,6 +3859,14 @@ statusLine (0.0000, 0.0000, 0.0000, 0.0000)
 actionRow (0.0000, 0.0000, 0.0000, 0.0000)
 pileSize (82.0000, 115.0000)
 chromeOverflow 0.0000
+tvUnit 1.0000
+seatFrames []
+banner (0.0000, 0.0000, 0.0000, 0.0000)
+bannerRoom (0.0000, 0.0000, 0.0000, 0.0000)
+rug (0.0000, 0.0000, 0.0000, 0.0000)
+tvAreas []
+tvPlan nil
+tvLaidWidth 0.0000
 handBaseY 142.5378
 fanRadius 1097.1600
 handSpan 310.3025
@@ -3437,6 +3913,14 @@ statusLine (0.0000, 0.0000, 0.0000, 0.0000)
 actionRow (0.0000, 0.0000, 0.0000, 0.0000)
 pileSize (82.0000, 115.0000)
 chromeOverflow 0.0000
+tvUnit 1.0000
+seatFrames []
+banner (0.0000, 0.0000, 0.0000, 0.0000)
+bannerRoom (0.0000, 0.0000, 0.0000, 0.0000)
+rug (0.0000, 0.0000, 0.0000, 0.0000)
+tvAreas []
+tvPlan nil
+tvLaidWidth 0.0000
 handBaseY 142.5378
 fanRadius 1097.1600
 handSpan 310.3025
@@ -3483,6 +3967,14 @@ statusLine (16.0000, 724.0000, 1148.0000, 28.0000)
 actionRow (602.0000, 440.9906, 398.0000, 263.0000)
 pileSize (187.0000, 263.0000)
 chromeOverflow 0.0000
+tvUnit 1.0000
+seatFrames []
+banner (0.0000, 0.0000, 0.0000, 0.0000)
+bannerRoom (0.0000, 0.0000, 0.0000, 0.0000)
+rug (0.0000, 0.0000, 0.0000, 0.0000)
+tvAreas []
+tvPlan nil
+tvLaidWidth 0.0000
 handBaseY 194.9813
 fanRadius 1566.0000
 handSpan 437.6504
@@ -3529,6 +4021,14 @@ statusLine (16.0000, 724.0000, 1148.0000, 28.0000)
 actionRow (602.0000, 410.3399, 398.0000, 263.0000)
 pileSize (187.0000, 263.0000)
 chromeOverflow 0.0000
+tvUnit 1.0000
+seatFrames []
+banner (0.0000, 0.0000, 0.0000, 0.0000)
+bannerRoom (0.0000, 0.0000, 0.0000, 0.0000)
+rug (0.0000, 0.0000, 0.0000, 0.0000)
+tvAreas []
+tvPlan nil
+tvLaidWidth 0.0000
 handBaseY 212.1797
 fanRadius 1566.0000
 handSpan 419.7606
@@ -3575,6 +4075,14 @@ statusLine (16.0000, 676.0000, 1148.0000, 56.0000)
 actionRow (602.0000, 418.4906, 398.0000, 245.0000)
 pileSize (174.0000, 245.0000)
 chromeOverflow 0.0000
+tvUnit 1.0000
+seatFrames []
+banner (0.0000, 0.0000, 0.0000, 0.0000)
+bannerRoom (0.0000, 0.0000, 0.0000, 0.0000)
+rug (0.0000, 0.0000, 0.0000, 0.0000)
+tvAreas []
+tvPlan nil
+tvLaidWidth 0.0000
 handBaseY 194.9813
 fanRadius 1566.0000
 handSpan 437.6504
@@ -3621,6 +4129,14 @@ statusLine (16.0000, 676.0000, 1148.0000, 56.0000)
 actionRow (602.0000, 386.3399, 398.0000, 263.0000)
 pileSize (187.0000, 263.0000)
 chromeOverflow 0.0000
+tvUnit 1.0000
+seatFrames []
+banner (0.0000, 0.0000, 0.0000, 0.0000)
+bannerRoom (0.0000, 0.0000, 0.0000, 0.0000)
+rug (0.0000, 0.0000, 0.0000, 0.0000)
+tvAreas []
+tvPlan nil
+tvLaidWidth 0.0000
 handBaseY 212.1797
 fanRadius 1566.0000
 handSpan 419.7606
@@ -3655,6 +4171,10 @@ catLift 10.0000
 nameDrop 40.0000
 menuButton (1142.0000, 768.0000)
 menuSide 44.0000
+tvUnit 1.0000
+seatFrames []
+banner (0.0000, 0.0000, 0.0000, 0.0000)
+bannerRoom (0.0000, 0.0000, 0.0000, 0.0000)
 rugArt (24.0000, 233.0000, 1132.0000, 441.0000)
 rug (49.0000, 262.0000, 1082.0000, 383.0000)
 rugBorderScale 2.4000
@@ -3693,6 +4213,10 @@ catLift 10.0000
 nameDrop 40.0000
 menuButton (1142.0000, 768.0000)
 menuSide 44.0000
+tvUnit 1.0000
+seatFrames []
+banner (0.0000, 0.0000, 0.0000, 0.0000)
+bannerRoom (0.0000, 0.0000, 0.0000, 0.0000)
 rugArt (24.0000, 367.0000, 1132.0000, 307.0000)
 rug (49.0000, 396.0000, 1082.0000, 249.0000)
 rugBorderScale 2.4000
@@ -3731,6 +4255,10 @@ catLift 10.0000
 nameDrop 40.0000
 menuButton (1142.0000, 768.0000)
 menuSide 44.0000
+tvUnit 1.0000
+seatFrames []
+banner (0.0000, 0.0000, 0.0000, 0.0000)
+bannerRoom (0.0000, 0.0000, 0.0000, 0.0000)
 rugArt (24.0000, 62.0000, 1132.0000, 612.0000)
 rug (49.0000, 91.0000, 1082.0000, 554.0000)
 rugBorderScale 2.4000
@@ -3769,6 +4297,10 @@ catLift 10.0000
 nameDrop 44.0000
 menuButton (1142.0000, 774.0000)
 menuSide 44.0000
+tvUnit 1.0000
+seatFrames []
+banner (0.0000, 0.0000, 0.0000, 0.0000)
+bannerRoom (0.0000, 0.0000, 0.0000, 0.0000)
 rugArt (0.0000, 0.0000, 0.0000, 0.0000)
 rug (0.0000, 0.0000, 0.0000, 0.0000)
 rugBorderScale 2.4000
@@ -3807,6 +4339,10 @@ catLift 10.0000
 nameDrop 44.0000
 menuButton (1142.0000, 774.0000)
 menuSide 44.0000
+tvUnit 1.0000
+seatFrames []
+banner (0.0000, 0.0000, 0.0000, 0.0000)
+bannerRoom (0.0000, 0.0000, 0.0000, 0.0000)
 rugArt (0.0000, 0.0000, 0.0000, 0.0000)
 rug (0.0000, 0.0000, 0.0000, 0.0000)
 rugBorderScale 2.4000
@@ -3845,6 +4381,10 @@ catLift 10.0000
 nameDrop 44.0000
 menuButton (1142.0000, 764.0000)
 menuSide 44.0000
+tvUnit 1.0000
+seatFrames []
+banner (0.0000, 0.0000, 0.0000, 0.0000)
+bannerRoom (0.0000, 0.0000, 0.0000, 0.0000)
 rugArt (0.0000, 0.0000, 0.0000, 0.0000)
 rug (0.0000, 0.0000, 0.0000, 0.0000)
 rugBorderScale 2.4000
@@ -3883,6 +4423,10 @@ catLift 10.0000
 nameDrop 44.0000
 menuButton (1142.0000, 764.0000)
 menuSide 44.0000
+tvUnit 1.0000
+seatFrames []
+banner (0.0000, 0.0000, 0.0000, 0.0000)
+bannerRoom (0.0000, 0.0000, 0.0000, 0.0000)
 rugArt (0.0000, 0.0000, 0.0000, 0.0000)
 rug (0.0000, 0.0000, 0.0000, 0.0000)
 rugBorderScale 2.4000
@@ -3921,6 +4465,10 @@ catLift 10.0000
 nameDrop 40.0000
 menuButton (1142.0000, 774.0000)
 menuSide 44.0000
+tvUnit 1.0000
+seatFrames []
+banner (0.0000, 0.0000, 0.0000, 0.0000)
+bannerRoom (0.0000, 0.0000, 0.0000, 0.0000)
 rugArt (24.0000, 201.0000, 1132.0000, 429.0000)
 rug (49.0000, 230.0000, 1082.0000, 371.0000)
 rugBorderScale 2.4000
@@ -3959,6 +4507,10 @@ catLift 10.0000
 nameDrop 40.0000
 menuButton (1142.0000, 774.0000)
 menuSide 44.0000
+tvUnit 1.0000
+seatFrames []
+banner (0.0000, 0.0000, 0.0000, 0.0000)
+bannerRoom (0.0000, 0.0000, 0.0000, 0.0000)
 rugArt (24.0000, 367.0000, 1132.0000, 263.0000)
 rug (49.0000, 396.0000, 1082.0000, 205.0000)
 rugBorderScale 2.4000
@@ -4009,6 +4561,14 @@ statusLine (0.0000, 0.0000, 0.0000, 0.0000)
 actionRow (0.0000, 0.0000, 0.0000, 0.0000)
 pileSize (102.0000, 143.0000)
 chromeOverflow 0.0000
+tvUnit 1.0000
+seatFrames []
+banner (0.0000, 0.0000, 0.0000, 0.0000)
+bannerRoom (0.0000, 0.0000, 0.0000, 0.0000)
+rug (0.0000, 0.0000, 0.0000, 0.0000)
+tvAreas []
+tvPlan nil
+tvLaidWidth 0.0000
 handBaseY 169.4768
 fanRadius 1364.7600
 handSpan 385.9925
@@ -4055,6 +4615,14 @@ statusLine (0.0000, 0.0000, 0.0000, 0.0000)
 actionRow (0.0000, 0.0000, 0.0000, 0.0000)
 pileSize (102.0000, 143.0000)
 chromeOverflow 0.0000
+tvUnit 1.0000
+seatFrames []
+banner (0.0000, 0.0000, 0.0000, 0.0000)
+bannerRoom (0.0000, 0.0000, 0.0000, 0.0000)
+rug (0.0000, 0.0000, 0.0000, 0.0000)
+tvAreas []
+tvPlan nil
+tvLaidWidth 0.0000
 handBaseY 169.4768
 fanRadius 1364.7600
 handSpan 385.9925
@@ -4101,6 +4669,14 @@ statusLine (0.0000, 0.0000, 0.0000, 0.0000)
 actionRow (0.0000, 0.0000, 0.0000, 0.0000)
 pileSize (102.0000, 143.0000)
 chromeOverflow 0.0000
+tvUnit 1.0000
+seatFrames []
+banner (0.0000, 0.0000, 0.0000, 0.0000)
+bannerRoom (0.0000, 0.0000, 0.0000, 0.0000)
+rug (0.0000, 0.0000, 0.0000, 0.0000)
+tvAreas []
+tvPlan nil
+tvLaidWidth 0.0000
 handBaseY 169.4768
 fanRadius 1364.7600
 handSpan 385.9925
@@ -4147,6 +4723,14 @@ statusLine (16.0000, 1270.0000, 992.0000, 28.0000)
 actionRow (102.0000, 478.0414, 760.0000, 52.0000)
 pileSize (255.0000, 359.0000)
 chromeOverflow 0.0000
+tvUnit 1.0000
+seatFrames []
+banner (0.0000, 0.0000, 0.0000, 0.0000)
+bannerRoom (0.0000, 0.0000, 0.0000, 0.0000)
+rug (0.0000, 0.0000, 0.0000, 0.0000)
+tvAreas []
+tvPlan nil
+tvLaidWidth 0.0000
 handBaseY 220.5414
 fanRadius 1524.0000
 handSpan 395.1997
@@ -4193,6 +4777,14 @@ statusLine (16.0000, 1270.0000, 992.0000, 28.0000)
 actionRow (102.0000, 431.1072, 760.0000, 52.0000)
 pileSize (312.0000, 439.0000)
 chromeOverflow 0.0000
+tvUnit 1.0000
+seatFrames []
+banner (0.0000, 0.0000, 0.0000, 0.0000)
+bannerRoom (0.0000, 0.0000, 0.0000, 0.0000)
+rug (0.0000, 0.0000, 0.0000, 0.0000)
+tvAreas []
+tvPlan nil
+tvLaidWidth 0.0000
 handBaseY 244.6072
 fanRadius 1524.0000
 handSpan 371.7002
@@ -4239,6 +4831,14 @@ statusLine (16.0000, 1222.0000, 992.0000, 56.0000)
 actionRow (102.0000, 478.0414, 760.0000, 96.0000)
 pileSize (255.0000, 359.0000)
 chromeOverflow 0.0000
+tvUnit 1.0000
+seatFrames []
+banner (0.0000, 0.0000, 0.0000, 0.0000)
+bannerRoom (0.0000, 0.0000, 0.0000, 0.0000)
+rug (0.0000, 0.0000, 0.0000, 0.0000)
+tvAreas []
+tvPlan nil
+tvLaidWidth 0.0000
 handBaseY 220.5414
 fanRadius 1524.0000
 handSpan 395.1997
@@ -4285,6 +4885,14 @@ statusLine (16.0000, 1222.0000, 992.0000, 56.0000)
 actionRow (102.0000, 431.1072, 760.0000, 96.0000)
 pileSize (312.0000, 439.0000)
 chromeOverflow 0.0000
+tvUnit 1.0000
+seatFrames []
+banner (0.0000, 0.0000, 0.0000, 0.0000)
+bannerRoom (0.0000, 0.0000, 0.0000, 0.0000)
+rug (0.0000, 0.0000, 0.0000, 0.0000)
+tvAreas []
+tvPlan nil
+tvLaidWidth 0.0000
 handBaseY 244.6072
 fanRadius 1524.0000
 handSpan 371.7002
@@ -4319,6 +4927,10 @@ catLift 10.0000
 nameDrop 53.0000
 menuButton (986.0000, 1314.0000)
 menuSide 44.0000
+tvUnit 1.0000
+seatFrames []
+banner (0.0000, 0.0000, 0.0000, 0.0000)
+bannerRoom (0.0000, 0.0000, 0.0000, 0.0000)
 rugArt (24.0000, 233.0000, 976.0000, 961.0000)
 rug (49.0000, 262.0000, 926.0000, 903.0000)
 rugBorderScale 2.4000
@@ -4357,6 +4969,10 @@ catLift 10.0000
 nameDrop 53.0000
 menuButton (986.0000, 1314.0000)
 menuSide 44.0000
+tvUnit 1.0000
+seatFrames []
+banner (0.0000, 0.0000, 0.0000, 0.0000)
+bannerRoom (0.0000, 0.0000, 0.0000, 0.0000)
 rugArt (24.0000, 367.0000, 976.0000, 827.0000)
 rug (49.0000, 396.0000, 926.0000, 769.0000)
 rugBorderScale 2.4000
@@ -4395,6 +5011,10 @@ catLift 10.0000
 nameDrop 53.0000
 menuButton (986.0000, 1314.0000)
 menuSide 44.0000
+tvUnit 1.0000
+seatFrames []
+banner (0.0000, 0.0000, 0.0000, 0.0000)
+bannerRoom (0.0000, 0.0000, 0.0000, 0.0000)
 rugArt (24.0000, 62.0000, 976.0000, 1132.0000)
 rug (49.0000, 91.0000, 926.0000, 1074.0000)
 rugBorderScale 2.4000
@@ -4433,6 +5053,10 @@ catLift 10.0000
 nameDrop 44.0000
 menuButton (986.0000, 1320.0000)
 menuSide 44.0000
+tvUnit 1.0000
+seatFrames []
+banner (0.0000, 0.0000, 0.0000, 0.0000)
+bannerRoom (0.0000, 0.0000, 0.0000, 0.0000)
 rugArt (0.0000, 0.0000, 0.0000, 0.0000)
 rug (0.0000, 0.0000, 0.0000, 0.0000)
 rugBorderScale 2.4000
@@ -4471,6 +5095,10 @@ catLift 10.0000
 nameDrop 44.0000
 menuButton (986.0000, 1320.0000)
 menuSide 44.0000
+tvUnit 1.0000
+seatFrames []
+banner (0.0000, 0.0000, 0.0000, 0.0000)
+bannerRoom (0.0000, 0.0000, 0.0000, 0.0000)
 rugArt (0.0000, 0.0000, 0.0000, 0.0000)
 rug (0.0000, 0.0000, 0.0000, 0.0000)
 rugBorderScale 2.4000
@@ -4509,6 +5137,10 @@ catLift 10.0000
 nameDrop 44.0000
 menuButton (986.0000, 1310.0000)
 menuSide 44.0000
+tvUnit 1.0000
+seatFrames []
+banner (0.0000, 0.0000, 0.0000, 0.0000)
+bannerRoom (0.0000, 0.0000, 0.0000, 0.0000)
 rugArt (0.0000, 0.0000, 0.0000, 0.0000)
 rug (0.0000, 0.0000, 0.0000, 0.0000)
 rugBorderScale 2.4000
@@ -4547,6 +5179,10 @@ catLift 10.0000
 nameDrop 44.0000
 menuButton (986.0000, 1310.0000)
 menuSide 44.0000
+tvUnit 1.0000
+seatFrames []
+banner (0.0000, 0.0000, 0.0000, 0.0000)
+bannerRoom (0.0000, 0.0000, 0.0000, 0.0000)
 rugArt (0.0000, 0.0000, 0.0000, 0.0000)
 rug (0.0000, 0.0000, 0.0000, 0.0000)
 rugBorderScale 2.4000
@@ -4585,6 +5221,10 @@ catLift 10.0000
 nameDrop 53.0000
 menuButton (986.0000, 1320.0000)
 menuSide 44.0000
+tvUnit 1.0000
+seatFrames []
+banner (0.0000, 0.0000, 0.0000, 0.0000)
+bannerRoom (0.0000, 0.0000, 0.0000, 0.0000)
 rugArt (24.0000, 201.0000, 976.0000, 949.0000)
 rug (49.0000, 230.0000, 926.0000, 891.0000)
 rugBorderScale 2.4000
@@ -4623,6 +5263,10 @@ catLift 10.0000
 nameDrop 53.0000
 menuButton (986.0000, 1320.0000)
 menuSide 44.0000
+tvUnit 1.0000
+seatFrames []
+banner (0.0000, 0.0000, 0.0000, 0.0000)
+bannerRoom (0.0000, 0.0000, 0.0000, 0.0000)
 rugArt (24.0000, 367.0000, 976.0000, 783.0000)
 rug (49.0000, 396.0000, 926.0000, 725.0000)
 rugBorderScale 2.4000
@@ -4673,6 +5317,14 @@ statusLine (0.0000, 0.0000, 0.0000, 0.0000)
 actionRow (0.0000, 0.0000, 0.0000, 0.0000)
 pileSize (102.0000, 143.0000)
 chromeOverflow 0.0000
+tvUnit 1.0000
+seatFrames []
+banner (0.0000, 0.0000, 0.0000, 0.0000)
+bannerRoom (0.0000, 0.0000, 0.0000, 0.0000)
+rug (0.0000, 0.0000, 0.0000, 0.0000)
+tvAreas []
+tvPlan nil
+tvLaidWidth 0.0000
 handBaseY 169.4768
 fanRadius 1364.7600
 handSpan 385.9925
@@ -4719,6 +5371,14 @@ statusLine (0.0000, 0.0000, 0.0000, 0.0000)
 actionRow (0.0000, 0.0000, 0.0000, 0.0000)
 pileSize (102.0000, 143.0000)
 chromeOverflow 0.0000
+tvUnit 1.0000
+seatFrames []
+banner (0.0000, 0.0000, 0.0000, 0.0000)
+bannerRoom (0.0000, 0.0000, 0.0000, 0.0000)
+rug (0.0000, 0.0000, 0.0000, 0.0000)
+tvAreas []
+tvPlan nil
+tvLaidWidth 0.0000
 handBaseY 169.4768
 fanRadius 1364.7600
 handSpan 385.9925
@@ -4765,6 +5425,14 @@ statusLine (0.0000, 0.0000, 0.0000, 0.0000)
 actionRow (0.0000, 0.0000, 0.0000, 0.0000)
 pileSize (102.0000, 143.0000)
 chromeOverflow 0.0000
+tvUnit 1.0000
+seatFrames []
+banner (0.0000, 0.0000, 0.0000, 0.0000)
+bannerRoom (0.0000, 0.0000, 0.0000, 0.0000)
+rug (0.0000, 0.0000, 0.0000, 0.0000)
+tvAreas []
+tvPlan nil
+tvLaidWidth 0.0000
 handBaseY 169.4768
 fanRadius 1364.7600
 handSpan 385.9925
@@ -4811,6 +5479,14 @@ statusLine (16.0000, 928.0000, 1334.0000, 28.0000)
 actionRow (695.0000, 572.2310, 398.0000, 263.0000)
 pileSize (187.0000, 263.0000)
 chromeOverflow 0.0000
+tvUnit 1.0000
+seatFrames []
+banner (0.0000, 0.0000, 0.0000, 0.0000)
+bannerRoom (0.0000, 0.0000, 0.0000, 0.0000)
+rug (0.0000, 0.0000, 0.0000, 0.0000)
+tvAreas []
+tvPlan nil
+tvLaidWidth 0.0000
 handBaseY 230.4620
 fanRadius 1845.0000
 handSpan 508.7625
@@ -4857,6 +5533,14 @@ statusLine (16.0000, 928.0000, 1334.0000, 28.0000)
 actionRow (695.0000, 546.3076, 398.0000, 263.0000)
 pileSize (187.0000, 263.0000)
 chromeOverflow 0.0000
+tvUnit 1.0000
+seatFrames []
+banner (0.0000, 0.0000, 0.0000, 0.0000)
+bannerRoom (0.0000, 0.0000, 0.0000, 0.0000)
+rug (0.0000, 0.0000, 0.0000, 0.0000)
+tvAreas []
+tvPlan nil
+tvLaidWidth 0.0000
 handBaseY 252.1151
 fanRadius 1845.0000
 handSpan 486.5176
@@ -4903,6 +5587,14 @@ statusLine (16.0000, 880.0000, 1334.0000, 56.0000)
 actionRow (695.0000, 548.2310, 398.0000, 263.0000)
 pileSize (187.0000, 263.0000)
 chromeOverflow 0.0000
+tvUnit 1.0000
+seatFrames []
+banner (0.0000, 0.0000, 0.0000, 0.0000)
+bannerRoom (0.0000, 0.0000, 0.0000, 0.0000)
+rug (0.0000, 0.0000, 0.0000, 0.0000)
+tvAreas []
+tvPlan nil
+tvLaidWidth 0.0000
 handBaseY 230.4620
 fanRadius 1845.0000
 handSpan 508.7625
@@ -4949,6 +5641,14 @@ statusLine (16.0000, 880.0000, 1334.0000, 56.0000)
 actionRow (695.0000, 522.3076, 398.0000, 263.0000)
 pileSize (187.0000, 263.0000)
 chromeOverflow 0.0000
+tvUnit 1.0000
+seatFrames []
+banner (0.0000, 0.0000, 0.0000, 0.0000)
+bannerRoom (0.0000, 0.0000, 0.0000, 0.0000)
+rug (0.0000, 0.0000, 0.0000, 0.0000)
+tvAreas []
+tvPlan nil
+tvLaidWidth 0.0000
 handBaseY 252.1151
 fanRadius 1845.0000
 handSpan 486.5176
@@ -4983,6 +5683,10 @@ catLift 10.0000
 nameDrop 53.0000
 menuButton (1328.0000, 972.0000)
 menuSide 44.0000
+tvUnit 1.0000
+seatFrames []
+banner (0.0000, 0.0000, 0.0000, 0.0000)
+bannerRoom (0.0000, 0.0000, 0.0000, 0.0000)
 rugArt (24.0000, 233.0000, 1318.0000, 619.0000)
 rug (49.0000, 262.0000, 1268.0000, 561.0000)
 rugBorderScale 2.4000
@@ -5021,6 +5725,10 @@ catLift 10.0000
 nameDrop 53.0000
 menuButton (1328.0000, 972.0000)
 menuSide 44.0000
+tvUnit 1.0000
+seatFrames []
+banner (0.0000, 0.0000, 0.0000, 0.0000)
+bannerRoom (0.0000, 0.0000, 0.0000, 0.0000)
 rugArt (24.0000, 367.0000, 1318.0000, 485.0000)
 rug (49.0000, 396.0000, 1268.0000, 427.0000)
 rugBorderScale 2.4000
@@ -5059,6 +5767,10 @@ catLift 10.0000
 nameDrop 53.0000
 menuButton (1328.0000, 972.0000)
 menuSide 44.0000
+tvUnit 1.0000
+seatFrames []
+banner (0.0000, 0.0000, 0.0000, 0.0000)
+bannerRoom (0.0000, 0.0000, 0.0000, 0.0000)
 rugArt (24.0000, 62.0000, 1318.0000, 790.0000)
 rug (49.0000, 91.0000, 1268.0000, 732.0000)
 rugBorderScale 2.4000
@@ -5097,6 +5809,10 @@ catLift 10.0000
 nameDrop 44.0000
 menuButton (1328.0000, 978.0000)
 menuSide 44.0000
+tvUnit 1.0000
+seatFrames []
+banner (0.0000, 0.0000, 0.0000, 0.0000)
+bannerRoom (0.0000, 0.0000, 0.0000, 0.0000)
 rugArt (0.0000, 0.0000, 0.0000, 0.0000)
 rug (0.0000, 0.0000, 0.0000, 0.0000)
 rugBorderScale 2.4000
@@ -5135,6 +5851,10 @@ catLift 10.0000
 nameDrop 44.0000
 menuButton (1328.0000, 978.0000)
 menuSide 44.0000
+tvUnit 1.0000
+seatFrames []
+banner (0.0000, 0.0000, 0.0000, 0.0000)
+bannerRoom (0.0000, 0.0000, 0.0000, 0.0000)
 rugArt (0.0000, 0.0000, 0.0000, 0.0000)
 rug (0.0000, 0.0000, 0.0000, 0.0000)
 rugBorderScale 2.4000
@@ -5173,6 +5893,10 @@ catLift 10.0000
 nameDrop 44.0000
 menuButton (1328.0000, 968.0000)
 menuSide 44.0000
+tvUnit 1.0000
+seatFrames []
+banner (0.0000, 0.0000, 0.0000, 0.0000)
+bannerRoom (0.0000, 0.0000, 0.0000, 0.0000)
 rugArt (0.0000, 0.0000, 0.0000, 0.0000)
 rug (0.0000, 0.0000, 0.0000, 0.0000)
 rugBorderScale 2.4000
@@ -5211,6 +5935,10 @@ catLift 10.0000
 nameDrop 44.0000
 menuButton (1328.0000, 968.0000)
 menuSide 44.0000
+tvUnit 1.0000
+seatFrames []
+banner (0.0000, 0.0000, 0.0000, 0.0000)
+bannerRoom (0.0000, 0.0000, 0.0000, 0.0000)
 rugArt (0.0000, 0.0000, 0.0000, 0.0000)
 rug (0.0000, 0.0000, 0.0000, 0.0000)
 rugBorderScale 2.4000
@@ -5249,6 +5977,10 @@ catLift 10.0000
 nameDrop 53.0000
 menuButton (1328.0000, 978.0000)
 menuSide 44.0000
+tvUnit 1.0000
+seatFrames []
+banner (0.0000, 0.0000, 0.0000, 0.0000)
+bannerRoom (0.0000, 0.0000, 0.0000, 0.0000)
 rugArt (24.0000, 201.0000, 1318.0000, 607.0000)
 rug (49.0000, 230.0000, 1268.0000, 549.0000)
 rugBorderScale 2.4000
@@ -5287,6 +6019,10 @@ catLift 10.0000
 nameDrop 53.0000
 menuButton (1328.0000, 978.0000)
 menuSide 44.0000
+tvUnit 1.0000
+seatFrames []
+banner (0.0000, 0.0000, 0.0000, 0.0000)
+bannerRoom (0.0000, 0.0000, 0.0000, 0.0000)
 rugArt (24.0000, 367.0000, 1318.0000, 441.0000)
 rug (49.0000, 396.0000, 1268.0000, 383.0000)
 rugBorderScale 2.4000
