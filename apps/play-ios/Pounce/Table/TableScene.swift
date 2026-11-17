@@ -777,7 +777,7 @@ final class TableScene: SKScene {
         let factory = CardFaceFactory.shared
         guard prewarm == nil, cards.contains(where: { !factory.hasTexture(for: $0, compact: true) }) else { return }
         prewarm = Task { @MainActor [weak self] in
-            factory.prewarmPreview()
+            await factory.warmPreview()
             for card in cards {
                 try? await Task.sleep(for: .milliseconds(40))
                 guard let self, !Task.isCancelled else { return }
