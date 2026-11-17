@@ -21,7 +21,8 @@ function Dots(props: { n: number }) {
   );
 }
 
-function TableCard(props: { t: TableEntry }) {
+/** A table on Home's strip (and the TV-link page's): `onOpen` instead of opening it. */
+export function TableCard(props: { t: TableEntry; onOpen?: (code: string) => void; disabled?: boolean }) {
   const { t } = props;
   const people = (t.seats ?? []).filter((s) => s.kind === "human" && s.person);
   const first = people[0]?.person;
@@ -30,7 +31,8 @@ function TableCard(props: { t: TableEntry }) {
     <button
       type="button"
       class={`table-card ${t.yourTurn && t.status === "playing" ? "turn" : ""}`}
-      onClick={() => navigate({ kind: "table", code: t.code })}
+      disabled={props.disabled}
+      onClick={() => (props.onOpen ? props.onOpen(t.code) : navigate({ kind: "table", code: t.code }))}
       aria-label={`${t.name ?? t.code}, ${titleOf(t.game ?? "cat-tower")}, ${status}`}
     >
       {t.yourTurn && t.status === "playing" ? <span class="turn-badge" aria-hidden="true"><Icon name="icon-paw-menu" size={26} /></span> : null}
@@ -115,23 +117,7 @@ export function Home(props: { onSettings: () => void; onPractice: (game: GameId)
         <h2 class="outlined section-h" id="new-h">
           New game
         </h2>
-        <div class="poster-grid">
-          {GAME_IDS.map((id, i) => (
-            <article class={`poster ${id}`}>
-              <img class="poster-art" src={art(CATALOG[id].art)} alt="" width={768} height={512} decoding="async" />
-              <div class="poster-body">
-                <h3 class="outlined">{CATALOG[id].title}</h3>
-                <p>{CATALOG[id].tagline}</p>
-                <span class="players">
-                  <Dots n={CATALOG[id].maxSeats} /> {CATALOG[id].minSeats} to {CATALOG[id].maxSeats} players
-                </span>
-              </div>
-              <Button size="small" class="poster-play" id={i === 0 ? "play-first" : undefined} onClick={() => props.onNew(id)} aria-label={`Play ${CATALOG[id].title}`}>
-                <Icon name="icon-play" size={26} /> Play
-              </Button>
-            </article>
-          ))}
-        </div>
+        <Posters onPlay={props.onNew} firstId="play-first" />
       </section>
 
       <nav class="dock" aria-label="Start">
@@ -144,6 +130,36 @@ export function Home(props: { onSettings: () => void; onPractice: (game: GameId)
       </nav>
       <Tip id="home.play" anchor="play-first" text="Tap Play to start a game." show={open.length === 0} place="below" />
     </main>
+  );
+}
+
+/** The games' posters, each with Play (Home's New game, and the TV-link page's). */
+export function Posters(props: { onPlay: (game: GameId) => void; firstId?: string; disabled?: boolean }) {
+  return (
+    <div class="poster-grid">
+      {GAME_IDS.map((id, i) => (
+        <article class={`poster ${id}`}>
+          <img class="poster-art" src={art(CATALOG[id].art)} alt="" width={768} height={512} decoding="async" />
+          <div class="poster-body">
+            <h3 class="outlined">{CATALOG[id].title}</h3>
+            <p>{CATALOG[id].tagline}</p>
+            <span class="players">
+              <Dots n={CATALOG[id].maxSeats} /> {CATALOG[id].minSeats} to {CATALOG[id].maxSeats} players
+            </span>
+          </div>
+          <Button
+            size="small"
+            class="poster-play"
+            id={i === 0 ? props.firstId : undefined}
+            disabled={props.disabled}
+            onClick={() => props.onPlay(id)}
+            aria-label={`Play ${CATALOG[id].title}`}
+          >
+            <Icon name="icon-play" size={26} /> Play
+          </Button>
+        </article>
+      ))}
+    </div>
   );
 }
 

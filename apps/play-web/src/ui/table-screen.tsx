@@ -25,6 +25,7 @@ import { TilesController } from "../table/tiles-controller";
 
 import { Button, Cat, Icon, IconButton, Sheet } from "./common";
 import { Lobby } from "./lobby";
+import { ShowOnTvSheet, TvIcon } from "./show-on-tv";
 
 import type { RoomView } from "@pounce/play-api/protocol";
 
@@ -36,7 +37,8 @@ function useRoom(store: RoomStore): RoomState {
   return state;
 }
 
-export function TableScreen(props: { code: string; intent: TableIntent }) {
+/** `say`: a toast over every screen (app.tsx's), as "On the TV" outlives the sheet that linked it. */
+export function TableScreen(props: { code: string; intent: TableIntent; say?: (words: string) => void }) {
   const { people } = useApp();
   const store = useMemo(
     () =>
@@ -132,6 +134,7 @@ export function TableScreen(props: { code: string; intent: TableIntent }) {
 
   const home = () => navigate({ kind: "home" });
   const [menu, setMenu] = useState<null | "menu" | "scores" | "forfeit">(null);
+  const [showOnTv, setShowOnTv] = useState(false);
   const offline = state.everConnected && !state.online && ["lobby", "playing", "over", "connecting"].includes(state.phase);
 
   let body;
@@ -168,6 +171,7 @@ export function TableScreen(props: { code: string; intent: TableIntent }) {
         room={room}
         kitten={people.band === "kitten"}
         onHome={home}
+        onShowOnTv={() => setShowOnTv(true)}
         onAddLocal={async (name, cat) => {
           const person = await addPerson(name, cat);
           // An open seat, else a House Cat's (a person takes it over), else a closed one, opened.
@@ -223,6 +227,20 @@ export function TableScreen(props: { code: string; intent: TableIntent }) {
                 <Icon name="icon-trophy" size={32} />
                 <span class="grow">Scores</span>
               </button>
+              {mySeats(room).length > 0 ? (
+                <button
+                  type="button"
+                  class="row"
+                  id="menu-show-on-tv"
+                  onClick={() => {
+                    setMenu(null);
+                    setShowOnTv(true);
+                  }}
+                >
+                  <TvIcon size={32} />
+                  <span class="grow">Show on TV</span>
+                </button>
+              ) : null}
               <a class="row" href="/support" target="_blank" rel="noopener">
                 <Icon name="icon-play" size={32} />
                 <span class="grow">How to play</span>
@@ -281,6 +299,16 @@ export function TableScreen(props: { code: string; intent: TableIntent }) {
   return (
     <>
       {body}
+      {showOnTv && room ? (
+        <ShowOnTvSheet
+          room={room.code}
+          onClose={() => setShowOnTv(false)}
+          onShown={() => {
+            setShowOnTv(false);
+            props.say?.("On the TV");
+          }}
+        />
+      ) : null}
       {offline ? (
         <div class="banner offline" role="status">
           <span class="dot" /> {navigator.onLine ? "Reconnecting" : "Offline"}

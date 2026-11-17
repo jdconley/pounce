@@ -13,6 +13,7 @@ import { seatCat, seatName, seatPose } from "../table/seat";
 import { Button, Cat, Icon, IconButton, Sheet, Tip } from "./common";
 import { NameScreen } from "./firstrun";
 import { QrCode } from "./qr";
+import { TvIcon } from "./show-on-tv";
 
 import type { RoomStore } from "../store/room";
 import type { RoomView } from "@pounce/play-api/protocol";
@@ -34,6 +35,8 @@ export function Lobby(props: {
   kitten: boolean;
   onHome: () => void;
   onAddLocal: (name: string, cat: number) => Promise<void>;
+  /** Show on TV: the sheet that types a TV's code (table-screen.tsx owns it). */
+  onShowOnTv: () => void;
 }) {
   const { store, room } = props;
   const [sheet, setSheet] = useState<null | "add" | "qr" | "local" | "rename" | { seat: number }>(null);
@@ -163,6 +166,10 @@ export function Lobby(props: {
           <button type="button" class="choice" onClick={houseCat} disabled={!seated || add === null}>
             <Icon name="badge-bot" size={40} />
             <span>House Cat</span>
+          </button>
+          <button type="button" class="choice tv-choice" id="show-on-tv" onClick={props.onShowOnTv} disabled={!seated}>
+            <TvIcon size={40} />
+            <span>Show on TV</span>
           </button>
         </div>
       </section>
