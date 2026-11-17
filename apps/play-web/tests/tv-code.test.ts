@@ -1,6 +1,6 @@
 import { describe, expect, test } from "vitest";
 
-import { linkExpired, linkWords, normaliseTvCode, typedTvCode } from "../src/lib/tv-code";
+import { linkExpired, linkFailedWords, linkWords, normaliseTvCode, typedTvCode } from "../src/lib/tv-code";
 import { ApiError } from "../src/net/api";
 
 describe("a TV's code as typed", () => {
@@ -43,5 +43,11 @@ describe("what a failed link says", () => {
     expect(linkExpired(new ApiError(404, "not_found"))).toBe(true);
     expect(linkExpired(new ApiError(429, "too_many_attempts"))).toBe(false);
     expect(linkExpired(new Error("x"))).toBe(false);
+  });
+
+  test("a table made, then its link failed: the note it opens with", () => {
+    expect(linkFailedWords(new ApiError(404, "not_found"))).toBe("The TV link expired.");
+    expect(linkFailedWords(new ApiError(429, "too_many_attempts", 30))).toBe("Too many wrong codes. Try again later.");
+    expect(linkFailedWords(new ApiError(0, "offline"))).toBe("You're offline.");
   });
 });

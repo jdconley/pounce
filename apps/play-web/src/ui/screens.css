@@ -963,12 +963,16 @@
   animation: toast-life var(--life) ease-out both;
 }
 
-/* A toast for something that worked: up top, clear of the bars and buttons along the bottom. */
+/* A toast for something that worked, in ink with a check. */
 .toast.good {
-  top: calc(var(--safe-top) + 10px);
-  bottom: auto;
   padding-left: 10px;
   background: var(--ink);
+}
+
+/* Under the header row (12 px, a 52 px button and its shadow), clear of the bars along the bottom. */
+.toast.top {
+  top: calc(var(--safe-top) + 76px);
+  bottom: auto;
 }
 
 @keyframes toast-life {

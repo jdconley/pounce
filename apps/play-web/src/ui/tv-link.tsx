@@ -2,13 +2,13 @@
  * The page a phone's camera opens from a TV's QR (`/play/tv-link/<token>`, after first run when
  * it hasn't run): pick one of your tables, or start a new game, and it goes on that TV.
  */
-import { useEffect, useState } from "preact/hooks";
+import { useEffect, useRef, useState } from "preact/hooks";
 
 import { art } from "../lib/art";
 import { buzz } from "../lib/haptics";
 import { navigate } from "../lib/router";
 import { play } from "../lib/sound";
-import { linkExpired, linkWords } from "../lib/tv-code";
+import { linkExpired, linkFailedWords, linkWords } from "../lib/tv-code";
 import { api, type TableEntry } from "../net/api";
 import { knownTables } from "../store/app";
 
@@ -23,9 +23,20 @@ function liveTables(list: TableEntry[]): TableEntry[] {
   return list.filter((t) => t.status === "lobby" || t.status === "playing").sort((a, b) => b.updatedAt - a.updatedAt);
 }
 
-export function TvLinkPage(props: { token: string; say: (words: string) => void; onOpen: (code: string, intent: TableIntent) => void }) {
+/**
+ * `say`: "On the TV". `warn`: why a table made here opened without the TV (the link failed after
+ * the table was made, which still opens rather than being left behind).
+ */
+export function TvLinkPage(props: {
+  token: string;
+  say: (words: string) => void;
+  warn: (words: string) => void;
+  onOpen: (code: string, intent: TableIntent) => void;
+}) {
   const [tables, setTables] = useState<TableEntry[] | null>(null);
   const [busy, setBusy] = useState(false);
+  // A second tap before the re-render that disables the buttons is still one tap.
+  const working = useRef(false);
   const [error, setError] = useState<string | null>(null);
   const [expired, setExpired] = useState(false);
   const [moving, setMoving] = useState<{ code: string; intent: TableIntent } | null>(null);
@@ -55,8 +66,20 @@ export function TvLinkPage(props: { token: string; say: (words: string) => void;
     props.onOpen(code, intent);
   };
 
+  /** Links a table just made here; when the link fails the table opens anyway, with a note. */
+  const linkNew = async (code: string, move = false) => {
+    try {
+      await link(code, "host", move);
+    } catch (failure) {
+      setMoving(null);
+      props.warn(linkFailedWords(failure));
+      props.onOpen(code, "host");
+    }
+  };
+
   const run = async (work: () => Promise<void>) => {
-    if (busy) return;
+    if (working.current) return;
+    working.current = true;
     setBusy(true);
     setError(null);
     try {
@@ -70,6 +93,7 @@ export function TvLinkPage(props: { token: string; say: (words: string) => void;
         buzz("nope");
       }
     } finally {
+      working.current = false;
       setBusy(false);
     }
   };
@@ -93,7 +117,7 @@ export function TvLinkPage(props: { token: string; say: (words: string) => void;
   const newGame = (game: GameId) =>
     void run(async () => {
       const code = await api.createRoom(game);
-      await link(code, "host");
+      await linkNew(code);
     });
 
   return (
@@ -131,12 +155,18 @@ export function TvLinkPage(props: { token: string; say: (words: string) => void;
       </section>
 
       {moving ? (
-        <Sheet title="Move the TV to this table?" onClose={() => setMoving(null)}>
+        <Sheet title="Move the TV to this table?" onClose={() => (moving.intent === "host" ? props.onOpen(moving.code, "host") : setMoving(null))}>
           <div class="sheet-actions">
-            <Button wide variant="ok" disabled={busy} onClick={() => void run(() => link(moving.code, moving.intent, true))}>
+            <Button
+              wide
+              variant="ok"
+              disabled={busy}
+              onClick={() => void run(() => (moving.intent === "host" ? linkNew(moving.code, true) : link(moving.code, moving.intent, true)))}
+            >
               Move
             </Button>
-            <Button wide variant="violet" onClick={() => setMoving(null)}>
+            {/* A table made here opens even when the TV stays where it is. */}
+            <Button wide variant="violet" onClick={() => (moving.intent === "host" ? props.onOpen(moving.code, "host") : setMoving(null))}>
               Cancel
             </Button>
           </div>

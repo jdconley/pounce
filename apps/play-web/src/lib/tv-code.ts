@@ -34,5 +34,8 @@ export function linkWords(error: unknown): string {
   return "Couldn't reach Pounce. Try again.";
 }
 
+/** Why a table just made opened without the TV: its link failed after the table was made. */
+export const linkFailedWords = (error: unknown): string => (linkExpired(error) ? "The TV link expired." : linkWords(error));
+
 /** A QR's token that the server no longer knows: the page says the link expired. */
 export const linkExpired = (error: unknown): boolean => error instanceof ApiError && error.status === 404;

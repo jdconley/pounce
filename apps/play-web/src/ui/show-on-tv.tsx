@@ -2,7 +2,7 @@
  * Show on TV: this phone puts its table on a TV by typing the TV's backup code (the six
  * characters under its QR). A TV already showing another table moves only after "Move".
  */
-import { useId, useState } from "preact/hooks";
+import { useId, useRef, useState } from "preact/hooks";
 
 import { buzz } from "../lib/haptics";
 import { play } from "../lib/sound";
@@ -45,6 +45,8 @@ export function ShowOnTvSheet(props: { room: string; onClose: () => void; onShow
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [nope, setNope] = useState(false);
+  // A second tap before the re-render that disables Show or Move is still one tap.
+  const working = useRef(false);
 
   const refuse = (words: string) => {
     setError(words);
@@ -54,7 +56,8 @@ export function ShowOnTvSheet(props: { room: string; onClose: () => void; onShow
   };
 
   const send = async (code: string, move: boolean) => {
-    if (busy) return;
+    if (working.current) return;
+    working.current = true;
     setBusy(true);
     setError(null);
     try {
@@ -65,6 +68,7 @@ export function ShowOnTvSheet(props: { room: string; onClose: () => void; onShow
       setMoving(null);
       refuse(linkWords(failure));
     } finally {
+      working.current = false;
       setBusy(false);
     }
   };

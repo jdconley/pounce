@@ -78,7 +78,7 @@ function PlayerApp(props: { route: Route }) {
   const { people } = useApp();
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [invite, setInvite] = useState<InviteBanner | null>(null);
-  const [toast, setToast] = useState<{ words: string; good: boolean } | null>(null);
+  const [toast, setToast] = useState<{ words: string; good: boolean; top: boolean } | null>(null);
   const [busy, setBusy] = useState(false);
 
   // Once the first screen is up, fetch the tables' code in the background.
@@ -109,9 +109,11 @@ function PlayerApp(props: { route: Route }) {
     }
   }, [route, people.owner]);
 
-  const say = (words: string) => setToast({ words, good: false });
-  /** Something that worked ("On the TV"), at the top, not in the refusal's red. */
-  const cheer = (words: string) => setToast({ words, good: true });
+  const say = (words: string) => setToast({ words, good: false, top: false });
+  /** Something that worked ("On the TV"): under the header, not in the refusal's red. */
+  const cheer = (words: string) => setToast({ words, good: true, top: true });
+  /** A refusal on a screen with bars along the bottom (a lobby): under the header too. */
+  const warn = (words: string) => setToast({ words, good: false, top: true });
 
   const newTable = async (game: GameId, practice: boolean) => {
     if (busy) return;
@@ -155,7 +157,7 @@ function PlayerApp(props: { route: Route }) {
         break;
       // A TV's QR: first run (above) keeps this route, then the page puts a table on that TV.
       case "tvLink":
-        screen = <TvLinkPage token={route.token} say={cheer} onOpen={(code, intent) => openTable(code, intent, true)} />;
+        screen = <TvLinkPage token={route.token} say={cheer} warn={warn} onOpen={(code, intent) => openTable(code, intent, true)} />;
         break;
       default:
         screen = <Home onSettings={() => setSettingsOpen(true)} onNew={(g) => void newTable(g, false)} onPractice={(g) => void newTable(g, true)} />;
@@ -167,7 +169,7 @@ function PlayerApp(props: { route: Route }) {
       {screen}
       {settingsOpen ? <SettingsSheet onClose={() => setSettingsOpen(false)} /> : null}
       {toast ? (
-        <div class={`banner toast ${toast.good ? "good" : ""}`} role={toast.good ? "status" : "alert"} key={toast.words} onAnimationEnd={() => setToast(null)}>
+        <div class={`banner toast ${toast.good ? "good" : ""} ${toast.top ? "top" : ""}`} role={toast.good ? "status" : "alert"} key={toast.words} onAnimationEnd={() => setToast(null)}>
           {toast.good ? <Icon name="icon-check" size={26} /> : null}
           {toast.words}
         </div>
