@@ -411,7 +411,14 @@ private struct TableStage: View {
     }
 
     var body: some View {
-        @Bindable var events = events
+        // Split in two so the compiler type-checks each chain in reasonable time.
+        tvAndMenu(stage)
+            .accessibilityElement(children: .contain)
+            .accessibilityIdentifier("screen-table")
+    }
+
+    /// The table and its overlays, with what they react to.
+    @ViewBuilder private var stage: some View {
         let covered = curtainSeat != nil
         ZStack {
             if let scene {
@@ -734,6 +741,12 @@ private struct TableStage: View {
             session.store.hidePass()
             sync()
         }
+    }
+
+    /// The TV's sheet, the paw menu, the Cards view's aim and the switch's tips.
+    private func tvAndMenu(_ content: some View) -> some View {
+        @Bindable var events = events
+        return content
         // A TV's link opened over the table: its sheet, not the menu.
         .onChange(of: model.tvSheet?.id) { _, id in if id != nil { events.menuOpen = false } }
         .sheet(isPresented: $events.menuOpen) {
@@ -773,8 +786,6 @@ private struct TableStage: View {
         }
         .onDisappear { clearAim() }
         .tipHost(.table, paused: curtainSeat != nil || events.menuOpen || events.winners != nil || priming)
-        .accessibilityElement(children: .contain)
-        .accessibilityIdentifier("screen-table")
     }
 
     // MARK: a table a TV shows
