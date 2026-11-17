@@ -62,7 +62,12 @@ function LazyTv() {
 
 function useRoute(): Route {
   const [route, setRoute] = useState(currentRoute);
-  useEffect(() => onRoute(setRoute), []);
+  useEffect(() => {
+    // A child's first effects run before this one: a route it moved to then (an invite link opened
+    // by someone who already has a name goes straight to the table) is read here, not missed.
+    setRoute(currentRoute());
+    return onRoute(setRoute);
+  }, []);
   return route;
 }
 
