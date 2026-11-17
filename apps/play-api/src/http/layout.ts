@@ -83,6 +83,7 @@ h1,h2,h3{font-family:var(--round);font-weight:900;line-height:1.1;letter-spacing
 .top nav{display:flex;gap:4px}
 .top nav a{padding:8px 11px;border-radius:999px;color:#fff;font-family:var(--round);font-weight:800;text-decoration:none}
 .top nav a:hover,.top nav a[aria-current]{background:var(--deep)}
+@media (max-width:374px){.top{gap:6px;padding:12px 12px}.brand{gap:7px}.brand img{width:36px;height:36px;border-radius:10px}.top nav{gap:0}.top nav a{padding:8px 8px;font-size:.95rem}}
 .foot{margin-top:56px;padding:32px 0 40px;background:var(--deep);border-top:3px solid var(--ink);color:#fff;font-size:.95rem}
 .foot .wrap{display:grid;gap:18px}
 .foot strong{font-family:var(--round);font-weight:900;font-size:1.15rem}
@@ -123,7 +124,7 @@ const header = (links: boolean, current: Current): string => {
 const footer = (links: boolean, credit: boolean): string =>
   links
     ? `<footer class="foot"><div class="wrap">
-<p><strong>Pounce: Family Games</strong><br>Card game for couples and kids.</p>
+<p><strong>Pounce: Family Games</strong><br>Family game night, every night.</p>
 <ul><li><a href="/support">Support</a></li><li><a href="/privacy">Privacy policy</a></li><li><a href="https://conleychaos.com">Conley Chaos LLC</a></li></ul>
 <p>&copy; 2026 Conley Chaos LLC</p>${credit ? `\n<small>${APPLE_CREDIT}</small>` : ""}
 </div></footer>`

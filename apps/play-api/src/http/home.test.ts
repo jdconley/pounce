@@ -3,7 +3,7 @@ import { fileURLToPath } from "node:url";
 
 import { describe, expect, test } from "vitest";
 
-import { HOME_CSP, homePage, installState } from "./home";
+import { DESCRIPTION, HOME_CSP, homePage, installState } from "./home";
 import { APPLE_CREDIT } from "./layout";
 import { MEDIA } from "./site-media";
 
@@ -12,8 +12,13 @@ const APP_STORE = "https://apps.apple.com/app/id6829560061";
 const TESTFLIGHT = "https://testflight.apple.com/join/abc123";
 
 const html = (install = {}, consent = true) => homePage(install, ORIGIN, consent).text();
-/** The page's structured data. */
-const ld = (page: string) => JSON.parse(/<script type="application\/ld\+json">(.*?)<\/script>/.exec(page)?.[1] ?? "null") as Record<string, unknown>;
+/** The page's structured data: the graph of the app and the web player. */
+const graph = (page: string) =>
+  (JSON.parse(/<script type="application\/ld\+json">(.*?)<\/script>/.exec(page)?.[1] ?? "null") as { "@context": string; "@graph": Record<string, unknown>[] });
+/** The iPhone and iPad app's node in the structured data. */
+const ld = (page: string) => graph(page)["@graph"].find((node) => node["@type"] === "MobileApplication") ?? {};
+/** The web player's node in the structured data. */
+const web = (page: string) => graph(page)["@graph"].find((node) => node["@type"] === "WebApplication") ?? {};
 /** Everything between `<main` and `</main>`: the page without its header and footer. */
 const main = (page: string) => page.slice(page.indexOf("<main"), page.indexOf("</main>"));
 
@@ -41,18 +46,21 @@ describe("homePage", () => {
     expect(HOME_CSP.match(/'self'/g)).toHaveLength(3);
   });
 
-  test("says what Pounce is and shows the real game, in every install state", async () => {
+  test("says what Pounce is and shows the real games, in every install state", async () => {
     for (const install of [{}, { testflightUrl: TESTFLIGHT }, { appStoreUrl: APP_STORE }]) {
       const page = await html(install);
-      expect(page).toContain("<title>Pounce: Family Games | Card game for couples and kids</title>");
+      expect(page).toContain("<title>Pounce: Family Games | Cat Tower and Tuna Tiles</title>");
       expect(page).toMatch(/<h1 id="top">Family game night, <span>every night\.<\/span><\/h1>/);
       expect(page.match(/<h1/g)).toHaveLength(1);
-      expect(page).toContain("Pounce is a card game for couples and families.");
-      for (const s of ["How a game works", "Play it your way", "Made with kids in mind", "Cat Tower is the first game in Pounce, with more to come."]) {
+      expect(page).toContain("Two games for the whole family. Gather round the TV, pass one phone, or play from far away.");
+      for (const s of ["Two games", "Put the table on the TV", "One table, any device", "Add players your way", "Play now or over days", "Made with kids in mind"]) {
         expect(page, s).toContain(s);
       }
-      // Six store screenshots and the clip, with a poster.
-      expect(page.match(/<li><picture>/g)).toHaveLength(6);
+      // Both games, with their player counts.
+      expect(page).toContain("<h3>Cat Tower</h3><p class=\"meta\">Cards. 2 to 6 players.</p>");
+      expect(page).toContain("<h3>Tuna Tiles</h3><p class=\"meta\">Tiles. 2 to 4 players.</p>");
+      // Six real screenshots (the TV twice, a phone at the TV, a laptop, each game on iPhone) and the clip, with a poster.
+      expect(page.match(/<img src="\/static\/[a-z-]+-\d+\.[0-9a-f]{10}\.jpg" srcset=/g)).toHaveLength(6);
       expect(page).toContain(`<source src="${MEDIA.clip.src}" type="video/mp4" media="(prefers-reduced-motion: no-preference)">`);
       expect(page).toContain(`poster="${MEDIA.clip.poster}"`);
       expect(page).not.toMatch(/\p{Extended_Pictographic}/u);
@@ -67,7 +75,7 @@ describe("homePage", () => {
     }
     // Its one source applies only without the preference; with it, CSS swaps the video for a still.
     expect(page.match(/<source src=/g)).toHaveLength(1);
-    expect(page).toContain("@media (prefers-reduced-motion:reduce){.phone .clip{display:none}.phone .still{display:block}}");
+    expect(page).toContain("@media (prefers-reduced-motion:reduce){.handset .clip{display:none}.handset .still{display:block}}");
     expect(page).toMatch(/<img class="still" src="[^"]+\.jpg" alt="[^"]{20,}"/);
   });
 
@@ -75,8 +83,17 @@ describe("homePage", () => {
     for (const install of [{}, { appStoreUrl: "", testflightUrl: "" }, { appStoreUrl: "not a url" }]) {
       const page = await html(install);
       expect(page.match(/<p class="soon">Coming soon to the App Store<\/p>/g)).toHaveLength(2);
-      // The only links in the body are the two to the privacy policy: nothing that looks like a button goes nowhere.
-      expect(main(page).match(/<a [^>]*>/g)).toEqual(['<a href="/privacy">', '<a href="/privacy#coppa">']);
+      // The only links in the body go to the web player and the privacy policy: nothing that looks like a button goes nowhere.
+      expect(main(page).match(/<a [^>]*>/g)).toEqual([
+        '<a class="btn web" href="/play/">',
+        '<a class="url" href="/play/tv">',
+        '<a class="url" href="/play/">',
+        '<a class="btn web" href="/play/">',
+        '<a href="/privacy">',
+        '<a href="/privacy#coppa">',
+        '<a class="btn web" href="/play/">',
+      ]);
+      expect(page).toContain('<p class="fine">Free. Play in your browser today.</p>');
       expect(page).not.toContain('class="btn"');
       expect(page).not.toContain('class="badge"');
       expect(page).not.toContain('class="qr"');
@@ -100,6 +117,7 @@ describe("homePage", () => {
     expect(page).not.toContain("apple-itunes-app");
     expect(page).not.toContain('class="soon"');
     expect(ld(page)).not.toHaveProperty("installUrl");
+    expect(page).toContain("Play here in your browser, or scan this with your iPhone to join the beta.");
   });
 
   test("App Store: Apple's badge at the top and the bottom, the Smart App Banner, the QR code and the trademark credit", async () => {
@@ -113,6 +131,43 @@ describe("homePage", () => {
     expect(page).not.toContain("beta");
     expect(page).not.toContain('class="soon"');
     expect(ld(page)).toMatchObject({ installUrl: APP_STORE, offers: { "@type": "Offer", price: "0", priceCurrency: "USD" } });
+    // One short line: free, the app on iPhone and iPad, the browser on everything else.
+    expect(page.match(/<p class="fine">Free\. Get the app on iPhone and iPad, or play in the browser on anything else\.<\/p>/g)).toHaveLength(2);
+    expect(page).not.toContain("Free, for iPhone and iPad.");
+  });
+
+  test("Play in your browser: the web player beside the app at the top and the bottom, and in its own section, in every install state", async () => {
+    for (const install of [{}, { testflightUrl: TESTFLIGHT }, { appStoreUrl: APP_STORE }]) {
+      const page = await html(install);
+      expect(page.match(/<a class="btn web" href="\/play\/">Play in your browser<\/a>/g), JSON.stringify(install)).toHaveLength(3);
+      expect(page).toContain("iPhone, Android and computer players sit at the same table.");
+      expect(page).toContain('<a class="url" href="/play/">play.conleychaos.com<wbr>/play</a>');
+    }
+  });
+
+  test("on a computer, the QR card offers the browser as well as the iPhone app", async () => {
+    const page = await html({ appStoreUrl: APP_STORE });
+    expect(page.match(/<strong>On a computer\?<\/strong> Play here in your browser, or scan this with your iPhone to get the app\.<\/p>/g)).toHaveLength(2);
+  });
+
+  test("the TV: the web player's TV address, and only what a phone in the browser does today", async () => {
+    const page = await html({ appStoreUrl: APP_STORE });
+    expect(page).toContain('<a class="url" href="/play/tv">play.conleychaos.com<wbr>/play/tv</a>');
+    expect(page).toContain("In a phone's browser, you see just your own cards. Tap Table for the whole board.");
+    // Nothing about an Apple TV app or a cards-only iPhone app yet: neither is out.
+    expect(page).not.toMatch(/Apple TV|tvOS|AirPlay/);
+    expect(page).not.toMatch(/iPhone[^.<]*just your (own )?(cards|hand)/);
+  });
+
+  test("nothing stale: no Cat Tower-only story, no iPhone-only line, no old tagline", async () => {
+    for (const install of [{}, { testflightUrl: TESTFLIGHT }, { appStoreUrl: APP_STORE }]) {
+      const page = await html(install);
+      for (const old of ["Cat Tower comes first", "more to come", "A game of Cat Tower runs", "Card game for couples and kids", "Free, for iPhone and iPad", "Cat Tower on iPhone. It plays the same on iPad."]) {
+        expect(page, old).not.toContain(old);
+      }
+      expect(page).not.toMatch(/one turn at a time|a turn at a time/i);
+      expect(page).not.toMatch(/[\u2013\u2014]/);
+    }
   });
 
   test("the install link is HTML-escaped", async () => {
@@ -136,7 +191,8 @@ describe("homePage", () => {
     const page = await html();
     const image = `${ORIGIN}${MEDIA.og.src}`;
     for (const tag of [
-      '<meta name="description" content="Family game night, every night. Play Cat Tower with your partner, your kids or the whole family, on one phone or from anywhere.">',
+      `<meta name="description" content="${DESCRIPTION}">`,
+      '<meta property="og:title" content="Pounce: Family Games | Cat Tower and Tuna Tiles">',
       `<link rel="canonical" href="${ORIGIN}/">`,
       '<link rel="apple-touch-icon" href="/apple-touch-icon.png">',
       `<link rel="icon" type="image/png" sizes="192x192" href="${MEDIA.icon192}">`,
@@ -150,15 +206,27 @@ describe("homePage", () => {
     ]) {
       expect(page, tag).toContain(tag);
     }
+    expect(DESCRIPTION).toMatch(/^Family game night, every night\. /);
+    expect(DESCRIPTION).toContain("Cat Tower and Tuna Tiles");
+    expect(DESCRIPTION.length).toBeLessThanOrEqual(160);
+    expect(graph(page)["@context"]).toBe("https://schema.org");
     expect(ld(page)).toMatchObject({
-      "@context": "https://schema.org",
       "@type": "MobileApplication",
       name: "Pounce: Family Games",
+      description: DESCRIPTION,
       url: `${ORIGIN}/`,
       image,
-      operatingSystem: "iOS",
+      operatingSystem: "iOS, iPadOS",
       applicationCategory: "GameApplication",
       author: { "@type": "Organization", name: "Conley Chaos LLC", url: "https://conleychaos.com" },
+    });
+    // The web player is free in every install state.
+    expect(web(page)).toMatchObject({
+      "@type": "WebApplication",
+      url: `${ORIGIN}/play/`,
+      operatingSystem: "Any",
+      applicationCategory: "GameApplication",
+      offers: { "@type": "Offer", price: "0", priceCurrency: "USD" },
     });
   });
 
@@ -198,14 +266,13 @@ describe("homePage", () => {
     }
   });
 
-  test("landmarks, a skip link, and a keyboard-reachable screenshot strip", async () => {
+  test("landmarks and a skip link", async () => {
     const page = await html();
     expect(page).toContain('<a class="skip" href="#main">Skip to content</a>');
     expect(page).toContain('<main id="main">');
     expect(page).toContain('<nav aria-label="Site">');
     expect(page).toContain('<footer class="foot">');
-    expect(page).toContain('<div class="strip" role="region" aria-label="Screenshots of Pounce" tabindex="0">');
-    for (const id of ["top", "look", "how", "ways", "kids", "first", "get"]) {
+    for (const id of ["top", "games", "tv", "anywhere", "ways", "pace", "kids", "get"]) {
       expect(page, id).toContain(`aria-labelledby="${id}"`);
       expect(page, id).toMatch(new RegExp(`<h[12] id="${id}">`));
     }

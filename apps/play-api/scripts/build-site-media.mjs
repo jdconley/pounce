@@ -1,4 +1,5 @@
-// Builds the public site's media from the app's own art and App Store media:
+// Builds the public site's media from the app's own art, its App Store preview and the real
+// screenshots under docs/screenshots and apps/play-ios/Art/screenshots:
 //   public/static/     images, served straight from Cloudflare's static assets at /static/*
 //   public/media/      the gameplay clip; the Worker serves /media/* itself, because Safari plays
 //                      video only from a server that answers byte-range requests and static assets
@@ -18,6 +19,7 @@ import { fileURLToPath } from "node:url";
 import qrcode from "qrcode-generator";
 
 const api = fileURLToPath(new URL("../", import.meta.url));
+const repo = join(api, "../..");
 const ios = join(api, "../play-ios");
 const catalog = join(ios, "Pounce/Resources/Assets.xcassets");
 const store = join(ios, "AppStore");
@@ -28,6 +30,21 @@ const tmp = mkdtempSync(join(tmpdir(), "pounce-site-"));
 
 /** The one address the QR code and other sites point at; the Worker redirects it (`/get`). */
 const GET_URL = "https://play.conleychaos.com/get";
+
+/** The real screenshots the landing page shows, from the repo root. */
+const SCREENS = {
+  // The web TV table (/play/tv), six seats mid-game.
+  tv: "docs/screenshots/tv/tv-ct6-mid-1920x1080.jpg",
+  // The web TV's start screen: the code a phone scans, and both games.
+  tvHome: "docs/screenshots/tv/tv-home-1920x1080.jpg",
+  // A phone in the browser at a TV table: just its cards, with the Cards/Table switch.
+  cards: "docs/screenshots/tv/phone-ct-draw-390x844.jpg",
+  // The web player on a laptop: a Cat Tower table.
+  laptop: "docs/screenshots/web-player/desktop-cat-tower-after.jpg",
+  // The iPhone app: a Cat Tower table, and a Tuna Tiles rug mid-game.
+  catTower: "apps/play-ios/Art/screenshots/table.jpg",
+  tiles: "apps/play-ios/Art/screenshots/tiles/large-phone.jpg",
+};
 
 const run = (cmd, args) => execFileSync(cmd, args, { stdio: ["ignore", "ignore", "inherit"] });
 // No timestamps in PNGs, so a rebuild from the same sources writes the same files.
@@ -58,13 +75,17 @@ function jpeg(src, name, quality = 80) {
   return publish(file, name, "jpg");
 }
 
-/** An App Store screenshot at each width, as WebP with a JPEG fallback. */
-function shot(n, widths) {
-  const src = join(store, `screenshots/iphone-${n}.jpg`);
+/**
+ * A real screenshot (a path from the repo root) at each width, as WebP with a JPEG fallback.
+ * The widths are the largest CSS width it is shown at, once and twice over. It has words in it,
+ * so neither format goes below quality 82.
+ */
+function screen(file, name, widths) {
+  const src = join(repo, file);
   const sizes = widths.map((w) => {
-    const png = join(tmp, `shot-${n}-${w}.png`);
+    const png = join(tmp, `${name}-${w}.png`);
     magick(src, "-filter", "Lanczos", "-resize", `${w}x`, png);
-    return { w, ...size(png), webp: webp(png, `shot-${n}-${w}`, 78), jpg: jpeg(png, `shot-${n}-${w}`, 76) };
+    return { w, ...size(png), webp: webp(png, `${name}-${w}`, 84), jpg: jpeg(png, `${name}-${w}`, 82) };
   });
   const first = sizes[0];
   return {
@@ -122,21 +143,22 @@ run("ffmpeg", [
 const posterPng = join(tmp, "poster.png");
 run("ffmpeg", ["-v", "error", "-y", "-ss", "0.7", "-i", preview, "-frames:v", "1", "-vf", `scale=${CLIP.width}:${CLIP.height}:flags=lanczos`, posterPng]);
 
-// --- The social card (Open Graph / Twitter), 1200x630: the icon, the name and two screenshots.
+// --- The social card (Open Graph / Twitter), 1200x630: the icon, the name, the tagline and a
+// screenshot of each game (the iPhone app: Cat Tower, then Tuna Tiles).
 const og = join(tmp, "og.png");
 const FONT = "/System/Library/Fonts/SFNSRounded.ttf";
 const INK = "#1B0B3A";
-const card = (n, file, angle) =>
+const card = (shot, file, angle) =>
   magick(
-    join(store, `screenshots/iphone-${n}.jpg`), "-resize", "x540",
+    join(repo, shot), "-resize", "x540",
     "(", "+clone", "-alpha", "extract", "-draw", "fill black polygon 0,0 0,26 26,0 fill white circle 26,26 26,0",
     "(", "+clone", "-flip", ")", "-compose", "Multiply", "-composite",
     "(", "+clone", "-flop", ")", "-compose", "Multiply", "-composite", ")",
     "-alpha", "off", "-compose", "CopyOpacity", "-composite",
     "-background", "none", "-rotate", String(angle), file,
   );
-card(1, join(tmp, "og-a.png"), -5);
-card(3, join(tmp, "og-b.png"), 6);
+card(SCREENS.catTower, join(tmp, "og-a.png"), -5);
+card(SCREENS.tiles, join(tmp, "og-b.png"), 6);
 const ogIcon = join(tmp, "og-icon.png");
 magick(
   icon, "-resize", "168x168",
@@ -166,7 +188,7 @@ magick(
   ogIcon, "-gravity", "northwest", "-geometry", "+72+70", "-composite",
   words("Pounce", "og-1", 124, "#FFFFFF", 6), "-gravity", "northwest", "-geometry", "+58+238", "-composite",
   words("Family Games", "og-2", 64, "#FFC400", 3), "-gravity", "northwest", "-geometry", "+62+388", "-composite",
-  words("Card game for couples and kids", "og-3", 30, "#FFFFFF", 1), "-gravity", "northwest", "-geometry", "+64+488", "-composite",
+  words("Family game night, every night", "og-3", 30, "#FFFFFF", 1), "-gravity", "northwest", "-geometry", "+64+488", "-composite",
   og,
 );
 
@@ -215,7 +237,14 @@ const manifest = {
   badge: { src: publish(badgeSrc, "app-store-badge", "svg"), width: 120, height: 40 },
   og: { src: jpeg(og, "og", 86), width: 1200, height: 630 },
   clip: { src: publish(clip, "clip", "mp4", "media"), poster: webp(posterPng, "poster", 74), posterJpg: jpeg(posterPng, "poster", 72), ...CLIP },
-  shots: [1, 2, 3, 4, 5, 6].map((n) => shot(n, [320, 440, 640])),
+  screens: {
+    tv: screen(SCREENS.tv, "tv-table", [480, 720, 1040]),
+    tvHome: screen(SCREENS.tvHome, "tv-home", [480, 720, 1040]),
+    cards: screen(SCREENS.cards, "phone-cards", [180, 360]),
+    laptop: screen(SCREENS.laptop, "browser-table", [480, 720, 1040]),
+    catTower: screen(SCREENS.catTower, "cat-tower", [200, 400]),
+    tiles: screen(SCREENS.tiles, "tuna-tiles", [200, 400]),
+  },
   art: {
     leap: art("Cats.spriteatlas/cat0-leap.imageset/cat0-leap@3x.png", "cat-leap", 360),
     celebrate: art("Cats.spriteatlas/cat0-celebrate.imageset/cat0-celebrate@3x.png", "cat-celebrate", 280),
@@ -224,7 +253,7 @@ const manifest = {
     asleep: art("Cats.spriteatlas/cat3-asleep.imageset/cat3-asleep@3x.png", "cat-asleep", 280),
     cheer: art("Cats.spriteatlas/cat4-celebrate.imageset/cat4-celebrate@3x.png", "cat-cheer", 280),
     white: art("Cats.spriteatlas/cat5-idle.imageset/cat5-idle@3x.png", "cat-white", 280),
-    tile: art("game-tile.imageset/game-tile@3x.png", "game-tile", 492),
+    grey: art("Cats.spriteatlas/cat3-idle.imageset/cat3-idle@3x.png", "cat-grey", 280),
     yarn: art("toy-yarn-ball.imageset/toy-yarn-ball@3x.png", "yarn", 144),
     bell: art("push-priming.imageset/push-priming@3x.png", "cat-bell", 420),
     condo: art("condo-10.imageset/condo-10@3x.png", "condo", 480),
