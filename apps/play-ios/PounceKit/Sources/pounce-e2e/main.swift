@@ -2,7 +2,9 @@
 // over the same PounceKit networking the app uses. macOS only; credentials live in memory.
 //
 //   pounce-e2e full [--local 2] [--bots 2] [--timeout 1800]
-//                   [--move-seats 1,2 --move-at-phase 8 --move-file PATH]
+//                   [--move-seats 1,2 --move-at-phase 8 --move-file PATH] [--screen-code TVCODE]
+//       (--screen-code: before the start the host links that TV (see `screen link`) to the room
+//        and logs "screen linked <CODE>"; the game is Cat Tower, there is no Tuna Tiles bot)
 //       (once any seat reaches that phase index, those local seats are offered to other phones
 //        with moveSeat; one line per seat goes to PATH: "<seat> pounce-dev://j/<CODE>?move=<M>")
 //   pounce-e2e join <CODE> [--name Remote] [--cat 4] [--drop-after N [--reconnect-after 3 | --reconnect-file PATH]] [--quit-after N] [--timeout 1800]
@@ -369,6 +371,12 @@ func full(_ base: APIConfig, _ o: Options) async throws {
     for seat in local..<(local + bots) { try await configure(host, seat: seat, .bot) }
     for seat in (local + bots)..<6 where await host.view.room?.seats[seat].kind == .open {
         try await configure(host, seat: seat, .closed)
+    }
+    if let screenCode = o.flags["screen-code"] {
+        var result = try await host.api.linkScreen(.code(screenCode), room: code)
+        if result == .showing { result = try await host.api.linkScreen(.code(screenCode), room: code, move: true) }
+        guard result == .linked else { throw Failure("the TV \(screenCode) wouldn't link") }
+        log("screen linked \(code)")
     }
     try await start(host)
     log("started: \(local) local, \(bots) bots")
