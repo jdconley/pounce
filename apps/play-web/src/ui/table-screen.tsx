@@ -15,7 +15,7 @@ import { noteGameFinished, reloadForUpdate, setSafeToReload } from "../pwa";
 import { addPerson, forgetTable, rememberTable, useApp } from "../store/app";
 import { autoClaimSeat, firstTableMessages, mySeats, practiceMessages } from "../store/lobby";
 import { RoomStore, type RoomState } from "../store/room";
-import { setView, showController, showSwitch, viewOf, type View } from "../store/views";
+import { carryView, setView, showController, showSwitch, viewOf, type View } from "../store/views";
 import { CatTowerTable } from "../table/cattower";
 import { CtController } from "../table/ct-controller";
 import { seatCat, seatName } from "../table/seat";
@@ -118,9 +118,13 @@ export function TableScreen(props: { code: string; intent: TableIntent; say?: (w
   }, [state.phase]);
   useEffect(() => () => setSafeToReload(true), []);
 
-  // Play again: the new table.
+  // Play again: the new table, on the view (Cards or Table) this one was on.
+  const playAgain = (code: string) => {
+    carryView(props.code, code);
+    navigate({ kind: "table", code });
+  };
   useEffect(() => {
-    if (state.rematch && state.phase === "over" && wantRematch.current) navigate({ kind: "table", code: state.rematch });
+    if (state.rematch && state.phase === "over" && wantRematch.current) playAgain(state.rematch);
   }, [state.rematch]);
   const wantRematch = useRef(false);
 
@@ -287,7 +291,7 @@ export function TableScreen(props: { code: string; intent: TableIntent; say?: (w
             onHome={home}
             onAgain={() => {
               wantRematch.current = true;
-              if (state.rematch) navigate({ kind: "table", code: state.rematch });
+              if (state.rematch) playAgain(state.rematch);
               else store.send({ t: "rematch" });
             }}
           />

@@ -5,7 +5,7 @@ import { turnOffAlerts, turnOnAlerts, useAlerts } from "./alerts";
 import { art } from "./lib/art";
 import { flushNow } from "./lib/kv";
 import { currentRoute, navigate, onRoute, type Route } from "./lib/router";
-import { onSettings, setSettings, settings } from "./lib/settings";
+import { keepTvSettings, onSettings, setSettings, settings } from "./lib/settings";
 import { api, ApiError } from "./net/api";
 import { installState, promptInstall, useInstall } from "./pwa";
 import { app, deleteMyData, finishAge, noteSource, reach, setOwner, syncProfile, useApp } from "./store/app";
@@ -51,6 +51,8 @@ function LazyTv() {
   const [mod, setMod] = useState<TvModule | null>(null);
   useEffect(() => {
     let live = true;
+    // This page is a TV: its sound is its own, not the phone's in the same browser.
+    keepTvSettings();
     void import("./ui/tv/tv-app").then((m) => live && setMod(m));
     return () => {
       live = false;

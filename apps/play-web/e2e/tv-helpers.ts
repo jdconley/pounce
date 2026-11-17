@@ -30,7 +30,10 @@ export async function openTv(browser: Browser, opts: { viewport?: { width: numbe
   return tv;
 }
 
-/** A page of `context` at `/play/tv`, past Start: home, or the table this TV kept. */
+/**
+ * A page of `context` at `/play/tv`, pressed into life: Start, then home; or, when this TV kept a
+ * table, straight back to it, with its "Press OK for sound" pressed.
+ */
 export async function tvPage(context: BrowserContext, before?: (page: Page) => void): Promise<Page> {
   const page = await context.newPage();
   before?.(page);
@@ -39,7 +42,11 @@ export async function tvPage(context: BrowserContext, before?: (page: Page) => v
   await page.addInitScript(WATCH_HANDS);
   page.on("pageerror", (e) => console.log("TV pageerror", e.message));
   await page.goto("/play/tv");
-  await page.getByRole("button", { name: "Start" }).click();
+  const start = page.getByRole("button", { name: "Start", exact: true });
+  const wake = page.getByRole("button", { name: "Press OK for sound" });
+  await expect(start.or(wake)).toBeVisible();
+  await (await start.isVisible() ? start : wake).click();
+  await expect(wake).toBeHidden();
   return page;
 }
 
@@ -62,9 +69,12 @@ export async function shownLink(tv: Tv, scope = ".tv-home-screen"): Promise<{ co
   return tv.links.findLast((l) => l.code === code)!;
 }
 
+/** A game's poster on the TV's home: its name is what it shows, "Cat Tower 2 to 6 players". */
+export const poster = (page: Page, game: "Cat Tower" | "Tuna Tiles") => page.getByRole("button", { name: new RegExp(`^${game}\\s*\\d+ to \\d+ players$`) });
+
 /** The TV makes a table from its poster; returns the table's code, read off its lobby. */
 export async function tvMakes(tv: Tv, game: "Cat Tower" | "Tuna Tiles"): Promise<string> {
-  await tv.page.getByRole("button", { name: game, exact: true }).click();
+  await poster(tv.page, game).click();
   return tvTable(tv.page);
 }
 

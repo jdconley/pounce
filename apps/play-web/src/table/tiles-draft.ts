@@ -102,8 +102,9 @@ const MAX_ID = 105;
 /**
  * What the draft tells the TV: the whole table as the player is arranging it, without empty
  * sets. Null when it is the table as played (nothing to show), and null for anything the wire
- * refuses: more than 60 sets, a set over 13, a piece twice or no piece at all. Such a draft is
- * never sent; the last one sent stands.
+ * refuses: more than 60 sets, a set over 13, a piece twice or an id that is no piece. Such a draft
+ * is never sent; the last one sent stands. A table with no piece on it is no refusal: it goes as
+ * an empty table.
  */
 export function tilesAimOf(draft: readonly (readonly TileId[])[], server: readonly (readonly TileId[])[]): TilesAim | null {
   const table = draft.filter((set) => set.length > 0).map((set) => [...set]);

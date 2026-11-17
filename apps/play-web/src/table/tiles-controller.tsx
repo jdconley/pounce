@@ -197,7 +197,7 @@ export function TilesController(props: { store: RoomStore; state: RoomState; onV
         })}
       </div>
 
-      <Tip id="tv.switch" anchor="view-switch" text="Your cards are here. The table is on the TV." show place="below" />
+      <Tip id="tv.switch" anchor="view-switch" text="Your tiles are here. The table is on the TV." show place="below" />
     </div>
   );
 }

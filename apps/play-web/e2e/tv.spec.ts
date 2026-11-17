@@ -1,6 +1,6 @@
 import { devices, expect, test, type Page, type WebSocketRoute } from "@playwright/test";
 
-import { catTowerTurn, closeAll, deckCount, newPlayer, tableCode } from "./helpers";
+import { catTowerTurn, closeAll, deckCount, newPlayer, scan, tableCode } from "./helpers";
 import {
   controllerTurn,
   forfeit,
@@ -10,6 +10,7 @@ import {
   outsideViewport,
   phonesJoin,
   playCatTowerTurns,
+  poster,
   shownLink,
   startFromPhone,
   tilesTurn,
@@ -18,6 +19,7 @@ import {
   tvMakes,
   tvPage,
   tvTable,
+  TV_VIEWPORT,
 } from "./tv-helpers";
 
 /**
@@ -253,11 +255,18 @@ test.describe("a TV and two browser phones", () => {
     await expect.poll(() => tvDeck(tv.page)).toBe(deck);
     await onCards(ava!.page, ben!.page);
 
-    // A reload goes straight back into the same table.
+    // A reload (a new deploy, the TV turned off and on) goes straight back into the same table, with
+    // no Start: the table shows at once, and one press of OK turns the sound on.
     await tv.page.reload();
-    await tv.page.getByRole("button", { name: "Start" }).click();
     await expect(tv.page.locator(".tv-table")).toBeVisible();
     await expect(banner(tv.page)).toHaveText(/^(Ava|Ben)'s turn$/);
+    const wake = tv.page.getByRole("button", { name: "Press OK for sound" });
+    await expect(wake).toBeFocused();
+    await playCatTowerTurns(tv.page, [ava!.page, ben!.page], 1);
+    await tv.page.keyboard.press("Enter");
+    await expect(wake).toBeHidden();
+    // That press was for the sound only: it opened nothing.
+    await expect(tv.page.getByRole("dialog", { name: "Menu" })).toBeHidden();
     await playCatTowerTurns(tv.page, [ava!.page, ben!.page], 1);
     await closeAll(tv.context, ava!.context, ben!.context);
   });
@@ -406,4 +415,69 @@ test.describe("a TV and two browser phones", () => {
     expect(await handEverOnTv(tv.page)).toEqual([]);
     await closeAll(tv.context, ava!.context, ben!.context);
   });
+});
+
+test("no serious accessibility problems on the TV, its phones and the TV-link page", async ({ browser }) => {
+  const tv = await openTv(browser);
+  await expect(poster(tv.page, "Cat Tower")).toBeVisible();
+  await shownLink(tv);
+  await scan(tv.page, "TV home");
+  const code = await tvMakes(tv, "Cat Tower");
+  const [ava, ben] = await phonesJoin(browser, code, ["Ava", "Ben"]);
+  await expect(tv.page.locator(".tv-seat:not(.open)")).toHaveCount(2);
+  await scan(tv.page, "TV lobby");
+  await startFromPhone(ava!.page, ben!.page);
+  await expect(tv.page.locator(".tv-table")).toBeVisible();
+  await onCards(ava!.page, ben!.page);
+  await scan(tv.page, "TV table");
+  await scan(ava!.page, "phone controller (Pixel 7)");
+  await scan(ben!.page, "phone controller (iPhone 13)");
+  await tv.page.keyboard.press("Escape");
+  await expect(tv.page.getByRole("dialog", { name: "Menu" })).toBeVisible();
+  await scan(tv.page, "TV menu");
+
+  // Another TV's QR, opened on Ava's phone: the TV-link page, listing the table she sits at.
+  const two = await openTv(browser);
+  const link = await shownLink(two);
+  await ava!.page.goto(new URL(link.url).pathname);
+  await expect(ava!.page.getByRole("heading", { name: "Put a table on the TV" })).toBeVisible();
+  await expect(ava!.page.getByRole("heading", { name: "Your tables" })).toBeVisible();
+  await expect(ava!.page.locator(".table-card", { hasText: code })).toBeVisible();
+  await scan(ava!.page, "TV-link page");
+  await closeAll(tv.context, two.context, ava!.context, ben!.context);
+});
+
+test("a TV browser too old for the app is told what to use instead", async ({ browser }) => {
+  const context = await browser.newContext({ viewport: TV_VIEWPORT });
+  const words = "Use a laptop or an Apple TV.";
+  const app = /\/play\/assets\/index-[^/]+\.js$/;
+
+  // The app's module never runs (blocked here; on an old TV, refused): told once the page has loaded.
+  const blocked = await context.newPage();
+  await blocked.route(app, (r) => r.abort());
+  await blocked.goto("/play/tv");
+  await expect(blocked.getByText(words)).toBeVisible({ timeout: 10_000 });
+
+  // It runs but can't be parsed, as on Tizen and webOS with an older Chromium: told at once, on the
+  // module's SyntaxError, well before the load check would.
+  const old = await context.newPage();
+  await old.route(app, (r) => r.fulfill({ contentType: "text/javascript", body: "const pounce = ;" }));
+  await old.goto("/play/tv");
+  await expect(old.getByText(words)).toBeVisible({ timeout: 1000 });
+
+  // Only the TV page says it: a phone page with no app shows nothing of the kind.
+  const phone = await context.newPage();
+  await phone.route(app, (r) => r.abort());
+  await phone.goto("/play/");
+  await phone.waitForTimeout(4000);
+  await expect(phone.getByText(words)).toHaveCount(0);
+
+  // A TV browser that runs the app never sees it.
+  const fine = await context.newPage();
+  await fine.goto("/play/tv");
+  await expect(fine.getByRole("button", { name: "Start", exact: true })).toBeVisible();
+  await fine.waitForTimeout(4000);
+  await expect(fine.getByText(words)).toHaveCount(0);
+  await expect(fine.getByRole("button", { name: "Start", exact: true })).toBeVisible();
+  await context.close();
 });

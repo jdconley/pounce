@@ -33,13 +33,14 @@ export function TableCard(props: { t: TableEntry; onOpen?: (code: string) => voi
       class={`table-card ${t.yourTurn && t.status === "playing" ? "turn" : ""}`}
       disabled={props.disabled}
       onClick={() => (props.onOpen ? props.onOpen(t.code) : navigate({ kind: "table", code: t.code }))}
-      aria-label={`${t.name ?? t.code}, ${titleOf(t.game ?? "cat-tower")}, ${status}`}
     >
       {t.yourTurn && t.status === "playing" ? <span class="turn-badge" aria-hidden="true"><Icon name="icon-paw-menu" size={26} /></span> : null}
       <Cat cat={first?.cat ?? 0} pose={t.status === "playing" ? "awake" : "idle"} size={64} />
       <strong class="outlined">{t.name ?? t.code}</strong>
       <span class="sub">{status}</span>
       <span class="code">{t.code}</span>
+      {/* Named by what it shows, then its game: a voice command can say what the eye reads. */}
+      <span class="sr-only">, {titleOf(t.game ?? "cat-tower")}</span>
     </button>
   );
 }

@@ -12,6 +12,9 @@ import { api, tvApi } from "./net/api";
 import { reloadForUpdate, startPwa } from "./pwa";
 import { injectFaceStyles } from "./table/faces";
 
+// The app's code runs: the TV page's boot check (public/assets/tv-boot-1.js) stands down.
+(window as unknown as { __pounceBooted?: boolean }).__pounceBooted = true;
+
 injectFaceStyles();
 api.onUpdateRequired = reloadForUpdate;
 tvApi.onUpdateRequired = reloadForUpdate;

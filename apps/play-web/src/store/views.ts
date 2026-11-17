@@ -29,6 +29,11 @@ export function setView(code: string, view: View): void {
   store.set(KEY, JSON.stringify(all));
 }
 
+/** Play again: the new table opens on the view the old one was on, when that was ever chosen. */
+export function carryView(from: string, to: string): void {
+  if (from !== to && read()[from] !== undefined) setView(to, viewOf(from));
+}
+
 /** The Cards/Table switch shows while a TV shows the table and this phone holds a seat at it. */
 export const showSwitch = (room: RoomView): boolean => room.screen === true && mySeats(room).length > 0;
 

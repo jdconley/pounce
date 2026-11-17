@@ -269,7 +269,9 @@ export function CtController(props: { store: RoomStore; state: RoomState; onView
   // The discard's top card is the pile's to show, not yours to move: a tap goes through to the pile.
   const renderCard = (id: CardId, p: Pose) =>
     id === pileTop ? (
-      <div key={`c${id}`} ref={setEl(`c${id}`)} class={`card ${step === "off" ? "rest" : ""}`} style={{ transform: transformOf(p), zIndex: p.z ?? 1 }}>
+      // The discard pile's top card, drawn here so it moves with the cards; the pile names it, so a
+      // screen reader doesn't hear it as one of the hand's.
+      <div key={`c${id}`} ref={setEl(`c${id}`)} class={`card ${step === "off" ? "rest" : ""}`} style={{ transform: transformOf(p), zIndex: p.z ?? 1 }} aria-hidden="true">
         <div class="card-inner">
           <CardFace id={id} />
         </div>

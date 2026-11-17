@@ -8,7 +8,7 @@ import { art } from "../lib/art";
 import { buzz } from "../lib/haptics";
 import { navigate } from "../lib/router";
 import { play } from "../lib/sound";
-import { linkExpired, linkFailedWords, linkWords } from "../lib/tv-code";
+import { linkableTables, linkExpired, linkFailedWords, linkWords } from "../lib/tv-code";
 import { api, type TableEntry } from "../net/api";
 import { knownTables } from "../store/app";
 
@@ -17,11 +17,6 @@ import { Posters, TableCard } from "./home";
 
 import type { TableIntent } from "./table-screen";
 import type { GameId } from "../lib/catalog";
-
-/** Tables a TV can take: the ones still waiting or playing, newest first. */
-function liveTables(list: TableEntry[]): TableEntry[] {
-  return list.filter((t) => t.status === "lobby" || t.status === "playing").sort((a, b) => b.updatedAt - a.updatedAt);
-}
 
 /**
  * `say`: "On the TV". `warn`: why a table made here opened without the TV (the link failed after
@@ -45,9 +40,10 @@ export function TvLinkPage(props: {
     let live = true;
     api
       .listTables()
-      .then((list) => live && setTables(liveTables(list)))
+      .then((list) => live && setTables(linkableTables(list)))
       .catch(() => {
-        // Offline: the tables this device opened before.
+        // Offline: the tables this device opened before (which seats it holds isn't known
+        // offline, and a link needs the network anyway: tapping one says "You're offline.").
         if (live) setTables(knownTables().map((k) => ({ code: k.code, name: k.name, game: k.game, status: "playing", yourTurn: false, updatedAt: k.at })));
       });
     return () => {

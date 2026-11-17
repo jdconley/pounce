@@ -1,23 +1,12 @@
-import AxeBuilder from "@axe-core/playwright";
 import { expect, test } from "@playwright/test";
 
-import { firstRun } from "./helpers";
+import { firstRun, scan } from "./helpers";
 
 /**
  * Screen readers and keyboards (web player design, "Everything a player expects"): axe finds no
  * serious problem on the first run, Home, the lobby and both tables, and the keyboard alone can
  * draw and discard.
  */
-async function scan(page: import("@playwright/test").Page, where: string) {
-  const result = await new AxeBuilder({ page })
-    .withTags(["wcag2a", "wcag2aa", "wcag21a", "wcag21aa"])
-    // The table is art on art: contrast of numerals on cards is checked by eye against iOS.
-    .disableRules(["color-contrast"])
-    .analyze();
-  const serious = result.violations.filter((v) => v.impact === "serious" || v.impact === "critical");
-  expect(serious.map((v) => `${where}: ${v.id} (${v.nodes.length}) ${v.help} at ${v.nodes.map((n) => n.target.join(" ")).join(", ")}`)).toEqual([]);
-}
-
 test("no serious accessibility problems, and the keyboard plays a turn", async ({ page }, info) => {
   test.skip(info.project.name !== "laptop-chrome", "one pass is enough");
   await page.goto("/play/");

@@ -1,6 +1,6 @@
 import { describe, expect, test } from "vitest";
 
-import { anyoneSeated, back, cheerStep, gameOf, lobbySeats, momentFor, otherGame, overTitle, standings, NO_CHEER, turnSeat, turnWords } from "../src/ui/tv/tv-model";
+import { anyoneSeated, back, bootPhase, cheerStep, gameOf, lobbySeats, momentFor, otherGame, overTitle, safeToReload, standings, NO_CHEER, turnSeat, turnWords } from "../src/ui/tv/tv-model";
 
 import type { RoomView } from "@pounce/play-api/protocol";
 
@@ -166,5 +166,17 @@ describe("one cheer per game end", () => {
 
   test("a TV that arrives after the end (a snapshot, no events) cheers once itself", () => {
     expect(run([])).toBe(false);
+  });
+});
+
+describe("a TV reloading", () => {
+  test("goes straight back to the table it kept, else to Start", () => {
+    expect(bootPhase("BCDFG")).toBe("lobby");
+    expect(bootPhase(null)).toBe("start");
+  });
+
+  test("takes a new deploy anywhere but mid-hand", () => {
+    expect(safeToReload("playing")).toBe(false);
+    for (const p of ["connecting", "lobby", "over", "closed", "notFound", "locked", "needsUpdate"] as const) expect(safeToReload(p)).toBe(true);
   });
 });

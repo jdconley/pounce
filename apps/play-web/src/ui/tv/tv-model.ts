@@ -4,6 +4,7 @@
 import { GAME_IDS, type GameId } from "../../lib/catalog";
 import { playing, seatName } from "../../table/seat-names";
 
+import type { RoomPhase } from "../../store/room";
 import type { RoomEvent, RoomView } from "@pounce/play-api/protocol";
 
 /** The room's game. */
@@ -106,3 +107,9 @@ export function cheerStep(s: Cheer, e: RoomEvent): Cheer {
   if (e.event.kind === "gameOver") return { roundJustEnded: false, cheered: s.roundJustEnded };
   return { roundJustEnded: false, cheered: false };
 }
+
+/** Where a TV opens: straight back to the table it kept (a reload, a new deploy), else at Start. */
+export const bootPhase = (kept: string | null): "lobby" | "start" => (kept ? "lobby" : "start");
+
+/** A new deploy may reload the TV in the lobby, at game over, or finding its table: never mid-hand. */
+export const safeToReload = (phase: RoomPhase): boolean => phase !== "playing";

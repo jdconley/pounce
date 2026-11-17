@@ -35,7 +35,6 @@ export function TvMenu(props: { view: Exclude<MenuView, "closed">; code: string;
             type="button"
             class="tv-menu-item teal"
             data-tv
-            aria-pressed={sound}
             onClick={() => {
               // The tap is heard only when turning sound on.
               setSettings({ sound: !sound });

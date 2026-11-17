@@ -4,7 +4,7 @@
  */
 import { ROOM_CODE_ALPHABET } from "@pounce/play-api/protocol";
 
-import { ApiError } from "../net/api";
+import { ApiError, type TableEntry } from "../net/api";
 
 /** A TV's backup code is six characters from the room-code alphabet. */
 export const TV_CODE_LENGTH = 6;
@@ -29,8 +29,10 @@ export function linkWords(error: unknown): string {
   if (error.status === 0) return "You're offline.";
   if (error.status === 404) return "No TV with that code.";
   if (error.status === 429) return "Too many wrong codes. Try again later.";
-  if (error.status === 403) return "Take a seat to play.";
-  if (error.status === 409 && error.code === "seated") return "This phone is at the table.";
+  // This phone holds no seat at the table it asked to show.
+  if (error.status === 403) return "Sit at this table first.";
+  // The TV's own device holds a seat here: a screen can't be a player too.
+  if (error.status === 409 && error.code === "seated") return "That TV is seated here.";
   return "Couldn't reach Pounce. Try again.";
 }
 
@@ -39,3 +41,13 @@ export const linkFailedWords = (error: unknown): string => (linkExpired(error) ?
 
 /** A QR's token that the server no longer knows: the page says the link expired. */
 export const linkExpired = (error: unknown): boolean => error instanceof ApiError && error.status === 404;
+
+/**
+ * The tables a phone can put on a TV (the TV-link page's "Your tables"): the ones still waiting or
+ * playing where it holds a seat, newest first. Any other is refused (403).
+ */
+export function linkableTables(list: TableEntry[]): TableEntry[] {
+  return list
+    .filter((t) => (t.status === "lobby" || t.status === "playing") && (t.seats ?? []).some((s) => s.yours === true))
+    .sort((a, b) => b.updatedAt - a.updatedAt);
+}

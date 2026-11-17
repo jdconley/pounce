@@ -107,6 +107,45 @@
   transform: scale(1.08);
 }
 
+/* A TV that went straight back to its table: one press for sound and full screen, over the table
+   dimmed (it plays on underneath). Above the menu, below the notes. */
+.tv-wake {
+  position: absolute;
+  inset: 0;
+  z-index: 850;
+  display: grid;
+  place-items: center;
+}
+
+.tv-wake-scrim {
+  position: absolute;
+  inset: 0;
+  background: rgba(27, 11, 58, 0.55);
+  animation: fade-in 200ms ease-out both;
+}
+
+.tv .tv-wake-btn {
+  position: relative;
+  gap: calc(var(--u) * 24);
+  min-height: calc(var(--u) * 130);
+  padding: 0 calc(var(--u) * 72) calc(var(--u) * 6);
+  border-width: calc(var(--u) * 6);
+  font-size: calc(var(--u) * 60);
+  box-shadow:
+    0 calc(var(--u) * 12) 0 var(--ink),
+    inset 0 calc(var(--u) * 6) 0 rgba(255, 255, 255, 0.45);
+}
+
+.tv .tv-wake-btn img {
+  width: calc(var(--u) * 76);
+  height: calc(var(--u) * 76);
+}
+
+.tv .tv-wake-btn:focus {
+  outline-offset: calc(var(--u) * 12);
+  transform: scale(1.06);
+}
+
 @keyframes tv-bob {
   to {
     transform: translateY(calc(var(--u) * -14)) rotate(2deg);

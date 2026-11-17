@@ -13,7 +13,7 @@ import { isRoomCode } from "../../lib/router";
 import { play, unlockAudio } from "../../lib/sound";
 import { tvApi } from "../../net/api";
 import { ScreenLink } from "../../net/screen-link";
-import { reloadForUpdate } from "../../pwa";
+import { reloadForUpdate, setSafeToReload } from "../../pwa";
 import { RoomStore, type RoomPhase, type RoomState } from "../../store/room";
 import { tvMenu } from "../../table/ct-layout";
 import { Button, Cat, useSize } from "../common";
@@ -22,7 +22,7 @@ import { QrCode } from "../qr";
 import { isBack, useDpad } from "./focus";
 import { NOPE, TvLobby } from "./tv-lobby";
 import { TvMenu } from "./tv-menu";
-import { back, cheerStep, gameOf, NO_CHEER, otherGame, type MenuView } from "./tv-model";
+import { back, bootPhase, cheerStep, gameOf, NO_CHEER, otherGame, safeToReload, type MenuView } from "./tv-model";
 import { MenuButton, TvOver, TvTable } from "./tv-table";
 import "./tv.css";
 
@@ -71,12 +71,50 @@ function useWakeLock(on: boolean): void {
   }, [on]);
 }
 
+/** Full screen, where the browser allows it: only in answer to a press. */
+function fullScreen(): void {
+  try {
+    void document.documentElement.requestFullscreen?.().catch(() => undefined);
+  } catch {
+    // No full screen here (an iframe, an old TV browser): the page still plays.
+  }
+}
+
 export function TvApp() {
   const root = useRef<HTMLElement>(null);
-  const [phase, setPhase] = useState<TvPhase>("start");
-  const [room, setRoom] = useState<string | null>(null);
+  // A TV that kept a table (a reload, a new deploy, the TV turned off and on) goes straight back to
+  // it; a new one starts at Start.
+  const [kept] = useState(keptRoom);
+  const [phase, setPhase] = useState<TvPhase>(bootPhase(kept));
+  const [room, setRoom] = useState<string | null>(kept);
+  // Sound and full screen wait for a press: Start is one. A TV that went straight to its table
+  // asks for one ("Press OK for sound"), and any press does.
+  const [pressed, setPressed] = useState(false);
   useDpad(root);
   useWakeLock(phase !== "start");
+
+  const woke = useRef(false);
+  const wake = () => {
+    if (woke.current) return;
+    woke.current = true;
+    unlockAudio();
+    fullScreen();
+    setPressed(true);
+  };
+
+  useEffect(() => {
+    if (pressed) return;
+    // Back is no press a browser counts (Escape never is): it leaves the question up.
+    const onKey = (e: KeyboardEvent) => {
+      if (!isBack(e)) wake();
+    };
+    window.addEventListener("keydown", onKey);
+    window.addEventListener("pointerdown", wake);
+    return () => {
+      window.removeEventListener("keydown", onKey);
+      window.removeEventListener("pointerdown", wake);
+    };
+  }, [pressed]);
 
   const goHome = () => {
     keepRoom(null);
@@ -91,20 +129,21 @@ export function TvApp() {
   };
 
   const start = () => {
-    unlockAudio();
-    try {
-      void document.documentElement.requestFullscreen?.().catch(() => undefined);
-    } catch {
-      // No full screen here (an iframe, an old TV browser): the page still plays.
-    }
-    const kept = keptRoom();
-    if (kept) openRoom(kept);
+    wake();
+    const code = keptRoom();
+    if (code) openRoom(code);
     else setPhase("home");
   };
 
-  // Back never leaves the app. A key's default is stopped (a table's own Back opens its menu);
-  // a remote whose Back goes back in history finds an entry of ours there, and it acts as a Back
-  // key would.
+  // Back never leaves the app. A key's default is stopped (a table's own Back opens its menu).
+  // Some remotes' Back is the browser's own Back instead, which no key handler sees: for those the
+  // page keeps one history entry of its own on top. Their Back pops it (popstate), the page puts it
+  // back and acts as a Back key would, so the page never goes back past /play/tv.
+  // Browsers differ here. Chromium (Chrome, Edge, and the Tizen and webOS browsers) skips a history
+  // entry a page added before anyone pressed anything on it: until the TV's first press (Start, or
+  // "Press OK for sound") its Back still leaves the page, and after it the entry holds. Firefox and
+  // Safari keep the entry as pushed. Most TV remotes send Back as a key instead (461 on webOS, 10009
+  // on Tizen), which the key handler takes in every browser.
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (isBack(e)) e.preventDefault();
@@ -128,7 +167,8 @@ export function TvApp() {
       <div class="tv-bg" style={{ backgroundImage: `url(${art(atHome ? "home-bg" : "room-bg")})` }} aria-hidden="true" />
       {phase === "start" ? <TvStart onStart={start} /> : null}
       {phase === "home" ? <TvHome onLinked={openRoom} onMade={openRoom} /> : null}
-      {room && !atHome ? <TvRoom key={room} code={room} onPhase={setPhase} onGone={goHome} onMove={openRoom} /> : null}
+      {room && !atHome ? <TvRoom key={room} code={room} asleep={!pressed} onPhase={setPhase} onGone={goHome} onMove={openRoom} /> : null}
+      {room && !atHome && !pressed ? <TvWake onWake={wake} /> : null}
     </main>
   );
 }
@@ -145,6 +185,18 @@ function TvStart(props: { onStart: () => void }) {
         Start
       </Button>
     </section>
+  );
+}
+
+/** Over a table the TV went straight back to: one press, for sound and full screen. */
+function TvWake(props: { onWake: () => void }) {
+  return (
+    <div class="tv-wake">
+      <div class="tv-wake-scrim" aria-hidden="true" />
+      <Button variant="ok" class="tv-wake-btn" data-tv data-tv-default autoFocus onClick={props.onWake}>
+        <img src={art("icon-sound-off")} alt="" /> Press OK for sound
+      </Button>
+    </div>
   );
 }
 
@@ -208,7 +260,6 @@ function TvHome(props: { onLinked: (room: string) => void; onMade: (room: string
             class={`tv-poster ${id}`}
             data-tv
             data-tv-default={i === 0 ? true : undefined}
-            aria-label={CATALOG[id].title}
             onClick={(e) => {
               play("pop", 0.5);
               void make(id, e.currentTarget);
@@ -251,7 +302,7 @@ function useRoom(room: RoomStore): RoomState {
  * menu over them. It goes home when the table is gone or no longer lists this TV, and moves to
  * another table when a phone links one, Play again deals one, or the TV changes the game.
  */
-function TvRoom(props: { code: string; onPhase: (p: TvPhase) => void; onGone: () => void; onMove: (code: string) => void }) {
+function TvRoom(props: { code: string; asleep: boolean; onPhase: (p: TvPhase) => void; onGone: () => void; onMove: (code: string) => void }) {
   const { code } = props;
   const room = useMemo(
     () =>
@@ -300,6 +351,10 @@ function TvRoom(props: { code: string; onPhase: (p: TvPhase) => void; onGone: ()
     };
   }, [room]);
 
+  // A new deploy reloads the TV only between hands, as it does a phone: never mid-hand.
+  useEffect(() => setSafeToReload(safeToReload(state.phase)), [state.phase]);
+  useEffect(() => () => setSafeToReload(true), []);
+
   useEffect(() => {
     const shown: Partial<Record<RoomPhase, TvPhase>> = { lobby: "lobby", playing: "table", over: "over" };
     // The table is gone (4404), closed, no longer lists this TV (4403, reported as not found), or
@@ -339,7 +394,8 @@ function TvRoom(props: { code: string; onPhase: (p: TvPhase) => void; onGone: ()
   };
 
   const offline = state.everConnected && !state.online;
-  const live = menu === "closed";
+  // Under the menu, or "Press OK for sound", the table's own buttons are out of the remote's reach.
+  const live = menu === "closed" && !props.asleep;
   const openMenu = () => setMenu("items");
   let body;
   if (!view) {

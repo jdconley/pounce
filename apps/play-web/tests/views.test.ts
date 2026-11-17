@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, test } from "vitest";
 
 import { store } from "../src/lib/kv";
-import { setView, showController, showSwitch, viewOf } from "../src/store/views";
+import { carryView, setView, showController, showSwitch, viewOf } from "../src/store/views";
 
 import type { RoomView } from "@pounce/play-api/protocol";
 
@@ -24,6 +24,19 @@ describe("the Cards or Table view, kept per table", () => {
     expect(viewOf("T2")).toBe("table");
     expect(viewOf("T31")).toBe("table");
     expect(Object.keys(store.json<Record<string, string>>("pounce.views")!)).toHaveLength(30);
+  });
+
+  test("Play again carries the view to the new table", () => {
+    setView("OLD01", "table");
+    carryView("OLD01", "NEW01");
+    expect(viewOf("NEW01")).toBe("table");
+    setView("OLD02", "cards");
+    setView("NEW02", "table");
+    carryView("OLD02", "NEW02");
+    expect(viewOf("NEW02")).toBe("cards");
+    // Never chosen: nothing is written for the new table.
+    carryView("OLD03", "NEW03");
+    expect(Object.keys(store.json<Record<string, string>>("pounce.views")!)).not.toContain("NEW03");
   });
 
   test("a table set again counts as the newest", () => {

@@ -1,7 +1,7 @@
 import { devices, expect, test, type Browser, type Page } from "@playwright/test";
 
 import { closeAll, firstRun, newPlayer } from "./helpers";
-import { controllerTurn, startFromPhone, tilesTurn, tvDeck, tvTable } from "./tv-helpers";
+import { controllerTurn, poster, startFromPhone, tilesTurn, tvDeck, tvTable } from "./tv-helpers";
 
 /**
  * The rendering thread does UI work only, and keeps up (docs/main-thread.md). While both games are
@@ -9,8 +9,8 @@ import { controllerTurn, startFromPhone, tilesTurn, tvDeck, tvTable } from "./tv
  * frame's main-thread work. The gate fails on:
  * - any task or animation frame over 50 ms;
  * - per-frame main-thread work at p95 over 8.3 ms (one 120 Hz frame) on the laptop, or over
- *   16.7 ms (one 60 Hz frame) on a phone with its CPU slowed 4x, or on the TV (a 1080p page that
- *   watches two phones play both games: TV screens run at 60 Hz).
+ *   16.7 ms (one 60 Hz frame) on a phone with its CPU slowed 4x, or on the TV with its CPU slowed
+ *   4x too (a 1080p page that watches two phones play both games).
  *
  * Headless Chrome draws at 60 Hz whatever the flags, so frames aren't counted: what is gated is the
  * work in each frame, which is what decides whether a 120 Hz screen gets every frame.
@@ -20,14 +20,20 @@ const LONG_MS = 50;
 const BUDGET = { "laptop-chrome": 1000 / 120, "android-chrome": 1000 / 60, "tv-chrome": 1000 / 60 } as const;
 /**
  * The profiles are fixed speeds, not "whatever runs the test": the laptop is a reference Mac
- * (Apple silicon) and the phone is that Mac slowed 4x. Each run benchmarks its own machine at
+ * (Apple silicon) and the phone is that Mac slowed 4x. So is the TV: a Chromium smart TV's chip
+ * (four Cortex-A55 to A73 class cores) runs a page about four to six times slower than that Mac,
+ * and a mid laptop about two to three; the slower of the two is the one to hold to. TV panels and
+ * their browsers draw at 60 Hz, so its budget is one 60 Hz frame, 16.7 ms: at 4x that leaves an
+ * unthrottled mid laptop around 2x headroom, and a TV no less than a phone gets. Each run
+ * benchmarks its own machine at
  * plain JavaScript and at style and layout (a Linux CI runner can match the Mac at one and be half
  * its speed at the other) and takes the slower of the two as its speed factor `f`:
- * - the phone's CPU slowdown is 4 / f (from 1 to 4), so it lands on the same phone everywhere;
+ * - the phone's and the TV's CPU slowdown is 4 / f (from 1 to 4), so each lands on the same
+ *   device everywhere;
  * - whatever a machine is slower than its target even unthrottled (`residual`, 1 on the reference)
  *   divides the measured times, which are reported raw beside the result.
  */
-const PHONE_SLOWDOWN = 4;
+const SLOWDOWN: Partial<Record<Gate, number>> = { "android-chrome": 4, "tv-chrome": 4 };
 const REFERENCE = { jsMs: 14.5, renderMs: 13.7 };
 
 /** Fixed work in JavaScript, and in style and layout over a table-sized page: medians of 9. */
@@ -81,9 +87,10 @@ type Speed = { rate: number; residual: number; f: number; jsMs: number; renderMs
 async function speedFor(page: Page, gate: Gate): Promise<Speed> {
   const b = await page.evaluate(bench);
   const f = Math.max(b.jsMs / REFERENCE.jsMs, b.renderMs / REFERENCE.renderMs);
-  if (gate !== "android-chrome") return { rate: 1, residual: Math.max(1, f), f, ...b };
-  const rate = Math.min(PHONE_SLOWDOWN, Math.max(1, PHONE_SLOWDOWN / f));
-  return { rate, residual: Math.max(1, (f * rate) / PHONE_SLOWDOWN), f, ...b };
+  const slowdown = SLOWDOWN[gate];
+  if (!slowdown) return { rate: 1, residual: Math.max(1, f), f, ...b };
+  const rate = Math.min(slowdown, Math.max(1, slowdown / f));
+  return { rate, residual: Math.max(1, (f * rate) / slowdown), f, ...b };
 }
 
 /** Long tasks and Long Animation Frames, as the page sees them. */
@@ -207,7 +214,7 @@ async function playTiles(page: Page) {
 async function playOnTv(page: Page, phones: Page[]) {
   const join = async (game: "Cat Tower" | "Tuna Tiles") => {
     await mark(page, `tv-${game}`);
-    await page.getByRole("button", { name: game, exact: true }).click();
+    await poster(page, game).click();
     const code = await tvTable(page);
     // One at a time: each phone takes the first open seat, so two at once could pick the same one.
     for (const [i, p] of phones.entries()) {
@@ -234,7 +241,7 @@ async function playOnTv(page: Page, phones: Page[]) {
   await mark(page, "tv-menu");
   await page.keyboard.press("Escape");
   await page.getByRole("button", { name: "Leave table" }).click();
-  await expect(page.getByRole("button", { name: "Tuna Tiles", exact: true })).toBeVisible();
+  await expect(poster(page, "Tuna Tiles")).toBeVisible();
   await join("Tuna Tiles");
   turns = 0;
   for (let i = 0; turns < 6 && i < 120; i++) {
@@ -298,7 +305,7 @@ test("the rendering thread keeps every frame: no long task, frame work within bu
     await context.addInitScript(() => (Element.prototype.requestFullscreen = () => Promise.resolve()));
     await page.goto("/play/tv");
     await page.getByRole("button", { name: "Start" }).click();
-    await expect(page.getByRole("button", { name: "Cat Tower", exact: true })).toBeVisible();
+    await expect(poster(page, "Cat Tower")).toBeVisible();
     phones.push(await newPlayer(browser, "Ava", { context: devices["Pixel 7"] }), await newPlayer(browser, "Ben", { context: devices["iPhone 13"] }));
     play = () => playOnTv(page, phones.map((p) => p.page));
   } else {

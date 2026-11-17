@@ -1,3 +1,4 @@
+import AxeBuilder from "@axe-core/playwright";
 import { expect, type Browser, type BrowserContext, type Page, type WebSocketRoute } from "@playwright/test";
 
 import type { ClientMessage, ServerMessage } from "@pounce/play-api/protocol";
@@ -60,6 +61,17 @@ export async function catTowerTurn(page: Page): Promise<boolean> {
   await cards.last().click();
   await page.locator("#discard").click();
   return true;
+}
+
+/** axe finds no serious or critical problem on `page` (the a11y spec's rules, and the TV's). */
+export async function scan(page: Page, where: string) {
+  const result = await new AxeBuilder({ page })
+    .withTags(["wcag2a", "wcag2aa", "wcag21a", "wcag21aa"])
+    // The table is art on art: contrast of numerals on cards is checked by eye against iOS.
+    .disableRules(["color-contrast"])
+    .analyze();
+  const serious = result.violations.filter((v) => v.impact === "serious" || v.impact === "critical");
+  expect(serious.map((v) => `${where}: ${v.id} (${v.nodes.length}) ${v.help} at ${v.nodes.map((n) => n.target.join(" ")).join(", ")}`)).toEqual([]);
 }
 
 export async function closeAll(...contexts: BrowserContext[]) {
