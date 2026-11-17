@@ -8,7 +8,7 @@ import { art } from "../lib/art";
 import { buzz } from "../lib/haptics";
 import { navigate } from "../lib/router";
 import { play } from "../lib/sound";
-import { linkableTables, linkExpired, linkFailedWords, linkWords } from "../lib/tv-code";
+import { linkExpired, linkFailedWords, linkWords, mergeLinkable } from "../lib/tv-code";
 import { api, type TableEntry } from "../net/api";
 import { knownTables } from "../store/app";
 
@@ -40,7 +40,8 @@ export function TvLinkPage(props: {
     let live = true;
     api
       .listTables()
-      .then((list) => live && setTables(linkableTables(list)))
+      // With the tables this device just opened: the server's list can lag a new table's seat.
+      .then((list) => live && setTables(mergeLinkable(list, knownTables(), Date.now())))
       .catch(() => {
         // Offline: the tables this device opened before (which seats it holds isn't known
         // offline, and a link needs the network anyway: tapping one says "You're offline.").
