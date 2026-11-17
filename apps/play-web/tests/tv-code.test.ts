@@ -1,6 +1,6 @@
 import { describe, expect, test } from "vitest";
 
-import { linkableTables, linkExpired, mergeLinkable, linkFailedWords, linkWords, normaliseTvCode, typedTvCode } from "../src/lib/tv-code";
+import { JUST_OPENED_MS, linkableTables, linkExpired, mergeLinkable, linkFailedWords, linkWords, normaliseTvCode, typedTvCode } from "../src/lib/tv-code";
 import { ApiError } from "../src/net/api";
 
 describe("a TV's code as typed", () => {
@@ -91,6 +91,21 @@ describe("the tables a phone can put on a TV", () => {
     const merged = mergeLinkable(server, [known("AAAAA", NOW - 1000), known("DDDDD", NOW - 500)], NOW);
     expect(merged.map((t) => t.code)).toEqual(["AAAAA"]);
     expect(merged[0]?.seats).toEqual([mine]);
+  });
+
+  test("an old table the server lists without this phone's seat stays out (one only watched)", () => {
+    const server = [table("WTCHD", "playing", NOW - 1000, [theirs, theirs])];
+    expect(mergeLinkable(server, [known("WTCHD", NOW - 7 * 24 * 60 * 60_000)], NOW)).toEqual([]);
+  });
+
+  test("ten minutes is the edge, for a table listed without the seat and one not listed", () => {
+    const server = [table("LSTED", "lobby", NOW - 1000, [{ kind: "open" }])];
+    const inside = NOW - JUST_OPENED_MS + 1;
+    const edge = NOW - JUST_OPENED_MS;
+    expect(mergeLinkable(server, [known("LSTED", inside)], NOW).map((t) => t.code)).toEqual(["LSTED"]);
+    expect(mergeLinkable(server, [known("LSTED", edge)], NOW)).toEqual([]);
+    expect(mergeLinkable([], [known("NOTLS", inside)], NOW).map((t) => t.code)).toEqual(["NOTLS"]);
+    expect(mergeLinkable([], [known("NOTLS", edge)], NOW)).toEqual([]);
   });
 
   test("an old table the server no longer lists stays gone", () => {

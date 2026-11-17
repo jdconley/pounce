@@ -105,8 +105,35 @@ describe("the e2e dev server supervisor", () => {
     const { stderr, exited } = launch(50, "all", { DEV_SERVER_RESTART_MS: "10", DEV_SERVER_MAX_RESTARTS: "2" });
     expect((await exited).code).toBe(3);
     expect(pids()).toHaveLength(3);
-    expect(stderr()).toContain("restarted 2 times already, giving up");
+    expect(stderr()).toContain("restarted 2 times in a row already, giving up");
     await until(() => pids().flat().every((p) => !alive(p)), 2000);
+  });
+
+  test("only restarts in a row count: a run that stayed up starts the count again", async () => {
+    // Each run is up 300 ms, longer than the 100 ms that counts as steady: it never gives up.
+    const { run, stderr, exited } = launch(300, "all", { DEV_SERVER_RESTART_MS: "10", DEV_SERVER_MAX_RESTARTS: "2", DEV_SERVER_STEADY_MS: "100" });
+    await until(() => pids().length >= 5);
+    expect(stderr()).not.toContain("giving up");
+    expect(stderr()).toContain("restarting (1 of 2)");
+    expect(stderr()).not.toContain("restarting (2 of 2)");
+    run.kill("SIGTERM");
+    expect((await exited).code).toBe(0);
+    await until(() => pids().flat().every((p) => !alive(p)), 2000);
+  });
+
+  test("a command that can't start at all gives up at once with 127", async () => {
+    dir = mkdtempSync(join(tmpdir(), "dev-server-test-"));
+    const started = Date.now();
+    const run = spawn(process.execPath, [SUPERVISOR, join(dir, "no-such-server")], { stdio: ["ignore", "pipe", "pipe"] });
+    supervisor = run;
+    let err = "";
+    run.stderr?.on("data", (chunk: Buffer) => (err += chunk.toString()));
+    const code = await new Promise<number | null>((done) => run.on("exit", (c) => done(c)));
+    expect(code).toBe(127);
+    expect(err).toContain("couldn't start");
+    expect(err).toContain("giving up");
+    expect(err).not.toContain("restarting");
+    expect(Date.now() - started).toBeLessThan(5000);
   });
 
   test("stops when the stdin pipe it was given closes (Playwright gone)", async () => {

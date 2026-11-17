@@ -13,7 +13,10 @@
  * - Each run of the command leads its own process group, so it and everything it starts (pnpm,
  *   wrangler, workerd) are stopped together, and a crashed run's leftovers go before the next.
  * - An exit we didn't ask for: one line on stderr, then a restart after DEV_SERVER_RESTART_MS
- *   (500), at most DEV_SERVER_MAX_RESTARTS (5) times; after that it exits with the command's code.
+ *   (500). At most DEV_SERVER_MAX_RESTARTS (5) in a row: a run that stayed up DEV_SERVER_STEADY_MS
+ *   (60 s) starts the count again, so a crash now and then over a long run always recovers and a
+ *   server that can't stay up stops; after that it exits with the command's code.
+ * - A command that can't be started at all (not found, not executable): it says so and exits 127.
  * - SIGTERM, SIGINT or SIGHUP (Playwright stopping its webServer), or stdin closing when it is a
  *   pipe (Playwright itself gone): the command's group is stopped, then this exits.
  */
@@ -28,6 +31,8 @@ if (!command) {
 
 const RESTART_MS = Number(process.env.DEV_SERVER_RESTART_MS ?? 500);
 const MAX_RESTARTS = Number(process.env.DEV_SERVER_MAX_RESTARTS ?? 5);
+/** A run up this long was a good one: the restarts in a row count from zero again. */
+const STEADY_MS = Number(process.env.DEV_SERVER_STEADY_MS ?? 60_000);
 /** How long the command has to stop on SIGTERM before its group is killed. */
 const STOP_MS = 5000;
 
@@ -53,16 +58,25 @@ function signalGroup(pgid, signal) {
 function start() {
   restartTimer = null;
   const run = spawn(command, args, { stdio: ["ignore", "inherit", "inherit"], detached: true });
+  const startedAt = Date.now();
   child = run;
-  run.on("error", (error) => say(`couldn't start ${command}: ${error.message}`));
+  run.on("error", (error) => {
+    // Never started (no pid): no restart would do better, and Playwright shouldn't wait it out.
+    if (run.pid === undefined) {
+      say(`couldn't start ${command}: ${error.message}; giving up`);
+      process.exit(127);
+    }
+    say(`${NAME}: ${error.message}`);
+  });
   run.on("exit", (code, signal) => {
     // Whatever the run left behind (a workerd still holding the port) goes with it.
     if (run.pid) signalGroup(run.pid, "SIGKILL");
     if (child === run) child = null;
     if (stopping) return;
     const how = signal ? `signal ${signal}` : `code ${code}`;
+    if (Date.now() - startedAt >= STEADY_MS) restarts = 0;
     if (restarts >= MAX_RESTARTS) {
-      say(`${NAME} exited (${how}); restarted ${restarts} times already, giving up`);
+      say(`${NAME} exited (${how}); restarted ${restarts} times in a row already, giving up`);
       process.exit(code ?? 1);
     }
     restarts += 1;
