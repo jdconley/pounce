@@ -50,6 +50,12 @@ final class FrameRateTests: XCTestCase {
         play("tiles", as: "tuna-tiles", ready: "tiles.debug")
     }
 
+    /// Tuna Tiles on Cards, my move (`-demo controller-tiles`: `tiles` with a TV showing it): the
+    /// same drags, and each drop sends the draft to the TV.
+    func testTunaTilesCardsPlaysAtTheTopFrameRate() {
+        play("controller-tiles", as: "tuna-tiles-cards", ready: "tiles.debug")
+    }
+
     /// Tuna Tiles' busiest table (`-demo tiles-late`: 25 sets, 22 pieces in the stash): each drop
     /// reflows the whole rug.
     func testTunaTilesLateTablePlaysAtTheTopFrameRate() {

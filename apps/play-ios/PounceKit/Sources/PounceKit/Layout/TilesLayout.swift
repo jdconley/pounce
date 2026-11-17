@@ -10,10 +10,11 @@ import CoreGraphics
 ///
 /// A controller (a phone whose table is on a TV) passes a `Controller`. Off turn, `.rackOnly`:
 /// the switch band (the paw menu at its right end), the status line, and the stash alone, large
-/// and centred in the room left; there is no table, so `opponentsBar`, `rugArt`, `rug`, `pool`,
-/// `strip`, its buttons, `meter` and `recap` are `.zero` and `opponentSlots` is empty, and the
-/// arrangement is `.controller`. On its turn, `.fullTable`: the table as ever (its arrangement
-/// from the size), under the switch band, with the paw menu moved up into the band.
+/// and centred in the room left, with its two sort toggles over its right end as on the table;
+/// there is no table, so `opponentsBar`, `rugArt`, `rug`, `pool`, `strip`, the other buttons,
+/// `meter` and `recap` are `.zero` and `opponentSlots` is empty, and the arrangement is
+/// `.controller`. On its turn, `.fullTable`: the table as ever (its arrangement from the size),
+/// under the switch band, with the paw menu moved up into the band and the toy box in its place.
 public struct TilesLayout: Equatable, Sendable {
     /// How a controller shows the tile game.
     public enum Controller: Equatable, Sendable {
@@ -203,7 +204,11 @@ public struct TilesLayout: Equatable, Sendable {
         let border: CGFloat = roomy ? 26 : 14
         rug = art.insetBy(dx: border - 1, dy: border + 3)
         let poolSide: CGFloat = roomy ? 48 : 36
-        let poolY = max(barMenu.y - base.menuSide / 2 - (roomy ? 8 : 4) - poolSide / 2, art.maxY + poolSide / 2 + 2)
+        // Under the paw menu; on a controller, whose paw is up in the switch band, in the paw's
+        // place in the bar's corner (no hole where the paw was).
+        let poolY = top == nil
+            ? max(barMenu.y - base.menuSide / 2 - (roomy ? 8 : 4) - poolSide / 2, art.maxY + poolSide / 2 + 2)
+            : max(min(barMenu.y, bar.maxY - poolSide / 2 - 2), art.maxY + poolSide / 2 + 2)
         pool = CGRect(x: barMenu.x - poolSide / 2, y: poolY - poolSide / 2, width: poolSide, height: poolSide)
 
         // Rug pieces: 30 pt on a 393 pt phone, shrinking to 24 as the table fills (spec §5.7).
@@ -223,9 +228,10 @@ public struct TilesLayout: Equatable, Sendable {
     }
 
     /// A controller off turn: the switch band, the status line and the stash, its pieces as big
-    /// as fit (up to 76 pt on a phone, 96 on an iPad) in up to `rackRowLimit` rows, centred in
-    /// what is left. Never smaller than a table stash's pieces on this screen: when that many
-    /// don't fit at that size, the rows hold as many as fit and the stash scrolls.
+    /// as fit (up to 76 pt on a phone, 96 on an iPad) in up to `rackRowLimit` rows, with the two
+    /// sort toggles over its right end (where the table's strip has them), the two centred
+    /// together in what is left. Never smaller than a table stash's pieces on this screen: when
+    /// that many don't fit at that size, the rows hold as many as fit and the stash scrolls.
     private init(rackOnly chrome: ControllerChrome, size: CGSize, safeTop: CGFloat, safeBottom: CGFloat, rackCount: Int) {
         self.size = size
         self.safeTop = safeTop
@@ -256,8 +262,6 @@ public struct TilesLayout: Equatable, Sendable {
         undo = .zero
         reset = .zero
         turn = .zero
-        sortNumber = .zero
-        sortToy = .zero
         tidy = .zero
         meter = .zero
         let scale = roomy ? min(max(min(size.width, size.height) / 500, 1.3), 1.7) : min(max(width / 393, 0.94), 1.12)
@@ -268,8 +272,11 @@ public struct TilesLayout: Equatable, Sendable {
         let gap: CGFloat = roomy ? 6 : 4
         rackGap = gap
         let pad: CGFloat = 8  // inside the stash, above and below its rows (as `rackSlots` takes it)
+        // The sort toggles' row over the stash (the table strip's size of button).
+        let hit: CGFloat = roomy ? 56 : Self.buttonHit
+        let togglesH = hit + 2
         let roomTop = statusLine.minY - (roomy ? 12 : 8), roomBottom = safeBottom + (roomy ? 10 : 4)
-        let availW = width - 2 * (roomy ? 24 : 8), availH = roomTop - roomBottom - 2 * pad
+        let availW = width - 2 * (roomy ? 24 : 8), availH = roomTop - roomBottom - 2 * pad - togglesH
         let largest: CGFloat = roomy ? 96 : 76, smallest = Self.stashPieceWidth(width: width, roomy: roomy)
         func height(_ w: CGFloat) -> CGFloat { (w * Self.pieceAspect).rounded() }
         func fit(rows: Int, columns: Int) -> CGFloat {
@@ -295,7 +302,15 @@ public struct TilesLayout: Equatable, Sendable {
         rackColumns = best.columns
         rackRows = best.rows
         let rackH = CGFloat(best.rows) * piece.height + CGFloat(best.rows - 1) * gap + 2 * pad
-        rack = CGRect(x: 0, y: ((roomTop + roomBottom - rackH) / 2).rounded(), width: width, height: rackH)
+        let rackY = ((roomTop + roomBottom - rackH - togglesH) / 2).rounded()
+        rack = CGRect(x: 0, y: rackY, width: width, height: rackH)
+        // The toggles end where the stash's rows do (as on the table: over its right side), and
+        // never run off a stash too narrow to hold them.
+        let rows = CGFloat(best.columns) * piece.width + CGFloat(best.columns - 1) * gap
+        let right = min(max((width + rows) / 2, width / 2 + hit + 1), width - (roomy ? 24 : 8))
+        let togglesY = rack.maxY + 2
+        sortToy = CGRect(x: right - hit, y: togglesY, width: hit, height: hit)
+        sortNumber = CGRect(x: right - 2 * hit - 2, y: togglesY, width: hit, height: hit)
     }
 
     // MARK: the stash

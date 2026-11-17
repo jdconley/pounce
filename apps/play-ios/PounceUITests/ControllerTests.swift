@@ -142,7 +142,7 @@ class ControllerTests: XCTestCase {
         XCTAssertEqual(debug(app)?.inFlight, false, "the discard went anyway")
     }
 
-        /// Pass and play on Cards: the curtain covers the hand between players, and nothing of the
+    /// Pass and play on Cards: the curtain covers the hand between players, and nothing of the
     /// table under it can be read or touched; the hold shows that player's hand on Cards.
     @MainActor
     func testTheCurtainCoversTheHandOnCards() throws {
@@ -167,7 +167,125 @@ class ControllerTests: XCTestCase {
         XCTAssertTrue(el(app, "table.view.cards").isHittable)
     }
 
+    // MARK: Tuna Tiles
+
+    /// Kiki's move at a TV (`-demo controller-tiles-off`; the House Cats wait 12 s, then play on to
+    /// my move): just my stash, the switch and whose turn it is; no rug, cats or strip. Table shows
+    /// the whole table; back on Cards, the stash again; my move brings the table.
+    @MainActor
+    func testTilesOffTurnShowsJustTheStashAndTheTableOnMyTurn() throws {
+        let app = launchTiles("controller-tiles-off")
+        XCTAssertEqual(tilesProbe(app)["tv"], "stash")
+        XCTAssertEqual(label(el(app, "table.status")), "Kiki's turn")
+        XCTAssertTrue(el(app, "tiles.rack.0").exists, "no stash")
+        XCTAssertTrue(el(app, "tiles.sort.toy").exists, "the stash can't be sorted")
+        for gone in ["tiles.seat.1", "tiles.pool", "tiles.set.0", "tiles.turn", "tiles.undo"] {
+            XCTAssertFalse(el(app, gone).exists, "\(gone) shows with just the stash")
+        }
+        screenshot(app, "controller-tiles-off")
+
+        // Sorting still works off turn.
+        el(app, "tiles.sort.number").tap()
+        XCTAssertTrue(until(3) { self.tilesProbe(app)["sort"] == "number" }, "sort: \(tilesProbe(app))")
+
+        el(app, "table.view.table").tap()
+        XCTAssertTrue(el(app, "tiles.seat.1").waitForExistence(timeout: Live.t(3)), "Table didn't show the other seats")
+        XCTAssertTrue(el(app, "tiles.set.0").exists)
+        XCTAssertEqual(tilesProbe(app)["tv"], "table")
+        XCTAssertTrue(el(app, "table.status").waitForNonExistence(timeout: Live.t(2)), "the status line stayed on Table")
+        el(app, "table.view.cards").tap()
+        XCTAssertTrue(el(app, "tiles.seat.1").waitForNonExistence(timeout: Live.t(3)), "Cards kept the other seats")
+        XCTAssertTrue(el(app, "table.status").waitForExistence(timeout: Live.t(2)))
+
+        // The House Cats play on to my move: the table opens, on Cards.
+        XCTAssertTrue(until(20) { self.tilesProbe(app)["tv"] == "table" }, "my move never opened the table: \(tilesProbe(app))")
+        XCTAssertTrue(el(app, "tiles.turn").waitForExistence(timeout: Live.t(3)))
+        XCTAssertTrue(el(app, "tiles.seat.1").exists)
+        XCTAssertTrue(el(app, "table.status").waitForNonExistence(timeout: Live.t(2)))
+        XCTAssertTrue(el(app, "table.view.cards").isSelected, "the switch left Cards")
+    }
+
+    /// My move at a TV (`-demo controller-tiles`): the table is up under the switch. A piece onto a
+    /// set sends the draft to the TV; Undo, Table and the turn button take it back; the play lands.
+    @MainActor
+    func testATilesPlayGoesThroughTheController() throws {
+        let app = launchTiles("controller-tiles")
+        XCTAssertEqual(tilesProbe(app)["tv"], "table")
+        XCTAssertTrue(el(app, "tiles.seat.1").exists, "no table on my move")
+        XCTAssertFalse(el(app, "table.status").exists)
+        XCTAssertEqual(tilesProbe(app)["aim"], "-")
+
+        tilesFind(app, "tiles.rack.", "7, fish")?.tap()
+        tilesFind(app, "tiles.set.", "Row, fish, 3 to 6")?.tap()
+        XCTAssertTrue(until(3) { self.tilesProbe(app)["placed"] == "1" }, "never placed: \(tilesProbe(app))")
+        XCTAssertTrue(until(3) { self.tilesProbe(app)["aim"] == "9" }, "the draft didn't go to the TV: \(tilesProbe(app))")
+        screenshot(app, "controller-tiles-draft")
+
+        el(app, "tiles.undo").tap()
+        XCTAssertTrue(until(3) { self.tilesProbe(app)["aim"] == "-" }, "Undo left the draft on the TV: \(tilesProbe(app))")
+        tilesFind(app, "tiles.rack.", "7, fish")?.tap()
+        tilesFind(app, "tiles.set.", "Row, fish, 3 to 6")?.tap()
+        XCTAssertTrue(until(3) { self.tilesProbe(app)["aim"] == "9" })
+
+        // Table takes it off the TV, Cards puts it back.
+        el(app, "table.view.table").tap()
+        XCTAssertTrue(until(3) { self.tilesProbe(app)["aim"] == "-" }, "Table left the draft on the TV")
+        el(app, "table.view.cards").tap()
+        XCTAssertTrue(until(3) { self.tilesProbe(app)["aim"] == "9" }, "Cards didn't send the draft again")
+
+        el(app, "tiles.turn").tap()
+        XCTAssertTrue(until(5) { self.tilesProbe(app)["sent"]?.hasPrefix("play") == true }, "the play never went: \(tilesProbe(app))")
+        XCTAssertTrue(until(3) { self.tilesProbe(app)["aim"] == "-" }, "the sent draft stayed on the TV")
+        XCTAssertTrue(until(10) { self.tilesProbe(app)["rack"] == "8" && self.tilesProbe(app)["placed"] == "0" },
+                      "the play didn't land: \(tilesProbe(app))")
+    }
+
+    /// Pass and play at a TV (`-demo controller-tiles-curtain`): the curtain covers the stash as on
+    /// any shared phone; the hold shows it, with the table, on Cards.
+    @MainActor
+    func testTheCurtainCoversTheStashAtATV() throws {
+        let app = Live.demo("controller-tiles-curtain")
+        app.launch()
+        let hold = el(app, "curtain.hold")
+        XCTAssertTrue(hold.waitForExistence(timeout: Live.t(20)), "no curtain")
+        XCTAssertTrue(el(app, "table.view.cards").waitForExistence(timeout: Live.t(3)), "no switch")
+        XCTAssertFalse(el(app, "tiles.rack.0").exists, "the stash reads under the curtain")
+        screenshot(app, "controller-tiles-curtain")
+        hold.press(forDuration: Live.pace(1.3, floor: 0.3))
+        XCTAssertTrue(el(app, "screen-curtain").waitForNonExistence(timeout: Live.t(5)), "the hold didn't lift the curtain")
+        XCTAssertTrue(el(app, "tiles.rack.0").waitForExistence(timeout: Live.t(3)), "no stash after the curtain")
+        XCTAssertEqual(tilesProbe(app)["tv"], "table")
+    }
+
     // MARK: helpers
+
+    @MainActor private func launchTiles(_ demo: String) -> XCUIApplication {
+        let app = Live.demo(demo)
+        app.launch()
+        XCTAssertTrue(el(app, "tiles.debug").waitForExistence(timeout: Live.t(20)), "the tile game's table never came up")
+        XCTAssertTrue(el(app, "table.view.cards").waitForExistence(timeout: Live.t(5)), "no Cards/Table switch")
+        return app
+    }
+
+    /// The tile scene's probe (`tiles.debug`) as keys and values.
+    @MainActor private func tilesProbe(_ app: XCUIApplication) -> [String: String] {
+        var out: [String: String] = [:]
+        for part in (value(el(app, "tiles.debug")) ?? "").split(separator: " ") {
+            let pair = part.split(separator: "=", maxSplits: 1).map(String.init)
+            if pair.count == 2 { out[pair[0]] = pair[1] }
+        }
+        return out
+    }
+
+    /// The first element whose id starts with `prefix` and whose label starts with `label`.
+    @MainActor private func tilesFind(_ app: XCUIApplication, _ prefix: String, _ label: String) -> XCUIElement? {
+        let query = app.descendants(matching: .any).matching(NSPredicate(format: "identifier BEGINSWITH %@ AND label BEGINSWITH %@", prefix, label))
+        guard query.count > 0 else {
+            XCTFail("no \(prefix) \(label)")
+            return nil
+        }
+        return query.element(boundBy: 0)
+    }
 
     @MainActor private func handLabels(_ app: XCUIApplication) -> [String] {
         var labels: [String] = []

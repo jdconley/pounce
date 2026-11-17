@@ -20,6 +20,10 @@ import SwiftUI
 /// - `tiles-last`: my last three pieces, each of which fits a row: play them all and win (the How
 ///   to play video's ending).
 ///
+/// - `controller-tiles`, `controller-tiles-off`, `controller-tiles-curtain`: `tiles`, `tiles-other`
+///   and `tiles-curtain` with a TV showing the table (`screen: true`), so this phone is a
+///   controller (Cards: just the stash off turn, the table on its turn).
+///
 /// `tiles-over -tiles-game-off`: Play again is refused with `game_off` (the server stopped dealing
 /// the game), and the card says no new table can be dealt.
 ///
@@ -30,6 +34,9 @@ import SwiftUI
 enum TilesDemo {
     static func room(_ mode: DemoMode) -> RoomView {
         switch mode {
+        case .controllerTiles: atTV(DemoFixtures.tilesMid())
+        case .controllerTilesOff: atTV(DemoFixtures.tilesOther())
+        case .controllerTilesCurtain: atTV(DemoFixtures.tilesCurtain())
         case .tilesEarly: DemoFixtures.tilesEarly()
         case .tilesOpened: DemoFixtures.tilesEarly(opened: true)
         case .tilesLate: DemoFixtures.tilesLate()
@@ -44,6 +51,13 @@ enum TilesDemo {
         }
     }
 
+    /// `room` with a TV showing it.
+    private static func atTV(_ room: RoomView) -> RoomView {
+        var room = room
+        room.screen = true
+        return room
+    }
+
     /// A new two-seat game against the House Cat, dealt the same way every time.
     static func fresh() -> RoomView {
         let game = TilesLocalGame(seats: 2, seed: 20261111)
@@ -56,7 +70,8 @@ enum TilesDemo {
     static func socket(_ mode: DemoMode) -> any RoomSocketing {
         let room = room(mode)
         let game = mode == .tilesPlay ? TilesLocalGame(seats: 2, seed: 20261111) : room.tiles.map { TilesLocalGame(view: $0, seed: 7) }
-        return TilesDemoSocket(room: room, game: game)
+        // Off turn at a TV: a while on just the stash before the House Cats play on to my move.
+        return TilesDemoSocket(room: room, game: game, firstWait: mode == .controllerTilesOff ? .seconds(12) : nil)
     }
 
     /// Sets a demo's turn up once the table is on screen.
@@ -110,10 +125,14 @@ actor TilesDemoSocket: RoomSocketing {
     private var seq = 1
     private var bots: Task<Void, Never>?
     private var started = false
+    /// How long the House Cat waits before the first move it plays, in real time (then as the
+    /// server's does).
+    private var firstWait: Duration?
 
-    init(room: RoomView, game: TilesLocalGame?) {
+    init(room: RoomView, game: TilesLocalGame?, firstWait: Duration? = nil) {
         self.room = room
         self.game = game
+        self.firstWait = firstWait
         (events, continuation) = AsyncStream.makeStream(of: SocketEvent.self)
     }
 
@@ -185,11 +204,18 @@ actor TilesDemoSocket: RoomSocketing {
         bots = Task {
             while !Task.isCancelled {
                 guard let game = await self.game, game.status == .playing, !(await self.mine).contains(game.turn) else { return }
-                try? await Task.sleep(for: Pace.duration(.milliseconds(1400)))
+                // The first wait is real time at any speed (a UI test looks at the stash first).
+                let wait = await self.takeFirstWait() ?? Pace.duration(.milliseconds(1400))
+                try? await Task.sleep(for: wait)
                 guard !Task.isCancelled else { return }
                 await self.botTurn()
             }
         }
+    }
+
+    private func takeFirstWait() -> Duration? {
+        defer { firstWait = nil }
+        return firstWait
     }
 
     private func botTurn() {

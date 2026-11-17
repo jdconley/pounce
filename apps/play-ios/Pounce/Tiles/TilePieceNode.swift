@@ -218,7 +218,7 @@ final class TilesOpponentsNode: SKNode {
         let names = SeatInfo.names(model.room)
         let textScale = TableText.scale
         let spacing = slots.count > 1 ? abs(slots[1].x - slots[0].x) : layout.size.width
-        let tagWidth = min(spacing - 2, (layout.arrangement == .phone ? 140 : 170) * textScale)
+        let tagWidth = min(spacing - 2, (layout.roomy ? 170 : 140) * textScale)
         let nameSize = TableTextScale.nameSize(scale: textScale)
         let chipScale = TableTextScale.chips(scale: textScale, spacing: spacing, diameter: diameter)
 

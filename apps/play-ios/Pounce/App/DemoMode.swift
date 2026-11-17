@@ -59,6 +59,11 @@ enum DemoMode: String {
     /// `controller-lay`: the `lay` table on Cards (Lay down in the action row). `controller-skip`:
     /// my play step on Cards with a Cucumber in hand (Leo and the House Cat can be skipped).
     case controllerLay = "controller-lay", controllerSkip = "controller-skip"
+    /// The tile game at a TV (`screen: true`): `controller-tiles` is `tiles` (my move, opened),
+    /// `controller-tiles-off` Kiki's move (just my stash on Cards; the House Cats play on until
+    /// it is mine), `controller-tiles-curtain` two seats on this phone, the curtain up for seat 0.
+    case controllerTiles = "controller-tiles", controllerTilesOff = "controller-tiles-off"
+    case controllerTilesCurtain = "controller-tiles-curtain"
     /// The tile game's table (`TilesDemo` has what each one shows). The only way into the game
     /// until Home offers it.
     case tiles
@@ -73,7 +78,7 @@ enum DemoMode: String {
     case tilesLast = "tiles-last"
 
     /// A tile game demo.
-    var isTiles: Bool { rawValue.hasPrefix("tiles") }
+    var isTiles: Bool { rawValue.hasPrefix("tiles") || rawValue.hasPrefix("controller-tiles") }
 
     static func from(arguments: [String] = CommandLine.arguments) -> DemoMode? {
         guard let i = arguments.firstIndex(of: "-demo"), arguments.indices.contains(i + 1) else { return nil }
@@ -91,7 +96,8 @@ enum DemoMode: String {
     private var baseRoom: RoomView {
         switch self {
         case .tiles, .tilesEarly, .tilesOpened, .tilesDraft, .tilesInvalid, .tilesLoupe, .tilesLate, .tilesLong,
-             .tilesPass, .tilesOther, .tilesCurtain, .tilesOver, .tilesPlay, .tilesLast:
+             .tilesPass, .tilesOther, .tilesCurtain, .tilesOver, .tilesPlay, .tilesLast,
+             .controllerTiles, .controllerTilesOff, .controllerTilesCurtain:
             return TilesDemo.room(self)
         case .howto: return DemoFixtures.howTo()
         case .lobby: return DemoFixtures.lobby()

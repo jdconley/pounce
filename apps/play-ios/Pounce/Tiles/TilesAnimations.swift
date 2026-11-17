@@ -77,6 +77,8 @@ extension TilesScene {
     private func animate(_ event: TilesEvent) async {
         guard let model, let layout else { return }
         let reduce = Effects.reduceMotion
+        // Just the stash (Cards, off turn): the others' moves play on the TV.
+        let stashOnly = layout.arrangement == .controller
         switch event {
         case .played(let seat, let table, let placed, let opened):
             recap.note(event, mine: model.mySeats)
@@ -124,7 +126,8 @@ extension TilesScene {
                 self.redraw()
             }
         case .drew(let seat, let tile, _):
-            let box = CGPoint(x: layout.pool.midX, y: layout.pool.midY)
+            // From the toy box; with just the stash, down from the top (the TV).
+            let box = layout.pool == .zero ? CGPoint(x: size.width / 2, y: size.height) : CGPoint(x: layout.pool.midX, y: layout.pool.midY)
             let fx = layer(.fx)
             if let tile, seat == shownSeat {
                 // My draw: the piece comes out of the toy box, turns over and lands at the
@@ -157,6 +160,7 @@ extension TilesScene {
             } else {
                 // Someone else's draw: a piece goes from the toy box to that cat, face down.
                 if let tile, model.mySeats.contains(seat) { onDrew(seat, tile) }
+                guard !stashOnly else { return }
                 let size = CGSize(width: layout.rugPieceMax, height: layout.rugPieceMax * TilesLayout.pieceAspect)
                 let node = SKSpriteNode(texture: TilePieceFactory.shared.back(), size: size)
                 node.position = box
@@ -173,6 +177,8 @@ extension TilesScene {
                 node.removeFromParent()
             }
         case .passed(let seat):
+            let words = String(localized: "\(SeatInfo.name(model.room, seat)) passed", comment: "VoiceOver: a player passed")
+            guard !stashOnly else { return onAnnounce(words) }
             // A sleepy Zzz over the cat that passed.
             let nap = SKSpriteNode(texture: TableArt.image(ArtName.iconZzz), size: CGSize(width: 34, height: 34))
             let at = seatPoint(seat)
@@ -187,7 +193,7 @@ extension TilesScene {
                 ])
             await director.run(action, on: nap)
             nap.removeFromParent()
-            onAnnounce(String(localized: "\(SeatInfo.name(model.room, seat)) passed", comment: "VoiceOver: a player passed"))
+            onAnnounce(words)
         case .turn(let seat):
             guard model.mySeats.contains(seat) else { return }
             Haptics.shared.turn()

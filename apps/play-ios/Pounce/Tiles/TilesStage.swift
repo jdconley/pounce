@@ -17,6 +17,8 @@ final class TilesStageEvents {
     var tableTaps = 0
     /// Where the scene's tip anchors are, in its view's points (`TilesScene.onTipSpots`).
     var tipSpots: [String: CGRect] = [:]
+    /// At a TV on Cards, off turn: the scene draws just the stash (the status line shows).
+    var stashOnly = false
 
     struct Drew: Equatable {
         var seat: Seat
@@ -70,9 +72,35 @@ struct TilesStage: View {
     @State private var playAgain = PlayAgain()
     @State private var againTick = 0
     @State private var gameOff = false
+    /// How the scene draws a table a TV shows (measured by `TilesChrome`); nil without a TV.
+    @State private var tvFrame: TVFrame?
 
     private var table: TilesTableModel? { session.store.room.flatMap(TilesTableModel.init(room:)) }
     private var pass: PassAndPlay { session.store.pass }
+
+    /// The whole table, or (Cards, off turn) just this phone's stash while a TV shows it (spec §3).
+    private var shown: TableShown {
+        TableShown.of(
+            screen: session.store.room?.screen, seated: !(table?.mySeats.isEmpty ?? true),
+            choice: model.tableViews.view(code: session.code))
+    }
+
+    /// The status line over the stash: whose turn it is.
+    private var status: (text: String, mine: Bool)? {
+        guard events.stashOnly, let table, let seat = table.currentSeat else { return nil }
+        return StatusLine.turn(name: SeatInfo.name(table.room, seat), mine: table.mySeats.contains(seat), shared: table.isMultiSeat)
+    }
+
+    /// A floating pill's distance from the safe top: under the top bar, which a TV's switch band
+    /// pushes down; with just the stash, under the status line.
+    private func pillTop(_ standard: CGFloat) -> CGFloat {
+        switch tvFrame {
+        case .cards(let chrome) where events.stashOnly: max(chrome.switchBand, TilesLayout.buttonHit) + chrome.status + 8
+        case .cards(let chrome): standard + max(chrome.switchBand, TilesLayout.buttonHit)
+        case .table(let band): standard + band
+        case nil: standard
+        }
+    }
 
     /// Easy mode (§5.10): on for a kitten unless they turned it off, off for everyone else
     /// unless they turned it on.
@@ -160,10 +188,15 @@ struct TilesStage: View {
             .ignoresSafeArea()
             .zIndex(TableLayer.curtain)
 
+            if shown.hasSwitch {
+                TilesChrome(shown: shown, status: status, onSwitch: pickView) { tvFrame = $0 }
+                    .zIndex(TableLayer.controls)
+            }
+
             if let pill = forfeitPill, let table, !table.mySeats.contains(pill.seat) || table.isMultiSeat {
                 VStack {
                     ForfeitPill(name: SeatInfo.name(table.room, pill.seat), cat: SeatInfo.catIndex(table.room.seats[safe: pill.seat]))
-                        .padding(.top, horizontalSizeClass == .regular ? 236 : 136)
+                        .padding(.top, pillTop(horizontalSizeClass == .regular ? 236 : 136))
                     Spacer()
                 }
                 .transition(.move(edge: .top).combined(with: .opacity))
@@ -173,7 +206,7 @@ struct TilesStage: View {
             if connection != .good, events.winners == nil, !events.menuOpen {
                 VStack {
                     ConnectionPill(connection: connection)
-                        .padding(.top, horizontalSizeClass == .regular ? 196 : 104)
+                        .padding(.top, pillTop(horizontalSizeClass == .regular ? 196 : 104))
                     Spacer()
                 }
                 .transition(.move(edge: .top).combined(with: .opacity))
@@ -204,14 +237,20 @@ struct TilesStage: View {
         }
         .onDisappear {
             scene?.saveDraft()
+            scene?.clearAim()
             session.detachTable()
         }
+        .onChange(of: shown, initial: true) { _, shown in
+            // (On Cards the game's sounds are the TV's: `AppModel.gameSoundsOnTV`.)
+            if !shown.hasSwitch { tvFrame = nil }
+        }
+        .onChange(of: tvFrame) { _, frame in scene?.tv = frame }
         .onChange(of: TilesStageInput(room: session.store.room, pass: pass), initial: true) {
             scene?.refresh()
         }
         .onChange(of: session.store.forfeitNotice) { _, notice in
             guard let notice else { return }
-            Sound.shared.play(ArtName.Sound.sfxThud, volume: 0.7)
+            Sound.shared.play(ArtName.Sound.sfxThud, volume: 0.7, kind: .game)
             withAnimation(.spring(duration: 0.45, bounce: 0.4).paced) { forfeitPill = notice }
             Task {
                 try? await Task.sleep(for: Pace.duration(.seconds(3)))
@@ -293,6 +332,12 @@ struct TilesStage: View {
         }
     }
 
+    /// The switch was tapped: this table's pick, kept on this phone.
+    private func pickView(_ view: TablePick) {
+        model.tips.used("table.view")
+        withAnimation(.easeOut(duration: 0.15).paced) { model.tableViews.set(view, code: session.code) }
+    }
+
     private func applyModes() {
         scene?.easy = easy
         scene?.tricks = tricks
@@ -314,6 +359,8 @@ struct TilesStage: View {
         scene.onBand = { [weak events] top in if events?.bandTop != top { events?.bandTop = top } }
         scene.onTipSpots = { [weak events] spots in events?.tipSpots = spots }
         scene.onTipUsed = { [weak model] control in model?.tips.used(control) }
+        scene.onStashOnly = { [weak events] only in if events?.stashOnly != only { events?.stashOnly = only } }
+        scene.tv = tvFrame
         scene.onDrew = { [weak events] seat, tile in
             events?.drew = .init(seat: seat, tile: tile, serial: (events?.drew?.serial ?? 0) + 1)
         }
@@ -567,7 +614,7 @@ struct TilesOverView: View {
             }
         }
         .onAppear {
-            Sound.shared.play(ArtName.Sound.sfxFanfare)
+            Sound.shared.play(ArtName.Sound.sfxFanfare, kind: .game)
             Haptics.shared.celebrate()
             withAnimation(.spring(duration: 0.5, bounce: 0.45).paced) { appeared = true }
         }

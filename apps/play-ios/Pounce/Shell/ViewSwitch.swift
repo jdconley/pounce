@@ -140,6 +140,17 @@ struct StatusLine: View {
     }
 }
 
+extension StatusLine {
+    /// Whose turn it is, in the status line's words (both games): "Your turn", on a phone several
+    /// people share "Your turn, Mia", or "Ava's turn". `mine`: it is one of this phone's seats.
+    static func turn(name: String, mine: Bool, shared: Bool) -> (text: String, mine: Bool) {
+        guard mine else { return (String(localized: "\(name)'s turn", comment: "Status line on Cards: another player is up"), false) }
+        return shared
+            ? (String(localized: "Your turn, \(name)", comment: "Status line on Cards, on a phone several people share"), true)
+            : (String(localized: "Your turn", comment: "Status line on Cards: this phone is up"), true)
+    }
+}
+
 /// How much the chrome of a table a TV shows grows with the person's text size: like the text,
 /// up to a cap, so the switch, the status line and the action row still leave the cards room on
 /// the smallest phone at the largest sizes.

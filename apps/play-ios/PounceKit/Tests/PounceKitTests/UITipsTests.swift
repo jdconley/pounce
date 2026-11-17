@@ -45,6 +45,18 @@ import Testing
         #expect(TipDirector.candidate(TipFacts(screen: .lobby, person: "a", visible: ["home.join"]), seen: [.homeShelf]) == nil)
     }
 
+    /// The Cards/Table switch's tip, on whichever game's table a TV shows first; then never again on
+    /// the other, and a tap on the switch in either game teaches both.
+    @Test func theTableSwitchIsTaughtOnceAcrossBothGames() {
+        let tiles = TipFacts(screen: .tiles, person: "a", visible: ["table.view", "tiles.draw", "tiles.sort"])
+        let cards = TipFacts(screen: .table, person: "a", visible: ["table.view"])
+        #expect(TipDirector.candidate(tiles, seen: []) == .tilesView)
+        #expect(TipDirector.candidate(cards, seen: []) == .tableView)
+        #expect(TipDirector.candidate(cards, seen: [.tilesView]) == nil)
+        #expect(TipDirector.candidate(tiles, seen: [.tableView]) == .tilesSort)
+        #expect(UITip.learned(by: "table.view") == [.tableView, .tilesView])
+    }
+
     @Test func appOpensGateTheLaterTips() {
         let seen: Set<UITip> = [.homeShelf, .homePractice, .homeJoin]
         #expect(TipDirector.candidate(home(newHome, opens: 1), seen: seen) == nil)

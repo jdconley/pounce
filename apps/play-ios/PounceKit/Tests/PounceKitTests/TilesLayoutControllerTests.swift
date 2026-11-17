@@ -38,7 +38,9 @@ import Testing
         #expect(l.opponentsBar == .zero && l.opponentSlots.isEmpty)
         #expect(l.rugArt == .zero && l.rug == .zero && l.pool == .zero)
         #expect(l.strip == .zero && l.meter == .zero && l.recap == .zero)
-        for control in [l.undo, l.reset, l.turn, l.sortNumber, l.sortToy, l.tidy] { #expect(control == .zero) }
+        for control in [l.undo, l.reset, l.turn, l.tidy] { #expect(control == .zero) }
+        // The stash keeps its two sort toggles.
+        #expect(l.sortNumber != .zero && l.sortToy != .zero)
         // A layout without the parameter is the table it always was.
         let plain = table(i, 14)
         #expect(plain.controller == nil && plain.switchBand == .zero && plain.statusLine == .zero)
@@ -52,11 +54,25 @@ import Testing
             let l = rackOnly(i, count, chrome)
             let safe = safeArea(l)
             let menu = menuFrame(l)
-            for (name, frame) in [("switch", l.switchBand), ("status", l.statusLine), ("menu", menu), ("rack", l.rack)] {
+            let frames = [
+                ("switch", l.switchBand), ("status", l.statusLine), ("menu", menu), ("rack", l.rack),
+                ("sort number", l.sortNumber), ("sort toy", l.sortToy),
+            ]
+            for (name, frame) in frames {
                 #expect(safe.insetBy(dx: -0.01, dy: -0.01).contains(frame), "\(l.size) \(count): \(name) \(frame) outside \(safe)")
             }
             #expect(l.switchBand.contains(menu))
-            #expect(!overlaps(l.switchBand, l.statusLine) && !overlaps(l.statusLine, l.rack) && !overlaps(l.switchBand, l.rack))
+            for (a, first) in frames.enumerated() where first.0 != "menu" {
+                for second in frames[(a + 1)...] where second.0 != "menu" {
+                    #expect(!overlaps(first.1, second.1), "\(l.size) \(count): \(first.0) \(first.1) overlaps \(second.0) \(second.1)")
+                }
+            }
+            // The sort toggles sit over the stash's right end, under the status line, full size.
+            for toggle in [l.sortNumber, l.sortToy] {
+                #expect(toggle.minY >= l.rack.maxY && toggle.maxY <= l.statusLine.minY)
+                #expect(toggle.width >= 44 && toggle.height >= 44)
+            }
+            #expect(l.sortNumber.maxX < l.sortToy.minX)
             let pieces = l.rackSlots(count: count).centers.map { pieceRect($0, l.rackPiece) }
             #expect(pieces.count == count)
             let scrolls = l.rackScrollLimit(count: count) > 0
@@ -70,6 +86,9 @@ import Testing
             }
             // The deal and a full phone stash: all of it on screen, nothing to scroll.
             if count <= TilesLayout.rackRowLimit * 7 { #expect(!scrolls, "\(l.size) \(count)") }
+            if !scrolls, let last = pieces.map(\.maxX).max() {
+                #expect(abs(l.sortToy.maxX - last) < 0.5, "\(l.size) \(count): the toggles end at \(l.sortToy.maxX), the rows at \(last)")
+            }
             // It scrolls only when the rows are full at no smaller than the table stash's size,
             // as many to a row as fit at that size.
             if scrolls {
@@ -98,7 +117,9 @@ import Testing
     func theRackIsCentredInTheRoomLeft(_ i: Int) {
         let l = rackOnly(i, 14)
         let room = (l.statusLine.minY + l.safeBottom) / 2
-        #expect(abs(l.rack.midY - room) <= 8, "\(l.size): rack at \(l.rack.midY), room's middle \(room)")
+        // The stash and its toggles, together.
+        let group = l.rack.union(l.sortNumber).union(l.sortToy)
+        #expect(abs(group.midY - room) <= 8, "\(l.size): stash at \(group.midY), room's middle \(room)")
         let xs = l.rackSlots(count: 14).centers.map(\.x)
         #expect(abs((xs.min()! + xs.max()!) / 2 - l.size.width / 2) < 0.5)
     }
@@ -134,9 +155,14 @@ import Testing
             #expect(l.rack == plain.rack && l.strip == plain.strip && l.turn == plain.turn && l.rackPiece == plain.rackPiece)
             #expect(l.rugArt.maxY <= l.opponentsBar.minY && l.rugArt.minY >= l.strip.maxY)
             #expect(l.rug.height > 150, "\(l.size): the rug is too short to play on: \(l.rug.height)")
-            // The toy box stays in the bar's corner, under the band.
+            // The toy box stays in the bar's corner, under the band, in the paw's old place (the
+            // paw is up in the band now): no hole where the paw was.
             #expect(!overlaps(l.pool, l.switchBand) && l.pool.maxY <= l.switchBand.minY)
             #expect(l.pool.minY >= l.rugArt.maxY)
+            #expect(abs(l.pool.midX - plain.menuButton.x) < 0.5)
+            let pawDrop = plain.opponentsBar.maxY - plain.menuButton.y, boxDrop = l.opponentsBar.maxY - l.pool.midY
+            #expect(abs(boxDrop - pawDrop) <= 2.01, "\(l.size): the toy box is \(boxDrop) under the bar's top, the paw was \(pawDrop)")
+            #expect(!overlaps(l.pool, menuFrame(l)))
             for (j, slot) in l.opponentSlots.enumerated() {
                 #expect(l.opponentsBar.contains(slot), "slot \(j)")
             }

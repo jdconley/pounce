@@ -295,13 +295,8 @@ private struct TableStage: View {
             return (String(localized: "Round over", comment: "Status line on Cards: the round ended"), false)
         }
         guard game.status == .playing else { return nil }
-        let name = SeatInfo.name(table.room, game.turn)
-        guard table.mySeats.contains(game.turn) else {
-            return (String(localized: "\(name)'s turn", comment: "Status line on Cards: another player is up"), false)
-        }
-        return table.isMultiSeat
-            ? (String(localized: "Your turn, \(name)", comment: "Status line on Cards, on a phone several people share"), true)
-            : (String(localized: "Your turn", comment: "Status line on Cards: this phone is up"), true)
+        return StatusLine.turn(
+            name: SeatInfo.name(table.room, game.turn), mine: table.mySeats.contains(game.turn), shared: table.isMultiSeat)
     }
 
     /// How far below the safe top the table's own top bar starts (the switch's band; on Cards, the
