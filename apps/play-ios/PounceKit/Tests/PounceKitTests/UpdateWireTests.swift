@@ -296,6 +296,15 @@ private let v11 = ["X-Pounce-App": "platform=ios; version=1.1; build=57; protoco
         #expect(result == .failure(.refused(.required(UpdateRequirement()))))
     }
 
+    @Test func a403And409AreTheirOwnErrors() async throws {
+        // A room's answers to a screen it won't take: `not_screen` and `seated` (docs/tv-protocol.md).
+        // The bodies never reach the app; the status alone says which.
+        let notScreen = RawServer.response("403 Forbidden", body: #"{"error":"not_screen"}"#)
+        #expect(try await connect(notScreen, headers: v11).0 == .failure(.forbidden))
+        let seated = RawServer.response("409 Conflict", body: #"{"error":"seated"}"#)
+        #expect(try await connect(seated, headers: v11).0 == .failure(.conflict))
+    }
+
     @Test func the404AndThePlain426AreWhatTheyWere() async throws {
         #expect(try await connect(RawServer.response("404 Not Found"), headers: [:]).0 == .failure(.notFound))
         let (plain, request) = try await connect(RawServer.response("426 Upgrade Required"), headers: [:])
