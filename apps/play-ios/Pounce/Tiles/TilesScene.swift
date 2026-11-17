@@ -978,8 +978,15 @@ final class TilesScene: SKScene {
         button(undoButton, layout.undo, factory.button(.undo, side: drawn, dim: !(composing && draft?.canUndo == true)))
         button(resetButton, layout.reset, factory.button(.reset, side: drawn, dim: !(composing && draft?.isUntouched == false)))
         let sort = orders[seat]?.sort
-        button(sortNumberButton, toggles.sortNumber, factory.button(.sortNumber, side: drawn, on: sort == .number))
-        button(sortToyButton, toggles.sortToy, factory.button(suit: .fish, side: drawn, on: sort == .toy))
+        // Over an iPad's stash alone the toggles grow with its pieces (`TilesLayout`).
+        let sortDrawn = toggles.arrangement == .controller && toggles.roomy
+            ? (toggles.sortNumber.width * 50 / 56).rounded() : drawn
+        func toggle(_ node: SKSpriteNode, _ frame: CGRect, _ texture: SKTexture) {
+            button(node, frame, texture)
+            node.size = CGSize(width: sortDrawn, height: sortDrawn + 3)
+        }
+        toggle(sortNumberButton, toggles.sortNumber, factory.button(.sortNumber, side: sortDrawn, on: sort == .number))
+        toggle(sortToyButton, toggles.sortToy, factory.button(suit: .fish, side: sortDrawn, on: sort == .toy))
         if easy {
             button(tidyButton, layout.tidy, factory.button(.hint, side: drawn, on: hint != nil, dim: !composing))
         } else {

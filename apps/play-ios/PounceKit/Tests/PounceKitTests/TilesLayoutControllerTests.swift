@@ -5,11 +5,13 @@ import Testing
 /// A phone that is a controller for a TV table. Off turn: just the rack, large, under the switch
 /// and the status line. On its turn: the full table, under the switch.
 @Suite struct TilesLayoutControllerTests {
-    /// iPhone SE, iPhone 17 Pro, iPhone 17 Pro Max, iPad portrait, iPad landscape.
+    /// iPhone SE, iPhone 17 Pro, iPhone 17 Pro Max, iPad portrait, iPad landscape, a 13-inch iPad
+    /// portrait and landscape.
     static let screens: [(size: CGSize, top: CGFloat, bottom: CGFloat)] = [
         (CGSize(width: 375, height: 667), 20, 0), (CGSize(width: 402, height: 874), 62, 34),
         (CGSize(width: 440, height: 956), 62, 34), (CGSize(width: 820, height: 1180), 24, 20),
-        (CGSize(width: 1180, height: 820), 24, 20),
+        (CGSize(width: 1180, height: 820), 24, 20), (CGSize(width: 1024, height: 1366), 24, 20),
+        (CGSize(width: 1366, height: 1024), 24, 20),
     ]
     /// 14 is the deal; 21 fills the stash's row limit on a phone; 22 and 28 are ordinary racks
     /// later in a game; 40 scrolls even on an iPad's off-turn rack.
@@ -111,6 +113,36 @@ import Testing
         #expect(l.rackPiece.height == (l.rackPiece.width * TilesLayout.pieceAspect).rounded())
         // The deal's fourteen are bigger than a phone stash's 48 pt.
         if count == 14 { #expect(l.rackPiece.width > 48, "\(l.size): \(l.rackPiece.width)") }
+    }
+
+    /// On an iPad the stash alone fills the room: a usual rack (up to 14 pieces) gets pieces of at
+    /// least 14% of the shorter side (or the 128 pt cap), and its rows span at least half the
+    /// width; the sort toggles grow with the pieces. Phones keep the phone stash.
+    @Test(arguments: screens.indices)
+    func anIPadsStashGrowsWithTheRoom(_ i: Int) {
+        let s = Self.screens[i]
+        let shorter = min(s.size.width, s.size.height)
+        for count in [9, 14] {
+            let l = rackOnly(i, count)
+            if l.roomy {
+                #expect(l.rackPiece.width >= min((shorter * 0.14).rounded(.down), 128), "\(s.size) \(count): \(l.rackPiece.width)")
+                #expect(l.rackPiece.width <= 128)
+                let rows = CGFloat(l.rackColumns) * l.rackPiece.width
+                #expect(rows >= s.size.width / 2, "\(s.size) \(count): rows \(rows) wide")
+                #expect(l.sortNumber.width >= 56 && l.sortNumber.width <= 72 && l.sortNumber.width == l.sortToy.width)
+                #expect(l.sortNumber.width >= min(l.rackPiece.width * 0.55, 72) - 1)
+                // Every piece is on screen, clear of the toggles and the status line.
+                let safe = safeArea(l).insetBy(dx: -0.01, dy: -0.01)
+                for c in l.rackSlots(count: count).centers {
+                    let r = pieceRect(c, l.rackPiece)
+                    #expect(safe.contains(r))
+                    #expect(!overlaps(r, l.sortNumber) && !overlaps(r, l.sortToy) && !overlaps(r, l.statusLine))
+                }
+            } else {
+                #expect(l.rackPiece.width <= 76)
+                #expect(l.sortNumber.width == TilesLayout.buttonHit)
+            }
+        }
     }
 
     @Test(arguments: screens.indices)

@@ -228,7 +228,8 @@ public struct TilesLayout: Equatable, Sendable {
     }
 
     /// A controller off turn: the switch band, the status line and the stash, its pieces as big
-    /// as fit (up to 76 pt on a phone, 96 on an iPad) in up to `rackRowLimit` rows, with the two
+    /// as fit (up to 76 pt on a phone; on an iPad up to 15% of the shorter side, 128 at most) in up
+    /// to `rackRowLimit` rows, with the two
     /// sort toggles over its right end (where the table's strip has them), the two centred
     /// together in what is left. Never smaller than a table stash's pieces on this screen: when
     /// that many don't fit at that size, the rows hold as many as fit and the stash scrolls.
@@ -272,12 +273,14 @@ public struct TilesLayout: Equatable, Sendable {
         let gap: CGFloat = roomy ? 6 : 4
         rackGap = gap
         let pad: CGFloat = 8  // inside the stash, above and below its rows (as `rackSlots` takes it)
-        // The sort toggles' row over the stash (the table strip's size of button).
-        let hit: CGFloat = roomy ? 56 : Self.buttonHit
+        // The sort toggles' row over the stash: the table strip's size of button on a phone; on an
+        // iPad they grow with the pieces (`stashToggle`), so they're sized once the pieces are.
+        let largest: CGFloat = roomy ? min((min(width, size.height) * 0.15).rounded(.down), 128) : 76
+        let hit: CGFloat = roomy ? Self.stashToggle(piece: largest) : Self.buttonHit
         let togglesH = hit + 2
         let roomTop = statusLine.minY - (roomy ? 12 : 8), roomBottom = safeBottom + (roomy ? 10 : 4)
         let availW = width - 2 * (roomy ? 24 : 8), availH = roomTop - roomBottom - 2 * pad - togglesH
-        let largest: CGFloat = roomy ? 96 : 76, smallest = Self.stashPieceWidth(width: width, roomy: roomy)
+        let smallest = Self.stashPieceWidth(width: width, roomy: roomy)
         func height(_ w: CGFloat) -> CGFloat { (w * Self.pieceAspect).rounded() }
         func fit(rows: Int, columns: Int) -> CGFloat {
             var w = min(((availW - gap * CGFloat(columns - 1)) / CGFloat(columns)).rounded(.down), largest)
@@ -305,13 +308,18 @@ public struct TilesLayout: Equatable, Sendable {
         let rackY = ((roomTop + roomBottom - rackH - togglesH) / 2).rounded()
         rack = CGRect(x: 0, y: rackY, width: width, height: rackH)
         // The toggles end where the stash's rows do (as on the table: over its right side), and
-        // never run off a stash too narrow to hold them.
+        // never run off a stash too narrow to hold them. On an iPad, as big as the pieces call for
+        // (never more than the room kept for them).
+        let toggle = roomy ? min(Self.stashToggle(piece: piece.width), hit) : hit
         let rows = CGFloat(best.columns) * piece.width + CGFloat(best.columns - 1) * gap
-        let right = min(max((width + rows) / 2, width / 2 + hit + 1), width - (roomy ? 24 : 8))
+        let right = min(max((width + rows) / 2, width / 2 + toggle + 1), width - (roomy ? 24 : 8))
         let togglesY = rack.maxY + 2
-        sortToy = CGRect(x: right - hit, y: togglesY, width: hit, height: hit)
-        sortNumber = CGRect(x: right - 2 * hit - 2, y: togglesY, width: hit, height: hit)
+        sortToy = CGRect(x: right - toggle, y: togglesY, width: toggle, height: toggle)
+        sortNumber = CGRect(x: right - 2 * toggle - 2, y: togglesY, width: toggle, height: toggle)
     }
+
+    /// A sort toggle's side over an iPad's stash alone: 56 at least, growing with the pieces.
+    static func stashToggle(piece: CGFloat) -> CGFloat { min(max((piece * 0.55).rounded(), 56), 72) }
 
     // MARK: the stash
 

@@ -145,7 +145,7 @@ public struct TableLayout: Sendable {
     /// Rect all laid-down rows live in (centered, between bar and trays).
     public let laidZone: CGRect
     /// Sort button center; laid rows stop short of its touch target (and the seat's name pill).
-    public let sortButton: CGPoint
+    public private(set) var sortButton: CGPoint
     /// The paw menu button, top right: its center and drawn side. On a phone with a tall safe
     /// top (a notch or island) it sits in the status bar's right ear, above the cats; with a
     /// short one it is tucked into the opponents bar's corner, and from three cats up the cats
@@ -498,9 +498,8 @@ public struct TableLayout: Sendable {
             discard = CGPoint(x: traysX + pilesWidth / 2 + pileOffset, y: pilesY)
             let rowH = min(max(actionsH, pile.height), top.statusLine.minY - gap - actionY - gap)
             actionRow = CGRect(x: traysX + traysW / 2 + pileGap, y: pilesY - rowH / 2, width: traysW / 2 - pileGap, height: rowH)
-            sortButton = CGPoint(
-                x: max(trays.maxX, width / 2 + half) + 8 + Self.sortButtonHit / 2,
-                y: hand.trays ? trays.midY : handTop + Self.sortButtonHit / 2)
+            // Placed against the fan once the fan is known (the end of this init).
+            sortButton = CGPoint(x: trays.maxX + 8 + Self.sortButtonHit / 2, y: hand.trays ? trays.midY : handTop + Self.sortButtonHit / 2)
         } else {
             let sortW = Self.sortButtonHit + (roomy ? 16 : 4)
             actionRow = CGRect(x: traysX, y: actionY, width: traysW - sortW, height: actionsH)
@@ -530,6 +529,21 @@ public struct TableLayout: Sendable {
         rowsAboveCapacity = 0
         rowsBelowCapacity = 0
         rowMaxWidth = .infinity
+        if wide {
+            // Side by side, the sort button sits just past the trays or the fan, whichever reaches
+            // further: the fan of as many cards as this hand is sized for (eleven, or a short
+            // hand's eight), an edge that doesn't move as cards are played.
+            let fanRight = controllerFanRight(cards: hand.short ? ControllerHand.shortMax : 11)
+            sortButton.x = max(hand.trays ? traysFrame.maxX : 0, fanRight) + 8 + Self.sortButtonHit / 2
+        }
+    }
+
+    /// The right edge of a controller's fan of `cards` cards (its cards' turned corners counted).
+    public func controllerFanRight(cards: Int) -> CGFloat {
+        let hw = cardSize.width / 2, hh = cardSize.height / 2
+        return hand(count: cards, lifted: nil).map { c in
+            [-hw, hw].flatMap { x in [-hh, hh].map { y in c.position.x + x * cos(c.rotation) - y * sin(c.rotation) } }.max() ?? 0
+        }.max() ?? 0
     }
 
     /// The share of each card's face a controller's fan shows at least (its corner number).

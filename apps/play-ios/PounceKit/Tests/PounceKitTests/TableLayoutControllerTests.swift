@@ -164,9 +164,11 @@ struct TableLayoutControllerTests {
             if l.controllerSideBySide {
                 // At the trays' trailing edge (or the fan's, if wider): beside the trays, or with
                 // none, beside the hand's top.
-                let handTopY = l.hand(count: 11, lifted: nil).map(\.position.y).max() ?? 0
-                let fanRight = l.hand(count: 11, lifted: nil).map { rotatedBounds($0, l.cardSize).maxX }.max() ?? 0
-                let edge = max(l.traysFrame.maxX, fanRight)
+                // The fan the hand is sized for: eleven cards, or a short hand's eight.
+                let n = hand.short ? ControllerHand.shortMax : 11
+                let handTopY = l.hand(count: n, lifted: nil).map(\.position.y).max() ?? 0
+                let fanRight = l.hand(count: n, lifted: nil).map { rotatedBounds($0, l.cardSize).maxX }.max() ?? 0
+                let edge = max(hand.trays ? l.traysFrame.maxX : 0, fanRight)
                 #expect(sort.minX >= edge - 0.5 && sort.minX - edge <= 12, "\(l.size) \(hand): sort \(sort) vs edge \(edge)")
                 if hand.trays {
                     #expect(abs(sort.midY - l.traysFrame.midY) < 0.5)
