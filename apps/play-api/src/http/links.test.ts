@@ -2,6 +2,8 @@ import { createHash } from "node:crypto";
 
 import { describe, expect, test } from "vitest";
 
+import { tvAppLinksOn } from "../env";
+
 import { appSiteAssociation, appStoreId, deadLinkPage, INVITE_CSP, INVITE_SCRIPT, INVITE_SCRIPT_HASH, ogImage, pouncePage, sharePage, viewerOf } from "./links";
 import { MEDIA } from "./site-media";
 
@@ -212,6 +214,11 @@ describe("sharePage: a table it can't speak of", () => {
 describe("with TV links (docs/tv-protocol.md)", () => {
   test("the association adds /tv/*, after /p/* when both are on", async () => {
     const app = { appIDs: ["B222J9J7B8.com.conleychaos.play"] };
+    // `tv` is `tvAppLinksOn`: TV and TV_APPLINKS both on (src/env.test.ts). TV on alone: none.
+    for (const tv of [tvAppLinksOn({ TV: "on", TV_APPLINKS: "off" }), tvAppLinksOn({ TV: "off", TV_APPLINKS: "on" })]) {
+      expect(await appSiteAssociation(false, tv).json()).toEqual({ applinks: { details: [{ ...app, components: [{ "/": "/j/*" }] }] } });
+    }
+    expect(tvAppLinksOn({ TV: "on", TV_APPLINKS: "on" })).toBe(true);
     expect(await appSiteAssociation(false, true).json()).toEqual({
       applinks: { details: [{ ...app, components: [{ "/": "/j/*" }, { "/": "/tv/*" }] }] },
     });

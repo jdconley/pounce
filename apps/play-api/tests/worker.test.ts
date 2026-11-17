@@ -69,6 +69,8 @@ function worker(
     link?: boolean;
     /** Pounce on the TV (`TV`). */
     tv?: boolean;
+    /** TV links open the app (`TV_APPLINKS`). */
+    tvAppLinks?: boolean;
     onFinished?: (fn: () => Promise<void>) => void;
   } = {},
 ): Miniflare {
@@ -91,6 +93,7 @@ function worker(
       ...(options.devSpeed ? { DEV_SPEED: options.devSpeed } : {}),
       ...(options.link ? { LINK: "on" } : {}),
       ...(options.tv ? { TV: "on" } : {}),
+      ...(options.tvAppLinks ? { TV_APPLINKS: "on" } : { TV_APPLINKS: "off" }),
     },
     ...(options.persist ? { durableObjectsPersist: options.persist } : {}),
   });
@@ -328,25 +331,31 @@ describe("worker", { timeout: 20_000 }, () => {
     expect(post.status).toBe(404);
   });
 
-  test("universal links: TV links join the association only while TV is on", async () => {
+  test("universal links: TV links join the association only while TV and TV_APPLINKS are on", async () => {
     const token = "A".repeat(22);
-    // Off: a /tv/ link is a 404, so the app doesn't claim it.
-    const off = worker({ secret: null });
-    expect(await (await off.dispatchFetch(`${BASE}/.well-known/apple-app-site-association`)).json()).toEqual({
-      applinks: { details: [{ appIDs: ["B222J9J7B8.com.conleychaos.play"], components: [{ "/": "/j/*" }] }] },
-    });
+    const only = { applinks: { details: [{ appIDs: ["B222J9J7B8.com.conleychaos.play"], components: [{ "/": "/j/*" }] }] } };
+    // TV off: a /tv/ link is a 404, and the app doesn't claim it (TV_APPLINKS on or not).
+    const off = worker({ secret: null, tvAppLinks: true });
+    expect(await (await off.dispatchFetch(`${BASE}/.well-known/apple-app-site-association`)).json()).toEqual(only);
     expect((await off.dispatchFetch(`${BASE}/tv/${token}`, { redirect: "manual" })).status).toBe(404);
 
-    // On: the app opens /tv/*; a phone without it goes to the web player's link page.
-    const on = worker({ secret: null, tv: true });
+    // TV on, TV_APPLINKS off: the app doesn't claim /tv/*, and the web player's link page opens.
+    const web = worker({ secret: null, tv: true });
+    expect(await (await web.dispatchFetch(`${BASE}/.well-known/apple-app-site-association`)).json()).toEqual(only);
+    const page = await web.dispatchFetch(`${BASE}/tv/${token}`, { redirect: "manual" });
+    expect(page.status).toBe(302);
+    expect(page.headers.get("location")).toBe(`${BASE}/play/tv-link/${token}`);
+
+    // Both on: the app opens /tv/*; a phone without it goes to the web player's link page.
+    const on = worker({ secret: null, tv: true, tvAppLinks: true });
     expect(await (await on.dispatchFetch(`${BASE}/.well-known/apple-app-site-association`)).json()).toEqual({
       applinks: {
         details: [{ appIDs: ["B222J9J7B8.com.conleychaos.play"], components: [{ "/": "/j/*" }, { "/": "/tv/*" }] }],
       },
     });
-    const web = await on.dispatchFetch(`${BASE}/tv/${token}`, { redirect: "manual" });
-    expect(web.status).toBe(302);
-    expect(web.headers.get("location")).toBe(`${BASE}/play/tv-link/${token}`);
+    const app = await on.dispatchFetch(`${BASE}/tv/${token}`, { redirect: "manual" });
+    expect(app.status).toBe(302);
+    expect(app.headers.get("location")).toBe(`${BASE}/play/tv-link/${token}`);
   });
 
   test("the privacy policy is served at /privacy without a token", async () => {
