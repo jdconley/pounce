@@ -111,6 +111,10 @@ public actor ScreenLink {
         self.backoff = backoff
         self.heartbeat = heartbeat
         self.sleep = sleep
+        // Whoever reads the events went away (its task was cancelled): nothing is shown, so stop.
+        continuation.onTermination = { [weak self] _ in
+            Task { await self?.stop() }
+        }
     }
 
     /// Links through `api`, as its device. `connector` defaults to URLSession with `config`'s headers.
@@ -240,8 +244,9 @@ public actor ScreenLink {
             return
         } catch {
             guard isCurrent(gen), dial == dialing else { return }
-            close(dropAll())
-            emit(.offline)
+            // The network, most likely. A socket on the link being replaced keeps listening (a phone
+            // may link the previous code meanwhile), so this is quiet until nothing is listening.
+            if old == nil { emit(.offline) }
             retry(gen, .connect)
             return
         }
@@ -320,11 +325,13 @@ public actor ScreenLink {
         }
     }
 
-    /// A socket that failed. The one being replaced goes quietly; the one shown reconnects.
+    /// A socket that failed or went silent. The one being replaced is closed quietly; the one
+    /// shown reconnects.
     private func lost(_ id: Int) {
-        if old?.id == id {
-            old?.tasks.forEach { $0.cancel() }
-            old = nil
+        if let old, old.id == id {
+            old.tasks.forEach { $0.cancel() }
+            close([old.connection])
+            self.old = nil
             return
         }
         guard live?.id == id, !stopped else { return }

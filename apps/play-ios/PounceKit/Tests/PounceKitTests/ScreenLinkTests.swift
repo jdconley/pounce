@@ -60,6 +60,19 @@ final class ManualClock: Sendable {
         }
         for waiter in due { waiter.continuation.resume() }
     }
+
+    /// Waits until a sleep with exactly `due` left is pending (the timer under test has started),
+    /// then moves time on by `by`. False, without moving time, when no such sleep appears.
+    func advance(by: Duration, afterPending due: Duration) async -> Bool {
+        guard await eventually({ pending.contains(due) }) else { return false }
+        advance(by)
+        return true
+    }
+
+    /// Moves time on by exactly the pending `due`.
+    func advance(afterPending due: Duration) async -> Bool {
+        await advance(by: due, afterPending: due)
+    }
 }
 
 /// `POST /v1/screens`, scripted: each answer is a new token, `tok1`, `tok2`, ….
@@ -108,16 +121,18 @@ final class FakeScreens: Sendable {
 /// when `pongs`, as the server does.
 final class LinkConnection: WebSocketConnection {
     let url: URL
-    private let pongs: Bool
+    private let pongs: Mutex<Bool>
     private let frames = Mailbox<String>()
     private let sentLog = Mutex<[String]>([])
 
     init(url: URL, pongs: Bool) {
         self.url = url
-        self.pongs = pongs
+        self.pongs = Mutex(pongs)
     }
 
     func push(_ frame: String) { frames.put(frame) }
+    /// From now on pings go unanswered, as on a socket that died without a close.
+    func silence() { pongs.withLock { $0 = false } }
     func drop() { frames.close(Dropped()) }
 
     var sent: [String] { sentLog.withLock { $0 } }
@@ -126,7 +141,7 @@ final class LinkConnection: WebSocketConnection {
     func send(_ text: String) async throws {
         if frames.isClosed { throw Dropped() }
         sentLog.withLock { $0.append(text) }
-        if pongs, text == #"{"t":"ping"}"# { frames.put(#"{"t":"pong"}"#) }
+        if pongs.withLock({ $0 }), text == #"{"t":"ping"}"# { frames.put(#"{"t":"pong"}"#) }
     }
 
     func receive() async throws -> String { try await frames.take() }
@@ -256,10 +271,10 @@ func settle() async {
     @Test func aTenMinuteLinkRenewsAt480Seconds() async throws {
         let r = rig(expiresIn: 600_000)
         let first = try await started(r)
-        r.clock.advance(.milliseconds(479_999))
+        #expect(await r.clock.advance(by: .milliseconds(479_999), afterPending: .milliseconds(480_000)))
         await settle()
         #expect(r.screens.calls == 1)
-        r.clock.advance(.milliseconds(1))
+        #expect(await r.clock.advance(afterPending: .milliseconds(1)))
         #expect(await eventually { r.connector.made.count == 2 })
         #expect(r.events.tokens == ["tok1", "tok2"])
         #expect(r.connector.calls.map(\.url.path) == ["/v1/screens/tok1/ws", "/v1/screens/tok2/ws"])
@@ -274,7 +289,7 @@ func settle() async {
         let r = rig()
         let first = try await started(r)
         r.screens.holding(true)
-        r.clock.advance(.seconds(80))
+        #expect(await r.clock.advance(afterPending: .seconds(80)))
         #expect(await eventually { r.screens.calls == 2 })
         #expect(!first.isClosed)
         first.push(linked("BCDFG"))
@@ -291,13 +306,13 @@ func settle() async {
         let r = rig()
         let first = try await started(r)
         r.screens.failing(true)
-        r.clock.advance(.seconds(80))
+        #expect(await r.clock.advance(afterPending: .seconds(80)))
         #expect(await eventually { r.screens.calls == 2 })
         await settle()
         #expect(!first.isClosed)
         #expect(r.events.offline == 0)
         // It asks again, quietly, after the backoff.
-        r.clock.advance(.milliseconds(250))
+        #expect(await r.clock.advance(afterPending: .milliseconds(250)))
         #expect(await eventually { r.screens.calls == 3 })
         await settle()
         #expect(r.events.offline == 0)
@@ -310,7 +325,7 @@ func settle() async {
         let r = rig()
         let first = try await started(r)
         r.connector.holding(true)
-        r.clock.advance(.seconds(80))
+        #expect(await r.clock.advance(afterPending: .seconds(80)))
         #expect(await eventually { r.connector.calls.count == 2 })
         #expect(r.events.tokens == ["tok1", "tok2"])
         await settle()
@@ -329,7 +344,7 @@ func settle() async {
         let r = rig()
         let first = try await started(r)
         r.connector.holding(true)
-        r.clock.advance(.seconds(80))
+        #expect(await r.clock.advance(afterPending: .seconds(80)))
         #expect(await eventually { r.connector.calls.count == 2 })
         await settle()
         #expect(!first.isClosed)
@@ -359,7 +374,7 @@ func settle() async {
         let r = rig()
         let first = try await started(r)
         r.connector.holding(true)
-        r.clock.advance(.seconds(80))
+        #expect(await r.clock.advance(afterPending: .seconds(80)))
         #expect(await eventually { r.connector.calls.count == 2 })
         first.push(expired)
         first.drop()
@@ -375,6 +390,68 @@ func settle() async {
         await r.link.stop()
     }
 
+    /// The renewal's socket can't connect (the network, not a refused link): the old socket keeps
+    /// listening, quietly, until the new one opens.
+    @Test func aRenewalWhoseSocketFailsKeepsTheOldSocket() async throws {
+        let r = rig()
+        let first = try await started(r)
+        r.connector.fail(.failed("down"))
+        #expect(await r.clock.advance(afterPending: .seconds(80)))
+        #expect(await eventually { r.connector.calls.count == 2 })
+        await settle()
+        #expect(!first.isClosed)
+        #expect(r.events.offline == 0)
+        #expect(await r.clock.advance(afterPending: .milliseconds(250)))
+        #expect(await eventually { r.connector.made.count == 2 })
+        #expect(r.connector.made[1].url.path == "/v1/screens/tok2/ws")
+        #expect(await eventually { first.isClosed })
+        #expect(r.events.offline == 0)
+        await r.link.stop()
+    }
+
+    @Test func aLinkOnTheOldSocketWinsWhileTheRenewalsSocketRetries() async throws {
+        let r = rig()
+        let first = try await started(r)
+        r.connector.fail(.failed("down"))
+        #expect(await r.clock.advance(afterPending: .seconds(80)))
+        #expect(await eventually { r.clock.pending.contains(.milliseconds(250)) })
+        first.push(linked("BCDFG"))
+        #expect(await eventually { r.events.finished })
+        #expect(r.events.all.last == .linked(room: "BCDFG"))
+        #expect(await eventually { first.isClosed })
+        #expect(await eventually { r.clock.pending.isEmpty })
+        #expect(r.connector.calls.count == 2)
+    }
+
+    /// The old socket goes silent while the renewal's socket is still opening: it is closed, and
+    /// quietly, since the new link is the one shown.
+    @Test func aSilentOldSocketIsClosed() async throws {
+        let r = rig(heartbeat: .seconds(25))
+        let first = try await started(r)
+        #expect(await r.clock.advance(afterPending: .seconds(25)))
+        #expect(await eventually { first.sent.count == 1 })
+        #expect(await r.clock.advance(afterPending: .seconds(25)))
+        #expect(await eventually { first.sent.count == 2 })
+        // 50 s in. Silence it, then a ping goes out at 75 s that nothing answers.
+        first.silence()
+        r.connector.holding(true)
+        #expect(await r.clock.advance(afterPending: .seconds(25)))
+        #expect(await eventually { first.sent.count == 3 })
+        // 80 s: the renewal; its socket waits on the upgrade.
+        #expect(await r.clock.advance(afterPending: .seconds(5)))
+        #expect(await eventually { r.connector.calls.count == 2 })
+        #expect(!first.isClosed)
+        // 100 s: the old socket's next beat finds it silent.
+        #expect(await r.clock.advance(afterPending: .seconds(20)))
+        #expect(await eventually { first.isClosed })
+        await settle()
+        #expect(r.events.offline == 0)
+        r.connector.release()
+        #expect(await eventually { r.connector.made.count == 2 })
+        #expect(!r.connector.made[1].isClosed)
+        await r.link.stop()
+    }
+
     @Test func expiredAfterLinkedIsIgnored() async throws {
         let r = rig()
         let first = try await started(r)
@@ -385,11 +462,11 @@ func settle() async {
         #expect(r.events.all == [.code(token: "tok1", code: "CODE1", url: URL(string: "https://x/tv/tok1")!), .linked(room: "BCDFG")])
         #expect(r.screens.calls == 1)
         #expect(r.connector.calls.count == 1)
-        // Linked stops renewals too.
+        // Linked stops renewals too: no timer is left to fire.
+        #expect(await eventually { r.clock.pending.isEmpty })
         r.clock.advance(.seconds(200))
         await settle()
         #expect(r.screens.calls == 1)
-        #expect(r.clock.pending.isEmpty)
     }
 
     /// A token the server no longer knows (404, a browser's 4404) or a device token it refused
@@ -400,7 +477,7 @@ func settle() async {
         r.connector.fail(error)
         await r.link.start(showing: nil)
         #expect(await eventually { r.connector.calls.count == 1 })
-        r.clock.advance(.milliseconds(250))
+        #expect(await r.clock.advance(afterPending: .milliseconds(250)))
         #expect(await eventually { r.connector.made.count == 1 })
         #expect(r.events.tokens == ["tok1", "tok2"])
         #expect(r.connector.calls.map(\.url.path) == ["/v1/screens/tok1/ws", "/v1/screens/tok2/ws"])
@@ -414,16 +491,16 @@ func settle() async {
         #expect(await eventually { r.events.all.last == .offline })
         await settle()
         #expect(r.connector.calls.count == 1)
-        r.clock.advance(.milliseconds(250))
+        #expect(await r.clock.advance(afterPending: .milliseconds(250)))
         #expect(await eventually { r.connector.made.count == 2 })
         #expect(r.connector.made[1].url.path == "/v1/screens/tok1/ws")
         // Opening resets the backoff.
         r.connector.made[1].drop()
         #expect(await eventually { r.events.offline == 2 })
-        r.clock.advance(.milliseconds(249))
+        #expect(await r.clock.advance(by: .milliseconds(249), afterPending: .milliseconds(250)))
         await settle()
         #expect(r.connector.calls.count == 2)
-        r.clock.advance(.milliseconds(1))
+        #expect(await r.clock.advance(afterPending: .milliseconds(1)))
         #expect(await eventually { r.connector.made.count == 3 })
         #expect(r.screens.calls == 1)
         await r.link.stop()
@@ -434,12 +511,12 @@ func settle() async {
         r.connector.fail(.failed("down"), .failed("down"))
         await r.link.start(showing: nil)
         #expect(await eventually { r.events.offline == 1 })
-        r.clock.advance(.milliseconds(250))
+        #expect(await r.clock.advance(afterPending: .milliseconds(250)))
         #expect(await eventually { r.connector.calls.count == 2 })
-        r.clock.advance(.milliseconds(499))
+        #expect(await r.clock.advance(by: .milliseconds(499), afterPending: .milliseconds(500)))
         await settle()
         #expect(r.connector.calls.count == 2)
-        r.clock.advance(.milliseconds(1))
+        #expect(await r.clock.advance(afterPending: .milliseconds(1)))
         #expect(await eventually { r.connector.made.count == 1 })
         await r.link.stop()
     }
@@ -450,7 +527,7 @@ func settle() async {
         await r.link.start(showing: nil)
         #expect(await eventually { r.events.all == [.offline] })
         r.screens.failing(false)
-        r.clock.advance(.milliseconds(250))
+        #expect(await r.clock.advance(afterPending: .milliseconds(250)))
         #expect(await eventually { r.connector.made.count == 1 })
         #expect(r.events.tokens == ["tok1"])
         await r.link.stop()
@@ -468,8 +545,7 @@ func settle() async {
         let live = rig(heartbeat: .seconds(25))
         let a = try await started(live)
         for n in 1...3 {
-            #expect(await eventually { live.clock.pending.contains(.seconds(25)) })
-            live.clock.advance(.seconds(25))
+            #expect(await live.clock.advance(afterPending: .seconds(25)))
             #expect(await eventually { a.sent.filter { $0 == #"{"t":"ping"}"# }.count == n })
         }
         await settle()
@@ -479,14 +555,12 @@ func settle() async {
 
         let silent = rig(heartbeat: .seconds(25), pongs: false)
         let b = try await started(silent)
-        #expect(await eventually { silent.clock.pending.contains(.seconds(25)) })
-        silent.clock.advance(.seconds(25))
+        #expect(await silent.clock.advance(afterPending: .seconds(25)))
         #expect(await eventually { b.sent == [#"{"t":"ping"}"#] })
-        #expect(await eventually { silent.clock.pending.contains(.seconds(25)) })
-        silent.clock.advance(.seconds(25))
+        #expect(await silent.clock.advance(afterPending: .seconds(25)))
         #expect(await eventually { b.isClosed })
         #expect(await eventually { silent.events.all.last == .offline })
-        silent.clock.advance(.milliseconds(250))
+        #expect(await silent.clock.advance(afterPending: .milliseconds(250)))
         #expect(await eventually { silent.connector.made.count == 2 })
         await silent.link.stop()
     }
@@ -502,6 +576,27 @@ func settle() async {
         await settle()
         #expect(r.screens.calls == 1)
         #expect(r.connector.calls.count == 1)
+    }
+
+    /// Whoever reads the events went away: the link stops itself.
+    @Test func cancellingTheReaderStops() async throws {
+        let screens = FakeScreens(expiresIn: 100_000)
+        let connector = LinkConnector()
+        let clock = ManualClock()
+        let link = ScreenLink(
+            config: Self.config, screens: { try await screens.call($0) },
+            credential: { DeviceCredential(deviceId: "tv", token: "tvtok") }, connector: connector,
+            heartbeat: nil, sleep: { try await clock.sleep($0) })
+        let reader = Task { for await _ in link.events {} }
+        await link.start(showing: nil)
+        #expect(await eventually { connector.made.count == 1 })
+        #expect(clock.pending == [.seconds(80)])
+        reader.cancel()
+        #expect(await eventually { connector.made[0].isClosed })
+        #expect(await eventually { clock.pending.isEmpty })
+        await link.start(showing: nil)
+        await settle()
+        #expect(screens.calls == 1)
     }
 
     @Test func stopWhileAskingEmitsNothingMore() async throws {
