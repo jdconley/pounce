@@ -98,10 +98,11 @@ func changes(since: String) -> [String] {
 /// The commits after `commit` that change the app itself (not its scripts, docs or art): a date
 /// can't say which commits a build holds when two merges land minutes apart.
 func changes(from commit: String) -> [String] {
-  // The Apple TV app's paths match ios.yml's tvOS distribute filter.
+  // These match ios.yml's distribute filters. The Apple TV list is what PounceTV compiles
+  // (project.yml's PounceTV sources); add a folder here and in ios.yml when the target gains one.
   let paths = isTV
-    ? ["PounceTV", "PounceKit", "project.yml", "Pounce/Table", "Pounce/Tiles", "Pounce/Design"]
-    : ["Pounce", "PounceKit", "PounceWidgets", "PounceNotify", "project.yml"]
+    ? ["PounceTV", "PounceKit", "Config", "project.yml"]
+    : ["Pounce", "PounceKit", "PounceWidgets", "PounceNotify", "Config", "project.yml"]
   let app = paths.map { ":(top)apps/play-ios/\($0)" }
   return subjects(["\(commit)..HEAD", "--"] + app)
 }

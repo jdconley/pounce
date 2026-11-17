@@ -525,26 +525,29 @@ would make, for both platforms.
 
 In CI, the `build` job also builds `PounceTV` for generic tvOS, unsigned. The `testflight` job
 archives and uploads both apps with one build number, the iPhone app first. An Apple TV failure
-doesn't hold up the iPhone build; the job still fails at the end. The Apple TV build goes to the
-group only when a push changes `PounceTV`, `PounceKit`, `project.yml`, `Pounce/Table`, `Pounce/Tiles`
-or `Pounce/Design`. To resend one, run `scripts/distribute.swift --platform TV_OS --build N` from a
-Mac; the workflow's `build` input is for the iPhone app.
+(or one stalled past 30 minutes) doesn't hold up the iPhone build; the job still fails at the end.
+The Apple TV build goes to the group only when a push changes what `PounceTV` compiles: `PounceTV`,
+`PounceKit`, `Config` or `project.yml` (the iPhone filter also has `Config`). When the target
+compiles another folder, add it to both TV filters (`ios.yml` and `distribute.swift`). To resend an
+Apple TV build, run `scripts/distribute.swift --platform TV_OS --build N` from a Mac; the workflow's
+`build` input is for the iPhone app.
 
 **Adding the platform (once).** App Store Connect takes Apple TV builds only after the record has
 the tvOS platform. `scripts/asc-add-platform.swift` adds it, as JD OK'd (2026-11-16), and changes
 nothing else: it looks the app up by bundle id and, if it has no `TV_OS` App Store version, creates
 one (`POST /v1/appStoreVersions`, version `--version`, default 1.2). A second run does nothing.
 `--dry-run` without credentials prints the requests and the body. CI runs it when the workflow is
-started by hand with `add_tvos_platform`, on any branch, using project.yml's `MARKETING_VERSION`:
+started by hand with `add_tvos_platform`, on any branch, using project.yml's `MARKETING_VERSION`.
+That dispatch makes only this change: no archive, upload or distribution.
 
 ```sh
-gh workflow run ios.yml --ref <branch> -f add_tvos_platform=true -f distribute=false
+gh workflow run ios.yml --ref <branch> -f add_tvos_platform=true
 gh run watch "$(gh run list --workflow ios.yml --limit 1 --json databaseId --jq '.[0].databaseId')"
 ```
 
-Run it before the first merge that carries the Apple TV app, or that merge's Apple TV upload fails
-(the iPhone build still goes out). On `main`, the same dispatch also archives and uploads both apps,
-after the platform is added; `distribute=false` keeps it to the internal testers.
+Dispatch it on the branch, check its log, then merge, so the merge's push uploads both apps. If the
+branch is merged first, that push's Apple TV upload fails (the iPhone build still goes out);
+dispatch it on `main` then, and the next push uploads the Apple TV build.
 
 ### Prerequisites only JD can do
 

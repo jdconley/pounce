@@ -30,7 +30,7 @@ on:
         type: boolean
         default: false
       add_tvos_platform:
-        description: One-off, before the first Apple TV upload - add the tvOS platform to the App Store Connect app record (runs on any branch; does nothing once it is there)
+        description: One-off, before the first Apple TV upload - only add the tvOS platform to the App Store Connect app record, nothing else (runs on any branch; does nothing once it is there)
         type: boolean
         default: false
 
@@ -48,7 +48,7 @@ defaults:
 jobs:
   build:
     runs-on: macos-26
-    timeout-minutes: 30
+    timeout-minutes: 40
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
       - run: xcodebuild -version
@@ -181,8 +181,9 @@ jobs:
 
   # One-off (JD OK'd it, 2026-11-16): add the tvOS platform to the App Store Connect app record, the
   # only App Store Connect change this makes. Runs only when asked (add_tvos_platform), on any
-  # branch, so it can go before the first merge that uploads an Apple TV build; a second run
-  # changes nothing. The version string is project.yml's MARKETING_VERSION.
+  # branch, so it can go before the first merge that uploads an Apple TV build; that dispatch does
+  # nothing else (testflight skips it), and a second run changes nothing. The version string is
+  # project.yml's MARKETING_VERSION.
   tv-platform:
     name: Add the Apple TV platform
     if: github.event_name == 'workflow_dispatch' && inputs.add_tvos_platform
@@ -211,11 +212,11 @@ jobs:
   # Uploads the iPhone and the Apple TV builds (one build number for both: App Store Connect keeps a
   # build train per platform) and sends each to the group when its own app changed.
   testflight:
-    needs: [build, tv-platform]
-    # tv-platform is skipped unless asked for; when it runs, the Apple TV upload waits for it.
+    needs: build
+    # A dispatch with add_tvos_platform makes only that change (tv-platform), no upload.
     if: >-
-      !cancelled() && needs.build.result == 'success' && needs.tv-platform.result != 'failure'
-      && github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+      github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+      && !inputs.add_tvos_platform
     runs-on: macos-26
     # Each archive and upload takes ~10-15 min; each distribute waits up to 30 more for App Store
     # Connect processing (the Apple TV build mostly processes while the iPhone one is waited on).
@@ -262,12 +263,14 @@ jobs:
           (umask 077; printenv ASC_KEY_P8 > "$ASC_KEY_PATH")
           trap 'rm -f "$ASC_KEY_PATH"' EXIT
           scripts/testflight.sh
-      # The Apple TV app, with the same build number. A failure here doesn't hold up the iPhone
-      # build: the iPhone build is still distributed, and the last step fails the job.
+      # The Apple TV app, with the same build number. If it fails or stalls (the 30-minute cap
+      # covers the archive and any tvOS SDK download), the iPhone build is still distributed and
+      # the last step fails the job.
       - name: Archive and upload (Apple TV)
         id: upload-tv
         if: steps.creds.outputs.ready == 'true' && inputs.build == ''
         continue-on-error: true
+        timeout-minutes: 30
         env:
           BUILD_NUMBER: ${{ steps.upload.outputs.build }}
           PLATFORM: tvOS
@@ -307,7 +310,7 @@ jobs:
           if [ -n "$FROM" ] && git cat-file -e "$FROM^{commit}" 2>/dev/null; then
             # A push that doesn't change the app itself (scripts, docs, this workflow) uploads for
             # the internal testers only: the family never gets an identical build.
-            if git diff --quiet "$FROM" HEAD -- Pounce PounceKit PounceWidgets PounceNotify project.yml; then
+            if git diff --quiet "$FROM" HEAD -- Pounce PounceKit PounceWidgets PounceNotify Config project.yml; then
               echo "no app change since $FROM: not sending this build to \"$GROUP\""
               exit 0
             fi
@@ -315,8 +318,9 @@ jobs:
           else
             scripts/distribute.swift --build "$BUILD" --group "$GROUP"
           fi
-      # The Apple TV build, when this run uploaded one. Its app is its own folder, the shared game
-      # code and the table code it will share with the iPhone app.
+      # The Apple TV build, when this run uploaded one. Its paths are what PounceTV compiles
+      # (project.yml's PounceTV sources, PounceKit, the build configs); keep them in step with
+      # project.yml and distribute.swift.
       - name: Distribute the Apple TV build to the TestFlight group
         if: >-
           !cancelled() && steps.creds.outputs.ready == 'true' && steps.upload-tv.outcome == 'success'
@@ -330,7 +334,7 @@ jobs:
           (umask 077; printenv ASC_KEY_P8 > "$ASC_KEY_PATH")
           trap 'rm -f "$ASC_KEY_PATH"' EXIT
           if [ -n "$FROM" ] && git cat-file -e "$FROM^{commit}" 2>/dev/null; then
-            if git diff --quiet "$FROM" HEAD -- PounceTV PounceKit project.yml Pounce/Table Pounce/Tiles Pounce/Design; then
+            if git diff --quiet "$FROM" HEAD -- PounceTV PounceKit Config project.yml; then
               echo "no Apple TV app change since $FROM: not sending this build to \"$GROUP\""
               exit 0
             fi

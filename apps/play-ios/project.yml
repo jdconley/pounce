@@ -149,6 +149,9 @@ targets:
   PounceTV:
     type: application
     platform: tvOS
+    # When this target starts compiling another folder (Pounce/Table, Pounce/Tiles, ...), add it
+    # to the Apple TV distribute filter in .github/workflows/ios.yml and to the TV paths in
+    # scripts/distribute.swift, or a change there won't reach the family's Apple TVs.
     sources:
       - path: PounceTV
         excludes:
