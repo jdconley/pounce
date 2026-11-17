@@ -125,7 +125,24 @@ class ControllerTests: XCTestCase {
         XCTAssertFalse(el(app, "skip.list").exists, "the skip list stayed up")
     }
 
-    /// Pass and play on Cards: the curtain covers the hand between players, and nothing of the
+    /// "Skip Leo" can be taken back: Undo brings the Cucumber back to the hand, nothing sent. At
+    /// normal speed, so the Undo window is the real one.
+    @MainActor
+    func testASkipCanBeUndone() throws {
+        let app = launch("controller-skip", speed: 1)
+        guard let i = handIndex(app, "Cucumber, skip") else { return XCTFail("no Cucumber in the hand: \(handLabels(app))") }
+        el(app, "table.hand.\(i)").tap()
+        let leo = el(app, "skip.target.1")
+        XCTAssertTrue(leo.waitForExistence(timeout: Live.t(3)), "no skip list for the Cucumber")
+        leo.tap()
+        let undo = el(app, "table.undo")
+        XCTAssertTrue(undo.waitForExistence(timeout: 2), "no Undo after Skip Leo")
+        undo.tap()
+        XCTAssertTrue(until(3) { self.handIndex(app, "Cucumber, skip") != nil }, "Undo didn't bring the Cucumber back")
+        XCTAssertEqual(debug(app)?.inFlight, false, "the discard went anyway")
+    }
+
+        /// Pass and play on Cards: the curtain covers the hand between players, and nothing of the
     /// table under it can be read or touched; the hold shows that player's hand on Cards.
     @MainActor
     func testTheCurtainCoversTheHandOnCards() throws {
@@ -158,8 +175,8 @@ class ControllerTests: XCTestCase {
         return labels
     }
 
-    @MainActor private func launch(_ demo: String) -> XCUIApplication {
-        let app = Live.demo(demo)
+    @MainActor private func launch(_ demo: String, speed: Double = Live.speed) -> XCUIApplication {
+        let app = Live.demo(demo, speed: speed)
         app.launch()
         XCTAssertTrue(el(app, "table.view.cards").waitForExistence(timeout: Live.t(10)), "no Cards/Table switch")
         let notNow = el(app, "priming.notNow")

@@ -131,7 +131,16 @@ struct TableLayoutControllerTests {
         for hand in Self.hands {
             let l = layout(i, .standard, hand)
             let handTop = l.hand(count: 11, lifted: nil).map { rotatedBounds($0, l.cardSize).maxY }.max() ?? 0
-            #expect(l.traysFrame.minY - handTop <= 12, "\(l.size) \(hand): trays float \(l.traysFrame.minY - handTop) over the hand")
+            // On the hand; with no trays, as high over it as a picked card rises.
+            let reserve = hand.trays ? 12 : 40
+            #expect(l.traysFrame.minY - handTop <= CGFloat(reserve), "\(l.size) \(hand): trays float \(l.traysFrame.minY - handTop) over the hand")
+            // A picked card (any of eleven, or of a short hand) stays clear of the action row and the sort button.
+            let n = hand.short ? ControllerHand.shortMax : 11
+            for k in 0..<n {
+                let r = rotatedBounds(l.hand(count: n, lifted: k)[k], l.cardSize)
+                #expect(!overlaps(r, l.actionRow) && !overlaps(r, l.sortButtonFrame),
+                        "\(l.size) \(hand): picked card \(k) of \(n) \(r) reaches the action row \(l.actionRow)")
+            }
             if !hand.trays { #expect(l.traysFrame.height == 0) }
             #expect(l.actionRow.minY - l.traysFrame.maxY <= 8)
             let sort = l.sortButtonFrame
@@ -254,11 +263,15 @@ private func expectNothingOverlaps(_ l: TableLayout, cards: Int = 11) {
         }
     }
     for n in 1...cards {
-        for c in l.hand(count: n, lifted: nil) {
-            let r = rotatedBounds(c, l.cardSize)
-            #expect(safe.contains(r))
-            for (name, frame) in all {
-                #expect(!overlaps(r, frame), "\(l.size): a card of \(n) overlaps \(name)")
+        // Resting, and with each card in turn picked up (lifted out of the fan).
+        for lifted in [nil] + Array(0..<n) {
+            for (k, c) in l.hand(count: n, lifted: lifted).enumerated() where lifted == nil || k == lifted {
+                let r = rotatedBounds(c, l.cardSize)
+                #expect(safe.contains(r))
+                // A lifted card rises over the trays, as on the table; never into anything else.
+                for (name, frame) in all where !(lifted != nil && name == "trays") {
+                    #expect(!overlaps(r, frame), "\(l.size): card \(k) of \(n) (lifted \(String(describing: lifted))) overlaps \(name)")
+                }
             }
         }
     }

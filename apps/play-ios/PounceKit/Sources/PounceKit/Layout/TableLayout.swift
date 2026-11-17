@@ -423,7 +423,8 @@ public struct TableLayout: Sendable {
         func actionTop(_ w: CGFloat) -> CGFloat {
             let c = card(w)
             let handTop = safeBottom + bottomPad + Self.fan(card: c, half: handHalf(w), radius: radius(w)).rise + c.height / 2 + 4
-            let trays = hand.trays ? traysPad + traysHeight(w) : 0
+            // No trays: room for a picked card to rise clear of the action row (`liftHeight`).
+            let trays = hand.trays ? traysPad + traysHeight(w) : Self.liftHeight
             return handTop + trays + 6 + actionsH
         }
         /// The height left for the piles, with a gap above and below them.
@@ -461,13 +462,13 @@ public struct TableLayout: Sendable {
         handBaseY = safeBottom + bottomPad + fan.rise
         let handTop = handBaseY + c.height / 2 + 4
 
-        // The trays on it (none: an empty strip), then the action row with the sort button at its
-        // right end.
+        // The trays on it (none: an empty strip as high as a picked card rises, so it never rides
+        // into the action row), then the action row with the sort button at its right end.
         let traysW = roomy ? min(width - 32, max(half * 2 + 40, 560), 820) : width - 2 * side
         let traysX = (width - traysW) / 2
         let trays = hand.trays
             ? CGRect(x: traysX, y: handTop + traysPad, width: traysW, height: traysHeight(cardW) + trayGrow)
-            : CGRect(x: traysX, y: handTop, width: traysW, height: 0)
+            : CGRect(x: traysX, y: handTop + Self.liftHeight, width: traysW, height: 0)
         traysFrame = trays
         let actionY = trays.maxY + 6
         let sortW = Self.sortButtonHit + 4
