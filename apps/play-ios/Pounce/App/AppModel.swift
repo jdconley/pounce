@@ -120,6 +120,14 @@ final class AppModel {
     var limits: AgeLimits { AgeLimits(band: ageBand) }
     /// Each table's Cards/Table pick while a TV shows it (spec §3).
     @ObservationIgnored let tableViews: TableViewChoices
+
+    /// The table on screen shows just this phone's cards while a TV shows it: the game's sounds
+    /// are the TV's ("one table, one sound", spec §3). Read by `Sound` on every game sound.
+    var gameSoundsOnTV: Bool {
+        guard case .room(let code, _) = route, let session = room, session.code == code, let r = session.store.room
+        else { return false }
+        return TableShown.of(screen: r.screen, seated: r.seats.contains { $0.yours }, choice: tableViews.view(code: code)).quiet
+    }
     /// Players, Sign in with Apple and sync (spec §10.5, §13.1).
     @ObservationIgnored private(set) var account: AccountModel!
 
@@ -309,11 +317,13 @@ final class AppModel {
            let url = URL(string: text), let link = WidgetLink.parse(url) {
             model.handle(link)
         }
+        Sound.gameOnTV = { [weak model] in model?.gameSoundsOnTV ?? false }
         model.startTips(arguments: arguments, env: env)
         model.startPasteboard(arguments: arguments, env: env)
         return model
         #else
         let model = await real(config: config)
+        Sound.gameOnTV = { [weak model] in model?.gameSoundsOnTV ?? false }
         model.startTips(arguments: arguments, env: env)
         model.startPasteboard(arguments: arguments, env: env)
         return model

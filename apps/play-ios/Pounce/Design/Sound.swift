@@ -20,8 +20,6 @@ protocol SoundPlaying: AnyObject {
     /// Plays `name` at `volume` (0–1; a quiet variant of an effect, say), unless it is a `game`
     /// sound while `gameMuted`.
     func play(_ name: String, volume: Float, kind: SoundKind)
-    /// Game sounds are the TV's (this phone shows just its cards). Set by the table screen.
-    var gameMuted: Bool { get set }
 }
 
 extension SoundPlaying {
@@ -33,6 +31,10 @@ extension SoundPlaying {
 @MainActor
 enum Sound {
     static let shared: any SoundPlaying = Pace.underTest ? SilentSound() : AudioSound()
+    /// Whether game sounds are the TV's right now (this phone shows just its cards). One owner:
+    /// the app model, which derives it from the table on screen (`AppModel.gameSoundsOnTV`), so
+    /// two table screens coming and going never leave it set wrong.
+    static var gameOnTV: () -> Bool = { false }
 }
 
 /// Sound effects from a small pool of pre-loaded `AVAudioPlayer`s per effect, so rapid repeats
@@ -46,7 +48,6 @@ final class AudioSound: SoundPlaying {
     private var loading: Set<String> = []
     private var cursor: [String: Int] = [:]
     private var session: Task<Void, Never>?
-    var gameMuted = false
 
     init(settings: Settings = .shared) {
         self.settings = settings
@@ -67,7 +68,7 @@ final class AudioSound: SoundPlaying {
     /// Plays `name`. One still loading (a moment after launch, or an effect `preload` doesn't
     /// list) is skipped this once and loads for next time.
     func play(_ name: String, volume: Float, kind: SoundKind) {
-        guard settings.soundOn, kind == .ui || !gameMuted else { return }
+        guard settings.soundOn, kind == .ui || !Sound.gameOnTV() else { return }
         guard let players = pools[name], !players.isEmpty else {
             load(name)
             return
@@ -98,11 +99,10 @@ final class AudioSound: SoundPlaying {
 @MainActor
 final class SilentSound: SoundPlaying {
     private(set) var played = 0
-    var gameMuted = false
 
     func preload() {}
 
     func play(_ name: String, volume: Float, kind: SoundKind) {
-        if kind == .ui || !gameMuted { played += 1 }
+        if kind == .ui || !Sound.gameOnTV() { played += 1 }
     }
 }

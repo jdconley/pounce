@@ -108,7 +108,7 @@ struct GameOverView: View {
             if !reduceMotion {
                 withAnimation(.easeOut(duration: CelebrationTiming.sunburstLoop).paced) { turned = true }
             }
-            Sound.shared.play(ArtName.Sound.sfxPop)
+            Sound.shared.play(ArtName.Sound.sfxPop, kind: .game)  // the crowning: the TV's on Cards
             Haptics.shared.success()
         }
         .accessibilityElement(children: .contain)

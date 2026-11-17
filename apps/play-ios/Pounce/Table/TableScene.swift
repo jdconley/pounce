@@ -78,6 +78,10 @@ final class TableScene: SKScene {
     }
     /// The lay-down trays are all valid and nothing is held over them (the button would show).
     private(set) var layDownReady = false
+    /// Just my cards: the hand is short and drawn bigger (`ControllerHand.short`). It goes short
+    /// at six cards or fewer and back at nine or more, so the cards keep their size from draw to
+    /// discard.
+    private var shortHand = false
     var turnCue = TurnCueState()
     /// Spotlight and game-over bookkeeping (Celebrations.swift).
     var celebration = CelebrationState()
@@ -619,9 +623,13 @@ final class TableScene: SKScene {
         let layout: TableLayout
         switch tv {
         case .cards(let chrome):
+            let shown = bottom == shownRevealed ? game.hands[bottom ?? -1]?.count : nil
+            let count = shown ?? bottom.flatMap { game.handCounts[safe: $0] } ?? 0
+            if count <= 6 { shortHand = true } else if count > ControllerHand.shortMax { shortHand = false }
+            let trays = shown != nil && !(bottom.map { model.trays(for: $0).isEmpty } ?? true)
             layout = TableLayout(
                 size: size, safeTop: safeInsets.top, safeBottom: safeInsets.bottom, opponents: max(barSeats.count, 1),
-                controller: chrome)
+                controller: chrome, hand: ControllerHand(short: shortHand, trays: trays))
         case .table(let band):
             // The whole table, under the switch's band.
             layout = TableLayout(
@@ -689,7 +697,7 @@ final class TableScene: SKScene {
             var hidden = trayState.cardsInTrays
             for card in [dragCard, provisionalCard].compactMap({ $0 }) { hidden.insert(card) }
             let shown = order.cards.filter { !hidden.contains($0) }
-            if model.game?.laid.contains(where: { $0 != nil }) == true { prewarmFaces(order.cards) }
+            if layout.arrangement != .controller, model.game?.laid.contains(where: { $0 != nil }) == true { prewarmFaces(order.cards) }
             if let s = selection, !shown.contains(s) { selection = nil }
             content = .faces(shown)
         } else if let bottom, model.mySeats.contains(bottom) {
@@ -744,7 +752,7 @@ final class TableScene: SKScene {
 
         // The hand's owner by name only on a shared phone while a hand is shown: it says whose
         // hand is up. A one-seat phone never names its own player on the table.
-        if let bottom, faceUp, model.isMultiSeat {
+        if let bottom, faceUp, model.isMultiSeat, !cards {
             bottomTagName = SeatInfo.name(model.room, bottom)
             setBottomTag(active: game.status == .playing && game.turn == bottom)
             let frame = layout.seatTagFrame
@@ -910,9 +918,14 @@ final class TableScene: SKScene {
     /// can hit (the table's own rule, `HitAims`), or Lay down.
     private func publishController() {
         var offer = ControllerOffer()
+        if controllerShown, let layout {
+            offer.frames = ControllerOffer.Frames(actionRow: layout.actionRow, trays: layout.traysFrame)
+        }
         if controllerShown, let seat = actingSeat, let model, model.canPlay(seat) {
             offer.layDown = layDownReady
-            if let card = liftedCard, let aims = heldAims(card), !aims.targets.isEmpty {
+            if let card = liftedCard, Card(id: card) == .cucumber, case let aims = model.skipTargets(for: seat), !aims.isEmpty {
+                offer.skip = ControllerOffer.Skip(card: card, seats: aims, model: model)
+            } else if let card = liftedCard, let aims = heldAims(card), !aims.targets.isEmpty {
                 offer.hit = ControllerOffer.Hit(
                     seat: seat, card: card, choices: HitChoices.choices(model: model, targets: Array(aims.targets), seat: seat),
                     model: model)
@@ -1165,8 +1178,23 @@ struct ControllerOffer: Equatable {
         var model: TableModel
     }
 
+    /// A picked Cucumber: the players it can skip (a discard, with its Undo).
+    struct Skip: Equatable {
+        var card: CardID
+        var seats: [Seat]
+        var model: TableModel
+    }
+
+    /// Where the scene put the action row and the trays (scene space), for the shell's overlays.
+    struct Frames: Equatable {
+        var actionRow: CGRect
+        var trays: CGRect
+    }
+
     var hit: Hit?
+    var skip: Skip?
     var layDown = false
+    var frames: Frames?
 }
 
 extension TableLayout {

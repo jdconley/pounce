@@ -396,7 +396,11 @@ private struct TableStage: View {
                 RoomBackground()
             }
             if !localCats.isEmpty {
-                LocalCatsRow(cats: localCats, tv: tvFrame) { seat in
+                LocalCatsRow(
+                    cats: localCats, tv: tvFrame,
+                    // On Cards with no hand up there are no trays: the cats sit on the action row's line.
+                    trays: events.controller.frames.map { $0.trays.height > 0 ? $0.trays : $0.actionRow }
+                ) { seat in
                     session.store.peek(seat)
                     sync()
                 }
@@ -435,7 +439,7 @@ private struct TableStage: View {
                 .zIndex(TableLayer.lookPill)
             }
             if let shown = moveNote, curtainSeat == nil, events.winners == nil, events.scoreboard == nil, events.player == nil {
-                MoveNoteView(text: noteText(shown.note), tv: tvFrame)
+                MoveNoteView(text: noteText(shown.note), tv: tvFrame, actionRow: events.controller.frames?.actionRow)
                     .id(shown.serial)
                     .transition(.scale(scale: 0.85, anchor: .bottom).combined(with: .opacity))
                     .zIndex(TableLayer.note)
@@ -457,6 +461,10 @@ private struct TableStage: View {
                         scene?.hitFromList(hit.card, target)
                     },
                     onCancel: clearAim,
+                    onSkip: { seat in
+                        guard let skip = events.controller.skip else { return }
+                        scene?.skipFromList(skip.card, seat)
+                    },
                     onLayDown: { scene?.layDownTapped() },
                     onFrame: { tvFrame = $0 })
                     .zIndex(TableLayer.controls)
@@ -616,7 +624,7 @@ private struct TableStage: View {
         .onChange(of: coachView) { feedCoach(allowNew: false) }
         .onChange(of: session.store.lookChange) { _, change in
             guard let change else { return }
-            Sound.shared.play(ArtName.Sound.sfxWhoosh)
+            Sound.shared.play(ArtName.Sound.sfxWhoosh, kind: .game)
             withAnimation(.spring(duration: 0.45, bounce: 0.4).paced) { lookPill = change }
             Task {
                 try? await Task.sleep(for: Pace.duration(.seconds(2)))
@@ -625,7 +633,7 @@ private struct TableStage: View {
         }
         .onChange(of: session.store.forfeitNotice) { _, notice in
             guard let notice else { return }
-            Sound.shared.play(ArtName.Sound.sfxThud, volume: 0.7)
+            Sound.shared.play(ArtName.Sound.sfxThud, volume: 0.7, kind: .game)
             withAnimation(.spring(duration: 0.45, bounce: 0.4).paced) { forfeitPill = notice }
             Task {
                 try? await Task.sleep(for: Pace.duration(.seconds(3)))
@@ -723,8 +731,7 @@ private struct TableStage: View {
                 .environment(settings)
         }
         .onChange(of: shown, initial: true) { _, shown in
-            // One table, one sound: on Cards the TV plays the game's sounds.
-            Sound.shared.gameMuted = shown.quiet
+            // (On Cards the game's sounds are the TV's: `AppModel.gameSoundsOnTV`.)
             if shown != .cards { clearAim() }
             if !shown.hasSwitch { tvFrame = nil }
         }
@@ -735,10 +742,7 @@ private struct TableStage: View {
             guard let picked else { return }
             if offer.hit?.card != old.hit?.card || offer.hit?.choices.contains(where: { $0.target == picked }) != true { clearAim() }
         }
-        .onDisappear {
-            clearAim()
-            Sound.shared.gameMuted = false
-        }
+        .onDisappear { clearAim() }
         .tipHost(.table, paused: curtainSeat != nil || events.menuOpen || events.winners != nil || priming)
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("screen-table")
@@ -824,22 +828,23 @@ private struct TableStage: View {
             }
         }
         // `-show-hits` (screenshots, Cards): the hand card that can hit the most groups is picked, so the
-        // hit list shows; `-show-hit-picked`: and its first group too.
+        // hit list shows (or, with none, a Cucumber, so the skip list does); `-show-hit-picked`: and
+        // its first group too.
         if CommandLine.arguments.contains("-show-hits") {
             Task { [weak scene] in
                 try? await Task.sleep(for: .milliseconds(1200))
-                guard let scene, let model = scene.model, let seat = scene.actingSeat,
-                      let card = scene.hand.cards.compactMap(\.card)
-                          .max(by: { model.hitTargets(card: $0, seat: seat).count < model.hitTargets(card: $1, seat: seat).count }),
-                      !model.hitTargets(card: card, seat: seat).isEmpty
-                else { return }
+                guard let scene, let model = scene.model, let seat = scene.actingSeat else { return }
+                let cards = scene.hand.cards.compactMap(\.card)
+                let best = cards.max(by: { model.hitTargets(card: $0, seat: seat).count < model.hitTargets(card: $1, seat: seat).count })
+                    .flatMap { model.hitTargets(card: $0, seat: seat).isEmpty ? nil : $0 }
+                guard let card = best ?? cards.first(where: { Card(id: $0) == .cucumber }) else { return }
                 scene.liftedCard = card
                 guard CommandLine.arguments.contains("-show-hit-picked") else { return }
                 try? await Task.sleep(for: .milliseconds(300))
                 if let first = events.controller.hit?.choices.first { pickTarget(first.target) }
             }
         }
-                // `-show-scoreboard` (screenshots): the scoreboard over the table as it opens.
+        // `-show-scoreboard` (screenshots): the scoreboard over the table as it opens.
         if CommandLine.arguments.contains("-show-scoreboard"), let room = session.store.room {
             events.scoreboard = TableModel(room: room)
         }
@@ -1064,8 +1069,9 @@ private final class StageEvents {
 /// to put the curtain up for that person and hold to peek at their hand.
 private struct LocalCatsRow: View {
     let cats: [(seat: Seat, person: Person)]
-    /// The table's frame at a TV (the trays sit elsewhere on Cards).
+    /// The table's frame at a TV, and on Cards the scene's trays (they sit elsewhere there).
     let tv: TVFrame?
+    let trays: CGRect?
     let onTap: (Seat) -> Void
 
     private static let side: CGFloat = 60
@@ -1077,7 +1083,7 @@ private struct LocalCatsRow: View {
                 width: geo.size.width + insets.leading + insets.trailing,
                 height: geo.size.height + insets.top + insets.bottom)
             // The trays' strip, empty while no hand is face up (scene space: y up from the bottom).
-            let trays = TableLayout(full: full, insets: insets, tv: tv).traysFrame
+            let trays = self.trays ?? TableLayout(full: full, insets: insets, tv: tv).traysFrame
             HStack(spacing: 18) {
                 ForEach(cats, id: \.seat) { cat in
                     LocalCat(seat: cat.seat, person: cat.person, side: Self.side) { onTap(cat.seat) }
@@ -1144,6 +1150,7 @@ private struct CardsChrome: View {
     let onPick: (HitTarget) -> Void
     let onHit: () -> Void
     let onCancel: () -> Void
+    let onSkip: (Seat) -> Void
     let onLayDown: () -> Void
     let onFrame: (TVFrame) -> Void
 
@@ -1154,6 +1161,8 @@ private struct CardsChrome: View {
         var band: CGFloat = 38
         var status: CGFloat = 30
         var pill: CGFloat = 44
+        /// What the action row holds now, wrapped to its width (0: nothing).
+        var actions: CGFloat = 0
     }
 
     var body: some View {
@@ -1163,6 +1172,8 @@ private struct CardsChrome: View {
                 width: geo.size.width + insets.leading + insets.trailing,
                 height: geo.size.height + insets.top + insets.bottom)
             let (frame, layout) = Self.frame(full: full, insets: insets, measured: measured, shown: shown)
+            // The scene's own action row once it has drawn (it moves with the hand's size).
+            let actionRow = offer.frames?.actionRow ?? layout.actionRow
             // Scene space (y up from the bottom of the screen) to this view's.
             let local: (CGRect) -> CGRect = { r in
                 CGRect(x: r.minX - insets.leading, y: full.height - r.maxY - insets.top, width: r.width, height: r.height)
@@ -1181,17 +1192,18 @@ private struct CardsChrome: View {
                             .position(x: line.midX, y: line.midY)
                             .transition(.opacity)
                     }
-                    let row = local(layout.actionRow)
+                    let row = local(actionRow)
                     ControllerActions(
-                        offer: offer, picked: picked, onPick: onPick, onHit: onHit, onCancel: onCancel, onLayDown: onLayDown)
+                        offer: offer, picked: picked, onPick: onPick, onHit: onHit, onCancel: onCancel, onSkip: onSkip,
+                        onLayDown: onLayDown)
                         .frame(width: row.width, height: row.height)
                         .position(x: row.midX, y: row.midY)
                         .transition(.opacity)
                 }
             }
             .onChange(of: frame, initial: true) { _, frame in onFrame(frame) }
+            .background { templates(width: layout.actionRow.width) }
         }
-        .background { templates }
         .animation(.spring(duration: 0.25, bounce: 0.2).paced, value: offer)
         .animation(.spring(duration: 0.25, bounce: 0.2).paced, value: picked)
     }
@@ -1200,7 +1212,9 @@ private struct CardsChrome: View {
     /// band is in the same place on Table). Short of room even with the smallest cards, the status
     /// line gives up what is missing (`TableLayout.chromeOverflow`).
     private static func frame(full: CGSize, insets: EdgeInsets, measured: Measured, shown: TableShown) -> (TVFrame, TableLayout) {
-        var chrome = ControllerChrome(switchBand: measured.band + 6, status: measured.status + 2, actions: measured.pill + 6)
+        // One line of pills at least; more when the chips wrap, up to three (then it scrolls).
+        let lines = min(max(measured.actions, measured.pill), 3 * measured.pill + 12)
+        var chrome = ControllerChrome(switchBand: measured.band + 6, status: measured.status + 2, actions: lines + 6)
         var layout = TableLayout(full: full, insets: insets, tv: .cards(chrome))
         if !layout.fits {
             chrome.status = max(chrome.status - layout.chromeOverflow.rounded(.up), 0)
@@ -1209,9 +1223,16 @@ private struct CardsChrome: View {
         return (shown == .cards ? .cards(chrome) : .table(switchBand: layout.switchBand.height), layout)
     }
 
-    /// Unseen copies of the pieces, for their heights at this text size.
-    private var templates: some View {
+    /// Unseen copies of the pieces, for their heights at this text size, and of the action row's
+    /// pills wrapped to its `width`.
+    private func templates(width: CGFloat) -> some View {
         VStack {
+            ControllerActions(
+                offer: offer, picked: picked, onPick: { _ in }, onHit: {}, onCancel: {}, onSkip: { _ in }, onLayDown: {})
+                .content
+                .frame(width: max(width, 1))
+                .fixedSize(horizontal: false, vertical: true)
+                .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { measured.actions = $0 }
             ViewSwitch(shown: .table) { _ in }
                 .fixedSize()
                 .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { measured.band = $0 }

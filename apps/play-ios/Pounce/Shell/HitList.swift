@@ -2,10 +2,12 @@ import PounceKit
 import SwiftUI
 
 /// The action row on Cards (a TV shows the table, this phone just its cards): what can be done
-/// with the hand right now, in one row between the piles and the trays. Lay down once the trays
-/// are ready; with a card picked that can hit, one chip per group it can go on ("Mom's 3s",
-/// "Your run"). Picking a chip lights that group on the TV; Hit plays it, Cancel puts the
-/// choice back. Nothing at all when there is nothing to do.
+/// with the hand right now, on the trays. Lay down once the trays are ready; with a card picked
+/// that can hit, one chip per group it can go on ("Mom's 3s", "Your run"): picking one lights that
+/// group on the TV, Hit plays it, Cancel puts the choice back; with a Cucumber picked, one chip per
+/// player it can skip ("Skip Leo"), which discards it at them. Nothing when there is nothing to do.
+/// The chips wrap onto more lines rather than run off the screen (`FlowRows`); the table measures
+/// how tall that makes the row and makes room for it.
 struct ControllerActions: View {
     let offer: ControllerOffer
     /// The group picked from the list (it glows on the TV).
@@ -13,17 +15,40 @@ struct ControllerActions: View {
     let onPick: (HitTarget) -> Void
     let onHit: () -> Void
     let onCancel: () -> Void
+    let onSkip: (Seat) -> Void
     let onLayDown: () -> Void
 
     var body: some View {
-        Group {
-            if let hit = offer.hit {
-                HitList(hit: hit, picked: picked, onPick: onPick, onHit: onHit, onCancel: onCancel)
-            } else if offer.layDown {
+        // Past the lines the table makes room for (many targets at the largest text), it scrolls,
+        // and says so with its scroll bar.
+        ViewThatFits(in: .vertical) {
+            content
+            ScrollView(.vertical) { content }
+                .scrollIndicatorsFlash(onAppear: true)
+        }
+    }
+
+    @ViewBuilder var content: some View {
+        if let hit = offer.hit {
+            HitList(hit: hit, picked: picked, onPick: onPick, onHit: onHit, onCancel: onCancel)
+        } else if let skip = offer.skip {
+            FlowRows {
+                ForEach(skip.seats, id: \.self) { seat in
+                    ActionPill(
+                        title: String(
+                            localized: "Skip \(SeatInfo.name(skip.model.room, seat))",
+                            comment: "Action row on Cards: discard the picked Cucumber at a player, who misses a turn"),
+                        style: .chip) { onSkip(seat) }
+                        .accessibilityIdentifier("skip.target.\(seat)")
+                }
+            }
+            .accessibilityElement(children: .contain)
+            .accessibilityIdentifier("skip.list")
+        } else if offer.layDown {
+            FlowRows {
                 ActionPill(
                     title: String(localized: "Lay down", comment: "Table on Cards: lay the ready trays down"),
                     style: .go, action: onLayDown)
-                    .fixedSize()
                     .accessibilityIdentifier("table.laydown.row")
             }
         }
@@ -39,38 +64,27 @@ struct HitList: View {
     let onCancel: () -> Void
 
     var body: some View {
-        // One line, centred: tighter chips when they don't fit, and sideways scrolling only when
-        // even those don't (many targets, big text).
-        ViewThatFits(in: .horizontal) {
-            row(compact: false)
-            row(compact: true)
-            ScrollView(.horizontal, showsIndicators: false) { row(compact: true).padding(.horizontal, 4) }
+        FlowRows {
+            if let picked, let choice = hit.choices.first(where: { $0.target == picked }) {
+                ActionPill(
+                    title: String(localized: "Cancel", comment: "Hit list on Cards: put the picked group back"),
+                    style: .quiet, action: onCancel)
+                    .accessibilityIdentifier("hit.cancel")
+                chip(choice, on: true)
+                ActionPill(
+                    title: String(localized: "Hit", comment: "Hit list on Cards: play the picked card on the picked group"),
+                    style: .go, action: onHit)
+                    .accessibilityIdentifier("hit.confirm")
+            } else {
+                ForEach(hit.choices, id: \.target) { choice in chip(choice, on: false) }
+            }
         }
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("hit.list")
     }
 
-    private func row(compact: Bool) -> some View {
-        HStack(spacing: compact ? 4 : 6) {
-            if let picked, let choice = hit.choices.first(where: { $0.target == picked }) {
-                ActionPill(
-                    title: String(localized: "Cancel", comment: "Hit list on Cards: put the picked group back"),
-                    style: .quiet, compact: compact, action: onCancel)
-                    .accessibilityIdentifier("hit.cancel")
-                chip(choice, on: true, compact: compact)
-                ActionPill(
-                    title: String(localized: "Hit", comment: "Hit list on Cards: play the picked card on the picked group"),
-                    style: .go, compact: compact, action: onHit)
-                    .accessibilityIdentifier("hit.confirm")
-            } else {
-                ForEach(hit.choices, id: \.target) { choice in chip(choice, on: false, compact: compact) }
-            }
-        }
-        .fixedSize()
-    }
-
-    private func chip(_ choice: HitChoice, on: Bool, compact: Bool) -> some View {
-        ActionPill(title: Self.label(choice, in: hit.model), style: on ? .picked : .chip, compact: compact) {
+    private func chip(_ choice: HitChoice, on: Bool) -> some View {
+        ActionPill(title: Self.label(choice, in: hit.model), style: on ? .picked : .chip) {
             if !on { onPick(choice.target) }
         }
             .accessibilityAddTraits(on ? .isSelected : [])
@@ -136,12 +150,10 @@ struct ActionPill: View {
 
     let title: String
     let style: Style
-    /// Smaller lettering and less padding, the same height (a row that is short of width).
-    var compact = false
     let action: () -> Void
 
     @Environment(\.dynamicTypeSize) private var type
-    private var letters: CGFloat { (compact ? 15 : 17) * ChromeType.scale(type, upTo: 1.5) }
+    private var letters: CGFloat { 17 * ChromeType.scale(type, upTo: 1.5) }
     private var face: CGFloat { 40 * ChromeType.scale(type, upTo: 1.5) }
     private static let lip: CGFloat = 4
 
@@ -157,7 +169,7 @@ struct ActionPill: View {
                 .lineLimit(1)
                 .truncationMode(.middle)
                 .frame(maxWidth: 220)
-                .padding(.horizontal, face * (compact ? 0.22 : 0.3))
+                .padding(.horizontal, face * 0.3)
                 .frame(minWidth: 64, minHeight: face)
                 .background(Capsule().fill(fill))
                 .overlay(Capsule().strokeBorder(Palette.ink, lineWidth: 3))
@@ -176,5 +188,60 @@ struct ActionPill: View {
         case .go: Palette.lime
         case .quiet: Palette.night
         }
+    }
+}
+
+/// Pills in centred lines, as many to a line as fit the width, wrapping onto the next line rather
+/// than running off the edge (a pill wider than a line is cut to it, its words truncated).
+struct FlowRows: Layout {
+    var spacing: CGFloat = 6
+    var lineSpacing: CGFloat = 6
+
+    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
+        let width = proposal.width ?? .infinity
+        let lines = lines(subviews, width: width)
+        let height = lines.map(\.height).reduce(0, +) + lineSpacing * CGFloat(max(lines.count - 1, 0))
+        let widest = lines.map(\.width).max() ?? 0
+        return CGSize(width: proposal.width ?? widest, height: height)
+    }
+
+    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
+        let lines = lines(subviews, width: bounds.width)
+        let total = lines.map(\.height).reduce(0, +) + lineSpacing * CGFloat(max(lines.count - 1, 0))
+        var y = bounds.midY - total / 2
+        for line in lines {
+            var x = bounds.midX - line.width / 2
+            for (index, size) in line.items {
+                subviews[index].place(
+                    at: CGPoint(x: x, y: y + (line.height - size.height) / 2), proposal: ProposedViewSize(size))
+                x += size.width + spacing
+            }
+            y += line.height + lineSpacing
+        }
+    }
+
+    private struct Line {
+        var items: [(Int, CGSize)] = []
+        var width: CGFloat = 0
+        var height: CGFloat = 0
+    }
+
+    private func lines(_ subviews: Subviews, width: CGFloat) -> [Line] {
+        var lines: [Line] = []
+        var line = Line()
+        for (index, subview) in subviews.enumerated() {
+            let ideal = subview.sizeThatFits(.unspecified)
+            let size = ideal.width > width ? subview.sizeThatFits(ProposedViewSize(width: width, height: nil)) : ideal
+            let needed = line.items.isEmpty ? size.width : line.width + spacing + size.width
+            if !line.items.isEmpty, needed > width {
+                lines.append(line)
+                line = Line()
+            }
+            line.width = line.items.isEmpty ? size.width : line.width + spacing + size.width
+            line.height = max(line.height, size.height)
+            line.items.append((index, size))
+        }
+        if !line.items.isEmpty { lines.append(line) }
+        return lines
     }
 }

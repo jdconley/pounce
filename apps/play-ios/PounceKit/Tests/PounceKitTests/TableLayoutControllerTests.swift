@@ -15,9 +15,16 @@ struct TableLayoutControllerTests {
     /// The chrome at the largest accessibility text size.
     static let tall = ControllerChrome(switchBand: 64, status: 56, actions: 96)
 
-    private func layout(_ i: Int, _ chrome: ControllerChrome = .standard) -> TableLayout {
+    /// Every hand a controller lays out: eleven cards with trays (before laying down), eleven
+    /// without, a short hand without trays (after laying down) and with them.
+    static let hands: [ControllerHand] = [
+        .full, ControllerHand(short: false, trays: false), ControllerHand(short: true, trays: false),
+        ControllerHand(short: true, trays: true),
+    ]
+
+    private func layout(_ i: Int, _ chrome: ControllerChrome = .standard, _ hand: ControllerHand = .full) -> TableLayout {
         let s = Self.screens[i]
-        return TableLayout(size: s.size, safeTop: s.top, safeBottom: s.bottom, opponents: 3, controller: chrome)
+        return TableLayout(size: s.size, safeTop: s.top, safeBottom: s.bottom, opponents: 3, controller: chrome, hand: hand)
     }
 
     @Test(arguments: screens.indices)
@@ -65,9 +72,11 @@ struct TableLayoutControllerTests {
     @Test(arguments: screens.indices)
     func nothingOverlaps(_ i: Int) {
         for chrome in [ControllerChrome.standard, Self.tall] {
-            let l = layout(i, chrome)
-            #expect(l.fits, "\(l.size): \(l.chromeOverflow) pt over")
-            expectNothingOverlaps(l)
+            for hand in Self.hands {
+                let l = layout(i, chrome, hand)
+                #expect(l.fits, "\(l.size) \(hand): \(l.chromeOverflow) pt over")
+                expectNothingOverlaps(l, cards: hand.short ? ControllerHand.shortMax : 11)
+            }
         }
     }
 
@@ -88,23 +97,47 @@ struct TableLayoutControllerTests {
         #expect(l.actionRow.minY - l.traysFrame.maxY <= TableLayout.sortButtonHit + 16)
     }
 
-    /// No dead band: the piles grow into the room, then sit in its middle, so the gap from the
-    /// action row up to the piles (the discard is a drag from the hand) is the same as the gap
-    /// above them, and at most a sixth of the safe height (the tallest phones, whose cards the
-    /// width caps, come nearest).
+    /// No dead band: the hand, trays and action row sit together at the bottom, and the piles
+    /// grow into the room above them, then sit in its middle, so the gap from the action row up to
+    /// the piles is the same as the gap above them. In the two usual hands (eleven cards before
+    /// laying down, a short hand after) that gap is at most a sixth of the safe height; in any
+    /// other, the piles are as big as they get.
     @Test(arguments: screens.indices)
     func thePilesFillTheRoomBetweenTheStatusLineAndTheActionRow(_ i: Int) {
         for chrome in [ControllerChrome.standard, Self.tall] {
-            let l = layout(i, chrome)
-            let below = (l.deck.y - l.pileSize.height / 2) - l.actionRow.maxY
-            let above = l.statusLine.minY - (l.deck.y + l.pileSize.height / 2)
-            let safeHeight = l.size.height - l.safeTop - l.safeBottom
-            #expect(below >= 8 && above >= 8, "\(l.size): \(above) above, \(below) below")
-            #expect(abs(above - below) < 0.5, "\(l.size): \(above) above, \(below) below")
-            #expect(below <= safeHeight / 6, "\(l.size): \(below) pt between the action row and the piles")
-            // The piles are never smaller than the hand while there is room.
-            #expect(l.pileSize.width >= l.cardSize.width)
-            #expect(l.pileSize.height == (l.pileSize.width * 90 / 64).rounded())
+            for hand in Self.hands {
+                let l = layout(i, chrome, hand)
+                let below = (l.deck.y - l.pileSize.height / 2) - l.actionRow.maxY
+                let above = l.statusLine.minY - (l.deck.y + l.pileSize.height / 2)
+                let safeHeight = l.size.height - l.safeTop - l.safeBottom
+                #expect(below >= 8 && above >= 8, "\(l.size) \(hand): \(above) above, \(below) below")
+                #expect(abs(above - below) < 0.5, "\(l.size) \(hand): \(above) above, \(below) below")
+                let usual = hand == .full || hand == ControllerHand(short: true, trays: false)
+                let atMost = l.pileSize.width >= min((l.cardSize.width * 1.5).rounded(.down), l.size.width / 2 - 24)
+                #expect(below <= safeHeight / 6 || (!usual && atMost),
+                        "\(l.size) \(hand): \(below) pt between the action row and the piles")
+                // Piles give way to the hand only down to three quarters of a hand card.
+                #expect(l.pileSize.width >= (l.cardSize.width * 0.75).rounded(.down))
+                #expect(l.pileSize.height == (l.pileSize.width * 90 / 64).rounded())
+            }
+        }
+    }
+
+    /// The hand, the trays and the action row are one block at the bottom: the trays on the hand
+    /// (none: no strip at all), the action row on them, and the sort button at the action row's
+    /// right end, on its line.
+    @Test(arguments: screens.indices)
+    func theHandTheTraysAndTheActionRowAreOneBlock(_ i: Int) {
+        for hand in Self.hands {
+            let l = layout(i, .standard, hand)
+            let handTop = l.hand(count: 11, lifted: nil).map { rotatedBounds($0, l.cardSize).maxY }.max() ?? 0
+            #expect(l.traysFrame.minY - handTop <= 12, "\(l.size) \(hand): trays float \(l.traysFrame.minY - handTop) over the hand")
+            if !hand.trays { #expect(l.traysFrame.height == 0) }
+            #expect(l.actionRow.minY - l.traysFrame.maxY <= 8)
+            let sort = l.sortButtonFrame
+            #expect(sort.minX >= l.actionRow.maxX && sort.maxX <= l.traysFrame.maxX + 0.01)
+            #expect(sort.minY >= l.actionRow.minY - 0.01 && sort.maxY <= l.actionRow.maxY + 0.01)
+            #expect(l.seatTagFrame == .zero, "the status line names the player on a controller")
         }
     }
 
@@ -119,7 +152,9 @@ struct TableLayoutControllerTests {
             #expect(l.switchBand.height >= max(chrome.switchBand, 44))
             #expect(l.statusLine.height >= chrome.status)
             #expect(l.actionRow.height >= chrome.actions)
-            #expect(l.actionRow.width >= l.size.width - 48)
+            // The row is the trays' width less the sort button at its end.
+            #expect(abs(l.actionRow.width + TableLayout.sortButtonHit + 4 - l.traysFrame.width) < 0.01)
+            #expect(l.actionRow.width >= min(l.size.width - 48, 560) - TableLayout.sortButtonHit - 4)
             for tray in l.trayFrames(count: 3) { #expect(tray.width >= 44 && tray.height >= 44) }
         }
     }
@@ -129,10 +164,29 @@ struct TableLayoutControllerTests {
         let s = Self.screens[i]
         let table = TableLayout(size: s.size, safeTop: s.top, safeBottom: s.bottom, opponents: 3)
         let l = layout(i)
-        #expect(l.cardSize.width > table.cardSize.width, "\(s.size): \(l.cardSize.width) vs \(table.cardSize.width)")
-        // Eleven cards still fan: each shows a strip of its face.
+        // A good fifth bigger at least (the width caps eleven cards).
+        #expect(l.cardSize.width >= table.cardSize.width * 1.15, "\(s.size): \(l.cardSize.width) vs \(table.cardSize.width)")
+        // Eleven cards still fan: each shows its corner.
         let hand = l.hand(count: 11, lifted: nil)
-        #expect(hand[1].position.x - hand[0].position.x >= 24)
+        #expect(hand[1].position.x - hand[0].position.x >= max(24, l.cardSize.width * TableLayout.stripRatio - 0.01))
+    }
+
+    /// A short hand (after laying down) is drawn bigger still, and eight of them still fan.
+    @Test(arguments: screens.indices)
+    func aShortHandIsBiggerStill(_ i: Int) {
+        let s = Self.screens[i]
+        let table = TableLayout(size: s.size, safeTop: s.top, safeBottom: s.bottom, opponents: 3)
+        let full = layout(i)
+        for hand in [ControllerHand(short: true, trays: false), ControllerHand(short: true, trays: true)] {
+            let l = layout(i, .standard, hand)
+            // A fifth bigger on a phone; a squat iPad window has less height to give.
+            #expect(l.cardSize.width >= full.cardSize.width * (l.roomy ? 1.1 : 1.15), "\(s.size): \(l.cardSize.width) vs \(full.cardSize.width)")
+            #expect(l.cardSize.width >= table.cardSize.width * 1.3)
+            let fan = l.hand(count: ControllerHand.shortMax, lifted: nil)
+            #expect(fan[1].position.x - fan[0].position.x >= l.cardSize.width * TableLayout.stripRatio - 0.01)
+        }
+        // Trays or not, a hand of one size: the cards only change between short and full.
+        #expect(layout(i, .standard, ControllerHand(short: false, trays: false)).cardSize == full.cardSize)
     }
 
     @Test func anSEAtTheLargestTextSizeStillFits() {
@@ -146,11 +200,20 @@ struct TableLayoutControllerTests {
         #expect(l.cardSize.width <= layout(0).cardSize.width)
     }
 
-    @Test func tallChromeShrinksTheHandToItsFloorAndThenThePiles() {
-        // A short window: the chrome takes most of it.
-        let huge = ControllerChrome(switchBand: 80, status: 80, actions: 140)
-        let roomy = TableLayout(size: CGSize(width: 375, height: 667), safeTop: 20, safeBottom: 0, opponents: 3, controller: .standard)
-        let squeezed = TableLayout(size: CGSize(width: 375, height: 667), safeTop: 20, safeBottom: 0, opponents: 3, controller: huge)
+    /// Tall chrome takes room from the piles first (down to three quarters of a hand card), then
+    /// from the hand, down to its floor, then from the piles again.
+    @Test func tallChromeShrinksThePilesThenTheHandThenThePiles() {
+        let size = CGSize(width: 375, height: 667)
+        func l(_ chrome: ControllerChrome) -> TableLayout {
+            TableLayout(size: size, safeTop: 20, safeBottom: 0, opponents: 3, controller: chrome)
+        }
+        let roomy = l(.standard)
+        let tall = l(ControllerChrome(switchBand: 80, status: 80, actions: 140))
+        #expect(tall.cardSize.width == roomy.cardSize.width)
+        #expect(tall.pileSize.width < roomy.pileSize.width && tall.pileSize.width >= (tall.cardSize.width * 0.75).rounded(.down))
+        #expect(tall.fits)
+        expectNothingOverlaps(tall)
+        let squeezed = l(ControllerChrome(switchBand: 80, status: 80, actions: 210))
         #expect(squeezed.cardSize.width < roomy.cardSize.width)
         #expect(squeezed.cardSize.width == TableLayout.controllerCardMin)
         #expect(squeezed.pileSize.width < squeezed.cardSize.width && squeezed.pileSize.width >= 44)
@@ -162,7 +225,7 @@ struct TableLayoutControllerTests {
     /// says by how much, and with that much taken off the chrome everything fits again.
     @Test func chromeTooTallSaysByHowMuch() {
         let size = CGSize(width: 375, height: 667)
-        let over = ControllerChrome(switchBand: 80, status: 112, actions: 140)
+        let over = ControllerChrome(switchBand: 80, status: 112, actions: 210)
         let l = TableLayout(size: size, safeTop: 20, safeBottom: 0, opponents: 3, controller: over)
         #expect(!l.fits)
         #expect(l.chromeOverflow > 0)
@@ -179,7 +242,7 @@ struct TableLayoutControllerTests {
 
 /// Nothing a controller shows overlaps, but the paw in its band and the fanned cards with each
 /// other; every frame and card inside the safe area.
-private func expectNothingOverlaps(_ l: TableLayout) {
+private func expectNothingOverlaps(_ l: TableLayout, cards: Int = 11) {
     let all = frames(l)
     let safe = safeArea(l).insetBy(dx: -0.01, dy: -0.01)
     for (a, (nameA, frameA)) in all.enumerated() {
@@ -190,7 +253,7 @@ private func expectNothingOverlaps(_ l: TableLayout) {
             #expect(!overlaps(frameA, frameB), "\(l.size): \(nameA) \(frameA) overlaps \(nameB) \(frameB)")
         }
     }
-    for n in 1...11 {
+    for n in 1...cards {
         for c in l.hand(count: n, lifted: nil) {
             let r = rotatedBounds(c, l.cardSize)
             #expect(safe.contains(r))
@@ -220,7 +283,7 @@ private func frames(_ l: TableLayout) -> [(String, CGRect)] {
         ("deck", cardRect(l.deck, l.pileSize)), ("discard", cardRect(l.discard, l.pileSize)),
         ("actions", l.actionRow), ("sort", l.sortButtonFrame), ("seat tag", l.seatTagFrame),
         ("trays", l.traysFrame),
-    ]
+    ].filter { $0.1.width > 0 && $0.1.height > 0 }
 }
 
 /// Shares some area (touching edges don't count).

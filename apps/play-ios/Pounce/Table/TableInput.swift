@@ -266,9 +266,12 @@ extension TableScene {
             from = layer(.hand).convert(n.position, from: hand)
             node = CardNode(card: card, size: layout.cardSize)
             node.isPrivate = true  // my hand's face: `hideHand()` turns it down mid-drag
-            // The see-through copy a laid group's gap shows (usually drawn ahead already).
-            _ = CardFaceFactory.shared.texture(for: card, compact: true)
-            CardFaceFactory.shared.prewarmPreview()
+            // The see-through copy a laid group's gap shows (usually drawn ahead already). Just my
+            // cards: no laid groups here, so nothing to draw in the drag's first frame.
+            if !controllerShown {
+                _ = CardFaceFactory.shared.texture(for: card, compact: true)
+                CardFaceFactory.shared.prewarmPreview()
+            }
         case .tray(let card, _):
             guard !store.actionInFlight, let f = trays.frame(of: card) else { return false }
             from = CGPoint(x: f.midX, y: f.midY)
@@ -581,6 +584,16 @@ extension TableScene {
         return true
     }
 
+    /// The skip list's "Skip Leo" (Cards): the picked Cucumber goes to the discard aimed at
+    /// `seat`, with its Undo, as a cat tap does on the table.
+    @discardableResult func skipFromList(_ card: CardID, _ seat: Seat) -> Bool {
+        guard tryDiscard(card, target: seat, undoable: true) else {
+            nope(card: card, why: why { model, mine in model.whyNoAim(card: card, seat: mine, at: seat) })
+            return false
+        }
+        return true
+    }
+
     /// A cat tap: that player's card for the table as drawn.
     func showPlayer(_ seat: Seat) {
         guard let model, model.game?.phase.indices.contains(seat) == true else { return }
@@ -629,7 +642,9 @@ extension TableScene {
         if Card(id: card) == .cucumber, !model.skipTargets(for: seat).isEmpty {
             if liftedCard == card { refresh() } else { liftedCard = card }
             Haptics.shared.tick()
-            onNote(.pickACat)  // not a refusal: the cats glow, and the words say what for
+            // Not a refusal: the cats glow, and the words say what for. Just my cards: the action
+            // row lists who to skip instead.
+            if !controllerShown { onNote(.pickACat) }
             return
         }
         if !tryDiscard(card, target: nil, undoable: true) { nope(card: card) }

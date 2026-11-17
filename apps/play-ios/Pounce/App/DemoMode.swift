@@ -56,8 +56,9 @@ enum DemoMode: String {
     /// this phone (pass and play), the curtain up for seat 0.
     case controller
     case controllerOff = "controller-off", controllerCurtain = "controller-curtain"
-    /// `controller-lay`: the `lay` table on Cards (Lay down in the action row).
-    case controllerLay = "controller-lay"
+    /// `controller-lay`: the `lay` table on Cards (Lay down in the action row). `controller-skip`:
+    /// my play step on Cards with a Cucumber in hand (Leo and the House Cat can be skipped).
+    case controllerLay = "controller-lay", controllerSkip = "controller-skip"
     /// The tile game's table (`TilesDemo` has what each one shows). The only way into the game
     /// until Home offers it.
     case tiles
@@ -144,6 +145,11 @@ enum DemoMode: String {
             return room
         case .controllerLay:
             var room = DemoFixtures.layTable()
+            room.screen = true
+            return room
+        case .controllerSkip:
+            var room = DemoFixtures.table(seats: 4, mySeat: 0, phase: 2)
+            room.game?.step = .play
             room.screen = true
             return room
         case .controllerCurtain:
