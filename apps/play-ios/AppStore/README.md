@@ -72,3 +72,17 @@ tools/cut.sh store-hero                  # cut/store-hero.png
 The cutout kept two small patches of the gray background enclosed by the cats (between the
 tabby's tail and the tuxedo's ear). They were flood-filled to transparent with ImageMagick before
 the file went to `Art/store/`.
+
+## Apple TV icon and Top Shelf
+
+The Apple TV app's brand assets (`PounceTV/Resources/TVAssets.xcassets`, "App Icon & Top Shelf
+Image") are composed by `tv-brand.swift` from the app's own art: the living room from `home-bg`
+under the sunburst, the cats, and the name in the app's type. The icon is three layers for the
+parallax: the room (back, blurred), three cats cheering (middle), and the name with stars (front).
+The Top Shelf images keep their art in the middle 1920 points, which both the plain and the wide
+image show.
+
+```sh
+swift AppStore/tv-brand.swift                      # rewrites the brand assets
+swift AppStore/tv-brand.swift --preview /tmp/tv    # also writes each icon flattened, to look at
+```

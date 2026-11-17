@@ -21,7 +21,7 @@ struct Rule {
         case outsideIOLayer
         /// Banned everywhere, the IO layer too: blocking waits and locks.
         case everywhere
-        /// Banned in the app's UI code (`Pounce/`): heavy compute that must be awaited off-main.
+        /// Banned in the apps' UI code (`Pounce/`, `PounceTV/`): heavy compute that must be awaited off-main.
         case appUI
     }
 
@@ -89,9 +89,10 @@ let rules: [Rule] = [
 // MARK: what is checked
 
 /// Shipped code: the app, its extensions and PounceKit. Not the e2e CLI, the tests or tools.
-let checkedRoots = ["Pounce", "PounceWidgets", "PounceNotify", "PounceKit/Sources/PounceKit"]
+let checkedRoots = ["Pounce", "PounceTV", "PounceWidgets", "PounceNotify", "PounceKit/Sources/PounceKit"]
 let ioLayer = "PounceKit/Sources/PounceKit/IO/"
-let appUI = "Pounce/"
+/// The app UIs: the iPhone and iPad app and the Apple TV app.
+let appUIRoots = ["Pounce/", "PounceTV/"]
 
 // MARK: lexer: blank out comments and strings, keep line numbers and suppressions
 
@@ -337,7 +338,7 @@ func check(path: String, relative: String) -> (violations: [Violation], suppress
     let code = String(chars)
     let lines = code.components(separatedBy: "\n")
     let inIOLayer = relative.hasPrefix(ioLayer)
-    let inAppUI = relative.hasPrefix(appUI)
+    let inAppUI = appUIRoots.contains { relative.hasPrefix($0) }
     var out: [Violation] = []
     var suppressed = 0
     for n in badAllow {
