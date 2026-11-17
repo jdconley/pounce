@@ -47,4 +47,19 @@ import Testing
         #expect(again.view(code: "T2") == .cards)
         #expect(again.view(code: "T1") == .table)
     }
+
+    @Test func playAgainKeepsTable() async {
+        let dir = directory()
+        defer { try? FileManager.default.removeItem(at: dir) }
+        let views = await TableViews.open(directory: dir)
+        // Cards (no choice) carries nothing.
+        views.carry(from: "OLD01", to: "NEW01")
+        #expect(views.view(code: "NEW01") == .cards)
+        // Table carries to the new table, and is written.
+        views.set(.table, code: "OLD02")
+        views.carry(from: "OLD02", to: "NEW02")
+        #expect(views.view(code: "NEW02") == .table)
+        await views.flush()
+        #expect(await TableViews.open(directory: dir).view(code: "NEW02") == .table)
+    }
 }

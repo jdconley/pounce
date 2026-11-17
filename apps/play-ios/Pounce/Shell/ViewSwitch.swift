@@ -53,6 +53,13 @@ final class TableViewChoices {
         changes += 1
     }
 
+    /// Play again: the new table opens as the old one was shown.
+    func carry(from: String, to: String) {
+        guard store.view(code: from) == .table, store.view(code: to) != .table else { return }
+        store.carry(from: from, to: to)
+        changes += 1
+    }
+
     /// Waits for the writes so far (the app going to the background).
     func flush() async { await store.flush() }
 

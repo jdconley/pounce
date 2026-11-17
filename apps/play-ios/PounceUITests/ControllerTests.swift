@@ -207,7 +207,8 @@ class ControllerTests: XCTestCase {
     }
 
     /// My move at a TV (`-demo controller-tiles`): the table is up under the switch. A piece onto a
-    /// set sends the draft to the TV; Undo, Table and the turn button take it back; the play lands.
+    /// set sends the draft to the TV, and it stays there on Table; Undo and the turn button take it
+    /// back; the play lands.
     @MainActor
     func testATilesPlayGoesThroughTheController() throws {
         let app = launchTiles("controller-tiles")
@@ -228,11 +229,18 @@ class ControllerTests: XCTestCase {
         tilesFind(app, "tiles.set.", "Row, fish, 3 to 6")?.tap()
         XCTAssertTrue(until(3) { self.tilesProbe(app)["aim"] == "9" })
 
-        // Table takes it off the TV, Cards puts it back.
+        // Table keeps it on the TV (each move shows live there), and so does Cards again.
         el(app, "table.view.table").tap()
-        XCTAssertTrue(until(3) { self.tilesProbe(app)["aim"] == "-" }, "Table left the draft on the TV")
+        XCTAssertTrue(until(3) { self.el(app, "table.view.table").isSelected }, "the switch never went to Table")
+        XCTAssertEqual(tilesProbe(app)["aim"], "9", "Table took the draft off the TV")
+        el(app, "tiles.undo").tap()
+        XCTAssertTrue(until(3) { self.tilesProbe(app)["aim"] == "-" }, "Undo on Table left the draft on the TV")
+        tilesFind(app, "tiles.rack.", "7, fish")?.tap()
+        tilesFind(app, "tiles.set.", "Row, fish, 3 to 6")?.tap()
+        XCTAssertTrue(until(3) { self.tilesProbe(app)["aim"] == "9" }, "a move on Table didn't go to the TV: \(tilesProbe(app))")
         el(app, "table.view.cards").tap()
-        XCTAssertTrue(until(3) { self.tilesProbe(app)["aim"] == "9" }, "Cards didn't send the draft again")
+        XCTAssertTrue(until(3) { self.el(app, "table.view.cards").isSelected }, "the switch never came back to Cards")
+        XCTAssertEqual(tilesProbe(app)["aim"], "9", "Cards took the draft off the TV")
 
         el(app, "tiles.turn").tap()
         XCTAssertTrue(until(5) { self.tilesProbe(app)["sent"]?.hasPrefix("play") == true }, "the play never went: \(tilesProbe(app))")

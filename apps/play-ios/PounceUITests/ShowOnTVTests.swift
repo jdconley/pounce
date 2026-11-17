@@ -117,6 +117,23 @@ final class ShowOnTVTests: XCTestCase {
         XCTAssertFalse(tv.output().contains("FAIL"), tv.output())
     }
 
+    /// Home's "Pick a table for the TV." goes with a tap, and takes the link with it: the table
+    /// made next opens without the TV sheet.
+    func testTappingTheHomeTVCueDropsTheLink() throws {
+        let app = Live.app()
+        app.launchArguments += ["-open-link", "pounce-dev://tv/\(String(repeating: "A", count: 22))"]
+        app.launch()
+        onboard(app)
+        let cue = el(app, "home.tvCue")
+        XCTAssertTrue(cue.waitForExistence(timeout: Live.t(10)), "no Pick a table for the TV on Home")
+        cue.tap()
+        XCTAssertTrue(cue.waitForNonExistence(timeout: Live.t(3)), "the cue stayed after a tap")
+
+        newGame(app)
+        _ = lobbyCode(app)
+        XCTAssertFalse(el(app, "sheet-tv").waitForExistence(timeout: Live.t(2)), "the dropped link still opened the TV sheet")
+    }
+
     /// A TV's link opened while a lobby is up: that table goes on the TV.
     func testATVLinkOpenedInALobbyPutsThatTableOnTheTV() throws {
         let tv = try HostProcess("e2e", ["screen", "link", "--timeout", "300", "--base", Live.baseURL])

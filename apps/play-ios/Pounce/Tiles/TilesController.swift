@@ -9,8 +9,8 @@ import SpriteKit
 /// - On this phone's turn, and on Table, the whole table under the switch (`.fullTable`): moving
 ///   what is already down needs it, so there is one way to play.
 /// - Between the two the stash slides and grows or shrinks to its new place (`redraw`'s morph).
-/// - On Cards, the draft goes to the TV as the player builds it (`store.aim`, throttled there):
-///   the table only, never what is still in the stash.
+/// - On Cards and on Table, the draft goes to the TV as the player builds it (`store.aim`,
+///   throttled there): the table only, never what is still in the stash.
 extension TilesScene {
     /// How the layout shows the table at a TV (`tv`). A drag in progress keeps the layout it
     /// started on; the drop brings the new one.
@@ -79,12 +79,12 @@ extension TilesScene {
         return layout.arrangement == .controller ? layout.statusLine.minY : layout.strip.minY
     }
 
-    /// Sends the TV this phone's draft while it builds its turn on Cards, and takes it back when
-    /// there is none to show: the draft is back as it began (Reset, Undo), the turn went or was
-    /// sent, the phone moved to Table, the TV left, or the table is going.
+    /// Sends the TV this phone's draft while it builds its turn (on Cards or Table), and takes it
+    /// back when there is none to show: the draft is back as it began (Reset, Undo), the turn went
+    /// or was sent, the TV left, or the table is going.
     func publishAim() {
         var next: (seat: Seat, table: [[TileID]])?
-        if case .cards = tv, let seat = shownSeat, let draft, !sending, !draft.isUntouched, model?.canCompose(seat) == true {
+        if tv != nil, let seat = shownSeat, let draft, !sending, !draft.isUntouched, model?.canCompose(seat) == true {
             next = (seat, draft.submission)
         }
         if let next {

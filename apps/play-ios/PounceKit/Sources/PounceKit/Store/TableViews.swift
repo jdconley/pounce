@@ -62,4 +62,9 @@ public final class TableViews {
         }
         file.save(File(views: views, recency: recency))
     }
+
+    /// Play again's new table (`to`) opens as the old one (`from`) was shown: Table stays Table.
+    public func carry(from: String, to: String) {
+        if view(code: from) == .table { set(.table, code: to) }
+    }
 }

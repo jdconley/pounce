@@ -452,7 +452,8 @@ struct HomeView: View {
     private static let tablesTitle = String(localized: "Your tables", comment: "Home: the title over your tables")
 
 
-    /// A TV's link waits for a table: one line over Home, until a table is picked or made.
+    /// A TV's link waits for a table: one line over Home, until a table is picked or made. A tap
+    /// drops the link (and the cue).
     private var tvCue: some View {
         HStack(spacing: 10) {
             Image(ArtName.iconTV)
@@ -476,8 +477,12 @@ struct HomeView: View {
                 .overlay(Capsule().strokeBorder(Palette.ink, lineWidth: 3))
                 .shadow(color: Palette.ink.opacity(0.5), radius: 0, x: 0, y: 3))
         .compositingGroup()
+        .contentShape(Capsule())
+        .onTapGesture { model.dropPendingTV() }
         .padding(.horizontal, 16)
         .accessibilityElement(children: .combine)
+        .accessibilityAddTraits(.isButton)
+        .accessibilityHint(Text("Cancels the TV link", comment: "VoiceOver hint: tapping Home's TV cue drops the waiting TV link"))
         .accessibilityIdentifier("home.tvCue")
     }
 

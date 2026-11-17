@@ -985,8 +985,20 @@ final class TilesScene: SKScene {
             button(node, frame, texture)
             node.size = CGSize(width: sortDrawn, height: sortDrawn + 3)
         }
-        toggle(sortNumberButton, toggles.sortNumber, factory.button(.sortNumber, side: sortDrawn, on: sort == .number))
-        toggle(sortToyButton, toggles.sortToy, factory.button(suit: .fish, side: sortDrawn, on: sort == .toy))
+        // That size is drawn off the main thread the first time (`buttonIfReady`); until it is in,
+        // the table's size stands in, stretched, for a frame or two.
+        func toggleTexture(_ node: SKSpriteNode, _ symbol: TilePieceFactory.Symbol?, suit: TileSuit?, on: Bool) -> SKTexture {
+            let table = factory.button(symbol, suit: suit, side: drawn, on: on)
+            guard sortDrawn != drawn else { return table }
+            let side = sortDrawn
+            return factory.buttonIfReady(symbol, suit: suit, side: side, on: on) { [weak node] texture in
+                // Still standing in at that size (no other state or size since).
+                guard let node, node.size.width == side, node.texture == table else { return }
+                node.texture = texture
+            } ?? table
+        }
+        toggle(sortNumberButton, toggles.sortNumber, toggleTexture(sortNumberButton, .sortNumber, suit: nil, on: sort == .number))
+        toggle(sortToyButton, toggles.sortToy, toggleTexture(sortToyButton, nil, suit: .fish, on: sort == .toy))
         if easy {
             button(tidyButton, layout.tidy, factory.button(.hint, side: drawn, on: hint != nil, dim: !composing))
         } else {

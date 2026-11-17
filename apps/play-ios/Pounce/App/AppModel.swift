@@ -930,8 +930,10 @@ final class AppModel {
         route = .room(code: code, intent: intent)
     }
 
-    /// Play again's table (§10.4): open it as one this phone sits at.
-    func openRematch(code: String) {
+    /// Play again's table (§10.4): open it as one this phone sits at, shown as the old table
+    /// (`from`) was: Table at a TV stays Table.
+    func openRematch(code: String, from: String) {
+        tableViews.carry(from: from, to: code)
         #if DEBUG
         // A demo's Play again deals a demo table under the new code.
         if DemoMode.from() != nil {
@@ -1176,7 +1178,8 @@ final class AppModel {
     var tvSheet: TVSheetRequest?
     /// A TV's link opened away from a table: Home says "Pick a table for the TV." and the table
     /// picked from Home's list or made from its games goes on that TV. Any other way to a table (a
-    /// push, Play again, an invite link) drops it, and so does the link's 10 minutes running out.
+    /// push, Play again, an invite link) drops it, and so do a tap on the cue and the link's 10
+    /// minutes running out.
     private(set) var pendingTV: String?
     @ObservationIgnored private var pendingTVExpiry: Task<Void, Never>?
     private static let tvLinkLife: Duration = .seconds(10 * 60)
@@ -1211,6 +1214,9 @@ final class AppModel {
         }
         return pendingTV
     }
+
+    /// Home's cue was tapped: the waiting TV link goes.
+    func dropPendingTV() { _ = takePendingTV() }
 
     /// A table picked from Home's list: the waiting TV link, if any, goes with it.
     func openFromHome(code: String, intent: RoomIntent) {

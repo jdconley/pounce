@@ -98,6 +98,22 @@ import Testing
     }
 }
 
+/// A QR that didn't link is tried again only when the server didn't refuse it.
+@Suite struct TVScanRetryTests {
+    @Test func aFailureOrACancelTriesAgain() {
+        #expect(TVCode.retriesScan(after: nil), "Cancel on Move the TV to this table?")
+        #expect(TVCode.retriesScan(after: URLError(.notConnectedToInternet)))
+        #expect(TVCode.retriesScan(after: APIError.server(500)))
+        #expect(TVCode.retriesScan(after: APIError.transport("offline")))
+    }
+
+    @Test func theServersRefusalsStand() {
+        for refusal: ScreenLinkError in [.notFound, .tooManyAttempts(retryAfter: 30), .tooManyAttempts(retryAfter: nil), .notSeated, .seated] {
+            #expect(!TVCode.retriesScan(after: refusal), "\(refusal)")
+        }
+    }
+}
+
 /// A pasted TV link isn't counted as an invite pasted.
 @Suite struct InviteKindTests {
     @Test func onlyTablesAndPicksAreInvites() {

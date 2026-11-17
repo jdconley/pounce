@@ -60,7 +60,7 @@ final class FrameRateTests: XCTestCase {
     /// Cats held until 6 s into the window): stash drags along the stash alone, then the table
     /// opening around it, then the usual drags.
     func testTunaTilesTurnComingOnCardsPlaysAtTheTopFrameRate() {
-        play("controller-tiles-off", as: "tuna-tiles-turn", ready: "tiles.debug", extra: ["-tiles-hold-bots"], release: 6)
+        play("controller-tiles-off", as: "tuna-tiles-turn", ready: "tiles.debug", extra: ["-tiles-hold-bots"], release: 6, tilesTurn: true)
     }
 
     /// Tuna Tiles' busiest table (`-demo tiles-late`: 25 sets, 22 pieces in the stash): each drop
@@ -72,9 +72,11 @@ final class FrameRateTests: XCTestCase {
     // MARK: playing and the gate
 
     /// `release`: seconds into the window when a held demo goes on (`Live.releaseDemo`).
+    /// `tilesTurn`: the tile table at a TV starts on the stash alone and must have opened for this
+    /// phone's turn by the window's end (the probe's `tv`), so the window measured the change.
     private func play(
         _ demo: String, as name: String, ready: String, extra: [String] = [], release: TimeInterval? = nil,
-        file: StaticString = #filePath, line: UInt = #line
+        tilesTurn: Bool = false, file: StaticString = #filePath, line: UInt = #line
     ) {
         let app = Live.demo(demo, speed: 1)
         app.launchArguments += ["-autoplay"] + extra
@@ -85,6 +87,9 @@ final class FrameRateTests: XCTestCase {
         if notNow.waitForExistence(timeout: 2) {
             dismissPriming(app)
             _ = notNow.waitForNonExistence(timeout: 3)
+        }
+        if tilesTurn {
+            XCTAssertEqual(tilesTV(app), "stash", "the \(name) table didn't start on the stash alone", file: file, line: line)
         }
         let before = gameplayBaseline(app)
         // Only waiting: nothing reads the screen while the table plays (its first drag starts 3 s
@@ -104,6 +109,9 @@ final class FrameRateTests: XCTestCase {
         // What the slow frames held (the app's own work, or none), read once, after the window.
         for frame in (value(el(app, "watchdog.frames")) ?? "").split(separator: "\n") {
             print("FRAMES \(name) \(frame)")
+        }
+        if tilesTurn {
+            XCTAssertEqual(tilesTV(app), "table", "the turn never came in the window, so it wasn't measured: \(report)", file: file, line: line)
         }
         let note = XCTAttachment(string: report)
         note.name = "frames-\(name)"
@@ -125,5 +133,10 @@ final class FrameRateTests: XCTestCase {
             XCTAssertEqual(window.tableFrames.slow, 0, "the table drew a frame over 16.7 ms: \(report)", file: file, line: line)
             XCTAssertEqual(window.link.slow, 0, "the main thread missed a frame by over 16.7 ms: \(report)", file: file, line: line)
         }
+    }
+
+    /// The tile table's `tv` at a TV (`tiles.debug`): `stash` (the stash alone) or `table`.
+    private func tilesTV(_ app: XCUIApplication) -> String? {
+        (value(el(app, "tiles.debug")) ?? "").split(separator: " ").first { $0.hasPrefix("tv=") }.map { String($0.dropFirst(3)) }
     }
 }

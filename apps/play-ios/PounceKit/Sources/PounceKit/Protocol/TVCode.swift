@@ -22,6 +22,15 @@ public enum TVCode {
         let code = text.uppercased().filter { !$0.isWhitespace && $0 != "-" && $0 != "\u{2010}" && $0 != "\u{2013}" }
         return RoomCode.isValidMoveCode(code) ? code : nil
     }
+
+    /// A QR the scanner sent that didn't link may be sent again once it is back in view: after a
+    /// failure that isn't the server's answer (no connection, a server error) or "Move the TV to
+    /// this table?" answered Cancel (`error` nil). The server's own refusals (no such TV, too many
+    /// tries, no seat, the TV's seat) stand, so the same code isn't sent again.
+    public static func retriesScan(after error: (any Error)?) -> Bool {
+        guard let error else { return true }
+        return !(error is ScreenLinkError)
+    }
 }
 
 /// The camera permission as Show on TV sees it (AVFoundation's, without importing it here).

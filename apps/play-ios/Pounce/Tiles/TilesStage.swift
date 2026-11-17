@@ -259,7 +259,7 @@ struct TilesStage: View {
         }
         .onChange(of: session.store.rematch) { _, code in
             // The phone that asked goes to the new table; the others' pill now jumps there.
-            if let code, let go = playAgain.arrived(code: code) { model.openRematch(code: go) }
+            if let code, let go = playAgain.arrived(code: code) { model.openRematch(code: go, from: session.code) }
         }
         .onChange(of: session.lobbyNope) {
             // A refused Play again. `game_off`: the server no longer deals this game, so no new
@@ -331,7 +331,7 @@ struct TilesStage: View {
                 try? await Task.sleep(for: .seconds(PlayAgain.wait + 0.2))
                 againTick += 1
             }
-        case .jump(let code): model.openRematch(code: code)
+        case .jump(let code): model.openRematch(code: code, from: session.code)
         case .none: break
         }
     }

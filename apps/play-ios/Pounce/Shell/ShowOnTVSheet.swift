@@ -34,7 +34,8 @@ struct ShowOnTVSheet: View {
     @State private var message: String?
     /// The TV shows another table: "Move the TV to this table?" for this key.
     @State private var moving: ScreenKey?
-    /// Tokens already tried from the camera: a code still in view isn't sent again.
+    /// Tokens already tried from the camera: a code still in view isn't sent again, unless the
+    /// try failed on the way or the move was cancelled (`TVCode.retriesScan`).
     @State private var tried: Set<String> = []
     @State private var shake = 0
     @State private var began = false
@@ -67,6 +68,7 @@ struct ShowOnTVSheet: View {
             }
             .accessibilityIdentifier("tv.move")
             Button(String(localized: "Cancel", comment: "Show on TV: leave the TV where it is"), role: .cancel) {
+                if let key = moving { mayRetry(key, after: nil) }
                 moving = nil
             }
             .accessibilityIdentifier("tv.move.cancel")
@@ -295,8 +297,20 @@ struct ShowOnTVSheet: View {
                     moving = key
                 }
             } catch {
+                mayRetry(key, after: error)
                 refused(Self.words(for: error))
             }
+        }
+    }
+
+    /// A scanned QR that didn't link may be scanned again, unless the server refused it. After a
+    /// moment: the camera sees a code in view many times a second, so it isn't sent again at
+    /// once (the words stay up to read, and a Cancel isn't asked again right away).
+    private func mayRetry(_ key: ScreenKey, after error: (any Error)?) {
+        guard case .token(let token) = key, TVCode.retriesScan(after: error) else { return }
+        Task {
+            try? await Task.sleep(for: Pace.duration(.seconds(2)))
+            tried.remove(token)
         }
     }
 
