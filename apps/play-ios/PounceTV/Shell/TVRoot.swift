@@ -25,7 +25,9 @@ struct TVRoot: View {
                     .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomTrailing)
             }
             if model.menu != .closed {
+                // Scrim and panel fade as one layer.
                 TVMenu(model: model)
+                    .compositingGroup()
                     .transition(.opacity)
             }
         }
@@ -37,6 +39,7 @@ struct TVRoot: View {
             // paw is the one thing to focus.
             guard model.table != nil, model.menu == .closed, !model.canChangeGame else { return }
             try? await Task.sleep(for: .milliseconds(80))
+            guard !Task.isCancelled else { return }
             pawFocused = true
         }
         .onChange(of: scenePhase) { _, phase in
@@ -94,10 +97,12 @@ struct TVRoot: View {
                 ZStack {
                     TableHost(table: table)
                     if model.phase == .over, let room = table.store.room {
+                        // Scrim, sunburst and panel fade as one layer.
                         GameOverView(room: room)
                             .overlay(alignment: .topLeading) {
                                 if table.reconnecting { TVReconnecting() }
                             }
+                            .compositingGroup()
                             .transition(.opacity)
                     }
                 }

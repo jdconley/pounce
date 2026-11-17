@@ -58,6 +58,9 @@ final class TVModel {
     @ObservationIgnored private var homeWatch: LinkWatch?
     @ObservationIgnored private var menuWatch: LinkWatch?
     @ObservationIgnored private var asleep = false
+    /// The table whose show step has run: the one before it is closed, so its socket may open.
+    /// Until then a background or return leaves the shown table alone.
+    @ObservationIgnored private var ready: TVRoom?
     @ObservationIgnored private var started = false
 
     /// A link being shown, and the task reading it.
@@ -124,12 +127,18 @@ final class TVModel {
         #endif
         step {
             await old?.close()
-            if !self.asleep { next.start() }
+            // A later show may have replaced this table while the old one closed: that show
+            // closes it. In the background it starts on return (`syncSleep`).
+            guard self.table === next else { return }
+            self.ready = next
+            guard !self.asleep else { return }
+            next.start()
         }
     }
 
-    /// Lets the table go, forgets it, and shows home's link.
-    private func goHome() {
+    /// Lets the table go and shows home's link. `forget` false keeps the table for the next
+    /// launch: a TV too old for it goes back to it once updated.
+    private func goHome(forget: Bool = true) {
         stopLink(&menuWatch)
         menuLink = nil
         menu = .closed
@@ -137,7 +146,7 @@ final class TVModel {
         let old = table
         table = nil
         phase = .home
-        keep(room: nil)
+        if forget { keep(room: nil) }
         if let old { step { await old.close() } }
         startHomeLink()
     }
@@ -156,10 +165,13 @@ final class TVModel {
     private func roomChanged(_ room: TVRoom) {
         guard room === table else { return }
         switch room.store.phase {
-        case .notFound, .closed, .locked, .needsUpdate:
+        case .notFound, .closed, .locked:
             // The table is gone, closed, no longer lists this TV (`not_screen` reads as not
             // found), or this device is locked out of it: forget it and go home.
             return goHome()
+        case .needsUpdate:
+            // The table needs a newer app: home for now, and back to it once updated.
+            return goHome(forget: false)
         case .connecting:
             break
         case .lobby:
@@ -218,7 +230,9 @@ final class TVModel {
         let other = table.isTiles ? GameCatalog.catTower.id : GameCatalog.tiles.id
         do {
             let code = try await services.createRoom(other)
-            guard self.table === table else { return }
+            // Someone may have sat down (or the TV moved) while the table was being made: the
+            // lobby they sat in stays.
+            guard self.table === table, canChangeGame else { return }
             move(to: code)
         } catch {
             refused += 1
@@ -277,28 +291,44 @@ final class TVModel {
 
     // MARK: background
 
-    /// The app went to the background: the table's socket and any link close.
+    /// The app went to the background: the table's socket and any link close. Returns once the
+    /// socket work queued so far is done.
     func background() async {
         guard started, !asleep else { return }
         asleep = true
         stopLink(&homeWatch)
         stopLink(&menuWatch)
-        let table = table
+        step { await self.syncSleep() }
         await steps?.value
-        await table?.suspend()
     }
 
     /// Back in front: the TV joins its table again, and shows a fresh link where it showed one.
     func active() async {
         guard started, asleep else { return }
         asleep = false
-        await steps?.value
-        if let table {
-            table.start()
-            await table.resume()
-        }
         if phase == .home { startHomeLink() }
         if menu == .link, let table { startMenuLink(showing: table.code) }
+        step { await self.syncSleep() }
+        await steps?.value
+    }
+
+    /// Brings the shown table's socket in line with `asleep`, in the socket queue, so a quick
+    /// background and return (or a move under way) always ends with the socket the TV wants: down
+    /// in the background, up in front. A later change queues another sync after this one.
+    private func syncSleep() async {
+        guard let table = ready, table === self.table else { return }
+        while true {
+            let sleep = asleep
+            if sleep {
+                await table.suspend()
+            } else {
+                table.start()
+                await table.resume()
+            }
+            // Another table now (its own show step starts it, after this one closes) or the same
+            // wish after the await: done. Otherwise the app changed its mind meanwhile: again.
+            guard self.table === table, asleep != sleep else { return }
+        }
     }
 
     // MARK: links

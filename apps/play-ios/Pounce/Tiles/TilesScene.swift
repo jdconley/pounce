@@ -493,12 +493,6 @@ final class TilesScene: SKScene {
         rackShown = []
     }
 
-    /// Tidy is remembered between turns on this phone.
-    var tidyPreference: Bool {
-        get { UserDefaults.standard.bool(forKey: "tiles.tidy") }
-        set { UserDefaults.standard.set(newValue, forKey: "tiles.tidy") }
-    }
-
     /// Keeps a half-built turn and the stash's order for when the app comes back.
     func saveDraft() {
         guard let memory, let model, let seat = shownSeat else { return }

@@ -72,6 +72,11 @@ struct LobbyView: View {
         .buttonStyle(TVButtonStyle(tint: Palette.violet, corner: 36))
         .disabled(!live)
         .focused($changeFocused)
+        // The one thing to press here until someone sits: it takes the focus from the paw.
+        .task {
+            try? await Task.sleep(for: .milliseconds(120))
+            if live, !Task.isCancelled { changeFocused = true }
+        }
         .shake(trigger: shakes)
         .onChange(of: model.refused) { _, _ in
             guard changeFocused else { return }
@@ -131,6 +136,8 @@ private struct LobbyRug: View {
                 ForEach(Array(spots.enumerated()), id: \.element.id) { k, spot in
                     let at = places[safe: k] ?? CGPoint(x: 0.5, y: 0.5)
                     LobbySeat(room: room, spot: spot, crowded: spots.count > 4)
+                        // One layer: the cat, cushion and name fade in together as it walks on.
+                        .compositingGroup()
                         .position(x: at.x * g.size.width, y: at.y * g.size.height)
                         .transition(.asymmetric(
                             insertion: .offset(x: at.x < 0.5 ? -260 : 260).combined(with: .opacity),

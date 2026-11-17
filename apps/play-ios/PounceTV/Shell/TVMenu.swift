@@ -14,7 +14,7 @@ struct TVMenu: View {
 
     var body: some View {
         ZStack {
-            Palette.ink.opacity(0.62)
+            Palette.ink.opacity(0.74)
                 .ignoresSafeArea()
                 .accessibilityHidden(true)
             switch model.menu {
@@ -27,6 +27,7 @@ struct TVMenu: View {
         // The paw that had the focus is gone under the menu: the remote starts on its first choice.
         .task(id: model.menu) {
             try? await Task.sleep(for: .milliseconds(60))
+            guard !Task.isCancelled else { return }
             focus = model.menu == .link ? .back : .link
         }
     }

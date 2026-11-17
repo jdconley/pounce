@@ -40,7 +40,10 @@ enum TVStandings {
                 detail = String(localized: "Left", comment: "TV game over: a player who left the game before it ended")
             } else if let game {
                 let level = min((game.phase[safe: seat] ?? 0) + 1, Rules.phases.count)
-                detail = "Level \(level) · \(game.scores[safe: seat] ?? 0)"
+                let score = game.scores[safe: seat] ?? 0
+                detail = String(
+                    localized: "Level \(level) · \(score)",
+                    comment: "TV game over: a Cat Tower player's last level (1 to 10) and their points")
             } else {
                 let points = tiles?.scores[safe: seat] ?? 0
                 detail = points > 0 ? "+\(points)" : "\(points)"
@@ -52,7 +55,12 @@ enum TVStandings {
     /// "<Name> wins", "A tie" or "Game over".
     static func title(_ room: RoomView) -> String {
         let winners = room.game?.winners ?? room.tiles?.winners ?? []
-        if winners.count == 1 { return "\(SeatInfo.name(room, winners[0])) wins" }
-        return winners.count > 1 ? "A tie" : "Game over"
+        if winners.count == 1 {
+            let name = SeatInfo.name(room, winners[0])
+            return String(localized: "\(name) wins", comment: "TV game over: the title, the one winner's name")
+        }
+        return winners.count > 1
+            ? String(localized: "A tie", comment: "TV game over: the title when several players win")
+            : String(localized: "Game over", comment: "TV game over: the title when nobody won")
     }
 }

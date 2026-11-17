@@ -15,6 +15,36 @@ final class Log: Sendable {
     func index(of line: String) -> Int? { all.firstIndex(of: line) }
 }
 
+/// Holds whoever passes while it's shut, until it opens: a test's way to keep a socket's close or
+/// a table's creation in flight. Open by default.
+final class Gate: Sendable {
+    private let state = Mutex<(shut: Bool, waiting: [CheckedContinuation<Void, Never>])>((false, []))
+
+    func shut() { state.withLock { $0.shut = true } }
+
+    func open() {
+        let waiting = state.withLock { s in
+            s.shut = false
+            defer { s.waiting = [] }
+            return s.waiting
+        }
+        for c in waiting { c.resume() }
+    }
+
+    /// How many are held now.
+    var held: Int { state.withLock { $0.waiting.count } }
+
+    func pass() async {
+        await withCheckedContinuation { (c: CheckedContinuation<Void, Never>) in
+            let go = state.withLock { s in
+                if s.shut { s.waiting.append(c) }
+                return !s.shut
+            }
+            if go { c.resume() }
+        }
+    }
+}
+
 /// One connection of a TV to a room (`SuspendableSocket` makes a fresh one per connection).
 final class FakeTableSocket: RoomSocketing {
     let code: String
@@ -23,11 +53,13 @@ final class FakeTableSocket: RoomSocketing {
     private let feed: AsyncStream<SocketEvent>.Continuation
     private let log: Log
     private let stopped = Mutex(false)
+    private let closing: Gate
 
-    init(code: String, n: Int, log: Log) {
+    init(code: String, n: Int, log: Log, closing: Gate) {
         self.code = code
         self.n = n
         self.log = log
+        self.closing = closing
         (events, feed) = AsyncStream.makeStream(of: SocketEvent.self)
     }
 
@@ -38,6 +70,7 @@ final class FakeTableSocket: RoomSocketing {
     func send(_ m: ClientMessage) async throws { log.add("send \(name)") }
     func reconnectNow() async {}
     func stop() async {
+        await closing.pass()
         stopped.withLock { $0 = true }
         log.add("stop \(name)")
         feed.finish()
@@ -85,6 +118,10 @@ final class FakeLink: ScreenLinking {
 /// The server, for a TV under test: tables it makes, links and sockets, all recorded.
 final class FakeServer: Sendable {
     let log = Log()
+    /// Shut, a socket's close waits (a move's old table still closing).
+    let closing = Gate()
+    /// Shut, a table being made waits for the server's answer.
+    let creating = Gate()
     private let state = Mutex<(sockets: [FakeTableSocket], links: [FakeLink], codes: [String], fails: Bool)>(([], [], ["NEWTB", "NEXTT", "THIRD"], false))
 
     var sockets: [FakeTableSocket] { state.withLock { $0.sockets } }
@@ -96,6 +133,7 @@ final class FakeServer: Sendable {
         TVServices(
             createRoom: { game in
                 self.log.add("create \(game)")
+                await self.creating.pass()
                 let (fails, code): (Bool, String?) = self.state.withLock { s in
                     (s.fails, s.codes.isEmpty ? nil : s.codes.removeFirst())
                 }
@@ -109,7 +147,7 @@ final class FakeServer: Sendable {
             },
             socket: { code in
                 self.state.withLock { s in
-                    let socket = FakeTableSocket(code: code, n: s.sockets.filter { $0.code == code }.count + 1, log: self.log)
+                    let socket = FakeTableSocket(code: code, n: s.sockets.filter { $0.code == code }.count + 1, log: self.log, closing: self.closing)
                     s.sockets.append(socket)
                     return socket
                 }
@@ -432,6 +470,164 @@ struct TVModelTests {
         #expect(await soon { server.links[0].stopped })
         await model.active()
         #expect(await soon { server.links.count == 2 && server.links[1].started })
+    }
+}
+
+@MainActor
+@Suite("The TV's model, when things overlap")
+struct TVModelRaceTests {
+    private func soon(_ done: () -> Bool) async -> Bool {
+        for _ in 0..<200 where !done() { try? await Task.sleep(for: .milliseconds(10)) }
+        return done()
+    }
+
+    private func started(_ server: FakeServer, kept: ScreenKept = ScreenKept()) async -> (TVModel, MemoryScreenKeep) {
+        let keep = MemoryScreenKeep(kept)
+        let model = TVModel(services: server.services(keep: keep))
+        await model.start()
+        return (model, keep)
+    }
+
+    private func atTable(_ server: FakeServer, _ code: String, _ room: RoomView) async -> (TVModel, MemoryScreenKeep) {
+        let (model, keep) = await started(server, kept: ScreenKept(room: code))
+        #expect(await soon { server.sockets(code).count == 1 })
+        server.sockets(code)[0].arrive(room)
+        #expect(await soon { model.table?.store.room != nil })
+        return (model, keep)
+    }
+
+    private func snapshot(_ room: RoomView, seq: Int) -> SocketEvent {
+        .message(.snapshot(protocol: PounceKit.protocolVersion, seq: seq, room: room))
+    }
+
+    @Test func twoMovesInQuickSuccessionEndOnTheLastTableAndNeverOpenTheOneBetween() async {
+        let server = FakeServer()
+        let (model, keep) = await atTable(server, "BCDFG", Rooms.playing("BCDFG"))
+        // The first table's socket is slow to close.
+        server.closing.shut()
+        model.back()
+        model.showLink()
+        #expect(await soon { server.links.count == 1 && server.links[0].started })
+        server.links[0].emit(.linked(room: "MNPQR"))
+        #expect(await soon { model.table?.code == "MNPQR" })
+        #expect(await soon { server.closing.held == 1 }, "BCDFG#1 is still closing")
+        // A second phone moves it again before the first move is done.
+        model.back()
+        model.showLink()
+        #expect(await soon { server.links.count == 2 && server.links[1].started })
+        #expect(server.links[1].showing == "MNPQR")
+        server.links[1].emit(.linked(room: "QRTVW"))
+        #expect(await soon { model.table?.code == "QRTVW" })
+
+        server.closing.open()
+        await model.settle()
+        #expect(await soon { server.log.all.contains("start QRTVW#1") })
+        #expect(server.sockets("MNPQR").isEmpty, "the table in between never opened: \(server.log.all)")
+        let stop = server.log.index(of: "stop BCDFG#1")
+        let start = server.log.index(of: "start QRTVW#1")
+        #expect(stop != nil && start != nil && stop! < start!, "\(server.log.all)")
+        #expect(server.sockets("QRTVW").first?.isStopped == false)
+        #expect(model.phase == .lobby)
+        await model.settle()
+        #expect(await keep.load().room == "QRTVW")
+    }
+
+    @Test func aPhoneLinksTheTVWhileAPostersTableIsBeingMade() async {
+        let server = FakeServer()
+        let (model, keep) = await started(server)
+        #expect(await soon { server.links.first?.started == true })
+        server.creating.shut()
+        let making = Task { await model.make(game: GameCatalog.tiles.id) }
+        #expect(await soon { server.log.all.contains("create tiles") })
+        server.links[0].emit(.linked(room: "BCDFG"))
+        #expect(await soon { model.table?.code == "BCDFG" })
+        server.creating.open()
+        await making.value
+        await model.settle()
+        #expect(model.table?.code == "BCDFG", "the phone's table stays; the poster's is dropped")
+        #expect(model.phase == .lobby)
+        #expect(server.sockets("NEWTB").isEmpty)
+        #expect(await soon { server.log.all.contains("start BCDFG#1") })
+        #expect(await keep.load().room == "BCDFG")
+    }
+
+    @Test func changeGameNeverLeavesALobbySomeoneSatDownInMeanwhile() async {
+        let server = FakeServer()
+        let (model, _) = await atTable(server, "BCDFG", Rooms.emptyLobby("BCDFG"))
+        #expect(model.canChangeGame)
+        server.creating.shut()
+        let changing = Task { await model.changeGame() }
+        #expect(await soon { server.log.all.contains("create tiles") })
+        server.sockets("BCDFG")[0].emit(snapshot(Rooms.seatedLobby("BCDFG"), seq: 2))
+        #expect(await soon { !model.canChangeGame })
+        server.creating.open()
+        await changing.value
+        await model.settle()
+        #expect(model.table?.code == "BCDFG")
+        #expect(server.sockets("NEWTB").isEmpty)
+        #expect(server.sockets("BCDFG")[0].isStopped == false)
+    }
+
+    @Test func backgroundAndBackWhileAMoveIsClosingEndsWithALiveSocket() async {
+        let server = FakeServer()
+        let (model, _) = await atTable(server, "BCDFG", Rooms.over("BCDFG"))
+        server.closing.shut()
+        server.sockets("BCDFG")[0].emit(.message(.rematch(code: "NEXTT")))
+        #expect(await soon { model.table?.code == "NEXTT" })
+        #expect(await soon { server.closing.held == 1 }, "the old table is still closing")
+        // Away and straight back, both while the close is in flight.
+        let away = Task { await model.background() }
+        await Task.yield()
+        let back = Task { await model.active() }
+        await Task.yield()
+        server.closing.open()
+        await away.value
+        await back.value
+        await model.settle()
+        #expect(await soon { server.log.all.contains("start NEXTT#1") })
+        let live = server.sockets("NEXTT").last
+        #expect(live != nil && live?.isStopped == false, "in front with a live socket: \(server.log.all)")
+        #expect(server.log.index(of: "stop BCDFG#1")! < server.log.index(of: "start NEXTT#1")!)
+
+        // And away while a close is in flight: nothing opens until the TV is back.
+        server.closing.shut()
+        live!.emit(.connected)
+        live!.emit(snapshot(Rooms.over("NEXTT"), seq: 1))
+        live!.emit(.message(.rematch(code: "THIRD")))
+        #expect(await soon { model.table?.code == "THIRD" })
+        #expect(await soon { server.closing.held == 1 })
+        let away2 = Task { await model.background() }
+        await Task.yield()
+        server.closing.open()
+        await away2.value
+        await model.settle()
+        #expect(server.sockets("THIRD").isEmpty, "no socket opens in the background")
+        await model.active()
+        #expect(await soon { server.log.all.contains("start THIRD#1") })
+        #expect(server.sockets("THIRD").last?.isStopped == false)
+    }
+
+    @Test func aKeptTableThatIsGoneAtLaunchSendsTheTVHomeAndIsForgotten() async {
+        let server = FakeServer()
+        let (model, keep) = await started(server, kept: ScreenKept(room: "BCDFG"))
+        #expect(model.phase == .lobby)
+        #expect(await soon { server.sockets("BCDFG").count == 1 })
+        server.sockets("BCDFG")[0].emit(.notFound)
+        #expect(await soon { model.phase == .home })
+        await model.settle()
+        #expect(await keep.load().room == nil)
+        #expect(await soon { server.links.first?.started == true })
+    }
+
+    @Test func aTableThatNeedsANewerAppIsKeptForAfterTheUpdate() async {
+        let server = FakeServer()
+        let (model, keep) = await atTable(server, "BCDFG", Rooms.emptyLobby("BCDFG"))
+        server.sockets("BCDFG")[0].emit(.message(.unsupportedProtocol(PounceKit.protocolVersion + 1)))
+        #expect(await soon { model.phase == .home })
+        #expect(model.table == nil)
+        await model.settle()
+        #expect(await keep.load().room == "BCDFG", "the updated app goes back to its table")
+        #expect(await soon { server.links.first?.started == true })
     }
 }
 

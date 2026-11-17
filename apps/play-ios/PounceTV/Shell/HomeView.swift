@@ -39,7 +39,7 @@ struct HomeView: View {
     private var posters: some View {
         VStack(spacing: 60) {
             ForEach(GameCatalog.all) { game in
-                Poster(game: game, making: model.making, refused: model.refused) {
+                Poster(game: game, refused: model.refused) {
                     Sound.shared.play(ArtName.Sound.sfxPop, volume: 0.5)
                     Task { await model.make(game: game.id) }
                 }
@@ -52,7 +52,6 @@ struct HomeView: View {
 /// A game's poster: its cover on the left, its name and how many play on the right.
 private struct Poster: View {
     let game: GameCatalog.Entry
-    let making: Bool
     let refused: Int
     let press: () -> Void
     @FocusState private var focused: Bool
