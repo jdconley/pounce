@@ -49,9 +49,17 @@ final class TilesScene: SKScene {
     /// The seat the banner names (the drawn table's turn, or one that just started).
     private var bannerTurn: Seat?
     /// A TV: the acting player's draft as last seen, for their seat and turn. Their phone takes it
-    /// back as it commits (that clear comes before `played`), so the board keeps it until the play
-    /// lands (`pendingTable`) or the turn moves on, rather than the pieces leaving and flying back.
+    /// back as it commits (that clear comes before `played`), so the board keeps it for a moment
+    /// (`draftHold`) rather than the pieces leaving and flying back in. A clear that isn't followed
+    /// by the play in that time was a cancel (on the wire the two are the same message): the draft
+    /// goes and the board shows the table as it really is.
     private var keptAim: (seat: Seat, turns: Int, sets: [[TileID]])?
+    /// The kept draft's clear came (its hold is running), and the scene time it was first seen at.
+    private var aimCleared = false
+    private var aimClearedAt: TimeInterval?
+    /// How long a draft stays on the board after its player's phone takes it back, waiting for the
+    /// play that commits it (seconds of scene time).
+    static let draftHold: TimeInterval = 1.5
     /// The draft the board last drew (a TV): a store change that leaves it as it is draws nothing.
     private var drawnAim: [[TileID]]?
     /// Rack orders, half-built drafts and the last rug seen, per table on this device.
@@ -362,6 +370,7 @@ final class TilesScene: SKScene {
     override func update(_ currentTime: TimeInterval) {
         let work = FrameWork("tiles.update"); defer { work.end() }
         stepInput(currentTime)
+        if aimCleared { holdDraft(currentTime) }
         // A set that isn't one yet breathes, so the view stays awake while one is on the rug.
         if breathing { director.wake() }
         #if DEBUG
@@ -394,7 +403,7 @@ final class TilesScene: SKScene {
         }
         self.model = model
         bannerTurn = model.room.liveTurn
-        if let kept = keptAim, !model.isLive || kept.seat != model.view.turn || kept.turns != model.view.turns { keptAim = nil }
+        if let kept = keptAim, !model.isLive || kept.seat != model.view.turn || kept.turns != model.view.turns { dropKeptAim() }
         drawnSeq = store.settledSeq
         pendingTable = nil
         for node in transients { node.removeFromParent() }
@@ -524,10 +533,42 @@ final class TilesScene: SKScene {
         return kept.sets
     }
 
-    /// Keeps the acting player's draft as their phone last sent it (`keptAim`).
+    /// Keeps the acting player's draft as their phone last sent it (`keptAim`), and starts its hold
+    /// when the phone takes it back.
     private func keepAim() {
-        guard isScreen, let model, model.isLive, case .table(let sets)? = store.aims[model.view.turn] else { return }
-        keptAim = (model.view.turn, model.view.turns, sets)
+        guard isScreen, let model, model.isLive else { return }
+        if case .table(let sets)? = store.aims[model.view.turn] {
+            keptAim = (model.view.turn, model.view.turns, sets)
+            aimCleared = false
+            aimClearedAt = nil
+            return
+        }
+        guard !aimCleared, let kept = keptAim, kept.seat == model.view.turn, kept.turns == model.view.turns else { return }
+        aimCleared = true
+        aimClearedAt = nil
+        // The view stays awake through the hold, so its frames can end it (`holdDraft`).
+        let director = director
+        let node = layer(.fx)
+        Task { await director.run(.wait(forDuration: Self.draftHold + 0.2), on: node, decorative: true) }
+    }
+
+    /// Each frame of a draft's hold: once `draftHold` of scene time has passed since its clear with no
+    /// play landing, it was a cancel, and the board goes back to the table as it is.
+    private func holdDraft(_ now: TimeInterval) {
+        guard let since = aimClearedAt else {
+            aimClearedAt = now
+            return
+        }
+        guard (now - since) * Double(speed) >= Self.draftHold else { return }
+        dropKeptAim()
+        redraw(animated: true)
+    }
+
+    /// Forgets the kept draft (the play landed, the turn moved on, or its hold ran out).
+    func dropKeptAim() {
+        keptAim = nil
+        aimCleared = false
+        aimClearedAt = nil
     }
 
     /// The pieces the acting player's draft adds to the table (a TV marks them).

@@ -93,6 +93,8 @@ extension TilesScene {
             // the rug slides to its new shape.
             draft = nil
             pendingTable = table
+            // The play the kept draft was waiting for: it's the board now (`pendingTable`).
+            if isScreen { dropKeptAim() }
             let name = SeatInfo.name(model.room, seat)
             let words = opened
                 ? String(localized: "\(name) opened with \(placed.count) toys", comment: "VoiceOver: another player made their opening play")

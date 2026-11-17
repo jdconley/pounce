@@ -238,6 +238,43 @@ struct TVTableTests {
         #expect(scene.shown.map(\.tiles) == next.tiles!.table)
     }
 
+    /// A draft its player takes back with no play following (a cancel: on the wire, the same clear
+    /// as a commit) stays on the board only for the hold, then the board is the table as it is.
+    @Test func aCancelledDraftLeavesTheBoardAfterTheHold() {
+        let store = Self.screenStore()
+        var room = DemoFixtures.tilesOther()  // seat 2's move
+        room.seats = room.seats.map { var s = $0; s.yours = false; return s }
+        room.tiles!.racks = [:]
+        let scene = TilesScene(store: store)
+        scene.size = Self.tv
+        store.handle(.message(.snapshot(protocol: PounceKit.protocolVersion, seq: 1, room: room)))
+        scene.reconcileFromStore()
+        var draft = room.tiles!.table
+        draft.append([DemoFixtures.tile(11, .bell), DemoFixtures.tile(11, .feather), DemoFixtures.tile(11, .fish)])
+        store.handle(.message(.aim(seat: 2, aim: .table(draft))))
+        scene.redraw()
+        scene.update(100)
+        #expect(scene.shown.map(\.tiles) == draft)
+
+        // The clear: the hold starts with the next frame.
+        store.handle(.message(.aim(seat: 2, aim: nil)))
+        scene.redraw()
+        scene.update(100.1)
+        #expect(scene.shown.map(\.tiles) == draft, "the draft left before its hold")
+        scene.update(100.1 + TilesScene.draftHold * 0.8 / Double(scene.speed))
+        #expect(scene.shown.map(\.tiles) == draft, "the draft left before its hold")
+        // No play came: once the hold is over the board is the table as it really is.
+        scene.update(100.1 + TilesScene.draftHold * 1.05 / Double(scene.speed))
+        #expect(scene.shown.map(\.tiles) == room.tiles!.table, "a cancelled draft stays on the TV")
+        scene.redraw()
+        #expect(scene.shown.map(\.tiles) == room.tiles!.table)
+
+        // A new draft in the same turn shows again.
+        store.handle(.message(.aim(seat: 2, aim: .table(draft))))
+        scene.redraw()
+        #expect(scene.shown.map(\.tiles) == draft)
+    }
+
     /// A turn that just started stays on the banner when the board redraws from the table as drawn.
     @Test func tilesBannerKeepsATurnThatJustStarted() {
         let store = Self.screenStore()

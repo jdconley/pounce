@@ -8,7 +8,8 @@ import SwiftUI
 /// to 6 for Cat Tower and 2 to 4 for Tuna Tiles; one player has a 20-character name and the scores
 /// run to three digits. `-aim` adds the acting player's aim from their phone: a laid group in Cat
 /// Tower, a draft adding pieces in Tuna Tiles. `-moment`: a second in, Kiki lays down (Cat Tower's
-/// big moment). `-lost`: a second in, the TV loses the table ("Reconnecting"). `-busy`: the table
+/// big moment). `-lost`: a second in, the TV loses the table ("Reconnecting"). `-cancel` (with
+/// `-aim`): two seconds in, the player takes their aim back and no play follows. `-busy`: the table
 /// keeps moving (the aim hops between groups or the draft comes and goes, a lay-down moment every
 /// few seconds), for watching its frames with `-watchdog -watchdog-log`.
 enum TVTablePreview {
@@ -175,6 +176,9 @@ struct TVTablePreviewView: View {
         Task {
             try? await Task.sleep(for: .milliseconds(600))
             store.handle(.message(.aim(seat: 1, aim: target)))
+            guard arguments.contains("-cancel") else { return }
+            try? await Task.sleep(for: .seconds(1.4))
+            store.handle(.message(.aim(seat: 1, aim: nil)))
         }
     }
 }
