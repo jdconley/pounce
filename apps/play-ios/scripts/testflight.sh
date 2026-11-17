@@ -3,6 +3,12 @@
 #
 #   scripts/testflight.sh --dry-run   print every command, run nothing
 #   scripts/testflight.sh             bootstrap, archive, export + upload
+#   PLATFORM=tvOS scripts/testflight.sh   the same for the Apple TV app (scheme PounceTV)
+#
+# PLATFORM is iOS (the default: scheme Pounce, build/Pounce.xcarchive, build/export) or tvOS
+# (scheme PounceTV, build/PounceTV.xcarchive, build/export-tv). Both share the bundle id, the
+# marketing version and ExportOptions.plist, and can share a build number: App Store Connect keeps
+# a build train per platform.
 #
 # The build number (CURRENT_PROJECT_VERSION) is the local time as YYYYMMDDHHMM (or $BUILD_NUMBER
 # when set), passed to xcodebuild as a build setting, so project.yml is never edited.
@@ -21,14 +27,18 @@ DRY_RUN=0
 for arg in "$@"; do
   case "$arg" in
     --dry-run) DRY_RUN=1 ;;
-    -h|--help) sed -n '2,16p' "$0"; exit 0 ;;
+    -h|--help) sed -n '2,22p' "$0"; exit 0 ;;
     *) echo "usage: scripts/testflight.sh [--dry-run]" >&2; exit 64 ;;
   esac
 done
 
 BUILD_NUMBER="${BUILD_NUMBER:-$(date +%Y%m%d%H%M)}"
-ARCHIVE=build/Pounce.xcarchive
-EXPORT=build/export
+PLATFORM="${PLATFORM:-iOS}"
+case "$PLATFORM" in
+  iOS) SCHEME=Pounce; ARCHIVE=build/Pounce.xcarchive; EXPORT=build/export ;;
+  tvOS) SCHEME=PounceTV; ARCHIVE=build/PounceTV.xcarchive; EXPORT=build/export-tv ;;
+  *) echo "PLATFORM is iOS or tvOS, not $PLATFORM" >&2; exit 64 ;;
+esac
 
 auth=()
 if [ -n "${ASC_KEY_ID:-}" ] || [ -n "${ASC_ISSUER_ID:-}" ] || [ -n "${ASC_KEY_PATH:-}" ]; then
@@ -45,13 +55,14 @@ run() {
 }
 
 [ "$DRY_RUN" -eq 1 ] && echo "dry run: nothing below is executed"
+[ "$PLATFORM" = iOS ] || echo "platform: $PLATFORM"
 echo "build number: $BUILD_NUMBER"
 
 run scripts/bootstrap.sh
 run rm -rf "$ARCHIVE" "$EXPORT"
 run xcodebuild archive \
-  -project Pounce.xcodeproj -scheme Pounce -configuration Release \
-  -destination 'generic/platform=iOS' \
+  -project Pounce.xcodeproj -scheme "$SCHEME" -configuration Release \
+  -destination "generic/platform=$PLATFORM" \
   -archivePath "$ARCHIVE" \
   "CURRENT_PROJECT_VERSION=$BUILD_NUMBER" \
   -allowProvisioningUpdates ${auth[@]+"${auth[@]}"}
@@ -61,4 +72,4 @@ run xcodebuild -exportArchive \
   -exportPath "$EXPORT" \
   -allowProvisioningUpdates ${auth[@]+"${auth[@]}"}
 
-if [ "$DRY_RUN" -eq 1 ]; then echo "dry run complete"; else echo "uploaded build $BUILD_NUMBER to App Store Connect"; fi
+if [ "$DRY_RUN" -eq 1 ]; then echo "dry run complete"; else echo "uploaded $([ "$PLATFORM" = iOS ] || echo "$PLATFORM ")build $BUILD_NUMBER to App Store Connect"; fi

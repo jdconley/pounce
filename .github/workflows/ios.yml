@@ -29,6 +29,10 @@ on:
         description: Before archiving, revoke every development certificate CI created through the API (for "maximum number of certificates")
         type: boolean
         default: false
+      add_tvos_platform:
+        description: One-off, before the first Apple TV upload - add the tvOS platform to the App Store Connect app record (runs on any branch; does nothing once it is there)
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -71,6 +75,12 @@ jobs:
         run: >
           xcodebuild build -project Pounce.xcodeproj -scheme Pounce -configuration Release
           -destination generic/platform=iOS CODE_SIGNING_ALLOWED=NO -quiet
+      - name: Build Apple TV Release (unsigned)
+        run: |
+          # Since Xcode 15 the tvOS SDK is an optional component; fetch it if the image lacks it.
+          xcodebuild -showsdks | grep appletvos >/dev/null || xcodebuild -downloadPlatform tvOS
+          xcodebuild build -project Pounce.xcodeproj -scheme PounceTV -configuration Release \
+            -destination generic/platform=tvOS CODE_SIGNING_ALLOWED=NO -quiet
       - name: Runner load after building
         if: always()
         working-directory: .
@@ -169,12 +179,47 @@ jobs:
             apps/play-ios/build/ui-gates.xcresult
           retention-days: 7
 
-  testflight:
-    needs: build
-    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+  # One-off (JD OK'd it, 2026-11-16): add the tvOS platform to the App Store Connect app record, the
+  # only App Store Connect change this makes. Runs only when asked (add_tvos_platform), on any
+  # branch, so it can go before the first merge that uploads an Apple TV build; a second run
+  # changes nothing. The version string is project.yml's MARKETING_VERSION.
+  tv-platform:
+    name: Add the Apple TV platform
+    if: github.event_name == 'workflow_dispatch' && inputs.add_tvos_platform
     runs-on: macos-26
-    # Archive and upload take ~15 min; distributing waits up to 30 more for App Store Connect processing.
-    timeout-minutes: 75
+    timeout-minutes: 10
+    environment: production
+    env:
+      ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+      ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
+      ASC_KEY_P8: ${{ secrets.ASC_KEY_P8 }}
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+      - name: Add the tvOS platform to the app record
+        run: |
+          if [ -z "$ASC_KEY_ID" ] || [ -z "$ASC_ISSUER_ID" ] || [ -z "$ASC_KEY_P8" ]; then
+            echo "::error title=App Store Connect::ASC_KEY_ID, ASC_ISSUER_ID or ASC_KEY_P8 is unset. See apps/play-ios/README.md."
+            exit 1
+          fi
+          version=$(sed -n 's/^ *MARKETING_VERSION: *"\{0,1\}\([0-9.]*\)"\{0,1\} *$/\1/p' project.yml | head -1)
+          [ -n "$version" ] || { echo "::error::no MARKETING_VERSION in project.yml"; exit 1; }
+          export ASC_KEY_PATH="$RUNNER_TEMP/AuthKey_$ASC_KEY_ID.p8"
+          (umask 077; printenv ASC_KEY_P8 > "$ASC_KEY_PATH")
+          trap 'rm -f "$ASC_KEY_PATH"' EXIT
+          scripts/asc-add-platform.swift --version "$version"
+
+  # Uploads the iPhone and the Apple TV builds (one build number for both: App Store Connect keeps a
+  # build train per platform) and sends each to the group when its own app changed.
+  testflight:
+    needs: [build, tv-platform]
+    # tv-platform is skipped unless asked for; when it runs, the Apple TV upload waits for it.
+    if: >-
+      !cancelled() && needs.build.result == 'success' && needs.tv-platform.result != 'failure'
+      && github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+    runs-on: macos-26
+    # Each archive and upload takes ~10-15 min; each distribute waits up to 30 more for App Store
+    # Connect processing (the Apple TV build mostly processes while the iPhone one is waited on).
+    timeout-minutes: 100
     environment: production
     concurrency:
       group: testflight
@@ -217,7 +262,22 @@ jobs:
           (umask 077; printenv ASC_KEY_P8 > "$ASC_KEY_PATH")
           trap 'rm -f "$ASC_KEY_PATH"' EXIT
           scripts/testflight.sh
-      # The archive minted a development certificate on this throwaway runner. Revoke it, pass or
+      # The Apple TV app, with the same build number. A failure here doesn't hold up the iPhone
+      # build: the iPhone build is still distributed, and the last step fails the job.
+      - name: Archive and upload (Apple TV)
+        id: upload-tv
+        if: steps.creds.outputs.ready == 'true' && inputs.build == ''
+        continue-on-error: true
+        env:
+          BUILD_NUMBER: ${{ steps.upload.outputs.build }}
+          PLATFORM: tvOS
+        run: |
+          xcodebuild -showsdks | grep appletvos >/dev/null || xcodebuild -downloadPlatform tvOS
+          export ASC_KEY_PATH="$RUNNER_TEMP/AuthKey_$ASC_KEY_ID.p8"
+          (umask 077; printenv ASC_KEY_P8 > "$ASC_KEY_PATH")
+          trap 'rm -f "$ASC_KEY_PATH"' EXIT
+          scripts/testflight.sh
+      # The archives minted a development certificate on this throwaway runner. Revoke it, pass or
       # fail, so runs don't pile them up until the team hits Apple's certificate limit.
       - name: Revoke this runner's development certificate
         if: always() && steps.creds.outputs.ready == 'true' && inputs.build == ''
@@ -255,3 +315,32 @@ jobs:
           else
             scripts/distribute.swift --build "$BUILD" --group "$GROUP"
           fi
+      # The Apple TV build, when this run uploaded one. Its app is its own folder, the shared game
+      # code and the table code it will share with the iPhone app.
+      - name: Distribute the Apple TV build to the TestFlight group
+        if: >-
+          !cancelled() && steps.creds.outputs.ready == 'true' && steps.upload-tv.outcome == 'success'
+          && (github.event_name == 'push' || inputs.distribute)
+        env:
+          BUILD: ${{ steps.upload.outputs.build }}
+          GROUP: ${{ inputs.group || 'Family and Friends' }}
+          FROM: ${{ github.event_name == 'push' && github.event.before || '' }}
+        run: |
+          export ASC_KEY_PATH="$RUNNER_TEMP/AuthKey_$ASC_KEY_ID.p8"
+          (umask 077; printenv ASC_KEY_P8 > "$ASC_KEY_PATH")
+          trap 'rm -f "$ASC_KEY_PATH"' EXIT
+          if [ -n "$FROM" ] && git cat-file -e "$FROM^{commit}" 2>/dev/null; then
+            if git diff --quiet "$FROM" HEAD -- PounceTV PounceKit project.yml Pounce/Table Pounce/Tiles Pounce/Design; then
+              echo "no Apple TV app change since $FROM: not sending this build to \"$GROUP\""
+              exit 0
+            fi
+            scripts/distribute.swift --platform TV_OS --build "$BUILD" --group "$GROUP" --from "$FROM"
+          else
+            scripts/distribute.swift --platform TV_OS --build "$BUILD" --group "$GROUP"
+          fi
+      - name: Apple TV upload failed
+        if: ${{ !cancelled() && steps.upload-tv.outcome == 'failure' }}
+        working-directory: .
+        run: |
+          echo "::error title=TestFlight::The Apple TV archive or upload failed (the iPhone build went ahead). See \"Archive and upload (Apple TV)\"."
+          exit 1

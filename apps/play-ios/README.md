@@ -477,6 +477,8 @@ build, run the workflow by hand: Actions → iOS → Run workflow on `main` (or
   job now revokes its own when it finishes, but runs before that left them behind until Apple
   refused with "Your account has reached the maximum number of certificates". Certificates a Mac
   made through Xcode are named after its user and are left alone.
+- `add_tvos_platform` (default off): one-off, add the tvOS platform to the App Store Connect record
+  (see "The Apple TV app" below).
 
 `scripts/distribute.swift` talks to the App Store Connect API with the same key (an ES256 JWT signed
 with CryptoKit; neither the key nor the token is ever printed). It waits up to 30 minutes for the
@@ -501,6 +503,48 @@ list, and `--timeout` sets the processing wait in minutes. Without credentials, 
 the plan and the notes only. External testing also needs the app-level Test Information in App Store
 Connect (feedback email, beta app description, review contact); if it's missing, the review
 submission fails with Apple's message in the log.
+
+### The Apple TV app
+
+`PounceTV` shares the iPhone app's App Store record (bundle id `com.conleychaos.play`, universal
+purchase) and its marketing version, so it is the same app on another platform with its own build
+train.
+
+```sh
+PLATFORM=tvOS scripts/testflight.sh --dry-run    # scheme PounceTV, generic/platform=tvOS
+PLATFORM=tvOS scripts/testflight.sh              # build/PounceTV.xcarchive, build/export-tv
+scripts/distribute.swift --platform TV_OS --dry-run --build 202611161200
+scripts/distribute.swift --platform TV_OS --build 202611161200
+```
+
+`testflight.sh` uses the same `ExportOptions.plist`. `distribute.swift --platform` (`IOS`, the
+default, or `TV_OS`) looks builds up on that platform only (`filter[preReleaseVersion.platform]`), so
+both apps can carry the same build number. With `TV_OS`, What to Test lists the Apple TV app's
+commits and the default note is the TV's. Without credentials, `--dry-run` prints the requests it
+would make, for both platforms.
+
+In CI, the `build` job also builds `PounceTV` for generic tvOS, unsigned. The `testflight` job
+archives and uploads both apps with one build number, the iPhone app first. An Apple TV failure
+doesn't hold up the iPhone build; the job still fails at the end. The Apple TV build goes to the
+group only when a push changes `PounceTV`, `PounceKit`, `project.yml`, `Pounce/Table`, `Pounce/Tiles`
+or `Pounce/Design`. To resend one, run `scripts/distribute.swift --platform TV_OS --build N` from a
+Mac; the workflow's `build` input is for the iPhone app.
+
+**Adding the platform (once).** App Store Connect takes Apple TV builds only after the record has
+the tvOS platform. `scripts/asc-add-platform.swift` adds it, as JD OK'd (2026-11-16), and changes
+nothing else: it looks the app up by bundle id and, if it has no `TV_OS` App Store version, creates
+one (`POST /v1/appStoreVersions`, version `--version`, default 1.2). A second run does nothing.
+`--dry-run` without credentials prints the requests and the body. CI runs it when the workflow is
+started by hand with `add_tvos_platform`, on any branch, using project.yml's `MARKETING_VERSION`:
+
+```sh
+gh workflow run ios.yml --ref <branch> -f add_tvos_platform=true -f distribute=false
+gh run watch "$(gh run list --workflow ios.yml --limit 1 --json databaseId --jq '.[0].databaseId')"
+```
+
+Run it before the first merge that carries the Apple TV app, or that merge's Apple TV upload fails
+(the iPhone build still goes out). On `main`, the same dispatch also archives and uploads both apps,
+after the platform is added; `distribute=false` keeps it to the internal testers.
 
 ### Prerequisites only JD can do
 
