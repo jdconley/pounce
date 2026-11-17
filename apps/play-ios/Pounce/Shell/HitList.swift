@@ -168,7 +168,6 @@ struct ActionPill: View {
                 .foregroundStyle(style == .quiet ? .white : Palette.ink)
                 .lineLimit(1)
                 .truncationMode(.middle)
-                .frame(maxWidth: 220)
                 .padding(.horizontal, face * 0.3)
                 .frame(minWidth: 64, minHeight: face)
                 .background(Capsule().fill(fill))

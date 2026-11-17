@@ -71,7 +71,7 @@ enum TilesDemo {
     }
 
     static func socket(_ mode: DemoMode) -> any RoomSocketing {
-        let room = room(mode)
+        let room = DemoMode.longNames(room(mode))
         let game = mode == .tilesPlay ? TilesLocalGame(seats: 2, seed: 20261111) : room.tiles.map { TilesLocalGame(view: $0, seed: 7) }
         return TilesDemoSocket(room: room, game: game, held: CommandLine.arguments.contains("-tiles-hold-bots"))
     }

@@ -90,6 +90,23 @@ enum DemoMode: String {
     var room: RoomView {
         var room = baseRoom
         if room.look == nil, ![.replay, .celebrate, .handoff].contains(self) { room.look = .standard }
+        return Self.longNames(room)
+    }
+
+    /// `-demo-long-names` (any demo, for the fit screenshots): every seat a person with a
+    /// 20-character name, two of them alike up to the last word, and every score in three digits.
+    static func longNames(_ room: RoomView, arguments: [String] = CommandLine.arguments) -> RoomView {
+        guard arguments.contains("-demo-long-names") else { return room }
+        let names = ["Christopher Albright", "Maximiliana Winthrop", "Maximiliana Wellesly",
+                     "Bartholomew Fernando", "Josephine Abernathey", "Guinevere Montgomery"]
+        var room = room
+        for i in room.seats.indices where room.seats[i].kind == .human || room.seats[i].kind == .bot {
+            let cat = room.seats[i].person?.cat ?? i
+            room.seats[i].kind = .human
+            room.seats[i].person = Person(id: room.seats[i].person?.id ?? "demo-long-\(i)", name: names[i % names.count], cat: cat)
+        }
+        if let scores = room.game?.scores { room.game?.scores = scores.indices.map { 100 + $0 * 287 % 900 } }
+        if let scores = room.tiles?.scores { room.tiles?.scores = scores.indices.map { 100 + $0 * 287 % 900 } }
         return room
     }
 

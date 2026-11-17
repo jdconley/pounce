@@ -99,7 +99,10 @@ struct QRScanner: UIViewControllerRepresentable {
                 do {
                     try scanner.startScanning()
                 } catch {
-                    onFail()
+                    // `active` is set from `updateUIViewController`, in the middle of a view
+                    // update: the fallback changes the sheet's state, so it waits a turn.
+                    let onFail = onFail
+                    Task { @MainActor in onFail() }
                 }
             } else if scanner.isScanning {
                 scanner.stopScanning()
