@@ -64,23 +64,46 @@ struct HitList: View {
     let onCancel: () -> Void
 
     var body: some View {
-        FlowRows {
+        Group {
             if let picked, let choice = hit.choices.first(where: { $0.target == picked }) {
-                ActionPill(
-                    title: String(localized: "Cancel", comment: "Hit list on Cards: put the picked group back"),
-                    style: .quiet, action: onCancel)
-                    .accessibilityIdentifier("hit.cancel")
-                chip(choice, on: true)
-                ActionPill(
-                    title: String(localized: "Hit", comment: "Hit list on Cards: play the picked card on the picked group"),
-                    style: .go, action: onHit)
-                    .accessibilityIdentifier("hit.confirm")
+                // Cancel, the chip and Hit on one line; short of room, the chip on its own line
+                // over Cancel and Hit, so the two moves stay together.
+                ViewThatFits(in: .horizontal) {
+                    HStack(spacing: 6) {
+                        cancel
+                        chip(choice, on: true)
+                        confirm
+                    }
+                    VStack(spacing: 6) {
+                        chip(choice, on: true)
+                        HStack(spacing: 6) {
+                            cancel
+                            confirm
+                        }
+                    }
+                }
             } else {
-                ForEach(hit.choices, id: \.target) { choice in chip(choice, on: false) }
+                FlowRows {
+                    ForEach(hit.choices, id: \.target) { choice in chip(choice, on: false) }
+                }
             }
         }
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("hit.list")
+    }
+
+    private var cancel: some View {
+        ActionPill(
+            title: String(localized: "Cancel", comment: "Hit list on Cards: put the picked group back"),
+            style: .quiet, action: onCancel)
+            .accessibilityIdentifier("hit.cancel")
+    }
+
+    private var confirm: some View {
+        ActionPill(
+            title: String(localized: "Hit", comment: "Hit list on Cards: play the picked card on the picked group"),
+            style: .go, action: onHit)
+            .accessibilityIdentifier("hit.confirm")
     }
 
     private func chip(_ choice: HitChoice, on: Bool) -> some View {
@@ -153,8 +176,10 @@ struct ActionPill: View {
     let action: () -> Void
 
     @Environment(\.dynamicTypeSize) private var type
-    private var letters: CGFloat { 17 * ChromeType.scale(type, upTo: 1.5) }
-    private var face: CGFloat { 40 * ChromeType.scale(type, upTo: 1.5) }
+    @Environment(\.chromeRoom) private var room
+    private var scale: CGFloat { ChromeType.scale(type, upTo: 1.5, room: room) }
+    private var letters: CGFloat { 17 * scale }
+    private var face: CGFloat { 40 * scale }
     private static let lip: CGFloat = 4
 
     var body: some View {
@@ -169,7 +194,7 @@ struct ActionPill: View {
                 .lineLimit(1)
                 .truncationMode(.middle)
                 .padding(.horizontal, face * 0.3)
-                .frame(minWidth: 64, minHeight: face)
+                .frame(minWidth: 64 * room, minHeight: face)
                 .background(Capsule().fill(fill))
                 .overlay(Capsule().strokeBorder(Palette.ink, lineWidth: 3))
                 .compositingGroup()

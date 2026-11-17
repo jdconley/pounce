@@ -180,6 +180,10 @@ public struct TableLayout: Sendable {
     /// The view is big enough for a roomy table (an iPad window), whatever the arrangement.
     public var roomy: Bool { Self.arrangement(for: size) != .phone }
 
+    /// A controller on a landscape iPad: the action row beside the piles (right of them) rather
+    /// than under them, and the sort button at the trays' trailing edge.
+    public var controllerSideBySide: Bool { arrangement == .controller && Self.arrangement(for: size) == .wide }
+
     // Hand fan.
     private let handBaseY: CGFloat
     private let fanRadius: CGFloat
@@ -377,6 +381,9 @@ public struct TableLayout: Sendable {
         arrangement = .controller
         let width = size.width
         let roomy = Self.arrangement(for: size) != .phone
+        // A landscape iPad: the action row goes beside the piles instead of under them, and the
+        // height that frees goes to the hand (`controllerSideBySide`).
+        let wide = Self.arrangement(for: size) == .wide
         let side: CGFloat = roomy ? 16 : 8
         let gap: CGFloat = roomy ? 12 : 8  // between the status line, the piles and the action row
 
@@ -393,7 +400,9 @@ public struct TableLayout: Sendable {
         let floor: CGFloat = roomy ? 72 : Self.controllerCardMin
         func card(_ w: CGFloat) -> CGSize { CGSize(width: w, height: (w * 90 / 64).rounded()) }
         func handHalf(_ w: CGFloat) -> CGFloat {
-            roomy ? min(width / 2 - Self.handSidePad, (w + w * 0.72 * 11) / 2) : width / 2 - Self.handSidePad
+            // Side by side, the sort button needs room at the hand's trailing end.
+            let edge = wide ? Self.sortButtonHit + 24 : Self.handSidePad
+            return roomy ? min(width / 2 - edge, (w + w * 0.72 * 11) / 2) : width / 2 - Self.handSidePad
         }
         func radius(_ w: CGFloat) -> CGFloat { roomy ? handHalf(w) * 3 : width * 1.5 }
         /// The step between neighbouring cards in a fan of `n` cards `w` wide.
@@ -409,11 +418,13 @@ public struct TableLayout: Sendable {
         }
         // An eleven-card hand, never past a fifth of the safe height tall (a squat screen).
         let safeH = size.height - safeTop - safeBottom
-        let fullCap = min(roomy ? 140 : 120, (safeH / 5.5 * 64 / 90).rounded(.down))
+        // The biggest card: 120 on a phone, 140 on an iPad, more on a bigger one.
+        let biggest = roomy ? max(140, (min(width, size.height) * 140 / 820).rounded(.down)) : 120
+        let fullCap = min(biggest, (safeH / (wide ? 4.4 : 5.5) * 64 / 90).rounded(.down))
         let full = max(widest(11, cap: fullCap), floor)
         // A short hand (eight cards at most): a third bigger, as far as eight can still fan and
         // within two ninths of the safe height.
-        let shortCap = min((full * 4 / 3).rounded(.down), (safeH / 4.5 * 64 / 90).rounded(.down))
+        let shortCap = min((full * 4 / 3).rounded(.down), (safeH / (wide ? 3.6 : 4.5) * 64 / 90).rounded(.down))
         let preferred = hand.short ? max(widest(ControllerHand.shortMax, cap: shortCap), full) : full
 
         func traysHeight(_ w: CGFloat) -> CGFloat {
@@ -425,13 +436,15 @@ public struct TableLayout: Sendable {
             let handTop = safeBottom + bottomPad + Self.fan(card: c, half: handHalf(w), radius: radius(w)).rise + c.height / 2 + 4
             // No trays: room for a picked card to rise clear of the action row (`liftHeight`).
             let trays = hand.trays ? traysPad + traysHeight(w) : Self.liftHeight
-            return handTop + trays + 6 + actionsH
+            // Side by side, the action row is beside the piles, not under them.
+            return handTop + trays + 6 + (wide ? 0 : actionsH)
         }
         /// The height left for the piles, with a gap above and below them.
         func pileRoom(_ w: CGFloat) -> CGFloat { top.statusLine.minY - gap - actionTop(w) - gap }
-        // Tall chrome: the piles give way to three quarters of a hand card, then the hand shrinks.
+        // Tall chrome: the piles give way to three quarters of a hand card, then the hand shrinks
+        // (side by side, the room holds the action row too).
         var cardW = preferred
-        while cardW > floor, pileRoom(cardW) < card((cardW * 0.75).rounded(.down)).height { cardW -= 1 }
+        while cardW > floor, pileRoom(cardW) < max(card((cardW * 0.75).rounded(.down)).height, wide ? actionsH : 0) { cardW -= 1 }
         let c = card(cardW)
         cardSize = c
         miniCardSize = CGSize(width: (cardW * 0.66).rounded(), height: (c.height * 0.66).rounded())
@@ -442,20 +455,26 @@ public struct TableLayout: Sendable {
         let room = pileRoom(cardW)
         let pileGap: CGFloat = roomy ? 12 : 8  // from the middle to each pile's inner edge
         let pileMin = max(miniCardSize.width, Self.buttonHit)
-        let pileMax = max(min((cardW * 1.5).rounded(.down), ((width - 2 * side) / 2 - pileGap).rounded(.down)), pileMin)
+        let half = handHalf(cardW)
+        let traysW = roomy ? min(width - 32, max(half * 2 + 40, 560), 820) : width - 2 * side
+        let traysX = (width - traysW) / 2
+        // Side by side, the piles share the left half of the trays' width.
+        let pilesWidth = wide ? traysW / 2 - pileGap : width - 2 * side
+        let pileMax = max(min((cardW * 1.5).rounded(.down), (pilesWidth / 2 - pileGap).rounded(.down)), pileMin)
         var fitting = (room * 64 / 90).rounded(.down)
         while fitting > pileMin, card(fitting).height > room { fitting -= 1 }
         let pile = card(min(max(fitting, pileMin), pileMax))
         pileSize = pile
-        chromeOverflow = max(pile.height - room, 0)
-        var leftover = max(room - pile.height, 0)
+        // Side by side, the room holds the action row as well as the piles.
+        let needed = max(pile.height, wide ? actionsH : 0)
+        chromeOverflow = max(needed - room, 0)
+        var leftover = max(room - needed, 0)
         // Trays take up to half of what is left, up to 88 tall on a phone (120 roomy).
         let trayGrow = hand.trays
             ? min((leftover / 2).rounded(.down), max((roomy ? 120 : 88) - traysHeight(cardW), 0)) : 0
         leftover -= trayGrow
 
         // The hand, at the bottom.
-        let half = handHalf(cardW)
         fanRadius = radius(cardW)
         let fan = Self.fan(card: c, half: half, radius: fanRadius)
         handSpan = fan.span
@@ -464,23 +483,35 @@ public struct TableLayout: Sendable {
 
         // The trays on it (none: an empty strip as high as a picked card rises, so it never rides
         // into the action row), then the action row with the sort button at its right end.
-        let traysW = roomy ? min(width - 32, max(half * 2 + 40, 560), 820) : width - 2 * side
-        let traysX = (width - traysW) / 2
         let trays = hand.trays
             ? CGRect(x: traysX, y: handTop + traysPad, width: traysW, height: traysHeight(cardW) + trayGrow)
             : CGRect(x: traysX, y: handTop + Self.liftHeight, width: traysW, height: 0)
         traysFrame = trays
         let actionY = trays.maxY + 6
-        let sortW = Self.sortButtonHit + 4
-        actionRow = CGRect(x: traysX, y: actionY, width: traysW - sortW, height: actionsH)
-        // The sort button on the action row's bottom line, at its right end.
-        sortButton = CGPoint(x: traysX + traysW - Self.sortButtonHit / 2, y: actionY + min(actionsH, 52) / 2)
-
-        // The piles in the middle of the room between the action row and the status line.
-        let pilesY = actionY + actionsH + gap + leftover / 2 + pile.height / 2
         let pileOffset = pile.width / 2 + pileGap
-        deck = CGPoint(x: width / 2 - pileOffset, y: pilesY)
-        discard = CGPoint(x: width / 2 + pileOffset, y: pilesY)
+        if wide {
+            // Side by side: the piles in the left half of the trays' width, the action row in the
+            // right half, both in the middle of the room between the trays and the status line;
+            // the sort button at the trays' trailing edge (with no trays, beside the hand's top).
+            let pilesY = actionY + gap + (top.statusLine.minY - gap - actionY - gap) / 2
+            deck = CGPoint(x: traysX + pilesWidth / 2 - pileOffset, y: pilesY)
+            discard = CGPoint(x: traysX + pilesWidth / 2 + pileOffset, y: pilesY)
+            let rowH = min(max(actionsH, pile.height), top.statusLine.minY - gap - actionY - gap)
+            actionRow = CGRect(x: traysX + traysW / 2 + pileGap, y: pilesY - rowH / 2, width: traysW / 2 - pileGap, height: rowH)
+            sortButton = CGPoint(
+                x: max(trays.maxX, width / 2 + half) + 8 + Self.sortButtonHit / 2,
+                y: hand.trays ? trays.midY : handTop + Self.sortButtonHit / 2)
+        } else {
+            let sortW = Self.sortButtonHit + (roomy ? 16 : 4)
+            actionRow = CGRect(x: traysX, y: actionY, width: traysW - sortW, height: actionsH)
+            // The sort button on the action row's bottom line, at its right end.
+            sortButton = CGPoint(x: traysX + traysW - Self.sortButtonHit / 2, y: actionY + min(actionsH, 52) / 2)
+
+            // The piles in the middle of the room between the action row and the status line.
+            let pilesY = actionY + actionsH + gap + leftover / 2 + pile.height / 2
+            deck = CGPoint(x: width / 2 - pileOffset, y: pilesY)
+            discard = CGPoint(x: width / 2 + pileOffset, y: pilesY)
+        }
 
         // No table around the hand.
         opponentsBar = .zero

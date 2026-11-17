@@ -919,7 +919,9 @@ final class TableScene: SKScene {
     private func publishController() {
         var offer = ControllerOffer()
         if controllerShown, let layout {
-            offer.frames = ControllerOffer.Frames(actionRow: layout.actionRow, trays: layout.traysFrame)
+            offer.frames = ControllerOffer.Frames(
+                actionRow: layout.actionRow, trays: layout.traysFrame,
+                note: layout.controllerSideBySide ? layout.traysFrame : layout.actionRow)
         }
         if controllerShown, let seat = actingSeat, let model, model.canPlay(seat) {
             offer.layDown = layDownReady
@@ -1189,6 +1191,9 @@ struct ControllerOffer: Equatable {
     struct Frames: Equatable {
         var actionRow: CGRect
         var trays: CGRect
+        /// What the move note sits over: the action row, or beside the piles (a landscape iPad)
+        /// the trays, as on the table.
+        var note: CGRect
     }
 
     var hit: Hit?

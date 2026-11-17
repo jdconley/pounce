@@ -77,7 +77,8 @@ struct ViewSwitch: View {
     let onPick: (TablePick) -> Void
 
     @Environment(\.dynamicTypeSize) private var type
-    private var scale: CGFloat { ChromeType.scale(type, upTo: 1.35) }
+    @Environment(\.chromeRoom) private var room
+    private var scale: CGFloat { ChromeType.scale(type, upTo: 1.35, room: room) }
     private var letters: CGFloat { 17 * scale }
     private var segment: CGFloat { 36 * scale }
 
@@ -132,9 +133,10 @@ struct StatusLine: View {
     let mine: Bool
 
     @Environment(\.dynamicTypeSize) private var type
+    @Environment(\.chromeRoom) private var room
 
     var body: some View {
-        OutlinedText(text, size: 22 * ChromeType.scale(type, upTo: 1.5), fill: mine ? Palette.orange : .white, width: 3)
+        OutlinedText(text, size: 22 * ChromeType.scale(type, upTo: 1.5, room: room), fill: mine ? Palette.orange : .white, width: 3)
             .accessibilityAddTraits(.isHeader)
             .accessibilityIdentifier("table.status")
     }
@@ -169,4 +171,23 @@ enum ChromeType {
         }
         return min(scale, cap)
     }
+
+    /// The text size's growth times the room's (`room(_:)`), together no more than 1.8: on an
+    /// iPad at the largest text sizes the chrome still leaves the cards their room.
+    static func scale(_ size: DynamicTypeSize, upTo cap: CGFloat, room: CGFloat) -> CGFloat {
+        min(scale(size, upTo: cap) * room, max(1.8, cap))
+    }
+
+    /// How much bigger the chrome is drawn for the room it has, on top of the text size: 1 on a
+    /// phone; on an iPad as much bigger as its cards are (half again on an 11-inch one), so the
+    /// switch, the status line and the action row don't read as a phone's beside iPad-sized cards.
+    static func room(_ size: CGSize) -> CGFloat {
+        guard TableLayout.arrangement(for: size) != .phone else { return 1 }
+        return min(max(min(size.width, size.height) / 560, 1.25), 1.5)
+    }
+}
+
+extension EnvironmentValues {
+    /// `ChromeType.room` for the table on screen (set by the chrome that lays the table out).
+    @Entry var chromeRoom: CGFloat = 1
 }

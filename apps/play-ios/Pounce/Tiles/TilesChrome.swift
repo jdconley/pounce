@@ -51,6 +51,7 @@ struct TilesChrome: View {
             }
             .onChange(of: frame, initial: true) { _, frame in onFrame(frame) }
             .background { templates }
+            .environment(\.chromeRoom, ChromeType.room(full))
         }
         .animation(.easeOut(duration: 0.2).paced, value: status?.text)
     }

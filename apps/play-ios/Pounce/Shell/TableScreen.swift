@@ -466,7 +466,7 @@ private struct TableStage: View {
                 .zIndex(TableLayer.lookPill)
             }
             if let shown = moveNote, curtainSeat == nil, events.winners == nil, events.scoreboard == nil, events.player == nil {
-                MoveNoteView(text: noteText(shown.note), tv: tvFrame, actionRow: events.controller.frames?.actionRow)
+                MoveNoteView(text: noteText(shown.note), tv: tvFrame, actionRow: events.controller.frames?.note)
                     .id(shown.serial)
                     .transition(.scale(scale: 0.85, anchor: .bottom).combined(with: .opacity))
                     .zIndex(TableLayer.note)
@@ -858,7 +858,7 @@ private struct TableStage: View {
         }
         // `-show-hits` (screenshots, Cards): the hand card that can hit the most groups is picked, so the
         // hit list shows (or, with none, a Cucumber, so the skip list does); `-show-hit-picked`: and
-        // its first group too.
+        // its first group too (`-show-hit-picked-last`: its last).
         if CommandLine.arguments.contains("-show-hits") {
             Task { [weak scene] in
                 try? await Task.sleep(for: .milliseconds(1200))
@@ -870,7 +870,10 @@ private struct TableStage: View {
                 scene.liftedCard = card
                 guard CommandLine.arguments.contains("-show-hit-picked") else { return }
                 try? await Task.sleep(for: .milliseconds(300))
-                if let first = events.controller.hit?.choices.first { pickTarget(first.target) }
+                // `-show-hit-picked-last`: the list's last group (another seat's, a long name).
+                let choices = events.controller.hit?.choices ?? []
+                let last = CommandLine.arguments.contains("-show-hit-picked-last")
+                if let choice = last ? choices.last : choices.first { pickTarget(choice.target) }
             }
         }
         // `-show-scoreboard` (screenshots): the scoreboard over the table as it opens.
@@ -1232,6 +1235,7 @@ private struct CardsChrome: View {
             }
             .onChange(of: frame, initial: true) { _, frame in onFrame(frame) }
             .background { templates(width: layout.actionRow.width) }
+            .environment(\.chromeRoom, ChromeType.room(full))
         }
         .animation(.spring(duration: 0.25, bounce: 0.2).paced, value: offer)
         .animation(.spring(duration: 0.25, bounce: 0.2).paced, value: picked)
@@ -1241,8 +1245,11 @@ private struct CardsChrome: View {
     /// band is in the same place on Table). Short of room even with the smallest cards, the status
     /// line gives up what is missing (`TableLayout.chromeOverflow`).
     private static func frame(full: CGSize, insets: EdgeInsets, measured: Measured, shown: TableShown) -> (TVFrame, TableLayout) {
-        // One line of pills at least; more when the chips wrap, up to three (then it scrolls).
-        let lines = min(max(measured.actions, measured.pill), 3 * measured.pill + 12)
+        // One line of pills at least; more when the chips wrap, up to three (then it scrolls); four
+        // beside the piles on a landscape iPad, where the row is half as wide.
+        let sideBySide = TableLayout.arrangement(for: full) == .wide
+        let most = sideBySide ? 4 * measured.pill + 18 : 3 * measured.pill + 12
+        let lines = min(max(measured.actions, measured.pill), most)
         var chrome = ControllerChrome(switchBand: measured.band + 6, status: measured.status + 2, actions: lines + 6)
         var layout = TableLayout(full: full, insets: insets, tv: .cards(chrome))
         if !layout.fits {

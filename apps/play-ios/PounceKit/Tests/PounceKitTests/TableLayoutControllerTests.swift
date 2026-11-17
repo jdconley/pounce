@@ -6,11 +6,13 @@ import Testing
 /// SwiftUI chrome (the "Cards" | "Table" switch, the status line, the action row).
 @Suite("TableLayout, controller")
 struct TableLayoutControllerTests {
-    /// iPhone SE, iPhone 17 Pro, iPhone 17 Pro Max, iPad portrait, iPad landscape.
+    /// iPhone SE, iPhone 17 Pro, iPhone 17 Pro Max, iPad portrait, iPad landscape, a 13-inch iPad
+    /// portrait and landscape.
     static let screens: [(size: CGSize, top: CGFloat, bottom: CGFloat)] = [
         (CGSize(width: 375, height: 667), 20, 0), (CGSize(width: 402, height: 874), 62, 34),
         (CGSize(width: 440, height: 956), 62, 34), (CGSize(width: 820, height: 1180), 24, 20),
-        (CGSize(width: 1180, height: 820), 24, 20),
+        (CGSize(width: 1180, height: 820), 24, 20), (CGSize(width: 1024, height: 1366), 24, 20),
+        (CGSize(width: 1366, height: 1024), 24, 20),
     ]
     /// The chrome at the largest accessibility text size.
     static let tall = ControllerChrome(switchBand: 64, status: 56, actions: 96)
@@ -88,13 +90,26 @@ struct TableLayoutControllerTests {
         #expect(l.switchBand.maxY <= l.size.height - l.safeTop + 0.01)
         #expect(l.statusLine.maxY <= l.switchBand.minY + 0.01)
         #expect(pileTop <= l.statusLine.minY)
-        #expect(l.actionRow.maxY <= pileBottom)
-        #expect(l.traysFrame.maxY <= l.actionRow.minY)
-        #expect(l.deck.y == l.discard.y && l.deck.x < l.size.width / 2 && l.discard.x > l.size.width / 2)
-        #expect(abs((l.deck.x + l.discard.x) / 2 - l.size.width / 2) < 0.01)
-        // The switch band and the status line hug the top; the action row sits on the trays.
+        #expect(l.deck.y == l.discard.y && l.deck.x < l.discard.x)
+        // The switch band and the status line hug the top.
         #expect(abs(l.switchBand.maxY - (l.size.height - l.safeTop)) < 0.01)
-        #expect(l.actionRow.minY - l.traysFrame.maxY <= TableLayout.sortButtonHit + 16)
+        #expect(l.controllerSideBySide == (TableLayout.arrangement(for: l.size) == .wide))
+        if l.controllerSideBySide {
+            // A landscape iPad: the piles in the left half of the trays' width, the action row in
+            // the right half beside them, level with them; all of it over the trays.
+            #expect(l.traysFrame.maxY <= pileBottom && l.traysFrame.maxY <= l.actionRow.minY)
+            #expect(l.discard.x + l.pileSize.width / 2 < l.actionRow.minX)
+            #expect(abs(l.actionRow.midY - l.deck.y) < 0.5)
+            #expect(abs((l.deck.x + l.discard.x) / 2 - (l.traysFrame.minX + l.traysFrame.width / 4)) < 12)
+            #expect(l.actionRow.maxX <= l.traysFrame.maxX + 0.01)
+        } else {
+            #expect(l.actionRow.maxY <= pileBottom)
+            #expect(l.traysFrame.maxY <= l.actionRow.minY)
+            #expect(l.deck.x < l.size.width / 2 && l.discard.x > l.size.width / 2)
+            #expect(abs((l.deck.x + l.discard.x) / 2 - l.size.width / 2) < 0.01)
+            // The action row sits on the trays.
+            #expect(l.actionRow.minY - l.traysFrame.maxY <= TableLayout.sortButtonHit + 16)
+        }
     }
 
     /// No dead band: the hand, trays and action row sit together at the bottom, and the piles
@@ -107,13 +122,16 @@ struct TableLayoutControllerTests {
         for chrome in [ControllerChrome.standard, Self.tall] {
             for hand in Self.hands {
                 let l = layout(i, chrome, hand)
-                let below = (l.deck.y - l.pileSize.height / 2) - l.actionRow.maxY
+                // Side by side, the room starts on the trays (the action row is beside the piles).
+                let floor = l.controllerSideBySide ? l.traysFrame.maxY + 6 : l.actionRow.maxY
+                let below = (l.deck.y - l.pileSize.height / 2) - floor
                 let above = l.statusLine.minY - (l.deck.y + l.pileSize.height / 2)
                 let safeHeight = l.size.height - l.safeTop - l.safeBottom
                 #expect(below >= 8 && above >= 8, "\(l.size) \(hand): \(above) above, \(below) below")
                 #expect(abs(above - below) < 0.5, "\(l.size) \(hand): \(above) above, \(below) below")
                 let usual = hand == .full || hand == ControllerHand(short: true, trays: false)
-                let atMost = l.pileSize.width >= min((l.cardSize.width * 1.5).rounded(.down), l.size.width / 2 - 24)
+                let pairWidth = l.controllerSideBySide ? l.traysFrame.width / 2 - 12 : l.size.width - 16
+                let atMost = l.pileSize.width >= min((l.cardSize.width * 1.5).rounded(.down), pairWidth / 2 - 24)
                 #expect(below <= safeHeight / 6 || (!usual && atMost),
                         "\(l.size) \(hand): \(below) pt between the action row and the piles")
                 // Piles give way to the hand only down to three quarters of a hand card.
@@ -142,10 +160,26 @@ struct TableLayoutControllerTests {
                         "\(l.size) \(hand): picked card \(k) of \(n) \(r) reaches the action row \(l.actionRow)")
             }
             if !hand.trays { #expect(l.traysFrame.height == 0) }
-            #expect(l.actionRow.minY - l.traysFrame.maxY <= 8)
             let sort = l.sortButtonFrame
-            #expect(sort.minX >= l.actionRow.maxX && sort.maxX <= l.traysFrame.maxX + 0.01)
-            #expect(sort.minY >= l.actionRow.minY - 0.01 && sort.maxY <= l.actionRow.maxY + 0.01)
+            if l.controllerSideBySide {
+                // At the trays' trailing edge (or the fan's, if wider): beside the trays, or with
+                // none, beside the hand's top.
+                let handTopY = l.hand(count: 11, lifted: nil).map(\.position.y).max() ?? 0
+                let fanRight = l.hand(count: 11, lifted: nil).map { rotatedBounds($0, l.cardSize).maxX }.max() ?? 0
+                let edge = max(l.traysFrame.maxX, fanRight)
+                #expect(sort.minX >= edge - 0.5 && sort.minX - edge <= 12, "\(l.size) \(hand): sort \(sort) vs edge \(edge)")
+                if hand.trays {
+                    #expect(abs(sort.midY - l.traysFrame.midY) < 0.5)
+                } else {
+                    #expect(sort.minY >= handTopY - 0.01 && sort.minY - handTopY <= l.cardSize.height)
+                }
+            } else {
+                #expect(l.actionRow.minY - l.traysFrame.maxY <= 8)
+                #expect(sort.minX >= l.actionRow.maxX && sort.maxX <= l.traysFrame.maxX + 0.01)
+                #expect(sort.minY >= l.actionRow.minY - 0.01 && sort.maxY <= l.actionRow.maxY + 0.01)
+                // Clear of the last chip by a margin (wider on an iPad).
+                #expect(sort.minX - l.actionRow.maxX >= (l.roomy ? 16 : 4) - 0.01)
+            }
             #expect(l.seatTagFrame == .zero, "the status line names the player on a controller")
         }
     }
@@ -161,9 +195,15 @@ struct TableLayoutControllerTests {
             #expect(l.switchBand.height >= max(chrome.switchBand, 44))
             #expect(l.statusLine.height >= chrome.status)
             #expect(l.actionRow.height >= chrome.actions)
-            // The row is the trays' width less the sort button at its end.
-            #expect(abs(l.actionRow.width + TableLayout.sortButtonHit + 4 - l.traysFrame.width) < 0.01)
-            #expect(l.actionRow.width >= min(l.size.width - 48, 560) - TableLayout.sortButtonHit - 4)
+            if l.controllerSideBySide {
+                // Half the trays' width, beside the piles.
+                #expect(l.actionRow.width >= l.traysFrame.width / 2 - 12 - 0.01)
+            } else {
+                // The row is the trays' width less the sort button at its end.
+                let reserve = TableLayout.sortButtonHit + (l.roomy ? 16 : 4)
+                #expect(abs(l.actionRow.width + reserve - l.traysFrame.width) < 0.01)
+                #expect(l.actionRow.width >= min(l.size.width - 48, 560) - reserve)
+            }
             for tray in l.trayFrames(count: 3) { #expect(tray.width >= 44 && tray.height >= 44) }
         }
     }

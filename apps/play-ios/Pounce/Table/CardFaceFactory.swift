@@ -106,9 +106,12 @@ final class CardFaceFactory {
             }
             let detail = Self.detail
             warming = Task {
+                // The preview's pieces alongside the faces, not after them: a drag can come before
+                // all the faces are drawn.
+                async let pieces: Void = warmPreview()
                 let made = await Self.drawFaces(keys, detail: detail)
                 for (key, texture) in made where faces[key] == nil { faces[key] = texture }
-                await warmPreview()
+                await pieces
             }
         }
         await warming?.value
