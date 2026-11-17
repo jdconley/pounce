@@ -38,6 +38,8 @@ struct ShowOnTVSheet: View {
     @State private var tried: Set<String> = []
     @State private var shake = 0
     @State private var began = false
+    /// Closes the sheet a moment after "On the TV"; cancelled if the sheet goes first.
+    @State private var closing: Task<Void, Never>?
 
     private var roomy: Bool { sizeClass == .regular }
 
@@ -70,6 +72,7 @@ struct ShowOnTVSheet: View {
             .accessibilityIdentifier("tv.move.cancel")
         }
         .task { await begin() }
+        .onDisappear { closing?.cancel() }
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("sheet-tv")
     }
@@ -255,16 +258,26 @@ struct ShowOnTVSheet: View {
         if let start { link(start) }
     }
 
+    /// `TVSheetStart` decides; this only reads the device and asks the system's question.
     private static func firstMode(askForCamera: Bool) async -> Mode {
-        guard QRScanner.supported else { return .type }
-        switch AVCaptureDevice.authorizationStatus(for: .video) {
-        case .authorized:
-            return QRScanner.canScan ? .scan : .type
-        case .notDetermined where askForCamera:
+        let start = TVSheetStart.first(
+            supported: QRScanner.supported, available: QRScanner.canScan,
+            permission: cameraPermission, askForCamera: askForCamera)
+        switch start {
+        case .scan: return .scan
+        case .type: return .type
+        case .askForCamera:
             let allowed = await AVCaptureDevice.requestAccess(for: .video)
-            return allowed && QRScanner.canScan ? .scan : .type
-        default:
-            return .type
+            return TVSheetStart.afterAsking(allowed: allowed, available: QRScanner.canScan) == .scan ? .scan : .type
+        }
+    }
+
+    private static var cameraPermission: CameraPermission {
+        switch AVCaptureDevice.authorizationStatus(for: .video) {
+        case .authorized: .authorized
+        case .notDetermined: .notDetermined
+        case .restricted: .restricted
+        default: .denied
         }
     }
 
@@ -293,9 +306,11 @@ struct ShowOnTVSheet: View {
         Sound.shared.play(ArtName.Sound.sfxSparkle)
         let words = String(localized: "On the TV", comment: "Show on TV: the table is on the TV now")
         UIAccessibility.post(notification: .announcement, argument: words)
-        // Long enough to read at any speed (it is words, not an animation), then the table.
-        Task {
+        // Long enough to read at any speed (it is words, not an animation), then the table. A
+        // sheet that went away before then (closed, or replaced by a newer request) closes nothing.
+        closing = Task {
             try? await Task.sleep(for: .milliseconds(1400))
+            guard !Task.isCancelled else { return }
             onClose()
         }
     }

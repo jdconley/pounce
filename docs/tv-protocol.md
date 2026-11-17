@@ -148,8 +148,10 @@ show.
 - **This app** (stage 3 on) takes the token:
   - At a table (lobby or game) where it is seated or hosts, it links that table at once, asking
     "Move the TV to this table?" on a 409 `showing`.
-  - Anywhere else it opens Home ("Your tables" and the games), and links the next table opened
-    or made (within the link's 10 minutes), as soon as the room exists.
+  - Anywhere else it opens Home ("Your tables" and the games) with "Pick a table for the TV.",
+    and links the table picked from Home's list or made from its games (within the link's 10
+    minutes), as soon as the room exists. Reaching a table any other way (a push, Play again, an
+    invite link) drops the waiting link.
   - Before the age check or pick-a-cat, the link waits for them, as a `/j/` link does.
 - **Show on TV** in the app scans the TV's QR. It accepts only
   `https://play.conleychaos.com/tv/<22 base64url chars>` and keeps looking past any other code,

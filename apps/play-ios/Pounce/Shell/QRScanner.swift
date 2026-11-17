@@ -36,7 +36,8 @@ struct QRScanner: UIViewControllerRepresentable {
             isGuidanceEnabled: false,
             isHighlightingEnabled: true)
         scanner.delegate = context.coordinator
-        return Host(scanner: scanner, active: active)
+        let coordinator = context.coordinator
+        return Host(scanner: scanner, active: active) { coordinator.onUnavailable() }
     }
 
     func updateUIViewController(_ host: Host, context: Context) {
@@ -53,14 +54,17 @@ struct QRScanner: UIViewControllerRepresentable {
     /// that), and stops it whenever `active` goes false or the view goes away.
     final class Host: UIViewController {
         let scanner: DataScannerViewController
+        /// The camera wouldn't start: the sheet shows the code entry instead of a black square.
+        private let onFail: () -> Void
         private var onScreen = false
         var active: Bool {
             didSet { if active != oldValue { apply() } }
         }
 
-        init(scanner: DataScannerViewController, active: Bool) {
+        init(scanner: DataScannerViewController, active: Bool, onFail: @escaping () -> Void) {
             self.scanner = scanner
             self.active = active
+            self.onFail = onFail
             super.init(nibName: nil, bundle: nil)
         }
 
@@ -91,7 +95,12 @@ struct QRScanner: UIViewControllerRepresentable {
 
         private func apply() {
             if active && onScreen {
-                if !scanner.isScanning { try? scanner.startScanning() }
+                guard !scanner.isScanning else { return }
+                do {
+                    try scanner.startScanning()
+                } catch {
+                    onFail()
+                }
             } else if scanner.isScanning {
                 scanner.stopScanning()
             }

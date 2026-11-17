@@ -885,7 +885,8 @@ final class AppModel {
     }
 
     /// `practice`: a game against the House Cat that starts at once, with no stop in the lobby.
-    func newGame(_ game: GameCatalog.Entry = GameCatalog.dealt, practice: Bool = false) async {
+    /// `fromHome`: made from Home's games, so a TV link waiting there goes on this table.
+    func newGame(_ game: GameCatalog.Entry = GameCatalog.dealt, practice: Bool = false, fromHome: Bool = false) async {
         // A game still on its way has a card on the shelf but no table to start.
         guard game.isAvailable, !isCreatingRoom else { return }
         isCreatingRoom = true
@@ -895,7 +896,11 @@ final class AppModel {
             // Before `open`, which caches the new table.
             let first = isFirstTable
             let code = try await api.createRoom(game: game.id)
-            open(code: code, intent: .create)
+            if fromHome {
+                openFromHome(code: code, intent: .create)
+            } else {
+                open(code: code, intent: .create)
+            }
             if practice {
                 room?.practicePending = true
             } else if first && firstTableCat {
@@ -1169,36 +1174,60 @@ final class AppModel {
 
     /// "Show on TV" is up over the table it names (the table screen presents it).
     var tvSheet: TVSheetRequest?
-    /// A TV's link opened away from a table: the next table opened or made goes on that TV, while
-    /// the link can still work (a TV renews its link every 10 minutes).
-    @ObservationIgnored private var pendingTV: (token: String, at: Date)?
-    private static let tvLinkLife: TimeInterval = 10 * 60
+    /// A TV's link opened away from a table: Home says "Pick a table for the TV." and the table
+    /// picked from Home's list or made from its games goes on that TV. Any other way to a table (a
+    /// push, Play again, an invite link) drops it, and so does the link's 10 minutes running out.
+    private(set) var pendingTV: String?
+    @ObservationIgnored private var pendingTVExpiry: Task<Void, Never>?
+    private static let tvLinkLife: Duration = .seconds(10 * 60)
 
     /// A TV's link (its QR scanned with the Camera app, or pasted). At a table, that table goes on
-    /// the TV; anywhere else Home shows your tables and the games, and the table picked or made
-    /// goes on it.
+    /// the TV; anywhere else Home, with nothing over it, waits for a table to be picked or made.
     private func openTV(_ token: String) {
         if case .room(let code, _) = route {
             tvSheet = TVSheetRequest(code: code, key: .token(token))
             return
         }
         inviteShown = false
-        pendingTV = (token, .now)
+        pick = nil
+        expiredInviteShown = false
+        offlineInvite = nil
+        kittensPanel = nil
         route = .home
+        pendingTV = token
+        pendingTVExpiry?.cancel()
+        pendingTVExpiry = Task { [weak self] in
+            try? await Task.sleep(for: Self.tvLinkLife)
+            guard !Task.isCancelled else { return }
+            self?.pendingTV = nil
+        }
     }
 
-    /// A table opened while a TV's link waits: Show on TV over it, linking that TV. Leaving a
-    /// table drops its sheet.
+    /// The waiting TV link, taken by the table Home is about to open or has just made.
+    private func takePendingTV() -> String? {
+        defer {
+            pendingTV = nil
+            pendingTVExpiry?.cancel()
+        }
+        return pendingTV
+    }
+
+    /// A table picked from Home's list: the waiting TV link, if any, goes with it.
+    func openFromHome(code: String, intent: RoomIntent) {
+        let tv = takePendingTV()
+        open(code: code, intent: intent)
+        if let tv { tvSheet = TVSheetRequest(code: code, key: .token(tv)) }
+    }
+
+    /// Leaving a table drops its sheet. Reaching a table any other way than from Home drops a
+    /// waiting TV link: it was for the table picked there.
     private func routeChangedForTV() {
         guard case .room(let code, _) = route else {
             tvSheet = nil
             return
         }
         if let sheet = tvSheet, sheet.code != code { tvSheet = nil }
-        guard let pending = pendingTV else { return }
-        pendingTV = nil
-        guard Date.now.timeIntervalSince(pending.at) < Self.tvLinkLife else { return }
-        tvSheet = TVSheetRequest(code: code, key: .token(pending.token))
+        if pendingTV != nil { _ = takePendingTV() }
     }
 
     /// The table's Show on TV button (the lobby, the table menus).
@@ -1259,7 +1288,7 @@ final class AppModel {
         pasteboard.settle()
         Haptics.shared.success()
         // A TV's link isn't an invite: it opens as the tapped link would, and isn't counted as one.
-        if case .tv = link {} else { funnel.pasted() }
+        if link.isInvite { funnel.pasted() }
         handle(link)
     }
 

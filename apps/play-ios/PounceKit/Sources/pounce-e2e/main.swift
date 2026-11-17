@@ -677,7 +677,7 @@ func screenMode(_ base: APIConfig, _ o: Options) async throws {
         while !Task.isCancelled {
             let text = try await socket.receive()
             let message = try JSONSerialization.jsonObject(with: Data(text.utf8)) as? [String: Any] ?? [:]
-            if let leak = ScreenPrivacy.leak(in: message) {
+            if let leak = ScreenPrivacy.leak(inJSON: text) {
                 log("FAIL the TV heard something private: \(leak)")
                 exit(1)
             }
@@ -716,25 +716,6 @@ func screenMode(_ base: APIConfig, _ o: Options) async throws {
     } while again && Date().timeIntervalSince(started) < timeout
     try? await Task.sleep(for: .seconds(max(1, timeout - Date().timeIntervalSince(started))))
     watching?.cancel()
-}
-
-/// What a TV must never hear (docs/tv-protocol.md, "A screen"): a hand, a rack, a seat of its own,
-/// or the card or tile drawn from the deck.
-enum ScreenPrivacy {
-    static func leak(in message: [String: Any]) -> String? {
-        if message["t"] as? String == "snapshot", let room = message["room"] as? [String: Any] {
-            if let hands = (room["game"] as? [String: Any])?["hands"] as? [String: Any], !hands.isEmpty { return "hands" }
-            if let racks = (room["tiles"] as? [String: Any])?["racks"] as? [String: Any], !racks.isEmpty { return "racks" }
-            if (room["seats"] as? [[String: Any]] ?? []).contains(where: { $0["yours"] as? Bool == true }) { return "a seat" }
-            if room["youAreHost"] as? Bool == true { return "the host" }
-        }
-        if message["t"] as? String == "event", let outer = message["event"] as? [String: Any],
-           let event = outer["event"] as? [String: Any], event["kind"] as? String == "drew" {
-            if outer["kind"] as? String == "game", event["from"] as? String == "deck", event["card"] != nil { return "a drawn card" }
-            if outer["kind"] as? String == "tiles", event["tile"] != nil { return "a drawn tile" }
-        }
-        return nil
-    }
 }
 
 // MARK: main

@@ -168,6 +168,17 @@ struct HomeView: View {
                 Task { await checkPush() }
             }
         }
+        // A TV's link arrived: Home, with nothing over it, so a table can be picked.
+        .onChange(of: model.pendingTV != nil) { _, waiting in
+            guard waiting else { return }
+            showPeople = false
+            showSettings = false
+            showArchived = false
+            showRules = false
+            showPriming = false
+            streakSignIn = false
+        }
+        .animation(.spring(duration: 0.35, bounce: 0.3).paced, value: model.pendingTV != nil)
         .onChange(of: model.newGameError) { _, error in
             if error != nil {
                 newGameShake += 1
@@ -416,7 +427,7 @@ struct HomeView: View {
             accessibilityLabel: "Practice with the House Cat"
         ) {
             model.tips.used("home.practice")
-            Task { await model.newGame(practice: true) }
+            Task { await model.newGame(practice: true, fromHome: true) }
         }
         .disabled(model.isCreatingRoom)
         // The pill's lip and face fade as one.
@@ -440,6 +451,35 @@ struct HomeView: View {
 
     private static let tablesTitle = String(localized: "Your tables", comment: "Home: the title over your tables")
 
+
+    /// A TV's link waits for a table: one line over Home, until a table is picked or made.
+    private var tvCue: some View {
+        HStack(spacing: 10) {
+            Image(ArtName.iconTV)
+                .resizable()
+                .scaledToFit()
+                .frame(width: roomy ? 40 : 32)
+                .accessibilityHidden(true)
+            Text("Pick a table for the TV.", comment: "Home: a TV's link was opened; the table picked or made next goes on it")
+                .font(.system(roomy ? .title3 : .callout, design: .rounded, weight: .heavy))
+                .foregroundStyle(.white)
+                .multilineTextAlignment(.leading)
+                .lineLimit(2)
+                .minimumScaleFactor(0.7)
+                .fixedSize(horizontal: false, vertical: true)
+                .dynamicTypeSize(...DynamicTypeSize.accessibility2)
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 10)
+        .background(
+            Capsule().fill(Palette.violet)
+                .overlay(Capsule().strokeBorder(Palette.ink, lineWidth: 3))
+                .shadow(color: Palette.ink.opacity(0.5), radius: 0, x: 0, y: 3))
+        .compositingGroup()
+        .padding(.horizontal, 16)
+        .accessibilityElement(children: .combine)
+        .accessibilityIdentifier("home.tvCue")
+    }
 
     /// Why a new game didn't start, over the shelf.
     @ViewBuilder private var createError: some View {
@@ -503,7 +543,7 @@ struct HomeView: View {
                     playAnchor: dealt ? "home.play" : nil
                 ) {
                     if dealt { model.tips.used("home.newGame") }
-                    Task { await model.newGame(game) }
+                    Task { await model.newGame(game, fromHome: true) }
                 }
                 if rules, !bigType { rulesChip(roomy: roomy).padding(roomy ? 16 : 12) }
             }
@@ -645,6 +685,7 @@ struct HomeView: View {
             VStack(spacing: 16) {
                 // A newer version, or a table waiting behind one (app updates design §4.1, §4.2).
                 HomeUpdates()
+                if model.pendingTV != nil { tvCue.transition(.scale.combined(with: .opacity)) }
                 if lead == .tables { tablesSection }
                 if lead != nil { shelfColumn(leads: lead == .shelf) }
                 if lead == .shelf { tablesSection }
@@ -667,6 +708,7 @@ struct HomeView: View {
         return ScrollView(.vertical, showsIndicators: false) {
             VStack(spacing: 24) {
                 HomeUpdates(roomy: true)
+                if model.pendingTV != nil { tvCue.transition(.scale.combined(with: .opacity)) }
                 Group {
                     if lead == nil {
                         EmptyView()
@@ -766,7 +808,7 @@ struct HomeView: View {
     private func tableCard(_ item: HomeTableItem) -> some View {
         TableCard(item: item, people: model.tablePeople(item), streakPaw: model.streaks.completesToday(code: item.id)) {
             model.tips.used("home.table")
-            model.open(code: item.id, intent: .rejoin)
+            model.openFromHome(code: item.id, intent: .rejoin)
         }
         // The archive tip points at the first table that has waited a day.
         .tipTarget(item.id == firstIdle ? "home.idleTable" : nil)

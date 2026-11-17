@@ -53,8 +53,10 @@ final class ShowOnTVTests: XCTestCase {
         XCTAssertFalse(tv.output().contains("FAIL"), tv.output())
     }
 
-    /// Camera permission denied: the sheet shows the code entry ("Type the TV's code") and no
-    /// error; a wrong code says so, and the right one still works.
+    /// Camera permission denied: the code entry works and nothing crashes. (The simulator has no
+    /// scanner, so it would show the code entry whatever the permission; which view a denied,
+    /// restricted or unasked camera gets is `TVSheetStartTests`.) A wrong code says so, and the
+    /// right one still works.
     func testWithTheCameraDeniedTheCodeStillWorks() throws {
         let udid = try XCTUnwrap(ProcessInfo.processInfo.environment["SIMULATOR_UDID"], "not on a simulator")
         let revoke = try HostProcess("privacy", [udid, "revoke"])
@@ -90,7 +92,73 @@ final class ShowOnTVTests: XCTestCase {
         XCTAssertFalse(tv.output().contains("FAIL"), tv.output())
     }
 
+    /// A TV's link opened before this phone has a player: onboarding first, then Home says "Pick
+    /// a table for the TV.", and the table made from Home's games goes on the TV.
+    func testATVLinkBeforeOnboardingGoesOnTheTableMadeFromHome() throws {
+        let tv = try HostProcess("e2e", ["screen", "link", "--timeout", "300", "--base", Live.baseURL])
+        addTeardownBlock { tv.stop() }
+        let token = try XCTUnwrap(tvToken(tv), "the TV never got a link:\n\(tv.output())")
+
+        let app = Live.app()
+        app.launchArguments += ["-open-link", "pounce-dev://tv/\(token)"]
+        app.launch()
+        onboard(app)
+        let cue = el(app, "home.tvCue")
+        XCTAssertTrue(cue.waitForExistence(timeout: Live.t(10)), "no Pick a table for the TV on Home")
+        XCTAssertEqual(cue.label, "Pick a table for the TV.")
+        screenshot(app, "tv-home-cue")
+
+        el(app, "home.newGame").tap()
+        XCTAssertTrue(el(app, "tv.linked").waitForExistence(timeout: Live.t(20)), "no On the TV: \(message(app))")
+        XCTAssertTrue(until(10) { !self.el(app, "sheet-tv").exists }, "the sheet stayed up")
+        let code = lobbyCode(app)
+        XCTAssertTrue(until(15) { tv.output().contains("linked \(code)") }, "the TV wasn't linked:\n\(tv.output())")
+        XCTAssertFalse(el(app, "home.tvCue").exists)
+        XCTAssertFalse(tv.output().contains("FAIL"), tv.output())
+    }
+
+    /// A TV's link opened while a lobby is up: that table goes on the TV.
+    func testATVLinkOpenedInALobbyPutsThatTableOnTheTV() throws {
+        let tv = try HostProcess("e2e", ["screen", "link", "--timeout", "300", "--base", Live.baseURL])
+        addTeardownBlock { tv.stop() }
+        let token = try XCTUnwrap(tvToken(tv), "the TV never got a link:\n\(tv.output())")
+
+        let app = Live.app()
+        app.launch()
+        onboard(app)
+        newGame(app)
+        let code = lobbyCode(app)
+        // Opened in the running app (`XCUIApplication.open` relaunches it, losing the test's data).
+        let udid = try XCTUnwrap(ProcessInfo.processInfo.environment["SIMULATOR_UDID"], "not on a simulator")
+        let opened = try HostProcess("openurl", [udid, "pounce-dev://tv/\(token)"])
+        // The system may ask before handing a custom scheme's link over (only the first time).
+        // "On the TV" shows for a moment, so look for it while answering that.
+        let open = XCUIApplication(bundleIdentifier: "com.apple.springboard").buttons["Open"]
+        let linked = el(app, "tv.linked")
+        var sawLinked = false
+        XCTAssertTrue(until(20) {
+            if open.exists { open.tap() }
+            if linked.exists { sawLinked = true }
+            return sawLinked
+        }, "no On the TV: \(message(app))")
+        XCTAssertEqual(opened.wait(timeout: 20), 0, "couldn't open the link: \(opened.output())")
+        XCTAssertTrue(until(15) { tv.output().contains("linked \(code)") }, "the TV wasn't linked:\n\(tv.output())")
+        XCTAssertFalse(tv.output().contains("FAIL"), tv.output())
+    }
+
     // MARK: helpers
+
+    /// The token of the TV's first link.
+    private func tvToken(_ tv: HostProcess) -> String? {
+        var token: String?
+        _ = until(30) {
+            guard let line = tv.output().split(separator: "\n").first(where: { $0.hasPrefix("link ") }) else { return false }
+            let parts = line.split(separator: " ")
+            token = parts.count == 3 ? String(parts[1]) : nil
+            return true
+        }
+        return token
+    }
 
     /// The backup code of the TV's `number`th link (`link <token> <code>` lines).
     private func tvCode(_ tv: HostProcess, number: Int) -> String? {

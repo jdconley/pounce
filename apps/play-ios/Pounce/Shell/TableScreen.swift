@@ -117,8 +117,11 @@ struct TableScreen: View {
         }
         // Show on TV: from the lobby's button, or a TV's link opened at (or on the way to) this
         // table. Up over the lobby or the table only, so a link waits for the table to arrive.
-        .sheet(item: tvSheet) { request in
-            ShowOnTVSheet(code: request.code, start: request.key) { model.tvSheet = nil }
+        .sheet(item: tvSheet(shownTV)) { request in
+            ShowOnTVSheet(code: request.code, start: request.key) {
+                // Only this request's sheet: a newer one stays.
+                if model.tvSheet?.id == request.id { model.tvSheet = nil }
+            }
                 .environment(model)
                 .presentationDetents([.large])
                 .presentationDragIndicator(.visible)
@@ -149,14 +152,16 @@ struct TableScreen: View {
         }
     }
 
-    private var tvSheet: Binding<TVSheetRequest?> {
-        Binding(
-            get: {
-                guard let request = model.tvSheet, request.code == session.code, screen == .lobby || screen == .table
-                else { return nil }
-                return request
-            },
-            set: { if $0 == nil { model.tvSheet = nil } })
+    /// The Show on TV request for this table, while its lobby or table is up. Read in `body`, so a
+    /// new request redraws the screen (the sheet's binding alone isn't watched).
+    private var shownTV: TVSheetRequest? {
+        guard let request = model.tvSheet, request.code == session.code, screen == .lobby || screen == .table
+        else { return nil }
+        return request
+    }
+
+    private func tvSheet(_ shown: TVSheetRequest?) -> Binding<TVSheetRequest?> {
+        Binding(get: { shown }, set: { if $0 == nil { model.tvSheet = nil } })
     }
 
     @ViewBuilder private var content: some View {

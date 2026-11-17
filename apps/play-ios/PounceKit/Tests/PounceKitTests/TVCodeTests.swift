@@ -62,3 +62,50 @@ import Testing
         #expect(TVCode.length == 6)
     }
 }
+
+/// What Show on TV shows first.
+@Suite struct TVSheetStartTests {
+    @Test func noScannerMeansTheCodeEntryWhateverThePermission() {
+        for permission in [CameraPermission.authorized, .denied, .restricted, .notDetermined] {
+            for ask in [true, false] {
+                #expect(TVSheetStart.first(supported: false, available: false, permission: permission, askForCamera: ask) == .type)
+            }
+        }
+    }
+
+    @Test func deniedOrRestrictedIsTheCodeEntry() {
+        for permission in [CameraPermission.denied, .restricted] {
+            for ask in [true, false] {
+                #expect(TVSheetStart.first(supported: true, available: true, permission: permission, askForCamera: ask) == .type)
+                #expect(TVSheetStart.first(supported: true, available: false, permission: permission, askForCamera: ask) == .type)
+            }
+        }
+    }
+
+    @Test func notDeterminedAsksOnlyFromTheButton() {
+        #expect(TVSheetStart.first(supported: true, available: false, permission: .notDetermined, askForCamera: true) == .askForCamera)
+        // A TV link opened on the phone never asks for the camera.
+        #expect(TVSheetStart.first(supported: true, available: false, permission: .notDetermined, askForCamera: false) == .type)
+        #expect(TVSheetStart.afterAsking(allowed: true, available: true) == .scan)
+        #expect(TVSheetStart.afterAsking(allowed: true, available: false) == .type)
+        #expect(TVSheetStart.afterAsking(allowed: false, available: true) == .type)
+    }
+
+    @Test func authorizedScansOnlyWhenTheScannerCanRun() {
+        #expect(TVSheetStart.first(supported: true, available: true, permission: .authorized, askForCamera: true) == .scan)
+        #expect(TVSheetStart.first(supported: true, available: true, permission: .authorized, askForCamera: false) == .scan)
+        #expect(TVSheetStart.first(supported: true, available: false, permission: .authorized, askForCamera: true) == .type)
+    }
+}
+
+/// A pasted TV link isn't counted as an invite pasted.
+@Suite struct InviteKindTests {
+    @Test func onlyTablesAndPicksAreInvites() {
+        let token = "dXEFk25T_lIQ7aDyHSVP2w"
+        #expect(DeepLink.join(code: "BCDFG").isInvite)
+        #expect(DeepLink.move(code: "BCDFG", moveCode: "BCDFGH").isInvite)
+        #expect(DeepLink.pounce(token: token).isInvite)
+        #expect(!DeepLink.tv(token: token).isInvite)
+        #expect(DeepLink.pasted("https://play.conleychaos.com/tv/\(token)")?.isInvite == false)
+    }
+}

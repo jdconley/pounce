@@ -8,9 +8,10 @@
 #   <id>.req   first line the command (`e2e` or `push`), then one argument per line
 #   <id>.pid   written once started;  <id>.log  its output;  <id>.exit  its status when done
 #   <id>.kill  the test wants it stopped
-# Only `e2e` (the pounce-e2e binary in $E2E_BIN), `push` (`xcrun simctl push`) and `privacy`
+# Only `e2e` (the pounce-e2e binary in $E2E_BIN), `push` (`xcrun simctl push`), `privacy`
 # (`xcrun simctl privacy <udid> revoke|reset|grant camera com.conleychaos.play`: the app's camera
-# permission on one simulator, nothing else) are run.
+# permission on one simulator, nothing else) and `openurl` (`xcrun simctl openurl <udid>
+# pounce-dev://tv/<token>`: a TV link opened in the running app) are run.
 HOST_BROKER_DIR=""
 HOST_BROKER_PID=""
 
@@ -44,6 +45,13 @@ start_host_broker() {
               cmd=(xcrun simctl privacy "$udid" "$verb" camera com.conleychaos.play)
             else
               echo "bad privacy request" > "$id.log"; echo 127 > "$id.exit"; continue
+            fi ;;
+          openurl)
+            udid="${rest[0]:-}"; url="${rest[1]:-}"
+            if [[ $udid =~ ^[0-9A-F-]{36}$ && $url =~ ^pounce-dev://tv/[A-Za-z0-9_-]{22}$ && ${#rest[@]} -eq 2 ]]; then
+              cmd=(xcrun simctl openurl "$udid" "$url")
+            else
+              echo "bad openurl request" > "$id.log"; echo 127 > "$id.exit"; continue
             fi ;;
           # Refused: a log and an exit status, never a .pid (nothing runs, nothing to kill).
           *) echo "unknown command $kind" > "$id.log"; echo 127 > "$id.exit"; continue ;;

@@ -104,6 +104,15 @@ public enum DeepLink: Equatable, Sendable {
 }
 
 extension DeepLink {
+    /// An invite to a table or a pick (a share, move or pounce link). A TV's link is not one: it
+    /// puts a table on a TV, so pasting it isn't counted as an invite pasted.
+    public var isInvite: Bool {
+        switch self {
+        case .join, .move, .pounce: true
+        case .tv: false
+        }
+    }
+
     /// What "Paste invite" found in the pasteboard's text: the first share, move or pounce link
     /// in it (a whole invite message works, links in it may be wrapped in punctuation), or a room
     /// code on its own. The invite pages copy the bare link; Messages and notes add words around it.

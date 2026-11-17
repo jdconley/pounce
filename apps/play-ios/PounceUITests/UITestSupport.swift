@@ -400,8 +400,9 @@ struct UISnap {
 final class HostProcess {
     private let base: String
 
-    /// `kind` is `e2e` (pounce-e2e), `push` (`xcrun simctl push`) or `privacy` (`<udid>
-    /// revoke|reset|grant`: the app's camera permission on that simulator).
+    /// `kind` is `e2e` (pounce-e2e), `push` (`xcrun simctl push`), `privacy` (`<udid>
+    /// revoke|reset|grant`: the app's camera permission on that simulator) or `openurl` (`<udid>
+    /// pounce-dev://tv/<token>`: a TV link opened in the running app).
     init(_ kind: String, _ args: [String]) throws {
         guard let dir = ProcessInfo.processInfo.environment["POUNCE_BROKER_DIR"] else {
             throw XCTSkip("needs the host broker (run through scripts/ui-tests.sh)")
