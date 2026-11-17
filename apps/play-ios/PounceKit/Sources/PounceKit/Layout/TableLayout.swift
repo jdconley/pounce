@@ -90,9 +90,10 @@ public struct ControllerHand: Equatable, Sendable {
 /// A TV across the room asks for `.tv` with `init(tv:insets:seats:)`; it is never chosen from the
 /// size either. It is planned in 1080p points (`TVPlan`, the web's TV table) and drawn at
 /// `tvUnit`. Every seat sits around the table (`seatFrames`, `opponentSlots`, seat order): across
-/// the top, and from four seats one more down each side. The piles are in the middle on a `rug`,
-/// each seat's laid groups beside it (`laidRow` is the room they have, sized for three groups of
-/// ten so laying down never moves anything; `tvGroups` places them), the tower down the left
+/// the top, and from three seats one more down each side. The piles are in the middle on a `rug`,
+/// each seat's laid groups under it (`laidRow` is the room they have, sized for two groups of
+/// twelve with every numeral whole, so laying down and hitting never move anything; `tvGroups`
+/// places them), the tower down the left
 /// (open: no `towerTab`), the turn `banner` along the bottom (`bannerRoom` as wide as it may grow)
 /// and the menu (`menuButton`) in the bottom-right corner. Nothing private: no hand, no trays, no
 /// sort button or name pill (`hand` and `trayFrames` are empty; `traysFrame`, `towerTab`,
@@ -823,33 +824,38 @@ public struct TVLaidGroup: Equatable, Sendable {
     public var cardSize: CGSize
 }
 
-/// A TV seat's room for its laid groups (plan points), and how its groups line up in it: against
-/// the seat beside it, or centred under the seat above it.
+/// A TV seat's room for its laid groups (plan points), under its seat, and how its groups line up
+/// in it: centred under a top seat, against the table's edge under a side seat.
 struct TVLaidArea: Equatable, Sendable {
     enum Align: Equatable, Sendable { case start, centre, end }
     var area: CGRect
     var align: Align
-    /// Rows from the top (a seat above), or centred top to bottom (a seat beside).
-    var top: Bool
 }
 
 extension TableLayout {
-    /// The TV's plan for Cat Tower (the web's `tvLayoutOn`), in 1080p plan points.
+    /// The TV's plan for Cat Tower (after the web's `tvLayoutOn`), in 1080p plan points.
     static let tvCard: CGFloat = 128
     static let tvTower: CGFloat = 96
-    /// Between rows of laid groups, and between a seat and the groups beside it.
+    /// Between rows of laid groups, and between a seat and the groups under it.
     static let tvRowGap: CGFloat = 12
     static let tvGroupGap: CGFloat = 16
-    /// How much of a laid card shows under the next: as much as there is room for, never less
-    /// than tight in the plan.
-    static let tvRoomy: CGFloat = 0.5
-    static let tvTight: CGFloat = 0.42
-    /// The table every seat is planned for: three groups of ten, so laying down never moves
-    /// anything.
-    static let tvPlanGroups = 3
-    static let tvPlanCards = 10
+    /// The share of a laid card's width that shows before the next card covers it: never less
+    /// than `tvTight`, the compact face's widest corner index, so every numeral is whole.
+    /// `CardFaceFactory.indexWidth` of a 10 (corner, two outlined digits in 30 pt SF Rounded
+    /// Black, kern -1.8) is 48 of the face's 64 points.
+    static let tvTight: CGFloat = 48.0 / 64
+    /// As much as shows when a seat's groups have the room.
+    static let tvRoomy: CGFloat = 0.85
+    /// The table every seat is planned for, so laying down and hitting never move anything: two
+    /// groups (every phase lays down at most two) of twelve (a run's longest; a set can grow past
+    /// it, and then that seat's cards shrink).
+    static let tvPlanGroups = 2
+    static let tvPlanCards = 12
     /// A laid group's outline around its cards.
     static let tvOutline: CGFloat = 4
+    /// A laid card's corner numeral (its font size) per point of card width: the compact face's
+    /// two-digit index, 30 pt on the 64 pt face (`CardFaceFactory.IndexStyle.compact`).
+    public static let laidNumeralRatio: CGFloat = 30.0 / 64
 
     /// A TV table for `seats` players (2 to 6; more are seated as six) on a `size` screen whose
     /// edges `insets` keeps clear. See the type's notes.
@@ -858,7 +864,8 @@ extension TableLayout {
         let gap = TVPlan.gap, avatar = TVPlan.avatar
         let seatW = TVPlan.seatW, seatH = TVPlan.seatH
         let n = min(max(seats, 1), 6)
-        let sides = n >= 4
+        // From three players, one seat down each side; the rest across the top.
+        let sides = n >= 3
         let across = max(sides ? n - 2 : n, 1)
         let cw = Self.tvCard
         let ch = (cw * 90 / 64).rounded()
@@ -873,12 +880,13 @@ extension TableLayout {
             x: cx - TVPlan.bannerW / 2, y: plan.h - plan.bottom - TVPlan.bannerH, width: TVPlan.bannerW, height: TVPlan.bannerH)
         let midBottom = banner.minY - gap
         let cellW = (x1 - x0 - CGFloat(across - 1) * gap) / CGFloat(across)
-        // A top seat's groups keep their outline inside its cell.
+        // Groups keep their outline inside a top seat's cell, and inside a side's column (from
+        // the table's edge to the piles).
         let topAreaW = cellW - 2 * Self.tvOutline
-        let sideW = cx - pileW / 2 - gap - (x0 + seatW + Self.tvGroupGap)
+        let sideAreaW = cx - pileW / 2 - gap - x0 - 2 * Self.tvOutline
 
-        // The biggest laid cards with which the planned table fits: rows under the top seats, the
-        // piles and the side seats' rows in what is left, above the banner.
+        // The biggest laid cards with which the planned table fits: rows under the top seats, then
+        // the piles beside the side seats with their rows under them, above the banner.
         func rows(_ w: CGFloat, _ lw: CGFloat) -> Int? {
             let long = lw * (1 + CGFloat(Self.tvPlanCards - 1) * Self.tvTight)
             guard w >= long else { return nil }
@@ -891,27 +899,29 @@ extension TableLayout {
         }
         func midHeight(_ topH: CGFloat) -> CGFloat { midBottom - (plan.top + seatH + Self.tvRowGap + topH + gap) }
         var lw: CGFloat = 96
-        while lw > 48 {
-            let topH = height(rows(topAreaW, lw), lw), sideH = sides ? height(rows(sideW, lw), lw) : 0
-            let midH = midHeight(topH)
-            if midH >= ch + 96, midH >= max(sideH, sides ? seatH : 0) { break }
+        while lw > 24 {
+            let topH = height(rows(topAreaW, lw), lw)
+            let sideH = sides ? seatH + Self.tvRowGap + height(rows(sideAreaW, lw), lw) : 0
+            if midHeight(topH) >= max(ch + 96, sideH) { break }
             lw -= 2
         }
         // Short of room even at the smallest (a frame no TV has), the rows shrink their cards.
         let topH = min(height(rows(topAreaW, lw), lw), height(Self.tvPlanGroups, lw))
-        let sideH = sides ? min(height(rows(sideW, lw), lw), height(Self.tvPlanGroups, lw)) : 0
+        let sideH = sides ? min(height(rows(sideAreaW, lw), lw), height(Self.tvPlanGroups, lw)) : 0
         let midTop = plan.top + seatH + Self.tvRowGap + topH + gap
         let midH = midBottom - midTop
         let cy = midTop + midH / 2
+        // A side seat and its rows, centred top to bottom beside the piles.
+        let sideTop = cy - (seatH + Self.tvRowGap + sideH) / 2
 
         // Seats clockwise from the left side: the left, the top from the left, the right.
         var cells: [(seat: CGRect, area: TVLaidArea)] = []
         if sides {
             cells.append((
-                CGRect(x: x0, y: cy - seatH / 2, width: seatW, height: seatH),
+                CGRect(x: x0, y: sideTop, width: seatW, height: seatH),
                 TVLaidArea(
-                    area: CGRect(x: x0 + seatW + Self.tvGroupGap, y: cy - sideH / 2, width: sideW, height: sideH),
-                    align: .start, top: false)))
+                    area: CGRect(x: x0 + Self.tvOutline, y: sideTop + seatH + Self.tvRowGap, width: sideAreaW, height: sideH),
+                    align: .start)))
         }
         for i in 0..<across {
             let x = x0 + CGFloat(i) * (cellW + gap)
@@ -920,14 +930,15 @@ extension TableLayout {
                 CGRect(x: x + (cellW - w) / 2, y: plan.top, width: w, height: seatH),
                 TVLaidArea(
                     area: CGRect(x: x + Self.tvOutline, y: plan.top + seatH + Self.tvRowGap, width: topAreaW, height: topH),
-                    align: .centre, top: true)))
+                    align: .centre)))
         }
         if sides {
             cells.append((
-                CGRect(x: x1 - seatW, y: cy - seatH / 2, width: seatW, height: seatH),
+                CGRect(x: x1 - seatW, y: sideTop, width: seatW, height: seatH),
                 TVLaidArea(
-                    area: CGRect(x: cx + pileW / 2 + gap, y: cy - sideH / 2, width: sideW, height: sideH),
-                    align: .end, top: false)))
+                    area: CGRect(
+                        x: x1 - Self.tvOutline - sideAreaW, y: sideTop + seatH + Self.tvRowGap, width: sideAreaW, height: sideH),
+                    align: .end)))
         }
         let placed = Array(cells.prefix(n))
 
@@ -985,9 +996,9 @@ extension TableLayout {
     }
 
     /// Where a TV places `seat`'s laid groups of `counts` cards each, in its room (`laidRow`):
-    /// spread out if they fit, closer if that is what fits, and smaller only if even that would
-    /// not (more than the planned three groups of ten). Empty off a TV or for a seat not at the
-    /// table.
+    /// spread out if they fit, closer (never past each card's corner numeral) if that is what
+    /// fits, and smaller only if even that would not (more than the planned two groups of twelve).
+    /// Empty off a TV or for a seat not at the table.
     public func tvGroups(seat: Int, counts: [Int]) -> [TVLaidGroup] {
         guard arrangement == .tv, let tvPlan, tvAreas.indices.contains(seat), !counts.isEmpty else { return [] }
         let a = tvAreas[seat]
@@ -998,9 +1009,11 @@ extension TableLayout {
             let lw = tvLaidWidth - 2 * CGFloat(k / 2)
             let spread = k % 2 == 0 ? Self.tvRoomy : Self.tvTight
             let lh = ch * lw / cw
+            // Never closer than `tvTight`, so every numeral stays whole: short of room, the cards
+            // shrink instead.
             let sized = counts.map { c -> (count: Int, step: CGFloat, w: CGFloat) in
                 let count = max(c, 1)
-                let step = count == 1 ? 0 : max(6, min(lw * spread, (area.width - lw) / CGFloat(count - 1)))
+                let step = count == 1 ? 0 : max(lw * Self.tvTight, min(lw * spread, (area.width - lw) / CGFloat(count - 1)))
                 return (c, step, lw + step * CGFloat(count - 1))
             }
             var rows: [[(count: Int, step: CGFloat, w: CGFloat)]] = []
@@ -1015,9 +1028,10 @@ extension TableLayout {
             }
             let h = CGFloat(rows.count) * lh + CGFloat(max(rows.count - 1, 0)) * Self.tvRowGap
             k += 1
-            if h > area.height + 0.01, lw > 24 { continue }
+            let wide = sized.contains { $0.w > area.width + 0.01 }
+            if h > area.height + 0.01 || wide, lw > 12 { continue }
             var out: [TVLaidGroup] = []
-            var y = area.minY + (a.top ? 0 : max(area.height - h, 0) / 2)
+            var y = area.minY
             let card = CGSize(width: tvPlan.len(lw), height: tvPlan.len(lh))
             for row in rows {
                 let rowW = row.reduce(0) { $0 + $1.w } + Self.tvGroupGap * CGFloat(row.count - 1)

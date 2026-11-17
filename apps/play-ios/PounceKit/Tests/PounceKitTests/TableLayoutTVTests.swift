@@ -61,17 +61,19 @@ enum TVGeometry {
 /// Cat Tower on a TV across the room: every seat around the table, the piles in the middle, each
 /// seat's laid groups beside it, the tower down the left, the turn banner along the bottom and
 /// the menu in the bottom-right corner. No hand, no trays. The web's TV table
-/// (`apps/play-web/src/table/ct-layout.ts`, `tests/layout.test.ts`) is the reference.
+/// (`apps/play-web/src/table/ct-layout.ts`, `tests/layout.test.ts`) is the reference, planned
+/// here for two groups of twelve a seat (every phase lays down at most two; hits grow a run to
+/// twelve) with every corner numeral whole.
 @Suite("TableLayout, TV")
 struct TableLayoutTVTests {
     typealias G = TVGeometry
 
     enum Table: CaseIterable { case full, sparse }
 
-    /// The worst table, every seat down with three groups of ten, or a sparse one: the first and
+    /// The worst table, every seat down with two groups of twelve, or a sparse one: the first and
     /// last seats down with a phase's groups, nobody else.
     static func groups(_ n: Int, _ table: Table) -> [[Int]] {
-        (0..<n).map { s in table == .full ? [10, 10, 10] : (s == 0 || s == n - 1 ? [4, 7] : []) }
+        (0..<n).map { s in table == .full ? [12, 12] : (s == 0 || s == n - 1 ? [4, 4] : []) }
     }
 
     static let cases: [(Int, Int, Table)] = G.frames.indices.flatMap { f in
@@ -184,8 +186,9 @@ struct TableLayoutTVTests {
         }
     }
 
-    /// The table is planned for every seat down with three groups of ten, so laying down never
-    /// moves anything: each seat's groups stay in its own place, at the planned size.
+    /// The table is planned for every seat down with two groups of twelve, so laying down and
+    /// hitting never move anything: each seat's groups stay in its own place, at the planned size,
+    /// and no card covers the corner numeral of the card under it.
     @Test(arguments: G.frames.indices, 2...6)
     func aFullTableFitsAtThePlannedSize(_ f: Int, _ n: Int) {
         let l = layout(f, n)
@@ -193,11 +196,33 @@ struct TableLayoutTVTests {
             let area = l.laidRow(slot: s, of: n)
             // The groups' frames reach at most their 4-point outline past the area.
             let outline = 4 * l.tvUnit + 0.5
-            for g in l.tvGroups(seat: s, counts: [10, 10, 10]) {
+            let groups = l.tvGroups(seat: s, counts: [12, 12])
+            #expect(groups.count == 2)
+            for g in groups {
                 #expect(G.inside(g.frame, area.insetBy(dx: -outline, dy: -outline)))
                 #expect(abs(g.cardSize.width - l.miniCardSize.width) <= 0.5, "a full table shrinks its cards")
-                #expect(g.cards.count == 10)
+                #expect(g.cards.count == 12)
+                for (a, b) in zip(g.cards, g.cards.dropFirst()) {
+                    #expect(b.x - a.x >= g.cardSize.width * 48 / 64 - 0.01, "a card covers its neighbour's numeral")
+                }
             }
+        }
+    }
+
+    /// The plan's rule: nothing that matters is under 28 pt at 1080p. A laid card's corner
+    /// numeral is `laidNumeralRatio` of its width (the compact face's two-digit index, 30 pt on
+    /// the 64 pt face), on a full table (two groups of twelve a seat) inside the TV-safe insets.
+    /// Four seats and up can't make it with two groups of twelve and every numeral whole: those
+    /// are known issues until the plan's trade-off is ruled on (the task 3 report).
+    @Test(arguments: 2...6)
+    func laidNumeralsAreAtLeast28Points(_ n: Int) {
+        let l = layout(0, n)
+        let numerals = (0..<n).flatMap { l.tvGroups(seat: $0, counts: [12, 12]) }.map { $0.cardSize.width * TableLayout.laidNumeralRatio }
+        let smallest = numerals.min() ?? 0
+        if n <= 3 {
+            #expect(smallest >= 28)
+        } else {
+            withKnownIssue("\(n) seats: laid numerals are \(smallest) pt, short of 28") { #expect(smallest >= 28) }
         }
     }
 
@@ -224,7 +249,7 @@ struct TableLayoutTVTests {
         let t = TilesLayout(tv: .zero, insets: .tvSafe, seats: 4)
         #expect(l.tvUnit.isFinite && t.tvUnit.isFinite)
         #expect(!l.deck.x.isNaN && !l.banner.minX.isNaN && !t.rug.minX.isNaN)
-        _ = l.tvGroups(seat: 0, counts: [10, 10, 10])
+        _ = l.tvGroups(seat: 0, counts: [12, 12])
     }
 
     @Test func theLaidZoneHoldsEverySeatsGroups() {
