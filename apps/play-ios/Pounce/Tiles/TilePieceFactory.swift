@@ -63,6 +63,9 @@ final class TilePieceFactory {
     private var warming: Task<Void, Never>?
     /// Textures being drawn off the main thread, by key.
     private var drawing: Set<String> = []
+    /// Yarn faces being drawn off the main thread. By the key itself: a string of it
+    /// (`"\(key)"`) is Swift's reflection, which costs a frame 10 to 18 ms the first time it runs.
+    private var drawingFaces: Set<FaceKey> = []
 
     /// The scale textures are drawn at: the screen's, at least 2.
     static var scale: CGFloat { max(UIScreen.main.scale, 2) }
@@ -172,14 +175,13 @@ final class TilePieceFactory {
     ) -> SKTexture? {
         let key = FaceKey(tile: Tile.yarnIDs[0], size: size, ghostValue: standing.value, ghostSuit: standing.suit, style: style)
         if let cached = faces[key] { return cached }
-        let name = "face|\(key)"
-        guard drawing.insert(name).inserted else { return nil }
+        guard drawingFaces.insert(key).inserted else { return nil }
         let scale = Self.scale
         Task {
             if let (_, texture) = await Self.drawFaces([key], scale: scale).first {
                 faces[key] = faces[key] ?? texture
             }
-            drawing.remove(name)
+            drawingFaces.remove(key)
             if let texture = faces[key] { then(texture) }
         }
         return nil
