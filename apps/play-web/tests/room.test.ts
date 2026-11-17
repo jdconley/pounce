@@ -39,13 +39,14 @@ const room = (over: Partial<RoomView> = {}): RoomView => ({
   ...over,
 });
 
-function setup() {
+function setup(opts: { role?: "screen" } = {}) {
   const clock = new Clock();
   const sockets: FakeSocket[] = [];
   const socket = new RoomSocket({
     code: "BCDFG",
     origin: "http://x",
     token: async () => "tok",
+    role: opts.role,
     factory: (url, p) => {
       const s = new FakeSocket(url, p);
       sockets.push(s);
@@ -55,7 +56,7 @@ function setup() {
     setTimer: clock.set,
     clearTimer: clock.clear,
   });
-  const store = new RoomStore({ code: "BCDFG", token: async () => "tok", socket, setTimer: clock.set, clearTimer: clock.clear });
+  const store = new RoomStore({ code: "BCDFG", token: async () => "tok", socket, setTimer: clock.set, clearTimer: clock.clear, now: () => clock.now });
   const played: Paced[] = [];
   store.subscribe({ event: (e) => played.push(e) });
   return { clock, sockets, store, played };
@@ -208,5 +209,116 @@ describe("the room store (RoomStore.swift)", () => {
     expect(after.tiles?.rackCounts).toEqual([14, 11]);
     expect(after.tiles?.table).toEqual([[1, 2, 3]]);
     expect(after.tiles?.opened).toEqual([false, true]);
+  });
+
+  describe("aims", () => {
+    const aimSent = (s: FakeSocket) => s.sent.filter((m) => (m as { t: string }).t === "aim");
+    const t = (group: number) => ({ target: { seat: 0, group } });
+
+    async function open() {
+      const env = setup();
+      env.store.start();
+      await flush();
+      env.sockets[0]!.open();
+      env.sockets[0]!.receive({ t: "snapshot", protocol: 1, seq: 1, room: room() });
+      return env;
+    }
+
+    test("the first aim goes at once; the next wait their turn, and only the latest goes", async () => {
+      const { clock, sockets, store } = await open();
+      store.aim(0, t(0));
+      store.aim(0, t(1));
+      store.aim(0, t(2));
+      expect(aimSent(sockets[0]!)).toEqual([{ t: "aim", seat: 0, aim: t(0) }]);
+      clock.advance(119);
+      expect(aimSent(sockets[0]!)).toHaveLength(1);
+      clock.advance(1);
+      expect(aimSent(sockets[0]!)).toEqual([
+        { t: "aim", seat: 0, aim: t(0) },
+        { t: "aim", seat: 0, aim: t(2) },
+      ]);
+      // Nothing left waiting.
+      clock.advance(1000);
+      expect(aimSent(sockets[0]!)).toHaveLength(2);
+    });
+
+    test("never more than one aim per 120 ms, however fast they come", async () => {
+      const { clock, sockets, store } = await open();
+      for (let i = 0; i < 100; i++) {
+        store.aim(0, t(i));
+        clock.advance(10);
+      }
+      clock.advance(200);
+      const times = aimSent(sockets[0]!).length;
+      expect(times).toBeLessThanOrEqual(Math.ceil(1000 / 120) + 1);
+      expect(aimSent(sockets[0]!).at(-1)).toEqual({ t: "aim", seat: 0, aim: t(99) });
+    });
+
+    test("after a quiet moment the next aim goes at once", async () => {
+      const { clock, sockets, store } = await open();
+      store.aim(0, t(0));
+      clock.advance(500);
+      store.aim(0, t(1));
+      expect(aimSent(sockets[0]!)).toHaveLength(2);
+    });
+
+    test("a clear goes at once and drops the aim that was waiting", async () => {
+      const { clock, sockets, store } = await open();
+      store.aim(0, t(0));
+      store.aim(0, t(1));
+      store.aim(0, null);
+      expect(aimSent(sockets[0]!)).toEqual([{ t: "aim", seat: 0, aim: t(0) }, { t: "aim", seat: 0 }]);
+      clock.advance(1000);
+      expect(aimSent(sockets[0]!)).toHaveLength(2);
+    });
+
+    test("a clear sent while offline goes once when the socket is back", async () => {
+      const { clock, sockets, store } = await open();
+      sockets[0]!.drop();
+      store.aim(0, null);
+      clock.advance(250);
+      await flush();
+      sockets[1]!.open();
+      expect(aimSent(sockets[1]!)).toEqual([{ t: "aim", seat: 0 }]);
+      sockets[1]!.drop();
+      clock.advance(500);
+      await flush();
+      sockets[2]!.open();
+      expect(aimSent(sockets[2]!)).toEqual([]);
+    });
+
+    test("aims from the server are kept per seat, and a clearing aim removes only that seat's", async () => {
+      const { sockets, store } = await open();
+      sockets[0]!.receive({ t: "aim", seat: 0, aim: t(1) });
+      sockets[0]!.receive({ t: "aim", seat: 1, aim: t(2) });
+      expect(store.state.aims).toEqual({ 0: t(1), 1: t(2) });
+      sockets[0]!.receive({ t: "aim", seat: 0, aim: t(3) });
+      expect(store.state.aims[0]).toEqual(t(3));
+      sockets[0]!.receive({ t: "aim", seat: 0 });
+      expect(store.state.aims).toEqual({ 1: t(2) });
+    });
+
+    test("a snapshot with the same turn and status keeps them; a new turn or status clears them all", async () => {
+      const { sockets, store } = await open();
+      sockets[0]!.receive({ t: "aim", seat: 0, aim: t(1) });
+      sockets[0]!.receive({ t: "snapshot", protocol: 1, seq: 2, room: room() });
+      expect(store.state.aims).toEqual({ 0: t(1) });
+      sockets[0]!.receive({ t: "snapshot", protocol: 1, seq: 3, room: room({ game: { ...game, turn: 0 } }) });
+      expect(store.state.aims).toEqual({});
+      sockets[0]!.receive({ t: "aim", seat: 1, aim: t(1) });
+      sockets[0]!.receive({ t: "snapshot", protocol: 1, seq: 4, room: room({ game: { ...game, turn: 0, status: "roundOver" } }) });
+      expect(store.state.aims).toEqual({});
+    });
+
+    test("a screen's room says so, and its socket asks for the screen role", async () => {
+      const { sockets, store } = setup({ role: "screen" });
+      store.start();
+      await flush();
+      expect(new URL(sockets[0]!.url).searchParams.get("role")).toBe("screen");
+      sockets[0]!.open();
+      expect(store.state.screen).toBe(false);
+      sockets[0]!.receive({ t: "snapshot", protocol: 1, seq: 1, room: room({ screen: true }) });
+      expect(store.state.screen).toBe(true);
+    });
   });
 });

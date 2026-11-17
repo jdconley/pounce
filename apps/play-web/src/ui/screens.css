@@ -498,6 +498,11 @@
   gap: 10px;
 }
 
+/* Large text can make the lobby scroll: the room stays put behind it. */
+.lobby > .room-bg {
+  position: fixed;
+}
+
 .lobby > header,
 .lobby > section,
 .lobby > div:not(.room-bg) {
@@ -529,16 +534,19 @@
   font-size: 1.15rem;
 }
 
+/* At least 240 px tall: when large text leaves the rug less than that, the screen scrolls rather
+   than shrinking the rug and its seats below a thumb's reach. */
 .rug-stage {
-  flex: 1;
+  container-type: size;
+  flex: 1 0 240px;
   display: grid;
   place-items: center;
-  min-height: 0;
 }
 
+/* The rug takes the room the bars leave it (large text makes them taller), never more. */
 .lobby-rug {
   position: relative;
-  width: min(100%, 62vh, 560px);
+  width: min(100cqw, 100cqh, 560px);
   aspect-ratio: 1;
 }
 
@@ -613,7 +621,9 @@
 }
 
 .add-bar {
-  padding: 8px 10px 12px;
+  container: add-bar / inline-size;
+  padding: 8px 6px 10px;
+  font-size: 1rem;
   text-align: center;
 }
 
@@ -624,10 +634,11 @@
   text-transform: uppercase;
 }
 
+/* Five ways in, one row: each choice a column of icon and a word or two, wrapped evenly. */
 .add-choices {
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
-  gap: 6px;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 2px;
 }
 
 .add-choices.big {
@@ -640,12 +651,48 @@
   flex-direction: column;
   align-items: center;
   gap: 4px;
+  min-width: 0;
   min-height: 72px;
-  padding: 6px 2px;
+  padding: 6px 1px;
   border: 0;
   border-radius: 16px;
   background: none;
-  font: 900 clamp(0.75rem, 3.2vw, 0.95rem) var(--round);
+  font: 900 clamp(0.75rem, 3.2vw, 0.95rem) / 1.1 var(--round);
+  text-wrap: balance;
+}
+
+/* The TV puts the whole table up rather than a seat: a line sets it apart from the four. */
+.add-choices .tv-choice {
+  position: relative;
+}
+
+.add-choices .tv-choice::before {
+  content: "";
+  position: absolute;
+  top: 10px;
+  bottom: 10px;
+  left: -2px;
+  width: 2px;
+  border-radius: 1px;
+  background: rgba(255, 255, 255, 0.22);
+}
+
+/* Large text on a narrow phone: three and two, centred, rather than words running together. */
+@container add-bar (max-width: 15.5em) {
+  .add-bar > .add-choices {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    row-gap: 4px;
+  }
+
+  .add-bar > .add-choices .choice {
+    flex: 0 0 calc((100% - 4px) / 3);
+  }
+
+  .add-bar > .add-choices .tv-choice::before {
+    display: none;
+  }
 }
 
 .add-choices.big .choice {
@@ -714,6 +761,39 @@
   display: flex;
   flex-direction: column;
   gap: 14px;
+}
+
+/* Show on TV: the TV's code, set like the code under its QR. */
+.tv-code-form {
+  gap: 10px;
+}
+
+.field-label {
+  font: 900 0.85rem var(--round);
+  letter-spacing: 0.08em;
+  text-align: center;
+  text-transform: uppercase;
+}
+
+.tv-code-field {
+  padding-right: 12px;
+  padding-left: 12px;
+  /* Six characters always fit the field, whatever the text size. */
+  font-size: min(clamp(1.9rem, 10vw, 2.6rem), 10.5vw);
+  letter-spacing: 0.22em;
+  text-indent: 0.22em;
+}
+
+.link-error {
+  min-height: 1.35em;
+  margin: 0;
+  color: var(--yellow);
+  text-align: center;
+  font: 900 1rem / 1.35 var(--round);
+}
+
+.tv-code-form .btn {
+  margin-top: 4px;
 }
 
 /* Settings. */
@@ -889,6 +969,18 @@
   animation: toast-life var(--life) ease-out both;
 }
 
+/* A toast for something that worked, in ink with a check. */
+.toast.good {
+  padding-left: 10px;
+  background: var(--ink);
+}
+
+/* Under the header row (12 px, a 52 px button and its shadow), clear of the bars along the bottom. */
+.toast.top {
+  top: calc(var(--safe-top) + 76px);
+  bottom: auto;
+}
+
 @keyframes toast-life {
   from {
     opacity: 0;
@@ -961,4 +1053,27 @@
   width: 38px;
   height: 38px;
   color: var(--white);
+}
+
+/* The TV-link page (a TV's QR): Home's sections under a heading with a way back. */
+.tv-link-top {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.tv-link-top .title {
+  flex: 1;
+  min-width: 0;
+  text-align: left;
+}
+
+.tv-link-error {
+  align-self: center;
+  width: auto;
+  max-width: min(100%, 520px);
+  padding: 8px 18px;
+  border: 3px solid var(--ink);
+  border-radius: 999px;
+  background: var(--ink);
 }

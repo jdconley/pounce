@@ -1,9 +1,12 @@
 /**
  * The Tuna Tiles table (TilesScene.swift): opponents across the top, the sets inside the rope
  * with the toy box, the controls, and the rack. A turn is built on this device (tiles-draft.ts)
- * and sent whole with Play; with nothing changed the button draws instead.
+ * and sent whole with Play; with nothing changed the button draws instead. The table anyone may
+ * see is TilesPublic (tiles-public.tsx), shared with the TV; this is the rack and the turn on top.
+ * While a TV shows the table, every change to the draft is sent as an aim, so the room watches the
+ * player work it out (off turn, that phone shows tiles-controller.tsx instead).
  */
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "preact/hooks";
+import { useEffect, useMemo, useRef, useState } from "preact/hooks";
 
 
 import { art } from "../lib/art";
@@ -18,23 +21,29 @@ import { useInsets } from "./cattower";
 import { inside, press, useLatest, type Point } from "./drag";
 import { PieceFace, pieceLabel } from "./faces";
 import { Motion, transformOf, wiggle, type Pose } from "./motion";
-import { seatName, SeatAvatar } from "./seat";
+import { seatName } from "./seat";
 import { Curtain } from "./shared";
-import { checkDraft, ghostOf, OPENING_POINTS, placedThisTurn, sameDraft, sortRack, toNewSet, toRack, toSet, type Draft } from "./tiles-draft";
+import { checkDraft, OPENING_POINTS, placedThisTurn, sameDraft, sortRack, tilesAimOf, toNewSet, toRack, toSet, type Draft } from "./tiles-draft";
 import { tilesLayout } from "./tiles-layout";
+import { aimTable as aimOf, TilesTableBase, tilesStyle, type PieceLook, type TilesHover } from "./tiles-public";
+import { rackInOrder, useRackOrder } from "./tiles-rack";
 
 import type { RoomState, RoomStore } from "../store/room";
 import type { TileId } from "@pounce/play-api/tiles/pieces";
 import type { TilesView } from "@pounce/play-api/tiles/view";
 
-type Hover = { kind: "set"; set: number; index: number } | { kind: "new" } | { kind: "rack"; index: number } | null;
-
-export function TilesTable(props: { store: RoomStore; state: RoomState }) {
+/**
+ * `sounds: false` silences the game's own events (a phone whose table is on a TV); taps still sound.
+ * `topInset` keeps a strip along the top clear (the Cards/Table switch, while a TV shows the table).
+ */
+export function TilesTable(props: { store: RoomStore; state: RoomState; sounds?: boolean; topInset?: number }) {
   const { store, state } = props;
+  const sounds = props.sounds ?? true;
   const room = state.room!;
   const v = room.tiles as TilesView;
   const [rootRef, size] = useSize<HTMLDivElement>();
-  const insets = useInsets();
+  const safe = useInsets();
+  const insets = useMemo(() => ({ ...safe, top: safe.top + (props.topInset ?? 0) }), [safe, props.topInset]);
   const motion = useMemo(() => new Motion(reducedMotion), []);
   const els = useRef(new Map<string, HTMLElement>());
 
@@ -55,7 +64,8 @@ export function TilesTable(props: { store: RoomStore; state: RoomState }) {
   const baseKey = JSON.stringify([v.table, serverRack, v.turns, seat]);
   const [draft, setDraft] = useState<Draft>(base);
   const [history, setHistory] = useState<Draft[]>([]);
-  const [rackOrder, setRackOrder] = useState<TileId[]>([]);
+  // The player's rack order, shared with the controller this phone shows off turn.
+  const { order: rackOrder, setOrder: setRackOrder, sortBy, setSortBy } = useRackOrder(`${room.code}:${seat}`);
   const lastBase = useRef(baseKey);
   useEffect(() => {
     if (lastBase.current === baseKey) return;
@@ -65,7 +75,7 @@ export function TilesTable(props: { store: RoomStore; state: RoomState }) {
   }, [baseKey]);
 
   // The rack keeps the player's order; new pieces go on the end.
-  const rackIds = [...rackOrder.filter((id) => draft.rack.includes(id)), ...draft.rack.filter((id) => !rackOrder.includes(id))];
+  const rackIds = rackInOrder(rackOrder, draft.rack);
   useEffect(() => {
     if (rackIds.join() !== rackOrder.join()) setRackOrder(rackIds);
   });
@@ -73,9 +83,35 @@ export function TilesTable(props: { store: RoomStore; state: RoomState }) {
   const result = checkDraft(v.table, serverRack, opened, { table: draft.table, rack: rackIds });
   const playable = myTurn && result.changed && result.check?.ok === true;
 
+  // While a TV shows the table, the draft goes to it as an aim on every change (the store sends
+  // at most one each 120 ms, the latest last). Back to the table as played, it is cleared; a draft
+  // the wire won't carry is never sent, and the last one sent stands.
+  const aiming = room.screen === true && myTurn && showRack && seat !== null && !state.pending;
+  const aimNow = aiming ? tilesAimOf(draft.table, v.table) : null;
+  const asPlayed = JSON.stringify(draft.table.filter((set) => set.length > 0)) === JSON.stringify(v.table);
+  const aimKey = !aiming || asPlayed ? "" : aimNow ? JSON.stringify(aimNow.table) : "keep";
+  const aimSent = useRef<{ seat: number; key: string } | null>(null);
+  const clearAim = () => {
+    if (aimSent.current) store.aim(aimSent.current.seat, null);
+    aimSent.current = null;
+  };
+  useEffect(() => {
+    if (aimKey === "keep") return;
+    if (aimNow && seat !== null) {
+      if (aimSent.current?.key === aimKey) return;
+      store.aim(seat, aimNow);
+      aimSent.current = { seat, key: aimKey };
+    } else clearAim();
+  }, [aimKey]);
+  useEffect(() => clearAim, [store]);
+
   const [selected, setSelected] = useState<TileId | null>(null);
-  const [hover, setHover] = useState<Hover>(null);
+  const [hover, setHover] = useState<TilesHover>(null);
   const opponents = room.seats.flatMap((s, i) => ((s.kind === "human" || s.kind === "bot") && i !== seat ? [i] : []));
+
+  // Watching someone else's turn, the sets are theirs as they arrange them (their aim).
+  const aimTable = myTurn ? null : aimOf(room, state.aims);
+  const shownTable = aimTable ?? draft.table;
 
   const L = useMemo(
     () =>
@@ -84,43 +120,24 @@ export function TilesTable(props: { store: RoomStore; state: RoomState }) {
         height: size.height || 640,
         insets,
         opponents,
-        sets: draft.table.map((s) => s.length),
+        sets: shownTable.map((s) => s.length),
         rack: rackIds.length,
       }),
-    [size.width, size.height, insets, opponents.join(), draft.table.map((s) => s.length).join(), rackIds.length],
+    [size.width, size.height, insets, opponents.join(), shownTable.map((s) => s.length).join(), rackIds.length],
   );
 
-  const avatarPose = (s: number): Pose => {
-    const at = L.opponents.get(s) ?? { x: size.width / 2, y: -40 };
-    return { x: at.x - L.pw / 2, y: at.y - L.ph / 2, r: 0, s: 0.4 };
-  };
-  const poolPose: Pose = { x: L.pool.x + L.pool.size / 2 - L.pw / 2, y: L.pool.y + L.pool.size / 2 - L.ph / 2, r: 0, s: 0.5 };
-
+  // The rack's own event (the table's are TilesPublic's): your turn.
   useEffect(
     () =>
       store.subscribe({
         event: ({ event: e }) => {
-          if (e.kind !== "tiles") return;
-          const ev = e.event;
-          if (ev.kind === "drew") {
-            play("flip", 0.6);
-            if (ev.tile !== undefined) motion.spawnFrom(`p${ev.tile}`, poolPose);
-          } else if (ev.kind === "played") {
-            if (!mine.includes(ev.seat)) for (const id of ev.placed) motion.spawnFrom(`p${id}`, avatarPose(ev.seat));
-            play("sparkle", 0.7);
-            buzz("drop");
-          } else if (ev.kind === "passed") {
-            play("tick", 0.5);
-          } else if (ev.kind === "turn" && mine.includes(ev.seat)) {
-            play("tick", 0.6);
+          if (e.kind === "tiles" && e.event.kind === "turn" && mine.includes(e.event.seat)) {
+            if (sounds) play("tick", 0.6);
             buzz("turn");
-          } else if (ev.kind === "gameOver") {
-            play("fanfare");
-            buzz("win");
           }
         },
       }),
-    [store, L, mine.join()],
+    [store, mine.join(), sounds],
   );
 
   useEffect(() => {
@@ -130,25 +147,12 @@ export function TilesTable(props: { store: RoomStore; state: RoomState }) {
     wiggle(rootRef.current?.querySelector(".board") as HTMLElement | null);
   }, [state.error?.n]);
 
-  // Poses: table pieces, then the rack.
+  // Poses for the rack; the table's pieces are TilesPublic's.
   const poses = new Map<string, Pose>();
-  draft.table.forEach((set, si) => set.forEach((id, i) => {
-    const p = L.sets[si]?.poses[i];
-    if (p) poses.set(`p${id}`, p);
-  }));
   rackIds.forEach((id, i) => {
     const p = L.rack[i];
     if (p) poses.set(`p${id}`, p);
   });
-
-  useLayoutEffect(() => {
-    motion.apply(els.current, poses);
-  });
-
-  const setEl = (key: string) => (el: HTMLElement | null) => {
-    if (el) els.current.set(key, el);
-    else els.current.delete(key);
-  };
 
   const change = (next: Draft) => {
     if (sameDraft(next, draft)) return;
@@ -163,7 +167,7 @@ export function TilesTable(props: { store: RoomStore; state: RoomState }) {
   /** A piece on the table this device may move: any once opened, else only this turn's. */
   const movable = (id: TileId) => myTurn && (draft.rack.includes(id) || opened || placedThisTurn(v.table, id));
 
-  const targetAt = (p: Point, id: TileId): Hover => {
+  const targetAt = (p: Point, id: TileId): TilesHover => {
     for (const [si, set] of L.sets.entries()) {
       if (inside(p, set.rect, L.pw * 0.45)) {
         const xs = (set.poses ?? []).map((q) => q.x + L.pw / 2);
@@ -256,6 +260,8 @@ export function TilesTable(props: { store: RoomStore; state: RoomState }) {
       }
       learnTip("tt.play");
       store.act(seat, { type: "play", table: draft.table });
+      // After the play, so the TV never shows the table without it in between.
+      clearAim();
       return;
     }
     learnTip("tt.draw");
@@ -275,7 +281,6 @@ export function TilesTable(props: { store: RoomStore; state: RoomState }) {
     setDraft({ table: v.table, rack: serverRack });
     play("whoosh", 0.5);
   };
-  const [sortBy, setSortBy] = useState<"number" | "toy" | null>(null);
   const sort = (by: "number" | "toy") => {
     setSortBy(by);
     setRackOrder(sortRack(rackIds, by));
@@ -318,121 +323,102 @@ export function TilesTable(props: { store: RoomStore; state: RoomState }) {
   });
 
   const turnName = seatName(room.seats[v.turn]);
+  const openingShown = showRack && !opened && myTurn && result.changed;
   const label = result.changed ? "Play" : v.poolCount > 0 ? "Draw" : "Pass";
-  const style = { ["--pw" as string]: `${L.pw}px`, ["--ph" as string]: `${L.ph}px`, ["--avatar" as string]: `${L.avatar}px` };
+
+  const renderPiece = (id: TileId, p: Pose, ref: (el: HTMLElement | null) => void, look: PieceLook) => {
+    const can = draft.rack.includes(id) || movable(id);
+    return (
+      <div key={`p${id}`} ref={ref} class={`tile ${selected === id ? "picked" : ""} ${can ? "mine" : ""}${look.draft ? " draft" : ""}`} style={{ transform: transformOf(p), zIndex: p.z ?? 1 }} onPointerDown={can ? onDown(id) : undefined}>
+        {can ? (
+          <button type="button" class="tile-inner" aria-label={pieceLabel(id, look.ghost ?? undefined)} aria-pressed={selected === id} onClick={(e) => e.preventDefault()} onKeyDown={(e) => {
+            if (e.key === "Enter" || e.key === " ") {
+              e.preventDefault();
+              setSelected((s) => (s === id ? null : id));
+            }
+          }}>
+            <PieceFace id={id} ghost={look.ghost} />
+          </button>
+        ) : (
+          <div class="tile-inner" role="img" aria-label={pieceLabel(id, look.ghost ?? undefined)}>
+            <PieceFace id={id} ghost={look.ghost} />
+          </div>
+        )}
+      </div>
+    );
+  };
 
   return (
-    <div class={`tt-table ${myTurn ? "my-turn" : ""}`} ref={rootRef} style={style}>
-      {opponents.map((s) => {
-        const at = L.opponents.get(s);
-        if (!at) return null;
-        return (
-          <div class="avatar-at" style={{ transform: `translate3d(${at.x - L.avatar / 2}px, ${at.y - L.avatar / 2}px, 0)` }}>
-            <SeatAvatar seat={s} info={room.seats[s]} size={L.avatar} turn={v.turn === s && v.status === "playing"} count={v.rackCounts[s]} out={v.forfeited[s]} />
-          </div>
-        );
-      })}
-
-      <div class="board" style={{ transform: `translate3d(${L.board.x}px, ${L.board.y}px, 0)`, width: `${L.board.w}px`, height: `${L.board.h}px` }} />
-      <div class="pool" style={{ transform: `translate3d(${L.pool.x}px, ${L.pool.y}px, 0)`, width: `${L.pool.size}px` }} role="img" aria-label={`Toy box: ${v.poolCount} pieces`}>
-        <img src={art(v.poolCount > 0 ? "toy-box" : "toy-box-closed")} alt="" />
-        <span class="pile-count">{v.poolCount}</span>
-      </div>
-
-      {L.sets.map((set, si) => {
-        const mark = result.marks[si];
-        const h = hover?.kind === "set" && hover.set === si;
-        return (
-          <button
-            type="button"
-            class={`set-zone ${mark ?? ""} ${h ? "hot" : ""}`}
-            style={{ transform: `translate3d(${set.rect.x - 4}px, ${set.rect.y - 4}px, 0)`, width: `${set.rect.w + 8}px`, height: `${set.rect.h + 8}px` }}
-            aria-label={`Set: ${(draft.table[si] ?? []).map((id, i) => pieceLabel(id, ghostOf(draft.table[si] ?? [], i) ?? undefined)).join(", ")}${mark === "bad" ? ". Not a set yet" : ""}`}
-            tabIndex={selected !== null ? 0 : -1}
-            onClick={() => tapSet(si)}
-          >
-            {mark === "good" ? <img class="mark" src={art("icon-check")} alt="" /> : mark === "bad" ? <span class="mark bad" /> : null}
-          </button>
-        );
-      })}
-      {myTurn ? (
-        <button
-          type="button"
-          id="new-set"
-          class={`new-set ${hover?.kind === "new" ? "hot" : ""}`}
-          style={{ transform: `translate3d(${L.newSet.x}px, ${L.newSet.y}px, 0)`, width: `${L.newSet.w}px`, height: `${L.newSet.h}px` }}
-          aria-label="New set"
-          onClick={tapNew}
-        >
-          <Icon name="icon-plus" size={22} />
-        </button>
-      ) : null}
-
-      <div class="pieces">
-        {[...poses.keys()].map((key) => {
-          const id = Number(key.slice(1));
-          const p = poses.get(key)!;
-          const si = draft.table.findIndex((set) => set.includes(id));
-          const ghost = si >= 0 ? ghostOf(draft.table[si]!, draft.table[si]!.indexOf(id)) : null;
-          const can = draft.rack.includes(id) || movable(id);
-          return (
-            <div key={key} ref={setEl(key)} class={`tile ${selected === id ? "picked" : ""} ${can ? "mine" : ""}`} style={{ transform: transformOf(p), zIndex: p.z ?? 1 }} onPointerDown={can ? onDown(id) : undefined}>
-              {can ? (
-                <button type="button" class="tile-inner" aria-label={pieceLabel(id, ghost ?? undefined)} aria-pressed={selected === id} onClick={(e) => e.preventDefault()} onKeyDown={(e) => {
-                  if (e.key === "Enter" || e.key === " ") {
-                    e.preventDefault();
-                    setSelected((s) => (s === id ? null : id));
-                  }
-                }}>
-                  <PieceFace id={id} ghost={ghost} />
-                </button>
-              ) : (
-                <div class="tile-inner" role="img" aria-label={pieceLabel(id, ghost ?? undefined)}>
-                  <PieceFace id={id} ghost={ghost} />
-                </div>
-              )}
-            </div>
-          );
-        })}
-      </div>
-
-      {showRack ? (
-        <div class="controls" style={{ transform: `translate3d(0, ${L.controls.y}px, 0)`, height: `${L.controls.h}px` }}>
-          <div class="side">
-            <IconButton icon="icon-replay" label="Undo" onClick={undo} id="undo" />
-            <IconButton icon="icon-remove" label="Start over" onClick={reset} />
-          </div>
-          <div class="middle">
-            {!opened && myTurn && result.changed ? (
-              <span class={`chip opening ${result.opening !== null && result.opening >= OPENING_POINTS ? "good" : ""}`} id="opening">
-                {result.opening ?? 0}/{OPENING_POINTS}
-              </span>
-            ) : null}
-            <Button id="play-btn" variant={result.changed ? "ok" : "teal"} size="small" disabled={!myTurn || Boolean(state.pending) || (result.changed && !playable)} onClick={submit}>
-              <Icon name="icon-paw-menu" size={26} /> {label}
-            </Button>
-          </div>
-          <div class="side">
-            {/* One button, two sorts: by number, then by toy, then by number again. */}
-            <button type="button" class="icon-btn" aria-label={sortBy === "number" ? "Sort by toy" : "123: sort by number"} title={sortBy === "number" ? "Sort by toy" : "Sort by number"} onClick={() => sort(sortBy === "number" ? "toy" : "number")} id="sort">
-              {sortBy === "number" ? <img src={art("tile-fish")} alt="" width={28} height={28} /> : <span class="num-icon">123</span>}
+    <div class={`tt-table ${myTurn ? "my-turn" : ""}`} ref={rootRef} style={tilesStyle(L)}>
+      <TilesTableBase
+        store={store}
+        room={room}
+        layout={L}
+        motion={motion}
+        aims={state.aims}
+        sounds={sounds}
+        draft={aimTable ? undefined : draft.table}
+        marks={aimTable ? undefined : result.marks}
+        mine={mine}
+        hand={{ poses, els: els.current, render: renderPiece }}
+        hover={hover}
+        setsFocusable={selected !== null}
+        onSet={tapSet}
+        cue={{
+          text: v.status !== "playing" ? "" : myTurn ? (result.changed ? (playable ? "Tap Play" : "Not a play yet") : "Your turn") : `${turnName}'s turn`,
+          mine: myTurn,
+          // Above the opening's points, which ride over Play into the foot of the board.
+          y: openingShown ? L.board.y + L.board.h - 80 : undefined,
+        }}
+        under={
+          myTurn ? (
+            <button
+              type="button"
+              id="new-set"
+              class={`new-set ${hover?.kind === "new" ? "hot" : ""}`}
+              style={{ transform: `translate3d(${L.newSet.x}px, ${L.newSet.y}px, 0)`, width: `${L.newSet.w}px`, height: `${L.newSet.h}px` }}
+              aria-label="New set"
+              onClick={tapNew}
+            >
+              <Icon name="icon-plus" size={22} />
             </button>
-            <IconButton icon="fx-sparkle" label="Hint" onClick={() => void hint()} id="hint" />
+          ) : null
+        }
+      >
+        {showRack ? (
+          <div class="controls" style={{ transform: `translate3d(0, ${L.controls.y}px, 0)`, height: `${L.controls.h}px` }}>
+            <div class="side">
+              <IconButton icon="icon-replay" label="Undo" onClick={undo} id="undo" />
+              <IconButton icon="icon-remove" label="Start over" onClick={reset} />
+            </div>
+            <div class="middle">
+              {openingShown ? (
+                <span class={`chip opening ${result.opening !== null && result.opening >= OPENING_POINTS ? "good" : ""}`} id="opening">
+                  {result.opening ?? 0}/{OPENING_POINTS}
+                </span>
+              ) : null}
+              <Button id="play-btn" variant={result.changed ? "ok" : "teal"} size="small" disabled={!myTurn || Boolean(state.pending) || (result.changed && !playable)} onClick={submit}>
+                <Icon name="icon-paw-menu" size={26} /> {label}
+              </Button>
+            </div>
+            <div class="side">
+              {/* One button, two sorts: by number, then by toy, then by number again. */}
+              <button type="button" class="icon-btn" aria-label={sortBy === "number" ? "Sort by toy" : "123: sort by number"} title={sortBy === "number" ? "Sort by toy" : "Sort by number"} onClick={() => sort(sortBy === "number" ? "toy" : "number")} id="sort">
+                {sortBy === "number" ? <img src={art("tile-fish")} alt="" width={28} height={28} /> : <span class="num-icon">123</span>}
+              </button>
+              <IconButton icon="fx-sparkle" label="Hint" onClick={() => void hint()} id="hint" />
+            </div>
           </div>
-        </div>
-      ) : null}
+        ) : null}
 
-      <p class={`cue ${myTurn ? "mine" : ""}`} aria-live="polite" style={{ transform: `translate3d(-50%, ${L.board.y + L.board.h - 40}px, 0)` }}>
-        {v.status !== "playing" ? "" : myTurn ? (result.changed ? (playable ? "Tap Play" : "Not a play yet") : "Your turn") : `${turnName}'s turn`}
-      </p>
+        {curtainSeat !== null ? <Curtain name={seatName(room.seats[curtainSeat])} cat={room.seats[curtainSeat]?.person?.cat ?? 0} onReveal={() => setRevealed({ seat: curtainSeat, key: turnKey })} /> : null}
 
-      {curtainSeat !== null ? <Curtain name={seatName(room.seats[curtainSeat])} cat={room.seats[curtainSeat]?.person?.cat ?? 0} onReveal={() => setRevealed({ seat: curtainSeat, key: turnKey })} /> : null}
-
-      <Tip id="tt.drag" anchor="new-set" text="Drag pieces here to make a set." show={myTurn && !result.changed && rackIds.length > 0} />
-      <Tip id="tt.open" anchor="opening" text="Your first play must reach this score." show={myTurn && !opened && result.changed && tipLearned("tt.drag")} />
-      <Tip id="tt.play" anchor="play-btn" text="Tap Play to send your turn." show={playable && tipLearned("tt.open")} />
-      <Tip id="tt.draw" anchor="play-btn" text="Nothing to play? Draw a toy." show={myTurn && !result.changed && tipLearned("tt.drag")} />
-      <Tip id="tt.hint" anchor="hint" text="Stuck? Tap for a hint." show={myTurn && tipLearned("tt.draw") && !result.changed} />
+        <Tip id="tt.drag" anchor="new-set" text="Drag pieces here to make a set." show={myTurn && !result.changed && rackIds.length > 0} />
+        <Tip id="tt.open" anchor="opening" text="Your first play must reach this score." show={myTurn && !opened && result.changed && tipLearned("tt.drag")} />
+        <Tip id="tt.play" anchor="play-btn" text="Tap Play to send your turn." show={playable && tipLearned("tt.open")} />
+        <Tip id="tt.draw" anchor="play-btn" text="Nothing to play? Draw a toy." show={myTurn && !result.changed && tipLearned("tt.drag")} />
+        <Tip id="tt.hint" anchor="hint" text="Stuck? Tap for a hint." show={myTurn && tipLearned("tt.draw") && !result.changed} />
+      </TilesTableBase>
     </div>
   );
 }

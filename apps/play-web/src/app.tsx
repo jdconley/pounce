@@ -5,7 +5,7 @@ import { turnOffAlerts, turnOnAlerts, useAlerts } from "./alerts";
 import { art } from "./lib/art";
 import { flushNow } from "./lib/kv";
 import { currentRoute, navigate, onRoute, type Route } from "./lib/router";
-import { onSettings, setSettings, settings } from "./lib/settings";
+import { keepTvSettings, onSettings, setSettings, settings } from "./lib/settings";
 import { api, ApiError } from "./net/api";
 import { installState, promptInstall, useInstall } from "./pwa";
 import { app, deleteMyData, finishAge, noteSource, reach, setOwner, syncProfile, useApp } from "./store/app";
@@ -13,6 +13,7 @@ import { peekInvite as peek } from "./store/peek";
 import { Button, Cat, Icon, Sheet } from "./ui/common";
 import { AgeScreen, NameScreen, type InviteBanner } from "./ui/firstrun";
 import { Home, JoinScreen } from "./ui/home";
+import { TvLinkPage } from "./ui/tv-link";
 
 import type { GameId } from "./lib/catalog";
 import type { TableIntent } from "./ui/table-screen";
@@ -22,7 +23,7 @@ type TableModule = typeof import("./ui/table-screen");
 let tableModule: Promise<TableModule> | null = null;
 export const loadTables = (): Promise<TableModule> => (tableModule ??= import("./ui/table-screen"));
 
-function LazyTable(props: { code: string; intent: TableIntent }) {
+function LazyTable(props: { code: string; intent: TableIntent; say: (words: string) => void }) {
   const [mod, setMod] = useState<TableModule | null>(null);
   useEffect(() => {
     let live = true;
@@ -32,7 +33,7 @@ function LazyTable(props: { code: string; intent: TableIntent }) {
     };
   }, []);
   if (!mod) return <main class="screen violet-bg" aria-busy="true" />;
-  return <mod.TableScreen code={props.code} intent={props.intent} />;
+  return <mod.TableScreen code={props.code} intent={props.intent} say={props.say} />;
 }
 
 /** How the next table screen was asked for (a new table, practice, an invite). */
@@ -43,18 +44,48 @@ export function openTable(code: string, intent: TableIntent, replace = false): v
   navigate({ kind: "table", code }, replace);
 }
 
+/** The TV page loads only on a TV: phones never download it. */
+type TvModule = typeof import("./ui/tv/tv-app");
+
+function LazyTv() {
+  const [mod, setMod] = useState<TvModule | null>(null);
+  useEffect(() => {
+    let live = true;
+    // This page is a TV: its sound is its own, not the phone's in the same browser.
+    keepTvSettings();
+    void import("./ui/tv/tv-app").then((m) => live && setMod(m));
+    return () => {
+      live = false;
+    };
+  }, []);
+  if (!mod) return <main class="screen violet-bg" aria-busy="true" />;
+  return <mod.TvApp />;
+}
+
 function useRoute(): Route {
   const [route, setRoute] = useState(currentRoute);
-  useEffect(() => onRoute(setRoute), []);
+  useEffect(() => {
+    // A child's first effects run before this one: a route it moved to then (an invite link opened
+    // by someone who already has a name goes straight to the table) is read here, not missed.
+    setRoute(currentRoute());
+    return onRoute(setRoute);
+  }, []);
   return route;
 }
 
 export function App() {
   const route = useRoute();
+  // A TV is no one's device: no first run, no profile, no funnel.
+  if (route.kind === "tv") return <LazyTv />;
+  return <PlayerApp route={route} />;
+}
+
+function PlayerApp(props: { route: Route }) {
+  const { route } = props;
   const { people } = useApp();
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [invite, setInvite] = useState<InviteBanner | null>(null);
-  const [toast, setToast] = useState<string | null>(null);
+  const [toast, setToast] = useState<{ words: string; good: boolean; top: boolean } | null>(null);
   const [busy, setBusy] = useState(false);
 
   // Once the first screen is up, fetch the tables' code in the background.
@@ -85,7 +116,11 @@ export function App() {
     }
   }, [route, people.owner]);
 
-  const say = (words: string) => setToast(words);
+  const say = (words: string) => setToast({ words, good: false, top: false });
+  /** Something that worked ("On the TV"): under the header, not in the refusal's red. */
+  const cheer = (words: string) => setToast({ words, good: true, top: true });
+  /** A refusal on a screen with bars along the bottom (a lobby): under the header too. */
+  const warn = (words: string) => setToast({ words, good: false, top: true });
 
   const newTable = async (game: GameId, practice: boolean) => {
     if (busy) return;
@@ -116,7 +151,7 @@ export function App() {
   } else {
     switch (route.kind) {
       case "table":
-        screen = <LazyTable key={route.code} code={route.code} intent={intents.get(route.code) ?? "open"} />;
+        screen = <LazyTable key={route.code} code={route.code} intent={intents.get(route.code) ?? "open"} say={cheer} />;
         break;
       case "keypad":
         screen = <JoinScreen onJoin={(code) => openTable(code, "guest")} />;
@@ -126,6 +161,10 @@ export function App() {
         break;
       case "join":
         screen = <main class="screen violet-bg" />;
+        break;
+      // A TV's QR: first run (above) keeps this route, then the page puts a table on that TV.
+      case "tvLink":
+        screen = <TvLinkPage token={route.token} say={cheer} warn={warn} onOpen={(code, intent) => openTable(code, intent, true)} />;
         break;
       default:
         screen = <Home onSettings={() => setSettingsOpen(true)} onNew={(g) => void newTable(g, false)} onPractice={(g) => void newTable(g, true)} />;
@@ -137,8 +176,9 @@ export function App() {
       {screen}
       {settingsOpen ? <SettingsSheet onClose={() => setSettingsOpen(false)} /> : null}
       {toast ? (
-        <div class="banner toast" role="alert" key={toast} onAnimationEnd={() => setToast(null)}>
-          {toast}
+        <div class={`banner toast ${toast.good ? "good" : ""} ${toast.top ? "top" : ""}`} role={toast.good ? "status" : "alert"} key={toast.words} onAnimationEnd={() => setToast(null)}>
+          {toast.good ? <Icon name="icon-check" size={26} /> : null}
+          {toast.words}
         </div>
       ) : null}
     </>

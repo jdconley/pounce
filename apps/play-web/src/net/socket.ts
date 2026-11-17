@@ -16,7 +16,10 @@ export type SocketEvent =
   | { kind: "connected" }
   | { kind: "message"; message: ServerMessage }
   | { kind: "disconnected" }
-  /** No such table (a bad code, or a table that closed and was deleted). */
+  /**
+   * No such table (a bad code, or a table that closed and was deleted), or, for a screen, a table
+   * that doesn't list this device as its screen (4403 `not_screen`).
+   */
   | { kind: "notFound" }
   /** Too many wrong codes from this device lately. */
   | { kind: "locked" }
@@ -42,7 +45,7 @@ export type SocketFactory = (url: string, protocols: string[]) => SocketLike;
 export type MeterConfig = { pingEvery: number; weakAfter: number; goodUnder: number; goodPongs: number; deadAfter: number };
 
 const METER: MeterConfig = { pingEvery: 3000, weakAfter: 1500, goodUnder: 1000, goodPongs: 2, deadAfter: 10_000 };
-const BACKOFF = [250, 500, 1000, 2000, 4000, 8000];
+export const BACKOFF = [250, 500, 1000, 2000, 4000, 8000];
 const TICK = 500;
 /** How long a connect may take before it counts as a failure. */
 const CONNECT_TIMEOUT = 15_000;
@@ -105,18 +108,26 @@ export class LinkMeter {
   }
 }
 
-/** The socket URL for a room on `origin` (http becomes ws, https wss), with the app's headers as its query. */
-export function socketUrl(origin: string, code: string): string {
-  const url = new URL(`/v1/rooms/${encodeURIComponent(code)}/ws`, origin);
+/** A socket URL on `origin` (http becomes ws, https wss), with the app's headers as its query. */
+export function wsUrl(origin: string, path: string, role?: "screen"): string {
+  const url = new URL(path, origin);
   url.protocol = url.protocol === "https:" ? "wss:" : "ws:";
   url.searchParams.set("games", GAMES);
   url.searchParams.set("app", APP_HEADER);
+  if (role) url.searchParams.set("role", role);
   return url.toString();
+}
+
+/** The socket URL for a room on `origin`; a TV joins it as the table's `screen`. */
+export function socketUrl(origin: string, code: string, role?: "screen"): string {
+  return wsUrl(origin, `/v1/rooms/${encodeURIComponent(code)}/ws`, role);
 }
 
 export type RoomSocketOptions = {
   code: string;
   origin?: string;
+  /** "screen": a TV watching the table, not a seat at it. */
+  role?: "screen";
   token: () => Promise<string>;
   /** Forget a token the server refused (4401): the next connect mints one. */
   dropToken?: () => void;
@@ -152,7 +163,7 @@ export class RoomSocket {
     this.setTimer = options.setTimer ?? ((fn, ms) => setTimeout(fn, ms));
     this.clearTimer = options.clearTimer ?? ((id) => clearTimeout(id as ReturnType<typeof setTimeout>));
     this.backoff = options.backoff ?? BACKOFF;
-    this.url = socketUrl(options.origin ?? location.origin, options.code);
+    this.url = socketUrl(options.origin ?? location.origin, options.code, options.role);
   }
 
   on(listener: (e: SocketEvent) => void): () => void {
@@ -287,7 +298,8 @@ export class RoomSocket {
       if (gen !== this.generation) return;
       this.clearTimer(timeout);
       const code = ev.code;
-      if (code === 4404) return this.end({ kind: "notFound" });
+      // 4403: the room doesn't list this device as its screen. As final as a room that's gone.
+      if (code === 4404 || code === 4403) return this.end({ kind: "notFound" });
       if (code === 4429) return this.end({ kind: "locked" });
       if (code === 4426) return this.end({ kind: "refused" });
       if (code === 4401) this.options.dropToken?.();

@@ -41,14 +41,15 @@
   right: calc(var(--safe-right) + 8px);
 }
 
+/* `--k` grows it with the controller's top bar on a tablet (ct-controller.tsx); 1 elsewhere. */
 .table-menu .icon-btn {
-  width: 44px;
-  height: 44px;
+  width: calc(44px * var(--k, 1));
+  height: calc(44px * var(--k, 1));
 }
 
 .table-menu .icon-btn img {
-  width: 26px;
-  height: 26px;
+  width: calc(26px * var(--k, 1));
+  height: calc(26px * var(--k, 1));
 }
 
 .rug-art {
@@ -165,8 +166,14 @@
   left: 9%;
 }
 
+/* A laid card shows only its left edge under the next one (as little as 42% of its width): a
+   two-digit numeral keeps its height and closes up to fit there (ct-layout.ts, TIGHT). */
 .face.compact .num.two {
+  left: 4%;
   font-size: calc(var(--cw) * 0.46);
+  letter-spacing: -0.1em;
+  transform: scaleX(0.82);
+  transform-origin: 0 50%;
 }
 
 .num.tabby {
@@ -411,6 +418,15 @@
   position: relative;
 }
 
+/* Points so far, under the name (a TV's seats). */
+.seat-avatar .score {
+  order: 2;
+  font: 900 calc(var(--avatar, 64px) * 0.2) / 1.1 var(--round);
+  color: var(--yellow);
+  -webkit-text-stroke: 0.12em var(--ink);
+  paint-order: stroke fill;
+}
+
 .laid-owner .seat-avatar .ring {
   border-width: 2px;
   box-shadow: none;
@@ -483,6 +499,11 @@
 
 .group-zone.bad {
   box-shadow: 0 0 0 3px var(--refuse);
+}
+
+/* The group the player whose turn it is is pointing at, from their phone (ct-public.tsx). */
+.group-zone.aimed {
+  box-shadow: 0 0 0 4px var(--yellow), 0 0 20px 4px var(--yellow);
 }
 
 .tray {
@@ -701,6 +722,12 @@
   filter: drop-shadow(0 0 6px var(--yellow));
 }
 
+/* A piece the player whose turn it is is adding, as they arrange it (tiles-public.tsx). */
+.tile.draft .tile-inner {
+  transform: translateY(-10%);
+  filter: drop-shadow(0 0 5px var(--yellow)) drop-shadow(0 0 2px var(--yellow));
+}
+
 .tile.dragging {
   z-index: 999 !important;
   cursor: grabbing;
@@ -906,4 +933,314 @@
   .controls .side {
     gap: 4px;
   }
+}
+
+/* A phone whose table is on a TV. The Cards/Table switch: on the controller, and over the full
+   table's top strip (table-screen.tsx). */
+.view-switch {
+  z-index: 40;
+  container-type: inline-size;
+  display: flex;
+  padding: 3px;
+  border: 3px solid var(--ink);
+  border-radius: 999px;
+  background: rgba(27, 11, 58, 0.78);
+  box-shadow: 0 4px 0 var(--ink);
+}
+
+.view-switch button {
+  flex: 1;
+  min-width: 0;
+  padding: 0 8px;
+  border: 0;
+  border-radius: 999px;
+  background: none;
+  color: rgba(255, 255, 255, 0.82);
+  /* The reader's size, never wider than its half of the switch ("Cards" is about 3.1 em). */
+  font: 900 min(calc(1.05rem * var(--k, 1)), calc((50cqi - 22px) / 3.1)) var(--round);
+  white-space: nowrap;
+}
+
+.view-switch button.on {
+  background: linear-gradient(180deg, #ffc21a, #ff8a00);
+  color: var(--white);
+  -webkit-text-stroke: 0.16em var(--ink);
+  paint-order: stroke fill;
+  box-shadow: 0 0 0 2.5px var(--ink), inset 0 2px 0 rgba(255, 255, 255, 0.45);
+}
+
+.view-bar {
+  position: absolute;
+  z-index: 40;
+  top: calc(var(--safe-top) + 8px);
+  left: calc(var(--safe-left) + 8px);
+}
+
+/* Wider with large text (10.25rem is 164 px at the default size), short of the paw on the right. */
+.view-bar .view-switch {
+  width: clamp(164px, 10.25rem, calc(100vw - var(--safe-left) - var(--safe-right) - 80px));
+  height: 44px;
+}
+
+/* The controller (ct-controller.tsx): placed by ct-controller-layout.ts like the table's pieces. */
+.ctl-status {
+  z-index: 30;
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  pointer-events: none;
+}
+
+/* Between the switch and the menu, on a tablet. */
+.ctl-status.inline {
+  justify-content: center;
+}
+
+.ctl-status-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  max-width: 100%;
+  height: 100%;
+  margin: 0;
+  padding: 0 20px 0 3px;
+  border: 3px solid var(--ink);
+  border-radius: 999px;
+  background: rgba(27, 11, 58, 0.8);
+  box-shadow: 0 4px 0 var(--ink);
+  color: var(--white);
+  font: 900 calc(clamp(1rem, 4.6vw, 1.4rem) * var(--k, 1)) var(--round);
+  -webkit-text-stroke: 0.14em var(--ink);
+  paint-order: stroke fill;
+  white-space: nowrap;
+}
+
+/* A long name: one step smaller, then only the name is cut short ("Great Aunt Jos…'s turn"). */
+.ctl-status-pill.long {
+  font-size: calc(clamp(0.9rem, 4vw, 1.15rem) * var(--k, 1));
+}
+
+.ctl-status-pill .words {
+  display: flex;
+  min-width: 0;
+}
+
+.ctl-status-pill .who {
+  flex: 0 1 auto;
+  min-width: 0;
+}
+
+.ctl-status-pill img {
+  flex: none;
+  height: calc(100% - 4px);
+  aspect-ratio: 1;
+  border: 2.5px solid var(--ink);
+  border-radius: 50%;
+  background: var(--ring);
+  object-fit: contain;
+}
+
+.ctl-status-pill span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.ctl-status-pill.mine,
+.ctl-status-pill.up,
+.ctl-status-pill.same {
+  animation: status-pop 420ms var(--ease-spring) both;
+}
+
+.ctl-status-pill.mine {
+  background: linear-gradient(180deg, #ffc21a, #ff8a00);
+}
+
+/* The round's result: climbed a shelf, or stayed. */
+.ctl-status-pill.up {
+  background: linear-gradient(180deg, #c6f76a, #7cc51c);
+}
+
+.ctl-status-pill.same {
+  background: linear-gradient(180deg, #b183ff, #7b2fff);
+}
+
+@keyframes status-pop {
+  from {
+    scale: 0.8;
+  }
+  to {
+    scale: 1;
+  }
+}
+
+/* After the draw the deck rests; off turn both piles do, in the place they have on your turn. */
+.ctl .deck:disabled .deck-card,
+.ctl .deck.rest .deck-card {
+  filter: drop-shadow(0 2px 0 rgba(27, 11, 58, 0.55)) saturate(0.6) brightness(0.8);
+}
+
+.ctl .card.rest .card-inner {
+  filter: saturate(0.6) brightness(0.8);
+}
+
+.ctl .discard.rest {
+  outline-color: rgba(255, 255, 255, 0.2);
+}
+
+.ctl .pile-count {
+  min-width: calc(36px * var(--k, 1));
+  font-size: calc(1.05rem * var(--k, 1));
+}
+
+.ctl .tray-label {
+  font-size: calc(clamp(0.85rem, 3.6vw, 1.05rem) * var(--k, 1));
+}
+
+/* A hand card shows as little as 38% of itself (ct-controller-layout.ts, SHOWS): a two-digit
+   number closes up to fit there. */
+.ctl .card.mine .face .num.two {
+  left: 7%;
+  letter-spacing: -0.1em;
+}
+
+/* Where the picked card can be hit: a short list, the chosen one lit (and lit on the TV). */
+.ctl-hits {
+  z-index: 30;
+  display: flex;
+  padding: 8px calc(var(--close) + 16px) 8px 8px;
+  animation: fade-in 160ms ease-out both;
+}
+
+.ctl-hits ul {
+  animation: sheet-in 260ms var(--ease-spring) both;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  touch-action: pan-y;
+}
+
+.ctl-hit {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  min-height: calc(44px * var(--k, 1));
+  padding: 2px 16px 2px 3px;
+  border: 3px solid var(--ink);
+  border-radius: 999px;
+  background: linear-gradient(180deg, #b183ff, #7b2fff);
+  box-shadow: 0 3px 0 var(--ink);
+  color: var(--white);
+  font: 900 calc(1.05rem * var(--k, 1)) var(--round);
+  -webkit-text-stroke: 0.14em var(--ink);
+  paint-order: stroke fill;
+  text-align: left;
+}
+
+.ctl-hit img {
+  flex: none;
+  width: calc(34px * var(--k, 1));
+  height: calc(34px * var(--k, 1));
+  border: 2.5px solid var(--ink);
+  border-radius: 50%;
+  background: var(--ring);
+  object-fit: contain;
+}
+
+.ctl-hit .label {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ctl-hit .end {
+  font-size: 0.85rem;
+}
+
+.ctl-hit.on {
+  background: linear-gradient(180deg, #ffe66b, #ffd21f);
+  box-shadow: 0 0 0 3px var(--yellow), 0 3px 0 var(--ink);
+  color: var(--ink);
+  -webkit-text-stroke: 0;
+}
+
+/* Inside the list's top-right corner, beside its first row (ct-controller-layout.ts, hitClose). */
+.ctl-hits-close {
+  z-index: 31;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  border: 2.5px solid var(--ink);
+  border-radius: 50%;
+  background: var(--ink);
+  color: var(--white);
+}
+
+.ctl-actions {
+  z-index: 30;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  pointer-events: none;
+}
+
+.ctl-actions > * {
+  pointer-events: auto;
+}
+
+/* A label, not a button: outlined words on the rug. */
+.ctl-cue {
+  margin: 0;
+  font-size: calc(1.35rem * var(--k, 1));
+}
+
+.ctl-actions .btn.small {
+  min-height: calc(44px * var(--k, 1));
+  padding: calc(6px * var(--k, 1)) calc(18px * var(--k, 1)) calc(8px * var(--k, 1));
+  font-size: calc(1.05rem * var(--k, 1));
+}
+
+.ctl-hand {
+  pointer-events: none;
+}
+
+/* A tip on the controller grows with its top bar on a tablet. */
+.ctl .tip {
+  max-width: min(calc(340px * var(--k, 1)), calc(100vw - 32px));
+  font-size: calc(clamp(0.95rem, 3.8vw, 1.05rem) * var(--k, 1));
+}
+
+/* Tuna Tiles on the controller, off turn (tiles-controller.tsx): the toy box big with its count,
+   the sort button and the rack, placed by tiles-controller-layout.ts. */
+.tcl .pool .pile-count {
+  right: -8px;
+  bottom: 0;
+  min-width: calc(44px * var(--k, 1));
+  padding: calc(2px * var(--k, 1)) calc(10px * var(--k, 1));
+  font-size: calc(1.35rem * var(--k, 1));
+}
+
+.tcl #sort {
+  z-index: 30;
+}
+
+.tcl #sort img {
+  width: 60%;
+  height: 60%;
+}
+
+.tcl #sort .num-icon {
+  font-size: calc(0.85rem * var(--k, 1));
+}
+
+.tcl-rack {
+  pointer-events: none;
 }

@@ -1,0 +1,1268 @@
+/* Pounce on the TV: read from across the room. Everything is laid out on a 1920 x 1080 stage and
+   scales with the screen through --u (one stage pixel), so 720p and 4K show the same picture with
+   nothing clipped and nothing to scroll. */
+
+.tv {
+  --u: min(calc(100vh / 1080), calc(100vw / 1920));
+  --ring: calc(var(--u) * 10);
+  position: fixed;
+  inset: 0;
+  overflow: hidden;
+  font-family: var(--round);
+  color: var(--white);
+  background: var(--night);
+}
+
+.tv-bg {
+  position: absolute;
+  inset: 0;
+  background: var(--night) center 34% / cover no-repeat;
+  pointer-events: none;
+}
+
+.tv-bg::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background:
+    radial-gradient(ellipse at 50% 50%, rgba(27, 11, 58, 0.15) 30%, rgba(27, 11, 58, 0.7) 100%),
+    linear-gradient(180deg, rgba(42, 15, 92, 0.35), rgba(27, 11, 58, 0.55));
+}
+
+/* A remote's focus: a thick bright ring and a lift, readable from the couch. */
+.tv [data-tv] {
+  transition:
+    transform 160ms var(--ease-spring),
+    box-shadow 160ms var(--ease-out),
+    filter 120ms;
+}
+
+.tv [data-tv]:focus {
+  outline: var(--ring) solid var(--yellow);
+  outline-offset: calc(var(--u) * 8);
+  transform: scale(1.06);
+  z-index: 1;
+}
+
+/* Start: the title, and one button. */
+.tv-start-screen {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: calc(var(--u) * 64);
+}
+
+.tv-sunburst {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: calc(var(--u) * 1500);
+  height: calc(var(--u) * 1500);
+  margin: calc(var(--u) * -750) 0 0 calc(var(--u) * -750);
+  opacity: 0.6;
+  animation: spin 40s linear infinite;
+  pointer-events: none;
+}
+
+.tv-brand {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.tv-logo {
+  width: calc(var(--u) * 340);
+  height: calc(var(--u) * 340);
+  border: calc(var(--u) * 9) solid var(--ink);
+  border-radius: calc(var(--u) * 76);
+  box-shadow: 0 calc(var(--u) * 14) 0 var(--ink);
+  animation: tv-bob 2.4s ease-in-out infinite alternate;
+}
+
+.tv-wordmark {
+  margin: calc(var(--u) * -36) 0 0;
+  font-size: calc(var(--u) * 210);
+  line-height: 1;
+  letter-spacing: 0.02em;
+  transform: rotate(-3deg);
+}
+
+.tv .tv-start-btn {
+  position: relative;
+  min-height: calc(var(--u) * 150);
+  padding: 0 calc(var(--u) * 150) calc(var(--u) * 8);
+  border-width: calc(var(--u) * 6);
+  font-size: calc(var(--u) * 84);
+  box-shadow:
+    0 calc(var(--u) * 12) 0 var(--ink),
+    inset 0 calc(var(--u) * 6) 0 rgba(255, 255, 255, 0.45);
+}
+
+.tv .tv-start-btn:focus {
+  outline-offset: calc(var(--u) * 12);
+  transform: scale(1.08);
+}
+
+/* A TV that went straight back to its table: one press for sound and full screen, over the table
+   dimmed (it plays on underneath). Above the menu, below the notes. */
+.tv-wake {
+  position: absolute;
+  inset: 0;
+  z-index: 850;
+  display: grid;
+  place-items: center;
+}
+
+.tv-wake-scrim {
+  position: absolute;
+  inset: 0;
+  background: rgba(27, 11, 58, 0.55);
+  animation: fade-in 200ms ease-out both;
+}
+
+.tv .tv-wake-btn {
+  position: relative;
+  gap: calc(var(--u) * 24);
+  min-height: calc(var(--u) * 130);
+  padding: 0 calc(var(--u) * 72) calc(var(--u) * 6);
+  border-width: calc(var(--u) * 6);
+  font-size: calc(var(--u) * 60);
+  box-shadow:
+    0 calc(var(--u) * 12) 0 var(--ink),
+    inset 0 calc(var(--u) * 6) 0 rgba(255, 255, 255, 0.45);
+}
+
+.tv .tv-wake-btn img {
+  width: calc(var(--u) * 76);
+  height: calc(var(--u) * 76);
+}
+
+.tv .tv-wake-btn:focus {
+  outline-offset: calc(var(--u) * 12);
+  transform: scale(1.06);
+}
+
+@keyframes tv-bob {
+  to {
+    transform: translateY(calc(var(--u) * -14)) rotate(2deg);
+  }
+}
+
+/* Home: the link on the left, the two games on the right. */
+.tv-home-screen {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: calc(var(--u) * 110);
+  padding: calc(var(--u) * 40) calc(var(--u) * 80);
+}
+
+.tv-link {
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: calc(var(--u) * 760);
+}
+
+.tv-scan {
+  margin: 0;
+  font-size: calc(var(--u) * 50);
+  line-height: 1.12;
+  text-align: center;
+  text-wrap: balance;
+}
+
+/* The QR in a cat-eared frame (the app's qr-frame art, drawn here so it stays sharp at 4K). */
+.tv-qr-frame {
+  position: relative;
+  margin-top: calc(var(--u) * 92);
+  padding: calc(var(--u) * 24);
+  border: calc(var(--u) * 6) solid var(--ink);
+  border-radius: calc(var(--u) * 64);
+  background: linear-gradient(180deg, #a35cff, #7b2fff 40%, #6a22e0);
+  box-shadow:
+    0 calc(var(--u) * 14) 0 var(--ink),
+    inset 0 calc(var(--u) * 6) 0 rgba(255, 255, 255, 0.35);
+}
+
+.tv-ear {
+  position: absolute;
+  bottom: calc(100% - var(--u) * 4);
+  width: calc(var(--u) * 126);
+  height: calc(var(--u) * 84);
+  background: var(--ink);
+}
+
+.tv-ear::after {
+  content: "";
+  position: absolute;
+  inset: calc(var(--u) * 20) calc(var(--u) * 26) 0;
+  background: #f04aa5;
+  clip-path: inherit;
+}
+
+.tv-ear.left {
+  left: calc(var(--u) * 70);
+  clip-path: polygon(0 100%, 14% 0, 100% 100%);
+}
+
+.tv-ear.right {
+  right: calc(var(--u) * 70);
+  clip-path: polygon(0 100%, 86% 0, 100% 100%);
+}
+
+.tv-qr-window {
+  padding: calc(var(--u) * 16);
+  border: calc(var(--u) * 5) solid var(--ink);
+  border-radius: calc(var(--u) * 36);
+  background: var(--white);
+}
+
+.tv .tv-qr {
+  width: calc(var(--u) * 560);
+  height: calc(var(--u) * 560);
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: var(--white);
+}
+
+.tv .tv-qr svg {
+  width: 100%;
+  height: 100%;
+}
+
+.tv-code {
+  position: relative;
+  min-width: calc(var(--u) * 460);
+  min-height: calc(var(--u) * 112);
+  margin: calc(var(--u) * -34) 0 0;
+  padding: calc(var(--u) * 6) calc(var(--u) * 36) calc(var(--u) * 10) calc(var(--u) * 50);
+  border: calc(var(--u) * 6) solid var(--ink);
+  border-radius: 999px;
+  background: var(--yellow);
+  box-shadow: 0 calc(var(--u) * 10) 0 var(--ink);
+  color: var(--ink);
+  font: 900 calc(var(--u) * 80) / 1.1 var(--round);
+  letter-spacing: 0.16em;
+  text-align: center;
+  white-space: nowrap;
+}
+
+.tv-games {
+  flex: 0 1 calc(var(--u) * 900);
+  display: flex;
+  flex-direction: column;
+  gap: calc(var(--u) * 64);
+}
+
+.tv-poster {
+  display: grid;
+  grid-template-columns: 46% 1fr;
+  height: calc(var(--u) * 400);
+  padding: 0;
+  overflow: hidden;
+  border: calc(var(--u) * 6) solid var(--ink);
+  border-radius: calc(var(--u) * 48);
+  background: linear-gradient(180deg, #a35cff, #6a22e0 55%, #4e13c4);
+  box-shadow:
+    0 calc(var(--u) * 14) 0 var(--ink),
+    inset 0 calc(var(--u) * 5) 0 rgba(255, 255, 255, 0.35);
+  color: var(--white);
+  text-align: left;
+}
+
+.tv-poster.tiles {
+  background: linear-gradient(180deg, #5ad7ff, #1c9be8 55%, #0e6fc0);
+}
+
+.tv .tv-poster:focus {
+  box-shadow:
+    0 calc(var(--u) * 14) 0 var(--ink),
+    inset 0 calc(var(--u) * 5) 0 rgba(255, 255, 255, 0.35),
+    0 0 calc(var(--u) * 70) calc(var(--u) * 14) rgba(255, 210, 31, 0.55);
+}
+
+.tv-poster-art {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  border-right: calc(var(--u) * 6) solid var(--ink);
+}
+
+.tv-poster-body {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: flex-start;
+  gap: calc(var(--u) * 28);
+  padding: calc(var(--u) * 28) calc(var(--u) * 36);
+  min-width: 0;
+}
+
+.tv-poster-title {
+  font-size: calc(var(--u) * 96);
+  line-height: 0.98;
+}
+
+.tv-players {
+  display: inline-flex;
+  align-items: center;
+  gap: calc(var(--u) * 14);
+  padding: calc(var(--u) * 8) calc(var(--u) * 22);
+  border-radius: 999px;
+  background: rgba(27, 11, 58, 0.5);
+  font: 800 calc(var(--u) * 30) var(--round);
+  white-space: nowrap;
+}
+
+.tv-dots {
+  display: inline-flex;
+  gap: calc(var(--u) * 6);
+}
+
+.tv-dots i {
+  width: calc(var(--u) * 18);
+  height: calc(var(--u) * 18);
+  border: calc(var(--u) * 3) solid var(--ink);
+  border-radius: 50%;
+}
+
+/* Waiting on the network: small, at the top, out of the way. */
+/* Top left: the lobby's QR column starts below it, and it sits over game over and the menu. */
+.tv-note {
+  position: absolute;
+  z-index: 900;
+  top: calc(var(--u) * 28);
+  left: calc(var(--u) * 28);
+  display: flex;
+  align-items: center;
+  gap: calc(var(--u) * 14);
+  padding: calc(var(--u) * 10) calc(var(--u) * 28);
+  border: calc(var(--u) * 4) solid var(--ink);
+  border-radius: 999px;
+  background: var(--ink);
+  font: 900 calc(var(--u) * 32) var(--round);
+  animation: fade-in 200ms ease-out both;
+  white-space: nowrap;
+}
+
+.tv-note .dot {
+  width: calc(var(--u) * 18);
+  height: calc(var(--u) * 18);
+  border-radius: 50%;
+  background: var(--refuse);
+  animation: pulse 1s ease-in-out infinite alternate;
+}
+
+/* A table: its screens, the menu's paw and the notes, on one frame. */
+.tv-room {
+  position: absolute;
+  inset: 0;
+}
+
+/* A table on its way: finding it, or finding it again. */
+.tv-room-screen {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+}
+
+.tv-room-card {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: calc(var(--u) * 900);
+  padding: calc(var(--u) * 140) calc(var(--u) * 60) calc(var(--u) * 60);
+  border-width: calc(var(--u) * 6);
+  border-radius: calc(var(--u) * 56);
+  box-shadow: 0 calc(var(--u) * 14) 0 var(--ink);
+}
+
+.tv-room-cat {
+  position: absolute;
+  top: calc(var(--u) * -110);
+  animation: tv-bob 2.4s ease-in-out infinite alternate;
+}
+
+.tv-room-words {
+  margin: 0;
+  font-size: calc(var(--u) * 64);
+  text-align: center;
+}
+
+/* The menu's button: a paw, for a mouse (a remote's Back opens the menu as well). */
+.tv .tv-menu-btn {
+  display: grid;
+  place-items: center;
+  padding: 0;
+  border: calc(var(--u) * 5) solid var(--ink);
+  border-radius: 50%;
+  background: linear-gradient(180deg, #b183ff, #7b2fff);
+  box-shadow:
+    0 calc(var(--u) * 8) 0 var(--ink),
+    inset 0 calc(var(--u) * 5) 0 rgba(255, 255, 255, 0.4);
+  position: absolute;
+  z-index: 600;
+}
+
+.tv .tv-menu-btn img {
+  width: 66%;
+  height: 66%;
+  object-fit: contain;
+}
+
+/* Focused only when a remote goes to it: the shared ring and lift, still over game over. */
+.tv .tv-menu-btn:focus {
+  z-index: 600;
+  outline-width: calc(var(--u) * 7);
+  outline-offset: calc(var(--u) * 6);
+  transform: scale(1.1);
+}
+
+/* ---- The lobby: the invite on the left, the rug and its cushions on the right. ---- */
+.tv-lobby {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: calc(var(--u) * 100);
+  padding: calc(var(--u) * 40) calc(var(--u) * 150) calc(var(--u) * 40) calc(var(--u) * 80);
+}
+
+.tv-lobby-join {
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: calc(var(--u) * 660);
+}
+
+.tv-lobby .tv-scan {
+  font-size: calc(var(--u) * 64);
+}
+
+.tv-lobby .tv-qr-frame {
+  margin-top: calc(var(--u) * 96);
+}
+
+.tv-lobby .tv-qr {
+  width: calc(var(--u) * 520);
+  height: calc(var(--u) * 520);
+}
+
+.tv-lobby-table {
+  flex: 0 1 calc(var(--u) * 900);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: calc(var(--u) * 20);
+}
+
+.tv-lobby-head {
+  display: flex;
+  align-items: center;
+  gap: calc(var(--u) * 32);
+  height: calc(var(--u) * 130);
+}
+
+.tv-lobby-art {
+  width: calc(var(--u) * 200);
+  height: calc(var(--u) * 134);
+  object-fit: cover;
+  border: calc(var(--u) * 6) solid var(--ink);
+  border-radius: calc(var(--u) * 28);
+  box-shadow: 0 calc(var(--u) * 8) 0 var(--ink);
+  transform: rotate(-4deg);
+}
+
+.tv-lobby-title {
+  margin: 0;
+  font-size: calc(var(--u) * 112);
+  line-height: 1;
+  white-space: nowrap;
+}
+
+.tv-lobby-rug {
+  position: relative;
+  width: calc(var(--u) * 820);
+  height: calc(var(--u) * 600);
+}
+
+.tv-lobby-rug-art {
+  position: absolute;
+  top: 0;
+  left: 50%;
+  width: calc(var(--u) * 600);
+  height: calc(var(--u) * 600);
+  margin-left: calc(var(--u) * -300);
+  object-fit: contain;
+}
+
+/* A cushion per seat; a player's cat walks on to theirs from the nearer side and hops in. */
+.tv-seat {
+  --seat: calc(var(--u) * 250);
+  position: absolute;
+  left: calc(var(--x) * 100%);
+  top: calc(var(--y) * 100%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: var(--seat);
+  transform: translate(-50%, -50%);
+  animation: tv-walk-on 900ms var(--ease-out) both;
+}
+
+.crowded .tv-seat {
+  --seat: calc(var(--u) * 200);
+}
+
+.tv-seat.open {
+  animation: fade-in 300ms ease-out both;
+}
+
+.tv-cushion {
+  position: absolute;
+  bottom: calc(var(--seat) * 0.2);
+  left: 4%;
+  width: 92%;
+  height: calc(var(--seat) * 0.34);
+  border: calc(var(--u) * 5) solid var(--ink);
+  border-radius: 50%;
+  background: radial-gradient(ellipse at 50% 30%, color-mix(in srgb, var(--ring) 55%, white), var(--ring));
+  box-shadow: 0 calc(var(--u) * 7) 0 var(--ink);
+}
+
+/* An open seat: a dashed spot on the rug, with a paw, waiting for a cat. */
+.tv-open-spot {
+  display: grid;
+  place-items: center;
+  width: 62%;
+  aspect-ratio: 1;
+  margin: 19% 0;
+  border: calc(var(--u) * 6) dashed rgba(255, 255, 255, 0.9);
+  border-radius: 50%;
+  background: rgba(27, 11, 58, 0.62);
+}
+
+.tv-open-spot img {
+  width: 52%;
+  opacity: 0.6;
+}
+
+.tv-seat-cat {
+  position: relative;
+  display: block;
+  width: 100%;
+  aspect-ratio: 1;
+  animation:
+    tv-hop 225ms ease-in-out 4 alternate both,
+    tv-bob 2.6s ease-in-out 1.2s infinite alternate;
+}
+
+
+.tv-seat-badge {
+  position: absolute;
+  top: calc(var(--seat) * 0.06);
+  right: 0;
+  width: 28%;
+}
+
+.tv .tv-seat .name-tag {
+  position: relative;
+  max-width: calc(var(--seat) * 1.5);
+  margin-top: calc(var(--seat) * -0.12);
+  padding: calc(var(--u) * 4) calc(var(--u) * 20) calc(var(--u) * 6);
+  border-width: calc(var(--u) * 4);
+  font: 900 calc(var(--u) * 36) / 1.2 var(--round);
+}
+
+.crowded .tv-seat .name-tag {
+  max-width: calc(var(--seat) * 1.3);
+  font-size: calc(var(--u) * 32);
+}
+
+/* What happens next, said on the TV and done on a phone: a flat label, not a button. */
+.tv-label {
+  display: flex;
+  align-items: center;
+  gap: calc(var(--u) * 22);
+  margin: 0;
+  padding: calc(var(--u) * 10) calc(var(--u) * 44) calc(var(--u) * 12) calc(var(--u) * 28);
+  border-radius: 999px;
+  background: rgba(27, 11, 58, 0.62);
+  font-size: calc(var(--u) * 56);
+  line-height: 1.1;
+  white-space: nowrap;
+}
+
+.tv-label img {
+  width: calc(var(--u) * 72);
+  height: calc(var(--u) * 72);
+  object-fit: contain;
+}
+
+.tv .tv-change {
+  min-height: calc(var(--u) * 100);
+  padding: 0 calc(var(--u) * 52) calc(var(--u) * 6);
+  border-width: calc(var(--u) * 6);
+  box-shadow:
+    0 calc(var(--u) * 10) 0 var(--ink),
+    inset 0 calc(var(--u) * 5) 0 rgba(255, 255, 255, 0.45);
+  font-size: calc(var(--u) * 46);
+  -webkit-text-stroke: 0.14em var(--ink);
+  paint-order: stroke fill;
+  color: var(--white);
+}
+
+.tv .tv-change img {
+  width: calc(var(--u) * 60);
+  height: calc(var(--u) * 60);
+}
+
+@keyframes tv-walk-on {
+  from {
+    translate: calc(var(--from) * var(--u) * 320) 0;
+    opacity: 0;
+  }
+  30% {
+    opacity: 1;
+  }
+  to {
+    translate: 0 0;
+  }
+}
+
+@keyframes tv-hop {
+  to {
+    translate: 0 calc(var(--u) * -26);
+  }
+}
+
+/* ---- The table: everything the phone sizes for a hand's reach, sized for the couch. ---- */
+.tv-table .seat-avatar .ring {
+  border-width: calc(var(--u) * 5);
+  box-shadow: 0 calc(var(--u) * 7) 0 var(--ink);
+}
+
+.tv-table .seat-avatar .ring::after {
+  inset: calc(var(--u) * -16);
+  border-width: calc(var(--u) * 10);
+  box-shadow: 0 0 calc(var(--u) * 28) calc(var(--u) * 4) var(--yellow);
+}
+
+/* Names fill their seat's block, and end in "..." past it. */
+.tv-table .seat-avatar .name-tag {
+  max-width: calc(var(--seat-w) - var(--u) * 12);
+  margin-top: calc(var(--u) * -14);
+  padding: calc(var(--u) * 3) calc(var(--u) * 22) calc(var(--u) * 5);
+  border-width: calc(var(--u) * 4);
+  font: 900 calc(var(--u) * 34) / 1.2 var(--round);
+}
+
+.tv-table .seat-avatar .score {
+  font-size: calc(var(--u) * 38);
+}
+
+/* The count sits on the ring's side, clear of the name over the ring's foot. */
+.tv-table .seat-avatar .count {
+  z-index: 2;
+  top: 44%;
+  right: -26%;
+  bottom: auto;
+  border-width: calc(var(--u) * 4);
+  border-radius: calc(var(--u) * 14);
+  padding: 0 calc(var(--u) * 8);
+}
+
+.tv-table .pile-count {
+  right: calc(var(--u) * -18);
+  bottom: calc(var(--u) * -18);
+  min-width: calc(var(--u) * 66);
+  padding: calc(var(--u) * 2) calc(var(--u) * 12) calc(var(--u) * 4);
+  border-width: calc(var(--u) * 4);
+  font: 900 calc(var(--u) * 36) / 1.15 var(--round);
+}
+
+.tv-table .pool .pile-count {
+  right: calc(var(--u) * -6);
+  bottom: calc(var(--u) * -6);
+}
+
+.tv-table .tower .shelf {
+  border-width: calc(var(--u) * 4);
+  border-radius: calc(var(--u) * 14);
+  box-shadow: 0 calc(var(--u) * 5) 0 var(--ink);
+}
+
+.tv-table .tower .shelf i {
+  right: calc(var(--u) * -14);
+  bottom: calc(var(--u) * -14);
+  width: calc(var(--u) * 48);
+  height: calc(var(--u) * 48);
+  border-width: calc(var(--u) * 4);
+  font-size: calc(var(--u) * 30);
+}
+
+.tv-table .tower-cat {
+  border-width: calc(var(--u) * 4);
+}
+
+.tv-table .tower-cat.turn {
+  outline-width: calc(var(--u) * 6);
+}
+
+/* A player's aim, from their phone: a bright ring and a glow that breathes (opacity only). */
+.tv-table .group-zone.aimed {
+  box-shadow: 0 0 0 calc(var(--u) * 7) var(--yellow);
+}
+
+.tv-table .group-zone.aimed::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  box-shadow: 0 0 calc(var(--u) * 46) calc(var(--u) * 14) var(--yellow);
+  animation: tv-glow 900ms ease-in-out infinite alternate;
+}
+
+.tv-table .tile.draft .tile-inner {
+  transform: translateY(-6%);
+  filter: drop-shadow(0 0 calc(var(--u) * 10) var(--yellow)) drop-shadow(0 0 calc(var(--u) * 4) var(--yellow));
+}
+
+@keyframes tv-glow {
+  from {
+    opacity: 0.35;
+  }
+}
+
+/* "<Name>'s turn": the seat's colour, their cat leaning in, popping in as the turn moves. */
+/* The banner's place (centred on the layout's banner); the banner in it pops about its own centre. */
+.tv-table .tv-banner-at {
+  z-index: 40;
+  translate: -50% 0;
+  width: max-content;
+}
+
+.tv-table .tv-banner {
+  position: relative;
+  box-sizing: border-box;
+  max-width: calc(var(--u) * 1400);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 calc(var(--u) * 36) 0 calc(var(--u) * 150);
+  border: calc(var(--u) * 6) solid var(--ink);
+  border-radius: 999px;
+  background: linear-gradient(180deg, color-mix(in srgb, var(--ring) 55%, white), var(--ring) 60%);
+  box-shadow:
+    0 0 0 calc(var(--u) * 6) var(--yellow),
+    0 calc(var(--u) * 12) 0 calc(var(--u) * 6) var(--ink),
+    inset 0 calc(var(--u) * 6) 0 rgba(255, 255, 255, 0.45);
+  animation: tv-pop 420ms var(--ease-spring) both;
+}
+
+.tv-banner-cat {
+  position: absolute;
+  left: calc(var(--u) * 6);
+  bottom: calc(var(--u) * -4);
+  filter: drop-shadow(0 calc(var(--u) * 4) 0 var(--ink));
+}
+
+.tv-banner-words {
+  display: flex;
+  align-items: baseline;
+  min-width: 0;
+  font-size: calc(var(--u) * 54);
+  line-height: 1.2;
+  white-space: nowrap;
+}
+
+.tv-banner-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  /* The outline is drawn inside the clip: room for it at the start. */
+  padding-left: 0.08em;
+}
+
+.tv-table .tv-banner.lost {
+  padding-left: calc(var(--u) * 36);
+  background: var(--ink);
+  box-shadow: 0 calc(var(--u) * 10) 0 rgba(27, 11, 58, 0.6);
+  animation: fade-in 200ms ease-out both;
+}
+
+.tv-banner.lost .tv-banner-words {
+  align-items: center;
+  gap: calc(var(--u) * 20);
+  color: var(--white);
+  font-weight: 900;
+  font-size: calc(var(--u) * 48);
+}
+
+.tv-banner .dot,
+.tv-link-note .dot {
+  width: calc(var(--u) * 24);
+  height: calc(var(--u) * 24);
+  border-radius: 50%;
+  background: var(--refuse);
+  animation: pulse 1s ease-in-out infinite alternate;
+}
+
+@keyframes tv-pop {
+  from {
+    scale: 0.7;
+    opacity: 0;
+  }
+  60% {
+    scale: 1.06;
+    opacity: 1;
+  }
+}
+
+/* Someone laid down: their cat, big, in the middle of the table, then gone. */
+.tv-table .tv-moment {
+  inset: 0;
+  z-index: 350;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+  animation: tv-moment 2400ms ease-out both;
+}
+
+.tv-moment-burst {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: calc(var(--u) * 1100);
+  height: calc(var(--u) * 1100);
+  margin: calc(var(--u) * -550) 0 0 calc(var(--u) * -550);
+  opacity: 0.7;
+  animation: spin 12s linear infinite;
+}
+
+.tv-moment-cat {
+  position: relative;
+  filter: drop-shadow(0 calc(var(--u) * 8) 0 var(--ink));
+  animation: tv-pop 520ms var(--ease-spring) both;
+}
+
+.tv-moment-title {
+  position: relative;
+  margin-top: calc(var(--u) * -20);
+  padding: calc(var(--u) * 10) calc(var(--u) * 56) calc(var(--u) * 16);
+  border: calc(var(--u) * 6) solid var(--ink);
+  border-radius: 999px;
+  background: linear-gradient(180deg, color-mix(in srgb, var(--ring) 55%, white), var(--ring) 60%);
+  box-shadow: 0 calc(var(--u) * 12) 0 var(--ink);
+  font-size: calc(var(--u) * 84);
+  line-height: 1.1;
+  white-space: nowrap;
+  max-width: calc(var(--u) * 1500);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  animation: tv-pop 520ms 120ms var(--ease-spring) both;
+}
+
+.tv-moment-sub {
+  position: relative;
+  margin-top: calc(var(--u) * 18);
+  font-size: calc(var(--u) * 60);
+  color: var(--yellow);
+  animation: tv-pop 520ms 240ms var(--ease-spring) both;
+}
+
+@keyframes tv-moment {
+  from {
+    opacity: 0;
+  }
+  8%,
+  82% {
+    opacity: 1;
+  }
+  to {
+    opacity: 0;
+  }
+}
+
+/* The round's results, at the TV's size. */
+.tv-table .round-over {
+  gap: calc(var(--u) * 24);
+  padding: calc(var(--u) * 40);
+  overflow: hidden;
+}
+
+.tv-table .round-over::before {
+  content: "";
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: calc(var(--u) * 1500);
+  height: calc(var(--u) * 1500);
+  margin: calc(var(--u) * -750) 0 0 calc(var(--u) * -750);
+  background: url("../../art/sunburst.webp") center / contain no-repeat;
+  opacity: 0.45;
+  animation: spin 30s linear infinite;
+}
+
+.tv-table .round-card {
+  width: calc(var(--u) * 1040);
+  padding: calc(var(--u) * 40) calc(var(--u) * 48) calc(var(--u) * 44);
+  border-width: calc(var(--u) * 6);
+  border-radius: calc(var(--u) * 52);
+  box-shadow: 0 calc(var(--u) * 14) 0 var(--ink);
+}
+
+.tv-table .round-card {
+  position: relative;
+}
+
+.tv-table .round-card .title {
+  margin: 0;
+  font-size: calc(var(--u) * 72);
+  line-height: 1.08;
+  text-align: center;
+  text-wrap: balance;
+  overflow-wrap: anywhere;
+}
+
+.tv-table .round-card ul {
+  margin-top: calc(var(--u) * 24);
+  gap: calc(var(--u) * 12);
+}
+
+.tv-table .round-card li {
+  grid-template-columns: calc(var(--u) * 84) 1fr auto calc(var(--u) * 230);
+  gap: calc(var(--u) * 24);
+  padding: calc(var(--u) * 2) calc(var(--u) * 32) calc(var(--u) * 2) calc(var(--u) * 6);
+  font-size: calc(var(--u) * 44);
+}
+
+.tv-table .round-card li .cat-img {
+  width: calc(var(--u) * 84) !important;
+  height: calc(var(--u) * 84) !important;
+}
+
+.tv-table .round-card li.up {
+  background: linear-gradient(90deg, #9be22e, #00d1c1);
+  -webkit-text-stroke: 0.14em var(--ink);
+  paint-order: stroke fill;
+}
+
+.tv-table .round-card .pts {
+  color: var(--yellow);
+}
+
+.tv-table .round-card .climb {
+  text-align: right;
+}
+
+/* ---- Game over: the winners up top, everyone's place, and how to play again. ---- */
+.tv-over {
+  position: absolute;
+  inset: 0;
+  z-index: 500;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: calc(var(--u) * 30);
+  padding-top: calc(var(--u) * 110);
+  background: rgba(27, 11, 58, 0.62);
+  animation: fade-in 300ms ease-out both;
+}
+
+.tv-over-burst {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: calc(var(--u) * 1900);
+  height: calc(var(--u) * 1900);
+  margin: calc(var(--u) * -950) 0 0 calc(var(--u) * -950);
+  opacity: 0.5;
+  animation: spin 30s linear infinite;
+  pointer-events: none;
+}
+
+.tv-over-card {
+  position: relative;
+  width: calc(var(--u) * 1080);
+  padding: calc(var(--u) * 96) calc(var(--u) * 48) calc(var(--u) * 40);
+  border: calc(var(--u) * 6) solid var(--ink);
+  border-radius: calc(var(--u) * 56);
+  background: linear-gradient(180deg, #5b22c9, #3b1580);
+  box-shadow:
+    0 calc(var(--u) * 14) 0 var(--ink),
+    inset 0 calc(var(--u) * 6) 0 rgba(255, 255, 255, 0.2);
+  animation: sheet-in 420ms var(--ease-spring) both;
+}
+
+.tv-over-winners {
+  position: absolute;
+  top: calc(var(--u) * -170);
+  left: 0;
+  right: 0;
+  display: flex;
+  justify-content: center;
+  gap: calc(var(--u) * 12);
+}
+
+.tv-over-winner {
+  width: calc(var(--u) * 240);
+  height: calc(var(--u) * 240);
+  filter: drop-shadow(0 calc(var(--u) * 8) 0 var(--ink));
+  animation: tv-hop 420ms var(--ease-out) infinite alternate;
+}
+
+.tv-over-title {
+  display: flex;
+  justify-content: center;
+  margin: 0;
+  font-size: calc(var(--u) * 104);
+  line-height: 1.05;
+  white-space: nowrap;
+}
+
+.tv-over-title.long {
+  font-size: calc(var(--u) * 62);
+}
+
+/* A long winner's name ends in "..."; "wins" always shows. */
+.tv-over-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  padding-left: 0.08em;
+}
+
+.tv-over-ranks {
+  margin: calc(var(--u) * 24) 0 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: calc(var(--u) * 10);
+}
+
+.tv-over-ranks li {
+  display: grid;
+  grid-template-columns: calc(var(--u) * 56) calc(var(--u) * 72) 1fr auto;
+  align-items: center;
+  gap: calc(var(--u) * 22);
+  height: calc(var(--u) * 76);
+  padding: 0 calc(var(--u) * 34) 0 calc(var(--u) * 10);
+  border-radius: 999px;
+  background: rgba(27, 11, 58, 0.5);
+  font: 900 calc(var(--u) * 44) / 1 var(--round);
+  animation: tv-rank-in 420ms var(--ease-spring) both;
+}
+
+.tv-over-ranks li.won {
+  background: linear-gradient(90deg, #ffd21f, #ff8a00);
+  -webkit-text-stroke: 0.14em var(--ink);
+  paint-order: stroke fill;
+}
+
+.tv-over-ranks li.won .tv-over-detail {
+  color: var(--white);
+}
+
+.tv-over-ranks li.out {
+  opacity: 0.6;
+}
+
+.tv-over-place {
+  display: grid;
+  place-items: center;
+  width: calc(var(--u) * 56);
+  height: calc(var(--u) * 56);
+  border-radius: 50%;
+  background: var(--ink);
+  color: var(--yellow);
+  font-size: calc(var(--u) * 34);
+}
+
+.tv-over-ring {
+  display: block;
+  width: calc(var(--u) * 72);
+  height: calc(var(--u) * 72);
+  border: calc(var(--u) * 4) solid var(--ink);
+  border-radius: 50%;
+  background: radial-gradient(circle at 50% 35%, color-mix(in srgb, var(--ring) 60%, white), var(--ring));
+  overflow: hidden;
+}
+
+.tv-over-who {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tv-over-detail {
+  color: var(--yellow);
+  white-space: nowrap;
+}
+
+.tv-over-again {
+  position: relative;
+}
+
+@keyframes tv-rank-in {
+  from {
+    opacity: 0;
+    translate: calc(var(--u) * -60) 0;
+  }
+}
+
+/* ---- The menu: big buttons over the table, which stays on. ---- */
+.tv-menu {
+  position: absolute;
+  inset: 0;
+  z-index: 800;
+  display: grid;
+  place-items: center;
+}
+
+.tv-menu-scrim {
+  position: absolute;
+  inset: 0;
+  background: rgba(27, 11, 58, 0.74);
+  animation: fade-in 200ms ease-out both;
+}
+
+.tv-menu-card {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: calc(var(--u) * 40);
+  padding: calc(var(--u) * 60);
+  border: calc(var(--u) * 6) solid var(--ink);
+  border-radius: calc(var(--u) * 56);
+  background: linear-gradient(180deg, #5b22c9, #3b1580);
+  box-shadow:
+    0 calc(var(--u) * 14) 0 var(--ink),
+    inset 0 calc(var(--u) * 6) 0 rgba(255, 255, 255, 0.2);
+  animation: sheet-in 320ms var(--ease-spring) both;
+}
+
+.tv .tv-menu-item {
+  display: flex;
+  align-items: center;
+  gap: calc(var(--u) * 30);
+  width: calc(var(--u) * 780);
+  min-height: calc(var(--u) * 136);
+  padding: 0 calc(var(--u) * 52) calc(var(--u) * 6);
+  border: calc(var(--u) * 6) solid var(--ink);
+  border-radius: 999px;
+  box-shadow:
+    0 calc(var(--u) * 10) 0 var(--ink),
+    inset 0 calc(var(--u) * 6) 0 rgba(255, 255, 255, 0.45);
+  color: var(--white);
+  font: 900 calc(var(--u) * 56) / 1.1 var(--round);
+  -webkit-text-stroke: 0.14em var(--ink);
+  paint-order: stroke fill;
+  text-align: left;
+  white-space: nowrap;
+}
+
+.tv-menu-item img {
+  width: calc(var(--u) * 84);
+  height: calc(var(--u) * 84);
+  object-fit: contain;
+}
+
+.tv-menu-item.violet {
+  background: linear-gradient(180deg, #b183ff, #7b2fff);
+}
+
+.tv-menu-item.teal {
+  background: linear-gradient(180deg, #6af5ea, #00b3a6);
+}
+
+.tv-menu-item.magenta {
+  background: linear-gradient(180deg, #ff7cc0, #ff2e9a);
+}
+
+.tv-link-card {
+  flex-direction: row;
+  align-items: center;
+  gap: calc(var(--u) * 64);
+}
+
+.tv-link-card .tv-qr {
+  width: calc(var(--u) * 560);
+  height: calc(var(--u) * 560);
+}
+
+.tv-link-side {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: calc(var(--u) * 48);
+  width: calc(var(--u) * 620);
+}
+
+.tv-link-side .tv-scan {
+  font-size: calc(var(--u) * 56);
+}
+
+.tv-link-side .tv-code {
+  margin: 0;
+}
+
+.tv .tv-link-back {
+  width: auto;
+}
+
+.tv-link-note {
+  display: flex;
+  align-items: center;
+  gap: calc(var(--u) * 16);
+  margin: 0;
+  font: 900 calc(var(--u) * 36) var(--round);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tv [data-tv]:focus {
+    transform: none;
+  }
+
+  .tv-sunburst,
+  .tv-logo,
+  .tv-room-cat,
+  .tv-seat-cat,
+  .tv-over-burst,
+  .tv-over-winner,
+  .tv-moment-burst,
+  .tv-moment-cat,
+  .tv-moment-title,
+  .tv-moment-sub,
+  .tv-table .tv-banner,
+  .tv-table .round-over::before {
+    animation: none;
+  }
+
+  /* Still faded in and out: its end is what takes it away. */
+  .tv-table .tv-moment {
+    animation-duration: 2000ms;
+  }
+
+  .tv-seat {
+    animation: fade-in 300ms ease-out both;
+  }
+}
