@@ -115,6 +115,23 @@ struct TableScreen: View {
             }
             shownConnection = connection
         }
+        // Show on TV: from the lobby's button, or a TV's link opened at (or on the way to) this
+        // table. Up over the lobby or the table only, so a link waits for the table to arrive.
+        .sheet(item: tvSheet) { request in
+            ShowOnTVSheet(code: request.code, start: request.key) { model.tvSheet = nil }
+                .environment(model)
+                .presentationDetents([.large])
+                .presentationDragIndicator(.visible)
+                .presentationBackground(Palette.night)
+        }
+        #if DEBUG
+        // `-show-tv` (screenshots): Show on TV over the lobby or the table.
+        .task {
+            guard CommandLine.arguments.contains("-show-tv") else { return }
+            try? await Task.sleep(for: .milliseconds(1200))
+            model.showOnTV(code: session.code)
+        }
+        #endif
         .onChange(of: session.model?.mySeats ?? []) { before, after in
             // This phone's last seat left while it held a move code: the move went through
             // (spec §5.11). Home, not the "full" card. The menu sheet is gone with the table.
@@ -130,6 +147,16 @@ struct TableScreen: View {
             guard was == false, out == true else { return }
             model.goHome()
         }
+    }
+
+    private var tvSheet: Binding<TVSheetRequest?> {
+        Binding(
+            get: {
+                guard let request = model.tvSheet, request.code == session.code, screen == .lobby || screen == .table
+                else { return nil }
+                return request
+            },
+            set: { if $0 == nil { model.tvSheet = nil } })
     }
 
     @ViewBuilder private var content: some View {
@@ -702,6 +729,8 @@ private struct TableStage: View {
             session.store.hidePass()
             sync()
         }
+        // A TV's link opened over the table: its sheet, not the menu.
+        .onChange(of: model.tvSheet?.id) { _, id in if id != nil { events.menuOpen = false } }
         .sheet(isPresented: $events.menuOpen) {
             TableMenuSheet(
                 session: session,
@@ -806,8 +835,8 @@ private struct TableStage: View {
         events.shown = scene.shownRevealed
         sync(scene)
         #if DEBUG
-        // `-show-look` (screenshots): the table menu open on its look tray.
-        if CommandLine.arguments.contains("-show-look") {
+        // `-show-look` (screenshots): the table menu open on its look tray; `-show-menu`: open.
+        if CommandLine.arguments.contains("-show-look") || CommandLine.arguments.contains("-show-menu") {
             Task {
                 try? await Task.sleep(for: .milliseconds(900))
                 events.menuOpen = true

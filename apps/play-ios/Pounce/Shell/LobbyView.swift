@@ -454,33 +454,52 @@ struct LobbyView: View {
         }
     }
 
-    /// The host's tray of ways to fill the next free seat; a guest's one "Add a player" pill
-    /// (the seat menu for that seat). Nothing when every seat holds a person.
+    /// The host's tray of ways to fill the next free seat, Show on TV at its end. Anyone else
+    /// seated (or a host with every seat filled) gets small pills instead: "Add a player" (the
+    /// seat menu for the next free seat) while one is free, and Show on TV.
     @ViewBuilder private func seatControls(_ table: TableModel) -> some View {
-        if let seat = table.seatToAdd {
-            if hostTray(table) {
-                AddPlayerTray(
-                    sharesLinks: model.limits.sharesLinks, scanning: showQR,
-                    wiggles: { wiggles[$0, default: 0] }
-                ) { way in
-                    add(way, seat: seat)
+        if let seat = table.seatToAdd, hostTray(table) {
+            AddPlayerTray(
+                sharesLinks: model.limits.sharesLinks, scanning: showQR,
+                wiggles: { wiggles[$0, default: 0] },
+                onTV: {
+                    Haptics.shared.tick()
+                    showOnTV()
                 }
-                .tipTarget("lobby.add")
-            } else {
+            ) { way in
+                add(way, seat: seat)
+            }
+            .tipTarget("lobby.add")
+        } else {
+            let seat = table.seatToAdd
+            HStack(spacing: 12) {
+                if let seat {
+                    PillButton(
+                        icon: ArtName.iconPlus, color: Palette.teal, size: .small, width: 172,
+                        title: String(localized: "Add a player", comment: "Lobby: opens the choices for the next free seat"),
+                        accessibilityLabel: "Add a player"
+                    ) {
+                        lastTapped = .add
+                        model.tips.used("lobby.add")
+                        menuSeat = seat
+                    }
+                    .wiggle(trigger: wiggles[.add, default: 0])
+                    .accessibilityIdentifier("lobby.add")
+                    .tipTarget("lobby.add")
+                }
                 PillButton(
-                    icon: ArtName.iconPlus, color: Palette.teal, size: .small, width: 220,
-                    title: String(localized: "Add a player", comment: "Lobby: opens the choices for the next free seat"),
-                    accessibilityLabel: "Add a player"
+                    icon: ArtName.iconTV, color: Palette.violet, size: .small, width: seat == nil ? 220 : 172,
+                    title: AddPlayerTray.tvLabel, accessibilityLabel: "Show on TV"
                 ) {
-                    lastTapped = .add
-                    model.tips.used("lobby.add")
-                    menuSeat = seat
+                    showOnTV()
                 }
-                .wiggle(trigger: wiggles[.add, default: 0])
-                .accessibilityIdentifier("lobby.add")
-                .tipTarget("lobby.add")
+                .accessibilityIdentifier("lobby.tv")
             }
         }
+    }
+
+    private func showOnTV() {
+        model.showOnTV(code: session.code)
     }
 
     /// The host's tray shows: this phone is the host and a seat is free.

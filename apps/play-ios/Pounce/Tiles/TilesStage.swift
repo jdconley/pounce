@@ -279,8 +279,11 @@ struct TilesStage: View {
         .onChange(of: scenePhase) { _, phase in
             if phase != .active { scene?.saveDraft() }
         }
+        // A TV's link opened over the table: its sheet, not the menu.
+        .onChange(of: model.tvSheet?.id) { _, id in if id != nil { events.menuOpen = false } }
         .sheet(isPresented: $events.menuOpen) {
             TilesMenuSheet(
+                code: session.code,
                 tableName: session.store.room?.title ?? TableName.fallback(code: session.code),
                 easy: easy, tricks: tricks,
                 // A kitten can't forfeit: giving up a game someone else is in is a grown-up's call.
@@ -305,6 +308,7 @@ struct TilesStage: View {
                 },
                 onClose: { events.menuOpen = false })
                 .environment(settings)
+                .environment(model)
         }
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("screen-tiles")
@@ -352,6 +356,15 @@ struct TilesStage: View {
         scene.easy = easy
         scene.tricks = tricks
         scene.onMenu = { [weak events] in events?.menuOpen = true }
+        #if DEBUG
+        // `-show-menu` (screenshots): the menu open.
+        if self.scene == nil, CommandLine.arguments.contains("-show-menu") {
+            Task { [weak events] in
+                try? await Task.sleep(for: .milliseconds(900))
+                events?.menuOpen = true
+            }
+        }
+        #endif
         scene.onSwipeHome = { [weak model] in model?.goHome() }
         scene.onGameOver = { [weak events] winners in events?.winners = winners }
         scene.onShownSeat = { [weak events] seat in events?.shown = seat }
@@ -702,10 +715,14 @@ struct TilesOverView: View {
     }
 }
 
-/// The tile game's paw menu: sound, haptics, easy mode and its tricks, how to play, home and
-/// forfeit (behind a confirmation).
+/// The tile game's paw menu: sound, haptics and home in one row, then Show on TV, easy mode and
+/// its tricks, how to play, and forfeit (behind a confirmation). Show on TV and how to play are
+/// pages inside the sheet.
 struct TilesMenuSheet: View {
     @Environment(Settings.self) private var settings
+    @Environment(AppModel.self) private var model
+    /// The table's room code (Show on TV puts this table on the TV).
+    let code: String
     let tableName: String
     @State var easy: Bool
     @State var tricks: Bool
@@ -717,17 +734,23 @@ struct TilesMenuSheet: View {
     let onClose: () -> Void
 
     @State private var rules = false
+    @State private var tv = false
     @State private var confirming = false
 
     var body: some View {
         Group {
             if rules {
                 HowToPlaySheet(game: GameCatalog.tiles, exit: .back) { rules = false }
+            } else if tv {
+                ShowOnTVSheet(code: code, onBack: { tv = false }, onClose: onClose)
+                    .transition(.move(edge: .trailing).combined(with: .opacity))
             } else {
                 menu
+                    .transition(.move(edge: .leading).combined(with: .opacity))
             }
         }
-        .presentationDetents(rules ? [.large] : [.height(forfeit == nil ? 520 : 600)])
+        .animation(.spring(duration: 0.4, bounce: 0.25).paced, value: tv)
+        .presentationDetents(rules || tv ? [.large] : [.height(forfeit == nil ? 520 : 600)])
         .presentationDragIndicator(.visible)
         .presentationBackground(Palette.night)
     }
@@ -744,6 +767,7 @@ struct TilesMenuSheet: View {
                     .accessibilityIdentifier("menu.close")
             }
             .padding(.horizontal, 16)
+            // The toggles and Home, icons in one row.
             HStack(spacing: 18) {
                 PillButton(
                     icon: settings.soundOn ? ArtName.iconSoundOn : ArtName.iconSoundOff,
@@ -757,7 +781,15 @@ struct TilesMenuSheet: View {
                     accessibilityLabel: settings.hapticsOn ? "Haptics on" : "Haptics off"
                 ) { settings.hapticsOn.toggle() }
                     .accessibilityIdentifier("menu.haptics")
+                PillButton(icon: ArtName.iconHome, color: Palette.sky, size: .medium, accessibilityLabel: "Home", action: onHome)
+                    .accessibilityIdentifier("menu.home")
             }
+            PillButton(
+                icon: ArtName.iconTV, color: Palette.magenta, size: .medium, width: 250,
+                title: String(localized: "Show on TV", comment: "Table menu: put this table on a TV"),
+                accessibilityLabel: "Show on TV"
+            ) { tv = true }
+                .accessibilityIdentifier("menu.tv")
             PillButton(
                 icon: nil, color: easy ? Palette.lime : Palette.violet, size: .medium, width: 250,
                 title: easy
@@ -787,8 +819,6 @@ struct TilesMenuSheet: View {
                 title: String(localized: "How to play", comment: "Table menu: open the rules"), accessibilityLabel: "How to play"
             ) { rules = true }
                 .accessibilityIdentifier("menu.rules")
-            PillButton(icon: ArtName.iconHome, color: Palette.sky, size: .medium, accessibilityLabel: "Home", action: onHome)
-                .accessibilityIdentifier("menu.home")
             if let forfeit {
                 PillButton(
                     icon: nil, color: Palette.refuse, size: .medium, width: 250,

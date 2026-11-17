@@ -30,7 +30,7 @@ Tick exactly these 9 boxes and nothing else.
 | Sensitive Info | Sensitive Info | No | |
 | Contacts | Contacts | No | Invites use the share sheet or a QR code. |
 | User Content | Emails or Text Messages | No | There is no chat. Nudges and requests to play are fixed messages. |
-| User Content | Photos or Videos, Audio Data | No | |
+| User Content | Photos or Videos, Audio Data | No | Show on TV uses the camera only to read the TV's QR code. The app keeps the code's text; the picture never leaves the phone and is never stored. |
 | User Content | **Gameplay Content** | **Yes** | Seats, turns, game state, tables, streak days, rewards. |
 | User Content | Customer Support | No | Support is by email, outside the app. |
 | User Content | **Other User Content** | **Yes** | Table names that players type. |

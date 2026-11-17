@@ -67,6 +67,8 @@ function worker(
     devSpeed?: string;
     /** The bad connection indicator's server half (`LINK`). */
     link?: boolean;
+    /** Pounce on the TV (`TV`). */
+    tv?: boolean;
     onFinished?: (fn: () => Promise<void>) => void;
   } = {},
 ): Miniflare {
@@ -88,6 +90,7 @@ function worker(
       ...(options.testflight ? { TESTFLIGHT_URL: options.testflight } : {}),
       ...(options.devSpeed ? { DEV_SPEED: options.devSpeed } : {}),
       ...(options.link ? { LINK: "on" } : {}),
+      ...(options.tv ? { TV: "on" } : {}),
     },
     ...(options.persist ? { durableObjectsPersist: options.persist } : {}),
   });
@@ -323,6 +326,27 @@ describe("worker", { timeout: 20_000 }, () => {
     }
     const post = await mf.dispatchFetch(`${BASE}/j/BCDFG`, { method: "POST" });
     expect(post.status).toBe(404);
+  });
+
+  test("universal links: TV links join the association only while TV is on", async () => {
+    const token = "A".repeat(22);
+    // Off: a /tv/ link is a 404, so the app doesn't claim it.
+    const off = worker({ secret: null });
+    expect(await (await off.dispatchFetch(`${BASE}/.well-known/apple-app-site-association`)).json()).toEqual({
+      applinks: { details: [{ appIDs: ["B222J9J7B8.com.conleychaos.play"], components: [{ "/": "/j/*" }] }] },
+    });
+    expect((await off.dispatchFetch(`${BASE}/tv/${token}`, { redirect: "manual" })).status).toBe(404);
+
+    // On: the app opens /tv/*; a phone without it goes to the web player's link page.
+    const on = worker({ secret: null, tv: true });
+    expect(await (await on.dispatchFetch(`${BASE}/.well-known/apple-app-site-association`)).json()).toEqual({
+      applinks: {
+        details: [{ appIDs: ["B222J9J7B8.com.conleychaos.play"], components: [{ "/": "/j/*" }, { "/": "/tv/*" }] }],
+      },
+    });
+    const web = await on.dispatchFetch(`${BASE}/tv/${token}`, { redirect: "manual" });
+    expect(web.status).toBe(302);
+    expect(web.headers.get("location")).toBe(`${BASE}/play/tv-link/${token}`);
   });
 
   test("the privacy policy is served at /privacy without a token", async () => {

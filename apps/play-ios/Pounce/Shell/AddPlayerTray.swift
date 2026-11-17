@@ -4,7 +4,8 @@ import SwiftUI
 /// The lobby's ways to fill the next free seat, right under the rug (first-run funnel, part 1):
 /// the ways families play together. People in the same room on their own phones (the QR code),
 /// family far away (the share sheet), someone sharing this phone (pass and play) and a House Cat.
-/// Four round toy buttons on a tray, each with a word or two under it.
+/// Four round toy buttons under "Add a player", each with a word or two under it; past a divider
+/// at the tray's end, a fifth that isn't a player: Show on TV, the table on the room's TV.
 struct AddPlayerTray: View {
     enum Way: String, CaseIterable, Identifiable {
         case room, away, here, bot
@@ -16,6 +17,8 @@ struct AddPlayerTray: View {
     /// The QR code is up: "Same room" shows pressed.
     let scanning: Bool
     let wiggles: (LobbyWiggle) -> Int
+    /// Show on TV, at the tray's end.
+    let onTV: () -> Void
     let onPick: (Way) -> Void
 
     @Environment(\.horizontalSizeClass) private var sizeClass
@@ -26,21 +29,39 @@ struct AddPlayerTray: View {
     var body: some View {
         let roomy = sizeClass == .regular
         let face: CGFloat = roomy ? 76 : 54
-        VStack(spacing: 8) {
-            Text("Add a player", comment: "Lobby: the heading over the ways to fill the next seat")
-                .font(.system(roomy ? .callout : .footnote, design: .rounded, weight: .black))
-                .foregroundStyle(.white.opacity(0.85))
-                .textCase(.uppercase)
-                .kerning(0.6)
-                .lineLimit(1)
-                .minimumScaleFactor(0.7)
-                .dynamicTypeSize(...DynamicTypeSize.xxxLarge)
-                .accessibilityAddTraits(.isHeader)
-            HStack(alignment: .top, spacing: 4) {
+        // The heading sits over the players' toys only. The TV's toy is a column like theirs, past
+        // a divider, with its own word under it.
+        Grid(horizontalSpacing: 4, verticalSpacing: 8) {
+            GridRow {
+                Text("Add a player", comment: "Lobby: the heading over the ways to fill the next seat")
+                    .font(.system(roomy ? .callout : .footnote, design: .rounded, weight: .black))
+                    .foregroundStyle(.white.opacity(0.85))
+                    .textCase(.uppercase)
+                    .kerning(0.6)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.7)
+                    .dynamicTypeSize(...DynamicTypeSize.xxxLarge)
+                    .accessibilityAddTraits(.isHeader)
+                    .gridCellColumns(ways.count)
+                Color.clear.gridCellUnsizedAxes([.horizontal, .vertical])
+                Color.clear.gridCellUnsizedAxes([.horizontal, .vertical])
+            }
+            GridRow(alignment: .top) {
                 ForEach(ways) { way in
                     button(way, face: face)
                         .frame(maxWidth: .infinity)
                 }
+                Capsule()
+                    .fill(.white.opacity(0.2))
+                    .frame(width: 3, height: face)
+                    .padding(.top, 2)
+                    .accessibilityHidden(true)
+                toy(color: Palette.violet, icon: ArtName.iconTV, label: Self.tvLabel, face: face, on: false, wiggle: 0) {
+                    onTV()
+                }
+                .frame(maxWidth: .infinity)
+                .accessibilityHint(Text("Puts the table on a TV", comment: "VoiceOver hint: the lobby tray's Show on TV button"))
+                .accessibilityIdentifier("lobby.tv")
             }
         }
         .padding(.horizontal, 8)
@@ -60,21 +81,32 @@ struct AddPlayerTray: View {
 
     private func button(_ way: Way, face: CGFloat) -> some View {
         let on = way == .room && scanning
-        return Button {
+        return toy(color: Self.color(way), icon: Self.icon(way), label: Self.label(way), face: face, on: on,
+                   wiggle: wiggles(Self.wiggle(way))) {
             onPick(way)
-        } label: {
+        }
+        .accessibilityHint(Text(Self.hint(way)))
+        .accessibilityIdentifier(Self.identifier(way))
+        .tipTarget(way == .away ? "lobby.share" : nil)
+    }
+
+    /// One round toy button with its word under it.
+    private func toy(
+        color: Color, icon: String, label: String, face: CGFloat, on: Bool, wiggle: Int, action: @escaping () -> Void
+    ) -> some View {
+        Button(action: action) {
             VStack(spacing: 6) {
                 ZStack {
                     Circle()
-                        .fill(Self.color(way).mix(with: Palette.ink, by: 0.5))
+                        .fill(color.mix(with: Palette.ink, by: 0.5))
                         .offset(y: 4)
                     Circle()
                         .fill(LinearGradient(
-                            colors: [Self.color(way).mix(with: .white, by: 0.35), Self.color(way)],
+                            colors: [color.mix(with: .white, by: 0.35), color],
                             startPoint: .top, endPoint: .bottom))
                         .overlay(Circle().strokeBorder(on ? .white : Palette.ink, lineWidth: 4))
                         .overlay {
-                            Image(Self.icon(way))
+                            Image(icon)
                                 .resizable()
                                 .scaledToFit()
                                 .padding(face * 0.2)
@@ -84,8 +116,8 @@ struct AddPlayerTray: View {
                 }
                 .frame(width: face, height: face)
                 .compositingGroup()
-                .shadow(color: on ? Self.color(way).opacity(0.9) : .clear, radius: 10)
-                Text(Self.label(way))
+                .shadow(color: on ? color.opacity(0.9) : .clear, radius: 10)
+                Text(label)
                     .font(.system(sizeClass == .regular ? .body : .caption, design: .rounded, weight: .black))
                     .foregroundStyle(.white)
                     .multilineTextAlignment(.center)
@@ -98,14 +130,13 @@ struct AddPlayerTray: View {
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
-        .wiggle(trigger: wiggles(Self.wiggle(way)))
+        .wiggle(trigger: wiggle)
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel(Text(Self.label(way)))
-        .accessibilityHint(Text(Self.hint(way)))
+        .accessibilityLabel(Text(label))
         .accessibilityAddTraits(on ? [.isButton, .isSelected] : .isButton)
-        .accessibilityIdentifier(Self.identifier(way))
-        .tipTarget(way == .away ? "lobby.share" : nil)
     }
+
+    static let tvLabel = String(localized: "Show on TV", comment: "Lobby tray: put this table on a TV")
 
     static func color(_ way: Way) -> Color {
         switch way {

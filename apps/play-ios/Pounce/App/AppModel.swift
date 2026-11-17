@@ -7,7 +7,10 @@ import SwiftUI
 @MainActor @Observable
 final class AppModel {
     var route: Route {
-        didSet { if case .home = route { funnel.reach(.homeSeen) } }
+        didSet {
+            if case .home = route { funnel.reach(.homeSeen) }
+            routeChangedForTV()
+        }
     }
     var people: LocalPeople
     /// The server's list of this device's tables (Home); at launch, the list saved last time.
@@ -1136,8 +1139,8 @@ final class AppModel {
         return homeItems.first { $0.id == code }?.game
     }
 
-    /// A share or move link arrived. Without a local owner, onboarding comes first and the link
-    /// is remembered. A join link for a table already on this device rejoins it.
+    /// A share, move, pounce or TV link arrived. Without a local owner, onboarding comes first and
+    /// the link is remembered. A join link for a table already on this device rejoins it.
     func handle(_ link: DeepLink) {
         funnel.opened(link)
         guard ageRecord != nil else {
@@ -1157,9 +1160,50 @@ final class AppModel {
             // Onboarding is done: the pick sheet (or its card) opens over Home, not the name screen.
             if case .pickCat = route { route = .home }
             Task { await openLink(token) }
-        case .tv:
-            break  // Task 4 links the TV.
+        case .tv(let token):
+            openTV(token)
         }
+    }
+
+    // MARK: Show on TV (docs/tv-protocol.md, TV links)
+
+    /// "Show on TV" is up over the table it names (the table screen presents it).
+    var tvSheet: TVSheetRequest?
+    /// A TV's link opened away from a table: the next table opened or made goes on that TV, while
+    /// the link can still work (a TV renews its link every 10 minutes).
+    @ObservationIgnored private var pendingTV: (token: String, at: Date)?
+    private static let tvLinkLife: TimeInterval = 10 * 60
+
+    /// A TV's link (its QR scanned with the Camera app, or pasted). At a table, that table goes on
+    /// the TV; anywhere else Home shows your tables and the games, and the table picked or made
+    /// goes on it.
+    private func openTV(_ token: String) {
+        if case .room(let code, _) = route {
+            tvSheet = TVSheetRequest(code: code, key: .token(token))
+            return
+        }
+        inviteShown = false
+        pendingTV = (token, .now)
+        route = .home
+    }
+
+    /// A table opened while a TV's link waits: Show on TV over it, linking that TV. Leaving a
+    /// table drops its sheet.
+    private func routeChangedForTV() {
+        guard case .room(let code, _) = route else {
+            tvSheet = nil
+            return
+        }
+        if let sheet = tvSheet, sheet.code != code { tvSheet = nil }
+        guard let pending = pendingTV else { return }
+        pendingTV = nil
+        guard Date.now.timeIntervalSince(pending.at) < Self.tvLinkLife else { return }
+        tvSheet = TVSheetRequest(code: code, key: .token(pending.token))
+    }
+
+    /// The table's Show on TV button (the lobby, the table menus).
+    func showOnTV(code: String) {
+        tvSheet = TVSheetRequest(code: code, key: nil)
     }
 
     // MARK: Pounce (spec §12.4)
@@ -1214,7 +1258,8 @@ final class AppModel {
         }
         pasteboard.settle()
         Haptics.shared.success()
-        funnel.pasted()
+        // A TV's link isn't an invite: it opens as the tapped link would, and isn't counted as one.
+        if case .tv = link {} else { funnel.pasted() }
         handle(link)
     }
 

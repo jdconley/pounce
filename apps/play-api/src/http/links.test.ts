@@ -209,6 +209,18 @@ describe("sharePage: a table it can't speak of", () => {
   });
 });
 
+describe("with TV links (docs/tv-protocol.md)", () => {
+  test("the association adds /tv/*, after /p/* when both are on", async () => {
+    const app = { appIDs: ["B222J9J7B8.com.conleychaos.play"] };
+    expect(await appSiteAssociation(false, true).json()).toEqual({
+      applinks: { details: [{ ...app, components: [{ "/": "/j/*" }, { "/": "/tv/*" }] }] },
+    });
+    expect(await appSiteAssociation(true, true).json()).toEqual({
+      applinks: { details: [{ ...app, components: [{ "/": "/j/*" }, { "/": "/p/*" }, { "/": "/tv/*" }] }] },
+    });
+  });
+});
+
 describe("with pounce links (§12.4)", () => {
   test("the association adds /p/*", async () => {
     expect(await appSiteAssociation(true).json()).toEqual({

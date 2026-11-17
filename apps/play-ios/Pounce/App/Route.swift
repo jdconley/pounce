@@ -1,3 +1,4 @@
+import Foundation
 import PounceKit
 
 /// Why a room screen is being opened; decides how it connects.
@@ -31,4 +32,13 @@ struct PickRequest: Identifiable, Equatable {
     var link: String?
     /// The person on this phone answering (the push's recipient, else the owner).
     var person: String?
+}
+
+/// "Show on TV" over the table `code` (docs/tv-protocol.md, TV links): from its button (`key` nil:
+/// scan the TV's QR or type its code), or a TV's link opened on this phone (`key` its token,
+/// linked as soon as the sheet is up).
+struct TVSheetRequest: Identifiable, Equatable {
+    let id = UUID()
+    let code: String
+    let key: ScreenKey?
 }

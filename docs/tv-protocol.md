@@ -139,5 +139,19 @@ the phone has confirmed "Move the TV to this table?".
 ### `GET /tv/{token}`
 
 A 302 to `/play/tv-link/{token}`, where a phone without the app picks or makes the table to
-show. The iPhone app adds `/tv/*` to its universal links in stage 3. A shipped 1.1 app opened
-by such a link opens and does nothing more.
+show.
+
+- **Universal links.** While `TV` is on, the site association lists `/tv/*` after `/j/*` (and
+  `/p/*`), so iOS opens these links in the app. With `TV` off it doesn't, and the path is a 404.
+- **A shipped 1.1 app** (before stage 3) opened by such a link simply opens. It doesn't know the
+  path, so it does nothing more.
+- **This app** (stage 3 on) takes the token:
+  - At a table (lobby or game) where it is seated or hosts, it links that table at once, asking
+    "Move the TV to this table?" on a 409 `showing`.
+  - Anywhere else it opens Home ("Your tables" and the games), and links the next table opened
+    or made (within the link's 10 minutes), as soon as the room exists.
+  - Before the age check or pick-a-cat, the link waits for them, as a `/j/` link does.
+- **Show on TV** in the app scans the TV's QR. It accepts only
+  `https://play.conleychaos.com/tv/<22 base64url chars>` and keeps looking past any other code,
+  or takes the 6-character backup code typed on the phone. Only the QR's text is read; camera
+  frames never leave the phone.

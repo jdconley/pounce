@@ -93,6 +93,8 @@ enum ArtName {
     static let iconShare = "icon-share"
     static let iconInvite = "icon-invite"
     static let iconQr = "icon-qr"
+    /// Show on TV. Drawn with ImageMagick for now (`Art/prompts/ui/icon-tv.txt` makes the real one).
+    static let iconTV = "icon-tv"
     static let iconPlay = "icon-play"
     static let iconBack = "icon-back"
     static let iconGear = "icon-gear"

@@ -83,7 +83,9 @@ public enum DeepLink: Equatable, Sendable {
             return nil
         }
         if kind == "tv" {
-            return isPounceToken(code) && (parts.queryItems ?? []).isEmpty ? .tv(token: code) : nil
+            // Exactly the TV's link: nothing after the token, and no one's name before the host.
+            let bare = parts.query == nil && parts.fragment == nil && parts.user == nil && parts.password == nil
+            return isPounceToken(code) && bare ? .tv(token: code) : nil
         }
         if kind == "p" {
             return isPounceToken(code) && (parts.queryItems ?? []).isEmpty ? .pounce(token: code) : nil

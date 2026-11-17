@@ -731,7 +731,7 @@ async function handle(request: Request, env: Env, ctx?: ExecutionContext): Promi
   const streaks = streaksOn(env);
   const notify = notifyOn(env);
   if (method === "GET" && pathname === "/.well-known/apple-app-site-association") {
-    return appSiteAssociation(notify);
+    return appSiteAssociation(notify, tvOn(env));
   }
   if (method === "GET" && pathname === "/og/room.jpg") return ogImage();
   if ((method === "GET" || method === "HEAD") && isWebPlayerPath(pathname)) return (await webPlayer(request, env.ASSETS)) ?? notFound();
@@ -746,8 +746,8 @@ async function handle(request: Request, env: Env, ctx?: ExecutionContext): Promi
     if (pathname === "/llms.txt") return llmsTxt(origin(), consentOn(env));
     if (pathname.startsWith("/media/")) return (await mediaFile(request, env.ASSETS)) ?? notFound();
   }
-  // A TV's QR on a phone without the app: the web player links the table. (The app takes these
-  // links once the site association lists /tv/*, a later stage.)
+  // A TV's QR on a phone without the app: the web player links the table. (A phone with the app
+  // opens it there: the site association lists /tv/* while `TV` is on.)
   const tvLink = method === "GET" && tvOn(env) ? TV_PATH.exec(pathname) : null;
   if (tvLink) {
     const token = tvLink[1] as string;
