@@ -227,6 +227,24 @@ targets:
         PRODUCT_BUNDLE_IDENTIFIER: com.conleychaos.play.tvtests
         GENERATE_INFOPLIST_FILE: YES
         TARGETED_DEVICE_FAMILY: "3"
+  # The Apple TV's UI tests on an Apple TV simulator, on the TV's DEBUG demos (no server): its
+  # frame-rate gates (FrameRateTVTests, the iPhone's FrameRateTests rules, reading the same
+  # watchdog) and the Siri Remote driving the shell (RemoteTests).
+  PounceTVUITests:
+    type: bundle.ui-testing
+    platform: tvOS
+    sources:
+      - PounceTVUITests
+      # The watchdog's reading and the machine's time budgets, shared with the iPhone's tests.
+      - path: PounceUITests/Watchdog.swift
+    dependencies:
+      - target: PounceTV
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.conleychaos.play.tvuitests
+        GENERATE_INFOPLIST_FILE: YES
+        TARGETED_DEVICE_FAMILY: "3"
+        TEST_TARGET_NAME: PounceTV
   PounceUITests:
     type: bundle.ui-testing
     platform: iOS
@@ -268,6 +286,7 @@ schemes:
       config: Debug
       targets:
         - PounceTVTests
+        - PounceTVUITests
     profile:
       config: Release
     archive:

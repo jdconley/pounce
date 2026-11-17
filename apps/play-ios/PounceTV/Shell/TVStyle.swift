@@ -238,6 +238,7 @@ struct TVMenuPaw: View {
         }
         .buttonStyle(PawStyle())
         .accessibilityLabel(Text("Table menu", comment: "TV: the paw that opens the menu at a table"))
+        .accessibilityIdentifier("tv.paw")
     }
 
     private struct PawStyle: ButtonStyle {

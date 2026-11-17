@@ -59,6 +59,7 @@ struct LobbyView: View {
         }
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(game.title)
+        .accessibilityIdentifier("tv.lobby.game")
     }
 
     private var changeGame: some View {
@@ -70,6 +71,7 @@ struct LobbyView: View {
                 .frame(width: 520)
         }
         .buttonStyle(TVButtonStyle(tint: Palette.violet, corner: 36))
+        .accessibilityIdentifier("tv.lobby.changeGame")
         .disabled(!live)
         .focused($changeFocused)
         // The one thing to press here until someone sits: it takes the focus from the paw.

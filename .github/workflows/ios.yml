@@ -81,6 +81,34 @@ jobs:
           xcodebuild -showsdks | grep appletvos >/dev/null || xcodebuild -downloadPlatform tvOS
           xcodebuild build -project Pounce.xcodeproj -scheme PounceTV -configuration Release \
             -destination generic/platform=tvOS CODE_SIGNING_ALLOWED=NO -quiet
+      # The Apple TV's own tests on an Apple TV simulator: PounceKit built for tvOS and its tests,
+      # and the TV app's unit tests (PounceTVTests: its table never drawing a hand, its model and
+      # its races). A few minutes each; the TV's frame and remote gates are their own job below.
+      - name: Make an Apple TV simulator
+        id: tvsim
+        run: |
+          tvos_runtime() {
+            xcrun simctl list runtimes -j | jq -r '[.runtimes[] | select(.platform == "tvOS" and .isAvailable)] | sort_by(.version | split(".") | map(tonumber)) | last | .identifier // empty'
+          }
+          runtime=$(tvos_runtime)
+          if [ -z "$runtime" ]; then
+            xcodebuild -downloadPlatform tvOS
+            runtime=$(tvos_runtime)
+          fi
+          udid=$(xcrun simctl create "Pounce TV tests" com.apple.CoreSimulator.SimDeviceType.Apple-TV-4K-3rd-generation-1080p "$runtime")
+          xcrun simctl boot "$udid"
+          echo "Apple TV simulator $udid on $runtime"
+          echo "udid=$udid" >> "$GITHUB_OUTPUT"
+      - name: PounceKit tests on tvOS
+        working-directory: apps/play-ios/PounceKit
+        run: >
+          xcodebuild test -scheme PounceKit-Package -destination "id=${{ steps.tvsim.outputs.udid }}"
+          -derivedDataPath ../build/dd-kit-tv -quiet
+      - name: Apple TV unit tests
+        run: >
+          xcodebuild test -project Pounce.xcodeproj -scheme PounceTV -configuration Debug
+          -destination "id=${{ steps.tvsim.outputs.udid }}" -derivedDataPath build/dd-tv-tests
+          -only-testing:PounceTVTests -quiet
       - name: Runner load after building
         if: always()
         working-directory: .
@@ -177,6 +205,94 @@ jobs:
           path: |
             apps/play-ios/build/ui-gates.log
             apps/play-ios/build/ui-gates.xcresult
+          retention-days: 7
+
+  # The same gates on the Apple TV: FrameRateTVTests (the iPhone's FrameRateTests rules, read from
+  # the same watchdog: a six-seat Cat Tower, a four-seat Tuna Tiles and the shell's table, each
+  # playing itself on a fake socket) and RemoteTests (the Siri Remote driving home, the lobby, the
+  # menu and the table, with something focused after every press). All on DEBUG demos, no server,
+  # in an optimized Debug build on a fresh Apple TV simulator, judged as the iOS job judges its
+  # runner. Not a required check.
+  tv-gates:
+    name: TV smooth play gates (Apple TV simulator)
+    runs-on: macos-26
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+      - run: xcodebuild -version
+      - name: Install XcodeGen
+        run: |
+          curl -fsSL -o "$RUNNER_TEMP/xcodegen.zip" https://github.com/yonaskolb/XcodeGen/releases/download/2.46.0/xcodegen.zip
+          echo "4d9e34b62172d645eed6457cac13fc222569974098ef4ee9c3368bedf0196806  $RUNNER_TEMP/xcodegen.zip" | shasum -a 256 -c -
+          unzip -q "$RUNNER_TEMP/xcodegen.zip" -d "$RUNNER_TEMP"
+          echo "$RUNNER_TEMP/xcodegen/bin" >> "$GITHUB_PATH"
+      - name: Make an Apple TV simulator
+        id: sim
+        run: |
+          tvos_runtime() {
+            xcrun simctl list runtimes -j | jq -r '[.runtimes[] | select(.platform == "tvOS" and .isAvailable)] | sort_by(.version | split(".") | map(tonumber)) | last | .identifier // empty'
+          }
+          runtime=$(tvos_runtime)
+          if [ -z "$runtime" ]; then
+            xcodebuild -downloadPlatform tvOS
+            runtime=$(tvos_runtime)
+          fi
+          udid=$(xcrun simctl create "Pounce TV gates" com.apple.CoreSimulator.SimDeviceType.Apple-TV-4K-3rd-generation-1080p "$runtime")
+          # It boots while the app builds; the tests wait for it.
+          xcrun simctl boot "$udid"
+          echo "simulator $udid on $runtime"
+          echo "udid=$udid" >> "$GITHUB_OUTPUT"
+      - run: scripts/bootstrap.sh
+      # Debug (the demos are Debug only) with the compiler's optimizations on, as the shipped app
+      # has them.
+      - name: Build for testing
+        run: >
+          xcodebuild build-for-testing -project Pounce.xcodeproj -scheme PounceTV -configuration Debug
+          -destination "id=${{ steps.sim.outputs.udid }}" -derivedDataPath build/dd-tv-gates
+          SWIFT_OPTIMIZATION_LEVEL=-O GCC_OPTIMIZATION_LEVEL=s -quiet
+      # A fresh simulator's first launches pay one-time costs (caches, shaders) that aren't the
+      # app's: one untimed run of each table that plays itself takes them first.
+      - name: Warm the simulator
+        run: |
+          xcrun simctl bootstatus "${{ steps.sim.outputs.udid }}" -b >/dev/null
+          app=$(find build/dd-tv-gates/Build/Products -maxdepth 2 -name PounceTV.app -path '*appletvsimulator*' | head -1)
+          xcrun simctl install "${{ steps.sim.outputs.udid }}" "$app"
+          for demo in tv-tiles tv-hit; do
+            xcrun simctl launch "${{ steps.sim.outputs.udid }}" com.conleychaos.play -demo "$demo" -anim-speed 1 >/dev/null
+            sleep 8
+            xcrun simctl terminate "${{ steps.sim.outputs.udid }}" com.conleychaos.play || true
+          done
+      - name: Frame, main-thread and remote gates
+        env:
+          TEST_RUNNER_POUNCE_FRAMES_SECONDS: "12"
+          # Waits only; the time budgets fit the machine on their own.
+          TEST_RUNNER_POUNCE_UITEST_TIMEOUT_SCALE: "3"
+        run: |
+          set -o pipefail
+          xcodebuild test-without-building -project Pounce.xcodeproj -scheme PounceTV \
+            -destination "id=${{ steps.sim.outputs.udid }}" -derivedDataPath build/dd-tv-gates \
+            -collect-test-diagnostics never -resultBundlePath build/tv-gates.xcresult \
+            -only-testing:PounceTVUITests/FrameRateTVTests \
+            -only-testing:PounceTVUITests/RemoteTests \
+            2>&1 | tee build/tv-gates.log | grep -E '^(FRAMES|Test Case|\s+Executed)|error:'
+      - name: Frame summary
+        if: always()
+        run: |
+          {
+            echo "### TV smooth play gates"
+            echo
+            echo '```'
+            grep -E '^FRAMES ' build/tv-gates.log || echo "no FRAMES lines"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+      - name: Keep the results
+        if: failure()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: tv-gates
+          path: |
+            apps/play-ios/build/tv-gates.log
+            apps/play-ios/build/tv-gates.xcresult
           retention-days: 7
 
   # One-off (JD OK'd it, 2026-11-16): add the tvOS platform to the App Store Connect app record, the

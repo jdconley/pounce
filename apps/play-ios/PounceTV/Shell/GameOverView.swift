@@ -43,6 +43,7 @@ struct GameOverView: View {
                     OutlinedText(title, size: title.count > 22 ? 64 : 80, fill: Palette.yellow, width: 5)
                         .frame(maxWidth: 1140)
                         .accessibilityAddTraits(.isHeader)
+                        .accessibilityIdentifier("tv.over.title")
                 }
                 VStack(spacing: rows.count > 4 ? 10 : 14) {
                     ForEach(Array(rows.enumerated()), id: \.element.id) { i, row in

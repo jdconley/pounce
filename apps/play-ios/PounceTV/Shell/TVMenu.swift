@@ -41,6 +41,7 @@ struct TVMenu: View {
                 TVButtonLabel(icon: ArtName.iconQr, words: String(localized: "Link another table", comment: "TV menu: show this TV's link so a phone can move it to its table"))
             }
             .buttonStyle(TVButtonStyle(tint: Palette.violet))
+            .accessibilityIdentifier("tv.menu.link")
             .focused($focus, equals: .link)
 
             Button {
@@ -55,6 +56,7 @@ struct TVMenu: View {
                         : String(localized: "Sound off", comment: "TV menu: the sound setting, now off"))
             }
             .buttonStyle(TVButtonStyle(tint: Palette.teal))
+            .accessibilityIdentifier("tv.menu.sound")
             .focused($focus, equals: .sound)
 
             Button {
@@ -64,6 +66,7 @@ struct TVMenu: View {
                 TVButtonLabel(icon: ArtName.iconLeave, words: String(localized: "Leave table", comment: "TV menu: stop showing this table and go home"))
             }
             .buttonStyle(TVButtonStyle(tint: Palette.magenta))
+            .accessibilityIdentifier("tv.menu.leave")
             .focused($focus, equals: .leave)
         }
         .frame(width: 780)
@@ -87,6 +90,7 @@ struct TVMenu: View {
                     size: 50, width: 4, lines: 2)
                     .fixedSize(horizontal: false, vertical: true)
                 TVCode(code: model.menuLink?.code, size: 84, label: String(localized: "Code", comment: "TV: VoiceOver, before a link's backup code is spelled out"))
+                    .accessibilityIdentifier("tv.menu.code")
                 if model.menuOffline { TVReconnecting() }
                 Button {
                     pop()
@@ -96,6 +100,7 @@ struct TVMenu: View {
                         .frame(width: 360)
                 }
                 .buttonStyle(TVButtonStyle(tint: Palette.violet))
+                .accessibilityIdentifier("tv.menu.back")
                 .focused($focus, equals: .back)
             }
             .frame(width: 640)

@@ -33,6 +33,7 @@ struct HomeView: View {
             TVQRCode(text: model.homeLink?.url.absoluteString, side: 400)
                 .accessibilityLabel(Text("QR code to put a table on this TV", comment: "TV home: the link's QR, for VoiceOver"))
             TVCode(code: model.homeLink?.code, label: String(localized: "Code", comment: "TV: VoiceOver, before a link's backup code is spelled out"))
+                .accessibilityIdentifier("tv.home.code")
         }
     }
 
@@ -87,6 +88,7 @@ private struct Poster: View {
             Sound.shared.play(ArtName.Sound.sfxNope)
         }
         .accessibilityLabel(game.title)
+        .accessibilityIdentifier("tv.poster.\(game.id)")
     }
 
     /// "2 to 6 players", with a dot in each seat's colour.

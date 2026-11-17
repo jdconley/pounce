@@ -157,7 +157,9 @@ struct TVTablePreviewView: View {
         if arguments.contains("-busy") {
             let draft = game == .tiles ? TVTablePreview.tilesDraft(room) : []
             Task {
-                var seq = 2
+                // The snapshot is seq 1 and `-moment`'s lay-down 2: each event is the one after (a
+                // gap would be dropped).
+                var seq = arguments.contains("-moment") ? 2 : 1
                 for i in 1... {
                     try? await Task.sleep(for: .milliseconds(800))
                     if game == .tiles {

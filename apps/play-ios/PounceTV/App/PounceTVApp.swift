@@ -13,6 +13,8 @@ struct PounceTVApp: App {
             #if DEBUG
             if let preview = TVTablePreview.from() {
                 TVTablePreviewView(game: preview.game, seats: preview.seats, aim: preview.aim)
+            } else if case .table(let game, let seats) = TVDemo.from() {
+                TVDemoTableView(game: game, seats: seats)
             } else if let model {
                 TVRoot(model: model)
             }
@@ -25,10 +27,14 @@ struct PounceTVApp: App {
     /// The TV against the server this build points at, as its own device.
     private static func makeModel() -> TVModel? {
         #if DEBUG
-        if TVTablePreview.from() != nil { return nil }
         // Hosting the unit tests: no server, no Keychain, nothing on screen.
         if ProcessInfo.processInfo.environment["XCTestConfigurationFilePath"] != nil { return nil }
+        // Before the window shows, so its probe (the UI tests' `watchdog` element) goes on it.
         MainThreadWatchdog.startIfAsked()
+        if TVTablePreview.from() != nil { return nil }
+        let demo = TVDemo.from()
+        if case .table = demo { return nil }
+        if demo == .shell { return TVModel(services: .demo()) }
         #endif
         return TVModel(services: .live(config: TVConfig.load()))
     }
