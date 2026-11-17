@@ -61,7 +61,12 @@ struct SheetBar: View {
         .padding(.bottom, 6)
     }
 
+    /// A corner keeps its width when it is empty, so the title stays centered.
     private func corner(@ViewBuilder _ content: () -> some View) -> some View {
-        content().frame(width: Self.side, height: PillSize.small.height + 6)
+        ZStack {
+            Color.clear
+            content()
+        }
+        .frame(width: Self.side, height: PillSize.small.height + 6)
     }
 }

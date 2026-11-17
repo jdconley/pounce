@@ -87,6 +87,12 @@ export interface Env {
    */
   TV?: string;
   /**
+   * TV links open the app (`tvAppLinksOn`): the site association lists `/tv/*` when this and `TV`
+   * are "on". Off, a `/tv/` link opens the web page even with the app installed, since an app
+   * before 1.2 opened by one does nothing.
+   */
+  TV_APPLINKS?: string;
+  /**
    * The games rooms may be created for beyond Cat Tower: a comma-separated list of game ids
    * (`gamesOn` in src/games, e.g. "tiles"). Empty or unset, as in production's wrangler.jsonc
    * today, only Cat Tower: asking for any other game is refused, as it always was. Tests and
@@ -187,6 +193,11 @@ export function linkOn(env: Pick<Env, "LINK">): boolean {
 /** Pounce on the TV when "on" (see `Env.TV`). */
 export function tvOn(env: Pick<Env, "TV">): boolean {
   return ["on", "1", "true"].includes((env.TV ?? "").toLowerCase());
+}
+
+/** The site association lists `/tv/*`: `TV` and `TV_APPLINKS` both "on" (see `Env.TV_APPLINKS`). */
+export function tvAppLinksOn(env: Pick<Env, "TV" | "TV_APPLINKS">): boolean {
+  return tvOn(env) && ["on", "1", "true"].includes((env.TV_APPLINKS ?? "").toLowerCase());
 }
 
 /** Nudges when "on" (see `Env.NUDGE`). The push half also needs `NOTIFY` (`notifyOn`). */

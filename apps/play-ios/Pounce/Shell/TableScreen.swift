@@ -115,6 +115,26 @@ struct TableScreen: View {
             }
             shownConnection = connection
         }
+        // Show on TV: from the lobby's button, or a TV's link opened at (or on the way to) this
+        // table. Up over the lobby or the table only, so a link waits for the table to arrive.
+        .sheet(item: tvSheet(shownTV)) { request in
+            ShowOnTVSheet(code: request.code, start: request.key) {
+                // Only this request's sheet: a newer one stays.
+                if model.tvSheet?.id == request.id { model.tvSheet = nil }
+            }
+                .environment(model)
+                .presentationDetents([.large])
+                .presentationDragIndicator(.visible)
+                .presentationBackground(Palette.night)
+        }
+        #if DEBUG
+        // `-show-tv` (screenshots): Show on TV over the lobby or the table.
+        .task {
+            guard CommandLine.arguments.contains("-show-tv") else { return }
+            try? await Task.sleep(for: .milliseconds(1200))
+            model.showOnTV(code: session.code)
+        }
+        #endif
         .onChange(of: session.model?.mySeats ?? []) { before, after in
             // This phone's last seat left while it held a move code: the move went through
             // (spec §5.11). Home, not the "full" card. The menu sheet is gone with the table.
@@ -130,6 +150,18 @@ struct TableScreen: View {
             guard was == false, out == true else { return }
             model.goHome()
         }
+    }
+
+    /// The Show on TV request for this table, while its lobby or table is up. Read in `body`, so a
+    /// new request redraws the screen (the sheet's binding alone isn't watched).
+    private var shownTV: TVSheetRequest? {
+        guard let request = model.tvSheet, request.code == session.code, screen == .lobby || screen == .table
+        else { return nil }
+        return request
+    }
+
+    private func tvSheet(_ shown: TVSheetRequest?) -> Binding<TVSheetRequest?> {
+        Binding(get: { shown }, set: { if $0 == nil { model.tvSheet = nil } })
     }
 
     @ViewBuilder private var content: some View {
@@ -206,6 +238,9 @@ struct ConnectingView: View {
 /// 0 with the SpriteKit table, under every named layer, so each overlay names its own. Sheets (the
 /// paw menu and its look tray) are presented over the whole stage and need no layer.
 enum TableLayer {
+    /// On a table a TV shows: the Cards/Table switch, and on Cards the status line and the action
+    /// row (`CardsChrome`).
+    static let controls: Double = 1
     /// The scoreboard and its phase ladder (tap the tower), or a player's card (tap their cat).
     static let scoreboard: Double = 2
     /// This phone's connection pill, just under the top bar.
@@ -264,6 +299,11 @@ private struct TableStage: View {
     @State private var nudgePill: RoomStore.NudgeNotice?
     /// Why the last refused move didn't go, for a moment (`MoveNoteView`).
     @State private var moveNote: MoveNoteShown?
+    /// How the scene draws a table a TV shows (measured by `CardsChrome`); nil without a TV.
+    @State private var tvFrame: TVFrame?
+    /// The group picked from the hit list on Cards (it glows on the TV), and the seat that aimed.
+    @State private var picked: HitTarget?
+    @State private var aimSeat: Seat?
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.scenePhase) private var scenePhase
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
@@ -272,6 +312,40 @@ private struct TableStage: View {
 
     private var table: TableModel? { session.store.room.map(TableModel.init(room:)) }
     private var pass: PassAndPlay { session.store.pass }
+
+    /// The whole table, or just this phone's cards while a TV shows it (spec §3).
+    private var shown: TableShown {
+        TableShown.of(
+            screen: session.store.room?.screen, seated: !(table?.mySeats.isEmpty ?? true),
+            choice: model.tableViews.view(code: session.code))
+    }
+
+    /// The status line on Cards: whose turn it is.
+    private var status: (text: String, mine: Bool)? {
+        guard let table, let game = table.game, table.room.status == .playing else { return nil }
+        if game.status == .roundOver {
+            return (String(localized: "Round over", comment: "Status line on Cards: the round ended"), false)
+        }
+        guard game.status == .playing else { return nil }
+        return StatusLine.turn(
+            name: SeatInfo.name(table.room, game.turn), mine: table.mySeats.contains(game.turn), shared: table.isMultiSeat)
+    }
+
+    /// How far below the safe top the table's own top bar starts (the switch's band; on Cards, the
+    /// status line too): the floating pills keep under it.
+    private var chromeTop: CGFloat {
+        switch tvFrame {
+        case .table(let band): band
+        case .cards(let chrome): max(chrome.switchBand, TableLayout.buttonHit) + chrome.status
+        case nil: 0
+        }
+    }
+
+    /// A pill's distance from the safe top: under the bar, or on Cards under the status line.
+    private func pillTop(_ standard: CGFloat) -> CGFloat {
+        if case .cards = tvFrame { return chromeTop + 8 }
+        return standard + chromeTop
+    }
 
     /// The seat the curtain is up for: a curtain waiting for its hold, or a hold that is done
     /// while the scene hasn't shown that hand yet. Never on a one-seat phone.
@@ -304,7 +378,8 @@ private struct TableStage: View {
     /// The table as the coach should see it: nothing while tips are off, or while the curtain, the
     /// scoreboard, the menu, the push priming or the game over is up.
     private var coachView: TableCoach? {
-        guard model.tipsEnabled, curtainSeat == nil, events.scoreboard == nil, events.player == nil, events.winners == nil,
+        // On Cards the rules coach has nothing to point at (the table is on the TV).
+        guard model.tipsEnabled, shown != .cards, curtainSeat == nil, events.scoreboard == nil, events.player == nil, events.winners == nil,
               !priming, !events.menuOpen else { return nil }
         return events.coach
     }
@@ -336,7 +411,14 @@ private struct TableStage: View {
     }
 
     var body: some View {
-        @Bindable var events = events
+        // Split in two so the compiler type-checks each chain in reasonable time.
+        tvAndMenu(stage)
+            .accessibilityElement(children: .contain)
+            .accessibilityIdentifier("screen-table")
+    }
+
+    /// The table and its overlays, with what they react to.
+    @ViewBuilder private var stage: some View {
         let covered = curtainSeat != nil
         ZStack {
             if let scene {
@@ -348,7 +430,11 @@ private struct TableStage: View {
                 RoomBackground()
             }
             if !localCats.isEmpty {
-                LocalCatsRow(cats: localCats) { seat in
+                LocalCatsRow(
+                    cats: localCats, tv: tvFrame,
+                    // On Cards with no hand up there are no trays: the cats sit on the action row's line.
+                    trays: events.controller.frames.map { $0.trays.height > 0 ? $0.trays : $0.actionRow }
+                ) { seat in
                     session.store.peek(seat)
                     sync()
                 }
@@ -357,7 +443,7 @@ private struct TableStage: View {
             if let pill = lookPill, let seat = table?.room.seats[safe: pill.seat] {
                 VStack {
                     LookPill(cat: SeatInfo.catIndex(seat), art: lookArt(pill), isBack: lookIsBack(pill))
-                        .padding(.top, 70)
+                        .padding(.top, pillTop(70))
                     Spacer()
                 }
                 .transition(.move(edge: .top).combined(with: .opacity))
@@ -368,7 +454,7 @@ private struct TableStage: View {
                 VStack {
                     // Under the top bar's cats and name tags, like the forfeit pill.
                     NudgePill(name: SeatInfo.name(table.room, pill.from), cat: SeatInfo.catIndex(from))
-                        .padding(.top, horizontalSizeClass == .regular ? 236 : 136)
+                        .padding(.top, pillTop(horizontalSizeClass == .regular ? 236 : 136))
                     Spacer()
                 }
                 .transition(.move(edge: .top).combined(with: .opacity))
@@ -379,7 +465,7 @@ private struct TableStage: View {
                 VStack {
                     // Under the top bar's name tags and the "Forfeited" tag it brings.
                     ForfeitPill(name: SeatInfo.name(table.room, pill.seat), cat: SeatInfo.catIndex(table.room.seats[safe: pill.seat]))
-                        .padding(.top, horizontalSizeClass == .regular ? 236 : 136)
+                        .padding(.top, pillTop(horizontalSizeClass == .regular ? 236 : 136))
                     Spacer()
                 }
                 .transition(.move(edge: .top).combined(with: .opacity))
@@ -387,7 +473,7 @@ private struct TableStage: View {
                 .zIndex(TableLayer.lookPill)
             }
             if let shown = moveNote, curtainSeat == nil, events.winners == nil, events.scoreboard == nil, events.player == nil {
-                MoveNoteView(text: noteText(shown.note))
+                MoveNoteView(text: noteText(shown.note), tv: tvFrame, actionRow: events.controller.frames?.note)
                     .id(shown.serial)
                     .transition(.scale(scale: 0.85, anchor: .bottom).combined(with: .opacity))
                     .zIndex(TableLayer.note)
@@ -399,11 +485,29 @@ private struct TableStage: View {
                     .zIndex(TableLayer.note)
             }
             probes
+            if shown.hasSwitch {
+                CardsChrome(
+                    shown: shown, status: status, offer: events.controller, picked: picked,
+                    onSwitch: pickView, onPick: pickTarget,
+                    onHit: {
+                        guard let hit = events.controller.hit, let target = picked else { return }
+                        clearAim()
+                        scene?.hitFromList(hit.card, target)
+                    },
+                    onCancel: clearAim,
+                    onSkip: { seat in
+                        guard let skip = events.controller.skip else { return }
+                        scene?.skipFromList(skip.card, seat)
+                    },
+                    onLayDown: { scene?.layDownTapped() },
+                    onFrame: { tvFrame = $0 })
+                    .zIndex(TableLayer.controls)
+            }
             if let shown = connectionPill {
                 // Just under the top bar's cats and name tags, clear of the hand.
                 VStack {
                     ConnectionPill(connection: shown)
-                        .padding(.top, horizontalSizeClass == .regular ? 196 : 104)
+                        .padding(.top, pillTop(horizontalSizeClass == .regular ? 196 : 104))
                     Spacer()
                 }
                 .transition(.move(edge: .top).combined(with: .opacity))
@@ -554,7 +658,7 @@ private struct TableStage: View {
         .onChange(of: coachView) { feedCoach(allowNew: false) }
         .onChange(of: session.store.lookChange) { _, change in
             guard let change else { return }
-            Sound.shared.play(ArtName.Sound.sfxWhoosh)
+            Sound.shared.play(ArtName.Sound.sfxWhoosh, kind: .game)
             withAnimation(.spring(duration: 0.45, bounce: 0.4).paced) { lookPill = change }
             Task {
                 try? await Task.sleep(for: Pace.duration(.seconds(2)))
@@ -563,7 +667,7 @@ private struct TableStage: View {
         }
         .onChange(of: session.store.forfeitNotice) { _, notice in
             guard let notice else { return }
-            Sound.shared.play(ArtName.Sound.sfxThud, volume: 0.7)
+            Sound.shared.play(ArtName.Sound.sfxThud, volume: 0.7, kind: .game)
             withAnimation(.spring(duration: 0.45, bounce: 0.4).paced) { forfeitPill = notice }
             Task {
                 try? await Task.sleep(for: Pace.duration(.seconds(3)))
@@ -585,7 +689,7 @@ private struct TableStage: View {
         }
         .onChange(of: session.store.rematch) { _, code in
             // The phone that asked goes to the new table; the others' pill now jumps there.
-            if let code, let go = playAgain.arrived(code: code) { model.openRematch(code: go) }
+            if let code, let go = playAgain.arrived(code: code) { model.openRematch(code: go, from: session.code) }
         }
         .onChange(of: session.lobbyNope) {
             // A refused Play again (the server said no): it can be asked again.
@@ -637,6 +741,14 @@ private struct TableStage: View {
             session.store.hidePass()
             sync()
         }
+    }
+
+    /// The TV's sheet, the paw menu, the Cards view's aim and the switch's tips.
+    private func tvAndMenu(_ content: some View) -> some View {
+        @Bindable var events = events
+        return content
+        // A TV's link opened over the table: its sheet, not the menu.
+        .onChange(of: model.tvSheet?.id) { _, id in if id != nil { events.menuOpen = false } }
         .sheet(isPresented: $events.menuOpen) {
             TableMenuSheet(
                 session: session,
@@ -660,8 +772,44 @@ private struct TableStage: View {
                 .environment(model)
                 .environment(settings)
         }
-        .accessibilityElement(children: .contain)
-        .accessibilityIdentifier("screen-table")
+        .onChange(of: shown, initial: true) { _, shown in
+            // (On Cards the game's sounds are the TV's: `AppModel.gameSoundsOnTV`.)
+            if shown != .cards { clearAim() }
+            if !shown.hasSwitch { tvFrame = nil }
+        }
+        .onChange(of: tvFrame) { _, frame in scene?.tv = frame }
+        .onChange(of: events.controller) { old, offer in
+            // The pick goes with its card (put down, swapped for another or played), and once its
+            // group can't be hit any more (the turn over, a move in flight).
+            guard let picked else { return }
+            if offer.hit?.card != old.hit?.card || offer.hit?.choices.contains(where: { $0.target == picked }) != true { clearAim() }
+        }
+        .onDisappear { clearAim() }
+        .tipHost(.table, paused: curtainSeat != nil || events.menuOpen || events.winners != nil || priming)
+    }
+
+    // MARK: a table a TV shows
+
+    /// The switch was tapped: this table's pick, kept on this phone.
+    private func pickView(_ view: TablePick) {
+        model.tips.used("table.view")
+        withAnimation(.easeOut(duration: 0.15).paced) { model.tableViews.set(view, code: session.code) }
+    }
+
+    /// A group picked from the hit list: it glows on the TV until Hit, Cancel or the turn moves on.
+    private func pickTarget(_ target: HitTarget) {
+        guard let hit = events.controller.hit else { return }
+        picked = target
+        aimSeat = hit.seat
+        session.store.aim(seat: hit.seat, .target(seat: target.seat, group: target.group))
+    }
+
+    /// Drops the hit list's pick and, if this phone aimed, the glow on the TV.
+    private func clearAim() {
+        picked = nil
+        guard let seat = aimSeat else { return }
+        aimSeat = nil
+        session.store.aim(seat: seat, nil)
     }
 
     /// The curtain drops in from above and lifts away like a stage curtain; with Reduce Motion
@@ -697,12 +845,14 @@ private struct TableStage: View {
             if events?.coach != coach { events?.coach = coach }
         }
         scene.onTurnCue = { [weak events] cue in events?.turnCue = cue }
+        scene.onController = { [weak events] offer in events?.controller = offer }
+        scene.tv = tvFrame
         self.scene = scene
         events.shown = scene.shownRevealed
         sync(scene)
         #if DEBUG
-        // `-show-look` (screenshots): the table menu open on its look tray.
-        if CommandLine.arguments.contains("-show-look") {
+        // `-show-look` (screenshots): the table menu open on its look tray; `-show-menu`: open.
+        if CommandLine.arguments.contains("-show-look") || CommandLine.arguments.contains("-show-menu") {
             Task {
                 try? await Task.sleep(for: .milliseconds(900))
                 events.menuOpen = true
@@ -715,6 +865,26 @@ private struct TableStage: View {
                 guard let scene, let card = session.store.room?.game?.hands[0]?.first(where: { Card(id: $0) != .cucumber })
                 else { return }
                 scene.tryDiscard(card, target: nil)
+            }
+        }
+        // `-show-hits` (screenshots, Cards): the hand card that can hit the most groups is picked, so the
+        // hit list shows (or, with none, a Cucumber, so the skip list does); `-show-hit-picked`: and
+        // its first group too (`-show-hit-picked-last`: its last).
+        if CommandLine.arguments.contains("-show-hits") {
+            Task { [weak scene] in
+                try? await Task.sleep(for: .milliseconds(1200))
+                guard let scene, let model = scene.model, let seat = scene.actingSeat else { return }
+                let cards = scene.hand.cards.compactMap(\.card)
+                let best = cards.max(by: { model.hitTargets(card: $0, seat: seat).count < model.hitTargets(card: $1, seat: seat).count })
+                    .flatMap { model.hitTargets(card: $0, seat: seat).isEmpty ? nil : $0 }
+                guard let card = best ?? cards.first(where: { Card(id: $0) == .cucumber }) else { return }
+                scene.liftedCard = card
+                guard CommandLine.arguments.contains("-show-hit-picked") else { return }
+                try? await Task.sleep(for: .milliseconds(300))
+                // `-show-hit-picked-last`: the list's last group (another seat's, a long name).
+                let choices = events.controller.hit?.choices ?? []
+                let last = CommandLine.arguments.contains("-show-hit-picked-last")
+                if let choice = last ? choices.last : choices.first { pickTarget(choice.target) }
             }
         }
         // `-show-scoreboard` (screenshots): the scoreboard over the table as it opens.
@@ -849,7 +1019,7 @@ private struct TableStage: View {
                 try? await Task.sleep(for: .seconds(PlayAgain.wait + 0.2))
                 againTick += 1
             }
-        case .jump(let code): model.openRematch(code: code)
+        case .jump(let code): model.openRematch(code: code, from: session.code)
         case .none: break
         }
     }
@@ -934,12 +1104,17 @@ private final class StageEvents {
     var note: MoveNoteShown?
     /// A discard waiting on the pile with its Undo.
     var undo: UndoOffer?
+    /// What the action row offers on Cards.
+    var controller = ControllerOffer()
 }
 
 /// The small cats of this phone's seats along the bottom, while another seat plays: tap one
 /// to put the curtain up for that person and hold to peek at their hand.
 private struct LocalCatsRow: View {
     let cats: [(seat: Seat, person: Person)]
+    /// The table's frame at a TV, and on Cards the scene's trays (they sit elsewhere there).
+    let tv: TVFrame?
+    let trays: CGRect?
     let onTap: (Seat) -> Void
 
     private static let side: CGFloat = 60
@@ -951,7 +1126,7 @@ private struct LocalCatsRow: View {
                 width: geo.size.width + insets.leading + insets.trailing,
                 height: geo.size.height + insets.top + insets.bottom)
             // The trays' strip, empty while no hand is face up (scene space: y up from the bottom).
-            let trays = TableLayout(size: full, safeTop: insets.top, safeBottom: insets.bottom, opponents: 1).traysFrame
+            let trays = self.trays ?? TableLayout(full: full, insets: insets, tv: tv).traysFrame
             HStack(spacing: 18) {
                 ForEach(cats, id: \.seat) { cat in
                     LocalCat(seat: cat.seat, person: cat.person, side: Self.side) { onTap(cat.seat) }
@@ -1001,5 +1176,122 @@ private struct LocalCat: View {
             "Peek at \(person.name)'s cards",
             comment: "VoiceOver: one of this phone's players in the row at the bottom; opens the curtain for them"))
         .accessibilityIdentifier("table.local.\(seat)")
+    }
+}
+
+/// Cat Tower's chrome while a TV shows the table: the Cards/Table switch in its band at the top
+/// (in the same place on both, the paw at its right end on Cards), and on Cards the status line
+/// and the action row in the bands the controller layout leaves for them. It measures its pieces
+/// at the person's text size and tells the stage how the scene should draw (`TVFrame`): the
+/// cards shrink to make room, and when even that can't, the status line gives up height.
+private struct CardsChrome: View {
+    let shown: TableShown
+    let status: (text: String, mine: Bool)?
+    let offer: ControllerOffer
+    let picked: HitTarget?
+    let onSwitch: (TablePick) -> Void
+    let onPick: (HitTarget) -> Void
+    let onHit: () -> Void
+    let onCancel: () -> Void
+    let onSkip: (Seat) -> Void
+    let onLayDown: () -> Void
+    let onFrame: (TVFrame) -> Void
+
+    /// The pieces' heights at this text size (`templates`).
+    @State private var measured = Measured()
+
+    private struct Measured: Equatable {
+        var band: CGFloat = 38
+        var status: CGFloat = 30
+        var pill: CGFloat = 44
+        /// What the action row holds now, wrapped to its width (0: nothing).
+        var actions: CGFloat = 0
+    }
+
+    var body: some View {
+        GeometryReader { geo in
+            let insets = geo.safeAreaInsets
+            let full = CGSize(
+                width: geo.size.width + insets.leading + insets.trailing,
+                height: geo.size.height + insets.top + insets.bottom)
+            let (frame, layout) = Self.frame(full: full, insets: insets, measured: measured, shown: shown)
+            // The scene's own action row once it has drawn (it moves with the hand's size).
+            let actionRow = offer.frames?.actionRow ?? layout.actionRow
+            // Scene space (y up from the bottom of the screen) to this view's.
+            let local: (CGRect) -> CGRect = { r in
+                CGRect(x: r.minX - insets.leading, y: full.height - r.maxY - insets.top, width: r.width, height: r.height)
+            }
+            let band = local(layout.switchBand)
+            ZStack(alignment: .topLeading) {
+                ViewSwitch(shown: shown, onPick: onSwitch)
+                    // Clear of the paw at the band's right end, and centred.
+                    .frame(maxWidth: max(band.width - 2 * (TableLayout.buttonHit + 8), 160))
+                    .position(x: band.midX, y: band.midY)
+                if shown == .cards {
+                    let line = local(layout.statusLine)
+                    if let status, line.height > 4 {
+                        StatusLine(text: status.text, mine: status.mine)
+                            .frame(width: line.width, height: line.height)
+                            .position(x: line.midX, y: line.midY)
+                            .transition(.opacity)
+                    }
+                    let row = local(actionRow)
+                    ControllerActions(
+                        offer: offer, picked: picked, onPick: onPick, onHit: onHit, onCancel: onCancel, onSkip: onSkip,
+                        onLayDown: onLayDown)
+                        .frame(width: row.width, height: row.height)
+                        .position(x: row.midX, y: row.midY)
+                        .transition(.opacity)
+                }
+            }
+            .onChange(of: frame, initial: true) { _, frame in onFrame(frame) }
+            .background { templates(width: layout.actionRow.width) }
+            .environment(\.chromeRoom, ChromeType.room(full))
+        }
+        .animation(.spring(duration: 0.25, bounce: 0.2).paced, value: offer)
+        .animation(.spring(duration: 0.25, bounce: 0.2).paced, value: picked)
+    }
+
+    /// The scene's frame for `shown`, and the controller layout the chrome sits in (the switch's
+    /// band is in the same place on Table). Short of room even with the smallest cards, the status
+    /// line gives up what is missing (`TableLayout.chromeOverflow`).
+    private static func frame(full: CGSize, insets: EdgeInsets, measured: Measured, shown: TableShown) -> (TVFrame, TableLayout) {
+        // One line of pills at least; more when the chips wrap, up to three (then it scrolls); four
+        // beside the piles on a landscape iPad, where the row is half as wide.
+        let sideBySide = TableLayout.arrangement(for: full) == .wide
+        let most = sideBySide ? 4 * measured.pill + 18 : 3 * measured.pill + 12
+        let lines = min(max(measured.actions, measured.pill), most)
+        var chrome = ControllerChrome(switchBand: measured.band + 6, status: measured.status + 2, actions: lines + 6)
+        var layout = TableLayout(full: full, insets: insets, tv: .cards(chrome))
+        if !layout.fits {
+            chrome.status = max(chrome.status - layout.chromeOverflow.rounded(.up), 0)
+            layout = TableLayout(full: full, insets: insets, tv: .cards(chrome))
+        }
+        return (shown == .cards ? .cards(chrome) : .table(switchBand: layout.switchBand.height), layout)
+    }
+
+    /// Unseen copies of the pieces, for their heights at this text size, and of the action row's
+    /// pills wrapped to its `width`.
+    private func templates(width: CGFloat) -> some View {
+        VStack {
+            ControllerActions(
+                offer: offer, picked: picked, onPick: { _ in }, onHit: {}, onCancel: {}, onSkip: { _ in }, onLayDown: {})
+                .content
+                .frame(width: max(width, 1))
+                .fixedSize(horizontal: false, vertical: true)
+                .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { measured.actions = $0 }
+            ViewSwitch(shown: .table) { _ in }
+                .fixedSize()
+                .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { measured.band = $0 }
+            StatusLine(text: "Your turn", mine: true)
+                .fixedSize()
+                .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { measured.status = $0 }
+            ActionPill(title: "Hit", style: .go) {}
+                .fixedSize()
+                .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { measured.pill = $0 }
+        }
+        .hidden()
+        .allowsHitTesting(false)
+        .accessibilityHidden(true)
     }
 }

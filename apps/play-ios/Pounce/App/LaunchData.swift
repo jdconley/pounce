@@ -22,6 +22,8 @@ struct LaunchData: Sendable {
     var account: Loaded<AccountRecord>
     /// The tile game's memory (`TilesMemory`), in its own folder.
     var tiles: Loaded<TilesDeviceStore.File>
+    /// Each table's Cards/Table pick at a TV (`TableViewChoices`).
+    var tableViews: Loaded<TableViews.File>
     var age: AgeRecord?
 
     @concurrent
@@ -42,10 +44,11 @@ struct LaunchData: Sendable {
         async let condoSeen = Loaded.read(JSONFile<[String: Int]>(url: directory.appendingPathComponent("streak-seen.json")))
         async let account = Loaded.read(AccountStore.file(directory: directory, fileName: AccountStore.fileName(for: config)))
         async let tiles = Loaded.read(TilesDeviceStore.file(directory: TilesMemory.directory))
+        async let tableViews = Loaded.read(TableViews.file(directory: TableViewChoices.directory))
         async let age = ageStore.load()
         return await LaunchData(
             people: people, cache: cache, archive: archive, list: list, invites: invites, tutorial: tutorial,
             pacing: pacing, rating: rating, updates: updates, funnel: funnel, pounces: pounces, kitten: kitten,
-            notify: notify, condoSeen: condoSeen, account: account, tiles: tiles, age: age)
+            notify: notify, condoSeen: condoSeen, account: account, tiles: tiles, tableViews: tableViews, age: age)
     }
 }

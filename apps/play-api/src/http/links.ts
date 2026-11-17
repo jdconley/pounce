@@ -8,11 +8,14 @@ import { MEDIA } from "./site-media";
 
 import type { InvitePeek } from "../safety/safety";
 
-const association = (pounces: boolean) =>
+const association = (pounces: boolean, tv: boolean) =>
   JSON.stringify({
     applinks: {
       details: [
-        { appIDs: ["B222J9J7B8.com.conleychaos.play"], components: [{ "/": "/j/*" }, ...(pounces ? [{ "/": "/p/*" }] : [])] },
+        {
+          appIDs: ["B222J9J7B8.com.conleychaos.play"],
+          components: [{ "/": "/j/*" }, ...(pounces ? [{ "/": "/p/*" }] : []), ...(tv ? [{ "/": "/tv/*" }] : [])],
+        },
       ],
     },
   });
@@ -60,9 +63,13 @@ export const INVITE_SCRIPT_HASH = "sha256-NHWXU2onSqv10XNR64R7LEbWf1mVG2lmEbNfyQ
 /** The invite pages load the inviter's cat from /static and run their one script. */
 export const INVITE_CSP = `default-src 'none'; style-src 'unsafe-inline'; img-src 'self' data:; script-src '${INVITE_SCRIPT_HASH}'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'`;
 
-/** Apple fetches this to bind `/j/*` links (and, with streaks on, `/p/*` pounce links) on our domain to the app. */
-export function appSiteAssociation(pounces = false): Response {
-  return new Response(association(pounces), {
+/**
+ * Apple fetches this to bind `/j/*` links on our domain to the app: with pushes on, `/p/*` pounce
+ * links too, and with `TV` on, `/tv/*` TV links (docs/tv-protocol.md). With `TV` off a `/tv/` link
+ * is a 404, so the app doesn't claim it.
+ */
+export function appSiteAssociation(pounces = false, tv = false): Response {
+  return new Response(association(pounces, tv), {
     headers: { "content-type": "application/json", "cache-control": CACHE },
   });
 }

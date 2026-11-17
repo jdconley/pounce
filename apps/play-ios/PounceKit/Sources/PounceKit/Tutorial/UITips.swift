@@ -4,6 +4,9 @@ import Foundation
 /// teaches on the Cat Tower table). One screen hosts tips at a time: the one on top.
 public enum TipScreen: String, CaseIterable, Codable, Sendable {
     case home, lobby, tableMenu, pounce, us, gear, tiles
+    /// Cat Tower's table (so far only while a TV shows it: the Cards/Table switch). The tile game's
+    /// table is `tiles`.
+    case table
 }
 
 /// What makes a tip worth showing, beyond its control being on screen.
@@ -14,6 +17,8 @@ public indirect enum TipTrigger: Hashable, Sendable {
     case opens(Int)
     /// This person has seen or learned that tip already.
     case after(UITip)
+    /// This person hasn't seen or learned that tip yet (a twin taught on another screen).
+    case unseen(UITip)
     /// Something happened this session (`TipEvent`).
     case event(TipEvent)
     case all([TipTrigger])
@@ -23,6 +28,7 @@ public indirect enum TipTrigger: Hashable, Sendable {
         case .visible: true
         case .opens(let n): facts.opens >= n
         case .after(let tip): seen.contains(tip)
+        case .unseen(let tip): !seen.contains(tip)
         case .event(let event): facts.events.contains(event)
         case .all(let triggers): triggers.allSatisfy { $0.holds(facts, seen: seen) }
         }
@@ -105,6 +111,9 @@ public enum UITip: String, CaseIterable, Codable, Sendable {
     case tilesUndo = "ui.tiles.undo"
     case tilesHint = "ui.tiles.hint"
     case tilesLoupe = "ui.tiles.loupe"
+    // A table a TV shows: the Cards/Table switch, on Cat Tower's table and on the tile game's
+    case tableView = "ui.table.view"
+    case tilesView = "ui.tiles.view"
 
     public var rule: UITipRule {
         switch self {
@@ -141,6 +150,11 @@ public enum UITip: String, CaseIterable, Codable, Sendable {
         case .tilesHint: r(.tiles, "tiles.hint", 94)
         case .tilesUndo: r(.tiles, "tiles.undo", 65, .after(.tilesSort), learnedBy: ["tiles.undo"])
         case .tilesLoupe: r(.tiles, "tiles.set", 60, learnedBy: ["tiles.loupe"])
+        // The switch shows only while a TV shows the table, so this comes up the first time the
+        // phone becomes a controller; tapping either side learns it. One tip on two tables: each
+        // game's table hosts its own, and once one is seen the other never shows.
+        case .tableView: r(.table, "table.view", 100, .unseen(.tilesView))
+        case .tilesView: r(.tiles, "table.view", 101, .unseen(.tableView))
         }
     }
 

@@ -916,6 +916,15 @@
   "batch": "ui"
  },
  {
+  "name": "icon-tv",
+  "dest": "imageset",
+  "points": [
+   28,
+   28
+  ],
+  "batch": "ui"
+ },
+ {
   "name": "icon-share",
   "dest": "imageset",
   "points": [

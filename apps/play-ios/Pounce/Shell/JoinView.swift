@@ -192,25 +192,8 @@ struct JoinView: View {
     }
 
     private var tiles: some View {
-        let chars = Array(typed)
-        return HStack(spacing: 8) {
-            ForEach(0..<Self.length, id: \.self) { i in
-                CodeTile(
-                    char: i < chars.count ? chars[i] : nil,
-                    active: i == min(chars.count, Self.length - 1) && !checking)
-                    .accessibilityIdentifier("join.tile.\(i)")
-            }
-        }
-        .padding(12)
-        .background(
-            RoundedRectangle(cornerRadius: 26, style: .continuous)
-                .fill(LinearGradient(
-                    colors: [Palette.violet.mix(with: Palette.ink, by: 0.25), Palette.night],
-                    startPoint: .top, endPoint: .bottom))
-                .overlay(RoundedRectangle(cornerRadius: 26, style: .continuous).strokeBorder(Palette.ink, lineWidth: 5))
-                .shadow(color: Palette.ink.opacity(0.5), radius: 0, x: 0, y: 6)
-        )
-        .shake(trigger: tilesShake)
+        CodeTiles(typed: typed, length: Self.length, busy: checking)
+            .shake(trigger: tilesShake)
     }
 
     // MARK: input

@@ -106,7 +106,7 @@ extension TilesScene {
     }
 
     private func accessibilityItems() -> [TableAccessibility.Item] {
-        guard let model, let layout, let flow else { return [] }
+        guard let model, let layout else { return [] }
         typealias Item = TableAccessibility.Item
         var items: [Item] = []
         let composing = draft != nil && !sending
@@ -115,7 +115,7 @@ extension TilesScene {
         }
 
         items.append(Item(id: "table.menu", label: String(localized: "Menu", comment: "VoiceOver: the table's paw menu"), frame: square(layout.menuButton)))
-        for seat in opponents.order {
+        for seat in opponents.order where tableUp {
             guard let frame = opponents.frame(of: seat) else { continue }
             let marks = model.marks(seat)
             var parts = [SeatInfo.name(model.room, seat), String(localized: "\(marks.count) toys", comment: "VoiceOver: pieces left on a player's rack")]
@@ -129,20 +129,23 @@ extension TilesScene {
             }
             items.append(Item(id: "tiles.seat.\(seat)", label: parts.joined(separator: ", "), frame: frame, traits: .staticText))
         }
-        items.append(Item(
-            id: "tiles.pool",
-            label: String(localized: "Toy box, \(model.view.poolCount) toys", comment: "VoiceOver: the pool and its count"),
-            frame: layout.pool, traits: .staticText))
-        if !recap.isEmpty, !recapButton.isHidden {
+        if layout.pool != .zero {
+            items.append(Item(
+                id: "tiles.pool",
+                label: String(localized: "Toy box, \(model.view.poolCount) toys", comment: "VoiceOver: the pool and its count"),
+                frame: layout.pool, traits: .staticText))
+        }
+        if tableUp, !recap.isEmpty, !recapButton.isHidden {
             items.append(Item(
                 id: "tiles.recap", label: String(localized: "What changed", comment: "VoiceOver: replay what others placed since my turn"),
                 frame: square(recapButton.position)))
         }
 
         // The rug's sets, top to bottom. Off screen ones (scrolled away) keep their place in the
-        // order, clipped to the rug.
-        for (index, set) in shown.enumerated() where flow.sets.indices.contains(index) {
-            let box = flow.sets[index].frame
+        // order, clipped to the rug. (None while the stash is all there is: the rug is the TV's.)
+        let placements = flow?.sets ?? []
+        for (index, set) in shown.enumerated() where placements.indices.contains(index) {
+            let box = placements[index].frame
             let origin = rugContent.convert(CGPoint(x: box.minX, y: -box.maxY), to: self)
             let frame = CGRect(origin: origin, size: box.size).intersection(layout.rugArt)
             guard !frame.isNull, frame.height > 4 else { continue }
@@ -174,7 +177,7 @@ extension TilesScene {
             }
             items.append(Item(id: "tiles.set.\(index)", label: label, hint: hint, frame: frame, actions: actions))
         }
-        if composing {
+        if composing, let flow {
             let box = flow.newSlot
             let origin = rugContent.convert(CGPoint(x: box.minX, y: -box.maxY), to: self)
             let frame = CGRect(origin: origin, size: box.size).intersection(layout.rugArt)
@@ -214,8 +217,8 @@ extension TilesScene {
             items.append(Item(id: "tiles.loupe.close", label: String(localized: "Close", comment: "VoiceOver: close the opened set"), frame: square(loupeClose.position)))
         }
 
-        // The action strip.
-        if !turnPill.isHidden {
+        // The action strip (hidden with the table while the stash is alone).
+        if tableUp, !turnPill.isHidden {
             if let meter = draft?.openingMeter, layout.meter != .zero {
                 items.append(Item(
                     id: "tiles.meter",
@@ -228,14 +231,17 @@ extension TilesScene {
                               traits: composing && draft?.isUntouched == false ? .button : [.button, .notEnabled]))
             let words = TilesWords.turnButton(turnButton, sending: sending)
             items.append(Item(id: "tiles.turn", label: words.label, hint: words.hint, frame: layout.turn))
+            if easy {
+                items.append(Item(id: "tiles.hint", label: String(localized: "Show me", comment: "VoiceOver: the hint button"), frame: layout.tidy))
+            }
+        }
+        // The sort toggles: on the strip, or over the stash when it is all there is.
+        if !sortToyButton.isHidden {
             let sort = shownSeat.flatMap { orders[$0]?.sort }
             items.append(Item(id: "tiles.sort.number", label: String(localized: "Sort by number", comment: "VoiceOver: a rack sort toggle"), frame: layout.sortNumber,
                               traits: sort == .number ? [.button, .selected] : .button))
             items.append(Item(id: "tiles.sort.toy", label: String(localized: "Sort by toy", comment: "VoiceOver: a rack sort toggle"), frame: layout.sortToy,
                               traits: sort == .toy ? [.button, .selected] : .button))
-            if easy {
-                items.append(Item(id: "tiles.hint", label: String(localized: "Show me", comment: "VoiceOver: the hint button"), frame: layout.tidy))
-            }
         }
 
         // The stash.
@@ -297,6 +303,9 @@ extension TilesScene {
             "selected=\(selection.count)", "loupe=\(loupe.map(String.init) ?? "-")", "piece=\(piece)",
             "scrolls=\(maxScroll > 0)", "points=\(draft?.newPoints ?? 0)", "sent=\(probe.sent)", "refused=\(probe.refused)",
             "sort=\(shownSeat.flatMap { orders[$0]?.sort?.rawValue } ?? "free")", "shown=\(shownSeat.map(String.init) ?? "-")",
+            // At a TV: `stash` (just the stash) or `table`; `aim`: the draft's sets the TV was sent.
+            "tv=\(layout?.controller.map { if case .rackOnly = $0 { "stash" } else { "table" } } ?? "-")",
+            "aim=\(aimed.map { String($0.table.count) } ?? "-")",
         ].joined(separator: " ")
     }
     #endif

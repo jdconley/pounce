@@ -2,7 +2,7 @@ import { readFileSync } from "node:fs";
 
 import { describe, expect, it } from "vitest";
 
-import { devSpeed, tvOn } from "./env";
+import { devSpeed, tvAppLinksOn, tvOn } from "./env";
 import { gamesOn } from "./games";
 import { liveOn, notifyOn, streaksOn, trophyOn } from "./streaks/profile";
 
@@ -86,5 +86,15 @@ describe("tvOn", () => {
     expect(tvOn({ TV: "ON" })).toBe(true);
     expect(tvOn({})).toBe(false);
     expect(tvOn({ TV: "off" })).toBe(false);
+  });
+});
+
+describe("tvAppLinksOn", () => {
+  it("needs TV and TV_APPLINKS both on", () => {
+    expect(tvAppLinksOn({ TV: "on", TV_APPLINKS: "on" })).toBe(true);
+    expect(tvAppLinksOn({ TV: "on", TV_APPLINKS: "off" })).toBe(false);
+    expect(tvAppLinksOn({ TV: "on" })).toBe(false);
+    expect(tvAppLinksOn({ TV: "off", TV_APPLINKS: "on" })).toBe(false);
+    expect(tvAppLinksOn({ TV_APPLINKS: "on" })).toBe(false);
   });
 });

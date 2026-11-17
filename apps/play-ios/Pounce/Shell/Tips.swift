@@ -243,6 +243,8 @@ enum UITipCopy {
         case .tilesUndo: String(localized: "Undo a move. Hold reset to start over.", comment: "Tip in the tile game: the undo and reset buttons")
         case .tilesHint: String(localized: "Stuck? Tap for a hint.", comment: "Tip in the tile game (easy mode): the hint button")
         case .tilesLoupe: String(localized: "Tap a set to see it up close.", comment: "Tip in the tile game: a set on the rug opens in the loupe")
+        case .tableView: String(localized: "Your cards are here. The table is on the TV.", comment: "Tip on a table a TV shows: the Cards/Table switch, the first time the phone shows just its cards")
+        case .tilesView: String(localized: "Your cards are here. The table is on the TV.", comment: "Tip on a table a TV shows: the Cards/Table switch, the first time the phone shows just its cards")
         }
     }
 }

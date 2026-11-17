@@ -13,6 +13,9 @@ import SwiftUI
 /// Privacy: stash pieces exist as nodes only for the one seat this phone may show: its only
 /// seat, or on a shared phone the seat pass-and-play has revealed (`RoomStore.pass`, read at
 /// every redraw and every intent, so a reveal never outlives its turn). The rug is public.
+///
+/// While a TV shows the table (`tv`), the switch's band is at the top, and on Cards off turn the
+/// stash is all there is (TilesController.swift).
 @MainActor
 final class TilesScene: SKScene {
     /// zPosition bands. Everything inside a layer stays below the next band.
@@ -55,15 +58,54 @@ final class TilesScene: SKScene {
     /// A control a tip teaches was used (`tiles.turn`, `tiles.sort`, `tiles.loupe`).
     var onTipUsed: (String) -> Void = { _ in }
     private var lastTipSpots: [String: CGRect] = [:]
+    /// The stash alone is drawn (Cards, off turn) or not: the shell shows the status line then.
+    var onStashOnly: (Bool) -> Void = { _ in }
+    var publishedStashOnly: Bool?
+
+    /// How a table a TV shows is drawn here (`TilesStage` decides); nil: no TV, today's table.
+    var tv: TVFrame? {
+        didSet {
+            guard tv != oldValue else { return }
+            redraw()
+            publishAim()
+        }
+    }
+    /// What the TV was last sent of this phone's draft (`publishAim`), and for which seat.
+    var aimed: (seat: Seat, table: [[TileID]])?
+    /// Whether the last redraw drew the stash alone, so a change between the two slides the stash.
+    var drawnStashOnly: Bool?
+    /// The stash is sliding between the stash-alone layout and the table's: its pieces' size
+    /// changes over the same time as their place.
+    var morphing = false
+    /// When the stash's slide between the two layouts ends (media time). Redraws until then (the
+    /// shell refreshes right after the snapshot that started it) let it finish instead of snapping.
+    var slideEnds: CFTimeInterval = 0
+    /// The table around the stash (rug, sets, toy box, top bar, strip): hidden, not torn down,
+    /// while the stash is alone (TilesController.swift).
+    let tableGroup = SKNode()
+    /// The room's floor laid over the table, faded to bring the table in or take it away as one
+    /// layer (`setTable(up:animated:)`): one opaque sprite, so nothing is drawn offscreen.
+    let tableVeil = SKSpriteNode(texture: TableArt.image(ArtName.roomBg))
+    /// The paw menu and the sort toggles: drawn with the stash alone too, so outside `tableGroup`
+    /// and over the veil.
+    let controlsLayer = SKNode()
+    /// Whether the table was last asked to show (`setTable(up:animated:)`).
+    var tableUpTarget: Bool?
 
     // Drawn state.
     var model: TilesTableModel?
     /// The seat whose stash is drawn, face up.
     private(set) var shownSeat: Seat? {
-        didSet { if shownSeat != oldValue { onShownSeat(shownSeat) } }
+        didSet {
+            guard shownSeat != oldValue else { return }
+            onShownSeat(shownSeat)
+            publishAim()
+        }
     }
     /// The turn being composed; nil off turn.
-    var draft: TilesDraft?
+    var draft: TilesDraft? {
+        didSet { if draft != oldValue { publishAim() } }
+    }
     var orders: [Seat: RackOrder] = [:]
     /// Pieces picked up by a tap (tap path): lifted in the stash or the loupe until a target is tapped.
     var selection: [TileID] = []
@@ -73,7 +115,9 @@ final class TilesScene: SKScene {
     var easy = false
     var tricks = false
     /// A turn was sent and its snapshot hasn't come back.
-    var sending = false
+    var sending = false {
+        didSet { if sending != oldValue { publishAim() } }
+    }
     /// The hint the "show me" paw lit.
     var hint: TilesHints.Hint?
     /// What changed since this phone's last turn, and the rings it is showing for it.
@@ -180,11 +224,20 @@ final class TilesScene: SKScene {
         anchorPoint = .zero
         backgroundColor = UIColor(Palette.night)
         TableArt.preload()
+        // Everything but the stash and what floats over it is the table (`tableGroup`).
+        tableGroup.zPosition = 1
+        addChild(tableGroup)
+        // Over every table layer (the strip's meter reaches about 67), under the stash (70).
+        tableVeil.zPosition = Layer.rack.rawValue - 2
+        tableVeil.isHidden = true
+        addChild(tableVeil)
+        controlsLayer.zPosition = Layer.rack.rawValue - 1
+        addChild(controlsLayer)
         for layer in Layer.allCases {
             let node = SKNode()
             node.zPosition = layer.rawValue
             layers[layer] = node
-            addChild(node)
+            if [.rug, .sets, .pool, .opponents, .strip].contains(layer) { tableGroup.addChild(node) } else { addChild(node) }
         }
         layer(.background).addChild(background)
         layer(.rug).addChild(rugSprite)
@@ -203,11 +256,11 @@ final class TilesScene: SKScene {
         recapButton.zPosition = 3
         layer(.pool).addChild(recapButton)
         layer(.opponents).addChild(opponents)
-        menuButton.zPosition = 9
-        layer(.opponents).addChild(menuButton)
-        for node in [undoButton, resetButton, sortNumberButton, sortToyButton, tidyButton] {
+        controlsLayer.addChild(menuButton)
+        for node in [undoButton, resetButton, tidyButton] {
             layer(.strip).addChild(node)
         }
+        for node in [sortNumberButton, sortToyButton] { controlsLayer.addChild(node) }
         turnPillGroup.addChild(turnPill)
         layer(.strip).addChild(turnPillGroup)
         holdFill.anchorPoint = CGPoint(x: 0, y: 0.5)
@@ -264,6 +317,7 @@ final class TilesScene: SKScene {
 
     override func willMove(from view: SKView) {
         saveDraft()
+        clearAim()
         director.cancelAll()
         warmup?.cancel()
     }
@@ -426,7 +480,7 @@ final class TilesScene: SKScene {
     }
 
     /// The seat the bottom band is laid out for: the one shown, else the one behind the curtain.
-    private func bandSeat(_ model: TilesTableModel) -> Seat? {
+    func bandSeat(_ model: TilesTableModel) -> Seat? {
         if let shownSeat { return shownSeat }
         switch store.pass.state {
         case .curtain(let seat), .revealed(let seat): return seat
@@ -447,6 +501,8 @@ final class TilesScene: SKScene {
         background.position = CGPoint(x: size.width / 2, y: size.height / 2)
         let bgScale = max(size.width / 390, size.height / 844)
         background.size = CGSize(width: 390 * bgScale, height: 844 * bgScale)
+        tableVeil.position = background.position
+        tableVeil.size = background.size
         guard let model else {
             clearTable()
             return
@@ -455,7 +511,6 @@ final class TilesScene: SKScene {
 
         let seat = shownSeat
         let sets = currentSets()
-        shown = sets
         let placed = draft?.placedTiles ?? []
         let rackTiles: [TileID]
         if let seat, let order = orders[seat] {
@@ -471,11 +526,111 @@ final class TilesScene: SKScene {
             size: size, safeTop: safeInsets.top, safeBottom: safeInsets.bottom,
             opponents: model.barSeats(bottom: seat).count,
             rackCount: max(band.map(model.rackCount) ?? 0, rackTiles.count + input.dragTiles.count),
-            meter: draft?.openingMeter != nil, controls: controls)
+            meter: draft?.openingMeter != nil, controls: controls, controller: controllerMode(model))
         self.layout = layout
-        onBand(controls ? (layout.meter == .zero ? layout.strip.maxY : layout.meter.maxY) + 2 : 0)
+        // Just the stash (Cards, off turn): the curtain and the shared phone's cats take all of
+        // the room under the status line.
+        let stashOnly = layout.arrangement == .controller
+        let morph = drawnStashOnly.map { $0 != stashOnly } ?? false
+        drawnStashOnly = stashOnly
+        shown = stashOnly ? [] : sets
+        if publishedStashOnly != stashOnly {
+            publishedStashOnly = stashOnly
+            onStashOnly(stashOnly)
+        }
+        let savedFlight = flight
+        if morph {
+            flight = max(flight, 0.32)
+            slideEnds = CACurrentMediaTime() + flight / max(Double(speed), 0.01)
+        }
+        // Scene time left of a slide under way (the whole of it on the redraw that starts it).
+        let slideLeft = max(slideEnds - CACurrentMediaTime(), 0) * Double(speed)
+        let sliding = slideLeft > 0
+        morphing = morph
+        defer {
+            flight = savedFlight
+            morphing = false
+        }
+        onBand(controls ? (stashOnly ? layout.statusLine.minY : (layout.meter == .zero ? layout.strip.maxY : layout.meter.maxY) + 2) : 0)
 
-        // The rug.
+        // With just the stash the table stays drawn, hidden, as it will show on this phone's turn
+        // (`tableLayout`), so the turn's first frame only shows it: no nodes, flows or textures
+        // made then.
+        let table = stashOnly ? tableLayout(model, seat: seat, stash: layout) : layout
+        setTable(up: !stashOnly, animated: morph)
+        var live: Set<TileID> = []
+        /// The first set on the rug that opens in the loupe (the loupe tip points at it).
+        let firstOpenSet = drawRug(sets, model: model, layout: table, placed: placed, live: &live, animated: animated && !stashOnly)
+        if input.isDragging { live.formUnion(input.dragTiles) }
+
+        // The stash.
+        rackLayer.position = CGPoint(x: -rackScroll, y: 0)
+        rackLayer.alpha = sending ? 0.6 : 1  // fade-ok: a FadeGroup
+        if let seat, model.rack(seat) != nil {
+            let gapSlot = input.isDragging && input.target == .rack ? input.rackSlot : nil
+            let slotCount = rackTiles.count + (gapSlot == nil ? 0 : input.dragTiles.count)
+            let slots = layout.rackSlots(count: slotCount).centers
+            let ready = orders[seat]?.readySets(in: rackTiles) ?? []
+            var slot = 0
+            for (i, tile) in rackTiles.enumerated() {
+                if let gapSlot, i == gapSlot { slot += input.dragTiles.count }
+                guard slot < slots.count else { break }
+                live.insert(tile)
+                var target = slots[slot]
+                // Ready sets sit a hair closer together.
+                if let range = ready.first(where: { $0.contains(i) }) {
+                    let mid = CGFloat(range.lowerBound + range.upperBound - 1) / 2
+                    target.x -= (CGFloat(i) - mid) * 1.5
+                }
+                let lifted = selection.contains(tile)
+                if lifted { target.y += layout.rackPiece.height * 0.16 }
+                let node = piece(tile, in: rackLayer, size: layout.rackPiece, face: .large, at: target)
+                node.isPrivate = true
+                let was = node.pieceSize
+                node.show(size: layout.rackPiece, face: .large, standing: nil)
+                // Between the stash alone and the table, each piece grows or shrinks on its way
+                // (it starts at the size it was drawn).
+                if morph, was.width > 0, was != layout.rackPiece { node.setScale(node.xScale * was.width / layout.rackPiece.width) }
+                node.zPosition = lifted ? 5 : 1 + CGFloat(i) * 0.01
+                node.setPlaced(false)
+                node.setRing(lifted ? .white : hintRing(tile))
+                node.alpha = 1  // the stash dims as a whole (`rackLayer`)
+                // Already sliding to this very place: let it get there.
+                let onItsWay = sliding && !morph && !animated && node.home == target && !lifted
+                if !onItsWay { settle(node, at: target, scale: lifted ? 1.08 : 1, animated: animated || morph) }
+                slot += 1
+            }
+            drawUnderlines(ready, tiles: rackTiles, layout: layout, after: sliding ? slideLeft : nil)
+        } else {
+            drawUnderlines([], tiles: [], layout: layout, after: nil)
+        }
+        rackScroll = min(max(rackScroll, 0), layout.rackScrollLimit(count: rackTiles.count))
+
+        for (tile, node) in pieces where !live.contains(tile) && !input.dragTiles.contains(tile) {
+            node.removeFromParent()
+            pieces[tile] = nil
+        }
+
+        drawLoupe(layout: layout, animated: animated)
+        drawPool(model, layout: table)
+        drawStrip(model, layout: table, toggles: layout, controls: controls && seat != nil, animated: sliding)
+        let turned = opponents.update(model: model, seats: model.barSeats(bottom: seat), layout: table)
+        if !stashOnly { for seat in turned { pulse(seat) } }
+        menuButton.size = CGSize(width: layout.menuSide, height: layout.menuSide)
+        menuButton.position = layout.menuButton
+        // `clearTable` hides it while there's no table yet; the table is here now.
+        menuButton.isHidden = false
+        publishProbe()
+        if controls { warmTextures(layout: table) }
+        publishTipSpots(firstSet: firstOpenSet.flatMap { layout.rug.contains(CGPoint(x: $0.midX, y: $0.midY)) ? $0 : nil })
+    }
+
+    /// Lays the rug's sets out (and the "new row" slot) and returns the first set that opens in the
+    /// loupe; every piece it draws goes in `live`.
+    private func drawRug(
+        _ sets: [ShownSet], model: TilesTableModel, layout: TilesLayout, placed: Set<TileID>, live: inout Set<TileID>,
+        animated: Bool
+    ) -> CGRect? {
         rugSprite.isHidden = false
         rugSprite.setScale(1)
         let rugBase = CGSize(width: 132 * layout.rugBorderScale, height: 176 * layout.rugBorderScale)
@@ -487,12 +642,10 @@ final class TilesScene: SKScene {
         rugMask.position = CGPoint(x: layout.rugArt.midX, y: layout.rugArt.midY)
         let flow = fitRug(lengths: sets.map(\.tiles.count), layout: layout, zoom: zoom)
         self.flow = flow
-        scroll = min(max(scroll, 0), maxScroll)
+        scroll = min(max(scroll, 0), max(flow.contentHeight - layout.rug.height, 0))
         rugContent.position = CGPoint(x: layout.rug.minX, y: layout.rug.maxY + scroll)
 
-        var live: Set<TileID> = []
         var liveSets: Set<Int> = []
-        /// The first set on the rug that opens in the loupe (the loupe tip points at it).
         var firstOpenSet: CGRect?
         let small: TilePieceFactory.Size = flow.pieceSize.width >= 42 ? .large : .small
         let reduce = Effects.reduceMotion
@@ -553,7 +706,6 @@ final class TilesScene: SKScene {
             setNodes[id] = nil
         }
         breathing = setNodes.values.contains { $0.breathes }
-        if input.isDragging { live.formUnion(input.dragTiles) }
 
         // The "new row" slot: where a piece starts a set of its own.
         let composing = draft != nil && !sending
@@ -581,63 +733,16 @@ final class TilesScene: SKScene {
             let plus = TilePieceFactory.shared.label("+", size: min(frame.height * 0.6, 24), outline: 2)
             newSlotPlus.texture = plus
             newSlotPlus.size = plus.size()
-        }
-
-        // The stash.
-        rackLayer.position = CGPoint(x: -rackScroll, y: 0)
-        rackLayer.alpha = sending ? 0.6 : 1  // fade-ok: a FadeGroup
-        if let seat, model.rack(seat) != nil {
-            let gapSlot = input.isDragging && input.target == .rack ? input.rackSlot : nil
-            let slotCount = rackTiles.count + (gapSlot == nil ? 0 : input.dragTiles.count)
-            let slots = layout.rackSlots(count: slotCount).centers
-            let ready = orders[seat]?.readySets(in: rackTiles) ?? []
-            var slot = 0
-            for (i, tile) in rackTiles.enumerated() {
-                if let gapSlot, i == gapSlot { slot += input.dragTiles.count }
-                guard slot < slots.count else { break }
-                live.insert(tile)
-                var target = slots[slot]
-                // Ready sets sit a hair closer together.
-                if let range = ready.first(where: { $0.contains(i) }) {
-                    let mid = CGFloat(range.lowerBound + range.upperBound - 1) / 2
-                    target.x -= (CGFloat(i) - mid) * 1.5
-                }
-                let lifted = selection.contains(tile)
-                if lifted { target.y += layout.rackPiece.height * 0.16 }
-                let node = piece(tile, in: rackLayer, size: layout.rackPiece, face: .large, at: target)
-                node.isPrivate = true
-                node.show(size: layout.rackPiece, face: .large, standing: nil)
-                node.zPosition = lifted ? 5 : 1 + CGFloat(i) * 0.01
-                node.setPlaced(false)
-                node.setRing(lifted ? .white : hintRing(tile))
-                node.alpha = 1  // the stash dims as a whole (`rackLayer`)
-                settle(node, at: target, scale: lifted ? 1.08 : 1, animated: animated)
-                slot += 1
+        } else if newSlot.texture == nil {
+            // Off turn: the slot's outline is drawn off the main thread now, for the turn's first frame.
+            let size = flow.newSlot.size
+            newSlot.texture = TilePieceFactory.shared.dashedIfReady(
+                size, color: UIColor.white.withAlphaComponent(0.9), fill: UIColor(Palette.ink).withAlphaComponent(0.2)
+            ) { [weak self] texture in
+                if self?.newSlot.texture == nil { self?.newSlot.texture = texture }
             }
-            drawUnderlines(ready, tiles: rackTiles, layout: layout)
-        } else {
-            drawUnderlines([], tiles: [], layout: layout)
         }
-        rackScroll = min(max(rackScroll, 0), layout.rackScrollLimit(count: rackTiles.count))
-
-        for (tile, node) in pieces where !live.contains(tile) && !input.dragTiles.contains(tile) {
-            node.removeFromParent()
-            pieces[tile] = nil
-        }
-
-        drawLoupe(layout: layout, animated: animated)
-        drawPool(model, layout: layout)
-        drawStrip(model, layout: layout, controls: controls && seat != nil)
-        let bar = model.barSeats(bottom: seat)
-        let turned = opponents.update(model: model, seats: bar, layout: layout)
-        for seat in turned { pulse(seat) }
-        menuButton.size = CGSize(width: layout.menuSide, height: layout.menuSide)
-        menuButton.position = layout.menuButton
-        // `clearTable` hides it while there's no table yet; the table is here now.
-        menuButton.isHidden = false
-        publishProbe()
-        if controls { warmTextures(layout: layout) }
-        publishTipSpots(firstSet: firstOpenSet.flatMap { layout.rug.contains(CGPoint(x: $0.midX, y: $0.midY)) ? $0 : nil })
+        return firstOpenSet
     }
 
     /// Tells the shell where the tips' controls are now (only when that changed).
@@ -649,7 +754,7 @@ final class TilesScene: SKScene {
             let b = convertPoint(toView: CGPoint(x: r.maxX, y: r.minY))
             spots[id] = CGRect(x: min(a.x, b.x), y: min(a.y, b.y), width: abs(b.x - a.x), height: abs(b.y - a.y)).integral
         }
-        if !turnPill.isHidden {
+        if tableUp, !turnPill.isHidden {
             switch turnButton {
             case .draw: put("tiles.draw", layout.turn)
             case .play: put("tiles.play", layout.turn)
@@ -657,9 +762,9 @@ final class TilesScene: SKScene {
             }
         }
         if !sortToyButton.isHidden { put("tiles.sort", layout.sortNumber.union(layout.sortToy)) }
-        if !undoButton.isHidden, layout.undo != .zero { put("tiles.undo", layout.undo.union(layout.reset)) }
-        if easy, !tidyButton.isHidden, layout.tidy != .zero { put("tiles.hint", layout.tidy) }
-        if !meterNode.isHidden, layout.meter != .zero { put("tiles.meter", layout.meter) }
+        if tableUp, !undoButton.isHidden, layout.undo != .zero { put("tiles.undo", layout.undo.union(layout.reset)) }
+        if tableUp, easy, !tidyButton.isHidden, layout.tidy != .zero { put("tiles.hint", layout.tidy) }
+        if tableUp, !meterNode.isHidden, layout.meter != .zero { put("tiles.meter", layout.meter) }
         if loupe == nil, selection.isEmpty, tricksAllowed, let firstSet { put("tiles.set", firstSet) }
         guard spots != lastTipSpots else { return }
         lastTipSpots = spots
@@ -667,7 +772,7 @@ final class TilesScene: SKScene {
     }
 
     var maxScroll: CGFloat {
-        guard let flow, let layout else { return 0 }
+        guard let flow, let layout, tableUp else { return 0 }
         return max(flow.contentHeight - layout.rug.height, 0)
     }
 
@@ -717,7 +822,7 @@ final class TilesScene: SKScene {
         director.cancelActions(on: node)
         let action = Effects.reduceMotion
             ? SKAction.move(to: target, duration: 0.01)
-            : SKAction.move(to: target, duration: 0.2).eased(.easeOut)
+            : SKAction.move(to: target, duration: morphing ? flight : 0.2).eased(.easeOut)
         director.play(action, on: node)
     }
 
@@ -738,7 +843,7 @@ final class TilesScene: SKScene {
         let reduce = Effects.reduceMotion
         var actions: [SKAction] = []
         if moved { actions.append(SKAction.move(to: target, duration: reduce ? 0.01 : flight).eased(.easeOut)) }
-        if scaled { actions.append(SKAction.scale(to: scale, duration: reduce ? 0.01 : 0.14).eased(.easeOut)) }
+        if scaled { actions.append(SKAction.scale(to: scale, duration: reduce ? 0.01 : morphing ? flight : 0.14).eased(.easeOut)) }
         // Nothing waits for a settle: started now, without a task per piece.
         director.play(SKAction.group(actions), on: node)
     }
@@ -778,7 +883,9 @@ final class TilesScene: SKScene {
         }
     }
 
-    private func drawUnderlines(_ ready: [Range<Int>], tiles: [TileID], layout: TilesLayout) {
+    /// The bars under the stash's ready sets. `after`: the stash is sliding to its place; they show
+    /// once it is there.
+    private func drawUnderlines(_ ready: [Range<Int>], tiles: [TileID], layout: TilesLayout, after: TimeInterval?) {
         for node in underlines { node.removeFromParent() }
         underlines.removeAll()
         guard !ready.isEmpty else { return }
@@ -795,25 +902,35 @@ final class TilesScene: SKScene {
                 bar.zPosition = 0.5
                 rackLayer.addChild(bar)
                 underlines.append(bar)
+                if let after {
+                    // Bars apart from one another, over nothing: each fades on its own.
+                    bar.alpha = 0  // fade-ok: one bar alone
+                    director.play(.sequence([.wait(forDuration: after), .fadeIn(withDuration: 0.15)]), on: bar)
+                }
                 start = end + 1
             }
         }
     }
 
     private func drawPool(_ model: TilesTableModel, layout: TilesLayout) {
+        guard layout.pool != .zero else {
+            // Just the stash: the toy box is on the TV.
+            [poolSprite, poolCount, recapButton].forEach { $0.isHidden = true }
+            return
+        }
         // Under the paw menu, off the rug.
         poolSprite.isHidden = false
         poolSprite.size = layout.pool.size
         poolSprite.position = CGPoint(x: layout.pool.midX, y: layout.pool.midY)
         poolSprite.alpha = model.view.poolCount == 0 ? 0.55 : 1  // fade-ok: the toy box alone
-        let count = TilePieceFactory.shared.count(model.view.poolCount, size: layout.arrangement == .phone ? 14 : 18)
+        let count = TilePieceFactory.shared.count(model.view.poolCount, size: layout.roomy ? 18 : 14)
         poolCount.isHidden = false
         poolCount.texture = count
         poolCount.size = count.size()
         poolCount.position = CGPoint(x: layout.pool.minX + count.size().width / 2 - 6, y: layout.pool.minY + count.size().height / 2 - 4)
         // The "what changed" paw, at the strip's right end, while there is something to show again.
         // Easy mode's hint has that slot, and the rings on the rug show what changed there.
-        let side = layout.arrangement == .phone ? CGFloat(40) : 50
+        let side: CGFloat = layout.roomy ? 50 : 40
         recapButton.isHidden = recap.isEmpty || easy || layout.recap == .zero || turnPill.isHidden
         recapButton.texture = TilePieceFactory.shared.button(.changed, side: side)
         recapButton.size = CGSize(width: side, height: side + 3)
@@ -838,7 +955,10 @@ final class TilesScene: SKScene {
         sending ? nil : draft?.turnButton
     }
 
-    private func drawStrip(_ model: TilesTableModel, layout: TilesLayout, controls: Bool) {
+    /// The action strip, and its sort toggles at `toggles`' place for them: the strip's, or with
+    /// just the stash (Cards, off turn) over the stash, while the rest of the strip waits hidden
+    /// with the table. `animated`: the toggles slide to their new place (the stash is sliding too).
+    private func drawStrip(_ model: TilesTableModel, layout: TilesLayout, toggles: TilesLayout, controls: Bool, animated: Bool) {
         let factory = TilePieceFactory.shared
         let nodes = [undoButton, resetButton, sortNumberButton, sortToyButton, tidyButton, turnPill]
         guard controls, let seat = shownSeat else {
@@ -847,19 +967,38 @@ final class TilesScene: SKScene {
             return
         }
         nodes.forEach { $0.isHidden = false }
-        let drawn = layout.arrangement == .phone ? CGFloat(40) : 50
+        let drawn: CGFloat = layout.roomy ? 50 : 40
         func button(_ node: SKSpriteNode, _ frame: CGRect, _ texture: SKTexture) {
             node.texture = texture
             node.setScale(1)
             node.size = CGSize(width: drawn, height: drawn + 3)
-            node.position = CGPoint(x: frame.midX, y: frame.midY)
+            place(node, at: CGPoint(x: frame.midX, y: frame.midY), animated: animated)
         }
         let composing = draft != nil && !sending
         button(undoButton, layout.undo, factory.button(.undo, side: drawn, dim: !(composing && draft?.canUndo == true)))
         button(resetButton, layout.reset, factory.button(.reset, side: drawn, dim: !(composing && draft?.isUntouched == false)))
         let sort = orders[seat]?.sort
-        button(sortNumberButton, layout.sortNumber, factory.button(.sortNumber, side: drawn, on: sort == .number))
-        button(sortToyButton, layout.sortToy, factory.button(suit: .fish, side: drawn, on: sort == .toy))
+        // Over an iPad's stash alone the toggles grow with its pieces (`TilesLayout`).
+        let sortDrawn = toggles.arrangement == .controller && toggles.roomy
+            ? (toggles.sortNumber.width * 50 / 56).rounded() : drawn
+        func toggle(_ node: SKSpriteNode, _ frame: CGRect, _ texture: SKTexture) {
+            button(node, frame, texture)
+            node.size = CGSize(width: sortDrawn, height: sortDrawn + 3)
+        }
+        // That size is drawn off the main thread the first time (`buttonIfReady`); until it is in,
+        // the table's size stands in, stretched, for a frame or two.
+        func toggleTexture(_ node: SKSpriteNode, _ symbol: TilePieceFactory.Symbol?, suit: TileSuit?, on: Bool) -> SKTexture {
+            let table = factory.button(symbol, suit: suit, side: drawn, on: on)
+            guard sortDrawn != drawn else { return table }
+            let side = sortDrawn
+            return factory.buttonIfReady(symbol, suit: suit, side: side, on: on) { [weak node] texture in
+                // Still standing in at that size (no other state or size since).
+                guard let node, node.size.width == side, node.texture == table else { return }
+                node.texture = texture
+            } ?? table
+        }
+        toggle(sortNumberButton, toggles.sortNumber, toggleTexture(sortNumberButton, .sortNumber, suit: nil, on: sort == .number))
+        toggle(sortToyButton, toggles.sortToy, toggleTexture(sortToyButton, nil, suit: .fish, on: sort == .toy))
         if easy {
             button(tidyButton, layout.tidy, factory.button(.hint, side: drawn, on: hint != nil, dim: !composing))
         } else {

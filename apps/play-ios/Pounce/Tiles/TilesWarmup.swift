@@ -12,7 +12,7 @@ extension TilesScene {
         guard size.width > 0, warmedFor != size else { return }
         warmedFor = size
         let factory = TilePieceFactory.shared
-        let drawn: CGFloat = layout.arrangement == .phone ? 40 : 50
+        let drawn: CGFloat = layout.roomy ? 50 : 40
         var jobs: [@MainActor () -> Void] = []
         for dim in [false, true] {
             jobs.append { _ = factory.button(.undo, side: drawn, dim: dim) }

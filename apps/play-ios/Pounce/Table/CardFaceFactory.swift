@@ -91,9 +91,10 @@ final class CardFaceFactory {
         return t
     }
 
-    /// Draws every card face, full and compact, off the main thread (`docs/main-thread.md`), so
-    /// no frame of play (a reveal at game over, a card coming into the hand) stops to draw one.
-    /// Started as a table opens; once a launch.
+    /// Draws every card face, full and compact, and the hit preview's pieces off the main thread
+    /// (`docs/main-thread.md`), so no frame of play (a reveal at game over, a card coming into the
+    /// hand, the first drag over the laid groups) stops to draw one. Started as a table opens;
+    /// once a launch.
     func prewarm() async {
         if warming == nil {
             var keys: [FaceKey] = []
@@ -105,8 +106,12 @@ final class CardFaceFactory {
             }
             let detail = Self.detail
             warming = Task {
+                // The preview's pieces alongside the faces, not after them: a drag can come before
+                // all the faces are drawn.
+                async let pieces: Void = warmPreview()
                 let made = await Self.drawFaces(keys, detail: detail)
                 for (key, texture) in made where faces[key] == nil { faces[key] = texture }
+                await pieces
             }
         }
         await warming?.value
@@ -128,14 +133,53 @@ final class CardFaceFactory {
 
     /// Draws ahead what a drag over the laid groups shows for the first time: the preview
     /// rings, the "+N" badges a group's gap can fold to and the numbers a Yarn stands for.
-    /// Each is cached, so a second call costs nothing.
+    /// Each is cached, so a second call costs nothing. `warmPreview()` draws them off the main
+    /// thread first; this only fills what that hasn't yet.
     func prewarmPreview() {
-        _ = ring(UIColor(Palette.lime))
-        _ = ring(UIColor(Palette.refuse))
-        for n in 1...12 {
-            _ = badge("+\(n)", size: LaidZoneNode.badgeSize)
-            _ = badge(String(n), size: LaidZoneNode.badgeSize + 4)
+        for piece in Self.previewPieces where numerals[piece.key] == nil {
+            numerals[piece.key] = SKTexture(image: piece.image())
         }
+    }
+
+    /// `prewarmPreview`'s pieces drawn off the main thread (`docs/main-thread.md`): with every
+    /// face already drawn, these were the first drag's only drawing (5 to 12 ms on the simulator).
+    func warmPreview() async {
+        let missing = Self.previewPieces.filter { numerals[$0.key] == nil }
+        guard !missing.isEmpty else { return }
+        for (key, texture) in await Self.drawPieces(missing) where numerals[key] == nil { numerals[key] = texture }
+    }
+
+    /// A preview ring or badge, as `ring(_:)` and `badge(_:size:)` cache it.
+    private enum PreviewPiece: Sendable {
+        case ring(UIColor)
+        case badge(String, CGFloat)
+
+        nonisolated var key: String {
+            switch self {
+            case .ring(let color): CardFaceFactory.ringKey(color)
+            case .badge(let text, let size): CardFaceFactory.badgeKey(text, size: size)
+            }
+        }
+
+        nonisolated func image() -> UIImage {
+            switch self {
+            case .ring(let color): CardFaceFactory.ringImage(color)
+            case .badge(let text, let size): CardFaceFactory.badgeImage(text, size: size)
+            }
+        }
+    }
+
+    private static var previewPieces: [PreviewPiece] {
+        [.ring(UIColor(Palette.lime)), .ring(UIColor(Palette.refuse))] + (1...12).flatMap { n in
+            [PreviewPiece.badge("+\(n)", LaidZoneNode.badgeSize), .badge(String(n), LaidZoneNode.badgeSize + 4)]
+        }
+    }
+
+    @concurrent
+    private static func drawPieces(_ pieces: [PreviewPiece]) async -> sending [(String, SKTexture)] {
+        let made = pieces.map { ($0.key, SKTexture(image: $0.image())) }
+        await SKTexture.preload(made.map(\.1))
+        return made
     }
 
     /// The open table's card back (§9.4), an art name; cards drawn from now on take it.
@@ -210,13 +254,21 @@ final class CardFaceFactory {
     /// A "+3" pill for cards folded out of a laid group: white on ink (18:1) inside a white
     /// keyline, so it reads on a card face and on the rug alike. Cached by content.
     func badge(_ text: String, size: CGFloat) -> SKTexture {
-        let key = "badge|\(text)|\(size)"
+        let key = Self.badgeKey(text, size: size)
         if let cached = numerals[key] { return cached }
-        let attrs = Self.numeralAttributes(size: size)
+        let t = SKTexture(image: Self.badgeImage(text, size: size))
+        numerals[key] = t
+        return t
+    }
+
+    nonisolated private static func badgeKey(_ text: String, size: CGFloat) -> String { "badge|\(text)|\(size)" }
+
+    nonisolated private static func badgeImage(_ text: String, size: CGFloat) -> UIImage {
+        let attrs = numeralAttributes(size: size)
         let textSize = (text as NSString).size(withAttributes: attrs)
         let h = ceil(textSize.height + 4)
         let canvas = CGSize(width: max(h, ceil(textSize.width + h * 0.6)), height: h)
-        let image = UIGraphicsImageRenderer(size: canvas).image { _ in
+        return UIGraphicsImageRenderer(size: canvas).image { _ in
             let pill = CGRect(origin: .zero, size: canvas)
             UIColor.white.setFill()
             UIBezierPath(roundedRect: pill, cornerRadius: h / 2).fill()
@@ -226,9 +278,6 @@ final class CardFaceFactory {
             fill[.foregroundColor] = UIColor.white
             (text as NSString).draw(at: CGPoint(x: (canvas.width - textSize.width) / 2, y: 2), withAttributes: fill)
         }
-        let t = SKTexture(image: image)
-        numerals[key] = t
-        return t
     }
 
     /// Name text size on the table: an 11 pt cap height in SF Pro Rounded Black.
@@ -344,10 +393,18 @@ final class CardFaceFactory {
     /// A rounded ring for the laid group a dragged card is over: `color` inside an ink
     /// outline, so it reads on the rug and over card faces. Stretch it with `ringCenter`.
     func ring(_ color: UIColor) -> SKTexture {
-        let key = "ring|\(color.hexKey)"
+        let key = Self.ringKey(color)
         if let cached = numerals[key] { return cached }
+        let t = SKTexture(image: Self.ringImage(color))
+        numerals[key] = t
+        return t
+    }
+
+    nonisolated private static func ringKey(_ color: UIColor) -> String { "ring|\(color.hexKey)" }
+
+    nonisolated private static func ringImage(_ color: UIColor) -> UIImage {
         let side: CGFloat = 40
-        let image = UIGraphicsImageRenderer(size: CGSize(width: side, height: side)).image { _ in
+        return UIGraphicsImageRenderer(size: CGSize(width: side, height: side)).image { _ in
             let outer = UIBezierPath(roundedRect: CGRect(x: 0, y: 0, width: side, height: side), cornerRadius: 12)
             let inner = UIBezierPath(roundedRect: CGRect(x: 8, y: 8, width: side - 16, height: side - 16), cornerRadius: 6)
             outer.append(inner)
@@ -360,9 +417,6 @@ final class CardFaceFactory {
             color.setFill()
             band.fill()
         }
-        let t = SKTexture(image: image)
-        numerals[key] = t
-        return t
     }
 
     /// `text`, or as much of it as fits `width` followed by an ellipsis.

@@ -78,6 +78,10 @@ import Observation
     /// The last `nudged` for one of this phone's seats: whose, and who nudged. `serial` goes up
     /// with each. Nil until one arrives.
     public private(set) var nudgeNotice: NudgeNotice?
+    /// What each other seat's player is pointing at right now, for a table with a TV
+    /// (docs/tv-protocol.md, `aim`). Cleared whenever the turn or the status changes (`turnEpoch`),
+    /// and a seat's entry goes when it sends a clear.
+    public private(set) var aims: [Seat: GameAim] = [:]
     /// Each `{t:"streak"}` for this device's people: pair, person, view. Set by the session.
     @ObservationIgnored public var onStreak: ((String, String, StreakView) -> Void)?
 
@@ -166,15 +170,26 @@ import Observation
     @ObservationIgnored private var connections = 0
     @ObservationIgnored private let makeMoveID: () -> String
     @ObservationIgnored private let clock: () -> Date
+    /// Waits out the rest of an aim's 120 ms; a test holds it.
+    @ObservationIgnored private let aimSleep: @Sendable (Duration) async -> Void
+    /// When the last aim went out, and the latest one held back until 120 ms after it.
+    @ObservationIgnored private var aimSentAt: Date?
+    @ObservationIgnored private var heldAim: (seat: Seat, aim: GameAim)?
+    @ObservationIgnored private var aimTask: Task<Void, Never>?
+
+    /// At most one aim goes out per this long.
+    static let aimInterval: Duration = .milliseconds(120)
 
     public init(
         code: String, socket: any RoomSocketing, makeMoveID: @escaping () -> String = { UUID().uuidString },
-        clock: @escaping () -> Date = Date.init
+        clock: @escaping () -> Date = Date.init,
+        aimSleep: @escaping @Sendable (Duration) async -> Void = { try? await Task.sleep(for: $0) }
     ) {
         self.code = code
         self.socket = socket
         self.makeMoveID = makeMoveID
         self.clock = clock
+        self.aimSleep = aimSleep
         (intents, continuation) = AsyncStream.makeStream(of: TableIntent.self, bufferingPolicy: .unbounded)
     }
 
@@ -188,6 +203,9 @@ import Observation
 
     /// Stops the socket and ends `intents`.
     public func close() async {
+        aimTask?.cancel()
+        aimTask = nil
+        heldAim = nil
         await socket.stop()
         continuation.finish()
     }
@@ -234,6 +252,68 @@ import Observation
     public func send(_ message: ClientMessage) {
         if case .moveSeat = message { moveCode = nil }
         callSocket(inOrder: true) { socket in try? await socket.send(message) }
+    }
+
+    // MARK: aiming
+
+    /// Tells the table where `seat`'s player is pointing; nil clears it. At most one goes out per
+    /// 120 ms, the latest trailing. A clear goes at once and drops any aim still held. Tuna Tiles'
+    /// empty sets are dropped first, as the contract asks of clients.
+    /// Nothing goes unless the table has a TV (`room.screen`): a server without TV answers an
+    /// aim `bad_message`, which would read as a refused move. Nor does a draft over the contract's
+    /// limits (`trimmed`): the TV keeps the last good aim.
+    public func aim(seat: Seat, _ aim: GameAim?) {
+        guard room?.screen == true else {
+            aimTask?.cancel()
+            aimTask = nil
+            heldAim = nil
+            return
+        }
+        guard let raw = aim else {
+            aimTask?.cancel()
+            aimTask = nil
+            heldAim = nil
+            aimSentAt = clock()
+            send(.aim(seat: seat, aim: nil))
+            return
+        }
+        guard let aim = Self.trimmed(raw) else { return }
+        let now = clock()
+        let wait = aimSentAt.map { Self.aimInterval - .seconds(now.timeIntervalSince($0)) } ?? .zero
+        guard wait > .zero else {
+            heldAim = nil
+            aimTask?.cancel()
+            aimTask = nil
+            aimSentAt = now
+            send(.aim(seat: seat, aim: aim))
+            return
+        }
+        heldAim = (seat, aim)
+        guard aimTask == nil else { return }
+        let sleep = aimSleep
+        aimTask = Task { [weak self] in
+            await sleep(wait)
+            guard !Task.isCancelled, let self else { return }
+            self.aimTask = nil
+            guard let held = self.heldAim, self.room?.screen == true else { return }
+            self.heldAim = nil
+            self.aimSentAt = self.clock()
+            self.send(.aim(seat: held.seat, aim: held.aim))
+        }
+    }
+
+    /// An aim is waiting for the end of the 120 ms (tests).
+    var hasHeldAim: Bool { heldAim != nil }
+
+    /// The aim as it may be sent: a draft loses its empty sets; nil when it still breaks the
+    /// contract's limits (60 sets, 1 to 13 pieces a set, ids 0 to 105, none twice).
+    private static func trimmed(_ aim: GameAim) -> GameAim? {
+        guard case .table(let all) = aim else { return aim }
+        let sets = all.filter { !$0.isEmpty }
+        guard sets.count <= 60, sets.allSatisfy({ $0.count <= 13 }) else { return nil }
+        let ids = sets.flatMap { $0 }
+        guard ids.allSatisfy({ (0...105).contains($0) }), Set(ids).count == ids.count else { return nil }
+        return .table(sets)
     }
 
     // MARK: nudges
@@ -391,6 +471,8 @@ import Observation
             applyNudgeSent(seat: seat)
         case .nudged(let seat, let from):
             applyNudged(seat: seat, from: from)
+        case .aim(let seat, let aim):
+            aims[seat] = aim
         case .pong:
             break
         }
@@ -516,7 +598,10 @@ import Observation
     private func noteTurn() {
         guard let room else { return }
         epochs.observe(room)
-        if turnEpoch != epochs.value { turnEpoch = epochs.value }
+        if turnEpoch != epochs.value {
+            turnEpoch = epochs.value
+            if !aims.isEmpty { aims = [:] }
+        }
         var next = pass
         next.update(TableModel(room: room), epoch: epochs.value)
         setPass(next)

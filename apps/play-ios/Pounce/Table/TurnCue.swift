@@ -65,7 +65,7 @@ extension TableScene {
               turnCue.dismissed != key, draw || turnCue.replay == key else { return nil }
         let piles = draw ? [deck.hitFrame, discard.hitFrame].enumerated()
             .filter { glows.piles.contains($0.offset == 0 ? .deck : .discard) }.map(\.element) : []
-        let pilesBottom = layout.deck.y - layout.cardSize.height / 2
+        let pilesBottom = layout.deck.y - layout.pileSize.height / 2
         let stage = CGRect(
             x: 0, y: layout.traysFrame.minY, width: size.width,
             height: max(pilesBottom - layout.traysFrame.minY, 0))
