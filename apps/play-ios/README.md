@@ -510,6 +510,13 @@ submission fails with Apple's message in the log.
 purchase) and its marketing version, so it is the same app on another platform with its own build
 train.
 
+Status: in TestFlight testing (Family and Friends), not on the App Store yet. It is a screen, not a
+player: it shows the whole table (Cat Tower or Tuna Tiles) and never a hand, and everyone plays
+from a phone (the iPhone app or the web player). Its privacy manifest and the label note are in
+`docs/privacy/app-store-label.md`; its App Review notes are in `docs/app-review-notes.md`; its
+store screenshots (`AppStore/screenshots/tv-1.jpg` to `tv-5.jpg`, 1920x1080) are made by
+`AppStore/capture-tv.sh` and `AppStore/tv-live.spec.ts` (see `AppStore/README.md`).
+
 It also shares the iPhone's table: `Pounce/Table` and `Pounce/Tiles` (less the tile game's iPhone
 screens, `TilesStage` and `TilesChrome`, and its demo), the frame tooling the scenes report to
 (`FrameWork`, `MainThreadWatchdog`, `Autoplay`), the `Pounce/Design` files they use, and the art

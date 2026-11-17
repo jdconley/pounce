@@ -13,6 +13,9 @@ The games:
   shelf. Yarn is wild, and a Cucumber makes the next cat skip a turn.
 - **Tuna Tiles**: tile rummy for two to four. Yarn is wild here too.
 
+An Apple TV app (in TestFlight testing, not on the App Store yet) puts the whole table on the TV; everyone
+plays from a phone, in the app or in the browser. See [apps/play-ios](apps/play-ios/README.md#the-apple-tv-app).
+
 No ads, no chat, no public profiles, and no account needed to play. Children under 13 get a limited
 version, and a parent decides whether they get turn alerts.
 

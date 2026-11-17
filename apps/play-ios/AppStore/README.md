@@ -8,6 +8,7 @@ messages, no server); nothing is drawn by hand except the caption and the backgr
 | --- | --- |
 | `screenshots/iphone-1.jpg` … `6` | 1206x2622, the required iPhone set (Dynamic Island, medium display; iPhone 17 Pro) |
 | `screenshots/ipad-1.jpg` … `6` | 2064x2752, the 13" iPad set |
+| `screenshots/tv-1.jpg` … `5` | 1920x1080, the Apple TV set (home, lobby, Cat Tower, Tuna Tiles, game over) |
 | `previews/iphone-preview.mp4` | 886x1920, 25.4 s (recorded on an iPhone 17 Pro Max, cut to the size the iPhone slot takes) |
 | `previews/ipad-preview.mp4` | 1200x1600, 25.4 s |
 | `captions.json`, `captions.md` | The captions and what backs each one |
@@ -86,3 +87,23 @@ image show.
 swift AppStore/tv-brand.swift                      # rewrites the brand assets
 swift AppStore/tv-brand.swift --preview /tmp/tv    # also writes each icon flattened, to look at
 ```
+
+## Apple TV screenshots
+
+The five Apple TV shots (`screenshots/tv-N.jpg`, 1920x1080, from an "Apple TV 4K (3rd generation)
+(at 1080p)" simulator; App Store Connect also takes 3840x2160) are the Debug PounceTV build's real
+screens, with no caption or background. The two tables come from the build's own preview, with no
+server. Home, the lobby and game over need a TV that is linked to a table, so a dev server and
+browser phones play them.
+
+```sh
+xcodebuild -project Pounce.xcodeproj -scheme PounceTV -destination "platform=tvOS Simulator,id=<udid>" build
+xcrun simctl install <udid> <DerivedData>/Build/Products/Debug-appletvsimulator/PounceTV.app
+AppStore/capture-tv.sh <udid>        # raw/tv/cattower.png, tiles.png (tv-3, tv-4)
+# raw/tv/home.png, lobby.png, game-over.png (tv-1, tv-2, tv-5): AppStore/tv-live.spec.ts, run from
+# apps/play-web against your own dev server (the header says how); never port 4343.
+sips -s format jpeg -s formatOptions 92 AppStore/raw/tv/<name>.png --out AppStore/screenshots/tv-<n>.jpg
+```
+
+Game over is a forfeit: no argument of the Debug build's preview shows it, so two phones leave a
+three-seat table and the House Cat wins. Delete the simulator afterwards.
