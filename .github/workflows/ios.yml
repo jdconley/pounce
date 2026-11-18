@@ -76,35 +76,38 @@ jobs:
           xcodebuild build -project Pounce.xcodeproj -scheme Pounce -configuration Release
           -destination generic/platform=iOS CODE_SIGNING_ALLOWED=NO -quiet
       - name: Build Apple TV Release (unsigned)
+        # The build, plus the tvOS SDK's download on an image without it.
+        timeout-minutes: 15
         run: |
           # Since Xcode 15 the tvOS SDK is an optional component; fetch it if the image lacks it.
           xcodebuild -showsdks | grep appletvos >/dev/null || xcodebuild -downloadPlatform tvOS
           xcodebuild build -project Pounce.xcodeproj -scheme PounceTV -configuration Release \
             -destination generic/platform=tvOS CODE_SIGNING_ALLOWED=NO -quiet
-      # The Apple TV's own tests on an Apple TV simulator: PounceKit built for tvOS and its tests,
-      # and the TV app's unit tests (PounceTVTests: its table never drawing a hand, its model and
-      # its races). A few minutes each; the TV's frame and remote gates are their own job below.
+      # The TV app's unit tests on an Apple TV simulator (PounceTVTests: its table never drawing a
+      # hand, its model and its races). Each TV step is capped, so a stuck simulator can't hold up
+      # this required job; the TV's frame and remote gates are their own job below.
       - name: Make an Apple TV simulator
         id: tvsim
+        timeout-minutes: 12
         run: |
+          # The runtime for this Xcode's tvOS SDK (major.minor), not just the newest installed.
+          xcodebuild -showsdks | grep appletvsimulator >/dev/null || xcodebuild -downloadPlatform tvOS
+          sdk=$(xcrun --sdk appletvsimulator --show-sdk-platform-version | cut -d. -f1-2)
           tvos_runtime() {
-            xcrun simctl list runtimes -j | jq -r '[.runtimes[] | select(.platform == "tvOS" and .isAvailable)] | sort_by(.version | split(".") | map(tonumber)) | last | .identifier // empty'
+            xcrun simctl list runtimes -j | jq -r --arg v "$sdk" '[.runtimes[] | select(.platform == "tvOS" and .isAvailable and ((.version | split(".") | .[0:2] | join(".")) == $v))] | last | .identifier // empty'
           }
           runtime=$(tvos_runtime)
           if [ -z "$runtime" ]; then
             xcodebuild -downloadPlatform tvOS
             runtime=$(tvos_runtime)
           fi
+          [ -n "$runtime" ] || { echo "::error::no tvOS $sdk simulator runtime"; exit 1; }
           udid=$(xcrun simctl create "Pounce TV tests" com.apple.CoreSimulator.SimDeviceType.Apple-TV-4K-3rd-generation-1080p "$runtime")
           xcrun simctl boot "$udid"
-          echo "Apple TV simulator $udid on $runtime"
+          echo "Apple TV simulator $udid on $runtime (SDK $sdk)"
           echo "udid=$udid" >> "$GITHUB_OUTPUT"
-      - name: PounceKit tests on tvOS
-        working-directory: apps/play-ios/PounceKit
-        run: >
-          xcodebuild test -scheme PounceKit-Package -destination "id=${{ steps.tvsim.outputs.udid }}"
-          -derivedDataPath ../build/dd-kit-tv -quiet
       - name: Apple TV unit tests
+        timeout-minutes: 12
         run: >
           xcodebuild test -project Pounce.xcodeproj -scheme PounceTV -configuration Debug
           -destination "id=${{ steps.tvsim.outputs.udid }}" -derivedDataPath build/dd-tv-tests
@@ -207,8 +210,8 @@ jobs:
             apps/play-ios/build/ui-gates.xcresult
           retention-days: 7
 
-  # The same gates on the Apple TV: FrameRateTVTests (the iPhone's FrameRateTests rules, read from
-  # the same watchdog: a six-seat Cat Tower, a four-seat Tuna Tiles and the shell's table, each
+  # The same gates on the Apple TV, after PounceKit's tests on tvOS: FrameRateTVTests (the
+  # iPhone's FrameRateTests rules, read from the same watchdog: a six-seat Cat Tower, a four-seat Tuna Tiles and the shell's table, each
   # playing itself on a fake socket) and RemoteTests (the Siri Remote driving home, the lobby, the
   # menu and the table, with something focused after every press). All on DEBUG demos, no server,
   # in an optimized Debug build on a fresh Apple TV simulator, judged as the iOS job judges its
@@ -229,19 +232,30 @@ jobs:
       - name: Make an Apple TV simulator
         id: sim
         run: |
+          # The runtime for this Xcode's tvOS SDK (major.minor), not just the newest installed.
+          xcodebuild -showsdks | grep appletvsimulator >/dev/null || xcodebuild -downloadPlatform tvOS
+          sdk=$(xcrun --sdk appletvsimulator --show-sdk-platform-version | cut -d. -f1-2)
           tvos_runtime() {
-            xcrun simctl list runtimes -j | jq -r '[.runtimes[] | select(.platform == "tvOS" and .isAvailable)] | sort_by(.version | split(".") | map(tonumber)) | last | .identifier // empty'
+            xcrun simctl list runtimes -j | jq -r --arg v "$sdk" '[.runtimes[] | select(.platform == "tvOS" and .isAvailable and ((.version | split(".") | .[0:2] | join(".")) == $v))] | last | .identifier // empty'
           }
           runtime=$(tvos_runtime)
           if [ -z "$runtime" ]; then
             xcodebuild -downloadPlatform tvOS
             runtime=$(tvos_runtime)
           fi
+          [ -n "$runtime" ] || { echo "::error::no tvOS $sdk simulator runtime"; exit 1; }
           udid=$(xcrun simctl create "Pounce TV gates" com.apple.CoreSimulator.SimDeviceType.Apple-TV-4K-3rd-generation-1080p "$runtime")
           # It boots while the app builds; the tests wait for it.
           xcrun simctl boot "$udid"
           echo "simulator $udid on $runtime"
           echo "udid=$udid" >> "$GITHUB_OUTPUT"
+      # PounceKit built for tvOS and its tests (its logic is also `swift test` in the build job).
+      - name: PounceKit tests on tvOS
+        timeout-minutes: 12
+        working-directory: apps/play-ios/PounceKit
+        run: >
+          xcodebuild test -scheme PounceKit-Package -destination "id=${{ steps.sim.outputs.udid }}"
+          -derivedDataPath ../build/dd-kit-tv -quiet
       - run: scripts/bootstrap.sh
       # Debug (the demos are Debug only) with the compiler's optimizations on, as the shipped app
       # has them.

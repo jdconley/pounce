@@ -354,6 +354,11 @@ when nothing moves. The UI suite checks that the main thread only draws:
   fails on a stale profile, open the project in Xcode once with the phone connected). It builds
   Debug with the compiler's optimizations on (`OPTIMIZE=0` for a plain Debug build), so the numbers
   are the shipped code's.
+- **On the Apple TV**, `FrameRateTVTests` (`PounceTVUITests`) holds a six-seat Cat Tower (`-demo
+  tv-hit`), a four-seat Tuna Tiles (`-demo tv-tiles`) and the shell's table (`-demo tv-shell`) to
+  the same rules. `PLATFORM=tvOS scripts/frame-rate.sh <device>` runs it on an Apple TV simulator
+  (by UDID) or a paired Apple TV. In CI it runs in the `tv-gates` job ("TV smooth play gates (Apple
+  TV simulator)"), with `RemoteTests` and PounceKit's tests on tvOS; that job isn't required.
 - **In CI**, the `ui-gates` job ("Smooth play gates (iOS simulator)" in `.github/workflows/ios.yml`)
   runs `FrameRateTests`, `HitTests` and two `TilesTests` drags on every pull request: an optimized
   Debug build on a fresh simulator, demo tables, no server, about 17 minutes. The job summary has
@@ -543,6 +548,20 @@ Menu leaves the app from home and opens the menu at a table. Point a Debug build
 with `SIMCTL_CHILD_POUNCE_API_BASE_URL=http://127.0.0.1:<port> xcrun simctl launch <sim>
 com.conleychaos.play`; `-tv-make cat-tower|tiles` presses a poster and `-tv-show-menu [link]` opens
 the menu, for screenshots without a remote. `PounceTVTests` covers the model with a fake server.
+
+The TV's UI tests (`PounceTVUITests`) need no server: `RemoteTests` drives the shell's demo (`-demo
+tv-shell`) with real Siri Remote presses, and `FrameRateTVTests` gates its frames. Build once with
+optimizations, as CI does, then run them on an Apple TV simulator:
+
+```sh
+xcodebuild build-for-testing -project Pounce.xcodeproj -scheme PounceTV -configuration Debug \
+  -destination 'platform=tvOS Simulator,id=<udid>' -derivedDataPath build/dd-tv \
+  SWIFT_OPTIMIZATION_LEVEL=-O GCC_OPTIMIZATION_LEVEL=s
+xcodebuild test-without-building -project Pounce.xcodeproj -scheme PounceTV \
+  -destination 'platform=tvOS Simulator,id=<udid>' -derivedDataPath build/dd-tv \
+  -only-testing:PounceTVUITests/RemoteTests -only-testing:PounceTVUITests/FrameRateTVTests
+PLATFORM=tvOS scripts/frame-rate.sh <udid>     # the frame tests alone, with their FRAMES lines
+```
 
 ```sh
 PLATFORM=tvOS scripts/testflight.sh --dry-run    # scheme PounceTV, generic/platform=tvOS

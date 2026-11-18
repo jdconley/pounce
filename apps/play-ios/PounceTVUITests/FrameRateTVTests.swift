@@ -53,6 +53,8 @@ final class FrameRateTVTests: XCTestCase {
         XCTAssertTrue(waitForFocus(app, "tv.poster.cat-tower", timeout: 20), "home never showed with Cat Tower focused")
         XCUIRemote.shared.press(.select)
         XCTAssertTrue(el(app, "tv.lobby.game").waitForExistence(timeout: Live.t(10)), "no lobby")
+        // The lobby is live (its room came over the socket) before the first go-ahead.
+        XCTAssertTrue(waitForFocus(app, "tv.lobby.changeGame"), "the empty lobby has no Change game focused")
         Live.releaseDemo()
         XCTAssertTrue(until(10) { !self.el(app, "tv.lobby.changeGame").exists }, "nobody sat down")
         Live.releaseDemo()

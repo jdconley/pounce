@@ -35,6 +35,7 @@ enum TVDemo: Equatable {
         room.code = code
         return room
     }
+
 }
 
 /// A UI test's go-ahead to the demo (a Darwin notification: it reads nothing from the screen).
@@ -70,6 +71,7 @@ extension TVServices {
             },
             keep: MemoryScreenKeep())
     }
+
 }
 
 /// The tables a demo TV made. A code says its game, so a socket can be made from it alone.
@@ -111,12 +113,21 @@ actor TVDemoSocket: RoomSocketing {
     private var seq = 1
     private var player: Task<Void, Never>?
     private var ending = false
-    private var tokens: [Int32] = []
+    /// The test's go-aheads, listened for from the moment the socket is made, so one posted as
+    /// soon as the lobby shows is never missed.
+    private let releases: AsyncStream<Void>
+    private let ends: AsyncStream<Void>
+    private var tokens: [Int32]
 
     init(room: RoomView, lobby: Bool) {
         playing = room
         self.room = lobby ? Self.lobby(room) : room
         (events, feed) = AsyncStream.makeStream(of: SocketEvent.self)
+        let release = TVDemoSignal.release.listen()
+        let end = TVDemoSignal.end.listen()
+        releases = release.posts
+        ends = end.posts
+        tokens = [release.token, end.token]
     }
 
     /// The table before anyone sits.
@@ -132,10 +143,7 @@ actor TVDemoSocket: RoomSocketing {
     func start() async {
         feed.yield(.connected)
         snapshot()
-        let releases = TVDemoSignal.release.listen()
-        let ends = TVDemoSignal.end.listen()
-        tokens = [releases.token, ends.token]
-        player = Task { await self.run(releases: releases.posts, ends: ends.posts) }
+        player = Task { await self.run() }
     }
 
     func send(_ m: ClientMessage) async throws {}
@@ -152,7 +160,9 @@ actor TVDemoSocket: RoomSocketing {
 
     // MARK: the script
 
-    private func run(releases: AsyncStream<Void>, ends: AsyncStream<Void>) async {
+    private func run() async {
+        // A finished game just stays finished.
+        guard room.status != .over else { return }
         if room.status == .lobby {
             var release = releases.makeAsyncIterator()
             guard await release.next() != nil, !Task.isCancelled else { return }
@@ -167,6 +177,7 @@ actor TVDemoSocket: RoomSocketing {
             snapshot()
             guard await pause(1.5) else { return }
         }
+        let ends = ends
         let watch = Task { [weak self] in
             for await _ in ends {
                 await self?.end()

@@ -15,8 +15,8 @@ final class RemoteTests: XCTestCase {
     /// swaps the game. The paw is reachable from there, and Select on it opens the menu.
     func testAPosterMakesATableAndChangeGameSwapsIt() {
         let app = launchHome()
-        XCTAssertEqual(press(app, .down), "tv.poster.tiles")
-        XCTAssertEqual(press(app, .up), "tv.poster.cat-tower")
+        press(app, .down, to: "tv.poster.tiles")
+        press(app, .up, to: "tv.poster.cat-tower")
 
         press(app, .select)
         XCTAssertTrue(until(10) { self.label(self.el(app, "tv.lobby.game")) == "Cat Tower" }, "Select on Cat Tower didn't show its lobby")
@@ -27,13 +27,13 @@ final class RemoteTests: XCTestCase {
         XCTAssertTrue(waitForFocus(app, "tv.lobby.changeGame"), "Change game lost the focus in the new lobby: \(focusedID(app) ?? "nothing")")
 
         // The paw, in the corner: from Change game, Down or Right reaches it.
-        var focus = press(app, .down)
-        if focus != "tv.paw" { focus = press(app, .right) }
-        XCTAssertEqual(focus, "tv.paw", "the paw can't be reached from Change game")
+        press(app, .down)
+        if !waitForFocus(app, "tv.paw", timeout: 2) { press(app, .right) }
+        XCTAssertTrue(waitForFocus(app, "tv.paw"), "the paw can't be reached from Change game: \(focusedID(app) ?? "nothing")")
         press(app, .select)
         XCTAssertTrue(waitForFocus(app, "tv.menu.link"), "Select on the paw didn't open the menu: \(focusedID(app) ?? "nothing")")
         press(app, .menu)
-        XCTAssertTrue(until(5) { !self.el(app, "tv.menu.link").exists }, "Menu didn't shut the menu")
+        XCTAssertTrue(until(5) { !self.el(app, "tv.menu.link").exists }, "Menu didn't shut the menu: \(focusedID(app) ?? "nothing")")
         XCTAssertEqual(app.state, .runningForeground)
     }
 
@@ -45,6 +45,8 @@ final class RemoteTests: XCTestCase {
         let app = launchHome()
         press(app, .select)
         XCTAssertTrue(el(app, "tv.lobby.game").waitForExistence(timeout: Live.t(10)), "no lobby")
+        // The lobby is live (its room came over the socket) before the first go-ahead.
+        XCTAssertTrue(waitForFocus(app, "tv.lobby.changeGame"), "the empty lobby has no Change game focused")
         Live.releaseDemo()
         XCTAssertTrue(until(10) { !self.el(app, "tv.lobby.changeGame").exists }, "nobody sat down")
         XCTAssertTrue(waitForFocus(app, "tv.paw"), "the paw doesn't have the focus once Change game is gone: \(focusedID(app) ?? "nothing")")
@@ -52,16 +54,17 @@ final class RemoteTests: XCTestCase {
         // Lobby: through the menu and back.
         press(app, .select)
         XCTAssertTrue(waitForFocus(app, "tv.menu.link"), "Select on the paw didn't open the menu")
-        XCTAssertEqual(press(app, .down), "tv.menu.sound")
-        XCTAssertEqual(press(app, .down), "tv.menu.leave")
-        XCTAssertEqual(press(app, .down), "tv.menu.leave", "Down past the last choice moved the focus off the menu")
-        XCTAssertEqual(press(app, .up), "tv.menu.sound")
+        press(app, .down, to: "tv.menu.sound")
+        press(app, .down, to: "tv.menu.leave")
+        Thread.sleep(forTimeInterval: 0.5)
+        press(app, .down, to: "tv.menu.leave", "Down past the last choice moved the focus off the menu")
+        press(app, .up, to: "tv.menu.sound")
         XCTAssertEqual(label(el(app, "tv.menu.sound")), "Sound on")
         press(app, .select)
         XCTAssertTrue(until(3) { self.label(self.el(app, "tv.menu.sound")) == "Sound off" }, "Sound didn't turn off")
         press(app, .select)
         XCTAssertTrue(until(3) { self.label(self.el(app, "tv.menu.sound")) == "Sound on" }, "Sound didn't turn on again")
-        XCTAssertEqual(press(app, .up), "tv.menu.link")
+        press(app, .up, to: "tv.menu.link")
         press(app, .select)
         XCTAssertTrue(waitForFocus(app, "tv.menu.back"), "the link opened without Back focused: \(focusedID(app) ?? "nothing")")
         XCTAssertTrue(until(5) { (self.label(self.el(app, "tv.menu.code")) ?? "").contains("K T N P W S") }, "the link's code isn't shown")
@@ -79,7 +82,7 @@ final class RemoteTests: XCTestCase {
         press(app, .menu)
         XCTAssertTrue(waitForFocus(app, "tv.menu.link"), "Menu at the table didn't open the menu")
         XCTAssertEqual(app.state, .runningForeground, "Menu at the table left the app")
-        XCTAssertEqual(press(app, .down), "tv.menu.sound")
+        press(app, .down, to: "tv.menu.sound")
         press(app, .menu)
         XCTAssertTrue(waitForFocus(app, "tv.paw"), "Menu didn't shut the menu at the table")
         // Select on the paw opens it too.
@@ -88,12 +91,11 @@ final class RemoteTests: XCTestCase {
         press(app, .menu)
         XCTAssertTrue(waitForFocus(app, "tv.paw"))
 
-        // A long Select, and Play/Pause: the table stays, and so does the focus.
-        press(app, .select, forDuration: 1.5)
-        if el(app, "tv.menu.link").exists {
-            press(app, .menu)
-        }
-        XCTAssertTrue(waitForFocus(app, "tv.paw"), "a long Select lost the paw's focus: \(focusedID(app) ?? "nothing")")
+        // A long Select on the paw acts as a Select: the menu opens over the table, and nothing
+        // else happens. Then Play/Pause: the table stays, and so does the focus.
+        press(app, .select, forDuration: 1.5, to: "tv.menu.link", "a long Select didn't open the menu as a Select does")
+        XCTAssertTrue(el(app, "table.deck").exists, "a long Select left the table")
+        press(app, .menu, to: "tv.paw")
         press(app, .playPause)
         XCTAssertTrue(el(app, "table.deck").exists, "Play/Pause left the table")
         XCTAssertFalse(el(app, "tv.menu.link").exists, "Play/Pause opened the menu")
@@ -107,6 +109,8 @@ final class RemoteTests: XCTestCase {
         let app = launchHome()
         press(app, .select)
         XCTAssertTrue(el(app, "tv.lobby.game").waitForExistence(timeout: Live.t(10)), "no lobby")
+        // The lobby is live (its room came over the socket) before the first go-ahead.
+        XCTAssertTrue(waitForFocus(app, "tv.lobby.changeGame"), "the empty lobby has no Change game focused")
         Live.releaseDemo()
         XCTAssertTrue(until(10) { !self.el(app, "tv.lobby.changeGame").exists }, "nobody sat down")
         Live.releaseDemo()
@@ -117,8 +121,8 @@ final class RemoteTests: XCTestCase {
 
         press(app, .select)
         XCTAssertTrue(waitForFocus(app, "tv.menu.link"), "Select on the paw didn't open the menu at game over")
-        XCTAssertEqual(press(app, .down), "tv.menu.sound")
-        XCTAssertEqual(press(app, .down), "tv.menu.leave")
+        press(app, .down, to: "tv.menu.sound")
+        press(app, .down, to: "tv.menu.leave")
         press(app, .select)
         XCTAssertTrue(waitForFocus(app, "tv.poster.cat-tower", timeout: 10), "Leave table didn't go home with Cat Tower focused: \(focusedID(app) ?? "nothing")")
         XCTAssertFalse(el(app, "tv.paw").exists, "the paw stayed after leaving the table")

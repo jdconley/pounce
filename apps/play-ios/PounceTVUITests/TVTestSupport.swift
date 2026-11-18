@@ -119,6 +119,15 @@ extension XCTestCase {
         return focus
     }
 
+    /// Presses a button on the Siri Remote and waits for the focus to land on `id`.
+    func press(_ app: XCUIApplication, _ button: XCUIRemote.Button, forDuration seconds: TimeInterval? = nil, to id: String,
+               _ message: String? = nil, file: StaticString = #filePath, line: UInt = #line) {
+        press(app, button, forDuration: seconds, file: file, line: line)
+        let landed = waitForFocus(app, id)
+        let why = "after \(Self.name(button)) the focus is on \(focusedID(app) ?? "nothing"), not \(id)"
+        XCTAssertTrue(landed, message.map { "\($0): \(why)" } ?? why, file: file, line: line)
+    }
+
     private static func name(_ button: XCUIRemote.Button) -> String {
         switch button {
         case .up: "Up"

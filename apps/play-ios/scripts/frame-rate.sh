@@ -28,14 +28,17 @@ cd "$(dirname "$0")/.."
 
 PLATFORM="${PLATFORM:-iOS}"
 case "$PLATFORM" in
-  iOS) SCHEME=Pounce; TESTS=PounceUITests/FrameRateTests; HARDWARE=iPhone; SIMULATOR="iOS Simulator"; PREFIX=dd-frames ;;
-  tvOS) SCHEME=PounceTV; TESTS=PounceTVUITests/FrameRateTVTests; HARDWARE="Apple TV"; SIMULATOR="tvOS Simulator"; PREFIX=dd-frames-tv ;;
+  iOS) SCHEME=Pounce; TESTS=PounceUITests/FrameRateTests; HARDWARE=iPhone; SIMULATOR="iOS Simulator"; PREFIX=dd-frames
+    STATES='connected' ;;
+  # An Apple TV pairs over the network: devicectl lists it as "available (paired)".
+  tvOS) SCHEME=PounceTV; TESTS=PounceTVUITests/FrameRateTVTests; HARDWARE="Apple TV"; SIMULATOR="tvOS Simulator"; PREFIX=dd-frames-tv
+    STATES='connected|available [(]paired[)]' ;;
   *) echo "PLATFORM is iOS or tvOS, not $PLATFORM"; exit 1 ;;
 esac
 
 DEVICE="${1:-${DEVICE:-}}"
 if [ -z "$DEVICE" ]; then
-  DEVICE="$(xcrun devicectl list devices 2>/dev/null | awk -v hw="$HARDWARE" '/connected/ && index($0, hw) { for (i = 1; i <= NF; i++) if ($i ~ /^[0-9A-F]{8}-[0-9A-F]{16}$/) { print $i; exit } }')"
+  DEVICE="$(xcrun devicectl list devices 2>/dev/null | awk -v hw="$HARDWARE" -v states="$STATES" '$0 ~ states && index($0, hw) { for (i = 1; i <= NF; i++) if ($i ~ /^[0-9A-F]{8}-[0-9A-F]{16}$/ || $i ~ /^[0-9A-F]{8}(-[0-9A-F]{4}){3}-[0-9A-F]{12}$/) { print $i; exit } }')"
 fi
 [ -n "$DEVICE" ] || { echo "usage: [PLATFORM=tvOS] scripts/frame-rate.sh <simulator UDID or $HARDWARE id> (no connected $HARDWARE found)"; exit 1; }
 OUT="${OUT:-$(mktemp -d -t pounce-frames)}"
