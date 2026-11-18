@@ -22,6 +22,12 @@ public enum SocketConnectError: Error, Equatable {
     case unauthorized
     /// The upgrade got 429: too many wrong room codes from this phone or its network.
     case tooManyAttempts
+    /// The upgrade got 403. A room answers a screen this way when it doesn't list the device as
+    /// one (`not_screen`, docs/tv-protocol.md).
+    case forbidden
+    /// The upgrade got 409. A room answers a screen this way when the device holds a seat there or
+    /// hosts it (`seated`).
+    case conflict
     /// The upgrade got 426 with a reason: this version is too old, or the table's game needs a
     /// newer app (app updates design §4.2, §4.3).
     case refused(UpdateRefusal)
@@ -43,7 +49,8 @@ public protocol WebSocketConnector: Sendable {
 /// two frames before the pong (the snapshot, then another seat's event or a bot
 /// step), the pong can sit behind them until the ping times out. If the handshake
 /// fails instead, the HTTP status of the refused upgrade decides the error: 404 is
-/// `.notFound`, 401 is `.unauthorized`, 429 is `.tooManyAttempts`.
+/// `.notFound`, 401 is `.unauthorized`, 429 is `.tooManyAttempts`, 403 is `.forbidden` and 409 is
+/// `.conflict`.
 public struct URLSessionWebSocketConnector: WebSocketConnector {
     private let session: URLSession
     private let timeout: Duration
@@ -81,6 +88,8 @@ public struct URLSessionWebSocketConnector: WebSocketConnector {
             case 404: throw SocketConnectError.notFound
             case 401: throw SocketConnectError.unauthorized
             case 429: throw SocketConnectError.tooManyAttempts
+            case 403: throw SocketConnectError.forbidden
+            case 409: throw SocketConnectError.conflict
             case let code?: throw SocketConnectError.failed("upgrade refused with HTTP \(code)")
             case nil: throw SocketConnectError.failed(String(describing: error))
             }

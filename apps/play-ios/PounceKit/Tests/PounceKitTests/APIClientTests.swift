@@ -201,6 +201,47 @@ final class StubProtocol: URLProtocol, @unchecked Sendable {  // URLProtocol is 
         #expect(GameCatalog.dealt.id == "cat-tower")
     }
 
+    /// A TV's own table: the TV is its screen, and it has no name until a phone sits down.
+    @Test func createRoomAsksForAScreen() async throws {
+        let server = StubServer { req in
+            req.path == "/v1/devices" ? Reply(200, #"{"deviceId":"dev1","token":"tok1"}"#) : Reply(201, #"{"code":"K7QM4"}"#)
+        }
+        let (api, _) = client(server)
+        #expect(try await api.createRoom(game: GameCatalog.tiles.id, screen: true) == "K7QM4")
+        _ = try await api.createRoom(game: "cat-tower", screen: false)
+        let posts = server.seen.filter { $0.path == "/v1/rooms" }
+        #expect(posts.map(\.method) == ["POST", "POST"])
+        #expect(posts.map(\.authorization) == ["Bearer tok1", "Bearer tok1"])
+        let first = try #require(try JSONSerialization.jsonObject(with: posts[0].body) as? NSDictionary)
+        #expect(first == ["game": "tiles", "screen": true] as NSDictionary)
+        let second = try #require(try JSONSerialization.jsonObject(with: posts[1].body) as? NSDictionary)
+        #expect(second == ["game": "cat-tower"] as NSDictionary)
+    }
+
+    @Test func screensPostsAnEmptyBodyOrTheTableItShowsAndDecodesTheLink() async throws {
+        let answer = #"{"token":"t","code":"ABCDFG","url":"https://play.conleychaos.com/tv/t","expiresIn":600000}"#
+        let server = StubServer { req in
+            req.path == "/v1/devices" ? Reply(200, #"{"deviceId":"dev1","token":"tok1"}"#) : Reply(201, answer)
+        }
+        let (api, _) = client(server)
+        let offer = try await api.screens()
+        #expect(offer == ScreenLinkOffer(token: "t", code: "ABCDFG", url: URL(string: "https://play.conleychaos.com/tv/t")!, expiresIn: 600_000))
+        _ = try await api.screens(showing: "BCDFG")
+        let posts = server.seen.filter { $0.path == "/v1/screens" }
+        #expect(posts.map(\.method) == ["POST", "POST"])
+        #expect(posts.map(\.authorization) == ["Bearer tok1", "Bearer tok1"])
+        #expect(try JSONSerialization.jsonObject(with: posts[0].body) as? [String: String] == [:])
+        #expect(try JSONSerialization.jsonObject(with: posts[1].body) as? [String: String] == ["showing": "BCDFG"])
+    }
+
+    @Test func screensRefusedIsAnError() async throws {
+        let server = StubServer { req in
+            req.path == "/v1/devices" ? Reply(200, #"{"deviceId":"dev1","token":"tok1"}"#) : Reply(429, #"{"error":"rate_limited"}"#)
+        }
+        let (api, _) = client(server)
+        await #expect(throws: APIError.rateLimited) { _ = try await api.screens() }
+    }
+
     @Test func listTablesDecodesTheNameWhenPresent() async throws {
         let server = StubServer { req in
             req.path == "/v1/devices"

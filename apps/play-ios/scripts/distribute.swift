@@ -9,6 +9,9 @@
 //   --since DATE   list commits after DATE (anything `git log --since` takes) in "What to Test",
 //                  instead of those since the group's previous build
 //   --timeout MIN  minutes to wait for App Store Connect to finish processing; default 30
+//   --platform P   IOS (default) or TV_OS: the build is looked up on that platform's train only, so
+//                  the iPhone and Apple TV builds can share a build number. TV_OS lists the Apple
+//                  TV app's own commits in What to Test.
 //
 // Steps: wait until the build is processed (VALID); answer export compliance if it is still pending
 // (Info.plist sets ITSAppUsesNonExemptEncryption to false, so normally it isn't); set "What to Test"
@@ -17,14 +20,15 @@
 //
 // Auth: export ASC_KEY_ID, ASC_ISSUER_ID and ASC_KEY_PATH (the AuthKey_<ID>.p8, kept outside the repo).
 // Each request carries a short-lived ES256 JWT signed with CryptoKit; neither it nor the key is printed.
-// --dry-run without them prints the notes and the plan only.
+// --dry-run without them prints the notes, the plan and the requests it would make only.
 import CryptoKit
 import Foundation
 
 setvbuf(stdout, nil, _IOLBF, 0)  // keep progress lines in order with errors when piped (CI logs)
 
 let bundleID = "com.conleychaos.play"
-let defaultNotes = "A fresh build of Pounce. Play a game or two, and send feedback from TestFlight (take a screenshot in the app to start one)."
+let iOSNotes = "A fresh build of Pounce. Play a game or two, and send feedback from TestFlight (take a screenshot in the app to start one)."
+let tvNotes = "A fresh build of Pounce for Apple TV. Put a table on the TV from your phone and play a game or two."
 
 func fail(_ message: String) -> Never {
   FileHandle.standardError.write(Data("error: \(message)\n".utf8))
@@ -32,7 +36,7 @@ func fail(_ message: String) -> Never {
 }
 
 func usage() -> Never {
-  FileHandle.standardError.write(Data("usage: scripts/distribute.swift [--dry-run] [--build N] [--group NAME] [--since DATE | --from SHA] [--timeout MIN]\n".utf8))
+  FileHandle.standardError.write(Data("usage: scripts/distribute.swift [--dry-run] [--build N] [--group NAME] [--since DATE | --from SHA] [--timeout MIN] [--platform IOS|TV_OS]\n".utf8))
   exit(64)
 }
 
@@ -45,6 +49,8 @@ var since: String?
 /// `--from SHA`: list the app's commits after SHA (the push's previous main) in What to Test.
 var fromCommit: String?
 var timeoutMinutes = 30.0
+/// The App Store Connect platform of the build: IOS or TV_OS.
+var platform = "IOS"
 var arguments = CommandLine.arguments.dropFirst().makeIterator()
 func value() -> String {
   guard let next = arguments.next() else { usage() }
@@ -60,10 +66,14 @@ while let arg = arguments.next() {
   case "--timeout":
     guard let minutes = Double(value()) else { usage() }
     timeoutMinutes = minutes
+  case "--platform":
+    platform = value()
+    guard ["IOS", "TV_OS"].contains(platform) else { usage() }
   case "-h", "--help":
     print("""
-      scripts/distribute.swift [--dry-run] [--build N] [--group NAME] [--since DATE | --from SHA] [--timeout MIN]
+      scripts/distribute.swift [--dry-run] [--build N] [--group NAME] [--since DATE | --from SHA] [--timeout MIN] [--platform IOS|TV_OS]
       --from SHA lists the app's own commits after SHA (CI passes the push's previous main).
+      --platform picks the iPhone (IOS, the default) or Apple TV (TV_OS) build train.
       Waits for the build to process, sets What to Test, adds it to the TestFlight group and, for an
       external group, submits it for beta app review. Needs ASC_KEY_ID, ASC_ISSUER_ID, ASC_KEY_PATH.
       """)
@@ -71,6 +81,11 @@ while let arg = arguments.next() {
   default: usage()
   }
 }
+
+let isTV = platform == "TV_OS"
+let defaultNotes = isTV ? tvNotes : iOSNotes
+/// "build" or "Apple TV build", for progress lines.
+let buildLabel = isTV ? "Apple TV build" : "build"
 
 // MARK: "What to Test"
 
@@ -83,7 +98,24 @@ func changes(since: String) -> [String] {
 /// The commits after `commit` that change the app itself (not its scripts, docs or art): a date
 /// can't say which commits a build holds when two merges land minutes apart.
 func changes(from commit: String) -> [String] {
-  let app = ["Pounce", "PounceKit", "PounceWidgets", "PounceNotify", "project.yml"].map { ":(top)apps/play-ios/\($0)" }
+  // These match ios.yml's distribute filters. The Apple TV list is what PounceTV compiles
+  // (project.yml's PounceTV sources), less the iPhone-only files in those folders; add a folder or
+  // file here and in ios.yml when the target gains one.
+  let paths = isTV
+    ? [
+      "PounceTV", "PounceKit", "Config", "project.yml",
+      "Pounce/Table", "Pounce/Tiles",
+      "Pounce/App/FrameWork.swift", "Pounce/App/MainThreadWatchdog.swift", "Pounce/App/Autoplay.swift",
+      "Pounce/Design/ArtName.swift", "Pounce/Design/FadeGroup.swift", "Pounce/Design/GroupOpacity.swift",
+      "Pounce/Design/Haptics.swift", "Pounce/Design/Juice.swift", "Pounce/Design/NameTag.swift",
+      "Pounce/Design/OutlinedText.swift", "Pounce/Design/Pace.swift", "Pounce/Design/Palette.swift",
+      "Pounce/Design/QRTile.swift", "Pounce/Design/Settings.swift", "Pounce/Design/SignalGlyph.swift",
+      "Pounce/Design/Sound.swift",
+      "Pounce/Resources/Assets.xcassets", "Pounce/Resources/Sounds",
+    ]
+    : ["Pounce", "PounceKit", "PounceWidgets", "PounceNotify", "Config", "project.yml"]
+  let skipped = isTV ? ["Pounce/Tiles/TilesStage.swift", "Pounce/Tiles/TilesChrome.swift", "Pounce/Tiles/TilesDemo.swift"] : []
+  let app = paths.map { ":(top)apps/play-ios/\($0)" } + skipped.map { ":(top,exclude)apps/play-ios/\($0)" }
   return subjects(["\(commit)..HEAD", "--"] + app)
 }
 
@@ -234,6 +266,26 @@ final class AppStoreConnect {
   }
 }
 
+// The build lookups, shared by the run and the dry-run plan.
+/// This platform's newest upload, or the one numbered `--build`.
+func buildQuery(app: String) -> [String: String] {
+  var query = ["filter[app]": app, "filter[preReleaseVersion.platform]": platform, "sort": "-uploadedDate", "limit": "1"]
+  if let buildNumber { query["filter[version]"] = buildNumber }
+  return query
+}
+
+/// The group's latest builds on this platform, for the start of What to Test.
+func previousBuildsQuery(app: String, group: String) -> [String: String] {
+  ["filter[app]": app, "filter[betaGroups]": group, "filter[preReleaseVersion.platform]": platform,
+   "sort": "-uploadedDate", "limit": "5"]
+}
+
+/// `METHOD /path?query`, with the query sorted as `send` sends it, for the dry-run plan.
+func request(_ method: String, _ path: String, _ query: [String: String] = [:]) -> String {
+  let items = query.sorted { $0.key < $1.key }.map { "\($0.key)=\($0.value)" }
+  return "\(method) \(path)" + (items.isEmpty ? "" : "?" + items.joined(separator: "&"))
+}
+
 func list(_ json: JSON) -> [JSON] { json["data"] as? [JSON] ?? [] }
 func attributes(_ resource: JSON) -> JSON { resource["attributes"] as? JSON ?? [:] }
 func id(_ resource: JSON) -> String { resource["id"] as? String ?? "" }
@@ -243,13 +295,27 @@ func id(_ resource: JSON) -> String { resource["id"] as? String ?? "" }
 if dryRun { print("dry run: reads App Store Connect, changes nothing") }
 guard let credentials = loadCredentials() else {
   guard dryRun else { fail("set ASC_KEY_ID, ASC_ISSUER_ID and ASC_KEY_PATH (see the comment at the top)") }
+  let whatToTestSource = fromCommit != nil || since != nil
+    ? "      (--since / --from given: no previous-build lookup)"
+    : "      \(request("GET", "/v1/builds", previousBuildsQuery(app: "{app}", group: "{group}")))"
   print("""
     no ASC_KEY_ID / ASC_ISSUER_ID / ASC_KEY_PATH, so this is the plan only:
-      1. wait up to \(Int(timeoutMinutes)) min for build \(buildNumber ?? "(newest)") of \(bundleID) to finish processing
+      0. find the app and the group
+          \(request("GET", "/v1/apps", ["filter[bundleId]": bundleID]))
+          \(request("GET", "/v1/betaGroups", ["filter[app]": "{app}", "limit": "200"]))
+      1. wait up to \(Int(timeoutMinutes)) min for \(buildLabel) \(buildNumber ?? "(newest)") of \(bundleID) to finish processing
+          \(request("GET", "/v1/builds", buildQuery(app: "{app}")))
       2. answer export compliance (no non-exempt encryption) if it is still pending
+          \(request("PATCH", "/v1/builds/{build}"))
       3. set What to Test (below; without --since the commits since the group's previous build)
+    \(whatToTestSource)
+          \(request("GET", "/v1/builds/{build}/betaBuildLocalizations"))
+          \(request("PATCH", "/v1/betaBuildLocalizations/{localization}")) or \(request("POST", "/v1/betaBuildLocalizations"))
       4. add the build to the beta group "\(groupName)"
+          \(request("POST", "/v1/betaGroups/{group}/relationships/builds"))
       5. if that group is external, submit the build for beta app review
+          \(request("GET", "/v1/builds/{build}/buildBetaDetail"))
+          \(request("POST", "/v1/betaAppReviewSubmissions"))
     What to Test:
     \(notes(since: since))
     dry run complete
@@ -276,25 +342,24 @@ do {
   print("group \"\(groupName)\" is \(isInternal ? "internal" : "external")")
 
   // 1. The build, once processed.
-  var buildQuery = ["filter[app]": appID, "sort": "-uploadedDate", "limit": "1"]
-  if let buildNumber { buildQuery["filter[version]"] = buildNumber }
+  let lookup = buildQuery(app: appID)
   let deadline = Date().addingTimeInterval(timeoutMinutes * 60)
   var build: JSON = [:]
   while true {
-    let found = list(try await asc.get("/v1/builds", buildQuery)).first
+    let found = list(try await asc.get("/v1/builds", lookup)).first
     let state = found.flatMap { attributes($0)["processingState"] as? String }
     if let found, state == "VALID" { build = found; break }
-    if state == "FAILED" || state == "INVALID" { fail("build \(buildNumber ?? "") processing ended \(state!)") }
-    if dryRun { fail("build \(buildNumber ?? "(newest)") is \(state ?? "not in App Store Connect yet"); a dry run doesn't wait") }
+    if state == "FAILED" || state == "INVALID" { fail("\(buildLabel) \(buildNumber ?? "") processing ended \(state!)") }
+    if dryRun { fail("\(buildLabel) \(buildNumber ?? "(newest)") is \(state ?? "not in App Store Connect yet"); a dry run doesn't wait") }
     if Date() > deadline {
-      fail("build \(buildNumber ?? "(newest)") is still \(state ?? "missing") after \(Int(timeoutMinutes)) min; rerun scripts/distribute.swift --build \(buildNumber ?? "N") later")
+      fail("\(buildLabel) \(buildNumber ?? "(newest)") is still \(state ?? "missing") after \(Int(timeoutMinutes)) min; rerun scripts/distribute.swift --build \(buildNumber ?? "N")\(isTV ? " --platform TV_OS" : "") later")
     }
-    print("build \(buildNumber ?? "(newest)"): \(state ?? "not in App Store Connect yet"), checking again in 30s")
+    print("\(buildLabel) \(buildNumber ?? "(newest)"): \(state ?? "not in App Store Connect yet"), checking again in 30s")
     try await Task.sleep(for: .seconds(30))
   }
   let buildID = id(build)
   let version = attributes(build)["version"] as? String ?? buildID
-  print("build \(version) is processed")
+  print("\(buildLabel) \(version) is processed")
 
   // 2. Export compliance.
   if !(attributes(build)["usesNonExemptEncryption"] is Bool) {
@@ -306,9 +371,8 @@ do {
   // 3. What to Test: the commits since the group's previous build was uploaded.
   if since == nil, fromCommit == nil {
     do {
-      let previous = list(try await asc.get("/v1/builds", [
-        "filter[app]": appID, "filter[betaGroups]": groupID, "sort": "-uploadedDate", "limit": "5",
-      ])).first { id($0) != buildID }
+      let previous = list(try await asc.get("/v1/builds", previousBuildsQuery(app: appID, group: groupID)))
+        .first { id($0) != buildID }
       since = previous.flatMap { attributes($0)["uploadedDate"] as? String }
     } catch {
       print("warning: can't find the group's previous build, so What to Test is the default text (\(error))")
@@ -358,10 +422,10 @@ do {
   if let summary = ProcessInfo.processInfo.environment["GITHUB_STEP_SUMMARY"], !dryRun,
      let handle = FileHandle(forWritingAtPath: summary) {
     handle.seekToEndOfFile()
-    handle.write(Data("### TestFlight: build \(version) → \(groupName)\n\nBeta app review: \(review)\n\n```\n\(whatToTest)\n```\n".utf8))
+    handle.write(Data("### TestFlight: \(buildLabel) \(version) → \(groupName)\n\nBeta app review: \(review)\n\n```\n\(whatToTest)\n```\n".utf8))
     handle.closeFile()
   }
-  print(dryRun ? "dry run complete" : "build \(version) is on its way to \"\(groupName)\" (beta app review: \(review))")
+  print(dryRun ? "dry run complete" : "\(buildLabel) \(version) is on its way to \"\(groupName)\" (beta app review: \(review))")
 } catch {
   fail("\(error)")
 }

@@ -62,8 +62,9 @@ enum DemoMode: String {
     /// The tile game at a TV (`screen: true`): `controller-tiles` is `tiles` (my move, opened),
     /// `controller-tiles-off` Kiki's move (just my stash on Cards; the House Cats play on until
     /// it is mine, or with `-tiles-hold-bots` once a UI test lets them), `controller-tiles-curtain` two seats on this phone, the curtain up for seat 0.
+    /// `controller-tiles-late-off`: `tiles-late` (22 in my stash) on Kiki's move, on Cards.
     case controllerTiles = "controller-tiles", controllerTilesOff = "controller-tiles-off"
-    case controllerTilesCurtain = "controller-tiles-curtain"
+    case controllerTilesCurtain = "controller-tiles-curtain", controllerTilesLateOff = "controller-tiles-late-off"
     /// The tile game's table (`TilesDemo` has what each one shows). The only way into the game
     /// until Home offers it.
     case tiles
@@ -114,7 +115,7 @@ enum DemoMode: String {
         switch self {
         case .tiles, .tilesEarly, .tilesOpened, .tilesDraft, .tilesInvalid, .tilesLoupe, .tilesLate, .tilesLong,
              .tilesPass, .tilesOther, .tilesCurtain, .tilesOver, .tilesPlay, .tilesLast,
-             .controllerTiles, .controllerTilesOff, .controllerTilesCurtain:
+             .controllerTiles, .controllerTilesOff, .controllerTilesCurtain, .controllerTilesLateOff:
             return TilesDemo.room(self)
         case .howto: return DemoFixtures.howTo()
         case .lobby: return DemoFixtures.lobby()
@@ -367,37 +368,6 @@ actor ReplaySocket: RoomSocketing {
     func stop() async {
         player?.cancel()
         continuation.finish()
-    }
-}
-
-extension TableScene {
-    private static let logsTimeline = [.replay, .nope, .celebrate, .handoff].contains(DemoMode.from())
-    /// `-log-timeline` (any table, e.g. a UI test against the dev server): the same lines to the
-    /// unified log (`log stream --predicate 'eventMessage CONTAINS "[timeline]"'`).
-    static let logsTimelineToSystem = CommandLine.arguments.contains("-log-timeline")
-
-    /// `-demo replay`: one line per game intent (played with its duration, or skipped).
-    func timelineLog(_ line: @autoclosure () -> String) {
-        if Self.logsTimeline { print("[timeline] \(line())") }
-        if Self.logsTimelineToSystem { NSLog("[timeline] %@", line()) }
-    }
-
-    /// `-demo replay`: prints the rendered frame count once a second (a Task, so it never
-    /// wakes the view itself).
-    func startFrameLog() {
-        let director = director
-        let clock = ContinuousClock()
-        let start = clock.now
-        Task { [weak self] in
-            var last = director.framesRendered
-            while self != nil {
-                try? await Task.sleep(for: .seconds(1))
-                let frames = director.framesRendered
-                let t = (clock.now - start).components.seconds
-                print("[replay] t=\(t)s frames=\(frames) +\(frames - last) paused=\(self?.view?.isPaused ?? true)")
-                last = frames
-            }
-        }
     }
 }
 

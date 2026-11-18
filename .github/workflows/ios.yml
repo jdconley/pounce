@@ -29,6 +29,10 @@ on:
         description: Before archiving, revoke every development certificate CI created through the API (for "maximum number of certificates")
         type: boolean
         default: false
+      add_tvos_platform:
+        description: One-off, before the first Apple TV upload - only add the tvOS platform to the App Store Connect app record, nothing else (runs on any branch; does nothing once it is there)
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -44,7 +48,7 @@ defaults:
 jobs:
   build:
     runs-on: macos-26
-    timeout-minutes: 30
+    timeout-minutes: 40
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
       - run: xcodebuild -version
@@ -71,6 +75,43 @@ jobs:
         run: >
           xcodebuild build -project Pounce.xcodeproj -scheme Pounce -configuration Release
           -destination generic/platform=iOS CODE_SIGNING_ALLOWED=NO -quiet
+      - name: Build Apple TV Release (unsigned)
+        # The build, plus the tvOS SDK's download on an image without it.
+        timeout-minutes: 15
+        run: |
+          # Since Xcode 15 the tvOS SDK is an optional component; fetch it if the image lacks it.
+          xcodebuild -showsdks | grep appletvos >/dev/null || xcodebuild -downloadPlatform tvOS
+          xcodebuild build -project Pounce.xcodeproj -scheme PounceTV -configuration Release \
+            -destination generic/platform=tvOS CODE_SIGNING_ALLOWED=NO -quiet
+      # The TV app's unit tests on an Apple TV simulator (PounceTVTests: its table never drawing a
+      # hand, its model and its races). Each TV step is capped, so a stuck simulator can't hold up
+      # this required job; the TV's frame and remote gates are their own job below.
+      - name: Make an Apple TV simulator
+        id: tvsim
+        timeout-minutes: 12
+        run: |
+          # The runtime for this Xcode's tvOS SDK (major.minor), not just the newest installed.
+          xcodebuild -showsdks | grep appletvsimulator >/dev/null || xcodebuild -downloadPlatform tvOS
+          sdk=$(xcrun --sdk appletvsimulator --show-sdk-platform-version | cut -d. -f1-2)
+          tvos_runtime() {
+            xcrun simctl list runtimes -j | jq -r --arg v "$sdk" '[.runtimes[] | select(.platform == "tvOS" and .isAvailable and ((.version | split(".") | .[0:2] | join(".")) == $v))] | last | .identifier // empty'
+          }
+          runtime=$(tvos_runtime)
+          if [ -z "$runtime" ]; then
+            xcodebuild -downloadPlatform tvOS
+            runtime=$(tvos_runtime)
+          fi
+          [ -n "$runtime" ] || { echo "::error::no tvOS $sdk simulator runtime"; exit 1; }
+          udid=$(xcrun simctl create "Pounce TV tests" com.apple.CoreSimulator.SimDeviceType.Apple-TV-4K-3rd-generation-1080p "$runtime")
+          xcrun simctl boot "$udid"
+          echo "Apple TV simulator $udid on $runtime (SDK $sdk)"
+          echo "udid=$udid" >> "$GITHUB_OUTPUT"
+      - name: Apple TV unit tests
+        timeout-minutes: 12
+        run: >
+          xcodebuild test -project Pounce.xcodeproj -scheme PounceTV -configuration Debug
+          -destination "id=${{ steps.tvsim.outputs.udid }}" -derivedDataPath build/dd-tv-tests
+          -only-testing:PounceTVTests -quiet
       - name: Runner load after building
         if: always()
         working-directory: .
@@ -169,12 +210,147 @@ jobs:
             apps/play-ios/build/ui-gates.xcresult
           retention-days: 7
 
+  # The same gates on the Apple TV, after PounceKit's tests on tvOS: FrameRateTVTests (the
+  # iPhone's FrameRateTests rules, read from the same watchdog: a six-seat Cat Tower, a four-seat Tuna Tiles and the shell's table, each
+  # playing itself on a fake socket) and RemoteTests (the Siri Remote driving home, the lobby, the
+  # menu and the table, with something focused after every press). All on DEBUG demos, no server,
+  # in an optimized Debug build on a fresh Apple TV simulator, judged as the iOS job judges its
+  # runner. Not a required check.
+  tv-gates:
+    name: TV smooth play gates (Apple TV simulator)
+    runs-on: macos-26
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+      - run: xcodebuild -version
+      - name: Install XcodeGen
+        run: |
+          curl -fsSL -o "$RUNNER_TEMP/xcodegen.zip" https://github.com/yonaskolb/XcodeGen/releases/download/2.46.0/xcodegen.zip
+          echo "4d9e34b62172d645eed6457cac13fc222569974098ef4ee9c3368bedf0196806  $RUNNER_TEMP/xcodegen.zip" | shasum -a 256 -c -
+          unzip -q "$RUNNER_TEMP/xcodegen.zip" -d "$RUNNER_TEMP"
+          echo "$RUNNER_TEMP/xcodegen/bin" >> "$GITHUB_PATH"
+      - name: Make an Apple TV simulator
+        id: sim
+        run: |
+          # The runtime for this Xcode's tvOS SDK (major.minor), not just the newest installed.
+          xcodebuild -showsdks | grep appletvsimulator >/dev/null || xcodebuild -downloadPlatform tvOS
+          sdk=$(xcrun --sdk appletvsimulator --show-sdk-platform-version | cut -d. -f1-2)
+          tvos_runtime() {
+            xcrun simctl list runtimes -j | jq -r --arg v "$sdk" '[.runtimes[] | select(.platform == "tvOS" and .isAvailable and ((.version | split(".") | .[0:2] | join(".")) == $v))] | last | .identifier // empty'
+          }
+          runtime=$(tvos_runtime)
+          if [ -z "$runtime" ]; then
+            xcodebuild -downloadPlatform tvOS
+            runtime=$(tvos_runtime)
+          fi
+          [ -n "$runtime" ] || { echo "::error::no tvOS $sdk simulator runtime"; exit 1; }
+          udid=$(xcrun simctl create "Pounce TV gates" com.apple.CoreSimulator.SimDeviceType.Apple-TV-4K-3rd-generation-1080p "$runtime")
+          # It boots while the app builds; the tests wait for it.
+          xcrun simctl boot "$udid"
+          echo "simulator $udid on $runtime"
+          echo "udid=$udid" >> "$GITHUB_OUTPUT"
+      # PounceKit built for tvOS and its tests (its logic is also `swift test` in the build job).
+      - name: PounceKit tests on tvOS
+        timeout-minutes: 12
+        working-directory: apps/play-ios/PounceKit
+        run: >
+          xcodebuild test -scheme PounceKit-Package -destination "id=${{ steps.sim.outputs.udid }}"
+          -derivedDataPath ../build/dd-kit-tv -quiet
+      - run: scripts/bootstrap.sh
+      # Debug (the demos are Debug only) with the compiler's optimizations on, as the shipped app
+      # has them.
+      - name: Build for testing
+        run: >
+          xcodebuild build-for-testing -project Pounce.xcodeproj -scheme PounceTV -configuration Debug
+          -destination "id=${{ steps.sim.outputs.udid }}" -derivedDataPath build/dd-tv-gates
+          SWIFT_OPTIMIZATION_LEVEL=-O GCC_OPTIMIZATION_LEVEL=s -quiet
+      # A fresh simulator's first launches pay one-time costs (caches, shaders) that aren't the
+      # app's: one untimed run of each table that plays itself takes them first.
+      - name: Warm the simulator
+        run: |
+          xcrun simctl bootstatus "${{ steps.sim.outputs.udid }}" -b >/dev/null
+          app=$(find build/dd-tv-gates/Build/Products -maxdepth 2 -name PounceTV.app -path '*appletvsimulator*' | head -1)
+          xcrun simctl install "${{ steps.sim.outputs.udid }}" "$app"
+          for demo in tv-tiles tv-hit; do
+            xcrun simctl launch "${{ steps.sim.outputs.udid }}" com.conleychaos.play -demo "$demo" -anim-speed 1 >/dev/null
+            sleep 8
+            xcrun simctl terminate "${{ steps.sim.outputs.udid }}" com.conleychaos.play || true
+          done
+      - name: Frame, main-thread and remote gates
+        env:
+          TEST_RUNNER_POUNCE_FRAMES_SECONDS: "12"
+          # Waits only; the time budgets fit the machine on their own.
+          TEST_RUNNER_POUNCE_UITEST_TIMEOUT_SCALE: "3"
+        run: |
+          set -o pipefail
+          xcodebuild test-without-building -project Pounce.xcodeproj -scheme PounceTV \
+            -destination "id=${{ steps.sim.outputs.udid }}" -derivedDataPath build/dd-tv-gates \
+            -collect-test-diagnostics never -resultBundlePath build/tv-gates.xcresult \
+            -only-testing:PounceTVUITests/FrameRateTVTests \
+            -only-testing:PounceTVUITests/RemoteTests \
+            2>&1 | tee build/tv-gates.log | grep -E '^(FRAMES|Test Case|\s+Executed)|error:'
+      - name: Frame summary
+        if: always()
+        run: |
+          {
+            echo "### TV smooth play gates"
+            echo
+            echo '```'
+            grep -E '^FRAMES ' build/tv-gates.log || echo "no FRAMES lines"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+      - name: Keep the results
+        if: failure()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: tv-gates
+          path: |
+            apps/play-ios/build/tv-gates.log
+            apps/play-ios/build/tv-gates.xcresult
+          retention-days: 7
+
+  # One-off (JD OK'd it, 2026-11-16): add the tvOS platform to the App Store Connect app record, the
+  # only App Store Connect change this makes. Runs only when asked (add_tvos_platform), on any
+  # branch, so it can go before the first merge that uploads an Apple TV build; that dispatch does
+  # nothing else (testflight skips it), and a second run changes nothing. The version string is
+  # project.yml's MARKETING_VERSION.
+  tv-platform:
+    name: Add the Apple TV platform
+    if: github.event_name == 'workflow_dispatch' && inputs.add_tvos_platform
+    runs-on: macos-26
+    timeout-minutes: 10
+    environment: production
+    env:
+      ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+      ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
+      ASC_KEY_P8: ${{ secrets.ASC_KEY_P8 }}
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+      - name: Add the tvOS platform to the app record
+        run: |
+          if [ -z "$ASC_KEY_ID" ] || [ -z "$ASC_ISSUER_ID" ] || [ -z "$ASC_KEY_P8" ]; then
+            echo "::error title=App Store Connect::ASC_KEY_ID, ASC_ISSUER_ID or ASC_KEY_P8 is unset. See apps/play-ios/README.md."
+            exit 1
+          fi
+          version=$(sed -n 's/^ *MARKETING_VERSION: *"\{0,1\}\([0-9.]*\)"\{0,1\} *$/\1/p' project.yml | head -1)
+          [ -n "$version" ] || { echo "::error::no MARKETING_VERSION in project.yml"; exit 1; }
+          export ASC_KEY_PATH="$RUNNER_TEMP/AuthKey_$ASC_KEY_ID.p8"
+          (umask 077; printenv ASC_KEY_P8 > "$ASC_KEY_PATH")
+          trap 'rm -f "$ASC_KEY_PATH"' EXIT
+          scripts/asc-add-platform.swift --version "$version"
+
+  # Uploads the iPhone and the Apple TV builds (one build number for both: App Store Connect keeps a
+  # build train per platform) and sends each to the group when its own app changed.
   testflight:
     needs: build
-    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+    # A dispatch with add_tvos_platform makes only that change (tv-platform), no upload.
+    if: >-
+      github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+      && !inputs.add_tvos_platform
     runs-on: macos-26
-    # Archive and upload take ~15 min; distributing waits up to 30 more for App Store Connect processing.
-    timeout-minutes: 75
+    # Each archive and upload takes ~10-15 min; each distribute waits up to 30 more for App Store
+    # Connect processing (the Apple TV build mostly processes while the iPhone one is waited on).
+    timeout-minutes: 100
     environment: production
     concurrency:
       group: testflight
@@ -217,7 +393,24 @@ jobs:
           (umask 077; printenv ASC_KEY_P8 > "$ASC_KEY_PATH")
           trap 'rm -f "$ASC_KEY_PATH"' EXIT
           scripts/testflight.sh
-      # The archive minted a development certificate on this throwaway runner. Revoke it, pass or
+      # The Apple TV app, with the same build number. If it fails or stalls (the 30-minute cap
+      # covers the archive and any tvOS SDK download), the iPhone build is still distributed and
+      # the last step fails the job.
+      - name: Archive and upload (Apple TV)
+        id: upload-tv
+        if: steps.creds.outputs.ready == 'true' && inputs.build == ''
+        continue-on-error: true
+        timeout-minutes: 30
+        env:
+          BUILD_NUMBER: ${{ steps.upload.outputs.build }}
+          PLATFORM: tvOS
+        run: |
+          xcodebuild -showsdks | grep appletvos >/dev/null || xcodebuild -downloadPlatform tvOS
+          export ASC_KEY_PATH="$RUNNER_TEMP/AuthKey_$ASC_KEY_ID.p8"
+          (umask 077; printenv ASC_KEY_P8 > "$ASC_KEY_PATH")
+          trap 'rm -f "$ASC_KEY_PATH"' EXIT
+          scripts/testflight.sh
+      # The archives minted a development certificate on this throwaway runner. Revoke it, pass or
       # fail, so runs don't pile them up until the team hits Apple's certificate limit.
       - name: Revoke this runner's development certificate
         if: always() && steps.creds.outputs.ready == 'true' && inputs.build == ''
@@ -247,7 +440,7 @@ jobs:
           if [ -n "$FROM" ] && git cat-file -e "$FROM^{commit}" 2>/dev/null; then
             # A push that doesn't change the app itself (scripts, docs, this workflow) uploads for
             # the internal testers only: the family never gets an identical build.
-            if git diff --quiet "$FROM" HEAD -- Pounce PounceKit PounceWidgets PounceNotify project.yml; then
+            if git diff --quiet "$FROM" HEAD -- Pounce PounceKit PounceWidgets PounceNotify Config project.yml; then
               echo "no app change since $FROM: not sending this build to \"$GROUP\""
               exit 0
             fi
@@ -255,3 +448,43 @@ jobs:
           else
             scripts/distribute.swift --build "$BUILD" --group "$GROUP"
           fi
+      # The Apple TV build, when this run uploaded one. Its paths are what PounceTV compiles
+      # (project.yml's PounceTV sources: its own folder, the shared table code and art, PounceKit,
+      # the build configs), less the iPhone-only files those folders hold; keep them in step with
+      # project.yml and distribute.swift.
+      - name: Distribute the Apple TV build to the TestFlight group
+        if: >-
+          !cancelled() && steps.creds.outputs.ready == 'true' && steps.upload-tv.outcome == 'success'
+          && (github.event_name == 'push' || inputs.distribute)
+        env:
+          BUILD: ${{ steps.upload.outputs.build }}
+          GROUP: ${{ inputs.group || 'Family and Friends' }}
+          FROM: ${{ github.event_name == 'push' && github.event.before || '' }}
+        run: |
+          export ASC_KEY_PATH="$RUNNER_TEMP/AuthKey_$ASC_KEY_ID.p8"
+          (umask 077; printenv ASC_KEY_P8 > "$ASC_KEY_PATH")
+          trap 'rm -f "$ASC_KEY_PATH"' EXIT
+          tv=(PounceTV PounceKit Config project.yml
+            Pounce/Table Pounce/Tiles
+            ':!Pounce/Tiles/TilesStage.swift' ':!Pounce/Tiles/TilesChrome.swift' ':!Pounce/Tiles/TilesDemo.swift'
+            Pounce/App/FrameWork.swift Pounce/App/MainThreadWatchdog.swift Pounce/App/Autoplay.swift
+            Pounce/Design/ArtName.swift Pounce/Design/FadeGroup.swift Pounce/Design/GroupOpacity.swift Pounce/Design/Haptics.swift
+            Pounce/Design/Juice.swift Pounce/Design/NameTag.swift Pounce/Design/OutlinedText.swift Pounce/Design/Pace.swift
+            Pounce/Design/Palette.swift Pounce/Design/QRTile.swift Pounce/Design/Settings.swift Pounce/Design/SignalGlyph.swift
+            Pounce/Design/Sound.swift
+            Pounce/Resources/Assets.xcassets Pounce/Resources/Sounds)
+          if [ -n "$FROM" ] && git cat-file -e "$FROM^{commit}" 2>/dev/null; then
+            if git diff --quiet "$FROM" HEAD -- "${tv[@]}"; then
+              echo "no Apple TV app change since $FROM: not sending this build to \"$GROUP\""
+              exit 0
+            fi
+            scripts/distribute.swift --platform TV_OS --build "$BUILD" --group "$GROUP" --from "$FROM"
+          else
+            scripts/distribute.swift --platform TV_OS --build "$BUILD" --group "$GROUP"
+          fi
+      - name: Apple TV upload failed
+        if: ${{ !cancelled() && steps.upload-tv.outcome == 'failure' }}
+        working-directory: .
+        run: |
+          echo "::error title=TestFlight::The Apple TV archive or upload failed (the iPhone build went ahead). See \"Archive and upload (Apple TV)\"."
+          exit 1

@@ -8,7 +8,8 @@ public enum SocketEvent: Equatable, Sendable {
     case message(ServerMessage)
     /// The connection (or a connect attempt) failed; a reconnect is scheduled.
     case disconnected
-    /// Terminal: the room does not exist (404 on connect).
+    /// Terminal: the room does not exist (404 on connect). For a screen, also a room that doesn't
+    /// take this device as its screen (403 `not_screen`, 409 `seated`): either way the TV goes home.
     case notFound
     /// Terminal: too many wrong room codes (429 on connect); the server takes no more for a while.
     case locked
@@ -42,6 +43,10 @@ public protocol RoomSocketing: Sendable {
 /// finishes when the socket stops for good: 404 on connect (`.notFound`), 429 (`.locked`), a
 /// `room_closed` error (`.closed`), or `stop()`. A stopped socket can't be restarted.
 ///
+/// With `role: .screen` (a TV, docs/tv-protocol.md) it connects with `?role=screen`, and a 403
+/// (`not_screen`) or 409 (`seated`) on connect is `.notFound` too. Without a role those statuses
+/// are only a failed connect, retried as before.
+///
 /// Heartbeats: every `tick` the connection's `LinkMeter` is checked and, when due, a heartbeat
 /// goes out: `{"t":"ping"}` once a snapshot says the server takes them (`room.link`, at its
 /// `ping` interval), else a WebSocket ping. Quality changes are `.link` events (and, to a server
@@ -54,6 +59,7 @@ public actor RoomSocket: RoomSocketing {
     private let continuation: AsyncStream<SocketEvent>.Continuation
 
     private let url: URL
+    private let role: RoomRole?
     private let credential: @Sendable () async throws -> DeviceCredential
     private let connector: any WebSocketConnector
     private let backoff: [Duration]
@@ -80,6 +86,7 @@ public actor RoomSocket: RoomSocketing {
     public init(
         code: String,
         config: APIConfig,
+        role: RoomRole? = nil,
         credential: @escaping @Sendable () async throws -> DeviceCredential,
         connector: any WebSocketConnector = URLSessionWebSocketConnector(),
         backoff: [Duration] = [.milliseconds(250), .milliseconds(500), .seconds(1), .seconds(2), .seconds(4), .seconds(8)],
@@ -89,7 +96,8 @@ public actor RoomSocket: RoomSocketing {
         sleep: @escaping @Sendable (Duration) async throws -> Void = { try await Task.sleep(for: $0) }
     ) {
         (events, continuation) = AsyncStream.makeStream(of: SocketEvent.self)
-        url = config.socketURL(code: code)
+        url = config.socketURL(code: code, role: role)
+        self.role = role
         self.credential = credential
         self.connector = connector
         self.backoff = backoff
@@ -184,7 +192,9 @@ public actor RoomSocket: RoomSocketing {
                 let token = try await credential().token
                 guard isCurrent(gen) else { return }
                 conn = try await connector.connect(url: url, token: token)
-            } catch SocketConnectError.notFound {
+            } catch SocketConnectError.notFound,
+                    SocketConnectError.forbidden where role == .screen,
+                    SocketConnectError.conflict where role == .screen {
                 guard isCurrent(gen) else { return }
                 emit(.notFound)
                 _ = finish()

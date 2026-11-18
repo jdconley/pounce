@@ -16,6 +16,9 @@ import UIKit
 ///
 /// `leap` and `crown` are the Shelf leap and Win verbs (spec §9.1); they move only what
 /// `update` sets again, so a reconcile mid-way snaps every head to the truth.
+///
+/// On a TV (`TableLayout.Arrangement.tv`) the tower stands open down the left the whole game, its
+/// heads, shelf numbers (30 points) and spacing grown with it.
 @MainActor
 final class TowerNode: SKNode {
     /// Set by the scene: motion runs through its director, bursts and badges go in its fx layer.
@@ -152,15 +155,23 @@ final class TowerNode: SKNode {
     func spot(shelf: Int, index: Int, of count: Int) -> CGPoint {
         guard let layout else { return .zero }
         let size = headSize
-        let spread = min(14, (layout.towerFrame.width - size) / CGFloat(max(count - 1, 1)))
+        let k = grown
+        let spread = min(14 * k, (layout.towerFrame.width - size) / CGFloat(max(count - 1, 1)))
         let dx = (CGFloat(index) - CGFloat(count - 1) / 2) * spread
         if shelf >= TableLayout.shelfCount {
-            let wide = min(22, layout.towerFrame.width * 0.5)
+            let wide = min(22 * k, layout.towerFrame.width * 0.5)
             let topDx = (CGFloat(index) - CGFloat(count - 1) / 2) * wide
-            return CGPoint(x: topCenter.x + topDx, y: topCenter.y + 8)
+            return CGPoint(x: topCenter.x + topDx, y: topCenter.y + 8 * k)
         }
         let center = layout.shelf(shelf)
-        return CGPoint(x: center.x + dx - 4, y: center.y + 12)
+        return CGPoint(x: center.x + dx - 4 * k, y: center.y + 12 * k)
+    }
+
+    /// How much bigger than a phone's the tower is drawn: a TV's grows with it, a phone's and an
+    /// iPad's keep the phone's spacing.
+    private var grown: CGFloat {
+        guard let layout, layout.arrangement == .tv else { return 1 }
+        return layout.towerFrame.width / TableLayout.towerWidth
     }
 
     /// The point a focus zoom should center on for shelves `low...high` (top cushion included).
@@ -339,7 +350,7 @@ final class TowerNode: SKNode {
 
     /// The big gold `shelf-badge` with the new phase number (a trophy past phase 10).
     private func popBadge(phase: Int, beside point: CGPoint, in fx: SKNode, director: AnimationDirector, reduce: Bool) async {
-        let d: CGFloat = 84
+        let d: CGFloat = 84 * director.fxScale
         let badge = SKSpriteNode(texture: TableArt.table(ArtName.shelfBadge), size: CGSize(width: d, height: d))
         badge.position = CGPoint(x: point.x + d * 0.95, y: point.y + d * 0.45)
         badge.zPosition = 6
@@ -349,7 +360,8 @@ final class TowerNode: SKNode {
             trophy.zPosition = 0.01
             badge.addChild(trophy)
         } else {
-            let digits = CardFaceFactory.shared.numeral(String(phase + 1), size: 44, fill: UIColor(Palette.orange), outline: 5)
+            let digits = CardFaceFactory.shared.numeral(
+                String(phase + 1), size: (44 * director.fxScale).rounded(), fill: UIColor(Palette.orange), outline: 5 * director.fxScale)
             let number = SKSpriteNode(texture: digits, size: digits.size())
             number.position = CGPoint(x: 0, y: -d * 0.08)
             number.zPosition = 0.01
@@ -520,10 +532,14 @@ final class TowerNode: SKNode {
             shelf.zPosition = 0.1 + CGFloat(i) * 0.1
             structure.addChild(shelf)
             let k = w / TableLayout.towerWidth  // a wider (roomy) tower gets bigger badges
-            let badge = SKSpriteNode(texture: TableArt.table(ArtName.shelfBadge), size: CGSize(width: 18 * k, height: 18 * k))
-            badge.position = CGPoint(x: frame.maxX - 4 * k, y: c.y - 8 * k)
+            // A TV's shelf numbers are read from the couch: 30 points on a 48-point badge.
+            let tv = layout.arrangement == .tv ? layout.tvUnit : nil
+            let side = tv.map { 48 * $0 } ?? 18 * k
+            let badge = SKSpriteNode(texture: TableArt.table(ArtName.shelfBadge), size: CGSize(width: side, height: side))
+            badge.position = CGPoint(x: frame.maxX - (tv.map { 6 * $0 } ?? 4 * k), y: c.y - (tv.map { 14 * $0 } ?? 8 * k))
             badge.zPosition = 2
-            let digits = CardFaceFactory.shared.numeral(String(i + 1), size: (10 * k).rounded(), outline: 2)
+            let digits = CardFaceFactory.shared.numeral(
+                String(i + 1), size: tv.map { (30 * $0).rounded() } ?? (10 * k).rounded(), outline: tv.map { 3 * $0 } ?? 2)
             let number = SKSpriteNode(texture: digits, size: digits.size())
             number.position = CGPoint(x: 0, y: -1)
             number.zPosition = 0.01
@@ -537,7 +553,7 @@ final class TowerNode: SKNode {
         top.zPosition = 1.5
         structure.addChild(top)
         topCenter = top.position
-        let burst = min(260, layout.size.width * 0.7)
+        let burst = min(260 * grown, layout.size.width * 0.7)
         sunburst.size = CGSize(width: burst, height: burst)
     }
 

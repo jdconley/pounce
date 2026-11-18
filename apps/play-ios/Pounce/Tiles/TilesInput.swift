@@ -139,6 +139,9 @@ extension TilesScene {
 
     // MARK: touches
 
+    // The iPhone's fingers. The Apple TV's table takes no touches: the Siri Remote's touch surface
+    // moves focus, it never drags a piece.
+    #if os(iOS)
     override func touchesBegan(_ touches: Set<UITouch>, with event: UIEvent?) {
         guard let touch = touches.first else { return }
         pressBegan(at: touch.location(in: self))
@@ -153,6 +156,7 @@ extension TilesScene {
         guard let touch = touches.first else { return }
         pressEnded(at: touch.location(in: self))
     }
+    #endif
 
     /// A finger went down at `point` (the touch handlers, and the DEBUG autoplay).
     func pressBegan(at point: CGPoint) {
@@ -231,6 +235,7 @@ extension TilesScene {
         }
     }
 
+    #if os(iOS)
     override func touchesCancelled(_ touches: Set<UITouch>, with event: UIEvent?) {
         let wasDragging = input.isDragging
         input.phase = .idle
@@ -243,6 +248,7 @@ extension TilesScene {
         if wasDragging { endDrag() }
         redraw(animated: wasDragging)
     }
+    #endif
 
     /// The finger has moved far enough to mean something: a drag, or a scroll.
     private func beginMove(at point: CGPoint) {

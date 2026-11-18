@@ -41,15 +41,20 @@ public struct AppIdentity: Equatable, Sendable {
         return fields.joined(separator: "; ")
     }
 
-    /// The running app or extension (they share a version). Nil off iOS: the `pounce-e2e` tool and
-    /// the package's tests say nothing, as version 1.0 does.
-    public static let current: AppIdentity? = {
+    /// The platform this build says it is: `ios` on the iPhone and iPad, `tvos` on the Apple TV.
+    /// Nil on the Mac: the `pounce-e2e` tool and the package's tests say nothing, as version 1.0 does.
+    public static let hostPlatform: String? = {
         #if os(iOS)
-        AppIdentity(platform: "ios", info: Bundle.main.infoDictionary)
+        "ios"
+        #elseif os(tvOS)
+        "tvos"
         #else
         nil
         #endif
     }()
+
+    /// The running app or extension (they share a version), on the `hostPlatform`.
+    public static let current: AppIdentity? = hostPlatform.flatMap { AppIdentity(platform: $0, info: Bundle.main.infoDictionary) }
 }
 
 /// The headers every request to play-api carries, from the app and from its extensions: who is

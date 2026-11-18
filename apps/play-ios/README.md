@@ -354,6 +354,11 @@ when nothing moves. The UI suite checks that the main thread only draws:
   fails on a stale profile, open the project in Xcode once with the phone connected). It builds
   Debug with the compiler's optimizations on (`OPTIMIZE=0` for a plain Debug build), so the numbers
   are the shipped code's.
+- **On the Apple TV**, `FrameRateTVTests` (`PounceTVUITests`) holds a six-seat Cat Tower (`-demo
+  tv-hit`), a four-seat Tuna Tiles (`-demo tv-tiles`) and the shell's table (`-demo tv-shell`) to
+  the same rules. `PLATFORM=tvOS scripts/frame-rate.sh <device>` runs it on an Apple TV simulator
+  (by UDID) or a paired Apple TV. In CI it runs in the `tv-gates` job ("TV smooth play gates (Apple
+  TV simulator)"), with `RemoteTests` and PounceKit's tests on tvOS; that job isn't required.
 - **In CI**, the `ui-gates` job ("Smooth play gates (iOS simulator)" in `.github/workflows/ios.yml`)
   runs `FrameRateTests`, `HitTests` and two `TilesTests` drags on every pull request: an optimized
   Debug build on a fresh simulator, demo tables, no server, about 17 minutes. The job summary has
@@ -477,6 +482,8 @@ build, run the workflow by hand: Actions → iOS → Run workflow on `main` (or
   job now revokes its own when it finishes, but runs before that left them behind until Apple
   refused with "Your account has reached the maximum number of certificates". Certificates a Mac
   made through Xcode are named after its user and are left alone.
+- `add_tvos_platform` (default off): one-off, add the tvOS platform to the App Store Connect record
+  (see "The Apple TV app" below).
 
 `scripts/distribute.swift` talks to the App Store Connect API with the same key (an ES256 JWT signed
 with CryptoKit; neither the key nor the token is ever printed). It waits up to 30 minutes for the
@@ -501,6 +508,100 @@ list, and `--timeout` sets the processing wait in minutes. Without credentials, 
 the plan and the notes only. External testing also needs the app-level Test Information in App Store
 Connect (feedback email, beta app description, review contact); if it's missing, the review
 submission fails with Apple's message in the log.
+
+### The Apple TV app
+
+`PounceTV` shares the iPhone app's App Store record (bundle id `com.conleychaos.play`, universal
+purchase) and its marketing version, so it is the same app on another platform with its own build
+train.
+
+Status: in TestFlight testing (Family and Friends), not on the App Store yet. It is a screen, not a
+player: it shows the whole table (Cat Tower or Tuna Tiles) and never a hand, and everyone plays
+from a phone (the iPhone app or the web player). Its privacy manifest is
+`PounceTV/Resources/PrivacyInfo.xcprivacy`, with the label note in `docs/privacy/app-store-label.md`;
+its App Review notes are in `docs/app-review-notes.md`; its store screenshots
+(`AppStore/screenshots/tv-1.jpg` to `tv-4.jpg`, 1920x1080) are made by `AppStore/capture-tv.sh` and
+`AppStore/tv-live.spec.ts` (see `AppStore/README.md`).
+
+It also shares the iPhone's table: `Pounce/Table` and `Pounce/Tiles` (less the tile game's iPhone
+screens, `TilesStage` and `TilesChrome`, and its demo), the frame tooling the scenes report to
+(`FrameWork`, `MainThreadWatchdog`, `Autoplay`), the `Pounce/Design` files they use, and the art
+catalog and sounds. `project.yml` lists them. There is one copy of the drawing code: iPhone-only
+calls in it (touches, the edge swipe, the pinch, haptics, the ambient audio session) sit behind
+`#if os(iOS)`, and on the TV `Haptics.shared` is silent. Build both schemes after changing it.
+
+A scene whose store joined as a screen (`RoomStore.isScreen`) draws the TV's table: the TV
+arrangement from PounceKit (`TableLayout(tv:)`, `TilesLayout(tv:)`), every seat around it, the turn
+banner, the acting player's aim, and never a hand or a stash (`Pounce/Table/TVTable.swift`). In a
+Debug build, `-tv-preview cattower|tiles -seats N` (with `-aim`, `-moment`, `-lost` or `-busy`)
+shows it full screen for a hand-made room, no server. `PounceTVTests` checks it on an Apple TV
+simulator: `xcodebuild test -scheme PounceTV -destination 'platform=tvOS Simulator,name=<yours>'`.
+
+The TV's shell (`PounceTV/App`, `PounceTV/Shell`) mirrors the web TV page's phases and words. `TVModel`
+holds them: home (a link a phone scans or types, `ScreenLink`, and the two game posters), the lobby,
+the table and game over, with the menu over a table ("Link another table", "Sound on", "Leave
+table"). It joins tables as their screen, keeps the table it shows and its sound setting in
+`UserDefaults` through PounceKit's `ScreenKeep` actor (never on the main thread), goes home on 404 or
+`not_screen`, follows Play again, closes the old table's socket before opening a new one, and drops
+the socket in the background and joins again on return. Everything is reached with the Siri Remote;
+Menu leaves the app from home and opens the menu at a table. Point a Debug build at a dev server
+with `SIMCTL_CHILD_POUNCE_API_BASE_URL=http://127.0.0.1:<port> xcrun simctl launch <sim>
+com.conleychaos.play`; `-tv-make cat-tower|tiles` presses a poster and `-tv-show-menu [link]` opens
+the menu, for screenshots without a remote. `PounceTVTests` covers the model with a fake server.
+
+The TV's UI tests (`PounceTVUITests`) need no server: `RemoteTests` drives the shell's demo (`-demo
+tv-shell`) with real Siri Remote presses, and `FrameRateTVTests` gates its frames. Build once with
+optimizations, as CI does, then run them on an Apple TV simulator:
+
+```sh
+xcodebuild build-for-testing -project Pounce.xcodeproj -scheme PounceTV -configuration Debug \
+  -destination 'platform=tvOS Simulator,id=<udid>' -derivedDataPath build/dd-tv \
+  SWIFT_OPTIMIZATION_LEVEL=-O GCC_OPTIMIZATION_LEVEL=s
+xcodebuild test-without-building -project Pounce.xcodeproj -scheme PounceTV \
+  -destination 'platform=tvOS Simulator,id=<udid>' -derivedDataPath build/dd-tv \
+  -only-testing:PounceTVUITests/RemoteTests -only-testing:PounceTVUITests/FrameRateTVTests
+PLATFORM=tvOS scripts/frame-rate.sh <udid>     # the frame tests alone, with their FRAMES lines
+```
+
+```sh
+PLATFORM=tvOS scripts/testflight.sh --dry-run    # scheme PounceTV, generic/platform=tvOS
+PLATFORM=tvOS scripts/testflight.sh              # build/PounceTV.xcarchive, build/export-tv
+scripts/distribute.swift --platform TV_OS --dry-run --build 202611161200
+scripts/distribute.swift --platform TV_OS --build 202611161200
+```
+
+`testflight.sh` uses the same `ExportOptions.plist`. `distribute.swift --platform` (`IOS`, the
+default, or `TV_OS`) looks builds up on that platform only (`filter[preReleaseVersion.platform]`), so
+both apps can carry the same build number. With `TV_OS`, What to Test lists the Apple TV app's
+commits and the default note is the TV's. Without credentials, `--dry-run` prints the requests it
+would make, for both platforms.
+
+In CI, the `build` job also builds `PounceTV` for generic tvOS, unsigned. The `testflight` job
+archives and uploads both apps with one build number, the iPhone app first. An Apple TV failure
+(or one stalled past 30 minutes) doesn't hold up the iPhone build; the job still fails at the end.
+The Apple TV build goes to the group only when a push changes what `PounceTV` compiles: `PounceTV`,
+`PounceKit`, `Config`, `project.yml` and the shared table files above (the iPhone filter also has
+`Config`). When the target compiles another folder or file, add it to both TV filters (`ios.yml`
+and `distribute.swift`). To resend an
+Apple TV build, run `scripts/distribute.swift --platform TV_OS --build N` from a Mac; the workflow's
+`build` input is for the iPhone app.
+
+**Adding the platform (once).** App Store Connect takes Apple TV builds only after the record has
+the tvOS platform. `scripts/asc-add-platform.swift` adds it, as JD OK'd (2026-11-16), and changes
+nothing else: it looks the app up by bundle id and, if it has no `TV_OS` App Store version, creates
+one (`POST /v1/appStoreVersions`, version `--version`, default 1.2). A second run does nothing.
+`--dry-run` without credentials prints the requests and the body. CI runs it when the workflow is
+started by hand with `add_tvos_platform`, on any branch, using project.yml's `MARKETING_VERSION`.
+That dispatch makes only this change: no archive, upload or distribution.
+
+```sh
+gh workflow run ios.yml --ref <branch> -f add_tvos_platform=true
+gh run watch "$(gh run list --workflow ios.yml --limit 1 --json databaseId --jq '.[0].databaseId')"
+```
+
+Dispatch it on the branch, check its log, then merge, so the merge's push uploads both apps. If the
+branch is merged first, that push's Apple TV upload fails (the iPhone build still goes out);
+dispatch it on `main` then, and the next push uploads the Apple TV build.
 
 ### Prerequisites only JD can do
 

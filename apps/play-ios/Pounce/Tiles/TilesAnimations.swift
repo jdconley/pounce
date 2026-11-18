@@ -93,6 +93,8 @@ extension TilesScene {
             // the rug slides to its new shape.
             draft = nil
             pendingTable = table
+            // The play the kept draft was waiting for: it's the board now (`pendingTable`).
+            if isScreen { dropKeptAim() }
             let name = SeatInfo.name(model.room, seat)
             let words = opened
                 ? String(localized: "\(name) opened with \(placed.count) toys", comment: "VoiceOver: another player made their opening play")
@@ -104,13 +106,14 @@ extension TilesScene {
             ringSerial += 1
             let serial = ringSerial
             rings = [:]
+            // Every placed piece wears the colour, those a TV already showed in the draft too.
+            for tile in placed { rings[tile] = color }
             for tile in placed where pieces[tile] == nil {
                 let size = flow?.pieceSize ?? CGSize(width: layout.rugPieceMax, height: layout.rugPieceMax * TilesLayout.pieceAspect)
                 let node = piece(tile, in: rugContent, size: size, face: .small, at: from)
                 node.setScale(reduce ? 1 : 0.5)
                 node.alpha = reduce ? 0 : 1
                 node.zPosition = 60
-                rings[tile] = color
             }
             flight = reduce ? 0.01 : 0.42
             redraw(animated: true)
@@ -161,8 +164,9 @@ extension TilesScene {
                 Haptics.shared.drop()
                 onAnnounce(String(localized: "You drew \(TilesWords.piece(tile))", comment: "VoiceOver: this player drew a piece"))
             } else {
-                // Someone else's draw: a piece goes from the toy box to that cat, face down.
-                if let tile, model.mySeats.contains(seat) { onDrew(seat, tile) }
+                // Someone else's draw: a piece goes from the toy box to that cat, face down. (A
+                // shared phone shows its own seat's piece for a beat; a TV never does.)
+                if let tile, model.mySeats.contains(seat), !isScreen { onDrew(seat, tile) }
                 guard !stashOnly else { return }
                 let size = CGSize(width: layout.rugPieceMax, height: layout.rugPieceMax * TilesLayout.pieceAspect)
                 let node = SKSpriteNode(texture: TilePieceFactory.shared.back(), size: size)
@@ -183,7 +187,8 @@ extension TilesScene {
             let words = String(localized: "\(SeatInfo.name(model.room, seat)) passed", comment: "VoiceOver: a player passed")
             guard !stashOnly else { return onAnnounce(words) }
             // A sleepy Zzz over the cat that passed.
-            let nap = SKSpriteNode(texture: TableArt.image(ArtName.iconZzz), size: CGSize(width: 34, height: 34))
+            let side = 34 * director.fxScale
+            let nap = SKSpriteNode(texture: TableArt.image(ArtName.iconZzz), size: CGSize(width: side, height: side))
             let at = seatPoint(seat)
             nap.position = CGPoint(x: at.x, y: at.y + (opponents.node(for: seat) == nil ? 60 : 0))
             nap.zPosition = 5
@@ -198,6 +203,8 @@ extension TilesScene {
             nap.removeFromParent()
             onAnnounce(words)
         case .turn(let seat):
+            // A TV's banner pops for the new turn now, not at the snapshot after it.
+            if isScreen { return showBanner(turn: seat) }
             guard model.mySeats.contains(seat) else { return }
             Haptics.shared.turn()
             if !model.isMultiSeat {
@@ -205,7 +212,9 @@ extension TilesScene {
             }
         case .forfeited(let seat):
             onAnnounce(String(localized: "\(SeatInfo.name(model.room, seat)) forfeited", comment: "VoiceOver announcement: a player forfeited"))
-        case .gameOver:
+        case .gameOver(_, _, let scores, _):
+            // A TV's final scores under the names, drawn off the main thread meanwhile.
+            if isScreen { TVArt.shared.warm(scores.map(TVSeatWords(.zero, unit: layout.tvUnit).piece)) }
             // The snapshot that follows ends the game on this table (`onGameOver`).
             await wait(0.4)
         }

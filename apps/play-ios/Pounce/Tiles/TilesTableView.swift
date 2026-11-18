@@ -3,8 +3,8 @@ import SpriteKit
 import SwiftUI
 
 /// Hosts the tile game's scene in one `SKView`, like `TableView` does Cat Tower's: the screen's
-/// top frame rate, the director controls `isPaused`. It adds the rug's pinch and double tap (tile game spec
-/// §5.7) and the swipe home from the left edge.
+/// top frame rate, the director controls `isPaused`. On the iPhone it adds the rug's pinch and
+/// double tap (tile game spec §5.7) and the swipe home from the left edge.
 struct TilesTableView: UIViewRepresentable {
     let scene: TilesScene
 
@@ -13,10 +13,13 @@ struct TilesTableView: UIViewRepresentable {
         view.runAtTopFrameRate()
         view.ignoresSiblingOrder = true
         view.shouldCullNonVisibleNodes = true
+        #if os(iOS)
         view.isMultipleTouchEnabled = false
+        #endif
         view.backgroundColor = UIColor(Palette.night)
         view.presentScene(scene)
         scene.director.view = view
+        #if os(iOS)
         let swipe = UIScreenEdgePanGestureRecognizer(target: context.coordinator, action: #selector(Coordinator.swiped))
         swipe.edges = .left
         swipe.delegate = context.coordinator
@@ -30,6 +33,7 @@ struct TilesTableView: UIViewRepresentable {
         double.delaysTouchesEnded = false
         double.delegate = context.coordinator
         view.addGestureRecognizer(double)
+        #endif
         return view
     }
 
@@ -49,6 +53,7 @@ struct TilesTableView: UIViewRepresentable {
 
     @MainActor
     final class Coordinator: NSObject, UIGestureRecognizerDelegate {
+        #if os(iOS)
         private func scene(_ recognizer: UIGestureRecognizer) -> TilesScene? {
             (recognizer.view as? SKView)?.scene as? TilesScene
         }
@@ -81,6 +86,7 @@ struct TilesTableView: UIViewRepresentable {
             guard recognizer.state == .ended, let view = recognizer.view, let scene = scene(recognizer) else { return }
             scene.doubleTap(at: scene.convertPoint(fromView: recognizer.location(in: view)))
         }
+        #endif
     }
 }
 

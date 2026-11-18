@@ -35,7 +35,9 @@ extension TableScene {
             await animateReshuffle()
         case .roundStarted(_, let dealer):
             await animateDeal(dealer: dealer)
-        case .roundOver(let wentOut, let points, let advanced, _, _):
+        case .roundOver(let wentOut, let points, let advanced, let scores, _):
+            // A TV's new scores under the names, drawn off the main thread while the round plays out.
+            if isScreen, let layout { TVArt.shared.warm(scores.map(TVSeatWords(.zero, unit: layout.tvUnit).piece)) }
             await playRoundOver(wentOut: wentOut, points: points, advanced: advanced)
         case .gameOver(let winners):
             await playGameOver(winners: winners)
@@ -294,6 +296,8 @@ extension TableScene {
             .flatMap { $0 }.map { fx.convert($0, from: laidZone.parent ?? self) }
         let endScale = laidZone.miniScale(layout: layout)
         let mine = seat == bottomSeat
+        // A TV makes a moment of it, big over the table.
+        if isScreen { showMoment(laidDown: seat) }
         // Just my cards: someone else's lay-down is the TV's to show; mine flies up to it.
         if controllerShown, !mine { return }
         let targets = controllerShown ? Array(repeating: tvPoint, count: cards.count) : landings
@@ -403,6 +407,8 @@ extension TableScene {
             await director.runAll(cat.turnOut(reduceMotion: reduceMotion), decorative: true)
         }
         setBottomTag(active: seat == bottomSeat)
+        // The TV's banner pops for the new turn now, not at the snapshot after it.
+        if isScreen { showBanner(turn: seat) }
         var items: [(SKAction, SKNode)] = []
         if seat != bottomSeat, let cat = opponents.node(for: seat), cat.setActive(true) {
             items += cat.turnPulse(reduceMotion: reduceMotion)

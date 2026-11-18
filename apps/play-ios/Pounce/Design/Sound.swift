@@ -38,8 +38,8 @@ enum Sound {
 }
 
 /// Sound effects from a small pool of pre-loaded `AVAudioPlayer`s per effect, so rapid repeats
-/// overlap instead of cutting off. The ambient session mixes with the user's music and follows
-/// the silent switch.
+/// overlap instead of cutting off. On the iPhone the ambient session mixes with the user's music
+/// and follows the silent switch; the Apple TV keeps the system's default session.
 @MainActor
 final class AudioSound: SoundPlaying {
     private static let voicesPerEffect = 3
@@ -84,7 +84,9 @@ final class AudioSound: SoundPlaying {
     private func load(_ name: String) {
         guard pools[name] == nil, !loading.contains(name) else { return }
         loading.insert(name)
+        #if os(iOS)
         if session == nil { session = Task { await SoundFiles.activateAmbientSession() } }
+        #endif
         let session = session
         Task {
             await session?.value

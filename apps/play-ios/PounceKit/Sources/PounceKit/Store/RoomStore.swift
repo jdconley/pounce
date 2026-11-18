@@ -27,8 +27,14 @@ import Observation
 /// - Nudges: `nudge(seat:)` sends one when `nudgeButton(for:)` is `.ready`. Its `nudgeSent` marks
 ///   the turn's nudge sent; an error while it's pending (too soon, not their turn) only clears it.
 ///   A `nudged` for one of this phone's seats becomes `nudgeNotice`.
+/// - A screen (`role: .screen`, a TV: docs/tv-protocol.md) only watches. It holds no seat, so it
+///   sends nothing of its own: no move, aim, nudge, lobby or presence message. Its socket's
+///   heartbeat still goes. A room that won't take it as its screen is `notFound`, as a missing
+///   one is. It shows the aims the server relays like any other device.
 @MainActor @Observable public final class RoomStore {
     public let code: String
+    /// How this device joined the room's socket: nil for a phone, `.screen` for a TV.
+    public let role: RoomRole?
     public private(set) var room: RoomView?
     public private(set) var phase: RoomPhase = .connecting
     /// Why the phase is `needsUpdate`, when the server said (app updates design §4): the app is
@@ -180,18 +186,33 @@ import Observation
     /// At most one aim goes out per this long.
     static let aimInterval: Duration = .milliseconds(120)
 
+    /// `role` must be the one `socket` connects with; the convenience init below keeps them together.
     public init(
-        code: String, socket: any RoomSocketing, makeMoveID: @escaping () -> String = { UUID().uuidString },
+        code: String, socket: any RoomSocketing, role: RoomRole? = nil, makeMoveID: @escaping () -> String = { UUID().uuidString },
         clock: @escaping () -> Date = Date.init,
         aimSleep: @escaping @Sendable (Duration) async -> Void = { try? await Task.sleep(for: $0) }
     ) {
         self.code = code
+        self.role = role
         self.socket = socket
         self.makeMoveID = makeMoveID
         self.clock = clock
         self.aimSleep = aimSleep
         (intents, continuation) = AsyncStream.makeStream(of: TableIntent.self, bufferingPolicy: .unbounded)
     }
+
+    /// A store with its own `RoomSocket`, joined as `role` (`?role=screen` for a TV).
+    public convenience init(
+        code: String, config: APIConfig, role: RoomRole? = nil,
+        credential: @escaping @Sendable () async throws -> DeviceCredential,
+        connector: any WebSocketConnector = URLSessionWebSocketConnector()
+    ) {
+        let socket = RoomSocket(code: code, config: config, role: role, credential: credential, connector: connector)
+        self.init(code: code, socket: socket, role: role)
+    }
+
+    /// A TV watching the table: it holds no seat and sends nothing of its own.
+    public var isScreen: Bool { role == .screen }
 
     /// Starts the socket and applies its events until the stream ends.
     public func run() async {
@@ -223,7 +244,7 @@ import Observation
     }
 
     private func act(seat: Seat, move: Move) -> Bool {
-        guard !actionInFlight, phase == .playing else { return false }
+        guard !isScreen, !actionInFlight, phase == .playing else { return false }
         actionInFlight = true
         actToken += 1
         let token = actToken
@@ -249,7 +270,9 @@ import Observation
     /// Sends a lobby, presence or move message. Never locks; replies arrive as
     /// snapshots (or an error that nopes the last control). Asking for a move code
     /// drops the one held, since the server replaces a seat's code.
+    /// A screen sends none: it holds no seat to play, claim, or be present in.
     public func send(_ message: ClientMessage) {
+        guard !isScreen else { return }
         if case .moveSeat = message { moveCode = nil }
         callSocket(inOrder: true) { socket in try? await socket.send(message) }
     }
@@ -263,7 +286,7 @@ import Observation
     /// aim `bad_message`, which would read as a refused move. Nor does a draft over the contract's
     /// limits (`trimmed`): the TV keeps the last good aim.
     public func aim(seat: Seat, _ aim: GameAim?) {
-        guard room?.screen == true else {
+        guard room?.screen == true, !isScreen else {
             aimTask?.cancel()
             aimTask = nil
             heldAim = nil
@@ -321,7 +344,7 @@ import Observation
     /// The Nudge button for `seat`, or nil when there's none: the server offers this phone a nudge
     /// for exactly that seat (a person on another phone, on the move mid-round).
     public func nudgeButton(for seat: Seat) -> NudgeButton? {
-        guard let room, room.liveTurn == seat,
+        guard !isScreen, let room, room.liveTurn == seat,
               room.seats.indices.contains(seat), room.seats[seat].kind == .human, !room.seats[seat].yours,
               let nudge = room.nudge, nudge.seat == seat
         else { return nil }
@@ -350,7 +373,7 @@ import Observation
     /// True when this phone may retire `seat` now: the server offers it (a person on another
     /// phone, on the move mid-round) and the move has waited out its days.
     public func canRetire(seat: Seat) -> Bool {
-        guard let room, room.liveTurn == seat,
+        guard !isScreen, let room, room.liveTurn == seat,
               room.seats.indices.contains(seat), room.seats[seat].kind == .human, !room.seats[seat].yours,
               room.retire?.seat == seat, let ready = retireReadyAt
         else { return false }

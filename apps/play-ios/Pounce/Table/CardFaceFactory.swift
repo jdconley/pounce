@@ -149,6 +149,13 @@ final class CardFaceFactory {
         for (key, texture) in await Self.drawPieces(missing) where numerals[key] == nil { numerals[key] = texture }
     }
 
+    /// The "+1" to "+12" fold badges at `size` (a TV's), drawn off the main thread.
+    func warmBadges(size: CGFloat) async {
+        let missing = (1...12).map { PreviewPiece.badge("+\($0)", size) }.filter { numerals[$0.key] == nil }
+        guard !missing.isEmpty else { return }
+        for (key, texture) in await Self.drawPieces(missing) where numerals[key] == nil { numerals[key] = texture }
+    }
+
     /// A preview ring or badge, as `ring(_:)` and `badge(_:size:)` cache it.
     private enum PreviewPiece: Sendable {
         case ring(UIColor)
@@ -290,16 +297,23 @@ final class CardFaceFactory {
     /// `size` is the type size wanted (it grows with the person's text size setting,
     /// `TableText`); a name too long for the pill gets smaller type, down to `nameSize`, before
     /// it is cut short at a sensible place (`NameFit`).
-    func nameTag(_ name: String, maxWidth: CGFloat, active: Bool, size wanted: CGFloat = CardFaceFactory.nameSize) -> SKTexture {
-        let key = "name|\(name)|\(Int(maxWidth))|\(active)|\(Int(wanted))"
+    ///
+    /// `minimum` is the smallest type a long name may get before it is cut (a TV keeps 28 points).
+    func nameTag(
+        _ name: String, maxWidth: CGFloat, active: Bool, size wanted: CGFloat = CardFaceFactory.nameSize,
+        minimum: CGFloat = CardFaceFactory.nameSize
+    ) -> SKTexture {
+        let key = minimum == Self.nameSize
+            ? "name|\(name)|\(Int(maxWidth))|\(active)|\(Int(wanted))"
+            : "name|\(name)|\(Int(maxWidth))|\(active)|\(Int(wanted))|\(Int(minimum))"
         if let cached = numerals[key] { return cached }
         let pads: (CGFloat) -> (h: CGFloat, pad: CGFloat) = { size in
             let h = ceil(("Ag" as NSString).size(withAttributes: Self.numeralAttributes(size: size)).height + 4)
             return (h, h * 0.24)
         }
         let fit = NameFit.fit(
-            name, width: maxWidth, sizes: NameFit.sizes(preferred: max(wanted, Self.nameSize), minimum: Self.nameSize),
-            wordFloor: TableTextScale.wordFloor
+            name, width: maxWidth, sizes: NameFit.sizes(preferred: max(wanted, minimum), minimum: minimum),
+            wordFloor: minimum == Self.nameSize ? TableTextScale.wordFloor : nil
         ) { text, size in
             (text as NSString).size(withAttributes: Self.numeralAttributes(size: size)).width + 2 * pads(size).pad
         }
@@ -466,9 +480,15 @@ final class CardFaceFactory {
     /// Extra pixels for a screen whose tables can be roomy (`TableLayout.roomyMinSide`), where
     /// hand cards are drawn up to 104 pt wide: the art keeps its edges at that size.
     static let detail: CGFloat = {
+        #if os(tvOS)
+        // A TV's piles are 128 points wide (`TableLayout.tvCard`), twice the art: drawn at twice
+        // the pixels, they stay sharp at 1080p and 4K alike.
+        return 2
+        #else
         let screen = UIApplication.shared.connectedScenes.compactMap { ($0 as? UIWindowScene)?.screen }.first
         guard let side = screen.map({ min($0.bounds.width, $0.bounds.height) }) else { return 1 }
         return side >= TableLayout.roomyMinSide ? 1.6 : 1
+        #endif
     }()
 
     /// Compact faces are only ever drawn small, so they render at three quarters the pixels.

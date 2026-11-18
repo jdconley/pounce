@@ -15,6 +15,14 @@ import CoreGraphics
 /// `meter` and `recap` are `.zero` and `opponentSlots` is empty, and the arrangement is
 /// `.controller`. On its turn, `.fullTable`: the table as ever (its arrangement from the size),
 /// under the switch band, with the paw menu moved up into the band and the toy box in its place.
+///
+/// A TV across the room asks for `.tv` with `init(tv:insets:seats:)`, planned in 1080p points
+/// like Cat Tower's (`TVPlan`, the web's TV table): the seats across the top (`seatFrames`,
+/// `opponentSlots`, inside `opponentsBar`), the board filling the room under them (`rugArt`, the
+/// sets flowing on `rug` with pieces up to `rugPieceMax`), and along the bottom the toy box
+/// (`pool`) at the left end, the turn `banner` in the middle and the menu (`menuButton`) in Cat
+/// Tower's corner. Nothing private and no controls: `rack`, `strip`, its buttons, `meter`,
+/// `recap`, `switchBand` and `statusLine` are `.zero`, and `rackSlots` is empty.
 public struct TilesLayout: Equatable, Sendable {
     /// How a controller shows the tile game.
     public enum Controller: Equatable, Sendable {
@@ -58,6 +66,21 @@ public struct TilesLayout: Equatable, Sendable {
     public let nameDrop: CGFloat
     public let menuButton: CGPoint
     public let menuSide: CGFloat
+
+    /// TV only (1 elsewhere): screen points per plan point (`TableLayout.tvUnit`).
+    public let tvUnit: CGFloat
+    /// TV only (empty elsewhere): each seat's place, its cat with its name and score under it,
+    /// left to right in seat order.
+    public let seatFrames: [CGRect]
+    /// TV only (`.zero` elsewhere): where "<Name>'s turn" sits, and as wide as it may grow.
+    public let banner: CGRect
+    public let bannerRoom: CGRect
+
+    /// The menu button's touch target.
+    public var menuButtonFrame: CGRect {
+        let d = max(menuSide, Self.buttonHit)
+        return CGRect(x: menuButton.x - d / 2, y: menuButton.y - d / 2, width: d, height: d)
+    }
 
     /// The rug's art.
     public let rugArt: CGRect
@@ -109,6 +132,10 @@ public struct TilesLayout: Equatable, Sendable {
             return
         }
         self.controller = controller
+        tvUnit = 1
+        seatFrames = []
+        banner = .zero
+        bannerRoom = .zero
         // On its turn a controller's table starts under the switch band.
         let top = controller.map { TableLayout.controllerTop(size: size, safeTop: safeTop, chrome: $0.chrome) }
         switchBand = top?.switchBand ?? .zero
@@ -232,7 +259,8 @@ public struct TilesLayout: Equatable, Sendable {
     /// to `rackRowLimit` rows, with the two
     /// sort toggles over its right end (where the table's strip has them), the two centred
     /// together in what is left. Never smaller than a table stash's pieces on this screen: when
-    /// that many don't fit at that size, the rows hold as many as fit and the stash scrolls.
+    /// that many don't fit at that size, the rows hold as many as fit at it and more rows are
+    /// added while the room holds them; only then does the stash scroll.
     private init(rackOnly chrome: ControllerChrome, size: CGSize, safeTop: CGFloat, safeBottom: CGFloat, rackCount: Int) {
         self.size = size
         self.safeTop = safeTop
@@ -240,6 +268,10 @@ public struct TilesLayout: Equatable, Sendable {
         self.rackCount = rackCount
         controller = .rackOnly(chrome)
         arrangement = .controller
+        tvUnit = 1
+        seatFrames = []
+        banner = .zero
+        bannerRoom = .zero
         let width = size.width
         let roomy = TableLayout.arrangement(for: size) != .phone
         let top = TableLayout.controllerTop(size: size, safeTop: safeTop, chrome: chrome)
@@ -295,9 +327,11 @@ public struct TilesLayout: Equatable, Sendable {
             if w > best.w { best = (w, rows, columns) }
         }
         if best.w < smallest {
-            // Too many to show at once: the most columns that fit at the table's size, and scroll.
-            let rows = Self.rackRowLimit
+            // Too many for three rows: the most columns that fit at the table's size, and as many
+            // more rows as the room holds; only past that does the stash scroll.
             let columns = max(Int(((availW + gap) / (smallest + gap)).rounded(.down)), 1)
+            let room = max(Int(((availH + gap) / (height(smallest) + gap)).rounded(.down)), Self.rackRowLimit)
+            let rows = min(max((n + columns - 1) / columns, Self.rackRowLimit), room)
             best = (max(fit(rows: rows, columns: columns), smallest), rows, columns)
         }
         let piece = CGSize(width: best.w, height: height(best.w))
@@ -318,13 +352,83 @@ public struct TilesLayout: Equatable, Sendable {
         sortNumber = CGRect(x: right - 2 * toggle - 2, y: togglesY, width: toggle, height: toggle)
     }
 
+    /// A TV table for `seats` players (2 to 4; more are seated as four) on a `size` screen whose
+    /// edges `insets` keeps clear. See the type's notes.
+    public init(tv size: CGSize, insets: TVInsets, seats: Int) {
+        let plan = TVPlan(size: size, insets: insets)
+        let gap = TVPlan.gap, avatar = TVPlan.avatar, seatH = TVPlan.seatH
+        let n = min(max(seats, 1), 4)
+        let left = plan.left, right = plan.w - plan.right
+        let slot = (right - left) / CGFloat(n)
+        let w = min(TVPlan.seatMaxW, slot - gap)
+        let seats = (0..<n).map { i in
+            CGRect(x: left + slot * (CGFloat(i) + 0.5) - w / 2, y: plan.top, width: w, height: seatH)
+        }
+        // Along the bottom: the toy box at the left end, the banner in the middle and the menu in
+        // Cat Tower's corner at the right end, both on Cat Tower's line, so neither moves between
+        // the games.
+        let stripH = TVPlan.bannerH + 16
+        let stripY = plan.h - plan.bottom - stripH
+        let cx = (left + right) / 2
+        let banner = CGRect(
+            x: cx - TVPlan.bannerW / 2, y: plan.h - plan.bottom - TVPlan.bannerH, width: TVPlan.bannerW, height: TVPlan.bannerH)
+        let pool = CGRect(x: left, y: stripY, width: stripH, height: stripH)
+        let menu = plan.menuRect
+        let boardY = plan.top + seatH + gap
+        let board = CGRect(x: left, y: boardY, width: right - left, height: stripY - gap - boardY)
+
+        self.size = size
+        safeTop = insets.top
+        safeBottom = insets.bottom
+        rackCount = 0
+        arrangement = .tv
+        controller = nil
+        tvUnit = plan.unit
+        switchBand = .zero
+        statusLine = .zero
+        seatFrames = seats.map(plan.rect)
+        opponentSlots = seats.map { plan.point(CGPoint(x: $0.midX, y: $0.minY + avatar / 2)) }
+        opponentsBar = plan.rect(CGRect(x: left, y: plan.top, width: right - left, height: seatH))
+        catDiameter = plan.len(avatar).rounded()
+        catLift = 0
+        nameDrop = plan.len(avatar / 2 + 24)
+        menuSide = plan.len(TVPlan.menu)
+        menuButton = plan.point(CGPoint(x: menu.midX, y: menu.midY))
+        self.banner = plan.rect(banner)
+        bannerRoom = plan.rect(plan.bannerRoom(banner, minX: pool.maxX, maxX: menu.minX))
+        self.pool = plan.rect(pool)
+        // The board as a roomy table's rug, its braid scaled with the plan; the sets flow inside it.
+        rugArt = plan.rect(board)
+        rug = plan.rect(board.insetBy(dx: 25, dy: 29))
+        rugBorderScale = plan.len(2.4)
+        // Pieces as big as the board allows, up to a Cat Tower card's width.
+        rugPieceMax = plan.len(TableLayout.tvCard).rounded()
+        rugPieceMin = plan.len(20).rounded()
+
+        // No stash and no controls.
+        rack = .zero
+        rackPiece = .zero
+        rackColumns = 0
+        rackRows = 0
+        rackGap = 0
+        strip = .zero
+        undo = .zero
+        reset = .zero
+        turn = .zero
+        sortNumber = .zero
+        sortToy = .zero
+        tidy = .zero
+        meter = .zero
+        recap = .zero
+    }
+
     /// A sort toggle's side over an iPad's stash alone: 56 at least, growing with the pieces.
     static func stashToggle(piece: CGFloat) -> CGFloat { min(max((piece * 0.55).rounded(), 56), 72) }
 
     // MARK: the stash
 
     /// Where each of `count` stash pieces sits (piece centers, before any sideways scroll), row
-    /// by row from the top left, and how wide the rows are together. Up to three rows of
+    /// by row from the top left, and how wide the rows are together. Up to `rackRows` rows of
     /// `rackColumns`; past that the rows grow sideways and the stash scrolls.
     public func rackSlots(count: Int) -> (centers: [CGPoint], contentWidth: CGFloat) {
         guard count > 0, rack.height > 0 else { return ([], 0) }

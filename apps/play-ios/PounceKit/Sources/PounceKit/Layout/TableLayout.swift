@@ -86,6 +86,18 @@ public struct ControllerHand: Equatable, Sendable {
 /// names the player. The table around the hand
 /// is absent: `opponentsBar`, `towerFrame`, `towerTab` and `laidZone` are `.zero`,
 /// `opponentSlots` is empty and `laidRow` is `.zero`.
+///
+/// A TV across the room asks for `.tv` with `init(tv:insets:seats:)`; it is never chosen from the
+/// size either. It is planned in 1080p points (`TVPlan`, the web's TV table) and drawn at
+/// `tvUnit`. Every seat sits around the table (`seatFrames`, `opponentSlots`, seat order): across
+/// the top, and from three seats one more down each side. The piles are in the middle on a `rug`,
+/// each seat's laid groups under it (`laidRow` is the room they have, sized for two groups of
+/// twelve with every numeral whole, so laying down and hitting never move anything; `tvGroups`
+/// places them), the tower down the left
+/// (open: no `towerTab`), the turn `banner` along the bottom (`bannerRoom` as wide as it may grow)
+/// and the menu (`menuButton`) in the bottom-right corner. Nothing private: no hand, no trays, no
+/// sort button or name pill (`hand` and `trayFrames` are empty; `traysFrame`, `towerTab`,
+/// `opponentsBar`, `sortButtonFrame` and `seatTagFrame` are `.zero`).
 public struct TableLayout: Sendable {
     /// How the table is arranged for the space it has.
     public enum Arrangement: Sendable, Equatable {
@@ -98,12 +110,15 @@ public struct TableLayout: Sendable {
         /// A phone or iPad whose table is on a TV: only its own cards (asked for, never chosen
         /// from the size).
         case controller
+        /// The TV a table is on: every seat, nothing private (asked for, never chosen from the
+        /// size).
+        case tv
     }
 
     /// The shorter side a view needs for a roomy arrangement.
     public static let roomyMinSide: CGFloat = 640
 
-    /// The arrangement a table (not a controller) gets for `size`: never `.controller`.
+    /// The arrangement a table (not a controller) gets for `size`: never `.controller` or `.tv`.
     public static func arrangement(for size: CGSize) -> Arrangement {
         guard min(size.width, size.height) >= roomyMinSide else { return .phone }
         return size.width > size.height * 1.1 ? .wide : .tall
@@ -177,6 +192,25 @@ public struct TableLayout: Sendable {
     /// Everything fits without overlapping.
     public var fits: Bool { chromeOverflow == 0 }
 
+    /// TV only (1 elsewhere): screen points per plan point, 1 at 1920 x 1080, 2 at 3840 x 2160.
+    /// Text on a TV table is sized in plan points times this.
+    public let tvUnit: CGFloat
+    /// TV only (empty elsewhere): each seat's place, its cat (`opponentSlots`) with its name and
+    /// score under it, in seat order: clockwise from the left side seat, across the top, then the
+    /// right side seat.
+    public let seatFrames: [CGRect]
+    /// TV only (`.zero` elsewhere): where "<Name>'s turn" sits, and as wide as it may grow for a
+    /// long name, centred on it.
+    public let banner: CGRect
+    public let bannerRoom: CGRect
+    /// TV only (`.zero` elsewhere): the rug under the piles.
+    public let rug: CGRect
+    /// TV only: each seat's room for its laid groups (plan points), how they line up in it, the
+    /// plan, and the laid card width the room is sized for.
+    private let tvAreas: [TVLaidArea]
+    private let tvPlan: TVPlan?
+    private let tvLaidWidth: CGFloat
+
     /// The view is big enough for a roomy table (an iPad window), whatever the arrangement.
     public var roomy: Bool { Self.arrangement(for: size) != .phone }
 
@@ -219,6 +253,14 @@ public struct TableLayout: Sendable {
         statusLine = .zero
         actionRow = .zero
         chromeOverflow = 0
+        tvUnit = 1
+        seatFrames = []
+        banner = .zero
+        bannerRoom = .zero
+        rug = .zero
+        tvAreas = []
+        tvPlan = nil
+        tvLaidWidth = 0
         self.size = size
         self.safeTop = safeTop
         self.safeBottom = safeBottom
@@ -296,7 +338,7 @@ public struct TableLayout: Sendable {
         // room left for the name pill and right for the sort button beside them).
         let trays: CGRect
         switch arrangement {
-        case .phone, .controller:  // a controller never comes this way
+        case .phone, .controller, .tv:  // a controller or a TV never comes this way
             trays = CGRect(x: 8, y: handTop + 6, width: width - 16, height: Self.traysHeight)
             sortButton = CGPoint(x: width - 26, y: trays.maxY + 24)
         case .tall:
@@ -318,7 +360,7 @@ public struct TableLayout: Sendable {
         towerFrame = CGRect(x: 0, y: towerBottom, width: towerW, height: bar.minY - 4 - towerBottom)
         let tab = Self.sortButtonHit
         switch arrangement {
-        case .phone, .controller:
+        case .phone, .controller, .tv:
             towerTab = CGRect(x: width - sortButton.x - tab / 2, y: sortButton.y - tab / 2, width: tab, height: tab)
         case .tall:
             towerTab = CGRect(x: trays.minX, y: sortButton.y - tab / 2, width: tab, height: tab)
@@ -330,7 +372,7 @@ public struct TableLayout: Sendable {
         // strip).
         let zone: CGRect
         switch arrangement {
-        case .phone, .controller:
+        case .phone, .controller, .tv:
             zone = CGRect(x: 8, y: towerBottom, width: width - 16, height: bar.minY - 8 - towerBottom)
         case .tall, .wide:
             let zoneMinY = arrangement == .tall ? sortButton.y + Self.sortButtonHit / 2 + 6 : trays.maxY + 12
@@ -379,6 +421,14 @@ public struct TableLayout: Sendable {
         self.safeTop = safeTop
         self.safeBottom = safeBottom
         arrangement = .controller
+        tvUnit = 1
+        seatFrames = []
+        banner = .zero
+        bannerRoom = .zero
+        rug = .zero
+        tvAreas = []
+        tvPlan = nil
+        tvLaidWidth = 0
         let width = size.width
         let roomy = Self.arrangement(for: size) != .phone
         // A landscape iPad: the action row goes beside the piles instead of under them, and the
@@ -589,7 +639,7 @@ public struct TableLayout: Sendable {
     }
 
     /// A cat's ring in the top bar: `catDiameter`, less when the bar is crowded.
-    public var opponentDiameter: CGFloat { min(catDiameter, opponentSpacing - 12) }
+    public var opponentDiameter: CGFloat { arrangement == .tv ? catDiameter : min(catDiameter, opponentSpacing - 12) }
 
     /// The touch target of the cat in slot `index` of the top bar (at least 44 pt).
     public func opponentFrame(_ index: Int) -> CGRect {
@@ -608,6 +658,7 @@ public struct TableLayout: Sendable {
     }
 
     public var sortButtonFrame: CGRect {
+        guard arrangement != .tv else { return .zero }  // a TV sorts nothing
         let d = Self.sortButtonHit
         return CGRect(x: sortButton.x - d / 2, y: sortButton.y - d / 2, width: d, height: d)
     }
@@ -620,7 +671,8 @@ public struct TableLayout: Sendable {
     /// the sort button, on its line (wide: just left of the trays). Laid rows stop short of it too.
     public var seatTagFrame: CGRect {
         // A controller names the player in its status line.
-        guard arrangement != .controller else { return .zero }
+        // A TV names every player in its seat.
+        guard arrangement != .controller, arrangement != .tv else { return .zero }
         let right = arrangement == .wide ? traysFrame.minX - 8 : sortButtonFrame.minX - 4
         return CGRect(
             x: right - Self.seatTagWidth, y: sortButton.y - Self.seatTagHeight / 2,
@@ -636,7 +688,7 @@ public struct TableLayout: Sendable {
 
     /// `count` equal tray slots across `traysFrame`, left to right, with gaps between.
     public func trayFrames(count: Int) -> [CGRect] {
-        guard count > 0 else { return [] }
+        guard count > 0, arrangement != .tv else { return [] }
         let gap: CGFloat = 8
         let w = (traysFrame.width - gap * CGFloat(count - 1)) / CGFloat(count)
         return (0..<count).map {
@@ -647,7 +699,7 @@ public struct TableLayout: Sendable {
     /// Fanned hand, left to right. Card `lifted` (if in range) is raised and straightened;
     /// `z` strictly increases left to right either way.
     public func hand(count: Int, lifted: Int?) -> [CardPlacement] {
-        guard count > 0 else { return [] }
+        guard count > 0, arrangement != .tv else { return [] }  // a TV never shows a hand
         let mid = CGFloat(count - 1) / 2
         let step = handStep(count: count)
         let cx = size.width / 2
@@ -667,7 +719,7 @@ public struct TableLayout: Sendable {
     /// spread over `count + 1` slots, exactly where they sit once the dragged card lands in the
     /// gap, so dropping it moves nothing else.
     public func hand(count: Int, gap: Int) -> [CardPlacement] {
-        guard count > 0 else { return [] }
+        guard count > 0, arrangement != .tv else { return [] }
         let gap = min(max(gap, 0), count)
         let slots = hand(count: count + 1, lifted: nil)
         return (0..<count).map { slots[$0 < gap ? $0 : $0 + 1] }
@@ -719,6 +771,10 @@ public struct TableLayout: Sendable {
     /// on each side of the piles instead, seats alternating left and right, top to bottom.
     public func laidRow(slot: Int, of total: Int) -> CGRect {
         guard arrangement != .controller else { return .zero }  // a controller lays nothing out
+        if arrangement == .tv {
+            guard let tvPlan, tvAreas.indices.contains(slot) else { return .zero }
+            return tvPlan.rect(tvAreas[slot].area)
+        }
         let total = max(total, 1)
         let slot = min(max(slot, 0), total - 1)
         let r: Int, rowsAbove: Int, x: CGFloat, width: CGFloat
@@ -758,4 +814,303 @@ public struct TableLayout: Sendable {
         }
         return row
     }
+}
+
+/// One of a TV's laid groups, placed as the phone's laid rows place theirs
+/// (`LaidZoneNode.placement`): a group too long for its room folds, showing its first cards and
+/// its last (a run keeps both ends, the cards a hit extends), with a "+n" badge for the rest.
+public struct TVLaidGroup: Equatable, Sendable {
+    /// The visible cards with a 4-point outline (the glow, the hit target).
+    public var frame: CGRect
+    /// Every card's center, left to right in group order; a folded-away card sits under the last
+    /// card (drawn hidden), so it slides out from there when the fold opens.
+    public var cards: [CGPoint]
+    /// Per card: drawn (true) or folded away under the last card.
+    public var shown: [Bool]
+    /// How many cards are folded away (0: none, and no badge).
+    public var folded: Int
+    /// Where the "+n" badge's center goes: on the seam before the last card, low on the cards,
+    /// clear of the corner numerals (as the phone puts it).
+    public var badge: CGPoint
+    /// The size the cards are drawn at.
+    public var cardSize: CGSize
+}
+
+/// A TV seat's room for its laid groups (plan points), under its seat, and how its groups line up
+/// in it: centred under a top seat, against the table's edge under a side seat.
+struct TVLaidArea: Equatable, Sendable {
+    enum Align: Equatable, Sendable { case start, centre, end }
+    var area: CGRect
+    var align: Align
+}
+
+extension TableLayout {
+    /// The TV's plan for Cat Tower (after the web's `tvLayoutOn`), in 1080p plan points.
+    static let tvCard: CGFloat = 128
+    static let tvTower: CGFloat = 96
+    /// Between rows of laid groups, and between a seat and the groups under it.
+    static let tvRowGap: CGFloat = 12
+    static let tvGroupGap: CGFloat = 16
+    /// The share of a laid card's width that shows before the next card covers it: never less
+    /// than `tvTight`, the compact face's widest corner index, so every numeral is whole.
+    /// `CardFaceFactory.indexWidth` of a 10 (corner, two outlined digits in 30 pt SF Rounded
+    /// Black, kern -1.8) is 48 of the face's 64 points.
+    static let tvTight: CGFloat = 48.0 / 64
+    /// As much as shows when a seat's groups have the room.
+    static let tvRoomy: CGFloat = 0.85
+    /// The table every seat is planned for, so laying down and hitting never move anything: two
+    /// groups (every phase lays down at most two) of twelve (a run's longest), as big as fits
+    /// unfolded, but never with corner numerals under 28 points (`tvLaidMin`): short of that room,
+    /// the plan keeps 28-point numerals and folds each group to the cards that fit.
+    static let tvPlanGroups = 2
+    static let tvPlanCards = 12
+    /// The narrowest laid card: its two-digit numeral is 28 points at 1080p.
+    static let tvLaidMin: CGFloat = (28 / laidNumeralRatio / 2).rounded(.up) * 2
+    /// A laid group's outline around its cards.
+    static let tvOutline: CGFloat = 4
+    /// A laid card's corner numeral (its font size) per point of card width: the compact face's
+    /// two-digit index, 30 pt on the 64 pt face (`CardFaceFactory.IndexStyle.compact`).
+    public static let laidNumeralRatio: CGFloat = 30.0 / 64
+
+    /// A TV table for `seats` players (2 to 6; more are seated as six) on a `size` screen whose
+    /// edges `insets` keeps clear. See the type's notes.
+    public init(tv size: CGSize, insets: TVInsets, seats: Int) {
+        let plan = TVPlan(size: size, insets: insets)
+        let gap = TVPlan.gap, avatar = TVPlan.avatar
+        let seatW = TVPlan.seatW, seatH = TVPlan.seatH
+        let n = min(max(seats, 1), 6)
+        // From three players, one seat down each side; the rest across the top.
+        let sides = n >= 3
+        let across = max(sides ? n - 2 : n, 1)
+        let cw = Self.tvCard
+        let ch = (cw * 90 / 64).rounded()
+        let pileGap = (cw * 0.22).rounded()
+        let pileW = cw * 2 + pileGap
+        let tower = CGRect(x: plan.left, y: plan.top, width: Self.tvTower, height: plan.h - plan.top - plan.bottom)
+        let x0 = tower.maxX + gap
+        let x1 = plan.w - plan.right
+        let cx = (x0 + x1) / 2
+        let menu = plan.menuRect
+        let banner = CGRect(
+            x: cx - TVPlan.bannerW / 2, y: plan.h - plan.bottom - TVPlan.bannerH, width: TVPlan.bannerW, height: TVPlan.bannerH)
+        let midBottom = banner.minY - gap
+        let cellW = (x1 - x0 - CGFloat(across - 1) * gap) / CGFloat(across)
+        // Groups keep their outline inside a top seat's cell, and inside a side's column (from
+        // the table's edge to the piles).
+        let topAreaW = cellW - 2 * Self.tvOutline
+        let sideAreaW = cx - pileW / 2 - gap - x0 - 2 * Self.tvOutline
+
+        // The biggest laid cards with which the planned table fits: rows under the top seats, then
+        // the piles beside the side seats with their rows under them, above the banner. Groups of
+        // `cards` cards, showing `tvTight` of each but the last.
+        func rows(_ w: CGFloat, _ lw: CGFloat, _ cards: Int) -> Int? {
+            let long = lw * (1 + CGFloat(cards - 1) * Self.tvTight)
+            guard w >= long else { return nil }
+            let perRow = max(1, Int(((w + Self.tvGroupGap) / (long + Self.tvGroupGap)).rounded(.down)))
+            return (Self.tvPlanGroups + perRow - 1) / perRow
+        }
+        func height(_ rows: Int?, _ lw: CGFloat) -> CGFloat {
+            guard let rows else { return .infinity }
+            return CGFloat(rows) * (ch * lw / cw) + CGFloat(rows - 1) * Self.tvRowGap
+        }
+        func midHeight(_ topH: CGFloat) -> CGFloat { midBottom - (plan.top + seatH + Self.tvRowGap + topH + gap) }
+        func fits(_ lw: CGFloat, _ cards: Int) -> Bool {
+            let topH = height(rows(topAreaW, lw, cards), lw)
+            let sideH = sides ? seatH + Self.tvRowGap + height(rows(sideAreaW, lw, cards), lw) : 0
+            return midHeight(topH) >= max(ch + 96, sideH)
+        }
+        // Unfolded at the biggest size that fits, down to 28-point numerals; then folded, keeping
+        // them; and only on a frame no TV has (two cards a group won't fit), smaller.
+        var lw: CGFloat = 96
+        var visible = Self.tvPlanCards
+        while lw > Self.tvLaidMin, !fits(lw, visible) { lw -= 2 }
+        while visible > 2, !fits(lw, visible) { visible -= 1 }
+        while lw > 24, !fits(lw, visible) { lw -= 2 }
+        let topH = min(height(rows(topAreaW, lw, visible), lw), height(Self.tvPlanGroups, lw))
+        let sideH = sides ? min(height(rows(sideAreaW, lw, visible), lw), height(Self.tvPlanGroups, lw)) : 0
+        let midTop = plan.top + seatH + Self.tvRowGap + topH + gap
+        let midH = midBottom - midTop
+        let cy = midTop + midH / 2
+        // A side seat and its rows, centred top to bottom beside the piles.
+        let sideTop = cy - (seatH + Self.tvRowGap + sideH) / 2
+
+        // Seats clockwise from the left side: the left, the top from the left, the right.
+        var cells: [(seat: CGRect, area: TVLaidArea)] = []
+        if sides {
+            cells.append((
+                CGRect(x: x0, y: sideTop, width: seatW, height: seatH),
+                TVLaidArea(
+                    area: CGRect(x: x0 + Self.tvOutline, y: sideTop + seatH + Self.tvRowGap, width: sideAreaW, height: sideH),
+                    align: .start)))
+        }
+        for i in 0..<across {
+            let x = x0 + CGFloat(i) * (cellW + gap)
+            let w = min(TVPlan.seatMaxW, cellW)
+            cells.append((
+                CGRect(x: x + (cellW - w) / 2, y: plan.top, width: w, height: seatH),
+                TVLaidArea(
+                    area: CGRect(x: x + Self.tvOutline, y: plan.top + seatH + Self.tvRowGap, width: topAreaW, height: topH),
+                    align: .centre)))
+        }
+        if sides {
+            cells.append((
+                CGRect(x: x1 - seatW, y: sideTop, width: seatW, height: seatH),
+                TVLaidArea(
+                    area: CGRect(
+                        x: x1 - Self.tvOutline - sideAreaW, y: sideTop + seatH + Self.tvRowGap, width: sideAreaW, height: sideH),
+                    align: .end)))
+        }
+        let placed = Array(cells.prefix(n))
+
+        // The rug sits under the piles, clear of the side seats' groups and the banner.
+        let rugSide = min(max(midH, pileW + 48), midH + gap, sides ? pileW + gap : pileW * 2)
+
+        self.size = size
+        safeTop = insets.top
+        safeBottom = insets.bottom
+        arrangement = .tv
+        tvUnit = plan.unit
+        tvPlan = plan
+        tvAreas = placed.map(\.area)
+        tvLaidWidth = lw
+        let card = CGSize(width: plan.len(cw).rounded(), height: plan.len(ch).rounded())
+        cardSize = card
+        pileSize = card
+        miniCardSize = CGSize(width: plan.len(lw).rounded(), height: plan.len(ch * lw / cw).rounded())
+        catDiameter = plan.len(avatar).rounded()
+        catLift = 0
+        // The name in the seat's strip under the cat, the score under it.
+        nameDrop = plan.len(avatar / 2 + 24)
+        towerHeadSize = plan.len(64).rounded()
+        seatFrames = placed.map { plan.rect($0.seat) }
+        opponentSlots = placed.map { plan.point(CGPoint(x: $0.seat.midX, y: $0.seat.minY + avatar / 2)) }
+        deck = plan.point(CGPoint(x: cx - pileGap / 2 - cw / 2, y: cy))
+        discard = plan.point(CGPoint(x: cx + pileGap / 2 + cw / 2, y: cy))
+        towerFrame = plan.rect(tower)
+        rug = plan.rect(CGRect(x: cx - rugSide / 2, y: cy - rugSide / 2, width: rugSide, height: rugSide))
+        laidZone = plan.rect(placed.map(\.area.area).reduce(CGRect.null) { $0.union($1) })
+        self.banner = plan.rect(banner)
+        bannerRoom = plan.rect(plan.bannerRoom(banner, minX: tower.maxX, maxX: menu.minX))
+        menuSide = plan.len(TVPlan.menu)
+        menuButton = plan.point(CGPoint(x: menu.midX, y: menu.midY))
+
+        // Nothing private, and none of a phone's or a controller's chrome.
+        opponentsBar = .zero
+        towerTab = .zero
+        traysFrame = .zero
+        sortButton = .zero
+        switchBand = .zero
+        statusLine = .zero
+        actionRow = .zero
+        chromeOverflow = 0
+        handBaseY = 0
+        fanRadius = 1
+        handSpan = 0
+        rowHeight = miniCardSize.height + 8
+        columnWidth = 0
+        columnGap = 8
+        rowGap = 8
+        rowsAboveCapacity = 0
+        rowsBelowCapacity = 0
+        rowMaxWidth = .infinity
+    }
+
+    /// Where a TV places `seat`'s laid groups of `counts` cards each, in its room (`laidRow`), at
+    /// `miniCardSize`: spread out if they fit, closer (never past a card's corner numeral) if that
+    /// is what fits, and then folded as the phone folds a laid row: the group showing the most
+    /// cards gives up one at a time, down to its first card and its last. The planned table (two
+    /// groups of up to twelve) always fits this way with 28-point numerals at 1080p; only more
+    /// than that shrinks the cards. Empty off a TV or for a seat not at the table.
+    ///
+    /// The scene draws each card at `cards[i]` when `shown[i]`, hides the rest (they sit under the
+    /// last card), and for `folded > 0` a "+\(folded)" badge at `badge`, in the corner numerals'
+    /// size (`tvLaidNumeral`) over the cards.
+    public func tvGroups(seat: Int, counts: [Int]) -> [TVLaidGroup] {
+        guard arrangement == .tv, let tvPlan, tvAreas.indices.contains(seat), !counts.isEmpty else { return [] }
+        let a = tvAreas[seat]
+        let area = a.area
+        let cw = Self.tvCard, ch = (Self.tvCard * 90 / 64).rounded()
+        typealias Sized = (count: Int, visible: Int, step: CGFloat, w: CGFloat)
+        /// Rows of `sized` groups, or nil when they don't fit the room.
+        func pack(_ sized: [Sized], _ lh: CGFloat) -> [[Sized]]? {
+            guard !sized.contains(where: { $0.w > area.width + 0.01 }) else { return nil }
+            var rows: [[Sized]] = []
+            var used = CGFloat.infinity
+            for g in sized {
+                if used + Self.tvGroupGap + g.w > area.width {
+                    rows.append([])
+                    used = -Self.tvGroupGap
+                }
+                rows[rows.count - 1].append(g)
+                used += Self.tvGroupGap + g.w
+            }
+            let h = CGFloat(rows.count) * lh + CGFloat(max(rows.count - 1, 0)) * Self.tvRowGap
+            return h <= area.height + 0.01 ? rows : nil
+        }
+        var lw = tvLaidWidth
+        var placed: (rows: [[Sized]], lw: CGFloat)?
+        while placed == nil {
+            let lh = ch * lw / cw
+            func sized(_ visible: [Int], _ spread: CGFloat) -> [Sized] {
+                zip(counts, visible).map { c, v in
+                    let shown = max(v, 1)
+                    let step = shown == 1 ? 0 : max(lw * Self.tvTight, min(lw * spread, (area.width - lw) / CGFloat(shown - 1)))
+                    return (c, v, step, lw + step * CGFloat(shown - 1))
+                }
+            }
+            var visible = counts.map { max($0, 0) }
+            while placed == nil {
+                if let rows = pack(sized(visible, Self.tvRoomy), lh) ?? pack(sized(visible, Self.tvTight), lh) {
+                    placed = (rows, lw)
+                } else if let g = visible.indices.filter({ visible[$0] > 2 }).max(by: { visible[$0] < visible[$1] }) {
+                    visible[g] -= 1  // fold one more card of the group showing the most
+                } else {
+                    break
+                }
+            }
+            if placed == nil {
+                guard lw > 12 else { placed = (pack(sized(visible, Self.tvTight), .zero) ?? [sized(visible, Self.tvTight)], lw); break }
+                lw -= 2  // more than the planned table: smaller cards
+            }
+        }
+        guard let placed else { return [] }
+        let lw2 = placed.lw, lh = ch * lw2 / cw
+        let o = Self.tvOutline
+        let card = CGSize(width: tvPlan.len(lw2), height: tvPlan.len(lh))
+        var out: [TVLaidGroup] = []
+        var y = area.minY
+        for row in placed.rows {
+            let rowW = row.reduce(0) { $0 + $1.w } + Self.tvGroupGap * CGFloat(row.count - 1)
+            var x: CGFloat = switch a.align {
+            case .start: area.minX
+            case .centre: area.minX + (area.width - rowW) / 2
+            case .end: area.maxX - rowW
+            }
+            for g in row {
+                // The phone's fold: the first cards and the last; the rest under the last.
+                let n = g.count
+                let vis: [Int] = g.visible >= n ? Array(0..<n) : (g.visible <= 1 ? [0] : Array(0..<(g.visible - 1)) + [n - 1])
+                var centers = Array(repeating: CGPoint.zero, count: n)
+                var shown = Array(repeating: false, count: n)
+                for (k, j) in vis.enumerated() {
+                    centers[j] = CGPoint(x: x + CGFloat(k) * g.step + lw2 / 2, y: y + lh / 2)
+                    shown[j] = true
+                }
+                let last = vis.last.map { centers[$0] } ?? CGPoint(x: x + lw2 / 2, y: y + lh / 2)
+                for j in centers.indices where !shown[j] { centers[j] = last }
+                let badge = CGPoint(x: vis.count > 1 ? last.x - lw2 / 2 : last.x + lw2 * 0.2, y: y + lh / 2 + lh * 0.24)
+                out.append(TVLaidGroup(
+                    frame: tvPlan.rect(CGRect(x: x - o, y: y - o, width: g.w + 2 * o, height: lh + 2 * o)),
+                    cards: centers.map(tvPlan.point), shown: shown, folded: n - vis.count,
+                    badge: tvPlan.point(badge), cardSize: card))
+                x += g.w + Self.tvGroupGap
+            }
+            y += lh + Self.tvRowGap
+        }
+        return out
+    }
+
+    /// TV only: a laid card's corner numeral size (`laidNumeralRatio` of `miniCardSize`), the size
+    /// a fold's "+n" badge is drawn at too.
+    public var tvLaidNumeral: CGFloat { arrangement == .tv ? miniCardSize.width * Self.laidNumeralRatio : 0 }
 }

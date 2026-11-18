@@ -205,6 +205,8 @@ final class TilesOpponentsNode: SKNode {
     private var tagText: [Seat: String] = [:]
     private var boxes: [Seat: SKSpriteNode] = [:]
     private var naps: [Seat: SKSpriteNode] = [:]
+    /// A TV's scores, under the names.
+    private var scores: [Seat: SKSpriteNode] = [:]
     private(set) var order: [Seat] = []
 
     func node(for seat: Seat) -> CatNode? { cats[seat] }
@@ -221,11 +223,17 @@ final class TilesOpponentsNode: SKNode {
         let slots = layout.opponentSlots
         let diameter = layout.catDiameter
         let names = SeatInfo.names(model.room)
-        let textScale = TableText.scale
+        // A TV's words are sized for the couch (`TVSeatWords`), not by the text size setting.
+        let onTV = layout.arrangement == .tv
+        let textScale = onTV ? 1 : TableText.scale
         let spacing = slots.count > 1 ? abs(slots[1].x - slots[0].x) : layout.size.width
         let tagWidth = min(spacing - 2, (layout.roomy ? 170 : 140) * textScale)
         let nameSize = TableTextScale.nameSize(scale: textScale)
-        let chipScale = TableTextScale.chips(scale: textScale, spacing: spacing, diameter: diameter)
+        let chipScale = onTV ? 1 : TableTextScale.chips(scale: textScale, spacing: spacing, diameter: diameter)
+        for (seat, score) in scores where !seats.contains(seat) || !onTV {
+            score.removeFromParent()
+            scores[seat] = nil
+        }
 
         for (seat, node) in cats where !seats.contains(seat) || node.diameter != diameter || node.textScale != chipScale
             || node.cat != SeatInfo.catIndex(model.room.seats[safe: seat]) {
@@ -260,7 +268,7 @@ final class TilesOpponentsNode: SKNode {
             node.alpha = marks.forfeited ? 0.45 : 1  // fade-ok: CatNode is a FadeGroup
             node.setLink(marks.forfeited ? nil : (view?.kind == .human ? LinkWords.seat(view?.link)?.level : nil))
             node.setBadges(bot: marks.bot, skip: false)
-            node.slotWidth = spacing
+            node.slotWidth = onTV ? layout.seatFrames[safe: i]?.width ?? spacing : spacing
             node.setCount(marks.forfeited ? nil : marks.count)
             if node.setActive(marks.onTheMove) { turnedOn.append(seat) }
 
@@ -298,15 +306,31 @@ final class TilesOpponentsNode: SKNode {
             let name = marks.forfeited
                 ? String(localized: "Forfeited", comment: "Under a player's name: they left the game")
                 : (names[safe: seat] ?? "")
-            let key = "\(name)|\(tagWidth)|\(nameSize)"
+            let words = onTV ? TVSeatWords(layout.seatFrames[safe: i] ?? .zero, unit: layout.tvUnit) : nil
+            let width = words?.nameWidth ?? tagWidth, size = words?.nameSize ?? nameSize
+            let key = "\(name)|\(width)|\(size)"
             if tagText[seat] != key || tag.texture == nil {
                 tagText[seat] = key
-                let texture = CardFaceFactory.shared.nameTag(name, maxWidth: tagWidth, active: false, size: nameSize)
+                let texture = CardFaceFactory.shared.nameTag(
+                    name, maxWidth: width, active: false, size: size, minimum: words?.nameMinimum ?? CardFaceFactory.nameSize)
                 tag.texture = texture
                 tag.size = texture.size()
             }
             tag.position = CGPoint(x: slots[i].x, y: slots[i].y - layout.nameDrop)
             tag.zPosition = Self.tagZ + CGFloat(i)
+            if let words {
+                // A TV: each seat's score under its name, once there is one (every score is 0
+                // until the game is over).
+                let score = scores[seat] ?? {
+                    let n = SKSpriteNode()
+                    scores[seat] = n
+                    addChild(n)
+                    return n
+                }()
+                let over = model.view.status == .gameOver
+                words.place(score: marks.forfeited || !over ? nil : model.view.scores[safe: seat], on: score, under: tag)
+                score.zPosition = Self.tagZ + CGFloat(i)
+            }
         }
         order = Array(seats.prefix(slots.count))
         return turnedOn
@@ -319,6 +343,7 @@ final class TilesOpponentsNode: SKNode {
         tagText.removeAll()
         boxes.removeAll()
         naps.removeAll()
+        scores.removeAll()
         order = []
     }
 

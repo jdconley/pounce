@@ -68,7 +68,15 @@ final class TilePieceFactory {
     private var drawingFaces: Set<FaceKey> = []
 
     /// The scale textures are drawn at: the screen's, at least 2.
-    static var scale: CGFloat { max(UIScreen.main.scale, 2) }
+    static var scale: CGFloat {
+        #if os(tvOS)
+        // A TV's rug pieces reach a Cat Tower card's 128 points, twice the large face's 60: twice
+        // the pixels keep them sharp at 1080p and 4K alike.
+        return max(UIScreen.main.scale * 2, 2)
+        #else
+        return max(UIScreen.main.scale, 2)
+        #endif
+    }
 
     // MARK: colours
 

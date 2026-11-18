@@ -44,8 +44,10 @@ extension TableScene {
         laidZone.isHidden = true
 
         let usable = size.height * 0.62
-        let gap: CGFloat = 12
-        let band = min(118, (usable - gap * CGFloat(n - 1)) / CGFloat(n))
+        // A TV's bands, cats and names are bigger, for the couch (`AnimationDirector.fxScale`).
+        let stage = director.fxScale
+        let gap: CGFloat = 12 * stage
+        let band = min(118 * stage, (usable - gap * CGFloat(n - 1)) / CGFloat(n))
         let topY = size.height / 2 + (CGFloat(n) * band + CGFloat(n - 1) * gap) / 2 - band / 2
         let tilt: CGFloat = 0.16
         let total = CelebrationTiming.versusIntro
@@ -65,7 +67,7 @@ extension TableScene {
             let home = CGPoint(x: size.width / 2, y: y)
             slash.position = reduce ? home : CGPoint(x: home.x + side * size.width * 1.7, y: y)
             fx.addChild(slash)
-            let cat = catBadge(seat: seat, model: model, height: band)
+            let cat = catBadge(seat: seat, model: model, height: band, stage: stage)
             cat.zPosition = 1.05 + CGFloat(i) * 0.1
             let spot = CGPoint(x: size.width * (fromLeft ? 0.3 : 0.7), y: y + band * 0.04)
             cat.position = reduce ? spot : CGPoint(x: spot.x + side * size.width, y: spot.y)
@@ -111,7 +113,7 @@ extension TableScene {
     /// A diagonal band of `color` with a thick ink outline (two plain color sprites, no shapes).
     private func slashNode(color: UIColor, width: CGFloat, height: CGFloat) -> SKNode {
         let node = SKNode()
-        let ink = SKSpriteNode(color: UIColor(Palette.ink), size: CGSize(width: width, height: height + 10))
+        let ink = SKSpriteNode(color: UIColor(Palette.ink), size: CGSize(width: width, height: height + 10 * director.fxScale))
         let fill = SKSpriteNode(color: color, size: CGSize(width: width, height: height))
         let shine = SKSpriteNode(color: UIColor.white.withAlphaComponent(0.22), size: CGSize(width: width, height: height * 0.22))
         shine.position = CGPoint(x: 0, y: height * 0.3)
@@ -122,7 +124,7 @@ extension TableScene {
     }
 
     /// A seat's cat (awake pose) with its name, or the bot badge, for the versus intro.
-    private func catBadge(seat: Seat, model: TableModel, height: CGFloat) -> SKNode {
+    private func catBadge(seat: Seat, model: TableModel, height: CGFloat, stage: CGFloat) -> SKNode {
         let node = SKNode()
         let view = model.room.seats[safe: seat]
         let d = height * 1.12
@@ -135,9 +137,11 @@ extension TableScene {
             node.addChild(badge)
         } else if let name = view?.person?.name, !name.isEmpty {
             let fromLeft = seat.isMultiple(of: 2)
-            let text = CardFaceFactory.shared.numeral(name, size: min(30, height * 0.3), outline: 4)
+            // Never under 28 points on a TV.
+            let text = CardFaceFactory.shared.numeral(
+                name, size: stage > 1 ? max(min(30 * stage, height * 0.3), 28).rounded() : min(30, height * 0.3), outline: 4 * stage)
             let label = SKSpriteNode(texture: text, size: text.size())
-            let dx = d * 0.5 + text.size().width / 2 + 4
+            let dx = d * 0.5 + text.size().width / 2 + 4 * stage
             label.position = CGPoint(x: fromLeft ? dx : -dx, y: -height * 0.08)
             label.zPosition = 0.02
             node.addChild(label)
@@ -180,7 +184,7 @@ extension TableScene {
                 if seat == wentOut { Effects.burst(.sparkle, at: spot, in: fx, director: director) }
             }
             let tail = SKAction.group([
-                .moveBy(x: 0, y: reduceMotion ? 0 : 44, duration: t.pointsTail).eased(.easeOut),
+                .moveBy(x: 0, y: reduceMotion ? 0 : 44 * director.fxScale, duration: t.pointsTail).eased(.easeOut),
                 .sequence([.wait(forDuration: t.pointsTail * 0.45), .fadeOut(withDuration: t.pointsTail * 0.55)]),
             ])
             pops.append((.sequence([.wait(forDuration: at), land, appear, tail, .removeFromParent()]), node))
@@ -246,7 +250,8 @@ extension TableScene {
     private func pointsNode(_ value: Int, wentOut: Bool) -> SKSpriteNode {
         let text = value > 0 ? "+\(value)" : "0"
         let fill = UIColor(wentOut || value == 0 ? Palette.teal : Palette.orange)
-        let texture = CardFaceFactory.shared.numeral(text, size: 34, fill: fill, outline: 4)
+        let stage = director.fxScale
+        let texture = CardFaceFactory.shared.numeral(text, size: (34 * stage).rounded(), fill: fill, outline: 4 * stage)
         return SKSpriteNode(texture: texture, size: texture.size())
     }
 
@@ -292,8 +297,8 @@ extension TableScene {
         let kinds: [BurstKind] = reduceMotion ? [.confetti, .stars] : [.confetti, .stars, .yarn, .confetti, .fur, .confetti]
         for (i, kind) in kinds.enumerated() {
             await pause(i == 0 ? 0.2 : 0.45)
-            let dx = CGFloat([0, -60, 60, -30, 40, 0][i % 6])
-            let dy = CGFloat([30, 70, 50, 110, 90, 140][i % 6])
+            let dx = CGFloat([0, -60, 60, -30, 40, 0][i % 6]) * director.fxScale
+            let dy = CGFloat([30, 70, 50, 110, 90, 140][i % 6]) * director.fxScale
             Effects.burst(kind, at: CGPoint(x: center.x + dx, y: center.y + dy), in: fxLayer, director: director)
         }
         await crowned.value

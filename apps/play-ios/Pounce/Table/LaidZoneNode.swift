@@ -11,6 +11,11 @@ import SpriteKit
 /// that could take the card fade back, and the group opens a gap at the end the card will land
 /// on, with a washed-out copy of the card there (a Yarn shows the number it stands for). A
 /// group that can't take it is ringed in red and darkened.
+///
+/// On a TV (`TableLayout.Arrangement.tv`) each seat's groups sit under its seat, which already
+/// shows its cat and name: no head or name in the row, the groups placed by
+/// `TableLayout.tvGroups` (folded the phone's way, the "+N" in the corner numerals' size), and the
+/// acting player's aim from their phone (`setAim`) glows on its group.
 @MainActor
 final class LaidZoneNode: SKNode {
     @MainActor private final class Row {
@@ -54,6 +59,13 @@ final class LaidZoneNode: SKNode {
     /// Every laid group's frame as aimed at (`drop(at:)`), in parent space; nil once rows or
     /// the zone's scale change.
     private var dropFrames: (scale: CGFloat, origin: CGPoint, frames: [(target: HitTarget, frame: CGRect)])?
+    /// The TV's layout, whose `tvGroups` place every row; nil on a phone or an iPad.
+    private var tv: TableLayout?
+    /// The group the acting player points at from their phone (a TV): its ring and glow.
+    private(set) var aim: HitTarget?
+    private let aimLayer = SKNode()
+    private let aimGlow = SKSpriteNode(texture: TableArt.cards(ArtName.cardGlow))
+    private let aimRing = SKSpriteNode()
 
     /// Growth while enlarged, about `center`.
     static let enlargeScale: CGFloat = 1.1
@@ -70,6 +82,16 @@ final class LaidZoneNode: SKNode {
         previewStands.zPosition = 1
         previewStands.isHidden = true
         previewLayer.addChild(previewStands)
+        aimLayer.zPosition = 0.04
+        aimLayer.isHidden = true
+        addChild(aimLayer)
+        aimGlow.centerRect = CGRect(x: 0.35, y: 0.35, width: 0.3, height: 0.3)
+        aimGlow.color = UIColor(Palette.yellow)
+        aimGlow.colorBlendFactor = 0.5
+        aimLayer.addChild(aimGlow)
+        aimRing.centerRect = CardFaceFactory.ringCenter
+        aimRing.zPosition = 6  // over the cards, like the preview's ring
+        aimLayer.addChild(aimRing)
     }
 
     @available(*, unavailable)
@@ -83,8 +105,10 @@ final class LaidZoneNode: SKNode {
             preview = nil
             drawPreview()
             setTargets([], enlarged: false, about: .zero)
+            _ = setAim(nil)
             return
         }
+        tv = layout.arrangement == .tv ? layout : nil
         let total = game.laid.count
         names = SeatInfo.names(model.room)
         for (seat, row) in rows where (game.laid[safe: seat] ?? nil) == nil {
@@ -119,6 +143,7 @@ final class LaidZoneNode: SKNode {
         for (seat, row) in rows { _ = arrange(row, seat: seat, animated: false) }
         drawPreview()
         placeGlows(seats: nil)
+        placeAim()
     }
 
     /// Frames of `seat`'s laid groups, in the zone's parent space (as drawn, enlarged or not).
@@ -279,7 +304,7 @@ final class LaidZoneNode: SKNode {
     /// says. Animated, the cards that move are returned as slides instead of set.
     private func arrange(_ row: Row, seat: Seat, animated: Bool) -> [(SKAction, SKNode)] {
         let groups = shownGroups(row, seat: seat)
-        let place = Self.placement(groups: groups, rect: row.rect, mini: row.miniSize, name: row.tag.size)
+        let place = placement(row, seat: seat, groups: groups)
         let ghostCard = preview.flatMap { p in p.target.seat == seat && p.ghost && p.plan != nil ? p.card : nil }
         var moves: [(SKAction, SKNode)] = []
         for (g, group) in groups.enumerated() {
@@ -318,7 +343,7 @@ final class LaidZoneNode: SKNode {
         }
         while row.badges.count > folds.count { row.badges.removeLast().removeFromParent() }
         for (badge, fold) in zip(row.badges, folds) {
-            let t = CardFaceFactory.shared.badge("+\(fold.count)", size: Self.badgeSize)
+            let t = CardFaceFactory.shared.badge("+\(fold.count)", size: badgeSize)
             if badge.texture !== t {
                 badge.texture = t
                 badge.size = t.size()
@@ -353,6 +378,34 @@ final class LaidZoneNode: SKNode {
         previewStands.isHidden = false
     }
 
+    /// Glows `target` (nil: none), the group the acting player points at from their phone (a TV):
+    /// a yellow ring round it and a soft glow behind. Returns the ring and glow when they just came
+    /// on somewhere new, for the scene to pop.
+    func setAim(_ target: HitTarget?) -> [SKNode] {
+        let shown = target.flatMap { t in rows[t.seat]?.shownFrames.indices.contains(t.group) == true ? t : nil }
+        guard shown != aim else { return [] }
+        aim = shown
+        placeAim()
+        return shown == nil ? [] : [aimRing, aimGlow]
+    }
+
+    /// Fits the aim's ring and glow to its group as drawn.
+    private func placeAim() {
+        guard let aim, let row = rows[aim.seat], let f = row.shownFrames[safe: aim.group] else {
+            aimLayer.isHidden = true
+            return
+        }
+        aimLayer.isHidden = false
+        let u = tv?.tvUnit ?? 1
+        let pad = CardNode.glowSize(for: row.miniSize)
+        aimGlow.size = CGSize(width: f.width + (pad.width - row.miniSize.width) * 1.8 + 8 * u,
+                              height: f.height + (pad.height - row.miniSize.height) * 1.8 + 8 * u)
+        aimGlow.position = CGPoint(x: f.midX, y: f.midY)
+        aimRing.texture = CardFaceFactory.shared.ring(UIColor(Palette.yellow))
+        aimRing.size = CGSize(width: f.width + 22 * u, height: f.height + 22 * u)
+        aimRing.position = CGPoint(x: f.midX, y: f.midY)
+    }
+
     /// Forces the glow sprites to rebuild after rows moved.
     private func invalidateGlows() {
         shownTargets = []
@@ -375,6 +428,29 @@ final class LaidZoneNode: SKNode {
         /// Per group, how many cards are folded away and where their badge goes.
         var folded: [(count: Int, at: CGPoint)]
         var frames: [CGRect]
+        /// The size the row's cards are drawn at.
+        var cardSize: CGSize
+    }
+
+    /// The "+N" badge's text size: the phone's, or on a TV the corner numerals' (28 points or more).
+    private var badgeSize: CGFloat { tv.map { $0.tvLaidNumeral.rounded() } ?? Self.badgeSize }
+
+    /// Where `row`'s pieces go for `groups`: the phone's row, or on a TV `tvGroups` under the seat.
+    private func placement(_ row: Row, seat: Seat, groups: [Group]) -> RowPlacement {
+        if let tv { return Self.placement(tv: tv, seat: seat, groups: groups) }
+        return Self.placement(groups: groups, rect: row.rect, mini: row.miniSize, name: row.tag.size)
+    }
+
+    /// A TV's row: `tvGroups` for the groups' lengths (no head, no name: the seat shows them).
+    static func placement(tv: TableLayout, seat: Seat, groups: [Group]) -> RowPlacement {
+        let placed = tv.tvGroups(seat: seat, counts: groups.map(\.cards.count))
+        let o = tv.tvUnit * 4  // the frame's outline (`TableLayout.tvOutline`)
+        return RowPlacement(
+            headCenter: .zero, headSize: 0, nameCenter: .zero,
+            cards: placed.map(\.cards), shown: placed.map(\.shown),
+            folded: placed.map { ($0.folded, $0.badge) },
+            frames: placed.map { $0.frame.insetBy(dx: o, dy: o) },
+            cardSize: placed.first?.cardSize ?? tv.miniCardSize)
     }
 
     /// "+N" badge text size: an 11 pt cap height.
@@ -459,7 +535,7 @@ final class LaidZoneNode: SKNode {
         return RowPlacement(
             headCenter: CGPoint(x: nameX, y: headY), headSize: headSize,
             nameCenter: CGPoint(x: nameX, y: nameY),
-            cards: cards, shown: shown, folded: folded, frames: frames)
+            cards: cards, shown: shown, folded: folded, frames: frames, cardSize: mini)
     }
 
     /// Zone space → parent space (as drawn, enlarged or not).
@@ -470,6 +546,7 @@ final class LaidZoneNode: SKNode {
     /// Where each card of `groups` will land when `seat` lays them down, in parent space, for
     /// a table with `total` seats (the lay-down animation flies there before the row exists).
     func landing(groups: [Group], seat: Seat, total: Int, layout: TableLayout) -> [[CGPoint]] {
+        if layout.arrangement == .tv { return Self.placement(tv: layout, seat: seat, groups: groups).cards.map { $0.map(toParent) } }
         let rect = layout.laidRow(slot: seat, of: total)
         let name = Self.nameTexture(names[safe: seat] ?? "", row: rect).size()
         return Self.placement(groups: groups, rect: rect, mini: layout.miniCardSize, name: name).cards.map { $0.map(toParent) }
@@ -481,7 +558,7 @@ final class LaidZoneNode: SKNode {
               let j = group.cards.firstIndex(of: card) else { return nil }
         var groups = row.groups
         groups[index] = group
-        let p = Self.placement(groups: groups, rect: row.rect, mini: row.miniSize, name: row.tag.size)
+        let p = placement(row, seat: seat, groups: groups)
         return p.cards[safe: index]?[safe: j].map(toParent)
     }
 
@@ -497,18 +574,28 @@ final class LaidZoneNode: SKNode {
     }
 
     private func build(_ row: Row, seat: Seat) {
+        if tv == nil {
+            let nameTexture = Self.nameTexture(row.name, row: row.rect)
+            row.tag.texture = nameTexture
+            row.tag.size = nameTexture.size()
+            row.tag.zPosition = 0.06
+            if row.tag.parent == nil { row.node.addChild(row.tag) }
+        } else {
+            // A TV's seat shows its cat and name: the row has neither.
+            row.tag.removeFromParent()
+            row.tag.size = .zero
+            row.head?.removeFromParent()
+            row.head = nil
+        }
+        let place = placement(row, seat: seat, groups: row.groups)
+        // A TV shrinks a seat's cards only for more than the planned table (`tvGroups`).
+        row.miniSize = place.cardSize
         let mini = row.miniSize
-        let nameTexture = Self.nameTexture(row.name, row: row.rect)
-        row.tag.texture = nameTexture
-        row.tag.size = nameTexture.size()
-        row.tag.zPosition = 0.06
-        if row.tag.parent == nil { row.node.addChild(row.tag) }
-        let place = Self.placement(groups: row.groups, rect: row.rect, mini: mini, name: row.tag.size)
         row.tag.position = place.nameCenter
 
         // The seat's tiny cat on the left (rebuilt only when the cat changes or it moved).
         let headSize = place.headSize
-        if row.head?.name != "head\(row.cat)" || row.head?.size.width != headSize + 4 {
+        if tv == nil, row.head?.name != "head\(row.cat)" || row.head?.size.width != headSize + 4 {
             row.head?.removeFromParent()
             let ring = SKSpriteNode(texture: TableArt.table(ArtName.ring), size: CGSize(width: headSize + 4, height: headSize + 4))
             ring.name = "head\(row.cat)"

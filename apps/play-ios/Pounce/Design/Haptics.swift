@@ -1,8 +1,11 @@
+#if os(iOS)
 import CoreHaptics
+#endif
 import Foundation
 
 /// The app's haptic patterns. `Haptics.shared` is the real one, or under a UI test
-/// (`Pace.underTest`) a silent stand-in that never starts the Taptic Engine.
+/// (`Pace.underTest`) a silent stand-in that never starts the Taptic Engine. The Apple TV has no
+/// haptics: there it is always the silent one.
 @MainActor
 protocol HapticPlaying: AnyObject {
     /// Wakes the Taptic Engine without blocking (a finger went down), so the ticks of a drag
@@ -24,9 +27,14 @@ protocol HapticPlaying: AnyObject {
 
 @MainActor
 enum Haptics {
+    #if os(iOS)
     static let shared: any HapticPlaying = Pace.underTest ? SilentHaptics() : EngineHaptics()
+    #else
+    static let shared: any HapticPlaying = SilentHaptics()
+    #endif
 }
 
+#if os(iOS)
 /// Core Haptics patterns. Every call is a silent no-op when the setting is off, the device has
 /// no haptic hardware (the simulator), or the engine fails to start.
 @MainActor
@@ -164,8 +172,9 @@ final class EngineHaptics: HapticPlaying {
         running = false
     }
 }
+#endif
 
-/// Under a UI test: counts what would have played and plays nothing.
+/// Under a UI test, and on the Apple TV: counts what would have played and plays nothing.
 @MainActor
 final class SilentHaptics: HapticPlaying {
     private(set) var played = 0

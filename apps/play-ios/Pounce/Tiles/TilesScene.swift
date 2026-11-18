@@ -1,3 +1,4 @@
+import Observation
 import PounceKit
 import SpriteKit
 import SwiftUI
@@ -16,6 +17,12 @@ import SwiftUI
 ///
 /// While a TV shows the table (`tv`), the switch's band is at the top, and on Cards off turn the
 /// stash is all there is (TilesController.swift).
+///
+/// A TV's table (`isScreen`: its store joined as a screen) is this scene in the TV's arrangement
+/// (`TilesLayout(tv:insets:seats:)`): every seat across the top, the board filling the room, the
+/// toy box and the turn banner along the bottom. The board shows the acting player's draft as they
+/// make it on their phone (`RoomStore.aims`), the pieces they are adding marked. It never has a
+/// stash, a strip or input, whatever the room says.
 @MainActor
 final class TilesScene: SKScene {
     /// zPosition bands. Everything inside a layer stays below the next band.
@@ -32,6 +39,29 @@ final class TilesScene: SKScene {
 
     let store: RoomStore
     let director = AnimationDirector(view: nil)
+    /// This is a TV's table: its store joined the room as a screen. Fixed for the scene's life.
+    let isScreen: Bool
+    /// A TV's "<Name>'s turn" (and "Reconnecting") along the bottom.
+    let banner = TVBanner()
+    /// The store's aims and connection are being watched (a TV).
+    private var watching = false
+    private var warmedBanners: [TVArt.Piece] = []
+    /// The seat the banner names (the drawn table's turn, or one that just started).
+    private var bannerTurn: Seat?
+    /// A TV: the acting player's draft as last seen, for their seat and turn. Their phone takes it
+    /// back as it commits (that clear comes before `played`), so the board keeps it for a moment
+    /// (`draftHold`) rather than the pieces leaving and flying back in. A clear that isn't followed
+    /// by the play in that time was a cancel (on the wire the two are the same message): the draft
+    /// goes and the board shows the table as it really is.
+    private var keptAim: (seat: Seat, turns: Int, sets: [[TileID]])?
+    /// The kept draft's clear came (its hold is running), and the scene time it was first seen at.
+    private var aimCleared = false
+    private var aimClearedAt: TimeInterval?
+    /// How long a draft stays on the board after its player's phone takes it back, waiting for the
+    /// play that commits it (seconds of scene time).
+    static let draftHold: TimeInterval = 1.5
+    /// The draft the board last drew (a TV): a store change that leaves it as it is draws nothing.
+    private var drawnAim: [[TileID]]?
     /// Rack orders, half-built drafts and the last rug seen, per table on this device.
     var memory: TilesDeviceStore?
 
@@ -219,6 +249,7 @@ final class TilesScene: SKScene {
     init(store: RoomStore, memory: TilesDeviceStore? = nil) {
         self.store = store
         self.memory = memory
+        isScreen = store.isScreen
         super.init(size: CGSize(width: 390, height: 844))
         scaleMode = .resizeFill
         anchorPoint = .zero
@@ -256,6 +287,8 @@ final class TilesScene: SKScene {
         recapButton.zPosition = 3
         layer(.pool).addChild(recapButton)
         layer(.opponents).addChild(opponents)
+        layer(.opponents).addChild(banner)
+        banner.zPosition = 30
         controlsLayer.addChild(menuButton)
         for node in [undoButton, resetButton, tidyButton] {
             layer(.strip).addChild(node)
@@ -311,6 +344,13 @@ final class TilesScene: SKScene {
         #endif
         director.view = view
         safeInsets = view.safeAreaInsets
+        if isScreen {
+            // The game's sounds are the TV's; its pieces are drawn ahead, off the main thread.
+            Sound.shared.preload()
+            Task { await TilePieceFactory.shared.prewarm() }
+            TVArt.shared.scale = max(view.traitCollection.displayScale, 1)
+            watchStore()
+        }
         redraw()
         speed = CGFloat(Pace.factor)
     }
@@ -330,6 +370,7 @@ final class TilesScene: SKScene {
     override func update(_ currentTime: TimeInterval) {
         let work = FrameWork("tiles.update"); defer { work.end() }
         stepInput(currentTime)
+        if aimCleared { holdDraft(currentTime) }
         // A set that isn't one yet breathes, so the view stays awake while one is on the rug.
         if breathing { director.wake() }
         #if DEBUG
@@ -343,7 +384,8 @@ final class TilesScene: SKScene {
     /// The seat whose stash may show now: this phone's only seat, or the one pass-and-play has
     /// revealed. Nil outside play.
     func currentReveal(_ model: TilesTableModel) -> Seat? {
-        guard model.isLive else { return nil }
+        // A TV shows no stash, ever.
+        guard model.isLive, !isScreen else { return nil }
         let mine = model.myActiveSeats
         if mine.count == 1, model.mySeats.count == 1 { return mine[0] }
         if case .revealed(let seat) = store.pass.state, mine.contains(seat) { return seat }
@@ -360,6 +402,8 @@ final class TilesScene: SKScene {
             return
         }
         self.model = model
+        bannerTurn = model.room.liveTurn
+        if let kept = keptAim, !model.isLive || kept.seat != model.view.turn || kept.turns != model.view.turns { dropKeptAim() }
         drawnSeq = store.settledSeq
         pendingTable = nil
         for node in transients { node.removeFromParent() }
@@ -449,12 +493,6 @@ final class TilesScene: SKScene {
         rackShown = []
     }
 
-    /// Tidy is remembered between turns on this phone.
-    var tidyPreference: Bool {
-        get { UserDefaults.standard.bool(forKey: "tiles.tidy") }
-        set { UserDefaults.standard.set(newValue, forKey: "tiles.tidy") }
-    }
-
     /// Keeps a half-built turn and the stash's order for when the app comes back.
     func saveDraft() {
         guard let memory, let model, let seat = shownSeat else { return }
@@ -475,8 +513,62 @@ final class TilesScene: SKScene {
     /// The sets the rug shows now: the draft's, another seat's play in flight, or the room's.
     func currentSets() -> [ShownSet] {
         if let draft { return draft.shownSets.map { ShownSet(id: $0.id, tiles: $0.tiles) } }
-        let table = pendingTable ?? model?.view.table ?? []
+        let table = pendingTable ?? aimTable ?? model?.view.table ?? []
         return table.enumerated().map { ShownSet(id: $0.offset, tiles: $0.element) }
+    }
+
+    /// A TV: the acting player's draft of the table, while they make it on their phone
+    /// (`RoomStore.aims`); nil for none, and always nil off a TV.
+    /// A clear from their phone doesn't take it off the board while the turn lasts (`keptAim`).
+    var aimTable: [[TileID]]? {
+        guard isScreen, let model, model.isLive else { return nil }
+        if case .table(let sets)? = store.aims[model.view.turn] { return sets }
+        guard let kept = keptAim, kept.seat == model.view.turn, kept.turns == model.view.turns else { return nil }
+        return kept.sets
+    }
+
+    /// Keeps the acting player's draft as their phone last sent it (`keptAim`), and starts its hold
+    /// when the phone takes it back.
+    private func keepAim() {
+        guard isScreen, let model, model.isLive else { return }
+        if case .table(let sets)? = store.aims[model.view.turn] {
+            keptAim = (model.view.turn, model.view.turns, sets)
+            aimCleared = false
+            aimClearedAt = nil
+            return
+        }
+        guard !aimCleared, let kept = keptAim, kept.seat == model.view.turn, kept.turns == model.view.turns else { return }
+        aimCleared = true
+        aimClearedAt = nil
+        // The view stays awake through the hold, so its frames can end it (`holdDraft`).
+        let director = director
+        let node = layer(.fx)
+        Task { await director.run(.wait(forDuration: Self.draftHold + 0.2), on: node, decorative: true) }
+    }
+
+    /// Each frame of a draft's hold: once `draftHold` of scene time has passed since its clear with no
+    /// play landing, it was a cancel, and the board goes back to the table as it is.
+    private func holdDraft(_ now: TimeInterval) {
+        guard let since = aimClearedAt else {
+            aimClearedAt = now
+            return
+        }
+        guard (now - since) * Double(speed) >= Self.draftHold else { return }
+        dropKeptAim()
+        redraw(animated: true)
+    }
+
+    /// Forgets the kept draft (the play landed, the turn moved on, or its hold ran out).
+    func dropKeptAim() {
+        keptAim = nil
+        aimCleared = false
+        aimClearedAt = nil
+    }
+
+    /// The pieces the acting player's draft adds to the table (a TV marks them).
+    func aimAdded() -> Set<TileID> {
+        guard pendingTable == nil, let model, let sets = aimTable else { return [] }
+        return Set(sets.joined()).subtracting(model.view.table.joined())
     }
 
     /// The seat the bottom band is laid out for: the one shown, else the one behind the curtain.
@@ -499,7 +591,10 @@ final class TilesScene: SKScene {
         probe.redraws += 1
         #endif
         background.position = CGPoint(x: size.width / 2, y: size.height / 2)
-        let bgScale = max(size.width / 390, size.height / 844)
+        // The room art is portrait; a TV turns it on its side, as Cat Tower's wide table does.
+        background.zRotation = isScreen ? .pi / 2 : 0
+        let art = isScreen ? CGSize(width: 844, height: 390) : CGSize(width: 390, height: 844)
+        let bgScale = max(size.width / art.width, size.height / art.height)
         background.size = CGSize(width: 390 * bgScale, height: 844 * bgScale)
         tableVeil.position = background.position
         tableVeil.size = background.size
@@ -510,8 +605,14 @@ final class TilesScene: SKScene {
         if !animated { director.cancelActions(under: rugContent) }
 
         let seat = shownSeat
+        if isScreen {
+            keepAim()
+            drawnAim = aimTable
+        }
         let sets = currentSets()
-        let placed = draft?.placedTiles ?? []
+        // A TV marks what the acting player's draft adds (a paw and a yellow ring, lifted a little).
+        let added = isScreen ? aimAdded() : []
+        let placed = draft?.placedTiles ?? added
         let rackTiles: [TileID]
         if let seat, let order = orders[seat] {
             let rack = draft?.rack ?? model.rack(seat) ?? []
@@ -520,13 +621,16 @@ final class TilesScene: SKScene {
             rackTiles = []
         }
         rackShown = rackTiles
-        let band = bandSeat(model)
-        let controls = model.isLive && !model.myActiveSeats.isEmpty
-        let layout = TilesLayout(
-            size: size, safeTop: safeInsets.top, safeBottom: safeInsets.bottom,
-            opponents: model.barSeats(bottom: seat).count,
-            rackCount: max(band.map(model.rackCount) ?? 0, rackTiles.count + input.dragTiles.count),
-            meter: draft?.openingMeter != nil, controls: controls, controller: controllerMode(model))
+        let band = isScreen ? nil : bandSeat(model)
+        let controls = !isScreen && model.isLive && !model.myActiveSeats.isEmpty
+        let layout = isScreen
+            ? TilesLayout(tv: size, insets: TVInsets(safeInsets), seats: model.barSeats(bottom: nil).count)
+            : TilesLayout(
+                size: size, safeTop: safeInsets.top, safeBottom: safeInsets.bottom,
+                opponents: model.barSeats(bottom: seat).count,
+                rackCount: max(band.map(model.rackCount) ?? 0, rackTiles.count + input.dragTiles.count),
+                meter: draft?.openingMeter != nil, controls: controls, controller: controllerMode(model))
+        director.fxScale = isScreen ? 2 * layout.tvUnit : 1
         self.layout = layout
         // Just the stash (Cards, off turn): the curtain and the shared phone's cats take all of
         // the room under the status line.
@@ -560,7 +664,8 @@ final class TilesScene: SKScene {
         setTable(up: !stashOnly, animated: morph)
         var live: Set<TileID> = []
         /// The first set on the rug that opens in the loupe (the loupe tip points at it).
-        let firstOpenSet = drawRug(sets, model: model, layout: table, placed: placed, live: &live, animated: animated && !stashOnly)
+        let firstOpenSet = drawRug(
+            sets, model: model, layout: table, placed: placed, added: added, live: &live, animated: animated && !stashOnly)
         if input.isDragging { live.formUnion(input.dragTiles) }
 
         // The stash.
@@ -622,14 +727,18 @@ final class TilesScene: SKScene {
         menuButton.isHidden = false
         publishProbe()
         if controls { warmTextures(layout: table) }
-        publishTipSpots(firstSet: firstOpenSet.flatMap { layout.rug.contains(CGPoint(x: $0.midX, y: $0.midY)) ? $0 : nil })
+        if isScreen {
+            showBanner(pop: false)
+        } else {
+            publishTipSpots(firstSet: firstOpenSet.flatMap { layout.rug.contains(CGPoint(x: $0.midX, y: $0.midY)) ? $0 : nil })
+        }
     }
 
     /// Lays the rug's sets out (and the "new row" slot) and returns the first set that opens in the
     /// loupe; every piece it draws goes in `live`.
     private func drawRug(
-        _ sets: [ShownSet], model: TilesTableModel, layout: TilesLayout, placed: Set<TileID>, live: inout Set<TileID>,
-        animated: Bool
+        _ sets: [ShownSet], model: TilesTableModel, layout: TilesLayout, placed: Set<TileID>, added: Set<TileID>,
+        live: inout Set<TileID>, animated: Bool
     ) -> CGRect? {
         rugSprite.isHidden = false
         rugSprite.setScale(1)
@@ -686,6 +795,8 @@ final class TilesScene: SKScene {
             for (i, tile) in set.tiles.enumerated() where !(input.dragTiles.contains(tile) && input.isDragging) {
                 live.insert(tile)
                 var target = CGPoint(x: placement.pieces[i].x, y: -placement.pieces[i].y)
+                // A TV lifts what the acting player's draft adds, a little.
+                if added.contains(tile) { target.y += flow.pieceSize.height * 0.06 }
                 if swell > 1 {
                     target = CGPoint(
                         x: center.x + (target.x - placement.frame.midX) * swell,
@@ -696,7 +807,8 @@ final class TilesScene: SKScene {
                 node.show(size: flow.pieceSize, face: swell > 1.2 ? .large : small, standing: standings?[i])
                 node.zPosition = (swell > 1 ? 45 : 10) + CGFloat(i) * 0.01
                 node.setPlaced(placed.contains(tile))
-                node.setRing(rings[tile] ?? (selection.contains(tile) ? .white : hintRing(tile)))
+                node.setRing(
+                    rings[tile] ?? (selection.contains(tile) ? .white : added.contains(tile) ? UIColor(Palette.yellow) : hintRing(tile)))
                 node.alpha = 1
                 settle(node, at: target, scale: selection.contains(tile) ? 1.12 : swell, animated: animated)
             }
@@ -792,6 +904,70 @@ final class TilesScene: SKScene {
             node.isHidden = true
         }
         meterNode.isHidden = true
+        _ = banner.show(nil, banner: .zero, room: .zero, unit: 1, pop: false, reduceMotion: true)
+    }
+
+    // MARK: a TV's table
+
+    /// A TV watches what its store hears between snapshots: the acting player's draft and whether
+    /// the TV still has the table. A new draft slides the board's pieces to it (and only a new
+    /// one: anything else the store changes redraws nothing); the connection redraws the banner.
+    private func watchStore() {
+        guard isScreen, !watching else { return }
+        watching = true
+        withObservationTracking {
+            _ = store.aims
+            _ = store.connection
+        } onChange: { [weak self] in
+            Task { @MainActor [weak self] in
+                guard let self else { return }
+                self.watching = false
+                guard self.view != nil else { return }
+                self.keepAim()
+                if self.aimTable != self.drawnAim { self.redraw(animated: true) }
+                self.showBanner(pop: false)
+                self.watchStore()
+            }
+        }
+    }
+
+    /// A TV's banner pops for the turn that just started.
+    func showBanner(turn started: Seat) {
+        bannerTurn = started
+        showBanner(pop: true)
+    }
+
+    /// A TV's banner: whose turn it is, or "Reconnecting" while the TV has lost the table; gone
+    /// after the game. `pop`: a turn just started.
+    private func showBanner(pop: Bool) {
+        guard isScreen, let model, let layout, layout.arrangement == .tv else {
+            _ = banner.show(nil, banner: .zero, room: .zero, unit: 1, pop: false, reduceMotion: true)
+            return
+        }
+        let names = SeatInfo.names(model.room)
+        let words = TVSeatWords(.zero, unit: layout.tvUnit)
+        let pieces = names.indices.map {
+            TVBanner.piece(name: names[$0], seat: $0, banner: layout.banner, room: layout.bannerRoom, unit: layout.tvUnit)
+        } + [TVBanner.lost(banner: layout.banner, unit: layout.tvUnit)] + model.view.scores.map(words.piece)
+        if pieces != warmedBanners {
+            warmedBanners = pieces
+            TVArt.shared.warm(pieces)
+        }
+        let next: TVBanner.Shown?
+        if store.connection == .reconnecting {
+            next = .reconnecting
+        } else if let turn = bannerTurn {
+            next = .turn(seat: turn, name: names[safe: turn] ?? "", cat: SeatInfo.catIndex(model.room.seats[safe: turn]))
+        } else {
+            next = nil
+        }
+        let motion = banner.show(
+            next, banner: layout.banner, room: layout.bannerRoom, unit: layout.tvUnit, pop: pop, reduceMotion: Effects.reduceMotion)
+        director.wake()
+        if let (action, node) = motion {
+            let director = director
+            Task { await director.run(action, on: node, decorative: true) }
+        }
     }
 
     /// The node for `tile`, in `parent`. A piece that changes parent keeps its place on screen
@@ -923,11 +1099,19 @@ final class TilesScene: SKScene {
         poolSprite.size = layout.pool.size
         poolSprite.position = CGPoint(x: layout.pool.midX, y: layout.pool.midY)
         poolSprite.alpha = model.view.poolCount == 0 ? 0.55 : 1  // fade-ok: the toy box alone
-        let count = TilePieceFactory.shared.count(model.view.poolCount, size: layout.roomy ? 18 : 14)
+        // A TV's count is read from the couch: 36 points.
+        let onTV = layout.arrangement == .tv
+        let count = TilePieceFactory.shared.count(model.view.poolCount, size: onTV ? (36 * layout.tvUnit).rounded() : layout.roomy ? 18 : 14)
         poolCount.isHidden = false
         poolCount.texture = count
         poolCount.size = count.size()
-        poolCount.position = CGPoint(x: layout.pool.minX + count.size().width / 2 - 6, y: layout.pool.minY + count.size().height / 2 - 4)
+        if onTV {
+            // In the toy box's bottom-right corner, inside the TV-safe area.
+            poolCount.position = CGPoint(
+                x: layout.pool.maxX - count.size().width / 2 + 6 * layout.tvUnit, y: layout.pool.minY + count.size().height / 2)
+        } else {
+            poolCount.position = CGPoint(x: layout.pool.minX + count.size().width / 2 - 6, y: layout.pool.minY + count.size().height / 2 - 4)
+        }
         // The "what changed" paw, at the strip's right end, while there is something to show again.
         // Easy mode's hint has that slot, and the rings on the rug show what changed there.
         let side: CGFloat = layout.roomy ? 50 : 40

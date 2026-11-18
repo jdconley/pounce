@@ -14,8 +14,8 @@ import Testing
         (CGSize(width: 1366, height: 1024), 24, 20),
     ]
     /// 14 is the deal; 21 fills the stash's row limit on a phone; 22 and 28 are ordinary racks
-    /// later in a game; 40 scrolls even on an iPad's off-turn rack.
-    static let counts = [14, TilesLayout.rackRowLimit * 7, 22, 28, 40]
+    /// later in a game; 40 is a long game's; 80 scrolls everywhere.
+    static let counts = [14, TilesLayout.rackRowLimit * 7, 22, 28, 40, 80]
     static let tall = ControllerChrome(switchBand: 64, status: 56, actions: 96)
 
     private func rackOnly(_ i: Int, _ count: Int, _ chrome: ControllerChrome = .standard) -> TilesLayout {
@@ -91,16 +91,16 @@ import Testing
             if !scrolls, let last = pieces.map(\.maxX).max() {
                 #expect(abs(l.sortToy.maxX - last) < 0.5, "\(l.size) \(count): the toggles end at \(l.sortToy.maxX), the rows at \(last)")
             }
-            // It scrolls only when the rows are full at no smaller than the table stash's size,
-            // as many to a row as fit at that size.
+            // It scrolls only when the room is full: as many to a row as fit at no smaller than
+            // the table stash's size, and as many rows as fit under the status line.
             if scrolls {
                 let stash = table(i, count).rackPiece.width
                 #expect(l.rackPiece.width >= stash, "\(l.size) \(count)")
                 let gap: CGFloat = l.roomy ? 6 : 4, side: CGFloat = l.roomy ? 24 : 8
                 #expect(CGFloat(l.rackColumns + 1) * (stash + gap) - gap > l.size.width - 2 * side, "\(l.size) \(count): room for another column")
-                #expect(l.rackRows == TilesLayout.rackRowLimit)
+                let row = l.rackPiece.height + gap
+                #expect(l.rack.height + row > l.statusLine.minY - l.safeBottom - l.sortToy.height, "\(l.size) \(count): room for another row")
             }
-            #expect(l.rackRows <= TilesLayout.rackRowLimit)
             #expect(menu.width >= 44 && menu.height >= 44)
             #expect(l.switchBand.height >= max(chrome.switchBand, 44) && l.statusLine.height >= chrome.status)
         }
@@ -154,6 +154,25 @@ import Testing
         #expect(abs(group.midY - room) <= 8, "\(l.size): stash at \(group.midY), room's middle \(room)")
         let xs = l.rackSlots(count: 14).centers.map(\.x)
         #expect(abs((xs.min()! + xs.max()!) / 2 - l.size.width / 2) < 0.5)
+    }
+
+    /// Past three rows the stash takes more rows, keeping its columns, while they fit: a usual
+    /// rack is all on screen, with no piece cut off at the edge. (22 pieces on an iPhone 17 Pro
+    /// once ran off the right edge with most of the screen empty.)
+    @Test(arguments: screens.indices)
+    func aUsualRackIsAllOnScreen(_ i: Int) {
+        for count in [22, 28] {
+            let l = rackOnly(i, count)
+            #expect(l.rackScrollLimit(count: count) == 0, "\(l.size) \(count): scrolls")
+            let safe = safeArea(l).insetBy(dx: -0.01, dy: -0.01)
+            for c in l.rackSlots(count: count).centers { #expect(safe.contains(pieceRect(c, l.rackPiece))) }
+            // Past three rows, one more piece adds a row at most: the columns and the pieces' size stay.
+            let fewer = rackOnly(i, count - 1)
+            #expect(l.rackPiece.width >= table(i, count).rackPiece.width)
+            if fewer.rackRows > TilesLayout.rackRowLimit {
+                #expect(l.rackColumns == fewer.rackColumns && l.rackPiece.width >= fewer.rackPiece.width - 0.5, "\(l.size) \(count)")
+            }
+        }
     }
 
     @Test func anSEAtTheLargestTextSizeStillFits() {

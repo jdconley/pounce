@@ -49,6 +49,10 @@ final class AnimationDirector {
     /// all (a redraw settles every piece on the table).
     private var keyedTokens: [ObjectIdentifier: [Int]] = [:]
 
+    /// How big the table's bursts and badges are drawn: 1 on a phone or an iPad, bigger on a TV
+    /// across the room (`Effects.burst` scales its particles, the tower its badges).
+    var fxScale: CGFloat = 1
+
     /// Frames the scene has updated since launch (DEBUG: `table.frames`).
     private(set) var framesRendered = 0
     #if DEBUG

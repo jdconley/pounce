@@ -1,3 +1,4 @@
+import Observation
 import PounceKit
 import SpriteKit
 import SwiftUI
@@ -19,6 +20,13 @@ import SwiftUI
 /// arrives late is dropped, and between the shell's calls the scene hides the hand by itself as
 /// soon as the store's epoch moves (a turn, round or status change), so a reveal never outlives
 /// the turn it was made for, however late SwiftUI delivers the shell's update.
+///
+/// A TV's table (`isScreen`: its store joined as a screen) is the same scene in the TV's
+/// arrangement (`TableLayout(tv:insets:seats:)`): every seat around the table, the tower open down
+/// the left, the turn banner along the bottom (`TVBanner`), the acting player's aim glowing on its
+/// group, celebrations at the TV's size and the game's sounds. It never has a hand, trays or a
+/// bottom seat, whatever the room says (a screen is sent no hand; one that came anyway is never
+/// drawn), and it takes no input.
 @MainActor
 final class TableScene: SKScene {
     /// zPosition bands. Everything inside a layer stays below the next band.
@@ -29,6 +37,19 @@ final class TableScene: SKScene {
 
     let store: RoomStore
     let director = AnimationDirector(view: nil)
+    /// This is a TV's table: its store joined the room as a screen. Fixed for the scene's life.
+    let isScreen: Bool
+    /// A TV's "<Name>'s turn" (and "Reconnecting") along the bottom.
+    let banner = TVBanner()
+    /// The store's aims and connection are being watched (a TV), so each change redraws them.
+    private var watching = false
+    /// The banners last warmed for this table's seats (`TVArt.warm`).
+    private var warmedBanners: [TVArt.Piece] = []
+    /// The seat the banner names: the drawn table's turn, or a turn that just started (its
+    /// snapshot not drawn yet).
+    private var bannerTurn: Seat?
+    /// The "+N" size last warmed for this table (`CardFaceFactory.warmBadges`).
+    private var warmedBadges: CGFloat?
     /// The paw button top-right (`table.menu`).
     var onMenu: () -> Void = {}
     /// The open tower was tapped (`table.tower`, TowerToggle.swift): the shell shows the
@@ -219,6 +240,7 @@ final class TableScene: SKScene {
 
     init(store: RoomStore) {
         self.store = store
+        isScreen = store.isScreen
         var made: [Layer: SKNode] = [:]
         for layer in [Layer.background, .rug, .piles, .laidZone, .tower, .opponents, .trays, .hand, .drag, .fx] {
             let node = SKNode()
@@ -252,6 +274,8 @@ final class TableScene: SKScene {
         made[.trays]?.addChild(bottomTag)
         bottomTag.zPosition = 4
         bottomTag.isHidden = true
+        made[.opponents]?.addChild(banner)
+        banner.zPosition = 8
         director.flourish = { [weak self] in self?.idleFlourish() }
         tower.director = director
         tower.fx = made[.fx]
@@ -297,9 +321,18 @@ final class TableScene: SKScene {
     override func didMove(to view: SKView) {
         director.view = view
         safeInsets = view.safeAreaInsets
+        if isScreen {
+            // The game's sounds are the TV's; its card faces are drawn ahead, off the main thread.
+            Sound.shared.preload()
+            Task { await CardFaceFactory.shared.prewarm() }
+            TVArt.shared.scale = max(view.traitCollection.displayScale, 1)
+            watchStore()
+        }
         redraw()
         #if DEBUG
+        #if os(iOS)
         if [.replay, .celebrate].contains(DemoMode.from()) { startFrameLog() }
+        #endif
         if autoplay == nil { autoplay = Autoplay.start(self) }
         #endif
         speed = CGFloat(Pace.factor)
@@ -366,7 +399,8 @@ final class TableScene: SKScene {
     /// The seat `reveal` may show on `model`: one of this phone's, and on a multi-seat phone
     /// only while the store is still in the reveal's epoch.
     private func valid(_ reveal: Reveal, in model: TableModel) -> Seat? {
-        guard let seat = reveal.seat, model.mySeats.contains(seat) else { return nil }
+        // A TV shows no hand, ever.
+        guard !isScreen, let seat = reveal.seat, model.mySeats.contains(seat) else { return nil }
         if model.isMultiSeat, reveal.epoch != store.turnEpoch { return nil }
         return seat
     }
@@ -395,6 +429,7 @@ final class TableScene: SKScene {
         markDrawn()
         pendingReveal = nil
         self.model = model
+        bannerTurn = model.room.liveTurn
         revealed = valid(reveal, in: model)
         revealedEpoch = reveal.epoch
         shownRevealed = revealed
@@ -584,6 +619,7 @@ final class TableScene: SKScene {
         if let reveal = pendingReveal { return apply(next, reveal) }
         settle()
         model = next
+        bannerTurn = next.room.liveTurn
         revealed = valid(Reveal(seat: revealed, epoch: revealedEpoch), in: next)
         shownRevealed = revealed
         redraw()
@@ -611,7 +647,8 @@ final class TableScene: SKScene {
             clearTable()
             return
         }
-        let bottom = Self.bottomSeat(model, revealed: shownRevealed)
+        // A TV has no bottom seat: every seat sits around its table and no hand is ever drawn.
+        let bottom = isScreen ? nil : Self.bottomSeat(model, revealed: shownRevealed)
         bottomSeat = bottom
         // A discard waiting on its Undo goes back to the hand, unsent, once its turn is gone or
         // its hand is no longer the one face up.
@@ -621,34 +658,44 @@ final class TableScene: SKScene {
         }
         let barSeats = model.barSeats(bottom: bottom)
         let layout: TableLayout
-        switch tv {
-        case .cards(let chrome):
-            let shown = bottom == shownRevealed ? game.hands[bottom ?? -1]?.count : nil
-            let count = shown ?? bottom.flatMap { game.handCounts[safe: $0] } ?? 0
-            if count <= 6 { shortHand = true } else if count > ControllerHand.shortMax { shortHand = false }
-            let trays = shown != nil && !(bottom.map { model.trays(for: $0).isEmpty } ?? true)
-            layout = TableLayout(
-                size: size, safeTop: safeInsets.top, safeBottom: safeInsets.bottom, opponents: max(barSeats.count, 1),
-                controller: chrome, hand: ControllerHand(short: shortHand, trays: trays))
-        case .table(let band):
-            // The whole table, under the switch's band.
-            layout = TableLayout(
-                size: size, safeTop: safeInsets.top + band, safeBottom: safeInsets.bottom, opponents: max(barSeats.count, 1))
-        case nil:
-            layout = TableLayout(
-                size: size, safeTop: safeInsets.top, safeBottom: safeInsets.bottom, opponents: max(barSeats.count, 1))
+        if isScreen {
+            // A TV: every seat around the table, inside its TV-safe area.
+            layout = TableLayout(tv: size, insets: TVInsets(safeInsets), seats: barSeats.count)
+        } else {
+            switch tv {
+            case .cards(let chrome):
+                let shown = bottom == shownRevealed ? game.hands[bottom ?? -1]?.count : nil
+                let count = shown ?? bottom.flatMap { game.handCounts[safe: $0] } ?? 0
+                if count <= 6 { shortHand = true } else if count > ControllerHand.shortMax { shortHand = false }
+                let trays = shown != nil && !(bottom.map { model.trays(for: $0).isEmpty } ?? true)
+                layout = TableLayout(
+                    size: size, safeTop: safeInsets.top, safeBottom: safeInsets.bottom, opponents: max(barSeats.count, 1),
+                    controller: chrome, hand: ControllerHand(short: shortHand, trays: trays))
+            case .table(let band):
+                // The whole table, under the switch's band.
+                layout = TableLayout(
+                    size: size, safeTop: safeInsets.top + band, safeBottom: safeInsets.bottom, opponents: max(barSeats.count, 1))
+            case nil:
+                layout = TableLayout(
+                    size: size, safeTop: safeInsets.top, safeBottom: safeInsets.bottom, opponents: max(barSeats.count, 1))
+            }
         }
         self.layout = layout
+        let onTV = layout.arrangement == .tv
+        director.fxScale = onTV ? 2 * layout.tvUnit : 1
         // Just my cards: the rug, the laid groups, the tower and the other seats are on the TV.
         let cards = layout.arrangement == .controller
         layer(.piles).isHidden = false
         for l in [Layer.rug, .laidZone, .tower] { layer(l).isHidden = cards }
         opponents.isHidden = cards
+        // A TV has no hand and no trays: not even their layers show.
+        layer(.hand).isHidden = onTV
+        layer(.trays).isHidden = onTV
 
         // Room and rug. The room art is portrait; a wide table turns it on its side (the floor
         // seen from above, planks running across) so it fills the view with less zoom.
         background.isHidden = false
-        let sideways = layout.arrangement == .wide
+        let sideways = layout.arrangement == .wide || onTV
         background.zRotation = sideways ? .pi / 2 : 0
         let art = sideways ? CGSize(width: 844, height: 390) : CGSize(width: 390, height: 844)
         let bgScale = max(size.width / art.width, size.height / art.height)
@@ -661,8 +708,13 @@ final class TableScene: SKScene {
             ? min(zone.width + 36, zone.height * 0.92)
             : min(zone.width, zone.height * 1.12)
         rug.isHidden = cards
-        rug.size = CGSize(width: rugSide, height: rugSide)
-        rug.position = CGPoint(x: zone.midX, y: (layout.deck.y + zone.midY) / 2)
+        if onTV {
+            rug.size = layout.rug.size
+            rug.position = CGPoint(x: layout.rug.midX, y: layout.rug.midY)
+        } else {
+            rug.size = CGSize(width: rugSide, height: rugSide)
+            rug.position = CGPoint(x: zone.midX, y: (layout.deck.y + zone.midY) / 2)
+        }
 
         // Piles.
         deck.position = layout.deck
@@ -676,7 +728,8 @@ final class TableScene: SKScene {
         } else {
             laidZone.update(model: model, layout: layout)
             tower.update(model: model, layout: layout)
-            foldOnTurnChange(game)
+            // A TV's tower stands open the whole game.
+            if onTV { tower.setOpen(true, animated: false) } else { foldOnTurnChange(game) }
             // A phone holding no seat shows every seat in the bar.
             let barChanges = opponents.update(model: model, seats: barSeats, layout: layout)
             for seat in barChanges.turnedOn { pulseTurn(seat) }
@@ -719,13 +772,25 @@ final class TableScene: SKScene {
         // A hit preview lasts while its card is dragged or in flight.
         if dragCard == nil, provisionalCard == nil, laidZone.preview != nil { _ = laidZone.setPreview(nil, animated: false) }
 
-        // Legal-target glows for the current step and held card.
-        let glows = computeGlows()
+        // Legal-target glows for the current step and held card (a TV holds none: it glows the
+        // acting player's aim instead).
+        let glows = onTV ? Glows() : computeGlows()
         self.glows = glows
         deck.setHighlighted(glows.piles.contains(.deck))
         discard.setHighlighted(glows.piles.contains(.discard) || glows.discard)
         for seat in opponents.order { opponents.node(for: seat)?.setTarget(glows.cats.contains(seat)) }
         laidZone.setTargets(glows.groups, enlarged: glows.enlarge, about: CGPoint(x: zone.midX, y: layout.deck.y))
+        if onTV {
+            showAim()
+            // A fold's "+N" at the TV's size, drawn off the main thread.
+            let badge = layout.tvLaidNumeral.rounded()
+            if warmedBadges != badge {
+                warmedBadges = badge
+                Task { await CardFaceFactory.shared.warmBadges(size: badge) }
+            }
+        } else {
+            _ = laidZone.setAim(nil)
+        }
 
         // Phase goal trays above a revealed hand; before laying down they take cards.
         if faceUp {
@@ -768,6 +833,121 @@ final class TableScene: SKScene {
 
         menuButton.isHidden = false
         menuButton.position = layout.menuButton
+        showBanner(pop: false)
+    }
+
+    // MARK: a TV's table
+
+    /// A TV watches what its store hears between snapshots: the acting player's aim and whether
+    /// the TV still has the table. Each change redraws just those (never the whole table, which
+    /// would stop an animation half way).
+    private func watchStore() {
+        guard isScreen, !watching else { return }
+        watching = true
+        withObservationTracking {
+            _ = store.aims
+            _ = store.connection
+        } onChange: { [weak self] in
+            Task { @MainActor [weak self] in
+                guard let self else { return }
+                self.watching = false
+                guard self.view != nil else { return }
+                self.showAim()
+                self.showBanner(pop: false)
+                self.watchStore()
+            }
+        }
+    }
+
+    /// The group the acting player points at from their phone glows (`RoomStore.aims`), on a TV.
+    func showAim() {
+        guard isScreen, let model, let game = model.game, layout != nil else { return }
+        var target: HitTarget?
+        if game.status == .playing, model.room.liveTurn == game.turn, case .target(let seat, let group)? = store.aims[game.turn] {
+            target = HitTarget(seat: seat, group: group)
+        }
+        let lit = laidZone.setAim(target)
+        guard !lit.isEmpty else { return }
+        director.wake()
+        guard !UIAccessibility.isReduceMotionEnabled else { return }
+        let director = director
+        for node in lit {
+            node.setScale(0.8)
+            let pop = SKAction.sequence([.scale(to: 1.08, duration: 0.14).eased(.easeOut), .scale(to: 1, duration: 0.12).eased(.easeInEaseOut)])
+            Task { await director.run(pop, on: node, decorative: true) }
+        }
+    }
+
+    /// A TV's banner: whose turn it is, or "Reconnecting" while the TV has lost the table; gone
+    /// between rounds and after the game. `turn`: the turn that just started, popped in.
+    func showBanner(turn started: Seat) {
+        bannerTurn = started
+        showBanner(pop: true)
+    }
+
+    private func showBanner(pop: Bool) {
+        guard isScreen, let model, let layout, layout.arrangement == .tv else {
+            _ = banner.show(nil, banner: .zero, room: .zero, unit: 1, pop: false, reduceMotion: true)
+            return
+        }
+        let names = SeatInfo.names(model.room)
+        let u = layout.tvUnit
+        // Every seat's banner and lay-down moment, and each level's words, drawn ahead.
+        let words = TVSeatWords(layout.seatFrames.first ?? .zero, unit: u)
+        let pieces = names.indices.flatMap {
+            [
+                TVBanner.piece(name: names[$0], seat: $0, banner: layout.banner, room: layout.bannerRoom, unit: u),
+                TVMoment.title(name: names[$0], seat: $0, unit: u),
+            ]
+        } + (1...10).map { TVMoment.level($0, unit: u) } + [TVBanner.lost(banner: layout.banner, unit: u)]
+            + (model.game?.scores ?? []).map(words.piece)
+        if pieces != warmedBanners {
+            warmedBanners = pieces
+            TVArt.shared.warm(pieces)
+        }
+        let next: TVBanner.Shown?
+        if store.connection == .reconnecting {
+            next = .reconnecting
+        } else if let turn = bannerTurn {
+            next = .turn(seat: turn, name: names[safe: turn] ?? "", cat: SeatInfo.catIndex(model.room.seats[safe: turn]))
+        } else {
+            next = nil
+        }
+        let motion = banner.show(
+            next, banner: layout.banner, room: layout.bannerRoom, unit: u, pop: pop,
+            reduceMotion: UIAccessibility.isReduceMotionEnabled)
+        director.wake()
+        if let (action, node) = motion {
+            let director = director
+            Task { await director.run(action, on: node, decorative: true) }
+        }
+    }
+
+    /// A TV's big moment for `seat` laying down (`TVMoment`), over the middle of the table. It
+    /// holds nothing up: the table plays on under it.
+    func showMoment(laidDown seat: Seat) {
+        guard isScreen, let model, let game = model.game, let layout, layout.arrangement == .tv else { return }
+        let u = layout.tvUnit
+        let cat = SeatInfo.catIndex(model.room.seats[safe: seat])
+        let center = CGPoint(x: layout.rug.midX, y: layout.rug.midY)
+        let pieces = [
+            TVMoment.title(name: SeatInfo.name(model.room, seat), seat: seat, unit: u),
+            TVMoment.level(min((game.phase[safe: seat] ?? 0) + 1, 10), unit: u),
+        ]
+        // Warmed as the table opened; were they not, the moment shows once they're drawn.
+        TVArt.shared.whenReady(pieces) { [weak self] textures in
+            guard let self, self.view != nil, textures.count == 2 else { return }
+            let (node, action) = TVMoment.make(
+                titleTexture: textures[0], subTexture: textures[1], cat: cat, center: center, unit: u,
+                reduceMotion: UIAccessibility.isReduceMotionEnabled)
+            node.zPosition = 20
+            self.layer(.fx).addChild(node)
+            let director = self.director
+            Task {
+                await director.run(action, on: node, decorative: true)
+                node.removeFromParent()
+            }
+        }
     }
 
     /// Draws ahead, a card per idle moment, the small faces a drag over the laid groups shows
@@ -844,6 +1024,7 @@ final class TableScene: SKScene {
         sortButton.isHidden = true
         bottomTag.isHidden = true
         bottomTagName = nil
+        _ = banner.show(nil, banner: .zero, room: .zero, unit: 1, pop: false, reduceMotion: true)
         for l in [Layer.rug, .piles, .laidZone, .tower] { layer(l).isHidden = true }
         tower.setOpen(false, animated: false)
         towerFoldKey = nil
@@ -864,6 +1045,9 @@ final class TableScene: SKScene {
 
     // MARK: touches
 
+    // The iPhone's fingers. The Apple TV's table takes no touches: the Siri Remote's touch surface
+    // moves focus, it never drags a card.
+    #if os(iOS)
     override func touchesBegan(_ touches: Set<UITouch>, with event: UIEvent?) {
         for touch in touches { pressBegan(at: touch.location(in: self)) }
     }
@@ -875,9 +1059,12 @@ final class TableScene: SKScene {
     override func touchesEnded(_ touches: Set<UITouch>, with event: UIEvent?) {
         for touch in touches { pressEnded(at: touch.location(in: self)) }
     }
+    #endif
 
-    /// A finger went down at `point` (the touch handlers, and the DEBUG autoplay).
+    /// A finger went down at `point` (the touch handlers, and the DEBUG autoplay). A TV's table
+    /// takes none.
     func pressBegan(at point: CGPoint) {
+        guard !isScreen else { return }
         let work = FrameWork("table.touchBegan"); defer { work.end() }
         dismissTurnCue()
         Haptics.shared.prepare()
@@ -886,26 +1073,32 @@ final class TableScene: SKScene {
     }
 
     func pressMoved(to point: CGPoint) {
+        guard !isScreen else { return }
         let work = FrameWork("table.touchMoved"); defer { work.end() }
         inputMoved(point)
     }
 
     func pressEnded(at point: CGPoint) {
+        guard !isScreen else { return }
         let work = FrameWork("table.touchEnded"); defer { work.end() }
         director.touchEnded()
         inputEnded(point)
     }
 
+    #if os(iOS)
     override func touchesCancelled(_ touches: Set<UITouch>, with event: UIEvent?) {
         for _ in touches {
             director.touchEnded()
             inputCancelled()
         }
     }
+    #endif
 
     /// The shell's overlays over the table: the first-game coach, the turn cue and, showing just
     /// my cards, the action row.
     func publishOverlays() {
+        // A TV's table has no coach, turn cue or action row: its banner says whose turn it is.
+        guard !isScreen else { return }
         onCoach(coachSnapshot())
         publishTurnCue()
         publishController()
@@ -1074,7 +1267,7 @@ final class TableScene: SKScene {
             id: "table.menu", label: String(localized: "Table menu", comment: "VoiceOver: the paw menu button"),
             frame: menuFrame))
         if !controllerShown { items.append(towerAccessibilityItem(model, game)) }
-        let mine = model.isMyTurn
+        let mine = !isScreen && model.isMyTurn
         let whose = mine
             ? String(localized: "Your turn", comment: "VoiceOver: it is this phone's turn")
             : String(localized: "\(SeatInfo.name(model.room, game.turn))'s turn", comment: "VoiceOver: whose turn it is")

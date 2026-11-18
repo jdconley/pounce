@@ -125,3 +125,24 @@ Path: App Information, then **Age Rating**, then **Edit**. This uses Apple's 202
 - **App Store id.** Once App Store Connect shows the app's Apple ID (App Information, General Information, a number), set `APP_STORE_URL` in `apps/play-api/wrangler.jsonc` to `https://apps.apple.com/app/id<that number>`. That turns on the invite pages' Smart App Banner and the "Get the app" link.
 - **Postal address and phone number** for the COPPA direct notice (see `retention-policy.md`, open items).
 - Confirm `privacy@conleychaos.com` is read.
+
+## Apple TV (tvOS)
+
+The Apple TV app is the same App Store record (bundle id `com.conleychaos.play`, a tvOS platform on it), so the nutrition label is the one above, shared by both platforms. The TV collects less, and it is covered by what is already ticked. Its own manifest is `apps/play-ios/PounceTV/Resources/PrivacyInfo.xcprivacy`; no new box is ticked for it.
+
+What the TV app does, from the code (`PounceTV/`, `PounceKit/Net`, and the files the target compiles):
+
+- **Device ID.** On first launch it asks the server for a device id (`APIClient.mint`, `POST /v1/devices`) and keeps it in the Keychain (`KeychainCredentialStore`, `PounceTV/App/TVServices.swift`). It is used to open a screen link (`POST /v1/screens`) and the table's screen socket (`role=screen`). Not the IDFA or IDFV. App Functionality.
+- **Analytics (first party).** The server's first-run funnel records the new device when it is made (`apps/play-api/src/index.ts`, `minted`): a keyed hash of the device id, the platform (`tvos`) and the app version, which the TV sends in `X-Pounce-App`. The TV opens no `Funnel` or profile calls, and a screen socket is not counted as the device being active (`if (!screen)` in `index.ts`). So the TV adds `tvos` and its version to the rows already declared under Device ID, Product Interaction and Other Data Types.
+- **Gameplay Content.** The TV makes tables (`APIClient.createRoom(game:screen:)`, `POST /v1/rooms` with `screen: true`), and the server keeps its device id in the table's `screens` (`apps/play-api/src/index.ts:249`, `room/core.ts:374`). Tables are what the iPhone label means by Gameplay Content. App Functionality.
+- **App version.** The server's device index keeps `app_version` from the screen socket (`index.ts:285`, `room/device-index.ts:134`), so Other Data Types also has App Functionality.
+- **Nothing else.** The TV has no player name, age band, phone number, push token, camera, microphone, location or time zone. It asks for no permissions. It sends no table names or text. It keeps a table code and the sound setting on the device only (`UserDefaults`, `DefaultsScreenKeep`).
+- **Not tracking.** No ad SDK, no IDFA, no tracking domains.
+
+The TV's manifest declares Device ID (App Functionality, Analytics), Gameplay Content (App Functionality), Product Interaction (Analytics) and Other Data Types (App Functionality, Analytics), all linked and none for tracking, plus these required-reason APIs:
+
+- `NSPrivacyAccessedAPICategoryUserDefaults`, reason `CA92.1`: the app's own settings and table code (`Pounce/Design/Settings.swift`, `PounceKit/IO/ScreenKeep.swift`).
+- `NSPrivacyAccessedAPICategorySystemBootTime`, reason `35F9.1`: elapsed time for animation and the frame budget (`CACurrentMediaTime`, `ContinuousClock`, `clock_gettime_nsec_np` in `Pounce/Table`, `Pounce/Tiles` and `Pounce/App/FrameWork.swift`).
+- No file timestamp, disk space or active keyboard calls anywhere the TV compiles.
+
+If a TV change adds data, a permission or one of those APIs, change this section and the TV manifest together.

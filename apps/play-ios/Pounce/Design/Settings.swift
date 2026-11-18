@@ -5,12 +5,17 @@ import Observation
 @MainActor @Observable
 final class Settings {
     /// The app-wide instance. Under `-uitest-reset` (DEBUG only) it uses a scratch suite wiped
-    /// at launch.
+    /// at launch. On the Apple TV it is kept in memory only: the TV's one setting, sound, is read
+    /// and written off the main thread by its model (`TVModel`, `ScreenKeep`), which sets it here.
     static let shared: Settings = {
+        #if os(tvOS)
+        return Settings(defaults: nil)
+        #else
         #if DEBUG
         if CommandLine.arguments.contains("-uitest-reset") { return Settings(defaults: freshSuite()) }
         #endif
         return Settings(defaults: .standard)
+        #endif
     }()
 
     private enum Key {
@@ -25,45 +30,46 @@ final class Settings {
         static let signInPromptSeen = "settings.signInPromptSeen"
     }
 
-    @ObservationIgnored private let defaults: UserDefaults
+    /// Nil keeps every value in memory only (the Apple TV).
+    @ObservationIgnored private let defaults: UserDefaults?
 
-    var soundOn: Bool { didSet { defaults.set(soundOn, forKey: Key.soundOn) } }
-    var hapticsOn: Bool { didSet { defaults.set(hapticsOn, forKey: Key.hapticsOn) } }
+    var soundOn: Bool { didSet { defaults?.set(soundOn, forKey: Key.soundOn) } }
+    var hapticsOn: Bool { didSet { defaults?.set(hapticsOn, forKey: Key.hapticsOn) } }
     /// The push priming screen has been shown.
-    var pushPrimed: Bool { didSet { defaults.set(pushPrimed, forKey: Key.pushPrimed) } }
+    var pushPrimed: Bool { didSet { defaults?.set(pushPrimed, forKey: Key.pushPrimed) } }
     /// The user said "not now" to push once (do not nag again right away).
-    var pushDeclinedOnce: Bool { didSet { defaults.set(pushDeclinedOnce, forKey: Key.pushDeclinedOnce) } }
+    var pushDeclinedOnce: Bool { didSet { defaults?.set(pushDeclinedOnce, forKey: Key.pushDeclinedOnce) } }
     /// Home's bell offered push again after a "not now" (it only does that once).
-    var pushReoffered: Bool { didSet { defaults.set(pushReoffered, forKey: Key.pushReoffered) } }
+    var pushReoffered: Bool { didSet { defaults?.set(pushReoffered, forKey: Key.pushReoffered) } }
 
     /// The local "your turn" reminder, as the person set it; nil until they touch it, when the age
     /// band's default applies (off for a kitten, spec §14.1).
     var turnReminderChoice: Bool? {
         didSet {
-            if let turnReminderChoice { defaults.set(turnReminderChoice, forKey: Key.turnReminder) }
-            else { defaults.removeObject(forKey: Key.turnReminder) }
+            if let turnReminderChoice { defaults?.set(turnReminderChoice, forKey: Key.turnReminder) }
+            else { defaults?.removeObject(forKey: Key.turnReminder) }
         }
     }
 
     /// A kitten's local daily reminder at 17:00 (spec §14.1): off until they turn it on.
-    var kittenDaily: Bool { didSet { defaults.set(kittenDaily, forKey: Key.kittenDaily) } }
+    var kittenDaily: Bool { didSet { defaults?.set(kittenDaily, forKey: Key.kittenDaily) } }
 
     /// Home's one-time "press and hold a table to archive it" hint was closed (or used).
-    var archiveHintSeen: Bool { didSet { defaults.set(archiveHintSeen, forKey: Key.archiveHintSeen) } }
+    var archiveHintSeen: Bool { didSet { defaults?.set(archiveHintSeen, forKey: Key.archiveHintSeen) } }
     /// Home's "Keep your streak if you change phones" card was answered (signed in or not now).
-    var signInPromptSeen: Bool { didSet { defaults.set(signInPromptSeen, forKey: Key.signInPromptSeen) } }
+    var signInPromptSeen: Bool { didSet { defaults?.set(signInPromptSeen, forKey: Key.signInPromptSeen) } }
 
-    init(defaults: UserDefaults = .standard) {
+    init(defaults: UserDefaults? = .standard) {
         self.defaults = defaults
-        archiveHintSeen = defaults.bool(forKey: Key.archiveHintSeen)
-        soundOn = defaults.object(forKey: Key.soundOn) as? Bool ?? true
-        hapticsOn = defaults.object(forKey: Key.hapticsOn) as? Bool ?? true
-        pushPrimed = defaults.bool(forKey: Key.pushPrimed)
-        pushDeclinedOnce = defaults.bool(forKey: Key.pushDeclinedOnce)
-        pushReoffered = defaults.bool(forKey: Key.pushReoffered)
-        turnReminderChoice = defaults.object(forKey: Key.turnReminder) as? Bool
-        kittenDaily = defaults.bool(forKey: Key.kittenDaily)
-        signInPromptSeen = defaults.bool(forKey: Key.signInPromptSeen)
+        archiveHintSeen = defaults?.bool(forKey: Key.archiveHintSeen) ?? false
+        soundOn = defaults?.object(forKey: Key.soundOn) as? Bool ?? true
+        hapticsOn = defaults?.object(forKey: Key.hapticsOn) as? Bool ?? true
+        pushPrimed = defaults?.bool(forKey: Key.pushPrimed) ?? false
+        pushDeclinedOnce = defaults?.bool(forKey: Key.pushDeclinedOnce) ?? false
+        pushReoffered = defaults?.bool(forKey: Key.pushReoffered) ?? false
+        turnReminderChoice = defaults?.object(forKey: Key.turnReminder) as? Bool
+        kittenDaily = defaults?.bool(forKey: Key.kittenDaily) ?? false
+        signInPromptSeen = defaults?.bool(forKey: Key.signInPromptSeen) ?? false
     }
 
     #if DEBUG

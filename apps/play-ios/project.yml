@@ -3,6 +3,7 @@ options:
   bundleIdPrefix: com.conleychaos
   deploymentTarget:
     iOS: "26.0"
+    tvOS: "26.0"
   createIntermediateGroups: true
   generateEmptyDirectories: true
 configs:
@@ -18,6 +19,11 @@ settings:
     DEVELOPMENT_TEAM: B222J9J7B8
     CODE_SIGN_STYLE: Automatic
     IPHONEOS_DEPLOYMENT_TARGET: "26.0"
+    TVOS_DEPLOYMENT_TARGET: "26.0"
+    # One version for every target: the app, its extensions and the Apple TV app (one App Store
+    # record, universal purchase). CI sets the build number on the command line (testflight.sh).
+    MARKETING_VERSION: "1.2"
+    CURRENT_PROJECT_VERSION: "1"
 packages:
   PounceKit:
     path: PounceKit
@@ -41,8 +47,6 @@ targets:
         CODE_SIGN_ENTITLEMENTS: Pounce/Pounce.entitlements
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
         ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME: AccentColor
-        MARKETING_VERSION: "1.2"
-        CURRENT_PROJECT_VERSION: "1"
         ENABLE_USER_SCRIPT_SANDBOXING: NO
     dependencies:
       - package: PounceKit
@@ -106,8 +110,6 @@ targets:
         INFOPLIST_FILE: PounceNotify/Info.plist
         # The App Group: a push's streak block goes to the widgets' snapshot (spec §11.2).
         CODE_SIGN_ENTITLEMENTS: PounceNotify/PounceNotify.entitlements
-        MARKETING_VERSION: "1.2"
-        CURRENT_PROJECT_VERSION: "1"
         SKIP_INSTALL: YES
     dependencies:
       - package: PounceKit
@@ -136,12 +138,114 @@ targets:
         TARGETED_DEVICE_FAMILY: "1,2"
         INFOPLIST_FILE: PounceWidgets/Info.plist
         CODE_SIGN_ENTITLEMENTS: PounceWidgets/PounceWidgets.entitlements
-        MARKETING_VERSION: "1.2"
-        CURRENT_PROJECT_VERSION: "1"
         SKIP_INSTALL: YES
     dependencies:
       - package: PounceKit
         product: PounceKit
+  # Pounce on the Apple TV (stage 4 of "Pounce on the TV"): the table as a screen, driven by the
+  # phones. The same bundle id as the iPhone app, for universal purchase under one App Store
+  # record. No push, Sign in with Apple, App Group or age range: the TV keeps only its device
+  # credential, in the app's keychain group.
+  PounceTV:
+    type: application
+    platform: tvOS
+    # Its own shell, plus the iPhone's table: one copy of the drawing code, built for both. The
+    # SpriteKit table (Pounce/Table, Pounce/Tiles) without the tile game's iPhone screens around it
+    # (TilesStage, TilesChrome) or its iPhone demo (TilesDemo); the frame-budget tooling the
+    # scenes report to (FrameWork, MainThreadWatchdog, Autoplay); the Design files they use; and the
+    # iPhone's art catalog and sounds (its AppIcon set is unused here: the icon is the TV's own).
+    # iOS-only calls in the shared files are behind `#if os(iOS)`.
+    # When this target starts compiling another folder or file, add it to the Apple TV distribute
+    # filter in .github/workflows/ios.yml and to the TV paths in scripts/distribute.swift (and an
+    # exclude here to their excludes), or a change there won't reach the family's Apple TVs.
+    sources:
+      - path: PounceTV
+        excludes:
+          - Info.plist
+          - PounceTV.entitlements
+      - path: Pounce/Table
+      - path: Pounce/Tiles
+        excludes:
+          - TilesStage.swift
+          - TilesChrome.swift
+          - TilesDemo.swift
+      - path: Pounce/App/FrameWork.swift
+      - path: Pounce/App/MainThreadWatchdog.swift
+      - path: Pounce/App/Autoplay.swift
+      - path: Pounce/Design/ArtName.swift
+      - path: Pounce/Design/FadeGroup.swift
+      - path: Pounce/Design/GroupOpacity.swift
+      - path: Pounce/Design/Haptics.swift
+      - path: Pounce/Design/Juice.swift
+      - path: Pounce/Design/NameTag.swift
+      - path: Pounce/Design/OutlinedText.swift
+      - path: Pounce/Design/Pace.swift
+      - path: Pounce/Design/Palette.swift
+      - path: Pounce/Design/QRTile.swift
+      - path: Pounce/Design/Settings.swift
+      - path: Pounce/Design/SignalGlyph.swift
+      - path: Pounce/Design/Sound.swift
+      - path: Pounce/Resources/Assets.xcassets
+      - path: Pounce/Resources/Sounds
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.conleychaos.play
+        PRODUCT_NAME: PounceTV
+        TARGETED_DEVICE_FAMILY: "3"
+        INFOPLIST_FILE: PounceTV/Info.plist
+        CODE_SIGN_ENTITLEMENTS: PounceTV/PounceTV.entitlements
+        # PounceTV/Resources/TVAssets.xcassets, made by AppStore/tv-brand.swift.
+        ASSETCATALOG_COMPILER_APPICON_NAME: "App Icon & Top Shelf Image"
+        ENABLE_USER_SCRIPT_SANDBOXING: NO
+    dependencies:
+      - package: PounceKit
+        product: PounceKit
+    postBuildScripts:
+      # PounceTV/Resources/PrivacyInfo.xcprivacy (the TV's own: Device ID, Gameplay Content, Product
+      # Interaction and Other Data Types, as docs/privacy/app-store-label.md's Apple TV section
+      # says) is a resource through the `PounceTV` source path. App Store Connect rejects an upload without
+      # it, so a build whose bundle lacks it fails here.
+      - name: Check privacy manifest
+        basedOnDependencyAnalysis: false
+        script: |
+          set -eu
+          manifest="${TARGET_BUILD_DIR}/${UNLOCALIZED_RESOURCES_FOLDER_PATH}/PrivacyInfo.xcprivacy"
+          if [ ! -f "$manifest" ]; then
+            echo "error: PrivacyInfo.xcprivacy is missing from the app bundle: $manifest"
+            exit 1
+          fi
+  # The Apple TV app's unit tests, hosted in PounceTV on an Apple TV simulator: the TV's table (the
+  # iPhone's scenes in the TV's arrangement) and, from stage 4's shell on, the TV's model.
+  PounceTVTests:
+    type: bundle.unit-test
+    platform: tvOS
+    sources:
+      - PounceTVTests
+    dependencies:
+      - target: PounceTV
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.conleychaos.play.tvtests
+        GENERATE_INFOPLIST_FILE: YES
+        TARGETED_DEVICE_FAMILY: "3"
+  # The Apple TV's UI tests on an Apple TV simulator, on the TV's DEBUG demos (no server): its
+  # frame-rate gates (FrameRateTVTests, the iPhone's FrameRateTests rules, reading the same
+  # watchdog) and the Siri Remote driving the shell (RemoteTests).
+  PounceTVUITests:
+    type: bundle.ui-testing
+    platform: tvOS
+    sources:
+      - PounceTVUITests
+      # The watchdog's reading and the machine's time budgets, shared with the iPhone's tests.
+      - path: PounceUITests/Watchdog.swift
+    dependencies:
+      - target: PounceTV
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.conleychaos.play.tvuitests
+        GENERATE_INFOPLIST_FILE: YES
+        TARGETED_DEVICE_FAMILY: "3"
+        TEST_TARGET_NAME: PounceTV
   PounceUITests:
     type: bundle.ui-testing
     platform: iOS
@@ -169,6 +273,21 @@ schemes:
       testPlans:
         - path: Pounce.xctestplan
           defaultPlan: true
+    profile:
+      config: Release
+    archive:
+      config: Release
+  PounceTV:
+    build:
+      targets:
+        PounceTV: all
+    run:
+      config: Debug
+    test:
+      config: Debug
+      targets:
+        - PounceTVTests
+        - PounceTVUITests
     profile:
       config: Release
     archive:
