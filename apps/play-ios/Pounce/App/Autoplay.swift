@@ -99,7 +99,7 @@ extension TilesScene: Autoplaying {
 }
 
 extension TableScene: Autoplaying {
-    /// The hand's first card into the middle of the laid zone (a hit, or back to the hand), then
+    /// The hand's first card into the laid zone, clear of the piles (a hit, or back to the hand), then
     /// the last card dragged along the hand. On Cards, the first card up to the action row.
     func autoplayPath(out: Bool) -> (CGPoint, CGPoint)? {
         guard let layout, !hand.cards.isEmpty else { return nil }
@@ -107,10 +107,12 @@ extension TableScene: Autoplaying {
         guard let frame = hand.frame(at: index) else { return nil }
         let start = convert(CGPoint(x: frame.midX, y: frame.midY), from: hand)
         // Just my cards (`-demo controller`): up to the action row, where it lands on nothing and
-        // goes back.
+        // goes back. On the table, a quarter of the way across the laid zone: its middle is the
+        // piles', and a card dropped there is discarded, which ends the turn (the demo's socket
+        // never answers it, so every later drop waited on it).
         let away = layout.arrangement == .controller
             ? CGPoint(x: layout.actionRow.midX, y: layout.actionRow.midY)
-            : CGPoint(x: layout.laidZone.midX, y: layout.laidZone.midY)
+            : CGPoint(x: layout.laidZone.minX + layout.laidZone.width / 4, y: layout.laidZone.midY)
         if out { return (start, away) }
         return (start, convert(CGPoint(x: (hand.frame(at: 0) ?? frame).midX, y: frame.midY), from: hand))
     }
