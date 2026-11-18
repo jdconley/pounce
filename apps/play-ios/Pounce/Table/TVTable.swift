@@ -270,6 +270,9 @@ final class TVBanner: SKNode {
     private let cat = SKSpriteNode()
     /// What shows now: a seat's turn (its seat, name and cat), "Reconnecting", or nothing.
     private(set) var shown: Shown?
+    /// The picture the banner asked for last (`TVArt.Piece.key`): the only one it takes when it
+    /// lands. The same words at an earlier layout are another picture, and may land later.
+    private var wanted: String?
 
     enum Shown: Equatable {
         case turn(seat: Seat, name: String, cat: Int)
@@ -299,6 +302,7 @@ final class TVBanner: SKNode {
     func show(_ next: Shown?, banner: CGRect, room: CGRect, unit: CGFloat, pop: Bool, reduceMotion: Bool) -> (SKAction, SKNode)? {
         shown = next
         guard let next, banner.width > 0 else {
+            wanted = nil
             isHidden = true
             return nil
         }
@@ -313,9 +317,11 @@ final class TVBanner: SKNode {
         case .reconnecting:
             piece = Self.lost(banner: banner, unit: unit)
         }
+        let key = piece.key
+        wanted = key
         TVArt.shared.whenReady([piece]) { [weak self] textures in
-            // Still what the banner shows (nothing newer asked for since).
-            guard let self, self.shown == next, let texture = textures.first else { return }
+            // Still the picture the banner wants (nothing newer asked for since, at any layout).
+            guard let self, self.wanted == key, let texture = textures.first else { return }
             self.apply(texture, next, unit: unit)
             self.drawLanded()
         }
@@ -434,6 +440,12 @@ struct TVSeatWords {
 
     /// Puts `score` (nil hides it) on `node`, just under `tag`. A score whose picture isn't drawn yet
     /// shows the moment it is (the last one stays till then).
+    ///
+    /// The node takes only the picture it asked for last (its name is that picture's key): a table
+    /// can lay out twice before its pictures land (at the scene's first size, then the TV's), and
+    /// the same score at the other size is another picture that may land after this one. Where it
+    /// goes is read from the name pill when it lands, so it is never put where an earlier layout
+    /// had it.
     @MainActor
     func place(score: Int?, on node: SKSpriteNode, under tag: SKSpriteNode) {
         guard let score else {
@@ -441,18 +453,18 @@ struct TVSeatWords {
             node.name = nil
             return
         }
-        let want = "score|\(score)"
+        let piece = piece(score)
+        let want = piece.key
         node.name = want
-        let below = CGPoint(x: tag.position.x, y: tag.position.y - tag.size.height / 2)
         let unit = unit
-        TVArt.shared.whenReady([piece(score)]) { [weak node] textures in
-            guard let node, node.name == want, let texture = textures.first else { return }
+        TVArt.shared.whenReady([piece]) { [weak node, weak tag] textures in
+            guard let node, let tag, node.name == want, let texture = textures.first else { return }
             node.isHidden = false
             if node.texture !== texture {
                 node.texture = texture
                 node.size = texture.size()
             }
-            node.position = CGPoint(x: below.x, y: below.y - node.size.height / 2 + 2 * unit)
+            node.position = CGPoint(x: tag.position.x, y: tag.position.y - tag.size.height / 2 - node.size.height / 2 + 2 * unit)
             node.drawLanded()
         }
     }

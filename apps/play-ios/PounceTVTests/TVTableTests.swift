@@ -114,6 +114,55 @@ struct TVTableTests {
         #expect(scene.bottomSeat == 0)
     }
 
+    // MARK: pictures that land late
+
+    /// A table can get its game before its view sizes it: it lays out once at the scene's first
+    /// size, then again at the TV's, and asks for each seat's score and the banner at both sizes.
+    /// The two pictures are drawn off the main thread and land in either order. Here the TV-size
+    /// ones are drawn already and the first-size ones land last: each seat must still show the
+    /// TV-size score under its name, and the banner the TV-size pill.
+    @Test func aPictureForAnEarlierLayoutNeverReplacesTheCurrentOne() async throws {
+        let store = Self.screenStore()
+        var room = DemoFixtures.hitTable()
+        room.seats = room.seats.map { var s = $0; s.yours = false; return s }
+        room.game!.hands = [:]
+        room.game!.turn = 1
+        // Scores no other test draws, so nothing is cached for them.
+        room.game!.scores = [901, 902, 903, 904]
+        let seats = room.seats.count
+        let tv = TableLayout(tv: Self.tv, insets: .zero, seats: seats)
+        let words = TVSeatWords(.zero, unit: tv.tvUnit)
+        let names = SeatInfo.names(room)
+        let big = room.game!.scores.map(words.piece)
+        let bigBanner = TVBanner.piece(name: names[1], seat: 1, banner: tv.banner, room: tv.bannerRoom, unit: tv.tvUnit)
+        TVArt.shared.warm(big + [bigBanner])
+        #expect(await Self.soon { (big + [bigBanner]).allSatisfy { TVArt.shared.ready($0) != nil } })
+
+        let scene = TableScene(store: store)  // still its first size, 390 x 844
+        let first = TableLayout(tv: scene.size, insets: .zero, seats: seats)
+        let small = room.game!.scores.map(TVSeatWords(.zero, unit: first.tvUnit).piece)
+        let smallBanner = TVBanner.piece(name: names[1], seat: 1, banner: first.banner, room: first.bannerRoom, unit: first.tvUnit)
+        #expect(small.allSatisfy { TVArt.shared.ready($0) == nil })
+        store.handle(.message(.snapshot(protocol: PounceKit.protocolVersion, seq: 1, room: room)))
+        await scene.play(.reconcile)  // lays out at the first size: asks for the small pictures
+        scene.size = Self.tv  // sized: asks for the big ones, drawn already
+        // The small ones land now, after the big ones.
+        #expect(await Self.soon { (small + [smallBanner]).allSatisfy { TVArt.shared.ready($0) != nil } })
+        try await Task.sleep(for: .milliseconds(100))
+
+        for seat in 0..<seats {
+            let node = try #require(scene.opponents.score(for: seat))
+            let want = try #require(TVArt.shared.ready(big[seat]))
+            #expect(!node.isHidden, "seat \(seat) shows no score")
+            #expect(node.texture === want, "seat \(seat) shows a score picture from an earlier layout")
+            #expect(node.size == want.size(), "seat \(seat)'s score is drawn at the wrong size")
+            let tag = try #require(scene.opponents.tag(for: seat))
+            #expect(abs(node.position.x - tag.position.x) < 0.5 && node.position.y < tag.position.y, "seat \(seat)'s score isn't under its name")
+        }
+        let pill = try #require(scene.banner.children.compactMap { $0 as? SKSpriteNode }.first)
+        #expect(pill.texture === TVArt.shared.ready(bigBanner), "the banner shows a picture from an earlier layout")
+    }
+
     // MARK: frame rate
 
     /// On the TV each game's table asks for the screen's top frame rate and, once nothing moves,

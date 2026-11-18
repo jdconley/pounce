@@ -94,9 +94,16 @@ struct TVRoot: View {
             }
         case .table, .over:
             if let table = model.table {
+                let over = model.phase == .over
                 ZStack {
+                    // Behind game over the table recedes: softened out of focus, so the title and
+                    // the places read alone over it (the scrim darkens it too).
                     TableHost(table: table)
-                    if model.phase == .over, let room = table.store.room {
+                        .blur(radius: over ? 18 : 0, opaque: true)
+                        .animation(.easeOut(duration: 0.4), value: over)
+                        // The whole screen, not the safe area, or the blur stops at its edge.
+                        .ignoresSafeArea()
+                    if over, let room = table.store.room {
                         // Scrim, sunburst and panel fade as one layer.
                         GameOverView(room: room)
                             .overlay(alignment: .topLeading) {

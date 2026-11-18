@@ -14,7 +14,7 @@ struct GameOverView: View {
         let title = TVStandings.title(room)
         ZStack {
             // The sunburst is bigger than the screen: an overlay, so it never sizes the screen.
-            Palette.ink.opacity(0.6)
+            Palette.ink.opacity(0.7)
                 .overlay {
                     Image(ArtName.sunburst)
                         .resizable()
