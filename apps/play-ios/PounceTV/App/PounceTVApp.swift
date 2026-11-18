@@ -35,6 +35,7 @@ struct PounceTVApp: App {
         let demo = TVDemo.from()
         if case .table = demo { return nil }
         if demo == .shell { return TVModel(services: .demo()) }
+        if case .over(let seats) = demo { return TVModel(services: .demoOver(seats: seats)) }
         #endif
         return TVModel(services: .live(config: TVConfig.load()))
     }

@@ -7,8 +7,10 @@
 #   xcodebuild -project Pounce.xcodeproj -scheme PounceTV -destination "platform=tvOS Simulator,id=<udid>" build
 #   xcrun simctl install <udid> <DerivedData>/Build/Products/Debug-appletvsimulator/PounceTV.app
 # The two tables come from the Debug build's own preview (a made-up room, no server), with the aim
-# glow on the player whose turn it is. Home, the lobby and game over need a server and phones:
-# `AppStore/tv-live.spec.ts` plays them (see README), and writes the same raw folder.
+# glow on the player whose turn it is. Game over is the Debug build's `-demo tv-over`: the whole TV
+# back at a four-seat Cat Tower table that just finished (three-digit scores, four levels, four
+# cats). Home and the lobby need a server and phones: `AppStore/tv-live.spec.ts` plays them (see
+# README), and writes the same raw folder.
 set -euo pipefail
 cd "$(dirname "$0")/.."
 DEVICE="${1:?Apple TV simulator UDID}"
@@ -33,3 +35,4 @@ shot() {
 
 shot cattower 9 -tv-preview cattower -seats 4 -aim
 shot tiles 9 -tv-preview tiles -seats 3
+shot gameover 9 -demo tv-over -seats 4

@@ -201,8 +201,9 @@ targets:
       - package: PounceKit
         product: PounceKit
     postBuildScripts:
-      # PounceTV/Resources/PrivacyInfo.xcprivacy (the TV's own: the device identifier only) is a
-      # resource through the `PounceTV` source path. App Store Connect rejects an upload without
+      # PounceTV/Resources/PrivacyInfo.xcprivacy (the TV's own: Device ID, Gameplay Content, Product
+      # Interaction and Other Data Types, as docs/privacy/app-store-label.md's Apple TV section
+      # says) is a resource through the `PounceTV` source path. App Store Connect rejects an upload without
       # it, so a build whose bundle lacks it fails here.
       - name: Check privacy manifest
         basedOnDependencyAnalysis: false

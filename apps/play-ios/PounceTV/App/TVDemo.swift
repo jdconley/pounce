@@ -14,9 +14,13 @@ import SwiftUI
 /// - `tv-shell`: the whole TV (`TVRoot`) on fake services. Home shows a link; a poster makes a
 ///   table whose lobby is empty until the test says so: the first `Live.releaseDemo` seats
 ///   everyone, the second starts the game, and `Live.endDemo` ends it.
+/// - `tv-over` (`-seats` 2 to 6, default 4): the whole TV back at a Cat Tower table that just
+///   finished, so game over shows over it (the App Store shot): three-digit scores, everyone on a
+///   different level and cat, nobody left.
 enum TVDemo: Equatable {
     case table(TVTablePreview.Game, seats: Int)
     case shell
+    case over(seats: Int)
 
     static func from(arguments: [String] = CommandLine.arguments) -> TVDemo? {
         guard let i = arguments.firstIndex(of: "-demo"), let name = arguments[safe: i + 1] else { return nil }
@@ -25,6 +29,7 @@ enum TVDemo: Equatable {
         case "tv-hit": return .table(.cattower, seats: seats ?? 6)
         case "tv-tiles": return .table(.tiles, seats: seats ?? 4)
         case "tv-shell": return .shell
+        case "tv-over": return .over(seats: seats ?? 4)
         default: return nil
         }
     }
@@ -36,6 +41,27 @@ enum TVDemo: Equatable {
         return room
     }
 
+    /// A Cat Tower game just finished, for `tv-over`: the 20-letter name won on level 10, and the
+    /// others stopped on different levels with three-digit scores, each with their own cat.
+    static func finished(seats: Int, code: String) -> RoomView {
+        let n = min(max(seats, 2), 6)
+        var room = TVTablePreview.catTower(seats: n)
+        room.code = code
+        room.status = .over
+        let cats = [3, 5, 1, 7, 2, 6]
+        for i in room.seats.indices where room.seats[i].kind == .human {
+            room.seats[i].person?.cat = cats[i % cats.count] % ArtName.catCount
+        }
+        guard var game = room.game else { return room }
+        game.status = .gameOver
+        game.phase = Array([7, 9, 4, 8, 5, 6].prefix(n))
+        game.scores = Array([185, 140, 320, 215, 275, 240].prefix(n))
+        game.winners = [1]
+        game.handCounts = Array(repeating: 0, count: n)
+        game.forfeited = Array(repeating: false, count: n)
+        room.game = game
+        return room
+    }
 }
 
 /// A UI test's go-ahead to the demo (a Darwin notification: it reads nothing from the screen).
@@ -72,6 +98,15 @@ extension TVServices {
             keep: MemoryScreenKeep())
     }
 
+    /// `tv-over`: the TV kept a table, and that table's game has just ended.
+    static func demoOver(seats: Int) -> TVServices {
+        let code = "OVERB"
+        return TVServices(
+            createRoom: { _ in code },
+            link: { TVDemoLink() },
+            socket: { code in TVDemoSocket(room: TVDemo.finished(seats: seats, code: code), lobby: false) },
+            keep: MemoryScreenKeep(ScreenKept(room: code)))
+    }
 }
 
 /// The tables a demo TV made. A code says its game, so a socket can be made from it alone.

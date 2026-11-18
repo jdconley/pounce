@@ -317,6 +317,7 @@ final class TVBanner: SKNode {
             // Still what the banner shows (nothing newer asked for since).
             guard let self, self.shown == next, let texture = textures.first else { return }
             self.apply(texture, next, unit: unit)
+            self.drawLanded()
         }
         guard pop, !reduceMotion else { return nil }
         setScale(0.7)
@@ -452,6 +453,20 @@ struct TVSeatWords {
                 node.size = texture.size()
             }
             node.position = CGPoint(x: below.x, y: below.y - node.size.height / 2 + 2 * unit)
+            node.drawLanded()
+        }
+    }
+}
+
+extension SKNode {
+    /// A picture drawn off the main thread (`TVArt.whenReady`) landed on this node: the table draws
+    /// a frame for it, even if it went idle and paused its view while the picture was drawn.
+    @MainActor
+    func drawLanded() {
+        switch scene {
+        case let table as TableScene: table.director.wake()
+        case let tiles as TilesScene: tiles.director.wake()
+        default: break
         }
     }
 }

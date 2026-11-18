@@ -8,7 +8,7 @@ messages, no server); nothing is drawn by hand except the caption and the backgr
 | --- | --- |
 | `screenshots/iphone-1.jpg` … `6` | 1206x2622, the required iPhone set (Dynamic Island, medium display; iPhone 17 Pro) |
 | `screenshots/ipad-1.jpg` … `6` | 2064x2752, the 13" iPad set |
-| `screenshots/tv-1.jpg` … `4` | 1920x1080, the Apple TV set so far (home, lobby, Cat Tower, Tuna Tiles; game over comes later) |
+| `screenshots/tv-1.jpg` … `5` | 1920x1080, the Apple TV set (home, lobby, Cat Tower, Tuna Tiles, game over) |
 | `previews/iphone-preview.mp4` | 886x1920, 25.4 s (recorded on an iPhone 17 Pro Max, cut to the size the iPhone slot takes) |
 | `previews/ipad-preview.mp4` | 1200x1600, 25.4 s |
 | `captions.json`, `captions.md` | The captions and what backs each one |
@@ -90,20 +90,21 @@ swift AppStore/tv-brand.swift --preview /tmp/tv    # also writes each icon flatt
 
 ## Apple TV screenshots
 
-The four Apple TV shots (`screenshots/tv-N.jpg`, 1920x1080, from an "Apple TV 4K (3rd generation)
+The five Apple TV shots (`screenshots/tv-N.jpg`, 1920x1080, from an "Apple TV 4K (3rd generation)
 (at 1080p)" simulator; App Store Connect also takes 3840x2160) are the Debug PounceTV build's real
-screens, with no caption or background. The two tables come from the build's own preview, with no
-server. Home and the lobby need a TV that is linked to a table, so a dev server and
-browser phones play them.
+screens, with no caption or background. The two tables come from the build's own preview, and game
+over from its `-demo tv-over` (the whole TV back at a four-seat Cat Tower game that just ended:
+three-digit scores, four levels, four cats, nobody left), all with no server. Home and the lobby
+need a TV that is linked to a table, so a dev server and browser phones play them.
 
 ```sh
 xcodebuild -project Pounce.xcodeproj -scheme PounceTV -destination "platform=tvOS Simulator,id=<udid>" build
 xcrun simctl install <udid> <DerivedData>/Build/Products/Debug-appletvsimulator/PounceTV.app
-AppStore/capture-tv.sh <udid>        # raw/tv/cattower.png, tiles.png (tv-3, tv-4)
+AppStore/capture-tv.sh <udid>        # raw/tv/cattower.png, tiles.png, gameover.png (tv-3, tv-4, tv-5)
 # raw/tv/home.png, lobby.png (tv-1, tv-2): AppStore/tv-live.spec.ts, against your own dev server
 # (its header says how); never port 4343.
 sips -s format jpeg -s formatOptions 92 AppStore/raw/tv/<name>.png --out AppStore/screenshots/tv-<n>.jpg
 ```
 
-Game over is not here yet: no argument of the Debug build's preview shows it. Delete the simulator
-afterwards.
+Look at each shot before converting it: the seats' scores behind game over must all show. Delete
+the simulator afterwards.
