@@ -255,12 +255,17 @@ jobs:
           echo "simulator $udid on $runtime"
           echo "udid=$udid" >> "$GITHUB_OUTPUT"
       # PounceKit built for tvOS and its tests (its logic is also `swift test` in the build job).
+      # Its log is kept (and the failures shown) so a failing test names itself.
       - name: PounceKit tests on tvOS
         timeout-minutes: 12
         working-directory: apps/play-ios/PounceKit
-        run: >
-          xcodebuild test -scheme PounceKit-Package -destination "id=${{ steps.sim.outputs.udid }}"
-          -derivedDataPath ../build/dd-kit-tv -quiet
+        run: |
+          set -o pipefail
+          mkdir -p ../build
+          xcodebuild test -scheme PounceKit-Package -destination "id=${{ steps.sim.outputs.udid }}" \
+            -derivedDataPath ../build/dd-kit-tv > ../build/tv-kit.log 2>&1 \
+            || { grep -E '✘|error:|recorded an issue' ../build/tv-kit.log | head -60; exit 1; }
+          grep -E 'Test run with' ../build/tv-kit.log || true
       - run: scripts/bootstrap.sh
       # Debug (the demos are Debug only) with the compiler's optimizations on, as the shipped app
       # has them.
@@ -310,6 +315,7 @@ jobs:
         with:
           name: tv-gates
           path: |
+            apps/play-ios/build/tv-kit.log
             apps/play-ios/build/tv-gates.log
             apps/play-ios/build/tv-gates.xcresult
           retention-days: 7
