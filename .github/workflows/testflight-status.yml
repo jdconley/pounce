@@ -1,0 +1,41 @@
+name: TestFlight status
+
+# Read only: lists the latest iPhone and Apple TV builds with their processing and beta app review
+# state (scripts/distribute.swift --status), so anyone can see when a build has cleared review
+# without App Store Connect access. Changes nothing in App Store Connect.
+#   gh workflow run testflight-status.yml --repo jdconley/pounce
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: testflight-status
+  cancel-in-progress: true
+
+jobs:
+  status:
+    name: TestFlight builds
+    runs-on: macos-26
+    timeout-minutes: 10
+    environment: production
+    env:
+      ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+      ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
+      ASC_KEY_P8: ${{ secrets.ASC_KEY_P8 }}
+    defaults:
+      run:
+        working-directory: apps/play-ios
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+      - name: Builds and beta review
+        run: |
+          if [ -z "$ASC_KEY_ID" ] || [ -z "$ASC_ISSUER_ID" ] || [ -z "$ASC_KEY_P8" ]; then
+            echo "::error title=App Store Connect::ASC_KEY_ID, ASC_ISSUER_ID or ASC_KEY_P8 is unset. See apps/play-ios/README.md."
+            exit 1
+          fi
+          export ASC_KEY_PATH="$RUNNER_TEMP/AuthKey_$ASC_KEY_ID.p8"
+          (umask 077; printenv ASC_KEY_P8 > "$ASC_KEY_PATH")
+          trap 'rm -f "$ASC_KEY_PATH"' EXIT
+          scripts/distribute.swift --status

@@ -502,9 +502,13 @@ Run it locally with the same three `ASC_*` variables as `testflight.sh`:
 
 ```sh
 scripts/distribute.swift --dry-run                         # read only: notes and planned changes
+scripts/distribute.swift --status                          # read only: latest builds and their beta review state
 scripts/distribute.swift --build 202611020653              # distribute that build to Family and Friends
 scripts/distribute.swift --build 202611020653 --group "Family and Friends" --since 2026-11-01
 ```
+
+Without App Store Connect access, the TestFlight status workflow runs `--status` in CI:
+`gh workflow run testflight-status.yml`; the run's summary has the table.
 
 `--build` defaults to the newest upload, `--since` overrides the start of the What to Test commit
 list, and `--timeout` sets the processing wait in minutes. Without credentials, `--dry-run` prints
