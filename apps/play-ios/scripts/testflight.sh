@@ -15,7 +15,12 @@
 # The upload reaches internal testers only; scripts/distribute.swift sends it to a beta group.
 # Release builds point at https://play.conleychaos.com and register no custom URL scheme.
 #
-# Signing is automatic (team B222J9J7B8). By default Xcode's signed-in account is used. To
+# Signing is automatic (team B222J9J7B8). The iPhone archive is development-signed, as Xcode does
+# by default. The Apple TV archive can't be: a development profile needs a registered device of
+# its platform, and the team has no Apple TV registered. So it is archived unsigned, signed ad hoc
+# with its entitlements (so they survive), and signed for the App Store only by the export, which
+# needs no device (App Store profile, cloud-managed distribution certificate).
+# By default Xcode's signed-in account is used. To
 # authenticate with an App Store Connect API key instead, export all three (never commit them):
 #   ASC_KEY_ID      the key's ID
 #   ASC_ISSUER_ID   the issuer ID shown on the Keys page
@@ -27,7 +32,7 @@ DRY_RUN=0
 for arg in "$@"; do
   case "$arg" in
     --dry-run) DRY_RUN=1 ;;
-    -h|--help) sed -n '2,22p' "$0"; exit 0 ;;
+    -h|--help) sed -n '2,27p' "$0"; exit 0 ;;
     *) echo "usage: scripts/testflight.sh [--dry-run]" >&2; exit 64 ;;
   esac
 done
@@ -60,12 +65,32 @@ echo "build number: $BUILD_NUMBER"
 
 run scripts/bootstrap.sh
 run rm -rf "$ARCHIVE" "$EXPORT"
-run xcodebuild archive \
-  -project Pounce.xcodeproj -scheme "$SCHEME" -configuration Release \
-  -destination "generic/platform=$PLATFORM" \
-  -archivePath "$ARCHIVE" \
-  "CURRENT_PROJECT_VERSION=$BUILD_NUMBER" \
-  -allowProvisioningUpdates ${auth[@]+"${auth[@]}"}
+if [ "$PLATFORM" = iOS ]; then
+  run xcodebuild archive \
+    -project Pounce.xcodeproj -scheme "$SCHEME" -configuration Release \
+    -destination "generic/platform=$PLATFORM" \
+    -archivePath "$ARCHIVE" \
+    "CURRENT_PROJECT_VERSION=$BUILD_NUMBER" \
+    -allowProvisioningUpdates ${auth[@]+"${auth[@]}"}
+else
+  # Unsigned, then ad hoc with the target's entitlements, $(AppIdentifierPrefix) filled in.
+  TEAM="$(/usr/libexec/PlistBuddy -c 'Print :teamID' ExportOptions.plist)"
+  APP="$ARCHIVE/Products/Applications/$SCHEME.app"
+  ENTITLEMENTS="build/$SCHEME.entitlements"
+  run xcodebuild archive \
+    -project Pounce.xcodeproj -scheme "$SCHEME" -configuration Release \
+    -destination "generic/platform=$PLATFORM" \
+    -archivePath "$ARCHIVE" \
+    "CURRENT_PROJECT_VERSION=$BUILD_NUMBER" \
+    CODE_SIGNING_ALLOWED=NO
+  run sh -c "sed 's/\$(AppIdentifierPrefix)/$TEAM./g' '$SCHEME/$SCHEME.entitlements' > '$ENTITLEMENTS'"
+  # One bundle and nothing nested: a framework or extension added later needs signing here first.
+  if [ "$DRY_RUN" -eq 0 ] && [ -n "$(find "$APP" -mindepth 1 \( -name '*.framework' -o -name '*.appex' -o -name '*.dylib' \) -print -quit)" ]; then
+    echo "$APP holds a framework or extension: sign it before the app" >&2
+    exit 1
+  fi
+  run codesign --force --sign - --timestamp=none --entitlements "$ENTITLEMENTS" "$APP"
+fi
 run xcodebuild -exportArchive \
   -archivePath "$ARCHIVE" \
   -exportOptionsPlist ExportOptions.plist \

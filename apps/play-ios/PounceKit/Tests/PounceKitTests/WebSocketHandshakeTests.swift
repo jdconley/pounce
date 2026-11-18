@@ -60,18 +60,23 @@ private final class LoopbackServer: Sendable {
     }
 }
 
-@Suite(.timeLimit(.minutes(1))) struct WebSocketHandshakeTests {
+/// No wall clock: each server leaves one way through, so a connect that returns at all proved the
+/// path under test, and one waiting for the other fails with "ping timed out". The generous timeout
+/// only keeps a loaded CI host (a tvOS simulator next to 1,250 tests running in parallel) from
+/// failing a handshake that is merely slow.
+@Suite(.timeLimit(.minutes(2))) struct WebSocketHandshakeTests {
+    static let timeout: Duration = .seconds(60)
+
     /// Frames that arrive before the pong (a snapshot, then another seat's event) can keep
     /// URLSession from reading the pong at all; the first frame alone proves the upgrade.
     @Test func firstFrameCompletesTheHandshakeWithoutAPong() async throws {
         let server = try LoopbackServer(answersPings: false, greeting: ["one", "two"])
         defer { server.stop() }
         let url = try await server.start()
-        let connector = URLSessionWebSocketConnector(session: URLSession(configuration: .ephemeral), timeout: .seconds(5))
+        let connector = URLSessionWebSocketConnector(session: URLSession(configuration: .ephemeral), timeout: Self.timeout)
 
-        let started = ContinuousClock.now
+        // The server never answers a ping: only the first frame can complete this.
         let connection = try await connector.connect(url: url, token: "t")
-        #expect(ContinuousClock.now - started < .seconds(4))  // not the ping timeout
         #expect(try await connection.receive() == "one")  // the prefetched frame is kept
         #expect(try await connection.receive() == "two")
         await connection.close()
@@ -82,11 +87,10 @@ private final class LoopbackServer: Sendable {
         let server = try LoopbackServer(answersPings: true, greeting: [])
         defer { server.stop() }
         let url = try await server.start()
-        let connector = URLSessionWebSocketConnector(session: URLSession(configuration: .ephemeral), timeout: .seconds(5))
+        let connector = URLSessionWebSocketConnector(session: URLSession(configuration: .ephemeral), timeout: Self.timeout)
 
-        let started = ContinuousClock.now
+        // No frame ever comes: only the pong can complete this.
         let connection = try await connector.connect(url: url, token: "t")
-        #expect(ContinuousClock.now - started < .seconds(4))
         await connection.close()
     }
 }

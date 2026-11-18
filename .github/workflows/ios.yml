@@ -25,6 +25,11 @@ on:
         description: Distribute this already-uploaded build number instead of archiving a new one (e.g. a build uploaded from a Mac)
         type: string
         default: ""
+      platform:
+        description: Which app to archive (or, with a build number, distribute) - both, or just the iPhone (iOS) or Apple TV (tvOS) one
+        type: choice
+        options: [both, iOS, tvOS]
+        default: both
       revoke_ci_certs:
         description: Before archiving, revoke every development certificate CI created through the API (for "maximum number of certificates")
         type: boolean
@@ -250,12 +255,17 @@ jobs:
           echo "simulator $udid on $runtime"
           echo "udid=$udid" >> "$GITHUB_OUTPUT"
       # PounceKit built for tvOS and its tests (its logic is also `swift test` in the build job).
+      # Its log is kept (and the failures shown) so a failing test names itself.
       - name: PounceKit tests on tvOS
         timeout-minutes: 12
         working-directory: apps/play-ios/PounceKit
-        run: >
-          xcodebuild test -scheme PounceKit-Package -destination "id=${{ steps.sim.outputs.udid }}"
-          -derivedDataPath ../build/dd-kit-tv -quiet
+        run: |
+          set -o pipefail
+          mkdir -p ../build
+          xcodebuild test -scheme PounceKit-Package -destination "id=${{ steps.sim.outputs.udid }}" \
+            -derivedDataPath ../build/dd-kit-tv > ../build/tv-kit.log 2>&1 \
+            || { grep -E '✘|error:|recorded an issue' ../build/tv-kit.log | head -60; exit 1; }
+          grep -E 'Test run with' ../build/tv-kit.log || true
       - run: scripts/bootstrap.sh
       # Debug (the demos are Debug only) with the compiler's optimizations on, as the shipped app
       # has them.
@@ -305,6 +315,7 @@ jobs:
         with:
           name: tv-gates
           path: |
+            apps/play-ios/build/tv-kit.log
             apps/play-ios/build/tv-gates.log
             apps/play-ios/build/tv-gates.xcresult
           retention-days: 7
@@ -384,7 +395,7 @@ jobs:
           scripts/certs.swift --revoke-api-created
       - name: Archive and upload
         id: upload
-        if: steps.creds.outputs.ready == 'true' && inputs.build == ''
+        if: steps.creds.outputs.ready == 'true' && inputs.build == '' && inputs.platform != 'tvOS'
         run: |
           BUILD_NUMBER="$(date +%Y%m%d%H%M)"
           export BUILD_NUMBER
@@ -393,18 +404,22 @@ jobs:
           (umask 077; printenv ASC_KEY_P8 > "$ASC_KEY_PATH")
           trap 'rm -f "$ASC_KEY_PATH"' EXIT
           scripts/testflight.sh
-      # The Apple TV app, with the same build number. If it fails or stalls (the 30-minute cap
-      # covers the archive and any tvOS SDK download), the iPhone build is still distributed and
-      # the last step fails the job.
+      # The Apple TV app, with the iPhone's build number (its own, on a tvOS-only dispatch). It is
+      # signed for the App Store at export, with no device (scripts/testflight.sh). If it fails or
+      # stalls (the 30-minute cap covers the archive and any tvOS SDK download), the iPhone build
+      # is still distributed and the last step fails the job.
       - name: Archive and upload (Apple TV)
         id: upload-tv
-        if: steps.creds.outputs.ready == 'true' && inputs.build == ''
+        if: steps.creds.outputs.ready == 'true' && inputs.build == '' && inputs.platform != 'iOS'
         continue-on-error: true
         timeout-minutes: 30
         env:
           BUILD_NUMBER: ${{ steps.upload.outputs.build }}
           PLATFORM: tvOS
         run: |
+          BUILD_NUMBER="${BUILD_NUMBER:-$(date +%Y%m%d%H%M)}"
+          export BUILD_NUMBER
+          echo "build=$BUILD_NUMBER" >> "$GITHUB_OUTPUT"
           xcodebuild -showsdks | grep appletvos >/dev/null || xcodebuild -downloadPlatform tvOS
           export ASC_KEY_PATH="$RUNNER_TEMP/AuthKey_$ASC_KEY_ID.p8"
           (umask 077; printenv ASC_KEY_P8 > "$ASC_KEY_PATH")
@@ -427,7 +442,9 @@ jobs:
           if [ ${#serials[@]} -eq 0 ]; then echo "no development certificate on this runner"; exit 0; fi
           scripts/certs.swift --revoke "${serials[@]}"
       - name: Distribute to the TestFlight group
-        if: steps.creds.outputs.ready == 'true' && (github.event_name == 'push' || inputs.distribute)
+        if: >-
+          steps.creds.outputs.ready == 'true' && (github.event_name == 'push' || inputs.distribute)
+          && inputs.platform != 'tvOS'
         env:
           BUILD: ${{ inputs.build || steps.upload.outputs.build }}
           GROUP: ${{ inputs.group || 'Family and Friends' }}
@@ -452,12 +469,14 @@ jobs:
       # (project.yml's PounceTV sources: its own folder, the shared table code and art, PounceKit,
       # the build configs), less the iPhone-only files those folders hold; keep them in step with
       # project.yml and distribute.swift.
+      # Also a dispatch with platform tvOS and a build number: that Apple TV build, uploaded before.
       - name: Distribute the Apple TV build to the TestFlight group
         if: >-
-          !cancelled() && steps.creds.outputs.ready == 'true' && steps.upload-tv.outcome == 'success'
+          !cancelled() && steps.creds.outputs.ready == 'true'
+          && (steps.upload-tv.outcome == 'success' || (inputs.build != '' && inputs.platform == 'tvOS'))
           && (github.event_name == 'push' || inputs.distribute)
         env:
-          BUILD: ${{ steps.upload.outputs.build }}
+          BUILD: ${{ inputs.build || steps.upload-tv.outputs.build }}
           GROUP: ${{ inputs.group || 'Family and Friends' }}
           FROM: ${{ github.event_name == 'push' && github.event.before || '' }}
         run: |

@@ -477,6 +477,9 @@ build, run the workflow by hand: Actions → iOS → Run workflow on `main` (or
 - `build` (default empty): distribute this already-uploaded build number and skip the archive, e.g.
   a build uploaded from a Mac with `scripts/testflight.sh` when CI can't sign
   (`gh workflow run ios.yml --ref main -f build=202611040600`).
+- `platform` (default `both`): `iOS` or `tvOS` archives (or, with `build`, distributes) just that
+  app. `gh workflow run ios.yml --ref main -f platform=tvOS` makes a fresh Apple TV build and sends
+  it to the group; add `-f build=N` to send an Apple TV build already uploaded.
 - `revoke_ci_certs` (default off): before archiving, revoke every development certificate CI ever
   created (`scripts/certs.swift --revoke-api-created`). Each fresh runner's archive mints one; the
   job now revokes its own when it finishes, but runs before that left them behind until Apple
@@ -577,14 +580,17 @@ commits and the default note is the TV's. Without credentials, `--dry-run` print
 would make, for both platforms.
 
 In CI, the `build` job also builds `PounceTV` for generic tvOS, unsigned. The `testflight` job
-archives and uploads both apps with one build number, the iPhone app first. An Apple TV failure
+archives and uploads both apps with one build number, the iPhone app first. The Apple TV archive is
+not development-signed (that needs a registered Apple TV, and the team has none): it is archived
+unsigned, signed ad hoc with its entitlements, and signed for the App Store by the export
+(`scripts/testflight.sh`). An Apple TV failure
 (or one stalled past 30 minutes) doesn't hold up the iPhone build; the job still fails at the end.
 The Apple TV build goes to the group only when a push changes what `PounceTV` compiles: `PounceTV`,
 `PounceKit`, `Config`, `project.yml` and the shared table files above (the iPhone filter also has
 `Config`). When the target compiles another folder or file, add it to both TV filters (`ios.yml`
-and `distribute.swift`). To resend an
-Apple TV build, run `scripts/distribute.swift --platform TV_OS --build N` from a Mac; the workflow's
-`build` input is for the iPhone app.
+and `distribute.swift`). To make and send
+an Apple TV build on its own, dispatch the workflow with `platform` `tvOS` (and `build` to resend
+one), or run `scripts/distribute.swift --platform TV_OS --build N` from a Mac.
 
 **Adding the platform (once).** App Store Connect takes Apple TV builds only after the record has
 the tvOS platform. `scripts/asc-add-platform.swift` adds it, as JD OK'd (2026-11-16), and changes
