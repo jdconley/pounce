@@ -54,17 +54,18 @@ jobs:
         run: |
           mkdir -p ~/apt-archives/partial
           echo "Dir::Cache::Archives \"$HOME/apt-archives\";" | sudo tee /etc/apt/apt.conf.d/99pounce-archives
-          echo "version=$(pnpm --filter @pounce/play-web exec playwright --version | tr -dc '0-9.')" >> "$GITHUB_OUTPUT"
+          echo "key=playwright-$ImageOS-$ImageVersion-$(pnpm --filter @pounce/play-web exec playwright --version | tr -dc '0-9.')" >> "$GITHUB_OUTPUT"
       - uses: actions/cache@5a3ec84eff668545956fd18022155c47e93e2684 # v4.2.3
         with:
           path: |
             ~/apt-archives
-            !~/apt-archives/lock
-            !~/apt-archives/partial
             ~/.cache/ms-playwright
-          key: playwright-${{ env.ImageOS }}-${{ steps.pw.outputs.version }}
-      - run: mkdir -p ~/apt-archives/partial
-      - run: pnpm --filter @pounce/play-web exec playwright install --with-deps chromium webkit firefox
+          key: ${{ steps.pw.outputs.key }}
+      - run: |
+          mkdir -p ~/apt-archives/partial
+          pnpm --filter @pounce/play-web exec playwright install --with-deps chromium webkit firefox
+          # apt's lock and partial folder are root's alone; the cache can't read them, and doesn't need them.
+          sudo rm -rf ~/apt-archives/lock ~/apt-archives/partial
       - run: pnpm --filter @pounce/play-web build
       - run: pnpm --filter @pounce/play-web e2e
       - if: failure()
