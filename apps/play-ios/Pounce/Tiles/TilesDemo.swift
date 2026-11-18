@@ -22,7 +22,8 @@ import SwiftUI
 ///   to play video's ending).
 ///
 /// - `controller-tiles`, `controller-tiles-off`, `controller-tiles-curtain`: `tiles`, `tiles-other`
-///   and `tiles-curtain` with a TV showing the table (`screen: true`), so this phone is a
+///   and `tiles-curtain` with a TV showing the table; `controller-tiles-late-off` is `tiles-late`
+///   on Kiki's move (22 pieces on Cards) (`screen: true`), so this phone is a
 ///   controller (Cards: just the stash off turn, the table on its turn).
 ///
 /// `-tiles-hold-bots`: the House Cats don't play until a UI test posts `DemoRelease`.
@@ -40,6 +41,7 @@ enum TilesDemo {
         case .controllerTiles: atTV(DemoFixtures.tilesMid())
         case .controllerTilesOff: atTV(DemoFixtures.tilesOther())
         case .controllerTilesCurtain: atTV(DemoFixtures.tilesCurtain())
+        case .controllerTilesLateOff: offTurn(atTV(DemoFixtures.tilesLate()))
         case .tilesEarly: DemoFixtures.tilesEarly()
         case .tilesOpened: DemoFixtures.tilesEarly(opened: true)
         case .tilesLate: DemoFixtures.tilesLate()
@@ -52,6 +54,13 @@ enum TilesDemo {
         case .tilesLast: DemoFixtures.tilesLast()
         default: DemoFixtures.tilesMid()
         }
+    }
+
+    /// `room` on the next seat's move.
+    private static func offTurn(_ room: RoomView) -> RoomView {
+        var room = room
+        room.tiles?.turn = 1
+        return room
     }
 
     /// `room` with a TV showing it.

@@ -259,7 +259,8 @@ public struct TilesLayout: Equatable, Sendable {
     /// to `rackRowLimit` rows, with the two
     /// sort toggles over its right end (where the table's strip has them), the two centred
     /// together in what is left. Never smaller than a table stash's pieces on this screen: when
-    /// that many don't fit at that size, the rows hold as many as fit and the stash scrolls.
+    /// that many don't fit at that size, the rows hold as many as fit at it and more rows are
+    /// added while the room holds them; only then does the stash scroll.
     private init(rackOnly chrome: ControllerChrome, size: CGSize, safeTop: CGFloat, safeBottom: CGFloat, rackCount: Int) {
         self.size = size
         self.safeTop = safeTop
@@ -326,9 +327,11 @@ public struct TilesLayout: Equatable, Sendable {
             if w > best.w { best = (w, rows, columns) }
         }
         if best.w < smallest {
-            // Too many to show at once: the most columns that fit at the table's size, and scroll.
-            let rows = Self.rackRowLimit
+            // Too many for three rows: the most columns that fit at the table's size, and as many
+            // more rows as the room holds; only past that does the stash scroll.
             let columns = max(Int(((availW + gap) / (smallest + gap)).rounded(.down)), 1)
+            let room = max(Int(((availH + gap) / (height(smallest) + gap)).rounded(.down)), Self.rackRowLimit)
+            let rows = min(max((n + columns - 1) / columns, Self.rackRowLimit), room)
             best = (max(fit(rows: rows, columns: columns), smallest), rows, columns)
         }
         let piece = CGSize(width: best.w, height: height(best.w))
@@ -425,7 +428,7 @@ public struct TilesLayout: Equatable, Sendable {
     // MARK: the stash
 
     /// Where each of `count` stash pieces sits (piece centers, before any sideways scroll), row
-    /// by row from the top left, and how wide the rows are together. Up to three rows of
+    /// by row from the top left, and how wide the rows are together. Up to `rackRows` rows of
     /// `rackColumns`; past that the rows grow sideways and the stash scrolls.
     public func rackSlots(count: Int) -> (centers: [CGPoint], contentWidth: CGFloat) {
         guard count > 0, rack.height > 0 else { return ([], 0) }

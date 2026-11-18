@@ -62,8 +62,9 @@ enum DemoMode: String {
     /// The tile game at a TV (`screen: true`): `controller-tiles` is `tiles` (my move, opened),
     /// `controller-tiles-off` Kiki's move (just my stash on Cards; the House Cats play on until
     /// it is mine, or with `-tiles-hold-bots` once a UI test lets them), `controller-tiles-curtain` two seats on this phone, the curtain up for seat 0.
+    /// `controller-tiles-late-off`: `tiles-late` (22 in my stash) on Kiki's move, on Cards.
     case controllerTiles = "controller-tiles", controllerTilesOff = "controller-tiles-off"
-    case controllerTilesCurtain = "controller-tiles-curtain"
+    case controllerTilesCurtain = "controller-tiles-curtain", controllerTilesLateOff = "controller-tiles-late-off"
     /// The tile game's table (`TilesDemo` has what each one shows). The only way into the game
     /// until Home offers it.
     case tiles
@@ -114,7 +115,7 @@ enum DemoMode: String {
         switch self {
         case .tiles, .tilesEarly, .tilesOpened, .tilesDraft, .tilesInvalid, .tilesLoupe, .tilesLate, .tilesLong,
              .tilesPass, .tilesOther, .tilesCurtain, .tilesOver, .tilesPlay, .tilesLast,
-             .controllerTiles, .controllerTilesOff, .controllerTilesCurtain:
+             .controllerTiles, .controllerTilesOff, .controllerTilesCurtain, .controllerTilesLateOff:
             return TilesDemo.room(self)
         case .howto: return DemoFixtures.howTo()
         case .lobby: return DemoFixtures.lobby()
