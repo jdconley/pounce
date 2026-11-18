@@ -85,9 +85,9 @@ How the site offers the app follows two settings, with no code change:
 
 | Setting | Where | Effect |
 | --- | --- | --- |
-| `APP_STORE_URL` | `vars` in `apps/play-api/wrangler.jsonc`, set to `https://apps.apple.com/app/id6829560061` since 1.0 was released | The landing page shows Apple's "Download on the App Store" badge and a QR code on desktop; every page gets Safari's Smart App Banner; `/get` goes to the App Store. |
+| `APP_STORE_URL` | `vars` in `apps/play-api/wrangler.jsonc`, set to `https://apps.apple.com/app/id6829560061` since 1.0 was released | The landing page shows Apple's "Download on the App Store" badge beside "Play in your browser", and a QR code on desktop; every page gets Safari's Smart App Banner; `/get` goes to the App Store. |
 | `TESTFLIGHT_URL` | the same `vars`, the public beta link | Before release, used in place of the App Store. Now only for an invite to a table the App Store's version can't open yet (below). |
-| neither | | The page says "Coming soon to the App Store" and has no install button. |
+| neither | | The page says "Coming soon to the App Store" and offers only "Play in your browser". |
 
 The invite pages (`/j/<code>`, `/p/<token>`) promise only what the App Store's current version can
 do, using the version Apple's public lookup reports (cached, never waited on). Paste invite and Tuna
@@ -100,8 +100,10 @@ Paste". Once the App Store has 1.1, every invite goes to the App Store with Past
 `https://play.conleychaos.com/get`.
 
 The page's images and gameplay clip are built from the app icon, the cat art and the App Store
-screenshots and preview under `apps/play-ios`, and committed in `apps/play-api/public`. After any
-of those change, rebuild them (needs `ffmpeg`, `cwebp` and ImageMagick):
+preview under `apps/play-ios`, and real screenshots of both games, the web player and the TV
+(`SCREENS` in the script, from `docs/screenshots` and `apps/play-ios/Art/screenshots`). They are
+committed in `apps/play-api/public`. After any of those change, rebuild them (needs `ffmpeg`,
+`cwebp` and ImageMagick):
 
 ```bash
 node apps/play-api/scripts/build-site-media.mjs

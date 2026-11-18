@@ -17,10 +17,33 @@ describe("supportPage", () => {
 
   test("covers each topic, the privacy contact and the privacy link", async () => {
     const html = await supportPage().text();
-    for (const s of ["Create", "House Cat", "Reminders", "Add a child", "Report", "Block", "Delete my data", 'href="/privacy"', 'href="mailto:privacy@conleychaos.com"']) {
+    for (const s of [
+      "tap Play on Cat Tower or Tuna Tiles",
+      "Add a player",
+      "Same room",
+      "Far away",
+      "This phone",
+      "Practice",
+      "House Cat",
+      "How to play Cat Tower",
+      "How to play Tuna Tiles",
+      'href="/play/"',
+      'href="/play/tv"',
+      "you see just your own cards",
+      "Reminders",
+      "Kids' alerts",
+      "Add a child",
+      "Report",
+      "Block",
+      "Delete my data",
+      'href="/privacy"',
+      'href="mailto:privacy@conleychaos.com"',
+    ]) {
       expect(html, s).toContain(s);
     }
     expect(html).not.toMatch(/kitten/i);
+    expect(html).not.toMatch(/card game for couples|tap Create|Add a bot/i);
+    expect(html).not.toMatch(/[\u2013\u2014]|Apple TV/);
   });
 });
 
@@ -72,13 +95,14 @@ describe("robots.txt and the sitemap", () => {
     expect(await res.text()).toBe("User-agent: *\nAllow: /\nDisallow: /v1/\n\nSitemap: https://play.conleychaos.com/sitemap.xml\n");
   });
 
-  test("the sitemap lists the three public pages", async () => {
+  test("the sitemap lists the public pages, the web player among them", async () => {
     const res = sitemapXml("https://play.conleychaos.com");
     expect(res.headers.get("content-type")).toBe("application/xml; charset=utf-8");
     const xml = await res.text();
     expect(xml.startsWith('<?xml version="1.0" encoding="UTF-8"?>')).toBe(true);
     expect([...xml.matchAll(/<loc>([^<]+)<\/loc>/g)].map((m) => m[1])).toEqual([
       "https://play.conleychaos.com/",
+      "https://play.conleychaos.com/play/",
       "https://play.conleychaos.com/support",
       "https://play.conleychaos.com/privacy",
     ]);
@@ -90,10 +114,18 @@ describe("robots.txt and the sitemap", () => {
     expect(res.headers.get("content-type")).toBe("text/plain; charset=utf-8");
     const text = await res.text();
     expect(text.startsWith("# Pounce: Family Games\n")).toBe(true);
-    for (const s of ["Cat Tower", "no chat, no ads, no tracking and no third-party analytics", "(https://play.conleychaos.com/support)", "(https://play.conleychaos.com/privacy)", "(https://play.conleychaos.com/get)"]) {
+    for (const s of [
+      "Cat Tower",
+      "Tuna Tiles",
+      "in any web browser",
+      "https://play.conleychaos.com/play/tv",
+      "(https://play.conleychaos.com/play/)",
+      "no chat, no ads, no tracking and no third-party analytics",
+      "(https://play.conleychaos.com/support)", "(https://play.conleychaos.com/privacy)", "(https://play.conleychaos.com/get)"]) {
       expect(text, s).toContain(s);
     }
     expect(text).not.toMatch(/\p{Extended_Pictographic}/u);
+    expect(text).not.toMatch(/first game|for iPhone and iPad, made by|[\u2013\u2014]|Apple TV/);
     // Like the privacy policy, it mentions a parent's choice only when parent consent is on.
     expect(text).toContain("a parent decides whether they get notifications");
     const off = await llmsTxt("https://play.conleychaos.com", false).text();

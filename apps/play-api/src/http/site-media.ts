@@ -9,7 +9,7 @@ export const MEDIA = {
     "height": 40
   },
   "og": {
-    "src": "/static/og.9cce277989.jpg",
+    "src": "/static/og.52f0d44eae.jpg",
     "width": 1200,
     "height": 630
   },
@@ -21,200 +21,176 @@ export const MEDIA = {
     "height": 1144,
     "seconds": 12
   },
-  "shots": [
-    {
-      "width": 320,
-      "height": 696,
+  "screens": {
+    "tv": {
+      "width": 480,
+      "height": 270,
       "webp": [
         {
-          "src": "/static/shot-1-320.fd0966b478.webp",
-          "w": 320
+          "src": "/static/tv-table-480.25ff680e6c.webp",
+          "w": 480
         },
         {
-          "src": "/static/shot-1-440.51a82667c5.webp",
-          "w": 440
+          "src": "/static/tv-table-720.80d5242195.webp",
+          "w": 720
         },
         {
-          "src": "/static/shot-1-640.75350b73b2.webp",
-          "w": 640
+          "src": "/static/tv-table-1040.0948877a60.webp",
+          "w": 1040
         }
       ],
       "jpg": [
         {
-          "src": "/static/shot-1-320.b325909f46.jpg",
-          "w": 320
+          "src": "/static/tv-table-480.a22a51c113.jpg",
+          "w": 480
         },
         {
-          "src": "/static/shot-1-440.0e98865b2f.jpg",
-          "w": 440
+          "src": "/static/tv-table-720.cd8b107c38.jpg",
+          "w": 720
         },
         {
-          "src": "/static/shot-1-640.528e911bd0.jpg",
-          "w": 640
+          "src": "/static/tv-table-1040.175ab9b3a5.jpg",
+          "w": 1040
         }
       ]
     },
-    {
-      "width": 320,
-      "height": 696,
+    "tvHome": {
+      "width": 480,
+      "height": 270,
       "webp": [
         {
-          "src": "/static/shot-2-320.4d15e989d2.webp",
-          "w": 320
+          "src": "/static/tv-home-480.18206f7718.webp",
+          "w": 480
         },
         {
-          "src": "/static/shot-2-440.556351ccc2.webp",
-          "w": 440
+          "src": "/static/tv-home-720.9f53cae66a.webp",
+          "w": 720
         },
         {
-          "src": "/static/shot-2-640.38094fa36e.webp",
-          "w": 640
+          "src": "/static/tv-home-1040.55b3899067.webp",
+          "w": 1040
         }
       ],
       "jpg": [
         {
-          "src": "/static/shot-2-320.29d5c2d569.jpg",
-          "w": 320
+          "src": "/static/tv-home-480.b7138af064.jpg",
+          "w": 480
         },
         {
-          "src": "/static/shot-2-440.9542f2657e.jpg",
-          "w": 440
+          "src": "/static/tv-home-720.9347f596d5.jpg",
+          "w": 720
         },
         {
-          "src": "/static/shot-2-640.86822d854c.jpg",
-          "w": 640
+          "src": "/static/tv-home-1040.f60cbdbba7.jpg",
+          "w": 1040
         }
       ]
     },
-    {
-      "width": 320,
-      "height": 696,
+    "cards": {
+      "width": 180,
+      "height": 389,
       "webp": [
         {
-          "src": "/static/shot-3-320.a679804c1f.webp",
-          "w": 320
+          "src": "/static/phone-cards-180.17a354ad81.webp",
+          "w": 180
         },
         {
-          "src": "/static/shot-3-440.1c33ce53e0.webp",
-          "w": 440
-        },
-        {
-          "src": "/static/shot-3-640.a1c9fd617b.webp",
-          "w": 640
+          "src": "/static/phone-cards-360.1ce122fb71.webp",
+          "w": 360
         }
       ],
       "jpg": [
         {
-          "src": "/static/shot-3-320.9cba98e5dd.jpg",
-          "w": 320
+          "src": "/static/phone-cards-180.7cc45bbc12.jpg",
+          "w": 180
         },
         {
-          "src": "/static/shot-3-440.6c8669def1.jpg",
-          "w": 440
-        },
-        {
-          "src": "/static/shot-3-640.7304fcbfca.jpg",
-          "w": 640
+          "src": "/static/phone-cards-360.31d8dc1331.jpg",
+          "w": 360
         }
       ]
     },
-    {
-      "width": 320,
-      "height": 696,
+    "laptop": {
+      "width": 480,
+      "height": 300,
       "webp": [
         {
-          "src": "/static/shot-4-320.ed7d4adcc6.webp",
-          "w": 320
+          "src": "/static/browser-table-480.644f5f9530.webp",
+          "w": 480
         },
         {
-          "src": "/static/shot-4-440.fd8d6de6f0.webp",
-          "w": 440
+          "src": "/static/browser-table-720.364d2a01ad.webp",
+          "w": 720
         },
         {
-          "src": "/static/shot-4-640.555d9c6e61.webp",
-          "w": 640
+          "src": "/static/browser-table-1040.fb59475bd4.webp",
+          "w": 1040
         }
       ],
       "jpg": [
         {
-          "src": "/static/shot-4-320.dcdefa3ac5.jpg",
-          "w": 320
+          "src": "/static/browser-table-480.2423f4291c.jpg",
+          "w": 480
         },
         {
-          "src": "/static/shot-4-440.708cfd1476.jpg",
-          "w": 440
+          "src": "/static/browser-table-720.7f5f8377f2.jpg",
+          "w": 720
         },
         {
-          "src": "/static/shot-4-640.29957f9537.jpg",
-          "w": 640
+          "src": "/static/browser-table-1040.6cda6d8d9d.jpg",
+          "w": 1040
         }
       ]
     },
-    {
-      "width": 320,
-      "height": 696,
+    "catTower": {
+      "width": 200,
+      "height": 435,
       "webp": [
         {
-          "src": "/static/shot-5-320.0d01d0708c.webp",
-          "w": 320
+          "src": "/static/cat-tower-200.10c020f699.webp",
+          "w": 200
         },
         {
-          "src": "/static/shot-5-440.62f1a148d8.webp",
-          "w": 440
-        },
-        {
-          "src": "/static/shot-5-640.768dade1e7.webp",
-          "w": 640
+          "src": "/static/cat-tower-400.1e0f590b04.webp",
+          "w": 400
         }
       ],
       "jpg": [
         {
-          "src": "/static/shot-5-320.5cefa8a2b0.jpg",
-          "w": 320
+          "src": "/static/cat-tower-200.bafe0e4e59.jpg",
+          "w": 200
         },
         {
-          "src": "/static/shot-5-440.ae2bfb0fee.jpg",
-          "w": 440
-        },
-        {
-          "src": "/static/shot-5-640.42c9dc2fa5.jpg",
-          "w": 640
+          "src": "/static/cat-tower-400.a4469d157a.jpg",
+          "w": 400
         }
       ]
     },
-    {
-      "width": 320,
-      "height": 696,
+    "tiles": {
+      "width": 200,
+      "height": 435,
       "webp": [
         {
-          "src": "/static/shot-6-320.65545d85fe.webp",
-          "w": 320
+          "src": "/static/tuna-tiles-200.d1338924e0.webp",
+          "w": 200
         },
         {
-          "src": "/static/shot-6-440.a102867fe0.webp",
-          "w": 440
-        },
-        {
-          "src": "/static/shot-6-640.3a35bf6849.webp",
-          "w": 640
+          "src": "/static/tuna-tiles-400.393d19033c.webp",
+          "w": 400
         }
       ],
       "jpg": [
         {
-          "src": "/static/shot-6-320.ff0432150c.jpg",
-          "w": 320
+          "src": "/static/tuna-tiles-200.546a6f5e3d.jpg",
+          "w": 200
         },
         {
-          "src": "/static/shot-6-440.8d6bc22661.jpg",
-          "w": 440
-        },
-        {
-          "src": "/static/shot-6-640.b8886822fa.jpg",
-          "w": 640
+          "src": "/static/tuna-tiles-400.79d2c0f31d.jpg",
+          "w": 400
         }
       ]
     }
-  ],
+  },
   "art": {
     "leap": {
       "width": 360,
@@ -258,11 +234,11 @@ export const MEDIA = {
       "webp": "/static/cat-white.cad175719e.webp",
       "png": "/static/cat-white.d49d738554.png"
     },
-    "tile": {
-      "width": 492,
-      "height": 360,
-      "webp": "/static/game-tile.e7af4c92e7.webp",
-      "png": "/static/game-tile.39656f7d86.png"
+    "grey": {
+      "width": 280,
+      "height": 280,
+      "webp": "/static/cat-grey.7f5f661c63.webp",
+      "png": "/static/cat-grey.18afce2bcd.png"
     },
     "yarn": {
       "width": 144,
