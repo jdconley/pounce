@@ -35,7 +35,10 @@ jobs:
   # Safari too, against the real Worker (wrangler dev).
   e2e-web:
     runs-on: ubuntu-latest
-    timeout-minutes: 25
+    # The browsers' system packages come from the runner's Ubuntu mirror, which has crawled
+    # for 20+ minutes on some runs. They're cached below so a slow mirror can't eat the tests'
+    # time; the timeout leaves room for the first, uncached run.
+    timeout-minutes: 40
     env:
       WRANGLER_SEND_METRICS: "false"
     steps:
@@ -46,6 +49,21 @@ jobs:
           node-version-file: .nvmrc
           cache: pnpm
       - run: pnpm install --frozen-lockfile
+      - name: Keep apt's downloads where the cache can reach them
+        id: pw
+        run: |
+          mkdir -p ~/apt-archives/partial
+          echo "Dir::Cache::Archives \"$HOME/apt-archives\";" | sudo tee /etc/apt/apt.conf.d/99pounce-archives
+          echo "version=$(pnpm --filter @pounce/play-web exec playwright --version | tr -dc '0-9.')" >> "$GITHUB_OUTPUT"
+      - uses: actions/cache@5a3ec84eff668545956fd18022155c47e93e2684 # v4.2.3
+        with:
+          path: |
+            ~/apt-archives
+            !~/apt-archives/lock
+            !~/apt-archives/partial
+            ~/.cache/ms-playwright
+          key: playwright-${{ env.ImageOS }}-${{ steps.pw.outputs.version }}
+      - run: mkdir -p ~/apt-archives/partial
       - run: pnpm --filter @pounce/play-web exec playwright install --with-deps chromium webkit firefox
       - run: pnpm --filter @pounce/play-web build
       - run: pnpm --filter @pounce/play-web e2e
