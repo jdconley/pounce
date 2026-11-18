@@ -3,6 +3,7 @@
 //
 //   scripts/distribute.swift --dry-run       read only: print the notes and every change it would make
 //   scripts/distribute.swift --build 202611020653 --group "Family and Friends"
+//   scripts/distribute.swift --status        read only: each platform's latest builds and their beta review state
 //
 //   --build N      the build number (CFBundleVersion) testflight.sh printed; default: the newest upload
 //   --group NAME   the beta group, looked up by name; default "Family and Friends"
@@ -36,13 +37,15 @@ func fail(_ message: String) -> Never {
 }
 
 func usage() -> Never {
-  FileHandle.standardError.write(Data("usage: scripts/distribute.swift [--dry-run] [--build N] [--group NAME] [--since DATE | --from SHA] [--timeout MIN] [--platform IOS|TV_OS]\n".utf8))
+  FileHandle.standardError.write(Data("usage: scripts/distribute.swift --status | [--dry-run] [--build N] [--group NAME] [--since DATE | --from SHA] [--timeout MIN] [--platform IOS|TV_OS]\n".utf8))
   exit(64)
 }
 
 // MARK: Arguments
 
 var dryRun = false
+/// `--status`: print each platform's latest builds and their beta app review state, change nothing.
+var statusOnly = false
 var buildNumber: String?
 var groupName = "Family and Friends"
 var since: String?
@@ -59,6 +62,7 @@ func value() -> String {
 while let arg = arguments.next() {
   switch arg {
   case "--dry-run": dryRun = true
+  case "--status": statusOnly = true
   case "--build": buildNumber = value()
   case "--group": groupName = value()
   case "--since": since = value()
@@ -71,6 +75,7 @@ while let arg = arguments.next() {
     guard ["IOS", "TV_OS"].contains(platform) else { usage() }
   case "-h", "--help":
     print("""
+      scripts/distribute.swift --status   (read only: the latest builds and their beta review state)
       scripts/distribute.swift [--dry-run] [--build N] [--group NAME] [--since DATE | --from SHA] [--timeout MIN] [--platform IOS|TV_OS]
       --from SHA lists the app's own commits after SHA (CI passes the push's previous main).
       --platform picks the iPhone (IOS, the default) or Apple TV (TV_OS) build train.
@@ -294,6 +299,7 @@ func id(_ resource: JSON) -> String { resource["id"] as? String ?? "" }
 
 if dryRun { print("dry run: reads App Store Connect, changes nothing") }
 guard let credentials = loadCredentials() else {
+  if statusOnly { fail("--status reads App Store Connect: set ASC_KEY_ID, ASC_ISSUER_ID and ASC_KEY_PATH") }
   guard dryRun else { fail("set ASC_KEY_ID, ASC_ISSUER_ID and ASC_KEY_PATH (see the comment at the top)") }
   let whatToTestSource = fromCommit != nil || since != nil
     ? "      (--since / --from given: no previous-build lookup)"
@@ -329,6 +335,42 @@ do {
     fail("no App Store Connect app with bundle ID \(bundleID)")
   }
   let appID = id(app)
+
+  // --status: read only. The latest builds on each platform with their processing and beta review
+  // state (externalBuildState: WAITING_FOR_BETA_REVIEW, IN_BETA_REVIEW, BETA_APPROVED,
+  // IN_BETA_TESTING, BETA_REJECTED, READY_FOR_BETA_SUBMISSION, ...).
+  if statusOnly {
+    var summary = "### TestFlight builds\n\n| App | Build | Processing | Beta review |\n|---|---|---|---|\n"
+    for (name, train) in [("iPhone", "IOS"), ("Apple TV", "TV_OS")] {
+      let json = try await asc.get("/v1/builds", [
+        "filter[app]": appID, "filter[preReleaseVersion.platform]": train,
+        "sort": "-uploadedDate", "limit": "4", "include": "buildBetaDetail",
+      ])
+      let details = (json["included"] as? [JSON] ?? []).filter { $0["type"] as? String == "buildBetaDetails" }
+      var stateByID: [String: String] = [:]
+      for detail in details { stateByID[id(detail)] = attributes(detail)["externalBuildState"] as? String }
+      let builds = list(json)
+      if builds.isEmpty { print("\(name): no builds") }
+      for build in builds {
+        let detailID = ((build["relationships"] as? JSON)?["buildBetaDetail"] as? JSON)
+          .flatMap { ($0["data"] as? JSON).map(id) } ?? ""
+        let version = attributes(build)["version"] as? String ?? id(build)
+        let processing = attributes(build)["processingState"] as? String ?? "unknown"
+        let review = stateByID[detailID] ?? "unknown"
+        let uploaded = attributes(build)["uploadedDate"] as? String ?? ""
+        print("\(name) build \(version): processing \(processing), beta review \(review), uploaded \(uploaded)")
+        summary += "| \(name) | \(version) | \(processing) | \(review) |\n"
+      }
+    }
+    if let path = ProcessInfo.processInfo.environment["GITHUB_STEP_SUMMARY"],
+       let handle = FileHandle(forWritingAtPath: path) {
+      handle.seekToEndOfFile()
+      handle.write(Data(summary.utf8))
+      handle.closeFile()
+    }
+    exit(0)
+  }
+
   let locale = attributes(app)["primaryLocale"] as? String ?? "en-US"
 
   // The group, by name, before any change: a wrong name fails without touching the build.
