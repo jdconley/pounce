@@ -1233,6 +1233,9 @@ private struct CardsChrome: View {
                         StatusLine(text: status.text, mine: status.mine)
                             .frame(width: line.width, height: line.height)
                             .position(x: line.midX, y: line.midY)
+                            // A new line for new words, so a change under an animation fades two
+                            // drawn layers and animates no text (`TilesChrome` has why).
+                            .id(status.text)
                             .transition(.opacity)
                     }
                     let row = local(actionRow)

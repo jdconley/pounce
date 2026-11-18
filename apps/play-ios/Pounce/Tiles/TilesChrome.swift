@@ -46,6 +46,10 @@ struct TilesChrome: View {
                     StatusLine(text: status.text, mine: status.mine)
                         .frame(width: line.width, height: line.height)
                         .position(x: line.midX, y: line.midY)
+                        // A new line for new words: the old one fades out as a drawn layer and
+                        // the new one in, so the turn's change animates no text (interpolated
+                        // outlined lettering is drawn on the CPU, a long frame on the turn).
+                        .id(status.text)
                         .transition(.opacity)
                 }
             }

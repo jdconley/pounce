@@ -657,7 +657,7 @@ final class TilesScene: SKScene {
         }
         onBand(controls ? (stashOnly ? layout.statusLine.minY : (layout.meter == .zero ? layout.strip.maxY : layout.meter.maxY) + 2) : 0)
 
-        // With just the stash the table stays drawn, hidden, as it will show on this phone's turn
+        // With just the stash the table stays drawn, under the veil, as it will show on this phone's turn
         // (`tableLayout`), so the turn's first frame only shows it: no nodes, flows or textures
         // made then.
         let table = stashOnly ? tableLayout(model, seat: seat, stash: layout) : layout

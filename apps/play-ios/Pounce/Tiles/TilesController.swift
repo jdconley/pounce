@@ -44,31 +44,36 @@ extension TilesScene {
             controller: .fullTable(stash.controller?.chrome ?? .standard))
     }
 
-    /// Shows or hides the table around the stash (`tableGroup`). `animated` fades it in or out
+    /// Shows or covers the table around the stash (`tableGroup`). `animated` fades it in or out
     /// as one layer over the stash's slide, so the change reads as one move: the room's floor
     /// (`tableVeil`, one opaque sprite) fades off the table or onto it. Nothing shows through
     /// anything, and nothing is drawn offscreen (a flattened full-screen `FadeGroup` cost a long
     /// main-thread frame to set up on the turn's first frame).
+    ///
+    /// Covered, the table is still drawn, under the veil, never hidden: SpriteKit makes a
+    /// texture's GPU copy on the main thread the first time it draws it, so a hidden table made
+    /// every one of them on the turn's first frame (a frame of 33 ms on an iPhone 17 Pro
+    /// simulator, where each is a call out to the Mac's GPU). Drawn, they are made as each piece
+    /// first appears, one or two at a time.
     func setTable(up: Bool, animated: Bool) {
         guard up != tableUpTarget else { return }
         tableUpTarget = up
         director.cancelActions(on: tableVeil)
         let veil = tableVeil
+        tableGroup.isHidden = false
         guard animated, !Effects.reduceMotion else {
-            tableGroup.isHidden = !up
-            veil.isHidden = true
+            veil.alpha = 1
+            veil.isHidden = up
             return
         }
-        // From where a fade under way left it.
-        if veil.isHidden { veil.alpha = tableGroup.isHidden ? 1 : 0 }
+        // From where a fade under way left it (the veil is off only while the table is up).
+        if veil.isHidden { veil.alpha = 0 }
         veil.isHidden = false
-        tableGroup.isHidden = false
         let fade = SKAction.fadeAlpha(to: up ? 0 : 1, duration: flight)  // fade-ok: the veil, one opaque sprite over the table
         Task { [weak self] in
             await self?.director.run(fade, on: veil)
             guard let self, self.tableUpTarget == up else { return }
-            veil.isHidden = true
-            self.tableGroup.isHidden = !up
+            veil.isHidden = up
         }
     }
 
