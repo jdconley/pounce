@@ -113,8 +113,15 @@ jobs:
             runtime=$(tvos_runtime)
           fi
           [ -n "$runtime" ] || { echo "::error::no tvOS $sdk simulator runtime"; exit 1; }
-          udid=$(xcrun simctl create "Pounce TV tests" com.apple.CoreSimulator.SimDeviceType.Apple-TV-4K-3rd-generation-1080p "$runtime")
-          xcrun simctl boot "$udid"
+          # Wait for it to finish booting: a freshly installed runtime can leave the first boot
+          # unusable ("tvOS Simulator (null)" at test time), so a failed boot gets one fresh device.
+          for attempt in 1 2; do
+            udid=$(xcrun simctl create "Pounce TV tests" com.apple.CoreSimulator.SimDeviceType.Apple-TV-4K-3rd-generation-1080p "$runtime")
+            xcrun simctl boot "$udid" || true
+            xcrun simctl bootstatus "$udid" -b >/dev/null && break
+            xcrun simctl delete "$udid"; udid=""
+          done
+          [ -n "$udid" ] || { echo "::error::the Apple TV simulator didn't boot"; exit 1; }
           echo "Apple TV simulator $udid on $runtime (SDK $sdk)"
           echo "udid=$udid" >> "$GITHUB_OUTPUT"
       - name: Apple TV unit tests
@@ -266,9 +273,14 @@ jobs:
             runtime=$(tvos_runtime)
           fi
           [ -n "$runtime" ] || { echo "::error::no tvOS $sdk simulator runtime"; exit 1; }
-          udid=$(xcrun simctl create "Pounce TV gates" com.apple.CoreSimulator.SimDeviceType.Apple-TV-4K-3rd-generation-1080p "$runtime")
-          # It boots while the app builds; the tests wait for it.
-          xcrun simctl boot "$udid"
+          # Wait for it to finish booting (see the build job's Apple TV simulator).
+          for attempt in 1 2; do
+            udid=$(xcrun simctl create "Pounce TV gates" com.apple.CoreSimulator.SimDeviceType.Apple-TV-4K-3rd-generation-1080p "$runtime")
+            xcrun simctl boot "$udid" || true
+            xcrun simctl bootstatus "$udid" -b >/dev/null && break
+            xcrun simctl delete "$udid"; udid=""
+          done
+          [ -n "$udid" ] || { echo "::error::the Apple TV simulator didn't boot"; exit 1; }
           echo "simulator $udid on $runtime"
           echo "udid=$udid" >> "$GITHUB_OUTPUT"
       # PounceKit built for tvOS and its tests (its logic is also `swift test` in the build job).
