@@ -46,19 +46,13 @@ concurrency:
   group: ios-${{ github.ref }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
-# Xcode 27 (the iOS 27 and tvOS 27 SDKs): App Store Connect warns on uploads built with an older
-# SDK (ITMS-90725, ITMS-90994) and requires 27 from April 2027. xcode-27 is GitHub's image with
-# it; 27.0 is a release, not a beta, so its builds can go to the App Store.
-env:
-  DEVELOPER_DIR: /Applications/Xcode_27.app/Contents/Developer
-
 defaults:
   run:
     working-directory: apps/play-ios
 
 jobs:
   build:
-    runs-on: xcode-27
+    runs-on: macos-26
     timeout-minutes: 40
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
@@ -113,15 +107,8 @@ jobs:
             runtime=$(tvos_runtime)
           fi
           [ -n "$runtime" ] || { echo "::error::no tvOS $sdk simulator runtime"; exit 1; }
-          # Wait for it to finish booting: a freshly installed runtime can leave the first boot
-          # unusable ("tvOS Simulator (null)" at test time), so a failed boot gets one fresh device.
-          for attempt in 1 2; do
-            udid=$(xcrun simctl create "Pounce TV tests" com.apple.CoreSimulator.SimDeviceType.Apple-TV-4K-3rd-generation-1080p "$runtime")
-            xcrun simctl boot "$udid" || true
-            xcrun simctl bootstatus "$udid" -b >/dev/null && break
-            xcrun simctl delete "$udid"; udid=""
-          done
-          [ -n "$udid" ] || { echo "::error::the Apple TV simulator didn't boot"; exit 1; }
+          udid=$(xcrun simctl create "Pounce TV tests" com.apple.CoreSimulator.SimDeviceType.Apple-TV-4K-3rd-generation-1080p "$runtime")
+          xcrun simctl boot "$udid"
           echo "Apple TV simulator $udid on $runtime (SDK $sdk)"
           echo "udid=$udid" >> "$GITHUB_OUTPUT"
       - name: Apple TV unit tests
@@ -150,7 +137,7 @@ jobs:
   # over 16.7 ms are reported here, enforced on a phone (scripts/frame-rate.sh).
   ui-gates:
     name: Smooth play gates (iOS simulator)
-    runs-on: xcode-27
+    runs-on: macos-26
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
@@ -166,18 +153,7 @@ jobs:
       - name: Make a simulator
         id: sim
         run: |
-          # The runtime for this Xcode's iOS SDK (major.minor): a newer one on the image can't run
-          # this Xcode's devices ("Incompatible device").
-          sdk=$(xcrun --sdk iphonesimulator --show-sdk-platform-version | cut -d. -f1-2)
-          ios_runtime() {
-            xcrun simctl list runtimes -j | jq -r --arg v "$sdk" '[.runtimes[] | select(.platform == "iOS" and .isAvailable and ((.version | split(".") | .[0:2] | join(".")) == $v))] | last | .identifier // empty'
-          }
-          runtime=$(ios_runtime)
-          if [ -z "$runtime" ]; then
-            xcodebuild -downloadPlatform iOS
-            runtime=$(ios_runtime)
-          fi
-          [ -n "$runtime" ] || { echo "::error::no iOS $sdk simulator runtime"; exit 1; }
+          runtime=$(xcrun simctl list runtimes -j | jq -r '[.runtimes[] | select(.platform == "iOS" and .isAvailable)] | sort_by(.version | split(".") | map(tonumber)) | last | .identifier')
           udid=$(xcrun simctl create "Pounce gates" "iPhone 17 Pro" "$runtime")
           # It boots while the app builds; the tests wait for it.
           xcrun simctl boot "$udid"
@@ -247,7 +223,7 @@ jobs:
   # runner. Not a required check.
   tv-gates:
     name: TV smooth play gates (Apple TV simulator)
-    runs-on: xcode-27
+    runs-on: macos-26
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
@@ -273,14 +249,9 @@ jobs:
             runtime=$(tvos_runtime)
           fi
           [ -n "$runtime" ] || { echo "::error::no tvOS $sdk simulator runtime"; exit 1; }
-          # Wait for it to finish booting (see the build job's Apple TV simulator).
-          for attempt in 1 2; do
-            udid=$(xcrun simctl create "Pounce TV gates" com.apple.CoreSimulator.SimDeviceType.Apple-TV-4K-3rd-generation-1080p "$runtime")
-            xcrun simctl boot "$udid" || true
-            xcrun simctl bootstatus "$udid" -b >/dev/null && break
-            xcrun simctl delete "$udid"; udid=""
-          done
-          [ -n "$udid" ] || { echo "::error::the Apple TV simulator didn't boot"; exit 1; }
+          udid=$(xcrun simctl create "Pounce TV gates" com.apple.CoreSimulator.SimDeviceType.Apple-TV-4K-3rd-generation-1080p "$runtime")
+          # It boots while the app builds; the tests wait for it.
+          xcrun simctl boot "$udid"
           echo "simulator $udid on $runtime"
           echo "udid=$udid" >> "$GITHUB_OUTPUT"
       # PounceKit built for tvOS and its tests (its logic is also `swift test` in the build job).
@@ -361,6 +332,7 @@ jobs:
     timeout-minutes: 10
     environment: production
     env:
+      DEVELOPER_DIR: /Applications/Xcode_27.app/Contents/Developer
       ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
       ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
       ASC_KEY_P8: ${{ secrets.ASC_KEY_P8 }}
@@ -396,6 +368,10 @@ jobs:
       group: testflight
       cancel-in-progress: false
     env:
+      # Archives use Xcode 27 (the iOS 27 and tvOS 27 SDKs): App Store Connect warns on uploads
+      # built with an older SDK (ITMS-90725, ITMS-90994) and requires 27 from April 2027.
+      # xcode-27 is GitHub's image with it (still a preview, so the test jobs stay on macos-26).
+      DEVELOPER_DIR: /Applications/Xcode_27.app/Contents/Developer
       ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
       ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
       ASC_KEY_P8: ${{ secrets.ASC_KEY_P8 }}
