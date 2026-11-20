@@ -46,13 +46,19 @@ concurrency:
   group: ios-${{ github.ref }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
+# Xcode 27 (the iOS 27 and tvOS 27 SDKs): App Store Connect warns on uploads built with an older
+# SDK (ITMS-90725, ITMS-90994) and requires 27 from April 2027. xcode-27 is GitHub's image with
+# it; 27.0 is a release, not a beta, so its builds can go to the App Store.
+env:
+  DEVELOPER_DIR: /Applications/Xcode_27.app/Contents/Developer
+
 defaults:
   run:
     working-directory: apps/play-ios
 
 jobs:
   build:
-    runs-on: macos-26
+    runs-on: xcode-27
     timeout-minutes: 40
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
@@ -137,7 +143,7 @@ jobs:
   # over 16.7 ms are reported here, enforced on a phone (scripts/frame-rate.sh).
   ui-gates:
     name: Smooth play gates (iOS simulator)
-    runs-on: macos-26
+    runs-on: xcode-27
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
@@ -223,7 +229,7 @@ jobs:
   # runner. Not a required check.
   tv-gates:
     name: TV smooth play gates (Apple TV simulator)
-    runs-on: macos-26
+    runs-on: xcode-27
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
@@ -328,7 +334,7 @@ jobs:
   tv-platform:
     name: Add the Apple TV platform
     if: github.event_name == 'workflow_dispatch' && inputs.add_tvos_platform
-    runs-on: macos-26
+    runs-on: xcode-27
     timeout-minutes: 10
     environment: production
     env:
@@ -358,7 +364,7 @@ jobs:
     if: >-
       github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
       && !inputs.add_tvos_platform
-    runs-on: macos-26
+    runs-on: xcode-27
     # Each archive and upload takes ~10-15 min; each distribute waits up to 30 more for App Store
     # Connect processing (the Apple TV build mostly processes while the iPhone one is waited on).
     timeout-minutes: 100

@@ -51,7 +51,7 @@ If simulator code signing complains about provisioning, add `CODE_SIGNING_ALLOWE
 
 ## Prerequisites
 
-- Xcode 27 (iOS 26 SDK or later; the app's deployment target is iOS 26.0; universal: iPhone in portrait, iPad in every orientation and every multitasking size).
+- Xcode 27 (CI builds and uploads with 27.0; the App Store requires the iOS 27 SDK from April 2027; the app's deployment target is iOS 26.0; universal: iPhone in portrait, iPad in every orientation and every multitasking size).
 - [XcodeGen](https://github.com/yonaskolb/XcodeGen) (`brew install xcodegen`; `scripts/bootstrap.sh`
   installs it if missing).
 - Node 24 and pnpm 10 (run `pnpm install` at the repo root once) for the dev server.
