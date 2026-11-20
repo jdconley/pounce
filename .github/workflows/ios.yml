@@ -159,7 +159,18 @@ jobs:
       - name: Make a simulator
         id: sim
         run: |
-          runtime=$(xcrun simctl list runtimes -j | jq -r '[.runtimes[] | select(.platform == "iOS" and .isAvailable)] | sort_by(.version | split(".") | map(tonumber)) | last | .identifier')
+          # The runtime for this Xcode's iOS SDK (major.minor): a newer one on the image can't run
+          # this Xcode's devices ("Incompatible device").
+          sdk=$(xcrun --sdk iphonesimulator --show-sdk-platform-version | cut -d. -f1-2)
+          ios_runtime() {
+            xcrun simctl list runtimes -j | jq -r --arg v "$sdk" '[.runtimes[] | select(.platform == "iOS" and .isAvailable and ((.version | split(".") | .[0:2] | join(".")) == $v))] | last | .identifier // empty'
+          }
+          runtime=$(ios_runtime)
+          if [ -z "$runtime" ]; then
+            xcodebuild -downloadPlatform iOS
+            runtime=$(ios_runtime)
+          fi
+          [ -n "$runtime" ] || { echo "::error::no iOS $sdk simulator runtime"; exit 1; }
           udid=$(xcrun simctl create "Pounce gates" "iPhone 17 Pro" "$runtime")
           # It boots while the app builds; the tests wait for it.
           xcrun simctl boot "$udid"
