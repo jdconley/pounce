@@ -6,13 +6,13 @@ import PounceKit
 @MainActor
 final class NineLivesLocalDriver: NineLivesDriver {
     /// The server's pinned Monday sample (`apps/play-api/src/daily/nine-lives/samples.ts`).
-    static let givens = digits("600350270050900130030804906400000003080000020500000009301205080025008040064073002")
-    static let solution = digits("649351278258967134137824956412589763983716425576432819391245687725698341864173592")
+    nonisolated static let givens = digits("600350270050900130030804906400000003080000020500000009301205080025008040064073002")
+    nonisolated static let solution = digits("649351278258967134137824956412589763983716425576432819391245687725698341864173592")
 
     private(set) var sent: [NineLivesMove] = []
     private var cells: [Int] = givens
 
-    func send(_ move: NineLivesMove) {
+    func send(_ move: NineLivesMove, urgent: Bool) {
         sent.append(move)
         switch move {
         case .set(let cell, let digit): cells[cell] = digit
@@ -26,6 +26,6 @@ final class NineLivesLocalDriver: NineLivesDriver {
         return (cell, Self.solution[cell])
     }
 
-    private static func digits(_ text: String) -> [Int] { text.map { Int(String($0))! } }
+    private nonisolated static func digits(_ text: String) -> [Int] { text.map { Int(String($0))! } }
 }
 #endif

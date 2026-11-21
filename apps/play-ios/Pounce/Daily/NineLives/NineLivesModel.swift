@@ -1,12 +1,13 @@
 import Observation
 import PounceKit
 
-/// Where a Nine Lives board's moves go. Phase A: `NineLivesLocalDriver`. Then the Daily Dish
-/// host's run session, which batches moves to the server and asks it for hints.
+/// Where a Nine Lives board's moves go: the Daily Dish's run session (`NineLivesSessionDriver`),
+/// or `NineLivesLocalDriver` for the DEBUG demo.
 @MainActor
 protocol NineLivesDriver: AnyObject {
-    /// A move the board already shows. The driver sends it on; it never waits.
-    func send(_ move: NineLivesMove)
+    /// A move the board already shows. The driver sends it on; it never waits. `urgent`: the move
+    /// that fills the grid, so the server's answer (and the end) comes at once.
+    func send(_ move: NineLivesMove, urgent: Bool)
     /// The server's hint: the cell it filled and its digit, or nil when there is none.
     func hint() async -> (cell: Int, digit: Int)?
 }
@@ -23,6 +24,8 @@ final class NineLivesModel {
     private(set) var asking = false
     /// Bumped when "Not quite" appears, so it shakes.
     private(set) var notQuiteBump = 0
+    /// False once the run has ended (the host shows its end screen over the board).
+    private(set) var playing = true
 
     @ObservationIgnored private weak var driver: (any NineLivesDriver)?
     @ObservationIgnored private var placements = 0
@@ -37,6 +40,8 @@ final class NineLivesModel {
     }
 
     var isSolved: Bool { board.looksSolved }
+    /// Taking input: the run is on and the grid isn't solved.
+    var live: Bool { playing && !board.looksSolved }
     /// Full, with a clash: with one solution, that's exactly "full and wrong".
     var notQuite: Bool { board.isFull && !clashes.isEmpty }
     var selected: Int? { marks.selected }
@@ -45,15 +50,24 @@ final class NineLivesModel {
     func count(of digit: Int) -> Int { board.count(of: digit) }
 
     func tap(_ cell: Int) {
-        guard !isSolved else { return }
+        guard live else { return }
         marks.selected = cell
     }
 
-    func toggleNotes() { notesOn.toggle() }
+    func toggleNotes() {
+        guard live else { return }
+        notesOn.toggle()
+    }
+
+    /// The run has ended: no more input.
+    func end() {
+        playing = false
+        marks.selected = nil
+    }
 
     /// A number pressed: a note in notes mode, else the cell's digit (or off again, the same digit twice).
     func press(_ digit: Int) {
-        guard let cell = marks.selected, !isSolved, !board.isLocked(cell) else { return }
+        guard let cell = marks.selected, live, !board.isLocked(cell) else { return }
         if notesOn {
             guard board.cells[cell] == 0 else { return }
             if marks.notes[cell].contains(digit) { marks.notes[cell].remove(digit) } else { marks.notes[cell].insert(digit) }
@@ -67,7 +81,7 @@ final class NineLivesModel {
     }
 
     func erase() {
-        guard let cell = marks.selected, !isSolved, !board.isLocked(cell) else { return }
+        guard let cell = marks.selected, live, !board.isLocked(cell) else { return }
         if board.cells[cell] != 0 {
             play(.clear(cell: cell))
         } else {
@@ -76,7 +90,7 @@ final class NineLivesModel {
     }
 
     func hint() async {
-        guard !isSolved, !asking, let driver else { return }
+        guard live, !asking, let driver else { return }
         asking = true
         defer { asking = false }
         guard let reveal = await driver.hint() else { return }
@@ -85,16 +99,17 @@ final class NineLivesModel {
         afterPlacing(reveal.cell, digit: reveal.digit)
     }
 
-    /// The server's own board (a resumed run, or a correction): it wins.
+    /// The server's own board (it refused something): it wins, and what was drawn since goes.
     func adopt(_ state: NineLivesState) {
         board = NineLivesBoard(puzzle: NineLivesPuzzle(givens: board.givens), state: state)
         clashes = Set(board.clashes)
         marks.solved = board.looksSolved
+        if let s = marks.selected, board.isLocked(s) { marks.selected = nil }
     }
 
     private func play(_ move: NineLivesMove) {
         guard board.apply(move) == nil else { return }
-        driver?.send(move)
+        driver?.send(move, urgent: board.looksSolved)
         if case .set(let cell, let digit) = move {
             afterPlacing(cell, digit: digit)
         } else {

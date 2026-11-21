@@ -105,7 +105,7 @@ struct NineLivesPlayView: View {
             .compositingGroup()
         }
         .buttonStyle(PressDown())
-        .disabled(done && !model.notesOn)
+        .disabled((done && !model.notesOn) || !model.live)
         .accessibilityLabel(Text(verbatim: model.notesOn ? "Note \(d)" : "\(d)"))
         .accessibilityIdentifier("nine-lives-key-\(d)")
     }
@@ -118,19 +118,24 @@ struct NineLivesPlayView: View {
                 icon: nil, color: model.notesOn ? Palette.yellow : Palette.teal, size: size, width: w,
                 title: model.notesOn ? "Notes on" : "Notes", accessibilityLabel: "Notes"
             ) { model.toggleNotes() }
+            .disabled(!model.live)
             .accessibilityValue(Text(model.notesOn ? "On" : "Off"))
             .accessibilityIdentifier("nine-lives-notes")
             PillButton(icon: nil, color: Palette.orange, size: size, width: w, title: "Erase", accessibilityLabel: "Erase") {
                 model.erase()
             }
+            .disabled(!model.live)
             .accessibilityIdentifier("nine-lives-erase")
             PillButton(icon: nil, color: Palette.magenta, size: size, width: w, title: "Hint", accessibilityLabel: "Hint") {
                 Task { await model.hint() }
             }
-            .disabled(model.asking)
+            .disabled(model.asking || !model.live)
             .accessibilityIdentifier("nine-lives-hint")
         }
         .frame(width: width)
+        // Faded as one layer when play has stopped.
+        .compositingGroup()
+        .opacity(model.live ? 1 : 0.45)
     }
 }
 
