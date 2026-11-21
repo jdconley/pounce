@@ -211,7 +211,16 @@ export function BoxFortPlay({ play, onPlace, playing = true }: BoxFortPlayProps)
 
   const held = (slot: number) => state.pieces[slot];
   return (
-    <div class="bf" ref={root}>
+    <div
+      class="bf"
+      ref={root}
+      // What the end-to-end tests read to play: the rug, the tray and where the spots are.
+      data-board={
+        layout
+          ? JSON.stringify({ rug: state.rug, pieces: state.pieces.map((p) => p.cells), placed: state.placed, over: state.over, ready: !play.waiting, x: layout.rug.x, y: layout.rug.y, cell: layout.cell })
+          : undefined
+      }
+    >
       {layout && (
         <>
           <Header state={state} layout={layout} />
