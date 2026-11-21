@@ -339,6 +339,64 @@ struct TVTableTests {
         scene.redraw(animated: true)
         #expect(scene.banner.shown == .turn(seat: 3, name: SeatInfo.name(room, 3), cat: SeatInfo.catIndex(room.seats[3])))
     }
+
+    // MARK: game over
+
+    /// A game's end comes as an event, then the snapshot that ends the room. The store marks the
+    /// game over on the event, so a table that redraws between the two (an earlier snapshot's
+    /// reconcile played late) saw a finished game in a room still playing. It said so then, the
+    /// TV (its room not over yet) let that go, and the table never said it again: the TV sat on
+    /// the table for good. Game over is said once the room is over, never before.
+    @Test func catTowerSaysGameOverOnlyOnceTheRoomIsOver() async {
+        let store = Self.screenStore()
+        var room = DemoFixtures.hitTable()
+        room.seats = room.seats.map { var s = $0; s.yours = false; return s }
+        store.handle(.message(.snapshot(protocol: PounceKit.protocolVersion, seq: 1, room: room)))
+        let scene = TableScene(store: store)
+        scene.size = Self.tv
+        var told: [[Seat]] = []
+        scene.onGameOver = { told.append($0) }
+        await scene.play(.reconcile)
+
+        store.handle(.message(.event(seq: 2, event: .game(.gameOver(winners: [1])))))
+        await scene.play(.reconcile)  // the turn's snapshot, played after the game-over event landed
+        #expect(told.isEmpty, "game over was said while the room was still playing")
+
+        var over = room
+        over.status = .over
+        over.game!.status = .gameOver
+        over.game!.winners = [1]
+        store.handle(.message(.snapshot(protocol: PounceKit.protocolVersion, seq: 2, room: over)))
+        await scene.play(.reconcile)
+        #expect(told == [[1]])
+    }
+
+    /// The same for the tile game: its store marks the game over on the event too.
+    @Test func tilesSaysGameOverOnlyOnceTheRoomIsOver() async {
+        let store = Self.screenStore()
+        var room = DemoFixtures.tilesMid()
+        room.seats = room.seats.map { var s = $0; s.yours = false; return s }
+        room.tiles!.racks = [:]
+        store.handle(.message(.snapshot(protocol: PounceKit.protocolVersion, seq: 1, room: room)))
+        let scene = TilesScene(store: store)
+        scene.size = Self.tv
+        var told: [[Seat]] = []
+        scene.onGameOver = { told.append($0) }
+        scene.reconcileFromStore()
+
+        let scores = room.tiles!.rackCounts.map { _ in 0 }
+        store.handle(.message(.event(seq: 2, event: .tiles(.gameOver(winners: [1], reason: .out, scores: scores, left: scores)))))
+        scene.reconcileFromStore()
+        #expect(told.isEmpty, "game over was said while the room was still playing")
+
+        var over = room
+        over.status = .over
+        over.tiles!.status = .gameOver
+        over.tiles!.winners = [1]
+        store.handle(.message(.snapshot(protocol: PounceKit.protocolVersion, seq: 2, room: over)))
+        scene.reconcileFromStore()
+        #expect(told == [[1]])
+    }
 }
 
 /// A socket that never connects: the tests hand the store its events.

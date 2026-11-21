@@ -300,6 +300,24 @@ struct TVModelTests {
         #expect(model.winners == [1])
     }
 
+    /// A table whose bot stalled stays `stalled` in its store through every snapshot, so a game
+    /// that ends after a stall is over by its room, not by the store's phase: game over still
+    /// comes up when the table has cheered.
+    @Test func gameOverComesUpAfterAStallToo() async {
+        let server = FakeServer()
+        let (model, _) = await atTable(server, "BCDFG", Rooms.emptyLobby("BCDFG"))
+        let socket = server.sockets("BCDFG")[0]
+        socket.emit(.message(.snapshot(protocol: PounceKit.protocolVersion, seq: 2, room: Rooms.playing("BCDFG"))))
+        #expect(await soon { model.phase == .table })
+        socket.emit(.message(.error(.botStalled)))
+        #expect(await soon { model.table?.store.phase == .stalled })
+        socket.emit(.message(.snapshot(protocol: PounceKit.protocolVersion, seq: 3, room: Rooms.over("BCDFG"))))
+        #expect(await soon { model.table?.store.room?.status == .over })
+        model.table?.gameOver([1])
+        #expect(model.phase == .over)
+        #expect(model.winners == [1])
+    }
+
     @Test func notScreenOrAMissingTableSendsTheTVHome() async {
         let server = FakeServer()
         let (model, keep) = await atTable(server, "BCDFG", Rooms.emptyLobby("BCDFG"))

@@ -315,10 +315,13 @@ extension TableScene {
     }
 
     /// After a snap: a finished room shows the game-over overlay (a table opened after the
-    /// game ended gets no events); a room still playing drops any leftover spotlight.
+    /// game ended gets no events); a room still playing drops any leftover spotlight. Finished
+    /// means the room is over: the store marks the game over on the game-over event, a moment
+    /// before the snapshot that ends the room, and a redraw between the two must not say it (the
+    /// TV lets a game over go while its room still plays, and the table says it only once).
     func settleCelebration() {
         guard let model else { return }
-        if model.room.status == .over || model.game?.status == .gameOver {
+        if model.room.status == .over {
             if !animating { announceGameOver(model.game?.winners ?? []) }
         } else if celebration.focused, !animating {
             endFocus()
