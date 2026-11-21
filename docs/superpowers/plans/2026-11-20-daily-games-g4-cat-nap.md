@@ -31,6 +31,7 @@
 - UI copy: one to three words on buttons, no emoji; teach with tips (phase B, with the host).
 - Own only G4's files (map plan). Until S1 merges, the contract types live in `cat-nap/contract.ts`, an exact copy of Task 3; after, it is deleted and imports switch to `../module` and `../days`.
 - Coverage: `src/daily/cat-nap/**` at 100%.
+- After S1 merged (bde2bb1): `contract.ts` is gone, imports are `../module` and `../days`, `games.ts` lists `"cat-nap"`, and `minMoveGapMs` is 120 (S1's run budget: one move per gap since the start, plus a burst of 10).
 - Commits end with `Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>`.
 
 ## Review Focus

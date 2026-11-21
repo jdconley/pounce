@@ -3,8 +3,8 @@ import { createHmac } from "node:crypto";
 
 import { createRng, type Rng } from "../src/rules/rng";
 
-import type { DayLevel } from "../src/daily/cat-nap/contract";
 import type { NapPuzzle } from "../src/daily/cat-nap/maker";
+import type { DayLevel } from "../src/daily/days";
 
 /** Each patch is one piece, sharing sides. */
 export function contiguous(n: number, patches: number[]): boolean {

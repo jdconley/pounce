@@ -17,7 +17,7 @@ import {
   type Quilt,
 } from "./rules";
 
-import type { DailyModule, DailyResult } from "./contract";
+import type { DailyModule, DailyResult } from "../module";
 
 const solvedBy = (p: NapPuzzle, s: NapState): boolean => {
   const cats = s.cells.flatMap((m, i) => (m === 2 ? [i] : []));
@@ -51,6 +51,9 @@ export const catNap: DailyModule<NapPuzzle, NapState, NapMove> = {
   },
   /** The fastest a strong player could tap out each size: faster runs are kept but marked. */
   floorMs: { 1: 6000, 2: 9000, 3: 12000, 4: 12000, 5: 16000, 6: 16000, 7: 20000 },
-  /** A batch's moves arrive together; the floors guard speed instead. */
-  minMoveGapMs: 0,
+  /**
+   * The run's move budget (`run-core.ts`): one move per 120 ms since the start, plus a burst. No
+   * one taps a quilt that fast for long (a drag is one move); a bot flooding marks does.
+   */
+  minMoveGapMs: 120,
 };

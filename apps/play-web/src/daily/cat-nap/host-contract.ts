@@ -4,7 +4,7 @@
  * `dish.tsx` imports `../host` and `../client`. One change the lead decided after dfd9955: a
  * watch view gets `{ puzzle, state }` (S1 adds the public puzzle to every watch frame).
  */
-import type { DailyGameId, DailyResult } from "@pounce/play-api/daily/cat-nap/contract";
+import type { DailyGameId, DailyResult } from "@pounce/play-api/daily/module";
 import type { ComponentType } from "preact";
 
 export type StartAnswer<P = unknown, S = unknown> = {

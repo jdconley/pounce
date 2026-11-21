@@ -6,7 +6,7 @@ import { makeNap, type NapPuzzle } from "./maker";
 import { catNap } from "./module";
 import { clashes, complete, type NapMove, type NapState } from "./rules";
 
-import type { DailyResult } from "./contract";
+import type { DailyResult } from "../module";
 
 const P: NapPuzzle = makeNap(createRng([4, 4, 4, 4]), 1);
 const at = (r: number, c: number) => r * P.n + c;
@@ -24,9 +24,9 @@ function play(moves: NapMove[]): ReturnType<typeof catNap.apply> {
 }
 
 describe("catNap", () => {
-  test("is cat-nap, with no move spacing and floors that grow with the quilt", () => {
+  test("is cat-nap, with a move budget and floors that grow with the quilt", () => {
     expect(catNap.id).toBe("cat-nap");
-    expect(catNap.minMoveGapMs).toBe(0);
+    expect(catNap.minMoveGapMs).toBe(120);
     expect(catNap.floorMs).toEqual({ 1: 6000, 2: 9000, 3: 12000, 4: 12000, 5: 16000, 6: 16000, 7: 20000 });
     expect(catNap.make(createRng([4, 4, 4, 4]), 1, { date: "2027-01-04", key: [1, 0, 0, 0] })).toEqual(P);
   });

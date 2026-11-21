@@ -5,7 +5,7 @@
  */
 import { grade as gradeOf, otherSolution, type Grade } from "./logic";
 
-import type { DayLevel } from "./contract";
+import type { DayLevel } from "../days";
 import type { Quilt } from "./rules";
 import type { Rng } from "../../rules/rng";
 

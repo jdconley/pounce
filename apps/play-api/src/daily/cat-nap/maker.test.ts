@@ -6,7 +6,7 @@ import { createRng } from "../../rules/rng";
 import { countSolutions } from "./logic";
 import { GRADES, growPatches, makeNap, placeCats, repair, SIZES } from "./maker";
 
-import type { DayLevel } from "./contract";
+import type { DayLevel } from "../days";
 
 const LEVELS: DayLevel[] = [1, 2, 3, 4, 5, 6, 7];
 
