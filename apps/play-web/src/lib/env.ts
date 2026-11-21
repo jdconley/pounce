@@ -11,8 +11,12 @@ export const VERSION: string = typeof __VERSION__ === "string" ? __VERSION__ : "
 /** The protocol this bundle speaks: the server's own constant, compiled in. */
 export const PROTOCOL = PROTOCOL_VERSION;
 
-/** Every game the web player can draw (`X-Pounce-Games`). Cat Tower is always implied. */
-export const GAMES = "cat-tower,tiles";
+/**
+ * Every game the web player can draw (`X-Pounce-Games`, and `games=` on its sockets). Cat Tower is
+ * always implied. `dish` says it shows the Daily Dish, so the server sends it the Dish's reminder
+ * (docs/daily-protocol.md); no table is a game called `dish`.
+ */
+export const GAMES = "cat-tower,tiles,dish";
 
 /** `X-Pounce-App`: who is asking. The server never holds the web player to an app minimum. */
 export const APP_HEADER = `platform=web; version=${VERSION}; protocol=${PROTOCOL}`;
