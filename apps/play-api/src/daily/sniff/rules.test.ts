@@ -5,6 +5,7 @@ import { describe, expect, it } from "vitest";
 import { isAllowed } from "./allowed-check";
 import { keyboardMarks } from "./keyboard";
 import { markGuess } from "./marks";
+
 import type { Guess, Mark } from "./types";
 
 type Vector = { name: string; answer: string; guess: string; marks: Mark[] };
