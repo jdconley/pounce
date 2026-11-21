@@ -1,6 +1,7 @@
 import { devices, expect, test, type Browser, type Page } from "@playwright/test";
 
 import { closeAll, firstRun, newPlayer } from "./helpers";
+import { openSniff, wrongWords } from "./sniff-helpers";
 import { speedAt, REFERENCE, type Speed } from "./speed";
 import { controllerTurn, poster, startFromPhone, tilesTurn, tvDeck, tvTable } from "./tv-helpers";
 
@@ -190,22 +191,30 @@ async function playDish(page: Page) {
   await playSniff(page);
 }
 
-/** Sniff: two guesses on its keys, an unknown word, then Give up and back to the Dish. */
+/**
+ * Sniff: two guesses on its keys, an unknown word, then Give up and back to the Dish. The guesses
+ * are never today's word (`wrongWords`), so the run is still going at each step.
+ */
 async function playSniff(page: Page) {
   await mark(page, "sniff-open");
-  await page.getByRole("button", { name: "Play Sniff" }).click();
+  const { answer } = await openSniff(page, () => page.getByRole("button", { name: "Play Sniff" }).click());
   const keys = page.getByRole("group", { name: "Keyboard" });
-  await expect(keys).toBeVisible();
+  const send = keys.getByRole("button", { name: "Sniff" });
   const tap = async (word: string) => {
     for (const l of word.toUpperCase()) await keys.getByRole("button", { name: new RegExp(`^${l}(,|$)`) }).click();
-    await keys.getByRole("button", { name: "Sniff" }).click();
+    await send.click();
   };
-  for (const [i, word] of ["crane", "sloth"].entries()) {
+  const marks = (row: number) => page.getByRole("group", { name: `Try ${row}` }).locator(".sniff-tag[data-mark=spot], .sniff-tag[data-mark=near], .sniff-tag[data-mark=none]");
+  for (const [i, word] of wrongWords(answer, 2).entries()) {
+    // Still playing: the keys take input and this try is empty.
+    await expect(send).toBeEnabled();
+    await expect(marks(i + 1)).toHaveCount(0);
     await mark(page, "sniff-guess");
     await tap(word);
-    await expect(page.getByRole("group", { name: `Try ${i + 1}` }).locator(".sniff-tag[data-mark=spot], .sniff-tag[data-mark=near], .sniff-tag[data-mark=none]")).toHaveCount(5);
+    await expect(marks(i + 1)).toHaveCount(5);
     await page.waitForTimeout(400);
   }
+  await expect(send).toBeEnabled();
   await mark(page, "sniff-unknown");
   await tap("zzzzz");
   await expect(page.getByRole("status").filter({ hasText: "Not a word" })).toBeVisible();
