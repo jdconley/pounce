@@ -46,7 +46,7 @@ function DishCard(props: { game: DailyGameId; board: BoardAnswer; first: boolean
         ) : null}
       </div>
       {mine?.result ? (
-        <button type="button" class="dd-mine" onClick={open} aria-label={`${look.title}: ${resultWords(mine.result)}. Result`}>
+        <button type="button" class="dd-mine" id={props.first ? "dish-first" : undefined} onClick={open} aria-label={`${look.title}: ${resultWords(mine.result)}. Result`}>
           <span class="dd-tick" aria-hidden="true" />
           {resultWords(mine.result)}
         </button>
@@ -100,7 +100,7 @@ export function DishScreen(props: { say: (words: string) => void }) {
 
       <section class="dd-cards" aria-label="Today's puzzles">
         {games.map((g, i) => (
-          <DishCard key={g} game={g} board={board} first={i === games.findIndex((x) => !myRow(board, x)?.result)} />
+          <DishCard key={g} game={g} board={board} first={i === 0} />
         ))}
       </section>
 

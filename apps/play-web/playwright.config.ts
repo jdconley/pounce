@@ -45,7 +45,7 @@ export default defineConfig({
     : {
         // Kept up by e2e/dev-server.mjs: wrangler dev 4.116 exits when a connection to the Worker
         // drops, and it restarts it with the same arguments (and the same state).
-        command: `node e2e/dev-server.mjs pnpm --filter @pounce/play-api exec wrangler dev --port ${PORT} --ip 127.0.0.1 --persist-to .wrangler/e2e-${PORT}-${Date.now()} --var TOKEN_SECRET:${SECRET} --var GAMES:tiles --var LINK:on --var TV:on --var DEV_SPEED:20`,
+        command: `node e2e/dev-server.mjs pnpm --filter @pounce/play-api exec wrangler dev --port ${PORT} --ip 127.0.0.1 --persist-to .wrangler/e2e-${PORT}-${Date.now()} --var TOKEN_SECRET:${SECRET} --var GAMES:tiles --var LINK:on --var TV:on --var DAILY:on --var DAILY_TEST:on --var DEV_SPEED:20`,
         url: `${BASE}/healthz`,
         reuseExistingServer: false,
         timeout: 120_000,

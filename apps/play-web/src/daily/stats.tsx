@@ -3,7 +3,7 @@
  * time or points, and a small chart: Sniff's guesses 1 to 6, or the last 30 days of times or
  * points, gaps drawn empty.
  */
-import { Sheet } from "../ui/common";
+import { Button, Sheet } from "../ui/common";
 
 import { clock } from "./format";
 import { lookOf } from "./treats";
@@ -72,6 +72,9 @@ export function StatsSheet(props: { game: DailyGameId; stats: Stats | null; toda
           </div>
         )}
         <p class="fine">{sniff ? "Guesses to solve" : points ? "Points, last 30 days" : "Times, last 30 days"}</p>
+        <Button wide variant="violet" onClick={props.onClose}>
+          Done
+        </Button>
       </div>
     </Sheet>
   );
