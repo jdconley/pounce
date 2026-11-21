@@ -79,6 +79,8 @@ struct RootView: View {
         case .home: "home"
         case .us: "us"
         case .trophies: "trophies"
+        case .dish: "dish"
+        case .daily(let game): "daily-\(game)"
         case .join: "join"
         case .room(let code, _): "room-\(code)"
         }
@@ -96,6 +98,10 @@ struct RootView: View {
             UsView()
         case .trophies:
             TrophyRoomView()
+        case .dish:
+            DishScreen()
+        case .daily(let game):
+            DailyPuzzleScreen(game: game)
         case .join:
             JoinView()
         case .room(let code, let intent):

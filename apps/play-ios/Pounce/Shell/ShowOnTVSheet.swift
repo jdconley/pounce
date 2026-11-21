@@ -15,8 +15,11 @@ struct ShowOnTVSheet: View {
     @Environment(AppModel.self) private var model
     @Environment(\.horizontalSizeClass) private var sizeClass
 
-    /// The table to show.
+    /// The table to show (ignored when `board` is set).
     let code: String
+    /// Puts the owner's Daily Dish board on the TV instead of a table (daily games design §8): the
+    /// same QR and backup code, `POST /v1/screens/link` with `board: true`.
+    var board = false
     /// A TV's link opened on this phone: linked as soon as the sheet is up.
     var start: ScreenKey?
     /// Back to the menu this page sits in (nil: the sheet is on its own).
@@ -48,7 +51,9 @@ struct ShowOnTVSheet: View {
         GeometryReader { geo in
             VStack(spacing: 0) {
                 SheetBar(
-                    title: String(localized: "Show on TV", comment: "Show on TV: the sheet's title"),
+                    title: board
+                        ? String(localized: "Board on TV", comment: "Show board on TV: the sheet's title")
+                        : String(localized: "Show on TV", comment: "Show on TV: the sheet's title"),
                     onBack: step == .linked ? nil : onBack, backID: "tv.back",
                     onClose: step == .linked ? nil : onClose, closeID: "tv.close")
                 content(Self.area(geo.size, roomy: roomy))
@@ -288,6 +293,21 @@ struct ShowOnTVSheet: View {
         message = nil
         let api = model.api
         let room = code
+        if board {
+            let daily = model.daily.service
+            let person = model.people.owner?.id
+            Task {
+                do {
+                    try await daily.linkBoard(key, person: person)
+                    model.daily.linkedHere = true
+                    done()
+                } catch {
+                    mayRetry(key, after: error)
+                    refused(Self.words(for: error))
+                }
+            }
+            return
+        }
         Task {
             do {
                 switch try await api.linkScreen(key, room: room, move: move) {

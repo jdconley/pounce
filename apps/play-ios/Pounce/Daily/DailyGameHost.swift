@@ -34,6 +34,14 @@ protocol DailyGameView: View {
     /// Built once the host has decoded the start answer, off the main actor. `state` is where
     /// the run stands: empty for a new run, the server's for a resumed one.
     init(session: DailyRunSession, puzzle: Puzzle, state: State)
+
+    /// The share card's grid for a finished run, from the server's final public state: marks with
+    /// no letters or digits (Sniff's guesses). Nil (the default): the card shows the result alone.
+    nonisolated static func shareMarks(_ state: State) -> [[DailyShareMark]]?
+}
+
+extension DailyGameView {
+    nonisolated static func shareMarks(_ state: State) -> [[DailyShareMark]]? { nil }
 }
 
 /// A daily game as the TV draws it while someone plays (spec §8): read-only, from the server's
@@ -52,13 +60,17 @@ protocol DailyWatchView: View {
 struct DailyPlayable: Sendable {
     let game: DailyGameInfo
     let make: @MainActor @Sendable (DailyRunSession) -> AnyView
+    /// The share card's marks from a final state (decoded off the main actor by the caller).
+    let marks: @Sendable (DailyJSON) -> [[DailyShareMark]]?
 }
 
 extension DailyGameView {
     /// Decodes the start answer off the main actor and returns the screen's builder.
     nonisolated static func prepare(_ session: DailyRunSession) async throws -> DailyPlayable {
         let (puzzle, state) = try await session.decodeStart(puzzle: Puzzle.self, state: State.self)
-        return DailyPlayable(game: Self.game) { session in AnyView(Self(session: session, puzzle: puzzle, state: state)) }
+        return DailyPlayable(
+            game: Self.game, make: { session in AnyView(Self(session: session, puzzle: puzzle, state: state)) },
+            marks: { json in (try? json.decoded(as: State.self)).flatMap(Self.shareMarks) })
     }
 }
 
@@ -77,9 +89,24 @@ enum DailyHost {
         DailyGames.play.first { $0.game.id == game }
     }
 
-    /// The games the Dish shows: those this app can play, in the Dish's order.
-    static var games: [DailyGameInfo] {
-        (DailyCatalog.all + [DailyCatalog.test]).filter { info in DailyGames.play.contains { $0.game.id == info.id } }
+    /// The games the Dish shows today: those the server lists on the board that this app can play,
+    /// in the server's order (Sniff, Nine Lives, Cat Nap, Box Fort). Debug's `-demo-dish` shows
+    /// every game the catalog knows.
+    static func shown(_ board: DailyBoard?) -> [DailyGameInfo] {
+        guard let board else { return [] }
+        return board.games.compactMap { game in
+            guard let info = DailyCatalog.info(game.game) else { return nil }
+            #if DEBUG
+                if DailyDemo.active { return info }
+            #endif
+            return playable(game.game) == nil ? nil : info
+        }
+    }
+
+    /// The first game shown that I haven't finished, after `game` (the end screen's Next puzzle).
+    static func next(after game: String, board: DailyBoard?) -> DailyGameInfo? {
+        let games = shown(board).filter { $0.id != game }
+        return games.first { board?.mine($0.id)?.result == nil }
     }
 
     /// Opens the existential to prepare a game's screen.

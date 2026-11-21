@@ -19,6 +19,10 @@ enum Route: Equatable {
     case us
     /// The trophy room (trophy room design §3): your records, the shelf, what's still to earn.
     case trophies
+    /// The Daily Dish (daily games design §7): today's four puzzles, the board and stats.
+    case dish
+    /// One daily puzzle, played through the host (`DailyPuzzleScreen`).
+    case daily(game: String)
     case join
     case room(code: String, intent: RoomIntent)
 }

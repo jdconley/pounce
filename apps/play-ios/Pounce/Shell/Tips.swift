@@ -245,6 +245,7 @@ enum UITipCopy {
         case .tilesLoupe: String(localized: "Tap a set to see it up close.", comment: "Tip in the tile game: a set on the rug opens in the loupe")
         case .tableView: String(localized: "Your cards are here. The table is on the TV.", comment: "Tip on a table a TV shows: the Cards/Table switch, the first time the phone shows just its cards")
         case .tilesView: String(localized: "Your cards are here. The table is on the TV.", comment: "Tip on a table a TV shows: the Cards/Table switch, the first time the phone shows just its cards")
+        case .dishFirst: String(localized: "Four new puzzles every day.", comment: "Tip on the Daily Dish, first visit: the puzzle cards")
         }
     }
 }
