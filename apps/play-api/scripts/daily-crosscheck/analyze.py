@@ -10,7 +10,8 @@ resends counted once) and their hash, and the server's result. Compared with the
 With --tv: for each TV client (default appletv and web), every watch frame its board socket was
 sent, per game: how many distinct frames, the hash of each frame's puzzle (against the plan), the
 hash of the whole sequence of states, and the result in its watchEnd. The TVs pass when, game by
-game, their puzzle hashes and state sequences are the same.
+game, their puzzle hashes and state sequences are the same, every frame is one of the phone's run's
+states in order, and the last frame is the run's final state.
 """
 import hashlib, json, re, sys
 
@@ -48,7 +49,8 @@ if sys.argv[1] == "--tv":
                 print(json.dumps({"game": game, "tv": c, "frames": 0, "pass": False})); continue
             # Every frame is one of the phone's run's states, in the order the moves made them.
             at = [phone.index(x) if x in phone else -1 for x in r["states"]]
-            inorder = bool(phone) and -1 not in at and at == sorted(at)
+            # ...ending on the run's final state: a TV's last picture is the board as it ended.
+            inorder = bool(phone) and -1 not in at and at == sorted(at) and at[-1] == len(phone) - 1
             print(json.dumps({"game": game, "tv": c, "frames": len(r["states"]), "ofPhoneStates": f"{at[0] if at else '-'}..{at[-1] if at else '-'} of 0..{len(phone) - 1}",
                               "puzzleHash": sorted(r["puzzles"]), "planHash": plans[game]["puzzleHash"], "statesHash": h(r["states"]), "end": r["end"],
                               "pass": same and inorder and r["puzzles"] == {plans[game]["puzzleHash"]}}))
