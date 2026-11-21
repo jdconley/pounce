@@ -185,11 +185,11 @@ h1 span{display:block;color:var(--sun);text-wrap:balance}
 .pace img{display:block;width:min(100%,260px);height:auto}
 .pace p{font-size:1.06rem}
 .pace p+p{margin-top:10px}
-.kids{display:grid;gap:24px;align-items:start;padding:26px 22px 30px}
+.kids{display:grid;grid-template-columns:minmax(0,1fr);gap:24px;align-items:start;padding:26px 22px 30px}
 .kids .cat{display:block;width:150px;height:auto;margin:0 0 6px -8px}
 .kids p{margin:0 0 14px}
 .kids .more{display:flex;flex-wrap:wrap;gap:8px 22px;margin:0;font-weight:700}
-.checks{display:grid;gap:16px;margin:0;padding:0;list-style:none;color:var(--muted)}
+.checks{display:grid;grid-template-columns:minmax(0,1fr);gap:16px;margin:0;padding:0;list-style:none;color:var(--muted)}
 .checks li{position:relative;padding-left:42px}
 .checks li::before{content:"";position:absolute;left:0;top:0;width:28px;height:28px;border:3px solid var(--ink);border-radius:50%;background:var(--lime)}
 .checks li::after{content:"";position:absolute;left:10px;top:6px;width:8px;height:13px;border:solid var(--ink);border-width:0 3px 3px 0;transform:rotate(45deg)}
