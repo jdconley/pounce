@@ -148,6 +148,7 @@ struct WatchHost: View {
             try? await Task.sleep(for: .milliseconds(60))
             backFocused = true
         }
+        .accessibilityElement(children: .contain)
         .accessibilityIdentifier("tv.watch.view.\(watching.game)")
     }
 }

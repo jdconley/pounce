@@ -62,12 +62,29 @@ final class FrameRateTVTests: XCTestCase {
         measure(app, as: "tv-shell")
     }
 
+    /// Tonight's board on a busy evening (DEBUG `-demo tv-board`): a result and a fresh board every
+    /// 1.5 s, progress between, rows sliding in and cats leaping, and a run offered and watched
+    /// halfway. SwiftUI only, so there is no table to ask for the top rate: the main thread's budget,
+    /// its hangs and the display link's frames are what's held.
+    func testBoardPlaysAtTheTopFrameRate() {
+        let app = Live.demo("tv-board", speed: 1)
+        app.launch()
+        XCTAssertTrue(el(app, "tv.board").waitForExistence(timeout: Live.t(20)), "the board never came up")
+        XCTAssertTrue(el(app, "tv.board.game.box-fort").waitForExistence(timeout: Live.t(10)), "the board has no games")
+        let before = gameplayBaseline(app)
+        Thread.sleep(forTimeInterval: seconds / 2)
+        // Halfway: Kid's run is offered, and the card comes up over the board.
+        Live.releaseDemo()
+        Thread.sleep(forTimeInterval: seconds / 2)
+        measure(app, as: "tv-board", from: before, table: false)
+    }
+
     // MARK: the gate
 
-    private func measure(_ app: XCUIApplication, as name: String, file: StaticString = #filePath, line: UInt = #line) {
-        let before = gameplayBaseline(app)
+    private func measure(_ app: XCUIApplication, as name: String, from baseline: Watchdog? = nil, table: Bool = true, file: StaticString = #filePath, line: UInt = #line) {
+        let before = baseline ?? gameplayBaseline(app)
         // Only waiting: nothing reads the screen while the table plays.
-        Thread.sleep(forTimeInterval: seconds)
+        if baseline == nil { Thread.sleep(forTimeInterval: seconds) }
         let host = Host.framesUnreliable()
         guard let after = watchdog(app) else { return XCTFail("the watchdog went away", file: file, line: line) }
         let window = after - before
@@ -82,9 +99,11 @@ final class FrameRateTVTests: XCTestCase {
         add(note)
 
         XCTAssertGreaterThan(window.screen, 0, report, file: file, line: line)
-        XCTAssertEqual(window.table, window.screen, "the table doesn't ask for the screen's top rate: \(report)", file: file, line: line)
-        // It rests between moves (the view pauses), so a quarter of the window's frames at least.
-        XCTAssertGreaterThanOrEqual(window.tableFrames.count, Int(seconds) * window.screen / 4, "the table hardly rendered while it played: \(report)", file: file, line: line)
+        if table {
+            XCTAssertEqual(window.table, window.screen, "the table doesn't ask for the screen's top rate: \(report)", file: file, line: line)
+            // It rests between moves (the view pauses), so a quarter of the window's frames at least.
+            XCTAssertGreaterThanOrEqual(window.tableFrames.count, Int(seconds) * window.screen / 4, "the table hardly rendered while it played: \(report)", file: file, line: line)
+        }
         for failure in window.timeFailures() { XCTFail("\(failure): \(report)", file: file, line: line) }
         if window.hangs > window.appHangs {
             print("FRAMES \(name): \(window.hangs - window.appHangs) main-thread hang(s) the app's own work didn't fill: reported, not gated")
@@ -92,7 +111,7 @@ final class FrameRateTVTests: XCTestCase {
         if host.busy || !window.nearReference {
             print("FRAMES \(name): frames over 16.7 ms are reported, not enforced: \(host.busy ? "the simulator's Mac is busy" : String(format: "this machine is %.2fx slower than the reference", window.slowdown))")
         } else {
-            XCTAssertEqual(window.tableFrames.slow, 0, "the table drew a frame over 16.7 ms: \(report)", file: file, line: line)
+            if table { XCTAssertEqual(window.tableFrames.slow, 0, "the table drew a frame over 16.7 ms: \(report)", file: file, line: line) }
             XCTAssertEqual(window.link.slow, 0, "the main thread missed a frame by over 16.7 ms: \(report)", file: file, line: line)
         }
     }

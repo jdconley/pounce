@@ -34,7 +34,13 @@ struct BoardView: View {
         .overlay(alignment: .topLeading) {
             if board.everConnected, !board.online { TVReconnecting() }
         }
+        .accessibilityElement(children: .contain)
         .accessibilityIdentifier("tv.board")
+        #if DEBUG
+        // The board is gameplay for the frame gates, as a table is.
+        .onAppear { MainThreadWatchdog.shared?.screen(true) }
+        .onDisappear { MainThreadWatchdog.shared?.screen(false) }
+        #endif
     }
 
     private func content(_ state: TVBoardState) -> some View {

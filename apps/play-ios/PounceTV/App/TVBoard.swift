@@ -75,6 +75,7 @@ final class TVBoard {
     }
 
     private func change(_ edit: (inout TVBoardState) -> Void) {
+        let work = FrameWork("tv.board.change"); defer { work.end() }
         var next = state
         edit(&next)
         if next != state { state = next }
