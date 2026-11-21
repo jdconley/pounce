@@ -3,23 +3,25 @@
  * draws the run from the server's frames. Each game brings its own read-only view
  * (`DailyWatchView`); until a game's lands, a placeholder stands in.
  */
+import { useEffect, useRef } from "preact/hooks";
+
 import { art } from "../../lib/art";
 import { play } from "../../lib/sound";
 import { Cat } from "../common";
 
-import { gameTitle, offerWords, resultWords, type Offer, type Watching } from "./tv-board-model";
+import { gameTitle, offerWords, resultWords, type Frame, type Offer, type Watching } from "./tv-board-model";
 
 import type { DailyResult } from "@pounce/play-api/daily/module";
 import type { JSX } from "preact";
 
-/** A game's read-only view of a run, drawn from its public state alone. */
-export type DailyWatchView = (props: { state: unknown }) => JSX.Element;
+/** A game's read-only view of a run, drawn from its public puzzle and public state. */
+export type DailyWatchView = (props: { puzzle: unknown; state: unknown }) => JSX.Element;
 
 /** The games' watch views, by game id. Each game adds its own line here as it lands. */
 const WATCH_VIEWS: Partial<Record<string, DailyWatchView>> = {};
 
 /** The test game ("count to N"): the number reached, big. */
-function TestWatch(props: { state: unknown }) {
+function TestWatch(props: { puzzle: unknown; state: unknown }) {
   const n = (props.state as { n?: unknown } | null)?.n;
   return <p class="tv-watch-count outlined">{typeof n === "number" ? n : 0}</p>;
 }
@@ -45,6 +47,10 @@ export function watchViewFor(game: string): DailyWatchView {
 /** The card: "Mom is playing Sniff. Spoilers." Not now has the remote's focus. */
 export function TvWatchCard(props: { offer: Offer; onWatch: () => void; onNotNow: () => void }) {
   const { offer } = props;
+  // Not now takes the remote's focus when the card comes up, wherever it was (the paw, say):
+  // watching is a choice, never an accident.
+  const notNow = useRef<HTMLButtonElement>(null);
+  useEffect(() => notNow.current?.focus({ preventScroll: true }), []);
   return (
     <div class="tv-watch-card" role="alertdialog" aria-label={offerWords(offer)}>
       <Cat cat={offer.cat} pose="awake" size="calc(var(--u) * 150)" class="tv-watch-card-cat" />
@@ -67,7 +73,7 @@ export function TvWatchCard(props: { offer: Offer; onWatch: () => void; onNotNow
           class="tv-menu-item magenta"
           data-tv
           data-tv-default
-          autoFocus
+          ref={notNow}
           onClick={() => {
             play("pop", 0.5);
             props.onNotNow();
@@ -84,7 +90,7 @@ export function TvWatchCard(props: { offer: Offer; onWatch: () => void; onNotNow
 const ENDED_WORDS: Record<DailyResult["outcome"], string> = { solved: "Solved", done: "Done", missed: "Missed", gaveUp: "Gave up", closed: "Closed" };
 
 /** A run, live: who and which game on top, the game's own view below, its result once it ends. */
-export function TvWatch(props: { watching: Watching; frame: unknown; ended: { result: DailyResult; name: string } | null; onBack: () => void }) {
+export function TvWatch(props: { watching: Watching; frame: Frame | undefined; ended: { result: DailyResult; name: string } | null; onBack: () => void }) {
   const { watching, ended } = props;
   const View = watchViewFor(watching.game);
   return (
@@ -108,7 +114,7 @@ export function TvWatch(props: { watching: Watching; frame: unknown; ended: { re
           <span>Board</span>
         </button>
       </header>
-      <div class="tv-watch-stage">{props.frame === undefined ? <Placeholder game={watching.game} /> : <View state={props.frame} />}</div>
+      <div class="tv-watch-stage">{props.frame === undefined ? <Placeholder game={watching.game} /> : <View puzzle={props.frame.puzzle} state={props.frame.state} />}</div>
       {ended ? (
         <div class="tv-watch-ended" role="status">
           <img class="tv-watch-ended-burst" src={art("sunburst")} alt="" aria-hidden="true" />

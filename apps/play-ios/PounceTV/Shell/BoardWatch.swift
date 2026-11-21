@@ -5,9 +5,9 @@ import SwiftUI
 /// draws the run from the server's frames. Each game brings its own read-only `DailyWatchView`;
 /// until a game's lands, a placeholder stands in. The web TV's `tv-watch.tsx`.
 enum DailyWatchViews {
-    /// The view for `game`, drawn from its public state alone.
+    /// The view for `game`, drawn from its public puzzle and public state.
     @MainActor @ViewBuilder
-    static func view(game: String, state: JSONValue?) -> some View {
+    static func view(game: String, puzzle: JSONValue?, state: JSONValue?) -> some View {
         switch (game, state) {
         // Each game adds its own case here as its watch view lands.
         case ("test", .some(.object(let o))):
@@ -128,6 +128,8 @@ struct WatchHost: View {
                     .padding(.vertical, 6)
                     .background(Capsule().fill(Palette.yellow))
                     .overlay(Capsule().strokeBorder(Palette.ink, lineWidth: 5))
+                    // On a leaf: a container's identifier folds into the board's.
+                    .accessibilityIdentifier("tv.watch.view.\(watching.game)")
                 Spacer()
                 Button(action: back) {
                     TVButtonLabel(icon: ArtName.iconBack, words: String(localized: "Board", comment: "TV: from a watched run back to the board"), size: 42)
@@ -137,7 +139,7 @@ struct WatchHost: View {
                 .focused($backFocused)
                 .accessibilityIdentifier("tv.watch.back")
             }
-            DailyWatchViews.view(game: watching.game, state: frame?.state)
+            DailyWatchViews.view(game: watching.game, puzzle: frame?.puzzle, state: frame?.state)
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
         .overlay {
@@ -148,8 +150,7 @@ struct WatchHost: View {
             try? await Task.sleep(for: .milliseconds(60))
             backFocused = true
         }
-        .accessibilityElement(children: .contain)
-        .accessibilityIdentifier("tv.watch.view.\(watching.game)")
+
     }
 }
 
@@ -159,7 +160,7 @@ private struct EndedView: View {
 
     var body: some View {
         ZStack {
-            Palette.ink.opacity(0.8).ignoresSafeArea()
+            Palette.ink.opacity(0.92).ignoresSafeArea()
             Image(ArtName.sunburst)
                 .resizable()
                 .frame(width: 1400, height: 1400)

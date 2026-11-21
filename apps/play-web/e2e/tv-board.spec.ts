@@ -109,6 +109,8 @@ test.describe("Tonight's board on the TV", () => {
     const mom = await dailyPhone("Mom", 3);
     await linked(tv, mom);
     const { run, target } = await mom.start();
+    // The paw holds the remote's focus when the card comes up: the card takes it anyway.
+    await tv.page.getByRole("button", { name: "Menu" }).focus();
     expect(await mom.showOnTv(run, true)).toBe(204);
     const card = tv.page.locator(".tv-watch-card");
     await expect(card).toContainText("Mom is playing Test. Spoilers.");

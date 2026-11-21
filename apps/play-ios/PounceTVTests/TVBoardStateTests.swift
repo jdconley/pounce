@@ -91,7 +91,7 @@ struct TVBoardStateTests {
         var s = run(["watchOffer", "watch"])
         s.notNow()
         #expect(s.offer == nil)
-        #expect(s.frames[kid] == .init(game: "test", state: .object(["n": .number(2)])))
+        #expect(s.frames[kid] == .init(game: "test", puzzle: .object(["target": .number(4)]), state: .object(["n": .number(2)])))
         s = run(["watchOffer", "watch"])
         s.watch()
         #expect(s.watching == .init(player: kid, name: "Kid", cat: 5, game: "test"))

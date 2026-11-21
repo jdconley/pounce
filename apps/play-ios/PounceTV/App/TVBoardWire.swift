@@ -73,7 +73,7 @@ enum BoardWire {
         case result(player: String, result: Result)
         case progress(player: String, game: String, progress: Double)
         case watchOffer(player: String, name: String, cat: Int, game: String)
-        case watch(player: String, game: String, state: JSONValue)
+        case watch(player: String, game: String, puzzle: JSONValue, state: JSONValue)
         case watchEnd(player: String, game: String, result: Result?)
         /// `tvs`, `pong`, `error`, and kinds this build doesn't know.
         case other
@@ -98,7 +98,7 @@ enum BoardWire {
                 return .watchOffer(player: m.player, name: m.name, cat: m.cat, game: m.game)
             case "watch":
                 guard let m = try? decoder.decode(WatchFrame.self, from: data) else { return .other }
-                return .watch(player: m.player, game: m.game, state: m.state)
+                return .watch(player: m.player, game: m.game, puzzle: m.puzzle ?? .null, state: m.state)
             case "watchEnd":
                 guard let m = try? decoder.decode(EndFrame.self, from: data) else { return .other }
                 return .watchEnd(player: m.player, game: m.game, result: m.result)
@@ -112,7 +112,7 @@ enum BoardWire {
         private struct ResultFrame: Decodable { let player: String; let result: Result }
         private struct ProgressFrame: Decodable { let player: String; let game: String; let progress: Double }
         private struct OfferFrame: Decodable { let player: String; let name: String; let cat: Int; let game: String }
-        private struct WatchFrame: Decodable { let player: String; let game: String; let state: JSONValue }
+        private struct WatchFrame: Decodable { let player: String; let game: String; let puzzle: JSONValue?; let state: JSONValue }
         private struct EndFrame: Decodable { let player: String; let game: String; let result: Result? }
     }
 }

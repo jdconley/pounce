@@ -46,10 +46,10 @@ struct BoardView: View {
     private func content(_ state: TVBoardState) -> some View {
         HStack(alignment: .top, spacing: 48) {
             DishColumn(board: state.board, cheer: state.cheer, connecting: !board.everConnected)
-                .frame(width: 640)
+                .frame(width: 600)
             Games(games: state.board?.games ?? [], cheer: state.cheer)
         }
-        .padding(.horizontal, 20)
+        // The menu's paw sits in the bottom right corner, beside the last card's "+N more".
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
     }
 }
@@ -84,7 +84,10 @@ private struct DishColumn: View {
             if let rows = board?.dish.rows, !rows.isEmpty {
                 VStack(spacing: 14) {
                     ForEach(rows.prefix(7), id: \.player) { row in
-                        DishLine(row: row, first: row.rank == 1, cheering: cheer?.player == row.player)
+                        let cheering = cheer?.player == row.player
+                        // A new view when it starts cheering, so its entrance plays.
+                        DishLine(row: row, first: row.rank == 1, cheering: cheering)
+                            .id(cheering ? "\(row.player)-cheer" : row.player)
                     }
                 }
             } else {
@@ -153,16 +156,30 @@ private struct Games: View {
     let games: [BoardWire.Game]
     let cheer: TVBoardState.Cheer?
 
+    /// One game fills the space, two sit side by side, three or four in a 2 x 2 grid. Each card
+    /// shows as many rows as its height holds.
     var body: some View {
-        let max = games.count <= 2 ? TVBoardState.rowsShown * 2 : TVBoardState.rowsShown
-        let columns = [GridItem(.flexible(), spacing: 36), GridItem(.flexible(), spacing: 36)]
-        if games.count == 1, let only = games.first {
-            GameCard(game: only, cheer: cheer, max: max)
-        } else {
-            LazyVGrid(columns: columns, spacing: 36) {
-                ForEach(games, id: \.game) { game in
-                    GameCard(game: game, cheer: cheer, max: max)
-                        .frame(height: games.count <= 2 ? 900 : 432)
+        GeometryReader { g in
+            let columns = games.count <= 1 ? 1 : 2
+            let rows = games.count <= 2 ? 1 : 2
+            let gap: CGFloat = 32
+            let w = (g.size.width - gap * CGFloat(columns - 1)) / CGFloat(columns)
+            let h = (g.size.height - gap * CGFloat(rows - 1)) / CGFloat(rows)
+            // A title of 70, a "+N more" line of 44, padding of 40, and rows of 92 (80 and the gap).
+            let fits = max(1, Int((h - 70 - 44 - 40) / 92))
+            VStack(spacing: gap) {
+                ForEach(0..<rows, id: \.self) { r in
+                    HStack(spacing: gap) {
+                        ForEach(0..<columns, id: \.self) { c in
+                            let i = r * columns + c
+                            if i < games.count {
+                                GameCard(game: games[i], cheer: cheer, max: fits)
+                                    .frame(width: w, height: h)
+                            } else {
+                                Color.clear.frame(width: w, height: h)
+                            }
+                        }
+                    }
                 }
             }
         }
@@ -277,13 +294,11 @@ private struct GameRow: View {
                             }
                         }
                         .overlay(Capsule().strokeBorder(Palette.ink, lineWidth: 3))
-                        .frame(width: 120, height: 22)
+                        .frame(width: 110, height: 24)
                         .animation(.easeOut(duration: 0.6), value: playing.progress)
-                    Text("Playing", comment: "TV board: someone playing this game now")
-                        .font(.system(size: 32, weight: .black, design: .rounded))
-                        .foregroundStyle(.white)
                 }
                 .fixedSize()
+                .accessibilityHidden(true)
             }
         }
         .padding(.leading, 12)

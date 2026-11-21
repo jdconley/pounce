@@ -51,7 +51,12 @@ final class TVBoard {
         await socket.stop()
     }
 
-    func watch() { change { $0.watch() } }
+    func watch() {
+        #if DEBUG
+        fputs("[tv] watch \(state.offer?.player ?? "none")\n", stderr)
+        #endif
+        change { $0.watch() }
+    }
     func notNow() { change { $0.notNow() } }
     func stopWatching() { change { $0.stopWatching() } }
 

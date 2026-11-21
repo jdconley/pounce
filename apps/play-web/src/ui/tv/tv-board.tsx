@@ -87,7 +87,7 @@ export function TvBoardRoom(props: { board: string; asleep: boolean; onGone: () 
   return (
     <div class="tv-room" ref={frameRef}>
       {screen.watching ? (
-        <TvWatch watching={screen.watching} frame={screen.frames[screen.watching.player]?.state} ended={screen.ended} onBack={() => store.stopWatching()} />
+        <TvWatch watching={screen.watching} frame={screen.frames[screen.watching.player]} ended={screen.ended} onBack={() => store.stopWatching()} />
       ) : (
         <TvBoard screen={screen} connecting={!state.everConnected} />
       )}
@@ -263,6 +263,8 @@ function TvBoardMenu(props: { onClose: () => void; onHome: () => void; onUnlink:
 /** Tonight's board, before a phone linked one: home's link, big, with the words for the Dish. */
 export function TvBoardLink(props: { link: { code: string; url: string } | null; offline: boolean; onBack: () => void }) {
   const { link } = props;
+  const back = useRef<HTMLButtonElement>(null);
+  useEffect(() => back.current?.focus({ preventScroll: true }), []);
   return (
     <div class="tv-menu tv-board-link" role="dialog" aria-label="Tonight's board">
       <div class="tv-menu-scrim" onClick={props.onBack} />
@@ -281,7 +283,7 @@ export function TvBoardLink(props: { link: { code: string; url: string } | null;
               <span class="dot" /> Reconnecting
             </p>
           ) : null}
-          <button type="button" class="tv-menu-item violet tv-link-back" data-tv data-tv-default autoFocus onClick={props.onBack}>
+          <button type="button" class="tv-menu-item violet tv-link-back" data-tv data-tv-default ref={back} onClick={props.onBack}>
             <img src={art("icon-back")} alt="" />
             <span>Back</span>
           </button>

@@ -30,6 +30,14 @@ struct HomeView: View {
             }
         }
         .animation(.easeOut(duration: 0.2), value: model.boardLinkShown)
+        .onChange(of: model.boardLinkShown) { _, shown in
+            // Back from the board's link: the remote lands where it was, on its poster.
+            guard !shown else { return }
+            Task {
+                try? await Task.sleep(for: .milliseconds(60))
+                focus = "board"
+            }
+        }
         .defaultFocus($focus, GameCatalog.catTower.id)
     }
 
@@ -148,6 +156,8 @@ private struct BoardPoster: View {
                         .resizable()
                         .frame(width: 640, height: 640)
                         .opacity(0.55)
+                        .frame(width: 380, height: height)
+                        .clipped()
                     Image(ArtName.iconTrophy)
                         .resizable()
                         .scaledToFit()
@@ -159,7 +169,7 @@ private struct BoardPoster: View {
                         Image(ArtName.cat(5, .leap)).resizable().scaledToFit().frame(width: 150, height: 150)
                     }
                     .padding(.horizontal, 6)
-                    .frame(maxHeight: .infinity, alignment: .bottom)
+                    .frame(width: 380, height: height, alignment: .bottom)
                 }
                 .frame(width: 380, height: height)
                 .clipped()

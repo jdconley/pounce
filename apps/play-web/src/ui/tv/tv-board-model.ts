@@ -23,12 +23,14 @@ export type Offer = { player: string; name: string; cat: number; game: string; u
 /** A row whose result just landed. */
 export type Cheer = { player: string; game: string; solved: boolean; until: number };
 export type Watching = { player: string; name: string; cat: number; game: string };
+/** A watched run as the server last sent it: the game's public puzzle and public state. */
+export type Frame = { game: string; puzzle: unknown; state: unknown };
 
 export type BoardScreen = {
   board: BoardAnswer | null;
   offer: Offer | null;
   /** The latest frame of each run offered to this TV, by player, kept from the offer on. */
-  frames: Record<string, { game: string; state: unknown }>;
+  frames: Record<string, Frame>;
   /** Who the TV is watching, after Watch. */
   watching: Watching | null;
   /** The watched run's result, shown over its last frame until `until`. */
@@ -70,7 +72,7 @@ export function boardStep(s: BoardScreen, m: BoardMessage, now: number): BoardSc
     case "watchOffer":
       return { ...s, offer: { player: m.player, name: m.name, cat: m.cat, game: m.game, until: now + OFFER_MS } };
     case "watch":
-      return { ...s, frames: { ...s.frames, [m.player]: { game: m.game, state: m.state } } };
+      return { ...s, frames: { ...s.frames, [m.player]: { game: m.game, puzzle: m.puzzle, state: m.state } } };
     case "watchEnd": {
       const frames = { ...s.frames };
       delete frames[m.player];

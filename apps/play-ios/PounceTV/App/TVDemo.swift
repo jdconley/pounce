@@ -513,11 +513,11 @@ actor TVDemoBoardSocket: BoardSocketing {
     private func offers() async {
         for await _ in releases {
             feed.yield(.message(.watchOffer(player: "pr_kid", name: "Kid", cat: 5, game: "sniff")))
-            feed.yield(.message(.watch(player: "pr_kid", game: "sniff", state: .object(["guesses": .number(0)]))))
+            feed.yield(.message(.watch(player: "pr_kid", game: "sniff", puzzle: .object([:]), state: .object(["guesses": .number(0)]))))
             // Long enough for the card to be read and Watch pressed, then a few guesses watched.
             try? await Task.sleep(for: Pace.duration(.seconds(10)))
             for n in 0...4 {
-                feed.yield(.message(.watch(player: "pr_kid", game: "sniff", state: .object(["guesses": .number(Double(n))]))))
+                feed.yield(.message(.watch(player: "pr_kid", game: "sniff", puzzle: .object([:]), state: .object(["guesses": .number(Double(n))]))))
                 try? await Task.sleep(for: Pace.duration(.seconds(1.5)))
             }
             feed.yield(.message(.watchEnd(player: "pr_kid", game: "sniff", result: Self.result(game: "sniff", who: 2))))

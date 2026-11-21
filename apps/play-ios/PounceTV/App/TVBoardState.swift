@@ -42,8 +42,10 @@ struct TVBoardState: Equatable, Sendable {
         let until: Date
     }
 
+    /// A watched run as the server last sent it: the game's public puzzle and public state.
     struct Frame: Equatable, Sendable {
         let game: String
+        let puzzle: JSONValue
         let state: JSONValue
     }
 
@@ -73,8 +75,8 @@ struct TVBoardState: Equatable, Sendable {
             self.board = board
         case .watchOffer(let player, let name, let cat, let game):
             offer = Offer(player: player, name: name, cat: cat, game: game, until: now + Self.offerTime)
-        case .watch(let player, let game, let state):
-            frames[player] = Frame(game: game, state: state)
+        case .watch(let player, let game, let puzzle, let state):
+            frames[player] = Frame(game: game, puzzle: puzzle, state: state)
         case .watchEnd(let player, _, let result):
             if offer?.player == player { offer = nil }
             guard watching?.player == player else {

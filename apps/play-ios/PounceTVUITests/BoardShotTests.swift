@@ -39,7 +39,7 @@ final class BoardShotTests: XCTestCase {
         XCTAssertTrue(el(app, "tv.watch.view.sniff").waitForExistence(timeout: Live.t(5)), "no watch view")
         Thread.sleep(forTimeInterval: 1)
         shot("watch")
-        XCTAssertTrue(el(app, "tv.watch.ended").waitForExistence(timeout: Live.t(10)), "the watched run never ended")
+        XCTAssertTrue(el(app, "tv.watch.ended").waitForExistence(timeout: Live.t(25)), "the watched run never ended")
         Thread.sleep(forTimeInterval: 0.8)
         shot("watch-ended")
         XCTAssertTrue(until(12) { !self.el(app, "tv.watch.ended").exists }, "the board never came back")

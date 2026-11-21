@@ -461,7 +461,8 @@ img.tv-rank.playing {
 
 .tv .tv-watch-top .tv-watch-back {
   flex: none;
-  width: calc(var(--u) * 340);
+  width: auto;
+  padding-right: calc(var(--u) * 64);
 }
 
 .tv-watch-gap {
@@ -507,7 +508,7 @@ img.tv-rank.playing {
   justify-content: center;
   gap: calc(var(--u) * 12);
   overflow: hidden;
-  background: rgba(27, 11, 58, 0.8);
+  background: rgba(27, 11, 58, 0.92);
   animation: tv-ended-in 400ms var(--ease-out) both;
 }
 

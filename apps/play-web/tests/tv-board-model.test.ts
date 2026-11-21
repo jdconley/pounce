@@ -77,21 +77,21 @@ describe("watching", () => {
   test("frames are kept from the offer on, even after Not now", () => {
     const s = notNow(run([msg("watchOffer"), msg("watch")]));
     expect(s.offer).toBeNull();
-    expect(s.frames[KID]).toEqual({ game: "test", state: { n: 2 } });
+    expect(s.frames[KID]).toEqual({ game: "test", puzzle: { target: 4 }, state: { n: 2 } });
   });
 
   test("Watch shows the offered run, drawn from the latest frame", () => {
     const s = watch(run([msg("watchOffer"), msg("watch")]));
     expect(s.offer).toBeNull();
     expect(s.watching).toEqual({ player: KID, name: "Kid", cat: 5, game: "test" });
-    expect(boardStep(s, { t: "watch", player: KID, game: "test", state: { n: 3 } }, 2500).frames[KID]?.state).toEqual({ n: 3 });
+    expect(boardStep(s, { t: "watch", player: KID, game: "test", puzzle: { target: 4 }, state: { n: 3 } }, 2500).frames[KID]).toEqual({ game: "test", puzzle: { target: 4 }, state: { n: 3 } });
   });
 
   test("the watched run's end shows its result for 6 seconds, then the board", () => {
     const s = run([msg("watchEnd")], 3000, watch(run([msg("watchOffer"), msg("watch")])));
     expect(s.ended).toEqual({ result: msg("watchEnd").result, name: "Kid", until: 9000 });
     // The run's last frame stays under its result.
-    expect(s.frames[KID]).toEqual({ game: "test", state: { n: 2 } });
+    expect(s.frames[KID]).toEqual({ game: "test", puzzle: { target: 4 }, state: { n: 2 } });
     const after = tick(s, 9001);
     expect(after.ended).toBeNull();
     expect(after.watching).toBeNull();
