@@ -99,8 +99,17 @@ export function viewerOf(userAgent: string | null): "apple" | "other" {
 /** The first app version that pastes an invite (first-run funnel, Part 2). */
 export const PASTE_SINCE = "1.1";
 
+/** The Dish, to the install logic: an "app game" that needs `DISH_SINCE`. */
+const DISH_GAME = "daily";
+
+/**
+ * The first App Store version with the Daily Dish. Until Apple's lookup names one at least this
+ * new, the Dish's page sends iPhones to the beta and shows no App Store banner.
+ */
+export const DISH_SINCE = "1.3";
+
 /** The first app version that can play each game, for games newer than the first release. */
-export const GAME_SINCE: Readonly<Record<string, string>> = { tiles: "1.1" };
+export const GAME_SINCE: Readonly<Record<string, string>> = { tiles: "1.1", [DISH_GAME]: DISH_SINCE };
 
 /**
  * Whether the App Store's current version is at least `since`. Unknown counts as no: a page
@@ -207,7 +216,7 @@ function gameChip(game: string): string {
 
 /** The Open Graph and Twitter tags Messages reads for its preview (TN3156: server-rendered, no scripts). */
 function previewTags(o: { title: string; description: string; url: string; origin: string; game: string }): string {
-  const image = isGameId(o.game) ? MEDIA.invite.previews[o.game] : MEDIA.og.src;
+  const image = o.game === DISH_GAME ? MEDIA.invite.dish : isGameId(o.game) ? MEDIA.invite.previews[o.game] : MEDIA.og.src;
   return [
     `<meta property="og:type" content="website">`,
     `<meta property="og:site_name" content="Pounce">`,
@@ -296,6 +305,22 @@ export function sharePage(code: string, install: Install, origin: string, peek: 
     ]
       .filter(Boolean)
       .join("\n"),
+  });
+  return new Response(html, { headers: { ...HTML, "content-security-policy": INVITE_CSP } });
+}
+
+/**
+ * Where a Daily Dish share link lands (`/daily`, only while `DAILY` is on): what the Dish is, and
+ * the ways in, the browser and the app. Nothing about a puzzle, a person or a result, so a shared
+ * card spoils nothing. Never cached and never indexed, like the invite pages.
+ */
+export function dailyPage(install: Install, origin: string): Response {
+  const title = "The Daily Dish";
+  const url = `${origin}/daily`;
+  const html = page({
+    title,
+    head: `${banner(install, url, DISH_GAME)}${previewTags({ title, description: "Four new puzzles every day.", url, origin, game: DISH_GAME })}\n`,
+    body: [CAT, `<h1>${title}</h1>`, `<p class="lead">Four new puzzles every day.</p>`, getButton(install, null, { game: DISH_GAME, web: "/play/daily" })].join("\n"),
   });
   return new Response(html, { headers: { ...HTML, "content-security-policy": INVITE_CSP } });
 }

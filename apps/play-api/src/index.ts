@@ -10,7 +10,7 @@ import { dailyOn, devSpeed, tvAppLinksOn, tvOn } from "./env";
 import { active, forget, minted, pageView, parseReport, prune, reached, report } from "./funnel/funnel";
 import { DEFAULT_GAME, GAMES_HEADER, gamesListed, gamesOn, gameTitle, isGameId, type GameId } from "./games";
 import { asAppSocket, browserAnswer, isBrowserSocket } from "./http/browser-socket";
-import { appSiteAssociation, ogImage, pouncePage, sharePage, viewerOf } from "./http/links";
+import { appSiteAssociation, dailyPage, ogImage, pouncePage, sharePage, viewerOf } from "./http/links";
 import { mediaFile } from "./http/media";
 import { privacyPage } from "./http/privacy";
 import { getRedirect, homePage, llmsTxt, robotsTxt, sitemapXml, supportPage } from "./http/site";
@@ -794,6 +794,11 @@ async function handle(request: Request, env: Env, ctx?: ExecutionContext): Promi
     const token = tvLink[1] as string;
     if (!LINK_TOKEN.test(token)) return notFound();
     return new Response(null, { status: 302, headers: { location: `${new URL(request.url).origin}/play/tv-link/${token}`, "cache-control": "no-store" } });
+  }
+  // Where a Daily Dish share link lands: only while DAILY is on, else a 404 as before.
+  if (method === "GET" && pathname === "/daily" && dailyOn(env)) {
+    const store = (await storeKnown(env, later)).store;
+    return dailyPage({ ...install(env), storeVersion: store, viewer: viewerOf(request.headers.get("user-agent")) }, new URL(request.url).origin);
   }
   const share = method === "GET" ? SHARE_PATH.exec(pathname) : null;
   if (share) {

@@ -4,7 +4,7 @@ import { describe, expect, test } from "vitest";
 
 import { tvAppLinksOn } from "../env";
 
-import { appSiteAssociation, appStoreId, deadLinkPage, INVITE_CSP, INVITE_SCRIPT, INVITE_SCRIPT_HASH, ogImage, pouncePage, sharePage, viewerOf } from "./links";
+import { appSiteAssociation, appStoreId, dailyPage, deadLinkPage, DISH_SINCE, INVITE_CSP, INVITE_SCRIPT, INVITE_SCRIPT_HASH, ogImage, pouncePage, sharePage, viewerOf } from "./links";
 import { MEDIA } from "./site-media";
 
 import type { InvitePeek } from "../safety/safety";
@@ -392,5 +392,53 @@ describe("ogImage", () => {
     const bytes = new Uint8Array(await res.arrayBuffer());
     expect([bytes[0], bytes[1]]).toEqual([0xff, 0xd8]);
     expect(bytes.length).toBeGreaterThan(10_000);
+  });
+});
+
+describe("dailyPage: where a Dish share link lands (/daily)", () => {
+  const html = async (install: Parameters<typeof dailyPage>[0]) => dailyPage(install, ORIGIN).text();
+
+  test("says what it is, with the Dish's card for Messages, and no scripts", async () => {
+    const res = dailyPage({ ...TF, viewer: "apple" }, ORIGIN);
+    expect(res.status).toBe(200);
+    expect(res.headers.get("cache-control")).toBe("no-store");
+    expect(res.headers.get("x-robots-tag")).toBe("noindex");
+    const page = await res.text();
+    expect(page).toContain("<h1>The Daily Dish</h1>");
+    expect(meta(page, "og:title")).toBe("The Daily Dish");
+    expect(meta(page, "og:url")).toBe(`${ORIGIN}/daily`);
+    expect(meta(page, "og:image")).toBe(`${ORIGIN}${MEDIA.invite.dish}`);
+    expect(meta(page, "twitter:card")).toBe("summary_large_image");
+    expect(page).not.toContain("<script");
+  });
+
+  test("a browser that isn't an iPhone plays in the browser first; the app is for later", async () => {
+    const page = await html({ appStoreUrl: APP_STORE, testflightUrl: TESTFLIGHT, storeVersion: "1.3", viewer: "other" });
+    expect(page).toContain(`<a class="go web" href="/play/daily">Play in your browser</a>`);
+    expect(page).toContain(`<a href="${APP_STORE}">Get the iPhone app</a>`);
+  });
+
+  test("an iPhone gets the app, once the App Store's version has the Dish, and the browser too", async () => {
+    const page = await html({ appStoreUrl: APP_STORE, testflightUrl: TESTFLIGHT, storeVersion: DISH_SINCE, viewer: "apple" });
+    expect(page).toContain(`<a class="go" href="${APP_STORE}">Get Pounce</a>`);
+    expect(page).toContain(`<a href="/play/daily">Play in your browser</a>`);
+    expect(page).toContain(`name="apple-itunes-app"`);
+  });
+
+  test("until then, the beta, and no App Store banner", async () => {
+    const page = await html({ appStoreUrl: APP_STORE, testflightUrl: TESTFLIGHT, storeVersion: "1.2", viewer: "apple" });
+    expect(page).toContain(`<a class="go" href="${TESTFLIGHT}">Get Pounce</a>`);
+    expect(page).toContain("Pounce is in beta.");
+    expect(page).not.toContain(`name="apple-itunes-app"`);
+  });
+
+  test("gives no puzzle, name or result", async () => {
+    const page = await html({ ...TF, viewer: "apple" });
+    for (const word of ["Sniff", "Nine Lives", "Cat Nap", "Box Fort", "solved", "guesses", "wants to play"]) expect(page).not.toContain(word);
+  });
+
+  test("the app's site association doesn't claim /daily yet", async () => {
+    const json = JSON.stringify(await appSiteAssociation(true, true).json());
+    expect(json).not.toContain("/daily");
   });
 });

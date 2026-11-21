@@ -33,6 +33,19 @@ async function start(options: { daily?: boolean; sent?: Sent[]; devSpeed?: numbe
   return mf;
 }
 
+describe("the share page, /daily", () => {
+  test("is the Dish's page with DAILY on, and a 404 with it off", async () => {
+    const on = await start();
+    const res = await on.dispatchFetch(`${BASE}/daily`, { headers: { "user-agent": "Mozilla/5.0 (Macintosh)" } });
+    expect(res.status).toBe(200);
+    const html = await res.text();
+    expect(html).toContain("<h1>The Daily Dish</h1>");
+    expect(html).toContain(`href="/play/daily"`);
+    const off = await start({ daily: false });
+    expect((await off.dispatchFetch(`${BASE}/daily`)).status).toBe(404);
+  });
+});
+
 describe("the DAILY flag", () => {
   test("every /v1/daily route is a 404 with DAILY off", async () => {
     const mf = await start({ daily: false });
