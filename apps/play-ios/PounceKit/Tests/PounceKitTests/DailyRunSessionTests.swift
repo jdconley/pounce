@@ -146,15 +146,17 @@ actor FakeDaily: DailyService {
         }
     }
 
-    @Test func tooSoonSendsTheMovesBeforeItFirst() async {
+    @Test func tooSoonResyncs() async {
         let fake = FakeDaily()
         await fake.script([.success(.refused(.tooSoon, at: 1, seq: 0))])
         let s = await session(fake)
+        await fake.setStart(FakeDaily.sample(seq: 1, state: 1))
         await s.send(move: Step(n: 1))
         await s.send(move: Step(n: 2))
         await s.flush()
-        #expect(await fake.calls == [.moves(from: 0, count: 2), .moves(from: 0, count: 1), .moves(from: 1, count: 1)])
-        #expect(await s.seq == 2)
+        let calls = await fake.calls
+        #expect(calls == [.moves(from: 0, count: 2), .start])
+        #expect(await s.seq == 1)
     }
 
     @Test func aResultEndsTheRun() async {

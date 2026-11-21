@@ -178,9 +178,10 @@ public enum DailyPlayAnswer<Reveal: Decodable & Sendable>: Sendable {
 /// A game draws each move at once and hands it to `send(move:urgent:)`. The session batches them:
 /// it sends what's waiting a second after the first of it, or at once for a move marked urgent
 /// (a Sniff guess, Box Fort's last piece of a set). One batch is in flight at a time. A batch that
-/// fails on the network is sent again with the same `from`, so the server answers it once. A move
-/// refused as illegal, or a batch the server calls stale, drops what's waiting and resyncs from a
-/// fresh start: games adopt the `.resync` state. Every answer goes out to each `events` stream.
+/// fails on the network is sent again with the same `from`, so the server answers it once. Any
+/// refusal (illegal, stale, over, or `too_soon`: past the game's move budget) drops what's waiting
+/// and resyncs from a fresh start: games adopt the `.resync` state. Every answer goes out to each
+/// `events` stream.
 public actor DailyRunSession {
     /// The start answer this session began from.
     public nonisolated let start: DailyStart
@@ -205,8 +206,6 @@ public actor DailyRunSession {
     private var queue: [Waiting] = []
     private var nextID = 0
     private var urgentThrough: Int?
-    /// After `too_soon` at index `at`, the next batch carries at most this many moves.
-    private var limit = DailyRunSession.maxBatch
     private var pumping = false
     private var nap: Task<Void, Never>?
     private var idle: [CheckedContinuation<Void, Never>] = []
@@ -364,14 +363,13 @@ public actor DailyRunSession {
                     continue
                 }
             }
-            let batch = Array(queue.prefix(limit))
+            let batch = Array(queue.prefix(Self.maxBatch))
             let from = seq
             guard let answer = await call({ service, run, person in
                 try await service.moves(run: run, body: DailyMovesBody(from: from, moves: batch.map(\.move)), person: person)
             }) else { break }
             switch answer {
             case .accepted(let seq, let reveals, let progress, let result):
-                limit = Self.maxBatch
                 self.seq = seq
                 self.progress = progress
                 queue.removeFirst(min(batch.count, queue.count))
@@ -379,12 +377,9 @@ public actor DailyRunSession {
                 for move in batch { waiters.removeValue(forKey: move.id)?.resume(returning: reveals) }
                 emit(.accepted(seq: seq, reveals: reveals, progress: progress))
                 if let result { end(result) }
-            case .refused(.tooSoon, let at, _):
-                // Spacing is the game's own: send the moves before the refused one first, then wait.
-                limit = max(1, at)
-                if at == 0 { try? await Task.sleep(for: retry) }
             case .refused(_, _, _):
-                // Illegal, stale, over, or a move this app got wrong: the server's run is the truth.
+                // Illegal, stale, over, a move this app got wrong, or past the game's move budget
+                // (`too_soon`: no human plays that fast): the server's run is the truth.
                 await resync()
             }
         }
@@ -424,7 +419,6 @@ public actor DailyRunSession {
     private func dropQueue() {
         queue.removeAll()
         urgentThrough = nil
-        limit = Self.maxBatch
         let waiting = waiters
         waiters = [:]
         for continuation in waiting.values { continuation.resume(returning: nil) }

@@ -5,8 +5,9 @@ import SwiftUI
 //
 // The host (`DailyPuzzleScreen`) draws the top bar, the clock, Show on TV, give up, the end
 // screen and share. A game draws only its board and controls, as a `DailyGameView`, and a
-// read-only `DailyWatchView` for the TV. Both are listed once in a registry: play views in
-// `DailyGames.swift`, watch views in `DailyWatchGames.swift` (the TV builds only that one).
+// read-only `DailyWatchView` for the TV (`DailyWatchView.swift`, which the TV builds). Each is
+// listed once in a registry: play views in `DailyGames.swift`, watch views in
+// `DailyWatchGames.swift` (the TV builds only that one).
 //
 // How a game talks to the run (`DailyRunSession`, PounceKit `Daily/DailyClient.swift`):
 // - Draw each move at once, then `await session.send(move:urgent:)`. It never waits on the
@@ -22,7 +23,7 @@ import SwiftUI
 
 /// A daily game's play screen: its board and controls, nothing else.
 @MainActor
-protocol DailyGameView: View {
+protocol DailyGameView: View, SendableMetatype {
     /// The game's public puzzle, as the start answer's `puzzle`.
     associatedtype Puzzle: Decodable & Sendable
     /// The game's public state, as the start answer's `state` and a resync's.
@@ -44,19 +45,6 @@ extension DailyGameView {
     nonisolated static func shareMarks(_ state: State) -> [[DailyShareMark]]? { nil }
 }
 
-/// A daily game as the TV draws it while someone plays (spec §8): read-only, from a `watch`
-/// frame's public puzzle and public state (exactly what `start` shows the player). SwiftUI and
-/// PounceKit only, so the TV target can build it.
-@MainActor
-protocol DailyWatchView: View {
-    associatedtype Puzzle: Decodable & Sendable
-    associatedtype State: Decodable & Sendable
-
-    nonisolated static var game: DailyGameInfo { get }
-
-    init(puzzle: Puzzle, state: State)
-}
-
 /// A game's play screen, ready to show: the start answer decoded, and a way to build the view.
 struct DailyPlayable: Sendable {
     let game: DailyGameInfo
@@ -75,15 +63,7 @@ extension DailyGameView {
     }
 }
 
-extension DailyWatchView {
-    /// One watch frame decoded off the main actor, and its view's builder. Nil when the frame
-    /// isn't this game's.
-    @concurrent nonisolated static func frame(puzzle: DailyJSON, state: DailyJSON) async -> (@MainActor @Sendable () -> AnyView)? {
-        guard let p = try? puzzle.decoded(as: Puzzle.self), let s = try? state.decoded(as: State.self) else { return nil }
-        return { AnyView(Self(puzzle: p, state: s)) }
-    }
-}
-
+@MainActor
 enum DailyHost {
     /// The play screen for `game`, when this app has one.
     static func playable(_ game: String) -> (any DailyGameView.Type)? {
