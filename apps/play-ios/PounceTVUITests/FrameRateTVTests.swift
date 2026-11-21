@@ -68,6 +68,8 @@ final class FrameRateTVTests: XCTestCase {
     /// its hangs and the display link's frames are what's held.
     func testBoardPlaysAtTheTopFrameRate() {
         let app = Live.demo("tv-board", speed: 1)
+        // Silent on a Mac: speed 1 plays real sound.
+        app.launchArguments += ["-settings.soundOn", "<false/>", "-tv.soundOn", "<false/>"]
         app.launch()
         XCTAssertTrue(el(app, "tv.board").waitForExistence(timeout: Live.t(20)), "the board never came up")
         XCTAssertTrue(el(app, "tv.board.game.box-fort").waitForExistence(timeout: Live.t(10)), "the board has no games")

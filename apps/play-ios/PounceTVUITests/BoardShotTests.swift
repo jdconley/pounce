@@ -23,6 +23,8 @@ final class BoardShotTests: XCTestCase {
 
     func testTheBoardItsCardAndWatchingAndHome() {
         let app = Live.demo("tv-board", speed: 1)
+        // Silent on a Mac: speed 1 plays real sound.
+        app.launchArguments += ["-settings.soundOn", "<false/>", "-tv.soundOn", "<false/>"]
         app.launch()
         XCTAssertTrue(el(app, "tv.board.game.box-fort").waitForExistence(timeout: Live.t(20)), "no board")
         // A few beats in, so every card has rows and someone is playing.
