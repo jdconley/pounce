@@ -60,6 +60,8 @@ export async function catTowerTurn(page: Page): Promise<boolean> {
   await expect(cards).toHaveCount(before + 1);
   await cards.last().click();
   await page.locator("#discard").click();
+  // The turn is done when the card has left the hand.
+  await expect.poll(() => cards.count()).toBeLessThanOrEqual(before);
   return true;
 }
 

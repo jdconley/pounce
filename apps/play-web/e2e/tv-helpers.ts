@@ -211,9 +211,13 @@ export async function controllerTurn(page: Page, opts: { layDown?: boolean } = {
   await expect.poll(() => cards.count()).toBeGreaterThan(0);
   await cards.last().press("Enter");
   await page.locator("#discard-btn:not([disabled])").click();
+  // A Cucumber at a table of three or more asks whom to skip; otherwise the card leaves the hand.
+  // The turn is done when it has (the deck greys as soon as the draw lands, so it can't tell a
+  // discard that went from one that didn't).
   const skip = page.getByRole("dialog", { name: "Skip whose turn?" });
-  if (await skip.isVisible().catch(() => false)) await skip.locator("button").first().click();
-  await expect(page.locator("#deck:not([disabled])")).toBeHidden();
+  await expect.poll(async () => (await skip.isVisible()) || (await cards.count()) <= before).toBe(true);
+  if (await skip.isVisible()) await skip.locator("button").first().click();
+  await expect.poll(() => cards.count()).toBeLessThanOrEqual(before);
   return laid ? "laid" : "turn";
 }
 

@@ -24,6 +24,8 @@ export const SETTLE: MoveStyle = { duration: 220, easing: "cubic-bezier(0.2, 0.8
  */
 export class Motion {
   private poses = new Map<string, Pose>();
+  /** Each arriving element's flight: a card dealt or drawn is grabbed only once it has landed. */
+  private flights = new WeakMap<HTMLElement, Animation>();
   private spawns = new Map<string, Pose>();
   constructor(private reduced: () => boolean) {}
 
@@ -56,7 +58,10 @@ export class Motion {
     for (const [key, to] of poses) {
       const el = els.get(key);
       if (!el) continue;
-      const from = this.poses.get(key) ?? this.spawns.get(key);
+      const known = this.poses.get(key);
+      const from = known ?? this.spawns.get(key);
+      // Coming onto the table from somewhere (a drawn card from the deck), not shifting within it.
+      const arriving = !known && from !== undefined;
       this.spawns.delete(key);
       this.poses.set(key, to);
       if (!from) {
@@ -77,11 +82,28 @@ export class Motion {
         continue;
       }
       const s = style(key);
-      el.animate([{ transform: start }, { transform: transformOf(to) }], { duration: s.duration, easing: s.easing, delay: s.delay ?? 0, fill: "backwards" });
+      const flight = el.animate([{ transform: start }, { transform: transformOf(to) }], { duration: s.duration, easing: s.easing, delay: s.delay ?? 0, fill: "backwards" });
+      if (arriving) this.land(el, flight);
     }
     // Keys gone from the table are forgotten, so they spawn afresh if they come back.
     for (const key of [...this.poses.keys()]) if (!poses.has(key)) this.poses.delete(key);
     return moved;
+  }
+
+  /**
+   * While an arriving `el` flies in it takes no taps: they reach what's under it (a drawn card
+   * crossing the Discard button mustn't eat the tap on it). Cards shifting within the hand stay
+   * grabbable. Taps come back when this flight, not a later one, ends.
+   */
+  private land(el: HTMLElement, flight: Animation): void {
+    this.flights.set(el, flight);
+    el.style.pointerEvents = "none";
+    const landed = () => {
+      if (this.flights.get(el) !== flight) return;
+      this.flights.delete(el);
+      el.style.pointerEvents = "";
+    };
+    flight.finished.then(landed, landed);
   }
 }
 
