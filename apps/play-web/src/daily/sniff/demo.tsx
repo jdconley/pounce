@@ -11,7 +11,7 @@ import "../../styles.css";
 
 import { emptyBoard, type SniffBoard } from "./board";
 import { SniffPlay } from "./sniff";
-import { SniffWatch } from "./watch";
+import SniffWatch from "./watch";
 
 import type { Mark, SniffReveal } from "@pounce/play-api/daily/sniff/types";
 
@@ -60,7 +60,7 @@ if (app) {
     <div style={{ position: "fixed", inset: 0, display: "flex", flexDirection: "column", background: "var(--night)" }}>
       <h1 style={{ margin: "calc(var(--safe-top) + 10px) 0 0", textAlign: "center", fontFamily: "var(--round)", fontWeight: 900 }}>Sniff</h1>
       <div style={{ flex: "1 1 auto", minHeight: 0 }}>
-        {name === "watch" ? <SniffWatch view={{ guesses: board.guesses, answer: DEMO_ANSWER }} /> : <SniffPlay start={board} referee={referee} />}
+        {name === "watch" ? <SniffWatch puzzle={{ letters: 5, tries: 6 }} state={{ guesses: board.guesses, answer: DEMO_ANSWER }} /> : <SniffPlay start={board} referee={referee} />}
       </div>
     </div>,
     app,

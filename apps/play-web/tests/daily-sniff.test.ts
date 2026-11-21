@@ -8,7 +8,7 @@ import { describe, expect, test } from "vitest";
 
 import { emptyBoard, isOver, isSolved, keys, reveal, refused, submit, typeLetter, deleteLetter } from "../src/daily/sniff/board";
 import { SniffTrail } from "../src/daily/sniff/trail";
-import { SniffWatch } from "../src/daily/sniff/watch";
+import SniffWatch from "../src/daily/sniff/watch";
 
 import type { Guess, Mark } from "@pounce/play-api/daily/sniff/types";
 
@@ -89,13 +89,32 @@ describe("the trail", () => {
   test("the watch view shows the answer under a missed run", () => {
     const host = document.createElement("div");
     const guesses = Array.from({ length: 6 }, () => g("dummy", "none none none none none"));
-    render(h(SniffWatch, { view: { guesses, answer: "kitty" } }), host);
+    render(h(SniffWatch, { puzzle: { letters: 5, tries: 6 }, state: { guesses, answer: "kitty" } }), host);
     expect(host.querySelectorAll(".sniff-tag[data-mark=answer]")).toHaveLength(5);
     expect(host.textContent).toContain("K");
   });
 });
 
 describe("Sniff's web files", () => {
+  /** Every file `file` loads statically (not type-only imports, which the build erases). */
+  function staticGraph(file: string, seen = new Set<string>()): Set<string> {
+    if (seen.has(file)) return seen;
+    seen.add(file);
+    for (const m of readFileSync(file, "utf8").matchAll(/^\s*(?:import|export)\s(?!type\s)[^;]*?from\s+"(\.[^"]+)"/gm)) {
+      const base = join(dirname(file), m[1]!);
+      const found = [".tsx", ".ts"].map((ext) => base + ext).find((p) => readdirSync(dirname(p)).includes(p.slice(dirname(p).length + 1)));
+      if (found) staticGraph(found, seen);
+    }
+    return seen;
+  }
+
+  test("the TV's watch view loads alone: no play screen, keyboard or sound", () => {
+    const dir = join(dirname(fileURLToPath(import.meta.url)), "../src/daily/sniff");
+    const graph = [...staticGraph(join(dir, "watch.tsx"))].map((p) => p.slice(dir.length + 1));
+    expect(graph).toContain("trail.tsx");
+    for (const heavy of ["sniff.tsx", "keys.tsx", "dish.tsx", "demo.tsx"]) expect(graph).not.toContain(heavy);
+  });
+
   test("never import the answers or the server module", () => {
     const dir = join(dirname(fileURLToPath(import.meta.url)), "../src/daily/sniff");
     for (const file of readdirSync(dir).filter((f) => /\.tsx?$/.test(f))) {
