@@ -1,5 +1,5 @@
 import { expect, test, type Page } from "@playwright/test";
-import { place } from "@pounce/play-api/daily/box-fort/rules";
+import { place, setFits } from "@pounce/play-api/daily/box-fort/rules";
 
 import { closeAll, newPlayer } from "./helpers";
 import { speedAt } from "./speed";
@@ -28,22 +28,31 @@ async function board(page: Page): Promise<Board> {
   return JSON.parse((await page.locator(".bf").getAttribute("data-board")) ?? "null") as Board;
 }
 
-/** The greedy move: the placement that clears the most lines, the biggest piece first. */
+type Cells = [number, number][];
+const asPiece = (cells: Cells) => ({ id: "", tint: 1, cells });
+const asPieces = (cells: Cells[]) => cells.map(asPiece);
+
+/**
+ * A legal move from the board as it is, whatever the day's deal: of the placements that leave room
+ * for the rest of the set, the one that clears the most lines, then the biggest piece, then low and
+ * to the left. A greedy clear that strands the set's last piece would end the run in its first set.
+ */
 function choose(b: Board): { slot: number; row: number; col: number } | null {
   let best: { slot: number; row: number; col: number; score: number } | null = null;
-  b.pieces.forEach((cells, slot) => {
-    if (b.placed[slot]) return;
-    const piece = { id: "", tint: 1, cells };
+  const left = b.pieces.map((cells, slot) => ({ cells, slot })).filter(({ slot }) => !b.placed[slot]);
+  for (const { cells, slot } of left) {
+    const rest = left.filter((p) => p.slot !== slot).map((p) => p.cells);
     for (let row = 0; row < 8; row++) {
       for (let col = 0; col < 8; col++) {
-        const out = place(b.rug, piece, row, col);
+        const out = place(b.rug, asPiece(cells), row, col);
         if (!out) continue;
-        // Clears first, then big pieces, then low and to the left (keeps the top open).
-        const score = (out.cleared.rows.length + out.cleared.cols.length) * 1000 + cells.length * 50 + row * 4 - col;
+        // Leaving the set placeable comes first; a dead end only when nothing else is legal.
+        const room = setFits(out.rug, asPieces(rest)) ? 1_000_000 : 0;
+        const score = room + (out.cleared.rows.length + out.cleared.cols.length) * 1000 + cells.length * 50 + row * 4 - col;
         if (!best || score > best.score) best = { slot, row, col, score };
       }
     }
-  });
+  }
   return best;
 }
 
@@ -82,7 +91,9 @@ async function drag(page: Page, slot: number, to: { x: number; y: number }, step
 }
 
 async function openBoxFort(page: Page) {
-  await page.getByRole("button", { name: "Open the Dish" }).click();
+  const dish = page.getByRole("button", { name: "Open the Dish" });
+  await expect(dish, "the Dish on Home (the server has DAILY on)").toBeVisible();
+  await dish.click();
   const tip = page.getByRole("button", { name: "Dismiss tip" });
   if (await tip.isVisible()) await tip.click();
   await page.getByRole("button", { name: "Play Box Fort" }).click();
