@@ -38,6 +38,14 @@ struct BoxFortPlayView: View {
                     BoxFortOverStamp(over: over, layout: layout)
                 }
                 BoxFortLifted(drag: drag, pieces: state.pieces, layout: layout)
+                #if DEBUG
+                    // For the UI tests: the board as data, at the view's top-left (its frame is the origin).
+                    Color.clear
+                        .frame(width: 1, height: 1)
+                        .accessibilityElement()
+                        .accessibilityIdentifier("boxfort.state")
+                        .accessibilityValue(BoxFortPlayView.debugValue(model, layout))
+                #endif
             }
             .frame(width: geo.size.width, height: geo.size.height, alignment: .topLeading)
             .coordinateSpace(.named(Self.space))
@@ -59,6 +67,22 @@ struct BoxFortPlayView: View {
         }
         .onChange(of: model.dealt) { Sound.shared.play(ArtName.Sound.sfxWhoosh, volume: 0.6, kind: .game) }
     }
+
+    #if DEBUG
+        /// `rug=<64 tints>|x=<rug left>|y=<rug top>|cell=<spot side>|pieces=<cells>/<cells>/<cells>|placed=010|ready=1`,
+        /// a piece's cells as `rc` pairs ("00 01 10"). `ready` is 0 while a set is on its way or the run is over.
+        static func debugValue(_ model: BoxFortPlayModel, _ layout: BoxFortLayout) -> String {
+            let s = model.state
+            let pieces = s.pieces.map { $0.cells.map { "\($0.row)\($0.col)" }.joined(separator: " ") }.joined(separator: "/")
+            return [
+                "rug=" + s.rug.map(String.init).joined(),
+                String(format: "x=%.2f", layout.rug.minX), String(format: "y=%.2f", layout.rug.minY), String(format: "cell=%.3f", layout.cell),
+                "pieces=" + pieces,
+                "placed=" + s.placed.map { $0 ? "1" : "0" }.joined(),
+                "ready=" + (model.canPlace ? "1" : "0"),
+            ].joined(separator: "|")
+        }
+    #endif
 
     @ViewBuilder
     private func tray(slot: Int, layout: BoxFortLayout) -> some View {
