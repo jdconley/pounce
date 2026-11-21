@@ -145,7 +145,9 @@ actor NineLivesDemoServer: DailyService {
         return answer([])
     }
 
-    func hint(run: String, person: String?) async throws -> DailyMovesAnswer {
+    func hint(run: String, hints used: Int, person: String?) async throws -> DailyMovesAnswer {
+        // A resent hint (the count says it was already given) costs nothing more.
+        if used < hints { return answer([]) }
         let solution = NineLivesLocalDriver.solution
         guard result == nil, let i = board.cells.indices.first(where: { board.cells[$0] != solution[$0] }) else {
             return .refused(.over, at: 0, seq: seq)

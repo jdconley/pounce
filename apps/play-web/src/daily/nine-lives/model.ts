@@ -32,6 +32,12 @@ export const isSolved = (v: View): boolean => isFull(v.cells) && v.clashes.size 
 /** Full with a clash: with one solution, that's exactly "full and wrong". */
 export const notQuite = (v: View): boolean => isFull(v.cells) && v.clashes.size > 0;
 export const countOf = (v: View, digit: number): number => v.cells.filter((d) => d === digit).length;
+/**
+ * All nine of `digit` are placed and none clashes: its key rests. A clashing one keeps the key
+ * awake, or a mistake could lock out the right cell.
+ */
+export const isDone = (v: View, digit: number): boolean =>
+  countOf(v, digit) >= 9 && ![...v.clashes].some((i) => v.cells[i] === digit);
 export const hasNote = (v: View, cell: number, digit: number): boolean => (v.notes[cell]! & (1 << (digit - 1))) !== 0;
 
 export function start(puzzle: Puzzle, state?: BoardState): View {

@@ -51,7 +51,9 @@ struct NineLivesPlayView: View {
             model.tap(cell)
         }
         .frame(width: side, height: side)
-        .accessibilityIdentifier("nine-lives-grid")
+            // A container, so each cell keeps its own identifier.
+            .accessibilityElement(children: .contain)
+            .accessibilityIdentifier("nine-lives-grid")
     }
 
     /// "Not quite": the grid is full with a clash. It has its own room, so nothing moves when it shows.
@@ -80,7 +82,7 @@ struct NineLivesPlayView: View {
     }
 
     private func padKey(_ d: Int, size: CGFloat) -> some View {
-        let done = model.count(of: d) >= 9
+        let done = model.isDone(d)
         return Button {
             Haptics.shared.tick()
             Sound.shared.play(ArtName.Sound.sfxTick)

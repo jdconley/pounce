@@ -8,7 +8,7 @@ import { buzz } from "../../lib/haptics";
 import { play } from "../../lib/sound";
 
 import { NineLivesGrid, PawDefs, PawTile } from "./grid";
-import { adopt, countOf, erase, isSolved, move, notQuite, press, reveal, start, tap, toggleNotes, type BoardState, type Puzzle, type Step, type View } from "./model";
+import { adopt, erase, isDone, isSolved, move, notQuite, press, reveal, start, tap, toggleNotes, type BoardState, type Puzzle, type Step, type View } from "./model";
 
 import type { NineLivesDriver } from "./local";
 
@@ -95,7 +95,7 @@ export function NineLivesPlay(props: { puzzle: Puzzle; state?: BoardState; drive
         </div>
         <div class={`nl-keys${view.notesOn ? " nl-notes-on" : ""}`}>
           {[1, 2, 3, 4, 5, 6, 7, 8, 9].map((d) => {
-            const done = countOf(view, d) >= 9 && !view.notesOn;
+            const done = isDone(view, d) && !view.notesOn;
             return (
               <button
                 type="button"

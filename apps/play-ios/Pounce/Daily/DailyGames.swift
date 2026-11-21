@@ -7,7 +7,7 @@ enum DailyGames {
     static let play: [any DailyGameView.Type] = {
         var games: [any DailyGameView.Type] = [
             // SniffDaily.self,
-            // NineLivesDaily.self,
+            NineLivesDaily.self,
             CatNapDaily.self,
             // BoxFortDaily.self,
         ]

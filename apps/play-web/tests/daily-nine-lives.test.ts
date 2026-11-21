@@ -9,6 +9,7 @@ import {
   countOf,
   erase,
   hasNote,
+  isDone,
   isSolved,
   move,
   notQuite,
@@ -110,6 +111,16 @@ describe("Nine Lives on the web: the board model", () => {
     expect(move(b, 1, 0)).toBe(b);
     expect(press({ ...b, selected: last }, 1).move).toBeUndefined();
     expect(countOf(b, 1)).toBe(9);
+    expect(isDone(b, 1)).toBe(true);
+  });
+
+  test("a digit with a clash among its nine keeps its key awake", () => {
+    const last = open.at(-1)!;
+    const wrong = (SAMPLE_SOLUTION[last]! % 9) + 1;
+    const a = press(tap(almost(), last), wrong).view;
+    expect(countOf(a, wrong)).toBe(10);
+    expect(isDone(a, wrong)).toBe(false);
+    expect(isDone(a, SAMPLE_SOLUTION[last]!)).toBe(false);
   });
 
   test("a hint's reveal locks the cell and selects it; the local driver answers from the sample", async () => {

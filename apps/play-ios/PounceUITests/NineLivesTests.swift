@@ -1,0 +1,265 @@
+import XCTest
+
+/// Nine Lives end to end against a dev server with `DAILY=on` (G1 uses its own, `wrangler dev
+/// --port 8802`; point the runner at it with `TEST_RUNNER_POUNCE_API_BASE_URL`). The app never
+/// has the solution, so the test reads today's givens off the screen in one snapshot and solves
+/// them itself, then plays: a hint, a clash and its fix, and every other cell, to the end screen.
+/// Skipped when the server has the Dish off.
+@MainActor
+final class NineLivesTests: XCTestCase {
+    private let seconds: Double = ProcessInfo.processInfo.environment["POUNCE_FRAMES_SECONDS"].flatMap(Double.init) ?? 12
+
+    override func setUp() {
+        continueAfterFailure = false
+    }
+
+    /// Home, then today's Nine Lives; or a skip when this server has no Dish.
+    private func open(_ app: XCUIApplication) throws {
+        XCTAssertTrue(el(app, "screen-home").waitForExistence(timeout: Live.t(20)), "no Home")
+        let treat = el(app, "home.dish.nine-lives")
+        guard treat.waitForExistence(timeout: Live.t(20)) else {
+            throw XCTSkip("the server at \(Live.baseURL) has no Nine Lives (DAILY on?)")
+        }
+        treat.tap()
+        XCTAssertTrue(el(app, "screen-daily").waitForExistence(timeout: Live.t(10)), "no puzzle screen")
+        XCTAssertTrue(el(app, "nine-lives-cell-80").waitForExistence(timeout: Live.t(15)), "the grid never came up")
+    }
+
+    /// Every cell's digit (0: empty), read in one snapshot of the screen.
+    private func cells(_ app: XCUIApplication) throws -> (digits: [Int], values: [String]) {
+        var digits = [Int](repeating: -1, count: 81)
+        var values = [String](repeating: "", count: 81)
+        func walk(_ s: any XCUIElementSnapshot) {
+            if s.identifier.hasPrefix("nine-lives-cell-"), let i = Int(s.identifier.dropFirst("nine-lives-cell-".count)) {
+                let value = s.value as? String ?? ""
+                values[i] = value
+                digits[i] = Int(value.prefix { $0.isNumber }) ?? 0
+            }
+            s.children.forEach(walk)
+        }
+        walk(try app.snapshot())
+        XCTAssertFalse(digits.contains(-1), "a cell is missing from the screen")
+        return (digits, values)
+    }
+
+    func testNineLivesPlaysToTheEnd() throws {
+        let app = Live.app()
+        app.launchArguments += ["-seed-people"]
+        app.launch()
+        try open(app)
+        XCTAssertTrue(el(app, "daily.clock").exists, "no clock")
+
+        let start = try cells(app).digits
+        let solution = try XCTUnwrap(Sudoku.solve(start), "today's givens have no solution")
+
+        // A hint fills one open cell with its answer, from the server, and locks it.
+        el(app, "nine-lives-hint").tap()
+        var hinted = -1
+        XCTAssertTrue(until(10) {
+            hinted = (try? self.cells(app).values.firstIndex { $0.hasSuffix("hint") }) ?? -1
+            return hinted >= 0
+        }, "the hint filled nothing")
+        let afterHint = try cells(app).digits
+        XCTAssertEqual(afterHint[hinted], solution[hinted], "the hint isn't the answer")
+
+        let open = (0..<81).filter { afterHint[$0] == 0 }
+        // A clash is legal and shows: a digit its row already has.
+        let first = open[0]
+        let rowDigit = try XCTUnwrap((0..<9).map { afterHint[first / 9 * 9 + $0] }.first { $0 != 0 })
+        el(app, "nine-lives-cell-\(first)").tap()
+        el(app, "nine-lives-key-\(rowDigit)").tap()
+        XCTAssertTrue(until(5) { (self.value(self.el(app, "nine-lives-cell-\(first)")) ?? "").hasSuffix("clash") }, "no clash shown")
+
+        // Everything else, right: the first cell is still selected, so its right digit replaces the clash.
+        for (k, i) in open.enumerated() {
+            if k > 0 { el(app, "nine-lives-cell-\(i)").tap() }
+            el(app, "nine-lives-key-\(solution[i])").tap()
+        }
+
+        XCTAssertTrue(el(app, "daily.end").waitForExistence(timeout: Live.t(15)), "the run never ended")
+        XCTAssertEqual(el(app, "daily.end.headline").label, "Solved")
+        XCTAssertTrue(el(app, "daily.end.share").exists, "no share")
+    }
+
+    /// The Nine Lives screen with its clock running, a few moves in: nothing reads the screen while
+    /// it's measured. Fails on a main-thread hang over 100 ms or app work over 8.3 ms in a frame.
+    func testNineLivesHoldsTheFrameRate() throws {
+        let app = XCUIApplication()
+        app.launchArguments = Live.arguments(speed: 1) + ["-uitest-reset", "-seed-people"]
+        app.launchEnvironment["POUNCE_API_BASE_URL"] = Live.baseURL
+        app.launch()
+        try open(app)
+        let start = try cells(app).digits
+        let solution = try XCTUnwrap(Sudoku.solve(start))
+        for i in (0..<81).filter({ start[$0] == 0 }).prefix(4) {
+            el(app, "nine-lives-cell-\(i)").tap()
+            el(app, "nine-lives-key-\(solution[i])").tap()
+        }
+        el(app, "nine-lives-notes").tap()
+
+        let before = gameplayBaseline(app)
+        Thread.sleep(forTimeInterval: seconds)
+        let host = Host.framesUnreliable()
+        guard let after = watchdog(app) else { return XCTFail("the watchdog went away") }
+        let window = after - before
+        let report = window.report("nine-lives") + String(format: " | host load %.2f per core", host.load)
+        print(report)
+        let note = XCTAttachment(string: report)
+        note.name = "frames-nine-lives"
+        note.lifetime = .keepAlways
+        add(note)
+        XCTAssertGreaterThan(window.link.count, Int(seconds) * 20, "the screen hardly drew: \(report)")
+        for failure in window.timeFailures() { XCTFail("\(failure): \(report)") }
+        if host.busy || !window.nearReference {
+            print("FRAMES nine-lives: frames over 16.7 ms are reported, not enforced (\(host.busy ? "busy Mac" : "slow machine"))")
+        } else {
+            XCTAssertEqual(window.link.slow, 0, "the main thread missed a frame by over 16.7 ms: \(report)")
+        }
+    }
+}
+
+/// Screenshots of every screen Nine Lives touches, for the PR: Home and the Dish with Nine Lives on
+/// them (demo data), and against the dev server the puzzle midway (notes, a hint, a clash), full
+/// with a mistake ("Not quite"), and its end. Skipped unless the runner sets `DAILY_SHOTS_DIR`. An
+/// iPad takes each in portrait and landscape; a phone also takes the biggest text.
+@MainActor
+final class NineLivesShotTests: XCTestCase {
+    private static let big = ["-UIPreferredContentSizeCategoryName", "UICTContentSizeCategoryAccessibilityXXXL"]
+
+    private var dir: String? {
+        let dir = ProcessInfo.processInfo.environment["DAILY_SHOTS_DIR"]
+        return dir?.isEmpty == false ? dir : nil
+    }
+
+    private var pad: Bool { UIDevice.current.userInterfaceIdiom == .pad }
+
+    private func save(_ name: String) {
+        guard let dir else { return }
+        let suffix = pad ? (XCUIDevice.shared.orientation.isLandscape ? "-landscape" : "-portrait") : ""
+        // The simulator's name ("G1 SE"), so devices run side by side don't overwrite each other.
+        let device = UIDevice.current.name.lowercased().replacingOccurrences(of: " ", with: "-")
+        try? FileManager.default.createDirectory(atPath: dir, withIntermediateDirectories: true)
+        try? XCUIScreen.main.screenshot().pngRepresentation.write(
+            to: URL(fileURLWithPath: dir).appendingPathComponent("\(device)-\(name)\(suffix).png"))
+    }
+
+    private func launch(_ args: [String]) -> XCUIApplication {
+        let app = XCUIApplication()
+        app.launchArguments = Live.arguments(speed: 4) + ["-uitest-reset", "-seed-people"] + args
+        app.launchEnvironment["POUNCE_API_BASE_URL"] = Live.baseURL
+        app.launch()
+        return app
+    }
+
+    func testShots() throws {
+        guard dir != nil else { throw XCTSkip("no DAILY_SHOTS_DIR") }
+        for orientation in pad ? [UIDeviceOrientation.portrait, .landscapeLeft] : [.portrait] {
+            XCUIDevice.shared.orientation = orientation
+            for (name, args, screen) in [
+                ("home", ["-demo-streaks", "-demo-home", "-demo-dish", "some"], "screen-home"),
+                ("dish", ["-demo-streaks", "-demo-dish", "some", "-show-dish"], "screen-dish"),
+            ] {
+                let app = launch(args)
+                XCTAssertTrue(el(app, screen).waitForExistence(timeout: Live.t(15)), "no \(screen)")
+                Thread.sleep(forTimeInterval: 2.5)
+                save("nine-lives-\(name)")
+                app.terminate()
+            }
+            for big in pad ? [false] : [false, true] {
+                try puzzle(big: big)
+            }
+        }
+        XCUIDevice.shared.orientation = .portrait
+    }
+
+    /// Today's puzzle against the dev server: midway, Not quite, and the end.
+    private func puzzle(big: Bool) throws {
+        let prefix = big ? "nine-lives-big-text" : "nine-lives"
+        let app = launch(big ? Self.big : [])
+        XCTAssertTrue(el(app, "screen-home").waitForExistence(timeout: Live.t(20)), "no Home")
+        let treat = el(app, "home.dish.nine-lives")
+        guard treat.waitForExistence(timeout: Live.t(20)) else { throw XCTSkip("no Nine Lives on \(Live.baseURL)") }
+        treat.tap()
+        XCTAssertTrue(el(app, "nine-lives-cell-80").waitForExistence(timeout: Live.t(15)), "no grid")
+        let givens = try NineLivesBoardReader.digits(app)
+        let solution = try XCTUnwrap(Sudoku.solve(givens))
+        let open = (0..<81).filter { givens[$0] == 0 }
+        let half = open.count / 2
+        for i in open.prefix(half) {
+            el(app, "nine-lives-cell-\(i)").tap()
+            el(app, "nine-lives-key-\(solution[i])").tap()
+        }
+        el(app, "nine-lives-hint").tap()
+        Thread.sleep(forTimeInterval: 1.5)
+        // Notes in two cells, then a clash selected.
+        let rest = try NineLivesBoardReader.digits(app)
+        let free = (0..<81).filter { rest[$0] == 0 }
+        el(app, "nine-lives-notes").tap()
+        for (cell, notes) in [(free[1], [2, 5, 8]), (free[3], [1, 4])] {
+            el(app, "nine-lives-cell-\(cell)").tap()
+            for d in notes { el(app, "nine-lives-key-\(d)").tap() }
+        }
+        el(app, "nine-lives-notes").tap()
+        let clash = free[0]
+        // A digit its row already has, whose key is still awake.
+        let rowDigit = try XCTUnwrap((0..<9).map { rest[clash / 9 * 9 + $0] }.first { d in d != 0 && rest.filter { $0 == d }.count < 9 })
+        el(app, "nine-lives-cell-\(clash)").tap()
+        el(app, "nine-lives-key-\(rowDigit)").tap()
+        Thread.sleep(forTimeInterval: 1)
+        save("\(prefix)-midway")
+        // Everything else right, the clash left in: full with a mistake is Not quite.
+        for i in free.dropFirst() {
+            el(app, "nine-lives-cell-\(i)").tap()
+            el(app, "nine-lives-key-\(solution[i])").tap()
+        }
+        XCTAssertTrue(el(app, "nine-lives-not-quite").waitForExistence(timeout: Live.t(5)))
+        Thread.sleep(forTimeInterval: 1)
+        save("\(prefix)-not-quite")
+        el(app, "nine-lives-cell-\(clash)").tap()
+        el(app, "nine-lives-key-\(solution[clash])").tap()
+        XCTAssertTrue(el(app, "daily.end").waitForExistence(timeout: Live.t(15)), "the run never ended")
+        Thread.sleep(forTimeInterval: 2)
+        save("\(prefix)-end")
+        app.terminate()
+    }
+}
+
+/// Reads every cell's digit (0: empty) in one snapshot of the screen.
+@MainActor
+enum NineLivesBoardReader {
+    static func digits(_ app: XCUIApplication) throws -> [Int] {
+        var digits = [Int](repeating: 0, count: 81)
+        func walk(_ s: any XCUIElementSnapshot) {
+            if s.identifier.hasPrefix("nine-lives-cell-"), let i = Int(s.identifier.dropFirst("nine-lives-cell-".count)) {
+                digits[i] = Int((s.value as? String ?? "").prefix { $0.isNumber }) ?? 0
+            }
+            s.children.forEach(walk)
+        }
+        walk(try app.snapshot())
+        return digits
+    }
+}
+
+/// A plain backtracking solver: the test's own, because no client ever gets the solution.
+enum Sudoku {
+    static func solve(_ givens: [Int]) -> [Int]? {
+        var grid = givens
+        func fits(_ i: Int, _ d: Int) -> Bool {
+            let r = i / 9, c = i % 9, br = r / 3 * 3, bc = c / 3 * 3
+            for k in 0..<9 {
+                if grid[r * 9 + k] == d || grid[k * 9 + c] == d || grid[(br + k / 3) * 9 + bc + k % 3] == d { return false }
+            }
+            return true
+        }
+        func step() -> Bool {
+            guard let i = grid.firstIndex(of: 0) else { return true }
+            for d in 1...9 where fits(i, d) {
+                grid[i] = d
+                if step() { return true }
+            }
+            grid[i] = 0
+            return false
+        }
+        return step() ? grid : nil
+    }
+}

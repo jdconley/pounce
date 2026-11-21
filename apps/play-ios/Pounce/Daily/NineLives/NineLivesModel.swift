@@ -46,8 +46,14 @@ final class NineLivesModel {
     var notQuite: Bool { board.isFull && !clashes.isEmpty }
     var selected: Int? { marks.selected }
 
-    /// How many cells hold `digit`; at nine it's done.
+    /// How many cells hold `digit`.
     func count(of digit: Int) -> Int { board.count(of: digit) }
+
+    /// All nine of `digit` are placed and none clashes: its key rests. A clashing one keeps the
+    /// key awake, or a mistake could lock out the right cell.
+    func isDone(_ digit: Int) -> Bool {
+        board.count(of: digit) >= 9 && !clashes.contains { board.cells[$0] == digit }
+    }
 
     func tap(_ cell: Int) {
         guard live else { return }
