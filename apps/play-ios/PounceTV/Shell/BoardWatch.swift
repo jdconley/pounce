@@ -50,6 +50,7 @@ private struct WatchPlaceholder: View {
     var body: some View {
         VStack(spacing: 32) {
             OutlinedText(TVBoardState.title(game), size: 120, width: 8)
+                .accessibilityIdentifier("tv.watch.placeholder")
             Image(ArtName.Habit.iconHourglass)
                 .resizable()
                 .scaledToFit()

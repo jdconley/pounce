@@ -509,15 +509,32 @@ actor TVDemoBoardSocket: BoardSocketing {
         }
     }
 
-    /// Each go-ahead: Kid's Sniff run is offered, then plays out a guess a second.
+    /// Kid's Sniff run as the server's watch frames would carry it: SPICE in four.
+    private static let sniffGuesses: [(String, [String])] = [
+        ("large", ["none", "none", "none", "none", "spot"]),
+        ("toils", ["none", "none", "spot", "none", "near"]),
+        ("spine", ["spot", "spot", "spot", "none", "spot"]),
+        ("spice", ["spot", "spot", "spot", "spot", "spot"]),
+    ]
+
+    private static func sniffFrame(_ guesses: Int) -> (puzzle: DailyJSON, state: DailyJSON) {
+        let shown = sniffGuesses.prefix(guesses).map { word, marks in
+            DailyJSON.object(["word": .string(word), "marks": .array(marks.map { .string($0) })])
+        }
+        return (.object(["letters": .int(5), "tries": .int(6)]), .object(["guesses": .array(shown)]))
+    }
+
+    /// Each go-ahead: Kid's Sniff run is offered, then plays out a guess every second and a half.
     private func offers() async {
         for await _ in releases {
             feed.yield(.message(.watchOffer(player: "pr_kid", name: "Kid", cat: 5, game: "sniff")))
-            feed.yield(.message(.watch(player: "pr_kid", game: "sniff", puzzle: .object([:]), state: .object(["guesses": .int(0)]))))
-            // Long enough for the card to be read and Watch pressed, then a few guesses watched.
+            let first = Self.sniffFrame(0)
+            feed.yield(.message(.watch(player: "pr_kid", game: "sniff", puzzle: first.puzzle, state: first.state)))
+            // Long enough for the card to be read and Watch pressed, then the guesses watched.
             try? await Task.sleep(for: Pace.duration(.seconds(10)))
-            for n in 0...4 {
-                feed.yield(.message(.watch(player: "pr_kid", game: "sniff", puzzle: .object([:]), state: .object(["guesses": .int(n)]))))
+            for n in 1...Self.sniffGuesses.count {
+                let frame = Self.sniffFrame(n)
+                feed.yield(.message(.watch(player: "pr_kid", game: "sniff", puzzle: frame.puzzle, state: frame.state)))
                 try? await Task.sleep(for: Pace.duration(.seconds(1.5)))
             }
             feed.yield(.message(.watchEnd(player: "pr_kid", game: "sniff", result: Self.result(game: "sniff", who: 2))))

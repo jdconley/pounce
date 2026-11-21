@@ -4,7 +4,8 @@ import XCTest
 /// `http://127.0.0.1:8808`, a local `wrangler dev` with `DAILY=on`, `DAILY_TEST=on`, `TV=on`), and
 /// this test as the phone over plain HTTP (docs/daily-protocol.md). It links a board by the code
 /// the TV shows, offers a run (Not now, then Watch), watches it to its end, sees the result land
-/// on the board, and unlinks from the TV's menu. Skipped when the server isn't there.
+/// on the board, and unlinks from the TV's menu; and it watches each daily game live. Skipped when
+/// the server isn't there.
 @MainActor
 final class BoardLiveTests: XCTestCase {
     private let server = URL(string: ProcessInfo.processInfo.environment["POUNCE_DAILY_SERVER"] ?? "http://127.0.0.1:8808")!
@@ -16,35 +17,8 @@ final class BoardLiveTests: XCTestCase {
     func testLinkABoardWatchARunSeeTheResultAndUnlink() async throws {
         let phone = try await Phone.make(server: server, name: "Mom", cat: 3)
 
-        let app = XCUIApplication()
-        app.launchArguments = Live.arguments()
-        app.launchEnvironment["POUNCE_API_BASE_URL"] = server.absoluteString
-        app.launch()
-
-        // A board kept from an earlier run opens straight away: unlink it first.
-        if el(app, "tv.board").waitForExistence(timeout: Live.t(4)) {
-            XCUIRemote.shared.press(.menu)
-            XCTAssertTrue(waitForFocus(app, "tv.menu.playAGame"))
-            press(app, .down, to: "tv.menu.sound")
-            press(app, .down, to: "tv.menu.unlink")
-            XCUIRemote.shared.press(.select)
-        }
-
-        // Home: the Dish is on, so Tonight's board is the third poster.
-        XCTAssertTrue(el(app, "tv.poster.board").waitForExistence(timeout: Live.t(15)), "no Tonight's board poster: is the server's DAILY on?")
-        XCTAssertTrue(waitForFocus(app, "tv.poster.cat-tower", timeout: 10))
-        press(app, .down, to: "tv.poster.tiles")
-        press(app, .down, to: "tv.poster.board")
-        XCUIRemote.shared.press(.select)
-        let codeLabel = el(app, "tv.boardLink.code")
-        var code = ""
-        XCTAssertTrue(until(15) {
-            code = (self.label(codeLabel) ?? "").replacingOccurrences(of: "Code", with: "").replacingOccurrences(of: " ", with: "")
-            return code.count == 6
-        }, "the link panel shows no code")
-        let linked = try await phone.call("POST", "/v1/screens/link", ["code": code, "board": true])
-        XCTAssertEqual(linked.status, 200)
-        XCTAssertTrue(el(app, "tv.board").waitForExistence(timeout: Live.t(10)), "the TV didn't show the board")
+        let app = launch()
+        try await link(app, phone)
         XCTAssertTrue(el(app, "tv.board.game.test").waitForExistence(timeout: Live.t(10)), "the board has no test game")
 
         // Show on TV: the card, with Not now focused. Not now, then the offer again, then Watch.
@@ -93,6 +67,139 @@ final class BoardLiveTests: XCTestCase {
         app.launch()
         XCTAssertTrue(el(app, "tv.poster.board").waitForExistence(timeout: Live.t(15)))
         XCTAssertFalse(el(app, "tv.board").exists, "the board came back after Unlink")
+    }
+    /// Each daily game, watched live: the card, the game's own view (from `DailyWatchGames`, not
+    /// the placeholder) redrawn by a move, `watchEnd` with its result, and the board again. The
+    /// phone's board counts the TV. `TV_SHOTS_DIR` keeps `appletv-watch-<game>.png`.
+    func testEachDailyGameIsWatchedLive() async throws {
+        let phone = try await Phone.make(server: server, name: "Mom", cat: 3)
+        let app = launch()
+        try await link(app, phone)
+        let board = try await phone.call("GET", "/v1/daily/board")
+        XCTAssertEqual(board.json["tvs"] as? Int, 1, "the phone's board doesn't count the TV")
+
+        for (game, title) in [("sniff", "Sniff"), ("nine-lives", "Nine Lives"), ("cat-nap", "Cat Nap"), ("box-fort", "Box Fort")] {
+            let started = try await phone.call("POST", "/v1/daily/\(game)/start")
+            XCTAssertEqual(started.status, 200, "\(game) isn't on the server")
+            let run = try XCTUnwrap(started.json["run"] as? String)
+            let seq = started.json["seq"] as? Int ?? 0
+            let move = try firstMove(game, puzzle: started.json["puzzle"] as? [String: Any] ?? [:], state: started.json["state"] as? [String: Any] ?? [:])
+            let on = try await phone.call("PUT", "/v1/daily/runs/\(run)/tv", ["on": true])
+            XCTAssertEqual(on.status, 204)
+            XCTAssertTrue(el(app, "tv.watch.card").waitForExistence(timeout: Live.t(10)), "no watch card for \(title)")
+            XCTAssertTrue(waitForFocus(app, "tv.watch.notNow"), "Not now isn't the card's focus")
+            press(app, .left, to: "tv.watch.watch")
+            XCUIRemote.shared.press(.select)
+            XCTAssertTrue(el(app, "tv.watch.view.\(game)").waitForExistence(timeout: Live.t(5)), "Watch shows no \(title) run")
+            // The game's own view, decoded from the first frame: never the placeholder.
+            XCTAssertTrue(until(5) { !self.el(app, "tv.watch.placeholder").exists }, "\(title) shows the placeholder")
+            try await Task.sleep(for: .seconds(1))
+            let before = stage()
+            let sent = try await phone.call("POST", "/v1/daily/runs/\(run)/moves", ["from": seq, "moves": [move]])
+            XCTAssertEqual(sent.json["ok"] as? Bool, true, "\(title)'s first move was refused: \(sent.json)")
+            XCTAssertTrue(until(5) { self.stage() != before }, "\(title)'s next frame didn't redraw it")
+            try await Task.sleep(for: .seconds(1))
+            shot("watch-\(game)")
+            // The end: `watchEnd`, its result over the last frame, then the board.
+            if sent.json["result"] is NSNull || sent.json["result"] == nil {
+                let gaveUp = try await phone.call("POST", "/v1/daily/runs/\(run)/giveup")
+                XCTAssertEqual(gaveUp.status, 200)
+            }
+            XCTAssertTrue(el(app, "tv.watch.ended").waitForExistence(timeout: Live.t(5)), "no result over \(title)'s run")
+            XCTAssertTrue(until(12) { !self.el(app, "tv.watch.ended").exists && self.el(app, "tv.board").exists }, "the board didn't come back after \(title)")
+        }
+        app.terminate()
+    }
+
+    /// The TV app on the server, muted (speed 1 plays real sound).
+    private func launch() -> XCUIApplication {
+        let app = XCUIApplication()
+        app.launchArguments = Live.arguments() + ["-settings.soundOn", "<false/>", "-tv.soundOn", "<false/>"]
+        app.launchEnvironment["POUNCE_API_BASE_URL"] = server.absoluteString
+        app.launch()
+        return app
+    }
+
+    /// From home (unlinking a board kept from an earlier run), Tonight's board's link panel, and
+    /// `phone` links the board by the code it shows.
+    private func link(_ app: XCUIApplication, _ phone: Phone) async throws {
+        if el(app, "tv.board").waitForExistence(timeout: Live.t(4)) {
+            XCUIRemote.shared.press(.menu)
+            XCTAssertTrue(waitForFocus(app, "tv.menu.playAGame"))
+            press(app, .down, to: "tv.menu.sound")
+            press(app, .down, to: "tv.menu.unlink")
+            XCUIRemote.shared.press(.select)
+        }
+        // Home: the Dish is on, so Tonight's board is the third poster.
+        XCTAssertTrue(el(app, "tv.poster.board").waitForExistence(timeout: Live.t(15)), "no Tonight's board poster: is the server's DAILY on?")
+        XCTAssertTrue(waitForFocus(app, "tv.poster.cat-tower", timeout: 10))
+        press(app, .down, to: "tv.poster.tiles")
+        press(app, .down, to: "tv.poster.board")
+        XCUIRemote.shared.press(.select)
+        let codeLabel = el(app, "tv.boardLink.code")
+        var code = ""
+        XCTAssertTrue(until(15) {
+            code = (self.label(codeLabel) ?? "").replacingOccurrences(of: "Code", with: "").replacingOccurrences(of: " ", with: "")
+            return code.count == 6
+        }, "the link panel shows no code")
+        let linked = try await phone.call("POST", "/v1/screens/link", ["code": code, "board": true])
+        XCTAssertEqual(linked.status, 200)
+        XCTAssertTrue(el(app, "tv.board").waitForExistence(timeout: Live.t(10)), "the TV didn't show the board")
+    }
+
+    /// The watch stage as drawn: the screen below the run's top bar.
+    private func stage() -> Data {
+        let screen = XCUIScreen.main.screenshot().image
+        guard let cg = screen.cgImage else { return Data() }
+        let scale = CGFloat(cg.height) / screen.size.height
+        let crop = CGRect(x: 0, y: 200 * scale, width: CGFloat(cg.width), height: CGFloat(cg.height) - 200 * scale)
+        guard let part = cg.cropping(to: crop) else { return Data() }
+        return UIImage(cgImage: part).pngData() ?? Data()
+    }
+
+    private func shot(_ name: String) {
+        let png = XCUIScreen.main.screenshot().pngRepresentation
+        let note = XCTAttachment(data: png, uniformTypeIdentifier: "public.png")
+        note.name = "appletv-\(name)"
+        note.lifetime = .keepAlways
+        add(note)
+        if let dir = ProcessInfo.processInfo.environment["TV_SHOTS_DIR"] {
+            try? png.write(to: URL(fileURLWithPath: dir).appendingPathComponent("appletv-\(name).png"))
+        }
+    }
+
+    /// A first move each game accepts from its start: Sniff's guess, a 1 in Nine Lives' first open
+    /// cell (a clash is legal), an x on Cat Nap's first cell, and a Box Fort piece where it fits.
+    private func firstMove(_ game: String, puzzle: [String: Any], state: [String: Any]) throws -> [String: Any] {
+        switch game {
+        case "sniff":
+            return ["k": "guess", "word": "large"]
+        case "nine-lives":
+            let givens = try XCTUnwrap(puzzle["givens"] as? [Int])
+            return ["k": "set", "i": try XCTUnwrap(givens.firstIndex(of: 0)), "d": 1]
+        case "cat-nap":
+            return ["k": "mark", "cells": [0], "to": "x"]
+        case "box-fort":
+            let rug = try XCTUnwrap(state["rug"] as? [Int])
+            let pieces = try XCTUnwrap(state["pieces"] as? [[String: Any]])
+            let placed = state["placed"] as? [Bool] ?? []
+            let size = 8
+            for (slot, piece) in pieces.enumerated() where !(placed.indices.contains(slot) && placed[slot]) {
+                let cells = (piece["cells"] as? [[Int]]) ?? []
+                for row in 0..<size {
+                    for col in 0..<size {
+                        let fits = cells.allSatisfy { c in
+                            let r = row + c[0], k = col + c[1]
+                            return r < size && k < size && rug[r * size + k] == 0
+                        }
+                        if fits { return ["k": "place", "slot": slot, "row": row, "col": col] }
+                    }
+                }
+            }
+            throw XCTSkip("no Box Fort placement fits")
+        default:
+            throw XCTSkip("no first move for \(game)")
+        }
     }
 }
 

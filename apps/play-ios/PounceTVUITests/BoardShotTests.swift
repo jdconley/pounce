@@ -39,7 +39,8 @@ final class BoardShotTests: XCTestCase {
         press(app, .left, to: "tv.watch.watch")
         XCUIRemote.shared.press(.select)
         XCTAssertTrue(el(app, "tv.watch.view.sniff").waitForExistence(timeout: Live.t(5)), "no watch view")
-        Thread.sleep(forTimeInterval: 1)
+        // Sniff's own view, three guesses in (the demo guesses 10 s after the offer, then every 1.5 s).
+        Thread.sleep(forTimeInterval: 10.5)
         shot("watch")
         XCTAssertTrue(el(app, "tv.watch.ended").waitForExistence(timeout: Live.t(25)), "the watched run never ended")
         Thread.sleep(forTimeInterval: 0.8)
