@@ -6,7 +6,13 @@ import type { Day } from "../streaks/clock";
  * What the board socket says (docs/daily-protocol.md), pure. A row's `player` is "me" for the
  * board's owner and the pair id for a connection: never a player id.
  */
-export type BoardAnswer = { date: Day; games: GameBoard[]; dish: Dish };
+export type BoardAnswer = {
+  date: Day;
+  games: GameBoard[];
+  dish: Dish;
+  /** TV sockets open now that show a board this person is on: their own and their connections'. */
+  tvs: number;
+};
 
 /**
  * What a run tells its player's boards as it goes (`DailyRun`): its progress, and with Show on
@@ -24,7 +30,8 @@ export type BoardMessage =
   | { t: "progress"; player: string; game: string; progress: number }
   | { t: "watchOffer"; player: string; name: string; cat: number; game: string }
   | { t: "watch"; player: string; game: string; state: unknown }
-  | { t: "watchEnd"; player: string; game: string; result: DailyResult | null };
+  | { t: "watchEnd"; player: string; game: string; result: DailyResult | null }
+  | { t: "tvs"; count: number };
 
 /** A run ended: its result, then the board as it now stands. */
 export function resultMessages(player: string, result: DailyResult, board: BoardAnswer): BoardMessage[] {
@@ -40,4 +47,9 @@ export function liveMessage(player: string, face: { name: string; cat: number },
   if (e.k === "watchOffer") return { to: "tv", message: { t: "watchOffer", player, name: face.name, cat: face.cat, game: e.game } };
   if (e.k === "watch") return { to: "tv", message: { t: "watch", player, game: e.game, state: e.state } };
   return { to: "tv", message: { t: "watchEnd", player, game: e.game, result: e.result } };
+}
+
+/** To phones, when the number of TVs showing a board they're on changed (Show on TV appears only while one is). */
+export function tvsMessage(count: number): BoardMessage {
+  return { t: "tvs", count };
 }

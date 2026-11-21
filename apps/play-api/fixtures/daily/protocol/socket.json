@@ -78,7 +78,8 @@
             "ended": 1
           }
         ]
-      }
+      },
+      "tvs": 1
     }
   },
   "result": {
@@ -147,5 +148,9 @@
   "linkBoard": {
     "t": "board",
     "token": "Qm9hcmRUb2tlbkV4YW1wbG"
+  },
+  "tvs": {
+    "t": "tvs",
+    "count": 1
   }
 }

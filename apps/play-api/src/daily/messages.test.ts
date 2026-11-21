@@ -1,11 +1,11 @@
 import { describe, expect, it } from "vitest";
 
-import { liveMessage, resultMessages } from "./messages";
+import { liveMessage, resultMessages, tvsMessage } from "./messages";
 
 import type { DailyResult } from "./module";
 
 const result: DailyResult = { game: "test", date: "2026-11-23", number: 12, outcome: "solved", timeMs: 61_000, hints: 0, tooFast: false, progress: 1 };
-const board = { date: "2026-11-23", games: [], dish: { rows: [] } };
+const board = { date: "2026-11-23", games: [], dish: { rows: [] }, tvs: 1 };
 const face = { name: "Kid", cat: 3 };
 
 describe("board socket messages", () => {
@@ -27,5 +27,11 @@ describe("board socket messages", () => {
     expect(liveMessage("me", face, { k: "watchOffer", game: "test" })).toEqual({ to: "tv", message: { t: "watchOffer", player: "me", name: "Kid", cat: 3, game: "test" } });
     expect(liveMessage("me", face, { k: "watch", game: "test", state: { n: 2 } })).toEqual({ to: "tv", message: { t: "watch", player: "me", game: "test", state: { n: 2 } } });
     expect(liveMessage("me", face, { k: "watchEnd", game: "test", result: null })).toEqual({ to: "tv", message: { t: "watchEnd", player: "me", game: "test", result: null } });
+  });
+});
+
+describe("tvsMessage", () => {
+  it("tells a phone how many TVs show a board it's on", () => {
+    expect(tvsMessage(2)).toEqual({ t: "tvs", count: 2 });
   });
 });

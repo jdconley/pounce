@@ -258,3 +258,43 @@ describe("live progress and watching", { timeout: 30_000 }, () => {
     expect(screen.heard.filter((m) => m.t === "watch")).toHaveLength(1);
   });
 });
+
+describe("how many TVs are watching", { timeout: 30_000 }, () => {
+  test("phones see how many TVs show a board they're on, and hear when it changes", async () => {
+    const mf = await start();
+    const mom = await someone(mf, "Mom");
+    const kid = await someone(mf, "Kid");
+    const stranger = await someone(mf, "Stranger");
+    await pairUp(mf, mom.id, kid.id);
+    const phone = await phoneSocket(mf, mom);
+    expect((await phone.find((m) => m.t === "board")).board).toMatchObject({ tvs: 0 });
+
+    // A TV showing Kid's board counts for Mom: Kid's watch offers reach it.
+    const kidTv = await linkBoard(mf, kid);
+    const screen = await tvSocket(mf, kidTv.tv, kidTv.board);
+    await screen.find((m) => m.t === "board");
+    expect(await phone.find((m) => m.t === "tvs")).toEqual({ t: "tvs", count: 1 });
+    const read = async () => (await (await call(mf, mom.device, "GET", `/v1/daily/board?person=${mom.person.id}`)).json()) as { tvs: number };
+    expect((await read()).tvs).toBe(1);
+
+    // A TV of someone Mom isn't paired with doesn't.
+    const strangerTv = await linkBoard(mf, stranger);
+    const other = await tvSocket(mf, strangerTv.tv, strangerTv.board);
+    await other.find((m) => m.t === "board");
+    expect((await read()).tvs).toBe(1);
+
+    // Mom's own TV counts too; then both go.
+    const momTv = await linkBoard(mf, mom);
+    const own = await tvSocket(mf, momTv.tv, momTv.board);
+    await own.find((m) => m.t === "board");
+    await phone.find((m) => m.t === "tvs" && m.count === 2);
+    screen.ws.close(1000, "bye");
+    await phone.find((m) => m.t === "tvs" && m.count === 1);
+    expect((await call(mf, mom.device, "DELETE", `/v1/daily/board/tv?person=${mom.person.id}`)).status).toBe(204);
+    await phone.find((m) => m.t === "tvs" && m.count === 0);
+    expect((await read()).tvs).toBe(0);
+    // Only changes are sent, and never to a TV.
+    expect(phone.heard.filter((m) => m.t === "tvs").map((m) => m.count)).toEqual([1, 2, 1, 0]);
+    expect(other.heard.some((m) => m.t === "tvs")).toBe(false);
+  });
+});

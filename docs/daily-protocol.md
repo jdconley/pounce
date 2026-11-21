@@ -169,7 +169,8 @@ someone else's run.
     "rows": [
       { "player": "me", "name": "Mom", "cat": 3, "rank": 1, "points": 4, "crowns": ["sniff"], "ended": 1 }
     ]
-  }
+  },
+  "tvs": 1
 }
 ```
 
@@ -186,6 +187,9 @@ someone else's run.
   points), plus 1 for each ended run (a run closed at 04:00 didn't end). `crowns` lists the games
   won. Sorted by points; equal points share a rank.
 - Games are listed in the Dish's order: Sniff, Nine Lives, Cat Nap, Box Fort.
+- **`tvs`** counts the TV board sockets open now that show a board this person is on: their own
+  TVs and their connections' (a watch offer reaches all of them). Show the "Show on TV" switch
+  only while it is above 0.
 
 ### `GET /v1/daily/stats`
 
@@ -220,6 +224,7 @@ Server to client:
 | `{ "t": "watchOffer", "player", "name", "cat", "game" }` | Someone turned on Show on TV | TVs |
 | `{ "t": "watch", "player", "game", "state" }` | A frame: the run's public state, first right after the offer, then one per accepted batch | TVs |
 | `{ "t": "watchEnd", "player", "game", "result" }` | The watched run ended (`result` null: Show on TV was turned off) | TVs |
+| `{ "t": "tvs", "count" }` | The number of TVs showing a board this person is on changed (as `tvs` in the snapshot) | phones |
 | `{ "t": "pong" }` | Answer to a ping | all |
 | `{ "t": "error", "error": "not_allowed" }` | The client sent anything but a ping | all |
 
@@ -228,6 +233,8 @@ Server to client:
   shows the latest at once.
 - The board snapshot's date is the board owner's day. A `result` can be for yesterday (a run
   closed at 04:00); check its `date`.
+- `tvs` is sent only when the count changes because a TV came or went. A pair formed or left
+  changes it without a message; the next snapshot has it.
 - A client sends only `{ "t": "ping" }`. Skip message kinds you don't know.
 - A TV's socket closes (1000, `"revoked"` or `"expired"`) when its board is unlinked or its token
   expires.

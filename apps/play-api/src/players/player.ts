@@ -3,7 +3,7 @@ import { DurableObject } from "cloudflare:workers";
 import { addToStats, dish, emptyStats, rankGame, statsView, type BoardRow, type GameBoard, type Stats } from "../daily/board";
 import { dailyDay, puzzleNumber, type DailyZone } from "../daily/days";
 import { DAILY_TITLES, listedGames } from "../daily/games";
-import { liveMessage, resultMessages, type BoardAnswer, type DailyEvent } from "../daily/messages";
+import { liveMessage, resultMessages, tvsMessage, type BoardAnswer, type DailyEvent } from "../daily/messages";
 import { dailyOn } from "../env";
 import { endKitten } from "../kittens/kittens";
 import { forgetLinks } from "../links/links";
@@ -129,6 +129,8 @@ function sendTo(ws: WebSocket, message: unknown): void {
 export class Player extends DurableObject<Env> {
   /** When each of this player's games last sent its progress to the boards (at most once a second). */
   private progressAt = new Map<string, number>();
+  /** The TV count this player's phones last heard (`tvsChanged`); null: none heard yet. */
+  private lastTvs: number | null = null;
 
   constructor(ctx: DurableObjectState, env: Env) {
     super(ctx, env);
@@ -720,11 +722,14 @@ export class Player extends DurableObject<Env> {
   /** A run ended: it isn't playing any more, and the boards hear the result, then the board as it now stands. */
   private pushResult(handle: string, playerId: string, result: DailyResult): void {
     this.ctx.storage.sql.exec("DELETE FROM daily_playing WHERE date = ? AND game = ? AND player_id = ?", result.date, result.game, playerId);
-    const sockets = this.ctx.getWebSockets();
-    if (sockets.length === 0) return;
+    if (this.ctx.getWebSockets().length === 0) return;
     const now = Date.now();
-    const messages = resultMessages(handle, result, this.board((this.dailyDay(now) as { day: Day }).day, now));
-    for (const ws of sockets) for (const m of messages) sendTo(ws, m);
+    this.ctx.waitUntil(
+      this.board((this.dailyDay(now) as { day: Day }).day, now).then((board) => {
+        const messages = resultMessages(handle, result, board);
+        for (const ws of this.ctx.getWebSockets()) for (const m of messages) sendTo(ws, m);
+      }),
+    );
   }
 
   /**
@@ -789,8 +794,48 @@ export class Player extends DurableObject<Env> {
     const [client, server] = Object.values(pair) as [WebSocket, WebSocket];
     this.ctx.acceptWebSocket(server, role === "tv" ? ["tv", `tv:${request.headers.get(BOARD_HASH_HEADER) ?? ""}`] : ["phone"]);
     const now = Date.now();
-    sendTo(server, { t: "board", board: this.board((this.dailyDay(now) as { day: Day }).day, now) });
+    const board = await this.board((this.dailyDay(now) as { day: Day }).day, now);
+    sendTo(server, { t: "board", board });
+    if (role === "tv") this.ownTvsChanged();
+    else this.lastTvs = board.tvs;
     return new Response(null, { status: 101, webSocket: client });
+  }
+
+  /** The TV sockets open now on this player's own board. */
+  ownTvs(): number {
+    return this.ctx.getWebSockets("tv").filter((ws) => ws.readyState === WebSocket.OPEN).length;
+  }
+
+  /** The TVs showing a board this player is on: their own, and their connections' (watch offers reach all of them). */
+  private async tvCount(): Promise<number> {
+    const partners = await Promise.all(
+      this.pairList().map(({ partnerId }) =>
+        (this.env.PLAYERS.get(this.env.PLAYERS.idFromName(partnerId)) as unknown as { ownTvs(): Promise<number> }).ownTvs().catch(() => 0),
+      ),
+    );
+    return partners.reduce((a, b) => a + b, this.ownTvs());
+  }
+
+  /** This player's phones hear the TV count when it changed. */
+  async tvsChanged(): Promise<void> {
+    const phones = this.ctx.getWebSockets("phone");
+    if (!this.live() || phones.length === 0) {
+      this.lastTvs = null;
+      return;
+    }
+    const count = await this.tvCount();
+    if (count === this.lastTvs) return;
+    this.lastTvs = count;
+    for (const ws of this.ctx.getWebSockets("phone")) sendTo(ws, tvsMessage(count));
+  }
+
+  /** A TV on this player's own board came or went: their phones hear, and their connections' phones. */
+  private ownTvsChanged(): void {
+    const tell = (p: Promise<void>) => this.ctx.waitUntil(p.catch(() => undefined));
+    tell(this.tvsChanged());
+    for (const { partnerId } of this.pairList()) {
+      tell((this.env.PLAYERS.get(this.env.PLAYERS.idFromName(partnerId)) as unknown as { tvsChanged(): Promise<void> }).tvsChanged());
+    }
   }
 
   webSocketMessage(ws: WebSocket): void {
@@ -803,6 +848,7 @@ export class Player extends DurableObject<Env> {
     } catch {
       // Already closed, or a code that may not be sent back (1005, 1006).
     }
+    if (this.ctx.getTags(ws).includes("tv")) this.ownTvsChanged();
   }
 
   /** A TV was given a board token for this player's board (`ScreenLinks.linkBoard`). */
@@ -814,6 +860,7 @@ export class Player extends DurableObject<Env> {
   boardTokenGone(hash: string): void {
     this.ctx.storage.sql.exec("DELETE FROM board_tokens WHERE hash = ?", hash);
     for (const ws of this.ctx.getWebSockets(`tv:${hash}`)) closeBoard(ws, "expired");
+    this.ownTvsChanged();
   }
 
   /** Unlink: every TV showing this player's board forgets it, and its sockets close. */
@@ -822,6 +869,7 @@ export class Player extends DurableObject<Env> {
     await Promise.all(hashes.map((hash) => this.env.BOARD_TOKENS.get(this.env.BOARD_TOKENS.idFromName(hash)).revoke()));
     this.ctx.storage.sql.exec("DELETE FROM board_tokens");
     for (const ws of this.ctx.getWebSockets("tv")) closeBoard(ws, "revoked");
+    this.ownTvsChanged();
   }
 
   /** Keeps a result unless it is already kept, or older than 120 days. False: nothing new. */
@@ -862,7 +910,11 @@ export class Player extends DurableObject<Env> {
    * per game and overall. Who is on it is read now, so a pair that is left drops off. Rows name
    * this player "me" and a connection by its pair id: no player id leaves the server.
    */
-  board(date: Day, now: number): BoardAnswer {
+  async board(date: Day, now: number): Promise<BoardAnswer> {
+    return { ...this.boardRows(date, now), tvs: await this.tvCount() };
+  }
+
+  private boardRows(date: Day, now: number): Omit<BoardAnswer, "tvs"> {
     this.pruneDaily(now);
     const me = this.getMeta("id") ?? "";
     const handles = new Map<string, string>([[me, "me"]]);

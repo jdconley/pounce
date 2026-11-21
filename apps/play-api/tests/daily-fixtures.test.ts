@@ -3,7 +3,7 @@ import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { afterEach, beforeAll, describe, expect, test } from "vitest";
 
 import { addToStats, dish, rankGame, statsView, type BoardRow } from "../src/daily/board";
-import { liveMessage, resultMessages, type BoardAnswer } from "../src/daily/messages";
+import { liveMessage, resultMessages, tvsMessage, type BoardAnswer } from "../src/daily/messages";
 import { giveUp, moves, newRun, startView, useHint } from "../src/daily/run-core";
 import { testGame } from "../src/daily/test-game";
 import { createRng } from "../src/rules/rng";
@@ -66,7 +66,7 @@ function http() {
     { player: "pr_Hn5sW2qLp7Xy3Zc8Vb1MkA", name: "Grandpa", cat: 1, rank: null, result: null, playing: { progress: 0.5 } },
   ];
   const games = [{ game: "test" as const, number: solved.number, rows: rankGame(m, rows) }];
-  const board: BoardAnswer = { date: DATE, games, dish: dish(games) };
+  const board: BoardAnswer = { date: DATE, games, dish: dish(games), tvs: 1 };
   const stats = { games: { test: statsView(addToStats(null, solved), DATE) } };
 
   return {
@@ -109,6 +109,7 @@ function socket(h: ReturnType<typeof http>) {
     pong: { t: "pong" },
     error: { t: "error", error: "not_allowed" },
     linkBoard: { t: "board", token: "Qm9hcmRUb2tlbkV4YW1wbG" },
+    tvs: tvsMessage(1),
   };
 }
 

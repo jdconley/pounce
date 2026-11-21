@@ -53,8 +53,8 @@ test("no Cat Tower sample mentions another game", () => {
  * to one is a change to the wire, made here on purpose.
  */
 const PINNED_DAILY: Record<string, string> = {
-  "daily/protocol/http.json": "63a3126fa15a30c0378b004877e5fa6403bcbf4b22819a2da43840c5cf2acd2b",
-  "daily/protocol/socket.json": "ee4eb92518d5138d6a2f1f0f06c61261a1d065c4b4ca8067b6d3e0e3172f1887",
+  "daily/protocol/http.json": "bc5073bcfa4420d3741fda5f4dffbde0feb863a981dd471101a44bb7a996327c",
+  "daily/protocol/socket.json": "b68d277c2af8063a2b0a9a12a89c019af8a6d656107b5633b42753459202dd0b",
   "daily/protocol/client.json": "d99dacbea20c3d405a6073b7f09cc1e09233fd0a380322dd56714f4a5eba2afa",
 };
 
