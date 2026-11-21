@@ -7,7 +7,8 @@ import { createRng } from "../../rules/rng";
 import { answerFor, POOLS, poolFor } from "./answer";
 import { sniff, type SniffPuzzle, type SniffState } from "./module";
 
-import type { Applied, DailyResult, DayLevel, Outcome } from "./contract";
+import type { DayLevel } from "../days";
+import type { Applied, DailyResult, Outcome } from "../module";
 import type { SniffMove } from "./types";
 
 const P: SniffPuzzle = { answer: "plant", level: 1 };

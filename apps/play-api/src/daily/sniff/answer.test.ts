@@ -1,7 +1,9 @@
 import { describe, expect, it } from "vitest";
 
+import { levelFor } from "../days";
+
 import { isAllowed } from "./allowed-check";
-import { answerFor, levelOf, poolDay, poolFor, POOLS, SNIFF_EPOCH, type Pool } from "./answer";
+import { answerFor, poolDay, poolFor, POOLS, SNIFF_EPOCH, type Pool } from "./answer";
 
 import type { Seed } from "../../rules/rng";
 
@@ -25,15 +27,15 @@ describe("the answer pools", () => {
 
   it("each weekday uses its pool: Mon and Tue easy, Wed Thu Sun mid, Fri Sat hard", () => {
     const week = ["2026-11-23", "2026-11-24", "2026-11-25", "2026-11-26", "2026-11-27", "2026-11-28", "2026-11-29"];
-    expect(week.map(levelOf)).toEqual([1, 2, 3, 4, 5, 6, 7]);
-    expect(week.map((d) => poolFor(levelOf(d)))).toEqual(["easy", "easy", "mid", "mid", "hard", "hard", "mid"]);
-    for (const d of week) expect(POOLS[poolFor(levelOf(d))]).toContain(answerFor(KEY, d));
+    expect(week.map(levelFor)).toEqual([1, 2, 3, 4, 5, 6, 7]);
+    expect(week.map((d) => poolFor(levelFor(d)))).toEqual(["easy", "easy", "mid", "mid", "hard", "hard", "mid"]);
+    for (const d of week) expect(POOLS[poolFor(levelFor(d))]).toContain(answerFor(KEY, d));
   });
 });
 
 describe("poolDay", () => {
   it("counts the pool's earlier dates from the epoch, across weeks", () => {
-    expect(levelOf(SNIFF_EPOCH)).toBe(1);
+    expect(levelFor(SNIFF_EPOCH)).toBe(1);
     expect(poolDay(SNIFF_EPOCH, "easy")).toBe(0);
     expect(poolDay("2026-01-06", "easy")).toBe(1);
     expect(poolDay("2026-01-12", "easy")).toBe(2);
@@ -58,7 +60,7 @@ describe("answerFor", () => {
     const n = POOLS[pool].length;
     const seen: string[] = [];
     for (let d = SNIFF_EPOCH; seen.length < 2 * n; d = addDays(d, 1)) {
-      if (poolFor(levelOf(d)) === pool) seen.push(answerFor(KEY, d));
+      if (poolFor(levelFor(d)) === pool) seen.push(answerFor(KEY, d));
     }
     const first = seen.slice(0, n);
     const second = seen.slice(n);
@@ -98,7 +100,7 @@ describe("answerFor", () => {
       const d = addDays("2026-12-01", i);
       const w = answerFor(KEY, d);
       expect(isAllowed(w), w).toBe(true);
-      expect(POOLS[poolFor(levelOf(d))]).toContain(w);
+      expect(POOLS[poolFor(levelFor(d))]).toContain(w);
     }
   });
 });

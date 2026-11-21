@@ -11,10 +11,11 @@
  * (a "cycle"), and nobody can tell which word goes with which day. Each cycle gets a new order.
  */
 import { createRng, type Seed, shuffle } from "../../rules/rng";
+import { type DayLevel, levelFor } from "../days";
 
 import { ANSWERS } from "./words/answers";
 
-import type { Day, DayLevel } from "./contract";
+import type { Day } from "../../streaks/clock";
 
 export type Pool = "easy" | "mid" | "hard";
 
@@ -32,12 +33,6 @@ export const POOLS: Readonly<Record<Pool, readonly string[]>> = {
   mid: ANSWERS.filter(([w, t]) => t === 2 && !repeats(w)).map(([w]) => w),
   hard: ANSWERS.filter(([w, t]) => t === 3 || repeats(w)).map(([w]) => w),
 };
-
-/** The level of a date, Mon 1 to Sun 7, as `levelFor` in `src/daily/days.ts`. */
-export function levelOf(date: Day): DayLevel {
-  const sunday0 = new Date(`${date}T00:00:00Z`).getUTCDay();
-  return (sunday0 === 0 ? 7 : sunday0) as DayLevel;
-}
 
 export function poolFor(level: DayLevel): Pool {
   if (level <= 2) return "easy";
@@ -79,7 +74,7 @@ function cycleSeed(key: Readonly<Seed>, pool: Pool, cycle: number): Seed {
 
 /** The answer for `date`, from its weekday's pool, in that pool's keyed order for its cycle. */
 export function answerFor(key: Readonly<Seed>, date: Day): string {
-  const pool = poolFor(levelOf(date));
+  const pool = poolFor(levelFor(date));
   const words = POOLS[pool];
   const i = poolDay(date, pool);
   const cycle = Math.floor(i / words.length);

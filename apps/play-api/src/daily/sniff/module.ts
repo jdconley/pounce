@@ -8,7 +8,8 @@ import { answerFor } from "./answer";
 import { markGuess } from "./marks";
 import { type Guess, LETTERS, type SniffMove, type SniffPublic, type SniffReveal, type SniffView, TRIES } from "./types";
 
-import type { Applied, DailyModule, DailyResult, DayLevel } from "./contract";
+import type { DayLevel } from "../days";
+import type { Applied, DailyModule, DailyResult } from "../module";
 
 export type SniffPuzzle = { answer: string; level: DayLevel };
 export type SniffState = { guesses: Guess[]; lastMs: number | null };
