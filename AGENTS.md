@@ -59,6 +59,34 @@ short tip at a time, pointing at the thing it's about, shown when it's relevant,
 the thing or a tap, and never shown again once learned. A new feature that needs explaining gets a
 tip, not more text on the screen.
 
+## Testing on this Mac
+
+Keep Pounce silent when you test it locally. Many sessions run simulators at once, and Simulator
+has no mute, so turn off the game's own sound instead:
+- After you boot a simulator, and before you launch Pounce, run
+  `xcrun simctl spawn <udid> defaults write com.conleychaos.play settings.soundOn -bool NO`. On an
+  Apple TV simulator, also run it for `tv.soundOn`. If the app is already running, relaunch it.
+- For UI tests and `-uitest-reset` launches, pass the launch arguments `-settings.soundOn` `<false/>`
+  (Apple TV: `-tv.soundOn` `<false/>`). Never pass a bare `NO`. The argument domain stores it as the
+  string "NO", `Settings` reads it as no value, so the sound stays on, and it also overrides the
+  `defaults write`. This matters most at `-anim-speed 1`: other speeds swap in silent sounds, but
+  speed 1 plays the real ones. The one exception is `PounceTVUITests/RemoteTests`, which checks that
+  Sound starts on.
+- Run headed Chromium with `--mute-audio`. Headless is already silent.
+
+This is only about local runs. Leave the sound code and its default alone.
+
+Clean up after yourself. Simulators and build output fill JD's disk fast:
+- Name every simulator you create after your session or task (for example "G2 BoxFort SE"), and
+  shut it down after each run.
+- When your task is done (its PR merged, or the work handed back), delete every simulator you
+  created with `xcrun simctl delete <udid>`, and check with `xcrun simctl list devices` that none
+  are left. Never delete a simulator you didn't create.
+- Delete the build output you made: `apps/play-ios/build` in your worktree, any
+  `-derivedDataPath` you pointed elsewhere (the scratchpad or `/tmp`), `.xcresult` bundles, and
+  recordings or screenshots you didn't commit.
+- Leave the worktree itself to the app, which removes it when the session is archived.
+
 ## Releases
 
 Every merge to `main` that touches `apps/play-ios` uploads a TestFlight build and sends it to the
