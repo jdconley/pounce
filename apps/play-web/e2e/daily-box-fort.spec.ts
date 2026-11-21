@@ -205,3 +205,83 @@ test("the drag holds the frame rate: no long frame, frame work within one frame"
   expect(p95, `p95 main-thread work per frame, ms (budget ${summary.budgetMs})`).toBeLessThanOrEqual(BUDGET[gate]!);
   await closeAll(ivy.context);
 });
+
+/**
+ * Screenshots of every screen Box Fort touches on the web, on a small phone, a big phone, an iPad
+ * both ways and a laptop, and on a phone with the text at twice its size: the Dish with Box Fort on
+ * it, a run under way, a piece held over the rug, and the end. Skipped unless `BOXFORT_SHOTS_DIR`
+ * is set.
+ */
+test("screenshots", async ({ browser }, info) => {
+  const dir = process.env.BOXFORT_SHOTS_DIR;
+  test.skip(!dir || info.project.name !== "laptop-chrome", "BOXFORT_SHOTS_DIR, once");
+  test.setTimeout(600_000);
+  const phone = { isMobile: true, hasTouch: true, deviceScaleFactor: 2 };
+  const sizes: [string, Parameters<typeof browser.newContext>[0], boolean?][] = [
+    ["se", { ...phone, viewport: { width: 375, height: 667 } }],
+    ["max", { ...phone, viewport: { width: 440, height: 956 }, deviceScaleFactor: 3 }],
+    ["ipad-portrait", { ...phone, viewport: { width: 820, height: 1180 } }],
+    ["ipad-landscape", { ...phone, viewport: { width: 1180, height: 820 } }],
+    ["laptop", { viewport: { width: 1440, height: 900 } }],
+    ["se-big-text", { ...phone, viewport: { width: 375, height: 667 } }, true],
+  ];
+  for (const [name, context, big] of sizes) {
+    const who = await newPlayer(browser, "Marmalade Montgomery", { context });
+    const { page } = who;
+    if (big) await page.addStyleTag({ content: "html { font-size: 200% !important; }" });
+    const shot = (what: string) => page.screenshot({ path: `${dir}/web-${name}-${what}.png` });
+    await page.getByRole("button", { name: "Open the Dish" }).click();
+    const tip = page.getByRole("button", { name: "Dismiss tip" });
+    if (await tip.isVisible()) await tip.click();
+    await page.waitForTimeout(600);
+    await shot("dish");
+    // The Dish as it was before Box Fort (a build without its line in the registry).
+    if (process.env.BOXFORT_SHOTS_BEFORE) {
+      await closeAll(who.context);
+      continue;
+    }
+    await page.getByRole("button", { name: "Play Box Fort" }).click();
+    await expect(page.locator(".bf[data-board]")).toBeVisible();
+    if (big) await page.addStyleTag({ content: "html { font-size: 200% !important; }" });
+    await page.waitForTimeout(800);
+    await shot("start");
+    for (let i = 0; i < 7; i++) {
+      const b = await board(page);
+      const move = choose(b);
+      if (!move || b.over) break;
+      await drag(page, move.slot, await dropPoint(page, b, b.pieces[move.slot]!, move.row, move.col));
+      await page.waitForTimeout(450);
+    }
+    await page.waitForTimeout(900);
+    await shot("play");
+    // A piece held over the rug, its landing spot showing.
+    const b = await board(page);
+    const move = choose(b);
+    if (move) {
+      const from = (await page.getByTestId(`boxfort-slot-${move.slot}`).boundingBox())!;
+      const to = await dropPoint(page, b, b.pieces[move.slot]!, move.row, move.col);
+      await page.mouse.move(from.x + from.width / 2, from.y + from.height / 2);
+      await page.mouse.down();
+      for (let i = 1; i <= 10; i++) await page.mouse.move(from.x + from.width / 2 + ((to.x - from.x - from.width / 2) * i) / 10, from.y + from.height / 2 + ((to.y - from.y - from.height / 2) * i) / 10);
+      await page.waitForTimeout(200);
+      await shot("drag");
+      await page.mouse.up();
+    }
+    for (let guard = 0; guard < 400; guard++) {
+      const n = await board(page);
+      if (n.over !== null) break;
+      if (!n.ready) {
+        await page.waitForTimeout(100);
+        continue;
+      }
+      const m = choose(n);
+      if (!m) break;
+      await drag(page, m.slot, await dropPoint(page, n, n.pieces[m.slot]!, m.row, m.col));
+      await page.waitForTimeout(160);
+    }
+    await expect(page.getByRole("heading", { name: "Fort done" })).toBeVisible({ timeout: 30_000 });
+    await page.waitForTimeout(2500);
+    await shot("end");
+    await closeAll(who.context);
+  }
+});
