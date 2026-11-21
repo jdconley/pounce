@@ -24,20 +24,20 @@ export default defineConfig({
   use: { baseURL: BASE, trace: "retain-on-failure", serviceWorkers: "block" },
   projects: [
     // The TV's own tests (tv.spec) run once, on the TV, which seats its phones itself.
-    { name: "android-chrome", use: { ...devices["Pixel 7"] }, testIgnore: [/alerts\.spec/, /tv\.spec/] },
-    { name: "iphone-safari", use: { ...devices["iPhone 13"] }, testIgnore: [/alerts\.spec/, /tv\.spec/] },
-    { name: "laptop-chrome", use: { ...devices["Desktop Chrome"], viewport: { width: 1440, height: 900 } }, testIgnore: [/alerts\.spec/, /tv\.spec/] },
+    { name: "android-chrome", use: { ...devices["Pixel 7"] }, testIgnore: [/alerts\.spec/, /tv\.spec/, /tv-board\.spec/] },
+    { name: "iphone-safari", use: { ...devices["iPhone 13"] }, testIgnore: [/alerts\.spec/, /tv\.spec/, /tv-board\.spec/] },
+    { name: "laptop-chrome", use: { ...devices["Desktop Chrome"], viewport: { width: 1440, height: 900 } }, testIgnore: [/alerts\.spec/, /tv\.spec/, /tv-board\.spec/] },
     // Gecko and desktop WebKit play the two-browser tables only, to keep CI quick.
-    { name: "laptop-firefox", testMatch: /tables\.spec/, testIgnore: /tv\.spec/, use: { ...devices["Desktop Firefox"], viewport: { width: 1440, height: 900 } } },
-    { name: "laptop-safari", testMatch: /tables\.spec/, testIgnore: /tv\.spec/, use: { ...devices["Desktop Safari"], viewport: { width: 1440, height: 900 } } },
+    { name: "laptop-firefox", testMatch: /tables\.spec/, testIgnore: [/tv\.spec/, /tv-board\.spec/], use: { ...devices["Desktop Firefox"], viewport: { width: 1440, height: 900 } } },
+    { name: "laptop-safari", testMatch: /tables\.spec/, testIgnore: [/tv\.spec/, /tv-board\.spec/], use: { ...devices["Desktop Safari"], viewport: { width: 1440, height: 900 } } },
     // Pounce on the TV: a 1080p TV page with phones (Pixel 7, iPhone 13) it seats in each test, and
     // the TV's frame gate.
-    { name: "tv-chrome", testMatch: [/tv\.spec/, /main-thread\.spec/], use: { ...devices["Desktop Chrome"], viewport: { width: 1920, height: 1080 } } },
+    { name: "tv-chrome", testMatch: [/tv\.spec/, /tv-board\.spec/, /main-thread\.spec/], use: { ...devices["Desktop Chrome"], viewport: { width: 1920, height: 1080 } } },
     // Turn alerts need full Chromium in its headless mode: the lighter headless shell refuses notifications.
     {
       name: "laptop-chromium-alerts",
       testMatch: /alerts\.spec/,
-      testIgnore: /tv\.spec/,
+      testIgnore: [/tv\.spec/, /tv-board\.spec/],
       use: { ...devices["Desktop Chrome"], channel: "chromium", permissions: ["notifications"], serviceWorkers: "allow" },
     },
   ],

@@ -26,6 +26,9 @@ public enum ScreenLinkEvent: Equatable, Sendable {
     /// A phone linked this TV to the table `room`, which already lists it as a screen. The link
     /// is spent: the events end after this.
     case linked(room: String)
+    /// A phone linked this TV to its Daily Dish board: the board token to keep
+    /// (docs/daily-protocol.md, "A board on the TV"). The link is spent: the events end after this.
+    case board(token: String)
     /// Waiting on the network: the link shown may not reach the server.
     case offline
 }
@@ -294,6 +297,7 @@ public actor ScreenLink {
     private struct Frame: Decodable {
         let t: String
         let room: String?
+        let token: String?
     }
 
     private func isOpen(_ id: Int) -> Bool { live?.id == id || old?.id == id }
@@ -314,6 +318,10 @@ public actor ScreenLink {
             case "linked":
                 guard let room = frame.room else { continue }
                 close(finish(.linked(room: room)))
+                return
+            case "board":
+                guard let token = frame.token else { continue }
+                close(finish(.board(token: token)))
                 return
             case "expired":
                 // The link being replaced expiring is expected: its successor is already shown.

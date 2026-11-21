@@ -14,7 +14,15 @@ import { QrCode } from "../qr";
 
 import type { MenuView } from "./tv-model";
 
-export function TvMenu(props: { view: Exclude<MenuView, "closed">; code: string; onView: (v: MenuView) => void; onLeave: () => void; onLinked: (room: string) => void }) {
+export function TvMenu(props: {
+  view: Exclude<MenuView, "closed">;
+  code: string;
+  onView: (v: MenuView) => void;
+  onLeave: () => void;
+  onLinked: (room: string) => void;
+  /** A phone linked this TV to its Daily Dish board instead. */
+  onBoard: (token: string) => void;
+}) {
   const [sound, setSound] = useState(settings().sound);
   useEffect(() => onSettings((s) => setSound(s.sound)), []);
   const press = (fn: () => void) => () => {
@@ -50,18 +58,18 @@ export function TvMenu(props: { view: Exclude<MenuView, "closed">; code: string;
           </button>
         </div>
       ) : (
-        <TvLinkPanel code={props.code} onLinked={props.onLinked} onBack={() => props.onView("items")} />
+        <TvLinkPanel code={props.code} onLinked={props.onLinked} onBoard={props.onBoard} onBack={() => props.onView("items")} />
       )}
     </div>
   );
 }
 
 /** This TV's link while it shows a table (`showing`), so a phone can move it to another one. */
-function TvLinkPanel(props: { code: string; onLinked: (room: string) => void; onBack: () => void }) {
+function TvLinkPanel(props: { code: string; onLinked: (room: string) => void; onBoard: (token: string) => void; onBack: () => void }) {
   const [link, setLink] = useState<{ code: string; url: string } | null>(null);
   const [offline, setOffline] = useState(false);
-  const linked = useRef(props.onLinked);
-  linked.current = props.onLinked;
+  const latest = useRef(props);
+  latest.current = props;
 
   useEffect(() => {
     const screen = new ScreenLink({ api: tvApi });
@@ -70,7 +78,8 @@ function TvLinkPanel(props: { code: string; onLinked: (room: string) => void; on
         setLink({ code: e.code, url: e.url });
         setOffline(false);
       } else if (e.kind === "offline") setOffline(true);
-      else linked.current(e.room);
+      else if (e.kind === "board") latest.current.onBoard(e.token);
+      else latest.current.onLinked(e.room);
     });
     screen.start(props.code);
     return () => {

@@ -175,6 +175,12 @@ describe("a TV reloading", () => {
     expect(bootPhase(null)).toBe("start");
   });
 
+  test("a kept table wins; else the board it kept opens straight away", () => {
+    expect(bootPhase("BCDFG", "B".repeat(22))).toBe("lobby");
+    expect(bootPhase(null, "B".repeat(22))).toBe("board");
+    expect(bootPhase(null, null)).toBe("start");
+  });
+
   test("takes a new deploy anywhere but mid-hand", () => {
     expect(safeToReload("playing")).toBe(false);
     for (const p of ["connecting", "lobby", "over", "closed", "notFound", "locked", "needsUpdate"] as const) expect(safeToReload(p)).toBe(true);
