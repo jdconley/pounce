@@ -22,6 +22,7 @@ afterEach(async () => {
 
 async function start(): Promise<Miniflare> {
   const mf = await worker(script, { sent: [], trophy: true, tv: true, daily: true, dailyTest: true });
+  await mf.dispatchFetch(`${BASE}/__test/fail-reports?n=0`);
   open.push(mf);
   return mf;
 }
@@ -144,5 +145,70 @@ describe("a merge", { timeout: 30_000 }, () => {
     // The TV's token now shows the account's board.
     const whose = (await (await mf.dispatchFetch(`${BASE}/__test/board-token?token=${board}&device=${tv.token.split(".")[1]}&now=${Date.now()}`)).json()) as { player: string };
     expect(whose.player).toBe(account);
+  });
+});
+
+describe("a merge that goes wrong part way", { timeout: 60_000 }, () => {
+  test("the Dish's part of a merge run twice (a sign-in retried) changes nothing the second time", async () => {
+    const mf = await start();
+    const phone = await guest(mf, "JD");
+    const account = (await signIn(mf, phone, "apple-jd")).playerId;
+    const ipad = await guest(mf, "JD on iPad");
+    const g = await begin(mf, ipad);
+    await send(mf, ipad, g.run, 0, steps(1, 3 + g.level));
+    await eventually(() => statsOf(mf, ipad), (s) => s?.played === 1);
+    // A sign-in that failed after the Dish moved, then the whole merge again.
+    expect((await mf.dispatchFetch(`${BASE}/__test/merge-daily?from=${ipad.id}&to=${account}`)).status).toBe(204);
+    expect((await signIn(mf, ipad, "apple-jd")).outcome).toBe("merged");
+    expect(await begin(mf, phone)).toMatchObject({ run: g.run, result: { outcome: "solved" } });
+    expect(testRows(await boardOf(mf, phone))).toMatchObject([{ player: "me", result: { outcome: "solved" } }]);
+    const stats = (await statsOf(mf, phone)) as unknown as { played: number; solved: number; streak: number; last30: unknown[] };
+    expect(stats).toMatchObject({ played: 1, solved: 1, streak: 1 });
+    expect(stats.last30).toHaveLength(1);
+  });
+
+  test("a guest's result that never reached it arrives at the account", async () => {
+    const mf = await start();
+    const phone = await guest(mf, "JD");
+    await signIn(mf, phone, "apple-jd");
+    const ipad = await guest(mf, "JD on iPad");
+    // The guest's player refuses the report; its retry is a minute off.
+    expect((await mf.dispatchFetch(`${BASE}/__test/fail-reports?n=1`)).status).toBe(204);
+    const g = await begin(mf, ipad);
+    await send(mf, ipad, g.run, 0, steps(1, 3 + g.level));
+    expect((await signIn(mf, ipad, "apple-jd")).outcome).toBe("merged");
+    const rows = await eventually(async () => testRows(await boardOf(mf, phone)), (r) => r.some((x) => x.result !== null));
+    expect(rows).toMatchObject([{ player: "me", result: { outcome: "solved" } }]);
+    expect(await statsOf(mf, phone)).toMatchObject({ played: 1, solved: 1 });
+  });
+
+  test("a connection's board drops the account's result when the guest's earlier run wins", async () => {
+    const mf = await start();
+    const phone = await guest(mf, "JD");
+    const account = (await signIn(mf, phone, "apple-jd")).playerId;
+    const kid = await guest(mf, "Kid");
+    await pairUp(mf, account, kid.id);
+    const ipad = await guest(mf, "JD on iPad");
+    const early = await begin(mf, ipad);
+    await send(mf, ipad, early.run, 0, steps(1, 1));
+    const late = await begin(mf, phone);
+    await send(mf, phone, late.run, 0, steps(1, 3 + late.level));
+    await eventually(async () => testRows(await boardOf(mf, kid)).length, (n) => n === 1);
+    expect((await signIn(mf, ipad, "apple-jd")).outcome).toBe("merged");
+    expect(await eventually(async () => testRows(await boardOf(mf, kid)), (r) => r.length === 0)).toEqual([]);
+    // The kept run ends, and the kid's board shows that result.
+    await send(mf, phone, early.run, 1, steps(2, 3 + early.level));
+    const rows = await eventually(async () => testRows(await boardOf(mf, kid)), (r) => r.length === 1);
+    expect(rows[0]?.result).toMatchObject({ outcome: "solved" });
+  });
+
+  test("a result from a run that isn't the one kept is ignored", async () => {
+    const mf = await start();
+    const mom = await guest(mf, "Mom");
+    const s = await begin(mf, mom);
+    const res = await mf.dispatchFetch(`${BASE}/__test/record?player=${mom.id}&run=not-the-run`);
+    expect(res.status).toBe(204);
+    expect(testRows(await boardOf(mf, mom))).toEqual([]);
+    expect(s.run).toBeTruthy();
   });
 });

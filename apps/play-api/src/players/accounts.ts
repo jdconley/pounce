@@ -203,18 +203,11 @@ export async function merge(env: Env, from: string, to: string, now: number): Pr
   // Before the pairs move: `from`'s partners, any of whom may be a kitten that approved `from`.
   const partners = (await player(env, from).pairList()).map((r) => r.partnerId);
   await player(env, to).absorb(exported, now);
-  // The Dish (daily games design): results, stats and runs move, one run per game and date stays,
-  // and the guest's TV board tokens show the account's board.
-  const daily = await player(env, from).exportDaily();
-  const plan = await player(env, to).absorbDaily(daily);
-  await Promise.all([
-    ...plan.adopt.map((id) => env.DAILY_RUNS.get(env.DAILY_RUNS.idFromName(id)).repoint(from, to)),
-    ...plan.drop.map((id) => env.DAILY_RUNS.get(env.DAILY_RUNS.idFromName(id)).drop()),
-    ...daily.tokens.map((t) => env.BOARD_TOKENS.get(env.BOARD_TOKENS.idFromName(t.hash)).repoint(to)),
-  ]);
   await Promise.all(exported.devices.map((d) => device(env, d).repointPlayer(from, to)));
   await Promise.all(exported.tables.map((t) => room(env, t.code).adopt({ from, to })));
   await player(env, from).retire();
+  // After `retire`: the guest starts no run and takes no result meanwhile (a run retries its report).
+  await mergeDaily(env, from, to);
   await mergePairs(env, from, to, now);
   // Connections now paired with the account get its results, as the merge kept them.
   await player(env, to).shareDaily();
@@ -223,6 +216,21 @@ export async function merge(env: Env, from: string, to: string, now: number): Pr
   await parentMerged(env, from, to, partners);
   await identities(env).repoint(from, to);
   await player(env, from).becomeStub(to, now);
+}
+
+/**
+ * The Dish's step of a merge (daily games design): results, stats and runs move, one run per game
+ * and date stays, and the guest's TV board tokens show the account's board. Idempotent: the
+ * account keeps the plan it made the first time, so a retried merge re-applies the same one.
+ */
+export async function mergeDaily(env: Env, from: string, to: string): Promise<void> {
+  const daily = await player(env, from).exportDaily();
+  const plan = await player(env, to).absorbDaily(daily);
+  await Promise.all([
+    ...plan.adopt.map((id) => env.DAILY_RUNS.get(env.DAILY_RUNS.idFromName(id)).repoint(from, to)),
+    ...plan.drop.map((id) => env.DAILY_RUNS.get(env.DAILY_RUNS.idFromName(id)).drop()),
+    ...plan.tokens.map((hash) => env.BOARD_TOKENS.get(env.BOARD_TOKENS.idFromName(hash)).repoint(to)),
+  ]);
 }
 
 /** One device stops speaking for a player: its device identities for that player go, and the link. */

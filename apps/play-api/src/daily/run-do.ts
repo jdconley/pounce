@@ -143,12 +143,17 @@ export class DailyRun extends DurableObject<Env> {
     return true;
   }
 
-  /** After an account merge: the run is the account's now (`Player.absorbDaily` kept it). */
+  /**
+   * After an account merge: the run is the account's now (`Player.absorbDaily` kept it). An ended
+   * run reports to the account again, so a result the guest never got isn't lost.
+   */
   async repoint(from: string, to: string): Promise<void> {
     const s = this.stored;
-    if (!s || s.run.playerId !== from) return;
+    if (!s || (s.run.playerId !== from && s.run.playerId !== to)) return;
     s.run.playerId = to;
+    if (s.run.ended) s.run.reported = false;
     this.save();
+    if (s.run.ended && !(await this.report())) await this.ctx.storage.setAlarm(Date.now() + this.retryMs());
   }
 
   /** After an account merge: a second run of the same puzzle goes, and reports nothing. */
@@ -213,7 +218,7 @@ export class DailyRun extends DurableObject<Env> {
     const { run } = s;
     const at = s.run.ended.at;
     try {
-      await player(this.env, run.playerId).recordDaily(run.result as DailyResult, countsForStreak(run), at);
+      await player(this.env, run.playerId).recordDaily(run.result as DailyResult, countsForStreak(run), at, run.id);
     } catch {
       console.error("daily_report_failed");
       return false;

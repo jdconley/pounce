@@ -689,8 +689,17 @@ export class Player extends DurableObject<Env> {
    * (`countsForStreak`); `endedAt`: when it ended, on the server's clock. Idempotent: a retried
    * report changes nothing.
    */
-  recordDaily(result: DailyResult, counts: boolean, endedAt: number): void {
+  async recordDaily(result: DailyResult, counts: boolean, endedAt: number, runId?: string): Promise<void> {
+    // A guest merged into an account: the result is the account's. Mid-merge: not yet (the run retries).
+    const to = this.getMeta("forward_to");
+    if (to !== null) {
+      await (this.env.PLAYERS.get(this.env.PLAYERS.idFromName(to)) as unknown as { recordDaily: Player["recordDaily"] }).recordDaily(result, counts, endedAt, runId);
+      return;
+    }
+    if (this.getMeta("retiring") !== null) throw new Error("player_moving");
     if (!this.live()) return;
+    // Only the run this player plays for that game and date: after a merge, the other one's result is no one's.
+    if (runId !== undefined && this.noteRun(result.date, result.game, runId, endedAt) !== runId) return;
     const me = this.getMeta("id") as string;
     if (!this.storeDaily(me, result)) return;
     this.pushResult("me", me, result);
@@ -745,11 +754,19 @@ export class Player extends DurableObject<Env> {
    */
   receiveDailyMany(from: string, face: { name: string; cat: number }, results: DailyResult[]): void {
     if (!this.live() || this.pairWith(from) === null) return;
-    for (const r of results) {
-      this.ctx.storage.sql.exec("DELETE FROM daily_results WHERE date = ? AND game = ? AND player_id = ?", r.date, r.game, from);
-      this.storeDaily(from, r);
-    }
+    // Everything kept of them goes first: a result the merge dropped leaves no trace.
+    this.ctx.storage.sql.exec("DELETE FROM daily_results WHERE player_id = ?", from);
+    this.ctx.storage.sql.exec("DELETE FROM daily_playing WHERE player_id = ?", from);
+    for (const r of results) this.storeDaily(from, r);
     this.saveFace(from, face);
+    if (this.ctx.getWebSockets().length > 0) {
+      const now = Date.now();
+      this.ctx.waitUntil(
+        this.board((this.dailyDay(now) as { day: Day }).day, now).then((board) => {
+          for (const ws of this.ctx.getWebSockets()) sendTo(ws, { t: "board", board });
+        }),
+      );
+    }
   }
 
   /** A connection's result, for this player's board. Only from someone this player is paired with. */
@@ -932,9 +949,10 @@ export class Player extends DurableObject<Env> {
   }
 
   /** A run was started (or resumed) for `game` on `date`; the first one noted stays. */
-  noteRun(date: Day, game: string, runId: string, startedAt: number): void {
-    if (!this.live()) return;
+  noteRun(date: Day, game: string, runId: string, startedAt: number): string | null {
+    if (!this.live()) return null;
     this.ctx.storage.sql.exec("INSERT OR IGNORE INTO daily_runs (date, game, run_id, started_at) VALUES (?, ?, ?, ?)", date, game, runId, startedAt);
+    return this.dailyRunFor(date, game);
   }
 
   /** Everything this player keeps of the Dish, for an account merge (`absorbDaily`). */
@@ -963,9 +981,12 @@ export class Player extends DurableObject<Env> {
    * Results, stats, connections' results and TV board tokens come along. Returns the runs to hand
    * to this player (`adopt`) and to delete (`drop`).
    */
-  absorbDaily(e: DailyExport): { adopt: string[]; drop: string[] } {
+  absorbDaily(e: DailyExport): { adopt: string[]; drop: string[]; tokens: string[] } {
     const { sql } = this.ctx.storage;
     const me = this.getMeta("id") ?? "";
+    // A retried merge re-applies the plan made the first time, and merges nothing twice.
+    const done = this.getMeta(`daily_absorbed:${e.me}`);
+    if (done !== null) return JSON.parse(done) as { adopt: string[]; drop: string[]; tokens: string[] };
     const mine = (date: string, game: string) =>
       sql.exec<{ result: string }>("SELECT result FROM daily_results WHERE date = ? AND game = ? AND player_id = ?", date, game, me).toArray()[0];
     const adopt: string[] = [];
@@ -991,6 +1012,7 @@ export class Player extends DurableObject<Env> {
       }
     }
     for (const { playerId, result } of e.results) {
+      if (playerId === me) continue;
       if (playerId !== e.me) {
         // A connection's result: the pair moves here too.
         sql.exec("INSERT OR IGNORE INTO daily_results (date, game, player_id, result) VALUES (?, ?, ?, ?)", result.date, result.game, playerId, JSON.stringify(result));
@@ -1013,7 +1035,9 @@ export class Player extends DurableObject<Env> {
         sql.exec("DELETE FROM daily_results WHERE date = ? AND game = ? AND player_id = ?", date, game, me);
       }
     }
-    for (const f of e.faces) sql.exec("INSERT OR IGNORE INTO daily_faces (player_id, name, cat) VALUES (?, ?, ?)", f.playerId, f.name, f.cat);
+    for (const f of e.faces) {
+      if (f.playerId !== me) sql.exec("INSERT OR IGNORE INTO daily_faces (player_id, name, cat) VALUES (?, ?, ?)", f.playerId, f.name, f.cat);
+    }
     const kept = new Map(sql.exec<{ game: string; stats: string }>("SELECT game, stats FROM daily_stats").toArray().map((r) => [r.game, JSON.parse(r.stats) as Stats]));
     for (const game of new Set([...kept.keys(), ...Object.keys(e.stats)])) {
       const merged = mergeStats(kept.get(game) ?? null, e.stats[game] ?? null, dropped.filter((r) => r.game === game));
@@ -1021,7 +1045,9 @@ export class Player extends DurableObject<Env> {
     }
     for (const t of e.tokens) sql.exec("INSERT OR REPLACE INTO board_tokens (hash, expires) VALUES (?, ?)", t.hash, t.expires);
     if (this.getMeta("daily_zone") === null && e.zone !== null) this.setMeta("daily_zone", e.zone);
-    return { adopt, drop };
+    const plan = { adopt, drop, tokens: e.tokens.map((t) => t.hash) };
+    this.setMeta(`daily_absorbed:${e.me}`, JSON.stringify(plan));
+    return plan;
   }
 
   /** After an account merge: each connection gets this player's results, in place of what it kept. */
@@ -1032,7 +1058,7 @@ export class Player extends DurableObject<Env> {
       .exec<{ result: string }>("SELECT result FROM daily_results WHERE player_id = ?", me)
       .toArray()
       .map((r) => JSON.parse(r.result) as DailyResult);
-    if (results.length === 0) return;
+    // Sent even with none: a connection drops whatever the merge dropped.
     const face = { name: this.getMeta("name") as string, cat: Number(this.getMeta("cat")) };
     for (const { partnerId } of this.pairList()) {
       const partner = this.env.PLAYERS.get(this.env.PLAYERS.idFromName(partnerId)) as unknown as { receiveDailyMany: Player["receiveDailyMany"] };
@@ -1388,7 +1414,6 @@ export class Player extends DurableObject<Env> {
       pairs: [],
       tableNames: Object.fromEntries(this.listTables().flatMap((t) => (t.name ? [[t.code, t.name]] : []))),
       ...(newerOnly.length > 0 ? { newerOnly } : {}),
-
     };
   }
 
