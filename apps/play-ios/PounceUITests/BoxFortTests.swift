@@ -185,7 +185,8 @@ final class BoxFortTests: XCTestCase {
                 Thread.sleep(forTimeInterval: 1.5)
                 save(prefix + "boxfort-playing")
                 while placeOne(app, n) { n += 1 }
-                XCTAssertTrue(el(app, "daily.end.place").waitForExistence(timeout: Live.t(15)))
+                // The end (its place on the board shows only when the run wasn't too fast for it).
+                XCTAssertTrue(el(app, "daily.end").waitForExistence(timeout: Live.t(15)))
                 Thread.sleep(forTimeInterval: 2)
                 save(prefix + "boxfort-end")
                 app.terminate()
