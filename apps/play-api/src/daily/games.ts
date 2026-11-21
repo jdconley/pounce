@@ -16,10 +16,10 @@ import type { Day } from "../streaks/clock";
  * "The contracts"). `test` is listed only with `DAILY_TEST` on (`dailyModule`).
  */
 export const DAILY_GAMES: Partial<Record<DailyGameId, DailyModule>> = {
-  "nine-lives": nineLives as DailyModule,
-  test: testGame as DailyModule,
   "cat-nap": catNap as DailyModule,
+  "nine-lives": nineLives as DailyModule,
   sniff: sniff as DailyModule,
+  test: testGame as DailyModule,
 };
 
 /** The module for `id`, or null for an unknown or unlisted game. */
