@@ -108,32 +108,13 @@ struct SniffPlayView: View {
 
     var body: some View {
         GeometryReader { geo in
-            let margin: CGFloat = 16
-            let keysWidth = min(geo.size.width - 2 * margin, 640)
-            let keysHeight = model.board.isOver ? 0 : SniffKeyboard.height(width: keysWidth)
-            let noteHeight: CGFloat = 30
-            let trailSize = CGSize(
-                width: min(geo.size.width - 2 * margin, 560),
-                height: max(0, geo.size.height - keysHeight - noteHeight - 24))
-            let showsAnswer = model.board.answer != nil && !model.board.isSolved
-            let tag = SniffTrail.tagWidth(
-                fitting: trailSize, rows: SniffBoard.tries + (showsAnswer ? 1 : 0), cap: sizeClass == .regular ? 96 : 72)
-
-            VStack(spacing: 8) {
-                Spacer(minLength: 0)
-                SniffTrail(board: model.board, tagWidth: tag, shake: model.shake)
-                Spacer(minLength: 0)
-                note.frame(height: noteHeight)
-                if !model.board.isOver {
-                    SniffKeyboard(
-                        marks: model.board.keyboard, width: keysWidth,
-                        enabled: model.playing && model.board.pending == nil,
-                        canSend: model.words != nil && model.board.draft.count == SniffBoard.letters,
-                        onLetter: model.type, onDelete: model.delete, onSend: model.send)
-                    .padding(.bottom, 8)
-                }
+            // A wide screen (an iPad on its side) puts the keyboard beside the trail, so the tags
+            // keep the whole height; anything else stacks them.
+            if geo.size.width > geo.size.height * 1.2 && geo.size.width >= 900 {
+                wide(geo.size)
+            } else {
+                tall(geo.size)
             }
-            .frame(maxWidth: .infinity)
         }
         .focusable()
         .focused($focused)
@@ -147,6 +128,64 @@ struct SniffPlayView: View {
         }
         .task { await model.load() }
         .onAppear { focused = true }
+    }
+
+    private static let margin: CGFloat = 16
+    private static let noteHeight: CGFloat = 30
+
+    private var showsAnswer: Bool { model.board.answer != nil && !model.board.isSolved }
+
+    private func tag(fitting size: CGSize) -> CGFloat {
+        SniffTrail.tagWidth(fitting: size, rows: SniffBoard.tries + (showsAnswer ? 1 : 0), cap: sizeClass == .regular ? 96 : 72)
+    }
+
+    private func keyboard(width: CGFloat) -> some View {
+        SniffKeyboard(
+            marks: model.board.keyboard, width: width,
+            enabled: model.playing && model.board.pending == nil,
+            canSend: model.words != nil && model.board.draft.count == SniffBoard.letters,
+            onLetter: model.type, onDelete: model.delete, onSend: model.send)
+    }
+
+    /// The trail over the keyboard.
+    private func tall(_ size: CGSize) -> some View {
+        let keysWidth = min(size.width - 2 * Self.margin, 640)
+        let keysHeight = model.board.isOver ? 0 : SniffKeyboard.height(width: keysWidth)
+        let trail = CGSize(
+            width: min(size.width - 2 * Self.margin, 560),
+            height: max(0, size.height - keysHeight - Self.noteHeight - 24))
+        return VStack(spacing: 8) {
+            Spacer(minLength: 0)
+            SniffTrail(board: model.board, tagWidth: tag(fitting: trail), shake: model.shake)
+            Spacer(minLength: 0)
+            note.frame(height: Self.noteHeight)
+            if !model.board.isOver {
+                keyboard(width: keysWidth).padding(.bottom, 8)
+            }
+        }
+        .frame(maxWidth: .infinity)
+    }
+
+    /// The trail on the left at full height; the note and the keyboard beside it.
+    private func wide(_ size: CGSize) -> some View {
+        let keysWidth = model.board.isOver ? 0 : min(size.width * 0.46, 600)
+        let trail = CGSize(
+            width: size.width - keysWidth - 3 * Self.margin,
+            height: size.height - 2 * Self.margin)
+        return HStack(spacing: Self.margin) {
+            SniffTrail(board: model.board, tagWidth: tag(fitting: trail), shake: model.shake)
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+            if !model.board.isOver {
+                VStack(spacing: 8) {
+                    Spacer(minLength: 0)
+                    note.frame(height: Self.noteHeight)
+                    keyboard(width: keysWidth)
+                    Spacer(minLength: 0)
+                }
+                .frame(width: keysWidth)
+            }
+        }
+        .padding(.horizontal, Self.margin)
     }
 
     @ViewBuilder private var note: some View {

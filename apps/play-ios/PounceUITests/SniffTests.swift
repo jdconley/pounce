@@ -129,3 +129,95 @@ final class SniffFrameTests: XCTestCase {
         }
     }
 }
+
+/// Screenshots of every screen Sniff touches (`AGENTS.md`), against a dev server with `DAILY=on`:
+/// Home and the Dish (where Sniff's treat and card now show), and Sniff itself: new, two guesses in
+/// with a word half typed, an unknown word, and the end. Skipped unless the runner sets
+/// `SNIFF_SHOTS_DIR` (`TEST_RUNNER_SNIFF_SHOTS_DIR`); `SNIFF_SHOTS_ONLY_SHELL=1` takes Home and the
+/// Dish alone (the "before" set, from a build without Sniff listed). An iPad takes each in portrait
+/// and landscape; an iPhone also takes the largest text size.
+@MainActor
+final class SniffShotTests: XCTestCase {
+    private static let big = ["-UIPreferredContentSizeCategoryName", "UICTContentSizeCategoryAccessibilityXXXL"]
+    private var env: [String: String] { ProcessInfo.processInfo.environment }
+    private var dir: String? { env["SNIFF_SHOTS_DIR"].flatMap { $0.isEmpty ? nil : $0 } }
+    private var pad: Bool { UIDevice.current.userInterfaceIdiom == .pad }
+
+    override func setUp() {
+        continueAfterFailure = true
+    }
+
+    private func save(_ name: String) {
+        guard let dir else { return }
+        let suffix = pad ? (XCUIDevice.shared.orientation.isLandscape ? "-landscape" : "-portrait") : ""
+        try? FileManager.default.createDirectory(atPath: dir, withIntermediateDirectories: true)
+        try? XCUIScreen.main.screenshot().pngRepresentation.write(to: URL(fileURLWithPath: dir).appendingPathComponent("\(name)\(suffix).png"))
+    }
+
+    private func launch(_ extra: [String]) -> XCUIApplication {
+        let app = XCUIApplication()
+        app.launchArguments = Live.arguments(speed: 1) + ["-uitest-reset", "-seed-people"] + extra
+        app.launchEnvironment["POUNCE_API_BASE_URL"] = Live.baseURL
+        app.launch()
+        return app
+    }
+
+    private func play(_ app: XCUIApplication, _ word: String, send: Bool = true) {
+        for letter in word { el(app, "sniff.key.\(letter)").tap() }
+        if send { el(app, "sniff.send").tap() }
+    }
+
+    func testShots() throws {
+        guard dir != nil else { throw XCTSkip("no SNIFF_SHOTS_DIR") }
+        let shellOnly = env["SNIFF_SHOTS_ONLY_SHELL"] == "1"
+        for orientation in pad ? [UIDeviceOrientation.portrait, .landscapeLeft] : [.portrait] {
+            XCUIDevice.shared.orientation = orientation
+            for big in pad ? [false] : [false, true] {
+                let text = big ? Self.big : []
+                let prefix = big ? "big-text-" : ""
+
+                var app = launch(text)
+                XCTAssertTrue(el(app, "screen-home").waitForExistence(timeout: Live.t(20)), "no Home")
+                Thread.sleep(forTimeInterval: 3)
+                save("\(prefix)home")
+                app.terminate()
+
+                app = launch(text + ["-show-dish"])
+                XCTAssertTrue(el(app, "screen-dish").waitForExistence(timeout: Live.t(20)), "no Dish")
+                Thread.sleep(forTimeInterval: 3)
+                save("\(prefix)dish")
+                app.terminate()
+                if shellOnly { continue }
+
+                app = launch(text)
+                let treat = el(app, "home.dish.sniff")
+                guard treat.waitForExistence(timeout: Live.t(25)) else { throw XCTSkip("no Sniff on \(Live.baseURL)") }
+                treat.tap()
+                XCTAssertTrue(el(app, "sniff.key.a").waitForExistence(timeout: Live.t(15)), "Sniff never came up")
+                Thread.sleep(forTimeInterval: 1.5)
+                save("\(prefix)sniff-new")
+                play(app, "crane")
+                Thread.sleep(forTimeInterval: 1.2)
+                play(app, "sloth")
+                Thread.sleep(forTimeInterval: 1.2)
+                play(app, "pud", send: false)
+                Thread.sleep(forTimeInterval: 1)
+                save("\(prefix)sniff-mid")
+                for _ in 0..<3 { el(app, "sniff.delete").tap() }
+                play(app, "zzzzz")
+                Thread.sleep(forTimeInterval: 0.5)
+                save("\(prefix)sniff-not-a-word")
+                for _ in 0..<5 { el(app, "sniff.delete").tap() }
+                for word in ["pudgy", "witch", "femur", "balky"] where !el(app, "daily.end").exists {
+                    play(app, word)
+                    Thread.sleep(forTimeInterval: 1.2)
+                }
+                XCTAssertTrue(el(app, "daily.end").waitForExistence(timeout: Live.t(15)), "the run never ended")
+                Thread.sleep(forTimeInterval: 2.5)
+                save("\(prefix)sniff-end")
+                app.terminate()
+            }
+        }
+        XCUIDevice.shared.orientation = .portrait
+    }
+}
