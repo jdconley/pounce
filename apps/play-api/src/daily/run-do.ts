@@ -86,12 +86,13 @@ export class DailyRun extends DurableObject<Env> {
     const answer = call(m, s);
     this.save();
     const moved = answer.ok && (s.run.seq !== before.seq || s.run.hints !== before.hints);
-    if (moved && s.run.ended === null) {
-      // The boards see how far it got; a TV watching sees the state itself.
-      this.tell({ k: "progress", game: s.run.game, date: s.run.date, progress: answer.progress }, now);
-      if (s.run.tv) this.tell({ k: "watch", game: s.run.game, puzzle: m.publicPuzzle(s.puzzle), state: m.publicState(s.puzzle, s.run.state) }, now);
-    }
-    if (wasOpen && s.run.ended !== null) this.ended(now);
+    const ending = wasOpen && s.run.ended !== null;
+    // The boards see how far it got.
+    if (moved && !ending) this.tell({ k: "progress", game: s.run.game, date: s.run.date, progress: answer.progress }, now);
+    // A TV watching sees the state itself, and the call that ends the run shows its final state
+    // before `watchEnd`, so the last picture is the finished puzzle.
+    if (s.run.tv && (moved || ending)) this.tell({ k: "watch", game: s.run.game, puzzle: m.publicPuzzle(s.puzzle), state: m.publicState(s.puzzle, s.run.state) }, now);
+    if (ending) this.ended(now);
     return answer;
   }
 
