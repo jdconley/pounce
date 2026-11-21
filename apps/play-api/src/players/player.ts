@@ -3,6 +3,7 @@ import { DurableObject } from "cloudflare:workers";
 import { addToStats, dish, emptyStats, rankGame, statsView, type BoardRow, type Dish, type GameBoard, type Stats } from "../daily/board";
 import { dailyDay, puzzleNumber, type DailyZone } from "../daily/days";
 import { listedGames } from "../daily/games";
+import { dailyOn } from "../env";
 import { endKitten } from "../kittens/kittens";
 import { forgetLinks } from "../links/links";
 import { deliverToPlayer, type PushProfile } from "../notify/deliver";
@@ -15,7 +16,7 @@ import { createTables, drawable, listTables, removeTable, upsertTable, type Tabl
 import { addDays, dayKey, FALLBACK_ZONE, type Day } from "../streaks/clock";
 import { leaveAllPairs } from "../streaks/pairs";
 import { mergePersonal, ownView, recordTurn, type OwnStreak, type Personal } from "../streaks/personal";
-import { notifyOn, quietStartMinutes, trophyOn } from "../streaks/profile";
+import { notifyOn, quietStartMinutes, streaksOn, trophyOn } from "../streaks/profile";
 
 import { IDENTITIES_NAME } from "./identities";
 import { mergeSection } from "./state";
@@ -625,10 +626,23 @@ export class Player extends DurableObject<Env> {
    */
   recordDaily(result: DailyResult, counts: boolean, endedAt: number): void {
     if (!this.live()) return;
-    void counts;
-    void endedAt;
     const me = this.getMeta("id") as string;
     if (!this.storeDaily(me, result)) return;
+    // It counts toward your own streak and every pair's, as a turn does (§5). Only with DAILY on.
+    if (counts && dailyOn(this.env)) {
+      const now = Date.now();
+      this.recordPersonalTurn(endedAt, now);
+      if (streaksOn(this.env)) {
+        for (const { pairId } of this.pairList()) {
+          const pair = this.env.PAIRS.get(this.env.PAIRS.idFromName(pairId));
+          this.ctx.waitUntil(
+            pair.reportDaily(me, endedAt, now).catch(() => {
+              console.error("daily_streak_report_failed");
+            }),
+          );
+        }
+      }
+    }
     const kept = this.ctx.storage.sql.exec<{ stats: string }>("SELECT stats FROM daily_stats WHERE game = ?", result.game).toArray()[0];
     const stats = addToStats(kept ? (JSON.parse(kept.stats) as Stats) : null, result);
     this.ctx.storage.sql.exec(

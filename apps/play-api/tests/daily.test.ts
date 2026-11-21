@@ -378,3 +378,48 @@ describe("the board", () => {
     expect(stats.games.test).toMatchObject({ played: 1, solved: 1, streak: 1, best: 1, bestTimeMs: result.timeMs, last30: [{ date: result.date, result }] });
   });
 });
+
+describe("streaks count daily runs", () => {
+  type Streaks = { own?: { count: number; kept: boolean }; pairs: { count: number; me: boolean; them: boolean }[] };
+  const streaksOf = async (mf: Miniflare, d: Device, p: Person) => (await (await call(mf, d, "GET", `/v1/me/streaks?person=${p.id}`)).json()) as Streaks;
+
+  test("your own streak counts a daily run", async () => {
+    const mf = await start();
+    const mom = await someone(mf, "Mom");
+    await solve(mf, mom.device, mom.person);
+    const list = await eventually(() => streaksOf(mf, mom.device, mom.person), (l) => l.own?.count === 1);
+    expect(list.own).toMatchObject({ count: 1, kept: true });
+  });
+
+  test("two connections who each end a daily run keep their shared day", async () => {
+    const mf = await start();
+    const mom = await someone(mf, "Mom");
+    const kid = await someone(mf, "Kid");
+    await pairUp(mf, mom.id, kid.id);
+    await solve(mf, mom.device, mom.person);
+    const half = await eventually(() => streaksOf(mf, kid.device, kid.person), (l) => l.pairs[0]?.them === true);
+    expect(half.pairs[0]).toMatchObject({ count: 0, me: false, them: true });
+    await solve(mf, kid.device, kid.person);
+    const kept = await eventually(() => streaksOf(mf, mom.device, mom.person), (l) => l.pairs[0]?.count === 1);
+    expect(kept.pairs[0]).toMatchObject({ count: 1, me: true, them: true });
+  });
+
+  test("a run given up with no moves doesn't count", async () => {
+    const mf = await start();
+    const mom = await someone(mf, "Mom");
+    const s = await begin(mf, mom.device, mom.person);
+    await call(mf, mom.device, "POST", `/v1/daily/runs/${s.run}/giveup?person=${mom.person.id}`);
+    await new Promise((resolve) => setTimeout(resolve, 300));
+    expect((await streaksOf(mf, mom.device, mom.person)).own).toMatchObject({ count: 0, kept: false });
+  });
+
+  test("DAILY off: reportDaily is never called", async () => {
+    const mf = await start({ daily: false });
+    const mom = await someone(mf, "Mom");
+    const kid = await someone(mf, "Kid");
+    await pairUp(mf, mom.id, kid.id);
+    for (const p of [mom, kid]) expect((await mf.dispatchFetch(`${BASE}/__test/record?player=${p.id}`)).status).toBe(204);
+    await new Promise((resolve) => setTimeout(resolve, 300));
+    expect(await streaksOf(mf, mom.device, mom.person)).toMatchObject({ own: { count: 0 }, pairs: [{ count: 0, me: false, them: false }] });
+  });
+});

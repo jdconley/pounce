@@ -24,7 +24,8 @@ export { BoardTokens } from "../src/daily/board-tokens";
  * puzzle, whole; `/__test/puzzle-warm?game=&date=` runs that puzzle's warm (its alarm's work) and says whether the
  * next date's puzzle is then made; `/__test/start?player=&game=&now=` starts a run at a made-up
  * time; `/__test/run?id=` reads a run as stored; `/__test/connect?a=&b=` pairs two players, as an
- * accepted invite does; `/__test/board?player=&date=&now=` reads a player's board at a made-up now.
+ * accepted invite does; `/__test/board?player=&date=&now=` reads a player's board at a made-up now;
+ * `/__test/record?player=` hands a player a counting result for today, as an ended run would.
  */
 export default {
   async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
@@ -51,6 +52,15 @@ export default {
     if (url.pathname === "/__test/board") {
       const playerId = url.searchParams.get("player") ?? "";
       return Response.json(await env.PLAYERS.get(env.PLAYERS.idFromName(playerId)).board(date, Number(url.searchParams.get("now"))));
+    }
+    if (url.pathname === "/__test/record") {
+      const now = Date.now();
+      const playerId = url.searchParams.get("player") ?? "";
+      const stub = env.PLAYERS.get(env.PLAYERS.idFromName(playerId));
+      const day = (await stub.dailyDay(now))?.day ?? "";
+      const result = { game: "test", date: day, number: 1, outcome: "solved", timeMs: 60_000, hints: 0, tooFast: false, progress: 1 } as const;
+      await stub.recordDaily(result, true, now);
+      return new Response(null, { status: 204 });
     }
     return worker.fetch(request, env, ctx);
   },

@@ -37,6 +37,11 @@ export type DayRow = {
   held: Record<string, boolean>;
   /** Some of that window had no shared table in play (or wasn't seen). */
   gap: Record<string, boolean>;
+  /**
+   * Of `turns`, how many were ended daily runs (daily games design §5). Absent on days saved
+   * before daily puzzles, and on days without one: read as none.
+   */
+  daily?: Record<string, number>;
   state: DayState;
   /** The kept-day effects (count, toy, milestone) have run. */
   applied: boolean;
@@ -273,9 +278,18 @@ function isIn(s: PairState, p: PairPerson, d: Day, now: number): boolean {
   return !r?.held[p.id] && now >= cutoffAt(d, zoneOf(s, p), p.quietStart);
 }
 
+const sum = (counts: Record<string, number>): number => Object.values(counts).reduce((a, b) => a + b, 0);
+
+/**
+ * Both are in (§6.1, and daily games design §5, "The rule, exactly"). A day with a table turn
+ * follows the table rules, the late move pass included, a daily run counting as that person's
+ * turn. A day whose only plays are daily runs needs both people to have ended one: no daily run
+ * ever waits on the other person, so the late move pass can't apply.
+ */
 function bothIn(s: PairState, d: Day, r: DayRow, now: number): boolean {
-  const turns = Object.values(r.turns).reduce((a, b) => a + b, 0);
-  return turns > 0 && s.people.every((p) => isIn(s, p, d, now));
+  const daily = r.daily ?? {};
+  if (sum(r.turns) - sum(daily) > 0) return s.people.every((p) => isIn(s, p, d, now));
+  return s.people.every((p) => (daily[p.id] ?? 0) > 0);
 }
 
 function paused(s: PairState, d: Day): boolean {
@@ -419,6 +433,22 @@ export function report(s: PairState, r: TableReport, now: number): void {
   }
   if (r.over) delete s.moves[r.code];
   else s.moves[r.code] = { holder: isMember(s, r.holder) ? r.holder : null, since: now };
+  advance(s, now);
+}
+
+/**
+ * A daily run a member ended at `at` (daily games design §5): it counts as their turn on the
+ * streak day holding `at` in their zone, unless that day has settled.
+ */
+export function reportDaily(s: PairState, playerId: string, at: number, now: number): void {
+  advance(s, now);
+  if (!isMember(s, playerId)) return;
+  const d = dayKey(at, zoneOf(s, personOf(s, playerId)));
+  if (d < s.firstDay || (s.lastSettled !== null && d <= s.lastSettled)) return;
+  addTurn(s, playerId, d);
+  const r = row(s, d);
+  r.daily = { ...r.daily, [playerId]: (r.daily?.[playerId] ?? 0) + 1 };
+  s.lastTurnAt = Math.max(s.lastTurnAt, at);
   advance(s, now);
 }
 
