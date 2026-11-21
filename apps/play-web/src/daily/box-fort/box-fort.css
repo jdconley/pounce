@@ -1,0 +1,192 @@
+/* Box Fort (src/daily/box-fort): the board fills its host's game area. Every animation moves
+   transform and opacity alone. */
+
+.bf {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.bf > * {
+  position: absolute;
+}
+
+.bf-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-family: var(--round);
+  color: var(--white);
+}
+
+.bf-points {
+  font-size: 30px;
+  font-weight: 900;
+  -webkit-text-stroke: 6px var(--ink);
+  paint-order: stroke fill;
+  font-variant-numeric: tabular-nums;
+}
+
+.bf-combo {
+  margin-left: auto;
+  padding: 4px 12px;
+  border: 2.5px solid var(--ink);
+  border-radius: 999px;
+  background: var(--yellow);
+  color: var(--ink);
+  font-size: 16px;
+  font-weight: 900;
+  white-space: nowrap;
+  animation: bf-pop 320ms var(--ease-spring);
+}
+
+.bf-set {
+  margin-left: auto;
+  font-size: 16px;
+  font-weight: 800;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
+.bf-combo + .bf-set {
+  margin-left: 0;
+}
+
+.bf-rug {
+  pointer-events: none;
+}
+
+.bf-layer {
+  left: 0;
+  top: 0;
+  pointer-events: none;
+}
+
+/* The landing spot: see-through as one layer, so its boxes don't show through each other. */
+.bf-ghost {
+  opacity: 0.45;
+}
+
+.bf-slot {
+  padding: 0;
+  margin: 0;
+  border: 0;
+  background: none;
+  cursor: grab;
+  touch-action: none;
+}
+
+.bf-slot:disabled {
+  cursor: default;
+}
+
+.bf-slot:focus-visible {
+  outline: 3px solid var(--yellow);
+  outline-offset: -3px;
+  border-radius: 12px;
+}
+
+.bf-tray-piece {
+  position: absolute;
+  line-height: 0;
+}
+
+.bf-tray-piece canvas {
+  display: block;
+}
+
+.bf-stuck {
+  opacity: 0.35;
+}
+
+.bf-held .bf-tray-piece {
+  opacity: 0;
+}
+
+.bf-lifted {
+  left: 0;
+  top: 0;
+  line-height: 0;
+  pointer-events: none;
+  will-change: transform;
+}
+
+.bf-lifted canvas {
+  display: none;
+}
+
+.bf-lifting[data-slot="0"] .bf-lifted-0,
+.bf-lifting[data-slot="1"] .bf-lifted-1,
+.bf-lifting[data-slot="2"] .bf-lifted-2 {
+  display: block;
+  animation: bf-lift 180ms var(--ease-spring);
+  transform-origin: 50% 100%;
+}
+
+.bf-gain {
+  left: 0;
+  top: 0;
+  opacity: 0;
+  pointer-events: none;
+  font-family: var(--round);
+  font-weight: 900;
+  color: var(--white);
+  -webkit-text-stroke: 5px var(--ink);
+  paint-order: stroke fill;
+  white-space: nowrap;
+}
+
+.bf-gain-combo {
+  color: var(--yellow);
+}
+
+.bf-stamp {
+  transform: translate(-50%, -50%) rotate(-8deg);
+  padding: 0.15em 0.45em;
+  border: 4px solid var(--ink);
+  border-radius: 0.3em;
+  background: var(--violet);
+  color: var(--white);
+  font-family: var(--round);
+  font-weight: 900;
+  white-space: nowrap;
+  -webkit-text-stroke: 5px var(--ink);
+  paint-order: stroke fill;
+  animation: bf-stamp 420ms var(--ease-spring);
+}
+
+.bf-stamp-full {
+  background: var(--magenta);
+  color: var(--yellow);
+}
+
+@keyframes bf-pop {
+  from {
+    transform: scale(0.4);
+  }
+}
+
+@keyframes bf-lift {
+  from {
+    transform: scale(0.5);
+  }
+}
+
+@keyframes bf-stamp {
+  from {
+    opacity: 0;
+    transform: translate(-50%, -50%) rotate(-8deg) scale(2);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .bf-combo,
+  .bf-stamp,
+  .bf-lifting canvas {
+    animation-duration: 1ms;
+  }
+}
