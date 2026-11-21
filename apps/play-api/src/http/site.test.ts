@@ -133,3 +133,26 @@ describe("robots.txt and the sitemap", () => {
     expect(off).not.toContain("a parent decides");
   });
 });
+
+describe("the Daily Dish on the help page and llms.txt", () => {
+  test("off: not a word of it; on: how to play each puzzle, in the browser and coming to the app", async () => {
+    const off = await supportPage().text();
+    expect(off).not.toMatch(/Daily Dish|Sniff|Nine Lives|Cat Nap|Box Fort|<!--/);
+    const on = await supportPage(true).text();
+    expect(on).toContain("<h2>The Daily Dish</h2>");
+    for (const name of ["Sniff:", "Nine Lives:", "Cat Nap:", "Box Fort:"]) expect(on, name).toContain(`<li>${name}`);
+    expect(on).toContain("They're coming to the iPhone app.");
+    expect(on).toContain("play the Daily Dish");
+    expect(on).not.toContain("<!--");
+    expect(on).not.toMatch(/\b(wordle|block blast|zoodoku|sudoku|nyt)\b/i);
+  });
+
+  test("llms.txt names the Dish only with DAILY on", async () => {
+    const off = await llmsTxt("https://play.conleychaos.com").text();
+    expect(off).not.toMatch(/Daily Dish|\/play\/daily/);
+    const on = await llmsTxt("https://play.conleychaos.com", true, true).text();
+    expect(on).toContain("The Daily Dish is four new puzzles every day");
+    expect(on).toContain("https://play.conleychaos.com/play/daily today and are coming to the iPhone app.");
+    expect(on).toContain("- [The Daily Dish](https://play.conleychaos.com/play/daily)");
+  });
+});
