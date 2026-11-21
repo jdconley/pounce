@@ -110,10 +110,14 @@ import Testing
 
     @Test func aDoubleTapSendsOnce() async {
         // Two performs read the same ready snapshot before either saved.
-        let fake = FakePounces()
+        let hold = Hold()
+        let fake = FakePounces(hold: hold)
         let s = snapshot()
         async let a = WidgetPounce.send(snapshot: s, pair: "pr_mia", service: fake, now: now, calendar: la)
-        async let b = WidgetPounce.send(snapshot: s, pair: "pr_mia", service: fake, now: now, calendar: la)
+        // The first tap's send is out and held there when the second tap comes.
+        await hold.arrivals(1)
+        let b = await WidgetPounce.send(snapshot: s, pair: "pr_mia", service: fake, now: now, calendar: la)
+        hold.open()
         let results = await [a.1, b.1]
         #expect(fake.calls.withLock { $0 }.count == 1)
         #expect(results.compactMap { $0 } == [.sent("pc_1")], "the other tap does nothing (and writes nothing)")

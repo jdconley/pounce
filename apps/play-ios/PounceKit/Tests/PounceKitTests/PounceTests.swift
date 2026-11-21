@@ -103,26 +103,78 @@ import Testing
     }
 }
 
+/// Holds requests until the test opens it: the test, not the wall clock, says when a reply comes.
+final class Hold: Sendable {
+    private struct State {
+        var open = false
+        var held: [CheckedContinuation<Void, Never>] = []
+        var arrived = 0
+        var watching: [(count: Int, k: CheckedContinuation<Void, Never>)] = []
+    }
+
+    private let state = Mutex(State())
+
+    /// The fake's side: counts the request in, then waits until `open()`.
+    func pass() async {
+        await withCheckedContinuation { (k: CheckedContinuation<Void, Never>) in
+            state.withLock { s in
+                s.arrived += 1
+                let arrived = s.arrived
+                s.watching.removeAll { w in
+                    guard w.count <= arrived else { return false }
+                    w.k.resume()
+                    return true
+                }
+                if s.open { k.resume() } else { s.held.append(k) }
+            }
+        }
+    }
+
+    /// Returns once `count` requests have reached the hold.
+    func arrivals(_ count: Int) async {
+        await withCheckedContinuation { (k: CheckedContinuation<Void, Never>) in
+            state.withLock { s in
+                if s.arrived >= count { k.resume() } else { s.watching.append((count, k)) }
+            }
+        }
+    }
+
+    /// Lets every held request, and every later one, through.
+    func open() {
+        state.withLock { s in
+            s.open = true
+            for k in s.held { k.resume() }
+            s.held = []
+        }
+    }
+}
+
 /// A scripted `PounceService`.
 final class FakePounces: PounceService, Sendable {
     let calls = Mutex<[String]>([])
     let answerResult: Mutex<Result<String?, APIError>>
     let sendResult: Mutex<Result<PounceSent, APIError>>
+    /// When set, each answer request waits there until the test opens it.
+    let hold: Hold?
 
-    init(answer: Result<String?, APIError> = .success(nil), send: Result<PounceSent, APIError> = .success(PounceSent(id: "pc_1", link: nil))) {
+    init(
+        answer: Result<String?, APIError> = .success(nil), send: Result<PounceSent, APIError> = .success(PounceSent(id: "pc_1", link: nil)),
+        hold: Hold? = nil
+    ) {
         answerResult = Mutex(answer)
         sendResult = Mutex(send)
+        self.hold = hold
     }
 
     func send(to pair: String?, target: PounceTarget, person: String?) async throws -> PounceSent {
         calls.withLock { $0.append("send \(pair ?? "link") \(target)") }
-        try await Task.sleep(for: .milliseconds(20))
+        await hold?.pass()
         return try sendResult.withLock { $0 }.get()
     }
 
     func answer(id: String, answer: PounceAnswer, choice: String?, link: String?, person: String?) async throws -> String? {
         calls.withLock { $0.append("answer \(id) \(answer.rawValue)") }
-        try await Task.sleep(for: .milliseconds(20))
+        await hold?.pass()
         return try answerResult.withLock { $0 }.get()
     }
 
@@ -213,21 +265,37 @@ final class FakePounces: PounceService, Sendable {
         async let a = store.answer(pending(.no))
         async let b = store.answer(pending(.no))
         let results = await [a, b]
-        #expect(results.contains(.done(code: nil)))
+        // The second tap waits on the first's request and hears how it ended.
+        #expect(results == [.done(code: nil), .done(code: nil)])
         #expect(fake.calls.withLock { $0 } == ["answer pc_1 no"])
     }
 
     /// Review fix: In a bit is in flight when Play replaces it; the reply to In a bit must not
-    /// drop Play, which then goes out too.
+    /// drop Play, which then goes out too, and Play's caller gets Play's table to open.
     @Test func aNewerAnswerWhileInFlightIsKept() async {
-        let fake = FakePounces(answer: .success(nil))
+        let hold = Hold()
+        let fake = FakePounces(answer: .success("GH2VD"), hold: hold)
         let store = PounceStore(service: fake, file: file())
         async let first = store.answer(pending(.later))
-        // In a bit is on disk first, then goes out: wait until its request is really in flight.
-        for _ in 0..<2_000 where fake.calls.withLock({ $0 }).isEmpty { try? await Task.sleep(for: .milliseconds(1)) }
-        let second = await store.answer(pending(.play))
-        _ = await first
-        #expect(second == .queued)
+        // In a bit is on disk, and its request is out and held there.
+        await hold.arrivals(1)
+        let second = Task { await store.answer(pending(.play)) }
+        // Play has replaced In a bit while In a bit's request is still out.
+        while store.pending != [pending(.play)] { await Task.yield() }
+        #expect(fake.calls.withLock { $0 } == ["answer pc_1 later"])
+        hold.open()
+        #expect(await second.value == .done(code: "GH2VD"))
+        #expect(await first == .done(code: "GH2VD"))
+        #expect(fake.calls.withLock { $0 } == ["answer pc_1 later", "answer pc_1 play"])
+        #expect(store.pending.isEmpty)
+    }
+
+    /// Play after In a bit's reply came back is a send of its own.
+    @Test func aNewerAnswerAfterTheReplyGoesOutOnItsOwn() async {
+        let fake = FakePounces(answer: .success("GH2VD"))
+        let store = PounceStore(service: fake, file: file())
+        #expect(await store.answer(pending(.later)) == .done(code: "GH2VD"))
+        #expect(await store.answer(pending(.play)) == .done(code: "GH2VD"))
         #expect(fake.calls.withLock { $0 } == ["answer pc_1 later", "answer pc_1 play"])
         #expect(store.pending.isEmpty)
     }
@@ -240,12 +308,15 @@ final class FakePounces: PounceService, Sendable {
     }
 
     @Test func aDoubleSendSendsOnce() async {
-        let fake = FakePounces()
+        let hold = Hold()
+        let fake = FakePounces(hold: hold)
         let store = PounceStore(service: fake, file: file())
         async let a = store.send(pair: "pr_x", target: .new, person: "me")
-        async let b = store.send(pair: "pr_x", target: .new, person: "me")
-        let results = await [a, b]
-        #expect(results.contains(.busy))
+        // The first send is out and held there when the second tap comes.
+        await hold.arrivals(1)
+        #expect(await store.send(pair: "pr_x", target: .new, person: "me") == .busy)
+        hold.open()
+        #expect(await a == .sent("pc_1"))
         #expect(fake.calls.withLock { $0 }.count == 1)
     }
 
