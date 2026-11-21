@@ -1,6 +1,6 @@
 import { afterEach, beforeAll, describe, expect, test } from "vitest";
 
-import { bundle, call, mint, worker } from "./play-helpers";
+import { BASE, bundle, call, mint, worker } from "./play-helpers";
 
 import type { Miniflare } from "miniflare";
 
@@ -36,5 +36,31 @@ describe("the DAILY flag", () => {
       const res = await call(mf, device, method, path);
       expect(res.status, `${method} ${path}`).toBe(404);
     }
+  });
+});
+
+describe("DailyPuzzle", () => {
+  const read = async (mf: Miniflare, game: string, date: string) =>
+    (await mf.dispatchFetch(`${BASE}/__test/puzzle?game=${game}&date=${date}`)).json();
+
+  test("the same game and date give the same puzzle from two isolates", async () => {
+    const [a, b] = [await start(), await start()];
+    const first = await read(a, "test", "2026-11-23");
+    expect(first).toEqual({ target: 4 });
+    expect(await read(b, "test", "2026-11-23")).toEqual(first);
+    expect(await read(a, "test", "2026-11-23")).toEqual(first);
+  });
+
+  test("different dates give different puzzles", async () => {
+    const mf = await start();
+    // The test game's puzzle is its level: Monday 4, Tuesday 5.
+    expect(await read(mf, "test", "2026-11-23")).toEqual({ target: 4 });
+    expect(await read(mf, "test", "2026-11-24")).toEqual({ target: 5 });
+  });
+
+  test("its alarm makes the next date's puzzle ahead of time", async () => {
+    const mf = await start();
+    const res = await mf.dispatchFetch(`${BASE}/__test/puzzle-warm?game=test&date=2026-11-23`);
+    expect(await res.json()).toEqual({ next: true });
   });
 });
