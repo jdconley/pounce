@@ -6,9 +6,10 @@
  */
 import { describe, expect, test } from "vitest";
 
+import { contiguous, dateRng, datesFrom, levelOf, oneCatPerPatch } from "../../../tests/cat-nap-helpers";
+
 import { countSolutions, grade } from "./logic";
 import { GRADES, makeNap, SIZES } from "./maker";
-import { contiguous, dateRng, datesFrom, levelOf, oneCatPerPatch } from "../../../tests/cat-nap-helpers";
 
 const DATES = datesFrom("2027-01-04", 365);
 

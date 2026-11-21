@@ -1,10 +1,10 @@
 import { describe, expect, test } from "vitest";
 
+import { contiguous, oneCatPerPatch } from "../../../tests/cat-nap-helpers";
 import { createRng } from "../../rules/rng";
 
 import { countSolutions } from "./logic";
 import { GRADES, growPatches, makeNap, placeCats, repair, SIZES } from "./maker";
-import { contiguous, oneCatPerPatch } from "../../../tests/cat-nap-helpers";
 
 import type { DayLevel } from "./contract";
 
