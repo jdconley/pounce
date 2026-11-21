@@ -12,6 +12,8 @@ import type { BoxFortPuzzle } from "./maker";
 
 const piece = (id: string, tint = 1): Piece => ({ id, tint, cells: shape(id).cells });
 const EMPTY = Array<number>(SIZE * SIZE).fill(0);
+/** Box Fort makes its day from the seed and level alone; the date and cycle key are unused. */
+const DAY = { date: "2027-01-04", key: [1, 2, 3, 4] as [number, number, number, number] };
 const dots = (): Piece[] => [piece("dot"), piece("dot"), piece("dot")];
 
 describe("parseMove", () => {
@@ -38,7 +40,7 @@ describe("parseMove", () => {
 });
 
 describe("the puzzle a client sees", () => {
-  const p = boxFort.make(createRng([5, 6, 7, 8]), 5);
+  const p = boxFort.make(createRng([5, 6, 7, 8]), 5, DAY);
 
   test("publicPuzzle is the rug, the set count and the first set, nothing more", () => {
     expect(boxFort.publicPuzzle(p)).toEqual({ rug: p.rug, sets: p.sets.length, pieces: p.sets[0] });
@@ -63,7 +65,7 @@ describe("the puzzle a client sees", () => {
   test.each([1, 2, 3, 4, 5, 6, 7] as DayLevel[])(
     "level %s: no future set ever leaks, and each set comes after the third piece",
     (level) => {
-      const day = boxFort.make(createRng([level, 2, 3, 4]), level);
+      const day = boxFort.make(createRng([level, 2, 3, 4]), level, DAY);
       let s = boxFort.init(day);
       let placedInSet = 0;
       for (;;) {
@@ -167,7 +169,7 @@ describe("apply", () => {
 });
 
 describe("the result and the board", () => {
-  const p = boxFort.make(createRng([1, 1, 1, 1]), 1);
+  const p = boxFort.make(createRng([1, 1, 1, 1]), 1, DAY);
 
   test("result is the server's points, no hints, the outcome given", () => {
     const s = { ...boxFort.init(p), points: 321 };

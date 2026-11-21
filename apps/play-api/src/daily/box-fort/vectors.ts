@@ -88,6 +88,8 @@ const pawsB = (tint: number) => piece("paws-b", tint, ".#/#.");
 const ellA = (tint: number) => piece("ell-a", tint, "#./#./##");
 
 const EMPTY = Array<number>(SIZE * SIZE).fill(0);
+/** Box Fort makes its day from the seed and level alone; the date and cycle key are unused. */
+const DAY = { date: "2027-01-04", key: [1, 2, 3, 4] as [number, number, number, number] };
 
 /** Seeds for the day vectors: one made puzzle per level, played greedily. */
 const DAY_SEEDS: Record<DayLevel, [number, number, number, number]> = {
@@ -214,7 +216,7 @@ export function buildVectors(): VectorFile[] {
     ),
   ];
   for (const level of [1, 2, 3, 4, 5, 6, 7] as DayLevel[]) {
-    files.push(record(`day-${level}`, boxFort.make(createRng(DAY_SEEDS[level]), level), "greedy"));
+    files.push(record(`day-${level}`, boxFort.make(createRng(DAY_SEEDS[level]), level, DAY), "greedy"));
   }
   return files;
 }
