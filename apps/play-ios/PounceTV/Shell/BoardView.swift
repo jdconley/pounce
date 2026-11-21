@@ -156,12 +156,14 @@ private struct Games: View {
     let games: [DailyGameBoard]
     let cheer: TVBoardState.Cheer?
 
-    /// One game fills the space, two sit side by side, three or four in a 2 x 2 grid. Each card
-    /// shows up to six people, its rows as tall as its height allows.
+    /// One game fills the space, two sit side by side, three or four in a 2 x 2 grid, five or six (a
+    /// test server's extra game) in 2 x 3. Each card shows up to six people, its rows as tall as its
+    /// height allows.
     var body: some View {
         GeometryReader { g in
-            let columns = games.count <= 1 ? 1 : 2
-            let rows = games.count <= 2 ? 1 : 2
+            let shown = Array(games.prefix(6))
+            let columns = shown.count <= 1 ? 1 : 2
+            let rows = max(1, (shown.count + columns - 1) / columns)
             let gap: CGFloat = 32
             let w = (g.size.width - gap * CGFloat(columns - 1)) / CGFloat(columns)
             let h = (g.size.height - gap * CGFloat(rows - 1)) / CGFloat(rows)
@@ -172,8 +174,8 @@ private struct Games: View {
                     HStack(spacing: gap) {
                         ForEach(0..<columns, id: \.self) { c in
                             let i = r * columns + c
-                            if i < games.count {
-                                GameCard(game: games[i], cheer: cheer, rowHeight: rowH)
+                            if i < shown.count {
+                                GameCard(game: shown[i], cheer: cheer, rowHeight: rowH)
                                     .frame(width: w, height: h)
                             } else {
                                 Color.clear.frame(width: w, height: h)

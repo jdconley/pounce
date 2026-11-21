@@ -203,7 +203,8 @@ img.tv-rank.playing {
   font-size: calc(var(--u) * 48);
 }
 
-/* One card per game: one fills the height, two side by side, three or four in a 2 x 2 grid. */
+/* One card per game: one fills the height, two side by side, three or four in a 2 x 2 grid, five or
+   six (a test server's extra game) in 2 x 3. */
 .tv-board-games {
   display: grid;
   gap: calc(var(--u) * 36);
@@ -223,6 +224,11 @@ img.tv-rank.playing {
 .tv-board-games.n4 {
   grid-template-columns: 1fr 1fr;
   grid-template-rows: 1fr 1fr;
+}
+
+.tv-board-games.n5 {
+  grid-template-columns: 1fr 1fr;
+  grid-template-rows: 1fr 1fr 1fr;
 }
 
 .tv-board-game {
@@ -520,9 +526,12 @@ img.tv-rank.playing {
   flex: 1;
 }
 
+/* The game's watch view gets the whole stage as a box of known size: its root fills it (width and
+   height 100%, as in the Dish), or sits centred if it's smaller. */
 .tv-watch-stage {
   display: grid;
   flex: 1;
+  grid-template: minmax(0, 1fr) / minmax(0, 1fr);
   place-items: center;
   min-height: 0;
 }

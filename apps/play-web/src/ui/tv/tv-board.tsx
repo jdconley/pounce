@@ -122,7 +122,7 @@ export function TvBoard(props: { screen: BoardScreen; connecting: boolean }) {
         <p class="tv-dish-day">{board ? boardDay(board.date) : " "}</p>
         <Dish board={board} cheer={cheer} connecting={props.connecting} />
       </aside>
-      <div class={`tv-board-games n${Math.max(1, Math.min(games.length, 4))}`}>
+      <div class={`tv-board-games n${Math.max(1, Math.min(games.length, 5))}`}>
         {games.map((g) => (
           <GameCard key={g.game} game={g} cheer={cheer} max={ROWS_SHOWN} />
         ))}

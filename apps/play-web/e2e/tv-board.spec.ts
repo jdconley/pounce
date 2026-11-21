@@ -2,7 +2,8 @@ import { mkdirSync } from "node:fs";
 
 import { expect, test, type Page } from "@playwright/test";
 
-import { dailyPhone, type DailyPhone } from "./daily-phone";
+import { dailyPhone, firstMove, type DailyPhone } from "./daily-phone";
+import { closeAll, newPlayer } from "./helpers";
 import { openTv, shownLink, tvPage, TV_VIEWPORT, type Tv } from "./tv-helpers";
 
 import type { BoardAnswer } from "@pounce/play-api/daily/messages";
@@ -183,9 +184,84 @@ test.describe("Tonight's board on the TV", () => {
     await expect(board(tv.page)).toBeHidden();
     await tv.context.close();
   });
+  test("a phone's Dish puts the board on the TV, shows it's on, and its run lands live", async ({ browser }) => {
+    const tv = await openTv(browser);
+    const jo = await newPlayer(browser, "Jo");
+    const { page } = jo;
+    await page.getByRole("button", { name: "Open the Dish" }).click();
+    const tip = page.getByRole("button", { name: "Dismiss tip" });
+    if (await tip.isVisible()) await tip.click();
+    await expect(page.getByRole("button", { name: "Unlink" })).toHaveCount(0);
+    await page.getByRole("button", { name: "Show board on TV" }).click();
+    await boardPoster(tv.page).click();
+    const { code } = await shownLink(tv, ".tv-board-link");
+    await page.getByLabel("TV code").fill(code);
+    await page.getByRole("button", { name: "Show", exact: true }).click();
+    await expect(page.getByText("On the TV")).toBeVisible();
+    await expect(board(tv.page)).toBeVisible();
+    // The phone hears the TV come (`tvs`): Unlink appears on its Dish.
+    await expect(page.getByRole("button", { name: "Unlink" })).toBeVisible();
+    // Jo finishes a run on the phone; the TV's board cheers it as it lands.
+    await page.goto("/play/daily/test");
+    const step = page.getByRole("button", { name: "Step" });
+    await expect(page.getByTestId("test-count")).toBeVisible();
+    while (await step.isEnabled()) await step.click();
+    await expect(row(tv.page, "test")).toHaveClass(/cheer/);
+    await expect(row(tv.page, "test").locator(".tv-row-result")).toHaveText(/^\d+:\d{2}$/);
+    await closeAll(tv.context, jo.context);
+  });
+
+  for (const [game, title] of [
+    ["sniff", "Sniff"],
+    ["nine-lives", "Nine Lives"],
+    ["cat-nap", "Cat Nap"],
+    ["box-fort", "Box Fort"],
+  ] as const) {
+    test(`watching ${title}: the card, its own view live at 1080p, and its end`, async ({ browser }) => {
+      const tv = await openTv(browser);
+      const mom = await dailyPhone("Mom", 3);
+      await linked(tv, mom);
+      expect((await mom.board()).tvs, "the phone's board counts the TV").toBe(1);
+      const begun = await mom.begin(game);
+      expect(await mom.showOnTv(begun.run, true)).toBe(204);
+      await expect(tv.page.locator(".tv-watch-card")).toContainText(`Mom is playing ${title}. Spoilers.`);
+      await expect(tv.page.getByRole("button", { name: "Not now" })).toBeFocused();
+      await tv.page.keyboard.press("ArrowLeft");
+      await tv.page.keyboard.press("Enter");
+      const stage = tv.page.locator(`.tv-watch[data-game="${game}"] .tv-watch-stage`);
+      // The game's own view (the registry's, in its own chunk), not the placeholder.
+      await expect(stage.locator(".tv-watch-placeholder")).toHaveCount(0);
+      await expect.poll(() => stage.evaluate((el) => el.querySelectorAll("*").length)).toBeGreaterThan(3);
+      const before = await stage.innerHTML();
+      const sent = await mom.send(begun.run, begun.seq, [firstMove(game, begun)]);
+      expect(sent.ok).toBe(true);
+      // The next frame redraws it.
+      await expect.poll(() => stage.innerHTML()).not.toBe(before);
+      await shot(tv.page, `watch-${game}`);
+      // It fits 1080p: nothing past the stage (but a few pixels of a tilted tag) or off the screen.
+      const fits = await stage.evaluate((el) => {
+        const box = el.getBoundingClientRect();
+        const slack = 6;
+        const out = [...el.querySelectorAll("*")]
+          .map((d) => ({ d, r: d.getBoundingClientRect() }))
+          .filter(({ r }) => r.width > 0 && (r.left < box.left - slack || r.right > box.right + slack || r.top < box.top - slack || r.bottom > box.bottom + slack || r.top < 0 || r.bottom > innerHeight));
+        return out.map(({ d, r }) => `${d.tagName}.${d.getAttribute("class")}:${Math.round(r.left)},${Math.round(r.top)},${Math.round(r.right)},${Math.round(r.bottom)}`).slice(0, 5);
+      });
+      expect(fits, `${title}'s watch view fits its stage at 1080p`).toEqual([]);
+      // The run ends (a solve, or given up here): `watchEnd`, its result over the last frame, then the
+      // board. (A run this quick is `tooFast`, so it stays off the board.)
+      if (!sent.result) expect(await mom.giveUp(begun.run)).toBe(200);
+      await expect(tv.page.locator(".tv-watch-ended")).toContainText(sent.result ? /\S/ : "Gave up");
+      await expect(board(tv.page)).toBeVisible({ timeout: 10_000 });
+      await tv.context.close();
+    });
+  }
 });
 
-/** A family of six across the four games, everyone done in some and playing in others. */
+/**
+ * A family of six across the four games, everyone done in some and playing in others: Dad and Kid
+ * tie for second in Sniff, Mom has two crowns, and the numbers run big (12,840 points, an hour).
+ */
 function familyBoard(): BoardAnswer {
   const people = [
     ["me", "Mom", 3],
@@ -208,7 +284,7 @@ function familyBoard(): BoardAnswer {
     ...(game === "sniff" ? { guesses: 3 + (i % 4) } : {}),
     ...(game === "box-fort" ? { points: 2400 - i * 310 } : {}),
   });
-  return {
+  const answer: BoardAnswer = {
     date: "2026-11-23",
     games: games.map((game, g) => ({
       game,
@@ -220,6 +296,11 @@ function familyBoard(): BoardAnswer {
     dish: { rows: people.map(([player, name, cat], i) => ({ player, name, cat, rank: i + 1, points: 16 - i * 3, crowns: i === 0 ? ["sniff", "nine-lives"] : [], ended: 4 })) },
     tvs: 1,
   };
+  const [sniff, nineLives, , boxFort] = answer.games;
+  sniff!.rows[2] = { ...sniff!.rows[2]!, rank: 2, result: { ...sniff!.rows[2]!.result!, guesses: sniff!.rows[1]!.result!.guesses } };
+  nineLives!.rows[1] = { ...nineLives!.rows[1]!, result: { ...nineLives!.rows[1]!.result!, timeMs: 3_725_000 } };
+  boxFort!.rows[0] = { ...boxFort!.rows[0]!, result: { ...boxFort!.rows[0]!.result!, points: 12_840 } };
+  return answer;
 }
 
 test("a whole family fits each game's board, nothing under 28 at 1080p", async ({ browser }) => {
@@ -244,25 +325,30 @@ test("a whole family fits each game's board, nothing under 28 at 1080p", async (
     }));
     expect(size.sh <= size.ch + 1 && size.sw <= size.cw + 1, `the card holds six rows: ${JSON.stringify(size)}`).toBe(true);
   }
+  // Ties share a rank; the crowns and the big numbers show, whole.
+  await expect(page.locator('.tv-board-game[data-game="sniff"] .tv-rank')).toHaveText(["1", "2", "2", "4", "5", "6"]);
+  await expect(page.locator(".tv-dish-crowns img")).toHaveCount(2);
+  await expect(page.locator('.tv-board-game[data-game="box-fort"] .tv-row-result').first()).toHaveText("12,840");
+  await expect(page.locator('.tv-board-game[data-game="nine-lives"] .tv-row-result').nth(1)).toHaveText("1:02:05");
   const smallest = await page.locator(".tv-board-row .tv-row-name, .tv-board-row .tv-row-result, .tv-board-row .tv-rank").evaluateAll((els) => Math.min(...els.map((e) => parseFloat(getComputedStyle(e).fontSize))));
   expect(smallest, "the smallest row text, px at 1080p").toBeGreaterThanOrEqual(28);
   await shot(page, "board-family");
   await context.close();
 });
 
-test("a game whose watch view hasn't landed shows its name while someone plays", async ({ browser }) => {
+test("a game this build has no watch view for shows a placeholder while someone plays", async ({ browser }) => {
   const context = await browser.newContext({ viewport: TV_VIEWPORT, isMobile: false, hasTouch: false });
   await context.addInitScript(() => localStorage.setItem("pounce.tv.board", JSON.stringify({ token: "F".repeat(22), until: Date.now() + 86_400_000 })));
   await context.routeWebSocket(/\/v1\/daily\/board\/ws/, (ws) => {
     ws.send(JSON.stringify({ t: "board", board: familyBoard() }));
-    ws.send(JSON.stringify({ t: "watchOffer", player: "pr_mom", name: "Mom", cat: 3, game: "sniff" }));
-    ws.send(JSON.stringify({ t: "watch", player: "pr_mom", game: "sniff", puzzle: {}, state: {} }));
+    ws.send(JSON.stringify({ t: "watchOffer", player: "pr_mom", name: "Mom", cat: 3, game: "yarn-ball" }));
+    ws.send(JSON.stringify({ t: "watch", player: "pr_mom", game: "yarn-ball", puzzle: {}, state: {} }));
   });
   const page = await tvPage(context);
   await expect(page.getByRole("button", { name: "Not now" })).toBeFocused();
   await page.keyboard.press("ArrowLeft");
   await page.keyboard.press("Enter");
-  const watching = page.locator('.tv-watch[data-game="sniff"]');
-  await expect(watching.locator(".tv-watch-placeholder")).toContainText("Sniff");
+  const watching = page.locator('.tv-watch[data-game="yarn-ball"]');
+  await expect(watching.locator(".tv-watch-placeholder")).toBeVisible();
   await context.close();
 });

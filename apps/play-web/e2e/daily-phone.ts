@@ -1,8 +1,13 @@
 import { randomBytes, randomUUID } from "node:crypto";
 
 import { expect } from "@playwright/test";
+import { greedyMove } from "@pounce/play-api/daily/box-fort/greedy";
 
 import { BASE } from "../playwright.config";
+
+import type { BoxFortPublicState } from "@pounce/play-api/daily/box-fort/module";
+import type { BoardAnswer } from "@pounce/play-api/daily/messages";
+import type { DailyResult } from "@pounce/play-api/daily/module";
 
 /**
  * A phone playing the Daily Dish, over plain HTTP (docs/daily-protocol.md): a device of its own,
@@ -20,7 +25,41 @@ export type DailyPhone = {
   start(): Promise<{ run: string; target: number }>;
   moves(run: string, from: number, to: number): Promise<{ ok: boolean; result: unknown }>;
   showOnTv(run: string, on: boolean): Promise<number>;
+  /** Starts today's `game`: its run, public puzzle and public state. */
+  begin(game: string): Promise<Begun>;
+  /** One batch of the game's own moves from `from`, as the server answers it. */
+  send(run: string, from: number, moves: unknown[]): Promise<{ ok: boolean; seq: number; result: DailyResult | null }>;
+  giveUp(run: string): Promise<number>;
+  /** `GET /v1/daily/board`: tonight's board as this person sees it, `tvs` included. */
+  board(): Promise<BoardAnswer>;
 };
+
+export type Begun = { run: string; puzzle: unknown; state: unknown; seq: number };
+
+/**
+ * A first move each daily game accepts, from its start: Sniff's guess, a digit in Nine Lives' first
+ * open cell (a clash is legal), an x on Cat Nap's first cell, and Box Fort's greedy placement.
+ */
+export function firstMove(game: string, begun: Begun): unknown {
+  switch (game) {
+    case "sniff":
+      return { k: "guess", word: "large" };
+    case "nine-lives": {
+      const givens = (begun.puzzle as { givens: number[] }).givens;
+      return { k: "set", i: givens.indexOf(0), d: 1 };
+    }
+    case "cat-nap":
+      return { k: "mark", cells: [0], to: "x" };
+    case "box-fort": {
+      const s = begun.state as BoxFortPublicState;
+      const move = greedyMove(s.rug, s.pieces, s.placed);
+      if (!move) throw new Error("no Box Fort placement");
+      return move;
+    }
+    default:
+      throw new Error(`no first move for ${game}`);
+  }
+}
 
 let address = 0;
 
@@ -61,5 +100,21 @@ export async function dailyPhone(name: string, cat = 3): Promise<DailyPhone> {
       return (await res.json()) as { ok: boolean; result: unknown };
     },
     showOnTv: async (run, on) => (await call("PUT", `/v1/daily/runs/${run}/tv${q}`, { on })).status,
+    async begin(game) {
+      const res = await call("POST", `/v1/daily/${game}/start${q}`);
+      expect(res.status, `${game} is on the server`).toBe(200);
+      return (await res.json()) as Begun;
+    },
+    async send(run, from, moves) {
+      const res = await call("POST", `/v1/daily/runs/${run}/moves${q}`, { from, moves });
+      expect(res.status).toBe(200);
+      return (await res.json()) as { ok: boolean; seq: number; result: DailyResult | null };
+    },
+    giveUp: async (run) => (await call("POST", `/v1/daily/runs/${run}/giveup${q}`)).status,
+    async board() {
+      const res = await call("GET", `/v1/daily/board${q}`);
+      expect(res.status).toBe(200);
+      return (await res.json()) as BoardAnswer;
+    },
   };
 }
