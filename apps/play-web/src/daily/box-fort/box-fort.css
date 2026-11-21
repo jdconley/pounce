@@ -56,6 +56,27 @@
   margin-left: 0;
 }
 
+/* A TV's watch view, read from the couch: the score row is --bf-head tall (the layout's
+   watchHeader, which grows with the stage), and its text keeps the phone's shares of the row. */
+.bf-watch .bf-header {
+  gap: calc(var(--bf-head) * 0.2);
+}
+
+.bf-watch .bf-points {
+  font-size: calc(var(--bf-head) * 0.62);
+  -webkit-text-stroke-width: calc(var(--bf-head) * 0.125);
+}
+
+.bf-watch .bf-combo,
+.bf-watch .bf-set {
+  font-size: calc(var(--bf-head) * 0.34);
+}
+
+.bf-watch .bf-combo {
+  padding: 0.25em 0.75em;
+  border-width: calc(var(--bf-head) * 0.05);
+}
+
 .bf-rug {
   pointer-events: none;
 }

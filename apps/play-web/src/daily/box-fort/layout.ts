@@ -28,18 +28,27 @@ export const LIFT = 1.1;
 export const FRINGE = 0.5;
 const GUTTER = 16;
 const GAP = 12;
-const HEADER = 48;
+/** The score row's height on a phone. */
+export const HEADER = 48;
 const SLOT_PAD = 10;
 
-export function boxFortLayout(width: number, height: number): BoxFortLayout {
+/**
+ * The score row's height for a TV's watch view: a share of the stage's shorter side, so the score
+ * reads from the couch on a 1080p stage and shrinks with a smaller box (never below a phone's).
+ * The same numbers as `BoxFortLayout.watchHeader` (PounceKit).
+ */
+export const watchHeader = (width: number, height: number): number => Math.min(128, Math.max(HEADER, 0.12 * Math.min(width, height)));
+
+/** The layout for a `width` by `height` space, with a score row `header` tall. */
+export function boxFortLayout(width: number, height: number, header = HEADER): BoxFortLayout {
   const sideTray = width > height * 1.15;
   const cell = Math.max(
     1,
     sideTray
       ? // Room under the rug for the finger: a piece going on the bottom row floats above a finger
         // LIFT spots below the rug (the stacked layout's tray gives it that room).
-        Math.min(MAX_CELL, (height - HEADER - 2 * GAP) / (8 + FRINGE + LIFT), (width - 2 * GUTTER - GAP - 2 * SLOT_PAD) / (8 + 2 * FRINGE + 5 * TRAY_SCALE))
-      : Math.min(MAX_CELL, (width - 2 * GUTTER) / 8, (height - HEADER - 3 * GAP - 2 * SLOT_PAD) / (8 + 2 * FRINGE + 5 * TRAY_SCALE)),
+        Math.min(MAX_CELL, (height - header - 2 * GAP) / (8 + FRINGE + LIFT), (width - 2 * GUTTER - GAP - 2 * SLOT_PAD) / (8 + 2 * FRINGE + 5 * TRAY_SCALE))
+      : Math.min(MAX_CELL, (width - 2 * GUTTER) / 8, (height - header - 3 * GAP - 2 * SLOT_PAD) / (8 + 2 * FRINGE + 5 * TRAY_SCALE)),
   );
   const side = 8 * cell;
   const depth = 5 * cell * TRAY_SCALE + 2 * SLOT_PAD;
@@ -47,7 +56,7 @@ export function boxFortLayout(width: number, height: number): BoxFortLayout {
   if (sideTray) {
     const total = side + 2 * fringe + GAP + depth;
     const left = (width - total) / 2;
-    const top = HEADER + GAP + fringe + Math.max(0, (height - HEADER - GAP - fringe - side - LIFT * cell) / 2);
+    const top = header + GAP + fringe + Math.max(0, (height - header - GAP - fringe - side - LIFT * cell) / 2);
     const rug = { x: left + fringe, y: top, w: side, h: side };
     return {
       width,
@@ -55,22 +64,22 @@ export function boxFortLayout(width: number, height: number): BoxFortLayout {
       cell,
       trayCell: cell * TRAY_SCALE,
       sideTray,
-      header: { x: left, y: 0, w: total, h: HEADER },
+      header: { x: left, y: 0, w: total, h: header },
       rug,
       slots: [0, 1, 2].map((i) => ({ x: rug.x + side + fringe + GAP, y: top + (i * side) / 3, w: depth, h: side / 3 })),
     };
   }
-  const total = HEADER + GAP + fringe + side + fringe + GAP + depth;
+  const total = header + GAP + fringe + side + fringe + GAP + depth;
   const top = Math.max(0, (height - total) / 2);
   const left = (width - side) / 2;
-  const rug = { x: left, y: top + HEADER + GAP + fringe, w: side, h: side };
+  const rug = { x: left, y: top + header + GAP + fringe, w: side, h: side };
   return {
     width,
     height,
     cell,
     trayCell: cell * TRAY_SCALE,
     sideTray,
-    header: { x: left, y: top, w: side, h: HEADER },
+    header: { x: left, y: top, w: side, h: header },
     rug,
     slots: [0, 1, 2].map((i) => ({ x: left + (i * side) / 3, y: rug.y + side + fringe + GAP, w: side / 3, h: depth })),
   };

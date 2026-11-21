@@ -6,6 +6,7 @@
  */
 import { useRef } from "preact/hooks";
 
+import { watchHeader } from "./layout";
 import { Header, Rug, Stamp, TrayPiece, at, useLayout } from "./parts";
 
 import type { DailyWatchView } from "../host";
@@ -13,9 +14,10 @@ import type { BoxFortPublicPuzzle, BoxFortPublicState } from "@pounce/play-api/d
 
 export function BoxFortWatch({ state }: { state: BoxFortPublicState }) {
   const root = useRef<HTMLDivElement>(null);
-  const layout = useLayout(root);
+  // A TV is read from the couch: the score row grows with the stage, and its text with the row.
+  const layout = useLayout(root, watchHeader);
   return (
-    <div class="bf bf-watch" ref={root} aria-label={`Box Fort, ${state.points} points`}>
+    <div class="bf bf-watch" ref={root} style={layout ? { "--bf-head": `${layout.header.h}px` } : undefined} aria-label={`Box Fort, ${state.points} points`}>
       {layout && (
         <>
           <Header state={state} layout={layout} />

@@ -150,7 +150,7 @@ final class BoxFortTests: XCTestCase {
             XCTAssertLessThan(placements, 120, "the run never ended")
         }
         XCTAssertTrue(el(app, "daily.end").waitForExistence(timeout: Live.t(15)), "the run never ended")
-        XCTAssertEqual(el(app, "daily.end.headline").label, "Fort built")
+        XCTAssertEqual(el(app, "daily.end.headline").label, "Fort done")
         XCTAssertTrue(el(app, "daily.end.result").label.contains("points"), "no points: \(el(app, "daily.end.result").label)")
         XCTAssertGreaterThan(placements, 2)
     }
