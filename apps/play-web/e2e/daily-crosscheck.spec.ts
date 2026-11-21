@@ -3,12 +3,18 @@ import { readFileSync } from "node:fs";
 import { expect, test, type Page } from "@playwright/test";
 
 import { closeAll, newPlayer } from "./helpers";
+import { openTv } from "./tv-helpers";
 
 /**
  * The Daily Dish cross-platform check, browser half. Skipped unless `CROSSCHECK_PLAN` names a plan
  * (the harness writes it from the server's secret and the date): for each game, one fixed move
  * list. This plays that list through the page's own controls, paced past the game's floor, and
  * the harness compares what the server answered with the iPhone's run of the same list.
+ *
+ * With `CROSSCHECK_TV=1`, the browser TV instead: it opens Tonight's board's link and waits; the
+ * harness (`api.mjs tv`) links it and plays each game with Show on TV on. This presses Watch on
+ * each offer and stays on the run to its end, and the proxy records every frame the TV is sent.
+ * `TV_SHOTS_DIR` keeps a picture of each run's end.
  */
 type Plan = { game: string; paceMs: number; moves: Record<string, unknown>[] };
 const file = process.env.CROSSCHECK_PLAN;
@@ -78,3 +84,31 @@ for (const plan of plans) {
     await closeAll(who.context);
   });
 }
+
+test("crosscheck tv: the browser TV watches each game the harness plays", async ({ browser }) => {
+  test.skip(process.env.CROSSCHECK_TV !== "1", "no CROSSCHECK_TV");
+  test.setTimeout(1_500_000);
+  const tv = await openTv(browser);
+  const { page } = tv;
+  const shots = process.env.TV_SHOTS_DIR;
+  await page.getByRole("button", { name: "Tonight's board" }).click();
+  await expect(page.locator(".tv-board-link .tv-code")).toHaveText(/^[A-Z0-9]{6}$/);
+  await expect(page.locator(".tv-board")).toBeVisible({ timeout: 300_000 });
+  for (let n = 1; n <= 4; n++) {
+    await expect(page.locator(".tv-watch-card")).toBeVisible({ timeout: 300_000 });
+    await expect(page.getByRole("button", { name: "Not now" })).toBeFocused();
+    await page.keyboard.press("ArrowLeft");
+    await expect(page.getByRole("button", { name: "Watch" })).toBeFocused();
+    await page.keyboard.press("Enter");
+    const watching = page.locator(".tv-watch[data-game]");
+    await expect(watching).toBeVisible();
+    const game = await watching.getAttribute("data-game");
+    await expect(page.locator(".tv-watch-ended")).toBeVisible({ timeout: 300_000 });
+    await page.waitForTimeout(1000);
+    if (shots) await page.screenshot({ path: `${shots}/web-crosscheck-${game}.png` });
+    await expect(page.locator(".tv-board")).toBeVisible({ timeout: 20_000 });
+  }
+  if (shots) await page.screenshot({ path: `${shots}/web-crosscheck-board.png` });
+  await tv.context.close();
+});
+

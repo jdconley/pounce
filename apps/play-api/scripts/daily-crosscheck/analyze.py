@@ -2,9 +2,15 @@
 """Daily Dish cross-platform check: each run in the proxy log, by who played it.
 
   python3 analyze.py <log.jsonl> <plan.json> [client ...]
+  python3 analyze.py --tv <log.jsonl> <plan.json> [tv client ...]
 
 For every run: the client, the date, the puzzle's hash, the moves the server accepted (in order,
 resends counted once) and their hash, and the server's result. Compared with the plan.
+
+With --tv: for each TV client (default appletv and web), every watch frame its board socket was
+sent, per game: how many distinct frames, the hash of each frame's puzzle (against the plan), the
+hash of the whole sequence of states, and the result in its watchEnd. The TVs pass when, game by
+game, their puzzle hashes and state sequences are the same.
 """
 import hashlib, json, re, sys
 
@@ -14,6 +20,42 @@ def canon(v):
     return json.dumps(v, separators=(",", ":"), ensure_ascii=False)
 
 h = lambda v: hashlib.sha256(canon(v).encode()).hexdigest()[:16]
+if sys.argv[1] == "--tv":
+    log, planfile, *tvs = sys.argv[2:]
+    tvs = tvs or ["appletv", "web"]
+    plans = {p["game"]: p for p in json.load(open(planfile))["plans"]}
+    seen = {c: {} for c in tvs}
+    for line in open(log):
+        e = json.loads(line)
+        if e.get("method") != "WSMSG" or e["client"] not in seen: continue
+        m = e["msg"]
+        if m.get("t") == "watch":
+            frames = seen[e["client"]].setdefault(m["game"], {"puzzles": set(), "states": [], "end": None})
+            frames["puzzles"].add(h(m["puzzle"]))
+            st = h(m["state"])
+            if not frames["states"] or frames["states"][-1] != st: frames["states"].append(st)  # a reconnect resends the latest
+        elif m.get("t") == "board":
+            board = {g["game"]: [(r["player"], r["rank"], {k: (r["result"] or {}).get(k) for k in ("outcome", "points", "guesses", "hints", "timeMs")}) for r in g["rows"]] for g in m["board"]["games"]}
+            seen[e["client"]]["_board"] = (board, [(r["player"], r["points"], r["crowns"]) for r in m["board"]["dish"]["rows"]])
+        elif m.get("t") == "watchEnd" and m.get("result"):
+            seen[e["client"]].setdefault(m["game"], {"puzzles": set(), "states": [], "end": None})["end"] = {k: m["result"].get(k) for k in ("outcome", "points", "guesses", "hints")}
+    for game in ["sniff", "nine-lives", "cat-nap", "box-fort"]:
+        rows = {c: seen[c].get(game) for c in tvs}
+        same = all(r is not None for r in rows.values()) and len({(tuple(sorted(r["puzzles"])), tuple(r["states"]), json.dumps(r["end"], sort_keys=True)) for r in rows.values()}) == 1
+        phone = plans[game].get("states", [])
+        for c, r in rows.items():
+            if r is None:
+                print(json.dumps({"game": game, "tv": c, "frames": 0, "pass": False})); continue
+            # Every frame is one of the phone's run's states, in the order the moves made them.
+            at = [phone.index(x) if x in phone else -1 for x in r["states"]]
+            inorder = bool(phone) and -1 not in at and at == sorted(at)
+            print(json.dumps({"game": game, "tv": c, "frames": len(r["states"]), "ofPhoneStates": f"{at[0] if at else '-'}..{at[-1] if at else '-'} of 0..{len(phone) - 1}",
+                              "puzzleHash": sorted(r["puzzles"]), "planHash": plans[game]["puzzleHash"], "statesHash": h(r["states"]), "end": r["end"],
+                              "pass": same and inorder and r["puzzles"] == {plans[game]["puzzleHash"]}}))
+    boards = {c: seen[c].get("_board") for c in tvs}
+    print(json.dumps({"board": {c: b for c, b in boards.items()}, "same": len({json.dumps(b, sort_keys=True) for b in boards.values()}) == 1}))
+    sys.exit(0)
+
 log, planfile, *only = sys.argv[1:]
 plans = {p["game"]: p for p in json.load(open(planfile))["plans"]}
 runs = {}

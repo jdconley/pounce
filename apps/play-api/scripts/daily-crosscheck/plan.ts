@@ -26,7 +26,7 @@ const hash = (v: unknown) => createHash("sha256").update(canon(v)).digest("hex")
 const [secret, date] = process.argv.slice(2);
 if (!secret || !date) throw new Error("usage: plan <secret> <date>");
 
-type Plan = { game: DailyGameId; floorMs: number; paceMs: number; puzzleHash: string; puzzle: unknown; moves: unknown[]; movesHash: string; expect: Record<string, unknown>; extra?: Record<string, unknown> };
+type Plan = { game: DailyGameId; floorMs: number; paceMs: number; states: string[]; puzzleHash: string; puzzle: unknown; moves: unknown[]; movesHash: string; expect: Record<string, unknown>; extra?: Record<string, unknown> };
 const out: Plan[] = [];
 
 for (const game of ["nine-lives", "box-fort", "sniff", "cat-nap"] as DailyGameId[]) {
@@ -69,10 +69,13 @@ for (const game of ["nine-lives", "box-fort", "sniff", "cat-nap"] as DailyGameId
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   let s = m.init(p) as any;
   let end: string | undefined;
+  // The public state (what a TV's watch frame carries) before the first move and after each one.
+  const states = [hash(m.publicState(p, s))];
   moves.forEach((move, k) => {
     const a = m.apply(p, s, m.parseMove(move), 10_000 + k * 1000);
     if (!a.ok) throw new Error(`${game} plan: move ${k} ${a.reason}`);
     s = a.state;
+    states.push(hash(m.publicState(p, s)));
     if (a.end) end = a.end;
   });
   if (!end) throw new Error(`${game} plan: the list never ends the run`);
@@ -80,6 +83,6 @@ for (const game of ["nine-lives", "box-fort", "sniff", "cat-nap"] as DailyGameId
   delete expect.timeMs; // the time is the clock's, so it differs from run to run
   const floorMs = m.floorMs[levelFor(date)];
   const paceMs = Math.ceil((floorMs * 1.15 + 3000) / moves.length);
-  out.push({ game, floorMs, paceMs, puzzleHash: hash(puzzle), puzzle, moves, movesHash: hash(moves), expect: { outcome: end, ...expect, tooFast: false }, extra });
+  out.push({ game, floorMs, paceMs, states, puzzleHash: hash(puzzle), puzzle, moves, movesHash: hash(moves), expect: { outcome: end, ...expect, tooFast: false }, extra });
 }
 process.stdout.write(JSON.stringify({ date, plans: out }, null, 1));

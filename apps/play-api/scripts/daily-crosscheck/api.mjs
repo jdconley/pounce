@@ -4,6 +4,9 @@
  *
  *   node api.mjs play <plan.json> <game>   one new person plays the plan's move list, paced like a person
  *   node api.mjs cheat <plan.json> <game>  the anti-cheat probes for that game
+ *   node api.mjs tv <plan.json> <log> <clients>  links the board to each TV in <clients> (comma
+ *       separated, as the proxy names them, e.g. appletv,web) by the code each last asked the
+ *       server for, then plays every game's plan with Show on TV on, so each TV can watch it
  *
  * Prints JSON lines: what was sent and what came back.
  */
@@ -12,7 +15,8 @@ import { readFileSync } from "node:fs";
 
 const BASE = process.env.CROSSCHECK_BASE ?? "http://127.0.0.1:8819";
 const [mode, planFile, game] = process.argv.slice(2);
-const plan = JSON.parse(readFileSync(planFile, "utf8")).plans.find((p) => p.game === game);
+const plans = JSON.parse(readFileSync(planFile, "utf8")).plans;
+const plan = mode === "tv" ? plans[0] : plans.find((p) => p.game === game);
 if (!plan) throw new Error(`no plan for ${game}`);
 
 const say = (o) => console.log(JSON.stringify(o));
@@ -52,7 +56,7 @@ async function device(names) {
   return { token, people };
 }
 
-const start = (d, person) => http(d.token, "POST", `/v1/daily/${game}/start?person=${person.id}`);
+const start = (d, person, g = game) => http(d.token, "POST", `/v1/daily/${g}/start?person=${person.id}`);
 const moves = (d, person, run, body) => http(d.token, "POST", `/v1/daily/runs/${run}/moves?person=${person.id}`, body);
 
 if (mode === "play") {
@@ -153,3 +157,47 @@ if (mode === "cheat") {
   const rows = board.json.games?.find((g) => g.game === game)?.rows ?? [];
   say({ probe: "unchanged", seq: mine.json.seq, result: mine.json.result, rows, pass: mine.json.run === run && mine.json.seq === 1 && mine.json.result === null && rows.every((r) => r.result === null) });
 }
+
+if (mode === "tv") {
+  const [logFile, clients] = process.argv.slice(4);
+  const wanted = clients.split(",");
+  const d = await device(["Mom"]);
+  const me = d.people[0];
+  // Each TV's newest link code (its `POST /v1/screens`), as the proxy logged it.
+  const codes = () => {
+    const found = {};
+    for (const line of readFileSync(logFile, "utf8").split("\n")) {
+      if (!line) continue;
+      const e = JSON.parse(line);
+      if (e.method === "POST" && e.url.split("?")[0] === "/v1/screens" && e.res?.code && wanted.includes(e.client)) found[e.client] = e.res.code;
+    }
+    return found;
+  };
+  while (Object.keys(codes()).length < wanted.length) await sleep(1000);
+  await sleep(3000);
+  for (const [client, code] of Object.entries(codes())) {
+    const linked = await http(d.token, "POST", `/v1/screens/link?person=${me.id}`, { code, board: true });
+    say({ step: "link", client, status: linked.status });
+  }
+  // The order the Dish lists them in.
+  for (const g of ["sniff", "nine-lives", "cat-nap", "box-fort"]) {
+    const p = plans.find((x) => x.game === g);
+    await sleep(4000);
+    const s = await start(d, me, g);
+    const on = await http(d.token, "PUT", `/v1/daily/runs/${s.json.run}/tv?person=${me.id}`, { on: true });
+    say({ step: "start", game: g, puzzleHash: hash(s.json.puzzle), planHash: p.puzzleHash, tv: on.status });
+    await sleep(8000); // the TVs press Watch
+    let seq = 0;
+    let result = null;
+    while (!result) {
+      const a = await moves(d, me, s.json.run, { from: seq, moves: p.moves.slice(seq, seq + 1) });
+      if (!a.json.ok) { say({ step: "refused", game: g, a: a.json }); process.exit(1); }
+      seq = a.json.seq;
+      result = a.json.result;
+      if (!result) await sleep(g === "sniff" ? 2500 : 700);
+    }
+    say({ step: "end", game: g, result });
+    await sleep(15000); // the TVs show the result, then the board
+  }
+}
+
