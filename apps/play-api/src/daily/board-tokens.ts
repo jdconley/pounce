@@ -30,6 +30,11 @@ export class BoardTokens extends DurableObject<Env> {
     return row && row.device === device && row.expires > now ? row.player : null;
   }
 
+  /** After an account merge: the token shows the account's board. */
+  async repoint(player: string): Promise<void> {
+    if (this.row()) this.ctx.storage.sql.exec("UPDATE token SET player = ? WHERE id = 1", player);
+  }
+
   /** Forgets the token. */
   async revoke(): Promise<void> {
     await this.ctx.storage.deleteAlarm();

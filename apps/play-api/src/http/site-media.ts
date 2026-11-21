@@ -278,6 +278,7 @@ export const MEDIA = {
     "previews": {
       "cat-tower": "/static/invite-cat-tower.71cd7c74f9.jpg",
       "tiles": "/static/invite-tiles.e7c5854191.jpg"
-    }
+    },
+    "dish": "/static/invite-dish.94897d5228.jpg"
   }
 } as const;

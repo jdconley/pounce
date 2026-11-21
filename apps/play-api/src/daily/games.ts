@@ -44,3 +44,14 @@ export async function makeDaily(m: DailyModule, secret: string, game: DailyGameI
   const [seed, key] = await Promise.all([dailySeed(secret, game, date), cycleKey(secret, game)]);
   return m.make(createRng(seed), levelFor(date), { date, key });
 }
+
+/**
+ * What an app that has the Daily Dish lists in its `X-Pounce-Games` header, beside the table games
+ * it can draw (`"tiles,dish"`). Only such a device is told about the Dish by push.
+ */
+export const DISH_APP = "dish";
+
+/** The app sending this `X-Pounce-Games` header has the Dish. */
+export function dishListed(header: string | null): boolean {
+  return (header ?? "").split(",").some((id) => id.trim().toLowerCase() === DISH_APP);
+}

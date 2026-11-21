@@ -2,6 +2,7 @@ import { DAILY_GAMES, listedGames } from "../src/daily/games";
 import { startRun } from "../src/daily/routes";
 import { testGame } from "../src/daily/test-game";
 import worker from "../src/index";
+import { mergeDaily } from "../src/players/accounts";
 import { sha256Hex } from "../src/players/ids";
 import { Player as RealPlayer } from "../src/players/player";
 import { addDays } from "../src/streaks/clock";
@@ -34,12 +35,12 @@ let failing = 0;
 
 /** The real Player, which can be made to refuse daily reports for a while. */
 export class Player extends RealPlayer {
-  override recordDaily(...args: Parameters<RealPlayer["recordDaily"]>): void {
+  override async recordDaily(...args: Parameters<RealPlayer["recordDaily"]>): Promise<void> {
     if (failing > 0) {
       failing -= 1;
       throw new Error("player_down");
     }
-    super.recordDaily(...args);
+    await super.recordDaily(...args);
   }
 
   /** Every player id this player keeps Dish data about (tests). */
@@ -93,6 +94,11 @@ export default {
       const found = await env.BOARD_TOKENS.get(env.BOARD_TOKENS.idFromName(hash)).resolve(url.searchParams.get("device") ?? "", Number(url.searchParams.get("now")));
       return Response.json({ player: found });
     }
+    if (url.pathname === "/__test/merge-daily") {
+      // The Dish's step of a merge, as a sign-in that failed after it left it.
+      await mergeDaily(env, url.searchParams.get("from") ?? "", url.searchParams.get("to") ?? "");
+      return new Response(null, { status: 204 });
+    }
     if (url.pathname === "/__test/listed") return Response.json(listedGames(env).map((m) => m.id));
     if (url.pathname === "/__test/daily-held") {
       const stub = env.PLAYERS.get(env.PLAYERS.idFromName(url.searchParams.get("player") ?? "")) as unknown as { dailyHeld(): Promise<string[]> };
@@ -101,6 +107,9 @@ export default {
     if (url.pathname === "/__test/fail-reports") {
       failing = Number(url.searchParams.get("n"));
       return new Response(null, { status: 204 });
+    }
+    if (url.pathname === "/__test/notify") {
+      return Response.json(await env.PLAYERS.get(env.PLAYERS.idFromName(url.searchParams.get("player") ?? "")).notifyState());
     }
     if (url.pathname === "/__test/remind") {
       await env.PLAYERS.get(env.PLAYERS.idFromName(url.searchParams.get("player") ?? "")).remind(Number(url.searchParams.get("now")));
@@ -112,7 +121,8 @@ export default {
       const stub = env.PLAYERS.get(env.PLAYERS.idFromName(playerId));
       const day = (await stub.dailyDay(now))?.day ?? "";
       const result = { game: "test", date: day, number: 1, outcome: "solved", timeMs: 60_000, hints: 0, tooFast: false, progress: 1 } as const;
-      await stub.recordDaily(result, true, now);
+      const run = url.searchParams.get("run");
+      await stub.recordDaily(result, true, now, ...(run === null ? [] : [run]));
       return new Response(null, { status: 204 });
     }
     return worker.fetch(request, env, ctx);

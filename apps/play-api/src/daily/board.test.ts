@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import { addDays } from "../streaks/clock";
 
-import { addToStats, dish, emptyStats, rankGame, statsView, type BoardRow, type GameBoard, type Stats } from "./board";
+import { addToStats, dish, emptyStats, mergeStats, rankGame, statsView, type BoardRow, type GameBoard, type Stats } from "./board";
 import { testGame } from "./test-game";
 
 import type { DailyModule, DailyResult, Outcome } from "./module";
@@ -90,6 +90,22 @@ describe("dish", () => {
     expect(d.rows.map((r) => r.player)).toEqual(["a"]);
   });
 
+  it("someone with 0 points isn't on the Dish: no last place for a run closed at 04:00 in 4th", () => {
+    const d = dish([
+      board([
+        row("a", { timeMs: 40_000 }),
+        row("b", { timeMs: 50_000 }),
+        row("c", { timeMs: 60_000 }),
+        row("d", { outcome: "closed", progress: 0.1 }),
+      ]),
+    ]);
+    expect(d.rows.map((r) => [r.player, r.points])).toEqual([
+      ["a", 4],
+      ["b", 3],
+      ["c", 2],
+    ]);
+  });
+
   it("equal totals share a rank", () => {
     const d = dish([board([row("a", {})]), board([row("b", {})], "sniff")]);
     expect(d.rows.map((r) => [r.player, r.rank])).toEqual([
@@ -153,5 +169,46 @@ describe("stats", () => {
     expect(statsView(s, "2026-11-25").streak).toBe(2);
     expect(statsView(s, "2026-11-26").streak).toBe(0);
     expect(statsView(s, "2026-11-26").best).toBe(2);
+  });
+});
+
+describe("mergeStats (an account merge)", () => {
+  const on = (date: string, outcome: Outcome = "solved", extra: Partial<DailyResult> = {}) => result({ date, outcome, ...extra });
+  const fold = (rs: DailyResult[]) => rs.reduce<Stats | null>((s, r) => addToStats(s, r), null);
+
+  it("adds the two sides' counts, less the results the merge dropped", () => {
+    const a = fold([on("2026-11-20", "solved", { timeMs: 90_000 }), on("2026-11-21", "solved", { timeMs: 80_000, guesses: 3 })]);
+    const dropped = on("2026-11-21", "gaveUp", { timeMs: 5000 });
+    const b = fold([on("2026-11-19", "solved", { timeMs: 70_000, guesses: 2 }), dropped]);
+    const m = mergeStats(a, b, [dropped]) as Stats;
+    expect(m).toMatchObject({ played: 3, solved: 3, bestTimeMs: 70_000, guesses: [0, 1, 1, 0, 0, 0] });
+    expect(m.last30.map((e) => [e.date, e.result?.outcome])).toEqual([
+      ["2026-11-19", "solved"],
+      ["2026-11-20", "solved"],
+      ["2026-11-21", "solved"],
+    ]);
+    // Three days in a row once merged.
+    expect(m).toMatchObject({ streak: 3, best: 3, lastEnded: "2026-11-21" });
+  });
+
+  it("a dropped solve comes off solved and its guesses", () => {
+    const dropped = on("2026-11-21", "solved", { guesses: 4, points: 50 });
+    const m = mergeStats(fold([on("2026-11-21", "gaveUp")]), fold([dropped]), [dropped]) as Stats;
+    expect(m).toMatchObject({ played: 1, solved: 0, guesses: [0, 0, 0, 0, 0, 0] });
+    expect(m.last30).toEqual([{ date: "2026-11-21", result: on("2026-11-21", "gaveUp") }]);
+  });
+
+  it("keeps the better records and the longer streak, and takes either side alone", () => {
+    const a = { ...emptyStats(), played: 50, solved: 40, streak: 40, best: 45, bestTimeMs: 60_000, bestPoints: 900, lastEnded: "2026-11-21" };
+    const b = { ...emptyStats(), played: 2, solved: 1, streak: 1, best: 2, bestTimeMs: null, bestPoints: 1000, lastEnded: "2026-11-20" };
+    expect(mergeStats(a, b, [])).toMatchObject({ played: 52, solved: 41, streak: 40, best: 45, bestTimeMs: 60_000, bestPoints: 1000, lastEnded: "2026-11-21" });
+    expect(mergeStats(b, a, [])).toMatchObject({ streak: 40, best: 45 });
+    expect(mergeStats(null, b, [])).toEqual(b);
+    expect(mergeStats(a, null, [])).toEqual(a);
+    expect(mergeStats(null, null, [])).toBeNull();
+    // A side with no stats still loses what the merge dropped from the other.
+    const solved = on("2026-11-21");
+    expect(mergeStats(fold([solved]), null, [solved])).toMatchObject({ played: 0, solved: 0, last30: [], streak: 0 });
+    expect(mergeStats(null, fold([solved]), [solved])).toMatchObject({ played: 0, solved: 0, last30: [], streak: 0, lastEnded: null });
   });
 });

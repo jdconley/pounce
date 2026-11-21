@@ -331,6 +331,8 @@ describe("the Dish (daily games design §9)", () => {
       thread: "dish",
       collapse: "reminder:dish",
       data: { dish: "sniff" },
+      // Only an app that has the Dish gets it (`forDevice`).
+      needs: "dish",
     });
     expect(st.lastDailyDay).toBe(D);
   });

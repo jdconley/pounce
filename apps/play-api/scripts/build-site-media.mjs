@@ -204,6 +204,26 @@ const invitePreviews = Object.fromEntries(
     return [game, jpeg(file, `invite-${game}`, 80)];
   }),
 );
+// The Daily Dish's link preview (/daily): four of the app's cats in a bowl, one for each of the
+// day's puzzles, 1200x630 and no words in it (the page's title says what it is).
+const dishCats = [0, 2, 5, 7].map((cat, i) => {
+  const file = join(tmp, `dish-cat-${cat}.png`);
+  magick(join(catalog, `Cats.spriteatlas/cat${cat}-awake.imageset/cat${cat}-awake@3x.png`), "-filter", "Lanczos", "-resize", "x300", "-background", "none", "-rotate", String([-8, -3, 3, 8][i]), file);
+  return file;
+});
+const dishPng = join(tmp, "invite-dish.png");
+magick(
+  "-size", "1200x630", "radial-gradient:#FF5FA2-#6A0DAD",
+  // The bowl's far rim, behind the cats.
+  "-fill", "#C27C00", "-stroke", INK, "-strokewidth", "10", "-draw", "ellipse 600,420 470,70 180,360",
+  ...dishCats.flatMap((file, i) => [file, "-gravity", "northwest", "-geometry", `+${150 + i * 225}+${[150, 120, 120, 150][i]}`, "-composite"]),
+  // The bowl: its front, and the near rim over the cats' paws.
+  "-fill", "#FFC400", "-stroke", INK, "-strokewidth", "12", "-draw", "path 'M 130,420 A 470,190 0 0 0 1070,420 Z'",
+  "-fill", "#FFE066", "-stroke", INK, "-strokewidth", "10", "-draw", "path 'M 130,420 A 470,70 0 0 0 1070,420 L 1070,446 A 470,70 0 0 1 130,446 Z'",
+  "-fill", "#FF8A00", "-stroke", "none", "-draw", "path 'M 240,520 A 400,120 0 0 0 960,520 L 940,545 A 380,100 0 0 1 260,545 Z'",
+  dishPng,
+);
+const inviteDish = jpeg(dishPng, "invite-dish", 80);
 const inviteCats = Array.from({ length: CATS }, (_, cat) => {
   const png = join(tmp, `inviter-${cat}.png`);
   magick(join(catalog, `Cats.spriteatlas/cat${cat}-awake.imageset/cat${cat}-awake@3x.png`), "-filter", "Lanczos", "-resize", "300x", "-strip", png);
@@ -259,7 +279,7 @@ const manifest = {
     condo: art("condo-10.imageset/condo-10@3x.png", "condo", 480),
   },
   qr: { url: GET_URL, size: modules, path: qrPath },
-  invite: { cats: inviteCats, previews: invitePreviews },
+  invite: { cats: inviteCats, previews: invitePreviews, dish: inviteDish },
 };
 
 writeFileSync(

@@ -33,6 +33,19 @@ async function start(options: { daily?: boolean; sent?: Sent[]; devSpeed?: numbe
   return mf;
 }
 
+describe("the share page, /daily", () => {
+  test("is the Dish's page with DAILY on, and a 404 with it off", async () => {
+    const on = await start();
+    const res = await on.dispatchFetch(`${BASE}/daily`, { headers: { "user-agent": "Mozilla/5.0 (Macintosh)" } });
+    expect(res.status).toBe(200);
+    const html = await res.text();
+    expect(html).toContain("<h1>The Daily Dish</h1>");
+    expect(html).toContain(`href="/play/daily"`);
+    const off = await start({ daily: false });
+    expect((await off.dispatchFetch(`${BASE}/daily`)).status).toBe(404);
+  });
+});
+
 describe("the DAILY flag", () => {
   test("every /v1/daily route is a 404 with DAILY off", async () => {
     const mf = await start({ daily: false });
@@ -461,12 +474,17 @@ describe("the daily reminder knows the Dish", () => {
     return localToInstant(addDays(today, 1), 19 * 60 + 30, LA);
   };
 
+  /** The app on `device` says it has the Dish, as it does on every tables call. */
+  const hasDish = async (mf: Miniflare, device: Device) =>
+    expect((await call(mf, device, "GET", "/v1/devices/me/tables", undefined, { "x-pounce-games": "tiles,dish" })).status).toBe(200);
+
   test("with no move waiting, the reminder names today's first game", async () => {
     const sent: Sent[] = [];
     const mf = await start({ sent });
     const device = await mint(mf);
     const mom = newPerson("Mom", 3);
     const id = (await profile(mf, device, [mom], { apns: tokenOf(1) }))[mom.id] as string;
+    await hasDish(mf, device);
     await remindAt(mf, id, tomorrowAt1930());
     const pushes = await eventually(() => sent.filter((s) => s.body.kind === "reminder"), (l) => l.length >= 1);
     expect(pushes).toHaveLength(1);
@@ -476,6 +494,36 @@ describe("the daily reminder knows the Dish", () => {
     const first = DAILY_TITLES[(await listed(mf))[0] as DailyGameId];
     expect((await listed(mf)).length).toBeGreaterThan(1);
     expect(alert.body).toMatch(new RegExp(`^Today's Dish is out\\. ${first} -?\\d+ is waiting\\.$`));
+  });
+
+  test("an app without the Dish never hears of it, and keeps its reminders as they were", async () => {
+    const sent: Sent[] = [];
+    const mf = await start({ sent });
+    const device = await mint(mf);
+    const mom = newPerson("Mom", 3);
+    const id = (await profile(mf, device, [mom], { apns: tokenOf(3) }))[mom.id] as string;
+    // An App Store build: it lists the tile game, and no Dish.
+    expect((await call(mf, device, "GET", "/v1/devices/me/tables", undefined, { "x-pounce-games": "tiles" })).status).toBe(200);
+    await remindAt(mf, id, tomorrowAt1930());
+    await new Promise((resolve) => setTimeout(resolve, 300));
+    expect(sent.filter((s) => s.body.kind === "reminder")).toEqual([]);
+    const state = (await (await mf.dispatchFetch(`${BASE}/__test/notify?player=${id}`)).json()) as { reminders: number; lastDailyDay: string | null };
+    expect(state).toMatchObject({ reminders: 0, lastDailyDay: null });
+  });
+
+  test("of one person's two devices, only the one whose app has the Dish gets it", async () => {
+    const sent: Sent[] = [];
+    const mf = await start({ sent });
+    const [phone, ipad] = [await mint(mf), await mint(mf)];
+    const mom = newPerson("Mom", 3);
+    const id = (await profile(mf, phone, [mom], { apns: tokenOf(4) }))[mom.id] as string;
+    await profile(mf, ipad, [mom], { apns: tokenOf(5) });
+    await hasDish(mf, phone);
+    await remindAt(mf, id, tomorrowAt1930());
+    const pushes = await eventually(() => sent.filter((s) => s.body.kind === "reminder"), (l) => l.length >= 1);
+    await new Promise((resolve) => setTimeout(resolve, 300));
+    expect(sent.filter((s) => s.body.kind === "reminder").map((s) => s.token)).toEqual([tokenOf(4)]);
+    expect(JSON.stringify(pushes[0]?.body)).not.toContain("needs");
   });
 
   test("DAILY off: no Dish, so nothing", async () => {

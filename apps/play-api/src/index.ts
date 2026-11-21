@@ -4,12 +4,13 @@ import { APP_HEADER, parseApp } from "./app/version";
 import { issueDeviceToken, verifyDeviceToken } from "./auth";
 import { APPLE_ROOTS } from "./consent/appstore";
 import { noticePage } from "./consent/pages";
+import { DISH_APP, dishListed } from "./daily/games";
 import { dailyRoute, who as dailyPlayer } from "./daily/routes";
 import { dailyOn, devSpeed, tvAppLinksOn, tvOn } from "./env";
 import { active, forget, minted, pageView, parseReport, prune, reached, report } from "./funnel/funnel";
 import { DEFAULT_GAME, GAMES_HEADER, gamesListed, gamesOn, gameTitle, isGameId, type GameId } from "./games";
 import { asAppSocket, browserAnswer, isBrowserSocket } from "./http/browser-socket";
-import { appSiteAssociation, ogImage, pouncePage, sharePage, viewerOf } from "./http/links";
+import { appSiteAssociation, dailyPage, ogImage, pouncePage, sharePage, viewerOf } from "./http/links";
 import { mediaFile } from "./http/media";
 import { privacyPage } from "./http/privacy";
 import { getRedirect, homePage, llmsTxt, robotsTxt, sitemapXml, supportPage } from "./http/site";
@@ -174,9 +175,13 @@ const appGames = (request: Request): GameId[] => gamesListed(request.headers.get
  * The same, less Cat Tower: what the device's index is told when the app opens a socket or
  * fetches its tables (`DeviceIndex.players`). It rides on the call those requests always made,
  * so no request waits on, or fails by, a call of its own. Empty for an app that sent no header,
- * which is then what the device is known by.
+ * which is then what the device is known by. An app that has the Daily Dish lists `dish` there
+ * too, which no table is a game of: only such a device is sent the Dish's reminder.
  */
-const declared = (request: Request): GameId[] => appGames(request).filter((id) => id !== DEFAULT_GAME);
+const declared = (request: Request): string[] => [
+  ...appGames(request).filter((id) => id !== DEFAULT_GAME),
+  ...(dishListed(request.headers.get(GAMES_HEADER)) ? [DISH_APP] : []),
+];
 
 /**
  * The version in this request's `X-Pounce-App`, for the device's index to remember alongside its
@@ -789,6 +794,11 @@ async function handle(request: Request, env: Env, ctx?: ExecutionContext): Promi
     const token = tvLink[1] as string;
     if (!LINK_TOKEN.test(token)) return notFound();
     return new Response(null, { status: 302, headers: { location: `${new URL(request.url).origin}/play/tv-link/${token}`, "cache-control": "no-store" } });
+  }
+  // Where a Daily Dish share link lands: only while DAILY is on, else a 404 as before.
+  if (method === "GET" && pathname === "/daily" && dailyOn(env)) {
+    const store = (await storeKnown(env, later)).store;
+    return dailyPage({ ...install(env), storeVersion: store, viewer: viewerOf(request.headers.get("user-agent")) }, new URL(request.url).origin);
   }
   const share = method === "GET" ? SHARE_PATH.exec(pathname) : null;
   if (share) {

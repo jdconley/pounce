@@ -109,3 +109,20 @@ describe("forDevice: a player with no table of another game", () => {
     }
   });
 });
+
+describe("forDevice: a push for apps that have the Dish", () => {
+  const dish: Outgoing = { kind: "reminder", title: "Mia", body: "Today's Dish is out. Sniff 12 is waiting.", thread: "dish", collapse: "reminder:dish", data: { dish: "sniff" }, needs: "dish" };
+
+  test("goes to an app that lists dish, without the needs key", () => {
+    const shown = forDevice(dish, TABLES, ["tiles", "dish"]);
+    const { needs, ...rest } = dish;
+    void needs;
+    expect(shown).toEqual(rest);
+    expect(JSON.stringify(apnsBody(shown as Outgoing, "active", 0))).not.toContain("needs");
+  });
+
+  test("never to an app that doesn't", () => {
+    expect(forDevice(dish, TABLES, NEWER)).toBeNull();
+    expect(forDevice(dish, TABLES, OLDER)).toBeNull();
+  });
+});

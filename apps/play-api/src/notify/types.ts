@@ -32,4 +32,9 @@ export type Outgoing = {
    * Never part of the payload (`forDevice` applies it).
    */
   otherwise?: { body: string; code?: string };
+  /**
+   * Only for a device whose app lists this among its games (`X-Pounce-Games`): `"dish"`, the Daily
+   * Dish's reminder. Any other device isn't sent the push at all. Never part of the payload.
+   */
+  needs?: "dish";
 };

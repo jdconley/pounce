@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { DAILY_GAMES, DAILY_TITLES, DISH_ORDER, dailyModule, listedGames, makeDaily } from "./games";
+import { DAILY_GAMES, DAILY_TITLES, DISH_APP, DISH_ORDER, dailyModule, dishListed, listedGames, makeDaily } from "./games";
 import { cycleKey, dailySeed } from "./seed";
 import { testGame } from "./test-game";
 
@@ -53,5 +53,16 @@ describe("makeDaily", () => {
     expect(calls).toEqual([
       { first: createRng(await dailySeed(secret, "sniff", "2026-11-24"))(), level: 2, day: { date: "2026-11-24", key: await cycleKey(secret, "sniff") } },
     ]);
+  });
+});
+
+describe("dishListed (X-Pounce-Games)", () => {
+  it("is true when the app lists dish among its games, in any case and spacing", () => {
+    expect(DISH_APP).toBe("dish");
+    expect(dishListed("tiles,dish")).toBe(true);
+    expect(dishListed(" Dish ")).toBe(true);
+    expect(dishListed("tiles")).toBe(false);
+    expect(dishListed("dishes")).toBe(false);
+    expect(dishListed(null)).toBe(false);
   });
 });
