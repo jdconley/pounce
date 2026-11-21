@@ -123,9 +123,10 @@ test.describe("Tonight's board on the TV", () => {
     await expect(tv.page.getByRole("button", { name: "Watch" })).toBeFocused();
     await tv.page.keyboard.press("Enter");
     const watching = tv.page.locator('.tv-watch[data-game="test"]');
-    await expect(watching.locator(".tv-watch-count")).toHaveText("0");
+    // The test game's own watch view, from the web registry: the count so far.
+    await expect(watching.locator(".dd-test-count")).toHaveText(`0 / ${target}`);
     await mom.moves(run, 0, 1);
-    await expect(watching.locator(".tv-watch-count")).toHaveText("1");
+    await expect(watching.locator(".dd-test-count")).toHaveText(`1 / ${target}`);
     await shot(tv.page, "watch");
     await mom.moves(run, 1, target);
     await expect(tv.page.locator(".tv-watch-ended")).toContainText("Solved");
@@ -246,5 +247,22 @@ test("a whole family fits each game's board, nothing under 28 at 1080p", async (
   const smallest = await page.locator(".tv-board-row .tv-row-name, .tv-board-row .tv-row-result, .tv-board-row .tv-rank").evaluateAll((els) => Math.min(...els.map((e) => parseFloat(getComputedStyle(e).fontSize))));
   expect(smallest, "the smallest row text, px at 1080p").toBeGreaterThanOrEqual(28);
   await shot(page, "board-family");
+  await context.close();
+});
+
+test("a game whose watch view hasn't landed shows its name while someone plays", async ({ browser }) => {
+  const context = await browser.newContext({ viewport: TV_VIEWPORT, isMobile: false, hasTouch: false });
+  await context.addInitScript(() => localStorage.setItem("pounce.tv.board", JSON.stringify({ token: "F".repeat(22), until: Date.now() + 86_400_000 })));
+  await context.routeWebSocket(/\/v1\/daily\/board\/ws/, (ws) => {
+    ws.send(JSON.stringify({ t: "board", board: familyBoard() }));
+    ws.send(JSON.stringify({ t: "watchOffer", player: "pr_mom", name: "Mom", cat: 3, game: "sniff" }));
+    ws.send(JSON.stringify({ t: "watch", player: "pr_mom", game: "sniff", puzzle: {}, state: {} }));
+  });
+  const page = await tvPage(context);
+  await expect(page.getByRole("button", { name: "Not now" })).toBeFocused();
+  await page.keyboard.press("ArrowLeft");
+  await page.keyboard.press("Enter");
+  const watching = page.locator('.tv-watch[data-game="sniff"]');
+  await expect(watching.locator(".tv-watch-placeholder")).toContainText("Sniff");
   await context.close();
 });

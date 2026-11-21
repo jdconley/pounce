@@ -527,10 +527,15 @@ img.tv-rank.playing {
   min-height: 0;
 }
 
-.tv-watch-count {
-  margin: 0;
-  font-size: calc(var(--u) * 420);
+/* The test game's watch view ("n / target"): the Dish's styles don't load on a TV. */
+.tv-watch-stage .dd-test-count {
+  font-family: var(--round);
+  font-size: calc(var(--u) * 300);
+  font-weight: 900;
   line-height: 1;
+  color: var(--white);
+  -webkit-text-stroke: 0.14em var(--ink);
+  paint-order: stroke fill;
 }
 
 .tv-watch-placeholder {
