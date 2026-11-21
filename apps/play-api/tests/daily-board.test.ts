@@ -127,7 +127,7 @@ describe("linking a TV to a board", { timeout: 30_000 }, () => {
     const { tv, board } = await linkBoard(mf, mom);
     const screen = await tvSocket(mf, tv, board);
     const snapshot = await screen.find((m) => m.t === "board");
-    expect(snapshot.board).toMatchObject({ games: [{ game: "test", rows: [] }], dish: { rows: [] } });
+    expect(snapshot.board).toMatchObject({ games: expect.arrayContaining([expect.objectContaining({ game: "test", rows: [] })]) as unknown, dish: { rows: [] } });
     const s = await begin(mf, kid);
     await send(mf, kid, s.run, 0, steps(1, 3 + s.level));
     const result = await screen.find((m) => m.t === "result");
@@ -176,7 +176,7 @@ describe("linking a TV to a board", { timeout: 30_000 }, () => {
     const browser = (device: Device, query: string) =>
       mf.dispatchFetch(`${BASE}/v1/daily/board/ws${query}`, { headers: { upgrade: "websocket", "sec-websocket-protocol": `pounce, pounce.token.${device.token}` } });
     const screen = await listen((await browser(tv, `?board=${board}`)) as unknown as Response);
-    expect((await screen.find((m) => m.t === "board")).board).toMatchObject({ games: [{ game: "test" }] });
+    expect((await screen.find((m) => m.t === "board")).board).toMatchObject({ games: expect.arrayContaining([expect.objectContaining({ game: "test" })]) as unknown });
     const phone = await listen((await browser(mom.device, `?person=${mom.person.id}`)) as unknown as Response);
     await phone.find((m) => m.t === "board");
   });
@@ -207,8 +207,8 @@ describe("live progress and watching", { timeout: 30_000 }, () => {
     expect(keys(progress)).not.toContain("state");
     expect(keys(progress)).not.toContain("target");
     // The board shows Kid playing, with progress and no result.
-    const board = (await (await call(mf, mom.device, "GET", `/v1/daily/board?person=${mom.person.id}`)).json()) as { games: { rows: unknown[] }[] };
-    expect(board.games[0]?.rows).toEqual([{ player: progress.player, name: "Kid", cat: 3, rank: null, result: null, playing: { progress: progress.progress } }]);
+    const board = (await (await call(mf, mom.device, "GET", `/v1/daily/board?person=${mom.person.id}`)).json()) as { games: { game: string; rows: unknown[] }[] };
+    expect(board.games.find((g) => g.game === "test")?.rows).toEqual([{ player: progress.player, name: "Kid", cat: 3, rank: null, result: null, playing: { progress: progress.progress } }]);
     expect(phone.heard.some((m) => m.t === "watch" || m.t === "watchOffer")).toBe(false);
   });
 

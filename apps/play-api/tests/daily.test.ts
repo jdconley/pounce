@@ -1,10 +1,12 @@
 import { afterEach, beforeAll, describe, expect, test } from "vitest";
 
+import { DAILY_TITLES } from "../src/daily/games";
 import { addDays, localToInstant } from "../src/streaks/clock";
 
 import { BASE, bundle, call, eventually, LA, mint, newPerson, PLAYER_ID_JSON, profile, tokenOf, worker, type Device, type Person, type Sent } from "./play-helpers";
 
 
+import type { DailyGameId } from "../src/daily/module";
 import type { Miniflare } from "miniflare";
 
 /** The Daily Dish through the Worker and its Durable Objects (spec §3). */
@@ -73,6 +75,9 @@ describe("DailyPuzzle", () => {
     expect(await res.json()).toEqual({ next: true });
   });
 });
+
+/** The games the worker lists, in the Dish's order. */
+const listed = async (mf: Miniflare) => (await (await mf.dispatchFetch(`${BASE}/__test/listed`)).json()) as string[];
 
 /** A device with one person on it; returns the device, the person and their player id. */
 async function someone(mf: Miniflare, name = "Mom", zone = LA): Promise<{ device: Device; person: Person; id: string }> {
@@ -262,8 +267,8 @@ describe("runs", () => {
     const read = async () => (await (await mf.dispatchFetch(`${BASE}/__test/run?id=${s.run}`)).json()) as unknown;
     expect(await eventually(read, (r) => r === null)).toBeNull();
     // Its result stays on the player's board until its 120 days are up.
-    const board = (await (await mf.dispatchFetch(`${BASE}/__test/board?player=${id}&date=${s.date}&now=${Date.now()}`)).json()) as { games: { rows: unknown[] }[] };
-    expect(board.games[0]?.rows).toHaveLength(1);
+    const board = (await (await mf.dispatchFetch(`${BASE}/__test/board?player=${id}&date=${s.date}&now=${Date.now()}`)).json()) as { games: { game: string; rows: unknown[] }[] };
+    expect(board.games.find((g) => g.game === "test")?.rows).toHaveLength(1);
   });
 
   test("the start limit answers 429", async () => {
@@ -313,7 +318,7 @@ describe("the board", () => {
     const kid = await someone(mf, "Kid");
     await pairUp(mf, mom.id, kid.id);
     const result = await solve(mf, kid.device, kid.person);
-    const board = await eventually(() => boardOf(mf, mom.device, mom.person), (b) => (b.games[0]?.rows.length ?? 0) > 0);
+    const board = await eventually(() => boardOf(mf, mom.device, mom.person), (b) => (b.games.find((g) => g.game === "test")?.rows.length ?? 0) > 0);
     expect(board.date).toBe(result.date);
     const test = board.games.find((g) => g.game === "test");
     expect(test?.rows).toEqual([{ player: expect.stringMatching(/^pr_/) as string, name: "Kid", cat: 3, rank: 1, result, playing: null }]);
@@ -322,10 +327,10 @@ describe("the board", () => {
     expect(JSON.stringify(board)).not.toMatch(PLAYER_ID_JSON);
     // Mom plays too, slower: both on both boards, Mom as "me" on her own.
     await solve(mf, mom.device, mom.person);
-    const both = await eventually(() => boardOf(mf, kid.device, kid.person), (b) => (b.games[0]?.rows.length ?? 0) === 2);
-    expect(both.games[0]?.rows.map((r) => r.name)).toHaveLength(2);
+    const both = await eventually(() => boardOf(mf, kid.device, kid.person), (b) => (b.games.find((g) => g.game === "test")?.rows.length ?? 0) === 2);
+    expect(both.games.find((g) => g.game === "test")?.rows.map((r) => r.name)).toHaveLength(2);
     const mine = await boardOf(mf, mom.device, mom.person);
-    expect(mine.games[0]?.rows.map((r) => r.player)).toContain("me");
+    expect(mine.games.find((g) => g.game === "test")?.rows.map((r) => r.player)).toContain("me");
   });
 
   test("someone I'm not paired with never appears", async () => {
@@ -345,10 +350,10 @@ describe("the board", () => {
     const kid = await someone(mf, "Kid");
     await pairUp(mf, mom.id, kid.id);
     await solve(mf, kid.device, kid.person);
-    const board = await eventually(() => boardOf(mf, mom.device, mom.person), (b) => (b.games[0]?.rows.length ?? 0) > 0);
-    const pair = board.games[0]?.rows[0]?.player as string;
+    const board = await eventually(() => boardOf(mf, mom.device, mom.person), (b) => (b.games.find((g) => g.game === "test")?.rows.length ?? 0) > 0);
+    const pair = board.games.find((g) => g.game === "test")?.rows[0]?.player as string;
     expect((await call(mf, mom.device, "DELETE", `/v1/pairs/${pair}?person=${mom.person.id}`)).status).toBe(204);
-    expect((await boardOf(mf, mom.device, mom.person)).games[0]?.rows).toEqual([]);
+    expect((await boardOf(mf, mom.device, mom.person)).games.find((g) => g.game === "test")?.rows).toEqual([]);
   });
 
   test("nobody who hasn't played appears", async () => {
@@ -359,8 +364,11 @@ describe("the board", () => {
     // Kid started but never played a move, and Mom never started.
     await begin(mf, kid.device, kid.person);
     const board = await boardOf(mf, mom.device, mom.person);
-    expect(board.games.map((g) => g.game)).toEqual(["test"]);
-    expect(board.games[0]?.rows).toEqual([]);
+    // Every listed game, in the Dish's order, each empty.
+    expect(board.games.map((g) => g.game)).toEqual(await listed(mf));
+    expect(board.games.map((g) => g.game)).toContain("test");
+    for (const g of board.games) expect(g.rows).toEqual([]);
+    expect(board.games.find((g) => g.game === "test")?.rows).toEqual([]);
     expect(board.dish.rows).toEqual([]);
   });
 
@@ -372,10 +380,10 @@ describe("the board", () => {
     const s = await startAt(mf, mom.id, old);
     const read = async (now: number) =>
       (await (await mf.dispatchFetch(`${BASE}/__test/board?player=${mom.id}&date=${s.date}&now=${now}`)).json()) as Board;
-    const kept = await eventually(() => read(Date.now()), (b) => (b.games[0]?.rows.length ?? 0) > 0);
-    expect(kept.games[0]?.rows[0]?.result).toMatchObject({ outcome: "closed" });
+    const kept = await eventually(() => read(Date.now()), (b) => (b.games.find((g) => g.game === "test")?.rows.length ?? 0) > 0);
+    expect(kept.games.find((g) => g.game === "test")?.rows[0]?.result).toMatchObject({ outcome: "closed" });
     // 30 days on, it is 130 days old.
-    expect((await read(Date.now() + 30 * 86_400_000)).games[0]?.rows).toEqual([]);
+    expect((await read(Date.now() + 30 * 86_400_000)).games.find((g) => g.game === "test")?.rows).toEqual([]);
   });
 
   test("the board route takes today or the past 120 days", async () => {
@@ -464,7 +472,10 @@ describe("the daily reminder knows the Dish", () => {
     expect(pushes).toHaveLength(1);
     const alert = (pushes[0]?.body.aps as { alert: { title: string; body: string } }).alert;
     expect(alert).toMatchObject({ title: "Mom" });
-    expect(alert.body).toMatch(/^Today's Dish is out\. Test -?\d+ is waiting\.$/);
+    // The first game in the Dish's order that's listed: with several, not necessarily the test game.
+    const first = DAILY_TITLES[(await listed(mf))[0] as DailyGameId];
+    expect((await listed(mf)).length).toBeGreaterThan(1);
+    expect(alert.body).toMatch(new RegExp(`^Today's Dish is out\\. ${first} -?\\d+ is waiting\\.$`));
   });
 
   test("DAILY off: no Dish, so nothing", async () => {
@@ -508,10 +519,10 @@ describe("nothing a run says is lost or doubled", () => {
     expect((await mf.dispatchFetch(`${BASE}/__test/fail-reports?n=2`)).status).toBe(204);
     const result = await solve(mf, device, person);
     const board = await eventually(
-      async () => (await (await mf.dispatchFetch(`${BASE}/__test/board?player=${id}&date=${result.date as string}&now=${Date.now()}`)).json()) as { games: { rows: unknown[] }[] },
-      (b) => (b.games[0]?.rows.length ?? 0) === 1,
+      async () => (await (await mf.dispatchFetch(`${BASE}/__test/board?player=${id}&date=${result.date as string}&now=${Date.now()}`)).json()) as { games: { game: string; rows: unknown[] }[] },
+      (b) => (b.games.find((g) => g.game === "test")?.rows.length ?? 0) === 1,
     );
-    expect(board.games[0]?.rows).toHaveLength(1);
+    expect(board.games.find((g) => g.game === "test")?.rows).toHaveLength(1);
   });
 });
 
@@ -535,8 +546,8 @@ describe("leaving", () => {
     const kid = await someone(mf, "Kid");
     await pairUp(mf, mom.id, kid.id);
     await solve(mf, kid.device, kid.person);
-    const board = await eventually(() => boardOf(mf, mom.device, mom.person), (b) => (b.games[0]?.rows.length ?? 0) > 0);
-    expect((await call(mf, mom.device, "DELETE", `/v1/pairs/${board.games[0]?.rows[0]?.player as string}?person=${mom.person.id}`)).status).toBe(204);
+    const board = await eventually(() => boardOf(mf, mom.device, mom.person), (b) => (b.games.find((g) => g.game === "test")?.rows.length ?? 0) > 0);
+    expect((await call(mf, mom.device, "DELETE", `/v1/pairs/${board.games.find((g) => g.game === "test")?.rows[0]?.player as string}?person=${mom.person.id}`)).status).toBe(204);
     expect(await held(mf, mom.id)).not.toContain(kid.id);
     expect(await held(mf, kid.id)).not.toContain(mom.id);
   });

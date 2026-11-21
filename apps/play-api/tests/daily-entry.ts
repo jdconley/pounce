@@ -1,11 +1,13 @@
+import { DAILY_GAMES, listedGames } from "../src/daily/games";
 import { startRun } from "../src/daily/routes";
+import { testGame } from "../src/daily/test-game";
 import worker from "../src/index";
 import { sha256Hex } from "../src/players/ids";
 import { Player as RealPlayer } from "../src/players/player";
 import { addDays } from "../src/streaks/clock";
 import { connect } from "../src/streaks/pairs";
 
-import type { DailyGameId } from "../src/daily/module";
+import type { DailyGameId, DailyModule } from "../src/daily/module";
 import type { Env } from "../src/env";
 
 export { DeviceIndex } from "../src/room/device-index";
@@ -19,6 +21,13 @@ export { ScreenLinks } from "../src/screens/screen-links";
 export { DailyPuzzle } from "../src/daily/puzzle-do";
 export { DailyRun } from "../src/daily/run-do";
 export { BoardTokens } from "../src/daily/board-tokens";
+
+/**
+ * A second game, so the daily suites hold with several listed, as they will once the real games
+ * add their lines: a stand-in for Box Fort (its rules are the test game's) unless Box Fort itself
+ * is listed. Box Fort comes before the test game in the Dish's order.
+ */
+DAILY_GAMES["box-fort"] ??= { ...(testGame as DailyModule), id: "box-fort" };
 
 /** Reports a player refuses before taking them (`/__test/fail-reports?n=`): a Player that is down. */
 let failing = 0;
@@ -84,6 +93,7 @@ export default {
       const found = await env.BOARD_TOKENS.get(env.BOARD_TOKENS.idFromName(hash)).resolve(url.searchParams.get("device") ?? "", Number(url.searchParams.get("now")));
       return Response.json({ player: found });
     }
+    if (url.pathname === "/__test/listed") return Response.json(listedGames(env).map((m) => m.id));
     if (url.pathname === "/__test/daily-held") {
       const stub = env.PLAYERS.get(env.PLAYERS.idFromName(url.searchParams.get("player") ?? "")) as unknown as { dailyHeld(): Promise<string[]> };
       return Response.json(await stub.dailyHeld());

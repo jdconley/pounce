@@ -170,14 +170,17 @@ describe("the real Worker", () => {
     const solved = await (await call(mf, device, "POST", `/v1/daily/runs/${start.run}/moves${q}`, { from: 2, moves: Array.from({ length: start.level + 1 }, (_, i) => step(3 + i)) })).json();
     expect(shape(solved)).toEqual(shape(samples.movesSolved));
     const board = await eventually(
-      async () => (await (await call(mf, device, "GET", `/v1/daily/board${q}`)).json()) as { games: { rows: unknown[] }[] },
-      (b) => (b.games[0]?.rows.length ?? 0) > 0,
+      async () => (await (await call(mf, device, "GET", `/v1/daily/board${q}`)).json()) as { games: { game: string; rows: unknown[] }[] },
+      (b) => (b.games.find((g) => g.game === "test")?.rows.length ?? 0) > 0,
     );
     const sampleBoard = samples.board as { games: { rows: unknown[] }[] };
-    expect(shape(board.games[0]?.rows[0])).toEqual(shape(sampleBoard.games[0]?.rows[0]));
+    expect(shape(board.games.find((g) => g.game === "test")?.rows[0])).toEqual(shape(sampleBoard.games[0]?.rows[0]));
     expect(shape({ ...board, games: [] })).toEqual(shape({ ...sampleBoard, games: [] }));
-    const stats = await (await call(mf, device, "GET", `/v1/daily/stats${q}`)).json();
-    expect(shape(stats)).toEqual(shape(samples.stats));
+    // One entry per listed game; the played one is shaped like the sample's.
+    const stats = (await (await call(mf, device, "GET", `/v1/daily/stats${q}`)).json()) as { games: Record<string, unknown> };
+    const sampleStats = samples.stats as { games: Record<string, unknown> };
+    expect(Object.keys(stats.games)).toContain("test");
+    expect(shape(stats.games.test)).toEqual(shape(sampleStats.games.test));
     expect((await mf.dispatchFetch(`${BASE}/healthz`)).status).toBe(200);
   });
 });
