@@ -4,7 +4,7 @@
  * posters. It runs on its own device credential (`tvApi`), never runs first run, and is driven by
  * a remote: arrow keys, Enter and Back, with the mouse as well.
  */
-import { useEffect, useMemo, useRef, useState } from "preact/hooks";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "preact/hooks";
 
 import { art, RINGS } from "../../lib/art";
 import { CATALOG, GAME_IDS, type GameId } from "../../lib/catalog";
@@ -285,8 +285,9 @@ function TvHome(props: { board: string | null; onLinked: (room: string) => void;
     }
   };
 
-  // Back closes the board's link panel (home's own Back leaves nothing to close).
-  useEffect(() => {
+  // Back closes the board's link panel (home's own Back leaves nothing to close). Listening from
+  // the moment the panel is drawn, not a frame later: a Back pressed at once still closes it.
+  useLayoutEffect(() => {
     if (!boardLink) return;
     const onKey = (e: KeyboardEvent) => {
       if (!isBack(e)) return;

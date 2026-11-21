@@ -68,10 +68,11 @@ export function TvBoardRoom(props: { board: string; asleep: boolean; onGone: () 
     };
   }, [store]);
 
-  // Back: out of a watched run to the board, else the menu, and back out of it.
+  // Back: out of a watched run to the board, else the menu, and back out of it. Listening from the
+  // moment the board is drawn, not a frame later.
   const watching = useRef(false);
   watching.current = screen.watching !== null;
-  useEffect(() => {
+  useLayoutEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (!isBack(e)) return;
       e.preventDefault();
