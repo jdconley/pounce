@@ -118,7 +118,9 @@ test("Box Fort plays to the end: pieces dragged onto the rug, the score, the end
       .toBe(true);
     placed++;
   }
-  expect(placed, "pieces placed").toBeGreaterThan(10);
+  // The run ends when the fort is built or nothing fits; a crowded rug can end it within a few sets.
+  expect((await board(page)).over, "the run ended").not.toBeNull();
+  expect(placed, "pieces placed").toBeGreaterThan(2);
   await expect(page.getByRole("heading", { name: "Fort done" })).toBeVisible({ timeout: 30_000 });
   await expect(page.locator(".dd-end")).toContainText(/\d+ (pts|points)/);
   await closeAll(kit.context);
