@@ -6,7 +6,7 @@ import { testGame, type TestMove, type TestPuzzle, type TestState } from "./test
 
 import type { DailyResult } from "./module";
 
-const puzzle = (level: 1 | 2 | 3 | 4 | 5 | 6 | 7 = 1): TestPuzzle => testGame.make(createRng([1, 2, 3, 4]), level);
+const puzzle = (level: 1 | 2 | 3 | 4 | 5 | 6 | 7 = 1): TestPuzzle => testGame.make(createRng([1, 2, 3, 4]), level, { date: "2026-11-23", key: [1, 0, 0, 0] });
 const step = (n: number): TestMove => ({ k: "step", n });
 
 /** Plays moves from the start, failing on any refusal. */

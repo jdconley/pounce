@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import { addDays } from "../streaks/clock";
 
-import { dailyKey, dailySeed, runId, seedOf } from "./seed";
+import { cycleKey, dailyKey, dailySeed, runId, seedOf } from "./seed";
 
 import type { DailyGameId } from "./module";
 
@@ -61,5 +61,29 @@ describe("runId", () => {
     expect(await runId(SECRET, "p_abd", "sniff", "2026-11-23")).not.toBe(id);
     expect(await runId(SECRET, "p_abc", "sniff", "2026-11-24")).not.toBe(id);
     expect(await runId(SECRET, "p_abc", "cat-nap", "2026-11-23")).not.toBe(id);
+  });
+});
+
+describe("cycleKey", () => {
+  it("is stable per game, the same every day, and differs by game and secret", async () => {
+    const sniff = await cycleKey(SECRET, "sniff");
+    expect(sniff).toHaveLength(4);
+    expect(await cycleKey(SECRET, "sniff")).toEqual(sniff);
+    expect(await cycleKey(SECRET, "nine-lives")).not.toEqual(sniff);
+    expect(await cycleKey("t".repeat(64), "sniff")).not.toEqual(sniff);
+  });
+
+  it("is HMAC-SHA256 over its own label with the daily key", async () => {
+    const mac = new Uint8Array(await crypto.subtle.sign("HMAC", await dailyKey(SECRET), new TextEncoder().encode("daily.v1.cycle|sniff")));
+    const view = new DataView(mac.buffer);
+    expect(await cycleKey(SECRET, "sniff")).toEqual([0, 4, 8, 12].map((o) => view.getUint32(o)));
+  });
+
+  it("differs from every dailySeed", async () => {
+    const keys = new Set<string>();
+    for (const game of GAMES) keys.add((await cycleKey(SECRET, game)).join(","));
+    for (let i = 0; i < 400; i++) {
+      for (const game of GAMES) expect(keys.has((await dailySeed(SECRET, game, addDays("2026-11-23", i))).join(","))).toBe(false);
+    }
   });
 });

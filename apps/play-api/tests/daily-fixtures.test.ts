@@ -44,7 +44,7 @@ const step = (n: number) => ({ k: "step", n });
 
 /** The HTTP answers, from the run referee and the board, at fixed times. */
 function http() {
-  const p = testGame.make(createRng([1, 2, 3, 4]), 1);
+  const p = testGame.make(createRng([1, 2, 3, 4]), 1, { date: DATE, key: [1, 0, 0, 0] });
   const r = newRun(m, p, { id: RUN, playerId: "p_owner", game: "test", date: DATE, zone: LA, now: T0 });
   const start = startView(m, p, r, T0);
   const movesOk = moves(m, p, r, 0, [step(1), step(2)], T0 + 20_000);

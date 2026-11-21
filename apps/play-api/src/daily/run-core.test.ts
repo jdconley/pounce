@@ -12,7 +12,7 @@ const LA = "America/Los_Angeles";
 const DATE = "2026-11-23"; // a Monday: the test game counts to 4
 const T0 = Date.UTC(2026, 10, 23, 20); // 12:00 in LA
 const m = testGame as DailyModule;
-const p: TestPuzzle = testGame.make(createRng([1, 2, 3, 4]), 1);
+const p: TestPuzzle = testGame.make(createRng([1, 2, 3, 4]), 1, { date: DATE, key: [1, 0, 0, 0] });
 const step = (n: number) => ({ k: "step", n });
 
 function run(module: DailyModule = m): RunState {

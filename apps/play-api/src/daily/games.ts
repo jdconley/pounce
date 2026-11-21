@@ -1,7 +1,12 @@
+import { createRng } from "../rules/rng";
+
+import { levelFor } from "./days";
+import { cycleKey, dailySeed } from "./seed";
 import { testGame } from "./test-game";
 
 import type { DailyGameId, DailyModule } from "./module";
 import type { Env } from "../env";
+import type { Day } from "../streaks/clock";
 
 /**
  * The daily games the server can referee. Each game session adds its own line here (map plan,
@@ -33,3 +38,9 @@ export const DAILY_TITLES: Record<DailyGameId, string> = {
   "box-fort": "Box Fort",
   test: "Test",
 };
+
+/** The whole puzzle for `game` on `date`: made from the day's seed and level, with the game's cycle key. Server only. */
+export async function makeDaily(m: DailyModule, secret: string, game: DailyGameId, date: Day): Promise<unknown> {
+  const [seed, key] = await Promise.all([dailySeed(secret, game, date), cycleKey(secret, game)]);
+  return m.make(createRng(seed), levelFor(date), { date, key });
+}

@@ -1,11 +1,8 @@
 import { DurableObject } from "cloudflare:workers";
 
-import { createRng } from "../rules/rng";
 import { addDays, type Day } from "../streaks/clock";
 
-import { levelFor } from "./days";
-import { dailyModule } from "./games";
-import { dailySeed } from "./seed";
+import { dailyModule, makeDaily } from "./games";
 
 import type { DailyGameId } from "./module";
 import type { Env } from "../env";
@@ -44,7 +41,7 @@ export class DailyPuzzle extends DurableObject<Env> {
         const module = dailyModule(game, this.env);
         const secret = this.env.TOKEN_SECRET;
         if (!module || !secret) throw new Error("daily_puzzle_unavailable");
-        const puzzle = module.make(createRng(await dailySeed(secret, game, date)), levelFor(date));
+        const puzzle = await makeDaily(module, secret, game, date);
         const made = { game, date, json: JSON.stringify(puzzle) };
         this.ctx.storage.sql.exec("INSERT OR REPLACE INTO puzzle (id, game, date, json) VALUES (1, ?, ?, ?)", made.game, made.date, made.json);
         this.puzzle = made;

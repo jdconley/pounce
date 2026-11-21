@@ -39,6 +39,15 @@ export async function dailySeed(secret: string, game: DailyGameId, date: Day): P
   return seedOf(await crypto.subtle.sign("HMAC", await dailyKey(secret), encoder.encode(`daily.v1|${game}|${date}`)));
 }
 
+/**
+ * A game's cycle key: `HMAC-SHA256(dailyKey, "daily.v1.cycle|" + game)` as four words, the same
+ * every day. A game uses it for what must run across days (Sniff shuffles each pass through its
+ * answer pool with it, so no answer repeats until the pool is used up). Server only, like the seeds.
+ */
+export async function cycleKey(secret: string, game: DailyGameId): Promise<Seed> {
+  return seedOf(await crypto.subtle.sign("HMAC", await dailyKey(secret), encoder.encode(`daily.v1.cycle|${game}`)));
+}
+
 /** A MAC's first 16 bytes as a seed. */
 export function seedOf(mac: ArrayBuffer): Seed {
   const view = new DataView(mac);

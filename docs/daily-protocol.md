@@ -278,7 +278,9 @@ Unlink: every TV showing this person's board forgets it, and their sockets close
 
 ## For game builders
 
-A game is a `DailyModule` (`apps/play-api/src/daily/module.ts`): its puzzle maker, public puzzle
+A game is a `DailyModule` (`apps/play-api/src/daily/module.ts`): its puzzle maker
+(`make(rng, level, { date, key })`, where `rng` is seeded for that game and date and `key` is the
+game's cycle key, the same every day, for what runs across days, like Sniff's answer pools), public puzzle
 and state, move parser, rules (`apply`), hint, progress, result and ranking, time floors and move
 spacing. Add one line to `src/daily/games.ts` (and its title to `DAILY_TITLES`). The referee
 (`src/daily/run-core.ts`) does the rest: the clock, batches, resends, hints, closing at 04:00 and
