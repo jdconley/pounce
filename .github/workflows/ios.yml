@@ -499,6 +499,7 @@ jobs:
             Pounce/Design/Juice.swift Pounce/Design/NameTag.swift Pounce/Design/OutlinedText.swift Pounce/Design/Pace.swift
             Pounce/Design/Palette.swift Pounce/Design/QRTile.swift Pounce/Design/Settings.swift Pounce/Design/SignalGlyph.swift
             Pounce/Design/Sound.swift
+            Pounce/Daily/DailyWatchView.swift Pounce/Daily/DailyWatchGames.swift ':(glob)Pounce/Daily/*/TV/**'
             Pounce/Resources/Assets.xcassets Pounce/Resources/Sounds)
           if [ -n "$FROM" ] && git cat-file -e "$FROM^{commit}" 2>/dev/null; then
             if git diff --quiet "$FROM" HEAD -- "${tv[@]}"; then

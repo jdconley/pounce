@@ -105,7 +105,8 @@ func changes(since: String) -> [String] {
 func changes(from commit: String) -> [String] {
   // These match ios.yml's distribute filters. The Apple TV list is what PounceTV compiles
   // (project.yml's PounceTV sources), less the iPhone-only files in those folders; add a folder or
-  // file here and in ios.yml when the target gains one.
+  // file here and in ios.yml when the target gains one. A daily game's TV files need neither:
+  // they live in `Pounce/Daily/<Game>/TV/`, which all three match.
   let paths = isTV
     ? [
       "PounceTV", "PounceKit", "Config", "project.yml",
@@ -116,11 +117,15 @@ func changes(from commit: String) -> [String] {
       "Pounce/Design/OutlinedText.swift", "Pounce/Design/Pace.swift", "Pounce/Design/Palette.swift",
       "Pounce/Design/QRTile.swift", "Pounce/Design/Settings.swift", "Pounce/Design/SignalGlyph.swift",
       "Pounce/Design/Sound.swift",
+      "Pounce/Daily/DailyWatchView.swift", "Pounce/Daily/DailyWatchGames.swift",
       "Pounce/Resources/Assets.xcassets", "Pounce/Resources/Sounds",
     ]
     : ["Pounce", "PounceKit", "PounceWidgets", "PounceNotify", "Config", "project.yml"]
+  // Each daily game's TV files (`Pounce/Daily/<Game>/TV/`), whichever games there are.
+  let globs = isTV ? ["Pounce/Daily/*/TV/**"] : []
   let skipped = isTV ? ["Pounce/Tiles/TilesStage.swift", "Pounce/Tiles/TilesChrome.swift", "Pounce/Tiles/TilesDemo.swift"] : []
-  let app = paths.map { ":(top)apps/play-ios/\($0)" } + skipped.map { ":(top,exclude)apps/play-ios/\($0)" }
+  let app = paths.map { ":(top)apps/play-ios/\($0)" } + globs.map { ":(top,glob)apps/play-ios/\($0)" }
+    + skipped.map { ":(top,exclude)apps/play-ios/\($0)" }
   return subjects(["\(commit)..HEAD", "--"] + app)
 }
 
