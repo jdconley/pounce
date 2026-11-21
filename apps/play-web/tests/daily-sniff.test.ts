@@ -10,7 +10,8 @@ import { emptyBoard, isOver, isSolved, keys, reveal, refused, submit, typeLetter
 import { SniffTrail } from "../src/daily/sniff/trail";
 import SniffWatch from "../src/daily/sniff/watch";
 
-import type { Guess, Mark } from "@pounce/play-api/daily/sniff/types";
+import type { RunEvent, RunSession, StartAnswer } from "../src/daily/client";
+import type { Guess, Mark, SniffMove, SniffPublic, SniffReveal, SniffView } from "@pounce/play-api/daily/sniff/types";
 
 const allowed = (w: string) => ["plant", "crane", "kitty", "dummy"].includes(w);
 const g = (word: string, marks: string): Guess => ({ word, marks: marks.split(" ") as Mark[] });
@@ -135,5 +136,118 @@ describe("the demo", () => {
     expect(DEMO_ANSWER).toBe(run.answer);
     expect(DEMO_SCRIPT).toEqual(run.answers.filter((a) => a.reveal).map((a) => a.reveal));
     expect(demoReveal("crane").marks).toEqual(["none", "none", "none", "none", "none"]);
+  });
+});
+
+describe("Sniff in the Dish's host", () => {
+  type Sent = { move: unknown; options: unknown };
+  type Listener = (e: RunEvent<SniffView, SniffReveal>) => void;
+
+  function fakeSession(state: SniffView, answer: (word: string) => SniffReveal | null) {
+    const sent: Sent[] = [];
+    const listeners: Listener[] = [];
+    const session = {
+      start: { puzzle: { letters: 5, tries: 6 }, state } as StartAnswer<SniffPublic, SniffView>,
+      game: "sniff",
+      result: null,
+      hints: 0,
+      send: (move: SniffMove, options?: unknown) => {
+        sent.push({ move, options });
+        return Promise.resolve(answer(move.word));
+      },
+      flush: () => Promise.resolve(),
+      hint: () => Promise.resolve(null),
+      giveUp: () => Promise.resolve(null),
+      subscribe: (l: Listener) => {
+        listeners.push(l);
+        return () => listeners.splice(listeners.indexOf(l), 1);
+      },
+      serverNow: () => 0,
+      elapsedMs: () => 0,
+    } as unknown as RunSession<SniffPublic, SniffView, SniffMove, SniffReveal>;
+    return { session, sent, emit: (e: RunEvent<SniffView, SniffReveal>) => listeners.forEach((l) => l(e)) };
+  }
+
+  const settle = () => new Promise((done) => setTimeout(done, 60));
+  const press = async (key: string) => {
+    window.dispatchEvent(new KeyboardEvent("keydown", { key }));
+    await settle();
+  };
+  const word = async (w: string) => {
+    for (const k of w) await press(k);
+    await press("Enter");
+  };
+
+  test("draws the server's state, sends each guess urgently, and shows its marks", async () => {
+    const { default: sniff } = await import("../src/daily/sniff/dish");
+    const host = document.createElement("div");
+    document.body.append(host);
+    const fake = fakeSession({ guesses: [g("crate", "none none spot none none")] }, (w) => ({ ...g(w, "spot spot spot spot spot"), answer: w }));
+    render(h(sniff.Screen, { session: fake.session, playing: true }), host);
+    await settle();
+    expect(host.querySelectorAll(".sniff-tag[data-mark=none]")).toHaveLength(4);
+    await word("plant");
+    expect(fake.sent).toEqual([{ move: { k: "guess", word: "plant" }, options: { urgent: true } }]);
+    expect(host.querySelectorAll(".sniff-tag[data-mark=spot]")).toHaveLength(6);
+    render(null, host);
+    host.remove();
+  });
+
+  test("an unknown word is never sent", async () => {
+    const { default: sniff } = await import("../src/daily/sniff/dish");
+    const host = document.createElement("div");
+    document.body.append(host);
+    const fake = fakeSession({ guesses: [] }, () => null);
+    render(h(sniff.Screen, { session: fake.session, playing: true }), host);
+    await settle();
+    await word("zzzzz");
+    expect(fake.sent).toEqual([]);
+    expect(host.textContent).toContain("Not a word");
+    render(null, host);
+    host.remove();
+  });
+
+  test("a resync redraws from the server's state", async () => {
+    const { default: sniff } = await import("../src/daily/sniff/dish");
+    const host = document.createElement("div");
+    document.body.append(host);
+    const fake = fakeSession({ guesses: [] }, () => null);
+    render(h(sniff.Screen, { session: fake.session, playing: true }), host);
+    await settle();
+    fake.emit({ kind: "resync", seq: 2, state: { guesses: [g("crane", "near none none none none"), g("slate", "none none none none near")] } });
+    await settle();
+    expect(host.querySelectorAll(".sniff-tag[data-mark=near]")).toHaveLength(2);
+    // The same seq again still redraws.
+    fake.emit({ kind: "resync", seq: 2, state: { guesses: [g("crane", "near none none none none")] } });
+    await settle();
+    expect(host.querySelectorAll(".sniff-tag[data-mark=near]")).toHaveLength(1);
+    render(null, host);
+    host.remove();
+  });
+
+  test("once the run is over, keys do nothing", async () => {
+    const { default: sniff } = await import("../src/daily/sniff/dish");
+    const host = document.createElement("div");
+    document.body.append(host);
+    const fake = fakeSession({ guesses: [] }, () => null);
+    render(h(sniff.Screen, { session: fake.session, playing: false }), host);
+    await settle();
+    await word("plant");
+    expect(fake.sent).toEqual([]);
+    expect(host.querySelector(".sniff-tag[data-mark=typed]")).toBeNull();
+    expect([...host.querySelectorAll<HTMLButtonElement>(".sniff-key")].every((b) => b.disabled)).toBe(true);
+    render(null, host);
+    host.remove();
+  });
+
+  test("share gives paws by row and never a letter", async () => {
+    const { default: sniff } = await import("../src/daily/sniff/dish");
+    const state: SniffView = { guesses: [g("otter", "none near spot none none"), g("kitty", "spot spot spot spot spot")], answer: "kitty" };
+    const grid = sniff.share!(state, {} as never);
+    expect(grid).toEqual([
+      ["none", "half", "full", "none", "none"],
+      ["full", "full", "full", "full", "full"],
+    ]);
+    expect(JSON.stringify(grid)).not.toMatch(/kitty|otter/);
   });
 });
