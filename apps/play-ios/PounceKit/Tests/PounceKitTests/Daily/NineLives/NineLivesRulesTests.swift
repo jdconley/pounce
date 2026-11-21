@@ -108,14 +108,47 @@ struct NineLivesVectors: Decodable {
         #expect(board.apply(.clear(cell: 2)) == .illegal)
     }
 
-    /// Clashes run on the main actor on every tap; they must stay far under a frame.
+    /// Clashes run on the main actor on every tap, so the scan must stay a fixed, small amount of
+    /// work: each cell, and a filled cell's 20 peers at most, never more as the board fills. This
+    /// counts the cell reads, which a clock in a parallel test run can't measure honestly; the
+    /// time on a device is the iPhone frame gate's (`NineLivesTests.testNineLivesHoldsTheFrameRate`).
     @Test func clashesAreCheap() {
-        var cells = [Int](repeating: 0, count: 81)
-        for i in 0..<81 { cells[i] = (i * 7) % 9 + 1 }
-        let board = NineLivesBoard(givens: cells)
-        let start = ContinuousClock.now
-        for _ in 0..<1000 { _ = board.clashes }
-        let each = (ContinuousClock.now - start) / 1000
-        #expect(each < .microseconds(200), "clashes took \(each)")
+        let most = NineLivesBoard.cellCount * (1 + 20)
+        // A solved grid: no clash, so every cell reads all 20 peers. The most there can be.
+        let solved = (0..<81).map { i in (i / 9 * 3 + i / 27 + i % 9) % 9 + 1 }
+        #expect(Self.reads(solved) == (most, []))
+        // An empty grid reads each cell once.
+        #expect(Self.reads([Int](repeating: 0, count: 81)) == (81, []))
+        // A grid of one digit stops at each cell's first peer.
+        #expect(Self.reads([Int](repeating: 5, count: 81)) == (81 * 2, Array(0..<81)))
+        // Any other grid, among them the vectors' boards, is in between, and the counted scan is the board's.
+        var rng = SystemRandomNumberGenerator()
+        for _ in 0..<200 {
+            let cells = (0..<81).map { _ in Int.random(in: 0...9, using: &rng) }
+            let (n, clashes) = Self.reads(cells)
+            #expect(n <= most, "\(n) reads")
+            #expect(clashes == NineLivesBoard(givens: cells).clashes)
+        }
+    }
+
+    /// The clash scan over `cells`, and how many cell reads it made.
+    private static func reads(_ cells: [Int]) -> (Int, [Int]) {
+        let counted = Counted(cells)
+        let clashes = NineLivesBoard.clashes(in: counted)
+        return (counted.count.n, clashes)
+    }
+}
+
+/// Cells that count their reads.
+private struct Counted: RandomAccessCollection {
+    final class Count { var n = 0 }
+    let cells: [Int]
+    let count = Count()
+    init(_ cells: [Int]) { self.cells = cells }
+    var startIndex: Int { 0 }
+    var endIndex: Int { cells.count }
+    subscript(i: Int) -> Int {
+        count.n += 1
+        return cells[i]
     }
 }
