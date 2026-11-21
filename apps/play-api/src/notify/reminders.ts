@@ -1,6 +1,6 @@
 import { addDays, dayKey, daysBetween, FALLBACK_ZONE, type Day } from "../streaks/clock";
 
-import { DAILY_LINES, freshStartBody, GOING_QUIET, LAST_CHANCE_LINES, pickLine, type Line } from "./copy";
+import { DAILY_LINES, dishBody, freshStartBody, GOING_QUIET, LAST_CHANCE_LINES, pickLine, type Line } from "./copy";
 import { emptyPlaytime, recordPlay, type Playtime } from "./playtime";
 import { gate, isReminder, isSpaced, type Level, type NotifyKind } from "./policy";
 import { lastChanceMinutes, reminderMinutes, slotAt } from "./schedule";
@@ -68,6 +68,12 @@ export type ReminderInput = {
    * Tower). Absent: none. A reminder that points at one says what an older app gets instead.
    */
   newerOnly?: readonly string[];
+  /**
+   * Today's Dish is open (daily games design §9): `DAILY` is on and the player has ended no daily
+   * run today. The game the reminder names: the first of today's unplayed games, its title and
+   * its number. Absent or null: no Dish, and the reminder is exactly what it was.
+   */
+  dish?: { game: string; title: string; number: number } | null;
 };
 
 export type Slot = "daily" | "lastChance";
@@ -214,6 +220,14 @@ function rotated(st: NotifyState, i: ReminderInput, p: PairFacts, slot: Slot, ki
   };
 }
 
+/** The daily reminder about the Dish: it opens the app, with the game to show. */
+function dishReminder(i: ReminderInput, dish: NonNullable<ReminderInput["dish"]>): Candidate {
+  return {
+    push: { kind: "reminder", title: i.name, body: dishBody(dish.title, dish.number), thread: "dish", collapse: "reminder:dish", data: { dish: dish.game } },
+    commit: () => undefined,
+  };
+}
+
 function dailyCandidate(st: NotifyState, i: ReminderInput, today: Day, idle: number, pairs: PairFacts[]): Candidate | null {
   const top = pairs[0];
   if (idle >= BACKOFF_QUIET) {
@@ -243,10 +257,14 @@ function dailyCandidate(st: NotifyState, i: ReminderInput, today: Day, idle: num
       },
     };
   }
-  if (!top || top.kept || top.me || top.myMove.length === 0) return null;
+  // It can fire when you aren't in today and either it's your move, or today's Dish is open.
+  const inToday = top !== undefined && (top.kept || top.me);
+  const yourMove = top !== undefined && !inToday && top.myMove.length > 0;
+  const dish = !inToday && !yourMove ? (i.dish ?? null) : null;
+  if (!yourMove && !dish) return null;
   if (i.lastOpenAt !== null && i.now - i.lastOpenAt < RECENT_OPEN_MS) return null;
   if (idle >= BACKOFF_EVERY_OTHER_DAY && st.lastDailyDay !== null && daysBetween(st.lastDailyDay, today) < 2) return null;
-  const c = rotated(st, i, top, "daily", "reminder");
+  const c = dish ? dishReminder(i, dish) : rotated(st, i, top as PairFacts, "daily", "reminder");
   return {
     push: c.push,
     commit: () => {

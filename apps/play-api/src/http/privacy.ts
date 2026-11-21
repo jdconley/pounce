@@ -21,7 +21,8 @@ const BODY = `<h1>Pounce privacy policy</h1>
 <li><strong>Push tokens</strong>, if you allow notifications, so we can tell you when it's your move, update the widget and show a game on the Lock Screen.</li>
 <li><strong>Streaks:</strong> the days you and another player both played, the days you played, lifetime counts and rewards, and, for players 13 and over, a count of the times of day you usually play, so reminders come at a good time.</li>
 <li><strong>Requests to play</strong> you send or answer, and the invite links you make.</li>
-<li><strong>How new players get started:</strong> for each device, the first time it reached each step of getting started (the age check, picking a name, Home, a first table, a first move, a first finished game, an invite sent or opened, the notifications question), which days it was used, the app version, the phone's language and region (like en-US), and whether an invite brought it. It is kept under a scrambled form of the device id, with no names, players, accounts or tables. We use it only to see where new players get stuck, on our own server. We also count how many times a day invite pages are opened, with nothing about who opened them.</li>
+<!--daily--><li><strong>Daily puzzles:</strong> each puzzle you start, every move you make in it, when you started and finished, your result, and your stats for each puzzle. Our server checks every move and works out every result.</li>
+<!--/daily--><li><strong>How new players get started:</strong> for each device, the first time it reached each step of getting started (the age check, picking a name, Home, a first table, a first move, a first finished game, an invite sent or opened, the notifications question), which days it was used, the app version, the phone's language and region (like en-US), and whether an invite brought it. It is kept under a scrambled form of the device id, with no names, players, accounts or tables. We use it only to see where new players get stuck, on our own server. We also count how many times a day invite pages are opened, with nothing about who opened them.</li>
 <li><strong>Sign in with Apple</strong>, if you use it: a one-way hash of the id Apple gives us, and, when our revocation key is set up, Apple's refresh token, kept only so we can revoke it when you delete your account. We ask Apple for no email and no name.</li>
 </ul>
 <!--consent--><p>We never collect contacts, location, photos, ad identifiers or messages, and no phone numbers except a parent's, given to us to consent for a child (below). Invites go through the share sheet or a QR code; Pounce never reads your contacts.</p><!--/consent--><!--plain--><p>We never collect contacts, location, photos, ad identifiers, phone numbers or messages. Invites go through the share sheet or a QR code; Pounce never reads your contacts.</p><!--/plain-->
@@ -41,6 +42,8 @@ const BODY = `<h1>Pounce privacy policy</h1>
 <ul>
 <li>The people at a table see the names and cats seated there. Someone who opens an invite link you sent sees your name and cat.</li>
 <li>The other person in a streak sees that streak, never a record of who missed a day.</li>
+<!--daily--><li>Your daily puzzle results, and how far along you are while you play, go only to the people you have a streak with, and a TV you linked to your board. A TV shows a puzzle you're playing only if you turn on Show on TV.</li>
+<!--/daily-->
 <li>Nobody else sees your settings, your play times or your history.</li>
 </ul>
 
@@ -57,6 +60,8 @@ const BODY = `<h1>Pounce privacy policy</h1>
 <ul>
 <li>A table, with the names seated at it: until 7 days after its last move.</li>
 <li>Shared streak days: 120 days. Your own streak days: 8 days. Lifetime counts and rewards: until you leave that streak or delete your data.</li>
+<!--daily--><li>Daily puzzle results: 120 days. A puzzle's moves: two days after its day ends. Your stats for each puzzle: until you delete your data. A TV's link to your board: 30 days, or until you unlink it.</li>
+<!--/daily-->
 <li>Requests to play and invite links: 7 days. A link stops working sooner once someone plays on it.</li>
 <li>A player who isn't signed in and that no device has opened for 90 days: deleted.</li>
 <li>A player merged into an account: a forwarding record for 30 days.</li>
@@ -80,7 +85,7 @@ const BODY = `<h1>Pounce privacy policy</h1>
 <ul>
 <li>a device id and the child's seats and turns;</li>
 <li>a name picked from Pounce's list of generated cat names (Mochi, Biscuit, Pickle and the like); a child cannot type a name;</li>
-<li>game progress such as streaks and rewards;</li>
+<li>game progress such as streaks and rewards<!--daily-->, and daily puzzle results<!--/daily-->;</li>
 <li>a time zone, so a day ends at the child's midnight;</li>
 <li>the getting-started steps above, which say nothing about who the child is, used only to make the game easier to start.</li>
 </ul>
@@ -110,12 +115,19 @@ const HTML = docPage({
 
 
 /** With parent consent (`CONSENT` on) the policy says what it adds; off, the page is as before. */
-const WITH_CONSENT = HTML.replace(/<!--plain-->[\s\S]*?<!--\/plain-->/g, "").replace(/<!--\/?consent-->/g, "");
-const WITHOUT_CONSENT = HTML.replace(/<!--consent-->[\s\S]*?<!--\/consent-->/g, "").replace(/<!--\/?plain-->/g, "");
+const withConsent = (html: string) => html.replace(/<!--plain-->[\s\S]*?<!--\/plain-->/g, "").replace(/<!--\/?consent-->/g, "");
+const withoutConsent = (html: string) => html.replace(/<!--consent-->[\s\S]*?<!--\/consent-->/g, "").replace(/<!--\/?plain-->/g, "");
+/** With the Daily Dish (`DAILY` on) the policy says what it keeps and who sees it; off, nothing of it. */
+const withDaily = (html: string) => html.replace(/<!--\/?daily-->/g, "");
+const withoutDaily = (html: string) => html.replace(/<!--daily-->[\s\S]*?<!--\/daily-->/g, "");
+const PAGES = {
+  consent: { daily: withConsent(withDaily(HTML)), plain: withConsent(withoutDaily(HTML)) },
+  plain: { daily: withoutConsent(withDaily(HTML)), plain: withoutConsent(withoutDaily(HTML)) },
+};
 
 /** The privacy policy page; public, static, no scripts. */
-export function privacyPage(consent = true): Response {
-  return new Response(consent ? WITH_CONSENT : WITHOUT_CONSENT, {
+export function privacyPage(consent = true, daily = false): Response {
+  return new Response(PAGES[consent ? "consent" : "plain"][daily ? "daily" : "plain"], {
     headers: { "content-type": "text/html; charset=utf-8", "cache-control": CACHE, "content-security-policy": CSP },
   });
 }

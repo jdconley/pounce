@@ -1,9 +1,11 @@
 import { DurableObject } from "cloudflare:workers";
 
 import { devSpeed } from "../env";
+import { sha256Hex } from "../players/ids";
 import { DEVICE_HEADER } from "../room/game-room";
 
-import { linkDecision, SCREEN_LINK_TTL_MS } from "./screens";
+
+import { BOARD_TOKEN_TTL_MS, boardLinkDecision, linkDecision, newLinkToken, SCREEN_LINK_TTL_MS } from "./screens";
 
 import type { Env } from "../env";
 
@@ -44,7 +46,7 @@ export class ScreenLinks extends DurableObject<Env> {
     return SCREEN_LINK_TTL_MS / devSpeed(this.env);
   }
 
-  private has(table: "link" | "code"): boolean {
+  private has(table: "link" | "code" | "board"): boolean {
     return this.ctx.storage.sql.exec("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = ?", table).toArray().length > 0;
   }
 
@@ -112,6 +114,33 @@ export class ScreenLinks extends DurableObject<Env> {
     return "link";
   }
 
+  /**
+   * Token instance: a phone links the TV to `player`'s Daily Dish board (daily games design §8).
+   * The TV is given a board token of its own, good for 30 days on that TV only, and keeps it; the
+   * link is spent. `gone`: no such live link.
+   */
+  async linkBoard(player: string, now: number): Promise<"link" | "gone"> {
+    const row = this.row();
+    if (!row || boardLinkDecision({ spent: row.spent === 1, expires: row.expires }, now) !== "link") return "gone";
+    // Spent before anything is awaited, so two phones can't both use it.
+    this.ctx.storage.sql.exec("UPDATE link SET spent = 1 WHERE id = 1");
+    const token = newLinkToken(crypto.getRandomValues(new Uint8Array(16)));
+    const hash = await sha256Hex(token);
+    const expires = now + BOARD_TOKEN_TTL_MS;
+    try {
+      await this.env.BOARD_TOKENS.get(this.env.BOARD_TOKENS.idFromName(hash)).open(hash, player, row.owner, expires);
+      await this.env.PLAYERS.get(this.env.PLAYERS.idFromName(player)).addBoardToken(hash, expires);
+    } catch (error) {
+      this.ctx.storage.sql.exec("UPDATE link SET spent = 0 WHERE id = 1");
+      throw error;
+    }
+    this.ctx.storage.sql.exec("CREATE TABLE IF NOT EXISTS board (id INTEGER PRIMARY KEY CHECK (id = 1), token TEXT)");
+    this.ctx.storage.sql.exec("INSERT OR REPLACE INTO board (id, token) VALUES (1, ?)", token);
+    const told = JSON.stringify({ t: "board", token });
+    for (const ws of this.ctx.getWebSockets()) send(ws, told);
+    return "link";
+  }
+
   /** Token instance: the TV's waiting socket. Only the device that made the link may wait on it. */
   async fetch(request: Request): Promise<Response> {
     const row = this.row();
@@ -122,6 +151,8 @@ export class ScreenLinks extends DurableObject<Env> {
     this.ctx.acceptWebSocket(server);
     // A TV that connects after the link happened is told at once.
     if (row.room !== null) send(server, JSON.stringify({ t: "linked", room: row.room }));
+    const board = this.has("board") ? this.ctx.storage.sql.exec<{ token: string }>("SELECT token FROM board WHERE id = 1").toArray()[0] : undefined;
+    if (board) send(server, JSON.stringify({ t: "board", token: board.token }));
     return new Response(null, { status: 101, webSocket: client });
   }
 

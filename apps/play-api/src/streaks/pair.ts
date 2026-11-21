@@ -12,6 +12,7 @@ import {
   pauseDays,
   repoint,
   report,
+  reportDaily,
   setPerson,
   unlockedFor,
   unpause,
@@ -98,6 +99,19 @@ export class Pair extends DurableObject<Env> {
     const byMember = s.people.some((p) => p.id === r.by);
     const other = byMember ? s.people.find((p) => p.id !== r.by) : undefined;
     await this.save(now, { awake, widgets: other && r.holder !== other.id ? [other.id] : [] });
+    return Object.fromEntries(s.people.map((p) => [p.id, view(s, p.id, now)]));
+  }
+
+  /**
+   * A daily run a member ended at `at` (daily games design §5): it counts as their turn today.
+   * Both people's views after it; the other person's widgets reload.
+   */
+  async reportDaily(playerId: string, at: number, now: number): Promise<Record<string, StreakView> | null> {
+    const s = this.state;
+    if (!s) return null;
+    reportDaily(s, playerId, at, now);
+    const member = s.people.some((p) => p.id === playerId);
+    await this.save(now, { widgets: member ? s.people.filter((p) => p.id !== playerId).map((p) => p.id) : [] });
     return Object.fromEntries(s.people.map((p) => [p.id, view(s, p.id, now)]));
   }
 

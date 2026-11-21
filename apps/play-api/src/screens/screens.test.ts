@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest";
 import { ROOM_CODE_ALPHABET } from "../room/codes";
 import { createRng } from "../rules/rng";
 
-import { LINK_CODE, LINK_TOKEN, linkDecision, newLinkCode, newLinkToken, parseLinkBody, parseScreenBody, SCREEN_LINK_TTL_MS } from "./screens";
+import { BOARD_TOKEN_TTL_MS, boardLinkDecision, LINK_CODE, LINK_TOKEN, linkDecision, newLinkCode, newLinkToken, parseBoardLinkBody, parseLinkBody, parseScreenBody, SCREEN_LINK_TTL_MS } from "./screens";
 
 describe("link tokens and codes", () => {
   it("live for ten minutes", () => {
@@ -127,5 +127,48 @@ describe("linkDecision", () => {
 
   it("an idle TV links", () => {
     expect(linkDecision(idle, "BCDFG", false, now)).toBe("link");
+  });
+});
+
+describe("parseBoardLinkBody (the Daily Dish's board on a TV)", () => {
+  const token = "A".repeat(22);
+
+  it("takes exactly one of token or code, with board: true", () => {
+    expect(parseBoardLinkBody({ token, board: true })).toEqual({ token });
+    expect(parseBoardLinkBody({ code: "bcdfgh", board: true })).toEqual({ code: "BCDFGH" });
+  });
+
+  it("refuses anything else", () => {
+    for (const bad of [
+      null,
+      { token },
+      { token, board: false },
+      { token, board: "yes" },
+      { board: true },
+      { token, code: "BCDFGH", board: true },
+      { token, board: true, room: "ABCDE" },
+      { token: "short", board: true },
+      { code: "nope", board: true },
+      { code: 7, board: true },
+    ]) {
+      expect(parseBoardLinkBody(bad as Record<string, unknown> | null), JSON.stringify(bad)).toBeNull();
+    }
+  });
+
+  it("is told apart from a table link by its board key", () => {
+    expect(parseLinkBody({ token, board: true })).toBeNull();
+  });
+});
+
+describe("boardLinkDecision", () => {
+  it("links a live, unspent link whatever the TV shows; anything else is gone", () => {
+    expect(boardLinkDecision({ spent: false, expires: 10 }, 5)).toBe("link");
+    expect(boardLinkDecision({ spent: true, expires: 10 }, 5)).toBe("gone");
+    expect(boardLinkDecision({ spent: false, expires: 10 }, 10)).toBe("gone");
+    expect(boardLinkDecision(null, 5)).toBe("gone");
+  });
+
+  it("a board token lasts 30 days", () => {
+    expect(BOARD_TOKEN_TTL_MS).toBe(30 * 86_400_000);
   });
 });

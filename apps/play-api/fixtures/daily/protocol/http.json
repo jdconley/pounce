@@ -1,0 +1,247 @@
+{
+  "start": {
+    "run": "Xq3vL0bNw8sJ2kT9yH4mR6pD1cF7gA5eZuWiOoKnBlM",
+    "game": "test",
+    "date": "2026-11-23",
+    "number": -26336,
+    "level": 1,
+    "startedAt": 1795464000000,
+    "now": 1795464000000,
+    "puzzle": {
+      "target": 4
+    },
+    "state": {
+      "n": 0
+    },
+    "seq": 0,
+    "hints": 0,
+    "result": null,
+    "closesAt": 1795521600000
+  },
+  "resumed": {
+    "run": "Xq3vL0bNw8sJ2kT9yH4mR6pD1cF7gA5eZuWiOoKnBlM",
+    "game": "test",
+    "date": "2026-11-23",
+    "number": -26336,
+    "level": 1,
+    "startedAt": 1795464000000,
+    "now": 1795464025000,
+    "puzzle": {
+      "target": 4
+    },
+    "state": {
+      "n": 2
+    },
+    "seq": 2,
+    "hints": 0,
+    "result": null,
+    "closesAt": 1795521600000
+  },
+  "movesOk": {
+    "ok": true,
+    "seq": 2,
+    "reveals": [],
+    "progress": 0.5,
+    "result": null
+  },
+  "movesSolved": {
+    "ok": true,
+    "seq": 3,
+    "reveals": [],
+    "progress": 1,
+    "result": {
+      "game": "test",
+      "date": "2026-11-23",
+      "number": -26336,
+      "outcome": "solved",
+      "timeMs": 125000,
+      "hints": 1,
+      "progress": 1,
+      "tooFast": false
+    }
+  },
+  "movesIllegal": {
+    "ok": false,
+    "error": "illegal",
+    "at": 0,
+    "seq": 2
+  },
+  "movesStale": {
+    "ok": false,
+    "error": "stale",
+    "at": 0,
+    "seq": 2
+  },
+  "movesOver": {
+    "ok": false,
+    "error": "over",
+    "at": 0,
+    "seq": 3
+  },
+  "hint": {
+    "ok": true,
+    "seq": 2,
+    "reveals": [
+      {
+        "n": 3
+      }
+    ],
+    "progress": 0.75,
+    "result": null
+  },
+  "gaveUp": {
+    "ok": true,
+    "seq": 1,
+    "reveals": [],
+    "progress": 0.25,
+    "result": {
+      "game": "test",
+      "date": "2026-11-23",
+      "number": -26336,
+      "outcome": "gaveUp",
+      "timeMs": 50000,
+      "hints": 0,
+      "progress": 0.25,
+      "tooFast": false
+    }
+  },
+  "board": {
+    "date": "2026-11-23",
+    "games": [
+      {
+        "game": "test",
+        "number": -26336,
+        "rows": [
+          {
+            "player": "me",
+            "name": "Mom",
+            "cat": 3,
+            "rank": 1,
+            "result": {
+              "game": "test",
+              "date": "2026-11-23",
+              "number": -26336,
+              "outcome": "solved",
+              "timeMs": 125000,
+              "hints": 1,
+              "progress": 1,
+              "tooFast": false
+            },
+            "playing": null
+          },
+          {
+            "player": "pr_8tGqLm2vXc9RzK1wYb4NdA",
+            "name": "Kid",
+            "cat": 5,
+            "rank": 2,
+            "result": {
+              "game": "test",
+              "date": "2026-11-23",
+              "number": -26336,
+              "outcome": "gaveUp",
+              "timeMs": 50000,
+              "hints": 0,
+              "progress": 0.25,
+              "tooFast": false
+            },
+            "playing": null
+          },
+          {
+            "player": "pr_Hn5sW2qLp7Xy3Zc8Vb1MkA",
+            "name": "Grandpa",
+            "cat": 1,
+            "rank": null,
+            "result": null,
+            "playing": {
+              "progress": 0.5
+            }
+          }
+        ]
+      }
+    ],
+    "dish": {
+      "rows": [
+        {
+          "player": "me",
+          "name": "Mom",
+          "cat": 3,
+          "rank": 1,
+          "points": 4,
+          "crowns": [
+            "test"
+          ],
+          "ended": 1
+        },
+        {
+          "player": "pr_8tGqLm2vXc9RzK1wYb4NdA",
+          "name": "Kid",
+          "cat": 5,
+          "rank": 2,
+          "points": 3,
+          "crowns": [],
+          "ended": 1
+        }
+      ]
+    },
+    "tvs": 1
+  },
+  "stats": {
+    "games": {
+      "test": {
+        "played": 1,
+        "solved": 1,
+        "streak": 1,
+        "best": 1,
+        "bestTimeMs": 125000,
+        "bestPoints": null,
+        "guesses": [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        "last30": [
+          {
+            "date": "2026-11-23",
+            "result": {
+              "game": "test",
+              "date": "2026-11-23",
+              "number": -26336,
+              "outcome": "solved",
+              "timeMs": 125000,
+              "hints": 1,
+              "progress": 1,
+              "tooFast": false
+            }
+          }
+        ],
+        "lastEnded": "2026-11-23"
+      }
+    }
+  },
+  "linked": {
+    "linked": true
+  },
+  "errors": {
+    "notFound": {
+      "error": "not_found"
+    },
+    "badRequest": {
+      "error": "bad_request"
+    },
+    "noPlayer": {
+      "error": "no_player"
+    },
+    "notAllowed": {
+      "error": "not_allowed"
+    },
+    "rateLimited": {
+      "error": "rate_limited"
+    },
+    "upgradeRequired": {
+      "error": "upgrade_required"
+    }
+  }
+}

@@ -1,0 +1,35 @@
+{
+  "moves": {
+    "from": 0,
+    "moves": [
+      {
+        "k": "step",
+        "n": 1
+      },
+      {
+        "k": "step",
+        "n": 2
+      }
+    ]
+  },
+  "hint": {
+    "hints": 0
+  },
+  "tvOn": {
+    "on": true
+  },
+  "tvOff": {
+    "on": false
+  },
+  "linkBoardByToken": {
+    "token": "Tm90QVJlYWxMaW5rVG9rZW",
+    "board": true
+  },
+  "linkBoardByCode": {
+    "code": "BCDFGH",
+    "board": true
+  },
+  "ping": {
+    "t": "ping"
+  }
+}

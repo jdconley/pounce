@@ -57,3 +57,23 @@ describe("privacyPage", () => {
     expect(html).not.toContain("second text");
   });
 });
+
+describe("the Daily Dish in the privacy policy", () => {
+  test("says nothing of daily puzzles while DAILY is off", async () => {
+    for (const html of [await privacyPage().text(), await privacyPage(false).text(), await privacyPage(true, false).text()]) {
+      expect(html).not.toMatch(/daily puzzle/i);
+      expect(html).not.toContain("<!--");
+    }
+  });
+
+  test("with DAILY on: what's kept, that only connections and a TV linked to your board see results, and 120 days", async () => {
+    for (const consent of [true, false]) {
+      const html = await privacyPage(consent, true).text();
+      expect(html).toContain("<strong>Daily puzzles:</strong>");
+      expect(html).toContain("go only to the people you have a streak with, and a TV you linked to your board");
+      expect(html).toContain("Daily puzzle results: 120 days.");
+      expect(html).toContain("and daily puzzle results;");
+      expect(html).not.toContain("<!--");
+    }
+  });
+});

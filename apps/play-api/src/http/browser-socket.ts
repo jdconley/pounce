@@ -20,6 +20,8 @@ export const TOKEN_PROTOCOL = "pounce.token.";
 export const REFUSED_BASE = 4000;
 
 const MAX_QUERY_VALUE = 200;
+/** The Daily Dish's board socket (docs/daily-protocol.md). */
+const DAILY_BOARD_WS = "/v1/daily/board/ws";
 
 const offered = (request: Request): string[] =>
   (request.headers.get("sec-websocket-protocol") ?? "")
@@ -51,9 +53,18 @@ export function asAppSocket(request: Request): Request {
   if (games !== null && games.length <= MAX_QUERY_VALUE) headers.set(GAMES_HEADER, games);
   const app = url.searchParams.get("app");
   if (app !== null && app.length <= MAX_QUERY_VALUE) headers.set(APP_HEADER, app);
-  // The one thing a socket's query says that no header does: a TV asking to be a screen.
-  const role = url.searchParams.get("role");
-  url.search = role === "screen" ? "?role=screen" : "";
+  // What a socket's query says that no header does: a TV asking to be a screen, and on the Daily
+  // Dish's board socket, the person (a phone) or the board token (a TV).
+  const kept = new URLSearchParams();
+  if (url.searchParams.get("role") === "screen") kept.set("role", "screen");
+  if (url.pathname === DAILY_BOARD_WS) {
+    for (const key of ["person", "board"]) {
+      const value = url.searchParams.get(key);
+      if (value !== null && value.length <= MAX_QUERY_VALUE) kept.set(key, value);
+    }
+  }
+  const query = kept.toString();
+  url.search = query === "" ? "" : `?${query}`;
   return new Request(url.toString(), { method: request.method, headers });
 }
 

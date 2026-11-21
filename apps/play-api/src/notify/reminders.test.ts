@@ -314,3 +314,85 @@ describe("noteSent and noteTurn", () => {
     expect(st.lastTurnDay).toBe(addDays(D, -1));
   });
 });
+
+describe("the Dish (daily games design §9)", () => {
+  const dish = { game: "sniff", title: "Sniff", number: 12 };
+
+  test("no move waiting but the Dish is open: the daily reminder fires with the Dish copy", () => {
+    const st = fresh();
+    const i = input(at(D, "19:30"), { pairs: [facts({ myMove: [] })], dish });
+    expect(dueSlots(st, i)).toEqual(["daily"]);
+    const { push, level } = decide(st, i, "daily");
+    expect(level).toBe("active");
+    expect(push).toEqual({
+      kind: "reminder",
+      title: "JD",
+      body: "Today's Dish is out. Sniff 12 is waiting.",
+      thread: "dish",
+      collapse: "reminder:dish",
+      data: { dish: "sniff" },
+    });
+    expect(st.lastDailyDay).toBe(D);
+  });
+
+  test("a player with no pairs gets the Dish reminder too", () => {
+    expect(decide(fresh(), input(at(D, "19:30"), { pairs: [], dish }), "daily").push?.body).toBe("Today's Dish is out. Sniff 12 is waiting.");
+  });
+
+  test("your move at a table comes first", () => {
+    expect(decide(fresh(), input(at(D, "19:30"), { dish }), "daily").push).toMatchObject({ code: "GH2VD", thread: "pair:pr_1" });
+  });
+
+  test("not when you're in today or the day is kept", () => {
+    for (const over of [{ me: true }, { kept: true }]) {
+      expect(decide(fresh(), input(at(D, "19:30"), { pairs: [facts({ ...over, myMove: [] })], dish }), "daily").push).toBeNull();
+    }
+  });
+
+  test("not right after opening the app", () => {
+    expect(decide(fresh(), input(at(D, "19:30"), { pairs: [], dish, lastOpenAt: at(D, "18:30") }), "daily").push).toBeNull();
+  });
+
+  test("kittens still get nothing", () => {
+    const kitten = input(at(D, "19:30"), { band: "kitten", settings: notifySettings({}, "kitten"), pairs: [], dish });
+    expect(dueSlots(fresh(), kitten)).toEqual([]);
+    expect(decide(fresh(), kitten, "daily").push).toBeNull();
+  });
+
+  test("teens: off by default, nothing 00:00 to 06:00", () => {
+    const teen = input(at(D, "19:00"), { band: "teen", settings: notifySettings({}, "teen"), pairs: [], dish });
+    expect(dueSlots(fresh(), teen)).toEqual([]);
+    expect(decide(fresh(), teen, "daily").push).toBeNull();
+    const on = notifySettings({ "reminders.on": { v: true, at: 1 } }, "teen");
+    expect(decide(fresh(), input(at(D, "19:00"), { band: "teen", settings: on, pairs: [], dish }), "daily").push?.body).toBe(
+      "Today's Dish is out. Sniff 12 is waiting.",
+    );
+    // A teen's slot never lands in the night: the latest it can be is two hours before 21:00.
+    const late = notifySettings({ "reminders.on": { v: true, at: 1 }, "reminders.weekday": { v: { h: 23, m: 30 }, at: 1 } }, "teen");
+    const night = input(at(addDays(D, 1), "00:30"), { band: "teen", settings: late, pairs: [], dish });
+    expect(dueSlots(fresh(), night)).toEqual([]);
+  });
+
+  test("a daily run resets backoff", () => {
+    // Seven idle days: going quiet. The daily run is noted like a turn (the Player does it), and the Dish reminder is back.
+    const st = emptyNotifyState();
+    noteTurn(st, at(addDays(D, -8), "20:00"), LA, false);
+    expect(decide(st, input(at(D, "19:30"), { pairs: [facts({ myMove: [] })], dish }), "daily").push?.kind).toBe("going_quiet");
+    noteTurn(st, at(addDays(D, 1), "09:00"), LA, false);
+    expect(decide(st, input(at(addDays(D, 2), "19:30"), { pairs: [facts({ myMove: [] })], dish }), "daily").push?.body).toBe(
+      "Today's Dish is out. Sniff 12 is waiting.",
+    );
+  });
+
+  test("dishOpen false: exactly today's behavior", () => {
+    for (const over of [{}, { myMove: [] }, { me: true }, { kept: true }]) {
+      const a = fresh();
+      const b = fresh();
+      const without = decide(a, input(at(D, "19:30"), { pairs: [facts(over)] }), "daily");
+      const closed = decide(b, input(at(D, "19:30"), { pairs: [facts(over)], dish: null }), "daily");
+      expect(closed).toEqual(without);
+      expect(b).toEqual(a);
+    }
+    expect(decide(fresh(), input(at(D, "19:30"), { pairs: [] }), "daily").push).toBeNull();
+  });
+});
