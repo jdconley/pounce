@@ -59,14 +59,20 @@
                 rows: all
                     ? [row("me", me, 2, 1, result("box-fort", .done, ms: 300_000, points: long ? 12_480 : 1_240)), row("pr_kid", kid, 5, 2, result("box-fort", .done, ms: 280_000, points: long ? 9_870 : 980))]
                     : [])
+            // As the server sends it: ties share a rank, and someone still playing isn't on it.
             let dish = DailyDish(
-                rows: mine
+                rows: all
                     ? [
-                        DailyDishRow(player: "me", name: me, cat: 2, rank: 1, points: all ? 13 : 6, crowns: all ? ["sniff", "cat-nap", "box-fort"] : ["sniff"], ended: all ? 4 : 2),
-                        DailyDishRow(player: "pr_kid", name: kid, cat: 5, rank: 2, points: all ? 8 : 6, crowns: ["nine-lives"], ended: all ? 3 : 2),
-                        DailyDishRow(player: "pr_gramps", name: gramps, cat: 1, rank: 3, points: all ? 3 : 0, crowns: [], ended: all ? 1 : 0),
+                        DailyDishRow(player: "me", name: me, cat: 2, rank: 1, points: 13, crowns: ["sniff", "cat-nap", "box-fort"], ended: 4),
+                        DailyDishRow(player: "pr_kid", name: kid, cat: 5, rank: 2, points: 8, crowns: ["nine-lives"], ended: 3),
+                        DailyDishRow(player: "pr_gramps", name: gramps, cat: 1, rank: 3, points: 3, crowns: [], ended: 1),
                     ]
-                    : [DailyDishRow(player: "pr_kid", name: kid, cat: 5, rank: 1, points: 5, crowns: ["sniff", "nine-lives"], ended: 2)])
+                    : mine
+                        ? [
+                            DailyDishRow(player: "me", name: me, cat: 2, rank: 1, points: 6, crowns: ["sniff"], ended: 2),
+                            DailyDishRow(player: "pr_kid", name: kid, cat: 5, rank: 1, points: 6, crowns: ["nine-lives"], ended: 2),
+                        ]
+                        : [DailyDishRow(player: "pr_kid", name: kid, cat: 5, rank: 1, points: 5, crowns: ["sniff", "nine-lives"], ended: 2)])
             return DailyBoard(date: date, games: [sniff, nine, nap, fort], dish: dish, tvs: mode == "fresh" ? 0 : 1)
         }
 

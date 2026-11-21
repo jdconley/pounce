@@ -110,6 +110,16 @@ enum DailyFixtures {
         #expect(board.with(tvs: 0).tvs == 0)
     }
 
+    @Test func theDishShowsNobodyAtZero() {
+        let dish = DailyDish(rows: [
+            DailyDishRow(player: "me", name: "Mom", cat: 1, rank: 1, points: 6, crowns: [], ended: 2),
+            DailyDishRow(player: "pr_a", name: "Kid", cat: 2, rank: 1, points: 6, crowns: [], ended: 2),
+            DailyDishRow(player: "pr_b", name: "Gramps", cat: 3, rank: 3, points: 0, crowns: [], ended: 0),
+        ])
+        #expect(dish.shown.map(\.player) == ["me", "pr_a"])
+        #expect(dish.shown.map(\.rank) == [1, 1])
+    }
+
     @Test func summariesReadAsTheSpecSays() {
         func r(_ outcome: DailyOutcome, ms: Int = 247_000, guesses: Int? = nil, points: Int? = nil, n: Int = 12) -> DailyResult {
             DailyResult(game: "x", date: "d", number: n, outcome: outcome, timeMs: ms, progress: 1, guesses: guesses, points: points)

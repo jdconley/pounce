@@ -225,6 +225,10 @@ public struct DailyDish: Sendable, Hashable, Codable {
     public let rows: [DailyDishRow]
 
     public init(rows: [DailyDishRow]) { self.rows = rows }
+
+    /// The rows the Dish shows: never someone at 0 points (a run closed at 04:00 in fourth place or
+    /// lower earns nothing), so nobody reads as last. Ranks are the server's, ties shared.
+    public var shown: [DailyDishRow] { rows.filter { $0.points > 0 } }
 }
 
 /// `GET /v1/daily/board`, and the socket's snapshot.

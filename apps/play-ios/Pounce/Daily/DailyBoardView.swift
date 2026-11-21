@@ -64,10 +64,10 @@ struct DailyBoardRows: View {
         VStack(spacing: 8) {
             switch tab {
             case .dish:
-                if board.dish.rows.isEmpty {
+                if board.dish.shown.isEmpty {
                     empty
                 } else {
-                    ForEach(board.dish.rows) { dishRow($0) }
+                    ForEach(board.dish.shown) { dishRow($0) }
                 }
             case .game(let id):
                 let rows = board.game(id)?.rows ?? []
