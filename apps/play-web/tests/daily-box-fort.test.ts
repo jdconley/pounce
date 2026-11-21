@@ -4,6 +4,7 @@ import { describe, expect, test } from "vitest";
 
 import { boxFortLayout, lifted, slotAt, snap, trayOrigin, TRAY_SCALE, type Box } from "../src/daily/box-fort/layout";
 import { fitsBySlot, placePiece, receiveReveal, resync, startPlay } from "../src/daily/box-fort/model";
+import { onRunEvent, placement, playFor } from "../src/daily/box-fort/session";
 
 import type { BoxFortPublicPuzzle, BoxFortPublicState, BoxFortReveal } from "@pounce/play-api/daily/box-fort/module";
 import type { Piece } from "@pounce/play-api/daily/box-fort/pieces";
@@ -139,5 +140,40 @@ describe("the play model", () => {
         expect(play.state, file).toEqual(step.state);
       }
     }
+  });
+});
+
+describe("the run wiring", () => {
+  const dots = [piece("#", 1), piece("#", 2), piece("#", 3)];
+  const puzzle: BoxFortPublicPuzzle = { rug: EMPTY, sets: 2, pieces: dots };
+
+  test("a resumed run draws from the server's state", () => {
+    const state: BoxFortPublicState = { ...startPlay(puzzle).state, placed: [true, false, false], points: 1 };
+    expect(playFor(puzzle, state).state).toEqual(state);
+  });
+
+  test("only the last piece of a set, or of the run, goes at once", () => {
+    let play = playFor(puzzle, startPlay(puzzle).state);
+    const first = placement(play, 0, 0, 0)!;
+    expect(first).toMatchObject({ move: { k: "place", slot: 0, row: 0, col: 0 }, urgent: false });
+    play = placement(first.play, 1, 0, 1)!.play;
+    const third = placement(play, 2, 0, 2)!;
+    expect(third.urgent).toBe(true);
+    expect(placement(third.play, 0, 5, 5)).toBeNull(); // waiting for the next set
+    const dealt = onRunEvent(third.play, { kind: "accepted", reveals: [{ set: 1, pieces: dots }] });
+    expect(dealt.waiting).toBe(false);
+    let last = dealt;
+    for (const slot of [0, 1]) last = placement(last, slot, 4, slot)!.play;
+    const end = placement(last, 2, 4, 2)!;
+    expect(end.urgent).toBe(true);
+    expect(end.play.state.over).toBe("full");
+  });
+
+  test("a resync takes over, other answers change nothing", () => {
+    const play = playFor(puzzle, startPlay(puzzle).state);
+    const server: BoxFortPublicState = { ...play.state, points: 9 };
+    expect(onRunEvent(play, { kind: "resync", state: server }).state).toBe(server);
+    expect(onRunEvent(play, { kind: "link" })).toBe(play);
+    expect(onRunEvent(play, { kind: "accepted", reveals: [] })).toBe(play);
   });
 });

@@ -68,5 +68,7 @@ export const boxFort: DailyModule<BoxFortPuzzle, BoxFortState, Place> = {
   result: (p, s, outcome, timeMs, hints) => ({ outcome, timeMs, hints, points: s.points, progress: progress(p, s) }),
   compare: (a, b) => (b.points ?? 0) - (a.points ?? 0) || a.timeMs - b.timeMs,
   floorMs: Object.fromEntries(([1, 2, 3, 4, 5, 6, 7] as DayLevel[]).map((l) => [l, FLOOR_MS])) as Record<DayLevel, number>,
-  minMoveGapMs: 200,
+  // Moves in one batch arrive together (run-core), so a gap would refuse a batch's second
+  // placement. The per-run move limit and the floor keep bots out instead.
+  minMoveGapMs: 0,
 };

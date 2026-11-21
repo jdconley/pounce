@@ -23,11 +23,13 @@ export type BoxFortPlayProps = {
   play: Play;
   /** The piece in `slot` let go on (`row`, `col`). True when it was placed. */
   onPlace: (slot: number, row: number, col: number) => boolean;
+  /** False once the run has ended: the board stays, and takes no more pieces. */
+  playing?: boolean;
 };
 
 const BURST_MS = 550;
 
-export function BoxFortPlay({ play, onPlace }: BoxFortPlayProps) {
+export function BoxFortPlay({ play, onPlace, playing = true }: BoxFortPlayProps) {
   const root = useRef<HTMLDivElement>(null);
   const layout = useLayout(root);
   const glow = useRef<HTMLCanvasElement>(null);
@@ -36,7 +38,7 @@ export function BoxFortPlay({ play, onPlace }: BoxFortPlayProps) {
   const liftedEl = useRef<HTMLDivElement>(null);
   const gainEl = useRef<HTMLDivElement>(null);
   const slotEls = useRef<(HTMLButtonElement | null)[]>([]);
-  const latest = useLatest({ play, layout, onPlace });
+  const latest = useLatest({ play, layout, onPlace, playing });
   const { state } = play;
 
   // A clear: the boxes swell, flash white and burst into scraps.
@@ -121,10 +123,10 @@ export function BoxFortPlay({ play, onPlace }: BoxFortPlayProps) {
   }, [state.over]);
 
   const pick = (slot: number, e: PointerEvent) => {
-    const { play: p, layout: l } = latest.current;
+    const { play: p, layout: l, playing: live } = latest.current;
     const button = slotEls.current[slot];
     const holder = liftedEl.current;
-    if (!l || !button || !holder || e.button > 0) return;
+    if (!live || !l || !button || !holder || e.button > 0) return;
     if (p.waiting || p.state.over !== null || p.state.placed[slot] !== false) return;
     const piece = p.state.pieces[slot]!;
     const span = spanOf(piece.cells);
@@ -229,7 +231,7 @@ export function BoxFortPlay({ play, onPlace }: BoxFortPlayProps) {
                 class="bf-slot"
                 style={at(layout.slots[slot]!)}
                 aria-label={showing ? `Piece ${slot + 1}, ${piece.cells.length} boxes` : `Piece ${slot + 1}, placed`}
-                disabled={!showing || state.over !== null}
+                disabled={!showing || state.over !== null || !playing}
                 data-testid={`boxfort-slot-${slot}`}
                 onPointerDown={(e) => pick(slot, e as unknown as PointerEvent)}
               >
