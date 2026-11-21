@@ -2,7 +2,7 @@ import Foundation
 import PounceKit
 
 enum BoardSocketEvent: Equatable, Sendable {
-    case message(BoardWire.Message)
+    case message(DailyBoardMessage)
     case online
     case offline
     /// The server no longer knows this board (unlinked from a phone, or its 30 days are up): the
@@ -139,7 +139,7 @@ actor TVBoardSocket: BoardSocketing {
         while !stopped {
             let text: String
             do { text = try await open.receive() } catch { break }
-            if let message = BoardWire.Message.decode(text) { feed.yield(.message(message)) }
+            if let message = DailyBoardMessage.decode(text) { feed.yield(.message(message)) }
         }
         connection = nil
         await open.close()

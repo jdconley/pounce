@@ -180,10 +180,17 @@ final class TVModel {
     /// Whether the server has the Daily Dish on, asked each time home shows.
     private func askDish() {
         let dailyOn = services.dailyOn
+        let delay = services.retryDelay
         Task {
-            let on = await dailyOn()
-            guard self.phase == .home else { return }
-            self.dishOn = on
+            // A probe that can't tell (offline, a busy server) is asked again, a few times.
+            for attempt in 1...4 {
+                guard self.phase == .home else { return }
+                if let on = await dailyOn() {
+                    if self.phase == .home { self.dishOn = on }
+                    return
+                }
+                try? await Task.sleep(for: delay(attempt))
+            }
         }
     }
 

@@ -37,7 +37,7 @@ struct TVBoardState: Equatable, Sendable {
     }
 
     struct Ended: Equatable, Sendable {
-        let result: BoardWire.Result
+        let result: DailyResult
         let name: String
         let until: Date
     }
@@ -45,11 +45,11 @@ struct TVBoardState: Equatable, Sendable {
     /// A watched run as the server last sent it: the game's public puzzle and public state.
     struct Frame: Equatable, Sendable {
         let game: String
-        let puzzle: JSONValue
-        let state: JSONValue
+        let puzzle: DailyJSON
+        let state: DailyJSON
     }
 
-    var board: BoardWire.Board?
+    var board: DailyBoard?
     var offer: Offer?
     /// The latest frame of each run offered to this TV, by player, kept from the offer on.
     var frames: [String: Frame] = [:]
@@ -59,20 +59,24 @@ struct TVBoardState: Equatable, Sendable {
 
     // MARK: the socket
 
-    mutating func apply(_ message: BoardWire.Message, now: Date) {
+    mutating func apply(_ message: DailyBoardMessage, now: Date) {
         switch message {
         case .board(let board):
             self.board = board
         case .result(let player, let result):
             cheer = Cheer(player: player, game: result.game, solved: result.finished, until: now + Self.cheerTime)
         case .progress(let player, let game, let progress):
-            guard var board else { return }
-            for g in board.games.indices where board.games[g].game == game {
-                for r in board.games[g].rows.indices where board.games[g].rows[r].player == player && board.games[g].rows[r].playing != nil {
-                    board.games[g].rows[r].playing = .init(progress: progress)
-                }
+            guard let board else { return }
+            var moved = false
+            let games = board.games.map { g -> DailyGameBoard in
+                guard g.game == game else { return g }
+                return DailyGameBoard(game: g.game, number: g.number, rows: g.rows.map { r in
+                    guard r.player == player, r.playing != nil else { return r }
+                    moved = true
+                    return DailyBoardRow(player: r.player, name: r.name, cat: r.cat, rank: r.rank, result: r.result, playing: DailyPlaying(progress: progress))
+                })
             }
-            self.board = board
+            if moved { self.board = DailyBoard(date: board.date, games: games, dish: board.dish, tvs: board.tvs) }
         case .watchOffer(let player, let name, let cat, let game):
             offer = Offer(player: player, name: name, cat: cat, game: game, until: now + Self.offerTime)
         case .watch(let player, let game, let puzzle, let state):
@@ -91,7 +95,7 @@ struct TVBoardState: Equatable, Sendable {
                 watching = nil
                 ended = nil
             }
-        case .other:
+        case .tvs, .pong, .error, .unknown:
             break
         }
     }
@@ -132,10 +136,8 @@ struct TVBoardState: Equatable, Sendable {
 
     // MARK: words
 
-    static let titles = ["sniff": "Sniff", "nine-lives": "Nine Lives", "cat-nap": "Cat Nap", "box-fort": "Box Fort", "test": "Test"]
-
-    /// A game's name, as the Dish says it.
-    static func title(_ game: String) -> String { titles[game] ?? game }
+    /// A game's name, as the Dish says it (`DailyCatalog`).
+    static func title(_ game: String) -> String { DailyCatalog.info(game)?.title ?? game }
 
     /// The card: "Mom is playing Sniff. Spoilers."
     static func offerWords(name: String, game: String) -> String {
@@ -150,10 +152,10 @@ struct TVBoardState: Equatable, Sendable {
     }
 
     /// What a row says for its result.
-    static func resultWords(_ r: BoardWire.Result) -> String {
+    static func resultWords(_ r: DailyResult) -> String {
         switch r.outcome {
         case .gaveUp: return String(localized: "Gave up", comment: "TV board: a run given up")
-        case .closed: return String(localized: "Closed", comment: "TV board: a run left open until the day ended")
+        case .closed, .other: return String(localized: "Closed", comment: "TV board: a run left open until the day ended")
         case .missed: return String(localized: "Missed", comment: "TV board: a Sniff run that ran out of guesses")
         case .solved, .done:
             if let points = r.points { return points.formatted(.number.locale(Locale(identifier: "en_US"))) }
@@ -163,7 +165,12 @@ struct TVBoardState: Equatable, Sendable {
     }
 
     /// A game's rows to draw, and how many more.
-    static func visibleRows(_ g: BoardWire.Game, max: Int = rowsShown) -> (rows: [BoardWire.Row], more: Int) {
+    static func visibleRows(_ g: DailyGameBoard, max: Int = rowsShown) -> (rows: [DailyBoardRow], more: Int) {
         (Array(g.rows.prefix(max)), Swift.max(0, g.rows.count - max))
     }
+}
+
+extension DailyResult {
+    /// Solved, or Box Fort's ending: a run that finished well.
+    var finished: Bool { outcome.finished }
 }

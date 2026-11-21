@@ -68,7 +68,7 @@ func boardDay(_ date: String) -> String {
 }
 
 private struct DishColumn: View {
-    let board: BoardWire.Board?
+    let board: DailyBoard?
     let cheer: TVBoardState.Cheer?
     let connecting: Bool
 
@@ -110,7 +110,7 @@ private struct DishColumn: View {
 }
 
 private struct DishLine: View {
-    let row: BoardWire.DishRow
+    let row: DailyDishRow
     let first: Bool
     let cheering: Bool
 
@@ -153,7 +153,7 @@ private struct DishLine: View {
 }
 
 private struct Games: View {
-    let games: [BoardWire.Game]
+    let games: [DailyGameBoard]
     let cheer: TVBoardState.Cheer?
 
     /// One game fills the space, two sit side by side, three or four in a 2 x 2 grid. Each card
@@ -187,7 +187,7 @@ private struct Games: View {
 }
 
 private struct GameCard: View {
-    let game: BoardWire.Game
+    let game: DailyGameBoard
     let cheer: TVBoardState.Cheer?
     /// Each row's height (`rowHeight(cardHeight:more:)`).
     let rowHeight: CGFloat
@@ -251,7 +251,7 @@ private struct GameCard: View {
 }
 
 private struct GameRow: View {
-    let row: BoardWire.Row
+    let row: DailyBoardRow
     let game: String
     let cheering: Bool
     /// The row's height (52 to 80): everything in it scales with it, words never under 28.

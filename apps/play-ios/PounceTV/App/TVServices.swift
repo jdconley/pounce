@@ -29,7 +29,10 @@ struct TVServices {
     /// The kept board token (the Keychain on a real TV).
     var boards: any BoardKeeping = MemoryBoardKeep()
     /// Whether the server has the Daily Dish on (its board socket answers 426 to a plain request).
-    var dailyOn: @Sendable () async -> Bool = { false }
+    /// Nil when it can't tell (offline, a server error): home asks again.
+    var dailyOn: @Sendable () async -> Bool? = { false }
+    /// How long home waits before asking again whether the Dish is on, after `attempt` tries.
+    var retryDelay: @Sendable (_ attempt: Int) -> Duration = { .seconds(2 * $0) }
     /// The clock: the board token's 30 days, the watch card's 20 seconds.
     var now: @Sendable () -> Date = { Date() }
     /// The link a phone scans to join table `code`: `/j/<CODE>` on this TV's server.
@@ -64,15 +67,20 @@ extension TVServices {
     }
 
     /// Asks the server whether the Daily Dish is on: `GET /v1/daily/board/ws` without an upgrade
-    /// answers 426 when it is, 404 when it isn't (docs/daily-protocol.md). Anything else is off.
+    /// answers 426 when it is, 404 when it isn't (docs/daily-protocol.md). Nil when it can't tell:
+    /// no credential, no network, or any other answer.
     @concurrent
-    static func dailyOn(api: APIClient, config: APIConfig) async -> Bool {
-        guard let token = try? await api.credential().token else { return false }
+    static func dailyOn(api: APIClient, config: APIConfig) async -> Bool? {
+        guard let token = try? await api.credential().token else { return nil }
         var request = URLRequest(url: config.endpoint("/v1/daily/board/ws"))
         request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
         for (name, value) in config.headers { request.setValue(value, forHTTPHeaderField: name) }
-        guard let (_, response) = try? await URLSession.shared.data(for: request) else { return false }
-        return (response as? HTTPURLResponse)?.statusCode == 426
+        guard let (_, response) = try? await URLSession.shared.data(for: request) else { return nil }
+        switch (response as? HTTPURLResponse)?.statusCode {
+        case 426: return true
+        case 404: return false
+        default: return nil
+        }
     }
 }
 

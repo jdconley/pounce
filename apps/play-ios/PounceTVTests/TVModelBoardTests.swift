@@ -50,7 +50,7 @@ final class BoardRig: Sendable {
     var boardSockets: [FakeBoardSocket] { sockets.withLock { $0 } }
 
     @MainActor
-    func model(keep: ScreenKept = ScreenKept(), dishOn: Bool = true) -> TVModel {
+    func model(keep: ScreenKept = ScreenKept(), dishOn: Bool = true, unsure: Int = 0) -> TVModel {
         var services = server.services(keep: MemoryScreenKeep(keep))
         services.boardSocket = { token in
             self.sockets.withLock { s in
@@ -60,7 +60,10 @@ final class BoardRig: Sendable {
             }
         }
         services.boards = boards
-        services.dailyOn = { dishOn }
+        // The first `unsure` probes can't tell (offline, a busy server); then the answer.
+        let asked = Mutex(0)
+        services.dailyOn = { asked.withLock { $0 += 1; return $0 } <= unsure ? nil : dishOn }
+        services.retryDelay = { _ in .milliseconds(1) }
         services.now = { self.clock.now }
         return TVModel(services: services)
     }
@@ -174,6 +177,13 @@ struct TVModelBoardTests {
         await model.settle()
         #expect(await rig.boards.load() == nil)
         #expect(await soon { rig.boardSockets.allSatisfy(\.isStopped) })
+    }
+
+    @Test func aProbeThatCantTellIsAskedAgain() async {
+        let rig = BoardRig()
+        let model = rig.model(unsure: 2)
+        await model.start()
+        #expect(await soon { model.dishOn })
     }
 
     @Test func thePosterHidesWhileTheDishIsOff() async {

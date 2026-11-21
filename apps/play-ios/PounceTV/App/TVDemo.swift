@@ -513,11 +513,11 @@ actor TVDemoBoardSocket: BoardSocketing {
     private func offers() async {
         for await _ in releases {
             feed.yield(.message(.watchOffer(player: "pr_kid", name: "Kid", cat: 5, game: "sniff")))
-            feed.yield(.message(.watch(player: "pr_kid", game: "sniff", puzzle: .object([:]), state: .object(["guesses": .number(0)]))))
+            feed.yield(.message(.watch(player: "pr_kid", game: "sniff", puzzle: .object([:]), state: .object(["guesses": .int(0)]))))
             // Long enough for the card to be read and Watch pressed, then a few guesses watched.
             try? await Task.sleep(for: Pace.duration(.seconds(10)))
             for n in 0...4 {
-                feed.yield(.message(.watch(player: "pr_kid", game: "sniff", puzzle: .object([:]), state: .object(["guesses": .number(Double(n))]))))
+                feed.yield(.message(.watch(player: "pr_kid", game: "sniff", puzzle: .object([:]), state: .object(["guesses": .int(n)]))))
                 try? await Task.sleep(for: Pace.duration(.seconds(1.5)))
             }
             feed.yield(.message(.watchEnd(player: "pr_kid", game: "sniff", result: Self.result(game: "sniff", who: 2))))
@@ -538,21 +538,21 @@ actor TVDemoBoardSocket: BoardSocketing {
         return people.count - (tick / games.count + g) % 3
     }
 
-    private static func result(game: String, who: Int) -> BoardWire.Result {
-        let outcome: BoardWire.Result.Outcome = game == "box-fort" ? .done : (who == 4 ? .gaveUp : .solved)
-        return BoardWire.Result(
+    private static func result(game: String, who: Int) -> DailyResult {
+        let outcome: DailyOutcome = game == "box-fort" ? .done : (who == 4 ? .gaveUp : .solved)
+        return DailyResult(
             game: game, date: "2026-11-23", number: 12, outcome: outcome, timeMs: 95_000 + who * 41_000, hints: who == 3 ? 1 : 0,
             progress: outcome == .gaveUp ? 0.4 : 1, tooFast: false,
             guesses: game == "sniff" ? 3 + who % 4 : nil, points: game == "box-fort" ? 2_400 - who * 310 : nil)
     }
 
-    static func board(_ tick: Int) -> BoardWire.Board {
+    static func board(_ tick: Int) -> DailyBoard {
         var dish: [String: (points: Int, crowns: [String], ended: Int)] = [:]
-        let games = games.map { game -> BoardWire.Game in
+        let games = games.map { game -> DailyGameBoard in
             let n = rowsFor(game: game, tick: tick)
             var rows = (0..<n).map { i in
                 let who = people[i]
-                return BoardWire.Row(player: who.id, name: who.name, cat: who.cat, rank: i + 1, result: result(game: game, who: i), playing: nil)
+                return DailyBoardRow(player: who.id, name: who.name, cat: who.cat, rank: i + 1, result: result(game: game, who: i), playing: nil)
             }
             for (i, row) in rows.enumerated() {
                 var d = dish[row.player] ?? (0, [], 0)
@@ -563,16 +563,16 @@ actor TVDemoBoardSocket: BoardSocketing {
             }
             if n < people.count {
                 let who = people[n]
-                rows.append(BoardWire.Row(player: who.id, name: who.name, cat: who.cat, rank: nil, result: nil, playing: .init(progress: 0.25)))
+                rows.append(DailyBoardRow(player: who.id, name: who.name, cat: who.cat, rank: nil, result: nil, playing: .init(progress: 0.25)))
             }
-            return BoardWire.Game(game: game, number: 12, rows: rows)
+            return DailyGameBoard(game: game, number: 12, rows: rows)
         }
         let sorted = dish.sorted { $0.value.points > $1.value.points }
         let rows = sorted.enumerated().map { i, entry in
             let who = people.first { $0.id == entry.key }!
-            return BoardWire.DishRow(player: who.id, name: who.name, cat: who.cat, rank: i + 1, points: entry.value.points, crowns: entry.value.crowns, ended: entry.value.ended)
+            return DailyDishRow(player: who.id, name: who.name, cat: who.cat, rank: i + 1, points: entry.value.points, crowns: entry.value.crowns, ended: entry.value.ended)
         }
-        return BoardWire.Board(date: "2026-11-23", games: games, dish: BoardWire.Dish(rows: rows), tvs: 1)
+        return DailyBoard(date: "2026-11-23", games: games, dish: DailyDish(rows: rows), tvs: 1)
     }
 }
 #endif

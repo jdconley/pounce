@@ -2,17 +2,31 @@ import PounceKit
 import SwiftUI
 
 /// Watching a puzzle on the TV (daily games design §8): the card that offers it, and the host that
-/// draws the run from the server's frames. Each game brings its own read-only `DailyWatchView`;
-/// until a game's lands, a placeholder stands in. The web TV's `tv-watch.tsx`.
-enum DailyWatchViews {
-    /// The view for `game`, drawn from its public puzzle and public state.
-    @MainActor @ViewBuilder
-    static func view(game: String, puzzle: JSONValue?, state: JSONValue?) -> some View {
-        switch (game, state) {
-        // Each game adds its own case here as its watch view lands.
-        case ("test", .some(.object(let o))):
-            TestWatch(n: o["n"].flatMap { if case .number(let n) = $0 { Int(n) } else { nil } } ?? 0)
-        default:
+/// draws the run from the server's frames. Each game brings its own read-only `DailyWatchView`,
+/// listed in `DailyWatchGames`; a game not listed yet gets a placeholder. The web TV's `tv-watch.tsx`.
+private struct WatchStage: View {
+    let game: String
+    let frame: TVBoardState.Frame?
+    /// The listed game's view for the latest frame, decoded off the main actor.
+    @State private var built: (@MainActor @Sendable () -> AnyView)?
+
+    var body: some View {
+        if let watch = DailyWatchGames.view(for: game) {
+            ZStack {
+                if let built {
+                    built()
+                } else {
+                    WatchPlaceholder(game: game)
+                }
+            }
+            .task(id: frame) {
+                guard let frame else { return }
+                // The last frame stays drawn until the next one is decoded.
+                if let next = await watch.frame(puzzle: frame.puzzle, state: frame.state) { built = next }
+            }
+        } else if game == DailyCatalog.test.id, let n = frame?.state["n"], case .int(let count) = n {
+            TestWatch(n: count)
+        } else {
             WatchPlaceholder(game: game)
         }
     }
@@ -139,7 +153,7 @@ struct WatchHost: View {
                 .focused($backFocused)
                 .accessibilityIdentifier("tv.watch.back")
             }
-            DailyWatchViews.view(game: watching.game, puzzle: frame?.puzzle, state: frame?.state)
+            WatchStage(game: watching.game, frame: frame)
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
         .overlay {
@@ -189,7 +203,7 @@ private struct EndedView: View {
         case .done: String(localized: "Done", comment: "TV: a watched Box Fort run, ended")
         case .missed: String(localized: "Missed", comment: "TV: a watched Sniff run, out of guesses")
         case .gaveUp: String(localized: "Gave up", comment: "TV: a watched run, given up")
-        case .closed: String(localized: "Closed", comment: "TV: a watched run, closed at the day's end")
+        case .closed, .other: String(localized: "Closed", comment: "TV: a watched run, closed at the day's end")
         }
     }
 }

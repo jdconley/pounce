@@ -20,10 +20,10 @@ enum BoardFixtures {
         }
     }()
 
-    static func message(_ name: String) -> BoardWire.Message {
-        guard let text = texts[name], let m = BoardWire.Message.decode(text) else {
+    static func message(_ name: String) -> DailyBoardMessage {
+        guard let text = texts[name], let m = DailyBoardMessage.decode(text) else {
             Issue.record("no fixture \(name)")
-            return .other
+            return .unknown(name)
         }
         return m
     }
@@ -41,17 +41,17 @@ struct TVBoardStateTests {
         return s
     }
 
-    private func result(_ outcome: BoardWire.Result.Outcome, game: String = "test", timeMs: Int = 125_000, guesses: Int? = nil, points: Int? = nil) -> BoardWire.Result {
-        BoardWire.Result(game: game, date: "2026-11-23", number: 12, outcome: outcome, timeMs: timeMs, hints: 0, progress: 1, tooFast: false, guesses: guesses, points: points)
+    private func result(_ outcome: DailyOutcome, game: String = "test", timeMs: Int = 125_000, guesses: Int? = nil, points: Int? = nil) -> DailyResult {
+        DailyResult(game: game, date: "2026-11-23", number: 12, outcome: outcome, timeMs: timeMs, hints: 0, progress: 1, tooFast: false, guesses: guesses, points: points)
     }
 
     @Test func everyFixtureDecodes() {
         for name in ["board", "result", "progress", "watchOffer", "watch", "watchEnd"] {
-            #expect(BoardFixtures.message(name) != .other, "\(name)")
+            #expect(BoardFixtures.message(name) != .unknown(name), "\(name)")
         }
-        #expect(BoardWire.Message.decode(#"{"t":"tvs","count":2}"#) == .other)
-        #expect(BoardWire.Message.decode(#"{"t":"later"}"#) == .other)
-        #expect(BoardWire.Message.decode("nope") == nil)
+        #expect(DailyBoardMessage.decode(#"{"t":"tvs","count":2}"#) == .tvs(2))
+        #expect(DailyBoardMessage.decode(#"{"t":"later"}"#) == .unknown("later"))
+        #expect(DailyBoardMessage.decode("nope") == nil)
     }
 
     @Test func aSnapshotIsTheBoardShown() {
@@ -91,7 +91,7 @@ struct TVBoardStateTests {
         var s = run(["watchOffer", "watch"])
         s.notNow()
         #expect(s.offer == nil)
-        #expect(s.frames[kid] == .init(game: "test", puzzle: .object(["target": .number(4)]), state: .object(["n": .number(2)])))
+        #expect(s.frames[kid] == .init(game: "test", puzzle: .object(["target": .int(4)]), state: .object(["n": .int(2)])))
         s = run(["watchOffer", "watch"])
         s.watch()
         #expect(s.watching == .init(player: kid, name: "Kid", cat: 5, game: "test"))
@@ -138,8 +138,8 @@ struct TVBoardStateTests {
     @Test func aWholeFamilyShowsAndPastSixTheRestAreCounted() throws {
         let game = try #require(run(["board"]).board?.games.first)
         let row = try #require(game.rows.first)
-        let nine = BoardWire.Game(game: "test", number: 1, rows: (0..<9).map { i in
-            BoardWire.Row(player: "p\(i)", name: row.name, cat: row.cat, rank: i + 1, result: row.result, playing: nil)
+        let nine = DailyGameBoard(game: "test", number: 1, rows: (0..<9).map { i in
+            DailyBoardRow(player: "p\(i)", name: row.name, cat: row.cat, rank: i + 1, result: row.result, playing: nil)
         })
         let shown = TVBoardState.visibleRows(nine)
         #expect(shown.rows.map(\.player) == ["p0", "p1", "p2", "p3", "p4", "p5"])
