@@ -2,6 +2,7 @@ import { expect, test, type Page } from "@playwright/test";
 import { place } from "@pounce/play-api/daily/box-fort/rules";
 
 import { closeAll, newPlayer } from "./helpers";
+import { speedAt } from "./speed";
 
 /**
  * Box Fort in the browser, end to end, against the server (`DAILY=on`): from the Dish, every piece
@@ -165,8 +166,10 @@ test("the drag holds the frame rate: no long frame, frame work within one frame"
   });
   await openBoxFort(page);
   await page.waitForTimeout(1000);
+  // The phone is the reference Mac slowed 4x, whatever machine runs this (as main-thread.spec).
+  const speed = await speedAt(page, gate === "android-chrome" ? 4 : undefined);
   const cdp = await page.context().newCDPSession(page);
-  if (gate === "android-chrome") await cdp.send("Emulation.setCPUThrottlingRate", { rate: 4 });
+  await cdp.send("Emulation.setCPUThrottlingRate", { rate: speed.rate });
   await page.evaluate(() => {
     (window as unknown as { __long: unknown[] }).__long = [];
     performance.mark("step:drag");
@@ -193,15 +196,29 @@ test("the drag holds the frame rate: no long frame, frame work within one frame"
   await cdp.send("Emulation.setCPUThrottlingRate", { rate: 1 });
   const long = (await page.evaluate(() => (window as unknown as { __long: { duration: number; blocking: number; script: number }[] }).__long)) ?? [];
   const costs = frameWork(trace.traceEvents).sort((p, q) => p - q);
-  const p95 = costs[Math.min(costs.length - 1, Math.floor(costs.length * 0.95))] ?? 0;
-  const summary = { profile: gate, frames: costs.length, p95FrameWorkMs: Math.round(p95 * 100) / 100, budgetMs: Math.round(BUDGET[gate]! * 100) / 100, longFrames: long.map((e) => Math.round(e.duration)) };
+  // On a machine slower than the profile even unthrottled, times are scaled to the profile's speed.
+  const k = speed.residual;
+  const raw = costs[Math.min(costs.length - 1, Math.floor(costs.length * 0.95))] ?? 0;
+  const p95 = raw / k;
+  const round = (n: number) => Math.round(n * 100) / 100;
+  const summary = {
+    profile: gate,
+    machine: `${round(speed.f)}x the reference's time`,
+    cpuSlowdown: round(speed.rate),
+    scaledBy: round(k),
+    frames: costs.length,
+    p95FrameWorkMs: round(p95),
+    rawP95FrameWorkMs: round(raw),
+    budgetMs: round(BUDGET[gate]!),
+    longFrames: long.map((e) => Math.round(e.duration / k)),
+  };
   console.log(`box fort drag: ${JSON.stringify(summary)}`);
   await info.attach("box-fort-drag.json", { body: JSON.stringify(summary, null, 2), contentType: "application/json" });
 
   // Every piece went back: nothing was placed by the sweep.
   expect((await board(page)).placed).toEqual([false, false, false]);
   expect(costs.length, "frames traced").toBeGreaterThan(100);
-  expect(long.filter((e) => e.blocking > 0 || e.script > 50), "animation frames over 50 ms on the rendering thread").toEqual([]);
+  expect(long.filter((e) => e.blocking / k > 0 || e.script / k > 50), "animation frames over 50 ms on the rendering thread").toEqual([]);
   expect(p95, `p95 main-thread work per frame, ms (budget ${summary.budgetMs})`).toBeLessThanOrEqual(BUDGET[gate]!);
   await closeAll(ivy.context);
 });
