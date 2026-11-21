@@ -54,7 +54,7 @@ export class DishStore {
   private socket: Socket | null = null;
   private readonly listeners = new Set<() => void>();
   private loading: Promise<void> | null = null;
-  /** Load again when the one out now ends: it was asked before the server knew this player. */
+  /** Load again if the one out now fails: it was asked before the server knew this player. */
   private again = false;
 
   constructor(private readonly deps: DishDeps) {}
@@ -99,7 +99,9 @@ export class DishStore {
       this.loading = null;
       if (!this.again) return;
       this.again = false;
-      void this.refresh();
+      // Only when the load that was out didn't show the Dish: it was answered before the save
+      // landed (a 403, or a 404 while the new player is still being made).
+      if (this.state.status !== "on") void this.refresh();
     });
     return this.loading;
   }

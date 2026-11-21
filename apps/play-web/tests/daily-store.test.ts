@@ -104,6 +104,54 @@ describe("the Dish store", () => {
     expect(calls.filter((c) => c.startsWith("/v1/daily/board"))).toHaveLength(2);
   });
 
+  test("a 404 answered while the save was landing (the player still being made) loads again", async () => {
+    let made = false;
+    let answer: () => void = () => {};
+    const calls: string[] = [];
+    const store = new DishStore({
+      call: async (_m, path) => {
+        calls.push(path);
+        if (!made) {
+          await new Promise<void>((done) => (answer = done));
+          throw new ApiError(404, "no_player");
+        }
+        return new Response(JSON.stringify(path.startsWith("/v1/daily/board") ? BOARD : STATS), { status: 200 });
+      },
+      socket: () => ({ start: () => {}, stop: () => {} }),
+    });
+    store.retain("pe_1");
+    await flush();
+    made = true;
+    store.profileSaved("pe_1");
+    answer();
+    await flush();
+    await flush();
+    await flush();
+    expect(store.state.status).toBe("on");
+  });
+
+  test("the profile save landing while a load that works is out asks nothing more", async () => {
+    let answer: () => void = () => {};
+    const calls: string[] = [];
+    const store = new DishStore({
+      call: async (_m, path) => {
+        calls.push(path);
+        if (path.startsWith("/v1/daily/board")) await new Promise<void>((done) => (answer = done));
+        return new Response(JSON.stringify(path.startsWith("/v1/daily/board") ? BOARD : STATS), { status: 200 });
+      },
+      socket: () => ({ start: () => {}, stop: () => {} }),
+    });
+    store.retain("pe_1");
+    await flush();
+    store.profileSaved("pe_1");
+    answer();
+    await flush();
+    await flush();
+    await flush();
+    expect(store.state.status).toBe("on");
+    expect(calls.filter((c) => c.startsWith("/v1/daily/board"))).toHaveLength(1);
+  });
+
   test("the profile saving again leaves a shown Dish alone, and another person's save does nothing", async () => {
     const { store, calls } = setup((p) => (p.startsWith("/v1/daily/board") ? BOARD : STATS));
     store.retain("pe_1");
