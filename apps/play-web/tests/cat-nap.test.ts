@@ -1,12 +1,16 @@
 // @vitest-environment happy-dom
-import { clashes, emptyState, type NapState, type Quilt } from "@pounce/play-api/daily/cat-nap/rules";
+import { clashes, emptyState, type NapMove, type NapState, type Quilt } from "@pounce/play-api/daily/cat-nap/rules";
 import { h, render } from "preact";
 import { act } from "preact/test-utils";
 import { describe, expect, test } from "vitest";
 
+import catNap, { type NapReveal } from "../src/daily/cat-nap/dish";
 import { begin, cancel, end, hint, load, move, start, shown, tap } from "../src/daily/cat-nap/model";
 import { CatNapPlay } from "../src/daily/cat-nap/play";
 import { CatNapWatch } from "../src/daily/cat-nap/watch";
+
+import type { RunEvent, RunSession } from "../src/daily/cat-nap/host-contract";
+import type { ComponentChild } from "preact";
 
 /** The 5 by 5 quilt from the server's vectors. */
 const Q: Quilt = { n: 5, patches: [0, 0, 1, 1, 1, 0, 2, 2, 1, 1, 3, 2, 2, 2, 1, 3, 3, 2, 4, 4, 3, 3, 4, 4, 4] };
@@ -93,5 +97,106 @@ describe("the views", () => {
     });
     expect(sent).toEqual([{ k: "mark", cells: [7], to: "x" }]);
     expect(cell.getAttribute("aria-label")).toBe("Row 2, column 3, teal checks, no cat");
+  });
+});
+
+describe("the Dish entry", () => {
+  type Ev = RunEvent<NapState, NapReveal>;
+  function fakeSession(state: NapState = emptyState(Q)) {
+    const listeners = new Set<(e: Ev) => void>();
+    const sent: NapMove[] = [];
+    let hints = 0;
+    const session: RunSession<Quilt, NapState, NapMove, NapReveal> = {
+      start: { run: "r1", game: "cat-nap", date: "2027-01-04", number: 1, level: 1, startedAt: 0, now: 0, puzzle: Q, state, seq: 0, hints: 0, result: null, closesAt: 1 },
+      game: "cat-nap",
+      result: null,
+      get hints() {
+        return hints;
+      },
+      send: async (m) => {
+        sent.push(m);
+        return null;
+      },
+      flush: async () => {},
+      hint: async () => {
+        hints++;
+        const reveal = { cell: 1 };
+        for (const l of listeners) l({ kind: "hint", reveal, hints });
+        return reveal;
+      },
+      giveUp: async () => null,
+      subscribe: (l) => {
+        listeners.add(l);
+        return () => listeners.delete(l);
+      },
+      serverNow: () => 0,
+      elapsedMs: () => 0,
+    };
+    const emit = (e: Ev) => act(() => listeners.forEach((l) => l(e)));
+    return { session, sent, emit, listeners };
+  }
+
+  function mount(node: ComponentChild) {
+    const root = document.createElement("div");
+    document.body.append(root);
+    act(() => render(node, root));
+    return root;
+  }
+
+  test("is cat-nap, with no share grid", () => {
+    expect(catNap.id).toBe("cat-nap");
+    expect(catNap.share?.(emptyState(Q), {} as never)).toBeNull();
+  });
+
+  test("a move goes to the session; the quilt starts from the start answer", () => {
+    const start = { ...emptyState(Q), cells: emptyState(Q).cells.map((_, i) => (i === 24 ? 2 : 0)) as NapState["cells"] };
+    const { session, sent } = fakeSession(start);
+    const root = mount(h(catNap.Screen, { session, playing: true }));
+    expect(root.querySelectorAll("[data-cat]")).toHaveLength(1);
+    act(() => {
+      root.querySelector('[data-cell="7"]')!.dispatchEvent(new Event("click", { bubbles: true }));
+    });
+    expect(sent).toEqual([{ k: "mark", cells: [7], to: "x" }]);
+  });
+
+  test("Hint asks the session and draws its locked cat", async () => {
+    const { session } = fakeSession();
+    const root = mount(h(catNap.Screen, { session, playing: true }));
+    const button = root.querySelector<HTMLButtonElement>('[data-testid="catnap-hint"]')!;
+    expect(button.textContent).toBe("Hint+30s");
+    await act(async () => {
+      button.click();
+    });
+    expect(session.hints).toBe(1);
+    expect(root.querySelector('[data-cat="1"] [data-hinted]')).not.toBeNull();
+    expect(button.disabled).toBe(false);
+  });
+
+  test("a resync redraws from the server's board", () => {
+    const { session, emit } = fakeSession();
+    const root = mount(h(catNap.Screen, { session, playing: true }));
+    emit({ kind: "resync", seq: 3, state: { cells: emptyState(Q).cells.map((_, i) => (i === 0 || i === 13 ? 2 : 0)) as NapState["cells"], hinted: [] } });
+    expect(root.querySelectorAll("[data-cat]")).toHaveLength(2);
+    emit({ kind: "accepted", seq: 4, reveals: [], progress: 0.4 });
+    expect(root.querySelectorAll("[data-cat]")).toHaveLength(2);
+  });
+
+  test("an ended run takes no input and asks no hint; unmounting unsubscribes", () => {
+    const { session, sent, listeners } = fakeSession();
+    const root = mount(h(catNap.Screen, { session, playing: false }));
+    act(() => {
+      root.querySelector('[data-cell="7"]')!.dispatchEvent(new Event("click", { bubbles: true }));
+    });
+    expect(sent).toEqual([]);
+    expect(root.querySelector<HTMLButtonElement>('[data-testid="catnap-hint"]')!.disabled).toBe(true);
+    act(() => render(null, root));
+    expect(listeners.size).toBe(0);
+  });
+
+  test("Watch draws from the frame's puzzle and state", () => {
+    const state = { cells: emptyState(Q).cells.map((_, i) => (i === 3 ? 2 : 0)) as NapState["cells"], hinted: [] };
+    const root = mount(h(catNap.Watch, { puzzle: Q, state }));
+    expect(root.querySelectorAll("[data-cat]")).toHaveLength(1);
+    expect(root.querySelector("[data-cell]")).toBeNull();
   });
 });

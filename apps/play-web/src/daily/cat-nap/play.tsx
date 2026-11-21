@@ -1,7 +1,8 @@
 /**
  * Cat Nap's board in the browser: the beds that count the cats, and the quilt. Tap a cell for "no
  * cat", again for a cat; drag to mark many. Marks show at once and each change goes to `onMove`
- * (the run session, once the Dish's host runs it). The host draws everything around it.
+ * (the run session, `dish.tsx`); hints and the server's resyncs come back through `subscribe`.
+ * The Dish's host draws everything around it; `controls` (the Hint button) sit under the quilt.
  */
 import { useEffect, useMemo, useRef, useState } from "preact/hooks";
 
@@ -10,10 +11,14 @@ import { buzz } from "../../lib/haptics";
 import { play as sound } from "../../lib/sound";
 
 import { checkBoard } from "./check";
-import { begin, cancel, end, load, move, shown, start, tap, type NapPlay } from "./model";
+import { begin, cancel, end, hint, load, move, shown, start, tap, type NapPlay } from "./model";
 import { Beds, catFor, clothOf, QuiltSvg, U } from "./quilt";
 
 import type { NapMove, NapState, Quilt } from "@pounce/play-api/daily/cat-nap/rules";
+import type { ComponentChildren } from "preact";
+
+/** What the server tells the board after it is drawn: a hint's cat, or its own board to redraw from. */
+export type NapEvent = { kind: "hint"; cell: number } | { kind: "resync"; state: NapState };
 
 type Pointer = { id: number; start: number; last: { x: number; y: number }; mode: "pending" | "dragging" | "inert"; box: DOMRect };
 
@@ -24,11 +29,13 @@ export function cellLabel(q: Quilt, s: NapState, cell: number): string {
   return `Row ${Math.floor(cell / q.n) + 1}, column ${(cell % q.n) + 1}, ${clothOf(q.patches[cell]!).name}${mark}`;
 }
 
-export function CatNapPlay({ quilt, state, onMove, playing = true }: {
+export function CatNapPlay({ quilt, state, onMove, subscribe, controls, playing = true }: {
   quilt: Quilt;
-  /** The server's board; a new one replaces this view's (a resumed run, a hint). */
+  /** The board to start from (a resumed run's is the server's). */
   state?: NapState;
   onMove: (m: NapMove) => void;
+  subscribe?: (listener: (e: NapEvent) => void) => () => void;
+  controls?: ComponentChildren;
   playing?: boolean;
 }) {
   const [board, setBoard] = useState<NapPlay>(() => start(quilt, state));
@@ -36,9 +43,16 @@ export function CatNapPlay({ quilt, state, onMove, playing = true }: {
   const live = useRef(board);
   live.current = board;
 
-  useEffect(() => {
-    if (state) setBoard((b) => load(b, state));
-  }, [state]);
+  useEffect(
+    () =>
+      subscribe?.((e) => {
+        pointer.current = null;
+        live.current = e.kind === "hint" ? hint(live.current, e.cell) : load(live.current, e.state);
+        setBoard(live.current);
+        if (e.kind === "hint") sound("sparkle");
+      }),
+    [subscribe],
+  );
 
   // The poses a cat can turn to (a clash wakes it, the finish makes it cheer), decoded ahead.
   useEffect(() => {
@@ -148,7 +162,7 @@ export function CatNapPlay({ quilt, state, onMove, playing = true }: {
 
   const n = quilt.n;
   return (
-    <div class="cn-play">
+    <div class={`cn-play${controls ? " cn-has-controls" : ""}`}>
       <Beds n={n} placed={check.placed} />
       <div class="cn-board">
         <QuiltSvg
@@ -176,6 +190,7 @@ export function CatNapPlay({ quilt, state, onMove, playing = true }: {
           ))}
         </QuiltSvg>
       </div>
+      {controls && <div class="cn-controls">{controls}</div>}
     </div>
   );
 }

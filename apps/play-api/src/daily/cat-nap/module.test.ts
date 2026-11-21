@@ -28,7 +28,7 @@ describe("catNap", () => {
     expect(catNap.id).toBe("cat-nap");
     expect(catNap.minMoveGapMs).toBe(0);
     expect(catNap.floorMs).toEqual({ 1: 6000, 2: 9000, 3: 12000, 4: 12000, 5: 16000, 6: 16000, 7: 20000 });
-    expect(catNap.make(createRng([4, 4, 4, 4]), 1)).toEqual(P);
+    expect(catNap.make(createRng([4, 4, 4, 4]), 1, { date: "2027-01-04", key: [1, 0, 0, 0] })).toEqual(P);
   });
 
   test("publicPuzzle carries only n and patches", () => {

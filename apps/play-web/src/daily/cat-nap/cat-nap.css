@@ -1,19 +1,48 @@
-/* Cat Nap's board: the beds over the quilt, the quilt as big as fits (never over 640 px). The
-   Dish's puzzle host gives it its space; it centers itself in it. */
+/* Cat Nap's board: the beds over the quilt, the Hint button under it, the quilt as big as fits
+   (never over 640 px). The Dish's puzzle host gives it a box (flex, min-height 0); it fills the box
+   and centers itself in it, from an iPhone SE to a laptop, either way up. */
 
 .cn-play {
-  container-type: inline-size;
+  --cn-gap: 16px;
+  /* The Hint row grows with the reader's text size. */
+  --cn-ctrl: max(44px, 2.75rem);
+  --cn-bed: min(36px, (100cqw - 32px) / 10.6, 6cqh);
+  --cn-chrome: calc(var(--cn-bed) + var(--cn-gap));
+  container-type: size;
+  flex: 1 1 auto;
+  align-self: stretch;
+  min-height: 0;
+  height: 100%;
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 16px;
+  justify-content: center;
+  gap: var(--cn-gap);
   width: 100%;
 }
 
+.cn-play.cn-has-controls {
+  --cn-chrome: calc(var(--cn-bed) + var(--cn-ctrl) + 2 * var(--cn-gap));
+}
+
 .cn-board {
-  width: min(100cqw - 16px, 640px, 100dvh - 220px);
-  min-width: 260px;
+  width: min(100cqw - 16px, 100cqh - var(--cn-chrome), 640px);
   aspect-ratio: 1;
+  flex: none;
+}
+
+.cn-controls {
+  display: flex;
+  justify-content: center;
+  gap: 12px;
+  height: var(--cn-ctrl);
+  flex: none;
+}
+
+.cn-hint-cost {
+  margin-left: 0.4em;
+  font-size: 0.75em;
+  opacity: 0.85;
 }
 
 .cn-quilt {
@@ -60,7 +89,7 @@
 
 .cn-bed {
   position: relative;
-  width: min(36px, (100cqw - 32px) / 10.6);
+  width: var(--cn-bed);
   aspect-ratio: 1;
 }
 
@@ -81,20 +110,10 @@
   animation: cn-pop 300ms cubic-bezier(0.34, 1.56, 0.64, 1);
 }
 
-/* Watching on a TV: it fills the box the TV page gives it, beds and quilt both scaled to it. */
+/* Watching on a TV: the same, read from across the room, so the beds grow with the box. */
 .cn-play.cn-watch {
-  container-type: size;
-  height: 100%;
-  gap: 3cqh;
-}
-
-.cn-watch .cn-board {
-  width: min(100cqw, 87cqh);
-  min-width: 0;
-}
-
-.cn-watch .cn-bed {
-  width: min(7cqh, 100cqw / 10.6);
+  --cn-gap: 3cqh;
+  --cn-bed: min(7cqh, 100cqw / 10.6);
 }
 
 @media (prefers-reduced-motion: reduce) {

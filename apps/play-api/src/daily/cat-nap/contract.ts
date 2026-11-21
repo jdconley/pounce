@@ -1,9 +1,9 @@
 /**
  * A copy of the Daily Dish's game module contract (server plan, Task 3), kept here only until the
  * server core (`src/daily/module.ts`, `src/daily/days.ts`) lands on main. Then this file goes and
- * Cat Nap imports those instead. Keep it exactly as Task 3 says.
+ * Cat Nap imports those instead. Kept exactly as S1's `module.ts` at dfd9955.
  */
-import type { Rng } from "../../rules/rng";
+import type { Rng, Seed } from "../../rules/rng";
 
 /** A streak day, `YYYY-MM-DD` (`streaks/clock.ts`). */
 export type Day = string;
@@ -24,7 +24,7 @@ export type Applied<S> =
   | { ok: false; reason: "illegal" | "too_soon" | "over" };
 export interface DailyModule<P = unknown, S = unknown, M = unknown> {
   id: DailyGameId;
-  make(rng: Rng, level: DayLevel): P;            // server only: the whole puzzle, solution included
+  make(rng: Rng, level: DayLevel, day: { date: Day; key: Seed }): P; // server only: the whole puzzle, solution included; key: cycleKey, the same every day
   publicPuzzle(p: P): unknown;                  // what start returns: never the solution, answer or future sets
   init(p: P): S;
   parseMove(raw: unknown): M | null;            // exact shape or null
