@@ -54,7 +54,10 @@ export const cell = (page: Page, i: number) => page.locator(`.nl-board [data-cel
 
 /** Opens today's Nine Lives from Home and returns its solution. */
 export async function openToday(page: Page): Promise<number[]> {
-  await page.getByRole("button", { name: /^Nine Lives Play/ }).click();
+  // Fails within the expect timeout, not the test's, when Home has no Today row.
+  const play = page.getByRole("button", { name: /^Nine Lives Play/ });
+  await expect(play).toBeVisible();
+  await play.click();
   await expect(page).toHaveURL(/\/play\/daily\/nine-lives$/);
   await expect(page.getByRole("group", { name: "Nine Lives" })).toBeVisible();
   const board = await readBoard(page);
