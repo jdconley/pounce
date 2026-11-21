@@ -159,7 +159,11 @@ a placeholder too.)*
   - A bonus for each line cleared that grows with the number of lines cleared at once.
   - A combo bonus for clearing on consecutive placements.
   - The exact numbers are ours, tuned by the builder. They are not copied from another game.
+  - Placing the day's last set earns a "full fort" bonus.
   - Ties go to the faster time.
+- **No "solved" or "missed".** Running out of room is the normal ending. Every run ends with points,
+  and the board ranks Box Fort by points alone. The puzzle maker doesn't need to prove that every set
+  can be placed. *(My call.)*
 - **Fairness:** the server deals each set only after it has accepted the placements of the set
   before.
 
@@ -198,8 +202,12 @@ a placeholder too.)*
   - The puzzles for date D unlock at 04:00 on D, your time.
   - A cousin in New York gets them three hours before you do in California.
   - Each board is for one date and fills in as each time zone reaches it.
-- **A run started on day D counts for D,** and stays open until 06:00 the next morning. A run left
-  open after that ends unsolved.
+- **A run started on day D belongs to D's board.** It closes when D ends, at 04:00 your time.
+  - A run still open then ends unsolved. It shows on the board that way, but it doesn't count
+    toward streaks: only a run you finish or give up counts.
+  - There's no grace period past 04:00, so a run always ends before its streak day settles (10
+    minutes after). Streak settlement doesn't move. *(My call.)*
+  - Starting a puzzle in the last 15 minutes of the day shows "The Dish turns over at 4:00".
 - **The weekday ramp**, the same for every player because it follows the date:
 
 | | Mon | Tue | Wed | Thu | Fri | Sat | Sun |
@@ -214,8 +222,8 @@ a placeholder too.)*
   - **Sniff:** how common the answer is, and repeated letters later in the week.
   - **Cat Nap:** the quilt grows from 5 by 5 on Monday to 8 by 8 on Saturday and 9 by 9 on Sunday,
     with deeper logic later in the week.
-- **Numbering.** Each game's puzzles are numbered from launch day: "Sniff 12". The share card and
-  the board use the number.
+- **Numbering.** Each game's puzzles are numbered from that game's own first day in production:
+  "Sniff 12". The share card and the board use the number. *(My call.)*
 
 ### 3. Refereeing: what the server does
 
@@ -234,7 +242,7 @@ a placeholder too.)*
 - **Box Fort:** the full sequence of sets is made up front and stays on the server.
 
 **A run.**
-- One run per person, per game, per date. Starting again returns the same run, so another device
+- One run per player (the player `resolveMe` picks for `?person=`), per game, per date. Starting again returns the same run, so another device
   can carry on.
 - The run lives in a `DailyRun` DO keyed by person, game and date *(builder's call: it could live
   in `Player` instead)*. It holds the moves, the state, the server's start time and the result.
@@ -313,19 +321,32 @@ already has around a deck of cards.
 ### 5. Streaks
 
 - **Played today** gains a second way in: a person who **ends a daily run** on day D played on D.
-  - "Ends" means solved, missed (Sniff's sixth miss, or Box Fort out of room) or given up.
+  - "Ends" means solved, missed (Sniff's sixth miss), given up, or for Box Fort, out of room or
+    the last set placed. A run closed at 04:00 doesn't count (§2).
   - The run needs at least one move.
+  - It counts for the streak day that holds the moment it ended, as a table turn does. That's the
+    run's date except after a time-zone hop.
 - **Your own streak:** a day counts with a turn at a table with another person, *or* an ended daily
   run. Bots alone still don't count.
 - **Shared streaks:**
   - An ended daily run counts as that person's turn for the day, in every pair they're part of.
   - A day is kept when both people are in and at least one of them played. Mixing counts too: Mom
     took a turn at a table, and JD played Sniff.
-  - **The late move pass still covers only moves at shared tables.** When a pair has no table in
-    play, nobody holds a move, so each person must play something to be in. The builder must make
-    `isIn` require a turn or a daily run on days when the person held no move only because no table
-    was in play (the "gap" days). Otherwise one person playing a puzzle alone would keep the pair's
-    day.
+  - **The rule, exactly** *(my call, from JD's "if they both play")*:
+    - **A day with at least one table turn** by either person follows today's rules unchanged,
+      the late move pass and held days included. A daily run on that day also counts as that
+      person's turn. Example: Mom took a turn at their table and JD never held the move; the day
+      is kept, as today. JD playing Sniff changes nothing there.
+    - **A day whose only plays are daily runs** is kept only when both people ended a daily run.
+      The late move pass doesn't apply, because no daily run is ever "waiting on" the other person.
+      Example: JD plays Sniff and Mom plays nothing. The day isn't kept, even though Mom never held
+      a move.
+    - So days with only table play behave exactly as they do for shipped 1.1 and 1.2 apps today.
+    - The other case the rule allows: A holds the move at their shared table all day and plays only
+      Sniff, and B never held the move. That's a day with no table turn, so B must also play a
+      daily puzzle for it to be kept.
+    - In the code, `bothIn` gains the second branch, keyed on "this day's `turns` came only from
+      daily runs". It doesn't use the existing `gap` flag.
 - **Each game has its own streak too,** in its stats only (below). Home keeps the strip it has: your
   own streak and your pairs.
 - **The reporting path.** When a run ends, the server reports it like a turn: to the person's own
@@ -340,7 +361,8 @@ already has around a deck of cards.
   - their cat and name, and the result: time, guesses or points;
   - a mark for solved, missed or hinted;
   - nothing at all for someone who hasn't played yet;
-  - the order: best first. Unsolved runs come after solved ones, best progress first.
+  - the order: best first. In Nine Lives, Sniff and Cat Nap, unsolved runs come after solved ones,
+    best progress first. Box Fort ranks by points alone.
 - **Overall: the Dish.**
   - Per game, 3 points for first, 2 for second and 1 for third among the people on your board,
     plus 1 point for each ended run. Ties share the points.
@@ -530,7 +552,12 @@ These must hold before each piece merges:
   - Streak tests across time zones and DST:
     - daily runs keep own and pair days;
     - mixing a table turn with a daily run;
-    - the gap-day rule (one person's daily run alone doesn't keep a pair day).
+    - a day with only daily runs needs both people to have played; one person's run alone doesn't
+      keep it;
+    - days with only table play give exactly today's results (run the existing streak tests
+      unchanged);
+    - a run closed at 04:00 never counts, and a run that ends after a time-zone hop credits the
+      right day.
   - The board's fan-out and live messages, the board link for a TV, and watching.
 - **Parity:** every golden vector passes in TS and in Swift.
 - **Clients.**
