@@ -505,8 +505,13 @@ with the iPhone's puzzle views, as the tables do.
   shape is unchanged.
 - **A `DAILY` server flag,** as `TV` and `TROPHY` work.
   - Off: every daily route is a 404, and streaks ignore daily runs.
-  - It goes on in production when the first app build with the Dish goes to TestFlight. The web
-    player shows the Dish from then on too.
+  - **All four at once (JD).** The flag stays off in production until all four games, the Dish
+    in the app and on the web, and the TV board have merged and passed the cross-platform check.
+    Then one change turns it on: the web player and the TestFlight build show the Dish the same
+    day.
+  - Until then, every piece is built and tested against local dev servers with `DAILY` on, and
+    the simulators. Apps and the web player hide the Dish while the server says it's off.
+  - A day-one puzzle number starts at 1 for every game on launch day.
 - **The board socket.**
   - Phones and TVs connect to `/v1/daily/board/ws` (phones with `?person=`, TVs with their board
     token).
@@ -593,7 +598,10 @@ No two run at once on the same files.
 3. **The TV,** once the Dish and at least one game have merged: the board poster and link, the live
    board, and watching, on Apple TV and the browser TV page. Each game's watch view is added as
    that game lands.
-4. **Release:** What's New, the README, and the websites, saying "coming" until the App Store
+4. **Launch (all four at once, JD):** the cross-platform check, then one PR that turns `DAILY` on
+   in production, plus the release updates. That's a release under `AGENTS.md`, because the web
+   player shows it. What's New, the README, and the websites say it's in the browser now, and
+   "coming" to the app until the App Store
    version is live (`AGENTS.md`).
 
 ## Left to the builder
