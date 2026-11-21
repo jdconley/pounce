@@ -89,7 +89,7 @@ export class DailyRun extends DurableObject<Env> {
     if (moved && s.run.ended === null) {
       // The boards see how far it got; a TV watching sees the state itself.
       this.tell({ k: "progress", game: s.run.game, date: s.run.date, progress: answer.progress }, now);
-      if (s.run.tv) this.tell({ k: "watch", game: s.run.game, state: m.publicState(s.puzzle, s.run.state) }, now);
+      if (s.run.tv) this.tell({ k: "watch", game: s.run.game, puzzle: m.publicPuzzle(s.puzzle), state: m.publicState(s.puzzle, s.run.state) }, now);
     }
     if (wasOpen && s.run.ended !== null) this.ended(now);
     return answer;
@@ -134,7 +134,8 @@ export class DailyRun extends DurableObject<Env> {
       const now = Date.now();
       if (on) {
         this.tell({ k: "watchOffer", game: s.run.game }, now);
-        this.tell({ k: "watch", game: s.run.game, state: this.module(s.run.game).publicState(s.puzzle, s.run.state) }, now);
+        const m = this.module(s.run.game);
+        this.tell({ k: "watch", game: s.run.game, puzzle: m.publicPuzzle(s.puzzle), state: m.publicState(s.puzzle, s.run.state) }, now);
       } else {
         this.tell({ k: "watchEnd", game: s.run.game, result: null }, now);
       }

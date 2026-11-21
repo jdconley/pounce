@@ -232,11 +232,18 @@ describe("live progress and watching", { timeout: 30_000 }, () => {
 
     expect((await showOnTv(mf, kid, s.run, true)).status).toBe(204);
     expect(await family.find((m) => m.t === "watchOffer")).toEqual({ t: "watchOffer", player: expect.stringMatching(/^pr_/) as string, name: "Kid", cat: 3, game: "test" });
-    expect(await family.find((m) => m.t === "watch")).toMatchObject({ t: "watch", game: "test", state: { n: 1 } });
+    const frame = await family.find((m) => m.t === "watch");
+    expect(frame).toMatchObject({ t: "watch", game: "test", state: { n: 1 } });
+    // Each frame carries the public puzzle, so a TV that presses Watch late can draw at once.
+    const started = (await (await call(mf, kid.device, "POST", `/v1/daily/test/start?person=${kid.person.id}`)).json()) as { puzzle: unknown };
+    expect(Object.keys(frame).sort()).toEqual(["game", "player", "puzzle", "state", "t"]);
+    expect(frame.puzzle).toEqual(started.puzzle);
     await send(mf, kid, s.run, 1, steps(2, 2));
     await eventually(() => family.heard.filter((m) => m.t === "watch").at(-1), (m) => (m?.state as { n: number } | undefined)?.n === 2);
     await send(mf, kid, s.run, 2, steps(3, 3 + s.level));
     expect(await family.find((m) => m.t === "watchEnd")).toMatchObject({ t: "watchEnd", game: "test", result: { outcome: "solved" } });
+    // No frame ever carries more of the puzzle than start shows the player.
+    for (const m of family.heard.filter((x) => x.t === "watch")) expect(m.puzzle).toEqual(started.puzzle);
 
     await new Promise((resolve) => setTimeout(resolve, 300));
     expect(other.heard.filter((m) => m.t !== "board")).toEqual([]);

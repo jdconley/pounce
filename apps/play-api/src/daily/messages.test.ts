@@ -25,7 +25,10 @@ describe("board socket messages", () => {
 
   it("watching goes to TVs only", () => {
     expect(liveMessage("me", face, { k: "watchOffer", game: "test" })).toEqual({ to: "tv", message: { t: "watchOffer", player: "me", name: "Kid", cat: 3, game: "test" } });
-    expect(liveMessage("me", face, { k: "watch", game: "test", state: { n: 2 } })).toEqual({ to: "tv", message: { t: "watch", player: "me", game: "test", state: { n: 2 } } });
+    expect(liveMessage("me", face, { k: "watch", game: "test", puzzle: { target: 4 }, state: { n: 2 } })).toEqual({
+      to: "tv",
+      message: { t: "watch", player: "me", game: "test", puzzle: { target: 4 }, state: { n: 2 } },
+    });
     expect(liveMessage("me", face, { k: "watchEnd", game: "test", result: null })).toEqual({ to: "tv", message: { t: "watchEnd", player: "me", game: "test", result: null } });
   });
 });

@@ -21,7 +21,7 @@ export type BoardAnswer = {
 export type DailyEvent =
   | { k: "progress"; game: string; date: Day; progress: number }
   | { k: "watchOffer"; game: string }
-  | { k: "watch"; game: string; state: unknown }
+  | { k: "watch"; game: string; puzzle: unknown; state: unknown }
   | { k: "watchEnd"; game: string; result: DailyResult | null };
 
 export type BoardMessage =
@@ -29,7 +29,7 @@ export type BoardMessage =
   | { t: "result"; player: string; result: DailyResult }
   | { t: "progress"; player: string; game: string; progress: number }
   | { t: "watchOffer"; player: string; name: string; cat: number; game: string }
-  | { t: "watch"; player: string; game: string; state: unknown }
+  | { t: "watch"; player: string; game: string; puzzle: unknown; state: unknown }
   | { t: "watchEnd"; player: string; game: string; result: DailyResult | null }
   | { t: "tvs"; count: number };
 
@@ -45,7 +45,7 @@ export function resultMessages(player: string, result: DailyResult, board: Board
 export function liveMessage(player: string, face: { name: string; cat: number }, e: DailyEvent): { to: "all" | "tv"; message: BoardMessage } {
   if (e.k === "progress") return { to: "all", message: { t: "progress", player, game: e.game, progress: e.progress } };
   if (e.k === "watchOffer") return { to: "tv", message: { t: "watchOffer", player, name: face.name, cat: face.cat, game: e.game } };
-  if (e.k === "watch") return { to: "tv", message: { t: "watch", player, game: e.game, state: e.state } };
+  if (e.k === "watch") return { to: "tv", message: { t: "watch", player, game: e.game, puzzle: e.puzzle, state: e.state } };
   return { to: "tv", message: { t: "watchEnd", player, game: e.game, result: e.result } };
 }
 

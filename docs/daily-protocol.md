@@ -228,14 +228,16 @@ Server to client:
 | `{ "t": "result", "player", "result" }` | A run on this board ended | all |
 | `{ "t": "progress", "player", "game", "progress" }` | Someone on the board moved (at most once a second per game) | all |
 | `{ "t": "watchOffer", "player", "name", "cat", "game" }` | Someone turned on Show on TV | TVs |
-| `{ "t": "watch", "player", "game", "state" }` | A frame: the run's public state, first right after the offer, then one per accepted batch | TVs |
+| `{ "t": "watch", "player", "game", "puzzle", "state" }` | A frame: the run's public puzzle (as start gives it) and public state, first right after the offer, then one per accepted batch | TVs |
 | `{ "t": "watchEnd", "player", "game", "result" }` | The watched run ended (`result` null: Show on TV was turned off) | TVs |
 | `{ "t": "tvs", "count" }` | The number of TVs showing a board this person is on changed (as `tvs` in the snapshot) | phones |
 | `{ "t": "pong" }` | Answer to a ping | all |
 | `{ "t": "error", "error": "not_allowed" }` | The client sent anything but a ping | all |
 
 - `progress` never carries state or letters. Only a TV ever gets `watch`, and only after the
-  player turned on Show on TV. A TV keeps the frames it hears after an offer, so pressing Watch
+  player turned on Show on TV. Every frame carries the whole public puzzle (Nine Lives' givens,
+  Cat Nap's quilt), exactly what `start` shows the player and nothing more, so a TV can draw from
+  any one frame. A TV keeps the frames it hears after an offer, so pressing Watch
   shows the latest at once.
 - The board snapshot's date is the board owner's day. A `result` can be for yesterday (a run
   closed at 04:00); check its `date`.

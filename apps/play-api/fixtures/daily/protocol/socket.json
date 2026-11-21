@@ -113,6 +113,9 @@
     "t": "watch",
     "player": "pr_8tGqLm2vXc9RzK1wYb4NdA",
     "game": "test",
+    "puzzle": {
+      "target": 4
+    },
     "state": {
       "n": 2
     }

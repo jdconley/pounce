@@ -103,7 +103,7 @@ function socket(h: ReturnType<typeof http>) {
     result,
     progress: liveMessage(PAIR, face, { k: "progress", game: "test", date: DATE, progress: 0.5 }).message,
     watchOffer: liveMessage(PAIR, face, { k: "watchOffer", game: "test" }).message,
-    watch: liveMessage(PAIR, face, { k: "watch", game: "test", state: { n: 2 } }).message,
+    watch: liveMessage(PAIR, face, { k: "watch", game: "test", puzzle: h.start.puzzle, state: { n: 2 } }).message,
     watchEnd: liveMessage(PAIR, face, { k: "watchEnd", game: "test", result: h.solved }).message,
     watchEndOff: liveMessage(PAIR, face, { k: "watchEnd", game: "test", result: null }).message,
     pong: { t: "pong" },
