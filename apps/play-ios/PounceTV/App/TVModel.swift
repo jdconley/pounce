@@ -191,8 +191,10 @@ final class TVModel {
         }
     }
 
+    /// The table finished cheering. Over by its room, not the store's phase: a table whose bot
+    /// stalled stays `stalled` there through every snapshot, the last one too.
     private func gameOver(_ winners: [Seat]) {
-        guard table?.store.phase == .over else { return }
+        guard table?.store.room?.status == .over else { return }
         self.winners = winners
         phase = .over
     }

@@ -411,7 +411,9 @@ final class TilesScene: SKScene {
         setLook(room.look ?? .standard)
         if !store.actionInFlight { sending = false }
         applyReveal(model)
-        if model.view.status == .gameOver, !reportedOver {
+        // Once the room is over, not on the game-over event a moment before (`TableScene`'s
+        // `settleCelebration` has why).
+        if model.room.status == .over, !reportedOver {
             reportedOver = true
             onGameOver(model.view.winners)
         }
