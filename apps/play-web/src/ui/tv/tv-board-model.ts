@@ -76,7 +76,8 @@ export function boardStep(s: BoardScreen, m: BoardMessage, now: number): BoardSc
       delete frames[m.player];
       const offer = s.offer?.player === m.player ? null : s.offer;
       if (s.watching?.player !== m.player) return { ...s, frames, offer };
-      if (m.result) return { ...s, frames, offer, ended: { result: m.result, name: s.watching.name, until: now + ENDED_MS } };
+      // The run's last frame stays under its result until the board comes back.
+      if (m.result) return { ...s, offer, ended: { result: m.result, name: s.watching.name, until: now + ENDED_MS } };
       return { ...s, frames, offer, watching: null, ended: null };
     }
     default:
@@ -94,14 +95,22 @@ export function watch(s: BoardScreen): BoardScreen {
 /** Not now, on the card. The frames stay, so a later offer's Watch shows the latest at once. */
 export const notNow = (s: BoardScreen): BoardScreen => (s.offer ? { ...s, offer: null } : s);
 
+/** The board again: the run that was watched is let go, and an ended run's last frame with it. */
+function backToBoard(s: BoardScreen): BoardScreen {
+  if (!s.watching && !s.ended) return s;
+  const frames = { ...s.frames };
+  if (s.ended && s.watching) delete frames[s.watching.player];
+  return { ...s, frames, watching: null, ended: null };
+}
+
 /** Back from watching: the board. */
-export const stopWatching = (s: BoardScreen): BoardScreen => (s.watching || s.ended ? { ...s, watching: null, ended: null } : s);
+export const stopWatching = (s: BoardScreen): BoardScreen => backToBoard(s);
 
 /** What time does: the card goes, a result shown gives way to the board, a cheer ends. */
 export function tick(s: BoardScreen, now: number): BoardScreen {
   let next = s;
   if (next.offer && now > next.offer.until) next = { ...next, offer: null };
-  if (next.ended && now > next.ended.until) next = { ...next, ended: null, watching: null };
+  if (next.ended && now > next.ended.until) next = backToBoard(next);
   if (next.cheer && now > next.cheer.until) next = { ...next, cheer: null };
   return next;
 }

@@ -91,9 +91,9 @@ export function TvWatch(props: { watching: Watching; frame: unknown; ended: { re
     <section class="tv-watch" data-game={watching.game} aria-label={`${watching.name}, ${gameTitle(watching.game)}`}>
       <header class="tv-watch-top">
         <Cat cat={watching.cat} pose="idle" size="calc(var(--u) * 110)" />
-        <p class="tv-watch-who outlined">
-          {watching.name} <span class="tv-watch-game">{gameTitle(watching.game)}</span>
-        </p>
+        <p class="tv-watch-who outlined">{watching.name}</p>
+        <span class="tv-watch-game">{gameTitle(watching.game)}</span>
+        <span class="tv-watch-gap" />
         <button
           type="button"
           class="tv-menu-item violet tv-watch-back"

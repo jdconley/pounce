@@ -90,10 +90,12 @@ describe("watching", () => {
   test("the watched run's end shows its result for 6 seconds, then the board", () => {
     const s = run([msg("watchEnd")], 3000, watch(run([msg("watchOffer"), msg("watch")])));
     expect(s.ended).toEqual({ result: msg("watchEnd").result, name: "Kid", until: 9000 });
-    expect(s.frames[KID]).toBeUndefined();
+    // The run's last frame stays under its result.
+    expect(s.frames[KID]).toEqual({ game: "test", state: { n: 2 } });
     const after = tick(s, 9001);
     expect(after.ended).toBeNull();
     expect(after.watching).toBeNull();
+    expect(after.frames[KID]).toBeUndefined();
   });
 
   test("Show on TV turned off goes back to the board at once", () => {
