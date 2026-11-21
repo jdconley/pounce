@@ -157,6 +157,9 @@ final class TableScene: SKScene {
     /// Laid-group aim changes during drags, and the last hit sent as `seat.group.side`, side
     /// `-` when the action carries none (`table.hit`).
     var hitProbe = (aims: 0, sent: "-")
+    /// Touch phases the scene was handed, each finger counted (`table.touches`), so a failed drag
+    /// test tells a touch that never ended from one the app dropped.
+    var touchProbe = (began: 0, moved: 0, ended: 0, cancelled: 0)
     /// Per-drag timings (`[dragperf]` on stdout when a drag ends).
     var dragPerf = DragPerf()
     #endif
@@ -1049,14 +1052,23 @@ final class TableScene: SKScene {
     // moves focus, it never drags a card.
     #if os(iOS)
     override func touchesBegan(_ touches: Set<UITouch>, with event: UIEvent?) {
+        #if DEBUG
+        touchProbe.began += touches.count
+        #endif
         for touch in touches { pressBegan(at: touch.location(in: self)) }
     }
 
     override func touchesMoved(_ touches: Set<UITouch>, with event: UIEvent?) {
+        #if DEBUG
+        touchProbe.moved += touches.count
+        #endif
         for touch in touches { pressMoved(to: touch.location(in: self)) }
     }
 
     override func touchesEnded(_ touches: Set<UITouch>, with event: UIEvent?) {
+        #if DEBUG
+        touchProbe.ended += touches.count
+        #endif
         for touch in touches { pressEnded(at: touch.location(in: self)) }
     }
     #endif
@@ -1087,6 +1099,9 @@ final class TableScene: SKScene {
 
     #if os(iOS)
     override func touchesCancelled(_ touches: Set<UITouch>, with event: UIEvent?) {
+        #if DEBUG
+        touchProbe.cancelled += touches.count
+        #endif
         for _ in touches {
             director.touchEnded()
             inputCancelled()
@@ -1317,6 +1332,15 @@ final class TableScene: SKScene {
                 id: "table.hit", label: "hit", frame: CGRect(x: 72, y: 0, width: 24, height: 24),
                 traits: .staticText, live: { [weak self] in
                     self.map { "\($0.hitProbe.aims)|\($0.hitProbe.sent)" }
+                }),
+            // began|moved|ended|cancelled touches the scene was handed, then the fingers the
+            // render gate counts down and whether a drag is open: "1|38|1|0|0|0" after one drag.
+            TableAccessibility.Item(
+                id: "table.touches", label: "touches", frame: CGRect(x: 144, y: 0, width: 24, height: 24),
+                traits: .staticText, live: { [weak self] in
+                    guard let self else { return "-" }
+                    let t = self.touchProbe
+                    return "\(t.began)|\(t.moved)|\(t.ended)|\(t.cancelled)|\(director.touchesDown)|\(self.input.dragging ? 1 : 0)"
                 }),
             TableAccessibility.Item(
                 id: "table.debug", label: "debug", frame: CGRect(x: 24, y: 0, width: 24, height: 24),

@@ -65,6 +65,8 @@ final class AnimationDirector {
     }
 
     var isIdle: Bool { gate.isIdle }
+    /// Fingers down on the table, as the render gate counts them.
+    var touchesDown: Int { gate.touches }
     /// Actions and emitters in flight.
     var running: Int { gate.running.count }
 
