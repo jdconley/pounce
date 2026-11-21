@@ -55,6 +55,12 @@ describe("Sniff's word lists", () => {
   it("the hand pass holds: no cut word is an answer", () => {
     const answers = new Set(ANSWERS.map(([w]) => w));
     for (const w of entries("answers-cut.txt")) expect(answers.has(w), w).toBe(false);
+    const rot = entries("answers-cut.rot13.txt").map(rot13);
+    expect(rot.length).toBeGreaterThan(0);
+    for (const w of rot) {
+      expect(answers.has(w), w).toBe(false);
+      expect(allowedSet.has(w), w).toBe(true);
+    }
   });
 
   it("the app's copy is the same list", () => {

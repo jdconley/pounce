@@ -18,7 +18,7 @@
  * Both lists drop offensive and adult words: the server's name filter (src/names/filter.ts) and
  * blocked.rot13.txt (words that filter lets through, written in ROT13 so the repo doesn't spell
  * them out). Answers also drop plurals and verb forms made by adding s or es, past tenses made by
- * adding d or ed, and the hand pass in answers-cut.txt:
+ * adding d or ed, and the hand pass in answers-cut.txt and answers-cut.rot13.txt:
  * words a parent would wince at, or that make a dull or unfair answer.
  */
 import { execFileSync } from "node:child_process";
@@ -100,7 +100,7 @@ function inflected(w, common) {
 
 const final = await scowlFinal();
 const blocked = new Set(lines("blocked.rot13.txt").map(rot13));
-const cut = new Set(lines("answers-cut.txt"));
+const cut = new Set([...lines("answers-cut.txt"), ...lines("answers-cut.rot13.txt").map(rot13)]);
 const clean = (w) => w.length === 5 && nameAllowed(w) && !blocked.has(w);
 
 const all = read(final, ALLOWED_LISTS, ALLOWED_MAX_LEVEL);

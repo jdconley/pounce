@@ -1,0 +1,8 @@
+# More of the hand pass (answers-cut.txt): words with a slur or crude second meaning. Players may
+# still guess them; Sniff never picks them. ROT13, so the repo does not spell them out. Decode
+# with: tr a-z n-za-m
+fcbbx
+gnvag
+snvel
+fcnqr
+tnvyl

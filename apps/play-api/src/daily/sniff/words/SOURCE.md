@@ -27,11 +27,12 @@ Answers also drop:
 - plurals and verb forms made by adding s or es, and past tenses made by adding d or ed, when the
   base word is common (SCOWL level 50 or under);
 - the hand pass in `answers-cut.txt`: words a parent would wince at, gloomy ones, slang, rare and
-  foreign words, odd comparatives.
+  foreign words, odd comparatives; and `answers-cut.rot13.txt`, words with a slur or crude second
+  meaning, in ROT13 like `blocked.rot13.txt`. Cut words stay allowed as guesses.
 
 ## Changing them
 
-Edit `blocked.rot13.txt` or `answers-cut.txt` (or the script), then run:
+Edit `blocked.rot13.txt`, `answers-cut.txt` or `answers-cut.rot13.txt` (or the script), then run:
 
 ```bash
 node apps/play-api/src/daily/sniff/words/build-words.mjs
