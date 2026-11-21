@@ -7,7 +7,7 @@ import { useEffect, useRef, useState } from "preact/hooks";
 
 import { navigate } from "../lib/router";
 import { useApp } from "../store/app";
-import { Button, Cat, IconButton, learnTip, Tip } from "../ui/common";
+import { Button, Cat, CloseMark, IconButton, learnTip, Tip, tipLearned, useTipsVersion } from "../ui/common";
 import { TvIcon } from "../ui/show-on-tv";
 
 import { BoardView } from "./board";
@@ -21,6 +21,10 @@ import { lookOf, Treat } from "./treats";
 import type { BoardAnswer } from "@pounce/play-api/daily/messages";
 import type { DailyGameId } from "@pounce/play-api/daily/module";
 
+/** The Dish's first-visit tip. */
+const TIP = "dish.first";
+const TIP_TEXT = "New puzzles every day.";
+
 function DishCard(props: { game: DailyGameId; board: BoardAnswer; first: boolean }) {
   const { game, board } = props;
   const look = lookOf(game);
@@ -28,7 +32,7 @@ function DishCard(props: { game: DailyGameId; board: BoardAnswer; first: boolean
   const mine = myRow(board, game);
   const best = bestRow(board, game);
   const open = () => {
-    learnTip("dish.first");
+    learnTip(TIP);
     navigate({ kind: "daily", game });
   };
   return (
@@ -67,6 +71,7 @@ export function DishScreen(props: { say: (words: string) => void }) {
   const [stats, setStats] = useState<DailyGameId | null>(null);
   const [tv, setTv] = useState(false);
   const unlinking = useRef(false);
+  useTipsVersion();
 
   useEffect(() => {
     if (dish.status === "off") navigate({ kind: "home" }, true);
@@ -104,6 +109,19 @@ export function DishScreen(props: { say: (words: string) => void }) {
         ))}
       </section>
 
+      {tipLearned(TIP) ? null : (
+        // Room for the first-visit tip, which floats under the first card: an unseen copy of it
+        // holds its exact height at any text size, so the tip never covers the board's heading.
+        <div class="dd-tip-room" aria-hidden="true">
+          <div class="tip below">
+            <span>{TIP_TEXT}</span>
+            <span class="dd-tip-x">
+              <CloseMark />
+            </span>
+          </div>
+        </div>
+      )}
+
       <section class="dd-board-wrap panel" aria-labelledby="board-h">
         <div class="dd-board-top">
           <h2 class="outlined section-h" id="board-h">
@@ -123,7 +141,7 @@ export function DishScreen(props: { say: (words: string) => void }) {
         <BoardView board={board} games={games} tab={tab} onTab={setTab} onStats={setStats} />
       </section>
 
-      <Tip id="dish.first" anchor="dish-first" text="New puzzles every day." show={!stats && !tv} place="below" />
+      <Tip id={TIP} anchor="dish-first" text={TIP_TEXT} show={!stats && !tv} place="below" />
       {stats ? <StatsSheet game={stats} stats={dish.stats?.[stats] ?? null} today={board.date} onClose={() => setStats(null)} /> : null}
       {tv ? (
         <BoardTvSheet

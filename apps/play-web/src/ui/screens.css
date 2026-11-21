@@ -381,7 +381,7 @@
   position: relative;
   display: grid;
   grid-template-columns: minmax(100px, 38%) 1fr;
-  align-items: center;
+  align-items: stretch;
   overflow: hidden;
   border: 3px solid var(--ink);
   border-radius: 26px;
@@ -401,8 +401,13 @@
   border-right: 3px solid var(--ink);
 }
 
+/* The poster's words, then its foot: the player count and Play, side by side while they fit and
+   one over the other when they don't (large text), always in the flow so nothing covers the count. */
 .poster-body {
-  padding: 12px 14px 58px;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  padding: 12px 14px;
 }
 
 .poster h3 {
@@ -437,32 +442,21 @@
   border-radius: 50%;
 }
 
-.poster-play {
-  position: absolute;
-  right: 12px;
-  bottom: 12px;
+.poster-foot {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-top: auto;
 }
 
-.dock {
-  position: sticky;
-  bottom: 0;
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 12px;
-  max-width: 560px !important;
-  margin-top: auto;
-  padding-top: 10px;
+.poster-play {
+  margin-left: auto;
 }
 
 .home-section {
   flex: none;
-}
-
-.dock .btn {
-  min-width: 0;
-  padding-left: 12px;
-  padding-right: 12px;
-  font-size: clamp(1.05rem, 4.8vw, 1.45rem);
 }
 
 /* Join. */
@@ -1014,20 +1008,17 @@
   background: rgba(255, 59, 78, 0.35);
 }
 
-/* A laptop or a monitor: Home's shelf sits in the middle of the room, not at its top. */
+/* A laptop or a monitor: Home's shelf sits in the middle of the room, not at its top. "safe": when
+   Home is taller than the window (large text), it starts at the top and scrolls, rather than
+   centering its top out of reach. */
 @media (min-width: 900px) and (min-height: 640px) {
   .home {
-    justify-content: center;
+    justify-content: safe center;
     gap: 28px;
   }
 
   .home .room-bg {
     background-position: center 30%;
-  }
-
-  .home .dock {
-    position: static;
-    margin-top: 8px;
   }
 
   .poster-art {

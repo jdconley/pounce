@@ -126,7 +126,7 @@ export function Home(props: { onSettings: () => void; onPractice: (game: GameId)
         <Posters onPlay={props.onNew} firstId="play-first" compact={dishOn} />
       </section>
 
-      <nav class="dock" aria-label="Start">
+      <nav class="home-start" aria-label="Start">
         <Button variant="violet" onClick={() => props.onPractice("cat-tower")} id="practice">
           <Icon name="badge-bot" size={30} /> Practice
         </Button>
@@ -149,20 +149,22 @@ export function Posters(props: { onPlay: (game: GameId) => void; firstId?: strin
           <div class="poster-body">
             <h3 class="outlined">{CATALOG[id].title}</h3>
             <p>{CATALOG[id].tagline}</p>
-            <span class="players">
-              <Dots n={CATALOG[id].maxSeats} /> {CATALOG[id].minSeats} to {CATALOG[id].maxSeats} players
-            </span>
+            <div class="poster-foot">
+              <span class="players">
+                <Dots n={CATALOG[id].maxSeats} /> {CATALOG[id].minSeats} to {CATALOG[id].maxSeats} players
+              </span>
+              <Button
+                size="small"
+                class="poster-play"
+                id={i === 0 ? props.firstId : undefined}
+                disabled={props.disabled}
+                onClick={() => props.onPlay(id)}
+                aria-label={`Play ${CATALOG[id].title}`}
+              >
+                <Icon name="icon-play" size={26} /> Play
+              </Button>
+            </div>
           </div>
-          <Button
-            size="small"
-            class="poster-play"
-            id={i === 0 ? props.firstId : undefined}
-            disabled={props.disabled}
-            onClick={() => props.onPlay(id)}
-            aria-label={`Play ${CATALOG[id].title}`}
-          >
-            <Icon name="icon-play" size={26} /> Play
-          </Button>
         </article>
       ))}
     </div>

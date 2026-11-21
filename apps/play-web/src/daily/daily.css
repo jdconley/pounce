@@ -95,6 +95,31 @@
   right: -6px;
 }
 
+/* Home's Practice and Join: the page's last row, in the flow, so they never sit over a card or a
+   table as Home scrolls. On a page that fits they rest at the bottom of the screen. They stand
+   side by side while each has room for its word, and stack at large text. */
+.home > .home-start {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 10rem), 1fr));
+  gap: 12px;
+  max-width: 560px;
+  margin-top: auto;
+  padding-top: 10px;
+}
+
+.home-start .btn {
+  min-width: 0;
+  padding-left: 12px;
+  padding-right: 12px;
+  font-size: clamp(1.05rem, 4.8vw, 1.45rem);
+}
+
+@media (min-width: 900px) and (min-height: 640px) {
+  .home > .home-start {
+    margin-top: 8px;
+  }
+}
+
 /* Home with the Dish: the game posters fold into a compact row on phones. */
 @media (max-width: 759px) {
   .poster-grid.compact {
@@ -116,7 +141,13 @@
   }
 
   .poster-grid.compact .poster-body {
-    padding: 8px 10px 56px;
+    flex: 1;
+    padding: 8px 10px 10px;
+  }
+
+  .poster-grid.compact .poster-foot {
+    flex-direction: column;
+    align-items: flex-start;
   }
 
   .poster-grid.compact .poster h3 {
@@ -137,9 +168,8 @@
   }
 
   .poster-grid.compact .poster-play {
-    left: 10px;
-    right: 10px;
-    bottom: 10px;
+    align-self: stretch;
+    margin-left: 0;
     min-height: 44px;
   }
 }
@@ -151,7 +181,7 @@
   background: radial-gradient(circle at 50% 0%, #6a2be0, var(--night) 70%);
 }
 
-.dd-dish > *,
+.dd-dish > :not(.tip),
 .dd-play > header {
   width: 100%;
   max-width: 1100px;
@@ -174,6 +204,25 @@
   .dd-cards {
     grid-template-columns: repeat(auto-fill, minmax(min(100%, 14rem), 1fr));
   }
+}
+
+/* The first-visit tip's room under the cards: the tip floats here, over nothing. */
+.dd-tip-room {
+  flex: none;
+  margin-top: -10px;
+  visibility: hidden;
+}
+
+.dd-tip-room .tip {
+  position: static;
+  width: fit-content;
+  animation: none;
+}
+
+.dd-tip-x {
+  flex: none;
+  width: 30px;
+  height: 30px;
 }
 
 .dd-card {
@@ -543,15 +592,29 @@
   background: radial-gradient(circle at 50% 0%, var(--d), var(--night) 75%);
 }
 
+/* The puzzle's top bar. With room: back, the name and clock, then TV and Give up, in one row. When
+   the name won't fit beside the buttons (a phone at large text, a long name), it drops to a row of
+   its own under them, with the clock beside it. The bar is a size container, so this follows the
+   text size as well as the width. */
+.dd-play-head {
+  flex: none;
+  container-type: inline-size;
+}
+
 .dd-play-bar {
   display: grid;
-  grid-template-columns: 52px minmax(0, 1fr) auto;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  grid-template-areas: "back title actions";
   align-items: center;
   gap: 8px;
-  flex: none;
+}
+
+.dd-play-bar > :first-child {
+  grid-area: back;
 }
 
 .dd-play-title {
+  grid-area: title;
   display: flex;
   flex-wrap: wrap;
   align-items: center;
@@ -562,11 +625,26 @@
 
 .dd-play-title h1 {
   margin: 0;
+  max-width: 100%;
   font-size: clamp(1.2rem, 5vw, 1.7rem);
   line-height: 1.1;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  text-align: center;
+  text-wrap: balance;
+  overflow-wrap: break-word;
+}
+
+@container (max-width: 34rem) {
+  .dd-play-bar {
+    grid-template-columns: auto minmax(0, 1fr);
+    grid-template-areas:
+      "back actions"
+      "title title";
+    row-gap: 6px;
+  }
+
+  .dd-play-title h1 {
+    font-size: 1.5rem;
+  }
 }
 
 .dd-play-title .dd-num {
@@ -585,6 +663,8 @@
 }
 
 .dd-play-actions {
+  grid-area: actions;
+  justify-self: end;
   display: flex;
   align-items: center;
   gap: 6px;
