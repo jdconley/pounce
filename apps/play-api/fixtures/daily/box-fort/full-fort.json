@@ -1,0 +1,303 @@
+{
+  "name": "full-fort",
+  "start": {
+    "rug": [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,7,7,7,7,7,0,0,0,7,7,7,7,7,0,0,0],
+    "sets": 2,
+    "pieces": [
+      {
+        "id": "dot",
+        "tint": 1,
+        "cells": [[0,0]]
+      },
+      {
+        "id": "dot",
+        "tint": 2,
+        "cells": [[0,0]]
+      },
+      {
+        "id": "dot",
+        "tint": 3,
+        "cells": [[0,0]]
+      }
+    ]
+  },
+  "steps": [
+    {
+      "move": {
+        "k": "place",
+        "slot": 0,
+        "row": 0,
+        "col": 0
+      },
+      "ok": true,
+      "gained": 1,
+      "cleared": {
+        "rows": [],
+        "cols": []
+      },
+      "reveal": null,
+      "end": null,
+      "state": {
+        "rug": [1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,7,7,7,7,7,0,0,0,7,7,7,7,7,0,0,0],
+        "set": 0,
+        "sets": 2,
+        "placed": [true,false,false],
+        "points": 1,
+        "combo": 0,
+        "lines": 0,
+        "over": null,
+        "pieces": [
+          {
+            "id": "dot",
+            "tint": 1,
+            "cells": [[0,0]]
+          },
+          {
+            "id": "dot",
+            "tint": 2,
+            "cells": [[0,0]]
+          },
+          {
+            "id": "dot",
+            "tint": 3,
+            "cells": [[0,0]]
+          }
+        ]
+      }
+    },
+    {
+      "move": {
+        "k": "place",
+        "slot": 1,
+        "row": 0,
+        "col": 1
+      },
+      "ok": true,
+      "gained": 1,
+      "cleared": {
+        "rows": [],
+        "cols": []
+      },
+      "reveal": null,
+      "end": null,
+      "state": {
+        "rug": [1,2,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,7,7,7,7,7,0,0,0,7,7,7,7,7,0,0,0],
+        "set": 0,
+        "sets": 2,
+        "placed": [true,true,false],
+        "points": 2,
+        "combo": 0,
+        "lines": 0,
+        "over": null,
+        "pieces": [
+          {
+            "id": "dot",
+            "tint": 1,
+            "cells": [[0,0]]
+          },
+          {
+            "id": "dot",
+            "tint": 2,
+            "cells": [[0,0]]
+          },
+          {
+            "id": "dot",
+            "tint": 3,
+            "cells": [[0,0]]
+          }
+        ]
+      }
+    },
+    {
+      "move": {
+        "k": "place",
+        "slot": 2,
+        "row": 0,
+        "col": 2
+      },
+      "ok": true,
+      "gained": 1,
+      "cleared": {
+        "rows": [],
+        "cols": []
+      },
+      "reveal": {
+        "set": 1,
+        "pieces": [
+          {
+            "id": "trio-h",
+            "tint": 4,
+            "cells": [[0,0],[0,1],[0,2]]
+          },
+          {
+            "id": "dot",
+            "tint": 5,
+            "cells": [[0,0]]
+          },
+          {
+            "id": "trio-h",
+            "tint": 6,
+            "cells": [[0,0],[0,1],[0,2]]
+          }
+        ]
+      },
+      "end": null,
+      "state": {
+        "rug": [1,2,3,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,7,7,7,7,7,0,0,0,7,7,7,7,7,0,0,0],
+        "set": 1,
+        "sets": 2,
+        "placed": [false,false,false],
+        "points": 3,
+        "combo": 0,
+        "lines": 0,
+        "over": null,
+        "pieces": [
+          {
+            "id": "trio-h",
+            "tint": 4,
+            "cells": [[0,0],[0,1],[0,2]]
+          },
+          {
+            "id": "dot",
+            "tint": 5,
+            "cells": [[0,0]]
+          },
+          {
+            "id": "trio-h",
+            "tint": 6,
+            "cells": [[0,0],[0,1],[0,2]]
+          }
+        ]
+      }
+    },
+    {
+      "move": {
+        "k": "place",
+        "slot": 1,
+        "row": 3,
+        "col": 3
+      },
+      "ok": true,
+      "gained": 1,
+      "cleared": {
+        "rows": [],
+        "cols": []
+      },
+      "reveal": null,
+      "end": null,
+      "state": {
+        "rug": [1,2,3,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,5,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,7,7,7,7,7,0,0,0,7,7,7,7,7,0,0,0],
+        "set": 1,
+        "sets": 2,
+        "placed": [false,true,false],
+        "points": 4,
+        "combo": 0,
+        "lines": 0,
+        "over": null,
+        "pieces": [
+          {
+            "id": "trio-h",
+            "tint": 4,
+            "cells": [[0,0],[0,1],[0,2]]
+          },
+          {
+            "id": "dot",
+            "tint": 5,
+            "cells": [[0,0]]
+          },
+          {
+            "id": "trio-h",
+            "tint": 6,
+            "cells": [[0,0],[0,1],[0,2]]
+          }
+        ]
+      }
+    },
+    {
+      "move": {
+        "k": "place",
+        "slot": 0,
+        "row": 6,
+        "col": 5
+      },
+      "ok": true,
+      "gained": 13,
+      "cleared": {
+        "rows": [6],
+        "cols": []
+      },
+      "reveal": null,
+      "end": null,
+      "state": {
+        "rug": [1,2,3,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,5,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,7,7,7,7,7,0,0,0],
+        "set": 1,
+        "sets": 2,
+        "placed": [true,true,false],
+        "points": 17,
+        "combo": 1,
+        "lines": 1,
+        "over": null,
+        "pieces": [
+          {
+            "id": "trio-h",
+            "tint": 4,
+            "cells": [[0,0],[0,1],[0,2]]
+          },
+          {
+            "id": "dot",
+            "tint": 5,
+            "cells": [[0,0]]
+          },
+          {
+            "id": "trio-h",
+            "tint": 6,
+            "cells": [[0,0],[0,1],[0,2]]
+          }
+        ]
+      }
+    },
+    {
+      "move": {
+        "k": "place",
+        "slot": 2,
+        "row": 7,
+        "col": 5
+      },
+      "ok": true,
+      "gained": 228,
+      "cleared": {
+        "rows": [7],
+        "cols": []
+      },
+      "reveal": null,
+      "end": "done",
+      "state": {
+        "rug": [1,2,3,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,5,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],
+        "set": 1,
+        "sets": 2,
+        "placed": [true,true,true],
+        "points": 245,
+        "combo": 2,
+        "lines": 2,
+        "over": "full",
+        "pieces": [
+          {
+            "id": "trio-h",
+            "tint": 4,
+            "cells": [[0,0],[0,1],[0,2]]
+          },
+          {
+            "id": "dot",
+            "tint": 5,
+            "cells": [[0,0]]
+          },
+          {
+            "id": "trio-h",
+            "tint": 6,
+            "cells": [[0,0],[0,1],[0,2]]
+          }
+        ]
+      }
+    }
+  ]
+}

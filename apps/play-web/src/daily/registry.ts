@@ -18,6 +18,7 @@ export type DailyEntry = {
 /* eslint-enable @typescript-eslint/no-explicit-any */
 
 export const DAILY_WEB_GAMES: Partial<Record<DailyGameId, DailyEntry>> = {
+  "box-fort": { play: () => import("./box-fort/dish"), watch: () => import("./box-fort/watch") },
   "cat-nap": { play: () => import("./cat-nap/dish"), watch: () => import("./cat-nap/watch") },
   "nine-lives": { play: () => import("./nine-lives/dish"), watch: () => import("./nine-lives/watch") },
   sniff: { play: () => import("./sniff/dish"), watch: () => import("./sniff/watch") },

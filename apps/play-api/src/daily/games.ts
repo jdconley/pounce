@@ -1,5 +1,6 @@
 import { createRng } from "../rules/rng";
 
+import { boxFort } from "./box-fort/module";
 import { catNap } from "./cat-nap/module";
 import { levelFor } from "./days";
 import { nineLives } from "./nine-lives/module";
@@ -16,6 +17,7 @@ import type { Day } from "../streaks/clock";
  * "The contracts"). `test` is listed only with `DAILY_TEST` on (`dailyModule`).
  */
 export const DAILY_GAMES: Partial<Record<DailyGameId, DailyModule>> = {
+  "box-fort": boxFort as DailyModule,
   "cat-nap": catNap as DailyModule,
   "nine-lives": nineLives as DailyModule,
   sniff: sniff as DailyModule,

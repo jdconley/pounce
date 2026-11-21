@@ -1,0 +1,303 @@
+{
+  "name": "combos",
+  "start": {
+    "rug": [7,7,7,7,7,7,7,0,7,7,7,7,7,7,7,0,7,7,7,7,7,7,7,0,7,7,7,7,7,7,7,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],
+    "sets": 2,
+    "pieces": [
+      {
+        "id": "dot",
+        "tint": 1,
+        "cells": [[0,0]]
+      },
+      {
+        "id": "dot",
+        "tint": 2,
+        "cells": [[0,0]]
+      },
+      {
+        "id": "dot",
+        "tint": 3,
+        "cells": [[0,0]]
+      }
+    ]
+  },
+  "steps": [
+    {
+      "move": {
+        "k": "place",
+        "slot": 0,
+        "row": 0,
+        "col": 7
+      },
+      "ok": true,
+      "gained": 11,
+      "cleared": {
+        "rows": [0],
+        "cols": []
+      },
+      "reveal": null,
+      "end": null,
+      "state": {
+        "rug": [0,0,0,0,0,0,0,0,7,7,7,7,7,7,7,0,7,7,7,7,7,7,7,0,7,7,7,7,7,7,7,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],
+        "set": 0,
+        "sets": 2,
+        "placed": [true,false,false],
+        "points": 11,
+        "combo": 1,
+        "lines": 1,
+        "over": null,
+        "pieces": [
+          {
+            "id": "dot",
+            "tint": 1,
+            "cells": [[0,0]]
+          },
+          {
+            "id": "dot",
+            "tint": 2,
+            "cells": [[0,0]]
+          },
+          {
+            "id": "dot",
+            "tint": 3,
+            "cells": [[0,0]]
+          }
+        ]
+      }
+    },
+    {
+      "move": {
+        "k": "place",
+        "slot": 1,
+        "row": 1,
+        "col": 7
+      },
+      "ok": true,
+      "gained": 26,
+      "cleared": {
+        "rows": [1],
+        "cols": []
+      },
+      "reveal": null,
+      "end": null,
+      "state": {
+        "rug": [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,7,7,7,7,7,7,7,0,7,7,7,7,7,7,7,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],
+        "set": 0,
+        "sets": 2,
+        "placed": [true,true,false],
+        "points": 37,
+        "combo": 2,
+        "lines": 2,
+        "over": null,
+        "pieces": [
+          {
+            "id": "dot",
+            "tint": 1,
+            "cells": [[0,0]]
+          },
+          {
+            "id": "dot",
+            "tint": 2,
+            "cells": [[0,0]]
+          },
+          {
+            "id": "dot",
+            "tint": 3,
+            "cells": [[0,0]]
+          }
+        ]
+      }
+    },
+    {
+      "move": {
+        "k": "place",
+        "slot": 2,
+        "row": 2,
+        "col": 7
+      },
+      "ok": true,
+      "gained": 41,
+      "cleared": {
+        "rows": [2],
+        "cols": []
+      },
+      "reveal": {
+        "set": 1,
+        "pieces": [
+          {
+            "id": "dot",
+            "tint": 4,
+            "cells": [[0,0]]
+          },
+          {
+            "id": "duo-h",
+            "tint": 5,
+            "cells": [[0,0],[0,1]]
+          },
+          {
+            "id": "dot",
+            "tint": 6,
+            "cells": [[0,0]]
+          }
+        ]
+      },
+      "end": null,
+      "state": {
+        "rug": [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,7,7,7,7,7,7,7,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],
+        "set": 1,
+        "sets": 2,
+        "placed": [false,false,false],
+        "points": 78,
+        "combo": 3,
+        "lines": 3,
+        "over": null,
+        "pieces": [
+          {
+            "id": "dot",
+            "tint": 4,
+            "cells": [[0,0]]
+          },
+          {
+            "id": "duo-h",
+            "tint": 5,
+            "cells": [[0,0],[0,1]]
+          },
+          {
+            "id": "dot",
+            "tint": 6,
+            "cells": [[0,0]]
+          }
+        ]
+      }
+    },
+    {
+      "move": {
+        "k": "place",
+        "slot": 0,
+        "row": 3,
+        "col": 7
+      },
+      "ok": true,
+      "gained": 56,
+      "cleared": {
+        "rows": [3],
+        "cols": []
+      },
+      "reveal": null,
+      "end": null,
+      "state": {
+        "rug": [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],
+        "set": 1,
+        "sets": 2,
+        "placed": [true,false,false],
+        "points": 134,
+        "combo": 4,
+        "lines": 4,
+        "over": null,
+        "pieces": [
+          {
+            "id": "dot",
+            "tint": 4,
+            "cells": [[0,0]]
+          },
+          {
+            "id": "duo-h",
+            "tint": 5,
+            "cells": [[0,0],[0,1]]
+          },
+          {
+            "id": "dot",
+            "tint": 6,
+            "cells": [[0,0]]
+          }
+        ]
+      }
+    },
+    {
+      "move": {
+        "k": "place",
+        "slot": 1,
+        "row": 6,
+        "col": 0
+      },
+      "ok": true,
+      "gained": 2,
+      "cleared": {
+        "rows": [],
+        "cols": []
+      },
+      "reveal": null,
+      "end": null,
+      "state": {
+        "rug": [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,5,5,0,0,0,0,0,0,0,0,0,0,0,0,0,0],
+        "set": 1,
+        "sets": 2,
+        "placed": [true,true,false],
+        "points": 136,
+        "combo": 0,
+        "lines": 4,
+        "over": null,
+        "pieces": [
+          {
+            "id": "dot",
+            "tint": 4,
+            "cells": [[0,0]]
+          },
+          {
+            "id": "duo-h",
+            "tint": 5,
+            "cells": [[0,0],[0,1]]
+          },
+          {
+            "id": "dot",
+            "tint": 6,
+            "cells": [[0,0]]
+          }
+        ]
+      }
+    },
+    {
+      "move": {
+        "k": "place",
+        "slot": 2,
+        "row": 7,
+        "col": 7
+      },
+      "ok": true,
+      "gained": 201,
+      "cleared": {
+        "rows": [],
+        "cols": []
+      },
+      "reveal": null,
+      "end": "done",
+      "state": {
+        "rug": [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,5,5,0,0,0,0,0,0,0,0,0,0,0,0,0,6],
+        "set": 1,
+        "sets": 2,
+        "placed": [true,true,true],
+        "points": 337,
+        "combo": 0,
+        "lines": 4,
+        "over": "full",
+        "pieces": [
+          {
+            "id": "dot",
+            "tint": 4,
+            "cells": [[0,0]]
+          },
+          {
+            "id": "duo-h",
+            "tint": 5,
+            "cells": [[0,0],[0,1]]
+          },
+          {
+            "id": "dot",
+            "tint": 6,
+            "cells": [[0,0]]
+          }
+        ]
+      }
+    }
+  ]
+}
