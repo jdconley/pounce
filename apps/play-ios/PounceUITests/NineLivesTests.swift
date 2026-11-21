@@ -7,6 +7,9 @@ import XCTest
 /// Skipped when the server has the Dish off.
 @MainActor
 final class NineLivesTests: XCTestCase {
+    /// No sound out loud on the Mac running the tests (a bare "NO" would be read as a string).
+    static let quiet = ["-settings.soundOn", "<false/>"]
+
     private let seconds: Double = ProcessInfo.processInfo.environment["POUNCE_FRAMES_SECONDS"].flatMap(Double.init) ?? 12
 
     override func setUp() {
@@ -44,7 +47,7 @@ final class NineLivesTests: XCTestCase {
 
     func testNineLivesPlaysToTheEnd() throws {
         let app = Live.app()
-        app.launchArguments += ["-seed-people"]
+        app.launchArguments += ["-seed-people"] + Self.quiet
         app.launch()
         try open(app)
         XCTAssertTrue(el(app, "daily.clock").exists, "no clock")
@@ -85,7 +88,7 @@ final class NineLivesTests: XCTestCase {
     /// it's measured. Fails on a main-thread hang over 100 ms or app work over 8.3 ms in a frame.
     func testNineLivesHoldsTheFrameRate() throws {
         let app = XCUIApplication()
-        app.launchArguments = Live.arguments(speed: 1) + ["-uitest-reset", "-seed-people"]
+        app.launchArguments = Live.arguments(speed: 1) + ["-uitest-reset", "-seed-people"] + NineLivesTests.quiet
         app.launchEnvironment["POUNCE_API_BASE_URL"] = Live.baseURL
         app.launch()
         try open(app)
@@ -145,7 +148,7 @@ final class NineLivesShotTests: XCTestCase {
 
     private func launch(_ args: [String]) -> XCUIApplication {
         let app = XCUIApplication()
-        app.launchArguments = Live.arguments(speed: 4) + ["-uitest-reset", "-seed-people"] + args
+        app.launchArguments = Live.arguments(speed: 4) + ["-uitest-reset", "-seed-people"] + NineLivesTests.quiet + args
         app.launchEnvironment["POUNCE_API_BASE_URL"] = Live.baseURL
         app.launch()
         return app
