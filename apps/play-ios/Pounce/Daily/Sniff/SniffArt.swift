@@ -176,12 +176,14 @@ struct SniffTrail: View {
             ForEach(0..<SniffBoard.tries, id: \.self) { row in
                 trail(faces(row))
                     .shake(trigger: row == board.guesses.count ? shake : 0)
+                    .accessibilityIdentifier("sniff.row.\(row)")
             }
             if showAnswer, let answer = board.answer, !board.isSolved {
                 trail(answer.map { .answer($0) })
                     .padding(.top, tagWidth * 0.12)
                     .accessibilityElement(children: .combine)
                     .accessibilityLabel(String(localized: "The word was \(answer.uppercased())"))
+                    .accessibilityIdentifier("sniff.answer")
             }
         }
     }

@@ -108,6 +108,7 @@ private struct LetterKey: View {
         .dynamicTypeSize(...DynamicTypeSize.large)
         .accessibilityLabel(String(letter).uppercased())
         .accessibilityValue(markWords)
+        .accessibilityIdentifier("sniff.key.\(letter)")
     }
 
     private var markWords: String {
@@ -136,6 +137,7 @@ private struct DeleteKey: View {
         .buttonStyle(SniffKeyStyle(fill: Palette.violet, lip: Palette.ink, corner: 9))
         .frame(width: size.width, height: size.height)
         .accessibilityLabel(String(localized: "Delete"))
+        .accessibilityIdentifier("sniff.delete")
     }
 }
 
@@ -158,5 +160,6 @@ private struct SendKey: View {
         .frame(height: height)
         .accessibilityLabel(String(localized: "Sniff"))
         .accessibilityHint(String(localized: "Sends the word"))
+        .accessibilityIdentifier("sniff.send")
     }
 }

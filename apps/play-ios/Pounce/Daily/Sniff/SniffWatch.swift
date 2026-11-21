@@ -1,9 +1,23 @@
 import PounceKit
 import SwiftUI
 
-/// Sniff watched on a TV (spec §8): the run as the server sees it, guesses with their letters,
-/// read-only. Built from the run's `publicState` (`{ guesses, answer? }`); nothing is typed here,
-/// so no draft row shows. The TV's host draws whose run it is and the result.
+/// Sniff as a TV watches it (spec §8, `DailyWatchGames.swift`): a watch frame's public state, the
+/// guesses with their letters, read-only. The TV builds this file and `SniffArt.swift` only.
+struct SniffWatch: DailyWatchView {
+    nonisolated static let game = DailyCatalog.sniff
+
+    let state: SniffView
+
+    init(puzzle: SniffPublic, state: SniffView) {
+        self.state = state
+    }
+
+    var body: some View {
+        SniffWatchView(board: state.board)
+    }
+}
+
+/// The run's trails, filling the space the TV gives them; no draft row, no keyboard.
 struct SniffWatchView: View {
     let board: SniffBoard
 
@@ -17,5 +31,6 @@ struct SniffWatchView: View {
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
         .accessibilityElement(children: .contain)
+        .accessibilityIdentifier("sniff.watch")
     }
 }

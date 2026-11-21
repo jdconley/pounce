@@ -149,7 +149,7 @@ import Testing
         }
     }
 
-    // MARK: The wire and the demo
+    // MARK: The wire
 
     @Test func aRevealDecodesFromTheServersJSON() throws {
         let runs = try #require(try Self.json("runs.json")["runs"] as? [[String: Any]])
@@ -161,25 +161,8 @@ import Testing
         #expect(reveal.answer == "plant")
     }
 
-    @Test func theDemoRevealsAreTheServersRepeatedLetterRun() throws {
-        let runs = try #require(try Self.json("runs.json")["runs"] as? [[String: Any]])
-        let run = runs[1]
-        #expect(SniffDemo.answer == run["answer"] as? String)
-        let answers = try #require(run["answers"] as? [[String: Any]]).filter { $0["reveal"] != nil }
-        #expect(SniffDemo.script.count == answers.count)
-        for answer in answers {
-            let data = try JSONSerialization.data(withJSONObject: try #require(answer["reveal"]))
-            let reveal = try JSONDecoder().decode(SniffReveal.self, from: data)
-            #expect(SniffDemo.reveal(reveal.guess.word) == reveal)
-        }
-    }
 }
 
-extension SniffTests {
-    @Test func theDemoMarksAnyOtherWordPlain() {
-        #expect(SniffDemo.reveal("crane") == SniffReveal(guess: SniffGuess(word: "crane", marks: Array(repeating: .none, count: 5)), answer: nil))
-    }
-}
 
 // MARK: The Dish's wire
 
@@ -208,5 +191,55 @@ extension SniffTests {
         let data = try JSONEncoder().encode(SniffMove(word: "plant"))
         let object = try #require(try JSONSerialization.jsonObject(with: data) as? [String: String])
         #expect(object == ["k": "guess", "word": "plant"])
+    }
+}
+
+// MARK: A run through the Dish's session
+
+extension SniffTests {
+    /// The server's first recorded run (`runs.json`), answered by H1's in-memory server.
+    @Test func aRunPlaysThroughTheSessionWithTheServersReveals() async throws {
+        let runs = try #require(try Self.json("runs.json")["runs"] as? [[String: Any]])
+        let answers = try #require(runs[0]["answers"] as? [[String: Any]])
+        let reveals = try answers.map { a in
+            try JSONDecoder().decode(DailyJSON.self, from: JSONSerialization.data(withJSONObject: try #require(a["reveal"])))
+        }
+        let start = DailyStart(
+            run: "run1", game: "sniff", date: "2026-11-23", number: 1, level: 1, startedAt: 1_000_000, now: 1_000_000,
+            puzzle: .object(["letters": .int(5), "tries": .int(6)]), state: .object(["guesses": .array([])]), seq: 0, hints: 0,
+            result: nil, closesAt: 2_000_000)
+        let fake = FakeDaily(start: start)
+        await fake.script(reveals.enumerated().map { i, r in .success(.accepted(seq: i + 1, reveals: [r], progress: Double(i + 1) / 6, result: nil)) })
+        let session = DailyRunSession(start: start, service: fake, person: "p1", window: .milliseconds(80), retry: .milliseconds(10))
+
+        let (puzzle, state) = try await session.decodeStart(puzzle: SniffPublic.self, state: SniffView.self)
+        #expect(puzzle == SniffPublic(letters: 5, tries: 6))
+        var board = state.board
+        for word in ["crane", "slant", "plant"] {
+            guard case .accepted(let got) = await session.play(SniffMove(word: word), revealing: SniffReveal.self), let reveal = got.last else {
+                Issue.record("\(word) refused")
+                return
+            }
+            #expect(reveal.guess.word == word)
+            board.reveal(reveal.guess, answer: reveal.answer)
+        }
+        #expect(board.isSolved)
+        #expect(board.answer == "plant")
+        let sent = await fake.bodies.flatMap(\.moves)
+        #expect(sent == [try DailyJSON(SniffMove(word: "crane")), try DailyJSON(SniffMove(word: "slant")), try DailyJSON(SniffMove(word: "plant"))])
+    }
+
+    @Test func anIllegalGuessComesBackRefused() async throws {
+        let start = DailyStart(
+            run: "run1", game: "sniff", date: "2026-11-23", number: 1, level: 1, startedAt: 1_000_000, now: 1_000_000,
+            puzzle: .object(["letters": .int(5), "tries": .int(6)]), state: .object(["guesses": .array([])]), seq: 0, hints: 0,
+            result: nil, closesAt: 2_000_000)
+        let fake = FakeDaily(start: start)
+        await fake.script([.success(.refused(.illegal, at: 0, seq: 0))])
+        let session = DailyRunSession(start: start, service: fake, person: "p1", window: .milliseconds(80), retry: .milliseconds(10))
+        guard case .refused = await session.play(SniffMove(word: "crane"), revealing: SniffReveal.self) else {
+            Issue.record("expected refused")
+            return
+        }
     }
 }

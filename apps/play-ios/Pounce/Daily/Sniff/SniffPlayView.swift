@@ -159,6 +159,7 @@ struct SniffPlayView: View {
                 .background(Capsule().fill(Palette.yellow))
                 .overlay(Capsule().stroke(Palette.ink, lineWidth: 2.5))
                 .dynamicTypeSize(...DynamicTypeSize.accessibility1)
+                .accessibilityIdentifier("sniff.note")
                 .transition(.scale.combined(with: .opacity))
                 .task(id: model.shake) {
                     try? await Task.sleep(for: Pace.duration(.milliseconds(1400)))
