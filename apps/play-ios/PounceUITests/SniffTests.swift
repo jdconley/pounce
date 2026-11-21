@@ -4,6 +4,10 @@ import XCTest
 /// 8804`; point the runner at it with `TEST_RUNNER_POUNCE_API_BASE_URL`): Home's treat, the
 /// puzzle, guesses marked by the server, and the end. Each test is a new person, so each plays
 /// today's Sniff fresh. Skipped when the server has the Dish off.
+/// Sound off while testing: nothing plays out loud on the machine running the tests. A plist false,
+/// since `Settings` reads the value as a Bool and a bare "NO" reads as text (so, sound on).
+private let muted = ["-settings.soundOn", "<false/>"]
+
 @MainActor
 final class SniffTests: XCTestCase {
     /// Six allowed words with different letters. Today's answer is secret, so a run ends solved if
@@ -20,7 +24,7 @@ final class SniffTests: XCTestCase {
     private func open(realTime: Bool = false) throws -> XCUIApplication {
         let app = Live.app()
         if realTime { app.launchArguments = Live.arguments(speed: 1) + ["-uitest-reset"] }
-        app.launchArguments += ["-seed-people"]
+        app.launchArguments += ["-seed-people"] + muted
         app.launch()
         XCTAssertTrue(el(app, "screen-home").waitForExistence(timeout: Live.t(20)), "no Home")
         let treat = el(app, "home.dish.sniff")
@@ -96,7 +100,7 @@ final class SniffFrameTests: XCTestCase {
 
     func testSniffHoldsTheFrameRate() throws {
         let app = XCUIApplication()
-        app.launchArguments = Live.arguments(speed: 1) + ["-uitest-reset", "-seed-people"]
+        app.launchArguments = Live.arguments(speed: 1) + ["-uitest-reset", "-seed-people"] + muted
         app.launchEnvironment["POUNCE_API_BASE_URL"] = Live.baseURL
         app.launch()
         let treat = el(app, "home.dish.sniff")
@@ -156,7 +160,7 @@ final class SniffShotTests: XCTestCase {
 
     private func launch(_ extra: [String]) -> XCUIApplication {
         let app = XCUIApplication()
-        app.launchArguments = Live.arguments(speed: 1) + ["-uitest-reset", "-seed-people"] + extra
+        app.launchArguments = Live.arguments(speed: 1) + ["-uitest-reset", "-seed-people"] + muted + extra
         app.launchEnvironment["POUNCE_API_BASE_URL"] = Live.baseURL
         app.launch()
         return app
