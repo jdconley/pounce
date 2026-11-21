@@ -203,10 +203,21 @@ export async function merge(env: Env, from: string, to: string, now: number): Pr
   // Before the pairs move: `from`'s partners, any of whom may be a kitten that approved `from`.
   const partners = (await player(env, from).pairList()).map((r) => r.partnerId);
   await player(env, to).absorb(exported, now);
+  // The Dish (daily games design): results, stats and runs move, one run per game and date stays,
+  // and the guest's TV board tokens show the account's board.
+  const daily = await player(env, from).exportDaily();
+  const plan = await player(env, to).absorbDaily(daily);
+  await Promise.all([
+    ...plan.adopt.map((id) => env.DAILY_RUNS.get(env.DAILY_RUNS.idFromName(id)).repoint(from, to)),
+    ...plan.drop.map((id) => env.DAILY_RUNS.get(env.DAILY_RUNS.idFromName(id)).drop()),
+    ...daily.tokens.map((t) => env.BOARD_TOKENS.get(env.BOARD_TOKENS.idFromName(t.hash)).repoint(to)),
+  ]);
   await Promise.all(exported.devices.map((d) => device(env, d).repointPlayer(from, to)));
   await Promise.all(exported.tables.map((t) => room(env, t.code).adopt({ from, to })));
   await player(env, from).retire();
   await mergePairs(env, from, to, now);
+  // Connections now paired with the account get its results, as the merge kept them.
+  await player(env, to).shareDaily();
   // The guest's pounces are short-lived; they end with it (its rows go with the stub's storage).
   await forgetLinks(env, from);
   await parentMerged(env, from, to, partners);

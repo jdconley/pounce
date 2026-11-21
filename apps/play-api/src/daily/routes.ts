@@ -8,7 +8,7 @@ import { dailyModule } from "./games";
 import { runId } from "./seed";
 
 import type { DailyGameId } from "./module";
-import type { Answer } from "./run-core";
+import type { Answer, StartView } from "./run-core";
 import type { Env } from "../env";
 
 /** Hands work to the request's `waitUntil`, as `src/index.ts` does. */
@@ -74,10 +74,15 @@ export async function startRun(env: Env, deviceId: string, playerId: string, gam
   if (!(await limiter(env, `daily-start:${deviceId}`).take("daily-start", STARTS_PER_HOUR, HOUR_MS, now))) {
     return json(429, { error: "rate_limited" });
   }
-  const day = await player(env, playerId).dailyDay(now);
+  const me = player(env, playerId);
+  const day = await me.dailyDay(now);
   if (!day) return json(404, { error: "no_player" });
-  const id = await runId(secret, playerId, module.id, day.day);
-  return json(200, await runs(env, id).start({ id, playerId, game: module.id as DailyGameId, date: day.day, zone: day.zone, now }));
+  // The run already started for this game and date, which after an account merge may be one the
+  // guest started: one run per person, game and date, never a second.
+  const id = (await me.dailyRunFor(day.day, module.id)) ?? (await runId(secret, playerId, module.id, day.day));
+  const view = (await runs(env, id).start({ id, playerId, game: module.id as DailyGameId, date: day.day, zone: day.zone, now })) as StartView;
+  await me.noteRun(view.date, view.game, view.run, view.startedAt);
+  return json(200, view);
 }
 
 /** `{ from, moves }`: anything else in the body (a result, a time) is never read. */

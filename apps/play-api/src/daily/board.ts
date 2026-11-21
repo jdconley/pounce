@@ -108,3 +108,46 @@ export function statsView(s: Stats, today: Day): Stats {
   const alive = s.lastEnded !== null && daysBetween(s.lastEnded, today) <= 1;
   return alive ? s : { ...s, streak: 0 };
 }
+
+const sameResult = (x: DailyResult | null, y: DailyResult) => x !== null && JSON.stringify(x) === JSON.stringify(y);
+
+/**
+ * Two players' stats for one game, after an account merge: the counts added, less the results the
+ * merge dropped (a second run of the same puzzle); the better records; the last 30 days together;
+ * and the streak the merged days give, or the longer side's when it ran past them.
+ */
+export function mergeStats(x: Stats | null, y: Stats | null, dropped: DailyResult[]): Stats | null {
+  if ((!x || !y) && dropped.length === 0) return x ?? y;
+  const [a, b] = [x ?? emptyStats(), y ?? emptyStats()];
+  const solvedOut = dropped.filter((r) => r.outcome === "solved");
+  const guesses = a.guesses.map((n, i) => n + (b.guesses[i] as number) - solvedOut.filter((r) => r.guesses === i + 1).length);
+  const best = <T>(x: T | null, y: T | null, pick: (p: T, q: T) => T) => (x === null ? y : y === null ? x : pick(x, y));
+  const byDate = new Map<Day, { date: Day; result: DailyResult | null }>();
+  for (const e of [...a.last30, ...b.last30]) {
+    if (dropped.some((d) => sameResult(e.result, d)) || byDate.has(e.date)) continue;
+    byDate.set(e.date, e);
+  }
+  const days = [...byDate.values()].sort((x, y) => x.date.localeCompare(y.date));
+  const newest = days.at(-1)?.date;
+  const last30 = newest === undefined ? [] : days.filter((e) => daysBetween(e.date, newest) < WINDOW_DAYS);
+  const ended = new Set(last30.filter((e) => e.result !== null && e.result.outcome !== "closed").map((e) => e.date));
+  // A side's last ended day still counts unless the merge dropped the run that ended it.
+  const still = (side: Stats) =>
+    side.lastEnded !== null && (ended.has(side.lastEnded) || !dropped.some((d) => d.date === side.lastEnded)) ? side.lastEnded : null;
+  const lastEnded = [still(a), still(b), [...ended].sort().at(-1) ?? null].reduce((p, q) => best(p, q, (m, n) => (m > n ? m : n)), null);
+  let run = 0;
+  for (let d = lastEnded; d !== null && ended.has(d); d = addDays(d, -1)) run += 1;
+  const counts = (side: Stats) => lastEnded !== null && still(side) === lastEnded;
+  const streak = Math.max(run, counts(a) ? a.streak : 0, counts(b) ? b.streak : 0);
+  return {
+    played: a.played + b.played - dropped.length,
+    solved: a.solved + b.solved - solvedOut.length,
+    streak,
+    best: Math.max(a.best, b.best, streak),
+    bestTimeMs: best(a.bestTimeMs, b.bestTimeMs, Math.min),
+    bestPoints: best(a.bestPoints, b.bestPoints, Math.max),
+    guesses,
+    last30,
+    lastEnded,
+  };
+}

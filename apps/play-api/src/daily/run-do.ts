@@ -143,6 +143,21 @@ export class DailyRun extends DurableObject<Env> {
     return true;
   }
 
+  /** After an account merge: the run is the account's now (`Player.absorbDaily` kept it). */
+  async repoint(from: string, to: string): Promise<void> {
+    const s = this.stored;
+    if (!s || s.run.playerId !== from) return;
+    s.run.playerId = to;
+    this.save();
+  }
+
+  /** After an account merge: a second run of the same puzzle goes, and reports nothing. */
+  async drop(): Promise<void> {
+    await this.ctx.storage.deleteAlarm();
+    await this.ctx.storage.deleteAll();
+    this.stored = null;
+  }
+
   /** The run as stored (tests). */
   async exportState(): Promise<RunState | null> {
     return this.stored?.run ?? null;

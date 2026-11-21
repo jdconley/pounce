@@ -1,6 +1,6 @@
 import { DurableObject } from "cloudflare:workers";
 
-import { addToStats, dish, emptyStats, rankGame, statsView, type BoardRow, type GameBoard, type Stats } from "../daily/board";
+import { addToStats, dish, emptyStats, mergeStats, rankGame, statsView, type BoardRow, type GameBoard, type Stats } from "../daily/board";
 import { dailyDay, puzzleNumber, type DailyZone } from "../daily/days";
 import { DAILY_TITLES, listedGames } from "../daily/games";
 import { liveMessage, resultMessages, tvsMessage, type BoardAnswer, type DailyEvent } from "../daily/messages";
@@ -94,6 +94,17 @@ const STUB_TTL_MS = 30 * DAY_MS;
 /** A guest no device has touched for this long is deleted (§14, §14.1). */
 const GUEST_TTL_MS = 90 * DAY_MS;
 const SECTIONS = ["settings", "tutorial", "archive"] as const;
+/** What an account merge carries of the Dish (`exportDaily`, `absorbDaily`). */
+export type DailyExport = {
+  me: string;
+  zone: string | null;
+  results: { playerId: string; result: DailyResult }[];
+  faces: { playerId: string; name: string; cat: number }[];
+  stats: Record<string, Stats>;
+  runs: { date: Day; game: string; runId: string; startedAt: number }[];
+  tokens: { hash: string; expires: number }[];
+};
+
 /** Tries at reporting a daily run to a pair, as a table's report gets. */
 const DAILY_STREAK_ATTEMPTS = 2;
 /** Daily results are kept this many days (daily games design §6). */
@@ -174,6 +185,9 @@ export class Player extends DurableObject<Env> {
     sql.exec("CREATE TABLE IF NOT EXISTS daily_faces (player_id TEXT PRIMARY KEY, name TEXT, cat INTEGER)");
     // Runs this player and their connections are playing now, and how far each got (spoiler-free).
     sql.exec("CREATE TABLE IF NOT EXISTS daily_playing (date TEXT, game TEXT, player_id TEXT, progress REAL, PRIMARY KEY (date, game, player_id))");
+    // The run this player plays for each game and date, and when it started: after an account
+    // merge it may be one the guest started, so no second run is ever opened.
+    sql.exec("CREATE TABLE IF NOT EXISTS daily_runs (date TEXT, game TEXT, run_id TEXT, started_at INTEGER, PRIMARY KEY (date, game))");
     // The hashes of the TV board tokens showing this player's board, and when each expires.
     sql.exec("CREATE TABLE IF NOT EXISTS board_tokens (hash TEXT PRIMARY KEY, expires INTEGER)");
     createTables(sql);
@@ -463,6 +477,8 @@ export class Player extends DurableObject<Env> {
 
   /** Empties a merged player, leaving a pointer to `to` for 30 days. */
   async becomeStub(to: string, now: number): Promise<void> {
+    // Board sockets reconnect, and find the account.
+    for (const ws of this.ctx.getWebSockets()) closeBoard(ws, "moved");
     const id = this.getMeta("id");
     const { name, cat } = { name: this.getMeta("name"), cat: this.getMeta("cat") };
     await this.ctx.storage.deleteAll();
@@ -592,9 +608,11 @@ export class Player extends DurableObject<Env> {
     }
   }
 
-  /** After a merge: the partner `from` is now `to`. */
+  /** After a merge: the partner `from` is now `to`. Their Dish rows go; `to` shares its own (`shareDaily`). */
   repointPair(pairId: string, to: string): void {
+    const old = this.pairList().find((r) => r.pairId === pairId)?.partnerId;
     this.ctx.storage.sql.exec("UPDATE pairs SET partner_id = ? WHERE pair_id = ?", to, pairId);
+    if (old !== undefined && old !== to && this.pairWith(old) === null) this.forgetDaily(old);
   }
 
   /** Pins one pair as the top pair (§7); false if it isn't this player's. */
@@ -719,6 +737,19 @@ export class Player extends DurableObject<Env> {
         }),
       );
     }
+  }
+
+  /**
+   * A connection's results after their account merge (`shareDaily`): each replaces whatever was
+   * kept for that game and date, since the merge may have kept a different run.
+   */
+  receiveDailyMany(from: string, face: { name: string; cat: number }, results: DailyResult[]): void {
+    if (!this.live() || this.pairWith(from) === null) return;
+    for (const r of results) {
+      this.ctx.storage.sql.exec("DELETE FROM daily_results WHERE date = ? AND game = ? AND player_id = ?", r.date, r.game, from);
+      this.storeDaily(from, r);
+    }
+    this.saveFace(from, face);
   }
 
   /** A connection's result, for this player's board. Only from someone this player is paired with. */
@@ -893,6 +924,126 @@ export class Player extends DurableObject<Env> {
     this.ownTvsChanged();
   }
 
+  /** The run this player plays for `game` on `date`, if one was started: never open a second. */
+  dailyRunFor(date: Day, game: string): string | null {
+    return (
+      this.ctx.storage.sql.exec<{ run_id: string }>("SELECT run_id FROM daily_runs WHERE date = ? AND game = ?", date, game).toArray()[0]?.run_id ?? null
+    );
+  }
+
+  /** A run was started (or resumed) for `game` on `date`; the first one noted stays. */
+  noteRun(date: Day, game: string, runId: string, startedAt: number): void {
+    if (!this.live()) return;
+    this.ctx.storage.sql.exec("INSERT OR IGNORE INTO daily_runs (date, game, run_id, started_at) VALUES (?, ?, ?, ?)", date, game, runId, startedAt);
+  }
+
+  /** Everything this player keeps of the Dish, for an account merge (`absorbDaily`). */
+  exportDaily(): DailyExport {
+    const { sql } = this.ctx.storage;
+    return {
+      me: this.getMeta("id") ?? "",
+      zone: this.getMeta("daily_zone"),
+      results: sql
+        .exec<{ date: string; game: string; player_id: string; result: string }>("SELECT date, game, player_id, result FROM daily_results")
+        .toArray()
+        .map((r) => ({ playerId: r.player_id, result: JSON.parse(r.result) as DailyResult })),
+      faces: sql.exec<{ player_id: string; name: string; cat: number }>("SELECT player_id, name, cat FROM daily_faces").toArray().map((f) => ({ playerId: f.player_id, name: f.name, cat: f.cat })),
+      stats: Object.fromEntries(sql.exec<{ game: string; stats: string }>("SELECT game, stats FROM daily_stats").toArray().map((r) => [r.game, JSON.parse(r.stats) as Stats])),
+      runs: sql
+        .exec<{ date: string; game: string; run_id: string; started_at: number }>("SELECT date, game, run_id, started_at FROM daily_runs")
+        .toArray()
+        .map((r) => ({ date: r.date, game: r.game, runId: r.run_id, startedAt: r.started_at })),
+      tokens: sql.exec<{ hash: string; expires: number }>("SELECT hash, expires FROM board_tokens").toArray(),
+    };
+  }
+
+  /**
+   * An account merge brings the guest's Dish here (accounts design §13.1). One run per game and
+   * date: when both started one, the earlier-started run and its result stay and the other goes.
+   * Results, stats, connections' results and TV board tokens come along. Returns the runs to hand
+   * to this player (`adopt`) and to delete (`drop`).
+   */
+  absorbDaily(e: DailyExport): { adopt: string[]; drop: string[] } {
+    const { sql } = this.ctx.storage;
+    const me = this.getMeta("id") ?? "";
+    const mine = (date: string, game: string) =>
+      sql.exec<{ result: string }>("SELECT result FROM daily_results WHERE date = ? AND game = ? AND player_id = ?", date, game, me).toArray()[0];
+    const adopt: string[] = [];
+    const drop: string[] = [];
+    const dropped: DailyResult[] = [];
+    /** Games and dates where the guest's run won, and where the account's did. */
+    const guestWins = new Set<string>();
+    const accountWins = new Set<string>();
+    const key = (date: string, game: string) => `${date}|${game}`;
+    for (const g of e.runs) {
+      const own = sql
+        .exec<{ run_id: string; started_at: number }>("SELECT run_id, started_at FROM daily_runs WHERE date = ? AND game = ?", g.date, g.game)
+        .toArray()[0];
+      if (own && own.run_id === g.runId) continue;
+      if (!own || g.startedAt < own.started_at) {
+        sql.exec("INSERT OR REPLACE INTO daily_runs (date, game, run_id, started_at) VALUES (?, ?, ?, ?)", g.date, g.game, g.runId, g.startedAt);
+        adopt.push(g.runId);
+        guestWins.add(key(g.date, g.game));
+        if (own) drop.push(own.run_id);
+      } else {
+        drop.push(g.runId);
+        accountWins.add(key(g.date, g.game));
+      }
+    }
+    for (const { playerId, result } of e.results) {
+      if (playerId !== e.me) {
+        // A connection's result: the pair moves here too.
+        sql.exec("INSERT OR IGNORE INTO daily_results (date, game, player_id, result) VALUES (?, ?, ?, ?)", result.date, result.game, playerId, JSON.stringify(result));
+        continue;
+      }
+      const own = mine(result.date, result.game);
+      if (accountWins.has(key(result.date, result.game)) || (own && !guestWins.has(key(result.date, result.game)))) {
+        dropped.push(result);
+        continue;
+      }
+      if (own) dropped.push(JSON.parse(own.result) as DailyResult);
+      sql.exec("INSERT OR REPLACE INTO daily_results (date, game, player_id, result) VALUES (?, ?, ?, ?)", result.date, result.game, me, JSON.stringify(result));
+    }
+    // The account's own result for a game and date the guest's run won, with no guest result yet: it goes.
+    for (const k of guestWins) {
+      const [date, game] = k.split("|") as [string, string];
+      const own = mine(date, game);
+      if (own && !e.results.some((r) => r.playerId === e.me && r.result.date === date && r.result.game === game)) {
+        dropped.push(JSON.parse(own.result) as DailyResult);
+        sql.exec("DELETE FROM daily_results WHERE date = ? AND game = ? AND player_id = ?", date, game, me);
+      }
+    }
+    for (const f of e.faces) sql.exec("INSERT OR IGNORE INTO daily_faces (player_id, name, cat) VALUES (?, ?, ?)", f.playerId, f.name, f.cat);
+    const kept = new Map(sql.exec<{ game: string; stats: string }>("SELECT game, stats FROM daily_stats").toArray().map((r) => [r.game, JSON.parse(r.stats) as Stats]));
+    for (const game of new Set([...kept.keys(), ...Object.keys(e.stats)])) {
+      const merged = mergeStats(kept.get(game) ?? null, e.stats[game] ?? null, dropped.filter((r) => r.game === game));
+      if (merged) sql.exec("INSERT OR REPLACE INTO daily_stats (game, stats) VALUES (?, ?)", game, JSON.stringify(merged));
+    }
+    for (const t of e.tokens) sql.exec("INSERT OR REPLACE INTO board_tokens (hash, expires) VALUES (?, ?)", t.hash, t.expires);
+    if (this.getMeta("daily_zone") === null && e.zone !== null) this.setMeta("daily_zone", e.zone);
+    return { adopt, drop };
+  }
+
+  /** After an account merge: each connection gets this player's results, in place of what it kept. */
+  shareDaily(): void {
+    if (!this.live()) return;
+    const me = this.getMeta("id") as string;
+    const results = this.ctx.storage.sql
+      .exec<{ result: string }>("SELECT result FROM daily_results WHERE player_id = ?", me)
+      .toArray()
+      .map((r) => JSON.parse(r.result) as DailyResult);
+    if (results.length === 0) return;
+    const face = { name: this.getMeta("name") as string, cat: Number(this.getMeta("cat")) };
+    for (const { partnerId } of this.pairList()) {
+      const partner = this.env.PLAYERS.get(this.env.PLAYERS.idFromName(partnerId)) as unknown as { receiveDailyMany: Player["receiveDailyMany"] };
+      this.ctx.waitUntil(
+        Promise.resolve(partner.receiveDailyMany(me, face, results)).catch(() => {
+          console.error("daily_share_failed");
+        }),
+      );
+    }
+  }
+
   /** Keeps a result unless it is already kept, or older than 120 days. False: nothing new. */
   private storeDaily(playerId: string, result: DailyResult): boolean {
     this.pruneDaily(Date.now());
@@ -921,6 +1072,7 @@ export class Player extends DurableObject<Env> {
     const { sql } = this.ctx.storage;
     const cutoff = this.dailyCutoff(now);
     sql.exec("DELETE FROM daily_results WHERE date < ?", cutoff);
+    sql.exec("DELETE FROM daily_runs WHERE date < ?", cutoff);
     // A run is playing only on its own date: anything older closed at 04:00.
     sql.exec("DELETE FROM daily_playing WHERE date < ?", addDays(dayKey(now, this.zone()), -1));
     sql.exec("DELETE FROM daily_faces WHERE player_id NOT IN (SELECT player_id FROM daily_results UNION SELECT player_id FROM daily_playing)");
