@@ -3,6 +3,8 @@ import { readFileSync, writeFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 
 import { createRng } from "../../rules/rng";
+import { dailyModule, listedGames, makeDaily } from "../games";
+import { cycleKey } from "../seed";
 
 import { answerFor, POOLS, poolFor } from "./answer";
 import { sniff, type SniffPuzzle, type SniffState } from "./module";
@@ -242,5 +244,16 @@ describe("golden runs", () => {
     expect(repeats.end.outcome).toBe("solved");
     expect(misses.end.outcome).toBe("missed");
     expect(misses.answers[6]).toEqual({ ok: false, reason: "over" });
+  });
+});
+
+describe("Sniff on the server", () => {
+  it("is listed, and the server makes its answer from the date and the game's cycle key", async () => {
+    expect(dailyModule("sniff", {})).toBe(sniff);
+    expect(listedGames({}).map((m) => m.id)).toContain("sniff");
+    const secret = "test-secret-not-real";
+    const p = (await makeDaily(sniff, secret, "sniff", "2026-12-04")) as SniffPuzzle;
+    expect(p).toEqual({ answer: answerFor(await cycleKey(secret, "sniff"), "2026-12-04"), level: 5 });
+    expect(sniff.publicPuzzle(p)).toEqual({ letters: 5, tries: 6 });
   });
 });

@@ -1,6 +1,6 @@
 import { afterEach, beforeAll, describe, expect, test } from "vitest";
 
-import { DAILY_TITLES } from "../src/daily/games";
+import { DAILY_GAMES, DAILY_TITLES } from "../src/daily/games";
 import { addDays, localToInstant } from "../src/streaks/clock";
 
 import { BASE, bundle, call, eventually, LA, mint, newPerson, PLAYER_ID_JSON, profile, tokenOf, worker, type Device, type Person, type Sent } from "./play-helpers";
@@ -205,7 +205,9 @@ describe("runs", () => {
     const mf = await start();
     const { device, person } = await someone(mf);
     expect((await startRun(mf, device, person, "chess")).status).toBe(404);
-    expect((await startRun(mf, device, person, "sniff")).status).toBe(404);
+    // A real game this server doesn't referee yet (each game session lists its own).
+    const unlisted = (["sniff", "nine-lives", "cat-nap", "box-fort"] as DailyGameId[]).find((id) => !DAILY_GAMES[id]);
+    if (unlisted) expect((await startRun(mf, device, person, unlisted)).status).toBe(404);
   });
 
   test("a posted result field is ignored and the run is unchanged", async () => {

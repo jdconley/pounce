@@ -4,6 +4,7 @@ import { catNap } from "./cat-nap/module";
 import { levelFor } from "./days";
 import { nineLives } from "./nine-lives/module";
 import { cycleKey, dailySeed } from "./seed";
+import { sniff } from "./sniff/module";
 import { testGame } from "./test-game";
 
 import type { DailyGameId, DailyModule } from "./module";
@@ -18,6 +19,7 @@ export const DAILY_GAMES: Partial<Record<DailyGameId, DailyModule>> = {
   "nine-lives": nineLives as DailyModule,
   test: testGame as DailyModule,
   "cat-nap": catNap as DailyModule,
+  sniff: sniff as DailyModule,
 };
 
 /** The module for `id`, or null for an unknown or unlisted game. */
