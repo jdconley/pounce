@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest";
 import { createRng } from "../rules/rng";
 
 import { closesAt, puzzleNumber } from "./days";
-import { close, countsForStreak, giveUp, HINT_PENALTY_MS, MAX_BATCH, moves, newRun, startView, useHint, type RunState } from "./run-core";
+import { close, countsForStreak, giveUp, HINT_PENALTY_MS, MAX_BATCH, MOVE_BURST, moves, newRun, startView, useHint, type RunState } from "./run-core";
 import { testGame, type TestPuzzle } from "./test-game";
 
 import type { DailyModule } from "./module";
@@ -102,14 +102,18 @@ describe("moves", () => {
     expect(Object.keys(r.answers).map(Number)).toEqual([12, 13, 14, 15, 16, 17, 18, 19]);
   });
 
-  it("moves closer than the module's spacing are too_soon", () => {
-    const spaced = { ...m, minMoveGapMs: 500 } as DailyModule;
-    const r = run(spaced);
-    expect(moves(spaced, p, r, 0, [step(1)], T0 + 1000)).toMatchObject({ ok: true, seq: 1 });
-    expect(moves(spaced, p, r, 1, [step(2)], T0 + 1400)).toEqual({ ok: false, error: "too_soon", at: 0, seq: 1 });
-    // Two in one batch arrive together: the second is too soon.
-    expect(moves(spaced, p, r, 1, [step(2), step(3)], T0 + 2000)).toEqual({ ok: false, error: "too_soon", at: 1, seq: 1 });
-    expect(moves(spaced, p, r, 1, [step(2)], T0 + 2000)).toMatchObject({ ok: true, seq: 2 });
+  it("moves faster than the module's spacing allows, past a burst, are too_soon", () => {
+    // A long puzzle, 100 ms apart at the fastest: the budget is 10 moves a second plus a burst of 10.
+    const big = { target: 1000 };
+    const spaced = { ...m, make: () => big, minMoveGapMs: 100 } as DailyModule;
+    const r = newRun(spaced, big, { id: "r1", playerId: "p_1", game: "test", date: DATE, zone: LA, now: T0 });
+    expect(MOVE_BURST).toBe(10);
+    // 50 in the first second: the 21st breaks the budget, and the whole batch is refused.
+    expect(moves(spaced, big, r, 0, Array.from({ length: 50 }, (_, i) => step(i + 1)), T0 + 1000)).toEqual({ ok: false, error: "too_soon", at: 20, seq: 0 });
+    expect(r.seq).toBe(0);
+    expect(r.state).toEqual({ n: 0 });
+    // The first 20 fit.
+    expect(moves(spaced, big, r, 0, Array.from({ length: 20 }, (_, i) => step(i + 1)), T0 + 1000)).toMatchObject({ ok: true, seq: 20 });
   });
 
   it("moves after the end answer over", () => {
@@ -326,5 +330,49 @@ describe("what a result carries", () => {
     const a = giveUp(leaky, p, r, T0 + 5000);
     expect(a).toMatchObject({ ok: true, result: { guesses: 3, points: 7, progress: 1 } });
     expect(Object.keys(r.result as object).sort()).toEqual(["date", "game", "guesses", "hints", "number", "outcome", "points", "progress", "timeMs", "tooFast"]);
+  });
+});
+
+describe("the move budget", () => {
+  const big = { target: 1000 };
+  const spaced = (gap: number) => ({ ...m, make: () => big, minMoveGapMs: gap }) as DailyModule;
+  const fresh = (mod: DailyModule) => newRun(mod, big, { id: "r1", playerId: "p_1", game: "test", date: DATE, zone: LA, now: T0 });
+
+  it("three quick moves in one batch are accepted", () => {
+    const mod = spaced(100);
+    const r = fresh(mod);
+    expect(moves(mod, big, r, 0, [step(1), step(2), step(3)], T0 + 5000)).toMatchObject({ ok: true, seq: 3 });
+  });
+
+  it("1 s batches with 200 ms of jitter are accepted", () => {
+    // Eight moves a second (125 ms apart, under the 100 ms limit), sent every second, arriving 200 ms early or late.
+    const mod = spaced(100);
+    const r = fresh(mod);
+    let n = 0;
+    for (let k = 1; k <= 30; k++) {
+      const batch = Array.from({ length: 8 }, (_, i) => step(n + i + 1));
+      const at = T0 + k * 1000 + (k % 2 === 0 ? 200 : -200);
+      expect(moves(mod, big, r, n, batch, at), `batch ${k}`).toMatchObject({ ok: true });
+      n += 8;
+    }
+    expect(r.seq).toBe(240);
+  });
+
+  it("a resent batch still gets its stored answer", () => {
+    const mod = spaced(100);
+    const r = fresh(mod);
+    const first = moves(mod, big, r, 0, Array.from({ length: 20 }, (_, i) => step(i + 1)), T0 + 1000);
+    expect(first).toMatchObject({ ok: true, seq: 20 });
+    expect(moves(mod, big, r, 0, Array.from({ length: 20 }, (_, i) => step(i + 1)), T0 + 1001)).toEqual(first);
+  });
+
+  it("hints don't count toward it, and a game with no spacing has none", () => {
+    const mod = spaced(100);
+    const r = fresh(mod);
+    for (let i = 0; i < 15; i++) useHint(mod, big, r, T0 + 10);
+    expect(moves(mod, big, r, 0, Array.from({ length: 10 }, (_, i) => step(16 + i)), T0 + 10)).toMatchObject({ ok: true, seq: 10 });
+    const free = spaced(0);
+    const q = fresh(free);
+    expect(moves(free, big, q, 0, Array.from({ length: 100 }, (_, i) => step(i + 1)), T0)).toMatchObject({ ok: true, seq: 100 });
   });
 });

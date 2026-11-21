@@ -117,7 +117,7 @@ No body. 200:
 | `error` | Meaning | What to do |
 |---|---|---|
 | `illegal` | Move `at` breaks the rules | Undo from that move; resend the rest from `seq` |
-| `too_soon` | Move `at` came closer to the last than the game allows | Wait, then resend from `seq` |
+| `too_soon` | Move `at` is past the game's move budget (Limits) | Wait, then resend from `seq` |
 | `bad_message` | Move `at` isn't one of the game's moves, or the batch is over 100 or not a list (`at` 0) | A client bug |
 | `stale` | `from` isn't `seq`, and this isn't a batch the server remembers | Start again to resync |
 | `over` | The run has ended, or closed at 04:00 (`at` 0, or the first move past the end) | Start again to see the result |
@@ -279,7 +279,7 @@ Unlink: every TV showing this person's board forgets it, and their sockets close
 | Calls on one run | 20 per second | 429 `rate_limited` |
 | Moves per batch | 100 | `bad_message` |
 | Move body | 8 KB | 400 |
-| Spacing between moves | Each game's own (`minMoveGapMs`; Sniff 500 ms); moves in one batch count as 0 ms apart | `too_soon` |
+| Moves over time | For a game with a spacing (`minMoveGapMs` > 0): `seq + n <= floor((now - startedAt) / minMoveGapMs) + 10` for a batch of `n`, so one move per spacing since the start plus a burst of 10 (`MOVE_BURST`) for batching and jitter. Hints don't count | `too_soon`, `at` the first move past the budget, `seq` unchanged |
 | Faster than a game's floor | Kept, `tooFast: true`, off every board | |
 
 ## Streaks and reminders

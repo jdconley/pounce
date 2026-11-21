@@ -50,6 +50,11 @@ export type StartView = {
 
 /** What a hint costs on the clock. */
 export const HINT_PENALTY_MS = 30_000;
+/**
+ * Moves a run may make beyond one per `minMoveGapMs` since its start: a batch of a second's moves,
+ * and network jitter, fit; a bot's flood doesn't.
+ */
+export const MOVE_BURST = 10;
 /** The most moves one batch may carry. */
 export const MAX_BATCH = 100;
 /** How many accepted batches' answers are kept for resends: a dropped connection resends the last one or two. */
@@ -151,9 +156,11 @@ export function moves(m: DailyModule, p: unknown, r: RunState, from: number, raw
     if (ending) return refuse(r, "over", i);
     const move = m.parseMove(item);
     if (move === null) return refuse(r, "bad_message", i);
-    // Moves in one batch arrive together: only the first can be spaced from the last batch.
-    const previous = i === 0 ? r.lastMoveAt : now;
-    if (previous > 0 && now - previous < m.minMoveGapMs) return refuse(r, "too_soon", i);
+    // The move budget: at most one move per `minMoveGapMs` since the start, plus a burst for
+    // batching and network jitter. Clients batch for up to a second, so moves arrive together.
+    if (m.minMoveGapMs > 0 && r.seq + i + 1 > Math.floor((now - r.startedAt) / m.minMoveGapMs) + MOVE_BURST) {
+      return refuse(r, "too_soon", i);
+    }
     const applied = m.apply(p, state, move, now - r.startedAt);
     if (!applied.ok) return refuse(r, applied.reason, i);
     state = applied.state;
