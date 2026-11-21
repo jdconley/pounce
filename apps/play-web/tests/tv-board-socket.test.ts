@@ -1,6 +1,6 @@
 import { describe, expect, test } from "vitest";
 
-import { BoardSocket, dailyOn, type BoardSocketEvent } from "../src/ui/tv/tv-board-socket";
+import { BoardSocket, dailyOn, type BoardSocketEvent } from "../src/net/tv-board-socket";
 
 import { Clock, FakeSocket, flush } from "./fake-socket";
 

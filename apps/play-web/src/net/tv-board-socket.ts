@@ -4,9 +4,9 @@
  * when the network drops. A board the server no longer knows (404, 4404 for a browser) or one
  * closed for good (1000 `revoked` or `expired`) is `gone`: the TV forgets its token and goes home.
  */
-import { BACKOFF, wsUrl, type SocketFactory, type SocketLike } from "../../net/socket";
+import { BACKOFF, wsUrl, type SocketFactory, type SocketLike } from "./socket";
 
-import type { Api } from "../../net/api";
+import type { Api } from "./api";
 import type { BoardMessage } from "@pounce/play-api/daily/messages";
 
 export type BoardSocketEvent = { kind: "message"; message: BoardMessage } | { kind: "online" } | { kind: "offline" } | { kind: "gone" };
