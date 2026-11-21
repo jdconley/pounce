@@ -17,9 +17,21 @@ struct NineLivesWatch: DailyWatchView {
 
     var body: some View {
         let board = NineLivesBoard(puzzle: puzzle, state: state)
-        NineLivesGrid(board: board, clashes: Set(board.clashes), marks: NineLivesMarks(solved: board.looksSolved))
-            // A container, so each cell keeps its own identifier.
-            .accessibilityElement(children: .contain)
-            .accessibilityIdentifier("nine-lives-watch")
+        // Fills the box the TV gives it (a wide stage is 1792 by 848): the quilt square, as large as
+        // the box's shorter side allows with its lip (a shadow 1.4% of its side, at least 3 points)
+        // also inside, the two centred together. The grid draws its quilt half a lip below the top
+        // of its frame and the lip under that, so the frame goes up one lip
+        // (NineLivesWatchTests measures it).
+        GeometryReader { geo in
+            let side = max(0, min(geo.size.width, geo.size.height / 1.014, geo.size.height - 3))
+            let lip = NineLivesGrid.Metrics(side: side).lip
+            NineLivesGrid(board: board, clashes: Set(board.clashes), marks: NineLivesMarks(solved: board.looksSolved))
+                .frame(width: side, height: side)
+                .offset(y: -lip)
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+        }
+        // A container, so each cell keeps its own identifier.
+        .accessibilityElement(children: .contain)
+        .accessibilityIdentifier("nine-lives-watch")
     }
 }
