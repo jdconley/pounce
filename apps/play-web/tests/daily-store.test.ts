@@ -63,6 +63,59 @@ describe("the Dish store", () => {
     expect(store.state.status).toBe("on");
   });
 
+  test("a 403 before the first profile save lands: hidden, then loaded once it lands", async () => {
+    let saved = false;
+    const { store } = setup((p) => (!saved ? new ApiError(403, "forbidden") : p.startsWith("/v1/daily/board") ? BOARD : STATS));
+    store.retain("pe_1");
+    await flush();
+    expect(store.state.status).toBe("unknown");
+    saved = true;
+    store.profileSaved("pe_1");
+    await flush();
+    await flush();
+    expect(store.state.status).toBe("on");
+  });
+
+  test("the profile save landing while a refused load is still out loads again after it", async () => {
+    let saved = false;
+    let answer: () => void = () => {};
+    const calls: string[] = [];
+    const store = new DishStore({
+      call: async (_m, path) => {
+        calls.push(path);
+        if (!saved) {
+          // The refused load is still on its way when the save lands.
+          await new Promise<void>((done) => (answer = done));
+          throw new ApiError(403, "forbidden");
+        }
+        return new Response(JSON.stringify(path.startsWith("/v1/daily/board") ? BOARD : STATS), { status: 200 });
+      },
+      socket: () => ({ start: () => {}, stop: () => {} }),
+    });
+    store.retain("pe_1");
+    await flush();
+    saved = true;
+    store.profileSaved("pe_1");
+    answer();
+    await flush();
+    await flush();
+    await flush();
+    expect(store.state.status).toBe("on");
+    expect(calls.filter((c) => c.startsWith("/v1/daily/board"))).toHaveLength(2);
+  });
+
+  test("the profile saving again leaves a shown Dish alone, and another person's save does nothing", async () => {
+    const { store, calls } = setup((p) => (p.startsWith("/v1/daily/board") ? BOARD : STATS));
+    store.retain("pe_1");
+    await flush();
+    await flush();
+    const before = calls.length;
+    store.profileSaved("pe_1");
+    store.profileSaved("pe_2");
+    await flush();
+    expect(calls).toHaveLength(before);
+  });
+
   test("live: a result fills its row, progress moves it, tvs counts, the next board replaces it", async () => {
     const { store, emit } = setup((p) => (p.startsWith("/v1/daily/board") ? BOARD : STATS));
     store.retain("pe_1");

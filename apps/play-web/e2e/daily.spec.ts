@@ -1,6 +1,6 @@
 import { expect, test, type Page } from "@playwright/test";
 
-import { closeAll, newPlayer, ownAddress, scan } from "./helpers";
+import { closeAll, firstRun, newPlayer, ownAddress, scan } from "./helpers";
 import { openTv, shownLink } from "./tv-helpers";
 
 /**
@@ -174,4 +174,78 @@ test("the Dish stays hidden while the server has it off", async ({ browser }) =>
   await page.goto("/play/daily");
   await expect(page).toHaveURL(/\/play\/$/);
   await closeAll(off.context);
+});
+
+test("a slow first profile save still shows the Dish once it lands", async ({ browser }) => {
+  // Home asks for the board as soon as a new player is named; until the server has their profile
+  // it refuses (403). The Dish must come up when the save lands, not wait for a reload.
+  const context = await browser.newContext();
+  await ownAddress(context);
+  const page = await context.newPage();
+  let land: () => void = () => {};
+  const held = new Promise<void>((done) => (land = done));
+  await page.route("**/v1/devices/me/profile", async (route) => {
+    if (route.request().method() === "PUT") await held;
+    await route.continue();
+  });
+  const refused = page.waitForResponse((r) => r.url().includes("/v1/daily/board") && r.status() === 403);
+  await page.goto("/play/");
+  await firstRun(page, "Ivy");
+  await refused;
+  await expect(page.getByRole("button", { name: "Practice" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Open the Dish" })).toHaveCount(0);
+  land();
+  await expect(page.getByRole("button", { name: "Open the Dish" })).toBeVisible();
+  await closeAll(context);
+});
+
+type Box = { x: number; y: number; width: number; height: number };
+const overlaps = (a: Box, b: Box) => a.x < b.x + b.width - 0.5 && b.x < a.x + a.width - 0.5 && a.y < b.y + b.height - 0.5 && b.y < a.y + a.height - 0.5;
+
+async function box(page: Page, selector: string): Promise<Box> {
+  const b = await page.locator(selector).first().boundingBox();
+  expect(b, selector).not.toBeNull();
+  return b!;
+}
+
+test("at the largest text nothing clips or overlaps: Home, the Dish's tip, a puzzle's bar", async ({ browser }) => {
+  const lu = await newPlayer(browser, "Lu");
+  const { page, context } = lu;
+  // A TV shows the board, so the puzzle's bar carries the TV switch as well as Give up: the
+  // server's board says so, and its socket stays quiet so nothing says otherwise.
+  await page.route("**/v1/daily/board?*", async (route) => {
+    const res = await route.fetch();
+    await route.fulfill({ response: res, json: { ...(await res.json()), tvs: 1 } });
+  });
+  await page.routeWebSocket(/\/v1\/daily\/board\/ws/, () => {});
+  // The browser's largest text size: every rem in the player doubles.
+  await context.addInitScript(() => document.addEventListener("DOMContentLoaded", () => (document.documentElement.style.fontSize = "200%")));
+  await page.reload();
+
+  // Home: Practice and Join never sit over a game, and their words fit.
+  await expect(page.getByRole("button", { name: "Practice" })).toBeVisible();
+  for (const name of ["Practice", "Join"]) {
+    const button = page.getByRole("navigation", { name: "Start" }).getByRole("button", { name });
+    const b = (await button.boundingBox())!;
+    for (const other of await page.locator(".poster, .dd-tile").all()) expect(overlaps(b, (await other.boundingBox())!), `${name} over a game`).toBe(false);
+    expect(await button.evaluate((e) => e.scrollWidth <= e.clientWidth + 1), `${name} fits`).toBe(true);
+  }
+
+  // The Dish: its first-visit tip points at the first card without hiding the board's heading.
+  await page.getByRole("button", { name: "Open the Dish" }).click();
+  const tip = page.locator(".tip[role=status]");
+  await expect(tip).toBeVisible();
+  await tip.evaluate((e) => Promise.all(e.getAnimations().map((a) => a.finished)));
+  for (const target of ["#board-h", "#dish-tv"]) expect(overlaps(await box(page, ".tip[role=status]"), await box(page, target)), `tip over ${target}`).toBe(false);
+
+  // A puzzle's bar, with the longest daily game's name in place of the test game's.
+  await page.getByRole("button", { name: "Play Test" }).click();
+  await expect(page.getByRole("switch", { name: "Show on TV" })).toBeVisible();
+  const h1 = page.locator(".dd-play-title h1");
+  await h1.evaluate((e) => (e.firstChild!.textContent = "Nine Lives "));
+  expect(await h1.evaluate((e) => e.scrollWidth <= e.clientWidth + 1), "the name is whole").toBe(true);
+  const title = await box(page, ".dd-play-title h1");
+  expect(title.x >= 0 && title.x + title.width <= page.viewportSize()!.width, "the name is on screen").toBe(true);
+  for (const other of [".dd-play-bar > :first-child", ".dd-play-actions"]) expect(overlaps(title, await box(page, other)), `the name under ${other}`).toBe(false);
+  await closeAll(context);
 });

@@ -17,9 +17,13 @@ const SIZES = [
   { name: "ipad-landscape", ...devices["iPad (gen 7) landscape"] },
   { name: "laptop", viewport: { width: 1440, height: 900 } },
   { name: "iphone-se-largest-text", ...devices["iPhone SE (3rd gen)"], big: true },
+  { name: "iphone-pro-max-largest-text", ...devices["iPhone 15 Pro Max"], big: true },
+  { name: "ipad-portrait-largest-text", ...devices["iPad (gen 7)"], big: true },
+  { name: "ipad-landscape-largest-text", ...devices["iPad (gen 7) landscape"], big: true },
+  { name: "laptop-largest-text", viewport: { width: 1440, height: 900 }, big: true },
 ].filter((s) => !process.env.SIZES || process.env.SIZES.split(",").includes(s.name));
 
-const browser = await chromium.launch();
+const browser = await chromium.launch({ args: ["--mute-audio"] });
 let ip = 1;
 for (const size of SIZES) {
   const { name, big, ...device } = size;
@@ -59,7 +63,7 @@ for (const size of SIZES) {
     await page.getByRole("button", { name: /Daily Dish|Open the Dish/ }).first().click();
     if (STEPS.includes("dish")) await shot("dish");
     if (STEPS.includes("play") || STEPS.includes("end") || STEPS.includes("card")) {
-      await page.getByRole("button", { name: /Play Test/ }).click();
+      await page.getByRole("button", { name: /^Play / }).first().click();
       await page.getByTestId("test-count").waitFor();
       if (STEPS.includes("play")) await shot("play");
       for (let i = 0; i < 12 && (await page.getByRole("button", { name: "Step" }).isEnabled().catch(() => false)); i++) {

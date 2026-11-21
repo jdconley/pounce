@@ -4,11 +4,15 @@
  * screen is up (Home's Today, the Dish, a puzzle) the board socket keeps it live.
  *
  * The Dish is "off" only on a 404 from the board (the server's `DAILY` flag off, or no player): it
- * stays hidden then. Offline it stays "unknown" (also hidden) and the next load decides.
+ * stays hidden then. Offline, or refused (a 403: a new player's first profile save hasn't landed
+ * yet), it stays "unknown" (also hidden) and the next load decides. The profile save landing
+ * (`profileSaved`) is one: Home asks for the board as soon as a new player is named, which can
+ * be before the server knows them.
  */
 import { useEffect, useState } from "preact/hooks";
 
 import { api, ApiError } from "../net/api";
+import { useApp } from "../store/app";
 
 import { BoardSocket, type BoardEvent } from "./board-socket";
 import { dailyPath } from "./client";
@@ -50,6 +54,8 @@ export class DishStore {
   private socket: Socket | null = null;
   private readonly listeners = new Set<() => void>();
   private loading: Promise<void> | null = null;
+  /** Load again when the one out now ends: it was asked before the server knew this player. */
+  private again = false;
 
   constructor(private readonly deps: DishDeps) {}
 
@@ -71,6 +77,7 @@ export class DishStore {
       this.person = person;
       this.state = EMPTY;
       this.loading = null;
+      this.again = false;
     }
     this.holds += 1;
     if (this.state.status !== "off") void this.refresh();
@@ -88,8 +95,20 @@ export class DishStore {
 
   /** Loads the board and stats again (after a run ends, on coming back online). */
   refresh(): Promise<void> {
-    this.loading ??= this.load().finally(() => (this.loading = null));
+    this.loading ??= this.load().finally(() => {
+      this.loading = null;
+      if (!this.again) return;
+      this.again = false;
+      void this.refresh();
+    });
     return this.loading;
+  }
+
+  /** `person`'s profile reached the server: a Dish not shown yet (refused before) loads now. */
+  profileSaved(person: string): void {
+    if (person !== this.person || this.state.status === "on") return;
+    if (this.loading) this.again = true;
+    else void this.refresh();
   }
 
   private async load(): Promise<void> {
@@ -171,7 +190,13 @@ export const dishStore = new DishStore({
 /** The Dish for `person` (the device's owner), live while the calling screen is up. */
 export function useDish(person: string | undefined): DishState {
   const [, setN] = useState(0);
+  // The server's id for this person arrives with each profile save.
+  const { players } = useApp();
+  const saved = person ? players[person] : undefined;
   useEffect(() => dishStore.listen(() => setN((n) => n + 1)), []);
   useEffect(() => (person ? dishStore.retain(person) : undefined), [person]);
+  useEffect(() => {
+    if (person && saved) dishStore.profileSaved(person);
+  }, [person, saved]);
   return dishStore.state;
 }

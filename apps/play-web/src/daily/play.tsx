@@ -205,25 +205,27 @@ export function PuzzleHost(props: { game: DailyGameId; say: (words: string) => v
 
   return (
     <main class="screen dd-play" style={{ "--c": look.color, "--d": look.deep }}>
-      <header class="dd-play-bar">
-        <IconButton icon="icon-back" label="Dish" onClick={() => navigate({ kind: "dish" })} />
-        <div class="dd-play-title">
-          <h1 class="outlined">
-            {look.title} {run && puzzleNumber(run.start.number) ? <span class="dd-num">{puzzleNumber(run.start.number)}</span> : null}
-          </h1>
-          {run ? <Clock run={run} /> : null}
-        </div>
-        <div class="dd-play-actions">
-          {run && !result && dish.tvs > 0 ? (
-            <button type="button" class={`dd-tv-switch ${tvOn ? "on" : ""}`} role="switch" aria-checked={tvOn} aria-label="Show on TV" onClick={() => void toggleTv()}>
-              <TvIcon size={30} />
-            </button>
-          ) : null}
-          {run && !result ? (
-            <Button size="small" variant="violet" class="dd-give-up" onClick={() => setQuitting(true)}>
-              Give up
-            </Button>
-          ) : null}
+      <header class="dd-play-head">
+        <div class="dd-play-bar">
+          <IconButton icon="icon-back" label="Dish" onClick={() => navigate({ kind: "dish" })} />
+          <div class="dd-play-title">
+            <h1 class="outlined">
+              {look.title} {run && puzzleNumber(run.start.number) ? <span class="dd-num">{puzzleNumber(run.start.number)}</span> : null}
+            </h1>
+            {run ? <Clock run={run} /> : null}
+          </div>
+          <div class="dd-play-actions">
+            {run && !result && dish.tvs > 0 ? (
+              <button type="button" class={`dd-tv-switch ${tvOn ? "on" : ""}`} role="switch" aria-checked={tvOn} aria-label="Show on TV" onClick={() => void toggleTv()}>
+                <TvIcon size={30} />
+              </button>
+            ) : null}
+            {run && !result ? (
+              <Button size="small" variant="violet" class="dd-give-up" onClick={() => setQuitting(true)}>
+                Give up
+              </Button>
+            ) : null}
+          </div>
         </div>
       </header>
       {late ? (

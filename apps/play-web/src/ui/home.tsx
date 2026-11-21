@@ -126,7 +126,7 @@ export function Home(props: { onSettings: () => void; onPractice: (game: GameId)
         <Posters onPlay={props.onNew} firstId="play-first" compact={dishOn} />
       </section>
 
-      <nav class="dock" aria-label="Start">
+      <nav class="home-start" aria-label="Start">
         <Button variant="violet" onClick={() => props.onPractice("cat-tower")} id="practice">
           <Icon name="badge-bot" size={30} /> Practice
         </Button>
