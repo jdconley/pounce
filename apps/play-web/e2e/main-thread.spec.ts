@@ -5,7 +5,7 @@ import { controllerTurn, poster, startFromPhone, tilesTurn, tvDeck, tvTable } fr
 
 /**
  * The rendering thread does UI work only, and keeps up (docs/main-thread.md). While both games are
- * played and a Daily Dish puzzle is played and shared, the page records long tasks and Long Animation Frames, and a DevTools trace gives each
+ * played and a Daily Dish puzzle is played and shared (and Sniff played and given up), the page records long tasks and Long Animation Frames, and a DevTools trace gives each
  * frame's main-thread work. The gate fails on:
  * - any task or animation frame over 50 ms;
  * - per-frame main-thread work at p95 over 8.3 ms (one 120 Hz frame) on the laptop, or over
@@ -241,6 +241,37 @@ async function playDish(page: Page) {
   await page.locator(".dd-end").getByRole("button", { name: "Dish", exact: true }).click();
   await expect(page.getByRole("tablist", { name: "Board" })).toBeVisible();
   await page.waitForTimeout(600);
+  await playSniff(page);
+}
+
+/** Sniff: two guesses on its keys, an unknown word, then Give up and back to the Dish. */
+async function playSniff(page: Page) {
+  await mark(page, "sniff-open");
+  await page.getByRole("button", { name: "Play Sniff" }).click();
+  const keys = page.getByRole("group", { name: "Keyboard" });
+  await expect(keys).toBeVisible();
+  const tap = async (word: string) => {
+    for (const l of word.toUpperCase()) await keys.getByRole("button", { name: new RegExp(`^${l}(,|$)`) }).click();
+    await keys.getByRole("button", { name: "Sniff" }).click();
+  };
+  for (const [i, word] of ["crane", "sloth"].entries()) {
+    await mark(page, "sniff-guess");
+    await tap(word);
+    await expect(page.getByRole("group", { name: `Try ${i + 1}` }).locator(".sniff-tag[data-mark=spot], .sniff-tag[data-mark=near], .sniff-tag[data-mark=none]")).toHaveCount(5);
+    await page.waitForTimeout(400);
+  }
+  await mark(page, "sniff-unknown");
+  await tap("zzzzz");
+  await expect(page.getByRole("status").filter({ hasText: "Not a word" })).toBeVisible();
+  await page.waitForTimeout(600);
+  for (let i = 0; i < 5; i++) await keys.getByRole("button", { name: "Delete" }).click();
+  await mark(page, "sniff-give-up");
+  await page.getByRole("button", { name: "Give up" }).click();
+  await page.getByRole("dialog", { name: "Give up?" }).getByRole("button", { name: "Give up" }).click();
+  await expect(page.getByRole("heading", { name: "Gave up" })).toBeVisible();
+  await page.waitForTimeout(1200);
+  await page.locator(".dd-end").getByRole("button", { name: "Dish", exact: true }).click();
+  await expect(page.getByRole("tablist", { name: "Board" })).toBeVisible();
 }
 
 /**

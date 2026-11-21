@@ -1,0 +1,308 @@
+/* Sniff: scent tags hung on six trails, over Sniff's own keyboard. Marks are shapes and colors
+   from Pounce's palette: a filled paw on magenta (right spot), an outlined paw on sky
+   (elsewhere), a plain violet tag (neither). Animations move transform and opacity only. */
+
+.sniff {
+  --tag-plain: #3b1580;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  font-family: var(--round);
+}
+
+.sniff-board {
+  flex: 1 1 auto;
+  min-height: 0;
+  width: 100%;
+  container-type: size;
+  display: grid;
+  place-items: center;
+  padding: 8px var(--gutter) 0;
+}
+
+.sniff-trail {
+  --rows: 8.2;
+  --tag: min(calc(100cqw / 5.6), calc(100cqh / var(--rows)), 72px);
+  display: flex;
+  flex-direction: column;
+  gap: calc(var(--tag) * 0.2);
+}
+
+.sniff-trail.with-answer {
+  --rows: 9.6;
+}
+
+.sniff-watch .sniff-trail {
+  --tag: min(calc(100cqw / 5.6), calc(100cqh / var(--rows)), 150px);
+}
+
+.sniff-row {
+  position: relative;
+  display: flex;
+  gap: calc(var(--tag) * 0.14);
+}
+
+/* The string the tags hang on, through their holes, sagging a little. */
+.sniff-row::before {
+  content: "";
+  position: absolute;
+  left: calc(var(--tag) * -0.14);
+  right: calc(var(--tag) * -0.14);
+  top: calc(var(--tag) * 0.13);
+  height: calc(var(--tag) * 0.16);
+  border-bottom: max(1.5px, calc(var(--tag) * 0.03)) solid rgba(255, 255, 255, 0.35);
+  border-radius: 0 0 50% 50%;
+}
+
+.sniff-row.answer {
+  margin-top: calc(var(--tag) * 0.12);
+}
+
+.sniff-row[data-shake] {
+  animation: sniff-shake 420ms var(--ease-out);
+}
+
+@keyframes sniff-shake {
+  15% { transform: translateX(-12px); }
+  35% { transform: translateX(10px); }
+  55% { transform: translateX(-8px); }
+  75% { transform: translateX(5px); }
+  100% { transform: none; }
+}
+
+.sniff-tag {
+  --fill: rgba(123, 47, 255, 0.22);
+  --ink: var(--white);
+  position: relative;
+  width: var(--tag);
+  height: calc(var(--tag) * 1.2);
+  transform: rotate(var(--tilt));
+  transform-origin: 50% 14%;
+  display: grid;
+  place-items: center;
+}
+
+.sniff-tag[data-mark="spot"] { --fill: var(--magenta); }
+.sniff-tag[data-mark="near"] { --fill: var(--sky); }
+.sniff-tag[data-mark="none"] { --fill: var(--tag-plain); --ink: rgba(255, 255, 255, 0.6); }
+.sniff-tag[data-mark="typed"] { --fill: var(--white); --ink: var(--ink-color, #1b0b3a); }
+.sniff-tag[data-mark="answer"] { --fill: var(--yellow); --ink: var(--ink-color, #1b0b3a); }
+.sniff-tag[data-mark="slot"] { --fill: rgba(123, 47, 255, 0.55); }
+
+.tag-card {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+}
+
+.tag-card path {
+  fill: var(--fill);
+  stroke: var(--ink, #1b0b3a);
+  stroke: #1b0b3a;
+  stroke-width: 5;
+  stroke-linejoin: round;
+}
+
+.sniff-tag[data-mark="empty"] .tag-card path,
+.sniff-tag[data-mark="slot"] .tag-card path {
+  stroke: rgba(255, 255, 255, 0.28);
+  stroke-width: 3;
+  stroke-dasharray: 8 6;
+}
+
+.sniff-tag[data-mark="slot"] .tag-card path {
+  stroke: rgba(255, 255, 255, 0.75);
+}
+
+.tag-letter {
+  position: relative;
+  margin-top: calc(var(--tag) * 0.2);
+  font-size: calc(var(--tag) * 0.52);
+  font-weight: 900;
+  line-height: 1;
+  color: var(--ink);
+  -webkit-text-stroke: calc(var(--tag) * 0.07) #1b0b3a;
+  paint-order: stroke fill;
+}
+
+.sniff-tag[data-mark="typed"] .tag-letter,
+.sniff-tag[data-mark="answer"] .tag-letter {
+  -webkit-text-stroke: 0;
+}
+
+.sniff-tag[data-mark="typed"] .tag-letter {
+  animation: sniff-pop 300ms var(--ease-spring);
+}
+
+@keyframes sniff-pop {
+  from { transform: scale(1.35); }
+  to { transform: none; }
+}
+
+.sniff-tag .paw {
+  position: absolute;
+  right: 8%;
+  bottom: 6%;
+  width: 30%;
+  height: 30%;
+}
+
+.paw.filled ellipse {
+  fill: var(--white);
+  stroke: #1b0b3a;
+  stroke-width: 1.2;
+}
+
+.paw.outlined ellipse {
+  fill: none;
+  stroke: var(--white);
+  stroke-width: 2.2;
+}
+
+.sniff-note {
+  flex: none;
+  height: 34px;
+  display: grid;
+  place-items: center;
+}
+
+.sniff-note span {
+  padding: 4px 14px;
+  border: 2.5px solid #1b0b3a;
+  border-radius: 999px;
+  background: var(--yellow);
+  color: #1b0b3a;
+  font-weight: 900;
+  font-size: 1rem;
+  animation: sniff-note 1600ms var(--ease-out) forwards;
+}
+
+@keyframes sniff-note {
+  0% { transform: scale(0.6); opacity: 0; }
+  12% { transform: scale(1); opacity: 1; }
+  80% { opacity: 1; }
+  100% { opacity: 0; }
+}
+
+.sniff-keys {
+  flex: none;
+  width: min(100%, 640px);
+  padding: 0 calc(var(--gutter) / 2) calc(var(--safe-bottom) + 10px);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  --key-h: clamp(44px, 12vw, 58px);
+  touch-action: manipulation;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.sniff-key-row {
+  display: flex;
+  justify-content: center;
+  gap: 6px;
+}
+
+.sniff-key {
+  position: relative;
+  flex: 0 1 calc((100% - 54px) / 10);
+  min-width: 0;
+  height: var(--key-h);
+  padding: 0;
+  border: 2.5px solid #1b0b3a;
+  border-radius: 10px;
+  background: var(--white);
+  box-shadow: 0 4px 0 #1b0b3a;
+  color: #1b0b3a;
+  font-family: var(--round);
+  font-size: clamp(1rem, 5vw, 1.5rem);
+  font-weight: 900;
+  transition: transform 80ms var(--ease-out), box-shadow 80ms var(--ease-out);
+}
+
+.sniff-key:active:not(:disabled) {
+  transform: translateY(3px);
+  box-shadow: 0 1px 0 #1b0b3a;
+}
+
+.sniff-key[data-mark="spot"] { background: var(--magenta); color: var(--white); }
+.sniff-key[data-mark="near"] { background: var(--sky); color: var(--white); }
+.sniff-key[data-mark="none"] { background: var(--tag-plain); color: rgba(255, 255, 255, 0.45); }
+
+.sniff-key .paw {
+  position: absolute;
+  top: 3px;
+  right: 3px;
+  width: 34%;
+  height: auto;
+  aspect-ratio: 1;
+}
+
+.sniff-key.delete {
+  flex: 0 1 calc((100% - 54px) / 10 * 1.6 + 6px);
+  background: var(--violet);
+  color: var(--white);
+}
+
+.sniff-key.delete svg {
+  width: 26px;
+  height: 26px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2.4;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.sniff-send {
+  margin-top: 2px;
+  height: max(50px, var(--key-h));
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  border: 3px solid #1b0b3a;
+  border-radius: 999px;
+  background: var(--violet);
+  box-shadow: 0 5px 0 #1b0b3a;
+  color: rgba(255, 255, 255, 0.5);
+  font-family: var(--round);
+  font-size: 1.45rem;
+  font-weight: 900;
+  -webkit-text-stroke: 0.14em #1b0b3a;
+  paint-order: stroke fill;
+  transition: transform 80ms var(--ease-out), box-shadow 80ms var(--ease-out);
+}
+
+.sniff-send[data-ready] {
+  background: linear-gradient(180deg, #ffc21a, #ff8a00);
+  color: var(--white);
+}
+
+.sniff-send:active:not(:disabled) {
+  transform: translateY(4px);
+  box-shadow: 0 1px 0 #1b0b3a;
+}
+
+.sniff-send .paw {
+  width: 1.1em;
+  height: 1.1em;
+  position: static;
+}
+
+.sniff-send .paw.filled ellipse {
+  fill: currentColor;
+  stroke: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sniff-row[data-shake],
+  .sniff-tag[data-mark="typed"] .tag-letter {
+    animation: none;
+  }
+}

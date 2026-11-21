@@ -9,8 +9,9 @@ import { defineConfig, devices } from "@playwright/test";
  */
 const PORT = Number(process.env.E2E_PORT ?? 8791);
 export const BASE = process.env.E2E_BASE ?? `http://127.0.0.1:${PORT}`;
-// A throwaway token secret for this run only.
-const SECRET = randomBytes(32).toString("hex");
+// A throwaway token secret for this run only. Kept in the environment so the workers, which load
+// this file again, see the same one (Sniff's test works out today's word from it, server side).
+const SECRET = (process.env.E2E_TOKEN_SECRET ??= randomBytes(32).toString("hex"));
 
 export default defineConfig({
   testDir: "e2e",
