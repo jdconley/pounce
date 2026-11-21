@@ -114,7 +114,7 @@ Techniques, each tried only when every lower one is stuck; the grade is the high
 
 **Files:**
 - Create: `apps/play-api/src/daily/cat-nap/maker.ts`
-- Test: `apps/play-api/src/daily/cat-nap/maker.test.ts`, `apps/play-api/src/daily/cat-nap/year.test.ts`
+- Test: `apps/play-api/src/daily/cat-nap/maker.test.ts`, `apps/play-api/src/daily/cat-nap/year.test.ts`, helpers in `apps/play-api/tests/cat-nap-helpers.ts` (outside coverage)
 
 **Interfaces (Produces):**
 
@@ -127,7 +127,9 @@ export function makeNap(rng: Rng, level: DayLevel): NapPuzzle;
 
 - The solution: a column per row, no two in neighbouring rows within one column of each other, by shuffled backtracking.
 - Patches: seeded at the solution's cats, grown one random frontier cell (4-connected) at a time until the quilt is full. Contiguous by construction.
+- Random growth alone is almost never unique past 6 by 6 (measured: 0 of 400 at 9 by 9), so `repair` then moves a non-solution cat of another solution into a neighbouring patch (keeping every patch whole) until no other solution is left, and `harden` walks single-cell moves that keep the quilt unique and its grade from falling, toward the band's floor.
 - Keep a quilt when `grade` is non-null and inside the band. Bounded tries; past them, the first logic-unique quilt seen at any grade (Review Focus 4).
+- Patches are renumbered in reading order, so a patch's number says nothing about its cat's row.
 - Starting bands (tuned by measurement in Step 4, keeping min non-decreasing Mon to Sat): 1 → [1,2], 2 → [2,2], 3 → [2,3], 4 → [3,3], 5 → [3,4], 6 → [4,4], 7 → [3,3].
 
 - [ ] **Step 1: Write failing tests**: `makeNap is deterministic for a seed`; `sizes follow the level`; `patches are contiguous and each holds one solution cat`; `make always returns a unique puzzle, even when the band is impossible` (GRADES overridden through a test-only parameter); `year.test.ts`: 365 dates from 2027-01-04, seeds from `createRng` over a fixed word mix of the date, each `countSolutions === 1`, contiguous, grade in band, and a printed table of ms per size (mean and max).
@@ -158,8 +160,8 @@ export function makeNap(rng: Rng, level: DayLevel): NapPuzzle;
 
 ### Task 5: Golden vectors
 
-**Files:**
-- Create: `apps/play-api/scripts/cat-nap-vectors.ts` (writes), `apps/play-api/src/daily/cat-nap/vectors.ts` (builds them), `apps/play-api/fixtures/daily/cat-nap/vectors.json`
+**Files:** (built in the test, like the repo's other fixtures: `UPDATE_FIXTURES=1` writes them)
+- Create: `apps/play-api/fixtures/daily/cat-nap/vectors.json`
 - Test: `apps/play-api/src/daily/cat-nap/vectors.test.ts` (rebuilds and compares to the file)
 
 **Format:** an array of `{ name, quilt: Quilt, start: NapState, steps: Step[] }`, where a step is `{ move: unknown }`, `{ hint: number }`, `{ tap: number }` or `{ drag: number[] }` (the client helpers make the move, which the step also records as `made`), and carries `{ ok: boolean, state: NapState, clashes: Clashes, complete: boolean, placed: number }` after it.
@@ -167,7 +169,7 @@ export function makeNap(rng: Rng, level: DayLevel): NapPuzzle;
 Vectors: `tap-cycle`, `drag-x`, `drag-clear`, `row-clash`, `column-clash`, `patch-clash`, `touching-diagonal`, `touching-side`, `full-but-touching`, `finish-5x5`, `finish-9x9`, `hint-locks`, `hint-clears-clashes`, `hinted-is-locked`, `drag-skips-hinted`, `bad-shapes` (each malformed move `ok: false`, state unchanged).
 
 - [ ] **Step 1: Write the test** that rebuilds the vectors and deep-equals the file. Run: FAIL (no file).
-- [ ] **Step 2: Implement** `vectors.ts` and the script; run `pnpm --filter @pounce/play-api exec tsx scripts/cat-nap-vectors.ts` (or `node --experimental-strip-types`). Run the test: PASS.
+- [ ] **Step 2: Write them** with `UPDATE_FIXTURES=1 pnpm --filter @pounce/play-api exec vitest run src/daily/cat-nap/vectors.test.ts`; run again without it: PASS.
 - [ ] **Step 3: Commit** `test(cat-nap): golden vectors`.
 
 ### Task 6: Swift rules
@@ -185,11 +187,12 @@ Vectors: `tap-cycle`, `drag-x`, `drag-clear`, `row-clash`, `column-clash`, `patc
 ### Task 7: The iOS views on a local state
 
 **Files (all under `apps/play-ios/Pounce/Daily/CatNap/`):**
-- `CatNapModel.swift`: `@MainActor @Observable final class CatNapModel` with `quilt`, `state`, `clashes`, `tap(_ cell:)`, `drag(began:)`, `drag(over:)`, `dragEnded()`, `onMove: (NapMove) -> Void`, and `receive(state:)` (server truth). Marks show at once; `clashes` comes from `CatNapRules.check` off the main actor, a stale result dropped.
+- `PounceKit/Daily/CatNap/NapPlay.swift` (tested in `NapPlayTests`): the board as a value, with `tap`, `dragBegan/Moved/Ended/Cancelled`, `hint`, `load` and `shown`, so the app model holds no rule of its own.
+- `CatNapModel.swift`: `@MainActor @Observable final class CatNapModel` wrapping a `NapPlay`, with `quilt`, `state`, `clashes`, `tap(_ cell:)`, `drag(began:)`, `drag(over:)`, `dragEnded()`, `onMove: (NapMove) -> Void`, and `receive(state:)` (server truth). Marks show at once; `clashes` comes from `CatNapRules.check` off the main actor, a stale result dropped.
 - `CatNapQuilt.swift`: the shared drawing: patch fills from an own palette of nine loud colors, a pattern per patch (stripes, dots, checks, zigzags, plaid, waves, stars, crosshatch, stitches), thick dark seams between patches, `catN-asleep` art for cats, a paw-print stamp for "no cat", a red-orange pulsing ring and a jagged edge on clashing cats and lines.
 - `CatNapPlayView.swift`: the quilt sized to fit (square, safe areas), one gesture for tap and drag; accessibility: each cell a button labelled "Row 3, column 4, blue stripes, cat".
 - `CatNapWatchView.swift`: the quilt from `(quilt, state)`, no input (for tvOS).
-- `CatNapPreview.swift` (DEBUG): a local puzzle and state for `#Preview` until the host exists.
+- `CatNapPreview.swift` (DEBUG): sample quilts and `#Preview`s, plus `CatNapLabScreen` for a temporary launch hook until the host exists.
 
 - [ ] **Step 1: The model's pure parts** are `CatNapRules.tapMove`, `dragPaint` and `dragMove` (Task 6, mirroring Task 1 and pinned by vectors `tap-cycle`, `drag-x`, `drag-clear`, `drag-skips-hinted`), so the app model holds no rule of its own.
 - [ ] **Step 2: Implement the views; build** with `xcodebuild -scheme Pounce -destination 'platform=iOS Simulator,name=<own sim>' build`. Expected: success, and `swift scripts/main-thread-lint.swift` passes.
@@ -201,7 +204,8 @@ Vectors: `tap-cycle`, `drag-x`, `drag-clear`, `row-clash`, `column-clash`, `patc
 - `quilt.tsx`: the shared SVG drawing (same palette and patterns, own CSS in `cat-nap.css`).
 - `play.tsx`: `CatNapPlay({ quilt, state, onMove })` with pointer events for tap and drag (one pointer, captured), local marks at once, clashes from `rules.ts` (a 9 by 9 check is microseconds, well under a frame; measured in the test).
 - `watch.tsx`: `CatNapWatch({ quilt, state })`.
-- `model.ts`: the tap cycle and drag paint, from `rules.ts`.
+- `model.ts`: the tap cycle and drag paint, from `rules.ts` (the web twin of `NapPlay`).
+- `check.ts`: clashes, complete and progress for the views, run where they draw (microseconds on 9 by 9, measured in the test).
 - Test: `apps/play-web/tests/cat-nap.test.ts` (model, and a happy-dom render of play and watch).
 
 - [ ] **Step 1: Write failing tests**: `tap cycles empty, x, cat, empty`; `a drag paints x over empties only`; `watch renders a cat per cat cell and no handlers`; `clashes over 9x9 take under 1 ms` (1000 runs).
