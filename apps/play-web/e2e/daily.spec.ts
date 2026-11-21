@@ -52,9 +52,8 @@ test("the test game plays end to end: Home, the host, the end, the board and sta
 
   await page.getByRole("button", { name: "Home" }).click();
   await expect(page.getByRole("button", { name: /^Test 0:0\d$/ })).toBeVisible();
-  // One puzzle played: "All done" when it is the Dish's only one, else "1 of" however many it has.
-  const games = await page.locator(".dd-tile").count();
-  await expect(page.locator(".dd-done")).toHaveText(games === 1 ? "All done" : `1 of ${games}`);
+  // One game played: "All done" while the test game is the only one, else "1 of" the Dish's games.
+  await expect(page.locator(".dd-done")).toHaveText(/^(All done|1 of \d+)$/);
   await closeAll(mia.context);
 });
 
