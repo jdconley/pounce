@@ -6,12 +6,13 @@
  * draws only its board and its own controls (Nine Lives' and Cat Nap's Hint buttons included), and
  * talks to the server only through the `RunSession` it is given (`client.ts`).
  *
- * A game's web entry, `src/daily/<game>/dish.tsx`, default-exports a `DailyGame`, and adds one
- * line to `registry.ts`, so each game loads in its own chunk:
+ * A game's web entry, `src/daily/<game>/dish.tsx`, default-exports a `DailyGame`; its TV view,
+ * `src/daily/<game>/watch.tsx`, default-exports a `DailyWatchView`. The game adds one line to
+ * `registry.ts`, so each loads in its own chunk:
  *
  * ```ts
  * import type { DailyGame } from "../host";
- * const sniff: DailyGame<SniffPublic, SniffView, SniffMove, SniffReveal> = { id: "sniff", Screen, Watch, share };
+ * const sniff: DailyGame<SniffPublic, SniffView, SniffMove, SniffReveal> = { id: "sniff", Screen, share };
  * export default sniff;
  * ```
  */
@@ -56,11 +57,13 @@ export type ShareMark = "full" | "half" | "none";
  */
 export type ShareGrid = ShareMark[][];
 
-/** A daily game, as the web player knows it. */
+/**
+ * A daily game being played, as its `dish.tsx` default-exports it. Its watch view is its own
+ * module (`watch.tsx`, default-exporting a `DailyWatchView`), so a TV loads it alone.
+ */
 export interface DailyGame<P = unknown, S = unknown, M = unknown, R = unknown> {
   id: DailyGameId;
   Screen: DailyGameScreen<P, S, M, R>;
-  Watch: DailyWatchView<P, S>;
   /** The share card's grid for an ended run, from its final public state. Leave out for none. */
   share?: (state: S, result: DailyResult) => ShareGrid | null;
 }

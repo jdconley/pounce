@@ -117,7 +117,7 @@ export function PuzzleHost(props: { game: DailyGameId; say: (words: string) => v
     const load = DAILY_WEB_GAMES[game];
     if (!load || !person) return navigate({ kind: "dish" }, true);
     let live = true;
-    Promise.all([load(), startRun(game, person)])
+    Promise.all([load.play(), startRun(game, person)])
       .then(([m, r]) => {
         if (!live) return;
         if (!r) return navigate({ kind: "dish" }, true);
