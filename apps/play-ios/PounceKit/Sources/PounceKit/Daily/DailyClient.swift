@@ -128,6 +128,31 @@ public struct DailyClock: Sendable, Hashable {
     }
 }
 
+// MARK: time
+
+/// The run session's sense of time: when a move joined the queue, and waiting out the batch
+/// window or a retry. The app uses the wall clock (`DailyWallTimer`); tests pass a timer they
+/// advance by hand, so nothing depends on how fast the machine runs.
+public protocol DailyTimer: Sendable {
+    /// The time now, counted from any fixed start.
+    func now() -> Duration
+    /// Returns once `now()` has reached `deadline`, or as soon as the calling task is cancelled.
+    func wait(until deadline: Duration) async
+}
+
+/// The wall clock (`ContinuousClock`: it keeps counting while the device sleeps).
+public struct DailyWallTimer: DailyTimer {
+    private let start = ContinuousClock.now
+
+    public init() {}
+
+    public func now() -> Duration { start.duration(to: .now) }
+
+    public func wait(until deadline: Duration) async {
+        try? await Task.sleep(until: start.advanced(by: deadline), clock: .continuous)
+    }
+}
+
 // MARK: the run session
 
 /// Whether the session is reaching the server.
@@ -198,10 +223,12 @@ public actor DailyRunSession {
     private let service: any DailyService
     private let window: Duration
     private let retry: Duration
+    private let timer: any DailyTimer
     private struct Waiting {
         let id: Int
         let move: DailyJSON
-        let at: ContinuousClock.Instant
+        /// When it joined the queue, as `timer` counts.
+        let at: Duration
     }
     private var queue: [Waiting] = []
     private var nextID = 0
@@ -215,18 +242,19 @@ public actor DailyRunSession {
 
     public static let maxBatch = 100
 
-    /// `window`: how long a move waits for others to join its batch (one second on the wire;
-    /// tests pass less). `retry`: the first wait before a failed call is sent again (it doubles,
-    /// up to 8 seconds).
+    /// `window`: how long a move waits for others to join its batch (one second on the wire).
+    /// `retry`: the first wait before a failed call is sent again (it doubles, up to 8 seconds).
+    /// `timer`: the wall clock, or a test's.
     public init(
         start: DailyStart, service: any DailyService, person: String?, received: Date = Date(), window: Duration = .seconds(1),
-        retry: Duration = .milliseconds(500)
+        retry: Duration = .milliseconds(500), timer: any DailyTimer = DailyWallTimer()
     ) {
         self.start = start
         self.service = service
         self.person = person
         self.window = window
         self.retry = retry
+        self.timer = timer
         clock = DailyClock(start: start, received: received)
         seq = start.seq
         hints = start.hints
@@ -332,7 +360,7 @@ public actor DailyRunSession {
     @discardableResult private func enqueue(_ move: DailyJSON, urgent: Bool) -> Int {
         let id = nextID
         nextID += 1
-        queue.append(Waiting(id: id, move: move, at: .now))
+        queue.append(Waiting(id: id, move: move, at: timer.now()))
         if urgent { urgentThrough = id }
         wake()
         return id
@@ -345,7 +373,8 @@ public actor DailyRunSession {
         Task { await self.pump() }
     }
 
-    private func settled() async {
+    /// Returns once nothing is waiting or in flight (`flush` without the push; tests wait on it).
+    func settled() async {
         guard pumping || !queue.isEmpty else { return }
         await withCheckedContinuation { idle.append($0) }
     }
@@ -354,9 +383,9 @@ public actor DailyRunSession {
         while let first = queue.first, result == nil, link != .lost {
             // Wait for the batch window, unless something waiting is urgent.
             if urgentThrough == nil {
-                let due = first.at.advanced(by: window)
-                if ContinuousClock.now < due {
-                    let sleep = Task { _ = try? await Task.sleep(until: due, clock: .continuous) }
+                let due = first.at + window
+                if timer.now() < due {
+                    let sleep = Task { [timer] in await timer.wait(until: due) }
                     nap = sleep
                     await sleep.value
                     nap = nil
@@ -404,7 +433,7 @@ public actor DailyRunSession {
                 return nil
             } catch {
                 setLink(.retrying)
-                try? await Task.sleep(for: wait)
+                await timer.wait(until: timer.now() + wait)
                 wait = min(wait * 2, .seconds(8))
             }
         }

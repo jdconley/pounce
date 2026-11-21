@@ -169,9 +169,14 @@ targets:
           - TilesStage.swift
           - TilesChrome.swift
           - TilesDemo.swift
-      # The daily games' watch contract (the TV's half; T1 adds each game's watch view).
-      - path: Pounce/Daily/DailyWatchView.swift
-      - path: Pounce/Daily/DailyWatchGames.swift
+      # The daily games' watch contract, and everything the TV builds for each game: its watch view
+      # and the drawing and art it needs, in `Pounce/Daily/<Game>/TV/`. A game adds files there and
+      # touches nothing else (this list, ios.yml's and distribute.swift's TV filters match the same).
+      - path: Pounce/Daily
+        includes:
+          - DailyWatchView.swift
+          - DailyWatchGames.swift
+          - "*/TV/**"
       - path: Pounce/App/FrameWork.swift
       - path: Pounce/App/MainThreadWatchdog.swift
       - path: Pounce/App/Autoplay.swift

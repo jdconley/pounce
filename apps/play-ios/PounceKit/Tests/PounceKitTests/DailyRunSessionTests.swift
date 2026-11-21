@@ -1,4 +1,5 @@
 import Foundation
+import Synchronization
 import Testing
 
 @testable import PounceKit
@@ -74,36 +75,117 @@ actor FakeDaily: DailyService {
     func unlinkBoard(person: String?) async throws { calls.append(.unlink) }
 }
 
+/// A timer the test moves by hand (`advance`): the session's batch window and retries open only
+/// when the test says so, however slow the machine is. Nothing here sleeps or reads the wall clock.
+final class ManualTimer: DailyTimer {
+    private struct Sleeper {
+        let id: Int
+        let deadline: Duration
+        let wake: CheckedContinuation<Void, Never>
+    }
+    private struct State {
+        var now: Duration = .zero
+        var nextID = 0
+        var sleepers: [Sleeper] = []
+        var cancelled: Set<Int> = []
+        var watchers: [CheckedContinuation<Void, Never>] = []
+    }
+    private let state = Mutex(State())
+
+    func now() -> Duration { state.withLock { $0.now } }
+
+    func wait(until deadline: Duration) async {
+        let id = state.withLock { s in
+            s.nextID += 1
+            return s.nextID
+        }
+        await withTaskCancellationHandler {
+            await withCheckedContinuation { (wake: CheckedContinuation<Void, Never>) in
+                let (now, watchers) = state.withLock { s -> (Bool, [CheckedContinuation<Void, Never>]) in
+                    if deadline <= s.now || s.cancelled.remove(id) != nil { return (true, []) }
+                    s.sleepers.append(Sleeper(id: id, deadline: deadline, wake: wake))
+                    defer { s.watchers = [] }
+                    return (false, s.watchers)
+                }
+                if now { wake.resume() }
+                for w in watchers { w.resume() }
+            }
+        } onCancel: {
+            let sleeper = state.withLock { s -> Sleeper? in
+                guard let i = s.sleepers.firstIndex(where: { $0.id == id }) else {
+                    s.cancelled.insert(id)
+                    return nil
+                }
+                return s.sleepers.remove(at: i)
+            }
+            sleeper?.wake.resume()
+        }
+    }
+
+    /// Moves time on, waking every sleeper whose deadline has come.
+    func advance(by step: Duration) {
+        let due = state.withLock { s -> [Sleeper] in
+            s.now += step
+            let due = s.sleepers.filter { $0.deadline <= s.now }
+            s.sleepers.removeAll { $0.deadline <= s.now }
+            return due
+        }
+        for sleeper in due { sleeper.wake.resume() }
+    }
+
+    /// Returns once something is asleep on this timer (the session waiting out its window or a retry).
+    func sleeping() async {
+        await withCheckedContinuation { (watch: CheckedContinuation<Void, Never>) in
+            let asleep = state.withLock { s -> Bool in
+                if !s.sleepers.isEmpty { return true }
+                s.watchers.append(watch)
+                return false
+            }
+            if asleep { watch.resume() }
+        }
+    }
+}
+
 @Suite struct DailyRunSessionTests {
-    private func session(_ fake: FakeDaily, window: Duration = .seconds(30)) async -> DailyRunSession {
-        DailyRunSession(start: await fake.startAnswer, service: fake, person: "p1", window: window, retry: .milliseconds(10))
+    private static let window = Duration.seconds(1)
+    private static let retry = Duration.milliseconds(500)
+
+    private func session(_ fake: FakeDaily, timer: ManualTimer = ManualTimer()) async -> DailyRunSession {
+        DailyRunSession(start: await fake.startAnswer, service: fake, person: "p1", window: Self.window, retry: Self.retry, timer: timer)
     }
 
     @Test func movesWaitForTheWindowAndGoInOneBatch() async {
         let fake = FakeDaily()
-        let s = await session(fake)
+        let timer = ManualTimer()
+        let s = await session(fake, timer: timer)
         await s.send(move: Step(n: 1))
         await s.send(move: Step(n: 2))
+        await timer.sleeping()
+        timer.advance(by: Self.window - .milliseconds(1))
         #expect(await fake.calls.isEmpty)
         await s.flush()
         #expect(await fake.calls == [.moves(from: 0, count: 2)])
         #expect(await s.seq == 2)
     }
 
-    @Test func aBatchGoesOnItsOwnAfterTheWindow() async throws {
+    @Test func aBatchGoesOnItsOwnAfterTheWindow() async {
         let fake = FakeDaily()
-        let s = await session(fake, window: .milliseconds(30))
+        let timer = ManualTimer()
+        let s = await session(fake, timer: timer)
         await s.send(move: Step(n: 1))
-        try await Task.sleep(for: .milliseconds(300))
+        await timer.sleeping()
+        #expect(await fake.calls.isEmpty)
+        timer.advance(by: Self.window)
+        await s.settled()
         #expect(await fake.calls == [.moves(from: 0, count: 1)])
     }
 
     @Test func anUrgentMoveGoesAtOnceWithWhatWaits() async throws {
         let fake = FakeDaily()
-        let s = await session(fake, window: .seconds(30))
+        let s = await session(fake)
         await s.send(move: Step(n: 1))
         await s.send(move: Step(n: 2), urgent: true)
-        try await Task.sleep(for: .milliseconds(200))
+        await s.settled()
         #expect(await fake.calls == [.moves(from: 0, count: 2)])
         let body = await fake.bodies.first
         #expect(body?.moves == [try DailyJSON(Step(n: 1)), try DailyJSON(Step(n: 2))])
@@ -112,10 +194,16 @@ actor FakeDaily: DailyService {
     @Test func aNetworkFailureResendsTheSameFrom() async {
         let fake = FakeDaily()
         await fake.script([.failure(APIError.transport("offline")), .failure(APIError.server(500))])
-        let s = await session(fake)
+        let timer = ManualTimer()
+        let s = await session(fake, timer: timer)
         let events = await s.events()
         await s.send(move: Step(n: 1), urgent: true)
-        await s.flush()
+        // The first retry waits `retry`, the second twice that.
+        await timer.sleeping()
+        timer.advance(by: Self.retry)
+        await timer.sleeping()
+        timer.advance(by: Self.retry * 2)
+        await s.settled()
         #expect(await fake.calls == [.moves(from: 0, count: 1), .moves(from: 0, count: 1), .moves(from: 0, count: 1)])
         var links: [DailyLink] = []
         for await event in events {
@@ -182,7 +270,7 @@ actor FakeDaily: DailyService {
 
     @Test func aHintFlushesFirstAndCounts() async {
         let fake = FakeDaily()
-        let s = await session(fake, window: .seconds(30))
+        let s = await session(fake)
         await s.send(move: Step(n: 1))
         let reveal = await s.hint(as: Count.self)
         #expect(reveal == Count(n: 3))
@@ -194,7 +282,7 @@ actor FakeDaily: DailyService {
 
     @Test func givingUpFlushesThenEnds() async {
         let fake = FakeDaily()
-        let s = await session(fake, window: .seconds(30))
+        let s = await session(fake)
         await s.send(move: Step(n: 1))
         let result = await s.giveUp()
         #expect(result?.outcome == .gaveUp)
@@ -204,7 +292,7 @@ actor FakeDaily: DailyService {
     @Test func playWaitsForItsReveal() async {
         let fake = FakeDaily()
         await fake.script([.success(.accepted(seq: 1, reveals: [.object(["n": .int(9)])], progress: 0.25, result: nil))])
-        let s = await session(fake, window: .seconds(30))
+        let s = await session(fake)
         let answer = await s.play(Step(n: 1), revealing: Count.self)
         guard case .accepted(let reveals) = answer else {
             Issue.record("refused")

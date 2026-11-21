@@ -70,7 +70,17 @@ public enum ClientHeaders {
     /// Every game in the catalog, whether or not it is on the shelf yet: this build can draw them all.
     public static var drawable: String { GameCatalog.all.map(\.id).joined(separator: ",") }
 
+    /// Listed after the games by an app that shows the Daily Dish: the server sends the Dish
+    /// reminder only to those (docs/daily-protocol.md). The iPhone and iPad app has the Dish; the
+    /// Apple TV only shows a board, so it doesn't say so.
+    public static let dish = "dish"
+
+    /// The games header's value for `app`: the games it can draw, then `dish` where it shows the Dish.
+    public static func games(for app: AppIdentity) -> String {
+        app.platform == "ios" ? "\(drawable),\(dish)" : drawable
+    }
+
     public static func headers(for app: AppIdentity?) -> [String: String] {
-        app.map { [AppIdentity.header: $0.headerValue, gamesHeader: drawable] } ?? [:]
+        app.map { [AppIdentity.header: $0.headerValue, gamesHeader: games(for: $0)] } ?? [:]
     }
 }
