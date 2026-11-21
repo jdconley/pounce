@@ -1,5 +1,6 @@
 import { createRng } from "../rules/rng";
 
+import { catNap } from "./cat-nap/module";
 import { levelFor } from "./days";
 import { cycleKey, dailySeed } from "./seed";
 import { testGame } from "./test-game";
@@ -14,6 +15,7 @@ import type { Day } from "../streaks/clock";
  */
 export const DAILY_GAMES: Partial<Record<DailyGameId, DailyModule>> = {
   test: testGame as DailyModule,
+  "cat-nap": catNap as DailyModule,
 };
 
 /** The module for `id`, or null for an unknown or unlisted game. */
