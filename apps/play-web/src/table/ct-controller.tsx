@@ -329,7 +329,7 @@ export function CtController(props: { store: RoomStore; state: RoomState; onView
             class={`deck ${step === "draw" ? "live" : ""}`}
             style={box(L.piles.deckRect)}
             aria-label={`Deck, ${g.deckCount} cards. Draw`}
-            disabled={step !== "draw"}
+            disabled={step !== "draw" || state.pending !== null}
             onClick={() => draw("deck")}
           >
             <DeckCards count={g.deckCount} />
@@ -340,6 +340,7 @@ export function CtController(props: { store: RoomStore; state: RoomState; onView
             class={`discard ${over?.kind === "discard" ? "hot" : ""} ${canDrawDiscard ? "live" : ""} ${selected !== null && step === "play" ? "aim" : ""}`}
             style={box(L.piles.discardRect)}
             aria-label={discardName}
+            disabled={state.pending !== null}
             onClick={() => (selected !== null && step === "play" ? discard(selected) : draw("discard"))}
           />
         </>
@@ -418,7 +419,7 @@ export function CtController(props: { store: RoomStore; state: RoomState; onView
                 </Button>
               ) : null}
               {!(showTrays && groupsReady) || selected !== null ? (
-                <Button size="small" variant="magenta" id="discard-btn" disabled={selected === null} onClick={() => selected !== null && discard(selected)}>
+                <Button size="small" variant="magenta" id="discard-btn" disabled={selected === null || state.pending !== null} onClick={() => selected !== null && discard(selected)}>
                   Discard
                 </Button>
               ) : null}

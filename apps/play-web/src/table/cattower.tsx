@@ -332,9 +332,10 @@ export function CatTowerTable(props: { store: RoomStore; state: RoomState; sound
         onGroup={(s, gi) => tapTarget({ kind: "group", seat: s, group: gi, ok: true })}
         onSeat={selected !== null && discardNeedsTarget(selected) ? (s) => tapTarget({ kind: "seat", seat: s }) : undefined}
         onDeck={() => draw("deck")}
-        deckLive={myTurn && g.step === "draw"}
+        deckLive={myTurn && g.step === "draw" && !state.pending}
         onDiscard={() => (selected !== null ? tapTarget({ kind: "discard" }) : draw("discard"))}
         discardLive={canDrawDiscard}
+        discardOff={state.pending !== null}
         discardAim={selected !== null && myTurn && g.step === "play"}
         discardHint={canDrawDiscard ? "Take it" : selected !== null ? "Discard here" : ""}
         cue={{ text: cue, mine: myTurn, y: (showTrays ? L.trays[0]!.y : L.handRect.y) - 34 }}

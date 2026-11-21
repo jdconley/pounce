@@ -415,6 +415,42 @@ test.describe("a TV and two browser phones", () => {
     expect(await handEverOnTv(tv.page)).toEqual([]);
     await closeAll(tv.context, ava!.context, ben!.context);
   });
+  test("a turn counts when the server's answer comes late", async ({ browser }) => {
+    // A move's events come first and the snapshot that settles it after (as on a slow runner or
+    // link): the drawn card shows while the draw is still in flight, and the phone must not offer
+    // a discard it will refuse.
+    const tv = await openTv(browser);
+    const code = await tvMakes(tv, "Cat Tower");
+    const [ava, ben] = await phonesJoin(browser, code, ["Ava", "Ben"]);
+    await startFromPhone(ava!.page, ben!.page);
+    await expect(tv.page.locator(".tv-table")).toBeVisible();
+    for (const p of [ava!.page, ben!.page]) {
+      let queue = Promise.resolve();
+      await p.routeWebSocket(/\/v1\/rooms\/[A-Z0-9]+\/ws/, (ws) => {
+        const server = ws.connectToServer();
+        server.onMessage((m) => {
+          const late = String(m).includes('"t":"snapshot"');
+          queue = queue.then(() => (late ? new Promise((r) => setTimeout(r, 300)) : undefined)).then(() => ws.send(m));
+        });
+        ws.onMessage((m) => server.send(m));
+      });
+      await p.reload();
+      await expect(p.getByRole("group", { name: "Your hand" })).toBeVisible();
+    }
+    await view(ben!.page, "Table").click();
+    let turns = 0;
+    for (let i = 0; i < 80 && turns < 4; i++) {
+      for (const turn of [() => controllerTurn(ava!.page), () => catTowerTurn(ben!.page)]) {
+        const before = await tvDeck(tv.page);
+        if (!(await turn())) continue;
+        turns++;
+        await expect.poll(() => tvDeck(tv.page)).toBeLessThan(before);
+      }
+      await tv.page.waitForTimeout(250);
+    }
+    expect(turns).toBe(4);
+    await closeAll(tv.context, ava!.context, ben!.context);
+  });
 });
 
 test("no serious accessibility problems on the TV, its phones and the TV-link page", async ({ browser }) => {

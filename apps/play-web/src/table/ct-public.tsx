@@ -86,6 +86,8 @@ export type CtHandProps = {
   discardLive?: boolean;
   /** A card is picked: the discard glows as a place for it. */
   discardAim?: boolean;
+  /** A move is in flight: the discard takes nothing until it settles. */
+  discardOff?: boolean;
   /** What a tap on the discard does, after its card in its name ("Take it"). */
   discardHint?: string;
   /** Drawn under the cards: the hand layer's trays and zones. */
@@ -294,6 +296,7 @@ export function CtTable(props: CtPublicProps & Partial<CtHandProps>) {
           class={`discard ${hover?.kind === "discard" ? "hot" : ""} ${props.discardLive ? "live" : ""} ${props.discardAim ? "aim" : ""}`}
           style={{ transform: transformOf(L.discard) }}
           aria-label={discardName}
+          disabled={props.discardOff}
           onClick={props.onDiscard}
         />
       ) : (
