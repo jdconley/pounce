@@ -29,6 +29,14 @@ describe("the web player's routes", () => {
     expect(parseRoute("/play/tv-link/AbCdEfGhIjKlMnOpQr.-12")).toEqual({ kind: "home" });
   });
 
+  test("/play/daily is the Dish, and /play/daily/<game> one of its puzzles", () => {
+    expect(parseRoute("/play/daily")).toEqual({ kind: "dish" });
+    expect(parseRoute("/play/daily/")).toEqual({ kind: "dish" });
+    expect(parseRoute("/play/daily/sniff")).toEqual({ kind: "daily", game: "sniff" });
+    expect(parseRoute("/play/daily/nine-lives")).toEqual({ kind: "daily", game: "nine-lives" });
+    expect(parseRoute("/play/daily/not-a-game")).toEqual({ kind: "dish" });
+  });
+
   test("pathFor is parseRoute's inverse", () => {
     const routes: Route[] = [
       { kind: "home" },
@@ -38,6 +46,8 @@ describe("the web player's routes", () => {
       { kind: "keypad" },
       { kind: "tv" },
       { kind: "tvLink", token: TOKEN },
+      { kind: "dish" },
+      { kind: "daily", game: "box-fort" },
     ];
     for (const route of routes) expect(parseRoute(pathFor(route))).toEqual(route);
     expect(pathFor({ kind: "tv" })).toBe("/play/tv");

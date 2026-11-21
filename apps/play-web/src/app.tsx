@@ -44,6 +44,24 @@ export function openTable(code: string, intent: TableIntent, replace = false): v
   navigate({ kind: "table", code }, replace);
 }
 
+/** The Daily Dish loads when it opens: Home shows only its Today row. */
+type DailyModule = typeof import("./daily/screens");
+let dailyModule: Promise<DailyModule> | null = null;
+const loadDaily = (): Promise<DailyModule> => (dailyModule ??= import("./daily/screens"));
+
+function LazyDaily(props: { route: Extract<Route, { kind: "dish" | "daily" }>; say: (words: string) => void }) {
+  const [mod, setMod] = useState<DailyModule | null>(null);
+  useEffect(() => {
+    let live = true;
+    void loadDaily().then((m) => live && setMod(m));
+    return () => {
+      live = false;
+    };
+  }, []);
+  if (!mod) return <main class="screen violet-bg" aria-busy="true" />;
+  return props.route.kind === "dish" ? <mod.DishScreen say={props.say} /> : <mod.PuzzleHost key={props.route.game} game={props.route.game} say={props.say} />;
+}
+
 /** The TV page loads only on a TV: phones never download it. */
 type TvModule = typeof import("./ui/tv/tv-app");
 
@@ -163,6 +181,10 @@ function PlayerApp(props: { route: Route }) {
         break;
       case "join":
         screen = <main class="screen violet-bg" />;
+        break;
+      case "dish":
+      case "daily":
+        screen = <LazyDaily route={route} say={cheer} />;
         break;
       // A TV's QR: first run (above) keeps this route, then the page puts a table on that TV.
       case "tvLink":

@@ -1,6 +1,7 @@
 import { useEffect, useState } from "preact/hooks";
 
 import { alertsCardDismissed, dismissAlertsCard, turnOnAlerts, useAlerts } from "../alerts";
+import { TodayDish, useDishOn } from "../daily/dish-home";
 import { art, RINGS } from "../lib/art";
 import { CATALOG, GAME_IDS, titleOf, type GameId } from "../lib/catalog";
 import { isRoomCode, navigate } from "../lib/router";
@@ -70,6 +71,8 @@ export function Home(props: { onSettings: () => void; onPractice: (game: GameId)
   const alerts = useAlerts();
   const askAlerts = alerts === "off" && open.length > 0 && people.band !== "kitten" && !alertsCardDismissed();
   const owner = people.owner;
+  // With the Dish on, Home makes room for it: the game posters fold into a compact row.
+  const dishOn = useDishOn();
 
   return (
     <main class="screen home">
@@ -88,6 +91,8 @@ export function Home(props: { onSettings: () => void; onPractice: (game: GameId)
           <IconButton icon="icon-gear" label="Settings" onClick={props.onSettings} id="gear" />
         </div>
       </header>
+
+      <TodayDish />
 
       {open.length > 0 ? (
         <section class="home-section" aria-labelledby="tables-h">
@@ -118,7 +123,7 @@ export function Home(props: { onSettings: () => void; onPractice: (game: GameId)
         <h2 class="outlined section-h" id="new-h">
           New game
         </h2>
-        <Posters onPlay={props.onNew} firstId="play-first" />
+        <Posters onPlay={props.onNew} firstId="play-first" compact={dishOn} />
       </section>
 
       <nav class="dock" aria-label="Start">
@@ -135,9 +140,9 @@ export function Home(props: { onSettings: () => void; onPractice: (game: GameId)
 }
 
 /** The games' posters, each with Play (Home's New game, and the TV-link page's). */
-export function Posters(props: { onPlay: (game: GameId) => void; firstId?: string; disabled?: boolean }) {
+export function Posters(props: { onPlay: (game: GameId) => void; firstId?: string; disabled?: boolean; compact?: boolean }) {
   return (
-    <div class="poster-grid">
+    <div class={`poster-grid ${props.compact ? "compact" : ""}`}>
       {GAME_IDS.map((id, i) => (
         <article class={`poster ${id}`}>
           <img class="poster-art" src={art(CATALOG[id].art)} alt="" width={768} height={512} decoding="async" />

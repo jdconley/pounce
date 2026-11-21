@@ -5,7 +5,7 @@ import { controllerTurn, poster, startFromPhone, tilesTurn, tvDeck, tvTable } fr
 
 /**
  * The rendering thread does UI work only, and keeps up (docs/main-thread.md). While both games are
- * played, the page records long tasks and Long Animation Frames, and a DevTools trace gives each
+ * played and a Daily Dish puzzle is played and shared, the page records long tasks and Long Animation Frames, and a DevTools trace gives each
  * frame's main-thread work. The gate fails on:
  * - any task or animation frame over 50 ms;
  * - per-frame main-thread work at p95 over 8.3 ms (one 120 Hz frame) on the laptop, or over
@@ -207,6 +207,43 @@ async function playTiles(page: Page) {
 }
 
 /**
+ * The Daily Dish: Home's Today row, the Dish and its board tabs, a puzzle in the host (the server's
+ * test game), its end, and Share, whose card is drawn in a Web Worker.
+ */
+async function playDish(page: Page) {
+  await mark(page, "dish-menu");
+  await page.getByRole("button", { name: "Menu" }).click();
+  await page.getByRole("button", { name: "Home" }).click();
+  await mark(page, "dish-open");
+  await page.getByRole("button", { name: "Open the Dish" }).click();
+  await expect(page.getByRole("tablist", { name: "Board" })).toBeVisible();
+  const tip = page.getByRole("button", { name: "Dismiss tip" });
+  if (await tip.isVisible()) await tip.click();
+  await mark(page, "dish-tabs");
+  await page.getByRole("tab", { name: "Test" }).click();
+  await page.getByRole("tab", { name: "Dish" }).click();
+  await mark(page, "dish-play");
+  await page.getByRole("button", { name: "Play Test" }).click();
+  const step = page.getByRole("button", { name: "Step" });
+  await expect(page.getByTestId("test-count")).toBeVisible();
+  while (await step.isEnabled()) {
+    await mark(page, "dish-step");
+    await step.click();
+    await page.waitForTimeout(250);
+  }
+  await mark(page, "dish-end");
+  await expect(page.getByRole("heading", { name: "Solved" })).toBeVisible();
+  await page.waitForTimeout(1500);
+  await mark(page, "dish-share");
+  await page.getByRole("button", { name: "Share" }).click();
+  await expect.poll(() => page.evaluate(() => (window as unknown as { __shared?: boolean }).__shared === true)).toBe(true);
+  await mark(page, "dish-back");
+  await page.locator(".dd-end").getByRole("button", { name: "Dish", exact: true }).click();
+  await expect(page.getByRole("tablist", { name: "Board" })).toBeVisible();
+  await page.waitForTimeout(600);
+}
+
+/**
  * The TV page shows a few turns of each game, played by two phones (other browser contexts, set
  * up before the trace): the TV is what is measured. Its own menu takes it from one game to the
  * next, and its poster makes each table.
@@ -309,12 +346,18 @@ test("the rendering thread keeps every frame: no long task, frame work within bu
     phones.push(await newPlayer(browser, "Ava", { context: devices["Pixel 7"] }), await newPlayer(browser, "Ben", { context: devices["iPhone 13"] }));
     play = () => playOnTv(page, phones.map((p) => p.page));
   } else {
+    // Share's sheet is the system's; here it only records that the card arrived.
+    await context.addInitScript(() => {
+      Object.defineProperty(navigator, "canShare", { value: () => true, configurable: true });
+      Object.defineProperty(navigator, "share", { value: async () => void ((window as unknown as { __shared: boolean }).__shared = true), configurable: true });
+    });
     await page.goto("/play/");
     await firstRun(page, "Gauge");
     await expect(page.getByRole("button", { name: "Practice" })).toBeVisible();
     play = async () => {
       await playCatTower(page);
       await playTiles(page);
+      await playDish(page);
     };
   }
 

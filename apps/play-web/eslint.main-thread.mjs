@@ -69,7 +69,14 @@ const NO_FRAME_ASSUMPTIONS = [
   },
 ];
 
-const UI_CODE = [`${PLAY_WEB}/ui/**/*.{ts,tsx}`, `${PLAY_WEB}/table/**/*.{ts,tsx}`, `${PLAY_WEB}/app.tsx`, `${PLAY_WEB}/main.tsx`];
+const UI_CODE = [
+  `${PLAY_WEB}/ui/**/*.{ts,tsx}`,
+  `${PLAY_WEB}/table/**/*.{ts,tsx}`,
+  // The Daily Dish's screens and every game's board; its network code (client, socket, store) keeps its timers.
+  `${PLAY_WEB}/daily/**/*.tsx`,
+  `${PLAY_WEB}/app.tsx`,
+  `${PLAY_WEB}/main.tsx`,
+];
 /** Not the page's thread: the service worker and Web Workers. */
 const OFF_THREAD = [`${PLAY_WEB}/sw.ts`, `${PLAY_WEB}/workers/*.worker.ts`];
 
