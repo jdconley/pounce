@@ -6,7 +6,7 @@ with the app: the birth year, the button names and the consent steps.
 
 ---
 
-Pounce has two family card and tile games, Cat Tower and Tuna Tiles. No account is needed to play, and there is no chat and no public profile.
+Pounce has two family card and tile games, Cat Tower and Tuna Tiles, and four daily puzzles. No account is needed to play, and there is no chat and no public profile.
 
 AGE CHECK (first launch)
 The app first asks Apple's Declared Age Range. If you choose not to share, it asks "What year were you born?". Please type 1980, tap the check, then tap "Yes" when it says "Born in 1980?". This sets the device to an adult. Next, the app suggests a name and a cat; tap the check to keep them.
@@ -26,6 +26,9 @@ In the lobby, "Add a player" offers Same room (a QR code to scan), Far away (a l
 SIGN IN WITH APPLE (optional)
 Signing in keeps your streaks if you change phones. Find it in Settings (the gear on Home), or on Home after you have played with someone. Adults and teens only. Settings also has the privacy policy and account deletion.
 
+DAILY DISH (four one-player puzzles a day)
+On Home, the Daily Dish panel shows Sniff, Nine Lives, Cat Nap and Box Fort. Tap Play on any. Everyone gets the same puzzles that day. Our server checks every move and works out every score; the app sends none. The header opens today's board: only you and the people you have a streak with.
+
 APPLE TV (no iPhone needed)
 The Apple TV app has no age check and no sign-in. On Home, select Cat Tower or Tuna Tiles. The TV shows a table code and a QR code ("Scan to join"). On any browser, open play.conleychaos.com/play. A new browser asks the birth year (type 1980) and a name. Then tap "Join" and type the code (or scan the QR code). Tap "Add a player", then "House Cat", then Start. The TV shows the whole table; the browser holds the cards. Menu (Back) on the remote opens the TV's menu.
 
@@ -38,9 +41,8 @@ A parent can allow turn alerts on a child's own device. This needs two devices a
 4. A text from Twilio Verify brings a six-digit code. The parent types it. Turn alerts are now on for that child.
 5. A day or two later the parent's own devices get a confirmation notification with a "Revoke" button.
 The parent can turn alerts off or remove the child at any time from the same panel. The phone number is used only for this consent and is deleted when consent ends.
-In the lobby, a child's device without consent shows "Want turn alerts? Show a grown-up here your code." A signed-in parent at the same table with a linked child whose consent isn't finished is asked to set it up.
 
-You don't need to test consent to play. If you would like to, use one device as the child (type a year under 13 on first launch) and one as the parent (type 1980, then sign in with Apple in Settings).
+Consent isn't needed to play. To test it, use one device as the child (a year under 13) and one as the parent (1980, then sign in with Apple in Settings).
 
 ---
 
@@ -49,3 +51,5 @@ You don't need to test consent to play. If you would like to, use one device as 
 - The consent steps need the Twilio Verify secrets on production. Without them, step 3 says "We can't text a code right now" and nothing is sent.
 - App Store Connect's demo account fields can stay empty: no login is needed to play, and Sign in with Apple uses the reviewer's own Apple Account.
 - If Practice, "Add a player" or the Start button get new words before release, update "Play alone".
+- The Daily Dish shows only while the server's `DAILY` flag is on. Turn it on before submitting, or App Review won't see it.
+- If the Home panel or its Play buttons get new words, update "Daily Dish".

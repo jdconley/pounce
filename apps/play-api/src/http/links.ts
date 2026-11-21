@@ -106,7 +106,7 @@ const DISH_GAME = "daily";
  * The first App Store version with the Daily Dish. Until Apple's lookup names one at least this
  * new, the Dish's page sends iPhones to the beta and shows no App Store banner.
  */
-export const DISH_SINCE = "1.3";
+export const DISH_SINCE = "1.2";
 
 /** The first app version that can play each game, for games newer than the first release. */
 export const GAME_SINCE: Readonly<Record<string, string>> = { tiles: "1.1", [DISH_GAME]: DISH_SINCE };

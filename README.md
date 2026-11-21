@@ -16,7 +16,7 @@ The games:
   board and streaks. Sniff (find the five-letter word), Nine Lives (a number grid), Cat Nap (one
   cat in each row, column and patch) and Box Fort (drag blocks onto a rug). In the browser now at
   [play.conleychaos.com/play/daily](https://play.conleychaos.com/play/daily); coming to the app in
-  1.3. The server checks every move and works out every result
+  1.2. The server checks every move and works out every result
   ([docs/daily-protocol.md](docs/daily-protocol.md)).
 
 An Apple TV app (in TestFlight, not on the App Store yet) puts the whole table on the TV;
@@ -32,7 +32,7 @@ version, and a parent decides whether they get turn alerts.
 | --- | --- | --- |
 | 1.0 | On the App Store since November 2026 | Cat Tower, live and turn-based tables, House Cat bots, streaks, widgets, the live table on the Lock Screen, parent consent for kids. |
 | 1.1 | Released on the App Store on 16 November 2026 | Tuna Tiles. A faster first game: a House Cat holds a seat. Add players your way: Same room (scan a QR code), Far away (send a link) or This phone (pass and play). Invites that survive installing the app (Paste). A new Home, How to play videos, clearer Settings, tips. |
-| 1.3 | Not submitted yet | The Daily Dish: four daily puzzles, a family board, stats and a share card. In the web player since launch day; the TestFlight build shows it too. |
+| 1.2 | Not submitted yet | Pounce on the TV (the Apple TV app and the browser TV). The Daily Dish: four daily puzzles, a family board, stats and a share card, in the web player since launch day and in the TestFlight build. |
 
 Every merge to `main` that touches the app builds to TestFlight and goes to the Family and Friends
 group (`apps/play-ios/README.md`, TestFlight). What each App Store version says is kept in the
