@@ -1,0 +1,51 @@
+diff --git a/wrangler-dist/ProxyWorker.js b/wrangler-dist/ProxyWorker.js
+index b296b6e9fa6a7c6f97ae9c53ae1cdfd5bb0bb74f..d2246e5844d8ae6dc9f1d2005f09e13046da83b5 100644
+--- a/wrangler-dist/ProxyWorker.js
++++ b/wrangler-dist/ProxyWorker.js
+@@ -135,7 +135,15 @@ var ProxyWorker = class {
+           headers.set(key, value);
+         }
+       }
+-      void fetch(userWorkerUrl, new Request(request, { headers })).then(async (res) => {
++      // Backport of wrangler 4.129.1 (cloudflare/workers-sdk#15252): a GET or HEAD that fails
++      // transiently (a pooled connection closed as it was written) is sent twice more first.
++      const attemptUserWorkerFetch = (attempt) => fetch(userWorkerUrl, new Request(request, { headers })).catch((error) => {
++        if (isSameUserWorkerOrigin(userWorkerUrl, this.proxyData?.userWorkerUrl) && (request.method === "GET" || request.method === "HEAD") && attempt < 2) {
++          return new Promise((done) => setTimeout(done, attempt === 0 ? 0 : 250)).then(() => attemptUserWorkerFetch(attempt + 1));
++        }
++        throw error;
++      });
++      void attemptUserWorkerFetch(0).then(async (res) => {
+         res = new Response(res.body, res);
+         rewriteUrlRelatedHeaders(res.headers, innerUrl, outerUrl);
+         await checkForPreviewTokenError(res, this.env, proxyData);
+diff --git a/wrangler-dist/cli.js b/wrangler-dist/cli.js
+index 484cb0b23f62759db7af3251d4c343de431b42cc..ff2984dc2b4fcceb1380abebb0b0617f2d29d884 100644
+--- a/wrangler-dist/cli.js
++++ b/wrangler-dist/cli.js
+@@ -172009,6 +172009,12 @@ You can also run \`wrangler whoami\` to check your current authentication status
+           logger3.debug(`Error in ${event.source}: ${event.reason}
+ `, event.cause);
+           logger3.debug("=> Error contextual data:", event.data);
++        } else if (event.source === "ProxyController" && event.reason.startsWith("Error inside ProxyWorker")) {
++          // Backport of wrangler 4.129.1 (cloudflare/workers-sdk#15252): one failed proxied request
++          // no longer ends the dev server.
++          const detail = event.cause?.message || event.cause?.cause?.message || "unknown error";
++          logger3.error(`${event.reason} (the affected request failed; the dev server continues): ${detail}`);
++          logger3.debug("=> Error contextual data:", event.data);
+         } else this.emit("error", event);
+       }
+       async teardown() {
+@@ -414356,6 +414362,12 @@ var init_DevEnv = __esm({
+           logger2.debug(`Error in ${event.source}: ${event.reason}
+ `, event.cause);
+           logger2.debug("=> Error contextual data:", event.data);
++        } else if (event.source === "ProxyController" && event.reason.startsWith("Error inside ProxyWorker")) {
++          // Backport of wrangler 4.129.1 (cloudflare/workers-sdk#15252): one failed proxied request
++          // no longer ends the dev server.
++          const detail = event.cause?.message || event.cause?.cause?.message || "unknown error";
++          logger2.error(`${event.reason} (the affected request failed; the dev server continues): ${detail}`);
++          logger2.debug("=> Error contextual data:", event.data);
+         } else if (event.source === "ConfigController" && event.cause instanceof ParseError) {
+           logger2.error(event.cause);
+           this.emit("buildFailed", event);
