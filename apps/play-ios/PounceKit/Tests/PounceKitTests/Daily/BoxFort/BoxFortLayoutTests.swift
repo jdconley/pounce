@@ -55,6 +55,36 @@ struct BoxFortLayoutTests {
         #expect(landscape.slots.allSatisfy { $0.minX >= landscape.rug.maxX })
     }
 
+    @Test(arguments: [
+        CGSize(width: 1792, height: 848), CGSize(width: 1920, height: 1080), CGSize(width: 896, height: 424),
+        CGSize(width: 600, height: 900), CGSize(width: 375, height: 583),
+    ])
+    func aTVsScoreRowGrowsWithTheStageAndStaysOffTheRug(size: CGSize) {
+        let head = BoxFortLayout.watchHeader(for: size)
+        #expect(head >= BoxFortLayout.headerHeight && head <= 128)
+        let layout = BoxFortLayout(size: size, headerHeight: head)
+        let bounds = CGRect(origin: .zero, size: size)
+        #expect(layout.header.height == head)
+        #expect(inside(layout.header, bounds) && inside(layout.rug, bounds))
+        let drawn = layout.rug.insetBy(dx: -BoxFortLayout.fringe * layout.cell, dy: -BoxFortLayout.fringe * layout.cell)
+        #expect(!layout.header.intersects(drawn), "the score row sits on the rug's fringe at \(size)")
+        for slot in layout.slots {
+            #expect(inside(slot, bounds) && !slot.intersects(drawn) && !slot.intersects(layout.header))
+        }
+    }
+
+    @Test func onATVsStageTheScoreRowIsTwiceAPhonesAndTheRugKeepsItsSize() {
+        let stage = CGSize(width: 1792, height: 848)
+        let head = BoxFortLayout.watchHeader(for: stage)
+        #expect(head >= 2 * BoxFortLayout.headerHeight)
+        // Text at the row's shares (0.62 and 0.34) reads from the couch: 28 points or more.
+        #expect(head * 0.34 >= 28)
+        #expect(BoxFortLayout(size: stage, headerHeight: head).cell > 0.95 * BoxFortLayout(size: stage).cell)
+        // A phone's play screen is untouched.
+        let phone = CGSize(width: 375, height: 583)
+        #expect(BoxFortLayout(size: phone) == BoxFortLayout(size: phone, headerHeight: BoxFortLayout.headerHeight))
+    }
+
     @Test func snapRoundsToNearestAndRefusesOffRug() {
         let layout = BoxFortLayout(size: CGSize(width: 400, height: 700))
         let c = layout.cell
