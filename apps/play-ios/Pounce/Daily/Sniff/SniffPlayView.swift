@@ -18,6 +18,8 @@ final class SniffPlayModel {
     private(set) var shake = 0
     /// A word under the trail for a moment: "Not a word".
     private(set) var note: String?
+    /// False once the run has ended (the host shows the end): no more input.
+    private(set) var playing = true
     private let referee: any SniffReferee
 
     init(board: SniffBoard = SniffBoard(), referee: any SniffReferee) {
@@ -32,17 +34,19 @@ final class SniffPlayModel {
     }
 
     func type(_ letter: Character) {
+        guard playing else { return }
         note = nil
         board.type(letter)
     }
 
     func delete() {
+        guard playing else { return }
         note = nil
         board.delete()
     }
 
     func send() {
-        guard let words else { return }
+        guard playing, let words else { return }
         switch board.submit(words: words) {
         case .send(let word):
             Sound.shared.play(ArtName.Sound.sfxWhoosh)
@@ -57,6 +61,18 @@ final class SniffPlayModel {
     }
 
     func clearNote() { note = nil }
+
+    /// The server's board replaces this one (it refused something): anything typed since is dropped.
+    func resync(_ board: SniffBoard) {
+        self.board = board
+        note = nil
+    }
+
+    /// The run ended: the host takes over.
+    func stop() {
+        playing = false
+        note = nil
+    }
 
     private func refuse(_ words: String) {
         shake += 1
@@ -111,7 +127,7 @@ struct SniffPlayView: View {
                 if !model.board.isOver {
                     SniffKeyboard(
                         marks: model.board.keyboard, width: keysWidth,
-                        enabled: model.board.pending == nil,
+                        enabled: model.playing && model.board.pending == nil,
                         canSend: model.words != nil && model.board.draft.count == SniffBoard.letters,
                         onLetter: model.type, onDelete: model.delete, onSend: model.send)
                     .padding(.bottom, 8)

@@ -180,3 +180,33 @@ extension SniffTests {
         #expect(SniffDemo.reveal("crane") == SniffReveal(guess: SniffGuess(word: "crane", marks: Array(repeating: .none, count: 5)), answer: nil))
     }
 }
+
+// MARK: The Dish's wire
+
+extension SniffTests {
+    @Test func theServersPublicStateDecodesBeforeAndAfterTheEnd() throws {
+        let runs = try #require(try Self.json("runs.json")["runs"] as? [[String: Any]])
+        let answers = try #require(runs[0]["answers"] as? [[String: Any]])
+        let decode = { (any: Any) throws -> SniffView in
+            try JSONDecoder().decode(SniffView.self, from: JSONSerialization.data(withJSONObject: any))
+        }
+        let first = try decode(try #require(answers[0]["view"]))
+        #expect(first.guesses.map(\.word) == ["crane"])
+        #expect(first.answer == nil)
+        let last = try decode(try #require(answers[2]["view"]))
+        #expect(last.answer == "plant")
+        #expect(last.board == SniffBoard(guesses: last.guesses, answer: "plant"))
+        #expect(last.board.isSolved)
+    }
+
+    @Test func thePublicPuzzleDecodes() throws {
+        let puzzle = try JSONDecoder().decode(SniffPublic.self, from: Data(#"{"letters":5,"tries":6}"#.utf8))
+        #expect(puzzle == SniffPublic(letters: 5, tries: 6))
+    }
+
+    @Test func aGuessEncodesAsTheServerParsesIt() throws {
+        let data = try JSONEncoder().encode(SniffMove(word: "plant"))
+        let object = try #require(try JSONSerialization.jsonObject(with: data) as? [String: String])
+        #expect(object == ["k": "guess", "word": "plant"])
+    }
+}
