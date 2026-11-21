@@ -213,7 +213,7 @@ describe("the result and the board", () => {
 
   test("floors and spacing", () => {
     expect(Object.values(boxFort.floorMs)).toEqual([20_000, 20_000, 20_000, 20_000, 20_000, 20_000, 20_000]);
-    expect(boxFort.minMoveGapMs).toBe(0);
+    expect(boxFort.minMoveGapMs).toBe(150);
     expect(boxFort.id).toBe("box-fort");
   });
 });

@@ -61,7 +61,7 @@ and the web.
 - Starting boxes: distinct random cells, tint `CLUTTER = 7`; no row or column over 5 boxes; every
   piece of the first set fits. Up to 50 tries, then one box fewer, until it holds.
 - Piece tints: 1 to 6, drawn per piece.
-- `floorMs = 20_000` every level (a full run at bot speed). `minMoveGapMs = 0` (a batch's moves arrive together, so any gap refuses its second move).
+- `floorMs = 20_000` every level (a full run at bot speed). `minMoveGapMs = 150`: a human floor, checked by run-core as a move budget since the start, so batches go through.
 
 **Pieces** (`pieces.ts`): 40 shapes (10 easy, 16 medium, 14 awkward), cells as `[row, col]` from the top-left of the bounding box.
 - Easy: `dot`, `duo-h`, `duo-v`, `trio-h`, `trio-v`, `sq2`, `nook-a..d` (three-cell corners).
