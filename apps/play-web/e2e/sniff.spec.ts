@@ -1,7 +1,6 @@
 import { expect, test, type Page } from "@playwright/test";
-
-import { answerFor } from "@pounce/play-api/daily/sniff/answer";
 import { cycleKey } from "@pounce/play-api/daily/seed";
+import { answerFor } from "@pounce/play-api/daily/sniff/answer";
 
 import { closeAll, newPlayer, scan } from "./helpers";
 
