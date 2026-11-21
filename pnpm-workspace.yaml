@@ -10,6 +10,14 @@ onlyBuiltDependencies:
   - esbuild
   - workerd
 
+# wrangler dev 4.116 exits when one proxied request to the Worker fails ("Error inside
+# ProxyWorker", an empty `✘ [ERROR]`): the e2e server died mid-run in CI. The patch backports the
+# fix from wrangler 4.129.1 (cloudflare/workers-sdk#15252): it logs that request's failure and keeps
+# serving, and retries a GET or HEAD twice first. Drop it when wrangler moves past 4.129.1 (those
+# wranglers need miniflare 5, still a pre-release).
+patchedDependencies:
+  wrangler@4.116.0: patches/wrangler@4.116.0.patch
+
 # Shared versions. Cloudflare releases wrangler, workerd (via miniflare) and
 # workers-types in lockstep, so move them together.
 catalog:

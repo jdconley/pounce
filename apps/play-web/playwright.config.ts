@@ -43,10 +43,13 @@ export default defineConfig({
   webServer: process.env.E2E_BASE
     ? undefined
     : {
-        // Kept up by e2e/dev-server.mjs: wrangler dev 4.116 exits when a connection to the Worker
-        // drops, and it restarts it with the same arguments (and the same state).
+        // Kept up by e2e/dev-server.mjs: it holds the port, and restarts a wrangler dev that exits
+        // with the same arguments (and the same state), so a crash never refuses a connection.
         command: `node e2e/dev-server.mjs pnpm --filter @pounce/play-api exec wrangler dev --port ${PORT} --ip 127.0.0.1 --persist-to .wrangler/e2e-${PORT}-${Date.now()} --var TOKEN_SECRET:${SECRET} --var GAMES:tiles --var LINK:on --var TV:on --var DAILY:on --var DAILY_TEST:on --var DEV_SPEED:20`,
         url: `${BASE}/healthz`,
+        // The supervisor holds the port through a restart and lets connections through once the
+        // new run answers this.
+        env: { DEV_SERVER_READY_PATH: "/healthz" },
         reuseExistingServer: false,
         timeout: 120_000,
         stdout: "ignore",

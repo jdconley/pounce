@@ -1,10 +1,14 @@
 /**
  * e2e/dev-server.mjs, the supervisor that keeps the e2e `wrangler dev` up, run with a stand-in
  * for wrangler: a node script that starts a helper (as wrangler starts workerd), notes both pids,
- * and exits on its first run as wrangler 4.116 does when a connection drops.
+ * and exits on its first run as wrangler 4.116 did when a connection dropped; and, for the port it
+ * holds, a stand-in HTTP server that takes `--port` and `--ip` as wrangler dev does.
  */
 import { spawn, type ChildProcess } from "node:child_process";
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { request as httpRequest } from "node:http";
+import { createRequire } from "node:module";
+import { createServer } from "node:net";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 
@@ -143,5 +147,86 @@ describe("the e2e dev server supervisor", () => {
     expect((await exited).code).toBe(0);
     await until(() => pids().flat().every((p) => !alive(p)), 2000);
     expect(pids()).toHaveLength(1);
+  });
+
+  describe("holding its port", () => {
+    // A stand-in HTTP server that takes `--port` and `--ip` as wrangler dev does: it listens after
+    // `delayMs` (a server starting up), notes its pid per run, and answers every path with its run.
+    const HTTP_STAND_IN = `
+const { appendFileSync, existsSync, readFileSync, writeFileSync } = require("node:fs");
+const { createServer } = require("node:http");
+const argv = process.argv.slice(2);
+const [dir, delayMs] = argv;
+const port = Number(argv[argv.indexOf("--port") + 1]);
+const ip = argv[argv.indexOf("--ip") + 1];
+const runs = existsSync(dir + "/runs") ? Number(readFileSync(dir + "/runs", "utf8")) + 1 : 1;
+writeFileSync(dir + "/runs", String(runs));
+appendFileSync(dir + "/pids", process.pid + "\\n");
+setTimeout(() => createServer((req, res) => res.end("run " + runs + " " + req.url)).listen(port, ip), Number(delayMs));
+`;
+
+    async function freePort(): Promise<number> {
+      const server = createServer();
+      await new Promise<void>((done) => server.listen(0, "127.0.0.1", done));
+      const port = (server.address() as { port: number }).port;
+      await new Promise((done) => server.close(done));
+      return port;
+    }
+
+    /** One GET to the supervisor's port: the body, or the error (never retried). */
+    function get(port: number, path: string): Promise<string> {
+      return new Promise((done, fail) => {
+        const req = httpRequest({ host: "127.0.0.1", port, path, agent: false }, (res) => {
+          let body = "";
+          res.on("data", (c: Buffer) => (body += c.toString()));
+          res.on("end", () => done(body));
+        });
+        req.on("error", fail);
+        req.end();
+      });
+    }
+
+    async function launchHttp(delayMs: number) {
+      dir = mkdtempSync(join(tmpdir(), "dev-server-test-"));
+      writeFileSync(join(dir, "http-stand-in.cjs"), HTTP_STAND_IN);
+      const port = await freePort();
+      const run = spawn(process.execPath, [SUPERVISOR, process.execPath, join(dir, "http-stand-in.cjs"), dir, String(delayMs), "--port", String(port), "--ip", "127.0.0.1"], {
+        stdio: ["ignore", "pipe", "pipe"],
+        env: { ...process.env, DEV_SERVER_RESTART_MS: "50" },
+      });
+      let err = "";
+      run.stderr?.on("data", (chunk: Buffer) => (err += chunk.toString()));
+      supervisor = run;
+      // Up once it holds the port (Playwright waits out the start the same way).
+      await until(() => err.includes("holding 127.0.0.1:"));
+      return { port, run, stderr: () => err };
+    }
+
+    test("answers a request made before the server is up, once it is", async () => {
+      const { port } = await launchHttp(400);
+      expect(await get(port, "/first")).toBe("run 1 /first");
+    });
+
+    test("a server killed mid-run costs no request: the next ones wait for the restart", async () => {
+      const { port, stderr } = await launchHttp(200);
+      expect(await get(port, "/a")).toBe("run 1 /a");
+      for (let crash = 1; crash <= 3; crash++) {
+        const pid = Number(pids().at(-1));
+        process.kill(pid, "SIGKILL");
+        // The instant after the crash, while the server is going and starting again: never refused.
+        const during = await Promise.all(["/b", "/c", "/d", "/e"].map((path) => get(port, path)));
+        expect(during).toEqual(["/b", "/c", "/d", "/e"].map((path) => `run ${crash + 1} ${path}`));
+        expect(stderr()).toContain(`restarting (${crash} of 5)`);
+      }
+    });
+  });
+
+  test("the e2e wrangler keeps serving when one proxied request fails (patches/wrangler@4.116.0.patch)", () => {
+    // wrangler 4.116 ended `wrangler dev` on one failed request to the Worker. The patch, or any
+    // wrangler from 4.129.1 on, logs that request's failure and carries on; a wrangler without
+    // either would bring the mid-run crashes back.
+    const wrangler = createRequire(resolve(__dirname, "../../play-api/package.json")).resolve("wrangler/package.json");
+    const cli = readFileSync(join(wrangler, "../wrangler-dist/cli.js"), "utf8");
+    expect(cli).toContain("(the affected request failed; the dev server continues)");
   });
 });
