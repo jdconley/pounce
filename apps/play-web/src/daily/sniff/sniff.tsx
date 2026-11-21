@@ -25,7 +25,14 @@ export function loadAllowed(): Promise<(word: string) => boolean> {
   return allowedCheck;
 }
 
-export function SniffPlay(props: { start?: SniffBoard; referee: SniffReferee; onEnd?: (board: SniffBoard) => void }) {
+export function SniffPlay(props: {
+  start?: SniffBoard;
+  referee: SniffReferee;
+  /** False once the host says the run has ended: no more input. */
+  enabled?: boolean;
+  onEnd?: (board: SniffBoard) => void;
+}) {
+  const enabled = props.enabled ?? true;
   const [board, setBoard] = useState<SniffBoard>(props.start ?? emptyBoard());
   const [allowed, setAllowed] = useState<((word: string) => boolean) | null>(null);
   const [shake, setShake] = useState(0);
@@ -80,11 +87,11 @@ export function SniffPlay(props: { start?: SniffBoard; referee: SniffReferee; on
     update(deleteLetter(live.current));
   };
 
-  const handlers = useRef({ send, type, del });
-  handlers.current = { send, type, del };
+  const handlers = useRef({ send, type, del, enabled });
+  handlers.current = { send, type, del, enabled };
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (e.metaKey || e.ctrlKey || e.altKey) return;
+      if (e.metaKey || e.ctrlKey || e.altKey || !handlers.current.enabled) return;
       if (e.key === "Enter") handlers.current.send();
       else if (e.key === "Backspace") handlers.current.del();
       else if (/^[a-zA-Z]$/.test(e.key)) handlers.current.type(e.key);
@@ -111,7 +118,7 @@ export function SniffPlay(props: { start?: SniffBoard; referee: SniffReferee; on
       {!over && (
         <SniffKeys
           marks={keys(board)}
-          enabled={board.pending === null}
+          enabled={enabled && board.pending === null}
           canSend={allowed !== null && board.draft.length === 5}
           onLetter={type}
           onDelete={del}

@@ -102,7 +102,7 @@ describe("Sniff's web files", () => {
       const source = readFileSync(join(dir, file), "utf8");
       const imports = [...source.matchAll(/\bfrom\s+["']([^"']+)["']|\bimport\(\s*["']([^"']+)["']/g)].map((m) => m[1] ?? m[2]);
       for (const spec of imports.filter((s) => s!.startsWith("@pounce/play-api"))) {
-        expect(spec, file).toMatch(/^@pounce\/play-api\/daily\/sniff\/(types|keyboard|allowed-check)$/);
+        expect(spec, file).toMatch(/^@pounce\/play-api\/daily\/(module|sniff\/(types|keyboard|allowed-check))$/);
       }
     }
   });
