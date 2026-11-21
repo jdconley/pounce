@@ -122,15 +122,36 @@ describe("sniff module", () => {
     expect(sniff.compare(noGuesses, r("solved", 6, 1))).toBeGreaterThan(0);
   });
 
-  it("make uses the day's key when given, the rng when not", () => {
+  it("make picks by the day's date and cycle key, not the rng", () => {
     const key = [9, 8, 7, 6] as [number, number, number, number];
-    expect(sniff.make(createRng([1, 1, 1, 1]), 3, { date: "2026-12-02", key })).toEqual({
-      answer: answerFor(key, "2026-12-02"),
-      level: 3,
-    });
-    const p = sniff.make(createRng([1, 1, 1, 1]), 5);
-    expect(p.level).toBe(5);
+    const day = { date: "2026-12-04", key };
+    const p = sniff.make(createRng([1, 1, 1, 1]), 5, day);
+    expect(p).toEqual({ answer: answerFor(key, "2026-12-04"), level: 5 });
+    expect(sniff.make(createRng([2, 2, 2, 2]), 5, day)).toEqual(p);
     expect(POOLS[poolFor(5)]).toContain(p.answer);
+  });
+
+  it("neither the cycle key nor the answer reaches a client before the run ends", () => {
+    const key = [0x5eed1234, 0x0badcafe, 0x12345678, 0x7fffffff] as [number, number, number, number];
+    const p = sniff.make(createRng([1, 1, 1, 1]), 1, { date: "2026-12-07", key });
+    const keyBits = key.map(String);
+    const leaks = (value: unknown) => {
+      const text = JSON.stringify(value);
+      return text.includes(`"${p.answer}"`) || keyBits.some((k) => text.includes(k));
+    };
+    expect(Object.keys(p).sort()).toEqual(["answer", "level"]);
+    expect(leaks(sniff.publicPuzzle(p))).toBe(false);
+    const wrong = ["crate", "sheep", "dummy", "kitty", "otter", "loops", "nanny", "piano"].filter((w) => w !== p.answer).slice(0, 5);
+    let s = sniff.init(p);
+    for (const [i, w] of wrong.entries()) {
+      const a = sniff.apply(p, s, guess(w), 4000 + i * 1000);
+      expect(a.ok).toBe(true);
+      if (!a.ok) return;
+      expect(leaks(a.reveal), w).toBe(false);
+      s = a.state;
+      expect(leaks(sniff.publicState(p, s))).toBe(false);
+      expect(leaks(sniff.progress(p, s))).toBe(false);
+    }
   });
 });
 

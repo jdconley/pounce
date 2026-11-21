@@ -4,7 +4,7 @@
  * answer only when the run ends.
  */
 import { isAllowed } from "./allowed-check";
-import { answerFor, pickAnswer } from "./answer";
+import { answerFor } from "./answer";
 import { markGuess } from "./marks";
 import { type Guess, LETTERS, type SniffMove, type SniffPublic, type SniffReveal, type SniffView, TRIES } from "./types";
 
@@ -31,8 +31,9 @@ function rank(r: DailyResult): number[] {
 export const sniff: DailyModule<SniffPuzzle, SniffState, SniffMove> = {
   id: "sniff",
 
-  make(rng, level, day) {
-    return { answer: day ? answerFor(day.key, day.date) : pickAnswer(rng, level), level };
+  // The answer follows the date and the cycle key alone; the day's rng isn't needed.
+  make(_rng, level, day) {
+    return { answer: answerFor(day.key, day.date), level };
   },
 
   publicPuzzle(): SniffPublic {

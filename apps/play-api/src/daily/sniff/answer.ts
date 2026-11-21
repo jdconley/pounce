@@ -10,7 +10,7 @@
  * keyed by a secret seed that doesn't change by date, so no word repeats until its pool is used up
  * (a "cycle"), and nobody can tell which word goes with which day. Each cycle gets a new order.
  */
-import { createRng, type Rng, type Seed, shuffle } from "../../rules/rng";
+import { createRng, type Seed, shuffle } from "../../rules/rng";
 
 import { ANSWERS } from "./words/answers";
 
@@ -87,8 +87,3 @@ export function answerFor(key: Readonly<Seed>, date: Day): string {
   return order[i - cycle * words.length] as string;
 }
 
-/** A plain pick from the level's pool, for when the puzzle's day isn't known. Words may repeat. */
-export function pickAnswer(rng: Rng, level: DayLevel): string {
-  const words = POOLS[poolFor(level)];
-  return words[Math.floor(rng() * words.length)] as string;
-}

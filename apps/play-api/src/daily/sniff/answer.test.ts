@@ -1,11 +1,9 @@
 import { describe, expect, it } from "vitest";
 
-import { createRng, type Seed } from "../../rules/rng";
-
 import { isAllowed } from "./allowed-check";
-import { answerFor, levelOf, pickAnswer, poolDay, poolFor, POOLS, SNIFF_EPOCH, type Pool } from "./answer";
+import { answerFor, levelOf, poolDay, poolFor, POOLS, SNIFF_EPOCH, type Pool } from "./answer";
 
-import type { DayLevel } from "./contract";
+import type { Seed } from "../../rules/rng";
 
 const KEY: Seed = [0x12345678, 0x9abcdef0, 0x0fedcba9, 0x87654321];
 const OTHER: Seed = [1, 2, 3, 4];
@@ -56,8 +54,7 @@ describe("answerFor", () => {
     expect(answerFor(KEY, "2026-12-01")).toBe(answerFor(KEY, "2026-12-01"));
   });
 
-  it("no word repeats until its pool is used up, then a new order starts", () => {
-    const pool: Pool = "easy";
+  it.each(["easy", "mid", "hard"] as Pool[])("no %s word repeats until its pool is used up, then a new order starts", (pool) => {
     const n = POOLS[pool].length;
     const seen: string[] = [];
     for (let d = SNIFF_EPOCH; seen.length < 2 * n; d = addDays(d, 1)) {
@@ -69,6 +66,18 @@ describe("answerFor", () => {
     expect(new Set(second).size).toBe(n);
     expect([...first].sort()).toEqual([...POOLS[pool]].sort());
     expect(second).not.toEqual(first);
+  });
+
+  it("every pool lasts at least a year at the weekday ramp's rate", () => {
+    for (const pool of ["easy", "mid", "hard"] as Pool[]) {
+      const usedInAYear = poolDay(addDays(SNIFF_EPOCH, 365), pool);
+      expect(POOLS[pool].length, pool).toBeGreaterThanOrEqual(usedInAYear);
+    }
+  });
+
+  it("a year of dates is deterministic", () => {
+    const year = Array.from({ length: 366 }, (_, i) => addDays("2026-12-01", i));
+    expect(year.map((d) => answerFor(KEY, d))).toEqual(year.map((d) => answerFor([...KEY] as Seed, d)));
   });
 
   it("different keys give different orders", () => {
@@ -90,15 +99,6 @@ describe("answerFor", () => {
       const w = answerFor(KEY, d);
       expect(isAllowed(w), w).toBe(true);
       expect(POOLS[poolFor(levelOf(d))]).toContain(w);
-    }
-  });
-});
-
-describe("pickAnswer", () => {
-  it("stays in the level's pool", () => {
-    const rng = createRng([5, 6, 7, 8]);
-    for (const level of [1, 2, 3, 4, 5, 6, 7] as DayLevel[]) {
-      for (let i = 0; i < 20; i++) expect(POOLS[poolFor(level)]).toContain(pickAnswer(rng, level));
     }
   });
 });
