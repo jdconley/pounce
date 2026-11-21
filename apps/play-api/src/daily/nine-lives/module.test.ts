@@ -39,7 +39,7 @@ function result(over: Partial<DailyResult>): DailyResult {
 
 describe("nine lives module", () => {
   test("make and the public puzzle: givens only, never the solution", () => {
-    const p = nineLives.make(createRng(seedOf(1)), 2);
+    const p = nineLives.make(createRng(seedOf(1)), 2, { date: "2027-01-05", key: seedOf(9) });
     const pub = nineLives.publicPuzzle(p) as Record<string, unknown>;
     expect(Object.keys(pub)).toEqual(["givens"]);
     expect(pub.givens).toEqual(p.givens);

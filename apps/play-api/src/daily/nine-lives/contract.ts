@@ -3,7 +3,7 @@
  * `src/daily/module.ts`), kept here only until that file lands on main. Then every import
  * switches to `../module` and this file goes.
  */
-import type { Rng } from "../../rules/rng";
+import type { Rng, Seed } from "../../rules/rng";
 import type { Day } from "../../streaks/clock";
 
 export type DayLevel = 1 | 2 | 3 | 4 | 5 | 6 | 7;
@@ -26,7 +26,7 @@ export type Applied<S> =
   | { ok: false; reason: "illegal" | "too_soon" | "over" };
 export interface DailyModule<P = unknown, S = unknown, M = unknown> {
   id: DailyGameId;
-  make(rng: Rng, level: DayLevel): P; // server only: the whole puzzle, solution included
+  make(rng: Rng, level: DayLevel, day: { date: Day; key: Seed }): P; // server only: the whole puzzle, solution included; key: cycleKey, the same every day
   publicPuzzle(p: P): unknown; // what start returns: never the solution, answer or future sets
   init(p: P): S;
   parseMove(raw: unknown): M | null; // exact shape or null

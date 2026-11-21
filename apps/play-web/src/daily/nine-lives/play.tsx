@@ -8,21 +8,30 @@ import { buzz } from "../../lib/haptics";
 import { play } from "../../lib/sound";
 
 import { NineLivesGrid, PawDefs, PawTile } from "./grid";
-import { countOf, erase, isSolved, move, notQuite, press, reveal, start, tap, toggleNotes, type BoardState, type Puzzle, type Step, type View } from "./model";
+import { adopt, countOf, erase, isSolved, move, notQuite, press, reveal, start, tap, toggleNotes, type BoardState, type Puzzle, type Step, type View } from "./model";
 
 import type { NineLivesDriver } from "./local";
 
 const ARROWS: Record<string, [number, number]> = { ArrowUp: [-1, 0], ArrowDown: [1, 0], ArrowLeft: [0, -1], ArrowRight: [0, 1] };
 
-export function NineLivesPlay(props: { puzzle: Puzzle; state?: BoardState; driver: NineLivesDriver }) {
+/**
+ * `playing` false: the run has ended (the host keeps the board up under its end screen), so the
+ * board takes no more input.
+ */
+export function NineLivesPlay(props: { puzzle: Puzzle; state?: BoardState; driver: NineLivesDriver; playing?: boolean }) {
   const [view, setView] = useState<View>(() => start(props.puzzle, props.state));
   const [asking, setAsking] = useState(false);
   const boardRef = useRef<HTMLDivElement>(null);
   const solved = isSolved(view);
+  const live = (props.playing ?? true) && !solved;
+
+  // The server's board wins when it replaces ours.
+  useEffect(() => props.driver.resyncs?.((state) => setView((v) => adopt(v, state))), [props.driver]);
 
   const apply = (step: Step): void => {
+    if (!live) return;
     if (step.move) {
-      props.driver.send(step.move);
+      props.driver.send(step.move, isSolved(step.view));
       const clash = step.view.clashBump !== view.clashBump;
       play(clash ? "nope" : "tick", 0.5);
       buzz(clash ? "nope" : "tap");
@@ -44,6 +53,7 @@ export function NineLivesPlay(props: { puzzle: Puzzle; state?: BoardState; drive
   }, [view.selected]);
 
   const onKey = (e: KeyboardEvent): void => {
+    if (!live) return;
     const arrow = ARROWS[e.key];
     if (arrow) {
       e.preventDefault();
@@ -60,7 +70,7 @@ export function NineLivesPlay(props: { puzzle: Puzzle; state?: BoardState; drive
   };
 
   const askHint = async (): Promise<void> => {
-    if (asking || solved) return;
+    if (asking || !live) return;
     setAsking(true);
     try {
       const r = await props.driver.hint();
@@ -75,7 +85,7 @@ export function NineLivesPlay(props: { puzzle: Puzzle; state?: BoardState; drive
       <PawDefs />
       <div class="nl-layout">
       <div class="nl-board-slot" ref={boardRef}>
-        <NineLivesGrid view={view} solved={solved} onTap={(cell) => setView(tap(view, cell))} onKey={onKey} />
+        <NineLivesGrid view={view} solved={solved} onTap={(cell) => live && setView(tap(view, cell))} onKey={onKey} />
       </div>
       <div class="nl-side">
         <div class="nl-not-quite-slot">
@@ -92,7 +102,7 @@ export function NineLivesPlay(props: { puzzle: Puzzle; state?: BoardState; drive
                 key={d}
                 class="nl-key"
                 data-key={d}
-                disabled={done}
+                disabled={done || !live}
                 aria-label={view.notesOn ? `Note ${d}` : String(d)}
                 onClick={() => apply(press(view, d))}
               >
@@ -106,14 +116,15 @@ export function NineLivesPlay(props: { puzzle: Puzzle; state?: BoardState; drive
             type="button"
             class={`btn small ${view.notesOn ? "nl-notes-active" : "teal"}`}
             aria-pressed={view.notesOn}
+            disabled={!live}
             onClick={() => setView(toggleNotes(view))}
           >
             {view.notesOn ? "Notes on" : "Notes"}
           </button>
-          <button type="button" class="btn small" onClick={() => apply(erase(view))}>
+          <button type="button" class="btn small" disabled={!live} onClick={() => apply(erase(view))}>
             Erase
           </button>
-          <button type="button" class="btn small magenta" disabled={asking || solved} onClick={() => void askHint()}>
+          <button type="button" class="btn small magenta" disabled={asking || !live} onClick={() => void askHint()}>
             Hint
           </button>
         </div>
