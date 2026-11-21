@@ -74,6 +74,17 @@ has no mute, so turn off the game's own sound instead:
 
 This is only about local runs. Leave the sound code and its default alone.
 
+Clean up after yourself. Simulators and build output fill JD's disk fast:
+- Name every simulator you create after your session or task (for example "G2 BoxFort SE"), and
+  shut it down after each run.
+- When your task is done (its PR merged, or the work handed back), delete every simulator you
+  created with `xcrun simctl delete <udid>`, and check with `xcrun simctl list devices` that none
+  are left. Never delete a simulator you didn't create.
+- Delete the build output you made: `apps/play-ios/build` in your worktree, any
+  `-derivedDataPath` you pointed elsewhere (the scratchpad or `/tmp`), `.xcresult` bundles, and
+  recordings or screenshots you didn't commit.
+- Leave the worktree itself to the app, which removes it when the session is archived.
+
 ## Releases
 
 Every merge to `main` that touches `apps/play-ios` uploads a TestFlight build and sends it to the
