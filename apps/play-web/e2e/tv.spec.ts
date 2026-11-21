@@ -3,6 +3,7 @@ import { devices, expect, test, type Page, type WebSocketRoute } from "@playwrig
 import { catTowerTurn, closeAll, deckCount, newPlayer, scan, tableCode } from "./helpers";
 import {
   controllerTurn,
+  ctMyTurn,
   forfeit,
   handEverOnTv,
   noHandOnTv,
@@ -158,29 +159,40 @@ test.describe("a TV and two browser phones", () => {
     await startFromPhone(page);
     await expect(tv.page.locator(".tv-table")).toBeVisible();
 
-    // The phone hides each hand behind the curtain; the TV plays the turns as usual.
+    // The phone hides each hand behind the curtain; the TV plays the turns as usual. A Cucumber
+    // skips the other seat, so after one the same person goes again, hand still showing.
     let last = "";
+    let skipped = false;
     for (let turn = 0; turn < 3; turn++) {
-      const curtain = page.getByRole("dialog", { name: /^Pass to (Dad|Kid)$/ });
-      await expect(curtain).toBeVisible({ timeout: 30_000 });
-      const who = ((await curtain.getAttribute("aria-label")) ?? "").replace("Pass to ", "");
-      expect(who).not.toBe(last);
-      last = who;
-      await expect(banner(tv.page)).toHaveText(`${who}'s turn`);
-      await expect(page.locator(".card.mine")).toHaveCount(0);
-      await noHandOnTv(tv.page);
+      if (skipped) {
+        await expect(banner(tv.page)).toHaveText(`${last}'s turn`);
+      } else {
+        const curtain = page.getByRole("dialog", { name: /^Pass to (Dad|Kid)$/ });
+        await expect(curtain).toBeVisible({ timeout: 30_000 });
+        const who = ((await curtain.getAttribute("aria-label")) ?? "").replace("Pass to ", "");
+        expect(who).not.toBe(last);
+        last = who;
+        await expect(banner(tv.page)).toHaveText(`${who}'s turn`);
+        await expect(page.locator(".card.mine")).toHaveCount(0);
+        await noHandOnTv(tv.page);
 
-      const hold = page.getByRole("button", { name: "Hold to see your hand" });
-      const box = (await hold.boundingBox())!;
-      await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
-      await page.mouse.down();
-      await page.waitForTimeout(900);
-      await page.mouse.up();
+        const hold = page.getByRole("button", { name: "Hold to see your hand" });
+        const box = (await hold.boundingBox())!;
+        await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+        await page.mouse.down();
+        await page.waitForTimeout(900);
+        await page.mouse.up();
+      }
       await expect(page.locator(".ctl .card.mine").first()).toBeVisible();
 
       const before = await tvDeck(tv.page);
       expect(await controllerTurn(page)).toBe("turn");
       await expect.poll(() => tvDeck(tv.page)).toBeLessThan(before);
+      // Then either the curtain for the other seat, or (a Cucumber skipped it) this seat's deck again.
+      const curtainNext = page.getByRole("dialog", { name: /^Pass to (Dad|Kid)$/ });
+      const deckAgain = page.locator("#deck:not([disabled])");
+      await expect(curtainNext.or(deckAgain)).toBeVisible({ timeout: 30_000 });
+      skipped = await deckAgain.isVisible();
     }
     await closeAll(tv.context, context);
   });
@@ -346,8 +358,11 @@ test.describe("a TV and two browser phones", () => {
     for (let i = 0; i < 60 && seen.size < 6; i++) {
       for (const p of phones) {
         const w = p.viewportSize()!.width;
-        if (!(await p.locator("#deck:not([disabled])").isVisible())) {
-          await expect(p.locator(".ctl .deck.rest")).toBeVisible();
+        const live = p.locator("#deck:not([disabled])");
+        const rest = p.locator(".ctl .deck.rest");
+        // Settled first: off turn (the deck rests) or this phone's turn (its deck is live).
+        await expect(rest.or(live)).toBeVisible();
+        if (!(await live.isVisible())) {
           await fits(p, "off turn");
           seen.add(`${w} off`);
           continue;
@@ -364,11 +379,56 @@ test.describe("a TV and two browser phones", () => {
         await fits(p, "play");
         seen.add(`${w} play`);
         await p.locator("#discard-btn").click();
-        await expect(p.locator("#deck:not([disabled])")).toBeHidden();
+        // The card left the hand. (A Cucumber skips the other phone: this one may go again.)
+        await expect.poll(() => cards.count()).toBeLessThanOrEqual(before);
       }
     }
     expect([...seen].sort()).toEqual(["320 draw", "320 off", "320 play", "430 draw", "430 off", "430 play"]);
     await closeAll(tv.context, small.context, big.context);
+  });
+
+  test("Discard tapped while the drawn card flies over it discards", async ({ browser }) => {
+    // The drawn card flies from the deck to the hand across the Discard button. A tap on the
+    // button then must reach the button, not grab the card in flight (a lost discard leaves the
+    // turn half done). The page's animations run at 1/20th speed so the flight can be caught.
+    const tv = await openTv(browser);
+    const code = await tvMakes(tv, "Cat Tower");
+    const phones = (await phonesJoin(browser, code, ["Ava", "Ben"])).map((p) => p!);
+    await startFromPhone(phones[0]!.page, phones[1]!.page);
+    await expect(tv.page.locator(".tv-table")).toBeVisible();
+    await expect.poll(async () => (await ctMyTurn(phones[0]!.page)) || (await ctMyTurn(phones[1]!.page))).toBe(true);
+    const page = (await ctMyTurn(phones[0]!.page)) ? phones[0]!.page : phones[1]!.page;
+    const cards = page.locator(".card.mine .card-inner");
+    const before = await cards.count();
+    const cdp = await page.context().newCDPSession(page);
+    await cdp.send("Animation.enable");
+    await cdp.send("Animation.setPlaybackRate", { playbackRate: 0.05 });
+    await page.locator("#deck").click();
+    await expect(cards).toHaveCount(before + 1);
+    // A card picked while the drawn one is still on its way: Discard comes up.
+    await cards.first().press("Enter");
+    await expect(page.locator("#discard-btn")).toBeEnabled();
+    // Wait for the flying card to cover the middle of the button, then tap there, as a finger does.
+    const target = await page.waitForFunction(() => {
+      const button = document.getElementById("discard-btn")?.getBoundingClientRect();
+      if (!button) return null;
+      const x = button.left + button.width / 2;
+      const y = button.top + button.height / 2;
+      // Is a moving card's own shape over that point? Asked with hit-testing on for the moving
+      // cards for this one synchronous look (it may be off for them), and put back at once.
+      const moving = [...document.querySelectorAll<HTMLElement>(".card.mine")].filter((c) => c.getAnimations().length > 0);
+      const saved = moving.map((c) => c.style.pointerEvents);
+      for (const c of moving) c.style.pointerEvents = "auto";
+      const over = document.elementFromPoint(x, y)?.closest(".card.mine");
+      moving.forEach((c, i) => (c.style.pointerEvents = saved[i]!));
+      return over && moving.includes(over as HTMLElement) ? { x, y } : null;
+    }, undefined, { polling: 10, timeout: 10_000 });
+    const { x, y } = (await target.jsonValue())!;
+    await page.mouse.click(x, y);
+    await cdp.send("Animation.setPlaybackRate", { playbackRate: 1 });
+    // The discard went: the hand is back to its size.
+    await expect(cards).toHaveCount(before);
+    await closeAll(tv.context, ...phones.map((p) => p.context));
   });
 
   test("the TV never shows a hand", async ({ browser }) => {
