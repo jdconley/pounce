@@ -11,9 +11,12 @@ struct BoxFortHeader: View {
     let sets: Int
     let height: CGFloat
 
+    /// 1 on a phone's 48-point row; a TV's taller row scales the strokes and padding with its text.
+    private var scale: CGFloat { height / BoxFortLayout.headerHeight }
+
     var body: some View {
-        HStack(alignment: .center, spacing: 10) {
-            OutlinedText("\(points)", size: height * 0.62)
+        HStack(alignment: .center, spacing: 10 * scale) {
+            OutlinedText("\(points)", size: height * 0.62, width: 3 * scale)
                 .fixedSize()
                 .pop(trigger: points)
                 .accessibilityLabel("Points")
@@ -26,10 +29,10 @@ struct BoxFortHeader: View {
                     .foregroundStyle(Palette.ink)
                     .lineLimit(1)
                     .minimumScaleFactor(0.6)
-                    .padding(.horizontal, 12)
-                    .padding(.vertical, 5)
+                    .padding(.horizontal, 12 * scale)
+                    .padding(.vertical, 5 * scale)
                     .background(Capsule().fill(Palette.yellow))
-                    .overlay(Capsule().stroke(Palette.ink, lineWidth: 2.5))
+                    .overlay(Capsule().stroke(Palette.ink, lineWidth: 2.5 * scale))
                     .pop(trigger: combo)
                     .transition(.scale.combined(with: .opacity))
                     .accessibilityIdentifier("boxfort.combo")

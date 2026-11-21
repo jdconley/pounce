@@ -2,7 +2,7 @@ import { readdirSync, readFileSync } from "node:fs";
 
 import { describe, expect, test } from "vitest";
 
-import { boxFortLayout, FRINGE, lifted, LIFT, slotAt, snap, trayOrigin, TRAY_SCALE, type Box } from "../src/daily/box-fort/layout";
+import { boxFortLayout, FRINGE, HEADER, lifted, LIFT, slotAt, snap, trayOrigin, TRAY_SCALE, watchHeader, type Box } from "../src/daily/box-fort/layout";
 import { fitsBySlot, placePiece, receiveReveal, resync, startPlay } from "../src/daily/box-fort/model";
 import { onRunEvent, placement, playFor } from "../src/daily/box-fort/session";
 
@@ -44,6 +44,34 @@ describe("layout", () => {
     expect(l.sideTray).toBe(w > h * 1.15);
     // Every row is in reach: filling the bottom row puts the finger LIFT spots below the rug.
     expect(l.rug.y + l.rug.h + LIFT * l.cell).toBeLessThanOrEqual(h + 0.5);
+  });
+
+  test.each([
+    [1792, 848],
+    [1920, 1080],
+    [896, 424],
+    [600, 900],
+    [375, 583],
+  ])("a TV watching at %s by %s: the score row grows with the stage and stays off the rug", (w, h) => {
+    const head = watchHeader(w, h);
+    expect(head).toBeGreaterThanOrEqual(HEADER);
+    expect(head).toBeLessThanOrEqual(128);
+    const l = boxFortLayout(w, h, head);
+    expect(l.header.h).toBe(head);
+    const f = FRINGE * l.cell;
+    const drawn = { x: l.rug.x - f, y: l.rug.y - f, w: l.rug.w + 2 * f, h: l.rug.h + 2 * f };
+    const bounds = { x: 0, y: 0, w, h };
+    expect(inside(l.header, bounds) && inside(l.rug, bounds)).toBe(true);
+    expect(meets(l.header, drawn)).toBe(false);
+    for (const s of l.slots) expect(inside(s, bounds) && !meets(s, drawn) && !meets(s, l.header)).toBe(true);
+  });
+
+  test("on a TV's 1080p stage the score row is twice a phone's, and the rug keeps its size", () => {
+    const head = watchHeader(1792, 848);
+    expect(head).toBeGreaterThanOrEqual(2 * HEADER);
+    expect(boxFortLayout(1792, 848, head).cell).toBeGreaterThan(0.95 * boxFortLayout(1792, 848).cell);
+    // A phone's play screen is untouched.
+    expect(boxFortLayout(375, 583)).toEqual(boxFortLayout(375, 583, HEADER));
   });
 
   test("snap rounds to the nearest spot and refuses hanging off the rug (as on iOS)", () => {

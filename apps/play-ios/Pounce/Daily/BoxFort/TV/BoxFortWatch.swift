@@ -9,7 +9,8 @@ struct BoxFortWatch: View {
 
     var body: some View {
         GeometryReader { geo in
-            let layout = BoxFortLayout(size: geo.size)
+            // A TV is read from the couch: the score row grows with the stage, and its text with the row.
+            let layout = BoxFortLayout(size: geo.size, headerHeight: BoxFortLayout.watchHeader(for: geo.size))
             ZStack(alignment: .topLeading) {
                 BoxFortHeader(points: state.points, combo: state.combo, set: state.set, sets: state.sets, height: layout.header.height)
                     .frame(width: layout.header.width)
