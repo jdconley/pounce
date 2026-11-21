@@ -91,6 +91,25 @@ describe("make", () => {
     expect(LEVELS[7].sets).toBeGreaterThan(LEVELS[6].sets);
   });
 
+  test("every day of a year, at every level, the whole first set fits the starting rug", () => {
+    for (const date of DATES) {
+      for (const level of [1, 2, 3, 4, 5, 6, 7] as DayLevel[]) {
+        const p = make(createRng(seedFor(date)), level);
+        expect(setFits(p.rug, p.sets[0]!), `${date} at level ${level}`).toBe(true);
+      }
+    }
+  });
+
+  test("days whose first set used to be stuck now fit", () => {
+    // Saturdays (level 6) where the old maker dealt pieces that each fit alone but not together:
+    // 2035-04-14 was a big D, a 3 by 3 and a big D; 2070-03-01 a nook, and two 3 by 3s.
+    for (const date of ["2035-04-14", "2070-03-01"]) {
+      expect(levelOf(date)).toBe(6);
+      const p = make(createRng(seedFor(date)), levelOf(date));
+      expect(setFits(p.rug, p.sets[0]!), date).toBe(true);
+    }
+  });
+
   test("the first set fits as a whole, not just piece by piece", () => {
     // Seeds where a dot and two 3 by 3s each fit the rug alone, but the two 3 by 3s wanted the same gap.
     for (const [seed, level] of [
