@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest";
 import { createRng } from "../rules/rng";
 
 import { closesAt, puzzleNumber } from "./days";
-import { close, countsForStreak, giveUp, HINT_PENALTY_MS, MAX_BATCH, moves, newRun, useHint, type RunState } from "./run-core";
+import { close, countsForStreak, giveUp, HINT_PENALTY_MS, MAX_BATCH, moves, newRun, startView, useHint, type RunState } from "./run-core";
 import { testGame, type TestPuzzle } from "./test-game";
 
 import type { DailyModule } from "./module";
@@ -257,5 +257,27 @@ describe("countsForStreak", () => {
     const r = run();
     expect(giveUp(m, p, r, T0 + 1000)).toMatchObject({ ok: true, result: { outcome: "gaveUp" } });
     expect(countsForStreak(r)).toBe(false);
+  });
+});
+
+describe("startView", () => {
+  it("is what start answers: the public puzzle and state, never the whole puzzle", () => {
+    const r = run();
+    moves(m, p, r, 0, [step(1)], T0 + 1000);
+    expect(startView(m, p, r, T0 + 2000)).toEqual({
+      run: "r1",
+      game: "test",
+      date: DATE,
+      number: puzzleNumber(DATE),
+      level: 1,
+      startedAt: T0,
+      now: T0 + 2000,
+      puzzle: { target: 4 },
+      state: { n: 1 },
+      seq: 1,
+      hints: 0,
+      result: null,
+      closesAt: closesAt(DATE, LA),
+    });
   });
 });

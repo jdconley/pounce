@@ -31,6 +31,11 @@ The web player (`apps/play-web`, at `play.conleychaos.com/play`, from 15 Novembe
 | Tables list | `Player`, `DeviceIndex` | Home's list of tables | Until the room closes | Room close removes the entry. |
 | Your own streak days | `Player.personal` | Your own streak | 8 days (`KEEP_DAYS`) | Pruned as days pass; lifetime best stays with the player. |
 | Streak day rows (PR 3) | `Pair` DO | The shared streak | 120 days | Settlement prunes older rows. Lifetime counters stay with the pair until a member leaves it or deletes their account. |
+| Daily puzzle runs (Daily Dish, behind `DAILY`) | `DailyRun` DO, one per player, game and date | Refereeing the run: the game's state after its moves, the server's start time, the result | 2 days after its day ends | Its alarm closes an open run at 04:00, then deletes the run 2 days later. The run's id is an HMAC, so it can't be found from the player. |
+| Daily puzzles | `DailyPuzzle` DO, one per game and date | The same puzzle for everyone that day | 3 days after its date | The alarm deletes it. |
+| Daily results, faces and progress | `Player.daily_results`, `daily_faces`, `daily_playing` | The family board: your results and your connections' (only people you have a pair with) | 120 days (results); progress until the day after | Pruned on each write, board read and the player's alarm. Shown only to your pairs and a TV linked to your board. |
+| Daily stats | `Player.daily_stats` | Your own stats per puzzle | Until you delete your data | Never sent to anyone else. |
+| TV board tokens | `BoardTokens` DO (by the token's SHA-256), `Player.board_tokens` | A TV showing your board | 30 days, or until Unlink or account deletion | Bound to the TV's device; names no one. |
 | Play-time histogram (PR 5) | `Player.playtime` | Learning reminder times | With the player | Never collected for a kitten; account deletion. |
 | Pounces (PR 5) | `Player.pounces` | "Come play with me" | 7 days | Alarm deletes them. |
 | Pounce links (PR 5) | `Links` DO | Messages invites and the plus's QR | 7 days (`LINK_MS`), or once someone plays on it | Deleted when someone plays, or by the alarm on expiry. "In a bit" and "Not now" no longer use a link up: they make it that person's, and only they can open it again. |

@@ -2,34 +2,19 @@ import { DurableObject } from "cloudflare:workers";
 
 import { player } from "../players/accounts";
 
-import { closesAt, levelFor, puzzleNumber } from "./days";
+import { closesAt } from "./days";
 import { dailyModule } from "./games";
-import { close, countsForStreak, giveUp, moves, newRun, useHint, type Answer, type RunState } from "./run-core";
+import { close, countsForStreak, giveUp, moves, newRun, startView, useHint, type Answer, type RunState, type StartView } from "./run-core";
 
 import type { DailyGameId, DailyModule, DailyResult } from "./module";
 import type { Env } from "../env";
-import type { DailyEvent } from "../players/player";
+import type { DailyEvent } from "./messages";
 import type { Day } from "../streaks/clock";
-
-/** What `POST /v1/daily/{game}/start` answers (docs/daily-protocol.md). */
-export type StartView = {
-  run: string;
-  game: DailyGameId;
-  date: Day;
-  number: number;
-  level: number;
-  startedAt: number;
-  now: number;
-  puzzle: unknown;
-  state: unknown;
-  seq: number;
-  hints: number;
-  result: DailyResult | null;
-  closesAt: number;
-};
 
 type Stored = { run: RunState; puzzle: unknown };
 
+/** A run is forgotten this long after its day ends. */
+const FORGET_AFTER_MS = 2 * 86_400_000;
 /** How long before a failed report to the player is tried once more. */
 const RETRY_MS = 2000;
 
@@ -71,22 +56,7 @@ export class DailyRun extends DurableObject<Env> {
 
   private view(now: number): StartView {
     const { run, puzzle } = this.stored as Stored;
-    const m = this.module(run.game);
-    return {
-      run: run.id,
-      game: run.game,
-      date: run.date,
-      number: puzzleNumber(run.date),
-      level: levelFor(run.date),
-      startedAt: run.startedAt,
-      now,
-      puzzle: m.publicPuzzle(puzzle),
-      state: m.publicState(puzzle, run.state),
-      seq: run.seq,
-      hints: run.hints,
-      result: run.result,
-      closesAt: closesAt(run.date, run.zone),
-    };
+    return startView(this.module(run.game), puzzle, run, now);
   }
 
   /** Starts the run, or returns it as it stands: one run per player, game and date. */
@@ -175,18 +145,30 @@ export class DailyRun extends DurableObject<Env> {
     return this.stored?.run ?? null;
   }
 
-  /** The day ended: an open run closes, unsolved. */
+  /**
+   * The day ended: an open run closes, unsolved. Two days later the run is forgotten: its result
+   * lives on with the player and their connections.
+   */
   async alarm(): Promise<void> {
     const s = this.stored;
-    if (!s || s.run.ended) return;
+    if (!s) return;
     const now = Date.now();
-    if (close(this.module(s.run.game), s.puzzle, s.run, now) === null) {
-      // Woken early: wait for the day's end.
-      await this.ctx.storage.setAlarm(closesAt(s.run.date, s.run.zone));
+    const end = closesAt(s.run.date, s.run.zone);
+    if (!s.run.ended) {
+      if (close(this.module(s.run.game), s.puzzle, s.run, now) === null) {
+        // Woken early: wait for the day's end.
+        await this.ctx.storage.setAlarm(end);
+        return;
+      }
+      this.save();
+      this.ended(now);
+    }
+    if (now >= end + FORGET_AFTER_MS) {
+      await this.ctx.storage.deleteAll();
+      this.stored = null;
       return;
     }
-    this.save();
-    this.ended(now);
+    await this.ctx.storage.setAlarm(end + FORGET_AFTER_MS);
   }
 
   /** Reports the ended run to its player, with one retry, never fatal (spec §5, "The reporting path"). */

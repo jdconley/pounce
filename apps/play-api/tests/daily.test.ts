@@ -238,14 +238,26 @@ describe("runs", () => {
   test("a run closes at 04:00 by alarm", async () => {
     const mf = await start();
     const { id } = await someone(mf);
-    // A run started on a day long over: its alarm is already due.
-    const s = await startAt(mf, id, Date.UTC(2026, 10, 2, 20));
+    // A run started 30 hours ago: its day is over, so its alarm is already due (and it's kept two more days).
+    const s = await startAt(mf, id, Date.now() - 30 * 3_600_000);
     const closed = await eventually(
       async () => (await (await mf.dispatchFetch(`${BASE}/__test/run?id=${s.run}`)).json()) as { ended: { outcome: string; at: number } | null; result: { outcome: string } | null },
       (r) => r.ended !== null,
     );
     expect(closed.ended).toEqual({ outcome: "closed", at: s.closesAt });
     expect(closed.result).toMatchObject({ outcome: "closed", progress: 0 });
+  });
+
+  test("a run is forgotten two days after its day ends", async () => {
+    const mf = await start();
+    const { id } = await someone(mf);
+    // A run ten days ago: closed, then forgotten, by its alarms.
+    const s = await startAt(mf, id, Date.now() - 10 * 86_400_000);
+    const read = async () => (await (await mf.dispatchFetch(`${BASE}/__test/run?id=${s.run}`)).json()) as unknown;
+    expect(await eventually(read, (r) => r === null)).toBeNull();
+    // Its result stays on the player's board until its 120 days are up.
+    const board = (await (await mf.dispatchFetch(`${BASE}/__test/board?player=${id}&date=${s.date}&now=${Date.now()}`)).json()) as { games: { rows: unknown[] }[] };
+    expect(board.games[0]?.rows).toHaveLength(1);
   });
 
   test("the start limit answers 429", async () => {

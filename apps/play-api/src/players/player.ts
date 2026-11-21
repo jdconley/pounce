@@ -1,8 +1,9 @@
 import { DurableObject } from "cloudflare:workers";
 
-import { addToStats, dish, emptyStats, rankGame, statsView, type BoardRow, type Dish, type GameBoard, type Stats } from "../daily/board";
+import { addToStats, dish, emptyStats, rankGame, statsView, type BoardRow, type GameBoard, type Stats } from "../daily/board";
 import { dailyDay, puzzleNumber, type DailyZone } from "../daily/days";
 import { DAILY_TITLES, listedGames } from "../daily/games";
+import { liveMessage, resultMessages, type BoardAnswer, type DailyEvent } from "../daily/messages";
 import { dailyOn } from "../env";
 import { endKitten } from "../kittens/kittens";
 import { forgetLinks } from "../links/links";
@@ -102,16 +103,6 @@ const PROGRESS_EVERY_MS = 1000;
 /** The headers the Worker sets on a board socket it hands to the player: never a client's own. */
 export const BOARD_ROLE_HEADER = "x-pounce-board-role";
 export const BOARD_HASH_HEADER = "x-pounce-board-hash";
-
-/**
- * What a run tells its player's boards as it goes (`DailyRun`): its progress, and with Show on
- * TV on, the offer, each frame of its public state, and its end.
- */
-export type DailyEvent =
-  | { k: "progress"; game: string; date: Day; progress: number }
-  | { k: "watchOffer"; game: string }
-  | { k: "watch"; game: string; state: unknown }
-  | { k: "watchEnd"; game: string; result: DailyResult | null };
 
 function closeBoard(ws: WebSocket, reason: string): void {
   try {
@@ -732,11 +723,8 @@ export class Player extends DurableObject<Env> {
     const sockets = this.ctx.getWebSockets();
     if (sockets.length === 0) return;
     const now = Date.now();
-    const board = this.board((this.dailyDay(now) as { day: Day }).day, now);
-    for (const ws of sockets) {
-      sendTo(ws, { t: "result", player: handle, result });
-      sendTo(ws, { t: "board", board });
-    }
+    const messages = resultMessages(handle, result, this.board((this.dailyDay(now) as { day: Day }).day, now));
+    for (const ws of sockets) for (const m of messages) sendTo(ws, m);
   }
 
   /**
@@ -780,15 +768,10 @@ export class Player extends DurableObject<Env> {
         playerId,
         e.progress,
       );
-      for (const ws of this.ctx.getWebSockets()) sendTo(ws, { t: "progress", player: handle, game: e.game, progress: e.progress });
+      for (const ws of this.ctx.getWebSockets()) sendTo(ws, liveMessage(handle, face, e).message);
       return;
     }
-    const message =
-      e.k === "watchOffer"
-        ? { t: "watchOffer", player: handle, name: face.name, cat: face.cat, game: e.game }
-        : e.k === "watch"
-          ? { t: "watch", player: handle, game: e.game, state: e.state }
-          : { t: "watchEnd", player: handle, game: e.game, result: e.result };
+    const { message } = liveMessage(handle, face, e);
     for (const ws of this.ctx.getWebSockets("tv")) sendTo(ws, message);
   }
 
@@ -879,7 +862,7 @@ export class Player extends DurableObject<Env> {
    * per game and overall. Who is on it is read now, so a pair that is left drops off. Rows name
    * this player "me" and a connection by its pair id: no player id leaves the server.
    */
-  board(date: Day, now: number): { date: Day; games: GameBoard[]; dish: Dish } {
+  board(date: Day, now: number): BoardAnswer {
     this.pruneDaily(now);
     const me = this.getMeta("id") ?? "";
     const handles = new Map<string, string>([[me, "me"]]);

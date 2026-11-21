@@ -25,6 +25,23 @@ export type Answer =
   | { ok: true; seq: number; reveals: unknown[]; progress: number; result: DailyResult | null }
   | { ok: false; error: "illegal" | "too_soon" | "over" | "stale" | "bad_message"; at: number; seq: number };
 
+/** What `POST /v1/daily/{game}/start` answers (docs/daily-protocol.md). */
+export type StartView = {
+  run: string;
+  game: DailyGameId;
+  date: Day;
+  number: number;
+  level: number;
+  startedAt: number;
+  now: number;
+  puzzle: unknown;
+  state: unknown;
+  seq: number;
+  hints: number;
+  result: DailyResult | null;
+  closesAt: number;
+};
+
 /** What a hint costs on the clock. */
 export const HINT_PENALTY_MS = 30_000;
 /** The most moves one batch may carry. */
@@ -85,6 +102,25 @@ export function newRun(
     result: null,
     tv: false,
     answers: {},
+  };
+}
+
+/** The run as start answers it: the public puzzle and state only, never the whole puzzle. */
+export function startView(m: DailyModule, p: unknown, r: RunState, now: number): StartView {
+  return {
+    run: r.id,
+    game: r.game,
+    date: r.date,
+    number: puzzleNumber(r.date),
+    level: levelFor(r.date),
+    startedAt: r.startedAt,
+    now,
+    puzzle: m.publicPuzzle(p),
+    state: m.publicState(p, r.state),
+    seq: r.seq,
+    hints: r.hints,
+    result: r.result,
+    closesAt: closesAt(r.date, r.zone),
   };
 }
 

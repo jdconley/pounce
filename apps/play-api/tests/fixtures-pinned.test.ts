@@ -45,3 +45,20 @@ test("no Cat Tower sample mentions another game", () => {
     for (const word of words) expect(text.includes(word), `${file}: ${word}`).toBe(false);
   }
 });
+
+/**
+ * The Daily Dish's samples (docs/daily-protocol.md), pinned when the server core landed: the app's
+ * and the web player's Dish decode them, and four game sessions build against them. They are not
+ * 1.0's, so they live apart from the list above. `tests/daily-fixtures.test.ts` makes them; a change
+ * to one is a change to the wire, made here on purpose.
+ */
+const PINNED_DAILY: Record<string, string> = {
+  "daily/protocol/http.json": "63a3126fa15a30c0378b004877e5fa6403bcbf4b22819a2da43840c5cf2acd2b",
+  "daily/protocol/socket.json": "ee4eb92518d5138d6a2f1f0f06c61261a1d065c4b4ca8067b6d3e0e3172f1887",
+  "daily/protocol/client.json": "d99dacbea20c3d405a6073b7f09cc1e09233fd0a380322dd56714f4a5eba2afa",
+};
+
+test.each(Object.entries(PINNED_DAILY))("fixtures/%s is byte for byte what the Dish's clients decode", (file, sha256) => {
+  const bytes = readFileSync(new URL(`../fixtures/${file}`, import.meta.url));
+  expect(createHash("sha256").update(bytes).digest("hex")).toBe(sha256);
+});
