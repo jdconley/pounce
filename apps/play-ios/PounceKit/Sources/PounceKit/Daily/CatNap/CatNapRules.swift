@@ -125,6 +125,21 @@ public struct NapClashes: Sendable, Equatable {
     public static let none = NapClashes(rows: [], cols: [], patches: [], touching: [], cells: [])
 }
 
+/// What the board shows from the rules: the clashes, whether every cat is in, and the progress.
+public struct NapCheck: Sendable, Equatable {
+    public var clashes: NapClashes
+    public var complete: Bool
+    public var placed: Int
+
+    public init(clashes: NapClashes, complete: Bool, placed: Int) {
+        self.clashes = clashes
+        self.complete = complete
+        self.placed = placed
+    }
+
+    public static let none = NapCheck(clashes: .none, complete: false, placed: 0)
+}
+
 public enum CatNapRules {
     /// The board after a move, or nil when it is illegal: a cell off the quilt, or a hinted cat.
     public static func apply(_ quilt: NapQuilt, _ state: NapState, _ move: NapMove) -> NapState? {
@@ -161,10 +176,16 @@ public enum CatNapRules {
         return NapClashes(rows: rows, cols: cols, patches: patches, touching: touching, cells: cells)
     }
 
-    /// `clashes` off the caller's actor: a drag over a 9 by 9 quilt checks here, so the main
-    /// thread only draws (docs/main-thread.md).
+    /// Every visible rule check on a board, off the caller's actor: marking over a 9 by 9 quilt
+    /// checks here, so the main thread only draws (docs/main-thread.md).
     @concurrent
-    public static func check(_ quilt: NapQuilt, _ state: NapState) async -> NapClashes { clashes(quilt, state) }
+    public static func check(_ quilt: NapQuilt, _ state: NapState) async -> NapCheck {
+        let c = clashes(quilt, state)
+        let cats = state.cats
+        return NapCheck(
+            clashes: c, complete: cats.count == quilt.n && c.cells.isEmpty,
+            placed: min(quilt.n, cats.filter { !c.cells.contains($0) }.count))
+    }
 
     /// N cats and no broken rule. With one solution, that is the solution.
     public static func complete(_ quilt: NapQuilt, _ state: NapState) -> Bool {

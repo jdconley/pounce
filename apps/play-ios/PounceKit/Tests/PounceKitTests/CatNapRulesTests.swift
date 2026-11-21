@@ -75,7 +75,7 @@ private func run(_ quilt: NapQuilt, _ state: NapState, _ step: [String: Any]) ->
 
 @Suite struct CatNapRulesTests {
     @Test(arguments: try CatNapVector.load())
-    func vector(_ v: CatNapVector) throws {
+    func vector(_ v: CatNapVector) async throws {
         var state = v.start
         for (i, step) in v.steps.enumerated() {
             let out = run(v.quilt, state, step.raw)
@@ -95,6 +95,8 @@ private func run(_ quilt: NapQuilt, _ state: NapState, _ step: [String: Any]) ->
             #expect(CatNapRules.clashes(v.quilt, state) == step.clashes, "step \(i)")
             #expect(CatNapRules.complete(v.quilt, state) == step.complete, "step \(i)")
             #expect(CatNapRules.placed(v.quilt, state) == step.placed, "step \(i)")
+            let check = await CatNapRules.check(v.quilt, state)
+            #expect(check == NapCheck(clashes: step.clashes, complete: step.complete, placed: step.placed), "step \(i)")
         }
     }
 
@@ -118,7 +120,8 @@ private func run(_ quilt: NapQuilt, _ state: NapState, _ step: [String: Any]) ->
         state.cells[0] = 2
         state.cells[1] = 2
         let check = await CatNapRules.check(quilt, state)
-        #expect(check == CatNapRules.clashes(quilt, state))
-        #expect(check.cells == [0, 1])
+        #expect(check.clashes == CatNapRules.clashes(quilt, state))
+        #expect(check.clashes.cells == [0, 1])
+        #expect(!check.complete && check.placed == 0)
     }
 }
