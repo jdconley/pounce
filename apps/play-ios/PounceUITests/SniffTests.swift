@@ -81,3 +81,51 @@ final class SniffTests: XCTestCase {
         XCTAssertTrue(until(10) { self.marked(app, row: 0) == 5 }, "crane never came back marked")
     }
 }
+
+/// Frame times on Sniff's screen (`docs/main-thread.md`), as `DailyFrameTests` measures the host:
+/// today's Sniff open on a dev server with `DAILY=on`, two guesses in and a word half typed, the
+/// clock running. Prints a `FRAMES` line, and fails on a main-thread hang over 100 ms or app work
+/// over 8.3 ms in a frame, and, near the reference's speed on a quiet machine, a frame over 16.7 ms.
+@MainActor
+final class SniffFrameTests: XCTestCase {
+    private let seconds: Double = ProcessInfo.processInfo.environment["POUNCE_FRAMES_SECONDS"].flatMap(Double.init) ?? 12
+
+    override func setUp() {
+        continueAfterFailure = true
+    }
+
+    func testSniffHoldsTheFrameRate() throws {
+        let app = XCUIApplication()
+        app.launchArguments = Live.arguments(speed: 1) + ["-uitest-reset", "-seed-people"]
+        app.launchEnvironment["POUNCE_API_BASE_URL"] = Live.baseURL
+        app.launch()
+        let treat = el(app, "home.dish.sniff")
+        guard treat.waitForExistence(timeout: Live.t(25)) else { throw XCTSkip("no Sniff on \(Live.baseURL)") }
+        treat.tap()
+        XCTAssertTrue(el(app, "sniff.key.a").waitForExistence(timeout: Live.t(15)), "Sniff never came up")
+        for word in ["crane", "sloth"] {
+            for letter in word { el(app, "sniff.key.\(letter)").tap() }
+            el(app, "sniff.send").tap()
+        }
+        for letter in "pud" { el(app, "sniff.key.\(letter)").tap() }
+        let before = gameplayBaseline(app)
+        // Only waiting: nothing reads the screen in the window.
+        Thread.sleep(forTimeInterval: seconds)
+        let host = Host.framesUnreliable()
+        guard let after = watchdog(app) else { return XCTFail("the watchdog went away") }
+        let window = after - before
+        let report = window.report("daily-sniff") + String(format: " | host load %.2f per core", host.load)
+        print(report)
+        let note = XCTAttachment(string: report)
+        note.name = "frames-daily-sniff"
+        note.lifetime = .keepAlways
+        add(note)
+        XCTAssertGreaterThan(window.link.count, Int(seconds) * 20, "the screen hardly drew: \(report)")
+        for failure in window.timeFailures() { XCTFail("\(failure): \(report)") }
+        if host.busy || !window.nearReference {
+            print("FRAMES daily-sniff: frames over 16.7 ms are reported, not enforced (\(host.busy ? "busy Mac" : "slow machine"))")
+        } else {
+            XCTAssertEqual(window.link.slow, 0, "the main thread missed a frame by over 16.7 ms: \(report)")
+        }
+    }
+}
