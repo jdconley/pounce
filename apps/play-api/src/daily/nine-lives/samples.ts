@@ -15,3 +15,10 @@ export function cellsOf(text: string): Cells {
   if (digits.length !== N) throw new RangeError(`need ${N} cells, got ${digits.length}`);
   return [...digits].map((ch) => (ch === "." ? 0 : Number(ch)));
 }
+
+/** A Monday puzzle the maker made (seedOf(101), level 1), pinned for the vectors and the demos. */
+export const SAMPLE = {
+  givens: cellsOf("600350270050900130030804906400000003080000020500000009301205080025008040064073002"),
+  solution: cellsOf("649351278258967134137824956412589763983716425576432819391245687725698341864173592"),
+  tier: 1 as const,
+};

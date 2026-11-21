@@ -16,7 +16,7 @@ import {
   type Cells,
   type NineLivesState,
 } from "./grid";
-import { SOLVED } from "./samples";
+import { cellsOf, SOLVED } from "./samples";
 
 function empty(): Cells {
   return new Array<number>(N).fill(0);
@@ -70,6 +70,11 @@ describe("clashes", () => {
     g[11] = 3;
     expect(clashes(g)).toEqual([9, 10, 17]);
   });
+});
+
+test("cellsOf reads dots and zeros, and needs 81 cells", () => {
+  expect(cellsOf(`1.0${".".repeat(78)}`).slice(0, 3)).toEqual([1, 0, 0]);
+  expect(() => cellsOf("123")).toThrow(RangeError);
 });
 
 describe("full and progress", () => {

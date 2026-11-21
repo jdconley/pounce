@@ -300,7 +300,10 @@ export function coloring(b: Board): boolean {
       let did = false;
       for (let i = 0; i < N; i++) {
         if (color.has(i) || (b.cand[i]! & bit(d)) === 0) continue;
-        if (side[0]!.some((x) => sees(i, x)) && side[1]!.some((y) => sees(i, y))) did = drop(b, i, bit(d)) || did;
+        if (side[0]!.some((x) => sees(i, x)) && side[1]!.some((y) => sees(i, y))) {
+          b.cand[i]! &= ~bit(d);
+          did = true;
+        }
       }
       if (did) return true;
     }

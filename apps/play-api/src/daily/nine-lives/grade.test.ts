@@ -54,6 +54,14 @@ describe("tier 1: singles", () => {
     expect(hiddenSingles(b)).toBe(true);
     expect(b.vals[4]).toBe(3);
   });
+
+  test("two digits with one place, the same cell: the first takes it", () => {
+    const b = open();
+    only(b, ROWS[0]!, 1, [0]);
+    only(b, ROWS[0]!, 2, [0]);
+    expect(hiddenSingles(b)).toBe(true);
+    expect(b.vals[0]).toBe(1);
+  });
 });
 
 describe("tier 2: locked candidates", () => {
