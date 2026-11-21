@@ -37,6 +37,12 @@ struct DishScreen: View {
         .safeAreaInset(edge: .top, spacing: 0) { topBar }
         .background { background }
         .tipHost(.dish, paused: showTV)
+        .frameGate()
+        #if DEBUG
+            // `-dish-autoplay`: the board changes as a live one does (tabs, progress, results),
+            // for the frame-rate gate.
+            .task { if CommandLine.arguments.contains("-dish-autoplay") { await autoplay() } }
+        #endif
         .task { await model.refreshDaily() }
         .task { await model.daily.refreshStats() }
         .onAppear {
@@ -271,6 +277,20 @@ struct DishScreen: View {
             .accessibilityAddTraits(.isHeader)
             .dynamicTypeSize(...DynamicTypeSize.accessibility2)
     }
+
+    #if DEBUG
+        private func autoplay() async {
+            var i = 0
+            while !Task.isCancelled {
+                try? await Task.sleep(for: .milliseconds(400))
+                i += 1
+                let tabs: [DailyBoardTab] = [.dish] + games.map { .game($0.id) }
+                if i % 3 == 0 { withAnimation(.spring(duration: 0.3, bounce: 0.3)) { tab = tabs[(i / 3) % tabs.count] } }
+                model.daily.apply(.progress(player: "pr_gramps", game: "sniff", progress: Double(i % 10) / 10))
+                model.daily.apply(.tvs(i % 2))
+            }
+        }
+    #endif
 
     // MARK: the TV
 

@@ -51,6 +51,7 @@ struct DailyPuzzleScreen: View {
             }
             .animation(.spring(duration: 0.4, bounce: 0.3).paced, value: result)
             .animation(.easeOut(duration: 0.2).paced, value: link)
+            .frameGate()
             .accessibilityElement(children: .contain)
             .accessibilityIdentifier("screen-daily")
     }
