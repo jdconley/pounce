@@ -1,0 +1,17 @@
+{
+  "about": "Sniff's marking rule, written by hand (not generated). spot: right letter, right spot (a filled paw). near: in the answer, elsewhere (an outlined paw). none: not in the answer, or already used up (plain). Right spots are marked first; then, left to right, a letter is near only while the answer still has an unmarked copy of it.",
+  "vectors": [
+    { "name": "all right spots", "answer": "plant", "guess": "plant", "marks": ["spot", "spot", "spot", "spot", "spot"] },
+    { "name": "nothing in common", "answer": "plant", "guess": "dummy", "marks": ["none", "none", "none", "none", "none"] },
+    { "name": "every letter elsewhere but one", "answer": "least", "guess": "slate", "marks": ["near", "near", "spot", "near", "near"] },
+    { "name": "every letter elsewhere but the last", "answer": "crane", "guess": "nacre", "marks": ["near", "near", "near", "near", "spot"] },
+    { "name": "the guess has n three times, the answer once at the fourth spot: that one is a spot, the earlier two are plain even though they come first", "answer": "piano", "guess": "nanny", "marks": ["none", "near", "none", "spot", "none"] },
+    { "name": "the guess has t three times, the answer once: the first is near, the rest plain", "answer": "plant", "guess": "tatty", "marks": ["near", "near", "none", "none", "none"] },
+    { "name": "the guess has t twice, the answer twice: one spot, the other near", "answer": "kitty", "guess": "otter", "marks": ["none", "near", "spot", "none", "none"] },
+    { "name": "the guess has e three times, the answer twice, none in place: the first two near, the third plain", "answer": "sheep", "guess": "eerie", "marks": ["near", "near", "none", "none", "none"] },
+    { "name": "the answer has e twice, the guess once: near", "answer": "sheep", "guess": "crate", "marks": ["none", "none", "none", "none", "near"] },
+    { "name": "both have e twice, both in place", "answer": "sheep", "guess": "speed", "marks": ["spot", "near", "spot", "spot", "none"] },
+    { "name": "both have o twice: one in place, the other elsewhere; every other letter elsewhere", "answer": "spool", "guess": "loops", "marks": ["near", "near", "spot", "near", "near"] },
+    { "name": "p in place and again later: the later copy is plain, the answer has one p", "answer": "plant", "guess": "pupil", "marks": ["spot", "none", "none", "none", "near"] }
+  ]
+}

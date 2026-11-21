@@ -20,5 +20,6 @@ export type DailyEntry = {
 export const DAILY_WEB_GAMES: Partial<Record<DailyGameId, DailyEntry>> = {
   "cat-nap": { play: () => import("./cat-nap/dish"), watch: () => import("./cat-nap/watch") },
   "nine-lives": { play: () => import("./nine-lives/dish"), watch: () => import("./nine-lives/watch") },
+  sniff: { play: () => import("./sniff/dish"), watch: () => import("./sniff/watch") },
   test: { play: () => import("./test-game"), watch: () => import("./test-watch") },
 };

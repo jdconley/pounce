@@ -5,7 +5,7 @@ import PounceKit
 @MainActor
 enum DailyWatchGames {
     static let watch: [any DailyWatchView.Type] = [
-        // SniffWatch.self,
+        SniffWatch.self,
         NineLivesWatch.self,
         CatNapWatch.self,
         // BoxFortWatch.self,

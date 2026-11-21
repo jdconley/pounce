@@ -1,0 +1,971 @@
+{
+  "about": "Sniff runs: each move's server answer. Written by module.test.ts (UPDATE_SNIFF_VECTORS=1).",
+  "runs": [
+    {
+      "name": "a solve in three",
+      "answer": "plant",
+      "moves": [
+        {
+          "ms": 4000,
+          "move": {
+            "k": "guess",
+            "word": "crane"
+          }
+        },
+        {
+          "ms": 9000,
+          "move": {
+            "k": "guess",
+            "word": "slant"
+          }
+        },
+        {
+          "ms": 15000,
+          "move": {
+            "k": "guess",
+            "word": "plant"
+          }
+        }
+      ],
+      "answers": [
+        {
+          "ok": true,
+          "reveal": {
+            "word": "crane",
+            "marks": [
+              "none",
+              "none",
+              "spot",
+              "spot",
+              "none"
+            ]
+          },
+          "end": null,
+          "progress": 0.16666666666666666,
+          "view": {
+            "guesses": [
+              {
+                "word": "crane",
+                "marks": [
+                  "none",
+                  "none",
+                  "spot",
+                  "spot",
+                  "none"
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "ok": true,
+          "reveal": {
+            "word": "slant",
+            "marks": [
+              "none",
+              "spot",
+              "spot",
+              "spot",
+              "spot"
+            ]
+          },
+          "end": null,
+          "progress": 0.3333333333333333,
+          "view": {
+            "guesses": [
+              {
+                "word": "crane",
+                "marks": [
+                  "none",
+                  "none",
+                  "spot",
+                  "spot",
+                  "none"
+                ]
+              },
+              {
+                "word": "slant",
+                "marks": [
+                  "none",
+                  "spot",
+                  "spot",
+                  "spot",
+                  "spot"
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "ok": true,
+          "reveal": {
+            "word": "plant",
+            "marks": [
+              "spot",
+              "spot",
+              "spot",
+              "spot",
+              "spot"
+            ],
+            "answer": "plant"
+          },
+          "end": "solved",
+          "progress": 0.5,
+          "view": {
+            "guesses": [
+              {
+                "word": "crane",
+                "marks": [
+                  "none",
+                  "none",
+                  "spot",
+                  "spot",
+                  "none"
+                ]
+              },
+              {
+                "word": "slant",
+                "marks": [
+                  "none",
+                  "spot",
+                  "spot",
+                  "spot",
+                  "spot"
+                ]
+              },
+              {
+                "word": "plant",
+                "marks": [
+                  "spot",
+                  "spot",
+                  "spot",
+                  "spot",
+                  "spot"
+                ]
+              }
+            ],
+            "answer": "plant"
+          }
+        }
+      ],
+      "end": {
+        "outcome": "solved",
+        "timeMs": 15000,
+        "result": {
+          "outcome": "solved",
+          "timeMs": 15000,
+          "hints": 0,
+          "guesses": 3,
+          "progress": 1
+        }
+      }
+    },
+    {
+      "name": "repeated letters, solved on the last try",
+      "answer": "kitty",
+      "moves": [
+        {
+          "ms": 3000,
+          "move": {
+            "k": "guess",
+            "word": "tatty"
+          }
+        },
+        {
+          "ms": 3300,
+          "move": {
+            "k": "guess",
+            "word": "otter"
+          }
+        },
+        {
+          "ms": 8000,
+          "move": {
+            "k": "guess",
+            "word": "otter"
+          }
+        },
+        {
+          "ms": 12000,
+          "move": {
+            "k": "guess",
+            "word": "zzzzz"
+          }
+        },
+        {
+          "ms": 15000,
+          "move": {
+            "k": "guess",
+            "word": "witty"
+          }
+        },
+        {
+          "ms": 20000,
+          "move": {
+            "k": "guess",
+            "word": "bitty"
+          }
+        },
+        {
+          "ms": 25000,
+          "move": {
+            "k": "guess",
+            "word": "ditty"
+          }
+        },
+        {
+          "ms": 30000,
+          "move": {
+            "k": "guess",
+            "word": "kitty"
+          }
+        }
+      ],
+      "answers": [
+        {
+          "ok": true,
+          "reveal": {
+            "word": "tatty",
+            "marks": [
+              "none",
+              "none",
+              "spot",
+              "spot",
+              "spot"
+            ]
+          },
+          "end": null,
+          "progress": 0.16666666666666666,
+          "view": {
+            "guesses": [
+              {
+                "word": "tatty",
+                "marks": [
+                  "none",
+                  "none",
+                  "spot",
+                  "spot",
+                  "spot"
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "ok": false,
+          "reason": "too_soon"
+        },
+        {
+          "ok": true,
+          "reveal": {
+            "word": "otter",
+            "marks": [
+              "none",
+              "near",
+              "spot",
+              "none",
+              "none"
+            ]
+          },
+          "end": null,
+          "progress": 0.3333333333333333,
+          "view": {
+            "guesses": [
+              {
+                "word": "tatty",
+                "marks": [
+                  "none",
+                  "none",
+                  "spot",
+                  "spot",
+                  "spot"
+                ]
+              },
+              {
+                "word": "otter",
+                "marks": [
+                  "none",
+                  "near",
+                  "spot",
+                  "none",
+                  "none"
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "ok": false,
+          "reason": "illegal"
+        },
+        {
+          "ok": true,
+          "reveal": {
+            "word": "witty",
+            "marks": [
+              "none",
+              "spot",
+              "spot",
+              "spot",
+              "spot"
+            ]
+          },
+          "end": null,
+          "progress": 0.5,
+          "view": {
+            "guesses": [
+              {
+                "word": "tatty",
+                "marks": [
+                  "none",
+                  "none",
+                  "spot",
+                  "spot",
+                  "spot"
+                ]
+              },
+              {
+                "word": "otter",
+                "marks": [
+                  "none",
+                  "near",
+                  "spot",
+                  "none",
+                  "none"
+                ]
+              },
+              {
+                "word": "witty",
+                "marks": [
+                  "none",
+                  "spot",
+                  "spot",
+                  "spot",
+                  "spot"
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "ok": true,
+          "reveal": {
+            "word": "bitty",
+            "marks": [
+              "none",
+              "spot",
+              "spot",
+              "spot",
+              "spot"
+            ]
+          },
+          "end": null,
+          "progress": 0.6666666666666666,
+          "view": {
+            "guesses": [
+              {
+                "word": "tatty",
+                "marks": [
+                  "none",
+                  "none",
+                  "spot",
+                  "spot",
+                  "spot"
+                ]
+              },
+              {
+                "word": "otter",
+                "marks": [
+                  "none",
+                  "near",
+                  "spot",
+                  "none",
+                  "none"
+                ]
+              },
+              {
+                "word": "witty",
+                "marks": [
+                  "none",
+                  "spot",
+                  "spot",
+                  "spot",
+                  "spot"
+                ]
+              },
+              {
+                "word": "bitty",
+                "marks": [
+                  "none",
+                  "spot",
+                  "spot",
+                  "spot",
+                  "spot"
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "ok": true,
+          "reveal": {
+            "word": "ditty",
+            "marks": [
+              "none",
+              "spot",
+              "spot",
+              "spot",
+              "spot"
+            ]
+          },
+          "end": null,
+          "progress": 0.8333333333333334,
+          "view": {
+            "guesses": [
+              {
+                "word": "tatty",
+                "marks": [
+                  "none",
+                  "none",
+                  "spot",
+                  "spot",
+                  "spot"
+                ]
+              },
+              {
+                "word": "otter",
+                "marks": [
+                  "none",
+                  "near",
+                  "spot",
+                  "none",
+                  "none"
+                ]
+              },
+              {
+                "word": "witty",
+                "marks": [
+                  "none",
+                  "spot",
+                  "spot",
+                  "spot",
+                  "spot"
+                ]
+              },
+              {
+                "word": "bitty",
+                "marks": [
+                  "none",
+                  "spot",
+                  "spot",
+                  "spot",
+                  "spot"
+                ]
+              },
+              {
+                "word": "ditty",
+                "marks": [
+                  "none",
+                  "spot",
+                  "spot",
+                  "spot",
+                  "spot"
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "ok": true,
+          "reveal": {
+            "word": "kitty",
+            "marks": [
+              "spot",
+              "spot",
+              "spot",
+              "spot",
+              "spot"
+            ],
+            "answer": "kitty"
+          },
+          "end": "solved",
+          "progress": 1,
+          "view": {
+            "guesses": [
+              {
+                "word": "tatty",
+                "marks": [
+                  "none",
+                  "none",
+                  "spot",
+                  "spot",
+                  "spot"
+                ]
+              },
+              {
+                "word": "otter",
+                "marks": [
+                  "none",
+                  "near",
+                  "spot",
+                  "none",
+                  "none"
+                ]
+              },
+              {
+                "word": "witty",
+                "marks": [
+                  "none",
+                  "spot",
+                  "spot",
+                  "spot",
+                  "spot"
+                ]
+              },
+              {
+                "word": "bitty",
+                "marks": [
+                  "none",
+                  "spot",
+                  "spot",
+                  "spot",
+                  "spot"
+                ]
+              },
+              {
+                "word": "ditty",
+                "marks": [
+                  "none",
+                  "spot",
+                  "spot",
+                  "spot",
+                  "spot"
+                ]
+              },
+              {
+                "word": "kitty",
+                "marks": [
+                  "spot",
+                  "spot",
+                  "spot",
+                  "spot",
+                  "spot"
+                ]
+              }
+            ],
+            "answer": "kitty"
+          }
+        }
+      ],
+      "end": {
+        "outcome": "solved",
+        "timeMs": 30000,
+        "result": {
+          "outcome": "solved",
+          "timeMs": 30000,
+          "hints": 0,
+          "guesses": 6,
+          "progress": 1
+        }
+      }
+    },
+    {
+      "name": "six misses, then a seventh guess is over",
+      "answer": "piano",
+      "moves": [
+        {
+          "ms": 2000,
+          "move": {
+            "k": "guess",
+            "word": "crate"
+          }
+        },
+        {
+          "ms": 4000,
+          "move": {
+            "k": "guess",
+            "word": "nanny"
+          }
+        },
+        {
+          "ms": 6000,
+          "move": {
+            "k": "guess",
+            "word": "sheep"
+          }
+        },
+        {
+          "ms": 8000,
+          "move": {
+            "k": "guess",
+            "word": "dummy"
+          }
+        },
+        {
+          "ms": 10000,
+          "move": {
+            "k": "guess",
+            "word": "kitty"
+          }
+        },
+        {
+          "ms": 12000,
+          "move": {
+            "k": "guess",
+            "word": "loops"
+          }
+        },
+        {
+          "ms": 14000,
+          "move": {
+            "k": "guess",
+            "word": "piano"
+          }
+        }
+      ],
+      "answers": [
+        {
+          "ok": true,
+          "reveal": {
+            "word": "crate",
+            "marks": [
+              "none",
+              "none",
+              "spot",
+              "none",
+              "none"
+            ]
+          },
+          "end": null,
+          "progress": 0.16666666666666666,
+          "view": {
+            "guesses": [
+              {
+                "word": "crate",
+                "marks": [
+                  "none",
+                  "none",
+                  "spot",
+                  "none",
+                  "none"
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "ok": true,
+          "reveal": {
+            "word": "nanny",
+            "marks": [
+              "none",
+              "near",
+              "none",
+              "spot",
+              "none"
+            ]
+          },
+          "end": null,
+          "progress": 0.3333333333333333,
+          "view": {
+            "guesses": [
+              {
+                "word": "crate",
+                "marks": [
+                  "none",
+                  "none",
+                  "spot",
+                  "none",
+                  "none"
+                ]
+              },
+              {
+                "word": "nanny",
+                "marks": [
+                  "none",
+                  "near",
+                  "none",
+                  "spot",
+                  "none"
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "ok": true,
+          "reveal": {
+            "word": "sheep",
+            "marks": [
+              "none",
+              "none",
+              "none",
+              "none",
+              "near"
+            ]
+          },
+          "end": null,
+          "progress": 0.5,
+          "view": {
+            "guesses": [
+              {
+                "word": "crate",
+                "marks": [
+                  "none",
+                  "none",
+                  "spot",
+                  "none",
+                  "none"
+                ]
+              },
+              {
+                "word": "nanny",
+                "marks": [
+                  "none",
+                  "near",
+                  "none",
+                  "spot",
+                  "none"
+                ]
+              },
+              {
+                "word": "sheep",
+                "marks": [
+                  "none",
+                  "none",
+                  "none",
+                  "none",
+                  "near"
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "ok": true,
+          "reveal": {
+            "word": "dummy",
+            "marks": [
+              "none",
+              "none",
+              "none",
+              "none",
+              "none"
+            ]
+          },
+          "end": null,
+          "progress": 0.6666666666666666,
+          "view": {
+            "guesses": [
+              {
+                "word": "crate",
+                "marks": [
+                  "none",
+                  "none",
+                  "spot",
+                  "none",
+                  "none"
+                ]
+              },
+              {
+                "word": "nanny",
+                "marks": [
+                  "none",
+                  "near",
+                  "none",
+                  "spot",
+                  "none"
+                ]
+              },
+              {
+                "word": "sheep",
+                "marks": [
+                  "none",
+                  "none",
+                  "none",
+                  "none",
+                  "near"
+                ]
+              },
+              {
+                "word": "dummy",
+                "marks": [
+                  "none",
+                  "none",
+                  "none",
+                  "none",
+                  "none"
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "ok": true,
+          "reveal": {
+            "word": "kitty",
+            "marks": [
+              "none",
+              "spot",
+              "none",
+              "none",
+              "none"
+            ]
+          },
+          "end": null,
+          "progress": 0.8333333333333334,
+          "view": {
+            "guesses": [
+              {
+                "word": "crate",
+                "marks": [
+                  "none",
+                  "none",
+                  "spot",
+                  "none",
+                  "none"
+                ]
+              },
+              {
+                "word": "nanny",
+                "marks": [
+                  "none",
+                  "near",
+                  "none",
+                  "spot",
+                  "none"
+                ]
+              },
+              {
+                "word": "sheep",
+                "marks": [
+                  "none",
+                  "none",
+                  "none",
+                  "none",
+                  "near"
+                ]
+              },
+              {
+                "word": "dummy",
+                "marks": [
+                  "none",
+                  "none",
+                  "none",
+                  "none",
+                  "none"
+                ]
+              },
+              {
+                "word": "kitty",
+                "marks": [
+                  "none",
+                  "spot",
+                  "none",
+                  "none",
+                  "none"
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "ok": true,
+          "reveal": {
+            "word": "loops",
+            "marks": [
+              "none",
+              "near",
+              "none",
+              "near",
+              "none"
+            ],
+            "answer": "piano"
+          },
+          "end": "missed",
+          "progress": 1,
+          "view": {
+            "guesses": [
+              {
+                "word": "crate",
+                "marks": [
+                  "none",
+                  "none",
+                  "spot",
+                  "none",
+                  "none"
+                ]
+              },
+              {
+                "word": "nanny",
+                "marks": [
+                  "none",
+                  "near",
+                  "none",
+                  "spot",
+                  "none"
+                ]
+              },
+              {
+                "word": "sheep",
+                "marks": [
+                  "none",
+                  "none",
+                  "none",
+                  "none",
+                  "near"
+                ]
+              },
+              {
+                "word": "dummy",
+                "marks": [
+                  "none",
+                  "none",
+                  "none",
+                  "none",
+                  "none"
+                ]
+              },
+              {
+                "word": "kitty",
+                "marks": [
+                  "none",
+                  "spot",
+                  "none",
+                  "none",
+                  "none"
+                ]
+              },
+              {
+                "word": "loops",
+                "marks": [
+                  "none",
+                  "near",
+                  "none",
+                  "near",
+                  "none"
+                ]
+              }
+            ],
+            "answer": "piano"
+          }
+        },
+        {
+          "ok": false,
+          "reason": "over"
+        }
+      ],
+      "end": {
+        "outcome": "missed",
+        "timeMs": 12000,
+        "result": {
+          "outcome": "missed",
+          "timeMs": 12000,
+          "hints": 0,
+          "guesses": 6,
+          "progress": 0.2
+        }
+      }
+    }
+  ]
+}

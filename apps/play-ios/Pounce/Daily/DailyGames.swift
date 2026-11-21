@@ -6,7 +6,7 @@ import PounceKit
 enum DailyGames {
     static let play: [any DailyGameView.Type] = {
         var games: [any DailyGameView.Type] = [
-            // SniffDaily.self,
+            SniffDaily.self,
             NineLivesDaily.self,
             CatNapDaily.self,
             // BoxFortDaily.self,
