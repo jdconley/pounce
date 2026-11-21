@@ -169,7 +169,7 @@ export function CatNapPlay({ quilt, state, onMove, subscribe, controls, playing 
           quilt={quilt}
           state={view}
           check={check}
-          svgProps={{ role: "grid", "aria-label": "Quilt", onPointerDown, onPointerMove, onPointerUp, onPointerCancel, "data-testid": "catnap-quilt" }}
+          svgProps={{ role: "group", "aria-label": "Quilt", onPointerDown, onPointerMove, onPointerUp, onPointerCancel, "data-testid": "catnap-quilt" }}
         >
           {Array.from({ length: n * n }, (_, cell) => (
             <rect

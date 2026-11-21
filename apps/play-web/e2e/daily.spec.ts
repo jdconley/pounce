@@ -52,7 +52,8 @@ test("the test game plays end to end: Home, the host, the end, the board and sta
 
   await page.getByRole("button", { name: "Home" }).click();
   await expect(page.getByRole("button", { name: /^Test 0:0\d$/ })).toBeVisible();
-  await expect(page.getByText("All done")).toBeVisible();
+  // One game played: "All done" while the test game is the only one, else "1 of" the Dish's games.
+  await expect(page.locator(".dd-done")).toHaveText(/^(All done|1 of \d+)$/);
   await closeAll(mia.context);
 });
 
