@@ -47,6 +47,8 @@ export const milestoneBody = (n: number) => `${n} days together. There's a gift 
 export const playAgainBody = (who: string) => `${who} dealt a new game.`;
 export const freshStartBody = (partner: string, month: boolean) =>
   `New ${month ? "month" : "week"}, new deal. One turn starts a streak with ${partner}.`;
+/** The daily reminder about the Daily Dish (daily games design §9): its first unplayed game. */
+export const dishBody = (game: string, number: number) => `Today's Dish is out. ${game} ${number} is waiting.`;
 /** The last reminder before going quiet (§12.3). */
 export const GOING_QUIET = "The cats will keep your seat warm.";
 

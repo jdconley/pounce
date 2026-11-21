@@ -1,6 +1,9 @@
 import { afterEach, beforeAll, describe, expect, test } from "vitest";
 
-import { BASE, bundle, call, eventually, LA, mint, newPerson, PLAYER_ID_JSON, profile, worker, type Device, type Person } from "./play-helpers";
+import { addDays, localToInstant } from "../src/streaks/clock";
+
+import { BASE, bundle, call, eventually, LA, mint, newPerson, PLAYER_ID_JSON, profile, tokenOf, worker, type Device, type Person, type Sent } from "./play-helpers";
+
 
 import type { Miniflare } from "miniflare";
 
@@ -16,8 +19,8 @@ afterEach(async () => {
   await Promise.all(open.splice(0).map((mf) => mf.dispose()));
 });
 
-async function start(options: { daily?: boolean } = {}): Promise<Miniflare> {
-  const mf = await worker(script, { sent: [], trophy: true, daily: options.daily ?? true, dailyTest: true });
+async function start(options: { daily?: boolean; sent?: Sent[] } = {}): Promise<Miniflare> {
+  const mf = await worker(script, { sent: options.sent ?? [], trophy: true, daily: options.daily ?? true, dailyTest: true });
   open.push(mf);
   return mf;
 }
@@ -421,5 +424,39 @@ describe("streaks count daily runs", () => {
     for (const p of [mom, kid]) expect((await mf.dispatchFetch(`${BASE}/__test/record?player=${p.id}`)).status).toBe(204);
     await new Promise((resolve) => setTimeout(resolve, 300));
     expect(await streaksOf(mf, mom.device, mom.person)).toMatchObject({ own: { count: 0 }, pairs: [{ count: 0, me: false, them: false }] });
+  });
+});
+
+describe("the daily reminder knows the Dish", () => {
+  const remindAt = async (mf: Miniflare, playerId: string, now: number) =>
+    expect((await mf.dispatchFetch(`${BASE}/__test/remind?player=${playerId}&now=${now}`)).status).toBe(204);
+  const tomorrowAt1930 = () => {
+    const today = new Date(Date.now() - 4 * 3_600_000).toLocaleDateString("en-CA", { timeZone: LA });
+    return localToInstant(addDays(today, 1), 19 * 60 + 30, LA);
+  };
+
+  test("with no move waiting, the reminder names today's first game", async () => {
+    const sent: Sent[] = [];
+    const mf = await start({ sent });
+    const device = await mint(mf);
+    const mom = newPerson("Mom", 3);
+    const id = (await profile(mf, device, [mom], { apns: tokenOf(1) }))[mom.id] as string;
+    await remindAt(mf, id, tomorrowAt1930());
+    const pushes = await eventually(() => sent.filter((s) => s.body.kind === "reminder"), (l) => l.length >= 1);
+    expect(pushes).toHaveLength(1);
+    const alert = (pushes[0]?.body.aps as { alert: { title: string; body: string } }).alert;
+    expect(alert).toMatchObject({ title: "Mom" });
+    expect(alert.body).toMatch(/^Today's Dish is out\. Test -?\d+ is waiting\.$/);
+  });
+
+  test("DAILY off: no Dish, so nothing", async () => {
+    const sent: Sent[] = [];
+    const mf = await start({ sent, daily: false });
+    const device = await mint(mf);
+    const mom = newPerson("Mom", 3);
+    const id = (await profile(mf, device, [mom], { apns: tokenOf(2) }))[mom.id] as string;
+    await remindAt(mf, id, tomorrowAt1930());
+    await new Promise((resolve) => setTimeout(resolve, 300));
+    expect(sent.filter((s) => s.body.kind === "reminder")).toEqual([]);
   });
 });

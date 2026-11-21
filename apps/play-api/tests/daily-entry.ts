@@ -25,7 +25,8 @@ export { BoardTokens } from "../src/daily/board-tokens";
  * next date's puzzle is then made; `/__test/start?player=&game=&now=` starts a run at a made-up
  * time; `/__test/run?id=` reads a run as stored; `/__test/connect?a=&b=` pairs two players, as an
  * accepted invite does; `/__test/board?player=&date=&now=` reads a player's board at a made-up now;
- * `/__test/record?player=` hands a player a counting result for today, as an ended run would.
+ * `/__test/record?player=` hands a player a counting result for today, as an ended run would;
+ * `/__test/remind?player=&now=` runs a player's reminder pass at a made-up time.
  */
 export default {
   async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
@@ -52,6 +53,10 @@ export default {
     if (url.pathname === "/__test/board") {
       const playerId = url.searchParams.get("player") ?? "";
       return Response.json(await env.PLAYERS.get(env.PLAYERS.idFromName(playerId)).board(date, Number(url.searchParams.get("now"))));
+    }
+    if (url.pathname === "/__test/remind") {
+      await env.PLAYERS.get(env.PLAYERS.idFromName(url.searchParams.get("player") ?? "")).remind(Number(url.searchParams.get("now")));
+      return new Response(null, { status: 204 });
     }
     if (url.pathname === "/__test/record") {
       const now = Date.now();

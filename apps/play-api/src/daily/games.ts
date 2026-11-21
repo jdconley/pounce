@@ -24,3 +24,12 @@ export const DISH_ORDER: readonly DailyGameId[] = ["sniff", "nine-lives", "cat-n
 export function listedGames(env: Pick<Env, "DAILY_TEST">): DailyModule[] {
   return DISH_ORDER.map((id) => dailyModule(id, env)).filter((m): m is DailyModule => m !== null);
 }
+
+/** Each game's name, for push copy (the names are placeholders until JD has seen them: spec §1). */
+export const DAILY_TITLES: Record<DailyGameId, string> = {
+  sniff: "Sniff",
+  "nine-lives": "Nine Lives",
+  "cat-nap": "Cat Nap",
+  "box-fort": "Box Fort",
+  test: "Test",
+};

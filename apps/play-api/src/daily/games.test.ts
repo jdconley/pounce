@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { DAILY_GAMES, DISH_ORDER, dailyModule, listedGames } from "./games";
+import { DAILY_GAMES, DAILY_TITLES, DISH_ORDER, dailyModule, listedGames } from "./games";
 import { testGame } from "./test-game";
 
 describe("the daily game registry", () => {
@@ -30,5 +30,11 @@ describe("listedGames", () => {
 
   it("orders the four games as the reminder names them, test last", () => {
     expect(DISH_ORDER).toEqual(["sniff", "nine-lives", "cat-nap", "box-fort", "test"]);
+  });
+});
+
+describe("DAILY_TITLES", () => {
+  it("names every game in plain words, as push copy and the board say them", () => {
+    expect(DAILY_TITLES).toEqual({ sniff: "Sniff", "nine-lives": "Nine Lives", "cat-nap": "Cat Nap", "box-fort": "Box Fort", test: "Test" });
   });
 });

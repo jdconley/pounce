@@ -2,7 +2,7 @@ import { DurableObject } from "cloudflare:workers";
 
 import { addToStats, dish, emptyStats, rankGame, statsView, type BoardRow, type Dish, type GameBoard, type Stats } from "../daily/board";
 import { dailyDay, puzzleNumber, type DailyZone } from "../daily/days";
-import { listedGames } from "../daily/games";
+import { DAILY_TITLES, listedGames } from "../daily/games";
 import { dailyOn } from "../env";
 import { endKitten } from "../kittens/kittens";
 import { forgetLinks } from "../links/links";
@@ -628,9 +628,12 @@ export class Player extends DurableObject<Env> {
     if (!this.live()) return;
     const me = this.getMeta("id") as string;
     if (!this.storeDaily(me, result)) return;
-    // It counts toward your own streak and every pair's, as a turn does (§5). Only with DAILY on.
+    // It counts toward your own streak and every pair's, as a turn does (§5), and resets the
+    // reminders' backoff (§9). Only with DAILY on. Either way, today's Dish may have closed.
+    const now = Date.now();
+    if (counts && dailyOn(this.env)) this.ctx.waitUntil(this.recordTurn(endedAt, now));
+    else if (notifyOn(this.env)) this.ctx.waitUntil(this.arm(now));
     if (counts && dailyOn(this.env)) {
-      const now = Date.now();
       this.recordPersonalTurn(endedAt, now);
       if (streaksOn(this.env)) {
         for (const { pairId } of this.pairList()) {
@@ -1002,7 +1005,23 @@ export class Player extends DurableObject<Env> {
       pairs: [],
       tableNames: Object.fromEntries(this.listTables().flatMap((t) => (t.name ? [[t.code, t.name]] : []))),
       ...(newerOnly.length > 0 ? { newerOnly } : {}),
+      ...(dailyOn(this.env) ? { dish: this.openDish(now) } : {}),
     };
+  }
+
+  /**
+   * Today's Dish, while this player has ended no daily run today (daily games design §9): the
+   * first game they haven't played, for the daily reminder. Null once they've played.
+   */
+  private openDish(now: number): { game: string; title: string; number: number } | null {
+    const kept = this.getMeta("daily_zone");
+    const today = dailyDay(now, kept === null ? null : (JSON.parse(kept) as DailyZone), this.getMeta("time_zone")).day;
+    const mine = this.ctx.storage.sql
+      .exec<{ game: string; result: string }>("SELECT game, result FROM daily_results WHERE date = ? AND player_id = ?", today, this.getMeta("id"))
+      .toArray();
+    if (mine.some((r) => (JSON.parse(r.result) as DailyResult).outcome !== "closed")) return null;
+    const next = listedGames(this.env).find((m) => !mine.some((r) => r.game === m.id));
+    return next ? { game: next.id, title: DAILY_TITLES[next.id], number: puzzleNumber(today) } : null;
   }
 
   /** The title of a streak push (§12.2): the table's name when the pair has exactly one shared table, else the partner's. */
