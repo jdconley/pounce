@@ -5,7 +5,7 @@ import { join } from "node:path";
 import { afterEach, beforeAll, describe, expect, test } from "vitest";
 
 import { slotAt } from "../src/notify/schedule";
-import { addDays, dayKey } from "../src/streaks/clock";
+import { addDays, dayKey, type Day } from "../src/streaks/clock";
 
 import {
   BASE,
@@ -28,9 +28,11 @@ import {
   type Sent,
   PLAYER_ID_JSON,
 } from "./play-helpers";
+import { twoDaysOn } from "./streak-helpers";
 
 import type { ServerMessage } from "../src/protocol";
 import type { RoomState } from "../src/room/core";
+import type { StreakView } from "../src/streaks/pair-core";
 import type { Miniflare } from "miniflare";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -294,8 +296,11 @@ describe("status pushes (§8, §12.1)", { timeout: 30_000 }, () => {
 
   test("a missed day after a kept one tells both people about win-back", async () => {
     const mf = await start();
-    const { pairId, name } = await pairedUp(mf);
-    await mf.dispatchFetch(`${BASE}/__test/settle?pair=${pairId}&now=${Date.now() + 2 * DAY_MS}`);
+    const { pairId, name, phone, jd } = await pairedUp(mf);
+    const listed = (await (await call(mf, phone, "GET", `/v1/me/streaks?person=${jd.id}`)).json()) as { pairs: StreakView[] };
+    const kept = listed.pairs[0]?.week.find((d) => d.state === "kept")?.day;
+    expect(kept).toBeDefined();
+    await mf.dispatchFetch(`${BASE}/__test/settle?pair=${pairId}&now=${twoDaysOn(kept as Day)}`);
     for (const token of [JD_TOKEN, MIA_TOKEN]) {
       const [winback] = (await eventually(() => alertsTo(token).filter((s) => s.body.kind === "winback"), (l) => l.length === 1)) as [Sent];
       expect(aps(winback)).toMatchObject({ alert: { title: name, body: "Two days in a row brings 1 back." }, "interruption-level": "passive" });

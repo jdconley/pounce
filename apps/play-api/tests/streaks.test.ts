@@ -9,15 +9,17 @@ import { afterEach, beforeAll, describe, expect, test } from "vitest";
 import { base64url, sha256Hex } from "../src/players/ids";
 import { card } from "../src/rules/cards";
 
+import { twoDaysOn } from "./streak-helpers";
+
 import type { ServerMessage } from "../src/protocol";
 import type { RoomState } from "../src/room/core";
 import type { CatTowerView } from "../src/rules/view";
+import type { Day } from "../src/streaks/clock";
 import type { PairState, StreakView } from "../src/streaks/pair-core";
 
 const SECRET = "s".repeat(64);
 const BASE = "https://play.conleychaos.com";
 const CLIENT_ID = "com.conleychaos.play";
-const DAY_MS = 24 * 60 * 60 * 1000;
 const encoder = new TextEncoder();
 
 type Snapshot = Extract<ServerMessage, { t: "snapshot" }>;
@@ -350,8 +352,10 @@ describe("streaks", { timeout: 30_000 }, () => {
 
   test("a missed day after a kept one settles into win-back", async () => {
     const mf = worker();
-    const { pairId } = await pairedUp(mf);
-    await mf.dispatchFetch(`${BASE}/__test/settle?pair=${pairId}&now=${Date.now() + 2 * DAY_MS}`);
+    const { jd, phone, pairId } = await pairedUp(mf);
+    const kept = (await streaks(mf, phone, jd))[0]?.week.find((d) => d.state === "kept")?.day;
+    expect(kept).toBeDefined();
+    await mf.dispatchFetch(`${BASE}/__test/settle?pair=${pairId}&now=${twoDaysOn(kept as Day)}`);
     const state = (await (await mf.dispatchFetch(`${BASE}/__test/pair?pair=${pairId}`)).json()) as PairState;
     expect(state.streak.count).toBe(1);
     expect(state.streak.winback).not.toBeNull();
