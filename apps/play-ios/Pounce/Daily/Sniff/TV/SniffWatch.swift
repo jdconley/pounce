@@ -2,7 +2,7 @@ import PounceKit
 import SwiftUI
 
 /// Sniff as a TV watches it (spec §8, `DailyWatchGames.swift`): a watch frame's public state, the
-/// guesses with their letters, read-only. The TV builds this file and `SniffArt.swift` only.
+/// guesses with their letters, read-only. The TV builds this folder only (`Sniff/TV/`).
 struct SniffWatch: DailyWatchView {
     nonisolated static let game = DailyCatalog.sniff
 
