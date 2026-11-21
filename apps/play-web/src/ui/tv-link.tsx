@@ -4,16 +4,19 @@
  */
 import { useEffect, useRef, useState } from "preact/hooks";
 
+import { linkBoard } from "../daily/board-tv";
+import { useDishOn } from "../daily/dish-home";
 import { art } from "../lib/art";
 import { buzz } from "../lib/haptics";
 import { navigate } from "../lib/router";
 import { play } from "../lib/sound";
 import { linkExpired, linkFailedWords, linkWords, mergeLinkable } from "../lib/tv-code";
 import { api, type TableEntry } from "../net/api";
-import { knownTables } from "../store/app";
+import { knownTables, useApp } from "../store/app";
 
 import { Button, Icon, IconButton, Sheet } from "./common";
 import { Posters, TableCard } from "./home";
+import { TvIcon } from "./show-on-tv";
 
 import type { TableIntent } from "./table-screen";
 import type { GameId } from "../lib/catalog";
@@ -35,6 +38,9 @@ export function TvLinkPage(props: {
   const [error, setError] = useState<string | null>(null);
   const [expired, setExpired] = useState(false);
   const [moving, setMoving] = useState<{ code: string; intent: TableIntent } | null>(null);
+  // With the Daily Dish on, the TV can show tonight's family board instead of a table.
+  const dishOn = useDishOn();
+  const person = useApp().people.owner?.id;
 
   useEffect(() => {
     let live = true;
@@ -129,6 +135,33 @@ export function TvLinkPage(props: {
         <p class="link-error tv-link-error" role="alert">
           {error}
         </p>
+      ) : null}
+
+      {dishOn && person ? (
+        <section class="home-section" aria-labelledby="tv-board-h">
+          <div class="tv-board-pick panel">
+            <TvIcon size={44} />
+            <h2 class="outlined section-h grow" id="tv-board-h">
+              Tonight's board
+            </h2>
+            <Button
+              variant="teal"
+              size="small"
+              id="tv-board"
+              aria-label="Show tonight's board"
+              disabled={busy}
+              onClick={() =>
+                void run(async () => {
+                  await linkBoard({ token: props.token }, person);
+                  props.say("On the TV");
+                  navigate({ kind: "dish" }, true);
+                })
+              }
+            >
+              Show
+            </Button>
+          </div>
+        </section>
       ) : null}
 
       {tables && tables.length > 0 ? (

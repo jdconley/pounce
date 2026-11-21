@@ -1,0 +1,761 @@
+/* The Daily Dish: Home's Today row, the Dish screen, the board, stats and the puzzle host. Each
+   game's colors come in as --c (bright) and --d (deep). Sizes are in rem, so the browser's text
+   size grows them; grids fold to fewer columns as text grows. */
+
+.dd-treat {
+  flex: none;
+  filter: drop-shadow(0 3px 0 var(--ink));
+}
+
+/* Home's Today. */
+.dd-today-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+
+.dd-today-top .section-h {
+  flex-wrap: wrap;
+  margin: 0;
+}
+
+.dd-done {
+  background: var(--teal);
+  -webkit-text-stroke: 0;
+  font-size: 0.85rem;
+}
+
+.dd-today-row {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 4.6rem), 1fr));
+  gap: 8px;
+}
+
+.dd-tile {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  min-width: 0;
+  padding: 10px 4px 8px;
+  border: 3px solid var(--ink);
+  border-radius: 20px;
+  background: linear-gradient(180deg, var(--c), var(--d));
+  box-shadow: 0 5px 0 var(--ink), inset 0 3px 0 rgba(255, 255, 255, 0.35);
+  color: var(--white);
+  text-align: center;
+  transition: transform 120ms var(--ease-out);
+}
+
+.dd-tile:active {
+  transform: translateY(4px);
+  box-shadow: 0 1px 0 var(--ink);
+}
+
+.dd-tile-title {
+  max-width: 100%;
+  font: 900 0.85rem / 1.1 var(--round);
+  overflow-wrap: anywhere;
+  -webkit-text-stroke: 0.14em var(--ink);
+  paint-order: stroke fill;
+}
+
+.dd-tile-sub {
+  max-width: 100%;
+  padding: 1px 8px;
+  border-radius: 999px;
+  background: rgba(27, 11, 58, 0.55);
+  font: 900 0.78rem / 1.25 var(--round);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.dd-tile.done .dd-tile-sub {
+  background: var(--white);
+  color: var(--ink);
+}
+
+.dd-tick {
+  display: inline-block;
+  flex: none;
+  width: 22px;
+  height: 22px;
+  border: 2.5px solid var(--ink);
+  border-radius: 50%;
+  background: var(--lime) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 20 20'%3E%3Cpath d='M5 10.5l3.2 3.2L15 6.8' fill='none' stroke='%231b0b3a' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") center / 80% no-repeat;
+}
+
+.dd-tile .dd-tick {
+  position: absolute;
+  top: -8px;
+  right: -6px;
+}
+
+/* Home with the Dish: the game posters fold into a compact row on phones. */
+@media (max-width: 759px) {
+  .poster-grid.compact {
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 8.5rem), 1fr));
+    gap: 10px;
+  }
+
+  .poster-grid.compact .poster {
+    grid-template-columns: 1fr;
+    align-items: stretch;
+  }
+
+  .poster-grid.compact .poster-art {
+    min-height: 0;
+    aspect-ratio: 16 / 9;
+    height: auto;
+    border-right: 0;
+    border-bottom: 3px solid var(--ink);
+  }
+
+  .poster-grid.compact .poster-body {
+    padding: 8px 10px 56px;
+  }
+
+  .poster-grid.compact .poster h3 {
+    font-size: 1.2rem;
+  }
+
+  .poster-grid.compact .poster p {
+    display: none;
+  }
+
+  .poster-grid.compact .players {
+    font-size: 0.75rem;
+    padding: 2px 8px;
+  }
+
+  .poster-grid.compact .dots {
+    display: none;
+  }
+
+  .poster-grid.compact .poster-play {
+    left: 10px;
+    right: 10px;
+    bottom: 10px;
+    min-height: 44px;
+  }
+}
+
+/* The Dish. */
+.dd-dish {
+  gap: 16px;
+  align-items: center;
+  background: radial-gradient(circle at 50% 0%, #6a2be0, var(--night) 70%);
+}
+
+.dd-dish > *,
+.dd-play > header {
+  width: 100%;
+  max-width: 1100px;
+}
+
+.dd-top {
+  display: grid;
+  grid-template-columns: 52px 1fr 52px;
+  align-items: center;
+  gap: 8px;
+}
+
+.dd-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 9.5rem), 1fr));
+  gap: 12px;
+}
+
+@media (min-width: 900px) {
+  .dd-cards {
+    grid-template-columns: repeat(auto-fill, minmax(min(100%, 14rem), 1fr));
+  }
+}
+
+.dd-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  padding: 14px 10px 12px;
+  border: 3px solid var(--ink);
+  border-radius: 26px;
+  background: linear-gradient(180deg, var(--c), var(--d));
+  box-shadow: 0 6px 0 var(--ink), inset 0 3px 0 rgba(255, 255, 255, 0.35);
+  text-align: center;
+}
+
+.dd-card-body {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+  max-width: 100%;
+}
+
+.dd-card h3 {
+  margin: 0;
+  font-size: clamp(1.15rem, 4.8vw, 1.5rem);
+  line-height: 1.1;
+  overflow-wrap: anywhere;
+}
+
+.dd-num {
+  font: 900 0.85rem var(--round);
+  opacity: 0.9;
+}
+
+.dd-best {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  max-width: 100%;
+  padding: 2px 8px 2px 2px;
+  border-radius: 999px;
+  background: rgba(27, 11, 58, 0.5);
+  font: 800 0.8rem var(--round);
+}
+
+.dd-best-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dd-best b {
+  flex: none;
+}
+
+.dd-card-play {
+  width: 100%;
+  margin-top: auto;
+}
+
+.dd-mine {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  width: 100%;
+  min-height: 48px;
+  margin-top: auto;
+  padding: 6px 12px;
+  border: 3px solid var(--ink);
+  border-radius: 999px;
+  background: var(--white);
+  color: var(--ink);
+  font: 900 1.05rem var(--round);
+}
+
+.dd-board-wrap {
+  padding: 14px 12px 12px;
+}
+
+.dd-board-top {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 10px;
+  margin-bottom: 10px;
+}
+
+.dd-board-top .section-h {
+  margin: 0;
+}
+
+.dd-tv-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.dd-tabs {
+  display: flex;
+  gap: 6px;
+  overflow-x: auto;
+  padding: 2px 2px 8px;
+  scrollbar-width: none;
+}
+
+.dd-tabs::-webkit-scrollbar {
+  display: none;
+}
+
+.dd-tab {
+  flex: none;
+  min-height: 40px;
+  padding: 4px 14px;
+  border: 3px solid var(--ink);
+  border-radius: 999px;
+  background: var(--panel-deep);
+  color: var(--white);
+  font: 900 0.95rem var(--round);
+}
+
+.dd-tab.on {
+  background: var(--c, var(--yellow));
+  color: var(--white);
+  -webkit-text-stroke: 0.14em var(--ink);
+  paint-order: stroke fill;
+}
+
+.dd-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.dd-rows {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.dd-row {
+  display: grid;
+  grid-template-columns: 2rem 40px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px;
+  min-height: 52px;
+  padding: 4px 12px 4px 6px;
+  border: 3px solid var(--ink);
+  border-radius: 18px;
+  background: rgba(27, 11, 58, 0.45);
+}
+
+.dd-row.dish {
+  grid-template-columns: 2rem 40px minmax(0, 1fr) auto auto;
+}
+
+.dd-row.mine {
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.2), rgba(255, 255, 255, 0.08));
+}
+
+.dd-rank {
+  display: grid;
+  place-items: center;
+  width: 2rem;
+  height: 2rem;
+  border: 2.5px solid var(--ink);
+  border-radius: 50%;
+  background: var(--panel);
+  font: 900 1rem var(--round);
+}
+
+.dd-rank.r1 {
+  background: var(--yellow);
+  color: var(--ink);
+}
+
+.dd-rank.r2 {
+  background: #e3e7ff;
+  color: var(--ink);
+}
+
+.dd-rank.r3 {
+  background: #ffb37a;
+  color: var(--ink);
+}
+
+.dd-rank.r0 {
+  border-style: dashed;
+  background: transparent;
+}
+
+.dd-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font: 900 1.05rem var(--round);
+}
+
+.dd-crowns {
+  display: inline-flex;
+  gap: 2px;
+}
+
+.dd-score {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font: 900 1.05rem var(--round);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.dd-hint-mark {
+  padding: 1px 7px;
+  border: 2px solid var(--ink);
+  border-radius: 999px;
+  background: var(--yellow);
+  color: var(--ink);
+  font: 900 0.7rem var(--round);
+}
+
+.dd-progress {
+  font-size: 0.9rem;
+  opacity: 0.95;
+}
+
+.dd-bar-track {
+  position: relative;
+  display: inline-block;
+  width: 3.2rem;
+  height: 10px;
+  overflow: hidden;
+  border: 2px solid var(--ink);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.2);
+}
+
+.dd-bar-track i {
+  position: absolute;
+  inset: 0;
+  background: var(--c, var(--teal));
+  transform-origin: left center;
+  transition: transform 400ms var(--ease-out);
+}
+
+.dd-empty {
+  margin: 8px 0;
+  text-align: center;
+  font: 800 1rem var(--round);
+  opacity: 0.85;
+}
+
+.dd-stats-link {
+  align-self: flex-end;
+  min-height: 40px;
+  padding: 4px 16px;
+  border: 3px solid var(--ink);
+  border-radius: 999px;
+  background: var(--panel-deep);
+  color: var(--white);
+  font: 900 0.95rem var(--round);
+}
+
+/* Stats. */
+.dd-stats {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.dd-figs {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 4.5rem), 1fr));
+  gap: 8px;
+}
+
+.dd-fig {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 8px 4px;
+  border: 3px solid var(--ink);
+  border-radius: 18px;
+  background: linear-gradient(180deg, var(--c), var(--d));
+  text-align: center;
+}
+
+.dd-fig strong {
+  font-size: 1.6rem;
+}
+
+.dd-fig span {
+  font: 800 0.8rem var(--round);
+}
+
+.dd-best-line {
+  margin: 0;
+  text-align: center;
+  font: 900 1.1rem var(--round);
+}
+
+.dd-guesses {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.dd-guesses li {
+  display: grid;
+  grid-template-columns: 1.2rem 1fr 2rem;
+  align-items: center;
+  gap: 8px;
+  font: 900 0.95rem var(--round);
+}
+
+.dd-guesses i {
+  height: 1.3rem;
+  border: 2.5px solid var(--ink);
+  border-radius: 8px;
+  background: var(--c);
+  transform-origin: left center;
+}
+
+.dd-chart {
+  display: grid;
+  grid-template-columns: repeat(30, 1fr);
+  align-items: end;
+  gap: 2px;
+  height: 90px;
+  padding: 6px;
+  border: 3px solid var(--ink);
+  border-radius: 14px;
+  background: rgba(27, 11, 58, 0.5);
+}
+
+.dd-chart i {
+  height: 100%;
+  border-radius: 3px;
+  background: rgba(255, 255, 255, 0.25);
+  transform-origin: bottom center;
+}
+
+.dd-chart i.won {
+  background: var(--c);
+}
+
+.dd-chart i.tried {
+  background: rgba(255, 255, 255, 0.6);
+}
+
+/* The puzzle host. */
+.dd-play {
+  gap: 8px;
+  align-items: center;
+  background: radial-gradient(circle at 50% 0%, var(--d), var(--night) 75%);
+}
+
+.dd-play-bar {
+  display: grid;
+  grid-template-columns: 52px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px;
+  flex: none;
+}
+
+.dd-play-title {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 4px 10px;
+  min-width: 0;
+}
+
+.dd-play-title h1 {
+  margin: 0;
+  font-size: clamp(1.2rem, 5vw, 1.7rem);
+  line-height: 1.1;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.dd-play-title .dd-num {
+  font-size: 0.75em;
+}
+
+.dd-clock {
+  min-width: 4.2rem;
+  padding: 2px 12px;
+  border: 3px solid var(--ink);
+  border-radius: 999px;
+  background: var(--ink);
+  font: 900 1.05rem var(--round);
+  font-variant-numeric: tabular-nums;
+  text-align: center;
+}
+
+.dd-play-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.dd-give-up {
+  min-height: 44px;
+  padding: 4px 14px 6px;
+  font-size: 0.95rem;
+}
+
+.dd-tv-switch {
+  display: grid;
+  place-items: center;
+  width: 48px;
+  height: 48px;
+  border: 3px solid var(--ink);
+  border-radius: 50%;
+  background: var(--panel-deep);
+  opacity: 0.75;
+}
+
+.dd-tv-switch.on {
+  background: var(--teal);
+  opacity: 1;
+  box-shadow: 0 0 0 4px var(--yellow);
+}
+
+.dd-late {
+  flex: none;
+  margin: 0;
+  padding: 4px 14px;
+  border: 3px solid var(--ink);
+  border-radius: 999px;
+  background: var(--orange);
+  font: 900 0.9rem var(--round);
+}
+
+.dd-stage {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  width: 100%;
+  min-height: 0;
+  transition: opacity 400ms var(--ease-out);
+}
+
+.dd-stage > * {
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+/* Under the end, the board fades as one layer. */
+.dd-stage.over {
+  opacity: 0.3;
+  pointer-events: none;
+}
+
+.dd-end-scrim {
+  position: absolute;
+  inset: 0;
+  z-index: 20;
+  display: grid;
+  place-items: center;
+  padding: calc(var(--safe-top) + 16px) calc(var(--safe-right) + 16px) calc(var(--safe-bottom) + 16px) calc(var(--safe-left) + 16px);
+  overflow-y: auto;
+  background: rgba(27, 11, 58, 0.45);
+  animation: dd-fade 360ms 700ms var(--ease-out) both;
+}
+
+.dd-end {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  width: min(100%, 26rem);
+  padding: 20px 16px 18px;
+  border: 3px solid var(--ink);
+  border-radius: 32px;
+  background: linear-gradient(180deg, var(--c), var(--d));
+  box-shadow: 0 8px 0 var(--ink), inset 0 4px 0 rgba(255, 255, 255, 0.35);
+  text-align: center;
+  animation: dd-pop 520ms 760ms var(--ease-spring) both;
+}
+
+.dd-end h2 {
+  margin: 0;
+  font-size: clamp(1.8rem, 8vw, 2.4rem);
+}
+
+.dd-end-result {
+  margin: 0;
+  font-size: clamp(2.2rem, 11vw, 3.2rem);
+  line-height: 1.05;
+  font-variant-numeric: tabular-nums;
+}
+
+.dd-end-place {
+  margin: 0 0 8px;
+  font: 900 1.05rem var(--round);
+}
+
+.dd-end-actions {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 9rem), 1fr));
+  gap: 10px;
+  width: 100%;
+}
+
+.dd-end-actions .btn:last-child:nth-child(odd) {
+  grid-column: 1 / -1;
+}
+
+.dd-end-actions .btn {
+  min-width: 0;
+  padding-left: 10px;
+  padding-right: 10px;
+  font-size: 1.1rem;
+}
+
+@keyframes dd-fade {
+  from {
+    opacity: 0;
+  }
+}
+
+@keyframes dd-pop {
+  from {
+    opacity: 0;
+    transform: scale(0.7) translateY(30px);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .dd-end-scrim,
+  .dd-end {
+    animation-duration: 1ms;
+  }
+}
+
+/* The server's test game. */
+.dd-test {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 24px;
+}
+
+.dd-test-count {
+  font: 900 4rem var(--round);
+  -webkit-text-stroke: 0.14em var(--ink);
+  paint-order: stroke fill;
+}
+
+.dd-test-keys {
+  display: flex;
+  gap: 12px;
+}
+
+/* The TV-link page: tonight's board, above the tables. */
+.tv-board-pick {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px 12px;
+  padding: 12px 14px;
+}
+
+.tv-board-pick .grow {
+  flex: 1;
+  min-width: 8rem;
+  margin: 0;
+}

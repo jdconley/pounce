@@ -1,6 +1,8 @@
 /** The web player's few routes, all under /play/. */
 import { ROOM_CODE as CODE } from "@pounce/play-api/room/codes";
 
+import type { DailyGameId } from "@pounce/play-api/daily/module";
+
 export type Route =
   | { kind: "home" }
   | { kind: "table"; code: string }
@@ -10,7 +12,13 @@ export type Route =
   /** The TV page: it shows a link, then a table. */
   | { kind: "tv" }
   /** A phone that scanned a TV's QR, choosing which table to put on it. */
-  | { kind: "tvLink"; token: string };
+  | { kind: "tvLink"; token: string }
+  /** The Daily Dish: today's puzzles, the board, stats. */
+  | { kind: "dish" }
+  /** One of today's daily puzzles, being played. */
+  | { kind: "daily"; game: DailyGameId };
+
+const DAILY_GAME_IDS: readonly DailyGameId[] = ["sniff", "nine-lives", "cat-nap", "box-fort", "test"];
 
 const TOKEN = /^[A-Za-z0-9_-]{22}$/;
 
@@ -24,6 +32,7 @@ export function parseRoute(pathname: string): Route {
   if (head === "join") return { kind: "keypad" };
   if (head === "tv" && parts.length === 1) return { kind: "tv" };
   if (head === "tv-link" && arg && TOKEN.test(arg)) return { kind: "tvLink", token: arg };
+  if (head === "daily") return arg && (DAILY_GAME_IDS as readonly string[]).includes(arg) ? { kind: "daily", game: arg as DailyGameId } : { kind: "dish" };
   return { kind: "home" };
 }
 
@@ -41,6 +50,10 @@ export function pathFor(route: Route): string {
       return "/play/tv";
     case "tvLink":
       return `/play/tv-link/${route.token}`;
+    case "dish":
+      return "/play/daily";
+    case "daily":
+      return `/play/daily/${route.game}`;
     default:
       return "/play/";
   }
