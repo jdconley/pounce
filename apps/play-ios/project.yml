@@ -169,6 +169,9 @@ targets:
           - TilesStage.swift
           - TilesChrome.swift
           - TilesDemo.swift
+      # The daily games' watch contract (the TV's half; T1 adds each game's watch view).
+      - path: Pounce/Daily/DailyWatchView.swift
+      - path: Pounce/Daily/DailyWatchGames.swift
       - path: Pounce/App/FrameWork.swift
       - path: Pounce/App/MainThreadWatchdog.swift
       - path: Pounce/App/Autoplay.swift

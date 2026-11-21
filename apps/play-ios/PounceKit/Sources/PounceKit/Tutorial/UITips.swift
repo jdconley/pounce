@@ -7,6 +7,8 @@ public enum TipScreen: String, CaseIterable, Codable, Sendable {
     /// Cat Tower's table (so far only while a TV shows it: the Cards/Table switch). The tile game's
     /// table is `tiles`.
     case table
+    /// The Daily Dish screen (daily games design §7).
+    case dish
 }
 
 /// What makes a tip worth showing, beyond its control being on screen.
@@ -114,6 +116,8 @@ public enum UITip: String, CaseIterable, Codable, Sendable {
     // A table a TV shows: the Cards/Table switch, on Cat Tower's table and on the tile game's
     case tableView = "ui.table.view"
     case tilesView = "ui.tiles.view"
+    // The Daily Dish: its first visit
+    case dishFirst = "ui.dish.first"
 
     public var rule: UITipRule {
         switch self {
@@ -155,6 +159,8 @@ public enum UITip: String, CaseIterable, Codable, Sendable {
         // game's table hosts its own, and once one is seen the other never shows.
         case .tableView: r(.table, "table.view", 100, .unseen(.tilesView))
         case .tilesView: r(.tiles, "table.view", 101, .unseen(.tableView))
+        // The first visit to the Dish: what it is. Playing any puzzle learns it.
+        case .dishFirst: r(.dish, "dish.cards", 100, learnedBy: ["dish.play"])
         }
     }
 

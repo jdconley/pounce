@@ -8,7 +8,8 @@ import SwiftUI
 ///   (your streak, your connections, the gift, Save, Invite), the bell when push is on offer again
 ///   (spec §10), and the gear (sound, haptics, how to play). One row, no wordmark.
 /// - The middle scrolls: Home's notices (a newer version, a table behind one, why a game didn't
-///   start), then what leads (`HomeLead`). With a game going your tables lead and the games sit
+///   start), then the Daily Dish (`DishBand`: today's puzzles, done or not, while the server has
+///   the Dish on), then what leads (`HomeLead`). With a game going your tables lead and the games sit
 ///   under them as compact tickets; with no table, or only finished ones, the games lead as
 ///   posters. An iPad lays the games out as a grid, beside your tables when it is on its side.
 /// - The dock: Invite and Join. Its own band: nothing scrolls under it. With no table yet,
@@ -20,8 +21,8 @@ import SwiftUI
 ///
 /// Home hosts UI tips (`Tips.swift`, `.tipHost(.home)`); the anchors are `home.play` (Cat Tower's
 /// play mark), `home.practice`, `home.join`, `home.tables`, `home.idleTable`, `home.hero`,
-/// `home.people`, `home.update`, the dock's `home.add` (Invite), and the strip's `home.own` and
-/// `home.gift`.
+/// `home.people`, `home.update`, the dock's `home.add` (Invite), the strip's `home.own` and
+/// `home.gift`, and the Dish's `home.dish`.
 struct HomeView: View {
     @Environment(AppModel.self) private var model
     @Environment(Settings.self) private var settings
@@ -133,8 +134,14 @@ struct HomeView: View {
         .animation(.easeOut(duration: 0.25).paced, value: showPriming)
         .animation(.spring(duration: 0.4, bounce: 0.4).paced, value: showBell)
         .animation(.easeOut(duration: 0.2).paced, value: scrolled)
+        .animation(.spring(duration: 0.4, bounce: 0.3).paced, value: showDish)
         .task { await model.refreshTables() }
         .task { await model.refreshStreaks() }
+        .task { await model.refreshDaily() }
+        // The live board while the Dish is on: results and progress land as they happen.
+        .task(id: model.daily.enabled == true) {
+            if model.daily.enabled == true { await model.daily.listen() }
+        }
         // Save on the top pair's streak, or once a pair formed: one sign-in card (§10.5, launch review).
         .overlay {
             if streakSignIn {
@@ -165,6 +172,7 @@ struct HomeView: View {
         .onChange(of: scenePhase) { _, phase in
             if phase == .active {
                 Task { await model.refreshTables() }
+                Task { await model.refreshDaily() }
                 Task { await checkPush() }
             }
         }
@@ -199,6 +207,11 @@ struct HomeView: View {
                 .accessibilityHidden(true)
         }
         .ignoresSafeArea()
+    }
+
+    /// The Daily Dish has a place on Home: the server has it on and lists a game this app plays.
+    private var showDish: Bool {
+        model.daily.enabled == true && !DailyHost.shown(model.daily.board).isEmpty
     }
 
     /// The first table that has waited a day or more.
@@ -691,6 +704,11 @@ struct HomeView: View {
                 // A newer version, or a table waiting behind one (app updates design §4.1, §4.2).
                 HomeUpdates()
                 if model.pendingTV != nil { tvCue.transition(.scale.combined(with: .opacity)) }
+                if showDish {
+                    DishBand()
+                        .padding(.horizontal, 16)
+                        .transition(.scale(scale: 0.9).combined(with: .opacity))
+                }
                 if lead == .tables { tablesSection }
                 if lead != nil { shelfColumn(leads: lead == .shelf) }
                 if lead == .shelf { tablesSection }
@@ -714,6 +732,12 @@ struct HomeView: View {
             VStack(spacing: 24) {
                 HomeUpdates(roomy: true)
                 if model.pendingTV != nil { tvCue.transition(.scale.combined(with: .opacity)) }
+                if showDish {
+                    DishBand(roomy: true)
+                        .frame(maxWidth: Roomy.sideBySide(size) && hasTables ? .infinity : min(size.width - 80, 900))
+                        .padding(.horizontal, Roomy.sideBySide(size) && hasTables ? 48 : 0)
+                        .transition(.scale(scale: 0.9).combined(with: .opacity))
+                }
                 Group {
                     if lead == nil {
                         EmptyView()

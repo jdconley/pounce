@@ -101,6 +101,8 @@ final class MainThreadWatchdog {
     /// The table on screen (its `SKView`), and when it appeared.
     private weak var tableView: SKView?
     private var tableSince: CFTimeInterval?
+    /// A SwiftUI play screen with no table (the Daily Dish, a daily puzzle): when it came up.
+    private var screenSince: CFTimeInterval?
 
     private let probe = Probe(id: "watchdog") { MainThreadWatchdog.shared?.summary() }
     private let framesProbe = Probe(id: "watchdog.frames") { MainThreadWatchdog.shared?.recentFrames() }
@@ -233,8 +235,15 @@ final class MainThreadWatchdog {
         lastTableFrame = nil
     }
 
-    /// Gameplay: a table is on screen and has been for `settleSeconds`.
+    /// A SwiftUI play screen with no table came up or went (`.frameGate()`): its frames and
+    /// hangs count as gameplay, as a table's do.
+    func screen(_ on: Bool) {
+        screenSince = on ? CACurrentMediaTime() : nil
+    }
+
+    /// Gameplay: a table, or a SwiftUI play screen, is on screen and has been for `settleSeconds`.
     private var inGameplay: Bool {
+        if let since = screenSince, CACurrentMediaTime() - since >= Self.settleSeconds { return true }
         guard tableView?.window != nil, let since = tableSince else { return false }
         return CACurrentMediaTime() - since >= Self.settleSeconds
     }

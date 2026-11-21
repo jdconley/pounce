@@ -71,6 +71,8 @@ final class AppModel {
     let streaks: StreakStore
     /// The owner's trophy room (trophy room design §3).
     let trophies: TrophyStore
+    /// The Daily Dish (daily games design §6, §7): the board, stats, and whether the server has it on.
+    let daily: DailyStore
     /// The invite sheet is up (trophy room design §4), over Home or the trophy room.
     var inviteShown = false
     /// The last invite link, shown again for an hour (`InviteLink`).
@@ -195,6 +197,7 @@ final class AppModel {
         let trophyService: any TrophyService = api
         #endif
         trophies = TrophyStore(service: trophyService)
+        daily = Self.makeDaily(api: api, config: config)
         pounces = PounceStore(service: pounceService, file: data.pounces.file, loaded: data.pounces.value)
         #if DEBUG
         let kittenService: any KittenService = Self.debugKittens(arguments: CommandLine.arguments) ?? api
@@ -206,6 +209,7 @@ final class AppModel {
         notify = NotifySettingsStore(file: data.notify.file, loaded: data.notify.value)
         streaks.person = loaded.owner?.id
         trophies.person = loaded.owner?.id
+        daily.person = loaded.owner?.id
         #if DEBUG
         // Demos and UI tests write demo data for the widgets, which then never fetch (no server).
         let args = CommandLine.arguments
@@ -275,6 +279,7 @@ final class AppModel {
             model.people = model.peopleStore.load()
             model.streaks.person = model.people.owner?.id
             model.trophies.person = model.people.owner?.id
+            model.daily.person = model.people.owner?.id
             // Screens for screenshots: no push priming over them.
             model.settings.pushPrimed = true
             if model.ageRecord != nil { model.route = .home }
@@ -289,6 +294,8 @@ final class AppModel {
         if arguments.contains("-show-us"), model.people.owner != nil, model.ageRecord != nil { model.route = .us }
         // `-show-trophies` / `-show-invite`: the trophy room, or the invite sheet over Home (UI tests, screenshots).
         if arguments.contains("-show-trophies"), model.people.owner != nil, model.ageRecord != nil { model.route = .trophies }
+        // `-show-dish`: the Daily Dish screen at launch (screenshots, UI tests).
+        if arguments.contains("-show-dish"), model.people.owner != nil, model.ageRecord != nil { model.route = .dish }
         if arguments.contains("-show-invite"), model.people.owner != nil, model.ageRecord != nil { model.inviteShown = true }
         // `-show-merge`: the two-cats question over the gear sheet (screenshots).
         if arguments.contains("-show-merge") {
@@ -511,6 +518,8 @@ final class AppModel {
         if ageRecord != nil { await accountsAfterAge() }
         if people.owner != nil { await refreshTables() }
         await refreshStreaks()
+        // After the profile upload: a new person has a player on the server only from then.
+        await refreshDaily()
         await refreshKitten()
         await kittens.drainRevokes()
         await pounces.retryPending()
@@ -666,6 +675,43 @@ final class AppModel {
     func refreshTrophies() async {
         trophies.person = people.owner?.id
         await trophies.refresh()
+    }
+
+    // MARK: The Daily Dish (daily games design §7)
+
+    private static func makeDaily(api: APIClient, config: APIConfig) -> DailyStore {
+        #if DEBUG
+            if let demo = DailyDemo.service(arguments: CommandLine.arguments) { return DailyStore(service: demo) }
+        #endif
+        let headers = config.headers
+        return DailyStore(service: api) { person in
+            DailyBoardSocket(
+                config: config, person: person, connector: URLSessionWebSocketConnector(headers: headers),
+                credential: { try await api.credential() })
+        }
+    }
+
+    /// The Dish screen opens on this game's board and stats (from a puzzle's end screen).
+    var dishFocus: String?
+
+    /// The Dish screen: the four puzzles, the board and stats.
+    func showDish(focus: String? = nil) {
+        dishFocus = focus
+        guard people.owner != nil, daily.enabled == true else { return }
+        closeRoom()
+        route = .dish
+    }
+
+    /// One daily puzzle: a new run, the one going, or its end screen.
+    func playDaily(_ game: String) {
+        guard people.owner != nil, daily.enabled == true, DailyHost.playable(game) != nil else { return }
+        closeRoom()
+        route = .daily(game: game)
+    }
+
+    func refreshDaily() async {
+        daily.person = people.owner?.id
+        await daily.refresh()
     }
 
     /// The plus: the invite sheet.
@@ -1023,6 +1069,7 @@ final class AppModel {
                 await account.sync()
                 await uploadGuestNotify()
                 await refreshStreaks()
+                await refreshDaily()
                 await refreshKitten()
                 await kittens.drainRevokes()
                 await pounces.retryPending()

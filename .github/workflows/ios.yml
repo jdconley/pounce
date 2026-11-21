@@ -194,6 +194,9 @@ jobs:
             -only-testing:PounceUITests/HitTests \
             -only-testing:PounceUITests/TilesTests/testDragPathPlacesAPieceAndDragsItBack \
             -only-testing:PounceUITests/TilesTests/testSeveralPiecesMakeANewSetAndABrokenSetBlocksPlay \
+            -only-testing:PounceUITests/DailyFrameTests/testTheDishBoardHoldsTheFrameRate \
+            -only-testing:PounceUITests/DailyTests/testTheDishScreen \
+            -only-testing:PounceUITests/DailyTests/testTheDishHidesWhenOff \
             2>&1 | tee build/ui-gates.log | grep -E '^(FRAMES|Test Case|\s+Executed)|error:'
       - name: Frame summary
         if: always()
