@@ -35,7 +35,7 @@ final class CatNapShotTests: XCTestCase {
             for big in pad ? [false] : [false, true] {
                 let prefix = big ? "big-text-" : ""
                 let app = XCUIApplication()
-                app.launchArguments = Live.arguments(speed: 4) + ["-uitest-reset", "-seed-people"] + (big ? Self.big : [])
+                app.launchArguments = Live.arguments(speed: 4) + ["-uitest-reset", "-seed-people", "-settings.soundOn", "<false/>"] + (big ? Self.big : [])
                 app.launchEnvironment["POUNCE_API_BASE_URL"] = Live.baseURL
                 app.launch()
                 let treat = el(app, "home.dish.cat-nap")

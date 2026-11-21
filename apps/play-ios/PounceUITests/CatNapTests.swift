@@ -13,7 +13,7 @@ final class CatNapTests: XCTestCase {
 
     private func launch() -> XCUIApplication {
         let app = Live.app()
-        app.launchArguments += ["-seed-people"]
+        app.launchArguments += ["-seed-people", "-settings.soundOn", "<false/>"]
         app.launch()
         return app
     }

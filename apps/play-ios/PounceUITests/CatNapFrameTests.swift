@@ -16,7 +16,7 @@ final class CatNapFrameTests: XCTestCase {
 
     func testCatNapHoldsTheFrameRateWhileMarking() throws {
         let app = XCUIApplication()
-        app.launchArguments = Live.arguments(speed: 1) + ["-uitest-reset", "-seed-people", "-autoplay"]
+        app.launchArguments = Live.arguments(speed: 1) + ["-uitest-reset", "-seed-people", "-autoplay", "-settings.soundOn", "<false/>"]
         app.launchEnvironment["POUNCE_API_BASE_URL"] = Live.baseURL
         app.launch()
         let treat = el(app, "home.dish.cat-nap")
