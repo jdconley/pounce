@@ -5,6 +5,8 @@ import XCTest
 /// run 4-5-6-7 is his group 2, and my hand is 2, 3, a Yarn and an 8; the fake server takes
 /// each hit like the real one. The DEBUG `table.hit` probe reads
 /// `<laid-group aim changes>|<last hit sent as seat.group.side>` (side `-` when none is sent).
+/// A failed drag also prints `table.touches` (`<began>|<moved>|<ended>|<cancelled>|<fingers down>|<drag open>`):
+/// a drag whose end never reached the app reads `1|n|0|0|1|1`.
 class HitTests: XCTestCase {
     private let run = "table.group.1.1"
 
@@ -19,17 +21,17 @@ class HitTests: XCTestCase {
         XCTAssertTrue(label(el(app, run))?.hasSuffix(": 4, gray; 5, gray; 6, tabby; 7, calico") == true, "\(label(el(app, run)) ?? "-")")
 
         drag(app, card: "Yarn, wild", toward: .start, of: run)
-        XCTAssertTrue(until(3) { self.value(probe)?.hasSuffix("|1.1.start") == true }, value(probe) ?? "-")
+        XCTAssertTrue(until(3) { self.value(probe)?.hasSuffix("|1.1.start") == true }, report(app, probe))
         XCTAssertTrue(until(3) { self.label(el(app, self.run))?.hasSuffix(": Yarn, wild; 4, gray; 5, gray; 6, tabby; 7, calico") == true },
-                      label(el(app, run)) ?? "-")
+                      "\(label(el(app, run)) ?? "-") \(report(app, probe))")
         XCTAssertGreaterThanOrEqual(aims(probe), 1, "the target never lit on the way")
         screenshot(app, "hit-yarn-start")
 
         // The 8 fits only above the run: dropped on its start half it still goes on the end.
         XCTAssertTrue(until(3) { self.handIndex(app, "8, gray") != nil })
         drag(app, card: "8, gray", toward: .start, of: run)
-        XCTAssertTrue(until(3) { self.label(el(app, self.run))?.hasSuffix("7, calico; 8, gray") == true }, label(el(app, run)) ?? "-")
-        XCTAssertTrue(value(probe)?.hasSuffix("|1.1.-") == true, value(probe) ?? "-")
+        XCTAssertTrue(until(3) { self.label(el(app, self.run))?.hasSuffix("7, calico; 8, gray") == true }, "\(label(el(app, run)) ?? "-") \(report(app, probe))")
+        XCTAssertTrue(value(probe)?.hasSuffix("|1.1.-") == true, report(app, probe))
     }
 
     /// At the end a Yarn extends the run upward, and a card dropped on a group that can't
@@ -39,7 +41,7 @@ class HitTests: XCTestCase {
         let (app, probe) = launch()
 
         drag(app, card: "Yarn, wild", toward: .end, of: run)
-        XCTAssertTrue(until(3) { self.label(el(app, self.run))?.hasSuffix("7, calico; Yarn, wild") == true }, label(el(app, run)) ?? "-")
+        XCTAssertTrue(until(3) { self.label(el(app, self.run))?.hasSuffix("7, calico; Yarn, wild") == true }, "\(label(el(app, run)) ?? "-") \(report(app, probe))")
         // The server's default end: no side on the wire, so an older server reads it the same.
         XCTAssertTrue(value(probe)?.hasSuffix("|1.1.-") == true, value(probe) ?? "-")
 
@@ -56,6 +58,7 @@ class HitTests: XCTestCase {
 
     @MainActor private func launch() -> (XCUIApplication, XCUIElement) {
         let app = Live.demo("hit")
+        app.launchArguments += ["-settings.soundOn", "<false/>"]
         app.launch()
         let probe = el(app, "table.hit")
         XCTAssertTrue(probe.waitForExistence(timeout: 10))
@@ -66,6 +69,11 @@ class HitTests: XCTestCase {
         }
         XCTAssertTrue(el(app, run).waitForExistence(timeout: 5))
         return (app, probe)
+    }
+
+    /// The hit probe and the touches the table was handed, for a failure message.
+    @MainActor private func report(_ app: XCUIApplication, _ probe: XCUIElement) -> String {
+        "hit \(value(probe) ?? "-"), touches \(value(el(app, "table.touches")) ?? "-")"
     }
 
     @MainActor private func aims(_ probe: XCUIElement) -> Int {
