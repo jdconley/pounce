@@ -85,7 +85,7 @@ export function boardStep(s: BoardScreen, m: BoardMessage, now: number): BoardSc
 }
 
 /** Watch, on the card: the offered run, from its latest frame. */
-export function watch(s: BoardScreen, _now: number): BoardScreen {
+export function watch(s: BoardScreen): BoardScreen {
   if (!s.offer) return s;
   const { player, name, cat, game } = s.offer;
   return { ...s, offer: null, ended: null, watching: { player, name, cat, game } };

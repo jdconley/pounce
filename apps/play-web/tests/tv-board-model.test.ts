@@ -81,14 +81,14 @@ describe("watching", () => {
   });
 
   test("Watch shows the offered run, drawn from the latest frame", () => {
-    const s = watch(run([msg("watchOffer"), msg("watch")]), 2000);
+    const s = watch(run([msg("watchOffer"), msg("watch")]));
     expect(s.offer).toBeNull();
     expect(s.watching).toEqual({ player: KID, name: "Kid", cat: 5, game: "test" });
     expect(boardStep(s, { t: "watch", player: KID, game: "test", state: { n: 3 } }, 2500).frames[KID]?.state).toEqual({ n: 3 });
   });
 
   test("the watched run's end shows its result for 6 seconds, then the board", () => {
-    const s = run([msg("watchEnd")], 3000, watch(run([msg("watchOffer"), msg("watch")]), 2000));
+    const s = run([msg("watchEnd")], 3000, watch(run([msg("watchOffer"), msg("watch")])));
     expect(s.ended).toEqual({ result: msg("watchEnd").result, name: "Kid", until: 9000 });
     expect(s.frames[KID]).toBeUndefined();
     const after = tick(s, 9001);
@@ -97,7 +97,7 @@ describe("watching", () => {
   });
 
   test("Show on TV turned off goes back to the board at once", () => {
-    const s = boardStep(watch(run([msg("watchOffer")]), 2000), { t: "watchEnd", player: KID, game: "test", result: null }, 3000);
+    const s = boardStep(watch(run([msg("watchOffer")])), { t: "watchEnd", player: KID, game: "test", result: null }, 3000);
     expect(s.watching).toBeNull();
     expect(s.ended).toBeNull();
   });
@@ -109,12 +109,12 @@ describe("watching", () => {
   });
 
   test("Back from watching is the board", () => {
-    expect(stopWatching(watch(run([msg("watchOffer")]), 2000)).watching).toBeNull();
+    expect(stopWatching(watch(run([msg("watchOffer")]))).watching).toBeNull();
   });
 
   test("the card's words", () => {
-    expect(offerWords({ player: KID, name: "Mom", cat: 3, game: "sniff", until: 0 })).toBe("Mom is playing Sniff. Spoilers.");
-    expect(offerWords({ player: KID, name: "Kid", cat: 3, game: "test", until: 0 })).toBe("Kid is playing Test. Spoilers.");
+    expect(offerWords({ name: "Mom", game: "sniff" })).toBe("Mom is playing Sniff. Spoilers.");
+    expect(offerWords({ name: "Kid", game: "test" })).toBe("Kid is playing Test. Spoilers.");
   });
 });
 

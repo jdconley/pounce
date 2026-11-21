@@ -67,7 +67,7 @@ export class TvBoardStore {
   }
 
   watch(): void {
-    this.screen(watch(this.state.screen, this.now()));
+    this.screen(watch(this.state.screen));
   }
 
   notNow(): void {
