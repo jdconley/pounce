@@ -22,6 +22,12 @@ export default defineConfig({
         "src/pounce/pounces.ts",
         "src/links/links.ts",
         "src/screens/screen-links.ts",
+        // The Daily Dish's Durable Objects and routes: Miniflare-only glue, covered by
+        // tests/daily*.test.ts. Their logic lives in the pure cores beside them.
+        "src/daily/puzzle-do.ts",
+        "src/daily/run-do.ts",
+        "src/daily/board-tokens.ts",
+        "src/daily/routes.ts",
         "src/kittens/**",
         "src/safety/safety.ts",
         "src/safety/limiter.ts",
@@ -81,6 +87,12 @@ export default defineConfig({
           lines: 100,
         },
         "src/funnel/**": {
+          statements: 100,
+          branches: 100,
+          functions: 100,
+          lines: 100,
+        },
+        "src/daily/**": {
           statements: 100,
           branches: 100,
           functions: 100,
