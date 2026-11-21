@@ -64,7 +64,7 @@ enum DailyFixtures {
             case ("result", .result(let player, let r)): #expect(player.hasPrefix("pr_") && r.outcome == .solved)
             case ("progress", .progress(_, "test", 0.5)): break
             case ("watchOffer", .watchOffer(_, "Kid", 5, "test")): break
-            case ("watch", .watch(_, "test", let state)): #expect(state["n"] == .int(2))
+            case ("watch", .watch(_, "test", let puzzle, let state)): #expect(state["n"] == .int(2) && puzzle["target"] == .int(4))
             case ("watchEnd", .watchEnd(_, _, let r)): #expect(r != nil)
             case ("watchEndOff", .watchEnd(_, _, nil)): break
             case ("pong", .pong): break
@@ -88,6 +88,9 @@ enum DailyFixtures {
         let ours = try JSONDecoder().decode(DailyJSON.self, from: JSONEncoder().encode(body))
         let theirs = try DailyFixtures.decode(DailyJSON.self, "client", "moves")
         #expect(ours == theirs)
+        // The hint's body: the hints used so far, as the session sends it.
+        let hint = try JSONDecoder().decode(DailyJSON.self, from: JSONEncoder().encode(["hints": 0]))
+        #expect(hint == (try DailyFixtures.decode(DailyJSON.self, "client", "hint")))
     }
 
     @Test func aResultForAnotherDateLeavesTheBoard() throws {

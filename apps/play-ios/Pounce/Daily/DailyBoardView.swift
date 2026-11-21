@@ -93,16 +93,22 @@ struct DailyBoardRows: View {
 
     private func dishRow(_ row: DailyDishRow) -> some View {
         line(rank: row.rank, cat: row.cat, name: row.name, me: row.isMe, id: "dish.row.\(row.player)") {
-            HStack(spacing: 4) {
-                ForEach(row.crowns, id: \.self) { game in
-                    if let info = DailyCatalog.info(game) {
-                        Image(systemName: "crown.fill")
-                            .font(.system(size: roomy ? 16 : 13, weight: .black))
-                            .foregroundStyle(DailyArt.tint(info))
-                            .shadow(color: Palette.ink, radius: 0, x: 1, y: 1)
-                            .accessibilityLabel(Text("Won \(info.title)", comment: "VoiceOver: a crown for a daily game won"))
+            // One crown, and how many games were won when more than one: the name keeps its room.
+            if !row.crowns.isEmpty {
+                HStack(spacing: 2) {
+                    Image(systemName: "crown.fill")
+                        .font(.system(size: roomy ? 16 : 13, weight: .black))
+                        .foregroundStyle(Palette.yellow)
+                        .shadow(color: Palette.ink, radius: 0, x: 1, y: 1)
+                    if row.crowns.count > 1 {
+                        Text(verbatim: "\(row.crowns.count)")
+                            .font(.system(size: roomy ? 15 : 12, weight: .black, design: .rounded))
+                            .foregroundStyle(Palette.yellow)
                     }
                 }
+                .fixedSize()
+                .accessibilityElement(children: .ignore)
+                .accessibilityLabel(Text("Won \(row.crowns.count)", comment: "VoiceOver: how many daily games someone won today"))
             }
             score(String(row.points), unit: String(localized: "pts", comment: "Daily Dish board: points, short"))
         }

@@ -14,7 +14,7 @@ private struct Count: Codable, Sendable, Equatable { let n: Int }
 /// A daily server in memory: it records each call and answers from a script.
 actor FakeDaily: DailyService {
     enum Call: Equatable {
-        case start, moves(from: Int, count: Int), hint, giveUp, tv(Bool), board, stats, link, unlink
+        case start, moves(from: Int, count: Int), hint(Int), giveUp, tv(Bool), board, stats, link, unlink
     }
 
     var calls: [Call] = []
@@ -50,8 +50,8 @@ actor FakeDaily: DailyService {
         return .accepted(seq: seq, reveals: [], progress: Double(seq) / 4, result: nil)
     }
 
-    func hint(run: String, person: String?) async throws -> DailyMovesAnswer {
-        calls.append(.hint)
+    func hint(run: String, hints: Int, person: String?) async throws -> DailyMovesAnswer {
+        calls.append(.hint(hints))
         return .accepted(seq: seq, reveals: [hintReveal], progress: 0.75, result: nil)
     }
 
@@ -75,7 +75,7 @@ actor FakeDaily: DailyService {
 }
 
 @Suite struct DailyRunSessionTests {
-    private func session(_ fake: FakeDaily, window: Duration = .milliseconds(80)) async -> DailyRunSession {
+    private func session(_ fake: FakeDaily, window: Duration = .seconds(30)) async -> DailyRunSession {
         DailyRunSession(start: await fake.startAnswer, service: fake, person: "p1", window: window, retry: .milliseconds(10))
     }
 
@@ -184,8 +184,10 @@ actor FakeDaily: DailyService {
         await s.send(move: Step(n: 1))
         let reveal = await s.hint(as: Count.self)
         #expect(reveal == Count(n: 3))
-        #expect(await fake.calls == [.moves(from: 0, count: 1), .hint])
+        #expect(await fake.calls == [.moves(from: 0, count: 1), .hint(0)])
         #expect(await s.hints == 1)
+        _ = await s.hint(as: Count.self)
+        #expect(await fake.calls.last == .hint(1))
     }
 
     @Test func givingUpFlushesThenEnds() async {

@@ -10,7 +10,8 @@ import Foundation
 public protocol DailyService: Sendable {
     func start(game: String, person: String?) async throws -> DailyStart
     func moves(run: String, body: DailyMovesBody, person: String?) async throws -> DailyMovesAnswer
-    func hint(run: String, person: String?) async throws -> DailyMovesAnswer
+    /// `hints`: the hints used so far, so a resent hint costs nothing more.
+    func hint(run: String, hints: Int, person: String?) async throws -> DailyMovesAnswer
     func giveUp(run: String, person: String?) async throws -> DailyMovesAnswer
     func showOnTV(run: String, on: Bool, person: String?) async throws
     func board(date: String?, person: String?) async throws -> DailyBoard
@@ -40,8 +41,8 @@ extension APIClient: DailyService {
         return try decode(DailyMovesAnswer.self, from: data, status: 200)
     }
 
-    public func hint(run: String, person: String?) async throws -> DailyMovesAnswer {
-        let data = try await authenticated("POST", "/v1/daily/runs/\(Self.path(run))/hint", body: nil, query: Self.who(person))
+    public func hint(run: String, hints: Int, person: String?) async throws -> DailyMovesAnswer {
+        let data = try await authenticated("POST", "/v1/daily/runs/\(Self.path(run))/hint", body: ["hints": hints], query: Self.who(person))
         return try decode(DailyMovesAnswer.self, from: data, status: 200)
     }
 
@@ -449,7 +450,8 @@ public actor DailyRunSession {
 
     // MARK: hints, giving up, the TV
 
-    /// A hint from the server: waiting moves go first, then the hint. Returns what it filled,
+    /// A hint from the server: waiting moves go first, then the hint, carrying the count used so
+    /// far (a resend after a dropped connection gets the same hint, once). Returns what it filled,
     /// decoded as the game's reveal, or nil when the game has none or the run has ended.
     public func hint<Reveal: Decodable & Sendable>(as reveal: Reveal.Type) async -> Reveal? {
         guard let json = await hint() else { return nil }
@@ -459,7 +461,8 @@ public actor DailyRunSession {
     /// The same, raw.
     public func hint() async -> DailyJSON? {
         await flush()
-        guard result == nil, let answer = await call({ service, run, person in try await service.hint(run: run, person: person) }) else {
+        let used = hints
+        guard result == nil, let answer = await call({ service, run, person in try await service.hint(run: run, hints: used, person: person) }) else {
             return nil
         }
         switch answer {

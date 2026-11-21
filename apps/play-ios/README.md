@@ -113,6 +113,15 @@ then the build setting (Debug: `http://localhost:8787`, optionally overridden by
   (no server).
 - A host's first table opens with a House Cat in the first open seat (first-run funnel). Like the
   tips it is off in staged runs; `-house-cat` turns it on there (`FirstRunTests`, `FunnelShotTests`).
+- The Daily Dish (`docs/superpowers/specs/2026-11-20-daily-games-design.md`, `Pounce/Daily/`) shows
+  only while the server has `DAILY` on (a 404 from `GET /v1/daily/board` hides it). Games plug in
+  through `DailyGameView` and `DailyWatchView` (`Pounce/Daily/DailyGameHost.swift`), one line each in
+  `DailyGames.swift` and `DailyWatchGames.swift`. `-demo-dish <fresh|some|done|long|off>` feeds the
+  Dish from memory (no server; `off` hides it), `-show-dish` opens the Dish screen at launch,
+  `-dish-autoplay` changes its board as a live one does (the frame gate), and `-daily-test` shows
+  the server's test game (`DAILY_TEST=on`) so the host plays end to end (`DailyTests`, against a
+  dev server started with `--var DAILY:on --var DAILY_TEST:on`). `DailyShotTests` takes the Dish's
+  screenshots (`DAILY_SHOTS_DIR`).
 - For screenshots: `-demo-home` puts sample tables on Home (`-demo-home calm`: the same tables, none
   waiting on you), `-show-rules` / `-show-people` open
   those sheets over Home, and `-show-scoreboard` opens the scoreboard over a table. `-shelf all`

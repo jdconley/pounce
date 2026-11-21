@@ -361,7 +361,8 @@ public enum DailyBoardMessage: Sendable, Hashable, Decodable {
     case result(player: String, result: DailyResult)
     case progress(player: String, game: String, progress: Double)
     case watchOffer(player: String, name: String, cat: Int, game: String)
-    case watch(player: String, game: String, state: DailyJSON)
+    /// A frame: the run's public puzzle (as start gives it) and public state, enough to draw it.
+    case watch(player: String, game: String, puzzle: DailyJSON, state: DailyJSON)
     /// `result` nil: Show on TV was turned off.
     case watchEnd(player: String, game: String, result: DailyResult?)
     case tvs(Int)
@@ -369,7 +370,7 @@ public enum DailyBoardMessage: Sendable, Hashable, Decodable {
     case error(String)
     case unknown(String)
 
-    private enum Key: String, CodingKey { case t, board, player, result, game, progress, name, cat, state, count, error }
+    private enum Key: String, CodingKey { case t, board, player, result, game, progress, name, cat, puzzle, state, count, error }
 
     public init(from decoder: any Decoder) throws {
         let c = try decoder.container(keyedBy: Key.self)
@@ -389,7 +390,7 @@ public enum DailyBoardMessage: Sendable, Hashable, Decodable {
         case "watch":
             self = .watch(
                 player: try c.decode(String.self, forKey: .player), game: try c.decode(String.self, forKey: .game),
-                state: try c.decode(DailyJSON.self, forKey: .state))
+                puzzle: try c.decodeIfPresent(DailyJSON.self, forKey: .puzzle) ?? .null, state: try c.decode(DailyJSON.self, forKey: .state))
         case "watchEnd":
             self = .watchEnd(
                 player: try c.decode(String.self, forKey: .player), game: try c.decode(String.self, forKey: .game),

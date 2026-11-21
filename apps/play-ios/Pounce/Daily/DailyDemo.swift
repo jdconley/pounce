@@ -114,7 +114,7 @@
         }
         func start(game: String, person: String?) async throws -> DailyStart { throw APIError.notFound }
         func moves(run: String, body: DailyMovesBody, person: String?) async throws -> DailyMovesAnswer { throw APIError.notFound }
-        func hint(run: String, person: String?) async throws -> DailyMovesAnswer { throw APIError.notFound }
+        func hint(run: String, hints: Int, person: String?) async throws -> DailyMovesAnswer { throw APIError.notFound }
         func giveUp(run: String, person: String?) async throws -> DailyMovesAnswer { throw APIError.notFound }
         func showOnTV(run: String, on: Bool, person: String?) async throws {}
         func linkBoard(_ key: ScreenKey, person: String?) async throws {}
