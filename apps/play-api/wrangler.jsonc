@@ -74,11 +74,12 @@
     // opened by a /tv/ link does nothing, while the web page works.
     "TV_APPLINKS": "off",
     // The Daily Dish (docs/superpowers/specs/2026-11-20-daily-games-design.md): daily puzzles,
-    // their family board and its TV link, and daily runs counting toward streaks. Off until all
-    // four games, the Dish in the app and on the web, and the TV board have merged and passed the
-    // cross-platform check (spec §11, "all four at once"); then one change turns it on. Off, every
-    // /v1/daily route is a 404 and streaks ignore daily runs.
-    "DAILY": "off",
+    // their family board and its TV link, and daily runs counting toward streaks. On since launch
+    // (LAUNCH in src/daily/days.ts), once all four games, the Dish in the app and on the web, and
+    // the TV board had merged and passed the cross-platform check (spec §11, "all four at once";
+    // apps/play-api/scripts/daily-crosscheck). Turned off, every /v1/daily route is a 404, streaks
+    // ignore daily runs, and the site and privacy policy say nothing of it.
+    "DAILY": "on",
     // The games rooms may be created for beyond Cat Tower: a comma-separated list of game ids
     // (src/games, e.g. "tiles"). Empty: Cat Tower only, and asking for any other game is refused.
     // "tiles" since version 1.1 can draw the tile game: only an app that lists a game in

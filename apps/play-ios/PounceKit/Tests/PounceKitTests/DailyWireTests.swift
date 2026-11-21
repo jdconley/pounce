@@ -95,13 +95,13 @@ enum DailyFixtures {
 
     @Test func aResultForAnotherDateLeavesTheBoard() throws {
         let board = try DailyFixtures.decode(DailyBoard.self, "http", "board")
-        let yesterday = DailyResult(game: "test", date: "2026-11-22", number: -26337, outcome: .closed, timeMs: 1, progress: 0.1)
+        let yesterday = DailyResult(game: "test", date: "2026-11-22", number: 0, outcome: .closed, timeMs: 1, progress: 0.1)
         #expect(board.adding(yesterday, for: "pr_Hn5sW2qLp7Xy3Zc8Vb1MkA") == board)
     }
 
     @Test func addingAResultFillsTheRow() throws {
         let board = try DailyFixtures.decode(DailyBoard.self, "http", "board")
-        let done = DailyResult(game: "test", date: "2026-11-23", number: -26336, outcome: .solved, timeMs: 200_000, progress: 1)
+        let done = DailyResult(game: "test", date: "2026-11-23", number: 1, outcome: .solved, timeMs: 200_000, progress: 1)
         let next = board.adding(done, for: "pr_Hn5sW2qLp7Xy3Zc8Vb1MkA")
         let row = next.games.first?.rows.last
         #expect(row?.result == done && row?.playing == nil)

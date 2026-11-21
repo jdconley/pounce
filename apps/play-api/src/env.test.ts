@@ -100,11 +100,11 @@ describe("tvAppLinksOn", () => {
 });
 
 describe("DAILY", () => {
-  it("is off in wrangler.jsonc until all four games launch together (spec §11)", () => {
+  it("is on in wrangler.jsonc since all four games launched together (spec §11)", () => {
     const config = readFileSync(new URL("../wrangler.jsonc", import.meta.url), "utf8");
     const value = /"DAILY"\s*:\s*"([^"]*)"/.exec(config)?.[1];
     expect(value).toBeDefined();
-    expect(dailyOn({ DAILY: value })).toBe(false);
+    expect(dailyOn({ DAILY: value })).toBe(true);
   });
 
   it("never lists the test-only game for deploys (DAILY_TEST)", () => {

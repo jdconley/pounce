@@ -6,7 +6,7 @@
       "games": [
         {
           "game": "test",
-          "number": -26336,
+          "number": 1,
           "rows": [
             {
               "player": "me",
@@ -16,7 +16,7 @@
               "result": {
                 "game": "test",
                 "date": "2026-11-23",
-                "number": -26336,
+                "number": 1,
                 "outcome": "solved",
                 "timeMs": 125000,
                 "hints": 1,
@@ -33,7 +33,7 @@
               "result": {
                 "game": "test",
                 "date": "2026-11-23",
-                "number": -26336,
+                "number": 1,
                 "outcome": "gaveUp",
                 "timeMs": 50000,
                 "hints": 0,
@@ -88,7 +88,7 @@
     "result": {
       "game": "test",
       "date": "2026-11-23",
-      "number": -26336,
+      "number": 1,
       "outcome": "solved",
       "timeMs": 125000,
       "hints": 1,
@@ -127,7 +127,7 @@
     "result": {
       "game": "test",
       "date": "2026-11-23",
-      "number": -26336,
+      "number": 1,
       "outcome": "solved",
       "timeMs": 125000,
       "hints": 1,
