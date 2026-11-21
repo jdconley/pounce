@@ -185,7 +185,11 @@ final class LinkConnector: WebSocketConnector {
     }
 }
 
-/// Everything the link emits, in order, and whether its stream has finished.
+/// Everything the link emits, in order, and whether its stream has finished. It collects on its
+/// own task, so it can trail the link by a moment (more on a loaded machine): a check that
+/// something was emitted waits for it (`eventually`), even right after waiting for something the
+/// link did next (the link emits a new code before it opens that code's socket). Once `finished`,
+/// it has everything.
 final class LinkEvents: Sendable {
     private let log = Mutex<(events: [ScreenLinkEvent], finished: Bool)>(([], false))
 
@@ -241,10 +245,11 @@ func settle() async {
         return Rig(link: link, screens: screens, connector: connector, clock: clock, events: LinkEvents(link.events))
     }
 
-    /// Started, with its first socket open.
+    /// Started, with its first socket open and its first code collected.
     private func started(_ r: Rig, showing: String? = nil) async throws -> LinkConnection {
         await r.link.start(showing: showing)
         #expect(await eventually { r.connector.made.count == 1 })
+        #expect(await eventually { r.events.tokens == ["tok1"] })
         return try #require(r.connector.made.first)
     }
 
@@ -276,7 +281,7 @@ func settle() async {
         #expect(r.screens.calls == 1)
         #expect(await r.clock.advance(afterPending: .milliseconds(1)))
         #expect(await eventually { r.connector.made.count == 2 })
-        #expect(r.events.tokens == ["tok1", "tok2"])
+        #expect(await eventually { r.events.tokens == ["tok1", "tok2"] })
         #expect(r.connector.calls.map(\.url.path) == ["/v1/screens/tok1/ws", "/v1/screens/tok2/ws"])
         // The new socket opened, so the old one is closed.
         #expect(await eventually { first.isClosed })
@@ -327,7 +332,7 @@ func settle() async {
         r.connector.holding(true)
         #expect(await r.clock.advance(afterPending: .seconds(80)))
         #expect(await eventually { r.connector.calls.count == 2 })
-        #expect(r.events.tokens == ["tok1", "tok2"])
+        #expect(await eventually { r.events.tokens == ["tok1", "tok2"] })
         await settle()
         #expect(!first.isClosed)
         first.push(linked("BCDFG"))
@@ -362,7 +367,7 @@ func settle() async {
         let first = try await started(r)
         first.push(expired)
         #expect(await eventually { r.connector.made.count == 2 })
-        #expect(r.events.tokens == ["tok1", "tok2"])
+        #expect(await eventually { r.events.tokens == ["tok1", "tok2"] })
         #expect(await eventually { first.isClosed })
         #expect(r.connector.made[1].url.path == "/v1/screens/tok2/ws")
         await r.link.stop()
@@ -380,7 +385,7 @@ func settle() async {
         first.drop()
         await settle()
         #expect(r.screens.calls == 2)
-        #expect(r.events.tokens == ["tok1", "tok2"])
+        #expect(await eventually { r.events.tokens == ["tok1", "tok2"] })
         #expect(r.events.offline == 0)
         r.connector.release()
         #expect(await eventually { r.connector.made.count == 2 })
@@ -479,7 +484,7 @@ func settle() async {
         #expect(await eventually { r.connector.calls.count == 1 })
         #expect(await r.clock.advance(afterPending: .milliseconds(250)))
         #expect(await eventually { r.connector.made.count == 1 })
-        #expect(r.events.tokens == ["tok1", "tok2"])
+        #expect(await eventually { r.events.tokens == ["tok1", "tok2"] })
         #expect(r.connector.calls.map(\.url.path) == ["/v1/screens/tok1/ws", "/v1/screens/tok2/ws"])
         await r.link.stop()
     }
@@ -529,7 +534,7 @@ func settle() async {
         r.screens.failing(false)
         #expect(await r.clock.advance(afterPending: .milliseconds(250)))
         #expect(await eventually { r.connector.made.count == 1 })
-        #expect(r.events.tokens == ["tok1"])
+        #expect(await eventually { r.events.tokens == ["tok1"] })
         await r.link.stop()
     }
 
