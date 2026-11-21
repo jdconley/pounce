@@ -13,7 +13,7 @@ The app first asks Apple's Declared Age Range. If you choose not to share, it as
 The answer is kept in the Keychain, so it stays after a reinstall. A wrong year can't be retyped. On a device set as under 18, Settings (the gear on Home), under Account, shows "Age not right?" and a "Check with Apple" button, which asks Declared Age Range again. Only Apple's answer changes the age.
 
 PLAY ALONE AGAINST THE HOUSE CAT BOT
-Fastest: on Home, tap Practice. A game against the House Cat bot starts right away.
+Fastest: on Home, tap Practice. A House Cat game starts right away.
 Or:
 1. On Home, tap Play on Cat Tower or Tuna Tiles.
 2. In the lobby, a House Cat bot already holds a seat. To add more, tap "Add a player", then "House Cat".
@@ -21,19 +21,19 @@ Or:
 One device is enough. Turn reminders are local notifications from the device.
 
 INVITES (optional, needs a second device)
-In the lobby, "Add a player" offers Same room (a QR code to scan), Far away (a link to send) and This phone (pass the phone). A link opens the table in Pounce. If Pounce isn't installed, the link's web page copies the invite, and after installing, Pounce offers a Paste button (the system paste control) that opens the same table.
+In the lobby, "Add a player" offers Same room (a QR code to scan), Far away (a link to send) and This phone (pass the phone). A link opens the table in Pounce. If Pounce isn't installed, the link's web page copies the invite, and after installing, Pounce offers a Paste button that opens the same table.
 
 SIGN IN WITH APPLE (optional)
 Signing in keeps your streaks if you change phones. Find it in Settings (the gear on Home), or on Home after you have played with someone. Adults and teens only. Settings also has the privacy policy and account deletion.
 
-DAILY DISH (four one-player puzzles a day)
-On Home, the Daily Dish panel shows Sniff, Nine Lives, Cat Nap and Box Fort. Tap Play on any. Everyone gets the same puzzles that day. Our server checks every move and works out every score; the app sends none. The header opens today's board: only you and the people you have a streak with.
+DAILY DISH (one-player puzzles)
+On Home, the Daily Dish panel shows Sniff, Nine Lives, Cat Nap and Box Fort. Tap Play on any. Same puzzles for everyone. Our server checks every move and works out every score; the app sends none. The header opens today's board: only you and the people you have a streak with.
 
 APPLE TV (no iPhone needed)
-The Apple TV app has no age check and no sign-in. On Home, select Cat Tower or Tuna Tiles. The TV shows a table code and a QR code ("Scan to join"). On any browser, open play.conleychaos.com/play. A new browser asks the birth year (type 1980) and a name. Then tap "Join" and type the code (or scan the QR code). Tap "Add a player", then "House Cat", then Start. The TV shows the whole table; the browser holds the cards. Menu (Back) on the remote opens the TV's menu.
+No age check or sign-in. On Home, select Cat Tower or Tuna Tiles; the TV shows a table code and a QR code. In any browser, open play.conleychaos.com/play, type 1980 and a name, then tap "Join" and type the code (or scan the QR). Tap "Add a player", "House Cat", then Start. The TV shows the table; the browser holds the cards. Menu (Back) opens the TV's menu.
 
 UNDER 13 ("kittens") AND PARENT CONSENT
-If the year typed means under 13, the device is limited: the name comes from a list (dice), there is no sign-in, no share links, and no push notifications from the server. Local turn reminders still work, because nothing leaves the device.
+If the year typed means under 13, the device is limited: the name comes from a list (dice), there is no sign-in, no share links, and no push notifications from the server. Local turn reminders still work.
 A parent can allow turn alerts on a child's own device. This needs two devices and a phone that can receive a text:
 1. Child's device (set up with a year under 13): Settings shows a padlocked bell and a six-digit code, with "Show this code to a grown-up".
 2. Parent's device (an adult, signed in with Apple): Settings, then under Family, "Kids' alerts". Tap "Add a child" and type the six digits.
@@ -41,6 +41,7 @@ A parent can allow turn alerts on a child's own device. This needs two devices a
 4. A text from Twilio Verify brings a six-digit code. The parent types it. Turn alerts are now on for that child.
 5. A day or two later the parent's own devices get a confirmation notification with a "Revoke" button.
 The parent can turn alerts off or remove the child at any time from the same panel. The phone number is used only for this consent and is deleted when consent ends.
+In the lobby, a child's device without consent shows "Want turn alerts? Show a grown-up here your code." A signed-in parent at the same table with a linked child whose consent isn't finished is asked to set it up.
 
 Consent isn't needed to play. To test it, use one device as the child (a year under 13) and one as the parent (1980, then sign in with Apple in Settings).
 
