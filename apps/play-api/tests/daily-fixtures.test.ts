@@ -116,6 +116,7 @@ function socket(h: ReturnType<typeof http>) {
 /** What clients send. */
 const client = {
   moves: { from: 0, moves: [step(1), step(2)] },
+  hint: { hints: 0 },
   tvOn: { on: true },
   tvOff: { on: false },
   linkBoardByToken: { token: "Tm90QVJlYWxMaW5rVG9rZW", board: true },

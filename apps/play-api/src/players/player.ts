@@ -94,6 +94,8 @@ const STUB_TTL_MS = 30 * DAY_MS;
 /** A guest no device has touched for this long is deleted (§14, §14.1). */
 const GUEST_TTL_MS = 90 * DAY_MS;
 const SECTIONS = ["settings", "tutorial", "archive"] as const;
+/** Tries at reporting a daily run to a pair, as a table's report gets. */
+const DAILY_STREAK_ATTEMPTS = 2;
 /** Daily results are kept this many days (daily games design §6). */
 const DAILY_KEEP_DAYS = 120;
 const BOARD_PING = '{"t":"ping"}';
@@ -534,7 +536,17 @@ export class Player extends DurableObject<Env> {
   }
 
   dropPair(pairId: string): void {
+    const partner = this.pairList().find((r) => r.pairId === pairId)?.partnerId;
     this.ctx.storage.sql.exec("DELETE FROM pairs WHERE pair_id = ?", pairId);
+    // Their Dish results, name and progress were kept only for this pair's board.
+    if (partner !== undefined && this.pairWith(partner) === null) this.forgetDaily(partner);
+  }
+
+  /** Forgets someone's Dish data: they're no longer a connection, or they're gone. */
+  private forgetDaily(playerId: string): void {
+    for (const table of ["daily_results", "daily_faces", "daily_playing"]) {
+      this.ctx.storage.sql.exec(`DELETE FROM ${table} WHERE player_id = ?`, playerId);
+    }
   }
 
   /** Leaves a pair (§14) and remembers the partner, so it doesn't re-form. Returns the partner. */
@@ -674,10 +686,19 @@ export class Player extends DurableObject<Env> {
       if (streaksOn(this.env)) {
         for (const { pairId } of this.pairList()) {
           const pair = this.env.PAIRS.get(this.env.PAIRS.idFromName(pairId));
+          // With the same retry as a table's report (§5, "The reporting path").
           this.ctx.waitUntil(
-            pair.reportDaily(me, endedAt, now).catch(() => {
+            (async () => {
+              for (let attempt = 0; attempt < DAILY_STREAK_ATTEMPTS; attempt++) {
+                try {
+                  await pair.reportDaily(me, endedAt, now);
+                  return;
+                } catch {
+                  // Tried again below.
+                }
+              }
               console.error("daily_streak_report_failed");
-            }),
+            })(),
           );
         }
       }

@@ -55,7 +55,7 @@ test("no Cat Tower sample mentions another game", () => {
 const PINNED_DAILY: Record<string, string> = {
   "daily/protocol/http.json": "bc5073bcfa4420d3741fda5f4dffbde0feb863a981dd471101a44bb7a996327c",
   "daily/protocol/socket.json": "b68d277c2af8063a2b0a9a12a89c019af8a6d656107b5633b42753459202dd0b",
-  "daily/protocol/client.json": "d99dacbea20c3d405a6073b7f09cc1e09233fd0a380322dd56714f4a5eba2afa",
+  "daily/protocol/client.json": "7a1625a24ca580670080d50bab5c6344ffb95cfc00d5682f60c2fdc0e7b02c9f",
 };
 
 test.each(Object.entries(PINNED_DAILY))("fixtures/%s is byte for byte what the Dish's clients decode", (file, sha256) => {

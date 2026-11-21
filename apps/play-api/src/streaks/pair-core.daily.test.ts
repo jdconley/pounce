@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest";
 import { A, at, B, C, D0, keepDay, keepDays, LA, missDay, NY, pairOn, pass, person, play, settle } from "../../tests/streak-helpers";
 
 import { addDays } from "./clock";
-import { advance, pause, reportDaily, view, type DayState, type PairState } from "./pair-core";
+import { advance, facts, pause, repoint, reportDaily, view, type DayState, type PairState } from "./pair-core";
 
 /**
  * A daily run counts as playing today (daily games design §5, "The rule, exactly"): a day with a
@@ -159,5 +159,36 @@ describe("reportDaily's limits", () => {
     const s = pairOn();
     reportDaily(s, A, at(D1, "09:00"), at(D1, "09:00"));
     expect(s.lastTurnAt).toBe(at(D1, "09:00"));
+  });
+});
+
+describe("what a day with only daily runs shows", () => {
+  it("after the cutoff, the one who played no daily run isn't lit: the late move pass doesn't apply", () => {
+    const s = pairOn();
+    reportDaily(s, A, at(D1, "09:00"), at(D1, "09:00"));
+    // 21:00 is past B's 20:00 cutoff, and B never held the move.
+    expect(view(s, B, at(D1, "21:00"))).toMatchObject({ me: false, them: true, kept: false });
+    expect(view(s, A, at(D1, "21:00"))).toMatchObject({ me: true, them: false });
+    expect(facts(s, B, at(D1, "21:00")).in).toBe(false);
+    expect(facts(s, A, at(D1, "21:00")).in).toBe(true);
+  });
+
+  it("a day nobody played reads as before", () => {
+    const s = pairOn();
+    advance(s, at(D1, "21:00"));
+    expect(facts(s, B, at(D1, "21:00")).in).toBe(true);
+    expect(view(s, B, at(D1, "21:00"))).toMatchObject({ me: false, them: false });
+  });
+});
+
+describe("a merge", () => {
+  it("repoint moves a person's daily runs to their account", () => {
+    const s = pairOn();
+    reportDaily(s, A, at(D1, "09:00"), at(D1, "09:00"));
+    const to = "p_zzzzzzzzzzzzzzzzzzzzzz";
+    repoint(s, A, to);
+    expect(s.days[D1]?.daily).toEqual({ [to]: 1 });
+    reportDaily(s, B, at(D1, "10:00"), at(D1, "10:00"));
+    expect(s.days[D1]?.applied).toBe(true);
   });
 });

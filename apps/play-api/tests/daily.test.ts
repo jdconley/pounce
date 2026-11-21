@@ -19,8 +19,14 @@ afterEach(async () => {
   await Promise.all(open.splice(0).map((mf) => mf.dispose()));
 });
 
-async function start(options: { daily?: boolean; sent?: Sent[] } = {}): Promise<Miniflare> {
-  const mf = await worker(script, { sent: options.sent ?? [], trophy: true, daily: options.daily ?? true, dailyTest: true });
+async function start(options: { daily?: boolean; sent?: Sent[]; devSpeed?: number } = {}): Promise<Miniflare> {
+  const mf = await worker(script, {
+    sent: options.sent ?? [],
+    trophy: true,
+    daily: options.daily ?? true,
+    dailyTest: true,
+    ...(options.devSpeed ? { devSpeed: options.devSpeed } : {}),
+  });
   open.push(mf);
   return mf;
 }
@@ -470,5 +476,68 @@ describe("the daily reminder knows the Dish", () => {
     await remindAt(mf, id, tomorrowAt1930());
     await new Promise((resolve) => setTimeout(resolve, 300));
     expect(sent.filter((s) => s.body.kind === "reminder")).toEqual([]);
+  });
+});
+
+describe("nothing a run says is lost or doubled", () => {
+  test("a hint resent with its count is answered once", async () => {
+    const mf = await start();
+    const { device, person } = await someone(mf);
+    const s = await begin(mf, device, person);
+    const ask = (body?: unknown) => call(mf, device, "POST", `/v1/daily/runs/${s.run}/hint?person=${person.id}`, body);
+    const first = await (await ask({ hints: 0 })).json();
+    expect(first).toMatchObject({ ok: true, reveals: [{ n: 1 }] });
+    expect(await (await ask({ hints: 0 })).json()).toEqual(first);
+    expect((await begin(mf, device, person)).hints).toBe(1);
+    expect((await ask({ hints: "one" })).status).toBe(400);
+    expect(await (await ask({ hints: 5 })).json()).toMatchObject({ ok: false, error: "stale" });
+  });
+
+  test("a different batch from an old from is stale", async () => {
+    const mf = await start();
+    const { device, person } = await someone(mf);
+    const s = await begin(mf, device, person);
+    await send(mf, device, person, s.run, { from: 0, moves: steps(1, 2) });
+    expect(await (await send(mf, device, person, s.run, { from: 0, moves: steps(1, 1) })).json()).toMatchObject({ ok: false, error: "stale", seq: 2 });
+  });
+
+  test("a result the player couldn't take is tried again until it lands", async () => {
+    const mf = await start({ devSpeed: 100 });
+    const { device, person, id } = await someone(mf);
+    // The player refuses the first report and the next.
+    expect((await mf.dispatchFetch(`${BASE}/__test/fail-reports?n=2`)).status).toBe(204);
+    const result = await solve(mf, device, person);
+    const board = await eventually(
+      async () => (await (await mf.dispatchFetch(`${BASE}/__test/board?player=${id}&date=${result.date as string}&now=${Date.now()}`)).json()) as { games: { rows: unknown[] }[] },
+      (b) => (b.games[0]?.rows.length ?? 0) === 1,
+    );
+    expect(board.games[0]?.rows).toHaveLength(1);
+  });
+});
+
+describe("leaving", () => {
+  const held = async (mf: Miniflare, id: string) => (await (await mf.dispatchFetch(`${BASE}/__test/daily-held?player=${id}`)).json()) as string[];
+
+  test("deleting your account deletes your Dish data from your connections", async () => {
+    const mf = await start();
+    const mom = await someone(mf, "Mom");
+    const kid = await someone(mf, "Kid");
+    await pairUp(mf, mom.id, kid.id);
+    await solve(mf, kid.device, kid.person);
+    await eventually(() => held(mf, mom.id), (ids) => ids.includes(kid.id));
+    expect((await call(mf, kid.device, "DELETE", `/v1/me?person=${kid.person.id}`)).status).toBe(204);
+    expect(await held(mf, mom.id)).not.toContain(kid.id);
+  });
+
+  test("leaving a pair forgets the other person's Dish data", async () => {
+    const mf = await start();
+    const mom = await someone(mf, "Mom");
+    const kid = await someone(mf, "Kid");
+    await pairUp(mf, mom.id, kid.id);
+    await solve(mf, kid.device, kid.person);
+    const board = await eventually(() => boardOf(mf, mom.device, mom.person), (b) => (b.games[0]?.rows.length ?? 0) > 0);
+    expect((await call(mf, mom.device, "DELETE", `/v1/pairs/${board.games[0]?.rows[0]?.player as string}?person=${mom.person.id}`)).status).toBe(204);
+    expect(await held(mf, mom.id)).not.toContain(kid.id);
+    expect(await held(mf, kid.id)).not.toContain(mom.id);
   });
 });

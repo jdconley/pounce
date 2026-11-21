@@ -286,6 +286,17 @@ const sum = (counts: Record<string, number>): number => Object.values(counts).re
  * turn. A day whose only plays are daily runs needs both people to have ended one: no daily run
  * ever waits on the other person, so the late move pass can't apply.
  */
+/**
+ * In for the day, by the same two cases as `bothIn`: on a day with daily runs and no table turn,
+ * only an ended daily run puts a person in. Any other day is `isIn`, exactly as before.
+ */
+function isInToday(s: PairState, p: PairPerson, d: Day, now: number): boolean {
+  const r = s.days[d];
+  const daily = r?.daily ?? {};
+  if (sum(daily) === 0 || sum((r as DayRow).turns) - sum(daily) > 0) return isIn(s, p, d, now);
+  return (daily[p.id] ?? 0) > 0;
+}
+
 function bothIn(s: PairState, d: Day, r: DayRow, now: number): boolean {
   const daily = r.daily ?? {};
   if (sum(r.turns) - sum(daily) > 0) return s.people.every((p) => isIn(s, p, d, now));
@@ -558,8 +569,8 @@ export function view(s: PairState, playerId: string, now: number): StreakView {
     pair: s.id,
     partner: { name: partner.name, cat: partner.cat },
     count: st.count,
-    me: played && isIn(s, me, today, now),
-    them: played && isIn(s, partner, today, now),
+    me: played && isInToday(s, me, today, now),
+    them: played && isInToday(s, partner, today, now),
     kept: row?.applied === true,
     naps: st.naps,
     winback: st.winback ? { kept: st.winback.kept } : null,
@@ -603,7 +614,7 @@ export function facts(s: PairState, playerId: string, now: number): Facts {
   const today = todayOf(s, playerId, now);
   return {
     view: v,
-    in: isIn(s, personOf(s, playerId), today, now),
+    in: isInToday(s, personOf(s, playerId), today, now),
     paused: paused(s, today),
     breakId: s.streak.breakId,
     brokeOn: s.streak.brokeOn ?? null,
@@ -635,6 +646,7 @@ export function repoint(s: PairState, from: string, to: string): void {
     renameKeys(r.turns, from, to);
     renameKeys(r.held, from, to);
     renameKeys(r.gap, from, to);
+    if (r.daily) renameKeys(r.daily, from, to);
   }
   for (const m of Object.values(s.moves)) if (m.holder === from) m.holder = to;
   for (const g of s.gifts) g.openedBy = g.openedBy.map((id) => (id === from ? to : id));

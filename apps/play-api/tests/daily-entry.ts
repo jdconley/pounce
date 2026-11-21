@@ -1,6 +1,7 @@
 import { startRun } from "../src/daily/routes";
 import worker from "../src/index";
 import { sha256Hex } from "../src/players/ids";
+import { Player as RealPlayer } from "../src/players/player";
 import { addDays } from "../src/streaks/clock";
 import { connect } from "../src/streaks/pairs";
 
@@ -12,13 +13,35 @@ export { GameRoom } from "../src/room/game-room";
 export { Identities } from "../src/players/identities";
 export { Limiter } from "../src/safety/limiter";
 export { Reports } from "../src/safety/reports";
-export { Player } from "../src/players/player";
 export { Links } from "../src/links/links";
 export { Pair } from "../src/streaks/pair";
 export { ScreenLinks } from "../src/screens/screen-links";
 export { DailyPuzzle } from "../src/daily/puzzle-do";
 export { DailyRun } from "../src/daily/run-do";
 export { BoardTokens } from "../src/daily/board-tokens";
+
+/** Reports a player refuses before taking them (`/__test/fail-reports?n=`): a Player that is down. */
+let failing = 0;
+
+/** The real Player, which can be made to refuse daily reports for a while. */
+export class Player extends RealPlayer {
+  override recordDaily(...args: Parameters<RealPlayer["recordDaily"]>): void {
+    if (failing > 0) {
+      failing -= 1;
+      throw new Error("player_down");
+    }
+    super.recordDaily(...args);
+  }
+
+  /** Every player id this player keeps Dish data about (tests). */
+  dailyHeld(): string[] {
+    const sql = this.ctx.storage.sql;
+    return sql
+      .exec<{ id: string }>("SELECT player_id AS id FROM daily_results UNION SELECT player_id FROM daily_faces UNION SELECT player_id FROM daily_playing")
+      .toArray()
+      .map((r) => r.id);
+  }
+}
 
 /**
  * The real worker, plus the daily suites' test hooks: `/__test/puzzle?game=&date=` reads a day's
@@ -60,6 +83,14 @@ export default {
       const hash = await sha256Hex(url.searchParams.get("token") ?? "");
       const found = await env.BOARD_TOKENS.get(env.BOARD_TOKENS.idFromName(hash)).resolve(url.searchParams.get("device") ?? "", Number(url.searchParams.get("now")));
       return Response.json({ player: found });
+    }
+    if (url.pathname === "/__test/daily-held") {
+      const stub = env.PLAYERS.get(env.PLAYERS.idFromName(url.searchParams.get("player") ?? "")) as unknown as { dailyHeld(): Promise<string[]> };
+      return Response.json(await stub.dailyHeld());
+    }
+    if (url.pathname === "/__test/fail-reports") {
+      failing = Number(url.searchParams.get("n"));
+      return new Response(null, { status: 204 });
     }
     if (url.pathname === "/__test/remind") {
       await env.PLAYERS.get(env.PLAYERS.idFromName(url.searchParams.get("player") ?? "")).remind(Number(url.searchParams.get("now")));

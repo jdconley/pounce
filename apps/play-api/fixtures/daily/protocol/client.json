@@ -12,6 +12,9 @@
       }
     ]
   },
+  "hint": {
+    "hints": 0
+  },
   "tvOn": {
     "on": true
   },

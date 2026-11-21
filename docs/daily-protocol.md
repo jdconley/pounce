@@ -16,8 +16,8 @@ games launch together). With it off:
 - streaks ignore daily runs, the reminder never mentions the Dish, and the privacy page says
   nothing of it.
 
-Clients ask nothing to learn whether the Dish is on: a 404 from `POST /v1/daily/{game}/start` or
-`GET /v1/daily/board` means hide it.
+To learn whether the Dish is on, read `GET /v1/daily/board`: a 404 means hide it. Never probe
+with `start`, which opens a run and starts its clock.
 
 ## Who and when
 
@@ -119,19 +119,25 @@ No body. 200:
 | `illegal` | Move `at` breaks the rules | Undo from that move; resend the rest from `seq` |
 | `too_soon` | Move `at` came closer to the last than the game allows | Wait, then resend from `seq` |
 | `bad_message` | Move `at` isn't one of the game's moves, or the batch is over 100 or not a list (`at` 0) | A client bug |
-| `stale` | `from` isn't `seq` and isn't a batch the server remembers | Start again to resync |
+| `stale` | `from` isn't `seq`, and this isn't a batch the server remembers | Start again to resync |
 | `over` | The run has ended, or closed at 04:00 (`at` 0, or the first move past the end) | Start again to see the result |
 
-- **A resend is safe.** A batch sent again from the same `from` (a dropped connection) gets the
-  same answer it got the first time, once, and changes nothing. The server remembers the last 8.
+- **A resend is safe.** The same batch sent again from the same `from` (a dropped connection)
+  gets the answer it got the first time, and changes nothing. The server remembers the last 8. A
+  different batch from an old `from` (another device that fell behind) answers `stale`.
 - 404 `{ "error": "not_found" }`: no such run, or someone else's (they look the same). 429
   `{ "error": "rate_limited" }`: over 20 calls a second on this run (moves, hints and give-ups).
 
 ### `POST /v1/daily/runs/{run}/hint`
 
-No body. 200, an answer as above: `reveals` holds the hint (a cell, a cat), `seq` is unchanged (a
-hint isn't a move), `hints` goes up and the result's time grows by 30 seconds. A game with no hints
-answers `illegal`. Flush waiting moves first.
+`{ "hints": <hints used so far> }` (an empty body is accepted, but isn't safe to resend). 200, an
+answer as above: `reveals` holds the hint (a cell, a cat), `seq` is unchanged (a hint isn't a move),
+`hints` goes up and the result's time grows by 30 seconds. A game with no hints answers `illegal`.
+Flush waiting moves first.
+
+- **A resent hint is safe** when it carries `hints`: asked again with the same count, it gets the
+  same answer and costs nothing more. A count the run never had answers `stale`; 400 for a body
+  that isn't `{ "hints": <whole number> }`.
 
 ### `POST /v1/daily/runs/{run}/giveup`
 

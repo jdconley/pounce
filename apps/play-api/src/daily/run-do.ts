@@ -1,5 +1,6 @@
 import { DurableObject } from "cloudflare:workers";
 
+import { devSpeed } from "../env";
 import { player } from "../players/accounts";
 
 import { closesAt } from "./days";
@@ -15,8 +16,8 @@ type Stored = { run: RunState; puzzle: unknown };
 
 /** A run is forgotten this long after its day ends. */
 const FORGET_AFTER_MS = 2 * 86_400_000;
-/** How long before a failed report to the player is tried once more. */
-const RETRY_MS = 2000;
+/** How long before a failed report to the player is tried again. */
+const REPORT_RETRY_MS = 60_000;
 
 /**
  * One player's run at one game on one date, named by its run id (`runId`: the HMAC of
@@ -109,8 +110,9 @@ export class DailyRun extends DurableObject<Env> {
     return this.act(playerId, now, (m, s) => moves(m, s.puzzle, s.run, from, raw, now));
   }
 
-  async hint(playerId: string, now: number): Promise<Answer | null> {
-    return this.act(playerId, now, (m, s) => useHint(m, s.puzzle, s.run, now));
+  /** `seen`: the hints the client had used when it asked, so a resent hint is answered once. */
+  async hint(playerId: string, now: number, seen?: number): Promise<Answer | null> {
+    return this.act(playerId, now, (m, s) => useHint(m, s.puzzle, s.run, now, seen));
   }
 
   async giveUp(playerId: string, now: number): Promise<Answer | null> {
@@ -161,7 +163,12 @@ export class DailyRun extends DurableObject<Env> {
         return;
       }
       this.save();
-      this.ended(now);
+      if (s.run.tv) this.tell({ k: "watchEnd", game: s.run.game, result: s.run.result }, now);
+    }
+    // An ended run reaches its player before it is forgotten, however long that takes.
+    if (!s.run.reported && !(await this.report())) {
+      await this.ctx.storage.setAlarm(now + this.retryMs());
+      return;
     }
     if (now >= end + FORGET_AFTER_MS) {
       await this.ctx.storage.deleteAll();
@@ -175,19 +182,33 @@ export class DailyRun extends DurableObject<Env> {
   private ended(now: number): void {
     const { run } = this.stored as Stored;
     if (run.tv) this.tell({ k: "watchEnd", game: run.game, result: run.result }, now);
-    const result = run.result as DailyResult;
-    const counts = countsForStreak(run);
-    const at = (run.ended as { at: number }).at;
-    const report = () => player(this.env, run.playerId).recordDaily(result, counts, at);
     this.ctx.waitUntil(
-      report()
-        .catch(async () => {
-          await new Promise((resolve) => setTimeout(resolve, RETRY_MS));
-          await report();
-        })
-        .catch(() => {
-          console.error("daily_report_failed", now);
-        }),
+      this.report().then(async (ok) => {
+        // The alarm tries again until it lands (`recordDaily` is idempotent).
+        if (!ok) await this.ctx.storage.setAlarm(Date.now() + this.retryMs());
+      }),
     );
+  }
+
+  /** Hands the ended run's result to its player; true once it landed (and is marked so). */
+  private async report(): Promise<boolean> {
+    const s = this.stored;
+    if (!s || !s.run.ended || !s.run.result) return true;
+    const { run } = s;
+    const at = s.run.ended.at;
+    try {
+      await player(this.env, run.playerId).recordDaily(run.result as DailyResult, countsForStreak(run), at);
+    } catch {
+      console.error("daily_report_failed");
+      return false;
+    }
+    run.reported = true;
+    this.save();
+    return true;
+  }
+
+  /** How long before a report that failed is tried again; shorter on a fast dev server. */
+  private retryMs(): number {
+    return REPORT_RETRY_MS / devSpeed(this.env);
   }
 }

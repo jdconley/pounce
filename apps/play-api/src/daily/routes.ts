@@ -103,7 +103,23 @@ async function onRun(request: Request, env: Env, deviceId: string, run: string, 
   }
   let answer: Answer | null;
   if (batch) answer = await stub.moves(playerId, batch.from, batch.moves, now);
-  else if (action === "hint") answer = await stub.hint(playerId, now);
+  else if (action === "hint") {
+    // `{ "hints": <used so far> }` makes a resent hint safe; an empty body is a new hint, as before.
+    const text = await request.text();
+    let seen: number | undefined;
+    if (text.trim() !== "") {
+      let body: unknown;
+      try {
+        body = JSON.parse(text);
+      } catch {
+        return badRequest();
+      }
+      const hints = (body as { hints?: unknown } | null)?.hints;
+      if (typeof body !== "object" || body === null || !Number.isInteger(hints) || (hints as number) < 0) return badRequest();
+      seen = hints as number;
+    }
+    answer = await stub.hint(playerId, now, seen);
+  }
   else answer = await stub.giveUp(playerId, now);
   // Someone else's run, or none, says the same: ids reveal nothing.
   return answer ? json(200, answer) : notFound();

@@ -281,3 +281,50 @@ describe("startView", () => {
     });
   });
 });
+
+describe("resends are matched by what they carry", () => {
+  it("a different batch from an old from is stale, not the old answer", () => {
+    const r = run();
+    moves(m, p, r, 0, [step(1), step(2)], T0 + 1000);
+    expect(moves(m, p, r, 0, [step(1)], T0 + 2000)).toEqual({ ok: false, error: "stale", at: 0, seq: 2 });
+    expect(moves(m, p, r, 0, [step(1), step(2), step(3)], T0 + 2000)).toEqual({ ok: false, error: "stale", at: 0, seq: 2 });
+    expect(moves(m, p, r, 0, [step(1), step(2)], T0 + 2000)).toMatchObject({ ok: true, seq: 2 });
+  });
+});
+
+describe("a hint resent", () => {
+  it("with the count it was asked at, gets the same answer once", () => {
+    const r = run();
+    const first = useHint(m, p, r, T0 + 1000, 0);
+    expect(first).toMatchObject({ ok: true, reveals: [{ n: 1 }] });
+    expect(useHint(m, p, r, T0 + 2000, 0)).toEqual(first);
+    expect(r.hints).toBe(1);
+    expect(useHint(m, p, r, T0 + 3000, 1)).toMatchObject({ ok: true, reveals: [{ n: 2 }] });
+    expect(r.hints).toBe(2);
+  });
+
+  it("a count the run never had is stale", () => {
+    const r = run();
+    expect(useHint(m, p, r, T0 + 1000, 3)).toEqual({ ok: false, error: "stale", at: 0, seq: 0 });
+    useHint(m, p, r, T0 + 1000, 0);
+    r.hintAnswers = {};
+    expect(useHint(m, p, r, T0 + 2000, 0)).toEqual({ ok: false, error: "stale", at: 0, seq: 0 });
+  });
+
+  it("without a count, every call is a new hint, as before", () => {
+    const r = run();
+    useHint(m, p, r, T0 + 1000);
+    useHint(m, p, r, T0 + 2000);
+    expect(r.hints).toBe(2);
+  });
+});
+
+describe("what a result carries", () => {
+  it("only the result's own fields: nothing else a game returns reaches the board", () => {
+    const leaky = { ...m, result: () => ({ outcome: "solved", timeMs: 1, hints: 0, progress: 1, guesses: 3, points: 7, answer: "CRANE" }) } as unknown as DailyModule;
+    const r = run(leaky);
+    const a = giveUp(leaky, p, r, T0 + 5000);
+    expect(a).toMatchObject({ ok: true, result: { guesses: 3, points: 7, progress: 1 } });
+    expect(Object.keys(r.result as object).sort()).toEqual(["date", "game", "guesses", "hints", "number", "outcome", "points", "progress", "timeMs", "tooFast"]);
+  });
+});
