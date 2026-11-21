@@ -1,3 +1,6 @@
+import { readFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
+
 import { describe, expect, test } from "vitest";
 
 import { LocalDriver, SAMPLE_GIVENS, SAMPLE_SOLUTION } from "../src/daily/nine-lives/local";
@@ -135,4 +138,10 @@ describe("Nine Lives on the web: the board model", () => {
     const done = start({ givens: SAMPLE_GIVENS }, { cells: SAMPLE_SOLUTION, hinted: [] });
     expect(done.selected).toBeNull();
   });
+});
+
+test("the TV's watch view imports nothing from the play side", () => {
+  const source = readFileSync(fileURLToPath(new URL("../src/daily/nine-lives/watch.tsx", import.meta.url)), "utf8");
+  const imports = [...source.matchAll(/^import (?!type )[^;]*?from "([^"]+)"/gm)].map((m) => m[1]);
+  expect(imports.sort()).toEqual(["./grid", "./model"]);
 });

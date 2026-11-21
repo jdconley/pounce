@@ -5,6 +5,7 @@ import { afterEach, describe, expect, test } from "vitest";
 
 import nineLives, { driverFor } from "../src/daily/nine-lives/dish";
 import { SAMPLE_GIVENS, SAMPLE_SOLUTION } from "../src/daily/nine-lives/local";
+import NineLivesWatch from "../src/daily/nine-lives/watch";
 
 import type { RunEvent, RunSession, SendOptions } from "../src/daily/client";
 import type { DailyGameScreenProps } from "../src/daily/host";
@@ -161,10 +162,8 @@ describe("Nine Lives in the Dish (web)", () => {
     root = el;
     document.body.append(el);
     const cells = [...SAMPLE_GIVENS];
-    act(() => render(h(nineLives.Watch, { state: { cells, hinted: [] }, puzzle: { givens: SAMPLE_GIVENS } } as never), el));
+    act(() => render(h(NineLivesWatch, { state: { cells, hinted: [] }, puzzle: { givens: SAMPLE_GIVENS } }), el));
     expect(el.querySelectorAll(".nl-cell")).toHaveLength(81);
     expect(el.querySelectorAll(".nl-given")).toHaveLength(SAMPLE_GIVENS.filter((d) => d).length);
-    act(() => render(h(nineLives.Watch, { state: { cells, hinted: [] } }), el));
-    expect(el.querySelectorAll(".nl-given")).toHaveLength(0);
   });
 });

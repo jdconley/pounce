@@ -1,12 +1,11 @@
 /**
  * Nine Lives in the Daily Dish (the web host's contract, `../host.tsx`). The host draws the bar,
  * the clock, give up, the end and share; this is the board and its keys, talking to the server
- * only through the run session it is given.
+ * only through the run session it is given. The TV's view is `watch.tsx`, loaded on its own.
  */
 import { useMemo } from "preact/hooks";
 
 import { NineLivesPlay } from "./play";
-import { NineLivesWatch } from "./watch";
 
 import type { NineLivesDriver } from "./local";
 import type { BoardState, Puzzle } from "./model";
@@ -35,18 +34,9 @@ function Screen({ session, playing }: Props) {
   return <NineLivesPlay puzzle={session.start.puzzle} state={session.start.state} driver={driver} playing={playing} />;
 }
 
-/**
- * The TV's view of a run. The server sends the puzzle (its givens) with every watch frame; until a
- * frame has it, every digit draws as a player's.
- */
-function Watch({ state, puzzle }: { state: BoardState; puzzle?: Puzzle }) {
-  return <NineLivesWatch puzzle={puzzle ?? { givens: new Array<number>(81).fill(0) }} state={state} />;
-}
-
 const nineLives: DailyGame<Puzzle, BoardState, NineLivesMove, Reveal> = {
   id: "nine-lives",
   Screen,
-  Watch,
   // The share card shows only the time and hints.
   share: () => null,
 };
