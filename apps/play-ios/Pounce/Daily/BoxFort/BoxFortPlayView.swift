@@ -210,3 +210,89 @@ extension BoxFortLayout {
     func lineRect(row: Int) -> CGRect { CGRect(x: rug.minX, y: rug.minY + CGFloat(row) * cell, width: rug.width, height: cell) }
     func lineRect(col: Int) -> CGRect { CGRect(x: rug.minX + CGFloat(col) * cell, y: rug.minY, width: cell, height: rug.height) }
 }
+
+/// Cleared boxes jump, flash white and burst into scraps of cardboard tape.
+struct BoxFortBurstLayer: View {
+    let burst: BoxFortBurst?
+    let layout: BoxFortLayout
+
+    var body: some View {
+        Group {
+            if let burst {
+                KeyframeAnimator(initialValue: 0.0, trigger: burst.id) { t in
+                    Canvas { ctx, _ in draw(&ctx, burst: burst, t: t) }
+                        .allowsHitTesting(false)
+                } keyframes: { _ in
+                    LinearKeyframe(0.0, duration: 0.001)
+                    LinearKeyframe(1.0, duration: Pace.seconds(0.55))
+                }
+            }
+        }
+        .frame(width: layout.size.width, height: layout.size.height)
+    }
+
+    private func draw(_ ctx: inout GraphicsContext, burst: BoxFortBurst, t: Double) {
+        guard t > 0, t < 1 else { return }
+        let cell = layout.cell
+        // Boxes swell, then shrink away; a white flash fades over them.
+        let scale = t < 0.25 ? 1 + 0.5 * t : max(0, 1.125 * (1 - (t - 0.25) / 0.75))
+        for (index, tint) in burst.boxes {
+            let spot = layout.cellRect(row: index / 8, col: index % 8)
+            let r = CGRect(
+                x: spot.midX - spot.width * scale / 2, y: spot.midY - spot.height * scale / 2,
+                width: spot.width * scale, height: spot.height * scale)
+            if r.width > 1 { BoxFortArt.drawBox(&ctx, rect: r, tint: tint) }
+            ctx.fill(Path(roundedRect: r, cornerRadius: r.width * 0.14), with: .color(.white.opacity(max(0, 0.85 - t * 1.6))))
+            // Four scraps fly out of each box.
+            for k in 0..<4 {
+                let angle = Double(index * 37 + k * 90) * .pi / 180
+                let d = cell * (0.3 + 1.4 * t) * (1 + Double(burst.lines) * 0.15)
+                let p = CGPoint(x: spot.midX + cos(angle) * d, y: spot.midY + sin(angle) * d + cell * 1.2 * t * t)
+                let scrap = CGRect(x: p.x - cell * 0.09, y: p.y - cell * 0.05, width: cell * 0.18, height: cell * 0.1)
+                ctx.fill(Path(roundedRect: scrap, cornerRadius: 2), with: .color(BoxFortArt.paint(tint).opacity(1 - t)))
+            }
+        }
+    }
+}
+
+/// "+64" floating up from where a piece landed, bigger with a combo.
+struct BoxFortGainLayer: View {
+    let gain: BoxFortGain?
+    let layout: BoxFortLayout
+
+    var body: some View {
+        Group {
+            if let gain {
+                let x = layout.rug.minX + gain.at.x * layout.cell
+                let y = layout.rug.minY + gain.at.y * layout.cell
+                KeyframeAnimator(initialValue: GainMotion(), trigger: gain.id) { m in
+                    OutlinedText("+\(gain.points)", size: layout.cell * (gain.combo >= 2 ? 0.8 : 0.6), fill: gain.combo >= 2 ? Palette.yellow : .white)
+                        .fixedSize()
+                        .scaleEffect(m.scale)
+                        .opacity(m.opacity)
+                        .position(x: x, y: y + m.rise * layout.cell)
+                } keyframes: { _ in
+                    KeyframeTrack(\.scale) {
+                        CubicKeyframe(1.3, duration: Pace.seconds(0.12))
+                        SpringKeyframe(1, duration: Pace.seconds(0.25))
+                    }
+                    KeyframeTrack(\.rise) { CubicKeyframe(-1.4, duration: Pace.seconds(0.8)) }
+                    KeyframeTrack(\.opacity) {
+                        LinearKeyframe(1, duration: Pace.seconds(0.05))
+                        LinearKeyframe(1, duration: Pace.seconds(0.45))
+                        LinearKeyframe(0, duration: Pace.seconds(0.3))
+                    }
+                }
+                .allowsHitTesting(false)
+                .accessibilityHidden(true)
+            }
+        }
+        .frame(width: layout.size.width, height: layout.size.height, alignment: .topLeading)
+    }
+
+    struct GainMotion {
+        var scale = 0.4
+        var rise = 0.0
+        var opacity = 0.0
+    }
+}

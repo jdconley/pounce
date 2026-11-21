@@ -8,7 +8,7 @@ enum DailyWatchGames {
         SniffWatch.self,
         NineLivesWatch.self,
         CatNapWatch.self,
-        // BoxFortWatch.self,
+        BoxFortWatch.self,
     ]
 
     static func view(for game: String) -> (any DailyWatchView.Type)? {

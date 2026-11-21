@@ -9,7 +9,7 @@ enum DailyGames {
             SniffDaily.self,
             NineLivesDaily.self,
             CatNapDaily.self,
-            // BoxFortDaily.self,
+            BoxFortDaily.self,
         ]
         #if DEBUG
             if DailyTestGame.enabled { games.append(DailyTestGameView.self) }
