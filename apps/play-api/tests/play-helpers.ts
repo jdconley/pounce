@@ -150,6 +150,13 @@ export async function worker(
     appMinimumForce?: string;
     appLatest?: string;
     appStoreUrl?: string;
+    /**
+     * `DAILY` (the Daily Dish): binds its Durable Objects, which the script must export
+     * (tests/daily-entry.ts), and sets the flag unless `daily` is false.
+     */
+    daily?: boolean;
+    /** `DAILY_TEST`: the server's test-only daily game. Needs the daily bindings (`daily` set). */
+    dailyTest?: boolean;
     /** The first-run funnel's database (`FUNNEL`, D1). Unbound unless asked for, as in most tests. */
     funnel?: boolean;
     /** Apple's public lookup (itunes.apple.com). Without it the lookup fails, as for any host a test doesn't fake. */
@@ -170,6 +177,13 @@ export async function worker(
       PAIRS: { className: "Pair", useSQLite: true },
       SCREEN_LINKS: { className: "ScreenLinks", useSQLite: true },
       ...(options.links ? { LINKS: { className: "Links", useSQLite: true } } : {}),
+      ...(options.daily === undefined
+        ? {}
+        : {
+            DAILY_PUZZLES: { className: "DailyPuzzle", useSQLite: true },
+            DAILY_RUNS: { className: "DailyRun", useSQLite: true },
+            BOARD_TOKENS: { className: "BoardTokens", useSQLite: true },
+          }),
       ...(options.consent
         ? { CONSENTS: { className: "Consents", useSQLite: true }, KITTENS: { className: "KittenIndex", useSQLite: true } }
         : {}),
@@ -192,6 +206,8 @@ export async function worker(
       ...(options.reportsKey ? { REPORTS_KEY: options.reportsKey } : {}),
       ...(options.games ? { GAMES: options.games } : {}),
       ...(options.tv ? { TV: "on" } : {}),
+      ...(options.daily ? { DAILY: "on" } : {}),
+      ...(options.daily !== undefined && options.dailyTest ? { DAILY_TEST: "on" } : {}),
       ...(options.appMinimum === undefined ? {} : { APP_MINIMUM: options.appMinimum }),
       ...(options.appMinimumForce === undefined ? {} : { APP_MINIMUM_FORCE: options.appMinimumForce }),
       ...(options.appLatest === undefined ? {} : { APP_LATEST: options.appLatest }),

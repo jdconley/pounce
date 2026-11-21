@@ -73,6 +73,12 @@
     // TV links (/tv/*) open the app. Turn on once the 1.2 app is live on the App Store: a 1.1 app
     // opened by a /tv/ link does nothing, while the web page works.
     "TV_APPLINKS": "off",
+    // The Daily Dish (docs/superpowers/specs/2026-11-20-daily-games-design.md): daily puzzles,
+    // their family board and its TV link, and daily runs counting toward streaks. Off until all
+    // four games, the Dish in the app and on the web, and the TV board have merged and passed the
+    // cross-platform check (spec §11, "all four at once"); then one change turns it on. Off, every
+    // /v1/daily route is a 404 and streaks ignore daily runs.
+    "DAILY": "off",
     // The games rooms may be created for beyond Cat Tower: a comma-separated list of game ids
     // (src/games, e.g. "tiles"). Empty: Cat Tower only, and asking for any other game is refused.
     // "tiles" since version 1.1 can draw the tile game: only an app that lists a game in
@@ -117,7 +123,10 @@
       { "name": "KITTENS", "class_name": "KittenIndex" },
       { "name": "LIMITS", "class_name": "Limiter" },
       { "name": "REPORTS", "class_name": "Reports" },
-      { "name": "SCREEN_LINKS", "class_name": "ScreenLinks" }
+      { "name": "SCREEN_LINKS", "class_name": "ScreenLinks" },
+      { "name": "DAILY_PUZZLES", "class_name": "DailyPuzzle" },
+      { "name": "DAILY_RUNS", "class_name": "DailyRun" },
+      { "name": "BOARD_TOKENS", "class_name": "BoardTokens" }
     ]
   },
   "migrations": [
@@ -127,7 +136,8 @@
     { "tag": "v4", "new_sqlite_classes": ["Links"] },
     { "tag": "v5", "new_sqlite_classes": ["Consents", "KittenIndex"] },
     { "tag": "v6", "new_sqlite_classes": ["Limiter", "Reports"] },
-    { "tag": "v7", "new_sqlite_classes": ["ScreenLinks"] }
+    { "tag": "v7", "new_sqlite_classes": ["ScreenLinks"] },
+    { "tag": "v8", "new_sqlite_classes": ["DailyPuzzle", "DailyRun", "BoardTokens"] }
   ],
   // Invocation logs would record each request URL, which carries room codes.
   "observability": { "enabled": true, "logs": { "invocation_logs": false } }

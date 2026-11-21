@@ -4,7 +4,8 @@ import { APP_HEADER, parseApp } from "./app/version";
 import { issueDeviceToken, verifyDeviceToken } from "./auth";
 import { APPLE_ROOTS } from "./consent/appstore";
 import { noticePage } from "./consent/pages";
-import { devSpeed, tvAppLinksOn, tvOn } from "./env";
+import { dailyRoute } from "./daily/routes";
+import { dailyOn, devSpeed, tvAppLinksOn, tvOn } from "./env";
 import { active, forget, minted, pageView, parseReport, prune, reached, report } from "./funnel/funnel";
 import { DEFAULT_GAME, GAMES_HEADER, gamesListed, gamesOn, gameTitle, isGameId, type GameId } from "./games";
 import { asAppSocket, browserAnswer, isBrowserSocket } from "./http/browser-socket";
@@ -59,6 +60,9 @@ import { consentOn, liveOn, notifyOn, streaksOn, trophyOn } from "./streaks/prof
 
 import type { Env } from "./env";
 
+export { BoardTokens } from "./daily/board-tokens";
+export { DailyPuzzle } from "./daily/puzzle-do";
+export { DailyRun } from "./daily/run-do";
 export { Consents } from "./kittens/consents";
 export { KittenIndex } from "./kittens/kitten-index";
 export { Links } from "./links/links";
@@ -652,7 +656,12 @@ function route(
   consent: boolean,
   trophy: boolean,
   tv: boolean,
+  daily: boolean,
 ): Route | null {
+  if (daily) {
+    const found = dailyRoute(method, pathname);
+    if (found) return found;
+  }
   if (consent) {
     const kitten = kittenRoute(method, pathname);
     if (kitten) return kitten;
@@ -792,7 +801,7 @@ async function handle(request: Request, env: Env, ctx?: ExecutionContext): Promi
   if (method === "GET" && pathname === "/v1/push/web") return webPushOn(env) && env.VAPID_PUBLIC_KEY ? json(200, { publicKey: env.VAPID_PUBLIC_KEY }) : notFound();
   const secret = env.TOKEN_SECRET;
   const mints = method === "POST" && pathname === "/v1/devices";
-  const handler = mints ? null : route(method, pathname, streaks, notify, liveOn(env), consent, trophyOn(env), tvOn(env));
+  const handler = mints ? null : route(method, pathname, streaks, notify, liveOn(env), consent, trophyOn(env), tvOn(env), dailyOn(env));
   if (!mints && !handler) return notFound();
   // Too old to be served (`APP_MINIMUM`, or a protocol the server dropped)? Nobody is while
   // there is no minimum, and then this asks nothing and costs nothing.

@@ -2,7 +2,7 @@ import { readFileSync } from "node:fs";
 
 import { describe, expect, it } from "vitest";
 
-import { devSpeed, tvAppLinksOn, tvOn } from "./env";
+import { dailyOn, devSpeed, tvAppLinksOn, tvOn } from "./env";
 import { gamesOn } from "./games";
 import { liveOn, notifyOn, streaksOn, trophyOn } from "./streaks/profile";
 
@@ -96,5 +96,27 @@ describe("tvAppLinksOn", () => {
     expect(tvAppLinksOn({ TV: "on" })).toBe(false);
     expect(tvAppLinksOn({ TV: "off", TV_APPLINKS: "on" })).toBe(false);
     expect(tvAppLinksOn({ TV_APPLINKS: "on" })).toBe(false);
+  });
+});
+
+describe("DAILY", () => {
+  it("is off in wrangler.jsonc until all four games launch together (spec §11)", () => {
+    const config = readFileSync(new URL("../wrangler.jsonc", import.meta.url), "utf8");
+    const value = /"DAILY"\s*:\s*"([^"]*)"/.exec(config)?.[1];
+    expect(value).toBeDefined();
+    expect(dailyOn({ DAILY: value })).toBe(false);
+  });
+
+  it("never lists the test-only game for deploys (DAILY_TEST)", () => {
+    const config = readFileSync(new URL("../wrangler.jsonc", import.meta.url), "utf8");
+    expect(config).not.toMatch(/DAILY_TEST/);
+  });
+
+  it("is on for the same words as the other flags, and off otherwise", () => {
+    expect(dailyOn({ DAILY: "on" })).toBe(true);
+    expect(dailyOn({ DAILY: "1" })).toBe(true);
+    expect(dailyOn({ DAILY: "TRUE" })).toBe(true);
+    expect(dailyOn({})).toBe(false);
+    expect(dailyOn({ DAILY: "off" })).toBe(false);
   });
 });

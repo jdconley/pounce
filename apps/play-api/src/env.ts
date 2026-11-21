@@ -1,3 +1,6 @@
+import type { BoardTokens } from "./daily/board-tokens";
+import type { DailyPuzzle } from "./daily/puzzle-do";
+import type { DailyRun } from "./daily/run-do";
 import type { Consents } from "./kittens/consents";
 import type { KittenIndex } from "./kittens/kitten-index";
 import type { Links } from "./links/links";
@@ -36,6 +39,12 @@ export interface Env {
   REPORTS: DurableObjectNamespace<Reports>;
   /** Screen links (`TV`): one instance per link, `token:<token>`, and one per backup code, `code:<code>`. */
   SCREEN_LINKS: DurableObjectNamespace<ScreenLinks>;
+  /** The Daily Dish: one instance per game and date, `${game}:${date}`, holding that day's puzzle. */
+  DAILY_PUZZLES: DurableObjectNamespace<DailyPuzzle>;
+  /** The Daily Dish: one instance per run, `${playerId}:${game}:${date}`, the server's referee. */
+  DAILY_RUNS: DurableObjectNamespace<DailyRun>;
+  /** The Daily Dish: one instance per TV board token's hash, naming the player whose board it shows. */
+  BOARD_TOKENS: DurableObjectNamespace<BoardTokens>;
   /**
    * The owner's key for `GET /v1/admin/reports`. A secret, optional: without it that route is a
    * 404 and reports are read in the Cloudflare dashboard instead.
@@ -86,6 +95,18 @@ export interface Env {
    * live aim and screen links. wrangler.jsonc turns it on; off, the server answers as before.
    */
   TV?: string;
+  /**
+   * The Daily Dish (docs/superpowers/specs/2026-11-20-daily-games-design.md, `dailyOn`): daily
+   * puzzles, their board and its TV link, and daily runs counting toward streaks. Off in
+   * wrangler.jsonc until all four games launch together (spec §11); off, every `/v1/daily` route
+   * is a 404 and streaks ignore daily runs.
+   */
+  DAILY?: string;
+  /**
+   * Miniflare tests only (`dailyModule`): "on" lists the server's test-only daily game. Never in
+   * wrangler.jsonc (a test checks the config).
+   */
+  DAILY_TEST?: string;
   /**
    * TV links open the app (`tvAppLinksOn`): the site association lists `/tv/*` when this and `TV`
    * are "on". Off, a `/tv/` link opens the web page even with the app installed, since an app
@@ -193,6 +214,11 @@ export function linkOn(env: Pick<Env, "LINK">): boolean {
 /** Pounce on the TV when "on" (see `Env.TV`). */
 export function tvOn(env: Pick<Env, "TV">): boolean {
   return ["on", "1", "true"].includes((env.TV ?? "").toLowerCase());
+}
+
+/** The Daily Dish when "on" (see `Env.DAILY`). */
+export function dailyOn(env: Pick<Env, "DAILY">): boolean {
+  return ["on", "1", "true"].includes((env.DAILY ?? "").toLowerCase());
 }
 
 /** The site association lists `/tv/*`: `TV` and `TV_APPLINKS` both "on" (see `Env.TV_APPLINKS`). */
