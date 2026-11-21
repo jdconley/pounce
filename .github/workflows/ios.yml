@@ -494,8 +494,6 @@ jobs:
           tv=(PounceTV PounceKit Config project.yml
             Pounce/Table Pounce/Tiles
             ':!Pounce/Tiles/TilesStage.swift' ':!Pounce/Tiles/TilesChrome.swift' ':!Pounce/Tiles/TilesDemo.swift'
-            Pounce/Daily/DailyWatchView.swift Pounce/Daily/DailyWatchGames.swift
-            Pounce/Daily/BoxFort/BoxFortWatch.swift Pounce/Daily/BoxFort/BoxFortArt.swift Pounce/Daily/BoxFort/BoxFortParts.swift
             Pounce/App/FrameWork.swift Pounce/App/MainThreadWatchdog.swift Pounce/App/Autoplay.swift
             Pounce/Design/ArtName.swift Pounce/Design/FadeGroup.swift Pounce/Design/GroupOpacity.swift Pounce/Design/Haptics.swift
             Pounce/Design/Juice.swift Pounce/Design/NameTag.swift Pounce/Design/OutlinedText.swift Pounce/Design/Pace.swift
