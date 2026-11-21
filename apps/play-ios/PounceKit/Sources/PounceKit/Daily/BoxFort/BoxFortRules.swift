@@ -67,6 +67,11 @@ public struct BoxFortPublicPuzzle: Hashable, Sendable, Codable {
 public struct BoxFortReveal: Hashable, Sendable, Codable {
     public let set: Int
     public let pieces: [BoxFortPiece]
+
+    public init(set: Int, pieces: [BoxFortPiece]) {
+        self.set = set
+        self.pieces = pieces
+    }
 }
 
 /// The lines one placement cleared.
@@ -75,6 +80,11 @@ public struct BoxFortCleared: Hashable, Sendable, Codable {
     public let cols: [Int]
 
     public static let none = BoxFortCleared(rows: [], cols: [])
+
+    public init(rows: [Int], cols: [Int]) {
+        self.rows = rows
+        self.cols = cols
+    }
 
     public var count: Int { rows.count + cols.count }
 }
@@ -213,5 +223,23 @@ public enum BoxFortRules {
         out.placed = [false, false, false]
         out.over = anyFits(s.rug, next) ? nil : .stuck
         return out
+    }
+
+    /// `deal`, off the caller's actor (it looks for room for the new set).
+    @concurrent
+    public static func dealOffMain(_ s: BoxFortState, next: [BoxFortPiece]?) async -> BoxFortState {
+        deal(s, next: next)
+    }
+
+    /// For each slot of the current set, whether its piece fits anywhere now. Placed slots count
+    /// as fitting, so only the tray's stuck pieces dim.
+    public static func fitsBySlot(_ s: BoxFortState) -> [Bool] {
+        s.placed.indices.map { s.placed[$0] || $0 >= s.pieces.count || anyFits(s.rug, [s.pieces[$0]]) }
+    }
+
+    /// `fitsBySlot`, off the caller's actor.
+    @concurrent
+    public static func fitsBySlotOffMain(_ s: BoxFortState) async -> [Bool] {
+        fitsBySlot(s)
     }
 }

@@ -53,4 +53,16 @@ struct BoxFortRulesTests {
         #expect(state.over == nil)
         #expect(state.left == [0, 1, 2])
     }
+
+    @Test func fitsBySlotDimsOnlyTheStuckPieces() async {
+        var rug = [Int](repeating: BoxFortRules.clutter, count: 64)
+        rug[0] = 0
+        var state = BoxFortRules.start(BoxFortPublicPuzzle(rug: rug, sets: 2, pieces: [piece("#"), piece("##"), piece("#/#")]))
+        #expect(BoxFortRules.fitsBySlot(state) == [true, false, false])
+        state.placed = [false, true, false]
+        #expect(await BoxFortRules.fitsBySlotOffMain(state) == [true, true, false])
+        let dealt = await BoxFortRules.dealOffMain(state, next: [piece("##"), piece("##"), piece("##")])
+        #expect(dealt.over == .stuck && dealt.set == 1)
+    }
 }
+
