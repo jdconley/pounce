@@ -13,7 +13,7 @@ import { begin, cancel, end, hint, load, move, start, shown, tap } from "../src/
 import { CatNapPlay } from "../src/daily/cat-nap/play";
 import catNapWatch, { CatNapWatch } from "../src/daily/cat-nap/watch";
 
-import type { RunEvent, RunSession } from "../src/daily/cat-nap/host-contract";
+import type { RunEvent, RunSession } from "../src/daily/client";
 import type { ComponentChild } from "preact";
 
 /** The 5 by 5 quilt from the server's vectors. */

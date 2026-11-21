@@ -7,7 +7,7 @@ import { useCallback, useState } from "preact/hooks";
 
 import { CatNapPlay, type NapEvent } from "./play";
 
-import type { DailyGame, DailyGameScreenProps } from "./host-contract";
+import type { DailyGame, DailyGameScreenProps } from "../host";
 import type { NapMove, NapState, Quilt } from "@pounce/play-api/daily/cat-nap/rules";
 
 /** What a hint reveals: the cell of its cat (`module.ts`). Moves reveal nothing. */

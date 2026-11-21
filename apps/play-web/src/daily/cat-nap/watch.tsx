@@ -8,7 +8,7 @@ import { useMemo } from "preact/hooks";
 import { checkBoard } from "./check";
 import { Beds, QuiltSvg } from "./quilt";
 
-import type { DailyWatchView } from "./host-contract";
+import type { DailyWatchView } from "../host";
 import type { NapState, Quilt } from "@pounce/play-api/daily/cat-nap/rules";
 
 /** A watch frame: the quilt (the run's public puzzle) and the board (its public state). */
