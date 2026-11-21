@@ -41,11 +41,11 @@ export type DailyGameScreenProps<P = unknown, S = unknown, M = unknown, R = unkn
 export type DailyGameScreen<P = unknown, S = unknown, M = unknown, R = unknown> = ComponentType<DailyGameScreenProps<P, S, M, R>>;
 
 /**
- * A run as a TV watches it (spec §8): read only, drawn from the server's public state alone. The
- * TV hears `{ t: "watch", state }` frames and nothing else, so `publicState` must carry everything
- * this view needs (a Nine Lives grid's givens, Cat Nap's quilt). No notes, no selection.
+ * A run as a TV watches it (spec §8): read only, drawn from one `{ t: "watch", puzzle, state }`
+ * frame: the run's public puzzle (as start gives it: Nine Lives' givens, Cat Nap's quilt) and its
+ * public state. No notes, no selection.
  */
-export type DailyWatchView<S = unknown> = ComponentType<{ state: S }>;
+export type DailyWatchView<P = unknown, S = unknown> = ComponentType<{ puzzle: P; state: S }>;
 
 /** One mark on a share card: a filled paw, an outlined paw, or plain (spec §7 "Share"). */
 export type ShareMark = "full" | "half" | "none";
@@ -60,7 +60,7 @@ export type ShareGrid = ShareMark[][];
 export interface DailyGame<P = unknown, S = unknown, M = unknown, R = unknown> {
   id: DailyGameId;
   Screen: DailyGameScreen<P, S, M, R>;
-  Watch: DailyWatchView<S>;
+  Watch: DailyWatchView<P, S>;
   /** The share card's grid for an ended run, from its final public state. Leave out for none. */
   share?: (state: S, result: DailyResult) => ShareGrid | null;
 }

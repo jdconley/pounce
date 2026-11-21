@@ -195,7 +195,14 @@ export class Run<P = unknown, S = unknown, M = unknown, R = unknown> implements 
   async hint(): Promise<R | null> {
     await this.flush();
     if (this.result) return null;
-    const answer = await this.post<MovesAnswer<R>>("hint");
+    // The count so far makes a resend safe: asked again with the same count, the server answers
+    // the same hint and charges nothing more. So a dropped hint is asked again, a few times.
+    const body = { hints: this.hints };
+    let answer: MovesAnswer<R> | null = null;
+    for (let attempt = 0; !answer && attempt < BACKOFF.length; attempt++) {
+      answer = await this.post<MovesAnswer<R>>("hint", body).catch(() => null);
+      if (!answer) await new Promise<void>((r) => this.setTimer(r, BACKOFF[attempt] as number));
+    }
     if (!answer) return null;
     if (!answer.ok) {
       if (answer.error !== "illegal") await this.resync();

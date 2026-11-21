@@ -48,7 +48,7 @@ function TestScreen({ session, playing }: Props) {
   );
 }
 
-function TestWatch({ state }: { state: TestState }) {
+function TestWatch({ state }: { puzzle: TestPuzzle; state: TestState }) {
   return <div class="dd-test-count">{state.n}</div>;
 }
 

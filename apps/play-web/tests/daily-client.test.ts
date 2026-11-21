@@ -174,6 +174,18 @@ describe("the run session", () => {
     expect(events).toContainEqual({ kind: "hint", reveal: { n: 2 }, hints: 1 });
   });
 
+  test("a hint carries the count so far, and a dropped one is asked again with the same count", async () => {
+    const { clock, calls, run } = setup([ok(0, { reveals: [{ n: 1 }] }), new ApiError(0, "offline"), ok(0, { reveals: [{ n: 2 }] })]);
+    await run.hint();
+    const second = run.hint();
+    await flush();
+    clock.advance(250);
+    await flush();
+    expect(await second).toEqual({ n: 2 });
+    expect(calls.map((c) => c.body)).toEqual([{ hints: 0 }, { hints: 1 }, { hints: 1 }]);
+    expect(run.hints).toBe(2);
+  });
+
   test("giveUp flushes, then ends the run", async () => {
     const gaveUp = { ...solved, outcome: "gaveUp", progress: 0.25 };
     const { calls, run, events } = setup([ok(1), ok(1, { result: gaveUp })]);
