@@ -40,6 +40,15 @@ describe("Nine Lives refereed by the server's run core", () => {
     expect(moves(m, p, r, 0, batch, T0 + 5_000)).toMatchObject({ ok: true, seq: 3 });
   });
 
+  test("sustained inhuman speed is refused: more moves than the time allows (S1's cumulative budget)", () => {
+    // A second in, the budget is floor(1000 / 100) + 10 = 20 moves; a whole solve is far more.
+    const r = run();
+    const batch = open.map((i) => ({ k: "set", i, d: p.solution[i] }));
+    expect(batch.length).toBeGreaterThan(20);
+    expect(moves(m, p, r, 0, batch, T0 + 1_000)).toMatchObject({ ok: false, error: "too_soon" });
+    expect(r.seq).toBe(0);
+  });
+
   test("a hint fills a cell and costs 30 s", () => {
     const r = run();
     const a = useHint(m, p, r, T0 + 10_000);
