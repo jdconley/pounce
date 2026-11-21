@@ -25,7 +25,7 @@ test("the test game plays end to end: Home, the host, the end, the board and sta
   const mia = await newPlayer(browser, "Mia");
   const { page } = mia;
   await expect(page.getByRole("button", { name: "Open the Dish" })).toBeVisible();
-  await page.getByRole("button", { name: "Play Test" }).click();
+  await page.getByRole("button", { name: "Test Play" }).click();
   await expect(page).toHaveURL(/\/play\/daily\/test$/);
   await expect(page.getByRole("timer")).toHaveText(/^0:0\d$/);
   await countToTheEnd(page);
@@ -51,7 +51,7 @@ test("the test game plays end to end: Home, the host, the end, the board and sta
   await scan(page, "the Dish");
 
   await page.getByRole("button", { name: "Home" }).click();
-  await expect(page.getByRole("button", { name: /^Test, 0:0\d$/ })).toBeVisible();
+  await expect(page.getByRole("button", { name: /^Test 0:0\d$/ })).toBeVisible();
   await expect(page.getByText("All done")).toBeVisible();
   await closeAll(mia.context);
 });

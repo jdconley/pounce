@@ -56,7 +56,6 @@ export function TodayDish() {
               key={game}
               class={`dd-tile ${mine?.result ? "done" : ""}`}
               style={{ "--c": look.color, "--d": look.deep }}
-              aria-label={mine?.result ? `${look.title}, ${words}` : `Play ${look.title}`}
               onClick={() => navigate({ kind: "daily", game })}
             >
               <Treat game={game} size={52} />
