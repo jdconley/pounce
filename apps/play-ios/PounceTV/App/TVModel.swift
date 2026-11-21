@@ -12,12 +12,15 @@ import PounceKit
 /// - Moving to another table (a phone's link, Play again, Change game) closes the old table's
 ///   screen socket before the new one opens.
 /// - In the background the table's socket closes; back in front, the TV joins it again.
+/// - Tonight's board (the Daily Dish, docs/daily-protocol.md): a phone's link can bring a board
+///   instead of a table. The TV keeps its token 30 days and opens to it when it kept no table;
+///   a board replaces a table, and the board's menu has Play a game and Unlink.
 @MainActor @Observable
 final class TVModel {
     enum Phase: Equatable {
         /// Reading what the TV kept: the launch backdrop, for a few milliseconds.
         case starting
-        case home, lobby, table, over
+        case home, board, lobby, table, over
     }
 
     /// The menu over a table: shut, its three choices, or the link for another table.
@@ -49,6 +52,14 @@ final class TVModel {
     private(set) var refused = 0
     /// A table is being made.
     private(set) var making = false
+    /// Tonight's board, while it's on screen.
+    private(set) var board: TVBoard?
+    /// The server has the Daily Dish on: home shows Tonight's board's poster.
+    private(set) var dishOn = false
+    /// Tonight's board's link panel over home (before a phone linked a board).
+    private(set) var boardLinkShown = false
+    /// The board token this TV keeps, if any.
+    private(set) var keptBoard: KeptBoard?
 
     @ObservationIgnored private let services: TVServices
     /// Socket work, one step at a time: an old table's socket is closed before a new one opens.
@@ -86,10 +97,18 @@ final class TVModel {
         guard !started else { return }
         started = true
         let kept = await services.keep.load()
+        let board = await services.boards.load()
         soundOn = kept.soundOn
         services.applySound(kept.soundOn)
+        if let board, board.live(at: services.now()) {
+            keptBoard = board
+        } else if board != nil {
+            keep(board: nil)
+        }
         if let room = kept.room {
             show(room)
+        } else if let keptBoard {
+            openBoard(keptBoard)
         } else {
             goHome()
         }
@@ -112,6 +131,8 @@ final class TVModel {
         menuLink = nil
         menu = .closed
         winners = []
+        boardLinkShown = false
+        closeBoard()
         let old = table
         let next = TVRoom(code: code, socket: services.socket, watchesNetwork: services.watchesNetwork)
         next.onChange = { [weak self] room in self?.roomChanged(room) }
@@ -143,12 +164,109 @@ final class TVModel {
         menuLink = nil
         menu = .closed
         winners = []
+        boardLinkShown = false
+        closeBoard()
         let old = table
         table = nil
         phase = .home
         if forget { keep(room: nil) }
         if let old { step { await old.close() } }
         startHomeLink()
+        askDish()
+    }
+
+    // MARK: Tonight's board
+
+    /// Whether the server has the Daily Dish on, asked each time home shows.
+    private func askDish() {
+        let dailyOn = services.dailyOn
+        Task {
+            let on = await dailyOn()
+            guard self.phase == .home else { return }
+            self.dishOn = on
+        }
+    }
+
+    /// A phone linked this TV to its board: kept for 30 days from now, and shown.
+    private func linkBoard(_ token: String) {
+        let fresh = KeptBoard.fresh(token, now: services.now())
+        keptBoard = fresh
+        keep(board: fresh)
+        openBoard(fresh)
+    }
+
+    /// Shows the board `kept`: a table shown is let go and forgotten, its socket closed first.
+    private func openBoard(_ kept: KeptBoard) {
+        stopLink(&homeWatch)
+        stopLink(&menuWatch)
+        homeLink = nil
+        menuLink = nil
+        menu = .closed
+        winners = []
+        boardLinkShown = false
+        closeBoard()
+        let old = table
+        table = nil
+        keep(room: nil)
+        phase = .board
+        let next = TVBoard(token: kept.token, socket: services.boardSocket(kept.token), now: services.now)
+        next.onGone = { [weak self, weak next] in
+            guard let self, let next, self.board === next else { return }
+            self.forgetBoard()
+        }
+        next.onCheer = { solved in
+            Sound.shared.play(solved ? ArtName.Sound.sfxFanfare : ArtName.Sound.sfxSparkle, volume: 0.8)
+        }
+        next.onOffer = { Sound.shared.play(ArtName.Sound.sfxPop, volume: 0.6) }
+        board = next
+        #if DEBUG
+        fputs("[tv] board\n", stderr)
+        #endif
+        step {
+            await old?.close()
+            guard self.board === next, !self.asleep else { return }
+            next.start()
+        }
+    }
+
+    private func closeBoard() {
+        guard let old = board else { return }
+        board = nil
+        step { await old.close() }
+    }
+
+    /// The board is forgotten (Unlink, or the server no longer knows it), and home.
+    private func forgetBoard() {
+        keptBoard = nil
+        keep(board: nil)
+        goHome()
+    }
+
+    /// Tonight's board's poster: the kept board, or its link.
+    func pressBoard() {
+        guard phase == .home else { return }
+        if let keptBoard, keptBoard.live(at: services.now()) {
+            openBoard(keptBoard)
+        } else {
+            boardLinkShown = true
+        }
+    }
+
+    /// Back from the board's link panel to home.
+    func closeBoardLink() {
+        boardLinkShown = false
+    }
+
+    /// "Unlink", on the board's menu.
+    func unlink() {
+        guard phase == .board else { return }
+        forgetBoard()
+    }
+
+    /// "Play a game", on the board's menu: home, with the board kept.
+    func playAGame() {
+        guard phase == .board else { return }
+        goHome()
     }
 
     /// Moves to table `code`, unless it's the one shown.
@@ -186,6 +304,7 @@ final class TVModel {
             if phase != .over { phase = room.scene == nil ? .over : .table }
         }
         // Play again: the TV follows to the new table, as its screen there.
+        guard phase != .board else { return }
         if let next = room.store.rematch, next != room.code {
             move(to: next)
         }
@@ -244,7 +363,9 @@ final class TVModel {
     /// The remote's Menu (or Back) at a table: opens the menu, goes back from its link to its
     /// choices, and shuts it.
     func back() {
-        guard table != nil else { return }
+        if phase == .home, boardLinkShown { return closeBoardLink() }
+        if phase == .board, menu == .closed, let board, board.state.watching != nil { return board.stopWatching() }
+        guard table != nil || phase == .board else { return }
         switch menu {
         case .closed: menu = .items
         case .link: closeLink()
@@ -253,9 +374,12 @@ final class TVModel {
     }
 
     func openMenu() {
-        guard table != nil else { return }
+        guard table != nil || phase == .board else { return }
         menu = .items
     }
+
+    /// Menu (or Back) does something here: at a table, on the board, or over the board's link.
+    var takesBack: Bool { table != nil || phase == .board || (phase == .home && boardLinkShown) }
 
     func closeMenu() {
         if menu == .link { closeLink() }
@@ -300,6 +424,11 @@ final class TVModel {
         asleep = true
         stopLink(&homeWatch)
         stopLink(&menuWatch)
+        // The board's socket closes; back in front a new one opens.
+        if let board {
+            let old = board
+            step { await old.close() }
+        }
         step { await self.syncSleep() }
         await steps?.value
     }
@@ -309,6 +438,7 @@ final class TVModel {
         guard started, asleep else { return }
         asleep = false
         if phase == .home { startHomeLink() }
+        if phase == .board, let keptBoard { openBoard(keptBoard) }
         if menu == .link, let table { startMenuLink(showing: table.code) }
         step { await self.syncSleep() }
         await steps?.value
@@ -352,6 +482,9 @@ final class TVModel {
                 // The link is spent; showing the table stops it.
                 guard phase == .home else { return }
                 show(room)
+            case .board(let token):
+                guard phase == .home else { return }
+                linkBoard(token)
             }
         }
     }
@@ -373,6 +506,9 @@ final class TVModel {
                 menuOffline = true
             case .linked(let room):
                 move(to: room)
+            case .board(let token):
+                // A board replaces the table shown.
+                linkBoard(token)
             }
         }
     }
@@ -407,5 +543,10 @@ final class TVModel {
     private func keep(room: String?) {
         let keep = services.keep
         writes.run { await keep.keep(room: room) }
+    }
+
+    private func keep(board: KeptBoard?) {
+        let boards = services.boards
+        writes.run { await boards.keep(board) }
     }
 }

@@ -24,6 +24,14 @@ struct TVServices {
     var socket: @Sendable (_ code: String) -> any RoomSocketing
     /// The kept table and sound setting.
     var keep: any ScreenKeeping
+    /// Tonight's board's socket for board token `token` (one connection; a new one to reconnect).
+    var boardSocket: @Sendable (_ token: String) -> any BoardSocketing = { _ in NoBoardSocket() }
+    /// The kept board token (the Keychain on a real TV).
+    var boards: any BoardKeeping = MemoryBoardKeep()
+    /// Whether the server has the Daily Dish on (its board socket answers 426 to a plain request).
+    var dailyOn: @Sendable () async -> Bool = { false }
+    /// The clock: the board token's 30 days, the watch card's 20 seconds.
+    var now: @Sendable () -> Date = { Date() }
     /// The link a phone scans to join table `code`: `/j/<CODE>` on this TV's server.
     var inviteURL: (_ code: String) -> URL = { DeepLink.shareURL(code: $0) }
     /// Applies the TV's sound setting to the game's sounds.
@@ -43,7 +51,38 @@ extension TVServices {
                 RoomSocket(code: code, config: config, role: .screen, credential: { try await api.credential() }, connector: URLSessionWebSocketConnector(headers: config.headers))
             },
             keep: DefaultsScreenKeep(),
+            boardSocket: { token in
+                TVBoardSocket(
+                    url: TVBoardSocket.url(config: config, board: token),
+                    credential: { try await api.credential() },
+                    connector: URLSessionWebSocketConnector(headers: config.headers))
+            },
+            boards: KeychainBoardKeep(),
+            dailyOn: { await TVServices.dailyOn(api: api, config: config) },
             inviteURL: { config.endpoint("/j/\($0)") },
             watchesNetwork: true)
     }
+
+    /// Asks the server whether the Daily Dish is on: `GET /v1/daily/board/ws` without an upgrade
+    /// answers 426 when it is, 404 when it isn't (docs/daily-protocol.md). Anything else is off.
+    @concurrent
+    static func dailyOn(api: APIClient, config: APIConfig) async -> Bool {
+        guard let token = try? await api.credential().token else { return false }
+        var request = URLRequest(url: config.endpoint("/v1/daily/board/ws"))
+        request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        for (name, value) in config.headers { request.setValue(value, forHTTPHeaderField: name) }
+        guard let (_, response) = try? await URLSession.shared.data(for: request) else { return false }
+        return (response as? HTTPURLResponse)?.statusCode == 426
+    }
+}
+
+/// A board socket that never connects: services with no Daily Dish (demos that don't show it).
+final class NoBoardSocket: BoardSocketing {
+    let events: AsyncStream<BoardSocketEvent>
+    private let feed: AsyncStream<BoardSocketEvent>.Continuation
+
+    init() { (events, feed) = AsyncStream.makeStream(of: BoardSocketEvent.self) }
+
+    func start() async {}
+    func stop() async { feed.finish() }
 }
