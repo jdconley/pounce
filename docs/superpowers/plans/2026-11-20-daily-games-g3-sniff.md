@@ -157,7 +157,7 @@ a letter is `near` while the answer still has unmatched copies of it, else `none
 
 **Files:**
 - Create: `apps/play-api/src/daily/sniff/contract.ts` (Task 3's types, `DayLevel`, `Day`, plus the
-  proposed optional `make(rng, level, day?: { date: Day; key: Seed })`)
+  approved `make(rng, level, day: { date: Day; key: Seed })`)
 - Create: `apps/play-api/src/daily/sniff/answer.ts`, `module.ts`
 - Create: `apps/play-api/fixtures/daily/sniff/runs.json` (written by the test with
   `UPDATE_SNIFF_VECTORS=1`, then checked)
@@ -288,6 +288,7 @@ a letter is `near` while the answer still has unmatched copies of it, else `none
 
 ## Open with the lead
 
-- `make` has no date, so a no-repeat cycle needs `make(rng, level, day?)` (asked 2026-11-20).
+- Settled 2026-11-20: `make(rng, level, day: { date, key })`, `day` required, `key` from S1's
+  `cycleKey(secret, game)`. `pickAnswer` (the no-day fallback) is gone.
 - `publicState(p, s)` can't tell a run ended by give up or 04:00, so it can't show the answer then.
   The host may need the answer on those ends.
