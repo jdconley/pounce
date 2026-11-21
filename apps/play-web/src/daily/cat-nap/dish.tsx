@@ -1,12 +1,11 @@
 /**
- * Cat Nap in the Daily Dish (the web host's contract, `../host.tsx`): the quilt to play, the
- * quilt to watch on a TV, and no share grid (Cat Nap's card shows only the time and hints).
- * Loaded in its own chunk by the registry.
+ * Cat Nap in the Daily Dish (the web host's contract, `../host.tsx`): the quilt to play, and no
+ * share grid (Cat Nap's card shows only the time and hints). Loaded in its own chunk by the
+ * registry; the TV's watch view is `watch.tsx`, loaded apart.
  */
 import { useCallback, useState } from "preact/hooks";
 
 import { CatNapPlay, type NapEvent } from "./play";
-import { CatNapWatch } from "./watch";
 
 import type { DailyGame, DailyGameScreenProps } from "./host-contract";
 import type { NapMove, NapState, Quilt } from "@pounce/play-api/daily/cat-nap/rules";
@@ -52,14 +51,9 @@ function CatNapScreen({ session, playing }: Props) {
   );
 }
 
-function CatNapWatchView({ puzzle, state }: { puzzle: Quilt; state: NapState }) {
-  return <CatNapWatch quilt={puzzle} state={state} />;
-}
-
 const catNap: DailyGame<Quilt, NapState, NapMove, NapReveal> = {
   id: "cat-nap",
   Screen: CatNapScreen,
-  Watch: CatNapWatchView,
   share: () => null,
 };
 

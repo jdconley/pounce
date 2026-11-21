@@ -1,4 +1,8 @@
 // @vitest-environment happy-dom
+import { existsSync, readFileSync } from "node:fs";
+import { dirname, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
+
 import { clashes, emptyState, type NapMove, type NapState, type Quilt } from "@pounce/play-api/daily/cat-nap/rules";
 import { h, render } from "preact";
 import { act } from "preact/test-utils";
@@ -7,7 +11,7 @@ import { describe, expect, test } from "vitest";
 import catNap, { type NapReveal } from "../src/daily/cat-nap/dish";
 import { begin, cancel, end, hint, load, move, start, shown, tap } from "../src/daily/cat-nap/model";
 import { CatNapPlay } from "../src/daily/cat-nap/play";
-import { CatNapWatch } from "../src/daily/cat-nap/watch";
+import catNapWatch, { CatNapWatch } from "../src/daily/cat-nap/watch";
 
 import type { RunEvent, RunSession } from "../src/daily/cat-nap/host-contract";
 import type { ComponentChild } from "preact";
@@ -78,7 +82,7 @@ describe("the views", () => {
   test("watch draws a cat per cat cell, an x per no-cat cell, and takes no input", () => {
     const state: NapState = { cells: emptyState(Q).cells.map((_, i) => (i === 1 || i === 8 ? 2 : i === 0 ? 1 : 0)), hinted: [8] };
     const root = document.createElement("div");
-    render(h(CatNapWatch, { quilt: Q, state }), root);
+    render(h(CatNapWatch, { puzzle: Q, state }), root);
     expect(root.querySelectorAll("[data-cat]")).toHaveLength(2);
     expect(root.querySelectorAll("[data-x]")).toHaveLength(1);
     expect(root.querySelectorAll("[data-hinted]")).toHaveLength(1);
@@ -193,10 +197,31 @@ describe("the Dish entry", () => {
     expect(listeners.size).toBe(0);
   });
 
-  test("Watch draws from the frame's puzzle and state", () => {
+  test("the watch module draws from the frame's puzzle and state", () => {
     const state = { cells: emptyState(Q).cells.map((_, i) => (i === 3 ? 2 : 0)) as NapState["cells"], hinted: [] };
-    const root = mount(h(catNap.Watch, { puzzle: Q, state }));
+    expect("Watch" in catNap).toBe(false);
+    const root = mount(h(catNapWatch, { puzzle: Q, state }));
     expect(root.querySelectorAll("[data-cat]")).toHaveLength(1);
     expect(root.querySelector("[data-cell]")).toBeNull();
+  });
+});
+
+describe("the watch module, loaded alone on a TV", () => {
+  test("never pulls in the play screen, the Dish entry, the model or the host", () => {
+    const src = resolve(dirname(fileURLToPath(import.meta.url)), "../src/daily/cat-nap");
+    const seen = new Set<string>();
+    const walk = (file: string) => {
+      if (seen.has(file)) return;
+      seen.add(file);
+      for (const m of readFileSync(file, "utf8").matchAll(/^\s*(?:import|export)\s(?!type\s)[^;]*?from\s+"(\.[^"]+)"/gm)) {
+        const base = resolve(dirname(file), m[1]!);
+        const next = [".tsx", ".ts"].map((ext) => base + ext).find((p) => existsSync(p));
+        if (next) walk(next);
+      }
+    };
+    walk(resolve(src, "watch.tsx"));
+    const names = [...seen].map((p) => p.split("/src/daily/")[1]);
+    expect(names).toEqual(expect.arrayContaining(["cat-nap/watch.tsx", "cat-nap/quilt.tsx", "cat-nap/check.ts"]));
+    for (const heavy of ["cat-nap/play.tsx", "cat-nap/dish.tsx", "cat-nap/model.ts", "host.tsx", "client.ts"]) expect(names).not.toContain(heavy);
   });
 });

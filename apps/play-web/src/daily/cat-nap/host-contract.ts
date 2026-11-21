@@ -1,8 +1,8 @@
 /**
  * A copy of the Dish's web host contract (`src/daily/host.tsx` and `client.ts` at dfd9955 on H2's
  * branch), only the parts Cat Nap uses, kept here until H2 and S1 merge. Then this file goes and
- * `dish.tsx` imports `../host` and `../client`. One change the lead decided after dfd9955: a
- * watch view gets `{ puzzle, state }` (S1 adds the public puzzle to every watch frame).
+ * `dish.tsx` and `watch.tsx` import `../host` and `../client`. As final in H2's PR #127: a watch
+ * view is its own module and gets `{ puzzle, state }`; `DailyGame` has no `Watch`.
  */
 import type { DailyGameId, DailyResult } from "@pounce/play-api/daily/module";
 import type { ComponentType } from "preact";
@@ -55,6 +55,5 @@ export type ShareGrid = ShareMark[][];
 export interface DailyGame<P = unknown, S = unknown, M = unknown, R = unknown> {
   id: DailyGameId;
   Screen: DailyGameScreen<P, S, M, R>;
-  Watch: DailyWatchView<P, S>;
   share?: (state: S, result: DailyResult) => ShareGrid | null;
 }
