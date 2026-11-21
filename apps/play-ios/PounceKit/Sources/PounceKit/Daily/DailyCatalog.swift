@@ -20,13 +20,16 @@ public struct DailyGameInfo: Sendable, Hashable, Identifiable {
     public let hints: Bool
     /// Sniff's six guesses; nil for games with no fixed number of tries.
     public let tries: Int?
+    /// The game's color on the Dish and its share card, from Pounce's palette (0xRRGGBB).
+    public let tint: UInt32
 
-    public init(id: String, title: String, scoring: DailyScoring, hints: Bool, tries: Int? = nil) {
+    public init(id: String, title: String, scoring: DailyScoring, hints: Bool, tries: Int? = nil, tint: UInt32) {
         self.id = id
         self.title = title
         self.scoring = scoring
         self.hints = hints
         self.tries = tries
+        self.tint = tint
     }
 
     /// "Sniff 12: 4 of 6", "Nine Lives 12: 4:07", "Box Fort 12: 1,240 points", "Cat Nap 12: Missed".
@@ -71,12 +74,12 @@ public struct DailyGameInfo: Sendable, Hashable, Identifiable {
 /// Box Fort). A game is played only when the app also has its screen (`Pounce/Daily/DailyGames.swift`,
 /// one line per game) and the server lists it.
 public enum DailyCatalog {
-    public static let sniff = DailyGameInfo(id: "sniff", title: "Sniff", scoring: .guesses, hints: false, tries: 6)
-    public static let nineLives = DailyGameInfo(id: "nine-lives", title: "Nine Lives", scoring: .time, hints: true)
-    public static let catNap = DailyGameInfo(id: "cat-nap", title: "Cat Nap", scoring: .time, hints: true)
-    public static let boxFort = DailyGameInfo(id: "box-fort", title: "Box Fort", scoring: .points, hints: false)
+    public static let sniff = DailyGameInfo(id: "sniff", title: "Sniff", scoring: .guesses, hints: false, tries: 6, tint: 0xFF2E9A)
+    public static let nineLives = DailyGameInfo(id: "nine-lives", title: "Nine Lives", scoring: .time, hints: true, tint: 0x2EB8FF)
+    public static let catNap = DailyGameInfo(id: "cat-nap", title: "Cat Nap", scoring: .time, hints: true, tint: 0x00D1C1)
+    public static let boxFort = DailyGameInfo(id: "box-fort", title: "Box Fort", scoring: .points, hints: false, tint: 0xFF8A00)
     /// The server's test game (`DAILY_TEST=on`): count to 3 + level. Debug builds only play it.
-    public static let test = DailyGameInfo(id: "test", title: "Count", scoring: .time, hints: true)
+    public static let test = DailyGameInfo(id: "test", title: "Count", scoring: .time, hints: true, tint: 0x9BE22E)
 
     public static let all: [DailyGameInfo] = [sniff, nineLives, catNap, boxFort]
 
