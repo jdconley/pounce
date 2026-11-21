@@ -52,7 +52,7 @@ export function rankGame(m: DailyModule, rows: BoardRow[]): BoardRow[] {
  * The overall board, the Dish (spec §6): per game 3, 2 and 1 points for the first three places
  * (ties share a place's points), plus 1 for each ended run (a run closed at 04:00 didn't end), and
  * a crown for each game won. Only ranked rows count: too-fast runs and people still playing earn
- * nothing.
+ * nothing. Only rows with at least 1 point are listed.
  */
 export function dish(boards: GameBoard[]): Dish {
   const byPlayer = new Map<string, DishRow>();
@@ -69,7 +69,8 @@ export function dish(boards: GameBoard[]): Dish {
       byPlayer.set(r.player, row);
     }
   }
-  const sorted = [...byPlayer.values()].sort(
+  // No row with 0 points: no last place, and no row for someone who only ran out the clock.
+  const sorted = [...byPlayer.values()].filter((r) => r.points > 0).sort(
     (a, b) => b.points - a.points || b.crowns.length - a.crowns.length || b.ended - a.ended || a.name.localeCompare(b.name),
   );
   const placed = ranks(sorted, (a, b) => a.points === b.points);

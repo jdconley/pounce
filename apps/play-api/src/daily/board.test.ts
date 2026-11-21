@@ -90,6 +90,22 @@ describe("dish", () => {
     expect(d.rows.map((r) => r.player)).toEqual(["a"]);
   });
 
+  it("someone with 0 points isn't on the Dish: no last place for a run closed at 04:00 in 4th", () => {
+    const d = dish([
+      board([
+        row("a", { timeMs: 40_000 }),
+        row("b", { timeMs: 50_000 }),
+        row("c", { timeMs: 60_000 }),
+        row("d", { outcome: "closed", progress: 0.1 }),
+      ]),
+    ]);
+    expect(d.rows.map((r) => [r.player, r.points])).toEqual([
+      ["a", 4],
+      ["b", 3],
+      ["c", 2],
+    ]);
+  });
+
   it("equal totals share a rank", () => {
     const d = dish([board([row("a", {})]), board([row("b", {})], "sniff")]);
     expect(d.rows.map((r) => [r.player, r.rank])).toEqual([

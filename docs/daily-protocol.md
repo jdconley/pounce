@@ -198,7 +198,8 @@ someone else's run.
   `rank: null` and their progress. Results marked `tooFast` are left off.
 - **The Dish:** per game 3, 2 and 1 points for the first three places (ties share a place's
   points), plus 1 for each ended run (a run closed at 04:00 didn't end). `crowns` lists the games
-  won. Sorted by points; equal points share a rank.
+  won. Sorted by points; equal points share a rank. Only rows with at least 1 point are listed,
+  so someone whose only run closed at 04:00 below third place isn't on the Dish.
 - Games are listed in the Dish's order: Sniff, Nine Lives, Cat Nap, Box Fort.
 - **`tvs`** counts the TV board sockets open now that show a board this person is on: their own
   TVs and their connections' (a watch offer reaches all of them). Show the "Show on TV" switch
