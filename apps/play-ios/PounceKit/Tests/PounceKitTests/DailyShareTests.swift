@@ -13,6 +13,17 @@ import Testing
         #expect(share.text == "Sniff 12: 4 of 6\nhttps://play.conleychaos.com/daily")
     }
 
+    /// Until launch day sets `LAUNCH`, a server's numbers are below 1: never show them.
+    @Test func numbersBelowOneAreLeftOut() {
+        let early = DailyResult(game: "sniff", date: "2026-11-23", number: -26339, outcome: .solved, timeMs: 1, progress: 1, guesses: 4)
+        #expect(DailyCatalog.sniff.name(number: -26339) == "Sniff")
+        #expect(DailyCatalog.sniff.name(number: 0) == "Sniff")
+        #expect(DailyCatalog.sniff.name(number: 1) == "Sniff 1")
+        #expect(DailyCatalog.sniff.line(early) == "Sniff: 4 of 6")
+        #expect(DailyShare(game: DailyCatalog.sniff, result: early, marks: nil).text == "Sniff: 4 of 6\nhttps://play.conleychaos.com/daily")
+        #expect(!DailyShare(game: DailyCatalog.sniff, result: early, marks: nil).title.contains("-"))
+    }
+
     @Test func nineLivesShowsTimeAndHints() {
         let share = DailyShare(game: DailyCatalog.nineLives, result: result(.solved, hints: 1), marks: nil)
         #expect(share.text.hasPrefix("Nine Lives 12: 4:07\n"))

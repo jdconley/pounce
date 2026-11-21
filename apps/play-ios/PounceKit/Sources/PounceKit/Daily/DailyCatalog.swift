@@ -35,7 +35,13 @@ public struct DailyGameInfo: Sendable, Hashable, Identifiable {
     /// "Sniff 12: 4 of 6", "Nine Lives 12: 4:07", "Box Fort 12: 1,240 points", "Cat Nap 12: Missed".
     /// The share text: the number and the result, nothing that spoils the puzzle.
     public func line(_ result: DailyResult) -> String {
-        "\(title) \(result.number): \(summary(result))"
+        "\(name(number: result.number)): \(summary(result))"
+    }
+
+    /// "Sniff 12", or just "Sniff" for a number below 1 (a server before launch day sets
+    /// `LAUNCH` counts from far ahead, so its numbers are negative).
+    public func name(number: Int) -> String {
+        number >= 1 ? "\(title) \(number)" : title
     }
 
     /// The result alone: "4 of 6", "4:07", "1,240 points", "Gave up".

@@ -35,6 +35,9 @@ public struct DailyShare: Sendable {
 
     public var text: String { "\(game.line(result))\n\(Self.link.absoluteString)" }
 
+    /// The card's title: "Sniff 12", or "Sniff" before there are real numbers.
+    public var title: String { game.name(number: result.number) }
+
     /// The line under the result: hints used, or nothing.
     public var detail: String? {
         switch result.hints {
@@ -95,7 +98,7 @@ public struct DailyShare: Sendable {
         c.addPath(CGPath(roundedRect: card.insetBy(dx: 5, dy: 5), cornerWidth: 44, cornerHeight: 44, transform: nil))
         c.strokePath()
 
-        text("\(game.title) \(result.number)", size: 52, color: Self.white, y: 78, in: c)
+        text(title, size: 52, color: Self.white, y: 78, in: c)
         text(game.summary(result), size: marks == nil ? 112 : 84, color: Self.yellow, y: marks == nil ? 210 : 160, in: c)
         if let detail { text(detail, size: 34, color: Self.white, y: marks == nil ? 360 : 262, in: c) }
         if let marks { grid(marks, top: detail == nil ? 270 : 316, in: c) }
