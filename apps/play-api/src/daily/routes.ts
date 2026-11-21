@@ -1,5 +1,6 @@
 import { player, resolveMe } from "../players/accounts";
 import { PERSON_ID } from "../players/ids";
+import { addDays, daysBetween } from "../streaks/clock";
 
 import { dailyModule } from "./games";
 import { runId } from "./seed";
@@ -106,8 +107,41 @@ async function onRun(request: Request, env: Env, deviceId: string, run: string, 
   return answer ? json(200, answer) : notFound();
 }
 
+const DATE = /^\d{4}-\d{2}-\d{2}$/;
+/** How far back a board may be read: results are kept 120 days (spec §6). */
+const BOARD_DAYS = 120;
+
+/**
+ * `GET /v1/daily/board?person=&date=`: the player's board for `date`, by default their own day;
+ * only today or the past 120 days.
+ */
+async function getBoard(request: Request, env: Env, deviceId: string): Promise<Response> {
+  const playerId = await who(request, env, deviceId);
+  if (typeof playerId !== "string") return playerId;
+  const now = Date.now();
+  const day = await player(env, playerId).dailyDay(now);
+  if (!day) return json(404, { error: "no_player" });
+  const asked = new URL(request.url).searchParams.get("date");
+  if (asked !== null) {
+    const valid = DATE.test(asked) && !Number.isNaN(Date.parse(`${asked}T00:00:00Z`)) && addDays(asked, 0) === asked;
+    if (!valid || asked > day.day || daysBetween(asked, day.day) > BOARD_DAYS) return badRequest();
+  }
+  return json(200, await player(env, playerId).board(asked ?? day.day, now));
+}
+
+/** `GET /v1/daily/stats?person=`: the player's stats for each listed game. */
+async function getStats(request: Request, env: Env, deviceId: string): Promise<Response> {
+  const playerId = await who(request, env, deviceId);
+  if (typeof playerId !== "string") return playerId;
+  const day = await player(env, playerId).dailyDay(Date.now());
+  if (!day) return json(404, { error: "no_player" });
+  return json(200, { games: await player(env, playerId).dailyStats(day.day) });
+}
+
 /** The Daily Dish's authenticated route for this request, or null (a 404). Only while `DAILY` is on. */
 export function dailyRoute(method: string, pathname: string): Route | null {
+  if (method === "GET" && pathname === "/v1/daily/board") return getBoard;
+  if (method === "GET" && pathname === "/v1/daily/stats") return getStats;
   const start = method === "POST" ? START.exec(pathname) : null;
   if (start) {
     return async (request, env, deviceId) => {

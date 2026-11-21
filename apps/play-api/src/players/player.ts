@@ -1,6 +1,8 @@
 import { DurableObject } from "cloudflare:workers";
 
-import { dailyDay, type DailyZone } from "../daily/days";
+import { addToStats, dish, emptyStats, rankGame, statsView, type BoardRow, type Dish, type GameBoard, type Stats } from "../daily/board";
+import { dailyDay, puzzleNumber, type DailyZone } from "../daily/days";
+import { listedGames } from "../daily/games";
 import { endKitten } from "../kittens/kittens";
 import { forgetLinks } from "../links/links";
 import { deliverToPlayer, type PushProfile } from "../notify/deliver";
@@ -10,7 +12,7 @@ import { decide, dueSlots, emptyNotifyState, nextWake, noteSent, noteTurn, type 
 import { notifySettings, type NotifySettings } from "../notify/settings";
 import { claimAnswer, KEEP_MS, restingUntil, type Answer, type PounceRow, type Target } from "../pounce/limits";
 import { createTables, drawable, listTables, removeTable, upsertTable, type TableEntry } from "../room/tables";
-import { FALLBACK_ZONE, type Day } from "../streaks/clock";
+import { addDays, dayKey, FALLBACK_ZONE, type Day } from "../streaks/clock";
 import { leaveAllPairs } from "../streaks/pairs";
 import { mergePersonal, ownView, recordTurn, type OwnStreak, type Personal } from "../streaks/personal";
 import { notifyOn, quietStartMinutes, trophyOn } from "../streaks/profile";
@@ -90,6 +92,8 @@ const STUB_TTL_MS = 30 * DAY_MS;
 /** A guest no device has touched for this long is deleted (§14, §14.1). */
 const GUEST_TTL_MS = 90 * DAY_MS;
 const SECTIONS = ["settings", "tutorial", "archive"] as const;
+/** Daily results are kept this many days (daily games design §6). */
+const DAILY_KEEP_DAYS = 120;
 
 /**
  * One instance per player (named by playerId): name and cat, identities,
@@ -132,6 +136,8 @@ export class Player extends DurableObject<Env> {
     // date, kept 120 days; and this player's lifetime stats per game.
     sql.exec("CREATE TABLE IF NOT EXISTS daily_results (date TEXT, game TEXT, player_id TEXT, result TEXT, PRIMARY KEY (date, game, player_id))");
     sql.exec("CREATE TABLE IF NOT EXISTS daily_stats (game TEXT PRIMARY KEY, stats TEXT)");
+    // The name and cat each connection had on their latest result.
+    sql.exec("CREATE TABLE IF NOT EXISTS daily_faces (player_id TEXT PRIMARY KEY, name TEXT, cat INTEGER)");
     createTables(sql);
   }
 
@@ -612,20 +618,118 @@ export class Player extends DurableObject<Env> {
   }
 
   /**
-   * A run of this player's ended (`DailyRun`): keeps the result. `counts`: it counts toward
-   * streaks (`countsForStreak`); `endedAt`: when it ended, on the server's clock.
+   * A run of this player's ended (`DailyRun`): keeps the result and the game's stats, and hands
+   * the result to each connection's board (`receiveDaily`). `counts`: it counts toward streaks
+   * (`countsForStreak`); `endedAt`: when it ended, on the server's clock. Idempotent: a retried
+   * report changes nothing.
    */
   recordDaily(result: DailyResult, counts: boolean, endedAt: number): void {
     if (!this.live()) return;
     void counts;
     void endedAt;
+    const me = this.getMeta("id") as string;
+    if (!this.storeDaily(me, result)) return;
+    const kept = this.ctx.storage.sql.exec<{ stats: string }>("SELECT stats FROM daily_stats WHERE game = ?", result.game).toArray()[0];
+    const stats = addToStats(kept ? (JSON.parse(kept.stats) as Stats) : null, result);
     this.ctx.storage.sql.exec(
-      "INSERT OR REPLACE INTO daily_results (date, game, player_id, result) VALUES (?, ?, ?, ?)",
+      "INSERT INTO daily_stats (game, stats) VALUES (?, ?) ON CONFLICT (game) DO UPDATE SET stats = excluded.stats",
+      result.game,
+      JSON.stringify(stats),
+    );
+    const face = { name: this.getMeta("name") as string, cat: Number(this.getMeta("cat")) };
+    for (const { partnerId } of this.pairList()) {
+      const partner = this.env.PLAYERS.get(this.env.PLAYERS.idFromName(partnerId)) as unknown as { receiveDaily: Player["receiveDaily"] };
+      this.ctx.waitUntil(
+        Promise.resolve(partner.receiveDaily(me, face, result)).catch(() => {
+          console.error("daily_fanout_failed");
+        }),
+      );
+    }
+  }
+
+  /** A connection's result, for this player's board. Only from someone this player is paired with. */
+  receiveDaily(from: string, face: { name: string; cat: number }, result: DailyResult): void {
+    if (!this.live() || this.pairWith(from) === null) return;
+    this.storeDaily(from, result);
+    this.ctx.storage.sql.exec(
+      "INSERT INTO daily_faces (player_id, name, cat) VALUES (?, ?, ?) ON CONFLICT (player_id) DO UPDATE SET name = excluded.name, cat = excluded.cat",
+      from,
+      face.name,
+      face.cat,
+    );
+  }
+
+  /** Keeps a result unless it is already kept, or older than 120 days. False: nothing new. */
+  private storeDaily(playerId: string, result: DailyResult): boolean {
+    this.pruneDaily(Date.now());
+    if (result.date < this.dailyCutoff(Date.now())) return false;
+    const had = this.ctx.storage.sql
+      .exec("SELECT 1 FROM daily_results WHERE date = ? AND game = ? AND player_id = ?", result.date, result.game, playerId)
+      .toArray().length;
+    if (had > 0) return false;
+    this.ctx.storage.sql.exec(
+      "INSERT INTO daily_results (date, game, player_id, result) VALUES (?, ?, ?, ?)",
       result.date,
       result.game,
-      this.getMeta("id") as string,
+      playerId,
       JSON.stringify(result),
     );
+    return true;
+  }
+
+  /** The oldest date whose results are kept: 120 days before this player's day. */
+  private dailyCutoff(now: number): Day {
+    return addDays(dayKey(now, this.zone()), -DAILY_KEEP_DAYS);
+  }
+
+  /** Forgets results past 120 days, and the faces of people with none left. */
+  private pruneDaily(now: number): void {
+    const { sql } = this.ctx.storage;
+    sql.exec("DELETE FROM daily_results WHERE date < ?", this.dailyCutoff(now));
+    sql.exec("DELETE FROM daily_faces WHERE player_id NOT IN (SELECT player_id FROM daily_results)");
+  }
+
+  /**
+   * This player's board for `date` (daily games design §6): this player and their connections,
+   * per game and overall. Who is on it is read now, so a pair that is left drops off. Rows name
+   * this player "me" and a connection by its pair id: no player id leaves the server.
+   */
+  board(date: Day, now: number): { date: Day; games: GameBoard[]; dish: Dish } {
+    this.pruneDaily(now);
+    const me = this.getMeta("id") ?? "";
+    const handles = new Map<string, string>([[me, "me"]]);
+    for (const p of this.pairList()) handles.set(p.partnerId, p.pairId);
+    const faces = new Map<string, { name: string; cat: number }>(
+      this.ctx.storage.sql
+        .exec<{ player_id: string; name: string; cat: number }>("SELECT player_id, name, cat FROM daily_faces")
+        .toArray()
+        .map((f) => [f.player_id, { name: f.name, cat: f.cat }]),
+    );
+    faces.set(me, { name: this.getMeta("name") ?? "", cat: Number(this.getMeta("cat") ?? 0) });
+    const rows = this.ctx.storage.sql
+      .exec<{ game: string; player_id: string; result: string }>("SELECT game, player_id, result FROM daily_results WHERE date = ?", date)
+      .toArray();
+    const games = listedGames(this.env).map((m): GameBoard => {
+      const mine = rows
+        .filter((r) => r.game === m.id && handles.has(r.player_id) && faces.has(r.player_id))
+        .map((r): BoardRow => {
+          const face = faces.get(r.player_id) as { name: string; cat: number };
+          return { player: handles.get(r.player_id) as string, name: face.name, cat: face.cat, rank: null, result: JSON.parse(r.result) as DailyResult, playing: null };
+        });
+      return { game: m.id, number: puzzleNumber(date), rows: rankGame(m, mine) };
+    });
+    return { date, games, dish: dish(games) };
+  }
+
+  /** This player's stats for each listed game, as shown on `today`. */
+  dailyStats(today: Day): Record<string, Stats> {
+    const kept = new Map(
+      this.ctx.storage.sql
+        .exec<{ game: string; stats: string }>("SELECT game, stats FROM daily_stats")
+        .toArray()
+        .map((r) => [r.game, JSON.parse(r.stats) as Stats]),
+    );
+    return Object.fromEntries(listedGames(this.env).map((m) => [m.id, statsView(kept.get(m.id) ?? emptyStats(), today)]));
   }
 
   /**
@@ -692,6 +796,7 @@ export class Player extends DurableObject<Env> {
       return;
     }
     this.prunePounces(now);
+    this.pruneDaily(now);
     if (notifyOn(this.env)) await this.remind(now);
     else await this.arm(now);
   }

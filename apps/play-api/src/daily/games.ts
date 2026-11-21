@@ -16,3 +16,11 @@ export function dailyModule(id: string, env: Pick<Env, "DAILY_TEST">): DailyModu
   if (id === "test" && env.DAILY_TEST !== "on") return null;
   return Object.hasOwn(DAILY_GAMES, id) ? (DAILY_GAMES[id as DailyGameId] as DailyModule) : null;
 }
+
+/** The order the Dish lists its games in (and the reminder picks the first unplayed one by). */
+export const DISH_ORDER: readonly DailyGameId[] = ["sniff", "nine-lives", "cat-nap", "box-fort", "test"];
+
+/** The games this server referees now, in the Dish's order. */
+export function listedGames(env: Pick<Env, "DAILY_TEST">): DailyModule[] {
+  return DISH_ORDER.map((id) => dailyModule(id, env)).filter((m): m is DailyModule => m !== null);
+}

@@ -1,6 +1,6 @@
 import { afterEach, beforeAll, describe, expect, test } from "vitest";
 
-import { BASE, bundle, call, eventually, LA, mint, newPerson, profile, worker, type Device, type Person } from "./play-helpers";
+import { BASE, bundle, call, eventually, LA, mint, newPerson, PLAYER_ID_JSON, profile, worker, type Device, type Person } from "./play-helpers";
 
 import type { Miniflare } from "miniflare";
 
@@ -258,5 +258,123 @@ describe("runs", () => {
     const s = await begin(mf, device, person);
     const answers = await Promise.all(Array.from({ length: 24 }, () => send(mf, device, person, s.run, { from: 0, moves: [] })));
     expect(answers.map((r) => r.status)).toContain(429);
+  });
+});
+
+type Board = {
+  date: string;
+  games: { game: string; number: number; rows: { player: string; name: string; cat: number; rank: number | null; result: Record<string, unknown> | null; playing: unknown }[] }[];
+  dish: { rows: { player: string; name: string; points: number; crowns: string[]; ended: number; rank: number }[] };
+};
+
+/** Pairs two players, as an accepted invite does. */
+async function pairUp(mf: Miniflare, a: string, b: string): Promise<void> {
+  expect((await mf.dispatchFetch(`${BASE}/__test/connect?a=${a}&b=${b}`)).status).toBe(204);
+}
+
+/** Plays today's test game to the end. */
+async function solve(mf: Miniflare, device: Device, person: Person): Promise<Record<string, unknown>> {
+  const s = await begin(mf, device, person);
+  const res = await send(mf, device, person, s.run, { from: 0, moves: steps(1, 3 + s.level) });
+  return ((await res.json()) as { result: Record<string, unknown> }).result;
+}
+
+const boardOf = async (mf: Miniflare, device: Device, person: Person, query = ""): Promise<Board> => {
+  const res = await call(mf, device, "GET", `/v1/daily/board?person=${person.id}${query}`);
+  expect(res.status).toBe(200);
+  return (await res.json()) as Board;
+};
+
+describe("the board", () => {
+  test("a connection's result appears on my board", async () => {
+    const mf = await start();
+    const mom = await someone(mf, "Mom");
+    const kid = await someone(mf, "Kid");
+    await pairUp(mf, mom.id, kid.id);
+    const result = await solve(mf, kid.device, kid.person);
+    const board = await eventually(() => boardOf(mf, mom.device, mom.person), (b) => (b.games[0]?.rows.length ?? 0) > 0);
+    expect(board.date).toBe(result.date);
+    const test = board.games.find((g) => g.game === "test");
+    expect(test?.rows).toEqual([{ player: expect.stringMatching(/^pr_/) as string, name: "Kid", cat: 3, rank: 1, result, playing: null }]);
+    expect(board.dish.rows).toMatchObject([{ name: "Kid", points: 4, crowns: ["test"], ended: 1, rank: 1 }]);
+    // No player ids leave the server.
+    expect(JSON.stringify(board)).not.toMatch(PLAYER_ID_JSON);
+    // Mom plays too, slower: both on both boards, Mom as "me" on her own.
+    await solve(mf, mom.device, mom.person);
+    const both = await eventually(() => boardOf(mf, kid.device, kid.person), (b) => (b.games[0]?.rows.length ?? 0) === 2);
+    expect(both.games[0]?.rows.map((r) => r.name)).toHaveLength(2);
+    const mine = await boardOf(mf, mom.device, mom.person);
+    expect(mine.games[0]?.rows.map((r) => r.player)).toContain("me");
+  });
+
+  test("someone I'm not paired with never appears", async () => {
+    const mf = await start();
+    const mom = await someone(mf, "Mom");
+    const stranger = await someone(mf, "Stranger");
+    await solve(mf, stranger.device, stranger.person);
+    await new Promise((resolve) => setTimeout(resolve, 300));
+    const board = await boardOf(mf, mom.device, mom.person);
+    expect(board.games.flatMap((g) => g.rows)).toEqual([]);
+    expect(board.dish.rows).toEqual([]);
+  });
+
+  test("a pair that is left drops off from the next read", async () => {
+    const mf = await start();
+    const mom = await someone(mf, "Mom");
+    const kid = await someone(mf, "Kid");
+    await pairUp(mf, mom.id, kid.id);
+    await solve(mf, kid.device, kid.person);
+    const board = await eventually(() => boardOf(mf, mom.device, mom.person), (b) => (b.games[0]?.rows.length ?? 0) > 0);
+    const pair = board.games[0]?.rows[0]?.player as string;
+    expect((await call(mf, mom.device, "DELETE", `/v1/pairs/${pair}?person=${mom.person.id}`)).status).toBe(204);
+    expect((await boardOf(mf, mom.device, mom.person)).games[0]?.rows).toEqual([]);
+  });
+
+  test("nobody who hasn't played appears", async () => {
+    const mf = await start();
+    const mom = await someone(mf, "Mom");
+    const kid = await someone(mf, "Kid");
+    await pairUp(mf, mom.id, kid.id);
+    // Kid started but never played a move, and Mom never started.
+    await begin(mf, kid.device, kid.person);
+    const board = await boardOf(mf, mom.device, mom.person);
+    expect(board.games.map((g) => g.game)).toEqual(["test"]);
+    expect(board.games[0]?.rows).toEqual([]);
+    expect(board.dish.rows).toEqual([]);
+  });
+
+  test("results past 120 days are gone", async () => {
+    const mf = await start();
+    const mom = await someone(mf, "Mom");
+    // A run 100 days ago, closed by its alarm at once.
+    const old = Date.now() - 100 * 86_400_000;
+    const s = await startAt(mf, mom.id, old);
+    const read = async (now: number) =>
+      (await (await mf.dispatchFetch(`${BASE}/__test/board?player=${mom.id}&date=${s.date}&now=${now}`)).json()) as Board;
+    const kept = await eventually(() => read(Date.now()), (b) => (b.games[0]?.rows.length ?? 0) > 0);
+    expect(kept.games[0]?.rows[0]?.result).toMatchObject({ outcome: "closed" });
+    // 30 days on, it is 130 days old.
+    expect((await read(Date.now() + 30 * 86_400_000)).games[0]?.rows).toEqual([]);
+  });
+
+  test("the board route takes today or the past 120 days", async () => {
+    const mf = await start();
+    const mom = await someone(mf, "Mom");
+    const today = (await boardOf(mf, mom.device, mom.person)).date;
+    expect((await boardOf(mf, mom.device, mom.person, `&date=${today}`)).date).toBe(today);
+    const day = (n: number) => new Date(Date.parse(`${today}T00:00:00Z`) + n * 86_400_000).toISOString().slice(0, 10);
+    expect((await boardOf(mf, mom.device, mom.person, `&date=${day(-120)}`)).date).toBe(day(-120));
+    for (const bad of [day(1), day(-121), "2026-13-01", "yesterday"]) {
+      expect((await call(mf, mom.device, "GET", `/v1/daily/board?person=${mom.person.id}&date=${bad}`)).status, bad).toBe(400);
+    }
+  });
+
+  test("stats count my own ended runs, per game", async () => {
+    const mf = await start();
+    const mom = await someone(mf, "Mom");
+    const result = await solve(mf, mom.device, mom.person);
+    const read = async () => (await (await call(mf, mom.device, "GET", `/v1/daily/stats?person=${mom.person.id}`)).json()) as { games: Record<string, Record<string, unknown>> };
+    const stats = await eventually(read, (s) => s.games.test?.played === 1);
+    expect(stats.games.test).toMatchObject({ played: 1, solved: 1, streak: 1, best: 1, bestTimeMs: result.timeMs, last30: [{ date: result.date, result }] });
   });
 });
