@@ -13,6 +13,8 @@ public struct BoxFortLayout: Equatable, Sendable {
     public static let trayScale: CGFloat = 0.5
     /// A lifted piece floats this many spots above the finger, so the finger never hides it.
     public static let lift: CGFloat = 1.1
+    /// The rug's border and fringe reach this many spots past its spots, all round.
+    public static let fringe: CGFloat = 0.5
 
     private static let gutter: CGFloat = 16
     private static let gap: CGFloat = 12
@@ -41,37 +43,41 @@ public struct BoxFortLayout: Equatable, Sendable {
         let depth: (CGFloat) -> CGFloat = { cell in 5 * cell * Self.trayScale + 2 * pad }
         sideTray = w > h * 1.15
         if sideTray {
-            let byHeight = (h - Self.headerHeight - 2 * g) / 8
-            let byWidth = (w - 2 * Self.gutter - g - 2 * pad) / (8 + 5 * Self.trayScale)
+            // Room under the rug for the finger: a piece going on the bottom row floats above a
+            // finger `lift` spots below the rug (the stacked layout's tray gives it that room).
+            let byHeight = (h - Self.headerHeight - 2 * g) / (8 + Self.fringe + Self.lift)
+            let byWidth = (w - 2 * Self.gutter - g - 2 * pad) / (8 + 2 * Self.fringe + 5 * Self.trayScale)
             cell = max(1, min(Self.maxCell, byHeight, byWidth))
         } else {
             let byWidth = (w - 2 * Self.gutter) / 8
-            let byHeight = (h - Self.headerHeight - 3 * g - 2 * pad) / (8 + 5 * Self.trayScale)
+            let byHeight = (h - Self.headerHeight - 3 * g - 2 * pad) / (8 + 2 * Self.fringe + 5 * Self.trayScale)
             cell = max(1, min(Self.maxCell, byWidth, byHeight))
         }
         let side = 8 * cell
         let trayDepth = depth(cell)
         if sideTray {
-            let total = side + g + trayDepth
+            let total = side + 2 * Self.fringe * cell + g + trayDepth
             let left = (w - total) / 2
-            let top = Self.headerHeight + g + (h - Self.headerHeight - g - side) / 2
+            let fringe = Self.fringe * cell
+            let top = Self.headerHeight + g + fringe + max(0, (h - Self.headerHeight - g - fringe - side - Self.lift * cell) / 2)
             header = CGRect(x: left, y: 0, width: total, height: Self.headerHeight)
-            let board = CGRect(x: left, y: top, width: side, height: side)
+            let board = CGRect(x: left + fringe, y: top, width: side, height: side)
             rug = board
             let slotHeight = side / 3
             slots = (0..<3).map { i in
-                CGRect(x: board.maxX + g, y: top + CGFloat(i) * slotHeight, width: trayDepth, height: slotHeight)
+                CGRect(x: board.maxX + fringe + g, y: top + CGFloat(i) * slotHeight, width: trayDepth, height: slotHeight)
             }
         } else {
-            let total = Self.headerHeight + g + side + g + trayDepth
+            let fringe = Self.fringe * cell
+            let total = Self.headerHeight + g + fringe + side + fringe + g + trayDepth
             let top = max(0, (h - total) / 2)
             let left = (w - side) / 2
             header = CGRect(x: left, y: top, width: side, height: Self.headerHeight)
-            let board = CGRect(x: left, y: top + Self.headerHeight + g, width: side, height: side)
+            let board = CGRect(x: left, y: top + Self.headerHeight + g + fringe, width: side, height: side)
             rug = board
             let slotWidth = side / 3
             slots = (0..<3).map { i in
-                CGRect(x: left + CGFloat(i) * slotWidth, y: board.maxY + g, width: slotWidth, height: trayDepth)
+                CGRect(x: left + CGFloat(i) * slotWidth, y: board.maxY + fringe + g, width: slotWidth, height: trayDepth)
             }
         }
     }

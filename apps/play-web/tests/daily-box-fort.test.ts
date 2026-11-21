@@ -2,7 +2,7 @@ import { readdirSync, readFileSync } from "node:fs";
 
 import { describe, expect, test } from "vitest";
 
-import { boxFortLayout, lifted, slotAt, snap, trayOrigin, TRAY_SCALE, type Box } from "../src/daily/box-fort/layout";
+import { boxFortLayout, FRINGE, lifted, LIFT, slotAt, snap, trayOrigin, TRAY_SCALE, type Box } from "../src/daily/box-fort/layout";
 import { fitsBySlot, placePiece, receiveReveal, resync, startPlay } from "../src/daily/box-fort/model";
 import { onRunEvent, placement, playFor } from "../src/daily/box-fort/session";
 
@@ -32,12 +32,18 @@ describe("layout", () => {
     expect(l.rug.w).toBeCloseTo(8 * l.cell);
     expect(l.rug.w).toBe(l.rug.h);
     expect(inside(l.rug, bounds) && inside(l.header, bounds)).toBe(true);
+    // The rug's border and fringe reach FRINGE spots past its spots; nothing sits on them.
+    const f = FRINGE * l.cell;
+    const drawn = { x: l.rug.x - f, y: l.rug.y - f, w: l.rug.w + 2 * f, h: l.rug.h + 2 * f };
+    expect(meets(l.header, drawn)).toBe(false);
     for (const s of l.slots) {
       expect(inside(s, bounds)).toBe(true);
-      expect(meets(s, l.rug) || meets(s, l.header)).toBe(false);
+      expect(meets(s, drawn) || meets(s, l.header)).toBe(false);
       expect(Math.min(s.w, s.h)).toBeGreaterThanOrEqual(5 * l.trayCell);
     }
     expect(l.sideTray).toBe(w > h * 1.15);
+    // Every row is in reach: filling the bottom row puts the finger LIFT spots below the rug.
+    expect(l.rug.y + l.rug.h + LIFT * l.cell).toBeLessThanOrEqual(h + 0.5);
   });
 
   test("snap rounds to the nearest spot and refuses hanging off the rug (as on iOS)", () => {

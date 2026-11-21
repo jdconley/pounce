@@ -13,16 +13,24 @@ struct BoxFortLayoutTests {
         #expect(layout.rug.width == layout.rug.height, "the rug is square")
         #expect(abs(layout.rug.width - 8 * layout.cell) < 0.01)
         #expect(inside(layout.header, bounds) && inside(layout.rug, bounds))
-        #expect(!layout.header.intersects(layout.rug))
+        // The rug's border and fringe reach `fringe` spots past its spots; nothing sits on them.
+        let drawn = layout.rug.insetBy(dx: -BoxFortLayout.fringe * layout.cell, dy: -BoxFortLayout.fringe * layout.cell)
+        #expect(!layout.header.intersects(drawn), "the score row sits on the rug's fringe at \(size)")
         #expect(layout.slots.count == 3)
         for (i, slot) in layout.slots.enumerated() {
             #expect(inside(slot, bounds), "slot \(i) on screen at \(size)")
-            #expect(!slot.intersects(layout.rug), "slot \(i) clear of the rug at \(size)")
+            #expect(!slot.intersects(drawn), "slot \(i) clear of the rug at \(size)")
             #expect(!slot.intersects(layout.header))
             // The longest piece (five boxes) fits its slot at tray scale.
             #expect(slot.width >= 5 * layout.trayCell && slot.height >= 5 * layout.trayCell)
         }
-        #expect(!layout.slots[0].intersects(layout.slots[1]) && !layout.slots[1].intersects(layout.slots[2]))
+        // Slots meet edge to edge; a hair inside each, they never overlap.
+        let inner = layout.slots.map { $0.insetBy(dx: 0.01, dy: 0.01) }
+        #expect(!inner[0].intersects(inner[1]) && !inner[1].intersects(inner[2]))
+        // Every row is in reach: a held piece floats above the finger, so filling the bottom row
+        // puts the finger below the rug, and that has to be on screen.
+        let lowest = layout.rug.maxY + BoxFortLayout.lift * layout.cell
+        #expect(lowest <= size.height + 0.5, "the bottom row is out of reach at \(size)")
         return layout
     }
 

@@ -24,6 +24,8 @@ export const MAX_CELL = 76;
 export const TRAY_SCALE = 0.5;
 /** A lifted piece floats this many spots above the finger. */
 export const LIFT = 1.1;
+/** The rug's border and fringe reach this many spots past its spots, all round. */
+export const FRINGE = 0.5;
 const GUTTER = 16;
 const GAP = 12;
 const HEADER = 48;
@@ -34,16 +36,19 @@ export function boxFortLayout(width: number, height: number): BoxFortLayout {
   const cell = Math.max(
     1,
     sideTray
-      ? Math.min(MAX_CELL, (height - HEADER - 2 * GAP) / 8, (width - 2 * GUTTER - GAP - 2 * SLOT_PAD) / (8 + 5 * TRAY_SCALE))
-      : Math.min(MAX_CELL, (width - 2 * GUTTER) / 8, (height - HEADER - 3 * GAP - 2 * SLOT_PAD) / (8 + 5 * TRAY_SCALE)),
+      ? // Room under the rug for the finger: a piece going on the bottom row floats above a finger
+        // LIFT spots below the rug (the stacked layout's tray gives it that room).
+        Math.min(MAX_CELL, (height - HEADER - 2 * GAP) / (8 + FRINGE + LIFT), (width - 2 * GUTTER - GAP - 2 * SLOT_PAD) / (8 + 2 * FRINGE + 5 * TRAY_SCALE))
+      : Math.min(MAX_CELL, (width - 2 * GUTTER) / 8, (height - HEADER - 3 * GAP - 2 * SLOT_PAD) / (8 + 2 * FRINGE + 5 * TRAY_SCALE)),
   );
   const side = 8 * cell;
   const depth = 5 * cell * TRAY_SCALE + 2 * SLOT_PAD;
+  const fringe = FRINGE * cell;
   if (sideTray) {
-    const total = side + GAP + depth;
+    const total = side + 2 * fringe + GAP + depth;
     const left = (width - total) / 2;
-    const top = HEADER + GAP + (height - HEADER - GAP - side) / 2;
-    const rug = { x: left, y: top, w: side, h: side };
+    const top = HEADER + GAP + fringe + Math.max(0, (height - HEADER - GAP - fringe - side - LIFT * cell) / 2);
+    const rug = { x: left + fringe, y: top, w: side, h: side };
     return {
       width,
       height,
@@ -52,13 +57,13 @@ export function boxFortLayout(width: number, height: number): BoxFortLayout {
       sideTray,
       header: { x: left, y: 0, w: total, h: HEADER },
       rug,
-      slots: [0, 1, 2].map((i) => ({ x: rug.x + side + GAP, y: top + (i * side) / 3, w: depth, h: side / 3 })),
+      slots: [0, 1, 2].map((i) => ({ x: rug.x + side + fringe + GAP, y: top + (i * side) / 3, w: depth, h: side / 3 })),
     };
   }
-  const total = HEADER + GAP + side + GAP + depth;
+  const total = HEADER + GAP + fringe + side + fringe + GAP + depth;
   const top = Math.max(0, (height - total) / 2);
   const left = (width - side) / 2;
-  const rug = { x: left, y: top + HEADER + GAP, w: side, h: side };
+  const rug = { x: left, y: top + HEADER + GAP + fringe, w: side, h: side };
   return {
     width,
     height,
@@ -67,7 +72,7 @@ export function boxFortLayout(width: number, height: number): BoxFortLayout {
     sideTray,
     header: { x: left, y: top, w: side, h: HEADER },
     rug,
-    slots: [0, 1, 2].map((i) => ({ x: left + (i * side) / 3, y: rug.y + side + GAP, w: side / 3, h: depth })),
+    slots: [0, 1, 2].map((i) => ({ x: left + (i * side) / 3, y: rug.y + side + fringe + GAP, w: side / 3, h: depth })),
   };
 }
 
