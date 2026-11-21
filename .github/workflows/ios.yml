@@ -141,6 +141,15 @@ jobs:
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+      # TEMP (diagnosing runner load): CPU use and the busiest processes every few seconds.
+      - name: Sample the runner
+        working-directory: .
+        run: |
+          mkdir -p "$RUNNER_TEMP/load"
+          echo "cores $(sysctl -n hw.ncpu), memory $(( $(sysctl -n hw.memsize) / 1073741824 )) GB"
+          mdutil -as 2>&1 | head -6 || true
+          xcrun simctl list devices booted
+          nohup bash -c 'while true; do echo "=== $(date -u +%H:%M:%S) loadavg $(sysctl -n vm.loadavg)"; top -l 2 -s 2 -n 12 -o cpu -stats pid,command,cpu,th,state | awk "/^Processes:/{n++} n==2"; sleep 6; done' > "$RUNNER_TEMP/load/samples.log" 2>&1 &
       - run: xcodebuild -version
       # XcodeGen from its pinned, checksummed release: seconds, where Homebrew takes over three
       # minutes. scripts/bootstrap.sh finds it on the path.
@@ -208,6 +217,16 @@ jobs:
             grep -E '^FRAMES ' build/ui-gates.log || echo "no FRAMES lines"
             echo '```'
           } >> "$GITHUB_STEP_SUMMARY"
+      # TEMP (diagnosing runner load)
+      - name: Runner samples
+        if: always()
+        working-directory: .
+        run: |
+          xcrun simctl list devices booted
+          echo "--- per sample: time, load average, CPU use"
+          awk '/^=== /{t=$2; l=$4} /^CPU usage/{print t, "load", l, $0}' "$RUNNER_TEMP/load/samples.log"
+          echo "--- every sample"
+          cat "$RUNNER_TEMP/load/samples.log"
       - name: Keep the results
         if: failure()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
