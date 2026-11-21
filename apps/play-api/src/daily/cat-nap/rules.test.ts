@@ -107,6 +107,13 @@ describe("clashes", () => {
     expect(patch).toEqual({ rows: [], cols: [], patches: [2], touching: [], cells: [at(1, 1), at(3, 2)] });
   });
 
+  test("many clashes at once come back in order", () => {
+    const many = clashes(Q, withCats([at(4, 0), at(4, 4), at(0, 0), at(0, 4)]));
+    expect(many.rows).toEqual([0, 4]);
+    expect(many.cols).toEqual([0, 4]);
+    expect(many.cells).toEqual([at(0, 0), at(0, 4), at(4, 0), at(4, 4)]);
+  });
+
   test("touching includes diagonals", () => {
     const diag = clashes(Q, withCats([at(1, 1), at(2, 2), at(4, 4)]));
     expect(diag.touching).toEqual([at(1, 1), at(2, 2)]);
