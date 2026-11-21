@@ -43,6 +43,9 @@ struct CatNapDaily: DailyGameView {
                 }
             }
         }
+        #if DEBUG
+            .task { if Autoplay.enabled { await model.autoplay() } }
+        #endif
     }
 
     private func hint() async {

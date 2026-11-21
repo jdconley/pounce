@@ -139,3 +139,35 @@ final class CatNapModel {
         }
     }
 }
+
+#if DEBUG
+    extension CatNapModel {
+        /// DEBUG `-autoplay`: the quilt marks itself, row by row, through the same input a finger
+        /// runs: a drag paints a row "no cat", the next drag back clears it. Each drag is one move
+        /// to the session. No UI test reads the screen meanwhile, so the frame gates measure the
+        /// app's own work (`CatNapFrameTests`, docs/main-thread.md).
+        func autoplay() async {
+            let geo = CatNapGeometry(n: quilt.n, side: CGFloat(quilt.n) * 40)
+            let frame = Duration.milliseconds(16)
+            do {
+                try await Task.sleep(for: .seconds(Autoplay.firstDragAfter))
+                var row = 0
+                while !Task.isCancelled, playing {
+                    for back in [false, true] {
+                        let y = (CGFloat(row) + 0.5) * geo.unit
+                        let left = CGPoint(x: geo.unit / 2, y: y), right = CGPoint(x: geo.side - geo.unit / 2, y: y)
+                        let (from, to) = back ? (right, left) : (left, right)
+                        for step in 0...Autoplay.dragFrames {
+                            let t = CGFloat(step) / CGFloat(Autoplay.dragFrames)
+                            pointer(at: CGPoint(x: from.x + (to.x - from.x) * t, y: y), from: from, geo: geo)
+                            try await Task.sleep(for: frame)
+                        }
+                        pointerEnded()
+                        try await Task.sleep(for: frame * Autoplay.restFrames)
+                    }
+                    row = (row + 1) % quilt.n
+                }
+            } catch {}
+        }
+    }
+#endif

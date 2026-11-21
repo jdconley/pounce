@@ -84,7 +84,8 @@ actor CatNapLocalReferee: DailyService {
         return answer(reveals: [])
     }
 
-    func hint(run: String, person: String?) async throws -> DailyMovesAnswer {
+    func hint(run: String, hints used: Int, person: String?) async throws -> DailyMovesAnswer {
+        guard used == hints else { return answer(reveals: []) }  // a resend: already given
         let cats = state.cats
         guard let cell = solution.enumerated().map({ $0.offset * quilt.n + $0.element }).first(where: { cell in
             state.cells[cell] != NapState.cat || cats.contains { CatNapRules.conflict(quilt, cell, $0) }

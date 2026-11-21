@@ -8,7 +8,7 @@ enum DailyGames {
         var games: [any DailyGameView.Type] = [
             // SniffDaily.self,
             // NineLivesDaily.self,
-            // CatNapDaily.self,
+            CatNapDaily.self,
             // BoxFortDaily.self,
         ]
         #if DEBUG
