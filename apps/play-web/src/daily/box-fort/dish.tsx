@@ -1,13 +1,13 @@
 /**
  * Box Fort in the Daily Dish (web): the board on the run the host gives it. The host draws the top
  * bar, the clock, Show on TV, give up and the end; Box Fort draws the rug, the pieces and the
- * score. Its share card shows points only, so there is no grid.
+ * score. Its share card shows points only, so there is no grid. Its TV view is `watch.tsx`, a
+ * module of its own, so a TV never loads this screen.
  */
 import { useEffect, useRef, useState } from "preact/hooks";
 
 import { BoxFortPlay } from "./play";
 import { onRunEvent, placement, playFor } from "./session";
-import { BoxFortWatch } from "./watch";
 
 import type { DailyGame, DailyGameScreenProps } from "../host";
 import type { BoxFortPublicPuzzle, BoxFortPublicState, BoxFortReveal, Place } from "@pounce/play-api/daily/box-fort/module";
@@ -34,15 +34,9 @@ function BoxFortScreen({ session, playing }: Props) {
   return <BoxFortPlay play={play} onPlace={onPlace} playing={playing} />;
 }
 
-/** A TV watching a run: its public state carries the rug and the set in play. */
-function BoxFortWatchView({ state }: { state: BoxFortPublicState; puzzle?: unknown }) {
-  return <BoxFortWatch state={state} />;
-}
-
 const boxFort: DailyGame<BoxFortPublicPuzzle, BoxFortPublicState, Place, BoxFortReveal> = {
   id: "box-fort",
   Screen: BoxFortScreen,
-  Watch: BoxFortWatchView,
   share: () => null,
 };
 

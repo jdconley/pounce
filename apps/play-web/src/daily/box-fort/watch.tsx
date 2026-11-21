@@ -1,12 +1,15 @@
 /**
  * Someone's Box Fort run as the server sees it, for a TV that pressed Watch (spec §8): the score
- * row, the rug and the set in play, read only, drawn with the play screen's own parts.
+ * row, the rug and the set in play, read only, drawn with the play screen's own parts. The TV
+ * loads this module alone (registry `watch`), so it imports drawing code only: no play screen,
+ * host, Dish, run session or store.
  */
 import { useRef } from "preact/hooks";
 
 import { Header, Rug, Stamp, TrayPiece, at, useLayout } from "./parts";
 
-import type { BoxFortPublicState } from "@pounce/play-api/daily/box-fort/module";
+import type { DailyWatchView } from "../host";
+import type { BoxFortPublicPuzzle, BoxFortPublicState } from "@pounce/play-api/daily/box-fort/module";
 
 export function BoxFortWatch({ state }: { state: BoxFortPublicState }) {
   const root = useRef<HTMLDivElement>(null);
@@ -31,3 +34,8 @@ export function BoxFortWatch({ state }: { state: BoxFortPublicState }) {
     </div>
   );
 }
+
+/** The Dish's watch view: the public state carries the rug and the set in play, so the puzzle isn't needed. */
+const BoxFortWatchView: DailyWatchView<BoxFortPublicPuzzle, BoxFortPublicState> = ({ state }) => <BoxFortWatch state={state} />;
+
+export default BoxFortWatchView;
