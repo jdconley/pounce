@@ -94,6 +94,7 @@
 - Consumes: `Seed` and `createRng` from `src/rules/rng.ts`; `dayKey`, `addDays`, `dayEnd`, `dayStart`, `FALLBACK_ZONE` and `Day` from `src/streaks/clock.ts`.
 - Produces:
   - `dailySeed(secret: string, game: DailyGameId, date: Day): Promise<Seed>`;
+  - `cycleKey(secret: string, game: DailyGameId): Promise<Seed>`: HMAC-SHA256(dailyKey, "daily.v1.cycle|" + game), with the same word conversion and zero fix. Server-only, never in any response;
   - `type DayLevel = 1 | 2 | 3 | 4 | 5 | 6 | 7`;
   - `levelFor(date: Day): DayLevel`;
   - `LAUNCH: Day`, a constant that starts as `"2099-01-01"` and is set by the launch PR;
@@ -141,7 +142,7 @@ export type Applied<S> =
   | { ok: false; reason: "illegal" | "too_soon" | "over" };
 export interface DailyModule<P = unknown, S = unknown, M = unknown> {
   id: DailyGameId;
-  make(rng: Rng, level: DayLevel): P;            // server only: the whole puzzle, solution included
+  make(rng: Rng, level: DayLevel, day: { date: Day; key: Seed }): P; // server only: the whole puzzle, solution included; `key` = cycleKey(secret, game), a per-game secret constant across days (Sniff's no-repeat shuffle)
   publicPuzzle(p: P): unknown;                  // what start returns: never the solution, answer or future sets
   init(p: P): S;
   parseMove(raw: unknown): M | null;            // exact shape or null
@@ -185,7 +186,7 @@ export interface DailyModule<P = unknown, S = unknown, M = unknown> {
 
 **Interfaces:**
 - Consumes: `dailySeed`, `levelFor` and `dailyModule`.
-- Produces: the `DailyPuzzle` DO, named `${game}:${date}`, with `get(game: DailyGameId, date: Day): Promise<unknown>`. It returns the stored full puzzle `P`, made once with `module.make(createRng(seed), levelFor(date))` and kept in SQLite.
+- Produces: the `DailyPuzzle` DO, named `${game}:${date}`, with `get(game: DailyGameId, date: Day): Promise<unknown>`. It returns the stored full puzzle `P`, made once with `module.make(createRng(seed), levelFor(date), { date, key: await cycleKey(secret, game) })` and kept in SQLite.
 - An alarm at 03:00 UTC makes tomorrow's puzzle in the `DailyPuzzle` for the next date. That's a cache warm only: `get` always makes the puzzle on a miss.
 
 - [ ] **Step 1: Write the failing tests**
