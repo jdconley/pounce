@@ -18,7 +18,8 @@ public struct BoxFortLayout: Equatable, Sendable {
 
     private static let gutter: CGFloat = 16
     private static let gap: CGFloat = 12
-    private static let headerHeight: CGFloat = 48
+    /// The score row's height on a phone or iPad.
+    public static let headerHeight: CGFloat = 48
     /// A tray slot holds a five-box piece at tray scale, plus this padding around it.
     private static let slotPad: CGFloat = 10
 
@@ -33,8 +34,17 @@ public struct BoxFortLayout: Equatable, Sendable {
 
     public var trayCell: CGFloat { cell * Self.trayScale }
 
-    public init(size: CGSize) {
+    /// The score row's height for a TV's watch view: a share of the space's shorter side, so the
+    /// score reads from the couch at 1080p and shrinks with a smaller space (never below a phone's).
+    /// The same numbers as the web's `watchHeader`.
+    public static func watchHeader(for size: CGSize) -> CGFloat {
+        min(128, max(headerHeight, 0.12 * min(size.width, size.height)))
+    }
+
+    /// The layout for `size`, with a score row `headerHeight` tall.
+    public init(size: CGSize, headerHeight: CGFloat = BoxFortLayout.headerHeight) {
         self.size = size
+        let head = headerHeight
         let w = size.width
         let h = size.height
         let g = Self.gap
@@ -45,12 +55,12 @@ public struct BoxFortLayout: Equatable, Sendable {
         if sideTray {
             // Room under the rug for the finger: a piece going on the bottom row floats above a
             // finger `lift` spots below the rug (the stacked layout's tray gives it that room).
-            let byHeight = (h - Self.headerHeight - 2 * g) / (8 + Self.fringe + Self.lift)
+            let byHeight = (h - head - 2 * g) / (8 + Self.fringe + Self.lift)
             let byWidth = (w - 2 * Self.gutter - g - 2 * pad) / (8 + 2 * Self.fringe + 5 * Self.trayScale)
             cell = max(1, min(Self.maxCell, byHeight, byWidth))
         } else {
             let byWidth = (w - 2 * Self.gutter) / 8
-            let byHeight = (h - Self.headerHeight - 3 * g - 2 * pad) / (8 + 2 * Self.fringe + 5 * Self.trayScale)
+            let byHeight = (h - head - 3 * g - 2 * pad) / (8 + 2 * Self.fringe + 5 * Self.trayScale)
             cell = max(1, min(Self.maxCell, byWidth, byHeight))
         }
         let side = 8 * cell
@@ -59,8 +69,8 @@ public struct BoxFortLayout: Equatable, Sendable {
             let total = side + 2 * Self.fringe * cell + g + trayDepth
             let left = (w - total) / 2
             let fringe = Self.fringe * cell
-            let top = Self.headerHeight + g + fringe + max(0, (h - Self.headerHeight - g - fringe - side - Self.lift * cell) / 2)
-            header = CGRect(x: left, y: 0, width: total, height: Self.headerHeight)
+            let top = head + g + fringe + max(0, (h - head - g - fringe - side - Self.lift * cell) / 2)
+            header = CGRect(x: left, y: 0, width: total, height: head)
             let board = CGRect(x: left + fringe, y: top, width: side, height: side)
             rug = board
             let slotHeight = side / 3
@@ -69,11 +79,11 @@ public struct BoxFortLayout: Equatable, Sendable {
             }
         } else {
             let fringe = Self.fringe * cell
-            let total = Self.headerHeight + g + fringe + side + fringe + g + trayDepth
+            let total = head + g + fringe + side + fringe + g + trayDepth
             let top = max(0, (h - total) / 2)
             let left = (w - side) / 2
-            header = CGRect(x: left, y: top, width: side, height: Self.headerHeight)
-            let board = CGRect(x: left, y: top + Self.headerHeight + g + fringe, width: side, height: side)
+            header = CGRect(x: left, y: top, width: side, height: head)
+            let board = CGRect(x: left, y: top + head + g + fringe, width: side, height: side)
             rug = board
             let slotWidth = side / 3
             slots = (0..<3).map { i in

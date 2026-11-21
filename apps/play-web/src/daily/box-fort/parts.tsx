@@ -14,21 +14,21 @@ import "./box-fort.css";
 
 export const at = (b: Box) => ({ left: `${b.x}px`, top: `${b.y}px`, width: `${b.w}px`, height: `${b.h}px` });
 
-/** The layout for the element's own size, kept up to date as it resizes. */
-export function useLayout(root: RefObject<HTMLElement | null>): BoxFortLayout | null {
+/** The layout for the element's own size, kept up to date as it resizes. `header` sizes the score row for that size. */
+export function useLayout(root: RefObject<HTMLElement | null>, header?: (width: number, height: number) => number): BoxFortLayout | null {
   const [layout, setLayout] = useState<BoxFortLayout | null>(null);
   useLayoutEffect(() => {
     const el = root.current;
     if (!el) return;
     const measure = (w: number, h: number) =>
-      setLayout((old) => (old && old.width === w && old.height === h ? old : boxFortLayout(w, h)));
+      setLayout((old) => (old && old.width === w && old.height === h ? old : boxFortLayout(w, h, header?.(w, h))));
     measure(el.clientWidth, el.clientHeight);
     const watch = new ResizeObserver(([entry]) => {
       if (entry) measure(entry.contentRect.width, entry.contentRect.height);
     });
     watch.observe(el);
     return () => watch.disconnect();
-  }, [root]);
+  }, [root, header]);
   return layout;
 }
 
