@@ -6,7 +6,7 @@
  *
  * Kittens never share: the caller doesn't offer it (no links out from an under-13's device).
  */
-import { shareText, SHARE_URL } from "./format";
+import { puzzleName, shareText, SHARE_URL } from "./format";
 
 import type { ShareGrid } from "./host";
 import type { DailyResult } from "@pounce/play-api/daily/module";
@@ -14,8 +14,8 @@ import type { DailyResult } from "@pounce/play-api/daily/module";
 /** What the worker draws. Plain values only. */
 export type CardRequest = {
   id: number;
+  /** "Sniff 12", or "Sniff" before launch day (`puzzleName`). */
   title: string;
-  number: number;
   words: string;
   hints: number;
   color: string;
@@ -42,7 +42,7 @@ let next = 0;
 const waiting = new Map<number, (png: Blob | null) => void>();
 
 /** The card as a PNG, drawn off the rendering thread; null where the browser can't (no OffscreenCanvas). */
-export function renderCard(card: Omit<CardRequest, "id" | "font">): Promise<Blob | null> {
+export function renderCard(card: Omit<CardRequest, "id" | "font" | "title"> & { title: string; number: number }): Promise<Blob | null> {
   if (typeof Worker === "undefined" || typeof OffscreenCanvas === "undefined") return Promise.resolve(null);
   if (!worker) {
     worker = new Worker(new URL("../workers/share-card.worker.ts", import.meta.url), { type: "module", name: "share-card" });
@@ -59,7 +59,8 @@ export function renderCard(card: Omit<CardRequest, "id" | "font">): Promise<Blob
   const font = new URL("@fontsource/nunito/files/nunito-latin-900-normal.woff2", import.meta.url).href;
   return new Promise((resolve) => {
     waiting.set(id, resolve);
-    worker!.postMessage({ ...card, id, font } satisfies CardRequest);
+    const { number, ...rest } = card;
+    worker!.postMessage({ ...rest, title: puzzleName(card.title, number), id, font } satisfies CardRequest);
   });
 }
 
@@ -77,7 +78,7 @@ export async function shareResult(
 ): Promise<"shared" | "copied" | "cancelled" | "failed"> {
   const text = shareText(title, result);
   if (typeof nav.share === "function") {
-    const file = png ? new File([png], `${title.toLowerCase().replace(/\s+/g, "-")}-${result.number}.png`, { type: "image/png" }) : null;
+    const file = png ? new File([png], `${puzzleName(title, result.number).toLowerCase().replace(/\s+/g, "-")}.png`, { type: "image/png" }) : null;
     const withFile = file && typeof nav.canShare === "function" && nav.canShare({ files: [file] }) ? { files: [file] } : {};
     try {
       await nav.share({ text, url: SHARE_URL, ...withFile });

@@ -36,10 +36,22 @@ export function resultWords(r: DailyResult): string {
   }
 }
 
+/**
+ * A puzzle's number as shown, or null when it's below 1: numbers count from launch day, so before
+ * it (the server's `LAUNCH` still a placeholder) they're negative, and never shown.
+ */
+export const puzzleNumber = (n: number): string | null => (n >= 1 ? String(n) : null);
+
+/** "Sniff 12", or just "Sniff" while its number isn't shown. */
+export function puzzleName(title: string, n: number): string {
+  const shown = puzzleNumber(n);
+  return shown ? `${title} ${shown}` : title;
+}
+
 /** "Sniff 12: 4 of 6", "Nine Lives 3: 4:05, 1 hint". */
 export function shareText(title: string, r: DailyResult): string {
   const hints = r.hints > 0 && typeof r.guesses !== "number" && typeof r.points !== "number" ? `, ${r.hints} ${r.hints === 1 ? "hint" : "hints"}` : "";
-  return `${title} ${r.number}: ${resultWords(r)}${hints}`;
+  return `${puzzleName(title, r.number)}: ${resultWords(r)}${hints}`;
 }
 
 export function ordinal(n: number): string {

@@ -100,7 +100,7 @@ test("Share sends the card image, the words and the Dish's link", async ({ brows
     .poll(() => page.evaluate(() => (window as unknown as { __shared?: unknown }).__shared ?? null))
     .not.toBeNull()
     .then(() => page.evaluate(() => (window as unknown as { __shared: unknown }).__shared))) as { text: string; url: string; files: { name: string; type: string; size: number }[] };
-  expect(shared.text).toMatch(/^Test -?\d+: 0:0\d$/);
+  expect(shared.text).toMatch(/^Test: 0:0\d$/);
   expect(shared.url).toBe("https://play.conleychaos.com/daily");
   expect(shared.files[0]?.type).toBe("image/png");
   expect(shared.files[0]?.size).toBeGreaterThan(5000);
@@ -119,7 +119,7 @@ test("without Web Share, Share copies the words and the link", async ({ browser 
   await countToTheEnd(page);
   await page.getByRole("button", { name: "Share" }).click();
   await expect(page.getByText("Copied")).toBeVisible();
-  expect(await page.evaluate(() => (window as unknown as { __copied: string }).__copied)).toMatch(/^Test -?\d+: 0:0\d https:\/\/play\.conleychaos\.com\/daily$/);
+  expect(await page.evaluate(() => (window as unknown as { __copied: string }).__copied)).toMatch(/^Test: 0:0\d https:\/\/play\.conleychaos\.com\/daily$/);
   await closeAll(bo.context);
 });
 

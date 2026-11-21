@@ -14,7 +14,7 @@ import { BoardView } from "./board";
 import { BoardTvSheet, unlinkBoard } from "./board-tv";
 import { dishGames } from "./dish-home";
 import { bestRow, dishStore, myRow, useDish } from "./dish-store";
-import { resultWords } from "./format";
+import { puzzleNumber, resultWords } from "./format";
 import { StatsSheet } from "./stats";
 import { lookOf, Treat } from "./treats";
 
@@ -36,7 +36,7 @@ function DishCard(props: { game: DailyGameId; board: BoardAnswer; first: boolean
       <Treat game={game} size={64} />
       <div class="dd-card-body">
         <h3 class="outlined">{look.title}</h3>
-        <span class="dd-num">No. {number}</span>
+        {puzzleNumber(number) ? <span class="dd-num">No. {puzzleNumber(number)}</span> : null}
         {best && best.player !== "me" ? (
           <span class="dd-best">
             <Cat cat={best.cat} size={22} />

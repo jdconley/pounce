@@ -1,6 +1,6 @@
 import { describe, expect, test } from "vitest";
 
-import { clock, ordinal, placeWords, resultWords, shareText } from "../src/daily/format";
+import { clock, ordinal, placeWords, puzzleName, puzzleNumber, resultWords, shareText } from "../src/daily/format";
 
 import type { DailyResult } from "@pounce/play-api/daily/module";
 
@@ -30,6 +30,17 @@ describe("the Dish's words", () => {
     expect(shareText("Nine Lives", { ...base, hints: 1 })).toBe("Nine Lives 3: 4:05, 1 hint");
     expect(shareText("Cat Nap", { ...base, game: "cat-nap", hints: 2 })).toBe("Cat Nap 3: 4:05, 2 hints");
     expect(shareText("Box Fort", { ...base, game: "box-fort", outcome: "done", points: 980 })).toBe("Box Fort 3: 980 points");
+  });
+
+  test("a puzzle number below 1 (before launch day) is never shown", () => {
+    expect(puzzleNumber(12)).toBe("12");
+    expect(puzzleNumber(1)).toBe("1");
+    expect(puzzleNumber(0)).toBeNull();
+    expect(puzzleNumber(-26339)).toBeNull();
+    expect(puzzleName("Sniff", 12)).toBe("Sniff 12");
+    expect(puzzleName("Sniff", -26339)).toBe("Sniff");
+    expect(shareText("Sniff", { ...base, game: "sniff", number: -26339, guesses: 4 })).toBe("Sniff: 4 of 6");
+    expect(shareText("Nine Lives", { ...base, number: 0, hints: 1 })).toBe("Nine Lives: 4:05, 1 hint");
   });
 
   test("places", () => {

@@ -18,7 +18,7 @@ import { TvIcon } from "../ui/show-on-tv";
 import { dailyPath, startRun, type Run } from "./client";
 import { dishGames } from "./dish-home";
 import { dishStore, myRow, useDish } from "./dish-store";
-import { clock, placeWords, resultWords } from "./format";
+import { clock, placeWords, puzzleNumber, resultWords } from "./format";
 import { DAILY_WEB_GAMES } from "./registry";
 import { renderCard, shareResult } from "./share";
 import { StatsSheet } from "./stats";
@@ -209,7 +209,7 @@ export function PuzzleHost(props: { game: DailyGameId; say: (words: string) => v
         <IconButton icon="icon-back" label="Dish" onClick={() => navigate({ kind: "dish" })} />
         <div class="dd-play-title">
           <h1 class="outlined">
-            {look.title} <span class="dd-num">{run ? run.start.number : ""}</span>
+            {look.title} {run && puzzleNumber(run.start.number) ? <span class="dd-num">{puzzleNumber(run.start.number)}</span> : null}
           </h1>
           {run ? <Clock run={run} /> : null}
         </div>

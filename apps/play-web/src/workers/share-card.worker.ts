@@ -90,7 +90,7 @@ async function draw(req: CardRequest): Promise<Blob> {
     ctx.fillStyle = "#fff";
     ctx.fillText(text, 540, y, 980);
   };
-  outlined(`${req.title} ${req.number}`, 150, 110);
+  outlined(req.title, 150, 110);
   outlined(req.words, 320, req.words.length > 12 ? 120 : 170);
   if (req.hints > 0) outlined(req.hints === 1 ? "1 hint" : `${req.hints} hints`, 440, 60);
 
