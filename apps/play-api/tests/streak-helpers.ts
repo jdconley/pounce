@@ -23,6 +23,16 @@ export function at(day: Day, hhmm: string, zone = LA): number {
   return localToInstant(day, h * 60 + m, zone);
 }
 
+/**
+ * Noon on the second day after `day`: the day after `day` has settled (at 04:10 the next
+ * morning) and the one after that hasn't. Tests that let a day go by settle here, never at
+ * `Date.now()` plus whole days, which within 10 minutes of 04:00 lands before the missed day
+ * settles.
+ */
+export function twoDaysOn(day: Day, zone = LA): number {
+  return at(addDays(day, 2), "12:00", zone);
+}
+
 export function pairOn(day: Day = D0, people: [PairPerson, PairPerson] = [person(A), person(B)]): PairState {
   return newPair("pair_1", people, at(day, "08:00"), [1, 2, 3, 4]);
 }
