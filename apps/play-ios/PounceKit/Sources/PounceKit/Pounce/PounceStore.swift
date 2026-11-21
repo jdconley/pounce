@@ -29,7 +29,8 @@ import Observation
 
     @ObservationIgnored private let service: any PounceService
     @ObservationIgnored private let file: JSONFile<[PendingAnswer]>?
-    @ObservationIgnored private var inFlight: Set<String> = []
+    /// The send out for each pounce: a second answer waits on it instead of reporting "queued".
+    @ObservationIgnored private var inFlight: [String: Task<AnswerResult, Never>] = [:]
 
     /// `pounce-answers.json` at `url`, written behind.
     public nonisolated static func file(at url: URL) -> JSONFile<[PendingAnswer]> { JSONFile(url: url) }
@@ -98,8 +99,6 @@ import Observation
             pending.append(answer)
         }
         save()
-        // On disk before the request goes out, so a kill mid-request still retries it.
-        await file?.flush()
         return await flush(answer.id)
     }
 
@@ -108,26 +107,38 @@ import Observation
         for id in pending.map(\.id) { _ = await flush(id) }
     }
 
-    /// Sends a pounce's entry. An answer that replaced it while the request was out (In a bit,
-    /// then Play) isn't dropped with the reply: it goes out next.
+    /// Sends a pounce's entry, or waits on the send already out for it. Either way the caller
+    /// gets how the newest answer ended: Play tapped while In a bit is out gets Play's table.
     private func flush(_ id: String) async -> AnswerResult {
-        guard !inFlight.contains(id), let entry = pending.first(where: { $0.id == id }) else { return .queued }
-        inFlight.insert(id)
-        let result: AnswerResult
-        do {
-            let code = try await service.answer(
-                id: entry.id, answer: entry.answer, choice: entry.choice, link: entry.link, person: entry.person)
-            result = .done(code: code)
-        } catch let error as APIError where Self.keeps(error) {
-            result = .queued
-        } catch {
-            result = .failed
+        if let out = inFlight[id] { return await out.value }
+        guard pending.contains(where: { $0.id == id }) else { return .queued }
+        let send = Task { await sendNewest(id) }
+        inFlight[id] = send
+        return await send.value
+    }
+
+    /// Sends the entry until the newest one has gone: an answer that replaced it while the
+    /// request was out (In a bit, then Play) isn't dropped with the reply but goes out next.
+    private func sendNewest(_ id: String) async -> AnswerResult {
+        defer { inFlight[id] = nil }
+        while true {
+            // On disk before the request goes out, so a kill mid-request still retries it.
+            await file?.flush()
+            guard let entry = pending.first(where: { $0.id == id }) else { return .queued }
+            let result: AnswerResult
+            do {
+                let code = try await service.answer(
+                    id: entry.id, answer: entry.answer, choice: entry.choice, link: entry.link, person: entry.person)
+                result = .done(code: code)
+            } catch let error as APIError where Self.keeps(error) {
+                result = .queued
+            } catch {
+                result = .failed
+            }
+            if let now = pending.first(where: { $0.id == id }), now != entry { continue }
+            if result != .queued { drop(id) }
+            return result
         }
-        inFlight.remove(id)
-        let replaced = pending.first(where: { $0.id == id }).map { $0 != entry } ?? false
-        if replaced { return await flush(id) }
-        if result != .queued { drop(id) }
-        return result
     }
 
     /// Worth trying again: offline, the server down, or the other answer still dealing the table.
