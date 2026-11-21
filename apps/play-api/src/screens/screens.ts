@@ -72,3 +72,24 @@ export function linkDecision(
   if (link.showing !== null && !move) return "showing";
   return "link";
 }
+
+/** How long a TV's board token lasts (daily games design §8): every evening for a month. */
+export const BOARD_TOKEN_TTL_MS = 30 * 86_400_000;
+
+/**
+ * `POST /v1/screens/link?person=` for the Daily Dish's board: exactly one of `token` or `code`,
+ * and `board: true`, in place of a room. Null: not a board link, or a bad one.
+ */
+export function parseBoardLinkBody(body: Record<string, unknown> | null): { token: string } | { code: string } | null {
+  if (!body || body.board !== true) return null;
+  if (Object.keys(body).some((key) => key !== "token" && key !== "code" && key !== "board")) return null;
+  if ("token" in body === "code" in body) return null;
+  if ("token" in body) return typeof body.token === "string" && LINK_TOKEN.test(body.token) ? { token: body.token } : null;
+  const code = typeof body.code === "string" ? body.code.toUpperCase() : "";
+  return LINK_CODE.test(code) ? { code } : null;
+}
+
+/** What a phone's board link does: a board can replace whatever the TV shows. */
+export function boardLinkDecision(link: { spent: boolean; expires: number } | null, now: number): "link" | "gone" {
+  return !link || link.expires <= now || link.spent ? "gone" : "link";
+}

@@ -8,6 +8,7 @@ import { close, countsForStreak, giveUp, moves, newRun, useHint, type Answer, ty
 
 import type { DailyGameId, DailyModule, DailyResult } from "./module";
 import type { Env } from "../env";
+import type { DailyEvent } from "../players/player";
 import type { Day } from "../streaks/clock";
 
 /** What `POST /v1/daily/{game}/start` answers (docs/daily-protocol.md). */
@@ -41,6 +42,8 @@ const RETRY_MS = 2000;
  */
 export class DailyRun extends DurableObject<Env> {
   private stored: Stored | null = null;
+  /** The boards hear this run's events in order, one after another. */
+  private told: Promise<unknown> = Promise.resolve();
 
   constructor(ctx: DurableObjectState, env: Env) {
     super(ctx, env);
@@ -107,10 +110,29 @@ export class DailyRun extends DurableObject<Env> {
     const s = this.stored;
     if (!s || s.run.playerId !== playerId) return null;
     const wasOpen = s.run.ended === null;
-    const answer = call(this.module(s.run.game), s);
+    const before = { seq: s.run.seq, hints: s.run.hints };
+    const m = this.module(s.run.game);
+    const answer = call(m, s);
     this.save();
+    const moved = answer.ok && (s.run.seq !== before.seq || s.run.hints !== before.hints);
+    if (moved && s.run.ended === null) {
+      // The boards see how far it got; a TV watching sees the state itself.
+      this.tell({ k: "progress", game: s.run.game, date: s.run.date, progress: answer.progress }, now);
+      if (s.run.tv) this.tell({ k: "watch", game: s.run.game, state: m.publicState(s.puzzle, s.run.state) }, now);
+    }
     if (wasOpen && s.run.ended !== null) this.ended(now);
     return answer;
+  }
+
+  /** Hands an event to the player's boards, after the ones before it. Never fatal. */
+  private tell(e: DailyEvent, now: number): void {
+    const { playerId } = (this.stored as Stored).run;
+    this.told = this.told
+      .then(() => player(this.env, playerId).dailyEvent(e, now))
+      .catch(() => {
+        console.error("daily_event_failed");
+      });
+    this.ctx.waitUntil(this.told);
   }
 
   async moves(playerId: string, from: number, raw: unknown[], now: number): Promise<Answer | null> {
@@ -125,12 +147,26 @@ export class DailyRun extends DurableObject<Env> {
     return this.act(playerId, now, (m, s) => giveUp(m, s.puzzle, s.run, now));
   }
 
-  /** Show on TV (watching lands with the board socket). False: not this player's run. */
+  /**
+   * Show on TV (spec §8, "Watching a puzzle"). Turned on while the run is open, every TV showing
+   * a board the player is on is offered it and gets a frame of its public state at once, then
+   * one each move; turned off, they're told it ended (with no result). False: not this player's run.
+   */
   async setTv(playerId: string, on: boolean): Promise<boolean> {
     const s = this.stored;
     if (!s || s.run.playerId !== playerId) return false;
+    const was = s.run.tv;
     s.run.tv = on;
     this.save();
+    if (s.run.ended === null && on !== was) {
+      const now = Date.now();
+      if (on) {
+        this.tell({ k: "watchOffer", game: s.run.game }, now);
+        this.tell({ k: "watch", game: s.run.game, state: this.module(s.run.game).publicState(s.puzzle, s.run.state) }, now);
+      } else {
+        this.tell({ k: "watchEnd", game: s.run.game, result: null }, now);
+      }
+    }
     return true;
   }
 
@@ -156,6 +192,7 @@ export class DailyRun extends DurableObject<Env> {
   /** Reports the ended run to its player, with one retry, never fatal (spec §5, "The reporting path"). */
   private ended(now: number): void {
     const { run } = this.stored as Stored;
+    if (run.tv) this.tell({ k: "watchEnd", game: run.game, result: run.result }, now);
     const result = run.result as DailyResult;
     const counts = countsForStreak(run);
     const at = (run.ended as { at: number }).at;

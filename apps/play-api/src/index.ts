@@ -4,7 +4,7 @@ import { APP_HEADER, parseApp } from "./app/version";
 import { issueDeviceToken, verifyDeviceToken } from "./auth";
 import { APPLE_ROOTS } from "./consent/appstore";
 import { noticePage } from "./consent/pages";
-import { dailyRoute } from "./daily/routes";
+import { dailyRoute, who as dailyPlayer } from "./daily/routes";
 import { dailyOn, devSpeed, tvAppLinksOn, tvOn } from "./env";
 import { active, forget, minted, pageView, parseReport, prune, reached, report } from "./funnel/funnel";
 import { DEFAULT_GAME, GAMES_HEADER, gamesListed, gamesOn, gameTitle, isGameId, type GameId } from "./games";
@@ -54,7 +54,7 @@ import { DEVICE_HEADER, PLAYER_HEADER, ROLE_HEADER } from "./room/game-room";
 import { parseRoomName } from "./room/names";
 import { lockedFor, withoutUndrawable } from "./room/tables";
 import { blockPlayer, guardJoin, guardScreenCode, listBlocks, mayMakeScreenLink, mayMint, mayReportFunnel, nameCheck, ownerReports, peekInvite, reportPlayer, unblockPlayer } from "./safety/safety";
-import { LINK_TOKEN, newLinkCode, newLinkToken, parseLinkBody, parseScreenBody, SCREEN_LINK_TTL_MS } from "./screens/screens";
+import { LINK_TOKEN, newLinkCode, newLinkToken, parseBoardLinkBody, parseLinkBody, parseScreenBody, SCREEN_LINK_TTL_MS } from "./screens/screens";
 import { creatorLook, isMine, leavePair, myLeft, myOwn, myStreaks, myTrophies, PAIR_ID, pairStub, rejoinPair, syncPairPeople } from "./streaks/pairs";
 import { consentOn, liveOn, notifyOn, streaksOn, trophyOn } from "./streaks/profile";
 
@@ -325,7 +325,10 @@ async function waitOnScreenLink(request: Request, env: Env, deviceId: string, to
 
 /** `POST /v1/screens/link`: a phone at a table opens it on the TV whose QR it scanned or whose code it typed. */
 async function linkScreen(request: Request, env: Env, deviceId: string): Promise<Response> {
-  const body = parseLinkBody(await readObject(request));
+  const raw = await readObject(request);
+  // The Daily Dish's board in place of a table (daily games design §8).
+  if (raw && "board" in raw && dailyOn(env)) return linkBoard(request, env, deviceId, raw);
+  const body = parseLinkBody(raw);
   if (!body) return badRequest();
   const now = Date.now();
   // Only the host or someone seated, and a table that doesn't exist says the same, so the
@@ -352,6 +355,30 @@ async function linkScreen(request: Request, env: Env, deviceId: string): Promise
   // The table went after the check above: as for one that never was.
   if (decision === "none") return json(403, { error: "not_seated" });
   return notFound();
+}
+
+/** `POST /v1/screens/link?person=` with `board: true`: a phone shows its person's board on the TV. */
+async function linkBoard(request: Request, env: Env, deviceId: string, raw: Record<string, unknown>): Promise<Response> {
+  const body = parseBoardLinkBody(raw);
+  if (!body) return badRequest();
+  const playerId = await dailyPlayer(request, env, deviceId);
+  if (typeof playerId !== "string") return playerId;
+  const now = Date.now();
+  let token: string | null;
+  if ("code" in body) {
+    // As for a table: wrong codes back off.
+    token = await screenLinks(env, `code:${body.code}`).tokenFor(now);
+    const retryAfter = await guardScreenCode(env, token === null, deviceId, clientIp(request), now);
+    if (retryAfter !== null) {
+      const response = json(429, { error: "too_many_attempts", retryAfter });
+      response.headers.set("retry-after", String(retryAfter));
+      return response;
+    }
+  } else {
+    token = body.token;
+  }
+  if (token === null) return notFound();
+  return (await screenLinks(env, `token:${token}`).linkBoard(playerId, now)) === "link" ? json(200, { linked: true }) : notFound();
 }
 
 async function setPushToken(request: Request, env: Env, deviceId: string): Promise<Response> {

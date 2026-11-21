@@ -1,5 +1,7 @@
 import { player, resolveMe } from "../players/accounts";
-import { PERSON_ID } from "../players/ids";
+import { PERSON_ID, sha256Hex } from "../players/ids";
+import { BOARD_HASH_HEADER, BOARD_ROLE_HEADER } from "../players/player";
+import { LINK_TOKEN } from "../screens/screens";
 import { addDays, daysBetween } from "../streaks/clock";
 
 import { dailyModule } from "./games";
@@ -53,7 +55,7 @@ const runs = (env: Env, id: string) => env.DAILY_RUNS.get(env.DAILY_RUNS.idFromN
  * The player `?person=` names on this device, or the device's account without one. A person the
  * device doesn't speak for is a 403; no person and no account, a 404.
  */
-async function who(request: Request, env: Env, deviceId: string): Promise<string | Response> {
+export async function who(request: Request, env: Env, deviceId: string): Promise<string | Response> {
   const person = new URL(request.url).searchParams.get("person");
   if (person !== null && !PERSON_ID.test(person)) return badRequest();
   const id = await resolveMe(env, deviceId, person);
@@ -138,8 +140,45 @@ async function getStats(request: Request, env: Env, deviceId: string): Promise<R
   return json(200, { games: await player(env, playerId).dailyStats(day.day) });
 }
 
+/**
+ * `GET /v1/daily/board/ws`: a board socket, handed to the board's player. A phone names its person
+ * (`?person=`); a TV gives its board token (`?board=`), good only from the TV it was given to.
+ */
+async function boardSocket(request: Request, env: Env, deviceId: string): Promise<Response> {
+  if (request.headers.get("upgrade")?.toLowerCase() !== "websocket") return json(426, { error: "upgrade_required" });
+  const board = new URL(request.url).searchParams.get("board");
+  const headers = new Headers({ upgrade: "websocket" });
+  let playerId: string;
+  if (board !== null) {
+    if (!LINK_TOKEN.test(board)) return notFound();
+    const hash = await sha256Hex(board);
+    const found = await env.BOARD_TOKENS.get(env.BOARD_TOKENS.idFromName(hash)).resolve(deviceId, Date.now());
+    if (found === null) return notFound();
+    playerId = found;
+    headers.set(BOARD_ROLE_HEADER, "tv");
+    headers.set(BOARD_HASH_HEADER, hash);
+  } else {
+    const found = await who(request, env, deviceId);
+    if (typeof found !== "string") return found;
+    playerId = found;
+    headers.set(BOARD_ROLE_HEADER, "phone");
+  }
+  // A fresh request: nothing the client sent but the upgrade reaches the player.
+  return env.PLAYERS.get(env.PLAYERS.idFromName(playerId)).fetch(new Request("https://player/board", { headers }));
+}
+
+/** `DELETE /v1/daily/board/tv?person=`: every TV showing the person's board forgets it. */
+async function unlinkBoards(request: Request, env: Env, deviceId: string): Promise<Response> {
+  const playerId = await who(request, env, deviceId);
+  if (typeof playerId !== "string") return playerId;
+  await player(env, playerId).revokeBoards();
+  return noContent();
+}
+
 /** The Daily Dish's authenticated route for this request, or null (a 404). Only while `DAILY` is on. */
 export function dailyRoute(method: string, pathname: string): Route | null {
+  if (method === "GET" && pathname === "/v1/daily/board/ws") return boardSocket;
+  if (method === "DELETE" && pathname === "/v1/daily/board/tv") return unlinkBoards;
   if (method === "GET" && pathname === "/v1/daily/board") return getBoard;
   if (method === "GET" && pathname === "/v1/daily/stats") return getStats;
   const start = method === "POST" ? START.exec(pathname) : null;

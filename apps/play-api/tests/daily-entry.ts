@@ -1,5 +1,6 @@
 import { startRun } from "../src/daily/routes";
 import worker from "../src/index";
+import { sha256Hex } from "../src/players/ids";
 import { addDays } from "../src/streaks/clock";
 import { connect } from "../src/streaks/pairs";
 
@@ -26,7 +27,8 @@ export { BoardTokens } from "../src/daily/board-tokens";
  * time; `/__test/run?id=` reads a run as stored; `/__test/connect?a=&b=` pairs two players, as an
  * accepted invite does; `/__test/board?player=&date=&now=` reads a player's board at a made-up now;
  * `/__test/record?player=` hands a player a counting result for today, as an ended run would;
- * `/__test/remind?player=&now=` runs a player's reminder pass at a made-up time.
+ * `/__test/remind?player=&now=` runs a player's reminder pass at a made-up time;
+ * `/__test/board-token?token=&device=&now=` asks whose board a TV's token shows, at a made-up time.
  */
 export default {
   async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
@@ -53,6 +55,11 @@ export default {
     if (url.pathname === "/__test/board") {
       const playerId = url.searchParams.get("player") ?? "";
       return Response.json(await env.PLAYERS.get(env.PLAYERS.idFromName(playerId)).board(date, Number(url.searchParams.get("now"))));
+    }
+    if (url.pathname === "/__test/board-token") {
+      const hash = await sha256Hex(url.searchParams.get("token") ?? "");
+      const found = await env.BOARD_TOKENS.get(env.BOARD_TOKENS.idFromName(hash)).resolve(url.searchParams.get("device") ?? "", Number(url.searchParams.get("now")));
+      return Response.json({ player: found });
     }
     if (url.pathname === "/__test/remind") {
       await env.PLAYERS.get(env.PLAYERS.idFromName(url.searchParams.get("player") ?? "")).remind(Number(url.searchParams.get("now")));
