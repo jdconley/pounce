@@ -1,6 +1,174 @@
 import { DurableObject } from "cloudflare:workers";
 
-import type { Env } from "../env";
+import { player } from "../players/accounts";
 
-/** One player's run at one game on one date, named `${playerId}:${game}:${date}` (spec §3, "A run"). */
-export class DailyRun extends DurableObject<Env> {}
+import { closesAt, levelFor, puzzleNumber } from "./days";
+import { dailyModule } from "./games";
+import { close, countsForStreak, giveUp, moves, newRun, useHint, type Answer, type RunState } from "./run-core";
+
+import type { DailyGameId, DailyModule, DailyResult } from "./module";
+import type { Env } from "../env";
+import type { Day } from "../streaks/clock";
+
+/** What `POST /v1/daily/{game}/start` answers (docs/daily-protocol.md). */
+export type StartView = {
+  run: string;
+  game: DailyGameId;
+  date: Day;
+  number: number;
+  level: number;
+  startedAt: number;
+  now: number;
+  puzzle: unknown;
+  state: unknown;
+  seq: number;
+  hints: number;
+  result: DailyResult | null;
+  closesAt: number;
+};
+
+type Stored = { run: RunState; puzzle: unknown };
+
+/** How long before a failed report to the player is tried once more. */
+const RETRY_MS = 2000;
+
+/**
+ * One player's run at one game on one date, named by its run id (`runId`: the HMAC of
+ * `${playerId}:${game}:${date}`), so ids can't be guessed (spec §3, "A run"). It keeps the run and
+ * its puzzle, referees every call with `run-core`, closes the run at its day's end by alarm, and
+ * reports an ended run to its player. Calls from anyone but the run's player are answered null,
+ * which the routes turn into a 404.
+ */
+export class DailyRun extends DurableObject<Env> {
+  private stored: Stored | null = null;
+
+  constructor(ctx: DurableObjectState, env: Env) {
+    super(ctx, env);
+    void ctx.blockConcurrencyWhile(async () => {
+      this.ctx.storage.sql.exec("CREATE TABLE IF NOT EXISTS run (id INTEGER PRIMARY KEY CHECK (id = 1), run TEXT, puzzle TEXT)");
+      const row = this.ctx.storage.sql.exec<{ run: string; puzzle: string }>("SELECT run, puzzle FROM run WHERE id = 1").toArray()[0];
+      this.stored = row ? { run: JSON.parse(row.run) as RunState, puzzle: JSON.parse(row.puzzle) } : null;
+    });
+  }
+
+  private module(game: DailyGameId): DailyModule {
+    const m = dailyModule(game, this.env);
+    if (!m) throw new Error("daily_game_unlisted");
+    return m;
+  }
+
+  private save(): void {
+    const { run, puzzle } = this.stored as Stored;
+    this.ctx.storage.sql.exec(
+      "INSERT INTO run (id, run, puzzle) VALUES (1, ?, ?) ON CONFLICT (id) DO UPDATE SET run = excluded.run",
+      JSON.stringify(run),
+      JSON.stringify(puzzle),
+    );
+  }
+
+  private view(now: number): StartView {
+    const { run, puzzle } = this.stored as Stored;
+    const m = this.module(run.game);
+    return {
+      run: run.id,
+      game: run.game,
+      date: run.date,
+      number: puzzleNumber(run.date),
+      level: levelFor(run.date),
+      startedAt: run.startedAt,
+      now,
+      puzzle: m.publicPuzzle(puzzle),
+      state: m.publicState(puzzle, run.state),
+      seq: run.seq,
+      hints: run.hints,
+      result: run.result,
+      closesAt: closesAt(run.date, run.zone),
+    };
+  }
+
+  /** Starts the run, or returns it as it stands: one run per player, game and date. */
+  async start(a: { id: string; playerId: string; game: DailyGameId; date: Day; zone: string; now: number }): Promise<StartView> {
+    if (!this.stored) {
+      // Two devices starting at once: the second waits here and gets the first's run.
+      await this.ctx.blockConcurrencyWhile(async () => {
+        if (this.stored) return;
+        const m = this.module(a.game);
+        const puzzle = await this.env.DAILY_PUZZLES.get(this.env.DAILY_PUZZLES.idFromName(`${a.game}:${a.date}`)).get(a.game, a.date);
+        this.stored = { run: newRun(m, puzzle, a), puzzle };
+        this.save();
+        await this.ctx.storage.setAlarm(closesAt(a.date, a.zone));
+      });
+    }
+    return this.view(a.now);
+  }
+
+  /** The run's player's call, refereed; null for anyone else, or no run. */
+  private act(playerId: string, now: number, call: (m: DailyModule, s: Stored) => Answer): Answer | null {
+    const s = this.stored;
+    if (!s || s.run.playerId !== playerId) return null;
+    const wasOpen = s.run.ended === null;
+    const answer = call(this.module(s.run.game), s);
+    this.save();
+    if (wasOpen && s.run.ended !== null) this.ended(now);
+    return answer;
+  }
+
+  async moves(playerId: string, from: number, raw: unknown[], now: number): Promise<Answer | null> {
+    return this.act(playerId, now, (m, s) => moves(m, s.puzzle, s.run, from, raw, now));
+  }
+
+  async hint(playerId: string, now: number): Promise<Answer | null> {
+    return this.act(playerId, now, (m, s) => useHint(m, s.puzzle, s.run, now));
+  }
+
+  async giveUp(playerId: string, now: number): Promise<Answer | null> {
+    return this.act(playerId, now, (m, s) => giveUp(m, s.puzzle, s.run, now));
+  }
+
+  /** Show on TV (watching lands with the board socket). False: not this player's run. */
+  async setTv(playerId: string, on: boolean): Promise<boolean> {
+    const s = this.stored;
+    if (!s || s.run.playerId !== playerId) return false;
+    s.run.tv = on;
+    this.save();
+    return true;
+  }
+
+  /** The run as stored (tests). */
+  async exportState(): Promise<RunState | null> {
+    return this.stored?.run ?? null;
+  }
+
+  /** The day ended: an open run closes, unsolved. */
+  async alarm(): Promise<void> {
+    const s = this.stored;
+    if (!s || s.run.ended) return;
+    const now = Date.now();
+    if (close(this.module(s.run.game), s.puzzle, s.run, now) === null) {
+      // Woken early: wait for the day's end.
+      await this.ctx.storage.setAlarm(closesAt(s.run.date, s.run.zone));
+      return;
+    }
+    this.save();
+    this.ended(now);
+  }
+
+  /** Reports the ended run to its player, with one retry, never fatal (spec §5, "The reporting path"). */
+  private ended(now: number): void {
+    const { run } = this.stored as Stored;
+    const result = run.result as DailyResult;
+    const counts = countsForStreak(run);
+    const at = (run.ended as { at: number }).at;
+    const report = () => player(this.env, run.playerId).recordDaily(result, counts, at);
+    this.ctx.waitUntil(
+      report()
+        .catch(async () => {
+          await new Promise((resolve) => setTimeout(resolve, RETRY_MS));
+          await report();
+        })
+        .catch(() => {
+          console.error("daily_report_failed", now);
+        }),
+    );
+  }
+}

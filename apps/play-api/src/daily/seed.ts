@@ -1,3 +1,5 @@
+import { base64url } from "../players/ids";
+
 import type { DailyGameId } from "./module";
 import type { Seed } from "../rules/rng";
 import type { Day } from "../streaks/clock";
@@ -43,4 +45,10 @@ export function seedOf(mac: ArrayBuffer): Seed {
   const seed: Seed = [view.getUint32(0), view.getUint32(4), view.getUint32(8), view.getUint32(12)];
   // xoshiro128** can't start from all zeros; a 2^-128 chance, handled anyway.
   return seed.every((word) => word === 0) ? [1, 0, 0, 0] : seed;
+}
+
+/** A run's id: `${playerId}:${game}:${date}` HMAC'd with the daily key, base64url. Ids can't be guessed or read back. */
+export async function runId(secret: string, playerId: string, game: DailyGameId, date: Day): Promise<string> {
+  const mac = await crypto.subtle.sign("HMAC", await dailyKey(secret), encoder.encode(`run|${playerId}:${game}:${date}`));
+  return base64url(new Uint8Array(mac));
 }

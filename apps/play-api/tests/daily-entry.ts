@@ -1,3 +1,4 @@
+import { startRun } from "../src/daily/routes";
 import worker from "../src/index";
 import { addDays } from "../src/streaks/clock";
 
@@ -20,7 +21,8 @@ export { BoardTokens } from "../src/daily/board-tokens";
 /**
  * The real worker, plus the daily suites' test hooks: `/__test/puzzle?game=&date=` reads a day's
  * puzzle, whole; `/__test/puzzle-warm?game=&date=` runs that puzzle's warm (its alarm's work) and says whether the
- * next date's puzzle is then made.
+ * next date's puzzle is then made; `/__test/start?player=&game=&now=` starts a run at a made-up
+ * time; `/__test/run?id=` reads a run as stored.
  */
 export default {
   async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
@@ -33,6 +35,12 @@ export default {
       await puzzle(date).get(game, date);
       await puzzle(date).warm();
       return Response.json({ next: await puzzle(addDays(date, 1)).made() });
+    }
+    if (url.pathname === "/__test/start") {
+      return startRun(env, "test-device", url.searchParams.get("player") ?? "", game, Number(url.searchParams.get("now")));
+    }
+    if (url.pathname === "/__test/run") {
+      return Response.json(await env.DAILY_RUNS.get(env.DAILY_RUNS.idFromName(url.searchParams.get("id") ?? "")).exportState());
     }
     return worker.fetch(request, env, ctx);
   },

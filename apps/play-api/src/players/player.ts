@@ -1,5 +1,6 @@
 import { DurableObject } from "cloudflare:workers";
 
+import { dailyDay, type DailyZone } from "../daily/days";
 import { endKitten } from "../kittens/kittens";
 import { forgetLinks } from "../links/links";
 import { deliverToPlayer, type PushProfile } from "../notify/deliver";
@@ -9,7 +10,7 @@ import { decide, dueSlots, emptyNotifyState, nextWake, noteSent, noteTurn, type 
 import { notifySettings, type NotifySettings } from "../notify/settings";
 import { claimAnswer, KEEP_MS, restingUntil, type Answer, type PounceRow, type Target } from "../pounce/limits";
 import { createTables, drawable, listTables, removeTable, upsertTable, type TableEntry } from "../room/tables";
-import { FALLBACK_ZONE } from "../streaks/clock";
+import { FALLBACK_ZONE, type Day } from "../streaks/clock";
 import { leaveAllPairs } from "../streaks/pairs";
 import { mergePersonal, ownView, recordTurn, type OwnStreak, type Personal } from "../streaks/personal";
 import { notifyOn, quietStartMinutes, trophyOn } from "../streaks/profile";
@@ -17,6 +18,7 @@ import { notifyOn, quietStartMinutes, trophyOn } from "../streaks/profile";
 import { IDENTITIES_NAME } from "./identities";
 import { mergeSection } from "./state";
 
+import type { DailyResult } from "../daily/module";
 import type { Env } from "../env";
 import type { AgeBand, Json, Section, StatePatch } from "./parse";
 import type { Outgoing } from "../notify/types";
@@ -126,6 +128,10 @@ export class Player extends DurableObject<Env> {
     sql.exec("CREATE TABLE IF NOT EXISTS left_handles (pair_id TEXT PRIMARY KEY, partner_id TEXT UNIQUE)");
     // Players this one blocked: their pounces and nudges are dropped, and they can't join its tables.
     sql.exec("CREATE TABLE IF NOT EXISTS blocks (player_id TEXT PRIMARY KEY, person_id TEXT, name TEXT, at INTEGER)");
+    // The Daily Dish (daily games design §6): this player's and their connections' results, by
+    // date, kept 120 days; and this player's lifetime stats per game.
+    sql.exec("CREATE TABLE IF NOT EXISTS daily_results (date TEXT, game TEXT, player_id TEXT, result TEXT, PRIMARY KEY (date, game, player_id))");
+    sql.exec("CREATE TABLE IF NOT EXISTS daily_stats (game TEXT PRIMARY KEY, stats TEXT)");
     createTables(sql);
   }
 
@@ -590,6 +596,36 @@ export class Player extends DurableObject<Env> {
   recordPersonalTurn(at: number, now: number): void {
     if (!trophyOn(this.env) || !this.live()) return;
     this.setMeta("personal", JSON.stringify(recordTurn(this.personal(), at, this.zone(), now)));
+  }
+
+  /**
+   * The Daily Dish: this player's day now and the zone it runs in (daily games design §2, §3). A
+   * reported zone change waits for the next 04:00 (`dailyDay`); the locked zone is kept here.
+   * Null for a player that doesn't exist.
+   */
+  dailyDay(now: number): { day: Day; zone: string } | null {
+    if (!this.live()) return null;
+    const kept = this.getMeta("daily_zone");
+    const { day, zone } = dailyDay(now, kept === null ? null : (JSON.parse(kept) as DailyZone), this.getMeta("time_zone"));
+    this.setMeta("daily_zone", JSON.stringify(zone));
+    return { day, zone: zone.before ?? zone.zone };
+  }
+
+  /**
+   * A run of this player's ended (`DailyRun`): keeps the result. `counts`: it counts toward
+   * streaks (`countsForStreak`); `endedAt`: when it ended, on the server's clock.
+   */
+  recordDaily(result: DailyResult, counts: boolean, endedAt: number): void {
+    if (!this.live()) return;
+    void counts;
+    void endedAt;
+    this.ctx.storage.sql.exec(
+      "INSERT OR REPLACE INTO daily_results (date, game, player_id, result) VALUES (?, ?, ?, ?)",
+      result.date,
+      result.game,
+      this.getMeta("id") as string,
+      JSON.stringify(result),
+    );
   }
 
   /**

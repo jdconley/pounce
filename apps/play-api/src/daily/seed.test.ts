@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import { addDays } from "../streaks/clock";
 
-import { dailyKey, dailySeed, seedOf } from "./seed";
+import { dailyKey, dailySeed, runId, seedOf } from "./seed";
 
 import type { DailyGameId } from "./module";
 
@@ -52,3 +52,14 @@ describe("dailySeed", () => {
 });
 
 const PINNED = [3478374278, 3446170504, 1048556025, 1932777257];
+
+describe("runId", () => {
+  it("is the run's name HMAC'd with the daily key, base64url: unguessable, and the same every time", async () => {
+    const id = await runId(SECRET, "p_abc", "sniff", "2026-11-23");
+    expect(id).toMatch(/^[A-Za-z0-9_-]{43}$/);
+    expect(await runId(SECRET, "p_abc", "sniff", "2026-11-23")).toBe(id);
+    expect(await runId(SECRET, "p_abd", "sniff", "2026-11-23")).not.toBe(id);
+    expect(await runId(SECRET, "p_abc", "sniff", "2026-11-24")).not.toBe(id);
+    expect(await runId(SECRET, "p_abc", "cat-nap", "2026-11-23")).not.toBe(id);
+  });
+});
