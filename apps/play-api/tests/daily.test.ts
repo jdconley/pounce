@@ -205,8 +205,9 @@ describe("runs", () => {
     const mf = await start();
     const { device, person } = await someone(mf);
     expect((await startRun(mf, device, person, "chess")).status).toBe(404);
-    // A real game this server doesn't referee yet (each game session lists its own).
-    const unlisted = (["sniff", "nine-lives", "cat-nap", "box-fort"] as DailyGameId[]).find((id) => !DAILY_GAMES[id]);
+    // A real game this server doesn't referee yet (each game session lists its own). Not Box Fort:
+    // the test worker (`daily-entry.ts`) stands the test game in for it.
+    const unlisted = (["sniff", "nine-lives", "cat-nap"] as DailyGameId[]).find((id) => !DAILY_GAMES[id]);
     if (unlisted) expect((await startRun(mf, device, person, unlisted)).status).toBe(404);
   });
 
