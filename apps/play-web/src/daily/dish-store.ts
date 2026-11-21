@@ -9,6 +9,7 @@
 import { useEffect, useState } from "preact/hooks";
 
 import { api, ApiError } from "../net/api";
+import { profileSynced } from "../store/app";
 
 import { BoardSocket, type BoardEvent } from "./board-socket";
 import { dailyPath } from "./client";
@@ -26,6 +27,8 @@ export type DishState = {
 type Socket = { start: (on: (e: BoardEvent) => void) => void; stop: () => void };
 
 export type DishDeps = {
+  /** The profile upload in flight, if any: until it lands the server may not know a new player (a 403). */
+  profileSynced: () => Promise<void>;
   call: (method: string, path: string, body?: unknown) => Promise<Response>;
   socket: (person: string) => Socket;
 };
@@ -95,6 +98,8 @@ export class DishStore {
   private async load(): Promise<void> {
     const person = this.person;
     if (!person) return;
+    await this.deps.profileSynced();
+    if (person !== this.person) return;
     let board: BoardAnswer;
     try {
       board = (await (await this.deps.call("GET", dailyPath("/v1/daily/board", person))).json()) as BoardAnswer;
@@ -159,6 +164,7 @@ export class DishStore {
 }
 
 export const dishStore = new DishStore({
+  profileSynced,
   call: (m, p, b) => api.call(m, p, b),
   socket: (person) =>
     new BoardSocket({

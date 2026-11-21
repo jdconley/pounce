@@ -98,6 +98,11 @@ export function syncProfile(): Promise<void> {
   return syncing;
 }
 
+/** The profile upload in flight, or done: wait on it before asking about a new person. */
+export function profileSynced(): Promise<void> {
+  return syncing ?? Promise.resolve();
+}
+
 // Funnel steps (first-run funnel design, Part 3): kept here with when they happened, and sent
 // only once the age check is done (nothing goes to the server before it).
 

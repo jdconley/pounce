@@ -12,11 +12,12 @@ import type { BoardAnswer } from "@pounce/play-api/daily/messages";
 const BOARD = (http as { board: BoardAnswer }).board;
 const STATS = (http as { stats: unknown }).stats;
 
-function setup(answer: (path: string) => unknown) {
+function setup(answer: (path: string) => unknown, profileSynced: () => Promise<void> = () => Promise.resolve()) {
   const calls: string[] = [];
   let on: ((e: BoardEvent) => void) | null = null;
   let stopped = 0;
   const store = new DishStore({
+    profileSynced,
     call: async (_m, path) => {
       calls.push(path);
       const a = answer(path);
@@ -39,6 +40,21 @@ describe("the Dish store", () => {
     expect(store.state.status).toBe("off");
     expect(calls).toEqual(["/v1/daily/board?person=pe_1"]);
     release();
+  });
+
+  test("a new player's board waits for the profile upload, so the server knows them first", async () => {
+    let landed!: () => void;
+    const upload = new Promise<void>((r) => (landed = r));
+    const { store, calls } = setup((p) => (p.startsWith("/v1/daily/board") ? BOARD : STATS), () => upload);
+    store.retain("pe_1");
+    await flush();
+    expect(calls).toEqual([]);
+    expect(store.state.status).toBe("unknown");
+    landed();
+    await flush();
+    await flush();
+    expect(calls[0]).toBe("/v1/daily/board?person=pe_1");
+    expect(store.state.status).toBe("on");
   });
 
   test("on with the board, its stats and its TV count", async () => {
