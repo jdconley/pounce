@@ -4,7 +4,7 @@ import SwiftUI
 /// Someone's Box Fort run as the server sees it, for a TV that pressed Watch (spec §8): the
 /// score row, the rug and the set in play, read only. It draws with the play view's own parts.
 /// Built for tvOS too: nothing here takes input or uses the phone's haptics.
-struct BoxFortWatchView: View {
+struct BoxFortWatch: View {
     let state: BoxFortState
 
     var body: some View {
@@ -33,5 +33,15 @@ struct BoxFortWatchView: View {
         .accessibilityElement(children: .combine)
         .accessibilityLabel("Box Fort")
         .accessibilityValue("\(state.points) points, set \(min(state.set + 1, state.sets)) of \(state.sets)")
+    }
+}
+
+/// A TV watching a Box Fort run: the public state carries the rug and the set in play, so the
+/// puzzle isn't needed.
+extension BoxFortWatch: DailyWatchView {
+    nonisolated static let game = DailyCatalog.boxFort
+
+    init(puzzle: BoxFortPublicPuzzle, state: BoxFortState) {
+        self.init(state: state)
     }
 }

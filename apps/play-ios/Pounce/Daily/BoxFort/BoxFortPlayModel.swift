@@ -2,13 +2,6 @@ import Observation
 import PounceKit
 import SwiftUI
 
-/// A placement the play view sends to the run (phase B: the host's `DailyRunSession`).
-struct BoxFortMove: Equatable, Sendable {
-    let slot: Int
-    let row: Int
-    let col: Int
-}
-
 /// The boxes one placement cleared, for the burst: each spot and the paint it had.
 struct BoxFortBurst: Equatable, Sendable {
     let id: Int
@@ -49,11 +42,15 @@ final class BoxFortPlayModel {
     private(set) var landing: BoxFortLanding?
     /// Bumped when a new set lands in the tray, so it can bounce in.
     private(set) var dealt = 0
+    /// The run has ended on the server (the host shows the end): no more placements.
+    private(set) var stopped = false
 
-    @ObservationIgnored private let send: (BoxFortMove) -> Void
+    /// Each placement and whether to send it now: a set's last piece (the next set is waited on)
+    /// and the run's last move go at once.
+    @ObservationIgnored private let send: (BoxFortMove, _ urgent: Bool) -> Void
     @ObservationIgnored private var counter = 0
 
-    init(state: BoxFortState, send: @escaping (BoxFortMove) -> Void) {
+    init(state: BoxFortState, send: @escaping (BoxFortMove, _ urgent: Bool) -> Void) {
         self.state = state
         self.send = send
         refreshFits()
@@ -61,18 +58,24 @@ final class BoxFortPlayModel {
 
     var over: Bool { state.over != nil }
 
+    /// Whether a piece can be picked up now.
+    var canPlace: Bool { !stopped && !waiting && state.over == nil && landing == nil }
+
+    /// The server ended the run: the board stays, and takes no more pieces.
+    func stop() { stopped = true }
+
     /// Puts the tray's piece in `slot` on the rug at `at`. False when it can't go there (the
     /// view sends it back to the tray).
     @discardableResult
     func place(slot: Int, at: BoxFortCell) async -> Bool {
-        guard !waiting, state.over == nil, state.pieces.indices.contains(slot), !state.placed[slot] else { return false }
+        guard !stopped, !waiting, state.over == nil, state.pieces.indices.contains(slot), !state.placed[slot] else { return false }
         let before = state
         let piece = before.pieces[slot]
         landing = BoxFortLanding(slot: slot, piece: piece, at: at)
         let out = await BoxFortRules.stepOffMain(before, slot: slot, row: at.row, col: at.col)
         landing = nil
-        guard state == before, let out else { return false }
-        send(BoxFortMove(slot: slot, row: at.row, col: at.col))
+        guard state == before, !stopped, let out else { return false }
+        send(BoxFortMove(slot: slot, row: at.row, col: at.col), out.setDone || out.state.over != nil)
         counter += 1
         state = out.state
         let size = piece.size

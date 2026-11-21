@@ -64,5 +64,12 @@ struct BoxFortRulesTests {
         let dealt = await BoxFortRules.dealOffMain(state, next: [piece("##"), piece("##"), piece("##")])
         #expect(dealt.over == .stuck && dealt.set == 1)
     }
+
+    @Test func aMoveEncodesAsTheServerParsesIt() throws {
+        let data = try JSONEncoder().encode(BoxFortMove(slot: 2, row: 7, col: 0))
+        let json = try #require(JSONSerialization.jsonObject(with: data) as? [String: Any])
+        #expect(Set(json.keys) == ["k", "slot", "row", "col"])
+        #expect(json["k"] as? String == "place" && json["slot"] as? Int == 2 && json["row"] as? Int == 7 && json["col"] as? Int == 0)
+    }
 }
 

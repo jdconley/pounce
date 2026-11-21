@@ -63,6 +63,20 @@ public struct BoxFortPublicPuzzle: Hashable, Sendable, Codable {
     }
 }
 
+/// A placement, as the run sends it: `{ "k": "place", "slot", "row", "col" }`.
+public struct BoxFortMove: Hashable, Sendable, Codable {
+    public var k = "place"
+    public let slot: Int
+    public let row: Int
+    public let col: Int
+
+    public init(slot: Int, row: Int, col: Int) {
+        self.slot = slot
+        self.row = row
+        self.col = col
+    }
+}
+
 /// A set the server dealt after the one before it was placed.
 public struct BoxFortReveal: Hashable, Sendable, Codable {
     public let set: Int

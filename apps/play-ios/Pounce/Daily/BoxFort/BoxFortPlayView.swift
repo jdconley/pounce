@@ -90,8 +90,7 @@ struct BoxFortPlayView: View {
             .onChanged { value in
                 let state = model.state
                 if drag.slot == nil {
-                    guard !model.waiting, state.over == nil, state.pieces.indices.contains(slot), !state.placed[slot],
-                          model.landing == nil else { return }
+                    guard model.canPlace, state.pieces.indices.contains(slot), !state.placed[slot] else { return }
                     drag.begin(slot: slot, at: value.location)
                     Haptics.shared.prepare()
                     Haptics.shared.tick()

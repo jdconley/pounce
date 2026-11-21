@@ -32,7 +32,7 @@ final class BoxFortDemoDealer {
         let start = BoxFortRules.start(BoxFortPublicPuzzle(rug: rug, sets: sets.count, pieces: sets[0]))
         var placedInSet = 0
         var set = 0
-        let model = BoxFortPlayModel(state: start) { [weak self] _ in
+        let model = BoxFortPlayModel(state: start) { [weak self] _, _ in
             placedInSet += 1
             guard placedInSet == 3 else { return }
             placedInSet = 0
@@ -94,7 +94,7 @@ struct BoxFortDemoScreen: View {
     let dealer = BoxFortDemoDealer()
     ZStack {
         Palette.night.ignoresSafeArea()
-        BoxFortWatchView(state: BoxFortRules.start(BoxFortPublicPuzzle(rug: dealer.rug, sets: 15, pieces: dealer.sets[0])))
+        BoxFortWatch(state: BoxFortRules.start(BoxFortPublicPuzzle(rug: dealer.rug, sets: 15, pieces: dealer.sets[0])))
     }
 }
 #endif
