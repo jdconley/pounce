@@ -70,9 +70,12 @@ final class BoxFortTests: XCTestCase {
         }
     }
 
+    /// Silent on the Mac running the tests: at speed 1 the app plays real sound.
+    private static let mute = ["-settings.soundOn", "<false/>"]
+
     private func launch(_ extra: [String] = []) -> XCUIApplication {
         let app = Live.app()
-        app.launchArguments += ["-seed-people"] + extra
+        app.launchArguments += ["-seed-people"] + Self.mute + extra
         app.launch()
         return app
     }
@@ -171,7 +174,7 @@ final class BoxFortTests: XCTestCase {
             for large in pad ? [false] : [false, true] {
                 let prefix = large ? "big-text-" : ""
                 let app = XCUIApplication()
-                app.launchArguments = Live.arguments(speed: 4) + ["-uitest-reset", "-seed-people"] + (large ? big : [])
+                app.launchArguments = Live.arguments(speed: 4) + ["-uitest-reset", "-seed-people"] + Self.mute + (large ? big : [])
                 app.launchEnvironment["POUNCE_API_BASE_URL"] = Live.baseURL
                 app.launch()
                 XCTAssertTrue(el(app, "screen-home").waitForExistence(timeout: Live.t(20)), "no Home")
@@ -201,7 +204,7 @@ final class BoxFortTests: XCTestCase {
     /// `FRAMES boxfort-drag` line and fails like `DailyFrameTests`.
     func testTheDragHoldsTheFrameRate() throws {
         let app = XCUIApplication()
-        app.launchArguments = Live.arguments(speed: 1) + ["-uitest-reset", "-seed-people"]
+        app.launchArguments = Live.arguments(speed: 1) + ["-uitest-reset", "-seed-people"] + Self.mute
         app.launchEnvironment["POUNCE_API_BASE_URL"] = Live.baseURL
         app.launch()
         try open(app)
