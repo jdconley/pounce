@@ -11,8 +11,8 @@ struct TVBoardState: Equatable, Sendable {
     static let endedTime: TimeInterval = 6
     /// How long a row cheers when its result lands.
     static let cheerTime: TimeInterval = 2.4
-    /// Rows a game's card shows before "+N more" (twice as many with one or two games).
-    static let rowsShown = 4
+    /// Rows a game's card shows before "+N more": a whole family, at a row height that fits.
+    static let rowsShown = 6
 
     struct Offer: Equatable, Sendable {
         let player: String

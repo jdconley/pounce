@@ -135,14 +135,14 @@ struct TVBoardStateTests {
         #expect(TVBoardState.resultWords(result(.closed)) == "Closed")
     }
 
-    @Test func aLongBoardShowsFourAndCountsTheRest() throws {
+    @Test func aWholeFamilyShowsAndPastSixTheRestAreCounted() throws {
         let game = try #require(run(["board"]).board?.games.first)
         let row = try #require(game.rows.first)
         let nine = BoardWire.Game(game: "test", number: 1, rows: (0..<9).map { i in
             BoardWire.Row(player: "p\(i)", name: row.name, cat: row.cat, rank: i + 1, result: row.result, playing: nil)
         })
         let shown = TVBoardState.visibleRows(nine)
-        #expect(shown.rows.map(\.player) == ["p0", "p1", "p2", "p3"])
-        #expect(shown.more == 5)
+        #expect(shown.rows.map(\.player) == ["p0", "p1", "p2", "p3", "p4", "p5"])
+        #expect(shown.more == 3)
     }
 }

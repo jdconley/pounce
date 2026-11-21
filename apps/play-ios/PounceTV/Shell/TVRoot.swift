@@ -23,7 +23,10 @@ struct TVRoot: View {
                 // and in the lobby, this does.
                 TVMenuPaw(drawsIcon: model.phase != .table) { openMenu() }
                     .focused($pawFocused)
-                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomTrailing)
+                    // On the board, top right, beside a card's title: the bottom corner holds rows.
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: model.phase == .board ? .topTrailing : .bottomTrailing)
+                    // Up into the top margin, so its focus ring clears the card's first row.
+                    .offset(y: model.phase == .board ? -26 : 0)
             }
             if model.menu != .closed {
                 // Scrim and panel fade as one layer.

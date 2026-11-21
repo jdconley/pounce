@@ -3,7 +3,10 @@ import { mkdirSync } from "node:fs";
 import { expect, test, type Page } from "@playwright/test";
 
 import { dailyPhone, type DailyPhone } from "./daily-phone";
-import { openTv, shownLink, type Tv } from "./tv-helpers";
+import { openTv, shownLink, tvPage, TV_VIEWPORT, type Tv } from "./tv-helpers";
+
+import type { BoardAnswer } from "@pounce/play-api/daily/messages";
+import type { DailyResult } from "@pounce/play-api/daily/module";
 
 /**
  * Tonight's board on the browser TV (daily games design §8), against a server with the Daily Dish
@@ -179,4 +182,69 @@ test.describe("Tonight's board on the TV", () => {
     await expect(board(tv.page)).toBeHidden();
     await tv.context.close();
   });
+});
+
+/** A family of six across the four games, everyone done in some and playing in others. */
+function familyBoard(): BoardAnswer {
+  const people = [
+    ["me", "Mom", 3],
+    ["pr_dad", "Dad", 1],
+    ["pr_kid", "Kid", 5],
+    ["pr_gpa", "Grandpa", 0],
+    ["pr_nana", "Nana", 7],
+    ["pr_bart", "Bartholomew Wiggles", 6],
+  ] as const;
+  const games = ["sniff", "nine-lives", "cat-nap", "box-fort"] as const;
+  const result = (game: (typeof games)[number], i: number): DailyResult => ({
+    game,
+    date: "2026-11-23",
+    number: 12,
+    outcome: game === "box-fort" ? "done" : i === 4 ? "gaveUp" : "solved",
+    timeMs: 95_000 + i * 41_000,
+    hints: i === 3 ? 1 : 0,
+    progress: 1,
+    tooFast: false,
+    ...(game === "sniff" ? { guesses: 3 + (i % 4) } : {}),
+    ...(game === "box-fort" ? { points: 2400 - i * 310 } : {}),
+  });
+  return {
+    date: "2026-11-23",
+    games: games.map((game, g) => ({
+      game,
+      number: 12,
+      rows: people.map(([player, name, cat], i) =>
+        i < 6 - g ? { player, name, cat, rank: i + 1, result: result(game, i), playing: null } : { player, name, cat, rank: null, result: null, playing: { progress: 0.4 } },
+      ),
+    })),
+    dish: { rows: people.map(([player, name, cat], i) => ({ player, name, cat, rank: i + 1, points: 16 - i * 3, crowns: i === 0 ? ["sniff", "nine-lives"] : [], ended: 4 })) },
+    tvs: 1,
+  };
+}
+
+test("a whole family fits each game's board, nothing under 28 at 1080p", async ({ browser }) => {
+  const context = await browser.newContext({ viewport: TV_VIEWPORT, isMobile: false, hasTouch: false });
+  // A board kept, and its socket answered here with the family's board.
+  await context.addInitScript(() => localStorage.setItem("pounce.tv.board", JSON.stringify({ token: "F".repeat(22), until: Date.now() + 86_400_000 })));
+  await context.routeWebSocket(/\/v1\/daily\/board\/ws/, (ws) => ws.send(JSON.stringify({ t: "board", board: familyBoard() })));
+  const page = await tvPage(context);
+  await expect(page.locator(".tv-board-game")).toHaveCount(4);
+  for (const card of await page.locator(".tv-board-game").all()) {
+    await expect(card.locator(".tv-board-row")).toHaveCount(6);
+    await expect(card.locator(".tv-board-more")).toHaveCount(0);
+    const size = await card.evaluate((el) => ({
+      sh: el.scrollHeight,
+      ch: el.clientHeight,
+      sw: el.scrollWidth,
+      cw: el.clientWidth,
+      parts: [...el.children].map((c) => `${c.className}:${Math.round(c.getBoundingClientRect().height)}`),
+      rows: [...el.querySelectorAll(".tv-board-row")].map((r) => Math.round(r.getBoundingClientRect().height)),
+      // Anything that pokes out of the card, by how much.
+      out: [...el.querySelectorAll("*")].filter((d) => d.getBoundingClientRect().bottom > el.getBoundingClientRect().bottom + 1).map((d) => `${d.className}:${Math.round(d.getBoundingClientRect().bottom - el.getBoundingClientRect().bottom)}`),
+    }));
+    expect(size.sh <= size.ch + 1 && size.sw <= size.cw + 1, `the card holds six rows: ${JSON.stringify(size)}`).toBe(true);
+  }
+  const smallest = await page.locator(".tv-board-row .tv-row-name, .tv-board-row .tv-row-result, .tv-board-row .tv-rank").evaluateAll((els) => Math.min(...els.map((e) => parseFloat(getComputedStyle(e).fontSize))));
+  expect(smallest, "the smallest row text, px at 1080p").toBeGreaterThanOrEqual(28);
+  await shot(page, "board-family");
+  await context.close();
 });

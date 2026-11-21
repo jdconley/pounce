@@ -3,7 +3,7 @@
  * draws the run from the server's frames. Each game brings its own read-only view
  * (`DailyWatchView`); until a game's lands, a placeholder stands in.
  */
-import { useEffect, useRef } from "preact/hooks";
+import { useLayoutEffect, useRef } from "preact/hooks";
 
 import { art } from "../../lib/art";
 import { play } from "../../lib/sound";
@@ -50,7 +50,7 @@ export function TvWatchCard(props: { offer: Offer; onWatch: () => void; onNotNow
   // Not now takes the remote's focus when the card comes up, wherever it was (the paw, say):
   // watching is a choice, never an accident.
   const notNow = useRef<HTMLButtonElement>(null);
-  useEffect(() => notNow.current?.focus({ preventScroll: true }), []);
+  useLayoutEffect(() => notNow.current?.focus({ preventScroll: true }), []);
   return (
     <div class="tv-watch-card" role="alertdialog" aria-label={offerWords(offer)}>
       <Cat cat={offer.cat} pose="awake" size="calc(var(--u) * 150)" class="tv-watch-card-cat" />

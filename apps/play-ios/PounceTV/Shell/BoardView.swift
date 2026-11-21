@@ -145,7 +145,7 @@ private struct DishLine: View {
         .padding(.vertical, 8)
         .frame(minHeight: 96)
         .background(RowFace(colors: first ? [Color(hex: 0xFFE066), Color(hex: 0xFFB400)] : [Color(hex: 0x9D63FF), Color(hex: 0x6A22E0)]))
-        .cheer(cheering)
+        .cheer(cheering, from: -700)
         .accessibilityElement(children: .ignore)
         .accessibilityLabel("\(row.rank). \(row.name), \(row.points) points")
         .accessibilityIdentifier("tv.board.dish.\(row.player)")
@@ -157,7 +157,7 @@ private struct Games: View {
     let cheer: TVBoardState.Cheer?
 
     /// One game fills the space, two sit side by side, three or four in a 2 x 2 grid. Each card
-    /// shows as many rows as its height holds.
+    /// shows up to six people, its rows as tall as its height allows.
     var body: some View {
         GeometryReader { g in
             let columns = games.count <= 1 ? 1 : 2
@@ -165,15 +165,15 @@ private struct Games: View {
             let gap: CGFloat = 32
             let w = (g.size.width - gap * CGFloat(columns - 1)) / CGFloat(columns)
             let h = (g.size.height - gap * CGFloat(rows - 1)) / CGFloat(rows)
-            // A title of 70, a "+N more" line of 44, padding of 40, and rows of 92 (80 and the gap).
-            let fits = max(1, Int((h - 70 - 44 - 40) / 92))
+            // One row height for every card, as if each held a whole family, so cards line up.
+            let rowH = GameCard.rowHeight(cardHeight: h, more: games.contains { $0.rows.count > TVBoardState.rowsShown })
             VStack(spacing: gap) {
                 ForEach(0..<rows, id: \.self) { r in
                     HStack(spacing: gap) {
                         ForEach(0..<columns, id: \.self) { c in
                             let i = r * columns + c
                             if i < games.count {
-                                GameCard(game: games[i], cheer: cheer, max: fits)
+                                GameCard(game: games[i], cheer: cheer, rowHeight: rowH)
                                     .frame(width: w, height: h)
                             } else {
                                 Color.clear.frame(width: w, height: h)
@@ -189,13 +189,28 @@ private struct Games: View {
 private struct GameCard: View {
     let game: BoardWire.Game
     let cheer: TVBoardState.Cheer?
-    let max: Int
+    /// Each row's height (`rowHeight(cardHeight:more:)`).
+    let rowHeight: CGFloat
+
+    private static let title: CGFloat = 56
+    private static let more: CGFloat = 40
+    private static let padding: CGFloat = 32
+    static let gap: CGFloat = 8
+
+    /// The row height that fits six rows in a card `cardHeight` tall, with room for "+N more"
+    /// when any card needs it: up to 80, never under 52 (its words stay at 28 or more).
+    static func rowHeight(cardHeight: CGFloat, more: Bool) -> CGFloat {
+        let rows = CGFloat(TVBoardState.rowsShown)
+        let free = cardHeight - padding - title - gap - (more ? Self.more + gap : 0) - gap * (rows - 1)
+        return min(80, max(52, free / rows))
+    }
 
     var body: some View {
-        let shown = TVBoardState.visibleRows(game, max: max)
-        VStack(alignment: .leading, spacing: 12) {
+        let shown = TVBoardState.visibleRows(game)
+        let rowH = rowHeight
+        VStack(alignment: .leading, spacing: Self.gap) {
             HStack(alignment: .firstTextBaseline, spacing: 16) {
-                OutlinedText(TVBoardState.title(game.game), size: 54, width: 4, alignment: .leading)
+                OutlinedText(TVBoardState.title(game.game), size: 48, width: 4, alignment: .leading)
                     .fixedSize()
                 if game.number > 0 {
                     Text("#\(game.number)")
@@ -208,10 +223,10 @@ private struct GameCard: View {
                     .font(.system(size: 32, weight: .heavy, design: .rounded))
                     .foregroundStyle(.white.opacity(0.85))
             } else {
-                VStack(spacing: 12) {
+                VStack(spacing: Self.gap) {
                     ForEach(shown.rows, id: \.player) { row in
                         let cheering = cheer?.player == row.player && cheer?.game == game.game
-                        GameRow(row: row, game: game.game, cheering: cheering)
+                        GameRow(row: row, game: game.game, cheering: cheering, height: rowH)
                             .id(cheering ? "\(row.player)-cheer" : row.player)
                     }
                 }
@@ -223,8 +238,8 @@ private struct GameCard: View {
             }
             Spacer(minLength: 0)
         }
-        .padding(.horizontal, 24)
-        .padding(.vertical, 20)
+        .padding(.horizontal, 22)
+        .padding(.vertical, 16)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .background(RoundedRectangle(cornerRadius: 40, style: .continuous).fill(Palette.ink.opacity(0.72)))
         .overlay(RoundedRectangle(cornerRadius: 40, style: .continuous).strokeBorder(Palette.ink, lineWidth: 6))
@@ -239,30 +254,36 @@ private struct GameRow: View {
     let row: BoardWire.Row
     let game: String
     let cheering: Bool
+    /// The row's height (52 to 80): everything in it scales with it, words never under 28.
+    var height: CGFloat = 80
     @State private var leap = false
 
+    private var words: CGFloat { min(42, max(30, height * 0.56)) }
+    private var disc: CGFloat { min(58, max(42, height - 14)) }
+    private var cat: CGFloat { min(72, max(44, height - 6)) }
+
     var body: some View {
-        HStack(spacing: 16) {
+        HStack(spacing: 12) {
             if row.playing != nil {
                 Image(ArtName.iconPlay)
                     .resizable()
                     .scaledToFit()
-                    .padding(10)
-                    .frame(width: 58, height: 58)
+                    .padding(disc * 0.18)
+                    .frame(width: disc, height: disc)
                     .background(Circle().fill(Palette.teal))
-                    .overlay(Circle().strokeBorder(Palette.ink, lineWidth: 4))
+                    .overlay(Circle().strokeBorder(Palette.ink, lineWidth: 3))
             } else {
-                RankDisc(rank: row.rank)
+                RankDisc(rank: row.rank, side: disc)
             }
             Image(ArtName.cat(row.cat % ArtName.catCount, cheering ? .leap : row.playing != nil ? .awake : .idle))
                 .resizable()
                 .scaledToFit()
-                .frame(width: 72, height: 72)
+                .frame(width: cat, height: cat)
                 .offset(y: leap ? -46 : 0)
                 .rotationEffect(.degrees(leap ? -12 : 0))
                 .scaleEffect(leap ? 1.18 : 1)
             Text(row.name)
-                .font(.system(size: 42, weight: .black, design: .rounded))
+                .font(.system(size: words, weight: .black, design: .rounded))
                 .foregroundStyle(.white)
                 .lineLimit(1)
                 .truncationMode(.tail)
@@ -279,7 +300,7 @@ private struct GameRow: View {
                             .overlay(Capsule().strokeBorder(Palette.ink, lineWidth: 3))
                     }
                     Text(TVBoardState.resultWords(result))
-                        .font(.system(size: result.finished ? 42 : 34, weight: .black, design: .rounded))
+                        .font(.system(size: result.finished ? words : max(28, words - 6), weight: .black, design: .rounded))
                         .monospacedDigit()
                         .foregroundStyle(result.finished ? .white : .white.opacity(0.9))
                 }
@@ -301,10 +322,9 @@ private struct GameRow: View {
                 .accessibilityHidden(true)
             }
         }
-        .padding(.leading, 12)
-        .padding(.trailing, 20)
-        .padding(.vertical, 4)
-        .frame(minHeight: 80)
+        .padding(.leading, 10)
+        .padding(.trailing, 18)
+        .frame(height: height)
         .background(RowFace(colors: row.playing != nil ? [Color(hex: 0x2AD8CB), Color(hex: 0x00A094)] : [Color(hex: 0x9D63FF), Color(hex: 0x6A22E0)]))
         .cheer(cheering)
         .onAppear {
@@ -327,6 +347,7 @@ private struct GameRow: View {
 
 private struct RankDisc: View {
     let rank: Int?
+    var side: CGFloat = 58
 
     var body: some View {
         let fill: Color = switch rank {
@@ -336,9 +357,9 @@ private struct RankDisc: View {
         default: Color(hex: 0x9D63FF)
         }
         Text(rank.map(String.init) ?? "")
-            .font(.system(size: 36, weight: .black, design: .rounded))
+            .font(.system(size: max(28, side * 0.62), weight: .black, design: .rounded))
             .foregroundStyle(Palette.ink)
-            .frame(width: 58, height: 58)
+            .frame(width: side, height: side)
             .background(Circle().fill(fill))
             .overlay(Circle().strokeBorder(Palette.ink, lineWidth: 4))
     }
@@ -358,13 +379,16 @@ private struct RowFace: View {
 
 private struct Cheer: ViewModifier {
     let on: Bool
+    /// Where it slides in from: the right inside a game's card, the left for the Dish (off the
+    /// screen's edge, never across the cards).
+    var from: CGFloat = 420
     @State private var arrived = false
 
     func body(content: Content) -> some View {
         content
             .overlay(RoundedRectangle(cornerRadius: 32, style: .continuous).inset(by: -8).strokeBorder(Palette.yellow, lineWidth: 6).opacity(on ? 1 : 0))
             .compositingGroup()
-            .offset(x: on && !arrived ? 420 : 0)
+            .offset(x: on && !arrived ? from : 0)
             .opacity(on && !arrived ? 0 : 1)
             .onAppear {
                 guard on else { return }
@@ -374,6 +398,6 @@ private struct Cheer: ViewModifier {
 }
 
 private extension View {
-    /// A result just landed: the row slides in from the right, ringed.
-    func cheer(_ on: Bool) -> some View { modifier(Cheer(on: on)) }
+    /// A result just landed: the row slides in, ringed.
+    func cheer(_ on: Bool, from: CGFloat = 420) -> some View { modifier(Cheer(on: on, from: from)) }
 }

@@ -228,11 +228,11 @@ img.tv-rank.playing {
 .tv-board-game {
   display: flex;
   flex-direction: column;
-  gap: calc(var(--u) * 12);
+  gap: calc(var(--u) * 8);
   min-width: 0;
   min-height: 0;
   overflow: hidden;
-  padding: calc(var(--u) * 20) calc(var(--u) * 24);
+  padding: calc(var(--u) * 12) calc(var(--u) * 22) calc(var(--u) * 16);
   border: calc(var(--u) * 6) solid var(--ink);
   border-radius: calc(var(--u) * 40);
   background: rgba(27, 11, 58, 0.72);
@@ -247,7 +247,7 @@ img.tv-rank.playing {
 
 .tv-board-game-title {
   margin: 0;
-  font-size: calc(var(--u) * 54);
+  font-size: calc(var(--u) * 48);
   line-height: 1.05;
 }
 
@@ -263,8 +263,44 @@ img.tv-rank.playing {
   color: rgba(255, 255, 255, 0.85);
 }
 
+/* A game's rows share the card's height: up to six, each at most 80 high. Everything in a row
+   scales with its height (container units), and nothing that matters goes under 28. */
+.tv-board-rows {
+  flex: 1;
+  min-height: 0;
+  gap: calc(var(--u) * 7);
+}
+
+/* Every row is sized as if its card held a whole family (six), so the cards line up. */
 .tv-board-row {
-  min-height: calc(var(--u) * 80);
+  flex: 0 0 min(calc(var(--u) * 80), calc((100% - var(--u) * 7 * 5) / 6));
+  min-height: calc(var(--u) * 52);
+  container-type: size;
+  gap: calc(var(--u) * 12);
+  padding-top: 0;
+  padding-bottom: 0;
+  border-width: calc(var(--u) * 4);
+}
+
+.tv-board-row .tv-row-name {
+  font-size: clamp(calc(var(--u) * 30), 66cqh, calc(var(--u) * 42));
+}
+
+.tv-board-row .tv-rank {
+  width: clamp(calc(var(--u) * 42), 80cqh, calc(var(--u) * 58));
+  height: clamp(calc(var(--u) * 42), 80cqh, calc(var(--u) * 58));
+  border-width: calc(var(--u) * 3);
+  font-size: clamp(calc(var(--u) * 28), 50cqh, calc(var(--u) * 36));
+}
+
+.tv-board-row img.tv-rank.playing {
+  box-sizing: border-box;
+  padding: calc(var(--u) * 8);
+}
+
+.tv-board-row .tv-row-cat {
+  width: clamp(calc(var(--u) * 44), 100cqh, calc(var(--u) * 72)) !important;
+  height: clamp(calc(var(--u) * 44), 100cqh, calc(var(--u) * 72)) !important;
 }
 
 .tv-board-row.playing {
@@ -280,12 +316,12 @@ img.tv-rank.playing {
   flex: none;
   align-items: center;
   gap: calc(var(--u) * 10);
-  font: 900 calc(var(--u) * 42) / 1 var(--round);
+  font: 900 clamp(calc(var(--u) * 30), 64cqh, calc(var(--u) * 42)) / 1 var(--round);
   font-variant-numeric: tabular-nums;
 }
 
 .tv-row-result.unsolved {
-  font-size: calc(var(--u) * 34);
+  font-size: clamp(calc(var(--u) * 28), 52cqh, calc(var(--u) * 34));
   color: rgba(255, 255, 255, 0.9);
 }
 
@@ -332,6 +368,21 @@ img.tv-rank.playing {
   animation: tv-row-in 700ms var(--ease-spring) both;
   outline: calc(var(--u) * 6) solid var(--yellow);
   outline-offset: calc(var(--u) * 4);
+}
+
+.tv-dish-row.cheer {
+  animation-name: tv-row-in-left;
+}
+
+@keyframes tv-row-in-left {
+  from {
+    opacity: 0;
+    transform: translateX(calc(var(--u) * -700));
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
 }
 
 .tv-board-row.cheer .tv-row-cat {

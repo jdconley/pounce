@@ -531,10 +531,11 @@ actor TVDemoBoardSocket: BoardSocketing {
         return (game, people[shown % people.count])
     }
 
-    /// How many people have a result in `game` at beat `tick` (1 to 6, round and round).
+    /// How many people have a result in `game` at beat `tick`: 4 to 6, round and round, so a
+    /// family's board is mostly full, with someone still playing now and then.
     private static func rowsFor(game: String, tick: Int) -> Int {
         let g = games.firstIndex(of: game) ?? 0
-        return (tick / games.count + g) % people.count + 1
+        return people.count - (tick / games.count + g) % 3
     }
 
     private static func result(game: String, who: Int) -> BoardWire.Result {

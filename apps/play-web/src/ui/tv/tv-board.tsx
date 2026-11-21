@@ -4,7 +4,7 @@
  * result lands, the card that offers to watch a run, and the run itself after Watch. Back opens the
  * menu: Play a game, sound, Unlink. Nothing is typed.
  */
-import { useEffect, useMemo, useRef, useState } from "preact/hooks";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "preact/hooks";
 
 import { art } from "../../lib/art";
 import { onSettings, setSettings, settings } from "../../lib/settings";
@@ -92,7 +92,7 @@ export function TvBoardRoom(props: { board: string; asleep: boolean; onGone: () 
         <TvBoard screen={screen} connecting={!state.everConnected} />
       )}
       {screen.offer && !screen.watching && live ? <TvWatchCard key={`${screen.offer.player}:${screen.offer.until}`} offer={screen.offer} onWatch={() => store.watch()} onNotNow={() => store.notNow()} /> : null}
-      {screen.watching ? null : <MenuButton rect={tvMenu(frame.width || 1920, frame.height || 1080, NO_INSETS)} live={live} onMenu={() => setMenu(true)} />}
+      {screen.watching ? null : <MenuButton rect={topRight(tvMenu(frame.width || 1920, frame.height || 1080, NO_INSETS), frame.height || 1080)} live={live} onMenu={() => setMenu(true)} />}
       {offline ? (
         <div class="tv-note" role="status">
           <span class="dot" /> Reconnecting
@@ -103,6 +103,9 @@ export function TvBoardRoom(props: { board: string; asleep: boolean; onGone: () 
   );
 }
 
+/** The menu's paw on the board: mirrored to the top right, beside a card's title, since the bottom corner holds rows. */
+const topRight = (r: { x: number; y: number; w: number; h: number }, height: number) => ({ ...r, y: height - r.y - r.h });
+
 /** "Monday, November 23": the board's own day. */
 export const boardDay = (date: string): string => new Date(`${date}T12:00:00Z`).toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric", timeZone: "UTC" });
 
@@ -111,8 +114,6 @@ export function TvBoard(props: { screen: BoardScreen; connecting: boolean }) {
   const board = props.screen.board;
   const cheer = props.screen.cheer;
   const games = board?.games ?? [];
-  // One or two games get the whole height, so twice the rows.
-  const rows = games.length <= 2 ? ROWS_SHOWN * 2 : ROWS_SHOWN;
   return (
     <section class="tv-board" aria-label="Tonight's board">
       <aside class="tv-dish">
@@ -122,7 +123,7 @@ export function TvBoard(props: { screen: BoardScreen; connecting: boolean }) {
       </aside>
       <div class={`tv-board-games n${Math.max(1, Math.min(games.length, 4))}`}>
         {games.map((g) => (
-          <GameCard key={g.game} game={g} cheer={cheer} max={rows} />
+          <GameCard key={g.game} game={g} cheer={cheer} max={ROWS_SHOWN} />
         ))}
       </div>
     </section>
@@ -214,9 +215,8 @@ function GameRow(props: { row: BoardRow; cheer: Cheer | null }) {
           {resultWords(r)}
         </span>
       ) : (
-        <span class="tv-row-playing">
+        <span class="tv-row-playing" aria-hidden="true">
           <span class="tv-row-bar" style={{ "--p": String(row.playing?.progress ?? 0) }} />
-          Playing
         </span>
       )}
     </li>
@@ -264,7 +264,7 @@ function TvBoardMenu(props: { onClose: () => void; onHome: () => void; onUnlink:
 export function TvBoardLink(props: { link: { code: string; url: string } | null; offline: boolean; onBack: () => void }) {
   const { link } = props;
   const back = useRef<HTMLButtonElement>(null);
-  useEffect(() => back.current?.focus({ preventScroll: true }), []);
+  useLayoutEffect(() => back.current?.focus({ preventScroll: true }), []);
   return (
     <div class="tv-menu tv-board-link" role="dialog" aria-label="Tonight's board">
       <div class="tv-menu-scrim" onClick={props.onBack} />

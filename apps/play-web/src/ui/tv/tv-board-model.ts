@@ -15,8 +15,8 @@ export const ENDED_MS = 6_000;
 export const CHEER_MS = 2_400;
 /** How long a TV keeps its board token (the server's own limit). */
 export const BOARD_DAYS = 30;
-/** Rows a game's card shows before "+N more". */
-export const ROWS_SHOWN = 4;
+/** Rows a game's card shows before "+N more": a whole family, at a row height that fits. */
+export const ROWS_SHOWN = 6;
 
 /** Someone turned on Show on TV: the card, until `until`. */
 export type Offer = { player: string; name: string; cat: number; game: string; until: number };
@@ -145,7 +145,7 @@ export function resultWords(r: DailyResult): string {
   return clock(r.timeMs);
 }
 
-/** A game's rows to draw: the first four (results first, as ranked, then people playing), and how many more. */
+/** A game's rows to draw: the first six (results first, as ranked, then people playing), and how many more. */
 export function visibleRows(g: GameBoard, max = ROWS_SHOWN): { rows: BoardRow[]; more: number } {
   return { rows: g.rows.slice(0, max), more: Math.max(0, g.rows.length - max) };
 }

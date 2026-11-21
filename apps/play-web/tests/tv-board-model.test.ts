@@ -131,11 +131,12 @@ describe("what a row says", () => {
     expect(resultWords(result({ outcome: "closed" }))).toBe("Closed");
   });
 
-  test("a long board shows four and counts the rest", () => {
+  test("a whole family shows; past six the rest are counted", () => {
     const rows = Array.from({ length: 9 }, (_, i) => ({ ...board.games[0]!.rows[0]!, player: `p${i}`, rank: i + 1 }));
     const shown = visibleRows({ ...board.games[0]!, rows });
-    expect(shown.rows.map((r) => r.player)).toEqual(["p0", "p1", "p2", "p3"]);
-    expect(shown.more).toBe(5);
+    expect(shown.rows.map((r) => r.player)).toEqual(["p0", "p1", "p2", "p3", "p4", "p5"]);
+    expect(shown.more).toBe(3);
+    expect(visibleRows({ ...board.games[0]!, rows: rows.slice(0, 6) }).more).toBe(0);
     expect(visibleRows(board.games[0]!)).toEqual({ rows: board.games[0]!.rows, more: 0 });
   });
 });
