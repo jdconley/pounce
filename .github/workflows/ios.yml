@@ -150,6 +150,10 @@ jobs:
           mdutil -as 2>&1 | head -6 || true
           xcrun simctl list devices booted
           nohup bash -c 'while true; do echo "=== $(date -u +%H:%M:%S) loadavg $(sysctl -n vm.loadavg)"; top -l 2 -s 2 -n 12 -o cpu -stats pid,command,cpu,th,state | awk "/^Processes:/{n++} n==2"; sleep 6; done' > "$RUNNER_TEMP/load/samples.log" 2>&1 &
+      # Spotlight indexes the checkout, the build and the simulator's files as they are written.
+      - name: Spotlight off
+        working-directory: .
+        run: sudo mdutil -a -i off
       - run: xcodebuild -version
       # XcodeGen from its pinned, checksummed release: seconds, where Homebrew takes over three
       # minutes. scripts/bootstrap.sh finds it on the path.
@@ -180,7 +184,11 @@ jobs:
       # app's: one untimed run of a table that plays itself takes them first.
       - name: Warm the simulator
         run: |
+          # Free the build's memory: the build service stays resident after the build.
+          killall SWBBuildService XCBBuildService 2>/dev/null || true
           xcrun simctl bootstatus "${{ steps.sim.outputs.udid }}" -b >/dev/null
+          # The simulator's own system logging at its default level, not debug.
+          xcrun simctl spawn "${{ steps.sim.outputs.udid }}" log config --mode "level:default" || true
           app=$(find build/dd-gates/Build/Products -maxdepth 2 -name Pounce.app -path '*iphonesimulator*' | head -1)
           xcrun simctl install "${{ steps.sim.outputs.udid }}" "$app"
           for demo in tiles hit; do
@@ -188,6 +196,10 @@ jobs:
             sleep 8
             xcrun simctl terminate "${{ steps.sim.outputs.udid }}" com.conleychaos.play || true
           done
+      # TEMP (diagnosing runner load)
+      - name: Memory before the gates
+        working-directory: .
+        run: top -l 1 -n 15 -o mem -stats pid,command,mem,cpu | sed -n '1,40p'
       - name: Frame and main-thread gates
         env:
           TEST_RUNNER_POUNCE_FRAMES_SECONDS: "12"
