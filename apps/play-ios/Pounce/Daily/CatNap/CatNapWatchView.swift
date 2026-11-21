@@ -25,3 +25,22 @@ struct CatNapWatchView: View {
         .accessibilityLabel("Cat Nap, \(check.placed) of \(quilt.n) cats")
     }
 }
+
+/// Cat Nap as the TV watches it, for the watch registry (`DailyWatchGames.swift`). A watch frame
+/// carries the quilt (`puzzle`, the public puzzle) and the board (`state`).
+///
+/// It conforms to `DailyWatchView` once H1's protocol takes `puzzle` as well as `state` (the
+/// lead's call; the contract at 3a56912 still has `init(state:)`).
+struct CatNapWatchDaily: View {
+    nonisolated static let game = DailyCatalog.catNap
+
+    let puzzle: NapQuilt
+    let state: NapState
+
+    init(puzzle: NapQuilt, state: NapState) {
+        self.puzzle = puzzle
+        self.state = state
+    }
+
+    var body: some View { CatNapWatchView(quilt: puzzle, state: state) }
+}

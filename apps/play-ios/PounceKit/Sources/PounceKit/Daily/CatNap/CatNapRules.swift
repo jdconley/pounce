@@ -241,3 +241,10 @@ public enum CatNapRules {
         return cells.isEmpty ? nil : NapMove(cells: cells, to: paint)
     }
 }
+
+/// What a hint reveals: the cell of its cat (the server's `module.ts`). Moves reveal nothing.
+public struct NapReveal: Codable, Sendable, Equatable {
+    public let cell: Int
+
+    public init(cell: Int) { self.cell = cell }
+}

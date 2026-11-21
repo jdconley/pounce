@@ -1,33 +1,29 @@
 import PounceKit
 import SwiftUI
 
-/// Cat Nap's board on a phone or iPad: the beds that count the cats, and the quilt as big as the
-/// space allows. Tap a cell for "no cat", again for a cat; drag to mark many. The puzzle host
-/// draws everything around it (the top bar, the clock, hints, give up, the end).
-struct CatNapPlayView: View {
+/// Cat Nap's board on a phone or iPad: the beds that count the cats, the quilt as big as the
+/// space allows, and the game's controls under it (the Hint button). Tap a cell for "no cat",
+/// again for a cat; drag to mark many. The puzzle host draws everything around it (the top bar,
+/// the clock, give up, the end).
+struct CatNapPlayView<Controls: View>: View {
     @Bindable var model: CatNapModel
+    /// How tall the controls are, so the quilt leaves them room.
+    var controlsHeight: CGFloat = 0
+    @ViewBuilder var controls: Controls
 
     var body: some View {
         GeometryReader { box in
-            let beds = CatNapPlayView.bedSize(width: box.size.width, n: model.quilt.n)
+            let beds = CatNapLayout.bedSize(width: box.size.width, n: model.quilt.n)
             let gap: CGFloat = 16
-            let side = CatNapPlayView.side(in: box.size, reserved: beds + gap)
+            let reserved = beds + gap + (controlsHeight > 0 ? controlsHeight + gap : 0)
+            let side = CatNapLayout.side(in: box.size, reserved: reserved)
             VStack(spacing: gap) {
                 CatNapBeds(n: model.quilt.n, placed: model.check.placed, size: beds)
                 board(side: side)
+                if controlsHeight > 0 { controls.frame(height: controlsHeight) }
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
-    }
-
-    /// The quilt's side: as big as fits under the beds, with an 8 pt margin, never over 640 pt.
-    static func side(in size: CGSize, reserved: CGFloat) -> CGFloat {
-        max(0, min(640, size.width - 16, size.height - reserved - 8)).rounded(.down)
-    }
-
-    /// The beds shrink to fit nine across an iPhone SE.
-    static func bedSize(width: CGFloat, n: Int) -> CGFloat {
-        min(36, (width - 32) / (CGFloat(n) * 1.18))
     }
 
     private func board(side: CGFloat) -> some View {
@@ -55,11 +51,30 @@ struct CatNapPlayView: View {
                 .offset(x: r.minX, y: r.minY)
                 .allowsHitTesting(false)
                 .accessibilityElement()
-                .accessibilityLabel(CatNapPlayView.label(model.quilt, model.shown, cell))
+                .accessibilityLabel(CatNapLayout.label(model.quilt, model.shown, cell))
                 .accessibilityAddTraits(.isButton)
                 .accessibilityIdentifier("catnap.cell.\(cell)")
                 .accessibilityAction { model.tap(cell) }
         }
+    }
+
+}
+
+extension CatNapPlayView where Controls == EmptyView {
+    init(model: CatNapModel) {
+        self.init(model: model, controlsHeight: 0) { EmptyView() }
+    }
+}
+
+enum CatNapLayout {
+    /// The quilt's side: as big as fits beside what's reserved, with an 8 pt margin, never over 640 pt.
+    static func side(in size: CGSize, reserved: CGFloat) -> CGFloat {
+        max(0, min(640, size.width - 16, size.height - reserved - 8)).rounded(.down)
+    }
+
+    /// The beds shrink to fit nine across an iPhone SE.
+    static func bedSize(width: CGFloat, n: Int) -> CGFloat {
+        min(36, (width - 32) / (CGFloat(n) * 1.18))
     }
 
     /// "Row 3, column 4, violet stripes, cat."
