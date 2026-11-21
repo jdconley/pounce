@@ -10,6 +10,8 @@ import type { Api } from "./api";
 export type ScreenLinkEvent =
   | { kind: "code"; token: string; code: string; url: string }
   | { kind: "linked"; room: string }
+  /** A phone linked this TV to its Daily Dish board: the board token to keep (docs/daily-protocol.md). */
+  | { kind: "board"; token: string }
   /** Waiting on the network: the code shown may not reach the server. */
   | { kind: "offline" };
 
@@ -153,9 +155,9 @@ export class ScreenLink {
     ws.onerror = () => undefined;
     ws.onmessage = (ev) => {
       if (ws !== this.ws && ws !== this.old) return;
-      let message: { t?: string; room?: string };
+      let message: { t?: string; room?: string; token?: string };
       try {
-        message = JSON.parse(String(ev.data)) as { t?: string; room?: string };
+        message = JSON.parse(String(ev.data)) as { t?: string; room?: string; token?: string };
       } catch {
         return;
       }
@@ -168,6 +170,9 @@ export class ScreenLink {
       } else if (message.t === "linked" && typeof message.room === "string") {
         this.stop();
         this.emit({ kind: "linked", room: message.room });
+      } else if (message.t === "board" && typeof message.token === "string") {
+        this.stop();
+        this.emit({ kind: "board", token: message.token });
       } else if (message.t === "expired") {
         void this.renew();
       }
