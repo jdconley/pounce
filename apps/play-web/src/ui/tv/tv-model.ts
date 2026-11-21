@@ -108,8 +108,11 @@ export function cheerStep(s: Cheer, e: RoomEvent): Cheer {
   return { roundJustEnded: false, cheered: false };
 }
 
-/** Where a TV opens: straight back to the table it kept (a reload, a new deploy), else at Start. */
-export const bootPhase = (kept: string | null): "lobby" | "start" => (kept ? "lobby" : "start");
+/**
+ * Where a TV opens: straight back to the table it kept (a reload, a new deploy), else to the Daily
+ * Dish board it kept (every evening, for 30 days), else at Start.
+ */
+export const bootPhase = (kept: string | null, board: string | null = null): "lobby" | "board" | "start" => (kept ? "lobby" : board ? "board" : "start");
 
 /** A new deploy may reload the TV in the lobby, at game over, or finding its table: never mid-hand. */
 export const safeToReload = (phase: RoomPhase): boolean => phase !== "playing";

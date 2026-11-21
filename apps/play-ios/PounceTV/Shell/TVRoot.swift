@@ -16,13 +16,17 @@ struct TVRoot: View {
             backdrop
             screen
                 .disabled(model.menu != .closed)
-            // Always there at a table, even while it's being found: the menu can leave it.
-            if model.table != nil, model.menu == .closed {
+            // Always there at a table, even while it's being found: the menu can leave it. On the
+            // board too, unless a run is being watched (its Board button goes back).
+            if model.table != nil || (model.phase == .board && model.board?.state.watching == nil), model.menu == .closed {
                 // At the table the scene draws the paw; over game over (which hides the table's)
                 // and in the lobby, this does.
                 TVMenuPaw(drawsIcon: model.phase != .table) { openMenu() }
                     .focused($pawFocused)
-                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomTrailing)
+                    // On the board, top right, beside a card's title: the bottom corner holds rows.
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: model.phase == .board ? .topTrailing : .bottomTrailing)
+                    // Up into the top margin, so its focus ring clears the card's first row.
+                    .offset(y: model.phase == .board ? -26 : 0)
             }
             if model.menu != .closed {
                 // Scrim and panel fade as one layer.
@@ -33,11 +37,12 @@ struct TVRoot: View {
         }
         .animation(.easeInOut(duration: 0.25), value: model.phase)
         .animation(.easeOut(duration: 0.2), value: model.menu == .closed)
-        .onExitCommand(perform: model.table == nil ? nil : { model.back() })
-        .task(id: FocusKey(phase: model.phase, menuClosed: model.menu == .closed, changeGame: model.canChangeGame)) {
+        .onExitCommand(perform: model.takesBack ? { model.back() } : nil)
+        .task(id: FocusKey(phase: model.phase, menuClosed: model.menu == .closed, changeGame: model.canChangeGame, boardBusy: model.board?.state.offer != nil || model.board?.state.watching != nil)) {
             // Lobby with Change game: that button takes the focus. Everywhere else at a table the
-            // paw is the one thing to focus.
-            guard model.table != nil, model.menu == .closed, !model.canChangeGame else { return }
+            // paw is the one thing to focus; on the board too, unless a card or a run has it.
+            guard model.table != nil || model.phase == .board, model.menu == .closed, !model.canChangeGame else { return }
+            guard model.board?.state.offer == nil, model.board?.state.watching == nil else { return }
             try? await Task.sleep(for: .milliseconds(80))
             guard !Task.isCancelled else { return }
             pawFocused = true
@@ -61,6 +66,7 @@ struct TVRoot: View {
         let phase: TVModel.Phase
         let menuClosed: Bool
         let changeGame: Bool
+        var boardBusy = false
     }
 
     private func openMenu() {
@@ -72,7 +78,7 @@ struct TVRoot: View {
         switch model.phase {
         case .starting: Palette.violet.ignoresSafeArea()
         case .home: TVBackdrop(art: ArtName.homeBg)
-        case .lobby, .table, .over: TVBackdrop(art: ArtName.roomBg)
+        case .board, .lobby, .table, .over: TVBackdrop(art: ArtName.roomBg)
         }
     }
 
@@ -83,6 +89,11 @@ struct TVRoot: View {
         case .home:
             HomeView(model: model)
                 .transition(.opacity)
+        case .board:
+            if let board = model.board {
+                BoardView(model: model, board: board)
+                    .transition(.opacity)
+            }
         case .lobby:
             if let table = model.table {
                 LobbyView(model: model, table: table, live: model.menu == .closed)

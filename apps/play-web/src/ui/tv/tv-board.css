@@ -1,0 +1,607 @@
+/* Tonight's board on the TV: read from about 3 meters. On the 1920 x 1080 stage (--u is one stage
+   pixel) nothing that matters is under 28 units. */
+
+/* Home with the Dish on: three posters stacked, so each is shorter and its words smaller. */
+.tv-home-screen.with-dish .tv-games {
+  gap: calc(var(--u) * 40);
+}
+
+.tv-home-screen.with-dish .tv-poster {
+  height: calc(var(--u) * 290);
+}
+
+.tv-home-screen.with-dish .tv-poster-title {
+  font-size: calc(var(--u) * 78);
+}
+
+.tv-poster.board {
+  background: linear-gradient(180deg, #ff7cc0, #ff2e9a 55%, #d0137a);
+}
+
+.tv-board-poster-art {
+  position: relative;
+  display: block;
+  overflow: hidden;
+  background: linear-gradient(180deg, #ffe066, #ff8a00);
+}
+
+.tv-board-poster-burst {
+  position: absolute;
+  inset: -40%;
+  width: 180%;
+  height: 180%;
+  opacity: 0.55;
+}
+
+.tv-board-poster-trophy {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: calc(var(--u) * 150);
+  height: calc(var(--u) * 150);
+  transform: translate(-50%, -62%);
+  filter: drop-shadow(0 calc(var(--u) * 8) 0 var(--ink));
+}
+
+.tv-board-poster-cat {
+  position: absolute;
+  bottom: calc(var(--u) * -6);
+}
+
+.tv-board-poster-cat.left {
+  left: calc(var(--u) * 6);
+}
+
+.tv-board-poster-cat.right {
+  right: calc(var(--u) * 6);
+}
+
+/* The poster's link panel: home's link, with the Dish's words. */
+.tv-board-link-title {
+  margin: 0;
+  font-size: calc(var(--u) * 72);
+  line-height: 1;
+}
+
+/* The board: the Dish on the left, the games on the right. */
+.tv-board {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  grid-template-columns: calc(var(--u) * 680) 1fr;
+  gap: calc(var(--u) * 48);
+  padding: calc(var(--u) * 56) calc(var(--u) * 64) calc(var(--u) * 64);
+}
+
+.tv-dish {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+}
+
+.tv-dish-title {
+  margin: 0;
+  font-size: calc(var(--u) * 80);
+  white-space: nowrap;
+  line-height: 1;
+}
+
+.tv-dish-day {
+  margin: calc(var(--u) * 10) 0 calc(var(--u) * 28);
+  font: 800 calc(var(--u) * 36) var(--round);
+  color: var(--yellow);
+}
+
+.tv-dish-rows,
+.tv-board-rows {
+  display: flex;
+  flex-direction: column;
+  gap: calc(var(--u) * 12);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.tv-dish-row,
+.tv-board-row {
+  display: flex;
+  align-items: center;
+  gap: calc(var(--u) * 16);
+  min-width: 0;
+  padding: calc(var(--u) * 8) calc(var(--u) * 20) calc(var(--u) * 8) calc(var(--u) * 12);
+  border: calc(var(--u) * 5) solid var(--ink);
+  border-radius: calc(var(--u) * 28);
+  background: linear-gradient(180deg, #9d63ff, #6a22e0);
+  box-shadow: 0 calc(var(--u) * 8) 0 var(--ink);
+}
+
+.tv-dish-row {
+  min-height: calc(var(--u) * 96);
+}
+
+.tv-dish-row:first-child {
+  background: linear-gradient(180deg, #ffe066, #ffb400);
+  color: var(--ink);
+}
+
+.tv-row-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  font: 900 calc(var(--u) * 42) / 1.1 var(--round);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tv-dish-crowns {
+  display: inline-flex;
+  flex: none;
+}
+
+.tv-dish-crowns img {
+  width: calc(var(--u) * 48);
+  height: calc(var(--u) * 48);
+  margin-left: calc(var(--u) * -10);
+  filter: drop-shadow(0 calc(var(--u) * 3) 0 var(--ink));
+}
+
+.tv-dish-points {
+  flex: none;
+  min-width: calc(var(--u) * 84);
+  padding: calc(var(--u) * 2) calc(var(--u) * 16) calc(var(--u) * 4);
+  border: calc(var(--u) * 4) solid var(--ink);
+  border-radius: 999px;
+  background: var(--white);
+  color: var(--ink);
+  font: 900 calc(var(--u) * 48) / 1.05 var(--round);
+  text-align: center;
+}
+
+.tv-rank {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: calc(var(--u) * 58);
+  height: calc(var(--u) * 58);
+  border: calc(var(--u) * 4) solid var(--ink);
+  border-radius: 50%;
+  background: var(--violet-light);
+  color: var(--ink);
+  font: 900 calc(var(--u) * 36) / 1 var(--round);
+}
+
+.tv-rank.gold {
+  background: var(--yellow);
+}
+
+.tv-rank.silver {
+  background: #d9e2f2;
+}
+
+.tv-rank.bronze {
+  background: #f0a35e;
+}
+
+img.tv-rank.playing {
+  padding: calc(var(--u) * 10);
+  background: var(--teal);
+  object-fit: contain;
+}
+
+.tv-dish-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: calc(var(--u) * 16);
+  margin-top: calc(var(--u) * 40);
+  text-align: center;
+}
+
+.tv-dish-empty p {
+  margin: 0;
+  font-size: calc(var(--u) * 48);
+}
+
+/* One card per game: one fills the height, two side by side, three or four in a 2 x 2 grid, five or
+   six (a test server's extra game) in 2 x 3. */
+.tv-board-games {
+  display: grid;
+  gap: calc(var(--u) * 28) calc(var(--u) * 36);
+  /* Below the menu's paw (top right): the cards start under it, so nothing overlaps it. */
+  margin-top: calc(var(--u) * 64);
+  min-width: 0;
+  min-height: 0;
+}
+
+.tv-board-games.n1 {
+  grid-template-columns: 1fr;
+}
+
+.tv-board-games.n2 {
+  grid-template-columns: 1fr 1fr;
+}
+
+.tv-board-games.n3,
+.tv-board-games.n4 {
+  grid-template-columns: 1fr 1fr;
+  grid-template-rows: 1fr 1fr;
+}
+
+.tv-board-games.n5 {
+  grid-template-columns: 1fr 1fr;
+  grid-template-rows: 1fr 1fr 1fr;
+}
+
+.tv-board-game {
+  display: flex;
+  flex-direction: column;
+  gap: calc(var(--u) * 8);
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+  padding: calc(var(--u) * 12) calc(var(--u) * 22) calc(var(--u) * 12);
+  border: calc(var(--u) * 6) solid var(--ink);
+  border-radius: calc(var(--u) * 40);
+  background: rgba(27, 11, 58, 0.72);
+  box-shadow: 0 calc(var(--u) * 12) 0 var(--ink);
+}
+
+.tv-board-game-top {
+  display: flex;
+  align-items: baseline;
+  gap: calc(var(--u) * 16);
+}
+
+.tv-board-game-title {
+  margin: 0;
+  font-size: calc(var(--u) * 48);
+  line-height: 1.05;
+}
+
+.tv-board-game-number {
+  font: 900 calc(var(--u) * 36) var(--round);
+  color: var(--yellow);
+}
+
+.tv-board-game-empty,
+.tv-board-more {
+  margin: 0;
+  font: 800 calc(var(--u) * 32) var(--round);
+  color: rgba(255, 255, 255, 0.85);
+}
+
+/* A game's rows share the card's height: up to six, each at most 80 high. Everything in a row
+   scales with its height (container units), and nothing that matters goes under 28. */
+.tv-board-rows {
+  flex: 1;
+  min-height: 0;
+  gap: calc(var(--u) * 7);
+}
+
+/* Every row is sized as if its card held a whole family (six), so the cards line up. */
+.tv-board-row {
+  flex: 0 0 min(calc(var(--u) * 80), calc((100% - var(--u) * 7 * 5) / 6));
+  min-height: calc(var(--u) * 52);
+  container-type: size;
+  gap: calc(var(--u) * 12);
+  padding-top: 0;
+  padding-bottom: 0;
+  border-width: calc(var(--u) * 4);
+}
+
+.tv-board-row .tv-row-name {
+  font-size: clamp(calc(var(--u) * 30), 66cqh, calc(var(--u) * 42));
+}
+
+.tv-board-row .tv-rank {
+  width: clamp(calc(var(--u) * 42), 80cqh, calc(var(--u) * 58));
+  height: clamp(calc(var(--u) * 42), 80cqh, calc(var(--u) * 58));
+  border-width: calc(var(--u) * 3);
+  font-size: clamp(calc(var(--u) * 28), 50cqh, calc(var(--u) * 36));
+}
+
+.tv-board-row img.tv-rank.playing {
+  box-sizing: border-box;
+  padding: calc(var(--u) * 8);
+}
+
+.tv-board-row .tv-row-cat {
+  width: clamp(calc(var(--u) * 44), 100cqh, calc(var(--u) * 72)) !important;
+  height: clamp(calc(var(--u) * 44), 100cqh, calc(var(--u) * 72)) !important;
+}
+
+.tv-board-row.playing {
+  background: linear-gradient(180deg, #2ad8cb, #00a094);
+}
+
+.tv-row-cat {
+  flex: none;
+}
+
+.tv-row-result {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: calc(var(--u) * 10);
+  font: 900 clamp(calc(var(--u) * 30), 64cqh, calc(var(--u) * 42)) / 1 var(--round);
+  font-variant-numeric: tabular-nums;
+}
+
+.tv-row-result.unsolved {
+  font-size: clamp(calc(var(--u) * 28), 52cqh, calc(var(--u) * 34));
+  color: rgba(255, 255, 255, 0.9);
+}
+
+.tv-row-hint {
+  padding: calc(var(--u) * 2) calc(var(--u) * 12) calc(var(--u) * 4);
+  border: calc(var(--u) * 3) solid var(--ink);
+  border-radius: 999px;
+  background: var(--orange);
+  color: var(--ink);
+  font: 900 calc(var(--u) * 28) / 1 var(--round);
+}
+
+.tv-row-playing {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: calc(var(--u) * 12);
+  font: 900 calc(var(--u) * 32) / 1 var(--round);
+}
+
+.tv-row-bar {
+  position: relative;
+  width: calc(var(--u) * 120);
+  height: calc(var(--u) * 22);
+  overflow: hidden;
+  border: calc(var(--u) * 3) solid var(--ink);
+  border-radius: 999px;
+  background: rgba(27, 11, 58, 0.5);
+}
+
+.tv-row-bar::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: var(--yellow);
+  transform: scaleX(var(--p));
+  transform-origin: left;
+  transition: transform 600ms var(--ease-out);
+}
+
+/* A result lands: the row slides in, its cat leaps. Transform and opacity only. */
+.tv-board-row.cheer,
+.tv-dish-row.cheer {
+  animation: tv-row-in 700ms var(--ease-spring) both;
+  outline: calc(var(--u) * 6) solid var(--yellow);
+  outline-offset: calc(var(--u) * 4);
+}
+
+.tv-dish-row.cheer {
+  animation-name: tv-row-in-left;
+}
+
+@keyframes tv-row-in-left {
+  from {
+    opacity: 0;
+    transform: translateX(calc(var(--u) * -700));
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+.tv-board-row.cheer .tv-row-cat {
+  animation: tv-cat-leap 900ms var(--ease-out) 200ms both;
+}
+
+@keyframes tv-row-in {
+  from {
+    opacity: 0;
+    transform: translateX(calc(var(--u) * 420));
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes tv-cat-leap {
+  0%,
+  100% {
+    transform: none;
+  }
+  40% {
+    transform: translateY(calc(var(--u) * -46)) rotate(-12deg) scale(1.18);
+  }
+  70% {
+    transform: translateY(calc(var(--u) * 6)) scale(0.96);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tv-board-row.cheer,
+  .tv-dish-row.cheer,
+  .tv-board-row.cheer .tv-row-cat {
+    animation: none;
+  }
+}
+
+/* The watch card: over the board's foot, one layer. */
+.tv-watch-card {
+  position: absolute;
+  left: 50%;
+  bottom: calc(var(--u) * 56);
+  z-index: 700;
+  display: grid;
+  grid-template-columns: auto 1fr;
+  grid-template-rows: auto auto;
+  align-items: center;
+  column-gap: calc(var(--u) * 28);
+  row-gap: calc(var(--u) * 20);
+  width: calc(var(--u) * 1180);
+  padding: calc(var(--u) * 28) calc(var(--u) * 40);
+  border: calc(var(--u) * 8) solid var(--ink);
+  border-radius: calc(var(--u) * 48);
+  background: var(--night);
+  box-shadow: 0 calc(var(--u) * 16) 0 var(--ink);
+  transform: translateX(-50%);
+  animation: tv-card-in 360ms var(--ease-spring) both;
+}
+
+@keyframes tv-card-in {
+  from {
+    opacity: 0;
+    transform: translate(-50%, calc(var(--u) * 140));
+  }
+}
+
+.tv-watch-card-cat {
+  grid-row: 1 / 3;
+}
+
+.tv-watch-card-buttons {
+  min-width: 0;
+}
+
+.tv-watch-card-words {
+  margin: 0;
+  font-size: calc(var(--u) * 52);
+  line-height: 1.1;
+}
+
+.tv-watch-card-buttons {
+  display: flex;
+  gap: calc(var(--u) * 28);
+}
+
+.tv .tv-watch-card-buttons .tv-menu-item {
+  flex: 1;
+  width: auto;
+  min-width: 0;
+}
+
+/* Watching a run. */
+.tv-watch {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  padding: calc(var(--u) * 48) calc(var(--u) * 64);
+}
+
+.tv-watch-top {
+  display: flex;
+  align-items: center;
+  gap: calc(var(--u) * 24);
+}
+
+.tv-watch-who {
+  flex: 0 1 auto;
+  min-width: 0;
+  margin: 0;
+  overflow: hidden;
+  font-size: calc(var(--u) * 64);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tv-watch-game {
+  flex: none;
+  padding: calc(var(--u) * 6) calc(var(--u) * 28) calc(var(--u) * 10);
+  border: calc(var(--u) * 5) solid var(--ink);
+  border-radius: 999px;
+  background: var(--yellow);
+  color: var(--ink);
+  font: 900 calc(var(--u) * 48) / 1 var(--round);
+}
+
+.tv .tv-watch-top .tv-watch-back {
+  flex: none;
+  width: auto;
+  padding-right: calc(var(--u) * 64);
+}
+
+.tv-watch-gap {
+  flex: 1;
+}
+
+/* The game's watch view gets the whole stage as a box of known size: its root fills it (width and
+   height 100%, as in the Dish), or sits centred if it's smaller. */
+.tv-watch-stage {
+  display: grid;
+  flex: 1;
+  grid-template: minmax(0, 1fr) / minmax(0, 1fr);
+  place-items: center;
+  min-height: 0;
+}
+
+/* The test game's watch view ("n / target"): the Dish's styles don't load on a TV. */
+.tv-watch-stage .dd-test-count {
+  font-family: var(--round);
+  font-size: calc(var(--u) * 300);
+  font-weight: 900;
+  line-height: 1;
+  color: var(--white);
+  -webkit-text-stroke: 0.14em var(--ink);
+  paint-order: stroke fill;
+}
+
+.tv-watch-placeholder {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: calc(var(--u) * 32);
+}
+
+.tv-watch-placeholder-title {
+  margin: 0;
+  font-size: calc(var(--u) * 120);
+}
+
+.tv-watch-placeholder-art {
+  width: calc(var(--u) * 200);
+  height: calc(var(--u) * 200);
+}
+
+.tv-watch-ended {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: calc(var(--u) * 12);
+  overflow: hidden;
+  background: rgba(27, 11, 58, 0.92);
+  animation: tv-ended-in 400ms var(--ease-out) both;
+}
+
+@keyframes tv-ended-in {
+  from {
+    opacity: 0;
+  }
+}
+
+.tv-watch-ended-burst {
+  position: absolute;
+  width: calc(var(--u) * 1400);
+  height: calc(var(--u) * 1400);
+  opacity: 0.4;
+}
+
+.tv-watch-ended-title {
+  position: relative;
+  margin: 0;
+  font-size: calc(var(--u) * 140);
+  line-height: 1;
+}
+
+.tv-watch-ended-result {
+  position: relative;
+  margin: 0;
+  font: 900 calc(var(--u) * 96) / 1 var(--round);
+  color: var(--yellow);
+}

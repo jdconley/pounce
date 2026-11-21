@@ -1,5 +1,6 @@
 import { devices, expect, test, type Browser, type Page } from "@playwright/test";
 
+import { dailyPhone } from "./daily-phone";
 import { closeAll, firstRun, newPlayer } from "./helpers";
 import { openSniff, wrongWords } from "./sniff-helpers";
 import { speedAt, REFERENCE, type Speed } from "./speed";
@@ -276,6 +277,37 @@ async function playOnTv(page: Page, phones: Page[]) {
     await page.waitForTimeout(200);
   }
   expect(turns, "Tuna Tiles turns the TV showed").toBe(6);
+  await boardOnTv(page);
+}
+
+/**
+ * Tonight's board on the TV (the Daily Dish): a phone links it from the board's poster, turns on
+ * Show on TV for the server's test game, and the TV watches the run to its end, then shows its
+ * result on the board.
+ */
+async function boardOnTv(page: Page) {
+  await mark(page, "tv-board");
+  await page.keyboard.press("Escape");
+  await page.getByRole("button", { name: "Leave table" }).click();
+  await page.getByRole("button", { name: "Tonight's board" }).click();
+  const shown = page.locator(".tv-board-link .tv-code");
+  await expect(shown).toHaveText(/^[A-Z0-9]{6}$/);
+  const mom = await dailyPhone("Mom");
+  expect(await mom.linkBoard(((await shown.textContent()) ?? "").trim())).toBe(200);
+  await expect(page.locator(".tv-board")).toBeVisible();
+  const { run, target } = await mom.start();
+  await mom.showOnTv(run, true);
+  await page.getByRole("button", { name: "Watch" }).click();
+  for (let n = 1; n <= target; n++) {
+    await mark(page, `tv-watch-${n}`);
+    await mom.moves(run, n - 1, n);
+    await page.waitForTimeout(400);
+  }
+  await expect(page.locator(".tv-watch-ended")).toBeVisible();
+  // The result shows over the run, then the board comes back with it.
+  await mark(page, "tv-board-back");
+  await expect(page.locator('.tv-board-row[data-player="me"]')).toBeVisible({ timeout: 10_000 });
+  await page.waitForTimeout(1500);
 }
 
 async function measure(browser: Browser, page: Page, gate: Gate, play: () => Promise<void>) {

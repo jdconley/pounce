@@ -9,7 +9,7 @@ struct TVMenu: View {
     @FocusState private var focus: Item?
 
     enum Item: Hashable {
-        case link, sound, leave, back
+        case link, sound, leave, back, playAGame, unlink
     }
 
     var body: some View {
@@ -18,6 +18,7 @@ struct TVMenu: View {
                 .ignoresSafeArea()
                 .accessibilityHidden(true)
             switch model.menu {
+            case .items where model.phase == .board: boardItems.transition(.scale(scale: 0.92).combined(with: .opacity))
             case .items: items.transition(.scale(scale: 0.92).combined(with: .opacity))
             case .link: link.transition(.scale(scale: 0.92).combined(with: .opacity))
             case .closed: EmptyView()
@@ -28,8 +29,61 @@ struct TVMenu: View {
         .task(id: model.menu) {
             try? await Task.sleep(for: .milliseconds(60))
             guard !Task.isCancelled else { return }
-            focus = model.menu == .link ? .back : .link
+            focus = model.menu == .link ? .back : model.phase == .board ? .playAGame : .link
         }
+    }
+
+    /// The board's menu: Play a game (home, the board kept), sound, Unlink.
+    private var boardItems: some View {
+        VStack(spacing: 40) {
+            Button {
+                pop()
+                model.playAGame()
+            } label: {
+                TVButtonLabel(icon: ArtName.iconDice, words: String(localized: "Play a game", comment: "TV menu on the board: go home to the games, keeping the board"))
+            }
+            .buttonStyle(TVButtonStyle(tint: Palette.violet))
+            .accessibilityIdentifier("tv.menu.playAGame")
+            .focused($focus, equals: .playAGame)
+
+            soundButton
+
+            Button {
+                pop()
+                model.unlink()
+            } label: {
+                TVButtonLabel(icon: ArtName.iconLeave, words: String(localized: "Unlink", comment: "TV menu on the board: stop showing this board and forget it"))
+            }
+            .buttonStyle(TVButtonStyle(tint: Palette.magenta))
+            .accessibilityIdentifier("tv.menu.unlink")
+            .focused($focus, equals: .unlink)
+        }
+        .frame(width: 780)
+        .padding(56)
+        .background(RoundedRectangle(cornerRadius: 56, style: .continuous).fill(Palette.night))
+        .overlay(RoundedRectangle(cornerRadius: 56, style: .continuous).strokeBorder(Palette.ink, lineWidth: 8))
+        .compositingGroup()
+        .focusSection()
+        .defaultFocus($focus, .playAGame)
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel(Text("Menu", comment: "TV: VoiceOver, the menu over a table"))
+    }
+
+    private var soundButton: some View {
+        Button {
+            model.toggleSound()
+            // The press is heard only when turning sound on.
+            pop()
+        } label: {
+            TVButtonLabel(
+                icon: model.soundOn ? ArtName.iconSoundOn : ArtName.iconSoundOff,
+                words: model.soundOn
+                    ? String(localized: "Sound on", comment: "TV menu: the sound setting, now on")
+                    : String(localized: "Sound off", comment: "TV menu: the sound setting, now off"))
+        }
+        .buttonStyle(TVButtonStyle(tint: Palette.teal))
+        .accessibilityIdentifier("tv.menu.sound")
+        .focused($focus, equals: .sound)
     }
 
     private var items: some View {
