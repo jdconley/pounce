@@ -344,7 +344,6 @@ function TvHome(props: { board: string | null; onLinked: (room: string) => void;
             type="button"
             class="tv-poster board"
             data-tv
-            aria-label="Tonight's board"
             onClick={() => {
               play("pop", 0.5);
               if (props.board) props.onBoard(props.board);

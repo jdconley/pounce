@@ -208,6 +208,8 @@ img.tv-rank.playing {
 .tv-board-games {
   display: grid;
   gap: calc(var(--u) * 36);
+  /* Below the menu's paw (top right): the cards start under it, so nothing overlaps it. */
+  margin-top: calc(var(--u) * 64);
   min-width: 0;
   min-height: 0;
 }

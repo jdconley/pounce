@@ -211,6 +211,43 @@ test.describe("Tonight's board on the TV", () => {
     await closeAll(tv.context, jo.context);
   });
 
+  test("the phone's Unlink stays when its board reload answers after the TV came", async ({ browser }) => {
+    // After a link the phone loads its board again. That answer can be made before the TV's socket
+    // is counted (tvs 0) and arrive after the phone's socket said tvs 1: the older answer mustn't
+    // win, or the phone shows no Unlink while the TV shows its board.
+    const tv = await openTv(browser);
+    const jo = await newPlayer(browser, "Jo");
+    const { page } = jo;
+    let heard: () => void = () => {};
+    const tvCounted = new Promise<void>((r) => (heard = r));
+    page.on("websocket", (ws) => ws.on("framereceived", (f) => String(f.payload).includes('"t":"tvs","count":1') && heard()));
+    await page.getByRole("button", { name: "Open the Dish" }).click();
+    const tip = page.getByRole("button", { name: "Dismiss tip" });
+    if (await tip.isVisible()) await tip.click();
+    await page.getByRole("button", { name: "Show board on TV" }).click();
+    await boardPoster(tv.page).click();
+    const { code } = await shownLink(tv, ".tv-board-link");
+    // The TV's board socket reaches the server late (a slow TV, a slow link)...
+    await tv.page.routeWebSocket(/\/v1\/daily\/board\/ws/, async (ws) => {
+      await new Promise((r) => setTimeout(r, 1500));
+      ws.connectToServer();
+    });
+    // ...so the reload's answer, made at once, says no TV; it lands after the socket said one.
+    await page.route(/\/v1\/daily\/board(\?|$)/, async (route) => {
+      const answer = await route.fetch();
+      expect(((await answer.json()) as BoardAnswer).tvs).toBe(0);
+      await tvCounted;
+      await route.fulfill({ response: answer });
+    });
+    await page.getByLabel("TV code").fill(code);
+    await page.getByRole("button", { name: "Show", exact: true }).click();
+    await expect(page.getByText("On the TV")).toBeVisible();
+    await tvCounted;
+    await page.waitForTimeout(500);
+    await expect(page.getByRole("button", { name: "Unlink" })).toBeVisible();
+    await closeAll(tv.context, jo.context);
+  });
+
   for (const [game, title] of [
     ["sniff", "Sniff"],
     ["nine-lives", "Nine Lives"],
@@ -324,6 +361,13 @@ test("a whole family fits each game's board, nothing under 28 at 1080p", async (
       out: [...el.querySelectorAll("*")].filter((d) => d.getBoundingClientRect().bottom > el.getBoundingClientRect().bottom + 1).map((d) => `${d.className}:${Math.round(d.getBoundingClientRect().bottom - el.getBoundingClientRect().bottom)}`),
     }));
     expect(size.sh <= size.ch + 1 && size.sw <= size.cw + 1, `the card holds six rows: ${JSON.stringify(size)}`).toBe(true);
+  }
+  // The menu's paw has its own room: it overlaps no card.
+  const paw = (await page.getByRole("button", { name: "Menu" }).boundingBox())!;
+  for (const card of await page.locator(".tv-board-game").all()) {
+    const c = (await card.boundingBox())!;
+    const overlaps = paw.x < c.x + c.width && c.x < paw.x + paw.width && paw.y < c.y + c.height && c.y < paw.y + paw.height;
+    expect(overlaps, `the paw over ${await card.getAttribute("data-game")}`).toBe(false);
   }
   // Ties share a rank; the crowns and the big numbers show, whole.
   await expect(page.locator('.tv-board-game[data-game="sniff"] .tv-rank')).toHaveText(["1", "2", "2", "4", "5", "6"]);

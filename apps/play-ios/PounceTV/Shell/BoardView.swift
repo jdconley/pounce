@@ -44,12 +44,14 @@ struct BoardView: View {
     }
 
     private func content(_ state: TVBoardState) -> some View {
-        HStack(alignment: .top, spacing: 48) {
+        HStack(alignment: .top, spacing: 36) {
             DishColumn(board: state.board, cheer: state.cheer, connecting: !board.everConnected)
                 .frame(width: 600)
+            // Left of the menu's paw (top right), so nothing overlaps it: six rows need the card's
+            // full height, so its room comes from the side.
             Games(games: state.board?.games ?? [], cheer: state.cheer)
+                .padding(.trailing, 120)
         }
-        // The menu's paw sits in the bottom right corner, beside the last card's "+N more".
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
     }
 }

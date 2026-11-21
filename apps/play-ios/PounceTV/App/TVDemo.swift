@@ -575,7 +575,7 @@ actor TVDemoBoardSocket: BoardSocketing {
                 var d = dish[row.player] ?? (0, [], 0)
                 d.points += max(0, 3 - i) + 1
                 d.ended += 1
-                if i == 0 { d.crowns.append(game) }
+                if i == 0, !d.crowns.contains(game) { d.crowns.append(game) }
                 dish[row.player] = d
             }
             if n < people.count {
