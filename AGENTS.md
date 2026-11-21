@@ -69,7 +69,9 @@ has no mute, so turn off the game's own sound instead:
 - For UI tests and `-uitest-reset` launches, pass the launch arguments `-settings.soundOn` `<false/>`
   (Apple TV: `-tv.soundOn` `<false/>`). Never pass a bare `NO`. The argument domain stores it as the
   string "NO", `Settings` reads it as no value, so the sound stays on, and it also overrides the
-  `defaults write`.
+  `defaults write`. This matters most at `-anim-speed 1`: other speeds swap in silent sounds, but
+  speed 1 plays the real ones. The one exception is `PounceTVUITests/RemoteTests`, which checks that
+  Sound starts on.
 - Run headed Chromium with `--mute-audio`. Headless is already silent.
 
 This is only about local runs. Leave the sound code and its default alone.
