@@ -6,7 +6,7 @@ import { createRng, type Seed } from "../../rules/rng";
 
 import { clutter, LEVELS, make, type BoxFortPuzzle } from "./maker";
 import { shape, type Piece } from "./pieces";
-import { anyFits, CLUTTER, SIZE } from "./rules";
+import { anyFits, CLUTTER, setFits, SIZE } from "./rules";
 
 import type { DayLevel } from "../days";
 
@@ -64,7 +64,7 @@ describe("make", () => {
     expect(boxes.every((v) => v === CLUTTER)).toBe(true);
     for (const y of lines) expect(lines.filter((x) => p.rug[y * SIZE + x] !== 0).length).toBeLessThanOrEqual(5);
     for (const x of lines) expect(lines.filter((y) => p.rug[y * SIZE + x] !== 0).length).toBeLessThanOrEqual(5);
-    for (const piece of p.sets[0]!) expect(anyFits(p.rug, [piece]), piece.id).toBe(true);
+    expect(setFits(p.rug, p.sets[0]!), "the whole first set fits").toBe(true);
     for (const set of p.sets) {
       expect(set).toHaveLength(3);
       expect(set.filter((piece) => shape(piece.id).tier === 2).length).toBeLessThanOrEqual(spec.maxAwkward);
@@ -89,6 +89,18 @@ describe("make", () => {
     const shares = ([1, 2, 3, 4, 5, 6] as const).map(share);
     for (let i = 1; i < shares.length; i++) expect(shares[i]).toBeGreaterThan(shares[i - 1]!);
     expect(LEVELS[7].sets).toBeGreaterThan(LEVELS[6].sets);
+  });
+
+  test("the first set fits as a whole, not just piece by piece", () => {
+    // Seeds where a dot and two 3 by 3s each fit the rug alone, but the two 3 by 3s wanted the same gap.
+    for (const [seed, level] of [
+      [[7068, 4, 2027, 1], 4],
+      [[3244, 5, 2027, 1], 5],
+      [[11047, 5, 2027, 1], 5],
+    ] as [Seed, DayLevel][]) {
+      const p = make(createRng(seed), level);
+      expect(setFits(p.rug, p.sets[0]!), JSON.stringify(seed)).toBe(true);
+    }
   });
 
   test("clutter that can't hold gives up a box at a time", () => {

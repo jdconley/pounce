@@ -10,6 +10,7 @@ import {
   FULL_FORT,
   lineBonus,
   place,
+  setFits,
   SIZE,
   start,
   step,
@@ -63,6 +64,22 @@ describe("fits", () => {
     expect(anyFits(full, [piece("sq2"), piece("dot")])).toBe(true);
     expect(anyFits(full, [piece("sq2"), piece("duo-h")])).toBe(false);
     expect(anyFits(full, [])).toBe(false);
+  });
+
+  test("setFits wants room for the whole set at once, not each piece alone", () => {
+    // Boxes on every other spot, and one more spot open at the top left: one domino's worth of room.
+    const rug = Array.from({ length: SIZE * SIZE }, (_, i) => (i !== 0 && (Math.floor(i / SIZE) + (i % SIZE)) % 2 === 0 ? CLUTTER : 0));
+    expect(anyFits(rug, [piece("duo-h")])).toBe(true);
+    expect(setFits(rug, [piece("duo-h"), piece("dot")])).toBe(true);
+    expect(setFits(rug, [piece("duo-h"), piece("duo-h")])).toBe(false);
+    expect(setFits(rug, [])).toBe(true);
+  });
+
+  test("setFits counts the room a clear makes", () => {
+    // Every row is one box short: the dot clears one, and then the long piece has that row.
+    const rug = rugOf(...Array<string>(SIZE).fill("#######."));
+    expect(anyFits(rug, [piece("five-h")])).toBe(false);
+    expect(setFits(rug, [piece("five-h"), piece("dot")])).toBe(true);
   });
 });
 

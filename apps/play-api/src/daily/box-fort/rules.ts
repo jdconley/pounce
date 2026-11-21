@@ -61,6 +61,25 @@ export function anyFits(rug: readonly number[], pieces: readonly Piece[]): boole
   return false;
 }
 
+/**
+ * Whether every one of `pieces` can go on `rug`, one after another in some order, lines clearing
+ * as they fill (a set is three pieces, so the search is small). Each fitting alone isn't enough:
+ * two pieces can want the same gap.
+ */
+export function setFits(rug: readonly number[], pieces: readonly Piece[]): boolean {
+  if (pieces.length === 0) return true;
+  return pieces.some((piece, i) => {
+    const rest = pieces.filter((_, j) => j !== i);
+    for (let row = 0; row < SIZE; row++) {
+      for (let col = 0; col < SIZE; col++) {
+        const out = place(rug, piece, row, col);
+        if (out && setFits(out.rug, rest)) return true;
+      }
+    }
+    return false;
+  });
+}
+
 /** Puts `piece` down with its top-left at (`row`, `col`), then clears every full line. */
 export function place(
   rug: readonly number[],

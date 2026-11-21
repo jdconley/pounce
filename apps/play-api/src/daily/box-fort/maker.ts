@@ -10,7 +10,7 @@
 import { shuffle, type Rng } from "../../rules/rng";
 
 import { SHAPES, type Piece, type Shape } from "./pieces";
-import { anyFits, CLUTTER, SIZE } from "./rules";
+import { CLUTTER, setFits, SIZE } from "./rules";
 
 import type { DayLevel } from "../days";
 
@@ -76,8 +76,8 @@ function crowded(rug: readonly number[]): boolean {
 }
 
 /**
- * Up to `boxes` boxes at random spots, with no line over 5 boxes and room for every piece of the
- * first set. When `TRIES` layouts fail, it tries again with one box fewer.
+ * Up to `boxes` boxes at random spots, with no line over 5 boxes and room for the whole first set,
+ * placed together. When `TRIES` layouts fail, it tries again with one box fewer.
  */
 export function clutter(rng: Rng, boxes: number, first: readonly Piece[]): number[] {
   const spots = [...Array(SIZE * SIZE).keys()];
@@ -85,7 +85,7 @@ export function clutter(rng: Rng, boxes: number, first: readonly Piece[]): numbe
     for (let t = 0; t < TRIES; t++) {
       const rug = Array<number>(SIZE * SIZE).fill(0);
       for (const at of shuffle(spots, rng).slice(0, count)) rug[at] = CLUTTER;
-      if (!crowded(rug) && first.every((p) => anyFits(rug, [p]))) return rug;
+      if (!crowded(rug) && setFits(rug, first)) return rug;
     }
   }
   return Array<number>(SIZE * SIZE).fill(0);
