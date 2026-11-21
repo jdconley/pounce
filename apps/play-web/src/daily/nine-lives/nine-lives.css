@@ -1,0 +1,393 @@
+/* Nine Lives (the app's NineLivesArt.swift): a quilt of cushions, digits on paw tiles. Every
+   animation moves transform and opacity only. */
+
+.nl-defs {
+  position: absolute;
+  width: 0;
+  height: 0;
+  overflow: hidden;
+}
+
+/* The play area: whatever box the host gives it. Phones and portrait tablets stack the quilt,
+   the keys and the tools; wide boxes put the keys beside the quilt. */
+.nl-play {
+  container-type: size;
+  position: relative;
+  width: 100%;
+  height: 100%;
+}
+
+.nl-layout {
+  --nl-w: min(100cqw - 24px, 780px);
+  --nl-key: calc((var(--nl-w) - 40px) / 9);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+}
+
+.nl-board-slot {
+  container-type: inline-size;
+  width: max(200px, min(var(--nl-w), 100cqh - var(--nl-key) * 1.1 - 50px - 56px - 34px));
+}
+
+.nl-side {
+  width: var(--nl-w);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.nl-keys {
+  display: grid;
+  grid-template-columns: repeat(9, 1fr);
+  gap: 5px;
+  width: 100%;
+}
+
+.nl-tools {
+  display: flex;
+  gap: 10px;
+  width: 100%;
+  margin-top: 16px;
+}
+
+.nl-tools .btn {
+  flex: 1;
+  min-width: 0;
+  padding-inline: 8px;
+}
+
+/* Tablets and laptops: full-size buttons beside a big quilt. */
+@container (min-width: 600px) {
+  .nl-tools .btn.small {
+    min-height: 58px;
+    font-size: 1.4rem;
+    box-shadow: 0 6px 0 var(--ink), inset 0 3px 0 rgba(255, 255, 255, 0.45);
+  }
+}
+
+@container (min-aspect-ratio: 23 / 20) {
+  .nl-layout {
+    flex-direction: row;
+    gap: 36px;
+  }
+
+  .nl-board-slot {
+    width: min(100cqh - 40px, 60cqw);
+  }
+
+  .nl-side {
+    width: min(340px, 100cqw - min(100cqh - 40px, 60cqw) - 76px);
+  }
+
+  .nl-not-quite-slot {
+    order: -1;
+  }
+
+  .nl-keys {
+    grid-template-columns: repeat(3, 1fr);
+    gap: 12px;
+  }
+
+  .nl-tools {
+    flex-direction: column;
+    margin-top: 24px;
+  }
+}
+
+/* The quilt. Its sizes follow its own width (cqw of the slot). */
+.nl-board {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  grid-template-rows: repeat(3, 1fr);
+  gap: 1.6cqw;
+  aspect-ratio: 1;
+  padding: 2.2cqw;
+  border-radius: 5cqw;
+  background: var(--ink);
+  box-shadow: 0 max(3px, 1.4cqw) 0 color-mix(in srgb, var(--violet) 45%, var(--ink));
+}
+
+.nl-box {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  grid-template-rows: repeat(3, 1fr);
+  gap: 0.4cqw;
+  padding: 0.6cqw;
+  border-radius: 3cqw;
+  background: var(--violet);
+}
+
+.nl-box-b {
+  background: color-mix(in srgb, var(--violet) 68%, var(--magenta));
+}
+
+.nl-cell {
+  position: relative;
+  display: grid;
+  place-items: center;
+  min-width: 0;
+  min-height: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+span.nl-cell {
+  cursor: default;
+}
+
+.nl-cell::before {
+  content: "";
+  position: absolute;
+  inset: 6%;
+  border-radius: 22%;
+  background: rgba(27, 11, 58, 0.42);
+}
+
+.nl-cell.nl-lit::before {
+  background: rgba(255, 255, 255, 0.2);
+}
+
+.nl-cell.nl-selected::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border: max(2.5px, 0.95cqw) solid var(--yellow);
+  border-radius: 26%;
+}
+
+.nl-cell:focus-visible {
+  outline: 3px solid var(--white);
+  outline-offset: -1px;
+  border-radius: 22%;
+}
+
+.nl-tile-wrap {
+  position: relative;
+  display: block;
+  width: 94%;
+  height: 94%;
+}
+
+/* A paw tile sizes its digit from its own width. */
+.nl-tile {
+  container-type: inline-size;
+  position: relative;
+  display: block;
+  width: 100%;
+  aspect-ratio: 1;
+}
+
+.nl-paw {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+}
+
+.nl-rim {
+  fill: var(--ink);
+  stroke: var(--ink);
+  stroke-width: 10;
+}
+
+.nl-lip {
+  stroke: var(--ink);
+  stroke-width: 10;
+}
+
+.nl-given .nl-lip {
+  fill: color-mix(in srgb, #fff 55%, var(--ink));
+}
+
+.nl-mine .nl-lip {
+  fill: color-mix(in srgb, var(--sky) 55%, var(--ink));
+}
+
+.nl-hinted .nl-lip {
+  fill: color-mix(in srgb, var(--yellow) 55%, var(--ink));
+}
+
+.nl-clash .nl-lip {
+  fill: color-mix(in srgb, var(--refuse) 55%, var(--ink));
+}
+
+.nl-digit {
+  position: absolute;
+  inset: 24% 0 0;
+  display: grid;
+  place-items: center;
+  font: 900 58cqw/1 var(--round);
+  color: var(--white);
+  text-shadow: 3cqw 4cqw 0 var(--ink);
+  pointer-events: none;
+}
+
+.nl-given .nl-digit,
+.nl-hinted .nl-digit {
+  color: var(--ink);
+  text-shadow: none;
+}
+
+/* Tiles with the selected cell's digit get a lime rim. */
+.nl-same .nl-rim {
+  fill: var(--lime);
+  stroke: var(--lime);
+}
+
+.nl-notes {
+  position: absolute;
+  inset: 8%;
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  grid-template-rows: repeat(3, 1fr);
+  place-items: center;
+  font: 800 2.5cqw/1 var(--round);
+  color: rgba(255, 255, 255, 0.92);
+  pointer-events: none;
+}
+
+/* "Not quite": its own room, so nothing moves when it shows. */
+.nl-not-quite-slot {
+  display: grid;
+  place-items: center;
+  height: 50px;
+}
+
+.nl-not-quite {
+  padding: 2px 18px 4px;
+  border: 3px solid var(--ink);
+  border-radius: 999px;
+  background: var(--refuse);
+  font: 900 22px/1.2 var(--round);
+  color: var(--white);
+  -webkit-text-stroke: 0.14em var(--ink);
+  paint-order: stroke fill;
+  opacity: 0;
+  transform: scale(0.6);
+  transition: opacity 200ms var(--ease-out), transform 300ms var(--ease-spring);
+}
+
+.nl-not-quite.nl-show {
+  opacity: 1;
+  transform: none;
+  animation: nl-shake 450ms var(--ease-out);
+}
+
+.nl-key {
+  display: block;
+  margin: 0;
+  padding: 0 0 8%;
+  border: 0;
+  background: none;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.nl-key .nl-tile {
+  transition: transform 90ms var(--ease-out);
+}
+
+.nl-key:active:not(:disabled) .nl-tile {
+  transform: scale(0.9);
+}
+
+.nl-key:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+
+.nl-key:focus-visible {
+  outline: 3px solid var(--white);
+  outline-offset: 2px;
+  border-radius: 12px;
+}
+
+/* Notes: hollow yellow paws, so they read as pencil marks. */
+.nl-hollow .nl-lip {
+  display: none;
+}
+
+.nl-hollow .nl-rim {
+  fill: var(--yellow);
+  stroke: var(--yellow);
+  stroke-width: 6;
+}
+
+.nl-hollow .nl-face {
+  fill: color-mix(in srgb, var(--ink) 70%, var(--violet));
+}
+
+.nl-hollow .nl-digit {
+  color: var(--yellow);
+  text-shadow: none;
+}
+
+.btn.nl-notes-active {
+  background: linear-gradient(180deg, #ffe679, #ffd21f);
+}
+
+/* The TV's watch view: the quilt alone, as large as its box. */
+.nl-watch {
+  container-type: inline-size;
+  width: 100%;
+}
+
+/* Motion. */
+.nl-pop {
+  animation: nl-pop 450ms var(--ease-spring);
+}
+
+.nl-wiggle {
+  animation: nl-wiggle 420ms var(--ease-out);
+}
+
+.nl-solved .nl-tile-wrap {
+  animation: nl-wave 520ms var(--ease-spring) var(--nl-wave) both;
+}
+
+@keyframes nl-pop {
+  0% { transform: scale(1); }
+  25% { transform: scale(1.3); }
+  100% { transform: scale(1); }
+}
+
+@keyframes nl-wiggle {
+  0% { transform: rotate(0); }
+  17% { transform: rotate(10deg); }
+  41% { transform: rotate(-8deg); }
+  63% { transform: rotate(5deg); }
+  82% { transform: rotate(-3deg); }
+  100% { transform: rotate(0); }
+}
+
+@keyframes nl-wave {
+  0% { transform: scale(1); }
+  45% { transform: scale(1.12) translateY(-6%); }
+  100% { transform: scale(1); }
+}
+
+@keyframes nl-shake {
+  0%, 100% { transform: translateX(0); }
+  20% { transform: translateX(-8px); }
+  40% { transform: translateX(7px); }
+  60% { transform: translateX(-5px); }
+  80% { transform: translateX(3px); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .nl-pop,
+  .nl-wiggle,
+  .nl-solved .nl-tile-wrap,
+  .nl-not-quite.nl-show {
+    animation: none;
+  }
+}
