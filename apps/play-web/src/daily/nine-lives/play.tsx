@@ -2,7 +2,7 @@
  * Nine Lives being played: the quilt, the number keys, and Notes, Erase and Hint. The Daily Dish
  * host draws everything else (the bar, the clock, give up, the end).
  */
-import { useEffect, useRef, useState } from "preact/hooks";
+import { useEffect, useState } from "preact/hooks";
 
 import { buzz } from "../../lib/haptics";
 import { play } from "../../lib/sound";
@@ -21,7 +21,6 @@ const ARROWS: Record<string, [number, number]> = { ArrowUp: [-1, 0], ArrowDown: 
 export function NineLivesPlay(props: { puzzle: Puzzle; state?: BoardState; driver: NineLivesDriver; playing?: boolean }) {
   const [view, setView] = useState<View>(() => start(props.puzzle, props.state));
   const [asking, setAsking] = useState(false);
-  const boardRef = useRef<HTMLDivElement>(null);
   const solved = isSolved(view);
   const live = (props.playing ?? true) && !solved;
 
@@ -45,12 +44,6 @@ export function NineLivesPlay(props: { puzzle: Puzzle; state?: BoardState; drive
       buzz("win");
     }
   }, [solved]);
-
-  // Keep keyboard focus on the selected cell as it moves.
-  useEffect(() => {
-    const el = boardRef.current?.querySelector<HTMLButtonElement>(`[data-cell="${view.selected}"]`);
-    if (el && boardRef.current?.contains(document.activeElement)) el.focus();
-  }, [view.selected]);
 
   const onKey = (e: KeyboardEvent): void => {
     if (!live) return;
@@ -84,7 +77,7 @@ export function NineLivesPlay(props: { puzzle: Puzzle; state?: BoardState; drive
     <div class="nl-play">
       <PawDefs />
       <div class="nl-layout">
-      <div class="nl-board-slot" ref={boardRef}>
+      <div class="nl-board-slot">
         <NineLivesGrid view={view} solved={solved} onTap={(cell) => live && setView(tap(view, cell))} onKey={onKey} />
       </div>
       <div class="nl-side">

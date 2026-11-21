@@ -77,9 +77,14 @@ function label(v: View, i: number): string {
   return [where, String(d), ...tags.filter(Boolean)].join(", ");
 }
 
+/** A tapped cell leaves focus on the board. */
+const keepFocus = (e: MouseEvent): void => e.preventDefault();
+
 /**
- * The quilt. Square, as wide as its box. With `onTap` the cells are buttons with one tab stop
- * (the selected cell); without it, it is a picture (the TV).
+ * The quilt. Square, as wide as its box. With `onTap` it is a group of 81 buttons and one tab stop:
+ * the board, whose active cell (`aria-activedescendant`) the arrow keys move. Focus never moves
+ * between cells and no cell's `tabIndex` ever changes: either makes the browser lay out the whole
+ * page, a frame's budget on its own. Without `onTap` it is a picture (the TV).
  */
 export function NineLivesGrid(props: { view: View; solved?: boolean; onTap?: (cell: number) => void; onKey?: (e: KeyboardEvent) => void }) {
   const { view: v } = props;
@@ -88,12 +93,14 @@ export function NineLivesGrid(props: { view: View; solved?: boolean; onTap?: (ce
   return (
     <div
       class={`nl-board${props.solved ? " nl-solved" : ""}`}
-      role={props.onTap ? "grid" : "img"}
+      role={props.onTap ? "group" : "img"}
       aria-label="Nine Lives"
+      tabIndex={props.onTap ? 0 : undefined}
+      aria-activedescendant={props.onTap && sel !== null ? `nl-cell-${sel}` : undefined}
       onKeyDown={props.onKey}
     >
       {[0, 1, 2, 3, 4, 5, 6, 7, 8].map((box) => (
-        <div class={`nl-box nl-box-${box % 2 ? "b" : "a"}`} key={box} role={props.onTap ? "rowgroup" : undefined}>
+        <div class={`nl-box nl-box-${box % 2 ? "b" : "a"}`} key={box}>
           {[0, 1, 2, 3, 4, 5, 6, 7, 8].map((k) => {
             const i = (Math.floor(box / 3) * 3 + Math.floor(k / 3)) * 9 + (box % 3) * 3 + (k % 3);
             const d = v.cells[i]!;
@@ -119,18 +126,23 @@ export function NineLivesGrid(props: { view: View; solved?: boolean; onTap?: (ce
                 type="button"
                 key={i}
                 class={classes.join(" ")}
+                id={`nl-cell-${i}`}
                 data-cell={i}
-                role="gridcell"
                 aria-label={label(v, i)}
-                aria-selected={sel === i}
-                tabIndex={sel === i || (sel === null && i === 0) ? 0 : -1}
-                onClick={() => props.onTap!(i)}
+                aria-current={sel === i ? "true" : undefined}
+                tabIndex={-1}
+                onMouseDown={keepFocus}
+                onClick={(e) => {
+                  const board = (e.currentTarget as HTMLElement).closest<HTMLElement>(".nl-board");
+                  if (board && !board.contains(document.activeElement)) board.focus({ preventScroll: true });
+                  props.onTap!(i);
+                }}
               >
-                {content}
+                <span class="nl-in">{content}</span>
               </button>
             ) : (
               <span key={i} class={classes.join(" ")} data-cell={i}>
-                {content}
+                <span class="nl-in">{content}</span>
               </span>
             );
           })}

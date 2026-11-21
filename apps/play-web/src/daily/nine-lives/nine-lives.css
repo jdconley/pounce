@@ -97,11 +97,15 @@
   }
 }
 
-/* The quilt. Its sizes follow its own width (cqw of the slot). */
+/* The quilt. Its sizes follow its own width (cqw of the slot). The boxes and cells are sized by
+   their tracks (zero-minimum tracks). A cell's content sits in `.nl-in`, a box of fixed size with
+   size and layout containment: the browser lays out only that box when a tile comes or goes, not
+   the page (a grid item can't be that boundary, so `.nl-in` is a block inside the cell). Its size
+   is the cell's: (100 - 2 x 2.2 - 2 x 1.6) / 3 - 2 x 0.6 - 2 x 0.4, over 3, is 9.6cqw. */
 .nl-board {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  grid-template-rows: repeat(3, 1fr);
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-rows: repeat(3, minmax(0, 1fr));
   gap: 1.6cqw;
   aspect-ratio: 1;
   padding: 2.2cqw;
@@ -112,8 +116,8 @@
 
 .nl-box {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  grid-template-rows: repeat(3, 1fr);
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-rows: repeat(3, minmax(0, 1fr));
   gap: 0.4cqw;
   padding: 0.6cqw;
   border-radius: 3cqw;
@@ -126,8 +130,7 @@
 
 .nl-cell {
   position: relative;
-  display: grid;
-  place-items: center;
+  display: block;
   min-width: 0;
   min-height: 0;
   margin: 0;
@@ -155,15 +158,35 @@ span.nl-cell {
   background: rgba(255, 255, 255, 0.2);
 }
 
-.nl-cell.nl-selected::after {
+/* Always there, so selecting a cell only repaints it. */
+.nl-cell::after {
   content: "";
   position: absolute;
   inset: 0;
-  border: max(2.5px, 0.95cqw) solid var(--yellow);
+  border: max(2.5px, 0.95cqw) solid transparent;
   border-radius: 26%;
 }
 
-.nl-cell:focus-visible {
+.nl-cell.nl-selected::after {
+  border-color: var(--yellow);
+}
+
+.nl-in {
+  contain: size layout style;
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 9.6cqw;
+  height: 9.6cqw;
+  margin: 0 auto;
+}
+
+/* Keyboard focus is on the board; its active cell gets the ring. */
+.nl-board:focus {
+  outline: none;
+}
+
+.nl-board:focus-visible .nl-cell.nl-selected {
   outline: 3px solid var(--white);
   outline-offset: -1px;
   border-radius: 22%;
