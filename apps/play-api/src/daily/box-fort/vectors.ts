@@ -10,7 +10,7 @@ import { greedyMove, type Place } from "./greedy";
 import { boxFort, type BoxFortPublicPuzzle, type BoxFortPublicState, type BoxFortReveal } from "./module";
 import { place, SIZE, type Cleared } from "./rules";
 
-import type { DayLevel } from "./contract";
+import type { DayLevel } from "../days";
 import type { BoxFortPuzzle } from "./maker";
 import type { Piece } from "./pieces";
 

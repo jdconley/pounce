@@ -6,7 +6,8 @@
 import { make, type BoxFortPuzzle } from "./maker";
 import { deal, SIZE, start, step, type BoxFortState } from "./rules";
 
-import type { DailyModule, DayLevel } from "./contract";
+import type { DayLevel } from "../days";
+import type { DailyModule } from "../module";
 import type { Place } from "./greedy";
 import type { Piece } from "./pieces";
 

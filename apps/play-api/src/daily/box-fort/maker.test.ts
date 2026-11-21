@@ -8,7 +8,7 @@ import { clutter, LEVELS, make, type BoxFortPuzzle } from "./maker";
 import { shape, type Piece } from "./pieces";
 import { anyFits, CLUTTER, SIZE } from "./rules";
 
-import type { DayLevel } from "./contract";
+import type { DayLevel } from "../days";
 
 /** A stand-in for the server's seed: the first 16 bytes of sha256(date). */
 function seedFor(date: string): Seed {

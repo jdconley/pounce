@@ -7,7 +7,8 @@ import { boxFort, type BoxFortPublicState } from "./module";
 import { shape, type Piece } from "./pieces";
 import { CLUTTER, FULL_FORT, SIZE } from "./rules";
 
-import type { DailyResult, DayLevel } from "./contract";
+import type { DayLevel } from "../days";
+import type { DailyResult } from "../module";
 import type { BoxFortPuzzle } from "./maker";
 
 const piece = (id: string, tint = 1): Piece => ({ id, tint, cells: shape(id).cells });

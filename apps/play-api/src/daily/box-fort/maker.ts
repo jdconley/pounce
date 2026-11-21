@@ -12,7 +12,7 @@ import { shuffle, type Rng } from "../../rules/rng";
 import { SHAPES, type Piece, type Shape } from "./pieces";
 import { anyFits, CLUTTER, SIZE } from "./rules";
 
-import type { DayLevel } from "./contract";
+import type { DayLevel } from "../days";
 
 export type LevelSpec = {
   /** How often each tier is drawn: easy, medium, awkward. */
