@@ -4,7 +4,7 @@
  * posters. It runs on its own device credential (`tvApi`), never runs first run, and is driven by
  * a remote: arrow keys, Enter and Back, with the mouse as well.
  */
-import { useEffect, useMemo, useRef, useState } from "preact/hooks";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "preact/hooks";
 
 import { art, RINGS } from "../../lib/art";
 import { CATALOG, GAME_IDS, type GameId } from "../../lib/catalog";
@@ -13,6 +13,7 @@ import { isRoomCode } from "../../lib/router";
 import { play, unlockAudio } from "../../lib/sound";
 import { tvApi } from "../../net/api";
 import { ScreenLink } from "../../net/screen-link";
+import { dailyOn } from "../../net/tv-board-socket";
 import { reloadForUpdate, setSafeToReload } from "../../pwa";
 import { RoomStore, type RoomPhase, type RoomState } from "../../store/room";
 import { tvMenu } from "../../table/ct-layout";
@@ -20,6 +21,8 @@ import { Button, Cat, useSize } from "../common";
 import { QrCode } from "../qr";
 
 import { isBack, useDpad } from "./focus";
+import { TvBoardLink, TvBoardRoom } from "./tv-board";
+import { boardToKeep, keptBoard } from "./tv-board-model";
 import { NOPE, TvLobby } from "./tv-lobby";
 import { TvMenu } from "./tv-menu";
 import { back, bootPhase, cheerStep, gameOf, NO_CHEER, otherGame, safeToReload, type MenuView } from "./tv-model";
@@ -29,7 +32,10 @@ import "./tv.css";
 /** The table this TV shows, so a reload goes back to it. */
 const ROOM_KEY = "pounce.tv.room";
 
-export type TvPhase = "start" | "home" | "lobby" | "table" | "over";
+/** The Daily Dish board this TV shows (`{ token, until }`), so it opens to it every evening. */
+const BOARD_KEY = "pounce.tv.board";
+
+export type TvPhase = "start" | "home" | "board" | "lobby" | "table" | "over";
 
 const keptRoom = (): string | null => {
   const code = store.get(ROOM_KEY);
@@ -39,6 +45,13 @@ const keptRoom = (): string | null => {
 const keepRoom = (code: string | null): void => {
   if (code) store.set(ROOM_KEY, code);
   else store.remove(ROOM_KEY);
+};
+
+const keptBoardToken = (): string | null => keptBoard(store.get(BOARD_KEY), Date.now());
+
+const keepBoard = (token: string | null): void => {
+  if (token) store.set(BOARD_KEY, boardToKeep(token, Date.now()));
+  else store.remove(BOARD_KEY);
 };
 
 /** Keeps the screen on while the TV page shows, taken again whenever the page comes back. */
@@ -85,7 +98,8 @@ export function TvApp() {
   // A TV that kept a table (a reload, a new deploy, the TV turned off and on) goes straight back to
   // it; a new one starts at Start.
   const [kept] = useState(keptRoom);
-  const [phase, setPhase] = useState<TvPhase>(bootPhase(kept));
+  const [board, setBoard] = useState<string | null>(keptBoardToken);
+  const [phase, setPhase] = useState<TvPhase>(() => bootPhase(kept, board));
   const [room, setRoom] = useState<string | null>(kept);
   // Sound and full screen wait for a press: Start is one. A TV that went straight to its table
   // asks for one ("Press OK for sound"), and any press does.
@@ -128,10 +142,28 @@ export function TvApp() {
     setPhase("lobby");
   };
 
+  /** A phone linked this TV to its board (or the TV opens the one it kept): a table shown is let go. */
+  const openBoard = (token: string) => {
+    keepBoard(token);
+    keepRoom(null);
+    setRoom(null);
+    setBoard(token);
+    setPhase("board");
+  };
+
+  /** Unlink, or a board the server no longer knows: forgotten, and home. */
+  const forgetBoard = () => {
+    keepBoard(null);
+    setBoard(null);
+    goHome();
+  };
+
   const start = () => {
     wake();
     const code = keptRoom();
+    const token = keptBoardToken();
     if (code) openRoom(code);
+    else if (token) openBoard(token);
     else setPhase("home");
   };
 
@@ -166,9 +198,10 @@ export function TvApp() {
     <main class={`tv tv-at-${phase}`} ref={root}>
       <div class="tv-bg" style={{ backgroundImage: `url(${art(atHome ? "home-bg" : "room-bg")})` }} aria-hidden="true" />
       {phase === "start" ? <TvStart onStart={start} /> : null}
-      {phase === "home" ? <TvHome onLinked={openRoom} onMade={openRoom} /> : null}
-      {room && !atHome ? <TvRoom key={room} code={room} asleep={!pressed} onPhase={setPhase} onGone={goHome} onMove={openRoom} /> : null}
-      {room && !atHome && !pressed ? <TvWake onWake={wake} /> : null}
+      {phase === "home" ? <TvHome board={board} onLinked={openRoom} onMade={openRoom} onBoard={openBoard} /> : null}
+      {phase === "board" && board ? <TvBoardRoom key={board} board={board} asleep={!pressed} onGone={forgetBoard} onHome={goHome} onUnlink={forgetBoard} /> : null}
+      {room && !atHome && phase !== "board" ? <TvRoom key={room} code={room} asleep={!pressed} onPhase={setPhase} onGone={goHome} onMove={openRoom} onBoard={openBoard} /> : null}
+      {!atHome && (room || phase === "board") && !pressed ? <TvWake onWake={wake} /> : null}
     </main>
   );
 }
@@ -202,12 +235,25 @@ function TvWake(props: { onWake: () => void }) {
 
 type Link = { code: string; url: string };
 
-function TvHome(props: { onLinked: (room: string) => void; onMade: (room: string) => void }) {
+/**
+ * Home: the link a phone scans on the left (a table or a Daily Dish board), the posters on the
+ * right. Tonight's board shows only while the server has the Dish on; it opens the kept board, or
+ * this same link with the Dish's words.
+ */
+function TvHome(props: { board: string | null; onLinked: (room: string) => void; onMade: (room: string) => void; onBoard: (token: string) => void }) {
   const [link, setLink] = useState<Link | null>(null);
   const [offline, setOffline] = useState(false);
+  const [dish, setDish] = useState(false);
+  const [boardLink, setBoardLink] = useState(false);
   const busy = useRef(false);
-  const linked = useRef(props.onLinked);
-  linked.current = props.onLinked;
+  const latest = useRef(props);
+  latest.current = props;
+
+  useEffect(() => {
+    let live = true;
+    void dailyOn(tvApi).then((on) => live && setDish(on));
+    return () => void (live = false);
+  }, []);
 
   useEffect(() => {
     const screen = new ScreenLink({ api: tvApi });
@@ -216,7 +262,8 @@ function TvHome(props: { onLinked: (room: string) => void; onMade: (room: string
         setLink({ code: e.code, url: e.url });
         setOffline(false);
       } else if (e.kind === "offline") setOffline(true);
-      else linked.current(e.room);
+      else if (e.kind === "board") latest.current.onBoard(e.token);
+      else latest.current.onLinked(e.room);
     });
     screen.start();
     return () => {
@@ -238,8 +285,21 @@ function TvHome(props: { onLinked: (room: string) => void; onMade: (room: string
     }
   };
 
+  // Back closes the board's link panel (home's own Back leaves nothing to close). Listening from
+  // the moment the panel is drawn, not a frame later: a Back pressed at once still closes it.
+  useLayoutEffect(() => {
+    if (!boardLink) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (!isBack(e)) return;
+      e.preventDefault();
+      setBoardLink(false);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [boardLink]);
+
   return (
-    <section class="tv-home-screen">
+    <section class={`tv-home-screen${dish ? " with-dish" : ""}`}>
       <div class="tv-link" aria-busy={link ? undefined : "true"}>
         <p class="tv-scan outlined">Scan with your phone to put your table here</p>
         <div class="tv-qr-frame">
@@ -279,7 +339,31 @@ function TvHome(props: { onLinked: (room: string) => void; onMade: (room: string
             </span>
           </button>
         ))}
+        {dish ? (
+          <button
+            type="button"
+            class="tv-poster board"
+            data-tv
+            onClick={() => {
+              play("pop", 0.5);
+              if (props.board) props.onBoard(props.board);
+              else setBoardLink(true);
+            }}
+          >
+            <span class="tv-poster-art tv-board-poster-art" aria-hidden="true">
+              <img class="tv-board-poster-burst" src={art("sunburst")} alt="" />
+              <img class="tv-board-poster-trophy" src={art("icon-trophy")} alt="" />
+              <Cat cat={3} pose="celebrate" size="calc(var(--u) * 150)" class="tv-board-poster-cat left" />
+              <Cat cat={5} pose="leap" size="calc(var(--u) * 150)" class="tv-board-poster-cat right" />
+            </span>
+            <span class="tv-poster-body">
+              <span class="tv-poster-title outlined">Tonight's board</span>
+              <span class="tv-players">Daily puzzles</span>
+            </span>
+          </button>
+        ) : null}
       </div>
+      {boardLink ? <TvBoardLink link={link} offline={offline} onBack={() => setBoardLink(false)} /> : null}
       {offline ? (
         <div class="tv-note" role="status">
           <span class="dot" /> Reconnecting
@@ -302,7 +386,7 @@ function useRoom(room: RoomStore): RoomState {
  * menu over them. It goes home when the table is gone or no longer lists this TV, and moves to
  * another table when a phone links one, Play again deals one, or the TV changes the game.
  */
-function TvRoom(props: { code: string; asleep: boolean; onPhase: (p: TvPhase) => void; onGone: () => void; onMove: (code: string) => void }) {
+function TvRoom(props: { code: string; asleep: boolean; onPhase: (p: TvPhase) => void; onGone: () => void; onMove: (code: string) => void; onBoard: (token: string) => void }) {
   const { code } = props;
   const room = useMemo(
     () =>
@@ -427,7 +511,20 @@ function TvRoom(props: { code: string; asleep: boolean; onPhase: (p: TvPhase) =>
           <span class="dot" /> Reconnecting
         </div>
       ) : null}
-      {menu !== "closed" ? <TvMenu view={menu} code={code} onView={setMenu} onLeave={() => latest.current.onGone()} onLinked={moveTo} /> : null}
+      {menu !== "closed" ? (
+        <TvMenu
+          view={menu}
+          code={code}
+          onView={setMenu}
+          onLeave={() => latest.current.onGone()}
+          onLinked={moveTo}
+          onBoard={(token) => {
+            // The board replaces the table: its socket closes first.
+            room.stop();
+            latest.current.onBoard(token);
+          }}
+        />
+      ) : null}
     </div>
   );
 }

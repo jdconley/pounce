@@ -17,10 +17,14 @@ import SwiftUI
 /// - `tv-over` (`-seats` 2 to 6, default 4): the whole TV back at a Cat Tower table that just
 ///   finished, so game over shows over it (the App Store shot): three-digit scores, everyone on a
 ///   different level and cat, nobody left.
+/// - `tv-board`: the whole TV opening to Tonight's board (a kept board token) on a fake board
+///   socket: six people across the four games, someone's progress and a new result every 1.5 s
+///   (at the app's pace). Each `Live.releaseDemo` offers a run to watch, then plays it.
 enum TVDemo: Equatable {
     case table(TVTablePreview.Game, seats: Int)
     case shell
     case over(seats: Int)
+    case board
 
     static func from(arguments: [String] = CommandLine.arguments) -> TVDemo? {
         guard let i = arguments.firstIndex(of: "-demo"), let name = arguments[safe: i + 1] else { return nil }
@@ -30,6 +34,7 @@ enum TVDemo: Equatable {
         case "tv-tiles": return .table(.tiles, seats: seats ?? 4)
         case "tv-shell": return .shell
         case "tv-over": return .over(seats: seats ?? 4)
+        case "tv-board": return .board
         default: return nil
         }
     }
@@ -96,6 +101,15 @@ extension TVServices {
                 TVDemoSocket(room: TVDemo.room(tiles: TVDemoTables.isTiles(code), code: code), lobby: true)
             },
             keep: MemoryScreenKeep())
+    }
+
+    /// `tv-board`: the TV kept a board, and its socket plays an evening of the Daily Dish.
+    static func demoBoard() -> TVServices {
+        var services = TVServices.demo()
+        services.boards = MemoryBoardKeep(.fresh(String(repeating: "D", count: 22), now: Date()))
+        services.boardSocket = { _ in TVDemoBoardSocket() }
+        services.dailyOn = { true }
+        return services
     }
 
     /// `tv-over`: the TV kept a table, and that table's game has just ended.
@@ -438,6 +452,144 @@ struct TVDemoTableView: View {
         }
         table = next
         next.start()
+    }
+}
+/// Tonight's board as a busy evening plays it: six people across the four games, the board growing
+/// a result at a time (each with its `result`, then the fresh `board`), and the next person's
+/// progress between. Each `Live.releaseDemo` offers Kid's Sniff run, then plays it to its end.
+actor TVDemoBoardSocket: BoardSocketing {
+    nonisolated let events: AsyncStream<BoardSocketEvent>
+    private let feed: AsyncStream<BoardSocketEvent>.Continuation
+    private var player: Task<Void, Never>?
+    private let releases: AsyncStream<Void>
+    private let token: Int32
+
+    private static let people: [(id: String, name: String, cat: Int)] = [
+        ("me", "Mom", 3), ("pr_dad", "Dad", 1), ("pr_kid", "Kid", 5),
+        ("pr_gpa", "Grandpa", 0), ("pr_nana", "Nana", 7), ("pr_bart", "Bartholomew Wiggles", 6),
+    ]
+    private static let games = ["sniff", "nine-lives", "cat-nap", "box-fort"]
+
+    init() {
+        (events, feed) = AsyncStream.makeStream(of: BoardSocketEvent.self)
+        let release = TVDemoSignal.release.listen()
+        releases = release.posts
+        token = release.token
+    }
+
+    func start() {
+        guard player == nil else { return }
+        player = Task { await self.play() }
+    }
+
+    func stop() {
+        player?.cancel()
+        player = nil
+        notify_cancel(token)
+        feed.finish()
+    }
+
+    private func play() async {
+        feed.yield(.online)
+        var tick = 0
+        feed.yield(.message(.board(Self.board(tick))))
+        let offers = Task { await self.offers() }
+        defer { offers.cancel() }
+        while !Task.isCancelled {
+            try? await Task.sleep(for: Pace.duration(.milliseconds(750)))
+            guard !Task.isCancelled else { return }
+            // The next person's progress, then (every other beat) their result and the new board.
+            let (game, who) = Self.next(tick)
+            feed.yield(.message(.progress(player: who.id, game: game, progress: 0.5)))
+            try? await Task.sleep(for: Pace.duration(.milliseconds(750)))
+            guard !Task.isCancelled else { return }
+            tick += 1
+            feed.yield(.message(.result(player: who.id, result: Self.result(game: game, who: Self.people.firstIndex { $0.id == who.id } ?? 0))))
+            feed.yield(.message(.board(Self.board(tick))))
+        }
+    }
+
+    /// Kid's Sniff run as the server's watch frames would carry it: SPICE in four.
+    private static let sniffGuesses: [(String, [String])] = [
+        ("large", ["none", "none", "none", "none", "spot"]),
+        ("toils", ["none", "none", "spot", "none", "near"]),
+        ("spine", ["spot", "spot", "spot", "none", "spot"]),
+        ("spice", ["spot", "spot", "spot", "spot", "spot"]),
+    ]
+
+    private static func sniffFrame(_ guesses: Int) -> (puzzle: DailyJSON, state: DailyJSON) {
+        let shown = sniffGuesses.prefix(guesses).map { word, marks in
+            DailyJSON.object(["word": .string(word), "marks": .array(marks.map { .string($0) })])
+        }
+        return (.object(["letters": .int(5), "tries": .int(6)]), .object(["guesses": .array(shown)]))
+    }
+
+    /// Each go-ahead: Kid's Sniff run is offered, then plays out a guess every second and a half.
+    private func offers() async {
+        for await _ in releases {
+            feed.yield(.message(.watchOffer(player: "pr_kid", name: "Kid", cat: 5, game: "sniff")))
+            let first = Self.sniffFrame(0)
+            feed.yield(.message(.watch(player: "pr_kid", game: "sniff", puzzle: first.puzzle, state: first.state)))
+            // Long enough for the card to be read and Watch pressed, then the guesses watched.
+            try? await Task.sleep(for: Pace.duration(.seconds(10)))
+            for n in 1...Self.sniffGuesses.count {
+                let frame = Self.sniffFrame(n)
+                feed.yield(.message(.watch(player: "pr_kid", game: "sniff", puzzle: frame.puzzle, state: frame.state)))
+                try? await Task.sleep(for: Pace.duration(.seconds(1.5)))
+            }
+            feed.yield(.message(.watchEnd(player: "pr_kid", game: "sniff", result: Self.result(game: "sniff", who: 2))))
+        }
+    }
+
+    /// Who plays which game at beat `tick`: around the games, then around the people.
+    private static func next(_ tick: Int) -> (String, (id: String, name: String, cat: Int)) {
+        let game = games[tick % games.count]
+        let shown = rowsFor(game: game, tick: tick)
+        return (game, people[shown % people.count])
+    }
+
+    /// How many people have a result in `game` at beat `tick`: 4 to 6, round and round, so a
+    /// family's board is mostly full, with someone still playing now and then.
+    private static func rowsFor(game: String, tick: Int) -> Int {
+        let g = games.firstIndex(of: game) ?? 0
+        return people.count - (tick / games.count + g) % 3
+    }
+
+    private static func result(game: String, who: Int) -> DailyResult {
+        let outcome: DailyOutcome = game == "box-fort" ? .done : (who == 4 ? .gaveUp : .solved)
+        return DailyResult(
+            game: game, date: "2026-11-23", number: 12, outcome: outcome, timeMs: 95_000 + who * 41_000, hints: who == 3 ? 1 : 0,
+            progress: outcome == .gaveUp ? 0.4 : 1, tooFast: false,
+            guesses: game == "sniff" ? 3 + who % 4 : nil, points: game == "box-fort" ? 2_400 - who * 310 : nil)
+    }
+
+    static func board(_ tick: Int) -> DailyBoard {
+        var dish: [String: (points: Int, crowns: [String], ended: Int)] = [:]
+        let games = games.map { game -> DailyGameBoard in
+            let n = rowsFor(game: game, tick: tick)
+            var rows = (0..<n).map { i in
+                let who = people[i]
+                return DailyBoardRow(player: who.id, name: who.name, cat: who.cat, rank: i + 1, result: result(game: game, who: i), playing: nil)
+            }
+            for (i, row) in rows.enumerated() {
+                var d = dish[row.player] ?? (0, [], 0)
+                d.points += max(0, 3 - i) + 1
+                d.ended += 1
+                if i == 0, !d.crowns.contains(game) { d.crowns.append(game) }
+                dish[row.player] = d
+            }
+            if n < people.count {
+                let who = people[n]
+                rows.append(DailyBoardRow(player: who.id, name: who.name, cat: who.cat, rank: nil, result: nil, playing: .init(progress: 0.25)))
+            }
+            return DailyGameBoard(game: game, number: 12, rows: rows)
+        }
+        let sorted = dish.sorted { $0.value.points > $1.value.points }
+        let rows = sorted.enumerated().map { i, entry in
+            let who = people.first { $0.id == entry.key }!
+            return DailyDishRow(player: who.id, name: who.name, cat: who.cat, rank: i + 1, points: entry.value.points, crowns: entry.value.crowns, ended: entry.value.ended)
+        }
+        return DailyBoard(date: "2026-11-23", games: games, dish: DailyDish(rows: rows), tvs: 1)
     }
 }
 #endif

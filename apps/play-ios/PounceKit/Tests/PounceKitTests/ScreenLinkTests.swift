@@ -290,6 +290,15 @@ func settle() async {
         await r.link.stop()
     }
 
+    @Test func aBoardLinkBringsItsTokenAndEndsTheLink() async throws {
+        let r = rig()
+        let first = try await started(r)
+        first.push(#"{"t":"board"}"#)
+        first.push(#"{"t":"board","token":"BBBBBBBBBBBBBBBBBBBBBB"}"#)
+        #expect(await eventually { r.events.finished })
+        #expect(r.events.all.last == .board(token: "BBBBBBBBBBBBBBBBBBBBBB"))
+    }
+
     @Test func aCodeLinkedWhileItsRenewalIsStillAskingIsNotLost() async throws {
         let r = rig()
         let first = try await started(r)

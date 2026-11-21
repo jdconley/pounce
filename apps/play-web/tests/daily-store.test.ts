@@ -52,6 +52,37 @@ describe("the Dish store", () => {
     expect(store.state.stats?.test?.played).toBe(1);
   });
 
+  test("a reload made before the socket's TV count, and landing after it, keeps the socket's count", async () => {
+    // Linking a TV reloads the board; the server can answer before the TV's socket is counted
+    // (tvs 0), and that answer can land after the phone's socket said tvs 1.
+    let loads = 0;
+    let land: () => void = () => {};
+    let on: ((e: BoardEvent) => void) | null = null;
+    const store = new DishStore({
+      call: async (_m, path) => {
+        if (!path.startsWith("/v1/daily/board")) return new Response(JSON.stringify(STATS), { status: 200 });
+        loads += 1;
+        if (loads === 2) await new Promise<void>((r) => (land = r));
+        return new Response(JSON.stringify({ ...BOARD, tvs: 0 }), { status: 200 });
+      },
+      socket: () => ({ start: (fn) => void (on = fn), stop: () => {} }),
+    });
+    store.retain("pe_1");
+    await flush();
+    await flush();
+    expect(store.state.tvs).toBe(0);
+    const reload = store.refresh();
+    await flush();
+    on!({ kind: "tvs", count: 1 });
+    expect(store.state.tvs).toBe(1);
+    land();
+    await reload;
+    expect(store.state.tvs, "the older answer's count doesn't win").toBe(1);
+    // A reload made after the socket's word is believed.
+    await store.refresh();
+    expect(store.state.tvs).toBe(0);
+  });
+
   test("offline keeps it unknown, and a later load turns it on", async () => {
     let up = false;
     const { store } = setup((p) => (!up ? new ApiError(0, "offline") : p.startsWith("/v1/daily/board") ? BOARD : STATS));

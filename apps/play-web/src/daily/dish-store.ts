@@ -56,6 +56,8 @@ export class DishStore {
   private loading: Promise<void> | null = null;
   /** Load again if the one out now fails: it was asked before the server knew this player. */
   private again = false;
+  /** Counts the socket's TV counts heard: a load asked before the latest one keeps its count. */
+  private tvsHeard = 0;
 
   constructor(private readonly deps: DishDeps) {}
 
@@ -116,6 +118,7 @@ export class DishStore {
   private async load(): Promise<void> {
     const person = this.person;
     if (!person) return;
+    const heard = this.tvsHeard;
     let board: BoardAnswer;
     try {
       board = (await (await this.deps.call("GET", dailyPath("/v1/daily/board", person))).json()) as BoardAnswer;
@@ -124,7 +127,9 @@ export class DishStore {
       return;
     }
     if (person !== this.person) return;
-    this.set({ status: "on", board, tvs: board.tvs });
+    // The socket's word since this load was asked is newer than the answer's: a TV linked while
+    // it was out may not be counted in it yet.
+    this.set({ status: "on", board, tvs: heard === this.tvsHeard ? board.tvs : this.state.tvs });
     if (this.holds > 0 && !this.socket) {
       this.socket = this.deps.socket(person);
       this.socket.start((e) => this.hear(e));
@@ -147,8 +152,10 @@ export class DishStore {
     const board = this.state.board;
     switch (e.kind) {
       case "board":
+        this.tvsHeard += 1;
         return this.set({ status: "on", board: e.board, tvs: e.board.tvs });
       case "tvs":
+        this.tvsHeard += 1;
         return this.set({ tvs: e.count });
       case "gone":
         this.socket = null;

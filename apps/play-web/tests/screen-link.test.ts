@@ -238,6 +238,20 @@ describe("the screen link (a TV waiting to be linked)", () => {
     expect(sockets).toHaveLength(1);
   });
 
+  test("a board link (the Daily Dish) is passed on with its token, and the link stops", async () => {
+    const { clock, sockets, events, link } = setup(100_000);
+    link.start();
+    await flush();
+    sockets[0]!.open();
+    sockets[0]!.receive({ t: "board" });
+    expect(events.at(-1)?.kind).toBe("code");
+    sockets[0]!.receive({ t: "board", token: "B".repeat(22) });
+    expect(events.at(-1)).toEqual({ kind: "board", token: "B".repeat(22) });
+    clock.advance(200_000);
+    await flush();
+    expect(sockets).toHaveLength(1);
+  });
+
   test("a code linked while its renewal is still asking is not lost", async () => {
     const { clock, sockets, events, link, release } = setup(100_000);
     link.start();
