@@ -14,10 +14,13 @@ import type { Outgoing } from "./types";
  * - a push that is only about that table ("your move", a nudge, play again) is not for it;
  * - one that says what such a device gets instead (`otherwise`: a streak reminder) is sent with
  *   that copy, pointing at the table it names, or at none.
- * Either way its streak block lists only tables it can open.
+ * Either way its streak block lists only tables it can open. A push that `needs` something of the
+ * app (the Dish's reminder) goes only to a device whose app lists it among its games.
  */
 export function forDevice(o: Outgoing, tables: readonly TableEntry[], games: readonly string[], game?: string): Outgoing | null {
-  const { otherwise, ...push } = o.streak ? { ...o, streak: withoutUndrawable(o.streak, tables, games) } : o;
+  if (o.needs !== undefined && !games.includes(o.needs)) return null;
+  const { otherwise, needs, ...push } = o.streak ? { ...o, streak: withoutUndrawable(o.streak, tables, games) } : o;
+  void needs;
   if (o.code === undefined || drawable(game ?? tables.find((t) => t.code === o.code)?.game, games)) return push;
   if (!otherwise) return null;
   const instead: Outgoing = { ...push, body: otherwise.body };

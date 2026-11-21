@@ -223,7 +223,16 @@ function rotated(st: NotifyState, i: ReminderInput, p: PairFacts, slot: Slot, ki
 /** The daily reminder about the Dish: it opens the app, with the game to show. */
 function dishReminder(i: ReminderInput, dish: NonNullable<ReminderInput["dish"]>): Candidate {
   return {
-    push: { kind: "reminder", title: i.name, body: dishBody(dish.title, dish.number), thread: "dish", collapse: "reminder:dish", data: { dish: dish.game } },
+    push: {
+      kind: "reminder",
+      title: i.name,
+      body: dishBody(dish.title, dish.number),
+      thread: "dish",
+      collapse: "reminder:dish",
+      data: { dish: dish.game },
+      // Only an app that has the Dish: anything older keeps today's reminders exactly.
+      needs: "dish",
+    },
     commit: () => undefined,
   };
 }

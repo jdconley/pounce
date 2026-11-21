@@ -19,6 +19,13 @@ games launch together). With it off:
 To learn whether the Dish is on, read `GET /v1/daily/board`: a 404 means hide it. Never probe
 with `start`, which opens a run and starts its clock.
 
+**Say that the app has the Dish.** An app (or web player) that shows the Dish adds `dish` to its
+`X-Pounce-Games` header on every request, beside the table games it can draw:
+`X-Pounce-Games: tiles,dish` (browsers: `games=tiles,dish` in a socket's query). The server learns
+it on the calls that already tell it the games (`GET /v1/devices/me/tables` and table sockets), and
+only such a device is sent the Dish's reminder. An app that doesn't list it keeps its reminders
+exactly as before.
+
 ## Who and when
 
 - **Identity.** Every route takes the device token as usual and `?person=<person id>`, as the
@@ -289,7 +296,18 @@ Unlink: every TV showing this person's board forgets it, and their sockets close
   only when both people ended one. `StreakView` is unchanged.
 - The daily reminder can also fire when no move is waiting but today's Dish is open: "Today's
   Dish is out. Sniff 12 is waiting." It is kind `reminder`, thread `dish`, with no `code` and
-  `data: { "dish": "<game>" }`; open the Dish.
+  `data: { "dish": "<game>" }`; open the Dish. It goes only to devices whose app lists `dish` in
+  `X-Pounce-Games`, and a player with none of those is never sent it.
+
+## Signing in
+
+- **An upgrade** (a guest's first sign-in) keeps everything in place: the run, results and stats.
+- **A merge** (a guest signs in to an account that already exists) brings the guest's Dish to the
+  account: results, stats, connections' results and TV board tokens (the TV now shows the
+  account's board; its socket closes once and reconnects).
+- **One run per game and date.** When both had started today's puzzle, the run started first
+  stays, with its moves and result; the other run and its result go (its id answers 404), and its
+  stats come off. `start` on any of the account's devices then returns the run that stayed.
 
 ## For game builders
 

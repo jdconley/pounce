@@ -102,6 +102,9 @@ export default {
       failing = Number(url.searchParams.get("n"));
       return new Response(null, { status: 204 });
     }
+    if (url.pathname === "/__test/notify") {
+      return Response.json(await env.PLAYERS.get(env.PLAYERS.idFromName(url.searchParams.get("player") ?? "")).notifyState());
+    }
     if (url.pathname === "/__test/remind") {
       await env.PLAYERS.get(env.PLAYERS.idFromName(url.searchParams.get("player") ?? "")).remind(Number(url.searchParams.get("now")));
       return new Response(null, { status: 204 });

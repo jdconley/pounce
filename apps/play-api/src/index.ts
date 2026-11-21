@@ -4,6 +4,7 @@ import { APP_HEADER, parseApp } from "./app/version";
 import { issueDeviceToken, verifyDeviceToken } from "./auth";
 import { APPLE_ROOTS } from "./consent/appstore";
 import { noticePage } from "./consent/pages";
+import { DISH_APP, dishListed } from "./daily/games";
 import { dailyRoute, who as dailyPlayer } from "./daily/routes";
 import { dailyOn, devSpeed, tvAppLinksOn, tvOn } from "./env";
 import { active, forget, minted, pageView, parseReport, prune, reached, report } from "./funnel/funnel";
@@ -174,9 +175,13 @@ const appGames = (request: Request): GameId[] => gamesListed(request.headers.get
  * The same, less Cat Tower: what the device's index is told when the app opens a socket or
  * fetches its tables (`DeviceIndex.players`). It rides on the call those requests always made,
  * so no request waits on, or fails by, a call of its own. Empty for an app that sent no header,
- * which is then what the device is known by.
+ * which is then what the device is known by. An app that has the Daily Dish lists `dish` there
+ * too, which no table is a game of: only such a device is sent the Dish's reminder.
  */
-const declared = (request: Request): GameId[] => appGames(request).filter((id) => id !== DEFAULT_GAME);
+const declared = (request: Request): string[] => [
+  ...appGames(request).filter((id) => id !== DEFAULT_GAME),
+  ...(dishListed(request.headers.get(GAMES_HEADER)) ? [DISH_APP] : []),
+];
 
 /**
  * The version in this request's `X-Pounce-App`, for the device's index to remember alongside its

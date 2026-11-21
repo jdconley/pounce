@@ -2,7 +2,7 @@ import { DurableObject } from "cloudflare:workers";
 
 import { addToStats, dish, emptyStats, mergeStats, rankGame, statsView, type BoardRow, type GameBoard, type Stats } from "../daily/board";
 import { dailyDay, puzzleNumber, type DailyZone } from "../daily/days";
-import { DAILY_TITLES, listedGames } from "../daily/games";
+import { DAILY_TITLES, DISH_APP, listedGames } from "../daily/games";
 import { liveMessage, resultMessages, tvsMessage, type BoardAnswer, type DailyEvent } from "../daily/messages";
 import { dailyOn } from "../env";
 import { endKitten } from "../kittens/kittens";
@@ -1388,8 +1388,21 @@ export class Player extends DurableObject<Env> {
       pairs: [],
       tableNames: Object.fromEntries(this.listTables().flatMap((t) => (t.name ? [[t.code, t.name]] : []))),
       ...(newerOnly.length > 0 ? { newerOnly } : {}),
-      ...(dailyOn(this.env) ? { dish: this.openDish(now) } : {}),
+
     };
+  }
+
+  /** One of this player's devices runs an app that has the Dish (it lists `dish` in `X-Pounce-Games`). */
+  private async dishApp(): Promise<boolean> {
+    const found = await Promise.all(
+      this.deviceIds().map((d) =>
+        this.env.DEVICES.get(this.env.DEVICES.idFromName(d))
+          .players()
+          .then((p) => p.games.includes(DISH_APP))
+          .catch(() => false),
+      ),
+    );
+    return found.some(Boolean);
   }
 
   /**
@@ -1500,6 +1513,8 @@ export class Player extends DurableObject<Env> {
     const input = this.reminderInput(now);
     if (dueSlots(this.notify(), input).length > 0) {
       input.pairs = await this.pairFacts(now);
+      // The Dish counts only when one of this player's devices has an app that has it.
+      if (dailyOn(this.env) && (await this.dishApp())) input.dish = this.openDish(now);
       // Decided in one go after the await, so a turn recorded meanwhile isn't overwritten.
       const st = this.notify();
       const out = dueSlots(st, input).map((slot) => decide(st, input, slot));
