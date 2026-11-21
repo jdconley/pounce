@@ -7,7 +7,7 @@ import { clashes, N, peers, type NineLivesState } from "./grid";
 import { FLOOR_MS, nineLives } from "./module";
 import { SAMPLE } from "./samples";
 
-import type { DailyResult } from "./contract";
+import type { DailyResult } from "../module";
 
 const P = SAMPLE;
 const open = P.givens.flatMap((d, i) => (d === 0 ? [i] : []));

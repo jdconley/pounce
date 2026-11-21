@@ -12,7 +12,7 @@ import { grade, type Tier } from "./grade";
 import { N, type Cells } from "./grid";
 import { randomSolution } from "./solve";
 
-import type { DayLevel } from "./contract";
+import type { DayLevel } from "../days";
 
 /**
  * Each weekday's hardest technique and how many givens it keeps (spec §2). Sunday is Thursday's

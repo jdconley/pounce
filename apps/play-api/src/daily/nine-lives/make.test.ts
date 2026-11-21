@@ -10,7 +10,7 @@ import { clashes, N } from "./grid";
 import { carve, givenCount, LEVELS, makePuzzle, MAX_TRIES } from "./make";
 import { countSolutions } from "./solve";
 
-import type { DayLevel } from "./contract";
+import type { DayLevel } from "../days";
 
 /** Stands in for the server's `dailySeed` (an HMAC of the game and date, first 16 bytes). */
 function seedFor(date: string): Seed {

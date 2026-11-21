@@ -11,7 +11,7 @@ import { makePuzzle, type NineLivesPuzzle } from "./make";
 import { nineLives } from "./module";
 import { SAMPLE } from "./samples";
 
-import type { DayLevel } from "./contract";
+import type { DayLevel } from "../days";
 
 type Step = ({ move: NineLivesMove } | { hint: { i: number; d: number } | null }) & {
   ok: boolean;

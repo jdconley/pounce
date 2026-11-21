@@ -15,7 +15,8 @@ import {
 import { makePuzzle, type NineLivesPuzzle } from "./make";
 import { POP } from "./solve";
 
-import type { Applied, DailyModule, DailyResult, DayLevel } from "./contract";
+import type { DayLevel } from "../days";
+import type { Applied, DailyModule, DailyResult } from "../module";
 
 /** Faster than this is kept but marked too fast (spec §3). Builder's numbers, from the levels. */
 export const FLOOR_MS: Record<DayLevel, number> = {
