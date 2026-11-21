@@ -208,7 +208,7 @@ async function box(page: Page, selector: string): Promise<Box> {
   return b!;
 }
 
-test("at the largest text nothing clips or overlaps: Home, the Dish's tip, a puzzle's bar", async ({ browser }) => {
+test("at the largest text nothing clips or overlaps: Home and its posters, the Dish's tip, a puzzle's bar", async ({ browser }) => {
   const lu = await newPlayer(browser, "Lu");
   const { page, context } = lu;
   // A TV shows the board, so the puzzle's bar carries the TV switch as well as Give up: the
@@ -224,11 +224,20 @@ test("at the largest text nothing clips or overlaps: Home, the Dish's tip, a puz
 
   // Home: Practice and Join never sit over a game, and their words fit.
   await expect(page.getByRole("button", { name: "Practice" })).toBeVisible();
+  // Home starts at its top: nothing is centered up out of reach.
+  expect((await box(page, ".home-top")).y, "Home's top bar on screen").toBeGreaterThanOrEqual(0);
   for (const name of ["Practice", "Join"]) {
     const button = page.getByRole("navigation", { name: "Start" }).getByRole("button", { name });
     const b = (await button.boundingBox())!;
     for (const other of await page.locator(".poster, .dd-tile").all()) expect(overlaps(b, (await other.boundingBox())!), `${name} over a game`).toBe(false);
     expect(await button.evaluate((e) => e.scrollWidth <= e.clientWidth + 1), `${name} fits`).toBe(true);
+  }
+
+  // Each game's poster: Play never covers its player count.
+  for (const poster of await page.locator(".poster").all()) {
+    const count = (await poster.locator(".players").boundingBox())!;
+    const play = (await poster.getByRole("button").boundingBox())!;
+    expect(overlaps(count, play), "Play over the player count").toBe(false);
   }
 
   // The Dish: its first-visit tip points at the first card without hiding the board's heading.

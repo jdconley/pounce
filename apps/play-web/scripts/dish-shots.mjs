@@ -1,6 +1,6 @@
 /**
  * Screenshots of the Daily Dish's screens at every size AGENTS.md asks for (a dev tool):
- *   BASE=http://127.0.0.1:8807 OUT=dir STEPS=home,dish,play,end node scripts/dish-shots.mjs
+ *   BASE=http://127.0.0.1:8807 OUT=dir STEPS=home,posters,dish,play,end node scripts/dish-shots.mjs
  * Needs a server with DAILY=on and DAILY_TEST=on. "Largest text" is the browser's text size at its
  * maximum: the page's root font size at 200%, which every rem in the player follows.
  */
@@ -59,6 +59,11 @@ for (const size of SIZES) {
   await page.getByRole("button", { name: "Done" }).click();
   await page.getByRole("button", { name: "Practice" }).waitFor();
   if (STEPS.includes("home")) await shot("home");
+  if (STEPS.includes("posters")) {
+    // The game posters alone, wherever Home's scroll puts them.
+    await page.waitForTimeout(700);
+    await page.locator(".poster-grid").screenshot({ path: `${OUT}/posters-${name}.png` });
+  }
   if (STEPS.some((s) => s !== "home")) {
     await page.getByRole("button", { name: /Daily Dish|Open the Dish/ }).first().click();
     if (STEPS.includes("dish")) await shot("dish");
