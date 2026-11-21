@@ -24,32 +24,32 @@ function loadFont(url: string): Promise<string> {
   return fontReady;
 }
 
-function paw(ctx: OffscreenCanvasRenderingContext2D, x: number, y: number, s: number, mark: "full" | "half" | "none", color: string): void {
+/** One mark: a filled paw on yellow, an outlined paw on white, or a plain tile (never color alone). */
+function paw(ctx: OffscreenCanvasRenderingContext2D, x: number, y: number, s: number, mark: "full" | "half" | "none"): void {
   ctx.lineWidth = Math.max(3, s * 0.06);
   ctx.strokeStyle = INK;
-  ctx.fillStyle = mark === "full" ? color : mark === "half" ? "#fff" : "rgba(255,255,255,0.18)";
+  ctx.fillStyle = mark === "full" ? "#ffd21f" : mark === "half" ? "#fff" : "rgba(255,255,255,0.22)";
   ctx.beginPath();
   ctx.roundRect(x, y, s, s, s * 0.22);
   ctx.fill();
   ctx.stroke();
   if (mark === "none") return;
-  // A paw: the pad and four toes, filled for "full", outlined for "half".
   const cx = x + s / 2;
   const cy = y + s / 2;
-  const fill = mark === "full" ? "#fff" : color;
-  ctx.fillStyle = fill;
-  ctx.beginPath();
-  ctx.ellipse(cx, cy + s * 0.12, s * 0.17, s * 0.14, 0, 0, Math.PI * 2);
-  ctx.fill();
-  for (const [dx, dy] of [
-    [-0.22, -0.06],
-    [-0.08, -0.2],
-    [0.08, -0.2],
-    [0.22, -0.06],
-  ] as const) {
+  const shapes: [number, number, number, number][] = [
+    [0, 0.12, 0.17, 0.14],
+    [-0.22, -0.06, 0.07, 0.085],
+    [-0.08, -0.2, 0.07, 0.085],
+    [0.08, -0.2, 0.07, 0.085],
+    [0.22, -0.06, 0.07, 0.085],
+  ];
+  ctx.fillStyle = INK;
+  ctx.lineWidth = Math.max(2, s * 0.045);
+  for (const [dx, dy, rx, ry] of shapes) {
     ctx.beginPath();
-    ctx.ellipse(cx + dx * s, cy + dy * s, s * 0.07, s * 0.085, 0, 0, Math.PI * 2);
-    ctx.fill();
+    ctx.ellipse(cx + dx * s, cy + dy * s, rx * s, ry * s, 0, 0, Math.PI * 2);
+    if (mark === "full") ctx.fill();
+    else ctx.stroke();
   }
 }
 
@@ -96,7 +96,7 @@ async function draw(req: CardRequest): Promise<Blob> {
 
   const layout = cardLayout(req.grid);
   req.grid?.forEach((row, r) =>
-    row.forEach((mark, c) => paw(ctx, layout.left[c] as number, layout.top + r * (layout.cell + layout.gap), layout.cell, mark, req.color)),
+    row.forEach((mark, c) => paw(ctx, layout.left[c] as number, layout.top + r * (layout.cell + layout.gap), layout.cell, mark)),
   );
 
   ctx.font = `900 48px ${family}`;

@@ -56,7 +56,8 @@ const test: DailyGame<TestPuzzle, TestState, TestMove, Reveal> = {
   id: "test",
   Screen: TestScreen,
   Watch: TestWatch,
-  share: (state) => [Array.from({ length: Math.max(1, state.n) }, () => "full" as const)],
+  // Every kind of mark, so the card's look can be checked before a real game has one.
+  share: (state) => [Array.from({ length: Math.max(1, state.n) }, (_, i) => (["full", "half", "none"] as const)[i % 3]!)],
 };
 
 export default test;

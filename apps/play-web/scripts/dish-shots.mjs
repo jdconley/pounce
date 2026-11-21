@@ -25,6 +25,23 @@ for (const size of SIZES) {
   const { name, big, ...device } = size;
   const ctx = await browser.newContext({ ...device, serviceWorkers: "block", extraHTTPHeaders: { "cf-connecting-ip": `10.77.${process.pid % 200}.${ip++}` } });
   if (big) await ctx.addInitScript(() => document.addEventListener("DOMContentLoaded", () => (document.documentElement.style.fontSize = "200%")));
+  if (STEPS.includes("card")) {
+    // Share's sheet is the system's: keep the card it's given, to save it.
+    await ctx.addInitScript(() => {
+      Object.defineProperty(navigator, "canShare", { value: () => true, configurable: true });
+      Object.defineProperty(navigator, "share", {
+        configurable: true,
+        value: async (d) => {
+          const file = d.files?.[0];
+          if (file) window.__card = await new Promise((done) => {
+            const r = new FileReader();
+            r.onload = () => done(String(r.result).split(",")[1]);
+            r.readAsDataURL(file);
+          });
+        },
+      });
+    });
+  }
   const page = await ctx.newPage();
   page.on("pageerror", (e) => console.log(name, "pageerror:", e.message));
   const shot = async (step) => {
@@ -41,7 +58,7 @@ for (const size of SIZES) {
   if (STEPS.some((s) => s !== "home")) {
     await page.getByRole("button", { name: /Daily Dish|Open the Dish/ }).first().click();
     if (STEPS.includes("dish")) await shot("dish");
-    if (STEPS.includes("play") || STEPS.includes("end")) {
+    if (STEPS.includes("play") || STEPS.includes("end") || STEPS.includes("card")) {
       await page.getByRole("button", { name: /Play Test/ }).click();
       await page.getByTestId("test-count").waitFor();
       if (STEPS.includes("play")) await shot("play");
@@ -50,6 +67,13 @@ for (const size of SIZES) {
       }
       await page.getByRole("heading", { name: /Solved|Gave up/ }).waitFor({ timeout: 20_000 });
       if (STEPS.includes("end")) await shot("end");
+      if (STEPS.includes("card")) {
+        await page.waitForTimeout(1600);
+        await page.getByRole("button", { name: "Share" }).click();
+        await page.waitForFunction(() => window.__card);
+        const { writeFile } = await import("node:fs/promises");
+        await writeFile(`${OUT}/share-card.png`, Buffer.from(await page.evaluate(() => window.__card), "base64"));
+      }
       if (STEPS.includes("dish")) {
         await page.locator(".dd-end").getByRole("button", { name: "Dish", exact: true }).click();
         await shot("dish-after");
