@@ -3,7 +3,7 @@ import SwiftUI
 
 /// A Nine Lives run as a TV shows it while someone plays (spec §8): the server's board, read only.
 /// No selection and no notes: those stay on the phone. The puzzle's givens draw white. SwiftUI and
-/// PounceKit only: the TV builds this file with `NineLivesGrid` and `NineLivesArt`.
+/// PounceKit only, and nothing from the play screen: the TV builds this folder (`NineLives/TV`).
 struct NineLivesWatch: DailyWatchView {
     nonisolated static let game = DailyCatalog.nineLives
 
