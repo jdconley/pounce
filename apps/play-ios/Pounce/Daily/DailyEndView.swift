@@ -62,7 +62,7 @@ struct DailyEndView: View {
     private var headline: String {
         switch result.outcome {
         case .solved: String(localized: "Solved", comment: "Daily end: the puzzle was solved")
-        case .done: String(localized: "Fort built", comment: "Daily end: Box Fort's run ended")
+        case .done: String(localized: "Fort done", comment: "Daily end: Box Fort's run ended")
         case .missed: String(localized: "Missed", comment: "Daily end: Sniff's six guesses ran out")
         case .gaveUp: String(localized: "Gave up", comment: "Daily end: the player gave up")
         case .closed: String(localized: "Out of time", comment: "Daily end: the day ended first")
