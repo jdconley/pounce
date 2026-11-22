@@ -14,9 +14,12 @@ describe("levels and numbers", () => {
     expect(week.map(levelFor)).toEqual([1, 2, 3, 4, 5, 6, 7]);
   });
 
-  it("puzzleNumber is 1 on LAUNCH, a Monday: day 1 is the easiest", () => {
+  it("puzzleNumber is 1 on LAUNCH, a Sunday: No. 1 is a Sunday puzzle", () => {
+    expect(LAUNCH).toBe("2026-11-22");
     expect(puzzleNumber(LAUNCH)).toBe(1);
-    expect(levelFor(LAUNCH)).toBe(1);
+    expect(levelFor(LAUNCH)).toBe(7);
+    expect(puzzleNumber(addDays(LAUNCH, 1))).toBe(2);
+    expect(levelFor(addDays(LAUNCH, 1))).toBe(1);
   });
 
   it("puzzleNumber counts up from LAUNCH", () => {

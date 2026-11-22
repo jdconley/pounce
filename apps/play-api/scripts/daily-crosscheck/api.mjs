@@ -173,8 +173,15 @@ if (mode === "tv") {
     }
     return found;
   };
-  while (Object.keys(codes()).length < wanted.length) await sleep(1000);
-  await sleep(3000);
+  // A TV can ask for a code at launch and again when its link panel opens, so link only once
+  // every TV has one and none has asked for a new one for 20 s.
+  let seen = "";
+  for (let quiet = 0; quiet < 20; quiet++) {
+    const now = JSON.stringify(codes());
+    if (now !== seen || Object.keys(codes()).length < wanted.length) quiet = -1;
+    seen = now;
+    await sleep(1000);
+  }
   for (const [client, code] of Object.entries(codes())) {
     const linked = await http(d.token, "POST", `/v1/screens/link?person=${me.id}`, { code, board: true });
     say({ step: "link", client, status: linked.status });
