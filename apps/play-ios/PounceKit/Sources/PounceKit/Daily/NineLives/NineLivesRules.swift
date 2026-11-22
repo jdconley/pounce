@@ -108,10 +108,15 @@ public struct NineLivesBoard: Sendable, Equatable {
     public func isLocked(_ cell: Int) -> Bool { givens[cell] != 0 || hinted.contains(cell) }
 
     /// Cells whose digit repeats in one of their units, ascending. Givens count too.
-    public var clashes: [Int] {
-        (0..<Self.cellCount).filter { i in
+    public var clashes: [Int] { Self.clashes(in: cells) }
+
+    /// The clash scan, which runs on the main actor on every tap. It reads each cell once and, for a
+    /// cell with a digit, its 20 peers until one matches: at most 81 times 21 reads, whatever the
+    /// board. Generic so a test can count the reads (`NineLivesRulesTests.clashesAreCheap`).
+    static func clashes<Cells: RandomAccessCollection>(in cells: Cells) -> [Int] where Cells.Index == Int, Cells.Element == Int {
+        (0..<cellCount).filter { i in
             let d = cells[i]
-            return d != 0 && Self.peerTable[i].contains { cells[$0] == d }
+            return d != 0 && peerTable[i].contains { cells[$0] == d }
         }
     }
 
