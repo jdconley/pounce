@@ -97,8 +97,11 @@ test("crosscheck tv: the browser TV watches each game the harness plays", async 
   for (let n = 1; n <= 4; n++) {
     await expect(page.locator(".tv-watch-card")).toBeVisible({ timeout: 300_000 });
     await expect(page.getByRole("button", { name: "Not now" })).toBeFocused();
-    await page.keyboard.press("ArrowLeft");
-    await expect(page.getByRole("button", { name: "Watch" })).toBeFocused();
+    // A press that lands while the card is still settling is lost, so press until Watch has focus.
+    await expect(async () => {
+      await page.keyboard.press("ArrowLeft");
+      await expect(page.getByRole("button", { name: "Watch" })).toBeFocused({ timeout: 1000 });
+    }).toPass({ timeout: 15_000 });
     await page.keyboard.press("Enter");
     const watching = page.locator(".tv-watch[data-game]");
     await expect(watching).toBeVisible();
