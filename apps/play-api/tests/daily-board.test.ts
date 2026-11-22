@@ -1,7 +1,19 @@
 import { afterEach, beforeAll, describe, expect, test } from "vitest";
 
-import { BASE, bundle, call, eventually, mint, newPerson, PLAYER_ID_JSON, profile, worker, type Device, type Person } from "./play-helpers";
+import { greedyMove } from "../src/daily/box-fort/greedy";
+import { DAILY_GAMES } from "../src/daily/games";
+import { ANSWERS } from "../src/daily/sniff/words/answers";
+import { dayKey, dayStart } from "../src/streaks/clock";
 
+import { BASE, bundle, call, eventually, LA, mint, newPerson, PLAYER_ID_JSON, profile, worker, type Device, type Person } from "./play-helpers";
+
+import type { BoxFortPuzzle } from "../src/daily/box-fort/maker";
+import type { BoxFortState } from "../src/daily/box-fort/rules";
+import type { NapPuzzle } from "../src/daily/cat-nap/maker";
+import type { DailyGameId, DailyModule } from "../src/daily/module";
+import type { NineLivesPuzzle } from "../src/daily/nine-lives/make";
+import type { RunState } from "../src/daily/run-core";
+import type { SniffPuzzle } from "../src/daily/sniff/module";
 import type { Miniflare } from "miniflare";
 
 /** The board socket, TV board links and watching (daily games design §6, §8), through the Worker (`DAILY` and `TV` on). */
@@ -263,6 +275,98 @@ describe("live progress and watching", { timeout: 30_000 }, () => {
     await send(mf, mom, s.run, 0, steps(1, 1));
     await screen.find((m) => m.t === "progress");
     expect(screen.heard.filter((m) => m.t === "watch")).toHaveLength(1);
+  });
+});
+
+/** Every move that finishes the day's puzzle, from the whole puzzle (as the server holds it). */
+function finish(game: DailyGameId, p: unknown): unknown[] {
+  if (game === "test") return Array.from({ length: (p as { target: number }).target }, (_, i) => ({ k: "step", n: i + 1 }));
+  if (game === "sniff") {
+    const { answer } = p as SniffPuzzle;
+    const other = ANSWERS.map(([w]) => w).find((w) => w !== answer) as string;
+    return [{ k: "guess", word: other }, { k: "guess", word: answer }];
+  }
+  if (game === "cat-nap") {
+    const q = p as NapPuzzle;
+    return q.solution.map((c, r) => ({ k: "mark", cells: [r * q.n + c], to: "cat" }));
+  }
+  if (game === "nine-lives") {
+    const q = p as NineLivesPuzzle;
+    return q.givens.flatMap((d, i) => (d === 0 ? [{ k: "set", i, d: q.solution[i] }] : []));
+  }
+  // Box Fort: a greedy player, until the rug runs out of room or the last set is placed.
+  const m = DAILY_GAMES["box-fort"] as DailyModule;
+  const q = p as BoxFortPuzzle;
+  const out: unknown[] = [];
+  let s = m.init(q) as BoxFortState;
+  for (;;) {
+    const move = greedyMove(s.rug, q.sets[s.set] ?? [], s.placed);
+    if (move === null) break;
+    out.push(move);
+    const next = m.apply(q, s, move, 0);
+    if (!next.ok) break;
+    s = next.state as BoxFortState;
+    if (next.end) break;
+  }
+  return out;
+}
+
+describe("the TV's last picture", { timeout: 60_000 }, () => {
+  const games = Object.keys(DAILY_GAMES) as DailyGameId[];
+
+  test.each(games)("%s: the batch that ends the run sends its final state, then watchEnd", async (game) => {
+    const mf = await start();
+    const mom = await someone(mf, "Mom");
+    const link = await linkBoard(mf, mom);
+    const screen = await tvSocket(mf, link.tv, link.board);
+    await screen.find((m) => m.t === "board");
+    // Started a minute ago, so the move budget allows the whole puzzle at once. Not across 04:00.
+    const now = Date.now();
+    if (now - dayStart(dayKey(now, LA), LA) < 70_000) await new Promise((resolve) => setTimeout(resolve, 70_000));
+    const started = (await (await mf.dispatchFetch(`${BASE}/__test/start?player=${mom.id}&game=${game}&now=${Date.now() - 60_000}`)).json()) as Start;
+    expect((await showOnTv(mf, mom, started.run, true)).status).toBe(204);
+    await screen.find((m) => m.t === "watch");
+    const whole = await (await mf.dispatchFetch(`${BASE}/__test/puzzle?game=${game}&date=${started.date}`)).json();
+    const moves = finish(game, whole);
+    expect(moves.length).toBeGreaterThan(1);
+
+    // One move, its frame, then the rest in batches of at most 100, the last of which ends the run.
+    expect(await (await send(mf, mom, started.run, 0, moves.slice(0, 1))).json()).toMatchObject({ ok: true });
+    await eventually(() => screen.heard.filter((m) => m.t === "watch").length, (n) => n === 2);
+    if (game === "sniff") await new Promise((resolve) => setTimeout(resolve, 600)); // Sniff spaces its guesses
+    for (let from = 1; from < moves.length; from += 100) {
+      const answer = (await (await send(mf, mom, started.run, from, moves.slice(from, from + 100))).json()) as { ok: boolean; end?: unknown };
+      expect(answer.ok).toBe(true);
+    }
+    await screen.find((m) => m.t === "watchEnd");
+
+    const run = (await (await mf.dispatchFetch(`${BASE}/__test/run?id=${started.run}`)).json()) as RunState;
+    expect(run.ended).not.toBeNull();
+    const m = DAILY_GAMES[game] as DailyModule;
+    const watching = screen.heard.filter((x) => x.t === "watch" || x.t === "watchEnd");
+    expect(watching.at(-1)).toMatchObject({ t: "watchEnd", game, result: run.result });
+    expect(watching.at(-2)).toMatchObject({ t: "watch", game });
+    expect(watching.at(-2)?.state).toEqual(JSON.parse(JSON.stringify(m.publicState(whole, run.state))));
+    // In order: the first move's frame, then the final one.
+    expect(watching.map((x) => x.t)).toEqual(["watch", "watch", "watch", "watchEnd"]);
+  });
+
+  test("giving up ends on a frame of the final state too, then watchEnd", async () => {
+    const mf = await start();
+    const mom = await someone(mf, "Mom");
+    const link = await linkBoard(mf, mom);
+    const screen = await tvSocket(mf, link.tv, link.board);
+    await screen.find((m) => m.t === "board");
+    const s = await begin(mf, mom);
+    await showOnTv(mf, mom, s.run, true);
+    await send(mf, mom, s.run, 0, steps(1, 2));
+    await eventually(() => screen.heard.filter((m) => m.t === "watch").length, (n) => n === 2);
+    expect((await call(mf, mom.device, "POST", `/v1/daily/runs/${s.run}/giveup?person=${mom.person.id}`)).status).toBe(200);
+    await screen.find((m) => m.t === "watchEnd");
+    const watching = screen.heard.filter((x) => x.t === "watch" || x.t === "watchEnd");
+    expect(watching.map((x) => x.t)).toEqual(["watch", "watch", "watch", "watchEnd"]);
+    expect(watching[2]?.state).toEqual({ n: 2 });
+    expect(watching[3]).toMatchObject({ result: { outcome: "gaveUp" } });
   });
 });
 
