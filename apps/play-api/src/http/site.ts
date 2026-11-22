@@ -13,9 +13,9 @@ export { homePage } from "./home";
 const HEADERS = { "content-type": "text/html; charset=utf-8", "cache-control": CACHE, "content-security-policy": CSP };
 const CONTACT = "privacy@conleychaos.com";
 
-const SUPPORT = docPage({
+const SUPPORT_HTML = docPage({
   title: "Pounce: Family Games support",
-  head: '<meta name="description" content="Help for Pounce: Family Games. Start a table and add players, play the House Cat bot, learn Cat Tower and Tuna Tiles, play in a browser or on a TV, set reminders, allow turn alerts for a child, report or block a player, and delete your data.">\n',
+  head: '<meta name="description" content="Help for Pounce: Family Games. Start a table and add players, play the House Cat bot, learn Cat Tower and Tuna Tiles<!--daily-->, play the Daily Dish<!--/daily-->, play in a browser or on a TV, set reminders, allow turn alerts for a child, report or block a player, and delete your data.">\n',
   current: "support",
   body: `<h1>Pounce: Family Games help</h1>
 <p>Pounce has two family games, Cat Tower and Tuna Tiles. Play them in the iPhone and iPad app, or in any web browser at <a href="/play/">play.conleychaos.com/play</a>. Everyone sits at the same tables. If something isn't covered here, write to us at the bottom of the page.</p>
@@ -65,7 +65,21 @@ const SUPPORT = docPage({
 </ul>
 </section>
 
-<section>
+<!--daily--><section>
+<h2>The Daily Dish</h2>
+<p>Four new puzzles every day, the same for the whole family. Play them in your browser at <a href="/play/daily">play.conleychaos.com/play/daily</a>, or tap Open the Dish on Home there. They're coming to the iPhone app.</p>
+<ul>
+<li>Sniff: find the five-letter word in six tries. Each guess shows which letters are in the word, and which are in the right spot.</li>
+<li>Nine Lives: fill the grid so every row, column and box has 1 to 9 once.</li>
+<li>Cat Nap: put one cat in each row, column and patch. No two cats touch, not even at a corner.</li>
+<li>Box Fort: drag each set of pieces onto the rug. A full row or column clears and scores. It ends when nothing fits.</li>
+<li>One try a day at each puzzle. The clock keeps running if you leave. A hint in Nine Lives or Cat Nap adds 30 seconds.</li>
+<li>Today's board shows how you and the people you have a streak with did. Tap On TV to put it on a TV showing <a href="/play/tv">play.conleychaos.com/play/tv</a>.</li>
+<li>New puzzles come out at 4 in the morning where you are. Monday's are the easiest.</li>
+</ul>
+</section>
+
+<!--/daily--><section>
 <h2>Play in a web browser</h2>
 <p>Go to <a href="/play/">play.conleychaos.com/play</a> on an Android phone, a laptop or a tablet. It plays both games at the same tables as the iPhone app. To keep it like an app, use your browser's Install or Add to Home Screen option, or Install Pounce in its Settings where your browser offers it. Turn on Turn alerts in Settings to hear when it's your move.</p>
 </section>
@@ -118,9 +132,15 @@ const SUPPORT = docPage({
 </section>`,
 });
 
+/** With the Daily Dish (`DAILY` on) the help page explains it; off, nothing of it, as the privacy policy does. */
+const SUPPORT = {
+  daily: SUPPORT_HTML.replace(/<!--\/?daily-->/g, ""),
+  plain: SUPPORT_HTML.replace(/<!--daily-->[\s\S]*?<!--\/daily-->/g, ""),
+};
+
 /** The help page; public, static, no scripts. */
-export function supportPage(): Response {
-  return new Response(SUPPORT, { headers: HEADERS });
+export function supportPage(daily = false): Response {
+  return new Response(SUPPORT[daily ? "daily" : "plain"], { headers: HEADERS });
 }
 
 /**
@@ -144,13 +164,16 @@ export function robotsTxt(origin: string): Response {
  * llms.txt (llmstxt.org): a plain summary for assistants asked what Pounce is. It says only what
  * the landing page and the privacy policy say.
  */
-export function llmsTxt(origin: string, consent = true): Response {
+export function llmsTxt(origin: string, consent = true, daily = false): Response {
+  const dish = daily
+    ? `\n\nThe Daily Dish is four new puzzles every day, the same for the whole family: Sniff (find a five-letter word in six tries), Nine Lives (a number grid), Cat Nap (one cat in each row, column and patch, no two touching) and Box Fort (drag block pieces onto a rug and clear lines). A family board shows how everyone you play with did today, and a TV can show it. The server checks every move and works out every result. The puzzles play in the browser at ${origin}/play/daily today and are coming to the iPhone app.`
+    : "";
   const alerts = consent ? "a parent decides whether they get notifications" : "they get no push notifications from our server";
   const text = `# Pounce: Family Games
 
 > Pounce is a free family games app made by Conley Chaos LLC. It has two games: Cat Tower, a rummy-style card game for two to six players where your cats climb a ten-shelf tower, and Tuna Tiles, tile rummy for two to four players where yarn is wild. It plays in the iPhone and iPad app and in any web browser, and players on each sit at the same tables.
 
-Play live together, or take turns over days. The game waits for everyone. Add players in the same room with a QR code, from far away with a link, or by passing one phone. A House Cat bot can hold a seat. To put the table on a TV, open ${origin}/play/tv on any big screen with a browser. A phone in the browser then shows just its own hand. On iPhone, Pounce has turn reminders, a Live Activity and a streak widget.
+Play live together, or take turns over days. The game waits for everyone. Add players in the same room with a QR code, from far away with a link, or by passing one phone. A House Cat bot can hold a seat. To put the table on a TV, open ${origin}/play/tv on any big screen with a browser. A phone in the browser then shows just its own hand. On iPhone, Pounce has turn reminders, a Live Activity and a streak widget.${dish}
 
 Pounce is free. It has no chat, no ads, no tracking and no third-party analytics, and nobody needs an account to play. Children under 13 get a simpler, limited version, and ${alerts}.
 
@@ -158,7 +181,7 @@ Pounce is free. It has no chat, no ads, no tracking and no third-party analytics
 
 - [Home](${origin}/): what Pounce is, screenshots, and how to start
 - [Play in your browser](${origin}/play/): the web player, for Android phones, computers and tablets
-- [Support](${origin}/support): how to start a table, add players, play each game, play in a browser or on a TV, set reminders, report or block a player, and delete your data
+${daily ? `- [The Daily Dish](${origin}/play/daily): today's four puzzles and the family board, in the browser\n` : ""}- [Support](${origin}/support): how to start a table, add players, play each game, play in a browser or on a TV, set reminders, report or block a player, and delete your data
 - [Privacy policy](${origin}/privacy): what the app and its server keep, for how long, and the notice for parents
 - [Get the app](${origin}/get): goes to the App Store listing, or to the TestFlight beta before the App Store release
 `;

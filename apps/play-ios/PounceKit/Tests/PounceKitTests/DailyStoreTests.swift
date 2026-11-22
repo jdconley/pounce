@@ -58,7 +58,7 @@ private actor ScriptedBoard: DailyService {
         #expect(store.tvs == 0)
         store.apply(.progress(player: "pr_Hn5sW2qLp7Xy3Zc8Vb1MkA", game: "test", progress: 0.9))
         #expect(store.board?.games.first?.rows.last?.playing?.progress == 0.9)
-        let done = DailyResult(game: "test", date: "2026-11-23", number: -26336, outcome: .solved, timeMs: 1, progress: 1)
+        let done = DailyResult(game: "test", date: "2026-11-23", number: 2, outcome: .solved, timeMs: 1, progress: 1)
         store.apply(.result(player: "pr_Hn5sW2qLp7Xy3Zc8Vb1MkA", result: done))
         #expect(store.board?.games.first?.rows.last?.result == done)
         store.apply(.watch(player: "x", game: "test", puzzle: .null, state: .null))

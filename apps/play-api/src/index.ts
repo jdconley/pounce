@@ -777,14 +777,14 @@ async function handle(request: Request, env: Env, ctx?: ExecutionContext): Promi
   if (method === "GET" && pathname === "/og/room.jpg") return ogImage();
   if ((method === "GET" || method === "HEAD") && isWebPlayerPath(pathname)) return (await webPlayer(request, env.ASSETS)) ?? notFound();
   if (method === "GET" && pathname === "/privacy") return privacyPage(consentOn(env), dailyOn(env));
-  if (method === "GET" && pathname === "/support") return supportPage();
+  if (method === "GET" && pathname === "/support") return supportPage(dailyOn(env));
   if (method === "GET") {
     const origin = () => new URL(request.url).origin;
-    if (pathname === "/") return homePage(install(env), origin(), consentOn(env));
+    if (pathname === "/") return homePage(install(env), origin(), consentOn(env), dailyOn(env));
     if (pathname === "/get") return getRedirect(install(env), origin());
     if (pathname === "/robots.txt") return robotsTxt(origin());
     if (pathname === "/sitemap.xml") return sitemapXml(origin());
-    if (pathname === "/llms.txt") return llmsTxt(origin(), consentOn(env));
+    if (pathname === "/llms.txt") return llmsTxt(origin(), consentOn(env), dailyOn(env));
     if (pathname.startsWith("/media/")) return (await mediaFile(request, env.ASSETS)) ?? notFound();
   }
   // A TV's QR on a phone without the app: the web player links the table. (A phone with the app

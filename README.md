@@ -12,6 +12,12 @@ The games:
 - **Cat Tower**: a set-collecting rummy game where cats climb a ten-shelf cat tower, one phase per
   shelf. Yarn is wild, and a Cucumber makes the next cat skip a turn.
 - **Tuna Tiles**: tile rummy for two to four. Yarn is wild here too.
+- **The Daily Dish**: four new puzzles every day, the same for the whole family, with a family
+  board and streaks. Sniff (find the five-letter word), Nine Lives (a number grid), Cat Nap (one
+  cat in each row, column and patch) and Box Fort (drag blocks onto a rug). In the browser now at
+  [play.conleychaos.com/play/daily](https://play.conleychaos.com/play/daily); coming to the app in
+  1.2. The server checks every move and works out every result
+  ([docs/daily-protocol.md](docs/daily-protocol.md)).
 
 An Apple TV app (in TestFlight, not on the App Store yet) puts the whole table on the TV;
 everyone plays from a phone, in the app or in the browser. See
@@ -26,6 +32,7 @@ version, and a parent decides whether they get turn alerts.
 | --- | --- | --- |
 | 1.0 | On the App Store since November 2026 | Cat Tower, live and turn-based tables, House Cat bots, streaks, widgets, the live table on the Lock Screen, parent consent for kids. |
 | 1.1 | Released on the App Store on 16 November 2026 | Tuna Tiles. A faster first game: a House Cat holds a seat. Add players your way: Same room (scan a QR code), Far away (send a link) or This phone (pass and play). Invites that survive installing the app (Paste). A new Home, How to play videos, clearer Settings, tips. |
+| 1.2 | Not submitted yet | Pounce on the TV (the Apple TV app and the browser TV). The Daily Dish: four daily puzzles, a family board, stats and a share card, in the web player since launch day and in the TestFlight build. |
 
 Every merge to `main` that touches the app builds to TestFlight and goes to the Family and Friends
 group (`apps/play-ios/README.md`, TestFlight). What each App Store version says is kept in the
@@ -36,9 +43,9 @@ repo: What's New and the listing in `docs/whats-new/`, the reviewer notes in
 
 | Path | What it is |
 | --- | --- |
-| `apps/play-api` | The game server: a Cloudflare Worker with one Durable Object per room. It owns the rules, the bots and the hidden hands. It also serves the website (below). |
+| `apps/play-api` | The game server: a Cloudflare Worker with one Durable Object per room. It owns the rules, the bots and the hidden hands, and referees the Daily Dish's puzzles (`src/daily`). It also serves the website (below). |
 | `apps/play-ios` | The iOS app (SwiftUI shell, SpriteKit table). See its [README](apps/play-ios/README.md). |
-| `apps/play-web` | Pounce in a browser, at `play.conleychaos.com/play`: both games for Android, laptops and anyone without an iPhone, installable as an app. It imports the server's rules and protocol from `apps/play-api`, so it can't drift from the game. |
+| `apps/play-web` | Pounce in a browser, at `play.conleychaos.com/play`: both games and the Daily Dish for Android, laptops and anyone without an iPhone, installable as an app. It imports the server's rules and protocol from `apps/play-api`, so it can't drift from the game. |
 | `docs/superpowers` | The design spec, implementation plans and follow-up notes. |
 
 ## Develop

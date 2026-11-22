@@ -7,6 +7,10 @@
  * The copy follows the App Store listing (docs/whats-new). The kids and privacy claims go only as
  * far as the privacy policy (privacy.ts) does: change them together. The TV section says only what
  * the web player does today: a phone in the browser shows just its own hand at a TV table.
+ *
+ * With the Daily Dish (`DAILY` on) the page also shows the four daily puzzles. They are in the
+ * browser only until an App Store version has them (`DISH_SINCE` in links.ts), so the page says
+ * "coming to the app" and the App Store app's own description and structured data leave them out.
  */
 import { CACHE, css, escapeHtml, shell } from "./layout";
 import { appStoreId, https } from "./links";
@@ -26,11 +30,16 @@ const NAME = "Pounce: Family Games";
 export const TITLE = `${NAME} | Cat Tower and Tuna Tiles`;
 export const DESCRIPTION =
   "Family game night, every night. Play Cat Tower and Tuna Tiles together on the couch, on the TV or from far away. Free on iPhone, iPad and in any web browser.";
+/** The page's description with the Daily Dish on. The app's own description stays `DESCRIPTION`. */
+export const DAILY_DESCRIPTION =
+  "Family game night, every night. Play Cat Tower and Tuna Tiles together, and four new puzzles every day in your browser. Free on iPhone, iPad and in any web browser.";
 
 /** The web player. Its page is `/play/`; `/play` only redirects there. */
 const PLAY = "/play/";
 /** The web player's TV screen, as people type it. */
 const TV = "/play/tv";
+/** The web player's Daily Dish. */
+const DISH = "/play/daily";
 
 /** How the page offers the app: the App Store, else the TestFlight beta, else "coming soon". */
 export type InstallState = { kind: "store"; url: string } | { kind: "beta"; url: string } | { kind: "soon" };
@@ -152,6 +161,14 @@ h1 span{display:block;color:var(--sun);text-wrap:balance}
 .game .art img{display:block;width:160px;height:auto;border:4px solid var(--ink);border-radius:24px;box-shadow:0 5px 0 var(--ink)}
 .game .txt{padding:18px 20px 24px}
 .game .txt p+p{margin-top:8px}
+.puzzles{display:grid;gap:16px;margin:0 0 24px;padding:0;list-style:none}
+.puzzle{display:flex;flex-wrap:wrap;gap:14px;align-items:center;padding:16px 18px}
+.puzzle>div:last-child{flex:1 1 9rem;min-width:0;overflow-wrap:break-word}
+.puzzle .art{flex:none;display:flex;justify-content:center;align-items:flex-end;width:76px;height:76px;border:3px solid var(--ink);border-radius:18px;overflow:hidden}
+.puzzle .art img{display:block;width:auto;height:68px}
+.puzzle h3{margin:0 0 2px}
+.dish-note{margin:16px 0 0;color:#F0E9FF;font-size:.95rem}
+@media (min-width:720px){.puzzles{grid-template-columns:1fr 1fr}}
 .panel p.meta{color:var(--text);font-family:var(--round);font-weight:900}
 .pink{background:var(--magenta)}.teal{background:var(--teal)}.orange{background:var(--orange)}.sky{background:var(--sky)}.violet{background:var(--violet)}
 .split{display:grid;gap:30px;align-items:center}
@@ -207,12 +224,13 @@ h1 span{display:block;color:var(--sun);text-wrap:balance}
 
 const json = (value: unknown): string => JSON.stringify(value).replace(/</g, "\\u003c");
 
-function head(state: InstallState, origin: string): string {
+function head(state: InstallState, origin: string, daily: boolean): string {
   const url = `${origin}/`;
   const image = `${origin}${MEDIA.og.src}`;
   const id = state.kind === "store" ? appStoreId(state.url) : null;
   const author = { "@type": "Organization", name: "Conley Chaos LLC", url: "https://conleychaos.com" };
   const free = { "@type": "Offer", price: "0", priceCurrency: "USD" };
+  const description = daily ? DAILY_DESCRIPTION : DESCRIPTION;
   const data = {
     "@context": "https://schema.org",
     "@graph": [
@@ -233,7 +251,9 @@ function head(state: InstallState, origin: string): string {
         "@type": "WebApplication",
         "@id": `${url}#web`,
         name: "Pounce",
-        description: "Cat Tower and Tuna Tiles in a web browser, at the same tables as the iPhone app, with a TV screen at /play/tv.",
+        description: daily
+          ? "Cat Tower and Tuna Tiles in a web browser, at the same tables as the iPhone app, with a TV screen at /play/tv, and four new puzzles every day at /play/daily."
+          : "Cat Tower and Tuna Tiles in a web browser, at the same tables as the iPhone app, with a TV screen at /play/tv.",
         url: `${origin}${PLAY}`,
         image,
         applicationCategory: "GameApplication",
@@ -245,7 +265,7 @@ function head(state: InstallState, origin: string): string {
     ],
   };
   return [
-    `<meta name="description" content="${DESCRIPTION}">`,
+    `<meta name="description" content="${description}">`,
     `<link rel="canonical" href="${escapeHtml(url)}">`,
     `<link rel="icon" type="image/png" sizes="192x192" href="${MEDIA.icon192}">`,
     `<link rel="apple-touch-icon" href="/apple-touch-icon.png">`,
@@ -253,7 +273,7 @@ function head(state: InstallState, origin: string): string {
     `<meta property="og:type" content="website">`,
     `<meta property="og:site_name" content="Pounce">`,
     `<meta property="og:title" content="${TITLE}">`,
-    `<meta property="og:description" content="${DESCRIPTION}">`,
+    `<meta property="og:description" content="${description}">`,
     `<meta property="og:url" content="${escapeHtml(url)}">`,
     `<meta property="og:image" content="${escapeHtml(image)}">`,
     `<meta property="og:image:width" content="${MEDIA.og.width}">`,
@@ -261,7 +281,7 @@ function head(state: InstallState, origin: string): string {
     `<meta property="og:image:alt" content="The Pounce app icon beside screenshots of Cat Tower and Tuna Tiles on iPhone.">`,
     `<meta name="twitter:card" content="summary_large_image">`,
     `<meta name="twitter:title" content="${TITLE}">`,
-    `<meta name="twitter:description" content="${DESCRIPTION}">`,
+    `<meta name="twitter:description" content="${description}">`,
     `<meta name="twitter:image" content="${escapeHtml(image)}">`,
     `<link rel="preload" as="image" href="${MEDIA.clip.poster}">`,
     `<script type="application/ld+json">${json(data)}</script>`,
@@ -275,7 +295,32 @@ const LAST: Record<InstallState["kind"], { title: string; line: string }> = {
   soon: { title: "Almost here", line: "Pounce is on its way to the App Store. Start a table in your browser tonight." },
 };
 
-function body(state: InstallState, consent: boolean): string {
+/**
+ * The Daily Dish: the four puzzles, the family board, and where they play today. Each puzzle's
+ * line says what to do, the way its own screen teaches it.
+ */
+function dishSection(): string {
+  const a = MEDIA.art;
+  const puzzle = (cat: Art, tint: string, name: string, kind: string, line: string) =>
+    `<li class="panel puzzle"><div class="art ${tint}">${art(cat)}</div><div><h3>${name}</h3><p class="meta">${kind}</p><p>${line}</p></div></li>`;
+  return `<section class="band" aria-labelledby="dish">
+<div class="wrap">
+<h2 id="dish">The Daily Dish</h2>
+<p class="sub">Four new puzzles every day, the same for the whole family. Easy on Monday, harder by Saturday.</p>
+<ul class="puzzles">
+${puzzle(a.calico, "teal", "Sniff", "Words", "Find the five-letter word in six tries.")}
+${puzzle(a.tuxedo, "pink", "Nine Lives", "Numbers", "Fill the grid. Every row, column and box gets 1 to 9 once.")}
+${puzzle(a.asleep, "violet", "Cat Nap", "Logic", "One cat in each row, column and patch. No two cats touch.")}
+${puzzle(a.leap, "orange", "Box Fort", "Blocks", "Drag pieces onto the rug. Fill a line to clear it.")}
+</ul>
+<p class="sub">A family board shows how everyone did today, and every puzzle counts toward your streaks.</p>
+<a class="btn web" href="${DISH}">Play today's puzzles</a>
+<p class="dish-note">In the browser now. Coming to the app.</p>
+</div>
+</section>`;
+}
+
+function body(state: InstallState, consent: boolean, daily: boolean): string {
   const c = MEDIA.clip;
   const s = MEDIA.screens;
   const install = installBlock(state);
@@ -289,7 +334,7 @@ function body(state: InstallState, consent: boolean): string {
 <div>
 <p class="chip">Free family games</p>
 <h1 id="top">Family game night, <span>every night.</span></h1>
-<p class="lede">Two games for the whole family. Gather round the TV, pass one phone, or play from far away.</p>
+<p class="lede">${daily ? "Two games for the whole family, and four new puzzles every day." : "Two games for the whole family."} Gather round the TV, pass one phone, or play from far away.</p>
 ${install}
 </div>
 <div class="scene">
@@ -315,7 +360,7 @@ ${art(MEDIA.art.leap, "pal").replace(' loading="lazy"', "")}
 </div>
 </div>
 </section>
-
+${daily ? `\n${dishSection()}\n` : ""}
 <section class="band clip" aria-labelledby="tv">
 <div class="wrap split">
 <div>
@@ -385,7 +430,7 @@ ${art(MEDIA.art.asleep, "cat")}
 <p class="more"><a href="/privacy">Read the privacy policy</a><a href="/privacy#coppa">Notice for parents</a></p>
 </div>
 <ul class="checks">
-<li><strong>No chat. No public profiles.</strong> The people at your tables see your name and your cat, and so does anyone who opens an invite link you send.</li>
+<li><strong>No chat. No public profiles.</strong> The people at your tables see your name and your cat, and so does anyone who opens an invite link you send.</li>${daily ? `\n<li><strong>Daily results stay in the family.</strong> Only the people you have a streak with see how you did, and a TV you linked to your board.</li>` : ""}
 <li><strong>No ads. No tracking.</strong> No third-party analytics or SDKs. We never sell your data.</li>
 <li><strong>No account needed.</strong> Signing in is never required to play.</li>
 <li><strong>Simpler for under-13s.</strong> A child under 13 picks a name from Pounce's list of cat names and can't type one. No sign-in, and no invite links sent out.</li>
@@ -411,18 +456,19 @@ ${install}
 
 /**
  * The home page. `install` picks the install action (see `installState`), `origin` is this
- * request's own (for the canonical link and the social image), and `consent` says whether a
- * parent can allow turn alerts for a child, as the privacy policy does.
+ * request's own (for the canonical link and the social image), `consent` says whether a
+ * parent can allow turn alerts for a child, as the privacy policy does, and `daily` whether the
+ * Daily Dish is on (`DAILY`), as the privacy policy says it.
  */
-export function homePage(install: Install = {}, origin = "https://play.conleychaos.com", consent = true): Response {
+export function homePage(install: Install = {}, origin = "https://play.conleychaos.com", consent = true, daily = false): Response {
   const state = installState(install);
   const html = shell({
     title: TITLE,
-    head: head(state, origin),
+    head: head(state, origin, daily),
     style: STYLE,
     current: "home",
     credit: true,
-    body: body(state, consent),
+    body: body(state, consent, daily),
   });
   return new Response(html, {
     headers: { "content-type": "text/html; charset=utf-8", "cache-control": CACHE, "content-security-policy": HOME_CSP },

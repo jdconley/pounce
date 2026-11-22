@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { FALLBACK_ZONE } from "../streaks/clock";
+import { addDays, FALLBACK_ZONE } from "../streaks/clock";
 
 import { closesAt, dailyDay, LAUNCH, levelFor, puzzleNumber } from "./days";
 
@@ -14,12 +14,17 @@ describe("levels and numbers", () => {
     expect(week.map(levelFor)).toEqual([1, 2, 3, 4, 5, 6, 7]);
   });
 
-  it("puzzleNumber is 1 on LAUNCH", () => {
+  it("puzzleNumber is 1 on LAUNCH, a Sunday: No. 1 is a Sunday puzzle", () => {
+    expect(LAUNCH).toBe("2026-11-22");
     expect(puzzleNumber(LAUNCH)).toBe(1);
+    expect(levelFor(LAUNCH)).toBe(7);
+    expect(puzzleNumber(addDays(LAUNCH, 1))).toBe(2);
+    expect(levelFor(addDays(LAUNCH, 1))).toBe(1);
   });
 
   it("puzzleNumber counts up from LAUNCH", () => {
-    expect(puzzleNumber("2099-01-12")).toBe(12);
+    expect(puzzleNumber(addDays(LAUNCH, 11))).toBe(12);
+    expect(puzzleNumber(addDays(LAUNCH, -1))).toBe(0);
   });
 
   it("closesAt is the end of the date's day: 04:00 the next morning", () => {

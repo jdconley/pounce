@@ -1,4 +1,5 @@
 import { expect, test, type Page } from "@playwright/test";
+import { puzzleNumber } from "@pounce/play-api/daily/days";
 
 import { closeAll, firstRun, newPlayer, ownAddress, scan } from "./helpers";
 import { openTv, shownLink } from "./tv-helpers";
@@ -14,6 +15,20 @@ async function countToTheEnd(page: Page) {
   const step = page.getByRole("button", { name: "Step" });
   await expect(page.getByTestId("test-count")).toHaveText(/^\d+ \/ \d+$/);
   while (await step.isEnabled()) await step.click();
+}
+
+/**
+ * Opens a test run and gives its share title: "Test 12" on the 12th day from launch, "Test" on a day
+ * before it. The number comes from the run's own date and the server's `LAUNCH`, never from today,
+ * so this holds on any day, and the server's number has to match it.
+ */
+async function openTestRun(page: Page): Promise<string> {
+  const started = page.waitForResponse((r) => r.url().includes("/v1/daily/test/start") && r.ok());
+  await page.goto("/play/daily/test");
+  const run = (await (await started).json()) as { date: string; number: number };
+  const n = puzzleNumber(run.date);
+  expect(run.number).toBe(n);
+  return n >= 1 ? `Test ${n}` : "Test";
 }
 
 async function dismissTip(page: Page) {
@@ -94,14 +109,14 @@ test("Share sends the card image, the words and the Dish's link", async ({ brows
       },
     });
   });
-  await page.goto("/play/daily/test");
+  const title = await openTestRun(page);
   await countToTheEnd(page);
   await page.getByRole("button", { name: "Share" }).click();
   const shared = (await expect
     .poll(() => page.evaluate(() => (window as unknown as { __shared?: unknown }).__shared ?? null))
     .not.toBeNull()
     .then(() => page.evaluate(() => (window as unknown as { __shared: unknown }).__shared))) as { text: string; url: string; files: { name: string; type: string; size: number }[] };
-  expect(shared.text).toMatch(/^Test: 0:0\d$/);
+  expect(shared.text).toMatch(new RegExp(`^${title}: 0:0\\d$`));
   expect(shared.url).toBe("https://play.conleychaos.com/daily");
   expect(shared.files[0]?.type).toBe("image/png");
   expect(shared.files[0]?.size).toBeGreaterThan(5000);
@@ -116,11 +131,11 @@ test("without Web Share, Share copies the words and the link", async ({ browser 
     Object.defineProperty(navigator, "share", { value: undefined, configurable: true });
     Object.defineProperty(navigator, "clipboard", { value: { writeText: async (t: string) => void (w.__copied = t) }, configurable: true });
   });
-  await page.goto("/play/daily/test");
+  const title = await openTestRun(page);
   await countToTheEnd(page);
   await page.getByRole("button", { name: "Share" }).click();
   await expect(page.getByText("Copied")).toBeVisible();
-  expect(await page.evaluate(() => (window as unknown as { __copied: string }).__copied)).toMatch(/^Test: 0:0\d https:\/\/play\.conleychaos\.com\/daily$/);
+  expect(await page.evaluate(() => (window as unknown as { __copied: string }).__copied)).toMatch(new RegExp(`^${title}: 0:0\\d https://play\\.conleychaos\\.com/daily$`));
   await closeAll(bo.context);
 });
 

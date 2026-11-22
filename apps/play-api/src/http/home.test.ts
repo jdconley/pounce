@@ -3,7 +3,7 @@ import { fileURLToPath } from "node:url";
 
 import { describe, expect, test } from "vitest";
 
-import { DESCRIPTION, HOME_CSP, homePage, installState } from "./home";
+import { DAILY_DESCRIPTION, DESCRIPTION, HOME_CSP, homePage, installState } from "./home";
 import { APPLE_CREDIT } from "./layout";
 import { MEDIA } from "./site-media";
 
@@ -311,5 +311,29 @@ describe("homePage", () => {
     expect(withConsent).not.toMatch(/[Oo]nly the people/);
     // No invented praise or numbers.
     expect(withConsent).not.toMatch(/\bstars?\b|rated|reviews|downloads|award|featured/i);
+  });
+
+  test("the Daily Dish shows only with DAILY on, as in the browser and coming to the app", async () => {
+    for (const install of [{}, { testflightUrl: TESTFLIGHT }, { appStoreUrl: APP_STORE }]) {
+      const off = await html(install);
+      expect(off).not.toMatch(/Daily Dish|daily puzzle|Sniff|Nine Lives|Cat Nap|Box Fort|\/play\/daily/);
+      const on = await homePage(install, ORIGIN, true, true).text();
+      expect(on).toContain('<h2 id="dish">The Daily Dish</h2>');
+      for (const name of ["Sniff", "Nine Lives", "Cat Nap", "Box Fort"]) expect(on, name).toContain(`<h3>${name}</h3>`);
+      expect(on).toContain('<a class="btn web" href="/play/daily">Play today\'s puzzles</a>');
+      expect(on).toContain("In the browser now. Coming to the app.");
+      expect(on).toContain("Two games for the whole family, and four new puzzles every day.");
+      // Who sees a result: the privacy policy's words.
+      expect(on).toContain("Only the people you have a streak with see how you did, and a TV you linked to your board.");
+      // The page's description names the puzzles; the App Store app's own entry doesn't claim them.
+      expect(on).toContain(`<meta name="description" content="${DAILY_DESCRIPTION}">`);
+      expect(on).toContain(`<meta property="og:description" content="${DAILY_DESCRIPTION}">`);
+      expect(ld(on).description).toBe(DESCRIPTION);
+      expect(web(on).description).toContain("/play/daily");
+      expect(web(off).description).not.toContain("daily");
+      // No other game's name, and no emoji.
+      expect(on).not.toMatch(/\b(wordle|block blast|zoodoku|sudoku|new york times|nyt)\b/i);
+      expect(main(on)).not.toMatch(/\p{Extended_Pictographic}/u);
+    }
   });
 });

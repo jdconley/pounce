@@ -37,8 +37,8 @@ export function resultWords(r: DailyResult): string {
 }
 
 /**
- * A puzzle's number as shown, or null when it's below 1: numbers count from launch day, so before
- * it (the server's `LAUNCH` still a placeholder) they're negative, and never shown.
+ * A puzzle's number as shown, or null when it's below 1: numbers count from launch day (the
+ * server's `LAUNCH`, No. 1), so a day before it is 0 or less, and never shown.
  */
 export const puzzleNumber = (n: number): string | null => (n >= 1 ? String(n) : null);
 

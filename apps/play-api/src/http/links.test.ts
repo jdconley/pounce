@@ -413,7 +413,7 @@ describe("dailyPage: where a Dish share link lands (/daily)", () => {
   });
 
   test("a browser that isn't an iPhone plays in the browser first; the app is for later", async () => {
-    const page = await html({ appStoreUrl: APP_STORE, testflightUrl: TESTFLIGHT, storeVersion: "1.3", viewer: "other" });
+    const page = await html({ appStoreUrl: APP_STORE, testflightUrl: TESTFLIGHT, storeVersion: DISH_SINCE, viewer: "other" });
     expect(page).toContain(`<a class="go web" href="/play/daily">Play in your browser</a>`);
     expect(page).toContain(`<a href="${APP_STORE}">Get the iPhone app</a>`);
   });
@@ -426,7 +426,9 @@ describe("dailyPage: where a Dish share link lands (/daily)", () => {
   });
 
   test("until then, the beta, and no App Store banner", async () => {
-    const page = await html({ appStoreUrl: APP_STORE, testflightUrl: TESTFLIGHT, storeVersion: "1.2", viewer: "apple" });
+    // 1.1, the App Store's version before the Dish.
+    expect(DISH_SINCE).toBe("1.2");
+    const page = await html({ appStoreUrl: APP_STORE, testflightUrl: TESTFLIGHT, storeVersion: "1.1", viewer: "apple" });
     expect(page).toContain(`<a class="go" href="${TESTFLIGHT}">Get Pounce</a>`);
     expect(page).toContain("Pounce is in beta.");
     expect(page).not.toContain(`name="apple-itunes-app"`);

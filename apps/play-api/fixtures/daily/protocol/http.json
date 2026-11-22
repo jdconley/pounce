@@ -3,7 +3,7 @@
     "run": "Xq3vL0bNw8sJ2kT9yH4mR6pD1cF7gA5eZuWiOoKnBlM",
     "game": "test",
     "date": "2026-11-23",
-    "number": -26336,
+    "number": 2,
     "level": 1,
     "startedAt": 1795464000000,
     "now": 1795464000000,
@@ -22,7 +22,7 @@
     "run": "Xq3vL0bNw8sJ2kT9yH4mR6pD1cF7gA5eZuWiOoKnBlM",
     "game": "test",
     "date": "2026-11-23",
-    "number": -26336,
+    "number": 2,
     "level": 1,
     "startedAt": 1795464000000,
     "now": 1795464025000,
@@ -52,7 +52,7 @@
     "result": {
       "game": "test",
       "date": "2026-11-23",
-      "number": -26336,
+      "number": 2,
       "outcome": "solved",
       "timeMs": 125000,
       "hints": 1,
@@ -97,7 +97,7 @@
     "result": {
       "game": "test",
       "date": "2026-11-23",
-      "number": -26336,
+      "number": 2,
       "outcome": "gaveUp",
       "timeMs": 50000,
       "hints": 0,
@@ -110,7 +110,7 @@
     "games": [
       {
         "game": "test",
-        "number": -26336,
+        "number": 2,
         "rows": [
           {
             "player": "me",
@@ -120,7 +120,7 @@
             "result": {
               "game": "test",
               "date": "2026-11-23",
-              "number": -26336,
+              "number": 2,
               "outcome": "solved",
               "timeMs": 125000,
               "hints": 1,
@@ -137,7 +137,7 @@
             "result": {
               "game": "test",
               "date": "2026-11-23",
-              "number": -26336,
+              "number": 2,
               "outcome": "gaveUp",
               "timeMs": 50000,
               "hints": 0,
@@ -208,7 +208,7 @@
             "result": {
               "game": "test",
               "date": "2026-11-23",
-              "number": -26336,
+              "number": 2,
               "outcome": "solved",
               "timeMs": 125000,
               "hints": 1,

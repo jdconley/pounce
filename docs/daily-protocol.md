@@ -9,8 +9,8 @@ Samples of every answer and message are in `apps/play-api/fixtures/daily/protoco
 (`http.json`, `socket.json`, `client.json`). They are made by the server's own code, pinned by
 hash, and checked against the real Worker's answers. Decode them in your tests.
 
-Everything here requires the server flag `DAILY` (`"off"` in `wrangler.jsonc` until all four
-games launch together). With it off:
+Everything here requires the server flag `DAILY` (`"on"` in `wrangler.jsonc` since all four
+games launched together on Sunday 2026-11-22). With it off:
 - every `/v1/daily` route is a 404;
 - `POST /v1/screens/link` with `"board"` is a 400 `{ "error": "bad_request" }`;
 - streaks ignore daily runs, the reminder never mentions the Dish, and the privacy page says
@@ -39,8 +39,8 @@ exactly as before.
   `America/Los_Angeles`.
 - **The clock is the server's.** `startedAt`, `now` and `closesAt` are epoch milliseconds. Count
   the timer locally from `startedAt`, corrected by `now - Date.now()` at start. There is no pause.
-- **Numbers and levels.** `number` counts from launch day (`LAUNCH`, 1 on that day, so it is
-  negative before launch, as in the samples). `level` is the weekday: Monday 1 to Saturday 6,
+- **Numbers and levels.** `number` counts from launch day (`LAUNCH`, 2026-11-22, 1 on that day;
+  the samples' date, 2026-11-23, is 2). A date before launch gets 0 or less, which clients don't show. `level` is the weekday: Monday 1 to Saturday 6,
   Sunday 7 (level 4, bigger).
 - **Games.** `"nine-lives"`, `"box-fort"`, `"sniff"`, `"cat-nap"`. A game the server doesn't list
   is a 404. The server's own test game, `"test"` ("count to 3 + level": a move is

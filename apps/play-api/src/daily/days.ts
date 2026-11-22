@@ -3,8 +3,12 @@ import { addDays, dayEnd, dayKey, daysBetween, dayStart, FALLBACK_ZONE, isZone, 
 /** The weekday ramp (spec §2): Mon 1 … Sat 6; Sun 7 is level 4, bigger. */
 export type DayLevel = 1 | 2 | 3 | 4 | 5 | 6 | 7;
 
-/** Puzzle 1's date, for every game. Far off until the launch PR sets it (spec §11). */
-export const LAUNCH: Day = "2099-01-01";
+/**
+ * Puzzle 1's date, for every game (spec §11): launch day, Sunday 22 November 2026, so No. 1 is a
+ * Sunday puzzle (level 7) and the weekday ramp carries on from there. Before it, numbers are below 1,
+ * and the app and the web player don't show them.
+ */
+export const LAUNCH: Day = "2026-11-22";
 
 /**
  * The zone a player's daily puzzles follow. A reported change waits for the next 04:00 of the zone
