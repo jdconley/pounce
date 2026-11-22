@@ -162,7 +162,8 @@ h1 span{display:block;color:var(--sun);text-wrap:balance}
 .game .txt{padding:18px 20px 24px}
 .game .txt p+p{margin-top:8px}
 .puzzles{display:grid;gap:16px;margin:0 0 24px;padding:0;list-style:none}
-.puzzle{display:flex;gap:14px;align-items:center;padding:16px 18px}
+.puzzle{display:flex;flex-wrap:wrap;gap:14px;align-items:center;padding:16px 18px}
+.puzzle>div:last-child{flex:1 1 9rem;min-width:0;overflow-wrap:break-word}
 .puzzle .art{flex:none;display:flex;justify-content:center;align-items:flex-end;width:76px;height:76px;border:3px solid var(--ink);border-radius:18px;overflow:hidden}
 .puzzle .art img{display:block;width:auto;height:68px}
 .puzzle h3{margin:0 0 2px}
