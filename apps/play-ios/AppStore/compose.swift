@@ -122,9 +122,16 @@ let root = URL(fileURLWithPath: CommandLine.arguments.count > 1 ? CommandLine.ar
 let captions = try JSONDecoder().decode([Caption].self, from: Data(contentsOf: root.appendingPathComponent("captions.json")))
 let outDir = root.appendingPathComponent("screenshots")
 try FileManager.default.createDirectory(at: outDir, withIntermediateDirectories: true)
+// A shot with no raw capture keeps the screenshot already there (`capture.sh <set> <udid> <shots…>`
+// retakes only some).
 for set in ["iphone", "ipad"] {
     for (i, caption) in captions.enumerated() {
-        try compose(raw: root.appendingPathComponent("raw/\(set)/\(caption.shot).png"), caption: caption,
-                    out: outDir.appendingPathComponent("\(set)-\(i + 1).jpg"))
+        let raw = root.appendingPathComponent("raw/\(set)/\(caption.shot).png")
+        let out = outDir.appendingPathComponent("\(set)-\(i + 1).jpg")
+        guard FileManager.default.fileExists(atPath: raw.path) else {
+            print("kept \(out.lastPathComponent) (no raw/\(set)/\(caption.shot).png)")
+            continue
+        }
+        try compose(raw: raw, caption: caption, out: out)
     }
 }

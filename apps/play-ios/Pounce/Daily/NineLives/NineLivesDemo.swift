@@ -112,22 +112,29 @@ actor NineLivesDemoServer: DailyService {
     private var seq = 0
     private var hints = 0
     private var result: DailyResult?
-    private let startedAt = Int64(Date().timeIntervalSince1970 * 1000)
+    private let startedAt: Int64
+    private let date: String
+    private let number: Int
 
     private var now: Int64 { Int64(Date().timeIntervalSince1970 * 1000) }
 
-    init(almost: Bool = false) {
+    /// `almost`: two cells from done. `midway`: half the open cells filled, three minutes in (the
+    /// Dish demo's puzzle in play).
+    init(almost: Bool = false, midway: Bool = false, date: String = "2027-01-04", number: Int = 1) {
         var board = NineLivesBoard(givens: NineLivesLocalDriver.givens)
-        if almost {
-            let open = board.givens.indices.filter { board.givens[$0] == 0 }
-            for i in open.dropLast(2) { board.apply(.set(cell: i, digit: NineLivesLocalDriver.solution[i])) }
-        }
+        let open = board.givens.indices.filter { board.givens[$0] == 0 }
+        // Midway: about half, scattered over the board as a person fills it.
+        let filled = almost ? Array(open.dropLast(2)) : midway ? open.enumerated().filter { ($0.offset * 7) % 11 < 6 }.map(\.element) : []
+        for i in filled { board.apply(.set(cell: i, digit: NineLivesLocalDriver.solution[i])) }
         self.board = board
+        self.date = date
+        self.number = number
+        startedAt = Int64(Date().timeIntervalSince1970 * 1000) - (midway ? 187_000 : 0)
     }
 
     func start(game: String, person: String?) async throws -> DailyStart {
         try DailyStart(
-            run: "demo", game: "nine-lives", date: "2027-01-04", number: 1, level: 1, startedAt: startedAt, now: now,
+            run: "demo", game: "nine-lives", date: date, number: number, level: 1, startedAt: startedAt, now: now,
             puzzle: DailyJSON(NineLivesPuzzle(givens: board.givens)), state: DailyJSON(board.state), seq: seq, hints: hints,
             result: result, closesAt: now + 3_600_000)
     }
@@ -176,7 +183,7 @@ actor NineLivesDemoServer: DailyService {
     private func end(_ outcome: DailyOutcome) {
         let time = Int(now - startedAt) + 30_000 * hints
         result = DailyResult(
-            game: "nine-lives", date: "2027-01-04", number: 1, outcome: outcome, timeMs: time, hints: hints,
+            game: "nine-lives", date: date, number: number, outcome: outcome, timeMs: time, hints: hints,
             progress: outcome == .solved ? 1 : board.progress)
     }
 }

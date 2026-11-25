@@ -6,9 +6,9 @@ messages, no server); nothing is drawn by hand except the caption and the backgr
 
 | File | What |
 | --- | --- |
-| `screenshots/iphone-1.jpg` … `6` | 1206x2622, the required iPhone set (Dynamic Island, medium display; iPhone 17 Pro) |
-| `screenshots/ipad-1.jpg` … `6` | 2064x2752, the 13" iPad set |
-| `screenshots/tv-1.jpg` … `5` | 1920x1080, the Apple TV set (home, lobby, Cat Tower, Tuna Tiles, game over) |
+| `screenshots/iphone-1.jpg` … `8` | 1206x2622, the required iPhone set (Dynamic Island, medium display; iPhone 17 Pro) |
+| `screenshots/ipad-1.jpg` … `8` | 2064x2752, the 13" iPad set |
+| `screenshots/tv-1.jpg` … `7` | 1920x1080, the Apple TV set (home, Tonight's board, lobby, Cat Tower, Tuna Tiles, game over, a watched Sniff run) |
 | `previews/iphone-preview.mp4` | 886x1920, 25.4 s (recorded on an iPhone 17 Pro Max, cut to the size the iPhone slot takes) |
 | `previews/ipad-preview.mp4` | 1200x1600, 25.4 s |
 | `captions.json`, `captions.md` | The captions and what backs each one |
@@ -27,10 +27,15 @@ xcodebuild -project Pounce.xcodeproj -scheme Pounce -destination "platform=iOS S
 xcrun simctl install <udid> <DerivedData>/Build/Products/Debug-iphonesimulator/Pounce.app
 AppStore/capture.sh iphone <iPhone 17 Pro udid>   # raw/iphone/*.png
 AppStore/capture.sh ipad <iPad Pro 13-inch (M5) udid>   # raw/ipad/*.png
-swift AppStore/compose.swift                            # screenshots/*.jpg
+AppStore/capture.sh iphone <udid> 2-dish 3-puzzle       # only those shots
+swift AppStore/compose.swift                            # screenshots/*.jpg (keeps a shot with no raw capture)
 AppStore/preview.sh iphone <udid>                       # previews/iphone-preview.mp4
 AppStore/preview.sh ipad <udid>
 ```
+
+The Daily Dish shots (2 and 3) use `-demo-dish done` (the Dish from memory) and
+`-show-daily nine-lives`, which plays Nine Lives half filled against an in-app referee
+(`NineLivesDemoServer`), with no server.
 
 `raw/` is gitignored. The people on screen (Jess and Sam, Grandma, Theo, Ruby) come from
 `POUNCE_DEMO_CAST`, which renames the demo fixtures' people (`DemoFixtures.cast`, DEBUG only).
@@ -90,21 +95,35 @@ swift AppStore/tv-brand.swift --preview /tmp/tv    # also writes each icon flatt
 
 ## Apple TV screenshots
 
-The five Apple TV shots (`screenshots/tv-N.jpg`, 1920x1080, from an "Apple TV 4K (3rd generation)
+The Apple TV shots (`screenshots/tv-N.jpg`, 1920x1080, from an "Apple TV 4K (3rd generation)
 (at 1080p)" simulator; App Store Connect also takes 3840x2160) are the Debug PounceTV build's real
 screens, with no caption or background. The two tables come from the build's own preview, and game
 over from its `-demo tv-over` (the whole TV back at a four-seat Cat Tower game that just ended:
-three-digit scores, four levels, four cats, nobody left), all with no server. Home and the lobby
-need a TV that is linked to a table, so a dev server and browser phones play them.
+three-digit scores, four levels, four cats, nobody left), all with no server. The lobby needs a TV
+that is linked to a table, so a dev server and browser phones play it.
 
 ```sh
 xcodebuild -project Pounce.xcodeproj -scheme PounceTV -destination "platform=tvOS Simulator,id=<udid>" build
 xcrun simctl install <udid> <DerivedData>/Build/Products/Debug-appletvsimulator/PounceTV.app
-AppStore/capture-tv.sh <udid>        # raw/tv/cattower.png, tiles.png, gameover.png (tv-3, tv-4, tv-5)
-# raw/tv/home.png, lobby.png (tv-1, tv-2): AppStore/tv-live.spec.ts, against your own dev server
+AppStore/capture-tv.sh <udid>        # raw/tv/cattower.png, tiles.png, gameover.png (tv-4, tv-5, tv-6)
+# raw/tv/lobby.png (tv-3): AppStore/tv-live.spec.ts, against your own dev server
 # (its header says how); never port 4343.
 sips -s format jpeg -s formatOptions 92 AppStore/raw/tv/<name>.png --out AppStore/screenshots/tv-<n>.jpg
 ```
+
+Home, Tonight's board and the watched Sniff run (tv-1, tv-2, tv-7) come from the Debug build's
+`-demo tv-board` (an evening of the Daily Dish on a fake board socket), played by
+`PounceTVUITests/BoardShotTests`, which presses Watch on the remote:
+
+```sh
+TEST_RUNNER_TV_SHOTS_DIR=<dir> TEST_RUNNER_POUNCE_DEMO_CAST="Jess,Sam,Ruby,Theo,Grandma,Grandpa" \
+  xcodebuild -project Pounce.xcodeproj -scheme PounceTV -destination "platform=tvOS Simulator,id=<udid>" \
+  test -only-testing:PounceTVUITests/BoardShotTests
+# <dir>/appletv-home.png, appletv-board.png, appletv-watch.png
+```
+
+The cast's fourth name takes the hint badge, so keep it short. In 1.2, tv-3 to tv-6 are the 1.1
+shots (lobby, Cat Tower, Tuna Tiles, game over) under new numbers.
 
 Look at each shot before converting it: the seats' scores behind game over must all show. Delete
 the simulator afterwards.

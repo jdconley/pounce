@@ -9,8 +9,9 @@
 # The two tables come from the Debug build's own preview (a made-up room, no server), with the aim
 # glow on the player whose turn it is. Game over is the Debug build's `-demo tv-over`: the whole TV
 # back at a four-seat Cat Tower table that just finished (three-digit scores, four levels, four
-# cats). Home and the lobby need a server and phones: `AppStore/tv-live.spec.ts` plays them (see
-# README), and writes the same raw folder.
+# cats). The lobby needs a server and phones: `AppStore/tv-live.spec.ts` plays it (see
+# README), and writes the same raw folder. Home, Tonight's board and a watched run come from
+# `PounceTVUITests/BoardShotTests` (README, "Apple TV screenshots").
 set -euo pipefail
 cd "$(dirname "$0")/.."
 DEVICE="${1:?Apple TV simulator UDID}"

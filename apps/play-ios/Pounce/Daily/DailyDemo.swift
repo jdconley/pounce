@@ -30,9 +30,11 @@
 
         static func board(_ mode: String) -> DailyBoard {
             let long = mode == "long"
-            let me = long ? "Bartholomew" : "Mom"
-            let kid = long ? "Clementine Rosalind" : "Kid"
-            let gramps = long ? "Grandpa Archibald" : "Grandpa"
+            // `POUNCE_DEMO_CAST` (the App Store captures) names them as `-seed-people` does: you
+            // first, a kid fourth, the grandparent sixth.
+            let me = long ? "Bartholomew" : DemoFixtures.castName(0, "Mom")
+            let kid = long ? "Clementine Rosalind" : DemoFixtures.castName(3, "Kid")
+            let gramps = long ? "Grandpa Archibald" : DemoFixtures.castName(5, "Grandpa")
             func row(_ player: String, _ name: String, _ cat: Int, _ rank: Int?, _ r: DailyResult?, playing: Double? = nil) -> DailyBoardRow {
                 DailyBoardRow(player: player, name: name, cat: cat, rank: rank, result: r, playing: playing.map(DailyPlaying.init))
             }
@@ -105,9 +107,11 @@
         }
     }
 
-    /// The Dish from memory. Starting a run isn't part of the demo: puzzles play against a server.
+    /// The Dish from memory. Nine Lives plays, half filled, against `NineLivesDemoServer` (the App
+    /// Store's puzzle in play: `-show-daily nine-lives`); the other puzzles need a server.
     actor DemoDailyService: DailyService {
         let mode: String
+        private var nineLives: NineLivesDemoServer?
         init(mode: String) { self.mode = mode }
 
         func board(date: String?, person: String?) async throws -> DailyBoard {
@@ -118,10 +122,24 @@
             if mode == "off" { throw APIError.notFound }
             return DailyDemo.stats()
         }
-        func start(game: String, person: String?) async throws -> DailyStart { throw APIError.notFound }
-        func moves(run: String, body: DailyMovesBody, person: String?) async throws -> DailyMovesAnswer { throw APIError.notFound }
-        func hint(run: String, hints: Int, person: String?) async throws -> DailyMovesAnswer { throw APIError.notFound }
-        func giveUp(run: String, person: String?) async throws -> DailyMovesAnswer { throw APIError.notFound }
+        func start(game: String, person: String?) async throws -> DailyStart {
+            guard game == "nine-lives", mode != "off" else { throw APIError.notFound }
+            let server = nineLives ?? NineLivesDemoServer(midway: true, date: DailyDemo.date, number: DailyDemo.number)
+            nineLives = server
+            return try await server.start(game: game, person: person)
+        }
+        func moves(run: String, body: DailyMovesBody, person: String?) async throws -> DailyMovesAnswer {
+            guard let nineLives else { throw APIError.notFound }
+            return try await nineLives.moves(run: run, body: body, person: person)
+        }
+        func hint(run: String, hints: Int, person: String?) async throws -> DailyMovesAnswer {
+            guard let nineLives else { throw APIError.notFound }
+            return try await nineLives.hint(run: run, hints: hints, person: person)
+        }
+        func giveUp(run: String, person: String?) async throws -> DailyMovesAnswer {
+            guard let nineLives else { throw APIError.notFound }
+            return try await nineLives.giveUp(run: run, person: person)
+        }
         func showOnTV(run: String, on: Bool, person: String?) async throws {}
         func linkBoard(_ key: ScreenKey, person: String?) async throws {}
         func unlinkBoard(person: String?) async throws {}
