@@ -5,6 +5,7 @@
 # caption and background.
 #   AppStore/capture.sh iphone <udid>   # iPhone 17 Pro: 1206x2622 (the required "Dynamic Island, medium display" set)
 #   AppStore/capture.sh ipad <udid>     # iPad Pro 13-inch (M5): 2064x2752 (the 13" set)
+#   AppStore/capture.sh iphone <udid> 2-dish 3-puzzle   # only these shots
 # Build and install first:
 #   xcodebuild -project Pounce.xcodeproj -scheme Pounce -destination "platform=iOS Simulator,id=<udid>" build
 #   xcrun simctl install <udid> <DerivedData>/Build/Products/Debug-iphonesimulator/Pounce.app
@@ -14,6 +15,7 @@ set -euo pipefail
 cd "$(dirname "$0")/.."
 SET="${1:?iphone or ipad}"
 DEVICE="${2:?simulator UDID}"
+ONLY=("${@:3}")
 BUNDLE=com.conleychaos.play
 OUT="AppStore/raw/$SET"
 CAST="${POUNCE_DEMO_CAST:-Jess,Sam,Grandma,Theo,Ruby,Grandpa}"
@@ -29,6 +31,7 @@ xcrun simctl status_bar "$DEVICE" override --time 9:41 --batteryState charged --
 shot() {
   local name="$1" wait="$2"
   shift 2
+  if [ ${#ONLY[@]} -gt 0 ] && [[ " ${ONLY[*]} " != *" $name "* ]]; then return; fi
   xcrun simctl terminate "$DEVICE" "$BUNDLE" >/dev/null 2>&1 || true
   SIMCTL_CHILD_POUNCE_DEMO_CAST="$CAST" xcrun simctl launch "$DEVICE" "$BUNDLE" \
     -anim-speed 1 -uitest-reset "$@" >/dev/null
@@ -39,9 +42,13 @@ shot() {
 
 # `-seed-people` gives the device an owner (and skips the push priming card over a table).
 shot 1-table 8 -seed-people -demo table
-shot 2-us 7 -seed-people -demo-streaks -show-us
-shot 3-family 6 -seed-people -demo lobbyFamily
-shot 4-levels 7 -seed-people -demo table -show-scoreboard
+# The Daily Dish (1.2): today's four puzzles and the family board, everyone done; then Nine Lives
+# half filled, played from memory (`-demo-dish` referees it in the app).
+shot 2-dish 7 -seed-people -demo-streaks -demo-dish done -show-dish
+shot 3-puzzle 7 -seed-people -demo-streaks -demo-dish done -show-daily nine-lives
+shot 4-us 7 -seed-people -demo-streaks -show-us
+shot 5-family 6 -seed-people -demo lobbyFamily
+shot 6-levels 7 -seed-people -demo table -show-scoreboard
 # A child's first launch: a cat and a name from the list (the dice), never typed.
-shot 5-kids 7 -age-band kitten
-shot 6-win 9 -seed-people -demo over
+shot 7-kids 7 -age-band kitten
+shot 8-win 9 -seed-people -demo over

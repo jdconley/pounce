@@ -464,10 +464,11 @@ actor TVDemoBoardSocket: BoardSocketing {
     private let releases: AsyncStream<Void>
     private let token: Int32
 
+    /// `POUNCE_DEMO_CAST` renames them in order (the App Store capture, `AppStore/capture-tv.sh`).
     private static let people: [(id: String, name: String, cat: Int)] = [
         ("me", "Mom", 3), ("pr_dad", "Dad", 1), ("pr_kid", "Kid", 5),
         ("pr_gpa", "Grandpa", 0), ("pr_nana", "Nana", 7), ("pr_bart", "Bartholomew Wiggles", 6),
-    ]
+    ].enumerated().map { i, who in (who.0, DemoFixtures.castName(i, who.1), who.2) }
     private static let games = ["sniff", "nine-lives", "cat-nap", "box-fort"]
 
     init() {
@@ -527,7 +528,7 @@ actor TVDemoBoardSocket: BoardSocketing {
     /// Each go-ahead: Kid's Sniff run is offered, then plays out a guess every second and a half.
     private func offers() async {
         for await _ in releases {
-            feed.yield(.message(.watchOffer(player: "pr_kid", name: "Kid", cat: 5, game: "sniff")))
+            feed.yield(.message(.watchOffer(player: "pr_kid", name: Self.people[2].name, cat: 5, game: "sniff")))
             let first = Self.sniffFrame(0)
             feed.yield(.message(.watch(player: "pr_kid", game: "sniff", puzzle: first.puzzle, state: first.state)))
             // Long enough for the card to be read and Watch pressed, then the guesses watched.
@@ -558,7 +559,7 @@ actor TVDemoBoardSocket: BoardSocketing {
     private static func result(game: String, who: Int) -> DailyResult {
         let outcome: DailyOutcome = game == "box-fort" ? .done : (who == 4 ? .gaveUp : .solved)
         return DailyResult(
-            game: game, date: "2026-11-23", number: 12, outcome: outcome, timeMs: 95_000 + who * 41_000, hints: who == 3 ? 1 : 0,
+            game: game, date: "2026-11-23", number: 12, outcome: outcome, timeMs: 95_000 + who * 41_000 + (games.firstIndex(of: game) ?? 0) * (who + 1) * 13_000, hints: who == 3 ? 1 : 0,
             progress: outcome == .gaveUp ? 0.4 : 1, tooFast: false,
             guesses: game == "sniff" ? 3 + who % 4 : nil, points: game == "box-fort" ? 2_400 - who * 310 : nil)
     }

@@ -25,6 +25,8 @@ final class BoardShotTests: XCTestCase {
         let app = Live.demo("tv-board", speed: 1)
         // Silent on a Mac: speed 1 plays real sound.
         app.launchArguments += ["-settings.soundOn", "<false/>", "-tv.soundOn", "<false/>"]
+        // The App Store's people (`AppStore/README.md`): `TEST_RUNNER_POUNCE_DEMO_CAST` for xcodebuild.
+        if let cast = ProcessInfo.processInfo.environment["POUNCE_DEMO_CAST"] { app.launchEnvironment["POUNCE_DEMO_CAST"] = cast }
         app.launch()
         XCTAssertTrue(el(app, "tv.board.game.box-fort").waitForExistence(timeout: Live.t(20)), "no board")
         // A few beats in, so every card has rows and someone is playing.

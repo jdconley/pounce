@@ -296,6 +296,11 @@ final class AppModel {
         if arguments.contains("-show-trophies"), model.people.owner != nil, model.ageRecord != nil { model.route = .trophies }
         // `-show-dish`: the Daily Dish screen at launch (screenshots, UI tests).
         if arguments.contains("-show-dish"), model.people.owner != nil, model.ageRecord != nil { model.route = .dish }
+        // `-show-daily <game>`: that daily puzzle at launch (with `-demo-dish`, Nine Lives plays from memory).
+        if let i = arguments.firstIndex(of: "-show-daily"), let game = arguments[safe: i + 1], model.people.owner != nil,
+           model.ageRecord != nil {
+            model.route = .daily(game: game)
+        }
         if arguments.contains("-show-invite"), model.people.owner != nil, model.ageRecord != nil { model.inviteShown = true }
         // `-show-merge`: the two-cats question over the gear sheet (screenshots).
         if arguments.contains("-show-merge") {
