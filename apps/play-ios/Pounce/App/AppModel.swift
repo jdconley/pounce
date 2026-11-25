@@ -1563,6 +1563,15 @@ final class AppModel {
         tipsSeen = tutorialStore.load()
         tips.reload()
         streaks.person = people.owner?.id
+        daily.person = people.owner?.id
+    }
+
+    /// A profile upload landed: the server knows this device's people now. A Dish it refused
+    /// before (Home asked while a new owner's first upload was still on its way) loads now,
+    /// without waiting for the next foreground.
+    func profileUploaded() {
+        guard let owner = people.owner?.id else { return }
+        Task { await daily.profileSaved(owner) }
     }
 
     /// Signed in on a second device: it shows the account's name and cat (spec §10.5). Not a

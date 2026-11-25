@@ -4,7 +4,9 @@ import Observation
 /// What the Dish's screens read: whether the server has the Dish on, today's board, and stats.
 /// It holds memory only; every call goes through `DailyService` (an actor) and the live board
 /// through `DailyBoardSocket`, so nothing here blocks. `enabled` is nil until the server answered,
-/// false after a 404 (hide the Dish); going offline keeps what was shown.
+/// false after a 404 (hide the Dish); going offline keeps what was shown. A 403 (the server
+/// doesn't know this person yet: a new owner's first profile upload hasn't landed) leaves it nil
+/// too, and `profileSaved` asks again once the upload lands.
 @MainActor @Observable public final class DailyStore {
     public var person: String? {
         didSet {
@@ -52,6 +54,14 @@ import Observation
         } catch {
             // Offline or the server is down: keep what was shown.
         }
+    }
+
+    /// `person`'s profile upload landed, so the server knows them now. Onboarding goes Home at
+    /// once and Home asks for the board before the upload is up, which the server refuses: a Dish
+    /// not shown yet loads now. One already shown, or someone else's, is left alone.
+    public func profileSaved(_ person: String) async {
+        guard person == self.person, enabled != true else { return }
+        await refresh()
     }
 
     public func refreshStats() async {
