@@ -185,6 +185,7 @@ final class AccountModel {
                 ) { body in try await service.uploadProfile(body) }
                 if !renamed.isEmpty { app.peopleRenamed() }
                 uploadState.finished(started)
+                app.profileUploaded()
                 #if DEBUG
                 print("[account] profile up: \(record.playerIds.count) players, \(renamed.count) renamed")
                 #endif

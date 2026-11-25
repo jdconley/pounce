@@ -21,6 +21,34 @@ private actor ScriptedBoard: DailyService {
     func unlinkBoard(person: String?) async throws {}
 }
 
+/// The server as a brand-new owner meets it: a person is known only once a profile upload named
+/// them, and the board refuses anyone else with a 403 (`who` in play-api's daily routes).
+private actor NewPlayerServer: DailyService {
+    let answer: DailyBoard
+    private var known: Set<String> = []
+    private(set) var boardCalls = 0
+    init(_ answer: DailyBoard) { self.answer = answer }
+
+    func upload(_ body: ProfileBody) -> ProfileReply {
+        known.formUnion(body.people.map(\.id))
+        return ProfileReply(players: Dictionary(uniqueKeysWithValues: body.people.map { ($0.id, "pr_\($0.id)") }), rejected: [])
+    }
+
+    func board(date: String?, person: String?) async throws -> DailyBoard {
+        boardCalls += 1
+        guard let person, known.contains(person) else { throw APIError.forbidden }
+        return answer
+    }
+    func stats(person: String?) async throws -> DailyStatsList { throw APIError.forbidden }
+    func start(game: String, person: String?) async throws -> DailyStart { throw APIError.notFound }
+    func moves(run: String, body: DailyMovesBody, person: String?) async throws -> DailyMovesAnswer { throw APIError.notFound }
+    func hint(run: String, hints: Int, person: String?) async throws -> DailyMovesAnswer { throw APIError.notFound }
+    func giveUp(run: String, person: String?) async throws -> DailyMovesAnswer { throw APIError.notFound }
+    func showOnTV(run: String, on: Bool, person: String?) async throws {}
+    func linkBoard(_ key: ScreenKey, person: String?) async throws {}
+    func unlinkBoard(person: String?) async throws {}
+}
+
 @MainActor @Suite struct DailyStoreTests {
     private func board() throws -> DailyBoard { try DailyFixtures.decode(DailyBoard.self, "http", "board") }
 
@@ -73,5 +101,47 @@ private actor ScriptedBoard: DailyService {
         #expect(store.stats["test"]?.played == 1)
         store.person = "p2"
         #expect(store.board == nil && store.enabled == nil && store.stats.isEmpty)
+    }
+
+    /// Onboarding saves the owner and goes Home, whose board call beats the profile upload to the
+    /// server: a 403. Once the upload lands the Dish shows, with no trip to the background.
+    @Test func aNewOwnersDishShowsOnceTheUploadLands() async throws {
+        let dir = FileManager.default.temporaryDirectory
+            .appendingPathComponent("pounce-tests-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: dir) }
+        let people = await PeopleStore.open(directory: dir)
+        let tutorial = await TutorialStore.open(directory: dir)
+        let server = NewPlayerServer(try board())
+        let store = DailyStore(service: server)
+
+        let owner = people.setOwner(name: "Mia", cat: 3)
+        store.person = owner.id
+        await store.refresh()
+        #expect(store.enabled == nil)
+
+        var record = AccountRecord()
+        _ = try await ProfileUploader.run(
+            people: people, tutorial: tutorial, keys: MemoryPersonKeyStore(), ownerBand: .adult, timeZone: "UTC",
+            record: { record }, update: { $0(&record) }
+        ) { body in await server.upload(body) }
+        await store.profileSaved(owner.id)
+
+        #expect(store.enabled == true)
+        #expect(store.board != nil)
+    }
+
+    @Test func aSavedProfileLeavesAShownDishAlone() async throws {
+        let server = NewPlayerServer(try board())
+        let store = DailyStore(service: server)
+        _ = await server.upload(ProfileBody(timeZone: "UTC", ageBand: .adult, people: [
+            ProfilePerson(id: "p1", name: "Mia", cat: 3, key: "k", ageBand: nil, at: 1),
+        ]))
+        store.person = "p1"
+        await store.refresh()
+        await store.profileSaved("p1")
+        await store.profileSaved("someone-else")
+        #expect(store.enabled == true)
+        #expect(await server.boardCalls == 1)
     }
 }
