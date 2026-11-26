@@ -4,7 +4,7 @@ import { describe, expect, test } from "vitest";
 import { CATALOG, GAME_IDS, titleOf } from "../src/lib/catalog";
 
 /** Games the server deals that this player doesn't draw yet: each leaves the list when its web table lands. */
-const NOT_YET: readonly string[] = ["purrtrait"];
+const NOT_YET: readonly string[] = [];
 
 describe("Home's game shelf", () => {
   test("names and seats every game the server has, exactly as the server does", () => {

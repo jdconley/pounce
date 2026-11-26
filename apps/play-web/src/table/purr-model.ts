@@ -6,47 +6,12 @@ import { seatName } from "./seat-names";
 
 import type { InkOp } from "./purr-ink";
 import type { RoomView } from "@pounce/play-api/protocol";
+import type { Group, Level, PurrEvent, PurrOptions } from "@pounce/play-api/purrtrait/engine";
+import type { PurrView } from "@pounce/play-api/purrtrait/view";
 
-export type PurrPhase = "choosing" | "drawing" | "reveal" | "over";
-export type Level = "easy" | "tricky";
-export type Group = "animals" | "food" | "home" | "outside" | "things" | "actions" | "jobs" | "places";
-export type Timer = 45 | 60 | 90;
-export type PurrOptions = { timer: Timer };
-
-export type PurrAction =
-  | { type: "choose"; level: Level }
-  | { type: "gotIt"; seat: number }
-  | { type: "giveUp" }
-  | { type: "forfeit" };
-
-export type PurrView = {
-  seats: number;
-  timer: Timer;
-  rounds: 2;
-  phase: PurrPhase;
-  round: number;
-  drawer: number | null;
-  order: number[];
-  scores: number[];
-  out: boolean[];
-  group: Group | null;
-  level: Level | null;
-  remainingMs: number | null;
-  paused: boolean;
-  turn: string;
-  last: { word: string; guesser: number | null; points: number } | null;
-  winners: number[];
-  choices?: { easy: string; tricky: string };
-  word?: string;
-  youDraw?: true;
-};
-
-export type PurrEvent =
-  | { type: "turn"; drawer: number; round: number }
-  | { type: "chosen"; drawer: number; group: Group; level: Level }
-  | { type: "guessed"; drawer: number; guesser: number; points: number; word: string }
-  | { type: "missed"; drawer: number; word: string; reason: "time" | "gaveUp" | "left" }
-  | { type: "over"; winners: number[]; scores: number[] };
+export type { Group, Level, PurrAction, PurrEvent, PurrOptions, PurrPhase } from "@pounce/play-api/purrtrait/engine";
+export type { PurrView } from "@pounce/play-api/purrtrait/view";
+export type Timer = PurrOptions["timer"];
 
 /** Only the screen's snapshot has it: the join key the TV's QR carries, and the code to type. */
 export type NearView = { key: string; code: string; expiresIn: number };

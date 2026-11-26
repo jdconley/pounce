@@ -69,7 +69,8 @@ describe("the TV lobby", () => {
   test("Change game makes the other game", () => {
     expect(otherGame("cat-tower")).toBe("tiles");
     expect(otherGame("tiles")).toBe("birdwatch");
-    expect(otherGame("birdwatch")).toBe("cat-tower");
+    expect(otherGame("birdwatch")).toBe("purrtrait");
+    expect(otherGame("purrtrait")).toBe("cat-tower");
     expect(gameOf(lobby([open]))).toBe("cat-tower");
     expect(gameOf(lobby([open], "tiles"))).toBe("tiles");
   });
