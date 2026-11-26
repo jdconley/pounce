@@ -4,11 +4,12 @@ import { ROOM_CODE_ALPHABET } from "./room/codes";
 import { parseRoomName } from "./room/names";
 import { hasKeys, isInt, isObj, type Obj } from "./shape";
 import { isBack, isRug } from "./streaks/catalog";
-import { parseTumble, type TumbleClient } from "./tumble/wire";
+import { parseTumble, type TumbleClient, type TumbleServer } from "./tumble/wire";
 
 import type { BirdEvent } from "./birdwatch/engine";
 import type { BirdView } from "./birdwatch/view";
 import type { GameAction, GameError, GameId, GameOptions } from "./games";
+import type { TumbleView } from "./games/tumble";
 import type { GameEvent, Seat } from "./rules/engine";
 import type { CatTowerView } from "./rules/view";
 import type { StreakView } from "./streaks/pair-core";
@@ -75,6 +76,8 @@ export type RoomView = {
   tiles?: TilesView;
   /** Birdwatch's view, in a `birdwatch` room once it is dealt. */
   birdwatch?: BirdView;
+  /** Toy Tumble's rounds and wins, in a `tumble` room once it is dealt (`docs/live-protocol.md`). */
+  tumble?: TumbleView;
   /**
    * What the table chose in its lobby (`setOptions`), for a game that has a choice: Birdwatch's
    * rule set. Absent at a table of a game with none, so Cat Tower and tile game snapshots never have it.
@@ -185,6 +188,8 @@ export type ErrorCode =
   | "not_your_seat"
   | "seats_open"
   | "not_enough_players"
+  // Toy Tumble starts only with every person's device connected.
+  | "not_connected"
   // Moving a seat to another device.
   | "game_over"
   | "bad_code"
@@ -222,7 +227,9 @@ export type ServerMessage =
   /** To the devices of the person in `seat`: the person in `from` nudged them (no seq). */
   | { t: "nudged"; seat: Seat; from: Seat }
   /** Where `seat` is pointing; no `aim` means it stopped. Not a state change, so no seq. */
-  | { t: "aim"; seat: Seat; aim?: GameAim };
+  | { t: "aim"; seat: Seat; aim?: GameAim }
+  /** A Toy Tumble round's live stream (`tumble/wire.ts`): never state, so no seq. */
+  | TumbleServer;
 
 export type BadMessage = { error: "bad_message" | "bad_name" };
 

@@ -53,8 +53,11 @@ export class TumbleRound {
   /** Seats out this round, in order, with the server time each went. */
   private outOrder: { seat: number; at: number }[] = [];
 
-  /** `boxes`: where each box starts, for tests; a round always starts from empty boxes otherwise. */
-  constructor(o: { r: number; seats: RoundSeat[]; roundSeed: Seed; trickSeeds: Seed[]; startsAt: number; rng: Seed; boxes?: Box[] }) {
+  /**
+   * `boxes`: where each box starts, for tests; a round always starts from empty boxes otherwise.
+   * `cats`: how the House Cats play (the table's option); easy when left out.
+   */
+  constructor(o: { r: number; seats: RoundSeat[]; roundSeed: Seed; trickSeeds: Seed[]; startsAt: number; rng: Seed; cats?: "easy" | "quick"; boxes?: Box[] }) {
     this.r = o.r;
     this.roundSeed = o.roundSeed;
     this.rng = [...o.rng] as Seed;
