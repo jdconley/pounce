@@ -70,14 +70,17 @@ export class TumbleRound {
   private readonly startsAt: number;
   private readonly wins: number[];
   private readonly cats = new Map<number, CatState>();
+  private readonly untilOne: boolean;
 
   /**
    * `cats`: the table's House Cat level. `catLevels`: a level per seat instead (the soak's scripted
    * players). `wins`: the standings, for the cats' aim. `boxes`: where each box starts, for tests;
-   * a round always starts from empty boxes otherwise.
+   * a round always starts from empty boxes otherwise. `untilOne`: play until one box is left even
+   * with no person in it (the soak's all-cat rounds).
    */
-  constructor(o: { r: number; seats: RoundSeat[]; roundSeed: Seed; trickSeeds: Seed[]; startsAt: number; rng: Seed; cats?: "easy" | "quick"; catLevels?: (CatLevel | undefined)[]; wins?: number[]; boxes?: Box[] }) {
+  constructor(o: { r: number; seats: RoundSeat[]; roundSeed: Seed; trickSeeds: Seed[]; startsAt: number; rng: Seed; cats?: "easy" | "quick"; catLevels?: (CatLevel | undefined)[]; wins?: number[]; boxes?: Box[]; untilOne?: boolean }) {
     this.r = o.r;
+    this.untilOne = o.untilOne === true;
     this.startsAt = o.startsAt;
     this.wins = o.wins ?? o.seats.map(() => 0);
     o.seats.forEach((s, i) => {
@@ -504,7 +507,7 @@ export class TumbleRound {
     const outs = this.outOrder.map((o) => o.seat);
     const live = this.seats.map((_, i) => i).filter((i) => this.live(i));
     const humans = live.filter((i) => this.kind(i) === "human");
-    if (live.length > 1 && humans.length > 0) return { over: false, winner: null, outs };
+    if (live.length > 1 && (humans.length > 0 || this.untilOne)) return { over: false, winner: null, outs };
     if (live.length === 1) return { over: true, winner: live[0] as number, outs };
     if (live.length === 0) return { over: true, winner: null, outs };
     const best = [...live].sort((a, b) => this.box(b).rows - this.box(a).rows || a - b)[0] as number;
