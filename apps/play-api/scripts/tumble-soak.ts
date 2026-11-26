@@ -11,8 +11,8 @@ import { CAT_LEVELS, shape, type CatLevel } from "../src/tumble/cats";
 import { toyAt } from "../src/tumble/queue";
 import { TumbleRound, type RoundOut } from "../src/tumble/round";
 
-import type { Box } from "../src/tumble/box";
 import type { Seed } from "../src/rules/rng";
+import type { Box } from "../src/tumble/box";
 
 const arg = (name: string, fallback: number): number => {
   const i = process.argv.indexOf(`--${name}`);

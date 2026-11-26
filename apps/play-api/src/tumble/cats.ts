@@ -21,7 +21,7 @@ export type CatLevel = {
 
 const ALL: readonly Trick[] = ["hairball", "swipe", "catnip", "scoop", "settle", "nap", "swap", "bath"];
 export const CAT_LEVELS: Record<"easy" | "quick", CatLevel> = {
-  easy: { think: [2800, 4400], sloppy: 0.5, tricks: ["hairball", "swipe", "scoop", "nap"] },
+  easy: { think: [3000, 4600], sloppy: 0.5, tricks: ["hairball", "swipe", "scoop", "nap"] },
   quick: { think: [800, 1600], sloppy: 0.15, tricks: ALL },
 };
 
