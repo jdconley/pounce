@@ -227,4 +227,35 @@ import Testing
         let unknown = TableEntry(code: "OLD01", status: "lobby", yourTurn: false, updatedAt: nowMs)
         #expect(HomeTables.merge(entries: [playing, unknown], cache: [:], now: now).map(\.id).sorted() == ["OLD01", "PLAY1"])
     }
+
+    /// The server's sample of a 1.3 app's list (`fixtures/http/birdwatch-tables.json`): each
+    /// Birdwatch table names its rule set, and the tile game table beside them has none.
+    @Test func aBirdwatchTableCarriesItsRuleSetFromTheServersList() throws {
+        let data = try Data(contentsOf: Fixtures.url("http/birdwatch-tables.json"))
+        let reply = try JSONDecoder().decode(TablesReply.self, from: data)
+        #expect(reply.tables.map(\.options?.rules) == [.tucker, .official, nil])
+        let at = Date(timeIntervalSince1970: (reply.tables.map(\.updatedAt).max() ?? 0) / 1000)
+        let items = HomeTables.merge(entries: reply.tables, cache: [:], now: at)
+        #expect(Dictionary(uniqueKeysWithValues: items.map { ($0.id, $0.rules) }) == ["BCDFG": .tucker, "GH2VD": .official, "KLMNP": nil])
+    }
+
+    @Test func aRuleSetThisAppDoesntKnowOrOnAnotherGameIsNoRuleSetAndTheListStillReads() throws {
+        let json = #"""
+            {"tables":[
+              {"code":"AAAAA","status":"playing","yourTurn":false,"updatedAt":1,"game":"birdwatch","options":{"rules":"grandma"}},
+              {"code":"BBBBB","status":"playing","yourTurn":false,"updatedAt":1,"game":"birdwatch","options":"tucker"},
+              {"code":"CCCCC","status":"playing","yourTurn":false,"updatedAt":1,"options":{"rules":"tucker"}}
+            ]}
+            """#
+        let reply = try JSONDecoder().decode(TablesReply.self, from: Data(json.utf8))
+        #expect(reply.tables.map(\.code) == ["AAAAA", "BBBBB", "CCCCC"])
+        let items = HomeTables.merge(entries: reply.tables, cache: [:], now: Date(timeIntervalSince1970: 0))
+        #expect(items.map(\.rules) == [nil, nil, nil])
+    }
+
+    @Test func aTableEntrysRuleSetSurvivesTheSavedList() throws {
+        let entry = TableEntry(code: "AAAAA", status: "lobby", yourTurn: false, updatedAt: 1, game: "birdwatch", options: TableOptions(rules: .friesen))
+        let back = try JSONDecoder().decode(TableEntry.self, from: JSONEncoder().encode(entry))
+        #expect(back == entry)
+    }
 }
