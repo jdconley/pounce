@@ -77,6 +77,11 @@ test("Birdwatch lobby: the host picks the rules, swaps seats, and teams wear rib
   // How to play, for the rule set on the table.
   await host.page.getByRole("button", { name: "How to play" }).click();
   await expect(host.page.getByRole("dialog", { name: "How to play" }).getByText("follows suit like any trump")).toBeVisible();
+
+  // Home names the table's rule set, for the guest who sits there too.
+  const home = await guest.context.newPage();
+  await home.goto("/play/");
+  await expect(home.getByRole("button", { name: /Friesen rules/ })).toBeVisible();
   await closeAll(host.context, guest.context);
 });
 
