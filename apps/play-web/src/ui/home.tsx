@@ -4,7 +4,7 @@ import { alertsCardDismissed, dismissAlertsCard, turnOnAlerts, useAlerts } from 
 import { TodayDish, useDishOn } from "../daily/dish-home";
 import { art, RINGS } from "../lib/art";
 import { CATALOG, GAME_IDS, titleOf, type GameId } from "../lib/catalog";
-import { isRoomCode, navigate } from "../lib/router";
+import { navigate, typedCode } from "../lib/router";
 import { api, type TableEntry } from "../net/api";
 import { promptInstall, useInstall } from "../pwa";
 import { knownTables, reach, useApp } from "../store/app";
@@ -181,23 +181,28 @@ export function Posters(props: { onPlay: (game: GameId) => void; firstId?: strin
   );
 }
 
-/** Join by code: five letters, typed or pasted (a whole invite link works too). */
-export function JoinScreen(props: { onJoin: (code: string) => void }) {
+/**
+ * Join by code: five letters, typed or pasted (a whole invite link works too), or the seven a
+ * Purrtrait table's TV shows (its code and two letters that change every 30 seconds).
+ */
+export function JoinScreen(props: { onJoin: (code: string, near?: string) => void }) {
   const [value, setValue] = useState("");
   const [shake, setShake] = useState(0);
-  const code = value.toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 5);
-  const ok = isRoomCode(code);
+  const code = value.toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 7);
+  const typed = typedCode(code);
+  const ok = typed !== null;
   const submit = () => {
-    if (ok) props.onJoin(code);
+    if (typed) props.onJoin(typed.code, typed.near);
     else setShake((n) => n + 1);
   };
   const paste = async () => {
     try {
       const text = await navigator.clipboard.readText();
-      const found = /\/j\/([A-Za-z0-9]{5})/.exec(text)?.[1] ?? /\b([A-Za-z0-9]{5})\b/.exec(text)?.[1];
+      const found = /\/j\/([A-Za-z0-9]{5})/.exec(text)?.[1] ?? /\b([A-Za-z0-9]{7}|[A-Za-z0-9]{5})\b/.exec(text)?.[1];
       if (found) {
         setValue(found.toUpperCase());
-        if (isRoomCode(found.toUpperCase())) props.onJoin(found.toUpperCase());
+        const t = typedCode(found);
+        if (t) props.onJoin(t.code, t.near);
       }
     } catch {
       // No clipboard access: typing works.

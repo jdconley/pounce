@@ -22,6 +22,9 @@ import { bwOverTitle, bwStandings, RULE_COPY } from "../table/bw-model";
 import { ScoreSheet } from "../table/bw-panels";
 import { CatTowerTable } from "../table/cattower";
 import { CtController } from "../table/ct-controller";
+import { PurrHowTo } from "../table/purr-help";
+import { purrStandings } from "../table/purr-model";
+import { PurrPhone } from "../table/purr-watch";
 import { seatCat, seatName } from "../table/seat";
 import { SwitchView } from "../table/shared";
 import { TilesTable } from "../table/tiles";
@@ -42,12 +45,13 @@ function useRoom(store: RoomStore): RoomState {
 }
 
 /** `say`: a toast over every screen (app.tsx's), as "On the TV" outlives the sheet that linked it. */
-export function TableScreen(props: { code: string; intent: TableIntent; say?: (words: string) => void }) {
+export function TableScreen(props: { code: string; intent: TableIntent; say?: (words: string) => void; near?: string }) {
   const { people } = useApp();
   const store = useMemo(
     () =>
       new RoomStore({
         code: props.code,
+        near: props.near,
         token: async () => (await api.credential()).token,
         dropToken: () => undefined,
         reducedMotion: () => matchMedia("(prefers-reduced-motion: reduce)").matches,
@@ -118,7 +122,7 @@ export function TableScreen(props: { code: string; intent: TableIntent; say?: (w
     if (state.phase === "over") {
       noteGameFinished();
     }
-    if (state.phase === "notFound" || state.phase === "closed") forgetTable(props.code);
+    if (state.phase === "notFound" || state.phase === "closed" || state.phase === "removed") forgetTable(props.code);
   }, [state.phase]);
   useEffect(() => () => setSafeToReload(true), []);
 
@@ -146,14 +150,22 @@ export function TableScreen(props: { code: string; intent: TableIntent; say?: (w
   const offline = state.everConnected && !state.online && ["lobby", "playing", "over", "connecting"].includes(state.phase);
 
   let body;
-  if (state.phase === "notFound" || state.phase === "closed" || state.phase === "locked") {
+  if (state.phase === "notFound" || state.phase === "closed" || state.phase === "locked" || state.phase === "notNear" || state.phase === "removed") {
     const words =
-      state.phase === "locked" ? "Too many wrong codes. Try again later." : state.phase === "closed" ? "This table has closed." : "No table with that code.";
+      state.phase === "locked"
+        ? "Too many wrong codes. Try again later."
+        : state.phase === "notNear"
+          ? "Scan the code on the TV."
+          : state.phase === "removed"
+            ? "The host removed you from this table."
+            : state.phase === "closed"
+              ? "This table has closed."
+              : "No table with that code.";
     body = (
       <main class="screen violet-bg">
         <div class="state">
           <img src={art(state.phase === "locked" ? "state-stalled" : "state-closed")} alt="" />
-          <p>{words}</p>
+          <p id="table-refused">{words}</p>
           <Button onClick={home}>
             <Icon name="icon-home" size={28} /> Home
           </Button>
@@ -198,7 +210,9 @@ export function TableScreen(props: { code: string; intent: TableIntent; say?: (w
   } else {
     const isTiles = room.gameId === "tiles";
     const isBird = room.gameId === "birdwatch";
-    const tvSwitch = (isBird ? Boolean(room.birdwatch) : isTiles ? Boolean(room.tiles) : room.game !== null) && showSwitch(room);
+    const isPurr = room.gameId === "purrtrait";
+    // Purrtrait is always on its TV and has no table to show on a phone: no Cards/Table switch.
+    const tvSwitch = !isPurr && (isBird ? Boolean(room.birdwatch) : isTiles ? Boolean(room.tiles) : room.game !== null) && showSwitch(room);
     const cards = tvSwitch && showController(room, view);
     // Tuna Tiles on Cards: the rack off turn; on your turn the full table, as rearranging it needs
     // it (the same element as on Table, so a draft survives the switch).
@@ -208,7 +222,9 @@ export function TableScreen(props: { code: string; intent: TableIntent; say?: (w
     body = (
       <main class="screen table-screen">
         <div class="room-bg" style={{ backgroundImage: `url(${art("room-bg")})` }} />
-        {isBird ? (
+        {isPurr ? (
+          <PurrPhone store={store} state={state} kitten={people.band === "kitten"} />
+        ) : isBird ? (
           room.birdwatch ? <BirdwatchTable store={store} state={state} sounds={!cards} cards={cards} topInset={tvSwitch && !cards ? SWITCH_STRIP : 0} /> : null
         ) : isTiles && room.tiles ? (
           controller ? (
@@ -238,7 +254,7 @@ export function TableScreen(props: { code: string; intent: TableIntent; say?: (w
                 <Icon name="icon-trophy" size={32} />
                 <span class="grow">Scores</span>
               </button>
-              {mySeats(room).length > 0 ? (
+              {mySeats(room).length > 0 && (!isPurr || (room.youAreHost && !room.screen)) ? (
                 <button
                   type="button"
                   class="row"
@@ -252,7 +268,12 @@ export function TableScreen(props: { code: string; intent: TableIntent; say?: (w
                   <span class="grow">Show on TV</span>
                 </button>
               ) : null}
-              {isBird && room.options && "rules" in room.options ? (
+              {isPurr ? (
+                <button type="button" class="row" onClick={() => setMenu("howto")}>
+                  <Icon name="icon-play" size={32} />
+                  <span class="grow">How to play</span>
+                </button>
+              ) : isBird && room.options && "rules" in room.options ? (
                 <button type="button" class="row" onClick={() => setMenu("howto")}>
                   <Icon name="icon-play" size={32} />
                   <span class="grow">How to play</span>
@@ -278,6 +299,7 @@ export function TableScreen(props: { code: string; intent: TableIntent; say?: (w
           </Sheet>
         ) : null}
         {menu === "scores" ? isBird && room.birdwatch ? <ScoreSheet room={room} onClose={() => setMenu(null)} /> : <ScoresSheet room={room} onClose={() => setMenu(null)} /> : null}
+        {menu === "howto" && isPurr ? <PurrHowTo onClose={() => setMenu(null)} /> : null}
         {menu === "howto" && room.options && "rules" in room.options ? <BwHowTo rules={room.options.rules} onClose={() => setMenu(null)} /> : null}
         {menu === "forfeit" ? (
           <Sheet title="Forfeit this game?" onClose={() => setMenu(null)}>
@@ -362,10 +384,11 @@ function GameOver(props: { room: RoomView; onHome: () => void; onAgain: () => vo
   const { room } = props;
   const g = room.game;
   const t = room.tiles;
-  const winners = g?.winners ?? t?.winners ?? [];
-  const forfeited = g?.forfeited ?? t?.forfeited ?? [];
+  const p = room.purrtrait;
+  const winners = g?.winners ?? t?.winners ?? p?.winners ?? [];
+  const forfeited = g?.forfeited ?? t?.forfeited ?? p?.out ?? [];
   const seats = room.seats.flatMap((s, i) => (s.kind === "human" || s.kind === "bot" ? [i] : []));
-  const rank = [...seats].sort((a, b) => {
+  const rank = p ? purrStandings(room, p).map((r) => r.seat) : [...seats].sort((a, b) => {
     const w = Number(winners.includes(b)) - Number(winners.includes(a));
     if (w) return w;
     const f = Number(forfeited[a] ?? false) - Number(forfeited[b] ?? false);
@@ -396,7 +419,7 @@ function GameOver(props: { room: RoomView; onHome: () => void; onAgain: () => vo
               <Cat cat={seatCat(room.seats[s])} pose={winners.includes(s) ? "celebrate" : "idle"} size={40} />
               <span class="who">{seatName(room.seats[s])}</span>
               <span class="detail">
-                {forfeited[s] ? "Left" : g ? `Level ${Math.min((g.phase[s] ?? 0) + 1, 10)} · ${g.scores[s] ?? 0}` : `${(t?.scores[s] ?? 0) > 0 ? "+" : ""}${t?.scores[s] ?? 0}`}
+                {forfeited[s] ? "Left" : p ? `${p.scores[s] ?? 0}` : g ? `Level ${Math.min((g.phase[s] ?? 0) + 1, 10)} · ${g.scores[s] ?? 0}` : `${(t?.scores[s] ?? 0) > 0 ? "+" : ""}${t?.scores[s] ?? 0}`}
               </span>
             </li>
           ))}
@@ -465,13 +488,14 @@ function BwGameOver(props: { room: RoomView; onHome: () => void; onAgain: () => 
 function liveSeats(room: RoomView): number[] {
   // Birdwatch: a seat that leaves goes to a House Cat, so every seat still this device's is live.
   if (room.gameId === "birdwatch") return mySeats(room);
-  const out = room.game?.forfeited ?? room.tiles?.forfeited ?? [];
+  const out = room.game?.forfeited ?? room.tiles?.forfeited ?? room.purrtrait?.out ?? [];
   return mySeats(room).filter((s) => !out[s]);
 }
 
 /** What a forfeit means here, in the words iOS uses (TableMenuSheet.swift). */
 function forfeitWords(room: RoomView): string {
   if (room.gameId === "birdwatch") return "A House Cat takes your seat.";
+  if (room.gameId === "purrtrait") return "Your turns are skipped. The rest play on.";
   const out = room.game?.forfeited ?? room.tiles?.forfeited ?? [];
   const mine = new Set(liveSeats(room));
   const rest = room.seats.flatMap((s, i) => ((s.kind === "human" || s.kind === "bot") && !out[i] && !mine.has(i) ? [i] : []));
@@ -493,7 +517,7 @@ function ScoresSheet(props: { room: RoomView; onClose: () => void }) {
             <Cat cat={seatCat(room.seats[s])} size={40} />
             <span class="who">{seatName(room.seats[s])}</span>
             <span class="detail">
-              {g ? `Level ${Math.min((g.phase[s] ?? 0) + 1, 10)} · ${g.scores[s] ?? 0}` : `${t?.rackCounts[s] ?? 0} pieces`}
+              {room.purrtrait ? `${room.purrtrait.scores[s] ?? 0}` : g ? `Level ${Math.min((g.phase[s] ?? 0) + 1, 10)} · ${g.scores[s] ?? 0}` : `${t?.rackCounts[s] ?? 0} pieces`}
             </span>
           </li>
         ))}

@@ -5,7 +5,6 @@
  */
 import { PROTOCOL } from "../lib/env";
 import { RoomSocket, type LinkQuality, type SocketEvent } from "../net/socket";
-
 import { foldPurr, type InkMessage, type PurrAction, type PurrEvent, type PurrRoom } from "../table/purr-model";
 
 import type { BirdAction, BirdEvent } from "@pounce/play-api/birdwatch/engine";

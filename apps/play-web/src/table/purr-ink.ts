@@ -299,6 +299,11 @@ export class InkWriter {
     return this.undoable.length > 0;
   }
 
+  /** Nothing drawn on this device this turn: a page that reloaded mid-turn takes the server's drawing. */
+  get fresh(): boolean {
+    return this.nextId === 0 && this.picture.strokes.length === 0;
+  }
+
   /** Points or ops are waiting to go. */
   get pending(): boolean {
     return this.outbox.length > 0 || this.held.length > 0 || (this.live !== null && !this.started);

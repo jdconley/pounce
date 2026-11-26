@@ -19,6 +19,7 @@ import { tilesLayout } from "../../table/tiles-layout";
 import { TilesPublic, tilesShown, tilesStyle } from "../../table/tiles-public";
 import { Cat, useSize } from "../common";
 
+import { PurrTvTable } from "./purr-tv";
 import { momentFor, overTitle, standings, turnSeat, type Moment } from "./tv-model";
 
 import type { RoomStore, RoomState } from "../../store/room";
@@ -34,6 +35,7 @@ type TableProps = { store: RoomStore; state: RoomState; offline: boolean };
 /** The table as the TV draws it, for either game. */
 export function TvTable(props: TableProps) {
   const room = props.state.room!;
+  if (room.gameId === "purrtrait") return room.purrtrait ? <PurrTvTable {...props} /> : null;
   if (room.gameId === "birdwatch") return room.birdwatch ? <TvBirdwatch {...props} /> : null;
   if (room.gameId === "tiles") return room.tiles ? <TvTiles {...props} /> : null;
   return room.game ? <TvCatTower {...props} /> : null;

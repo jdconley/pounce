@@ -7,6 +7,8 @@ export type Route =
   | { kind: "home" }
   | { kind: "table"; code: string }
   | { kind: "join"; code: string }
+  /** The TV's QR at a Purrtrait table (`/e/<CODE>?near=<KEY>`, design §5.2): join with the TV's key. */
+  | { kind: "easel"; code: string; near?: string }
   | { kind: "pounce"; token: string }
   | { kind: "keypad" }
   /** The TV page: it shows a link, then a table. */
@@ -21,13 +23,19 @@ export type Route =
 const DAILY_GAME_IDS: readonly DailyGameId[] = ["sniff", "nine-lives", "cat-nap", "box-fort", "test"];
 
 const TOKEN = /^[A-Za-z0-9_-]{22}$/;
+/** A near key, or the typed code that carries its first letters. */
+const NEAR = /^[A-Za-z0-9]{2,16}$/;
 
-export function parseRoute(pathname: string): Route {
+export function parseRoute(pathname: string, search = ""): Route {
   const parts = pathname.replace(/^\/play\/?/, "").split("/").filter(Boolean);
   const [head, arg] = parts;
   const code = arg?.toUpperCase();
   if (head === "t" && code && CODE.test(code)) return { kind: "table", code };
   if (head === "j" && code && CODE.test(code)) return { kind: "join", code };
+  if (head === "e" && code && CODE.test(code)) {
+    const near = new URLSearchParams(search).get("near");
+    return near && NEAR.test(near) ? { kind: "easel", code, near: near.toUpperCase() } : { kind: "easel", code };
+  }
   if (head === "p" && arg && TOKEN.test(arg)) return { kind: "pounce", token: arg };
   if (head === "join") return { kind: "keypad" };
   if (head === "tv" && parts.length === 1) return { kind: "tv" };
@@ -42,6 +50,8 @@ export function pathFor(route: Route): string {
       return `/play/t/${route.code}`;
     case "join":
       return `/play/j/${route.code}`;
+    case "easel":
+      return `/play/e/${route.code}`;
     case "pounce":
       return `/play/p/${route.token}`;
     case "keypad":
@@ -61,7 +71,7 @@ export function pathFor(route: Route): string {
 
 const listeners = new Set<(r: Route) => void>();
 
-export const currentRoute = (): Route => parseRoute(location.pathname);
+export const currentRoute = (): Route => parseRoute(location.pathname, location.search);
 
 export function navigate(route: Route, replace = false): void {
   const path = pathFor(route);
@@ -82,6 +92,19 @@ if (typeof window !== "undefined") {
     const route = currentRoute();
     for (const l of [...listeners]) l(route);
   });
+}
+
+/**
+ * What "Join with code" was typed: a room code, or a Purrtrait table's TV code (the room code and
+ * the two letters after it, design §5.2). Null when it is neither.
+ */
+export function typedCode(raw: string): { code: string; near?: string } | null {
+  const clean = raw.toUpperCase().replace(/[^A-Z0-9]/g, "");
+  const code = clean.slice(0, 5);
+  if (!CODE.test(code)) return null;
+  if (clean.length === 5) return { code };
+  if (clean.length === 7) return { code, near: clean };
+  return null;
 }
 
 export const isRoomCode = (code: string): boolean => CODE.test(code);
