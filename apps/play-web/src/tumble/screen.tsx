@@ -317,7 +317,7 @@ function TumblePlay(props: Props & { tumble: TumbleStore; t: TumbleRoom }) {
               <div class={`tt-mini watch ${tumble.seatState(s)}`} ref={holder(s)} style={{ ...rectStyle(r), ["--ring" as string]: RINGS[s % RINGS.length] }} key={`w${s}`}>
                 <canvas class="tt-canvas" ref={register(s, r.cell, { landing: true })} style={{ width: `${r.cell * 12}px`, height: `${r.cell * 18}px` }} />
                 {status(s)}
-                {label(s, r.cell >= 6)}
+                {label(s, r.w >= 110)}
               </div>
             );
           })}
@@ -327,7 +327,7 @@ function TumblePlay(props: Props & { tumble: TumbleStore; t: TumbleRoom }) {
           <div class="tt-rim" style={rectStyle(L.rim)}>
             <span class="tt-rim-cat">
               <Cat cat={seatCat(mine !== null ? room.seats[mine] : undefined)} pose="awake" size={L.rim.h} />
-              <canvas class="tt-next" ref={nextRef} aria-label="Next toy" />
+              <canvas class="tt-next" ref={nextRef} aria-label="Next toy" style={{ width: `${Math.round(L.rim.h * 0.75)}px`, height: `${Math.round(L.rim.h * 0.75)}px` }} />
             </span>
             <b class="tt-num big">{(mine ?? 0) + 1}</b>
             <Paws wins={mine !== null ? wins(mine) : 0} size={16} />
@@ -361,7 +361,7 @@ function TumblePlay(props: Props & { tumble: TumbleStore; t: TumbleRoom }) {
                 return (
                   <button
                     type="button"
-                    class={`tt-chip ${tumble.seatState(s)} ${glows(s) ? "glow" : ""}`}
+                    class={`tt-chip ${r.w < 110 ? "narrow" : ""} ${tumble.seatState(s)} ${glows(s) ? "glow" : ""}`}
                     ref={holder(s)}
                     style={{ ...rectStyle(r), ["--ring" as string]: RINGS[s % RINGS.length] }}
                     onClick={() => picker.tapBox(s)}
@@ -418,7 +418,7 @@ function TumblePlay(props: Props & { tumble: TumbleStore; t: TumbleRoom }) {
                   aria-pressed={picker.lifted === i}
                   aria-label={trick ? TRICK_NAME[trick] : "Empty"}
                 >
-                  {trick ? <span class="tt-slot-name">{TRICK_NAME[trick]}</span> : null}
+                  {trick ? <span class="tt-slot-name" style={{ fontSize: `${Math.max(9, Math.round(r.w * 0.2))}px` }}>{TRICK_NAME[trick]}</span> : null}
                 </button>
               );
             })}
@@ -440,6 +440,9 @@ function TumblePlay(props: Props & { tumble: TumbleStore; t: TumbleRoom }) {
   );
 }
 
+/** Confetti over the round's winner: where each bit starts across, its delay and colour. */
+const CONFETTI: readonly [number, number, string][] = Array.from({ length: 16 }, (_, i) => [(i * 37) % 100, (i * 113) % 700, RINGS[i % RINGS.length] as string]);
+
 /** Between rounds (spec §5.5): the winner's cat on top with confetti, everyone's paw tokens, and who the next round waits for. */
 export function RoundOver(props: { room: RoomView; t: TumbleRoom; tv?: boolean }) {
   const { room, t } = props;
@@ -460,7 +463,11 @@ export function RoundOver(props: { room: RoomView; t: TumbleRoom; tv?: boolean }
         <p class="tt-over-round">Round {t.r}</p>
         {winner !== null ? (
           <div class="tt-over-winner" style={{ ["--ring" as string]: RINGS[winner % RINGS.length] }}>
-            <img class="tt-confetti" src={art("fx-confetti")} alt="" />
+            <span class="tt-confetti" aria-hidden="true">
+              {CONFETTI.map(([x, delay, color]) => (
+                <i style={{ left: `${x}%`, animationDelay: `${delay}ms`, background: color }} />
+              ))}
+            </span>
             <Cat cat={seatCat(room.seats[winner])} pose="celebrate" size={props.tv ? 220 : 120} />
             <span class="name-tag">{seatName(room.seats[winner])}</span>
           </div>

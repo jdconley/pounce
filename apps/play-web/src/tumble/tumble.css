@@ -167,6 +167,11 @@
   pointer-events: none;
 }
 
+.tt-mini:not(.watch) > .tt-state {
+  padding: 2px 5px;
+  font-size: 10px;
+}
+
 .tt-box > .tt-state {
   font-size: 18px;
   padding: 6px 14px;
@@ -195,7 +200,8 @@
 
 @keyframes tt-tip {
   to {
-    rotate: 14deg;
+    rotate: 8deg;
+    scale: 0.92;
     opacity: 0.7;
   }
 }
@@ -277,7 +283,8 @@
   color: var(--white);
   -webkit-text-stroke: 3px var(--ink);
   paint-order: stroke fill;
-  overflow-wrap: anywhere;
+  overflow-wrap: normal;
+  word-break: keep-all;
 }
 
 .tt-fx {
@@ -399,9 +406,94 @@
 
 .tt-confetti {
   position: absolute;
-  inset: -20px -40px auto;
-  width: calc(100% + 80px);
+  inset: -30px -60px 0;
+  overflow: hidden;
   pointer-events: none;
+}
+
+.tt-confetti i {
+  position: absolute;
+  top: -10px;
+  width: 8px;
+  height: 12px;
+  border: 1.5px solid var(--ink);
+  border-radius: 2px;
+  animation: tt-confetti 1800ms ease-in infinite;
+}
+
+@keyframes tt-confetti {
+  from {
+    translate: 0 0;
+    rotate: 0deg;
+  }
+  to {
+    translate: 12px 220px;
+    rotate: 540deg;
+    opacity: 0;
+  }
+}
+
+/* How to play's tricks table. */
+.tt-tricks {
+  width: 100%;
+  margin-top: 10px;
+  border-collapse: separate;
+  border-spacing: 0 6px;
+  font: 800 15px / 1.25 var(--round);
+}
+
+.tt-tricks th {
+  padding-right: 10px;
+  text-align: left;
+  white-space: nowrap;
+  font-weight: 900;
+}
+
+.tt-tricks th i {
+  display: inline-block;
+  width: 18px;
+  height: 18px;
+  margin-right: 6px;
+  vertical-align: -3px;
+  border: 2px solid var(--ink);
+  border-radius: 50%;
+  background: radial-gradient(circle at 40% 35%, #fff 0 12%, var(--trick) 45%);
+}
+
+.tt-tricks td.fine {
+  padding-left: 8px;
+  text-align: right;
+  white-space: nowrap;
+  opacity: 0.75;
+}
+
+/* Chips in a phone's slim column: cat and wins, the name under them, then the stack bar. */
+.tt-chip.narrow {
+  display: grid;
+  grid-template: "cat wins" auto "body body" 1fr / auto 1fr;
+  align-items: center;
+  gap: 2px 4px;
+  padding: 3px 5px;
+}
+
+.tt-chip.narrow .cat-img {
+  grid-area: cat;
+}
+
+.tt-chip.narrow .tt-chip-body {
+  grid-area: body;
+  font-size: 10px;
+}
+
+.tt-chip.narrow .tt-chip-wins {
+  grid-area: wins;
+  justify-self: end;
+}
+
+.tt-mini:not(.watch) > .tt-state {
+  white-space: normal;
+  text-align: center;
+  line-height: 1;
 }
 
 .tt-over-paws {
@@ -497,7 +589,7 @@
 }
 
 .tt-tv-box > .tt-state {
-  font-size: 3.4vh;
+  font-size: 2.6vh;
   padding: 0.6vh 1.4vh;
 }
 
