@@ -303,7 +303,7 @@ final class RoomSession {
                 return .claim(seat: 0, person: owner)
             }
             return RoomEntry.autoClaim(model: model, owner: owner)
-        case .join, .rejoin:
+        case .join, .rejoin, .easel:
             return RoomEntry.autoClaim(model: model, owner: owner)
         case .move(let moveCode):
             beginMove(moveCode, seats: model.mySeats)

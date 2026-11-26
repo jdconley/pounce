@@ -251,6 +251,11 @@ enum UITipCopy {
         case .birdDimmed: String(localized: "Dim cards can't be played. Follow suit.", comment: "Tip at Birdwatch's table: a dimmed card in your hand")
         case .birdTrump: String(localized: "Trump beats every other suit.", comment: "Tip at Birdwatch's table: the trump badge")
         case .birdPartner: String(localized: "You hold the called card. Help the bidder, quietly.", comment: "Tip at Birdwatch's table (five players): the partner's own mark")
+        case .purrShelf: String(localized: "Pick it on the TV.", comment: "Tip on Home: Purrtrait's card, a game only a TV starts")
+        case .purrPick: String(localized: "Pick one to draw", comment: "Tip in Purrtrait: the drawer's two word cards")
+        case .purrEasel: String(localized: "No letters or numbers", comment: "Tip in Purrtrait: the drawer's easel (draw pictures only)")
+        case .purrGotIt: String(localized: "Tap who said it first", comment: "Tip in Purrtrait: the Got it button")
+        case .purrLook: String(localized: "Guess out loud", comment: "Tip in Purrtrait: a guesser's phone")
         }
     }
 }

@@ -82,12 +82,19 @@ enum DemoMode: String {
     case birdWatch = "bird-watch", birdPartner = "bird-partner", birdPartnerMark = "bird-partner-mark"
     case birdSix = "bird-six", birdBetween = "bird-between", birdOver = "bird-over", birdCurtain = "bird-curtain"
     case birdTV = "bird-tv", birdLobby = "bird-lobby", birdLobbyReady = "bird-lobby-ready"
+    /// Purrtrait's phone in each state (`PurrDemo`).
+    case purrPick = "purr-pick", purrDraw = "purr-draw", purrWatch = "purr-watch", purrNext = "purr-next"
+    case purrPaused = "purr-paused", purrReveal = "purr-reveal", purrMissed = "purr-missed", purrOver = "purr-over"
+    case purrCurtain = "purr-curtain", purrLobby = "purr-lobby", purrCrowd = "purr-crowd"
 
     /// A tile game demo.
     var isTiles: Bool { rawValue.hasPrefix("tiles") || rawValue.hasPrefix("controller-tiles") }
 
     /// A Birdwatch demo.
     var isBirdwatch: Bool { rawValue.hasPrefix("bird-") }
+
+    /// A Purrtrait demo.
+    var isPurrtrait: Bool { rawValue.hasPrefix("purr-") }
 
     static func from(arguments: [String] = CommandLine.arguments) -> DemoMode? {
         guard let i = arguments.firstIndex(of: "-demo"), arguments.indices.contains(i + 1) else { return nil }
@@ -124,6 +131,9 @@ enum DemoMode: String {
         case .birdBid, .birdNest, .birdTrump, .birdPlay, .birdWatch, .birdPartner, .birdPartnerMark, .birdSix, .birdBetween,
              .birdOver, .birdCurtain, .birdTV, .birdLobby, .birdLobbyReady:
             return BirdDemo.room(self)
+        case .purrPick, .purrDraw, .purrWatch, .purrNext, .purrPaused, .purrReveal, .purrMissed, .purrOver, .purrCurtain,
+             .purrLobby, .purrCrowd:
+            return PurrDemo.room(self)
         case .tiles, .tilesEarly, .tilesOpened, .tilesDraft, .tilesInvalid, .tilesLoupe, .tilesLate, .tilesLong,
              .tilesPass, .tilesOther, .tilesCurtain, .tilesOver, .tilesPlay, .tilesLast,
              .controllerTiles, .controllerTilesOff, .controllerTilesCurtain, .controllerTilesLateOff:
@@ -272,6 +282,7 @@ enum DemoMode: String {
     private func baseSocket() -> any RoomSocketing {
         if isTiles { return TilesDemo.socket(self) }
         if isBirdwatch { return BirdDemo.socket(self) }
+        if isPurrtrait { return PurrDemo.socket(self) }
         return switch self {
         case .replay: ReplaySocket(start: DemoFixtures.replayStart(), steps: DemoFixtures.replay(), loops: 2)
         case .handoff: ReplaySocket(start: room, steps: Self.handoffSteps(), loops: 1)

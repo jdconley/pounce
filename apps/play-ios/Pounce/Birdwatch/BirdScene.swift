@@ -738,7 +738,7 @@ final class BirdScene: SKScene {
             next.seats = room.seats
             self.model = BirdTableModel(room: next)
             redraw()
-        case .game, .tiles, .lobbyNope:
+        case .game, .tiles, .purrtrait, .lobbyNope:
             break
         }
     }

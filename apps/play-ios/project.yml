@@ -177,6 +177,12 @@ targets:
           - BirdPanels.swift
           - BirdScoreSheet.swift
           - BirdDemo.swift
+      # Purrtrait's easel (the layer-backed view the TV draws the live ink on) and its words; not
+      # the iPhone's drawing canvas, its screens, lobby or demo.
+      - path: Pounce/Purrtrait
+        includes:
+          - PurrEaselView.swift
+          - PurrWords.swift
       # The daily games' watch contract, and everything the TV builds for each game: its watch view
       # and the drawing and art it needs, in `Pounce/Daily/<Game>/TV/`. A game adds files there and
       # touches nothing else (this list, ios.yml's and distribute.swift's TV filters match the same).

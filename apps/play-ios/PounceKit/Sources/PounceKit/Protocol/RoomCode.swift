@@ -7,7 +7,18 @@ public enum RoomCode {
     private static let roomLength = 5
     private static let moveLength = 6
 
+    /// A room code's length.
+    public static let length = roomLength
+    /// A Purrtrait TV's typed code: the room code and the first 2 characters of its key.
+    public static let easelLength = roomLength + 2
+
     public static func isValid(_ s: String) -> Bool { matches(s, length: roomLength) }
+
+    /// A Purrtrait TV's 7-character typed code.
+    public static func isValidEasel(_ s: String) -> Bool { matches(s, length: easelLength) }
+
+    /// A Purrtrait TV's join key (8 characters from the same alphabet).
+    public static func isValidNearKey(_ s: String) -> Bool { matches(s, length: 8) }
 
     public static func isValidMoveCode(_ s: String) -> Bool { matches(s, length: moveLength) }
 

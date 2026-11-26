@@ -18,9 +18,14 @@ struct JoinView: View {
     /// The last code was wrong: the line under the tiles says so until the next key.
     @State private var wrong = false
 
-    private static let length = 5
+    /// A room code is five; a Purrtrait TV's code is seven (the table asks for the last two).
+    private var length: Int { easel ? RoomCode.easelLength : RoomCode.length }
+    /// The five typed are a Purrtrait table's: two more from the TV.
+    @State private var easel = false
 
-    private var checking: Bool { model.probing != nil && model.probing == typed }
+    private var checking: Bool {
+        model.probing != nil && typed.count == length && model.probing == String(typed.prefix(RoomCode.length))
+    }
     /// The check's socket failed to connect several times: the server can't be reached.
     private var offline: Bool { checking && model.room?.offline == true }
     /// The server refused the check: too many wrong codes from this phone or its network.
@@ -64,6 +69,18 @@ struct JoinView: View {
         // The table is there, but this version can't join it: the table's own screen says why.
         .onChange(of: model.room?.store.phase) { _, phase in
             if checking, phase == .needsUpdate, let code = model.probing { model.open(code: code, intent: .join) }
+            // A Purrtrait table: five letters aren't enough. Two more tiles, for the TV's last two.
+            if model.probing != nil, phase == .notNear {
+                if typed.count == RoomCode.length, !easel {
+                    model.cancelProbe()
+                    withAnimation(.spring(duration: 0.35, bounce: 0.35).paced) { easel = true }
+                    Sound.shared.play(ArtName.Sound.sfxPop)
+                    UIAccessibility.post(notification: .announcement, argument: Self.moreWords)
+                } else {
+                    model.cancelProbe()
+                    nope(Self.tvWords)
+                }
+            }
         }
         .onAppear {
             if let bounced = model.takeBouncedCode() {
@@ -161,8 +178,8 @@ struct JoinView: View {
     /// Under the tiles: why they shook, in a few words; empty space otherwise, so nothing moves.
     private func message(height: CGFloat) -> some View {
         ZStack {
-            if wrong {
-                Text("No table with that code.", comment: "Join: a code with no table behind it")
+            if let words = wrong ? wrongWords : (easel ? Self.moreWords : nil) {
+                Text(verbatim: words)
                     .font(.system(size: 18, weight: .heavy, design: .rounded))
                     .foregroundStyle(Palette.yellow)
                     .multilineTextAlignment(.center)
@@ -176,10 +193,11 @@ struct JoinView: View {
         .frame(maxWidth: .infinity)
         .padding(.horizontal, 16)
         .animation(.easeOut(duration: 0.2).paced, value: wrong)
+        .animation(.easeOut(duration: 0.2).paced, value: easel)
     }
 
     private func cat(height: CGFloat) -> some View {
-        Image(ArtName.cat(3, sad ? .away : (typed.count == Self.length ? .awake : .idle)))
+        Image(ArtName.cat(3, sad ? .away : (typed.count == length ? .awake : .idle)))
             .resizable()
             .scaledToFit()
             .frame(height: height)
@@ -192,17 +210,17 @@ struct JoinView: View {
     }
 
     private var tiles: some View {
-        CodeTiles(typed: typed, length: Self.length, busy: checking)
+        CodeTiles(typed: typed, length: length, busy: checking)
             .shake(trigger: tilesShake)
     }
 
     // MARK: input
 
     private func type(_ c: Character) {
-        guard typed.count < Self.length else { return }
+        guard typed.count < length else { return }
         wrong = false
         typed.append(c)
-        if typed.count == Self.length {
+        if typed.count == length {
             model.joinTyped(typed)
         }
     }
@@ -211,22 +229,34 @@ struct JoinView: View {
         guard !typed.isEmpty else { return }
         model.cancelProbe()
         typed.removeLast()
+        // Back under five: a code of any table again.
+        if typed.count < RoomCode.length, easel { withAnimation(.spring(duration: 0.3).paced) { easel = false } }
     }
 
+    static let wrongWords = String(localized: "No table with that code.", comment: "Join: a code with no table behind it")
+    /// A Purrtrait table: the TV's code has two more characters after the room's five.
+    static let moreWords = String(localized: "Two more from the TV", comment: "Join: the table is on a TV; type its code's last two characters")
+    static let tvWords = String(localized: "Scan the code on the TV.", comment: "Join: a Purrtrait TV's code that is too old")
+
+    /// The words of the last bad code.
+    @State private var wrongWords = Self.wrongWords
+
     /// Bad code: shake the tiles, the cat shakes its head, then the tiles clear.
-    private func nope() {
+    private func nope(_ words: String = Self.wrongWords) {
         tilesShake += 1
         headShake += 1
         sad = true
         wrong = true
-        UIAccessibility.post(
-            notification: .announcement,
-            argument: String(localized: "No table with that code.", comment: "Join: a code with no table behind it"))
+        wrongWords = words
+        UIAccessibility.post(notification: .announcement, argument: words)
         Haptics.shared.thump()
         Sound.shared.play(ArtName.Sound.sfxNope)
         Task {
             try? await Task.sleep(for: Pace.duration(.milliseconds(380)))
-            withAnimation(.spring(duration: 0.3).paced) { typed = "" }
+            withAnimation(.spring(duration: 0.3).paced) {
+                typed = ""
+                easel = false
+            }
             try? await Task.sleep(for: Pace.duration(.milliseconds(600)))
             sad = false
         }

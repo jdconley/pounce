@@ -73,6 +73,11 @@ struct TableScreen: View {
         case .locked:
             // Too many wrong room codes from this phone or its network.
             return .state(.locked)
+        case .notNear:
+            // Purrtrait: an old QR, a stale typed code, or a plain room code.
+            return .state(.notNear)
+        case .removed:
+            return .state(.removed)
         case .needsUpdate:
             return .state(.update)
         }
@@ -175,7 +180,11 @@ struct TableScreen: View {
         case .connecting:
             ConnectingView()
         case .lobby:
-            LobbyView(session: session, interactive: store.connected)
+            if store.room?.isPurrtrait == true {
+                PurrLobbyView(session: session, interactive: store.connected)
+            } else {
+                LobbyView(session: session, interactive: store.connected)
+            }
         case .table:
             // No touches while the socket is down. Not `allowsHitTesting(false)`: that rehosts the
             // SpriteKit view with no safe area, and the whole table jumps under the status bar.
@@ -208,7 +217,9 @@ struct TableScreen: View {
 extension TableScreen {
     /// The table for the game the room plays: the tile game's (tile game spec §9.4), or Cat Tower's.
     @ViewBuilder fileprivate var stage: some View {
-        if session.store.room?.isBirdwatch == true {
+        if session.store.room?.isPurrtrait == true {
+            PurrStage(session: session, connection: shownConnection)
+        } else if session.store.room?.isBirdwatch == true {
             BirdStage(session: session, connection: shownConnection)
         } else if session.store.room?.isTiles == true {
             TilesStage(session: session, connection: shownConnection)

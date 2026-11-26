@@ -45,7 +45,11 @@ struct GameCard: View {
     static let outline: CGFloat = 5
     static let lip: CGFloat = 7
 
-    private var soon: Bool { !game.isAvailable }
+    private var soon: Bool { !game.isPlayable }
+    /// Only a TV starts this game (Purrtrait): bright, with a sticker that says so, and a tap says
+    /// where to pick it.
+    private var onTV: Bool { game.startsOnTV }
+    private var marked: Bool { soon || onTV }
     private var shape: RoundedRectangle { RoundedRectangle(cornerRadius: Self.corner, style: .continuous) }
     private var tint: Color { Palette.tint(game.tint) }
     /// Big text: every card is a poster.
@@ -56,6 +60,9 @@ struct GameCard: View {
         Button {
             if soon {
                 acknowledge()
+            } else if onTV {
+                acknowledge()
+                action()
             } else {
                 Haptics.shared.tick()
                 Sound.shared.play(ArtName.Sound.sfxTick)
@@ -73,15 +80,16 @@ struct GameCard: View {
         .accessibilityLabel(label)
         .accessibilityHint(hint)
         // While the "not ready yet" note is up, its words are the card's value.
-        .accessibilityValue(noteShown ? Self.noteWords : "")
+        .accessibilityValue(noteShown ? noteWords : "")
         .accessibilityIdentifier(identifier ?? "home.game.\(game.id)")
+        .tipTarget(onTV ? "home.game.\(game.id)" : nil)
         .task(id: nudges) {
             // The note goes away by itself a moment after the last tap.
             guard nudges > 0 else { return }
             try? await Task.sleep(for: Pace.duration(.milliseconds(2600)))
             if !Task.isCancelled { noteShown = false }
         }
-        .overlay(alignment: .topTrailing) { if soon { sticker } }
+        .overlay(alignment: .topTrailing) { if marked { sticker } }
         .animation(.spring(duration: 0.35, bounce: 0.35).paced, value: noteShown)
     }
 
@@ -102,7 +110,7 @@ struct GameCard: View {
         case .ticket:
             HStack(spacing: 0) {
                 cover.frame(width: 108)
-                    .overlay { if !soon { PlayDisc().tipTarget(playAnchor) } }
+                    .overlay { if !marked { PlayDisc().tipTarget(playAnchor) } }
                 Rectangle().fill(Palette.ink).frame(width: Self.outline)
                 band(titleSize: ticketTitleSize)
                     .overlay(alignment: .bottom) { note.padding(.bottom, 8) }
@@ -141,7 +149,9 @@ struct GameCard: View {
         .multilineTextAlignment(.leading)
 
         return Group {
-            if soon {
+            if onTV {
+                words.frame(maxWidth: .infinity, alignment: .leading)
+            } else if soon {
                 if shownLayout == .poster, playUnder || bigType {
                     // Where a playable card has its play mark, so a row of posters lines up.
                     VStack(alignment: .leading, spacing: 12) {
@@ -183,14 +193,15 @@ struct GameCard: View {
     // MARK: coming soon
 
     private var sticker: some View {
-        OutlinedText(Self.soonWords, size: min(stickerSize, 24) * (roomy ? 1.25 : 1), width: 2.5)
+        let color = onTV ? Palette.teal : Palette.magenta
+        return OutlinedText(onTV ? Self.tvWords : Self.soonWords, size: min(stickerSize, 24) * (roomy ? 1.25 : 1), width: 2.5)
             .fixedSize()
             .padding(.horizontal, 12)
             .padding(.vertical, 4)
             .background(
                 Capsule()
                     .fill(LinearGradient(
-                        colors: [Palette.magenta.mix(with: .white, by: 0.25), Palette.magenta], startPoint: .top, endPoint: .bottom))
+                        colors: [color.mix(with: .white, by: 0.25), color], startPoint: .top, endPoint: .bottom))
                     .overlay(Capsule().strokeBorder(Palette.ink, lineWidth: 4))
                     .shadow(color: Palette.ink.opacity(0.55), radius: 0, x: 0, y: 4))
             .rotationEffect(.degrees(5))
@@ -203,7 +214,7 @@ struct GameCard: View {
 
     @ViewBuilder private var note: some View {
         if noteShown {
-            Text(verbatim: Self.noteWords)
+            Text(verbatim: noteWords)
                 .font(.system(.footnote, design: .rounded, weight: .heavy))
                 .foregroundStyle(Palette.ink)
                 .multilineTextAlignment(.center)
@@ -227,24 +238,32 @@ struct GameCard: View {
         Sound.shared.play(ArtName.Sound.sfxPop)
         nudges += 1
         noteShown = true
-        UIAccessibility.post(notification: .announcement, argument: Self.noteWords)
+        UIAccessibility.post(notification: .announcement, argument: noteWords)
     }
 
     static let soonWords = String(localized: "Coming soon", comment: "Game shelf: the sticker on a game that can't be played yet")
     static let noteWords = String(
         localized: "Not ready yet.", comment: "Game shelf: the short note after a tap on a game that can't be played yet")
+    static let tvWords = String(localized: "Starts on the TV", comment: "Game shelf: the sticker on a game only a TV starts (Purrtrait)")
+    static let tvNoteWords = String(localized: "Pick it on the TV.", comment: "Game shelf: the note after a tap on a game only a TV starts")
+
+    private var noteWords: String { onTV ? Self.tvNoteWords : Self.noteWords }
 
     // MARK: words for VoiceOver
 
     private var label: Text {
         let players = PlayersChip.words(game)
+        if onTV {
+            return Text("\(game.title), starts on the TV. \(game.pitch) \(players).", comment: "VoiceOver: a game on Home's shelf only a TV starts: name, pitch, players")
+        }
         return soon
             ? Text("\(game.title), coming soon. \(game.pitch) \(players).", comment: "VoiceOver: a game on Home's shelf that can't be played yet: name, pitch, players")
             : Text("\(game.title). \(game.pitch) \(players).", comment: "VoiceOver: a game on Home's shelf: name, pitch, players")
     }
 
     private var hint: Text {
-        soon
+        if onTV { return Text("Pick it on the TV", comment: "VoiceOver hint: a game on the shelf only a TV starts") }
+        return soon
             ? Text("Not ready to play yet", comment: "VoiceOver hint: a game on the shelf that is coming soon")
             : Text("Starts a new table", comment: "VoiceOver hint: a game on the shelf")
     }
