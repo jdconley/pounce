@@ -1,9 +1,12 @@
 import { expect, type Page } from "@playwright/test";
 
 /**
- * Playing Birdwatch in a browser the way a person does: from what the table shows. "keys" plays
- * by keyboard (focus a card, Enter; 1 to 4 for trump), "taps" by tapping each card's corner (a
- * card's corner is what shows in a tight fan).
+ * Playing Birdwatch in a browser the way a person does: from what the table shows. Every read of
+ * something that can vanish (a summary, a card) is one that never waits: a driver waiting on the
+ * table while the table waits on the driver is a game that never ends. The spec also caps every
+ * action's wait (`actionTimeout`), so a wait like that fails in seconds, not at the test's end.
+ * "keys" plays by keyboard (focus a card, Enter; 1 to 4 for trump), "taps" by tapping each card's
+ * corner (a card's corner is what shows in a tight fan).
  */
 export type How = "keys" | "taps";
 
@@ -17,19 +20,20 @@ const handCards = (page: Page) => page.locator(".bw-hand-card");
  * and turn, so its box's corner can be its neighbour. Tries points from its top-left inward.
  */
 export async function cardPoint(page: Page, i: number): Promise<{ x: number; y: number } | null> {
-  return handCards(page)
-    .nth(i)
-    .evaluate((el) => {
-      const r = el.getBoundingClientRect();
-      for (const fy of [0.25, 0.4, 0.15, 0.55]) {
-        for (const fx of [0.2, 0.3, 0.12, 0.4, 0.5, 0.6]) {
-          const x = r.left + r.width * fx;
-          const y = r.top + r.height * fy;
-          if (document.elementFromPoint(x, y)?.closest(".bw-hand-card") === el) return { x, y };
-        }
+  // Over all the cards at once (no wait for card `i`): the hand may have changed since `i` was picked.
+  return handCards(page).evaluateAll((els, i) => {
+    const el = els[i];
+    if (!el) return null;
+    const r = el.getBoundingClientRect();
+    for (const fy of [0.25, 0.4, 0.15, 0.55]) {
+      for (const fx of [0.2, 0.3, 0.12, 0.4, 0.5, 0.6]) {
+        const x = r.left + r.width * fx;
+        const y = r.top + r.height * fy;
+        if (document.elementFromPoint(x, y)?.closest(".bw-hand-card") === el) return { x, y };
       }
-      return null;
-    });
+    }
+    return null;
+  }, i);
 }
 
 /** Taps a hand card where it shows in the fan. */
@@ -40,8 +44,13 @@ async function tapCorner(page: Page, i: number): Promise<void> {
 
 async function pickCard(page: Page, i: number, how: How): Promise<void> {
   if (how === "taps") return tapCorner(page, i);
-  await handCards(page).nth(i).locator("button").focus();
-  await page.keyboard.press("Enter");
+  // Focus it without waiting for it (it may have left the hand), then Enter.
+  const focused = await handCards(page).evaluateAll((els, i) => {
+    const button = els[i]?.querySelector("button");
+    button?.focus();
+    return button !== undefined && button !== null && document.activeElement === button;
+  }, i);
+  if (focused) await page.keyboard.press("Enter");
 }
 
 /** Holds the curtain's button until the hand shows. */
@@ -91,7 +100,7 @@ export async function bwStep(page: Page, how: How, stats: BwStats, opts: { bid?:
     // The cards fly in from the feeder; then put back as many as it held, from the right of the fan.
     await page.waitForTimeout(500);
     if (how === "keys") await page.evaluate(() => (document.activeElement as HTMLElement | null)?.blur());
-    const words = (await page.locator(".bw-nest .bw-cue-line").textContent()) ?? "";
+    const words = (await page.locator(".bw-nest .bw-cue-line").allTextContents()).join(" ");
     const need = Number(/\d+/.exec(words)?.[0] ?? 0);
     const n = await handCards(page).count();
     for (let k = 0; k < need; k++) await pickCard(page, n - 1 - k, how);
@@ -157,14 +166,9 @@ export async function playToTheEnd(pages: Page[], how: How[], opts: { bidOnce?: 
     let any = false;
     for (const [k, page] of pages.entries()) {
       if (over.has(k)) continue;
-      const summary = page.locator(".bw-summary .title");
-      if ((await summary.count()) > 0)
-        stats.hands.add(
-          (await summary
-            .first()
-            .textContent()
-            .catch(() => null)) ?? "",
-        );
+      // A read that never waits: the summary is gone the moment the next hand is dealt, and a
+      // waiting read (textContent) would then wait for the next one, which needs this player's move.
+      for (const title of await page.locator(".bw-summary .title").allTextContents()) stats.hands.add(title);
       // Bid the least until a bid is won once, so every game also takes the feeder and names trump.
       const r = await bwStep(page, how[k] ?? "keys", stats, { bid: () => !wonABid && (opts.bidOnce ?? true) });
       if (stats.nests > 0) wonABid = true;

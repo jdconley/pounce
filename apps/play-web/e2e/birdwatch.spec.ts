@@ -10,7 +10,7 @@ import { closeAll, newPlayer, tableCode } from "./helpers";
  * leaves these to those two (playwright.config.ts), to keep CI quick.
  */
 // House Cats move fast on the test server; the table's own pacing is what takes the time.
-test.use({ reducedMotion: "reduce" });
+test.use({ reducedMotion: "reduce", actionTimeout: 15_000 });
 
 const how = (): How => (test.info().project.name === "laptop-chrome" ? "keys" : "taps");
 

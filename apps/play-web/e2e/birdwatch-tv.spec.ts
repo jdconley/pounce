@@ -9,7 +9,7 @@ import { forfeit, noHandOnTv, openTv, phonesJoin, startFromPhone, tvMakes } from
  * sill, the trump badge and the score strip; the phone shows its hand and controls on Cards. The
  * phone's player leaves, a House Cat takes the seat, and with no person left the game ends.
  */
-test.use({ reducedMotion: "reduce" });
+test.use({ reducedMotion: "reduce", actionTimeout: 15_000 });
 
 test("a TV shows a Birdwatch table a phone plays on Cards, and never a hand", async ({ browser }) => {
   test.setTimeout(6 * 60_000);
