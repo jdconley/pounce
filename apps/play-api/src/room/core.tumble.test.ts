@@ -1,9 +1,9 @@
 import { beforeEach, describe, expect, it } from "vitest";
 
 import { newBox } from "../tumble/box";
+import { restingY } from "../tumble/box";
 import { toyAt } from "../tumble/queue";
 import { DROP_MS } from "../tumble/round";
-import { restingY } from "../tumble/vectors";
 
 import { RoomCore, TUMBLE_BETWEEN_MS, TUMBLE_COUNTDOWN_MS, TUMBLE_PLAY_WITHOUT_MS, type Outbound, type RoomFeatures } from "./core";
 
@@ -308,12 +308,14 @@ describe("leaving", () => {
     clock += 2000;
     batch(r, "laptop");
     leave(r, 2);
-    expect(r.tumbleTick().changed).toBe(false);
-    // The tablet is out at 15 seconds; the box that left would last 2 more.
+    // The box that left is out of the round at once.
+    r.tumbleTick();
+    expect(tumbleOf(r)).toMatchObject({ status: "playing", outs: [2] });
+    // The tablet is out at 15 seconds.
     clock = tumbleOf(r).startsAt + DROP_MS;
     batch(r, "phone");
     r.tumbleTick();
-    expect(tumbleOf(r)).toMatchObject({ status: "between", winner: 0, outs: [1] });
+    expect(tumbleOf(r)).toMatchObject({ status: "between", winner: 0, outs: [2, 1] });
   });
 
   it("a box that left never wins the round", () => {
@@ -333,7 +335,7 @@ describe("leaving", () => {
     leave(r, 0);
     clock = tumbleOf(r).startsAt + DROP_MS;
     r.tumbleTick();
-    expect(tumbleOf(r)).toMatchObject({ status: "between", winner: 2, outs: [1] });
+    expect(tumbleOf(r)).toMatchObject({ status: "between", winner: 2, outs: [0, 1] });
   });
 
   it("with one seat left the game is over, and the seat left with the most wins wins", () => {

@@ -258,3 +258,28 @@ describe("the end of a round", () => {
     expect(r.sync("all", T0).boxes.map((b) => b.s)).toEqual([0, 2]);
   });
 });
+
+describe("the room's calls", () => {
+  it("drop puts a box out at once, and it can't win", () => {
+    const r = round(["human", "human", "human"]);
+    expect(syncs(r.drop(1, T0 + 100))[0]?.to).toBe("all");
+    expect(r.live(1)).toBe(false);
+    expect(r.drop(1, T0 + 200)).toEqual([]);
+    r.drop(2, T0 + 300);
+    expect(r.result()).toMatchObject({ over: true, winner: 0, outs: [1, 2] });
+  });
+
+  it("an older heard time never clears a lag", () => {
+    const r = round();
+    r.input(0, batch(), T0 + LAG_MS);
+    r.tick(T0 + LAG_MS);
+    expect(r.heard(1, T0 + 500)).toEqual([]);
+    expect(r.sync([1], T0 + LAG_MS).boxes[0]?.status).toBe("lag");
+  });
+
+  it("refuses a Swap aimed at your own box, and you keep it", () => {
+    const r = round(["human", "human"], [{ ...newBox([1, 1, 1, 1]), held: ["swap"] }, newBox([2, 2, 2, 2])]);
+    expect(syncs(r.input(0, batch(["u", 0, 0]), T0 + 100))[0]?.to).toEqual({ seat: 0 });
+    expect(r.box(0).held).toEqual(["swap"]);
+  });
+});

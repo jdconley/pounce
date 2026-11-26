@@ -2042,7 +2042,7 @@ export class RoomCore<S = CatTowerState> {
     }));
     this.endRound();
     this.tumbleRelay.clear();
-    this.round = new TumbleRound({ r: s.r, seats, roundSeed, trickSeeds, startsAt: at, rng: this.newSeed(), cats: s.cats });
+    this.round = new TumbleRound({ r: s.r, seats, roundSeed, trickSeeds, startsAt: at, rng: this.newSeed(), cats: s.cats, wins: s.wins });
     this.state.timers.nextRoundAt = at;
     return this.snapshots();
   }
@@ -2068,7 +2068,7 @@ export class RoomCore<S = CatTowerState> {
     if (round === null || !this.tumblePlaying()) return { out: [], changed: false };
     const now = this.now();
     const out = this.roundOut(round.tick(now));
-    const result = this.roundResult(round);
+    const result = round.result();
     const known = this.tumbleState().outs;
     const outs = result.outs.filter((seat) => !known.includes(seat));
     for (const seat of outs) this.tumbleApply({ k: "out", seat });
@@ -2080,22 +2080,6 @@ export class RoomCore<S = CatTowerState> {
     }
     const changed = outs.length > 0 || result.over;
     return { out: changed ? [...out, ...this.snapshots()] : out, changed };
-  }
-
-  /**
-   * The referee's result, with the boxes of seats that left the game this round counted as out
-   * of it: one never wins, and never keeps a round going.
-   */
-  private roundResult(round: TumbleRound): { over: boolean; winner: number | null; outs: number[] } {
-    const result = round.result();
-    const { left } = this.tumbleState();
-    if (!left.some((l, i) => l && round.live(i))) return result;
-    const live = Array.from({ length: round.seatCount }, (_, i) => i).filter((i) => round.live(i) && left[i] !== true);
-    // Fewer boxes than the referee counts: if it says over, this is too.
-    if (live.length > 1 && live.some((i) => round.kind(i) === "human")) return result;
-    // As the referee has it: the last box standing, nobody, or the House Cat that cleared the most rows.
-    const best = [...live].sort((a, b) => round.box(b).rows - round.box(a).rows || a - b)[0];
-    return { over: true, winner: best ?? null, outs: result.outs };
   }
 
   /** Each person who played the round has had their turn, for streaks (§5.1). */
@@ -2129,6 +2113,8 @@ export class RoomCore<S = CatTowerState> {
    */
   private tumbleLeft(seat: Seat): void {
     this.writers.delete(seat);
+    // Its box is out of the round at once; the snapshot's `left` tells every client.
+    this.round?.drop(seat, this.now());
     if (this.state.status === "over") {
       this.endRound();
       return;

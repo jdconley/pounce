@@ -38,6 +38,8 @@ type SeatState = {
   q: number;
   heardAt: number;
   lag: boolean;
+  /** Server time the seat was marked lagging. */
+  lagAt: number;
   lastMs: number;
   /** Server time of the box's last set-down (the round's start before the first). */
   setDownAt: number;
@@ -96,6 +98,7 @@ export class TumbleRound {
       q: 0,
       heardAt: o.startsAt,
       lag: false,
+      lagAt: 0,
       lastMs: 0,
       setDownAt: o.startsAt,
       move: null,
@@ -217,6 +220,8 @@ export class TumbleRound {
       case "u": {
         const [, slot, target] = e;
         if (!this.live(target)) return "refused";
+        // A Swap needs another box: aimed at your own, it is refused and you keep it.
+        if (target === seat && s.box.held[slot] === "swap") return "refused";
         const used = useTrick(s.box, slot);
         if (!used) return "refused";
         s.box = used.box;
@@ -259,7 +264,6 @@ export class TumbleRound {
         out.push({ to: "all", message: this.issue(from, to, "swipe", { shifts: Array.from({ length: TOTAL }, () => this.int(5) - 2) }, now) });
         return;
       case "swap": {
-        if (from === to) return;
         const mine = contents(this.box(from));
         const theirs = contents(this.box(to));
         out.push({ to: "all", message: this.issue(from, to, "swap", mine, now) });
@@ -319,8 +323,10 @@ export class TumbleRound {
   heard(seat: number, now: number): RoundOut[] {
     const s = this.seats[seat];
     if (!s || s.kind !== "human") return [];
+    // Only news moves the clock: an older time (a ping answered earlier) never clears a lag.
+    if (now <= s.heardAt) return [];
     s.heardAt = now;
-    if (!s.lag || s.box.out) return [];
+    if (!s.lag || s.box.out || now < s.lagAt) return [];
     s.lag = false;
     const out: RoundOut[] = [
       { to: "all", message: { t: "tumbleSeat", r: this.r, s: seat, st: "ok" } },
@@ -377,6 +383,7 @@ export class TumbleRound {
       if (s.kind !== "human" || s.box.out) return;
       if (!s.lag && now - s.heardAt >= LAG_MS) {
         s.lag = true;
+        s.lagAt = now;
         out.push({ to: "all", message: { t: "tumbleSeat", r: this.r, s: seat, st: "lag" } });
       }
       if (now - s.heardAt >= DROP_MS) {
@@ -475,6 +482,15 @@ export class TumbleRound {
       }
     }
     return out;
+  }
+
+  /** A seat that left the game: its box is out at once, so nothing more is aimed at it and it can't win (§5.1). */
+  drop(seat: number, now: number): RoundOut[] {
+    const s = this.seats[seat];
+    if (!s || !this.live(seat)) return [];
+    s.box = { ...s.box, out: true };
+    this.noteOut(seat, now);
+    return [{ to: "all", message: this.sync([seat], now) }];
   }
 
   private noteOut(seat: number, now: number): void {

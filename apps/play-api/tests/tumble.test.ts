@@ -1,8 +1,8 @@
 import { afterEach, beforeAll, describe, expect, test } from "vitest";
 
 import { newBox } from "../src/tumble/box";
+import { restingY } from "../src/tumble/box";
 import { toyAt } from "../src/tumble/queue";
-import { restingY } from "../src/tumble/vectors";
 
 import { BASE, bundle, call, connect, mint, newPerson, worker, type Client, type Device, type Sent, type Snapshot } from "./play-helpers";
 
