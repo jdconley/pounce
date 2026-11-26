@@ -375,6 +375,22 @@
   .poster-grid {
     grid-template-columns: 1fr 1fr;
   }
+
+  /* An odd poster out takes the whole row, rather than leave a hole beside it. */
+  .poster-grid > :last-child:nth-child(odd) {
+    grid-column: 1 / -1;
+  }
+}
+
+/* Room for every game in one row. */
+@media (min-width: 1060px) {
+  .poster-grid {
+    grid-template-columns: repeat(3, 1fr);
+  }
+
+  .poster-grid > :last-child:nth-child(odd) {
+    grid-column: auto;
+  }
 }
 
 .poster {

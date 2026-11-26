@@ -174,6 +174,39 @@
   }
 }
 
+/* Three games on a phone's compact shelf: three across where they fit; where only two do, the
+   third takes the whole row with its art beside its words, rather than leave a hole. With large
+   text they stack (the auto-fit above). */
+.home-section.posters {
+  container: shelf / inline-size;
+}
+
+@media (max-width: 759px) {
+  @container shelf (min-width: 21.5rem) {
+    .poster-grid.compact {
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+    }
+
+    .poster-grid.compact .poster h3 {
+      font-size: 1.05rem;
+    }
+  }
+
+  @container shelf (min-width: 17.5rem) and (max-width: 21.49rem) {
+    .poster-grid.compact > :last-child:nth-child(odd) {
+      grid-column: 1 / -1;
+      grid-template-columns: 42% 1fr;
+    }
+
+    .poster-grid.compact > :last-child:nth-child(odd) .poster-art {
+      aspect-ratio: auto;
+      height: 100%;
+      border-bottom: 0;
+      border-right: 3px solid var(--ink);
+    }
+  }
+}
+
 /* The Dish. */
 .dd-dish {
   gap: 16px;

@@ -553,6 +553,7 @@ div.bw-strip {
 }
 
 .bw-suit {
+  container-type: inline-size;
   position: relative;
   display: flex;
   flex-direction: column;
@@ -603,6 +604,14 @@ div.bw-strip {
 @keyframes bw-hint {
   to {
     outline-color: var(--yellow);
+  }
+}
+
+/* A button too narrow for its word (large text on a small phone) keeps its silhouette; the word
+   stays in its accessible name. */
+@container (max-width: 4.2em) {
+  .bw-suit > span:not(.bw-suit-icon) {
+    display: none;
   }
 }
 
@@ -795,16 +804,19 @@ div.bw-strip {
 }
 
 /* Rule set pills: the lobby's and How to play's. */
+/* Large text: the pills wrap to a second row rather than clip their names. */
 .bw-pills {
   display: flex;
+  flex-wrap: wrap;
   justify-content: center;
   gap: 8px;
 }
 
 .bw-pill {
-  flex: 1 1 0;
-  min-width: 0;
+  flex: 1 1 auto;
+  min-width: min-content;
   max-width: 160px;
+  white-space: nowrap;
   padding: 10px 8px;
   border: 3px solid var(--ink);
   border-radius: 999px;
