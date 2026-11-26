@@ -75,7 +75,10 @@ export function BirdwatchTable(props: { store: RoomStore; state: RoomState; soun
     if (!state.pending) setHeld(null);
   }, [state.pending]);
 
-  const playable = new Set(step === "play" ? (v.playable ?? []) : []);
+  // The cards this seat may play, once the server has said (a turn shown from an event waits for
+  // the snapshot behind it): until then nothing is dimmed and nothing plays.
+  const choosing = step === "play" && v.playable !== undefined;
+  const playable = new Set(choosing ? v.playable : []);
   const fromNest = new Set(v.fromNest ?? []);
 
   const L = useMemo(
@@ -124,6 +127,7 @@ export function BirdwatchTable(props: { store: RoomStore; state: RoomState; soun
   const act = (action: Parameters<RoomStore["act"]>[1]) => (seat === null ? false : store.act(seat, action));
 
   const playCard = (c: CardId) => {
+    if (step === "play" && !choosing) return;
     if (step !== "play" || busy || !playable.has(c)) return nope(els.current.get(`c${c}`));
     learnTip("bw.follow");
     setLifted(null);
@@ -144,6 +148,7 @@ export function BirdwatchTable(props: { store: RoomStore; state: RoomState; soun
       return;
     }
     if (lifted === c) return playCard(c);
+    if (!choosing) return;
     if (!playable.has(c)) return nope(els.current.get(`c${c}`));
     play("tick", 0.4);
     buzz("tap");
@@ -251,7 +256,7 @@ export function BirdwatchTable(props: { store: RoomStore; state: RoomState; soun
   const cue = step === "play" ? (v.trick.length === 0 ? "Your lead" : "Your turn") : step === "wait" ? waitWords(room, v) : "";
 
   const renderCard = (id: CardId, p: Pose, ref: (el: HTMLElement | null) => void) => {
-    const dim = step === "play" && !playable.has(id);
+    const dim = choosing && !playable.has(id);
     const up = lifted === id || chosen.includes(id);
     const words = `${cardLabel(id, v.rules)}${dim ? ", can't play" : ""}${chosen.includes(id) ? ", putting back" : ""}${fromNest.has(id) ? ", from the feeder" : ""}`;
     return (
@@ -291,7 +296,7 @@ export function BirdwatchTable(props: { store: RoomStore; state: RoomState; soun
 
   return (
     <>
-      <div class={`bw-table ${L.landscape ? "landscape" : ""} ${props.cards ? "cards-view" : ""} ${myTurn ? "my-turn" : ""}`} ref={rootRef} style={bwStyle(L)}>
+      <div class={`bw-table ${L.landscape ? "landscape" : ""} ${props.cards ? "cards-view" : ""} ${myTurn ? "my-turn" : ""} ${choosing ? "choosing" : ""}`} ref={rootRef} style={bwStyle(L)}>
         <BwPublic store={store} room={room} layout={L} motion={motion} sounds={sounds} onStrip={() => setSheet(true)} hand={{ poses, els: els.current, render: renderCard }}>
           <div class="bw-hand-zone" id="bw-hand" style={{ transform: `translate3d(${L.handRect.x}px, ${L.handRect.y}px, 0)`, width: `${L.handRect.w}px`, height: `${L.handRect.h}px` }} />
 
@@ -336,9 +341,9 @@ export function BirdwatchTable(props: { store: RoomStore; state: RoomState; soun
 
           <Tip id="bw.bid" anchor="bw-bid-sign" text="Bid on the points your side will take." show={step === "bid" && !busy} place="above" />
           <Tip id="bw.trump" anchor="bw-trump" text="Trump beats every other suit." show={step === "play" && v.trump !== null && tipLearned("bw.bid") && !tipLearned("bw.follow")} />
-          <Tip id="bw.follow" anchor="bw-hand" text="Follow the suit led. Dim cards can't play." show={step === "play" && playable.size < hand.length && tipLearned("bw.trump")} place="above" />
+          <Tip id="bw.follow" anchor="bw-hand" text="Follow the suit led. Dim cards can't play." show={choosing && playable.size < hand.length && tipLearned("bw.trump")} place="above" />
           <Tip id="bw.partner" anchor="bw-partner-mark" text="You hold the called card. Help the bidder." show={secret} place="above" />
-          <Tip id="bw.keys" anchor="bw-hand" text="Keys: arrows pick, Enter plays." show={fineMouse && step === "play" && tipLearned("bw.follow") && !busy} place="above" />
+          <Tip id="bw.keys" anchor="bw-hand" text="Keys: arrows pick, Enter plays." show={fineMouse && choosing && tipLearned("bw.follow") && !busy} place="above" />
         </BwPublic>
       </div>
       {/* Outside the table's own layers, so nothing on the table (the hand's summary) covers it. */}

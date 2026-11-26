@@ -1,6 +1,6 @@
 import { devices, expect, test, type Browser, type Page } from "@playwright/test";
 
-import { bwStep, newStats } from "./birdwatch-helpers";
+import { bwStep, cardPoint, newStats } from "./birdwatch-helpers";
 import { dailyPhone } from "./daily-phone";
 import { closeAll, firstRun, newPlayer } from "./helpers";
 import { openSniff, wrongWords } from "./sniff-helpers";
@@ -173,15 +173,17 @@ async function playBirdwatch(page: Page) {
   let dragged = 0;
   const until = Date.now() + 45_000;
   while (Date.now() < until && stats.plays < 6) {
-    const lead = page.locator(".bw-cue.mine");
+    const lead = page.locator(".bw-table.choosing");
     if (dragged < 3 && (await lead.isVisible())) {
       // Drag a card the server lets this seat play onto the sill.
-      const card = page.locator(".bw-hand-card:not(.dim)").first();
-      const before = await page.locator(".bw-hand-card").count();
-      const from = (await card.boundingBox())!;
+      const dims = await page.locator(".bw-hand-card").evaluateAll((els) => els.map((el) => el.classList.contains("dim")));
+      const before = dims.length;
+      if (!dims.includes(false)) continue;
+      const from = await cardPoint(page, dims.indexOf(false));
       const to = (await page.locator(".bw-sill").boundingBox())!;
+      if (!from) continue;
       await mark(page, "bw-drag");
-      await page.mouse.move(from.x + from.width * 0.3, from.y + from.height * 0.3);
+      await page.mouse.move(from.x, from.y);
       await page.mouse.down();
       for (let i = 1; i <= 30; i++) await page.mouse.move(from.x + (to.x + to.width / 2 - from.x) * (i / 30), from.y + (to.y + to.height / 2 - from.y) * (i / 30));
       await page.mouse.up();

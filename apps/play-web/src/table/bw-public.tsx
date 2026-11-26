@@ -76,7 +76,15 @@ export function BwPublic(props: BwPublicProps) {
           const sound: typeof play = (...a) => {
             if (sounds) play(...a);
           };
-          if (ev.kind === "played") {
+          // The deal and the feeder's cards fly into the hand from the middle of the sill.
+          const fromSill: Pose = { x: L.centre.x - L.cw / 2, y: L.centre.y - L.ch / 2, r: 0, s: 0.5 };
+          if (ev.kind === "dealt") {
+            for (const card of Object.values(ev.hands).flat()) motion.spawnFrom(`c${card}`, fromSill);
+            sound("flip", 0.5);
+          } else if (ev.kind === "nest" && ev.cards) {
+            for (const card of ev.cards) motion.spawnFrom(`c${card}`, fromSill);
+            sound("sparkle", 0.5);
+          } else if (ev.kind === "played") {
             if (!props.hand?.poses.has(`c${ev.card}`)) motion.spawnFrom(`c${ev.card}`, fromSeat(ev.seat));
             sound("flip", 0.6);
           } else if (ev.kind === "trick") {

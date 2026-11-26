@@ -12,12 +12,30 @@ export const newStats = (): BwStats => ({ steps: 0, bids: 0, nests: 0, trumps: 0
 
 const handCards = (page: Page) => page.locator(".bw-hand-card");
 
-/** Taps a hand card where it shows in the fan: its top-left corner, under its numeral. */
+/**
+ * A point on the page where hand card `i` is what a finger would touch: in a fan, cards overlap
+ * and turn, so its box's corner can be its neighbour. Tries points from its top-left inward.
+ */
+export async function cardPoint(page: Page, i: number): Promise<{ x: number; y: number } | null> {
+  return handCards(page)
+    .nth(i)
+    .evaluate((el) => {
+      const r = el.getBoundingClientRect();
+      for (const fy of [0.25, 0.4, 0.15, 0.55]) {
+        for (const fx of [0.2, 0.3, 0.12, 0.4, 0.5, 0.6]) {
+          const x = r.left + r.width * fx;
+          const y = r.top + r.height * fy;
+          if (document.elementFromPoint(x, y)?.closest(".bw-hand-card") === el) return { x, y };
+        }
+      }
+      return null;
+    });
+}
+
+/** Taps a hand card where it shows in the fan. */
 async function tapCorner(page: Page, i: number): Promise<void> {
-  const card = handCards(page).nth(i);
-  const box = await card.boundingBox();
-  if (!box) return;
-  await page.mouse.click(box.x + box.width * 0.22, box.y + box.height * 0.22);
+  const at = await cardPoint(page, i);
+  if (at) await page.mouse.click(at.x, at.y);
 }
 
 async function pickCard(page: Page, i: number, how: How): Promise<void> {
@@ -109,7 +127,8 @@ export async function bwStep(page: Page, how: How, stats: BwStats, opts: { bid?:
     stats.steps++;
     return "acted";
   }
-  if (await page.locator(".bw-cue.mine").isVisible()) {
+  // My turn to play, once the server has said which cards may go.
+  if (await page.locator(".bw-table.choosing").isVisible()) {
     const dims = await handCards(page).evaluateAll((els) => els.map((el) => el.classList.contains("dim")));
     const i = dims.indexOf(false);
     if (i < 0) return null;

@@ -123,7 +123,7 @@ if (!process.env.SIZES || process.env.SIZES.includes("tv")) {
   while (Date.now() < until && (await tv.locator(".bw-tv .card.on-sill").count()) < 3) {
     if (await phone.locator("#bw-pass:not([disabled])").isVisible()) await phone.locator("#bw-pass").click();
     else if (await phone.locator("#bw-nest-done").isVisible()) break;
-    else if (await phone.locator(".bw-cue.mine").isVisible()) {
+    else if (await phone.locator(".bw-table.choosing").isVisible()) {
       const c = phone.locator(".bw-hand-card:not(.dim)").first();
       const box = await c.boundingBox();
       if (box) {

@@ -109,4 +109,20 @@ describe("the Birdwatch table from a snapshot", () => {
     root.remove();
     store.stop();
   });
+
+  test("my turn from an event: nothing dims or plays until the server says which cards may go", async () => {
+    const s = samples.find((x) => x.name === "snapshot-play-watching")!;
+    const { store, socket } = await storeWith(s.message);
+    const mine = Number(Object.keys(store.state.room!.birdwatch!.hands)[0]);
+    socket.receive({ t: "event", seq: 999, event: { kind: "birdwatch", event: { kind: "turn", seat: mine } } });
+    const root = document.createElement("div");
+    document.body.append(root);
+    act(() => render(h(BirdwatchTable, { store, state: store.state }), root));
+    expect(store.state.room!.birdwatch!.turn).toBe(mine);
+    expect(root.querySelector(".bw-table.choosing")).toBeNull();
+    expect(root.querySelectorAll(".bw-hand-card.dim").length).toBe(0);
+    act(() => render(null, root));
+    root.remove();
+    store.stop();
+  });
 });
