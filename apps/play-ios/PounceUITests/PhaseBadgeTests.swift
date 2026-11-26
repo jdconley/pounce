@@ -46,6 +46,8 @@ final class PhaseBadgeTests: XCTestCase {
         let kiki = label(el(app, "table.opponent.2")) ?? "-"
         XCTAssertTrue(kiki.hasPrefix("Kiki, 10 cards, level 7"), kiki)
         XCTAssertFalse(kiki.contains("laid down"), kiki)
+        // A skip waits on Kiki: her cat says so, last.
+        XCTAssertTrue(kiki.hasSuffix(", pickled"), kiki)
         screenshot(app, "phase-badges")
     }
 

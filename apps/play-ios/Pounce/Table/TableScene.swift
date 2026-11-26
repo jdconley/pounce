@@ -793,9 +793,11 @@ final class TableScene: SKScene {
 
         // Piles.
         deck.position = layout.deck
-        deck.update(count: game.deckCount, top: nil, cardSize: layout.pileSize)
+        for (action, node) in deck.update(count: game.deckCount, top: nil, cardSize: layout.pileSize) { director.play(action, on: node) }
         discard.position = layout.discard
-        discard.update(count: game.discardCount, top: game.discardTop, cardSize: layout.pileSize)
+        for (action, node) in discard.update(count: game.discardCount, top: game.discardTop, cardSize: layout.pileSize) {
+            director.play(action, on: node)
+        }
 
         if cards {
             // Nothing of theirs here: no cat to tap, pulse or fly a card to.

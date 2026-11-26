@@ -408,14 +408,15 @@ extension TableScene {
 
     /// The laid group (and its end) hand card `card` let go at `p` would hit: nothing where the
     /// discard pile, a cat or a tray takes the drop first. A card that fits only one group goes
-    /// there from anywhere on the rug (not the deck, not over the hand).
+    /// there from anywhere above the hand (not the deck), as on the web.
     private func laidDrop(at p: CGPoint, card: CardID) -> (target: HitTarget, toward: HitSide, anywhere: Bool)? {
         // Just my cards: the groups are on the TV, hit from the shell's list.
         if controllerShown { return nil }
         if discard.hitFrame.insetBy(dx: -12, dy: -12).contains(p) || opponentSeat(at: p) != nil { return nil }
         if !trays.isHidden, trays.tray(at: p) != nil { return nil }
         guard let layout else { return nil }
-        let rug = deck.hitFrame.contains(p) || isOverHand(p, layout) ? .null : layout.laidZone
+        let above = CGRect(x: 0, y: layout.traysFrame.minY, width: size.width, height: max(size.height - layout.traysFrame.minY, 0))
+        let rug = deck.hitFrame.contains(p) || isOverHand(p, layout) ? .null : above
         return laidZone.drop(at: p, fits: heldAims(card)?.targets ?? [], zone: rug)
     }
 

@@ -43,9 +43,15 @@ final class PileNode: SKNode {
     @available(*, unavailable)
     required init?(coder aDecoder: NSCoder) { fatalError("init(coder:) is not used") }
 
-    func update(count: Int, top topCard: CardID?, cardSize: CGSize) {
+    /// Draws the pile. When its card size changes (Cards and Table size the piles differently),
+    /// the top card keeps the size it was drawn at and the tween to the new one is returned, for
+    /// the scene's director: it never pops to the new size in one frame.
+    @discardableResult
+    func update(count: Int, top topCard: CardID?, cardSize: CGSize) -> [(SKAction, SKNode)] {
         let showsTop = kind == .deck ? count > 0 : topCard != nil
         let under = count <= 1 ? 0 : min(Self.maxLayers, (count - 1 + Self.cardsPerLayer - 1) / Self.cardsPerLayer)
+        // The top's height as drawn now (an SKSpriteNode's `size` has its scale in it).
+        let was = self.cardSize.height > 0 ? top?.size.height : nil
         if cardSize != self.cardSize {
             self.cardSize = cardSize
             empty.size = CGSize(width: cardSize.width * 1.1, height: cardSize.height * 1.1)
@@ -85,12 +91,18 @@ final class PileNode: SKNode {
             }
             top?.position = .zero
             top?.setScale(1)
+            top?.size = cardSize
             top?.alpha = 1
             top?.zPosition = 1
+            if let top, let was, cardSize.height > 0, abs(was / cardSize.height - 1) > 0.02 {
+                top.setScale(was / cardSize.height)
+                return [(SKAction.scale(to: 1, duration: HandNode.resizeDuration).eased(.easeOut), top)]
+            }
         } else {
             top?.removeFromParent()
             top = nil
         }
+        return []
     }
 
     /// Glow, sparkle and grow while this pile is a legal draw or drop.
