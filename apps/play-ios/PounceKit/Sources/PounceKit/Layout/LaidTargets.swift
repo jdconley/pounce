@@ -25,4 +25,18 @@ public enum LaidTargets {
     public static func side(at p: CGPoint, of frame: CGRect) -> HitSide {
         p.x < frame.midX ? .start : .end
     }
+
+    /// Where a held card let go at `p` goes: the group near the finger (`target(at:in:)`), even one
+    /// that can't take it; or, with no group near and the card fitting exactly one group
+    /// (`fits`), that group from anywhere on `zone`. `anywhere` says it was the second.
+    public static func drop(
+        at p: CGPoint, in frames: [(target: HitTarget, frame: CGRect)], fits: Set<HitTarget>, zone: CGRect
+    ) -> (target: HitTarget, toward: HitSide, anywhere: Bool)? {
+        if let target = target(at: p, in: frames), let frame = frames.first(where: { $0.target == target })?.frame {
+            return (target, side(at: p, of: frame), false)
+        }
+        guard fits.count == 1, let only = fits.first, zone.contains(p),
+              let frame = frames.first(where: { $0.target == only })?.frame else { return nil }
+        return (only, side(at: p, of: frame), true)
+    }
 }

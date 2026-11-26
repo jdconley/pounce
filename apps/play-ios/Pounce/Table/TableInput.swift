@@ -38,6 +38,8 @@ struct TableInputState {
     struct AimKey: Equatable {
         let target: HitTarget
         let toward: HitSide
+        /// Not near the finger: the one group the card fits, from elsewhere on the rug.
+        var anywhere = false
     }
 
     /// A finger that moves further than this is dragging, not tapping.
@@ -197,7 +199,9 @@ extension TableScene {
     }
 
     func inputEnded(_ p: CGPoint) {
-        if input.finger != nil { stepDrag() }  // the last move counts before the drop
+        // Where the finger let go counts as its last move, so the preview is up to date there.
+        if input.dragging { input.finger = p }
+        if input.finger != nil { stepDrag() }
         let state = input
         input = TableInputState()
         if state.dragging {
@@ -207,8 +211,12 @@ extension TableScene {
             let landing = Landing(gap: dragGap, from: state.dragNode.map { hand.convert($0.position, from: layer(.drag)) })
             dragGap = nil
             state.dragNode?.removeFromParent()
+            // The group the preview showed is where the card goes. It was found on the laid zone
+            // as drawn while the card was held (grown 1.1x); the redraw `dragCard = nil` makes
+            // shrinks it back, so asking again after that could find another group or none.
+            let aim = state.aimed ? state.aim : nil
             dragCard = nil
-            drop(state.source, at: p, landing: landing)
+            drop(state.source, at: p, landing: landing, aim: aim)
             if provisionalCard == nil { showHitPreview(nil) }  // no hit went out: close any gap
         } else if hypot(p.x - state.start.x, p.y - state.start.y) <= TableInputState.dragThreshold * 2 {
             tap(state.source, at: p)
@@ -354,8 +362,8 @@ extension TableScene {
     /// or nil away from the laid groups.
     private func aimHit(finger p: CGPoint) -> CGPoint? {
         guard case .hand(let card) = input.source, let layout else { return nil }
-        let drop = laidDrop(at: p)
-        let key = drop.map { TableInputState.AimKey(target: $0.target, toward: $0.toward) }
+        let drop = laidDrop(at: p, card: card)
+        let key = drop.map { TableInputState.AimKey(target: $0.target, toward: $0.toward, anywhere: $0.anywhere) }
         // The preview changes only when the finger reaches another group or end.
         if !input.aimed || key != input.aim {
             input.aimed = true
@@ -370,7 +378,9 @@ extension TableScene {
                 #endif
             }
         }
-        guard let drop, let f = laidZone.shownFrame(of: drop.target) else { return nil }
+        // The one group the card fits, aimed from across the rug: it shows where the card goes,
+        // and the card stays on the finger.
+        guard let drop, !drop.anywhere, let f = laidZone.shownFrame(of: drop.target) else { return nil }
         let h = layout.cardSize.height * Self.liftScale
         return CGPoint(x: p.x, y: min(f.maxY + 10 + h / 2, size.height - h / 2))
     }
@@ -390,14 +400,17 @@ extension TableScene {
         Task { await director.runAll(moves) }
     }
 
-    /// The laid group (and its end) a hand card let go at `p` would hit: nothing where the
-    /// discard pile, a cat or a tray takes the drop first.
-    private func laidDrop(at p: CGPoint) -> (target: HitTarget, toward: HitSide)? {
+    /// The laid group (and its end) hand card `card` let go at `p` would hit: nothing where the
+    /// discard pile, a cat or a tray takes the drop first. A card that fits only one group goes
+    /// there from anywhere on the rug (not the deck, not over the hand).
+    private func laidDrop(at p: CGPoint, card: CardID) -> (target: HitTarget, toward: HitSide, anywhere: Bool)? {
         // Just my cards: the groups are on the TV, hit from the shell's list.
         if controllerShown { return nil }
         if discard.hitFrame.insetBy(dx: -12, dy: -12).contains(p) || opponentSeat(at: p) != nil { return nil }
         if !trays.isHidden, trays.tray(at: p) != nil { return nil }
-        return laidZone.drop(at: p)
+        guard let layout else { return nil }
+        let rug = deck.hitFrame.contains(p) || isOverHand(p, layout) ? .null : layout.laidZone
+        return laidZone.drop(at: p, fits: heldAims(card)?.targets ?? [], zone: rug)
     }
 
     /// A drop here reorders the hand (the fan and the strip just above it, below the trays).
@@ -414,7 +427,8 @@ extension TableScene {
         var from: CGPoint?
     }
 
-    private func drop(_ source: TableInputState.Source, at p: CGPoint, landing: Landing) {
+    /// `aim`: the laid group the drag's preview showed at `p`, if any.
+    private func drop(_ source: TableInputState.Source, at p: CGPoint, landing: Landing, aim: TableInputState.AimKey?) {
         // One action in flight at a time: game drops are ignored (no nope, nothing sent);
         // only reordering the hand still works.
         if store.actionInFlight {
@@ -427,7 +441,7 @@ extension TableScene {
         }
         switch source {
         case .hand(let card):
-            dropHandCard(card, at: p, landing: landing)
+            dropHandCard(card, at: p, landing: landing, aim: aim)
         case .tray(let card, let tray):
             dropTrayCard(card, from: tray, at: p, landing: landing)
         case .pile(let pile):
@@ -443,15 +457,15 @@ extension TableScene {
         }
     }
 
-    private func dropHandCard(_ card: CardID, at p: CGPoint, landing: Landing) {
+    private func dropHandCard(_ card: CardID, at p: CGPoint, landing: Landing, aim aimed: TableInputState.AimKey?) {
         if discard.hitFrame.insetBy(dx: -12, dy: -12).contains(p) { return chooseDiscard(card) }
         if let seat = opponentSeat(at: p) { return aim(card, at: seat) }
         if !trays.isHidden, let tray = trays.tray(at: p) {
             if !tryTray(card, tray, at: dropSlot(tray: tray, x: p.x)) { nope(card: card, why: whyNoTray(card, tray)) }
             return
         }
-        if let aim = laidDrop(at: p) {
-            if !tryHit(card, aim.target, toward: aim.toward) { nope(card: card, why: whyNoHit(card, aim.target)) }
+        if let aimed {
+            if !tryHit(card, aimed.target, toward: aimed.toward) { nope(card: card, why: whyNoHit(card, aimed.target)) }
             return
         }
         if let layout, isOverHand(p, layout) {
