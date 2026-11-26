@@ -913,7 +913,8 @@ export class GameRoom extends DurableObject<Env> {
         this.player(playerId).upsertTable({
           ...entry,
           ...(core.allOut(state.seats.flatMap((s, i) => (s.playerId === playerId ? [i] : []))) ? { status: "over" } : {}),
-          yourTurn: actor !== null && state.seats[actor]?.playerId === playerId,
+          // A House Cat on a seat its person left is nobody's turn.
+          yourTurn: actor !== null && state.seats[actor]?.kind === "human" && state.seats[actor]?.playerId === playerId,
           seats: tableSeats(
             state,
             state.seats.flatMap((s, i) => (s.playerId === playerId ? [i] : [])),

@@ -261,6 +261,19 @@ describe("a House Cat takes the seat of a person who leaves", () => {
     expect(r.state.timers.botAt).not.toBeNull();
   });
 
+  it("deleting or merging the account that left reaches the seat it left", () => {
+    const merged = started();
+    act(merged, 1, { type: "forfeit" });
+    merged.adopt({ from: B, to: "p_CCCCCCCCCCCCCCCCCCCCCC" });
+    expect(merged.state.seats[1]).toMatchObject({ kind: "bot", left: true, playerId: "p_CCCCCCCCCCCCCCCCCCCCCC" });
+    const deleted = started();
+    act(deleted, 1, { type: "forfeit" });
+    deleted.adopt({ from: B, to: null });
+    expect(deleted.state.seats[1]?.playerId).toBeUndefined();
+    expect(deleted.seatPlayers()).toEqual([A]);
+    expect(deleted.outPlayers()).toEqual([]);
+  });
+
   it("the game ends once no person is left", () => {
     const r = started();
     act(r, 1, { type: "forfeit" });

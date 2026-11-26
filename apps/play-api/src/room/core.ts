@@ -590,7 +590,8 @@ export class RoomCore<S = CatTowerState> {
     this.adoptDevices(rule);
     let changed = false;
     for (const seat of this.state.seats) {
-      if (seat.kind !== "human") continue;
+      // A seat a House Cat took over still names who left it: a merge or a deletion reaches it too.
+      if (seat.kind !== "human" && seat.left !== true) continue;
       if ("person" in rule) {
         // Only the uploading device's own seats: a person id is visible to everyone at the table.
         const playerId = rule.person[(seat.person as Person).id];
