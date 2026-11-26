@@ -5,12 +5,13 @@
 # caption and background.
 #   AppStore/capture.sh iphone <udid>   # iPhone 17 Pro: 1206x2622 (the required "Dynamic Island, medium display" set)
 #   AppStore/capture.sh ipad <udid>     # iPad Pro 13-inch (M5): 2064x2752 (the 13" set)
-#   AppStore/capture.sh iphone <udid> 2-dish 3-puzzle   # only these shots
+#   AppStore/capture.sh iphone <udid> 2-bird 3-trump    # only these shots
 # Build and install first:
 #   xcodebuild -project Pounce.xcodeproj -scheme Pounce -destination "platform=iOS Simulator,id=<udid>" build
 #   xcrun simctl install <udid> <DerivedData>/Build/Products/Debug-iphonesimulator/Pounce.app
 # The people on screen come from POUNCE_DEMO_CAST (DemoFixtures.cast): you, your person, then
-# the rest of the family. `-anim-speed 1` keeps the simulator silent.
+# the rest of the family. `-settings.soundOn <false/>` keeps the simulator silent (`-anim-speed 1`
+# plays the real sounds).
 set -euo pipefail
 cd "$(dirname "$0")/.."
 SET="${1:?iphone or ipad}"
@@ -34,7 +35,7 @@ shot() {
   if [ ${#ONLY[@]} -gt 0 ] && [[ " ${ONLY[*]} " != *" $name "* ]]; then return; fi
   xcrun simctl terminate "$DEVICE" "$BUNDLE" >/dev/null 2>&1 || true
   SIMCTL_CHILD_POUNCE_DEMO_CAST="$CAST" xcrun simctl launch "$DEVICE" "$BUNDLE" \
-    -anim-speed 1 -uitest-reset "$@" >/dev/null
+    -anim-speed 1 -settings.soundOn "<false/>" -uitest-reset "$@" >/dev/null
   sleep "$wait"
   xcrun simctl io "$DEVICE" screenshot --type=png "$OUT/$name.png" >/dev/null 2>&1
   echo "$OUT/$name.png"
@@ -42,13 +43,16 @@ shot() {
 
 # `-seed-people` gives the device an owner (and skips the push priming card over a table).
 shot 1-table 8 -seed-people -demo table
+# Birdwatch (1.3): a trick on the sill with cards you can't play dimmed; then naming trump.
+shot 2-bird 8 -seed-people -demo bird-play
+shot 3-trump 8 -seed-people -demo bird-trump
 # The Daily Dish (1.2): today's four puzzles and the family board, everyone done; then Nine Lives
 # half filled, played from memory (`-demo-dish` referees it in the app).
-shot 2-dish 7 -seed-people -demo-streaks -demo-dish done -show-dish
-shot 3-puzzle 7 -seed-people -demo-streaks -demo-dish done -show-daily nine-lives
-shot 4-us 7 -seed-people -demo-streaks -show-us
-shot 5-family 6 -seed-people -demo lobbyFamily
-shot 6-levels 7 -seed-people -demo table -show-scoreboard
+shot 4-dish 7 -seed-people -demo-streaks -demo-dish done -show-dish
+shot 5-puzzle 7 -seed-people -demo-streaks -demo-dish done -show-daily nine-lives
+shot 6-us 7 -seed-people -demo-streaks -show-us
+shot 7-family 6 -seed-people -demo lobbyFamily
+shot 8-levels 7 -seed-people -demo table -show-scoreboard
 # A child's first launch: a cat and a name from the list (the dice), never typed.
-shot 7-kids 7 -age-band kitten
-shot 8-win 9 -seed-people -demo over
+shot 9-kids 7 -age-band kitten
+shot 10-win 9 -seed-people -demo over
