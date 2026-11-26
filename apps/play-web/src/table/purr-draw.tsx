@@ -15,6 +15,7 @@ import { replayInk } from "../workers/purr-ink";
 
 import { EaselCanvas } from "./purr-easel-view";
 import { COLOURS, EASEL_H, EASEL_W, ERASER, InkWriter, WIDTHS, type Stroke } from "./purr-ink";
+import { attachDrawing } from "./purr-input";
 import { drawLayout } from "./purr-layout";
 import { clock, POINTS, type PurrView } from "./purr-model";
 import { useLeft } from "./purr-parts";
@@ -110,8 +111,10 @@ function DrawScreen(props: Props) {
   const send = (messages: unknown[][]) => {
     for (const ops of messages) store.sendInk(seat, turn, ops);
   };
+  // Offline, ink waits in the writer (it would be lost on a closed socket); it goes once the socket is back.
   const pump = () => {
     frame.current = 0;
+    if (!store.socket.connected) return;
     send(writer.flush(performance.now()));
     if (writer.pending) frame.current = requestAnimationFrame(pump);
   };
@@ -130,70 +133,24 @@ function DrawScreen(props: Props) {
   // The finger, on the easel's top layer: every coalesced point, drawn on the next frame.
   const [input, setInput] = useState<HTMLCanvasElement | null>(null);
   useEffect(() => {
-    const el = input;
-    if (!el) return;
-    let active: number | null = null;
-    let rect = { left: 0, top: 0, width: 1, height: 1 };
-    const at = (e: PointerEvent): [number, number] => [((e.clientX - rect.left) / rect.width) * EASEL_W, ((e.clientY - rect.top) / rect.height) * EASEL_H];
-    const down = (e: PointerEvent) => {
-      if (active !== null || !e.isPrimary || fullRef.current) return;
-      if (e.pointerType === "mouse" && e.button !== 0) return;
-      e.preventDefault();
-      active = e.pointerId;
-      el.setPointerCapture?.(e.pointerId);
-      // One layout read, at the start of the stroke.
-      const r = el.getBoundingClientRect();
-      rect = { left: r.left, top: r.top, width: r.width || 1, height: r.height || 1 };
-      const [x, y] = at(e);
-      writer.begin(tool.current.colour, tool.current.width, x, y);
-      learnTip("purr.easel");
-      easel.current?.invalidate();
-      kick();
-    };
-    const move = (e: PointerEvent) => {
-      if (e.pointerId !== active) return;
-      const events = typeof e.getCoalescedEvents === "function" ? e.getCoalescedEvents() : [];
-      let grew = false;
-      for (const c of events.length > 0 ? events : [e]) {
-        const [x, y] = at(c);
-        grew = writer.move(x, y) || grew;
-      }
-      if (grew) {
+    if (!input) return;
+    return attachDrawing(input, document, {
+      writer,
+      tool: () => tool.current,
+      blocked: () => fullRef.current,
+      drew: () => {
+        learnTip("purr.easel");
         easel.current?.invalidate();
         kick();
-      }
-    };
-    const up = (e: PointerEvent) => {
-      if (e.pointerId !== active) return;
-      active = null;
-      writer.end();
-      setCanUndo(writer.canUndo);
-      setStrokes((n) => n + 1);
-      easel.current?.invalidate();
-      kick();
-    };
-    el.addEventListener("pointerdown", down);
-    el.addEventListener("pointermove", move);
-    el.addEventListener("pointerup", up);
-    el.addEventListener("pointercancel", up);
-    el.addEventListener("lostpointercapture", up);
-    // The phone locked or the tab hidden mid-stroke: the stroke ends cleanly and goes now.
-    const hidden = () => {
-      if (document.visibilityState !== "hidden") return;
-      active = null;
-      writer.end();
-      send(writer.flush(performance.now(), true));
-      setCanUndo(writer.canUndo);
-    };
-    document.addEventListener("visibilitychange", hidden);
-    return () => {
-      el.removeEventListener("pointerdown", down);
-      el.removeEventListener("pointermove", move);
-      el.removeEventListener("pointerup", up);
-      el.removeEventListener("pointercancel", up);
-      el.removeEventListener("lostpointercapture", up);
-      document.removeEventListener("visibilitychange", hidden);
-    };
+      },
+      ended: (hidden) => {
+        setCanUndo(writer.canUndo);
+        setStrokes((n) => n + 1);
+        easel.current?.invalidate();
+        if (hidden) send(writer.flush(performance.now(), true));
+        else kick();
+      },
+    });
   }, [input, writer]);
 
   // The room asks for the drawing again (it lost it), or tells this device what it has (a reconnect).
@@ -203,20 +160,20 @@ function DrawScreen(props: Props) {
         ink: (m) => {
           if (m.turn !== turn) return;
           if (m.t === "inkResend") {
-            send(writer.resend());
+            // The whole easel, the last message marked: exempt from the rate limit, so sent at once.
+            const messages = writer.resend();
+            messages.forEach((ops, i) => store.sendInk(seat, turn, ops, i === messages.length - 1));
             return;
           }
           if (m.t !== "inkSync") return;
+          // A page that reloaded mid-turn takes the server's drawing as its own. One that drew
+          // here keeps its own: whatever the server lacks is still waiting in the writer.
+          if (!writer.fresh) return;
           void replayInk(m.ops).then(({ strokes, lastId }) => {
-            if (writer.fresh) {
-              // A reload mid-turn: the server's drawing is this device's again.
-              writer.adoptStrokes(strokes, lastId);
-              setCanUndo(writer.canUndo);
-              easel.current?.invalidate();
-            } else if (!samePicture(strokes, writer.picture.strokes)) {
-              // Something this device drew didn't get there: the whole easel again.
-              send(writer.resend());
-            }
+            if (!writer.fresh) return;
+            writer.adoptStrokes(strokes, lastId);
+            setCanUndo(writer.canUndo);
+            easel.current?.invalidate();
           });
         },
       }),
@@ -241,7 +198,11 @@ function DrawScreen(props: Props) {
     kick();
   };
   const clear = () => {
-    writer.clear();
+    // After easel_full the clear goes on its own, at once (the server refused what came before it).
+    if (fullRef.current) {
+      writer.clearAlone();
+      send(writer.flush(performance.now(), true));
+    } else writer.clear();
     play("whoosh", 0.5);
     buzz("tap");
     setCanUndo(false);
@@ -249,6 +210,11 @@ function DrawScreen(props: Props) {
     easel.current?.invalidate();
     kick();
   };
+
+  // Back online: what waited goes.
+  useEffect(() => {
+    if (state.online) kick();
+  }, [state.online]);
 
   const guessers = v.order.filter((s) => s !== seat && !v.out[s]);
   const low = left !== null && left <= 10_000;
@@ -400,15 +366,4 @@ function fitIn(w: number, h: number): { width: number; height: number } {
   return { width, height: Math.floor((width * 4) / 3) };
 }
 
-/** The same strokes, point for point. */
-function samePicture(a: readonly Stroke[], b: readonly Stroke[]): boolean {
-  if (a.length !== b.length) return false;
-  for (let i = 0; i < a.length; i++) {
-    const x = a[i]!;
-    const y = b[i]!;
-    if (x.id !== y.id || x.colour !== y.colour || x.width !== y.width || x.points.length !== y.points.length) return false;
-    for (let k = 0; k < x.points.length; k++) if (x.points[k] !== y.points[k]) return false;
-  }
-  return true;
-}
 

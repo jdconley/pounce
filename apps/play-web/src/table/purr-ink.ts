@@ -369,7 +369,17 @@ export class InkWriter {
     }
     this.encode();
     if (this.outbox.length === 0) return [];
-    const messages = splitOps(this.outbox);
+    // A clear always starts a message of its own, so nothing before it rides in the same batch.
+    const messages: InkOp[][] = [];
+    let run: InkOp[] = [];
+    for (const op of this.outbox) {
+      if (op[0] === "c" && run.length > 0) {
+        messages.push(...splitOps(run));
+        run = [];
+      }
+      run.push(op);
+    }
+    if (run.length > 0) messages.push(...splitOps(run));
     this.outbox = [];
     this.urgent = false;
     this.lastSent = now;
@@ -380,7 +390,20 @@ export class InkWriter {
   /** The whole easel again, after the server lost it (`inkResend`): a clear, then every visible stroke. */
   resend(): InkOp[][] {
     this.encode();
+    // The resend carries everything: what was waiting is in it.
+    this.outbox = [];
+    this.urgent = false;
     return splitOps([["c"], ...this.picture.toOps()]);
+  }
+
+  /** A clear on its own (after `easel_full`): what was waiting is dropped, the server refused it anyway. */
+  clearAlone(): void {
+    this.live = null;
+    this.held = [];
+    this.outbox = [];
+    this.push(["c"]);
+    this.undoable = [];
+    this.urgent = true;
   }
 
   /** Takes the server's drawing as this device's own (a reload mid-turn): its strokes, and ids after its last. */

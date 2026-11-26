@@ -210,6 +210,45 @@ describe("the writer", () => {
   });
 });
 
+describe("the server's rules for the writer", () => {
+  test("a clear starts a message of its own", () => {
+    const w = new InkWriter();
+    w.begin(0, 0, 10, 10);
+    w.end();
+    w.clear();
+    w.begin(0, 0, 20, 20);
+    w.end();
+    expect(w.flush(0, true)).toEqual([[["s", 0, 0, 0, 10, 10]], [["c"], ["s", 1, 0, 0, 20, 20]]]);
+  });
+
+  test("after easel_full the clear goes alone, and what waited is dropped", () => {
+    const w = new InkWriter();
+    w.begin(0, 0, 10, 10);
+    w.move(40, 40);
+    w.clearAlone();
+    expect(w.flush(0, true)).toEqual([[["c"]]]);
+    expect(w.picture.strokes).toEqual([]);
+    w.begin(0, 0, 5, 5);
+    w.end();
+    // Ids still only go up.
+    expect(w.flush(0, true)).toEqual([[["s", 1, 0, 0, 5, 5]]]);
+  });
+
+  test("the resend carries what was waiting, so nothing goes twice", () => {
+    const w = new InkWriter();
+    w.begin(0, 0, 10, 10);
+    w.move(30, 10);
+    w.flush(0, true);
+    w.move(50, 10);
+    const resend = w.resend();
+    expect(resend).toEqual([[["c"], ["s", 0, 0, 0, 10, 10, 20, 0, 20, 0]]]);
+    expect(w.flush(100, true)).toEqual([]);
+    w.move(70, 10);
+    w.end();
+    expect(w.flush(200, true)).toEqual([[["p", 0, 20, 0]]]);
+  });
+});
+
 describe("pacing", () => {
   test("at most 22 messages in any second", () => {
     const p = new Pacer(22, 1000);

@@ -527,8 +527,8 @@ export class RoomStore {
   }
 
   /** Sends Purrtrait ink for `seat` this `turn` (the drawer's device only; the server drops anyone else's). */
-  sendInk(seat: number, turn: string, ops: unknown[]): boolean {
-    return this.socket.send({ t: "ink", seat, turn, ops } as unknown as ClientMessage);
+  sendInk(seat: number, turn: string, ops: unknown[], last = false): boolean {
+    return this.socket.send({ t: "ink", seat, turn, ops, ...(last ? { last: true } : {}) } as unknown as ClientMessage);
   }
 
   private onMessage(m: ServerMessage): void {
