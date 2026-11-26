@@ -133,8 +133,12 @@ public enum ServerMessage: Decodable, Equatable, Sendable {
     /// Where `seat`'s player is pointing now, relayed to every other device; nil: cleared. Not a
     /// state change: no seq, never replayed. An app that predates it skips the unknown type.
     case aim(seat: Seat, aim: GameAim?)
+    /// Toy Tumble's live stream (`docs/live-protocol.md`): relays, hits, syncs and seat links. Not
+    /// room state: no seq. An app that predates it skips the unknown types.
+    case tumble(TumbleMessage)
 
     private enum CodingKeys: String, CodingKey { case t, `protocol`, seq, room, event, seat, code, pair, person, view, seats, from, aim }
+    enum TumbleKeys: String, CodingKey { case r, s, q, ev, id, from, to, k, x, boxes, st }
 
     public init(from decoder: any Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
@@ -174,6 +178,20 @@ public enum ServerMessage: Decodable, Equatable, Sendable {
         case "aim":
             self = .aim(seat: try c.decode(Seat.self, forKey: .seat),
                         aim: try c.decodeIfPresent(GameAim.self, forKey: .aim))
+        case "tumble":
+            let k = try decoder.container(keyedBy: TumbleKeys.self)
+            self = .tumble(.relay(TumbleRelay(
+                r: try k.decode(Int.self, forKey: .r), s: try k.decode(Int.self, forKey: .s), q: try k.decode(Int.self, forKey: .q),
+                ev: try k.decode([TumbleEvent].self, forKey: .ev))))
+        case "tumbleHit":
+            self = .tumble(.hit(try TumbleHitWire(from: try decoder.container(keyedBy: TumbleKeys.self))))
+        case "tumbleSync":
+            let k = try decoder.container(keyedBy: TumbleKeys.self)
+            self = .tumble(.sync(TumbleSync(r: try k.decode(Int.self, forKey: .r), boxes: try k.decode([TumbleBoxSync].self, forKey: .boxes))))
+        case "tumbleSeat":
+            let k = try decoder.container(keyedBy: TumbleKeys.self)
+            self = .tumble(.seat(TumbleSeat(
+                r: try k.decode(Int.self, forKey: .r), s: try k.decode(Int.self, forKey: .s), st: try k.decode(TumbleSeat.State.self, forKey: .st))))
         default:
             throw DecodingError.dataCorruptedError(
                 forKey: .t, in: c, debugDescription: "unknown server message type: \(t)")
@@ -301,8 +319,11 @@ public enum ClientMessage: Encodable, Equatable, Sendable {
     case retire(seat: Seat)
     /// Live pointing for the TV; nil clears it (`{"t":"aim","seat":n}`).
     case aim(seat: Seat, aim: GameAim?)
+    /// Toy Tumble's events for this device's own box, in order (`docs/live-protocol.md`). An
+    /// empty `ev` asks for a sync of every box.
+    case tumble(r: Int, ev: [TumbleEvent])
 
-    private enum CodingKeys: String, CodingKey { case t, seat, person, kind, action, state, code, name, rug, back, id, aim, options, seats }
+    private enum CodingKeys: String, CodingKey { case t, seat, person, kind, action, state, code, name, rug, back, id, aim, options, seats, r, ev }
 
     public func encode(to encoder: any Encoder) throws {
         var c = encoder.container(keyedBy: CodingKeys.self)
@@ -378,6 +399,10 @@ public enum ClientMessage: Encodable, Equatable, Sendable {
             try c.encode("aim", forKey: .t)
             try c.encode(seat, forKey: .seat)
             try c.encodeIfPresent(aim, forKey: .aim)
+        case .tumble(let r, let ev):
+            try c.encode("tumble", forKey: .t)
+            try c.encode(r, forKey: .r)
+            try c.encode(ev, forKey: .ev)
         }
     }
 }
