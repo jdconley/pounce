@@ -20,7 +20,8 @@ enum BirdDemo {
         return DemoFixtures.birdRoom(DemoFixtures.BirdDemo(rawValue: name) ?? .play)
     }
 
-    static func socket(_ mode: DemoMode) -> any RoomSocketing { BirdDemoSocket(room: room(mode)) }
+    /// The mode's own room (`DemoMode.room`: with `-demo-long-names` too).
+    static func socket(_ mode: DemoMode) -> any RoomSocketing { BirdDemoSocket(room: mode.room) }
 }
 
 actor BirdDemoSocket: RoomSocketing {

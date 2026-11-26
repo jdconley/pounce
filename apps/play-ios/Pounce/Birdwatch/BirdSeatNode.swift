@@ -90,10 +90,10 @@ final class BirdSeatNode: SKNode {
             heart.size = CGSize(width: side * 0.4, height: side * 0.4)
             heart.position = CGPoint(x: -side * 0.42, y: side * 0.4)
         }
-        setSign(next, textScale: textScale)
+        setSign(next, textScale: textScale, edges: edges)
     }
 
-    private func setSign(_ next: BirdTableModel.Sign?, textScale: CGFloat) {
+    private func setSign(_ next: BirdTableModel.Sign?, textScale: CGFloat, edges: (left: CGFloat, right: CGFloat)) {
         shownSign = next
         guard let next else {
             sign.isHidden = true
@@ -117,7 +117,10 @@ final class BirdSeatNode: SKNode {
         sign.removeAllActions()
         sign.setScale(1)
         sign.size = CGSize(width: max(words.size().width + 16, side * 0.62), height: words.size().height + 10)
-        sign.position = CGPoint(x: side * 0.46, y: side * 0.36)
+        // Up at the cat's right, or its left where the screen's edge is too near.
+        let x = side * 0.46
+        let fitsRight = x + sign.size.width / 2 <= edges.right
+        sign.position = CGPoint(x: fitsRight ? x : -min(x, max(edges.left - sign.size.width / 2, 0)), y: side * 0.36)
         // A missed bid: the cat droops.
         if case .missed = next { cat.zRotation = -0.12 } else { cat.zRotation = 0 }
     }

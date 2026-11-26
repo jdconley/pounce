@@ -44,6 +44,8 @@ final class BirdScene: SKScene {
     var onTableTap: () -> Void = {}
     /// Where UI tips can point, in the view's points from its top-left corner.
     var onTipSpots: ([String: CGRect]) -> Void = { _ in }
+    /// A control a tip teaches was used (`bird.play`).
+    var onTipUsed: (String) -> Void = { _ in }
     var onAnnounce: (String) -> Void = { UIAccessibility.post(notification: .announcement, argument: $0) }
     /// The sill in the view's points (top-left origin): where the stage puts the phase panels.
     var onSill: (CGRect) -> Void = { _ in }
@@ -335,7 +337,8 @@ final class BirdScene: SKScene {
                 name: names[safe: seat] ?? "", active: model.currentSeat == seat, count: model.handCount(seat),
                 ribbon: model.ribbon(of: seat), dealer: model.view.dealer == seat && model.isLive, sign: model.sign(seat),
                 partner: partner, bot: view?.kind == .bot, left: view?.isTakenOver ?? false, presence: view?.presence,
-                maxTagWidth: min(maxTag, size.width / 2 - 12), textScale: layout.mode == .tv ? 2.4 : textScale, edges: edges)
+                maxTagWidth: min(maxTag, size.width / 2 - 12),
+                textScale: layout.mode == .tv ? 2.4 : (layout.roomy ? textScale * 1.35 : textScale), edges: edges)
             if popSigns.contains(seat) { node.popSign(reduceMotion: reduceMotion) }
         }
     }
@@ -648,6 +651,7 @@ final class BirdScene: SKScene {
         guard store.actBirdwatch(seat: seat, .play(card)) else { return }
         provisional = card
         lifted = nil
+        onTipUsed("bird.play")
         Haptics.shared.drop()
         Sound.shared.play(ArtName.Sound.sfxFlip, volume: 0.6, kind: .game)
         node.removeAllActions()

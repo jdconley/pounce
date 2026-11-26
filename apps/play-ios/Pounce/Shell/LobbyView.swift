@@ -436,10 +436,11 @@ struct LobbyView: View {
         let host = room?.youAreHost == true && interactive
         return BirdRulesPills(rules: $rules, enabled: host) { next in
             lastTapped = .rules
+            model.tips.used("lobby.rules")
             session.send(.setOptions(RoomOptions(rules: next)))
         }
         .wiggle(trigger: wiggles[.rules, default: 0])
-        .tipTarget("lobby.rules")
+        .tipTarget(host ? "lobby.rules" : nil)
     }
 
     // MARK: start

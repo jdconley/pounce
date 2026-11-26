@@ -216,6 +216,11 @@ struct BirdStage: View {
         .animation(.spring(duration: 0.4, bounce: 0.3).paced, value: summary)
         .animation(.spring(duration: 0.35, bounce: 0.3).paced, value: connection)
         .onChange(of: events.winners != nil) { _, over in if over { model.tips.note(.gameOver) } }
+        // The face-up hand's person gets the tips; none while a curtain, a sheet, the summary or
+        // game over is up.
+        .tipHost(.birdwatch, paused: curtainSeat != nil || events.menuOpen || events.scoresOpen || partnerSheet
+                    || summary != nil || events.winners != nil,
+                 person: events.shown.flatMap { table?.room.seats[safe: $0]?.person?.id })
         .task {
             await BirdCardFactory.shared.prewarm()
             guard !Task.isCancelled else { return }
@@ -334,6 +339,8 @@ struct BirdStage: View {
 
     private func act(_ action: BirdAction) {
         guard let seat = events.shown else { return }
+        if case .bid = action { model.tips.used("bird.bid") }
+        if case .pass = action { model.tips.used("bird.bid") }
         session.store.actBirdwatch(seat: seat, action)
     }
 
@@ -369,6 +376,7 @@ struct BirdStage: View {
         scene.onShownSeat = { [weak events] seat in events?.shown = seat }
         scene.onTableTap = { [weak events] in events?.tableTaps += 1 }
         scene.onTipSpots = { [weak events] spots in events?.tipSpots = spots }
+        scene.onTipUsed = { [weak model] control in model?.tips.used(control) }
         scene.onPutBack = { [weak events] n in events?.putBack = n }
         scene.onSill = { [weak events] rect in if events?.sill != rect { events?.sill = rect } }
         scene.onBand = { [weak events] top in if events?.bandTop != top { events?.bandTop = top } }

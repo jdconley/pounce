@@ -212,8 +212,8 @@ struct BirdRulesPills: View {
                             .font(.system(.headline, design: .rounded, weight: .black))
                             .foregroundStyle(.white)
                             .lineLimit(1)
-                            .minimumScaleFactor(0.7)
-                            .padding(.horizontal, 14)
+                            .minimumScaleFactor(0.6)
+                            .padding(.horizontal, 10)
                             .padding(.vertical, 9)
                             .frame(maxWidth: .infinity)
                             .background(
@@ -236,7 +236,9 @@ struct BirdRulesPills: View {
                 .fixedSize(horizontal: false, vertical: true)
                 .accessibilityHidden(true)
         }
-        .dynamicTypeSize(...DynamicTypeSize.accessibility2)
+        // The three names always fit on one row, so the pills stop growing at the largest
+        // standard size (VoiceOver and the line under them still read in full).
+        .dynamicTypeSize(...DynamicTypeSize.xxxLarge)
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("bird.rules")
     }

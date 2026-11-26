@@ -4,6 +4,8 @@ import Foundation
 /// teaches on the Cat Tower table). One screen hosts tips at a time: the one on top.
 public enum TipScreen: String, CaseIterable, Codable, Sendable {
     case home, lobby, tableMenu, pounce, us, gear, tiles
+    /// Birdwatch's table: its first hands teach the bid sign, dimmed cards, trump and the partner.
+    case birdwatch
     /// Cat Tower's table (so far only while a TV shows it: the Cards/Table switch). The tile game's
     /// table is `tiles`.
     case table
@@ -118,6 +120,12 @@ public enum UITip: String, CaseIterable, Codable, Sendable {
     case tilesView = "ui.tiles.view"
     // The Daily Dish: its first visit
     case dishFirst = "ui.dish.first"
+    // Birdwatch: the lobby's rule sets, then the table's first hands (design §5.8)
+    case lobbyRules = "ui.lobby.rules"
+    case birdSign = "ui.bird.sign"
+    case birdDimmed = "ui.bird.dimmed"
+    case birdTrump = "ui.bird.trump"
+    case birdPartner = "ui.bird.partner"
 
     public var rule: UITipRule {
         switch self {
@@ -161,6 +169,15 @@ public enum UITip: String, CaseIterable, Codable, Sendable {
         case .tilesView: r(.tiles, "table.view", 101, .unseen(.tableView))
         // The first visit to the Dish: what it is. Playing any puzzle learns it.
         case .dishFirst: r(.dish, "dish.cards", 100, learnedBy: ["dish.play"])
+        // Only the host's pills are live; a tap on one learns it.
+        case .lobbyRules: r(.lobby, "lobby.rules", 97, learnedBy: ["lobby.rules"])
+        // Birdwatch's table, one at a time as each comes up: a bid, a card you can't play, trump,
+        // and (five players, the partner's own hand) the partner mark. Bidding learns the sign,
+        // playing a card learns the dimming.
+        case .birdSign: r(.birdwatch, "bird.sign", 90, learnedBy: ["bird.bid"])
+        case .birdDimmed: r(.birdwatch, "bird.dimmed", 95, learnedBy: ["bird.play"])
+        case .birdTrump: r(.birdwatch, "bird.trump", 85)
+        case .birdPartner: r(.birdwatch, "bird.partner", 100)
         }
     }
 

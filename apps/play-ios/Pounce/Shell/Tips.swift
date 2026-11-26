@@ -246,6 +246,11 @@ enum UITipCopy {
         case .tableView: String(localized: "Your cards are here. The table is on the TV.", comment: "Tip on a table a TV shows: the Cards/Table switch, the first time the phone shows just its cards")
         case .tilesView: String(localized: "Your cards are here. The table is on the TV.", comment: "Tip on a table a TV shows: the Cards/Table switch, the first time the phone shows just its cards")
         case .dishFirst: String(localized: "Four new puzzles every day.", comment: "Tip on the Daily Dish, first visit: the puzzle cards")
+        case .lobbyRules: String(localized: "Pick the rules your family plays.", comment: "Tip in the Birdwatch lobby: the three rule-set pills")
+        case .birdSign: String(localized: "Each cat's bid shows on its sign.", comment: "Tip at Birdwatch's table: a cat's bid sign")
+        case .birdDimmed: String(localized: "Dim cards can't be played. Follow suit.", comment: "Tip at Birdwatch's table: a dimmed card in your hand")
+        case .birdTrump: String(localized: "Trump beats every other suit.", comment: "Tip at Birdwatch's table: the trump badge")
+        case .birdPartner: String(localized: "You hold the called card. Help the bidder, quietly.", comment: "Tip at Birdwatch's table (five players): the partner's own mark")
         }
     }
 }

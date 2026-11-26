@@ -103,7 +103,7 @@ public struct BirdLayout: Equatable, Sendable {
                 let stripHeight: CGFloat = roomy ? 52 : 40
                 strip = CGRect(x: 12, y: hand.maxY + 8, width: w - 24, height: stripHeight)
                 window = CGRect(x: 0, y: strip.maxY + 6, width: w, height: max(topBand.minY - strip.maxY - 6, 120))
-                catSide = min(roomy ? 110 : 70, max(48, min(w * 0.17, window.height * 0.22)))
+                catSide = min(roomy ? 140 : 70, max(48, min(w * 0.17, window.height * 0.24)))
                 seatSpots = Self.arc(count: others, in: window, cat: catSide, full: false)
                 // The sill is a wide band along the window's bottom, under every cat and its tag.
                 var sillTop = window.minY + 10 + (roomy ? 460 : 320)
