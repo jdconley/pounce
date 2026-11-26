@@ -514,3 +514,25 @@ function finish(s: BirdState, winners: Seat[], reason: EndReason, events: BirdEv
   s.endReason = reason;
   events.push({ kind: "gameOver", winners: [...winners], scores: [...s.scores], reason });
 }
+
+/**
+ * A plain legal action for the seat on the move, for when a bot's is refused: pass, put the nest
+ * back as it came, the first suit, the first card the bid winner doesn't hold, the first card
+ * that may be played, or the next hand.
+ */
+export function plainAction(s: BirdState, seat: Seat): BirdAction {
+  switch (s.phase) {
+    case "bidding":
+      return { type: "pass" };
+    case "nest":
+      return { type: "nest", discard: [...s.fromNest] };
+    case "trump":
+      return { type: "trump", suit: "fish" };
+    case "partner":
+      return { type: "partner", card: deckFor(rulesOf(s), s.seats).find((c) => !(s.hands[seat] as CardId[]).includes(c)) as CardId };
+    case "play":
+      return { type: "play", card: playable(s, seat)[0] as CardId };
+    default:
+      return { type: "nextHand" };
+  }
+}
