@@ -7,10 +7,12 @@ import { titleOf } from "../lib/catalog";
 import { buzz } from "../lib/haptics";
 import { play } from "../lib/sound";
 import { reach } from "../store/app";
-import { inviteMessages, mySeats, practiceMessages, rulesMessage, seatToAdd, startClosingOpenSeats, startLit, startWords, swapMessage } from "../store/lobby";
+import { catsMessage, inviteMessages, mySeats, oneSeatPerDevice, practiceMessages, rulesMessage, seatToAdd, startClosingOpenSeats, startLit, startWords, swapMessage } from "../store/lobby";
 import { BwHowTo } from "../table/bw-help";
 import { lobbyRibbons, RULE_COPY, RULES_ORDER } from "../table/bw-model";
 import { seatCat, seatName, seatPose } from "../table/seat";
+import { TumbleHowTo } from "../tumble/help";
+import { catsOf, CATS_WORDS, isTumble, type Cats } from "../tumble/store";
 
 import { Button, Cat, Icon, IconButton, Sheet, Tip } from "./common";
 import { NameScreen } from "./firstrun";
@@ -54,6 +56,10 @@ export function Lobby(props: {
   const game = room.gameId ?? "cat-tower";
   const bird = game === "birdwatch";
   const rules = room.options?.rules ?? "official";
+  // Toy Tumble: one seat per device, and the House Cats' level once a cat is seated.
+  const tumble = isTumble(room);
+  const cats = catsOf(room);
+  const localSeat = !oneSeatPerDevice(room);
   const ribbons = bird ? lobbyRibbons(room) : new Map<number, string>();
   const host = room.youAreHost && seated;
 
@@ -191,6 +197,37 @@ export function Lobby(props: {
         </section>
       ) : null}
 
+      {tumble ? (
+        <section class="bw-rules panel" aria-label="House Cats" id="tt-cats">
+          {room.seats.some((s) => s.kind === "bot") ? (
+            <div class="bw-pills" role="radiogroup" aria-label="House Cats">
+              {(["easy", "quick"] as Cats[]).map((c) => (
+                <button
+                  type="button"
+                  role="radio"
+                  aria-checked={c === cats}
+                  class={`bw-pill ${c === cats ? "on" : ""}`}
+                  disabled={!host && c !== cats}
+                  onClick={() => {
+                    if (!host || c === cats) return;
+                    play("pop", 0.5);
+                    buzz("tap");
+                    store.send(catsMessage(c));
+                  }}
+                >
+                  {CATS_WORDS[c]}
+                </button>
+              ))}
+            </div>
+          ) : null}
+          <p class="bw-rules-line">
+            <button type="button" class="link" onClick={() => setSheet("howto")}>
+              How to play
+            </button>
+          </p>
+        </section>
+      ) : null}
+
       <section class="add-bar panel" aria-label="Add a player" id="add-bar">
         <h2 class="add-title">Add a player</h2>
         <div class="add-choices">
@@ -208,10 +245,12 @@ export function Lobby(props: {
               <span>Far away</span>
             )}
           </button>
-          <button type="button" class="choice" onClick={() => setSheet("local")} disabled={!seated || room.seats.every((s) => s.kind === "human")}>
-            <Icon name="icon-phone" size={40} />
-            <span>This device</span>
-          </button>
+          {localSeat ? (
+            <button type="button" class="choice" onClick={() => setSheet("local")} disabled={!seated || room.seats.every((s) => s.kind === "human")}>
+              <Icon name="icon-phone" size={40} />
+              <span>This device</span>
+            </button>
+          ) : null}
           <button type="button" class="choice" onClick={houseCat} disabled={!seated || add === null}>
             <Icon name="badge-bot" size={40} />
             <span>House Cat</span>
@@ -265,10 +304,12 @@ export function Lobby(props: {
               <Icon name="icon-share" size={48} />
               <span>Far away</span>
             </button>
-            <button type="button" class="choice" onClick={() => setSheet("local")}>
-              <Icon name="icon-phone" size={48} />
-              <span>This device</span>
-            </button>
+            {localSeat ? (
+              <button type="button" class="choice" onClick={() => setSheet("local")}>
+                <Icon name="icon-phone" size={48} />
+                <span>This device</span>
+              </button>
+            ) : null}
             <button type="button" class="choice" onClick={houseCat}>
               <Icon name="badge-bot" size={48} />
               <span>House Cat</span>
@@ -290,7 +331,7 @@ export function Lobby(props: {
           />
         </div>
       ) : null}
-      {sheet === "howto" ? <BwHowTo rules={rules} onClose={() => setSheet(null)} /> : null}
+      {sheet === "howto" ? tumble ? <TumbleHowTo onClose={() => setSheet(null)} /> : <BwHowTo rules={rules} onClose={() => setSheet(null)} /> : null}
       {sheet === "rename" ? <RenameSheet current={room.name} onClose={() => setSheet(null)} onRename={(name) => store.send({ t: "rename", name })} /> : null}
       {typeof sheet === "object" && sheet !== null ? (
         <Sheet title={seatName(room.seats[sheet.seat])} onClose={() => setSheet(null)}>

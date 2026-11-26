@@ -26,6 +26,7 @@ import { seatCat, seatName } from "../table/seat";
 import { SwitchView } from "../table/shared";
 import { TilesTable } from "../table/tiles";
 import { TilesController } from "../table/tiles-controller";
+import { TumbleHowTo } from "../tumble/help";
 import { TumbleTable } from "../tumble/screen";
 import { isTumble, tumbleOf, tumbleWinners, winsWords } from "../tumble/store";
 
@@ -258,7 +259,12 @@ export function TableScreen(props: { code: string; intent: TableIntent; say?: (w
                   <span class="grow">Show on TV</span>
                 </button>
               ) : null}
-              {isBird && room.options ? (
+              {isTumbleRoom ? (
+                <button type="button" class="row" onClick={() => setMenu("howto")}>
+                  <Icon name="icon-play" size={32} />
+                  <span class="grow">How to play</span>
+                </button>
+              ) : isBird && room.options ? (
                 <button type="button" class="row" onClick={() => setMenu("howto")}>
                   <Icon name="icon-play" size={32} />
                   <span class="grow">How to play</span>
@@ -284,7 +290,7 @@ export function TableScreen(props: { code: string; intent: TableIntent; say?: (w
           </Sheet>
         ) : null}
         {menu === "scores" ? isBird && room.birdwatch ? <ScoreSheet room={room} onClose={() => setMenu(null)} /> : <ScoresSheet room={room} onClose={() => setMenu(null)} /> : null}
-        {menu === "howto" && room.options ? <BwHowTo rules={room.options.rules} onClose={() => setMenu(null)} /> : null}
+        {menu === "howto" && isTumbleRoom ? <TumbleHowTo onClose={() => setMenu(null)} /> : menu === "howto" && room.options ? <BwHowTo rules={room.options.rules} onClose={() => setMenu(null)} /> : null}
         {menu === "forfeit" ? (
           <Sheet title="Forfeit this game?" onClose={() => setMenu(null)}>
             <div class="sheet-actions">
