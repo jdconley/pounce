@@ -300,9 +300,6 @@ final class CatNode: FadeGroup {
 
     var skipBadgeSize: CGSize { skipBadge.size }
 
-    /// Hides the skip badge while a `skipped` animation pops its own copy.
-    func hideSkipBadge() { skipBadge.isHidden = true }
-
     /// Back to the seat's pose at rest (after a terror or blink, or when the table is torn
     /// down mid-motion).
     func resetMotion() {

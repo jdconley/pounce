@@ -251,14 +251,17 @@ extension TableScene {
 
     // MARK: skipped
 
-    /// The skipped seat's skip badge pops and floats away.
+    /// The skipped seat's skip badge pops big and settles back onto the cat, which stays
+    /// pickled through the turn played in its place (`PickledSeats`); over my own hand it pops
+    /// and floats away.
     private func animateSkipped(_ seat: Seat) async {
         var spot = seatPoint(seat)
         var size = CGSize(width: 34, height: 34)
+        var stays = false
         if seat != bottomSeat, let cat = opponents.node(for: seat) {
             spot = fx.convert(cat.skipBadgePoint, from: opponents)
             size = CGSize(width: cat.skipBadgeSize.width * 1.5, height: cat.skipBadgeSize.height * 1.5)
-            cat.hideSkipBadge()
+            stays = true
         } else {
             spot.y += 70
         }
@@ -277,6 +280,11 @@ extension TableScene {
         await director.run(.sequence([appear, .wait(forDuration: 0.12)]), on: badge)
         let away: SKAction = reduceMotion
             ? .sequence([.wait(forDuration: 0.2), .fadeOut(withDuration: 0.2)])
+            : stays
+            ? .sequence([
+                .wait(forDuration: 0.16),
+                .group([.scale(to: 1 / 1.5, duration: 0.2).eased(.easeIn), .sequence([.wait(forDuration: 0.12), .fadeOut(withDuration: 0.08)])]),
+            ])
             : .sequence([
                 .wait(forDuration: 0.16),
                 .group([.fadeOut(withDuration: 0.25), .moveBy(x: 0, y: 18, duration: 0.25), .scale(to: 1.3, duration: 0.25)]),

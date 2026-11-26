@@ -31,9 +31,10 @@ final class OpponentsNode: SKNode {
         var movedOn: [Seat] = []
     }
 
-    /// Lays the bar out for `seats` (`TableModel.barSeats`).
+    /// Lays the bar out for `seats` (`TableModel.barSeats`). `pickled`: the seats a Cucumber
+    /// skips (`PickledSeats`), whose cats wear the skip badge and a "Pickled" pill.
     @discardableResult
-    func update(model: TableModel, seats: [Seat], layout: TableLayout) -> Changes {
+    func update(model: TableModel, seats: [Seat], layout: TableLayout, pickled: Set<Seat> = []) -> Changes {
         guard let game = model.game else {
             clear()
             return Changes()
@@ -92,7 +93,11 @@ final class OpponentsNode: SKNode {
                 ? (level: SignalGlyph.Level.lost, text: String(localized: "Forfeited", comment: "Under a player's name: they left the game"))
                 : view?.kind == .human ? LinkWords.seat(view?.link) : nil
             node.setLink(out ? nil : link?.level)
-            node.setBadges(bot: view?.kind == .bot, skip: game.pendingSkip[safe: seat] ?? false)
+            // Pickled: the skip badge, and "Pickled" where a bad link would show (its glyph stays on
+            // the cat) until the turn played in this seat's place is over.
+            let isPickled = !out && pickled.contains(seat)
+            node.setBadges(bot: view?.kind == .bot, skip: isPickled)
+            let pill: SeatPill? = isPickled ? .pickled : link.map { .link($0.level, $0.text) }
             node.slotWidth = onTV ? layout.seatFrames[safe: i]?.width ?? spacing : spacing
             node.setCount(game.handCounts[safe: seat])
             if node.setPhase(PhaseMark.seat(seat, in: game)) { changes.movedOn.append(seat) }
@@ -121,7 +126,7 @@ final class OpponentsNode: SKNode {
             tag.zPosition = 20 + CGFloat(i)
             if let words {
                 // A TV: the score under the name, or in its place a bad link or "Forfeited".
-                setLinkTag(seat, link, under: tag, width: words.nameWidth, size: words.linkSize, z: 30 + CGFloat(i))
+                setLinkTag(seat, pill, under: tag, width: words.nameWidth, size: words.linkSize, z: 30 + CGFloat(i))
                 let score = scores[seat] ?? {
                     let n = SKSpriteNode()
                     n.name = "score"
@@ -129,11 +134,11 @@ final class OpponentsNode: SKNode {
                     addChild(n)
                     return n
                 }()
-                words.place(score: link == nil ? game.scores[safe: seat] : nil, on: score, under: tag)
+                words.place(score: pill == nil ? game.scores[safe: seat] : nil, on: score, under: tag)
                 score.zPosition = 30 + CGFloat(i)
             } else {
                 setLinkTag(
-                    seat, link, under: tag, width: tagWidth, size: ((!layout.roomy ? 13 : 15) * min(textScale, 1.25)).rounded(),
+                    seat, pill, under: tag, width: tagWidth, size: ((!layout.roomy ? 13 : 15) * min(textScale, 1.25)).rounded(),
                     z: 30 + CGFloat(i))
             }
         }
@@ -141,8 +146,21 @@ final class OpponentsNode: SKNode {
         return changes
     }
 
+    /// What the pill under a seat's name says: a bad link (or "Forfeited"), or "Pickled".
+    private enum SeatPill {
+        case link(SignalGlyph.Level, String)
+        case pickled
+
+        @MainActor func texture(maxWidth: CGFloat, size: CGFloat) -> SKTexture {
+            switch self {
+            case .link(let level, let text): SignalGlyph.pillTexture(level, text: text, maxWidth: maxWidth, size: size)
+            case .pickled: SignalGlyph.pickledPill(maxWidth: maxWidth, size: size)
+            }
+        }
+    }
+
     private func setLinkTag(
-        _ seat: Seat, _ link: (level: SignalGlyph.Level, text: String)?, under tag: SKSpriteNode,
+        _ seat: Seat, _ link: SeatPill?, under tag: SKSpriteNode,
         width: CGFloat, size: CGFloat, z: CGFloat
     ) {
         guard let link else {
@@ -157,7 +175,7 @@ final class OpponentsNode: SKNode {
             addChild(n)
             return n
         }()
-        let texture = SignalGlyph.pillTexture(link.level, text: link.text, maxWidth: width, size: size)
+        let texture = link.texture(maxWidth: width, size: size)
         node.texture = texture
         node.size = texture.size()
         node.position = CGPoint(x: tag.position.x, y: tag.position.y - tag.size.height / 2 - node.size.height / 2 + 1)

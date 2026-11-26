@@ -44,11 +44,23 @@ enum SignalGlyph {
     /// The seat's pill under its name: ink on orange (weak) or white on red (lost), with an ink
     /// rim; cut short with an ellipsis past `maxWidth`, never shrunk below legible.
     @MainActor static func pillTexture(_ level: Level, text: String, maxWidth: CGFloat, size: CGFloat = 12) -> SKTexture {
-        let key = "\(level)|\(text)|\(Int(maxWidth))|\(Int(size))"
+        pill(text, fill: level == .weak ? Palette.orange : Palette.refuse, ink: level == .weak ? Palette.ink : .white,
+             maxWidth: maxWidth, size: size)
+    }
+
+    /// "Pickled" under a seat's name while a Cucumber skips it (`PickledSeats`): ink on the
+    /// cucumber's lime, in the bad link pill's place and shape.
+    @MainActor static func pickledPill(maxWidth: CGFloat, size: CGFloat = 12) -> SKTexture {
+        pill(String(localized: "Pickled", comment: "Under a player's name: a Cucumber skips their turn"),
+             fill: Palette.lime, ink: Palette.ink, maxWidth: maxWidth, size: size)
+    }
+
+    @MainActor private static func pill(_ text: String, fill: Color, ink: Color, maxWidth: CGFloat, size: CGFloat) -> SKTexture {
+        let key = "\(text)|\(fill)|\(ink)|\(Int(maxWidth))|\(Int(size))"
         if let cached = pills[key] { return cached }
         let font = UIFont.systemFont(ofSize: size, weight: .black).rounded
         let attrs: [NSAttributedString.Key: Any] = [
-            .font: font, .foregroundColor: level == .weak ? UIColor(Palette.ink) : UIColor.white,
+            .font: font, .foregroundColor: UIColor(ink),
         ]
         let h = ceil(font.lineHeight + 4)
         let pad = h * 0.45
@@ -58,7 +70,7 @@ enum SignalGlyph {
             let pill = CGRect(origin: .zero, size: canvas)
             UIColor(Palette.ink).setFill()
             UIBezierPath(roundedRect: pill, cornerRadius: h / 2).fill()
-            UIColor(level == .weak ? Palette.orange : Palette.refuse).setFill()
+            UIColor(fill).setFill()
             UIBezierPath(roundedRect: pill.insetBy(dx: 1.5, dy: 1.5), cornerRadius: h / 2 - 1.5).fill()
             let box = CGRect(x: pad, y: (h - textSize.height) / 2, width: canvas.width - 2 * pad, height: textSize.height)
             let style = NSMutableParagraphStyle()

@@ -226,6 +226,8 @@ final class TableScene: SKScene {
     /// replaying them). Never `lastSeq`: events past the last snapshot are in `room` only as
     /// turn, step and status, so a redraw between them and their snapshot must not skip them.
     private var drawnSeq = -1
+    /// Seats a Cucumber pickled, from the events as they play (`PickledSeats`).
+    private(set) var pickled = PickledSeats()
     /// A shell reconcile that arrived mid-timeline: its `revealed` and epoch, applied by the next
     /// `.reconcile` intent (or after `deferLimit` if none comes).
     private var pendingReveal: Reveal?
@@ -498,6 +500,8 @@ final class TableScene: SKScene {
             rejected(code)
         case .game(let event, let seq):
             seenSeq = max(seenSeq, seq)
+            // Every event counts, even one the table already shows: it says whose turn replaced a skip.
+            pickled.note(event, round: model?.game?.round ?? 0)
             guard seq > drawnSeq else {
                 #if DEBUG
                 timelineLog("skip seq \(seq) (drawn \(drawnSeq)) \(event)")
@@ -734,7 +738,7 @@ final class TableScene: SKScene {
             // A TV's tower stands open the whole game.
             if onTV { tower.setOpen(true, animated: false) } else { foldOnTurnChange(game) }
             // A phone holding no seat shows every seat in the bar.
-            let barChanges = opponents.update(model: model, seats: barSeats, layout: layout)
+            let barChanges = opponents.update(model: model, seats: barSeats, layout: layout, pickled: pickled.seats(in: game))
             for seat in barChanges.turnedOn { pulseTurn(seat) }
             for seat in barChanges.movedOn { popPhase(seat) }
         }
@@ -1198,7 +1202,8 @@ final class TableScene: SKScene {
                 ? String(localized: "\(SeatInfo.name(model.room, seat)), forfeited", comment: "VoiceOver: a player who left the game")
                 : SeatInfo.label(
                     model.room.seats[safe: seat], name: SeatInfo.name(model.room, seat),
-                    cards: game.handCounts[safe: seat], phase: PhaseMark.seat(seat, in: game))
+                    cards: game.handCounts[safe: seat], phase: PhaseMark.seat(seat, in: game),
+                    pickled: pickled.seats(in: game).contains(seat))
             let card = customAction(String(localized: "Player card", comment: "VoiceOver action: open a player's card")) { [weak self] in
                 self?.showPlayer(seat)
                 return true

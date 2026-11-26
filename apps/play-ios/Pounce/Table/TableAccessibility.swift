@@ -35,9 +35,13 @@ enum SeatInfo {
         names(room)[safe: seat] ?? ""
     }
 
-    /// "Mia, 6 cards, phase 3, laid down, asleep" (what the cat's two chips say, in words).
-    static func label(_ view: SeatView?, name: String? = nil, cards: Int?, phase: PhaseMark?) -> String {
+    /// "Mia, pickled, 6 cards, phase 3, laid down, asleep" (what the cat's pill and two chips
+    /// say, in words). `pickled`: a Cucumber skips this seat (`PickledSeats`).
+    static func label(_ view: SeatView?, name: String? = nil, cards: Int?, phase: PhaseMark?, pickled: Bool = false) -> String {
         var parts = [name ?? self.name(view)]
+        if pickled {
+            parts.append(String(localized: "pickled", comment: "VoiceOver: a Cucumber skips this player's turn"))
+        }
         if let cards {
             parts.append(String(localized: "\(cards) cards", comment: "VoiceOver: a player's card count"))
         }
