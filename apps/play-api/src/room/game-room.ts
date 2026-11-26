@@ -226,7 +226,7 @@ export class GameRoom extends DurableObject<Env> {
       ws.close(NORMAL_CLOSURE);
       return;
     }
-    const parsed = typeof data === "string" ? parseClientMessage(data, core.parseAction, core.parseAim) : null;
+    const parsed = typeof data === "string" ? parseClientMessage(data, core.parseAction, core.parseAim, core.parseOptions) : null;
     if (parsed === null || "error" in parsed) {
       send(ws, parsed === null ? BAD_MESSAGE : { t: "error", code: parsed.error });
       return;
@@ -904,7 +904,7 @@ export class GameRoom extends DurableObject<Env> {
         this.index(deviceId).upsertTable({
           ...entry,
           // Every seat this device holds forfeited: the table is over for it (§5.13), whoever plays on.
-          ...(core.allOut(core.controlledSeats(deviceId)) ? { status: "over" } : {}),
+          ...(core.allOut(core.heldSeats(deviceId)) ? { status: "over" } : {}),
           yourTurn: actor !== null && core.controlledSeats(deviceId).includes(actor),
           seats: tableSeats(state, core.controlledSeats(deviceId)),
         }),

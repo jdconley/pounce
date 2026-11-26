@@ -5,7 +5,9 @@ import { parseRoomName } from "./room/names";
 import { hasKeys, isInt, isObj, type Obj } from "./shape";
 import { isBack, isRug } from "./streaks/catalog";
 
-import type { GameAction, GameError, GameId } from "./games";
+import type { BirdEvent } from "./birdwatch/engine";
+import type { BirdView } from "./birdwatch/view";
+import type { GameAction, GameError, GameId, GameOptions } from "./games";
 import type { GameEvent, Seat } from "./rules/engine";
 import type { CatTowerView } from "./rules/view";
 import type { StreakView } from "./streaks/pair-core";
@@ -54,6 +56,11 @@ export type RoomView = {
     presence: Presence | null;
     /** Only with `LINK` on, while playing, and only when not fine. */
     link?: SeatLink;
+    /**
+     * A House Cat plays this seat for the rest of the game because its person left (a game with
+     * `leaveTakeover`, Birdwatch): `kind` is "bot" and `person` is still who sat here. Absent otherwise.
+     */
+    left?: true;
   }[];
   /** Cat Tower's view of the game. Null in the lobby, and in a room of any other game. */
   game: CatTowerView | null;
@@ -65,6 +72,13 @@ export type RoomView = {
   gameId?: Exclude<GameId, "cat-tower">;
   /** The tile game's view, in a `tiles` room once it is dealt. */
   tiles?: TilesView;
+  /** Birdwatch's view, in a `birdwatch` room once it is dealt. */
+  birdwatch?: BirdView;
+  /**
+   * What the table chose in its lobby (`setOptions`), for a game that has a choice: Birdwatch's
+   * rule set. Absent at a table of a game with none, so Cat Tower and tile game snapshots never have it.
+   */
+  options?: GameOptions;
   /** The table's rug and card back (§9.4). Only while streaks are on. */
   look?: { rug: string; back: string };
   /** The code of the table "Play again" dealt (§10.4), once there is one. */
@@ -106,8 +120,12 @@ export type RoomEvent =
   | { kind: "presence"; seat: Seat; presence: Presence }
   /** A Cat Tower event. */
   | { kind: "game"; event: GameEvent }
-  /** A tile game event. The two games share event names, so each has a kind of its own. */
+  /** A tile game event. The games share event names, so each has a kind of its own. */
   | { kind: "tiles"; event: TilesEvent }
+  /** A Birdwatch event. */
+  | { kind: "birdwatch"; event: BirdEvent }
+  /** A House Cat took `seat` for the rest of the game: its person left, or was retired (Birdwatch). */
+  | { kind: "houseCat"; seat: Seat }
   /** Someone at the table changed its look; `seat` is theirs, for the pill with their cat (§9.4). */
   | { kind: "look"; seat: Seat; rug: string; back: string };
 
@@ -123,6 +141,10 @@ export type ClientMessage =
   | { t: "leave"; seat: Seat }
   | { t: "rename"; name: string }
   | { t: "renameSeat"; seat: Seat; name: string }
+  /** The host sets the table's options in the lobby (Birdwatch's rule set). Errors: `not_allowed`, `not_lobby`. */
+  | { t: "setOptions"; options: GameOptions }
+  /** The host swaps two seats in the lobby, to choose teams. Errors: `not_allowed`, `not_lobby`, `bad_seat`. */
+  | { t: "swapSeats"; seats: [Seat, Seat] }
   | { t: "rematch" }
   | { t: "setLook"; rug?: string; back?: string }
   /** A heartbeat. The room answers `{"t":"pong"}` without waking (WebSocket auto-response). */
@@ -247,7 +269,8 @@ function named(message: ClientMessage | null, name: string | undefined): ClientM
   return message && name !== undefined && !nameAllowed(name) ? BAD_NAME : message;
 }
 
-function parseObject(o: Obj, parseAction: ActionParser, parseAim: AimParser): ClientMessage | BadMessage | null {
+function parseObject(o: Obj, parsers: Parsers): ClientMessage | BadMessage | null {
+  const { parseAction, parseAim, parseOptions } = parsers;
   switch (o.t) {
     case "start":
       return hasKeys(o, ["t"]) ? { t: "start" } : null;
@@ -279,6 +302,16 @@ function parseObject(o: Obj, parseAction: ActionParser, parseAim: AimParser): Cl
     }
     case "rematch":
       return hasKeys(o, ["t"]) ? { t: "rematch" } : null;
+    case "setOptions": {
+      if (!hasKeys(o, ["t", "options"])) return null;
+      const options = parseOptions(o.options);
+      return options ? { t: "setOptions", options } : null;
+    }
+    case "swapSeats": {
+      const seats = o.seats;
+      if (!hasKeys(o, ["t", "seats"]) || !Array.isArray(seats) || seats.length !== 2 || !seats.every((s) => isInt(s, 0))) return null;
+      return { t: "swapSeats", seats: [seats[0] as Seat, seats[1] as Seat] };
+    }
     case "setLook": {
       if (!hasKeys(o, ["t"], ["rug", "back"]) || !("rug" in o || "back" in o)) return null;
       const { rug, back } = o;
@@ -326,17 +359,27 @@ export type ActionParser = (raw: unknown) => GameAction | null;
 /** A game's own check of an `aim` message's `aim` (`GameModule.parseAim`). */
 export type AimParser = (raw: unknown) => GameAim | null;
 
+/** A game's own check of a `setOptions` message's `options` (`GameModule.parseOptions`). */
+export type OptionsParser = (raw: unknown) => GameOptions | null;
+
+type Parsers = { parseAction: ActionParser; parseAim: AimParser; parseOptions: OptionsParser };
+
+/** Cat Tower and the tile game have no options: every `setOptions` is a bad message. */
+const NO_OPTIONS: OptionsParser = () => null;
+
 /**
  * Parses and fully validates a client frame. This is the only guard in front
  * of the rules engine, which trusts the shape of every action it receives.
  * An `act` message's action is checked by `parseAction`, the room's game's own
- * parser; left out, Cat Tower's. An `aim` message's aim likewise goes to `parseAim`.
+ * parser; left out, Cat Tower's. An `aim` message's aim likewise goes to `parseAim`, and a
+ * `setOptions` message's options to `parseOptions` (left out: none are taken).
  * `bad_name`: well-formed, but a name in it is refused by the name filter.
  */
 export function parseClientMessage(
   raw: string,
   parseAction: ActionParser = parseCatTowerAction,
   parseAim: AimParser = parseCatTowerAim,
+  parseOptions: OptionsParser = NO_OPTIONS,
 ): ClientMessage | BadMessage {
   if (new TextEncoder().encode(raw).length > MAX_MESSAGE_BYTES) return BAD;
   let value: unknown;
@@ -346,5 +389,5 @@ export function parseClientMessage(
     return BAD;
   }
   if (!isObj(value)) return BAD;
-  return parseObject(value, parseAction, parseAim) ?? BAD;
+  return parseObject(value, { parseAction, parseAim, parseOptions }) ?? BAD;
 }

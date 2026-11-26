@@ -1,4 +1,13 @@
-import { DEFAULT_GAME, gameModule, type AnyGameEvent, type GameAction, type GameError, type GameId, type RoomGame } from "../games";
+import {
+  DEFAULT_GAME,
+  gameModule,
+  type AnyGameEvent,
+  type GameAction,
+  type GameError,
+  type GameId,
+  type GameOptions,
+  type RoomGame,
+} from "../games";
 import { POUNCE_LIVE_MS, deadline, expired, liveState, type LiveRecord, type LiveState } from "../live/live";
 import { PROTOCOL_VERSION } from "../protocol";
 import { DEFAULT_BACK, DEFAULT_RUG } from "../streaks/catalog";
@@ -26,8 +35,6 @@ import type {
 import type { Action, ApplyError, CatTowerState, GameEvent, Seat } from "../rules/engine";
 import type { Rng, Seed } from "../rules/rng";
 import type { CatTowerView } from "../rules/view";
-import type { TilesEvent } from "../tiles/engine";
-import type { TilesView } from "../tiles/view";
 
 export type CatTowerModule = GameModule<CatTowerState, Action, CatTowerView, GameEvent, ApplyError>;
 
@@ -42,6 +49,12 @@ export type SeatInfo = {
    */
   playerId?: string;
   botLevel?: "house";
+  /**
+   * A House Cat took this seat mid-game because its person left (a game with `leaveTakeover`). The
+   * seat keeps its `person`, `deviceId` and `playerId`, so lists and streaks still know who left,
+   * but a bot seat is controlled by no device.
+   */
+  left?: true;
 };
 
 export type DeviceRecord = {
@@ -70,6 +83,8 @@ export type RoomState<S = CatTowerState> = {
   name: string;
   /** The room's game, for good. Every room saved before there was a second game says "cat-tower". */
   game: GameId;
+  /** What the table chose in its lobby, for a game that has options (Birdwatch's rule set). Absent: none. */
+  options?: GameOptions;
   hostDeviceId: string;
   status: RoomStatus;
   /** As many as the game seats at most in the lobby (6 for Cat Tower); compacted to the game's seats on start. */
@@ -194,6 +209,8 @@ export type RematchIntent = {
   seats: SeatInfo[];
   hostDeviceId: string;
   game?: GameId;
+  /** The table's options, kept for the new table. Absent: the game has none. */
+  options?: GameOptions;
   /** The table's screens, so a TV stays on the new table. Absent: none. */
   screens?: string[];
 };
@@ -371,16 +388,20 @@ export class RoomCore<S = CatTowerState> {
     game: GameId = DEFAULT_GAME,
     screen?: string,
   ): RoomState<S> {
+    const module = gameModule(game);
+    // As many open seats as the game needs at least (2 for Cat Tower and tiles, 4 for Birdwatch).
+    const open = Math.max(2, module.minSeats);
     return {
       ...(screen === undefined ? {} : { screens: [screen] }),
       ...(look ? { look } : {}),
       code,
       name: name ?? defaultRoomName(code),
       game,
+      ...(module.defaultOptions === undefined ? {} : { options: { ...module.defaultOptions } }),
       hostDeviceId,
       status: "lobby",
-      seats: Array.from({ length: gameModule(game).maxSeats }, (_, i): SeatInfo => ({
-        kind: i < 2 ? "open" : "closed",
+      seats: Array.from({ length: module.maxSeats }, (_, i): SeatInfo => ({
+        kind: i < open ? "open" : "closed",
       })),
       gameState: null,
       seq: 0,
@@ -401,6 +422,7 @@ export class RoomCore<S = CatTowerState> {
   static rematchState<S = CatTowerState>(code: string, spec: RematchIntent, now: number): RoomState<S> {
     const state = RoomCore.create<S>(code, spec.hostDeviceId, now, spec.name, spec.look, spec.game);
     if (spec.screens) state.screens = [...spec.screens];
+    if (spec.options) state.options = { ...spec.options };
     state.seats = [
       ...spec.seats.map((s) => ({ ...s })),
       ...Array.from({ length: state.seats.length - spec.seats.length }, (): SeatInfo => ({ kind: "closed" })),
@@ -414,16 +436,25 @@ export class RoomCore<S = CatTowerState> {
   /** The room's game's own check of an `aim` message's aim (`parseClientMessage`). */
   parseAim = (raw: unknown): GameAim | null => this.game.parseAim(raw);
 
+  /** The room's game's own check of a `setOptions` message's options: none for a game without any. */
+  parseOptions = (raw: unknown): GameOptions | null => this.game.parseOptions?.(raw) ?? null;
+
   /** The seat that must act next; null in the lobby and whenever nobody is to act. */
   actor(): Seat | null {
     const game = this.state.gameState;
     return game === null ? null : this.game.currentActor(game);
   }
 
-  /** Per seat: forfeited, out of the game for good. Empty until someone is. */
+  /**
+   * Per seat: forfeited, out of the game for good. Empty until someone is. A seat a House Cat took
+   * over when its person left counts as out: the person is (lists, streaks, nudges).
+   */
   outSeats(): readonly boolean[] {
     const game = this.state.gameState;
-    return game === null ? [] : this.game.forfeited(game);
+    if (game === null) return [];
+    const out = this.game.forfeited(game);
+    if (!this.state.seats.some((s) => s.left)) return out;
+    return this.state.seats.map((s, i) => s.left === true || out[i] === true);
   }
 
   /** Dealt and in play: not the lobby, not between two deals, not over. */
@@ -814,7 +845,7 @@ export class RoomCore<S = CatTowerState> {
       table: state.name,
       seats: state.seats.slice(0, marks.length),
       // Cat Tower's state is the shelves, as it always was; another game's adds its own count beside them.
-      ...(this.game.progressKind === "shelf" ? { phases: marks } : { phases: [], pieces: marks }),
+      ...(this.game.progressKind === "shelf" ? { phases: marks } : { phases: [], pieces: marks, progressKind: this.game.progressKind }),
       controlled: this.controlledSeats(deviceId),
       turn: this.midGame() ? this.game.currentActor(game) : null,
       streak: null,
@@ -876,7 +907,7 @@ export class RoomCore<S = CatTowerState> {
     const playing = state.seats.flatMap((s, i) =>
       s.kind === "human" || s.kind === "bot" ? [{ seat: s, from: i }] : [],
     );
-    const gameState = this.game.create(playing.length, this.newSeed());
+    const gameState = this.game.create(playing.length, this.newSeed(), state.options);
 
     // Move codes address seats by index, and compaction renumbers them. Codes
     // only exist for human seats, which are never dropped.
@@ -929,6 +960,7 @@ export class RoomCore<S = CatTowerState> {
         yours: controlled.includes(i),
         presence: s.kind === "human" ? this.seatPresence(i) : null,
         ...(link ? { link } : {}),
+        ...(s.left ? { left: true as const } : {}),
       };
     });
     return {
@@ -942,6 +974,7 @@ export class RoomCore<S = CatTowerState> {
         youAreHost: deviceId === state.hostDeviceId,
         seats,
         ...this.gameFields(controlled),
+        ...(state.options ? { options: { ...state.options } } : {}),
         ...(this.features.streaks ? { look: this.look() } : {}),
         ...(state.rematch?.code ? { rematch: state.rematch.code } : {}),
         ...(this.features.tv && this.screenShown() ? { screen: true as const } : {}),
@@ -957,18 +990,18 @@ export class RoomCore<S = CatTowerState> {
    * game's is under the key of its own id, with `gameId` saying which and `game` null, so an app
    * never has to guess what it is decoding.
    */
-  private gameFields(controlled: Seat[]): Pick<RoomView, "game" | "gameId" | "tiles"> {
+  private gameFields(controlled: Seat[]): Pick<RoomView, "game" | "gameId" | "tiles" | "birdwatch"> {
     const { state } = this;
     const view = state.gameState === null ? null : this.game.view(state.gameState, controlled);
-    if (state.game !== "tiles") return { game: view as CatTowerView | null };
-    return { game: null, gameId: "tiles", ...(view === null ? {} : { tiles: view as TilesView }) };
+    if (state.game === DEFAULT_GAME) return { game: view as CatTowerView | null };
+    return { game: null, gameId: state.game as Exclude<GameId, "cat-tower">, ...(view === null ? {} : { [state.game]: view }) };
   }
 
   /** A game event as the room sends it: Cat Tower's as `game`, any other game's under its own id. */
   private gameEvent(event: unknown): RoomEvent {
-    return this.state.game === "tiles"
-      ? { kind: "tiles", event: event as TilesEvent }
-      : { kind: "game", event: event as GameEvent };
+    return this.state.game === DEFAULT_GAME
+      ? { kind: "game", event: event as GameEvent }
+      : ({ kind: this.state.game, event } as RoomEvent);
   }
 
   /** Links are watched while a game is on with the feature on. */
@@ -1004,9 +1037,22 @@ export class RoomCore<S = CatTowerState> {
     return out;
   }
 
+  /**
+   * The seats the device controls, and those it held before a House Cat took them over: whose
+   * table this is on the device's lists. The same as `controlledSeats` at a table nobody left.
+   */
+  heldSeats(deviceId: string): Seat[] {
+    return this.state.seats.flatMap((s, i) => (this.controls(deviceId, i) || (s.left === true && this.heldBy(deviceId, s)) ? [i] : []));
+  }
+
   private controls(deviceId: string, seat: Seat): boolean {
     // Callers have bounds-checked the seat.
     const s = this.state.seats[seat] as SeatInfo;
+    // A House Cat that took over a seat keeps who sat there, but plays it alone.
+    return s.kind !== "bot" && this.heldBy(deviceId, s);
+  }
+
+  private heldBy(deviceId: string, s: SeatInfo): boolean {
     if (s.playerId === undefined) return s.deviceId === deviceId;
     return Object.values(this.state.devices[deviceId]?.players ?? {}).includes(s.playerId);
   }
@@ -1057,6 +1103,10 @@ export class RoomCore<S = CatTowerState> {
         return this.rename(deviceId, msg.name);
       case "renameSeat":
         return this.renameSeat(deviceId, msg.seat, msg.name);
+      case "setOptions":
+        return this.setOptions(deviceId, msg.options);
+      case "swapSeats":
+        return this.swapSeats(deviceId, msg.seats);
       case "nudge":
         return this.features.nudge ? this.nudge(deviceId, msg.seat) : [this.fail(deviceId, "bad_message")];
       case "retire":
@@ -1265,7 +1315,7 @@ export class RoomCore<S = CatTowerState> {
     if (this.actor() !== seat) return [this.fail(deviceId, "not_their_turn")];
     if (this.retireWait(this.now()) > 0) return [this.fail(deviceId, "too_soon")];
     // The seat on the move is in the game, so its forfeit is never refused.
-    const applied = this.applyGame(seat, this.game.forfeitAction) as { out: Outbound[] };
+    const applied = this.leaveGame(seat) as { out: Outbound[] };
     const sender = state.seats[from] as SeatInfo;
     if (target.playerId) {
       const person = sender.person as Person;
@@ -1333,6 +1383,35 @@ export class RoomCore<S = CatTowerState> {
     return this.changed();
   }
 
+  /** The host sets the table's options in the lobby (Birdwatch's rule set); the game's parser has checked them. */
+  private setOptions(deviceId: string, options: GameOptions): Outbound[] {
+    const { state } = this;
+    if (state.status !== "lobby") return [this.fail(deviceId, "not_lobby")];
+    if (deviceId !== state.hostDeviceId) return [this.fail(deviceId, "not_allowed")];
+    if (JSON.stringify(options) === JSON.stringify(state.options)) return [];
+    state.options = { ...options };
+    return this.changed();
+  }
+
+  /**
+   * The host swaps two seats in the lobby, whatever is in them, to choose teams: teams follow
+   * seat order (Birdwatch). A move code for either seat goes with it.
+   */
+  private swapSeats(deviceId: string, [a, b]: [Seat, Seat]): Outbound[] {
+    const { seats } = this.state;
+    if (this.state.status !== "lobby") return [this.fail(deviceId, "not_lobby")];
+    if (deviceId !== this.state.hostDeviceId) return [this.fail(deviceId, "not_allowed")];
+    const [first, second] = [seats[a], seats[b]];
+    if (a === b || !first || !second) return [this.fail(deviceId, "bad_seat")];
+    seats[a] = second;
+    seats[b] = first;
+    for (const entry of Object.values(this.state.moveCodes)) {
+      if (entry.seat === a) entry.seat = b;
+      else if (entry.seat === b) entry.seat = a;
+    }
+    return this.changed();
+  }
+
   private configure(deviceId: string, seat: Seat, kind: "open" | "bot" | "closed"): Outbound[] {
     const target = this.state.seats[seat];
     if (this.state.status !== "lobby") return [this.fail(deviceId, "not_lobby")];
@@ -1386,10 +1465,11 @@ export class RoomCore<S = CatTowerState> {
     this.rematchIntent = {
       name: state.name,
       look: this.look(),
-      // The first seat rotates: everyone moves one on.
-      seats: [...state.seats.slice(1), ...state.seats.slice(0, 1)].map((s) => ({ ...s })),
+      // The first seat rotates: everyone moves one on. A seat a House Cat took over is a plain one now.
+      seats: [...state.seats.slice(1), ...state.seats.slice(0, 1)].map((s): SeatInfo => (s.left ? { kind: "bot", botLevel: "house" } : { ...s })),
       hostDeviceId: deviceId,
       ...(state.screens?.length ? { screens: [...state.screens] } : {}),
+      ...(state.options ? { options: { ...state.options } } : {}),
       // The same game again. Cat Tower's intent is as it always was.
       ...(state.game === DEFAULT_GAME ? {} : { game: state.game }),
     };
@@ -1471,7 +1551,7 @@ export class RoomCore<S = CatTowerState> {
     if (!this.controlledSeats(deviceId).includes(seat)) return [this.fail(deviceId, "not_your_seat")];
     if (this.state.status !== "playing") return [this.fail(deviceId, "not_playing")];
     const turn = this.turnKey();
-    const applied = this.applyGame(seat, action);
+    const applied = this.isForfeit(action) ? this.leaveGame(seat) : this.applyGame(seat, action);
     if ("error" in applied) return [this.fail(deviceId, applied.error)];
     if (id !== undefined && device) device.acks = [...(device.acks ?? []), id].slice(-ACKS_KEPT);
     const mover = this.state.seats[seat]?.playerId;
@@ -1484,6 +1564,29 @@ export class RoomCore<S = CatTowerState> {
     const woke = this.wake(deviceId);
     this.afterGameChange();
     return [...applied.out, ...woke, ...this.snapshots()];
+  }
+
+  /** The game's own forfeit, as a client sends it to leave for good. */
+  private isForfeit(action: unknown): boolean {
+    return JSON.stringify(action) === JSON.stringify(this.game.forfeitAction);
+  }
+
+  /**
+   * `seat` leaves the game for good: its own forfeit, or retired. In most games that is the game's
+   * forfeit. In a game with `leaveTakeover` (Birdwatch, design §4.9) the game never hears of it: a
+   * House Cat plays the seat from now on (the room event `houseCat`), and only once no person is
+   * left does the game's forfeit end it.
+   */
+  private leaveGame(seat: Seat): { out: Outbound[]; events: AnyGameEvent[] } | { error: GameError } {
+    if (!this.game.leaveTakeover) return this.applyGame(seat, this.game.forfeitAction);
+    const { state } = this;
+    const info = state.seats[seat] as SeatInfo;
+    state.seats[seat] = { ...info, kind: "bot", botLevel: "house", left: true };
+    this.dropMoveCodes((entry) => entry.seat === seat);
+    const out = this.broadcast(() => ({ kind: "houseCat", seat }));
+    if (state.seats.some((s) => s.kind === "human")) return { out, events: [] };
+    const ended = this.applyGame(seat, this.game.forfeitAction) as { out: Outbound[]; events: AnyGameEvent[] };
+    return { out: [...out, ...ended.out], events: ended.events };
   }
 
   /**
@@ -1649,7 +1752,8 @@ export class RoomCore<S = CatTowerState> {
     state.streakKey = key;
     if (by) state.streakTurns = { ...state.streakTurns, [by]: now };
     const actor = over ? null : this.actor();
-    const holder = actor === null ? null : (state.seats[actor]?.playerId ?? null);
+    const holderSeat = actor === null ? undefined : state.seats[actor];
+    const holder = holderSeat?.kind === "human" ? (holderSeat.playerId ?? null) : null;
     this.streakIntents.push({
       code: state.code,
       at: now,

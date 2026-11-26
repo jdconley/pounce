@@ -1,4 +1,3 @@
-import { chooseAction } from "../bots/house-cat-birdwatch";
 import {
   actor,
   applyAction,
@@ -14,6 +13,7 @@ import {
 } from "../birdwatch/engine";
 import { parseAction, parseOptions } from "../birdwatch/parse";
 import { eventFor, viewFor, type BirdView } from "../birdwatch/view";
+import { chooseAction } from "../bots/house-cat-birdwatch";
 
 import type { GameModule } from "./module";
 

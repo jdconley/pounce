@@ -72,7 +72,7 @@ describe("ErrorCode", () => {
       own_card: true,
       must_follow: true,
     };
-    expect(Object.keys(codes)).toHaveLength(47);
+    expect(Object.keys(codes)).toHaveLength(56);
   });
 });
 
