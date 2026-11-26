@@ -16,6 +16,7 @@ import { reducedMotion } from "../lib/settings";
 import { play } from "../lib/sound";
 import { Button, Icon, learnTip, Tip, tipLearned, useMedia, useSize } from "../ui/common";
 
+import { groupDrop, heldRect, type GroupSpot } from "./ct-drop";
 import { ctMoves, useCtHand, useCtSeat } from "./ct-hand";
 import { ctLayout, trayPoses, type Insets } from "./ct-layout";
 import { discardNeedsTarget, hitTargets } from "./ct-moves";
@@ -175,22 +176,34 @@ export function CatTowerTable(props: { store: RoomStore; state: RoomState; sound
   });
   const groupsReady = groups !== null;
 
-  // Where a card dropped at `p` would go.
-  const targetAt = (p: Point, c: CardId): CtHover => {
+  // Hits can be made now: our play step, laid down, and nothing in flight but a hit or the lay
+  // down before it (a hit dropped then waits for it). Otherwise the groups don't light at all.
+  const queueable = state.pending === null || state.pending.action.type === "hit" || state.pending.action.type === "layDown";
+  const hitsNow = myTurn && g.step === "play" && laidMine && queueable;
+  const spots: GroupSpot[] = [...L.laid].flatMap(([s, row]) => row.groups.map((grp, gi) => ({ seat: s, group: gi, rect: grp.rect, run: g.laid[s]?.[gi]?.kind === "run" })));
+
+  // Where a card dropped at `p` would go, held where `pose` draws it: what lights while it is held
+  // is where it goes (ct-drop.ts).
+  const targetAt = (p: Point, c: CardId, pose?: Pose): CtHover => {
     if (inside(p, L.discardRect, 14)) return { kind: "discard" };
     for (const [i, t] of L.trays.entries()) if (showTrays && inside(p, t, 6)) return { kind: "tray", i };
-    for (const [s, row] of L.laid) {
-      for (const [gi, grp] of row.groups.entries()) {
-        if (inside(p, grp.rect, 8)) {
-          const side = sideFor(p, grp.rect, s, gi);
-          return { kind: "group", seat: s, group: gi, ok: hitOk(c, s, gi, side) };
-        }
-      }
+    const inHand = inside(p, L.handRect, 10);
+    if (hitsNow) {
+      const fits = hitTargets(c, g.laid);
+      const drop = groupDrop({
+        finger: p,
+        // Back over the hand only the finger counts, so the hand can still be put in order.
+        card: pose && !inHand ? heldRect(pose, L.cw, L.ch) : { x: p.x, y: p.y, w: 0, h: 0 },
+        spots,
+        sides: (s, gi) => fits.flatMap((t) => (t.seat === s && t.group === gi ? [t.side] : [])),
+        onTable: !inHand && p.y < L.handRect.y,
+      });
+      if (drop) return { kind: "group", ...drop };
     }
     if (discardNeedsTarget(c)) {
       for (const [s, at] of L.opponents) if (Math.hypot(p.x - at.x, p.y - at.y) < L.avatar * 0.7) return { kind: "seat", seat: s };
     }
-    if (inside(p, L.handRect, 10)) {
+    if (inHand) {
       const xs = L.hand.map((h) => h.x + L.cw / 2);
       let index = xs.findIndex((x) => p.x < x);
       if (index < 0) index = xs.length;
@@ -199,17 +212,30 @@ export function CatTowerTable(props: { store: RoomStore; state: RoomState; sound
     return null;
   };
 
-  const sideFor = (p: Point, rect: { x: number; w: number }, s: number, gi: number): HitSide | undefined =>
-    g.laid[s]?.[gi]?.kind === "run" ? (p.x < rect.x + rect.w / 2 ? "start" : "end") : undefined;
+  // A hit dropped while the one before it is still in flight goes as soon as that is answered.
+  const [queued, setQueued] = useState<{ c: CardId; seat: number; group: number; side?: HitSide } | null>(null);
+  useEffect(() => {
+    if (state.pending || !queued) return;
+    setQueued(null);
+    hit(queued.c, queued.seat, queued.group, queued.side);
+  }, [state.pending, queued]);
 
+  /** What lit last while the card was held: a drop just past it still lands there. */
+  const shown = useRef<CtHover>(null);
   const dropAt = (c: CardId, p: Point, pose: Pose) => {
-    const t = targetAt(p, c);
+    const fresh = targetAt(p, c, pose);
+    const lit = shown.current;
+    shown.current = null;
+    const t = (fresh === null || (fresh.kind === "group" && !fresh.ok)) && lit?.kind === "group" && lit.ok ? lit : fresh;
     setHover(null);
     motion.place(`c${c}`, pose);
     if (!t) return;
     if (t.kind === "discard") return discard(c);
     if (t.kind === "tray") return toTray(c, t.i);
-    if (t.kind === "group") return hit(c, t.seat, t.group, sideFor(p, L.laid.get(t.seat)!.groups[t.group]!.rect, t.seat, t.group));
+    if (t.kind === "group") {
+      if (t.ok && state.pending) return setQueued({ c, seat: t.seat, group: t.group, side: t.side });
+      return hit(c, t.seat, t.group, t.side);
+    }
     if (t.kind === "seat" && discardNeedsTarget(c)) return discard(c, t.seat);
     if (t.kind === "hand") {
       if (inTrays.has(c)) outOfTray(c);
@@ -241,9 +267,15 @@ export function CatTowerTable(props: { store: RoomStore; state: RoomState; sound
         buzz("pick");
         setSelected(null);
       },
-      onMove: (p) => setHover(live.current.targetAt(p, c)),
+      onMove: (p, pose) => {
+        shown.current = live.current.targetAt(p, c, pose);
+        setHover(shown.current);
+      },
       onDrop: (p, pose) => live.current.dropAt(c, p, pose),
-      onCancel: () => setHover(null),
+      onCancel: () => {
+        shown.current = null;
+        setHover(null);
+      },
     });
   };
 

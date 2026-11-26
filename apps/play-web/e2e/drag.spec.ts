@@ -135,3 +135,142 @@ test("a piece picked up before our turn comes is placed when it does", async ({ 
   await expect(page.locator(".set-zone")).toHaveCount(1);
   expect(acts(sent)).toEqual([]);
 });
+
+/**
+ * Hits forgive the hand. The card the player sees is the one that counts: a group lit as a fit
+ * takes the card on release, wherever the finger is over it, and a card that fits one place only
+ * goes there from anywhere on the table.
+ */
+test.describe("hits forgive the hand", () => {
+  const label = (id: number) => `${(id % 12) + 1}, ${["tabby", "tuxedo", "calico", "gray"][Math.floor(id / 24)]}`;
+  const myCard = (page: Page, id: number) => page.locator(`.card.mine .card-inner[aria-label="${label(id)}"]`);
+  // Ada (seat 0) has laid 2s and 5s; the House Cat has laid 9s and a run from 3 to 6.
+  const laid: CatTowerView["laid"] = [
+    [
+      { kind: "set", cards: [1, 13, 25], value: 2 },
+      { kind: "set", cards: [4, 16, 28], value: 5 },
+    ],
+    [
+      { kind: "set", cards: [8, 20, 32], value: 9 },
+      { kind: "run", cards: [2, 3, 4, 5], start: 3, end: 6 },
+    ],
+  ];
+  // 40 is a 5 (Ada's 5s only), 44 a 9 (the House Cat's 9s only), 30 a 7 (the run's high end only);
+  // the 10s and 12s fit nowhere.
+  const playing = (hand: number[]): CatTowerView => ({
+    round: 1,
+    dealer: 1,
+    turn: 0,
+    step: "play",
+    status: "playing",
+    deckCount: 40,
+    discardTop: 0,
+    discardCount: 1,
+    phase: [0, 1],
+    scores: [0, 0],
+    laid,
+    handCounts: [hand.length, 4],
+    hands: { 0: hand },
+    pendingSkip: [false, false],
+    winners: [],
+    forfeited: [false, false],
+  });
+  const room = (g: CatTowerView, acks: string[] = []): RoomView => ({ code: "BCDFG", name: "Drag", status: "playing", youAreHost: true, seats, game: g, link: { ping: 3000, acks } });
+  const box = async (page: Page, selector: string, i = 0) => (await page.locator(selector).nth(i).boundingBox())!;
+  const hits = (sent: ClientMessage[]) => acts(sent).flatMap((m) => (m.action.type === "hit" ? [m.action] : []));
+
+  async function seated(page: Page, hand: number[]) {
+    const server = await standInServer(page);
+    server.send({ t: "snapshot", protocol: 1, seq: 1, room: room(playing(hand)) });
+    await page.goto("/play/t/BCDFG");
+    await expect(page.locator(".card.mine .card-inner")).toHaveCount(hand.length);
+    await expect(page.locator(".group-zone")).toHaveCount(4);
+    return server;
+  }
+
+  test("a card held over the group it fits lands there, with the finger off the group's edge", async ({ page }) => {
+    const { sent } = await seated(page, [40, 9, 11, 33, 47]);
+    const fives = await box(page, ".group-zone", 1);
+    const card = (await myCard(page, 40).boundingBox())!;
+    const from = { x: card.x + card.width / 2, y: card.y + card.height / 2 };
+    // Held by its middle, the card covers the group's top while the finger is above it.
+    const at = { x: fives.x + fives.width / 2, y: fives.y - card.height * 0.35 };
+    const held = await lift(page, from, at);
+    await glide(page, held, at);
+    await expect(page.locator(".group-zone").nth(1)).toHaveClass(/\bgood\b/);
+    await page.mouse.up();
+    await expect.poll(() => hits(sent)).toEqual([{ type: "hit", card: 40, target: { seat: 0, group: 1 } }]);
+  });
+
+  test("a card that fits one group goes there from anywhere on the table", async ({ page }) => {
+    const { sent } = await seated(page, [44, 9, 11, 33, 47]);
+    const card = (await myCard(page, 44).boundingBox())!;
+    const from = { x: card.x + card.width / 2, y: card.y + card.height / 2 };
+    // Beside the piles, nowhere near the House Cat's 9s.
+    const deck = await box(page, "#deck");
+    const at = { x: Math.max(deck.x - card.width, 12), y: deck.y + deck.height / 2 };
+    const held = await lift(page, from, at);
+    await glide(page, held, at);
+    await expect(page.locator(".group-zone").nth(2)).toHaveClass(/\bgood\b/);
+    await page.mouse.up();
+    await expect.poll(() => hits(sent)).toEqual([{ type: "hit", card: 44, target: { seat: 1, group: 0 } }]);
+  });
+
+  test("a card that fits one end of a run goes on that end, whichever half it is dropped on", async ({ page }) => {
+    const { sent } = await seated(page, [30, 9, 11, 33, 47]);
+    const run = await box(page, ".group-zone", 3);
+    const card = (await myCard(page, 30).boundingBox())!;
+    const from = { x: card.x + card.width / 2, y: card.y + card.height / 2 };
+    // On the run's low end, where a 7 doesn't go.
+    const at = { x: run.x + run.width * 0.2, y: run.y + run.height / 2 };
+    const held = await lift(page, from, at);
+    await glide(page, held, at);
+    await expect(page.locator(".group-zone").nth(3)).toHaveClass(/\bgood\b/);
+    await page.mouse.up();
+    await expect.poll(() => hits(sent)).toEqual([{ type: "hit", card: 30, target: { seat: 1, group: 1 }, side: "end" }]);
+  });
+
+  test("a card dropped on a lit group while the last hit is in flight lands when it is answered", async ({ page }) => {
+    const { send, sent } = await seated(page, [40, 44, 9, 11, 33, 47]);
+    // The 5 goes on, and the server's answer waits.
+    await myCard(page, 40).click();
+    await page.locator(".group-zone").nth(1).click();
+    await expect.poll(() => hits(sent).length).toBe(1);
+    const first = acts(sent)[0]!;
+
+    // The 9 is dropped on the 9s before that answer comes.
+    const nines = await box(page, ".group-zone", 2);
+    const card = (await myCard(page, 44).boundingBox())!;
+    const at = { x: nines.x + nines.width / 2, y: nines.y + nines.height / 2 };
+    const held = await lift(page, { x: card.x + card.width / 2, y: card.y + card.height / 2 }, at);
+    await glide(page, held, at);
+    await expect(page.locator(".group-zone").nth(2)).toHaveClass(/\bgood\b/);
+    await page.mouse.up();
+    expect(hits(sent)).toHaveLength(1);
+
+    // The answer lands: the 9 follows.
+    const after = playing([44, 9, 11, 33, 47]);
+    after.laid = [[laid[0]![0]!, { kind: "set", cards: [4, 16, 28, 40], value: 5 }], laid[1]!];
+    send({ t: "event", seq: 2, event: { kind: "game", event: { kind: "hit", seat: 0, card: 40, target: { seat: 0, group: 1 }, group: after.laid[0]![1]! } } });
+    send({ t: "snapshot", protocol: 1, seq: 2, room: room(after, [first.id!]) });
+    await expect.poll(() => hits(sent).map((h) => h.card)).toEqual([40, 44]);
+    expect(hits(sent)[1]).toEqual({ type: "hit", card: 44, target: { seat: 1, group: 0 } });
+  });
+
+  test("before our draw a group doesn't light, as it can't take the card yet", async ({ page }) => {
+    const server = await standInServer(page);
+    server.send({ t: "snapshot", protocol: 1, seq: 1, room: room({ ...playing([40, 9, 11, 33, 47]), step: "draw" }) });
+    await page.goto("/play/t/BCDFG");
+    await expect(page.locator(".group-zone")).toHaveCount(4);
+    const fives = await box(page, ".group-zone", 1);
+    const card = (await myCard(page, 40).boundingBox())!;
+    const at = { x: fives.x + fives.width / 2, y: fives.y + fives.height / 2 };
+    const held = await lift(page, { x: card.x + card.width / 2, y: card.y + card.height / 2 }, at);
+    await glide(page, held, at);
+    await expect(page.locator(".card.mine.dragging")).toHaveCount(1);
+    await expect(page.locator(".group-zone").nth(1)).toHaveClass("group-zone ");
+    await page.mouse.up();
+    await expect(myCard(page, 40)).toBeVisible();
+    expect(hits(server.sent)).toEqual([]);
+  });
+});

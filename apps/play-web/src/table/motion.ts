@@ -20,7 +20,11 @@ export const SETTLE: MoveStyle = { duration: 220, easing: "cubic-bezier(0.2, 0.8
 
 /**
  * Tracks each keyed element's last pose and animates the change. `spawn` gives where a key that
- * wasn't on the table comes from (the deck, a player's cat); without one it pops in.
+ * wasn't on the table comes from (the deck, a player's cat). Without one it is simply there, at
+ * its pose's size: a card alone fades in, and a view's worth at once (a view just drawn, as on a
+ * Cards/Table switch or a new turn's view) shows as it is. Never smaller first: a hand card that
+ * starts small and grows reads as a glitch, and cards overlap, so fading many one by one would
+ * show each through the next.
  */
 export class Motion {
   private poses = new Map<string, Pose>();
@@ -55,6 +59,8 @@ export class Motion {
   apply(els: Map<string, HTMLElement>, poses: Map<string, Pose>, style: (key: string) => MoveStyle = () => MOVE): number {
     let moved = 0;
     const reduced = this.reduced();
+    let fresh = 0;
+    for (const key of poses.keys()) if (els.has(key) && !this.poses.has(key) && !this.spawns.has(key)) fresh++;
     for (const [key, to] of poses) {
       const el = els.get(key);
       if (!el) continue;
@@ -65,7 +71,7 @@ export class Motion {
       this.spawns.delete(key);
       this.poses.set(key, to);
       if (!from) {
-        if (!reduced) el.animate([{ opacity: 0, transform: `${transformOf(to)} scale(0.6)` }, { opacity: 1, transform: transformOf(to) }], SETTLE);
+        if (!reduced && fresh === 1) el.animate([{ opacity: 0 }, { opacity: 1 }], SETTLE);
         continue;
       }
       if (same(from, to)) continue;
