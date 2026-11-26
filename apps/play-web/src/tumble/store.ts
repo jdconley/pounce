@@ -5,12 +5,12 @@
  * a box never replays a burst of frames or anything out of order.
  */
 import { mySeats } from "../store/lobby";
+import { newMoveId, type RoomStore } from "../store/room";
 
 import { LocalBox } from "./local";
 import { Replay, type SeatStatus } from "./replay";
 import { gravityMs, type Fx } from "./rules";
 
-import { newMoveId, type RoomStore } from "../store/room";
 import type { RoomView } from "@pounce/play-api/protocol";
 import type { Seed } from "@pounce/play-api/rules/rng";
 import type { Box } from "@pounce/play-api/tumble/box";
