@@ -14,6 +14,7 @@ export const ROWS = 18;
 const GAP = 8;
 const RIM = 56;
 const TRAY = 64;
+const TRAY_BIG = 84;
 const MENU = 56;
 const METER_MIN = 14;
 /** The junk meter's width, in cells. */
@@ -22,7 +23,7 @@ const RIM_MAX = 96;
 /** A mini is at most this much of your box: yours leads. */
 const MINI_MAX = 0.45;
 /** A mini's name and wins strip. */
-export const MINI_LABEL = 18;
+export const MINI_LABEL = 20;
 const CHIP_H = 44;
 const CHIP_H_NARROW = 64;
 const CHIP_W = 160;
@@ -88,10 +89,13 @@ export function playLayout(p: PlayInput): PlayLayout {
   // The tray along the bottom, the box sitting on it (the thumbs' end of the screen), the rim on
   // the box. The box's cells are what the height between the rim and the tray, and the width
   // beside the minis, allow.
-  const trayTop = B - TRAY;
-  const cellByH = (trayTop - GAP - T - RIM) / ROWS;
-  // A phone's minis get a slim column, so the box keeps cells of 20 px or more.
+  // A phone keeps the rim and tray slim, and gives its minis a slim column, so the box keeps
+  // cells of 20 px or more. A big screen gives the rim and tray room.
   const narrow = R - L < 500;
+  const trayH = narrow ? TRAY : TRAY_BIG;
+  const rimWant = narrow ? RIM : Math.round(Math.min(RIM_MAX, Math.max(RIM, (B - T) * 0.09)));
+  const trayTop = B - trayH;
+  const cellByH = (trayTop - GAP - T - rimWant) / ROWS;
   const side = n === 0 ? 0 : narrow ? PHONE_SIDE : p.chips ? CHIP_W : landscape ? Math.max(120, (R - L) * 0.22) : Math.max(120, (R - L) * 0.24);
   const sides = landscape ? 2 : n === 0 ? 0 : 1;
   const cellByW = (R - L - side * sides - GAP * (sides + 1) - METER_MIN) / (COLS + METER);
@@ -131,11 +135,11 @@ export function playLayout(p: PlayInput): PlayLayout {
 
   // Portrait: the tray spans the screen. Landscape: it sits under the box, between the minis.
   const trayRoom = landscape ? bw + GAP / 2 + meterW : R - L;
-  const slotSize = Math.min(TRAY - 8, (trayRoom - GAP * 5) / 6);
+  const slotSize = Math.min(trayH - 8, (trayRoom - GAP * 5) / 6);
   const trayW = slotSize * 6 + GAP * 5;
   const trayX = landscape ? boxX + (bw + GAP / 2 + meterW - trayW) / 2 : L;
-  const tray = { x: trayX, y: trayTop, w: trayW, h: TRAY };
-  const slots = Array.from({ length: 6 }, (_, i) => ({ x: trayX + i * (slotSize + GAP), y: trayTop + (TRAY - slotSize) / 2, w: slotSize, h: slotSize }));
+  const tray = { x: trayX, y: trayTop, w: trayW, h: trayH };
+  const slots = Array.from({ length: 6 }, (_, i) => ({ x: trayX + i * (slotSize + GAP), y: trayTop + (trayH - slotSize) / 2, w: slotSize, h: slotSize }));
   return { box, rim, meter, minis, chips, tray, slots, menu, landscape };
 }
 

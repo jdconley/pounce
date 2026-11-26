@@ -292,10 +292,10 @@ function TumblePlay(props: Props & { tumble: TumbleStore; t: TumbleRoom }) {
 
   const label = (s: number, big: boolean) => (
     <span class={`tt-label ${big ? "big" : ""}`}>
-      <Cat cat={seatCat(room.seats[s])} pose={tumble.seatState(s) === "out" ? "terrified" : "awake"} size={big ? 28 : 16} />
+      <Cat cat={seatCat(room.seats[s])} pose={tumble.seatState(s) === "out" ? "terrified" : "awake"} size={big ? 20 : 16} />
       <b class="tt-num">{s + 1}</b>
       {big ? <span class="tt-name">{seatName(room.seats[s])}</span> : null}
-      <Paws wins={wins(s)} size={big ? 12 : 7} />
+      <Paws wins={wins(s)} size={big ? 11 : 7} />
     </span>
   );
   const status = (s: number) => {
@@ -393,7 +393,7 @@ function TumblePlay(props: Props & { tumble: TumbleStore; t: TumbleRoom }) {
                   >
                     <canvas class="tt-canvas" ref={register(s, r.cell)} style={{ width: `${r.cell * 12}px`, height: `${r.cell * 18}px` }} />
                     {status(s)}
-                    {label(s, false)}
+                    {label(s, r.w >= 110)}
                   </button>
                 );
               })}

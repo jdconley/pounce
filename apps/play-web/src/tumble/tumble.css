@@ -130,7 +130,7 @@
   display: flex;
   align-items: center;
   gap: 2px;
-  height: 18px;
+  height: 20px;
   overflow: hidden;
   font: 900 11px / 1 var(--round);
   white-space: nowrap;
@@ -138,8 +138,8 @@
 
 .tt-label.big {
   gap: 6px;
-  height: 34px;
-  font-size: 15px;
+  height: 20px;
+  font-size: 13px;
 }
 
 .tt-name {
