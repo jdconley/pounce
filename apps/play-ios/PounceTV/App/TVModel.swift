@@ -355,7 +355,10 @@ final class TVModel {
         guard canChangeGame, !making, let table else { return }
         making = true
         defer { making = false }
-        let other = table.isTiles ? GameCatalog.catTower.id : GameCatalog.tiles.id
+        // The next game in the catalog, round and round.
+        let ids = GameCatalog.all.map(\.id)
+        let here = ids.firstIndex(of: table.store.room?.gameId ?? GameCatalog.catTower.id) ?? 0
+        let other = ids[(here + 1) % ids.count]
         do {
             let code = try await services.createRoom(other)
             // Someone may have sat down (or the TV moved) while the table was being made: the

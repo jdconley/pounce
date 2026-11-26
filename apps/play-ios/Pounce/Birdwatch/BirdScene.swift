@@ -310,7 +310,7 @@ final class BirdScene: SKScene {
             seatNodes[seat] = nil
         }
         let names = SeatInfo.names(model.room)
-        let maxTag = layout.mode == .tv ? 260 : min(layout.catSide * 1.6, layout.size.width / CGFloat(max(min(seats.count, 3), 1)) - 8)
+        let maxTag = layout.mode == .tv ? 360 : min(layout.catSide * 1.6, layout.size.width / CGFloat(max(min(seats.count, 3), 1)) - 8)
         for (i, seat) in seats.enumerated() {
             let view = model.room.seats[safe: seat]
             let catIndex = SeatInfo.catIndex(view)
@@ -325,12 +325,14 @@ final class BirdScene: SKScene {
             }
             guard let node else { continue }
             node.position = layout.seatSpots[safe: i] ?? .zero
+            // A tag never runs off the screen's edge.
+            let room = 2 * min(node.position.x, size.width - node.position.x) - 16
             let partner = !isScreen && model.partnerMark(for: seat, revealed: shownSeat)
             node.update(
                 name: names[safe: seat] ?? "", active: model.currentSeat == seat, count: model.handCount(seat),
                 ribbon: model.ribbon(of: seat), dealer: model.view.dealer == seat && model.isLive, sign: model.sign(seat),
                 partner: partner, bot: view?.kind == .bot, left: view?.isTakenOver ?? false, presence: view?.presence,
-                maxTagWidth: maxTag, textScale: layout.mode == .tv ? 1.8 : textScale)
+                maxTagWidth: min(maxTag, max(room, layout.catSide * 1.2)), textScale: layout.mode == .tv ? 2.4 : textScale)
             if popSigns.contains(seat) { node.popSign(reduceMotion: reduceMotion) }
         }
     }
@@ -364,13 +366,18 @@ final class BirdScene: SKScene {
             node.removeFromParent()
             trickNodes[i] = nil
         }
+        // A TV shows the trick: the phone at its table shows just the hand.
+        for node in trickNodes.values { node.isHidden = layout.mode == .handOnly }
         // Trump: a glowing badge in the sill's corner.
-        if let trump = model.view.trump, layout.mode != .handOnly {
+        if let trump = model.view.trump {
             trumpBadge.isHidden = false
             trumpBadge.texture = BirdCardFactory.shared.trumpBadge(trump)
             let side: CGFloat = layout.mode == .tv ? 120 : (layout.roomy ? 64 : 44)
             trumpBadge.size = CGSize(width: side, height: side)
-            trumpBadge.position = layout.trumpBadge
+            // At a TV's table the phone keeps trump in view, at the top right.
+            trumpBadge.position = layout.mode == .handOnly
+                ? CGPoint(x: size.width - side / 2 - 14, y: layout.topBand.midY)
+                : layout.trumpBadge
             if popTrump, !reduceMotion {
                 trumpBadge.setScale(0.2)
                 trumpBadge.run(.sequence([.scale(to: 1.25, duration: 0.18).eased(.easeOut), .scale(to: 1, duration: 0.12)]))
@@ -389,7 +396,9 @@ final class BirdScene: SKScene {
             bidChip.texture = BirdArt.sign(UIColor(Palette.orange))
             bidChip.centerRect = BirdArt.sliceCenter
             bidChip.size = CGSize(width: words.size().width + size, height: words.size().height + size * 0.6)
-            bidChip.position = CGPoint(x: layout.sill.minX + bidChip.size.width / 2 + 8, y: layout.trumpBadge.y)
+            bidChip.position = layout.mode == .tv
+                ? CGPoint(x: layout.sill.minX + bidChip.size.width / 2, y: layout.bidChip.y)
+                : CGPoint(x: layout.sill.minX + bidChip.size.width / 2 + 8, y: layout.trumpBadge.y)
             bidChip.isHidden = false
         } else {
             bidChip.isHidden = true
@@ -400,7 +409,9 @@ final class BirdScene: SKScene {
             // The called card, small, beside the trump badge: public, so everyone sees it.
             let w = layout.sillCard.width * 0.7
             calledCard.size = CGSize(width: w, height: w * BirdLayout.cardAspect)
-            calledCard.position = CGPoint(x: layout.trumpBadge.x - trumpBadge.size.width / 2 - w * 0.7, y: layout.sill.maxY - calledCard.size.height / 2 - 6)
+            calledCard.position = layout.mode == .tv
+                ? CGPoint(x: layout.trumpBadge.x - trumpBadge.size.width / 2 - w * 0.7, y: layout.sill.maxY + calledCard.size.height / 2 + 8)
+                : CGPoint(x: layout.trumpBadge.x - trumpBadge.size.width / 2 - w * 0.7, y: layout.sill.maxY - calledCard.size.height / 2 - 6)
         } else {
             calledCard.isHidden = true
         }

@@ -110,7 +110,7 @@ func changes(from commit: String) -> [String] {
   let paths = isTV
     ? [
       "PounceTV", "PounceKit", "Config", "project.yml",
-      "Pounce/Table", "Pounce/Tiles",
+      "Pounce/Table", "Pounce/Tiles", "Pounce/Birdwatch",
       "Pounce/App/FrameWork.swift", "Pounce/App/MainThreadWatchdog.swift", "Pounce/App/Autoplay.swift",
       "Pounce/Design/ArtName.swift", "Pounce/Design/FadeGroup.swift", "Pounce/Design/GroupOpacity.swift",
       "Pounce/Design/Haptics.swift", "Pounce/Design/Juice.swift", "Pounce/Design/NameTag.swift",
@@ -123,7 +123,11 @@ func changes(from commit: String) -> [String] {
     : ["Pounce", "PounceKit", "PounceWidgets", "PounceNotify", "Config", "project.yml"]
   // Each daily game's TV files (`Pounce/Daily/<Game>/TV/`), whichever games there are.
   let globs = isTV ? ["Pounce/Daily/*/TV/**"] : []
-  let skipped = isTV ? ["Pounce/Tiles/TilesStage.swift", "Pounce/Tiles/TilesChrome.swift", "Pounce/Tiles/TilesDemo.swift"] : []
+  let skipped = isTV
+    ? ["Pounce/Tiles/TilesStage.swift", "Pounce/Tiles/TilesChrome.swift", "Pounce/Tiles/TilesDemo.swift",
+       "Pounce/Birdwatch/BirdStage.swift", "Pounce/Birdwatch/BirdPanels.swift", "Pounce/Birdwatch/BirdScoreSheet.swift",
+       "Pounce/Birdwatch/BirdDemo.swift"]
+    : []
   let app = paths.map { ":(top)apps/play-ios/\($0)" } + globs.map { ":(top,glob)apps/play-ios/\($0)" }
     + skipped.map { ":(top,exclude)apps/play-ios/\($0)" }
   return subjects(["\(commit)..HEAD", "--"] + app)

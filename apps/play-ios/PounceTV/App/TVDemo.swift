@@ -32,6 +32,7 @@ enum TVDemo: Equatable {
         switch name {
         case "tv-hit": return .table(.cattower, seats: seats ?? 6)
         case "tv-tiles": return .table(.tiles, seats: seats ?? 4)
+        case "tv-birdwatch": return .table(.birdwatch, seats: seats ?? 4)
         case "tv-shell": return .shell
         case "tv-over": return .over(seats: seats ?? 4)
         case "tv-board": return .board
@@ -40,8 +41,9 @@ enum TVDemo: Equatable {
     }
 
     /// The table a demo plays: `TVTablePreview`'s, nobody's hand, at `code`.
-    static func room(tiles: Bool, seats: Int? = nil, code: String) -> RoomView {
-        var room = tiles ? TVTablePreview.tiles(seats: seats ?? 4) : TVTablePreview.catTower(seats: seats ?? 6)
+    static func room(tiles: Bool, birdwatch: Bool = false, seats: Int? = nil, code: String) -> RoomView {
+        var room = birdwatch ? TVTablePreview.birdwatch(seats: seats ?? 4)
+            : tiles ? TVTablePreview.tiles(seats: seats ?? 4) : TVTablePreview.catTower(seats: seats ?? 6)
         room.code = code
         return room
     }
@@ -234,7 +236,9 @@ actor TVDemoSocket: RoomSocketing {
             }
         }
         defer { watch.cancel() }
-        if room.tiles != nil {
+        if room.birdwatch != nil {
+            await playBirdwatch()
+        } else if room.tiles != nil {
             await playTiles()
         } else {
             await playCatTower()
@@ -267,6 +271,41 @@ actor TVDemoSocket: RoomSocketing {
     /// Each turn: the turn, a draw from the deck, the phone's aim, then a hit on a set, a discard
     /// or (every fourth turn) a lay-down with its big moment. Every sixth turn the laid groups go
     /// back to how they began, so no group grows past its room.
+    /// Birdwatch: each seat in turn plays a card nobody holds; a full trick goes to its leader.
+    private func playBirdwatch() async {
+        while !ending {
+            guard var view = room.birdwatch else { return }
+            view.phase = .play
+            let n = view.seats
+            let seat = view.turn ?? 0
+            let used = Set(view.played)
+            guard let card = DemoFixtures.birdDeck(view.rules, seats: n).first(where: { !used.contains($0) }) else {
+                view.played = []
+                room.birdwatch = view
+                snapshot()
+                continue
+            }
+            guard await pause(1.2) else { return }
+            view.trick.append(BirdTrickCard(seat: seat, card: card))
+            view.played.append(card)
+            view.handCounts[seat] = max(view.handCounts[seat] - 1, 1)
+            room.birdwatch = view
+            event(.birdwatch(.played(seat: seat, card: card)))
+            if view.trick.count == n {
+                let winner = view.trick[0].seat
+                let points = view.trick.reduce(0) { $0 + (BirdCard(id: $1.card)?.points ?? 0) }
+                event(.birdwatch(.trick(winner: winner, cards: view.trick, points: points)))
+                view.lastTrick = BirdLastTrick(cards: view.trick, winner: winner)
+                view.trick = []
+                view.points[winner] += points
+            }
+            view.turn = (seat + 1) % n
+            room.birdwatch = view
+            event(.birdwatch(.turn(seat: (seat + 1) % n)))
+            snapshot()
+        }
+    }
+
     private func playCatTower() async {
         guard let start = room.game else { return }
         var turn = 0
@@ -445,7 +484,7 @@ struct TVDemoTableView: View {
 
     private func start() {
         guard table == nil else { return }
-        let room = TVDemo.room(tiles: game == .tiles, seats: seats, code: DemoFixtures.code)
+        let room = TVDemo.room(tiles: game == .tiles, birdwatch: game == .birdwatch, seats: seats, code: DemoFixtures.code)
         let next = TVRoom(code: room.code, socket: { _ in TVDemoSocket(room: room, lobby: false) }, watchesNetwork: false)
         next.onChange = { table in
             if table.store.phase == .playing || table.store.phase == .over { table.openTable() }

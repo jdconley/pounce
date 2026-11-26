@@ -400,7 +400,7 @@ struct TVTableTests {
 }
 
 /// A socket that never connects: the tests hand the store its events.
-private actor QuietSocket: RoomSocketing {
+actor QuietSocket: RoomSocketing {
     nonisolated let events: AsyncStream<SocketEvent>
     private let continuation: AsyncStream<SocketEvent>.Continuation
 

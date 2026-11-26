@@ -13,12 +13,12 @@ import SwiftUI
 /// keeps moving (the aim hops between groups or the draft comes and goes, a lay-down moment every
 /// few seconds), for watching its frames with `-watchdog -watchdog-log`.
 enum TVTablePreview {
-    enum Game: String { case cattower, tiles }
+    enum Game: String { case cattower, tiles, birdwatch }
 
     static func from(arguments: [String] = CommandLine.arguments) -> (game: Game, seats: Int, aim: Bool)? {
         guard let i = arguments.firstIndex(of: "-tv-preview"), let game = arguments[safe: i + 1].flatMap(Game.init) else { return nil }
         let seats = arguments.firstIndex(of: "-seats").flatMap { arguments[safe: $0 + 1] }.flatMap(Int.init)
-        return (game, seats ?? (game == .tiles ? 4 : 6), arguments.contains("-aim"))
+        return (game, seats ?? (game == .cattower ? 6 : 4), arguments.contains("-aim"))
     }
 
     static let longName = "Great Aunt Josephine"
@@ -52,6 +52,36 @@ enum TVTablePreview {
         ]
         game.forfeited = Array(repeating: false, count: n)
         room.game = game
+        room.youAreHost = false
+        room.screen = true
+        return room
+    }
+
+    /// Birdwatch for 4, 5 or 6 players as a TV sees it: mid-trick (four), the partner called and
+    /// still hidden (five), bidding with a House Cat for someone who left (six). No hand, no
+    /// choices and no partner mark: a screen's view never has them.
+    static func birdwatch(seats: Int) -> RoomView {
+        let demo: DemoFixtures.BirdDemo = switch seats {
+        case 5: .partnerMark
+        case 6: .six
+        default: .play
+        }
+        var room = DemoFixtures.birdRoom(demo)
+        room.seats = room.seats.map { seat in
+            var seat = seat
+            seat.yours = false
+            return seat
+        }
+        if room.seats[1].kind == .human { room.seats[1].person?.name = longName }
+        var view = room.birdwatch!
+        view.hands = [:]
+        view.playable = nil
+        view.bidRange = nil
+        view.fromNest = nil
+        view.putBack = nil
+        view.partnerChoices = nil
+        view.youArePartner = nil
+        room.birdwatch = view
         room.youAreHost = false
         room.screen = true
         return room
@@ -109,6 +139,7 @@ struct TVTablePreviewView: View {
     enum Table {
         case catTower(TableScene)
         case tiles(TilesScene)
+        case birdwatch(BirdScene)
     }
 
     var body: some View {
@@ -117,6 +148,7 @@ struct TVTablePreviewView: View {
             switch table {
             case .catTower(let scene): TableView(scene: scene)
             case .tiles(let scene): TilesTableView(scene: scene)
+            case .birdwatch(let scene): BirdTableView(scene: scene)
             case nil: EmptyView()
             }
         }
@@ -128,8 +160,19 @@ struct TVTablePreviewView: View {
         guard table == nil else { return }
         MainThreadWatchdog.startIfAsked()
         let store = RoomStore(code: DemoFixtures.code, socket: PreviewSocket(), role: .screen)
-        let room = game == .tiles ? TVTablePreview.tiles(seats: seats) : TVTablePreview.catTower(seats: seats)
+        let room = switch game {
+        case .tiles: TVTablePreview.tiles(seats: seats)
+        case .birdwatch: TVTablePreview.birdwatch(seats: seats)
+        case .cattower: TVTablePreview.catTower(seats: seats)
+        }
         switch game {
+        case .birdwatch:
+            let scene = BirdScene(store: store)
+            table = .birdwatch(scene)
+            Task {
+                await BirdCardFactory.shared.prewarm()
+                for await intent in store.intents { scene.enqueue(intent) }
+            }
         case .cattower:
             let scene = TableScene(store: store)
             table = .catTower(scene)

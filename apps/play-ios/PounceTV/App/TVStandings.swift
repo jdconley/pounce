@@ -17,6 +17,7 @@ enum TVStandings {
     /// Everyone who played, best first: winners, then by level and fewest points (Cat Tower) or
     /// most points (Tuna Tiles), and anyone who left last.
     static func rows(_ room: RoomView) -> [Row] {
+        if let model = BirdTableModel(room: room) { return birdRows(model) }
         let game = room.game
         let tiles = room.tiles
         let winners = game?.winners ?? tiles?.winners ?? []
@@ -52,9 +53,22 @@ enum TVStandings {
         }
     }
 
+    /// Birdwatch: every seat by its side's place, its side's total beside it (teammates match).
+    static func birdRows(_ model: BirdTableModel) -> [Row] {
+        model.standings.flatMap { side in
+            side.seats.map { seat in
+                Row(seat: seat, won: model.view.winners.contains(seat), out: false, detail: "\(side.score)")
+            }
+        }
+    }
+
     /// "<Name> wins", "A tie" or "Game over".
     static func title(_ room: RoomView) -> String {
-        let winners = room.game?.winners ?? room.tiles?.winners ?? []
+        if let bird = room.birdwatch, bird.winners.count > 1 {
+            let names = bird.winners.map { SeatInfo.name(room, $0) }.formatted(.list(type: .and))
+            return String(localized: "\(names) win", comment: "TV game over (Birdwatch): the winning side's names")
+        }
+        let winners = room.game?.winners ?? room.tiles?.winners ?? room.birdwatch?.winners ?? []
         if winners.count == 1 {
             let name = SeatInfo.name(room, winners[0])
             return String(localized: "\(name) wins", comment: "TV game over: the title, the one winner's name")

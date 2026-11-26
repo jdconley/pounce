@@ -12,6 +12,7 @@ struct TableHost: View {
             switch table.scene {
             case .catTower(let scene): TableView(scene: scene)
             case .tiles(let scene): TilesTableView(scene: scene)
+            case .birdwatch(let scene): BirdTableView(scene: scene)
             case nil: Color.clear
             }
         }

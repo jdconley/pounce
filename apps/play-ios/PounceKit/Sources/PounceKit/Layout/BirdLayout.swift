@@ -67,9 +67,18 @@ public struct BirdLayout: Equatable, Sendable {
             strip = CGRect(x: 160, y: bottom + 40, width: w - 320, height: 92)
             banner = CGPoint(x: w / 2, y: strip.maxY + 46)
             window = CGRect(x: 60, y: strip.maxY + 90, width: w - 120, height: top - strip.maxY - 120)
-            sillCard = CGSize(width: 150, height: 150 * Self.cardAspect)
-            sill = window.insetBy(dx: window.width * 0.27, dy: window.height * 0.2)
             seatSpots = Self.arc(count: others, in: window, cat: catSide, full: true)
+            // Clear of the cats at the top and bottom of the arc (with their tags), and the sides.
+            let clearY = catSide * (1.05 + Self.nameDrop) + 16
+            var tvSill = window.insetBy(dx: catSide * 1.35 + 60, dy: clearY)
+            // Narrower where a cat on the arc's shoulders would touch it.
+            for spot in seatSpots where abs(spot.y - tvSill.midY) < tvSill.height / 2 + catSide * 0.9 {
+                let half = abs(spot.x - tvSill.midX) - catSide * 0.6 - 16
+                if half < tvSill.width / 2 { tvSill = tvSill.insetBy(dx: tvSill.width / 2 - max(half, 200), dy: 0) }
+            }
+            sill = tvSill
+            let sc = min(150, sill.height * 0.8 / Self.cardAspect)
+            sillCard = CGSize(width: sc, height: sc * Self.cardAspect)
         } else {
             let band: CGFloat = roomy ? 70 : 52
             topBand = CGRect(x: 0, y: top - band, width: w, height: band)
@@ -105,8 +114,14 @@ public struct BirdLayout: Equatable, Sendable {
                 sillCard = CGSize(width: sc, height: sc * Self.cardAspect)
             }
         }
-        trumpBadge = CGPoint(x: sill.maxX - (roomy ? 34 : 22), y: sill.maxY - (roomy ? 34 : 22))
-        bidChip = CGPoint(x: sill.minX + (roomy ? 48 : 34), y: sill.maxY - (roomy ? 34 : 22))
+        if mode == .tv {
+            // Just over the sill's top corners: across a room every card stays in full view.
+            trumpBadge = CGPoint(x: sill.maxX - 60, y: sill.maxY + 66)
+            bidChip = CGPoint(x: sill.minX + 90, y: sill.maxY + 40)
+        } else {
+            trumpBadge = CGPoint(x: sill.maxX - (roomy ? 34 : 22), y: sill.maxY - (roomy ? 34 : 22))
+            bidChip = CGPoint(x: sill.minX + (roomy ? 48 : 34), y: sill.maxY - (roomy ? 34 : 22))
+        }
     }
 
     /// Cats on the window's arc. A table puts them from the left edge over the top to the right
@@ -171,11 +186,19 @@ public struct BirdLayout: Equatable, Sendable {
     /// Where a card played by the cat at `spot` lands on the sill: toward its cat. `nil` is the
     /// bottom seat (this phone's hand).
     public func sillSpot(toward spot: CGPoint?) -> CGPoint {
-        let c = CGPoint(x: sill.midX, y: sill.midY)
-        let dx = sill.width / 2 - sillCard.width * 0.62
-        let dy = sill.height / 2 - sillCard.height * 0.56
+        // On a phone or iPad the bid chip and the trump badge ride the sill's top edge: the trick
+        // keeps under them.
+        let chips: CGFloat = mode == .table ? (roomy ? 52 : 38) : 0
+        let area = CGRect(x: sill.minX, y: sill.minY, width: sill.width, height: max(sill.height - chips, sillCard.height * 1.2))
+        let c = CGPoint(x: area.midX, y: area.midY)
+        let dx = area.width / 2 - sillCard.width * 0.62
+        let dy = max(area.height / 2 - sillCard.height * 0.56, 0)
         guard let spot else { return CGPoint(x: c.x, y: c.y - dy) }
         let angle = atan2(spot.y - c.y, spot.x - c.x)
-        return CGPoint(x: c.x + cos(angle) * dx, y: c.y + sin(angle) * dy)
+        var x = c.x + cos(angle) * dx
+        // A low sill (a TV's) has no room above and below: the cards from the top and the bottom
+        // seat sit side by side instead of on top of each other.
+        if dy < sillCard.height * 0.3, abs(cos(angle)) < 0.4 { x += (sin(angle) > 0 ? 1 : -1) * sillCard.width * 0.6 }
+        return CGPoint(x: x, y: c.y + sin(angle) * dy)
     }
 }
