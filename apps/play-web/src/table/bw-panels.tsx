@@ -6,6 +6,7 @@
  */
 import { useEffect, useRef, useState } from "preact/hooks";
 
+import { art } from "../lib/art";
 import { buzz } from "../lib/haptics";
 import { play } from "../lib/sound";
 import { Button, Sheet } from "../ui/common";
@@ -103,6 +104,7 @@ export function NestBar(props: { need: number; chosen: number; onDone: () => voi
   const left = props.need - props.chosen;
   return (
     <div class="bw-nest" role="group" aria-label="Put back cards">
+      <img class="bw-feeder" src={art("bird-feeder")} alt="" width={44} height={44} />
       <p class="bw-cue-line outlined" aria-live="polite">
         {left > 0 ? `Put back ${left}` : left < 0 ? `${-left} too many` : "Ready"}
       </p>

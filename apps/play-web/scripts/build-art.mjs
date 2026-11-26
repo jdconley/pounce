@@ -66,6 +66,10 @@ webp("home-bg", 780, "home-bg", 74);
 webp("curtain-stage", 780, "curtain-stage", 74);
 webp("game-cat-tower", 768, "game-cat-tower", 78);
 webp("game-tiles", 768, "game-tiles", 78);
+// Birdwatch (apps/play-ios PR #157): its poster, the Bird's art and the feeder.
+webp("game-birdwatch", 768, "game-birdwatch", 78);
+webp("bird-card", 208);
+webp("bird-feeder", 160);
 // Controls and badges.
 for (const name of [
   "icon-back", "icon-gear", "icon-plus", "icon-qr", "icon-share", "icon-phone", "icon-sound-on", "icon-sound-off",

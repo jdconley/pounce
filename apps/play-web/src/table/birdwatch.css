@@ -113,25 +113,25 @@
   background-position: center;
 }
 
-/* The seed badge: what the card is worth. */
+/* The seed badge: what the card is worth, gold in the bottom corner (BirdCardFactory.swift). */
 .bface .seed {
   position: absolute;
-  top: 4%;
-  right: 6%;
+  right: 5%;
+  bottom: 4%;
   min-width: calc(var(--cw) * 0.3);
-  padding: calc(var(--cw) * 0.03) calc(var(--cw) * 0.04);
+  padding: calc(var(--cw) * 0.035) calc(var(--cw) * 0.04);
   border: calc(var(--cw) * 0.025 + 1px) solid var(--ink);
   border-radius: 50% 50% 50% 50% / 60% 60% 40% 40%;
-  background: linear-gradient(180deg, #fff3c4, #f2c46b);
+  background: linear-gradient(180deg, #ffe680, #ffc21a);
   font: 900 calc(var(--cw) * 0.17) / 1 var(--round);
   color: var(--ink);
   text-align: center;
 }
 
-.bface.bird .seed {
-  top: auto;
-  right: 6%;
-  bottom: 5%;
+/* With a seed in the corner, the big toy sits higher and to the left of it. */
+.bface.counter .art.pip {
+  right: 22%;
+  bottom: 20%;
 }
 
 /* A suit's silhouette and the Bird, as icons in buttons and badges. */
@@ -992,4 +992,11 @@ div.bw-strip {
   margin: 0;
   font: 900 2.2rem / 1.1 var(--round);
   color: var(--yellow);
+}
+
+.bw-feeder {
+  width: 2.75rem;
+  height: 2.75rem;
+  object-fit: contain;
+  filter: drop-shadow(0 3px 0 var(--ink));
 }

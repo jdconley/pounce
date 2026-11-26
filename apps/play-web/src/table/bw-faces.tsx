@@ -2,12 +2,11 @@
  * Birdwatch's card faces (design §3.3): Cat Tower's chunky style in Tuna Tiles' toy suits. A
  * suit's body colour, a big white outlined numeral in the corner and the suit's silhouette, so the
  * corner alone reads in a tight fan and colour is never the only cue; a seed badge with its value
- * on a card worth points. The Bird has its own white face. Each face is one element with a few
+ * on a card worth points. The Bird (the iOS app's bird-card art) has its own white face. Each face is one element with a few
  * spans and CSS image layers, so a card is one thing for the compositor to move.
  */
 import { art } from "../lib/art";
 
-import bird from "./bw-art/bird.svg?url";
 import { cardFacts, cardLabel, type CardId, type RuleSetId } from "./bw-model";
 
 let injected = false;
@@ -17,14 +16,12 @@ export function injectBirdStyles(): void {
   if (injected || typeof document === "undefined") return;
   injected = true;
   const rules = ["fish", "mouse", "feather", "bell"].map((suit) => `.bface .pip.${suit},.bw-suit-icon.${suit}{background-image:url(${art(`tile-${suit}`)})}`);
-  rules.push(`.bface.bird .art,.bface.bird .pip,.bw-bird-icon{background-image:url(${bird})}`);
+  rules.push(`.bface.bird .art,.bface.bird .pip,.bw-bird-icon{background-image:url(${art("bird-card")})}`);
   rules.push(`.bface.back{background-image:url(${art("card-back")})}`);
   const style = document.createElement("style");
   style.textContent = rules.join("\n");
   document.head.append(style);
 }
-
-export const birdArt = bird;
 
 export { cardLabel };
 
@@ -42,7 +39,7 @@ export function BirdFace(props: { id: CardId; rules: RuleSetId }) {
     );
   }
   return (
-    <div class={`bface ${f.suit}`}>
+    <div class={`bface ${f.suit} ${f.points ? "counter" : ""}`}>
       <span class={`n ${f.rank! > 9 ? "two" : ""}`}>{f.rank}</span>
       <span class={`pip ${f.suit}`} />
       <span class={`art pip ${f.suit}`} />

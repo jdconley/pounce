@@ -24,7 +24,7 @@
 
 ## Rulings on gaps (recorded here, per the brief)
 
-1. **No iOS art yet.** The iOS session had no Birdwatch art when this started. Faces are drawn to §3.3: the suit's Tuna Tiles colour body, big white outlined numeral, the existing `tile-<suit>` silhouette, a seed badge (5, 10, 15) on counters. The Bird is our own SVG (`src/table/bw-art/bird.svg`): round, yellow-orange, a big eye and a teal wing, on a white face with a "20" seed badge. Back: the existing `card-back` (Cat Tower's violet paw back). The Home poster `game-birdwatch.webp` is made once by `scripts/build-birdwatch-art.mjs` (room art + cats + the Bird) and committed. If iOS exports art later, `build-art.mjs` takes it over.
+1. **The iOS app's art.** Faces are drawn in CSS to §3.3 as `BirdCardFactory.swift` (iOS PR #157) draws them: the suit's Tuna Tiles colour body, the big white outlined numeral with the toy under it in the corner, the toy large in the middle, a gold seed badge (5, 10, 15, 20) in the bottom corner. The Bird, the feeder and the Home poster are iOS's images (`bird-card`, `bird-feeder`, `game-birdwatch`), taken from PR #157's asset catalog and listed in `scripts/build-art.mjs` (which needs #157 merged to rebuild them). Back: the existing `card-back`. (Before #157 landed, the web drew a stand-in Bird and poster of its own; both were dropped for iOS's.)
 2. **Home's table card can't name the rule set.** `GET /v1/devices/me/tables` carries no options (`apps/play-api/src/room/tables.ts`). Server gap, reported in the PR; Home shows "Birdwatch" as it shows other games. The lobby, the table menu and the TV name the rule set (they have the snapshot).
 3. **No e2e sharding exists** in CI (`e2e-web` is one job over Playwright projects). Birdwatch's full games run in one spec, `e2e/birdwatch.spec.ts`, on `laptop-chrome` (keyboard and mouse) with the 5-player game also on `android-chrome` (touch). A 5-player Tucker game to 500 (five separate scores) runs many hands, so the spec has a CI job of its own, `e2e-web-birdwatch`, beside `e2e-web` (which sets `E2E_BIRDWATCH=off`); the deploy needs both. The TV's Birdwatch test (`e2e/birdwatch-tv.spec.ts`) stays in `e2e-web` on `tv-chrome`, and the frame gate (`main-thread.spec.ts`) plays a stretch of Birdwatch on the laptop and the slowed phone.
 4. **First table and practice.** A Birdwatch first table gets House Cats up to 4 seats (3 cats), so Start is lit at once; Practice fills 3 House Cats and closes the rest. Home's Practice stays Cat Tower; the shelf's Birdwatch poster makes a table.
@@ -60,7 +60,6 @@
 | `src/table/bw-model.ts` | Pure: card facts and labels, hand sort, sides and ribbons, who acts, phase of this device, summary rows, standings |
 | `src/table/bw-layout.ts` | Pure geometry: window seats, sill, trump badge, score strip, hand fan, panel; phone, landscape, TV |
 | `src/table/bw-faces.tsx` | Card faces and back, the Bird, the seed badge |
-| `src/table/bw-art/bird.svg` | The Bird |
 | `src/table/bw-public.tsx` | The table anyone may see (phone and TV) |
 | `src/table/bw-panels.tsx` | Bid, nest, trump, partner, between-hands, score sheet |
 | `src/table/birdwatch.tsx` | The phone table: hand, input, curtain, tips; the Cards view when a TV shows the table |
@@ -69,7 +68,7 @@
 | `src/ui/lobby.tsx` | Rule pills, Swap seats, team ribbons |
 | `src/ui/table-screen.tsx` | Routes Birdwatch; game over, scores, forfeit for it |
 | `src/ui/tv/tv-model.ts`, `tv-table.tsx`, `tv-lobby.tsx` | The TV's Birdwatch table, rule set name, game cycling |
-| `scripts/build-birdwatch-art.mjs` | Makes the poster webp |
+| `scripts/build-art.mjs` | Takes iOS's Birdwatch images |
 | `tests/bw-*.test.ts`, `tests/catalog.test.ts`, `tests/lobby.test.ts`, `tests/tv-model.test.ts` | Unit tests |
 | `e2e/birdwatch.spec.ts`, `e2e/birdwatch-helpers.ts`, `playwright.config.ts` | Full games vs House Cats; screenshots |
 
@@ -116,7 +115,7 @@
 
 ### Task 4: Faces and art
 
-**Files:** Create `src/table/bw-faces.tsx`, `src/table/bw-art/bird.svg`, `scripts/build-birdwatch-art.mjs`, `src/art/game-birdwatch.webp`, `src/table/birdwatch.css` (faces part).
+**Files:** Create `src/table/bw-faces.tsx`, `src/art/{bird-card,bird-feeder,game-birdwatch}.webp` (from iOS), `src/table/birdwatch.css` (faces part); modify `scripts/build-art.mjs`.
 
 **Interfaces (produces):** `BirdFace({ id, rules, dim? })`, `BirdBack()`, `injectBirdStyles()`.
 
