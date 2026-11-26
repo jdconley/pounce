@@ -139,6 +139,9 @@ describe("events fold forward", () => {
     expect(v).toMatchObject({ phase: "choosing", drawer: 2, group: null });
     v = foldPurr(v, { type: "chosen", drawer: 2, group: "food", level: "tricky" });
     expect(v).toMatchObject({ phase: "drawing", group: "food", level: "tricky" });
+    expect(v.youDraw).toBeUndefined();
+    // The device that picked stays the drawer through the fold.
+    expect(foldPurr(purrView({ phase: "choosing", choices: { easy: "cat", tricky: "shadow" } }), { type: "chosen", drawer: 1, group: "animals", level: "easy" }).youDraw).toBe(true);
     v = foldPurr(v, { type: "missed", drawer: 2, word: "shadow", reason: "time" });
     expect(v.last).toEqual({ word: "shadow", guesser: null, points: 0 });
     v = foldPurr(v, { type: "over", winners: [1, 2], scores: [0, 2, 2, 0] });

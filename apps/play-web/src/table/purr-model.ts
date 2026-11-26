@@ -134,7 +134,8 @@ export function foldPurr(v0: PurrView, e: PurrEvent): PurrView {
     case "turn":
       return { ...v, phase: "choosing", drawer: e.drawer, round: e.round, group: null, level: null };
     case "chosen":
-      return { ...v, phase: "drawing", drawer: e.drawer, group: e.group, level: e.level };
+      // The device that picked stays the drawer's until the snapshot brings the word: its screen never flickers to a guesser's.
+      return { ...v, phase: "drawing", drawer: e.drawer, group: e.group, level: e.level, ...(v0.choices || v0.youDraw ? { youDraw: true as const } : {}) };
     case "guessed": {
       const scores = [...v.scores];
       scores[e.drawer] = (scores[e.drawer] ?? 0) + e.points;
