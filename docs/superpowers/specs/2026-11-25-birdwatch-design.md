@@ -134,7 +134,8 @@ The bid winner takes the nest into their hand. They put back the same number of 
 - Whoever holds the called card is the bid winner's partner for that hand. Nobody else is told. The partner's own screen quietly marks them as the partner, so they know how to play.
 - Everyone learns the partner when the called card is played. **(JD)** The partner's cat joins the bid winner's side on the table with a small flourish.
 - If the called card is in the nest discards, the bid winner plays alone. This is revealed at the end of the hand. **(call)**
-- Each player keeps their own score. The bid winner and the partner each score the side's result, made or missed. Each of the other three scores the points their side took. **(call)**
+- Each player keeps their own score. The bid winner and the partner each score their side's result, made or missed. Every player on the other side scores the points that side took. That is three players, or four when the bid winner plays alone. **(call)**
+- A shared phone that holds the partner's seat shows the partner mark only behind that seat's curtain (§5.5). A phone that holds both the bid winner's seat and the partner's seat can't hide it from whoever holds the phone. That is accepted. **(call)**
 
 ### 4.7 Scoring a hand **(official)**
 
@@ -152,11 +153,20 @@ Scores can go below zero.
 - A game ends after the hand in which someone reaches the target.
 - If more than one side reaches it, the highest total wins.
 - A tie for highest plays one more hand.
-- A side that missed its bid can't win on that hand, even if its total is over the target. **(call, a common house rule; JD to confirm)**
+- A side that missed its bid can't win on that hand, even if its total is over the target. In a 5-player game, that means the bid winner and the partner. **(call, a common house rule; JD to confirm)**
+- A tie is broken by a normal hand for the whole table. The game ends after the first hand that leaves one highest total over the target.
 
 ### 4.9 Leaving and forfeit **(call)**
 
 This is a team game, so one player leaving must not end it for everyone. A forfeited or retired seat is taken over by a House Cat for the rest of the game. Its team keeps playing and its score stands. The game ends early only if every human at the table has forfeited. This replaces Cat Tower's "seat is out" rule for this game.
+
+This is a room change, not a module change:
+- The module declares `leaveTakeover: true` and never receives a forfeit.
+- The room flips the seat to a bot in its seat list and drives it with `botAction`, like any House Cat.
+- The room ends the game when no human seat is left.
+- Streaks, nudges and the live table treat the seat as a bot from then on.
+
+Cat Tower and Tuna Tiles don't declare `leaveTakeover`, so nothing changes for them.
 
 ## 5. The table on a phone, the web and the TV
 
@@ -166,8 +176,12 @@ This is a team game, so one player leaving must not end it for everyone. A forfe
   - Official: "1s out, Bird wild."
   - Tucker: "1s high, worth 15."
   - Friesen: "1s high, Bird follows suit."
-- The lobby needs 4, 5 or 6 seats, and Start stays dark until there are 4. It fills empty seats with House Cats only when the host asks, as in Cat Tower.
-- With 4 or 6 seats, teammates are set by seat order: across from each other, with seats 0 and 2 on one team and 1 and 3 on the other, or 0 and 3, 1 and 4, and 2 and 5 with six. The host drags seats to choose teams. Teammates share a ribbon colour on their name tags.
+- The lobby needs 4, 5 or 6 seats, House Cats included. Start stays dark until 4 seats are filled. The host may fill any number of seats with House Cats.
+- Teams follow seat order, applied after the room compacts seats at start, so teams are never stored. In 4- and 6-player games, teammates sit across from each other:
+  - 4 players: seats 0 and 2, and seats 1 and 3.
+  - 6 players: seats 0 and 3, 1 and 4, and 2 and 5.
+- To choose teams, the host uses a new "Swap seats" item in the seat menu.
+- Teammates share a ribbon colour on their name tags.
 - The table card on Home and the TV show the rule set's name.
 
 ### 5.2 The phone table, top to bottom (portrait) **(call)**
@@ -223,7 +237,9 @@ The House Cat is `chooseAction(view, seat, rng)` in `src/bots/house-cat-birdwatc
 
 `src/games/birdwatch.ts` exports `birdwatch: GameModule<BirdState, BirdAction, BirdView, BirdEvent, BirdError>`, with id `birdwatch` and `minSeats: 4` and `maxSeats: 6`. It is pure and deterministic, as the other two games are.
 
-The module needs to know the rule set at `create`. The builder adds an options argument, `create(seats, seed, options)`, that the room passes from the lobby, `{ rules: "official" | "tucker" | "friesen" }`. The two other games ignore it. The options are stored on the room so that "Play again" keeps them. **(call)**
+The module needs to know the rule set at `create`. The builder adds an options argument, `create(seats, seed, options)`, that the room passes from the lobby, `{ rules: "official" | "tucker" | "friesen" }`. The two other games ignore it. The options go in a new optional `options` field on the stored room. A room without the field has no options, so nothing needs migrating. "Play again" keeps the options. **(call)**
+
+**The server says what is legal.** On its turn to play, each controlled seat's view carries `playable: CardId[]`. In the other phases the view carries the bid range, the nest count or the partner choices. Clients dim and enable controls from those values and never port the rules engine. **(call)**
 
 Phases inside a hand: `bidding`, `nest` (bid winner only), `trump`, `partner` (5 players only), `play`, then `between` (the summary, through `betweenAction` as Cat Tower's rounds use it), and `over`.
 
@@ -253,7 +269,7 @@ Rule sets are data (`src/birdwatch/rules.ts`): the deck for each player count, t
 
 - Everything follows the Tuna Tiles spec §9. `GAMES` lists `birdwatch` in dev and tests. A 1.3 app sends `x-pounce-games: cat-tower,tiles,birdwatch`. An older app never meets a Birdwatch table: joining gets a 404, the table is left out of lists, and pushes skip that device.
 - Snapshots carry `gameId: "birdwatch"` and a `birdwatch` view. Events are wrapped as `{ "kind": "birdwatch", "event": … }`. The error codes are new, the game's own.
-- **The live table:** progress is each side's score, `progressKind: "score"`, for the TV and the widgets.
+- **The live table:** `progress` for each seat is its side's score, so teammates show the same number. In a 5-player game it is each player's own score. `progressKind` is `"score"`.
 - **Rollout:** the server merges with the flag off in production. It turns on once 1.3 is in TestFlight and the web player draws the game. 1.3 then goes to the App Store, and the websites are updated per AGENTS.md. They claim the game only once people can play it.
 
 ## 9. Testing **(call)**
@@ -268,7 +284,7 @@ Rule sets are data (`src/birdwatch/rules.ts`): the deck for each player count, t
 - Counter totals: 120 and 180 every hand, summed across sides.
 - Hidden-information tests: no view or event leaks a hand, the nest or the partner seat before the reveal.
 - Bot soak: thousands of bot-only games across every rule set and player count. They check for no stalls and no illegal moves, and that every game ends.
-- Shared fixtures for the Swift and web ports of the legal-play check, as Tuna Tiles uses `tiles-sets.json`.
+- Fixtures pin the view shape, including `playable` and the phases, for the Swift and web decoders.
 - Cross-platform: one table played from iPhone, web and TV together, in each player count. That is the "every platform with every other" check before merge.
 
 ## 10. Left to the builder
@@ -277,3 +293,4 @@ Rule sets are data (`src/birdwatch/rules.ts`): the deck for each player count, t
 - Exact layout on small phones and iPad.
 - Bot tuning, inside §6.
 - The wording of tips and help, kept terse.
+- Players under 13 play the same game. There is no easy mode. Parental consent applies as it does for the other table games. **(call)**
