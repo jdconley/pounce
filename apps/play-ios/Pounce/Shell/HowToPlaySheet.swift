@@ -75,13 +75,15 @@ struct HowToPlaySheet: View {
 
     /// One chip per game in the catalog; the chosen one is lit in its own tint.
     private var picker: some View {
+        // One row, tighter on a narrower phone, and a column only when even that doesn't fit.
         ViewThatFits(in: .horizontal) {
-            HStack(spacing: 10) { chips }
-            VStack(spacing: 10) { chips }
+            HStack(spacing: 10) { chips() }
+            HStack(spacing: 6) { chips(compact: true) }
+            VStack(spacing: 10) { chips() }
         }
     }
 
-    private var chips: some View {
+    private func chips(compact: Bool = false) -> some View {
         ForEach(GameCatalog.all) { entry in
             let on = entry.id == game.id
             Button {
@@ -91,7 +93,7 @@ struct HowToPlaySheet: View {
             } label: {
                 HStack(spacing: 8) {
                     Text(entry.title)
-                        .font(.system(.headline, design: .rounded, weight: .black))
+                        .font(.system(compact ? .subheadline : .headline, design: .rounded, weight: .black))
                         .foregroundStyle(.white)
                     if !entry.isAvailable {
                         Text("Soon", comment: "How to play: tag on a game that can't be started yet")
@@ -102,9 +104,10 @@ struct HowToPlaySheet: View {
                             .background(Capsule().fill(Palette.lime))
                     }
                 }
-                .lineLimit(2)
+                .lineLimit(compact ? 1 : 2)
+                .fixedSize(horizontal: compact, vertical: false)
                 .multilineTextAlignment(.center)
-                .padding(.horizontal, 16)
+                .padding(.horizontal, compact ? 10 : 16)
                 .padding(.vertical, 9)
                 .background(
                     Capsule().fill(on ? Palette.tint(entry.tint) : Palette.ink.opacity(0.55))

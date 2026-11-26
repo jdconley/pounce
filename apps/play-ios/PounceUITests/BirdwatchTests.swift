@@ -19,8 +19,8 @@ final class BirdwatchTests: XCTestCase {
         return out
     }
 
-    private func launch(_ demo: String) -> XCUIApplication {
-        let app = Live.demo(demo)
+    private func launch(_ demo: String, speed: Double = Live.speed) -> XCUIApplication {
+        let app = Live.demo(demo, speed: speed)
         app.launchArguments += ["-settings.soundOn", "<false/>"]
         app.launch()
         XCTAssertTrue(el(app, "screen-birdwatch").waitForExistence(timeout: Live.t(10)), "no Birdwatch table")
@@ -62,7 +62,8 @@ final class BirdwatchTests: XCTestCase {
     }
 
     func testADimmedCardRefusesAndTheStripOpensTheScores() {
-        let app = launch("bird-play")
+        // At normal speed: the note stays up a moment, as a person sees it.
+        let app = launch("bird-play", speed: 1)
         // The 10 of mouse can't follow fish: it says so and stays.
         let dim = el(app, "bird.card.23")
         XCTAssertTrue(dim.waitForExistence(timeout: Live.t(5)))
@@ -76,8 +77,8 @@ final class BirdwatchTests: XCTestCase {
 
     func testFivePlayersCallAPartner() {
         let app = launch("bird-partner")
-        // The picker comes up on its own; calling the 1 of feather starts the play.
-        let one = el(app, "bird.partner.28")
+        // The picker comes up on its own; calling the 12 of feather (trump) starts the play.
+        let one = el(app, "bird.partner.39")
         XCTAssertTrue(one.waitForExistence(timeout: Live.t(5)), "no partner picker")
         one.tap()
         XCTAssertTrue(until(5) { self.probe(app)["phase"] == "play" }, "no play after the call: \(probe(app))")

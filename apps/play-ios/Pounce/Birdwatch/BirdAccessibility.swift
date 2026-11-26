@@ -108,10 +108,16 @@ extension BirdScene {
                 if nest, putBack.contains(card) {
                     label += String(localized: ", putting back", comment: "Birdwatch VoiceOver: a card marked to put back")
                 }
-                // Each card's own strip: what shows of it under the next card.
+                // Each card's own part: what shows of it under the next card in its row, and above
+                // the front row when it sits in the back one.
                 var frame = node.frame
                 if i + 1 < handShown.count, let next = handNodes[handShown[i + 1]], abs(next.position.y - node.position.y) < 2 {
                     frame.size.width = max(next.frame.minX - frame.minX, 20)
+                }
+                let front = handShown[(i + 1)...].compactMap { handNodes[$0] }
+                    .filter { $0.position.y < node.position.y - 2 && $0.frame.intersects(frame) }
+                if let top = front.map(\.frame.maxY).max(), top < frame.maxY - 16 {
+                    frame = CGRect(x: frame.minX, y: top, width: frame.width, height: frame.maxY - top)
                 }
                 let hint: String? = if myPlay, playable.contains(card) {
                     String(localized: "Double tap to play", comment: "Birdwatch VoiceOver hint: a playable card")

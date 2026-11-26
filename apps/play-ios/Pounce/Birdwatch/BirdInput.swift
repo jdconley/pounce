@@ -28,6 +28,12 @@ extension BirdScene {
     }
     #endif
 
+    /// The score strip as one target, gaps between the chips included.
+    var stripHit: CGRect {
+        guard let first = stripFrames.first else { return .null }
+        return stripFrames.reduce(first) { $0.union($1) }.insetBy(dx: 0, dy: -4)
+    }
+
     /// The hand card under `point`, topmost first.
     func card(at point: CGPoint) -> BirdCardID? {
         handShown.reversed().first { card in
@@ -42,7 +48,7 @@ extension BirdScene {
             press = Press(start: point, onMenu: true)
             return
         }
-        if stripFrames.contains(where: { $0.contains(point) }) {
+        if stripHit.contains(point) {
             press = Press(start: point, onStrip: true)
             return
         }
@@ -69,7 +75,7 @@ extension BirdScene {
             return
         }
         if press.onStrip {
-            if stripFrames.contains(where: { $0.contains(point) }) { onScores() }
+            if stripHit.contains(point) { onScores() }
             return
         }
         guard let card = press.card, let model, let seat = shownSeat else {
