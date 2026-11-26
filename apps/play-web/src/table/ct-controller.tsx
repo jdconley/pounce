@@ -26,7 +26,7 @@ import { inside, press, useLatest, type Point, type Rect } from "./drag";
 import { CardFace, cardLabel } from "./faces";
 import { Motion, MOVE, transformOf, wiggle, type Pose } from "./motion";
 import { seatCat, seatName, SeatAvatar } from "./seat";
-import { Curtain, SwitchView, useTextScale } from "./shared";
+import { Curtain, LayDownFirst, SwitchView, useTextScale } from "./shared";
 
 import type { RoomState, RoomStore } from "../store/room";
 import type { View } from "../store/views";
@@ -58,6 +58,8 @@ export function CtController(props: { store: RoomStore; state: RoomState; onView
   const [over, setOver] = useState<Over>(null);
   const [held, setHeld] = useState<Map<CardId, Pose>>(new Map());
   const [skipPick, setSkipPick] = useState<CardId | null>(null);
+  const [layFirst, setLayFirst] = useState<{ card: CardId; skipTarget?: number } | null>(null);
+  const layFirstOpen = useLatest(layFirst !== null);
   const [target, setTarget] = useState<HitTarget | null>(null);
   const [focusIndex, setFocusIndex] = useState(0);
 
@@ -116,7 +118,7 @@ export function CtController(props: { store: RoomStore; state: RoomState; onView
     wiggle(rootRef.current?.querySelector(".ctl-hand") as HTMLElement | null);
   }, [state.error?.n]);
 
-  const moves = ctMoves({ store, state, room, seat, myTurn, hand, motion, discardPose: L.piles.discard, setHeld, setSelected, setSkipPick, quiet: true });
+  const moves = ctMoves({ store, state, room, seat, myTurn, hand, motion, discardPose: L.piles.discard, setHeld, setSelected, setSkipPick, setLayFirst, quiet: true });
   const { nope, draw, discard, toTray, outOfTray, groups, layDown, hit, skipCandidates } = moves;
   const groupsReady = groups !== null;
 
@@ -225,7 +227,8 @@ export function CtController(props: { store: RoomStore; state: RoomState; onView
   // The keyboard: arrows pick, Enter lifts, D draws, T takes the discard, X discards, L lays down.
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (e.target instanceof HTMLInputElement || e.metaKey || e.ctrlKey || e.altKey) return;
+      // "Lay down first?" is open, or a sheet took the key: its own keys (Enter, Esc) answer it.
+      if (layFirstOpen.current || e.defaultPrevented || e.target instanceof HTMLInputElement || e.metaKey || e.ctrlKey || e.altKey) return;
       const k = e.key.toLowerCase();
       const focusCard = (i: number) => {
         const c = ordered[Math.min(Math.max(i, 0), ordered.length - 1)];
@@ -446,7 +449,7 @@ export function CtController(props: { store: RoomStore; state: RoomState; onView
                 onClick={() => {
                   const c = skipPick;
                   setSkipPick(null);
-                  discard(c, s);
+                  discard(c, s, true);
                 }}
               />
             ))}
@@ -457,13 +460,24 @@ export function CtController(props: { store: RoomStore; state: RoomState; onView
         </div>
       ) : null}
 
+      {layFirst !== null ? (
+        <LayDownFirst
+          onLay={layDown}
+          onDiscard={() => {
+            setLayFirst(null);
+            discard(layFirst.card, layFirst.skipTarget, true);
+          }}
+          onClose={() => setLayFirst(null)}
+        />
+      ) : null}
+
       {curtainSeat !== null ? <Curtain name={seatName(room.seats[curtainSeat])} cat={room.seats[curtainSeat]?.person?.cat ?? 0} onReveal={() => reveal(curtainSeat)} /> : null}
 
       <Tip id="tv.switch" anchor="view-switch" text="Your cards are here. The table is on the TV." show={curtainSeat === null && skipPick === null} place="below" />
       <Tip id="ct.draw" anchor="deck" text="Take a card from the deck or the discard pile." show={switchLearned && step === "draw" && !state.pending} />
       <Tip id="ct.trays" anchor="tray-0" text={`This round: ${phaseWords(phaseIndex)}. Drag cards into the trays.`} show={switchLearned && step === "play" && showTrays && tipLearned("ct.draw")} />
       <Tip id="ct.discard" anchor="discard" text="Drag one card to the discard pile." show={switchLearned && step === "play" && tipLearned("ct.trays") && !groupsReady && targets.length === 0} />
-      <Tip id="ct.lay" anchor="lay" text="Tap the paw to lay down your level." show={switchLearned && groupsReady && step === "play"} />
+      <Tip id="ct.lay" anchor="lay" text="Your level is ready. Tap Lay down." show={switchLearned && groupsReady && step === "play" && layFirst === null} />
     </div>
   );
 }

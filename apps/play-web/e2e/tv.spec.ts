@@ -1,6 +1,6 @@
 import { devices, expect, test, type Page, type WebSocketRoute } from "@playwright/test";
 
-import { catTowerTurn, closeAll, deckCount, newPlayer, scan, tableCode } from "./helpers";
+import { catTowerTurn, closeAll, deckCount, newPlayer, ownAddress, scan, standInServer, tableCode } from "./helpers";
 import {
   controllerTurn,
   ctMyTurn,
@@ -22,6 +22,10 @@ import {
   tvTable,
   TV_VIEWPORT,
 } from "./tv-helpers";
+
+import type { RoomView } from "@pounce/play-api/protocol";
+import type { GameEvent } from "@pounce/play-api/rules/engine";
+import type { CatTowerView } from "@pounce/play-api/rules/view";
 
 /**
  * Pounce on the TV in a browser: a TV page (1920×1080, a device of its own) shows the table, and
@@ -511,6 +515,62 @@ test.describe("a TV and two browser phones", () => {
     expect(turns).toBe(4);
     await closeAll(tv.context, ava!.context, ben!.context);
   });
+});
+
+test("the TV shows a pickled player until the turn played in its place is over", async ({ browser }) => {
+  // The TV kept this table; a stand-in for the room plays it, so the Cucumber comes when we say.
+  const context = await browser.newContext({ viewport: TV_VIEWPORT, isMobile: false, hasTouch: false });
+  await ownAddress(context);
+  await context.addInitScript(() => localStorage.setItem("pounce.tv.room", "BCDFG"));
+  const page = await context.newPage();
+  await page.addInitScript(() => (Element.prototype.requestFullscreen = () => Promise.resolve()));
+  const { send } = await standInServer(page);
+  const seats: RoomView["seats"] = [
+    { kind: "human", person: { id: "11111111-1111-4111-8111-111111111111", name: "Ada", cat: 1 }, yours: false, presence: "awake" },
+    { kind: "bot", yours: false, presence: null },
+    { kind: "human", person: { id: "22222222-2222-4222-8222-222222222222", name: "Bo", cat: 5 }, yours: false, presence: "awake" },
+  ];
+  const game = (over: Partial<CatTowerView>): CatTowerView => ({
+    round: 1, dealer: 2, turn: 0, step: "play", status: "playing", deckCount: 40, discardTop: 0, discardCount: 1, phase: [0, 2, 1], scores: [0, 0, 0],
+    laid: [null, null, null], handCounts: [8, 10, 10], hands: {}, pendingSkip: [false, false, false], winners: [], forfeited: [false, false, false], ...over,
+  });
+  const room = (g: CatTowerView): RoomView => ({ code: "BCDFG", name: "Pickles", status: "playing", youAreHost: false, seats, game: g, screen: true });
+  let seq = 1;
+  const play = (events: GameEvent[], g: CatTowerView) => {
+    for (const event of events) send({ t: "event", seq: ++seq, event: { kind: "game", event } });
+    send({ t: "snapshot", protocol: 1, seq, room: room(g) });
+  };
+  send({ t: "snapshot", protocol: 1, seq, room: room(game({})) });
+  await page.goto("/play/tv");
+  const start = page.getByRole("button", { name: "Start", exact: true });
+  const wake = page.getByRole("button", { name: "Press OK for sound" });
+  await expect(start.or(wake)).toBeVisible();
+  await (await start.isVisible() ? start : wake).click();
+  await expect(page.locator(".tv-table")).toBeVisible();
+  const cat = page.locator(".tv-table .seat-avatar", { has: page.locator(".name-tag", { hasText: "House Cat" }) });
+  await expect(cat).not.toHaveClass(/\bpickled\b/);
+
+  // Ada pickles the House Cat, who is next: Bo plays in its place, and the TV shows it pickled.
+  play(
+    [
+      { kind: "discarded", seat: 0, card: 104, skipTarget: 1 },
+      { kind: "skipped", seat: 1 },
+      { kind: "turn", seat: 2 },
+    ],
+    game({ turn: 2, step: "draw", discardTop: 104, discardCount: 2, handCounts: [7, 10, 10] }),
+  );
+  await expect(banner(page)).toHaveText("Bo's turn");
+  await expect(cat).toHaveClass(/\bpickled\b/);
+  await expect(cat).toHaveAttribute("aria-label", /, pickled/);
+  await expect(cat.locator(".pickled-tag")).toHaveText("Pickled");
+  await page.waitForTimeout(600);
+  if (process.env.SHOTS) await page.screenshot({ path: `${process.env.SHOTS}/pickled-tv.png` });
+
+  // Bo's turn ends: no longer pickled.
+  play([{ kind: "drew", seat: 2, from: "deck" }, { kind: "discarded", seat: 2, card: 50 }, { kind: "turn", seat: 0 }], game({ turn: 0, step: "draw", deckCount: 39, discardTop: 50, discardCount: 3 }));
+  await expect(banner(page)).toHaveText("Ada's turn");
+  await expect(cat).not.toHaveClass(/\bpickled\b/);
+  await context.close();
 });
 
 test("no serious accessibility problems on the TV, its phones and the TV-link page", async ({ browser }) => {

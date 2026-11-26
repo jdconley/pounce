@@ -14,6 +14,7 @@ import { play } from "../lib/sound";
 import { aimedGroup } from "./ct-moves";
 import { CardFace, cardLabel } from "./faces";
 import { transformOf, type Motion, type MoveStyle, type Pose } from "./motion";
+import { usePickled } from "./pickled";
 import { seatCat, seatName, SeatAvatar } from "./seat";
 import { Flights, RoundOver, type Flight } from "./shared";
 
@@ -21,13 +22,14 @@ import type { CtLayout } from "./ct-layout";
 import type { RoomStore } from "../store/room";
 import type { GameAim, RoomView } from "@pounce/play-api/protocol";
 import type { GameEvent } from "@pounce/play-api/rules/engine";
+import type { HitSide } from "@pounce/play-api/rules/groups";
 import type { ComponentChildren, VNode } from "preact";
 
 /** What a held card is over: the table's targets, and the hand layer's own (a tray, a place in the hand). */
 export type CtHover =
   | { kind: "discard" }
   | { kind: "tray"; i: number }
-  | { kind: "group"; seat: number; group: number; ok: boolean }
+  | { kind: "group"; seat: number; group: number; side?: HitSide; ok: boolean }
   | { kind: "seat"; seat: number }
   | { kind: "hand"; index: number }
   | null;
@@ -121,6 +123,7 @@ export function CtTable(props: CtPublicProps & Partial<CtHandProps>) {
   const [flights, setFlights] = useState<Flight[]>([]);
   const [round, setRound] = useState<Extract<GameEvent, { kind: "roundOver" }> | null>(null);
   const [under, setUnder] = useState<CardId | null>(null);
+  const pickled = usePickled(store, g.pendingSkip);
 
   // The discard's card underneath stays a moment while the new one lands on it: its own CSS
   // animation (`.discard-under.leaving`) times that, and its end lets it go.
@@ -225,7 +228,7 @@ export function CtTable(props: CtPublicProps & Partial<CtHandProps>) {
     <>
       <img class="rug-art" src={art("rug")} alt="" style={{ transform: `translate3d(${L.rug.x}px, ${L.rug.y}px, 0)`, width: `${L.rug.w}px`, height: `${L.rug.h}px` }} />
 
-      <Tower seats={room.seats} phase={g.phase} rect={L.tower} turn={g.turn} />
+      <Tower seats={room.seats} phase={g.phase} rect={L.tower} turn={g.turn} pickled={pickled} />
 
       {[...L.opponents].map(([s, at]) => (
         <div class="avatar-at" style={{ transform: `translate3d(${at.x - L.avatar / 2}px, ${at.y - L.avatar / 2}px, 0)`, ["--seat-w" as string]: `${L.seats.get(s)?.w ?? L.avatar}px` }}>
@@ -237,7 +240,7 @@ export function CtTable(props: CtPublicProps & Partial<CtHandProps>) {
             count={g.handCounts[s]}
             score={props.scores ? g.scores[s] : undefined}
             laid={Boolean(g.laid[s])}
-            skip={g.pendingSkip[s]}
+            pickled={pickled[s]}
             out={g.forfeited[s]}
             target={hover?.kind === "seat" && hover.seat === s}
             onClick={props.onSeat ? () => props.onSeat!(s) : undefined}
@@ -253,7 +256,7 @@ export function CtTable(props: CtPublicProps & Partial<CtHandProps>) {
           <>
             {ownCat ? (
               <div class="laid-owner" style={{ transform: `translate3d(${row.avatar.x - row.avatar.size / 2}px, ${row.avatar.y - row.avatar.size / 2}px, 0)`, width: `${row.avatar.size}px`, height: `${row.avatar.size}px` }}>
-                <SeatAvatar seat={s} info={room.seats[s]} size={row.avatar.size} turn={false} label={`${seatName(room.seats[s])} laid down`} />
+                <SeatAvatar seat={s} info={room.seats[s]} size={row.avatar.size} turn={false} pickled={pickled[s]} label={`${seatName(room.seats[s])} laid down${pickled[s] ? ", pickled" : ""}`} />
               </div>
             ) : null}
             {row.groups.map((grp, gi) => {
@@ -346,13 +349,13 @@ export function DeckCards(props: { count: number }) {
   );
 }
 
-/** The ten-shelf tower with each cat on the shelf they reached (TowerNode.swift). */
-function Tower(props: { seats: RoomView["seats"]; phase: number[]; rect: { x: number; y: number; w: number; h: number }; turn: number }) {
+/** The ten-shelf tower with each cat on the shelf they reached (TowerNode.swift); a pickled cat is terrified, with a cucumber. */
+function Tower(props: { seats: RoomView["seats"]; phase: number[]; rect: { x: number; y: number; w: number; h: number }; turn: number; pickled: boolean[] }) {
   const { rect } = props;
   const shelf = rect.h / 11;
   const cats = props.phase.map((ph, s) => ({ s, ph })).filter(({ s }) => props.seats[s]?.kind === "human" || props.seats[s]?.kind === "bot");
   return (
-    <div class="tower" style={{ transform: `translate3d(${rect.x}px, ${rect.y}px, 0)`, width: `${rect.w}px`, height: `${rect.h}px` }} role="img" aria-label={cats.map(({ s, ph }) => `${seatName(props.seats[s])}: level ${Math.min(ph + 1, 10)}`).join(". ")}>
+    <div class="tower" style={{ transform: `translate3d(${rect.x}px, ${rect.y}px, 0)`, width: `${rect.w}px`, height: `${rect.h}px` }} role="img" aria-label={cats.map(({ s, ph }) => `${seatName(props.seats[s])}: level ${Math.min(ph + 1, 10)}${props.pickled[s] ? ", pickled" : ""}`).join(". ")}>
       {Array.from({ length: 10 }, (_, i) => (
         <span class="shelf" style={{ transform: `translate3d(0, ${rect.h - (i + 1) * shelf - shelf * 0.2}px, 0)`, height: `${shelf * 0.7}px` }}>
           <i>{i + 1}</i>
@@ -363,8 +366,9 @@ function Tower(props: { seats: RoomView["seats"]; phase: number[]; rect: { x: nu
         const y = rect.h - (level + 0.9) * shelf - shelf * 0.25;
         const offset = (k % 3) * rect.w * 0.18;
         return (
-          <span class={`tower-cat ${props.turn === s ? "turn" : ""}`} style={{ transform: `translate3d(${offset}px, ${y}px, 0)`, width: `${rect.w * 0.78}px`, height: `${rect.w * 0.78}px`, ["--ring" as string]: ringOf(s) }}>
-            <img src={catImg(props.seats[s])} alt="" />
+          <span class={`tower-cat ${props.turn === s ? "turn" : ""} ${props.pickled[s] ? "pickled" : ""}`} style={{ transform: `translate3d(${offset}px, ${y}px, 0)`, width: `${rect.w * 0.78}px`, height: `${rect.w * 0.78}px`, ["--ring" as string]: ringOf(s) }}>
+            <img src={catArt(seatCat(props.seats[s]), props.pickled[s] ? "terrified" : "idle")} alt="" />
+            {props.pickled[s] ? <img class="tower-pickle" src={art("badge-skip")} alt="" /> : null}
           </span>
         );
       })}
@@ -373,4 +377,3 @@ function Tower(props: { seats: RoomView["seats"]; phase: number[]; rect: { x: nu
 }
 
 const ringOf = (s: number) => RINGS[s % RINGS.length];
-const catImg = (s: RoomView["seats"][number] | undefined) => catArt(seatCat(s), "idle");
