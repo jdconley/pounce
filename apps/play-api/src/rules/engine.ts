@@ -35,11 +35,24 @@ export type CatTowerState = {
    * Absent on a game that ended the usual way (and on older stored states).
    */
   endReason?: EndReason;
+  /**
+   * Server-only, never in a view: what each seat did with the discard pile this round, as
+   * everyone at the table saw it. The rules never read it; the game module
+   * (`games/cat-tower.ts`) keeps it from the public events so the House Cat can remember the
+   * table the way a person does. Absent until the first move that adds to it.
+   */
+  discardLog?: DiscardLog;
   /** Server-only: 128 bits from a crypto source. Never sent to a device. */
   seed: Seed;
   /** How many values of the seeded rng stream have been consumed. */
   rngCalls: number;
 };
+
+/**
+ * Per seat, the number cards it took from the discard pile (`took: true`), or passed up there
+ * or threw onto it (`took: false`), oldest first, for one round.
+ */
+export type DiscardLog = { round: number; seats: { card: CardId; took: boolean }[][] };
 
 /**
  * Why a game ended early: "decided", see `outcomeDecided`; "forfeit", every

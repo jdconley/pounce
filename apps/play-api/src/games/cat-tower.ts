@@ -1,4 +1,4 @@
-import { chooseAction } from "../bots/house-cat";
+import { chooseAction, noteDiscards } from "../bots/house-cat";
 import { card } from "../rules/cards";
 import {
   applyAction,
@@ -98,16 +98,32 @@ function fallbackAction(game: CatTowerState, seat: Seat): Action {
     : { type: "discard", card: pick };
 }
 
+/**
+ * `applyAction`, then the House Cat's discard log brought up to date (see
+ * `CatTowerState.discardLog`) from the face-up top card and the events with
+ * every private detail removed, so it holds only what everyone at the table saw.
+ */
+function apply(s: CatTowerState, seat: Seat, a: Action): ReturnType<typeof applyAction> {
+  const result = applyAction(s, seat, a);
+  if (!result.ok) return result;
+  const seen = result.events.map((event) => eventFor(event, []));
+  const log = noteDiscards(s.discardLog, result.state.round, result.state.seats, s.discard.at(-1) ?? null, seen);
+  // `result.state` is a fresh copy, ours to finish.
+  if (log === undefined) delete result.state.discardLog;
+  else result.state.discardLog = log;
+  return result;
+}
+
 export const catTower: GameModule<CatTowerState, Action, CatTowerView, GameEvent, ApplyError> = {
   id: "cat-tower",
   minSeats: 2,
   maxSeats: 6,
   create: newGame,
-  apply: applyAction,
+  apply,
   view: viewFor,
   filterEvent: eventFor,
   currentActor: (s) => (s.status === "playing" ? s.turn : null),
-  botAction: (s, seat, rng) => chooseAction(viewFor(s, [seat]), seat, rng),
+  botAction: (s, seat, rng) => chooseAction(viewFor(s, [seat]), seat, rng, s.discardLog),
   // A discard or going out ends a turn; drawing alone doesn't, and a new round's deal isn't anyone's turn.
   // Nor is a forfeit: it moves the turn on, but nobody played (§5.13).
   endsTurn: (a, events, seat) =>
