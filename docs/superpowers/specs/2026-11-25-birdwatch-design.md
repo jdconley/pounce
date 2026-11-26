@@ -1,6 +1,6 @@
 # Birdwatch: design
 
-Date: 2026-11-25 · Owner: JD Conley (Conley Chaos LLC) · Status: draft for JD · Release: 1.3 · Lives in `github.com/jdconley/pounce`
+Date: 2026-11-25 · Owner: JD Conley (Conley Chaos LLC) · Status: approved by JD (2026-11-25) · Release: 1.3 · Lives in `github.com/jdconley/pounce`
 
 Parent specs: `2026-10-31-pounce-cat-tower-design.md` (product principles, architecture), `2026-10-31-pounce-ios-design.md` (art direction, table, pass-and-play, forfeit), `2026-11-11-tile-game-design.md` (rooms and the wire for more than one game, the `GAMES` flag), `2026-11-15-web-player-design.md`, `2026-11-16-tv-table-design.md`. Where this document says nothing, those apply.
 
@@ -73,7 +73,11 @@ Birdwatch reuses the four toy suits from Tuna Tiles (fish, mouse, feather, bell)
 
 ### 3.4 Name
 
-**Birdwatch** **(JD)**. The code id is `birdwatch` and never changes, even if the display name does. Nobody has run a trademark or App Store search on the name yet, and it has to happen before 1.3 is submitted. If it fails, the display name changes and the id stays.
+**Birdwatch** **(JD)**. The code id is `birdwatch` and never changes, even if the display name does. A search on 2026-11-25 (USPTO records via Trademarkia) found no live BIRDWATCH mark for games, playing cards or entertainment:
+- The live class 9 marks are air-traffic data software (ATAC, Reg. 3838250) and traffic surveillance equipment (Quercus, Reg. 6886456).
+- The only class 41 mark, a birding TV series, was cancelled in 2005.
+
+The game is named inside Pounce, not as its own App Store app. **(JD: go ahead if the search is clear)**
 
 ## 4. Rules, in our words
 
@@ -109,7 +113,7 @@ The deal rotates one seat to the left each hand. The first dealer is picked at r
 ### 4.3 Bidding **(official, with calls)**
 
 - Bidding starts left of the dealer and goes around. On your turn, raise the high bid by 5 or more, or pass. Once you pass, you are out of the bidding for that hand.
-- Official bids run from 70 to 120. Tucker and Friesen bids run from 100 to 180. **(call: the official range, scaled to the bigger deck)**
+- Official bids run from 70 to 120. Tucker and Friesen bids run from 70 to 180. **(JD)**
 - Bidding ends when every player but one has passed. If every player passes without a bid, the dealer takes the hand at the minimum bid. **(call)**
 - A bid of the maximum ends bidding at once.
 - There are no redeals. **(call: the official rules allow a redeal for a hand with no points, which adds a decision for little gain)**
