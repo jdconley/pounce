@@ -16,7 +16,7 @@ export const PROTOCOL = PROTOCOL_VERSION;
  * always implied. `dish` says it shows the Daily Dish, so the server sends it the Dish's reminder
  * (docs/daily-protocol.md); no table is a game called `dish`.
  */
-export const GAMES = "cat-tower,tiles,dish";
+export const GAMES = "cat-tower,tiles,birdwatch,dish";
 
 /** `X-Pounce-App`: who is asking. The server never holds the web player to an app minimum. */
 export const APP_HEADER = `platform=web; version=${VERSION}; protocol=${PROTOCOL}`;
