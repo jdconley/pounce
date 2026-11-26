@@ -6,7 +6,6 @@ import {
   type GameError,
   type GameId,
   type AnyGameOptions,
-  type GameOptions,
   type RoomGame,
 } from "../games";
 import { POUNCE_LIVE_MS, deadline, expired, liveState, type LiveRecord, type LiveState } from "../live/live";
@@ -976,7 +975,7 @@ export class RoomCore<S = CatTowerState> {
         youAreHost: deviceId === state.hostDeviceId,
         seats,
         ...this.gameFields(controlled),
-        ...(state.options ? { options: { ...state.options } as GameOptions } : {}),
+        ...(state.options ? { options: { ...state.options } } : {}),
         ...(this.features.streaks ? { look: this.look() } : {}),
         ...(state.rematch?.code ? { rematch: state.rematch.code } : {}),
         ...(this.features.tv && this.screenShown() ? { screen: true as const } : {}),

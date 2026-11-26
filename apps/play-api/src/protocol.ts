@@ -7,7 +7,7 @@ import { isBack, isRug } from "./streaks/catalog";
 
 import type { BirdEvent } from "./birdwatch/engine";
 import type { BirdView } from "./birdwatch/view";
-import type { GameAction, GameError, GameId, AnyGameOptions, GameOptions } from "./games";
+import type { GameAction, GameError, GameId, AnyGameOptions } from "./games";
 import type { PurrEvent } from "./purrtrait/engine";
 import type { PurrView } from "./purrtrait/view";
 import type { GameEvent, Seat } from "./rules/engine";
@@ -80,9 +80,10 @@ export type RoomView = {
   purrtrait?: PurrView;
   /**
    * What the table chose in its lobby (`setOptions`), for a game that has a choice: Birdwatch's
-   * rule set (typed as that, as the web player draws only Birdwatch's; Purrtrait's `{ timer }` is on the wire too). Absent at a table of a game with none, so Cat Tower and tile game snapshots never have it.
+   * `{ rules }` or Purrtrait's `{ timer }`.
+   * Absent at a table of a game with none, so Cat Tower and tile game snapshots never have it.
    */
-  options?: GameOptions;
+  options?: AnyGameOptions;
   /** The table's rug and card back (§9.4). Only while streaks are on. */
   look?: { rug: string; back: string };
   /** The code of the table "Play again" dealt (§10.4), once there is one. */

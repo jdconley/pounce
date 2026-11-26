@@ -68,7 +68,7 @@ test("a game ends in `over`", () => {
   expect(purrtrait.phase(s)).toBe("over");
 });
 
-test("fallbackAction: the drawer gives up, and a choosing drawer picks the Easy word; the room's refusal is never needed", () => {
+test("fallbackAction: a choosing drawer picks the Easy word, a drawing one gives up", () => {
   const s = game();
   expect(purrtrait.fallbackAction(s, 0)).toEqual({ type: "choose", level: "easy" });
   const drawing = ok(apply(s, 0, { type: "choose", level: "easy" })).state;

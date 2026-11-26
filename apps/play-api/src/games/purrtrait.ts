@@ -46,7 +46,7 @@ export const purrtrait: GameModule<PurrState, PurrAction, PurrView, PurrEvent, P
   progressKind: "score",
 };
 
-/** The drawer gives up; a drawer who has yet to pick takes the Easy word. */
+/** For the drawer seat. The drawer gives up; a drawer who has yet to pick takes the Easy word. */
 function fallbackAction(s: PurrState): PurrAction {
   return s.phase === "choosing" ? { type: "choose", level: "easy" } : { type: "giveUp" };
 }

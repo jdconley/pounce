@@ -53,7 +53,7 @@ export function Lobby(props: {
   const words = startWords(room);
   const game = room.gameId ?? "cat-tower";
   const bird = game === "birdwatch";
-  const rules = room.options?.rules ?? "official";
+  const rules = room.options && "rules" in room.options ? room.options.rules : "official";
   const ribbons = bird ? lobbyRibbons(room) : new Map<number, string>();
   const host = room.youAreHost && seated;
 
