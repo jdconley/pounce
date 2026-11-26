@@ -130,6 +130,15 @@ extension BirdScene {
                 }
             }
         }
+        #if DEBUG
+        // Hand cards that popped to another size between two frames: "<blips>|<the last few>".
+        let sizes = TableElement(accessibilityContainer: view)
+        sizes.accessibilityIdentifier = "bird.sizes"
+        sizes.accessibilityLabel = "sizes"
+        sizes.accessibilityFrameInContainerSpace = CGRect(x: 0, y: 0, width: 2, height: 2)
+        sizes.liveValue = { [weak self] in self?.sizeWatch.probe }
+        out.append(sizes)
+        #endif
         accessibilityCache = (accessibilityVersion, out)
         return out
     }

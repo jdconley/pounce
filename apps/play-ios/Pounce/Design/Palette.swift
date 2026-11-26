@@ -12,6 +12,8 @@ enum Palette {
     static let yellow = Color(hex: 0xFFD21F)
     /// A drop the table refuses (the ring around a laid group that can't take the card).
     static let refuse = Color(hex: 0xFF3B4E)
+    /// Cucumber green: a pickled player (a Cucumber skips their turn), as on the web.
+    static let pickle = Color(hex: 0x2FAE3F)
     /// Outline color for everything chunky.
     static let ink = Color(hex: 0x1B0B3A)
     /// App background.

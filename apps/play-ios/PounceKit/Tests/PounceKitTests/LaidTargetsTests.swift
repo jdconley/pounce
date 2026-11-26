@@ -53,4 +53,48 @@ import Testing
         #expect(LaidTargets.side(at: CGPoint(x: 20, y: 120), of: f) == .start)  // past the left edge
         #expect(LaidTargets.side(at: CGPoint(x: 140, y: 120), of: f) == .end)
     }
+
+    // MARK: a card that fits one place
+
+    /// The laid zone around the frames above.
+    private let zone = CGRect(x: 20, y: 20, width: 300, height: 200)
+
+    /// JD: "for sets or runs where it only fits in one place, don't need to be precise". A card
+    /// only `b` takes goes to `b` from anywhere on the zone, and says it got there that way.
+    @Test func aCardThatFitsOnePlaceGoesThereFromAnywhereOnTheZone() {
+        let far = CGPoint(x: 280, y: 200)  // nowhere near a group
+        #expect(LaidTargets.target(at: far, in: frames) == nil)
+        let drop = LaidTargets.drop(at: far, in: frames, fits: [b], zone: zone)
+        #expect(drop?.target == b)
+        #expect(drop?.toward == .end)  // right of b's middle
+        #expect(drop?.anywhere == true)
+        let left = LaidTargets.drop(at: CGPoint(x: 25, y: 200), in: frames, fits: [b], zone: zone)
+        #expect(left?.target == b)
+        #expect(left?.toward == .start)
+    }
+
+    /// A finger on a group is that group, even one that can't take the card (it says so), and
+    /// off the zone there is no drop.
+    @Test func aGroupUnderTheFingerStillWinsAndOffTheZoneIsNothing() {
+        let onA = LaidTargets.drop(at: CGPoint(x: 60, y: 120), in: frames, fits: [b], zone: zone)
+        #expect(onA?.target == a)
+        #expect(onA?.anywhere == false)
+        #expect(LaidTargets.drop(at: CGPoint(x: 280, y: 260), in: frames, fits: [b], zone: zone) == nil)
+    }
+
+    /// Two places (or none) the card fits: only a group near the finger takes it.
+    @Test func aCardThatFitsTwoPlacesNeedsAGroupNearTheFinger() {
+        let far = CGPoint(x: 280, y: 200)
+        #expect(LaidTargets.drop(at: far, in: frames, fits: [a, b], zone: zone) == nil)
+        #expect(LaidTargets.drop(at: far, in: frames, fits: [], zone: zone) == nil)
+        let onB = LaidTargets.drop(at: CGPoint(x: 150, y: 120), in: frames, fits: [a, b], zone: zone)
+        #expect(onB?.target == b)
+        #expect(onB?.anywhere == false)
+    }
+
+    /// The one group it fits, though no longer drawn (a row went away), is no drop.
+    @Test func theOneGroupMustBeOnTheTable() {
+        let gone = HitTarget(seat: 3, group: 0)
+        #expect(LaidTargets.drop(at: CGPoint(x: 280, y: 200), in: frames, fits: [gone], zone: zone) == nil)
+    }
 }

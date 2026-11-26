@@ -136,6 +136,63 @@ struct UndoPill: View {
     }
 }
 
+/// "Lay down first?": a discard while the trays hold a lay-down that would go (JD: "people keep
+/// forgetting to lay down their cards"). Lay down is the big lime button, the safe choice; Discard
+/// anyway is the quiet one under it. A tap on the dimmed table around it leaves the card in hand.
+struct LayDownFirst: View {
+    /// true: lay down, false: discard anyway, nil: neither (the table was tapped).
+    let answer: (Bool?) -> Void
+
+    @Environment(\.dynamicTypeSize) private var type
+
+    var body: some View {
+        ZStack {
+            Palette.ink.opacity(0.45)
+                .ignoresSafeArea()
+                .contentShape(Rectangle())
+                .onTapGesture { answer(nil) }
+                .accessibilityHidden(true)
+            VStack(spacing: 14) {
+                Text("Lay down first?", comment: "Asked when a card is discarded while the trays hold a lay-down")
+                    .font(.system(.title2, design: .rounded, weight: .black))
+                    .foregroundStyle(.white)
+                    .multilineTextAlignment(.center)
+                    .minimumScaleFactor(0.7)
+                    .accessibilityAddTraits(.isHeader)
+                PillButton(
+                    icon: ArtName.iconPawMenu, color: Palette.lime, size: .medium, width: 240,
+                    title: String(localized: "Lay down", comment: "Lay down first?: lay the trays down instead"),
+                    accessibilityLabel: "Lay down") { answer(true) }
+                    .accessibilityIdentifier("ask.layDown")
+                Button { answer(false) } label: {
+                    Text("Discard anyway", comment: "Lay down first?: discard the card without laying down")
+                        .font(.system(.body, design: .rounded, weight: .heavy))
+                        .foregroundStyle(.white)
+                        .underline()
+                        .padding(.horizontal, 16)
+                        .frame(minHeight: 44)
+                }
+                .accessibilityIdentifier("ask.discard")
+            }
+            .padding(.horizontal, 22)
+            .padding(.vertical, 20)
+            .frame(maxWidth: 320)
+            .background(RoundedRectangle(cornerRadius: 26).fill(Palette.night))
+            .overlay(RoundedRectangle(cornerRadius: 26).strokeBorder(Palette.ink, lineWidth: 4))
+            .compositingGroup()
+            .shadow(color: Palette.ink.opacity(0.5), radius: 0, x: 0, y: 4)
+            .padding(.horizontal, 16)
+            .accessibilityElement(children: .contain)
+            .accessibilityIdentifier("ask")
+        }
+        .onAppear {
+            UIAccessibility.post(
+                notification: .screenChanged,
+                argument: String(localized: "Lay down first?", comment: "Asked when a card is discarded while the trays hold a lay-down"))
+        }
+    }
+}
+
 /// The game goes on without this phone: it forfeited every seat, the game started (or ended)
 /// before it sat down. A picture, the reason in words, what to do next, and the way home.
 struct NotPlayingCard: View {

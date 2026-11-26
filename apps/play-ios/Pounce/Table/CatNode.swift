@@ -42,8 +42,13 @@ final class CatNode: FadeGroup {
     private(set) var pose: CatPose = .idle
     private(set) var count: Int?
 
+    /// The seat's own ring color (`setPickled` turns it cucumber green for a while).
+    private let seatRing: UIColor
+    private(set) var isPickled = false
+
     init(cat: Int, ringColor: Color, diameter: CGFloat = 72, textScale: CGFloat = 1) {
         self.cat = cat
+        seatRing = UIColor(ringColor)
         self.diameter = diameter
         self.textScale = textScale
         let k = diameter / 72
@@ -121,14 +126,25 @@ final class CatNode: FadeGroup {
     required init?(coder aDecoder: NSCoder) { fatalError("init(coder:) is not used") }
 
     func setPose(_ pose: CatPose) {
+        let pose = isPickled ? .terrified : pose
         guard pose != self.pose else { return }
         self.pose = pose
         sprite.texture = TableArt.cat(cat, pose)
     }
 
-    func setBadges(bot: Bool, skip: Bool) {
+    /// Pickled (a Cucumber skips this seat, `PickledSeats`): the ring goes cucumber green and the
+    /// cat wears its terrified face, with the skip badge, until the turn played in its place ends.
+    /// Called before `setPresence`, which then keeps the terrified face.
+    func setPickled(_ on: Bool) {
+        guard on != isPickled else { return }
+        isPickled = on
+        ring.color = on ? UIColor(Palette.pickle) : seatRing
+        skipBadge.isHidden = !on
+        if on { setPose(.terrified) }
+    }
+
+    func setBadges(bot: Bool) {
         botBadge.isHidden = !bot
-        skipBadge.isHidden = !skip
     }
 
     /// The phase chip's height: the card count's numeral size, never under 20 pt.
@@ -299,9 +315,6 @@ final class CatNode: FadeGroup {
     }
 
     var skipBadgeSize: CGSize { skipBadge.size }
-
-    /// Hides the skip badge while a `skipped` animation pops its own copy.
-    func hideSkipBadge() { skipBadge.isHidden = true }
 
     /// Back to the seat's pose at rest (after a terror or blink, or when the table is torn
     /// down mid-motion).

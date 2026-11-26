@@ -129,6 +129,8 @@ struct TVTableTests {
         room.game!.turn = 1
         // Scores no other test draws, so nothing is cached for them.
         room.game!.scores = [901, 902, 903, 904]
+        // Nobody pickled: a "Pickled" pill takes a score's place for a turn, as a bad link does.
+        room.game!.pendingSkip = [false, false, false, false]
         let seats = room.seats.count
         let tv = TableLayout(tv: Self.tv, insets: .zero, seats: seats)
         let words = TVSeatWords(.zero, unit: tv.tvUnit)

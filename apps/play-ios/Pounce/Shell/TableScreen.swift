@@ -102,6 +102,12 @@ struct TableScreen: View {
             }
         }
         .animation(.spring(duration: 0.4, bounce: 0.25).paced, value: screen)
+        // The screen stays on while this table's game is played (`KeepAwake`), and sleeps again
+        // once people leave it or the game is over.
+        .onChange(of: KeepAwake.phone(atTable: screen == .table, status: store.room?.status), initial: true) { _, on in
+            IdleTimer.keepAwake(on, for: session.code)
+        }
+        .onDisappear { IdleTimer.keepAwake(false, for: session.code) }
         .animation(.spring(duration: 0.35, bounce: 0.3).paced, value: shownConnection)
         .task(id: connection) {
             if connection == .reconnecting, shownConnection == .good {
@@ -480,6 +486,12 @@ private struct TableStage: View {
                     .transition(.scale(scale: 0.85, anchor: .bottom).combined(with: .opacity))
                     .zIndex(TableLayer.note)
             }
+            if let ask = events.ask, curtainSeat == nil, events.winners == nil {
+                LayDownFirst { layDown in scene?.answerAsk(layDown: layDown) }
+                    .id(ask.serial)
+                    .transition(.opacity)
+                    .zIndex(TableLayer.note)
+            }
             if let offer = events.undo, curtainSeat == nil, events.winners == nil {
                 UndoPill(offer: offer) { scene?.undoDiscard() }
                     .id(offer.serial)
@@ -631,6 +643,7 @@ private struct TableStage: View {
         .animation(.spring(duration: 0.35, bounce: 0.3).paced, value: connectionPill)
         .animation(.spring(duration: 0.3, bounce: 0.35).paced, value: moveNote)
         .animation(.spring(duration: 0.3, bounce: 0.35).paced, value: events.undo)
+        .animation(.easeOut(duration: 0.15).paced, value: events.ask)
         .onChange(of: events.note) { _, note in
             guard let note else { return }
             moveNote = note
@@ -737,6 +750,14 @@ private struct TableStage: View {
             coach.turnOn()
             feedCoach(allowNew: true)
         }
+        // My own lay-down on Cards: the phone goes to Table, as if Table was tapped (and stays
+        // there until Cards is). `TableView.afterLayDown` has the rule.
+        .onChange(of: events.played) { _, played in
+            guard let played, let table = session.model,
+                  let next = TablePick.afterLayDown(played.event, mine: table.mySeats, showing: shown.hasSwitch ? (shown == .cards ? .cards : .table) : nil)
+            else { return }
+            withAnimation(.easeOut(duration: 0.15).paced) { model.tableViews.set(next, code: session.code) }
+        }
         .onChange(of: events.tableTaps) {
             // Tapping away from a peeked hand hides it again.
             guard peeking, case .revealed = pass.state else { return }
@@ -838,11 +859,15 @@ private struct TableStage: View {
         }
         scene.onShownRevealed = { [weak events] seat in events?.shown = seat }
         scene.onTableTap = { [weak events] in events?.tableTaps += 1 }
+        scene.onEvent = { [weak events] event in
+            events?.played = PlayedEvent(serial: (events?.played?.serial ?? 0) + 1, event: event)
+        }
         scene.onNote = { [weak events] note in
             guard let events else { return }
             events.note = MoveNoteShown(note: note, serial: (events.note?.serial ?? 0) + 1)
         }
         scene.onUndo = { [weak events] offer in events?.undo = offer }
+        scene.onAsk = { [weak events] ask in events?.ask = ask }
         scene.onCoach = { [weak events] coach in
             if events?.coach != coach { events?.coach = coach }
         }
@@ -1063,6 +1088,12 @@ private struct TableStage: View {
     }
 }
 
+/// A game event the scene just played, numbered so the same event twice still counts.
+struct PlayedEvent: Equatable {
+    let serial: Int
+    let event: GameEvent
+}
+
 /// A cat tapped in the top bar: its seat on the table as the scene drew it.
 private struct PlayerTap: Equatable {
     let model: TableModel
@@ -1098,6 +1129,8 @@ private final class StageEvents {
     var shown: Seat?
     /// Bumped by a tap on the table itself while this phone can't act.
     var tableTaps = 0
+    /// The last game event the scene played live (set by `TableScene.onEvent`, bumped per event).
+    var played: PlayedEvent?
     /// The scene's view of the face-up hand for the first-game coach.
     var coach: TableCoach?
     /// Whose turn the scene says to show.
@@ -1106,6 +1139,8 @@ private final class StageEvents {
     var note: MoveNoteShown?
     /// A discard waiting on the pile with its Undo.
     var undo: UndoOffer?
+    /// "Lay down first?" is up for this discard (`TableScene.onAsk`).
+    var ask: DiscardAsk?
     /// What the action row offers on Cards.
     var controller = ControllerOffer()
 }

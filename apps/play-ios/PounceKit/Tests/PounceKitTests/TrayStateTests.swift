@@ -160,4 +160,17 @@ private let phase2 = Rules.phases[1]  // set of 3, run of 4
         #expect(trays.isValid(0))
         #expect(trays.layGroups() == [LayGroup(cards: cards)])
     }
+
+    /// A discard asks "Lay down first?" only while the trays hold a lay-down that would go.
+    @Test func aDiscardAsksOnlyWithALayDownReady() {
+        var trays = TrayState(requirements: phase2)
+        #expect(!trays.asksBeforeDiscard)  // nothing staged
+        for c in [card(9, .tabby), card(9, .gray), card(9, .calico)] { trays.add(c, to: 0) }
+        #expect(!trays.asksBeforeDiscard)  // half a lay-down: it can't go, so no question
+        for c in [card(4, .tabby), card(5, .tuxedo), card(6, .gray)] { trays.add(c, to: 1) }
+        #expect(!trays.asksBeforeDiscard)  // a run one short
+        trays.add(card(7, .calico), to: 1)
+        #expect(trays.asksBeforeDiscard)
+        #expect(!TrayState(requirements: []).asksBeforeDiscard)  // already laid down
+    }
 }

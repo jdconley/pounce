@@ -3,8 +3,8 @@ import SpriteKit
 
 /// The fanned hand at the bottom. Face cards exist only for the revealed seat; otherwise the
 /// fan is face-down backs (a multi-seat phone between reveals) or empty. Reconciling is
-/// idempotent: nodes are matched by card id and moved to their layout placement. Dimmed off
-/// turn as one layer (`FadeGroup`), so no card shows through the one on top of it.
+/// idempotent: nodes are matched by card id and moved to their layout placement. Always fully
+/// opaque, on turn or off: a see-through hand was hard to read.
 @MainActor
 final class HandNode: FadeGroup {
     enum Content: Equatable {
@@ -27,8 +27,18 @@ final class HandNode: FadeGroup {
     /// Within-layer z for a lifted card, above every resting card.
     static let liftedZ: CGFloat = 6
 
-    func update(_ content: Content, layout: TableLayout, lifted: CardID?, gap: Int? = nil, dimmed: Bool) {
+    /// Lays the fan out for `content`. A card already drawn at another size (the hand's size
+    /// changed: the Cards/Table switch, a short hand, the trays going away, a turn of the iPad) is
+    /// kept at the size it was drawn and returned with the tween that takes it to the new one, for
+    /// the scene's director: no card pops to a new size in one frame. New cards start at full size.
+    @discardableResult
+    /// `dimmed` (off turn) no longer fades the hand: it stays fully opaque.
+    func update(_ content: Content, layout: TableLayout, lifted: CardID?, gap: Int? = nil, dimmed: Bool) -> [(SKAction, SKNode)] {
         self.content = content
+        // Every node's height as drawn now (an SKSpriteNode's `size` has its scale in it).
+        var drawn: [ObjectIdentifier: CGFloat] = [:]
+        for node in faceNodes.values { drawn[ObjectIdentifier(node)] = node.size.height }
+        for node in backNodes { drawn[ObjectIdentifier(node)] = node.size.height }
         let ordered: [CardNode]
         switch content {
         case .faces(let ids):
@@ -66,17 +76,32 @@ final class HandNode: FadeGroup {
         self.gap = gap.map { min(max($0, 0), ordered.count) }
         let liftedIndex = self.lifted.flatMap { id in ordered.firstIndex { $0.card == id } }
         let placements = placements(layout, lifted: liftedIndex)
+        var resizes: [(SKAction, SKNode)] = []
         for (i, node) in ordered.enumerated() {
             let p = placements[i]
+            // Scale 1 before the size: `size` includes the scale, so a card caught mid-glide or
+            // mid-squash would otherwise keep that scale in its size (a card a little too small).
+            node.setScale(1)  // a cancelled squash or flip never sticks
             node.size = layout.cardSize
             node.position = p.position
             node.zRotation = p.rotation
-            node.setScale(1)  // a cancelled squash or flip never sticks
             node.alpha = 1
+            node.colorBlendFactor = 0  // a cancelled dark blink never sticks
             node.zPosition = i == liftedIndex ? Self.liftedZ : Self.z(p)
+            if let was = drawn[ObjectIdentifier(node)], layout.cardSize.height > 0,
+               abs(was / layout.cardSize.height - 1) > 0.02 {
+                node.setScale(was / layout.cardSize.height)
+                resizes.append((SKAction.scale(to: 1, duration: Self.resizeDuration).eased(.easeOut), node))
+            }
         }
-        alpha = dimmed ? 0.82 : 1  // fade-ok: the hand is a FadeGroup
+        // Never see-through, on or off turn (JD: "for my own hand ... i want the cards to not be
+        // translucent they are hard to see"). Whose turn it is, the turn cue and the rings say.
+        alpha = 1
+        return resizes
     }
+
+    /// How long a hand card takes to grow or shrink to a new hand size.
+    static let resizeDuration: TimeInterval = 0.2
 
     /// Opens the fan at `gap` (or closes it, nil) without snapping: the moves that slide each
     /// card to its new place, for the scene to run through its director.

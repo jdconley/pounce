@@ -35,8 +35,9 @@ enum SeatInfo {
         names(room)[safe: seat] ?? ""
     }
 
-    /// "Mia, 6 cards, phase 3, laid down, asleep" (what the cat's two chips say, in words).
-    static func label(_ view: SeatView?, name: String? = nil, cards: Int?, phase: PhaseMark?) -> String {
+    /// "Mia, 6 cards, phase 3, laid down, asleep, pickled" (what the cat's two chips and its pill
+    /// say, in words). `pickled`: a Cucumber skips this seat (`PickledSeats`).
+    static func label(_ view: SeatView?, name: String? = nil, cards: Int?, phase: PhaseMark?, pickled: Bool = false) -> String {
         var parts = [name ?? self.name(view)]
         if let cards {
             parts.append(String(localized: "\(cards) cards", comment: "VoiceOver: a player's card count"))
@@ -61,6 +62,9 @@ enum SeatInfo {
         }
         // VoiceOver hears "Weak signal" in full; the tag on screen is one word.
         if let link = LinkWords.seat(view?.link) { parts.append(link.level == .weak ? LinkWords.weak() : link.text) }
+        if pickled {
+            parts.append(String(localized: "pickled", comment: "VoiceOver: a Cucumber skips this player's turn"))
+        }
         return parts.joined(separator: ", ")
     }
 }

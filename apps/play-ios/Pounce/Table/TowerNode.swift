@@ -52,6 +52,9 @@ final class TowerNode: SKNode {
     private var faces: [Seat: SKSpriteNode] = [:]
     private var crowns: [Seat: SKSpriteNode] = [:]
     private var cats: [Seat: Int] = [:]
+    /// Each head's ring and its cucumber badge, for a pickled seat (`update`'s `pickled`).
+    private var rings: [Seat: SKSpriteNode] = [:]
+    private var pickles: [Seat: SKSpriteNode] = [:]
     /// The shelf each head is drawn on (`shelfCount` = the top cushion).
     private var shelves: [Seat: Int] = [:]
 
@@ -85,7 +88,9 @@ final class TowerNode: SKNode {
     @available(*, unavailable)
     required init?(coder aDecoder: NSCoder) { fatalError("init(coder:) is not used") }
 
-    func update(model: TableModel, layout: TableLayout) {
+    /// `pickled`: the seats a Cucumber skips (`PickledSeats`): their heads wear a cucumber green
+    /// ring, the terrified face and the cucumber badge, as their cats in the bar do.
+    func update(model: TableModel, layout: TableLayout, pickled: Set<Seat> = []) {
         self.layout = layout
         if builtFor != layout.towerFrame || tabBuiltFor != layout.towerTab { build(layout) }
         let foot = CGPoint(x: layout.towerFrame.midX, y: layout.towerFrame.minY)
@@ -134,7 +139,10 @@ final class TowerNode: SKNode {
                 head.zPosition = CGFloat(j) * 0.1
                 head.setScale(winner ? Self.winnerScale : 1)
                 head.alpha = 1
-                faces[seat]?.texture = TableArt.cat(cat, winner ? .celebrate : .idle)
+                let isPickled = pickled.contains(seat) && !winner
+                faces[seat]?.texture = TableArt.cat(cat, winner ? .celebrate : isPickled ? .terrified : .idle)
+                rings[seat]?.color = UIColor(isPickled ? Palette.pickle : SeatInfo.ringColor(seat))
+                pickles[seat]?.isHidden = !isPickled
                 crowns[seat]?.isHidden = !winner
                 crowns[seat]?.position = crownRest
                 crowns[seat]?.alpha = 1
@@ -482,11 +490,18 @@ final class TowerNode: SKNode {
         crown.position = crownRest
         crown.zPosition = 2
         crown.isHidden = true
+        let pickle = SKSpriteNode(texture: TableArt.image(ArtName.badgeSkip), size: CGSize(width: size * 0.6, height: size * 0.6))
+        pickle.position = CGPoint(x: -size * 0.45, y: size * 0.4)
+        pickle.zPosition = 3
+        pickle.isHidden = true
+        node.addChild(pickle)
         node.addChild(ring)
         node.addChild(face)
         node.addChild(crown)
         faces[seat] = face
         crowns[seat] = crown
+        rings[seat] = ring
+        pickles[seat] = pickle
         cats[seat] = cat
         return node
     }

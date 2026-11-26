@@ -170,6 +170,12 @@ final class LaidZoneNode: SKNode {
         return (target, LaidTargets.side(at: point, of: frame))
     }
 
+    /// `drop(at:)` for a held card that fits `fits`: with no group near the finger and one group
+    /// in `fits`, that group from anywhere on `zone` (parent space; `LaidTargets.drop`).
+    func drop(at point: CGPoint, fits: Set<HitTarget>, zone: CGRect) -> (target: HitTarget, toward: HitSide, anywhere: Bool)? {
+        LaidTargets.drop(at: point, in: aimFrames(), fits: fits, zone: zone)
+    }
+
     /// Every laid group's frame as aimed at, in parent space, worked out once per layout and
     /// scale rather than on every touch move.
     private func aimFrames() -> [(target: HitTarget, frame: CGRect)] {

@@ -40,11 +40,16 @@ enum TVDemo: Equatable {
         }
     }
 
-    /// The table a demo plays: `TVTablePreview`'s, nobody's hand, at `code`.
+    /// The table a demo plays: `TVTablePreview`'s, nobody's hand, at `code`. `-pickled`: a
+    /// Cucumber waits on Cat Tower's third seat (its cat shows "Pickled").
     static func room(tiles: Bool, birdwatch: Bool = false, seats: Int? = nil, code: String) -> RoomView {
         var room = birdwatch ? TVTablePreview.birdwatch(seats: seats ?? 4)
             : tiles ? TVTablePreview.tiles(seats: seats ?? 4) : TVTablePreview.catTower(seats: seats ?? 6)
         room.code = code
+        if CommandLine.arguments.contains("-pickled"), var game = room.game, game.pendingSkip.count > 2 {
+            game.pendingSkip[2] = true
+            room.game = game
+        }
         return room
     }
 

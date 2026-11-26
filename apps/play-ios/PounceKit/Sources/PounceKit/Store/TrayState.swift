@@ -67,6 +67,11 @@ public struct TrayState: Equatable, Sendable {
         !requirements.isEmpty && requirements.indices.allSatisfy(isValid)
     }
 
+    /// JD: "people keep forgetting to lay down their cards." A discard asks "Lay down first?"
+    /// only when the trays hold a lay-down that would go: every tray filled and valid. Trays
+    /// partly filled, or empty, can't be laid down, so the discard goes without a question.
+    public var asksBeforeDiscard: Bool { allValid }
+
     /// The lay-down in phase order. Runs carry their start so the cards land where the tray
     /// shows them.
     public func layGroups() -> [LayGroup] {

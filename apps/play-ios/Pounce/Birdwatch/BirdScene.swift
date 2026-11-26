@@ -118,6 +118,20 @@ final class BirdScene: SKScene {
     var seatNodes: [Seat: BirdSeatNode] = [:]
     var handNodes: [BirdCardID: SKSpriteNode] = [:]
     var trickNodes: [Int: SKSpriteNode] = [:]
+    #if DEBUG
+    /// A hand card that popped to another size between two frames (`CardSizeWatch`, `bird.sizes`).
+    var sizeWatch = CardSizeWatch()
+
+    override func didFinishUpdate() {
+        super.didFinishUpdate()
+        guard !isScreen else { return }
+        var cards: [(card: Int, height: CGFloat, what: String)] = []
+        for (card, node) in handNodes where CardSizeWatch.shows(node, in: self) {
+            cards.append((card, CardSizeWatch.height(node), "hand"))
+        }
+        sizeWatch.frame(cards, context: layout.map { "card \(Int($0.cardSize.height))" } ?? "-")
+    }
+    #endif
     private var glows: [BirdCardID: SKSpriteNode] = [:]
     /// Each strip chip's frame (scene space), for VoiceOver and taps.
     private(set) var stripFrames: [CGRect] = []

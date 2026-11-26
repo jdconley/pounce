@@ -38,6 +38,8 @@ struct TableInputState {
     struct AimKey: Equatable {
         let target: HitTarget
         let toward: HitSide
+        /// Not near the finger: the one group the card fits, from elsewhere on the rug.
+        var anywhere = false
     }
 
     /// A finger that moves further than this is dragging, not tapping.
@@ -197,7 +199,9 @@ extension TableScene {
     }
 
     func inputEnded(_ p: CGPoint) {
-        if input.finger != nil { stepDrag() }  // the last move counts before the drop
+        // Where the finger let go counts as its last move, so the preview is up to date there.
+        if input.dragging { input.finger = p }
+        if input.finger != nil { stepDrag() }
         let state = input
         input = TableInputState()
         if state.dragging {
@@ -205,10 +209,15 @@ extension TableScene {
             print(dragPerf.summary)
             #endif
             let landing = Landing(gap: dragGap, from: state.dragNode.map { hand.convert($0.position, from: layer(.drag)) })
+            if case .hand(let card) = state.source, let node = state.dragNode { released = (card, node.yScale) }
             dragGap = nil
             state.dragNode?.removeFromParent()
+            // The group the preview showed is where the card goes. It was found on the laid zone
+            // as drawn while the card was held (grown 1.1x); the redraw `dragCard = nil` makes
+            // shrinks it back, so asking again after that could find another group or none.
+            let aim = state.aimed ? state.aim : nil
             dragCard = nil
-            drop(state.source, at: p, landing: landing)
+            drop(state.source, at: p, landing: landing, aim: aim)
             if provisionalCard == nil { showHitPreview(nil) }  // no hit went out: close any gap
         } else if hypot(p.x - state.start.x, p.y - state.start.y) <= TableInputState.dragThreshold * 2 {
             tap(state.source, at: p)
@@ -293,6 +302,11 @@ extension TableScene {
         input.follow = DragFollow(duration: Self.liftDuration / Double(max(speed, 0.01)))
         input.follow.move(to: from, jump: false, at: CACurrentMediaTime())
         node.setScale(Self.dragScale)
+        if case .pile = input.source, abs(pileScale - 1) > 0.01 {
+            // Off a pile drawn at its own size (Cards): from that size up to the hand's.
+            node.setScale(Self.dragScale * pileScale)
+            node.run(SKAction.scale(to: Self.dragScale, duration: Self.liftDuration).eased(.easeOut), withKey: "lift")
+        }
         node.zPosition = 0
         layer(.drag).addChild(node)
         input.dragNode = node
@@ -354,8 +368,8 @@ extension TableScene {
     /// or nil away from the laid groups.
     private func aimHit(finger p: CGPoint) -> CGPoint? {
         guard case .hand(let card) = input.source, let layout else { return nil }
-        let drop = laidDrop(at: p)
-        let key = drop.map { TableInputState.AimKey(target: $0.target, toward: $0.toward) }
+        let drop = laidDrop(at: p, card: card)
+        let key = drop.map { TableInputState.AimKey(target: $0.target, toward: $0.toward, anywhere: $0.anywhere) }
         // The preview changes only when the finger reaches another group or end.
         if !input.aimed || key != input.aim {
             input.aimed = true
@@ -370,7 +384,9 @@ extension TableScene {
                 #endif
             }
         }
-        guard let drop, let f = laidZone.shownFrame(of: drop.target) else { return nil }
+        // The one group the card fits, aimed from across the rug: it shows where the card goes,
+        // and the card stays on the finger.
+        guard let drop, !drop.anywhere, let f = laidZone.shownFrame(of: drop.target) else { return nil }
         let h = layout.cardSize.height * Self.liftScale
         return CGPoint(x: p.x, y: min(f.maxY + 10 + h / 2, size.height - h / 2))
     }
@@ -390,14 +406,18 @@ extension TableScene {
         Task { await director.runAll(moves) }
     }
 
-    /// The laid group (and its end) a hand card let go at `p` would hit: nothing where the
-    /// discard pile, a cat or a tray takes the drop first.
-    private func laidDrop(at p: CGPoint) -> (target: HitTarget, toward: HitSide)? {
+    /// The laid group (and its end) hand card `card` let go at `p` would hit: nothing where the
+    /// discard pile, a cat or a tray takes the drop first. A card that fits only one group goes
+    /// there from anywhere above the hand (not the deck), as on the web.
+    private func laidDrop(at p: CGPoint, card: CardID) -> (target: HitTarget, toward: HitSide, anywhere: Bool)? {
         // Just my cards: the groups are on the TV, hit from the shell's list.
         if controllerShown { return nil }
         if discard.hitFrame.insetBy(dx: -12, dy: -12).contains(p) || opponentSeat(at: p) != nil { return nil }
         if !trays.isHidden, trays.tray(at: p) != nil { return nil }
-        return laidZone.drop(at: p)
+        guard let layout else { return nil }
+        let above = CGRect(x: 0, y: layout.traysFrame.minY, width: size.width, height: max(size.height - layout.traysFrame.minY, 0))
+        let rug = deck.hitFrame.contains(p) || isOverHand(p, layout) ? .null : above
+        return laidZone.drop(at: p, fits: heldAims(card)?.targets ?? [], zone: rug)
     }
 
     /// A drop here reorders the hand (the fan and the strip just above it, below the trays).
@@ -414,7 +434,8 @@ extension TableScene {
         var from: CGPoint?
     }
 
-    private func drop(_ source: TableInputState.Source, at p: CGPoint, landing: Landing) {
+    /// `aim`: the laid group the drag's preview showed at `p`, if any.
+    private func drop(_ source: TableInputState.Source, at p: CGPoint, landing: Landing, aim: TableInputState.AimKey?) {
         // One action in flight at a time: game drops are ignored (no nope, nothing sent);
         // only reordering the hand still works.
         if store.actionInFlight {
@@ -427,7 +448,8 @@ extension TableScene {
         }
         switch source {
         case .hand(let card):
-            dropHandCard(card, at: p, landing: landing)
+            dropHandCard(card, at: p, landing: landing, aim: aim)
+            released = nil
         case .tray(let card, let tray):
             dropTrayCard(card, from: tray, at: p, landing: landing)
         case .pile(let pile):
@@ -443,15 +465,15 @@ extension TableScene {
         }
     }
 
-    private func dropHandCard(_ card: CardID, at p: CGPoint, landing: Landing) {
+    private func dropHandCard(_ card: CardID, at p: CGPoint, landing: Landing, aim aimed: TableInputState.AimKey?) {
         if discard.hitFrame.insetBy(dx: -12, dy: -12).contains(p) { return chooseDiscard(card) }
         if let seat = opponentSeat(at: p) { return aim(card, at: seat) }
         if !trays.isHidden, let tray = trays.tray(at: p) {
             if !tryTray(card, tray, at: dropSlot(tray: tray, x: p.x)) { nope(card: card, why: whyNoTray(card, tray)) }
             return
         }
-        if let aim = laidDrop(at: p) {
-            if !tryHit(card, aim.target, toward: aim.toward) { nope(card: card, why: whyNoHit(card, aim.target)) }
+        if let aimed {
+            if !tryHit(card, aimed.target, toward: aimed.toward) { nope(card: card, why: whyNoHit(card, aimed.target)) }
             return
         }
         if let layout, isOverHand(p, layout) {
@@ -683,13 +705,19 @@ extension TableScene {
     /// goes out plain (`TableModel.discardAction`). `undoable` (a tap or a drop, where a slip
     /// ends the turn): the card goes to the pile and waits there with an Undo for a moment
     /// (`DiscardHold`) before the action is sent. Otherwise it is sent at once.
-    @discardableResult func tryDiscard(_ card: CardID, target: Seat?, undoable: Bool = false) -> Bool {
+    /// `asked`: "Lay down first?" was answered "Discard anyway"; otherwise, with a lay-down ready
+    /// in the trays, the discard waits on that question (`askDiscard`).
+    @discardableResult func tryDiscard(_ card: CardID, target: Seat?, undoable: Bool = false, asked: Bool = false) -> Bool {
         guard let seat = actingSeat, let model, model.canPlay(seat) else { return false }
         if Card(id: card) == .cucumber {
             let aims = model.skipTargets(for: seat)
             if !aims.isEmpty {
                 guard let target, aims.contains(target) else { return false }
             }
+        }
+        if !asked, trayState.asksBeforeDiscard {
+            askDiscard(card, target: target)
+            return true
         }
         if undoable {
             holdDiscard(card, target: target, seat: seat)
@@ -698,8 +726,47 @@ extension TableScene {
         guard store.act(seat: seat, model.discardAction(card: card, target: target)) else { return false }
         lastAct = .card(card)
         Haptics.shared.drop()
-        provisionalMove(card: card, to: discard.position)
+        provisionalMove(card: card, to: discard.position, scale: pileScale)
         return true
+    }
+
+    // MARK: lay down first?
+
+    /// JD: "people keep forgetting to lay down their cards." A discard while the trays hold a
+    /// lay-down that would go asks first: "Lay down" (the safe choice) or "Discard anyway". The
+    /// card stays in the hand, picked up, until it's answered; a tap anywhere else lets it be.
+    private func askDiscard(_ card: CardID, target: Seat?) {
+        holdSerial += 1
+        let ask = DiscardAsk(serial: holdSerial, card: card, target: target)
+        discardAsk = ask
+        liftedCard = card
+        Haptics.shared.tick()
+        refresh()
+        onAsk(ask)
+    }
+
+    /// The answer: `layDown` lays the trays down (the card stays in the hand for the discard
+    /// that ends the turn); otherwise the card is discarded as it was going to be, with its Undo.
+    /// Nil: the question went away unanswered.
+    func answerAsk(layDown: Bool?) {
+        guard let ask = discardAsk else { return }
+        dropAsk()
+        switch layDown {
+        case true?:
+            liftedCard = nil
+            layDownTapped()
+        case false?:
+            if !tryDiscard(ask.card, target: ask.target, undoable: true, asked: true) { nope(card: ask.card) }
+        case nil:
+            break
+        }
+    }
+
+    /// Takes the question down (answered, or the table moved on under it).
+    func dropAsk() {
+        guard discardAsk != nil else { return }
+        discardAsk = nil
+        onAsk(nil)
     }
 
     // MARK: discard undo
@@ -712,7 +779,7 @@ extension TableScene {
         discardHold = hold
         liftedCard = nil
         Haptics.shared.drop()
-        provisionalMove(card: card, to: discard.position)
+        provisionalMove(card: card, to: discard.position, scale: pileScale)
         let window = TableText.lingering(DiscardHold.window)
         onUndo(UndoOffer(serial: hold.serial, pile: discard.hitFrame, seconds: window))
         Task { [weak self] in
