@@ -5,6 +5,9 @@ import { createRng } from "../rules/rng";
 
 import { catTower, parseAim } from "./cat-tower";
 
+import type { Action, CatTowerState } from "../rules/engine";
+
+
 describe("catTower module", () => {
   it("declares id and seat bounds", () => {
     expect(catTower.id).toBe("cat-tower");
@@ -97,5 +100,69 @@ describe("cat tower aim", () => {
     expect(catTower.aimAllowed(s, 0, at(2, 0))).toBe(false);
     expect(catTower.aimAllowed(s, 0, at(1, 1))).toBe(false);
     expect(catTower.aimAllowed(s, 0, at(3, 0))).toBe(false);
+  });
+});
+
+describe("cat tower discard log", () => {
+  // Two seats, seat 0 to draw, a 7 face up and the deck's top a 3.
+  const start = (): CatTowerState => ({
+    ...catTower.create(2, seedOf(7)),
+    turn: 0,
+    step: "draw",
+    pendingSkip: [false, false],
+    discard: [6],
+    deck: [2],
+    hands: [[0, 11, 12], [1, 13, 14]],
+  });
+  const play = (s: CatTowerState, seat: number, action: Action): CatTowerState => {
+    const r = catTower.apply(s, seat, action);
+    if (!r.ok) throw new Error(r.error);
+    return r.state;
+  };
+
+  it("notes what each seat took, passed up and threw, as the table saw it", () => {
+    let s = play(start(), 0, { type: "draw", from: "deck" });
+    s = play(s, 0, { type: "discard", card: 11 });
+    s = play(s, 1, { type: "draw", from: "discard" });
+    expect(s.discardLog).toEqual({
+      round: s.round,
+      seats: [
+        [
+          { card: 6, took: false },
+          { card: 11, took: false },
+        ],
+        [{ card: 11, took: true }],
+      ],
+    });
+  });
+
+  it("never reaches a device", () => {
+    let s = play(start(), 0, { type: "draw", from: "deck" });
+    s = play(s, 0, { type: "discard", card: 11 });
+    expect(s.discardLog).toBeDefined();
+    expect(catTower.view(s, [0])).not.toHaveProperty("discardLog");
+    expect(catTower.view(s, [])).not.toHaveProperty("discardLog");
+  });
+
+  it("starts again each round", () => {
+    let s = play(start(), 0, { type: "draw", from: "deck" });
+    expect(s.discardLog?.seats[0]).toHaveLength(1);
+    s = play({ ...s, status: "roundOver" }, 0, { type: "nextRound" });
+    expect(s.discardLog).toBeUndefined();
+  });
+
+  it("botAction keeps back the card the next player is collecting", () => {
+    // Seat 1 took two 7s; seat 0 holds a spare 7 and a spare 2, both worth 5.
+    const s: CatTowerState = {
+      ...start(),
+      step: "play",
+      phase: [0, 0],
+      hands: [[4, 28, 7, 31, 54, 73], [1, 13]],
+      discardLog: { round: 1, seats: [[], [{ card: 6, took: true }, { card: 30, took: true }]] },
+      round: 1,
+    };
+    for (let seed = 1; seed <= 20; seed++) {
+      expect(catTower.botAction(s, 0, createRng(seedOf(seed)))).toEqual({ type: "discard", card: 73 });
+    }
   });
 });

@@ -7,6 +7,7 @@ import {
   newGame,
   type Action,
   type CatTowerState,
+  type DiscardLog,
 } from "../rules/engine";
 import { buildGroup, type Group } from "../rules/groups";
 import { createRng } from "../rules/rng";
@@ -268,6 +269,109 @@ describe("House Cat play step", () => {
     const action = choose(state);
     expect(action.type).toBe("hit");
     expect(accepted(state, action).status).toBe("roundOver");
+  });
+});
+
+/** A round-1 log in which each listed seat did these things with the discard pile, in order. */
+function logOf(bySeat: Record<number, { card: CardId; took: boolean }[]>, seats = 3): DiscardLog {
+  return { round: 1, seats: Array.from({ length: seats }, (_, seat) => bySeat[seat] ?? []) };
+}
+const took = (id: CardId) => ({ card: id, took: true });
+const left = (id: CardId) => ({ card: id, took: false });
+
+/** Every card the bot discards from `state` with `log`, over 40 rng seeds. */
+function discards(state: CatTowerState, log: DiscardLog): Set<CardId> {
+  const out = new Set<CardId>();
+  for (let seed = 1; seed <= 40; seed++) {
+    const action = chooseAction(viewFor(state, [0]), 0, createRng(seedOf(seed)), log);
+    expect(action.type).toBe("discard");
+    out.add((action as { card: CardId }).card);
+  }
+  return out;
+}
+
+describe("House Cat reads the table", () => {
+  // Seat 0 holds pairs of 5s and 8s toward set(3)+set(3), and two spares worth 5 points each.
+  const spares = (a: CardId, b: CardId, over: Partial<CatTowerState> = {}) =>
+    makeState({
+      hands: [[tabby(5), tuxedo(5), tabby(8), tuxedo(8), a, b], [tabby(1)], [tabby(2)]],
+      ...over,
+    });
+
+  test("without a log, two equal spares are a coin flip", () => {
+    expect(discards(spares(calico(7), gray(2)), logOf({}))).toEqual(new Set([calico(7), gray(2)]));
+  });
+
+  test("keeps the 7 when the next player took two 7s from the discard pile", () => {
+    const log = logOf({ 1: [took(tabby(7)), took(tuxedo(7))] });
+    expect(discards(spares(calico(7), gray(2)), log)).toEqual(new Set([gray(2)]));
+  });
+
+  test("keeps a card that fits the run the next player is collecting", () => {
+    // Phase 2 is set(3)+run(4); a 4 and a 5 taken make a 6 fit and leave a 10 out.
+    const log = logOf({ 1: [took(tabby(4)), took(tuxedo(5))] });
+    const state = spares(calico(6), gray(10), { phase: [0, 1, 0] });
+    // The 10 is worth more anyway, so check the other way round too: a 9 is just as safe.
+    expect(discards(state, log)).toEqual(new Set([gray(10)]));
+    expect(discards(spares(calico(6), gray(9), { phase: [0, 1, 0] }), log)).toEqual(new Set([gray(9)]));
+  });
+
+  test("keeps a card of the coat the next player is collecting", () => {
+    // Phase 8 is seven of one coat.
+    const log = logOf({ 1: [took(calico(3)), took(calico(10))] });
+    const state = spares(calico(6), gray(9), { phase: [0, 7, 0] });
+    expect(discards(state, log)).toEqual(new Set([gray(9)]));
+  });
+
+  test("keeps a card the next player could hit once they are laid down", () => {
+    // A 10 is worth more, but it goes straight onto seat 1's set of 10s.
+    const state = spares(gray(10), gray(3), {
+      laid: [null, [setOf([tabby(10), tuxedo(10), calico(10)])], null],
+    });
+    expect(discards(state, logOf({}))).toEqual(new Set([gray(3)]));
+  });
+
+  test("still throws the 7 when every other card is part of its own phase", () => {
+    const log = logOf({ 1: [took(tabby(7)), took(tuxedo(7))] });
+    const state = makeState({
+      hands: [[tabby(5), tuxedo(5), tabby(8), tuxedo(8), calico(7)], [tabby(1)], [tabby(2)]],
+    });
+    expect(discards(state, log)).toEqual(new Set([calico(7)]));
+  });
+
+  test("only the player who draws next matters", () => {
+    // Seat 1 collects 7s, seat 2 collects 9s. Seat 1 draws next, unless it is skipped.
+    const log = logOf({ 1: [took(tabby(7)), took(tuxedo(7))], 2: [took(tabby(9)), took(tuxedo(9))] });
+    expect(discards(spares(calico(7), calico(9)), log)).toEqual(new Set([calico(9)]));
+    const skipped = spares(calico(7), calico(9), { pendingSkip: [false, true, false] });
+    expect(discards(skipped, log)).toEqual(new Set([calico(7)]));
+  });
+
+  test("a value the next player passed up or threw since taking one is the safest to give", () => {
+    const passed = logOf({ 1: [took(tabby(7)), took(tuxedo(7)), left(gray(7))] });
+    expect(discards(spares(calico(7), gray(2)), passed)).toEqual(new Set([calico(7)]));
+    const threw = logOf({ 1: [took(tabby(7)), left(tabby(7))] });
+    expect(discards(spares(calico(7), gray(2)), threw)).toEqual(new Set([calico(7)]));
+    // Taking one again after passing it up counts again.
+    const again = logOf({ 1: [left(gray(7)), took(tabby(7))] });
+    expect(discards(spares(calico(7), gray(2)), again)).toEqual(new Set([gray(2)]));
+  });
+
+  test("a passed-up value is safe for a run, a passed-up coat for a coat phase", () => {
+    const run = logOf({ 1: [took(tabby(4)), took(tuxedo(5)), left(gray(9))] });
+    expect(discards(spares(calico(9), gray(11), { phase: [0, 1, 0] }), run)).toEqual(new Set([calico(9)]));
+    const coat = logOf({ 1: [took(calico(3)), left(gray(4))] });
+    expect(discards(spares(gray(9), tabby(9), { phase: [0, 7, 0] }), coat)).toEqual(new Set([gray(9)]));
+  });
+
+  test("a player who finished every phase wants nothing in particular", () => {
+    const log = logOf({ 1: [took(tabby(7)), took(tuxedo(7))] });
+    expect(discards(spares(calico(7), gray(2), { phase: [0, 10, 0] }), log)).toEqual(new Set([calico(7), gray(2)]));
+  });
+
+  test("a log from an earlier round is ignored", () => {
+    const old = { ...logOf({ 1: [took(tabby(7)), took(tuxedo(7))] }), round: 0 };
+    expect(discards(spares(calico(7), gray(2)), old)).toEqual(new Set([calico(7), gray(2)]));
   });
 });
 
