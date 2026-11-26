@@ -102,6 +102,8 @@ export function ctMoves(o: {
   setHeld: (held: Map<CardId, Pose>) => void;
   setSelected: (c: CardId | null) => void;
   setSkipPick: (c: CardId | null) => void;
+  /** A discard that waits on "Lay down first?": the level is staged in the trays (null closes it). */
+  setLayFirst: (d: { card: CardId; skipTarget?: number } | null) => void;
   quiet?: boolean;
 }) {
   const { store, state, room, seat, myTurn, hand } = o;
@@ -124,8 +126,19 @@ export function ctMoves(o: {
     act({ type: "draw", from });
   };
 
-  const discard = (c: CardId, skipTarget?: number) => {
+  const groups = showTrays && trayCards.length === reqs.length ? layDownGroups(trayCards, phaseIndex) : null;
+
+  /**
+   * Discards `c` (a Cucumber asks whom it skips). With the level made in the trays it asks first,
+   * "Lay down first?", as discarding ends the turn without it; `anyway` is the answer "Discard
+   * anyway". Trays that don't make the level yet don't ask: they keep their cards for next turn.
+   */
+  const discard = (c: CardId, skipTarget?: number, anyway = false) => {
     if (!myTurn || g.step !== "play" || state.pending) return nope();
+    if (!anyway && groups !== null) {
+      o.setLayFirst(skipTarget === undefined ? { card: c } : { card: c, skipTarget });
+      return;
+    }
     if (discardNeedsTarget(c) && skipTarget === undefined && skipCandidates.length > 0) {
       if (skipCandidates.length === 1) skipTarget = skipCandidates[0];
       else {
@@ -158,10 +171,10 @@ export function ctMoves(o: {
     play("pop", 0.4);
   };
 
-  const groups = showTrays && trayCards.length === reqs.length ? layDownGroups(trayCards, phaseIndex) : null;
   const layDown = () => {
     if (!myTurn || g.step !== "play" || groups === null || state.pending) return nope();
     learnTip("ct.lay");
+    o.setLayFirst(null);
     const holdAt = new Map<CardId, Pose>();
     for (const c of trayCards.flat()) {
       const p = o.motion.last(`c${c}`);

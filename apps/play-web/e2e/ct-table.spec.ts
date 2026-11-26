@@ -170,3 +170,207 @@ test("laying down on Cards turns this phone to the Table, and no one else's does
   await view("Cards").click();
   await expect(page.locator(".ctl")).toBeVisible();
 });
+
+/**
+ * Discarding with the level made in the trays asks "Lay down first?": people forget to lay down.
+ * Lay down (the focused choice, so Enter) lays it down; Discard anyway discards; Esc goes back.
+ * Nothing in the trays, or trays that don't make the level yet, discard without asking.
+ */
+test.describe("Lay down first?", () => {
+  // 2s and 5s of three coats each make level 1 (two sets of three); the 10 and the 12 don't fit.
+  const HAND = [1, 25, 49, 4, 28, 52, 9, 11];
+  const label = (id: number) => `${(id % 12) + 1}, ${["tabby", "tuxedo", "calico", "gray"][Math.floor(id / 24)]}`;
+  const two = seats.slice(0, 2);
+  const turn = (over: Partial<CatTowerView> = {}) =>
+    game({ phase: [0, 0], scores: [0, 0], laid: [null, null], handCounts: [8, 10], hands: { 0: HAND }, pendingSkip: [false, false], forfeited: [false, false], dealer: 1, turn: 0, step: "play", ...over });
+  const acts = (sent: { t: string; action?: { type: string } }[]) => sent.flatMap((m) => (m.t === "act" && m.action ? [m.action] : []));
+  const confirm = (page: Page) => page.getByRole("dialog", { name: "Lay down first?" });
+
+  async function seated(page: Page, over: Partial<RoomView> = {}) {
+    const server = await standInServer(page);
+    server.send({ t: "snapshot", protocol: 1, seq: 1, room: { ...room(turn()), seats: two, ...over } });
+    await page.goto("/play/t/BCDFG");
+    await expect(page.locator(".card.mine .card-inner")).toHaveCount(8);
+    return server;
+  }
+  /** Picks a card by key, and waits for the table to have taken it (its keys read the pick next). */
+  async function pick(page: Page, id: number) {
+    const c = page.locator(`.card.mine .card-inner[aria-label="${label(id)}"]`);
+    await c.press("Enter");
+    await expect(c).toHaveAttribute("aria-pressed", "true");
+    await page.evaluate(() => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r))));
+  }
+
+  /** Puts `ids` in tray `i` on the full table: pick a card, then its tray's key. */
+  async function stage(page: Page, i: number, ids: number[]) {
+    for (const id of ids) {
+      await pick(page, id);
+      await page.keyboard.press(String(i + 1));
+      await expect(page.locator(`.tray`).nth(i)).toHaveAttribute("aria-label", new RegExp(`, ${ids.indexOf(id) + 1} of 3`));
+    }
+  }
+
+  test.beforeEach(() => {
+    const name = test.info().project.name;
+    test.skip(name !== "android-chrome" && name !== "laptop-chrome", "one phone and the laptop");
+  });
+
+  test("with the level in the trays, a discard asks; Esc goes back, Discard anyway discards", async ({ page }, info) => {
+    const { sent } = await seated(page);
+    await stage(page, 0, [1, 25, 49]);
+    await stage(page, 1, [4, 28, 52]);
+    await expect(page.locator("#lay")).toHaveText("Lay down");
+    await expect(page.locator("#lay")).toHaveAccessibleName("Lay down");
+    if (SHOTS) await page.screenshot({ path: `${SHOTS}/lay-down-button-${info.project.name}.png` });
+
+    // By tap: the 10, then the pile.
+    await pick(page, 9);
+    await page.locator("#discard").click();
+    await expect(confirm(page)).toBeVisible();
+    await expect(confirm(page).getByRole("button", { name: "Lay down" })).toBeFocused();
+    if (SHOTS) {
+      await page.waitForTimeout(400);
+      await page.screenshot({ path: `${SHOTS}/lay-down-first-${info.project.name}.png` });
+    }
+    await page.keyboard.press("Escape");
+    await expect(confirm(page)).toBeHidden();
+
+    // Back to the turn, the 10 still picked. By key: X asks too.
+    await expect(page.locator(`.card.mine .card-inner[aria-label="${label(9)}"]`)).toHaveAttribute("aria-pressed", "true");
+    await page.keyboard.press("x");
+    await expect(confirm(page)).toBeVisible();
+    await confirm(page).getByRole("button", { name: "Discard anyway" }).click();
+    await expect(confirm(page)).toBeHidden();
+    await expect.poll(() => acts(sent)).toEqual([{ type: "discard", card: 9 }]);
+  });
+
+  test("Lay down lays the level down by Enter, and a drag on the pile asks too", async ({ page }) => {
+    const { sent } = await seated(page);
+    await stage(page, 0, [1, 25, 49]);
+    await stage(page, 1, [4, 28, 52]);
+
+    // Dragged onto the pile: asked. Enter takes Lay down.
+    const card = (await page.locator(`.card.mine .card-inner[aria-label="${label(11)}"]`).boundingBox())!;
+    const pile = (await page.locator("#discard").boundingBox())!;
+    await page.mouse.move(card.x + card.width / 2, card.y + card.height / 2);
+    await page.mouse.down();
+    for (let i = 1; i <= 10; i++) await page.mouse.move(card.x + card.width / 2 + ((pile.x + pile.width / 2 - card.x - card.width / 2) * i) / 10, card.y + card.height / 2 + ((pile.y + pile.height / 2 - card.y - card.height / 2) * i) / 10);
+    await page.mouse.up();
+    await expect(confirm(page)).toBeVisible();
+    await expect(confirm(page).getByRole("button", { name: "Lay down" })).toBeFocused();
+    await page.keyboard.press("Enter");
+    await expect(confirm(page)).toBeHidden();
+    await expect.poll(() => acts(sent).map((a) => a.type)).toEqual(["layDown"]);
+  });
+
+  test("nothing in the trays: a discard goes without asking", async ({ page }) => {
+    const { sent } = await seated(page);
+    await pick(page, 9);
+    await page.locator("#discard").click();
+    await expect.poll(() => acts(sent)).toEqual([{ type: "discard", card: 9 }]);
+    await expect(confirm(page)).toHaveCount(0);
+  });
+
+  test("trays that don't make the level yet keep their cards, and a discard goes without asking", async ({ page }) => {
+    const { sent } = await seated(page);
+    await stage(page, 0, [1, 25]);
+    await pick(page, 9);
+    await page.locator("#discard").click();
+    await expect.poll(() => acts(sent)).toEqual([{ type: "discard", card: 9 }]);
+    await expect(confirm(page)).toHaveCount(0);
+  });
+
+  test("on Cards at a TV table: the Discard button asks, and Lay down lays down", async ({ page }, info) => {
+    test.skip(info.project.name !== "android-chrome", "a phone at a TV table");
+    const { sent } = await seated(page, { screen: true });
+    await expect(page.locator(".ctl")).toBeVisible();
+    // Into the trays by tap: a card, then a part of its tray no card covers.
+    const tapTray = async (i: number) => {
+      const at = await page.locator(".ctl .tray").nth(i).evaluate((tray) => {
+        const r = tray.getBoundingClientRect();
+        for (let y = r.bottom - 4; y > r.top; y -= 6)
+          for (let x = r.right - 4; x > r.left; x -= 6) {
+            const hit = document.elementFromPoint(x, y);
+            if (hit && tray.contains(hit)) return { x, y };
+          }
+        return null;
+      });
+      await page.mouse.click(at!.x, at!.y);
+    };
+    for (const [i, ids] of [[0, [1, 25, 49]], [1, [4, 28, 52]]] as const) {
+      for (const [k, id] of ids.entries()) {
+        await page.waitForTimeout(350);
+        await pick(page, id);
+        await tapTray(i);
+        await expect(page.locator(".ctl .tray").nth(i)).toHaveAttribute("aria-label", new RegExp(`, ${k + 1} of 3`));
+      }
+    }
+    await expect(page.locator("#lay")).toHaveText("Lay down");
+    await pick(page, 9);
+    await page.locator("#discard-btn").click();
+    await expect(confirm(page)).toBeVisible();
+    if (SHOTS) {
+      await page.waitForTimeout(400);
+      await page.screenshot({ path: `${SHOTS}/lay-down-first-cards-${info.project.name}.png` });
+    }
+    await confirm(page).getByRole("button", { name: "Lay down" }).click();
+    await expect.poll(() => acts(sent).map((a) => a.type)).toEqual(["layDown"]);
+  });
+});
+
+/** The Lay down button says so, and fits: the smallest phone, the largest text, a TV table's phone. */
+test.describe("the Lay down button", () => {
+  const HAND = [1, 25, 49, 4, 28, 52, 9, 11];
+  const label = (id: number) => `${(id % 12) + 1}, ${["tabby", "tuxedo", "calico", "gray"][Math.floor(id / 24)]}`;
+  const sizes = [
+    { name: "se", viewport: { width: 375, height: 667 }, text: 16 },
+    { name: "se-largest-text", viewport: { width: 375, height: 667 }, text: 26 },
+  ];
+  test.beforeEach(() => {
+    test.skip(test.info().project.name !== "android-chrome", "phone sizes, set here");
+  });
+  for (const size of sizes) {
+    for (const tv of [false, true]) {
+      test(`${size.name}${tv ? " on Cards" : ""}: it reads "Lay down" and fits`, async ({ page }) => {
+        await page.setViewportSize(size.viewport);
+        await page.addInitScript((px) => addEventListener("DOMContentLoaded", () => (document.documentElement.style.fontSize = `${px}px`)), size.text);
+        const server = await standInServer(page);
+        const g = game({ phase: [0, 0], scores: [0, 0], laid: [null, null], handCounts: [8, 10], hands: { 0: HAND }, pendingSkip: [false, false], forfeited: [false, false], dealer: 1, turn: 0, step: "play" });
+        server.send({ t: "snapshot", protocol: 1, seq: 1, room: { ...room(g), seats: seats.slice(0, 2), ...(tv ? { screen: true } : {}) } });
+        await page.goto("/play/t/BCDFG");
+        await expect(page.locator(".card.mine .card-inner")).toHaveCount(8);
+        const trays = page.locator(tv ? ".ctl .tray" : ".tray");
+        for (const [i, ids] of [[0, [1, 25, 49]], [1, [4, 28, 52]]] as const) {
+          for (const [k, id] of ids.entries()) {
+            await page.waitForTimeout(350);
+            const c = page.locator(`.card.mine .card-inner[aria-label="${label(id)}"]`);
+            await c.press("Enter");
+            await expect(c).toHaveAttribute("aria-pressed", "true");
+            await page.evaluate(() => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r))));
+            if (tv) {
+              const at = await trays.nth(i).evaluate((tray) => {
+                const r = tray.getBoundingClientRect();
+                for (let y = r.bottom - 4; y > r.top; y -= 6)
+                  for (let x = r.right - 4; x > r.left; x -= 6) {
+                    const hit = document.elementFromPoint(x, y);
+                    if (hit && tray.contains(hit)) return { x, y };
+                  }
+                return null;
+              });
+              await page.mouse.click(at!.x, at!.y);
+            } else await page.keyboard.press(String(i + 1));
+            await expect(trays.nth(i)).toHaveAttribute("aria-label", new RegExp(`, ${k + 1} of 3`));
+          }
+        }
+        const lay = page.locator("#lay");
+        await expect(lay).toHaveText("Lay down");
+        await expect(lay).toHaveAccessibleName("Lay down");
+        await expect(lay).toBeInViewport({ ratio: 1 });
+        // One line, nothing cut: the words fit the button.
+        expect(await lay.evaluate((b) => b.scrollWidth <= b.clientWidth + 1 && b.getBoundingClientRect().height < 80)).toBe(true);
+        await page.waitForTimeout(400);
+        if (SHOTS) await page.screenshot({ path: `${SHOTS}/lay-down-button-${size.name}${tv ? "-cards" : ""}.png` });
+      });
+    }
+  }
+});

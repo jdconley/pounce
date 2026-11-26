@@ -634,6 +634,13 @@
   animation: fade-in 200ms ease-out both;
 }
 
+/* A sheet over the table ("Lay down first?"): over every card, a lifted one too (z 999). */
+.ct-table > .scrim {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+}
+
 .skip-pick p {
   margin: 0;
   font-size: 1.6rem;

@@ -25,7 +25,7 @@ import { inside, press, useLatest, type Point } from "./drag";
 import { CardFace, cardLabel } from "./faces";
 import { Motion, MOVE, transformOf, wiggle, type Pose } from "./motion";
 import { seatName, SeatAvatar } from "./seat";
-import { Curtain } from "./shared";
+import { Curtain, LayDownFirst } from "./shared";
 
 import type { RoomState, RoomStore } from "../store/room";
 
@@ -90,6 +90,8 @@ export function CatTowerTable(props: { store: RoomStore; state: RoomState; sound
   const [hover, setHover] = useState<CtHover>(null);
   const [held, setHeld] = useState<Map<CardId, Pose>>(new Map());
   const [skipPick, setSkipPick] = useState<CardId | null>(null);
+  const [layFirst, setLayFirst] = useState<{ card: CardId; skipTarget?: number } | null>(null);
+  const layFirstOpen = useLatest(layFirst !== null);
   const [focusIndex, setFocusIndex] = useState(0);
 
   const opponents = room.seats.flatMap((s, i) => ((s.kind === "human" || s.kind === "bot") && i !== seat ? [i] : []));
@@ -173,6 +175,7 @@ export function CatTowerTable(props: { store: RoomStore; state: RoomState; sound
     setHeld,
     setSelected,
     setSkipPick,
+    setLayFirst,
   });
   const groupsReady = groups !== null;
 
@@ -291,7 +294,8 @@ export function CatTowerTable(props: { store: RoomStore; state: RoomState; sound
   // The keyboard: arrows pick, Enter lifts, D draws, T takes the discard, X discards, 1 and 2 fill trays, L lays down, H hits.
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (e.target instanceof HTMLInputElement || e.metaKey || e.ctrlKey || e.altKey) return;
+      // "Lay down first?" is open, or a sheet took the key: its own keys (Enter, Esc) answer it.
+      if (layFirstOpen.current || e.defaultPrevented || e.target instanceof HTMLInputElement || e.metaKey || e.ctrlKey || e.altKey) return;
       const k = e.key.toLowerCase();
       const focusCard = (i: number) => {
         const c = ordered[Math.min(Math.max(i, 0), ordered.length - 1)];
@@ -413,7 +417,7 @@ export function CatTowerTable(props: { store: RoomStore; state: RoomState; sound
                 <SeatAvatar seat={s} info={room.seats[s]} size={72} turn={false} onClick={() => {
                   const c = skipPick;
                   setSkipPick(null);
-                  discard(c, s);
+                  discard(c, s, true);
                 }} />
               ))}
             </div>
@@ -423,12 +427,23 @@ export function CatTowerTable(props: { store: RoomStore; state: RoomState; sound
           </div>
         ) : null}
 
+        {layFirst !== null ? (
+          <LayDownFirst
+            onLay={layDown}
+            onDiscard={() => {
+              setLayFirst(null);
+              discard(layFirst.card, layFirst.skipTarget, true);
+            }}
+            onClose={() => setLayFirst(null)}
+          />
+        ) : null}
+
         {curtainSeat !== null ? <Curtain name={seatName(room.seats[curtainSeat])} cat={room.seats[curtainSeat]?.person?.cat ?? 0} onReveal={() => reveal(curtainSeat)} /> : null}
 
         <Tip id="ct.draw" anchor="deck" text="Take a card from the deck or the discard pile." show={myTurn && g.step === "draw" && !state.pending} />
         <Tip id="ct.trays" anchor="tray-0" text={`This round: ${phaseWords(phaseIndex)}. Drag cards into the trays.`} show={myTurn && g.step === "play" && showTrays && tipLearned("ct.draw")} />
         <Tip id="ct.discard" anchor="discard" text="Drag one card to the discard pile." show={myTurn && g.step === "play" && tipLearned("ct.trays") && !groupsReady} />
-        <Tip id="ct.lay" anchor="lay" text="Tap the paw to lay down your level." show={groupsReady && myTurn} />
+        <Tip id="ct.lay" anchor="lay" text="Your level is ready. Tap Lay down." show={groupsReady && myTurn && layFirst === null} />
         <Tip id="ct.keys" anchor="hand" text="Keys: D draws, X discards, arrows pick a card." show={fineMouse && myTurn && tipLearned("ct.discard") && !state.pending} />
         <Tip id="ct.hit" anchor="discard" text="Drop cards on any laid group they fit." show={myTurn && g.step === "play" && laidMine && tipLearned("ct.discard")} />
       </CtTable>
