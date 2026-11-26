@@ -87,6 +87,14 @@ extension BirdScene {
                     frame: first.union(last), hint: String(localized: "Opens the score sheet", comment: "Birdwatch VoiceOver hint"),
                     traits: .button) { [weak self] in self?.onScores() }
         }
+        if let seat = shownSeat, !isScreen, model.partnerMark(for: seat, revealed: shownSeat) {
+            let w: CGFloat = 220
+            let frame = layout.mode == .handOnly
+                ? CGRect(x: layout.hand.midX - w / 2, y: layout.hand.maxY, width: w, height: 30)
+                : CGRect(x: layout.sill.midX - w / 2, y: layout.sill.maxY - 34, width: w, height: 30)
+            element("bird.partner.mark", String(localized: "You're the partner", comment: "Birdwatch: over the partner's own hand (five players)"),
+                    frame: frame)
+        }
         if let seat = shownSeat {
             let playable = model.playable(seat)
             let myPlay = model.view.phase == .play && model.currentSeat == seat

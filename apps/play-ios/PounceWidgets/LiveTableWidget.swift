@@ -147,7 +147,7 @@ struct LiveSeatView: View {
                     .frame(width: cat * 0.36, height: cat * 0.36)
                     .offset(x: -cat * 0.62, y: 0)
             }
-            OutlinedText(String(seat.phase), size: cat * 0.3, fill: .white, width: 2)
+            OutlinedText(seat.chip, size: cat * (seat.chip.count > 2 ? 0.22 : 0.3), fill: .white, width: 2)
                 .fixedSize()
                 .frame(minWidth: cat * 0.38, minHeight: cat * 0.38)
                 .background(Circle().fill(color).overlay(Circle().strokeBorder(Palette.ink, lineWidth: 2)))

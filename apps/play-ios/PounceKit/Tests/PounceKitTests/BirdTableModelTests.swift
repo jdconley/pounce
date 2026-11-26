@@ -232,3 +232,16 @@ extension BirdTableModel.Panel {
         if let first = table.firstTableMessages { #expect(first.count <= 1) }
     }
 }
+
+@Suite struct BirdLiveTableTests {
+    @Test func aBirdwatchTableShowsSideScoresOnTheChips() {
+        let seats = [
+            LiveTableState.Seat(cat: 1, phase: 1, name: "Mia", bot: false, me: true, progress: 145),
+            LiveTableState.Seat(cat: 3, phase: 1, name: nil, bot: true, me: false, progress: -70),
+        ]
+        let bird = LiveTableLook(LiveTableState(table: "Window Seat", seats: seats, turn: 1, mine: false, streak: nil, progressKind: "score"))
+        #expect(bird.seats.map(\.chip) == ["145", "-70"])
+        let tower = LiveTableLook(LiveTableState(table: "Cats", seats: seats, turn: 1, mine: false, streak: nil))
+        #expect(tower.seats.map(\.chip) == ["1", "1"])
+    }
+}

@@ -100,7 +100,9 @@ extension TVServices {
             },
             link: { TVDemoLink() },
             socket: { code in
-                TVDemoSocket(room: TVDemo.room(tiles: TVDemoTables.isTiles(code), code: code), lobby: true)
+                TVDemoSocket(
+                    room: TVDemo.room(tiles: TVDemoTables.isTiles(code), birdwatch: TVDemoTables.isBirdwatch(code), code: code),
+                    lobby: true)
             },
             keep: MemoryScreenKeep())
     }
@@ -132,10 +134,16 @@ actor TVDemoTables {
     func make(_ game: String) -> String {
         made += 1
         let letters = Array("BCDFGHJKLMNPQRSTVWXZ")
-        return (game == GameCatalog.tiles.id ? "TILE" : "CATT") + String(letters[made % letters.count])
+        let prefix = switch game {
+        case GameCatalog.tiles.id: "TILE"
+        case GameCatalog.birdwatch.id: "BIRD"
+        default: "CATT"
+        }
+        return prefix + String(letters[made % letters.count])
     }
 
     nonisolated static func isTiles(_ code: String) -> Bool { code.hasPrefix("TILE") }
+    nonisolated static func isBirdwatch(_ code: String) -> Bool { code.hasPrefix("BIRD") }
 }
 
 /// Home's link, which no phone scans.
@@ -187,6 +195,7 @@ actor TVDemoSocket: RoomSocketing {
         lobby.status = .lobby
         lobby.game = nil
         lobby.tiles = nil
+        lobby.birdwatch = nil
         lobby.seats = room.seats.map { _ in SeatView(kind: .open) }
         return lobby
     }

@@ -165,3 +165,35 @@
 - [ ] **Step 1:** Run each live test against `DEV_SERVER_PORT=8791 DEV_SERVER_GAMES=tiles,birdwatch DEV_SERVER_SPEED=10`; all reach the game over screen.
 - [ ] **Step 2:** `swift scripts/main-thread-lint.swift`, PounceKit tests, iOS build-for-testing, tvOS build, TV unit tests.
 - [ ] **Step 3:** PR "Birdwatch on iPhone, iPad and the TV: bid, call trump, take tricks", screenshots, notes for the web session in the shared notes folder. Clean up simulators and build output.
+
+---
+
+## As built (2026-11-26)
+
+Every task above is done; these are the places the build moved from the plan, and why.
+
+- **The sill is a wide band along the window's bottom**, with every cat on an arc over the window's top half.
+  The first layout (cats around a small sill in the middle) left the SE a sill too short for the bid and
+  trump panels. The trick keeps under the bid chip and the trump badge.
+- **Hands over 40% overlap go to two rows** (`BirdLayout.rows`): a 17-card hand on an SE shows 22 pt or more
+  of every card, numeral and toy.
+- **The trump panel** is one row of four when the sill is wide enough, else two by two.
+- **The partner sheet opens itself** when the phase panel turns to the call; a pill reopens it.
+- **The summary between hands reads the room** (`history.last` while the phase is `between`), not the event,
+  so a reconnect or a cold open shows it too.
+- **A seat a House Cat took over keeps its person's name** (`SeatNames`), tagged "(left)".
+- **Lobby House Cat shortcuts** (first table, practice) fill up to the game's minimum: three House Cats for
+  Birdwatch, one for the others, as before.
+- **The dev server deals Birdwatch by default** (`scripts/dev-server.sh`), so `scripts/ui-tests.sh` runs
+  `BirdwatchLiveTests`.
+- **SpriteKit `size` includes the node's scale**: every resize sets the scale back to 1 first, or a sign or
+  card caught mid-pop grew on the next redraw.
+- **`TVModelTests.theTableItsPhasesAndGameOver`** accepted only `.table` right after the room went over; a
+  Cat Tower scene with no view cheers in no time, so with other suites drawing in parallel it could already be
+  `.over`. It now accepts either; the rest of the test is unchanged.
+- **Coach marks are UI tips** (`UITip.bird*`, `TipScreen.birdwatch`), one at a time, per person, learned by
+  bidding and by playing a card (ruling 12).
+
+Tests: PounceKit (fixtures, model, layout, store, lobby), PounceTV (`BirdSceneTVTests`: no hand or partner mark
+on a TV, the TV layout clears every cat), UI demo tests (`BirdwatchTests`), and live games against a local
+server for 4 (Official), 5 (Tucker) and 6 (Friesen) players (`BirdwatchLiveTests`).
