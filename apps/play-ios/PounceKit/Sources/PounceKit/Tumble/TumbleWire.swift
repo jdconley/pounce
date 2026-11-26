@@ -205,6 +205,28 @@ public enum TumbleMessage: Equatable, Sendable {
     }
 }
 
+/// Toy Tumble's actions in the room's `act` envelope (the server plan's Task 6): `{k:"leave"}`
+/// leaves the game for good (its `forfeitAction`), and the host's `{k:"playWithout"}` seats a
+/// missing player as Away after 20 seconds of waiting.
+public enum TumbleAction: String, Codable, Equatable, Sendable {
+    case leave, playWithout
+
+    private enum Keys: String, CodingKey { case k }
+
+    public func encode(to encoder: any Encoder) throws {
+        var c = encoder.container(keyedBy: Keys.self)
+        try c.encode(rawValue, forKey: .k)
+    }
+
+    public init(from decoder: any Decoder) throws {
+        let c = try decoder.container(keyedBy: Keys.self)
+        guard let a = TumbleAction(rawValue: try c.decode(String.self, forKey: .k)) else {
+            throw DecodingError.dataCorruptedError(forKey: .k, in: c, debugDescription: "unknown tumble action")
+        }
+        self = a
+    }
+}
+
 // MARK: - Room state: the snapshot's `tumble` field
 
 /// The House Cats' level (spec §6.9), the room's `cats` option.

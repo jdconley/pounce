@@ -122,6 +122,11 @@ import Testing
         #expect(!t.inRound(2))
     }
 
+    @Test func leaveAndPlayWithoutGoInTheActEnvelope() throws {
+        #expect(try jsonEqual(try Codec.encode(.actTumble(seat: 1, action: .leave)), #"{"t":"act","seat":1,"action":{"k":"leave"}}"#))
+        #expect(try jsonEqual(try Codec.encode(.actTumble(seat: 0, action: .playWithout)), #"{"t":"act","seat":0,"action":{"k":"playWithout"}}"#))
+    }
+
     @Test func theLobbysOptionsCarryTheCats() throws {
         #expect(try jsonEqual(try Codec.encode(.setOptions(RoomOptions(cats: .quick))), #"{"t":"setOptions","options":{"cats":"quick"}}"#))
         let o = try JSONDecoder().decode(RoomOptions.self, from: Data(#"{"cats":"lazy"}"#.utf8))

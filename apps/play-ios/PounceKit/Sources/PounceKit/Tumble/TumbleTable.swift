@@ -25,6 +25,9 @@ import Foundation
 
     public var r: Int? { view?.r }
 
+    /// The device's wall clock in ms, the clock every Toy Tumble time here is on.
+    public nonisolated static func now() -> Double { Date().timeIntervalSince1970 * 1000 }
+
     /// The seats at the table, in order.
     public var seatCount: Int { view?.seats ?? room?.seats.count ?? 0 }
 
@@ -101,6 +104,12 @@ import Foundation
         } else if let r = view?.r, isPlaying, !screen {
             send(.tumble(r: r, ev: []))
         }
+    }
+
+    /// A new connection's first snapshot: a box still waiting for its sync asks for it again.
+    public func reconnected(now: Double) {
+        guard !backgrounded, let local, local.awaitingSync else { return }
+        local.resume(now)
     }
 
     /// The box a seat shows: its own device's, or the replayed copy.

@@ -290,6 +290,8 @@ public enum ClientMessage: Encodable, Equatable, Sendable {
     case actTiles(seat: Seat, action: TilesAction, id: String? = nil)
     /// A Birdwatch move: the same envelope around a `BirdAction`.
     case actBirdwatch(seat: Seat, action: BirdAction, id: String? = nil)
+    /// Toy Tumble's few room actions (leave the game, the host's Play without), in the `act` envelope.
+    case actTumble(seat: Seat, action: TumbleAction)
     /// The host sets the game's options in the lobby (Birdwatch's rule set).
     case setOptions(RoomOptions)
     /// The host swaps two seats in the lobby (Birdwatch's teams follow seat order).
@@ -353,6 +355,10 @@ public enum ClientMessage: Encodable, Equatable, Sendable {
             try c.encode(seat, forKey: .seat)
             try c.encode(action, forKey: .action)
             try c.encodeIfPresent(id, forKey: .id)
+        case .actTumble(let seat, let action):
+            try c.encode("act", forKey: .t)
+            try c.encode(seat, forKey: .seat)
+            try c.encode(action, forKey: .action)
         case .setOptions(let options):
             try c.encode("setOptions", forKey: .t)
             try c.encode(options, forKey: .options)
