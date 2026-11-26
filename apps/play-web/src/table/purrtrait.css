@@ -111,10 +111,11 @@
   max-width: 94%;
   margin: 0;
   color: var(--yellow);
-  font: 900 calc(var(--u) * 132) / 1 var(--round);
+  /* As big as the longest word allows across the easel: a word never breaks in the middle. */
+  font: 900 calc(var(--u) * min(132, 880 / var(--len, 8))) / 1.02 var(--round);
   text-align: center;
   text-transform: uppercase;
-  overflow-wrap: anywhere;
+  text-wrap: balance;
   animation: purr-pop 520ms var(--ease-spring) 80ms both;
 }
 
@@ -201,6 +202,20 @@
   font-size: calc(var(--u) * 38);
 }
 
+/* A long name takes two lines, a little smaller, rather than losing its end. */
+.tv .purr-tv-name.long {
+  display: -webkit-box;
+  font-size: calc(var(--u) * 34);
+  line-height: 1.05;
+  white-space: normal;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+.tv .purr-tv-players.many .purr-tv-name.long {
+  font-size: calc(var(--u) * 30);
+}
+
 .tv .purr-tv-score {
   min-width: calc(var(--u) * 60);
   font: 900 calc(var(--u) * 52) / 1 var(--round);
@@ -236,6 +251,9 @@
 
 .tv .purr-tv-drawer .name-tag {
   max-width: calc(var(--u) * 460);
+  white-space: normal;
+  text-align: center;
+  text-wrap: balance;
   margin-top: calc(var(--u) * -24);
   padding: calc(var(--u) * 4) calc(var(--u) * 26) calc(var(--u) * 6);
   border-width: calc(var(--u) * 5);
@@ -284,9 +302,24 @@
   opacity: 0.9;
 }
 
-/* The lobby's typed code, eight letters with a space: a little smaller so it fits under the QR. */
+/* The lobby's typed code: the room code and two letters, with a space between. */
 .tv .tv-code.purr-code {
   letter-spacing: 0.08em;
+}
+
+.tv .tv-lobby-rules {
+  white-space: nowrap;
+}
+
+/* Ten seats on the TV's rug: two rows of five, smaller cats. */
+.tv .packed .tv-seat {
+  --seat: calc(var(--u) * 158);
+}
+
+.tv .packed .tv-seat .name-tag {
+  max-width: calc(var(--seat) * 1.05);
+  padding-inline: calc(var(--u) * 12);
+  font-size: calc(var(--u) * 28);
 }
 
 @keyframes purr-reveal-in {
@@ -407,10 +440,10 @@
 
 .purr-cards {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(min(100%, 240px), 1fr));
-  gap: 14px;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 280px), 1fr));
+  gap: 16px;
   width: 100%;
-  max-width: 640px;
+  max-width: 860px;
 }
 
 .purr-card {
@@ -452,11 +485,22 @@
   letter-spacing: 0.06em;
 }
 
+/* Big enough to read at arm's length, never broken inside a word. */
 .purr-card-word {
   margin: auto 0;
-  font: 900 2.2rem / 1.05 var(--round);
-  overflow-wrap: anywhere;
+  font: 900 min(2.4rem, 10vw) / 1.05 var(--round);
   text-align: center;
+  text-wrap: balance;
+}
+
+@media (min-width: 700px) {
+  .purr-card {
+    min-height: 220px;
+  }
+
+  .purr-card-word {
+    font-size: min(3.4rem, 6vw);
+  }
 }
 
 .purr-card-points {
@@ -481,13 +525,13 @@
   padding-right: 52px;
 }
 
+/* The word never loses letters: as big as the width allows, and two lines for a long one. */
 .purr-word {
   min-width: 0;
-  overflow: hidden;
-  font: 900 clamp(1.4rem, 7vw, 2rem) / 1.1 var(--round);
-  text-overflow: ellipsis;
+  font: 900 min(2rem, 8vw) / 1.05 var(--round);
   text-transform: uppercase;
-  white-space: nowrap;
+  overflow-wrap: anywhere;
+  text-wrap: balance;
 }
 
 .purr-body {
@@ -603,9 +647,18 @@
   background: var(--yellow);
 }
 
+/* Undo and Clear share the widths' row; with big text they wrap onto a row of their own. */
 .purr-row .btn {
   flex: 1 1 0;
   min-width: max-content;
+  padding-inline: 12px;
+}
+
+@media (max-width: 360px) {
+  .purr-width {
+    width: 34px;
+    height: 34px;
+  }
 }
 
 .purr-actions {
@@ -616,6 +669,8 @@
 
 .purr-actions .btn {
   min-width: 0;
+  white-space: nowrap;
+  font-size: min(1.35rem, 6vw);
 }
 
 /* Easel full: over the easel, with Clear. */

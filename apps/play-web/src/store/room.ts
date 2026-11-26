@@ -397,8 +397,16 @@ export class RoomStore {
     this.socket.on((e) => this.onSocket(e));
   }
 
+  /**
+   * The current turn's ink as it came (an `inkSync`, then the `ink` after it), so a screen that
+   * mounts after it arrived (a TV that reloaded: its snapshot and sync land before the easel is
+   * drawn) still gets it. Memory only, dropped when the turn changes.
+   */
+  private inkLog: InkMessage[] = [];
+
   subscribe(listener: RoomListener): () => void {
     this.listeners.add(listener);
+    if (listener.ink) for (const m of this.inkLog) listener.ink(m);
     return () => this.listeners.delete(listener);
   }
 
@@ -526,7 +534,10 @@ export class RoomStore {
   private onMessage(m: ServerMessage): void {
     const any = m as unknown as { t: string };
     if (any.t === "ink" || any.t === "inkSync" || any.t === "inkResend") {
-      for (const l of [...this.listeners]) l.ink?.(any as InkMessage);
+      const ink = any as InkMessage;
+      if (ink.t === "inkSync" || this.inkLog[0]?.turn !== ink.turn) this.inkLog = [ink];
+      else this.inkLog.push(ink);
+      for (const l of [...this.listeners]) l.ink?.(ink);
       return;
     }
     if (m.t === "error" && (m.code as string) === "removed") {
@@ -585,6 +596,8 @@ export class RoomStore {
   }
 
   private onSnapshot(seq: number, room: RoomView): void {
+    const turn = (room as PurrRoom).purrtrait?.turn;
+    if (this.inkLog.length > 0 && this.inkLog[0]!.turn !== turn) this.inkLog = [];
     // The move in flight: applied (its id is in acks), or to be sent again on this connection.
     const pending = this.state.pending;
     let stillPending = pending;

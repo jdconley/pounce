@@ -225,6 +225,23 @@ describe("the store at a Purrtrait table", () => {
     expect(purrOf(store.state.room)?.turn).toBe("1:1");
   });
 
+  test("a screen that mounts after the sync still gets the turn's ink; a new turn drops it", async () => {
+    const { sockets, store } = setup();
+    store.start();
+    await flush();
+    sockets[0]!.open();
+    sockets[0]!.receive({ t: "snapshot", protocol: 1, seq: 1, room: purrRoom(purrView()) });
+    sockets[0]!.receive({ t: "inkSync", turn: "1:1", ops: [["s", 0, 0, 0, 1, 1]] });
+    sockets[0]!.receive({ t: "ink", seat: 1, turn: "1:1", ops: [["s", 1, 0, 0, 5, 5]] });
+    const late: InkMessage[] = [];
+    store.subscribe({ ink: (m) => late.push(m) });
+    expect(late.map((m) => m.t)).toEqual(["inkSync", "ink"]);
+    sockets[0]!.receive({ t: "snapshot", protocol: 1, seq: 2, room: purrRoom(purrView({ turn: "1:2", drawer: 2 })) });
+    const later: InkMessage[] = [];
+    store.subscribe({ ink: (m) => later.push(m) });
+    expect(later).toEqual([]);
+  });
+
   test("sendInk sends the drawer's ops for its seat and turn", async () => {
     const { sockets, store } = setup();
     store.start();

@@ -474,8 +474,11 @@
 /* A game only a TV starts (Purrtrait): where Play would be, a label. */
 .poster-tv {
   display: inline-flex;
+  flex: 1 1 auto;
   align-items: center;
+  justify-content: center;
   gap: 6px;
+  max-width: 100%;
   margin-left: auto;
   padding: 5px 12px 5px 8px;
   border: 3px solid var(--ink);
@@ -483,7 +486,18 @@
   background: var(--yellow);
   color: var(--ink);
   font: 900 0.9rem/1.1 var(--round);
-  white-space: nowrap;
+  text-align: center;
+}
+
+.poster-tv svg {
+  flex: none;
+}
+
+/* Narrow posters: the label takes the poster's foot to itself. */
+.poster-grid.compact .poster-tv,
+.poster-tv:only-child {
+  flex-basis: 100%;
+  font-size: 0.8rem;
 }
 
 .home-section {

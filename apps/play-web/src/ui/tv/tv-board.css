@@ -43,6 +43,31 @@
   font-size: calc(var(--u) * 64);
 }
 
+/* Five posters (four games and Tonight's board): three rows of two, each shorter. */
+.tv-games.grid.five {
+  gap: calc(var(--u) * 30) calc(var(--u) * 36);
+}
+
+.tv-games.grid.five .tv-poster {
+  height: calc(var(--u) * 316);
+  grid-template-rows: 52% 1fr;
+}
+
+.tv-games.grid.five .tv-poster-body {
+  gap: calc(var(--u) * 8);
+  padding: calc(var(--u) * 10) calc(var(--u) * 24);
+}
+
+.tv-games.grid.five .tv-poster-title {
+  font-size: calc(var(--u) * 50);
+  white-space: nowrap;
+}
+
+.tv-games.grid.five .tv-players {
+  padding: calc(var(--u) * 4) calc(var(--u) * 18);
+  font-size: calc(var(--u) * 28);
+}
+
 .tv-poster.board {
   background: linear-gradient(180deg, #ff7cc0, #ff2e9a 55%, #d0137a);
 }

@@ -97,6 +97,8 @@ function DrawScreen(props: Props) {
   const tool = useRef({ colour, width });
   tool.current = { colour, width };
   const [canUndo, setCanUndo] = useState(false);
+  /** Strokes drawn this turn: Got it's tip waits until there is something to guess. */
+  const [strokes, setStrokes] = useState(0);
   const [full, setFull] = useState(false);
   const fullRef = useRef(false);
   fullRef.current = full;
@@ -166,6 +168,7 @@ function DrawScreen(props: Props) {
       active = null;
       writer.end();
       setCanUndo(writer.canUndo);
+      setStrokes((n) => n + 1);
       easel.current?.invalidate();
       kick();
     };
@@ -313,10 +316,10 @@ function DrawScreen(props: Props) {
               ))}
             </div>
             <Button size="small" variant="violet" onClick={undo} disabled={!canUndo} id="purr-undo">
-              <Icon name="icon-replay" size={22} /> Undo
+              Undo
             </Button>
             <Button size="small" variant="violet" onClick={clear} id="purr-clear">
-              <Icon name="icon-trash" size={22} /> Clear
+              Clear
             </Button>
           </div>
           <div class="purr-actions">
@@ -330,7 +333,7 @@ function DrawScreen(props: Props) {
                 setSheet("got");
               }}
             >
-              <Icon name="icon-check" size={28} /> Got it
+              Got it
             </Button>
             <Button variant="magenta" id="purr-give-up" disabled={busy} onClick={() => setSheet("giveUp")}>
               Give up
@@ -338,8 +341,8 @@ function DrawScreen(props: Props) {
           </div>
         </div>
       </div>
-      <Tip id="purr.easel" anchor="purr-easel" text="No letters or numbers" show={!easelTipDone} place="below" />
-      <Tip id="purr.got" anchor="purr-got-it" text="Tap who said it first" show={easelTipDone && canUndo} />
+      <Tip id="purr.easel" anchor="purr-word" text="No letters or numbers" show={!easelTipDone} place="below" />
+      <Tip id="purr.got" anchor="purr-got-it" text="Tap who said it first" show={easelTipDone && strokes >= 4} />
       {sheet === "got" ? (
         <Sheet title="Who got it?" onClose={() => setSheet(null)}>
           <div class="purr-who" id="purr-who">

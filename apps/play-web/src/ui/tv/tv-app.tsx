@@ -313,8 +313,8 @@ function TvHome(props: { board: string | null; onLinked: (room: string) => void;
           {link ? link.code : " "}
         </p>
       </div>
-      {/* Up to three posters stack; four (every game and Tonight's board) sit two by two. */}
-      <div class={`tv-games ${GAME_IDS.length + (dish ? 1 : 0) >= 4 ? "grid" : GAME_IDS.length + (dish ? 1 : 0) === 3 ? "three" : ""}`}>
+      {/* Up to three posters stack; four sit two by two; five (every game and Tonight's board) in three rows of two. */}
+      <div class={`tv-games ${GAME_IDS.length + (dish ? 1 : 0) >= 5 ? "grid five" : GAME_IDS.length + (dish ? 1 : 0) === 4 ? "grid" : GAME_IDS.length + (dish ? 1 : 0) === 3 ? "three" : ""}`}>
         {GAME_IDS.map((id, i) => (
           <button
             type="button"

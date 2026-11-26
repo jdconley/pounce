@@ -85,7 +85,9 @@ export function PurrTvTable(props: Props) {
             {!showing ? <div class="purr-blank" aria-hidden="true" /> : null}
             {v.phase === "reveal" && v.last ? (
               <div class="purr-reveal" role="status" key={v.turn}>
-                <p class="purr-reveal-word outlined">{v.last.word}</p>
+                <p class="purr-reveal-word outlined" style={{ ["--len" as string]: longestWord(v.last.word) }}>
+                  {v.last.word}
+                </p>
                 <p class="purr-reveal-line outlined">
                   {revealLine(room, v, reason)}
                   {v.last.points > 0 ? <span class="purr-points">+{v.last.points}</span> : null}
@@ -120,7 +122,7 @@ function PlayerList(props: { room: RoomView; v: PurrView; cheer: { seat: number;
             <span class="purr-tv-cat" key={props.cheer?.seat === seat ? `c${props.cheer.n}` : "c"}>
               <Cat cat={seatCat(room.seats[seat])} pose={got ? "leap" : drawing ? "awake" : "idle"} />
             </span>
-            <span class="purr-tv-name">{seatName(room.seats[seat])}</span>
+            <span class={`purr-tv-name ${seatName(room.seats[seat]).length > 9 ? "long" : ""}`}>{seatName(room.seats[seat])}</span>
             {drawing ? <Brush /> : null}
             <span class="purr-tv-score" key={`${seat}:${v.scores[seat] ?? 0}`}>
               {v.scores[seat] ?? 0}
@@ -164,6 +166,9 @@ function TurnPanel(props: { room: RoomView; v: PurrView; left: number | null }) 
     </aside>
   );
 }
+
+/** The longest word of a phrase, in letters: the reveal is sized so it never breaks inside one. */
+const longestWord = (phrase: string): number => Math.max(4, ...phrase.split(" ").map((w) => w.length));
 
 /** The drawer's mark: a brush. */
 export function Brush(props: { size?: string }) {
