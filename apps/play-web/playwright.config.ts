@@ -25,7 +25,7 @@ export default defineConfig({
   projects: [
     // The TV's own tests (tv.spec) run once, on the TV, which seats its phones itself.
     { name: "android-chrome", use: { ...devices["Pixel 7"] }, testIgnore: [/alerts\.spec/, /tv\.spec/, /tv-board\.spec/] },
-    { name: "iphone-safari", use: { ...devices["iPhone 13"] }, testIgnore: [/alerts\.spec/, /tv\.spec/, /tv-board\.spec/] },
+    { name: "iphone-safari", use: { ...devices["iPhone 13"] }, testIgnore: [/alerts\.spec/, /tv\.spec/, /tv-board\.spec/, /birdwatch\.spec/] },
     { name: "laptop-chrome", use: { ...devices["Desktop Chrome"], viewport: { width: 1440, height: 900 } }, testIgnore: [/alerts\.spec/, /tv\.spec/, /tv-board\.spec/] },
     // Gecko and desktop WebKit play the two-browser tables only, to keep CI quick.
     { name: "laptop-firefox", testMatch: /tables\.spec/, testIgnore: [/tv\.spec/, /tv-board\.spec/], use: { ...devices["Desktop Firefox"], viewport: { width: 1440, height: 900 } } },
@@ -46,7 +46,7 @@ export default defineConfig({
     : {
         // Kept up by e2e/dev-server.mjs: it holds the port, and restarts a wrangler dev that exits
         // with the same arguments (and the same state), so a crash never refuses a connection.
-        command: `node e2e/dev-server.mjs pnpm --filter @pounce/play-api exec wrangler dev --port ${PORT} --ip 127.0.0.1 --persist-to .wrangler/e2e-${PORT}-${Date.now()} --var TOKEN_SECRET:${SECRET} --var GAMES:tiles --var LINK:on --var TV:on --var DAILY:on --var DAILY_TEST:on --var DEV_SPEED:20`,
+        command: `node e2e/dev-server.mjs pnpm --filter @pounce/play-api exec wrangler dev --port ${PORT} --ip 127.0.0.1 --persist-to .wrangler/e2e-${PORT}-${Date.now()} --var TOKEN_SECRET:${SECRET} --var GAMES:tiles,birdwatch --var LINK:on --var TV:on --var DAILY:on --var DAILY_TEST:on --var DEV_SPEED:20`,
         url: `${BASE}/healthz`,
         // The supervisor holds the port through a restart and lets connections through once the
         // new run answers this.
