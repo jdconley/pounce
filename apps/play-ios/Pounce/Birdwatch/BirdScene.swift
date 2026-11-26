@@ -296,9 +296,12 @@ final class BirdScene: SKScene {
         sillNode.size = layout.sill.size
         sillNode.position = CGPoint(x: layout.sill.midX, y: layout.sill.midY)
         // The feeder waits on the sill while the table bids; it goes to the bid winner.
+        // Not while it flies to the bid winner (`size` includes the scale).
+        guard feeder.action(forKey: "fly") == nil else { return }
         let feederUp = shows && model.view.phase == .bidding && model.isLive
         feeder.isHidden = !feederUp
         let side = min(layout.sill.height * 0.36, layout.roomy ? 120 : 64)
+        feeder.setScale(1)
         feeder.size = CGSize(width: side, height: side)
         feeder.position = CGPoint(x: layout.sill.midX, y: layout.sill.maxY - side * 0.62)
     }
@@ -310,7 +313,7 @@ final class BirdScene: SKScene {
             seatNodes[seat] = nil
         }
         let names = SeatInfo.names(model.room)
-        let maxTag = layout.mode == .tv ? 360 : min(layout.catSide * 1.6, layout.size.width / CGFloat(max(min(seats.count, 3), 1)) - 8)
+        let maxTag = layout.mode == .tv ? 360 : max(layout.catSide * 1.9, 120)
         for (i, seat) in seats.enumerated() {
             let view = model.room.seats[safe: seat]
             let catIndex = SeatInfo.catIndex(view)
@@ -325,14 +328,14 @@ final class BirdScene: SKScene {
             }
             guard let node else { continue }
             node.position = layout.seatSpots[safe: i] ?? .zero
-            // A tag never runs off the screen's edge.
-            let room = 2 * min(node.position.x, size.width - node.position.x) - 16
+            // A tag never runs off the screen's edge: it slides inward instead.
+            let edges = (left: node.position.x - 8, right: size.width - node.position.x - 8)
             let partner = !isScreen && model.partnerMark(for: seat, revealed: shownSeat)
             node.update(
                 name: names[safe: seat] ?? "", active: model.currentSeat == seat, count: model.handCount(seat),
                 ribbon: model.ribbon(of: seat), dealer: model.view.dealer == seat && model.isLive, sign: model.sign(seat),
                 partner: partner, bot: view?.kind == .bot, left: view?.isTakenOver ?? false, presence: view?.presence,
-                maxTagWidth: min(maxTag, max(room, layout.catSide * 1.2)), textScale: layout.mode == .tv ? 2.4 : textScale)
+                maxTagWidth: min(maxTag, size.width / 2 - 12), textScale: layout.mode == .tv ? 2.4 : textScale, edges: edges)
             if popSigns.contains(seat) { node.popSign(reduceMotion: reduceMotion) }
         }
     }
@@ -356,9 +359,10 @@ final class BirdScene: SKScene {
                 return n
             }()
             node.texture = BirdCardFactory.shared.face(played.card)
-            node.size = layout.sillCard
+            node.removeAllActions()
             node.zRotation = 0
             node.setScale(1)
+            node.size = layout.sillCard
             node.zPosition = Layer.trick.rawValue + CGFloat(i)
             node.position = layout.sillSpot(toward: played.seat == bottom ? nil : spot(of: played.seat))
         }
@@ -373,6 +377,8 @@ final class BirdScene: SKScene {
             trumpBadge.isHidden = false
             trumpBadge.texture = BirdCardFactory.shared.trumpBadge(trump)
             let side: CGFloat = layout.mode == .tv ? 120 : (layout.roomy ? 64 : 44)
+            trumpBadge.removeAllActions()
+            trumpBadge.setScale(1)
             trumpBadge.size = CGSize(width: side, height: side)
             // At a TV's table the phone keeps trump in view, at the top right.
             trumpBadge.position = layout.mode == .handOnly
@@ -395,6 +401,7 @@ final class BirdScene: SKScene {
             bidChipText.size = words.size()
             bidChip.texture = BirdArt.sign(UIColor(Palette.orange))
             bidChip.centerRect = BirdArt.sliceCenter
+            bidChip.setScale(1)
             bidChip.size = CGSize(width: words.size().width + size, height: words.size().height + size * 0.6)
             bidChip.position = layout.mode == .tv
                 ? CGPoint(x: layout.sill.minX + bidChip.size.width / 2, y: layout.bidChip.y)
@@ -427,6 +434,8 @@ final class BirdScene: SKScene {
             mySignText.size = words.size()
             mySign.texture = BirdArt.sign(UIColor(sign == .pass ? Palette.violet : Palette.orange))
             mySign.centerRect = BirdArt.sliceCenter
+            mySign.removeAllActions()
+            mySign.setScale(1)
             mySign.size = CGSize(width: words.size().width + 20, height: words.size().height + 12)
             mySign.position = CGPoint(x: layout.sill.midX, y: layout.sill.minY + mySign.size.height / 2 + 10)
             mySign.isHidden = false
@@ -544,9 +553,11 @@ final class BirdScene: SKScene {
             }()
             if card == provisional { continue }
             node.texture = BirdCardFactory.shared.face(card)
-            node.size = layout.cardSize
+            // `size` includes the scale: back to 1 first, or a card caught mid-deal grows.
+            node.removeAction(forKey: "deal")
             node.zRotation = 0
             node.setScale(1)
+            node.size = layout.cardSize
             node.zPosition = Layer.hand.rawValue + CGFloat(i)
             var target = slots[safe: i] ?? .zero
             if card == lifted { target.y += layout.cardSize.height * 0.2 }
@@ -562,7 +573,7 @@ final class BirdScene: SKScene {
                 node.run(.sequence([
                     .wait(forDuration: 0.04 * Double(i)),
                     .group([.move(to: target, duration: 0.28).eased(.easeOut), .scale(to: 1, duration: 0.28)]),
-                ]))
+                ]), withKey: "deal")
             } else {
                 node.removeAction(forKey: "slide")
                 if node.position == .zero || press?.card == card {
@@ -735,7 +746,12 @@ final class BirdScene: SKScene {
         case .nest(let seat, _):
             guard !feeder.isHidden else { return }
             let to = spot(of: seat) ?? CGPoint(x: layout.hand.midX, y: layout.hand.maxY)
-            await run(.group([.move(to: to, duration: 0.35).eased(.easeInEaseOut), .scale(to: 0.3, duration: 0.35)]), on: feeder)
+            await withCheckedContinuation { continuation in
+                feeder.run(.sequence([
+                    .group([.move(to: to, duration: 0.35).eased(.easeInEaseOut), .scale(to: 0.3, duration: 0.35)]),
+                    .run { continuation.resume() },
+                ]), withKey: "fly")
+            }
             feeder.isHidden = true
             feeder.setScale(1)
         case .trump(let seat, let suit):

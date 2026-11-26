@@ -90,6 +90,16 @@ struct BirdStage: View {
         return last
     }
 
+    #if DEBUG
+    private var probe: String {
+        guard let table else { return "phase=none" }
+        let v = table.view
+        let mine = table.mySeats.map(String.init).joined(separator: ",")
+        return "phase=\(v.phase.rawValue) hand=\(v.hand) turn=\(v.turn.map(String.init) ?? "-") mine=\(mine) shown=\(events.shown.map(String.init) ?? "-") "
+            + "played=\(v.played.count) scores=\(v.scores.map(String.init).joined(separator: ",")) over=\(events.winners != nil ? 1 : 0)"
+    }
+    #endif
+
     private var status: (text: String, mine: Bool)? {
         guard onTV, let table, let seat = table.currentSeat else { return nil }
         return StatusLine.turn(name: SeatInfo.name(table.room, seat), mine: table.mySeats.contains(seat), shared: table.isMultiSeat)
@@ -107,6 +117,14 @@ struct BirdStage: View {
             }
             panels
                 .zIndex(TableLayer.controls)
+            #if DEBUG
+            // The UI tests' probe: the hand's phase and where the game stands.
+            Color.clear.frame(width: 1, height: 1)
+                .accessibilityElement()
+                .accessibilityIdentifier("bird.debug")
+                .accessibilityValue(Text(verbatim: probe))
+                .allowsHitTesting(false)
+            #endif
             if let status {
                 VStack {
                     StatusLine(text: status.text, mine: status.mine)

@@ -53,7 +53,7 @@ final class BirdSeatNode: SKNode {
     func update(
         name: String, active: Bool, count: Int?, ribbon kind: BirdTableModel.Ribbon?, dealer isDealer: Bool,
         sign next: BirdTableModel.Sign?, partner: Bool, bot: Bool, left: Bool, presence: Presence?, maxTagWidth: CGFloat,
-        textScale: CGFloat
+        textScale: CGFloat, edges: (left: CGFloat, right: CGFloat) = (.infinity, .infinity)
     ) {
         cat.setActive(active)
         cat.setCount(count)
@@ -64,13 +64,16 @@ final class BirdSeatNode: SKNode {
             shown, maxWidth: maxTagWidth, active: active, size: (CardFaceFactory.nameSize * textScale).rounded())
         tag.texture = texture
         tag.size = texture.size()
-        tag.position = CGPoint(x: 0, y: -side * 0.5 - tag.size.height * 0.35)
+        // Centred under the cat, slid inward where the screen's edge is nearer than half the tag.
+        let half = tag.size.width / 2
+        let slide: CGFloat = half > edges.left ? half - edges.left : (half > edges.right ? edges.right - half : 0)
+        tag.position = CGPoint(x: slide, y: -side * 0.5 - tag.size.height * 0.35)
         // The ribbon: a band in the team's colour under the tag, as wide as the tag.
         if let kind {
             ribbon.isHidden = false
             ribbon.color = BirdArt.ribbon(kind)
             ribbon.size = CGSize(width: tag.size.width + 8, height: 7)
-            ribbon.position = CGPoint(x: 0, y: tag.position.y - tag.size.height / 2 - 2)
+            ribbon.position = CGPoint(x: tag.position.x, y: tag.position.y - tag.size.height / 2 - 2)
         } else {
             ribbon.isHidden = true
         }
@@ -110,6 +113,9 @@ final class BirdSeatNode: SKNode {
         let board = BirdArt.sign(fill)
         sign.texture = board
         sign.centerRect = BirdArt.sliceCenter
+        // `size` includes the scale: back to 1 first, or a sign caught mid-pop grows.
+        sign.removeAllActions()
+        sign.setScale(1)
         sign.size = CGSize(width: max(words.size().width + 16, side * 0.62), height: words.size().height + 10)
         sign.position = CGPoint(x: side * 0.46, y: side * 0.36)
         // A missed bid: the cat droops.
