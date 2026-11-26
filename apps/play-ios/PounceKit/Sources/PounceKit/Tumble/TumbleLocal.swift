@@ -64,6 +64,8 @@ public final class TumbleLocal {
     }
 
     public var isOut: Bool { box.out }
+    /// Nothing waits to be sent.
+    public var isQuiet: Bool { pending.isEmpty }
     public var catnip: Bool { lastNow < catnipUntil }
     public var napping: Bool { lastNow < napUntil }
     private var lastNow: Double = 0
