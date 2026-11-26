@@ -7,8 +7,8 @@ The types are in `apps/play-api/src/tumble/wire.ts`. Samples every client must d
 are in `apps/play-api/fixtures/protocol/tumble-*-messages.json`. The engine every client runs is
 in `apps/play-api/src/tumble/`, with golden vectors in `apps/play-api/fixtures/tumble/`.
 
-Everything here is additive. `PROTOCOL_VERSION` stays 1. Until the server's Toy Tumble room work
-lands, a `tumble` message is answered `{ "t": "error", "code": "bad_message" }`.
+Everything here is additive. `PROTOCOL_VERSION` stays 1. At a table of any other game, a `tumble`
+message is answered `{ "t": "error", "code": "bad_message" }`.
 
 ## The model
 
@@ -43,7 +43,33 @@ A Toy Tumble room's snapshot carries `room.gameId: "tumble"` and `room.tumble`:
 - `outs` lists the seats out this round, in order. `winner` is set at round end, `null` for a
   round nobody won.
 - `waitingSince` is the server time when a countdown began waiting for a missing device (spec §5.1).
+  The status stays `between` while it waits.
+- Before the first countdown (a Play again table waiting for its people), `r` is 0, `status` is
+  `between`, and the seeds are absent.
+- `winner` once `over` is the game's: the third win's seat, or after an early end the seat left
+  with the most wins (`null` on a tie).
 - These changes go out with a `seq` as usual.
+
+## The room around a round
+
+- **Lobby.** `options` is `{ "cats": "easy" | "quick" }`, set with `setOptions` (host only).
+  2 to 6 seats. A device that holds a seat can't `claim` or `claimMove` another: `not_allowed`.
+- **Start** is refused with `not_connected` until every person's seat has a connected device.
+  It goes straight to the first countdown.
+- **Between rounds** the standings show 5 seconds. The next countdown starts once every person
+  still playing has a device connected. If one is missing, `waitingSince` is set; 20 seconds
+  later the host may send `{ "t": "act", "seat": <theirs>, "action": { "k": "playWithout" } }`
+  (`too_soon` before then, `not_allowed` from anyone else or while nothing waits). The missing
+  seats become `away` and sit rounds out until their device is back at a countdown.
+- **Leave** is `{ "t": "act", "seat": <theirs>, "action": { "k": "leave" } }`: out for the rest of
+  the game, wins kept, no House Cat takes it. Fewer than 2 seats left, or no person left, ends
+  the game.
+- Nothing is ever "to act": snapshots have no turn, and there are no nudges, retires or live
+  tables.
+- **A server restart** mid-countdown or mid-round loses the round: it counts down again as the
+  same `r`, with new seeds and the wins kept.
+- **Who gets the game.** An iOS or tvOS app below 1.4 is never given `tumble`, whatever its
+  `X-Pounce-Games` lists. The web player always is.
 
 ## Client to server: `tumble`
 
