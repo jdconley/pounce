@@ -1027,7 +1027,9 @@ export class RoomCore<S = CatTowerState> {
     const { state } = this;
     const view = state.gameState === null ? null : this.game.view(state.gameState, controlled);
     if (state.game === DEFAULT_GAME) return { game: view as CatTowerView | null };
-    return { game: null, gameId: state.game as Exclude<GameId, "cat-tower">, ...(view === null ? {} : { [state.game]: view }) };
+    // Toy Tumble's clock is real time: the server's own time lets a device with a wrong clock count down right.
+    const seen = view !== null && state.game === "tumble" ? { ...(view as object), now: this.now() } : view;
+    return { game: null, gameId: state.game as Exclude<GameId, "cat-tower">, ...(seen === null ? {} : { [state.game]: seen }) };
   }
 
   /** A game event as the room sends it: Cat Tower's as `game`, any other game's under its own id. */

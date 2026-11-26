@@ -44,8 +44,11 @@ export type TumbleState = {
   waitingSince: number | null;
 };
 
-/** The snapshot's `room.tumble`: the state, with the seeds from the first countdown on. */
-export type TumbleView = Omit<TumbleState, "roundSeed" | "trickSeeds"> & { roundSeed?: Seed; trickSeeds?: Seed[] };
+/**
+ * The snapshot's `room.tumble`: the state, with the seeds from the first countdown on, and `now`,
+ * the server's clock when the room made the snapshot.
+ */
+export type TumbleView = Omit<TumbleState, "roundSeed" | "trickSeeds"> & { roundSeed?: Seed; trickSeeds?: Seed[]; now?: number };
 
 /**
  * What changes the state. Only `playWithout` and `leave` come from clients; the room applies the

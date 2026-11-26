@@ -43,6 +43,9 @@ A Toy Tumble room's snapshot carries `room.gameId: "tumble"` and `room.tumble`:
 - `outs` lists the seats out this round, in order. `winner` is set at round end, `null` for a
   round nobody won.
 - `waitingSince` is the server time when a countdown began waiting for a missing device (spec §5.1).
+- `now` is the server's clock when the room made this snapshot. A device keeps the difference
+  between `now` and its own clock on arrival, and counts `startsAt` and the round clock with it,
+  so a device whose clock is wrong still counts down 3-2-1 with everyone else.
   The status stays `between` while it waits.
 - Before the first countdown (a Play again table waiting for its people), `r` is 0, `status` is
   `between`, and the seeds are absent.
@@ -115,7 +118,8 @@ Positions are the bottom-left corner of the toy's own k by k box (`toyCells`). x
 ```
 
 - It is sent to every connected device and screen except the box's own device.
-- `q` counts up by one per relay of that box. A gap means something was missed, so ask for a sync.
+- `q` counts up by one per relay of that box, starting at 1 each round; a sync carries the last
+  `q` relayed (0 before any). A gap means something was missed, so ask for a sync.
 - `m` events are relayed at most every 66 ms per box (the latest wins).
 
 ### `tumbleHit`: something hits a box
@@ -145,6 +149,11 @@ Positions are the bottom-left corner of the toy's own k by k box (`toyCells`). x
 - **Swap** sends one `tumbleHit` per box, each carrying the other box's contents.
 - An unacked hit is applied by the server after 3 seconds, and the box's sync goes to everyone.
   A later ack for it is refused with a sync.
+
+A hit can leave the target's falling toy overlapping cells (Hairball, Swap). The target's
+device lifts the toy row by row until it fits and sends an `m` for the new position; the server
+takes any `m` for the toy in hand. A toy can always fit in the hidden rows (18 to 21) unless the
+hit filled them, and then the hit has already put the box out.
 
 ### `tumbleSync`: whole boxes
 
