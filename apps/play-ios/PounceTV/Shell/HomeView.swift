@@ -84,6 +84,7 @@ private struct Poster: View {
         switch game.id {
         case GameCatalog.tiles.id: Palette.sky
         case GameCatalog.birdwatch.id: Palette.lime
+        case GameCatalog.purrtrait.id: Palette.magenta
         default: Palette.violet
         }
     }

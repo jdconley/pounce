@@ -33,6 +33,7 @@ enum TVDemo: Equatable {
         case "tv-hit": return .table(.cattower, seats: seats ?? 6)
         case "tv-tiles": return .table(.tiles, seats: seats ?? 4)
         case "tv-birdwatch": return .table(.birdwatch, seats: seats ?? 4)
+        case "tv-purrtrait": return .table(.purrtrait, seats: seats ?? 6)
         case "tv-shell": return .shell
         case "tv-over": return .over(seats: seats ?? 4)
         case "tv-board": return .board
@@ -105,7 +106,8 @@ extension TVServices {
             },
             link: { TVDemoLink() },
             socket: { code in
-                TVDemoSocket(
+                if TVDemoTables.isPurrtrait(code) { return TVPurrDemoSocket(seats: 6, lobby: true, code: code) }
+                return TVDemoSocket(
                     room: TVDemo.room(tiles: TVDemoTables.isTiles(code), birdwatch: TVDemoTables.isBirdwatch(code), code: code),
                     lobby: true)
             },
@@ -142,6 +144,7 @@ actor TVDemoTables {
         let prefix = switch game {
         case GameCatalog.tiles.id: "TILE"
         case GameCatalog.birdwatch.id: "BIRD"
+        case GameCatalog.purrtrait.id: "PURR"
         default: "CATT"
         }
         return prefix + String(letters[made % letters.count])
@@ -149,6 +152,7 @@ actor TVDemoTables {
 
     nonisolated static func isTiles(_ code: String) -> Bool { code.hasPrefix("TILE") }
     nonisolated static func isBirdwatch(_ code: String) -> Bool { code.hasPrefix("BIRD") }
+    nonisolated static func isPurrtrait(_ code: String) -> Bool { code.hasPrefix("PURR") }
 }
 
 /// Home's link, which no phone scans.
@@ -485,6 +489,8 @@ actor TVDemoSocket: RoomSocketing {
 struct TVDemoTableView: View {
     let game: TVTablePreview.Game
     let seats: Int
+    /// Purrtrait: the drawing arrives whole and stays (screenshots).
+    var still = false
     @State private var table: TVRoom?
 
     var body: some View {
@@ -498,8 +504,13 @@ struct TVDemoTableView: View {
 
     private func start() {
         guard table == nil else { return }
+        if still { MainThreadWatchdog.startIfAsked() }
         let room = TVDemo.room(tiles: game == .tiles, birdwatch: game == .birdwatch, seats: seats, code: DemoFixtures.code)
-        let next = TVRoom(code: room.code, socket: { _ in TVDemoSocket(room: room, lobby: false) }, watchesNetwork: false)
+        let purr = game == .purrtrait
+        let (seats, still) = (seats, still)
+        let next = TVRoom(code: room.code, socket: { _ in
+            purr ? TVPurrDemoSocket(seats: seats, still: still) as any RoomSocketing : TVDemoSocket(room: room, lobby: false)
+        }, watchesNetwork: false)
         next.onChange = { table in
             if table.store.phase == .playing || table.store.phase == .over { table.openTable() }
         }

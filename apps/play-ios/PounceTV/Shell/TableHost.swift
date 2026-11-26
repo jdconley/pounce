@@ -13,6 +13,7 @@ struct TableHost: View {
             case .catTower(let scene): TableView(scene: scene)
             case .tiles(let scene): TilesTableView(scene: scene)
             case .birdwatch(let scene): BirdTableView(scene: scene)
+            case .purrtrait: PurrTVTable(table: table)
             case nil: Color.clear
             }
         }

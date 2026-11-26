@@ -21,7 +21,7 @@ struct TVRoot: View {
             if model.table != nil || (model.phase == .board && model.board?.state.watching == nil), model.menu == .closed {
                 // At the table the scene draws the paw; over game over (which hides the table's)
                 // and in the lobby, this does.
-                TVMenuPaw(drawsIcon: model.phase != .table) { openMenu() }
+                TVMenuPaw(drawsIcon: model.phase != .table || model.table?.isPurrtrait == true) { openMenu() }
                     .focused($pawFocused)
                     // On the board, top right, beside a card's title: the bottom corner holds rows.
                     .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: model.phase == .board ? .topTrailing : .bottomTrailing)

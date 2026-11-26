@@ -13,7 +13,7 @@ import SwiftUI
 /// keeps moving (the aim hops between groups or the draft comes and goes, a lay-down moment every
 /// few seconds), for watching its frames with `-watchdog -watchdog-log`.
 enum TVTablePreview {
-    enum Game: String { case cattower, tiles, birdwatch }
+    enum Game: String { case cattower, tiles, birdwatch, purrtrait }
 
     static func from(arguments: [String] = CommandLine.arguments) -> (game: Game, seats: Int, aim: Bool)? {
         guard let i = arguments.firstIndex(of: "-tv-preview"), let game = arguments[safe: i + 1].flatMap(Game.init) else { return nil }
@@ -163,9 +163,11 @@ struct TVTablePreviewView: View {
         let room = switch game {
         case .tiles: TVTablePreview.tiles(seats: seats)
         case .birdwatch: TVTablePreview.birdwatch(seats: seats)
-        case .cattower: TVTablePreview.catTower(seats: seats)
+        case .cattower, .purrtrait: TVTablePreview.catTower(seats: seats)
         }
         switch game {
+        case .purrtrait:
+            return  // drawn by `TVDemoTableView` (PounceTVApp)
         case .birdwatch:
             let scene = BirdScene(store: store)
             table = .birdwatch(scene)

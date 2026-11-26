@@ -18,6 +18,7 @@ enum TVStandings {
     /// most points (Tuna Tiles), and anyone who left last.
     static func rows(_ room: RoomView) -> [Row] {
         if let model = BirdTableModel(room: room) { return birdRows(model) }
+        if let view = room.purrtrait { return purrRows(room, view) }
         let game = room.game
         let tiles = room.tiles
         let winners = game?.winners ?? tiles?.winners ?? []
@@ -62,13 +63,29 @@ enum TVStandings {
         }
     }
 
+    /// Purrtrait: everyone by points, the most first; anyone who left last.
+    static func purrRows(_ room: RoomView, _ view: PurrView) -> [Row] {
+        let seats = (0..<min(view.seats, room.seats.count)).filter { room.seats[$0].kind == .human }
+        return seats
+            .sorted { a, b in
+                if view.isOut(a) != view.isOut(b) { return !view.isOut(a) }
+                let sa = view.scores[safe: a] ?? 0, sb = view.scores[safe: b] ?? 0
+                return sa != sb ? sa > sb : a < b
+            }
+            .map { seat in
+                Row(seat: seat, won: view.winners.contains(seat), out: view.isOut(seat),
+                    detail: view.isOut(seat) ? String(localized: "Left", comment: "TV game over: a player who left the game before it ended")
+                        : "\(view.scores[safe: seat] ?? 0)")
+            }
+    }
+
     /// "<Name> wins", "A tie" or "Game over".
     static func title(_ room: RoomView) -> String {
         if let bird = room.birdwatch, bird.winners.count > 1 {
             let names = bird.winners.map { SeatInfo.name(room, $0) }.formatted(.list(type: .and))
             return String(localized: "\(names) win", comment: "TV game over (Birdwatch): the winning side's names")
         }
-        let winners = room.game?.winners ?? room.tiles?.winners ?? room.birdwatch?.winners ?? []
+        let winners = room.game?.winners ?? room.tiles?.winners ?? room.birdwatch?.winners ?? room.purrtrait?.winners ?? []
         if winners.count == 1 {
             let name = SeatInfo.name(room, winners[0])
             return String(localized: "\(name) wins", comment: "TV game over: the title, the one winner's name")

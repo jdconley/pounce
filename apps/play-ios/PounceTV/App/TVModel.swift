@@ -290,7 +290,7 @@ final class TVModel {
     private func roomChanged(_ room: TVRoom) {
         guard room === table else { return }
         switch room.store.phase {
-        case .notFound, .closed, .locked:
+        case .notFound, .closed, .locked, .notNear, .removed:
             // The table is gone, closed, no longer lists this TV (`not_screen` reads as not
             // found), or this device is locked out of it: forget it and go home.
             return goHome()
@@ -342,7 +342,14 @@ final class TVModel {
     }
 
     /// The link a phone scans to join the table shown.
-    var inviteURL: URL? { table.map { services.inviteURL($0.code) } }
+    var inviteURL: URL? {
+        guard let table else { return nil }
+        // Purrtrait: the TV's key, which changes every 30 seconds (spec §5.2). None yet: no QR.
+        if table.isPurrtrait {
+            return table.store.room?.near.map { services.easelURL(table.code, $0.key) }
+        }
+        return services.inviteURL(table.code)
+    }
 
     /// The lobby may swap its game until anyone (a person or a House Cat) sits down.
     var canChangeGame: Bool {

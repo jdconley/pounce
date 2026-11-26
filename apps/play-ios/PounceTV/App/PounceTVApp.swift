@@ -11,7 +11,9 @@ struct PounceTVApp: App {
     var body: some Scene {
         WindowGroup {
             #if DEBUG
-            if let preview = TVTablePreview.from() {
+            if let preview = TVTablePreview.from(), preview.game == .purrtrait {
+                TVDemoTableView(game: .purrtrait, seats: preview.seats, still: true)
+            } else if let preview = TVTablePreview.from() {
                 TVTablePreviewView(game: preview.game, seats: preview.seats, aim: preview.aim)
             } else if case .table(let game, let seats) = TVDemo.from() {
                 TVDemoTableView(game: game, seats: seats)

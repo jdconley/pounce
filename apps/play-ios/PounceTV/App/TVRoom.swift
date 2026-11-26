@@ -16,6 +16,8 @@ final class TVRoom {
         case catTower(TableScene)
         case tiles(TilesScene)
         case birdwatch(BirdScene)
+        /// Purrtrait draws in SwiftUI and layers (`PurrTVTable`): no scene, nothing to enqueue.
+        case purrtrait
     }
 
     private(set) var scene: Scene?
@@ -46,6 +48,7 @@ final class TVRoom {
     /// The table drawn by a game this build knows, whichever the room plays.
     var isTiles: Bool { store.room?.gameId == GameCatalog.tiles.id }
     var isBirdwatch: Bool { store.room?.gameId == GameCatalog.birdwatch.id }
+    var isPurrtrait: Bool { store.room?.gameId == GameCatalog.purrtrait.id }
 
     /// The TV has the room, and lost its connection to it.
     var reconnecting: Bool { store.room != nil && !store.connected }
@@ -102,6 +105,11 @@ final class TVRoom {
     func openTable() {
         guard scene == nil, !closed, store.room != nil else { return }
         let finished: ([Seat]) -> Void = { [weak self] winners in self?.gameOver(winners) }
+        if isPurrtrait {
+            scene = .purrtrait
+            pending.removeAll()
+            return
+        }
         if isBirdwatch {
             let bird = BirdScene(store: store)
             bird.onGameOver = finished
@@ -141,7 +149,7 @@ final class TVRoom {
         case .catTower(let table): table.enqueue(intent)
         case .tiles(let tiles): tiles.enqueue(intent)
         case .birdwatch(let bird): bird.enqueue(intent)
-        case nil: break
+        case .purrtrait, nil: break
         }
     }
 
