@@ -104,6 +104,9 @@ export class GameRoom extends DurableObject<Env> {
     void ctx.blockConcurrencyWhile(async () => {
       this.core = this.load();
       if (this.core) await this.dropStaleDevices(this.core);
+      // A Toy Tumble round lived in the memory this instance lost: it counts down again (§6.6).
+      const replayed = this.core?.restartRound() ?? [];
+      if (replayed.length > 0) await this.after(replayed);
     });
   }
 

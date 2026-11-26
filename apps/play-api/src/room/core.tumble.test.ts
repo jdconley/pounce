@@ -444,3 +444,58 @@ describe("the live stream", () => {
     expect(errorsOf(other.handle("phone", { t: "tumble", r: 1, ev: [] }))).toEqual(["bad_message"]);
   });
 });
+
+describe("a restart mid-round", () => {
+  const reload = (r: Room): Room =>
+    new RoomCore<TumbleState>(JSON.parse(JSON.stringify(r.state)) as typeof r.state, () => clock, rng, undefined, 1, { streaks: true, games: ON });
+
+  it("replays the round from a new countdown, with new seeds and the wins kept", () => {
+    const r = play(started(2));
+    win(r, 1);
+    clock += TUMBLE_BETWEEN_MS;
+    r.tick();
+    play(r);
+    const before = tumbleOf(r);
+    clock += 30_000;
+    const back = reload(r);
+    expect(back.tumblePlaying()).toBe(false);
+    back.restartRound();
+    const after = tumbleOf(back);
+    expect(after).toMatchObject({ status: "countdown", r: 2, wins: [0, 1], startsAt: clock + TUMBLE_COUNTDOWN_MS, outs: [] });
+    expect(after.roundSeed).not.toEqual(before.roundSeed);
+    expect(back.nextAlarm()).toBe(after.startsAt);
+    play(back);
+    expect(back.tumblePlaying()).toBe(true);
+  });
+
+  it("a countdown lost to a restart counts down again", () => {
+    const r = started(2);
+    const back = reload(r);
+    clock += 1000;
+    back.restartRound();
+    expect(tumbleOf(back)).toMatchObject({ status: "countdown", r: 1, startsAt: clock + TUMBLE_COUNTDOWN_MS });
+  });
+
+  it("a countdown's alarm with its round lost counts down again", () => {
+    const back = reload(started(2));
+    clock = tumbleOf(back).startsAt;
+    back.tick();
+    expect(tumbleOf(back)).toMatchObject({ status: "countdown", r: 1, startsAt: clock + TUMBLE_COUNTDOWN_MS });
+  });
+
+  it("a round still in memory, a lobby and other games have nothing to replay", () => {
+    const r = play(started(2));
+    expect(r.restartRound()).toEqual([]);
+    expect(lobby(2).restartRound()).toEqual([]);
+    expect(new RoomCore(RoomCore.create("BCDFG", "phone", clock), () => clock, rng).restartRound()).toEqual([]);
+  });
+
+  it("standings between rounds are left as they are", () => {
+    const r = play(started(2));
+    win(r, 0);
+    const back = reload(r);
+    const before = JSON.stringify(back.state);
+    expect(back.restartRound()).toEqual([]);
+    expect(JSON.stringify(back.state)).toBe(before);
+  });
+});

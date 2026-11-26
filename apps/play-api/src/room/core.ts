@@ -370,7 +370,7 @@ export class RoomCore<S = CatTowerState> {
   private readonly aimTimes = new Map<string, number[]>();
   /** Per device and seat (not persisted): the last aim message relayed was an aim, not a clear. */
   private readonly lastWasAim = new Map<string, boolean>();
-  /** Toy Tumble's round, from its countdown to its end. Never persisted. */
+  /** Toy Tumble's round, from its countdown to its end. Never persisted: a restart replays it. */
   private round: TumbleRound | null = null;
   /** Per seat, this round: the one socket that writes its box, and when it was last heard. */
   private readonly writers = new Map<Seat, { deviceId: string; socket: string; at: number }>();
@@ -2027,15 +2027,15 @@ export class RoomCore<S = CatTowerState> {
     }
     // A seat that sat out is back with its device: it plays again (§5.1).
     for (const i of here) if (s.away[i] === true) this.tumbleApply({ k: "away", seat: i, away: false });
-    return this.tumbleCountdown();
+    return this.tumbleCountdown(false);
   }
 
-  /** The next round's countdown, with its seeds from the room's rng, and the round that will play it. */
-  private tumbleCountdown(): Outbound[] {
+  /** A countdown, with the round's seeds from the room's rng, and the round that will play it. `replay`: the same round again. */
+  private tumbleCountdown(replay: boolean): Outbound[] {
     const at = this.now() + TUMBLE_COUNTDOWN_MS;
     const roundSeed = this.newSeed();
     const trickSeeds = this.state.seats.map(() => this.newSeed());
-    this.tumbleApply({ k: "start", at, roundSeed, trickSeeds });
+    this.tumbleApply({ k: "start", at, roundSeed, trickSeeds, ...(replay ? { replay: true as const } : {}) });
     const s = this.tumbleState();
     const seats = this.state.seats.map((seat, i): RoundSeat => ({
       kind: seat.kind === "bot" ? "cat" : s.left[i] === true || s.away[i] === true ? "away" : "human",
@@ -2047,9 +2047,13 @@ export class RoomCore<S = CatTowerState> {
     return this.snapshots();
   }
 
-  /** `nextRoundAt` came (it is set only while the game is on): the countdown is over, or the standings are. */
+  /**
+   * `nextRoundAt` came (it is set only while the game is on): the countdown is over, or the
+   * standings are. A countdown with no round lost it to a restart, and counts down again.
+   */
   private tumbleTimer(): Outbound[] {
     if (this.tumbleState().status !== "countdown") return this.tumbleAdvance();
+    if (this.round === null) return this.tumbleCountdown(true);
     this.tumbleApply({ k: "play" });
     return this.snapshots();
   }
@@ -2136,5 +2140,15 @@ export class RoomCore<S = CatTowerState> {
     }
     // It may have been the device a countdown was waiting for.
     this.tumbleAdvance();
+  }
+
+  /**
+   * After a restart (a deploy, an eviction): a round counting down or playing was lost with the
+   * room's memory. It counts down again, as the same round with new seeds; the wins stand (§6.6).
+   */
+  restartRound(): Outbound[] {
+    if (!this.isTumble() || this.round !== null || this.state.status !== "playing") return [];
+    const { status } = this.tumbleState();
+    return status === "countdown" || status === "playing" ? this.tumbleCountdown(true) : [];
   }
 }
