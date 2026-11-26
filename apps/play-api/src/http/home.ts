@@ -1,16 +1,19 @@
 /**
- * The landing page at `/`: what Pounce is (two family games), where it plays (the iPhone and iPad
+ * The landing page at `/`: what Pounce is (family games), where it plays (the iPhone and iPad
  * app, any web browser, and a TV), and how to start. Static HTML, no scripts; images and the clip
  * come from this Worker's own /static files (scripts/build-site-media.mjs), and every screenshot
  * is a real one.
  *
  * The copy follows the App Store listing (docs/whats-new). The kids and privacy claims go only as
  * far as the privacy policy (privacy.ts) does: change them together. The TV section says only what
- * the web player does today: a phone in the browser shows just its own hand at a TV table.
+ * works today: the browser TV at /play/tv, with a phone (in the browser or the 1.2 app) showing
+ * just its own hand. The Apple TV app isn't on the App Store yet, so the page doesn't name it.
  *
- * With the Daily Dish (`DAILY` on) the page also shows the four daily puzzles. They are in the
- * browser only until an App Store version has them (`DISH_SINCE` in links.ts), so the page says
- * "coming to the app" and the App Store app's own description and structured data leave them out.
+ * With the Daily Dish (`DAILY` on) the page also shows the four daily puzzles, in the app since
+ * 1.2 and in the browser. With Birdwatch in `GAMES` it shows the third game too. Birdwatch is in
+ * the browser only until an App Store version has it (`GAME_SINCE` in links.ts), so the page says
+ * "coming to the iPhone app" and the App Store app's own description and structured data leave it
+ * out.
  */
 import { CACHE, css, escapeHtml, shell } from "./layout";
 import { appStoreId, https } from "./links";
@@ -28,11 +31,29 @@ export const HOME_CSP =
 
 const NAME = "Pounce: Family Games";
 export const TITLE = `${NAME} | Cat Tower and Tuna Tiles`;
+/** The title with Birdwatch on. */
+export const BIRDWATCH_TITLE = `${NAME} | Cat Tower, Tuna Tiles and Birdwatch`;
 export const DESCRIPTION =
   "Family game night, every night. Play Cat Tower and Tuna Tiles together on the couch, on the TV or from far away. Free on iPhone, iPad and in any web browser.";
-/** The page's description with the Daily Dish on. The app's own description stays `DESCRIPTION`. */
+/** The description with the Daily Dish on, for the page and the app (the Dish is in the app since 1.2). */
 export const DAILY_DESCRIPTION =
-  "Family game night, every night. Play Cat Tower and Tuna Tiles together, and four new puzzles every day in your browser. Free on iPhone, iPad and in any web browser.";
+  "Family game night, every night. Play Cat Tower and Tuna Tiles together, and four new puzzles every day. Free on iPhone, iPad and in any web browser.";
+/**
+ * The page's description with Birdwatch on, and with the Daily Dish too (as in production). Birdwatch
+ * is only in the browser, so it is named apart from what the app has. The app's own description
+ * never names it until an App Store version has it.
+ */
+export const BIRDWATCH_DESCRIPTION =
+  "Family game night, every night. Cat Tower, Tuna Tiles and four new puzzles a day on iPhone, iPad and the web, and now Birdwatch in your browser. All free.";
+/** The page's description with Birdwatch on and the Daily Dish off. */
+export const BIRDWATCH_ONLY_DESCRIPTION =
+  "Family game night, every night. Cat Tower and Tuna Tiles on iPhone, iPad and the web, and now Birdwatch, a team card game, in your browser. All free.";
+
+/** What the page says it is, from the flags that are on. */
+export function pageDescription(daily: boolean, birdwatch: boolean): string {
+  if (birdwatch) return daily ? BIRDWATCH_DESCRIPTION : BIRDWATCH_ONLY_DESCRIPTION;
+  return daily ? DAILY_DESCRIPTION : DESCRIPTION;
+}
 
 /** The web player. Its page is `/play/`; `/play` only redirects there. */
 const PLAY = "/play/";
@@ -68,11 +89,12 @@ const screen = (s: Screen, sizes: string, alt: string, eager = false): string =>
 /** What each screenshot shows, for people who can't see it. */
 const ALT = {
   tv: "A TV showing a Cat Tower table with six players, their cats around the edge and the deck in the middle.",
-  tvHome: "The TV's start screen: a code to scan with your phone, beside Cat Tower for 2 to 6 players and Tuna Tiles for 2 to 4.",
+  tvHome: "The TV's start screen: a code to scan with your phone, beside posters for Cat Tower, Tuna Tiles, Birdwatch and Tonight's board.",
   cards: "A phone in the browser at a TV table, showing just its own cards, with a Cards and Table switch at the top.",
   laptop: "Cat Tower in a web browser on a laptop: the deck on the rug, the tower's levels down the side and a hand of cat cards.",
   catTower: "Cat Tower on iPhone: three players' cats along the top, the tower's shelves down the side and a hand of cards.",
   tiles: "Tuna Tiles on iPhone: rows of numbered tiles laid out on the rug, with your own tiles along the bottom.",
+  birdwatch: "Birdwatch in a phone's browser: four cats around the window, a card played on the sill, the team scores and a hand of cards.",
 } as const;
 
 /** The QR code for `/get`, for people reading on a computer; shown only on wide screens with a mouse. */
@@ -161,6 +183,9 @@ h1 span{display:block;color:var(--sun);text-wrap:balance}
 .game .art img{display:block;width:160px;height:auto;border:4px solid var(--ink);border-radius:24px;box-shadow:0 5px 0 var(--ink)}
 .game .txt{padding:18px 20px 24px}
 .game .txt p+p{margin-top:8px}
+.panel p.where{color:var(--text);font-weight:700}
+.panel p.where a{font-family:var(--round);font-weight:900}
+.lime{background:var(--lime)}
 .puzzles{display:grid;gap:16px;margin:0 0 24px;padding:0;list-style:none}
 .puzzle{display:flex;flex-wrap:wrap;gap:14px;align-items:center;padding:16px 18px}
 .puzzle>div:last-child{flex:1 1 9rem;min-width:0;overflow-wrap:break-word}
@@ -216,7 +241,7 @@ h1 span{display:block;color:var(--sun);text-wrap:balance}
 .last .cat{position:absolute;right:-12px;bottom:-14px;width:150px;height:auto;opacity:.95}
 @media (prefers-color-scheme:dark){.last{background:linear-gradient(135deg,#5B1FD1,#8A1466)}}
 @media (min-width:480px) and (max-width:639px),(min-width:900px){.game{grid-template-columns:auto 1fr}.game .art{border-bottom:0;border-right:3px solid var(--ink)}.game .txt{align-self:center}}
-@media (min-width:640px){.games,.ways,.devices{grid-template-columns:1fr 1fr}.pace{grid-template-columns:minmax(0,240px) 1fr;gap:32px;padding:28px 32px 32px}.last{padding:40px 250px 44px 40px}.last .cat{width:210px;right:24px}}
+@media (min-width:640px){.games,.ways,.devices{grid-template-columns:1fr 1fr}.game.wide{grid-column:1/-1;grid-template-columns:auto 1fr}.game.wide .art{border-bottom:0;border-right:3px solid var(--ink)}.game.wide .txt{align-self:center}.game.wide .txt p{max-width:40em}.pace{grid-template-columns:minmax(0,240px) 1fr;gap:32px;padding:28px 32px 32px}.last{padding:40px 250px 44px 40px}.last .cat{width:210px;right:24px}}
 @media (min-width:720px){.hero-grid{grid-template-columns:1fr 1fr;gap:28px}h1{font-size:2.9rem}}
 @media (min-width:900px){.hero{padding:26px 0 48px}.hero-grid{grid-template-columns:1.1fr .9fr;gap:40px}h1{font-size:clamp(2.9rem,5.1vw,3.9rem)}h1 span{white-space:nowrap}.split{grid-template-columns:1fr 1fr;gap:44px}.split.flip>:first-child{order:2}.devices{grid-template-columns:1fr}.kids{grid-template-columns:.9fr 1.1fr;gap:40px;padding:36px 40px 40px}.band{padding:56px 0 8px}}
 @media (min-width:1000px){.ways{grid-template-columns:repeat(4,1fr)}}
@@ -224,13 +249,17 @@ h1 span{display:block;color:var(--sun);text-wrap:balance}
 
 const json = (value: unknown): string => JSON.stringify(value).replace(/</g, "\\u003c");
 
-function head(state: InstallState, origin: string, daily: boolean): string {
+function head(state: InstallState, origin: string, daily: boolean, birdwatch: boolean): string {
   const url = `${origin}/`;
   const image = `${origin}${MEDIA.og.src}`;
   const id = state.kind === "store" ? appStoreId(state.url) : null;
   const author = { "@type": "Organization", name: "Conley Chaos LLC", url: "https://conleychaos.com" };
   const free = { "@type": "Offer", price: "0", priceCurrency: "USD" };
-  const description = daily ? DAILY_DESCRIPTION : DESCRIPTION;
+  const description = pageDescription(daily, birdwatch);
+  const title = birdwatch ? BIRDWATCH_TITLE : TITLE;
+  // The browser's games: all of them. The App Store app shares tables for the games it has.
+  const webGames = birdwatch ? "Cat Tower, Tuna Tiles and Birdwatch" : "Cat Tower and Tuna Tiles";
+  const shared = birdwatch ? "Cat Tower and Tuna Tiles tables are shared with the iPhone app" : "at the same tables as the iPhone app";
   const data = {
     "@context": "https://schema.org",
     "@graph": [
@@ -238,7 +267,8 @@ function head(state: InstallState, origin: string, daily: boolean): string {
         "@type": "MobileApplication",
         "@id": `${url}#app`,
         name: NAME,
-        description: DESCRIPTION,
+        // Only what the App Store's version has: the Dish since 1.2, never Birdwatch before its release.
+        description: daily ? DAILY_DESCRIPTION : DESCRIPTION,
         url,
         image,
         applicationCategory: "GameApplication",
@@ -251,9 +281,7 @@ function head(state: InstallState, origin: string, daily: boolean): string {
         "@type": "WebApplication",
         "@id": `${url}#web`,
         name: "Pounce",
-        description: daily
-          ? "Cat Tower and Tuna Tiles in a web browser, at the same tables as the iPhone app, with a TV screen at /play/tv, and four new puzzles every day at /play/daily."
-          : "Cat Tower and Tuna Tiles in a web browser, at the same tables as the iPhone app, with a TV screen at /play/tv.",
+        description: `${webGames} in a web browser, ${shared}, with a TV screen at /play/tv${daily ? ", and four new puzzles every day at /play/daily" : ""}.`,
         url: `${origin}${PLAY}`,
         image,
         applicationCategory: "GameApplication",
@@ -272,7 +300,7 @@ function head(state: InstallState, origin: string, daily: boolean): string {
     ...(id ? [`<meta name="apple-itunes-app" content="app-id=${id}">`] : []),
     `<meta property="og:type" content="website">`,
     `<meta property="og:site_name" content="Pounce">`,
-    `<meta property="og:title" content="${TITLE}">`,
+    `<meta property="og:title" content="${title}">`,
     `<meta property="og:description" content="${description}">`,
     `<meta property="og:url" content="${escapeHtml(url)}">`,
     `<meta property="og:image" content="${escapeHtml(image)}">`,
@@ -280,7 +308,7 @@ function head(state: InstallState, origin: string, daily: boolean): string {
     `<meta property="og:image:height" content="${MEDIA.og.height}">`,
     `<meta property="og:image:alt" content="The Pounce app icon beside screenshots of Cat Tower and Tuna Tiles on iPhone.">`,
     `<meta name="twitter:card" content="summary_large_image">`,
-    `<meta name="twitter:title" content="${TITLE}">`,
+    `<meta name="twitter:title" content="${title}">`,
     `<meta name="twitter:description" content="${description}">`,
     `<meta name="twitter:image" content="${escapeHtml(image)}">`,
     `<link rel="preload" as="image" href="${MEDIA.clip.poster}">`,
@@ -315,12 +343,17 @@ ${puzzle(a.leap, "orange", "Box Fort", "Blocks", "Drag pieces onto the rug. Fill
 </ul>
 <p class="sub">A family board shows how everyone did today, and every puzzle counts toward your streaks.</p>
 <a class="btn web" href="${DISH}">Play today's puzzles</a>
-<p class="dish-note">In the browser now. Coming to the app.</p>
+<p class="dish-note">In the iPhone and iPad app, and in your browser.</p>
 </div>
 </section>`;
 }
 
-function body(state: InstallState, consent: boolean, daily: boolean): string {
+/** Birdwatch's card: the newest game, across the whole row, and where it plays today. */
+function birdwatchCard(): string {
+  return `<article class="panel game wide"><div class="art lime">${screen(MEDIA.screens.birdwatch, "160px", ALT.birdwatch)}</div><div class="txt"><h3>Birdwatch</h3><p class="meta">Cards, in teams. 4 to 6 players.</p><p>Bid for the hand, take the feeder's extra cards, name trump and win tricks. The Bird is the top trump. With five players, call a card: whoever holds it is your secret partner. Play by Official, Tucker or Friesen rules.</p><p class="where"><a href="${PLAY}">Play it in your browser</a>. Coming to the iPhone app.</p></div></article>`;
+}
+
+function body(state: InstallState, consent: boolean, daily: boolean, birdwatch: boolean): string {
   const c = MEDIA.clip;
   const s = MEDIA.screens;
   const install = installBlock(state);
@@ -334,7 +367,7 @@ function body(state: InstallState, consent: boolean, daily: boolean): string {
 <div>
 <p class="chip">Free family games</p>
 <h1 id="top">Family game night, <span>every night.</span></h1>
-<p class="lede">${daily ? "Two games for the whole family, and four new puzzles every day." : "Two games for the whole family."} Gather round the TV, pass one phone, or play from far away.</p>
+<p class="lede">${birdwatch ? "Three" : "Two"} games for the whole family${daily ? ", and four new puzzles every day" : ""}. Gather round the TV, pass one phone, or play from far away.</p>
 ${install}
 </div>
 <div class="scene">
@@ -352,11 +385,11 @@ ${art(MEDIA.art.leap, "pal").replace(' loading="lazy"', "")}
 
 <section class="band" aria-labelledby="games">
 <div class="wrap">
-<h2 id="games">Two games</h2>
-<p class="sub">Each one has a How to play video in the app.</p>
+<h2 id="games">${birdwatch ? "Three games" : "Two games"}</h2>
+<p class="sub">${birdwatch ? "Each one teaches itself with How to play." : "Each one has a How to play video in the app."}</p>
 <div class="games">
 <article class="panel game"><div class="art pink">${screen(s.catTower, "160px", ALT.catTower)}</div><div class="txt"><h3>Cat Tower</h3><p class="meta">Cards. 2 to 6 players.</p><p>Rummy up a ten-shelf tower. Collect sets and runs to clear each level, and your cat climbs a shelf. Yarn is wild. A Cucumber makes the next cat skip a turn.</p></div></article>
-<article class="panel game"><div class="art sky">${screen(s.tiles, "160px", ALT.tiles)}</div><div class="txt"><h3>Tuna Tiles</h3><p class="meta">Tiles. 2 to 4 players.</p><p>Tile rummy. Lay matches and rows on the rug, and move any tile already there. Yarn is wild. Empty your stash first to win.</p></div></article>
+<article class="panel game"><div class="art sky">${screen(s.tiles, "160px", ALT.tiles)}</div><div class="txt"><h3>Tuna Tiles</h3><p class="meta">Tiles. 2 to 4 players.</p><p>Tile rummy. Lay matches and rows on the rug, and move any tile already there. Yarn is wild. Empty your stash first to win.</p></div></article>${birdwatch ? `\n${birdwatchCard()}` : ""}
 </div>
 </div>
 </section>
@@ -368,8 +401,8 @@ ${daily ? `\n${dishSection()}\n` : ""}
 <p class="sub">Everyone looks up at one big table.</p>
 <ol class="steps">
 <li class="panel"><h3>Open it on the big screen</h3><p>Go to <a class="url" href="${TV}">play.conleychaos.com<wbr>/play/tv</a> on a laptop plugged into the TV, a smart TV's browser, or a tab you cast.</p></li>
-<li class="panel"><h3>Scan the code</h3><p>Scan the code on the TV with your phone. Everyone else scans to join.</p></li>
-<li class="panel"><h3>Hold just your hand</h3><p>In a phone's browser, you see just your own cards. Tap Table for the whole board.</p></li>
+<li class="panel"><h3>Scan the code</h3><p>Scan the code on the TV with your phone, or type it in. Everyone else scans to join.</p></li>
+<li class="panel"><h3>Hold just your hand</h3><p>Your phone shows just your own cards, in the app or the browser. Tap Table for the whole board.</p></li>
 </ol>
 </div>
 <div class="scene tvscene">
@@ -457,18 +490,19 @@ ${install}
 /**
  * The home page. `install` picks the install action (see `installState`), `origin` is this
  * request's own (for the canonical link and the social image), `consent` says whether a
- * parent can allow turn alerts for a child, as the privacy policy does, and `daily` whether the
- * Daily Dish is on (`DAILY`), as the privacy policy says it.
+ * parent can allow turn alerts for a child, as the privacy policy does, `daily` whether the
+ * Daily Dish is on (`DAILY`), as the privacy policy says it, and `birdwatch` whether Birdwatch
+ * tables can be dealt (`GAMES`).
  */
-export function homePage(install: Install = {}, origin = "https://play.conleychaos.com", consent = true, daily = false): Response {
+export function homePage(install: Install = {}, origin = "https://play.conleychaos.com", consent = true, daily = false, birdwatch = false): Response {
   const state = installState(install);
   const html = shell({
-    title: TITLE,
-    head: head(state, origin, daily),
+    title: birdwatch ? BIRDWATCH_TITLE : TITLE,
+    head: head(state, origin, daily, birdwatch),
     style: STYLE,
     current: "home",
     credit: true,
-    body: body(state, consent, daily),
+    body: body(state, consent, daily, birdwatch),
   });
   return new Response(html, {
     headers: { "content-type": "text/html; charset=utf-8", "cache-control": CACHE, "content-security-policy": HOME_CSP },

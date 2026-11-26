@@ -15,15 +15,15 @@ const CONTACT = "privacy@conleychaos.com";
 
 const SUPPORT_HTML = docPage({
   title: "Pounce: Family Games support",
-  head: '<meta name="description" content="Help for Pounce: Family Games. Start a table and add players, play the House Cat bot, learn Cat Tower and Tuna Tiles<!--daily-->, play the Daily Dish<!--/daily-->, play in a browser or on a TV, set reminders, allow turn alerts for a child, report or block a player, and delete your data.">\n',
+  head: '<meta name="description" content="Help for Pounce: Family Games. Start a table and add players, play the House Cat bot, learn Cat Tower and Tuna Tiles<!--birdwatch--> and Birdwatch<!--/birdwatch--><!--daily-->, play the Daily Dish<!--/daily-->, play in a browser or on a TV, set reminders, allow turn alerts for a child, report or block a player, and delete your data.">\n',
   current: "support",
   body: `<h1>Pounce: Family Games help</h1>
-<p>Pounce has two family games, Cat Tower and Tuna Tiles. Play them in the iPhone and iPad app, or in any web browser at <a href="/play/">play.conleychaos.com/play</a>. Everyone sits at the same tables. If something isn't covered here, write to us at the bottom of the page.</p>
+<p>Pounce has family games: Cat Tower and Tuna Tiles<!--birdwatch-->, and Birdwatch in the browser<!--/birdwatch-->. Play them in the iPhone and iPad app, or in any web browser at <a href="/play/">play.conleychaos.com/play</a>. Everyone sits at the same tables. If something isn't covered here, write to us at the bottom of the page.</p>
 
 <section>
 <h2>Start a table and add players</h2>
 <ul>
-<li>On Home, tap Play on Cat Tower or Tuna Tiles.</li>
+<li>On Home, tap Play on a game.</li>
 <li>In the lobby, tap Add a player. Same room shows a QR code to scan. Far away sends a link. This phone lets someone play on your phone, passing it between turns. In a browser it says This device.</li>
 <li>Nobody needs an account to play. A link opens your table in Pounce. Without the app, its page offers Play in your browser, or the App Store. After installing, open Pounce and tap Paste to sit at the same table.</li>
 <li>Tap Start when everyone is seated. Play live together, or take a turn when you have a minute. The game waits for you.</li>
@@ -65,9 +65,23 @@ const SUPPORT_HTML = docPage({
 </ul>
 </section>
 
-<!--daily--><section>
+<!--birdwatch--><section>
+<h2>How to play Birdwatch</h2>
+<p>Cards, for four to six players in teams. Play it in your browser at <a href="/play/">play.conleychaos.com/play</a>. It's coming to the iPhone app.</p>
+<ul>
+<li>Pick the rules in the lobby. Official leaves out the 1s. In Tucker and Friesen, 1s are the highest card of their suit. In Friesen, the Bird follows suit like any other trump.</li>
+<li>With four players, two teams of two sit across from each other. With six, three teams of two. With five, the bid winner calls a card, and whoever holds it is their secret partner for the hand. Everyone finds out when that card is played.</li>
+<li>Bid on how many points your side will take, or pass. The highest bid wins the hand.</li>
+<li>The bid winner takes the feeder's extra cards, puts back the same number, and names trump.</li>
+<li>Follow the suit that was led if you can. The highest trump takes the trick, or else the highest card of the suit led. The Bird is the top trump.</li>
+<li>Points come from the 5s, 10s and 14s, the Bird, and in Tucker and Friesen the 1s. Make your bid and your side scores its points. Miss it and your side loses the bid.</li>
+<li>Official games go to 300, Tucker and Friesen to 500. House Cats fill empty seats, and take over for anyone who leaves.</li>
+</ul>
+</section>
+
+<!--/birdwatch--><!--daily--><section>
 <h2>The Daily Dish</h2>
-<p>Four new puzzles every day, the same for the whole family. Play them in your browser at <a href="/play/daily">play.conleychaos.com/play/daily</a>, or tap Open the Dish on Home there. They're coming to the iPhone app.</p>
+<p>Four new puzzles every day, the same for the whole family. In the iPhone and iPad app they're on Home. In a browser, go to <a href="/play/daily">play.conleychaos.com/play/daily</a>, or tap Open the Dish on Home there.</p>
 <ul>
 <li>Sniff: find the five-letter word in six tries. Each guess shows which letters are in the word, and which are in the right spot.</li>
 <li>Nine Lives: fill the grid so every row, column and box has 1 to 9 once.</li>
@@ -81,7 +95,7 @@ const SUPPORT_HTML = docPage({
 
 <!--/daily--><section>
 <h2>Play in a web browser</h2>
-<p>Go to <a href="/play/">play.conleychaos.com/play</a> on an Android phone, a laptop or a tablet. It plays both games at the same tables as the iPhone app. To keep it like an app, use your browser's Install or Add to Home Screen option, or Install Pounce in its Settings where your browser offers it. Turn on Turn alerts in Settings to hear when it's your move.</p>
+<p>Go to <a href="/play/">play.conleychaos.com/play</a> on an Android phone, a laptop or a tablet. It plays Cat Tower and Tuna Tiles at the same tables as the iPhone app<!--birdwatch-->, and Birdwatch too<!--/birdwatch-->. To keep it like an app, use your browser's Install or Add to Home Screen option, or Install Pounce in its Settings where your browser offers it. Turn on Turn alerts in Settings to hear when it's your move.</p>
 </section>
 
 <section>
@@ -89,8 +103,8 @@ const SUPPORT_HTML = docPage({
 <ul>
 <li>On the big screen, open <a href="/play/tv">play.conleychaos.com/play/tv</a>. A laptop plugged into the TV, a smart TV's browser or a cast browser tab all work.</li>
 <li>Pick a game on the TV. Everyone scans the code on the TV with their phone to join, and any phone can press Start.</li>
-<li>Already at a table in your browser? Scan the code on the TV's start screen to put that table on the TV.</li>
-<li>In a phone's browser, you see just your own cards. Tap Table to see the whole board, and Cards to go back. The iPhone app shows the whole table.</li>
+<li>Already at a table? Tap Show on TV, then scan the code on the TV's start screen or type it. That table moves to the TV.</li>
+<li>Your phone shows just your own cards, in the app or the browser. Tap Table to see the whole board, and Cards to go back.</li>
 </ul>
 </section>
 
@@ -132,15 +146,21 @@ const SUPPORT_HTML = docPage({
 </section>`,
 });
 
-/** With the Daily Dish (`DAILY` on) the help page explains it; off, nothing of it, as the privacy policy does. */
-const SUPPORT = {
-  daily: SUPPORT_HTML.replace(/<!--\/?daily-->/g, ""),
-  plain: SUPPORT_HTML.replace(/<!--daily-->[\s\S]*?<!--\/daily-->/g, ""),
-};
+/** Keeps a marked part of the help page (`<!--tag-->...<!--/tag-->`) without its marks, or drops it. */
+const part = (html: string, tag: string, on: boolean): string =>
+  on ? html.replace(new RegExp(`<!--/?${tag}-->`, "g"), "") : html.replace(new RegExp(`<!--${tag}-->[\\s\\S]*?<!--/${tag}-->`, "g"), "");
+
+/**
+ * With the Daily Dish (`DAILY` on) the help page explains it; off, nothing of it, as the privacy
+ * policy does. Birdwatch likewise follows `GAMES`.
+ */
+const SUPPORT: Record<string, string> = Object.fromEntries(
+  [false, true].flatMap((daily) => [false, true].map((birdwatch) => [`${daily}/${birdwatch}`, part(part(SUPPORT_HTML, "daily", daily), "birdwatch", birdwatch)])),
+);
 
 /** The help page; public, static, no scripts. */
-export function supportPage(daily = false): Response {
-  return new Response(SUPPORT[daily ? "daily" : "plain"], { headers: HEADERS });
+export function supportPage(daily = false, birdwatch = false): Response {
+  return new Response(SUPPORT[`${daily}/${birdwatch}`], { headers: HEADERS });
 }
 
 /**
@@ -164,16 +184,19 @@ export function robotsTxt(origin: string): Response {
  * llms.txt (llmstxt.org): a plain summary for assistants asked what Pounce is. It says only what
  * the landing page and the privacy policy say.
  */
-export function llmsTxt(origin: string, consent = true, daily = false): Response {
+export function llmsTxt(origin: string, consent = true, daily = false, birdwatch = false): Response {
   const dish = daily
-    ? `\n\nThe Daily Dish is four new puzzles every day, the same for the whole family: Sniff (find a five-letter word in six tries), Nine Lives (a number grid), Cat Nap (one cat in each row, column and patch, no two touching) and Box Fort (drag block pieces onto a rug and clear lines). A family board shows how everyone you play with did today, and a TV can show it. The server checks every move and works out every result. The puzzles play in the browser at ${origin}/play/daily today and are coming to the iPhone app.`
+    ? `\n\nThe Daily Dish is four new puzzles every day, the same for the whole family: Sniff (find a five-letter word in six tries), Nine Lives (a number grid), Cat Nap (one cat in each row, column and patch, no two touching) and Box Fort (drag block pieces onto a rug and clear lines). A family board shows how everyone you play with did today, and a TV can show it. The server checks every move and works out every result. The puzzles play in the iPhone and iPad app and in the browser at ${origin}/play/daily.`
     : "";
+  const games = birdwatch
+    ? "It has three games: Cat Tower, a rummy-style card game for two to six players where your cats climb a ten-shelf tower; Tuna Tiles, tile rummy for two to four players where yarn is wild; and Birdwatch, a trick-taking card game for four to six players in teams, with bidding, trump and a top card called the Bird. Cat Tower and Tuna Tiles play in the iPhone and iPad app and in any web browser, and players on each sit at the same tables. Birdwatch plays in the browser today and is coming to the iPhone app."
+    : "It has two games: Cat Tower, a rummy-style card game for two to six players where your cats climb a ten-shelf tower, and Tuna Tiles, tile rummy for two to four players where yarn is wild. It plays in the iPhone and iPad app and in any web browser, and players on each sit at the same tables.";
   const alerts = consent ? "a parent decides whether they get notifications" : "they get no push notifications from our server";
   const text = `# Pounce: Family Games
 
-> Pounce is a free family games app made by Conley Chaos LLC. It has two games: Cat Tower, a rummy-style card game for two to six players where your cats climb a ten-shelf tower, and Tuna Tiles, tile rummy for two to four players where yarn is wild. It plays in the iPhone and iPad app and in any web browser, and players on each sit at the same tables.
+> Pounce is a free family games app made by Conley Chaos LLC. ${games}
 
-Play live together, or take turns over days. The game waits for everyone. Add players in the same room with a QR code, from far away with a link, or by passing one phone. A House Cat bot can hold a seat. To put the table on a TV, open ${origin}/play/tv on any big screen with a browser. A phone in the browser then shows just its own hand. On iPhone, Pounce has turn reminders, a Live Activity and a streak widget.${dish}
+Play live together, or take turns over days. The game waits for everyone. Add players in the same room with a QR code, from far away with a link, or by passing one phone. A House Cat bot can hold a seat. To put the table on a TV, open ${origin}/play/tv on any big screen with a browser. Each phone, in the app or the browser, then shows just its own hand. On iPhone, Pounce has turn reminders, a Live Activity and a streak widget.${dish}
 
 Pounce is free. It has no chat, no ads, no tracking and no third-party analytics, and nobody needs an account to play. Children under 13 get a simpler, limited version, and ${alerts}.
 

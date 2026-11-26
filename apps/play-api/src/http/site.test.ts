@@ -18,7 +18,7 @@ describe("supportPage", () => {
   test("covers each topic, the privacy contact and the privacy link", async () => {
     const html = await supportPage().text();
     for (const s of [
-      "tap Play on Cat Tower or Tuna Tiles",
+      "tap Play on a game",
       "Add a player",
       "Same room",
       "Far away",
@@ -29,7 +29,8 @@ describe("supportPage", () => {
       "How to play Tuna Tiles",
       'href="/play/"',
       'href="/play/tv"',
-      "you see just your own cards",
+      "Your phone shows just your own cards, in the app or the browser.",
+      "Tap Show on TV",
       "Reminders",
       "Kids' alerts",
       "Add a child",
@@ -135,13 +136,15 @@ describe("robots.txt and the sitemap", () => {
 });
 
 describe("the Daily Dish on the help page and llms.txt", () => {
-  test("off: not a word of it; on: how to play each puzzle, in the browser and coming to the app", async () => {
+  test("off: not a word of it; on: how to play each puzzle, in the app and the browser", async () => {
     const off = await supportPage().text();
     expect(off).not.toMatch(/Daily Dish|Sniff|Nine Lives|Cat Nap|Box Fort|<!--/);
     const on = await supportPage(true).text();
     expect(on).toContain("<h2>The Daily Dish</h2>");
     for (const name of ["Sniff:", "Nine Lives:", "Cat Nap:", "Box Fort:"]) expect(on, name).toContain(`<li>${name}`);
-    expect(on).toContain("They're coming to the iPhone app.");
+    // In the App Store app since 1.2.
+    expect(on).toContain("In the iPhone and iPad app they're on Home.");
+    expect(on).not.toContain("coming to the iPhone app");
     expect(on).toContain("play the Daily Dish");
     expect(on).not.toContain("<!--");
     expect(on).not.toMatch(/\b(wordle|block blast|zoodoku|sudoku|nyt)\b/i);
@@ -152,7 +155,42 @@ describe("the Daily Dish on the help page and llms.txt", () => {
     expect(off).not.toMatch(/Daily Dish|\/play\/daily/);
     const on = await llmsTxt("https://play.conleychaos.com", true, true).text();
     expect(on).toContain("The Daily Dish is four new puzzles every day");
-    expect(on).toContain("https://play.conleychaos.com/play/daily today and are coming to the iPhone app.");
+    expect(on).toContain("The puzzles play in the iPhone and iPad app and in the browser at https://play.conleychaos.com/play/daily.");
+    expect(on).not.toContain("coming to the iPhone app");
     expect(on).toContain("- [The Daily Dish](https://play.conleychaos.com/play/daily)");
+  });
+});
+
+describe("Birdwatch on the help page and llms.txt", () => {
+  test("off: not a word of it; on: how to play it, in the browser and coming to the iPhone app", async () => {
+    for (const daily of [false, true]) {
+      const off = await supportPage(daily).text();
+      expect(off).not.toMatch(/Birdwatch|Tucker|Friesen|<!--/);
+      const on = await supportPage(daily, true).text();
+      expect(on).toContain("<h2>How to play Birdwatch</h2>");
+      expect(on).toContain("Cards, for four to six players in teams.");
+      for (const s of ["Official", "Tucker", "Friesen", "secret partner", "names trump", "The Bird is the top trump.", "House Cats fill empty seats"]) {
+        expect(on, s).toContain(s);
+      }
+      expect(on).toContain("It's coming to the iPhone app.");
+      expect(on).toContain("learn Cat Tower and Tuna Tiles and Birdwatch");
+      expect(on).toContain("It plays Cat Tower and Tuna Tiles at the same tables as the iPhone app, and Birdwatch too.");
+      expect(on.includes("<h2>The Daily Dish</h2>")).toBe(daily);
+      expect(on).not.toContain("<!--");
+      // Never the commercial game it resembles, and never an App Store claim.
+      expect(on).not.toMatch(/\brook\b/i);
+      expect(on).not.toMatch(/Birdwatch[^.]*(App Store|in the app\b)/);
+    }
+  });
+
+  test("llms.txt names Birdwatch only with it on, as in the browser and coming to the iPhone app", async () => {
+    const off = await llmsTxt("https://play.conleychaos.com", true, true).text();
+    expect(off).not.toContain("Birdwatch");
+    expect(off).toContain("It has two games");
+    const on = await llmsTxt("https://play.conleychaos.com", true, true, true).text();
+    expect(on).toContain("It has three games");
+    expect(on).toContain("Birdwatch, a trick-taking card game for four to six players in teams");
+    expect(on).toContain("Birdwatch plays in the browser today and is coming to the iPhone app.");
+    expect(on).not.toMatch(/\brook\b|[\u2013\u2014]|Apple TV/i);
   });
 });

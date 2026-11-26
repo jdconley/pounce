@@ -12,16 +12,24 @@ The games:
 - **Cat Tower**: a set-collecting rummy game where cats climb a ten-shelf cat tower, one phase per
   shelf. Yarn is wild, and a Cucumber makes the next cat skip a turn.
 - **Tuna Tiles**: tile rummy for two to four. Yarn is wild here too.
+- **Birdwatch**: a trick-taking card game in teams for four to six. Bid for the hand, take the
+  feeder's extra cards, name trump and win tricks; the Bird is the top trump. With five, the bid
+  winner calls a card and whoever holds it is their secret partner. Three rule sets: Official,
+  Tucker and Friesen. House Cats fill empty seats. In the browser now at
+  [play.conleychaos.com/play](https://play.conleychaos.com/play) and on its TV page; coming to the
+  iPhone app in 1.3 (in TestFlight). Design:
+  [docs/superpowers/specs/2026-11-25-birdwatch-design.md](docs/superpowers/specs/2026-11-25-birdwatch-design.md).
 - **The Daily Dish**: four new puzzles every day, the same for the whole family, with a family
   board and streaks. Sniff (find the five-letter word), Nine Lives (a number grid), Cat Nap (one
-  cat in each row, column and patch) and Box Fort (drag blocks onto a rug). In the browser now at
-  [play.conleychaos.com/play/daily](https://play.conleychaos.com/play/daily); coming to the app in
-  1.2. The server checks every move and works out every result
+  cat in each row, column and patch) and Box Fort (drag blocks onto a rug). In the app since 1.2,
+  and in the browser at [play.conleychaos.com/play/daily](https://play.conleychaos.com/play/daily).
+  The server checks every move and works out every result
   ([docs/daily-protocol.md](docs/daily-protocol.md)).
 
-An Apple TV app (in TestFlight, not on the App Store yet) puts the whole table on the TV;
-everyone plays from a phone, in the app or in the browser. See
-[apps/play-ios](apps/play-ios/README.md#the-apple-tv-app).
+Pounce on the TV: open [play.conleychaos.com/play/tv](https://play.conleychaos.com/play/tv) in a
+browser on the big screen, and each phone (the app since 1.2, or a browser) shows just its own
+cards. Show on TV moves a table there by its code. An Apple TV app is in TestFlight, not on the App
+Store yet. See [apps/play-ios](apps/play-ios/README.md#the-apple-tv-app).
 
 No ads, no chat, no public profiles, and no account needed to play. Children under 13 get a limited
 version, and a parent decides whether they get turn alerts.
@@ -32,7 +40,8 @@ version, and a parent decides whether they get turn alerts.
 | --- | --- | --- |
 | 1.0 | On the App Store since November 2026 | Cat Tower, live and turn-based tables, House Cat bots, streaks, widgets, the live table on the Lock Screen, parent consent for kids. |
 | 1.1 | Released on the App Store on 16 November 2026 | Tuna Tiles. A faster first game: a House Cat holds a seat. Add players your way: Same room (scan a QR code), Far away (send a link) or This phone (pass and play). Invites that survive installing the app (Paste). A new Home, How to play videos, clearer Settings, tips. |
-| 1.2 | Not submitted yet | Pounce on the TV (the Apple TV app and the browser TV). The Daily Dish: four daily puzzles, a family board, stats and a share card, in the web player since launch day and in the TestFlight build. |
+| 1.2 | Released on the App Store on 26 November 2026 | Pounce on the TV: your phone shows just your cards, Tap Table for the whole board, and Show on TV by scanning or typing the TV's code. The Daily Dish: Sniff, Nine Lives, Cat Nap and Box Fort, a family board, and streaks. The Apple TV app is not on the App Store yet. |
+| 1.3 | In TestFlight | Birdwatch, the third table game: bidding, the feeder, trump and the Bird, 4 to 6 players, Official, Tucker and Friesen rules. On the web and its TV page since 26 November 2026. |
 
 Every merge to `main` that touches the app builds to TestFlight and goes to the Family and Friends
 group (`apps/play-ios/README.md`, TestFlight). What each App Store version says is kept in the
@@ -45,7 +54,7 @@ repo: What's New and the listing in `docs/whats-new/`, the reviewer notes in
 | --- | --- |
 | `apps/play-api` | The game server: a Cloudflare Worker with one Durable Object per room. It owns the rules, the bots and the hidden hands, and referees the Daily Dish's puzzles (`src/daily`). It also serves the website (below). |
 | `apps/play-ios` | The iOS app (SwiftUI shell, SpriteKit table). See its [README](apps/play-ios/README.md). |
-| `apps/play-web` | Pounce in a browser, at `play.conleychaos.com/play`: both games and the Daily Dish for Android, laptops and anyone without an iPhone, installable as an app. It imports the server's rules and protocol from `apps/play-api`, so it can't drift from the game. |
+| `apps/play-web` | Pounce in a browser, at `play.conleychaos.com/play`: every game and the Daily Dish for Android, laptops and anyone without an iPhone, installable as an app. It imports the server's rules and protocol from `apps/play-api`, so it can't drift from the game. |
 | `docs/superpowers` | The design spec, implementation plans and follow-up notes. |
 
 ## Develop
@@ -77,10 +86,12 @@ cp apps/play-api/.dev.vars.example apps/play-api/.dev.vars   # gitignored
 pnpm --filter @pounce/play-api exec wrangler dev --port 8787
 ```
 
-The example `.dev.vars` sets `GAMES=tiles`, which lets the local server deal the second game (the
-tile game) as well as Cat Tower; `apps/play-ios/scripts/dev-server.sh` passes it too. Production's
-`GAMES` in `apps/play-api/wrangler.jsonc` is `tiles` as well: apps from version 1.1 deal and play
-the tile game, and version 1.0 never sees a tile table.
+The example `.dev.vars` sets `GAMES=tiles,birdwatch`, which lets the local server deal the tile game
+and Birdwatch as well as Cat Tower; `apps/play-ios/scripts/dev-server.sh` passes `tiles` unless
+`DEV_SERVER_GAMES` says otherwise. Production's
+`GAMES` in `apps/play-api/wrangler.jsonc` is `tiles,birdwatch`: apps from version 1.1 deal and
+play the tile game, version 1.0 never sees a tile table, and only 1.3 and the web player see
+Birdwatch tables.
 
 ## The website
 
@@ -101,7 +112,9 @@ do, using the version Apple's public lookup reports (cached, never waited on). P
 Tiles arrived in 1.1. So while the App Store still has 1.0, a Tuna Tiles invite's button goes to the
 TestFlight beta, and other invites say "tap Join" (or "tap this link again") instead of "tap
 Paste". Once the App Store has 1.1, every invite goes to the App Store with Paste, by itself
-(`GAME_SINCE` and `PASTE_SINCE` in `apps/play-api/src/http/links.ts`).
+(`GAME_SINCE` and `PASTE_SINCE` in `apps/play-api/src/http/links.ts`). Birdwatch needs 1.3: until
+the App Store has it, a Birdwatch invite sends iPhones to the beta and says the game is coming to
+the iPhone app, and the landing page, help and llms.txt say it plays in the browser.
 
 `/get` redirects to whichever link is set (or home), so other sites and the QR code can point at
 `https://play.conleychaos.com/get`.

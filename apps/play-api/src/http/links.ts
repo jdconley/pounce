@@ -35,6 +35,7 @@ const STYLE = css(`
 .game{display:inline-block;margin:0 0 6px;padding:5px 16px;border:3px solid var(--ink);border-radius:999px;font-family:var(--round);font-size:1.05rem;font-weight:900;line-height:1.2;box-shadow:0 3px 0 var(--ink)}
 .game.cat-tower{background:var(--violet);color:#fff}
 .game.tiles{background:var(--sky);color:var(--ink)}
+.game.birdwatch{background:var(--lime);color:var(--ink)}
 .table{margin:4px auto 0;color:var(--muted);font-weight:700;overflow-wrap:anywhere}
 .go{display:block;margin:20px 0 0;padding:15px 20px;border:3px solid var(--ink);border-radius:999px;background:linear-gradient(#FFC21A,#FF8A00);box-shadow:0 6px 0 var(--ink);color:var(--ink);font-family:var(--round);font-size:1.35rem;font-weight:900;text-decoration:none}
 .go:active{transform:translateY(4px);box-shadow:0 2px 0 var(--ink)}
@@ -108,8 +109,15 @@ const DISH_GAME = "daily";
  */
 export const DISH_SINCE = "1.2";
 
+/**
+ * The first App Store version with Birdwatch. It is in TestFlight (1.3) and the browser; until
+ * Apple's lookup names 1.3, a Birdwatch invite sends iPhones to the beta and says the game is coming
+ * to the iPhone app.
+ */
+export const BIRDWATCH_SINCE = "1.3";
+
 /** The first app version that can play each game, for games newer than the first release. */
-export const GAME_SINCE: Readonly<Record<string, string>> = { tiles: "1.1", [DISH_GAME]: DISH_SINCE };
+export const GAME_SINCE: Readonly<Record<string, string>> = { tiles: "1.1", birdwatch: BIRDWATCH_SINCE, [DISH_GAME]: DISH_SINCE };
 
 /**
  * Whether the App Store's current version is at least `since`. Unknown counts as no: a page
@@ -124,6 +132,11 @@ export function storeHas(install: Install, since: string): boolean {
 function storePlays(install: Install, game: string): boolean {
   const since = GAME_SINCE[game];
   return since === undefined || storeHas(install, since);
+}
+
+/** A table game the App Store has the app for, but whose version there can't open it yet. */
+function notInStoreYet(install: Install, game: string): boolean {
+  return isGameId(game) && https(install.appStoreUrl) !== null && !storePlays(install, game);
 }
 
 export const https = (url: string | undefined): string | null => (url?.startsWith("https://") ? url : null);
@@ -161,6 +174,9 @@ function store(install: Install, game: string = DEFAULT_GAME): { url: string; be
 /** One line under the button, so nobody is surprised to land on a beta page. */
 const BETA_NOTE = `<p class="note">Pounce is in beta. This opens TestFlight.</p>`;
 
+/** The beta line for a game the App Store's version can't open yet: it's the game that's coming, not Pounce. */
+const comingNote = (game: string): string => `<p class="note">${escapeHtml(gameTitle(game))} is coming to the iPhone app. This opens the beta on TestFlight.</p>`;
+
 /**
  * The button: copies `invite` (the page's own link) and opens the store; with nothing to copy,
  * just the store. Then the one line that says what to do once it's installed.
@@ -183,7 +199,8 @@ function getButton(install: Install, invite: string | null, opts: { game?: strin
     ? `<a class="go" id="get" href="${href}" data-invite="${escapeHtml(invite)}" data-copied="Invite copied">Get Pounce</a>
 <p class="next">${next}</p>`
     : `<a class="go" href="${href}">Get Pounce</a>`;
-  return `${button}${to.beta ? `\n${BETA_NOTE}` : ""}${browser}`;
+  const note = !to.beta ? "" : opts.game && notInStoreYet(install, opts.game) ? `\n${comingNote(opts.game)}` : `\n${BETA_NOTE}`;
+  return `${button}${note}${browser}`;
 }
 
 const NOINDEX = { "cache-control": "no-store", "referrer-policy": "no-referrer", "x-robots-tag": "noindex" };
@@ -291,7 +308,8 @@ export function sharePage(code: string, install: Install, origin: string, peek: 
   const game = known?.game ?? DEFAULT_GAME;
   const title = host ? `${host.name} saved you a seat` : "Come play Pounce";
   const description = known ? [gameTitle(game), known.table].filter(Boolean).join(" · ") : `Table ${code}`;
-  const update = known ? game !== DEFAULT_GAME : newest;
+  // "Update it first" only when an update helps: not for a game the App Store's version can't open yet.
+  const update = known ? game !== DEFAULT_GAME && !notInStoreYet(install, game) : newest;
   const html = page({
     title: escapeHtml(title),
     head: `${banner(install, url, game)}${previewTags({ title, description, url, origin, game: known ? game : "" })}\n`,

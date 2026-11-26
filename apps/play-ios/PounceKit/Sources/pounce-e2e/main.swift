@@ -20,6 +20,7 @@
 //        prints "linked <CODE>", then watches that table as its screen, one line per snapshot and
 //        event; fails if anything it hears carries a hand, a rack, or a drawn card or tile.
 //        --again: "Link another table" after each link, so a phone can move the TV)
+//   pounce-e2e birdwatch host|join <CODE> [--rules official|tucker|friesen] …   (Birdwatch.swift)
 //
 // Every mode takes `--base <url>` (default http://localhost:8787). Exit 0 on success, 1 with a
 // one-line reason on failure, 2 on bad usage.
@@ -110,7 +111,10 @@ actor Device {
         generation += 1
         let gen = generation
         let api = api
-        let s = RoomSocket(code: code, config: config, credential: { try await api.credential() })
+        // The upgrade carries this device's headers (Birdwatch's games header among them).
+        let s = RoomSocket(
+            code: code, config: config, credential: { try await api.credential() },
+            connector: URLSessionWebSocketConnector(headers: config.headers))
         socket = s
         pump = Task { [weak self] in
             for await event in s.events { await self?.handle(event, gen: gen) }
@@ -743,6 +747,7 @@ do {
     case "peek": try await peek(config, options)
     case "host": try await hostMode(config, options)
     case "screen": try await screenMode(config, options)
+    case "birdwatch": try await birdwatchMode(config, options)
     default:
         log("unknown mode \(mode)")
         exit(2)
