@@ -11,6 +11,7 @@ import type { BirdView } from "@pounce/play-api/birdwatch/view";
 import type { ClientMessage, ErrorCode, GameAim, RoomEvent, RoomView, ServerMessage } from "@pounce/play-api/protocol";
 import type { GameEvent, Action } from "@pounce/play-api/rules/engine";
 import type { TilesAction, TilesEvent } from "@pounce/play-api/tiles/engine";
+import type { TumbleServer } from "@pounce/play-api/tumble/wire";
 
 
 /** A move any game's table sends. */
@@ -50,7 +51,12 @@ export type RoomListener = {
   /** A room event, as it is played (after the ones before it have had their moment). */
   event?: (e: Paced, room: RoomView | null) => void;
   change?: (s: RoomState) => void;
+  /** Toy Tumble's live stream (`docs/live-protocol.md`): not room state, so never paced or folded. */
+  live?: (m: TumbleServer) => void;
 };
+
+/** The live stream's message types, handed on as they arrive. */
+const LIVE: ReadonlySet<string> = new Set(["tumble", "tumbleHit", "tumbleSync", "tumbleSeat"]);
 
 /** How long each kind of event holds the stage before the next one plays. */
 export function eventPause(e: RoomEvent): number {
@@ -496,6 +502,11 @@ export class RoomStore {
   }
 
   private onMessage(m: ServerMessage): void {
+    // The protocol's server union doesn't list the live stream yet (`tumble/wire.ts` has it).
+    if (LIVE.has((m as { t: string }).t)) {
+      for (const l of [...this.listeners]) l.live?.(m as unknown as TumbleServer);
+      return;
+    }
     switch (m.t) {
       case "snapshot":
         if (m.protocol !== PROTOCOL) {

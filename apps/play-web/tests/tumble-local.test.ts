@@ -4,6 +4,7 @@
  * stops on a hidden tab until a sync comes.
  */
 import { fits, newBox, W, type Box } from "@pounce/play-api/tumble/box";
+import { gravityMs as engineGravity } from "@pounce/play-api/tumble/clock";
 import { toyAt } from "@pounce/play-api/tumble/queue";
 import { spawn, toyCells } from "@pounce/play-api/tumble/toys";
 import { describe, expect, test } from "vitest";
@@ -28,17 +29,12 @@ function setup() {
 const junk = (id: number, rows = 1, gap = 3): HitWire => ({ t: "tumbleHit", r: 2, id, from: 0, to: 1, k: "junk", x: { rows, gap } });
 
 describe("gravity", () => {
-  test("starts at 1000 ms a row, 15% faster every 30 s, never under 50 ms, and the Zoomies from 2:30", () => {
+  test("is the engine's shared clock: 1000 ms a row to start, Catnip 4 times as fast, never under 50 ms", () => {
+    expect(gravityMs).toBe(engineGravity);
     expect(gravityMs(0)).toBe(1000);
-    expect(gravityMs(29_999)).toBe(1000);
     expect(gravityMs(30_000)).toBeCloseTo(850);
-    expect(gravityMs(60_000)).toBeCloseTo(722.5);
-    expect(gravityMs(149_999)).toBeCloseTo(1000 * 0.85 ** 4);
-    expect(gravityMs(150_000)).toBeCloseTo(1000 * 0.85 ** 4 * 0.7);
-    expect(gravityMs(165_000)).toBeCloseTo(1000 * 0.85 ** 4 * 0.49);
-    expect(gravityMs(600_000)).toBe(50);
     expect(gravityMs(0, true)).toBe(250);
-    expect(gravityMs(140_000, true)).toBeGreaterThanOrEqual(50);
+    expect(gravityMs(600_000)).toBe(50);
   });
 });
 
