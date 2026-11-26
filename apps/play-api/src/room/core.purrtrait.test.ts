@@ -46,6 +46,12 @@ function started(speed = 1, seats = 2): Room {
   return r;
 }
 
+/** The room as a fresh Durable Object would build it from storage. */
+function rebuild(r: Room): Room {
+  const state = JSON.parse(JSON.stringify(r.state)) as typeof r.state;
+  return new RoomCore<PurrState>(state, () => clock, rng, undefined, 1, { games: ["cat-tower", "purrtrait"], tv: true, streaks: true });
+}
+
 describe("the turn clock", () => {
   it("choosing times out to the easy word", () => {
     const r = started();
@@ -128,6 +134,97 @@ describe("the turn clock", () => {
     expect(errorsOf(act(r, "c", 2, { type: "forfeit" }))).toEqual([]);
     expect(game(r).phase).toBe("drawing");
     expect(viewOf(r, "a").remainingMs).toBe(55_000);
+  });
+
+  it("a late alarm never times out a turn whose screen was already gone", () => {
+    const r = started();
+    act(r, "a", 0, { type: "choose", level: "easy" });
+    clock = T0 + 10_000;
+    r.disconnect("tv");
+    // The alarm is long overdue (the deadline was T0 + 60 000).
+    clock = T0 + 100_000;
+    r.tick();
+    expect(game(r).phase).toBe("drawing");
+    expect(viewOf(r, "a")).toMatchObject({ paused: true, remainingMs: 60_000 - 10_000 - SCREEN_GRACE_MS });
+    expect(r.state.timers.pausedAt).toBe(T0 + 10_000 + SCREEN_GRACE_MS);
+  });
+
+  it("a deadline that passed before the screen left still times out", () => {
+    const r = started();
+    act(r, "a", 0, { type: "choose", level: "easy" });
+    clock = T0 + 55_000;
+    r.disconnect("tv");
+    clock = T0 + 200_000;
+    r.tick();
+    expect(game(r).phase).toBe("reveal");
+  });
+
+  it("the stall counts the whole absence, across turns", () => {
+    const r = started();
+    act(r, "a", 0, { type: "choose", level: "easy" });
+    r.disconnect("tv");
+    clock += SCREEN_GRACE_MS;
+    r.tick();
+    const pausedAt = clock;
+    // The drawer ends the turn; the reveal and the next turn keep the same pause.
+    act(r, "a", 0, { type: "giveUp" });
+    expect(r.state.timers.pausedAt).toBe(pausedAt);
+    clock += 6_000;
+    r.tick();
+    expect(game(r).phase).toBe("choosing");
+    expect(r.state.timers.pausedAt).toBe(pausedAt);
+    clock = pausedAt + STALL_END_MS;
+    r.tick();
+    expect(game(r).phase).toBe("over");
+    expect(game(r).endReason).toBe("stalled");
+  });
+
+  it("a screen that comes back in a reveal clears the pause", () => {
+    const r = started();
+    act(r, "a", 0, { type: "choose", level: "easy" });
+    r.disconnect("tv");
+    clock += SCREEN_GRACE_MS;
+    r.tick();
+    act(r, "a", 0, { type: "giveUp" });
+    expect(game(r).phase).toBe("reveal");
+    expect(r.state.timers.pausedAt).not.toBeNull();
+    r.connect("tv");
+    expect(r.state.timers.pausedAt).toBeNull();
+    clock += 6_000;
+    r.tick();
+    expect(viewOf(r, "a")).toMatchObject({ phase: "choosing", paused: false, remainingMs: 10_000 });
+  });
+
+  it("a room rebuilt from storage keeps its clock, mid-drawing", () => {
+    const r = started();
+    act(r, "a", 0, { type: "choose", level: "easy" });
+    clock += 15_000;
+    const again = rebuild(r);
+    expect(viewOf(again, "a")).toMatchObject({ paused: false, remainingMs: 45_000 });
+    expect(again.nextAlarm()).toBe(r.nextAlarm());
+    clock += 45_000;
+    again.tick();
+    expect(game(again).phase).toBe("reveal");
+  });
+
+  it("a room rebuilt from storage keeps its pause and resumes", () => {
+    const r = started();
+    act(r, "a", 0, { type: "choose", level: "easy" });
+    clock += 20_000;
+    r.disconnect("tv");
+    clock += SCREEN_GRACE_MS;
+    r.tick();
+    clock += 60_000;
+    const again = rebuild(r);
+    expect(viewOf(again, "a")).toMatchObject({ paused: true, remainingMs: 30_000 });
+    expect(again.nextAlarm()).toBe(r.nextAlarm());
+    again.tick();
+    expect(game(again).phase).toBe("drawing");
+    again.connect("tv");
+    expect(viewOf(again, "a")).toMatchObject({ paused: false, remainingMs: 30_000 });
+    clock += 30_000;
+    again.tick();
+    expect(game(again).phase).toBe("reveal");
   });
 
   it("a screen back inside the grace never pauses", () => {

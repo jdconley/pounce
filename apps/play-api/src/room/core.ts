@@ -673,15 +673,21 @@ export class RoomCore<S = CatTowerState> {
       out.push(...this.botStep());
     }
 
+    // A screen gone past its grace stops the clock first, so a late alarm never times out a turn
+    // whose screen was already away; then a due deadline, then the stalled end.
+    this.syncClock();
     if (state.status === "playing" && (timers.turnEndsAt ?? null) !== null && (timers.turnEndsAt as number) <= this.now()) {
       timers.turnEndsAt = null;
       // Only a game with `turnLimitMs` has a deadline, and such a game names what a deadline does.
       out.push(...this.applyAndAfter(this.actor() as Seat, this.game.timeUpAction));
     }
-    // A screen gone past its grace stops the clock; one that stayed away too long ends the game.
-    this.syncClock();
-    if (state.status === "playing" && (timers.pausedAt ?? null) !== null && (timers.pausedAt as number) + STALL_END_MS / this.speed <= this.now()) {
-      const ended = (this.game.stall as NonNullable<typeof this.game.stall>)(state.gameState as S);
+    if (
+      state.status === "playing" &&
+      this.game.stall &&
+      (timers.pausedAt ?? null) !== null &&
+      (timers.pausedAt as number) + STALL_END_MS / this.speed <= this.now()
+    ) {
+      const ended = this.game.stall(state.gameState as S);
       timers.pausedAt = null;
       out.push(...this.commit(ended.state, ended.events as AnyGameEvent[]), ...this.afterAndSnapshots());
     }
@@ -1042,18 +1048,26 @@ export class RoomCore<S = CatTowerState> {
    * and carries on, with the same time left, when it is back.
    */
   private syncClock(): void {
-    const { timers } = this.state;
-    if (this.state.status !== "playing") return;
+    const { timers, screenLeftAt } = this.state;
+    if (this.state.status !== "playing" || !this.game.turnLimitMs) return;
     const now = this.now();
     if (this.screenShown()) {
+      timers.pausedAt = null;
       if ((timers.pausedLeftMs ?? null) === null) return;
       timers.turnEndsAt = now + (timers.pausedLeftMs as number);
       timers.pausedLeftMs = null;
-      timers.pausedAt = null;
-    } else if ((timers.turnEndsAt ?? null) !== null) {
-      timers.pausedLeftMs = Math.max(0, (timers.turnEndsAt as number) - now);
+      return;
+    }
+    // The pause began when the grace ran out, however late the alarm that noticed.
+    const at = screenLeftAt === undefined ? now : Math.min(now, screenLeftAt + SCREEN_GRACE_MS / this.speed);
+    // Carried across turns and phases while the screen stays away: the stall counts the whole absence.
+    timers.pausedAt ??= at;
+    const due = timers.turnEndsAt ?? null;
+    // A deadline that passed before the screen went is the turn's to time out.
+    if (due !== null && due > at) {
+      // Never more than the phase's own limit: a turn that began within the grace has run less.
+      timers.pausedLeftMs = Math.min(due - at, (this.game.turnLimitMs(this.state.gameState as S) as number) / this.speed);
       timers.turnEndsAt = null;
-      timers.pausedAt = now;
     }
   }
 
@@ -1062,7 +1076,7 @@ export class RoomCore<S = CatTowerState> {
     const { timers } = this.state;
     const limit = this.game.turnLimitMs?.(this.state.gameState as S) ?? null;
     if (limit === null) {
-      this.stopClock();
+      this.stopClock(true);
       return;
     }
     const key = `${this.turnKey()}/${limit}`;
@@ -1076,19 +1090,20 @@ export class RoomCore<S = CatTowerState> {
       } else {
         timers.turnEndsAt = null;
         timers.pausedLeftMs = left;
-        timers.pausedAt = this.now();
+        timers.pausedAt ??= this.now();
       }
     }
     this.syncClock();
   }
 
-  private stopClock(): void {
+  /** No clock now (a reveal, the end). `keepPause`: the stall keeps counting while the screen stays away. */
+  private stopClock(keepPause: boolean): void {
     const { timers } = this.state;
     // Games without clocks keep their timers as they always were.
     if (timers.clockKey === undefined && timers.turnEndsAt === undefined) return;
     timers.turnEndsAt = null;
     timers.pausedLeftMs = null;
-    timers.pausedAt = null;
+    if (!keepPause) timers.pausedAt = null;
     timers.clockKey = null;
   }
 
@@ -1806,13 +1821,13 @@ export class RoomCore<S = CatTowerState> {
       timers.cleanupAt = state.lastActivity + CLEANUP_AFTER_MS;
       timers.botAt = null;
       timers.nextRoundAt = null;
-      this.stopClock();
+      this.stopClock(false);
       return;
     }
     if (phase === "between") {
       timers.nextRoundAt = now + NEXT_ROUND_DELAY_MS / this.speed;
       timers.botAt = null;
-      this.stopClock();
+      this.stopClock(true);
       return;
     }
 
