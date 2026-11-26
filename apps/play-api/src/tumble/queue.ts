@@ -26,7 +26,7 @@ export function toyAt(roundSeed: Readonly<Seed>, n: number): ToyId {
   const bag = Math.floor(n / BAG);
   while (dealt.bags.length <= bag) {
     const b = dealt.bags.length;
-    const [order, state] = rngShuffle([...SMALL, b % 2 === 0 ? "p5" : "u5"], dealt.state);
+    const [order, state] = rngShuffle<ToyId>([...SMALL, b % 2 === 0 ? "p5" : "u5"], dealt.state);
     dealt.bags.push(order);
     dealt.state = state;
   }
