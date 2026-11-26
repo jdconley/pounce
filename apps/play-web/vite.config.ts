@@ -1,4 +1,5 @@
 import { execSync } from "node:child_process";
+import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 
 import { defineConfig } from "vite";
@@ -22,6 +23,20 @@ function buildVersion(now = new Date()): string {
   return `${now.getUTCFullYear()}.${p(now.getUTCMonth() + 1)}${p(now.getUTCDate())}.${p(now.getUTCHours())}${p(now.getUTCMinutes())}`;
 }
 
+/**
+ * The games the server this build ships with deals: `WEB_GAMES`, else the Worker's own `GAMES`
+ * (wrangler.jsonc), so a game behind the flag stays off the shelf until the flag lists it.
+ */
+function dealtGames(): string {
+  if (process.env.WEB_GAMES) return process.env.WEB_GAMES;
+  try {
+    const wrangler = readFileSync(new URL("../play-api/wrangler.jsonc", import.meta.url), "utf8");
+    return /"GAMES"\s*:\s*"([^"]*)"/.exec(wrangler)?.[1] ?? "";
+  } catch {
+    return "";
+  }
+}
+
 const DEV_SERVER = process.env.DEV_SERVER_URL ?? "http://localhost:8787";
 
 export default defineConfig({
@@ -29,6 +44,7 @@ export default defineConfig({
   define: {
     __BUILD__: JSON.stringify(buildId()),
     __VERSION__: JSON.stringify(buildVersion()),
+    __GAMES__: JSON.stringify(dealtGames()),
   },
   build: {
     outDir: fileURLToPath(new URL("../play-api/public/play", import.meta.url)),

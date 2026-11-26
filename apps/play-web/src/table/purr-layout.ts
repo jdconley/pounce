@@ -37,7 +37,7 @@ export function drawLayout(w: number, h: number, text = 1, safeTop = 0, safeBott
     const swatch = Math.max(36, Math.min(56, Math.floor((column - 4 * 8) / 5)));
     return { side, swatch, bar, palette: swatch * 2 + 16, tools, actions, easel };
   }
-  const swatch = Math.max(28, Math.min(48, Math.floor((w - GUTTER * 2 - 8 * 6) / 9)));
+  const swatch = Math.max(28, Math.min(48, Math.floor((w - GUTTER * 2 - 8 * 4) / 9)));
   const palette = swatch + 8;
   const gaps = GUTTER * 5;
   const easel = fitEasel(w - GUTTER * 2, h - safeTop - safeBottom - bar - palette - tools - actions - gaps);

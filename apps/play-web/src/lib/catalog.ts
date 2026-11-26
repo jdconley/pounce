@@ -13,6 +13,14 @@ export const CATALOG: Record<GameId, { title: string; minSeats: number; maxSeats
   purrtrait: { title: "Purrtrait", minSeats: 2, maxSeats: 10, tagline: "Draw it. The room guesses.", art: "game-purrtrait", tv: true },
 };
 
-export const GAME_IDS = Object.keys(CATALOG) as GameId[];
+declare const __GAMES__: string | undefined;
+
+/**
+ * The games the shelf shows: Cat Tower, and those the server this build ships with deals (its
+ * `GAMES` flag, read at build time). Tests see every game.
+ */
+const DEALT = typeof __GAMES__ === "string" ? __GAMES__.split(",") : null;
+
+export const GAME_IDS = (Object.keys(CATALOG) as GameId[]).filter((id) => id === "cat-tower" || DEALT === null || DEALT.includes(id));
 
 export const titleOf = (id: string | undefined): string => (id && id in CATALOG ? CATALOG[id as GameId].title : "a newer game");
