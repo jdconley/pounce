@@ -57,7 +57,7 @@ final class BirdSeatNode: SKNode {
     ) {
         cat.setActive(active)
         cat.setCount(count)
-        cat.setBadges(bot: bot, skip: false)
+        cat.setBadges(bot: bot)
         cat.setPresence(bot ? nil : presence)
         let shown = left ? String(localized: "\(name) (left)", comment: "Birdwatch: a seat a House Cat plays for someone who left") : name
         let texture = CardFaceFactory.shared.nameTag(

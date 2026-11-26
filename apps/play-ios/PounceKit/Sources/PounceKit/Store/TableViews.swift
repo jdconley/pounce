@@ -68,3 +68,14 @@ public final class TableViews {
         if view(code: from) == .table { set(.table, code: to) }
     }
 }
+
+extension TableView {
+    /// JD: "switch to table view on cat tower when the player lays down." A phone on Cards goes to
+    /// Table when one of its own seats lays its level down (`mine`), so the laid groups and the
+    /// groups to hit are in view. Kept as if Table was tapped, until Cards is. Someone else's
+    /// lay-down never switches it, and nothing switches it back. Nil: no change.
+    public static func afterLayDown(_ event: GameEvent, mine: [Seat], showing: TableView?) -> TableView? {
+        guard case .laidDown(let seat, _) = event, mine.contains(seat), showing == .cards else { return nil }
+        return .table
+    }
+}

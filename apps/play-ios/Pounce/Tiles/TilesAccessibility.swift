@@ -275,6 +275,10 @@ extension TilesScene {
         items.append(Item(
             id: "tiles.debug", label: "tiles debug", frame: CGRect(x: 0, y: size.height - 2, width: 2, height: 2), traits: .staticText,
             live: { [weak self] in self?.debugSummary }))
+        // Pieces that popped to another size between two frames: "<blips>|<the last few>".
+        items.append(Item(
+            id: "tiles.sizes", label: "tiles sizes", frame: CGRect(x: 4, y: size.height - 2, width: 2, height: 2), traits: .staticText,
+            live: { [weak self] in self?.sizeWatch.probe }))
         // The last drag's timings (`DragPerf`), for the performance check.
         items.append(Item(
             id: "tiles.perf", label: "tiles perf", frame: CGRect(x: 2, y: size.height - 2, width: 2, height: 2), traits: .staticText,

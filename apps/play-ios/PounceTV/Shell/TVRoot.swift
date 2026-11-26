@@ -47,6 +47,11 @@ struct TVRoot: View {
             guard !Task.isCancelled else { return }
             pawFocused = true
         }
+        // The TV stays on while a table is live on it (`KeepAwake`): its lobby and its game.
+        .onChange(of: KeepAwake.tv(atTable: model.phase == .lobby || model.phase == .table, status: model.table?.store.room?.status),
+                  initial: true) { _, on in
+            IdleTimer.keepAwake(on, for: "tv")
+        }
         .onChange(of: scenePhase) { _, phase in
             switch phase {
             case .background: Task { await model.background() }

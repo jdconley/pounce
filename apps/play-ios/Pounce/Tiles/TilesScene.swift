@@ -367,6 +367,22 @@ final class TilesScene: SKScene {
         redraw()
     }
 
+    #if DEBUG
+    /// A piece that popped to another size between two frames (`CardSizeWatch`, `tiles.sizes`).
+    var sizeWatch = CardSizeWatch()
+
+    override func didFinishUpdate() {
+        super.didFinishUpdate()
+        guard !isScreen else { return }
+        // Every piece, followed from the stash to the rug and back (it changes parents on the way).
+        var cards: [(card: Int, height: CGFloat, what: String)] = []
+        for (tile, node) in pieces where CardSizeWatch.shows(node, in: self) {
+            cards.append((tile, CardSizeWatch.height(node), node.parent === rackLayer ? "stash" : "rug"))
+        }
+        sizeWatch.frame(cards, context: layout.map { "stash \(Int($0.rackPiece.height))" } ?? "-")
+    }
+    #endif
+
     override func update(_ currentTime: TimeInterval) {
         let work = FrameWork("tiles.update"); defer { work.end() }
         stepInput(currentTime)

@@ -262,8 +262,14 @@ enum DemoMode: String {
         ]
     }
 
-    /// The fake socket behind this demo.
+    /// The fake socket behind this demo. `-on-tv`: every snapshot it sends has a TV at the table
+    /// (`OnTVSocket`), so `replay`, `celebrate` and `howto` play on Cards.
     func makeSocket() -> any RoomSocketing {
+        let socket = baseSocket()
+        return CommandLine.arguments.contains("-on-tv") ? OnTVSocket(socket) : socket
+    }
+
+    private func baseSocket() -> any RoomSocketing {
         if isTiles { return TilesDemo.socket(self) }
         if isBirdwatch { return BirdDemo.socket(self) }
         return switch self {
@@ -281,6 +287,37 @@ enum DemoMode: String {
         default: DemoSocket(room: room)
         }
     }
+}
+
+/// DEBUG `-on-tv`: a demo's socket with a TV at its table (`RoomView.screen`), so its game plays on
+/// Cards. Everything else passes through as it is.
+final class OnTVSocket: RoomSocketing {
+    let events: AsyncStream<SocketEvent>
+    private let inner: any RoomSocketing
+
+    init(_ inner: any RoomSocketing) {
+        self.inner = inner
+        let source = inner.events
+        events = AsyncStream { continuation in
+            let pump = Task {
+                for await event in source {
+                    if case .message(.snapshot(let version, let seq, var room)) = event {
+                        room.screen = true
+                        continuation.yield(.message(.snapshot(protocol: version, seq: seq, room: room)))
+                    } else {
+                        continuation.yield(event)
+                    }
+                }
+                continuation.finish()
+            }
+            continuation.onTermination = { _ in pump.cancel() }
+        }
+    }
+
+    func start() async { await inner.start() }
+    func send(_ m: ClientMessage) async throws { try await inner.send(m) }
+    func reconnectNow() async { await inner.reconnectNow() }
+    func stop() async { await inner.stop() }
 }
 
 /// `-demo celebrate`: the lobby, then each `DemoFixtures.celebration()` step (its events, then

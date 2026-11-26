@@ -85,6 +85,7 @@ final class OpponentsNode: SKNode {
             node.position = CGPoint(x: slots[i].x, y: slots[i].y + layout.catLift)
             node.setScale(1)
             node.zPosition = CGFloat(i)
+            node.setPickled(!game.isOut(seat) && pickled.contains(seat))
             node.setPresence(view?.kind == .bot ? nil : view?.presence)
             // A seat that forfeited (§5.13): dimmed, with "Forfeited" where a bad link would show.
             let out = game.isOut(seat)
@@ -95,8 +96,8 @@ final class OpponentsNode: SKNode {
             node.setLink(out ? nil : link?.level)
             // Pickled: the skip badge, and "Pickled" where a bad link would show (its glyph stays on
             // the cat) until the turn played in this seat's place is over.
-            let isPickled = !out && pickled.contains(seat)
-            node.setBadges(bot: view?.kind == .bot, skip: isPickled)
+            let isPickled = node.isPickled
+            node.setBadges(bot: view?.kind == .bot)
             let pill: SeatPill? = isPickled ? .pickled : link.map { .link($0.level, $0.text) }
             node.slotWidth = onTV ? layout.seatFrames[safe: i]?.width ?? spacing : spacing
             node.setCount(game.handCounts[safe: seat])

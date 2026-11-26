@@ -69,10 +69,14 @@ extension TableScene {
     func towerAccessibilityItem(_ model: TableModel, _ game: GameView) -> TableAccessibility.Item {
         var value: String?
         if tower.isOpen {
+            let pickled = pickled.seats(in: game)
             value = game.phase.indices.map { seat in
-                String(
+                let words = String(
                     localized: "\(SeatInfo.name(model.room, seat)), level \(min(game.phase[seat] + 1, 10))",
                     comment: "VoiceOver: one seat on the open cat tower, e.g. 'Mia, level 3'")
+                return pickled.contains(seat)
+                    ? words + ", " + String(localized: "pickled", comment: "VoiceOver: a Cucumber skips this player's turn")
+                    : words
             }.joined(separator: "; ")
         }
         let scores = UIAccessibilityCustomAction(

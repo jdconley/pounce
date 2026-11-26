@@ -1,5 +1,7 @@
 import PounceKit
 import SpriteKit
+import SwiftUI
+import UIKit
 
 /// The phase goal above the hand, drawn as one tray per requirement in the server's phase
 /// order: the group size as a big numeral and a tiny card fan that shows the kind (same
@@ -12,8 +14,11 @@ final class TrayNode: SKNode {
     private(set) var frames: [CGRect] = []
     private var slots: [Slot] = []
     private var builtFor: (reqs: [Requirement], frame: CGRect)?
-    /// The big paw that sends the lay-down; shown when every tray is valid.
+    /// "Lay down", the paw at its left, on a lime pill (JD: the paw alone didn't read as lay
+    /// down); sends the lay-down, shown when every tray is valid.
     let layDownButton: SKSpriteNode
+    private let layDownPaw = SKSpriteNode(texture: TableArt.image(ArtName.iconPawMenu))
+    private var layDownBuiltFor: (scale: CGFloat, width: CGFloat)?
     /// Card nodes by id for the cards currently in trays.
     private var cardNodes: [CardID: CardNode] = [:]
     /// Cards shown in each tray, in display order (hidden ones left out).
@@ -40,10 +45,12 @@ final class TrayNode: SKNode {
     private static let trayArt = CGSize(width: 120, height: 64)
 
     override init() {
-        layDownButton = SKSpriteNode(texture: TableArt.image(ArtName.iconPawMenu), size: CGSize(width: 64, height: 64))
+        layDownButton = SKSpriteNode(color: .clear, size: CGSize(width: 64, height: 48))
         super.init()
         layDownButton.isHidden = true
         layDownButton.zPosition = 5
+        layDownPaw.zPosition = 0.1
+        layDownButton.addChild(layDownPaw)
         addChild(layDownButton)
     }
 
@@ -52,7 +59,8 @@ final class TrayNode: SKNode {
 
     func update(requirements reqs: [Requirement], layout: TableLayout) {
         let frame = layout.traysFrame
-        layDownButton.position = CGPoint(x: frame.midX, y: frame.maxY + 40)
+        labelLayDown(textScale: TableText.scale, maxWidth: frame.width - 16)
+        layDownButton.position = CGPoint(x: frame.midX, y: frame.maxY + 12 + layDownButton.size.height / 2)
         if let built = builtFor, built.reqs == reqs, built.frame == frame { return }
         builtFor = (reqs, frame)
         requirements = reqs
@@ -116,6 +124,44 @@ final class TrayNode: SKNode {
             cardNodes[id] = nil
         }
         layDownButton.isHidden = !state.allValid || !hidden.isDisjoint(with: state.cardsInTrays)
+    }
+
+    /// Draws the lay-down pill for this text size, at most `maxWidth` wide (the words shrink, never
+    /// below 13 pt, before they get cut).
+    private func labelLayDown(textScale: CGFloat, maxWidth: CGFloat) {
+        if let built = layDownBuiltFor, built.scale == textScale, built.width == maxWidth { return }
+        layDownBuiltFor = (textScale, maxWidth)
+        let text = String(localized: "Lay down", comment: "Table: the button that lays the filled trays down")
+        var size = (19 * min(textScale, TableTextScale.most)).rounded()
+        func font(_ s: CGFloat) -> UIFont { UIFont.systemFont(ofSize: s, weight: .black).rounded }
+        func width(_ s: CGFloat) -> CGFloat {
+            let h = max(44, ceil(font(s).lineHeight + 14))
+            return ceil((text as NSString).size(withAttributes: [.font: font(s)]).width) + h * 0.9 + h * 0.55
+        }
+        while size > 13, width(size) > maxWidth { size -= 1 }
+        let h = max(44, ceil(font(size).lineHeight + 14))
+        let paw = h * 0.72
+        let canvas = CGSize(width: min(width(size), max(maxWidth, h * 2)), height: h)
+        let attrs: [NSAttributedString.Key: Any] = [.font: font(size), .foregroundColor: UIColor(Palette.ink)]
+        let image = UIGraphicsImageRenderer(size: canvas).image { _ in
+            let pill = CGRect(origin: .zero, size: canvas)
+            UIColor(Palette.ink).setFill()
+            UIBezierPath(roundedRect: pill, cornerRadius: h / 2).fill()
+            UIColor(Palette.lime).setFill()
+            UIBezierPath(roundedRect: pill.insetBy(dx: 3, dy: 3), cornerRadius: h / 2 - 3).fill()
+            let textSize = (text as NSString).size(withAttributes: attrs)
+            let box = CGRect(x: h * 0.9, y: (h - textSize.height) / 2, width: canvas.width - h * 0.9 - h * 0.45, height: textSize.height)
+            let style = NSMutableParagraphStyle()
+            style.lineBreakMode = .byTruncatingTail
+            var drawn = attrs
+            drawn[.paragraphStyle] = style
+            (text as NSString).draw(in: box, withAttributes: drawn)
+        }
+        layDownButton.texture = SKTexture(image: image)
+        layDownButton.color = .white
+        layDownButton.size = canvas
+        layDownPaw.size = CGSize(width: paw, height: paw)
+        layDownPaw.position = CGPoint(x: -canvas.width / 2 + h * 0.5, y: 0)
     }
 
     /// The tray under `point` (parent space), with a little slop above and below.

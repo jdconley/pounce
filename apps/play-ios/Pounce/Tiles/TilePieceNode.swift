@@ -267,7 +267,7 @@ final class TilesOpponentsNode: SKNode {
             node.setPresence(view?.kind == .bot ? nil : view?.presence)
             node.alpha = marks.forfeited ? 0.45 : 1  // fade-ok: CatNode is a FadeGroup
             node.setLink(marks.forfeited ? nil : (view?.kind == .human ? LinkWords.seat(view?.link)?.level : nil))
-            node.setBadges(bot: marks.bot, skip: false)
+            node.setBadges(bot: marks.bot)
             node.slotWidth = onTV ? layout.seatFrames[safe: i]?.width ?? spacing : spacing
             node.setCount(marks.forfeited ? nil : marks.count)
             if node.setActive(marks.onTheMove) { turnedOn.append(seat) }

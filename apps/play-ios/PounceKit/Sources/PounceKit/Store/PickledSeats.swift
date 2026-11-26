@@ -12,6 +12,9 @@ public struct PickledSeats: Equatable, Sendable {
     }
 
     private var served: [Seat: Served] = [:]
+    /// Seats a Cucumber was just discarded at, by round, until they are passed over: the mark
+    /// shows as the discard plays, before the snapshot with `pendingSkip` arrives.
+    private var aimed: [Seat: Int] = [:]
     /// The latest round a `roundStarted` dealt: its events play before its snapshot arrives.
     private var dealt: Int?
 
@@ -22,8 +25,12 @@ public struct PickledSeats: Equatable, Sendable {
         switch event {
         case .roundStarted(let next, _):
             served = [:]
+            aimed = [:]
             dealt = next
+        case .discarded(_, _, let target?):
+            aimed[target] = max(dealt ?? round, round)
         case .skipped(let seat):
+            aimed[seat] = nil
             served[seat] = Served(round: max(dealt ?? round, round), turn: nil)
         case .turn(let seat):
             for (skipped, entry) in served {
@@ -35,8 +42,10 @@ public struct PickledSeats: Equatable, Sendable {
             }
         case .forfeited(let seat):
             served[seat] = nil
+            aimed[seat] = nil
         case .roundOver, .gameOver:
             served = [:]
+            aimed = [:]
         case .drew, .laidDown, .hit, .discarded, .reshuffled:
             break
         }
@@ -47,6 +56,7 @@ public struct PickledSeats: Equatable, Sendable {
     public func seats(in game: GameView) -> Set<Seat> {
         guard game.status == .playing else { return [] }
         var seats = Set(game.pendingSkip.indices.filter { game.pendingSkip[$0] })
+        for (seat, round) in aimed where round == game.round { seats.insert(seat) }
         for (seat, entry) in served where entry.round == game.round && (entry.turn ?? game.turn) == game.turn {
             seats.insert(seat)
         }

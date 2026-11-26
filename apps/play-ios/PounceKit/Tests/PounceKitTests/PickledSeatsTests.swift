@@ -34,6 +34,18 @@ import Testing
         #expect(pickled.seats(in: game(turn: 0)).isEmpty)
     }
 
+    /// The mark comes with the Cucumber's discard, before the snapshot that sets `pendingSkip`.
+    @Test func theMarkComesWithTheDiscard() {
+        var pickled = PickledSeats()
+        pickled.note(.discarded(seat: 0, card: 104, skipTarget: 2), round: 3)
+        #expect(pickled.seats(in: game(turn: 0)) == [2])
+        pickled.note(.discarded(seat: 0, card: 5, skipTarget: nil), round: 3)
+        #expect(pickled.seats(in: game(turn: 0)) == [2])
+        // A new round deals the aim away.
+        pickled.note(.roundStarted(round: 4, dealer: 1), round: 3)
+        #expect(pickled.seats(in: game(turn: 2, round: 4)).isEmpty)
+    }
+
     /// Aimed at the next seat: the server skips it in the same move, so `pendingSkip` is never
     /// set in a snapshot. The mark lasts through the turn played instead.
     @Test func theNextSeatIsPickledThroughTheTurnThatReplacesIt() {

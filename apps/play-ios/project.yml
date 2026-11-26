@@ -192,6 +192,7 @@ targets:
       - path: Pounce/Design/FadeGroup.swift
       - path: Pounce/Design/GroupOpacity.swift
       - path: Pounce/Design/Haptics.swift
+      - path: Pounce/Design/IdleTimer.swift
       - path: Pounce/Design/Juice.swift
       - path: Pounce/Design/NameTag.swift
       - path: Pounce/Design/OutlinedText.swift

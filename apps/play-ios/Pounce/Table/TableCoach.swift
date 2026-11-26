@@ -71,6 +71,14 @@ extension TableScene {
 }
 
 /// A discard waiting on the pile, for the Undo pill the shell draws under it.
+/// A discard waiting on "Lay down first?" (`TrayState.asksBeforeDiscard`): the card, where a
+/// Cucumber was aimed, and a serial so the same question twice still shows.
+struct DiscardAsk: Equatable {
+    let serial: Int
+    let card: CardID
+    let target: Seat?
+}
+
 struct UndoOffer: Equatable {
     let serial: Int
     /// The discard pile, in scene space.

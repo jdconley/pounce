@@ -58,7 +58,7 @@ extension TableScene {
         let start = point(of: fromDeck ? deck : discard)
         let face: CardID? = fromDeck ? nil : (card ?? game.discardTop)
         if !fromDeck { discard.top?.alpha = 0 }  // the pile shows what's under it until the snap
-        let node = flyer(face, at: start, z: 1)
+        let node = flyer(face, at: start, scale: pileScale, z: 1)
 
         guard seat == bottomSeat else {
             Sound.shared.play(ArtName.Sound.sfxFlip, volume: 0.4, kind: .game)
@@ -160,10 +160,10 @@ extension TableScene {
                 : .group([
                     .sequence([.moveBy(x: 0, y: 26, duration: 0.13).eased(.easeOut), .moveBy(x: 0, y: -26, duration: 0.13).eased(.easeIn)]),
                     .sequence([.rotate(byAngle: -2 * .pi, duration: 0.22), .rotate(toAngle: 0, duration: 0.04, shortestUnitArc: true)]),
-                    .scale(to: 1, duration: 0.26),
+                    .scale(to: pileScale, duration: 0.26),
                 ])
         } else {
-            flight = Effects.fly(from: node.position, to: landing, duration: 0.3, lift: 44, spins: -1, scale: 1)
+            flight = Effects.fly(from: node.position, to: landing, duration: 0.3, lift: 44, spins: -1, scale: pileScale)
         }
         if !reduceMotion {
             let (swipe, paw) = pawSwipe(at: pile, delay: flight.duration * 0.5)
@@ -441,10 +441,10 @@ extension TableScene {
         for i in 0..<(reduceMotion ? 3 : 5) {
             let side: CGFloat = i.isMultiple(of: 2) ? -1 : 1
             let start = CGPoint(x: from.x + side * 3, y: from.y + CGFloat(i))
-            let node = flyer(nil, at: start, rotation: side * 0.08, z: 0.2 + CGFloat(i) * 0.01)
+            let node = flyer(nil, at: start, scale: pileScale, rotation: side * 0.08, z: 0.2 + CGFloat(i) * 0.01)
             items.append((.sequence([
                 .wait(forDuration: Double(i) * 0.035),
-                Effects.fly(from: start, to: to, duration: 0.24, lift: 22 + CGFloat(i % 3) * 8, rotation: 0),
+                Effects.fly(from: start, to: to, duration: 0.24, lift: 22 + CGFloat(i % 3) * 8, rotation: 0, scale: pileScale),
             ]), node))
             nodes.append(node)
         }
@@ -472,7 +472,7 @@ extension TableScene {
         var i = 0
         for round in 0..<perSeat {
             for seat in order {
-                let node = flyer(nil, at: start, z: 0.3 + CGFloat(i) * 0.001)
+                let node = flyer(nil, at: start, scale: pileScale, z: 0.3 + CGFloat(i) * 0.001)
                 let sound: SKAction = i.isMultiple(of: 4)
                     ? .run { Sound.shared.play(ArtName.Sound.sfxFlip, volume: 0.35, kind: .game) } : .wait(forDuration: 0)
                 let lead = SKAction.sequence([.wait(forDuration: Double(i) * 0.025), sound])
@@ -507,6 +507,16 @@ extension TableScene {
     }
 
     // MARK: geometry
+
+    /// How big a card is drawn on the deck or the discard pile, as a scale of a node made at the
+    /// hand's size (`layout.cardSize`, which every card node is). The piles have a size of their
+    /// own on Cards (`TableLayout.pileSize`: up to half again a hand card, or smaller when room is
+    /// short); on a table it is the hand's. Every card that leaves or lands on a pile starts or
+    /// ends at it, so it never pops to the pile's size at the snapshot.
+    var pileScale: CGFloat {
+        guard let layout, layout.cardSize.height > 0 else { return 1 }
+        return layout.pileSize.height / layout.cardSize.height
+    }
 
     /// A temporary card in the fx layer.
     private func flyer(_ card: CardID?, at p: CGPoint, scale: CGFloat = 1, rotation: CGFloat = 0, z: CGFloat = 0) -> CardNode {

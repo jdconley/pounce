@@ -65,6 +65,10 @@ final class TableScene: SKScene {
     var onNote: (MoveNote) -> Void = { _ in }
     /// A discard is waiting on the pile with an Undo (nil: no longer).
     var onUndo: (UndoOffer?) -> Void = { _ in }
+    /// "Lay down first?" for a discard while the trays hold a lay-down (nil: none up).
+    var onAsk: (DiscardAsk?) -> Void = { _ in }
+    /// The discard that question waits on.
+    var discardAsk: DiscardAsk?
     /// The discard held back for its Undo window (`TableInput`).
     var discardHold: DiscardHold?
     var holdSerial = 0
@@ -84,11 +88,17 @@ final class TableScene: SKScene {
     /// Just this phone's cards are shown (a TV shows the table): what the shell's action row
     /// offers now (`ControllerOffer`).
     var onController: (ControllerOffer) -> Void = { _ in }
+    /// A game event played live (not one the table already showed), for the shell's rules: its
+    /// own lay-down on Cards switches to Table (`TableView.afterLayDown`).
+    var onEvent: (GameEvent) -> Void = { _ in }
     private var publishedOffer = ControllerOffer()
     /// How a table a TV shows is drawn here (`TableScreen` decides); nil: no TV, today's table.
     var tv: TVFrame? {
         didSet {
             guard tv != oldValue else { return }
+            #if DEBUG
+            sizeWatch.mark(tv.map { if case .cards = $0 { "tv cards" } else { "tv table" } } ?? "tv none")
+            #endif
             if case .cards = tv {
                 // The table's own pieces are the TV's now: the tower goes back down, unseen.
                 tower.setOpen(false, animated: false)
@@ -166,6 +176,11 @@ final class TableScene: SKScene {
     /// A played card shown at its target until the server answers (`provisionalMove`).
     private(set) var provisionalCard: CardID?
     private(set) var provisionalNode: CardNode?
+    /// The card a drag just let go of and the scale it was drawn at, for the move that takes it
+    /// from there (`provisionalMove`).
+    var released: (card: CardID, scale: CGFloat)?
+    /// How long a card takes to grow or shrink to the size of the place it was put (a pile, a gap).
+    static let resizeDuration: TimeInterval = 0.12
     /// What the in-flight action was, so a rejection nopes the right thing.
     var lastAct: LastAct? {
         didSet { lastAct == nil ? hidePendingMark() : schedulePendingMark() }
@@ -362,6 +377,32 @@ final class TableScene: SKScene {
         redraw()
     }
 
+    #if DEBUG
+    /// Hand cards drawn small for a few frames (`CardSizeWatch`, the `table.sizes` probe).
+    var sizeWatch = CardSizeWatch()
+
+    override func didFinishUpdate() {
+        super.didFinishUpdate()
+        guard !isScreen else { return }
+        // Every face-up card that isn't a laid group's: the fan, a held card, the piles' tops,
+        // the trays and every card in flight.
+        var cards: [(card: Int, height: CGFloat, what: String)] = []
+        func add(_ node: SKNode, _ what: String) {
+            for case let card as CardNode in node.children {
+                guard let id = card.card, !card.compact, CardSizeWatch.shows(card, in: self) else { continue }
+                cards.append((Int(id), CardSizeWatch.height(card), "\(what) x\(String(format: "%.2f", card.yScale))"))
+            }
+        }
+        add(hand, "hand")
+        add(layer(.drag), "held")
+        add(layer(.fx), "flying")
+        add(discard, "discard")
+        for tray in trays.children { add(tray, "tray") }
+        add(trays, "tray")
+        sizeWatch.frame(cards, context: layout.map { "card \(Int($0.cardSize.height)) pile \(Int($0.pileSize.height))" } ?? "-")
+    }
+    #endif
+
     override func update(_ currentTime: TimeInterval) {
         let work = FrameWork("table.update"); defer { work.end() }
         if input.source != .none { stepDrag() }
@@ -501,7 +542,9 @@ final class TableScene: SKScene {
         case .game(let event, let seq):
             seenSeq = max(seenSeq, seq)
             // Every event counts, even one the table already shows: it says whose turn replaced a skip.
+            let wasPickled = model?.game.map { pickled.seats(in: $0) }
             pickled.note(event, round: model?.game?.round ?? 0)
+            defer { if let game = model?.game, pickled.seats(in: game) != wasPickled { showPickled() } }
             guard seq > drawnSeq else {
                 #if DEBUG
                 timelineLog("skip seq \(seq) (drawn \(drawnSeq)) \(event)")
@@ -522,6 +565,7 @@ final class TableScene: SKScene {
             #endif
             await animate(event)
             animating = false
+            onEvent(event)
             #if DEBUG
             timelineLog("seq \(seq) \(ContinuousClock.now - started) \(event)")
             #endif
@@ -547,6 +591,16 @@ final class TableScene: SKScene {
         }
     }
 
+    /// The pickled marks changed mid-timeline (a Cucumber's discard, a skip, the turn after it):
+    /// the cats in the bar and on the tower show it now, not at the next snapshot.
+    private func showPickled() {
+        guard let model, let game = model.game, let layout, !controllerShown else { return }
+        let seats = pickled.seats(in: game)
+        opponents.update(model: model, seats: model.barSeats(bottom: isScreen ? nil : bottomSeat), layout: layout, pickled: seats)
+        tower.update(model: model, layout: layout, pickled: seats)
+        accessibilityVersion += 1
+    }
+
     /// Before a snap: landed flyers go and anything an animation hid comes back.
     private func settle() {
         for node in transients { node.removeFromParent() }
@@ -563,11 +617,20 @@ final class TableScene: SKScene {
         provisionalMove(card: card, to: point, scale: 1)
     }
 
+    /// `scale`: where it waits, as a scale of the hand's size (`pileScale` on the discard pile, a
+    /// laid card's in a group's gap). It grows or shrinks there from the size it was just drawn at
+    /// (the card let go under the finger, or the hand's), never popping to it in one frame.
     func provisionalMove(card: CardID, to point: CGPoint, scale: CGFloat) {
         provisionalNode?.removeFromParent()
         let node = CardNode(card: card, size: layout?.cardSize ?? CardFaceFactory.cardSize)
         node.position = point
-        node.setScale(scale)
+        let from = released?.card == card ? released?.scale ?? 1 : 1
+        released = nil
+        node.setScale(from)
+        if abs(from - scale) > 0.01 {
+            let director = director
+            Task { await director.run(SKAction.scale(to: scale, duration: Self.resizeDuration).eased(.easeOut), on: node) }
+        }
         node.isPrivate = true  // still my hand's card until the server takes it
         layer(.drag).addChild(node)
         provisionalNode = node
@@ -687,6 +750,11 @@ final class TableScene: SKScene {
                     size: size, safeTop: safeInsets.top, safeBottom: safeInsets.bottom, opponents: max(barSeats.count, 1))
             }
         }
+        #if DEBUG
+        if self.layout?.cardSize != layout.cardSize {
+            sizeWatch.mark("card \(Int(layout.cardSize.height))\(shortHand ? " short" : "") seat \(bottom.map(String.init) ?? "-") shown \(shownRevealed.map(String.init) ?? "-") n \(game.hands[bottom ?? -1]?.count ?? -1)/\(bottom.flatMap { game.handCounts[safe: $0] } ?? -1) r\(game.round)")
+        }
+        #endif
         self.layout = layout
         let onTV = layout.arrangement == .tv
         director.fxScale = onTV ? 2 * layout.tvUnit : 1
@@ -734,7 +802,7 @@ final class TableScene: SKScene {
             opponents.clear()
         } else {
             laidZone.update(model: model, layout: layout)
-            tower.update(model: model, layout: layout)
+            tower.update(model: model, layout: layout, pickled: pickled.seats(in: game))
             // A TV's tower stands open the whole game.
             if onTV { tower.setOpen(true, animated: false) } else { foldOnTurnChange(game) }
             // A phone holding no seat shows every seat in the bar.
@@ -774,8 +842,10 @@ final class TableScene: SKScene {
             trayState = TrayState(requirements: [])
             trayKey = nil
         }
+        if discardAsk != nil, actingSeat == nil || !trayState.asksBeforeDiscard { dropAsk() }
         let dimmed = !(model.isMyTurn && model.currentSeat == bottom)
-        hand.update(content, layout: layout, lifted: selection, gap: faceUp && dragCard != nil ? dragGap : nil, dimmed: dimmed)
+        let resizes = hand.update(content, layout: layout, lifted: selection, gap: faceUp && dragCard != nil ? dragGap : nil, dimmed: dimmed)
+        for (action, node) in resizes { director.play(action, on: node) }
         // A hit preview lasts while its card is dragged or in flight.
         if dragCard == nil, provisionalCard == nil, laidZone.preview != nil { _ = laidZone.setPreview(nil, animated: false) }
 
@@ -1167,8 +1237,8 @@ final class TableScene: SKScene {
 
     var layDownFrame: CGRect {
         let b = trays.layDownButton
-        let d = max(b.size.width, 44)
-        return CGRect(x: b.position.x - d / 2, y: b.position.y - d / 2, width: d, height: d)
+        let w = max(b.size.width, 44), h = max(b.size.height, 44)
+        return CGRect(x: b.position.x - w / 2, y: b.position.y - h / 2, width: w, height: h)
     }
 
     // MARK: accessibility
@@ -1332,6 +1402,12 @@ final class TableScene: SKScene {
                         self.opponents.node(for: seat).map { "\(seat)=\($0.badgeProbe)" }
                     }
                     return (cats + ["tab=\(self.tower.tabPhaseText ?? "-")"]).joined(separator: ",")
+                }),
+            // Hand cards drawn small for a few frames: "<blips>|<the last few>".
+            TableAccessibility.Item(
+                id: "table.sizes", label: "sizes", frame: CGRect(x: 168, y: 0, width: 24, height: 24),
+                traits: .staticText, live: { [weak self] in
+                    self?.sizeWatch.probe
                 }),
             TableAccessibility.Item(
                 id: "table.hit", label: "hit", frame: CGRect(x: 72, y: 0, width: 24, height: 24),

@@ -48,11 +48,11 @@ enum SignalGlyph {
              maxWidth: maxWidth, size: size)
     }
 
-    /// "Pickled" under a seat's name while a Cucumber skips it (`PickledSeats`): ink on the
-    /// cucumber's lime, in the bad link pill's place and shape.
+    /// "Pickled" under a seat's name while a Cucumber skips it (`PickledSeats`): white on
+    /// cucumber green, in the bad link pill's place and shape.
     @MainActor static func pickledPill(maxWidth: CGFloat, size: CGFloat = 12) -> SKTexture {
         pill(String(localized: "Pickled", comment: "Under a player's name: a Cucumber skips their turn"),
-             fill: Palette.lime, ink: Palette.ink, maxWidth: maxWidth, size: size)
+             fill: Palette.pickle, ink: .white, maxWidth: maxWidth, size: size)
     }
 
     @MainActor private static func pill(_ text: String, fill: Color, ink: Color, maxWidth: CGFloat, size: CGFloat) -> SKTexture {
@@ -121,7 +121,8 @@ enum SignalGlyph {
     }
 }
 
-private extension UIFont {
+extension UIFont {
+    /// The same font in the rounded design (the toy lettering), when the system has it.
     var rounded: UIFont {
         guard let descriptor = fontDescriptor.withDesign(.rounded) else { return self }
         return UIFont(descriptor: descriptor, size: pointSize)
