@@ -2081,5 +2081,33 @@
    176
   ],
   "batch": "tiles"
+ },
+ {
+  "name": "bird-card",
+  "dest": "imageset",
+  "points": [
+   96,
+   96
+  ],
+  "batch": "birdwatch"
+ },
+ {
+  "name": "bird-feeder",
+  "dest": "imageset",
+  "points": [
+   96,
+   96
+  ],
+  "batch": "birdwatch"
+ },
+ {
+  "name": "game-birdwatch",
+  "dest": "imageset",
+  "points": [
+   384,
+   256
+  ],
+  "batch": "ui",
+  "fit": "cover"
  }
 ]

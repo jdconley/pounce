@@ -96,14 +96,12 @@ public struct BirdLayout: Equatable, Sendable {
                 window = CGRect(x: 0, y: strip.maxY + 6, width: w, height: max(topBand.minY - strip.maxY - 6, 120))
                 catSide = min(roomy ? 110 : 70, max(48, min(w * 0.17, window.height * 0.22)))
                 seatSpots = Self.arc(count: others, in: window, cat: catSide, full: false)
-                let sw = min(window.width - catSide * 2.3 - 8, roomy ? 620 : 300)
-                var sillTop = window.minY + 8 + min(window.height - catSide * 1.9, roomy ? 460 : 300)
-                // Under every cat above it, with its name tag.
-                for spot in seatSpots where abs(spot.x - window.midX) < sw / 2 + catSide / 2 {
-                    sillTop = min(sillTop, spot.y - catSide * (0.5 + Self.nameDrop) - 2)
-                }
-                sill = CGRect(x: window.midX - sw / 2, y: window.minY + 8, width: sw, height: max(sillTop - window.minY - 8, 100))
-                let sc = min(cw * 0.86, sill.height * 0.3 / Self.cardAspect, sill.width * 0.24)
+                // The sill is a wide band along the window's bottom, under every cat and its tag.
+                var sillTop = window.minY + 10 + (roomy ? 460 : 320)
+                for spot in seatSpots { sillTop = min(sillTop, spot.y - catSide * (0.5 + Self.nameDrop) - 4) }
+                let sw = min(window.width - 28, roomy ? 760 : 420)
+                sill = CGRect(x: window.midX - sw / 2, y: window.minY + 10, width: sw, height: max(sillTop - window.minY - 10, 110))
+                let sc = min(cw * 0.95, sill.height * 0.44 / Self.cardAspect, sill.width * 0.2)
                 sillCard = CGSize(width: sc, height: sc * Self.cardAspect)
             }
         }
@@ -125,9 +123,9 @@ public struct BirdLayout: Equatable, Sendable {
                 return CGPoint(x: cx + CGFloat(cos(a)) * rx, y: cy + CGFloat(sin(a)) * ry)
             }
         }
-        // The window's lower edge is the sill's; the cats ride from mid-height up and over.
-        let cy = window.minY + window.height * 0.36
-        let ry = window.maxY - cat * 0.78 - cy
+        // The cats ride the window's top half, from its middle up and over; the sill is below them.
+        let cy = window.minY + window.height * 0.52
+        let ry = window.maxY - cat * 0.62 - cy
         if count == 1 { return [CGPoint(x: cx, y: cy + ry)] }
         return (0..<count).map { i in
             let a = (180 - Double(i) * 180 / Double(count - 1)) * .pi / 180

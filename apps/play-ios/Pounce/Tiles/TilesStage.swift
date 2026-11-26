@@ -396,6 +396,8 @@ private struct TilesStageInput: Equatable {
 struct TilesCurtain: View {
     let person: Person
     var peeking = false
+    /// Birdwatch's curtain covers a hand of cards, not a stash.
+    var cards = false
     var onBack: () -> Void = {}
     let onRevealed: () -> Void
 
@@ -420,12 +422,16 @@ struct TilesCurtain: View {
                 VStack(alignment: .leading, spacing: 2) {
                     OutlinedText(person.name, size: 34, fill: Palette.orange, width: 4)
                         .accessibilityIdentifier("curtain.name")
-                    OutlinedText(String(localized: "Hold to show your stash", comment: "Tile game curtain: what the paw does"), size: 16, lines: 2)
+                    OutlinedText(cards
+                                 ? String(localized: "Hold to show your hand", comment: "Birdwatch curtain: what the paw does")
+                                 : String(localized: "Hold to show your stash", comment: "Tile game curtain: what the paw does"), size: 16, lines: 2)
                         .accessibilityHidden(true)
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
                 TilesHoldButton(
-                    label: Text("Hold to show \(person.name)'s stash", comment: "VoiceOver: the tile game curtain's paw button"),
+                    label: cards
+                        ? Text("Hold to show \(person.name)'s hand", comment: "VoiceOver: the Birdwatch curtain's paw button")
+                        : Text("Hold to show \(person.name)'s stash", comment: "VoiceOver: the tile game curtain's paw button"),
                     onDone: onRevealed)
                     .accessibilityIdentifier("curtain.hold")
             }

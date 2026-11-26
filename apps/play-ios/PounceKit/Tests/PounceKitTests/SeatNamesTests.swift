@@ -24,6 +24,14 @@ private func room(_ seats: [SeatView], status: RoomStatus = .playing) -> TableMo
         #expect(SeatNames.names(seats, bot: "House Cat") == ["House Cat", "Leo", "House Cat 2", "House Cat 3"])
     }
 
+    /// Birdwatch: a seat a House Cat took over for someone who left keeps their name, and isn't
+    /// counted among the numbered House Cats.
+    @Test func aTakenOverSeatKeepsTheLeaversName() {
+        let mia = Person(id: "m", name: "Mia", cat: 1)
+        let seats = [SeatView(kind: .bot, person: mia, left: true), SeatView(kind: .bot), SeatView(kind: .bot)]
+        #expect(SeatNames.names(seats, bot: "House Cat") == ["Mia", "House Cat", "House Cat 2"])
+    }
+
     @Test func renamesMySeatsWhosePersonWasRenamedHere() {
         var sync = NameSync()
         let model = room([

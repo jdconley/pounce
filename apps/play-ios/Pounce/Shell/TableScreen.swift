@@ -202,7 +202,9 @@ struct TableScreen: View {
 extension TableScreen {
     /// The table for the game the room plays: the tile game's (tile game spec §9.4), or Cat Tower's.
     @ViewBuilder fileprivate var stage: some View {
-        if session.store.room?.isTiles == true {
+        if session.store.room?.isBirdwatch == true {
+            BirdStage(session: session, connection: shownConnection)
+        } else if session.store.room?.isTiles == true {
             TilesStage(session: session, connection: shownConnection)
             #if DEBUG
                 .overlay { if CommandLine.arguments.contains("-tiles-sheet") { TilesPieceSheet() } }

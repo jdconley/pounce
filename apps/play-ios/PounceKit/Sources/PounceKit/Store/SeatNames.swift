@@ -2,13 +2,16 @@
 public enum SeatNames {
     /// Every seat's name as the table shows it: the person's name; a bot's is `bot`, numbered
     /// ("House Cat 2", "House Cat 3") when more than one bot sits; "" for open and closed seats.
+    /// A seat a House Cat took over for someone who left (Birdwatch) keeps that person's name.
     public static func names(_ seats: [SeatView], bot: String) -> [String] {
-        let bots = seats.filter { $0.kind == .bot }.count
+        let bots = seats.filter { $0.kind == .bot && !$0.isTakenOver }.count
         var botNumber = 0
         return seats.map { seat in
             switch seat.kind {
             case .human:
                 return seat.person?.name ?? ""
+            case .bot where seat.isTakenOver:
+                return seat.person?.name ?? bot
             case .bot:
                 botNumber += 1
                 return bots > 1 && botNumber > 1 ? "\(bot) \(botNumber)" : bot

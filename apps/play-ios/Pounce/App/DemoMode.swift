@@ -77,9 +77,17 @@ enum DemoMode: String {
     /// last turn (three pieces left, each fits a row).
     case howto
     case tilesLast = "tiles-last"
+    /// Birdwatch's table in each phase (`BirdDemo`), its lobby, and at a TV.
+    case birdBid = "bird-bid", birdNest = "bird-nest", birdTrump = "bird-trump", birdPlay = "bird-play"
+    case birdWatch = "bird-watch", birdPartner = "bird-partner", birdPartnerMark = "bird-partner-mark"
+    case birdSix = "bird-six", birdBetween = "bird-between", birdOver = "bird-over", birdCurtain = "bird-curtain"
+    case birdTV = "bird-tv", birdLobby = "bird-lobby", birdLobbyReady = "bird-lobby-ready"
 
     /// A tile game demo.
     var isTiles: Bool { rawValue.hasPrefix("tiles") || rawValue.hasPrefix("controller-tiles") }
+
+    /// A Birdwatch demo.
+    var isBirdwatch: Bool { rawValue.hasPrefix("bird-") }
 
     static func from(arguments: [String] = CommandLine.arguments) -> DemoMode? {
         guard let i = arguments.firstIndex(of: "-demo"), arguments.indices.contains(i + 1) else { return nil }
@@ -113,6 +121,9 @@ enum DemoMode: String {
 
     private var baseRoom: RoomView {
         switch self {
+        case .birdBid, .birdNest, .birdTrump, .birdPlay, .birdWatch, .birdPartner, .birdPartnerMark, .birdSix, .birdBetween,
+             .birdOver, .birdCurtain, .birdTV, .birdLobby, .birdLobbyReady:
+            return BirdDemo.room(self)
         case .tiles, .tilesEarly, .tilesOpened, .tilesDraft, .tilesInvalid, .tilesLoupe, .tilesLate, .tilesLong,
              .tilesPass, .tilesOther, .tilesCurtain, .tilesOver, .tilesPlay, .tilesLast,
              .controllerTiles, .controllerTilesOff, .controllerTilesCurtain, .controllerTilesLateOff:
@@ -254,6 +265,7 @@ enum DemoMode: String {
     /// The fake socket behind this demo.
     func makeSocket() -> any RoomSocketing {
         if isTiles { return TilesDemo.socket(self) }
+        if isBirdwatch { return BirdDemo.socket(self) }
         return switch self {
         case .replay: ReplaySocket(start: DemoFixtures.replayStart(), steps: DemoFixtures.replay(), loops: 2)
         case .handoff: ReplaySocket(start: room, steps: Self.handoffSteps(), loops: 1)
