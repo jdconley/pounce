@@ -231,8 +231,8 @@ extension TableScene {
         var items: [(SKAction, SKNode)] = []
         for (i, card) in hand.cards.enumerated() {
             let flip: SKAction = reduceMotion
-                // fade-ok: a 0.25 s blink in place of the flip, Reduce Motion only
-                ? .sequence([.fadeAlpha(to: 0.4, duration: 0.1), .fadeAlpha(to: 1, duration: 0.15)])
+                // A dark blink in place of the flip, Reduce Motion only: never see-through.
+                ? Effects.darkBlink(total: 0.25)
                 : .sequence([
                     .wait(forDuration: Double(i) * 0.03),
                     .scaleX(to: 0, duration: 0.1).eased(.easeIn),

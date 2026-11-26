@@ -3,8 +3,8 @@ import SpriteKit
 
 /// The fanned hand at the bottom. Face cards exist only for the revealed seat; otherwise the
 /// fan is face-down backs (a multi-seat phone between reveals) or empty. Reconciling is
-/// idempotent: nodes are matched by card id and moved to their layout placement. Dimmed off
-/// turn as one layer (`FadeGroup`), so no card shows through the one on top of it.
+/// idempotent: nodes are matched by card id and moved to their layout placement. Always fully
+/// opaque, on turn or off: a see-through hand was hard to read.
 @MainActor
 final class HandNode: FadeGroup {
     enum Content: Equatable {
@@ -32,6 +32,7 @@ final class HandNode: FadeGroup {
     /// kept at the size it was drawn and returned with the tween that takes it to the new one, for
     /// the scene's director: no card pops to a new size in one frame. New cards start at full size.
     @discardableResult
+    /// `dimmed` (off turn) no longer fades the hand: it stays fully opaque.
     func update(_ content: Content, layout: TableLayout, lifted: CardID?, gap: Int? = nil, dimmed: Bool) -> [(SKAction, SKNode)] {
         self.content = content
         // Every node's height as drawn now (an SKSpriteNode's `size` has its scale in it).
@@ -85,6 +86,7 @@ final class HandNode: FadeGroup {
             node.position = p.position
             node.zRotation = p.rotation
             node.alpha = 1
+            node.colorBlendFactor = 0  // a cancelled dark blink never sticks
             node.zPosition = i == liftedIndex ? Self.liftedZ : Self.z(p)
             if let was = drawn[ObjectIdentifier(node)], layout.cardSize.height > 0,
                abs(was / layout.cardSize.height - 1) > 0.02 {
@@ -92,7 +94,9 @@ final class HandNode: FadeGroup {
                 resizes.append((SKAction.scale(to: 1, duration: Self.resizeDuration).eased(.easeOut), node))
             }
         }
-        alpha = dimmed ? 0.82 : 1  // fade-ok: the hand is a FadeGroup
+        // Never see-through, on or off turn (JD: "for my own hand ... i want the cards to not be
+        // translucent they are hard to see"). Whose turn it is, the turn cue and the rings say.
+        alpha = 1
         return resizes
     }
 

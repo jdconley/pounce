@@ -110,6 +110,14 @@ enum Effects {
     }
 
     /// Squash: 1.0 → (1.15, 0.85) → 1.0 in 0.14 s, relative to the node's current scale.
+    /// A card darkens and comes back, over `total` seconds: Reduce Motion's stand-in for a motion.
+    static func darkBlink(total: TimeInterval) -> SKAction {
+        .sequence([
+            .colorize(with: UIColor(white: 0.08, alpha: 1), colorBlendFactor: 0.5, duration: total / 2),
+            .colorize(withColorBlendFactor: 0, duration: total / 2),
+        ])
+    }
+
     static func squash() -> SKAction {
         .sequence([
             .scaleX(by: 1.15, y: 0.85, duration: 0.07).eased(.easeOut),
@@ -117,12 +125,10 @@ enum Effects {
         ])
     }
 
-    /// Nope: three quick ±6° wiggles that end at the starting angle. Reduce Motion: a dim blink.
+    /// Nope: three quick ±6° wiggles that end at the starting angle. Reduce Motion: a dark blink
+    /// (darkened, never see-through, so a hand card stays easy to read).
     static func nope() -> SKAction {
-        if reduceMotion {
-            // fade-ok: a 0.16 s blink, Reduce Motion only (a pile's cards show through for that long)
-            return .sequence([.fadeAlpha(by: -0.5, duration: 0.08), .fadeAlpha(by: 0.5, duration: 0.08)])
-        }
+        if reduceMotion { return darkBlink(total: 0.16) }
         let d = CGFloat.pi / 30
         var steps: [SKAction] = [.rotate(byAngle: d, duration: 0.04)]
         for _ in 0..<2 {
