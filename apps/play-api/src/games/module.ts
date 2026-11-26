@@ -63,6 +63,17 @@ export interface GameModule<S, A, V, E, Err extends string = string, O = never> 
   turnLimitMs?(s: S): number | null;
   /** What the room applies, for the seat on the move, when `turnLimitMs` runs out. */
   timeUpAction?: A | null;
+  /**
+   * The game ended by the room, for a table whose screen stayed away too long: the final state and
+   * events, applied like any action's result. Absent: such a table never ends that way.
+   */
+  stall?(s: S): { state: S; events: E[] };
+  /**
+   * An action only the room sends (a clock's `timeUp`): refused from a client as `not_allowed`.
+   * Absent: every action is a client's.
+   */
+  parseRoomAction?(raw: unknown): A | null;
+  isRoomOnly?(a: A): boolean;
   /** What the room applies, for seat 0, once the game has sat `between` for a moment; null for a game that never is. */
   betweenAction: A | null;
   /** Leaving for good. A room applies it for a stalled seat its tablemates retire. */

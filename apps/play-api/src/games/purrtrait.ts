@@ -1,5 +1,6 @@
 import {
   apply,
+  finish,
   create,
   CHOOSE_MS,
   endsTurn,
@@ -9,7 +10,7 @@ import {
   type PurrOptions,
   type PurrState,
 } from "../purrtrait/engine";
-import { DEFAULT_OPTIONS, parseAction, parseOptions } from "../purrtrait/parse";
+import { DEFAULT_OPTIONS, isRoomOnly, parseAction, parseOptions, parseRoomAction } from "../purrtrait/parse";
 import { turnKey, view, type PurrView } from "../purrtrait/view";
 
 import type { GameModule } from "./module";
@@ -31,6 +32,9 @@ export const purrtrait: GameModule<PurrState, PurrAction, PurrView, PurrEvent, P
   botAction: (s) => fallbackAction(s),
   endsTurn: (a, events) => endsTurn(a, events),
   parseAction,
+  parseRoomAction,
+  isRoomOnly,
+  stall: (s) => finish(s, "stalled"),
   parseAim: () => null,
   aimAllowed: () => false,
   phase: (s) => (s.phase === "over" ? "over" : s.phase === "reveal" ? "between" : "playing"),

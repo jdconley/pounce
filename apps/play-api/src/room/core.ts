@@ -98,7 +98,19 @@ export type RoomState<S = CatTowerState> = {
   moveFailures: Record<string, { count: number; windowStart: number }>;
   /** Lobby renames (table and seats) per device, within a rolling window. Absent: none yet. */
   renames?: Record<string, { count: number; windowStart: number }>;
-  timers: { botAt: number | null; nextRoundAt: number | null; cleanupAt: number };
+  timers: {
+    botAt: number | null;
+    nextRoundAt: number | null;
+    cleanupAt: number;
+    /** When the turn's clock runs out; null while paused, between turns and in games without clocks. Absent in older rooms. */
+    turnEndsAt?: number | null;
+    /** The clock's time left while the screen is away; null while it runs. Absent in older rooms. */
+    pausedLeftMs?: number | null;
+    /** When the clock was paused, for the stalled end. */
+    pausedAt?: number | null;
+    /** The turn and limit the clock was started for: a new key starts it afresh. */
+    clockKey?: string | null;
+  };
   /** "<round>:<turn>:<turnSeq>" dedupe key for turn pushes. */
   pushedForTurn: string | null;
   /** The turn whose push the player's other devices were last told to clear. Absent in older rooms. */
@@ -298,6 +310,8 @@ export const RETIRE_WARNING_MS = MS_PER_DAY;
  * phones aren't told and told again (divided by the dev speed).
  */
 export const SCREEN_GRACE_MS = 10_000;
+/** A turn clock paused this long (no screen) ends the game as stalled (divided by the dev speed). */
+export const STALL_END_MS = 30 * MS_PER_MINUTE;
 
 /** Most aims a device may send in a second; more are dropped. */
 export const AIM_PER_SECOND = 10;
@@ -431,7 +445,8 @@ export class RoomCore<S = CatTowerState> {
   }
 
   /** The room's game's own check of an `act` message's action (`parseClientMessage`). */
-  parseAction = (raw: unknown): GameAction | null => this.game.parseAction(raw) as GameAction | null;
+  parseAction = (raw: unknown): GameAction | null =>
+    (this.game.parseAction(raw) ?? this.game.parseRoomAction?.(raw) ?? null) as GameAction | null;
 
   /** The room's game's own check of an `aim` message's aim (`parseClientMessage`). */
   parseAim = (raw: unknown): GameAim | null => this.game.parseAim(raw);
@@ -540,6 +555,7 @@ export class RoomCore<S = CatTowerState> {
     if (this.isScreen(deviceId)) {
       // Always: a mark left past the grace would keep an overdue alarm.
       delete this.state.screenLeftAt;
+      this.syncClock();
       // Not `touch`: a TV looking in doesn't keep the table from closing.
       // Back within the grace, the phones were never told it went.
       if (!wasShown && this.features.tv) {
@@ -657,6 +673,19 @@ export class RoomCore<S = CatTowerState> {
       out.push(...this.botStep());
     }
 
+    if (state.status === "playing" && (timers.turnEndsAt ?? null) !== null && (timers.turnEndsAt as number) <= this.now()) {
+      timers.turnEndsAt = null;
+      // Only a game with `turnLimitMs` has a deadline, and such a game names what a deadline does.
+      out.push(...this.applyAndAfter(this.actor() as Seat, this.game.timeUpAction));
+    }
+    // A screen gone past its grace stops the clock; one that stayed away too long ends the game.
+    this.syncClock();
+    if (state.status === "playing" && (timers.pausedAt ?? null) !== null && (timers.pausedAt as number) + STALL_END_MS / this.speed <= this.now()) {
+      const ended = (this.game.stall as NonNullable<typeof this.game.stall>)(state.gameState as S);
+      timers.pausedAt = null;
+      out.push(...this.commit(ended.state, ended.events as AnyGameEvent[]), ...this.afterAndSnapshots());
+    }
+
     for (const [deviceId, device] of Object.entries(state.devices)) {
       if (device.presence === "away" && device.since + ASLEEP_AFTER_MS <= this.now()) {
         out.push(
@@ -693,7 +722,8 @@ export class RoomCore<S = CatTowerState> {
   }
 
   nextAlarm(): number {
-    const { botAt, nextRoundAt, cleanupAt } = this.state.timers;
+    const { botAt, nextRoundAt, cleanupAt, turnEndsAt = null, pausedAt = null } = this.state.timers;
+    const stalls = pausedAt === null ? null : pausedAt + STALL_END_MS / this.speed;
     const decays = Object.values(this.state.devices)
       .filter((device) => device.presence === "away")
       .map((device) => device.since + ASLEEP_AFTER_MS);
@@ -701,7 +731,7 @@ export class RoomCore<S = CatTowerState> {
     const { screenLeftAt } = this.state;
     const screenGone = screenLeftAt === undefined ? null : screenLeftAt + SCREEN_GRACE_MS / this.speed;
     return Math.min(
-      ...[botAt, nextRoundAt, cleanupAt, link, screenGone, this.retireWarningAt(), ...decays, ...Object.values(this.state.live ?? {}).map(deadline)].filter(
+      ...[botAt, nextRoundAt, cleanupAt, turnEndsAt, stalls, link, screenGone, this.retireWarningAt(), ...decays, ...Object.values(this.state.live ?? {}).map(deadline)].filter(
         (t): t is number => t !== null,
       ),
     );
@@ -993,9 +1023,73 @@ export class RoomCore<S = CatTowerState> {
    */
   private gameFields(controlled: Seat[]): Pick<RoomView, "game" | "gameId" | "tiles" | "birdwatch" | "purrtrait"> {
     const { state } = this;
-    const view = state.gameState === null ? null : this.game.view(state.gameState, controlled);
+    const plain = state.gameState === null ? null : this.game.view(state.gameState, controlled);
+    // A game with clocks leaves its view's `remainingMs` and `paused` to the room, which keeps the clock.
+    const view = plain !== null && this.game.turnLimitMs ? { ...(plain as object), ...this.clockView() } : plain;
     if (state.game === DEFAULT_GAME) return { game: view as CatTowerView | null };
     return { game: null, gameId: state.game as Exclude<GameId, "cat-tower">, ...(view === null ? {} : { [state.game]: view }) };
+  }
+
+  /** The turn clock as a view shows it: time left while it runs or is paused, null when the phase has none. */
+  private clockView(): { remainingMs: number | null; paused: boolean } {
+    const { turnEndsAt = null, pausedLeftMs = null } = this.state.timers;
+    if (pausedLeftMs !== null) return { remainingMs: pausedLeftMs, paused: true };
+    return { remainingMs: turnEndsAt === null ? null : Math.max(0, turnEndsAt - this.now()), paused: false };
+  }
+
+  /**
+   * Keeps the turn clock in step with the screen: it stops when the screen is gone past its grace
+   * and carries on, with the same time left, when it is back.
+   */
+  private syncClock(): void {
+    const { timers } = this.state;
+    if (this.state.status !== "playing") return;
+    const now = this.now();
+    if (this.screenShown()) {
+      if ((timers.pausedLeftMs ?? null) === null) return;
+      timers.turnEndsAt = now + (timers.pausedLeftMs as number);
+      timers.pausedLeftMs = null;
+      timers.pausedAt = null;
+    } else if ((timers.turnEndsAt ?? null) !== null) {
+      timers.pausedLeftMs = Math.max(0, (timers.turnEndsAt as number) - now);
+      timers.turnEndsAt = null;
+      timers.pausedAt = now;
+    }
+  }
+
+  /** Starts the clock for a new turn or phase, or lets the running one be; clears it where there is none. */
+  private startClock(): void {
+    const { timers } = this.state;
+    const limit = this.game.turnLimitMs?.(this.state.gameState as S) ?? null;
+    if (limit === null) {
+      this.stopClock();
+      return;
+    }
+    const key = `${this.turnKey()}/${limit}`;
+    if (timers.clockKey !== key) {
+      timers.clockKey = key;
+      const left = limit / this.speed;
+      if (this.screenShown()) {
+        timers.turnEndsAt = this.now() + left;
+        timers.pausedLeftMs = null;
+        timers.pausedAt = null;
+      } else {
+        timers.turnEndsAt = null;
+        timers.pausedLeftMs = left;
+        timers.pausedAt = this.now();
+      }
+    }
+    this.syncClock();
+  }
+
+  private stopClock(): void {
+    const { timers } = this.state;
+    // Games without clocks keep their timers as they always were.
+    if (timers.clockKey === undefined && timers.turnEndsAt === undefined) return;
+    timers.turnEndsAt = null;
+    timers.pausedLeftMs = null;
+    timers.pausedAt = null;
+    timers.clockKey = null;
   }
 
   /** A game event as the room sends it: Cat Tower's as `game`, any other game's under its own id. */
@@ -1546,6 +1640,8 @@ export class RoomCore<S = CatTowerState> {
   }
 
   private act(deviceId: string, seat: Seat, action: GameAction, id?: string): Outbound[] {
+    // The room's own actions (a clock running out) are never a client's.
+    if (this.game.isRoomOnly?.(action)) return [this.fail(deviceId, "not_allowed")];
     const device = this.state.devices[deviceId];
     // Sent again after a reconnect, already applied: the snapshot says so.
     if (id !== undefined && device?.acks?.includes(id)) return [{ to: deviceId, message: this.snapshotFor(deviceId) }];
@@ -1643,12 +1739,23 @@ export class RoomCore<S = CatTowerState> {
     const { state } = this;
     const result = this.game.apply(state.gameState as S, seat, action);
     if (!result.ok) return { error: result.error };
-    state.gameState = result.state;
-    const out = result.events.flatMap((event) => {
+    return { out: this.commit(result.state, result.events as AnyGameEvent[]), events: result.events as AnyGameEvent[] };
+  }
+
+  /** Stores a new game state and sends its events, each device its own filtered copy. */
+  private commit(next: S, events: readonly AnyGameEvent[]): Outbound[] {
+    const { state } = this;
+    state.gameState = next;
+    return events.flatMap((event) => {
       if (this.game.startsTurn(event)) state.turnSeq = state.seq + 1;
       return this.broadcast((deviceId) => this.gameEvent(this.game.filterEvent(event, this.controlledSeats(deviceId))));
     });
-    return { out, events: result.events as AnyGameEvent[] };
+  }
+
+  /** After a change the room made itself: timers follow, and every device gets its snapshot. */
+  private afterAndSnapshots(): Outbound[] {
+    this.afterGameChange();
+    return this.snapshots();
   }
 
   /**
@@ -1699,15 +1806,18 @@ export class RoomCore<S = CatTowerState> {
       timers.cleanupAt = state.lastActivity + CLEANUP_AFTER_MS;
       timers.botAt = null;
       timers.nextRoundAt = null;
+      this.stopClock();
       return;
     }
     if (phase === "between") {
       timers.nextRoundAt = now + NEXT_ROUND_DELAY_MS / this.speed;
       timers.botAt = null;
+      this.stopClock();
       return;
     }
 
     timers.nextRoundAt = null;
+    this.startClock();
     const turn = this.turnKey();
     if (state.turnAt?.turn !== turn) state.turnAt = { turn, at: now };
     const actor = this.actor() as Seat;
