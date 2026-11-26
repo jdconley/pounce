@@ -1,15 +1,17 @@
 import { describe, expect, it, test } from "vitest";
 
+import { birdwatch } from "./birdwatch";
 import { catTower } from "./cat-tower";
 import { tiles } from "./tiles";
 
 import { DEFAULT_GAME, GAMES, GAMES_HEADER, gameModule, gamesListed, gamesOn, gameTitle, isGameId } from "./index";
 
 describe("the games a room can hold", () => {
-  it("are Cat Tower and the tile game, each under its own id", () => {
-    expect(Object.keys(GAMES)).toEqual(["cat-tower", "tiles"]);
+  it("are Cat Tower, the tile game and Birdwatch, each under its own id", () => {
+    expect(Object.keys(GAMES)).toEqual(["cat-tower", "tiles", "birdwatch"]);
     expect(GAMES["cat-tower"]).toBe(catTower);
     expect(GAMES.tiles).toBe(tiles);
+    expect(GAMES.birdwatch).toBe(birdwatch);
     for (const [id, module] of Object.entries(GAMES)) expect(module.id).toBe(id);
     expect(DEFAULT_GAME).toBe("cat-tower");
   });
@@ -17,6 +19,7 @@ describe("the games a room can hold", () => {
   it("isGameId takes those ids and nothing else", () => {
     expect(isGameId("cat-tower")).toBe(true);
     expect(isGameId("tiles")).toBe(true);
+    expect(isGameId("birdwatch")).toBe(true);
     for (const other of ["Tiles", "", "toString", "constructor", "__proto__", 1, null, undefined, ["tiles"]]) {
       expect(isGameId(other), String(other)).toBe(false);
     }
@@ -24,6 +27,7 @@ describe("the games a room can hold", () => {
 
   it("gameModule finds a room's module, and Cat Tower for a room that names none or one that is unknown", () => {
     expect(gameModule("tiles")).toBe(tiles);
+    expect(gameModule("birdwatch")).toBe(birdwatch);
     expect(gameModule("cat-tower")).toBe(catTower);
     expect(gameModule(undefined)).toBe(catTower);
     expect(gameModule("chess")).toBe(catTower);
@@ -44,6 +48,7 @@ describe("the games an app says it can draw", () => {
     expect(gamesListed("cat-tower,tiles")).toEqual(["cat-tower", "tiles"]);
     expect(gamesListed("tiles")).toEqual(["cat-tower", "tiles"]);
     expect(gamesListed(" Tiles , cat-tower ")).toEqual(["cat-tower", "tiles"]);
+    expect(gamesListed("cat-tower,tiles,birdwatch")).toEqual(["cat-tower", "tiles", "birdwatch"]);
   });
 
   it("ignores what it doesn't know, and repeats", () => {
@@ -63,6 +68,7 @@ describe("the GAMES flag", () => {
   it("turns on the games it lists", () => {
     expect(gamesOn({ GAMES: "tiles" })).toEqual(["cat-tower", "tiles"]);
     expect(gamesOn({ GAMES: "cat-tower, tiles" })).toEqual(["cat-tower", "tiles"]);
+    expect(gamesOn({ GAMES: "tiles,birdwatch" })).toEqual(["cat-tower", "tiles", "birdwatch"]);
   });
 });
 
@@ -70,6 +76,7 @@ describe("a game's name, for an app that can't draw it", () => {
   test("is the one the app's shelf uses", () => {
     expect(gameTitle("cat-tower")).toBe("Cat Tower");
     expect(gameTitle("tiles")).toBe("Tuna Tiles");
+    expect(gameTitle("birdwatch")).toBe("Birdwatch");
   });
 
   test("a game this server has no name for is a newer game", () => {

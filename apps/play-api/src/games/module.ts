@@ -6,11 +6,22 @@ import type { Rng, Seed } from "../rules/rng";
 export type GamePhase = "playing" | "between" | "over";
 
 /** What a room needs from a game. Rooms hold no game-specific logic. */
-export interface GameModule<S, A, V, E, Err extends string = string> {
+export interface GameModule<S, A, V, E, Err extends string = string, O = never> {
   id: string;
   minSeats: number;
   maxSeats: number;
-  create(seats: number, seed: Seed): S;
+  /** `options`: what the table chose in the lobby (`parseOptions`); a game with none ignores it. */
+  create(seats: number, seed: Seed, options?: O): S;
+  /** What a new table of this game starts with, for its lobby to change. Absent: the game has no options. */
+  defaultOptions?: O;
+  /** A lobby's `setOptions` off the wire, fully validated, or null. Absent: the game has no options. */
+  parseOptions?(raw: unknown): O | null;
+  /**
+   * A seat that leaves (its own forfeit, or retired) goes to a House Cat for the rest of the game,
+   * and the room ends the game only once no person is left, by applying `forfeitAction` then.
+   * Absent: the seat is out, as the game's own forfeit has it.
+   */
+  leaveTakeover?: boolean;
   apply(
     s: S,
     seat: Seat,
@@ -50,6 +61,9 @@ export interface GameModule<S, A, V, E, Err extends string = string> {
   fallbackAction(s: S, seat: Seat): A;
   /** Per seat, how far along it is, for the live table. What the number means is `progressKind`. */
   progress(s: S): number[];
-  /** `shelf`: the phase a seat is on, counting up. `pieces`: what is left on its rack, counting down. */
-  progressKind: "shelf" | "pieces";
+  /**
+   * `shelf`: the phase a seat is on, counting up. `pieces`: what is left on its rack, counting
+   * down. `score`: its side's score.
+   */
+  progressKind: "shelf" | "pieces" | "score";
 }

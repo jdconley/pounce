@@ -62,6 +62,15 @@ describe("ErrorCode", () => {
       opening_too_low: true,
       // Play again at a table whose game was turned off.
       game_off: true,
+      wrong_phase: true,
+      bid_too_low: true,
+      bid_too_high: true,
+      bad_bid: true,
+      not_your_card: true,
+      wrong_count: true,
+      duplicate_card: true,
+      own_card: true,
+      must_follow: true,
     };
     expect(Object.keys(codes)).toHaveLength(47);
   });
