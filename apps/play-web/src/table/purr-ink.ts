@@ -215,6 +215,13 @@ export class Picture {
     for (const op of ops) this.apply(op);
   }
 
+  /** Takes strokes decoded elsewhere (the ink worker) as the whole picture. */
+  adopt(strokes: Stroke[], lastId: number): void {
+    this.strokes = strokes;
+    this.byId = new Map(strokes.map((s) => [s.id, s]));
+    this.lastId = Math.max(lastId, ...strokes.map((s) => s.id));
+  }
+
   /** The picture as ops: one `s` per visible stroke. */
   toOps(): InkOp[] {
     return this.strokes.map((s): InkOp => ["s", s.id, s.colour, s.width, s.points[0]!, s.points[1]!, ...deltas(s.points[0]!, s.points[1]!, s.points.slice(2))]);
@@ -373,10 +380,17 @@ export class InkWriter {
 
   /** Takes the server's drawing as this device's own (a reload mid-turn): its strokes, and ids after its last. */
   adopt(ops: readonly InkOp[]): void {
+    const p = new Picture();
+    p.applyAll(ops);
+    this.adoptStrokes(p.strokes, p.lastId);
+  }
+
+  /** As `adopt`, from strokes the ink worker decoded. */
+  adoptStrokes(strokes: Stroke[], lastId: number): void {
     this.live = null;
     this.held = [];
     this.outbox = [];
-    this.picture.applyAll([["c"], ...ops]);
+    this.picture.adopt(strokes, lastId);
     this.nextId = Math.max(this.nextId, this.picture.lastId + 1);
     this.undoable = this.picture.strokes.map((s) => s.id);
   }
