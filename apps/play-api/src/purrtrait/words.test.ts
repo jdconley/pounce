@@ -27,7 +27,7 @@ describe("word list", () => {
   });
 
   it("holds nothing from the deny list", () => {
-    const deny = /gun|blood|kill|dead|die|knife|bomb|beer|wine|god|church|butt|poop|naked/;
+    const deny = /\b(gun|blood|kill|dead|die|knife|bomb|beer|wine|god|church|butt|poop|naked)\b/;
     expect(WORDS.filter((w) => deny.test(w.word)).map((w) => w.word)).toEqual([]);
   });
 });

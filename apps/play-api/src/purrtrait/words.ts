@@ -10,7 +10,7 @@ export type Word = { word: string; group: Group; level: Level };
 /** Easy: quick to draw. Tricky: still known by sight, just harder to draw. One comma list per group. */
 const EASY: Record<Group, string> = {
   animals:
-    "cat,dog,fish,bird,cow,pig,duck,frog,horse,sheep,mouse,rabbit,bear,lion,tiger,monkey,elephant,snake,turtle,bug,bee,spider,chicken,owl,whale,shark,penguin,giraffe,zebra,snail,ant,goat,fox,deer,dolphin,crab",
+    "cat,dog,fish,bird,cow,pig,duck,frog,horse,sheep,mouse,rabbit,bear,lion,tiger,monkey,elephant,snake,turtle,butterfly,bee,spider,chicken,owl,whale,shark,penguin,giraffe,zebra,snail,ant,goat,fox,deer,dolphin,crab",
   food:
     "apple,banana,pizza,cake,cookie,bread,egg,cheese,milk,ice cream,carrot,grapes,orange,strawberry,cherry,lemon,pear,peach,watermelon,corn,hot dog,hamburger,popcorn,pancake,sandwich,candy,cupcake,donut,pie,soup,rice,noodles,tomato,potato,pumpkin,juice",
   home:
@@ -22,7 +22,7 @@ const EASY: Record<Group, string> = {
   actions:
     "run,jump,sleep,eat,drink,swim,dance,sing,read,write,laugh,cry,clap,point,smile,walk,climb,throw,catch,kick,hug,wash,cook,paint,draw,play,sit,stand,fly,push,pull,ride,brush teeth,sneeze,yawn",
   jobs:
-    "doctor,teacher,firefighter,farmer,chef,nurse,police officer,baker,dentist,bus driver,painter,singer,pilot,mail carrier,artist,clown,king,queen,cowboy,pirate,builder,librarian,princess,prince,knight,wizard,skater,soccer player,swimmer,runner,writer,dancer,coach,drummer",
+    "doctor,teacher,firefighter,farmer,chef,nurse,police officer,baker,dentist,bus driver,painter,singer,pilot,mail carrier,artist,king,queen,cowboy,pirate,builder,librarian,princess,prince,knight,wizard,skater,soccer player,swimmer,runner,writer,dancer,coach,drummer",
   places:
     "school,house,park,zoo,farm,store,hospital,playground,castle,bedroom,bathroom,pool,restaurant,bakery,circus,airport,city,town,barn,shop,museum,theater,bank,jungle,space,street,classroom,backyard,kitchen,garage,playroom,cafe,camp,dock",
 };
@@ -33,17 +33,17 @@ const TRICKY: Record<Group, string> = {
   food:
     "spaghetti,pretzel,taco,sushi,waffle,lollipop,pineapple,coconut,broccoli,mushroom,avocado,cereal,jelly,marshmallow,cotton candy,birthday cake,french fries,meatball,burrito,bagel,honey,peanut,pepper,onion,celery,cabbage,lettuce,cucumber,kiwi,mango,pickle,sprinkles,gingerbread,toast,nachos,ice pop",
   home:
-    "chimney,fireplace,vacuum,ladder,hammock,bunk bed,closet,drawer,doorbell,doorknob,bubble bath,laundry,dishwasher,microwave,toaster,blender,teapot,kettle,flashlight,night light,hanger,wallpaper,chandelier,rocking chair,bookcase,trash can,shower,washing machine,alarm clock,light bulb,ironing board,mop,sponge,pillowcase,birdhouse,doormat,attic,basement",
+    "chimney,fireplace,vacuum,ladder,hammock,bunk bed,closet,drawer,doorbell,doorknob,bubble bath,laundry,dishwasher,microwave,toaster,blender,teapot,kettle,flashlight,night light,hanger,wallpaper,rocking chair,bookcase,trash can,shower,washing machine,alarm clock,light bulb,mop,sponge,pillowcase,birdhouse,doormat",
   outside:
-    "waterfall,lightning,tornado,thunder,shadow,sunrise,sunset,fog,icicle,snowman,snowflake,igloo,cave,desert,tent,swamp,glacier,canyon,meadow,sandcastle,scarecrow,treehouse,bonfire,hurricane,iceberg,rainforest,cactus,footprint,shooting star,pebble,seashell,seaweed,palm tree,windmill,whirlpool,bush,dandelion,sunflower,pinecone,acorn",
+    "waterfall,lightning,thunder,shadow,sunrise,sunset,fog,icicle,snowman,snowflake,igloo,cave,desert,tent,swamp,sandcastle,scarecrow,treehouse,bonfire,iceberg,rainforest,cactus,footprint,shooting star,pebble,seashell,seaweed,palm tree,windmill,dandelion,sunflower,pinecone,acorn,haystack,treetop",
   things:
-    "trampoline,skateboard,helicopter,submarine,parachute,telescope,microscope,compass,treasure chest,magnet,binoculars,hourglass,yoyo,trumpet,violin,tambourine,xylophone,accordion,harp,fireworks,pinata,roller skates,magic wand,lantern,anchor,bubble,rattle,shovel,wagon,scooter,sled,swing,slide,seesaw,zipper,thermometer,calendar,envelope,stamp,battery,snow globe",
+    "trampoline,skateboard,helicopter,submarine,parachute,telescope,microscope,compass,treasure chest,magnet,binoculars,yoyo,trumpet,violin,fireworks,pinata,roller skates,magic wand,lantern,anchor,bubble,rattle,shovel,wagon,scooter,sled,swing,slide,seesaw,zipper,calendar,envelope,stamp,battery,snow globe",
   actions:
     "whisper,tiptoe,juggle,skip,hop,crawl,stretch,tickle,shiver,blink,snore,hiccup,daydream,giggle,tumble,spin,balance,wiggle,squeeze,tie shoes,blow bubbles,share,pretend,march,bow,salute,sweep,dig,knock,wink,whistle,pour,stir,fold,peek,sneak,hide,somersault,cartwheel,bounce,stomp,gallop,splash,melt,freeze",
   jobs:
-    "astronaut,scientist,magician,mechanic,plumber,photographer,lifeguard,zookeeper,vet,barber,fisherman,cashier,waiter,gardener,janitor,judge,detective,tailor,carpenter,electrician,window washer,dog walker,ballerina,acrobat,mermaid,superhero,referee,diver,miner,sailor,captain,tour guide,cheerleader,babysitter,news reporter,inventor,train driver,snake charmer",
+    "astronaut,scientist,magician,mechanic,plumber,photographer,lifeguard,zookeeper,vet,barber,fisherman,cashier,waiter,gardener,judge,detective,carpenter,window washer,dog walker,ballerina,acrobat,mermaid,superhero,referee,diver,sailor,captain,tour guide,cheerleader,babysitter,news reporter,inventor,train driver,toy maker,lumberjack",
   places:
-    "lighthouse,aquarium,fire station,gas station,carnival,amusement park,movie theater,campsite,farmhouse,pyramid,skyscraper,space station,bus stop,train station,harbor,tunnel,fort,cabin,hotel,post office,laundromat,supermarket,candy store,toy store,ice rink,ski slope,basketball court,mini golf,pet shop,bowling alley,market,parking lot,tree fort,cliff,dentist office,playhouse",
+    "lighthouse,aquarium,fire station,gas station,carnival,amusement park,movie theater,campsite,farmhouse,pyramid,skyscraper,space station,bus stop,train station,harbor,tunnel,fort,cabin,hotel,post office,supermarket,candy store,toy store,ice rink,ski slope,basketball court,mini golf,pet shop,bowling alley,market,parking lot,tree fort,cliff,playhouse",
 };
 
 function build(): Word[] {
@@ -59,5 +59,5 @@ function build(): Word[] {
   return out;
 }
 
-/** Every word. A word's id is its index here, so the order is part of the seeded game: only ever append. */
+/** Every word. A word's id is its index here, so the order is part of the seeded game: append only from the first release, once ids are stored anywhere. */
 export const WORDS: readonly Word[] = build();

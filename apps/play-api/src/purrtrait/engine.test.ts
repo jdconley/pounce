@@ -62,7 +62,10 @@ describe("a turn", () => {
     const r = ok(game(), 0, { type: "choose", level: "tricky" });
     expect(r.events).toHaveLength(1);
     expect(r.events[0]).toEqual({ type: "chosen", drawer: 0, group: wordOf(r.state.word).group, level: "tricky" });
-    expect(JSON.stringify(r.events)).not.toContain(wordOf(r.state.word).word + '"');
+    const word = wordOf(r.state.word).word;
+    expect(r.events[0]).not.toHaveProperty("word");
+    expect(Object.values(r.events[0] as object)).not.toContain(word);
+    expect(JSON.stringify(r.events)).not.toContain(word);
   });
 
   it("timeUp and giveUp score nothing and reveal", () => {
@@ -225,5 +228,23 @@ describe("the game", () => {
     expect(r.state.phase).toBe("over");
     expect(r.state.endReason).toBe("stalled");
     expect(r.state.winners).toEqual([0, 2]);
+  });
+
+  it("finish does nothing once the game is over", () => {
+    const over = finish(game(3), "left").state;
+    const again = finish(over, "stalled");
+    expect(again.state).toEqual(over);
+    expect(again.events).toEqual([]);
+    expect(again.state.endReason).toBe("left");
+  });
+
+  it("every offer in a 10-seat game excludes used words", () => {
+    let s = create(10, SEED, DEFAULT_OPTIONS);
+    for (let i = 0; i < 20; i++) {
+      const o = s.offer!;
+      for (const id of [o.easy, o.tricky, o.easy2]) expect(s.used).not.toContain(id);
+      s = playTurn(s, i % 2 ? "tricky" : "easy", (s.drawer! + 1) % 10);
+      s = ok(s, 0, { type: "nextTurn" }).state;
+    }
   });
 });

@@ -117,6 +117,7 @@ function over(s: PurrState, reason: EndReason): Out {
 
 /** Ends the game now. The room uses it for a stalled table. */
 export function finish(state: PurrState, reason: EndReason): Out {
+  if (state.phase === "over") return { state, events: [] };
   return over(structuredClone(state), reason);
 }
 
