@@ -225,6 +225,21 @@ export function setDown(box: Box, roundSeed: Readonly<Seed>, n: number, rot: Rot
   return { box: b, cleared, sent: attack, blocked, pocketed, out: b.out };
 }
 
+/**
+ * Lands the oldest `count` waiting junk now, as the server does for junk a device owed and didn't
+ * land (§6.5). Not a client step: the device is sent the result.
+ */
+export function landWaiting(box: Box, count: number): Box {
+  if (box.out || count <= 0) return box;
+  const b = copy(box);
+  for (let i = 0; i < count && b.waiting.length > 0; i++) {
+    const w = b.waiting.shift() as Waiting;
+    pushJunk(b, w.rows, w.gap);
+  }
+  b.out = anyAbove(b);
+  return b;
+}
+
 /** Junk that has arrived and starts its wait (§4.5). */
 export function receiveJunk(box: Box, w: Waiting): Box {
   if (box.out) return box;
