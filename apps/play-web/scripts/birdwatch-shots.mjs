@@ -86,5 +86,57 @@ for (const size of SIZES) {
   }
   await ctx.close();
 }
+// The TV: its home with Birdwatch's poster, a Birdwatch lobby, and the table mid-hand while a
+// phone plays its seat on Cards.
+if (!process.env.SIZES || process.env.SIZES.includes("tv")) {
+  const tvCtx = await browser.newContext({ viewport: { width: 1920, height: 1080 }, reducedMotion: "reduce", extraHTTPHeaders: { "cf-connecting-ip": `10.79.${process.pid % 200}.${ip++}` } });
+  await tvCtx.addInitScript(() => (Element.prototype.requestFullscreen = () => Promise.resolve()));
+  const tv = await tvCtx.newPage();
+  await tv.goto(`${BASE}/play/tv`);
+  await tv.getByRole("button", { name: "Start", exact: true }).click();
+  await tv.getByRole("button", { name: /^Birdwatch\s*4 to 6 players$/ }).waitFor();
+  await tv.waitForTimeout(1200);
+  await tv.screenshot({ path: `${OUT}/tv-home.png` });
+  await tv.getByRole("button", { name: /^Birdwatch\s*4 to 6 players$/ }).click();
+  const codeEl = tv.locator(".tv-lobby .tv-code");
+  await codeEl.waitFor();
+  const code = ((await codeEl.textContent()) ?? "").trim();
+  const phoneCtx = await browser.newContext({ ...devices["Pixel 7"], reducedMotion: "reduce", extraHTTPHeaders: { "cf-connecting-ip": `10.79.${process.pid % 200}.${ip}` } });
+  const phone = await phoneCtx.newPage();
+  await phone.goto(`${BASE}/play/j/${code}`);
+  for (const d of "1985") await phone.getByRole("button", { name: d, exact: true }).click();
+  await phone.getByRole("button", { name: "Done" }).click();
+  await phone.getByLabel("Your name").fill("Great Aunt Josephine");
+  await phone.getByRole("button", { name: "Done" }).click();
+  await phone.waitForURL(/\/play\/t\//);
+  for (let n = 0; n < 3; n++) {
+    await phone.locator("#add-bar").getByRole("button", { name: "House Cat" }).click();
+    await phone.waitForTimeout(400);
+  }
+  await phone.getByRole("radio", { name: "Friesen" }).click();
+  await tv.waitForTimeout(1500);
+  await tv.screenshot({ path: `${OUT}/tv-lobby.png` });
+  await phone.getByRole("button", { name: "Start", exact: true }).click();
+  await tv.locator(".bw-tv").waitFor();
+  // The phone passes and plays its first card it may, until a trick is on the sill.
+  const until = Date.now() + 60_000;
+  while (Date.now() < until && (await tv.locator(".bw-tv .card.on-sill").count()) < 3) {
+    if (await phone.locator("#bw-pass:not([disabled])").isVisible()) await phone.locator("#bw-pass").click();
+    else if (await phone.locator("#bw-nest-done").isVisible()) break;
+    else if (await phone.locator(".bw-cue.mine").isVisible()) {
+      const c = phone.locator(".bw-hand-card:not(.dim)").first();
+      const box = await c.boundingBox();
+      if (box) {
+        await phone.mouse.click(box.x + box.width * 0.22, box.y + box.height * 0.22);
+        await phone.mouse.click(box.x + box.width * 0.22, box.y + box.height * 0.22);
+      }
+    }
+    await phone.waitForTimeout(200);
+  }
+  await tv.screenshot({ path: `${OUT}/tv-table.png` });
+  await phone.screenshot({ path: `${OUT}/phone-cards-with-tv.png` });
+  await phoneCtx.close();
+  await tvCtx.close();
+}
 await browser.close();
 console.log("shots in", OUT);

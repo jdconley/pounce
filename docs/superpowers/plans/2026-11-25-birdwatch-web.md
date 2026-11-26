@@ -26,7 +26,7 @@
 
 1. **No iOS art yet.** The iOS session had no Birdwatch art when this started. Faces are drawn to §3.3: the suit's Tuna Tiles colour body, big white outlined numeral, the existing `tile-<suit>` silhouette, a seed badge (5, 10, 15) on counters. The Bird is our own SVG (`src/table/bw-art/bird.svg`): round, yellow-orange, a big eye and a teal wing, on a white face with a "20" seed badge. Back: the existing `card-back` (Cat Tower's violet paw back). The Home poster `game-birdwatch.webp` is made once by `scripts/build-birdwatch-art.mjs` (room art + cats + the Bird) and committed. If iOS exports art later, `build-art.mjs` takes it over.
 2. **Home's table card can't name the rule set.** `GET /v1/devices/me/tables` carries no options (`apps/play-api/src/room/tables.ts`). Server gap, reported in the PR; Home shows "Birdwatch" as it shows other games. The lobby, the table menu and the TV name the rule set (they have the snapshot).
-3. **No e2e sharding exists** in CI (`e2e-web` is one job over Playwright projects). Birdwatch's full games run in one spec, `e2e/birdwatch.spec.ts`, on `laptop-chrome` (keyboard and mouse) with the 5-player game also on `android-chrome` (touch). If the job grows past its 40 minute timeout, the spec gets a CI job of its own (`e2e-web-birdwatch`, `--project laptop-chrome --grep Birdwatch`).
+3. **No e2e sharding exists** in CI (`e2e-web` is one job over Playwright projects). Birdwatch's full games run in one spec, `e2e/birdwatch.spec.ts`, on `laptop-chrome` (keyboard and mouse) with the 5-player game also on `android-chrome` (touch). A 5-player Tucker game to 500 (five separate scores) runs many hands, so the spec has a CI job of its own, `e2e-web-birdwatch`, beside `e2e-web` (which sets `E2E_BIRDWATCH=off`); the deploy needs both. The TV's Birdwatch test (`e2e/birdwatch-tv.spec.ts`) stays in `e2e-web` on `tv-chrome`, and the frame gate (`main-thread.spec.ts`) plays a stretch of Birdwatch on the laptop and the slowed phone.
 4. **First table and practice.** A Birdwatch first table gets House Cats up to 4 seats (3 cats), so Start is lit at once; Practice fills 3 House Cats and closes the rest. Home's Practice stays Cat Tower; the shelf's Birdwatch poster makes a table.
 5. **Raise faster.** A long press on +5 repeats the raise every 140 ms after 400 ms, driven by `requestAnimationFrame` and pointer events (no timers in table code).
 6. **Keys.** Hand: Left/Right move the selection, Enter or Space plays (play phase) or toggles a put-back (nest), Escape clears. Bidding: + or = raises 5, - lowers, Enter bids, P passes. Trump: 1-4 pick fish, mouse, feather, bell. Partner: the picker's buttons are a grid in Tab order.
@@ -34,6 +34,11 @@
 8. **5-player privacy.** `youArePartner` shows a small "Partner" ribbon on the hand only while that seat's hand is shown (behind the curtain on a shared device). The public table never marks the partner until `view.partner` is set. A phone that holds both seats can't hide it (§4.6, accepted).
 9. **How to Play** is an in-app sheet per rule set (`bw-help.tsx`), opened from the table menu and from the lobby's rule pills' "How to play" link. Other games keep `/support`.
 10. **TV "Change game"** cycles through the three games (`otherGame` returns the next id), so a TV can open a Birdwatch table.
+11. **A seat a House Cat took over** keeps its person's name and cat (`seatName`, `seatCat` read `left`), with the House Cat badge, as the wire note says the name tag does.
+12. **Phone on its side** (a short window): the strip and the panel take a column on the right and the cats sit in a row along the window's top; a laptop or tablet keeps the portrait order with the cats around the window.
+13. **Cards view** (a TV shows the table): upright, more than six cards sit in two rows of big cards; nothing else of the table shows, per §5.6.
+14. **Game over** lists sides, not seats, with each side's cats; the TV's game over does the same (`standings` gives a side's names).
+15. **Found while building:** the shared `.card:not(.mine)` rule makes any `.card` untouchable, so the partner picker's buttons are not `.card`s.
 
 ## Review Focus
 

@@ -67,9 +67,9 @@ export const MIN_SHOW = 24;
  * The hand's poses: one fan when it fits with each card's corner showing, else two rows (the
  * nest's 17 cards on a small phone), the back row's corners above the front row.
  */
-export function handPoses(n: number, centreX: number, baseY: number, cw: number, ch: number, maxWidth: number): { poses: Pose[]; rows: 1 | 2 } {
+export function handPoses(n: number, centreX: number, baseY: number, cw: number, ch: number, maxWidth: number, twoRows = false): { poses: Pose[]; rows: 1 | 2 } {
   const minStep = Math.max(MIN_SHOW, cw * 0.36);
-  if (n <= 1 || (n - 1) * minStep + cw <= maxWidth) return { poses: fan(n, centreX, baseY, cw, ch, maxWidth), rows: 1 };
+  if (n <= 1 || (!twoRows && (n - 1) * minStep + cw <= maxWidth)) return { poses: fan(n, centreX, baseY, cw, ch, maxWidth), rows: 1 };
   const back = Math.ceil(n / 2);
   const front = n - back;
   const lift = ch * 0.46;
@@ -176,13 +176,13 @@ const phoneAngles = (n: number): number[] => (n === 1 ? [90] : Array.from({ leng
 const tvAngles = (n: number): number[] => Array.from({ length: n }, (_, i) => 270 - (i * 360) / n);
 
 /** Each seat's card on the sill: towards its cat from the sill's centre, overlapping like a real trick. */
-function slotsFor(sill: Rect, seats: { seat: number; angle: number }[], cw: number, ch: number, s: number): Map<number, Pose> {
+function slotsFor(sill: Rect, seats: { seat: number; angle: number }[], cw: number, ch: number, s: number, spread = 1): Map<number, Pose> {
   const cx = sill.x + sill.w / 2;
   const cy = sill.y + sill.h / 2;
   const out = new Map<number, Pose>();
   // A scaled card shrinks about its centre: its pose is the unscaled card's corner.
-  const reachX = Math.max(0, Math.min(cw * s * 0.62, sill.w / 2 - (cw * s) / 2 - 4));
-  const reachY = Math.max(0, Math.min(ch * s * 0.42, sill.h / 2 - (ch * s) / 2 - 4));
+  const reachX = Math.max(0, Math.min(cw * s * 0.62 * spread, sill.w / 2 - (cw * s) / 2 - 4));
+  const reachY = Math.max(0, Math.min(ch * s * 0.42 * spread, sill.h / 2 - (ch * s) / 2 - 4));
   seats.forEach(({ seat, angle }, i) => {
     const a = (angle * Math.PI) / 180;
     const x = cx + Math.cos(a) * reachX;
@@ -287,10 +287,15 @@ function cardsOn(input: BwInput): BwLayout {
   const pad = 12;
   const usable = H - insets.top - insets.bottom;
   const handMax = Math.min(W - insets.left - insets.right - 2 * pad, 1280);
-  const cw = cardFor(input.hand, handMax, Math.round(clamp(Math.min(W / 4.8, usable / (landscape ? 3.4 : 4.6)), 56, 150)));
+  // Upright, more than six cards sit in two rows of big cards: the hand is all this view shows.
+  const twoRows = !landscape && input.hand > 6;
+  const perRow = twoRows ? Math.ceil(input.hand / 2) : input.hand;
+  const fits = (w: number) => (perRow - 1) * Math.max(MIN_SHOW, w * 0.36) + w <= handMax;
+  let cw = Math.round(clamp(Math.min(W / (twoRows ? 3.2 : 4.8), usable / (landscape ? 3.4 : 4.6)), 56, 160));
+  while (cw > 44 && !fits(cw)) cw -= 2;
   const ch = Math.round(cw * 1.4);
   const handBase = H - insets.bottom - 10;
-  const { poses: hand } = handPoses(input.hand, W / 2, handBase, cw, ch, handMax);
+  const { poses: hand } = handPoses(input.hand, W / 2, handBase, cw, ch, handMax, twoRows);
   const handTop = Math.min(handBase - ch, ...hand.map((p) => p.y)) - ch * 0.2 - 6;
   const top = insets.top + 8;
   // Beside the Cards/Table switch and the paw, which sit along the top.
@@ -365,7 +370,13 @@ function tvBird(input: BwInput): BwLayout {
   const ry = window.h / 2 - seatH / 2;
   const angles = tvAngles(n);
   const { centres, rects } = ring(seatsAll, angles, c, rx, ry, avatar, seatW, seatH);
-  const sill = { x: c.x - rx * 0.56, y: c.y - ry * 0.42, w: rx * 1.12, h: ry * 0.84 };
+  // The sill: across the middle, as tall as the cats above and below it leave room for.
+  const sx = c.x - rx * 0.56;
+  const sw = rx * 1.12;
+  const over = [...rects.values()].filter((r) => r.x < sx + sw && r.x + r.w > sx);
+  const top = Math.max(c.y - ry * 0.7, ...over.filter((r) => r.y + r.h / 2 < c.y).map((r) => r.y + r.h + gap));
+  const bottom = Math.min(c.y + ry * 0.7, ...over.filter((r) => r.y + r.h / 2 >= c.y).map((r) => r.y - gap));
+  const sill = { x: sx, y: top, w: sw, h: Math.max(0, bottom - top) };
   const cw = 168;
   const ch = Math.round(cw * 1.4);
   const sillScale = clamp(Math.min(sill.h / (ch * 1.9), sill.w / (cw * 2.4)), 0.5, 1);
