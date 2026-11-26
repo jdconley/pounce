@@ -172,8 +172,10 @@ export type ClientMessage =
    * Purrtrait: the drawer's device's strokes for turn `turn` (design §6.2). Only the device that
    * owns the drawing turn, while it draws: anyone else's is dropped. Never stored. Errors:
    * `bad_message`, `easel_full` (once a turn), `not_allowed` at a table of another game.
+   * `last`: the final message of a reply to `inkResend` (the reply is exempt from the rate limit
+   * until it); never relayed.
    */
-  | { t: "ink"; seat: Seat; turn: string; ops: InkOp[] };
+  | { t: "ink"; seat: Seat; turn: string; ops: InkOp[]; last?: true };
 
 /** Every `error` code the server sends. */
 export type ErrorCode =
@@ -373,11 +375,13 @@ function parseObject(o: Obj, parsers: Parsers): ClientMessage | BadMessage | nul
       return aim ? { t: "aim", seat: o.seat, aim } : null;
     }
     case "ink": {
-      if (!hasKeys(o, ["t", "seat", "turn", "ops"]) || !isInt(o.seat, 0)) return null;
+      if (!hasKeys(o, ["t", "seat", "turn", "ops"], ["last"]) || !isInt(o.seat, 0)) return null;
       const { turn } = o;
       if (typeof turn !== "string" || turn.length < 1 || turn.length > MAX_TURN) return null;
+      if ("last" in o && o.last !== true) return null;
       const ops = parseOps(o.ops);
-      return ops ? { t: "ink", seat: o.seat, turn, ops } : null;
+      if (!ops) return null;
+      return o.last === true ? { t: "ink", seat: o.seat, turn, ops, last: true } : { t: "ink", seat: o.seat, turn, ops };
     }
     case "link":
       if (!hasKeys(o, ["t", "state"]) || (o.state !== "weak" && o.state !== "good")) return null;

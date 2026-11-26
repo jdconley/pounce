@@ -10,7 +10,7 @@ import {
   type PurrOptions,
   type PurrState,
 } from "../purrtrait/engine";
-import { checkInk, compact, freshEasel, INK_PER_SECOND, wipes } from "../purrtrait/ink";
+import { checkInk, compact, freshEasel, INK_PER_SECOND, wipes, type InkEasel, type InkOp } from "../purrtrait/ink";
 import { DEFAULT_OPTIONS, isRoomOnly, parseAction, parseOptions, parseRoomAction } from "../purrtrait/parse";
 import { turnKey, view, type PurrView } from "../purrtrait/view";
 
@@ -27,11 +27,15 @@ export const purrtrait: GameModule<PurrState, PurrAction, PurrView, PurrEvent, P
   apply,
   view,
   kittenAware: true,
-  ink: {
+  stream: {
     perSecond: INK_PER_SECOND,
-    live: (s) => (s.phase === "drawing" ? turnKey(s) : null),
+    audience: "screens+owner",
+    key: (s) => (s.phase === "drawing" ? turnKey(s) : null),
     start: freshEasel,
-    check: checkInk,
+    check(ops: readonly InkOp[], easel: InkEasel) {
+      const r = checkInk(ops, easel);
+      return r.ok ? { ok: true as const, tally: r.easel } : r;
+    },
     compact,
     wipes,
   },

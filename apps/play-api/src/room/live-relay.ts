@@ -12,8 +12,9 @@
  *   null ends it.
  * - A per-device rolling one-second rate limit (`admit`).
  * - A lost log: a room rebuilt from storage with a key still live (`lost`) has none until the
- *   sender sends a batch that restarts it. `askResend` asks the sender for it, and its reply is
- *   exempt from the rate limit once, for `resendMs` from the reply's first message.
+ *   sender sends a batch that restarts it. `askResend` asks the sender for it, and its whole reply
+ *   is exempt from the rate limit once: from its first message (one that restarts) to the one the
+ *   sender marks as its last, or `resendMs` after the first, whichever comes sooner.
  * - Fan-out to chosen devices, and the catch-up for one, as the room's `Outbound[]`.
  *
  * Usage:
@@ -21,7 +22,7 @@
  * ```ts
  * const relay = new LiveRelay<Op, Tally>({ perSecond: 25, start: (rebuilt) => fresh(rebuilt), compact }, now);
  * relay.follow(liveKey(state));                      // after every change: a new key drops the log
- * if (!relay.admit(device, wipes(ops))) return [];   // over the limit: dropped
+ * if (!relay.admit(device, { restarts: wipes(ops), last })) return [];   // over the limit: dropped
  * const base = relay.base(wipes(ops));               // null: nothing live, or a lost log not restarted
  * const checked = base && check(ops, base);          // the game's own check
  * if (checked?.ok) { relay.record(ops, checked.tally); return relay.fanOut([screen, device], message); }
@@ -42,11 +43,23 @@ export type LiveRelayConfig<Op, Tally> = {
   start(rebuilt: boolean): Tally;
   /** The log made as small as it can be while showing the same: what a late joiner gets. */
   compact(log: readonly Op[]): Op[];
-  /** How long a resend reply is exempt from the rate limit, from its first message. Default 1000 ms. */
+  /**
+   * The longest a resend reply is exempt from the rate limit, from its first message, should its
+   * last never come (a sender that dropped mid-reply). Default 5000 ms.
+   */
   resendMs?: number;
 };
 
+/** What the room knows of one message for the rate limit. */
+export type AdmitInfo = {
+  /** It begins again from nothing (a wipe), so it can open a resend reply. */
+  restarts?: boolean;
+  /** The sender marked it the last of a resend reply: the exemption ends after it. */
+  last?: boolean;
+};
+
 const WINDOW_MS = 1000;
+const RESEND_MS = 5000;
 /** The log is compacted once it grows this much past its last compacted size. */
 const COMPACT_SLACK = 256;
 
@@ -101,18 +114,22 @@ export class LiveRelay<Op, Tally> {
   }
 
   /**
-   * Counts one message from `device` against its rolling second; false: drop it. `restarts`: the
-   * message begins again from nothing (a wipe), so it can open a resend reply's exemption.
+   * Counts one message from `device` against its rolling second; false: drop it. A resend reply,
+   * from its first message (`restarts`) to its `last`, is free.
    */
-  admit(device: string, restarts = false): boolean {
+  admit(device: string, info: AdmitInfo = {}): boolean {
     const now = this.now();
     const exempt = this.exempt.get(device);
-    if (exempt === "armed" && restarts) {
-      this.exempt.set(device, now + (this.config.resendMs ?? WINDOW_MS));
+    if (exempt === "armed" && info.restarts) {
+      if (info.last) this.exempt.delete(device);
+      else this.exempt.set(device, now + (this.config.resendMs ?? RESEND_MS));
       return true;
     }
     if (typeof exempt === "number") {
-      if (now < exempt) return true;
+      if (now < exempt) {
+        if (info.last) this.exempt.delete(device);
+        return true;
+      }
       this.exempt.delete(device);
     }
     const recent = (this.times.get(device) ?? []).filter((at) => at > now - WINDOW_MS);
@@ -161,7 +178,7 @@ export class LiveRelay<Op, Tally> {
     return [{ to: device, message: build(this.current, this.config.compact(this.log)) }];
   }
 
-  /** While the log is lost: asks `device`, the sender, for all of it. Its reply is then exempt from the limit once. */
+  /** While the log is lost: asks `device`, the sender, for all of it. Its whole reply is then exempt from the limit, once. */
   askResend(device: string, build: (key: string) => ServerMessage): Outbound[] {
     if (!this.lostLog) return [];
     this.exempt.set(device, "armed");

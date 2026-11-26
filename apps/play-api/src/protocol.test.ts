@@ -471,6 +471,8 @@ describe("ink (Purrtrait, design §6.2)", () => {
   it("parses ink with its ops as they came", () => {
     const ops = [["s", 0, 0, 1, 384, 210, 3, -1], ["p", 0, 2, 2], ["u", 0], ["c"]];
     expect(parse({ t: "ink", seat: 3, turn: "2:5", ops })).toEqual({ t: "ink", seat: 3, turn: "2:5", ops });
+    // The last message of a resend reply says so.
+    expect(parse({ t: "ink", seat: 3, turn: "2:5", ops, last: true })).toEqual({ t: "ink", seat: 3, turn: "2:5", ops, last: true });
   });
 
   it("refuses a malformed ink", () => {
@@ -487,6 +489,8 @@ describe("ink (Purrtrait, design §6.2)", () => {
       { t: "ink", seat: 0, turn: "1:0", ops: [["s", 0, 9, 0, 0, 0]] },
       { t: "ink", seat: 0, turn: "1:0", ops: [["p", 0, 1]] },
       { t: "ink", seat: 0, turn: "1:0", ops, extra: 1 },
+      { t: "ink", seat: 0, turn: "1:0", ops, last: false },
+      { t: "ink", seat: 0, turn: "1:0", ops, last: 1 },
     ])
       expect(parse(v)).toEqual(BAD);
   });

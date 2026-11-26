@@ -1,10 +1,12 @@
 import { beforeEach, describe, expect, it } from "vitest";
 
+import { purrtrait } from "../games/purrtrait";
 import { parseClientMessage, type ClientMessage, type Person, type ServerMessage } from "../protocol";
 import { WORDS } from "../purrtrait/words";
 
 import { RoomCore, SCREEN_GRACE_MS, STALL_END_MS, type Outbound } from "./core";
 
+import type { RoomGame } from "../games";
 import type { PurrState } from "../purrtrait/engine";
 import type { PurrView } from "../purrtrait/view";
 
@@ -536,6 +538,22 @@ describe("ink", () => {
     expect(inkTo(ink(r, "a", 0, turnOf(r), [dot(0)]))).toEqual(["a"]);
   });
 
+  it("a game whose stream goes to everyone reaches every connected device", () => {
+    const base = purrtrait as RoomGame<PurrState>;
+    const all = { ...base, stream: { ...(base.stream as NonNullable<typeof base.stream>), audience: "all" as const } };
+    const state = RoomCore.create<PurrState>("BCDFG", "a", clock, undefined, undefined, "purrtrait");
+    const r = new RoomCore<PurrState>(state, () => clock, rng, all, 1, { games: ["cat-tower", "purrtrait"], tv: true, streaks: false });
+    r.addScreen("tv");
+    for (const d of ["tv", "a", "b", "w"]) r.connect(d);
+    r.connect("gone");
+    r.disconnect("gone");
+    r.handle("a", { t: "claim", seat: 0, person: person(1) });
+    r.handle("b", { t: "claim", seat: 1, person: person(2) });
+    r.handle("a", { t: "start" });
+    act(r, "a", 0, { type: "choose", level: "easy" });
+    expect(inkTo(ink(r, "a", 0, turnOf(r), [dot(0)])).sort()).toEqual(["a", "b", "tv", "w"]);
+  });
+
   it("the room's state never holds the ink", () => {
     const r = drawing();
     const turn = turnOf(r);
@@ -578,13 +596,19 @@ describe("ink after a rebuild from storage", () => {
     expect(ink(r, "a", 0, turn, [["p", 0, 1, 1]])).toEqual([]);
     // The reply: its first message clears; the ids are the device's own, so they only have to go up.
     expect(inkTo(ink(r, "a", 0, turn, [["c"], ["s", 3, 0, 1, 100, 100]]))).toEqual(["tv", "a"]);
-    for (let i = 0; i < 40; i++) expect(inkTo(ink(r, "a", 0, turn, [["p", 3, 1, 0]]))).toEqual(["tv", "a"]);
-    expect(inkTo(ink(r, "a", 0, turn, [["s", 7, 0, 1, 100, 100]]))).toEqual(["tv", "a"]);
+    // However long it takes, up to the message marked last.
+    for (let i = 0; i < 40; i++) {
+      clock += 50;
+      expect(inkTo(ink(r, "a", 0, turn, [["p", 3, 1, 0]]))).toEqual(["tv", "a"]);
+    }
+    const last = r.handle("a", { t: "ink", seat: 0, turn, ops: [["s", 7, 0, 1, 100, 100]], last: true } as ClientMessage);
+    expect(inkTo(last)).toEqual(["tv", "a"]);
+    // `last` is the server's: the screen gets the ink as drawn.
+    expect(last[0]?.message).toEqual({ t: "ink", seat: 0, turn, ops: [["s", 7, 0, 1, 100, 100]] });
     r.disconnect("tv");
     const sync = only(r.connect("tv"), "inkSync")[0]?.message as { ops: Op[] };
     expect(sync.ops.map((op) => op[1])).toEqual([3, 7]);
-    // The exemption is spent: the limit holds again a second on.
-    clock += 1000;
+    // The exemption is spent: the limit holds again at once.
     for (let i = 0; i < 25; i++) ink(r, "a", 0, turn, [["p", 7, 0, 1]]);
     expect(ink(r, "a", 0, turn, [["p", 7, 0, 1]])).toEqual([]);
   });
@@ -651,9 +675,20 @@ describe("the drawer's device", () => {
     expect(viewOf(r, "a").word).toBeDefined();
     expect(viewOf(r, "a2").word).toBeDefined();
     const turn = turnOf(r);
-    expect(inkTo(ink(r, "a2", 0, turn, [dot(0)]))).toEqual(["tv", "a2"]);
+    const seq = r.state.seq;
+    const out = ink(r, "a2", 0, turn, [dot(0)]);
+    expect(inkTo(out)).toEqual(["tv", "a2"]);
     expect(r.state.drawerDevice).toMatchObject({ deviceId: "a2" });
-    expect(ink(r, "a", 0, turn, [dot(1)])).toEqual([]);
+    // At once, every device gets its snapshot: "a" loses the word, "a2" keeps it.
+    expect(r.state.seq).toBe(seq + 1);
+    const snap = (d: string) => (only(out, "snapshot").find((o) => o.to === d)?.message as { seq: number; room: { purrtrait: PurrView } }).room.purrtrait;
+    expect(snap("a").youDraw).toBeUndefined();
+    expect(snap("a").word).toBeUndefined();
+    expect(snap("a2")).toMatchObject({ youDraw: true });
+    expect(snap("tv").word).toBeUndefined();
+    // Later ink from the owner sends no snapshots.
+    expect(only(ink(r, "a2", 0, turn, [dot(1)]), "snapshot")).toEqual([]);
+    expect(ink(r, "a", 0, turn, [dot(2)])).toEqual([]);
     expect(viewOf(r, "a").word).toBeUndefined();
     // Still the drawer's device after a rebuild: its ink is lost, so it alone is asked for it.
     expect(rebuild(r).rebuilt()).toEqual([{ to: "a2", message: { t: "inkResend", turn } }]);
@@ -692,6 +727,13 @@ describe("kittens (ruling 5)", () => {
     r.setKitten("a", false);
     act(r, "a", 0, { type: "choose", level: "tricky" });
     expect(game(r).level).toBe("tricky");
+  });
+
+  it("remembers what it was last told", () => {
+    const r = family();
+    expect(r.isKitten("a")).toBe(false);
+    r.setKitten("a", true);
+    expect(r.isKitten("a")).toBe(true);
   });
 
   it("only a game that changes for kittens wants the age band", () => {

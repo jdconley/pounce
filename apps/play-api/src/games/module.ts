@@ -1,5 +1,4 @@
 import type { GameAim } from "../protocol";
-import type { InkEasel, InkOp } from "../purrtrait/ink";
 import type { Seat } from "../rules/engine";
 import type { Rng, Seed } from "../rules/rng";
 
@@ -13,20 +12,24 @@ export type ViewerInfo = { drawerDevice: boolean; easyOnly: boolean };
 export type ApplyContext = { easyOnly: boolean };
 
 /**
- * Live drawing (Purrtrait's ink, design §6): what a room needs to relay it with its `LiveRelay`.
- * The checks and the compaction are the game's; who may draw and who sees it are the room's.
+ * A game's live stream (Purrtrait's ink, design §6): what a room needs to relay it with its
+ * `LiveRelay`. `Op` is one update and `Tally` the game's checking state; the checks and the
+ * compaction are the game's, who may send (the device that owns the turn) is the room's.
+ * Methods, not properties, so a game's own op and tally types fit the room's `unknown`.
  */
-export type InkRules<S> = {
-  /** Ink messages one device may send in a second. */
+export type LiveRules<S, Op = unknown, Tally = unknown> = {
+  /** Messages one device may send in a second. */
   perSecond: number;
-  /** The turn ink is taken for now (the wire's `turn`), or null while nobody draws. */
-  live(s: S): string | null;
-  /** A fresh easel. `rebuilt`: it stands in for one the room lost. */
-  start(rebuilt: boolean): InkEasel;
-  check(ops: readonly InkOp[], easel: InkEasel): { ok: true; easel: InkEasel } | { ok: false; full: boolean };
-  compact(ops: readonly InkOp[]): InkOp[];
-  /** The batch starts with a clear, so it can stand in for a lost drawing. */
-  wipes(ops: readonly InkOp[]): boolean;
+  /** Who hears each message: the screens and the sender's own device (the default), or every connected device. */
+  audience?: "screens+owner" | "all";
+  /** The key (the turn) messages are taken for now, or null while nobody may send. */
+  key(s: S): string | null;
+  /** A fresh tally. `rebuilt`: it stands in for a log the room lost. */
+  start(rebuilt: boolean): Tally;
+  check(ops: readonly Op[], tally: Tally): { ok: true; tally: Tally } | { ok: false; full: boolean };
+  compact(ops: readonly Op[]): Op[];
+  /** The batch begins again from nothing (a clear), so it can stand in for a lost log. */
+  wipes(ops: readonly Op[]): boolean;
 };
 
 /** What a room needs from a game. Rooms hold no game-specific logic. */
@@ -59,12 +62,12 @@ export interface GameModule<S, A, V, E, Err extends string = string, O = never> 
    */
   kittenAware?: boolean;
   /**
-   * The game takes live ink (design §6). The room keeps it in memory only, relays it to the
-   * screen and to the device that owns the drawing turn (the first to act for the seat on the
-   * move), and lets only that device act for the seat until the turn ends. Absent: `ink` is
-   * `not_allowed`.
+   * The game takes a live stream (`ink` messages; Purrtrait, design §6). The room keeps it in
+   * memory only, relays it to its `audience`, and the device that first acts for the seat on the
+   * move owns the turn: only it streams and acts for the seat until the turn ends. Absent: `ink`
+   * is `not_allowed`.
    */
-  ink?: InkRules<S>;
+  stream?: LiveRules<S>;
   /** `viewer`: what the room knows of the device asking. A game with no use for it ignores it. */
   view(s: S, controlled: readonly Seat[], viewer?: ViewerInfo): V;
   filterEvent(e: E, controlled: readonly Seat[]): E;

@@ -222,12 +222,19 @@ export class GameRoom extends DurableObject<Env> {
     const screen = tvOn(this.env) && request.headers.get(ROLE_HEADER) === "screen";
     if (screen && !this.core.mayScreen(deviceId)) return refuse(409, "seated");
     if (screen && !this.core.isScreen(deviceId)) return refuse(403, "not_screen");
-    // A game that changes for kittens (Purrtrait's two Easy words) needs the device's age band first.
-    const kitten = !screen && this.core.wantsAgeBands() && (await this.index(deviceId).ageBand().catch(() => null)) === "kitten";
+    // A game that changes for kittens (Purrtrait's two Easy words) needs the device's age band
+    // first. A lookup that fails keeps what the room already knew: a kitten stays one.
+    const kitten =
+      !screen && this.core.wantsAgeBands()
+        ? await this.index(deviceId)
+            .ageBand()
+            .then((band) => band === "kitten")
+            .catch(() => null)
+        : false;
     if (!this.core) return new Response(null, { status: 404 });
+    if (kitten !== null) this.core.setKitten(deviceId, kitten);
     this.ctx.acceptWebSocket(server, [deviceId]);
-    server.serializeAttachment({ deviceId, ...(kitten ? { kitten } : {}) });
-    this.core.setKitten(deviceId, kitten);
+    server.serializeAttachment({ deviceId, ...(this.core.isKitten(deviceId) ? { kitten: true } : {}) });
     await this.after(this.core.connect(deviceId, parsePlayers(request.headers.get(PLAYER_HEADER))));
     return new Response(null, { status: 101, webSocket: client });
   }

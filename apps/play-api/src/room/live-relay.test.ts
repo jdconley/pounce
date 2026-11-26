@@ -114,35 +114,48 @@ describe("LiveRelay", () => {
     expect(r.base(false)).toEqual({ n: 0, rebuilt: false });
   });
 
-  it("the resend reply is exempt from the limit once, from its first restart for resendMs", () => {
-    const r = relay(2, 500);
+  it("the resend reply is exempt from the limit once, from its first restart to its last", () => {
+    const r = relay(2);
     r.lost("k");
     expect([r.admit("a"), r.admit("a"), r.admit("a")]).toEqual([true, true, false]);
     r.askResend("a", resend);
     // Not exempt until the reply begins; another device never is.
     expect(r.admit("a")).toBe(false);
-    expect(r.admit("b", true)).toBe(true);
-    expect(r.admit("a", true)).toBe(true);
-    for (let i = 0; i < 40; i++) expect(r.admit("a")).toBe(true);
-    clock += 499;
-    expect(r.admit("a", true)).toBe(true);
-    clock += 1;
-    // The window is over, and spent: a second restart is not exempt.
-    expect(r.admit("a", true)).toBe(false);
-    clock += 1000;
-    expect([r.admit("a", true), r.admit("a", true), r.admit("a", true)]).toEqual([true, true, false]);
+    expect(r.admit("b", { restarts: true })).toBe(true);
+    expect(r.admit("a", { restarts: true })).toBe(true);
+    for (let i = 0; i < 40; i++) {
+      clock += 100;
+      expect(r.admit("a")).toBe(true);
+    }
+    expect(r.admit("a", { last: true })).toBe(true);
+    // Spent: the limit holds again, and a second restart is not exempt.
+    expect([r.admit("a"), r.admit("a"), r.admit("a", { restarts: true })]).toEqual([true, true, false]);
   });
 
-  it("resendMs defaults to a second", () => {
+  it("a one-message reply is its first and its last", () => {
+    const r = relay(1);
+    r.lost("k");
+    expect(r.admit("a")).toBe(true);
+    r.askResend("a", resend);
+    expect(r.admit("a", { restarts: true, last: true })).toBe(true);
+    expect(r.admit("a")).toBe(false);
+  });
+
+  it("a reply whose last never comes is exempt for resendMs (default 5 s)", () => {
     const r = relay(1);
     r.lost("k");
     r.askResend("a", resend);
-    expect(r.admit("a", true)).toBe(true);
-    clock += 999;
+    expect(r.admit("a", { restarts: true })).toBe(true);
+    clock += 4999;
     expect(r.admit("a")).toBe(true);
     clock += 1;
-    expect(r.admit("a")).toBe(true);
-    expect(r.admit("a")).toBe(false);
+    expect([r.admit("a"), r.admit("a")]).toEqual([true, false]);
+    const short = relay(1, 500);
+    short.lost("k");
+    short.askResend("a", resend);
+    short.admit("a", { restarts: true });
+    clock += 500;
+    expect([short.admit("a"), short.admit("a")]).toEqual([true, false]);
   });
 
   it("a new key drops an unused exemption", () => {
@@ -150,7 +163,7 @@ describe("LiveRelay", () => {
     r.lost("k");
     r.askResend("a", resend);
     r.follow("k2");
-    expect([r.admit("a", true), r.admit("a", true)]).toEqual([true, false]);
+    expect([r.admit("a", { restarts: true }), r.admit("a", { restarts: true })]).toEqual([true, false]);
   });
 
   it("asks only while the log is missing", () => {
