@@ -14,7 +14,7 @@ import { Button, Cat, learnTip, Sheet, Tip, tipLearned, useSize, useTipsVersion 
 import { replayInk } from "../workers/purr-ink";
 
 import { EaselCanvas } from "./purr-easel-view";
-import { COLOURS, EASEL_H, EASEL_W, ERASER, InkWriter, WIDTHS, type Stroke } from "./purr-ink";
+import { COLOURS, ERASER, InkWriter, WIDTHS, type Stroke } from "./purr-ink";
 import { attachDrawing } from "./purr-input";
 import { drawLayout } from "./purr-layout";
 import { clock, POINTS, type PurrView } from "./purr-model";
