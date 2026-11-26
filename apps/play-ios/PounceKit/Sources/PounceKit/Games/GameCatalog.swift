@@ -74,8 +74,13 @@ public enum GameCatalog {
         minPlayers: 2, maxPlayers: 4, art: "game-tiles", tint: .sky, availability: .available,
         howTo: "howto-tiles")
 
+    /// The trick-taking game with bidding, the feeder and the Bird (design 2026-11-25).
+    public static let birdwatch = Entry(
+        id: "birdwatch", title: "Birdwatch", pitch: "Bid, call trump, take tricks.",
+        minPlayers: 4, maxPlayers: 6, art: "game-birdwatch", tint: .lime, availability: .available)
+
     /// Catalog order: the order games were added, oldest first.
-    public static let all: [Entry] = [catTower, tiles]
+    public static let all: [Entry] = [catTower, tiles, birdwatch]
 
     /// The game the server deals when a table is created.
     public static let dealt = catTower

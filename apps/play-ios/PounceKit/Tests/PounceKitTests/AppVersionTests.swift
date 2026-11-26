@@ -59,15 +59,15 @@ import Testing
         #expect(app.headerValue == "platform=ios; version=1.1; build=57; protocol=1")
         #expect(ClientHeaders.headers(for: app) == [
             "X-Pounce-App": "platform=ios; version=1.1; build=57; protocol=1",
-            "X-Pounce-Games": "cat-tower,tiles,dish",
+            "X-Pounce-Games": "cat-tower,tiles,birdwatch,dish",
         ])
     }
 
     /// `dish` in the games header says this app shows the Daily Dish, so the server sends it the
     /// Dish reminder. Only the iPhone and iPad app has the Dish; the Apple TV only shows a board.
     @Test func onlyThePhoneAppSaysItHasTheDish() {
-        #expect(ClientHeaders.headers(for: AppIdentity(platform: "ios", version: "1.3"))["X-Pounce-Games"] == "cat-tower,tiles,dish")
-        #expect(ClientHeaders.headers(for: AppIdentity(platform: "tvos", version: "1.3"))["X-Pounce-Games"] == "cat-tower,tiles")
+        #expect(ClientHeaders.headers(for: AppIdentity(platform: "ios", version: "1.3"))["X-Pounce-Games"] == "cat-tower,tiles,birdwatch,dish")
+        #expect(ClientHeaders.headers(for: AppIdentity(platform: "tvos", version: "1.3"))["X-Pounce-Games"] == "cat-tower,tiles,birdwatch")
     }
 
     @Test func itSaysTheProtocolThisBuildSpeaks() {

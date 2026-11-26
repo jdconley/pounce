@@ -3,8 +3,10 @@ import Testing
 @testable import PounceKit
 
 @Suite struct GameCatalogTests {
-    @Test func theCatalogHoldsCatTowerThenTiles() {
-        #expect(GameCatalog.all.map(\.id) == ["cat-tower", "tiles"])
+    @Test func theCatalogHoldsCatTowerThenTilesThenBirdwatch() {
+        #expect(GameCatalog.all.map(\.id) == ["cat-tower", "tiles", "birdwatch"])
+        #expect(GameCatalog.birdwatch.minPlayers == 4)
+        #expect(GameCatalog.birdwatch.maxPlayers == 6)
     }
 
     @Test func catTowerIsTheGameTheServerDealsAndCanBeStarted() {
@@ -51,10 +53,12 @@ import Testing
         #expect(Set(GameCatalog.all.map(\.title)).count == GameCatalog.all.count)
     }
 
-    /// Each game names its own How to play video, and a made-up entry has none.
+    /// Each game with a How to play video names its own (Birdwatch has text only in 1.3), and a
+    /// made-up entry has none.
     @Test func everyGameHasItsOwnHowToVideo() {
         let videos = GameCatalog.all.compactMap(\.howTo)
-        #expect(videos.count == GameCatalog.all.count)
+        #expect(videos.count == GameCatalog.all.count - 1)
+        #expect(GameCatalog.birdwatch.howTo == nil)
         #expect(Set(videos).count == videos.count)
         #expect(GameCatalog.catTower.howTo == "howto-cat-tower")
         #expect(GameCatalog.Entry(id: "x", title: "X", pitch: "p", minPlayers: 2, maxPlayers: 4, art: "a", tint: .sky,
@@ -78,7 +82,7 @@ import Testing
             game("e", .available),
         ])
         #expect(shelf.map(\.id) == ["a", "c", "e", "b", "d"])
-        #expect(GameCatalog.shelf().map(\.id) == ["cat-tower", "tiles"])
+        #expect(GameCatalog.shelf().map(\.id) == ["cat-tower", "tiles", "birdwatch"])
     }
 
     @Test func unlockingAGameOnlyChangesItsAvailability() {

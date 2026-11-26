@@ -71,6 +71,9 @@ import Observation
     /// The last `forfeited` event (§5.13): whose seat left the game. `serial` goes up with each.
     /// Nil until one arrives.
     public private(set) var forfeitNotice: ForfeitNotice?
+    /// The last `houseCat` event (Birdwatch): whose person left, so a House Cat plays on for them.
+    /// `serial` goes up with each. Nil until one arrives.
+    public private(set) var houseCatNotice: ForfeitNotice?
     /// Play again's table (§10.4): from `{t:"rematch"}`, or a snapshot that already has one.
     public private(set) var rematch: String?
     /// When this phone may nudge `room.nudge`'s seat: the snapshot's wait from when it arrived.
@@ -108,7 +111,7 @@ import Observation
         public let move: Move
         fileprivate var connection: Int
 
-        /// Cat Tower's action; nil for a tile game turn.
+        /// Cat Tower's action; nil for another game's move.
         public var action: Action? {
             if case .catTower(let action) = move { return action }
             return nil
@@ -119,11 +122,13 @@ import Observation
     public enum Move: Equatable, Sendable {
         case catTower(Action)
         case tiles(TilesAction)
+        case birdwatch(BirdAction)
 
         func message(seat: Seat, id: String?) -> ClientMessage {
             switch self {
             case .catTower(let action): .act(seat: seat, action: action, id: id)
             case .tiles(let action): .actTiles(seat: seat, action: action, id: id)
+            case .birdwatch(let action): .actBirdwatch(seat: seat, action: action, id: id)
             }
         }
     }
@@ -241,6 +246,11 @@ import Observation
     /// `act` for a turn in the tile game: the same lock, move id and resend rules.
     @discardableResult public func actTiles(seat: Seat, _ action: TilesAction) -> Bool {
         act(seat: seat, move: .tiles(action))
+    }
+
+    /// `act` for a Birdwatch move: the same lock, move id and resend rules.
+    @discardableResult public func actBirdwatch(seat: Seat, _ action: BirdAction) -> Bool {
+        act(seat: seat, move: .birdwatch(action))
     }
 
     private func act(seat: Seat, move: Move) -> Bool {
@@ -609,6 +619,25 @@ import Observation
             }
             noteTurn()
             continuation.yield(.tiles(event, seq: seq))
+        case .birdwatch(let event):
+            // As for the other games: the turn and the status are folded in, for timing.
+            switch event {
+            case .turn(let seat):
+                room?.birdwatch?.turn = seat
+            case .gameOver:
+                room?.birdwatch?.status = .over
+                room?.birdwatch?.turn = nil
+            case .handOver:
+                room?.birdwatch?.turn = nil
+            default:
+                break  // the snapshot that follows this action carries the rest
+            }
+            noteTurn()
+            continuation.yield(.birdwatch(event, seq: seq))
+        case .houseCat(let seat):
+            // The snapshot that follows says the seat is a House Cat's now.
+            houseCatNotice = ForfeitNotice(seat: seat, serial: (houseCatNotice?.serial ?? 0) + 1)
+            noteTurn()
         case .look(let seat, let look):
             // Folded in whole, like presence: the snapshot that follows says the same.
             room?.look = look

@@ -62,14 +62,24 @@ public struct SeatView: Codable, Equatable, Sendable {
     public var yours: Bool
     public var presence: Presence?
     public var link: SeatLink?
+    /// A House Cat took this seat over when its person left a Birdwatch game (their forfeit, or
+    /// retired): `kind` is `bot`, and `person` is still the one who left, for the name tag.
+    public var left: Bool?
 
-    public init(kind: SeatKind, person: Person? = nil, yours: Bool = false, presence: Presence? = nil, link: SeatLink? = nil) {
+    public init(
+        kind: SeatKind, person: Person? = nil, yours: Bool = false, presence: Presence? = nil, link: SeatLink? = nil,
+        left: Bool? = nil
+    ) {
         self.kind = kind
         self.person = person
         self.yours = yours
         self.presence = presence
         self.link = link
+        self.left = left
     }
+
+    /// A House Cat plays this seat for someone who left.
+    public var isTakenOver: Bool { kind == .bot && left == true }
 }
 
 /// A server with nudges on, while a person on another phone holds the move: whether this phone may
@@ -279,6 +289,10 @@ public struct RoomView: Codable, Equatable, Sendable {
     /// The tile game's view, in a room playing it (tile game spec §9.3). One key per game: the two
     /// games share event names with different payloads, so nothing here is decoded by `gameId`.
     public var tiles: TilesView?
+    /// Birdwatch's view, in a room playing it, once dealt.
+    public var birdwatch: BirdView?
+    /// The game's options (Birdwatch's rule set); nil for a game without any.
+    public var options: RoomOptions?
     /// The table's rug and card back; nil from a server without looks (streaks off).
     public var look: Look?
     /// The Play again table's code, once someone dealt it (§10.4).
@@ -297,7 +311,7 @@ public struct RoomView: Codable, Equatable, Sendable {
         code: String, name: String? = nil, status: RoomStatus, youAreHost: Bool, seats: [SeatView],
         game: GameView? = nil, look: Look? = nil, rematch: String? = nil, link: RoomLink? = nil,
         nudge: NudgeView? = nil, retire: RetireView? = nil, gameId: String? = nil, tiles: TilesView? = nil,
-        screen: Bool? = nil
+        screen: Bool? = nil, birdwatch: BirdView? = nil, options: RoomOptions? = nil
     ) {
         self.code = code
         self.name = name
@@ -313,20 +327,29 @@ public struct RoomView: Codable, Equatable, Sendable {
         self.screen = screen
         self.gameId = gameId
         self.tiles = tiles
+        self.birdwatch = birdwatch
+        self.options = options
     }
 
     /// The room plays the tile game. Decided by `gameId` alone, so a room in its lobby says so too.
     public var isTiles: Bool { gameId == GameID.tiles }
+
+    /// The room plays Birdwatch. Decided by `gameId` alone, so a room in its lobby says so too.
+    public var isBirdwatch: Bool { gameId == GameID.birdwatch }
+
+    /// The table's rule set: the dealt game's, else the lobby's options (Official by default).
+    public var birdRules: BirdRules { birdwatch?.rules ?? options?.rules ?? .official }
 
     /// The seat on the move while the room and its game (either one) are playing; nil otherwise.
     public var liveTurn: Seat? {
         guard status == .playing else { return nil }
         if let game { return game.status == .playing ? game.turn : nil }
         if let tiles { return tiles.status == .playing ? tiles.turn : nil }
+        if let birdwatch { return birdwatch.status == .playing ? birdwatch.turn : nil }
         return nil
     }
 
-    /// True when `seat` forfeited, in either game.
+    /// True when `seat` forfeited, in either game. Never in Birdwatch: a House Cat takes over.
     public func isOut(_ seat: Seat) -> Bool { game?.isOut(seat) ?? tiles?.isOut(seat) ?? false }
 
     /// The name to show: the table's own, or `TableName.fallback` from an older server.

@@ -13,6 +13,8 @@ public enum TableIntent: Equatable, Sendable {
     case game(GameEvent, seq: Int)
     /// Animate one tile game event, under the same rules as `game`.
     case tiles(TilesEvent, seq: Int)
+    /// Animate one Birdwatch event, under the same rules as `game`.
+    case birdwatch(BirdEvent, seq: Int)
     case presence(seat: Seat, presence: Presence)
     /// Some seat's connection quality changed (`SeatView.link`): redraw the seats.
     case link
