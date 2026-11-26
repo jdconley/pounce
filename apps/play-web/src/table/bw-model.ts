@@ -3,8 +3,8 @@
  * The rules stay on the server (it sends `playable`, `bidRange` and `partnerChoices`); this only
  * reads the deck's data to sort, name and score cards on show.
  */
-import { teamsFor } from "@pounce/play-api/birdwatch/engine";
 import { isBird, rankOf, suitOf, SUITS, type CardId, type Suit } from "@pounce/play-api/birdwatch/cards";
+import { teamsFor } from "@pounce/play-api/birdwatch/engine";
 import { counterOf, powerOf, RULE_SETS, type RuleSetId } from "@pounce/play-api/birdwatch/rules";
 
 import { playing, seatName, type SeatInfo } from "./seat-names";

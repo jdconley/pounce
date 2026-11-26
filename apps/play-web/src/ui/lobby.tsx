@@ -7,7 +7,9 @@ import { titleOf } from "../lib/catalog";
 import { buzz } from "../lib/haptics";
 import { play } from "../lib/sound";
 import { reach } from "../store/app";
-import { inviteMessages, mySeats, practiceMessages, seatToAdd, startClosingOpenSeats, startLit, startWords } from "../store/lobby";
+import { inviteMessages, mySeats, practiceMessages, rulesMessage, seatToAdd, startClosingOpenSeats, startLit, startWords, swapMessage } from "../store/lobby";
+import { BwHowTo } from "../table/bw-help";
+import { lobbyRibbons, RULE_COPY, RULES_ORDER } from "../table/bw-model";
 import { seatCat, seatName, seatPose } from "../table/seat";
 
 import { Button, Cat, Icon, IconButton, Sheet, Tip } from "./common";
@@ -39,7 +41,9 @@ export function Lobby(props: {
   onShowOnTv: () => void;
 }) {
   const { store, room } = props;
-  const [sheet, setSheet] = useState<null | "add" | "qr" | "local" | "rename" | { seat: number }>(null);
+  const [sheet, setSheet] = useState<null | "add" | "qr" | "local" | "rename" | "howto" | { seat: number }>(null);
+  /** Swap seats: the first seat picked, waiting for the second. */
+  const [swapFrom, setSwapFrom] = useState<number | null>(null);
   const [copied, setCopied] = useState(false);
   const shown = room.seats.map((s, i) => ({ s, i })).filter(({ s }) => s.kind !== "closed");
   const spots = SPOTS[Math.min(Math.max(shown.length, 2), 6)] ?? SPOTS[2];
@@ -48,6 +52,10 @@ export function Lobby(props: {
   const lit = startLit(room);
   const words = startWords(room);
   const game = room.gameId ?? "cat-tower";
+  const bird = game === "birdwatch";
+  const rules = room.options?.rules ?? "official";
+  const ribbons = bird ? lobbyRibbons(room) : new Map<number, string>();
+  const host = room.youAreHost && seated;
 
   const send = (messages: Parameters<RoomStore["send"]>[0][] | null) => {
     for (const m of messages ?? []) store.send(m);
@@ -107,19 +115,30 @@ export function Lobby(props: {
           <img class="rug-art" src={art("rug")} alt="" />
           {shown.map(({ s, i }, k) => {
             const [x, y] = spots[k] ?? [0.5, 0.5];
-            const label = s.kind === "open" ? "Open seat. Add a player" : `${seatName(s)}${s.kind === "bot" ? "" : s.yours ? ", on this device" : ", on another device"}`;
+            const ribbon = ribbons.get(i);
+            const label =
+              swapFrom !== null && s.kind !== "open"
+                ? i === swapFrom
+                  ? `${seatName(s)}. Cancel swap`
+                  : `Swap with ${seatName(s)}`
+                : s.kind === "open"
+                  ? "Open seat. Add a player"
+                  : `${seatName(s)}${s.kind === "bot" ? "" : s.yours ? ", on this device" : ", on another device"}`;
             return (
               <button
                 type="button"
-                class={`lobby-seat ${s.kind}`}
-                style={{ left: `${x * 100}%`, top: `${y * 100}%`, ["--ring" as string]: RINGS[i % RINGS.length] }}
+                class={`lobby-seat ${s.kind} ${ribbon ? "ribboned" : ""} ${swapFrom === i ? "swapping" : ""} ${swapFrom !== null && s.kind !== "open" && swapFrom !== i ? "swap-target" : ""}`}
+                style={{ left: `${x * 100}%`, top: `${y * 100}%`, ["--ring" as string]: RINGS[i % RINGS.length], ["--ribbon" as string]: ribbon ?? "transparent" }}
                 aria-label={label}
                 id={s.kind === "open" && i === add ? "open-seat" : undefined}
                 onClick={() => {
                   play("pop", 0.5);
                   buzz("tap");
-                  if (s.kind === "open") setSheet("add");
-                  else if (seated && (s.kind === "bot" || s.yours)) setSheet({ seat: i });
+                  if (swapFrom !== null && s.kind !== "open") {
+                    if (swapFrom !== i) store.send(swapMessage(swapFrom, i));
+                    setSwapFrom(null);
+                  } else if (s.kind === "open") setSheet("add");
+                  else if (seated && (s.kind === "bot" || s.yours || (bird && host))) setSheet({ seat: i });
                 }}
               >
                 {s.kind === "open" ? (
@@ -141,6 +160,36 @@ export function Lobby(props: {
           })}
         </div>
       </div>
+
+      {bird ? (
+        <section class="bw-rules panel" aria-label="Rules" id="bw-rules">
+          <div class="bw-pills" role="radiogroup" aria-label="Rules">
+            {RULES_ORDER.map((r) => (
+              <button
+                type="button"
+                role="radio"
+                aria-checked={r === rules}
+                class={`bw-pill ${r === rules ? "on" : ""}`}
+                disabled={!host && r !== rules}
+                onClick={() => {
+                  if (!host || r === rules) return;
+                  play("pop", 0.5);
+                  buzz("tap");
+                  store.send(rulesMessage(r));
+                }}
+              >
+                {RULE_COPY[r].name}
+              </button>
+            ))}
+          </div>
+          <p class="bw-rules-line">
+            <span>{RULE_COPY[rules].line}</span>
+            <button type="button" class="link" onClick={() => setSheet("howto")}>
+              How to play
+            </button>
+          </p>
+        </section>
+      ) : null}
 
       <section class="add-bar panel" aria-label="Add a player" id="add-bar">
         <h2 class="add-title">Add a player</h2>
@@ -175,7 +224,13 @@ export function Lobby(props: {
       </section>
 
       <div class="start-row">
-        {words ? <p class="start-words">{words}</p> : null}
+        {swapFrom !== null ? (
+          <p class="start-words" aria-live="polite">
+            Tap a seat to swap
+          </p>
+        ) : words ? (
+          <p class="start-words">{words}</p>
+        ) : null}
         <Button size="big" wide id="start" disabled={!lit} onClick={start}>
           <Icon name="icon-play" size={34} /> Start
         </Button>
@@ -235,11 +290,25 @@ export function Lobby(props: {
           />
         </div>
       ) : null}
+      {sheet === "howto" ? <BwHowTo rules={rules} onClose={() => setSheet(null)} /> : null}
       {sheet === "rename" ? <RenameSheet current={room.name} onClose={() => setSheet(null)} onRename={(name) => store.send({ t: "rename", name })} /> : null}
       {typeof sheet === "object" && sheet !== null ? (
         <Sheet title={seatName(room.seats[sheet.seat])} onClose={() => setSheet(null)}>
           <div class="sheet-actions">
-            {room.seats[sheet.seat]?.kind === "bot" ? (
+            {bird && host ? (
+              <Button
+                wide
+                variant="teal"
+                id="swap-seats"
+                onClick={() => {
+                  setSwapFrom(sheet.seat);
+                  setSheet(null);
+                }}
+              >
+                <Icon name="icon-swap" size={28} /> Swap seats
+              </Button>
+            ) : null}
+            {room.seats[sheet.seat]?.kind === "human" && !room.seats[sheet.seat]?.yours ? null : room.seats[sheet.seat]?.kind === "bot" ? (
               <Button wide variant="magenta" onClick={() => { store.send({ t: "configure", seat: sheet.seat, kind: "open" }); setSheet(null); }}>
                 Remove House Cat
               </Button>

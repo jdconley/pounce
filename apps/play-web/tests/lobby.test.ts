@@ -1,6 +1,6 @@
 import { describe, expect, test } from "vitest";
 
-import { autoClaimSeat, firstTableMessages, inviteHost, inviteMessages, practiceMessages, startBlock, startClosingOpenSeats, startLit, startWords, takeableSeats } from "../src/store/lobby";
+import { autoClaimSeat, minPlayers, rulesMessage, swapMessage, firstTableMessages, inviteHost, inviteMessages, practiceMessages, startBlock, startClosingOpenSeats, startLit, startWords, takeableSeats } from "../src/store/lobby";
 
 import type { RoomView } from "@pounce/play-api/protocol";
 
@@ -58,5 +58,36 @@ describe("the lobby plan (LobbyPlan.swift)", () => {
     expect(inviteHost(room([grandma, bot]))).toEqual({ name: "Grandma", cat: 4, table: "The Sleepy Sardines", seatWaits: true });
     expect(inviteHost(room([grandma, grandma], "playing"))?.seatWaits).toBe(false);
     expect(inviteHost(room([bot, open]))).toBeNull();
+  });
+});
+
+describe("a Birdwatch lobby", () => {
+  const bird = (seats: Seat[]): RoomView => ({ ...room(seats), gameId: "birdwatch", options: { rules: "official" } });
+
+  test("needs 4 players", () => {
+    expect(minPlayers(bird([me]))).toBe(4);
+    expect(minPlayers(room([me]))).toBe(2);
+    expect(startLit(bird([me, bot, bot, closed, closed, closed]))).toBe(false);
+    expect(startWords(bird([me, bot, bot, closed, closed, closed]))).toBe("Needs 4 players.");
+    expect(startWords(bird([me, bot, open, open, closed, closed]))).toBe("Waiting for 2 seats.");
+    expect(startLit(bird([me, bot, bot, bot, closed, closed]))).toBe(true);
+    expect(startClosingOpenSeats(bird([me, bot, bot, bot, open, closed]))).toEqual([{ t: "configure", seat: 4, kind: "closed" }, { t: "start" }]);
+    expect(startClosingOpenSeats(bird([me, bot, bot, open, open, closed]))).toBeNull();
+  });
+
+  test("a first table gets three House Cats, so Start is lit at once", () => {
+    expect(firstTableMessages(bird([me, open, open, open, closed, closed]))).toEqual([1, 2, 3].map((seat) => ({ t: "configure", seat, kind: "bot" })));
+  });
+
+  test("practice: three House Cats, the rest closed, dealt", () => {
+    expect(practiceMessages(bird([me, open, open, open, closed, closed]))).toEqual([
+      ...[1, 2, 3].map((seat) => ({ t: "configure", seat, kind: "bot" })),
+      { t: "start" },
+    ]);
+  });
+
+  test("the rule set and seat swaps", () => {
+    expect(rulesMessage("friesen")).toEqual({ t: "setOptions", options: { rules: "friesen" } });
+    expect(swapMessage(1, 2)).toEqual({ t: "swapSeats", seats: [1, 2] });
   });
 });
