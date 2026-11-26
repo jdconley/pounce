@@ -99,7 +99,15 @@ export class GameRoom extends DurableObject<Env> {
     ctx.setWebSocketAutoResponse(new WebSocketRequestResponsePair(PING, PONG));
     void ctx.blockConcurrencyWhile(async () => {
       this.core = this.load();
-      if (this.core) await this.dropStaleDevices(this.core);
+      if (!this.core) return;
+      // Kittens stay kittens across a wake: their sockets remember (a device's age band is never stored here).
+      for (const ws of ctx.getWebSockets()) {
+        const { deviceId, kitten } = attachment(ws);
+        if (kitten) this.core.setKitten(deviceId, true);
+      }
+      await this.dropStaleDevices(this.core);
+      // A drawing turn's ink lived only in the old instance: ask the drawer for it again.
+      this.deliver(this.core.rebuilt());
     });
   }
 
@@ -214,8 +222,12 @@ export class GameRoom extends DurableObject<Env> {
     const screen = tvOn(this.env) && request.headers.get(ROLE_HEADER) === "screen";
     if (screen && !this.core.mayScreen(deviceId)) return refuse(409, "seated");
     if (screen && !this.core.isScreen(deviceId)) return refuse(403, "not_screen");
+    // A game that changes for kittens (Purrtrait's two Easy words) needs the device's age band first.
+    const kitten = !screen && this.core.wantsAgeBands() && (await this.index(deviceId).ageBand().catch(() => null)) === "kitten";
+    if (!this.core) return new Response(null, { status: 404 });
     this.ctx.acceptWebSocket(server, [deviceId]);
-    server.serializeAttachment({ deviceId });
+    server.serializeAttachment({ deviceId, ...(kitten ? { kitten } : {}) });
+    this.core.setKitten(deviceId, kitten);
     await this.after(this.core.connect(deviceId, parsePlayers(request.headers.get(PLAYER_HEADER))));
     return new Response(null, { status: 101, webSocket: client });
   }
@@ -233,9 +245,16 @@ export class GameRoom extends DurableObject<Env> {
     }
     // Where a player points: delivered live, never kept. No save, no alarm, no tables list.
     if (parsed.t === "aim") {
-      for (const { to, message } of core.handle(deviceOf(ws), parsed)) {
-        for (const socket of to === "all" ? this.ctx.getWebSockets() : this.ctx.getWebSockets(to)) send(socket, message);
-      }
+      this.deliver(core.handle(deviceOf(ws), parsed));
+      return;
+    }
+    // A drawer's ink: the same, back to every socket of the drawer's device but this one. Saved only
+    // when it made its device the drawing turn's (a pick the clock made): never the ink itself.
+    if (parsed.t === "ink") {
+      const owner = core.state.drawerDevice?.deviceId;
+      const out = core.handle(deviceOf(ws), parsed);
+      this.deliver(out, ws);
+      if (core.state.drawerDevice?.deviceId !== owner) await this.after([]);
       return;
     }
     const refused = await this.refusal(deviceOf(ws), parsed).catch(() => null);
@@ -766,6 +785,15 @@ export class GameRoom extends DurableObject<Env> {
     if (!this.hasOpenSocket(deviceId, ws)) await this.after(this.core.disconnect(deviceId, asked));
   }
 
+  /** Delivers only: nothing is saved. `sender`'s own ink never goes back to it. */
+  private deliver(out: Outbound[], sender?: WebSocket): void {
+    for (const { to, message } of out) {
+      for (const socket of to === "all" ? this.ctx.getWebSockets() : this.ctx.getWebSockets(to)) {
+        if (socket !== sender || message.t !== "ink") send(socket, message);
+      }
+    }
+  }
+
   /** Delivers, pushes, persists, re-arms the alarm and updates the tables index. */
   private async after(out: Outbound[]): Promise<void> {
     const core = this.core as Room;
@@ -998,8 +1026,13 @@ function tableDevices(state: RoomState<unknown>): Set<string> {
   return out;
 }
 
+/** What a socket remembers across a wake: its device, and whether that device is a kitten's (Purrtrait). */
+function attachment(ws: WebSocket): { deviceId: string; kitten?: true } {
+  return ws.deserializeAttachment() as { deviceId: string; kitten?: true };
+}
+
 function deviceOf(ws: WebSocket): string {
-  return (ws.deserializeAttachment() as { deviceId: string }).deviceId;
+  return attachment(ws).deviceId;
 }
 
 function send(ws: WebSocket, message: ServerMessage): void {

@@ -466,3 +466,34 @@ describe("aim", () => {
     expect(parseAim).toHaveBeenCalledWith({ table: [[1, 2, 3]] });
   });
 });
+
+describe("ink (Purrtrait, design §6.2)", () => {
+  it("parses ink with its ops as they came", () => {
+    const ops = [["s", 0, 0, 1, 384, 210, 3, -1], ["p", 0, 2, 2], ["u", 0], ["c"]];
+    expect(parse({ t: "ink", seat: 3, turn: "2:5", ops })).toEqual({ t: "ink", seat: 3, turn: "2:5", ops });
+  });
+
+  it("refuses a malformed ink", () => {
+    const ops = [["c"]];
+    for (const v of [
+      { t: "ink", seat: 0, turn: "1:0" },
+      { t: "ink", seat: 0, ops },
+      { t: "ink", turn: "1:0", ops },
+      { t: "ink", seat: -1, turn: "1:0", ops },
+      { t: "ink", seat: 0, turn: 5, ops },
+      { t: "ink", seat: 0, turn: "", ops },
+      { t: "ink", seat: 0, turn: "1:".padEnd(40, "0"), ops },
+      { t: "ink", seat: 0, turn: "1:0", ops: [] },
+      { t: "ink", seat: 0, turn: "1:0", ops: [["s", 0, 9, 0, 0, 0]] },
+      { t: "ink", seat: 0, turn: "1:0", ops: [["p", 0, 1]] },
+      { t: "ink", seat: 0, turn: "1:0", ops, extra: 1 },
+    ])
+      expect(parse(v)).toEqual(BAD);
+  });
+
+  it("refuses an ink over the 8 KB limit", () => {
+    const deltas = Array.from({ length: 4100 }, () => 1);
+    expect(JSON.stringify(deltas).length).toBeGreaterThan(8192);
+    expect(parse({ t: "ink", seat: 0, turn: "1:0", ops: [["p", 0, ...deltas]] })).toEqual(BAD);
+  });
+});

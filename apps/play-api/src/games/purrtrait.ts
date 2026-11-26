@@ -10,6 +10,7 @@ import {
   type PurrOptions,
   type PurrState,
 } from "../purrtrait/engine";
+import { checkInk, compact, freshEasel, INK_PER_SECOND, wipes } from "../purrtrait/ink";
 import { DEFAULT_OPTIONS, isRoomOnly, parseAction, parseOptions, parseRoomAction } from "../purrtrait/parse";
 import { turnKey, view, type PurrView } from "../purrtrait/view";
 
@@ -25,6 +26,15 @@ export const purrtrait: GameModule<PurrState, PurrAction, PurrView, PurrEvent, P
   parseOptions,
   apply,
   view,
+  kittenAware: true,
+  ink: {
+    perSecond: INK_PER_SECOND,
+    live: (s) => (s.phase === "drawing" ? turnKey(s) : null),
+    start: freshEasel,
+    check: checkInk,
+    compact,
+    wipes,
+  },
   // The word is in no event until the reveal, so every event is for everyone.
   filterEvent: (e) => e,
   currentActor: (s) => (s.phase === "choosing" || s.phase === "drawing" ? s.drawer : null),

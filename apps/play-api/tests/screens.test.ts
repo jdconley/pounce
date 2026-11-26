@@ -1,10 +1,12 @@
 import { afterEach, beforeAll, describe, expect, test } from "vitest";
 
 import { funnelId } from "../src/funnel/funnel";
+import { WORDS } from "../src/purrtrait/words";
 
 import { BASE, bundle, call, Client, connect, createRoom, eventually, mint, newPerson, profile, SECRET, settle, worker, type Device, type Person } from "./play-helpers";
 
 import type { ServerMessage } from "../src/protocol";
+import type { PurrView } from "../src/purrtrait/view";
 import type { Miniflare } from "miniflare";
 
 /** Pounce on the TV through the Worker and the room's Durable Object (`TV` on): the screen role, a TV's table, the aim relay. */
@@ -624,5 +626,51 @@ describe("screen links through the Worker", { timeout: 30_000 }, () => {
     expect((await linkTv(mf, a, { token, room: code })).status).toBe(404);
     expect((await waitUpgrade(mf, token, tv)).status).toBe(404);
     expect((await mf.dispatchFetch(`${BASE}/tv/${token}`, { redirect: "manual" })).status).toBe(404);
+  });
+});
+
+describe("Purrtrait's ink through the Worker", { timeout: 30_000 }, () => {
+  const PURR = { "x-pounce-games": "cat-tower,tiles,purrtrait" };
+  const purr = (c: Client) => c.last?.room.purrtrait as PurrView;
+  const inks = (c: Client) => c.received.filter((m) => m.t === "ink");
+
+  test("a kitten's two Easy words; ink to the TV and the drawer's other socket only; a TV back gets inkSync", async () => {
+    const mf = await start({ games: "tiles,purrtrait" });
+    const [tv, a, b] = [await mint(mf), await mint(mf), await mint(mf)];
+    const made = await call(mf, tv, "POST", "/v1/rooms", { game: "purrtrait", screen: true }, PURR);
+    expect(made.status).toBe(201);
+    const code = ((await made.json()) as { code: string }).code;
+    const screen = await asScreen(mf, code, tv, PURR);
+    const kid = newPerson("Mochi", 1);
+    await profile(mf, a, [kid], { band: "kitten" });
+    const a1 = await sit(mf, code, a, 0, kid, PURR);
+    const b1 = await sit(mf, code, b, 1, newPerson("Bo", 2), PURR);
+    a1.send({ t: "start" });
+    await a1.until((s) => s.room.purrtrait?.phase === "choosing");
+    const level = (word: string) => WORDS.find((w) => w.word === word)?.level;
+    const choices = purr(a1).choices as { easy: string; tricky: string };
+    expect([level(choices.easy), level(choices.tricky)]).toEqual(["easy", "easy"]);
+    a1.send({ t: "act", seat: 0, action: { type: "choose", level: "tricky" } });
+    await a1.until((s) => s.room.purrtrait?.phase === "drawing");
+    expect(purr(a1).level).toBe("easy");
+
+    const a2 = await connect(mf, code, a, PURR);
+    const turn = purr(a1).turn;
+    a1.send({ t: "ink", seat: 0, turn, ops: [["s", 0, 0, 1, 100, 100, 1, 1], ["s", 1, 2, 0, 50, 50], ["u", 1]] });
+    await eventually(() => inks(screen).length, (n) => n === 1);
+    await eventually(() => inks(a2).length, (n) => n === 1);
+    expect(inks(screen)[0]).toEqual({ t: "ink", seat: 0, turn, ops: [["s", 0, 0, 1, 100, 100, 1, 1], ["s", 1, 2, 0, 50, 50], ["u", 1]] });
+    // Anyone else's is dropped, silently.
+    b1.send({ t: "ink", seat: 0, turn, ops: [["c"]] });
+    await settle();
+    expect(inks(a1)).toEqual([]);
+    expect(inks(b1)).toEqual([]);
+    expect(inks(screen)).toHaveLength(1);
+    expect(errors(b1)).toEqual([]);
+
+    screen.ws.close();
+    const back = await asScreen(mf, code, tv, PURR);
+    const sync = await eventually(() => back.received.find((m) => m.t === "inkSync"), Boolean);
+    expect(sync).toEqual({ t: "inkSync", turn, ops: [["s", 0, 0, 1, 100, 100, 1, 1]] });
   });
 });

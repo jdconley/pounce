@@ -14,9 +14,10 @@ import { DEFAULT_BACK, DEFAULT_RUG } from "../streaks/catalog";
 
 import { newMoveCode } from "./codes";
 import { LINK_PING_MS, LinkTracker } from "./link";
+import { LiveRelay } from "./live-relay";
 import { defaultRoomName } from "./names";
 
-import type { GameModule } from "../games/module";
+import type { GameModule, InkRules } from "../games/module";
 import type {
   ClientMessage,
   ErrorCode,
@@ -32,6 +33,7 @@ import type {
   SeatLink,
   ServerMessage,
 } from "../protocol";
+import type { InkEasel, InkOp } from "../purrtrait/ink";
 import type { Action, ApplyError, CatTowerState, GameEvent, Seat } from "../rules/engine";
 import type { Rng, Seed } from "../rules/rng";
 import type { CatTowerView } from "../rules/view";
@@ -147,6 +149,12 @@ export type RoomState<S = CatTowerState> = {
   screens?: string[];
   /** When the last connected screen went, while within the grace. A screen back by then changes nothing. */
   screenLeftAt?: number;
+  /**
+   * A game with ink (Purrtrait): the device that owns this drawing turn, the first to act for the
+   * seat on the move (its `choose`). Only it sees the word, draws and ends the turn. A device id,
+   * not a drawing: the ink itself is never stored. Absent: no device yet, or no such game.
+   */
+  drawerDevice?: { turn: string; deviceId: string };
 };
 
 export type Look = { rug: string; back: string };
@@ -323,6 +331,7 @@ const MAX_MOVE_FAILURES = 5;
 export const RENAMES_PER_WINDOW = 5;
 export const RENAME_WINDOW_MS = MS_PER_MINUTE;
 const UINT32_RANGE = 2 ** 32;
+const INK_RESEND = (turn: string): ServerMessage => ({ t: "inkResend", turn });
 const BOT_DELAY_MS = 1200;
 const NEXT_ROUND_DELAY_MS = 6000;
 const ASLEEP_AFTER_MS = 5 * MS_PER_MINUTE;
@@ -368,6 +377,12 @@ export class RoomCore<S = CatTowerState> {
   private readonly aimTimes = new Map<string, number[]>();
   /** Per device and seat (not persisted): the last aim message relayed was an aim, not a clear. */
   private readonly lastWasAim = new Map<string, boolean>();
+  /** The drawing turn's ink, in memory only (design §6.5): never in `state`. Null for a game without ink. */
+  private readonly inkRelay: LiveRelay<InkOp, InkEasel> | null;
+  /** The live ink turn whose drawer was told the easel is full: once a turn. */
+  private inkFullTold: string | null = null;
+  /** Devices whose age band is a kitten's. The Durable Object sets it before each connect; not persisted. */
+  private readonly kittens = new Set<string>();
 
   /** `game`: left out, the module `state.game` names; tests pass a stand-in. */
   constructor(
@@ -387,6 +402,17 @@ export class RoomCore<S = CatTowerState> {
     this.game = game ?? (gameModule(state.game) as RoomGame<S>);
     this.speed = speed;
     this.features = features;
+    const ink = this.game.ink;
+    this.inkRelay = null;
+    if (ink) {
+      const relay = new LiveRelay<InkOp, InkEasel>({ perSecond: ink.perSecond, start: ink.start, compact: ink.compact }, now);
+      this.inkRelay = relay;
+      const live = this.inkKey();
+      // Built from storage mid-drawing: once a device owns the turn, its drawing is gone (it is
+      // never stored) until it sends it again (`rebuilt`). Before that there was none to lose.
+      if (live !== null && this.turnDevice() !== null) relay.lost(live);
+      else relay.follow(live);
+    }
   }
 
   /**
@@ -560,10 +586,69 @@ export class RoomCore<S = CatTowerState> {
       // Back within the grace, the phones were never told it went.
       if (!wasShown && this.features.tv) {
         this.state.seq += 1;
-        return [...events, ...this.linkCheck(deviceId), ...this.snapshots()];
+        return [...events, ...this.linkCheck(deviceId), ...this.snapshots(), ...this.inkOnConnect(deviceId)];
       }
     }
-    return [...events, ...this.linkCheck(deviceId), { to: deviceId, message: this.snapshotFor(deviceId) }];
+    return [...events, ...this.linkCheck(deviceId), { to: deviceId, message: this.snapshotFor(deviceId) }, ...this.inkOnConnect(deviceId)];
+  }
+
+  /**
+   * Whether the device's age band is a kitten's (ruling 5), as the Durable Object looked it up
+   * before the device connected. Only asked for a game that is `kittenAware`.
+   */
+  setKitten(deviceId: string, kitten: boolean): void {
+    if (kitten) this.kittens.add(deviceId);
+    else this.kittens.delete(deviceId);
+  }
+
+  /** The room's game changes for a kitten's device, so the Durable Object should look up age bands. */
+  wantsAgeBands(): boolean {
+    return this.game.kittenAware === true;
+  }
+
+  /**
+   * A Durable Object just built this room from storage (a wake): if a drawing turn's ink was lost
+   * with the old instance, asks the drawer's device, if it is still connected, to send it again.
+   * A drawer that isn't is asked when it connects.
+   */
+  rebuilt(): Outbound[] {
+    const owner = this.turnDevice();
+    if (this.inkRelay === null || owner === null || !this.state.devices[owner]?.connected) return [];
+    return this.inkRelay.askResend(owner, INK_RESEND);
+  }
+
+  /** A screen, or the drawing turn's device, connecting mid-drawing: the drawing so far, or a request for it if the room lost it. */
+  private inkOnConnect(deviceId: string): Outbound[] {
+    const relay = this.inkRelay;
+    if (relay === null) return [];
+    const owner = this.turnDevice();
+    if (deviceId === owner && relay.missing) return relay.askResend(deviceId, INK_RESEND);
+    if (deviceId !== owner && !this.isScreen(deviceId)) return [];
+    return relay.catchUp(deviceId, (turn, ops) => ({ t: "inkSync", turn, ops }));
+  }
+
+  /** The turn ink is taken for now, or null while nobody draws. Only for a game with ink. */
+  private inkKey(): string | null {
+    const game = this.state.gameState;
+    return game === null ? null : (this.game.ink as InkRules<S>).live(game);
+  }
+
+  /** The device that owns this drawing turn, or null while none does (cleared when the turn ends). */
+  private turnDevice(): string | null {
+    return this.state.drawerDevice?.deviceId ?? null;
+  }
+
+  /** The device may see the drawer's word: it owns the drawing turn, or no device does yet. */
+  private ownsDrawing(deviceId: string): boolean {
+    const owner = this.turnDevice();
+    return owner === null || owner === deviceId;
+  }
+
+  /** After every game change: a new turn has no drawing device yet and no ink. */
+  private followInk(): void {
+    const { state } = this;
+    if (state.drawerDevice && state.drawerDevice.turn !== this.turnKey()) delete state.drawerDevice;
+    this.inkRelay?.follow(this.inkKey());
   }
 
   /**
@@ -1010,7 +1095,7 @@ export class RoomCore<S = CatTowerState> {
         status: state.status,
         youAreHost: deviceId === state.hostDeviceId,
         seats,
-        ...this.gameFields(controlled),
+        ...this.gameFields(controlled, deviceId),
         ...(state.options ? { options: { ...state.options } } : {}),
         ...(this.features.streaks ? { look: this.look() } : {}),
         ...(state.rematch?.code ? { rematch: state.rematch.code } : {}),
@@ -1027,9 +1112,10 @@ export class RoomCore<S = CatTowerState> {
    * game's is under the key of its own id, with `gameId` saying which and `game` null, so an app
    * never has to guess what it is decoding.
    */
-  private gameFields(controlled: Seat[]): Pick<RoomView, "game" | "gameId" | "tiles" | "birdwatch" | "purrtrait"> {
+  private gameFields(controlled: Seat[], deviceId: string): Pick<RoomView, "game" | "gameId" | "tiles" | "birdwatch" | "purrtrait"> {
     const { state } = this;
-    const plain = state.gameState === null ? null : this.game.view(state.gameState, controlled);
+    const viewer = { drawerDevice: this.ownsDrawing(deviceId), easyOnly: this.kittens.has(deviceId) };
+    const plain = state.gameState === null ? null : this.game.view(state.gameState, controlled, viewer);
     // A game with clocks leaves its view's `remainingMs` and `paused` to the room, which keeps the clock.
     const view = plain !== null && this.game.turnLimitMs ? { ...(plain as object), ...this.clockView() } : plain;
     if (state.game === DEFAULT_GAME) return { game: view as CatTowerView | null };
@@ -1223,6 +1309,8 @@ export class RoomCore<S = CatTowerState> {
         return this.retire(deviceId, msg.seat);
       case "aim":
         return this.features.tv ? this.aim(deviceId, msg.seat, msg.aim) : [this.fail(deviceId, "bad_message")];
+      case "ink":
+        return this.ink(deviceId, msg.seat, msg.turn, msg.ops);
       default:
         return [this.fail(deviceId, "bad_message")];
     }
@@ -1251,6 +1339,41 @@ export class RoomCore<S = CatTowerState> {
     return Object.entries(this.state.devices)
       .filter(([id, device]) => device.connected && id !== deviceId)
       .map(([id]) => ({ to: id, message }));
+  }
+
+  /**
+   * The drawer's strokes (design §6), passed on as they came to the screen and to the drawer's own
+   * device (the Durable Object skips the socket that sent them), and kept in memory for a screen
+   * that joins late. Not state: no seq, no save. Ink from anyone but the drawing turn's device,
+   * for another turn, or over the rate is dropped, as aim is.
+   */
+  private ink(deviceId: string, seat: Seat, turn: string, ops: InkOp[]): Outbound[] {
+    const relay = this.inkRelay;
+    if (relay === null) return [this.fail(deviceId, "not_allowed")];
+    const rules = this.game.ink as InkRules<S>;
+    const owner = this.turnDevice();
+    // The key is null unless someone is drawing, so a string never matches it then.
+    if (turn !== relay.key || this.actor() !== seat || !this.controls(deviceId, seat)) return [];
+    if (owner !== null && owner !== deviceId) return [];
+    const restarts = rules.wipes(ops);
+    if (!relay.admit(deviceId, restarts)) return [];
+    // Null: the room lost the drawing (a rebuild), and only a batch that clears first can stand in for it.
+    const base = relay.base(restarts);
+    if (base === null) return [];
+    const checked = rules.check(ops, base);
+    if (!checked.ok) {
+      if (!checked.full) return [this.fail(deviceId, "bad_message")];
+      if (this.inkFullTold === turn) return [];
+      this.inkFullTold = turn;
+      return [this.fail(deviceId, "easel_full")];
+    }
+    relay.record(ops, checked.easel);
+    // A pick the clock made left the turn to whichever device draws first.
+    if (owner === null) this.state.drawerDevice = { turn: this.turnKey(), deviceId };
+    const screens = Object.entries(this.state.devices)
+      .filter(([id, device]) => device.connected && this.isScreen(id))
+      .map(([id]) => id);
+    return relay.fanOut([...screens, deviceId], { t: "ink", seat, turn, ops });
   }
 
   private claim(deviceId: string, seat: Seat, person: Person): Outbound[] {
@@ -1663,8 +1786,15 @@ export class RoomCore<S = CatTowerState> {
     if (!this.controlledSeats(deviceId).includes(seat)) return [this.fail(deviceId, "not_your_seat")];
     if (this.state.status !== "playing") return [this.fail(deviceId, "not_playing")];
     const turn = this.turnKey();
-    const applied = this.isForfeit(action) ? this.leaveGame(seat) : this.applyGame(seat, action);
+    // In a game with ink, the drawing turn belongs to one device (design §10.2): another device of
+    // the drawer's may still leave the game for the seat, but not act for it.
+    const owner = this.turnDevice();
+    const forfeit = this.isForfeit(action);
+    const forActor = seat === this.actor() && !forfeit;
+    if (owner !== null && owner !== deviceId && forActor) return [this.fail(deviceId, "not_allowed")];
+    const applied = forfeit ? this.leaveGame(seat) : this.applyGame(seat, action, { easyOnly: this.kittens.has(deviceId) });
     if ("error" in applied) return [this.fail(deviceId, applied.error)];
+    if (forActor && owner === null && this.game.ink) this.state.drawerDevice = { turn, deviceId };
     if (id !== undefined && device) device.acks = [...(device.acks ?? []), id].slice(-ACKS_KEPT);
     const mover = this.state.seats[seat]?.playerId;
     const ended = this.game.endsTurn(action, applied.events, seat);
@@ -1750,9 +1880,14 @@ export class RoomCore<S = CatTowerState> {
    * (`snapshots()`), which carries the truth (drawn cards, a fresh deal, the
    * new discard top, a finished room).
    */
-  private applyGame(seat: Seat, action: unknown): { out: Outbound[]; events: AnyGameEvent[] } | { error: GameError } {
+  private applyGame(
+    seat: Seat,
+    action: unknown,
+    /** What the room knows of the acting device; left out for the room's own actions. */
+    ctx?: { easyOnly: boolean },
+  ): { out: Outbound[]; events: AnyGameEvent[] } | { error: GameError } {
     const { state } = this;
-    const result = this.game.apply(state.gameState as S, seat, action);
+    const result = this.game.apply(state.gameState as S, seat, action, ctx);
     if (!result.ok) return { error: result.error };
     return { out: this.commit(result.state, result.events as AnyGameEvent[]), events: result.events as AnyGameEvent[] };
   }
@@ -1810,6 +1945,7 @@ export class RoomCore<S = CatTowerState> {
     const { timers } = state;
     const phase = this.game.phase(state.gameState as S);
     const now = this.now();
+    this.followInk();
     this.queueStreak(phase === "over");
     const from = this.movedBy;
     this.movedBy = null;

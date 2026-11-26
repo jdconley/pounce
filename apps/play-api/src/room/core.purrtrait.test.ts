@@ -334,3 +334,368 @@ describe("room-only actions", () => {
     expect(wire(r, { type: "nope" })).toEqual({ error: "bad_message" });
   });
 });
+
+/* Live ink (design §6): relayed to the screen and the drawer's device only, kept in memory only. */
+
+type Op = (string | number)[];
+const ink = (r: Room, device: string, seat: number, turn: string, ops: Op[]) =>
+  r.handle(device, { t: "ink", seat, turn, ops } as ClientMessage);
+const turnOf = (r: Room) => viewOf(r, "tv").turn;
+const inkTo = (out: Outbound[]) => out.filter((o) => o.message.t === "ink").map((o) => o.to);
+const only = (out: Outbound[], t: ServerMessage["t"]) => out.filter((o) => o.message.t === t);
+const dot = (id: number): Op => ["s", id, 0, 1, 100, 100, 1, 1];
+const player = (n: number) => `player-${n}`;
+
+/**
+ * Seat 0 is player 1's, on "a" and on the family iPad "a2" (both speak for player 1); seat 1 is "b"'s.
+ * "tv" is the screen and "w" a phone that only watches.
+ */
+function family(): Room {
+  const state = RoomCore.create<PurrState>("BCDFG", "a", clock, undefined, undefined, "purrtrait");
+  const r = new RoomCore<PurrState>(state, () => clock, rng, undefined, 1, { games: ["cat-tower", "purrtrait"], tv: true, streaks: false });
+  r.addScreen("tv");
+  r.connect("tv");
+  r.connect("a", { [person(1).id]: player(1) });
+  r.connect("a2", { [person(1).id]: player(1) });
+  r.connect("b");
+  r.connect("w");
+  r.handle("a", { t: "claim", seat: 0, person: person(1) });
+  r.handle("b", { t: "claim", seat: 1, person: person(2) });
+  expect(errorsOf(r.handle("a", { t: "start" }))).toEqual([]);
+  expect(game(r).drawer).toBe(0);
+  return r;
+}
+
+/** Seat 0 has picked, from "a": the turn is "a"'s to draw. */
+function drawing(): Room {
+  const r = family();
+  expect(errorsOf(act(r, "a", 0, { type: "choose", level: "easy" }))).toEqual([]);
+  expect(game(r).phase).toBe("drawing");
+  return r;
+}
+
+/** A small seeded rng for the property tests. */
+function mulberry(seed: number): () => number {
+  let a = seed >>> 0;
+  return () => {
+    a = (a + 0x6d2b79f5) >>> 0;
+    let t = a;
+    t = Math.imul(t ^ (t >>> 15), t | 1);
+    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+    return ((t ^ (t >>> 14)) >>> 0) / 2 ** 32;
+  };
+}
+
+describe("ink", () => {
+  it("ink goes to the screen and the drawer's other sockets only (random rooms of 2-10 seats, shared phones)", () => {
+    for (let seed = 1; seed <= 60; seed++) {
+      const rand = mulberry(seed);
+      const seats = 2 + Math.floor(rand() * 9);
+      // Each seat's phone: a new one, or one already holding a seat (a shared phone).
+      const holder: string[] = [];
+      for (let i = 0; i < seats; i++) holder.push(i > 0 && rand() < 0.35 ? (holder[Math.floor(rand() * i)] as string) : `d${i}`);
+      // Some seats' players are on a second device too (a parent's iPad).
+      const extra = Array.from({ length: seats }, (_, i) => (rand() < 0.3 ? `x${i}` : null));
+      const maps = new Map<string, Record<string, string>>();
+      holder.forEach((d, i) => maps.set(d, { ...maps.get(d), [person(i + 1).id]: player(i + 1) }));
+      extra.forEach((d, i) => d && maps.set(d, { [person(i + 1).id]: player(i + 1) }));
+      const host = holder[0] as string;
+      const state = RoomCore.create<PurrState>("BCDFG", host, clock, undefined, undefined, "purrtrait");
+      const r = new RoomCore<PurrState>(state, () => clock, rng, undefined, 1, { games: ["cat-tower", "purrtrait"], tv: true, streaks: false });
+      r.addScreen("tv");
+      r.connect("tv");
+      r.connect("watcher");
+      for (const [d, map] of maps) r.connect(d, map);
+      r.handle(host, { t: "claim", seat: 0, person: person(1) });
+      for (let i = 1; i < state.seats.length; i++) r.handle(host, { t: "configure", seat: i, kind: i < seats ? "open" : "closed" });
+      for (let i = 1; i < seats; i++) expect(errorsOf(r.handle(holder[i] as string, { t: "claim", seat: i, person: person(i + 1) }))).toEqual([]);
+      expect(errorsOf(r.handle(host, { t: "start" }))).toEqual([]);
+
+      const drawer = game(r).drawer as number;
+      const devices = [...maps.keys(), "watcher"];
+      const controllers = devices.filter((d) => r.controlledSeats(d).includes(drawer));
+      const chooser = controllers[Math.floor(rand() * controllers.length)] as string;
+      expect(errorsOf(act(r, chooser, drawer, { type: "choose", level: "easy" }))).toEqual([]);
+      const turn = turnOf(r);
+      const out = ink(r, chooser, drawer, turn, [dot(0)]);
+      expect(new Set(out.map((o) => o.to)), `seed ${seed}`).toEqual(new Set(["tv", chooser]));
+      expect(out.every((o) => o.message.t === "ink")).toBe(true);
+      expect(out[0]?.message).toEqual({ t: "ink", seat: drawer, turn, ops: [dot(0)] });
+      for (const d of devices) {
+        if (d === chooser) continue;
+        // Anyone else's well-formed ink is dropped silently, whichever seat it names.
+        for (let seat = 0; seat < seats; seat++) expect(ink(r, d, seat, turn, [dot(1)]), `seed ${seed} ${d}`).toEqual([]);
+      }
+      // None of that took a stroke id: the drawer's next stroke is still 1.
+      expect(inkTo(ink(r, chooser, drawer, turn, [dot(1)])).sort()).toEqual([chooser, "tv"].sort());
+    }
+  });
+
+  it("ink from a guesser, a stale turn, before choose or for another seat is dropped", () => {
+    const r = family();
+    const turn = turnOf(r);
+    expect(ink(r, "a", 0, turn, [dot(0)])).toEqual([]);
+    act(r, "a", 0, { type: "choose", level: "easy" });
+    expect(ink(r, "b", 1, turn, [dot(0)])).toEqual([]);
+    expect(ink(r, "b", 0, turn, [dot(0)])).toEqual([]);
+    expect(ink(r, "a", 0, "1:9", [dot(0)])).toEqual([]);
+    expect(ink(r, "a", 1, turn, [dot(0)])).toEqual([]);
+    expect(ink(r, "a", 7, turn, [dot(0)])).toEqual([]);
+    expect(ink(r, "w", 0, turn, [dot(0)])).toEqual([]);
+    // The drawer's own is taken, and its first stroke is still stroke 0.
+    expect(inkTo(ink(r, "a", 0, turn, [dot(0)]))).toEqual(["tv", "a"]);
+  });
+
+  it("a screen's ink is not_allowed, and so is ink at a table of another game", () => {
+    const r = drawing();
+    expect(errorsOf(ink(r, "tv", 0, turnOf(r), [dot(0)]))).toEqual(["not_allowed"]);
+    const state = RoomCore.create("BCDFG", "a", clock);
+    const cat = new RoomCore(state, () => clock, rng, undefined, 1, { streaks: false, tv: true });
+    cat.connect("a");
+    expect(errorsOf(cat.handle("a", { t: "ink", seat: 0, turn: "1:0", ops: [["c"]] } as ClientMessage))).toEqual(["not_allowed"]);
+  });
+
+  it("bad ops are bad_message; a full easel is easel_full once per turn", () => {
+    const r = drawing();
+    const turn = turnOf(r);
+    expect(errorsOf(ink(r, "a", 0, turn, [dot(1)]))).toEqual(["bad_message"]);
+    expect(errorsOf(ink(r, "a", 0, turn, [["p", 0, 1, 1]]))).toEqual(["bad_message"]);
+    for (let id = 0; id < 500; id++) {
+      if (id % 25 === 0) clock += 1000;
+      expect(errorsOf(ink(r, "a", 0, turn, [["s", id, 0, 0, 0, 0]]))).toEqual([]);
+    }
+    clock += 1000;
+    expect(errorsOf(ink(r, "a", 0, turn, [dot(500)]))).toEqual(["easel_full"]);
+    expect(ink(r, "a", 0, turn, [dot(500)])).toEqual([]);
+    // A clear makes room.
+    expect(inkTo(ink(r, "a", 0, turn, [["c"], dot(500)]))).toEqual(["tv", "a"]);
+  });
+
+  it("the 26th message in a second is dropped, and a second later one is taken again", () => {
+    const r = drawing();
+    const turn = turnOf(r);
+    expect(inkTo(ink(r, "a", 0, turn, [dot(0)]))).toEqual(["tv", "a"]);
+    for (let i = 1; i < 25; i++) expect(inkTo(ink(r, "a", 0, turn, [["p", 0, 1, 0]]))).toEqual(["tv", "a"]);
+    expect(ink(r, "a", 0, turn, [["p", 0, 1, 0]])).toEqual([]);
+    clock += 999;
+    expect(ink(r, "a", 0, turn, [["p", 0, 1, 0]])).toEqual([]);
+    clock += 1;
+    expect(inkTo(ink(r, "a", 0, turn, [["p", 0, 1, 0]]))).toEqual(["tv", "a"]);
+  });
+
+  it("a screen connecting mid-turn gets inkSync after its snapshot: s,s,u,c,s is one stroke", () => {
+    const r = drawing();
+    const turn = turnOf(r);
+    for (const ops of [[dot(0)], [dot(1)], [["u", 1]], [["c"]], [["s", 2, 3, 2, 30, 30, 2, 2]], [["p", 2, 1, 1]]]) ink(r, "a", 0, turn, ops);
+    r.disconnect("tv");
+    const out = r.connect("tv");
+    const mine = out.filter((o) => o.to === "tv").map((o) => o.message.t);
+    expect(mine.slice(-2)).toEqual(["snapshot", "inkSync"]);
+    expect(only(out, "inkSync")).toEqual([{ to: "tv", message: { t: "inkSync", turn, ops: [["s", 2, 3, 2, 30, 30, 2, 2, 1, 1]] } }]);
+    // The drawer's device too, on a reconnect. Nobody else.
+    r.disconnect("a");
+    expect(only(r.connect("a", { [person(1).id]: player(1) }), "inkSync")).toHaveLength(1);
+    for (const d of ["a2", "b", "w"]) {
+      r.disconnect(d);
+      expect(only(r.connect(d, d === "a2" ? { [person(1).id]: player(1) } : {}), "inkSync")).toEqual([]);
+    }
+  });
+
+  it("no inkSync while choosing", () => {
+    const r = family();
+    r.disconnect("tv");
+    expect(only(r.connect("tv"), "inkSync")).toEqual([]);
+  });
+
+  it("a new turn drops the ink", () => {
+    const r = drawing();
+    const turn = turnOf(r);
+    ink(r, "a", 0, turn, [dot(0)]);
+    act(r, "a", 0, { type: "gotIt", seat: 1 });
+    expect(game(r).phase).toBe("reveal");
+    // The turn's drawing is over: late ink is dropped, and a screen joining gets none.
+    expect(ink(r, "a", 0, turn, [["p", 0, 1, 1]])).toEqual([]);
+    r.disconnect("tv");
+    expect(only(r.connect("tv"), "inkSync")).toEqual([]);
+    clock += 10_000;
+    r.tick();
+    expect(game(r)).toMatchObject({ phase: "choosing", drawer: 1 });
+    expect(r.state.drawerDevice).toBeUndefined();
+    act(r, "b", 1, { type: "choose", level: "easy" });
+    const next = turnOf(r);
+    expect(next).not.toBe(turn);
+    r.disconnect("tv");
+    expect(only(r.connect("tv"), "inkSync")).toEqual([{ to: "tv", message: { t: "inkSync", turn: next, ops: [] } }]);
+    // Stroke ids start again at 0.
+    expect(inkTo(ink(r, "b", 1, next, [dot(0)]))).toEqual(["tv", "b"]);
+  });
+
+  it("a screen that is away gets none", () => {
+    const r = drawing();
+    r.disconnect("tv");
+    expect(inkTo(ink(r, "a", 0, turnOf(r), [dot(0)]))).toEqual(["a"]);
+  });
+
+  it("the room's state never holds the ink", () => {
+    const r = drawing();
+    const turn = turnOf(r);
+    ink(r, "a", 0, turn, [["s", 0, 4, 2, 123, 456, 7, 8]]);
+    ink(r, "a", 0, turn, [["p", 0, 9, 9], ["u", 0], ["c"]]);
+    const saved = JSON.stringify(r.state);
+    expect(saved).not.toContain("ops");
+    expect(saved).not.toContain("456");
+    expect(saved).not.toContain('"s"');
+    expect(r.state.drawerDevice).toMatchObject({ deviceId: "a" });
+  });
+});
+
+describe("ink after a rebuild from storage", () => {
+  /** "a" drew a stroke; the room is rebuilt with every socket still open (a wake from hibernation). */
+  function woken(): { r: Room; turn: string } {
+    const before = drawing();
+    const turn = turnOf(before);
+    ink(before, "a", 0, turn, [dot(0)]);
+    return { r: rebuild(before), turn };
+  }
+
+  it("a core rebuilt from storage asks the drawer for inkResend once", () => {
+    const { r, turn } = woken();
+    expect(r.rebuilt()).toEqual([{ to: "a", message: { t: "inkResend", turn } }]);
+    // Nothing else asks again: not a tick, not a message, not another phone or the screen coming back.
+    expect(only(r.tick(), "inkResend")).toEqual([]);
+    expect(only(ink(r, "a", 0, turn, [["p", 0, 1, 1]]), "inkResend")).toEqual([]);
+    r.disconnect("tv");
+    const back = r.connect("tv");
+    expect(only(back, "inkResend")).toEqual([]);
+    // With no drawing to give, the screen gets no inkSync.
+    expect(only(back, "inkSync")).toEqual([]);
+  });
+
+  it("only a batch that starts with a clear takes the place of the lost drawing, and the reply is exempt from the limit", () => {
+    const { r, turn } = woken();
+    r.rebuilt();
+    // Points for a stroke the room no longer knows: dropped, not bad.
+    expect(ink(r, "a", 0, turn, [["p", 0, 1, 1]])).toEqual([]);
+    // The reply: its first message clears; the ids are the device's own, so they only have to go up.
+    expect(inkTo(ink(r, "a", 0, turn, [["c"], ["s", 3, 0, 1, 100, 100]]))).toEqual(["tv", "a"]);
+    for (let i = 0; i < 40; i++) expect(inkTo(ink(r, "a", 0, turn, [["p", 3, 1, 0]]))).toEqual(["tv", "a"]);
+    expect(inkTo(ink(r, "a", 0, turn, [["s", 7, 0, 1, 100, 100]]))).toEqual(["tv", "a"]);
+    r.disconnect("tv");
+    const sync = only(r.connect("tv"), "inkSync")[0]?.message as { ops: Op[] };
+    expect(sync.ops.map((op) => op[1])).toEqual([3, 7]);
+    // The exemption is spent: the limit holds again a second on.
+    clock += 1000;
+    for (let i = 0; i < 25; i++) ink(r, "a", 0, turn, [["p", 7, 0, 1]]);
+    expect(ink(r, "a", 0, turn, [["p", 7, 0, 1]])).toEqual([]);
+  });
+
+  it("a drawer that was away is asked when it connects, each time while the drawing is still lost", () => {
+    const { r, turn } = woken();
+    r.disconnect("a");
+    expect(r.rebuilt()).toEqual([]);
+    const map = { [person(1).id]: player(1) };
+    expect(only(r.connect("a", map), "inkResend")).toEqual([{ to: "a", message: { t: "inkResend", turn } }]);
+    r.disconnect("a");
+    expect(only(r.connect("a", map), "inkResend")).toHaveLength(1);
+    ink(r, "a", 0, turn, [["c"]]);
+    r.disconnect("a");
+    const back = r.connect("a", map);
+    expect(only(back, "inkResend")).toEqual([]);
+    expect(only(back, "inkSync")).toEqual([{ to: "a", message: { t: "inkSync", turn, ops: [] } }]);
+    // The iPad is never asked.
+    r.disconnect("a2");
+    expect(only(r.connect("a2", map), "inkResend")).toEqual([]);
+  });
+
+  it("nothing is lost, and nobody asked, in a room rebuilt while choosing or in the lobby", () => {
+    const r = rebuild(family());
+    expect(r.rebuilt()).toEqual([]);
+    act(r, "a", 0, { type: "choose", level: "easy" });
+    expect(inkTo(ink(r, "a", 0, turnOf(r), [dot(0)]))).toEqual(["tv", "a"]);
+    const lobby = new RoomCore<PurrState>(RoomCore.create<PurrState>("BCDFG", "a", clock, undefined, undefined, "purrtrait"), () => clock, rng);
+    expect(lobby.rebuilt()).toEqual([]);
+  });
+});
+
+describe("the drawer's device", () => {
+  it("the first choose fixes it: only it sees the word and may draw, say gotIt or give up", () => {
+    const r = family();
+    // Before the pick, every device that controls the seat sees the choices.
+    expect(viewOf(r, "a").choices).toBeDefined();
+    expect(viewOf(r, "a2").choices).toBeDefined();
+    act(r, "a", 0, { type: "choose", level: "easy" });
+    expect(viewOf(r, "a")).toMatchObject({ youDraw: true });
+    expect(viewOf(r, "a").word).toBeDefined();
+    expect(viewOf(r, "a2").word).toBeUndefined();
+    expect(viewOf(r, "a2").youDraw).toBeUndefined();
+    expect(ink(r, "a2", 0, turnOf(r), [dot(0)])).toEqual([]);
+    expect(errorsOf(act(r, "a2", 0, { type: "gotIt", seat: 1 }))).toEqual(["not_allowed"]);
+    expect(errorsOf(act(r, "a2", 0, { type: "giveUp" }))).toEqual(["not_allowed"]);
+    expect(game(r).phase).toBe("drawing");
+    expect(errorsOf(act(r, "a", 0, { type: "giveUp" }))).toEqual([]);
+    expect(game(r).phase).toBe("reveal");
+  });
+
+  it("another device of the drawer's player may still leave the game for the seat", () => {
+    const r = drawing();
+    expect(errorsOf(act(r, "a2", 0, { type: "forfeit" }))).toEqual([]);
+    expect(game(r).phase).toBe("over");
+  });
+
+  it("a pick the clock made fixes no device: the first to draw does", () => {
+    const r = family();
+    clock += 10_000;
+    r.tick();
+    expect(game(r).phase).toBe("drawing");
+    expect(r.state.drawerDevice).toBeUndefined();
+    expect(viewOf(r, "a").word).toBeDefined();
+    expect(viewOf(r, "a2").word).toBeDefined();
+    const turn = turnOf(r);
+    expect(inkTo(ink(r, "a2", 0, turn, [dot(0)]))).toEqual(["tv", "a2"]);
+    expect(r.state.drawerDevice).toMatchObject({ deviceId: "a2" });
+    expect(ink(r, "a", 0, turn, [dot(1)])).toEqual([]);
+    expect(viewOf(r, "a").word).toBeUndefined();
+    // Still the drawer's device after a rebuild: its ink is lost, so it alone is asked for it.
+    expect(rebuild(r).rebuilt()).toEqual([{ to: "a2", message: { t: "inkResend", turn } }]);
+  });
+
+  it("a new turn clears it", () => {
+    const r = drawing();
+    act(r, "a", 0, { type: "gotIt", seat: 1 });
+    expect(r.state.drawerDevice).toBeDefined();
+    clock += 10_000;
+    r.tick();
+    expect(r.state.drawerDevice).toBeUndefined();
+  });
+});
+
+describe("kittens (ruling 5)", () => {
+  it("a kitten device drawing sees two Easy words and scores 1", () => {
+    const r = family();
+    r.setKitten("a", true);
+    const choices = viewOf(r, "a").choices as { easy: string; tricky: string };
+    const level = (word: string) => WORDS.find((w) => w.word === word)?.level;
+    expect([level(choices.easy), level(choices.tricky)]).toEqual(["easy", "easy"]);
+    expect(choices.easy).not.toBe(choices.tricky);
+    // Another device of the same player is no kitten's.
+    expect(level((viewOf(r, "a2").choices as { tricky: string }).tricky)).toBe("tricky");
+    act(r, "a", 0, { type: "choose", level: "tricky" });
+    expect(game(r).level).toBe("easy");
+    expect(viewOf(r, "a").word).toBe(choices.tricky);
+    act(r, "a", 0, { type: "gotIt", seat: 1 });
+    expect(game(r).scores).toEqual([1, 1]);
+  });
+
+  it("a device that is no kitten any more picks a Tricky word", () => {
+    const r = family();
+    r.setKitten("a", true);
+    r.setKitten("a", false);
+    act(r, "a", 0, { type: "choose", level: "tricky" });
+    expect(game(r).level).toBe("tricky");
+  });
+
+  it("only a game that changes for kittens wants the age band", () => {
+    expect(family().wantsAgeBands()).toBe(true);
+    expect(new RoomCore(RoomCore.create("BCDFG", "a", clock), () => clock, rng).wantsAgeBands()).toBe(false);
+  });
+});

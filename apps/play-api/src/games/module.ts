@@ -1,4 +1,5 @@
 import type { GameAim } from "../protocol";
+import type { InkEasel, InkOp } from "../purrtrait/ink";
 import type { Seat } from "../rules/engine";
 import type { Rng, Seed } from "../rules/rng";
 
@@ -10,6 +11,23 @@ export type ViewerInfo = { drawerDevice: boolean; easyOnly: boolean };
 
 /** What the room knows of the device acting, beyond its seat. */
 export type ApplyContext = { easyOnly: boolean };
+
+/**
+ * Live drawing (Purrtrait's ink, design §6): what a room needs to relay it with its `LiveRelay`.
+ * The checks and the compaction are the game's; who may draw and who sees it are the room's.
+ */
+export type InkRules<S> = {
+  /** Ink messages one device may send in a second. */
+  perSecond: number;
+  /** The turn ink is taken for now (the wire's `turn`), or null while nobody draws. */
+  live(s: S): string | null;
+  /** A fresh easel. `rebuilt`: it stands in for one the room lost. */
+  start(rebuilt: boolean): InkEasel;
+  check(ops: readonly InkOp[], easel: InkEasel): { ok: true; easel: InkEasel } | { ok: false; full: boolean };
+  compact(ops: readonly InkOp[]): InkOp[];
+  /** The batch starts with a clear, so it can stand in for a lost drawing. */
+  wipes(ops: readonly InkOp[]): boolean;
+};
 
 /** What a room needs from a game. Rooms hold no game-specific logic. */
 export interface GameModule<S, A, V, E, Err extends string = string, O = never> {
@@ -35,6 +53,18 @@ export interface GameModule<S, A, V, E, Err extends string = string, O = never> 
     /** What the room knows of the acting device. A game with no use for it ignores it. */
     ctx?: ApplyContext,
   ): { ok: true; state: S; events: E[] } | { ok: false; error: Err };
+  /**
+   * The game changes for a kitten's device (Purrtrait offers it two Easy words): the room looks up
+   * each device's age band and passes `easyOnly` to `view` and `apply`. Absent: it never asks.
+   */
+  kittenAware?: boolean;
+  /**
+   * The game takes live ink (design §6). The room keeps it in memory only, relays it to the
+   * screen and to the device that owns the drawing turn (the first to act for the seat on the
+   * move), and lets only that device act for the seat until the turn ends. Absent: `ink` is
+   * `not_allowed`.
+   */
+  ink?: InkRules<S>;
   /** `viewer`: what the room knows of the device asking. A game with no use for it ignores it. */
   view(s: S, controlled: readonly Seat[], viewer?: ViewerInfo): V;
   filterEvent(e: E, controlled: readonly Seat[]): E;

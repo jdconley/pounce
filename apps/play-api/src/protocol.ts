@@ -1,5 +1,6 @@
 import { parseAction as parseCatTowerAction, parseAim as parseCatTowerAim } from "./games/cat-tower";
 import { nameAllowed } from "./names/filter";
+import { parseOps, type InkOp } from "./purrtrait/ink";
 import { ROOM_CODE_ALPHABET } from "./room/codes";
 import { parseRoomName } from "./room/names";
 import { hasKeys, isInt, isObj, type Obj } from "./shape";
@@ -166,7 +167,13 @@ export type ClientMessage =
    */
   | { t: "retire"; seat: Seat }
   /** Where `seat` is pointing, for a screen. No `aim` clears it. */
-  | { t: "aim"; seat: Seat; aim?: GameAim };
+  | { t: "aim"; seat: Seat; aim?: GameAim }
+  /**
+   * Purrtrait: the drawer's device's strokes for turn `turn` (design §6.2). Only the device that
+   * owns the drawing turn, while it draws: anyone else's is dropped. Never stored. Errors:
+   * `bad_message`, `easel_full` (once a turn), `not_allowed` at a table of another game.
+   */
+  | { t: "ink"; seat: Seat; turn: string; ops: InkOp[] };
 
 /** Every `error` code the server sends. */
 export type ErrorCode =
@@ -231,7 +238,13 @@ export type ServerMessage =
   /** To the devices of the person in `seat`: the person in `from` nudged them (no seq). */
   | { t: "nudged"; seat: Seat; from: Seat }
   /** Where `seat` is pointing; no `aim` means it stopped. Not a state change, so no seq. */
-  | { t: "aim"; seat: Seat; aim?: GameAim };
+  | { t: "aim"; seat: Seat; aim?: GameAim }
+  /** Purrtrait: the drawer's ink as it came, to the screen and the drawer's other sockets. No seq, never in a snapshot. */
+  | { t: "ink"; seat: Seat; turn: string; ops: InkOp[] }
+  /** Purrtrait: the turn's drawing so far, compacted, right after a screen's or the drawer's snapshot. */
+  | { t: "inkSync"; turn: string; ops: InkOp[] }
+  /** Purrtrait: to the drawer's device after the room lost the drawing: send it all again, starting with `["c"]`. */
+  | { t: "inkResend"; turn: string };
 
 export type BadMessage = { error: "bad_message" | "bad_name" };
 
@@ -241,6 +254,8 @@ const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const MOVE_CODE_LENGTH = 6;
 const MAX_NAME = 20;
 const MAX_CAT = 7;
+/** A turn key as a view's `turn` has it (`"2:5"`): any short string, compared as it came. */
+const MAX_TURN = 32;
 /** A move id: what the app makes (a UUID), or anything short and plain. */
 const MOVE_ID = /^[A-Za-z0-9_-]{1,64}$/;
 
@@ -356,6 +371,13 @@ function parseObject(o: Obj, parsers: Parsers): ClientMessage | BadMessage | nul
       if (!("aim" in o)) return { t: "aim", seat: o.seat };
       const aim = parseAim(o.aim);
       return aim ? { t: "aim", seat: o.seat, aim } : null;
+    }
+    case "ink": {
+      if (!hasKeys(o, ["t", "seat", "turn", "ops"]) || !isInt(o.seat, 0)) return null;
+      const { turn } = o;
+      if (typeof turn !== "string" || turn.length < 1 || turn.length > MAX_TURN) return null;
+      const ops = parseOps(o.ops);
+      return ops ? { t: "ink", seat: o.seat, turn, ops } : null;
     }
     case "link":
       if (!hasKeys(o, ["t", "state"]) || (o.state !== "weak" && o.state !== "good")) return null;
