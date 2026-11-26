@@ -18,7 +18,7 @@ import { usePickled } from "./pickled";
 import { seatCat, seatName, SeatAvatar } from "./seat";
 import { Flights, RoundOver, type Flight } from "./shared";
 
-import type { CtLayout } from "./ct-layout";
+import type { CtLayout, LaidOwner as LaidOwnerRoom } from "./ct-layout";
 import type { RoomStore } from "../store/room";
 import type { GameAim, RoomView } from "@pounce/play-api/protocol";
 import type { GameEvent } from "@pounce/play-api/rules/engine";
@@ -254,11 +254,7 @@ export function CtTable(props: CtPublicProps & Partial<CtHandProps>) {
         const ownCat = !seatAt || seatAt.x !== row.avatar.x || seatAt.y !== row.avatar.y;
         return (
           <>
-            {ownCat ? (
-              <div class="laid-owner" style={{ transform: `translate3d(${row.avatar.x - row.avatar.size / 2}px, ${row.avatar.y - row.avatar.size / 2}px, 0)`, width: `${row.avatar.size}px`, height: `${row.avatar.size}px` }}>
-                <SeatAvatar seat={s} info={room.seats[s]} size={row.avatar.size} turn={false} pickled={pickled[s]} label={`${seatName(room.seats[s])} laid down${pickled[s] ? ", pickled" : ""}`} />
-              </div>
-            ) : null}
+            {ownCat ? <LaidOwner seat={s} info={room.seats[s]} owner={row} pickled={pickled[s] ?? false} /> : null}
             {row.groups.map((grp, gi) => {
               const h = hover?.kind === "group" && hover.seat === s && hover.group === gi;
               const ok = props.fits?.(s, gi) ?? false;
@@ -337,6 +333,34 @@ export function CtTable(props: CtPublicProps & Partial<CtHandProps>) {
   );
 }
 
+/**
+ * A laid row's owner, in the column the layout keeps for it at the row's left: their cat, and their
+ * name tag under it, no wider than the column (a long name ends in an ellipsis). Pickled, the cat is
+ * terrified in a cucumber-green ring.
+ */
+function LaidOwner(props: { seat: number; info: RoomView["seats"][number] | undefined; owner: LaidOwnerRoom; pickled: boolean }) {
+  const { avatar, tag, font } = props.owner;
+  const name = seatName(props.info);
+  const top = avatar.size ? avatar.y - avatar.size / 2 : tag.y;
+  return (
+    <div
+      class={`laid-owner ${props.pickled ? "pickled" : ""}`}
+      role="img"
+      aria-label={`${name} laid down${props.pickled ? ", pickled" : ""}`}
+      style={{ transform: `translate3d(${tag.x}px, ${top}px, 0)`, width: `${tag.w}px`, height: `${tag.y + tag.h - top}px`, ["--ring" as string]: ringOf(props.seat) }}
+    >
+      {avatar.size ? (
+        <span class="laid-cat" style={{ width: `${avatar.size}px`, height: `${avatar.size}px` }}>
+          <img src={catArt(seatCat(props.info), props.pickled ? "terrified" : "idle")} alt="" draggable={false} decoding="async" />
+        </span>
+      ) : null}
+      <span class="name-tag" style={{ height: `${tag.h}px`, maxWidth: `${tag.w}px`, fontSize: `${font}px`, lineHeight: `${tag.h - 5}px`, marginTop: avatar.size ? "-8px" : "0" }}>
+        {name}
+      </span>
+    </div>
+  );
+}
+
 /** The deck: three backs and its count. */
 export function DeckCards(props: { count: number }) {
   return (
@@ -364,7 +388,8 @@ function Tower(props: { seats: RoomView["seats"]; phase: number[]; rect: { x: nu
       {cats.map(({ s, ph }, k) => {
         const level = Math.min(ph, 10);
         const y = rect.h - (level + 0.9) * shelf - shelf * 0.25;
-        const offset = (k % 3) * rect.w * 0.18;
+        // Up to three cats side by side on a shelf, every one inside the tower's width.
+        const offset = (k % 3) * rect.w * 0.11;
         return (
           <span class={`tower-cat ${props.turn === s ? "turn" : ""} ${props.pickled[s] ? "pickled" : ""}`} style={{ transform: `translate3d(${offset}px, ${y}px, 0)`, width: `${rect.w * 0.78}px`, height: `${rect.w * 0.78}px`, ["--ring" as string]: ringOf(s) }}>
             <img src={catArt(seatCat(props.seats[s]), props.pickled[s] ? "terrified" : "idle")} alt="" />

@@ -26,7 +26,7 @@ import { inside, press, useLatest, type Point, type Rect } from "./drag";
 import { CardFace, cardLabel } from "./faces";
 import { Motion, MOVE, transformOf, wiggle, type Pose } from "./motion";
 import { seatCat, seatName, SeatAvatar } from "./seat";
-import { Curtain, LayDownFirst, SwitchView, useTextScale } from "./shared";
+import { Curtain, LayDownFirst, SwitchView, TrayCount, useTextScale } from "./shared";
 
 import type { RoomState, RoomStore } from "../store/room";
 import type { View } from "../store/views";
@@ -157,7 +157,7 @@ export function CtController(props: { store: RoomStore; state: RoomState; onView
     trayCards.forEach((cards, i) => {
       const tray = L.trays[i];
       if (!tray) return;
-      trayPoses(tray, cards.length, reqs[i]?.size ?? cards.length, L.cw, L.ch, L.small).forEach((p, j) => poses.set(`c${cards[j]}`, held.get(cards[j] as CardId) ?? { ...p, z: 50 + j }));
+      trayPoses(tray, cards.length, reqs[i]?.size ?? cards.length, L.cw, L.ch, L.small, L.trayLabel).forEach((p, j) => poses.set(`c${cards[j]}`, held.get(cards[j] as CardId) ?? { ...p, z: 50 + j }));
     });
   }
   const pileTop = g.discardTop !== null && !poses.has(`c${g.discardTop}`) ? g.discardTop : null;
@@ -364,7 +364,7 @@ export function CtController(props: { store: RoomStore; state: RoomState; onView
                 aria-label={`Tray ${i + 1}: ${REQ_WORDS(req)}, ${cards.length} of ${req.size}${valid ? ", ready" : ""}`}
                 onClick={() => (selected !== null ? toTray(selected, i) : undefined)}
               >
-                <span class="tray-label">{cards.length === 0 ? REQ_WORDS(req) : `${cards.length}/${req.size}`}</span>
+                <TrayCount tray={t} label={L.trayLabel} text={cards.length === 0 ? REQ_WORDS(req) : `${cards.length}/${req.size}`} words={cards.length === 0} />
               </button>
             );
           })

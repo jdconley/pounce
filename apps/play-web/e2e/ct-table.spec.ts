@@ -374,3 +374,132 @@ test.describe("the Lay down button", () => {
     }
   }
 });
+
+/**
+ * Nothing overlaps, measured in the page: a laid row's name tag clear of the tower and of every
+ * card, and a tray's count clear of its cards, on the full table and on Cards at a TV table. The
+ * smallest phone, a large one, a phone sideways, a tablet both ways, and the largest text.
+ */
+test.describe("nothing overlaps", () => {
+  const HAND = [1, 25, 49, 4, 28, 52, 9, 11];
+  const label = (id: number) => `${(id % 12) + 1}, ${["tabby", "tuxedo", "calico", "gray"][Math.floor(id / 24)]}`;
+  const sizes = [
+    { name: "se", viewport: { width: 375, height: 667 }, text: 16 },
+    { name: "se-largest-text", viewport: { width: 375, height: 667 }, text: 26 },
+    { name: "pro-max", viewport: { width: 430, height: 932 }, text: 16 },
+    { name: "pro-max-largest-text", viewport: { width: 430, height: 932 }, text: 26 },
+    { name: "sideways", viewport: { width: 844, height: 390 }, text: 16 },
+    { name: "ipad", viewport: { width: 820, height: 1180 }, text: 16 },
+    { name: "ipad-landscape", viewport: { width: 1180, height: 820 }, text: 26 },
+  ];
+  type Box = { x: number; y: number; width: number; height: number };
+  const hit = (a: Box, b: Box) => Math.min(a.x + a.width, b.x + b.width) - Math.max(a.x, b.x) > 0.5 && Math.min(a.y + a.height, b.y + b.height) - Math.max(a.y, b.y) > 0.5;
+  /** Boxes in the page: each element's, or with `text` its words' (what the glyphs take). */
+  const boxes = (page: Page, selector: string, text = false) =>
+    page.locator(selector).evaluateAll(
+      (els, text) =>
+        els.map((el) => {
+          const r = text ? (() => {
+            const range = document.createRange();
+            range.selectNodeContents(el);
+            return range.getBoundingClientRect();
+          })() : el.getBoundingClientRect();
+          return { x: r.x, y: r.y, width: r.width, height: r.height, what: (el.textContent ?? "").trim() || el.className };
+        }),
+      text,
+    );
+  const settle = (page: Page) => page.evaluate(() => new Promise((r) => setTimeout(() => requestAnimationFrame(() => requestAnimationFrame(r)), 700)));
+
+  test.beforeEach(() => {
+    const name = test.info().project.name;
+    test.skip(name !== "android-chrome" && name !== "iphone-safari", "phone sizes, set here, in Blink and WebKit");
+  });
+
+  for (const size of sizes) {
+    test(`${size.name}: laid rows' name tags are clear of the tower and the cards`, async ({ page }, info) => {
+      await page.setViewportSize(size.viewport);
+      await page.addInitScript((px) => addEventListener("DOMContentLoaded", () => (document.documentElement.style.fontSize = `${px}px`)), size.text);
+      const { send } = await standInServer(page);
+      // Ada and the House Cat have laid down: two rows, each with its owner's name.
+      const laid: CatTowerView["laid"] = [
+        [
+          { kind: "set", cards: [1, 13, 25], value: 2 },
+          { kind: "set", cards: [4, 16, 28], value: 5 },
+        ],
+        [
+          { kind: "set", cards: [7, 19, 31], value: 8 },
+          { kind: "set", cards: [10, 22, 34, 46], value: 11 },
+        ],
+        null,
+      ];
+      send({ t: "snapshot", protocol: 1, seq: 1, room: room(game({ phase: [1, 2, 1], laid, handCounts: [2, 3, 10], hands: { 0: [9, 11] } })) });
+      await page.goto("/play/t/BCDFG");
+      await expect(page.locator(".card.mine .card-inner")).toHaveCount(2);
+      await expect(page.locator(".laid-owner .name-tag")).toHaveText(["Ada", "House Cat"]);
+      await settle(page);
+      const tags = await boxes(page, ".laid-owner .name-tag");
+      const tower = await boxes(page, ".tower, .tower .shelf i, .tower-cat");
+      const cards = await boxes(page, ".ct-table .card .card-inner, #deck, #discard, .tray, .cue");
+      for (const t of tags) {
+        for (const b of tower) expect(hit(t, b), `${t.what} ${JSON.stringify(t)} on the tower ${JSON.stringify(b)}`).toBe(false);
+        for (const b of cards) expect(hit(t, b), `${t.what} ${JSON.stringify(t)} on ${b.what} ${JSON.stringify(b)}`).toBe(false);
+        expect(t.x).toBeGreaterThanOrEqual(0);
+      }
+      for (const [a, b] of tags.flatMap((a, i) => tags.slice(i + 1).map((b) => [a, b] as const))) expect(hit(a, b), `${a.what} and ${b.what}`).toBe(false);
+      // Each name's line fits its tag: no glyph cut off at the top or the bottom.
+      expect(await page.locator(".laid-owner .name-tag").evaluateAll((els) => els.every((el) => el.scrollHeight <= el.clientHeight + 1))).toBe(true);
+      if (SHOTS) await page.screenshot({ path: `${SHOTS}/laid-names-${size.name}-${info.project.name}.png` });
+    });
+
+    for (const tv of [false, true]) {
+      test(`${size.name}${tv ? " on Cards" : ""}: a tray's count is clear of its cards`, async ({ page }, info) => {
+        await page.setViewportSize(size.viewport);
+        await page.addInitScript((px) => addEventListener("DOMContentLoaded", () => (document.documentElement.style.fontSize = `${px}px`)), size.text);
+        const server = await standInServer(page);
+        const g = game({ phase: [0, 0], scores: [0, 0], laid: [null, null], handCounts: [8, 10], hands: { 0: HAND }, pendingSkip: [false, false], forfeited: [false, false], dealer: 1, turn: 0, step: "play" });
+        server.send({ t: "snapshot", protocol: 1, seq: 1, room: { ...room(g), seats: seats.slice(0, 2), ...(tv ? { screen: true } : {}) } });
+        await page.goto("/play/t/BCDFG");
+        await expect(page.locator(".card.mine .card-inner")).toHaveCount(8);
+        const trays = page.locator(tv ? ".ctl .tray" : ".tray");
+        // A full tray and one on its way: "3/3" and "2/3".
+        for (const [i, ids] of [[0, [1, 25, 49]], [1, [4, 28]]] as const) {
+          for (const [k, id] of ids.entries()) {
+            await page.waitForTimeout(350);
+            const c = page.locator(`.card.mine .card-inner[aria-label="${label(id)}"]`);
+            await c.press("Enter");
+            await expect(c).toHaveAttribute("aria-pressed", "true");
+            await page.evaluate(() => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r))));
+            if (tv) {
+              const at = await trays.nth(i).evaluate((tray) => {
+                const r = tray.getBoundingClientRect();
+                for (let y = r.bottom - 4; y > r.top; y -= 6)
+                  for (let x = r.right - 4; x > r.left; x -= 6) {
+                    const el = document.elementFromPoint(x, y);
+                    if (el && tray.contains(el)) return { x, y };
+                  }
+                return null;
+              });
+              await page.mouse.click(at!.x, at!.y);
+            } else await page.keyboard.press(String(i + 1));
+            await expect(trays.nth(i)).toHaveAttribute("aria-label", new RegExp(`, ${k + 1} of 3`));
+          }
+        }
+        await expect(trays.locator(".tray-label")).toHaveText(["3/3", "2/3"]);
+        await settle(page);
+        const inTrays = await boxes(page, tv ? ".ctl .tray" : ".tray");
+        const counts = await boxes(page, `${tv ? ".ctl " : ""}.tray-label`, true);
+        const cards = await boxes(page, ".card.mine .card-inner");
+        counts.forEach((count, i) => {
+          const tray = inTrays[i]!;
+          // Inside its tray, and under none of the cards in it.
+          expect(count.x).toBeGreaterThanOrEqual(tray.x);
+          expect(count.x + count.width).toBeLessThanOrEqual(tray.x + tray.width);
+          const own = cards.filter((c) => hit(c, tray) && c.y + c.height <= tray.y + tray.height + 1);
+          expect(own.length, `cards in tray ${i}`).toBe(i === 0 ? 3 : 2);
+          for (const c of own) expect(hit(count, c), `${count.what} ${JSON.stringify(count)} under a card ${JSON.stringify(c)}`).toBe(false);
+        });
+        if (SHOTS) await page.screenshot({ path: `${SHOTS}/tray-count-${size.name}${tv ? "-cards" : ""}-${info.project.name}.png` });
+      });
+    }
+  }
+});

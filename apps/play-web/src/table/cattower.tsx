@@ -25,7 +25,7 @@ import { inside, press, useLatest, type Point } from "./drag";
 import { CardFace, cardLabel } from "./faces";
 import { Motion, MOVE, transformOf, wiggle, type Pose } from "./motion";
 import { seatName, SeatAvatar } from "./seat";
-import { Curtain, LayDownFirst } from "./shared";
+import { Curtain, LayDownFirst, TrayCount, useTextScale } from "./shared";
 
 import type { RoomState, RoomStore } from "../store/room";
 
@@ -78,6 +78,7 @@ export function CatTowerTable(props: { store: RoomStore; state: RoomState; sound
   const g = room.game!;
   const [rootRef, size] = useSize<HTMLDivElement>();
   const safe = useInsets();
+  const text = useTextScale();
   const insets = useMemo(() => ({ ...safe, top: safe.top + (props.topInset ?? 0) }), [safe, props.topInset]);
   const motion = useMemo(() => new Motion(reducedMotion), []);
   const els = useRef(new Map<string, HTMLElement>());
@@ -107,8 +108,9 @@ export function CatTowerTable(props: { store: RoomStore; state: RoomState; sound
         handCount: ordered.length,
         trays: showTrays ? reqs.length : 0,
         laid: laidRows,
+        text,
       }),
-    [size.width, size.height, insets, opponents.join(), ordered.length, showTrays, reqs.length, JSON.stringify(laidRows)],
+    [size.width, size.height, insets, opponents.join(), ordered.length, showTrays, reqs.length, JSON.stringify(laidRows), text],
   );
 
   // Clear what this device held in place once the server answers.
@@ -151,7 +153,7 @@ export function CatTowerTable(props: { store: RoomStore; state: RoomState; sound
     trayCards.forEach((cards, i) => {
       const tray = L.trays[i];
       if (!tray) return;
-      trayPoses(tray, cards.length, reqs[i]?.size ?? cards.length, L.cw, L.ch, L.small).forEach((p, j) => poses.set(`c${cards[j]}`, held.get(cards[j] as CardId) ?? { ...p, z: 50 + j }));
+      trayPoses(tray, cards.length, reqs[i]?.size ?? cards.length, L.cw, L.ch, L.small, L.trayLabel).forEach((p, j) => poses.set(`c${cards[j]}`, held.get(cards[j] as CardId) ?? { ...p, z: 50 + j }));
     });
   }
 
@@ -392,7 +394,7 @@ export function CatTowerTable(props: { store: RoomStore; state: RoomState; sound
                       aria-label={`Tray ${i + 1}: ${REQ_WORDS(req)}, ${cards.length} of ${req.size}${valid ? ", ready" : ""}`}
                       onClick={() => tapTarget({ kind: "tray", i })}
                     >
-                      <span class="tray-label">{cards.length === 0 ? REQ_WORDS(req) : `${cards.length}/${req.size}`}</span>
+                      <TrayCount tray={t} label={L.trayLabel} text={cards.length === 0 ? REQ_WORDS(req) : `${cards.length}/${req.size}`} words={cards.length === 0} />
                     </button>
                   );
                 })
