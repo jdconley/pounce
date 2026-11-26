@@ -26,6 +26,8 @@ import { seatCat, seatName } from "../table/seat";
 import { SwitchView } from "../table/shared";
 import { TilesTable } from "../table/tiles";
 import { TilesController } from "../table/tiles-controller";
+import { TumbleTable } from "../tumble/screen";
+import { isTumble, tumbleOf, tumbleWinners, winsWords } from "../tumble/store";
 
 import { Button, Cat, Icon, IconButton, Sheet } from "./common";
 import { Lobby } from "./lobby";
@@ -198,7 +200,9 @@ export function TableScreen(props: { code: string; intent: TableIntent; say?: (w
   } else {
     const isTiles = room.gameId === "tiles";
     const isBird = room.gameId === "birdwatch";
-    const tvSwitch = (isBird ? Boolean(room.birdwatch) : isTiles ? Boolean(room.tiles) : room.game !== null) && showSwitch(room);
+    // Toy Tumble has no Cards view: at a TV table the phone plays its own box, with chips for the rest.
+    const isTumbleRoom = isTumble(room);
+    const tvSwitch = !isTumbleRoom && (isBird ? Boolean(room.birdwatch) : isTiles ? Boolean(room.tiles) : room.game !== null) && showSwitch(room);
     const cards = tvSwitch && showController(room, view);
     // Tuna Tiles on Cards: the rack off turn; on your turn the full table, as rearranging it needs
     // it (the same element as on Table, so a draft survives the switch).
@@ -208,7 +212,9 @@ export function TableScreen(props: { code: string; intent: TableIntent; say?: (w
     body = (
       <main class="screen table-screen">
         <div class="room-bg" style={{ backgroundImage: `url(${art("room-bg")})` }} />
-        {isBird ? (
+        {isTumbleRoom ? (
+          <TumbleTable store={store} state={state} />
+        ) : isBird ? (
           room.birdwatch ? <BirdwatchTable store={store} state={state} sounds={!cards} cards={cards} topInset={tvSwitch && !cards ? SWITCH_STRIP : 0} /> : null
         ) : isTiles && room.tiles ? (
           controller ? (
@@ -362,12 +368,14 @@ function GameOver(props: { room: RoomView; onHome: () => void; onAgain: () => vo
   const { room } = props;
   const g = room.game;
   const t = room.tiles;
-  const winners = g?.winners ?? t?.winners ?? [];
-  const forfeited = g?.forfeited ?? t?.forfeited ?? [];
+  const tt = tumbleOf(room);
+  const winners = tt ? tumbleWinners(tt) : (g?.winners ?? t?.winners ?? []);
+  const forfeited = tt?.left ?? g?.forfeited ?? t?.forfeited ?? [];
   const seats = room.seats.flatMap((s, i) => (s.kind === "human" || s.kind === "bot" ? [i] : []));
   const rank = [...seats].sort((a, b) => {
     const w = Number(winners.includes(b)) - Number(winners.includes(a));
     if (w) return w;
+    if (tt) return (tt.wins[b] ?? 0) - (tt.wins[a] ?? 0) || Number(forfeited[a] ?? false) - Number(forfeited[b] ?? false);
     const f = Number(forfeited[a] ?? false) - Number(forfeited[b] ?? false);
     if (f) return f;
     if (g) return (g.phase[b] ?? 0) - (g.phase[a] ?? 0) || (g.scores[a] ?? 0) - (g.scores[b] ?? 0);
@@ -396,7 +404,7 @@ function GameOver(props: { room: RoomView; onHome: () => void; onAgain: () => vo
               <Cat cat={seatCat(room.seats[s])} pose={winners.includes(s) ? "celebrate" : "idle"} size={40} />
               <span class="who">{seatName(room.seats[s])}</span>
               <span class="detail">
-                {forfeited[s] ? "Left" : g ? `Level ${Math.min((g.phase[s] ?? 0) + 1, 10)} · ${g.scores[s] ?? 0}` : `${(t?.scores[s] ?? 0) > 0 ? "+" : ""}${t?.scores[s] ?? 0}`}
+                {tt ? winsWords(tt.wins[s] ?? 0) : forfeited[s] ? "Left" : g ? `Level ${Math.min((g.phase[s] ?? 0) + 1, 10)} · ${g.scores[s] ?? 0}` : `${(t?.scores[s] ?? 0) > 0 ? "+" : ""}${t?.scores[s] ?? 0}`}
               </span>
             </li>
           ))}
@@ -465,14 +473,14 @@ function BwGameOver(props: { room: RoomView; onHome: () => void; onAgain: () => 
 function liveSeats(room: RoomView): number[] {
   // Birdwatch: a seat that leaves goes to a House Cat, so every seat still this device's is live.
   if (room.gameId === "birdwatch") return mySeats(room);
-  const out = room.game?.forfeited ?? room.tiles?.forfeited ?? [];
+  const out = tumbleOf(room)?.left ?? room.game?.forfeited ?? room.tiles?.forfeited ?? [];
   return mySeats(room).filter((s) => !out[s]);
 }
 
 /** What a forfeit means here, in the words iOS uses (TableMenuSheet.swift). */
 function forfeitWords(room: RoomView): string {
   if (room.gameId === "birdwatch") return "A House Cat takes your seat.";
-  const out = room.game?.forfeited ?? room.tiles?.forfeited ?? [];
+  const out = tumbleOf(room)?.left ?? room.game?.forfeited ?? room.tiles?.forfeited ?? [];
   const mine = new Set(liveSeats(room));
   const rest = room.seats.flatMap((s, i) => ((s.kind === "human" || s.kind === "bot") && !out[i] && !mine.has(i) ? [i] : []));
   if (rest.length === 1) return `${seatName(room.seats[rest[0]!])} wins.`;
@@ -493,7 +501,7 @@ function ScoresSheet(props: { room: RoomView; onClose: () => void }) {
             <Cat cat={seatCat(room.seats[s])} size={40} />
             <span class="who">{seatName(room.seats[s])}</span>
             <span class="detail">
-              {g ? `Level ${Math.min((g.phase[s] ?? 0) + 1, 10)} · ${g.scores[s] ?? 0}` : `${t?.rackCounts[s] ?? 0} pieces`}
+              {tumbleOf(room) ? winsWords(tumbleOf(room)!.wins[s] ?? 0) : g ? `Level ${Math.min((g.phase[s] ?? 0) + 1, 10)} · ${g.scores[s] ?? 0}` : `${t?.rackCounts[s] ?? 0} pieces`}
             </span>
           </li>
         ))}

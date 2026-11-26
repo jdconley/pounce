@@ -46,6 +46,18 @@ export const isTumble = (room: Pick<RoomView, "gameId"> | null | undefined): boo
 /** The table's House Cat level (the lobby's two pills): Easy unless it chose Quick. */
 export const catsOf = (room: RoomView): Cats => ((room.options as { cats?: Cats } | undefined)?.cats === "quick" ? "quick" : (tumbleOf(room)?.cats ?? "easy"));
 
+/** The lobby's two pills, and the TV lobby's line. */
+export const CATS_WORDS: Record<Cats, string> = { easy: "Cats: Easy", quick: "Cats: Quick" };
+
+/** Who won the game: the seats with the most round wins (none before anyone has one). */
+export function tumbleWinners(t: TumbleRoom): number[] {
+  const most = Math.max(0, ...t.wins);
+  return most === 0 ? [] : t.wins.flatMap((w, s) => (w === most ? [s] : []));
+}
+
+/** "1 win", "3 wins". */
+export const winsWords = (n: number): string => `${n} ${n === 1 ? "win" : "wins"}`;
+
 /** A seat as everyone sees it: in play, lagging, out this round, sitting out (Away), or gone for good. */
 export type SeatState = SeatStatus | "away" | "left";
 
@@ -207,7 +219,11 @@ export class TumbleStore {
 
   private onRoom(room: RoomView | null): void {
     const t = isTumble(room) ? tumbleOf(room) : null;
+    const was = this.t;
     this.t = t;
+    // The round's shape changed (a countdown, its end, a winner, someone away or out): draw again.
+    const shape = (x: TumbleRoom | null) => (x ? `${x.r}|${x.status}|${x.winner}|${x.outs.join()}|${x.away.join()}|${x.left.join()}|${x.wins.join()}` : "");
+    if (shape(was) !== shape(t)) this.changed();
     if (!room || !t || (t.status !== "countdown" && t.status !== "playing") || !t.roundSeed || !t.trickSeeds) {
       if (this.r !== null || this.local || this.replay) {
         this.local = this.replay = null;
