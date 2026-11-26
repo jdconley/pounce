@@ -1,6 +1,6 @@
 import { expect, test, type Page } from "@playwright/test";
 
-import { bwStep, newStats, playToTheEnd, type How } from "./birdwatch-helpers";
+import { birdTable, bwStep, newStats, playToTheEnd, type How } from "./birdwatch-helpers";
 import { closeAll, newPlayer, tableCode } from "./helpers";
 
 /**
@@ -13,22 +13,6 @@ import { closeAll, newPlayer, tableCode } from "./helpers";
 test.use({ reducedMotion: "reduce", actionTimeout: 15_000 });
 
 const how = (): How => (test.info().project.name === "laptop-chrome" ? "keys" : "taps");
-
-/** A Birdwatch table from Home's shelf, its rule set picked, House Cats in the seats to `seats`. */
-async function birdTable(page: Page, rules: "Official" | "Tucker" | "Friesen", seats: number): Promise<string> {
-  await page.getByRole("button", { name: "Play Birdwatch" }).click();
-  const code = await tableCode(page);
-  // A first table gets three House Cats, so Start is lit at once.
-  await expect(page.getByRole("button", { name: "House Cat" }).nth(2)).toBeVisible();
-  await page.getByRole("radio", { name: rules }).click();
-  await expect(page.getByRole("radio", { name: rules })).toHaveAttribute("aria-checked", "true");
-  for (let n = 4; n < seats; n++) {
-    const before = await page.locator(".lobby-seat.bot").count();
-    await page.locator("#add-bar").getByRole("button", { name: "House Cat" }).click();
-    await expect(page.locator(".lobby-seat.bot")).toHaveCount(before + 1);
-  }
-  return code;
-}
 
 for (const [seats, rules] of [
   [4, "Official"],

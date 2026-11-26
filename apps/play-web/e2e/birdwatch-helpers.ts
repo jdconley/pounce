@@ -1,5 +1,7 @@
 import { expect, type Page } from "@playwright/test";
 
+import { tableCode } from "./helpers";
+
 /**
  * Playing Birdwatch in a browser the way a person does: from what the table shows. Every read of
  * something that can vanish (a summary, a card) is one that never waits: a driver waiting on the
@@ -178,4 +180,20 @@ export async function playToTheEnd(pages: Page[], how: How[], opts: { bidOnce?: 
     if (!any) await pages[0]!.waitForTimeout(150);
   }
   return stats;
+}
+
+/** A Birdwatch table from Home's shelf, its rule set picked, House Cats in the seats to `seats`. */
+export async function birdTable(page: Page, rules: "Official" | "Tucker" | "Friesen", seats: number): Promise<string> {
+  await page.getByRole("button", { name: "Play Birdwatch" }).click();
+  const code = await tableCode(page);
+  // A first table gets three House Cats, so Start is lit at once.
+  await expect(page.getByRole("button", { name: "House Cat" }).nth(2)).toBeVisible();
+  await page.getByRole("radio", { name: rules }).click();
+  await expect(page.getByRole("radio", { name: rules })).toHaveAttribute("aria-checked", "true");
+  for (let n = 4; n < seats; n++) {
+    const before = await page.locator(".lobby-seat.bot").count();
+    await page.locator("#add-bar").getByRole("button", { name: "House Cat" }).click();
+    await expect(page.locator(".lobby-seat.bot")).toHaveCount(before + 1);
+  }
+  return code;
 }
