@@ -11,8 +11,8 @@
 export const EASEL_W = 768;
 export const EASEL_H = 1024;
 
-/** The palette, numbered as on the wire: black first, white (8) is the eraser. */
-export const COLOURS = ["#1B1B22", "#FF2E2E", "#FF8A00", "#FFD21F", "#2DBE4E", "#2E8BFF", "#8B3DFF", "#8B5A2B", "#FFFFFF"] as const;
+/** The palette, numbered as on the wire: black first, white (8) is the eraser. The same sRGB values as the apps (PurrEaselView). */
+export const COLOURS = ["#1A1426", "#FF3B4A", "#FF9419", "#FFD400", "#2ECC5B", "#2F80FF", "#9B4DFF", "#8B5A2B", "#FFFFFF"] as const;
 export const ERASER = 8;
 /** The paper: what the eraser paints. */
 export const PAPER = "#FFFFFF";

@@ -80,6 +80,7 @@ describe("drawing a stroke", () => {
     traceStroke(r, stroke(0, [0, 0, 10, 0, 20, 10, 30, 10]));
     expect(r.calls.filter((c) => c[0] !== "beginPath" && c[0] !== "stroke")).toEqual([
       ["moveTo", 0, 0],
+      ["lineTo", 5, 0],
       ["quad", 10, 0, 15, 5],
       ["quad", 20, 10, 25, 10],
       ["lineTo", 30, 10],

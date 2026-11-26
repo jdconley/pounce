@@ -51,18 +51,16 @@ export function traceStroke(pen: Pen, s: Stroke): void {
   pen.lineCap = "round";
   pen.lineJoin = "round";
   pen.beginPath();
+  // As the apps draw it (PurrEaselView): a line to the first midpoint, a curve through each
+  // midpoint with the point between as its control, and a line to the last point.
   pen.moveTo(p[0]!, p[1]!);
-  if (n === 2) {
-    pen.lineTo(p[2]!, p[3]!);
-  } else {
-    // Through the midpoints: each point is the control of the curve between its neighbours' midpoints.
-    for (let i = 1; i < n - 1; i++) {
-      const x = p[i * 2]!;
-      const y = p[i * 2 + 1]!;
-      pen.quadraticCurveTo(x, y, (x + p[i * 2 + 2]!) / 2, (y + p[i * 2 + 3]!) / 2);
-    }
-    pen.lineTo(p[(n - 1) * 2]!, p[(n - 1) * 2 + 1]!);
+  pen.lineTo((p[0]! + p[2]!) / 2, (p[1]! + p[3]!) / 2);
+  for (let i = 1; i < n - 1; i++) {
+    const x = p[i * 2]!;
+    const y = p[i * 2 + 1]!;
+    pen.quadraticCurveTo(x, y, (x + p[i * 2 + 2]!) / 2, (y + p[i * 2 + 3]!) / 2);
   }
+  pen.lineTo(p[(n - 1) * 2]!, p[(n - 1) * 2 + 1]!);
   pen.stroke();
 }
 
