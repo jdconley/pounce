@@ -5,6 +5,7 @@ import {
   type GameAction,
   type GameError,
   type GameId,
+  type AnyGameOptions,
   type GameOptions,
   type RoomGame,
 } from "../games";
@@ -84,7 +85,7 @@ export type RoomState<S = CatTowerState> = {
   /** The room's game, for good. Every room saved before there was a second game says "cat-tower". */
   game: GameId;
   /** What the table chose in its lobby, for a game that has options (Birdwatch's rule set). Absent: none. */
-  options?: GameOptions;
+  options?: AnyGameOptions;
   hostDeviceId: string;
   status: RoomStatus;
   /** As many as the game seats at most in the lobby (6 for Cat Tower); compacted to the game's seats on start. */
@@ -210,7 +211,7 @@ export type RematchIntent = {
   hostDeviceId: string;
   game?: GameId;
   /** The table's options, kept for the new table. Absent: the game has none. */
-  options?: GameOptions;
+  options?: AnyGameOptions;
   /** The table's screens, so a TV stays on the new table. Absent: none. */
   screens?: string[];
 };
@@ -437,7 +438,7 @@ export class RoomCore<S = CatTowerState> {
   parseAim = (raw: unknown): GameAim | null => this.game.parseAim(raw);
 
   /** The room's game's own check of a `setOptions` message's options: none for a game without any. */
-  parseOptions = (raw: unknown): GameOptions | null => this.game.parseOptions?.(raw) ?? null;
+  parseOptions = (raw: unknown): AnyGameOptions | null => this.game.parseOptions?.(raw) ?? null;
 
   /** The seat that must act next; null in the lobby and whenever nobody is to act. */
   actor(): Seat | null {
@@ -975,7 +976,7 @@ export class RoomCore<S = CatTowerState> {
         youAreHost: deviceId === state.hostDeviceId,
         seats,
         ...this.gameFields(controlled),
-        ...(state.options ? { options: { ...state.options } } : {}),
+        ...(state.options ? { options: { ...state.options } as GameOptions } : {}),
         ...(this.features.streaks ? { look: this.look() } : {}),
         ...(state.rematch?.code ? { rematch: state.rematch.code } : {}),
         ...(this.features.tv && this.screenShown() ? { screen: true as const } : {}),
@@ -991,7 +992,7 @@ export class RoomCore<S = CatTowerState> {
    * game's is under the key of its own id, with `gameId` saying which and `game` null, so an app
    * never has to guess what it is decoding.
    */
-  private gameFields(controlled: Seat[]): Pick<RoomView, "game" | "gameId" | "tiles" | "birdwatch"> {
+  private gameFields(controlled: Seat[]): Pick<RoomView, "game" | "gameId" | "tiles" | "birdwatch" | "purrtrait"> {
     const { state } = this;
     const view = state.gameState === null ? null : this.game.view(state.gameState, controlled);
     if (state.game === DEFAULT_GAME) return { game: view as CatTowerView | null };
@@ -1385,7 +1386,7 @@ export class RoomCore<S = CatTowerState> {
   }
 
   /** The host sets the table's options in the lobby (Birdwatch's rule set); the game's parser has checked them. */
-  private setOptions(deviceId: string, options: GameOptions): Outbound[] {
+  private setOptions(deviceId: string, options: AnyGameOptions): Outbound[] {
     const { state } = this;
     if (state.status !== "lobby") return [this.fail(deviceId, "not_lobby")];
     if (deviceId !== state.hostDeviceId) return [this.fail(deviceId, "not_allowed")];

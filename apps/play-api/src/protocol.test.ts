@@ -27,6 +27,10 @@ describe("ErrorCode", () => {
       not_your_seat: true,
       seats_open: true,
       not_enough_players: true,
+      no_screen: true,
+      not_near: true,
+      removed: true,
+      easel_full: true,
       game_over: true,
       bad_code: true,
       too_many_attempts: true,
@@ -72,7 +76,7 @@ describe("ErrorCode", () => {
       own_card: true,
       must_follow: true,
     };
-    expect(Object.keys(codes)).toHaveLength(56);
+    expect(Object.keys(codes)).toHaveLength(60);
   });
 });
 

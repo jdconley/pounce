@@ -5,6 +5,12 @@ import type { Rng, Seed } from "../rules/rng";
 /** Where a game stands, as a room sees it: being played, between two deals, or finished. */
 export type GamePhase = "playing" | "between" | "over";
 
+/** What the room knows of the device a view is for, beyond which seats it controls (Purrtrait's drawer's device and kittens). */
+export type ViewerInfo = { drawerDevice: boolean; easyOnly: boolean };
+
+/** What the room knows of the device acting, beyond its seat. */
+export type ApplyContext = { easyOnly: boolean };
+
 /** What a room needs from a game. Rooms hold no game-specific logic. */
 export interface GameModule<S, A, V, E, Err extends string = string, O = never> {
   id: string;
@@ -26,8 +32,11 @@ export interface GameModule<S, A, V, E, Err extends string = string, O = never> 
     s: S,
     seat: Seat,
     a: A,
+    /** What the room knows of the acting device. A game with no use for it ignores it. */
+    ctx?: ApplyContext,
   ): { ok: true; state: S; events: E[] } | { ok: false; error: Err };
-  view(s: S, controlled: readonly Seat[]): V;
+  /** `viewer`: what the room knows of the device asking. A game with no use for it ignores it. */
+  view(s: S, controlled: readonly Seat[], viewer?: ViewerInfo): V;
   filterEvent(e: E, controlled: readonly Seat[]): E;
   /** The seat that must act next, or null when nobody is to act. */
   currentActor(s: S): Seat | null;
@@ -47,6 +56,13 @@ export interface GameModule<S, A, V, E, Err extends string = string, O = never> 
   /** True when `aim` points only at things every seat can see (never at another seat's hand or the pool). */
   aimAllowed(s: S, seat: Seat, aim: GameAim): boolean;
   phase(s: S): GamePhase;
+  /**
+   * How long the phase may last, ms, or null when it has no clock. The room keeps the deadline,
+   * stops it while the screen is away, and applies `timeUpAction` when it passes. Absent: no clocks.
+   */
+  turnLimitMs?(s: S): number | null;
+  /** What the room applies, for the seat on the move, when `turnLimitMs` runs out. */
+  timeUpAction?: A | null;
   /** What the room applies, for seat 0, once the game has sat `between` for a moment; null for a game that never is. */
   betweenAction: A | null;
   /** Leaving for good. A room applies it for a stalled seat its tablemates retire. */

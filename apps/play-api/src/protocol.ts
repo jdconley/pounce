@@ -7,7 +7,9 @@ import { isBack, isRug } from "./streaks/catalog";
 
 import type { BirdEvent } from "./birdwatch/engine";
 import type { BirdView } from "./birdwatch/view";
-import type { GameAction, GameError, GameId, GameOptions } from "./games";
+import type { GameAction, GameError, GameId, AnyGameOptions, GameOptions } from "./games";
+import type { PurrEvent } from "./purrtrait/engine";
+import type { PurrView } from "./purrtrait/view";
 import type { GameEvent, Seat } from "./rules/engine";
 import type { CatTowerView } from "./rules/view";
 import type { StreakView } from "./streaks/pair-core";
@@ -74,9 +76,11 @@ export type RoomView = {
   tiles?: TilesView;
   /** Birdwatch's view, in a `birdwatch` room once it is dealt. */
   birdwatch?: BirdView;
+  /** Purrtrait's view, in a `purrtrait` room once it is dealt. */
+  purrtrait?: PurrView;
   /**
    * What the table chose in its lobby (`setOptions`), for a game that has a choice: Birdwatch's
-   * rule set. Absent at a table of a game with none, so Cat Tower and tile game snapshots never have it.
+   * rule set (typed as that, as the web player draws only Birdwatch's; Purrtrait's `{ timer }` is on the wire too). Absent at a table of a game with none, so Cat Tower and tile game snapshots never have it.
    */
   options?: GameOptions;
   /** The table's rug and card back (§9.4). Only while streaks are on. */
@@ -124,6 +128,8 @@ export type RoomEvent =
   | { kind: "tiles"; event: TilesEvent }
   /** A Birdwatch event. */
   | { kind: "birdwatch"; event: BirdEvent }
+  /** A Purrtrait event. */
+  | { kind: "purrtrait"; event: PurrEvent }
   /** A House Cat took `seat` for the rest of the game: its person left, or was retired (Birdwatch). */
   | { kind: "houseCat"; seat: Seat }
   /** Someone at the table changed its look; `seat` is theirs, for the pill with their cat (§9.4). */
@@ -142,7 +148,7 @@ export type ClientMessage =
   | { t: "rename"; name: string }
   | { t: "renameSeat"; seat: Seat; name: string }
   /** The host sets the table's options in the lobby (Birdwatch's rule set). Errors: `not_allowed`, `not_lobby`. */
-  | { t: "setOptions"; options: GameOptions }
+  | { t: "setOptions"; options: AnyGameOptions }
   /** The host swaps two seats in the lobby, to choose teams. Errors: `not_allowed`, `not_lobby`, `bad_seat`. */
   | { t: "swapSeats"; seats: [Seat, Seat] }
   | { t: "rematch" }
@@ -182,6 +188,11 @@ export type ErrorCode =
   | "not_your_seat"
   | "seats_open"
   | "not_enough_players"
+  // Purrtrait: a table with no screen showing it, a phone that is not near the TV, a device the host removed, a full easel.
+  | "no_screen"
+  | "not_near"
+  | "removed"
+  | "easel_full"
   // Moving a seat to another device.
   | "game_over"
   | "bad_code"
@@ -360,7 +371,7 @@ export type ActionParser = (raw: unknown) => GameAction | null;
 export type AimParser = (raw: unknown) => GameAim | null;
 
 /** A game's own check of a `setOptions` message's `options` (`GameModule.parseOptions`). */
-export type OptionsParser = (raw: unknown) => GameOptions | null;
+export type OptionsParser = (raw: unknown) => AnyGameOptions | null;
 
 type Parsers = { parseAction: ActionParser; parseAim: AimParser; parseOptions: OptionsParser };
 

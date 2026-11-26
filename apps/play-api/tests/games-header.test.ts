@@ -208,3 +208,26 @@ describe("a device that stops sending the header", { timeout: 60_000 }, () => {
     expect((push as Sent).body).toMatchObject({ code });
   });
 });
+
+describe("an app that does not list Purrtrait", { timeout: 30_000 }, () => {
+  const PURR_APP = { "x-pounce-games": "cat-tower,tiles,purrtrait" };
+
+  test("cannot make a table, is told there is none when it joins one, and never sees it listed", async () => {
+    const mf = await worker(script, { sent, devSpeed: 100, games: "tiles,purrtrait" });
+    open.push(mf);
+    const phone = await mint(mf);
+    expect((await call(mf, phone, "POST", "/v1/rooms", { game: "purrtrait" }, NEW_APP)).status).toBe(400);
+    const made = await call(mf, phone, "POST", "/v1/rooms", { game: "purrtrait" }, PURR_APP);
+    expect(made.status).toBe(201);
+    const code = ((await made.json()) as { code: string }).code;
+    expect(await upgrade(mf, code, phone, NEW_APP)).toBe(404);
+    expect(await upgrade(mf, code, phone, PURR_APP)).toBe(101);
+    expect((await tablesOf(mf, phone, NEW_APP)).map((t) => t.code)).not.toContain(code);
+  });
+
+  test("with the flag off, nobody can make one", async () => {
+    const mf = await start();
+    const phone = await mint(mf);
+    expect((await call(mf, phone, "POST", "/v1/rooms", { game: "purrtrait" }, PURR_APP)).status).toBe(400);
+  });
+});
