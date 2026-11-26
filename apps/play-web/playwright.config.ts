@@ -13,6 +13,9 @@ export const BASE = process.env.E2E_BASE ?? `http://127.0.0.1:${PORT}`;
 // this file again, see the same one (Sniff's test works out today's word from it, server side).
 const SECRET = (process.env.E2E_TOKEN_SECRET ??= randomBytes(32).toString("hex"));
 
+/** CI plays Birdwatch's long games in a job of their own (E2E_BIRDWATCH=off in the main one). */
+const BIRDWATCH_GAMES = process.env.E2E_BIRDWATCH === "off" ? [/birdwatch\.spec/] : [];
+
 export default defineConfig({
   testDir: "e2e",
   timeout: 180_000,
@@ -24,9 +27,9 @@ export default defineConfig({
   use: { baseURL: BASE, trace: "retain-on-failure", serviceWorkers: "block" },
   projects: [
     // The TV's own tests (tv.spec) run once, on the TV, which seats its phones itself.
-    { name: "android-chrome", use: { ...devices["Pixel 7"] }, testIgnore: [/alerts\.spec/, /tv\.spec/, /tv-board\.spec/] },
-    { name: "iphone-safari", use: { ...devices["iPhone 13"] }, testIgnore: [/alerts\.spec/, /tv\.spec/, /tv-board\.spec/] },
-    { name: "laptop-chrome", use: { ...devices["Desktop Chrome"], viewport: { width: 1440, height: 900 } }, testIgnore: [/alerts\.spec/, /tv\.spec/, /tv-board\.spec/] },
+    { name: "android-chrome", use: { ...devices["Pixel 7"] }, testIgnore: [/alerts\.spec/, /tv\.spec/, /tv-board\.spec/, ...BIRDWATCH_GAMES] },
+    { name: "iphone-safari", use: { ...devices["iPhone 13"] }, testIgnore: [/alerts\.spec/, /tv\.spec/, /tv-board\.spec/, /birdwatch\.spec/] },
+    { name: "laptop-chrome", use: { ...devices["Desktop Chrome"], viewport: { width: 1440, height: 900 } }, testIgnore: [/alerts\.spec/, /tv\.spec/, /tv-board\.spec/, ...BIRDWATCH_GAMES] },
     // Gecko and desktop WebKit play the two-browser tables only, to keep CI quick.
     { name: "laptop-firefox", testMatch: /tables\.spec/, testIgnore: [/tv\.spec/, /tv-board\.spec/], use: { ...devices["Desktop Firefox"], viewport: { width: 1440, height: 900 } } },
     { name: "laptop-safari", testMatch: /tables\.spec/, testIgnore: [/tv\.spec/, /tv-board\.spec/], use: { ...devices["Desktop Safari"], viewport: { width: 1440, height: 900 } } },
@@ -46,7 +49,7 @@ export default defineConfig({
     : {
         // Kept up by e2e/dev-server.mjs: it holds the port, and restarts a wrangler dev that exits
         // with the same arguments (and the same state), so a crash never refuses a connection.
-        command: `node e2e/dev-server.mjs pnpm --filter @pounce/play-api exec wrangler dev --port ${PORT} --ip 127.0.0.1 --persist-to .wrangler/e2e-${PORT}-${Date.now()} --var TOKEN_SECRET:${SECRET} --var GAMES:tiles --var LINK:on --var TV:on --var DAILY:on --var DAILY_TEST:on --var DEV_SPEED:20`,
+        command: `node e2e/dev-server.mjs pnpm --filter @pounce/play-api exec wrangler dev --port ${PORT} --ip 127.0.0.1 --persist-to .wrangler/e2e-${PORT}-${Date.now()} --var TOKEN_SECRET:${SECRET} --var GAMES:tiles,birdwatch --var LINK:on --var TV:on --var DAILY:on --var DAILY_TEST:on --var DEV_SPEED:20`,
         url: `${BASE}/healthz`,
         // The supervisor holds the port through a restart and lets connections through once the
         // new run answers this.

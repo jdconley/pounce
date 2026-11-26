@@ -6,10 +6,15 @@
 import { PROTOCOL } from "../lib/env";
 import { RoomSocket, type LinkQuality, type SocketEvent } from "../net/socket";
 
+import type { BirdAction, BirdEvent } from "@pounce/play-api/birdwatch/engine";
+import type { BirdView } from "@pounce/play-api/birdwatch/view";
 import type { ClientMessage, ErrorCode, GameAim, RoomEvent, RoomView, ServerMessage } from "@pounce/play-api/protocol";
 import type { GameEvent, Action } from "@pounce/play-api/rules/engine";
 import type { TilesAction, TilesEvent } from "@pounce/play-api/tiles/engine";
 
+
+/** A move any game's table sends. */
+export type AnyAction = Action | TilesAction | BirdAction;
 
 export type RoomPhase = "connecting" | "lobby" | "playing" | "over" | "closed" | "notFound" | "locked" | "needsUpdate";
 
@@ -27,7 +32,7 @@ export type RoomState = {
   everConnected: boolean;
   link: LinkQuality;
   /** The move sent and not yet answered. */
-  pending: { id: string; seat: number; action: Action | TilesAction } | null;
+  pending: { id: string; seat: number; action: AnyAction } | null;
   /** The last error the server sent this device, with a counter so the same one twice is seen twice. */
   error: { code: ErrorCode; n: number } | null;
   moveCode: { seat: number; code: string } | null;
@@ -63,6 +68,17 @@ export function eventPause(e: RoomEvent): number {
     if (k === "turn") return 120;
     return 380;
   }
+  if (e.kind === "birdwatch") {
+    const k = e.event.kind;
+    // A card lands on the sill; a full sill holds a moment, then sweeps to its winner.
+    if (k === "played") return 520;
+    if (k === "trick") return 900;
+    if (k === "handOver") return 1200;
+    if (k === "gameOver") return 600;
+    if (k === "bid" || k === "passed") return 380;
+    if (k === "turn") return 0;
+    return 300;
+  }
   return 0;
 }
 
@@ -74,7 +90,114 @@ export function foldEvent(room: RoomView, e: RoomEvent): RoomView {
   }
   if (e.kind === "game" && room.game) return { ...room, game: foldCatTower(room.game, e.event) };
   if (e.kind === "tiles" && room.tiles) return { ...room, tiles: foldTiles(room.tiles, e.event) };
+  if (e.kind === "birdwatch" && room.birdwatch) return { ...room, birdwatch: foldBirdwatch(room.birdwatch, e.event) };
+  if (e.kind === "houseCat") {
+    // The seat plays on as a House Cat; its person stays for the name tag.
+    const seats = room.seats.map((s, i) => (i === e.seat ? { ...s, kind: "bot" as const, yours: false, presence: null, left: true as const } : s));
+    return { ...room, seats };
+  }
   return room;
+}
+
+/** The fields only the device on the move gets: stale once anything happens. The snapshot brings them back. */
+function withoutChoices(v: BirdView): BirdView {
+  const rest = { ...v };
+  delete rest.playable;
+  delete rest.bidRange;
+  delete rest.partnerChoices;
+  return rest;
+}
+
+function foldBirdwatch(v0: BirdView, e: BirdEvent): BirdView {
+  const v = withoutChoices(v0);
+  const handCounts = [...v.handCounts];
+  switch (e.kind) {
+    case "dealt": {
+      const n = v.seats;
+      const fresh = { ...v };
+      delete fresh.fromNest;
+      delete fresh.putBack;
+      delete fresh.youArePartner;
+      return {
+        ...fresh,
+        phase: "bidding",
+        hand: e.hand,
+        dealer: e.dealer,
+        handCounts: [...e.handCounts],
+        hands: { ...e.hands },
+        bids: Array<number | null>(n).fill(null),
+        passed: Array<boolean>(n).fill(false),
+        high: null,
+        trump: null,
+        called: null,
+        partner: null,
+        trick: [],
+        leader: null,
+        lastTrick: null,
+        played: [],
+        points: Array<number>(n).fill(0),
+        tricks: Array<number>(n).fill(0),
+      };
+    }
+    case "bid": {
+      const bids = [...v.bids];
+      bids[e.seat] = e.amount;
+      return { ...v, bids, high: { seat: e.seat, amount: e.amount } };
+    }
+    case "passed": {
+      const passed = [...v.passed];
+      passed[e.seat] = true;
+      return { ...v, passed };
+    }
+    case "bidWon":
+      return { ...v, high: { seat: e.seat, amount: e.amount }, phase: "nest", turn: e.seat };
+    case "nest": {
+      handCounts[e.seat] = (handCounts[e.seat] ?? 0) + v.nestSize;
+      if (!e.cards || !v.hands[e.seat]) return { ...v, handCounts };
+      return { ...v, handCounts, hands: { ...v.hands, [e.seat]: [...v.hands[e.seat]!, ...e.cards] }, fromNest: [...e.cards] };
+    }
+    case "putBack": {
+      handCounts[e.seat] = Math.max(0, (handCounts[e.seat] ?? 0) - e.count);
+      const rest = { ...v, handCounts, phase: "trump" as const };
+      delete rest.fromNest;
+      if (!e.cards || !v.hands[e.seat]) return rest;
+      const out = new Set(e.cards);
+      return { ...rest, hands: { ...v.hands, [e.seat]: v.hands[e.seat]!.filter((c) => !out.has(c)) }, putBack: [...e.cards] };
+    }
+    case "trump":
+      return { ...v, trump: e.suit, phase: v.seats === 5 ? "partner" : "play" };
+    case "called":
+      return { ...v, called: e.card, phase: "play" };
+    case "turn":
+      return { ...v, turn: e.seat };
+    case "played": {
+      handCounts[e.seat] = Math.max(0, (handCounts[e.seat] ?? 0) - 1);
+      const hands = v.hands[e.seat] ? { ...v.hands, [e.seat]: v.hands[e.seat]!.filter((c) => c !== e.card) } : v.hands;
+      return {
+        ...v,
+        handCounts,
+        hands,
+        trick: [...v.trick, { seat: e.seat, card: e.card }],
+        leader: v.trick.length === 0 ? e.seat : v.leader,
+        played: [...v.played, e.card],
+      };
+    }
+    case "partner":
+      return { ...v, partner: e.seat };
+    case "trick": {
+      const points = [...v.points];
+      const tricks = [...v.tricks];
+      points[e.winner] = (points[e.winner] ?? 0) + e.points;
+      tricks[e.winner] = (tricks[e.winner] ?? 0) + 1;
+      return { ...v, trick: [], lastTrick: { cards: e.cards.map((t) => ({ ...t })), winner: e.winner }, points, tricks, leader: e.winner };
+    }
+    case "handOver":
+      return { ...v, history: [...v.history, e.result], scores: [...e.result.totals], phase: "between", turn: null, putBack: [...e.putBack], partner: e.result.partner ?? v.partner };
+    case "gameOver":
+      return { ...v, status: "over", phase: "over", turn: null, winners: [...e.winners], scores: [...e.scores], endReason: e.reason };
+    default:
+      return v;
+  }
 }
 
 function foldCatTower(g: NonNullable<RoomView["game"]>, e: GameEvent): NonNullable<RoomView["game"]> {
@@ -175,7 +298,7 @@ export function phaseOf(room: RoomView | null): RoomPhase {
 
 /** A room's turn and status, as one comparable value: when it changes, shown aims are stale. */
 function turnAndStatus(room: RoomView): string {
-  const g = room.game ?? room.tiles;
+  const g = room.game ?? room.tiles ?? room.birdwatch;
   return `${room.status}|${g?.status ?? ""}|${g?.turn ?? ""}`;
 }
 
@@ -284,7 +407,7 @@ export class RoomStore {
   }
 
   /** Sends a move with a move id; it is sent again after a reconnect unless the server applied it. */
-  act(seat: number, action: Action | TilesAction): boolean {
+  act(seat: number, action: AnyAction): boolean {
     if (this.state.pending) return false;
     const id = newMoveId();
     this.set({ pending: { id, seat, action } });

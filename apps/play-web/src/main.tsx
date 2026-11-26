@@ -3,6 +3,7 @@ import "@fontsource/nunito/latin-800.css";
 import "./styles.css";
 import "./ui/screens.css";
 import "./table/table.css";
+import "./table/birdwatch.css";
 
 import { render } from "preact";
 

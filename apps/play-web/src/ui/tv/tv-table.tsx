@@ -8,6 +8,9 @@ import { useEffect, useMemo, useState } from "preact/hooks";
 import { art, RINGS } from "../../lib/art";
 import { reducedMotion } from "../../lib/settings";
 import { play } from "../../lib/sound";
+import { bwLayout } from "../../table/bw-layout";
+import { othersInOrder, RULE_COPY } from "../../table/bw-model";
+import { BwPublic, bwStyle } from "../../table/bw-public";
 import { ctLayout } from "../../table/ct-layout";
 import { CtPublic, ctStyle } from "../../table/ct-public";
 import { Motion } from "../../table/motion";
@@ -31,6 +34,7 @@ type TableProps = { store: RoomStore; state: RoomState; offline: boolean };
 /** The table as the TV draws it, for either game. */
 export function TvTable(props: TableProps) {
   const room = props.state.room!;
+  if (room.gameId === "birdwatch") return room.birdwatch ? <TvBirdwatch {...props} /> : null;
   if (room.gameId === "tiles") return room.tiles ? <TvTiles {...props} /> : null;
   return room.game ? <TvCatTower {...props} /> : null;
 }
@@ -53,6 +57,33 @@ function TvCatTower(props: TableProps) {
         <Banner store={store} room={room} rect={L.banner} offline={props.offline} />
         <Moments store={store} room={room} />
       </CtPublic>
+    </div>
+  );
+}
+
+/**
+ * Birdwatch on the TV (design §5.6): the sill, the cats with their bid signs, the score strip and
+ * the trump badge; no hand, and never the 5-player partner until the called card is played (the
+ * public table reads only `partner`).
+ */
+function TvBirdwatch(props: TableProps) {
+  const { store, state } = props;
+  const room = state.room!;
+  const v = room.birdwatch!;
+  const [rootRef, size] = useSize<HTMLDivElement>();
+  const motion = useMemo(() => new Motion(reducedMotion), []);
+  const L = useMemo(
+    () => bwLayout({ width: size.width || 1920, height: size.height || 1080, insets: NO_INSETS, me: null, others: othersInOrder(v, null), hand: 0, tv: true }),
+    [size.width, size.height, v.seats],
+  );
+  return (
+    <div class="bw-table tv-table bw-tv" ref={rootRef} style={bwStyle(L)}>
+      <BwPublic store={store} room={room} layout={L} motion={motion} haptics={false} tv>
+        <p class="bw-tv-rules outlined" style={{ transform: `translate3d(${L.sill.x + L.sill.w - 12}px, ${L.sill.y + 10}px, 0) translateX(-100%)` }}>
+          {RULE_COPY[v.rules].name}, to {v.target}
+        </p>
+        <Banner store={store} room={room} rect={L.banner} offline={props.offline} />
+      </BwPublic>
     </div>
   );
 }
@@ -92,7 +123,7 @@ function Banner(props: { store: RoomStore; room: RoomView; rect: Rect; offline: 
     () =>
       props.store.subscribe({
         event: ({ event: e }) => {
-          if ((e.kind === "game" || e.kind === "tiles") && e.event.kind === "turn") setTurns((n) => n + 1);
+          if ((e.kind === "game" || e.kind === "tiles" || e.kind === "birdwatch") && e.event.kind === "turn") setTurns((n) => n + 1);
         },
       }),
     [props.store],
@@ -207,7 +238,7 @@ export function TvOver(props: { room: RoomView; cheered: boolean }) {
           ))}
         </div>
         <h2 class={`tv-over-title outlined ${title.length > 18 ? "long" : ""}`}>
-          {winners.length === 1 ? (
+          {winners.length === 1 && !room.birdwatch ? (
             <>
               <span class="tv-over-name">{seatName(room.seats[winners[0]!.seat])}</span>
               <span>&nbsp;wins</span>
@@ -223,7 +254,7 @@ export function TvOver(props: { room: RoomView; cheered: boolean }) {
               <span class="tv-over-ring">
                 <Cat cat={seatCat(room.seats[r.seat])} pose={r.won ? "celebrate" : "idle"} />
               </span>
-              <span class="tv-over-who">{seatName(room.seats[r.seat])}</span>
+              <span class="tv-over-who">{r.name ?? seatName(room.seats[r.seat])}</span>
               <span class="tv-over-detail">{r.detail}</span>
             </li>
           ))}

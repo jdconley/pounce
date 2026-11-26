@@ -16,6 +16,10 @@ import { addPerson, forgetTable, rememberTable, useApp } from "../store/app";
 import { autoClaimSeat, firstTableMessages, mySeats, practiceMessages } from "../store/lobby";
 import { RoomStore, type RoomState } from "../store/room";
 import { carryView, setView, showController, showSwitch, viewOf, type View } from "../store/views";
+import { BirdwatchTable } from "../table/birdwatch";
+import { BwHowTo } from "../table/bw-help";
+import { bwOverTitle, bwStandings, RULE_COPY } from "../table/bw-model";
+import { ScoreSheet } from "../table/bw-panels";
 import { CatTowerTable } from "../table/cattower";
 import { CtController } from "../table/ct-controller";
 import { seatCat, seatName } from "../table/seat";
@@ -137,7 +141,7 @@ export function TableScreen(props: { code: string; intent: TableIntent; say?: (w
   };
 
   const home = () => navigate({ kind: "home" });
-  const [menu, setMenu] = useState<null | "menu" | "scores" | "forfeit">(null);
+  const [menu, setMenu] = useState<null | "menu" | "scores" | "forfeit" | "howto">(null);
   const [showOnTv, setShowOnTv] = useState(false);
   const offline = state.everConnected && !state.online && ["lobby", "playing", "over", "connecting"].includes(state.phase);
 
@@ -193,7 +197,8 @@ export function TableScreen(props: { code: string; intent: TableIntent; say?: (w
     );
   } else {
     const isTiles = room.gameId === "tiles";
-    const tvSwitch = (isTiles ? Boolean(room.tiles) : room.game !== null) && showSwitch(room);
+    const isBird = room.gameId === "birdwatch";
+    const tvSwitch = (isBird ? Boolean(room.birdwatch) : isTiles ? Boolean(room.tiles) : room.game !== null) && showSwitch(room);
     const cards = tvSwitch && showController(room, view);
     // Tuna Tiles on Cards: the rack off turn; on your turn the full table, as rearranging it needs
     // it (the same element as on Table, so a draft survives the switch).
@@ -203,7 +208,9 @@ export function TableScreen(props: { code: string; intent: TableIntent; say?: (w
     body = (
       <main class="screen table-screen">
         <div class="room-bg" style={{ backgroundImage: `url(${art("room-bg")})` }} />
-        {isTiles && room.tiles ? (
+        {isBird ? (
+          room.birdwatch ? <BirdwatchTable store={store} state={state} sounds={!cards} cards={cards} topInset={tvSwitch && !cards ? SWITCH_STRIP : 0} /> : null
+        ) : isTiles && room.tiles ? (
           controller ? (
             <TilesController store={store} state={state} onView={changeView} />
           ) : (
@@ -216,7 +223,7 @@ export function TableScreen(props: { code: string; intent: TableIntent; say?: (w
             <CatTowerTable store={store} state={state} topInset={tvSwitch ? SWITCH_STRIP : 0} />
           )
         ) : null}
-        {tvSwitch && !controller ? (
+        {tvSwitch && (!controller || isBird) ? (
           <div class="view-bar">
             <SwitchView view={view} onChange={changeView} />
           </div>
@@ -245,10 +252,18 @@ export function TableScreen(props: { code: string; intent: TableIntent; say?: (w
                   <span class="grow">Show on TV</span>
                 </button>
               ) : null}
-              <a class="row" href="/support" target="_blank" rel="noopener">
-                <Icon name="icon-play" size={32} />
-                <span class="grow">How to play</span>
-              </a>
+              {isBird && room.options ? (
+                <button type="button" class="row" onClick={() => setMenu("howto")}>
+                  <Icon name="icon-play" size={32} />
+                  <span class="grow">How to play</span>
+                  <span class="fine">{RULE_COPY[room.options.rules].name}</span>
+                </button>
+              ) : (
+                <a class="row" href="/support" target="_blank" rel="noopener">
+                  <Icon name="icon-play" size={32} />
+                  <span class="grow">How to play</span>
+                </a>
+              )}
               <button type="button" class="row" onClick={home}>
                 <Icon name="icon-home" size={32} />
                 <span class="grow">Home</span>
@@ -262,7 +277,8 @@ export function TableScreen(props: { code: string; intent: TableIntent; say?: (w
             </div>
           </Sheet>
         ) : null}
-        {menu === "scores" ? <ScoresSheet room={room} onClose={() => setMenu(null)} /> : null}
+        {menu === "scores" ? isBird && room.birdwatch ? <ScoreSheet room={room} onClose={() => setMenu(null)} /> : <ScoresSheet room={room} onClose={() => setMenu(null)} /> : null}
+        {menu === "howto" && room.options ? <BwHowTo rules={room.options.rules} onClose={() => setMenu(null)} /> : null}
         {menu === "forfeit" ? (
           <Sheet title="Forfeit this game?" onClose={() => setMenu(null)}>
             <div class="sheet-actions">
@@ -284,7 +300,18 @@ export function TableScreen(props: { code: string; intent: TableIntent; say?: (w
             </div>
           </Sheet>
         ) : null}
-        {room.status === "over" ? (
+        {room.status === "over" && isBird ? (
+          <BwGameOver
+            room={room}
+            quiet={cards}
+            onHome={home}
+            onAgain={() => {
+              wantRematch.current = true;
+              if (state.rematch) playAgain(state.rematch);
+              else store.send({ t: "rematch" });
+            }}
+          />
+        ) : room.status === "over" ? (
           <GameOver
             room={room}
             quiet={cards}
@@ -387,14 +414,64 @@ function GameOver(props: { room: RoomView; onHome: () => void; onAgain: () => vo
   );
 }
 
+/** Birdwatch's game over: the winning side, every side's score, and Play again. */
+function BwGameOver(props: { room: RoomView; onHome: () => void; onAgain: () => void; quiet?: boolean }) {
+  const { room } = props;
+  const rows = bwStandings(room);
+  const winners = room.birdwatch?.winners ?? [];
+  const won = winners.some((w) => mySeats(room).includes(w));
+  useEffect(() => {
+    if (!props.quiet) play(won ? "fanfare" : "leap");
+    buzz("win");
+  }, []);
+  const title = bwOverTitle(room);
+  return (
+    <div class="game-over" role="dialog" aria-label={title}>
+      <img class="sunburst" src={art("sunburst")} alt="" />
+      <div class="panel over-card">
+        <div class="winners">
+          {winners.map((w) => (
+            <Cat cat={seatCat(room.seats[w])} pose="celebrate" size={winners.length > 1 ? 96 : 120} />
+          ))}
+        </div>
+        <h2 class="title outlined">{title}</h2>
+        <ol class="ranks">
+          {rows.map((r) => (
+            <li class={r.won ? "won" : ""}>
+              <span class="bw-cats">
+                {r.seats.map((s) => (
+                  <Cat cat={seatCat(room.seats[s])} pose={r.won ? "celebrate" : "idle"} size={36} />
+                ))}
+              </span>
+              <span class="who">{r.name}</span>
+              <span class="detail">{r.score}</span>
+            </li>
+          ))}
+        </ol>
+        <div class="over-actions">
+          <Button variant="ok" onClick={props.onAgain} id="again">
+            <Icon name="icon-replay" size={28} /> Play again
+          </Button>
+          <Button variant="violet" onClick={props.onHome}>
+            <Icon name="icon-home" size={28} /> Home
+          </Button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 /** This device's seats still in the game. */
 function liveSeats(room: RoomView): number[] {
+  // Birdwatch: a seat that leaves goes to a House Cat, so every seat still this device's is live.
+  if (room.gameId === "birdwatch") return mySeats(room);
   const out = room.game?.forfeited ?? room.tiles?.forfeited ?? [];
   return mySeats(room).filter((s) => !out[s]);
 }
 
 /** What a forfeit means here, in the words iOS uses (TableMenuSheet.swift). */
 function forfeitWords(room: RoomView): string {
+  if (room.gameId === "birdwatch") return "A House Cat takes your seat.";
   const out = room.game?.forfeited ?? room.tiles?.forfeited ?? [];
   const mine = new Set(liveSeats(room));
   const rest = room.seats.flatMap((s, i) => ((s.kind === "human" || s.kind === "bot") && !out[i] && !mine.has(i) ? [i] : []));

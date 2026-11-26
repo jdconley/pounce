@@ -1,0 +1,1002 @@
+/* Birdwatch (bw-*.tsx). Placed by bw-layout.ts; moved only by transform (motion.ts). */
+
+/* Card faces (bw-faces.tsx): the suit's body, the corner numeral and pip, the big pip, the seed. */
+.bface {
+  --top: #9d63ff;
+  --base: var(--violet);
+  --side: #4e13c4;
+  position: relative;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  border: calc(var(--cw) * 0.04 + 1px) solid var(--ink);
+  border-radius: 12%/9%;
+  background: radial-gradient(circle at 70% 24%, rgba(255, 255, 255, 0.35), transparent 42%), linear-gradient(170deg, var(--top), var(--base) 62%, var(--side));
+  box-shadow: inset 0 0 0 calc(var(--cw) * 0.035) rgba(255, 255, 255, 0.55), 0 2px 0 rgba(27, 11, 58, 0.55);
+}
+
+.bface.fish {
+  --top: #4ff2e4;
+  --base: var(--teal);
+  --side: #00857f;
+}
+
+.bface.mouse {
+  --top: #b78bff;
+  --base: var(--violet);
+  --side: #4e13c4;
+}
+
+.bface.feather {
+  --top: #ffb54d;
+  --base: var(--orange);
+  --side: #c25200;
+}
+
+.bface.bell {
+  --top: #fff08a;
+  --base: #ffd21f;
+  --side: #e09a00;
+}
+
+.bface.bird {
+  --top: #fff;
+  --base: #fff7d6;
+  --side: #ffe08a;
+}
+
+.bface.back {
+  border: 0;
+  box-shadow: 0 2px 0 rgba(27, 11, 58, 0.55);
+  background-size: 100% 100%;
+  background-repeat: no-repeat;
+}
+
+/* The corner: the numeral, and the suit's pip under it. */
+.bface .n {
+  position: absolute;
+  top: 3%;
+  left: 7%;
+  font: 900 calc(var(--cw) * 0.42) / 1 var(--round);
+  letter-spacing: -0.04em;
+  color: var(--white);
+  -webkit-text-stroke: calc(var(--cw) * 0.075) var(--ink);
+  paint-order: stroke fill;
+}
+
+.bface .n.two {
+  font-size: calc(var(--cw) * 0.36);
+  letter-spacing: -0.09em;
+}
+
+.bface .pip {
+  position: absolute;
+  top: 33%;
+  left: 7%;
+  width: 26%;
+  height: 18%;
+  background-size: contain;
+  background-repeat: no-repeat;
+  background-position: left center;
+  filter: drop-shadow(0 0 1.5px var(--ink));
+}
+
+/* The big pip, low on the card: what the eye finds first in a spread-out hand. */
+.bface .art.pip {
+  top: auto;
+  left: auto;
+  right: 8%;
+  bottom: 10%;
+  width: 58%;
+  height: 40%;
+  background-position: right bottom;
+  filter: drop-shadow(0 calc(var(--cw) * 0.02) 0 var(--ink));
+}
+
+.bface.bird .pip {
+  top: 4%;
+  left: 5%;
+  width: 34%;
+  height: 26%;
+}
+
+.bface.bird .art {
+  position: absolute;
+  left: 8%;
+  right: 8%;
+  top: 26%;
+  bottom: 10%;
+  width: auto;
+  height: auto;
+  background-size: contain;
+  background-repeat: no-repeat;
+  background-position: center;
+}
+
+/* The seed badge: what the card is worth, gold in the bottom corner (BirdCardFactory.swift). */
+.bface .seed {
+  position: absolute;
+  right: 5%;
+  bottom: 4%;
+  min-width: calc(var(--cw) * 0.3);
+  padding: calc(var(--cw) * 0.035) calc(var(--cw) * 0.04);
+  border: calc(var(--cw) * 0.025 + 1px) solid var(--ink);
+  border-radius: 50% 50% 50% 50% / 60% 60% 40% 40%;
+  background: linear-gradient(180deg, #ffe680, #ffc21a);
+  font: 900 calc(var(--cw) * 0.17) / 1 var(--round);
+  color: var(--ink);
+  text-align: center;
+}
+
+/* With a seed in the corner, the big toy sits higher and to the left of it. */
+.bface.counter .art.pip {
+  right: 22%;
+  bottom: 20%;
+}
+
+/* A suit's silhouette and the Bird, as icons in buttons and badges. */
+.bw-suit-icon,
+.bw-bird-icon {
+  display: inline-block;
+  width: 32px;
+  height: 32px;
+  background-size: contain;
+  background-repeat: no-repeat;
+  background-position: center;
+  vertical-align: middle;
+}
+
+/* The table. */
+.bw-table {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+  contain: layout size;
+}
+
+.bw-table > * {
+  position: absolute;
+  top: 0;
+  left: 0;
+  transform-origin: 50% 50%;
+}
+
+/* The window the cats watch the feeder through: sky, a white frame, and its cross bars. */
+.bw-window {
+  z-index: 1;
+  pointer-events: none;
+  border: 3px solid var(--ink);
+  border-radius: 28px;
+  background:
+    linear-gradient(90deg, transparent calc(50% - 5px), rgba(255, 255, 255, 0.85) calc(50% - 5px) calc(50% + 5px), transparent calc(50% + 5px)),
+    linear-gradient(180deg, transparent calc(42% - 5px), rgba(255, 255, 255, 0.85) calc(42% - 5px) calc(42% + 5px), transparent calc(42% + 5px)),
+    radial-gradient(ellipse at 70% 18%, rgba(255, 255, 255, 0.6), transparent 30%),
+    linear-gradient(180deg, #7fdcff, #2eb8ff 55%, #9be22e 56%, #4fbf2a);
+  box-shadow: inset 0 0 0 8px #fff, inset 0 0 0 11px var(--ink), 0 5px 0 var(--ink);
+  opacity: 0.9;
+}
+
+.cards-view .bw-window,
+.cards-view .bw-sill {
+  display: none;
+}
+
+/* The sill: a painted ledge where the trick lands. */
+.bw-sill {
+  z-index: 2;
+  pointer-events: none;
+  border: 3px solid var(--ink);
+  border-radius: 22px;
+  background: radial-gradient(ellipse at 50% 40%, rgba(255, 255, 255, 0.22), transparent 65%), linear-gradient(180deg, #ffb54d, #ff8a00 70%, #c25200);
+  box-shadow: inset 0 -10px 0 rgba(27, 11, 58, 0.25), 0 5px 0 var(--ink);
+}
+
+.bw-table .cards {
+  position: absolute;
+  inset: 0;
+  z-index: 10;
+  pointer-events: none;
+}
+
+.bw-table .cards > * {
+  position: absolute;
+  top: 0;
+  left: 0;
+}
+
+.bw-table .card.on-sill {
+  pointer-events: none;
+}
+
+.bw-sweep {
+  position: absolute;
+  inset: 0;
+  will-change: opacity;
+}
+
+.bw-sweep > * {
+  position: absolute;
+  top: 0;
+  left: 0;
+}
+
+/* The hand: a dimmed card is one element under no translucent sibling; it greys its own face. */
+.bw-hand-card.dim .card-inner {
+  filter: saturate(0.25) brightness(0.62);
+  cursor: not-allowed;
+}
+
+.bw-hand-card.glow .card-inner {
+  box-shadow: 0 0 0 3px var(--yellow), 0 0 18px 4px rgba(255, 210, 31, 0.8);
+  border-radius: 12%/9%;
+}
+
+.bw-hand-zone {
+  z-index: 3;
+  pointer-events: none;
+}
+
+/* The seats: a ribbon under the name in the side's colour, the dealer's chip, the bid sign. */
+.bw-seat {
+  z-index: 20;
+}
+
+.bw-seat .name-tag {
+  max-width: var(--seat-w, calc(var(--avatar) * 1.6));
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.bw-seat.ribboned .name-tag {
+  box-shadow: 0 0 0 3px var(--ribbon), 0 3px 0 3px var(--ink);
+}
+
+.bw-dealer {
+  position: absolute;
+  top: calc(var(--avatar) * 0.62);
+  left: calc(var(--avatar) * -0.16);
+  display: grid;
+  place-items: center;
+  width: calc(var(--avatar) * 0.34);
+  height: calc(var(--avatar) * 0.34);
+  border: 2.5px solid var(--ink);
+  border-radius: 50%;
+  background: #fff;
+  color: var(--ink);
+  font: 900 calc(var(--avatar) * 0.2) / 1 var(--round);
+}
+
+.bw-sign {
+  position: absolute;
+  top: calc(var(--avatar) * -0.16);
+  left: calc(var(--avatar) * -0.3);
+  min-width: calc(var(--avatar) * 0.6);
+  padding: 2px 6px;
+  border: 2.5px solid var(--ink);
+  border-radius: 8px;
+  background: #fff;
+  color: var(--ink);
+  font: 900 calc(var(--avatar) * 0.28) / 1.1 var(--round);
+  text-align: center;
+  transform: rotate(-6deg);
+  box-shadow: 0 3px 0 var(--ink);
+}
+
+.bw-sign.high {
+  background: linear-gradient(180deg, #fff08a, var(--yellow));
+}
+
+.bw-sign.pass {
+  background: #d9cdf2;
+  color: #4e13c4;
+}
+
+.bw-sign.missed {
+  background: var(--refuse);
+  color: #fff;
+  transform: rotate(8deg) translateY(4px);
+}
+
+/* The trump badge, in the sill's corner, with the hand's bid under it. */
+.bw-trump {
+  z-index: 25;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  pointer-events: none;
+}
+
+.bw-badge {
+  display: grid;
+  place-items: center;
+  width: var(--badge);
+  height: var(--badge);
+  border: 3px solid var(--ink);
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.7);
+  box-shadow: 0 3px 0 var(--ink);
+}
+
+.bw-badge.on {
+  background: radial-gradient(circle, #fff 30%, var(--yellow));
+  box-shadow: 0 0 0 4px rgba(255, 210, 31, 0.6), 0 0 18px 6px rgba(255, 210, 31, 0.7), 0 3px 0 var(--ink);
+  animation: bw-glow 1.6s ease-in-out infinite alternate;
+}
+
+.bw-badge .bw-suit-icon {
+  width: 70%;
+  height: 70%;
+}
+
+.bw-badge-q {
+  font: 900 calc(var(--badge) * 0.5) / 1 var(--round);
+  color: rgba(27, 11, 58, 0.5);
+}
+
+@keyframes bw-glow {
+  to {
+    box-shadow: 0 0 0 6px rgba(255, 210, 31, 0.3), 0 0 26px 10px rgba(255, 210, 31, 0.55), 0 3px 0 var(--ink);
+  }
+}
+
+.bw-high {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  max-width: calc(var(--badge) * 1.8);
+  padding: 2px 8px;
+  border: 2.5px solid var(--ink);
+  border-radius: 8px;
+  background: #fff;
+  color: var(--ink);
+  transform: rotate(-4deg);
+}
+
+.bw-high-n {
+  font: 900 calc(var(--badge) * 0.36) / 1 var(--round);
+}
+
+.bw-high-who {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font: 800 0.7rem / 1.2 var(--round);
+}
+
+/* The score strip: one chip per side. */
+.bw-strip {
+  z-index: 25;
+  display: flex;
+  align-items: stretch;
+  justify-content: center;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+
+.bw-strip.column {
+  flex-direction: column;
+  justify-content: flex-start;
+  overflow: hidden;
+}
+
+div.bw-strip {
+  cursor: default;
+}
+
+.bw-chip {
+  display: flex;
+  flex: 1 1 0;
+  min-width: 0;
+  max-width: 260px;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 10px 3px 6px;
+  border: 2.5px solid var(--ink);
+  border-radius: 999px;
+  background: linear-gradient(90deg, var(--ribbon) 0 10px, rgba(27, 11, 58, 0.82) 10px);
+  box-shadow: 0 3px 0 var(--ink);
+  font: 900 0.9rem / 1.15 var(--round);
+  color: #fff;
+}
+
+.bw-strip.column .bw-chip {
+  flex: 0 0 auto;
+  max-width: none;
+  min-height: 38px;
+}
+
+.bw-chip.bidding {
+  outline: 3px solid var(--yellow);
+  outline-offset: 1px;
+}
+
+.bw-chip-cats {
+  display: flex;
+  flex: 0 0 auto;
+  margin-left: 8px;
+}
+
+.bw-chip-cats img {
+  width: 1.4em;
+  height: 1.4em;
+  object-fit: contain;
+}
+
+.bw-chip-cats img + img {
+  margin-left: -0.5em;
+}
+
+.bw-strip.many .bw-chip-who {
+  display: none;
+}
+
+.bw-strip.many .bw-chip {
+  justify-content: center;
+  padding-right: 6px;
+}
+
+.bw-chip-who {
+  flex: 1 1 auto;
+  min-width: 0;
+  padding-left: 8px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 800;
+  font-size: 0.78rem;
+}
+
+.bw-chip-score {
+  font-size: 1.05rem;
+}
+
+.bw-chip-taken {
+  padding: 0 5px;
+  border-radius: 6px;
+  background: rgba(155, 226, 46, 0.85);
+  color: var(--ink);
+  font-size: 0.78rem;
+}
+
+/* This step's controls. */
+.bw-panel {
+  z-index: 60;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+}
+
+.bw-panel > * {
+  pointer-events: auto;
+}
+
+.bw-cue {
+  position: static;
+  transform: none;
+  left: auto !important;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.bw-bid {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  width: 100%;
+}
+
+.bw-bid .btn {
+  min-width: 0;
+  padding-inline: clamp(10px, 3vw, 22px);
+}
+
+.bw-bid-sign {
+  display: grid;
+  place-items: center;
+  min-width: clamp(76px, 22vw, 120px);
+  height: clamp(64px, 16vw, 92px);
+  padding: 0 10px;
+  border: 3px solid var(--ink);
+  border-radius: 14px;
+  background: linear-gradient(180deg, #fff, #fff3c4);
+  box-shadow: 0 5px 0 var(--ink);
+  color: var(--ink);
+  transform: rotate(-3deg);
+  cursor: pointer;
+}
+
+.bw-bid-n {
+  font: 900 clamp(2rem, 9vw, 3.2rem) / 1 var(--round);
+  letter-spacing: -0.03em;
+}
+
+.bw-raise {
+  min-width: clamp(56px, 15vw, 80px);
+  font: 900 1.3rem / 1 var(--round);
+  touch-action: none;
+}
+
+.bw-nest {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.bw-cue-line {
+  margin: 0;
+  font: 900 1.15rem / 1.2 var(--round);
+  color: #fff;
+}
+
+.bw-trumps {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+  width: min(100%, 600px);
+  height: min(100%, 120px);
+}
+
+.bw-suit {
+  container-type: inline-size;
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  min-width: 0;
+  padding: 4px;
+  border: 3px solid var(--ink);
+  border-radius: 18px;
+  box-shadow: 0 5px 0 var(--ink);
+  font: 900 clamp(0.8rem, 3.4vw, 1.05rem) / 1.1 var(--round);
+  color: #fff;
+  -webkit-text-stroke: 0.12em var(--ink);
+  paint-order: stroke fill;
+  cursor: pointer;
+}
+
+.bw-suit .bw-suit-icon {
+  width: min(56%, 56px);
+  height: auto;
+  aspect-ratio: 1;
+  filter: drop-shadow(0 2px 0 var(--ink));
+}
+
+.bw-suit.fish {
+  background: linear-gradient(180deg, #4ff2e4, var(--teal));
+}
+
+.bw-suit.mouse {
+  background: linear-gradient(180deg, #b78bff, var(--violet));
+}
+
+.bw-suit.feather {
+  background: linear-gradient(180deg, #ffb54d, var(--orange));
+}
+
+.bw-suit.bell {
+  background: linear-gradient(180deg, #fff08a, #ffd21f);
+}
+
+.bw-suit.hint {
+  outline: 4px solid #fff;
+  outline-offset: 3px;
+  animation: bw-hint 1s ease-in-out infinite alternate;
+}
+
+@keyframes bw-hint {
+  to {
+    outline-color: var(--yellow);
+  }
+}
+
+/* A button too narrow for its word (large text on a small phone) keeps its silhouette; the word
+   stays in its accessible name. */
+@container (max-width: 4.2em) {
+  .bw-suit > span:not(.bw-suit-icon) {
+    display: none;
+  }
+}
+
+.bw-suit kbd {
+  position: absolute;
+  top: 4px;
+  left: 6px;
+  font: 900 0.7rem / 1 var(--round);
+  -webkit-text-stroke: 0;
+  color: rgba(27, 11, 58, 0.7);
+}
+
+.bw-partner-mark {
+  z-index: 70;
+  padding: 3px 12px;
+  border: 2.5px solid var(--ink);
+  border-radius: 999px;
+  background: linear-gradient(180deg, #fff08a, #ffc21a);
+  color: var(--ink);
+  font: 900 0.85rem / 1.2 var(--round);
+  box-shadow: 0 3px 0 var(--ink);
+}
+
+/* The 5-player partner call, over the window. */
+.bw-overlay {
+  z-index: 300;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.bw-partner {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: 100%;
+  max-height: 100%;
+  padding: 12px;
+  overflow: auto;
+  animation: sheet-in 260ms var(--ease-spring) both;
+}
+
+.bw-partner h2 {
+  margin: 0;
+  text-align: center;
+  font: 900 1.2rem var(--round);
+}
+
+.bw-partner-rows {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  --cw: clamp(34px, 7.5vw, 66px);
+  --ch: calc(var(--cw) * 1.4);
+}
+
+.bw-partner-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.bw-mini {
+  width: var(--cw);
+  height: var(--ch);
+  padding: 0;
+  border: 0;
+  background: none;
+  cursor: pointer;
+}
+
+.bw-mini:hover .bface,
+.bw-mini:focus-visible .bface {
+  outline: 3px solid var(--yellow);
+  outline-offset: 1px;
+}
+
+/* Between hands. */
+.bw-summary {
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 400;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  background: rgba(27, 11, 58, 0.5);
+  pointer-events: none;
+  animation: fade-in 200ms ease-out both;
+}
+
+.bw-summary-card {
+  width: min(100%, 440px);
+  padding: 16px;
+  text-align: center;
+  animation: sheet-in 320ms var(--ease-spring) both;
+}
+
+.bw-summary-card .title {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.bw-made {
+  display: inline-block;
+  margin: 8px 0 4px;
+  padding: 2px 14px;
+  border: 2.5px solid var(--ink);
+  border-radius: 999px;
+  font: 900 1.1rem / 1.3 var(--round);
+}
+
+.bw-made.made {
+  background: var(--lime);
+  color: var(--ink);
+}
+
+.bw-made.missed {
+  background: var(--refuse);
+  color: #fff;
+}
+
+.bw-summary-card ul {
+  margin: 10px 0 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.bw-summary-card li {
+  display: grid;
+  grid-template-columns: 1fr auto auto;
+  align-items: center;
+  gap: 12px;
+  padding: 4px 14px 4px 10px;
+  border-left: 10px solid var(--ribbon);
+  border-radius: 999px;
+  background: rgba(27, 11, 58, 0.45);
+  font: 900 1rem var(--round);
+  text-align: left;
+}
+
+.bw-summary-card li.bidding {
+  background: rgba(255, 210, 31, 0.28);
+}
+
+.bw-summary-card .who {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.bw-summary-card .pts.minus,
+.bw-sheet .minus {
+  color: #ff9aa5;
+}
+
+/* The score sheet. */
+.bw-sheet-scroll {
+  max-height: 60vh;
+  overflow: auto;
+}
+
+.bw-sheet {
+  width: 100%;
+  border-collapse: collapse;
+  font: 800 0.9rem / 1.3 var(--round);
+}
+
+.bw-sheet th,
+.bw-sheet td {
+  padding: 6px 8px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.15);
+  text-align: left;
+  vertical-align: middle;
+}
+
+.bw-sheet thead th {
+  max-width: 9em;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.bw-sheet-bid {
+  white-space: nowrap;
+}
+
+/* Rule set pills: the lobby's and How to play's. */
+/* Large text: the pills wrap to a second row rather than clip their names. */
+.bw-pills {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 8px;
+}
+
+.bw-pill {
+  flex: 1 1 auto;
+  min-width: min-content;
+  max-width: 160px;
+  white-space: nowrap;
+  padding: 10px 8px;
+  border: 3px solid var(--ink);
+  border-radius: 999px;
+  background: rgba(27, 11, 58, 0.55);
+  box-shadow: 0 4px 0 var(--ink);
+  color: #fff;
+  font: 900 1rem / 1.1 var(--round);
+  cursor: pointer;
+}
+
+.bw-pill.on {
+  background: linear-gradient(180deg, #fff08a, var(--yellow));
+  color: var(--ink);
+}
+
+.bw-pill:disabled {
+  cursor: default;
+}
+
+.bw-pills.small .bw-pill {
+  padding: 6px 8px;
+  font-size: 0.9rem;
+}
+
+.bw-howto {
+  margin: 12px 0 0;
+  padding-left: 1.4em;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  font: 800 1rem / 1.35 var(--text);
+}
+
+.bw-cats {
+  display: flex;
+  flex: 0 0 auto;
+}
+
+.bw-cats > * + * {
+  margin-left: -10px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .bw-badge.on,
+  .bw-suit.hint {
+    animation: none;
+  }
+}
+
+/* The lobby (lobby.tsx): the rule set's pills and line, the team ribbons, Swap seats. */
+.bw-rules {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 10px 10px 8px;
+}
+
+.bw-rules-line {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  align-items: baseline;
+  gap: 4px 12px;
+  margin: 0;
+  font: 800 0.95rem / 1.3 var(--round);
+  text-align: center;
+}
+
+.bw-rules-line .link {
+  padding: 4px;
+  border: 0;
+  background: none;
+  color: var(--yellow);
+  font: inherit;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.lobby-seat.ribboned .name-tag {
+  box-shadow: 0 0 0 3px var(--ribbon);
+}
+
+.lobby-seat.swapping .cat-img,
+.lobby-seat.swap-target .cat-img {
+  animation: bw-wobble 0.9s ease-in-out infinite alternate;
+}
+
+.lobby-seat.swapping .name-tag {
+  background: var(--yellow);
+  color: var(--ink);
+}
+
+@keyframes bw-wobble {
+  from {
+    transform: rotate(-4deg);
+  }
+  to {
+    transform: rotate(4deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .lobby-seat.swapping .cat-img,
+  .lobby-seat.swap-target .cat-img {
+    animation: none;
+  }
+}
+
+/* The TV (tv-table.tsx): read from the couch. */
+.bw-tv .bw-chip {
+  max-width: 520px;
+  padding: 6px 18px 6px 8px;
+  border-width: 4px;
+  background: linear-gradient(90deg, var(--ribbon) 0 18px, rgba(27, 11, 58, 0.85) 18px);
+  font-size: calc(var(--avatar) * 0.3);
+}
+
+.bw-tv .bw-chip-cats {
+  display: flex;
+  flex: 0 0 auto;
+  margin-left: 8px;
+}
+
+.bw-chip-cats img {
+  width: 1.4em;
+  height: 1.4em;
+  object-fit: contain;
+}
+
+.bw-chip-cats img + img {
+  margin-left: -0.5em;
+}
+
+.bw-strip.many .bw-chip-who {
+  display: none;
+}
+
+.bw-strip.many .bw-chip {
+  justify-content: center;
+  padding-right: 6px;
+}
+
+.bw-chip-who {
+  font-size: calc(var(--avatar) * 0.22);
+  padding-left: 14px;
+}
+
+.bw-tv .bw-chip-score {
+  font-size: calc(var(--avatar) * 0.34);
+}
+
+.bw-tv .bw-chip-taken {
+  font-size: calc(var(--avatar) * 0.2);
+}
+
+.bw-tv .bw-high-who {
+  font-size: calc(var(--badge) * 0.16);
+}
+
+.bw-tv .seat-avatar .name-tag {
+  font-size: calc(var(--avatar) * 0.2);
+}
+
+.bw-tv-rules {
+  z-index: 26;
+  margin: 0;
+  font: 900 calc(var(--avatar) * 0.22) / 1.2 var(--round);
+  color: #fff;
+  pointer-events: none;
+}
+
+.tv-lobby-rules {
+  margin: 0;
+  font: 900 2.2rem / 1.1 var(--round);
+  color: var(--yellow);
+}
+
+.bw-feeder {
+  width: 2.75rem;
+  height: 2.75rem;
+  object-fit: contain;
+  filter: drop-shadow(0 3px 0 var(--ink));
+}

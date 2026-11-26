@@ -24,7 +24,7 @@ describe("the web player says it has the Dish", () => {
     await api.listTables();
     const header = seen.at(-1)!.get("x-pounce-games");
     expect(dishListed(header)).toBe(true);
-    expect(header).toBe("cat-tower,tiles,dish");
+    expect(header).toBe("cat-tower,tiles,birdwatch,dish");
   });
 
   test("in games= on every browser socket", () => {
@@ -34,6 +34,6 @@ describe("the web player says it has the Dish", () => {
   });
 
   test("and still draws the same table games", () => {
-    expect(gamesListed("cat-tower,tiles,dish")).toEqual(gamesListed("cat-tower,tiles"));
+    expect(gamesListed("cat-tower,tiles,birdwatch,dish")).toEqual(gamesListed("cat-tower,tiles,birdwatch"));
   });
 });

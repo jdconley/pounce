@@ -375,6 +375,22 @@
   .poster-grid {
     grid-template-columns: 1fr 1fr;
   }
+
+  /* An odd poster out takes the whole row, rather than leave a hole beside it. */
+  .poster-grid > :last-child:nth-child(odd) {
+    grid-column: 1 / -1;
+  }
+}
+
+/* Room for every game in one row. */
+@media (min-width: 1060px) {
+  .poster-grid {
+    grid-template-columns: repeat(3, 1fr);
+  }
+
+  .poster-grid > :last-child:nth-child(odd) {
+    grid-column: auto;
+  }
 }
 
 .poster {
@@ -865,6 +881,8 @@
   inset: 0;
   z-index: 50;
   display: grid;
+  /* One column no wider than the screen, so a long name ellipsizes instead of widening the card. */
+  grid-template-columns: minmax(0, 1fr);
   place-items: center;
   padding: calc(var(--safe-top) + 16px) 16px calc(var(--safe-bottom) + 16px);
   background: rgba(27, 11, 58, 0.55);

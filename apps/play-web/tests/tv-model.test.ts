@@ -1,3 +1,5 @@
+import { readFileSync } from "node:fs";
+
 import { describe, expect, test } from "vitest";
 
 import { anyoneSeated, back, bootPhase, cheerStep, gameOf, lobbySeats, momentFor, otherGame, overTitle, safeToReload, standings, NO_CHEER, turnSeat, turnWords } from "../src/ui/tv/tv-model";
@@ -66,7 +68,8 @@ describe("the TV lobby", () => {
 
   test("Change game makes the other game", () => {
     expect(otherGame("cat-tower")).toBe("tiles");
-    expect(otherGame("tiles")).toBe("cat-tower");
+    expect(otherGame("tiles")).toBe("birdwatch");
+    expect(otherGame("birdwatch")).toBe("cat-tower");
     expect(gameOf(lobby([open]))).toBe("cat-tower");
     expect(gameOf(lobby([open], "tiles"))).toBe("tiles");
   });
@@ -184,5 +187,31 @@ describe("a TV reloading", () => {
   test("takes a new deploy anywhere but mid-hand", () => {
     expect(safeToReload("playing")).toBe(false);
     for (const p of ["connecting", "lobby", "over", "closed", "notFound", "locked", "needsUpdate"] as const) expect(safeToReload(p)).toBe(true);
+  });
+});
+
+describe("Birdwatch on the TV", () => {
+  const samples = JSON.parse(readFileSync(new URL("../../play-api/fixtures/protocol/birdwatch-server-messages.json", import.meta.url), "utf8")) as { name: string; message: { room?: RoomView } }[];
+  const room = (name: string): RoomView => structuredClone(samples.find((s) => s.name === name)!.message.room!);
+
+  test("the banner names whoever acts, and nobody between hands", () => {
+    const bidding = room("snapshot-bidding-watching");
+    expect(turnSeat(bidding)).toBe(bidding.birdwatch!.turn);
+    expect(turnWords(bidding)).toMatch(/'s turn$/);
+    expect(turnSeat(room("snapshot-between"))).toBeNull();
+  });
+
+  test("game over: one row per side, the winners' names in the title", () => {
+    const over = room("snapshot-over-target");
+    const rows = standings(over);
+    expect(rows.length).toBe(2);
+    expect(rows[0]!.won).toBe(true);
+    expect(rows[0]!.name).toContain(" and ");
+    expect(overTitle(over)).toMatch(/ win$/);
+    expect(overTitle(room("snapshot-over-left"))).toBe("Game over");
+  });
+
+  test("its events never cheer twice", () => {
+    expect(cheerStep(NO_CHEER, { kind: "birdwatch", event: { kind: "gameOver", winners: [0], scores: [300, 0], reason: "target" } })).toEqual(NO_CHEER);
   });
 });

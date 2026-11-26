@@ -1,17 +1,46 @@
 /* Tonight's board on the TV: read from about 3 meters. On the 1920 x 1080 stage (--u is one stage
    pixel) nothing that matters is under 28 units. */
 
-/* Home with the Dish on: three posters stacked, so each is shorter and its words smaller. */
-.tv-home-screen.with-dish .tv-games {
+/* Home with three posters (tv-app.tsx): stacked, so each is shorter and its words smaller. */
+.tv-games.three {
   gap: calc(var(--u) * 40);
 }
 
-.tv-home-screen.with-dish .tv-poster {
+.tv-games.three .tv-poster {
   height: calc(var(--u) * 290);
 }
 
-.tv-home-screen.with-dish .tv-poster-title {
+.tv-games.three .tv-poster-title {
   font-size: calc(var(--u) * 78);
+}
+
+/* Four posters (every game and Tonight's board): two by two, each its art over its words. */
+.tv-games.grid {
+  flex-basis: calc(var(--u) * 960);
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: calc(var(--u) * 40);
+}
+
+.tv-games.grid .tv-poster {
+  height: calc(var(--u) * 460);
+  grid-template-columns: 1fr;
+  grid-template-rows: 54% 1fr;
+}
+
+.tv-games.grid .tv-poster-art,
+.tv-games.grid .tv-board-poster-art {
+  border-right: 0;
+  border-bottom: calc(var(--u) * 6) solid var(--ink);
+}
+
+.tv-games.grid .tv-poster-body {
+  gap: calc(var(--u) * 14);
+  padding: calc(var(--u) * 16) calc(var(--u) * 26);
+}
+
+.tv-games.grid .tv-poster-title {
+  font-size: calc(var(--u) * 64);
 }
 
 .tv-poster.board {

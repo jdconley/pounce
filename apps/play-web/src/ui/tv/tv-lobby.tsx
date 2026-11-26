@@ -8,6 +8,7 @@ import { useEffect, useRef } from "preact/hooks";
 import { art, RINGS } from "../../lib/art";
 import { CATALOG } from "../../lib/catalog";
 import { play } from "../../lib/sound";
+import { lobbyRibbons, RULE_COPY } from "../../table/bw-model";
 import { seatCat, seatName } from "../../table/seat";
 import { Cat, Icon } from "../common";
 import { inviteLink } from "../lobby";
@@ -43,6 +44,7 @@ export function TvLobby(props: { room: RoomView; live: boolean; onChangeGame: (b
   const spots = SPOTS[Math.min(Math.max(seats.length, 2), 6)] ?? SPOTS[2]!;
   const filled = seats.filter((s) => s.filled).length;
   const code = room.code;
+  const ribbons = game === "birdwatch" ? lobbyRibbons(room) : new Map<number, string>();
 
   // A pop as each cat arrives.
   const was = useRef(filled);
@@ -71,6 +73,7 @@ export function TvLobby(props: { room: RoomView; live: boolean; onChangeGame: (b
         <header class={`tv-lobby-head ${game}`}>
           <img class="tv-lobby-art" src={art(CATALOG[game].art)} alt="" width={768} height={512} decoding="async" />
           <h1 class="tv-lobby-title outlined">{CATALOG[game].title}</h1>
+          {game === "birdwatch" && room.options ? <p class="tv-lobby-rules outlined">{RULE_COPY[room.options.rules].name}</p> : null}
         </header>
         <div class="tv-lobby-rug">
           <img class="tv-lobby-rug-art" src={art("rug")} alt="" />
@@ -94,7 +97,9 @@ export function TvLobby(props: { room: RoomView; live: boolean; onChangeGame: (b
                   <Cat cat={seatCat(info)} pose="awake" />
                 </span>
                 {info?.kind === "bot" ? <img class="tv-seat-badge" src={art("badge-bot")} alt="" /> : null}
-                <span class="name-tag">{seatName(info)}</span>
+                <span class="name-tag" style={ribbons.has(seat) ? { boxShadow: `0 0 0 5px ${ribbons.get(seat)}` } : undefined}>
+                  {seatName(info)}
+                </span>
               </div>
             );
           })}
