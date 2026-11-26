@@ -1,10 +1,9 @@
 import { describe, expect, it } from "vitest";
 
-import { newBox, type Box } from "./box";
+import { newBox, restingY, type Box } from "./box";
 import { fromText } from "./codec";
 import { toyAt } from "./queue";
 import { ACK_MS, DROP_MS, LAG_MS, OWED_MS, STALL_MS, TumbleRound, type RoundOut, type RoundSeat } from "./round";
-import { restingY } from "./vectors";
 
 import type { HitWire, TumbleClient, TumbleRelay, TumbleSync } from "./wire";
 import type { Seed } from "../rules/rng";
