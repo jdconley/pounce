@@ -92,6 +92,14 @@ export function turn(box: Box, toy: ToyId, rot: Rot, x: number, y: number, dir: 
   return null;
 }
 
+/** Where a toy rests if dropped straight down from where it appears, at this rotation and column, or null. */
+export function restingY(box: Box, toy: ToyId, rot: Rot, x: number): number | null {
+  let y = spawn(toy).y;
+  if (!fits(box, toy, rot, x, y)) return null;
+  while (fits(box, toy, rot, x, y - 1)) y--;
+  return y;
+}
+
 /** The highest filled row, or -1 for an empty box. */
 export function highest(box: Box): number {
   for (let y = TOTAL - 1; y >= 0; y--) for (let x = 0; x < W; x++) if (box.cells[idx(x, y)] !== 0) return y;
@@ -223,6 +231,21 @@ export function setDown(box: Box, roundSeed: Readonly<Seed>, n: number, rot: Rot
   const at = spawn(nextToy);
   b.out = anyAbove(b) || !fits(b, nextToy, at.rot, at.x, at.y);
   return { box: b, cleared, sent: attack, blocked, pocketed, out: b.out };
+}
+
+/**
+ * Lands the oldest `count` waiting junk now, as the server does for junk a device owed and didn't
+ * land (§6.5). Not a client step: the device is sent the result.
+ */
+export function landWaiting(box: Box, count: number): Box {
+  if (box.out || count <= 0) return box;
+  const b = copy(box);
+  for (let i = 0; i < count && b.waiting.length > 0; i++) {
+    const w = b.waiting.shift() as Waiting;
+    pushJunk(b, w.rows, w.gap);
+  }
+  b.out = anyAbove(b);
+  return b;
 }
 
 /** Junk that has arrived and starts its wait (§4.5). */

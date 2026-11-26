@@ -1,6 +1,6 @@
 import { formatVector } from "../daily/box-fort/vectors";
 
-import { applyHit, fits, newBox, receiveJunk, setDown, turn, useTrick, TOTAL, type Box, type Hit, type Waiting } from "./box";
+import { applyHit, newBox, receiveJunk, restingY, setDown, turn, useTrick, TOTAL, type Box, type Hit, type Waiting } from "./box";
 import { fromText, toText, type BoxText } from "./codec";
 import { toyAt } from "./queue";
 import { rngFloat, rngNext } from "./rng";
@@ -89,14 +89,6 @@ class Dice {
   int(n: number): number {
     return Math.floor(this.float() * n);
   }
-}
-
-/** Where a toy rests if dropped straight down from row 18 at this rotation and column, or null. */
-export function restingY(box: Box, toy: ToyId, rot: Rot, x: number): number | null {
-  let y = spawn(toy).y;
-  if (!fits(box, toy, rot, x, y)) return null;
-  while (fits(box, toy, rot, x, y - 1)) y--;
-  return y;
 }
 
 const holesAndHeight = (b: Box): number => {

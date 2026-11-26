@@ -3,9 +3,13 @@ import { rngShuffle } from "./rng";
 import type { ToyId } from "./toys";
 import type { Seed } from "../rules/rng";
 
-/** The seven small toys every bag holds once; an eighth, a 5-cell toy, alternates bag by bag (spec §4.1). */
+/**
+ * The seven small toys every bag holds once. Every other bag also holds a 5-cell toy, the paw print
+ * and the food bowl taking turns, so bags run 8, 7, 8, 7 (spec §4.1, tuned by the soak §9.3).
+ */
 const SMALL: readonly ToyId[] = ["i3", "v3", "i4", "o4", "t4", "l4", "j4"];
-export const BAG = 8;
+/** Toys in a pair of bags: one with a 5-cell toy, one without. */
+export const PAIR = 15;
 
 type Dealt = { bags: ToyId[][]; state: Seed };
 const cache = new Map<string, Dealt>();
@@ -23,12 +27,15 @@ export function toyAt(roundSeed: Readonly<Seed>, n: number): ToyId {
     if (cache.size >= CACHE_SEEDS) cache.delete(cache.keys().next().value as string);
     cache.set(key, dealt);
   }
-  const bag = Math.floor(n / BAG);
+  const pair = Math.floor(n / PAIR);
+  const i = n % PAIR;
+  const bag = pair * 2 + (i < SMALL.length + 1 ? 0 : 1);
   while (dealt.bags.length <= bag) {
     const b = dealt.bags.length;
-    const [order, state] = rngShuffle<ToyId>([...SMALL, b % 2 === 0 ? "p5" : "u5"], dealt.state);
+    const five: ToyId[] = b % 2 === 1 ? [] : [b % 4 === 0 ? "p5" : "u5"];
+    const [order, state] = rngShuffle<ToyId>([...SMALL, ...five], dealt.state);
     dealt.bags.push(order);
     dealt.state = state;
   }
-  return (dealt.bags[bag] as ToyId[])[n % BAG] as ToyId;
+  return (dealt.bags[bag] as ToyId[])[i < SMALL.length + 1 ? i : i - (SMALL.length + 1)] as ToyId;
 }

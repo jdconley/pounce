@@ -65,11 +65,15 @@ describe("toys", () => {
 });
 
 describe("the queue", () => {
-  it("deals bags of 8: the seven small toys once, then a paw print or a bowl, alternating", () => {
+  it("deals bags of 8 and 7 in turn: the seven small toys each time, and a paw print or a bowl in every other bag", () => {
     const seed: Seed = [11, 22, 33, 44];
-    for (let bag = 0; bag < 6; bag++) {
-      const toys = Array.from({ length: 8 }, (_, i) => toyAt(seed, bag * 8 + i));
-      expect([...toys].sort()).toEqual(["i3", "i4", "j4", "l4", "o4", "t4", "v3", bag % 2 === 0 ? "p5" : "u5"].sort());
+    let n = 0;
+    for (let bag = 0; bag < 8; bag++) {
+      const size = bag % 2 === 0 ? 8 : 7;
+      const toys = Array.from({ length: size }, (_, i) => toyAt(seed, n + i));
+      n += size;
+      const five = bag % 2 === 1 ? [] : [bag % 4 === 0 ? "p5" : "u5"];
+      expect([...toys].sort()).toEqual(["i3", "i4", "j4", "l4", "o4", "t4", "v3", ...five].sort());
     }
   });
 
