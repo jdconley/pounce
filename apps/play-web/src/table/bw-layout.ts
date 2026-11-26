@@ -133,7 +133,7 @@ function sillAmong(window: Rect, rects: Rect[]): Rect {
  * then a row along the window's top, each with cats as big as `avatar0` and smaller, and takes
  * the first that overlaps nothing and leaves the sill room for a trick.
  */
-function placeSeats(others: number[], window: Rect, avatar0: number, cw: number, ch: number, landscape: boolean) {
+function placeSeats(others: number[], window: Rect, avatar0: number, cw: number, ch: number, short: boolean) {
   const c = { x: window.x + window.w / 2, y: window.y + window.h / 2 };
   const roomy = (sill: Rect) => sill.w >= cw * 0.42 * 2.3 && sill.h >= ch * 0.42 * 1.95;
   const tryRing = (avatar: number) => {
@@ -159,7 +159,8 @@ function placeSeats(others: number[], window: Rect, avatar0: number, cw: number,
   };
   const sizes: number[] = [];
   for (let a = avatar0; a >= MIN_AVATAR; a -= 4) sizes.push(a);
-  const plans = landscape ? [tryRow, tryRing] : [tryRing, tryRow];
+  // A short window (a phone on its side) seats the cats along its top first.
+  const plans = short ? [tryRow, tryRing] : [tryRing, tryRow];
   for (const plan of plans) {
     for (const a of sizes) {
       const p = plan(a);
@@ -213,9 +214,9 @@ function phoneOn(input: BwInput): BwLayout {
   const cw = cardFor(input.hand, handMax, want);
   const ch = Math.round(cw * 1.4);
   const handBase = H - insets.bottom - 8;
-  const { poses: hand, rows } = handPoses(input.hand, W / 2, handBase, cw, ch, handMax);
-  const handH = ch + (rows === 2 ? ch * 0.46 : 0);
-  const handTop = handBase - handH - 16;
+  const { poses: hand } = handPoses(input.hand, W / 2, handBase, cw, ch, handMax);
+  // Room over the fan's highest card for a card lifted to play (a fifth of its height).
+  const handTop = Math.min(handBase - ch, ...hand.map((p) => p.y)) - ch * 0.2 - 6;
   const handRect = { x: (W - handMax) / 2, y: handTop, w: handMax, h: handBase - handTop + 4 };
 
   // The panel and the strip: under the window in portrait; a column on the right sideways.
@@ -224,7 +225,8 @@ function phoneOn(input: BwInput): BwLayout {
   let window: Rect;
   let panel: Rect;
   let strip: Rect;
-  const column = landscape;
+  // A phone on its side: the strip and the panel take a column on the right, so the window keeps its height.
+  const column = landscape && usable < 600;
   if (column) {
     const colW = Math.round(clamp(W * 0.3, 220, 380));
     const colX = W - insets.right - pad - colW;
@@ -241,8 +243,13 @@ function phoneOn(input: BwInput): BwLayout {
 
   // The others around the window, from my left over the top to my right; or, where the window is
   // too short for that, in a row along its top. Cats shrink before anything overlaps.
-  const placed = placeSeats(input.others, window, avatar0, cw, ch, landscape);
-  const { seats, seatRects, sill, angles, avatar } = placed;
+  const placed = placeSeats(input.others, window, avatar0, cw, ch, column);
+  const { seats, seatRects, angles, avatar } = placed;
+  // The sill is as big as a trick needs, centred in the room the cats leave: the window shows round it.
+  const room = placed.sill;
+  const sw = Math.min(room.w, cw * 3.8);
+  const sh = Math.min(room.h, ch * 2.4);
+  const sill = { x: room.x + (room.w - sw) / 2, y: room.y + (room.h - sh) / 2, w: sw, h: sh };
   const sillScale = clamp(Math.min(sill.h / (ch * 1.95), sill.w / (cw * 2.3)), 0.42, 0.9);
   const slotSeats = [...input.others.map((seat, i) => ({ seat, angle: angles[i] ?? 90 })), ...(input.me !== null ? [{ seat: input.me, angle: 270 }] : [])];
   const slots = slotsFor(sill, slotSeats, cw, ch, sillScale);
@@ -284,8 +291,8 @@ function cardsOn(input: BwInput): BwLayout {
   const cw = cardFor(input.hand, handMax, Math.round(clamp(Math.min(W / 4.8, usable / (landscape ? 3.4 : 4.6)), 56, 150)));
   const ch = Math.round(cw * 1.4);
   const handBase = H - insets.bottom - 10;
-  const { poses: hand, rows } = handPoses(input.hand, W / 2, handBase, cw, ch, handMax);
-  const handTop = handBase - ch - (rows === 2 ? ch * 0.46 : 0) - 16;
+  const { poses: hand } = handPoses(input.hand, W / 2, handBase, cw, ch, handMax);
+  const handTop = Math.min(handBase - ch, ...hand.map((p) => p.y)) - ch * 0.2 - 6;
   const top = insets.top + 8;
   // Beside the Cards/Table switch and the paw, which sit along the top.
   const strip = { x: insets.left + pad, y: top + 52, w: W - insets.left - insets.right - 2 * pad, h: 44 };

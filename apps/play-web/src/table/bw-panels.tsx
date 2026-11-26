@@ -47,14 +47,14 @@ function useHold(fn: () => void) {
 }
 
 /** The bid: one big number on the sign, +5 (hold to raise faster), Bid and Pass. */
-export function BidPanel(props: { range: { min: number; max: number; step: number }; amount: number; setAmount: (n: number) => void; onBid: () => void; onPass: () => void; busy: boolean }) {
+export function BidPanel(props: { range: { min: number; max: number; step: number }; amount: number; setAmount: (n: number | ((a: number) => number)) => void; onBid: () => void; onPass: () => void; busy: boolean }) {
   const { range, amount } = props;
   const raise = () => {
     if (amount + range.step > range.max) {
       play("nope", 0.4);
       return;
     }
-    props.setAmount(amount + range.step);
+    props.setAmount((a) => Math.min(Math.max(a, range.min) + range.step, range.max));
     play("tick", 0.4);
     buzz("tap");
   };

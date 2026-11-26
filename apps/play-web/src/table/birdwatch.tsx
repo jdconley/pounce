@@ -232,8 +232,8 @@ export function BirdwatchTable(props: { store: RoomStore; state: RoomState; soun
       if (k === "arrowright") focusCard(focusIndex + 1);
       else if (k === "arrowleft") focusCard(focusIndex - 1);
       else if (step === "trump" && ["1", "2", "3", "4"].includes(k)) pickTrump((["fish", "mouse", "feather", "bell"] as const)[Number(k) - 1]!);
-      else if (step === "bid" && (k === "+" || k === "=")) setAmount(Math.min(amount + (v.bidRange?.step ?? 5), v.bidRange?.max ?? amount));
-      else if (step === "bid" && k === "-") setAmount(Math.max(amount - (v.bidRange?.step ?? 5), v.bidRange?.min ?? amount));
+      else if (step === "bid" && v.bidRange && (k === "+" || k === "=")) setAmount((a) => Math.min(Math.max(a, v.bidRange!.min) + v.bidRange!.step, v.bidRange!.max));
+      else if (step === "bid" && v.bidRange && k === "-") setAmount((a) => Math.max(a - v.bidRange!.step, v.bidRange!.min));
       else if (step === "bid" && k === "p") pass();
       else if (step === "bid" && k === "enter" && !onCard && e.target === document.body) bid();
       else if (step === "nest" && k === "enter" && !onCard && e.target === document.body) nestDone();

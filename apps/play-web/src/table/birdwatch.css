@@ -523,8 +523,8 @@ div.bw-strip {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 8px;
-  width: 100%;
-  height: 100%;
+  width: min(100%, 600px);
+  height: min(100%, 120px);
 }
 
 .bw-suit {
@@ -884,4 +884,48 @@ div.bw-strip {
   .lobby-seat.swap-target .cat-img {
     animation: none;
   }
+}
+
+/* The TV (tv-table.tsx): read from the couch. */
+.bw-tv .bw-chip {
+  max-width: 520px;
+  padding: 6px 18px 6px 8px;
+  border-width: 4px;
+  background: linear-gradient(90deg, var(--ribbon) 0 18px, rgba(27, 11, 58, 0.85) 18px);
+  font-size: calc(var(--avatar) * 0.3);
+}
+
+.bw-tv .bw-chip-who {
+  font-size: calc(var(--avatar) * 0.22);
+  padding-left: 14px;
+}
+
+.bw-tv .bw-chip-score {
+  font-size: calc(var(--avatar) * 0.34);
+}
+
+.bw-tv .bw-chip-taken {
+  font-size: calc(var(--avatar) * 0.2);
+}
+
+.bw-tv .bw-high-who {
+  font-size: calc(var(--badge) * 0.16);
+}
+
+.bw-tv .seat-avatar .name-tag {
+  font-size: calc(var(--avatar) * 0.2);
+}
+
+.bw-tv-rules {
+  z-index: 26;
+  margin: 0;
+  font: 900 calc(var(--avatar) * 0.22) / 1.2 var(--round);
+  color: #fff;
+  pointer-events: none;
+}
+
+.tv-lobby-rules {
+  margin: 0;
+  font: 900 2.2rem / 1.1 var(--round);
+  color: var(--yellow);
 }
