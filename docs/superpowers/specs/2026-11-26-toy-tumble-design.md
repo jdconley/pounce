@@ -1,6 +1,6 @@
 # Toy Tumble: design
 
-Date: 2026-11-26 · Owner: JD Conley (Conley Chaos LLC) · Status: draft for the manager's approval · Release: switched on for the web player and the web TV page once every client's code is merged and cross-play passes; the iPhone, iPad and Apple TV app gets it in 1.4 (§10) · Lives in `github.com/jdconley/pounce`
+Date: 2026-11-26 · Owner: JD Conley (Conley Chaos LLC) · Status: approved by the lead on 2026-11-26, with House Cat levels added (§6.9) · Release: switched on for the web player and the web TV page once every client's code is merged and cross-play passes; the iPhone, iPad and Apple TV app gets it in 1.4 (§10) · Lives in `github.com/jdconley/pounce`
 
 Parent specs: `2026-10-31-pounce-cat-tower-design.md` (product principles, architecture), `2026-10-31-pounce-ios-design.md` (art direction), `2026-11-11-tile-game-design.md` (rooms with more than one game, the `GAMES` flag), `2026-11-15-web-player-design.md`, `2026-11-16-tv-table-design.md`, `2026-11-25-birdwatch-design.md`. Where this document says nothing, those apply.
 
@@ -28,7 +28,8 @@ Two things carry that feeling, and both are protected throughout this design:
 ## 2. Goals, non-goals, anti-goals
 
 **Goals**
-- 2 to 6 players, free for all. House Cats fill any seat except the last human one. **(call)**
+- 2 to 6 players, free for all. **(call)**
+- The host can seat House Cats at two levels, Easy and Quick, in any seat but the last human one. A kid can play alone, and two siblings get a real match. **(lead)**
 - Each player's own box runs on their own device. Moves never wait on the network. It renders at 60 fps or better, and at 120 Hz on screens that can (§7).
 - Play in one room, remotely, or both at once, at one table. The TV is optional: phones show every opponent as a mini box. **(JD)**
 - iPhone, iPad, the web player (touch and keyboard), the Apple TV table and the web TV page, all at one table, with the same rules.
@@ -148,7 +149,7 @@ The engine implements this section exactly, in TypeScript (server, web, web TV p
 
 ### 4.4 Out, rounds and winning **(call)**
 
-- A box is **out** when a new toy can't appear, or when junk or a trick pushes a cell above row 17. Its cat tips the box over. An out player watches the rest of the round.
+- A box is **out** when a new toy can't appear, or when any cell is left above row 17. That can follow a set-down after its clears, junk or a trick. Its cat tips the box over. An out player watches the rest of the round.
 - **A round ends** when one box is left, or when no person's box is left.
   - The last box standing wins the round.
   - If only House Cats are left, the one that has cleared the most rows wins.
@@ -476,17 +477,33 @@ This is a family game. The checks in §6.5 stop:
 
 A modified client could still play faster or smarter than a person. That's accepted. There are no rankings to protect.
 
-### 6.9 House Cats **(call)**
+### 6.9 House Cats **(lead: in v1, optional, two levels; details are calls)**
 
-- House Cats run on the server, in the room, with the same engine.
-- Each plays at a family pace: a think time of 0.8 to 1.6 seconds per toy, then a move.
-- It picks the placement with a simple score (holes, height, bumpiness, rows cleared), and picks a worse one 20% of the time.
-- It uses a trick 1 to 3 seconds after pocketing it.
+House Cats are opponents a kid can play alone against, or that turn two siblings into a real match.
+
+- **Seating.** They're seated only on purpose, by the host in the lobby, as in every Pounce game. They never take over a seat that leaves (§5.1).
+- **On the server.** They run in the room, with the same engine. They write the same event stream a phone does (§6.3), through the same checks, so the TV and observers need nothing new. They send junk and use tricks on the same rules as people.
+- **Two levels**, chosen per table in the lobby with two pills, as Birdwatch's rule set is. The lobby shows "Cats: Easy" or "Cats: Quick". The game's option is `cats: "easy" | "quick"`, and the default is `easy`.
+
+  | | Easy | Quick |
+  | --- | --- | --- |
+  | Think time per toy | 1.4 to 2.4 s | 0.8 to 1.6 s |
+  | Picks a worse placement | 35% of the time | 15% of the time |
+  | Uses tricks | only Hairball, Paw Swipe, Scoop and Nap; the rest it holds | all of them |
+
+  Both levels must be beatable by a child: the soak (§9.3) also plays each level against a scripted "kid" player (slow, sloppy) and tunes until the kid wins at least 1 round in 3 against one Easy cat.
+- **Placement.** It scores every placement of the current toy (every turn and column, about 48) by holes, height, bumpiness and rows cleared. It never looks ahead to the next toy.
+- **Tricks.** It uses one 1 to 3 seconds after pocketing it.
   - Harmful tricks go to the human with the most round wins, then the lowest stack.
   - Helpful ones go to itself.
   - It never uses Swap from a box lower than the target's.
-- Its toy's position is relayed about 5 times a second, so it looks alive on the TV.
-- A round with House Cats keeps the room awake. The sockets are busy then anyway.
+- **Moving.** It moves its toy in visible steps, relayed about 5 times a second, so it looks alive on the TV, then drops.
+- **A capped rate.** One timer per room drives every cat, at most 10 ticks a second. A tick does at most one decision per cat. The room never runs cats outside a round, or when no human device is connected (§5.1).
+- **Server cost.** Estimated per room with 5 cats:
+  - about 48 placements × 216 cells per decision, under 0.2 ms each, so a few ms of CPU per second of round;
+  - about 5 position updates a second per cat, fanned out to each socket.
+
+  The soak and a room benchmark measure the real numbers: CPU ms per second of round, and messages out per second, for 1 human with 5 cats, watched by a TV. They're recorded here. The budget is under 10 ms of CPU per second of round per room. **(call)**
 
 ### 6.10 A shared live layer with Purrtrait **(lead: agreed)**
 
@@ -564,7 +581,7 @@ So one generic helper, `apps/play-api/src/room/live-relay.ts`, gives a game exac
 
 ### 9.3 Bot soak
 
-10,000 offline House Cat rounds (2 to 6 cats), checking:
+10,000 offline House Cat rounds (2 to 6 cats, both levels, plus the scripted kid of §6.9), checking the server cost of §6.9 and:
 - every round ends, and within 5 minutes;
 - how often a 5-cell toy can't be placed without a hole (unfair dead ends);
 - how often each trick decides a round.
