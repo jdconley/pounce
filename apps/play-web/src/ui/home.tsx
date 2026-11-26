@@ -9,7 +9,8 @@ import { api, type TableEntry } from "../net/api";
 import { promptInstall, useInstall } from "../pwa";
 import { knownTables, reach, useApp } from "../store/app";
 
-import { Button, Cat, CloseMark, Icon, IconButton, Tip } from "./common";
+import { Button, Cat, CloseMark, Icon, IconButton, Tip, tipLearned } from "./common";
+import { TvIcon } from "./show-on-tv";
 
 
 function Dots(props: { n: number }) {
@@ -135,6 +136,8 @@ export function Home(props: { onSettings: () => void; onPractice: (game: GameId)
         </Button>
       </nav>
       <Tip id="home.play" anchor="play-first" text="Tap Play to start a game." show={open.length === 0} place="below" />
+      {/* One tip at a time: Purrtrait's waits until Play is learned. */}
+      <Tip id="home.purrtrait" anchor="purr-on-tv" text="Pick Purrtrait on the TV." show={open.length > 0 || tipLearned("home.play")} />
     </main>
   );
 }
@@ -153,16 +156,23 @@ export function Posters(props: { onPlay: (game: GameId) => void; firstId?: strin
               <span class="players">
                 <Dots n={CATALOG[id].maxSeats} /> {CATALOG[id].minSeats} to {CATALOG[id].maxSeats} players
               </span>
-              <Button
-                size="small"
-                class="poster-play"
-                id={i === 0 ? props.firstId : undefined}
-                disabled={props.disabled}
-                onClick={() => props.onPlay(id)}
-                aria-label={`Play ${CATALOG[id].title}`}
-              >
-                <Icon name="icon-play" size={26} /> Play
-              </Button>
+              {CATALOG[id].tv ? (
+                // Only a TV makes this table: a label, not a button.
+                <span class="poster-tv" id={id === "purrtrait" ? "purr-on-tv" : undefined}>
+                  <TvIcon size={26} /> Starts on the TV
+                </span>
+              ) : (
+                <Button
+                  size="small"
+                  class="poster-play"
+                  id={i === 0 ? props.firstId : undefined}
+                  disabled={props.disabled}
+                  onClick={() => props.onPlay(id)}
+                  aria-label={`Play ${CATALOG[id].title}`}
+                >
+                  <Icon name="icon-play" size={26} /> Play
+                </Button>
+              )}
             </div>
           </div>
         </article>
