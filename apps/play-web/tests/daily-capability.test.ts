@@ -24,7 +24,7 @@ describe("the web player says it has the Dish", () => {
     await api.listTables();
     const header = seen.at(-1)!.get("x-pounce-games");
     expect(dishListed(header)).toBe(true);
-    expect(header).toBe("cat-tower,tiles,birdwatch,dish");
+    expect(header).toBe("cat-tower,tiles,birdwatch,purrtrait,dish");
   });
 
   test("in games= on every browser socket", () => {

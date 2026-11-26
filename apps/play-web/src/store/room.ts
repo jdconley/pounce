@@ -6,6 +6,8 @@
 import { PROTOCOL } from "../lib/env";
 import { RoomSocket, type LinkQuality, type SocketEvent } from "../net/socket";
 
+import { foldPurr, type InkMessage, type PurrAction, type PurrEvent, type PurrRoom } from "../table/purr-model";
+
 import type { BirdAction, BirdEvent } from "@pounce/play-api/birdwatch/engine";
 import type { BirdView } from "@pounce/play-api/birdwatch/view";
 import type { ClientMessage, ErrorCode, GameAim, RoomEvent, RoomView, ServerMessage } from "@pounce/play-api/protocol";
@@ -14,9 +16,15 @@ import type { TilesAction, TilesEvent } from "@pounce/play-api/tiles/engine";
 
 
 /** A move any game's table sends. */
-export type AnyAction = Action | TilesAction | BirdAction;
+export type AnyAction = Action | TilesAction | BirdAction | PurrAction;
+/** A move as the wire types it (Purrtrait's moves are this player's own types until the server's land). */
+type Wire = Extract<ClientMessage, { t: "act" }>["action"];
 
-export type RoomPhase = "connecting" | "lobby" | "playing" | "over" | "closed" | "notFound" | "locked" | "needsUpdate";
+/**
+ * `notNear`: a Purrtrait table refused this device's join key (stale, or none: design §5.1).
+ * `removed`: the table's host removed this device; it stays out.
+ */
+export type RoomPhase = "connecting" | "lobby" | "playing" | "over" | "closed" | "notFound" | "locked" | "needsUpdate" | "notNear" | "removed";
 
 export type Paced = { seq: number; event: RoomEvent };
 
@@ -50,6 +58,8 @@ export type RoomListener = {
   /** A room event, as it is played (after the ones before it have had their moment). */
   event?: (e: Paced, room: RoomView | null) => void;
   change?: (s: RoomState) => void;
+  /** Purrtrait's live ink: not state, never paced, never in a snapshot (design §6.4). */
+  ink?: (m: InkMessage) => void;
 };
 
 /** How long each kind of event holds the stage before the next one plays. */
@@ -79,6 +89,7 @@ export function eventPause(e: RoomEvent): number {
     if (k === "turn") return 0;
     return 300;
   }
+  // Purrtrait's turns run on the room's clock: its events never hold the stage.
   return 0;
 }
 
@@ -91,6 +102,9 @@ export function foldEvent(room: RoomView, e: RoomEvent): RoomView {
   if (e.kind === "game" && room.game) return { ...room, game: foldCatTower(room.game, e.event) };
   if (e.kind === "tiles" && room.tiles) return { ...room, tiles: foldTiles(room.tiles, e.event) };
   if (e.kind === "birdwatch" && room.birdwatch) return { ...room, birdwatch: foldBirdwatch(room.birdwatch, e.event) };
+  const purr = e as unknown as { kind: string; event: PurrEvent };
+  const pv = (room as PurrRoom).purrtrait;
+  if (purr.kind === "purrtrait" && pv) return { ...room, purrtrait: foldPurr(pv, purr.event) } as PurrRoom;
   if (e.kind === "houseCat") {
     // The seat plays on as a House Cat; its person stays for the name tag.
     const seats = room.seats.map((s, i) => (i === e.seat ? { ...s, kind: "bot" as const, yours: false, presence: null, left: true as const } : s));
@@ -298,6 +312,8 @@ export function phaseOf(room: RoomView | null): RoomPhase {
 
 /** A room's turn and status, as one comparable value: when it changes, shown aims are stale. */
 function turnAndStatus(room: RoomView): string {
+  const p = (room as PurrRoom).purrtrait;
+  if (p) return `${room.status}|${p.phase}|${p.turn}`;
   const g = room.game ?? room.tiles ?? room.birdwatch;
   return `${room.status}|${g?.status ?? ""}|${g?.turn ?? ""}`;
 }
@@ -319,6 +335,8 @@ export type RoomStoreOptions = {
   reducedMotion?: () => boolean;
   /** "screen": this device is the table's TV, not a seat at it. */
   role?: "screen";
+  /** A Purrtrait table's join key (from the TV's QR, or the typed code), for the first connect. */
+  near?: string;
   now?: () => number;
 };
 
@@ -376,7 +394,7 @@ export class RoomStore {
     this.reducedMotion = options.reducedMotion ?? (() => false);
     this.socket =
       options.socket ??
-      new RoomSocket({ code: options.code, token: options.token, dropToken: options.dropToken, origin: options.origin, role: options.role });
+      new RoomSocket({ code: options.code, token: options.token, dropToken: options.dropToken, origin: options.origin, role: options.role, near: options.near });
     this.socket.on((e) => this.onSocket(e));
   }
 
@@ -411,7 +429,7 @@ export class RoomStore {
     if (this.state.pending) return false;
     const id = newMoveId();
     this.set({ pending: { id, seat, action } });
-    if (this.socket.send({ t: "act", seat, action, id })) this.sentOn = this.connection;
+    if (this.socket.send({ t: "act", seat, action: action as Wire, id })) this.sentOn = this.connection;
     return true;
   }
 
@@ -481,6 +499,12 @@ export class RoomStore {
       case "notFound":
         this.set({ phase: "notFound", online: false });
         return;
+      case "notNear":
+        this.set({ phase: "notNear", online: false });
+        return;
+      case "removed":
+        this.set({ phase: "removed", online: false });
+        return;
       case "locked":
         this.set({ phase: "locked", online: false });
         return;
@@ -495,7 +519,22 @@ export class RoomStore {
     }
   }
 
+  /** Sends Purrtrait ink for `seat` this `turn` (the drawer's device only; the server drops anyone else's). */
+  sendInk(seat: number, turn: string, ops: unknown[]): boolean {
+    return this.socket.send({ t: "ink", seat, turn, ops } as unknown as ClientMessage);
+  }
+
   private onMessage(m: ServerMessage): void {
+    const any = m as unknown as { t: string };
+    if (any.t === "ink" || any.t === "inkSync" || any.t === "inkResend") {
+      for (const l of [...this.listeners]) l.ink?.(any as InkMessage);
+      return;
+    }
+    if (m.t === "error" && (m.code as string) === "removed") {
+      this.set({ phase: "removed", online: false });
+      this.socket.stop();
+      return;
+    }
     switch (m.t) {
       case "snapshot":
         if (m.protocol !== PROTOCOL) {
@@ -571,7 +610,7 @@ export class RoomStore {
     this.set({ truth: room, room, phase: phaseOf(room), pending: stillPending, rematch: room.rematch ?? this.state.rematch, aims: this.aimsAfter(room), screen: room.screen === true });
     if (resend && pending) {
       // Reconnected before the server heard it: send it again, with the same id.
-      if (this.socket.send({ t: "act", seat: pending.seat, action: pending.action, id: pending.id })) this.sentOn = this.connection;
+      if (this.socket.send({ t: "act", seat: pending.seat, action: pending.action as Wire, id: pending.id })) this.sentOn = this.connection;
     }
   }
 
