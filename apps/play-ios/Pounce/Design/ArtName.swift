@@ -82,6 +82,7 @@ enum ArtName {
     /// Game shelf covers (384x256 pt, 3:2, the subject in the middle): `GameCatalog` names them.
     static let gameCatTower = "game-cat-tower"
     static let gameTiles = "game-tiles"
+    static let gameBirdwatch = "game-birdwatch"
     static let stateClosed = "state-closed"
     static let stateStalled = "state-stalled"
     static let stateOffline = "state-offline"
@@ -256,6 +257,14 @@ enum ArtName {
         /// The tile game's rug (132x176 pt, stretched from its middle): a calm violet field for
         /// the sets inside a braided candy border.
         static let rug = "rug-play"
+    }
+
+    // MARK: Birdwatch (design 2026-11-25 §3)
+    enum Bird {
+        /// The Bird (96x96 pt): a round, bright songbird, drawn on its white card face.
+        static let card = "bird-card"
+        /// The feeder (96x96 pt): the nest's cards waiting for the bid winner.
+        static let feeder = "bird-feeder"
     }
 
     // MARK: Sounds (Resources/Sounds/<name>.caf, 44.1 kHz mono)

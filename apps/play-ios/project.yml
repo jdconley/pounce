@@ -169,6 +169,14 @@ targets:
           - TilesStage.swift
           - TilesChrome.swift
           - TilesDemo.swift
+      # Birdwatch's scene, its cards and art; not its iPhone shell (the stage, the phase panels,
+      # the score sheet and summary) or its iPhone demo.
+      - path: Pounce/Birdwatch
+        excludes:
+          - BirdStage.swift
+          - BirdPanels.swift
+          - BirdScoreSheet.swift
+          - BirdDemo.swift
       # The daily games' watch contract, and everything the TV builds for each game: its watch view
       # and the drawing and art it needs, in `Pounce/Daily/<Game>/TV/`. A game adds files there and
       # touches nothing else (this list, ios.yml's and distribute.swift's TV filters match the same).

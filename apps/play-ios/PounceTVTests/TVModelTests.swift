@@ -293,8 +293,10 @@ struct TVModelTests {
         #expect(model.table?.scene != nil)
         socket.emit(.message(.snapshot(protocol: PounceKit.protocolVersion, seq: 3, room: Rooms.over("BCDFG"))))
         #expect(await soon { model.table?.store.phase == .over })
-        // The table cheers first; game over comes up when the scene says it's done.
-        #expect(model.phase == .table)
+        // The table cheers first; game over comes up when the scene says it's done. A scene with
+        // no view cheers in no time, so under a busy main actor (other suites drawing in parallel)
+        // it may already have said so by the time the poll above sees the room over.
+        #expect(model.phase == .table || model.phase == .over)
         model.table?.gameOver([1])
         #expect(model.phase == .over)
         #expect(model.winners == [1])

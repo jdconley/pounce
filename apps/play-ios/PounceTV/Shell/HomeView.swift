@@ -56,9 +56,10 @@ struct HomeView: View {
     }
 
     private var posters: some View {
-        // With the Dish on, three posters share the height.
-        let height: CGFloat = model.dishOn ? 284 : 360
-        return VStack(spacing: model.dishOn ? 36 : 60) {
+        // The games and, with the Dish on, its board share the height.
+        let count = GameCatalog.all.count + (model.dishOn ? 1 : 0)
+        let height: CGFloat = count >= 4 ? 212 : count == 3 ? 284 : 360
+        return VStack(spacing: count >= 4 ? 26 : count == 3 ? 36 : 60) {
             ForEach(GameCatalog.all) { game in
                 Poster(game: game, refused: model.refused, height: height) {
                     Sound.shared.play(ArtName.Sound.sfxPop, volume: 0.5)
@@ -79,6 +80,14 @@ struct HomeView: View {
 
 /// A game's poster: its cover on the left, its name and how many play on the right.
 private struct Poster: View {
+    static func tint(_ game: GameCatalog.Entry) -> Color {
+        switch game.id {
+        case GameCatalog.tiles.id: Palette.sky
+        case GameCatalog.birdwatch.id: Palette.lime
+        default: Palette.violet
+        }
+    }
+
     let game: GameCatalog.Entry
     let refused: Int
     var height: CGFloat = 360
@@ -96,7 +105,7 @@ private struct Poster: View {
                     .clipped()
                     .overlay(alignment: .trailing) { Rectangle().fill(Palette.ink).frame(width: 6) }
                 VStack(alignment: .leading, spacing: 30) {
-                    OutlinedText(game.title, size: height < 360 ? 76 : 84, width: 5, lines: 2, alignment: .leading)
+                    OutlinedText(game.title, size: height < 240 ? 64 : height < 360 ? 76 : 84, width: 5, lines: 2, alignment: .leading)
                         .fixedSize(horizontal: false, vertical: true)
                     players
                 }
@@ -106,7 +115,7 @@ private struct Poster: View {
             .frame(height: height)
             .clipShape(RoundedRectangle(cornerRadius: 40, style: .continuous))
         }
-        .buttonStyle(TVButtonStyle(tint: game.id == GameCatalog.tiles.id ? Palette.sky : Palette.violet, corner: 40))
+        .buttonStyle(TVButtonStyle(tint: Self.tint(game), corner: 40))
         .focused($focused)
         .shake(trigger: shakes)
         .onChange(of: refused) { _, _ in

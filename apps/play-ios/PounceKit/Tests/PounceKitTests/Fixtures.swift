@@ -36,6 +36,15 @@ enum Fixtures {
         try messages(at: localURL("tiles/tiles-client-messages.json"))
     }
 
+    /// Birdwatch's samples, made by play-api from real rooms (PR #156).
+    static func birdwatchServerMessages() throws -> [(name: String, json: String)] {
+        try messages(in: "protocol/birdwatch-server-messages.json")
+    }
+
+    static func birdwatchClientMessages() throws -> [(name: String, json: String)] {
+        try messages(in: "protocol/birdwatch-client-messages.json")
+    }
+
     static func serverMessages() throws -> [(name: String, json: String)] {
         try messages(in: "protocol/server-messages.json")
     }

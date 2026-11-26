@@ -15,6 +15,7 @@ final class TVRoom {
     enum Scene {
         case catTower(TableScene)
         case tiles(TilesScene)
+        case birdwatch(BirdScene)
     }
 
     private(set) var scene: Scene?
@@ -44,6 +45,7 @@ final class TVRoom {
 
     /// The table drawn by a game this build knows, whichever the room plays.
     var isTiles: Bool { store.room?.gameId == GameCatalog.tiles.id }
+    var isBirdwatch: Bool { store.room?.gameId == GameCatalog.birdwatch.id }
 
     /// The TV has the room, and lost its connection to it.
     var reconnecting: Bool { store.room != nil && !store.connected }
@@ -100,7 +102,11 @@ final class TVRoom {
     func openTable() {
         guard scene == nil, !closed, store.room != nil else { return }
         let finished: ([Seat]) -> Void = { [weak self] winners in self?.gameOver(winners) }
-        if isTiles {
+        if isBirdwatch {
+            let bird = BirdScene(store: store)
+            bird.onGameOver = finished
+            scene = .birdwatch(bird)
+        } else if isTiles {
             let tiles = TilesScene(store: store)
             tiles.onGameOver = finished
             scene = .tiles(tiles)
@@ -134,6 +140,7 @@ final class TVRoom {
         switch scene {
         case .catTower(let table): table.enqueue(intent)
         case .tiles(let tiles): tiles.enqueue(intent)
+        case .birdwatch(let bird): bird.enqueue(intent)
         case nil: break
         }
     }

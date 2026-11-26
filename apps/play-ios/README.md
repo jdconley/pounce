@@ -22,6 +22,14 @@ with a SpriteKit table. Apple frameworks only, no third-party packages.
   with its input, animations and VoiceOver elements, `TilePieceFactory` (the toy tokens, drawn in code
   over the glyph art), `TilesStage` (the SwiftUI shell: curtain, menu, game over) and the demos. Its
   rules, draft model and layout are in PounceKit (`TilesRules`, `TilesDraft`, `TilesLayout`).
+- `Pounce/Birdwatch/` Birdwatch's table (`docs/superpowers/specs/2026-11-25-birdwatch-design.md`, plan
+  `docs/superpowers/plans/2026-11-25-birdwatch-ios-tv.md`): `BirdScene` (the window with every other seat's
+  cat, the sill with the trick, trump and the bid, the score strip and the hand) with its input, seat nodes,
+  VoiceOver elements and card faces (`BirdCardFactory`, drawn off the main thread), and the iPhone-only shell
+  `BirdStage` (the bid, put-back, trump and partner panels, the curtain, the summary between hands, the score
+  sheet, the menu and game over). The TV compiles the scene, not the shell. Its view, events, moves and table
+  model are in PounceKit (`BirdwatchModels`, `BirdTableModel`, `BirdLayout`). The app never ports the rules:
+  what may be played, bid or called comes from the server's view (`playable`, `bidRange`, `partnerChoices`).
 - `PounceKit/` local Swift package (game model, networking, `pounce-e2e` CLI) with Swift Testing tests.
   `PounceKit/Sources/PounceKit/IO/` is the only code that touches the disk or the Keychain: actors
   and `@concurrent` functions, so none of it runs on the main thread. Stores keep their data in
@@ -101,6 +109,16 @@ then the build setting (Debug: `http://localhost:8787`, optionally overridden by
   default), `-tiles-tricks`, `-tiles-hint`, `-tiles-recap`, `-tiles-sheet` (every piece at stash and rug
   size, both designs tried) and `-tiles-game-off` (with `tiles-over`: Play again refused with `game_off`).
   See `Pounce/Tiles/TilesDemo.swift`; screenshots are in `Art/screenshots/tiles/`.
+- Birdwatch (game id `birdwatch`, 4 to 6 players, three rule sets) needs a server whose `GAMES` lists it
+  (`scripts/dev-server.sh` deals it by default). Its demos, offline, on `BirdDemoSocket` (a bid wins the
+  feeder, the hand moves on as the server would, roughly): `bird-bid`, `bird-nest`, `bird-trump`,
+  `bird-play` (my move, fish only), `bird-watch`, `bird-partner` (five players, calling), `bird-partner-mark`
+  (five players, I hold the called card), `bird-six` (Friesen, a House Cat playing for someone who left),
+  `bird-between`, `bird-over`, `bird-curtain` (two seats on this phone), `bird-tv` (a TV shows the table:
+  just the hand), `bird-lobby` and `bird-lobby-ready`. `-bird-autoplay` makes this phone's seat play itself
+  through the scene's own calls (`BirdwatchLiveTests` plays 4, 5 and 6 players to game over with it), and
+  `-show-scores` opens the score sheet. On the TV: `-tv-preview birdwatch -seats <4|5|6>` and
+  `-demo tv-birdwatch`. Screenshots are in `Art/screenshots/birdwatch/`.
 - How to play's videos (`HowTo/README.md`): `-demo howto` is Cat Tower's video table (my whole turn,
   taken by `HowToSocket` as the server would, then the other seats), `-demo tiles-last` the tile
   game's last turn (three pieces left, each fits a row), `-show-touches` draws a ring under every

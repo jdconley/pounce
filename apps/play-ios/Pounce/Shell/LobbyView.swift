@@ -51,6 +51,12 @@ struct LobbyView: View {
     @State private var rugFrame: CGRect = .zero
     /// The landscape iPad lobby shows the QR code in its side panel, not over the rug.
     @State private var qrInPanel = false
+    /// Birdwatch: the seat the host picked "Swap seats" on; the next seat tapped trades places.
+    @State private var swapFrom: Int?
+    /// Birdwatch: the rule set as the pills show it (the room's, or the host's tap on its way).
+    @State private var rules: BirdRules = .official
+
+    private var isBird: Bool { room?.isBirdwatch == true }
 
     private var room: RoomView? { session.store.room }
     private var table: TableModel? { session.model }
@@ -73,6 +79,7 @@ struct LobbyView: View {
             } else {
                 VStack(spacing: 6) {
                     topBar
+                    if isBird { rulePills.padding(.horizontal, 14) }
                     rug
                         .allowsHitTesting(interactive)
                     startRow
@@ -101,6 +108,27 @@ struct LobbyView: View {
                 .transition(.opacity)
             }
         }
+        .overlay(alignment: .top) {
+            if let swapFrom, let room {
+                HStack(spacing: 10) {
+                    OutlinedText(String(localized: "Swap \(SeatInfo.name(room, swapFrom).isEmpty ? String(localized: "this seat", comment: "Lobby: an empty seat being swapped") : SeatInfo.name(room, swapFrom)) with…", comment: "Lobby: the host picked Swap seats; tap the other seat"),
+                                 size: 18, width: 3, lines: 2)
+                    PillButton(icon: nil, color: Palette.violet, size: .small, width: 96,
+                               title: String(localized: "Cancel", comment: "Lobby: stop swapping seats"), accessibilityLabel: "Cancel") {
+                        self.swapFrom = nil
+                    }
+                    .accessibilityIdentifier("lobby.swap.cancel")
+                }
+                .padding(.horizontal, 14).padding(.vertical, 8)
+                .background(Capsule().fill(Palette.ink.opacity(0.85)))
+                .padding(.top, 60)
+                .transition(.move(edge: .top).combined(with: .opacity))
+                .accessibilityElement(children: .contain)
+                .accessibilityIdentifier("lobby.swap")
+            }
+        }
+        .animation(.easeOut(duration: 0.15).paced, value: swapFrom)
+        .onChange(of: room?.options?.rules, initial: true) { _, next in if let next, next != rules { rules = next } }
         .coordinateSpace(.named("lobby"))
         // Tips wait while a seat menu, a sheet or the start question is up.
         .tipHost(.lobby, paused: menuSeat != nil || picker != nil || sharing || renaming || confirmingStart || !interactive)
@@ -184,6 +212,7 @@ struct LobbyView: View {
                         topBar
                             .padding(.horizontal, 12)
                             .padding(.vertical, 6)
+                        if isBird { rulePills.frame(maxWidth: 560) }
                         rug
                             .frame(maxWidth: 820)
                             .allowsHitTesting(interactive)
@@ -210,6 +239,7 @@ struct LobbyView: View {
                 .padding(.top, 8)
                 codeChip(size: 30)
                     .allowsHitTesting(interactive)
+                if isBird { rulePills }
                 if showQR {
                     QRTile(text: shareURL.absoluteString, side: min(220, height * 0.3))
                         .onTapGesture { withAnimation(.spring(duration: 0.3).paced) { showQR = false } }
@@ -357,12 +387,14 @@ struct LobbyView: View {
         Button {
             tapSeat(i)
         } label: {
-            Cushion(seat: seat, index: i, width: width, name: room.map { SeatInfo.name($0, i) } ?? "")
+            Cushion(seat: seat, index: i, width: width, name: room.map { SeatInfo.name($0, i) } ?? "",
+                    ribbon: table?.lobbyRibbon(i), swapping: swapFrom == i)
         }
         .buttonStyle(.plain)
         .wiggle(trigger: wiggles[.seat(i), default: 0])
         .pop(trigger: seat.kind)
         .accessibilityLabel(seatLabel(seat))
+        .accessibilityValue(table?.lobbyRibbon(i).map { Text(BirdScene.teamWords($0)) } ?? Text(verbatim: ""))
         .accessibilityHint(seatHint(seat))
         .accessibilityIdentifier("lobby.seat.\(i)")
         // The seat tip points at the first open cushion.
@@ -394,6 +426,21 @@ struct LobbyView: View {
         case .open where !seated, .bot where !seated: Text("Sit here")
         default: Text("Seat options", comment: "VoiceOver hint: a lobby seat opens its menu")
         }
+    }
+
+    // MARK: Birdwatch's rule set
+
+    /// The three rule sets: the host taps one (the server keeps it on the table), everyone else
+    /// sees which the host picked.
+    private var rulePills: some View {
+        let host = room?.youAreHost == true && interactive
+        return BirdRulesPills(rules: $rules, enabled: host) { next in
+            lastTapped = .rules
+            model.tips.used("lobby.rules")
+            session.send(.setOptions(RoomOptions(rules: next)))
+        }
+        .wiggle(trigger: wiggles[.rules, default: 0])
+        .tipTarget(host ? "lobby.rules" : nil)
     }
 
     // MARK: start
@@ -531,6 +578,7 @@ struct LobbyView: View {
 
     private func start() {
         guard let table else { return }
+        swapFrom = nil
         lastTapped = .start
         model.tips.used("lobby.start")
         if table.canStart {
@@ -563,6 +611,20 @@ struct LobbyView: View {
         model.tips.used("lobby.seat")
         let seat = room.seats[i]
         Haptics.shared.tick()
+        // Birdwatch: picking the second seat of a swap.
+        if let from = swapFrom {
+            swapFrom = nil
+            guard from != i else { return }
+            Sound.shared.play(ArtName.Sound.sfxPop)
+            session.send(.swapSeats(from, i))
+            return
+        }
+        // Birdwatch's host can swap any seat (teams follow seats), someone else's cat too.
+        if isBird, room.youAreHost, seated, seat.kind == .human, !seat.yours {
+            Sound.shared.play(ArtName.Sound.sfxPop)
+            menuSeat = i
+            return
+        }
         switch seat.kind {
         case .human:
             if seat.yours {
@@ -599,6 +661,22 @@ struct LobbyView: View {
     }
 
     private func menuItems(_ i: Int, _ seat: SeatView) -> [SeatMenuItem] {
+        var swap: [SeatMenuItem] = []
+        if isBird, room?.youAreHost == true {
+            swap = [SeatMenuItem(
+                id: "swapSeats", icon: ArtName.iconSwap, color: Palette.lime,
+                label: String(localized: "Swap seats", comment: "Lobby seat menu (Birdwatch host): trade this seat with another; teams follow seats")
+            ) {
+                menuSeat = nil
+                model.tips.used("lobby.swapSeats")
+                swapFrom = i
+            }]
+        }
+        if seat.kind == .human, !seat.yours { return swap }
+        return swap + baseItems(i, seat)
+    }
+
+    private func baseItems(_ i: Int, _ seat: SeatView) -> [SeatMenuItem] {
         if seat.kind == .human {
             return [
                 SeatMenuItem(
@@ -727,14 +805,14 @@ enum LobbyCopy {
             return table.blockingSeats.isEmpty
                 ? String(localized: "No open seat.", comment: "Lobby status: this phone has no seat and none is open")
                 : String(localized: "Tap an open seat.", comment: "Lobby status: this phone has no seat yet")
-        case .openSeats(let open, let players) where players >= TableModel.minPlayers:
+        case .openSeats(let open, let players) where players >= table.neededPlayers:
             return open == 1
                 ? String(localized: "Waiting for 1 seat.", comment: "Lobby status: one seat still open, enough players to start without it")
                 : String(localized: "Waiting for \(open) seats.", comment: "Lobby status: several seats still open, enough players to start without them")
         case .openSeats:
-            return String(localized: "Needs 2 players.", comment: "Lobby status: alone at the table with a seat open")
-        case .notEnoughPlayers:
-            return String(localized: "Needs 2 players.", comment: "Lobby status: alone at the table with no open seat")
+            return String(localized: "Needs \(table.neededPlayers) players.", comment: "Lobby status: too few at the table with a seat open; 2, or 4 for Birdwatch")
+        case .notEnoughPlayers(_, let needed):
+            return String(localized: "Needs \(needed) players.", comment: "Lobby status: too few at the table with no open seat; 2, or 4 for Birdwatch")
         }
     }
 }
@@ -799,6 +877,10 @@ struct Cushion: View {
     let width: CGFloat
     /// The person's name, or the bot's; shown on a pill under the cat.
     var name = ""
+    /// Birdwatch: the team ribbon under the name.
+    var ribbon: BirdTableModel.Ribbon?
+    /// Birdwatch: this seat is the first of a swap.
+    var swapping = false
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var pulse = false
@@ -812,6 +894,12 @@ struct Cushion: View {
             occupant
         }
         .frame(width: width, height: width * 1.15, alignment: .bottom)
+        .overlay {
+            if swapping {
+                RoundedRectangle(cornerRadius: 20).strokeBorder(Palette.lime, style: StrokeStyle(lineWidth: 4, dash: [8, 6]))
+                    .padding(-6)
+            }
+        }
         .contentShape(Rectangle())
     }
 
@@ -875,6 +963,16 @@ struct Cushion: View {
 
     private var nameTag: some View {
         NameTag(name, maxWidth: max(width * 1.5, 112))
+            .overlay(alignment: .bottom) {
+                if let ribbon {
+                    Capsule().fill(BirdArt.ribbonColor(ribbon))
+                        .overlay(Capsule().strokeBorder(Palette.ink, lineWidth: 2))
+                        .frame(height: 8)
+                        .padding(.horizontal, 4)
+                        .offset(y: 7)
+                        .accessibilityHidden(true)
+                }
+            }
             .offset(y: 20)
     }
 

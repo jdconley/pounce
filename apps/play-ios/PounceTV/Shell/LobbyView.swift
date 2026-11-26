@@ -22,7 +22,9 @@ struct LobbyView: View {
                     header(room)
                     LobbyRug(room: room)
                         .frame(width: 1128, height: 520)
-                    TVHint(icon: ArtName.Habit.iconPhone, words: String(localized: "Press Start on any phone", comment: "TV lobby: a phone starts the game"))
+                    TVHint(icon: ArtName.Habit.iconPhone, words: room.isBirdwatch
+                           ? String(localized: "4 to 6 players. Press Start on any phone", comment: "TV lobby (Birdwatch): how many play, and a phone starts the game")
+                           : String(localized: "Press Start on any phone", comment: "TV lobby: a phone starts the game"))
                     if model.canChangeGame {
                         changeGame
                     }
@@ -54,11 +56,19 @@ struct LobbyView: View {
                 .frame(width: 186, height: 124)
                 .clipShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
                 .overlay(RoundedRectangle(cornerRadius: 24, style: .continuous).strokeBorder(Palette.ink, lineWidth: 5))
-            OutlinedText(game.title, size: 84, width: 5)
-                .fixedSize()
+            VStack(alignment: .leading, spacing: 4) {
+                OutlinedText(game.title, size: 84, width: 5)
+                    .fixedSize()
+                // Birdwatch: the rule set the host picked, and its line.
+                if room.isBirdwatch {
+                    OutlinedText("\(BirdWords.rules(room.birdRules)): \(BirdWords.rulesLine(room.birdRules))", size: 36, fill: Palette.lime, width: 3)
+                        .fixedSize()
+                        .accessibilityIdentifier("tv.lobby.rules")
+                }
+            }
         }
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel(game.title)
+        .accessibilityLabel(room.isBirdwatch ? "\(game.title), \(BirdWords.rules(room.birdRules))" : game.title)
         .accessibilityIdentifier("tv.lobby.game")
     }
 

@@ -47,7 +47,7 @@ public struct TableModel: Equatable, Sendable {
     }
 
     /// The seat on the move, in either game.
-    public var currentSeat: Seat? { game?.turn ?? room.tiles?.turn }
+    public var currentSeat: Seat? { game?.turn ?? room.tiles?.turn ?? room.birdwatch?.turn }
 
     /// The room and its game (either one) are both playing.
     var isLive: Bool { room.liveTurn != nil }
@@ -171,12 +171,12 @@ public struct TableModel: Equatable, Sendable {
         return .discard(card: card, skipTarget: nil)
     }
 
-    /// Mirrors the server's `start`: lobby, I hold a seat, no open seats,
-    /// at least two humans or bots (closed seats don't count).
+    /// Mirrors the server's `start`: lobby, I hold a seat, no open seats, and as many humans or
+    /// bots as the game takes (two or more; Birdwatch four to six; closed seats don't count).
     public var canStart: Bool {
         guard room.status == .lobby, !mySeats.isEmpty, firstOpenSeat == nil else { return false }
         let players = room.seats.filter { $0.kind == .human || $0.kind == .bot }.count
-        return players >= 2
+        return players >= neededPlayers && players <= seatRange.upperBound
     }
 
     public var firstOpenSeat: Seat? { blockingSeats.first }

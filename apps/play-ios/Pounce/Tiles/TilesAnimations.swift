@@ -32,7 +32,7 @@ extension TilesScene {
             next.seats = room.seats
             self.model = TilesTableModel(room: next)
             redraw()
-        case .game, .lobbyNope:
+        case .game, .birdwatch, .lobbyNope:
             break
         }
     }

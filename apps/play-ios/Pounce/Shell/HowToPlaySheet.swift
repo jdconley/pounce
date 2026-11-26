@@ -17,8 +17,10 @@ struct HowToPlaySheet: View {
 
     @State private var game: GameCatalog.Entry
     @State private var replayed = false
+    /// Birdwatch's rule set to explain (one guide per rule set): the table's, or Official.
+    @State private var birdRules: BirdRules
 
-    init(game: GameCatalog.Entry = GameCatalog.dealt, exit: Exit = .close, onClose: @escaping () -> Void) {
+    init(game: GameCatalog.Entry = GameCatalog.dealt, exit: Exit = .close, birdRules: BirdRules = .official, onClose: @escaping () -> Void) {
         var game = game
         #if DEBUG
         // `-show-rules -rules-game tiles`: open on that game (screenshots).
@@ -28,11 +30,14 @@ struct HowToPlaySheet: View {
         }
         #endif
         _game = State(initialValue: game)
+        _birdRules = State(initialValue: birdRules)
         self.exit = exit
         self.onClose = onClose
     }
 
-    private var guide: HowToGuide { HowToGuide.of(game) }
+    private var guide: HowToGuide {
+        game.id == GameCatalog.birdwatch.id ? HowToGuide.birdwatch(birdRules) : HowToGuide.of(game)
+    }
 
     var body: some View {
         VStack(spacing: 0) {
@@ -46,6 +51,7 @@ struct HowToPlaySheet: View {
                 ScrollView {
                     VStack(spacing: roomy ? 22 : 18) {
                         if GameCatalog.all.count > 1 { picker }
+                        if game.id == GameCatalog.birdwatch.id { BirdRulesPills(rules: $birdRules) }
                         HowToVideoView(game: game, bounds: CGSize(width: width, height: geo.size.height * (roomy ? 0.66 : 0.72)))
                             .id(game.id)
                             .padding(.bottom, 4)
@@ -69,13 +75,15 @@ struct HowToPlaySheet: View {
 
     /// One chip per game in the catalog; the chosen one is lit in its own tint.
     private var picker: some View {
+        // One row, tighter on a narrower phone, and a column only when even that doesn't fit.
         ViewThatFits(in: .horizontal) {
-            HStack(spacing: 10) { chips }
-            VStack(spacing: 10) { chips }
+            HStack(spacing: 10) { chips() }
+            HStack(spacing: 6) { chips(compact: true) }
+            VStack(spacing: 10) { chips() }
         }
     }
 
-    private var chips: some View {
+    private func chips(compact: Bool = false) -> some View {
         ForEach(GameCatalog.all) { entry in
             let on = entry.id == game.id
             Button {
@@ -85,7 +93,7 @@ struct HowToPlaySheet: View {
             } label: {
                 HStack(spacing: 8) {
                     Text(entry.title)
-                        .font(.system(.headline, design: .rounded, weight: .black))
+                        .font(.system(compact ? .subheadline : .headline, design: .rounded, weight: .black))
                         .foregroundStyle(.white)
                     if !entry.isAvailable {
                         Text("Soon", comment: "How to play: tag on a game that can't be started yet")
@@ -96,9 +104,10 @@ struct HowToPlaySheet: View {
                             .background(Capsule().fill(Palette.lime))
                     }
                 }
-                .lineLimit(2)
+                .lineLimit(compact ? 1 : 2)
+                .fixedSize(horizontal: compact, vertical: false)
                 .multilineTextAlignment(.center)
-                .padding(.horizontal, 16)
+                .padding(.horizontal, compact ? 10 : 16)
                 .padding(.vertical, 9)
                 .background(
                     Capsule().fill(on ? Palette.tint(entry.tint) : Palette.ink.opacity(0.55))

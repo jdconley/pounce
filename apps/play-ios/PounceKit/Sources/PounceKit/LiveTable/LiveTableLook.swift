@@ -12,6 +12,9 @@ public struct LiveTableLook: Equatable, Sendable {
         public let me: Bool
         /// Their move: the ring glows.
         public let glowing: Bool
+        /// What the seat's chip says: its phase, or at a Birdwatch table (`progressKind`
+        /// `"score"`) its side's score.
+        public var chip: String = ""
     }
 
     /// The Island's trailing side (and the minimal view).
@@ -43,7 +46,8 @@ public struct LiveTableLook: Equatable, Sendable {
     public init(_ state: LiveTableState) {
         table = state.table
         seats = state.seats.enumerated().map { i, s in
-            Seat(cat: s.cat, phase: s.phase, bot: s.bot, me: s.me, glowing: i == state.turn)
+            Seat(cat: s.cat, phase: s.phase, bot: s.bot, me: s.me, glowing: i == state.turn,
+                 chip: state.progressKind == "score" ? String(s.progress ?? 0) : String(s.phase))
         }
         bell = state.mine
         leadingCat = (state.seats.first { $0.me } ?? state.seats.first)?.cat ?? 0

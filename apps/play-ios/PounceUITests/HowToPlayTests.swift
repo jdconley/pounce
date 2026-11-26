@@ -24,6 +24,17 @@ final class HowToPlayTests: XCTestCase {
         checkVideo(app, game: "Tuna Tiles")
         XCTAssertFalse(el(app, "rules.replay").exists, "the tile game has no first-game tips to bring back")
         screenshot(app, "howto-tiles")
+
+        // Birdwatch: words only, one guide per rule set, picked with its pills.
+        el(app, "rules.game.birdwatch").tap()
+        XCTAssertTrue(until(3) { self.el(app, "rules.game.birdwatch").isSelected }, "Birdwatch was not picked")
+        XCTAssertFalse(el(app, "rules.video").exists, "Birdwatch has no video in 1.3")
+        XCTAssertTrue(el(app, "bird.rules.official").isSelected, "How to play opens on Official")
+        let ones = app.descendants(matching: .any).matching(NSPredicate(format: "label CONTAINS %@", "Each 1 is 15.")).firstMatch
+        XCTAssertFalse(ones.exists, "Official has no 1s")
+        el(app, "bird.rules.tucker").tap()
+        XCTAssertTrue(ones.waitForExistence(timeout: Live.t(3)), "Tucker's 1s aren't explained")
+        screenshot(app, "howto-birdwatch-tucker")
     }
 
     /// The poster names the video for VoiceOver; a tap swaps it for the player.

@@ -76,6 +76,21 @@ public struct ErrorCode: RawRepresentable, Codable, Hashable, Sendable {
     /// Play again at a tile game table after the server stopped dealing that game: no new table
     /// can be dealt. Never sent at a Cat Tower table.
     public static let gameOff = ErrorCode(rawValue: "game_off")
+    // Birdwatch.
+    /// A move outside its phase (a bid while playing, a card while bidding).
+    public static let wrongPhase = ErrorCode(rawValue: "wrong_phase")
+    public static let bidTooLow = ErrorCode(rawValue: "bid_too_low")
+    public static let bidTooHigh = ErrorCode(rawValue: "bid_too_high")
+    /// A bid that isn't a multiple of 5.
+    public static let badBid = ErrorCode(rawValue: "bad_bid")
+    public static let notYourCard = ErrorCode(rawValue: "not_your_card")
+    /// A put-back of the wrong number of cards.
+    public static let wrongCount = ErrorCode(rawValue: "wrong_count")
+    public static let duplicateCard = ErrorCode(rawValue: "duplicate_card")
+    /// A partner call for a card the bid winner holds.
+    public static let ownCard = ErrorCode(rawValue: "own_card")
+    /// A card off the led suit while the hand still holds that suit.
+    public static let mustFollow = ErrorCode(rawValue: "must_follow")
     // Table looks and Play again (daily habit §9.4, §10.4).
     /// Play again before the game is over.
     public static let notOver = ErrorCode(rawValue: "not_over")
@@ -255,6 +270,12 @@ public enum ClientMessage: Encodable, Equatable, Sendable {
     case act(seat: Seat, action: Action, id: String? = nil)
     /// A turn in the tile game: the same `{"t":"act"}` envelope around a `TilesAction`.
     case actTiles(seat: Seat, action: TilesAction, id: String? = nil)
+    /// A Birdwatch move: the same envelope around a `BirdAction`.
+    case actBirdwatch(seat: Seat, action: BirdAction, id: String? = nil)
+    /// The host sets the game's options in the lobby (Birdwatch's rule set).
+    case setOptions(RoomOptions)
+    /// The host swaps two seats in the lobby (Birdwatch's teams follow seat order).
+    case swapSeats(Seat, Seat)
     case presence(PresenceState)
     case moveSeat(seat: Seat)
     case claimMove(code: String)
@@ -281,7 +302,7 @@ public enum ClientMessage: Encodable, Equatable, Sendable {
     /// Live pointing for the TV; nil clears it (`{"t":"aim","seat":n}`).
     case aim(seat: Seat, aim: GameAim?)
 
-    private enum CodingKeys: String, CodingKey { case t, seat, person, kind, action, state, code, name, rug, back, id, aim }
+    private enum CodingKeys: String, CodingKey { case t, seat, person, kind, action, state, code, name, rug, back, id, aim, options, seats }
 
     public func encode(to encoder: any Encoder) throws {
         var c = encoder.container(keyedBy: CodingKeys.self)
@@ -306,6 +327,17 @@ public enum ClientMessage: Encodable, Equatable, Sendable {
             try c.encode(seat, forKey: .seat)
             try c.encode(action, forKey: .action)
             try c.encodeIfPresent(id, forKey: .id)
+        case .actBirdwatch(let seat, let action, let id):
+            try c.encode("act", forKey: .t)
+            try c.encode(seat, forKey: .seat)
+            try c.encode(action, forKey: .action)
+            try c.encodeIfPresent(id, forKey: .id)
+        case .setOptions(let options):
+            try c.encode("setOptions", forKey: .t)
+            try c.encode(options, forKey: .options)
+        case .swapSeats(let a, let b):
+            try c.encode("swapSeats", forKey: .t)
+            try c.encode([a, b], forKey: .seats)
         case .presence(let state):
             try c.encode("presence", forKey: .t)
             try c.encode(state, forKey: .state)
