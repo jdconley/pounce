@@ -3,9 +3,9 @@ import { devices, expect, test, type Browser, type Page } from "@playwright/test
 import { bwStep, cardPoint, newStats } from "./birdwatch-helpers";
 import { dailyPhone } from "./daily-phone";
 import { closeAll, firstRun, newPlayer } from "./helpers";
+import { easelPicture, inked, joinLink, phoneScans, PURR, purrTv, tvMakesPurrtrait } from "./purr-helpers";
 import { openSniff, wrongWords } from "./sniff-helpers";
 import { speedAt, REFERENCE, type Speed } from "./speed";
-import { easelPicture, inked, joinLink, phoneScans, PURR, purrTv, tvMakesPurrtrait } from "./purr-helpers";
 import { controllerTurn, poster, startFromPhone, tilesTurn, tvDeck, tvTable } from "./tv-helpers";
 
 /**
