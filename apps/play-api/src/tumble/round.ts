@@ -1,5 +1,9 @@
-import { applyHit, contents, landWaiting, newBox, receiveJunk, setDown, useTrick, TOTAL, W, type Box, type Hit, type Trick, type Waiting } from "./box";
+import { applyHit, contents, landWaiting, newBox, receiveJunk, restingY, setDown, useTrick, TOTAL, W, type Box, type Hit, type Trick, type Waiting } from "./box";
+import { CAT_LEVELS, chooseTrick, place, type CatLevel, type Placement } from "./cats";
+import { SET_DOWN_MS, gravityMs } from "./clock";
+import { toyAt } from "./queue";
 import { rngFloat, rngNext } from "./rng";
+import { spawn, type Rot } from "./toys";
 
 import type { ClientEvent, HitKind, HitWire, TumbleClient, TumbleRelay, TumbleSeat, TumbleSync, BoxSync } from "./wire";
 import type { Seed } from "../rules/rng";
@@ -18,6 +22,8 @@ export const OWED_MS = 4000;
 export const LAG_MS = 3000;
 export const DROP_MS = 15_000;
 export const EFFECT_MS = 10_000;
+/** A box with no set-down for this long gets its owed junk landed by the server: longer than the slowest real fall (18 rows at 1000 ms, plus the set-down wait). */
+export const STALL_MS = 25_000;
 
 export type SeatKind = "human" | "cat" | "away";
 export type RoundSeat = { kind: SeatKind };
@@ -33,6 +39,8 @@ type SeatState = {
   heardAt: number;
   lag: boolean;
   lastMs: number;
+  /** Server time of the box's last set-down (the round's start before the first). */
+  setDownAt: number;
   move: ClientEvent | null;
   movedAt: number;
   /** Server time each waiting junk was acknowledged, by id. */
@@ -42,6 +50,12 @@ type SeatState = {
 };
 
 const HARMLESS_TO_SELF: readonly Trick[] = ["scoop", "settle", "nap", "bath"];
+/** A House Cat moves its toy one step this often, so it looks alive on the TV (§6.9). */
+export const CAT_STEP_MS = 200;
+const TRICK_DELAY: readonly [number, number] = [1000, 3000];
+
+/** One House Cat's toy in hand: when it appeared, when the cat stops thinking, where it is going and where it is. */
+type CatState = { level: CatLevel; toyStart: number | null; thinkUntil: number; plan: Placement | null; rot: Rot; x: number; stepAt: number; trickAt: number | null; held: number };
 
 export class TumbleRound {
   readonly r: number;
@@ -53,9 +67,24 @@ export class TumbleRound {
   /** Seats out this round, in order, with the server time each went. */
   private outOrder: { seat: number; at: number }[] = [];
 
-  /** `boxes`: where each box starts, for tests; a round always starts from empty boxes otherwise. */
-  constructor(o: { r: number; seats: RoundSeat[]; roundSeed: Seed; trickSeeds: Seed[]; startsAt: number; rng: Seed; boxes?: Box[] }) {
+  private readonly startsAt: number;
+  private readonly wins: number[];
+  private readonly cats = new Map<number, CatState>();
+
+  /**
+   * `cats`: the table's House Cat level. `catLevels`: a level per seat instead (the soak's scripted
+   * players). `wins`: the standings, for the cats' aim. `boxes`: where each box starts, for tests;
+   * a round always starts from empty boxes otherwise.
+   */
+  constructor(o: { r: number; seats: RoundSeat[]; roundSeed: Seed; trickSeeds: Seed[]; startsAt: number; rng: Seed; cats?: "easy" | "quick"; catLevels?: (CatLevel | undefined)[]; wins?: number[]; boxes?: Box[] }) {
     this.r = o.r;
+    this.startsAt = o.startsAt;
+    this.wins = o.wins ?? o.seats.map(() => 0);
+    o.seats.forEach((s, i) => {
+      if (s.kind !== "cat") return;
+      const level = o.catLevels?.[i] ?? CAT_LEVELS[o.cats ?? "easy"];
+      this.cats.set(i, { level, toyStart: null, thinkUntil: 0, plan: null, rot: 0, x: 0, stepAt: 0, trickAt: null, held: 0 });
+    });
     this.roundSeed = o.roundSeed;
     this.rng = [...o.rng] as Seed;
     this.seats = o.seats.map((s, i) => ({
@@ -65,6 +94,7 @@ export class TumbleRound {
       heardAt: o.startsAt,
       lag: false,
       lastMs: 0,
+      setDownAt: o.startsAt,
       move: null,
       movedAt: 0,
       junkAt: new Map(),
@@ -158,17 +188,14 @@ export class TumbleRound {
         if ("error" in r) return "refused";
         s.move = null;
         s.lastMs = ms;
+        s.setDownAt = now;
         for (const id of landed) s.junkAt.delete(id);
         for (const b of r.blocked) if (!r.box.waiting.some((w) => w.id === b.id)) s.junkAt.delete(b.id);
         s.box = r.box;
         let corrected = false;
         if (r.cleared === 0) {
           // Junk acknowledged more than 4 seconds ago must have landed by now (§6.5).
-          let owed = 0;
-          for (const w of s.box.waiting) {
-            if ((s.junkAt.get(w.id) ?? now) + OWED_MS < now) owed++;
-            else break;
-          }
+          const owed = this.owed(s, now);
           if (owed > 0) {
             for (const w of s.box.waiting.slice(0, owed)) s.junkAt.delete(w.id);
             s.box = landWaiting(s.box, owed);
@@ -194,6 +221,16 @@ export class TumbleRound {
         return "ok";
       }
     }
+  }
+
+  /** How many of the oldest waiting junk were acknowledged more than 4 seconds ago. */
+  private owed(s: SeatState, now: number): number {
+    let owed = 0;
+    for (const w of s.box.waiting) {
+      if ((s.junkAt.get(w.id) ?? now) + OWED_MS < now) owed++;
+      else break;
+    }
+    return owed;
   }
 
   /** Junk from a clear goes to every other box still in the round, unless it naps (§4.5). */
@@ -299,7 +336,7 @@ export class TumbleRound {
    * quiet devices lag at 3 seconds and are out at 15.
    */
   tick(now: number): RoundOut[] {
-    const out: RoundOut[] = [];
+    const out: RoundOut[] = this.driveCats(now);
     this.seats.forEach((s, seat) => {
       if (s.move && now - s.movedAt >= MOVE_RELAY_MS && !s.box.out) {
         s.movedAt = now;
@@ -319,6 +356,16 @@ export class TumbleRound {
       this.applyIssued(hit, now);
       corrected.add(hit.to);
     }
+    // A box that stops setting down still gets the junk it owes (§6.5).
+    this.seats.forEach((s, seat) => {
+      if (s.box.out || s.kind === "away" || s.lag || now - s.setDownAt < STALL_MS) return;
+      const owed = this.owed(s, now);
+      if (owed === 0) return;
+      for (const w of s.box.waiting.slice(0, owed)) s.junkAt.delete(w.id);
+      s.box = landWaiting(s.box, owed);
+      s.setDownAt = now;
+      corrected.add(seat);
+    });
     for (const seat of corrected) {
       out.push({ to: "all", message: this.sync([seat], now) });
       if (this.box(seat).out) this.noteOut(seat, now);
@@ -335,6 +382,95 @@ export class TumbleRound {
         out.push({ to: "all", message: this.sync([seat], now) });
       }
     });
+    return out;
+  }
+
+  /** Every House Cat's turn of the clock: it acks its hits at once, thinks, steps its toy, sets it down, and uses tricks (§6.9). */
+  private driveCats(now: number): RoundOut[] {
+    const out: RoundOut[] = [];
+    for (const [seat, c] of this.cats) {
+      if (!this.live(seat)) continue;
+      const s = this.seats[seat] as SeatState;
+      const ev: ClientEvent[] = [];
+      for (const hit of this.hits.values()) if (hit.to === seat && !hit.done) ev.push(["a", hit.id]);
+      if (ev.length > 0) {
+        out.push(...this.input(seat, { t: "tumble", r: this.r, ev }, now));
+        ev.length = 0;
+        if (!this.live(seat)) continue;
+      }
+      const box = s.box;
+      const toy = toyAt(this.roundSeed, box.next);
+      const at = spawn(toy);
+      if (c.toyStart === null) {
+        c.toyStart = now;
+        c.thinkUntil = now + c.level.think[0] + this.random() * (c.level.think[1] - c.level.think[0]);
+        c.plan = null;
+        c.rot = at.rot;
+        c.x = at.x;
+      }
+      if (c.plan === null && now >= c.thinkUntil) {
+        const [plan, rng] = place(box, this.roundSeed, c.level.sloppy, this.rng);
+        this.rng = rng;
+        c.plan = plan;
+      }
+      // Gravity: a toy that has had time to fall sets down where it is (§4.2), so the Zoomies end cat rounds too.
+      const g = gravityMs(now - this.startsAt, s.catnipUntil > now);
+      const restHere = restingY(box, toy, c.rot, c.x);
+      const fallen = restHere !== null && now >= c.toyStart + (at.y - restHere) * g + SET_DOWN_MS;
+      let setAt: Placement | null = null;
+      if (c.plan && c.rot === c.plan.rot && c.x === c.plan.x) setAt = c.plan;
+      else if (fallen && restHere !== null) setAt = { rot: c.rot, x: c.x, y: restHere };
+      else if (c.plan && now >= c.stepAt) {
+        if (c.rot !== c.plan.rot) c.rot = ((c.rot + 1) % 4) as Rot;
+        else c.x += Math.sign(c.plan.x - c.x);
+        c.stepAt = now + CAT_STEP_MS;
+        if (restingY(box, toy, c.rot, c.x) === null) {
+          // The step doesn't fit from above; go straight to the plan.
+          c.rot = c.plan.rot;
+          c.x = c.plan.x;
+        }
+        ev.push(["m", box.next, c.rot, c.x, at.y]);
+      }
+      if (setAt) {
+        // The box may have changed since the plan (junk, a hit): rest where the toy rests now, or think again.
+        const y = restingY(box, toy, setAt.rot, setAt.x);
+        if (y === null) {
+          c.toyStart = null;
+          setAt = null;
+        } else setAt = { ...setAt, y };
+      }
+      if (setAt) {
+        const ms = Math.max(s.lastMs, now - this.startsAt);
+        const trial = setDown(box, this.roundSeed, box.next, setAt.rot, setAt.x, setAt.y, []);
+        const clears = !("error" in trial) && trial.cleared > 0;
+        const landed: number[] = [];
+        if (!clears) for (const w of box.waiting) {
+          if ((s.junkAt.get(w.id) ?? now) + JUNK_WAIT_MS <= now) landed.push(w.id);
+          else break;
+        }
+        ev.push(["l", box.next, setAt.rot, setAt.x, setAt.y, ms, landed]);
+        c.toyStart = null;
+      }
+      if (ev.length > 0) out.push(...this.input(seat, { t: "tumble", r: this.r, ev }, now));
+      const held = this.box(seat).held.length;
+      if (held > c.held && c.trickAt === null) c.trickAt = now + TRICK_DELAY[0] + this.random() * (TRICK_DELAY[1] - TRICK_DELAY[0]);
+      c.held = held;
+      if (c.trickAt !== null && now >= c.trickAt && this.live(seat)) {
+        const pick = chooseTrick(
+          {
+            me: seat,
+            boxes: this.seats.map((x) => x.box),
+            live: this.seats.map((_, i) => this.live(i)),
+            humans: this.seats.map((x) => x.kind === "human"),
+            wins: this.wins,
+          },
+          c.level,
+        );
+        c.trickAt = pick || held === 0 ? null : now + TRICK_DELAY[0];
+        if (pick) out.push(...this.input(seat, { t: "tumble", r: this.r, ev: [["u", pick.slot, pick.seat]] }, now));
+        c.held = this.box(seat).held.length;
+      }
+    }
     return out;
   }
 

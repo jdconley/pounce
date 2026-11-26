@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest";
 import { newBox, type Box } from "./box";
 import { fromText } from "./codec";
 import { toyAt } from "./queue";
-import { ACK_MS, DROP_MS, LAG_MS, OWED_MS, TumbleRound, type RoundOut, type RoundSeat } from "./round";
+import { ACK_MS, DROP_MS, LAG_MS, OWED_MS, STALL_MS, TumbleRound, type RoundOut, type RoundSeat } from "./round";
 import { restingY } from "./vectors";
 
 import type { HitWire, TumbleClient, TumbleRelay, TumbleSync } from "./wire";
@@ -184,6 +184,25 @@ describe("tricks", () => {
     expect(r.box(1).out).toBe(true);
     expect(syncs(r.tick(T0 + 100 + ACK_MS + 1))).toHaveLength(0);
     expect(syncs(r.input(1, batch(["a", hit?.id ?? 0]), T0 + 4000))).toHaveLength(0);
+  });
+});
+
+describe("a box that stops setting down", () => {
+  it("gets the junk it owes landed by the server after 25 seconds without a set-down", () => {
+    const r = round(["human", "human"], [fourReady(), newBox([2, 2, 2, 2])]);
+    const [hit] = hitsIn(clearFour(r));
+    r.input(1, batch(["a", hit?.id ?? 0]), T0 + 1100);
+    for (let t = T0 + 2000; t < T0 + STALL_MS; t += 1000) {
+      r.input(0, batch(), t);
+      r.input(1, batch(), t);
+      r.tick(t);
+    }
+    expect(r.box(1).waiting).toHaveLength(1);
+    r.input(0, batch(), T0 + STALL_MS);
+    r.input(1, batch(), T0 + STALL_MS);
+    const out = r.tick(T0 + STALL_MS);
+    expect(syncs(out)[0]?.to).toBe("all");
+    expect(r.box(1).waiting).toEqual([]);
   });
 });
 
