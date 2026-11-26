@@ -422,6 +422,31 @@ div.bw-strip {
   outline-offset: 1px;
 }
 
+.bw-chip-cats {
+  display: flex;
+  flex: 0 0 auto;
+  margin-left: 8px;
+}
+
+.bw-chip-cats img {
+  width: 1.4em;
+  height: 1.4em;
+  object-fit: contain;
+}
+
+.bw-chip-cats img + img {
+  margin-left: -0.5em;
+}
+
+.bw-strip.many .bw-chip-who {
+  display: none;
+}
+
+.bw-strip.many .bw-chip {
+  justify-content: center;
+  padding-right: 6px;
+}
+
 .bw-chip-who {
   flex: 1 1 auto;
   min-width: 0;
@@ -630,7 +655,7 @@ div.bw-strip {
   display: flex;
   flex-direction: column;
   gap: 6px;
-  --cw: clamp(34px, 7.5vw, 54px);
+  --cw: clamp(34px, 7.5vw, 66px);
   --ch: calc(var(--cw) * 1.4);
 }
 
@@ -649,9 +674,10 @@ div.bw-strip {
   cursor: pointer;
 }
 
-.bw-mini:hover,
-.bw-mini:focus-visible {
-  transform: translateY(-6%);
+.bw-mini:hover .bface,
+.bw-mini:focus-visible .bface {
+  outline: 3px solid var(--yellow);
+  outline-offset: 1px;
 }
 
 /* Between hands. */
@@ -814,6 +840,7 @@ div.bw-strip {
 
 .bw-cats {
   display: flex;
+  flex: 0 0 auto;
 }
 
 .bw-cats > * + * {
@@ -895,7 +922,32 @@ div.bw-strip {
   font-size: calc(var(--avatar) * 0.3);
 }
 
-.bw-tv .bw-chip-who {
+.bw-tv .bw-chip-cats {
+  display: flex;
+  flex: 0 0 auto;
+  margin-left: 8px;
+}
+
+.bw-chip-cats img {
+  width: 1.4em;
+  height: 1.4em;
+  object-fit: contain;
+}
+
+.bw-chip-cats img + img {
+  margin-left: -0.5em;
+}
+
+.bw-strip.many .bw-chip-who {
+  display: none;
+}
+
+.bw-strip.many .bw-chip {
+  justify-content: center;
+  padding-right: 6px;
+}
+
+.bw-chip-who {
   font-size: calc(var(--avatar) * 0.22);
   padding-left: 14px;
 }

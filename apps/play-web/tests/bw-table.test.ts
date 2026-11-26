@@ -14,7 +14,6 @@ import { RoomStore } from "../src/store/room";
 import { BirdwatchTable } from "../src/table/birdwatch";
 import { TvTable } from "../src/ui/tv/tv-table";
 
-
 import { Clock, FakeSocket, flush } from "./fake-socket";
 
 import type { ServerMessage } from "@pounce/play-api/protocol";

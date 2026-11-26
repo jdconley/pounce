@@ -61,7 +61,10 @@ describe("the table's words", () => {
     const room = roomOf("snapshot-play-lead");
     const v = room.birdwatch!;
     const s = sides(v);
-    expect(s.map((x) => x.seats)).toEqual([[0, 2], [1, 3]]);
+    expect(s.map((x) => x.seats)).toEqual([
+      [0, 2],
+      [1, 3],
+    ]);
     expect(s.find((x) => x.bidding)!.seats).toContain(v.high!.seat);
     expect(ribbonOf(v, 0)).toBe(RIBBONS[0]);
     expect(ribbonOf(v, 3)).toBe(RIBBONS[1]);
@@ -75,7 +78,12 @@ describe("the table's words", () => {
     expect(wearing).toEqual([bidder]);
     const shown = roomOf("snapshot-five-partner-shown").birdwatch!;
     expect([0, 1, 2, 3, 4].filter((s) => ribbonOf(shown, s) !== null).sort()).toEqual([shown.high!.seat, 3].sort());
-    expect(sides(shown).filter((x) => x.bidding).map((x) => x.seats[0]).sort()).toEqual([shown.high!.seat, 3].sort());
+    expect(
+      sides(shown)
+        .filter((x) => x.bidding)
+        .map((x) => x.seats[0])
+        .sort(),
+    ).toEqual([shown.high!.seat, 3].sort());
   });
 
   test("the partner mark shows only on the partner's own hand, before the reveal", () => {
@@ -87,7 +95,11 @@ describe("the table's words", () => {
 
   test("six players: three sides across the table, ribbons in the lobby by seat order", () => {
     const room = roomOf("snapshot-six-house-cat");
-    expect(sides(room.birdwatch!).map((x) => x.seats)).toEqual([[0, 3], [1, 4], [2, 5]]);
+    expect(sides(room.birdwatch!).map((x) => x.seats)).toEqual([
+      [0, 3],
+      [1, 4],
+      [2, 5],
+    ]);
     const lobby = roomOf("snapshot-lobby");
     // Four seated (two closed): teams by seat order among them.
     const ribbons = lobbyRibbons(lobby);

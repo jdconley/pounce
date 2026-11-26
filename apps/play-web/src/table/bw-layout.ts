@@ -108,7 +108,6 @@ function ring(seats: number[], angles: number[], c: { x: number; y: number }, rx
   return { centres, rects };
 }
 
-
 const MIN_AVATAR = 34;
 
 /** A seat's box for a cat `avatar` wide: the cat, its name under it, its bid sign over its corner. */
@@ -370,7 +369,13 @@ function tvBird(input: BwInput): BwLayout {
   const cw = 168;
   const ch = Math.round(cw * 1.4);
   const sillScale = clamp(Math.min(sill.h / (ch * 1.9), sill.w / (cw * 2.4)), 0.5, 1);
-  const slots = slotsFor(sill, seatsAll.map((seat, i) => ({ seat, angle: angles[i] ?? 270 })), cw, ch, sillScale);
+  const slots = slotsFor(
+    sill,
+    seatsAll.map((seat, i) => ({ seat, angle: angles[i] ?? 270 })),
+    cw,
+    ch,
+    sillScale,
+  );
   const trump = { x: sill.x + 8, y: sill.y + 8, w: 112, h: 112 };
 
   const { unit: u, at, box } = tvMap(input.width, input.height, input.insets);

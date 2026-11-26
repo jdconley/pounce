@@ -7,7 +7,6 @@
  */
 import { art } from "../lib/art";
 
-
 import bird from "./bw-art/bird.svg?url";
 import { cardFacts, cardLabel, type CardId, type RuleSetId } from "./bw-model";
 

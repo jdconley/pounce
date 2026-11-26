@@ -73,7 +73,11 @@ test("Birdwatch lobby: the host picks the rules, swaps seats, and teams wear rib
   await expect(guest.page.getByRole("radio", { name: "Tucker" })).toBeDisabled();
 
   // Teams by seat order: seats 0 and 2, 1 and 3. Kiki took the first House Cat's seat (seat 1).
-  const ribbon = (page: Page, name: string) => page.getByRole("button", { name: new RegExp(`^${name}`) }).first().evaluate((el) => getComputedStyle(el).getPropertyValue("--ribbon").trim());
+  const ribbon = (page: Page, name: string) =>
+    page
+      .getByRole("button", { name: new RegExp(`^${name}`) })
+      .first()
+      .evaluate((el) => getComputedStyle(el).getPropertyValue("--ribbon").trim());
   const leoBefore = await ribbon(host.page, "Leo");
   expect(await ribbon(host.page, "Kiki")).not.toBe(leoBefore);
 
@@ -81,7 +85,8 @@ test("Birdwatch lobby: the host picks the rules, swaps seats, and teams wear rib
   await host.page.getByRole("button", { name: "Kiki, on another device" }).click();
   await host.page.locator("#swap-seats").click();
   await expect(host.page.getByText("Tap a seat to swap")).toBeVisible();
-  await host.page.getByRole("button", { name: "Swap with House Cat" }).nth(1).click();
+  // Seat 2 is Leo's teammate's: the first House Cat after Kiki.
+  await host.page.getByRole("button", { name: "Swap with House Cat" }).first().click();
   await expect.poll(() => ribbon(host.page, "Kiki")).toBe(leoBefore);
   await expect.poll(() => ribbon(guest.page, "Kiki")).toBe(await ribbon(guest.page, "Leo"));
 

@@ -70,10 +70,10 @@ export async function shownLink(tv: Tv, scope = ".tv-home-screen"): Promise<{ co
 }
 
 /** A game's poster on the TV's home: its name is what it shows, "Cat Tower 2 to 6 players". */
-export const poster = (page: Page, game: "Cat Tower" | "Tuna Tiles") => page.getByRole("button", { name: new RegExp(`^${game}\\s*\\d+ to \\d+ players$`) });
+export const poster = (page: Page, game: "Cat Tower" | "Tuna Tiles" | "Birdwatch") => page.getByRole("button", { name: new RegExp(`^${game}\\s*\\d+ to \\d+ players$`) });
 
 /** The TV makes a table from its poster; returns the table's code, read off its lobby. */
-export async function tvMakes(tv: Tv, game: "Cat Tower" | "Tuna Tiles"): Promise<string> {
+export async function tvMakes(tv: Tv, game: "Cat Tower" | "Tuna Tiles" | "Birdwatch"): Promise<string> {
   await poster(tv.page, game).click();
   return tvTable(tv.page);
 }

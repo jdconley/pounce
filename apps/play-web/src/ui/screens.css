@@ -865,6 +865,8 @@
   inset: 0;
   z-index: 50;
   display: grid;
+  /* One column no wider than the screen, so a long name ellipsizes instead of widening the card. */
+  grid-template-columns: minmax(0, 1fr);
   place-items: center;
   padding: calc(var(--safe-top) + 16px) 16px calc(var(--safe-bottom) + 16px);
   background: rgba(27, 11, 58, 0.55);

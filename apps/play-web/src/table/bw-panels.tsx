@@ -47,7 +47,14 @@ function useHold(fn: () => void) {
 }
 
 /** The bid: one big number on the sign, +5 (hold to raise faster), Bid and Pass. */
-export function BidPanel(props: { range: { min: number; max: number; step: number }; amount: number; setAmount: (n: number | ((a: number) => number)) => void; onBid: () => void; onPass: () => void; busy: boolean }) {
+export function BidPanel(props: {
+  range: { min: number; max: number; step: number };
+  amount: number;
+  setAmount: (n: number | ((a: number) => number)) => void;
+  onBid: () => void;
+  onPass: () => void;
+  busy: boolean;
+}) {
   const { range, amount } = props;
   const raise = () => {
     if (amount + range.step > range.max) {
@@ -67,12 +74,21 @@ export function BidPanel(props: { range: { min: number; max: number; step: numbe
       <button type="button" class="bw-bid-sign" id="bw-bid-sign" aria-label={`Bid ${amount}${amount > range.min ? `. Back to ${range.min}` : ""}`} onClick={() => props.setAmount(range.min)}>
         <span class="bw-bid-n">{amount}</span>
       </button>
-      <button type="button" class="btn teal bw-raise" id="bw-raise" aria-label="Raise 5" disabled={props.busy || amount + range.step > range.max} {...hold} onClick={(e) => e.preventDefault()} onKeyDown={(e) => {
-        if (e.key === "Enter" || e.key === " ") {
-          e.preventDefault();
-          raise();
-        }
-      }}>
+      <button
+        type="button"
+        class="btn teal bw-raise"
+        id="bw-raise"
+        aria-label="Raise 5"
+        disabled={props.busy || amount + range.step > range.max}
+        {...hold}
+        onClick={(e) => e.preventDefault()}
+        onKeyDown={(e) => {
+          if (e.key === "Enter" || e.key === " ") {
+            e.preventDefault();
+            raise();
+          }
+        }}
+      >
         +{range.step}
       </button>
       <Button id="bw-bid" variant="ok" onClick={props.onBid} disabled={props.busy}>
@@ -102,7 +118,14 @@ export function TrumpPicker(props: { suggest: Suit | null; onPick: (suit: Suit) 
   return (
     <div class="bw-trumps" role="group" aria-label="Pick trump">
       {SUITS.map((suit, i) => (
-        <button type="button" id={`bw-suit-${suit}`} class={`bw-suit ${suit} ${props.suggest === suit ? "hint" : ""}`} disabled={props.busy} onClick={() => props.onPick(suit)} aria-label={`${SUIT_NAME[suit]} trump`}>
+        <button
+          type="button"
+          id={`bw-suit-${suit}`}
+          class={`bw-suit ${suit} ${props.suggest === suit ? "hint" : ""}`}
+          disabled={props.busy}
+          onClick={() => props.onPick(suit)}
+          aria-label={`${SUIT_NAME[suit]} trump`}
+        >
           <SuitIcon suit={suit} />
           <span>{SUIT_NAME[suit]}</span>
           {props.keys ? <kbd aria-hidden="true">{i + 1}</kbd> : null}
@@ -122,7 +145,7 @@ export function PartnerPicker(props: { choices: CardId[]; trump: Suit | null; ru
         {rows.map((row) => (
           <div class="bw-partner-row" role="group" aria-label={row.suit === props.trump ? `${SUIT_WORD[row.suit]}, trump` : SUIT_WORD[row.suit]}>
             {row.cards.map((c) => (
-              <button type="button" class="card bw-mini" disabled={props.busy} aria-label={cardLabel(c, props.rules)} onClick={() => props.onPick(c)}>
+              <button type="button" class="bw-mini" disabled={props.busy} aria-label={cardLabel(c, props.rules)} onClick={() => props.onPick(c)}>
                 <BirdFace id={c} rules={props.rules} />
               </button>
             ))}

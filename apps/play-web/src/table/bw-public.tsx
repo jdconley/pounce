@@ -8,6 +8,7 @@
  */
 import { useEffect, useLayoutEffect, useRef, useState } from "preact/hooks";
 
+import { catArt } from "../lib/art";
 import { buzz } from "../lib/haptics";
 import { reducedMotion } from "../lib/settings";
 import { play } from "../lib/sound";
@@ -15,7 +16,7 @@ import { play } from "../lib/sound";
 import { BirdFace, SuitIcon } from "./bw-faces";
 import { cardLabel, ribbonOf, sideName, sides, signOf, SUIT_WORD, type CardId } from "./bw-model";
 import { bump, transformOf, type Motion, type Pose } from "./motion";
-import { seatName, SeatAvatar } from "./seat";
+import { seatCat, seatName, SeatAvatar } from "./seat";
 
 import type { BwLayout } from "./bw-layout";
 import type { RoomStore } from "../store/room";
@@ -125,11 +126,18 @@ export function BwPublic(props: BwPublicProps) {
   const trumpWords = v.trump ? `Trump: ${SUIT_WORD[v.trump]}` : "No trump yet";
   const bidWords = v.high ? `${v.phase === "bidding" ? "High bid" : "Bid"} ${v.high.amount}, ${seatName(room.seats[v.high.seat])}` : "";
   const StripTag = props.onStrip ? "button" : "div";
+  // Too many sides for names (five players on a phone): each chip shows its cats instead.
+  const many = !L.stripColumn && L.strip.w / Math.max(strip.length, 1) < 128;
 
   return (
     <>
       <div class="bw-window" style={{ transform: `translate3d(${L.window.x}px, ${L.window.y}px, 0)`, width: `${L.window.w}px`, height: `${L.window.h}px` }} aria-hidden="true" />
-      <div class="bw-sill" style={{ transform: `translate3d(${L.sill.x}px, ${L.sill.y}px, 0)`, width: `${L.sill.w}px`, height: `${L.sill.h}px` }} role="img" aria-label={v.trick.length ? `On the sill: ${v.trick.map((t) => `${seatName(room.seats[t.seat])}, ${cardLabel(t.card, v.rules)}`).join("; ")}` : "The sill is empty"} />
+      <div
+        class="bw-sill"
+        style={{ transform: `translate3d(${L.sill.x}px, ${L.sill.y}px, 0)`, width: `${L.sill.w}px`, height: `${L.sill.h}px` }}
+        role="img"
+        aria-label={v.trick.length ? `On the sill: ${v.trick.map((t) => `${seatName(room.seats[t.seat])}, ${cardLabel(t.card, v.rules)}`).join("; ")}` : "The sill is empty"}
+      />
 
       {[...L.seats].map(([s, at]) => {
         const sign = signOf(v, s);
@@ -142,10 +150,18 @@ export function BwPublic(props: BwPublicProps) {
               if (el) seatEls.current.set(s, el);
               else seatEls.current.delete(s);
             }}
-            style={{ transform: `translate3d(${at.x - L.avatar / 2}px, ${at.y - L.avatar / 2 - 4}px, 0)`, ["--ribbon" as string]: ribbon ?? "transparent", ["--seat-w" as string]: `${rect?.w ?? L.avatar}px` }}
+            style={{
+              transform: `translate3d(${at.x - L.avatar / 2}px, ${at.y - L.avatar / 2 - 4}px, 0)`,
+              ["--ribbon" as string]: ribbon ?? "transparent",
+              ["--seat-w" as string]: `${rect?.w ?? L.avatar}px`,
+            }}
           >
             <SeatAvatar seat={s} info={room.seats[s]} size={L.avatar} turn={live && v.turn === s} count={v.handCounts[s]} label={seatLabel(room, v, s, sign?.text)} />
-            {v.dealer === s && live ? <span class="bw-dealer" aria-hidden="true">D</span> : null}
+            {v.dealer === s && live ? (
+              <span class="bw-dealer" aria-hidden="true">
+                D
+              </span>
+            ) : null}
             {sign ? (
               <span class={`bw-sign ${sign.kind}`} id={`bw-sign-${s}`} aria-hidden="true">
                 {sign.text}
@@ -155,7 +171,13 @@ export function BwPublic(props: BwPublicProps) {
         );
       })}
 
-      <div class="bw-trump" id="bw-trump" style={{ transform: `translate3d(${L.trump.x}px, ${L.trump.y}px, 0)`, ["--badge" as string]: `${L.trump.w}px` }} role="img" aria-label={[trumpWords, bidWords].filter(Boolean).join(". ")}>
+      <div
+        class="bw-trump"
+        id="bw-trump"
+        style={{ transform: `translate3d(${L.trump.x}px, ${L.trump.y}px, 0)`, ["--badge" as string]: `${L.trump.w}px` }}
+        role="img"
+        aria-label={[trumpWords, bidWords].filter(Boolean).join(". ")}
+      >
         <span class={`bw-badge ${v.trump ? "on" : ""}`}>{v.trump ? <SuitIcon suit={v.trump} /> : <span class="bw-badge-q">?</span>}</span>
         {v.high ? (
           <span class="bw-high">
@@ -167,7 +189,7 @@ export function BwPublic(props: BwPublicProps) {
 
       <StripTag
         type={props.onStrip ? "button" : undefined}
-        class={`bw-strip ${L.stripColumn ? "column" : ""}`}
+        class={`bw-strip ${L.stripColumn ? "column" : ""} ${many ? "many" : ""}`}
         id="bw-strip"
         style={{ transform: `translate3d(${L.strip.x}px, ${L.strip.y}px, 0)`, width: `${L.strip.w}px`, height: L.stripColumn ? undefined : `${L.strip.h}px`, maxHeight: `${L.strip.h}px` }}
         onClick={props.onStrip}
@@ -176,6 +198,11 @@ export function BwPublic(props: BwPublicProps) {
       >
         {strip.map((s) => (
           <span class={`bw-chip ${s.bidding ? "bidding" : ""}`} style={{ ["--ribbon" as string]: s.ribbon ?? "rgba(255,255,255,0.25)" }}>
+            <span class="bw-chip-cats" aria-hidden="true">
+              {s.seats.map((seat) => (
+                <img src={catArt(seatCat(room.seats[seat]), "idle")} alt="" width={22} height={22} decoding="async" />
+              ))}
+            </span>
             <span class="bw-chip-who">{sideName(room, s.seats)}</span>
             <span class="bw-chip-score">{s.score}</span>
             {s.taken ? <span class="bw-chip-taken">+{s.taken}</span> : null}
@@ -229,10 +256,11 @@ function TrickSweep(props: { sweep: Sweep; L: BwLayout; rules: BirdView["rules"]
     const anims = [...host.children].map((el, i) => {
       const from = props.L.slots.get(props.sweep.cards[i]!.seat) ?? to;
       const mid = { x: props.L.centre.x - props.L.cw / 2, y: props.L.centre.y - props.L.ch / 2, r: 0, s: props.L.sillScale };
-      return (el as HTMLElement).animate(
-        [{ transform: transformOf(from) }, { transform: transformOf(mid), offset: 0.35 }, { transform: transformOf(to) }],
-        { duration: 640, easing: "cubic-bezier(0.4, 0, 0.3, 1)", fill: "forwards" },
-      );
+      return (el as HTMLElement).animate([{ transform: transformOf(from) }, { transform: transformOf(mid), offset: 0.35 }, { transform: transformOf(to) }], {
+        duration: 640,
+        easing: "cubic-bezier(0.4, 0, 0.3, 1)",
+        fill: "forwards",
+      });
     });
     // The gathered cards overlap: they fade as one layer, never card by card.
     anims.push(host.animate([{ opacity: 1 }, { opacity: 1, offset: 0.55 }, { opacity: 0 }], { duration: 640, fill: "forwards" }));

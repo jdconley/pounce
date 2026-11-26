@@ -1,5 +1,6 @@
 import { devices, expect, test, type Browser, type Page } from "@playwright/test";
 
+import { bwStep, newStats } from "./birdwatch-helpers";
 import { dailyPhone } from "./daily-phone";
 import { closeAll, firstRun, newPlayer } from "./helpers";
 import { openSniff, wrongWords } from "./sniff-helpers";
@@ -151,6 +152,46 @@ async function playTiles(page: Page) {
     await page.waitForTimeout(600);
     await page.getByRole("button", { name: "Start over" }).click();
     await page.locator("#play-btn").click();
+  }
+}
+
+/**
+ * Birdwatch against three House Cats: the deal, the bid, a hand of tricks with cards dragged onto
+ * the sill and tapped, the trick sweeping to its winner.
+ */
+async function playBirdwatch(page: Page) {
+  await mark(page, "bw-menu");
+  await page.getByRole("button", { name: "Menu" }).click();
+  await page.getByRole("button", { name: "Home" }).click();
+  await mark(page, "bw-lobby");
+  await page.getByRole("button", { name: "Play Birdwatch" }).click();
+  await expect(page.getByRole("button", { name: "House Cat" }).nth(2)).toBeVisible();
+  await mark(page, "bw-start");
+  await page.getByRole("button", { name: "Start" }).click();
+  await expect(page.locator(".bw-table")).toBeVisible();
+  const stats = newStats();
+  let dragged = 0;
+  const until = Date.now() + 45_000;
+  while (Date.now() < until && stats.plays < 6) {
+    const lead = page.locator(".bw-cue.mine");
+    if (dragged < 3 && (await lead.isVisible())) {
+      // Drag a card the server lets this seat play onto the sill.
+      const card = page.locator(".bw-hand-card:not(.dim)").first();
+      const before = await page.locator(".bw-hand-card").count();
+      const from = (await card.boundingBox())!;
+      const to = (await page.locator(".bw-sill").boundingBox())!;
+      await mark(page, "bw-drag");
+      await page.mouse.move(from.x + from.width * 0.3, from.y + from.height * 0.3);
+      await page.mouse.down();
+      for (let i = 1; i <= 30; i++) await page.mouse.move(from.x + (to.x + to.width / 2 - from.x) * (i / 30), from.y + (to.y + to.height / 2 - from.y) * (i / 30));
+      await page.mouse.up();
+      await expect.poll(() => page.locator(".bw-hand-card").count()).toBeLessThan(before);
+      dragged++;
+      stats.plays++;
+      continue;
+    }
+    await mark(page, "bw-step");
+    if ((await bwStep(page, "keys", stats, { bid: () => stats.bids === 0 })) === null) await page.waitForTimeout(150);
   }
 }
 
@@ -350,7 +391,7 @@ async function measure(browser: Browser, page: Page, gate: Gate, play: () => Pro
 test("the rendering thread keeps every frame: no long task, frame work within budget", async ({ browser, page, context }, info) => {
   const gate = info.project.name as Gate;
   test.skip(!(gate in BUDGET), "Chrome on the laptop, on a slowed phone, and on the TV");
-  test.setTimeout(gate === "tv-chrome" ? 360_000 : 240_000);
+  test.setTimeout(gate === "tv-chrome" ? 360_000 : 300_000);
   await context.setExtraHTTPHeaders({ "cf-connecting-ip": `10.250.${{ "laptop-chrome": 1, "android-chrome": 2, "tv-chrome": 3 }[gate]}.${(process.pid % 250) + 1}` });
   await context.addInitScript(RECORDER);
   let play: () => Promise<void>;
@@ -375,6 +416,7 @@ test("the rendering thread keeps every frame: no long task, frame work within bu
     play = async () => {
       await playCatTower(page);
       await playTiles(page);
+      await playBirdwatch(page);
       await playDish(page);
     };
   }

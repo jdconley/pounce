@@ -54,6 +54,7 @@ export async function bwStep(page: Page, how: How, stats: BwStats, opts: { bid?:
   const bid = page.locator("#bw-bid:not([disabled])");
   if (await bid.isVisible()) {
     stats.steps++;
+    await expect(page.locator("#bw-pass")).toBeEnabled();
     // Keys go to the table, not to a card or button that has focus.
     if (how === "keys") await page.evaluate(() => (document.activeElement as HTMLElement | null)?.blur());
     if (opts.bid?.() ?? false) {
@@ -62,7 +63,9 @@ export async function bwStep(page: Page, how: How, stats: BwStats, opts: { bid?:
       stats.bids++;
     } else if (how === "keys") await page.keyboard.press("p");
     else await page.locator("#bw-pass").click();
-    await expect(page.locator("#bw-bid")).toBeHidden({ timeout: 10_000 }).catch(() => undefined);
+    await expect(page.locator("#bw-bid"))
+      .toBeHidden({ timeout: 10_000 })
+      .catch(() => undefined);
     return "acted";
   }
   const done = page.locator("#bw-nest-done");
@@ -86,6 +89,8 @@ export async function bwStep(page: Page, how: How, stats: BwStats, opts: { bid?:
   }
   const suits = page.locator(".bw-trumps .bw-suit");
   if (await suits.first().isVisible()) {
+    // Live once the put-back has been answered.
+    await expect(suits.first()).toBeEnabled();
     const all = await suits.evaluateAll((els) => els.map((el) => el.classList.contains("hint")));
     const i = Math.max(0, all.indexOf(true));
     if (how === "keys") await page.keyboard.press(String(i + 1));
@@ -97,6 +102,7 @@ export async function bwStep(page: Page, how: How, stats: BwStats, opts: { bid?:
   }
   const partner = page.locator(".bw-partner .bw-mini");
   if (await partner.first().isVisible()) {
+    await expect(partner.first()).toBeEnabled();
     await partner.first().click();
     await expect(page.locator(".bw-partner")).toBeHidden({ timeout: 10_000 });
     stats.partners++;
@@ -133,7 +139,13 @@ export async function playToTheEnd(pages: Page[], how: How[], opts: { bidOnce?: 
     for (const [k, page] of pages.entries()) {
       if (over.has(k)) continue;
       const summary = page.locator(".bw-summary .title");
-      if ((await summary.count()) > 0) stats.hands.add((await summary.first().textContent().catch(() => null)) ?? "");
+      if ((await summary.count()) > 0)
+        stats.hands.add(
+          (await summary
+            .first()
+            .textContent()
+            .catch(() => null)) ?? "",
+        );
       // Bid the least until a bid is won once, so every game also takes the feeder and names trump.
       const r = await bwStep(page, how[k] ?? "keys", stats, { bid: () => !wonABid && (opts.bidOnce ?? true) });
       if (stats.nests > 0) wonABid = true;

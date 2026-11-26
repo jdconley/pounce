@@ -248,21 +248,20 @@ export function BirdwatchTable(props: { store: RoomStore; state: RoomState; soun
 
   const fineMouse = useMedia("(hover: hover) and (pointer: fine)");
   const secret = isSecretPartner(v, seat, showHand);
-  const cue =
-    step === "play"
-      ? v.trick.length === 0
-        ? "Your lead"
-        : "Your turn"
-      : step === "wait"
-        ? waitWords(room, v)
-        : "";
+  const cue = step === "play" ? (v.trick.length === 0 ? "Your lead" : "Your turn") : step === "wait" ? waitWords(room, v) : "";
 
   const renderCard = (id: CardId, p: Pose, ref: (el: HTMLElement | null) => void) => {
     const dim = step === "play" && !playable.has(id);
     const up = lifted === id || chosen.includes(id);
     const words = `${cardLabel(id, v.rules)}${dim ? ", can't play" : ""}${chosen.includes(id) ? ", putting back" : ""}${fromNest.has(id) ? ", from the feeder" : ""}`;
     return (
-      <div key={`c${id}`} ref={ref} class={`card mine bw-hand-card ${dim ? "dim" : ""} ${up ? "picked" : ""} ${fromNest.has(id) ? "glow" : ""}`} style={{ transform: transformOf(p), zIndex: p.z ?? 1 }} onPointerDown={onCardDown(id)}>
+      <div
+        key={`c${id}`}
+        ref={ref}
+        class={`card mine bw-hand-card ${dim ? "dim" : ""} ${up ? "picked" : ""} ${fromNest.has(id) ? "glow" : ""}`}
+        style={{ transform: transformOf(p), zIndex: p.z ?? 1 }}
+        onPointerDown={onCardDown(id)}
+      >
         <button
           type="button"
           class="card-inner"
@@ -291,48 +290,59 @@ export function BirdwatchTable(props: { store: RoomStore; state: RoomState; soun
   const panelStyle = { transform: `translate3d(${panel.x}px, ${panel.y}px, 0)`, width: `${panel.w}px`, height: `${panel.h}px` };
 
   return (
-    <div class={`bw-table ${L.landscape ? "landscape" : ""} ${props.cards ? "cards-view" : ""} ${myTurn ? "my-turn" : ""}`} ref={rootRef} style={bwStyle(L)}>
-      <BwPublic store={store} room={room} layout={L} motion={motion} sounds={sounds} onStrip={() => setSheet(true)} hand={{ poses, els: els.current, render: renderCard }}>
-        <div class="bw-hand-zone" id="bw-hand" style={{ transform: `translate3d(${L.handRect.x}px, ${L.handRect.y}px, 0)`, width: `${L.handRect.w}px`, height: `${L.handRect.h}px` }} />
+    <>
+      <div class={`bw-table ${L.landscape ? "landscape" : ""} ${props.cards ? "cards-view" : ""} ${myTurn ? "my-turn" : ""}`} ref={rootRef} style={bwStyle(L)}>
+        <BwPublic store={store} room={room} layout={L} motion={motion} sounds={sounds} onStrip={() => setSheet(true)} hand={{ poses, els: els.current, render: renderCard }}>
+          <div class="bw-hand-zone" id="bw-hand" style={{ transform: `translate3d(${L.handRect.x}px, ${L.handRect.y}px, 0)`, width: `${L.handRect.w}px`, height: `${L.handRect.h}px` }} />
 
-        <div class="bw-panel" style={panelStyle}>
-          {step === "bid" && v.bidRange ? (
-            <BidPanel range={v.bidRange} amount={amount} setAmount={setAmount} onBid={bid} onPass={pass} busy={busy} />
-          ) : step === "nest" ? (
-            <NestBar need={v.nestSize} chosen={chosen.length} onDone={nestDone} busy={busy} />
-          ) : step === "trump" ? (
-            <TrumpPicker suggest={suggestTrump(serverHand, v.rules)} onPick={pickTrump} busy={busy} keys={fineMouse} />
-          ) : cue ? (
-            <p class={`cue bw-cue ${step === "play" ? "mine" : ""}`} aria-live="polite">
-              {cue}
-            </p>
-          ) : null}
-        </div>
-
-        {secret ? (
-          <span class="bw-partner-mark" id="bw-partner-mark" style={{ transform: `translate3d(${L.handRect.x + 4}px, ${L.handRect.y - 30}px, 0)` }}>
-            Secret partner
-          </span>
-        ) : null}
-
-        {step === "partner" && v.partnerChoices ? (
-          <div class="bw-overlay" style={{ transform: `translate3d(${L.window.x}px, ${insets.top + 8}px, 0)`, width: `${props.cards ? L.panel.w : L.window.w}px`, height: `${Math.max(L.handRect.y - insets.top - 16, 200)}px` }}>
-            <PartnerPicker choices={v.partnerChoices} trump={v.trump} rules={v.rules} onPick={callPartner} busy={busy} />
+          <div class="bw-panel" style={panelStyle}>
+            {step === "bid" && v.bidRange ? (
+              <BidPanel range={v.bidRange} amount={amount} setAmount={setAmount} onBid={bid} onPass={pass} busy={busy} />
+            ) : step === "nest" ? (
+              <NestBar need={v.nestSize} chosen={chosen.length} onDone={nestDone} busy={busy} />
+            ) : step === "trump" ? (
+              <TrumpPicker suggest={suggestTrump(serverHand, v.rules)} onPick={pickTrump} busy={busy} keys={fineMouse} />
+            ) : cue ? (
+              <p class={`cue bw-cue ${step === "play" ? "mine" : ""}`} aria-live="polite">
+                {cue}
+              </p>
+            ) : null}
           </div>
-        ) : null}
 
-        {v.phase === "between" && v.status === "playing" ? <HandSummaryCard room={room} /> : null}
+          {secret ? (
+            <span class="bw-partner-mark" id="bw-partner-mark" style={{ transform: `translate3d(${L.handRect.x + 4}px, ${L.handRect.y - 30}px, 0)` }}>
+              Secret partner
+            </span>
+          ) : null}
 
-        {curtainSeat !== null ? <Curtain name={seatName(room.seats[curtainSeat])} cat={room.seats[curtainSeat]?.person?.cat ?? 0} onReveal={() => setRevealed({ seat: curtainSeat, hand: v.hand })} /> : null}
+          {step === "partner" && v.partnerChoices ? (
+            <div
+              class="bw-overlay"
+              style={{
+                transform: `translate3d(${L.window.x}px, ${insets.top + 8}px, 0)`,
+                width: `${props.cards ? L.panel.w : L.window.w}px`,
+                height: `${Math.max(L.handRect.y - insets.top - 16, 200)}px`,
+              }}
+            >
+              <PartnerPicker choices={v.partnerChoices} trump={v.trump} rules={v.rules} onPick={callPartner} busy={busy} />
+            </div>
+          ) : null}
 
-        {sheet ? <ScoreSheet room={room} onClose={() => setSheet(false)} /> : null}
+          {v.phase === "between" && v.status === "playing" ? <HandSummaryCard room={room} /> : null}
 
-        <Tip id="bw.bid" anchor="bw-bid-sign" text="Bid on the points your side will take." show={step === "bid" && !busy} place="above" />
-        <Tip id="bw.trump" anchor="bw-trump" text="Trump beats every other suit." show={step === "play" && v.trump !== null && tipLearned("bw.bid") && !tipLearned("bw.follow")} />
-        <Tip id="bw.follow" anchor="bw-hand" text="Follow the suit led. Dim cards can't play." show={step === "play" && playable.size < hand.length && tipLearned("bw.trump")} place="above" />
-        <Tip id="bw.partner" anchor="bw-partner-mark" text="You hold the called card. Help the bidder." show={secret} place="above" />
-        <Tip id="bw.keys" anchor="bw-hand" text="Keys: arrows pick, Enter plays." show={fineMouse && step === "play" && tipLearned("bw.follow") && !busy} place="above" />
-      </BwPublic>
-    </div>
+          {curtainSeat !== null ? (
+            <Curtain name={seatName(room.seats[curtainSeat])} cat={room.seats[curtainSeat]?.person?.cat ?? 0} onReveal={() => setRevealed({ seat: curtainSeat, hand: v.hand })} />
+          ) : null}
+
+          <Tip id="bw.bid" anchor="bw-bid-sign" text="Bid on the points your side will take." show={step === "bid" && !busy} place="above" />
+          <Tip id="bw.trump" anchor="bw-trump" text="Trump beats every other suit." show={step === "play" && v.trump !== null && tipLearned("bw.bid") && !tipLearned("bw.follow")} />
+          <Tip id="bw.follow" anchor="bw-hand" text="Follow the suit led. Dim cards can't play." show={step === "play" && playable.size < hand.length && tipLearned("bw.trump")} place="above" />
+          <Tip id="bw.partner" anchor="bw-partner-mark" text="You hold the called card. Help the bidder." show={secret} place="above" />
+          <Tip id="bw.keys" anchor="bw-hand" text="Keys: arrows pick, Enter plays." show={fineMouse && step === "play" && tipLearned("bw.follow") && !busy} place="above" />
+        </BwPublic>
+      </div>
+      {/* Outside the table's own layers, so nothing on the table (the hand's summary) covers it. */}
+      {sheet ? <ScoreSheet room={room} onClose={() => setSheet(false)} /> : null}
+    </>
   );
 }

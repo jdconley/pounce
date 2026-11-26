@@ -191,8 +191,7 @@ export function seatOnShow(room: RoomView, revealed: { seat: number; hand: numbe
 }
 
 /** "Partner" on this hand: the seat on show holds the called card (§4.6), behind the curtain on a shared device. */
-export const isSecretPartner = (v: BirdView, seat: number | null, showHand: boolean): boolean =>
-  showHand && seat !== null && v.youArePartner === seat && v.partner === null;
+export const isSecretPartner = (v: BirdView, seat: number | null, showHand: boolean): boolean => showHand && seat !== null && v.youArePartner === seat && v.partner === null;
 
 export type HandSummary = {
   hand: number;
