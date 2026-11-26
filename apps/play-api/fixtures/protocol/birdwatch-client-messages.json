@@ -1,0 +1,103 @@
+[
+  {
+    "name": "setOptions",
+    "message": {
+      "t": "setOptions",
+      "options": {
+        "rules": "tucker"
+      }
+    }
+  },
+  {
+    "name": "swapSeats",
+    "message": {
+      "t": "swapSeats",
+      "seats": [
+        1,
+        2
+      ]
+    }
+  },
+  {
+    "name": "act-bid",
+    "message": {
+      "t": "act",
+      "seat": 1,
+      "action": {
+        "type": "bid",
+        "amount": 85
+      }
+    }
+  },
+  {
+    "name": "act-pass",
+    "message": {
+      "t": "act",
+      "seat": 1,
+      "action": {
+        "type": "pass"
+      }
+    }
+  },
+  {
+    "name": "act-nest",
+    "message": {
+      "t": "act",
+      "seat": 1,
+      "action": {
+        "type": "nest",
+        "discard": [
+          5,
+          7,
+          19,
+          32,
+          46
+        ]
+      }
+    }
+  },
+  {
+    "name": "act-trump",
+    "message": {
+      "t": "act",
+      "seat": 1,
+      "action": {
+        "type": "trump",
+        "suit": "bell"
+      }
+    }
+  },
+  {
+    "name": "act-partner",
+    "message": {
+      "t": "act",
+      "seat": 1,
+      "action": {
+        "type": "partner",
+        "card": 56
+      }
+    }
+  },
+  {
+    "name": "act-play",
+    "message": {
+      "t": "act",
+      "seat": 1,
+      "action": {
+        "type": "play",
+        "card": 13
+      },
+      "id": "0f8fad5b-d9cb-469f-a165-70867728950e"
+    }
+  },
+  {
+    "name": "act-forfeit",
+    "message": {
+      "t": "act",
+      "seat": 1,
+      "action": {
+        "type": "forfeit"
+      }
+    }
+  }
+]

@@ -216,7 +216,9 @@ function gameChip(game: string): string {
 
 /** The Open Graph and Twitter tags Messages reads for its preview (TN3156: server-rendered, no scripts). */
 function previewTags(o: { title: string; description: string; url: string; origin: string; game: string }): string {
-  const image = o.game === DISH_GAME ? MEDIA.invite.dish : isGameId(o.game) ? MEDIA.invite.previews[o.game] : MEDIA.og.src;
+  // A game with no preview of its own yet (Birdwatch, until its release) uses the site's.
+  const previews: Partial<Record<string, string>> = MEDIA.invite.previews;
+  const image = o.game === DISH_GAME ? MEDIA.invite.dish : isGameId(o.game) ? (previews[o.game] ?? MEDIA.og.src) : MEDIA.og.src;
   return [
     `<meta property="og:type" content="website">`,
     `<meta property="og:site_name" content="Pounce">`,

@@ -62,12 +62,29 @@ describe("ErrorCode", () => {
       opening_too_low: true,
       // Play again at a table whose game was turned off.
       game_off: true,
+      wrong_phase: true,
+      bid_too_low: true,
+      bid_too_high: true,
+      bad_bid: true,
+      not_your_card: true,
+      wrong_count: true,
+      duplicate_card: true,
+      own_card: true,
+      must_follow: true,
     };
-    expect(Object.keys(codes)).toHaveLength(47);
+    expect(Object.keys(codes)).toHaveLength(56);
   });
 });
 
 describe("parseClientMessage", () => {
+  it("takes a table's options only with the room's own parser for them (Cat Tower's has none)", () => {
+    const set = JSON.stringify({ t: "setOptions", options: { rules: "tucker" } });
+    expect(parseClientMessage(set)).toEqual(BAD);
+    const takes = (raw: unknown) => (typeof raw === "object" && raw !== null && "rules" in raw ? { rules: "tucker" as const } : null);
+    expect(parseClientMessage(set, undefined, undefined, takes)).toEqual({ t: "setOptions", options: { rules: "tucker" } });
+    expect(parseClientMessage('{"t":"setOptions"}', undefined, undefined, takes)).toEqual(BAD);
+  });
+
   it("exports the protocol version", () => {
     expect(PROTOCOL_VERSION).toBe(1);
   });

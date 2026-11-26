@@ -47,6 +47,28 @@ test("no Cat Tower sample mentions another game", () => {
 });
 
 /**
+ * The tile game's samples (`tests/tiles-protocol-fixtures.test.ts`), pinned when the third game,
+ * Birdwatch, was wired in: the app's and the web player's tile game decode them, and nothing done
+ * for another game may change one byte of what a tile game table sends.
+ */
+const PINNED_TILES: Record<string, string> = {
+  "protocol/tiles-server-messages.json": "9dfddec5e3ba2639db5ca29b2107a06546ef379842eec0cf3851bfa0f8bceb34",
+  "protocol/tiles-client-messages.json": "e6a7e01383bcfb5cf942968aa961a74db4b3e328cbdef7b972c5ffabed8769c7",
+};
+
+test.each(Object.entries(PINNED_TILES))("fixtures/%s is byte for byte what the tile game's clients decode", (file, sha256) => {
+  const bytes = readFileSync(new URL(`../fixtures/${file}`, import.meta.url));
+  expect(createHash("sha256").update(bytes).digest("hex")).toBe(sha256);
+});
+
+test("no tile game sample mentions Birdwatch or table options", () => {
+  for (const file of Object.keys(PINNED_TILES)) {
+    const text = readFileSync(new URL(`../fixtures/${file}`, import.meta.url), "utf8");
+    for (const word of ["birdwatch", '"options"', "houseCat", '"left": true']) expect(text.includes(word), `${file}: ${word}`).toBe(false);
+  }
+});
+
+/**
  * The Daily Dish's samples (docs/daily-protocol.md), pinned when the server core landed: the app's
  * and the web player's Dish decode them, and four game sessions build against them. They are not
  * 1.0's, so they live apart from the list above. `tests/daily-fixtures.test.ts` makes them; a change

@@ -43,10 +43,11 @@ export type LiveState = {
   streak: { count: number; me: boolean; them: boolean } | null;
   /**
    * Only on a table of a game other than Cat Tower: what each seat's `progress` counts. `pieces`:
-   * the pieces left on its rack (the tile game). A Cat Tower table's state has neither key and is
-   * exactly what it always was.
+   * the pieces left on its rack (the tile game). `score`: its side's score (Birdwatch), so
+   * teammates show the same number. A Cat Tower table's state has neither key and is exactly what
+   * it always was.
    */
-  progressKind?: "pieces";
+  progressKind?: "pieces" | "score";
 };
 
 /** One device's live table at a room. */
@@ -67,7 +68,8 @@ type SeatIn = { kind: string; person?: { name: string; cat: number } };
 
 /**
  * The content state for a device controlling `controlled`, from the room's seats and phases.
- * `pieces`: for a table whose game counts pieces left instead of shelves (one number per seat).
+ * `pieces`: for a table whose game counts something other than shelves (one number per seat),
+ * which `progressKind` names (left out: pieces).
  */
 export function liveState(i: {
   table: string;
@@ -77,6 +79,7 @@ export function liveState(i: {
   turn: number | null;
   streak: LiveState["streak"];
   pieces?: number[];
+  progressKind?: "pieces" | "score";
 }): LiveState {
   const seats = i.seats.map((s, n): LiveSeat => {
     const phase = Math.min((i.phases[n] ?? 0) + 1, FINAL_PHASE);
@@ -92,7 +95,7 @@ export function liveState(i: {
     turn: i.turn,
     mine: i.turn !== null && i.controlled.includes(i.turn),
     streak: i.streak,
-    ...(i.pieces ? { progressKind: "pieces" as const } : {}),
+    ...(i.pieces ? { progressKind: i.progressKind ?? "pieces" } : {}),
   };
 }
 
