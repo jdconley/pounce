@@ -197,5 +197,5 @@ struct AddPlayerTray: View {
 
 /// The lobby controls that wiggle when the server refuses what they asked.
 enum LobbyWiggle: Hashable {
-    case seat(Int), start, share, add, scan, here, bot
+    case seat(Int), start, share, add, scan, here, bot, rules
 }

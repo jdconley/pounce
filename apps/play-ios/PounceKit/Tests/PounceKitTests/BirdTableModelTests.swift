@@ -215,3 +215,20 @@ extension BirdTableModel.Panel {
         #expect(layout.seatSpots[0].y < layout.sill.minY)
     }
 }
+
+@Suite struct BirdLobbyHouseCatTests {
+    @Test func aFirstBirdwatchTableFillsUpToFour() {
+        var room = DemoFixtures.birdLobby(seated: 1)
+        room.seats[0].yours = true
+        let table = TableModel(room: room)
+        #expect(table.firstTableMessages == [.configure(seat: 1, kind: .bot), .configure(seat: 2, kind: .bot), .configure(seat: 3, kind: .bot)])
+        #expect(table.practiceMessages == [
+            .configure(seat: 1, kind: .bot), .configure(seat: 2, kind: .bot), .configure(seat: 3, kind: .bot), .start,
+        ])
+    }
+
+    @Test func catTowerStillAddsOne() {
+        let table = TableModel(room: DemoFixtures.lobby())
+        if let first = table.firstTableMessages { #expect(first.count <= 1) }
+    }
+}
