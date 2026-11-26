@@ -180,13 +180,40 @@ import Testing
         }
     }
 
-    @Test func everyBagHoldsTheSevenSmallToysAndOneBigOne() {
+    /// Bags run 8, 7, 8, 7: the seven small toys each time, and a paw print (bags 0, 4...) or a
+    /// bowl (bags 2, 6...) in every other bag.
+    @Test func bagsRunEightSevenWithABigToyEveryOtherBag() {
         let seed: [UInt32] = [9, 8, 7, 6]
-        for bag in 0..<4 {
-            let toys = (0..<8).map { TumbleQueue.toyAt(seed, bag * 8 + $0) }
-            #expect(Set(toys).count == 8)
-            #expect(toys.contains(bag % 2 == 0 ? .p5 : .u5))
+        var n = 0
+        for bag in 0..<8 {
+            let size = bag % 2 == 0 ? 8 : 7
+            let toys = (0..<size).map { TumbleQueue.toyAt(seed, n + $0) }
+            n += size
+            #expect(Set(toys).count == size)
+            #expect(Set(toys).isSuperset(of: TumbleQueue.small))
+            if bag % 2 == 0 { #expect(toys.contains(bag % 4 == 0 ? .p5 : .u5)) }
         }
+    }
+
+    /// `clock.ts`: 1000 ms, 15% faster every 30 s, the Zoomies from 2:30, Catnip 4 times, never under 50.
+    @Test func gravityFollowsTheSharedClock() {
+        #expect(TumbleClock.gravityMs(0) == 1000)
+        #expect(TumbleClock.gravityMs(-5) == 1000)
+        #expect(TumbleClock.gravityMs(29_999) == 1000)
+        #expect(abs(TumbleClock.gravityMs(30_000) - 850) < 1e-9)
+        #expect(abs(TumbleClock.gravityMs(149_999) - 1000 * pow(0.85, 4)) < 1e-9)
+        #expect(abs(TumbleClock.gravityMs(150_000) - 1000 * pow(0.85, 5) * 0.7) < 1e-9)
+        #expect(abs(TumbleClock.gravityMs(165_000) - 1000 * pow(0.85, 5) * 0.49) < 1e-9)
+        #expect(TumbleClock.gravityMs(0, catnip: true) == 250)
+        #expect(TumbleClock.gravityMs(400_000) == 50)
+        #expect(TumbleClock.setDownMs == 500)
+        #expect(TumbleClock.setDownResets == 15)
+    }
+
+    @Test func restingYDropsFromWhereTheToyAppears() throws {
+        let box = try TumbleText.box(cells: ["############", "############"])
+        #expect(Tumble.restingY(box, toy: .o4, rot: 0, x: 0) == 2)
+        #expect(Tumble.restingY(box, toy: .o4, rot: 0, x: 11) == nil)
     }
 
     @Test func theCachedQueueMatchesTheFreshOne() {

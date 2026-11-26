@@ -343,7 +343,12 @@ public enum Tumble {
         return (b, trick)
     }
 
-    /// Where a toy rests if dropped straight down from `y` at this rotation and column, or nil when it can't be there.
+    /// Where a toy rests if dropped straight down from where it appears, at this rotation and column, or nil (`restingY` in box.ts).
+    public static func restingY(_ box: TumbleBox, toy: TumbleToy, rot: Int, x: Int) -> Int? {
+        restingY(box, toy: toy, rot: rot, x: x, from: TumbleToys.spawn(toy).y)
+    }
+
+    /// The same from row `y`: the paw-print outline under a toy already falling.
     public static func restingY(_ box: TumbleBox, toy: TumbleToy, rot: Int, x: Int, from y: Int) -> Int? {
         guard fits(box, toy: toy, rot: rot, x: x, y: y) else { return nil }
         var y = y
