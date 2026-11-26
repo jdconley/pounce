@@ -142,6 +142,25 @@ describe("the player screen", () => {
     expect(root.querySelectorAll(".tt-over-paws li.won .tt-paws i.on").length).toBe(2);
   });
 
+  test("a round waiting on a missing device says so, and after 20 s the host may play without them", async () => {
+    const waiting = (since: number) => {
+      const r = room(3, 0, { status: "between", winner: null, waitingSince: since });
+      r.seats[2] = { ...r.seats[2]!, presence: "asleep" };
+      return r;
+    };
+    await draw(waiting(Date.now() - 5000));
+    expect(root.querySelector(".tt-over-wait")?.textContent).toBe("Waiting for Cleo");
+    expect(root.querySelector("#play-without")).toBeNull();
+    act(() => render(null, root));
+    root.remove();
+    stop?.();
+    const { ws } = await draw(waiting(Date.now() - 25_000));
+    const button = root.querySelector<HTMLButtonElement>("#play-without")!;
+    expect(button.textContent).toBe("Play without Cleo");
+    act(() => button.click());
+    expect(ws.sent.at(-1)).toMatchObject({ t: "act", seat: 0, action: { k: "playWithout" } });
+  });
+
   test("round over on another phone names no one as you", async () => {
     await draw(room(3, 0, { status: "between", winner: 1, wins: [0, 1, 0] }));
     expect(root.querySelector(".tt-over h2")).toBeNull();

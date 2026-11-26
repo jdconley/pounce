@@ -28,7 +28,7 @@ import { TilesTable } from "../table/tiles";
 import { TilesController } from "../table/tiles-controller";
 import { TumbleHowTo } from "../tumble/help";
 import { TumbleTable } from "../tumble/screen";
-import { isTumble, tumbleOf, tumbleWinners, winsWords } from "../tumble/store";
+import { isTumble, leave, tumbleOf, tumbleWinners, winsWords } from "../tumble/store";
 
 import { Button, Cat, Icon, IconButton, Sheet } from "./common";
 import { Lobby } from "./lobby";
@@ -283,7 +283,7 @@ export function TableScreen(props: { code: string; intent: TableIntent; say?: (w
               {room.status === "playing" && liveSeats(room).length > 0 ? (
                 <button type="button" class="row danger" onClick={() => setMenu("forfeit")}>
                   <Icon name="icon-leave" size={32} />
-                  <span class="grow">Forfeit</span>
+                  <span class="grow">{isTumbleRoom ? "Leave" : "Forfeit"}</span>
                 </button>
               ) : null}
             </div>
@@ -292,7 +292,7 @@ export function TableScreen(props: { code: string; intent: TableIntent; say?: (w
         {menu === "scores" ? isBird && room.birdwatch ? <ScoreSheet room={room} onClose={() => setMenu(null)} /> : <ScoresSheet room={room} onClose={() => setMenu(null)} /> : null}
         {menu === "howto" && isTumbleRoom ? <TumbleHowTo onClose={() => setMenu(null)} /> : menu === "howto" && room.options ? <BwHowTo rules={room.options.rules} onClose={() => setMenu(null)} /> : null}
         {menu === "forfeit" ? (
-          <Sheet title="Forfeit this game?" onClose={() => setMenu(null)}>
+          <Sheet title={isTumbleRoom ? "Leave this game?" : "Forfeit this game?"} onClose={() => setMenu(null)}>
             <div class="sheet-actions">
               <p class="fine">{forfeitWords(room)}</p>
               <Button
@@ -300,11 +300,14 @@ export function TableScreen(props: { code: string; intent: TableIntent; say?: (w
                 variant="magenta"
                 id="forfeit"
                 onClick={() => {
-                  for (const seat of liveSeats(room)) store.forfeit(seat);
+                  for (const seat of liveSeats(room)) {
+                    if (isTumbleRoom) leave(store, seat);
+                    else store.forfeit(seat);
+                  }
                   setMenu(null);
                 }}
               >
-                Forfeit
+                {isTumbleRoom ? "Leave" : "Forfeit"}
               </Button>
               <Button wide variant="violet" onClick={() => setMenu(null)}>
                 Keep playing
@@ -486,6 +489,7 @@ function liveSeats(room: RoomView): number[] {
 /** What a forfeit means here, in the words iOS uses (TableMenuSheet.swift). */
 function forfeitWords(room: RoomView): string {
   if (room.gameId === "birdwatch") return "A House Cat takes your seat.";
+  if (isTumble(room)) return "Your wins stay. The rest play on.";
   const out = tumbleOf(room)?.left ?? room.game?.forfeited ?? room.tiles?.forfeited ?? [];
   const mine = new Set(liveSeats(room));
   const rest = room.seats.flatMap((s, i) => ((s.kind === "human" || s.kind === "bot") && !out[i] && !mine.has(i) ? [i] : []));

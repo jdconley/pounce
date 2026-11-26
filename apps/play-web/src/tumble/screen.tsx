@@ -14,13 +14,13 @@ import { play } from "../lib/sound";
 import { mySeats, waitingSeats, waitingWords } from "../store/lobby";
 import { useInsets } from "../table/cattower";
 import { seatCat, seatName } from "../table/seat";
-import { Cat, learnTip, Tip, tipLearned, useSize } from "../ui/common";
+import { Button, Cat, learnTip, Tip, tipLearned, useSize } from "../ui/common";
 
 import { BoxPainter, paintToy, TRICK_COLOR } from "./canvas";
 import { attachKeys, attachTouch, aimsAtSelf, TrickPicker } from "./input";
 import { playLayout, watchLayout, type BoxRect, type PlayLayout, type Rect } from "./layout";
 import { stackHeight, type Fx } from "./rules";
-import { TumbleStore, type SeatState, type TumbleRoom } from "./store";
+import { PLAY_WITHOUT_AFTER_MS, playWithout, TumbleStore, type SeatState, type TumbleRoom } from "./store";
 
 import type { RoomStore, RoomState } from "../store/room";
 import type { RoomView } from "@pounce/play-api/protocol";
@@ -146,7 +146,7 @@ export function TumbleTable(props: Props) {
   const tumble = useTumble(props.store);
   const t = tumble.room;
   if (!t) return null;
-  if (t.status === "between") return <RoundOver room={room} t={t} />;
+  if (t.status === "between") return <RoundOver room={room} t={t} onPlayWithout={() => playWithout(props.store, room)} />;
   if (t.status === "over") return null;
   return <TumblePlay {...props} tumble={tumble} t={t} />;
 }
@@ -440,11 +440,28 @@ function TumblePlay(props: Props & { tumble: TumbleStore; t: TumbleRoom }) {
   );
 }
 
+/** The clock, read again about once a second while `on` (on the frame clock, not a timer). */
+function useSecond(on: boolean): number {
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    if (!on) return;
+    let raf = 0;
+    const tick = () => {
+      const t = Date.now();
+      setNow((n) => (t - n >= 1000 ? t : n));
+      raf = requestAnimationFrame(tick);
+    };
+    raf = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(raf);
+  }, [on]);
+  return now;
+}
+
 /** Confetti over the round's winner: where each bit starts across, its delay and colour. */
 const CONFETTI: readonly [number, number, string][] = Array.from({ length: 16 }, (_, i) => [(i * 37) % 100, (i * 113) % 700, RINGS[i % RINGS.length] as string]);
 
 /** Between rounds (spec §5.5): the winner's cat on top with confetti, everyone's paw tokens, and who the next round waits for. */
-export function RoundOver(props: { room: RoomView; t: TumbleRoom; tv?: boolean }) {
+export function RoundOver(props: { room: RoomView; t: TumbleRoom; tv?: boolean; onPlayWithout?: () => void }) {
   const { room, t } = props;
   const winner = t.winner;
   const mine = mySeats(room);
@@ -456,6 +473,9 @@ export function RoundOver(props: { room: RoomView; t: TumbleRoom; tv?: boolean }
   }, [t.r]);
   const seats = room.seats.flatMap((s, i) => ((s.kind === "human" || s.kind === "bot") && !t.left[i] ? [i] : []));
   const waiting = waitingSeats(room).filter((s) => !t.left[s] && !t.away[s]);
+  // The host may go on without them once the next round has waited 20 seconds (spec §5.1).
+  const now = useSecond(t.waitingSince !== null && waiting.length > 0);
+  const waitedLong = t.waitingSince !== null && now - t.waitingSince >= PLAY_WITHOUT_AFTER_MS;
   return (
     <div class={`tt-over ${props.tv ? "tv" : ""}`} role="dialog" aria-label={`Round ${t.r}`}>
       <img class="tt-over-burst" src={art("sunburst")} alt="" />
@@ -483,6 +503,11 @@ export function RoundOver(props: { room: RoomView; t: TumbleRoom; tv?: boolean }
           ))}
         </ol>
         {waiting.length > 0 ? <p class="tt-over-wait">{waitingWords(room, waiting)}</p> : null}
+        {waiting.length > 0 && props.onPlayWithout && room.youAreHost && mine.length > 0 && waitedLong ? (
+          <Button variant="violet" id="play-without" onClick={props.onPlayWithout}>
+            {waiting.length === 1 ? `Play without ${seatName(room.seats[waiting[0]!])}` : `Play without ${waiting.length}`}
+          </Button>
+        ) : null}
       </div>
     </div>
   );

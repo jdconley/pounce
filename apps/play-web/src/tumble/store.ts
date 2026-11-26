@@ -10,7 +10,7 @@ import { LocalBox } from "./local";
 import { Replay, type SeatStatus } from "./replay";
 import { gravityMs, type Fx } from "./rules";
 
-import type { RoomStore } from "../store/room";
+import { newMoveId, type RoomStore } from "../store/room";
 import type { RoomView } from "@pounce/play-api/protocol";
 import type { Seed } from "@pounce/play-api/rules/rng";
 import type { Box } from "@pounce/play-api/tumble/box";
@@ -45,6 +45,23 @@ export const isTumble = (room: Pick<RoomView, "gameId"> | null | undefined): boo
 
 /** The table's House Cat level (the lobby's two pills): Easy unless it chose Quick. */
 export const catsOf = (room: RoomView): Cats => ((room.options as { cats?: Cats } | undefined)?.cats === "quick" ? "quick" : (tumbleOf(room)?.cats ?? "easy"));
+
+/** How long the next round waits for a missing device before the host may go on without it. */
+export const PLAY_WITHOUT_AFTER_MS = 20_000;
+
+/**
+ * The host's "Play without Sam": the seats whose devices are missing sit out (Away) until they
+ * are back. The room works out who; any seat of the host's sends it.
+ */
+export function playWithout(store: RoomStore, room: RoomView): void {
+  const seat = mySeats(room)[0];
+  if (seat !== undefined) store.send({ t: "act", seat, action: { k: "playWithout" } as never, id: newMoveId() });
+}
+
+/** Leave: the seat is out of the game for good (Toy Tumble's forfeit, spec §5.1). */
+export function leave(store: RoomStore, seat: number): void {
+  store.send({ t: "act", seat, action: { k: "leave" } as never, id: newMoveId() });
+}
 
 /** The lobby's two pills, and the TV lobby's line. */
 export const CATS_WORDS: Record<Cats, string> = { easy: "Cats: Easy", quick: "Cats: Quick" };
