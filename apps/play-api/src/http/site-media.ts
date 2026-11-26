@@ -59,30 +59,22 @@ export const MEDIA = {
       "height": 270,
       "webp": [
         {
-          "src": "/static/tv-home-480.18206f7718.webp",
+          "src": "/static/tv-home-480.85d2280301.webp",
           "w": 480
         },
         {
-          "src": "/static/tv-home-720.9f53cae66a.webp",
-          "w": 720
-        },
-        {
-          "src": "/static/tv-home-1040.55b3899067.webp",
-          "w": 1040
+          "src": "/static/tv-home-760.9817edc6c0.webp",
+          "w": 760
         }
       ],
       "jpg": [
         {
-          "src": "/static/tv-home-480.b7138af064.jpg",
+          "src": "/static/tv-home-480.08b00459fd.jpg",
           "w": 480
         },
         {
-          "src": "/static/tv-home-720.9347f596d5.jpg",
-          "w": 720
-        },
-        {
-          "src": "/static/tv-home-1040.f60cbdbba7.jpg",
-          "w": 1040
+          "src": "/static/tv-home-760.50055488b5.jpg",
+          "w": 760
         }
       ]
     },
@@ -186,6 +178,30 @@ export const MEDIA = {
         },
         {
           "src": "/static/tuna-tiles-400.79d2c0f31d.jpg",
+          "w": 400
+        }
+      ]
+    },
+    "birdwatch": {
+      "width": 200,
+      "height": 344,
+      "webp": [
+        {
+          "src": "/static/birdwatch-200.c40eb0aa44.webp",
+          "w": 200
+        },
+        {
+          "src": "/static/birdwatch-400.f0043da6e0.webp",
+          "w": 400
+        }
+      ],
+      "jpg": [
+        {
+          "src": "/static/birdwatch-200.195f10d001.jpg",
+          "w": 200
+        },
+        {
+          "src": "/static/birdwatch-400.9ddb77791a.jpg",
           "w": 400
         }
       ]

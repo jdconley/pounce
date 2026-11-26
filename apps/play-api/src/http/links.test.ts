@@ -4,7 +4,7 @@ import { describe, expect, test } from "vitest";
 
 import { tvAppLinksOn } from "../env";
 
-import { appSiteAssociation, appStoreId, dailyPage, deadLinkPage, DISH_SINCE, INVITE_CSP, INVITE_SCRIPT, INVITE_SCRIPT_HASH, ogImage, pouncePage, sharePage, viewerOf } from "./links";
+import { appSiteAssociation, appStoreId, BIRDWATCH_SINCE, dailyPage, deadLinkPage, DISH_SINCE, INVITE_CSP, INVITE_SCRIPT, INVITE_SCRIPT_HASH, ogImage, pouncePage, sharePage, viewerOf } from "./links";
 import { MEDIA } from "./site-media";
 
 import type { InvitePeek } from "../safety/safety";
@@ -347,7 +347,10 @@ describe("what the App Store's version can do", () => {
     expect(html).toContain(`<a class="go" id="get" href="${TESTFLIGHT}"`);
     expect(html).not.toContain("apple-itunes-app");
     expect(html).toContain('<p class="next">Then open Pounce and tap Paste.</p>');
-    expect(html).toContain("Pounce is in beta. This opens TestFlight.");
+    // It's the game that is coming, not Pounce; and updating from the App Store wouldn't help.
+    expect(html).toContain('<p class="note">Tuna Tiles is coming to the iPhone app. This opens the beta on TestFlight.</p>');
+    expect(html).not.toContain("Pounce is in beta");
+    expect(html).not.toContain("Update it first");
   });
 
   test("a pounce link on the App Store's 1.0: tap the link again", async () => {
@@ -370,6 +373,50 @@ describe("what the App Store's version can do", () => {
     expect(tower).toContain(`href="${APP_STORE}"`);
     expect(tower).toContain("Then open Pounce and tap Join.");
     expect(await sharePage("BCDFG", UNKNOWN, ORIGIN, GRANDMA).text()).toContain(`href="${TESTFLIGHT}"`);
+  });
+});
+
+describe("a Birdwatch table: in the browser and TestFlight until the App Store has 1.3", () => {
+  const BIRDS: InvitePeek = { table: "Porch", game: "birdwatch", host: { name: "Dad", cat: 4 } };
+  const STORE_12 = { appStoreUrl: APP_STORE, testflightUrl: TESTFLIGHT, storeVersion: "1.2" };
+
+  test("on the App Store's 1.2: the beta, says Birdwatch is coming to the iPhone app, and no App Store banner", async () => {
+    expect(BIRDWATCH_SINCE).toBe("1.3");
+    const html = await sharePage("BCDFG", { ...STORE_12, viewer: "apple" }, ORIGIN, BIRDS).text();
+    expect(html).toContain('<p class="game birdwatch">Birdwatch</p>');
+    expect(html).toContain(`<a class="go" id="get" href="${TESTFLIGHT}"`);
+    expect(html).toContain('<p class="note">Birdwatch is coming to the iPhone app. This opens the beta on TestFlight.</p>');
+    expect(html).toContain('<a href="/play/j/BCDFG">Play in your browser</a>');
+    expect(html).not.toContain("apple-itunes-app");
+    expect(html).not.toContain("Update it first");
+    expect(html).not.toContain("Pounce is in beta");
+    expect(html).not.toMatch(/\brook\b/i);
+    // Its chip has its own colour.
+    expect(html).toContain(".game.birdwatch{background:var(--lime);color:var(--ink)}");
+  });
+
+  test("not an iPhone: the browser first, and the beta for later", async () => {
+    const html = await sharePage("BCDFG", { ...STORE_12, viewer: "other" }, ORIGIN, BIRDS).text();
+    expect(html).toContain('<a class="go web" href="/play/j/BCDFG">Play in your browser</a>');
+    expect(html).toContain(`<a href="${TESTFLIGHT}">Get the iPhone app</a>`);
+    expect(html).not.toContain(`href="${APP_STORE}"`);
+  });
+
+  test("a pounce link to Birdwatch does the same", async () => {
+    const html = await pouncePage({ name: "Mia", cat: 2 }, "D".repeat(22), { ...STORE_12, viewer: "apple" }, ORIGIN, "birdwatch").text();
+    expect(html).toContain('<p class="game birdwatch">Birdwatch</p>');
+    expect(html).toContain(`href="${TESTFLIGHT}"`);
+    expect(html).toContain("Birdwatch is coming to the iPhone app.");
+    expect(html).not.toContain("apple-itunes-app");
+  });
+
+  test("once the App Store has 1.3: the App Store, Paste and the update note", async () => {
+    const html = await sharePage("BCDFG", { ...STORE_12, storeVersion: "1.3", viewer: "apple" }, ORIGIN, BIRDS).text();
+    expect(html).toContain(`<a class="go" id="get" href="${APP_STORE}"`);
+    expect(html).toContain("apple-itunes-app");
+    expect(html).toContain('<p class="next">Then open Pounce and tap Paste.</p>');
+    expect(html).toContain("Have Pounce? Update it first.");
+    expect(html).not.toContain("TestFlight");
   });
 });
 

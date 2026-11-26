@@ -35,8 +35,9 @@ const GET_URL = "https://play.conleychaos.com/get";
 const SCREENS = {
   // The web TV table (/play/tv), six seats mid-game.
   tv: "docs/screenshots/tv/tv-ct6-mid-1920x1080.jpg",
-  // The web TV's start screen: the code a phone scans, and both games.
-  tvHome: "docs/screenshots/tv/tv-home-1920x1080.jpg",
+  // The web TV's start screen: the code a phone scans, the three games and Tonight's board
+  // (from the Birdwatch web branch's screenshots, 760 wide, so no larger size is made from it).
+  tvHome: "docs/screenshots/birdwatch-web/tv-home-760x428.jpg",
   // A phone in the browser at a TV table: just its cards, with the Cards/Table switch.
   cards: "docs/screenshots/tv/phone-ct-draw-390x844.jpg",
   // The web player on a laptop: a Cat Tower table.
@@ -44,6 +45,8 @@ const SCREENS = {
   // The iPhone app: a Cat Tower table, and a Tuna Tiles rug mid-game.
   catTower: "apps/play-ios/Art/screenshots/table.jpg",
   tiles: "apps/play-ios/Art/screenshots/tiles/large-phone.jpg",
+  // Birdwatch in the web player on a large phone: it is in the browser before the App Store app.
+  birdwatch: "docs/screenshots/birdwatch-web/phone-follow-suit-442x760.jpg",
 };
 
 const run = (cmd, args) => execFileSync(cmd, args, { stdio: ["ignore", "ignore", "inherit"] });
@@ -259,11 +262,12 @@ const manifest = {
   clip: { src: publish(clip, "clip", "mp4", "media"), poster: webp(posterPng, "poster", 74), posterJpg: jpeg(posterPng, "poster", 72), ...CLIP },
   screens: {
     tv: screen(SCREENS.tv, "tv-table", [480, 720, 1040]),
-    tvHome: screen(SCREENS.tvHome, "tv-home", [480, 720, 1040]),
+    tvHome: screen(SCREENS.tvHome, "tv-home", [480, 760]),
     cards: screen(SCREENS.cards, "phone-cards", [180, 360]),
     laptop: screen(SCREENS.laptop, "browser-table", [480, 720, 1040]),
     catTower: screen(SCREENS.catTower, "cat-tower", [200, 400]),
     tiles: screen(SCREENS.tiles, "tuna-tiles", [200, 400]),
+    birdwatch: screen(SCREENS.birdwatch, "birdwatch", [200, 400]),
   },
   art: {
     leap: art("Cats.spriteatlas/cat0-leap.imageset/cat0-leap@3x.png", "cat-leap", 360),

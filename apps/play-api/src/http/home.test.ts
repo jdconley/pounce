@@ -3,7 +3,7 @@ import { fileURLToPath } from "node:url";
 
 import { describe, expect, test } from "vitest";
 
-import { DAILY_DESCRIPTION, DESCRIPTION, HOME_CSP, homePage, installState } from "./home";
+import { BIRDWATCH_DESCRIPTION, BIRDWATCH_ONLY_DESCRIPTION, BIRDWATCH_TITLE, DAILY_DESCRIPTION, DESCRIPTION, HOME_CSP, homePage, installState } from "./home";
 import { APPLE_CREDIT } from "./layout";
 import { MEDIA } from "./site-media";
 
@@ -150,13 +150,13 @@ describe("homePage", () => {
     expect(page.match(/<strong>On a computer\?<\/strong> Play here in your browser, or scan this with your iPhone to get the app\.<\/p>/g)).toHaveLength(2);
   });
 
-  test("the TV: the web player's TV address, and only what a phone in the browser does today", async () => {
+  test("the TV: the web player's TV address, and only what a phone does today", async () => {
     const page = await html({ appStoreUrl: APP_STORE });
     expect(page).toContain('<a class="url" href="/play/tv">play.conleychaos.com<wbr>/play/tv</a>');
-    expect(page).toContain("In a phone's browser, you see just your own cards. Tap Table for the whole board.");
-    // Nothing about an Apple TV app or a cards-only iPhone app yet: neither is out.
+    // The 1.2 app holds just your cards at a TV table, as the browser does.
+    expect(page).toContain("Your phone shows just your own cards, in the app or the browser. Tap Table for the whole board.");
+    // Nothing about an Apple TV app: it isn't on the App Store yet.
     expect(page).not.toMatch(/Apple TV|tvOS|AirPlay/);
-    expect(page).not.toMatch(/iPhone[^.<]*just your (own )?(cards|hand)/);
   });
 
   test("nothing stale: no Cat Tower-only story, no iPhone-only line, no old tagline", async () => {
@@ -313,7 +313,7 @@ describe("homePage", () => {
     expect(withConsent).not.toMatch(/\bstars?\b|rated|reviews|downloads|award|featured/i);
   });
 
-  test("the Daily Dish shows only with DAILY on, as in the browser and coming to the app", async () => {
+  test("the Daily Dish shows only with DAILY on, as in the app and the browser", async () => {
     for (const install of [{}, { testflightUrl: TESTFLIGHT }, { appStoreUrl: APP_STORE }]) {
       const off = await html(install);
       expect(off).not.toMatch(/Daily Dish|daily puzzle|Sniff|Nine Lives|Cat Nap|Box Fort|\/play\/daily/);
@@ -321,14 +321,17 @@ describe("homePage", () => {
       expect(on).toContain('<h2 id="dish">The Daily Dish</h2>');
       for (const name of ["Sniff", "Nine Lives", "Cat Nap", "Box Fort"]) expect(on, name).toContain(`<h3>${name}</h3>`);
       expect(on).toContain('<a class="btn web" href="/play/daily">Play today\'s puzzles</a>');
-      expect(on).toContain("In the browser now. Coming to the app.");
+      expect(on).toContain("In the iPhone and iPad app, and in your browser.");
+      expect(on).not.toContain("Coming to the app");
       expect(on).toContain("Two games for the whole family, and four new puzzles every day.");
       // Who sees a result: the privacy policy's words.
       expect(on).toContain("Only the people you have a streak with see how you did, and a TV you linked to your board.");
-      // The page's description names the puzzles; the App Store app's own entry doesn't claim them.
+      // The page's description names the puzzles, and so does the App Store app's own entry (since 1.2).
       expect(on).toContain(`<meta name="description" content="${DAILY_DESCRIPTION}">`);
       expect(on).toContain(`<meta property="og:description" content="${DAILY_DESCRIPTION}">`);
-      expect(ld(on).description).toBe(DESCRIPTION);
+      expect(ld(on).description).toBe(DAILY_DESCRIPTION);
+      expect(ld(off).description).toBe(DESCRIPTION);
+      expect(DAILY_DESCRIPTION).not.toMatch(/browser\b[^.]*puzzles|puzzles[^.]*browser/);
       expect(web(on).description).toContain("/play/daily");
       expect(web(off).description).not.toContain("daily");
       // No other game's name, and no emoji.
@@ -336,4 +339,40 @@ describe("homePage", () => {
       expect(main(on)).not.toMatch(/\p{Extended_Pictographic}/u);
     }
   });
+
+  test("Birdwatch shows only with it on: a third game, in the browser now and coming to the iPhone app", async () => {
+    for (const install of [{}, { testflightUrl: TESTFLIGHT }, { appStoreUrl: APP_STORE }]) {
+      for (const daily of [false, true]) {
+        const off = await homePage(install, ORIGIN, true, daily).text();
+        // The words; the TV's start screen (a real screenshot) shows its poster either way.
+        expect(main(off).replace(/ alt="[^"]*"/g, "")).not.toMatch(/Birdwatch|Tucker|Friesen/);
+        expect(off).toContain('<h2 id="games">Two games</h2>');
+        const on = await homePage(install, ORIGIN, true, daily, true).text();
+        expect(on).toContain(`<title>${BIRDWATCH_TITLE}</title>`);
+        expect(on).toContain('<h2 id="games">Three games</h2>');
+        expect(on).toContain(`Three games for the whole family${daily ? ", and four new puzzles every day" : ""}. Gather round the TV`);
+        expect(on).toContain('<h3>Birdwatch</h3><p class="meta">Cards, in teams. 4 to 6 players.</p>');
+        for (const s of ["The Bird is the top trump.", "secret partner", "Official, Tucker or Friesen"]) expect(on, s).toContain(s);
+        // Where it plays: the browser now; the iPhone app later. Never the App Store.
+        expect(on).toContain('<p class="where"><a href="/play/">Play it in your browser</a>. Coming to the iPhone app.</p>');
+        expect(on).toMatch(/<img src="\/static\/birdwatch-200\.[0-9a-f]{10}\.jpg" srcset=/);
+        expect(on).not.toMatch(/\brook\b/i);
+        // The page's description names it apart from the app; the App Store app's entry never does.
+        const description = daily ? BIRDWATCH_DESCRIPTION : BIRDWATCH_ONLY_DESCRIPTION;
+        expect(description.length).toBeLessThanOrEqual(160);
+        expect(description).toMatch(/^Family game night, every night\. /);
+        expect(description).toMatch(/Birdwatch[^.]* in your browser\./);
+        expect(on).toContain(`<meta name="description" content="${description}">`);
+        expect(on).toContain(`<meta property="og:description" content="${description}">`);
+        expect(on).toContain(`<meta property="og:title" content="${BIRDWATCH_TITLE}">`);
+        expect(ld(on).description).toBe(daily ? DAILY_DESCRIPTION : DESCRIPTION);
+        expect(JSON.stringify(ld(on))).not.toContain("Birdwatch");
+        expect(web(on).description).toContain("Cat Tower, Tuna Tiles and Birdwatch in a web browser");
+        expect(web(on).description).toContain("Cat Tower and Tuna Tiles tables are shared with the iPhone app");
+        expect(on).not.toMatch(/[\u2013\u2014]/);
+        expect(main(on)).not.toMatch(/\p{Extended_Pictographic}/u);
+      }
+    }
+  });
 });
+
