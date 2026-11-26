@@ -16,8 +16,6 @@ function el() {
   return { node: node as unknown as HTMLElement, made };
 }
 
-const scaled = (frames: Keyframe[]) => frames.some((f) => typeof f.transform === "string" && /scale\(0\.[0-8]/.test(f.transform));
-
 describe("cards that come onto the table from nowhere", () => {
   test("a view's cards, all new at once (a Cards/Table switch, a new turn's view, a fresh hand), show at their size with no animation", () => {
     const motion = new Motion(() => false);
@@ -34,15 +32,21 @@ describe("cards that come onto the table from nowhere", () => {
     expect(made.flat()).toEqual([]);
   });
 
-  test("one card alone fades in where it sits, never smaller than its pose", () => {
+  test("one card alone is just there too, whole: never smaller, never see-through", () => {
     const motion = new Motion(() => false);
     const a = el();
     motion.apply(new Map([["c1", a.node]]), new Map([["c1", { x: 0, y: 0, s: 1 }]]));
     const b = el();
     motion.apply(new Map([["c1", a.node], ["c2", b.node]]), new Map([["c1", { x: 0, y: 0, s: 1 }], ["c2", { x: 40, y: 0, s: 1 }]]));
-    for (const frames of [...a.made, ...b.made]) expect(scaled(frames)).toBe(false);
-    expect(b.made).toHaveLength(1);
-    expect(b.made[0]!.map((f) => f.opacity)).toEqual([0, 1]);
+    expect([...a.made, ...b.made]).toEqual([]);
+  });
+
+  test("with reduced motion a card goes to its new place at once, with no fade", () => {
+    const motion = new Motion(() => true);
+    const a = el();
+    motion.apply(new Map([["c1", a.node]]), new Map([["c1", { x: 0, y: 0, s: 1 }]]));
+    motion.apply(new Map([["c1", a.node]]), new Map([["c1", { x: 80, y: 0, s: 1 }]]));
+    expect(a.made).toEqual([]);
   });
 
   test("a card from somewhere (the deck) still flies from there", () => {
