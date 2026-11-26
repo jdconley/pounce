@@ -3,8 +3,13 @@ import Testing
 @testable import PounceKit
 
 @Suite struct GameCatalogTests {
-    @Test func theCatalogHoldsCatTowerThenTilesThenBirdwatch() {
-        #expect(GameCatalog.all.map(\.id) == ["cat-tower", "tiles", "birdwatch"])
+    @Test func theCatalogHoldsCatTowerThenTilesThenBirdwatchThenPurrtrait() {
+        #expect(GameCatalog.all.map(\.id) == ["cat-tower", "tiles", "birdwatch", "purrtrait"])
+        #expect(GameCatalog.purrtrait.minPlayers == 2)
+        #expect(GameCatalog.purrtrait.maxPlayers == 10)
+        #expect(GameCatalog.purrtrait.startsOnTV)
+        #expect(!GameCatalog.purrtrait.isAvailable)
+        #expect(GameCatalog.purrtrait.isPlayable)
         #expect(GameCatalog.birdwatch.minPlayers == 4)
         #expect(GameCatalog.birdwatch.maxPlayers == 6)
     }
@@ -57,7 +62,8 @@ import Testing
     /// made-up entry has none.
     @Test func everyGameHasItsOwnHowToVideo() {
         let videos = GameCatalog.all.compactMap(\.howTo)
-        #expect(videos.count == GameCatalog.all.count - 1)
+        #expect(videos.count == GameCatalog.all.count - 2)
+        #expect(GameCatalog.purrtrait.howTo == nil)
         #expect(GameCatalog.birdwatch.howTo == nil)
         #expect(Set(videos).count == videos.count)
         #expect(GameCatalog.catTower.howTo == "howto-cat-tower")
@@ -82,7 +88,8 @@ import Testing
             game("e", .available),
         ])
         #expect(shelf.map(\.id) == ["a", "c", "e", "b", "d"])
-        #expect(GameCatalog.shelf().map(\.id) == ["cat-tower", "tiles", "birdwatch"])
+        #expect(GameCatalog.shelf().map(\.id) == ["cat-tower", "tiles", "birdwatch", "purrtrait"])
+        #expect(GameCatalog.shelf([game("t", .onTV), game("s", .comingSoon), game("a", .available)]).map(\.id) == ["a", "t", "s"])
     }
 
     @Test func unlockingAGameOnlyChangesItsAvailability() {

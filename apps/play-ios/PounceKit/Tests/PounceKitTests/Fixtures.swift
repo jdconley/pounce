@@ -45,6 +45,19 @@ enum Fixtures {
         try messages(in: "protocol/birdwatch-client-messages.json")
     }
 
+    /// Purrtrait's samples (`Fixtures/purrtrait/`), written from the server plan's wire contract
+    /// (docs/superpowers/plans/2026-11-26-purrtrait-server.md) while the server is built. Once
+    /// play-api commits `fixtures/protocol/purrtrait-*.json` from real rooms these read those.
+    static func purrtraitServerMessages() throws -> [(name: String, json: String)] {
+        let shared = url("protocol/purrtrait-server-messages.json")
+        return try messages(at: FileManager.default.fileExists(atPath: shared.path) ? shared : localURL("purrtrait/purrtrait-server-messages.json"))
+    }
+
+    static func purrtraitClientMessages() throws -> [(name: String, json: String)] {
+        let shared = url("protocol/purrtrait-client-messages.json")
+        return try messages(at: FileManager.default.fileExists(atPath: shared.path) ? shared : localURL("purrtrait/purrtrait-client-messages.json"))
+    }
+
     static func serverMessages() throws -> [(name: String, json: String)] {
         try messages(in: "protocol/server-messages.json")
     }

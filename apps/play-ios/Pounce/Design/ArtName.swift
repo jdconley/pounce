@@ -83,6 +83,7 @@ enum ArtName {
     static let gameCatTower = "game-cat-tower"
     static let gameTiles = "game-tiles"
     static let gameBirdwatch = "game-birdwatch"
+    static let gamePurrtrait = "game-purrtrait"
     static let stateClosed = "state-closed"
     static let stateStalled = "state-stalled"
     static let stateOffline = "state-offline"

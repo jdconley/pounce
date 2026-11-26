@@ -28,6 +28,9 @@ public struct TurnEpoch: Equatable, Sendable {
         var birdTurn: Seat?
         var birdTrick: Int?
         var birdStatus: BirdStatus?
+        /// Purrtrait's turn key and whether it is over (a word pick and the drawing are one turn).
+        var purrTurn: String?
+        var purrOver: Bool?
     }
 
     public init() {}
@@ -37,7 +40,8 @@ public struct TurnEpoch: Equatable, Sendable {
             roomStatus: room.status, round: room.game?.round, turn: room.game?.turn, status: room.game?.status,
             tilesTurn: room.tiles?.turn, tilesTurns: room.tiles?.turns, tilesStatus: room.tiles?.status,
             birdHand: room.birdwatch?.hand, birdPhase: room.birdwatch?.phase, birdTurn: room.birdwatch?.turn,
-            birdTrick: room.birdwatch.map { $0.played.count }, birdStatus: room.birdwatch?.status)
+            birdTrick: room.birdwatch.map { $0.played.count }, birdStatus: room.birdwatch?.status,
+            purrTurn: room.purrtrait?.turn, purrOver: room.purrtrait.map { $0.phase == .over })
         guard next != key else { return }
         key = next
         value += 1

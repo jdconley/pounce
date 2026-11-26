@@ -91,6 +91,15 @@ public struct ErrorCode: RawRepresentable, Codable, Hashable, Sendable {
     public static let ownCard = ErrorCode(rawValue: "own_card")
     /// A card off the led suit while the hand still holds that suit.
     public static let mustFollow = ErrorCode(rawValue: "must_follow")
+    // Purrtrait (spec §5, §6).
+    /// The turn's easel holds all the strokes or points it takes: Clear makes room.
+    public static let easelFull = ErrorCode(rawValue: "easel_full")
+    /// A join without the TV's current code (an old QR, a stale typed code, a plain room code).
+    public static let notNear = ErrorCode(rawValue: "not_near")
+    /// The host removed this device or its player from the table: it stays out.
+    public static let removed = ErrorCode(rawValue: "removed")
+    /// Start without the table's TV connected.
+    public static let noScreen = ErrorCode(rawValue: "no_screen")
     // Table looks and Play again (daily habit §9.4, §10.4).
     /// Play again before the game is over.
     public static let notOver = ErrorCode(rawValue: "not_over")
@@ -133,8 +142,15 @@ public enum ServerMessage: Decodable, Equatable, Sendable {
     /// Where `seat`'s player is pointing now, relayed to every other device; nil: cleared. Not a
     /// state change: no seq, never replayed. An app that predates it skips the unknown type.
     case aim(seat: Seat, aim: GameAim?)
+    /// Purrtrait: the drawer's ops as they came, to the TV and the drawer's other sockets. Not
+    /// state: no seq, never in a snapshot.
+    case ink(seat: Seat, turn: String, ops: [InkOp])
+    /// Purrtrait: the turn's drawing so far, compacted, right after a TV's or the drawer's snapshot.
+    case inkSync(turn: String, ops: [InkOp])
+    /// Purrtrait: the room lost the turn's ink (it woke up); the drawer's device sends it all again.
+    case inkResend(turn: String)
 
-    private enum CodingKeys: String, CodingKey { case t, `protocol`, seq, room, event, seat, code, pair, person, view, seats, from, aim }
+    private enum CodingKeys: String, CodingKey { case t, `protocol`, seq, room, event, seat, code, pair, person, view, seats, from, aim, turn, ops }
 
     public init(from decoder: any Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
@@ -174,6 +190,13 @@ public enum ServerMessage: Decodable, Equatable, Sendable {
         case "aim":
             self = .aim(seat: try c.decode(Seat.self, forKey: .seat),
                         aim: try c.decodeIfPresent(GameAim.self, forKey: .aim))
+        case "ink":
+            self = .ink(seat: try c.decode(Seat.self, forKey: .seat), turn: try c.decode(String.self, forKey: .turn),
+                        ops: try c.decode([InkOp].self, forKey: .ops))
+        case "inkSync":
+            self = .inkSync(turn: try c.decode(String.self, forKey: .turn), ops: try c.decode([InkOp].self, forKey: .ops))
+        case "inkResend":
+            self = .inkResend(turn: try c.decode(String.self, forKey: .turn))
         default:
             throw DecodingError.dataCorruptedError(
                 forKey: .t, in: c, debugDescription: "unknown server message type: \(t)")
@@ -301,8 +324,14 @@ public enum ClientMessage: Encodable, Equatable, Sendable {
     case retire(seat: Seat)
     /// Live pointing for the TV; nil clears it (`{"t":"aim","seat":n}`).
     case aim(seat: Seat, aim: GameAim?)
+    /// A Purrtrait move: the same `act` envelope around a `PurrAction`.
+    case actPurrtrait(seat: Seat, action: PurrAction, id: String? = nil)
+    /// Purrtrait: the drawer's ops for turn `turn`, from the device that owns the drawing turn.
+    case ink(seat: Seat, turn: String, ops: [InkOp])
+    /// Purrtrait: the host takes a seat off the table (in the lobby it opens; in a game it's skipped).
+    case remove(seat: Seat)
 
-    private enum CodingKeys: String, CodingKey { case t, seat, person, kind, action, state, code, name, rug, back, id, aim, options, seats }
+    private enum CodingKeys: String, CodingKey { case t, seat, person, kind, action, state, code, name, rug, back, id, aim, options, seats, turn, ops }
 
     public func encode(to encoder: any Encoder) throws {
         var c = encoder.container(keyedBy: CodingKeys.self)
@@ -378,6 +407,19 @@ public enum ClientMessage: Encodable, Equatable, Sendable {
             try c.encode("aim", forKey: .t)
             try c.encode(seat, forKey: .seat)
             try c.encodeIfPresent(aim, forKey: .aim)
+        case .actPurrtrait(let seat, let action, let id):
+            try c.encode("act", forKey: .t)
+            try c.encode(seat, forKey: .seat)
+            try c.encode(action, forKey: .action)
+            try c.encodeIfPresent(id, forKey: .id)
+        case .ink(let seat, let turn, let ops):
+            try c.encode("ink", forKey: .t)
+            try c.encode(seat, forKey: .seat)
+            try c.encode(turn, forKey: .turn)
+            try c.encode(ops, forKey: .ops)
+        case .remove(let seat):
+            try c.encode("remove", forKey: .t)
+            try c.encode(seat, forKey: .seat)
         }
     }
 }

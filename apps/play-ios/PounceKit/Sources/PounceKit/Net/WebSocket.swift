@@ -16,6 +16,9 @@ extension WebSocketConnection {
 }
 
 public enum SocketConnectError: Error, Equatable {
+    /// The header a refused upgrade names its reason in, lower case.
+    public static let reasonHeader = "x-pounce-error"
+
     /// The upgrade got 404: the room does not exist (or has expired).
     case notFound
     /// The upgrade got 401: the bearer token was rejected.
@@ -25,6 +28,8 @@ public enum SocketConnectError: Error, Equatable {
     /// The upgrade got 403. A room answers a screen this way when it doesn't list the device as
     /// one (`not_screen`, docs/tv-protocol.md).
     case forbidden
+    /// The upgrade got 403 and said why in `x-pounce-error` (a Purrtrait table: `not_near`, `removed`).
+    case denied(String)
     /// The upgrade got 409. A room answers a screen this way when the device holds a seat there or
     /// hosts it (`seated`).
     case conflict
@@ -64,6 +69,16 @@ public struct URLSessionWebSocketConnector: WebSocketConnector {
         self.headers = headers
     }
 
+    static func header(_ name: String, in response: HTTPURLResponse) -> String? {
+        for (key, value) in response.allHeaderFields {
+            if let key = key as? String, key.lowercased() == name, let value = value as? String {
+                let trimmed = value.trimmingCharacters(in: .whitespaces).lowercased()
+                return trimmed.isEmpty ? nil : trimmed
+            }
+        }
+        return nil
+    }
+
     public func connect(url: URL, token: String) async throws -> any WebSocketConnection {
         var request = URLRequest(url: url)
         for (name, value) in headers { request.setValue(value, forHTTPHeaderField: name) }
@@ -88,7 +103,12 @@ public struct URLSessionWebSocketConnector: WebSocketConnector {
             case 404: throw SocketConnectError.notFound
             case 401: throw SocketConnectError.unauthorized
             case 429: throw SocketConnectError.tooManyAttempts
-            case 403: throw SocketConnectError.forbidden
+            case 403:
+                // A Purrtrait table says why in a header (the body never arrives): not_near, removed.
+                if let why = response.flatMap({ Self.header(SocketConnectError.reasonHeader, in: $0) }) {
+                    throw SocketConnectError.denied(why)
+                }
+                throw SocketConnectError.forbidden
             case 409: throw SocketConnectError.conflict
             case let code?: throw SocketConnectError.failed("upgrade refused with HTTP \(code)")
             case nil: throw SocketConnectError.failed(String(describing: error))

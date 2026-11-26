@@ -291,7 +291,11 @@ public struct RoomView: Codable, Equatable, Sendable {
     public var tiles: TilesView?
     /// Birdwatch's view, in a room playing it, once dealt.
     public var birdwatch: BirdView?
-    /// The game's options (Birdwatch's rule set); nil for a game without any.
+    /// Purrtrait's view, in a room playing it, once started.
+    public var purrtrait: PurrView?
+    /// The TV's join key for a Purrtrait table: only in the screen's snapshot.
+    public var near: RoomNear?
+    /// The game's options (Birdwatch's rule set, Purrtrait's timer); nil for a game without any.
     public var options: RoomOptions?
     /// The table's rug and card back; nil from a server without looks (streaks off).
     public var look: Look?
@@ -311,7 +315,8 @@ public struct RoomView: Codable, Equatable, Sendable {
         code: String, name: String? = nil, status: RoomStatus, youAreHost: Bool, seats: [SeatView],
         game: GameView? = nil, look: Look? = nil, rematch: String? = nil, link: RoomLink? = nil,
         nudge: NudgeView? = nil, retire: RetireView? = nil, gameId: String? = nil, tiles: TilesView? = nil,
-        screen: Bool? = nil, birdwatch: BirdView? = nil, options: RoomOptions? = nil
+        screen: Bool? = nil, birdwatch: BirdView? = nil, options: RoomOptions? = nil, purrtrait: PurrView? = nil,
+        near: RoomNear? = nil
     ) {
         self.code = code
         self.name = name
@@ -329,6 +334,8 @@ public struct RoomView: Codable, Equatable, Sendable {
         self.tiles = tiles
         self.birdwatch = birdwatch
         self.options = options
+        self.purrtrait = purrtrait
+        self.near = near
     }
 
     /// The room plays the tile game. Decided by `gameId` alone, so a room in its lobby says so too.
@@ -336,6 +343,12 @@ public struct RoomView: Codable, Equatable, Sendable {
 
     /// The room plays Birdwatch. Decided by `gameId` alone, so a room in its lobby says so too.
     public var isBirdwatch: Bool { gameId == GameID.birdwatch }
+
+    /// The room plays Purrtrait (the TV is the easel). Decided by `gameId` alone.
+    public var isPurrtrait: Bool { gameId == GameID.purrtrait }
+
+    /// Purrtrait's seconds a turn: the game's, else the lobby's options (60 by default).
+    public var purrTimer: Int { purrtrait?.timer ?? options?.timer ?? PurrTimer.standard.rawValue }
 
     /// The table's rule set: the dealt game's, else the lobby's options (Official by default).
     public var birdRules: BirdRules { birdwatch?.rules ?? options?.rules ?? .official }
@@ -346,11 +359,12 @@ public struct RoomView: Codable, Equatable, Sendable {
         if let game { return game.status == .playing ? game.turn : nil }
         if let tiles { return tiles.status == .playing ? tiles.turn : nil }
         if let birdwatch { return birdwatch.status == .playing ? birdwatch.turn : nil }
+        if let purrtrait { return purrtrait.isLive ? purrtrait.drawer : nil }
         return nil
     }
 
     /// True when `seat` forfeited, in either game. Never in Birdwatch: a House Cat takes over.
-    public func isOut(_ seat: Seat) -> Bool { game?.isOut(seat) ?? tiles?.isOut(seat) ?? false }
+    public func isOut(_ seat: Seat) -> Bool { game?.isOut(seat) ?? tiles?.isOut(seat) ?? purrtrait?.isOut(seat) ?? false }
 
     /// The name to show: the table's own, or `TableName.fallback` from an older server.
     public var title: String { name ?? TableName.fallback(code: code) }

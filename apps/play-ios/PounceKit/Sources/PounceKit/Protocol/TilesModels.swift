@@ -6,6 +6,7 @@ public enum GameID {
     public static let catTower = "cat-tower"
     public static let tiles = "tiles"
     public static let birdwatch = "birdwatch"
+    public static let purrtrait = "purrtrait"
 }
 
 public enum TilesStatus: String, Codable, Sendable { case playing, gameOver }

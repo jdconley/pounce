@@ -88,15 +88,27 @@ public enum BirdEndReason: String, Codable, Sendable { case target, left }
 /// A game option a room carries (`room.options`), set in the lobby by the host.
 public struct RoomOptions: Codable, Equatable, Sendable {
     public var rules: BirdRules?
+    /// Purrtrait's seconds a turn (45, 60 or 90).
+    public var timer: Int?
 
-    public init(rules: BirdRules? = nil) { self.rules = rules }
+    public init(rules: BirdRules? = nil, timer: Int? = nil) {
+        self.rules = rules
+        self.timer = timer
+    }
 
-    private enum CodingKeys: String, CodingKey { case rules }
+    private enum CodingKeys: String, CodingKey { case rules, timer }
 
     public init(from decoder: any Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         // A rule set this build doesn't know reads as none, never as a broken room.
         rules = (try? c.decodeIfPresent(String.self, forKey: .rules)).flatMap(BirdRules.init(rawValue:))
+        timer = (try? c.decodeIfPresent(Int.self, forKey: .timer)) ?? nil
+    }
+
+    public func encode(to encoder: any Encoder) throws {
+        var c = encoder.container(keyedBy: CodingKeys.self)
+        try c.encodeIfPresent(rules, forKey: .rules)
+        try c.encodeIfPresent(timer, forKey: .timer)
     }
 }
 

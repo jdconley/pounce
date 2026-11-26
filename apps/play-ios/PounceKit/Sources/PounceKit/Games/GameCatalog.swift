@@ -13,6 +13,9 @@ public enum GameCatalog {
             case available
             /// On the shelf, named and pictured, but no table can be started yet.
             case comingSoon
+            /// Played, but only a TV starts a table (Purrtrait: the TV is the easel). The phone's
+            /// card says "Starts on the TV" and a tip says to pick it there.
+            case onTV
         }
 
         /// The card's colour, from the app's palette (`Palette` maps it): the band under the art.
@@ -55,11 +58,17 @@ public enum GameCatalog {
 
         public var isAvailable: Bool { availability == .available }
 
+        /// Played on this app, though a phone can't start it (`onTV`), or startable here.
+        public var isPlayable: Bool { availability != .comingSoon }
+
+        /// Only a TV makes this game's table.
+        public var startsOnTV: Bool { availability == .onTV }
+
         /// The same game, startable (a debug preview of a game before it ships).
         public func unlocked() -> Entry {
             Entry(
                 id: id, title: title, pitch: pitch, minPlayers: minPlayers, maxPlayers: maxPlayers, art: art, tint: tint,
-                availability: .available, howTo: howTo)
+                availability: availability == .onTV ? .onTV : .available, howTo: howTo)
         }
     }
 
@@ -79,8 +88,14 @@ public enum GameCatalog {
         id: "birdwatch", title: "Birdwatch", pitch: "Bid, call trump, take tricks.",
         minPlayers: 4, maxPlayers: 6, art: "game-birdwatch", tint: .lime, availability: .available)
 
+    /// The draw-and-guess party game (design 2026-11-26): the TV is the easel, the drawer draws
+    /// on a phone, everyone else shouts. A TV starts the table.
+    public static let purrtrait = Entry(
+        id: "purrtrait", title: "Purrtrait", pitch: "Draw it. They shout it.",
+        minPlayers: 2, maxPlayers: 10, art: "game-purrtrait", tint: .magenta, availability: .onTV)
+
     /// Catalog order: the order games were added, oldest first.
-    public static let all: [Entry] = [catTower, tiles, birdwatch]
+    public static let all: [Entry] = [catTower, tiles, birdwatch, purrtrait]
 
     /// The game the server deals when a table is created.
     public static let dealt = catTower
@@ -98,7 +113,7 @@ public enum GameCatalog {
     /// The shelf, top to bottom: the games you can start, then the ones on the way, each group in
     /// catalog order.
     public static func shelf(_ entries: [Entry] = all) -> [Entry] {
-        entries.filter(\.isAvailable) + entries.filter { !$0.isAvailable }
+        entries.filter(\.isAvailable) + entries.filter(\.startsOnTV) + entries.filter { !$0.isPlayable }
     }
 }
 
