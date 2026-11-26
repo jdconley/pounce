@@ -14,17 +14,16 @@ import type { BirdState } from "../src/birdwatch/engine";
 const GAMES_EACH = Number(process.env.BIRDWATCH_SOAK ?? 150);
 const MAX_HANDS = 300;
 
-function playOut(rules: RuleSetId, seats: number, seed: number): { hands: number; moves: number; slowest: number } {
+function playOut(rules: RuleSetId, seats: number, seed: number, times: number[]): { hands: number; moves: number } {
   const rng = createRng([seed, seats, 77, 1]);
   let s: BirdState = birdwatch.create(seats, [seed, (seed * 2654435761) >>> 0, seats, 9], { rules });
   let moves = 0;
-  let slowest = 0;
   while (birdwatch.phase(s) !== "over") {
     if (s.hand > MAX_HANDS) throw new Error(`${rules} ${seats} seed ${seed}: no end after ${MAX_HANDS} hands`);
     const seat = birdwatch.currentActor(s);
     const started = performance.now();
     const action = seat === null ? birdwatch.betweenAction : birdwatch.botAction(s, seat, rng);
-    slowest = Math.max(slowest, performance.now() - started);
+    if (seat !== null) times.push(performance.now() - started);
     const result = birdwatch.apply(s, seat ?? 0, action as NonNullable<typeof action>);
     if (!result.ok) throw new Error(`${rules} ${seats} seed ${seed}: ${JSON.stringify(action)} refused: ${result.error}`);
     for (const e of result.events) {
@@ -38,23 +37,22 @@ function playOut(rules: RuleSetId, seats: number, seed: number): { hands: number
   }
   expect(s.endReason).toBe("target");
   expect(s.winners.length).toBeGreaterThan(0);
-  return { hands: s.hand, moves, slowest };
+  return { hands: s.hand, moves };
 }
 
 test.each(RULE_SET_IDS.flatMap((rules) => [4, 5, 6].map((seats) => [rules, seats] as const)))(
   "%s at %i seats: House Cats play legal moves to the end of every game",
   (rules, seats) => {
     let hands = 0;
-    let slowest = 0;
-    for (let seed = 1; seed <= GAMES_EACH; seed++) {
-      const r = playOut(rules, seats, seed);
-      hands += r.hands;
-      slowest = Math.max(slowest, r.slowest);
-    }
+    const times: number[] = [];
+    for (let seed = 1; seed <= GAMES_EACH; seed++) hands += playOut(rules, seats, seed, times).hands;
     // Games last a sensible while: neither a hand or two nor hundreds.
     expect(hands / GAMES_EACH).toBeGreaterThan(2);
     expect(hands / GAMES_EACH).toBeLessThan(40);
-    expect(slowest).toBeLessThan(50);
+    // Under 50 ms a move (design §6), by a wide margin: the 99th percentile, so one pause of a
+    // busy test machine (a garbage collection, coverage) doesn't count as the bot's.
+    const p99 = [...times].sort((a, b) => a - b)[Math.floor(times.length * 0.99)] as number;
+    expect(p99).toBeLessThan(5);
   },
   60_000,
 );

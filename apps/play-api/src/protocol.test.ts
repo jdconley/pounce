@@ -77,6 +77,14 @@ describe("ErrorCode", () => {
 });
 
 describe("parseClientMessage", () => {
+  it("takes a table's options only with the room's own parser for them (Cat Tower's has none)", () => {
+    const set = JSON.stringify({ t: "setOptions", options: { rules: "tucker" } });
+    expect(parseClientMessage(set)).toEqual(BAD);
+    const takes = (raw: unknown) => (typeof raw === "object" && raw !== null && "rules" in raw ? { rules: "tucker" as const } : null);
+    expect(parseClientMessage(set, undefined, undefined, takes)).toEqual({ t: "setOptions", options: { rules: "tucker" } });
+    expect(parseClientMessage('{"t":"setOptions"}', undefined, undefined, takes)).toEqual(BAD);
+  });
+
   it("exports the protocol version", () => {
     expect(PROTOCOL_VERSION).toBe(1);
   });

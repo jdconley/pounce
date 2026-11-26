@@ -115,9 +115,9 @@ export interface Env {
   TV_APPLINKS?: string;
   /**
    * The games rooms may be created for beyond Cat Tower: a comma-separated list of game ids
-   * (`gamesOn` in src/games, e.g. "tiles"). Empty or unset, as in production's wrangler.jsonc
-   * today, only Cat Tower: asking for any other game is refused, as it always was. Tests and
-   * local dev (`.dev.vars`) turn the tile game on.
+   * (`gamesOn` in src/games, e.g. "tiles,birdwatch"). Empty or unset, only Cat Tower: asking for
+   * any other game is refused, as it always was. Production's wrangler.jsonc lists the tile game;
+   * tests and local dev (`.dev.vars`) turn Birdwatch on too, which production does with 1.3.
    */
   GAMES?: string;
   /**

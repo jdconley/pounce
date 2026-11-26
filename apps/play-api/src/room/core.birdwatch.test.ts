@@ -137,6 +137,9 @@ describe("swapping seats", () => {
     expect(r.state.moveCodes[code]?.seat).toBe(2);
     r.handle("phone", { t: "swapSeats", seats: [3, 2] });
     expect(r.state.moveCodes[code]?.seat).toBe(3);
+    // A code for neither seat stays where it is.
+    r.handle("phone", { t: "swapSeats", seats: [4, 5] });
+    expect(r.state.moveCodes[code]?.seat).toBe(3);
   });
 
   it("only the host, two different seats, and only in the lobby", () => {
@@ -213,7 +216,11 @@ describe("a House Cat takes the seat of a person who leaves", () => {
   it("on a forfeit: the seat goes to a House Cat, the table is told, and the game plays on", () => {
     const r = started();
     r.drainStreakIntents();
+    // A code to move the seat to another phone goes with the person.
+    r.handle("tablet", { t: "moveSeat", seat: 1 });
+    expect(Object.keys(r.state.moveCodes)).toHaveLength(1);
     const out = act(r, 1, { type: "forfeit" });
+    expect(r.state.moveCodes).toEqual({});
     expect(errorsOf(out)).toEqual([]);
     expect(eventsTo(out, "phone")).toEqual([{ kind: "houseCat", seat: 1 }]);
     expect(r.state.seats[1]).toMatchObject({ kind: "bot", botLevel: "house", left: true, person: person(2), playerId: B });

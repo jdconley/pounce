@@ -1,0 +1,3630 @@
+[
+  {
+    "name": "snapshot-lobby",
+    "message": {
+      "t": "snapshot",
+      "protocol": 1,
+      "seq": 7,
+      "room": {
+        "code": "BCDFG",
+        "name": "Window Seat",
+        "status": "lobby",
+        "youAreHost": false,
+        "seats": [
+          {
+            "kind": "human",
+            "person": {
+              "id": "11111111-1111-4111-8111-111111111111",
+              "name": "Alice",
+              "cat": 0
+            },
+            "yours": false,
+            "presence": "awake"
+          },
+          {
+            "kind": "human",
+            "person": {
+              "id": "22222222-1111-4111-8111-111111111111",
+              "name": "Bob",
+              "cat": 1
+            },
+            "yours": true,
+            "presence": "awake"
+          },
+          {
+            "kind": "human",
+            "person": {
+              "id": "33333333-1111-4111-8111-111111111111",
+              "name": "Cleo",
+              "cat": 2
+            },
+            "yours": false,
+            "presence": "awake"
+          },
+          {
+            "kind": "human",
+            "person": {
+              "id": "44444444-1111-4111-8111-111111111111",
+              "name": "Dev",
+              "cat": 3
+            },
+            "yours": false,
+            "presence": "awake"
+          },
+          {
+            "kind": "closed",
+            "yours": false,
+            "presence": null
+          },
+          {
+            "kind": "closed",
+            "yours": false,
+            "presence": null
+          }
+        ],
+        "game": null,
+        "gameId": "birdwatch",
+        "options": {
+          "rules": "tucker"
+        }
+      }
+    }
+  },
+  {
+    "name": "snapshot-bidding-your-move",
+    "message": {
+      "t": "snapshot",
+      "protocol": 1,
+      "seq": 7,
+      "room": {
+        "code": "BCDFG",
+        "name": "Window Seat",
+        "status": "playing",
+        "youAreHost": false,
+        "seats": [
+          {
+            "kind": "human",
+            "person": {
+              "id": "11111111-1111-4111-8111-111111111111",
+              "name": "Alice",
+              "cat": 0
+            },
+            "yours": false,
+            "presence": "awake"
+          },
+          {
+            "kind": "human",
+            "person": {
+              "id": "22222222-1111-4111-8111-111111111111",
+              "name": "Bob",
+              "cat": 1
+            },
+            "yours": true,
+            "presence": "awake"
+          },
+          {
+            "kind": "human",
+            "person": {
+              "id": "33333333-1111-4111-8111-111111111111",
+              "name": "Cleo",
+              "cat": 2
+            },
+            "yours": false,
+            "presence": "awake"
+          },
+          {
+            "kind": "human",
+            "person": {
+              "id": "44444444-1111-4111-8111-111111111111",
+              "name": "Dev",
+              "cat": 3
+            },
+            "yours": false,
+            "presence": "awake"
+          }
+        ],
+        "game": null,
+        "gameId": "birdwatch",
+        "birdwatch": {
+          "rules": "official",
+          "seats": 4,
+          "target": 300,
+          "minBid": 70,
+          "maxBid": 120,
+          "nestSize": 5,
+          "teams": [
+            [
+              0,
+              2
+            ],
+            [
+              1,
+              3
+            ]
+          ],
+          "scores": [
+            0,
+            0
+          ],
+          "history": [],
+          "status": "playing",
+          "phase": "bidding",
+          "hand": 1,
+          "dealer": 0,
+          "turn": 1,
+          "handCounts": [
+            9,
+            9,
+            9,
+            9
+          ],
+          "hands": {
+            "1": [
+              4,
+              6,
+              9,
+              24,
+              38,
+              49,
+              50,
+              53,
+              56
+            ]
+          },
+          "bids": [
+            null,
+            null,
+            null,
+            null
+          ],
+          "passed": [
+            false,
+            false,
+            false,
+            false
+          ],
+          "high": null,
+          "trump": null,
+          "called": null,
+          "partner": null,
+          "trick": [],
+          "leader": null,
+          "lastTrick": null,
+          "played": [],
+          "points": [
+            0,
+            0,
+            0,
+            0
+          ],
+          "tricks": [
+            0,
+            0,
+            0,
+            0
+          ],
+          "winners": [],
+          "bidRange": {
+            "min": 70,
+            "max": 120,
+            "step": 5
+          }
+        },
+        "options": {
+          "rules": "official"
+        }
+      }
+    }
+  },
+  {
+    "name": "snapshot-bidding-watching",
+    "message": {
+      "t": "snapshot",
+      "protocol": 1,
+      "seq": 7,
+      "room": {
+        "code": "BCDFG",
+        "name": "Window Seat",
+        "status": "playing",
+        "youAreHost": false,
+        "seats": [
+          {
+            "kind": "human",
+            "person": {
+              "id": "11111111-1111-4111-8111-111111111111",
+              "name": "Alice",
+              "cat": 0
+            },
+            "yours": false,
+            "presence": "awake"
+          },
+          {
+            "kind": "human",
+            "person": {
+              "id": "22222222-1111-4111-8111-111111111111",
+              "name": "Bob",
+              "cat": 1
+            },
+            "yours": false,
+            "presence": "awake"
+          },
+          {
+            "kind": "human",
+            "person": {
+              "id": "33333333-1111-4111-8111-111111111111",
+              "name": "Cleo",
+              "cat": 2
+            },
+            "yours": true,
+            "presence": "awake"
+          },
+          {
+            "kind": "human",
+            "person": {
+              "id": "44444444-1111-4111-8111-111111111111",
+              "name": "Dev",
+              "cat": 3
+            },
+            "yours": false,
+            "presence": "awake"
+          }
+        ],
+        "game": null,
+        "gameId": "birdwatch",
+        "birdwatch": {
+          "rules": "official",
+          "seats": 4,
+          "target": 300,
+          "minBid": 70,
+          "maxBid": 120,
+          "nestSize": 5,
+          "teams": [
+            [
+              0,
+              2
+            ],
+            [
+              1,
+              3
+            ]
+          ],
+          "scores": [
+            0,
+            0
+          ],
+          "history": [],
+          "status": "playing",
+          "phase": "bidding",
+          "hand": 1,
+          "dealer": 0,
+          "turn": 1,
+          "handCounts": [
+            9,
+            9,
+            9,
+            9
+          ],
+          "hands": {
+            "2": [
+              8,
+              12,
+              13,
+              25,
+              26,
+              37,
+              39,
+              51,
+              52
+            ]
+          },
+          "bids": [
+            null,
+            null,
+            null,
+            null
+          ],
+          "passed": [
+            false,
+            false,
+            false,
+            false
+          ],
+          "high": null,
+          "trump": null,
+          "called": null,
+          "partner": null,
+          "trick": [],
+          "leader": null,
+          "lastTrick": null,
+          "played": [],
+          "points": [
+            0,
+            0,
+            0,
+            0
+          ],
+          "tricks": [
+            0,
+            0,
+            0,
+            0
+          ],
+          "winners": []
+        },
+        "options": {
+          "rules": "official"
+        },
+        "retire": {
+          "seat": 1,
+          "wait": 259200000
+        }
+      }
+    }
+  },
+  {
+    "name": "snapshot-bidding-after-bid",
+    "message": {
+      "t": "snapshot",
+      "protocol": 1,
+      "seq": 9,
+      "room": {
+        "code": "BCDFG",
+        "name": "Window Seat",
+        "status": "playing",
+        "youAreHost": true,
+        "seats": [
+          {
+            "kind": "human",
+            "person": {
+              "id": "11111111-1111-4111-8111-111111111111",
+              "name": "Alice",
+              "cat": 0
+            },
+            "yours": true,
+            "presence": "awake"
+          },
+          {
+            "kind": "human",
+            "person": {
+              "id": "22222222-1111-4111-8111-111111111111",
+              "name": "Bob",
+              "cat": 1
+            },
+            "yours": false,
+            "presence": "awake"
+          },
+          {
+            "kind": "human",
+            "person": {
+              "id": "33333333-1111-4111-8111-111111111111",
+              "name": "Cleo",
+              "cat": 2
+            },
+            "yours": false,
+            "presence": "awake"
+          },
+          {
+            "kind": "human",
+            "person": {
+              "id": "44444444-1111-4111-8111-111111111111",
+              "name": "Dev",
+              "cat": 3
+            },
+            "yours": false,
+            "presence": "awake"
+          }
+        ],
+        "game": null,
+        "gameId": "birdwatch",
+        "birdwatch": {
+          "rules": "official",
+          "seats": 4,
+          "target": 300,
+          "minBid": 70,
+          "maxBid": 120,
+          "nestSize": 5,
+          "teams": [
+            [
+              0,
+              2
+            ],
+            [
+              1,
+              3
+            ]
+          ],
+          "scores": [
+            0,
+            0
+          ],
+          "history": [],
+          "status": "playing",
+          "phase": "bidding",
+          "hand": 1,
+          "dealer": 0,
+          "turn": 2,
+          "handCounts": [
+            9,
+            9,
+            9,
+            9
+          ],
+          "hands": {
+            "0": [
+              7,
+              10,
+              20,
+              21,
+              22,
+              23,
+              32,
+              34,
+              36
+            ]
+          },
+          "bids": [
+            null,
+            75,
+            null,
+            null
+          ],
+          "passed": [
+            false,
+            false,
+            false,
+            false
+          ],
+          "high": {
+            "seat": 1,
+            "amount": 75
+          },
+          "trump": null,
+          "called": null,
+          "partner": null,
+          "trick": [],
+          "leader": null,
+          "lastTrick": null,
+          "played": [],
+          "points": [
+            0,
+            0,
+            0,
+            0
+          ],
+          "tricks": [
+            0,
+            0,
+            0,
+            0
+          ],
+          "winners": []
+        },
+        "options": {
+          "rules": "official"
+        },
+        "retire": {
+          "seat": 2,
+          "wait": 259200000
+        }
+      }
+    }
+  },
+  {
+    "name": "snapshot-nest-bid-winner",
+    "message": {
+      "t": "snapshot",
+      "protocol": 1,
+      "seq": 17,
+      "room": {
+        "code": "BCDFG",
+        "name": "Window Seat",
+        "status": "playing",
+        "youAreHost": false,
+        "seats": [
+          {
+            "kind": "human",
+            "person": {
+              "id": "11111111-1111-4111-8111-111111111111",
+              "name": "Alice",
+              "cat": 0
+            },
+            "yours": false,
+            "presence": "awake"
+          },
+          {
+            "kind": "human",
+            "person": {
+              "id": "22222222-1111-4111-8111-111111111111",
+              "name": "Bob",
+              "cat": 1
+            },
+            "yours": true,
+            "presence": "awake"
+          },
+          {
+            "kind": "human",
+            "person": {
+              "id": "33333333-1111-4111-8111-111111111111",
+              "name": "Cleo",
+              "cat": 2
+            },
+            "yours": false,
+            "presence": "awake"
+          },
+          {
+            "kind": "human",
+            "person": {
+              "id": "44444444-1111-4111-8111-111111111111",
+              "name": "Dev",
+              "cat": 3
+            },
+            "yours": false,
+            "presence": "awake"
+          }
+        ],
+        "game": null,
+        "gameId": "birdwatch",
+        "birdwatch": {
+          "rules": "official",
+          "seats": 4,
+          "target": 300,
+          "minBid": 70,
+          "maxBid": 120,
+          "nestSize": 5,
+          "teams": [
+            [
+              0,
+              2
+            ],
+            [
+              1,
+              3
+            ]
+          ],
+          "scores": [
+            0,
+            0
+          ],
+          "history": [],
+          "status": "playing",
+          "phase": "nest",
+          "hand": 1,
+          "dealer": 0,
+          "turn": 1,
+          "handCounts": [
+            9,
+            14,
+            9,
+            9
+          ],
+          "hands": {
+            "1": [
+              4,
+              6,
+              9,
+              11,
+              24,
+              38,
+              40,
+              47,
+              49,
+              50,
+              53,
+              54,
+              55,
+              56
+            ]
+          },
+          "bids": [
+            null,
+            75,
+            null,
+            null
+          ],
+          "passed": [
+            true,
+            false,
+            true,
+            true
+          ],
+          "high": {
+            "seat": 1,
+            "amount": 75
+          },
+          "trump": null,
+          "called": null,
+          "partner": null,
+          "trick": [],
+          "leader": null,
+          "lastTrick": null,
+          "played": [],
+          "points": [
+            0,
+            0,
+            0,
+            0
+          ],
+          "tricks": [
+            0,
+            0,
+            0,
+            0
+          ],
+          "winners": [],
+          "fromNest": [
+            11,
+            40,
+            47,
+            54,
+            55
+          ]
+        },
+        "options": {
+          "rules": "official"
+        }
+      }
+    }
+  },
+  {
+    "name": "snapshot-nest-waiting",
+    "message": {
+      "t": "snapshot",
+      "protocol": 1,
+      "seq": 17,
+      "room": {
+        "code": "BCDFG",
+        "name": "Window Seat",
+        "status": "playing",
+        "youAreHost": false,
+        "seats": [
+          {
+            "kind": "human",
+            "person": {
+              "id": "11111111-1111-4111-8111-111111111111",
+              "name": "Alice",
+              "cat": 0
+            },
+            "yours": false,
+            "presence": "awake"
+          },
+          {
+            "kind": "human",
+            "person": {
+              "id": "22222222-1111-4111-8111-111111111111",
+              "name": "Bob",
+              "cat": 1
+            },
+            "yours": false,
+            "presence": "awake"
+          },
+          {
+            "kind": "human",
+            "person": {
+              "id": "33333333-1111-4111-8111-111111111111",
+              "name": "Cleo",
+              "cat": 2
+            },
+            "yours": true,
+            "presence": "awake"
+          },
+          {
+            "kind": "human",
+            "person": {
+              "id": "44444444-1111-4111-8111-111111111111",
+              "name": "Dev",
+              "cat": 3
+            },
+            "yours": false,
+            "presence": "awake"
+          }
+        ],
+        "game": null,
+        "gameId": "birdwatch",
+        "birdwatch": {
+          "rules": "official",
+          "seats": 4,
+          "target": 300,
+          "minBid": 70,
+          "maxBid": 120,
+          "nestSize": 5,
+          "teams": [
+            [
+              0,
+              2
+            ],
+            [
+              1,
+              3
+            ]
+          ],
+          "scores": [
+            0,
+            0
+          ],
+          "history": [],
+          "status": "playing",
+          "phase": "nest",
+          "hand": 1,
+          "dealer": 0,
+          "turn": 1,
+          "handCounts": [
+            9,
+            14,
+            9,
+            9
+          ],
+          "hands": {
+            "2": [
+              8,
+              12,
+              13,
+              25,
+              26,
+              37,
+              39,
+              51,
+              52
+            ]
+          },
+          "bids": [
+            null,
+            75,
+            null,
+            null
+          ],
+          "passed": [
+            true,
+            false,
+            true,
+            true
+          ],
+          "high": {
+            "seat": 1,
+            "amount": 75
+          },
+          "trump": null,
+          "called": null,
+          "partner": null,
+          "trick": [],
+          "leader": null,
+          "lastTrick": null,
+          "played": [],
+          "points": [
+            0,
+            0,
+            0,
+            0
+          ],
+          "tricks": [
+            0,
+            0,
+            0,
+            0
+          ],
+          "winners": []
+        },
+        "options": {
+          "rules": "official"
+        },
+        "retire": {
+          "seat": 1,
+          "wait": 259200000
+        }
+      }
+    }
+  },
+  {
+    "name": "snapshot-trump-bid-winner",
+    "message": {
+      "t": "snapshot",
+      "protocol": 1,
+      "seq": 19,
+      "room": {
+        "code": "BCDFG",
+        "name": "Window Seat",
+        "status": "playing",
+        "youAreHost": false,
+        "seats": [
+          {
+            "kind": "human",
+            "person": {
+              "id": "11111111-1111-4111-8111-111111111111",
+              "name": "Alice",
+              "cat": 0
+            },
+            "yours": false,
+            "presence": "awake"
+          },
+          {
+            "kind": "human",
+            "person": {
+              "id": "22222222-1111-4111-8111-111111111111",
+              "name": "Bob",
+              "cat": 1
+            },
+            "yours": true,
+            "presence": "awake"
+          },
+          {
+            "kind": "human",
+            "person": {
+              "id": "33333333-1111-4111-8111-111111111111",
+              "name": "Cleo",
+              "cat": 2
+            },
+            "yours": false,
+            "presence": "awake"
+          },
+          {
+            "kind": "human",
+            "person": {
+              "id": "44444444-1111-4111-8111-111111111111",
+              "name": "Dev",
+              "cat": 3
+            },
+            "yours": false,
+            "presence": "awake"
+          }
+        ],
+        "game": null,
+        "gameId": "birdwatch",
+        "birdwatch": {
+          "rules": "official",
+          "seats": 4,
+          "target": 300,
+          "minBid": 70,
+          "maxBid": 120,
+          "nestSize": 5,
+          "teams": [
+            [
+              0,
+              2
+            ],
+            [
+              1,
+              3
+            ]
+          ],
+          "scores": [
+            0,
+            0
+          ],
+          "history": [],
+          "status": "playing",
+          "phase": "trump",
+          "hand": 1,
+          "dealer": 0,
+          "turn": 1,
+          "handCounts": [
+            9,
+            9,
+            9,
+            9
+          ],
+          "hands": {
+            "1": [
+              4,
+              6,
+              9,
+              24,
+              38,
+              49,
+              50,
+              53,
+              56
+            ]
+          },
+          "bids": [
+            null,
+            75,
+            null,
+            null
+          ],
+          "passed": [
+            true,
+            false,
+            true,
+            true
+          ],
+          "high": {
+            "seat": 1,
+            "amount": 75
+          },
+          "trump": null,
+          "called": null,
+          "partner": null,
+          "trick": [],
+          "leader": null,
+          "lastTrick": null,
+          "played": [],
+          "points": [
+            0,
+            0,
+            0,
+            0
+          ],
+          "tricks": [
+            0,
+            0,
+            0,
+            0
+          ],
+          "winners": [],
+          "putBack": [
+            11,
+            40,
+            47,
+            54,
+            55
+          ]
+        },
+        "options": {
+          "rules": "official"
+        }
+      }
+    }
+  },
+  {
+    "name": "snapshot-play-lead",
+    "message": {
+      "t": "snapshot",
+      "protocol": 1,
+      "seq": 21,
+      "room": {
+        "code": "BCDFG",
+        "name": "Window Seat",
+        "status": "playing",
+        "youAreHost": false,
+        "seats": [
+          {
+            "kind": "human",
+            "person": {
+              "id": "11111111-1111-4111-8111-111111111111",
+              "name": "Alice",
+              "cat": 0
+            },
+            "yours": false,
+            "presence": "awake"
+          },
+          {
+            "kind": "human",
+            "person": {
+              "id": "22222222-1111-4111-8111-111111111111",
+              "name": "Bob",
+              "cat": 1
+            },
+            "yours": true,
+            "presence": "awake"
+          },
+          {
+            "kind": "human",
+            "person": {
+              "id": "33333333-1111-4111-8111-111111111111",
+              "name": "Cleo",
+              "cat": 2
+            },
+            "yours": false,
+            "presence": "awake"
+          },
+          {
+            "kind": "human",
+            "person": {
+              "id": "44444444-1111-4111-8111-111111111111",
+              "name": "Dev",
+              "cat": 3
+            },
+            "yours": false,
+            "presence": "awake"
+          }
+        ],
+        "game": null,
+        "gameId": "birdwatch",
+        "birdwatch": {
+          "rules": "official",
+          "seats": 4,
+          "target": 300,
+          "minBid": 70,
+          "maxBid": 120,
+          "nestSize": 5,
+          "teams": [
+            [
+              0,
+              2
+            ],
+            [
+              1,
+              3
+            ]
+          ],
+          "scores": [
+            0,
+            0
+          ],
+          "history": [],
+          "status": "playing",
+          "phase": "play",
+          "hand": 1,
+          "dealer": 0,
+          "turn": 1,
+          "handCounts": [
+            9,
+            9,
+            9,
+            9
+          ],
+          "hands": {
+            "1": [
+              4,
+              6,
+              9,
+              24,
+              38,
+              49,
+              50,
+              53,
+              56
+            ]
+          },
+          "bids": [
+            null,
+            75,
+            null,
+            null
+          ],
+          "passed": [
+            true,
+            false,
+            true,
+            true
+          ],
+          "high": {
+            "seat": 1,
+            "amount": 75
+          },
+          "trump": "bell",
+          "called": null,
+          "partner": null,
+          "trick": [],
+          "leader": 1,
+          "lastTrick": null,
+          "played": [],
+          "points": [
+            0,
+            0,
+            0,
+            0
+          ],
+          "tricks": [
+            0,
+            0,
+            0,
+            0
+          ],
+          "winners": [],
+          "playable": [
+            4,
+            6,
+            9,
+            24,
+            38,
+            49,
+            50,
+            53,
+            56
+          ],
+          "putBack": [
+            11,
+            40,
+            47,
+            54,
+            55
+          ]
+        },
+        "options": {
+          "rules": "official"
+        }
+      }
+    }
+  },
+  {
+    "name": "snapshot-play-follow",
+    "message": {
+      "t": "snapshot",
+      "protocol": 1,
+      "seq": 23,
+      "room": {
+        "code": "BCDFG",
+        "name": "Window Seat",
+        "status": "playing",
+        "youAreHost": false,
+        "seats": [
+          {
+            "kind": "human",
+            "person": {
+              "id": "11111111-1111-4111-8111-111111111111",
+              "name": "Alice",
+              "cat": 0
+            },
+            "yours": false,
+            "presence": "awake"
+          },
+          {
+            "kind": "human",
+            "person": {
+              "id": "22222222-1111-4111-8111-111111111111",
+              "name": "Bob",
+              "cat": 1
+            },
+            "yours": false,
+            "presence": "awake"
+          },
+          {
+            "kind": "human",
+            "person": {
+              "id": "33333333-1111-4111-8111-111111111111",
+              "name": "Cleo",
+              "cat": 2
+            },
+            "yours": true,
+            "presence": "awake"
+          },
+          {
+            "kind": "human",
+            "person": {
+              "id": "44444444-1111-4111-8111-111111111111",
+              "name": "Dev",
+              "cat": 3
+            },
+            "yours": false,
+            "presence": "awake"
+          }
+        ],
+        "game": null,
+        "gameId": "birdwatch",
+        "birdwatch": {
+          "rules": "official",
+          "seats": 4,
+          "target": 300,
+          "minBid": 70,
+          "maxBid": 120,
+          "nestSize": 5,
+          "teams": [
+            [
+              0,
+              2
+            ],
+            [
+              1,
+              3
+            ]
+          ],
+          "scores": [
+            0,
+            0
+          ],
+          "history": [],
+          "status": "playing",
+          "phase": "play",
+          "hand": 1,
+          "dealer": 0,
+          "turn": 2,
+          "handCounts": [
+            9,
+            8,
+            9,
+            9
+          ],
+          "hands": {
+            "2": [
+              8,
+              12,
+              13,
+              25,
+              26,
+              37,
+              39,
+              51,
+              52
+            ]
+          },
+          "bids": [
+            null,
+            75,
+            null,
+            null
+          ],
+          "passed": [
+            true,
+            false,
+            true,
+            true
+          ],
+          "high": {
+            "seat": 1,
+            "amount": 75
+          },
+          "trump": "bell",
+          "called": null,
+          "partner": null,
+          "trick": [
+            {
+              "seat": 1,
+              "card": 4
+            }
+          ],
+          "leader": 1,
+          "lastTrick": null,
+          "played": [
+            4
+          ],
+          "points": [
+            0,
+            0,
+            0,
+            0
+          ],
+          "tricks": [
+            0,
+            0,
+            0,
+            0
+          ],
+          "winners": [],
+          "playable": [
+            8,
+            12,
+            13
+          ]
+        },
+        "options": {
+          "rules": "official"
+        }
+      }
+    }
+  },
+  {
+    "name": "snapshot-play-watching",
+    "message": {
+      "t": "snapshot",
+      "protocol": 1,
+      "seq": 23,
+      "room": {
+        "code": "BCDFG",
+        "name": "Window Seat",
+        "status": "playing",
+        "youAreHost": false,
+        "seats": [
+          {
+            "kind": "human",
+            "person": {
+              "id": "11111111-1111-4111-8111-111111111111",
+              "name": "Alice",
+              "cat": 0
+            },
+            "yours": false,
+            "presence": "awake"
+          },
+          {
+            "kind": "human",
+            "person": {
+              "id": "22222222-1111-4111-8111-111111111111",
+              "name": "Bob",
+              "cat": 1
+            },
+            "yours": true,
+            "presence": "awake"
+          },
+          {
+            "kind": "human",
+            "person": {
+              "id": "33333333-1111-4111-8111-111111111111",
+              "name": "Cleo",
+              "cat": 2
+            },
+            "yours": false,
+            "presence": "awake"
+          },
+          {
+            "kind": "human",
+            "person": {
+              "id": "44444444-1111-4111-8111-111111111111",
+              "name": "Dev",
+              "cat": 3
+            },
+            "yours": false,
+            "presence": "awake"
+          }
+        ],
+        "game": null,
+        "gameId": "birdwatch",
+        "birdwatch": {
+          "rules": "official",
+          "seats": 4,
+          "target": 300,
+          "minBid": 70,
+          "maxBid": 120,
+          "nestSize": 5,
+          "teams": [
+            [
+              0,
+              2
+            ],
+            [
+              1,
+              3
+            ]
+          ],
+          "scores": [
+            0,
+            0
+          ],
+          "history": [],
+          "status": "playing",
+          "phase": "play",
+          "hand": 1,
+          "dealer": 0,
+          "turn": 2,
+          "handCounts": [
+            9,
+            8,
+            9,
+            9
+          ],
+          "hands": {
+            "1": [
+              6,
+              9,
+              24,
+              38,
+              49,
+              50,
+              53,
+              56
+            ]
+          },
+          "bids": [
+            null,
+            75,
+            null,
+            null
+          ],
+          "passed": [
+            true,
+            false,
+            true,
+            true
+          ],
+          "high": {
+            "seat": 1,
+            "amount": 75
+          },
+          "trump": "bell",
+          "called": null,
+          "partner": null,
+          "trick": [
+            {
+              "seat": 1,
+              "card": 4
+            }
+          ],
+          "leader": 1,
+          "lastTrick": null,
+          "played": [
+            4
+          ],
+          "points": [
+            0,
+            0,
+            0,
+            0
+          ],
+          "tricks": [
+            0,
+            0,
+            0,
+            0
+          ],
+          "winners": [],
+          "putBack": [
+            11,
+            40,
+            47,
+            54,
+            55
+          ]
+        },
+        "options": {
+          "rules": "official"
+        },
+        "retire": {
+          "seat": 2,
+          "wait": 259200000
+        }
+      }
+    }
+  },
+  {
+    "name": "snapshot-play-after-trick",
+    "message": {
+      "t": "snapshot",
+      "protocol": 1,
+      "seq": 30,
+      "room": {
+        "code": "BCDFG",
+        "name": "Window Seat",
+        "status": "playing",
+        "youAreHost": false,
+        "seats": [
+          {
+            "kind": "human",
+            "person": {
+              "id": "11111111-1111-4111-8111-111111111111",
+              "name": "Alice",
+              "cat": 0
+            },
+            "yours": false,
+            "presence": "awake"
+          },
+          {
+            "kind": "human",
+            "person": {
+              "id": "22222222-1111-4111-8111-111111111111",
+              "name": "Bob",
+              "cat": 1
+            },
+            "yours": false,
+            "presence": "awake"
+          },
+          {
+            "kind": "human",
+            "person": {
+              "id": "33333333-1111-4111-8111-111111111111",
+              "name": "Cleo",
+              "cat": 2
+            },
+            "yours": true,
+            "presence": "awake"
+          },
+          {
+            "kind": "human",
+            "person": {
+              "id": "44444444-1111-4111-8111-111111111111",
+              "name": "Dev",
+              "cat": 3
+            },
+            "yours": false,
+            "presence": "awake"
+          }
+        ],
+        "game": null,
+        "gameId": "birdwatch",
+        "birdwatch": {
+          "rules": "official",
+          "seats": 4,
+          "target": 300,
+          "minBid": 70,
+          "maxBid": 120,
+          "nestSize": 5,
+          "teams": [
+            [
+              0,
+              2
+            ],
+            [
+              1,
+              3
+            ]
+          ],
+          "scores": [
+            0,
+            0
+          ],
+          "history": [],
+          "status": "playing",
+          "phase": "play",
+          "hand": 1,
+          "dealer": 0,
+          "turn": 2,
+          "handCounts": [
+            8,
+            8,
+            8,
+            8
+          ],
+          "hands": {
+            "2": [
+              12,
+              13,
+              25,
+              26,
+              37,
+              39,
+              51,
+              52
+            ]
+          },
+          "bids": [
+            null,
+            75,
+            null,
+            null
+          ],
+          "passed": [
+            true,
+            false,
+            true,
+            true
+          ],
+          "high": {
+            "seat": 1,
+            "amount": 75
+          },
+          "trump": "bell",
+          "called": null,
+          "partner": null,
+          "trick": [],
+          "leader": 2,
+          "lastTrick": {
+            "cards": [
+              {
+                "seat": 1,
+                "card": 4
+              },
+              {
+                "seat": 2,
+                "card": 8
+              },
+              {
+                "seat": 3,
+                "card": 5
+              },
+              {
+                "seat": 0,
+                "card": 7
+              }
+            ],
+            "winner": 2
+          },
+          "played": [
+            4,
+            8,
+            5,
+            7
+          ],
+          "points": [
+            0,
+            0,
+            5,
+            0
+          ],
+          "tricks": [
+            0,
+            0,
+            1,
+            0
+          ],
+          "winners": [],
+          "playable": [
+            12,
+            13,
+            25,
+            26,
+            37,
+            39,
+            51,
+            52
+          ]
+        },
+        "options": {
+          "rules": "official"
+        }
+      }
+    }
+  },
+  {
+    "name": "snapshot-between",
+    "message": {
+      "t": "snapshot",
+      "protocol": 1,
+      "seq": 102,
+      "room": {
+        "code": "BCDFG",
+        "name": "Window Seat",
+        "status": "playing",
+        "youAreHost": false,
+        "seats": [
+          {
+            "kind": "human",
+            "person": {
+              "id": "11111111-1111-4111-8111-111111111111",
+              "name": "Alice",
+              "cat": 0
+            },
+            "yours": false,
+            "presence": "awake"
+          },
+          {
+            "kind": "human",
+            "person": {
+              "id": "22222222-1111-4111-8111-111111111111",
+              "name": "Bob",
+              "cat": 1
+            },
+            "yours": false,
+            "presence": "awake"
+          },
+          {
+            "kind": "human",
+            "person": {
+              "id": "33333333-1111-4111-8111-111111111111",
+              "name": "Cleo",
+              "cat": 2
+            },
+            "yours": false,
+            "presence": "awake"
+          },
+          {
+            "kind": "human",
+            "person": {
+              "id": "44444444-1111-4111-8111-111111111111",
+              "name": "Dev",
+              "cat": 3
+            },
+            "yours": true,
+            "presence": "awake"
+          }
+        ],
+        "game": null,
+        "gameId": "birdwatch",
+        "birdwatch": {
+          "rules": "official",
+          "seats": 4,
+          "target": 300,
+          "minBid": 70,
+          "maxBid": 120,
+          "nestSize": 5,
+          "teams": [
+            [
+              0,
+              2
+            ],
+            [
+              1,
+              3
+            ]
+          ],
+          "scores": [
+            45,
+            75
+          ],
+          "history": [
+            {
+              "hand": 1,
+              "bidder": 1,
+              "bid": 75,
+              "partner": null,
+              "trump": "bell",
+              "made": true,
+              "taken": [
+                45,
+                75
+              ],
+              "change": [
+                45,
+                75
+              ],
+              "totals": [
+                45,
+                75
+              ]
+            }
+          ],
+          "status": "playing",
+          "phase": "between",
+          "hand": 1,
+          "dealer": 0,
+          "turn": null,
+          "handCounts": [
+            0,
+            0,
+            0,
+            0
+          ],
+          "hands": {
+            "3": []
+          },
+          "bids": [
+            null,
+            75,
+            null,
+            null
+          ],
+          "passed": [
+            true,
+            false,
+            true,
+            true
+          ],
+          "high": {
+            "seat": 1,
+            "amount": 75
+          },
+          "trump": "bell",
+          "called": null,
+          "partner": null,
+          "trick": [],
+          "leader": 1,
+          "lastTrick": {
+            "cards": [
+              {
+                "seat": 1,
+                "card": 56
+              },
+              {
+                "seat": 2,
+                "card": 39
+              },
+              {
+                "seat": 3,
+                "card": 41
+              },
+              {
+                "seat": 0,
+                "card": 36
+              }
+            ],
+            "winner": 1
+          },
+          "played": [
+            4,
+            8,
+            5,
+            7,
+            12,
+            18,
+            10,
+            6,
+            13,
+            19,
+            20,
+            9,
+            25,
+            27,
+            21,
+            24,
+            33,
+            32,
+            38,
+            37,
+            49,
+            51,
+            46,
+            22,
+            26,
+            35,
+            23,
+            50,
+            53,
+            52,
+            48,
+            34,
+            56,
+            39,
+            41,
+            36
+          ],
+          "points": [
+            0,
+            65,
+            45,
+            10
+          ],
+          "tricks": [
+            0,
+            4,
+            4,
+            1
+          ],
+          "winners": [],
+          "putBack": [
+            11,
+            40,
+            47,
+            54,
+            55
+          ]
+        },
+        "options": {
+          "rules": "official"
+        }
+      }
+    }
+  },
+  {
+    "name": "snapshot-over-target",
+    "message": {
+      "t": "snapshot",
+      "protocol": 1,
+      "seq": 103,
+      "room": {
+        "code": "BCDFG",
+        "name": "Window Seat",
+        "status": "over",
+        "youAreHost": false,
+        "seats": [
+          {
+            "kind": "human",
+            "person": {
+              "id": "11111111-1111-4111-8111-111111111111",
+              "name": "Alice",
+              "cat": 0
+            },
+            "yours": false,
+            "presence": "awake"
+          },
+          {
+            "kind": "human",
+            "person": {
+              "id": "22222222-1111-4111-8111-111111111111",
+              "name": "Bob",
+              "cat": 1
+            },
+            "yours": true,
+            "presence": "awake"
+          },
+          {
+            "kind": "human",
+            "person": {
+              "id": "33333333-1111-4111-8111-111111111111",
+              "name": "Cleo",
+              "cat": 2
+            },
+            "yours": false,
+            "presence": "awake"
+          },
+          {
+            "kind": "human",
+            "person": {
+              "id": "44444444-1111-4111-8111-111111111111",
+              "name": "Dev",
+              "cat": 3
+            },
+            "yours": false,
+            "presence": "awake"
+          }
+        ],
+        "game": null,
+        "gameId": "birdwatch",
+        "birdwatch": {
+          "rules": "official",
+          "seats": 4,
+          "target": 300,
+          "minBid": 70,
+          "maxBid": 120,
+          "nestSize": 5,
+          "teams": [
+            [
+              0,
+              2
+            ],
+            [
+              1,
+              3
+            ]
+          ],
+          "scores": [
+            345,
+            210
+          ],
+          "history": [
+            {
+              "hand": 1,
+              "bidder": 1,
+              "bid": 70,
+              "partner": null,
+              "trump": "fish",
+              "made": false,
+              "taken": [
+                55,
+                65
+              ],
+              "change": [
+                55,
+                -70
+              ],
+              "totals": [
+                345,
+                210
+              ]
+            }
+          ],
+          "status": "over",
+          "phase": "over",
+          "hand": 1,
+          "dealer": 0,
+          "turn": null,
+          "handCounts": [
+            0,
+            0,
+            0,
+            0
+          ],
+          "hands": {
+            "1": []
+          },
+          "bids": [
+            null,
+            70,
+            null,
+            null
+          ],
+          "passed": [
+            true,
+            false,
+            true,
+            true
+          ],
+          "high": {
+            "seat": 1,
+            "amount": 70
+          },
+          "trump": "fish",
+          "called": null,
+          "partner": null,
+          "trick": [],
+          "leader": 1,
+          "lastTrick": {
+            "cards": [
+              {
+                "seat": 3,
+                "card": 48
+              },
+              {
+                "seat": 0,
+                "card": 36
+              },
+              {
+                "seat": 1,
+                "card": 56
+              },
+              {
+                "seat": 2,
+                "card": 52
+              }
+            ],
+            "winner": 1
+          },
+          "played": [
+            4,
+            8,
+            5,
+            7,
+            12,
+            18,
+            10,
+            6,
+            13,
+            19,
+            20,
+            9,
+            25,
+            27,
+            21,
+            24,
+            33,
+            32,
+            38,
+            37,
+            49,
+            51,
+            46,
+            22,
+            26,
+            35,
+            23,
+            50,
+            39,
+            41,
+            34,
+            53,
+            48,
+            36,
+            56,
+            52
+          ],
+          "points": [
+            0,
+            45,
+            55,
+            20
+          ],
+          "tricks": [
+            0,
+            2,
+            5,
+            2
+          ],
+          "winners": [
+            0,
+            2
+          ],
+          "putBack": [
+            11,
+            40,
+            47,
+            54,
+            55
+          ],
+          "endReason": "target"
+        },
+        "options": {
+          "rules": "official"
+        }
+      }
+    }
+  },
+  {
+    "name": "snapshot-five-partner-call",
+    "message": {
+      "t": "snapshot",
+      "protocol": 1,
+      "seq": 25,
+      "room": {
+        "code": "BCDFG",
+        "name": "Window Seat",
+        "status": "playing",
+        "youAreHost": false,
+        "seats": [
+          {
+            "kind": "human",
+            "person": {
+              "id": "11111111-1111-4111-8111-111111111111",
+              "name": "Alice",
+              "cat": 0
+            },
+            "yours": false,
+            "presence": "awake"
+          },
+          {
+            "kind": "human",
+            "person": {
+              "id": "22222222-1111-4111-8111-111111111111",
+              "name": "Bob",
+              "cat": 1
+            },
+            "yours": true,
+            "presence": "awake"
+          },
+          {
+            "kind": "human",
+            "person": {
+              "id": "33333333-1111-4111-8111-111111111111",
+              "name": "Cleo",
+              "cat": 2
+            },
+            "yours": false,
+            "presence": "awake"
+          },
+          {
+            "kind": "human",
+            "person": {
+              "id": "44444444-1111-4111-8111-111111111111",
+              "name": "Dev",
+              "cat": 3
+            },
+            "yours": false,
+            "presence": "awake"
+          },
+          {
+            "kind": "human",
+            "person": {
+              "id": "55555555-1111-4111-8111-111111111111",
+              "name": "Eli",
+              "cat": 4
+            },
+            "yours": false,
+            "presence": "awake"
+          }
+        ],
+        "game": null,
+        "gameId": "birdwatch",
+        "birdwatch": {
+          "rules": "tucker",
+          "seats": 5,
+          "target": 500,
+          "minBid": 70,
+          "maxBid": 180,
+          "nestSize": 7,
+          "teams": [
+            [
+              0
+            ],
+            [
+              1
+            ],
+            [
+              2
+            ],
+            [
+              3
+            ],
+            [
+              4
+            ]
+          ],
+          "scores": [
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          "history": [],
+          "status": "playing",
+          "phase": "partner",
+          "hand": 1,
+          "dealer": 0,
+          "turn": 1,
+          "handCounts": [
+            10,
+            10,
+            10,
+            10,
+            10
+          ],
+          "hands": {
+            "1": [
+              3,
+              4,
+              8,
+              26,
+              36,
+              39,
+              42,
+              43,
+              48,
+              52
+            ]
+          },
+          "bids": [
+            null,
+            70,
+            null,
+            null,
+            null
+          ],
+          "passed": [
+            true,
+            false,
+            true,
+            true,
+            true
+          ],
+          "high": {
+            "seat": 1,
+            "amount": 70
+          },
+          "trump": "mouse",
+          "called": null,
+          "partner": null,
+          "trick": [],
+          "leader": null,
+          "lastTrick": null,
+          "played": [],
+          "points": [
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          "tricks": [
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          "winners": [],
+          "putBack": [
+            2,
+            11,
+            34,
+            40,
+            44,
+            53,
+            55
+          ],
+          "partnerChoices": [
+            0,
+            1,
+            2,
+            5,
+            6,
+            7,
+            9,
+            10,
+            11,
+            12,
+            13,
+            14,
+            15,
+            16,
+            17,
+            18,
+            19,
+            20,
+            21,
+            22,
+            23,
+            24,
+            25,
+            27,
+            28,
+            29,
+            30,
+            31,
+            32,
+            33,
+            34,
+            35,
+            37,
+            38,
+            40,
+            41,
+            44,
+            45,
+            46,
+            47,
+            49,
+            50,
+            51,
+            53,
+            54,
+            55,
+            56
+          ]
+        },
+        "options": {
+          "rules": "tucker"
+        }
+      }
+    }
+  },
+  {
+    "name": "snapshot-five-you-are-partner",
+    "message": {
+      "t": "snapshot",
+      "protocol": 1,
+      "seq": 27,
+      "room": {
+        "code": "BCDFG",
+        "name": "Window Seat",
+        "status": "playing",
+        "youAreHost": false,
+        "seats": [
+          {
+            "kind": "human",
+            "person": {
+              "id": "11111111-1111-4111-8111-111111111111",
+              "name": "Alice",
+              "cat": 0
+            },
+            "yours": false,
+            "presence": "awake"
+          },
+          {
+            "kind": "human",
+            "person": {
+              "id": "22222222-1111-4111-8111-111111111111",
+              "name": "Bob",
+              "cat": 1
+            },
+            "yours": false,
+            "presence": "awake"
+          },
+          {
+            "kind": "human",
+            "person": {
+              "id": "33333333-1111-4111-8111-111111111111",
+              "name": "Cleo",
+              "cat": 2
+            },
+            "yours": false,
+            "presence": "awake"
+          },
+          {
+            "kind": "human",
+            "person": {
+              "id": "44444444-1111-4111-8111-111111111111",
+              "name": "Dev",
+              "cat": 3
+            },
+            "yours": true,
+            "presence": "awake"
+          },
+          {
+            "kind": "human",
+            "person": {
+              "id": "55555555-1111-4111-8111-111111111111",
+              "name": "Eli",
+              "cat": 4
+            },
+            "yours": false,
+            "presence": "awake"
+          }
+        ],
+        "game": null,
+        "gameId": "birdwatch",
+        "birdwatch": {
+          "rules": "tucker",
+          "seats": 5,
+          "target": 500,
+          "minBid": 70,
+          "maxBid": 180,
+          "nestSize": 7,
+          "teams": [
+            [
+              0
+            ],
+            [
+              1
+            ],
+            [
+              2
+            ],
+            [
+              3
+            ],
+            [
+              4
+            ]
+          ],
+          "scores": [
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          "history": [],
+          "status": "playing",
+          "phase": "play",
+          "hand": 1,
+          "dealer": 0,
+          "turn": 1,
+          "handCounts": [
+            10,
+            10,
+            10,
+            10,
+            10
+          ],
+          "hands": {
+            "3": [
+              0,
+              1,
+              10,
+              14,
+              32,
+              35,
+              37,
+              38,
+              46,
+              51
+            ]
+          },
+          "bids": [
+            null,
+            70,
+            null,
+            null,
+            null
+          ],
+          "passed": [
+            true,
+            false,
+            true,
+            true,
+            true
+          ],
+          "high": {
+            "seat": 1,
+            "amount": 70
+          },
+          "trump": "mouse",
+          "called": 0,
+          "partner": null,
+          "trick": [],
+          "leader": 1,
+          "lastTrick": null,
+          "played": [],
+          "points": [
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          "tricks": [
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          "winners": [],
+          "youArePartner": 3
+        },
+        "options": {
+          "rules": "tucker"
+        },
+        "retire": {
+          "seat": 1,
+          "wait": 259200000
+        }
+      }
+    }
+  },
+  {
+    "name": "snapshot-five-partner-hidden",
+    "message": {
+      "t": "snapshot",
+      "protocol": 1,
+      "seq": 27,
+      "room": {
+        "code": "BCDFG",
+        "name": "Window Seat",
+        "status": "playing",
+        "youAreHost": false,
+        "seats": [
+          {
+            "kind": "human",
+            "person": {
+              "id": "11111111-1111-4111-8111-111111111111",
+              "name": "Alice",
+              "cat": 0
+            },
+            "yours": false,
+            "presence": "awake"
+          },
+          {
+            "kind": "human",
+            "person": {
+              "id": "22222222-1111-4111-8111-111111111111",
+              "name": "Bob",
+              "cat": 1
+            },
+            "yours": false,
+            "presence": "awake"
+          },
+          {
+            "kind": "human",
+            "person": {
+              "id": "33333333-1111-4111-8111-111111111111",
+              "name": "Cleo",
+              "cat": 2
+            },
+            "yours": true,
+            "presence": "awake"
+          },
+          {
+            "kind": "human",
+            "person": {
+              "id": "44444444-1111-4111-8111-111111111111",
+              "name": "Dev",
+              "cat": 3
+            },
+            "yours": false,
+            "presence": "awake"
+          },
+          {
+            "kind": "human",
+            "person": {
+              "id": "55555555-1111-4111-8111-111111111111",
+              "name": "Eli",
+              "cat": 4
+            },
+            "yours": false,
+            "presence": "awake"
+          }
+        ],
+        "game": null,
+        "gameId": "birdwatch",
+        "birdwatch": {
+          "rules": "tucker",
+          "seats": 5,
+          "target": 500,
+          "minBid": 70,
+          "maxBid": 180,
+          "nestSize": 7,
+          "teams": [
+            [
+              0
+            ],
+            [
+              1
+            ],
+            [
+              2
+            ],
+            [
+              3
+            ],
+            [
+              4
+            ]
+          ],
+          "scores": [
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          "history": [],
+          "status": "playing",
+          "phase": "play",
+          "hand": 1,
+          "dealer": 0,
+          "turn": 1,
+          "handCounts": [
+            10,
+            10,
+            10,
+            10,
+            10
+          ],
+          "hands": {
+            "2": [
+              5,
+              13,
+              21,
+              22,
+              27,
+              30,
+              33,
+              41,
+              49,
+              54
+            ]
+          },
+          "bids": [
+            null,
+            70,
+            null,
+            null,
+            null
+          ],
+          "passed": [
+            true,
+            false,
+            true,
+            true,
+            true
+          ],
+          "high": {
+            "seat": 1,
+            "amount": 70
+          },
+          "trump": "mouse",
+          "called": 0,
+          "partner": null,
+          "trick": [],
+          "leader": 1,
+          "lastTrick": null,
+          "played": [],
+          "points": [
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          "tricks": [
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          "winners": []
+        },
+        "options": {
+          "rules": "tucker"
+        },
+        "retire": {
+          "seat": 1,
+          "wait": 259200000
+        }
+      }
+    }
+  },
+  {
+    "name": "snapshot-five-partner-shown",
+    "message": {
+      "t": "snapshot",
+      "protocol": 1,
+      "seq": 34,
+      "room": {
+        "code": "BCDFG",
+        "name": "Window Seat",
+        "status": "playing",
+        "youAreHost": false,
+        "seats": [
+          {
+            "kind": "human",
+            "person": {
+              "id": "11111111-1111-4111-8111-111111111111",
+              "name": "Alice",
+              "cat": 0
+            },
+            "yours": false,
+            "presence": "awake"
+          },
+          {
+            "kind": "human",
+            "person": {
+              "id": "22222222-1111-4111-8111-111111111111",
+              "name": "Bob",
+              "cat": 1
+            },
+            "yours": false,
+            "presence": "awake"
+          },
+          {
+            "kind": "human",
+            "person": {
+              "id": "33333333-1111-4111-8111-111111111111",
+              "name": "Cleo",
+              "cat": 2
+            },
+            "yours": true,
+            "presence": "awake"
+          },
+          {
+            "kind": "human",
+            "person": {
+              "id": "44444444-1111-4111-8111-111111111111",
+              "name": "Dev",
+              "cat": 3
+            },
+            "yours": false,
+            "presence": "awake"
+          },
+          {
+            "kind": "human",
+            "person": {
+              "id": "55555555-1111-4111-8111-111111111111",
+              "name": "Eli",
+              "cat": 4
+            },
+            "yours": false,
+            "presence": "awake"
+          }
+        ],
+        "game": null,
+        "gameId": "birdwatch",
+        "birdwatch": {
+          "rules": "tucker",
+          "seats": 5,
+          "target": 500,
+          "minBid": 70,
+          "maxBid": 180,
+          "nestSize": 7,
+          "teams": [
+            [
+              0
+            ],
+            [
+              1
+            ],
+            [
+              2
+            ],
+            [
+              3
+            ],
+            [
+              4
+            ]
+          ],
+          "scores": [
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          "history": [],
+          "status": "playing",
+          "phase": "play",
+          "hand": 1,
+          "dealer": 0,
+          "turn": 4,
+          "handCounts": [
+            10,
+            9,
+            9,
+            9,
+            10
+          ],
+          "hands": {
+            "2": [
+              13,
+              21,
+              22,
+              27,
+              30,
+              33,
+              41,
+              49,
+              54
+            ]
+          },
+          "bids": [
+            null,
+            70,
+            null,
+            null,
+            null
+          ],
+          "passed": [
+            true,
+            false,
+            true,
+            true,
+            true
+          ],
+          "high": {
+            "seat": 1,
+            "amount": 70
+          },
+          "trump": "mouse",
+          "called": 0,
+          "partner": 3,
+          "trick": [
+            {
+              "seat": 1,
+              "card": 3
+            },
+            {
+              "seat": 2,
+              "card": 5
+            },
+            {
+              "seat": 3,
+              "card": 0
+            }
+          ],
+          "leader": 1,
+          "lastTrick": null,
+          "played": [
+            3,
+            5,
+            0
+          ],
+          "points": [
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          "tricks": [
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          "winners": []
+        },
+        "options": {
+          "rules": "tucker"
+        },
+        "retire": {
+          "seat": 4,
+          "wait": 259200000
+        }
+      }
+    }
+  },
+  {
+    "name": "snapshot-six-house-cat",
+    "message": {
+      "t": "snapshot",
+      "protocol": 1,
+      "seq": 11,
+      "room": {
+        "code": "BCDFG",
+        "name": "Window Seat",
+        "status": "playing",
+        "youAreHost": true,
+        "seats": [
+          {
+            "kind": "human",
+            "person": {
+              "id": "11111111-1111-4111-8111-111111111111",
+              "name": "Alice",
+              "cat": 0
+            },
+            "yours": true,
+            "presence": "awake"
+          },
+          {
+            "kind": "human",
+            "person": {
+              "id": "22222222-1111-4111-8111-111111111111",
+              "name": "Bob",
+              "cat": 1
+            },
+            "yours": false,
+            "presence": "awake"
+          },
+          {
+            "kind": "bot",
+            "person": {
+              "id": "33333333-1111-4111-8111-111111111111",
+              "name": "Cleo",
+              "cat": 2
+            },
+            "yours": false,
+            "presence": null,
+            "left": true
+          },
+          {
+            "kind": "human",
+            "person": {
+              "id": "44444444-1111-4111-8111-111111111111",
+              "name": "Dev",
+              "cat": 3
+            },
+            "yours": false,
+            "presence": "awake"
+          },
+          {
+            "kind": "human",
+            "person": {
+              "id": "55555555-1111-4111-8111-111111111111",
+              "name": "Eli",
+              "cat": 4
+            },
+            "yours": false,
+            "presence": "awake"
+          },
+          {
+            "kind": "human",
+            "person": {
+              "id": "66666666-1111-4111-8111-111111111111",
+              "name": "Fay",
+              "cat": 5
+            },
+            "yours": false,
+            "presence": "awake"
+          }
+        ],
+        "game": null,
+        "gameId": "birdwatch",
+        "birdwatch": {
+          "rules": "friesen",
+          "seats": 6,
+          "target": 500,
+          "minBid": 70,
+          "maxBid": 180,
+          "nestSize": 3,
+          "teams": [
+            [
+              0,
+              3
+            ],
+            [
+              1,
+              4
+            ],
+            [
+              2,
+              5
+            ]
+          ],
+          "scores": [
+            0,
+            0,
+            0
+          ],
+          "history": [],
+          "status": "playing",
+          "phase": "bidding",
+          "hand": 1,
+          "dealer": 0,
+          "turn": 1,
+          "handCounts": [
+            9,
+            9,
+            9,
+            9,
+            9,
+            9
+          ],
+          "hands": {
+            "0": [
+              7,
+              9,
+              19,
+              20,
+              23,
+              24,
+              47,
+              50,
+              56
+            ]
+          },
+          "bids": [
+            null,
+            null,
+            null,
+            null,
+            null,
+            null
+          ],
+          "passed": [
+            false,
+            false,
+            false,
+            false,
+            false,
+            false
+          ],
+          "high": null,
+          "trump": null,
+          "called": null,
+          "partner": null,
+          "trick": [],
+          "leader": null,
+          "lastTrick": null,
+          "played": [],
+          "points": [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          "tricks": [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          "winners": []
+        },
+        "options": {
+          "rules": "friesen"
+        },
+        "retire": {
+          "seat": 1,
+          "wait": 259200000
+        }
+      }
+    }
+  },
+  {
+    "name": "snapshot-over-left",
+    "message": {
+      "t": "snapshot",
+      "protocol": 1,
+      "seq": 12,
+      "room": {
+        "code": "BCDFG",
+        "name": "Window Seat",
+        "status": "over",
+        "youAreHost": true,
+        "seats": [
+          {
+            "kind": "bot",
+            "person": {
+              "id": "11111111-1111-4111-8111-111111111111",
+              "name": "Alice",
+              "cat": 0
+            },
+            "yours": false,
+            "presence": null,
+            "left": true
+          },
+          {
+            "kind": "bot",
+            "person": {
+              "id": "22222222-1111-4111-8111-111111111111",
+              "name": "Bob",
+              "cat": 1
+            },
+            "yours": false,
+            "presence": null,
+            "left": true
+          },
+          {
+            "kind": "bot",
+            "person": {
+              "id": "33333333-1111-4111-8111-111111111111",
+              "name": "Cleo",
+              "cat": 2
+            },
+            "yours": false,
+            "presence": null,
+            "left": true
+          },
+          {
+            "kind": "bot",
+            "person": {
+              "id": "44444444-1111-4111-8111-111111111111",
+              "name": "Dev",
+              "cat": 3
+            },
+            "yours": false,
+            "presence": null,
+            "left": true
+          }
+        ],
+        "game": null,
+        "gameId": "birdwatch",
+        "birdwatch": {
+          "rules": "official",
+          "seats": 4,
+          "target": 300,
+          "minBid": 70,
+          "maxBid": 120,
+          "nestSize": 5,
+          "teams": [
+            [
+              0,
+              2
+            ],
+            [
+              1,
+              3
+            ]
+          ],
+          "scores": [
+            0,
+            0
+          ],
+          "history": [],
+          "status": "over",
+          "phase": "over",
+          "hand": 1,
+          "dealer": 0,
+          "turn": null,
+          "handCounts": [
+            9,
+            9,
+            9,
+            9
+          ],
+          "hands": {},
+          "bids": [
+            null,
+            null,
+            null,
+            null
+          ],
+          "passed": [
+            false,
+            false,
+            false,
+            false
+          ],
+          "high": null,
+          "trump": null,
+          "called": null,
+          "partner": null,
+          "trick": [],
+          "leader": null,
+          "lastTrick": null,
+          "played": [],
+          "points": [
+            0,
+            0,
+            0,
+            0
+          ],
+          "tricks": [
+            0,
+            0,
+            0,
+            0
+          ],
+          "winners": [],
+          "endReason": "left"
+        },
+        "options": {
+          "rules": "official"
+        }
+      }
+    }
+  },
+  {
+    "name": "event-dealt-own",
+    "message": {
+      "t": "event",
+      "seq": 4,
+      "event": {
+        "kind": "birdwatch",
+        "event": {
+          "kind": "dealt",
+          "hand": 2,
+          "dealer": 1,
+          "handCounts": [
+            9,
+            9,
+            9,
+            9
+          ],
+          "hands": {
+            "0": [
+              4,
+              6,
+              9,
+              17,
+              18,
+              30,
+              33,
+              41,
+              56
+            ]
+          }
+        }
+      }
+    }
+  },
+  {
+    "name": "event-dealt-screen",
+    "message": {
+      "t": "event",
+      "seq": 4,
+      "event": {
+        "kind": "birdwatch",
+        "event": {
+          "kind": "dealt",
+          "hand": 2,
+          "dealer": 1,
+          "handCounts": [
+            9,
+            9,
+            9,
+            9
+          ],
+          "hands": {}
+        }
+      }
+    }
+  },
+  {
+    "name": "event-bid",
+    "message": {
+      "t": "event",
+      "seq": 5,
+      "event": {
+        "kind": "birdwatch",
+        "event": {
+          "kind": "bid",
+          "seat": 2,
+          "amount": 85
+        }
+      }
+    }
+  },
+  {
+    "name": "event-passed",
+    "message": {
+      "t": "event",
+      "seq": 6,
+      "event": {
+        "kind": "birdwatch",
+        "event": {
+          "kind": "passed",
+          "seat": 3
+        }
+      }
+    }
+  },
+  {
+    "name": "event-bidWon",
+    "message": {
+      "t": "event",
+      "seq": 7,
+      "event": {
+        "kind": "birdwatch",
+        "event": {
+          "kind": "bidWon",
+          "seat": 2,
+          "amount": 85
+        }
+      }
+    }
+  },
+  {
+    "name": "event-nest-own",
+    "message": {
+      "t": "event",
+      "seq": 8,
+      "event": {
+        "kind": "birdwatch",
+        "event": {
+          "kind": "nest",
+          "seat": 2,
+          "cards": [
+            7,
+            21,
+            44,
+            50,
+            55
+          ]
+        }
+      }
+    }
+  },
+  {
+    "name": "event-nest-other",
+    "message": {
+      "t": "event",
+      "seq": 8,
+      "event": {
+        "kind": "birdwatch",
+        "event": {
+          "kind": "nest",
+          "seat": 2
+        }
+      }
+    }
+  },
+  {
+    "name": "event-putBack-own",
+    "message": {
+      "t": "event",
+      "seq": 9,
+      "event": {
+        "kind": "birdwatch",
+        "event": {
+          "kind": "putBack",
+          "seat": 2,
+          "count": 5,
+          "cards": [
+            5,
+            7,
+            19,
+            32,
+            46
+          ]
+        }
+      }
+    }
+  },
+  {
+    "name": "event-putBack-other",
+    "message": {
+      "t": "event",
+      "seq": 9,
+      "event": {
+        "kind": "birdwatch",
+        "event": {
+          "kind": "putBack",
+          "seat": 2,
+          "count": 5
+        }
+      }
+    }
+  },
+  {
+    "name": "event-trump",
+    "message": {
+      "t": "event",
+      "seq": 10,
+      "event": {
+        "kind": "birdwatch",
+        "event": {
+          "kind": "trump",
+          "seat": 2,
+          "suit": "feather"
+        }
+      }
+    }
+  },
+  {
+    "name": "event-called",
+    "message": {
+      "t": "event",
+      "seq": 11,
+      "event": {
+        "kind": "birdwatch",
+        "event": {
+          "kind": "called",
+          "seat": 2,
+          "card": 42
+        }
+      }
+    }
+  },
+  {
+    "name": "event-turn",
+    "message": {
+      "t": "event",
+      "seq": 12,
+      "event": {
+        "kind": "birdwatch",
+        "event": {
+          "kind": "turn",
+          "seat": 2
+        }
+      }
+    }
+  },
+  {
+    "name": "event-played",
+    "message": {
+      "t": "event",
+      "seq": 13,
+      "event": {
+        "kind": "birdwatch",
+        "event": {
+          "kind": "played",
+          "seat": 2,
+          "card": 56
+        }
+      }
+    }
+  },
+  {
+    "name": "event-partner",
+    "message": {
+      "t": "event",
+      "seq": 14,
+      "event": {
+        "kind": "birdwatch",
+        "event": {
+          "kind": "partner",
+          "seat": 4
+        }
+      }
+    }
+  },
+  {
+    "name": "event-trick",
+    "message": {
+      "t": "event",
+      "seq": 15,
+      "event": {
+        "kind": "birdwatch",
+        "event": {
+          "kind": "trick",
+          "winner": 3,
+          "cards": [
+            {
+              "seat": 1,
+              "card": 23
+            },
+            {
+              "seat": 2,
+              "card": 27
+            },
+            {
+              "seat": 3,
+              "card": 4
+            },
+            {
+              "seat": 0,
+              "card": 19
+            }
+          ],
+          "points": 25
+        }
+      }
+    }
+  },
+  {
+    "name": "event-handOver",
+    "message": {
+      "t": "event",
+      "seq": 16,
+      "event": {
+        "kind": "birdwatch",
+        "event": {
+          "kind": "handOver",
+          "result": {
+            "hand": 3,
+            "bidder": 1,
+            "bid": 85,
+            "partner": null,
+            "trump": "fish",
+            "made": true,
+            "taken": [
+              30,
+              90
+            ],
+            "change": [
+              30,
+              90
+            ],
+            "totals": [
+              145,
+              210
+            ]
+          },
+          "putBack": [
+            5,
+            7,
+            19,
+            32,
+            46
+          ]
+        }
+      }
+    }
+  },
+  {
+    "name": "event-gameOver-target",
+    "message": {
+      "t": "event",
+      "seq": 17,
+      "event": {
+        "kind": "birdwatch",
+        "event": {
+          "kind": "gameOver",
+          "winners": [
+            1,
+            3
+          ],
+          "scores": [
+            145,
+            310
+          ],
+          "reason": "target"
+        }
+      }
+    }
+  },
+  {
+    "name": "event-gameOver-left",
+    "message": {
+      "t": "event",
+      "seq": 18,
+      "event": {
+        "kind": "birdwatch",
+        "event": {
+          "kind": "gameOver",
+          "winners": [],
+          "scores": [
+            40,
+            75
+          ],
+          "reason": "left"
+        }
+      }
+    }
+  },
+  {
+    "name": "event-houseCat",
+    "message": {
+      "t": "event",
+      "seq": 19,
+      "event": {
+        "kind": "houseCat",
+        "seat": 2
+      }
+    }
+  },
+  {
+    "name": "error-wrong_phase",
+    "message": {
+      "t": "error",
+      "code": "wrong_phase"
+    }
+  },
+  {
+    "name": "error-bid_too_low",
+    "message": {
+      "t": "error",
+      "code": "bid_too_low"
+    }
+  },
+  {
+    "name": "error-bid_too_high",
+    "message": {
+      "t": "error",
+      "code": "bid_too_high"
+    }
+  },
+  {
+    "name": "error-bad_bid",
+    "message": {
+      "t": "error",
+      "code": "bad_bid"
+    }
+  },
+  {
+    "name": "error-bad_card",
+    "message": {
+      "t": "error",
+      "code": "bad_card"
+    }
+  },
+  {
+    "name": "error-not_your_card",
+    "message": {
+      "t": "error",
+      "code": "not_your_card"
+    }
+  },
+  {
+    "name": "error-wrong_count",
+    "message": {
+      "t": "error",
+      "code": "wrong_count"
+    }
+  },
+  {
+    "name": "error-duplicate_card",
+    "message": {
+      "t": "error",
+      "code": "duplicate_card"
+    }
+  },
+  {
+    "name": "error-own_card",
+    "message": {
+      "t": "error",
+      "code": "own_card"
+    }
+  },
+  {
+    "name": "error-must_follow",
+    "message": {
+      "t": "error",
+      "code": "must_follow"
+    }
+  },
+  {
+    "name": "error-not_your_turn",
+    "message": {
+      "t": "error",
+      "code": "not_your_turn"
+    }
+  },
+  {
+    "name": "error-bad_action",
+    "message": {
+      "t": "error",
+      "code": "bad_action"
+    }
+  },
+  {
+    "name": "error-game_over",
+    "message": {
+      "t": "error",
+      "code": "game_over"
+    }
+  },
+  {
+    "name": "error-not_allowed",
+    "message": {
+      "t": "error",
+      "code": "not_allowed"
+    }
+  },
+  {
+    "name": "error-not_enough_players",
+    "message": {
+      "t": "error",
+      "code": "not_enough_players"
+    }
+  },
+  {
+    "name": "error-game_off",
+    "message": {
+      "t": "error",
+      "code": "game_off"
+    }
+  }
+]

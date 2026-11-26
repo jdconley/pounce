@@ -28,6 +28,7 @@ describe("what a device sees", () => {
     expect(v.hands[1]).toEqual(s.hands[1]);
     expect(v.handCounts).toEqual([9, 9, 9, 9]);
     expect(viewFor(s, []).hands).toEqual({});
+    expect(viewFor(s, [9, 1.5]).hands).toEqual({});
     expect([v.target, v.minBid, v.maxBid, v.nestSize, v.teams]).toEqual([300, 70, 120, 5, [[0, 2], [1, 3]]]);
   });
 

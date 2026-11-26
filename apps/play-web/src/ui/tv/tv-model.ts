@@ -7,8 +7,11 @@ import { playing, seatName } from "../../table/seat-names";
 import type { RoomPhase } from "../../store/room";
 import type { RoomEvent, RoomView } from "@pounce/play-api/protocol";
 
-/** The room's game. */
-export const gameOf = (room: RoomView): GameId => room.gameId ?? "cat-tower";
+/**
+ * The room's game. The server only lets this player into a room of a game it lists in
+ * X-Pounce-Games, which is its catalog, so a newer game's id never reaches here.
+ */
+export const gameOf = (room: RoomView): GameId => (room.gameId ?? "cat-tower") as GameId;
 
 /** The game a TV's "Change game" makes instead. */
 export const otherGame = (id: GameId): GameId => GAME_IDS.find((g) => g !== id) ?? id;

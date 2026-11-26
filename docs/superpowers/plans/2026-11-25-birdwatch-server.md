@@ -2,6 +2,8 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
+**Status:** built (2026-11-25).
+
 **Goal:** The server half of Birdwatch, Pounce's 1.3 trick-taking game: rules as data, a pure engine, the game module, the House Cat, and the room changes it needs (options, swap seats, a House Cat taking over a seat that leaves), behind the `GAMES` flag.
 
 **Architecture:** `src/birdwatch/` holds the pure rules (cards, rule sets, engine, views, parser). `src/games/birdwatch.ts` adapts it to `GameModule`. The room gains three generic abilities (game options, swapping seats, `leaveTakeover`) that Cat Tower and Tuna Tiles never use, so their bytes on the wire don't change.
@@ -38,7 +40,10 @@
 15. **Live table.** `progressKind` gains `"score"`; `progress` per seat is its side's score.
 16. **Put-back cards in the bid winner's own view.** The device controlling the bid winner sees `fromNest` during the nest step (so the cards can glow) and `putBack` afterwards. Nobody else sees either until the hand ends, when `handOver` and the view show `putBack` to everyone.
 17. **Abandoned and hand-cap safety.** The House Cat soak plays every rule set at 4, 5 and 6 seats; a game must end within 300 hands.
-18. **Invite pages.** A Birdwatch invite uses the default Open Graph image until the release adds its own preview (the websites change only at release, per AGENTS.md).
+18. **Rule set at Play again.** The new table keeps it (`RematchIntent.options`).
+19. **The web player builds.** It imports the server's types, so two small changes keep it compiling without drawing anything new: `gameOf` in `apps/play-web/src/ui/tv/tv-model.ts` narrows the room's id to the web catalog's (the server never lets the web player into a game it doesn't list), and `tests/catalog.test.ts` lists `birdwatch` as a server game the web doesn't draw yet. The web session removes it from that list when its table lands.
+20. **Bot speed** is checked as the 99th percentile over the soak (under 5 ms), not the single slowest move, which a busy CI machine can stall.
+21. **Invite pages.** A Birdwatch invite uses the default Open Graph image until the release adds its own preview (the websites change only at release, per AGENTS.md).
 
 ## Wire shapes
 
@@ -95,8 +100,10 @@ type BirdEvent =
   | { kind: "gameOver"; winners: Seat[]; scores: number[]; reason: "target" | "left" };
 
 type BirdError = "game_over" | "bad_action" | "not_your_turn" | "bad_seat" | "wrong_phase"
-  | "bid_too_low" | "bid_too_high" | "bad_bid" | "passed" | "bad_card" | "not_your_card"
+  | "bid_too_low" | "bid_too_high" | "bad_bid" | "bad_card" | "not_your_card"
   | "wrong_count" | "duplicate_card" | "own_card" | "must_follow";
+// Room messages: { t: "setOptions", options: BirdOptions }, { t: "swapSeats", seats: [a, b] }.
+// Room event: { kind: "houseCat", seat }. Seat view: left?: true. RoomView: gameId "birdwatch", birdwatch?, options?.
 ```
 
 ## Review Focus

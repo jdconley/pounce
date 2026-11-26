@@ -36,6 +36,7 @@ test("anything else is refused", () => {
     { type: "nest", discard: [1, "2"] },
     { type: "nest", discard: 1 },
     { type: "nest" },
+    { type: "nest", discard: [1], more: true },
     { type: "draw" },
   ]) {
     expect(parseAction(a), JSON.stringify(a)).toBeNull();
