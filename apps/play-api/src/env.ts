@@ -116,8 +116,8 @@ export interface Env {
   /**
    * The games rooms may be created for beyond Cat Tower: a comma-separated list of game ids
    * (`gamesOn` in src/games, e.g. "tiles,birdwatch"). Empty or unset, only Cat Tower: asking for
-   * any other game is refused, as it always was. Production's wrangler.jsonc lists the tile game;
-   * tests and local dev (`.dev.vars`) turn Birdwatch on too, which production does with 1.3.
+   * any other game is refused, as it always was. Production's wrangler.jsonc lists the tile game
+   * and Birdwatch, as do tests and local dev (`.dev.vars`).
    */
   GAMES?: string;
   /**
