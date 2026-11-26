@@ -10,7 +10,7 @@ import { useEffect, useMemo, useRef, useState } from "preact/hooks";
 import { buzz } from "../lib/haptics";
 import { play } from "../lib/sound";
 import { mySeats } from "../store/lobby";
-import { Button, Cat, Icon, learnTip, Sheet, Tip, tipLearned, useSize, useTipsVersion } from "../ui/common";
+import { Button, Cat, learnTip, Sheet, Tip, tipLearned, useSize, useTipsVersion } from "../ui/common";
 import { replayInk } from "../workers/purr-ink";
 
 import { EaselCanvas } from "./purr-easel-view";
