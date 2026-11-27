@@ -3,7 +3,8 @@
  * board socket's messages (docs/daily-protocol.md, "The board socket"): pure, so it is tested
  * without a page. The Apple TV's `TVBoardState.swift` is the same, rule for rule.
  */
-import type { GameBoard, BoardRow } from "@pounce/play-api/daily/board";
+import { percentOf, type GameBoard, type BoardRow } from "@pounce/play-api/daily/board";
+
 import type { BoardAnswer, BoardMessage } from "@pounce/play-api/daily/messages";
 import type { DailyResult } from "@pounce/play-api/daily/module";
 
@@ -135,11 +136,15 @@ export function clock(ms: number): string {
   return h > 0 ? `${h}:${String(m).padStart(2, "0")}:${sec}` : `${m}:${sec}`;
 }
 
-/** What a row says for its result. */
-export function resultWords(r: DailyResult): string {
-  if (r.outcome === "gaveUp") return "Gave up";
-  if (r.outcome === "closed") return "Closed";
+/** How a run that didn't finish ended, in a word or two. */
+export function endedWords(r: Pick<DailyResult, "game" | "outcome">): string {
   if (r.outcome === "missed") return r.game === "nine-lives" ? "Out of lives" : "Missed";
+  return r.outcome === "gaveUp" ? "Gave up" : r.outcome === "closed" ? "Closed" : r.outcome === "done" ? "Done" : "Solved";
+}
+
+/** What a row says for its result: for a run that didn't finish, how far it got ("62%"). */
+export function resultWords(r: DailyResult): string {
+  if (r.outcome === "gaveUp" || r.outcome === "closed" || r.outcome === "missed") return `${percentOf(r)}%`;
   if (r.points !== undefined) return r.points.toLocaleString("en-US");
   if (r.guesses !== undefined) return `${r.guesses} of 6`;
   return clock(r.timeMs);

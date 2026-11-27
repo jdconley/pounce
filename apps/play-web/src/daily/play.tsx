@@ -115,6 +115,8 @@ export function PuzzleHost(props: { game: DailyGameId; say: (words: string) => v
   // How long the end waits before it comes over the board, when the run ends while it's played:
   // the game's moment (Nine Lives filling in the solution). The wait is the end's own CSS delay.
   const [endWait, setEndWait] = useState(0);
+  // A batch waits on a dropped connection: say so, so nothing looks taken that the server hasn't.
+  const [retrying, setRetrying] = useState(false);
   const [quitting, setQuitting] = useState(false);
   const [tvOn, setTvOn] = useState(false);
   const [stats, setStats] = useState(false);
@@ -151,6 +153,7 @@ export function PuzzleHost(props: { game: DailyGameId; say: (words: string) => v
   useEffect(() => {
     if (!run) return;
     const off = run.subscribe((e) => {
+      if (e.kind === "link") setRetrying(e.status === "retrying");
       if (e.kind !== "result") return;
       setEndWait(modRef.current?.endDelayMs?.(e.result) ?? 0);
       setResult(e.result);
@@ -161,10 +164,15 @@ export function PuzzleHost(props: { game: DailyGameId; say: (words: string) => v
     });
     return () => {
       off();
-      // Whatever the game queued goes before the screen does.
+      // Whatever the game queued goes before the screen does; the clock stops with it.
       void run.flush();
+      run.close();
     };
   }, [run]);
+
+  // Active time counts only while the puzzle is on screen: not under Give up's sheet, not after
+  // the end (the Run also pauses for a hidden tab).
+  useEffect(() => run?.setShown(!quitting && !result), [run, quitting, result]);
 
   const giveUp = async () => {
     if (!run || working.current) return;
@@ -240,6 +248,10 @@ export function PuzzleHost(props: { game: DailyGameId; say: (words: string) => v
             ) : null}
           </div>
         </div>
+        {/* Floats under the bar, over the stage, so the board never moves for it. */}
+        <p class={`dd-retrying${retrying && !result ? " on" : ""}`} role="status">
+          {retrying && !result ? "Reconnecting" : ""}
+        </p>
       </header>
       {late ? (
         <p class="dd-late" role="status">

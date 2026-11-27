@@ -14,7 +14,7 @@ import { BoardView } from "./board";
 import { BoardTvSheet, unlinkBoard } from "./board-tv";
 import { dishGames } from "./dish-home";
 import { bestRow, dishStore, myRow, useDish } from "./dish-store";
-import { puzzleNumber, resultWords } from "./format";
+import { puzzleNumber, resultLabel, resultWords } from "./format";
 import { StatsSheet } from "./stats";
 import { lookOf, Treat } from "./treats";
 
@@ -50,7 +50,7 @@ function DishCard(props: { game: DailyGameId; board: BoardAnswer; first: boolean
         ) : null}
       </div>
       {mine?.result ? (
-        <button type="button" class="dd-mine" id={props.first ? "dish-first" : undefined} onClick={open} aria-label={`${look.title}: ${resultWords(mine.result)}. Result`}>
+        <button type="button" class="dd-mine" id={props.first ? "dish-first" : undefined} onClick={open} aria-label={`${look.title}: ${resultLabel(mine.result)}. Result`}>
           <span class="dd-tick" aria-hidden="true" />
           {resultWords(mine.result)}
         </button>

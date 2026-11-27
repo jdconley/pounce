@@ -7,7 +7,7 @@ import { h, render } from "preact";
 import { act } from "preact/test-utils";
 import { afterEach, beforeEach, describe, expect, test } from "vitest";
 
-import { outcomeWords, resultWords, shareText } from "../src/daily/format";
+import { outcomeWords, resultLabel, resultWords, shareText } from "../src/daily/format";
 import nineLives from "../src/daily/nine-lives/dish";
 import { SAMPLE_GIVENS, SAMPLE_SOLUTION } from "../src/daily/nine-lives/local";
 import {
@@ -31,7 +31,7 @@ import {
 } from "../src/daily/nine-lives/model";
 import NineLivesWatch from "../src/daily/nine-lives/watch";
 import { endTitle } from "../src/daily/play";
-import { resultWords as tvResultWords } from "../src/ui/tv/tv-board-model";
+import { endedWords, resultWords as tvResultWords } from "../src/ui/tv/tv-board-model";
 
 import type { RunEvent, RunSession, SendOptions } from "../src/daily/client";
 import type { Reveal } from "../src/daily/nine-lives/dish";
@@ -351,23 +351,31 @@ describe("the play screen under the lives rules", () => {
   });
 });
 
-describe("Out of lives, in words", () => {
-  const result = (game: DailyResult["game"], outcome: DailyResult["outcome"]): DailyResult =>
-    ({ game, date: "2027-01-04", number: 3, outcome, timeMs: 61_000, hints: 0, tooFast: false, progress: 0.5 }) as DailyResult;
+describe("Out of lives, and percent, in words", () => {
+  const result = (game: DailyResult["game"], outcome: DailyResult["outcome"], extra: Partial<DailyResult> = {}): DailyResult =>
+    ({ game, date: "2027-01-04", number: 3, outcome, timeMs: 61_000, hints: 0, tooFast: false, progress: 0.5, ...extra }) as DailyResult;
 
-  test("the end, the Dish, the board and the TV say Out of lives for Nine Lives' miss, Missed for Sniff's", () => {
+  test("the end's heading says how it ended: Out of lives for Nine Lives' miss, Missed for Sniff's", () => {
     expect(endTitle(result("nine-lives", "missed"))).toBe("Out of lives");
     expect(endTitle(result("sniff", "missed"))).toBe("Missed");
     expect(endTitle(result("nine-lives", "solved"))).toBe("Solved");
-    expect(resultWords(result("nine-lives", "missed"))).toBe("Out of lives");
-    expect(resultWords(result("sniff", "missed"))).toBe("Missed");
-    // Home's Today tiles are narrow.
-    expect(resultWords(result("nine-lives", "missed"), true)).toBe("No lives");
-    expect(resultWords(result("sniff", "missed"), true)).toBe("Missed");
     expect(outcomeWords(result("nine-lives", "gaveUp"))).toBe("Gave up");
-    expect(tvResultWords(result("nine-lives", "missed"))).toBe("Out of lives");
-    expect(tvResultWords(result("sniff", "missed"))).toBe("Missed");
-    expect(shareText("Nine Lives", result("nine-lives", "missed"))).toBe("Nine Lives 3: Out of lives");
+    expect(endedWords(result("nine-lives", "missed"))).toBe("Out of lives");
+    expect(endedWords(result("sniff", "missed"))).toBe("Missed");
+  });
+
+  test("a run that didn't finish reads as its percent everywhere; an old result's from its progress", () => {
+    for (const outcome of ["missed", "gaveUp", "closed"] as const) {
+      expect(resultWords(result("nine-lives", outcome, { percent: 62 }))).toBe("62%");
+      expect(tvResultWords(result("cat-nap", outcome, { percent: 62 }))).toBe("62%");
+    }
+    // Box Fort's give-up has points, but didn't finish.
+    expect(resultWords(result("box-fort", "gaveUp", { percent: 40, points: 900 }))).toBe("40%");
+    expect(resultWords(result("nine-lives", "missed"))).toBe("50%");
+    expect(resultWords(result("nine-lives", "solved", { percent: 100 }))).toBe("1:01");
+    expect(resultLabel(result("nine-lives", "missed", { percent: 62 }))).toBe("Out of lives, 62%");
+    expect(shareText("Nine Lives", result("nine-lives", "missed", { percent: 62 }))).toBe("Nine Lives 3: Out of lives, 62%");
+    expect(shareText("Sniff", result("sniff", "missed", { percent: 40, guesses: 6 }))).toBe("Sniff 3: Missed, 40%");
   });
 });
 

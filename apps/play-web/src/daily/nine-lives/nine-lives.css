@@ -262,6 +262,19 @@ span.nl-cell {
   fill: color-mix(in srgb, var(--refuse) 55%, var(--ink));
 }
 
+.nl-pending .nl-lip {
+  fill: color-mix(in srgb, #4a3089 55%, var(--ink));
+}
+
+/* Checking with the server: a quiet pulse, only if the answer is slow to come. */
+.nl-tile.nl-pending {
+  animation: nl-checking 800ms ease-in-out 350ms infinite alternate;
+}
+
+@keyframes nl-checking {
+  to { opacity: 0.55; }
+}
+
 .nl-answer .nl-lip {
   fill: color-mix(in srgb, #c9b3ff 55%, var(--ink));
 }
@@ -631,6 +644,7 @@ span.nl-cell {
   .nl-solved .nl-tile-wrap,
   .nl-fill,
   .nl-life-pop,
+  .nl-tile.nl-pending,
   .nl-not-quite.nl-show {
     animation: none;
   }

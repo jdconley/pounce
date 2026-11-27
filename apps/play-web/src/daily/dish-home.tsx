@@ -49,7 +49,7 @@ export function TodayDish() {
         {games.map((game) => {
           const mine = myRow(dish.board, game);
           const look = lookOf(game);
-          const words = mine?.result ? resultWords(mine.result, true) : mine?.playing ? "Playing" : "Play";
+          const words = mine?.result ? resultWords(mine.result) : mine?.playing ? "Playing" : "Play";
           return (
             <button
               type="button"

@@ -35,9 +35,13 @@ function setup(answers: Answer[] = [], start = START) {
   const clock = new Clock();
   clock.now = 1_000_000; // the device's clock is 5 s behind the server's
   const calls: Call[] = [];
+  // Every call's `activeMs`, kept apart so the bodies read as the moves they carry.
+  const actives: (number | undefined)[] = [];
   const queue = [...answers];
   const call = async (method: string, path: string, body?: unknown) => {
-    calls.push({ method, path, body });
+    const { activeMs, ...rest } = (body ?? {}) as { activeMs?: number };
+    actives.push(activeMs);
+    calls.push({ method, path, body: body === undefined || (activeMs !== undefined && Object.keys(rest).length === 0) ? undefined : activeMs === undefined ? body : rest });
     const a = queue.shift();
     if (a === undefined) throw new Error(`no answer for ${method} ${path}`);
     if (a instanceof Error) throw a;
@@ -46,7 +50,7 @@ function setup(answers: Answer[] = [], start = START) {
   const run = new Run(start, { call, person: "pe_1", now: () => clock.now, setTimer: clock.set, clearTimer: clock.clear });
   const events: RunEvent<TestState, unknown>[] = [];
   run.subscribe((e) => events.push(e));
-  return { clock, calls, run, events, answer: (...more: Answer[]) => queue.push(...more) };
+  return { clock, calls, actives, run, events, answer: (...more: Answer[]) => queue.push(...more) };
 }
 
 const MOVES = `/v1/daily/runs/${"R".repeat(43)}/moves?person=pe_1`;
@@ -96,7 +100,7 @@ describe("the run session", () => {
     await flush();
     clock.advance(0);
     await flush();
-    expect(calls[1]!.body).toEqual({ from: 1, moves: [step(2), step(3)] });
+    expect(calls[1]!.body).toEqual({ from: 1, moves: [step(2), step(3)], activeMs: 5000 });
   });
 
   test("resends the same from after a dropped connection", async () => {
@@ -195,18 +199,51 @@ describe("the run session", () => {
     expect(events.at(-1)).toEqual({ kind: "result", result: gaveUp });
   });
 
-  test("the clock is the server's, plus 30 seconds a hint", async () => {
+  test("the clock is active time, plus 30 seconds a hint; an old server's start counts from startedAt", async () => {
     const { clock, run } = setup([ok(0, { reveals: [{ n: 1 }] })]);
     expect(run.serverNow()).toBe(1_005_000);
+    // No `activeMs` at start: the server's time since the start, then only while it's on screen.
     expect(run.elapsedMs()).toBe(5000);
+    clock.advance(2000);
+    expect(run.elapsedMs()).toBe(5000);
+    run.setShown(true);
     clock.advance(2000);
     expect(run.elapsedMs()).toBe(7000);
     await run.hint();
     expect(run.elapsedMs()).toBe(37_000);
   });
 
+  test("active time pauses off screen and in a hidden tab, and goes with every call", async () => {
+    const giveUp = { ...solved, outcome: "gaveUp", timeMs: 40_000, progress: 0.25 };
+    const { clock, run, calls, actives } = setup([ok(1), ok(1, { reveals: [{ n: 2 }] }), ok(1, { result: giveUp })], { ...START, activeMs: 18_000 });
+    expect(run.activeMs()).toBe(18_000);
+    run.setShown(true);
+    clock.advance(1500);
+    run.setVisible(false);
+    clock.advance(60_000);
+    run.setVisible(true);
+    clock.advance(500);
+    expect(run.activeMs()).toBe(20_000);
+    void run.send(step(1), { urgent: true });
+    await flush();
+    run.setShown(false); // a sheet over the puzzle
+    clock.advance(30_000);
+    run.setShown(true);
+    clock.advance(1000);
+    await run.hint();
+    clock.advance(250);
+    await run.giveUp();
+    expect(calls.map((c) => c.path.split("?")[0]!.split("/").at(-1))).toEqual(["moves", "hint", "giveup"]);
+    expect(actives).toEqual([20_000, 21_000, 21_250]);
+    // Ended: the result's time, and no more counting.
+    expect(run.elapsedMs()).toBe(40_000);
+    clock.advance(5000);
+    expect(run.activeMs()).toBe(21_250);
+  });
+
   test("a hint adds the start's hintMs: none under Nine Lives' lives", async () => {
     const { clock, run } = setup([ok(0, { reveals: [{ n: 1 }] })], { ...START, hintMs: 0 });
+    run.setShown(true);
     clock.advance(2000);
     await run.hint();
     expect(run.elapsedMs()).toBe(7000);

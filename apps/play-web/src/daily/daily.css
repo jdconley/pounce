@@ -630,6 +630,8 @@
    its own under them, with the clock beside it. The bar is a size container, so this follows the
    text size as well as the width. */
 .dd-play-head {
+  position: relative;
+  z-index: 16;
   flex: none;
   container-type: inline-size;
 }
@@ -734,6 +736,31 @@
   border-radius: 999px;
   background: var(--orange);
   font: 900 0.9rem var(--round);
+}
+
+/* A dropped connection, while a move waits: over the top of the stage, never moving it. */
+.dd-retrying {
+  position: absolute;
+  top: 100%;
+  left: 50%;
+  z-index: 15;
+  margin: 4px 0 0;
+  padding: 4px 14px;
+  border: 3px solid var(--ink);
+  border-radius: 999px;
+  background: var(--white);
+  color: var(--ink);
+  font: 900 0.9rem var(--round);
+  white-space: nowrap;
+  opacity: 0;
+  transform: translateX(-50%) scale(0.8);
+  transition: opacity 160ms var(--ease-out), transform 220ms var(--ease-spring);
+  pointer-events: none;
+}
+
+.dd-retrying.on {
+  opacity: 1;
+  transform: translateX(-50%);
 }
 
 .dd-stage {

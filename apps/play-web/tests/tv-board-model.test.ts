@@ -125,10 +125,11 @@ describe("what a row says", () => {
     expect(resultWords(result({ timeMs: 125_000 }))).toBe("2:05");
     expect(resultWords(result({ timeMs: 3_725_000 }))).toBe("1:02:05");
     expect(resultWords(result({ game: "sniff", guesses: 4 }))).toBe("4 of 6");
-    expect(resultWords(result({ game: "sniff", outcome: "missed", guesses: 6 }))).toBe("Missed");
     expect(resultWords(result({ game: "box-fort", outcome: "done", points: 1240 }))).toBe("1,240");
-    expect(resultWords(result({ outcome: "gaveUp" }))).toBe("Gave up");
-    expect(resultWords(result({ outcome: "closed" }))).toBe("Closed");
+    // A run that didn't finish shows how far it got: its percent, or an old result's progress.
+    expect(resultWords(result({ game: "sniff", outcome: "missed", guesses: 6, percent: 40 }))).toBe("40%");
+    expect(resultWords(result({ outcome: "gaveUp", percent: 62 }))).toBe("62%");
+    expect(resultWords(result({ outcome: "closed", progress: 0.255 }))).toBe("25%");
   });
 
   test("a whole family shows; past six the rest are counted", () => {

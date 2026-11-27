@@ -8,8 +8,11 @@ import { hasNote, LIVES, type View } from "./model";
 
 import "./nine-lives.css";
 
-/** `clash` is also a wrong number (lives); `answer` is the solution filled in, out of lives. */
-export type TileKind = "given" | "mine" | "hinted" | "clash" | "answer";
+/**
+ * `clash` is also a wrong number (lives); `answer` is the solution filled in, out of lives;
+ * `pending` is a number the server hasn't answered yet (lives): neutral, never right-looking.
+ */
+export type TileKind = "given" | "mine" | "hinted" | "clash" | "answer" | "pending";
 
 /** The paw's shape and the four faces' gradients, once per page. */
 export function PawDefs() {
@@ -31,6 +34,7 @@ export function PawDefs() {
             ["hinted", "#ffe679", "#ffd21f", "#ecc31f"],
             ["clash", "#ff8a95", "#ff3b4e", "#e9374a"],
             ["answer", "#f3ecff", "#ddccff", "#c9b3ff"],
+            ["pending", "#7a5cc0", "#5b3f9e", "#4a3089"],
             ["cat", "#ff9ad8", "#ff4fb8", "#e8399f"],
           ] as const
         ).map(([kind, top, mid, bottom]) => (
@@ -111,6 +115,7 @@ function shown(v: View, i: number): number {
 
 function kindOf(v: View, i: number): TileKind {
   if (v.cells[i] === 0) return v.solution ? "answer" : "clash";
+  if (v.pending.includes(i)) return "pending";
   if (v.clashes.has(i) && v.givens[i] === 0) return "clash";
   if (v.givens[i] !== 0) return "given";
   if (v.hinted.includes(i)) return "hinted";
@@ -131,6 +136,7 @@ function label(v: View, i: number): string {
     return notes.length ? `${where}, notes ${notes.join(" ")}` : `${where}, empty`;
   }
   if (v.cells[i] === 0) return `${where}, ${d}, ${v.solution ? "answer" : "wrong"}`;
+  if (v.pending.includes(i)) return `${where}, ${d}, checking`;
   const tags = [v.givens[i] !== 0 ? "given" : v.hinted.includes(i) ? "hint" : "", v.clashes.has(i) ? "clash" : ""];
   return [where, String(d), ...tags.filter(Boolean)].join(", ");
 }
@@ -170,7 +176,7 @@ export function NineLivesGrid(props: { view: View; solved?: boolean; onTap?: (ce
               kind !== null ? (
                 <span
                   class={`nl-tile-wrap${v.placed?.cell === i && kind !== "clash" ? " nl-pop" : ""}${wiggle ? " nl-wiggle" : ""}${kind === "answer" ? " nl-fill" : ""}`}
-                  key={kind === "answer" ? "a" : wiggle ? `c${v.clashBump}` : v.placed?.cell === i ? `p${v.placed.count}` : "t"}
+                  key={kind === "answer" ? "a" : wiggle ? `c${v.clashBump}` : v.placed?.cell === i ? `${kind === "pending" ? "q" : "p"}${v.placed.count}` : "t"}
                   style={{ "--nl-wave": `${(Math.floor(i / 9) + (i % 9)) * 35}ms` }}
                 >
                   <PawTile digit={d} kind={kind} />
