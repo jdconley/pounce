@@ -146,7 +146,7 @@ struct DishScreen: View {
         } label: {
             VStack(spacing: 8) {
                 HStack(spacing: 8) {
-                    DailyTreat(game: game, side: roomy ? 58 : 46, done: result != nil)
+                    DailyTreat(game: game, side: roomy ? 58 : 46, done: result?.outcome.finished == true, ended: result != nil)
                     VStack(alignment: .leading, spacing: 0) {
                         Text(verbatim: game.title)
                             .font(.system(size: roomy ? 22 : 18, weight: .black, design: .rounded))

@@ -34,7 +34,7 @@ struct DailyEndView: View {
     var body: some View {
         ScrollView(.vertical, showsIndicators: false) {
             VStack(spacing: roomy ? 24 : 18) {
-                DailyTreat(game: game, side: roomy ? 110 : 84, done: result.outcome.finished)
+                DailyTreat(game: game, side: roomy ? 110 : 84, done: result.outcome.finished, ended: true)
                     .padding(.top, 12)
                 OutlinedText(headline, size: roomy ? 44 : 34, fill: result.outcome.finished ? Palette.lime : .white, width: 4)
                     .accessibilityIdentifier("daily.end.headline")

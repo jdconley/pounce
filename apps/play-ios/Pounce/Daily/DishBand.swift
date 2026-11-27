@@ -107,7 +107,7 @@ struct DishBand: View {
             model.playDaily(game.id)
         } label: {
             VStack(spacing: 6) {
-                DailyTreat(game: game, side: side, done: result != nil)
+                DailyTreat(game: game, side: side, done: result?.outcome.finished == true, ended: result != nil)
                     .overlay(alignment: .topTrailing) {
                         if row?.playing != nil, result == nil {
                             Circle().fill(Palette.yellow).overlay(Circle().strokeBorder(Palette.ink, lineWidth: 2))
