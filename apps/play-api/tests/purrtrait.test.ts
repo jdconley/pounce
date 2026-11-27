@@ -286,6 +286,10 @@ describe("the host removes a player (design §10.2)", { timeout: 30_000 }, () =>
     expect(await closed).toBe(4403);
     await pa.until((s) => s.room.purrtrait?.out[2] === true);
     expect(pa.last?.room.status).toBe("playing");
+    // The removed player on another device, with the TV's live key: refused too.
+    const y = await mint(mf);
+    await profile(mf, y, [cy]);
+    expect(await refusal(await upgrade(mf, code, y, `?near=${nearOf(screen).key}`))).toEqual(REMOVED);
     pb.send({ t: "act", seat: 1, action: { type: "forfeit" } });
     await pa.until((s) => s.room.status === "over");
     pa.send({ t: "rematch" });

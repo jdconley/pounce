@@ -607,11 +607,35 @@ export class RoomCore<S = CatTowerState> {
     return this.state.removed?.devices.includes(deviceId) ?? false;
   }
 
-  /** The seat's person was removed: by its device, or by its player. */
+  /** The seat's person was removed: its player, or for a seat with no player, its device. */
   private removedSeat(s: SeatInfo): boolean {
     const removed = this.state.removed;
     if (!removed) return false;
-    return (s.playerId !== undefined && removed.players.includes(s.playerId)) || (s.deviceId !== undefined && removed.devices.includes(s.deviceId));
+    return s.playerId === undefined ? removed.devices.includes(s.deviceId as string) : removed.players.includes(s.playerId);
+  }
+
+  /** A device whose every player here (it speaks for one at least) the host removed. */
+  private onlyRemovedPlayers(players: Record<string, string>): boolean {
+    const removed = this.state.removed?.players ?? [];
+    const speaks = Object.values(players);
+    return speaks.length > 0 && speaks.every((p) => removed.includes(p));
+  }
+
+  /**
+   * Whether the room turns this device away on a socket upgrade (design §10.2): the host removed
+   * it, or it comes as a removed player and speaks for nobody still seated here. `players` is
+   * whom it speaks for on this upgrade. A shared phone that still holds another seat is let in;
+   * its removed player is refused a seat.
+   */
+  turnedAway(deviceId: string, players: Record<string, string>): boolean {
+    if (this.isRemoved(deviceId)) return true;
+    const removed = this.state.removed?.players ?? [];
+    const speaks = Object.values(players);
+    if (!speaks.some((p) => removed.includes(p))) return false;
+    return !this.inSeats().some((i) => {
+      const s = this.state.seats[i] as SeatInfo;
+      return s.playerId === undefined ? s.deviceId === deviceId : speaks.includes(s.playerId);
+    });
   }
 
   /**
@@ -1419,8 +1443,9 @@ export class RoomCore<S = CatTowerState> {
   private controls(deviceId: string, seat: Seat): boolean {
     // Callers have bounds-checked the seat.
     const s = this.state.seats[seat] as SeatInfo;
-    // A House Cat that took over a seat keeps who sat there, but plays it alone.
-    return s.kind !== "bot" && this.heldBy(deviceId, s);
+    // A House Cat that took over a seat keeps who sat there, but plays it alone. A seat whose
+    // person the host removed is nobody's from then on, on any device (design §10.2).
+    return s.kind !== "bot" && !this.removedSeat(s) && this.heldBy(deviceId, s);
   }
 
   private heldBy(deviceId: string, s: SeatInfo): boolean {
@@ -1912,7 +1937,9 @@ export class RoomCore<S = CatTowerState> {
     if (!this.sameRoom()) return {};
     // Every seat's device has been here, so it is among them; so is the device asking.
     const ids = new Set([...Object.keys(this.state.devices), ...(this.state.members ?? [])]);
-    return { members: [...ids].filter((id) => !this.isScreen(id) && !this.isRemoved(id)) };
+    // Not a removed device, nor one that came back here only as a removed player.
+    const out = (id: string) => this.isRemoved(id) || this.onlyRemovedPlayers(this.state.devices[id]?.players ?? {});
+    return { members: [...ids].filter((id) => !this.isScreen(id) && !out(id)) };
   }
 
   /** Four uint32 words from the room's rng, which is crypto-backed in production. */
@@ -1976,10 +2003,10 @@ export class RoomCore<S = CatTowerState> {
     return [...out, ...this.changed()];
   }
 
-  /** The seats still in: a person's, in the lobby or not out of the game. */
+  /** The seats still in: a person's, in the lobby or not out of the game, and not removed by the host. */
   private inSeats(): Seat[] {
     const out = this.outSeats();
-    return this.state.seats.flatMap((s, i) => (s.kind === "human" && out[i] !== true ? [i] : []));
+    return this.state.seats.flatMap((s, i) => (s.kind === "human" && out[i] !== true && !this.removedSeat(s) ? [i] : []));
   }
 
   /**

@@ -1082,6 +1082,52 @@ describe("remove (design §10.2, ruling 10)", () => {
     expect(errorsOf(next.handle("b2", { t: "claim", seat: 2, person: person(2) }))).toEqual(["removed"]);
   });
 
+  it("a removed player back on another device controls nothing, can't deal Play again and isn't carried to it", () => {
+    const r = game3();
+    expect(errorsOf(remove(r, "a", 2))).toEqual([]);
+    // Player 3 comes back mid-game on device "y" (signed in there too).
+    r.connect("y", players(3));
+    expect(r.controlledSeats("y")).toEqual([]);
+    expect(r.heldSeats("y")).toEqual([]);
+    expect(r.mayLink("y")).toBe(false);
+    expect(r.snapshotFor("y").room.seats.some((s) => s.yours)).toBe(false);
+    expect(errorsOf(act(r, "y", 2, { type: "forfeit" }))).toEqual(["not_your_seat"]);
+    // The room turns such a device away at its next upgrade; a device that speaks for someone still seated it doesn't.
+    expect(r.turnedAway("y", players(3))).toBe(true);
+    expect(r.turnedAway("c", {})).toBe(true);
+    expect(r.turnedAway("b", players(2))).toBe(false);
+    expect(r.turnedAway("y", { ...players(3), ...players(2) })).toBe(false);
+    expect(r.turnedAway("w", {})).toBe(false);
+    // Nobody removed: nobody turned away.
+    expect(game3().turnedAway("y", players(3))).toBe(false);
+    act(r, "b", 1, { type: "forfeit" });
+    expect(r.state.status).toBe("over");
+    expect(errorsOf(r.handle("y", { t: "rematch" }))).toEqual(["not_seated"]);
+    expect(r.state.rematch).toBeUndefined();
+    r.handle("a", { t: "rematch" });
+    const spec = r.drainRematch() as NonNullable<ReturnType<Room["drainRematch"]>>;
+    expect(spec.members?.sort()).toEqual(["a", "b"]);
+    expect(spec.hostDeviceId).toBe("a");
+  });
+
+  it("a removed device's seat is matched by its player when it has one", () => {
+    const r = lobby3();
+    // "c" holds no player of its own for seat 2 any more: the seat is player 3's, wherever they are.
+    expect(errorsOf(remove(r, "a", 2))).toEqual([]);
+    expect(r.state.removed).toEqual({ devices: ["c"], players: [player(3)] });
+    // A guest seat (no player) on the removed device would be its device's.
+    r.connect("g");
+    r.handle("g", { t: "claim", seat: 2, person: person(7) });
+    expect(r.controlledSeats("g")).toEqual([2]);
+    // Its guest seat keeps it in, even when it also speaks for the removed player.
+    expect(r.turnedAway("g", players(3))).toBe(false);
+    r.state.removed = { devices: ["g"], players: [] };
+    expect(r.controlledSeats("g")).toEqual([]);
+    // A seat whose player is not removed stays theirs, even on a listed device.
+    r.state.removed = { devices: ["b"], players: [] };
+    expect(r.controlledSeats("b")).toEqual([1]);
+  });
+
   it("Play again with too few people left after a remove is not_enough_players", () => {
     const r = started();
     expect(errorsOf(remove(r, "a", 1))).toEqual([]);

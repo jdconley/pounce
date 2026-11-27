@@ -216,8 +216,10 @@ export class GameRoom extends DurableObject<Env> {
     if (request.headers.get("upgrade")?.toLowerCase() !== "websocket") {
       return new Response(null, { status: 426 });
     }
-    // A device the host of a same-room table removed stays out, whatever key it brings (design §10.2).
-    if (this.core.isRemoved(deviceId)) return refuse(403, "removed");
+    // A device the host of a same-room table removed stays out, whatever key it brings, and so
+    // does a removed player on another device (design §10.2).
+    const players = parsePlayers(request.headers.get(PLAYER_HEADER));
+    if (this.core.turnedAway(deviceId, players)) return refuse(403, "removed");
     const pair = new WebSocketPair();
     const [client, server] = Object.values(pair) as [WebSocket, WebSocket];
     // A device that sits or hosts is no screen, and only a device the room lists is one: it made
@@ -239,10 +241,12 @@ export class GameRoom extends DurableObject<Env> {
             .catch(() => null)
         : false;
     if (!this.core) return new Response(null, { status: 404 });
+    // The host may have removed it while the age band was looked up.
+    if (this.core.turnedAway(deviceId, players)) return refuse(403, "removed");
     if (kitten !== null) this.core.setKitten(deviceId, kitten);
     this.ctx.acceptWebSocket(server, [deviceId]);
     server.serializeAttachment({ deviceId, ...(this.core.isKitten(deviceId) ? { kitten: true } : {}) });
-    await this.after(this.core.connect(deviceId, parsePlayers(request.headers.get(PLAYER_HEADER))));
+    await this.after(this.core.connect(deviceId, players));
     return new Response(null, { status: 101, webSocket: client });
   }
 
