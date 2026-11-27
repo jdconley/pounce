@@ -132,7 +132,9 @@ final class PurrtraitTests: XCTestCase {
         let env = ProcessInfo.processInfo.environment
         guard let dir = env["PURR_SHOTS_DIR"] ?? env["TEST_RUNNER_PURR_SHOTS_DIR"] else { throw XCTSkip("no shots folder") }
         let prefix = env["PURR_SHOTS_PREFIX"] ?? env["TEST_RUNNER_PURR_SHOTS_PREFIX"] ?? "shot"
-        let long = (env["PURR_SHOTS_LONG"] ?? env["TEST_RUNNER_PURR_SHOTS_LONG"]) == "1" ? ["-demo-long-names"] : []
+        var long = (env["PURR_SHOTS_LONG"] ?? env["TEST_RUNNER_PURR_SHOTS_LONG"]) == "1" ? ["-demo-long-names"] : []
+        // `PURR_SHOTS_SEATS=10`: a full table.
+        if let seats = env["PURR_SHOTS_SEATS"] ?? env["TEST_RUNNER_PURR_SHOTS_SEATS"] { long += ["-seats", seats] }
         let shots: [(String, String, String, (XCUIApplication) -> Void)] = [
             ("pick", "purr-pick", "purr.pick.easy", { _ in }),
             ("draw", "purr-draw", "purr.easel", { app in

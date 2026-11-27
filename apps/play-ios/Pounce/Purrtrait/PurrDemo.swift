@@ -10,8 +10,10 @@ enum PurrDemo {
     static func room(_ mode: DemoMode) -> RoomView {
         let name = mode.rawValue.replacingOccurrences(of: "purr-", with: "")
         let demo = DemoFixtures.PurrDemo(rawValue: name) ?? .draw
-        let seats = CommandLine.arguments.firstIndex(of: "-seats").flatMap { CommandLine.arguments[safe: $0 + 1] }.flatMap(Int.init) ?? 4
-        return DemoFixtures.purrRoom(demo, seats: seats)
+        let asked = CommandLine.arguments.firstIndex(of: "-seats").flatMap { CommandLine.arguments[safe: $0 + 1] }.flatMap(Int.init)
+        // `-seats N`: that many at the table (the lobby's default is three).
+        if demo == .lobby { return DemoFixtures.purrLobby(seated: min(asked ?? 3, 10)) }
+        return DemoFixtures.purrRoom(demo, seats: asked ?? 4)
     }
 
     static func socket(_ mode: DemoMode) -> any RoomSocketing { PurrDemoSocket(room: mode.room) }

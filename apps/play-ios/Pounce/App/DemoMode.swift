@@ -119,11 +119,14 @@ enum DemoMode: String {
     }
 
     /// `-demo-long-names` (any demo, for the fit screenshots): every seat a person with a
-    /// 20-character name, two of them alike up to the last word, and every score in three digits.
+    /// 20-character name, two of them alike up to the last word, and every score in three digits
+    /// (Purrtrait's in two).
     static func longNames(_ room: RoomView, arguments: [String] = CommandLine.arguments) -> RoomView {
         guard arguments.contains("-demo-long-names") else { return room }
+        // Seats past six (Purrtrait's ten) get longer names still.
         let names = ["Christopher Albright", "Maximiliana Winthrop", "Maximiliana Wellesly",
-                     "Bartholomew Fernando", "Josephine Abernathey", "Guinevere Montgomery"]
+                     "Bartholomew Fernando", "Josephine Abernathey", "Guinevere Montgomery",
+                     "Clementine Wigglesworth", "Persephone Holloway", "Ignatius Fairweather", "Wilhelmina Courtenay"]
         var room = room
         for i in room.seats.indices where room.seats[i].kind == .human || room.seats[i].kind == .bot {
             let cat = room.seats[i].person?.cat ?? i
@@ -132,6 +135,11 @@ enum DemoMode: String {
         }
         if let scores = room.game?.scores { room.game?.scores = scores.indices.map { 100 + $0 * 287 % 900 } }
         if let scores = room.tiles?.scores { room.tiles?.scores = scores.indices.map { 100 + $0 * 287 % 900 } }
+        // Purrtrait's points are two digits at most in a game; seats 0 and 2 stay level at the top.
+        if let scores = room.purrtrait?.scores {
+            let two = [24, 19, 24, 17, 15, 12, 11, 10, 13, 16]
+            room.purrtrait?.scores = scores.indices.map { two[$0 % two.count] }
+        }
         return room
     }
 

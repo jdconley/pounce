@@ -226,14 +226,14 @@ struct PurrLobbyView: View {
     }
 
     /// An iPad's cats: as big as the floor lets every one of them be (up to 210 points), in the
-    /// rows and columns that make them biggest, centred.
+    /// rows and columns that make them biggest, centred, each column wide enough for a long name.
     private func fittedCats(_ s: LobbySizes) -> some View {
         GeometryReader { geo in
             let count = max(seated.count + (addSeat == nil ? 0 : 1), 1)
             let fit = Self.fit(count: count, in: geo.size, cap: s.catCap, label: s.nameSize * 2.2 + 8)
             ScrollView {
-                LazyVGrid(columns: Array(repeating: GridItem(.fixed(fit.side + 40), spacing: Self.gap), count: fit.columns), spacing: Self.gap) {
-                    catCells(side: fit.side, s: s)
+                LazyVGrid(columns: Array(repeating: GridItem(.fixed(fit.cell), spacing: Self.gap), count: fit.columns), spacing: Self.gap) {
+                    catCells(side: fit.side, s: s, tag: fit.cell)
                 }
                 .padding(.vertical, 8)
                 .frame(maxWidth: .infinity, minHeight: geo.size.height)
@@ -244,31 +244,36 @@ struct PurrLobbyView: View {
     }
 
     static let gap: CGFloat = 22
+    /// A column on an iPad is at least this wide, so a long name mostly shows.
+    static let minCell: CGFloat = 200
 
-    /// The columns, and the side of a cat, that make `count` cats biggest in `size` (each with a
-    /// name `label` points tall under it), no bigger than `cap`.
-    static func fit(count: Int, in size: CGSize, cap: CGFloat, label: CGFloat) -> (columns: Int, side: CGFloat) {
-        var best = (columns: 1, side: CGFloat(0))
+    /// The columns, the side of a cat and the width of a column that make `count` cats biggest in
+    /// `size` (each with a name `label` points tall under it): no cat bigger than `cap`, and no
+    /// column narrower than `minCell` (unless one column is all there is).
+    static func fit(count: Int, in size: CGSize, cap: CGFloat, label: CGFloat) -> (columns: Int, side: CGFloat, cell: CGFloat) {
+        var best = (columns: 1, side: CGFloat(0), cell: size.width)
         for columns in 1...max(1, min(count, 6)) {
+            let room = (size.width - CGFloat(columns - 1) * gap) / CGFloat(columns)
+            if columns > 1, room < minCell { break }
             let rows = CGFloat((count + columns - 1) / columns)
-            let across = (size.width - CGFloat(columns - 1) * gap) / CGFloat(columns) - 40
             let down = (size.height - 16 - (rows - 1) * gap) / rows - label
-            let side = min(across, down, cap)
-            if side > best.side { best = (columns, side) }
+            let side = min(room - 40, down, cap)
+            if side > best.side { best = (columns, side, min(room, max(side + 40, minCell))) }
         }
-        return (best.columns, max(best.side, 60))
+        return (best.columns, max(best.side, 60), best.cell)
     }
 
-    @ViewBuilder private func catCells(side: CGFloat, s: LobbySizes) -> some View {
+    /// `tag`: how wide a name may be (on a phone, the cat's width and a little).
+    @ViewBuilder private func catCells(side: CGFloat, s: LobbySizes, tag: CGFloat? = nil) -> some View {
         ForEach(seated, id: \.self) { seat in
-            catButton(seat, side: side, s: s)
+            catButton(seat, side: side, s: s, tag: tag ?? side + 30)
         }
         if let seat = addSeat {
             addButton(seat, side: side, s: s)
         }
     }
 
-    private func catButton(_ seat: Seat, side: CGFloat, s: LobbySizes) -> some View {
+    private func catButton(_ seat: Seat, side: CGFloat, s: LobbySizes, tag: CGFloat) -> some View {
         let info = room?.seats[safe: seat]
         let name = room.map { SeatInfo.name($0, seat) } ?? ""
         let yours = info?.yours == true
@@ -287,7 +292,8 @@ struct PurrLobbyView: View {
                     .frame(width: side, height: side)
                     .background(Ellipse().fill(SeatInfo.ringColor(seat)).overlay(Ellipse().strokeBorder(Palette.ink, lineWidth: side > 120 ? 4 : 3))
                         .frame(width: side * 1.05, height: side * 0.4).offset(y: side * 0.36))
-                NameTag(name, maxWidth: side + 30, active: yours, size: s.nameSize)
+                // A crowd's smaller cats get smaller names, so more of each name shows.
+                NameTag(name, maxWidth: tag, active: yours, size: side < 150 ? min(s.nameSize, 18) : s.nameSize)
             }
             .frame(maxWidth: .infinity)
         }
