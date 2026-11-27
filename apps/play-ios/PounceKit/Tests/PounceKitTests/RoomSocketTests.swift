@@ -90,6 +90,8 @@ final class FakeConnection: WebSocketConnection {
     func push(_ frame: String) { frames.put(frame) }
     /// The network went away: the pending and every later `receive()` throws.
     func drop() { frames.close(Dropped()) }
+    /// The room closed the socket as a refusal (4403) with `reason`.
+    func refuse(_ reason: String) { frames.close(SocketRefused(reason: reason)) }
 
     var sent: [String] { sentLog.withLock { $0 } }
     var pings: Int { pingCount.withLock { $0 } }

@@ -276,7 +276,17 @@ public actor RoomSocket: RoomSocketing {
     private func receive(_ gen: Int, _ conn: any WebSocketConnection) async {
         while true {
             let text: String
-            do { text = try await conn.receive() } catch { return }
+            do {
+                text = try await conn.receive()
+            } catch let refused as SocketRefused {
+                // Refused for good: a removed phone stays out; a screen the room let go goes home.
+                guard isCurrent(gen) else { return }
+                emit(role == .screen ? .notFound : .forbidden(refused.reason == ErrorCode.notNear.rawValue ? .notNear : .removed))
+                await finish()?.close()
+                return
+            } catch {
+                return
+            }
             guard isCurrent(gen) else { return }
             meter?.heard(now: clock())
             guard let message = try? Codec.decode(text) else { continue }

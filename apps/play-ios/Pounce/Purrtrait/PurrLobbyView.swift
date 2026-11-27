@@ -22,7 +22,9 @@ struct PurrLobbyView: View {
     private var seated: [Seat] { room.map { r in r.seats.indices.filter { r.seats[$0].kind == .human } } ?? [] }
     private var mySeats: [Seat] { room.map { r in r.seats.indices.filter { r.seats[$0].yours } } ?? [] }
     private var openSeat: Seat? { room?.seats.firstIndex { $0.kind == .open } }
-    private var ready: Bool { seated.count >= GameCatalog.purrtrait.minPlayers }
+    /// The table's TV is connected: Start needs it (the room answers `no_screen` without).
+    private var tvHere: Bool { room?.screen == true }
+    private var ready: Bool { seated.count >= GameCatalog.purrtrait.minPlayers && tvHere }
     private var roomy: Bool { sizeClass == .regular }
 
     var body: some View {
@@ -220,7 +222,9 @@ struct PurrLobbyView: View {
             HStack(spacing: 8) {
                 Image(ArtName.iconTV).resizable().scaledToFit().frame(width: 28, height: 28)
                 Group {
-                    if ready {
+                    if !tvHere {
+                        Text(verbatim: PurrWords.waitingForTV)
+                    } else if ready {
                         Text("Scan the TV to join", comment: "Purrtrait lobby: how others join (the TV's code)")
                     } else {
                         Text("2 to 10 players. Scan the TV to join", comment: "Purrtrait lobby: how many play, and how others join")

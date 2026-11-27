@@ -114,6 +114,23 @@ import Testing
         #expect(connector.calls.count == 1, "no reconnect")
     }
 
+    /// Purrtrait: the host removed this phone; the room closes its socket with 4403 "removed".
+    @Test func aRemovedPhoneIsNotReconnected() async throws {
+        let open = FakeConnection()
+        let connector = FakeConnector([.connection(open), .connection(FakeConnection())])
+        let sleeper = FakeSleeper()
+        let credential = credential
+        let socket = RoomSocket(
+            code: "BCDFG", config: config, near: "ZZZZZZZZ", credential: { credential }, connector: connector,
+            tick: sleeper.pingInterval, sleep: { try await sleeper.sleep($0) })
+        var reader = EventReader(socket.events)
+        await socket.start()
+        #expect(await reader.next(2) == [.connecting, .connected])
+        open.refuse("removed")
+        #expect(await reader.next(1) == [.forbidden(.removed)])
+        #expect(connector.calls.count == 1, "no reconnect")
+    }
+
     @Test func notScreenAfterADropIsStillTerminal() async throws {
         // Linked once, then the room stops listing the TV (a new table, or it was unlinked).
         let first = FakeConnection()

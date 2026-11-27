@@ -15,6 +15,14 @@ extension WebSocketConnection {
     public func abort() async { await close() }
 }
 
+/// An open socket the room closed as a refusal (close code 4403, 4000 + 403), with its reason.
+public struct SocketRefused: Error, Equatable {
+    public static let closeCode = 4403
+    public let reason: String
+
+    public init(reason: String) { self.reason = reason }
+}
+
 public enum SocketConnectError: Error, Equatable {
     /// The header a refused upgrade names its reason in, lower case.
     public static let reasonHeader = "x-pounce-error"
@@ -153,7 +161,17 @@ actor URLSessionWebSocketConnection: WebSocketConnection {
     func receive() async throws -> String {
         let pending = early
         early = nil
-        let message = if let pending { try await pending.value } else { try await task.receive() }
+        let message: URLSessionWebSocketTask.Message
+        do {
+            message = if let pending { try await pending.value } else { try await task.receive() }
+        } catch {
+            // The room closed this socket as a refusal (4403: a Purrtrait host removed this device,
+            // or a table that no longer lists this screen): its reason, so nothing reconnects.
+            if task.closeCode.rawValue == SocketRefused.closeCode {
+                throw SocketRefused(reason: task.closeReason.map { String(decoding: $0, as: UTF8.self) } ?? "")
+            }
+            throw error
+        }
         switch message {
         case .string(let text): return text
         case .data(let data): return String(decoding: data, as: UTF8.self)
