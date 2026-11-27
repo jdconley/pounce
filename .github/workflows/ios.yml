@@ -54,9 +54,11 @@ defaults:
 jobs:
   # What this PR changes that the iOS and TV apps are built or tested from.
   # - `kit`: apps/play-ios, this workflow, or a server file PounceKit's tests read by path (the
-  #   shared fixtures, the funnel's steps, Sniff's word list). Runs the build and unit tests.
+  #   shared fixtures, the funnel's steps, Sniff's word list). Runs the build and unit tests
+  #   (PounceKit on macOS, the TV app's on an Apple TV simulator).
   # - `app`: apps/play-ios or this workflow. Also runs the simulator gates, which play demo tables
-  #   built from apps/play-ios alone, so no server or web change can move them.
+  #   built from apps/play-ios alone, so no server or web change can move them, and PounceKit's
+  #   tvOS run.
   # When neither, the macOS jobs skip and `build` passes on its own in seconds. Server, web and docs
   # PRs used to hold three macOS runners for 20-40 minutes for results they couldn't change, and
   # the queue for those runners held up everything else, the App Store build included. A PounceKit
