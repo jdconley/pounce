@@ -67,7 +67,7 @@ export async function who(request: Request, env: Env, deviceId: string): Promise
  * `POST /v1/daily/{game}/start` for `playerId` at `now`: the run for the player's day, made on
  * the first start. Exported so the tests can start at a made-up time.
  */
-export async function startRun(env: Env, deviceId: string, playerId: string, game: string, now: number): Promise<Response> {
+export async function startRun(env: Env, deviceId: string, playerId: string, game: string, now: number, rules?: string): Promise<Response> {
   const module = dailyModule(game, env);
   const secret = env.TOKEN_SECRET;
   if (!module || !secret) return notFound();
@@ -80,18 +80,45 @@ export async function startRun(env: Env, deviceId: string, playerId: string, gam
   // The run already started for this game and date, which after an account merge may be one the
   // guest started: one run per person, game and date, never a second.
   const id = (await me.dailyRunFor(day.day, module.id)) ?? (await runId(secret, playerId, module.id, day.day));
-  const view = (await runs(env, id).start({ id, playerId, game: module.id as DailyGameId, date: day.day, zone: day.zone, now })) as StartView;
+  const view = (await runs(env, id).start({ id, playerId, game: module.id as DailyGameId, date: day.day, zone: day.zone, now, ...(rules ? { rules } : {}) })) as StartView;
   const noted = await me.noteRun(view.date, view.game, view.run, view.startedAt);
   if (noted === null) return json(404, { error: "no_player" });
   // A merge noted another run meanwhile: that one is this player's.
-  if (noted !== view.run) return json(200, await runs(env, noted).start({ id: noted, playerId, game: module.id as DailyGameId, date: day.day, zone: day.zone, now }));
+  if (noted !== view.run) return json(200, await runs(env, noted).start({ id: noted, playerId, game: module.id as DailyGameId, date: day.day, zone: day.zone, now, ...(rules ? { rules } : {}) }));
   return json(200, view);
 }
 
-/** `{ from, moves }`: anything else in the body (a result, a time) is never read. */
-function parseBatch(body: Record<string, unknown> | null): { from: number; moves: unknown[] } | null {
+const RULES = /^[a-z]{1,20}$/;
+
+/**
+ * The rules a start asks for: `{ "rules": "lives" }`, or nothing. No body, or one that isn't
+ * that (an old app sends none), starts on the game's first rules; the start isn't refused for it.
+ */
+async function rulesAsked(request: Request): Promise<string | undefined> {
+  const text = await request.text().catch(() => "");
+  if (text.trim() === "" || text.length > 200) return undefined;
+  try {
+    const rules = (JSON.parse(text) as { rules?: unknown } | null)?.rules;
+    return typeof rules === "string" && RULES.test(rules) ? rules : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+/**
+ * A client's active time (`activeMs`, spec §3 "The clock"), when it sent a sane one: a whole
+ * number of milliseconds, 0 or more. Anything else is as if it sent none.
+ */
+function activeOf(body: unknown): number | undefined {
+  const v = (body as { activeMs?: unknown } | null)?.activeMs;
+  return typeof v === "number" && Number.isSafeInteger(v) && v >= 0 ? v : undefined;
+}
+
+/** `{ from, moves, activeMs? }`: anything else in the body (a result, a score) is never read. */
+function parseBatch(body: Record<string, unknown> | null): { from: number; moves: unknown[]; activeMs?: number } | null {
   if (!body || !Number.isInteger(body.from) || (body.from as number) < 0 || !("moves" in body)) return null;
-  return { from: body.from as number, moves: body.moves as unknown[] };
+  const activeMs = activeOf(body);
+  return { from: body.from as number, moves: body.moves as unknown[], ...(activeMs === undefined ? {} : { activeMs }) };
 }
 
 async function onRun(request: Request, env: Env, deviceId: string, run: string, action: string): Promise<Response> {
@@ -110,11 +137,12 @@ async function onRun(request: Request, env: Env, deviceId: string, run: string, 
     return json(429, { error: "rate_limited" });
   }
   let answer: Answer | null;
-  if (batch) answer = await stub.moves(playerId, batch.from, batch.moves, now);
+  if (batch) answer = await stub.moves(playerId, batch.from, batch.moves, now, batch.activeMs);
   else if (action === "hint") {
-    // `{ "hints": <used so far> }` makes a resent hint safe; an empty body is a new hint, as before.
+    // `{ "hints": <used so far>, "activeMs"? }` makes a resent hint safe; an empty body is a new hint, as before.
     const text = await request.text();
     let seen: number | undefined;
+    let activeMs: number | undefined;
     if (text.trim() !== "") {
       let body: unknown;
       try {
@@ -125,10 +153,20 @@ async function onRun(request: Request, env: Env, deviceId: string, run: string, 
       const hints = (body as { hints?: unknown } | null)?.hints;
       if (typeof body !== "object" || body === null || !Number.isInteger(hints) || (hints as number) < 0) return badRequest();
       seen = hints as number;
+      activeMs = activeOf(body);
     }
-    answer = await stub.hint(playerId, now, seen);
+    answer = await stub.hint(playerId, now, seen, activeMs);
+  } else {
+    // `{ "activeMs" }`, or no body (before active time): never refused for its body.
+    const text = await request.text().catch(() => "");
+    let activeMs: number | undefined;
+    try {
+      activeMs = text.trim() === "" || text.length > 200 ? undefined : activeOf(JSON.parse(text));
+    } catch {
+      activeMs = undefined;
+    }
+    answer = await stub.giveUp(playerId, now, activeMs);
   }
-  else answer = await stub.giveUp(playerId, now);
   // Someone else's run, or none, says the same: ids reveal nothing.
   return answer ? json(200, answer) : notFound();
 }
@@ -209,7 +247,7 @@ export function dailyRoute(method: string, pathname: string): Route | null {
   if (start) {
     return async (request, env, deviceId) => {
       const playerId = await who(request, env, deviceId);
-      return typeof playerId === "string" ? startRun(env, deviceId, playerId, start[1] as string, Date.now()) : playerId;
+      return typeof playerId === "string" ? startRun(env, deviceId, playerId, start[1] as string, Date.now(), await rulesAsked(request)) : playerId;
     };
   }
   const run = RUN.exec(pathname);

@@ -28,6 +28,8 @@ if (!secret || !date) throw new Error("usage: plan <secret> <date>");
 
 type Plan = { game: DailyGameId; floorMs: number; paceMs: number; states: string[]; puzzleHash: string; puzzle: unknown; moves: unknown[]; movesHash: string; expect: Record<string, unknown>; extra?: Record<string, unknown> };
 const out: Plan[] = [];
+/** Each game's rules as today's apps ask for them (`api.mjs` asks the same). */
+const RULES: Partial<Record<DailyGameId, string>> = { "nine-lives": "lives" };
 
 for (const game of ["nine-lives", "box-fort", "sniff", "cat-nap"] as DailyGameId[]) {
   const m = DAILY_GAMES[game] as DailyModule;
@@ -51,7 +53,7 @@ for (const game of ["nine-lives", "box-fort", "sniff", "cat-nap"] as DailyGameId
   } else {
     // Box Fort: the plain greedy player, set by set, until the run ends.
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    let s = m.init(p) as any;
+    let s = m.init(p, RULES[game]) as any;
     for (;;) {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const view = m.publicState(p, s) as any;
@@ -67,7 +69,7 @@ for (const game of ["nine-lives", "box-fort", "sniff", "cat-nap"] as DailyGameId
   }
   // Play the list through the module, at a human pace, for the result.
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  let s = m.init(p) as any;
+  let s = m.init(p, RULES[game]) as any;
   let end: string | undefined;
   // The public state (what a TV's watch frame carries) before the first move and after each one.
   const states = [hash(m.publicState(p, s))];

@@ -15,6 +15,30 @@
   "hint": {
     "hints": 0
   },
+  "movesActive": {
+    "from": 0,
+    "moves": [
+      {
+        "k": "step",
+        "n": 1
+      },
+      {
+        "k": "step",
+        "n": 2
+      }
+    ],
+    "activeMs": 18250
+  },
+  "hintActive": {
+    "hints": 0,
+    "activeMs": 31000
+  },
+  "giveUpActive": {
+    "activeMs": 95500
+  },
+  "startLives": {
+    "rules": "lives"
+  },
   "tvOn": {
     "on": true
   },

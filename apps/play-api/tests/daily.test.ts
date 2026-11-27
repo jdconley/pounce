@@ -603,3 +603,104 @@ describe("leaving", () => {
     expect(await held(mf, kid.id)).not.toContain(mom.id);
   });
 });
+
+describe("Nine Lives' lives, through the routes (spec, \"Nine Lives: lives and hints\")", () => {
+  type NineStart = Start & { puzzle: { givens: number[] }; state: Record<string, unknown>; hintMs?: number };
+  const nine = async (mf: Miniflare, device: Device, person: Person, body?: unknown): Promise<NineStart> => {
+    const res = await call(mf, device, "POST", `/v1/daily/nine-lives/start?person=${person.id}`, body);
+    expect(res.status).toBe(200);
+    return (await res.json()) as NineStart;
+  };
+  const solutionOf = async (mf: Miniflare, date: string) =>
+    ((await (await mf.dispatchFetch(`${BASE}/__test/puzzle?game=nine-lives&date=${date}`)).json()) as { solution: number[] }).solution;
+
+  test("a start that asks gets lives, keeps them on every later start, and three wrong numbers end it for the day", async () => {
+    const mf = await start();
+    const { device, person } = await someone(mf);
+    const s = await nine(mf, device, person, { rules: "lives" });
+    expect(s.state).toMatchObject({ rules: "lives", lives: 3, hintsLeft: 3, wrong: [] });
+    expect(s.hintMs).toBe(0);
+    // A later start that asks again (another device with today's app) is the same run, on the same rules.
+    const again = await nine(mf, device, person, { rules: "lives" });
+    expect(again.run).toBe(s.run);
+    expect(again.state).toMatchObject({ rules: "lives", lives: 3 });
+
+    const solution = await solutionOf(mf, s.date);
+    const cell = s.puzzle.givens.findIndex((d) => d === 0);
+    const bad = (solution[cell]! % 9) + 1;
+    const wrong = { k: "set", i: cell, d: bad };
+    const res = await send(mf, device, person, s.run, { from: 0, moves: [wrong, wrong, wrong] });
+    const answer = (await res.json()) as { ok: boolean; seq: number; reveals: Record<string, unknown>[]; result: Record<string, unknown> };
+    expect(answer).toMatchObject({ ok: true, seq: 3, result: { game: "nine-lives", outcome: "missed", hints: 0 } });
+    expect(answer.reveals.map((r) => r.lives)).toEqual([2, 1, 0]);
+    expect(answer.reveals[2]).toMatchObject({ k: "wrong", solution });
+
+    // Failed is final for the day: starting again returns the ended run, with the solution.
+    const after = await nine(mf, device, person, { rules: "lives" });
+    expect(after).toMatchObject({ run: s.run, result: { outcome: "missed" }, state: { lives: 0, solution } });
+    const hint = await call(mf, device, "POST", `/v1/daily/runs/${s.run}/hint?person=${person.id}`, { hints: 0 });
+    expect(await hint.json()).toMatchObject({ ok: false, error: "over" });
+
+    // Played, not solved, and a day on the game's streak, as a missed Sniff is. (Three numbers in
+    // a second is too fast for the board, so it isn't checked here; the ranking is in lives.test.ts.)
+    const stats = async () => ((await (await call(mf, device, "GET", `/v1/daily/stats?person=${person.id}`)).json()) as { games: Record<string, { played: number; solved: number; streak: number }> }).games;
+    expect((await eventually(stats, (g) => (g["nine-lives"]?.played ?? 0) > 0))["nine-lives"]).toMatchObject({ played: 1, solved: 0, streak: 1 });
+  }, 30_000);
+
+  test("an app from before lives that opens a lives run puts it back on the first rules, so it is never failed by lives it can't show", async () => {
+    const mf = await start();
+    const { device, person } = await someone(mf);
+    const s = await nine(mf, device, person, { rules: "lives" });
+    const solution = await solutionOf(mf, s.date);
+    const open = s.puzzle.givens.flatMap((d, i) => (d === 0 ? [i] : []));
+    const wrong = (i: number) => ({ k: "set", i, d: (solution[i]! % 9) + 1 });
+    // Two wrong numbers on today's app: one life left.
+    expect(await (await send(mf, device, person, s.run, { from: 0, moves: [wrong(open[0]!), wrong(open[1]!)] })).json()).toMatchObject({ ok: true, result: null });
+    // The 1.3 app (no body) opens the same run: first rules from now on.
+    const old = await nine(mf, device, person);
+    expect(old.run).toBe(s.run);
+    expect(Object.keys(old.state).sort()).toEqual(["cells", "hinted"]);
+    expect(old.hintMs).toBe(30_000);
+    // Three more wrong numbers, and a clear: nothing ends the run.
+    const a = (await (await send(mf, device, person, s.run, { from: 2, moves: [wrong(open[2]!), wrong(open[3]!), wrong(open[4]!), { k: "clear", i: open[2]! }] })).json()) as { ok: boolean; result: unknown };
+    expect(a).toMatchObject({ ok: true, seq: 6, result: null });
+    // Today's app opening it again doesn't bring lives back.
+    expect(Object.keys((await nine(mf, device, person, { rules: "lives" })).state).sort()).toEqual(["cells", "hinted"]);
+  }, 30_000);
+
+  test("a start that doesn't ask (every app before lives) plays the first rules, and the body never breaks a start", async () => {
+    const mf = await start();
+    for (const body of [undefined, {}, { rules: 3 }, { rules: "LIVES!" }, "not an object"]) {
+      const { device, person } = await someone(mf);
+      const s = await nine(mf, device, person, body);
+      expect(Object.keys(s.state).sort()).toEqual(["cells", "hinted"]);
+      expect(s.hintMs).toBe(30_000);
+    }
+  }, 30_000);
+});
+
+describe("active time through the routes (spec §3, \"The clock\", JD 2026-11-26)", () => {
+  test("moves, hints and give-ups carry the client's active time; the result's time is it, plus hints", async () => {
+    const mf = await start();
+    const { device, person } = await someone(mf);
+    const s = await begin(mf, device, person);
+    expect(s).toMatchObject({ activeMs: expect.any(Number) });
+    const a = await send(mf, device, person, s.run, { from: 0, moves: steps(1, 1), activeMs: 0 });
+    expect(a.status).toBe(200);
+    const hint = await call(mf, device, "POST", `/v1/daily/runs/${s.run}/hint?person=${person.id}`, { hints: 0, activeMs: 1 });
+    expect(hint.status).toBe(200);
+    // 2 ms on screen: less than the wall's time since the start, so it can only be the report.
+    const gave = await call(mf, device, "POST", `/v1/daily/runs/${s.run}/giveup?person=${person.id}`, { activeMs: 2 });
+    expect(await gave.json()).toMatchObject({ ok: true, result: { outcome: "gaveUp", timeMs: 2 + 30_000, hints: 1, percent: expect.any(Number) } });
+  });
+
+  test("a give-up with no body, or an odd one, still gives up", async () => {
+    const mf = await start();
+    for (const body of [undefined, "nope", { activeMs: -5 }]) {
+      const { device, person } = await someone(mf);
+      const s = await begin(mf, device, person);
+      const res = await call(mf, device, "POST", `/v1/daily/runs/${s.run}/giveup?person=${person.id}`, body);
+      expect(await res.json()).toMatchObject({ ok: true, result: { outcome: "gaveUp" } });
+    }
+  });
+});

@@ -35,13 +35,35 @@ function ranks<T>(sorted: T[], same: (a: T, b: T) => boolean): number[] {
   return out;
 }
 
+/** A run that finished the puzzle: solved, or Box Fort's normal ending. Everything else didn't. */
+export const finishedRun = (r: DailyResult): boolean => r.outcome === "solved" || r.outcome === "done";
+
+/** A result's percent: its own, or for one stored before `percent`, its progress. */
+export const percentOf = (r: DailyResult): number => r.percent ?? Math.max(0, Math.min(100, Math.floor(r.progress * 100 + 1e-9)));
+
 /**
- * One game's board: results ranked best first by the game's own `compare`, then people still
- * playing, furthest first. A run marked too fast is left off; so is anyone with neither.
+ * The board's order for one game (spec §6, "Ranking", JD 2026-11-26: "if you fail or quit any
+ * puzzle you should get ranked on % completed as well. just lower rank than anyone that completed
+ * it"): every finished run first, by the game's own `compare`; then every run that failed, was
+ * given up or closed at 04:00, by percent, highest first, then the shorter time.
+ */
+export function rankOrder(m: DailyModule): (a: DailyResult, b: DailyResult) => number {
+  return (a, b) => {
+    const [fa, fb] = [finishedRun(a), finishedRun(b)];
+    if (fa !== fb) return fa ? -1 : 1;
+    if (fa) return m.compare(a, b);
+    return percentOf(b) - percentOf(a) || a.timeMs - b.timeMs;
+  };
+}
+
+/**
+ * One game's board: results ranked best first (`rankOrder`), then people still playing, furthest
+ * first. A run marked too fast is left off; so is anyone with neither.
  */
 export function rankGame(m: DailyModule, rows: BoardRow[]): BoardRow[] {
-  const done = rows.filter((r) => r.result !== null && !r.result.tooFast).sort((a, b) => m.compare(a.result as DailyResult, b.result as DailyResult));
-  const placed = ranks(done, (a, b) => m.compare(a.result as DailyResult, b.result as DailyResult) === 0);
+  const order = rankOrder(m);
+  const done = rows.filter((r) => r.result !== null && !r.result.tooFast).sort((a, b) => order(a.result as DailyResult, b.result as DailyResult));
+  const placed = ranks(done, (a, b) => order(a.result as DailyResult, b.result as DailyResult) === 0);
   const playing = rows
     .filter((r) => r.result === null && r.playing !== null)
     .sort((a, b) => (b.playing as { progress: number }).progress - (a.playing as { progress: number }).progress);

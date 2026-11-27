@@ -4,6 +4,8 @@ import { afterEach, beforeAll, describe, expect, test } from "vitest";
 
 import { addToStats, dish, rankGame, statsView, type BoardRow } from "../src/daily/board";
 import { liveMessage, resultMessages, tvsMessage, type BoardAnswer } from "../src/daily/messages";
+import { nineLives } from "../src/daily/nine-lives/module";
+import { SAMPLE } from "../src/daily/nine-lives/samples";
 import { giveUp, moves, newRun, startView, useHint } from "../src/daily/run-core";
 import { testGame } from "../src/daily/test-game";
 import { createRng } from "../src/rules/rng";
@@ -117,12 +119,46 @@ function socket(h: ReturnType<typeof http>) {
 const client = {
   moves: { from: 0, moves: [step(1), step(2)] },
   hint: { hints: 0 },
+  // From 2026-11-26, every call on a run carries the client's active time (spec §3, "The clock").
+  movesActive: { from: 0, moves: [step(1), step(2)], activeMs: 18_250 },
+  hintActive: { hints: 0, activeMs: 31_000 },
+  giveUpActive: { activeMs: 95_500 },
+  startLives: { rules: "lives" },
   tvOn: { on: true },
   tvOff: { on: false },
   linkBoardByToken: { token: "Tm90QVJlYWxMaW5rVG9rZW", board: true },
   linkBoardByCode: { code: "BCDFGH", board: true },
   ping: { t: "ping" },
 };
+
+/**
+ * Nine Lives under its `"lives"` rules (docs/daily-protocol.md "## Nine Lives"), on the fixed
+ * sample puzzle: what the app and the web player decode for lives, hints and running out.
+ */
+function nineLivesSamples() {
+  const nl = nineLives as unknown as DailyModule;
+  const p = SAMPLE;
+  const open = p.givens.flatMap((d, i) => (d === 0 ? [i] : []));
+  const right = (i: number) => ({ k: "set", i, d: p.solution[i] as number });
+  const wrong = (i: number) => ({ k: "set", i, d: ((p.solution[i] as number) % 9) + 1 });
+  const base = { id: RUN, playerId: "p_owner", game: "nine-lives" as const, date: DATE, zone: LA, now: T0 };
+  const firstRules = startView(nl, p, newRun(nl, p, base), T0);
+  const r = newRun(nl, p, { ...base, rules: "lives" });
+  const start = startView(nl, p, r, T0);
+  const movesRight = moves(nl, p, r, 0, [right(open[0] as number)], T0 + 10_000);
+  const movesWrong = moves(nl, p, r, 1, [wrong(open[1] as number)], T0 + 20_000);
+  const hint = useHint(nl, p, r, T0 + 30_000, 0);
+  const resumed = startView(nl, p, r, T0 + 35_000);
+  useHint(nl, p, r, T0 + 40_000, 1);
+  useHint(nl, p, r, T0 + 41_000, 2);
+  const hintNoneLeft = useHint(nl, p, r, T0 + 42_000, 3);
+  const still = open.filter((i) => (r.state as { cells: number[] }).cells[i] === 0);
+  const movesOutOfLives = moves(nl, p, r, 2, [wrong(still[0] as number), wrong(still[1] as number)], T0 + 90_000);
+  const resumedOutOfLives = startView(nl, p, r, T0 + 95_000);
+  const clear = newRun(nl, p, { ...base, rules: "lives" });
+  const movesClear = moves(nl, p, clear, 0, [{ k: "clear", i: open[0] as number }], T0 + 10_000);
+  return { firstRules, start, movesRight, movesWrong, hint, resumed, hintNoneLeft, movesOutOfLives, resumedOutOfLives, movesClear };
+}
 
 test("the Daily Dish's samples match the committed files", () => {
   const h = http();
@@ -131,6 +167,7 @@ test("the Daily Dish's samples match the committed files", () => {
   check("http.json", answers);
   check("socket.json", socket(h));
   check("client.json", client);
+  check("nine-lives.json", nineLivesSamples());
 });
 
 /** A value's shape: keys and the types under them, arrays by their first item. */
