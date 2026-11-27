@@ -3,9 +3,10 @@ import { afterEach, beforeAll, describe, expect, test } from "vitest";
 import { chooseAction } from "../src/bots/house-cat-birdwatch";
 import { createRng } from "../src/rules/rng";
 
-import { BASE, bundle, call, connect, mint, newPerson, worker, type Client, type Device, type Sent, type Snapshot } from "./play-helpers";
+import { BASE, bundle, call, connect, eventually, mint, newPerson, worker, type Client, type Device, type Sent, type Snapshot } from "./play-helpers";
 
 import type { BirdView } from "../src/birdwatch/view";
+import type { TableEntry } from "../src/room/tables";
 import type { Miniflare } from "miniflare";
 
 /* Birdwatch through the real Worker and room sockets, and the apps that can't draw it kept out. */
@@ -69,6 +70,20 @@ describe("creating a Birdwatch table", { timeout: 30_000 }, () => {
       ((await (await call(mf, phone, "GET", "/v1/devices/me/tables", undefined, headers)).json()) as { tables: { code: string }[] }).tables.map((t) => t.code);
     expect(await listed(TILES_APP)).not.toContain(code);
   });
+
+  test("Home's list names the table's rule set, and follows the host's pick in the lobby", async () => {
+    const mf = await start();
+    const phone = await mint(mf);
+    const code = await birdRoom(mf, phone);
+    const me: Client = await connect(mf, code, phone, NEW_APP);
+    const jd = newPerson("JD", 1);
+    me.send({ t: "claim", seat: 0, person: { id: jd.id, name: jd.name, cat: jd.cat } });
+    const entry = async () =>
+      ((await (await call(mf, phone, "GET", "/v1/devices/me/tables", undefined, NEW_APP)).json()) as { tables: TableEntry[] }).tables.find((t) => t.code === code);
+    expect(await eventually(entry, (t) => t?.seats?.[0]?.kind === "human")).toMatchObject({ game: "birdwatch", options: { rules: "official" } });
+    me.send({ t: "setOptions", options: { rules: "friesen" } });
+    expect(await eventually(entry, (t) => t?.options?.rules === "friesen")).toMatchObject({ game: "birdwatch", status: "lobby" });
+  });
 });
 
 describe("a Birdwatch hand through the room's sockets", { timeout: 120_000 }, () => {
@@ -82,7 +97,7 @@ describe("a Birdwatch hand through the room's sockets", { timeout: 120_000 }, ()
     me.send({ t: "setOptions", options: { rules: "tucker" } });
     for (const seat of [1, 2, 3]) me.send({ t: "configure", seat, kind: "bot" });
     me.send({ t: "swapSeats", seats: [0, 2] });
-    await me.until((s) => s.room.options?.rules === "tucker" && s.room.seats[2]?.kind === "human" && s.room.seats[0]?.kind === "bot");
+    await me.until((s) => (s.room.options as { rules?: string } | undefined)?.rules === "tucker" && s.room.seats[2]?.kind === "human" && s.room.seats[0]?.kind === "bot");
     me.send({ t: "start" });
     await me.until((s) => s.room.status === "playing" && s.room.birdwatch !== undefined);
 

@@ -6,17 +6,21 @@ import {
   type GameError,
   type GameId,
   type GameOptions,
+  type RoomOptions,
   type RoomGame,
 } from "../games";
 import { POUNCE_LIVE_MS, deadline, expired, liveState, type LiveRecord, type LiveState } from "../live/live";
 import { PROTOCOL_VERSION } from "../protocol";
 import { DEFAULT_BACK, DEFAULT_RUG } from "../streaks/catalog";
+import { LAG_MS, TumbleRound, type RoundOut, type RoundSeat } from "../tumble/round";
 
 import { newMoveCode } from "./codes";
 import { LINK_PING_MS, LinkTracker } from "./link";
+import { LiveRelay } from "./live-relay";
 import { defaultRoomName } from "./names";
 
 import type { GameModule } from "../games/module";
+import type { TumbleAction, TumbleState } from "../games/tumble";
 import type {
   ClientMessage,
   ErrorCode,
@@ -35,6 +39,7 @@ import type {
 import type { Action, ApplyError, CatTowerState, GameEvent, Seat } from "../rules/engine";
 import type { Rng, Seed } from "../rules/rng";
 import type { CatTowerView } from "../rules/view";
+import type { TumbleClient } from "../tumble/wire";
 
 export type CatTowerModule = GameModule<CatTowerState, Action, CatTowerView, GameEvent, ApplyError>;
 
@@ -84,7 +89,7 @@ export type RoomState<S = CatTowerState> = {
   /** The room's game, for good. Every room saved before there was a second game says "cat-tower". */
   game: GameId;
   /** What the table chose in its lobby, for a game that has options (Birdwatch's rule set). Absent: none. */
-  options?: GameOptions;
+  options?: RoomOptions;
   hostDeviceId: string;
   status: RoomStatus;
   /** As many as the game seats at most in the lobby (6 for Cat Tower); compacted to the game's seats on start. */
@@ -210,7 +215,7 @@ export type RematchIntent = {
   hostDeviceId: string;
   game?: GameId;
   /** The table's options, kept for the new table. Absent: the game has none. */
-  options?: GameOptions;
+  options?: RoomOptions;
   /** The table's screens, so a TV stays on the new table. Absent: none. */
   screens?: string[];
 };
@@ -276,6 +281,8 @@ export type Outbound = {
   /** "all" or a deviceId. */
   to: "all" | string;
   message: ServerMessage;
+  /** Only this one of the device's sockets (a Toy Tumble answer to the socket that sent). Absent: all of them. */
+  socket?: string;
 };
 
 type Snapshot = Extract<ServerMessage, { t: "snapshot" }>;
@@ -323,6 +330,15 @@ const ACKS_KEPT = 16;
 export const NUDGE_AFTER_MS = 2 * MS_PER_MINUTE;
 /** Between two nudges from the same seat at a table, on any turns (divided by the dev speed). */
 export const NUDGE_EVERY_MS = 10 * MS_PER_MINUTE;
+/** Toy Tumble's 3-2-1 before each round (§4.4). */
+export const TUMBLE_COUNTDOWN_MS = 3000;
+/** The standings between two Toy Tumble rounds (§5.5). */
+export const TUMBLE_BETWEEN_MS = 5000;
+/** How long a countdown waits for a missing device before the host may play without it (§5.1). */
+export const TUMBLE_PLAY_WITHOUT_MS = 20_000;
+/** The most `tumble` batches a device may send in a second (§6.3). */
+export const TUMBLE_BATCHES_PER_SECOND = 30;
+const PLAY_WITHOUT = JSON.stringify({ k: "playWithout" });
 
 /**
  * The room state machine. Pure: it mutates `state` and returns the messages
@@ -354,6 +370,13 @@ export class RoomCore<S = CatTowerState> {
   private readonly aimTimes = new Map<string, number[]>();
   /** Per device and seat (not persisted): the last aim message relayed was an aim, not a clear. */
   private readonly lastWasAim = new Map<string, boolean>();
+  /** Toy Tumble's round, from its countdown to its end. Never persisted: a restart replays it. */
+  private round: TumbleRound | null = null;
+  /** Per seat, this round: the one socket that writes its box, and when it was last heard. */
+  private readonly writers = new Map<Seat, { deviceId: string; socket: string; at: number }>();
+  /** Per seat, this round: when the round last heard from its device. */
+  private readonly roundHeard = new Map<Seat, number>();
+  private readonly tumbleRelay = new LiveRelay(TUMBLE_BATCHES_PER_SECOND);
 
   /** `game`: left out, the module `state.game` names; tests pass a stand-in. */
   constructor(
@@ -436,8 +459,11 @@ export class RoomCore<S = CatTowerState> {
   /** The room's game's own check of an `aim` message's aim (`parseClientMessage`). */
   parseAim = (raw: unknown): GameAim | null => this.game.parseAim(raw);
 
-  /** The room's game's own check of a `setOptions` message's options: none for a game without any. */
-  parseOptions = (raw: unknown): GameOptions | null => this.game.parseOptions?.(raw) ?? null;
+  /**
+   * The room's game's own check of a `setOptions` message's options: none for a game without any.
+   * Toy Tumble's pass as the wire's `GameOptions` (see `RoomOptions`).
+   */
+  parseOptions =(raw: unknown): GameOptions | null => (this.game.parseOptions?.(raw) ?? null) as GameOptions | null;
 
   /** The seat that must act next; null in the lobby and whenever nobody is to act. */
   actor(): Seat | null {
@@ -468,10 +494,12 @@ export class RoomCore<S = CatTowerState> {
    * are what the device's people may put on the table (`setLook`), resolved
    * by the Durable Object first; the defaults need none.
    */
-  handle(deviceId: string, msg: ClientMessage, unlocks: Unlocks = NO_UNLOCKS): Outbound[] {
-    this.heard(deviceId, this.now());
+  handle(deviceId: string, msg: ClientMessage, unlocks: Unlocks = NO_UNLOCKS, socket = ""): Outbound[] {
+    const now = this.now();
+    this.heard(deviceId, now);
     try {
-      return this.dispatch(deviceId, msg, unlocks);
+      // `socket`: which of the device's sockets sent it, for Toy Tumble's one writer per box.
+      return [...this.tumbleHeard(deviceId, socket, now), ...this.dispatch(deviceId, msg, unlocks, socket)];
     } catch {
       return [this.fail(deviceId, "internal")];
     }
@@ -544,10 +572,10 @@ export class RoomCore<S = CatTowerState> {
       // Back within the grace, the phones were never told it went.
       if (!wasShown && this.features.tv) {
         this.state.seq += 1;
-        return [...events, ...this.linkCheck(deviceId), ...this.snapshots()];
+        return [...events, ...this.linkCheck(deviceId), ...this.snapshots(), ...this.tumbleConnected(deviceId)];
       }
     }
-    return [...events, ...this.linkCheck(deviceId), { to: deviceId, message: this.snapshotFor(deviceId) }];
+    return [...events, ...this.linkCheck(deviceId), { to: deviceId, message: this.snapshotFor(deviceId) }, ...this.tumbleConnected(deviceId)];
   }
 
   /**
@@ -649,7 +677,9 @@ export class RoomCore<S = CatTowerState> {
     if (timers.nextRoundAt !== null && timers.nextRoundAt <= this.now()) {
       timers.nextRoundAt = null;
       const next = this.game.betweenAction;
-      if (next !== null) out.push(...this.applyAndAfter(0, next));
+      // Toy Tumble's countdown and standings run on the same timer.
+      if (this.isTumble()) out.push(...this.tumbleTimer());
+      else if (next !== null) out.push(...this.applyAndAfter(0, next));
     }
 
     if (timers.botAt !== null && timers.botAt <= this.now()) {
@@ -784,7 +814,8 @@ export class RoomCore<S = CatTowerState> {
    */
   private maybeStartLive(deviceId: string): void {
     const { state } = this;
-    if (!this.features.live || state.live?.[deviceId]) return;
+    // Toy Tumble has no live table: nobody is ever to move (§5.1).
+    if (!this.features.live || state.live?.[deviceId] || this.isTumble()) return;
     if (!this.midGame()) return;
     const mine = this.controlledSeats(deviceId);
     if (mine.length === 0) return;
@@ -922,7 +953,8 @@ export class RoomCore<S = CatTowerState> {
     const out = this.changed();
     state.turnSeq = state.seq;
     this.afterGameChange();
-    return out;
+    // Toy Tumble counts down at once when everyone is here (Start), or once they are (Play again).
+    return [...out, ...this.tumbleAdvance()];
   }
 
   /** The players in the seats `deviceId` controls: whose unlocks a `setLook` from it may use. */
@@ -975,7 +1007,7 @@ export class RoomCore<S = CatTowerState> {
         youAreHost: deviceId === state.hostDeviceId,
         seats,
         ...this.gameFields(controlled),
-        ...(state.options ? { options: { ...state.options } } : {}),
+        ...(state.options ? { options: { ...state.options } as GameOptions } : {}),
         ...(this.features.streaks ? { look: this.look() } : {}),
         ...(state.rematch?.code ? { rematch: state.rematch.code } : {}),
         ...(this.features.tv && this.screenShown() ? { screen: true as const } : {}),
@@ -991,11 +1023,13 @@ export class RoomCore<S = CatTowerState> {
    * game's is under the key of its own id, with `gameId` saying which and `game` null, so an app
    * never has to guess what it is decoding.
    */
-  private gameFields(controlled: Seat[]): Pick<RoomView, "game" | "gameId" | "tiles" | "birdwatch"> {
+  private gameFields(controlled: Seat[]): Pick<RoomView, "game" | "gameId" | "tiles" | "birdwatch" | "tumble"> {
     const { state } = this;
     const view = state.gameState === null ? null : this.game.view(state.gameState, controlled);
     if (state.game === DEFAULT_GAME) return { game: view as CatTowerView | null };
-    return { game: null, gameId: state.game as Exclude<GameId, "cat-tower">, ...(view === null ? {} : { [state.game]: view }) };
+    // Toy Tumble's clock is real time: the server's own time lets a device with a wrong clock count down right.
+    const seen = view !== null && state.game === "tumble" ? { ...(view as object), now: this.now() } : view;
+    return { game: null, gameId: state.game as Exclude<GameId, "cat-tower">, ...(seen === null ? {} : { [state.game]: seen }) };
   }
 
   /** A game event as the room sends it: Cat Tower's as `game`, any other game's under its own id. */
@@ -1068,7 +1102,7 @@ export class RoomCore<S = CatTowerState> {
     return best ?? "away";
   }
 
-  private dispatch(deviceId: string, msg: ClientMessage, unlocks: Unlocks): Outbound[] {
+  private dispatch(deviceId: string, msg: ClientMessage, unlocks: Unlocks, socket: string): Outbound[] {
     // A screen only watches: it has no seat, no say, and no aim of its own.
     if (this.isScreen(deviceId) && msg.t !== "ping" && msg.t !== "presence" && msg.t !== "link") {
       return [this.fail(deviceId, "not_allowed")];
@@ -1114,6 +1148,8 @@ export class RoomCore<S = CatTowerState> {
         return this.retire(deviceId, msg.seat);
       case "aim":
         return this.features.tv ? this.aim(deviceId, msg.seat, msg.aim) : [this.fail(deviceId, "bad_message")];
+      case "tumble":
+        return this.isTumble() ? this.tumbleInput(deviceId, socket, msg) : [this.fail(deviceId, "bad_message")];
       default:
         return [this.fail(deviceId, "bad_message")];
     }
@@ -1150,6 +1186,8 @@ export class RoomCore<S = CatTowerState> {
     if (!target) return [this.fail(deviceId, "bad_seat")];
     // A person takes over a House Cat's seat (a first table's cat holds it for whoever comes).
     if (target.kind !== "open" && target.kind !== "bot") return [this.fail(deviceId, "seat_taken")];
+    // One box per device in Toy Tumble: it is played with both hands (§5.1).
+    if (this.isTumble() && this.controlledSeats(deviceId).length > 0) return [this.fail(deviceId, "not_allowed")];
     const playerId = this.state.devices[deviceId]?.players?.[person.id];
     if (this.state.seats.some((s) => s.person?.id === person.id || (playerId && s.playerId === playerId))) {
       return [this.fail(deviceId, "person_seated")];
@@ -1248,7 +1286,7 @@ export class RoomCore<S = CatTowerState> {
 
   /** When the move has waited since: the current turn's start mid-round, else null. */
   waitingSince(): number | null {
-    return this.midGame() ? this.turnStartedAt() : null;
+    return this.midGame() && this.actor() !== null ? this.turnStartedAt() : null;
   }
 
   /** Ms until the current turn's seat may be retired (0: now). */
@@ -1432,6 +1470,10 @@ export class RoomCore<S = CatTowerState> {
       s.kind === "human" || s.kind === "bot" ? [{ seat: s, from: i }] : [],
     );
     if (playing.length < this.game.minSeats) return [this.fail(deviceId, "not_enough_players")];
+    // A real-time game starts with everyone there (§5.1).
+    if (this.isTumble() && state.seats.some((s, i) => s.kind === "human" && !this.seatConnected(i))) {
+      return [this.fail(deviceId, "not_connected")];
+    }
     return this.deal();
   }
 
@@ -1531,6 +1573,8 @@ export class RoomCore<S = CatTowerState> {
       return [this.fail(deviceId, "bad_code")];
     }
 
+    // One box per device in Toy Tumble: a device holding a seat can't take another.
+    if (this.isTumble() && this.controlledSeats(deviceId).length > 0) return [this.fail(deviceId, "not_allowed")];
     // The seat goes to this device, whoever it speaks for.
     const moved = state.seats[entry.seat] as SeatInfo;
     moved.deviceId = deviceId;
@@ -1552,6 +1596,8 @@ export class RoomCore<S = CatTowerState> {
     if (!this.controlledSeats(deviceId).includes(seat)) return [this.fail(deviceId, "not_your_seat")];
     if (this.state.status !== "playing") return [this.fail(deviceId, "not_playing")];
     const turn = this.turnKey();
+    // Who is connected is the room's to know, so Toy Tumble's Play without is the room's to do.
+    if (this.isTumble() && JSON.stringify(action) === PLAY_WITHOUT) return this.playWithout(deviceId);
     const applied = this.isForfeit(action) ? this.leaveGame(seat) : this.applyGame(seat, action);
     if ("error" in applied) return [this.fail(deviceId, applied.error)];
     if (id !== undefined && device) device.acks = [...(device.acks ?? []), id].slice(-ACKS_KEPT);
@@ -1564,6 +1610,7 @@ export class RoomCore<S = CatTowerState> {
     // Acting proves the device is in use, whatever it last reported.
     const woke = this.wake(deviceId);
     this.afterGameChange();
+    if (this.isTumble() && this.isForfeit(action)) this.tumbleLeft(seat);
     return [...applied.out, ...woke, ...this.snapshots()];
   }
 
@@ -1644,6 +1691,8 @@ export class RoomCore<S = CatTowerState> {
     const result = this.game.apply(state.gameState as S, seat, action);
     if (!result.ok) return { error: result.error };
     state.gameState = result.state;
+    // A game that tells its changes by snapshot alone (Toy Tumble) still moves the seq.
+    if (result.events.length === 0 && this.isTumble()) state.seq += 1;
     const out = result.events.flatMap((event) => {
       if (this.game.startsTurn(event)) state.turnSeq = state.seq + 1;
       return this.broadcast((deviceId) => this.gameEvent(this.game.filterEvent(event, this.controlledSeats(deviceId))));
@@ -1699,6 +1748,11 @@ export class RoomCore<S = CatTowerState> {
       timers.cleanupAt = state.lastActivity + CLEANUP_AFTER_MS;
       timers.botAt = null;
       timers.nextRoundAt = null;
+      return;
+    }
+    // Toy Tumble runs its own rounds (the hooks below): no bot clock, no turn, no "your move".
+    if (this.isTumble()) {
+      timers.botAt = null;
       return;
     }
     if (phase === "between") {
@@ -1829,5 +1883,260 @@ export class RoomCore<S = CatTowerState> {
 
   private fail(deviceId: string, code: ErrorCode): Outbound {
     return { to: deviceId, message: { t: "error", code } };
+  }
+
+  // MARK: Toy Tumble (design 2026-11-26 §5.1, §6)
+  //
+  // The module keeps the slow state: rounds, wins, who left and who sits out. The room drives it:
+  // a countdown, then a round the in-memory `TumbleRound` referees, then standings, then the next
+  // countdown once everyone is there. The Durable Object ticks the round every 100 ms
+  // (`tumbleTick`), and its alarm runs the countdown and the standings (`tick`, on `nextRoundAt`).
+
+  private isTumble(): boolean {
+    return this.state.game === "tumble";
+  }
+
+  private tumbleState(): TumbleState {
+    return this.state.gameState as unknown as TumbleState;
+  }
+
+  /** True while a round plays: the Durable Object ticks it. */
+  tumblePlaying(): boolean {
+    return this.round !== null && this.state.status === "playing" && this.tumbleState().status === "playing";
+  }
+
+  /** Some device holding the seat is connected. */
+  private seatConnected(seat: Seat): boolean {
+    return Object.entries(this.state.devices).some(([id, device]) => device.connected && this.controls(id, seat));
+  }
+
+  /** The seat a device plays at a Toy Tumble table (one at most), unless it left. */
+  private tumbleSeat(deviceId: string): Seat | null {
+    const { left } = this.tumbleState();
+    return this.controlledSeats(deviceId).find((seat) => left[seat] !== true) ?? null;
+  }
+
+  /**
+   * A device's batch for its own box. Only one socket writes a box each round: the first to send.
+   * Another (a second tab, the same person's other device) is refused, unless the writer has gone
+   * quiet for 3 seconds or closed. Over the rate limit, the device gets its box instead.
+   */
+  private tumbleInput(deviceId: string, socket: string, msg: TumbleClient): Outbound[] {
+    const round = this.round;
+    if (round === null || msg.r !== round.r) return [];
+    const seat = this.tumbleSeat(deviceId);
+    const refused: Outbound[] = [{ ...this.fail(deviceId, "not_allowed"), socket }];
+    if (seat === null) return refused;
+    const now = this.now();
+    const writer = this.writers.get(seat);
+    if (writer && (writer.deviceId !== deviceId || writer.socket !== socket) && now - writer.at < LAG_MS) return refused;
+    this.writers.set(seat, { deviceId, socket, at: now });
+    if (!this.tumbleRelay.allow(deviceId, now)) return this.roundOut([{ to: { seat }, message: round.sync([seat], now) }]);
+    return this.roundOut(round.input(seat, msg, now));
+  }
+
+  /** Any message from a seat's device (or a ping it answered, `tumblePing`): the round hears it is there. */
+  private tumbleHeard(deviceId: string, socket: string, at: number): Outbound[] {
+    const round = this.round;
+    if (round === null || this.isScreen(deviceId)) return [];
+    for (const writer of this.writers.values()) {
+      if (writer.deviceId === deviceId && writer.socket === socket) writer.at = Math.max(writer.at, at);
+    }
+    const seat = this.tumbleSeat(deviceId);
+    // Only news: later than the round last heard it, which starts at the round's start.
+    const { startsAt } = this.tumbleState();
+    const when = Math.max(at, startsAt);
+    if (seat === null || (this.roundHeard.get(seat) ?? startsAt) >= when) return [];
+    this.roundHeard.set(seat, when);
+    return this.roundOut(round.heard(seat, when));
+  }
+
+  /** A socket's last answered ping, which reaches no handler: the Durable Object passes it on each tick. */
+  tumblePing(deviceId: string, socket: string, at: number): Outbound[] {
+    return this.tumbleHeard(deviceId, socket, at);
+  }
+
+  /** A socket closed: if it wrote a box, the next to send for that seat may. */
+  tumbleClosed(deviceId: string, socket: string): void {
+    for (const [seat, writer] of this.writers) {
+      if (writer.deviceId === deviceId && writer.socket === socket) this.writers.delete(seat);
+    }
+  }
+
+  /** A device connecting mid-round gets every box, and its seat's device is heard. Its arrival may start a waiting countdown. */
+  private tumbleConnected(deviceId: string): Outbound[] {
+    if (!this.isTumble() || this.state.status !== "playing") return [];
+    const round = this.round;
+    const now = this.now();
+    const out = round === null ? [] : [...this.tumbleHeard(deviceId, "", now), { to: deviceId, message: round.sync("all", now) }];
+    return [...out, ...this.tumbleAdvance()];
+  }
+
+  /** A round's messages to sockets: `{except}` is everyone but the seat's own device; "all" includes screens. */
+  private roundOut(list: RoundOut[]): Outbound[] {
+    return list.flatMap(({ to, message }): Outbound[] => {
+      if (to === "all") return [{ to: "all", message }];
+      if ("seat" in to) return this.boxDevices(to.seat).map((id) => ({ to: id, message }));
+      const own = this.boxDevices(to.except);
+      return Object.entries(this.state.devices)
+        .filter(([id, device]) => device.connected && !own.includes(id))
+        .map(([id]) => ({ to: id, message }));
+    });
+  }
+
+  /** The device writing a seat's box this round; before one has, every connected device holding it. A House Cat's: none. */
+  private boxDevices(seat: Seat): string[] {
+    const writer = this.writers.get(seat);
+    if (writer) return [writer.deviceId];
+    return Object.entries(this.state.devices)
+      .filter(([id, device]) => device.connected && this.controls(id, seat))
+      .map(([id]) => id);
+  }
+
+  /** Applies one of the room's own changes to the slow state. The room applies each only in its phase. */
+  private tumbleApply(action: TumbleAction): void {
+    this.applyGame(0, action);
+    this.touch();
+    this.afterGameChange();
+    if (this.state.status === "over") this.endRound();
+  }
+
+  private endRound(): void {
+    this.round = null;
+    this.writers.clear();
+    this.roundHeard.clear();
+    this.state.timers.nextRoundAt = null;
+  }
+
+  /**
+   * Between rounds, once the standings have shown: the next countdown, when every person still
+   * playing has a device here and at least two seats would play. Otherwise the countdown waits
+   * (`waitingSince`), and with no person's device here nothing runs at all.
+   */
+  private tumbleAdvance(): Outbound[] {
+    if (!this.isTumble() || this.state.status !== "playing" || this.state.timers.nextRoundAt !== null) return [];
+    const s = this.tumbleState();
+    if (s.status !== "between") return [];
+    const people = this.state.seats.flatMap((seat, i) => (seat.kind === "human" && s.left[i] !== true ? [i] : []));
+    const here = people.filter((i) => this.seatConnected(i));
+    if (here.length === 0) return [];
+    const missing = people.some((i) => s.away[i] !== true && !here.includes(i));
+    const cats = this.state.seats.filter((seat) => seat.kind === "bot").length;
+    if (missing || here.length + cats < 2) {
+      if (s.waitingSince !== null) return [];
+      this.tumbleApply({ k: "wait", since: this.now() });
+      return this.snapshots();
+    }
+    // A seat that sat out is back with its device: it plays again (§5.1).
+    for (const i of here) if (s.away[i] === true) this.tumbleApply({ k: "away", seat: i, away: false });
+    return this.tumbleCountdown(false);
+  }
+
+  /** A countdown, with the round's seeds from the room's rng, and the round that will play it. `replay`: the same round again. */
+  private tumbleCountdown(replay: boolean): Outbound[] {
+    const at = this.now() + TUMBLE_COUNTDOWN_MS;
+    const roundSeed = this.newSeed();
+    const trickSeeds = this.state.seats.map(() => this.newSeed());
+    this.tumbleApply({ k: "start", at, roundSeed, trickSeeds, ...(replay ? { replay: true as const } : {}) });
+    const s = this.tumbleState();
+    const seats = this.state.seats.map((seat, i): RoundSeat => ({
+      kind: seat.kind === "bot" ? "cat" : s.left[i] === true || s.away[i] === true ? "away" : "human",
+    }));
+    this.endRound();
+    this.tumbleRelay.clear();
+    this.round = new TumbleRound({ r: s.r, seats, roundSeed, trickSeeds, startsAt: at, rng: this.newSeed(), cats: s.cats, wins: s.wins });
+    this.state.timers.nextRoundAt = at;
+    return this.snapshots();
+  }
+
+  /**
+   * `nextRoundAt` came (it is set only while the game is on): the countdown is over, or the
+   * standings are. A countdown with no round lost it to a restart, and counts down again.
+   */
+  private tumbleTimer(): Outbound[] {
+    if (this.tumbleState().status !== "countdown") return this.tumbleAdvance();
+    if (this.round === null) return this.tumbleCountdown(true);
+    this.tumbleApply({ k: "play" });
+    return this.snapshots();
+  }
+
+  /**
+   * The round's clock, every 100 ms while it plays. Who is out and who won are decided here and
+   * only here, so boxes that go out within the same tick go out together (§4.4). `changed`: the
+   * slow state did, and the room must be saved.
+   */
+  tumbleTick(): { out: Outbound[]; changed: boolean } {
+    const round = this.round;
+    if (round === null || !this.tumblePlaying()) return { out: [], changed: false };
+    const now = this.now();
+    const out = this.roundOut(round.tick(now));
+    const result = round.result();
+    const known = this.tumbleState().outs;
+    const outs = result.outs.filter((seat) => !known.includes(seat));
+    for (const seat of outs) this.tumbleApply({ k: "out", seat });
+    if (result.over) {
+      this.countRound(round);
+      this.tumbleApply({ k: "end", winner: result.winner });
+      this.endRound();
+      if (this.tumbleState().status === "between") this.state.timers.nextRoundAt = now + TUMBLE_BETWEEN_MS;
+    }
+    const changed = outs.length > 0 || result.over;
+    return { out: changed ? [...out, ...this.snapshots()] : out, changed };
+  }
+
+  /** Each person who played the round has had their turn, for streaks (§5.1). */
+  private countRound(round: TumbleRound): void {
+    const { left } = this.tumbleState();
+    this.state.seats.forEach((seat, i) => {
+      if (round.kind(i) !== "human" || left[i] === true || !seat.playerId) return;
+      this.turnBy = seat.playerId;
+      this.queueStreak(false);
+    });
+  }
+
+  /** The host, 20 seconds into a wait: the missing seats sit out, and the countdown starts without them. */
+  private playWithout(deviceId: string): Outbound[] {
+    const s = this.tumbleState();
+    const waiting = s.status === "between" && s.waitingSince !== null && this.state.timers.nextRoundAt === null;
+    if (deviceId !== this.state.hostDeviceId || !waiting) return [this.fail(deviceId, "not_allowed")];
+    if (this.now() < (s.waitingSince as number) + TUMBLE_PLAY_WITHOUT_MS) return [this.fail(deviceId, "too_soon")];
+    this.state.seats.forEach((seat, i) => {
+      if (seat.kind === "human" && s.left[i] !== true && s.away[i] !== true && !this.seatConnected(i)) {
+        this.tumbleApply({ k: "away", seat: i, away: true });
+      }
+    });
+    const started = this.tumbleAdvance();
+    return started.length > 0 ? started : this.snapshots();
+  }
+
+  /**
+   * A seat left for good (its own Leave). The module ends the game with fewer than 2 seats left;
+   * the room ends it with no person left. Otherwise the round plays on without it.
+   */
+  private tumbleLeft(seat: Seat): void {
+    this.writers.delete(seat);
+    // Its box is out of the round at once; the snapshot's `left` tells every client.
+    this.round?.drop(seat, this.now());
+    if (this.state.status === "over") {
+      this.endRound();
+      return;
+    }
+    const { left } = this.tumbleState();
+    if (!this.state.seats.some((s, i) => s.kind === "human" && left[i] !== true)) {
+      this.tumbleApply({ k: "stop" });
+      return;
+    }
+    // It may have been the device a countdown was waiting for.
+    this.tumbleAdvance();
+  }
+
+  /**
+   * After a restart (a deploy, an eviction): a round counting down or playing was lost with the
+   * room's memory. It counts down again, as the same round with new seeds; the wins stand (§6.6).
+   */
+  restartRound(): Outbound[] {
+    if (!this.isTumble() || this.round !== null || this.state.status !== "playing") return [];
+    const { status } = this.tumbleState();
+    return status === "countdown" || status === "playing" ? this.tumbleCountdown(true) : [];
   }
 }

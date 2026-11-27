@@ -185,6 +185,22 @@ public struct BirdLayout: Equatable, Sendable {
 
     /// Where a card played by the cat at `spot` lands on the sill: toward its cat. `nil` is the
     /// bottom seat (this phone's hand).
+    /// The room a seat's name tag has on each side of its cat's middle, in points: to the screen's
+    /// edge (8 in), and to the sill (12 clear) where a tag `tagHeight` tall hangs level with it,
+    /// as the side seats do on a TV. A tag wider than both sides together is cut to fit; one wider
+    /// than its nearer side slides toward the other.
+    public func tagRoom(at index: Int, tagHeight: CGFloat) -> (left: CGFloat, right: CGFloat) {
+        guard seatSpots.indices.contains(index) else { return (0, 0) }
+        let spot = seatSpots[index]
+        var room = (left: spot.x - 8, right: size.width - spot.x - 8)
+        let middle = spot.y - catSide * 0.5 - tagHeight * 0.35
+        let level = middle + tagHeight / 2 > sill.minY && middle - tagHeight / 2 < sill.maxY
+        guard level, sill.width > 0 else { return room }
+        if spot.x < sill.minX { room.right = min(room.right, sill.minX - 12 - spot.x) }
+        if spot.x > sill.maxX { room.left = min(room.left, spot.x - sill.maxX - 12) }
+        return (max(room.left, 0), max(room.right, 0))
+    }
+
     public func sillSpot(toward spot: CGPoint?) -> CGPoint {
         // On a phone or iPad the bid chip and the trump badge ride the sill's top edge: the trick
         // keeps under them.

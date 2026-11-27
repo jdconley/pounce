@@ -8,7 +8,7 @@ import { DISH_APP, dishListed } from "./daily/games";
 import { dailyRoute, who as dailyPlayer } from "./daily/routes";
 import { dailyOn, devSpeed, tvAppLinksOn, tvOn } from "./env";
 import { active, forget, minted, pageView, parseReport, prune, reached, report } from "./funnel/funnel";
-import { DEFAULT_GAME, GAMES_HEADER, gamesListed, gamesOn, gameTitle, isGameId, type GameId } from "./games";
+import { DEFAULT_GAME, GAMES_HEADER, gamesFor, gamesOn, gameTitle, isGameId, type GameId } from "./games";
 import { asAppSocket, browserAnswer, isBrowserSocket } from "./http/browser-socket";
 import { appSiteAssociation, dailyPage, ogImage, pouncePage, sharePage, viewerOf } from "./http/links";
 import { mediaFile } from "./http/media";
@@ -168,8 +168,12 @@ async function mintDevice(request: Request, env: Env, secret: string, later: Lat
   return json(200, { deviceId, token: await issueDeviceToken(secret, deviceId) });
 }
 
-/** The games this request's app can draw (`X-Pounce-Games`): always Cat Tower, plus what it lists. */
-const appGames = (request: Request): GameId[] => gamesListed(request.headers.get(GAMES_HEADER));
+/**
+ * The games this request's app can draw (`X-Pounce-Games`): always Cat Tower, plus what it lists
+ * that its version is new enough for (`gamesFor`; a dev server skips the versions).
+ */
+const appGames = (request: Request, env: Env): GameId[] =>
+  gamesFor(request.headers.get(GAMES_HEADER), request.headers.get(APP_HEADER), devSpeed(env) > 1);
 
 /**
  * The same, less Cat Tower: what the device's index is told when the app opens a socket or
@@ -178,8 +182,8 @@ const appGames = (request: Request): GameId[] => gamesListed(request.headers.get
  * which is then what the device is known by. An app that has the Daily Dish lists `dish` there
  * too, which no table is a game of: only such a device is sent the Dish's reminder.
  */
-const declared = (request: Request): string[] => [
-  ...appGames(request).filter((id) => id !== DEFAULT_GAME),
+const declared = (request: Request, env: Env): string[] => [
+  ...appGames(request, env).filter((id) => id !== DEFAULT_GAME),
   ...(dishListed(request.headers.get(GAMES_HEADER)) ? [DISH_APP] : []),
 ];
 
@@ -235,7 +239,7 @@ async function createRoom(request: Request, env: Env, deviceId: string, later: L
   // Only a game the `GAMES` flag has turned on, and only for an app that can draw it.
   if (!body || !isGameId(body.game) || !gamesOn(env).includes(body.game)) return badRequest();
   const game = body.game;
-  if (!appGames(request).includes(game)) return badRequest();
+  if (!appGames(request, env).includes(game)) return badRequest();
   if (Object.keys(body).some((key) => key !== "game" && key !== "name" && key !== "screen")) return badRequest();
   // A TV makes a table with no host: the caller is its screen, and the first phone to sit hosts it.
   const screen = "screen" in body;
@@ -291,7 +295,7 @@ async function openSocket(request: Request, env: Env, deviceId: string, code: st
   headers.set(DEVICE_HEADER, deviceId);
   if (screen) headers.set(ROLE_HEADER, "screen");
   // The same call tells the device's index what this app can draw, before the room can push to it.
-  headers.set(PLAYER_HEADER, JSON.stringify(await devicePlayers(env, deviceId, declared(request), appVersion(request))));
+  headers.set(PLAYER_HEADER, JSON.stringify(await devicePlayers(env, deviceId, declared(request, env), appVersion(request))));
   return env.ROOMS.get(env.ROOMS.idFromName(code)).fetch(new Request(request, { headers }));
 }
 
@@ -428,10 +432,10 @@ async function setWebPush(request: Request, env: Env, deviceId: string): Promise
 async function listTables(request: Request, env: Env, deviceId: string, later: Later): Promise<Response> {
   later(active(env, deviceId, Date.now()).catch(() => undefined));
   const app = appVersion(request);
-  const { tables, all } = await deviceTableLists(env, deviceId, declared(request), app);
+  const { tables, all } = await deviceTableLists(env, deviceId, declared(request, env), app);
   // An app that said what it is also hears of the tables it was left out of, as `locked`: there
   // to say "update to join", never to open. An app that didn't gets the body it always got.
-  const locked = app === undefined ? [] : lockedFor(all, declared(request), gameTitle);
+  const locked = app === undefined ? [] : lockedFor(all, declared(request, env), gameTitle);
   return json(200, locked.length > 0 ? { tables, locked } : { tables });
 }
 
@@ -501,7 +505,7 @@ const getStreaks = asMe(async (request, env, _d, me) => {
   // While another game is on: a streak names its tables by code, and an app is told only of the
   // ones it can draw. Off, nothing is looked up and the answer is what it always was.
   const other = gamesOn(env).length > 1;
-  const [tables, games] = other ? [await player(env, me).listTables(), appGames(request)] : [[], []];
+  const [tables, games] = other ? [await player(env, me).listTables(), appGames(request, env)] : [[], []];
   const pairs = all.map((view) => withoutUndrawable(view, tables, games));
   // Your own streak, for Home's strip (trophy room design §1): only with TROPHY on.
   const own = trophyOn(env) ? await myOwn(env, me, now, pairs) : null;

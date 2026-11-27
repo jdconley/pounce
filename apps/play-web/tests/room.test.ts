@@ -211,6 +211,14 @@ describe("the room store (RoomStore.swift)", () => {
     expect(after.tiles?.opened).toEqual([false, true]);
   });
 
+  test("folding: a Cucumber's target is to be skipped until the skip comes", () => {
+    const three = room({ game: { ...game, pendingSkip: [false, false, false] } });
+    const aimed = foldEvent(three, { kind: "game", event: { kind: "discarded", seat: 0, card: 104, skipTarget: 2 } });
+    expect(aimed.game?.pendingSkip).toEqual([false, false, true]);
+    const skipped = foldEvent(aimed, { kind: "game", event: { kind: "skipped", seat: 2 } });
+    expect(skipped.game?.pendingSkip).toEqual([false, false, false]);
+  });
+
   describe("aims", () => {
     const aimSent = (s: FakeSocket) => s.sent.filter((m) => (m as { t: string }).t === "aim");
     const t = (group: number) => ({ target: { seat: 0, group } });

@@ -36,6 +36,31 @@ private func forEachRoomy(_ body: (TableLayout, CGRect, Int) -> Void) {
 
 @Suite("TableLayout, roomy")
 struct TableLayoutRoomyTests {
+    /// A laid row's name pill hangs up to `laidNameOverhang` past the row's left edge: there it is
+    /// still on the screen and clear of the folded tower, the sort button and the seat's name, on
+    /// every phone and iPad window, with one seat laid down or all six.
+    @Test func laidNamesStayClearOfTheTowerTab() {
+        let phones: [(CGSize, CGFloat, CGFloat)] = [
+            (CGSize(width: 375, height: 667), 20, 0), (CGSize(width: 390, height: 844), 59, 34),
+            (CGSize(width: 440, height: 956), 62, 34),
+        ]
+        for (size, top, bottom) in phones + roomy {
+            for opp in 1...5 {
+                let l = TableLayout(size: size, safeTop: top, safeBottom: bottom, opponents: opp)
+                for total in 1...6 {
+                    for slot in 0..<total {
+                        let row = l.laidRow(slot: slot, of: total)
+                        let reach = CGRect(x: row.minX - TableLayout.laidNameOverhang, y: row.minY, width: row.width + TableLayout.laidNameOverhang, height: row.height)
+                        #expect(reach.minX >= 0, "row \(slot) of \(total) off the screen at \(size)")
+                        for (name, r) in [("towerTab", l.towerTab), ("sort", l.sortButtonFrame), ("seatTag", l.seatTagFrame)] {
+                            #expect(!reach.intersects(r), "row \(slot) of \(total)'s name on the \(name) at \(size)")
+                        }
+                    }
+                }
+            }
+        }
+    }
+
     @Test func arrangementFollowsTheSpace() {
         #expect(TableLayout.arrangement(for: CGSize(width: 390, height: 844)) == .phone)
         #expect(TableLayout.arrangement(for: CGSize(width: 440, height: 956)) == .phone)
