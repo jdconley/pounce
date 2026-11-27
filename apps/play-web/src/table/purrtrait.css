@@ -517,6 +517,7 @@
 
 .purr-bar {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: 10px;
   width: 100%;
@@ -528,9 +529,9 @@
 /* The word never loses letters: as big as the width allows, and two lines for a long one. */
 .purr-word {
   min-width: 0;
-  font: 900 min(2rem, 8vw) / 1.05 var(--round);
+  /* Sized to its longest word, so a word never breaks, at any text size. */
+  font: 900 min(2rem, 8vw, calc(90vw / var(--len, 8))) / 1.05 var(--round);
   text-transform: uppercase;
-  overflow-wrap: anywhere;
   text-wrap: balance;
 }
 

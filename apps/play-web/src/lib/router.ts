@@ -95,15 +95,15 @@ if (typeof window !== "undefined") {
 }
 
 /**
- * What "Join with code" was typed: a room code, or a Purrtrait table's TV code (the room code and
- * the two letters after it, design §5.2). Null when it is neither.
+ * What "Join with code" was typed: a room code (5), or a Purrtrait table's TV code (8: the room
+ * code and the near key's first 3 letters, design §5.2). Null when it is neither.
  */
 export function typedCode(raw: string): { code: string; near?: string } | null {
   const clean = raw.toUpperCase().replace(/[^A-Z0-9]/g, "");
   const code = clean.slice(0, 5);
   if (!CODE.test(code)) return null;
   if (clean.length === 5) return { code };
-  if (clean.length === 7) return { code, near: clean };
+  if (clean.length === 8) return { code, near: clean };
   return null;
 }
 

@@ -27,7 +27,7 @@ export async function tvMakesPurrtrait(tv: Tv): Promise<string> {
     return (await tv.page.evaluate(() => localStorage.getItem("pounce.tv.room")))!;
   }
   const code = tv.page.locator(".tv-lobby .tv-code");
-  await expect(code).toHaveText(/^[A-Z0-9]{5} [A-Z0-9]{2}$/);
+  await expect(code).toHaveText(/^[A-Z0-9]{5} [A-Z0-9]{3}$/);
   return ((await code.textContent()) ?? "").trim().slice(0, 5);
 }
 

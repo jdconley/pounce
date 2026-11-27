@@ -228,7 +228,7 @@ for (const size of PHONES) {
   await shot("removed");
 
   await page.goto(`${BASE}/play/join`);
-  await page.getByLabel("Table code").fill("BCDFGKQ");
+  await page.getByLabel("Table code").fill("BCDFGKQ2");
   await shot("join-code");
   await ctx.close();
 }
@@ -260,7 +260,7 @@ for (const size of TVS) {
     await wake.click();
     await page.waitForTimeout(wait);
   };
-  const near = { key: "KQ2X7MNP", code: "BCDFGKQ", expiresIn: 30_000 };
+  const near = { key: "KQ2X7MNP", code: "BCDFGKQ2", expiresIn: 30_000 };
   await open([snap(room({ status: "lobby", players: 5, near }))]);
   await shot("tv-lobby");
   await open([snap(room({ status: "lobby", players: 10, near }))]);

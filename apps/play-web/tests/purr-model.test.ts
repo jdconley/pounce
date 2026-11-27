@@ -123,7 +123,7 @@ describe("what the screens say", () => {
 
   test("the easel link and the typed code", () => {
     expect(easelLink("https://play.conleychaos.com", "BCDFG", "KQ2X7MNP")).toBe("https://play.conleychaos.com/e/BCDFG?near=KQ2X7MNP");
-    expect(spacedCode("BCDFGKQ", "BCDFG")).toBe("BCDFG KQ");
+    expect(spacedCode("BCDFGKQ2", "BCDFG")).toBe("BCDFG KQ2");
   });
 });
 

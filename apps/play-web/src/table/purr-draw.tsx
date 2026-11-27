@@ -227,7 +227,7 @@ function DrawScreen(props: Props) {
       style={{ ["--swatch" as string]: `${L.swatch}px`, ["--bar" as string]: `${L.bar}px` }}
     >
       <header class="purr-bar">
-        <span class="purr-word outlined" id="purr-word">
+        <span class="purr-word outlined" id="purr-word" style={{ ["--len" as string]: Math.max(4, ...(v.word ?? "").split(" ").map((w) => w.length)) }}>
           {v.word}
         </span>
         {left !== null ? <span class={`purr-clock-chip ${low ? "low" : ""}`} id="purr-clock">{clock(left)}</span> : null}
