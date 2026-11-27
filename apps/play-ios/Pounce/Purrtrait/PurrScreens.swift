@@ -496,7 +496,9 @@ struct PurrGotItSheet: View {
     }
 }
 
-/// Game over: the winners' cats, everyone's score, Play again and Home.
+/// Game over: the winners' cats, everyone's score, Play again and Home. A phone stacks them; an
+/// iPad sizes everything up, and in a wide window puts the winners and the buttons beside the
+/// scores.
 struct PurrOverView: View {
     enum Again: Equatable { case ask, waiting, go, off }
 
@@ -505,15 +507,34 @@ struct PurrOverView: View {
     var onPlayAgain: () -> Void = {}
     let onHome: () -> Void
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.horizontalSizeClass) private var sizeClass
     @State private var appeared = false
 
     var body: some View {
         ZStack {
             Palette.ink.opacity(0.72).ignoresSafeArea()
-            ViewThatFits(in: .vertical) {
-                column(cat: 130)
-                column(cat: 80)
-                ScrollView { column(cat: 80) }
+            if sizeClass == .regular {
+                // The biggest sizes that fit the window, worked out rather than measured: the
+                // lettering shrinks to fit, so a measured layout that was too tall would still
+                // "fit", with the names at half size. A crowd that outgrows even the phone's
+                // sizes scrolls.
+                GeometryReader { geo in
+                    let side = Roomy.sideBySide(geo.size)
+                    let s = [OverSizes.pad, .padSnug].first { needed($0, wide: side) <= geo.size.height } ?? .phone
+                    ScrollView {
+                        Group {
+                            if side { wide(s) } else { column(s, across: geo.size.width) }
+                        }
+                        .frame(maxWidth: .infinity, minHeight: geo.size.height)
+                    }
+                    .scrollBounceBehavior(.basedOnSize)
+                }
+            } else {
+                ViewThatFits(in: .vertical) {
+                    column(.phone)
+                    column(.phoneSnug)
+                    ScrollView { column(.phoneSnug) }
+                }
             }
         }
         .onAppear {
@@ -525,58 +546,138 @@ struct PurrOverView: View {
         .accessibilityIdentifier("screen-purr-over")
     }
 
-    private func column(cat: CGFloat) -> some View {
-        let winners = table.view.winners
-        return VStack(spacing: 14) {
-            HStack(spacing: -18) {
-                ForEach(winners, id: \.self) { seat in
-                    Image(ArtName.cat(SeatInfo.catIndex(table.room.seats[safe: seat]), .celebrate))
-                        .resizable().scaledToFit().frame(width: cat, height: cat)
-                }
+    private var winners: [Seat] { table.view.winners }
+
+    /// About how tall a layout with sizes `s` is: the cats, two lines of title, the scores, the
+    /// buttons, and the space between (wide: the taller of its two sides).
+    private func needed(_ s: OverSizes, wide: Bool) -> CGFloat {
+        let rows = CGFloat(table.standings.count)
+        let card = rows * s.rowCat + max(rows - 1, 0) * s.rowGap + 2 * s.cardPad + 8
+        let left = s.cat + s.title * 2.6 + s.pill.height + 12 + 2 * s.gap
+        return (wide ? max(left, card) : left + card + s.gap) + 48
+    }
+
+    /// `across`: the window's width, on an iPad: the scores take their full width there, so a
+    /// name never shrinks to fit a card sized to its words.
+    private func column(_ s: OverSizes, across: CGFloat? = nil) -> some View {
+        VStack(spacing: s.gap) {
+            cats(s)
+            title(s)
+            if let across {
+                scores(s).frame(width: min(s.width, across - 40))
+            } else {
+                scores(s)
             }
-            .scaleEffect(appeared || reduceMotion ? 1 : 0.6)
-            .accessibilityHidden(true)
-            OutlinedText(PurrWords.winners(winners.map { SeatInfo.name(table.room, $0) }), size: 34, fill: Palette.orange, width: 5, lines: 2)
-                .accessibilityAddTraits(.isHeader)
-                .accessibilityIdentifier("purr.over.title")
-            VStack(spacing: 6) {
-                ForEach(Array(table.standings.enumerated()), id: \.element.seat) { place, row in
-                    HStack(spacing: 10) {
-                        Image(ArtName.cat(SeatInfo.catIndex(table.room.seats[safe: row.seat]), .idle))
-                            .resizable().scaledToFit().frame(width: 34, height: 34)
-                        OutlinedText(SeatInfo.name(table.room, row.seat), size: 18, alignment: .leading)
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                        OutlinedText("\(row.score)", size: 24, fill: winners.contains(row.seat) ? Palette.yellow : .white)
-                    }
-                    .accessibilityElement(children: .ignore)
-                    .accessibilityLabel(Text(verbatim: "\(place + 1). \(SeatInfo.name(table.room, row.seat)), \(row.score)"))
-                }
-            }
-            .padding(14)
-            .background(RoundedRectangle(cornerRadius: 22).fill(Palette.night).overlay(RoundedRectangle(cornerRadius: 22).strokeBorder(Palette.ink, lineWidth: 4)))
-            if again == .off {
-                OutlinedText(String(localized: "This game is off for now.", comment: "Purrtrait game over: Play again was refused"), size: 17, fill: Palette.orange, lines: 3)
-            }
-            HStack(spacing: 14) {
-                if let again, again != .off {
-                    PillButton(
-                        icon: ArtName.iconPlay, color: again == .waiting ? Palette.violet : Palette.orange, size: .medium, width: 210,
-                        title: again == .go
-                            ? String(localized: "Join", comment: "Game over: someone dealt the next table; join it")
-                            : again == .waiting
-                                ? String(localized: "Dealing…", comment: "Game over: Play again was asked and the server hasn't answered")
-                                : String(localized: "Play again", comment: "Game over: deal a new table with the same players"),
-                        accessibilityLabel: again == .go ? "Join the new game" : "Play again", action: onPlayAgain)
-                        .accessibilityIdentifier("purr.over.again")
-                }
-                PillButton(icon: ArtName.iconHome, color: Palette.sky, size: .medium, width: again == nil || again == .off ? 200 : 84,
-                           title: again == nil || again == .off ? String(localized: "Home", comment: "Game over: back to Home") : nil,
-                           accessibilityLabel: "Home", action: onHome)
-                    .accessibilityIdentifier("purr.over.home")
-            }
+            buttons(s)
         }
-        .frame(maxWidth: 460)
+        .frame(maxWidth: s.width)
         .padding(.horizontal, 20)
         .padding(.vertical, 24)
     }
+
+    /// A wide window: the winners, the title and the buttons on the left; the scores on the right.
+    private func wide(_ s: OverSizes) -> some View {
+        HStack(alignment: .center, spacing: 48) {
+            VStack(spacing: s.gap) {
+                cats(s)
+                title(s)
+                buttons(s)
+            }
+            .frame(maxWidth: 480)
+            scores(s)
+                .frame(maxWidth: s.width)
+        }
+        .padding(.horizontal, 40)
+        .padding(.vertical, 24)
+    }
+
+    private func cats(_ s: OverSizes) -> some View {
+        HStack(spacing: -s.cat * 0.14) {
+            ForEach(winners, id: \.self) { seat in
+                Image(ArtName.cat(SeatInfo.catIndex(table.room.seats[safe: seat]), .celebrate))
+                    .resizable().scaledToFit().frame(width: s.cat, height: s.cat)
+            }
+        }
+        .scaleEffect(appeared || reduceMotion ? 1 : 0.6)
+        .accessibilityHidden(true)
+    }
+
+    private func title(_ s: OverSizes) -> some View {
+        OutlinedText(PurrWords.winners(winners.map { SeatInfo.name(table.room, $0) }), size: s.title, fill: Palette.orange, width: s.title / 7, lines: 2)
+            .accessibilityAddTraits(.isHeader)
+            .accessibilityIdentifier("purr.over.title")
+    }
+
+    private func scores(_ s: OverSizes) -> some View {
+        VStack(spacing: s.rowGap) {
+            ForEach(Array(table.standings.enumerated()), id: \.element.seat) { place, row in
+                HStack(spacing: s.rowCat * 0.3) {
+                    Image(ArtName.cat(SeatInfo.catIndex(table.room.seats[safe: row.seat]), .idle))
+                        .resizable().scaledToFit().frame(width: s.rowCat, height: s.rowCat)
+                    OutlinedText(SeatInfo.name(table.room, row.seat), size: s.rowName, width: s.rowName / 7, alignment: .leading)
+                        .fixedSize(horizontal: s.roomy, vertical: true)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                    OutlinedText("\(row.score)", size: s.rowScore, fill: winners.contains(row.seat) ? Palette.yellow : .white, width: s.rowScore / 7)
+                        .fixedSize()
+                }
+                .accessibilityElement(children: .ignore)
+                .accessibilityLabel(Text(verbatim: "\(place + 1). \(SeatInfo.name(table.room, row.seat)), \(row.score)"))
+            }
+        }
+        .padding(s.cardPad)
+        .background(RoundedRectangle(cornerRadius: s.cardPad * 1.6).fill(Palette.night)
+            .overlay(RoundedRectangle(cornerRadius: s.cardPad * 1.6).strokeBorder(Palette.ink, lineWidth: s.cardPad > 16 ? 5 : 4)))
+    }
+
+    @ViewBuilder private func buttons(_ s: OverSizes) -> some View {
+        if again == .off {
+            OutlinedText(String(localized: "This game is off for now.", comment: "Purrtrait game over: Play again was refused"), size: s.rowName - 1, fill: Palette.orange, lines: 3)
+        }
+        HStack(spacing: 14) {
+            if let again, again != .off {
+                PillButton(
+                    icon: ArtName.iconPlay, color: again == .waiting ? Palette.violet : Palette.orange, size: s.pill, width: s.againWidth,
+                    title: again == .go
+                        ? String(localized: "Join", comment: "Game over: someone dealt the next table; join it")
+                        : again == .waiting
+                            ? String(localized: "Dealing…", comment: "Game over: Play again was asked and the server hasn't answered")
+                            : String(localized: "Play again", comment: "Game over: deal a new table with the same players"),
+                    accessibilityLabel: again == .go ? "Join the new game" : "Play again", action: onPlayAgain)
+                    .accessibilityIdentifier("purr.over.again")
+            }
+            PillButton(icon: ArtName.iconHome, color: Palette.sky, size: s.pill, width: again == nil || again == .off ? s.homeWidth : s.homeIconWidth,
+                       title: again == nil || again == .off ? String(localized: "Home", comment: "Game over: back to Home") : nil,
+                       accessibilityLabel: "Home", action: onHome)
+                .accessibilityIdentifier("purr.over.home")
+        }
+    }
+}
+
+/// Game over's sizes: a phone's (and a tighter one for a crowd), an iPad's (and its tighter one).
+struct OverSizes {
+    let cat: CGFloat
+    let title: CGFloat
+    let gap: CGFloat
+    let rowCat: CGFloat
+    let rowName: CGFloat
+    let rowScore: CGFloat
+    let rowGap: CGFloat
+    let cardPad: CGFloat
+    let pill: PillSize
+    let againWidth: CGFloat
+    let homeWidth: CGFloat
+    let homeIconWidth: CGFloat
+    let width: CGFloat
+    /// An iPad's: the card has room for any name at full size, so a name never shrinks sideways.
+    /// (A row's name never shrinks to its height on any device: it used to, by half on an iPad.)
+    var roomy: Bool { rowName > 20 }
+
+    static let phone = OverSizes(cat: 130, title: 34, gap: 14, rowCat: 34, rowName: 18, rowScore: 24, rowGap: 6, cardPad: 14,
+                                 pill: .medium, againWidth: 210, homeWidth: 200, homeIconWidth: 84, width: 460)
+    static let phoneSnug = OverSizes(cat: 80, title: 34, gap: 14, rowCat: 34, rowName: 18, rowScore: 24, rowGap: 6, cardPad: 14,
+                                     pill: .medium, againWidth: 210, homeWidth: 200, homeIconWidth: 84, width: 460)
+    static let pad = OverSizes(cat: 220, title: 54, gap: 26, rowCat: 64, rowName: 32, rowScore: 42, rowGap: 12, cardPad: 26,
+                               pill: .large, againWidth: 300, homeWidth: 280, homeIconWidth: 116, width: 640)
+    static let padSnug = OverSizes(cat: 160, title: 46, gap: 20, rowCat: 50, rowName: 26, rowScore: 34, rowGap: 8, cardPad: 22,
+                                   pill: .large, againWidth: 280, homeWidth: 260, homeIconWidth: 110, width: 600)
 }
