@@ -82,7 +82,7 @@ describe("creating a Birdwatch table", { timeout: 30_000 }, () => {
       ((await (await call(mf, phone, "GET", "/v1/devices/me/tables", undefined, NEW_APP)).json()) as { tables: TableEntry[] }).tables.find((t) => t.code === code);
     expect(await eventually(entry, (t) => t?.seats?.[0]?.kind === "human")).toMatchObject({ game: "birdwatch", options: { rules: "official" } });
     me.send({ t: "setOptions", options: { rules: "friesen" } });
-    expect(await eventually(entry, (t) => t?.options?.rules === "friesen")).toMatchObject({ game: "birdwatch", status: "lobby" });
+    expect(await eventually(entry, (t) => t?.options !== undefined && "rules" in t.options && t.options.rules === "friesen")).toMatchObject({ game: "birdwatch", status: "lobby" });
   });
 });
 
