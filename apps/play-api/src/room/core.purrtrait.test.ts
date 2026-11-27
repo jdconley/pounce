@@ -969,3 +969,306 @@ describe("near keys (design §5.2, ruling 12)", () => {
     expect(r.state.screens).toEqual(["tv", "tv2"]);
   });
 });
+
+/* The host's seat menu, the host's role, and what a same-room table refuses (design §10.2, rulings 10, 11, 14, 17). */
+
+const FEATURES = { games: ["cat-tower", "purrtrait"] as const, tv: true, streaks: true, live: true, nudge: true };
+const players = (n: number) => ({ [person(n).id]: player(n) });
+
+/** A lobby with its TV: "a" (the host), "b" and "c" sit in seats 0 to 2, each a signed-in player. */
+function lobby3(game?: RoomGame<PurrState>): Room {
+  const state = RoomCore.create<PurrState>("BCDFG", "a", clock, undefined, undefined, "purrtrait");
+  const r = new RoomCore<PurrState>(state, () => clock, rng, game, 1, FEATURES);
+  r.addScreen("tv");
+  r.connect("tv");
+  ["a", "b", "c"].forEach((d, i) => r.connect(d, players(i + 1)));
+  ["a", "b", "c"].forEach((d, i) => {
+    if (i === 2) r.handle("a", { t: "configure", seat: 2, kind: "open" });
+    expect(errorsOf(r.handle(d, { t: "claim", seat: i, person: person(i + 1) }))).toEqual([]);
+  });
+  return r;
+}
+
+/** `lobby3`, started: seat 0 ("a") draws first. */
+function game3(g?: RoomGame<PurrState>): Room {
+  const r = lobby3(g);
+  expect(errorsOf(r.handle("a", { t: "start" }))).toEqual([]);
+  return r;
+}
+
+const remove = (r: Room, device: string, seat: number) => r.handle(device, { t: "remove", seat } as ClientMessage);
+const eventsOf = (out: Outbound[], to: string) =>
+  out.flatMap((o) => (o.to === to && o.message.t === "event" ? [o.message.event] : [])) as { kind: string; event?: { type: string; reason?: string } }[];
+
+/** Plays the game to its end: each drawer picks Easy and the next seat in guesses it. */
+function playOut(r: Room, deviceOf: (seat: number) => string, before?: () => void): void {
+  for (let step = 0; step < 500 && game(r).phase !== "over"; step++) {
+    const s = game(r);
+    const drawer = s.drawer as number;
+    if (s.phase === "choosing") act(r, deviceOf(drawer), drawer, { type: "choose", level: "easy" });
+    else if (s.phase === "drawing") {
+      const guesser = [1, 2, 3, 4, 5, 6, 7, 8, 9].map((k) => (drawer + k) % s.seats).find((g) => !s.out[g]) as number;
+      act(r, deviceOf(drawer), drawer, { type: "gotIt", seat: guesser });
+    } else {
+      before?.();
+      clock += 10_000;
+      r.tick();
+    }
+  }
+  expect(game(r).phase).toBe("over");
+}
+
+describe("remove (design §10.2, ruling 10)", () => {
+  it("remove in the lobby opens the seat and the device is refused after", () => {
+    const r = lobby3();
+    const seq = r.state.seq;
+    const out = remove(r, "a", 2);
+    expect(errorsOf(out)).toEqual([]);
+    expect(r.state.seats[2]).toEqual({ kind: "open" });
+    expect(r.state.removed).toEqual({ devices: ["c"], players: [player(3)] });
+    expect(r.isRemoved("c")).toBe(true);
+    // Gone from the room: it hears nothing more, and everyone else sees the open seat.
+    expect(r.state.devices.c).toBeUndefined();
+    expect(out.some((o) => o.to === "c")).toBe(false);
+    expect(r.state.seq).toBeGreaterThan(seq);
+    expect(out.filter((o) => o.message.t === "snapshot").map((o) => o.to).sort()).toEqual(["a", "b", "tv"]);
+    // It needs no near key to be told it was removed (the room refuses it), and is never counted.
+    expect(r.knows("c", null, false)).toBe("member");
+    // Its player can't sit again from another device.
+    r.connect("c2", players(3));
+    expect(errorsOf(r.handle("c2", { t: "claim", seat: 2, person: person(3) }))).toEqual(["removed"]);
+    // Somebody else can.
+    r.connect("d", players(4));
+    expect(errorsOf(r.handle("d", { t: "claim", seat: 2, person: person(4) }))).toEqual([]);
+    // Kept in storage: a woken room still knows.
+    expect(rebuild(r).isRemoved("c")).toBe(true);
+  });
+
+  it("remove in a game skips the seat; Play again keeps it out", () => {
+    const r = game3();
+    // Seat 1 ("b") is drawing when the host removes it: the turn ends with no points, as if it left.
+    act(r, "a", 0, { type: "choose", level: "easy" });
+    act(r, "a", 0, { type: "gotIt", seat: 1 });
+    clock += 10_000;
+    r.tick();
+    act(r, "b", 1, { type: "choose", level: "easy" });
+    expect(game(r)).toMatchObject({ phase: "drawing", drawer: 1 });
+    const out = remove(r, "a", 1);
+    expect(errorsOf(out)).toEqual([]);
+    expect(eventsOf(out, "tv").find((e) => e.kind === "purrtrait" && e.event?.type === "missed")?.event).toMatchObject({ type: "missed", reason: "left" });
+    expect(game(r).out[1]).toBe(true);
+    expect(game(r).phase).toBe("reveal");
+    expect(r.state.removed).toEqual({ devices: ["b"], players: [player(2)] });
+    // From then on the seat is skipped: it never draws, and never guesses.
+    const score = game(r).scores[1];
+    playOut(r, (seat) => {
+      expect(seat).not.toBe(1);
+      return ["a", "b", "c"][seat] as string;
+    });
+    expect(game(r).scores[1]).toBe(score);
+    // Play again leaves the removed seat and device out, and carries the list.
+    r.handle("c", { t: "rematch" });
+    const spec = r.drainRematch() as NonNullable<ReturnType<Room["drainRematch"]>>;
+    expect(spec.seats.map((s) => s.deviceId)).toEqual(["c", "a"]);
+    expect(spec.members?.sort()).toEqual(["a", "c"]);
+    expect(spec.removed).toEqual({ devices: ["b"], players: [player(2)] });
+    const next = new RoomCore<PurrState>(RoomCore.rematchState<PurrState>("CDFGH", spec, clock), () => clock, rng, undefined, 1, FEATURES);
+    expect(next.state.removed).toEqual(spec.removed);
+    expect(next.isRemoved("b")).toBe(true);
+    // Not even into a seat opened for them on the new table, from another device.
+    next.connect("c", players(3));
+    expect(errorsOf(next.handle("c", { t: "configure", seat: 2, kind: "open" }))).toEqual([]);
+    next.connect("b2", players(2));
+    expect(errorsOf(next.handle("b2", { t: "claim", seat: 2, person: person(2) }))).toEqual(["removed"]);
+  });
+
+  it("Play again with too few people left after a remove is not_enough_players", () => {
+    const r = started();
+    expect(errorsOf(remove(r, "a", 1))).toEqual([]);
+    expect(r.state.status).toBe("over");
+    expect(errorsOf(r.handle("a", { t: "rematch" }))).toEqual(["not_enough_players"]);
+    expect(r.drainRematch()).toBeNull();
+    expect(r.state.rematch).toBeUndefined();
+  });
+
+  it("removing a seat that already left lists it, and changes nothing in the game", () => {
+    const r = game3();
+    act(r, "c", 2, { type: "forfeit" });
+    const before = JSON.stringify(game(r));
+    expect(errorsOf(remove(r, "a", 2))).toEqual([]);
+    expect(JSON.stringify(game(r))).toBe(before);
+    expect(r.state.removed).toEqual({ devices: ["c"], players: [player(3)] });
+  });
+
+  it("a non-host remove is not_allowed, and so is one at a table of another game", () => {
+    const r = lobby3();
+    expect(errorsOf(remove(r, "b", 2))).toEqual(["not_allowed"]);
+    expect(errorsOf(remove(r, "tv", 2))).toEqual(["not_allowed"]);
+    expect(errorsOf(remove(r, "w", 2))).toEqual(["not_allowed"]);
+    expect(r.state.removed).toBeUndefined();
+    // The host's own seat, an open or closed seat, or none at all: bad_seat.
+    expect(errorsOf(remove(r, "a", 0))).toEqual(["bad_seat"]);
+    expect(errorsOf(remove(r, "a", 3))).toEqual(["bad_seat"]);
+    expect(errorsOf(remove(r, "a", 10))).toEqual(["bad_seat"]);
+    const tower = new RoomCore(RoomCore.create("BCDFG", "a", clock), () => clock, rng);
+    tower.connect("a");
+    tower.connect("b");
+    tower.handle("a", { t: "claim", seat: 0, person: person(1) });
+    tower.handle("b", { t: "claim", seat: 1, person: person(2) });
+    expect(errorsOf(tower.handle("a", { t: "remove", seat: 1 } as ClientMessage))).toEqual(["not_allowed"]);
+    expect(tower.state.seats[1]?.kind).toBe("human");
+  });
+
+  it("a device that holds another seat stays; only the removed player is refused", () => {
+    const r = lobby3();
+    // "b" also seats a second person, on the same phone.
+    r.connect("b", { ...players(2), ...players(5) });
+    r.handle("a", { t: "configure", seat: 3, kind: "open" });
+    expect(errorsOf(r.handle("b", { t: "claim", seat: 3, person: person(5) }))).toEqual([]);
+    expect(errorsOf(remove(r, "a", 1))).toEqual([]);
+    expect(r.state.removed).toEqual({ devices: [], players: [player(2)] });
+    expect(r.isRemoved("b")).toBe(false);
+    expect(r.state.seats[3]?.kind).toBe("human");
+    expect(errorsOf(r.handle("b", { t: "claim", seat: 1, person: person(2) }))).toEqual(["removed"]);
+  });
+});
+
+describe("the host's role (ruling 11)", () => {
+  const host = (r: Room) => r.state.hostDeviceId;
+
+  it("the host leaving hands the role to the next seated person", () => {
+    const r = lobby3();
+    expect(errorsOf(r.handle("a", { t: "leave", seat: 0 }))).toEqual([]);
+    expect(host(r)).toBe("b");
+    expect(r.snapshotFor("b").room.youAreHost).toBe(true);
+    expect(r.snapshotFor("a").room.youAreHost).toBe(false);
+    // In seat order from the seat that left, round to the start.
+    r.handle("a", { t: "claim", seat: 0, person: person(1) });
+    r.handle("b", { t: "leave", seat: 1 });
+    expect(host(r)).toBe("c");
+    r.handle("c", { t: "leave", seat: 2 });
+    expect(host(r)).toBe("a");
+    // Nobody seated: no host, and the next phone to sit is it.
+    r.handle("a", { t: "leave", seat: 0 });
+    expect(host(r)).toBe("");
+    r.handle("c", { t: "claim", seat: 2, person: person(3) });
+    expect(host(r)).toBe("c");
+  });
+
+  it("in a game, the host's seat leaving hands the role to the next seat still in", () => {
+    const r = game3();
+    act(r, "b", 1, { type: "forfeit" });
+    expect(host(r)).toBe("a");
+    expect(errorsOf(act(r, "a", 0, { type: "forfeit" }))).toEqual([]);
+    // Seat 1 is out, so seat 2.
+    expect(host(r)).toBe("c");
+    expect(r.state.status).toBe("over");
+  });
+
+  it("a host with another seat still in keeps the role, and other games keep their host", () => {
+    const r = lobby3();
+    r.connect("a", { ...players(1), ...players(6) });
+    r.handle("a", { t: "configure", seat: 3, kind: "open" });
+    r.handle("a", { t: "claim", seat: 3, person: person(6) });
+    r.handle("a", { t: "leave", seat: 0 });
+    expect(host(r)).toBe("a");
+    const tower = new RoomCore(RoomCore.create("BCDFG", "a", clock), () => clock, rng);
+    tower.connect("a");
+    tower.connect("b");
+    tower.handle("a", { t: "claim", seat: 0, person: person(1) });
+    tower.handle("b", { t: "claim", seat: 1, person: person(2) });
+    tower.handle("a", { t: "leave", seat: 0 });
+    expect(tower.state.hostDeviceId).toBe("a");
+  });
+});
+
+describe("the drawer's second device (review focus 3)", () => {
+  it("the drawer's second device gets the guesser view after the pick and its ink is dropped", () => {
+    const r = drawing();
+    const turn = turnOf(r);
+    // The family iPad sees what a guesser sees: no choices, no word, not its turn to draw.
+    expect(viewOf(r, "a2")).toEqual(viewOf(r, "w"));
+    expect(viewOf(r, "a2").choices).toBeUndefined();
+    // The drawer's lines reach the screen and the drawer's own device, never the iPad.
+    expect(inkTo(ink(r, "a", 0, turn, [dot(0)]))).toEqual(["tv", "a"]);
+    // The iPad's ink is dropped: nothing relayed, nothing kept.
+    expect(ink(r, "a2", 0, turn, [dot(1)])).toEqual([]);
+    expect(only(r.connect("tv"), "inkSync").map((o) => (o.message as { ops: unknown[] }).ops)).toEqual([[dot(0)]]);
+    // Reconnecting, it gets no drawing.
+    expect(only(r.connect("a2", { [person(1).id]: player(1) }), "inkSync")).toEqual([]);
+  });
+});
+
+describe("what a same-room table refuses (ruling 14)", () => {
+  it("moveSeat, claimMove, nudge, retire and bot seats are not_allowed", () => {
+    const r = lobby3();
+    expect(errorsOf(r.handle("b", { t: "moveSeat", seat: 1 }))).toEqual(["not_allowed"]);
+    expect(Object.keys(r.state.moveCodes)).toEqual([]);
+    expect(errorsOf(r.handle("w", { t: "claimMove", code: "BCDFGH" }))).toEqual(["not_allowed"]);
+    r.handle("a", { t: "configure", seat: 3, kind: "open" });
+    expect(errorsOf(r.handle("a", { t: "configure", seat: 3, kind: "bot" }))).toEqual(["not_allowed"]);
+    expect(r.state.seats[3]?.kind).toBe("open");
+    expect(errorsOf(r.handle("a", { t: "configure", seat: 3, kind: "closed" }))).toEqual([]);
+    expect(errorsOf(r.handle("a", { t: "start" }))).toEqual([]);
+    // Long after the turn began: still nothing to nudge or retire.
+    clock += 4 * 24 * 60 * 60_000;
+    expect(errorsOf(r.handle("b", { t: "nudge", seat: 0 }))).toEqual(["not_allowed"]);
+    expect(errorsOf(r.handle("b", { t: "retire", seat: 0 }))).toEqual(["not_allowed"]);
+    expect(r.snapshotFor("b").room.nudge).toBeUndefined();
+    expect(r.snapshotFor("b").room.retire).toBeUndefined();
+    expect(game(r).out).toEqual([false, false, false]);
+  });
+
+  it("no push, live or invite intent is queued, through a whole game", () => {
+    /** Every seat's phone goes to the background between turns, one by one, so a Cat Tower table would push and go live. */
+    const away = (r: Room) => () => {
+      for (const d of ["a", "b", "c"]) r.handle(d, { t: "presence", state: "background" });
+    };
+    const drained = (r: Room) => ({
+      push: r.drainPushIntents(),
+      live: r.drainLiveIntents(),
+      nudge: r.drainNudgeIntents(),
+      retire: r.drainRetireIntents(),
+    });
+    const r = game3();
+    away(r)();
+    playOut(r, (seat) => ["a", "b", "c"][seat] as string, away(r));
+    for (const d of ["b", "c"]) r.handle(d, { t: "presence", state: "background" });
+    clock += 4 * 24 * 60 * 60_000;
+    r.tick();
+    expect(drained(r)).toEqual({ push: [], live: [], nudge: [], retire: [] });
+    expect(r.state.live).toBeUndefined();
+    // The same game at a table that isn't same-room queues both: the filter is what keeps them out.
+    const open = game3({ ...(purrtrait as unknown as RoomGame<PurrState>), sameRoom: false });
+    away(open)();
+    playOut(open, (seat) => ["a", "b", "c"][seat] as string, away(open));
+    const control = drained(open);
+    expect(control.push.length).toBeGreaterThan(0);
+    expect(control.live.length).toBeGreaterThan(0);
+  });
+});
+
+describe("start (ruling 17)", () => {
+  it("start needs the screen (no_screen) and 2 seats filled (not_enough_players); open seats don't hold it up", () => {
+    const state = RoomCore.create<PurrState>("BCDFG", "", clock, undefined, undefined, "purrtrait", "tv");
+    const r = new RoomCore<PurrState>(state, () => clock, rng, undefined, 1, FEATURES);
+    r.connect("a");
+    r.connect("b");
+    r.handle("a", { t: "claim", seat: 0, person: person(1) });
+    expect(errorsOf(r.handle("a", { t: "start" }))).toEqual(["not_enough_players"]);
+    r.handle("b", { t: "claim", seat: 1, person: person(2) });
+    // A TV-made table whose TV never came: no screen.
+    expect(errorsOf(r.handle("a", { t: "start" }))).toEqual(["no_screen"]);
+    r.connect("tv");
+    r.disconnect("tv");
+    // Within the grace the table is still shown, after it not.
+    clock += SCREEN_GRACE_MS;
+    expect(errorsOf(r.handle("a", { t: "start" }))).toEqual(["no_screen"]);
+    r.connect("tv");
+    // An open seat waiting for a phone is dropped at the start.
+    r.handle("a", { t: "configure", seat: 2, kind: "open" });
+    expect(errorsOf(r.handle("a", { t: "start" }))).toEqual([]);
+    expect(game(r).seats).toBe(2);
+    expect(r.state.seats).toHaveLength(2);
+  });
+});

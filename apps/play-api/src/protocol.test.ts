@@ -501,3 +501,12 @@ describe("ink (Purrtrait, design §6.2)", () => {
     expect(parse({ t: "ink", seat: 0, turn: "1:0", ops: [["p", 0, ...deltas]] })).toEqual(BAD);
   });
 });
+
+describe("remove (Purrtrait, design §10.2)", () => {
+  it("takes a seat and nothing else", () => {
+    expect(parse({ t: "remove", seat: 4 })).toEqual({ t: "remove", seat: 4 });
+    for (const v of [{ t: "remove" }, { t: "remove", seat: -1 }, { t: "remove", seat: 1.5 }, { t: "remove", seat: "1" }, { t: "remove", seat: 1, device: "x" }]) {
+      expect(parse(v)).toEqual(BAD);
+    }
+  });
+});

@@ -181,7 +181,13 @@ export type ClientMessage =
    * `last`: the final message of a reply to `inkResend` (the reply is exempt from the rate limit
    * until it); never relayed.
    */
-  | { t: "ink"; seat: Seat; turn: string; ops: InkOp[]; last?: true };
+  | { t: "ink"; seat: Seat; turn: string; ops: InkOp[]; last?: true }
+  /**
+   * Purrtrait: the host takes `seat` from its person (design §10.2): in the lobby the seat opens,
+   * in a game it is skipped from then on. Its device and player stay out, Play again too. Errors:
+   * `not_allowed` (not the host, or a table of another game), `bad_seat`.
+   */
+  | { t: "remove"; seat: Seat };
 
 /** Every `error` code the server sends. */
 export type ErrorCode =
@@ -314,6 +320,7 @@ function parseObject(o: Obj, parsers: Parsers): ClientMessage | BadMessage | nul
       return { t: "presence", state: o.state };
     case "leave":
     case "moveSeat":
+    case "remove":
       if (!hasKeys(o, ["t", "seat"]) || !isInt(o.seat, 0)) return null;
       return { t: o.t, seat: o.seat };
     case "configure":
