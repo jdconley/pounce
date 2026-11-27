@@ -379,19 +379,55 @@
   paint-order: stroke fill;
 }
 
-.seat-avatar .skip,
 .seat-avatar .laid {
   position: absolute;
+  top: -4%;
   left: -10%;
   width: 36%;
 }
 
-.seat-avatar .skip {
-  bottom: -4%;
+/* Pickled: a cucumber-green ring round the seat's own, a terrified cat, and a tag across the
+   ring's top that pops in (scale and opacity only). It sits mostly inside the ring, so a seat at
+   the screen's top edge keeps it whole. */
+.seat-avatar.pickled .ring {
+  box-shadow: 0 0 0 4px var(--pickle), 0 4px 0 4px var(--ink);
 }
 
-.seat-avatar .laid {
-  top: -4%;
+.seat-avatar .pickled-tag {
+  position: absolute;
+  top: 0;
+  left: 50%;
+  z-index: 3;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.15em;
+  padding: 0.05em 0.55em 0.1em 0.1em;
+  border: 2.5px solid var(--ink);
+  border-radius: 999px;
+  background: var(--pickle);
+  color: var(--white);
+  font: 900 max(11px, calc(var(--avatar, 64px) * 0.21)) / 1.15 var(--round);
+  white-space: nowrap;
+  translate: -50% -28%;
+  -webkit-text-stroke: 0.12em var(--ink);
+  paint-order: stroke fill;
+  animation: pickled-in 420ms var(--ease-spring) both;
+}
+
+.seat-avatar .pickled-tag img {
+  width: 1.45em;
+  height: 1.45em;
+}
+
+@keyframes pickled-in {
+  from {
+    opacity: 0;
+    scale: 0.4;
+  }
+  to {
+    opacity: 1;
+    scale: 1;
+  }
 }
 
 .seat-avatar .link {
@@ -427,9 +463,41 @@
   paint-order: stroke fill;
 }
 
-.laid-owner .seat-avatar .ring {
-  border-width: 2px;
-  box-shadow: none;
+.laid-owner {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  pointer-events: none;
+}
+
+.laid-owner .laid-cat {
+  position: relative;
+  display: block;
+  flex: none;
+  border: 2px solid var(--ink);
+  border-radius: 50%;
+  background: radial-gradient(circle at 50% 35%, color-mix(in srgb, var(--ring) 60%, white), var(--ring));
+}
+
+.laid-owner.pickled .laid-cat {
+  background: var(--pickle);
+}
+
+.laid-owner .laid-cat img {
+  position: absolute;
+  inset: 4% 4% 0;
+  width: 92%;
+  height: 96%;
+  object-fit: contain;
+}
+
+/* Sized by the layout (ct-layout.ts): as tall as it says, never wider than the owner's column. */
+.laid-owner .name-tag {
+  position: relative;
+  z-index: 1;
+  flex: none;
+  box-sizing: border-box;
+  padding: 0 7px;
 }
 
 /* The tower. */
@@ -459,7 +527,8 @@
   border-radius: 50%;
   background: var(--yellow);
   color: var(--ink);
-  font: 900 0.7rem var(--round);
+  /* Follows the text size only as far as "10" fits its 22 px circle. */
+  font: 900 min(0.7rem, 11px) var(--round);
   font-style: normal;
 }
 
@@ -481,6 +550,18 @@
 
 .tower-cat.turn {
   outline: 3px solid var(--yellow);
+}
+
+.tower-cat.pickled {
+  background: var(--pickle);
+}
+
+.tower-cat .tower-pickle {
+  position: absolute;
+  right: -34%;
+  bottom: -22%;
+  width: 60%;
+  height: 60%;
 }
 
 /* Laid groups and trays. */
@@ -527,16 +608,31 @@
   background: linear-gradient(180deg, #ff8a95, var(--refuse));
 }
 
+/* A tray's words, sized by the layout: what it wants while empty, then its count in the room kept
+   for it at the tray's left (ct-layout.ts, trayLabelOf), clear of the tray's cards. */
 .tray-label {
   position: absolute;
   left: 10px;
   top: 50%;
   translate: 0 -50%;
-  font: 900 clamp(0.85rem, 3.6vw, 1.05rem) var(--round);
+  font-weight: 900;
+  font-family: var(--round);
+  line-height: 1.2;
   color: var(--white);
+  white-space: nowrap;
   -webkit-text-stroke: 0.15em var(--ink);
   paint-order: stroke fill;
   pointer-events: none;
+}
+
+.tray-label.count {
+  text-align: center;
+}
+
+.tray-label.words {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  padding-inline: 0.1em;
 }
 
 .hand-zone {
@@ -584,6 +680,13 @@
   padding: 24px;
   background: rgba(27, 11, 58, 0.7);
   animation: fade-in 200ms ease-out both;
+}
+
+/* A sheet over the table ("Lay down first?"): over every card, a lifted one too (z 999). */
+.ct-table > .scrim {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
 }
 
 .skip-pick p {
@@ -1090,10 +1193,6 @@
 .ctl .pile-count {
   min-width: calc(36px * var(--k, 1));
   font-size: calc(1.05rem * var(--k, 1));
-}
-
-.ctl .tray-label {
-  font-size: calc(clamp(0.85rem, 3.6vw, 1.05rem) * var(--k, 1));
 }
 
 /* A hand card shows as little as 38% of itself (ct-controller-layout.ts, SHOWS): a two-digit

@@ -19,10 +19,12 @@ public struct HomeTableItem: Equatable, Sendable, Identifiable {
     public var idleDays: Int?
     /// The game played here (`GameCatalog` id).
     public var game: String
+    /// A Birdwatch table's rule set, from the server's list; nil for every other game.
+    public var rules: BirdRules?
 
     public init(
         id: String, name: String? = nil, yourTurn: Bool, status: String, seats: [CachedSeat], turnCat: Int?,
-        updatedAt: Double, idleDays: Int? = nil, game: String = GameCatalog.dealt.id
+        updatedAt: Double, idleDays: Int? = nil, game: String = GameCatalog.dealt.id, rules: BirdRules? = nil
     ) {
         self.id = id
         self.name = name
@@ -33,6 +35,7 @@ public struct HomeTableItem: Equatable, Sendable, Identifiable {
         self.updatedAt = updatedAt
         self.idleDays = idleDays
         self.game = game
+        self.rules = rules
     }
 
     /// The name to show on the card.
@@ -136,7 +139,8 @@ public enum HomeTables {
             return HomeTableItem(
                 id: entry.code, name: entry.name ?? cached?.name, yourTurn: entry.yourTurn && !isOver, status: entry.status,
                 seats: seats, turnCat: turnCat, updatedAt: entry.updatedAt, idleDays: idleDays(entry, nowMs: nowMs),
-                game: entry.game ?? GameCatalog.dealt.id)
+                game: entry.game ?? GameCatalog.dealt.id,
+                rules: entry.game == GameCatalog.birdwatch.id ? entry.options?.rules : nil)
         }
     }
 

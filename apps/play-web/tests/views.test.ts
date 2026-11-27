@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, test } from "vitest";
 
 import { store } from "../src/lib/kv";
-import { carryView, setView, showController, showSwitch, viewOf } from "../src/store/views";
+import { carryView, setView, showController, showSwitch, viewAfterLayDown, viewOf } from "../src/store/views";
 
 import type { RoomView } from "@pounce/play-api/protocol";
 
@@ -88,5 +88,18 @@ describe("the controller or the full table", () => {
     expect(showController(room({ screen: true }), viewOf("BCDFG"))).toBe(false);
     setView("BCDFG", "cards");
     expect(showController(room({ screen: true }), viewOf("BCDFG"))).toBe(true);
+  });
+
+  test("laying down on Cards turns this phone to the Table, for its groups and the hits", () => {
+    expect(viewAfterLayDown(room({ screen: true }), "cards", 0)).toBe("table");
+  });
+
+  test("someone else laying down changes nothing, and Table stays Table", () => {
+    expect(viewAfterLayDown(room({ screen: true }), "cards", 1)).toBe("cards");
+    expect(viewAfterLayDown(room({ screen: true }), "table", 0)).toBe("table");
+  });
+
+  test("with no TV there is no switch to turn", () => {
+    expect(viewAfterLayDown(room({}), "cards", 0)).toBe("cards");
   });
 });

@@ -16,11 +16,13 @@ const same = (a: Pose, b: Pose): boolean =>
 export type MoveStyle = { duration: number; easing: string; delay?: number };
 
 export const MOVE: MoveStyle = { duration: 340, easing: "cubic-bezier(0.2, 0.9, 0.25, 1.08)" };
-export const SETTLE: MoveStyle = { duration: 220, easing: "cubic-bezier(0.2, 0.8, 0.2, 1)" };
 
 /**
  * Tracks each keyed element's last pose and animates the change. `spawn` gives where a key that
- * wasn't on the table comes from (the deck, a player's cat); without one it pops in.
+ * wasn't on the table comes from (the deck, a player's cat). Without one it is simply there, at
+ * its pose's size, whole. Cards never show smaller first or see-through: a hand card that starts
+ * small and grows reads as a glitch, and a faded card is hard to read (and shows the next one
+ * through it). With reduced motion a card just goes to its new place.
  */
 export class Motion {
   private poses = new Map<string, Pose>();
@@ -64,10 +66,7 @@ export class Motion {
       const arriving = !known && from !== undefined;
       this.spawns.delete(key);
       this.poses.set(key, to);
-      if (!from) {
-        if (!reduced) el.animate([{ opacity: 0, transform: `${transformOf(to)} scale(0.6)` }, { opacity: 1, transform: transformOf(to) }], SETTLE);
-        continue;
-      }
+      if (!from) continue;
       if (same(from, to)) continue;
       moved++;
       // Mid-flight: start from where it is now, not where it was headed.
@@ -77,10 +76,7 @@ export class Motion {
         start = getComputedStyle(el).transform || start;
         for (const a of running) a.cancel();
       }
-      if (reduced) {
-        el.animate([{ opacity: 0.4 }, { opacity: 1 }], { duration: 160 });
-        continue;
-      }
+      if (reduced) continue;
       const s = style(key);
       const flight = el.animate([{ transform: start }, { transform: transformOf(to) }], { duration: s.duration, easing: s.easing, delay: s.delay ?? 0, fill: "backwards" });
       if (arriving) this.land(el, flight);

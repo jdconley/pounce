@@ -1,0 +1,99 @@
+{
+  "tables": [
+    {
+      "code": "BCDFG",
+      "name": "Window Seat",
+      "status": "playing",
+      "yourTurn": true,
+      "updatedAt": 1795629600000,
+      "seats": [
+        {
+          "kind": "human",
+          "person": {
+            "id": "11111111-1111-4111-8111-111111111111",
+            "name": "Alice",
+            "cat": 0
+          },
+          "yours": true
+        },
+        {
+          "kind": "bot"
+        },
+        {
+          "kind": "human",
+          "person": {
+            "id": "22222222-1111-4111-8111-111111111111",
+            "name": "Bob",
+            "cat": 1
+          }
+        },
+        {
+          "kind": "bot"
+        }
+      ],
+      "movedAt": 1795626000000,
+      "game": "birdwatch",
+      "options": {
+        "rules": "tucker"
+      }
+    },
+    {
+      "code": "GH2VD",
+      "name": "Porch",
+      "status": "lobby",
+      "yourTurn": false,
+      "updatedAt": 1795608000000,
+      "seats": [
+        {
+          "kind": "human",
+          "person": {
+            "id": "11111111-1111-4111-8111-111111111111",
+            "name": "Alice",
+            "cat": 0
+          },
+          "yours": true
+        },
+        {
+          "kind": "bot"
+        },
+        {
+          "kind": "human",
+          "person": {
+            "id": "22222222-1111-4111-8111-111111111111",
+            "name": "Bob",
+            "cat": 1
+          }
+        },
+        {
+          "kind": "bot"
+        }
+      ],
+      "game": "birdwatch",
+      "options": {
+        "rules": "official"
+      }
+    },
+    {
+      "code": "KLMNP",
+      "name": "Taco Night",
+      "status": "playing",
+      "yourTurn": false,
+      "updatedAt": 1795597200000,
+      "seats": [
+        {
+          "kind": "human",
+          "person": {
+            "id": "11111111-1111-4111-8111-111111111111",
+            "name": "Alice",
+            "cat": 0
+          },
+          "yours": true
+        },
+        {
+          "kind": "bot"
+        }
+      ],
+      "game": "tiles"
+    }
+  ]
+}

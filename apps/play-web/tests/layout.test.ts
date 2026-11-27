@@ -1,7 +1,7 @@
 import { describe, expect, test } from "vitest";
 
 import { ctControllerLayout } from "../src/table/ct-controller-layout";
-import { ctLayout, fan, tvMenu } from "../src/table/ct-layout";
+import { ctLayout, fan, towerReach, trayLabelRect, trayPoses, tvMenu } from "../src/table/ct-layout";
 import { tilesLayout } from "../src/table/tiles-layout";
 
 const portrait = { top: 47, right: 0, bottom: 34, left: 0 };
@@ -460,5 +460,137 @@ describe("Cat Tower on a phone controller", () => {
       expect(L.status.y).toBe(L.menu.y);
       expect(L.switch.y).toBeGreaterThan(L.status.y + L.status.h);
     }
+  });
+});
+
+/**
+ * The phone's full table and its trays, at every size it is played on, at the default text and the
+ * largest (a 26 px root, 1.625): no name tag on the tower or on cards, no tray's count under its cards.
+ */
+describe("Cat Tower on a phone's full table: nothing overlaps", () => {
+  const TEXT = [1, 1.625] as const;
+  /** Who has laid down: one seat, two, a full table of five rows, and long groups. */
+  const TABLES: { name: string; laid: { seat: number; groups: number[] }[] }[] = [
+    { name: "one row", laid: [{ seat: 0, groups: [3, 3] }] },
+    { name: "two rows", laid: [{ seat: 0, groups: [3, 3] }, { seat: 1, groups: [3, 4] }] },
+    {
+      name: "five rows",
+      laid: [
+        { seat: 0, groups: [3, 3] },
+        { seat: 1, groups: [4, 4] },
+        { seat: 2, groups: [9] },
+        { seat: 3, groups: [5, 2] },
+        { seat: 4, groups: [7] },
+      ],
+    },
+    { name: "long groups", laid: [{ seat: 0, groups: [5, 6] }, { seat: 1, groups: [12] }] },
+  ];
+  const CASES = SIZES.flatMap(([w, h]) => TEXT.flatMap((text) => TABLES.flatMap((t) => [0, 2].map((trays) => [w, h, text, t.name, trays] as const))));
+  const layout = (width: number, height: number, text: number, table: string, trays: number) =>
+    ctLayout({ width, height, insets: insetsFor(width, height), opponents: [1, 2, 3, 4, 5], handCount: trays ? 6 : 2, trays, laid: TABLES.find((t) => t.name === table)!.laid, text });
+
+  /** Everything on the table, by name, with the tower as far as its shelf numbers reach. */
+  const parts = (L: ReturnType<typeof ctLayout>, width: number) => {
+    const out: [string, Box][] = [
+      ["tower", { ...L.tower, w: L.tower.w + towerReach(L.tower.w) }],
+      // The seats across the top: each cat and its name tag under it.
+      ["seats", { x: 0, y: 0, w: width, h: Math.max(...[...L.opponents.values()].map((at) => at.y + L.avatar / 2 + 22)) }],
+      ["deck", L.deckRect],
+      ["discard", L.discardRect],
+      ["hand", L.handRect],
+      ["cue", L.banner],
+    ];
+    L.trays.forEach((t, i) => out.push([`tray ${i}`, t]));
+    for (const [s, row] of L.laid) {
+      out.push([`row ${s} name`, row.tag]);
+      if (row.avatar.size) out.push([`row ${s} cat`, circle(row.avatar, row.avatar.size)]);
+      row.groups.forEach((g, i) => out.push([`row ${s} group ${i}`, g.rect]));
+    }
+    return out;
+  };
+  /** A row's cat sits on its name tag's top, as a seat's does; the hand's room is where a picked card rises, over the cue. */
+  const mayOverlap = (a: string, b: string) => {
+    const [x, y] = [a, b].sort();
+    const row = (n: string) => n.match(/^row (\d+) (name|cat)$/)?.[1];
+    if (row(x!) !== undefined && row(x!) === row(y!)) return true;
+    return [x, y].join(" and ") === "cue and hand";
+  };
+
+  test.each(CASES)("at %i x %i, text %d, %s, %i trays: names, cats, groups, the tower, the piles and the trays are apart", (width, height, text, table, trays) => {
+    const L = layout(width, height, text, table, trays);
+    const all = parts(L, width);
+    for (const [[a, ra], [b, rb]] of pairs(all)) if (!mayOverlap(a, b)) expect(overlaps(ra, rb), `${a} ${JSON.stringify(ra)} and ${b} ${JSON.stringify(rb)}`).toBe(false);
+  });
+
+  test.each(CASES)("at %i x %i, text %d, %s, %i trays: every name tag and group is on screen, a tag is big enough to read", (width, height, text, table, trays) => {
+    const L = layout(width, height, text, table, trays);
+    const insets = insetsFor(width, height);
+    for (const [s, row] of L.laid) {
+      for (const r of [row.tag, ...row.groups.map((g) => g.rect)]) expect(within(r, width, height), `row ${s} ${JSON.stringify(r)}`).toBe(true);
+      expect(row.tag.x).toBeGreaterThanOrEqual(insets.left);
+      expect(row.tag.w).toBeGreaterThanOrEqual(56);
+      expect(row.font).toBeGreaterThanOrEqual(10);
+      // The tag fits its line of text.
+      expect(row.tag.h).toBeGreaterThanOrEqual(row.font * 1.2 + 5);
+    }
+  });
+
+  test.each(SIZES)("at %i x %i: a larger text size makes the name tags larger", (width, height) => {
+    const normal = layout(width, height, 1, "two rows", 0);
+    const large = layout(width, height, 1.625, "two rows", 0);
+    expect(large.laid.get(0)!.font).toBeGreaterThan(normal.laid.get(0)!.font);
+  });
+});
+
+describe("Cat Tower trays: the count is never under the cards", () => {
+  const TEXT = [1, 1.625, 2] as const;
+  /** Every tray a level asks for: two of three, three and four, a run of nine, five and two. */
+  const LEVELS = [[3, 3], [3, 4], [9], [5, 2], [5, 3], [4, 4]];
+  const ipad = { top: 24, right: 0, bottom: 20, left: 0 };
+  const CTL_SIZES = [
+    [320, 568, portrait],
+    [375, 667, portrait],
+    [430, 932, portrait],
+    [820, 1180, ipad],
+    [1180, 820, ipad],
+    [844, 390, sideways],
+  ] as const;
+  const check = (L: { trays: Box[]; trayLabel: { font: number; w: number }; cw: number; ch: number; small: number }, sizes: number[]) => {
+    L.trays.forEach((tray, i) => {
+      const size = sizes[i]!;
+      const label = trayLabelRect(tray, L.trayLabel);
+      expect(label.x + label.w, "the count is inside its tray").toBeLessThanOrEqual(tray.x + tray.w);
+      expect(L.trayLabel.font).toBeGreaterThanOrEqual(13);
+      for (let n = 1; n <= size; n++) {
+        for (const p of trayPoses(tray, n, size, L.cw, L.ch, L.small, L.trayLabel)) {
+          const card = visual(p, L.cw, L.ch);
+          expect(overlaps(card, label), `${n} of ${size} in tray ${i}: card ${JSON.stringify(card)}, count ${JSON.stringify(label)}`).toBe(false);
+          expect(card.x + card.w, "the card is inside its tray").toBeLessThanOrEqual(tray.x + tray.w + 0.5);
+          expect(card.y).toBeGreaterThanOrEqual(tray.y);
+        }
+      }
+    });
+  };
+
+  test.each(SIZES.flatMap(([w, h]) => TEXT.map((t) => [w, h, t] as const)))("on the full table at %i x %i, text %d", (width, height, text) => {
+    for (const level of LEVELS) {
+      const L = ctLayout({ width, height, insets: insetsFor(width, height), opponents: [1, 2], handCount: 8, trays: level.length, laid: [], text });
+      check(L, level);
+    }
+  });
+
+  test.each(CTL_SIZES.flatMap(([w, h, insets]) => TEXT.map((t) => [w, h, t, insets] as const)))("on Cards at a TV table at %i x %i, text %d", (width, height, text, insets) => {
+    for (const level of LEVELS) {
+      const L = ctControllerLayout({ width, height, insets, handCount: 8, trays: level.length, step: "play", text });
+      check(L, level);
+    }
+  });
+
+  test("the count grows with the text, and with a tablet's controls", () => {
+    const at = (text: number) => ctControllerLayout({ width: 375, height: 667, insets: portrait, handCount: 8, trays: 2, step: "play", text }).trayLabel;
+    expect(at(1.625).font).toBeGreaterThan(at(1).font);
+    expect(at(1.625).w).toBeGreaterThan(at(1).w);
+    const tablet = ctControllerLayout({ width: 820, height: 1180, insets: { top: 24, right: 0, bottom: 20, left: 0 }, handCount: 8, trays: 2, step: "play" });
+    expect(tablet.trayLabel.font).toBeGreaterThan(at(1).font);
   });
 });
