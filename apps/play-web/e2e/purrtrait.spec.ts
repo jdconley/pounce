@@ -1,7 +1,7 @@
 import { devices, expect, test, type Page } from "@playwright/test";
 
-import { closeAll, newPlayer } from "./helpers";
-import { differ, drawerPage, drawStroke, easelPicture, inked, liftCurtain, phoneScans, PURR, purrTv, tvMakesPurrtrait } from "./purr-helpers";
+import { closeAll, newPlayer, standInServer } from "./helpers";
+import { differ, drawerPage, drawStroke, easelPicture, inked, liftCurtain, phoneScans, PURR, purrTv, toolsReachable, tvMakesPurrtrait } from "./purr-helpers";
 
 /**
  * Purrtrait end to end (design §12): the TV page is the easel; three phones, one of them shared by
@@ -49,7 +49,10 @@ test("a TV and three phones, one shared, play a whole game, and the TV shows eve
       await expect(other.locator("#purr-look")).toBeVisible();
     }
     const before = inked(await easelPicture(tv.page));
+    // A first-time tip shows now ("No letters or numbers"): it never covers a tool.
+    expect(await toolsReachable(drawer), "the drawer's tools under a tip").toEqual([]);
     await drawStroke(drawer, [[0.15, 0.55], [0.5, 0.35], [0.85, 0.55], [0.5, 0.8]]);
+    expect(await toolsReachable(drawer), "the drawer's tools after a stroke").toEqual([]);
     // The line shows on the TV while it is drawn.
     await expect.poll(async () => inked(await easelPicture(tv.page)), { message: "the stroke on the TV" }).toBeGreaterThan(before + 10);
 
@@ -124,4 +127,40 @@ test("joining is only from the TV's code, and a removed phone stays out", async 
   await guest.page.goto(fresh);
   await expect(guest.page.locator("#table-refused")).toHaveText("The host removed you from this table.");
   await closeAll(host.context, stale.context, guest.context, tv.context);
+});
+
+/** The drawer's screen at every size the spec lists: the tools always take a tap, tips or not. */
+test("no tip ever covers the drawer's Undo, Clear, Got it or Give up, at any size", async ({ browser }) => {
+  test.setTimeout(240_000);
+  const sizes = [
+    { name: "iPhone SE", ...devices["iPhone SE (3rd gen)"], big: false },
+    { name: "iPhone 15 Pro Max", ...devices["iPhone 15 Pro Max"], big: false },
+    { name: "iPad portrait", ...devices["iPad (gen 7)"], big: false },
+    { name: "iPad landscape", ...devices["iPad (gen 7) landscape"], big: false },
+    { name: "iPhone SE, largest text", ...devices["iPhone SE (3rd gen)"], big: true },
+  ];
+  for (const { name, big, ...device } of sizes) {
+    const { page, context } = await newPlayer(browser, "Gran", { context: { ...device, baseURL: PURR } });
+    if (big) await context.addInitScript(() => document.addEventListener("DOMContentLoaded", () => (document.documentElement.style.fontSize = "200%")));
+    const server = await standInServer(page);
+    const seats = ["Gran", "Great Aunt Josephine", "Ava"].map((who, i) => ({
+      kind: "human",
+      person: { id: `00000000-0000-4000-8000-00000000000${i}`, name: who, cat: i },
+      yours: i === 0,
+      presence: "awake",
+    }));
+    const view = { seats: 3, timer: 60, rounds: 2, phase: "drawing", round: 1, drawer: 0, order: [0, 1, 2], scores: [0, 0, 0], out: [false, false, false], group: "animals", level: "tricky", remainingMs: 50_000, paused: false, turn: "1:0", last: null, winners: [], word: "sandcastle", youDraw: true };
+    server.send({ t: "snapshot", protocol: 1, seq: 1, room: { code: "BCDFG", name: "Couch", status: "playing", youAreHost: true, seats, game: null, gameId: "purrtrait", options: { timer: 60 }, purrtrait: view, screen: true } } as never);
+    await page.goto("/play/t/BCDFG");
+    await expect(page.locator("#purr-easel")).toBeVisible();
+    await expect(page.locator(".tip")).toBeVisible();
+    expect(await toolsReachable(page), `${name}: the tools under the first tip`).toEqual([]);
+    await drawStroke(page, [[0.2, 0.5], [0.8, 0.5]]);
+    expect(await toolsReachable(page), `${name}: the tools after a stroke`).toEqual([]);
+    // Got it's own tip shows on its sheet, over nobody's tools.
+    await page.locator("#purr-got-it").click();
+    await expect(page.locator(".purr-who-btn").first()).toBeVisible();
+    await expect(page.getByText("Tap who said it first")).toBeVisible();
+    await closeAll(context);
+  }
 });

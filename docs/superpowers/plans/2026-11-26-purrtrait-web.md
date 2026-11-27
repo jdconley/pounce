@@ -39,7 +39,7 @@ Recorded by the web session as it built (branch `claude/purrtrait-web`).
 12. **The TV's home** with five posters (four games and Tonight's board) is three rows of two.
 13. **The reveal** sizes the word to its longest word, so a word never breaks in the middle.
 14. **Got it** opens "Who got it?", everyone else's cat and name. **Give up** asks once: Give up / Keep drawing. Undo, Clear and Got it carry no icons, so the tools fit one row on iPhone SE and wrap only at the largest text.
-15. **Tips.** "No letters or numbers" points at the word bar (the easel fills its screen, so a tip beside it would fall off), learned on the first stroke. "Tap who said it first" waits for 4 strokes. "Pick one to draw" on the cards, "Guess out loud" on a guesser's "Look at the TV".
+15. **Tips.** "No letters or numbers" points at the word bar (the easel fills its screen, so a tip beside it would fall off), learned on the first stroke. "Tap who said it first" shows on the Who got it? sheet, over the cats (over the tools it would cover Undo and Clear). "Pick one to draw" on the cards, "Guess out loud" on a guesser's "Look at the TV".
 16. **No Cards/Table switch** at a Purrtrait table, and the table menu's Show on TV is the host's only, while no TV shows it. Forfeit says "Your turns are skipped. The rest play on." A removed phone says "The host removed you from this table."
 17. **The drawer's screen holds through the pick:** the `chosen` event's fold keeps the picking device the drawer's until the snapshot brings the word, so a shared phone's curtain never comes down twice.
 18. **Tests' hooks:** the QR element carries `data-url` (the URL it encodes).

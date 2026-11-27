@@ -98,8 +98,6 @@ function DrawScreen(props: Props) {
   const tool = useRef({ colour, width });
   tool.current = { colour, width };
   const [canUndo, setCanUndo] = useState(false);
-  /** Strokes drawn this turn: Got it's tip waits until there is something to guess. */
-  const [strokes, setStrokes] = useState(0);
   const [full, setFull] = useState(false);
   const fullRef = useRef(false);
   fullRef.current = full;
@@ -145,7 +143,6 @@ function DrawScreen(props: Props) {
       },
       ended: (hidden) => {
         setCanUndo(writer.canUndo);
-        setStrokes((n) => n + 1);
         easel.current?.invalidate();
         if (hidden) send(writer.flush(performance.now(), true));
         else kick();
@@ -294,7 +291,6 @@ function DrawScreen(props: Props) {
               id="purr-got-it"
               disabled={busy}
               onClick={() => {
-                learnTip("purr.got");
                 play("pop", 0.5);
                 setSheet("got");
               }}
@@ -308,7 +304,6 @@ function DrawScreen(props: Props) {
         </div>
       </div>
       <Tip id="purr.easel" anchor="purr-word" text="No letters or numbers" show={!easelTipDone} place="below" />
-      <Tip id="purr.got" anchor="purr-got-it" text="Tap who said it first" show={easelTipDone && strokes >= 4} />
       {sheet === "got" ? (
         <Sheet title="Who got it?" onClose={() => setSheet(null)}>
           <div class="purr-who" id="purr-who">
@@ -318,6 +313,7 @@ function DrawScreen(props: Props) {
                 class="purr-who-btn"
                 style={{ ["--ring" as string]: ringOf(s) }}
                 onClick={() => {
+                  learnTip("purr.got");
                   setSheet(null);
                   writer.end();
                   send(writer.flush(performance.now(), true));
@@ -330,6 +326,8 @@ function DrawScreen(props: Props) {
               </button>
             ))}
           </div>
+          {/* On the sheet itself, where it applies: never over the drawer's tools. */}
+          <Tip id="purr.got" anchor="purr-who" text="Tap who said it first" show />
         </Sheet>
       ) : null}
       {sheet === "giveUp" ? (

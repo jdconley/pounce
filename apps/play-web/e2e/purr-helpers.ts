@@ -106,6 +106,22 @@ export async function drawerPage(pages: Page[]): Promise<Page> {
   return found!;
 }
 
+/**
+ * The drawer's tools take a tap whatever tip shows: at the middle of Undo, Clear, Got it and Give
+ * up, the topmost element is the button itself (or inside it), never a tip or anything else.
+ */
+export async function toolsReachable(page: Page): Promise<string[]> {
+  return page.evaluate(() =>
+    ["purr-undo", "purr-clear", "purr-got-it", "purr-give-up"].flatMap((id) => {
+      const el = document.getElementById(id);
+      if (!el) return [`${id}: missing`];
+      const r = el.getBoundingClientRect();
+      const hit = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2);
+      return hit && el.contains(hit) ? [] : [`${id}: covered by ${hit?.className || hit?.tagName}`];
+    }),
+  );
+}
+
 /** Lifts the curtain on a shared phone: holds its button until it fills. */
 export async function liftCurtain(page: Page): Promise<void> {
   const hold = page.locator(".curtain button.hold");
