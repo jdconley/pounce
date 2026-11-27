@@ -99,8 +99,8 @@ export const hintMs = (m: DailyModule, r: RunState): number => m.hintMs?.(r.stat
  */
 export function activeAt(r: RunState, at: number): number {
   if (r.lastCallAt === undefined) return Math.max(0, at - r.startedAt);
-  if (r.activeReported) return r.activeMs ?? 0;
-  return (r.activeMs ?? 0) + Math.min(IDLE_CAP_MS, Math.max(0, at - r.lastCallAt));
+  const ms = r.activeMs as number; // set with `lastCallAt`, by `newRun`
+  return r.activeReported ? ms : ms + Math.min(IDLE_CAP_MS, Math.max(0, at - r.lastCallAt));
 }
 
 /**
@@ -111,7 +111,7 @@ export function activeAt(r: RunState, at: number): number {
 function noteCall(r: RunState, now: number, reported?: number): void {
   if (r.lastCallAt === undefined) return;
   if (reported !== undefined && Number.isSafeInteger(reported) && reported >= 0) {
-    r.activeMs = Math.min(Math.max(0, now - r.startedAt), Math.max(r.activeReported ? (r.activeMs ?? 0) : 0, reported));
+    r.activeMs = Math.min(Math.max(0, now - r.startedAt), Math.max(r.activeReported ? (r.activeMs as number) : 0, reported));
     r.activeReported = true;
   } else if (!r.activeReported) {
     r.activeMs = activeAt(r, now);

@@ -20,6 +20,7 @@ import {
   progressOf,
   type NineLivesMove,
   type NineLivesState,
+  type Wrong,
 } from "./grid";
 import { makePuzzle, type NineLivesPuzzle } from "./make";
 import { POP } from "./solve";
@@ -89,12 +90,9 @@ function hintCell(p: NineLivesPuzzle, s: NineLivesState): number {
 function applyWithLives(p: NineLivesPuzzle, s: NineLivesState, m: NineLivesMove): Applied<NineLivesState> {
   if ((s.lives as number) <= 0) return { ok: false, reason: "over" };
   if (m.k !== "set" || p.givens[m.i] !== 0 || s.cells[m.i] !== 0) return { ok: false, reason: "illegal" };
-  if (m.d === p.solution[m.i]) {
-    const next = applyMove(p.givens, s, m);
-    return next ? ended(p, next) : { ok: false, reason: "illegal" };
-  }
+  if (m.d === p.solution[m.i]) return ended(p, { ...s, cells: s.cells.map((d, i) => (i === m.i ? m.d : d)) });
   const lives = (s.lives as number) - 1;
-  const state: NineLivesState = { ...s, lives, wrong: [...(s.wrong ?? []), { i: m.i, d: m.d }] };
+  const state: NineLivesState = { ...s, lives, wrong: [...(s.wrong as Wrong[]), { i: m.i, d: m.d }] };
   const reveal = { k: "wrong", i: m.i, d: m.d, lives, ...(lives === 0 ? { solution: [...p.solution] } : {}) };
   return lives === 0 ? { ok: true, state, reveal, end: "missed" } : { ok: true, state, reveal };
 }
@@ -113,7 +111,7 @@ function earned(p: NineLivesPuzzle, s: NineLivesState): number {
     open++;
     if (s.cells[i] === p.solution[i] && !s.hinted.includes(i)) right++;
   }
-  return open === 0 ? 1 : right / open;
+  return right / open; // every puzzle has open cells
 }
 
 export const nineLives: DailyModule<NineLivesPuzzle, NineLivesState, NineLivesMove> = {
@@ -140,7 +138,7 @@ export const nineLives: DailyModule<NineLivesPuzzle, NineLivesState, NineLivesMo
   freeHints: (s) => s.freeHints ?? 0,
   rulesOf: (s) => (withLives(s) ? LIVES_RULES : undefined),
   // Back to the first rules: the right numbers and hints stay, lives and wrong numbers go.
-  toFirstRules: (_p, s) => ({ cells: [...s.cells], hinted: [...s.hinted], ...(s.hinted.length > 0 ? { freeHints: s.hinted.length } : {}) }),
+  toFirstRules: (_p, s) => ({ cells: [...s.cells], hinted: [...s.hinted], freeHints: s.hinted.length }),
   progress: (p, s) => progressOf(p.givens, s.cells),
   publicState(p, s) {
     if (!withLives(s)) return { cells: [...s.cells], hinted: [...s.hinted] };
@@ -151,7 +149,7 @@ export const nineLives: DailyModule<NineLivesPuzzle, NineLivesState, NineLivesMo
       rules: LIVES_RULES,
       lives,
       hintsLeft: Math.max(0, HINTS - s.hinted.length),
-      wrong: (s.wrong ?? []).map((w) => ({ ...w })),
+      wrong: (s.wrong as Wrong[]).map((w) => ({ ...w })),
       // Only once the run ended out of lives: the solution, to show kindly.
       ...(lives === 0 ? { solution: [...p.solution] } : {}),
     };

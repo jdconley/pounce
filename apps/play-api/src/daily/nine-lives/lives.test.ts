@@ -88,6 +88,11 @@ describe("Nine Lives with lives: entries are checked as they come", () => {
     expect((r.state as NineLivesState).lives).toBe(3);
   });
 
+  test("a board out of lives takes nothing more, even asked directly", () => {
+    const s: NineLivesState = { cells: [...p.givens], hinted: [], lives: 0, wrong: [] };
+    expect(nineLives.apply(p, s, { k: "set", i: open[0]!, d: p.solution[open[0]!]! }, 0)).toEqual({ ok: false, reason: "over" });
+  });
+
   test("clear is illegal under lives: the board holds no wrong number to clear", () => {
     const r = run(LIVES_RULES);
     expect(moves(m, p, r, 0, [{ k: "clear", i: open[0]! }], T0 + 10_000)).toMatchObject({ ok: false, error: "illegal", at: 0, seq: 0 });

@@ -100,6 +100,8 @@ describe("percent, each game's fair measure", () => {
     cells[3 * p.n + ((p.solution[3]! + 2) % p.n)] = 2; // wrong
     const s: NapState = { cells, hinted: [2 * p.n + p.solution[2]!] };
     expect(catNap.result(p, s, "gaveUp", 1, 1).progress).toBeCloseTo(2 / p.n);
+    // Solved is the whole quilt, hints and all.
+    expect(catNap.result(p, s, "solved", 1, 1).progress).toBe(1);
   });
 
   it("Sniff: letters found in their right place in any guess, out of five", () => {
