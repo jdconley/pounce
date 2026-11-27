@@ -309,6 +309,23 @@ describe("the turn clock", () => {
     expect(r.nextAlarm()).toBe(clock + STALL_END_MS / 10);
   });
 
+  it("a fractional dev speed keeps every deadline and every time on the wire in whole milliseconds", () => {
+    const r = started(1.01);
+    const whole = (n: number | null | undefined) => n === null || n === undefined || Number.isInteger(n);
+    expect(whole(r.state.timers.turnEndsAt)).toBe(true);
+    expect(whole(r.nextAlarm())).toBe(true);
+    expect(whole(viewOf(r, "tv").remainingMs)).toBe(true);
+    expect(whole(r.snapshotFor("tv").room.near?.expiresIn)).toBe(true);
+    // A pick, a give-up, then the reveal moves on to the next turn at its whole-millisecond alarm.
+    act(r, "a", 0, { type: "choose", level: "easy" });
+    act(r, "a", 0, { type: "giveUp" });
+    expect(game(r).phase).toBe("reveal");
+    expect(whole(r.state.timers.nextRoundAt)).toBe(true);
+    clock = r.nextAlarm();
+    r.tick();
+    expect(game(r).phase).toBe("choosing");
+  });
+
   it("Cat Tower rooms never set turnEndsAt", () => {
     const state = RoomCore.create("BCDFG", "a", clock);
     const r = new RoomCore(state, () => clock, rng, undefined, 1, { tv: true, streaks: true });
