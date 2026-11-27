@@ -1,10 +1,11 @@
 /**
  * What the TV's screens say, worked out from the room: pure, so it is tested without a page.
  */
-import { GAME_IDS, type GameId } from "../../lib/catalog";
+import { SHELF, type GameId } from "../../lib/catalog";
 import { bwOverTitle, bwStandings } from "../../table/bw-model";
 import { purrOverTitle, purrStandings } from "../../table/purr-model";
 import { playing, seatName } from "../../table/seat-names";
+import { tumbleOf, tumbleWinners, winsWords } from "../../tumble/store";
 
 import type { RoomPhase } from "../../store/room";
 import type { RoomEvent, RoomView } from "@pounce/play-api/protocol";
@@ -16,7 +17,7 @@ import type { RoomEvent, RoomView } from "@pounce/play-api/protocol";
 export const gameOf = (room: RoomView): GameId => (room.gameId ?? "cat-tower") as GameId;
 
 /** The game a TV's "Change game" makes instead: the next on the shelf, round again after the last. */
-export const otherGame = (id: GameId): GameId => GAME_IDS[(GAME_IDS.indexOf(id) + 1) % GAME_IDS.length] ?? id;
+export const otherGame = (id: GameId): GameId => SHELF[(SHELF.indexOf(id) + 1) % SHELF.length] ?? id;
 
 /** Someone sits at the table: a person or a House Cat. Until then the TV may change the game. */
 export const anyoneSeated = (room: RoomView): boolean => room.seats.some(playing);
@@ -58,6 +59,14 @@ export function standings(room: RoomView): Standing[] {
   if (room.birdwatch) return bwStandings(room).map((s) => ({ seat: s.seats[0]!, won: s.won, out: s.left, detail: String(s.score), name: s.name }));
   const p = room.purrtrait;
   if (p) return purrStandings(room, p).map((s) => ({ seat: s.seat, won: s.won, out: s.out, detail: s.out ? "Left" : String(s.score) }));
+  const tt = tumbleOf(room);
+  if (tt) {
+    const won = tumbleWinners(tt);
+    const seats = room.seats.flatMap((s, i) => (playing(s) ? [i] : []));
+    return seats
+      .sort((a, b) => Number(won.includes(b)) - Number(won.includes(a)) || (tt.wins[b] ?? 0) - (tt.wins[a] ?? 0) || Number(tt.left[a] ?? false) - Number(tt.left[b] ?? false))
+      .map((seat) => ({ seat, won: won.includes(seat), out: tt.left[seat] ?? false, detail: winsWords(tt.wins[seat] ?? 0) }));
+  }
   const g = room.game;
   const t = room.tiles;
   const winners = g?.winners ?? t?.winners ?? [];
@@ -83,7 +92,8 @@ export function standings(room: RoomView): Standing[] {
 export function overTitle(room: RoomView): string {
   if (room.birdwatch) return bwOverTitle(room);
   if (room.purrtrait) return purrOverTitle(room, room.purrtrait);
-  const winners = room.game?.winners ?? room.tiles?.winners ?? [];
+  const tt = tumbleOf(room);
+  const winners = tt ? tumbleWinners(tt) : (room.game?.winners ?? room.tiles?.winners ?? []);
   if (winners.length === 1) return `${seatName(room.seats[winners[0]!])} wins`;
   return winners.length > 1 ? "A tie" : "Game over";
 }

@@ -72,7 +72,7 @@ export default defineConfig({
     },
   ],
   webServer: [
-    ...(process.env.E2E_BASE ? [] : [server(PORT, "--var GAMES:tiles,birdwatch,purrtrait --var LINK:on --var TV:on --var DAILY:on --var DAILY_TEST:on --var DEV_SPEED:20")]),
-    ...(PURR_GIVEN ? [] : [server(PURR_PORT, "--var GAMES:tiles,birdwatch,purrtrait --var LINK:on --var TV:on")]),
+    ...(process.env.E2E_BASE ? [] : [server(PORT, "--var GAMES:tiles,birdwatch,tumble,purrtrait --var LINK:on --var TV:on --var DAILY:on --var DAILY_TEST:on --var DEV_SPEED:20")]),
+    ...(PURR_GIVEN ? [] : [server(PURR_PORT, "--var GAMES:tiles,birdwatch,tumble,purrtrait --var LINK:on --var TV:on")]),
   ],
 });

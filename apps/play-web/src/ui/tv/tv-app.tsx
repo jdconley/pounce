@@ -7,7 +7,7 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "preact/hooks";
 
 import { art, RINGS } from "../../lib/art";
-import { CATALOG, GAME_IDS, type GameId } from "../../lib/catalog";
+import { CATALOG, SHELF, type GameId } from "../../lib/catalog";
 import { store } from "../../lib/kv";
 import { isRoomCode } from "../../lib/router";
 import { play, unlockAudio } from "../../lib/sound";
@@ -313,9 +313,9 @@ function TvHome(props: { board: string | null; onLinked: (room: string) => void;
           {link ? link.code : " "}
         </p>
       </div>
-      {/* Up to three posters stack; four sit two by two; five (every game and Tonight's board) in three rows of two. */}
-      <div class={`tv-games ${GAME_IDS.length + (dish ? 1 : 0) >= 5 ? "grid five" : GAME_IDS.length + (dish ? 1 : 0) === 4 ? "grid" : GAME_IDS.length + (dish ? 1 : 0) === 3 ? "three" : ""}`}>
-        {GAME_IDS.map((id, i) => (
+      {/* Up to three posters stack; four sit two by two; five or six in three rows of two. */}
+      <div class={`tv-games ${SHELF.length + (dish ? 1 : 0) >= 5 ? "grid five" : SHELF.length + (dish ? 1 : 0) === 4 ? "grid" : SHELF.length + (dish ? 1 : 0) === 3 ? "three" : ""}`}>
+        {SHELF.map((id, i) => (
           <button
             type="button"
             class={`tv-poster ${id}`}

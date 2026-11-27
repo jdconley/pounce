@@ -43,8 +43,8 @@ jobs:
       WRANGLER_SEND_METRICS: "false"
       # Birdwatch's full games run in e2e-web-birdwatch, beside this job.
       E2E_BIRDWATCH: "off"
-      # The e2e servers deal Purrtrait, so the player built for them shows it (production's flag may not yet).
-      WEB_GAMES: "tiles,birdwatch,purrtrait"
+      # The e2e servers deal Purrtrait, so the player built for them offers it (production's stays off until switch-on).
+      WEB_PURRTRAIT: "on"
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
       - uses: pnpm/action-setup@fc06bc1257f339d1d5d8b3a19a8cae5388b55320 # v4.4.0
@@ -70,7 +70,10 @@ jobs:
           pnpm --filter @pounce/play-web exec playwright install --with-deps chromium webkit firefox
           # apt's lock and partial folder are root's alone; the cache can't read them, and doesn't need them.
           sudo rm -rf ~/apt-archives/lock ~/apt-archives/partial
+      # Toy Tumble on the shelf for its e2e; the deployed build keeps it off until switch-on.
       - run: pnpm --filter @pounce/play-web build
+        env:
+          WEB_TUMBLE: "on"
       - run: pnpm --filter @pounce/play-web e2e
       - if: failure()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
@@ -92,7 +95,7 @@ jobs:
     timeout-minutes: 45
     env:
       WRANGLER_SEND_METRICS: "false"
-      WEB_GAMES: "tiles,birdwatch,purrtrait"
+      WEB_PURRTRAIT: "on"
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
       - uses: pnpm/action-setup@fc06bc1257f339d1d5d8b3a19a8cae5388b55320 # v4.4.0

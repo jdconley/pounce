@@ -11,6 +11,7 @@ import { play } from "../../lib/sound";
 import { lobbyRibbons, RULE_COPY } from "../../table/bw-model";
 import { clock, easelLink, isPurr, nearOf, spacedCode, timerOf } from "../../table/purr-model";
 import { seatCat, seatName } from "../../table/seat";
+import { catsOf, CATS_WORDS } from "../../tumble/store";
 import { Cat, Icon } from "../common";
 import { inviteLink } from "../lobby";
 import { QrCode } from "../qr";
@@ -95,6 +96,7 @@ export function TvLobby(props: { room: RoomView; live: boolean; onChangeGame: (b
               {clock(timerOf(room) * 1000)} a turn
             </p>
           ) : null}
+          {game === "tumble" && room.seats.some((s) => s.kind === "bot") ? <p class="tv-lobby-rules outlined">{CATS_WORDS[catsOf(room)]}</p> : null}
         </header>
         <div class="tv-lobby-rug">
           <img class="tv-lobby-rug-art" src={art("rug")} alt="" />

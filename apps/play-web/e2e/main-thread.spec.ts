@@ -1,4 +1,4 @@
-import { devices, expect, test, type Browser, type Page } from "@playwright/test";
+import { devices, expect, test, type Browser, type Page, type TestInfo } from "@playwright/test";
 
 import { bwStep, cardPoint, newStats } from "./birdwatch-helpers";
 import { dailyPhone } from "./daily-phone";
@@ -6,6 +6,7 @@ import { closeAll, firstRun, newPlayer } from "./helpers";
 import { easelPicture, inked, joinLink, phoneScans, PURR, purrTv, tvMakesPurrtrait } from "./purr-helpers";
 import { openSniff, wrongWords } from "./sniff-helpers";
 import { speedAt, REFERENCE, type Speed } from "./speed";
+import { keysTurn, playing, touchTurn } from "./tumble-helpers";
 import { controllerTurn, poster, startFromPhone, tilesTurn, tvDeck, tvTable } from "./tv-helpers";
 
 /**
@@ -426,6 +427,11 @@ test("the rendering thread keeps every frame: no long task, frame work within bu
 
   const r = await measure(browser, page, gate, play);
   await closeAll(...phones.map((p) => p.context));
+  await judge(r, gate, info);
+});
+
+/** Reports a measured run and fails it on a long task or frame work over the profile's budget. */
+async function judge(r: Awaited<ReturnType<typeof measure>>, gate: Gate, info: TestInfo): Promise<void> {
   // On a machine slower than the profile even unthrottled, times are scaled to the profile's speed.
   const k = r.speed.residual;
   const round = (n: number, d = 10) => Math.round(n * d) / d;
@@ -455,6 +461,66 @@ test("the rendering thread keeps every frame: no long task, frame work within bu
   expect(ours, "tasks and animation frames over 50 ms on the rendering thread").toEqual([]);
   expect(r.longest / k, "longest main-thread task, ms").toBeLessThanOrEqual(LONG_MS);
   expect(r.p95 / k, `p95 main-thread work per frame, ms (budget ${summary.budgetMs})`).toBeLessThanOrEqual(BUDGET[gate]);
+}
+
+/** Toy Tumble's House Cats to seat: five more, so six boxes play. */
+async function fiveCats(page: Page): Promise<void> {
+  for (let n = await page.locator(".lobby-seat.bot").count(); n < 5; n++) {
+    await page.locator("#add-bar").getByRole("button", { name: "House Cat" }).click();
+    await expect(page.locator(".lobby-seat.bot")).toHaveCount(n + 1);
+  }
+}
+
+/** A minute of Toy Tumble on this page against five House Cats: by keys, or by touch on a phone. */
+async function playTumble(page: Page, how: "keys" | "touch", markOn: Page = page, ms = 60_000): Promise<void> {
+  await mark(markOn, "tt-play");
+  const until = Date.now() + ms;
+  let k = 0;
+  while (Date.now() < until) {
+    if (await playing(page)) {
+      await mark(markOn, `tt-${how}`);
+      if (how === "keys") await keysTurn(page, k++);
+      else await touchTurn(page, k++);
+      await page.waitForTimeout(120);
+    } else await page.waitForTimeout(300);
+  }
+}
+
+test("Toy Tumble keeps every frame: a minute against five House Cats, and a TV with six boxes", async ({ browser, page, context }, info) => {
+  const gate = info.project.name as Gate;
+  test.skip(!(gate in BUDGET), "Chrome on the laptop, on a slowed phone, and on the TV");
+  test.setTimeout(240_000);
+  await context.setExtraHTTPHeaders({ "cf-connecting-ip": `10.251.${{ "laptop-chrome": 1, "android-chrome": 2, "tv-chrome": 3 }[gate]}.${(process.pid % 250) + 1}` });
+  await context.addInitScript(RECORDER);
+  const phones: Awaited<ReturnType<typeof newPlayer>>[] = [];
+  let play: () => Promise<void>;
+  if (gate === "tv-chrome") {
+    // The TV makes the table; one phone sits with five House Cats and plays while the TV is traced.
+    await context.addInitScript(() => (Element.prototype.requestFullscreen = () => Promise.resolve()));
+    await page.goto("/play/tv");
+    await page.getByRole("button", { name: "Start" }).click();
+    await poster(page, "Toy Tumble").click();
+    const code = await tvTable(page);
+    const ava = await newPlayer(browser, "Ava", { context: devices["Pixel 7"], path: `/play/j/${code}` });
+    phones.push(ava);
+    await expect(ava.page).toHaveURL(new RegExp(`/play/t/${code}$`));
+    await fiveCats(ava.page);
+    await startFromPhone(ava.page);
+    await expect(page.locator(".tt-tv-box")).toHaveCount(6);
+    play = () => playTumble(ava.page, "keys", page);
+  } else {
+    await page.goto("/play/");
+    await firstRun(page, "Gauge");
+    await page.getByRole("button", { name: "Play Toy Tumble" }).click();
+    await expect(page.locator(".lobby-seat.bot")).toHaveCount(1);
+    await fiveCats(page);
+    await page.getByRole("button", { name: "Start" }).click();
+    await expect(page.locator(".tt-mini")).toHaveCount(5);
+    play = () => playTumble(page, gate === "android-chrome" ? "touch" : "keys");
+  }
+  const r = await measure(browser, page, gate, play);
+  await closeAll(...phones.map((p) => p.context));
+  await judge(r, gate, info);
 });
 
 /**

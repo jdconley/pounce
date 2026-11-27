@@ -12,13 +12,14 @@ export async function ownAddress(context: BrowserContext): Promise<void> {
 }
 
 /** A new player in a fresh browser profile: the age check and a name, then Home. */
-export async function newPlayer(browser: Browser, name: string, opts: { path?: string; year?: string; context?: Parameters<Browser["newContext"]>[0] } = {}) {
+export async function newPlayer(browser: Browser, name: string, opts: { path?: string; year?: string; context?: Parameters<Browser["newContext"]>[0]; before?: (page: Page) => void } = {}) {
   // Each player comes from an address of its own, as family members' phones do: a full run signs
   // up more devices than the server's per-address limit allows from one (10 a minute). Only
   // wrangler dev believes this header; Cloudflare sets it itself in production.
   const context = await browser.newContext({ ...opts.context, extraHTTPHeaders: { "cf-connecting-ip": nextAddress() } });
   const page = await context.newPage();
   page.on("pageerror", (e) => console.log(name, "pageerror", e.message));
+  opts.before?.(page);
   if (process.env.E2E_DEBUG) {
     page.on("console", (m) => console.log(name, m.type(), m.text()));
     page.on("websocket", (ws) => {

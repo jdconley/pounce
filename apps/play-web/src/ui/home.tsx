@@ -3,7 +3,7 @@ import { useEffect, useState } from "preact/hooks";
 import { alertsCardDismissed, dismissAlertsCard, turnOnAlerts, useAlerts } from "../alerts";
 import { TodayDish, useDishOn } from "../daily/dish-home";
 import { art, RINGS } from "../lib/art";
-import { CATALOG, GAME_IDS, rulesLine, titleOf, type GameId } from "../lib/catalog";
+import { CATALOG, SHELF, rulesLine, titleOf, type GameId } from "../lib/catalog";
 import { navigate, typedCode } from "../lib/router";
 import { api, type TableEntry } from "../net/api";
 import { promptInstall, useInstall } from "../pwa";
@@ -148,7 +148,7 @@ export function Home(props: { onSettings: () => void; onPractice: (game: GameId)
 export function Posters(props: { onPlay: (game: GameId) => void; firstId?: string; disabled?: boolean; compact?: boolean }) {
   return (
     <div class={`poster-grid ${props.compact ? "compact" : ""}`}>
-      {GAME_IDS.map((id, i) => (
+      {SHELF.map((id, i) => (
         <article class={`poster ${id}`}>
           <img class="poster-art" src={art(CATALOG[id].art)} alt="" width={768} height={512} decoding="async" />
           <div class="poster-body">

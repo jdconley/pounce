@@ -17,6 +17,8 @@ import { Motion } from "../../table/motion";
 import { seatCat, seatName } from "../../table/seat";
 import { tilesLayout } from "../../table/tiles-layout";
 import { TilesPublic, tilesShown, tilesStyle } from "../../table/tiles-public";
+import { isTumble } from "../../tumble/store";
+import { TvTumble } from "../../tumble/tv";
 import { Cat, useSize } from "../common";
 
 import { PurrTvTable } from "./purr-tv";
@@ -36,6 +38,7 @@ type TableProps = { store: RoomStore; state: RoomState; offline: boolean };
 export function TvTable(props: TableProps) {
   const room = props.state.room!;
   if (room.gameId === "purrtrait") return room.purrtrait ? <PurrTvTable {...props} /> : null;
+  if (isTumble(room)) return <TvTumble {...props} />;
   if (room.gameId === "birdwatch") return room.birdwatch ? <TvBirdwatch {...props} /> : null;
   if (room.gameId === "tiles") return room.tiles ? <TvTiles {...props} /> : null;
   return room.game ? <TvCatTower {...props} /> : null;
