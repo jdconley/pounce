@@ -68,7 +68,10 @@ jobs:
           pnpm --filter @pounce/play-web exec playwright install --with-deps chromium webkit firefox
           # apt's lock and partial folder are root's alone; the cache can't read them, and doesn't need them.
           sudo rm -rf ~/apt-archives/lock ~/apt-archives/partial
+      # Toy Tumble on the shelf for its e2e; the deployed build keeps it off until switch-on.
       - run: pnpm --filter @pounce/play-web build
+        env:
+          WEB_TUMBLE: "on"
       - run: pnpm --filter @pounce/play-web e2e
       - if: failure()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
