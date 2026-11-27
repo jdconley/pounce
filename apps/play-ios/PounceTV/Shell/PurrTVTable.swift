@@ -178,6 +178,15 @@ private struct PurrTVTurn: View {
                         .background(Capsule().fill(Palette.magenta).overlay(Capsule().strokeBorder(Palette.ink, lineWidth: 6)))
                         .accessibilityIdentifier("tv.purr.group")
                 }
+            } else if view.phase == .reveal, let last = view.last, let drawer = view.drawer {
+                // Both score: the drawer and whoever got it.
+                Image(ArtName.cat(SeatInfo.catIndex(room.seats[safe: drawer]), last.points > 0 ? .celebrate : .awake))
+                    .resizable().scaledToFit().frame(width: 190, height: 190)
+                if last.points > 0 {
+                    OutlinedText("+\(last.points)", size: 72, fill: .white, width: 5)
+                        .padding(.horizontal, 40).padding(.vertical, 8)
+                        .background(Capsule().fill(Palette.teal).overlay(Capsule().strokeBorder(Palette.ink, lineWidth: 6)))
+                }
             }
         }
         .frame(maxHeight: .infinity)

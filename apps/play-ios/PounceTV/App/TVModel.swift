@@ -287,8 +287,19 @@ final class TVModel {
         show(code)
     }
 
+    #if DEBUG
+    /// The last Purrtrait key printed (live tests read `[tv] near <link>` from the log).
+    @ObservationIgnored private var printedNear: String?
+    #endif
+
     private func roomChanged(_ room: TVRoom) {
         guard room === table else { return }
+        #if DEBUG
+        if let near = room.store.room?.near, near.key != printedNear {
+            printedNear = near.key
+            fputs("[tv] near \(services.easelURL(room.code, near.key).absoluteString) \(near.code)\n", stderr)
+        }
+        #endif
         switch room.store.phase {
         case .notFound, .closed, .locked, .notNear, .removed:
             // The table is gone, closed, no longer lists this TV (`not_screen` reads as not
