@@ -5,15 +5,15 @@
  */
 import { PURRTRAIT_ON, TUMBLE_ON } from "./env";
 
-export type GameId = "cat-tower" | "tiles" | "birdwatch" | "tumble" | "purrtrait";
+export type GameId = "cat-tower" | "tiles" | "birdwatch" | "purrtrait" | "tumble";
 
 /** `tv`: only a TV makes this game's table (Purrtrait, played in one room on the TV's easel). */
 export const CATALOG: Record<GameId, { title: string; minSeats: number; maxSeats: number; tagline: string; art: string; tv?: true }> = {
   "cat-tower": { title: "Cat Tower", minSeats: 2, maxSeats: 6, tagline: "Rummy up a ten-shelf tower.", art: "game-cat-tower" },
   tiles: { title: "Tuna Tiles", minSeats: 2, maxSeats: 4, tagline: "Tile rummy. Yarn is wild.", art: "game-tiles" },
   birdwatch: { title: "Birdwatch", minSeats: 4, maxSeats: 6, tagline: "Bid, call trump, take tricks.", art: "game-birdwatch" },
-  tumble: { title: "Toy Tumble", minSeats: 2, maxSeats: 6, tagline: "Drop toys. Clear rows. Play tricks.", art: "game-tumble" },
   purrtrait: { title: "Purrtrait", minSeats: 2, maxSeats: 10, tagline: "Draw it. The room guesses.", art: "game-purrtrait", tv: true },
+  tumble: { title: "Toy Tumble", minSeats: 2, maxSeats: 6, tagline: "Drop toys. Clear rows. Play tricks.", art: "game-tumble" },
 };
 
 /** Every game this player draws, at a table it joins. */

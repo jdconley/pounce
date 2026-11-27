@@ -69,7 +69,8 @@ describe("the TV lobby", () => {
   test("Change game makes the other game", () => {
     expect(otherGame("cat-tower")).toBe("tiles");
     expect(otherGame("tiles")).toBe("birdwatch");
-    expect(otherGame("birdwatch")).toBe("purrtrait");
+    // Purrtrait and Toy Tumble are off the shelf in a build without their flags.
+    expect(otherGame("birdwatch")).toBe("cat-tower");
     expect(otherGame("purrtrait")).toBe("cat-tower");
     expect(gameOf(lobby([open]))).toBe("cat-tower");
     expect(gameOf(lobby([open], "tiles"))).toBe("tiles");
