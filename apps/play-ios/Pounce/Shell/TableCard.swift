@@ -1,9 +1,10 @@
 import PounceKit
 import SwiftUI
 
-/// One table on Home: its game on a tab at the top, its name, who you're playing with, then one
-/// footer line: how long the move has waited, the code while it gathers players (a started game
-/// can't be joined by code), or the seats as pips.
+/// One table on Home: its game on a tab at the top, its name, the rule set for a game that has
+/// them (Birdwatch: "Tucker rules"), who you're playing with, then one footer line: how long the
+/// move has waited, the code while it gathers players (a started game can't be joined by code), or
+/// the seats as pips.
 /// Your-turn cards glow orange and bounce with the waiting player's cat awake; the rest are
 /// dimmed with the current player's cat. Finished games carry a trophy.
 struct TableCard: View {
@@ -60,6 +61,19 @@ struct TableCard: View {
                         .fixedSize(horizontal: false, vertical: true)
                         .padding(.horizontal, 8)
                         .layoutPriority(1)
+                    if let rulesText {
+                        // Right under the name: which rules this table plays is part of what it is.
+                        Text(verbatim: rulesText)
+                            .font(.system(size: 12, weight: .heavy, design: .rounded))
+                            .foregroundStyle(.white.opacity(0.85))
+                            .shadow(color: Palette.ink.opacity(0.6), radius: 0, x: 0, y: 1)
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.8)
+                            .frame(height: 14)
+                            .padding(.horizontal, 8)
+                            .layoutPriority(1)
+                            .accessibilityIdentifier("home.table.\(item.id).rules")
+                    }
                     if !people.isEmpty {
                         PeopleLine(line: people)
                             .frame(height: 18)
@@ -157,8 +171,16 @@ struct TableCard: View {
             : String(localized: "\(days) days ago", comment: "Home table card: how long ago the last move was")
     }
 
+    /// "Tucker rules": a Birdwatch table's rule set, so two tables of the game tell apart.
+    private var rulesText: String? {
+        guard let rules = item.rules else { return nil }
+        return String(localized: "\(BirdWords.rules(rules)) rules", comment: "Home table card: a Birdwatch table's rule set, as in Tucker rules")
+    }
+
     private var accessibilityText: Text {
-        let gameName = game?.title ?? ""
+        let title = game?.title ?? ""
+        // The rule set rides with the game's name: "Birdwatch, Tucker rules".
+        let gameName = rulesText.map { "\(title), \($0)" } ?? title
         let table =
             item.yourTurn
                 ? Text("Your turn, \(item.title), \(gameName)", comment: "VoiceOver: a Home table card on your turn: its name, its game")

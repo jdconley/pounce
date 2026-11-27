@@ -75,4 +75,32 @@ describe("the tables list's storage", () => {
     upsertTable(sql, entry("BBBBB", { updatedAt: 1_000, status: "lobby" }));
     expect(listTables(sql)).toEqual([entry("BBBBB", { game: "tiles", updatedAt: 3_000, status: "over", yourTurn: false })]);
   });
+
+  it("keeps a Birdwatch table's rule set, and adds no options to a table of a game without any", () => {
+    const sql = storage(new DatabaseSync(":memory:"));
+    createTables(sql);
+    upsertTable(sql, entry("AAAAA"));
+    upsertTable(sql, entry("BBBBB", { game: "tiles", updatedAt: 2_000 }));
+    upsertTable(sql, entry("CCCCC", { game: "birdwatch", options: { rules: "official" }, updatedAt: 3_000 }));
+    // The host picks another rule set in the lobby.
+    upsertTable(sql, entry("CCCCC", { game: "birdwatch", options: { rules: "friesen" }, updatedAt: 4_000 }));
+    const [bird, tiles, tower] = listTables(sql);
+    expect(bird).toEqual(entry("CCCCC", { game: "birdwatch", options: { rules: "friesen" }, updatedAt: 4_000 }));
+    expect(Object.keys(tiles as TableEntry)).not.toContain("options");
+    expect(Object.keys(tower as TableEntry)).not.toContain("options");
+  });
+
+  it("a list saved before tables had options gains the column and reads exactly as it did", () => {
+    const db = new DatabaseSync(":memory:");
+    // The table as the release before this one made it.
+    db.exec(
+      "CREATE TABLE tables (code TEXT PRIMARY KEY, status TEXT, your_turn INTEGER, updated_at INTEGER, name TEXT, next TEXT, seats TEXT, moved_at INTEGER, game TEXT)",
+    );
+    db.prepare("INSERT INTO tables (code, status, your_turn, updated_at, name, game) VALUES (?, ?, ?, ?, ?, ?)").run(
+      "AAAAA", "playing", 1, 1_000, "Couch Cats", "birdwatch",
+    );
+    const sql = storage(db);
+    createTables(sql);
+    expect(listTables(sql)).toEqual([entry("AAAAA", { game: "birdwatch" })]);
+  });
 });

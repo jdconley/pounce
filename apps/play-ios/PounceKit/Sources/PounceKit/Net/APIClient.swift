@@ -18,10 +18,13 @@ public struct TableEntry: Codable, Equatable, Sendable {
     public let movedAt: Double?
     /// The game's id (`GameCatalog`); the server sends it only for a game other than Cat Tower.
     public let game: String?
+    /// What the table chose in its lobby, for a game that has options (Birdwatch's rule set).
+    /// Nil for a game without any, from an older server, or when it can't be read.
+    public let options: TableOptions?
 
     public init(
         code: String, name: String? = nil, status: String, yourTurn: Bool, updatedAt: Double, next: String? = nil,
-        seats: [TableSeat]? = nil, movedAt: Double? = nil, game: String? = nil
+        seats: [TableSeat]? = nil, movedAt: Double? = nil, game: String? = nil, options: TableOptions? = nil
     ) {
         self.code = code
         self.name = name
@@ -32,9 +35,10 @@ public struct TableEntry: Codable, Equatable, Sendable {
         self.seats = seats
         self.movedAt = movedAt
         self.game = game
+        self.options = options
     }
 
-    private enum CodingKeys: String, CodingKey { case code, name, status, yourTurn, updatedAt, next, seats, movedAt, game }
+    private enum CodingKeys: String, CodingKey { case code, name, status, yourTurn, updatedAt, next, seats, movedAt, game, options }
 
     public init(from decoder: any Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
@@ -47,6 +51,22 @@ public struct TableEntry: Codable, Equatable, Sendable {
         seats = (try? c.decodeIfPresent([TableSeat].self, forKey: .seats)) ?? nil
         movedAt = (try? c.decodeIfPresent(Double.self, forKey: .movedAt)) ?? nil
         game = (try? c.decodeIfPresent(String.self, forKey: .game)) ?? nil
+        options = (try? c.decodeIfPresent(TableOptions.self, forKey: .options)) ?? nil
+    }
+}
+
+/// A tables-list entry's `options`: what its lobby chose. Today only Birdwatch has any.
+public struct TableOptions: Codable, Equatable, Sendable {
+    /// Birdwatch's rule set; nil when absent or a rule set this app doesn't know.
+    public var rules: BirdRules?
+
+    public init(rules: BirdRules? = nil) { self.rules = rules }
+
+    private enum CodingKeys: String, CodingKey { case rules }
+
+    public init(from decoder: any Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        rules = (try? c.decodeIfPresent(BirdRules.self, forKey: .rules)) ?? nil
     }
 }
 

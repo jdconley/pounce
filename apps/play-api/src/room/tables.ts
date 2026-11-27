@@ -1,3 +1,4 @@
+import type { GameOptions } from "../games";
 import type { Person, SeatKind } from "../protocol";
 
 /**
@@ -26,6 +27,12 @@ export type TableEntry = {
    * before there was a second game. A list only shows such a table to an app that can draw it.
    */
   game?: string;
+  /**
+   * What the table chose in its lobby, for a game that has options: Birdwatch's rule set, so Home
+   * can say "Tucker rules". Absent for a game without any (Cat Tower, the tile game), whose rows
+   * stay what they always were.
+   */
+  options?: GameOptions;
 };
 
 /** The game a table without a `game` plays. */
@@ -97,15 +104,17 @@ export function createTables(sql: SqlStorage): void {
   if (!columns.some((c) => c.name === "moved_at")) sql.exec("ALTER TABLE tables ADD COLUMN moved_at INTEGER");
   // Null for every row there already is, and for every Cat Tower table from here on.
   if (!columns.some((c) => c.name === "game")) sql.exec("ALTER TABLE tables ADD COLUMN game TEXT");
+  // Null for every row there already is, and for every table of a game without options.
+  if (!columns.some((c) => c.name === "options")) sql.exec("ALTER TABLE tables ADD COLUMN options TEXT");
 }
 
 /** An older report never overwrites a newer one. */
 export function upsertTable(sql: SqlStorage, entry: TableEntry): void {
   sql.exec(
-    `INSERT INTO tables (code, name, status, your_turn, updated_at, next, seats, moved_at, game) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `INSERT INTO tables (code, name, status, your_turn, updated_at, next, seats, moved_at, game, options) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
      ON CONFLICT (code) DO UPDATE SET name = excluded.name, status = excluded.status,
        your_turn = excluded.your_turn, updated_at = excluded.updated_at, next = excluded.next,
-       seats = excluded.seats, moved_at = excluded.moved_at, game = excluded.game
+       seats = excluded.seats, moved_at = excluded.moved_at, game = excluded.game, options = excluded.options
      WHERE excluded.updated_at >= tables.updated_at`,
     entry.code,
     entry.name ?? null,
@@ -116,6 +125,7 @@ export function upsertTable(sql: SqlStorage, entry: TableEntry): void {
     entry.seats ? JSON.stringify(entry.seats) : null,
     entry.movedAt ?? null,
     entry.game ?? null,
+    entry.options ? JSON.stringify(entry.options) : null,
   );
 }
 
@@ -136,8 +146,9 @@ export function listTables(sql: SqlStorage): TableEntry[] {
       seats: string | null;
       moved_at: number | null;
       game: string | null;
+      options: string | null;
     }>(
-      "SELECT code, name, status, your_turn, updated_at, next, seats, moved_at, game FROM tables ORDER BY updated_at DESC LIMIT ?",
+      "SELECT code, name, status, your_turn, updated_at, next, seats, moved_at, game, options FROM tables ORDER BY updated_at DESC LIMIT ?",
       MAX_TABLES,
     )
     .toArray()
@@ -151,5 +162,6 @@ export function listTables(sql: SqlStorage): TableEntry[] {
       ...(row.seats === null ? {} : { seats: JSON.parse(row.seats) as TableSeat[] }),
       ...(row.moved_at === null ? {} : { movedAt: row.moved_at }),
       ...(row.game === null ? {} : { game: row.game }),
+      ...(row.options === null ? {} : { options: JSON.parse(row.options) as GameOptions }),
     }));
 }

@@ -655,6 +655,15 @@
   box-shadow: 0 calc(var(--u) * 7) 0 var(--ink);
 }
 
+.tv-table .seat-avatar.pickled .ring {
+  box-shadow: 0 0 0 calc(var(--u) * 8) var(--pickle), 0 calc(var(--u) * 7) 0 calc(var(--u) * 8) var(--ink);
+}
+
+.tv-table .seat-avatar .pickled-tag {
+  border-width: calc(var(--u) * 4);
+  font-size: calc(var(--u) * 34);
+}
+
 .tv-table .seat-avatar .ring::after {
   inset: calc(var(--u) * -16);
   border-width: calc(var(--u) * 10);

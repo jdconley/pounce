@@ -33,8 +33,8 @@ export type DragHandlers = {
   pose: () => Pose;
   onTap: () => void;
   onStart?: () => void;
-  /** Called every frame with the point in table coordinates (for hover highlights). */
-  onMove?: (p: Point) => void;
+  /** Called every frame with the point in table coordinates and where the held thing is drawn (for hover highlights). */
+  onMove?: (p: Point, pose: Pose) => void;
   /** Dropped at `p` (table coordinates), where the element now sits at `pose`. */
   onDrop: (p: Point, pose: Pose) => void;
   onCancel?: () => void;
@@ -64,8 +64,9 @@ export function press(e: PointerEvent, el: HTMLElement, h: DragHandlers): void {
 
   const draw = () => {
     frame = 0;
-    el.style.transform = transformOf(current());
-    h.onMove?.({ x: latest.x - origin.x, y: latest.y - origin.y });
+    const pose = current();
+    el.style.transform = transformOf(pose);
+    h.onMove?.({ x: latest.x - origin.x, y: latest.y - origin.y }, pose);
   };
 
   const move = (ev: PointerEvent) => {
