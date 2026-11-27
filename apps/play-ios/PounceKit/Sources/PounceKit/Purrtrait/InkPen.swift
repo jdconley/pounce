@@ -144,33 +144,35 @@ public struct InkPen: Sendable {
 
     // MARK: the server lost it, or the device did
 
-    /// The whole picture again, for `inkResend` (spec §6.5): a clear, then every stroke, renumbered
-    /// from 0 (the server's easel starts over), split into messages under the size limit. The pen
-    /// takes the new numbers, so later ops line up. Nothing already queued is sent after it.
+    /// The whole picture again, for `inkResend` (spec §6.5, the server's wire rules): a clear, then
+    /// every stroke with its own id (ids only have to go up), split into messages under the size
+    /// limit; the caller marks the last one `last`. The next stroke follows the highest id resent,
+    /// so the room's easel, which knows only these, sees ids that go up by one. Nothing already
+    /// queued goes after it.
     public mutating func resend() -> [[InkOp]] {
-        let drawingStroke = strokeID
-        var renumbered = InkDrawing()
         var ops: [InkOp] = [.clear]
-        var newStroke: Int?
-        for (i, s) in drawing.strokes.enumerated() {
+        for s in drawing.strokes {
             let pts = InkCodec.simplify(s.points)
-            ops.append(.stroke(id: i, color: s.color, width: s.width, start: pts[0],
+            ops.append(.stroke(id: s.id, color: s.color, width: s.width, start: pts[0],
                                deltas: InkCodec.deltas(from: pts[0], through: Array(pts.dropFirst()))))
-            renumbered.apply(.stroke(id: i, color: s.color, width: s.width, start: s.points[0],
-                                     deltas: InkCodec.deltas(from: s.points[0], through: Array(s.points.dropFirst()))))
-            if s.id == drawingStroke {
-                newStroke = i
-                lastSent = pts.last
-            }
+            if s.id == strokeID { lastSent = pts.last }
         }
-        drawing = renumbered
-        nextID = drawing.strokes.count
-        strokeID = newStroke
-        strokeSent = newStroke != nil
+        if let top = drawing.strokes.map(\.id).max() { nextID = top + 1 } else { nextID = 0 }
+        if let id = strokeID { nextID = max(nextID, id + 1) }
+        strokeSent = strokeID != nil
         pending = []
         queue = []
         urgent = false
         return InkCodec.chunk(ops)
+    }
+
+    /// The server refused a batch with `easel_full`: what waits to go would be refused too. The
+    /// stroke ends and the queue empties, so the next message (Clear) goes on its own.
+    public mutating func dropQueued() {
+        if strokeID != nil { up() }
+        pending = []
+        queue = []
+        urgent = false
     }
 
     /// A drawing the server kept (`inkSync`), taken only when this device has none of its own for

@@ -24,7 +24,24 @@
 
 ## Rulings
 
-Record yours here as you go, as the Birdwatch iOS plan did.
+Mine, open to JD's override.
+
+1. **Codes are 5 + 2, not 6 + 2.** Room codes are five characters (`RoomCode`), so the TV's typed fallback is seven (`room.near.code`). Join keeps five tiles; when a code turns out to be a Purrtrait table's (a 403 on the probe), two more tiles appear with "Two more from the TV". A seven-character code goes on the socket as `near`.
+2. **The palette** is ours and the web's (notes `purrtrait-ios-tv.md`): black #1A1426, red #FF3B4A, orange #FF9419, yellow #FFD400, green #2ECC5B, blue #2F80FF, purple #9B4DFF, brown #8B5A2B, eraser white. Brown over pink: animals and trees need it.
+3. **One easel view, two hosts.** `PurrEaselView` (layers: a bitmap of finished strokes from the `InkRaster` actor, a `CAShapeLayer` for the live stroke, and one shape layer per stroke while its bitmap is on the way, so nothing blinks) is compiled into both apps. The phone's `PurrCanvasView` adds touches and a 120 Hz display link while a finger is down; the TV's `PurrInkFollower` feeds it from the room's `InkFeed`, building a whole `inkSync` off the main thread.
+4. **Ink never touches SwiftUI state.** `RoomStore.ink` (`InkFeed`) is unobserved; the easel listens to it. The store drops a relay for any turn but the room's, and a new turn key empties it (the reveal keeps the picture up).
+5. **What the drawer sees is what the finger made**, every point 2 units apart; what goes is each batch simplified (RDP, 1 unit). The TV's lines sit within a unit of the drawer's.
+6. **The resend** (server wire): a clear, then every visible stroke with its own id, the final message `last: true`. The next stroke follows the highest id resent. Batches that never left (the socket was down) go again after the reconnect, in order. The drawer's device takes the room's `inkSync` only when it has no drawing of its own this turn (it was closed and came back); otherwise its own picture stands and its unsent batches catch the room up.
+7. **`easel_full`** ends the stroke, drops what waits to go (the room would refuse it whole), shows "Easel full" over the easel and lights Clear, which then goes as a message of its own.
+8. **403 to a phone.** URLSession never hands the app an upgrade's body, so a phone reads `x-pounce-error` when the server sends it (`not_near`, `removed`); without it, a 403 to a socket that brought a key (or a typed code) is `not_near`, and any other 403 is retried as before. A `removed` error on an open socket ends the visit. Asked of the server in the notes.
+9. **The phone's lobby is its own screen** (`PurrLobbyView`): the TV does the joining, so no code chip, QR, invite, House Cat or seat ellipse for ten. The cats in a grid, the host's timer pills, "This phone" for pass and play, the host's tap on another cat removes it (asks first), Start at two.
+10. **The shelf.** `GameCatalog.Availability.onTV`: the card is bright, wears "Starts on the TV", and a tap says "Pick it on the TV." (a tip points at it once). Nothing is made from the phone.
+11. **Show on TV** is in the host's paw menu only, as "New TV" (the spec's path for a TV that came back as a new device). The lobby has none.
+12. **The drawer's screen** puts the paw, the word and the clock in one row; the 3:4 easel takes the height that's left; colours across one row, widths, Undo and Clear in the next, Got it and Give up last. Give up asks first. Wide screens (iPad landscape) put the tools in a column beside an easel at full height. Text in the tools caps at XXXL so the SE fits at the largest size.
+13. **The reveal shows on every phone** (the word is everyone's then) and on the TV across the easel. The TV holds the last reveal three seconds before game over.
+14. **The TV has no SpriteKit scene for Purrtrait** (`TVRoom.Scene.purrtrait`); `PurrTVTable` draws in SwiftUI and the easel's layers, and marks itself gameplay for the watchdog. Its paw draws its own icon.
+15. **Tips**: "Pick one to draw" (the word cards), "No letters or numbers" (the easel, learned by a stroke), "Tap who said it first" (Got it, after the easel's), "Guess out loud" (a guesser's "Look at the TV"), and "Pick it on the TV." (the shelf card).
+16. **No video** in How to play for Purrtrait yet: four short sections.
 
 ## Review Focus
 

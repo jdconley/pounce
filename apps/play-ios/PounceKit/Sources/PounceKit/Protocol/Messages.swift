@@ -327,11 +327,12 @@ public enum ClientMessage: Encodable, Equatable, Sendable {
     /// A Purrtrait move: the same `act` envelope around a `PurrAction`.
     case actPurrtrait(seat: Seat, action: PurrAction, id: String? = nil)
     /// Purrtrait: the drawer's ops for turn `turn`, from the device that owns the drawing turn.
-    case ink(seat: Seat, turn: String, ops: [InkOp])
+    /// `last`: the final message of a reply to `inkResend` (sent as `"last": true`, else omitted).
+    case ink(seat: Seat, turn: String, ops: [InkOp], last: Bool = false)
     /// Purrtrait: the host takes a seat off the table (in the lobby it opens; in a game it's skipped).
     case remove(seat: Seat)
 
-    private enum CodingKeys: String, CodingKey { case t, seat, person, kind, action, state, code, name, rug, back, id, aim, options, seats, turn, ops }
+    private enum CodingKeys: String, CodingKey { case t, seat, person, kind, action, state, code, name, rug, back, id, aim, options, seats, turn, ops, last }
 
     public func encode(to encoder: any Encoder) throws {
         var c = encoder.container(keyedBy: CodingKeys.self)
@@ -412,11 +413,12 @@ public enum ClientMessage: Encodable, Equatable, Sendable {
             try c.encode(seat, forKey: .seat)
             try c.encode(action, forKey: .action)
             try c.encodeIfPresent(id, forKey: .id)
-        case .ink(let seat, let turn, let ops):
+        case .ink(let seat, let turn, let ops, let last):
             try c.encode("ink", forKey: .t)
             try c.encode(seat, forKey: .seat)
             try c.encode(turn, forKey: .turn)
             try c.encode(ops, forKey: .ops)
+            if last { try c.encode(true, forKey: .last) }
         case .remove(let seat):
             try c.encode("remove", forKey: .t)
             try c.encode(seat, forKey: .seat)

@@ -5,6 +5,7 @@
   { "name": "act-giveUp", "message": { "t": "act", "seat": 0, "action": { "type": "giveUp" } } },
   { "name": "act-forfeit", "message": { "t": "act", "seat": 1, "action": { "type": "forfeit" } } },
   { "name": "ink", "message": { "t": "ink", "seat": 3, "turn": "2:5", "ops": [["s", 0, 0, 1, 384, 210, 3, -1], ["p", 0, 2, 2], ["u", 0], ["c"]] } },
+  { "name": "ink-resend-last", "message": { "t": "ink", "seat": 3, "turn": "2:5", "ops": [["c"], ["s", 4, 1, 2, 10, 20, 5, 5]], "last": true } },
   { "name": "remove", "message": { "t": "remove", "seat": 4 } },
   { "name": "setOptions-timer", "message": { "t": "setOptions", "options": { "timer": 45 } } }
 ]

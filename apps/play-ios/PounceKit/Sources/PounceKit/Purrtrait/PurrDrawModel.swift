@@ -25,17 +25,20 @@ import Observation
     public private(set) var full = false
     /// Strokes this turn (the tips count them).
     public private(set) var strokes = 0
+    /// Strokes on the easel now (observed: the debug probe and tests read it).
+    public private(set) var visible = 0
 
     @ObservationIgnored public private(set) var pen = InkPen()
     /// Ops whose message never left the device, oldest first.
     @ObservationIgnored private var unsent: [[InkOp]] = []
-    @ObservationIgnored private let send: @MainActor (_ ops: [InkOp], _ failed: @escaping @MainActor () -> Void) -> Void
+    @ObservationIgnored private let send: @MainActor (_ ops: [InkOp], _ last: Bool, _ failed: @escaping @MainActor () -> Void) -> Void
     @ObservationIgnored private let clock: () -> Duration
 
-    /// `send` gets each message's ops (for `seat` and `turn`), and a closure to call if it never left.
+    /// `send` gets each message's ops (for `seat` and `turn`), whether it ends a resend reply
+    /// (`last`), and a closure to call if it never left.
     public init(
         seat: Seat, turn: String, clock: @escaping () -> Duration = { ContinuousClock.now - PurrDrawModel.origin },
-        send: @escaping @MainActor (_ ops: [InkOp], _ failed: @escaping @MainActor () -> Void) -> Void
+        send: @escaping @MainActor (_ ops: [InkOp], _ last: Bool, _ failed: @escaping @MainActor () -> Void) -> Void
     ) {
         self.seat = seat
         self.turn = turn
@@ -103,8 +106,8 @@ import Observation
         for message in InkCodec.chunk(ops) { out(message) }
     }
 
-    private func out(_ ops: [InkOp]) {
-        send(ops) { [weak self] in self?.unsent.append(ops) }
+    private func out(_ ops: [InkOp], last: Bool = false) {
+        send(ops, last) { [weak self] in self?.unsent.append(ops) }
     }
 
     /// The socket is back: whatever never left goes now, in order (the room drops it if the turn
@@ -115,10 +118,12 @@ import Observation
         for ops in pending { out(ops) }
     }
 
-    /// The room lost the turn's ink (`inkResend`): the whole picture again, starting with a clear.
+    /// The room lost the turn's ink (`inkResend`): the whole picture again, starting with a clear,
+    /// its final message marked `last` (even when there is only one).
     public func resend() {
         unsent = []
-        for message in pen.resend() { out(message) }
+        let messages = pen.resend()
+        for (i, message) in messages.enumerated() { out(message, last: i == messages.count - 1) }
         sync()
     }
 
@@ -130,13 +135,16 @@ import Observation
         return true
     }
 
-    /// The server's `easel_full`.
+    /// The server's `easel_full`: it refused the batch whole, and would refuse what waits too. The
+    /// next message is Clear, on its own.
     public func easelFull() {
-        pen.up()
+        pen.dropQueued()
+        unsent = []
         full = true
     }
 
     private func sync() {
+        if visible != pen.drawing.strokes.count { visible = pen.drawing.strokes.count }
         let undo = !pen.drawing.isEmpty
         if canUndo != undo { canUndo = undo }
         if canClear != undo { canClear = undo }

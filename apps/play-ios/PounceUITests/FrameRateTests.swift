@@ -69,6 +69,42 @@ final class FrameRateTests: XCTestCase {
         play("tiles-late", as: "tuna-tiles-late", ready: "tiles.debug")
     }
 
+    /// Purrtrait's drawer (`-demo purr-draw`): a scripted finger draws for the whole window through
+    /// the same code a touch runs (four coalesced samples a frame), lifting every two seconds,
+    /// and the easel clears itself past 40 strokes. Every point draws on its frame; finished
+    /// strokes flatten into the bitmap off the main thread; batches go every 50 ms.
+    func testPurrtraitDrawingHoldsTheFrameRate() {
+        let app = Live.demo("purr-draw", speed: 1)
+        app.launchArguments += ["-autoplay"]
+        app.launch()
+        XCTAssertTrue(el(app, "purr.easel").waitForExistence(timeout: Live.t(20)), "the easel never came up")
+        let before = gameplayBaseline(app)
+        // Only waiting: nothing reads the screen while the finger draws (it starts 3 s after the
+        // easel appears, once the baseline is taken).
+        Thread.sleep(forTimeInterval: seconds)
+        let host = Host.framesUnreliable()
+        guard let after = watchdog(app) else { return XCTFail("the watchdog went away") }
+        let window = after - before
+        let report = window.report("purrtrait-drawing") + String(format: " | host load %.2f per core", host.load)
+        print(report)
+        for frame in (value(el(app, "watchdog.frames")) ?? "").split(separator: "\n") {
+            print("FRAMES purrtrait-drawing \(frame)")
+        }
+        let note = XCTAttachment(string: report)
+        note.name = "frames-purrtrait-drawing"
+        note.lifetime = .keepAlways
+        add(note)
+        XCTAssertGreaterThan(window.link.count, Int(seconds) * 20, "the easel hardly drew: \(report)")
+        for failure in window.timeFailures() { XCTFail("\(failure): \(report)") }
+        if host.busy || !window.nearReference {
+            print("FRAMES purrtrait-drawing: frames over 16.7 ms are reported, not enforced: \(host.busy ? "the simulator's Mac is busy" : String(format: "this machine is %.2fx slower than the reference", window.slowdown))")
+        } else {
+            XCTAssertEqual(window.link.slow, 0, "the main thread missed a frame by over 16.7 ms: \(report)")
+        }
+        // The finger really drew: the probe counts the easel's strokes.
+        XCTAssertFalse((value(el(app, "purr.debug")) ?? "").contains("strokes=0"), "the scripted finger never drew")
+    }
+
     // MARK: playing and the gate
 
     /// `release`: seconds into the window when a held demo goes on (`Live.releaseDemo`).

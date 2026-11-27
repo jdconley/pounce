@@ -115,14 +115,41 @@ final class PurrCanvasView: PurrEaselView {
         if window == nil {
             end()
             stopLink()
+            #if DEBUG
+            autoplay?.invalidate()
+            autoplay = nil
+            #endif
         }
+        #if DEBUG
+        if window != nil, Autoplay.enabled, autoplay == nil {
+            let link = CADisplayLink(target: Ticker(self), selector: #selector(Ticker.autoplay))
+            link.preferredFrameRateRange = CAFrameRateRange(minimum: 80, maximum: 120, preferred: 120)
+            link.add(to: .main, forMode: .common)
+            autoplay = link
+        }
+        #endif
     }
+
+    #if DEBUG
+    private var autoplay: CADisplayLink?
+    private var autoplayStart: CFTimeInterval?
+
+    fileprivate func autoplayTick() {
+        let now = CACurrentMediaTime()
+        if autoplayStart == nil { autoplayStart = now }
+        guard let start = autoplayStart, now - start >= Autoplay.firstDragAfter else { return }
+        autoplayStep(now - start)
+    }
+    #endif
 
     /// Breaks the display link's hold on the view.
     @MainActor private final class Ticker: NSObject {
         weak var view: PurrCanvasView?
         init(_ view: PurrCanvasView) { self.view = view }
         @objc func tick() { view?.tick() }
+        #if DEBUG
+        @objc func autoplay() { view?.autoplayTick() }
+        #endif
     }
 
     #if DEBUG
@@ -130,6 +157,7 @@ final class PurrCanvasView: PurrEaselView {
     /// touch runs, `samples` points a frame, for as long as the canvas is up.
     func autoplayStep(_ t: Double) {
         guard let model else { return }
+        let work = FrameWork("purr.touch"); defer { work.end() }
         let w = Double(InkGrid.width), h = Double(InkGrid.height)
         func at(_ s: Double) -> InkPoint {
             InkPoint(Int(w * (0.5 + 0.38 * sin(s * 1.7))), Int(h * (0.5 + 0.38 * sin(s * 2.3 + 0.6))))

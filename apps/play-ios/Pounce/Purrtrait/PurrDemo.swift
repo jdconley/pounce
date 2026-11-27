@@ -120,7 +120,8 @@ actor PurrDemoSocket: RoomSocketing {
     /// After the reveal's few seconds: the next drawer (the demo's other seats just watch).
     private func next(after view: PurrView) {
         Task {
-            try? await Task.sleep(for: Pace.duration(.seconds(4)))
+            // The room's own clock, not the app's pace: the reveal stays up its 4 seconds.
+            try? await Task.sleep(for: .seconds(4))
             await self.advance()
         }
     }

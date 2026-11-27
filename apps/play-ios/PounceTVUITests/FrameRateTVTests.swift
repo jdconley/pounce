@@ -62,6 +62,18 @@ final class FrameRateTVTests: XCTestCase {
         measure(app, as: "tv-shell")
     }
 
+    /// Purrtrait's easel with six players (DEBUG `-demo tv-purrtrait`): a drawer's phone sends a cat
+    /// stroke by stroke, 50 ms batches as a phone sends them, then the reveal and the next turn,
+    /// over and over. The easel is layers in SwiftUI, so there's no SpriteKit table to ask for the
+    /// top rate: the main thread's budget, its hangs and the display link's frames are what's held.
+    func testPurrtraitEaselPlaysAtTheTopFrameRate() {
+        let app = Live.demo("tv-purrtrait", speed: 1)
+        app.launchArguments += ["-seats", "6", "-settings.soundOn", "<false/>", "-tv.soundOn", "<false/>"]
+        app.launch()
+        XCTAssertTrue(el(app, "tv.purrtrait").waitForExistence(timeout: Live.t(20)), "the easel never came up")
+        measure(app, as: "tv-purrtrait-6", table: false)
+    }
+
     /// Tonight's board on a busy evening (DEBUG `-demo tv-board`): a result and a fresh board every
     /// 1.5 s, progress between, rows sliding in and cats leaping, and a run offered and watched
     /// halfway. SwiftUI only, so there is no table to ask for the top rate: the main thread's budget,

@@ -5,16 +5,18 @@ import Testing
 @MainActor @Suite struct PurrDrawModelTests {
     final class Wire {
         var sent: [[InkOp]] = []
+        var lasts: [Bool] = []
         var failing = false
         var failures: [@MainActor () -> Void] = []
     }
 
     private func model(_ wire: Wire, now: @escaping () -> Duration) -> PurrDrawModel {
-        PurrDrawModel(seat: 2, turn: "1:3", clock: now) { ops, failed in
+        PurrDrawModel(seat: 2, turn: "1:3", clock: now) { ops, last, failed in
             if wire.failing {
                 wire.failures.append(failed)
             } else {
                 wire.sent.append(ops)
+                wire.lasts.append(last)
             }
         }
     }
@@ -65,8 +67,11 @@ import Testing
         m.down(InkPoint(10, 300))
         m.up()
         wire.sent = []
+        wire.lasts = []
         m.resend()
         #expect(wire.sent.first?.first == .clear)
+        // One message: it is the first and the last.
+        #expect(wire.lasts == [true])
         let picture = InkDrawing(ops: wire.sent.flatMap { $0 })
         #expect(picture.strokes.count == 2)
         #expect(picture.strokes.map(\.id) == [0, 1])
@@ -107,14 +112,25 @@ import Testing
 
     @Test func aFullEaselTakesNoStrokesUntilCleared() {
         let wire = Wire()
-        let m = model(wire) { .zero }
+        var now = Duration.zero
+        let m = model(wire) { now }
         m.down(InkPoint(10, 10))
         m.up()
+        // A stroke held back by the rate limit when the refusal comes: it never goes.
+        for i in 0..<30 {
+            m.down(InkPoint(20 + i, 20))
+            m.up()
+        }
         m.easelFull()
+        #expect(!m.needsTicks)
+        now += .seconds(2)
         #expect(m.full)
         #expect(!m.down(InkPoint(20, 20)))
+        wire.sent = []
         #expect(m.clear())
         #expect(!m.full)
+        // Clear goes on its own (the server refuses a batch past the caps whole).
+        #expect(wire.sent == [[.clear]])
         #expect(m.down(InkPoint(20, 20)))
     }
 

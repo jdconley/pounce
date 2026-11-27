@@ -123,6 +123,11 @@ struct PurrStage: View {
             PurrMenuSheet(
                 code: session.code, tableName: store.room?.title ?? TableName.fallback(code: session.code),
                 host: store.room?.youAreHost == true,
+                others: removable,
+                onRemove: { seat in
+                    menuOpen = false
+                    session.send(.remove(seat: seat))
+                },
                 forfeit: model.ageBand == .kitten ? nil : forfeitSeat,
                 onHome: {
                     menuOpen = false
@@ -249,8 +254,8 @@ struct PurrStage: View {
         }
         guard draw?.turn != key || draw?.seat != seat else { return }
         let store = store
-        let next = PurrDrawModel(seat: seat, turn: key) { ops, failed in
-            store.sendInk(seat: seat, turn: key, ops: ops, failed: failed)
+        let next = PurrDrawModel(seat: seat, turn: key) { ops, last, failed in
+            store.sendInk(seat: seat, turn: key, ops: ops, last: last, failed: failed)
         }
         draw = next
         revision = .init(serial: revision.serial + 1, change: .cleared)
@@ -293,6 +298,16 @@ struct PurrStage: View {
         return seat.flatMap { table.room.seats[safe: $0]?.person?.id }
     }
 
+    /// The host may take anyone at another phone off the table (spec §4.4).
+    private var removable: [(seat: Seat, name: String, cat: Int)] {
+        guard let table, store.room?.youAreHost == true, table.view.isLive else { return [] }
+        return table.room.seats.indices.compactMap { seat in
+            let info = table.room.seats[seat]
+            guard info.kind == .human, !info.yours, !table.view.isOut(seat) else { return nil }
+            return (seat, SeatInfo.name(table.room, seat), SeatInfo.catIndex(info))
+        }
+    }
+
     private var forfeitSeat: Seat? {
         guard let table, table.view.isLive else { return nil }
         let mine = table.mySeats.filter { !table.view.isOut($0) }
@@ -333,7 +348,7 @@ struct PurrStage: View {
         case .over: "over"
         }
         return "phase=\(v.phase.rawValue) screen=\(screen) turn=\(v.turn) drawer=\(v.drawer.map(String.init) ?? "-") "
-            + "strokes=\(draw?.drawing.strokes.count ?? 0) scores=\(v.scores.map(String.init).joined(separator: ","))"
+            + "strokes=\(draw?.visible ?? 0) scores=\(v.scores.map(String.init).joined(separator: ","))"
     }
     #endif
 }
@@ -345,6 +360,9 @@ struct PurrMenuSheet: View {
     let code: String
     let tableName: String
     let host: Bool
+    /// The host's: players at other phones who can be removed.
+    var others: [(seat: Seat, name: String, cat: Int)] = []
+    var onRemove: (Seat) -> Void = { _ in }
     let forfeit: Seat?
     let onHome: () -> Void
     let onForfeit: (Seat) -> Void
@@ -353,10 +371,14 @@ struct PurrMenuSheet: View {
     @State private var howTo = false
     @State private var tv = false
     @State private var confirming = false
+    @State private var picking = false
+    @State private var removing: (seat: Seat, name: String)?
 
     var body: some View {
         Group {
-            if howTo {
+            if picking {
+                removeList.transition(.move(edge: .trailing).combined(with: .opacity))
+            } else if howTo {
                 HowToPlaySheet(game: GameCatalog.purrtrait, exit: .back) { howTo = false }
             } else if tv {
                 ShowOnTVSheet(code: code, onBack: { tv = false }, onClose: onClose)
@@ -366,9 +388,55 @@ struct PurrMenuSheet: View {
             }
         }
         .animation(.spring(duration: 0.4, bounce: 0.25).paced, value: tv)
-        .presentationDetents(howTo || tv ? [.large] : [.height(forfeit == nil ? 360 : 440)])
+        .animation(.spring(duration: 0.4, bounce: 0.25).paced, value: picking)
+        .presentationDetents(howTo || tv || picking ? [.large] : [.height((forfeit == nil ? 360 : 440) + (others.isEmpty ? 0 : 76))])
         .presentationDragIndicator(.visible)
         .presentationBackground(Palette.night)
+    }
+
+    /// The host's list of players to remove; a tap asks first.
+    private var removeList: some View {
+        VStack(spacing: 14) {
+            HStack(spacing: 8) {
+                SheetBackButton { picking = false }
+                Spacer(minLength: 0)
+                OutlinedText(String(localized: "Remove a player", comment: "Purrtrait menu (host): take someone off the table"), size: 24, fill: Palette.orange, width: 3)
+                Spacer(minLength: 0)
+                SheetCloseButton(action: onClose)
+            }
+            .padding(.horizontal, 16)
+            ScrollView {
+                VStack(spacing: 10) {
+                    ForEach(others, id: \.seat) { other in
+                        Button {
+                            Haptics.shared.tick()
+                            removing = (other.seat, other.name)
+                        } label: {
+                            HStack(spacing: 12) {
+                                Image(ArtName.cat(other.cat, .awake)).resizable().scaledToFit().frame(width: 48, height: 48)
+                                OutlinedText(other.name, size: 20, alignment: .leading).frame(maxWidth: .infinity, alignment: .leading)
+                            }
+                            .padding(.horizontal, 14).padding(.vertical, 6)
+                            .background(RoundedRectangle(cornerRadius: 18).fill(Palette.ink.opacity(0.5)))
+                        }
+                        .buttonStyle(.plain)
+                        .accessibilityIdentifier("menu.remove.\(other.seat)")
+                    }
+                }
+                .padding(.horizontal, 16)
+            }
+        }
+        .padding(.top, 12)
+        .alert(Text("Remove \(removing?.name ?? "")?", comment: "Purrtrait (host): confirm taking a player off the table"),
+               isPresented: Binding(get: { removing != nil }, set: { if !$0 { removing = nil } })) {
+            Button(String(localized: "Remove", comment: "Purrtrait (host): take this player off the table"), role: .destructive) {
+                if let seat = removing?.seat { onRemove(seat) }
+                removing = nil
+            }
+            Button(String(localized: "Keep", comment: "Purrtrait: don't remove the player"), role: .cancel) { removing = nil }
+        } message: {
+            Text("Their turns are skipped. They can't come back.", comment: "Purrtrait: what removing a player mid-game does")
+        }
     }
 
     private var menu: some View {
@@ -407,6 +475,12 @@ struct PurrMenuSheet: View {
             PillButton(icon: nil, color: Palette.orange, size: .medium, width: 250,
                        title: String(localized: "How to play", comment: "Table menu: open the rules"), accessibilityLabel: "How to play") { howTo = true }
                 .accessibilityIdentifier("menu.rules")
+            if !others.isEmpty {
+                PillButton(icon: ArtName.iconRemove, color: Palette.violet, size: .medium, width: 250,
+                           title: String(localized: "Remove a player", comment: "Purrtrait menu (host): take someone off the table"),
+                           accessibilityLabel: "Remove a player") { picking = true }
+                    .accessibilityIdentifier("menu.remove")
+            }
             if let forfeit {
                 PillButton(icon: nil, color: Palette.refuse, size: .medium, width: 250,
                            title: String(localized: "Leave game", comment: "Purrtrait menu: leave the game (asks first)"),

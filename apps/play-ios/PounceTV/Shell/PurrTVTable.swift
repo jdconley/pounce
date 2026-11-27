@@ -61,6 +61,11 @@ struct PurrTVTable: View {
             guard guesser != nil else { return }
             Sound.shared.play(ArtName.Sound.sfxFanfare, volume: 0.8)
         }
+        #if DEBUG
+        // SwiftUI and layers, no SpriteKit table: its frames and hangs count as gameplay.
+        .onAppear { MainThreadWatchdog.shared?.screen(true) }
+        .onDisappear { MainThreadWatchdog.shared?.screen(false) }
+        #endif
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("tv.purrtrait")
     }

@@ -160,6 +160,9 @@ import Testing
                 .stroke(id: 0, color: 0, width: 1, start: InkPoint(384, 210), deltas: [InkPoint(3, -1)]),
                 .extend(id: 0, deltas: [InkPoint(2, 2)]), .undo(id: 0), .clear,
             ])),
+            ("ink-resend-last", .ink(seat: 3, turn: "2:5", ops: [
+                .clear, .stroke(id: 4, color: 1, width: 2, start: InkPoint(10, 20), deltas: [InkPoint(5, 5)]),
+            ], last: true)),
             ("remove", .remove(seat: 4)),
             ("setOptions-timer", .setOptions(RoomOptions(timer: 45))),
         ]

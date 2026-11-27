@@ -30,6 +30,14 @@ with a SpriteKit table. Apple frameworks only, no third-party packages.
   sheet, the menu and game over). The TV compiles the scene, not the shell. Its view, events, moves and table
   model are in PounceKit (`BirdwatchModels`, `BirdTableModel`, `BirdLayout`). The app never ports the rules:
   what may be played, bid or called comes from the server's view (`playable`, `bidRange`, `partnerChoices`).
+- `Pounce/Purrtrait/` Purrtrait, the draw-and-guess game (`docs/superpowers/specs/2026-11-26-purrtrait-design.md`,
+  plan `docs/superpowers/plans/2026-11-26-purrtrait-ios-tv.md`): `PurrEaselView` (our own easel, not PencilKit or
+  SpriteKit: finished strokes in one bitmap drawn off the main thread by PounceKit's `InkRaster`, the live stroke a shape
+  layer), compiled into both apps with `PurrWords`; on the iPhone, `PurrCanvas` (touches, coalesced and predicted, a
+  120 Hz display link while a finger is down), `PurrStage` (the word pick, the drawer's easel and tools, everyone
+  else's "Look at the TV", the reveal, the curtain, game over), `PurrLobbyView` and the demos. The ink itself
+  (`InkCodec`, `InkPen`, `InkFeed`, `PurrDrawModel`) and the wire are in PounceKit. The TV's table is
+  `PounceTV/Shell/PurrTVTable.swift`.
 - `PounceKit/` local Swift package (game model, networking, `pounce-e2e` CLI) with Swift Testing tests.
   `PounceKit/Sources/PounceKit/IO/` is the only code that touches the disk or the Keychain: actors
   and `@concurrent` functions, so none of it runs on the main thread. Stores keep their data in
@@ -119,6 +127,14 @@ then the build setting (Debug: `http://localhost:8787`, optionally overridden by
   through the scene's own calls (`BirdwatchLiveTests` plays 4, 5 and 6 players to game over with it), and
   `-show-scores` opens the score sheet. On the TV: `-tv-preview birdwatch -seats <4|5|6>` and
   `-demo tv-birdwatch`. Screenshots are in `Art/screenshots/birdwatch/`.
+- Purrtrait (game id `purrtrait`, 2 to 10 players) starts only on a TV: the phone's shelf card says so. Its demos,
+  offline, on `PurrDemoSocket` (a pick starts the drawing, Got it and Give up reveal, the next drawer follows):
+  `purr-pick`, `purr-draw`, `purr-watch`, `purr-next` (you draw next), `purr-paused` (no TV), `purr-reveal`,
+  `purr-missed`, `purr-over`, `purr-curtain` (two seats on this phone), `purr-lobby` and `purr-crowd` (ten
+  players). `-autoplay` on `purr-draw` draws with a scripted finger (`FrameRateTests`). A TV's QR opens
+  `pounce-dev://e/<CODE>?near=<KEY>` in Debug. On the TV: `-demo tv-purrtrait [-seats N]` (a phone draws a cat,
+  stroke by stroke, over and over), `-tv-preview purrtrait` (the drawing whole; `-moment` adds the reveal) and the
+  shell's poster. `PurrtraitTests` saves screenshots under `TEST_RUNNER_PURR_SHOTS_DIR`.
 - How to play's videos (`HowTo/README.md`): `-demo howto` is Cat Tower's video table (my whole turn,
   taken by `HowToSocket` as the server would, then the other seats), `-demo tiles-last` the tile
   game's last turn (three pieces left, each fits a row), `-show-touches` draws a ring under every

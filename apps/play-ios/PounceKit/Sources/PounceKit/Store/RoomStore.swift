@@ -268,9 +268,10 @@ import Observation
     /// Sends one `ink` message from the drawer's device, in order with everything else, never
     /// waiting on the move lock (ink is not a move). `failed` runs if it never left the device
     /// (the socket was down), so the drawer's model can send it again after the reconnect.
-    public func sendInk(seat: Seat, turn: String, ops: [InkOp], failed: @escaping @MainActor () -> Void = {}) {
+    /// `last` marks the final message of a reply to `inkResend`.
+    public func sendInk(seat: Seat, turn: String, ops: [InkOp], last: Bool = false, failed: @escaping @MainActor () -> Void = {}) {
         guard !isScreen, !ops.isEmpty else { return }
-        let message = ClientMessage.ink(seat: seat, turn: turn, ops: ops)
+        let message = ClientMessage.ink(seat: seat, turn: turn, ops: ops, last: last)
         callSocket(inOrder: true) { socket in
             do { try await socket.send(message) } catch { failed() }
         }
@@ -680,9 +681,10 @@ import Observation
                 room?.purrtrait?.round = round
                 room?.purrtrait?.phase = .choosing
             case .chosen(_, let group, let level):
+                // The phase waits for the snapshot that brings the drawer's device its word, so
+                // the drawer's screen never shows "watch" for a moment between the two.
                 room?.purrtrait?.group = group
                 room?.purrtrait?.level = level
-                room?.purrtrait?.phase = .drawing
             case .guessed, .missed:
                 room?.purrtrait?.phase = .reveal
             case .over(let winners, _):
