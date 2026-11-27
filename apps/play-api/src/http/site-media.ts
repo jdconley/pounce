@@ -59,29 +59,29 @@ export const MEDIA = {
       "height": 270,
       "webp": [
         {
-          "src": "/static/tv-home-480.d8bfea6b65.webp",
+          "src": "/static/tv-home-480.d525cc0cb1.webp",
           "w": 480
         },
         {
-          "src": "/static/tv-home-720.c393679e33.webp",
+          "src": "/static/tv-home-720.c8573d6df3.webp",
           "w": 720
         },
         {
-          "src": "/static/tv-home-1040.17f2a65317.webp",
+          "src": "/static/tv-home-1040.8f86f35e5c.webp",
           "w": 1040
         }
       ],
       "jpg": [
         {
-          "src": "/static/tv-home-480.5bb7baf6cc.jpg",
+          "src": "/static/tv-home-480.a059cd0d80.jpg",
           "w": 480
         },
         {
-          "src": "/static/tv-home-720.cf4b0966ed.jpg",
+          "src": "/static/tv-home-720.ec0e3d3cc3.jpg",
           "w": 720
         },
         {
-          "src": "/static/tv-home-1040.d015109e3e.jpg",
+          "src": "/static/tv-home-1040.5529d786a1.jpg",
           "w": 1040
         }
       ]
@@ -235,6 +235,30 @@ export const MEDIA = {
         {
           "src": "/static/toy-tumble-400.dc5ea247bd.jpg",
           "w": 400
+        }
+      ]
+    },
+    "purrtrait": {
+      "width": 320,
+      "height": 180,
+      "webp": [
+        {
+          "src": "/static/purrtrait-tv-320.4267712cef.webp",
+          "w": 320
+        },
+        {
+          "src": "/static/purrtrait-tv-640.a2564006e0.webp",
+          "w": 640
+        }
+      ],
+      "jpg": [
+        {
+          "src": "/static/purrtrait-tv-320.3d2f452e3b.jpg",
+          "w": 320
+        },
+        {
+          "src": "/static/purrtrait-tv-640.076d4f88b9.jpg",
+          "w": 640
         }
       ]
     }

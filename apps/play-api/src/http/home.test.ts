@@ -13,6 +13,7 @@ import {
   homePage,
   installState,
   pageDescription,
+  PURRTRAIT_DESCRIPTION,
   TUMBLE_DESCRIPTION,
   TUMBLE_TITLE,
 } from "./home";
@@ -429,9 +430,60 @@ describe("homePage", () => {
     }
   });
 
-  test("the TV's start screen shows every game on the shelf, Toy Tumble too", () => {
+  test("Purrtrait shows only with it on: draw on a phone, the TV shows it, on the TV page now and coming to the apps in 1.4", async () => {
+    for (const install of [{}, { testflightUrl: TESTFLIGHT }, { appStoreUrl: APP_STORE }]) {
+      for (const daily of [false, true]) {
+        for (const [birdwatch, tumble] of [
+          [false, false],
+          [true, false],
+          [true, true],
+        ] as const) {
+          const off = await homePage(install, ORIGIN, true, daily, birdwatch, tumble).text();
+          // The words; the TV's start screen (a real screenshot) shows its poster either way.
+          expect(main(off).replace(/ alt="[^"]*"/g, "")).not.toMatch(/Purrtrait|easel/i);
+          expect(off).not.toContain('class="panel game tvgame');
+          const on = await homePage(install, ORIGIN, true, daily, birdwatch, tumble, true).text();
+          const count = 3 + Number(birdwatch) + Number(tumble);
+          const games = ["Three", "Four", "Five"][count - 3];
+          expect(on).toContain(`<h2 id="games">${games} games</h2>`);
+          expect(on).toContain(`${games} games for the whole family${daily ? ", and four new puzzles every day" : ""}. Gather round the TV`);
+          expect(on).toContain('<h3>Purrtrait</h3><p class="meta">Draw and guess, in one room. 2 to 10 players.</p>');
+          for (const s of ["One player draws a word on their phone, and the TV shows it as it's drawn.", "Everyone else calls out guesses.", "Needs a TV or a big screen in the room."]) {
+            expect(on, s).toContain(s);
+          }
+          // Where it plays: the browser TV page now; the iPhone and Apple TV app in 1.4. Never the App Store.
+          expect(on).toContain('<p class="where"><a href="/play/tv">Start it on the TV page</a> in your browser. Coming to the iPhone and Apple TV app in 1.4.</p>');
+          // Its picture is the TV mid-drawing.
+          expect(on).toMatch(/<img src="\/static\/purrtrait-tv-320\.[0-9a-f]{10}\.jpg" srcset=/);
+          // An odd number of games: the last card, Purrtrait, spans the row.
+          expect(on.match(/class="panel game[^"]* wide"/g) ?? []).toHaveLength(count % 2);
+          if (count % 2) expect(on).toContain('class="panel game tvgame wide"');
+          // The title, the description and the social cards name it apart from the app; the App Store app's entry never does.
+          const title = `Pounce: Family Games | ${birdwatch && tumble ? "Cat Tower, Tuna Tiles, Birdwatch, Toy Tumble and Purrtrait" : birdwatch ? "Cat Tower, Tuna Tiles, Birdwatch and Purrtrait" : "Cat Tower, Tuna Tiles and Purrtrait"}`;
+          expect(on).toContain(`<title>${title}</title>`);
+          expect(on).toContain(`<meta property="og:title" content="${title}">`);
+          const description = pageDescription(daily, birdwatch, tumble, true);
+          if (birdwatch && tumble && daily) expect(description).toBe(PURRTRAIT_DESCRIPTION);
+          expect(description.length).toBeLessThanOrEqual(160);
+          expect(description).toMatch(/^Family game night, every night\. /);
+          expect(description).toMatch(/Purrtrait in your browser\./);
+          expect(on).toContain(`<meta name="description" content="${description}">`);
+          expect(on).toContain(`<meta property="og:description" content="${description}">`);
+          expect(ld(on).description).toBe(daily ? DAILY_DESCRIPTION : DESCRIPTION);
+          expect(JSON.stringify(ld(on))).not.toMatch(/Purrtrait|Toy Tumble|Birdwatch/);
+          expect(web(on).description).toContain("Purrtrait in a web browser");
+          expect(web(on).description).toContain("with a TV screen at /play/tv where Purrtrait starts");
+          expect(on).not.toMatch(/[–—]/);
+          expect(main(on)).not.toMatch(/\p{Extended_Pictographic}/u);
+        }
+      }
+    }
+  });
+
+  test("the TV's start screen shows every game on the shelf, Toy Tumble and Purrtrait too", () => {
     expect(MEDIA.screens.tvHome.webp.map((f) => f.w)).toEqual([480, 720, 1040]);
     expect(MEDIA.screens.tumble.width).toBe(200);
+    expect(MEDIA.screens.purrtrait.webp.map((f) => f.w)).toEqual([320, 640]);
   });
 });
 

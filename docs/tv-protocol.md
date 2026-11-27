@@ -311,15 +311,20 @@ Server to client, with no `seq`, never in a snapshot and never stored:
 
 ### Switching it on
 
-Purrtrait stays off on production until the apps draw it. To switch it on:
+Purrtrait is on in production for the web player and the browser TV page since 27 November 2026.
+What was done, and what waits for the apps:
 
-- Add `purrtrait` to `GAMES` (`apps/play-api/wrangler.jsonc`).
-  The web player and the browser TV page get it at once (and need `WEB_PURRTRAIT=on` in the web
-  build). iPhone and Apple TV apps get it only from 1.4 (`GAME_MIN_APP`): a 1.3 app never sees,
-  joins or hosts a Purrtrait table, except on a dev server.
-- The same day, bump the privacy policy's "Last updated" date in `apps/play-api/src/http/privacy.ts`:
-  its drawing lines show from the moment Purrtrait tables can be dealt.
-- Trim the App Review notes (`docs/app-review-notes.md`) first, then add their Purrtrait block, so
-  the whole stays under App Store Connect's 4,000 characters.
+- Done: `purrtrait` is in `GAMES` (`apps/play-api/wrangler.jsonc`), and the deploy builds the web
+  player with `WEB_PURRTRAIT=on` (`.github/workflows/ci.yml`, tested by
+  `apps/play-web/tests/catalog.test.ts`). iPhone and Apple TV apps get it only from 1.4
+  (`GAME_MIN_APP`): a 1.3 app never sees, joins or hosts a Purrtrait table, except on a dev server.
+- Done: the privacy policy's "Last updated" date (`apps/play-api/src/http/privacy.ts`) is
+  27 November 2026: its drawing lines show from the moment Purrtrait tables can be dealt.
+- Done: the site (landing page, help, llms.txt) says Purrtrait starts on the browser TV page and is
+  coming to the iPhone and Apple TV app in 1.4.
+- With the first build that draws Purrtrait (1.4): trim the App Review notes
+  (`docs/app-review-notes.md`) first, then add their Purrtrait block, so the whole stays under App
+  Store Connect's 4,000 characters. The notes go with the build under review, and 1.3 doesn't draw
+  it.
 - `PURRTRAIT_APPLINKS` stays off until the App Store app draws Purrtrait.
 - The notice to parents' Purrtrait sentence (PR #179) waits on counsel.

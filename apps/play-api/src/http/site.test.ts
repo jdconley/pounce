@@ -238,3 +238,60 @@ describe("Toy Tumble on the help page and llms.txt", () => {
     expect(on).not.toMatch(/[\u2013\u2014]|Apple TV/);
   });
 });
+
+describe("Purrtrait on the help page and llms.txt", () => {
+  test("off: not a word of it; on: how to play it, on the TV page and coming to the iPhone and Apple TV app in 1.4", async () => {
+    for (const daily of [false, true]) {
+      for (const [birdwatch, tumble] of [
+        [false, false],
+        [true, true],
+      ] as const) {
+        const off = await supportPage(daily, birdwatch, tumble).text();
+        expect(off).not.toMatch(/Purrtrait|<!--/);
+        const on = await supportPage(daily, birdwatch, tumble, true).text();
+        expect(on).toContain("<h2>How to play Purrtrait</h2>");
+        expect(on).toContain("Draw and guess, for two to ten players in one room. It needs a TV or a big screen everyone can see.");
+        expect(on).toContain('Start it on the TV page at <a href="/play/tv">play.conleychaos.com/play/tv</a>.');
+        expect(on).toContain("It's coming to the iPhone and Apple TV app in 1.4.");
+        for (const s of [
+          "pick Purrtrait",
+          "The code changes every 30 seconds",
+          "45, 60 or 90 seconds",
+          "House Cats don't play it.",
+          "the Easy word scores 1 point, the Tricky word 2",
+          "The TV shows your lines as you draw",
+          "No letters or numbers, and no talking.",
+          "Tap Got it, then the player who said it first, and you both score.",
+          "Everyone draws twice.",
+          "Drawings show only on the TV and are gone when the turn ends.",
+        ]) {
+          expect(on, s).toContain(s);
+        }
+        const newer = birdwatch ? "Birdwatch, Toy Tumble and Purrtrait" : "Purrtrait";
+        expect(on).toContain(`Pounce has family games: Cat Tower and Tuna Tiles, and ${newer} in the browser.`);
+        expect(on).toContain(`It plays Cat Tower and Tuna Tiles at the same tables as the iPhone app, and ${newer} too.`);
+        expect(on.includes("<h2>How to play Toy Tumble</h2>")).toBe(tumble);
+        expect(on.includes("<h2>The Daily Dish</h2>")).toBe(daily);
+        expect(on).not.toContain("<!--");
+        expect(on).not.toMatch(/Purrtrait[^.]*App Store/);
+        expect(on).not.toMatch(/[\u2013\u2014]/);
+      }
+    }
+  });
+
+  test("llms.txt names Purrtrait only with it on: one room, a TV, the web TV page now and the apps in 1.4", async () => {
+    const off = await llmsTxt("https://play.conleychaos.com", true, true, true, true).text();
+    expect(off).not.toContain("Purrtrait");
+    const on = await llmsTxt("https://play.conleychaos.com", true, true, true, true, true).text();
+    expect(on).toContain("It has five games");
+    expect(on).toContain("Purrtrait, a draw-and-guess game for two to ten players in one room");
+    expect(on).toContain("the TV shows the drawing as it is drawn, and everyone else guesses out loud");
+    expect(on).toContain("Purrtrait needs a TV or a big screen in the same room: it starts on the web TV page at https://play.conleychaos.com/play/tv");
+    expect(on).toContain("It is coming to the iPhone and Apple TV app in 1.4.");
+    expect(on).toContain("Drawings go only to that TV and are never saved.");
+    const alone = await llmsTxt("https://play.conleychaos.com", true, false, false, false, true).text();
+    expect(alone).toContain("It has three games");
+    expect(alone).not.toMatch(/Birdwatch|Toy Tumble/);
+    expect(on).not.toMatch(/[\u2013\u2014]/);
+  });
+});

@@ -796,17 +796,18 @@ async function handle(request: Request, env: Env, ctx?: ExecutionContext): Promi
   if (method === "GET" && pathname === "/og/room.jpg") return ogImage();
   if ((method === "GET" || method === "HEAD") && isWebPlayerPath(pathname)) return (await webPlayer(request, env.ASSETS)) ?? notFound();
   if (method === "GET" && pathname === "/privacy") return privacyPage(consentOn(env), dailyOn(env), easelOn(env));
-  // Birdwatch and Toy Tumble on the site follow GAMES: the pages name each only while its tables can be dealt.
+  // Birdwatch, Toy Tumble and Purrtrait on the site follow GAMES (and TV for Purrtrait): the pages
+  // name each only while its tables can be dealt.
   const birdwatch = () => gamesOn(env).includes("birdwatch");
   const tumble = () => gamesOn(env).includes("tumble");
-  if (method === "GET" && pathname === "/support") return supportPage(dailyOn(env), birdwatch(), tumble());
+  if (method === "GET" && pathname === "/support") return supportPage(dailyOn(env), birdwatch(), tumble(), easelOn(env));
   if (method === "GET") {
     const origin = () => new URL(request.url).origin;
-    if (pathname === "/") return homePage(install(env), origin(), consentOn(env), dailyOn(env), birdwatch(), tumble());
+    if (pathname === "/") return homePage(install(env), origin(), consentOn(env), dailyOn(env), birdwatch(), tumble(), easelOn(env));
     if (pathname === "/get") return getRedirect(install(env), origin());
     if (pathname === "/robots.txt") return robotsTxt(origin());
     if (pathname === "/sitemap.xml") return sitemapXml(origin());
-    if (pathname === "/llms.txt") return llmsTxt(origin(), consentOn(env), dailyOn(env), birdwatch(), tumble());
+    if (pathname === "/llms.txt") return llmsTxt(origin(), consentOn(env), dailyOn(env), birdwatch(), tumble(), easelOn(env));
     if (pathname.startsWith("/media/")) return (await mediaFile(request, env.ASSETS)) ?? notFound();
   }
   // A TV's QR on a phone without the app: the web player links the table. (A phone with the app

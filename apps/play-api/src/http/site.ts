@@ -5,7 +5,7 @@
  */
 import { and, browserGames } from "./home";
 import { CACHE, CSP, docPage } from "./layout";
-import { https, TUMBLE_SINCE } from "./links";
+import { https, PURRTRAIT_SINCE, TUMBLE_SINCE } from "./links";
 
 import type { Install } from "./links";
 
@@ -96,7 +96,21 @@ const supportHtml = (newer: readonly string[]): string =>
 </ul>
 </section>
 
-<!--/tumble--><!--daily--><section>
+<!--/tumble--><!--purrtrait--><section>
+<h2>How to play Purrtrait</h2>
+<p>Draw and guess, for two to ten players in one room. It needs a TV or a big screen everyone can see. Start it on the TV page at <a href="/play/tv">play.conleychaos.com/play/tv</a>. It's coming to the iPhone and Apple TV app in ${PURRTRAIT_SINCE}.</p>
+<ul>
+<li>On the big screen, open the TV page and pick Purrtrait. Each player scans the code on the TV with their own phone, or taps Join and types the code under it. The code changes every 30 seconds, so join from the room.</li>
+<li>Pick a timer in the lobby: 45, 60 or 90 seconds a turn. House Cats don't play it. Tap Start once two people are in.</li>
+<li>On your turn, your phone shows two words. Pick one: the Easy word scores 1 point, the Tricky word 2.</li>
+<li>Draw it on your phone. The TV shows your lines as you draw, with a hint such as Animal or Food. No letters or numbers, and no talking.</li>
+<li>Everyone else calls out guesses. Tap Got it, then the player who said it first, and you both score. The turn also ends when the time runs out or you tap Give up.</li>
+<li>Everyone draws twice. The highest score wins.</li>
+<li>Drawings show only on the TV and are gone when the turn ends. The host can remove a player from the table.</li>
+</ul>
+</section>
+
+<!--/purrtrait--><!--daily--><section>
 <h2>The Daily Dish</h2>
 <p>Four new puzzles every day, the same for the whole family. In the iPhone and iPad app they're on Home. In a browser, go to <a href="/play/daily">play.conleychaos.com/play/daily</a>, or tap Open the Dish on Home there.</p>
 <ul>
@@ -171,22 +185,26 @@ const BOTH = [false, true] as const;
 
 /**
  * With the Daily Dish (`DAILY` on) the help page explains it; off, nothing of it, as the privacy
- * policy does. Birdwatch and Toy Tumble likewise follow `GAMES`.
+ * policy does. Birdwatch and Toy Tumble likewise follow `GAMES`, and Purrtrait whether its tables
+ * can be dealt (`GAMES` and `TV`).
  */
 const SUPPORT: Record<string, string> = Object.fromEntries(
   BOTH.flatMap((daily) =>
     BOTH.flatMap((birdwatch) =>
-      BOTH.map((tumble) => [
-        `${daily}/${birdwatch}/${tumble}`,
-        part(part(part(supportHtml(browserGames(birdwatch, tumble)), "daily", daily), "birdwatch", birdwatch), "tumble", tumble),
-      ]),
+      BOTH.flatMap((tumble) =>
+        BOTH.map((purrtrait) => {
+          let html = supportHtml(browserGames(birdwatch, tumble, purrtrait));
+          for (const [tag, on] of [["daily", daily], ["birdwatch", birdwatch], ["tumble", tumble], ["purrtrait", purrtrait]] as const) html = part(html, tag, on);
+          return [`${daily}/${birdwatch}/${tumble}/${purrtrait}`, html];
+        }),
+      ),
     ),
   ),
 );
 
 /** The help page; public, static, no scripts. */
-export function supportPage(daily = false, birdwatch = false, tumble = false): Response {
-  return new Response(SUPPORT[`${daily}/${birdwatch}/${tumble}`], { headers: HEADERS });
+export function supportPage(daily = false, birdwatch = false, tumble = false, purrtrait = false): Response {
+  return new Response(SUPPORT[`${daily}/${birdwatch}/${tumble}/${purrtrait}`], { headers: HEADERS });
 }
 
 /**
@@ -210,7 +228,7 @@ export function robotsTxt(origin: string): Response {
  * llms.txt (llmstxt.org): a plain summary for assistants asked what Pounce is. It says only what
  * the landing page and the privacy policy say.
  */
-export function llmsTxt(origin: string, consent = true, daily = false, birdwatch = false, tumble = false): Response {
+export function llmsTxt(origin: string, consent = true, daily = false, birdwatch = false, tumble = false, purrtrait = false): Response {
   const dish = daily
     ? `\n\nThe Daily Dish is four new puzzles every day, the same for the whole family: Sniff (find a five-letter word in six tries), Nine Lives (a number grid), Cat Nap (one cat in each row, column and patch, no two touching) and Box Fort (drag block pieces onto a rug and clear lines). A family board shows how everyone you play with did today, and a TV can show it. The server checks every move and works out every result. The puzzles play in the iPhone and iPad app and in the browser at ${origin}/play/daily.`
     : "";
@@ -219,15 +237,23 @@ export function llmsTxt(origin: string, consent = true, daily = false, birdwatch
     "Tuna Tiles, tile rummy for two to four players where yarn is wild",
     ...(birdwatch ? ["Birdwatch, a trick-taking card game for four to six players in teams, with bidding, trump and a top card called the Bird"] : []),
     ...(tumble ? ["Toy Tumble, a real-time game for two to six players where everyone plays at once: toys fall into each player's box, clearing rows sends hairballs to everyone else, tricks hit a player or save you, and a TV shows every box"] : []),
+    ...(purrtrait
+      ? ["Purrtrait, a draw-and-guess game for two to ten players in one room: one player draws a word on their phone, the TV shows the drawing as it is drawn, and everyone else guesses out loud"]
+      : []),
   ];
-  const count = ["two", "three", "four"][kinds.length - 2] ?? "two";
+  const count = ["two", "three", "four", "five"][kinds.length - 2] ?? "two";
   const list = kinds.length === 2 ? `${kinds[0]}, and ${kinds[1]}` : `${kinds.slice(0, -1).join("; ")}; and ${kinds.at(-1) ?? ""}`;
   const where = [
     ...(birdwatch ? ["Birdwatch plays in the browser today and is coming to the iPhone app."] : []),
     ...(tumble ? [`Toy Tumble plays in the browser and on the web TV page today, and is coming to the iPhone app in ${TUMBLE_SINCE}.`] : []),
+    ...(purrtrait
+      ? [
+          `Purrtrait needs a TV or a big screen in the same room: it starts on the web TV page at ${origin}/play/tv, and players join from the code on the TV with a phone's browser. It is coming to the iPhone and Apple TV app in ${PURRTRAIT_SINCE}. Drawings go only to that TV and are never saved.`,
+        ]
+      : []),
   ];
   const games =
-    birdwatch || tumble
+    birdwatch || tumble || purrtrait
       ? `It has ${count} games: ${list}. Cat Tower and Tuna Tiles play in the iPhone and iPad app and in any web browser, and players on each sit at the same tables. ${where.join(" ")}`
       : `It has ${count} games: ${list}. It plays in the iPhone and iPad app and in any web browser, and players on each sit at the same tables.`;
   const alerts = consent ? "a parent decides whether they get notifications" : "they get no push notifications from our server";

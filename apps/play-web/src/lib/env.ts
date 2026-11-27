@@ -27,7 +27,10 @@ declare const __TUMBLE__: boolean;
 export const TUMBLE_ON: boolean = typeof __TUMBLE__ === "boolean" ? __TUMBLE__ : false;
 
 declare const __PURRTRAIT__: boolean;
-/** Purrtrait on the shelf ("Starts on the TV") and the TV's posters: as Toy Tumble, with `WEB_PURRTRAIT=on`. */
+/**
+ * Purrtrait on the shelf ("Starts on the TV") and the TV's posters: as Toy Tumble, with
+ * `WEB_PURRTRAIT=on`, which the deploy and the e2e runs set.
+ */
 export const PURRTRAIT_ON: boolean = typeof __PURRTRAIT__ === "boolean" ? __PURRTRAIT__ : false;
 
 /** `X-Pounce-App`: who is asking. The server never holds the web player to an app minimum. */

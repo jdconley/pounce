@@ -10,13 +10,15 @@
  * just its own hand. The Apple TV app isn't on the App Store yet, so the page doesn't name it.
  *
  * With the Daily Dish (`DAILY` on) the page also shows the four daily puzzles, in the app since
- * 1.2 and in the browser. With Birdwatch or Toy Tumble in `GAMES` it shows that game too. Both are
- * in the browser only until an App Store version has them (`GAME_SINCE` in links.ts), so the page
- * says "coming to the iPhone app" (Toy Tumble: "in 1.4") and the App Store app's own description
- * and structured data leave them out.
+ * 1.2 and in the browser. With Birdwatch or Toy Tumble in `GAMES` it shows that game too, and
+ * Purrtrait while its tables can be dealt (`GAMES` and `TV`). They are in the browser only until an
+ * App Store version has them (`GAME_SINCE` in links.ts), so the page says "coming to the iPhone
+ * app" (Toy Tumble and Purrtrait: "in 1.4") and the App Store app's own description and structured
+ * data leave them out. Purrtrait starts on a TV, so its card shows the browser TV page and sends
+ * people there.
  */
 import { CACHE, css, escapeHtml, shell } from "./layout";
-import { appStoreId, https, TUMBLE_SINCE } from "./links";
+import { appStoreId, https, PURRTRAIT_SINCE, TUMBLE_SINCE } from "./links";
 import { MEDIA } from "./site-media";
 
 import type { Install } from "./links";
@@ -58,13 +60,29 @@ export const TUMBLE_DESCRIPTION =
   "Family game night, every night. Cat Tower, Tuna Tiles and daily puzzles on iPhone, iPad and the web, and now Birdwatch and Toy Tumble in your browser. All free.";
 
 /** The games only the browser has, by name, from the flags that are on. */
-export const browserGames = (birdwatch: boolean, tumble: boolean): string[] => [...(birdwatch ? ["Birdwatch"] : []), ...(tumble ? ["Toy Tumble"] : [])];
+export const browserGames = (birdwatch: boolean, tumble: boolean, purrtrait = false): string[] => [
+  ...(birdwatch ? ["Birdwatch"] : []),
+  ...(tumble ? ["Toy Tumble"] : []),
+  ...(purrtrait ? ["Purrtrait"] : []),
+];
 
 /** "A", "A and B", "A, B and C". */
 export const and = (names: readonly string[]): string => (names.length < 2 ? (names[0] ?? "") : `${names.slice(0, -1).join(", ")} and ${names.at(-1) ?? ""}`);
 
+/**
+ * The page's description with Birdwatch, Toy Tumble, Purrtrait and the Daily Dish on, as in
+ * production. The three newer games are only in the browser, so they are named apart from what the
+ * app has.
+ */
+export const PURRTRAIT_DESCRIPTION =
+  "Family game night, every night. Cat Tower, Tuna Tiles and daily puzzles on iPhone, iPad and the web. Birdwatch, Toy Tumble and Purrtrait in your browser. Free.";
+
 /** What the page says it is, from the flags that are on. */
-export function pageDescription(daily: boolean, birdwatch: boolean, tumble = false): string {
+export function pageDescription(daily: boolean, birdwatch: boolean, tumble = false, purrtrait = false): string {
+  if (purrtrait) {
+    const app = daily ? "Cat Tower, Tuna Tiles and daily puzzles" : "Cat Tower and Tuna Tiles";
+    return `Family game night, every night. ${app} on iPhone, iPad and the web. ${and(browserGames(birdwatch, tumble, true))} in your browser. Free.`;
+  }
   if (!tumble) {
     if (birdwatch) return daily ? BIRDWATCH_DESCRIPTION : BIRDWATCH_ONLY_DESCRIPTION;
     return daily ? DAILY_DESCRIPTION : DESCRIPTION;
@@ -77,8 +95,8 @@ export function pageDescription(daily: boolean, birdwatch: boolean, tumble = fal
 }
 
 /** The page's title, from the games that are on. */
-export function pageTitle(birdwatch: boolean, tumble = false): string {
-  return `${NAME} | ${and(["Cat Tower", "Tuna Tiles", ...browserGames(birdwatch, tumble)])}`;
+export function pageTitle(birdwatch: boolean, tumble = false, purrtrait = false): string {
+  return `${NAME} | ${and(["Cat Tower", "Tuna Tiles", ...browserGames(birdwatch, tumble, purrtrait)])}`;
 }
 
 /** The web player. Its page is `/play/`; `/play` only redirects there. */
@@ -115,13 +133,14 @@ const screen = (s: Screen, sizes: string, alt: string, eager = false): string =>
 /** What each screenshot shows, for people who can't see it. */
 const ALT = {
   tv: "A TV showing a Cat Tower table with six players, their cats around the edge and the deck in the middle.",
-  tvHome: "The TV's start screen: a code to scan with your phone, beside posters for Cat Tower, Tuna Tiles, Birdwatch, Toy Tumble and Tonight's board.",
+  tvHome: "The TV's start screen: a code to scan with your phone, beside posters for Cat Tower, Tuna Tiles, Birdwatch, Purrtrait, Toy Tumble and Tonight's board.",
   cards: "A phone in the browser at a TV table, showing just its own cards, with a Cards and Table switch at the top.",
   laptop: "Cat Tower in a web browser on a laptop: the deck on the rug, the tower's levels down the side and a hand of cat cards.",
   catTower: "Cat Tower on iPhone: three players' cats along the top, the tower's shelves down the side and a hand of cards.",
   tiles: "Tuna Tiles on iPhone: rows of numbered tiles laid out on the rug, with your own tiles along the bottom.",
   birdwatch: "Birdwatch in a phone's browser: four cats around the window, a card played on the sill, the team scores and a hand of cards.",
   tumble: "Toy Tumble in a phone's browser: your toy box with toys stacked at the bottom and one falling, the next toy on the cat's paw, and five other players' boxes down the side.",
+  purrtrait: "Purrtrait on a TV: a cat's face being drawn on the easel, the players' scores down one side, and the drawer's name, the timer and the hint Animal on the other.",
 } as const;
 
 /** The QR code for `/get`, for people reading on a computer; shown only on wide screens with a mouse. */
@@ -210,7 +229,7 @@ h1 span{display:block;color:var(--sun);text-wrap:balance}
 .game .art img{display:block;width:160px;height:auto;border:4px solid var(--ink);border-radius:24px;box-shadow:0 5px 0 var(--ink)}
 .game .txt{padding:18px 20px 24px}
 .game .txt p+p{margin-top:8px}
-.panel p.where{color:var(--text);font-weight:700}
+.panel p.where{color:var(--text);font-weight:700;text-wrap:pretty}
 .panel p.where a{font-family:var(--round);font-weight:900}
 .lime{background:var(--lime)}
 .puzzles{display:grid;gap:16px;margin:0 0 24px;padding:0;list-style:none}
@@ -269,6 +288,10 @@ h1 span{display:block;color:var(--sun);text-wrap:balance}
 @media (prefers-color-scheme:dark){.last{background:linear-gradient(135deg,#5B1FD1,#8A1466)}}
 @media (min-width:480px) and (max-width:639px),(min-width:900px){.game{grid-template-columns:auto 1fr;align-content:stretch}.game .art{border-bottom:0;border-right:3px solid var(--ink)}.game .txt{align-self:center}}
 @media (min-width:640px){.games,.ways,.devices{grid-template-columns:1fr 1fr}.game.wide{grid-column:1/-1;grid-template-columns:auto 1fr}.game.wide .art{border-bottom:0;border-right:3px solid var(--ink)}.game.wide .txt{align-self:center}.game.wide .txt p{max-width:40em}.pace{grid-template-columns:minmax(0,240px) 1fr;gap:32px;padding:28px 32px 32px}.last{padding:40px 250px 44px 40px}.last .cat{width:210px;right:24px}}
+.game.tvgame .art img{width:min(100%,360px);border-width:5px;border-radius:14px}
+@media (min-width:640px){.game.tvgame.wide .art img{width:clamp(220px,30vw,320px)}}
+@media (min-width:480px) and (max-width:639px){.game.tvgame{grid-template-columns:1fr}.game.tvgame .art{border-right:0;border-bottom:3px solid var(--ink)}}
+@media (min-width:900px){.game.tvgame:not(.wide){grid-template-columns:1fr;align-content:start}.game.tvgame:not(.wide) .art{border-right:0;border-bottom:3px solid var(--ink)}}
 @media (min-width:720px){.hero-grid{grid-template-columns:1fr 1fr;gap:28px}h1{font-size:2.9rem}}
 @media (min-width:900px){.hero{padding:26px 0 48px}.hero-grid{grid-template-columns:1.1fr .9fr;gap:40px}h1{font-size:clamp(2.9rem,5.1vw,3.9rem)}h1 span{white-space:nowrap}.split{grid-template-columns:1fr 1fr;gap:44px}.split.flip>:first-child{order:2}.devices{grid-template-columns:1fr}.kids{grid-template-columns:.9fr 1.1fr;gap:40px;padding:36px 40px 40px}.band{padding:56px 0 8px}}
 @media (min-width:1000px){.ways{grid-template-columns:repeat(4,1fr)}}
@@ -276,16 +299,16 @@ h1 span{display:block;color:var(--sun);text-wrap:balance}
 
 const json = (value: unknown): string => JSON.stringify(value).replace(/</g, "\\u003c");
 
-function head(state: InstallState, origin: string, daily: boolean, birdwatch: boolean, tumble: boolean): string {
+function head(state: InstallState, origin: string, daily: boolean, birdwatch: boolean, tumble: boolean, purrtrait: boolean): string {
   const url = `${origin}/`;
   const image = `${origin}${MEDIA.og.src}`;
   const id = state.kind === "store" ? appStoreId(state.url) : null;
   const author = { "@type": "Organization", name: "Conley Chaos LLC", url: "https://conleychaos.com" };
   const free = { "@type": "Offer", price: "0", priceCurrency: "USD" };
-  const description = pageDescription(daily, birdwatch, tumble);
-  const title = pageTitle(birdwatch, tumble);
+  const description = pageDescription(daily, birdwatch, tumble, purrtrait);
+  const title = pageTitle(birdwatch, tumble, purrtrait);
   // The browser's games: all of them. The App Store app shares tables for the games it has.
-  const newer = browserGames(birdwatch, tumble);
+  const newer = browserGames(birdwatch, tumble, purrtrait);
   const webGames = and(["Cat Tower", "Tuna Tiles", ...newer]);
   const shared = newer.length ? "Cat Tower and Tuna Tiles tables are shared with the iPhone app" : "at the same tables as the iPhone app";
   const data = {
@@ -295,7 +318,7 @@ function head(state: InstallState, origin: string, daily: boolean, birdwatch: bo
         "@type": "MobileApplication",
         "@id": `${url}#app`,
         name: NAME,
-        // Only what the App Store's version has: the Dish since 1.2, never Birdwatch or Toy Tumble before their release.
+        // Only what the App Store's version has: the Dish since 1.2, never Birdwatch, Toy Tumble or Purrtrait before their release.
         description: daily ? DAILY_DESCRIPTION : DESCRIPTION,
         url,
         image,
@@ -309,7 +332,7 @@ function head(state: InstallState, origin: string, daily: boolean, birdwatch: bo
         "@type": "WebApplication",
         "@id": `${url}#web`,
         name: "Pounce",
-        description: `${webGames} in a web browser, ${shared}, with a TV screen at /play/tv${daily ? ", and four new puzzles every day at /play/daily" : ""}.`,
+        description: `${webGames} in a web browser, ${shared}, with a TV screen at /play/tv${purrtrait ? " where Purrtrait starts" : ""}${daily ? ", and four new puzzles every day at /play/daily" : ""}.`,
         url: `${origin}${PLAY}`,
         image,
         applicationCategory: "GameApplication",
@@ -386,14 +409,23 @@ function tumbleCard(wide: boolean): string {
   return `<article class="panel game${wide ? " wide" : ""}"><div class="art orange">${screen(MEDIA.screens.tumble, "160px", ALT.tumble)}</div><div class="txt"><h3>Toy Tumble</h3><p class="meta">Falling toys, in real time. 2 to 6 players.</p><p>Everyone plays at once on their own phone, and the TV shows every box. Clear rows to send hairballs to everyone else, and pocket tricks to hit a player or save yourself. Win three rounds to take the game.</p><p class="where"><a href="${PLAY}">Play it in your browser</a>. Coming to the iPhone app in ${TUMBLE_SINCE}.</p></div></article>`;
 }
 
-const COUNT = ["Two", "Three", "Four"] as const;
+/**
+ * Purrtrait's card: the party game that starts on a TV, so its picture is the TV mid-drawing and its
+ * link is the browser TV page.
+ */
+function purrtraitCard(wide: boolean): string {
+  return `<article class="panel game tvgame${wide ? " wide" : ""}"><div class="art teal">${screen(MEDIA.screens.purrtrait, "(min-width: 640px) 320px, 80vw", ALT.purrtrait)}</div><div class="txt"><h3>Purrtrait</h3><p class="meta">Draw and guess, in one room. 2 to 10 players.</p><p>One player draws a word on their phone, and the TV shows it as it's drawn. Everyone else calls out guesses. Get it first and you both score. Needs a TV or a big screen in the room.</p><p class="where"><a href="${TV}">Start it on the TV page</a> in your browser. Coming to the iPhone and Apple TV app in ${PURRTRAIT_SINCE}.</p></div></article>`;
+}
 
-function body(state: InstallState, consent: boolean, daily: boolean, birdwatch: boolean, tumble: boolean): string {
+const COUNT = ["Two", "Three", "Four", "Five"] as const;
+
+function body(state: InstallState, consent: boolean, daily: boolean, birdwatch: boolean, tumble: boolean, purrtrait: boolean): string {
   const c = MEDIA.clip;
-  const count = 2 + Number(birdwatch) + Number(tumble);
+  const cards = [...(birdwatch ? [birdwatchCard] : []), ...(tumble ? [tumbleCard] : []), ...(purrtrait ? [purrtraitCard] : [])];
+  const count = 2 + cards.length;
   const games = COUNT[count - 2] ?? "Two";
   // An odd last card spans the row.
-  const newer = [...(birdwatch ? [birdwatchCard(!tumble)] : []), ...(tumble ? [tumbleCard(!birdwatch)] : [])];
+  const newer = cards.map((card, i) => card(count % 2 === 1 && i === cards.length - 1));
   const s = MEDIA.screens;
   const install = installBlock(state);
   const last = LAST[state.kind];
@@ -530,18 +562,27 @@ ${install}
  * The home page. `install` picks the install action (see `installState`), `origin` is this
  * request's own (for the canonical link and the social image), `consent` says whether a
  * parent can allow turn alerts for a child, as the privacy policy does, `daily` whether the
- * Daily Dish is on (`DAILY`), as the privacy policy says it, and `birdwatch` and `tumble` whether
- * Birdwatch and Toy Tumble tables can be dealt (`GAMES`).
+ * Daily Dish is on (`DAILY`), as the privacy policy says it, and `birdwatch`, `tumble` and
+ * `purrtrait` whether Birdwatch, Toy Tumble and Purrtrait tables can be dealt (`GAMES`, and `TV`
+ * for Purrtrait).
  */
-export function homePage(install: Install = {}, origin = "https://play.conleychaos.com", consent = true, daily = false, birdwatch = false, tumble = false): Response {
+export function homePage(
+  install: Install = {},
+  origin = "https://play.conleychaos.com",
+  consent = true,
+  daily = false,
+  birdwatch = false,
+  tumble = false,
+  purrtrait = false,
+): Response {
   const state = installState(install);
   const html = shell({
-    title: pageTitle(birdwatch, tumble),
-    head: head(state, origin, daily, birdwatch, tumble),
+    title: pageTitle(birdwatch, tumble, purrtrait),
+    head: head(state, origin, daily, birdwatch, tumble, purrtrait),
     style: STYLE,
     current: "home",
     credit: true,
-    body: body(state, consent, daily, birdwatch, tumble),
+    body: body(state, consent, daily, birdwatch, tumble, purrtrait),
   });
   return new Response(html, {
     headers: { "content-type": "text/html; charset=utf-8", "cache-control": CACHE, "content-security-policy": HOME_CSP },

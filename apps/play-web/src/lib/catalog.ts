@@ -21,8 +21,8 @@ export const GAME_IDS = Object.keys(CATALOG) as GameId[];
 
 /**
  * The games Home and the TV offer a new table of. Toy Tumble is on the shelf in a build with
- * `WEB_TUMBLE=on`, as the deployed one is; Purrtrait in one with `WEB_PURRTRAIT=on`, which the
- * deployed one isn't until it is switched on. A table someone else made draws either way.
+ * `WEB_TUMBLE=on`, and Purrtrait in one with `WEB_PURRTRAIT=on`, as the deployed one has both. A
+ * table someone else made draws either way.
  */
 export const SHELF: GameId[] = GAME_IDS.filter((id) => (id !== "tumble" || TUMBLE_ON) && (id !== "purrtrait" || PURRTRAIT_ON));
 

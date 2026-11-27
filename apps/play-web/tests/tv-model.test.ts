@@ -2,7 +2,7 @@ import { readFileSync } from "node:fs";
 
 import { describe, expect, test } from "vitest";
 
-import { TUMBLE_ON } from "../src/lib/env";
+import { PURRTRAIT_ON, TUMBLE_ON } from "../src/lib/env";
 import { anyoneSeated, back, bootPhase, cheerStep, gameOf, lobbySeats, momentFor, otherGame, overTitle, posterLayout, safeToReload, standings, NO_CHEER, turnSeat, turnWords } from "../src/ui/tv/tv-model";
 
 import type { RoomView } from "@pounce/play-api/protocol";
@@ -70,11 +70,14 @@ describe("the TV lobby", () => {
   test("Change game makes the other game", () => {
     expect(otherGame("cat-tower")).toBe("tiles");
     expect(otherGame("tiles")).toBe("birdwatch");
-    // Toy Tumble is on the shelf, after Birdwatch, in a build with WEB_TUMBLE=on (the deployed one);
-    // Purrtrait only with WEB_PURRTRAIT=on, which tests don't have.
-    expect(otherGame("birdwatch")).toBe(TUMBLE_ON ? "tumble" : "cat-tower");
+    // Purrtrait and Toy Tumble are on the shelf, after Birdwatch, in a build with WEB_PURRTRAIT=on
+    // and WEB_TUMBLE=on (the deployed one); a build without them goes back to Cat Tower.
+    const after = [...(PURRTRAIT_ON ? ["purrtrait"] : []), ...(TUMBLE_ON ? ["tumble"] : []), "cat-tower"];
+    expect(otherGame("birdwatch")).toBe(after[0]);
+    if (PURRTRAIT_ON) expect(otherGame("purrtrait")).toBe(after[1]);
     if (TUMBLE_ON) expect(otherGame("tumble")).toBe("cat-tower");
-    expect(otherGame("purrtrait")).toBe("cat-tower");
+    // A game off the shelf (a table someone else made) changes to the first game.
+    if (!PURRTRAIT_ON) expect(otherGame("purrtrait")).toBe("cat-tower");
     expect(gameOf(lobby([open]))).toBe("cat-tower");
     expect(gameOf(lobby([open], "tiles"))).toBe("tiles");
   });
