@@ -443,6 +443,9 @@ jobs:
     # Connect processing (the Apple TV build mostly processes while the iPhone one is waited on).
     timeout-minutes: 100
     environment: production
+    permissions:
+      contents: read
+      actions: read # main's earlier runs, for where this build's changes start
     concurrency:
       group: testflight
       cancel-in-progress: false
@@ -470,6 +473,30 @@ jobs:
         uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
         with:
           fetch-depth: 0 # What to Test lists the commits since the group's previous build
+      # Where this build's changes start: main's last iOS push run that went all the way through, not
+      # the push just before this one. A run still waiting for its runner is dropped when a newer
+      # push lands (the workflow's concurrency group), so its commits ride in this build instead;
+      # measured from `github.event.before` they'd be missing from What to Test, and a push with no
+      # app change of its own would keep their build from the family altogether.
+      - name: Commits since main's last good build
+        id: since
+        if: steps.creds.outputs.ready == 'true' && github.event_name == 'push'
+        working-directory: .
+        env:
+          GH_TOKEN: ${{ github.token }}
+          BEFORE: ${{ github.event.before }}
+        run: |
+          from=""
+          for sha in $(gh run list --repo "$GITHUB_REPOSITORY" --workflow ios.yml --branch main --event push \
+              --status success --limit 20 --json headSha --jq '.[].headSha'); do
+            if [ "$sha" != "$GITHUB_SHA" ] && git merge-base --is-ancestor "$sha" HEAD 2>/dev/null; then
+              from=$sha
+              break
+            fi
+          done
+          from=${from:-$BEFORE}
+          echo "from=$from" >> "$GITHUB_OUTPUT"
+          echo "::notice title=TestFlight::this build's changes start after $from"
       - name: Free the certificate slots CI used up
         if: steps.creds.outputs.ready == 'true' && github.event_name == 'workflow_dispatch' && inputs.revoke_ci_certs
         run: |
@@ -532,8 +559,8 @@ jobs:
         env:
           BUILD: ${{ inputs.build || steps.upload.outputs.build }}
           GROUP: ${{ inputs.group || 'Family and Friends' }}
-          # A push lists the app's commits since the previous main; a manual run, since the group's last build.
-          FROM: ${{ github.event_name == 'push' && github.event.before || '' }}
+          # A push lists the app's commits since main's last good build; a manual run, since the group's last build.
+          FROM: ${{ steps.since.outputs.from }}
         run: |
           export ASC_KEY_PATH="$RUNNER_TEMP/AuthKey_$ASC_KEY_ID.p8"
           (umask 077; printenv ASC_KEY_P8 > "$ASC_KEY_PATH")
@@ -562,7 +589,7 @@ jobs:
         env:
           BUILD: ${{ inputs.build || steps.upload-tv.outputs.build }}
           GROUP: ${{ inputs.group || 'Family and Friends' }}
-          FROM: ${{ github.event_name == 'push' && github.event.before || '' }}
+          FROM: ${{ steps.since.outputs.from }}
         run: |
           export ASC_KEY_PATH="$RUNNER_TEMP/AuthKey_$ASC_KEY_ID.p8"
           (umask 077; printenv ASC_KEY_P8 > "$ASC_KEY_PATH")
