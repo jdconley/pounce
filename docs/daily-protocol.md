@@ -338,6 +338,9 @@ Spec §3, "The clock" (JD, 2026-11-26).
   `hintMs` a hint, as the run's clock.
 - Send it as `activeMs` with every moves batch, hint and give-up: the total so far, in whole
   milliseconds, carrying on from start's `activeMs`.
+- When the clock pauses (the app goes to the background, the tab hides, the player leaves the
+  puzzle), send an empty batch, `{ "from": <seq>, "moves": [], "activeMs": <total> }`, so the time
+  since the last move is kept. It changes nothing else and answers like any batch.
 - The server trusts it, and keeps it sane: a value that isn't a whole number of 0 or more is
   ignored, one below the run's last is ignored, and one past the time since the start is cut to
   it. The result's `timeMs` is the active time at the end.

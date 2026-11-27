@@ -452,6 +452,14 @@ describe("active time (spec §3, \"The clock\", JD 2026-11-26)", () => {
     expect(moves(m, p, r, 2, [step(3), step(4)], T0 + 3_600_000)).toMatchObject({ result: { timeMs: 3_600_000 } });
   });
 
+  it("an empty batch when the clock pauses keeps the time since the last move, and changes nothing else", () => {
+    const r = run();
+    moves(m, p, r, 0, [step(1)], T0 + 10_000, 9_000);
+    expect(moves(m, p, r, 1, [], T0 + 70_000, 64_000)).toMatchObject({ ok: true, seq: 1, result: null });
+    expect(r.seq).toBe(1);
+    expect(startView(m, p, r, T0 + 900_000).activeMs).toBe(64_000);
+  });
+
   it("a run closed at 04:00 keeps its last reported active time", () => {
     const r = run();
     moves(m, p, r, 0, [step(1)], T0 + 60_000, 45_000);
