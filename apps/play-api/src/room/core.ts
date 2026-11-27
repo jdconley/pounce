@@ -1103,8 +1103,10 @@ export class RoomCore<S = CatTowerState> {
   }
 
   private dispatch(deviceId: string, msg: ClientMessage, unlocks: Unlocks, socket: string): Outbound[] {
-    // A screen only watches: it has no seat, no say, and no aim of its own.
-    if (this.isScreen(deviceId) && msg.t !== "ping" && msg.t !== "presence" && msg.t !== "link") {
+    // A screen only watches: it has no seat, no say, and no aim of its own. It may ask for Toy
+    // Tumble's boxes (an empty `tumble` batch), which `tumbleInput` answers.
+    const asksBoxes = msg.t === "tumble" && msg.ev.length === 0;
+    if (this.isScreen(deviceId) && msg.t !== "ping" && msg.t !== "presence" && msg.t !== "link" && !asksBoxes) {
       return [this.fail(deviceId, "not_allowed")];
     }
     switch (msg.t) {
@@ -1924,10 +1926,14 @@ export class RoomCore<S = CatTowerState> {
   private tumbleInput(deviceId: string, socket: string, msg: TumbleClient): Outbound[] {
     const round = this.round;
     if (round === null || msg.r !== round.r) return [];
+    const now = this.now();
+    // A screen after a gap: every box, to that socket alone, within the same rate limit.
+    if (this.isScreen(deviceId)) {
+      return this.tumbleRelay.allow(deviceId, now) ? [{ to: deviceId, message: round.sync("all", now), socket }] : [];
+    }
     const seat = this.tumbleSeat(deviceId);
     const refused: Outbound[] = [{ ...this.fail(deviceId, "not_allowed"), socket }];
     if (seat === null) return refused;
-    const now = this.now();
     const writer = this.writers.get(seat);
     if (writer && (writer.deviceId !== deviceId || writer.socket !== socket) && now - writer.at < LAG_MS) return refused;
     this.writers.set(seat, { deviceId, socket, at: now });
