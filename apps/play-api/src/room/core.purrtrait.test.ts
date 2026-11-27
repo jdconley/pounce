@@ -4,7 +4,7 @@ import { purrtrait } from "../games/purrtrait";
 import { parseClientMessage, type ClientMessage, type Person, type ServerMessage } from "../protocol";
 import { WORDS } from "../purrtrait/words";
 
-import { NEAR_KEY_MS, RoomCore, SCREEN_GRACE_MS, STALL_END_MS, type Outbound } from "./core";
+import { NEAR_KEY_MS, NEAR_TYPED_MISSES, RoomCore, SCREEN_GRACE_MS, STALL_END_MS, type Outbound } from "./core";
 
 import type { RoomGame } from "../games";
 import type { PurrState } from "../purrtrait/engine";
@@ -881,9 +881,75 @@ describe("near keys (design §5.2, ruling 12)", () => {
     expect(r.sameRoom()).toBe(false);
   });
 
+  it("an app that can't draw the game is no wrong guess: the room tells it there is no such table", () => {
+    const r = lobby();
+    expect(r.knows("b", null, false, ["cat-tower", "tiles"])).toBe("exists");
+    expect(r.knows("b", null, false, ["cat-tower", "purrtrait"])).toBe("not_near");
+  });
+
+  it("wrong guesses before any key are counted too, and nothing is let in", () => {
+    const state = RoomCore.create<PurrState>("BCDFG", "", clock, undefined, undefined, "purrtrait", "tv");
+    const r = new RoomCore<PurrState>(state, () => clock, counting(), undefined, 1, { games: ["cat-tower", "purrtrait"], tv: true, streaks: true });
+    r.noteNearMiss();
+    r.noteNearMiss();
+    expect(r.state.nearMisses).toEqual({ at: 0, count: 2 });
+    expect(r.nearLive("BCDFGHJK")).toBe(false);
+  });
+
+  it("30 wrong guesses in one key's time close the typed code until the next key; the QR's key still works", () => {
+    const r = lobby();
+    const key = keyOf(r);
+    const typed = `BCDFG${key.slice(0, 3)}`;
+    for (let i = 0; i < NEAR_TYPED_MISSES - 1; i++) r.noteNearMiss();
+    expect(r.nearLive(typed)).toBe(true);
+    r.noteNearMiss();
+    expect(r.nearLive(typed)).toBe(false);
+    expect(r.knows("b", typed, false)).toBe("not_near");
+    expect(r.nearLive(key)).toBe(true);
+    // The next key opens typing again, for the new key and the old.
+    clock = T0 + PERIOD;
+    r.tick();
+    expect(r.nearLive(typed)).toBe(true);
+    expect(r.nearLive(`BCDFG${keyOf(r).slice(0, 3)}`)).toBe(true);
+    expect(r.state.nearMisses).toBeUndefined();
+    // The count survives a rebuild from storage.
+    for (let i = 0; i < NEAR_TYPED_MISSES; i++) r.noteNearMiss();
+    expect(rebuild(r).nearLive(typed)).toBe(false);
+  });
+
+  it("Play again: the old table's devices are members of the new one, with no key", () => {
+    const r = started();
+    r.connect("watcher");
+    act(r, "a", 0, { type: "forfeit" });
+    expect(r.state.status).toBe("over");
+    r.handle("b", { t: "rematch" });
+    const spec = r.drainRematch();
+    expect(spec?.members?.sort()).toEqual(["a", "b", "watcher"]);
+    const next = new RoomCore<PurrState>(RoomCore.rematchState<PurrState>("CDFGH", spec as NonNullable<typeof spec>, clock), () => clock, counting(), undefined, 1, {
+      games: ["cat-tower", "purrtrait"],
+      tv: true,
+      streaks: true,
+    });
+    for (const id of ["a", "b", "watcher"]) expect(next.knows(id, null, false)).toBe("member");
+    expect(next.knows("tv", null, true)).toBe("member");
+    expect(next.knows("stranger", null, false)).toBe("not_near");
+    // And again: a member who never came back to the second table is still one at the third.
+    next.connect("tv");
+    next.connect("a");
+    next.connect("b");
+    next.deal();
+    act(next, "a", next.state.seats.findIndex((s) => s.deviceId === "a"), { type: "forfeit" });
+    next.handle("b", { t: "rematch" });
+    expect(next.drainRematch()?.members?.sort()).toEqual(["a", "b", "watcher"]);
+    // Only a same-room table carries them.
+    const tower = new RoomCore(RoomCore.create("BCDFG", "a", clock), () => clock, rng);
+    tower.connect("a");
+    expect(tower.state.members).toBeUndefined();
+  });
+
   it("linking a TV swaps the screen: the old one is no member any more, and the table stays shown", () => {
     const r = lobby();
-    expect(r.addScreen("tv2")).toEqual(["tv"]);
+    expect(r.addScreen("tv2").replaced).toEqual(["tv"]);
     expect(r.state.screens).toEqual(["tv2"]);
     expect(r.isScreen("tv")).toBe(false);
     expect(r.state.devices.tv).toBeUndefined();
@@ -891,7 +957,7 @@ describe("near keys (design §5.2, ruling 12)", () => {
     expect(r.knows("tv", null, false)).toBe("not_near");
     // Within the grace the phones still show the TV layout, waiting for the new one.
     expect(r.snapshotFor("a").room.screen).toBe(true);
-    expect(r.addScreen("tv2")).toEqual([]);
+    expect(r.addScreen("tv2")).toEqual({ replaced: [], out: [] });
     r.connect("tv2");
     expect(near(r, "tv2")).toBeDefined();
     expect(near(r, "tv")).toBeUndefined();
@@ -899,7 +965,7 @@ describe("near keys (design §5.2, ruling 12)", () => {
 
   it("a Cat Tower table keeps every screen it is linked to", () => {
     const r = new RoomCore(RoomCore.create("BCDFG", "", clock, undefined, undefined, "cat-tower", "tv"), () => clock, rng, undefined, 1, { streaks: false, tv: true });
-    expect(r.addScreen("tv2")).toEqual([]);
+    expect(r.addScreen("tv2")).toEqual({ replaced: [], out: [] });
     expect(r.state.screens).toEqual(["tv", "tv2"]);
   });
 });
