@@ -3,11 +3,11 @@ import { readFileSync } from "node:fs";
 import { GAMES, gameTitle } from "@pounce/play-api/games/index";
 import { describe, expect, test } from "vitest";
 
-import { CATALOG, GAME_IDS, RULE_NAMES, rulesLine, titleOf } from "../src/lib/catalog";
+import { CATALOG, GAME_IDS, RULE_NAMES, SHELF, rulesLine, titleOf } from "../src/lib/catalog";
 import { RULE_COPY } from "../src/table/bw-model";
 
 /** Games the server deals that this player doesn't draw yet: each leaves the list when its web table lands. */
-const NOT_YET: readonly string[] = ["purrtrait", "tumble"];
+const NOT_YET: readonly string[] = ["purrtrait"];
 
 describe("Home's game shelf", () => {
   test("names and seats every game the server has, exactly as the server does", () => {
@@ -18,6 +18,11 @@ describe("Home's game shelf", () => {
       expect(CATALOG[id].maxSeats).toBe(GAMES[id].maxSeats);
     }
     expect(titleOf("chess")).toBe(gameTitle("chess"));
+  });
+
+  test("keeps Toy Tumble off the shelf until the build turns it on", () => {
+    expect(SHELF).toEqual(["cat-tower", "tiles", "birdwatch"]);
+    expect(GAME_IDS).toContain("tumble");
   });
 });
 

@@ -17,6 +17,8 @@ import { Motion } from "../../table/motion";
 import { seatCat, seatName } from "../../table/seat";
 import { tilesLayout } from "../../table/tiles-layout";
 import { TilesPublic, tilesShown, tilesStyle } from "../../table/tiles-public";
+import { isTumble } from "../../tumble/store";
+import { TvTumble } from "../../tumble/tv";
 import { Cat, useSize } from "../common";
 
 import { momentFor, overTitle, standings, turnSeat, type Moment } from "./tv-model";
@@ -34,6 +36,7 @@ type TableProps = { store: RoomStore; state: RoomState; offline: boolean };
 /** The table as the TV draws it, for either game. */
 export function TvTable(props: TableProps) {
   const room = props.state.room!;
+  if (isTumble(room)) return <TvTumble {...props} />;
   if (room.gameId === "birdwatch") return room.birdwatch ? <TvBirdwatch {...props} /> : null;
   if (room.gameId === "tiles") return room.tiles ? <TvTiles {...props} /> : null;
   return room.game ? <TvCatTower {...props} /> : null;
