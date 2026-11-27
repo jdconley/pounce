@@ -6,7 +6,7 @@ import { APP_HEADER, parseApp } from "../app/version";
 import { devSpeed, linkOn, nudgeOn, tvOn } from "../env";
 import { reached } from "../funnel/funnel";
 import { roomSteps } from "../funnel/room";
-import { DEFAULT_GAME, GAMES_HEADER, gamesListed, gamesOn, gameTitle, type GameId } from "../games";
+import { DEFAULT_GAME, GAMES_HEADER, gamesFor, gamesOn, gameTitle, type GameId } from "../games";
 import { endBody, startAlert, startBody, updateBody, type LiveState } from "../live/live";
 import { isGeneratedName } from "../names/filter";
 import { yourMoveBody } from "../notify/copy";
@@ -63,6 +63,8 @@ const PING = '{"t":"ping"}';
 const PONG = '{"t":"pong"}';
 const ROOM_CODE_ATTEMPTS = 5;
 const STREAK_ATTEMPTS = 2;
+/** Toy Tumble's round clock while a round plays (§6.9: at most 10 ticks a second). */
+const TUMBLE_TICK_MS = 100;
 
 const cryptoRng = (): number => (crypto.getRandomValues(new Uint32Array(1))[0] as number) / 2 ** 32;
 
@@ -93,6 +95,8 @@ export class GameRoom extends DurableObject<Env> {
   /** The funnel steps this instance already reported (`roomSteps`), and the device whose move was just accepted. */
   private funnelTold = new Set<string>();
   private movedNow: string | null = null;
+  /** Toy Tumble's 100 ms round clock, running only while a round plays. */
+  private tumbleClock: ReturnType<typeof setInterval> | null = null;
 
   constructor(ctx: DurableObjectState, env: Env) {
     super(ctx, env);
@@ -100,6 +104,9 @@ export class GameRoom extends DurableObject<Env> {
     void ctx.blockConcurrencyWhile(async () => {
       this.core = this.load();
       if (this.core) await this.dropStaleDevices(this.core);
+      // A Toy Tumble round lived in the memory this instance lost: it counts down again (§6.6).
+      const replayed = this.core?.restartRound() ?? [];
+      if (replayed.length > 0) await this.after(replayed);
     });
   }
 
@@ -185,7 +192,7 @@ export class GameRoom extends DurableObject<Env> {
     if (!this.core) return new Response(null, { status: 404 });
     // An app that can't draw this room's game (it lists its games; one that lists none draws Cat
     // Tower) is told there is no such table, which every version of the app knows how to show.
-    if (!gamesListed(request.headers.get(GAMES_HEADER)).includes(this.core.state.game)) {
+    if (!gamesFor(request.headers.get(GAMES_HEADER), request.headers.get(APP_HEADER), devSpeed(this.env) > 1).includes(this.core.state.game)) {
       const { game } = this.core.state;
       // An app that said what it is (1.1 on) is told why instead: the game, by id and by name,
       // in headers too, since the app can't read a refused upgrade's body.
@@ -215,7 +222,8 @@ export class GameRoom extends DurableObject<Env> {
     if (screen && !this.core.mayScreen(deviceId)) return refuse(409, "seated");
     if (screen && !this.core.isScreen(deviceId)) return refuse(403, "not_screen");
     this.ctx.acceptWebSocket(server, [deviceId]);
-    server.serializeAttachment({ deviceId });
+    // `socket`: which of the device's sockets this is (a second tab, a reconnect), for Toy Tumble's one writer per box.
+    server.serializeAttachment({ deviceId, socket: crypto.randomUUID() });
     await this.after(this.core.connect(deviceId, parsePlayers(request.headers.get(PLAYER_HEADER))));
     return new Response(null, { status: 101, webSocket: client });
   }
@@ -231,11 +239,10 @@ export class GameRoom extends DurableObject<Env> {
       send(ws, parsed === null ? BAD_MESSAGE : { t: "error", code: parsed.error });
       return;
     }
-    // Where a player points: delivered live, never kept. No save, no alarm, no tables list.
-    if (parsed.t === "aim") {
-      for (const { to, message } of core.handle(deviceOf(ws), parsed)) {
-        for (const socket of to === "all" ? this.ctx.getWebSockets() : this.ctx.getWebSockets(to)) send(socket, message);
-      }
+    // Where a player points, and a Toy Tumble box's events: delivered live, never kept. No save,
+    // no alarm, no tables list. Who is out of a round is decided on its tick, never here.
+    if (parsed.t === "aim" || parsed.t === "tumble") {
+      this.deliver(core.handle(deviceOf(ws), parsed, undefined, socketOf(ws)));
       return;
     }
     const refused = await this.refusal(deviceOf(ws), parsed).catch(() => null);
@@ -248,7 +255,7 @@ export class GameRoom extends DurableObject<Env> {
       await this.setLook(deviceOf(ws), parsed);
       return;
     }
-    const out = core.handle(deviceOf(ws), parsed);
+    const out = core.handle(deviceOf(ws), parsed, undefined, socketOf(ws));
     if (parsed.t === "act" && !out.some(({ message }) => message.t === "error")) this.movedNow = deviceOf(ws);
     await this.after(out);
   }
@@ -365,6 +372,36 @@ export class GameRoom extends DurableObject<Env> {
     if (!this.core) return;
     this.heardPings(this.core);
     await this.after(this.core.tick());
+  }
+
+  /** Starts Toy Tumble's round clock when a round plays, and stops it when none does. */
+  private runTumbleClock(): void {
+    const playing = this.core?.tumblePlaying() ?? false;
+    if (playing && this.tumbleClock === null) this.tumbleClock = setInterval(() => void this.tumbleTick(), TUMBLE_TICK_MS);
+    if (!playing && this.tumbleClock !== null) {
+      clearInterval(this.tumbleClock);
+      this.tumbleClock = null;
+    }
+  }
+
+  /**
+   * One tick of a Toy Tumble round: the pings each socket's device answered (they reach no
+   * handler) and the round's own clock, delivered. Saved only when the round's slow state
+   * changed: someone out, or the round over.
+   */
+  private async tumbleTick(): Promise<void> {
+    const core = this.core;
+    if (!core) return;
+    const out: Outbound[] = [];
+    for (const ws of this.ctx.getWebSockets()) {
+      const at = this.ctx.getWebSocketAutoResponseTimestamp(ws);
+      if (at && ws.readyState === WebSocket.OPEN) out.push(...core.tumblePing(deviceOf(ws), socketOf(ws), at.getTime()));
+    }
+    const tick = core.tumbleTick();
+    out.push(...tick.out);
+    if (tick.changed) await this.after(out);
+    else this.deliver(out);
+    this.runTumbleClock();
   }
 
   /** Each open socket's last auto-answered ping, for the seats' links. */
@@ -763,7 +800,16 @@ export class GameRoom extends DurableObject<Env> {
   private async dropped(ws: WebSocket, asked: boolean): Promise<void> {
     if (!this.core) return;
     const deviceId = deviceOf(ws);
+    this.core.tumbleClosed(deviceId, socketOf(ws));
     if (!this.hasOpenSocket(deviceId, ws)) await this.after(this.core.disconnect(deviceId, asked));
+  }
+
+  /** Sends each message to its sockets: every one, a device's, or one socket of a device. */
+  private deliver(out: Outbound[]): void {
+    for (const { to, message, socket } of out) {
+      const sockets = to === "all" ? this.ctx.getWebSockets() : this.ctx.getWebSockets(to);
+      for (const ws of sockets) if (socket === undefined || socketOf(ws) === socket) send(ws, message);
+    }
   }
 
   /** Delivers, pushes, persists, re-arms the alarm and updates the tables index. */
@@ -771,10 +817,8 @@ export class GameRoom extends DurableObject<Env> {
     const core = this.core as Room;
     const { state } = core;
 
-    for (const { to, message } of out) {
-      const sockets = to === "all" ? this.ctx.getWebSockets() : this.ctx.getWebSockets(to);
-      for (const ws of sockets) send(ws, message);
-    }
+    this.deliver(out);
+    this.runTumbleClock();
 
     for (const intent of core.drainStreakIntents()) this.reportStreak(intent);
     // Live table pushes go after the turn's streak report (fresh paws) and before
@@ -901,7 +945,8 @@ export class GameRoom extends DurableObject<Env> {
       ...(next ? { next } : {}),
       ...(movedAt === null ? {} : { movedAt }),
       ...(this.otherGame() ? { game: this.otherGame() } : {}),
-      ...(options ? { options: { ...options } } : {}),
+      // A card shows a table's rule set (Birdwatch); Toy Tumble's House Cat level isn't on it.
+      ...(options && "rules" in options ? { options: { ...options } } : {}),
     };
     await Promise.all([
       ...[...devices].map((deviceId) =>
@@ -954,6 +999,7 @@ export class GameRoom extends DurableObject<Env> {
       },
     );
     this.core = null;
+    this.runTumbleClock();
     this.tablesFingerprint = "";
     this.tableDevices = new Set();
     this.tablePlayers = new Set();
@@ -1004,6 +1050,11 @@ function tableDevices(state: RoomState<unknown>): Set<string> {
 
 function deviceOf(ws: WebSocket): string {
   return (ws.deserializeAttachment() as { deviceId: string }).deviceId;
+}
+
+/** Which of its device's sockets this is. One opened before sockets had an id is "". */
+function socketOf(ws: WebSocket): string {
+  return (ws.deserializeAttachment() as { socket?: string }).socket ?? "";
 }
 
 function send(ws: WebSocket, message: ServerMessage): void {
