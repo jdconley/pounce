@@ -61,8 +61,11 @@ import Foundation
         let startsAt = serverStart - clockOffset
         guard fresh else { return }
         let r = next.r
-        replay = TumbleReplay(r: r, roundSeed: roundSeed, trickSeeds: seeds, skip: mine)
-        if let mine, seeds.indices.contains(mine), next.inRound(mine) {
+        let plays = mine.map { seeds.indices.contains($0) && next.inRound($0) } ?? false
+        // This device's box is its own while it plays; once it's out (a relaunch mid-round), the
+        // replay keeps it like any other box, from the server's sync.
+        replay = TumbleReplay(r: r, roundSeed: roundSeed, trickSeeds: seeds, skip: plays ? mine : nil)
+        if let mine, plays {
             let send = self.send
             local = TumbleLocal(r: r, seat: mine, roundSeed: roundSeed, trickSeed: seeds[mine], startsAt: startsAt) { ev in
                 send(.tumble(r: r, ev: ev))

@@ -77,6 +77,31 @@ import Testing
         #expect(two.miniCell > six.miniCell)
     }
 
+    /// Out at a table a TV shows: the phone is a spectator now, so it draws every box, not chips,
+    /// and a tipped box stays clear of its neighbours (cross-play, PR #176).
+    @Test(arguments: screens) func watchingAtATVTableDrawsBoxesNotChips(_ s: Screen) {
+        for seats in [2, 4, 6] {
+            let l = TumbleLayout(size: s.size, safeTop: s.top, safeBottom: s.bottom, others: seats, mode: .watching, chips: true)
+            #expect(!l.chips, "\(s.name) \(seats)")
+            #expect(l.minis.count == seats)
+            #expect(l.miniBoxes.allSatisfy { abs($0.height / $0.width - 1.5) < 0.01 }, "\(s.name) \(seats): boxes are 12 by 18")
+            #expect(overlaps(l.minis) == nil)
+            // The chest's walls take 0.6 of a cell of the 0.7 a mini's grid leaves around it.
+            for b in l.miniBoxes { #expect(TumbleLayout.tipFits(b, margin: l.miniCell * 0.1), "\(s.name) \(seats): a tipped box overlaps") }
+        }
+        // Playing at a TV table, the minis are chips.
+        #expect(TumbleLayout(size: CGSize(width: 375, height: 667), safeTop: 20, safeBottom: 0, others: 3, chips: true).chips)
+    }
+
+    @Test func seatsThatLeftOrAreAwayGetNoBox() {
+        let view = TumbleView(
+            seats: 5, wins: [0, 1, 0, 0, 2], left: [false, true, false, false, false], away: [false, false, true, false, false],
+            status: .playing, r: 3)
+        #expect(TumbleSeating.boxes(view, mine: 0, watching: false) == [3, 4])
+        #expect(TumbleSeating.boxes(view, mine: 0, watching: true) == [0, 3, 4])
+        #expect(TumbleSeating.boxes(view, mine: nil, watching: true) == [0, 3, 4], "the TV")
+    }
+
     @Test func watchingShowsEveryBoxBig() {
         let l = TumbleLayout(size: CGSize(width: 375, height: 667), safeTop: 20, safeBottom: 0, others: 6, mode: .watching)
         #expect(l.minis.count == 6)

@@ -508,6 +508,11 @@ struct TVDemoTableView: View {
             options.screen = true
             options.think = 600...1100
             options.stack = 3
+            // `-tumble-gone`: seat 1 left the game and seat 2 sits this round out (no boxes).
+            if CommandLine.arguments.contains("-tumble-gone") {
+                options.left = [1]
+                options.away = [2]
+            }
             let made = options
             next = TVRoom(code: "TUMBLE", socket: { _ in TumbleDemoSocket(options: made, tv: true) }, watchesNetwork: false)
         } else {

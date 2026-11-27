@@ -386,9 +386,14 @@ final class TumbleBoxNode: SKNode {
         let pivot = CGPoint(x: rect.width / 2, y: 0)
         body.position = pivot
         for child in body.children { child.position = CGPoint(x: child.position.x - pivot.x, y: child.position.y - pivot.y) }
-        body.run(.group([.rotate(toAngle: -0.07, duration: 0.35, shortestUnitArc: true), .scale(to: 0.9, duration: 0.35)]))
+        body.run(.group([.rotate(toAngle: -Self.tipAngle, duration: 0.35, shortestUnitArc: true), .scale(to: Self.tipScale, duration: 0.35)]))
         settled.run(.sequence([.wait(forDuration: 0.2), .fadeAlpha(to: 0.55, duration: 0.3)]))
     }
+
+    /// How far a box tips, and how much it shrinks as it does: its top's lean stays inside the
+    /// room shrinking leaves it (`TumbleLayout.tipFits`), so it never covers a neighbour.
+    static let tipAngle: CGFloat = TumbleLayout.tipAngle
+    static let tipScale: CGFloat = TumbleLayout.tipScale
 
     /// A new round: upright and full.
     func reset() {

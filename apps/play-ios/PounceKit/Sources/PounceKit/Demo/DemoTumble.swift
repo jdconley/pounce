@@ -29,6 +29,11 @@ public final class TumbleDemoRoom {
         public var sheet = false
         /// A screen (the TV) watches: no seat is this device's.
         public var screen = false
+        /// This device's box starts the round out (it watches every box).
+        public var mineOut = false
+        /// Seats that left the game, and seats sitting rounds out as Away: no box, no play.
+        public var left: [Int] = []
+        public var away: [Int] = []
         public var names: [String] = ["Sam", "Mia", "Leo", "Ivy", "Max", "Zoe"]
         public init() {}
     }
@@ -111,6 +116,8 @@ public final class TumbleDemoRoom {
         t.roundSeed = roundSeed
         t.trickSeeds = trickSeeds
         t.outs = []
+        t.left = (0..<n).map { o.left.contains($0) }
+        t.away = (0..<n).map { o.away.contains($0) }
         t.winner = nil
         t.status = playing ? .playing : .countdown
         t.startsAt = playing ? now - 1 : now + 3000
@@ -140,7 +147,12 @@ public final class TumbleDemoRoom {
         owed = [:]
         betweenUntil = nil
         let start = t.startsAt ?? now
-        for s in 0..<n where s != mine { plans[s] = plan(s, at: start + (o.sheet ? 1e12 : think())) }
+        if o.mineOut, let mine {
+            boxes[mine].out = true
+            room.tumble?.outs = [mine]
+        }
+        for s in o.left + o.away where s < n { boxes[s].out = true }
+        for s in 0..<n where s != mine && !boxes[s].out { plans[s] = plan(s, at: start + (o.sheet ? 1e12 : think())) }
     }
 
     /// The nine toys, each in its own colour (1 to 9 in `TumbleToy` order), over three hairball rows.

@@ -207,6 +207,17 @@ public struct TumbleLayout: Equatable, Sendable {
         return (items, boxes, cell)
     }
 
+    /// A tipped box (out of the round) leans this far about the middle of its foot and shrinks to this.
+    public static let tipAngle: CGFloat = 0.05
+    public static let tipScale: CGFloat = 0.88
+
+    /// A tipped box drawn at `rect` stays inside `rect` widened by `margin` on each side.
+    public static func tipFits(_ rect: CGRect, margin: CGFloat) -> Bool {
+        let shrink = rect.width * (1 - tipScale) / 2
+        let lean = rect.height * tipScale * sin(tipAngle) + rect.width * tipScale / 2 * (1 - cos(tipAngle))
+        return lean <= shrink + margin
+    }
+
     /// A cell's rect inside a box drawn at `rect` (x 0 to 11 left to right, y 0 at the bottom).
     public static func cellRect(_ x: Int, _ y: Int, in rect: CGRect) -> CGRect {
         let c = rect.width / CGFloat(columns)
@@ -217,6 +228,18 @@ public struct TumbleLayout: Equatable, Sendable {
     public static func column(at x: CGFloat, in rect: CGRect) -> Int {
         let c = rect.width / CGFloat(columns)
         return min(max(Int(((x - rect.minX) / c).rounded(.down)), 0), columns - 1)
+    }
+}
+
+/// Which seats get a box on a Toy Tumble table, as the web's TV and player draw them.
+public enum TumbleSeating {
+    /// Seats playing this round: a seat that left the game, or sits this round out as Away, gets
+    /// no box (it stays on the standings). `mine` is left out while this device plays its own box.
+    public static func boxes(_ view: TumbleView, mine: Int?, watching: Bool) -> [Int] {
+        (0..<view.seats).filter { s in
+            !(view.left.indices.contains(s) && view.left[s]) && !(view.away.indices.contains(s) && view.away[s])
+                && (watching || s != mine)
+        }
     }
 }
 

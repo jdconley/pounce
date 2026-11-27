@@ -21,6 +21,13 @@ enum TumbleDemo {
         case .tumbleSix: o.seats = 6
         case .tumbleTwo: o.seats = 2
         case .tumbleCountdown: o.playing = false
+        case .tumbleTVOut:
+            // A TV shows the table, this phone's box is out, one seat left and one is away.
+            o.seats = 5
+            o.mineOut = true
+            o.left = [2]
+            o.away = [3]
+            o.stack = 4
         case .tumbleSheet:
             o.sheet = true
             o.held = TumbleTrick.allCases.prefix(6).map { $0 }
@@ -40,7 +47,7 @@ enum TumbleDemo {
     static func room(_ mode: DemoMode) -> RoomView {
         if mode == .tumbleLobby { return lobby() }
         var room = TumbleDemoRoom(options(mode), now: TumbleTable.now()).room
-        if mode == .tumbleTV { room.screen = true }
+        if mode == .tumbleTV || mode == .tumbleTVOut { room.screen = true }
         return room
     }
 
@@ -57,7 +64,7 @@ enum TumbleDemo {
 
     static func socket(_ mode: DemoMode) -> any RoomSocketing {
         if mode == .tumbleLobby { return DemoSocket(room: mode.room) }
-        return TumbleDemoSocket(options: options(mode), tv: mode == .tumbleTV)
+        return TumbleDemoSocket(options: options(mode), tv: mode == .tumbleTV || mode == .tumbleTVOut)
     }
 }
 

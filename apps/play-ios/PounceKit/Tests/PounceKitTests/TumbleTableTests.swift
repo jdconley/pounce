@@ -79,6 +79,21 @@ import Testing
         #expect(table.local?.r == 2)
     }
 
+    /// Back in a round this phone's box is already out of: no own box to step, and its box shows
+    /// from the server's sync like any other.
+    @Test func aBoxAlreadyOutIsReplayed() {
+        let table = TumbleTable { _ in }
+        table.update(room: Self.room(status: .playing, outs: [0]), now: 0)
+        #expect(table.local == nil)
+        #expect(table.replay?.seats.keys.sorted() == [0, 1, 2])
+        var out = TumbleBox(trickSeed: [1, 2, 3, 4])
+        out.cells[0] = Tumble.junk
+        out.out = true
+        table.receive(.sync(TumbleSync(r: 1, boxes: [TumbleBoxSync(s: 0, box: out, q: 4, status: .out)])), now: 10)
+        #expect(table.box(0) == out)
+        #expect(table.isOut(0))
+    }
+
     @Test func aScreenHasNoOwnBoxAndReplaysEveryBox() {
         let table = TumbleTable(screen: true) { _ in }
         table.update(room: Self.room(mine: nil), now: 0)

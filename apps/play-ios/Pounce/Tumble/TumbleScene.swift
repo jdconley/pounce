@@ -183,10 +183,11 @@ final class TumbleScene: SKScene {
 
     private func relayoutIfNeeded() {
         guard size.width > 1, size.height > 1, let view = table.view else { return }
-        let seats = view.seats
-        let others: [Int] = watching ? Array(0..<seats) : (0..<seats).filter { $0 != mySeat }
+        // Seats that left, or sit this round out as Away, get no box (spec §5.1).
+        let others = TumbleSeating.boxes(view, mine: mySeat, watching: watching)
         let mode: TumbleLayout.Mode = isScreen ? .tv : (watching ? .watching : .play)
-        let chips = store.room?.screen == true && !isScreen
+        // Chips only while this phone plays its own box at a TV's table: out, it watches every box.
+        let chips = store.room?.screen == true && !isScreen && mode == .play
         let key = "\(size)|\(safeInsets)|\(others)|\(mode)|\(chips)|\(textScale)"
         if !needsLayout, key == lastLayoutKey { return }
         needsLayout = false

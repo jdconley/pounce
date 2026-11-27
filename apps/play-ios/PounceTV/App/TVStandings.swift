@@ -72,9 +72,11 @@ enum TVStandings {
         }
         return seats.map { s in
             let left = t.left[safe: s] ?? false
-            return Row(
-                seat: s, won: t.status == .over && t.winner == s, out: left,
-                detail: left ? String(localized: "Left", comment: "TV game over: a player who left the game before it ended") : "\(t.wins[safe: s] ?? 0)")
+            let away = t.away[safe: s] ?? false
+            let detail = left ? String(localized: "Left", comment: "TV game over: a player who left the game before it ended")
+                : away ? String(localized: "Away", comment: "TV standings (Toy Tumble): a player sitting rounds out until their device is back")
+                : "\(t.wins[safe: s] ?? 0)"
+            return Row(seat: s, won: t.status == .over && t.winner == s, out: left, detail: detail)
         }
     }
 
