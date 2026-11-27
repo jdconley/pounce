@@ -296,7 +296,9 @@ extension XCTestCase {
             }
             if let reading = Watchdog(raw) { return reading }
             if raw == "off" { return nil }
-            if raw != nil { WatchdogRead.lastError = "unreadable: \(raw!.prefix(80))" }
+            if let raw {
+                WatchdogRead.lastError = "unreadable, \(raw.count) characters in \(raw.split(separator: "|").count) sections, ending \(raw.suffix(160))"
+            }
             guard Date() < deadline else { return nil }
             Thread.sleep(forTimeInterval: Live.poll(0.5))
         }

@@ -128,8 +128,21 @@ final class FrameRateTests: XCTestCase {
 
         XCTAssertGreaterThan(window.screen, 0, report, file: file, line: line)
         XCTAssertEqual(window.table, window.screen, "the table doesn't ask for the screen's top rate: \(report)", file: file, line: line)
-        // It rests between drags (the view pauses), so a quarter of the window's frames at least.
-        XCTAssertGreaterThanOrEqual(window.tableFrames.count, Int(seconds) * window.screen / 4, "the table hardly rendered while it played: \(report)", file: file, line: line)
+        // The table stays on screen, in the same view, the whole window.
+        XCTAssertEqual(window.offs, 0, "the table left its window while it played: \(report)", file: file, line: line)
+        XCTAssertEqual(window.views, 0, "the table's view was replaced while it played: \(report)", file: file, line: line)
+        // It rests between drags (the view pauses), so it draws a quarter of the frames at least:
+        // of the frames the app's own display link got in the window, and on a trustworthy machine
+        // of the clock's too. A starved CI runner can take most of a window from the whole app
+        // (#185: a 6.9 s stall none of it the app's, 109 link ticks in 12 s, 84 of them drawn),
+        // which says nothing about the table; a table that stopped drawing still fails.
+        let clockFrames = Int(seconds) * window.screen
+        XCTAssertGreaterThanOrEqual(window.tableFrames.count, window.link.count / 4, "the table hardly rendered while the app ran: \(report)", file: file, line: line)
+        if !host.busy, window.nearReference {
+            XCTAssertGreaterThanOrEqual(window.tableFrames.count, clockFrames / 4, "the table hardly rendered while it played: \(report)", file: file, line: line)
+        } else if window.link.count < clockFrames / 2 {
+            print("FRAMES \(name): the app got \(window.link.count) of \(clockFrames) frames from this machine; the window judged those")
+        }
         // The app's time budgets, as fits this machine (`Watchdog.timeFailures`).
         for failure in window.timeFailures() { XCTFail("\(failure): \(report)", file: file, line: line) }
         if window.hangs > window.appHangs {
