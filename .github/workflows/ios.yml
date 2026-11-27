@@ -217,6 +217,19 @@ jobs:
     timeout-minutes: 45
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+      # TEMP (diagnosing runner load): CPU use and the busiest processes every few seconds.
+      - name: Sample the runner
+        working-directory: .
+        run: |
+          mkdir -p "$RUNNER_TEMP/load"
+          echo "cores $(sysctl -n hw.ncpu), memory $(( $(sysctl -n hw.memsize) / 1073741824 )) GB"
+          mdutil -as 2>&1 | head -6 || true
+          xcrun simctl list devices booted
+          nohup bash -c 'while true; do echo "=== $(date -u +%H:%M:%S) loadavg $(sysctl -n vm.loadavg)"; top -l 2 -s 2 -n 12 -o cpu -stats pid,command,cpu,th,state | awk "/^Processes:/{n++} n==2"; sleep 6; done' > "$RUNNER_TEMP/load/samples.log" 2>&1 &
+      # Spotlight indexes the checkout, the build and the simulator's files as they are written.
+      - name: Spotlight off
+        working-directory: .
+        run: sudo mdutil -a -i off
       - run: xcodebuild -version
       # XcodeGen from its pinned, checksummed release: seconds, where Homebrew takes over three
       # minutes. scripts/bootstrap.sh finds it on the path.
@@ -247,7 +260,11 @@ jobs:
       # app's: one untimed run of a table that plays itself takes them first.
       - name: Warm the simulator
         run: |
+          # Free the build's memory: the build service stays resident after the build.
+          killall SWBBuildService XCBBuildService 2>/dev/null || true
           xcrun simctl bootstatus "${{ steps.sim.outputs.udid }}" -b >/dev/null
+          # The simulator's own system logging at its default level, not debug.
+          xcrun simctl spawn "${{ steps.sim.outputs.udid }}" log config --mode "level:default" || true
           app=$(find build/dd-gates/Build/Products -maxdepth 2 -name Pounce.app -path '*iphonesimulator*' | head -1)
           xcrun simctl install "${{ steps.sim.outputs.udid }}" "$app"
           for demo in tiles hit; do
@@ -255,6 +272,10 @@ jobs:
             sleep 8
             xcrun simctl terminate "${{ steps.sim.outputs.udid }}" com.conleychaos.play || true
           done
+      # TEMP (diagnosing runner load)
+      - name: Memory before the gates
+        working-directory: .
+        run: top -l 1 -n 15 -o mem -stats pid,command,mem,cpu | sed -n '1,40p'
       - name: Frame and main-thread gates
         env:
           TEST_RUNNER_POUNCE_FRAMES_SECONDS: "12"
@@ -285,6 +306,16 @@ jobs:
             grep -E '^FRAMES ' build/ui-gates.log || echo "no FRAMES lines"
             echo '```'
           } >> "$GITHUB_STEP_SUMMARY"
+      # TEMP (diagnosing runner load)
+      - name: Runner samples
+        if: always()
+        working-directory: .
+        run: |
+          xcrun simctl list devices booted
+          echo "--- per sample: time, load average, CPU use"
+          awk '/^=== /{t=$2; l=$4} /^CPU usage/{print t, "load", l, $0}' "$RUNNER_TEMP/load/samples.log"
+          echo "--- every sample"
+          cat "$RUNNER_TEMP/load/samples.log"
       - name: Keep the results
         if: failure()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
