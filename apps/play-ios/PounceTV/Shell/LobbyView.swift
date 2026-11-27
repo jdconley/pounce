@@ -47,8 +47,8 @@ struct LobbyView: View {
                 .accessibilityLabel(Text("QR code to join table \(room.code)", comment: "TV lobby: the invite QR, for VoiceOver"))
                 .accessibilityIdentifier("tv.lobby.qr")
                 .accessibilityValue(Text(verbatim: model.inviteURL?.absoluteString ?? ""))
-            // Purrtrait: the 7-letter code that goes with the QR, good for a minute (spec §5.2).
-            TVCode(code: room.isPurrtrait ? room.near?.code : room.code, size: room.isPurrtrait ? 74 : 92,
+            // Purrtrait: the 8-letter code that goes with the QR, good for a minute (spec §5.2).
+            TVCode(code: room.isPurrtrait ? room.near?.code : room.code, size: room.isPurrtrait ? 66 : 92,
                    label: String(localized: "Table code", comment: "TV lobby: VoiceOver, before the table's code is spelled out"))
                 .accessibilityIdentifier("tv.lobby.code")
         }

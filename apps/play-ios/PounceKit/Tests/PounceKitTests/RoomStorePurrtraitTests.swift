@@ -99,7 +99,7 @@ import Testing
 
     @Test func aRefusedPhoneStaysOut() async throws {
         let socket = FakeSocket()
-        let store = RoomStore(code: "KQ7XPM", socket: socket)
+        let store = RoomStore(code: "KQ7XP", socket: socket)
         store.handle(.forbidden(.notNear))
         #expect(store.phase == .notNear)
         store.handle(snapshot(try Self.room("snapshot-lobby-phone"), seq: 1))

@@ -18,9 +18,9 @@ struct JoinView: View {
     /// The last code was wrong: the line under the tiles says so until the next key.
     @State private var wrong = false
 
-    /// A room code is five; a Purrtrait TV's code is seven (the table asks for the last two).
+    /// A room code is five; a Purrtrait TV's code is eight (the table asks for the last three).
     private var length: Int { easel ? RoomCode.easelLength : RoomCode.length }
-    /// The five typed are a Purrtrait table's: two more from the TV.
+    /// The five typed are a Purrtrait table's: three more from the TV.
     @State private var easel = false
 
     private var checking: Bool {
@@ -69,7 +69,7 @@ struct JoinView: View {
         // The table is there, but this version can't join it: the table's own screen says why.
         .onChange(of: model.room?.store.phase) { _, phase in
             if checking, phase == .needsUpdate, let code = model.probing { model.open(code: code, intent: .join) }
-            // A Purrtrait table: five letters aren't enough. Two more tiles, for the TV's last two.
+            // A Purrtrait table: five letters aren't enough. Three more tiles, for the TV's last three.
             if model.probing != nil, phase == .notNear {
                 if typed.count == RoomCode.length, !easel {
                     model.cancelProbe()
@@ -234,8 +234,8 @@ struct JoinView: View {
     }
 
     static let wrongWords = String(localized: "No table with that code.", comment: "Join: a code with no table behind it")
-    /// A Purrtrait table: the TV's code has two more characters after the room's five.
-    static let moreWords = String(localized: "Two more from the TV", comment: "Join: the table is on a TV; type its code's last two characters")
+    /// A Purrtrait table: the TV's code has three more characters after the room's five.
+    static let moreWords = String(localized: "Three more from the TV", comment: "Join: the table is on a TV; type its code's last three characters")
     static let tvWords = String(localized: "Scan the code on the TV.", comment: "Join: a Purrtrait TV's code that is too old")
 
     /// The words of the last bad code.

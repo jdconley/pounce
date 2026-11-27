@@ -7,7 +7,7 @@ enum RoomIntent: Equatable {
     case join
     case rejoin
     case move(moveCode: String)
-    /// A Purrtrait TV's QR (`/e/<CODE>?near=<KEY>`) or its 7-character typed code: join with the
+    /// A Purrtrait TV's QR (`/e/<CODE>?near=<KEY>`) or its 8-character typed code: join with the
     /// TV's key (spec §5.2). Sits down like a join.
     case easel(near: String)
 }

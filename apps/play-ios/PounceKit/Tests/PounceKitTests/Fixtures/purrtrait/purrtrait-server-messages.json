@@ -1,6 +1,6 @@
 [
   { "name": "snapshot-lobby-phone", "message": { "t": "snapshot", "protocol": 1, "seq": 3, "room": {
-    "code": "KQ7XPM", "name": "Couch Cats", "status": "lobby", "youAreHost": true, "gameId": "purrtrait", "screen": true,
+    "code": "KQ7XP", "name": "Couch Cats", "status": "lobby", "youAreHost": true, "gameId": "purrtrait", "screen": true,
     "options": { "timer": 60 },
     "seats": [
       { "kind": "human", "person": { "id": "p-mom", "name": "Mom", "cat": 2 }, "yours": true, "presence": "awake" },
@@ -11,15 +11,15 @@
       { "kind": "open", "yours": false, "presence": null }, { "kind": "open", "yours": false, "presence": null }
     ] } } },
   { "name": "snapshot-lobby-screen", "message": { "t": "snapshot", "protocol": 1, "seq": 3, "room": {
-    "code": "KQ7XPM", "name": "Couch Cats", "status": "lobby", "youAreHost": false, "gameId": "purrtrait", "screen": true,
+    "code": "KQ7XP", "name": "Couch Cats", "status": "lobby", "youAreHost": false, "gameId": "purrtrait", "screen": true,
     "options": { "timer": 90 },
-    "near": { "key": "H4TR9WQZ", "code": "KQ7XPMH4", "expiresIn": 21000 },
+    "near": { "key": "H4TR9WQZ", "code": "KQ7XPH4T", "expiresIn": 21000 },
     "seats": [
       { "kind": "human", "person": { "id": "p-mom", "name": "Mom", "cat": 2 }, "yours": false, "presence": "awake" },
       { "kind": "open", "yours": false, "presence": null }
     ] } } },
   { "name": "snapshot-choosing-drawer", "message": { "t": "snapshot", "protocol": 1, "seq": 9, "room": {
-    "code": "KQ7XPM", "name": "Couch Cats", "status": "playing", "youAreHost": true, "gameId": "purrtrait", "screen": true,
+    "code": "KQ7XP", "name": "Couch Cats", "status": "playing", "youAreHost": true, "gameId": "purrtrait", "screen": true,
     "options": { "timer": 60 },
     "seats": [
       { "kind": "human", "person": { "id": "p-mom", "name": "Mom", "cat": 2 }, "yours": true, "presence": "awake" },
@@ -30,7 +30,7 @@
       "scores": [0, 0, 0], "out": [false, false, false], "group": null, "level": null, "remainingMs": 9400, "paused": false,
       "turn": "1:0", "last": null, "winners": [], "choices": { "easy": "pizza", "tricky": "sandcastle" } } } } },
   { "name": "snapshot-choosing-guesser", "message": { "t": "snapshot", "protocol": 1, "seq": 9, "room": {
-    "code": "KQ7XPM", "name": "Couch Cats", "status": "playing", "youAreHost": false, "gameId": "purrtrait", "screen": true,
+    "code": "KQ7XP", "name": "Couch Cats", "status": "playing", "youAreHost": false, "gameId": "purrtrait", "screen": true,
     "options": { "timer": 60 },
     "seats": [
       { "kind": "human", "person": { "id": "p-mom", "name": "Mom", "cat": 2 }, "yours": false, "presence": "awake" },
@@ -41,7 +41,7 @@
       "scores": [0, 0, 0], "out": [false, false, false], "group": null, "level": null, "remainingMs": 9400, "paused": false,
       "turn": "1:0", "last": null, "winners": [] } } } },
   { "name": "snapshot-drawing-drawer", "message": { "t": "snapshot", "protocol": 1, "seq": 11, "room": {
-    "code": "KQ7XPM", "name": "Couch Cats", "status": "playing", "youAreHost": true, "gameId": "purrtrait", "screen": true,
+    "code": "KQ7XP", "name": "Couch Cats", "status": "playing", "youAreHost": true, "gameId": "purrtrait", "screen": true,
     "options": { "timer": 60 },
     "seats": [
       { "kind": "human", "person": { "id": "p-mom", "name": "Mom", "cat": 2 }, "yours": true, "presence": "awake" },
@@ -52,7 +52,7 @@
       "scores": [0, 0, 0], "out": [false, false, false], "group": "food", "level": "easy", "remainingMs": 58200, "paused": false,
       "turn": "1:0", "last": null, "winners": [], "word": "pizza", "youDraw": true } } } },
   { "name": "snapshot-drawing-guesser", "message": { "t": "snapshot", "protocol": 1, "seq": 11, "room": {
-    "code": "KQ7XPM", "name": "Couch Cats", "status": "playing", "youAreHost": false, "gameId": "purrtrait", "screen": true,
+    "code": "KQ7XP", "name": "Couch Cats", "status": "playing", "youAreHost": false, "gameId": "purrtrait", "screen": true,
     "options": { "timer": 60 },
     "seats": [
       { "kind": "human", "person": { "id": "p-mom", "name": "Mom", "cat": 2 }, "yours": false, "presence": "awake" },
@@ -63,9 +63,9 @@
       "scores": [0, 0, 0], "out": [false, false, false], "group": "food", "level": "easy", "remainingMs": 58200, "paused": false,
       "turn": "1:0", "last": null, "winners": [] } } } },
   { "name": "snapshot-drawing-screen-paused", "message": { "t": "snapshot", "protocol": 1, "seq": 12, "room": {
-    "code": "KQ7XPM", "name": "Couch Cats", "status": "playing", "youAreHost": false, "gameId": "purrtrait", "screen": true,
+    "code": "KQ7XP", "name": "Couch Cats", "status": "playing", "youAreHost": false, "gameId": "purrtrait", "screen": true,
     "options": { "timer": 60 },
-    "near": { "key": "Z2MPQ7TT", "code": "KQ7XPMZ2", "expiresIn": 30000 },
+    "near": { "key": "Z2MPQ7TT", "code": "KQ7XPZ2M", "expiresIn": 30000 },
     "seats": [
       { "kind": "human", "person": { "id": "p-mom", "name": "Mom", "cat": 2 }, "yours": false, "presence": "awake" },
       { "kind": "human", "person": { "id": "p-ava", "name": "Ava", "cat": 5 }, "yours": false, "presence": "awake" },
@@ -75,7 +75,7 @@
       "scores": [0, 0, 0], "out": [false, false, false], "group": "food", "level": "easy", "remainingMs": 41000, "paused": true,
       "turn": "1:0", "last": null, "winners": [] } } } },
   { "name": "snapshot-reveal", "message": { "t": "snapshot", "protocol": 1, "seq": 14, "room": {
-    "code": "KQ7XPM", "name": "Couch Cats", "status": "playing", "youAreHost": false, "gameId": "purrtrait", "screen": true,
+    "code": "KQ7XP", "name": "Couch Cats", "status": "playing", "youAreHost": false, "gameId": "purrtrait", "screen": true,
     "options": { "timer": 60 },
     "seats": [
       { "kind": "human", "person": { "id": "p-mom", "name": "Mom", "cat": 2 }, "yours": false, "presence": "awake" },
@@ -86,7 +86,7 @@
       "scores": [1, 1, 0], "out": [false, false, false], "group": "food", "level": "easy", "remainingMs": null, "paused": false,
       "turn": "1:0", "last": { "word": "pizza", "guesser": 1, "points": 1 }, "winners": [] } } } },
   { "name": "snapshot-over", "message": { "t": "snapshot", "protocol": 1, "seq": 60, "room": {
-    "code": "KQ7XPM", "name": "Couch Cats", "status": "over", "youAreHost": true, "gameId": "purrtrait", "screen": true,
+    "code": "KQ7XP", "name": "Couch Cats", "status": "over", "youAreHost": true, "gameId": "purrtrait", "screen": true,
     "options": { "timer": 60 },
     "seats": [
       { "kind": "human", "person": { "id": "p-mom", "name": "Mom", "cat": 2 }, "yours": true, "presence": "awake" },

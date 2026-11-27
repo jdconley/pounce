@@ -113,7 +113,7 @@ extension DemoFixtures {
         room.purrtrait?.choices = nil
         room.purrtrait?.word = nil
         room.purrtrait?.youDraw = false
-        room.near = RoomNear(key: "H4TR9WQZ", code: "\(code)H4", expiresIn: 30_000)
+        room.near = RoomNear(key: "H4TR9WQZ", code: "\(code)H4T", expiresIn: 30_000)
         return room
     }
 

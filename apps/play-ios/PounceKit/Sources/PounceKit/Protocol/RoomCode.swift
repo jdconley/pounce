@@ -9,12 +9,12 @@ public enum RoomCode {
 
     /// A room code's length.
     public static let length = roomLength
-    /// A Purrtrait TV's typed code: the room code and the first 2 characters of its key.
-    public static let easelLength = roomLength + 2
+    /// A Purrtrait TV's typed code: the room code and the first 3 characters of its key.
+    public static let easelLength = roomLength + 3
 
     public static func isValid(_ s: String) -> Bool { matches(s, length: roomLength) }
 
-    /// A Purrtrait TV's 7-character typed code.
+    /// A Purrtrait TV's 8-character typed code.
     public static func isValidEasel(_ s: String) -> Bool { matches(s, length: easelLength) }
 
     /// A Purrtrait TV's join key (8 characters from the same alphabet).

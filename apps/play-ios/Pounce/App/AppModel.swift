@@ -1024,7 +1024,7 @@ final class AppModel {
     /// Join's keypad finished a code. A table this device knows rejoins at once; any other
     /// code is checked first while Join stays on screen, so a bad one can shake the tiles.
     func joinTyped(_ typedCode: String) {
-        // Seven characters: a Purrtrait TV's code, the room's five and two of its key.
+        // Eight characters: a Purrtrait TV's code, the room's five and three of its key.
         let code = String(typedCode.prefix(RoomCode.length))
         let near = typedCode.count > RoomCode.length ? typedCode : nil
         if near == nil, isKnown(code) {
@@ -1130,7 +1130,7 @@ final class AppModel {
         let config = config
         let api = api
         // A Purrtrait TV's key goes on every connect (a member passes with an old one). A typed
-        // code with no key reads a 403 as the TV's table asking for one (Join shows two more tiles).
+        // code with no key reads a 403 as the TV's table asking for one (Join shows three more tiles).
         let near: String? = if case .easel(let key) = intent { key } else { nil }
         let socket = SuspendableSocket {
             RoomSocket(code: code, config: config, near: near, typed: typed, credential: { try await api.credential() })

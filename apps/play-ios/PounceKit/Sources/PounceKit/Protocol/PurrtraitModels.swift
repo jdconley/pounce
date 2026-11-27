@@ -212,7 +212,7 @@ public struct PurrView: Codable, Equatable, Sendable {
 /// 8-character typed fallback, good for 30 to 60 seconds.
 public struct RoomNear: Codable, Equatable, Sendable {
     public var key: String
-    /// The room code plus the key's first 2 characters, as one 8-character code.
+    /// The room code plus the key's first 3 characters, as one 8-character code.
     public var code: String
     /// Milliseconds until a new key, from the snapshot.
     public var expiresIn: Int

@@ -27,10 +27,10 @@ actor TVPurrDemoSocket: RoomSocketing {
         var room = lobby ? DemoFixtures.purrScreen(.lobby) : DemoFixtures.purrScreen(.draw, seats: self.seats)
         if lobby {
             room.seats = (0..<10).map { _ in SeatView(kind: .open) }
-            room.near = RoomNear(key: "H4TR9WQZ", code: "\(code)H4", expiresIn: 30_000)
+            room.near = RoomNear(key: "H4TR9WQZ", code: "\(code)H4T", expiresIn: 30_000)
         }
         room.code = code
-        room.near?.code = "\(code)H4"
+        room.near?.code = "\(code)H4T"
         self.room = room
         (events, feed) = AsyncStream.makeStream(of: SocketEvent.self)
         let release = TVDemoSignal.release.listen()

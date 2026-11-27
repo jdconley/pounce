@@ -46,7 +46,7 @@ import Testing
 
     @Test func onlyTheScreensSnapshotCarriesTheNearKey() throws {
         let screen = try room("snapshot-lobby-screen")
-        #expect(screen.near == RoomNear(key: "H4TR9WQZ", code: "KQ7XPMH4", expiresIn: 21000))
+        #expect(screen.near == RoomNear(key: "H4TR9WQZ", code: "KQ7XPH4T", expiresIn: 21000))
         #expect(screen.purrTimer == 90)
     }
 
@@ -174,8 +174,8 @@ import Testing
 
     @Test func theSocketURLCarriesTheNearKey() {
         let config = APIConfig(baseURL: URL(string: "http://localhost:8798")!)
-        #expect(config.socketURL(code: "KQ7XPM", near: "H4TR9WQZ").absoluteString == "ws://localhost:8798/v1/rooms/KQ7XPM/ws?near=H4TR9WQZ")
-        #expect(config.socketURL(code: "KQ7XPM").absoluteString == "ws://localhost:8798/v1/rooms/KQ7XPM/ws")
+        #expect(config.socketURL(code: "KQ7XP", near: "H4TR9WQZ").absoluteString == "ws://localhost:8798/v1/rooms/KQ7XP/ws?near=H4TR9WQZ")
+        #expect(config.socketURL(code: "KQ7XP").absoluteString == "ws://localhost:8798/v1/rooms/KQ7XP/ws")
     }
 
     @Test func aRefusedPhoneSaysWhy() {

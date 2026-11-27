@@ -26,7 +26,7 @@
 
 Mine, open to JD's override.
 
-1. **Codes are 5 + 2, not 6 + 2.** Room codes are five characters (`RoomCode`), so the TV's typed fallback is seven (`room.near.code`). Join keeps five tiles; when a code turns out to be a Purrtrait table's (a 403 on the probe), two more tiles appear with "Two more from the TV". A seven-character code goes on the socket as `near`.
+1. **Codes are 5 + 3.** Room codes are five characters (`RoomCode`); the TV's typed fallback is the room code and the key's first three, eight in all (`room.near.code`, shown as given; the server's fix). Join keeps five tiles; when a code turns out to be a Purrtrait table's (a 403 on the probe), three more tiles appear with "Three more from the TV". An eight-character code goes on the socket as `near`.
 2. **The palette** is ours and the web's (notes `purrtrait-ios-tv.md`): black #1A1426, red #FF3B4A, orange #FF9419, yellow #FFD400, green #2ECC5B, blue #2F80FF, purple #9B4DFF, brown #8B5A2B, eraser white. Brown over pink: animals and trees need it.
 3. **One easel view, two hosts.** `PurrEaselView` (layers: a bitmap of finished strokes from the `InkRaster` actor, a `CAShapeLayer` for the live stroke, and one shape layer per stroke while its bitmap is on the way, so nothing blinks) is compiled into both apps. The phone's `PurrCanvasView` adds touches and a 120 Hz display link while a finger is down; the TV's `PurrInkFollower` feeds it from the room's `InkFeed`, building a whole `inkSync` off the main thread.
 4. **Ink never touches SwiftUI state.** `RoomStore.ink` (`InkFeed`) is unobserved; the easel listens to it. The store drops a relay for any turn but the room's, and a new turn key empties it (the reveal keeps the picture up).
