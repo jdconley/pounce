@@ -193,7 +193,7 @@ struct NineLivesVectors: Decodable {
             Issue.record("no result")
             return
         }
-        #expect(result.outcome == .missed && DailyCatalog.nineLives.summary(result) == "Out of lives")
+        #expect(result.outcome == .missed && result.percent == 2 && DailyCatalog.nineLives.line(result) == "Nine Lives 2: Out of lives, 2%")
         let (ended, endedState) = try start("resumedOutOfLives")
         #expect(ended.result?.outcome == .missed && endedState.lives == 0 && endedState.solution == solution)
         // A board picked up from it is out of lives and shows the solution.

@@ -185,6 +185,9 @@ final class NineLivesModel {
         marks.pending.remove(cell)
         switch verdict {
         case .right:
+            // It locks: from checking to yours, with a pop.
+            placements += 1
+            marks.placed = (cell, placements)
             afterRight(cell, digit: digit)
         case .wrong(let left, let solution):
             board.applyWrong(cell: cell, digit: digit, lives: left)

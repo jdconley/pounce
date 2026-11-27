@@ -19,6 +19,8 @@ enum NineLivesStyle {
     static let hinted = Palette.yellow
     static let clash = Palette.refuse
     static let shown = Palette.violet.mix(with: .white, by: 0.62)
+    /// A number on its way to the server: neutral, neither right nor wrong, until the answer lands.
+    static let checking = Palette.night.mix(with: .white, by: 0.42)
     /// A life: a bright cat head. A lost one is a dim ghost of it.
     static let life = Palette.magenta.mix(with: Palette.orange, by: 0.25)
     static let lifeLost = Palette.ink.opacity(0.5)
@@ -47,7 +49,7 @@ struct PawShape: Shape {
 
 /// One paw tile: an ink rim, a darker lip below, a glossy face and the digit.
 struct PawTile: View {
-    enum Kind: Equatable { case given, mine, hinted, clash, wrong, shown }
+    enum Kind: Equatable { case given, mine, hinted, clash, wrong, shown, checking }
 
     let digit: Int
     let kind: Kind
@@ -60,6 +62,7 @@ struct PawTile: View {
         case .hinted: NineLivesStyle.hinted
         case .clash, .wrong: NineLivesStyle.clash
         case .shown: NineLivesStyle.shown
+        case .checking: NineLivesStyle.checking
         }
     }
 

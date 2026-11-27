@@ -21,6 +21,9 @@ actor FakeDaily: DailyService {
     var calls: [Call] = []
     /// The `rules` each start asked for.
     var startRules: [String?] = []
+    /// The `activeMs` each hint and give-up carried.
+    var hintActive: [Int64?] = []
+    var giveUpActive: [Int64?] = []
     var bodies: [DailyMovesBody] = []
     /// Answers for the moves route, in order; when empty, it accepts.
     var movesScript: [Result<DailyMovesAnswer, any Error>] = []
@@ -56,6 +59,16 @@ actor FakeDaily: DailyService {
         if !movesScript.isEmpty { return try movesScript.removeFirst().get() }
         seq = body.from + body.moves.count
         return .accepted(seq: seq, reveals: [], progress: Double(seq) / 4, result: nil)
+    }
+
+    func hint(run: String, hints: Int, activeMs: Int64?, person: String?) async throws -> DailyMovesAnswer {
+        hintActive.append(activeMs)
+        return try await hint(run: run, hints: hints, person: person)
+    }
+
+    func giveUp(run: String, activeMs: Int64?, person: String?) async throws -> DailyMovesAnswer {
+        giveUpActive.append(activeMs)
+        return try await giveUp(run: run, person: person)
     }
 
     func hint(run: String, hints: Int, person: String?) async throws -> DailyMovesAnswer {
@@ -346,21 +359,76 @@ final class ManualTimer: DailyTimer {
     @Test func aHintCostsTheStartsHintMs() {
         let free = DailyStart(
             run: "r", game: "nine-lives", date: "2026-11-23", number: 1, level: 1, startedAt: 1_000_000, now: 1_000_000,
-            puzzle: .null, state: .null, seq: 0, hints: 0, result: nil, closesAt: 2_000_000, hintMs: 0)
+            puzzle: .null, state: .null, seq: 0, hints: 0, result: nil, closesAt: 2_000_000, hintMs: 0, activeMs: 0)
         let clock = DailyClock(start: free, received: Date(timeIntervalSince1970: 1000))
-        #expect(clock.elapsedMs(at: Date(timeIntervalSince1970: 1003), hints: 3) == 3000)
+        #expect(clock.shownMs(active: 3000, hints: 3) == 3000)
+        #expect(DailyClock(start: FakeDaily.sample()).shownMs(active: 3000, hints: 1) == 33_000)
     }
 
-    @Test func theClockIsTheServers() {
+    @Test func theClockStartsFromTheServersActiveTime() {
         let start = FakeDaily.sample()
         // This device is 2 seconds behind the server.
-        let received = Date(timeIntervalSince1970: 998)
-        let clock = DailyClock(start: start, received: received)
+        let clock = DailyClock(start: start, received: Date(timeIntervalSince1970: 998))
         #expect(clock.skewMs == 2000)
-        #expect(clock.elapsedMs(at: Date(timeIntervalSince1970: 1003), hints: 0) == 5000)
-        #expect(clock.elapsedMs(at: Date(timeIntervalSince1970: 1003), hints: 1) == 35000)
-        #expect(clock.elapsedMs(at: Date(timeIntervalSince1970: 900), hints: 0) == 0)
+        // No `activeMs` (a server before active time): its clock from the start.
+        #expect(clock.activeMs == 0)
+        let later = DailyStart(
+            run: "r", game: "test", date: "d", number: 1, level: 1, startedAt: 1_000_000, now: 1_025_000, puzzle: .null,
+            state: .null, seq: 0, hints: 0, result: nil, closesAt: 2_000_000)
+        #expect(DailyClock(start: later).activeMs == 25_000)
+        let resumed = DailyStart(
+            run: "r", game: "test", date: "d", number: 1, level: 1, startedAt: 1_000_000, now: 9_000_000, puzzle: .null,
+            state: .null, seq: 0, hints: 0, result: nil, closesAt: 2_000_000, activeMs: 18_250)
+        #expect(DailyClock(start: resumed).activeMs == 18_250)
         #expect(DailyClock.format(ms: 247_000) == "4:07")
         #expect(DailyClock.format(ms: 3_729_000) == "1:02:09")
+    }
+
+    @Test func activeTimeCountsOnlyWhileRunning() {
+        var t = DailyActiveTime(ms: 1000)
+        #expect(t.ms(at: .seconds(50)) == 1000 && !t.running)
+        t.resume(at: .seconds(10))
+        #expect(t.ms(at: .milliseconds(12_500)) == 3500)
+        t.resume(at: .seconds(11))
+        #expect(t.ms(at: .seconds(12)) == 3000, "a second resume restarts nothing")
+        t.pause(at: .seconds(14))
+        #expect(t.ms(at: .seconds(100)) == 5000, "paused: the time away doesn't count")
+        t.resume(at: .seconds(100))
+        #expect(t.ms(at: .seconds(101)) == 6000)
+        t.raise(to: 9000, at: .seconds(101))
+        #expect(t.ms(at: .seconds(101)) == 9000)
+        t.raise(to: 2000, at: .seconds(101))
+        #expect(t.ms(at: .seconds(102)) == 10_000, "a lower count never wins")
+    }
+
+    @Test func everyCallCarriesTheActiveTimeAndAwayTimeDoesntCount() async {
+        let fake = FakeDaily(start: DailyStart(
+            run: "run1", game: "test", date: "2026-11-23", number: 1, level: 1, startedAt: 1_000_000, now: 1_000_000,
+            puzzle: .object(["target": .int(4)]), state: .object(["n": .int(0)]), seq: 0, hints: 0, result: nil,
+            closesAt: 2_000_000, activeMs: 2000))
+        let timer = ManualTimer()
+        let s = await session(fake, timer: timer)
+        // Off screen until the host says so.
+        timer.advance(by: .seconds(30))
+        #expect(await s.activeMs == 2000)
+        await s.setActive(true)
+        timer.advance(by: .seconds(5))
+        await s.send(move: Step(n: 1), urgent: true)
+        await s.flush()
+        #expect(await fake.bodies.last?.activeMs == 7000)
+        // Away (Home, a sheet, the background): an hour that doesn't count.
+        await s.setActive(false)
+        timer.advance(by: .seconds(3600))
+        await s.setActive(true)
+        timer.advance(by: .seconds(1))
+        _ = await s.hint()
+        #expect(await fake.hintActive == [8000])
+        timer.advance(by: .seconds(2))
+        await s.giveUp()
+        #expect(await fake.giveUpActive == [10_000])
+        // Ended: it stops.
+        timer.advance(by: .seconds(60))
+        await s.setActive(true)
+        #expect(await s.activeMs == 10_000)
     }
 }

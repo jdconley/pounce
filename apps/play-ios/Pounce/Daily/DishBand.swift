@@ -127,7 +127,7 @@ struct DishBand: View {
         .buttonStyle(.plain)
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(Text(verbatim: game.title))
-        .accessibilityValue(result.map(game.summary) ?? String(localized: "Not played", comment: "VoiceOver: a daily puzzle not played yet"))
+        .accessibilityValue(result.map(game.spoken) ?? String(localized: "Not played", comment: "VoiceOver: a daily puzzle not played yet"))
         .accessibilityAddTraits(.isButton)
         .accessibilityIdentifier("home.dish.\(game.id)")
     }

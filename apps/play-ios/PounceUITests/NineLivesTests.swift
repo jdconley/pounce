@@ -145,7 +145,8 @@ final class NineLivesTests: XCTestCase {
         XCTAssertEqual(answers.count, open.count, "the solution didn't fill in: \(answers.count) of \(open.count)")
         XCTAssertTrue(el(app, "daily.end").waitForExistence(timeout: Live.t(15)), "the run never ended")
         XCTAssertEqual(el(app, "daily.end.headline").label, "Out of lives")
-        XCTAssertFalse(el(app, "daily.end.result").exists, "Out of lives said twice")
+        // How far it got: three wrong numbers and nothing right is 0%.
+        XCTAssertEqual(el(app, "daily.end.result").label, "0%")
     }
 
     /// Three hints a day, none of them costing a life; then the Hint button is spent.
@@ -162,6 +163,34 @@ final class NineLivesTests: XCTestCase {
         hint.tap()
         Thread.sleep(forTimeInterval: 1)
         XCTAssertEqual(try cells(app).values.filter { $0.hasSuffix("hint") }.count, 3, "a fourth hint came")
+    }
+
+    /// The clock is active time (spec §3): twenty seconds on the Home Screen mid-puzzle don't
+    /// count. The run is given up after it, and the result's time is about the time on screen.
+    func testTimeAwayDoesntCount() throws {
+        let app = try launch(speed: 1)
+        let start = try cells(app).digits
+        let solution = try XCTUnwrap(GridSolver.solve(start))
+        let cell = try XCTUnwrap((0..<81).first { start[$0] == 0 })
+        enter(app, cell, solution[cell], wrong: false)
+        let began = Date()
+        XCUIDevice.shared.press(.home)
+        Thread.sleep(forTimeInterval: 20)
+        app.activate()
+        XCTAssertTrue(el(app, "screen-daily").waitForExistence(timeout: Live.t(10)), "the puzzle didn't come back")
+        el(app, "daily.giveup").tap()
+        let confirm = app.buttons["daily.giveup.confirm"].firstMatch
+        XCTAssertTrue(confirm.waitForExistence(timeout: Live.t(5)), "no give up confirm")
+        confirm.tap()
+        XCTAssertTrue(el(app, "daily.end").waitForExistence(timeout: Live.t(15)), "the run never ended")
+        let away = Date().timeIntervalSince(began)
+        // "Time 0:09": the result's time.
+        let label = el(app, "daily.clock").label
+        let parts = label.split(separator: " ").last?.split(separator: ":").compactMap { Int($0) } ?? []
+        let seconds = parts.reduce(0) { $0 * 60 + $1 }
+        XCTAssertGreaterThan(away, 20)
+        XCTAssertLessThan(seconds, 15, "the clock counted the time away: \(label) after \(Int(away)) s, 20 of them away")
+        XCTAssertGreaterThan(seconds, 0, "no time at all: \(label)")
     }
 
     /// The Nine Lives screen with its clock running, a few moves in: nothing reads the screen while
@@ -255,6 +284,86 @@ final class NineLivesShotTests: XCTestCase {
             }
         }
         XCUIDevice.shared.orientation = .portrait
+    }
+
+    /// On a slow network (the runner points at a delaying proxy): a number shows at once as
+    /// neutral "checking", never as right, and turns red or locks only on the server's answer.
+    /// Also prints how long the answer took to show.
+    func testCheckingOnASlowNetwork() throws {
+        guard dir != nil else { throw XCTSkip("no DAILY_SHOTS_DIR") }
+        let app = launch([], speed: 1)
+        XCTAssertTrue(el(app, "screen-home").waitForExistence(timeout: Live.t(30)), "no Home")
+        let treat = el(app, "home.dish.nine-lives")
+        guard treat.waitForExistence(timeout: Live.t(30)) else { throw XCTSkip("no Nine Lives on \(Live.baseURL)") }
+        treat.tap()
+        XCTAssertTrue(el(app, "nine-lives-cell-80").waitForExistence(timeout: Live.t(30)), "no grid")
+        let givens = try NineLivesBoardReader.digits(app)
+        let solution = try XCTUnwrap(GridSolver.solve(givens))
+        let open = (0..<81).filter { givens[$0] == 0 }
+        for (k, (cell, digit)) in [(open[0], solution[open[0]] % 9 + 1), (open[1], solution[open[1]])].enumerated() {
+            let element = el(app, "nine-lives-cell-\(cell)")
+            element.tap()
+            el(app, "nine-lives-key-\(digit)").tap()
+            let tapped = Date()
+            let first = value(element) ?? ""
+            let checking = first.contains("checking")
+            // Whatever the network, a wrong number never shows as a settled digit first.
+            if k == 0 { XCTAssertNotEqual(first, "\(digit)", "the wrong number looked right before the answer") }
+            if k == 0 { save("nine-lives-slow-checking") }
+            // As tight as snapshots allow (each takes a few tens of milliseconds), to time the answer.
+            let deadline = Date().addingTimeInterval(Live.t(15))
+            var answered = false
+            while !answered, Date() < deadline {
+                let v = value(element) ?? ""
+                answered = k == 0 ? v.hasSuffix("wrong") : v == "\(digit)"
+            }
+            XCTAssertTrue(answered, "no answer for cell \(cell)")
+            let ms = Int(Date().timeIntervalSince(tapped) * 1000)
+            print("SLOW \(k == 0 ? "wrong" : "right") shown \(ms) ms after the tap (checking at once: \(checking))")
+            // On a slow network it shows as checking at once; on a fast one the answer may beat the look.
+            XCTAssertTrue(checking || ms < 200, "neither checking nor answered at once (\(ms) ms)")
+            if k == 0 { save("nine-lives-slow-wrong") }
+        }
+        app.terminate()
+    }
+
+    /// Offline mid-puzzle: the runner's server is a proxy that drops off the network on
+    /// `/__proxy/off` (`NINE_LIVES_PROXY_CONTROL=1`; the slow-network check in the PR). A number
+    /// placed then stays "checking" and the screen says it's reconnecting; it never looks accepted.
+    /// Back online, the answer lands.
+    func testOfflineNeverLooksAccepted() throws {
+        guard dir != nil, ProcessInfo.processInfo.environment["NINE_LIVES_PROXY_CONTROL"] == "1" else {
+            throw XCTSkip("no proxy to switch off")
+        }
+        func network(_ on: Bool) {
+            let url = URL(string: "\(Live.baseURL)/__proxy/\(on ? "on" : "off")")!
+            let done = expectation(description: "proxy \(on)")
+            URLSession.shared.dataTask(with: url) { _, _, _ in done.fulfill() }.resume()
+            wait(for: [done], timeout: 5)
+        }
+        let app = launch([], speed: 1)
+        XCTAssertTrue(el(app, "screen-home").waitForExistence(timeout: Live.t(30)), "no Home")
+        let treat = el(app, "home.dish.nine-lives")
+        guard treat.waitForExistence(timeout: Live.t(30)) else { throw XCTSkip("no Nine Lives on \(Live.baseURL)") }
+        treat.tap()
+        XCTAssertTrue(el(app, "nine-lives-cell-80").waitForExistence(timeout: Live.t(30)), "no grid")
+        let givens = try NineLivesBoardReader.digits(app)
+        let solution = try XCTUnwrap(GridSolver.solve(givens))
+        let cell = try XCTUnwrap((0..<81).first { givens[$0] == 0 })
+        let element = el(app, "nine-lives-cell-\(cell)")
+        network(false)
+        defer { network(true) }
+        element.tap()
+        el(app, "nine-lives-key-\(solution[cell] % 9 + 1)").tap()
+        XCTAssertTrue(el(app, "daily.reconnecting").waitForExistence(timeout: Live.t(10)), "no Reconnecting")
+        Thread.sleep(forTimeInterval: 2)
+        XCTAssertTrue((value(element) ?? "").contains("checking"), "offline, the number looked settled: \(value(element) ?? "")")
+        save("nine-lives-offline")
+        network(true)
+        XCTAssertTrue(until(20) { (self.value(element) ?? "").hasSuffix("wrong") }, "back online, no answer")
+        XCTAssertTrue(until(10) { !self.el(app, "daily.reconnecting").exists }, "still reconnecting")
+        save("nine-lives-back-online")
+        app.terminate()
     }
 
     /// Today's puzzle against the dev server: midway, hints spent, out of lives, and the end.

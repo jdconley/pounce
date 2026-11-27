@@ -186,11 +186,10 @@ private struct EndedView: View {
                     .scaledToFit()
                     .frame(width: 260, height: 260)
                 OutlinedText(title, size: 140, width: 10)
-                if ended.result.finished {
-                    Text(TVBoardState.resultWords(ended.result))
-                        .font(.system(size: 96, weight: .black, design: .rounded))
-                        .foregroundStyle(Palette.yellow)
-                }
+                // The time, guesses or points; or how far the run got ("62%").
+                Text(TVBoardState.resultWords(ended.result))
+                    .font(.system(size: 96, weight: .black, design: .rounded))
+                    .foregroundStyle(Palette.yellow)
             }
         }
         .compositingGroup()

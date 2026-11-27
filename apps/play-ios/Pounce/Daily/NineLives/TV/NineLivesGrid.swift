@@ -100,8 +100,6 @@ struct NineLivesGrid: View {
                                 .frame(width: m.cell * 0.98, height: m.cell * 0.98)
                         }
                     }
-                    // A set on its way to the server: a little see-through until it locks.
-                    .opacity(marks.pending.contains(i) ? 0.72 : 1)
                     .modifier(TileMotion(cell: i, marks: marks, clashing: clashes.contains(i)))
             } else if let solution = marks.solution, solution.indices.contains(i), solution[i] != 0 {
                 PawTile(digit: solution[i], kind: .shown, size: m.cell * 0.9)
@@ -133,6 +131,8 @@ struct NineLivesGrid: View {
     }
 
     private func kind(_ i: Int) -> PawTile.Kind {
+        // On its way to the server: neutral until the answer lands (it must never look right first).
+        if marks.pending.contains(i) { return .checking }
         if clashes.contains(i) && !board.isGiven(i) { return .clash }
         if board.isGiven(i) { return .given }
         if board.hinted.contains(i) { return .hinted }
@@ -150,6 +150,7 @@ struct NineLivesGrid: View {
             return notes.isEmpty ? "Empty" : "Notes \(notes.map(String.init).joined(separator: " "))"
         }
         var parts = ["\(d)"]
+        if marks.pending.contains(i) { parts.append("checking") }
         if board.isGiven(i) { parts.append("given") } else if board.hinted.contains(i) { parts.append("hint") }
         if clashes.contains(i) { parts.append("clash") }
         return parts.joined(separator: ", ")

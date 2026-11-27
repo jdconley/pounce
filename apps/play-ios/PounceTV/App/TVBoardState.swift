@@ -151,15 +151,11 @@ struct TVBoardState: Equatable, Sendable {
         return h > 0 ? String(format: "%d:%02d:%02d", h, m, s) : String(format: "%d:%02d", m, s)
     }
 
-    /// What a row says for its result.
+    /// What a row says for its result: the time, guesses or points, or for a run that didn't
+    /// finish how far it got, "62%" (spec §6, "Ranking").
     static func resultWords(_ r: DailyResult) -> String {
         switch r.outcome {
-        case .gaveUp: return String(localized: "Gave up", comment: "TV board: a run given up")
-        case .closed, .other: return String(localized: "Closed", comment: "TV board: a run left open until the day ended")
-        case .missed:
-            return r.game == DailyCatalog.nineLives.id
-                ? String(localized: "Out of lives", comment: "TV board: a Nine Lives run that ran out of lives")
-                : String(localized: "Missed", comment: "TV board: a Sniff run that ran out of guesses")
+        case .gaveUp, .closed, .missed, .other: return "\(r.shownPercent)%"
         case .solved, .done:
             if let points = r.points { return points.formatted(.number.locale(Locale(identifier: "en_US"))) }
             if let guesses = r.guesses { return String(localized: "\(guesses) of 6", comment: "TV board: Sniff guesses used") }

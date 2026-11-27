@@ -36,16 +36,11 @@ struct DailyEndView: View {
             VStack(spacing: roomy ? 24 : 18) {
                 DailyTreat(game: game, side: roomy ? 110 : 84, done: result.outcome.finished)
                     .padding(.top, 12)
-                if game.summary(result) == headline {
-                    // "Out of lives", "Gave up": the result is the headline, said once, big.
-                    OutlinedText(headline, size: roomy ? 64 : 50, fill: Palette.yellow, width: 5)
-                        .accessibilityIdentifier("daily.end.headline")
-                } else {
-                    OutlinedText(headline, size: roomy ? 44 : 34, fill: result.outcome.finished ? Palette.lime : .white, width: 4)
-                        .accessibilityIdentifier("daily.end.headline")
-                    OutlinedText(game.summary(result), size: roomy ? 64 : 50, fill: Palette.yellow, width: 5)
-                        .accessibilityIdentifier("daily.end.result")
-                }
+                OutlinedText(headline, size: roomy ? 44 : 34, fill: result.outcome.finished ? Palette.lime : .white, width: 4)
+                    .accessibilityIdentifier("daily.end.headline")
+                // The time, guesses or points; for a run that didn't finish, how far it got ("62%").
+                OutlinedText(game.summary(result), size: roomy ? 64 : 50, fill: Palette.yellow, width: 5)
+                    .accessibilityIdentifier("daily.end.result")
                 if let detail = share.detail {
                     Text(verbatim: detail)
                         .font(.system(size: roomy ? 20 : 16, weight: .heavy, design: .rounded))
@@ -185,7 +180,7 @@ struct DailyEndView: View {
         let result = result
         let marks = marks
         let made: (Data, UIImage)? = await Task.detached {
-            let state = try? await service.start(game: game.id, person: person).state
+            let state = try? await service.start(game: game.id, person: person, rules: game.rules).state
             let grid = state.flatMap(marks)
             guard let png = await DailyShare(game: game, result: result, marks: grid).png(),
                   let image = await UIImage(data: png)?.byPreparingForDisplay() else { return nil }
