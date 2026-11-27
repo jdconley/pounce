@@ -217,12 +217,10 @@ import Testing
     }
 
     @Test func aRefusedPhoneSaysWhy() {
-        #expect(RoomSocket.refusal(.denied("removed"), near: "K") == .removed)
-        #expect(RoomSocket.refusal(.denied("not_near"), near: nil) == .notNear)
-        #expect(RoomSocket.refusal(.forbidden, near: "K") == .notNear)
-        #expect(RoomSocket.refusal(.forbidden, near: nil, typed: true) == .notNear)
-        #expect(RoomSocket.refusal(.forbidden, near: nil) == nil)
-        #expect(RoomSocket.refusal(.notFound, near: nil) == nil)
+        #expect(RoomSocket.refusal(.denied("removed")) == .removed)
+        #expect(RoomSocket.refusal(.denied("not_near")) == .notNear)
+        #expect(RoomSocket.refusal(.forbidden) == nil)
+        #expect(RoomSocket.refusal(.notFound) == nil)
     }
 
     @Test func theNextDrawerWrapsIntoRoundTwoAndStopsAtTheEnd() {

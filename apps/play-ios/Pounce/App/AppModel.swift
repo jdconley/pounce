@@ -1032,7 +1032,7 @@ final class AppModel {
             return
         }
         closeRoom()
-        let session = makeSession(code: code, intent: near.map { .easel(near: $0) } ?? .join, typed: true)
+        let session = makeSession(code: code, intent: near.map { .easel(near: $0) } ?? .join)
         room = session
         probing = code
         session.start()
@@ -1126,14 +1126,14 @@ final class AppModel {
         push?.scheduleTurnReminder(code: room.code, name: person.name, table: table.room.title, after: delay)
     }
 
-    private func makeSession(code: String, intent: RoomIntent, typed: Bool = false) -> RoomSession {
+    private func makeSession(code: String, intent: RoomIntent) -> RoomSession {
         let config = config
         let api = api
         // A Purrtrait TV's key goes on every connect (a member passes with an old one). A typed
         // code with no key reads a 403 as the TV's table asking for one (Join shows three more tiles).
         let near: String? = if case .easel(let key) = intent { key } else { nil }
         let socket = SuspendableSocket {
-            RoomSocket(code: code, config: config, near: near, typed: typed, credential: { try await api.credential() })
+            RoomSocket(code: code, config: config, near: near, credential: { try await api.credential() })
         }
         let session = RoomSession(code: code, intent: intent, socket: socket)
         session.owner = { [weak self] in self?.people.owner }

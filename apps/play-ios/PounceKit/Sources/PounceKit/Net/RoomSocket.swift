@@ -65,8 +65,6 @@ public actor RoomSocket: RoomSocketing {
     private let role: RoomRole?
     /// A Purrtrait TV's key this socket joins with (every connect: a member passes with an old one).
     private let near: String?
-    /// Opened from a code typed into Join: a 403 is a Purrtrait table asking for its TV's key.
-    private let typed: Bool
     private let credential: @Sendable () async throws -> DeviceCredential
     private let connector: any WebSocketConnector
     private let backoff: [Duration]
@@ -95,7 +93,6 @@ public actor RoomSocket: RoomSocketing {
         config: APIConfig,
         role: RoomRole? = nil,
         near: String? = nil,
-        typed: Bool = false,
         credential: @escaping @Sendable () async throws -> DeviceCredential,
         connector: any WebSocketConnector = URLSessionWebSocketConnector(),
         backoff: [Duration] = [.milliseconds(250), .milliseconds(500), .seconds(1), .seconds(2), .seconds(4), .seconds(8)],
@@ -108,7 +105,6 @@ public actor RoomSocket: RoomSocketing {
         url = config.socketURL(code: code, role: role, near: near)
         self.role = role
         self.near = near
-        self.typed = typed
         self.credential = credential
         self.connector = connector
         self.backoff = backoff
@@ -118,14 +114,12 @@ public actor RoomSocket: RoomSocketing {
         self.sleep = sleep
     }
 
-    /// Why a phone's connect was refused for good: a 403 from a Purrtrait table. The server's
-    /// header says which; without one, a socket that brought the TV's key wasn't near. Any other
-    /// 403 to a phone is only a failed connect, retried as always (a removed member's open socket
-    /// is told `removed` before it closes). Nil for anything else.
-    static func refusal(_ error: SocketConnectError, near: String?, typed: Bool = false) -> ErrorCode? {
+    /// Why a phone's connect was refused for good: a 403 whose `x-pounce-error` names it
+    /// (`not_near`, `removed`). A 403 without one is only a failed connect, retried as always.
+    /// Nil for anything else.
+    static func refusal(_ error: SocketConnectError) -> ErrorCode? {
         switch error {
         case .denied(let why): ErrorCode(rawValue: why)
-        case .forbidden where near != nil || typed: .notNear
         default: nil
         }
     }
@@ -223,9 +217,9 @@ public actor RoomSocket: RoomSocketing {
                 emit(.notFound)
                 _ = finish()
                 return
-            } catch let error as SocketConnectError where Self.refusal(error, near: near, typed: typed) != nil {
+            } catch let error as SocketConnectError where Self.refusal(error) != nil {
                 // A phone a Purrtrait table won't take: no retry, the screen says why.
-                guard isCurrent(gen), let why = Self.refusal(error, near: near, typed: typed) else { return }
+                guard isCurrent(gen), let why = Self.refusal(error) else { return }
                 emit(.forbidden(why))
                 _ = finish()
                 return

@@ -1,4 +1,3 @@
-import { sameRoomGame } from "../games";
 import { kittenMayPounce } from "../kittens/kittens";
 import { LINKS_NAME } from "../links/links";
 import { deliverToPlayer } from "../notify/deliver";
@@ -15,6 +14,7 @@ import { liveOn, trophyOn } from "../streaks/profile";
 
 import { KEEP_MS, LINK_MS, type Target } from "./limits";
 import { LINK_TOKEN, parseAnswer, parsePounce, POUNCE_ID } from "./parse";
+import { sameRoomTable } from "./same-room";
 
 import type { Env } from "../env";
 import type { Face } from "../notify/pushes";
@@ -127,12 +127,6 @@ async function shared(env: Env, a: string, b: string, code: string): Promise<boo
   const [x, y] = await Promise.all([player(env, a).listTables(), player(env, b).listTables()]);
   const live = (list: typeof x) => list.some((t) => t.code === code && t.status !== "over");
   return live(x) && live(y) && !(await sameRoomTable(env, code));
-}
-
-/** Whether the table `code` is of a same-room game (Purrtrait), as the room itself says: no request to play goes to one. */
-async function sameRoomTable(env: Env, code: string): Promise<boolean> {
-  const room = await env.ROOMS.get(env.ROOMS.idFromName(code)).invite();
-  return room !== null && sameRoomGame(room.game);
 }
 
 /**

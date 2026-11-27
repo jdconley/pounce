@@ -243,6 +243,20 @@ export const UPDATE_GAME = "game";
 export const GAME_HEADER = "x-pounce-game";
 export const GAME_TITLE_HEADER = "x-pounce-game-title";
 
+/**
+ * `X-Pounce-Error: <code>`: why a socket upgrade was refused (`not_near`, `removed`, ...), the
+ * same code as the body's `error`, for the app that can't read a refused upgrade's body.
+ */
+export const ERROR_HEADER = "x-pounce-error";
+
+/** A refused upgrade: `{ error }` in the body and in `X-Pounce-Error`. A browser hears it as close code 4000 + status. */
+export function refused(status: number, error: string): Response {
+  return new Response(JSON.stringify({ error }), {
+    status,
+    headers: { [ERROR_HEADER]: error, "content-type": "application/json", "cache-control": "no-store" },
+  });
+}
+
 /** The answer to an app that said what it is and can't draw this table's game (426). */
 export type GameUnsupported = { error: "game_unsupported"; game: string; title: string };
 

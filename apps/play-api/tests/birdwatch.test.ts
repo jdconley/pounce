@@ -97,7 +97,7 @@ describe("a Birdwatch hand through the room's sockets", { timeout: 120_000 }, ()
     me.send({ t: "setOptions", options: { rules: "tucker" } });
     for (const seat of [1, 2, 3]) me.send({ t: "configure", seat, kind: "bot" });
     me.send({ t: "swapSeats", seats: [0, 2] });
-    await me.until((s) => s.room.options !== undefined && "rules" in s.room.options && s.room.options.rules === "tucker" && s.room.seats[2]?.kind === "human" && s.room.seats[0]?.kind === "bot");
+    await me.until((s) => (s.room.options as { rules?: string } | undefined)?.rules === "tucker" && s.room.seats[2]?.kind === "human" && s.room.seats[0]?.kind === "bot");
     me.send({ t: "start" });
     await me.until((s) => s.room.status === "playing" && s.room.birdwatch !== undefined);
 

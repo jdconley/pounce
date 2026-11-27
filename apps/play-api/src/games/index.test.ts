@@ -4,12 +4,14 @@ import { birdwatch } from "./birdwatch";
 import { catTower } from "./cat-tower";
 import { purrtrait } from "./purrtrait";
 import { tiles } from "./tiles";
+import { tumble } from "./tumble";
 
-import { DEFAULT_GAME, GAMES, GAMES_HEADER, gameModule, gamesListed, gamesOn, gameTitle, isGameId } from "./index";
+import { DEFAULT_GAME, GAME_MIN_APP, GAMES, GAMES_HEADER, gameModule, gamesFor, gamesListed, gamesOn, gameTitle, isGameId } from "./index";
 
 describe("the games a room can hold", () => {
-  it("are Cat Tower, the tile game, Birdwatch and Purrtrait, each under its own id", () => {
-    expect(Object.keys(GAMES)).toEqual(["cat-tower", "tiles", "birdwatch", "purrtrait"]);
+  it("are Cat Tower, the tile game, Birdwatch, Purrtrait and Toy Tumble, each under its own id", () => {
+    expect(Object.keys(GAMES)).toEqual(["cat-tower", "tiles", "birdwatch", "purrtrait", "tumble"]);
+    expect(GAMES.tumble).toBe(tumble);
     expect(GAMES["cat-tower"]).toBe(catTower);
     expect(GAMES.tiles).toBe(tiles);
     expect(GAMES.birdwatch).toBe(birdwatch);
@@ -59,7 +61,50 @@ describe("the games an app says it can draw", () => {
   });
 });
 
+describe("the games an app is given, by its version", () => {
+  const all = "cat-tower,tiles,birdwatch,tumble";
+  const ios = (version: string) => `platform=ios; version=${version}; build=1; protocol=1`;
+  const older = ["cat-tower", "tiles", "birdwatch"];
+
+  it("Toy Tumble needs app 1.4", () => {
+    expect(GAME_MIN_APP).toEqual({ tumble: "1.4" });
+  });
+
+  it("an iOS or tvOS app below 1.4 never gets Toy Tumble, whatever it lists", () => {
+    expect(gamesFor(all, ios("1.3"), false)).toEqual(older);
+    expect(gamesFor(all, ios("1.3.9"), false)).toEqual(older);
+    expect(gamesFor(all, "platform=tvos; version=1.2; protocol=1", false)).toEqual(older);
+    // An app that doesn't say what it is is 1.0.
+    expect(gamesFor(all, null, false)).toEqual(older);
+    expect(gamesFor(all, "nonsense", false)).toEqual(older);
+  });
+
+  it("from 1.4 it does", () => {
+    expect(gamesFor(all, ios("1.4"), false)).toEqual([...older, "tumble"]);
+    expect(gamesFor(all, ios("2.0"), false)).toContain("tumble");
+    expect(gamesFor(all, "platform=tvos; version=1.4; protocol=1", false)).toContain("tumble");
+  });
+
+  it("the web player always does: it ships with the server", () => {
+    expect(gamesFor(all, "platform=web; version=500; protocol=1", false)).toContain("tumble");
+  });
+
+  it("a dev server skips the check", () => {
+    expect(gamesFor(all, ios("1.3"), true)).toContain("tumble");
+  });
+
+  it("is still only what the app lists", () => {
+    expect(gamesFor("tiles", ios("1.4"), true)).toEqual(["cat-tower", "tiles"]);
+    expect(gamesFor(null, ios("1.4"), true)).toEqual(["cat-tower"]);
+  });
+});
+
 describe("the GAMES flag", () => {
+  it("leaves Toy Tumble off unless it lists it", () => {
+    expect(gamesOn({ GAMES: "tiles,birdwatch" })).not.toContain("tumble");
+    expect(gamesOn({ GAMES: "tiles,birdwatch,tumble" })).toContain("tumble");
+  });
+
   it("off or unset: rooms are Cat Tower only", () => {
     expect(gamesOn({})).toEqual(["cat-tower"]);
     expect(gamesOn({ GAMES: "" })).toEqual(["cat-tower"]);
@@ -80,6 +125,7 @@ describe("a game's name, for an app that can't draw it", () => {
     expect(gameTitle("tiles")).toBe("Tuna Tiles");
     expect(gameTitle("birdwatch")).toBe("Birdwatch");
     expect(gameTitle("purrtrait")).toBe("Purrtrait");
+    expect(gameTitle("tumble")).toBe("Toy Tumble");
   });
 
   test("a game this server has no name for is a newer game", () => {
