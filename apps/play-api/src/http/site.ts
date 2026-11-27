@@ -5,7 +5,7 @@
  */
 import { and, browserGames } from "./home";
 import { CACHE, CSP, docPage } from "./layout";
-import { https, PURRTRAIT_SINCE, TUMBLE_SINCE } from "./links";
+import { BIRDWATCH_SINCE, https, IN_REVIEW, PURRTRAIT_SINCE, TUMBLE_SINCE } from "./links";
 
 import type { Install } from "./links";
 
@@ -21,7 +21,7 @@ const supportHtml = (newer: readonly string[]): string =>
     head: `<meta name="description" content="Help for Pounce: Family Games. Start a table and add players, play the House Cat bot, learn ${and(["Cat Tower", "Tuna Tiles", ...newer])}<!--daily-->, play the Daily Dish<!--/daily-->, play in a browser or on a TV, set reminders, allow turn alerts for a child, report or block a player, and delete your data.">\n`,
     current: "support",
     body: `<h1>Pounce: Family Games help</h1>
-<p>Pounce has family games: Cat Tower and Tuna Tiles${newer.length ? `, and ${and(newer)} in the browser` : ""}. Play them in the iPhone and iPad app, or in any web browser at <a href="/play/">play.conleychaos.com/play</a>. Everyone sits at the same tables. If something isn't covered here, write to us at the bottom of the page.</p>
+<p>Pounce has family games: Cat Tower and Tuna Tiles${newer.length ? `, and ${and(newer)} in the browser` : ""}. Play them in the iPhone and iPad app, or in any web browser at <a href="/play/">play.conleychaos.com/play</a>. Everyone sits at the same tables.${newer.length ? ` Pounce 1.4, ${IN_REVIEW}, brings ${and(newer)} to the iPhone and iPad app, and adds an Apple TV app.` : ""} If something isn't covered here, write to us at the bottom of the page.</p>
 
 <section>
 <h2>Start a table and add players</h2>
@@ -70,7 +70,7 @@ const supportHtml = (newer: readonly string[]): string =>
 
 <!--birdwatch--><section>
 <h2>How to play Birdwatch</h2>
-<p>Cards, for four to six players in teams. Play it in your browser at <a href="/play/">play.conleychaos.com/play</a>. It's coming to the iPhone app.</p>
+<p>Cards, for four to six players in teams. Play it in your browser at <a href="/play/">play.conleychaos.com/play</a>. It's coming to the iPhone and iPad app in ${BIRDWATCH_SINCE}, ${IN_REVIEW}.</p>
 <ul>
 <li>Pick the rules in the lobby. Official leaves out the 1s. In Tucker and Friesen, 1s are the highest card of their suit. In Friesen, the Bird follows suit like any other trump.</li>
 <li>With four players, two teams of two sit across from each other. With six, three teams of two. With five, the bid winner calls a card, and whoever holds it is their secret partner for the hand. Everyone finds out when that card is played.</li>
@@ -84,7 +84,7 @@ const supportHtml = (newer: readonly string[]): string =>
 
 <!--/birdwatch--><!--tumble--><section>
 <h2>How to play Toy Tumble</h2>
-<p>Falling toys, for two to six players, all at the same time. Each player plays on their own phone or computer, and a TV can show every box. Play it in your browser at <a href="/play/">play.conleychaos.com/play</a>. It's coming to the iPhone app in ${TUMBLE_SINCE}.</p>
+<p>Falling toys, for two to six players, all at the same time. Each player plays on their own phone or computer, and a TV can show every box. Play it in your browser at <a href="/play/">play.conleychaos.com/play</a>. It's coming to the iPhone, iPad and Apple TV app in ${TUMBLE_SINCE}, ${IN_REVIEW}.</p>
 <ul>
 <li>Toys fall into your box one at a time. Drag to move one, tap to turn it, and flick down to drop it. On a keyboard, use the arrow keys and the space bar.</li>
 <li>Fill a row from side to side and it clears. Clear two or more at once to send hairballs to everyone else.</li>
@@ -98,7 +98,7 @@ const supportHtml = (newer: readonly string[]): string =>
 
 <!--/tumble--><!--purrtrait--><section>
 <h2>How to play Purrtrait</h2>
-<p>Draw and guess, for two to ten players in one room. It needs a TV or a big screen everyone can see. Start it on the TV page at <a href="/play/tv">play.conleychaos.com/play/tv</a>. It's coming to the iPhone and Apple TV app in ${PURRTRAIT_SINCE}.</p>
+<p>Draw and guess, for two to ten players in one room. It needs a TV or a big screen everyone can see. Start it on the TV page at <a href="/play/tv">play.conleychaos.com/play/tv</a>. It's coming to the iPhone, iPad and Apple TV app in ${PURRTRAIT_SINCE}, ${IN_REVIEW}.</p>
 <ul>
 <li>On the big screen, open the TV page and pick Purrtrait. Each player scans the code on the TV with their own phone, or taps Join and types the code under it. The code changes every 30 seconds, so join from the room.</li>
 <li>Pick a timer in the lobby: 45, 60 or 90 seconds a turn. House Cats don't play it. Tap Start once two people are in.</li>
@@ -115,10 +115,10 @@ const supportHtml = (newer: readonly string[]): string =>
 <p>Four new puzzles every day, the same for the whole family. In the iPhone and iPad app they're on Home. In a browser, go to <a href="/play/daily">play.conleychaos.com/play/daily</a>, or tap Open the Dish on Home there.</p>
 <ul>
 <li>Sniff: find the five-letter word in six tries. Each guess shows which letters are in the word, and which are in the right spot.</li>
-<li>Nine Lives: fill the grid so every row, column and box has 1 to 9 once. In a browser you get three lives and three free hints: a wrong number turns red and costs a life, and the third ends the puzzle. The iPhone and iPad app gets them in its next version.</li>
+<li>Nine Lives: fill the grid so every row, column and box has 1 to 9 once. In a browser you get three lives and three free hints: a wrong number turns red and costs a life, and the third ends the puzzle. The iPhone and iPad app gets them in 1.4, ${IN_REVIEW}.</li>
 <li>Cat Nap: put one cat in each row, column and patch. No two cats touch, not even at a corner.</li>
 <li>Box Fort: drag each set of pieces onto the rug. A full row or column clears and scores. It ends when nothing fits.</li>
-<li>One try a day at each puzzle. In a browser, the clock counts only the time you're playing, so it stops when you leave. The app's clock does the same from its next version. A hint in Cat Nap, or in Nine Lives in the app, adds 30 seconds.</li>
+<li>One try a day at each puzzle. In a browser, the clock counts only the time you're playing, so it stops when you leave. The app's clock does the same from 1.4. A hint in Cat Nap, or in Nine Lives in the app, adds 30 seconds.</li>
 <li>Today's board shows how you and the people you have a streak with did. Everyone who finished comes first, then everyone else by how far they got. Tap On TV to put it on a TV showing <a href="/play/tv">play.conleychaos.com/play/tv</a>.</li>
 <li>New puzzles come out at 4 in the morning where you are. Monday's are the easiest.</li>
 </ul>
@@ -136,6 +136,7 @@ const supportHtml = (newer: readonly string[]): string =>
 <li>Pick a game on the TV. Everyone scans the code on the TV with their phone to join, and any phone can press Start.</li>
 <li>Already at a table? Tap Show on TV, then scan the code on the TV's start screen or type it. That table moves to the TV.</li>
 <li>Your phone shows just your own cards, in the app or the browser. Tap Table to see the whole board, and Cards to go back.</li>
+<li>A Pounce app for Apple TV comes in 1.4, ${IN_REVIEW}.</li>
 </ul>
 </section>
 
@@ -230,7 +231,7 @@ export function robotsTxt(origin: string): Response {
  */
 export function llmsTxt(origin: string, consent = true, daily = false, birdwatch = false, tumble = false, purrtrait = false): Response {
   const dish = daily
-    ? `\n\nThe Daily Dish is four new puzzles every day, the same for the whole family: Sniff (find a five-letter word in six tries), Nine Lives (a number grid), Cat Nap (one cat in each row, column and patch, no two touching) and Box Fort (drag block pieces onto a rug and clear lines). A family board shows how everyone you play with did today, and a TV can show it. The server checks every move and works out every result. The puzzles play in the iPhone and iPad app and in the browser at ${origin}/play/daily.`
+    ? `\n\nThe Daily Dish is four new puzzles every day, the same for the whole family: Sniff (find a five-letter word in six tries), Nine Lives (a number grid, with three lives and three free hints a day in the browser, and in the app from 1.4), Cat Nap (one cat in each row, column and patch, no two touching) and Box Fort (drag block pieces onto a rug and clear lines). A family board shows how everyone you play with did today, and a TV can show it. The server checks every move and works out every result. The puzzles play in the iPhone and iPad app and in the browser at ${origin}/play/daily.`
     : "";
   const kinds = [
     "Cat Tower, a rummy-style card game for two to six players where your cats climb a ten-shelf tower",
@@ -244,11 +245,11 @@ export function llmsTxt(origin: string, consent = true, daily = false, birdwatch
   const count = ["two", "three", "four", "five"][kinds.length - 2] ?? "two";
   const list = kinds.length === 2 ? `${kinds[0]}, and ${kinds[1]}` : `${kinds.slice(0, -1).join("; ")}; and ${kinds.at(-1) ?? ""}`;
   const where = [
-    ...(birdwatch ? ["Birdwatch plays in the browser today and is coming to the iPhone app."] : []),
-    ...(tumble ? [`Toy Tumble plays in the browser and on the web TV page today, and is coming to the iPhone app in ${TUMBLE_SINCE}.`] : []),
+    ...(birdwatch ? [`Birdwatch plays in the browser today and is coming to the iPhone and iPad app in ${BIRDWATCH_SINCE}, ${IN_REVIEW}.`] : []),
+    ...(tumble ? [`Toy Tumble plays in the browser and on the web TV page today, and is coming to the iPhone, iPad and Apple TV app in ${TUMBLE_SINCE}, ${IN_REVIEW}.`] : []),
     ...(purrtrait
       ? [
-          `Purrtrait needs a TV or a big screen in the same room: it starts on the web TV page at ${origin}/play/tv, and players join from the code on the TV with a phone's browser. It is coming to the iPhone and Apple TV app in ${PURRTRAIT_SINCE}. Drawings go only to that TV and are never saved.`,
+          `Purrtrait needs a TV or a big screen in the same room: it starts on the web TV page at ${origin}/play/tv, and players join from the code on the TV with a phone's browser. It is coming to the iPhone, iPad and Apple TV app in ${PURRTRAIT_SINCE}, ${IN_REVIEW}. Drawings go only to that TV and are never saved.`,
         ]
       : []),
   ];
@@ -261,7 +262,7 @@ export function llmsTxt(origin: string, consent = true, daily = false, birdwatch
 
 > Pounce is a free family games app made by Conley Chaos LLC. ${games}
 
-Play live together, or take turns over days. The game waits for everyone. Add players in the same room with a QR code, from far away with a link, or by passing one phone. A House Cat bot can hold a seat. To put the table on a TV, open ${origin}/play/tv on any big screen with a browser. Each phone, in the app or the browser, then shows just its own hand. On iPhone, Pounce has turn reminders, a Live Activity and a streak widget.${dish}
+Play live together, or take turns over days. The game waits for everyone. Add players in the same room with a QR code, from far away with a link, or by passing one phone. A House Cat bot can hold a seat. To put the table on a TV, open ${origin}/play/tv on any big screen with a browser. Each phone, in the app or the browser, then shows just its own hand. A Pounce app for Apple TV comes in 1.4, ${IN_REVIEW}. On iPhone, Pounce has turn reminders, a Live Activity and a streak widget.${dish}
 
 Pounce is free. It has no chat, no ads, no tracking and no third-party analytics, and nobody needs an account to play. Children under 13 get a simpler, limited version, and ${alerts}.
 

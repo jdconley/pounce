@@ -20,6 +20,16 @@ import {
 import { APPLE_CREDIT } from "./layout";
 import { MEDIA } from "./site-media";
 
+/**
+ * The text outside sentences that say "now in App Review": the Apple TV app may be named only
+ * there, as coming in 1.4, until it is on the App Store.
+ */
+const outsideReview = (text: string): string =>
+  text
+    .split(/(?<=\.)(?=\s|<)|(?<=>)(?=<)/)
+    .filter((s) => !s.includes("now in App Review"))
+    .join(" ");
+
 const ORIGIN = "https://play.conleychaos.com";
 const APP_STORE = "https://apps.apple.com/app/id6829560061";
 const TESTFLIGHT = "https://testflight.apple.com/join/abc123";
@@ -168,8 +178,9 @@ describe("homePage", () => {
     expect(page).toContain('<a class="url" href="/play/tv">play.conleychaos.com<wbr>/play/tv</a>');
     // The 1.2 app holds just your cards at a TV table, as the browser does.
     expect(page).toContain("Your phone shows just your own cards, in the app or the browser. Tap Table for the whole board.");
-    // Nothing about an Apple TV app: it isn't on the App Store yet.
-    expect(page).not.toMatch(/Apple TV|tvOS|AirPlay/);
+    // The Apple TV app only as coming in 1.4, in App Review: it isn't on the App Store yet.
+    expect(page).toContain("The Apple TV app comes in 1.4, now in App Review.");
+    expect(outsideReview(page)).not.toMatch(/Apple TV|tvOS|AirPlay/);
   });
 
   test("nothing stale: no Cat Tower-only story, no iPhone-only line, no old tagline", async () => {
@@ -367,7 +378,7 @@ describe("homePage", () => {
         expect(on).toContain('<h3>Birdwatch</h3><p class="meta">Cards, in teams. 4 to 6 players.</p>');
         for (const s of ["The Bird is the top trump.", "secret partner", "Official, Tucker or Friesen"]) expect(on, s).toContain(s);
         // Where it plays: the browser now; the iPhone app later. Never the App Store.
-        expect(on).toContain('<p class="where"><a href="/play/">Play it in your browser</a>. Coming to the iPhone app.</p>');
+        expect(on).toContain('<p class="where"><a href="/play/">Play it in your browser</a>. Coming to the iPhone and iPad app in 1.4, now in App Review.</p>');
         expect(on).toMatch(/<img src="\/static\/birdwatch-200\.[0-9a-f]{10}\.jpg" srcset=/);
         expect(on).not.toMatch(/\brook\b/i);
         // The page's description names it apart from the app; the App Store app's entry never does.
@@ -404,7 +415,7 @@ describe("homePage", () => {
             expect(on, s).toContain(s);
           }
           // Where it plays: the browser now; the iPhone app in 1.4. Never the App Store.
-          expect(on).toContain('<p class="where"><a href="/play/">Play it in your browser</a>. Coming to the iPhone app in 1.4.</p>');
+          expect(on).toContain('<p class="where"><a href="/play/">Play it in your browser</a>. Coming to the iPhone, iPad and Apple TV app in 1.4, now in App Review.</p>');
           expect(on).toMatch(/<img src="\/static\/toy-tumble-200\.[0-9a-f]{10}\.jpg" srcset=/);
           // Four games sit two by two; an odd last one spans the row.
           expect(on.match(/class="panel game wide"/g) ?? []).toHaveLength(birdwatch ? 0 : 1);
@@ -452,7 +463,7 @@ describe("homePage", () => {
             expect(on, s).toContain(s);
           }
           // Where it plays: the browser TV page now; the iPhone and Apple TV app in 1.4. Never the App Store.
-          expect(on).toContain('<p class="where"><a href="/play/tv">Start it on the TV page</a> in your browser. Coming to the iPhone and Apple TV app in 1.4.</p>');
+          expect(on).toContain('<p class="where"><a href="/play/tv">Start it on the TV page</a> in your browser. Coming to the iPhone, iPad and Apple TV app in 1.4, now in App Review.</p>');
           // Its picture is the TV mid-drawing.
           expect(on).toMatch(/<img src="\/static\/purrtrait-tv-320\.[0-9a-f]{10}\.jpg" srcset=/);
           // An odd number of games: the last card, Purrtrait, spans the row.
@@ -466,7 +477,7 @@ describe("homePage", () => {
           if (birdwatch && tumble && daily) expect(description).toBe(PURRTRAIT_DESCRIPTION);
           expect(description.length).toBeLessThanOrEqual(160);
           expect(description).toMatch(/^Family game night, every night\. /);
-          expect(description).toMatch(/Purrtrait in your browser\./);
+          expect(description).toMatch(/Purrtrait on the web, app in 1\.4\./);
           expect(on).toContain(`<meta name="description" content="${description}">`);
           expect(on).toContain(`<meta property="og:description" content="${description}">`);
           expect(ld(on).description).toBe(daily ? DAILY_DESCRIPTION : DESCRIPTION);

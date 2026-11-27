@@ -226,9 +226,10 @@ and `purrtrait-client-messages.json`. Only a Purrtrait room speaks any of this. 
   on the TV." with no button (a wrong key counts against the address). `/j/<CODE>` for a
   Purrtrait table shows the same page. While Purrtrait tables can't be dealt, `/e/` is a 404.
 - **`PURRTRAIT_APPLINKS`** (`"off"` by default). With it `"on"`, and Purrtrait dealt, the site
-  association lists `/e/*` after `/j/*` and `/p/*`, so iOS opens the TV's QR in the app. Leave
-  it off until an App Store version draws Purrtrait: until then the QR opens the web player,
-  which can play.
+  association lists `/e/*` after `/j/*` and `/p/*`, so iOS opens the TV's QR in the app. Off,
+  the QR opens the web player, which can play. Production turned it on on 27 November 2026,
+  while 1.4 (the first version that draws Purrtrait) was in App Review, so the reviewers' scans
+  open the app.
 
 ### Live ink
 
@@ -326,5 +327,5 @@ What was done, and what waits for the apps:
   (`docs/app-review-notes.md`) first, then add their Purrtrait block, so the whole stays under App
   Store Connect's 4,000 characters. The notes go with the build under review, and 1.3 doesn't draw
   it.
-- `PURRTRAIT_APPLINKS` stays off until the App Store app draws Purrtrait.
+- Done: `PURRTRAIT_APPLINKS` is on (27 November 2026, with 1.4 in App Review).
 - The notice to parents' Purrtrait sentence (PR #179) waits on counsel.

@@ -73,9 +73,11 @@
     // TV links (/tv/*) open the app. On since 1.2 went live on the App Store (2026-11-26): a 1.1
     // app opened by a /tv/ link does nothing, while the web page works.
     "TV_APPLINKS": "on",
-    // Purrtrait's TV QR links (/e/*) open the app. Off until an App Store version draws
-    // Purrtrait: until then they open the web player, which can play (Purrtrait design §5.2).
-    "PURRTRAIT_APPLINKS": "off",
+    // Purrtrait's TV QR links (/e/*) open the app. On since 27 November 2026, while 1.4 (the first
+    // version that draws Purrtrait) is in App Review, so the reviewers' scans open the app and
+    // Apple's CDN has the association before release. Until 1.4 is out, a 1.2 app opened by an /e/
+    // link can't draw it; without the app, the link opens the web player (Purrtrait design §5.2).
+    "PURRTRAIT_APPLINKS": "on",
     // The Daily Dish (docs/superpowers/specs/2026-11-20-daily-games-design.md): daily puzzles,
     // their family board and its TV link, and daily runs counting toward streaks. On since launch
     // (LAUNCH in src/daily/days.ts), once all four games, the Dish in the app and on the web, and
@@ -94,7 +96,7 @@
     // the web player, which the deploy builds with WEB_TUMBLE and WEB_PURRTRAIT on, and on the
     // browser TV page; an iOS or tvOS app below 1.4 never gets either, whatever it lists
     // (`GAME_MIN_APP`). Only a TV makes a Purrtrait table, so it needs TV on as well
-    // (docs/tv-protocol.md, "Switching it on"); PURRTRAIT_APPLINKS stays off until 1.4.
+    // (docs/tv-protocol.md, "Switching it on"); PURRTRAIT_APPLINKS opens its QR links in the app.
     "GAMES": "tiles,birdwatch,tumble,purrtrait",
     // App updates (docs/superpowers/specs/2026-11-12-app-updates-design.md). The oldest app
     // version the server still supports, e.g. "1.1": an app below it is told to update, once the

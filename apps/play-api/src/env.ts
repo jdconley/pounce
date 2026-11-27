@@ -115,9 +115,9 @@ export interface Env {
   TV_APPLINKS?: string;
   /**
    * Purrtrait's TV QR links (`/e/<code>?near=`) open the app: the site association lists `/e/*`
-   * when this is "on" and Purrtrait tables can be dealt (`TV` on, `GAMES` lists it). "off" in
-   * wrangler.jsonc until an App Store version draws Purrtrait: until then such a link opens the
-   * web player, which can play, rather than an app that can't (design §5.2).
+   * when this is "on" and Purrtrait tables can be dealt (`TV` on, `GAMES` lists it). "on" in wrangler.jsonc
+   * since 1.4, the first version that draws Purrtrait, went to App Review. Off, such a link opens
+   * the web player, which can play (design §5.2).
    */
   PURRTRAIT_APPLINKS?: string;
   /**

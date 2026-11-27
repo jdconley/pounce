@@ -2,6 +2,15 @@ import { describe, expect, test } from "vitest";
 
 import { getRedirect, homePage, llmsTxt, robotsTxt, sitemapXml, supportPage } from "./site";
 
+/**
+ * The text outside sentences that say "now in App Review": the Apple TV app may be named only
+ * there, as coming in 1.4, until it is on the App Store.
+ */
+const outsideReview = (text: string): string =>
+  text
+    .split(/(?<=\.)(?=\s|<)|(?<=>)(?=<)/)
+    .filter((s) => !s.includes("now in App Review"))
+    .join(" ");
 const CSP = "default-src 'none'; style-src 'unsafe-inline'; img-src data:";
 
 describe("supportPage", () => {
@@ -44,7 +53,7 @@ describe("supportPage", () => {
     }
     expect(html).not.toMatch(/kitten/i);
     expect(html).not.toMatch(/card game for couples|tap Create|Add a bot/i);
-    expect(html).not.toMatch(/[\u2013\u2014]|Apple TV/);
+    expect(outsideReview(html)).not.toMatch(/[\u2013\u2014]|Apple TV/);
   });
 });
 
@@ -126,7 +135,7 @@ describe("robots.txt and the sitemap", () => {
       expect(text, s).toContain(s);
     }
     expect(text).not.toMatch(/\p{Extended_Pictographic}/u);
-    expect(text).not.toMatch(/first game|for iPhone and iPad, made by|[\u2013\u2014]|Apple TV/);
+    expect(outsideReview(text)).not.toMatch(/first game|for iPhone and iPad, made by|[\u2013\u2014]|Apple TV/);
     // Like the privacy policy, it mentions a parent's choice only when parent consent is on.
     expect(text).toContain("a parent decides whether they get notifications");
     const off = await llmsTxt("https://play.conleychaos.com", false).text();
@@ -172,7 +181,7 @@ describe("Birdwatch on the help page and llms.txt", () => {
       for (const s of ["Official", "Tucker", "Friesen", "secret partner", "names trump", "The Bird is the top trump.", "House Cats fill empty seats"]) {
         expect(on, s).toContain(s);
       }
-      expect(on).toContain("It's coming to the iPhone app.");
+      expect(on).toContain("It's coming to the iPhone and iPad app in 1.4, now in App Review.");
       expect(on).toContain("learn Cat Tower, Tuna Tiles and Birdwatch");
       expect(on).toContain("Pounce has family games: Cat Tower and Tuna Tiles, and Birdwatch in the browser.");
       expect(on).toContain("It plays Cat Tower and Tuna Tiles at the same tables as the iPhone app, and Birdwatch too.");
@@ -191,8 +200,8 @@ describe("Birdwatch on the help page and llms.txt", () => {
     const on = await llmsTxt("https://play.conleychaos.com", true, true, true).text();
     expect(on).toContain("It has three games");
     expect(on).toContain("Birdwatch, a trick-taking card game for four to six players in teams");
-    expect(on).toContain("Birdwatch plays in the browser today and is coming to the iPhone app.");
-    expect(on).not.toMatch(/\brook\b|[\u2013\u2014]|Apple TV/i);
+    expect(on).toContain("Birdwatch plays in the browser today and is coming to the iPhone and iPad app in 1.4, now in App Review.");
+    expect(outsideReview(on)).not.toMatch(/\brook\b|[\u2013\u2014]|Apple TV/i);
   });
 });
 
@@ -205,7 +214,7 @@ describe("Toy Tumble on the help page and llms.txt", () => {
         const on = await supportPage(daily, birdwatch, true).text();
         expect(on).toContain("<h2>How to play Toy Tumble</h2>");
         expect(on).toContain("Falling toys, for two to six players, all at the same time.");
-        expect(on).toContain("It's coming to the iPhone app in 1.4.");
+        expect(on).toContain("It's coming to the iPhone, iPad and Apple TV app in 1.4, now in App Review.");
         for (const s of ["Drag to move one, tap to turn it, and flick down to drop it.", "Clear rows in time to block them.", "Tap a trick, then a box", "Win three rounds to take the game.", "House Cats at Easy or Quick"]) {
           expect(on, s).toContain(s);
         }
@@ -218,7 +227,7 @@ describe("Toy Tumble on the help page and llms.txt", () => {
         expect(on).not.toContain("<!--");
         // Never an App Store claim before 1.4, and none of the words of the games it grew from.
         expect(on).not.toMatch(/Toy Tumble[^.]*(App Store|in the app\b)/);
-        expect(on).not.toMatch(/[\u2013\u2014]|Apple TV/);
+        expect(outsideReview(on)).not.toMatch(/[\u2013\u2014]|Apple TV/);
       }
     }
   });
@@ -230,12 +239,12 @@ describe("Toy Tumble on the help page and llms.txt", () => {
     expect(on).toContain("It has four games");
     expect(on).toContain("Toy Tumble, a real-time game for two to six players where everyone plays at once");
     expect(on).toContain("a TV shows every box");
-    expect(on).toContain("Birdwatch plays in the browser today and is coming to the iPhone app.");
-    expect(on).toContain("Toy Tumble plays in the browser and on the web TV page today, and is coming to the iPhone app in 1.4.");
+    expect(on).toContain("Birdwatch plays in the browser today and is coming to the iPhone and iPad app in 1.4, now in App Review.");
+    expect(on).toContain("Toy Tumble plays in the browser and on the web TV page today, and is coming to the iPhone, iPad and Apple TV app in 1.4, now in App Review.");
     const alone = await llmsTxt("https://play.conleychaos.com", true, false, false, true).text();
     expect(alone).toContain("It has three games");
     expect(alone).not.toContain("Birdwatch");
-    expect(on).not.toMatch(/[\u2013\u2014]|Apple TV/);
+    expect(outsideReview(on)).not.toMatch(/[\u2013\u2014]|Apple TV/);
   });
 });
 
@@ -252,7 +261,7 @@ describe("Purrtrait on the help page and llms.txt", () => {
         expect(on).toContain("<h2>How to play Purrtrait</h2>");
         expect(on).toContain("Draw and guess, for two to ten players in one room. It needs a TV or a big screen everyone can see.");
         expect(on).toContain('Start it on the TV page at <a href="/play/tv">play.conleychaos.com/play/tv</a>.');
-        expect(on).toContain("It's coming to the iPhone and Apple TV app in 1.4.");
+        expect(on).toContain("It's coming to the iPhone, iPad and Apple TV app in 1.4, now in App Review.");
         for (const s of [
           "pick Purrtrait",
           "The code changes every 30 seconds",
@@ -287,7 +296,7 @@ describe("Purrtrait on the help page and llms.txt", () => {
     expect(on).toContain("Purrtrait, a draw-and-guess game for two to ten players in one room");
     expect(on).toContain("the TV shows the drawing as it is drawn, and everyone else guesses out loud");
     expect(on).toContain("Purrtrait needs a TV or a big screen in the same room: it starts on the web TV page at https://play.conleychaos.com/play/tv");
-    expect(on).toContain("It is coming to the iPhone and Apple TV app in 1.4.");
+    expect(on).toContain("It is coming to the iPhone, iPad and Apple TV app in 1.4, now in App Review.");
     expect(on).toContain("Drawings go only to that TV and are never saved.");
     const alone = await llmsTxt("https://play.conleychaos.com", true, false, false, false, true).text();
     expect(alone).toContain("It has three games");

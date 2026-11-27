@@ -69,8 +69,8 @@ export const INVITE_CSP = `default-src 'none'; style-src 'unsafe-inline'; img-sr
 /**
  * Apple fetches this to bind `/j/*` links on our domain to the app: with pushes on, `/p/*` pounce
  * links too, and with `TV` on, `/tv/*` TV links (docs/tv-protocol.md). With `TV` off a `/tv/` link
- * is a 404, so the app doesn't claim it. `easel`: Purrtrait's TV QR links, `/e/*`, once an App
- * Store version draws the game (`PURRTRAIT_APPLINKS`); until then they open the web player.
+ * is a 404, so the app doesn't claim it. `easel`: Purrtrait's TV QR links, `/e/*`, with
+ * `PURRTRAIT_APPLINKS` on (since 1.4, the first version that draws the game, went to App Review).
  */
 export function appSiteAssociation(pounces = false, tv = false, easel = false): Response {
   return new Response(association(pounces, tv, easel), {
@@ -113,11 +113,17 @@ const DISH_GAME = "daily";
 export const DISH_SINCE = "1.2";
 
 /**
- * The first App Store version with Birdwatch. It is in TestFlight (1.3) and the browser; until
- * Apple's lookup names 1.3, a Birdwatch invite sends iPhones to the beta and says the game is coming
- * to the iPhone app.
+ * The first App Store version with Birdwatch. TestFlight builds have it since 1.3, but 1.3 never
+ * reached the App Store (it was pulled from review for 1.4). Until Apple's lookup names 1.4, a
+ * Birdwatch invite sends iPhones to the beta and says the game is coming to the iPhone app.
  */
-export const BIRDWATCH_SINCE = "1.3";
+export const BIRDWATCH_SINCE = "1.4";
+
+/**
+ * Where the next app version stands, said after "in 1.4" on the site while Apple reviews it. When
+ * 1.4 is on the App Store, the lines that use it change to say what the app has.
+ */
+export const IN_REVIEW = "now in App Review";
 
 /** The first App Store version with Toy Tumble. Until then it plays in the browser only. */
 export const TUMBLE_SINCE = "1.4";
@@ -212,7 +218,7 @@ function getButton(install: Install, invite: string | null, opts: { game?: strin
   const web = opts.web ? escapeHtml(opts.web) : null;
   if (web && opts.game && browserOnly(install, opts.game)) {
     // No app plays it yet, not even the beta: the browser is the way in for everyone.
-    const when = install.viewer === "other" ? "" : `\n<p class="note">${escapeHtml(gameTitle(opts.game))} is coming to the iPhone app in ${GAME_SINCE[opts.game] ?? "a later version"}.</p>`;
+    const when = install.viewer === "other" ? "" : `\n<p class="note">${escapeHtml(gameTitle(opts.game))} is coming to the iPhone app in ${GAME_SINCE[opts.game] ?? "a later version"}, ${IN_REVIEW}.</p>`;
     return `<a class="go web" href="${web}">Play in your browser</a>${when}`;
   }
   const to = store(install, opts.game);
