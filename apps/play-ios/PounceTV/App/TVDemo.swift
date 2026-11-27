@@ -11,7 +11,8 @@ import SwiftUI
 ///   default 4): `TVTablePreview`'s room, shown through the TV's own table path (`TVRoom`,
 ///   `TableHost`) on a fake socket that plays the game: turns, draws, aims from the phones, hits,
 ///   discards, lay-downs and plays, over and over.
-/// - `tv-shell`: the whole TV (`TVRoot`) on fake services. Home shows a link; a poster makes a
+/// - `tv-shell`: the whole TV (`TVRoot`) on fake services. Home shows a link (and, with `-dish`,
+///   Tonight's board's poster too); a poster makes a
 ///   table whose lobby is empty until the test says so: the first `Live.releaseDemo` seats
 ///   everyone, the second starts the game, and `Live.endDemo` ends it.
 /// - `tv-over` (`-seats` 2 to 6, default 4): the whole TV back at a Cat Tower table that just

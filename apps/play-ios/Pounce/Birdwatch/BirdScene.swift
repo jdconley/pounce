@@ -344,15 +344,18 @@ final class BirdScene: SKScene {
             }
             guard let node else { continue }
             node.position = layout.seatSpots[safe: i] ?? .zero
-            // A tag never runs off the screen's edge: it slides inward instead.
-            let edges = (left: node.position.x - 8, right: size.width - node.position.x - 8)
+            // A tag never runs off the screen's edge or under the sill: it slides inward, and a
+            // name too long for the room left is cut (on a TV, at 28 points, as the other tables).
+            let tagSize = (CardFaceFactory.nameSize * (layout.mode == .tv ? 2.4 : 1)).rounded()
+            let edges = layout.tagRoom(at: i, tagHeight: tagSize * 1.4)
             let partner = !isScreen && model.partnerMark(for: seat, revealed: shownSeat)
             node.update(
                 name: names[safe: seat] ?? "", active: model.currentSeat == seat, count: model.handCount(seat),
                 ribbon: model.ribbon(of: seat), dealer: model.view.dealer == seat && model.isLive, sign: model.sign(seat),
                 partner: partner, bot: view?.kind == .bot, left: view?.isTakenOver ?? false, presence: view?.presence,
-                maxTagWidth: min(maxTag, size.width / 2 - 12),
-                textScale: layout.mode == .tv ? 2.4 : (layout.roomy ? textScale * 1.35 : textScale), edges: edges)
+                maxTagWidth: min(maxTag, size.width / 2 - 12, edges.left + edges.right),
+                textScale: layout.mode == .tv ? 2.4 : (layout.roomy ? textScale * 1.35 : textScale), edges: edges,
+                minimumText: layout.mode == .tv ? 28 : CardFaceFactory.nameSize)
             if popSigns.contains(seat) { node.popSign(reduceMotion: reduceMotion) }
         }
     }
