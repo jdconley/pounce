@@ -291,8 +291,10 @@ public struct RoomView: Codable, Equatable, Sendable {
     public var tiles: TilesView?
     /// Birdwatch's view, in a room playing it, once dealt.
     public var birdwatch: BirdView?
-    /// The game's options (Birdwatch's rule set); nil for a game without any.
+    /// The game's options (Birdwatch's rule set, Toy Tumble's House Cats); nil for a game without any.
     public var options: RoomOptions?
+    /// Toy Tumble's rounds and wins, in a room playing it (`docs/live-protocol.md`).
+    public var tumble: TumbleView?
     /// The table's rug and card back; nil from a server without looks (streaks off).
     public var look: Look?
     /// The Play again table's code, once someone dealt it (§10.4).
@@ -311,7 +313,7 @@ public struct RoomView: Codable, Equatable, Sendable {
         code: String, name: String? = nil, status: RoomStatus, youAreHost: Bool, seats: [SeatView],
         game: GameView? = nil, look: Look? = nil, rematch: String? = nil, link: RoomLink? = nil,
         nudge: NudgeView? = nil, retire: RetireView? = nil, gameId: String? = nil, tiles: TilesView? = nil,
-        screen: Bool? = nil, birdwatch: BirdView? = nil, options: RoomOptions? = nil
+        screen: Bool? = nil, birdwatch: BirdView? = nil, options: RoomOptions? = nil, tumble: TumbleView? = nil
     ) {
         self.code = code
         self.name = name
@@ -329,7 +331,14 @@ public struct RoomView: Codable, Equatable, Sendable {
         self.tiles = tiles
         self.birdwatch = birdwatch
         self.options = options
+        self.tumble = tumble
     }
+
+    /// The room plays Toy Tumble. Decided by `gameId` alone, so a room in its lobby says so too.
+    public var isTumble: Bool { gameId == GameID.tumble }
+
+    /// The table's House Cat level: the game's, else the lobby's options (Easy by default).
+    public var tumbleCats: TumbleCats { tumble?.cats ?? options?.cats ?? .easy }
 
     /// The room plays the tile game. Decided by `gameId` alone, so a room in its lobby says so too.
     public var isTiles: Bool { gameId == GameID.tiles }

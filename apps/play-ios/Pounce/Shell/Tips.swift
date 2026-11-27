@@ -251,6 +251,11 @@ enum UITipCopy {
         case .birdDimmed: String(localized: "Dim cards can't be played. Follow suit.", comment: "Tip at Birdwatch's table: a dimmed card in your hand")
         case .birdTrump: String(localized: "Trump beats every other suit.", comment: "Tip at Birdwatch's table: the trump badge")
         case .birdPartner: String(localized: "You hold the called card. Help the bidder, quietly.", comment: "Tip at Birdwatch's table (five players): the partner's own mark")
+        case .tumbleDrag: String(localized: "Drag to move.", comment: "Tip at Toy Tumble's table: drag across the box to move the toy")
+        case .tumbleTap: String(localized: "Tap to turn.", comment: "Tip at Toy Tumble's table: tap to turn the toy")
+        case .tumbleFlick: String(localized: "Flick down to drop.", comment: "Tip at Toy Tumble's table: a fast swipe down drops the toy")
+        case .tumbleTrick: String(localized: "Tap a trick, then a box.", comment: "Tip at Toy Tumble's table: the trick tray, the first time a trick is pocketed")
+        case .tumbleJunk: String(localized: "Clear rows to block it.", comment: "Tip at Toy Tumble's table: the junk meter, the first time junk waits")
         }
     }
 }

@@ -93,6 +93,9 @@ import Observation
     public private(set) var aims: [Seat: GameAim] = [:]
     /// Each `{t:"streak"}` for this device's people: pair, person, view. Set by the session.
     @ObservationIgnored public var onStreak: ((String, String, StreakView) -> Void)?
+    /// Toy Tumble's live stream (relays, hits, syncs, seat links), already decoded off the main
+    /// thread, for the table's `TumbleTable`. Not room state: the store keeps none of it.
+    @ObservationIgnored public var onTumble: ((TumbleMessage) -> Void)?
 
     /// This phone's connection as the table shows it.
     public enum Connection: Equatable, Sendable {
@@ -506,6 +509,8 @@ import Observation
             applyNudged(seat: seat, from: from)
         case .aim(let seat, let aim):
             aims[seat] = aim
+        case .tumble(let live):
+            onTumble?(live)
         case .pong:
             break
         }

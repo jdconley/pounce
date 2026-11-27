@@ -138,7 +138,7 @@ final class RemoteTests: XCTestCase {
     /// comes back. Each poster is wholly on screen.
     func testHomeShelfWalksEveryPoster() {
         let app = launchHome(dish: true)
-        let shelf = ["tv.poster.cat-tower", "tv.poster.tiles", "tv.poster.birdwatch", "tv.poster.board"]
+        let shelf = Self.shelfGames + ["tv.poster.board"]
         XCTAssertTrue(el(app, "tv.poster.board").waitForExistence(timeout: Live.t(10)), "no Tonight's board poster with the Dish on")
         let screen = app.windows.firstMatch.frame
         for id in shelf {

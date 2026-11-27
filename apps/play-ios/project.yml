@@ -180,6 +180,11 @@ targets:
       # The daily games' watch contract, and everything the TV builds for each game: its watch view
       # and the drawing and art it needs, in `Pounce/Daily/<Game>/TV/`. A game adds files there and
       # touches nothing else (this list, ios.yml's and distribute.swift's TV filters match the same).
+      # Toy Tumble's scene, boxes, input, art and demo socket; not its iPhone shell or demos.
+      - path: Pounce/Tumble
+        excludes:
+          - TumbleStage.swift
+          - TumbleDemo.swift
       - path: Pounce/Daily
         includes:
           - DailyWatchView.swift

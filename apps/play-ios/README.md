@@ -30,6 +30,20 @@ with a SpriteKit table. Apple frameworks only, no third-party packages.
   sheet, the menu and game over). The TV compiles the scene, not the shell. Its view, events, moves and table
   model are in PounceKit (`BirdwatchModels`, `BirdTableModel`, `BirdLayout`). The app never ports the rules:
   what may be played, bid or called comes from the server's view (`playable`, `bidRange`, `partnerChoices`).
+- `Pounce/Tumble/` Toy Tumble's table (`docs/superpowers/specs/2026-11-26-toy-tumble-design.md`, plan
+  `docs/superpowers/plans/2026-11-26-toy-tumble-ios-tv.md`), the first real-time game: `TumbleScene`
+  (your box, the minis or chips, the trick tray, the countdown), `TumbleBoxNode` (one box at any cell
+  size: the toy chest, settled cells in one rasterized layer re-made only on a set-down or hit, the
+  falling toy, the paw-print landing, the cat on the rim with the next toy), `TumbleInput` (drag, tap,
+  drag down, flick, tricks onto boxes, applied in the touch handlers), `TumbleArt` (cushions, hairball
+  fur, badges, drawn off the main thread), and the iPhone shell `TumbleStage` (between rounds, game
+  over, the menu). The TV compiles everything but the shell and the iPhone demo. The engine is a
+  line-for-line Swift port of play-api's (`PounceKit/Sources/PounceKit/Tumble/`: `TumbleBox`,
+  `TumbleQueue`, `TumbleClock`, the wire) and passes every shared vector in
+  `apps/play-api/fixtures/tumble/` (`TumbleFixtureTests`); `TumbleLocal` runs this device's box on the
+  frame clock, `TumbleReplay` replays the others from the relays, and `TumbleTable` holds both for a
+  session. `GameCatalog.tumble` exists only in Debug builds or from app version 1.4, so a Release 1.3
+  build never shows it or lists it in `X-Pounce-Games`.
 - `PounceKit/` local Swift package (game model, networking, `pounce-e2e` CLI) with Swift Testing tests.
   `PounceKit/Sources/PounceKit/IO/` is the only code that touches the disk or the Keychain: actors
   and `@concurrent` functions, so none of it runs on the main thread. Stores keep their data in
@@ -119,6 +133,16 @@ then the build setting (Debug: `http://localhost:8787`, optionally overridden by
   through the scene's own calls (`BirdwatchLiveTests` plays 4, 5 and 6 players to game over with it), and
   `-show-scores` opens the score sheet. On the TV: `-tv-preview birdwatch -seats <4|5|6>` and
   `-demo tv-birdwatch`. Screenshots are in `Art/screenshots/birdwatch/`.
+- Toy Tumble (game id `tumble`, 2 to 6 players, House Cats Easy or Quick, one seat per device) needs a
+  server whose `GAMES` lists it (play-api's round room; a dev server skips its 1.4 gate). Its demos,
+  offline, on `TumbleDemoSocket` (a small stand-in referee with House-Cat-like boxes, run on the
+  socket's actor): `tumble-play` (four seats, two tricks in hand), `tumble-six` (five cats),
+  `tumble-two`, `tumble-junk` (every box four hairball rows deep), `tumble-countdown`, `tumble-tv`
+  (a TV shows the table: chips) and `tumble-lobby`. `-tumble-autoplay` makes this phone's box play
+  itself through the scene's own input calls, and `-tumble-busy` makes the cats quick. On the TV:
+  `-demo tv-tumble -seats <2...6>` (every box a cat's). `ToyTumbleTests` drives the gestures on the demo
+  table, `ToyTumbleLiveTests` plays a game against a dev server, and `FrameRateTests` /
+  `FrameRateTVTests` have a minute of each. Screenshots are in `Art/screenshots/tumble/`.
 - How to play's videos (`HowTo/README.md`): `-demo howto` is Cat Tower's video table (my whole turn,
   taken by `HowToSocket` as the server would, then the other seats), `-demo tiles-last` the tile
   game's last turn (three pieces left, each fits a row), `-show-touches` draws a ring under every
