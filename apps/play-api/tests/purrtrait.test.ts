@@ -23,7 +23,7 @@ afterEach(async () => {
 });
 
 /** What an app that can draw Purrtrait says. */
-const PURR = { "x-pounce-games": "cat-tower,tiles,purrtrait" };
+const PURR = { "x-pounce-games": "cat-tower,tiles,purrtrait", "x-pounce-app": "platform=ios; version=1.4; build=1; protocol=1" };
 /** A near key's life at `DEV_SPEED` 100: 30 s for each of two keys, a hundred times faster. */
 const FAST = 100;
 
@@ -81,7 +81,7 @@ const NOT_NEAR = { status: 403, body: { error: "not_near" }, why: "not_near" };
 
 /** A browser's socket, offered as the web player offers it: its close code once it closes. */
 async function browser(mf: Miniflare, code: string, device: Device, query: string) {
-  const res = await mf.dispatchFetch(`${BASE}/v1/rooms/${code}/ws?games=cat-tower,tiles,purrtrait&${query}`, {
+  const res = await mf.dispatchFetch(`${BASE}/v1/rooms/${code}/ws?games=cat-tower,tiles,purrtrait&app=${encodeURIComponent("platform=web; version=1; protocol=1")}&${query}`, {
     headers: { upgrade: "websocket", "sec-websocket-protocol": `pounce, pounce.token.${device.token}` },
   });
   const ws = res.webSocket as unknown as WebSocket & { accept(): void };
