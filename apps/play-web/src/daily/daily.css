@@ -336,6 +336,12 @@
   font: 900 1.05rem var(--round);
 }
 
+/* Ended without finishing ("18%"): no tick, and the dim pill the board's rows use. */
+.dd-mine.unfinished {
+  background: rgba(27, 11, 58, 0.55);
+  color: var(--white);
+}
+
 .dd-board-wrap {
   padding: 14px 12px 12px;
 }
@@ -630,6 +636,8 @@
    its own under them, with the clock beside it. The bar is a size container, so this follows the
    text size as well as the width. */
 .dd-play-head {
+  position: relative;
+  z-index: 16;
   flex: none;
   container-type: inline-size;
 }
@@ -736,6 +744,31 @@
   font: 900 0.9rem var(--round);
 }
 
+/* A dropped connection, while a move waits: over the top of the stage, never moving it. */
+.dd-retrying {
+  position: absolute;
+  top: 100%;
+  left: 50%;
+  z-index: 15;
+  margin: 4px 0 0;
+  padding: 4px 14px;
+  border: 3px solid var(--ink);
+  border-radius: 999px;
+  background: var(--white);
+  color: var(--ink);
+  font: 900 0.9rem var(--round);
+  white-space: nowrap;
+  opacity: 0;
+  transform: translateX(-50%) scale(0.8);
+  transition: opacity 160ms var(--ease-out), transform 220ms var(--ease-spring);
+  pointer-events: none;
+}
+
+.dd-retrying.on {
+  opacity: 1;
+  transform: translateX(-50%);
+}
+
 .dd-stage {
   display: flex;
   flex-direction: column;
@@ -750,10 +783,12 @@
   min-height: 0;
 }
 
-/* Under the end, the board fades as one layer. */
+/* Under the end, the board fades as one layer. `--dd-end-wait`: a game's moment before the end
+   (Nine Lives filling in the solution), when the run ended while it was played. */
 .dd-stage.over {
   opacity: 0.3;
   pointer-events: none;
+  transition-delay: var(--dd-end-wait, 0ms);
 }
 
 .dd-end-scrim {
@@ -764,7 +799,7 @@
   padding: calc(var(--safe-top) + 16px) calc(var(--safe-right) + 16px) calc(var(--safe-bottom) + 16px) calc(var(--safe-left) + 16px);
   overflow-y: auto;
   background: rgba(27, 11, 58, 0.45);
-  animation: dd-fade 360ms 700ms var(--ease-out) both;
+  animation: dd-fade 360ms calc(700ms + var(--dd-end-wait, 0ms)) var(--ease-out) both;
 }
 
 .dd-end {
@@ -781,7 +816,7 @@
   background: linear-gradient(180deg, var(--c), var(--d));
   box-shadow: 0 8px 0 var(--ink), inset 0 4px 0 rgba(255, 255, 255, 0.35);
   text-align: center;
-  animation: dd-pop 520ms 760ms var(--ease-spring) both;
+  animation: dd-pop 520ms calc(760ms + var(--dd-end-wait, 0ms)) var(--ease-spring) both;
 }
 
 .dd-end h2 {

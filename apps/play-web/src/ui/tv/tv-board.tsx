@@ -16,7 +16,7 @@ import { Cat, useSize } from "../common";
 import { QrCode } from "../qr";
 
 import { isBack } from "./focus";
-import { gameTitle, resultWords, ROWS_SHOWN, visibleRows, type BoardScreen, type Cheer } from "./tv-board-model";
+import { endedWords, gameTitle, resultWords, ROWS_SHOWN, visibleRows, type BoardScreen, type Cheer } from "./tv-board-model";
 import { MenuButton } from "./tv-table";
 import { TvWatch, TvWatchCard } from "./tv-watch";
 
@@ -205,7 +205,7 @@ function GameRow(props: { row: BoardRow; cheer: Cheer | null }) {
     <li
       class={`tv-board-row${cheer ? " cheer" : ""}${row.playing ? " playing" : ""}`}
       data-player={row.player}
-      aria-label={r ? `${row.rank}. ${row.name}, ${resultWords(r)}${r.hints ? `, ${r.hints} hint${r.hints > 1 ? "s" : ""}` : ""}` : `${row.name}, playing`}
+      aria-label={r ? `${row.rank}. ${row.name}, ${solved ? "" : `${endedWords(r)}, `}${resultWords(r)}${r.hints ? `, ${r.hints} hint${r.hints > 1 ? "s" : ""}` : ""}` : `${row.name}, playing`}
     >
       {row.playing ? <img class="tv-rank playing" src={art("icon-play")} alt="" /> : <Rank rank={row.rank} />}
       <Cat cat={row.cat} pose={cheer ? "leap" : row.playing ? "awake" : "idle"} size="calc(var(--u) * 72)" class="tv-row-cat" />

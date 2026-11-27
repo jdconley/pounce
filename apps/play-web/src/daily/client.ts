@@ -10,8 +10,14 @@
  * - `hint()` and `giveUp()` flush waiting moves first, then ask.
  * - `subscribe` hears every authoritative answer: accepted batches and their reveals, hints, a
  *   resync (the server's state wins: redraw from it), and the result.
- * - The clock is the server's: `elapsedMs()` counts from `startedAt`, corrected by the server's
- *   `now` at start, plus 30 seconds a hint, as the result's `timeMs` will.
+ * - The clock is active time (docs/daily-protocol.md "Active time"): it runs only while the
+ *   puzzle is on screen (`setShown`, from the host) and the tab is visible, carrying on from the
+ *   start's `activeMs`. Every moves batch, hint and give-up sends it as `activeMs`, and the result's
+ *   `timeMs` is it. `elapsedMs()` adds the start's `hintMs` a hint (30 seconds when it's missing).
+ *   No timer counts it: two timestamps do, read when asked. When it pauses, an empty batch tells
+ *   the server the time since the last call, so none is lost.
+ * - The rules: a game with more than one set asks for the ones this player plays at start
+ *   (`startBody`: Nine Lives' lives). The server fixes them at the run's first start.
  *
  * Network calls are fetches (never blocking); timers live here, in net code, never in screens.
  */
@@ -34,6 +40,10 @@ export type StartAnswer<P = unknown, S = unknown> = {
   hints: number;
   result: DailyResult | null;
   closesAt: number;
+  /** What one hint adds to the time: 30 s, or 0 under Nine Lives' lives. Older servers: missing. */
+  hintMs?: number;
+  /** The run's active time so far. Older servers: missing (count from `startedAt`). */
+  activeMs?: number;
 };
 
 /** `POST /v1/daily/runs/{run}/moves` (and hint, give up), 200. */
@@ -88,7 +98,7 @@ export interface RunSession<P = unknown, S = unknown, M = unknown, R = unknown> 
   subscribe(listener: (event: RunEvent<S, R>) => void): () => void;
   /** The server's clock now, in epoch ms. */
   serverNow(): number;
-  /** The run's time so far, as the server will count it: since `startedAt`, plus 30 s a hint. */
+  /** The run's time so far, as the server will count it: its active time, plus `hintMs` a hint. */
   elapsedMs(): number;
 }
 
@@ -98,7 +108,7 @@ export interface RunSession<P = unknown, S = unknown, M = unknown, R = unknown> 
 
 export type RunDeps = {
   /** An authenticated call (`api.call`): throws `ApiError` for anything but a 2xx. */
-  call: (method: string, path: string, body?: unknown) => Promise<Response>;
+  call: (method: string, path: string, body?: unknown, options?: { keepalive?: boolean }) => Promise<Response>;
   /** The person playing (`?person=`). */
   person: string;
   now?: () => number;
@@ -111,7 +121,14 @@ export type RunDeps = {
 /** A path with the person's `?person=`. */
 export const dailyPath = (path: string, person: string): string => `${path}${path.includes("?") ? "&" : "?"}person=${encodeURIComponent(person)}`;
 
-const HINT_MS = 30_000;
+/** What a hint adds when the start doesn't say (a server before `hintMs`). */
+export const HINT_MS = 30_000;
+
+/**
+ * The start's body: the rules this player plays, for a game with more than one set. Nine Lives:
+ * three lives and three free hints (docs/daily-protocol.md "## Nine Lives"). Every other game: none.
+ */
+export const startBody = (game: DailyGameId): { rules: string } | undefined => (game === "nine-lives" ? { rules: "lives" } : undefined);
 const MAX_BATCH = 100;
 const BACKOFF = [250, 500, 1000, 2000, 4000];
 const TOO_SOON_MS = 500;
@@ -136,6 +153,15 @@ export class Run<P = unknown, S = unknown, M = unknown, R = unknown> implements 
   private readonly now: () => number;
   private readonly setTimer: (fn: () => void, ms: number) => unknown;
   private readonly clearTimer: (id: unknown) => void;
+  /** Active time counted before `since`; `since` is when counting last resumed (null: paused). */
+  private active: number;
+  private since: number | null = null;
+  private shown = false;
+  private visible = true;
+  /** The active time the server last heard. */
+  private reported = -1;
+  private readonly onVisibility = (): void => this.setVisible(typeof document === "undefined" || document.visibilityState !== "hidden");
+  private readonly onOnline = (): void => this.retryNow();
 
   constructor(
     public start: StartAnswer<P, S>,
@@ -149,7 +175,78 @@ export class Run<P = unknown, S = unknown, M = unknown, R = unknown> implements 
     this.setTimer = deps.setTimer ?? ((fn, ms) => setTimeout(fn, ms));
     this.clearTimer = deps.clearTimer ?? ((id) => clearTimeout(id as ReturnType<typeof setTimeout>));
     this.offset = start.now - this.now();
-    if (typeof window !== "undefined" && !deps.setTimer) window.addEventListener("online", () => this.retryNow());
+    this.active = start.activeMs ?? Math.max(0, start.now - start.startedAt);
+    this.reported = this.active;
+    if (typeof window !== "undefined" && !deps.setTimer) {
+      window.addEventListener("online", this.onOnline);
+      document.addEventListener("visibilitychange", this.onVisibility);
+      this.onVisibility();
+    }
+  }
+
+  /** The run's active time now, in whole ms. */
+  activeMs(): number {
+    const running = this.since === null ? 0 : Math.max(0, this.now() - this.since);
+    return Math.floor(this.active + running);
+  }
+
+  /**
+   * The puzzle is on screen (true) or isn't: the host leaving, a sheet over it, the end. Active
+   * time counts only while it's shown and the tab is visible.
+   */
+  setShown(shown: boolean): void {
+    this.shown = shown;
+    this.recount();
+  }
+
+  /** The tab hid or showed (the browser's `visibilitychange`, or a test). */
+  setVisible(visible: boolean): void {
+    this.visible = visible;
+    this.recount();
+  }
+
+  /** The screen is gone for good: stop counting and listening. */
+  close(): void {
+    this.setShown(false);
+    if (typeof window !== "undefined") {
+      window.removeEventListener("online", this.onOnline);
+      document.removeEventListener("visibilitychange", this.onVisibility);
+    }
+  }
+
+  private recount(): void {
+    const counting = this.shown && this.visible && !this.result;
+    if (counting && this.since === null) this.since = this.now();
+    else if (!counting && this.since !== null) {
+      this.active = this.activeMs();
+      this.since = null;
+      this.notePause();
+    }
+  }
+
+  /**
+   * The clock paused: the server hears the time since the last call (docs/daily-protocol.md
+   * "Active time"). Waiting moves go now and carry it; with nothing waiting, an empty batch does,
+   * sent to outlive the page. Its answer changes nothing, so it isn't awaited.
+   */
+  private notePause(): void {
+    if (this.result || this.activeMs() === this.reported) return;
+    if (this.queue.length > 0) {
+      this.urgent = true;
+      this.cancelTimer();
+      return this.pump();
+    }
+    // A batch in flight carries an active time a moment older; the next call brings it up to date.
+    if (this.inflight) return;
+    const activeMs = this.stamp();
+    void this.deps.call("POST", dailyPath(`/v1/daily/runs/${this.start.run}/moves`, this.deps.person), { from: this.seq, moves: [], activeMs }, { keepalive: true }).catch(() => undefined);
+  }
+
+  /** The active time now, for a call's body; the server will have heard it. */
+  private stamp(): number {
+    const ms = this.activeMs();
+    this.reported = ms;
+    return ms;
   }
 
   subscribe(listener: (event: RunEvent<S, R>) => void): () => void {
@@ -163,7 +260,7 @@ export class Run<P = unknown, S = unknown, M = unknown, R = unknown> implements 
 
   elapsedMs(): number {
     if (this.result) return this.result.timeMs;
-    return Math.max(0, this.serverNow() - this.start.startedAt) + this.hints * HINT_MS;
+    return this.activeMs() + this.hints * (this.start.hintMs ?? HINT_MS);
   }
 
   send(move: M, options: SendOptions = {}): Promise<R | null> {
@@ -197,7 +294,7 @@ export class Run<P = unknown, S = unknown, M = unknown, R = unknown> implements 
     if (this.result) return null;
     // The count so far makes a resend safe: asked again with the same count, the server answers
     // the same hint and charges nothing more. So a dropped hint is asked again, a few times.
-    const body = { hints: this.hints };
+    const body = { hints: this.hints, activeMs: this.stamp() };
     let answer: MovesAnswer<R> | null = null;
     for (let attempt = 0; !answer && attempt < BACKOFF.length; attempt++) {
       answer = await this.post<MovesAnswer<R>>("hint", body).catch(() => null);
@@ -220,7 +317,7 @@ export class Run<P = unknown, S = unknown, M = unknown, R = unknown> implements 
   async giveUp(): Promise<DailyResult | null> {
     await this.flush();
     if (this.result) return this.result;
-    const answer = await this.post<MovesAnswer<R>>("giveup");
+    const answer = await this.post<MovesAnswer<R>>("giveup", { activeMs: this.stamp() });
     if (!answer) return null;
     if (!answer.ok) {
       await this.resync();
@@ -308,7 +405,7 @@ export class Run<P = unknown, S = unknown, M = unknown, R = unknown> implements 
   private async sendBatch(batch: Batch<M, R>): Promise<void> {
     let answer: MovesAnswer<R> | null;
     try {
-      answer = await this.post<MovesAnswer<R>>("moves", { from: batch.from, moves: batch.moves });
+      answer = await this.post<MovesAnswer<R>>("moves", { from: batch.from, moves: batch.moves, activeMs: this.stamp() });
     } catch {
       // A 4xx (the run is gone, a body too big): nothing to resend; the server's state wins.
       this.drop(batch);
@@ -357,7 +454,7 @@ export class Run<P = unknown, S = unknown, M = unknown, R = unknown> implements 
         if (legal.length > 0) {
           const prefix = { from: this.seq, moves: legal, waiters };
           this.inflight = prefix;
-          const kept = await this.post<MovesAnswer<R>>("moves", { from: prefix.from, moves: legal }).catch(() => null);
+          const kept = await this.post<MovesAnswer<R>>("moves", { from: prefix.from, moves: legal, activeMs: this.stamp() }).catch(() => null);
           if (kept?.ok) {
             this.seq = kept.seq;
             this.emit({ kind: "accepted", seq: kept.seq, reveals: kept.reveals, progress: kept.progress });
@@ -385,6 +482,7 @@ export class Run<P = unknown, S = unknown, M = unknown, R = unknown> implements 
   private end(result: DailyResult | null): void {
     if (!result || this.result) return;
     this.result = result;
+    this.recount();
     this.emit({ kind: "result", result });
   }
 
@@ -394,13 +492,19 @@ export class Run<P = unknown, S = unknown, M = unknown, R = unknown> implements 
     let fresh: StartAnswer<P, S> | null = null;
     for (let attempt = 0; !fresh && attempt < 6; attempt++) {
       try {
-        const res = await this.deps.call("POST", dailyPath(`/v1/daily/${this.game}/start`, this.deps.person));
+        const res = await this.deps.call("POST", dailyPath(`/v1/daily/${this.game}/start`, this.deps.person), startBody(this.game));
         fresh = (await res.json()) as StartAnswer<P, S>;
       } catch {
         await new Promise<void>((r) => this.setTimer(r, BACKOFF[Math.min(attempt, BACKOFF.length - 1)] as number));
       }
     }
     if (fresh) {
+      this.start = { ...this.start, hintMs: fresh.hintMs ?? this.start.hintMs };
+      // The server's active time is the last one sent; ours never goes back.
+      if (typeof fresh.activeMs === "number" && fresh.activeMs > this.activeMs()) {
+        this.active = fresh.activeMs;
+        if (this.since !== null) this.since = this.now();
+      }
       this.seq = fresh.seq;
       this.hints = fresh.hints;
       this.emit({ kind: "resync", state: fresh.state, seq: fresh.seq });
@@ -414,10 +518,10 @@ export class Run<P = unknown, S = unknown, M = unknown, R = unknown> implements 
 export async function startRun<P, S, M, R>(
   game: DailyGameId,
   person: string,
-  call: RunDeps["call"] = (m, p, b) => api.call(m, p, b),
+  call: RunDeps["call"] = (m, p, b, o) => api.call(m, p, b, o),
 ): Promise<Run<P, S, M, R> | null> {
   try {
-    const res = await call("POST", dailyPath(`/v1/daily/${game}/start`, person));
+    const res = await call("POST", dailyPath(`/v1/daily/${game}/start`, person), startBody(game));
     return new Run<P, S, M, R>((await res.json()) as StartAnswer<P, S>, { call, person });
   } catch (error) {
     if (error instanceof ApiError && error.status === 404) return null;

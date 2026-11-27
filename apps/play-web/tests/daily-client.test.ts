@@ -1,6 +1,6 @@
 import { describe, expect, test } from "vitest";
 
-import { Run, type RunEvent, type StartAnswer } from "../src/daily/client";
+import { Run, startBody, startRun, type RunEvent, type StartAnswer } from "../src/daily/client";
 import { ApiError } from "../src/net/api";
 
 import { Clock, flush } from "./fake-socket";
@@ -35,9 +35,13 @@ function setup(answers: Answer[] = [], start = START) {
   const clock = new Clock();
   clock.now = 1_000_000; // the device's clock is 5 s behind the server's
   const calls: Call[] = [];
+  // Every call's `activeMs`, kept apart so the bodies read as the moves they carry.
+  const actives: (number | undefined)[] = [];
   const queue = [...answers];
   const call = async (method: string, path: string, body?: unknown) => {
-    calls.push({ method, path, body });
+    const { activeMs, ...rest } = (body ?? {}) as { activeMs?: number };
+    actives.push(activeMs);
+    calls.push({ method, path, body: body === undefined || (activeMs !== undefined && Object.keys(rest).length === 0) ? undefined : activeMs === undefined ? body : rest });
     const a = queue.shift();
     if (a === undefined) throw new Error(`no answer for ${method} ${path}`);
     if (a instanceof Error) throw a;
@@ -46,7 +50,7 @@ function setup(answers: Answer[] = [], start = START) {
   const run = new Run(start, { call, person: "pe_1", now: () => clock.now, setTimer: clock.set, clearTimer: clock.clear });
   const events: RunEvent<TestState, unknown>[] = [];
   run.subscribe((e) => events.push(e));
-  return { clock, calls, run, events, answer: (...more: Answer[]) => queue.push(...more) };
+  return { clock, calls, actives, run, events, answer: (...more: Answer[]) => queue.push(...more) };
 }
 
 const MOVES = `/v1/daily/runs/${"R".repeat(43)}/moves?person=pe_1`;
@@ -96,7 +100,7 @@ describe("the run session", () => {
     await flush();
     clock.advance(0);
     await flush();
-    expect(calls[1]!.body).toEqual({ from: 1, moves: [step(2), step(3)] });
+    expect(calls[1]!.body).toEqual({ from: 1, moves: [step(2), step(3)], activeMs: 5000 });
   });
 
   test("resends the same from after a dropped connection", async () => {
@@ -195,14 +199,110 @@ describe("the run session", () => {
     expect(events.at(-1)).toEqual({ kind: "result", result: gaveUp });
   });
 
-  test("the clock is the server's, plus 30 seconds a hint", async () => {
+  test("the clock is active time, plus 30 seconds a hint; an old server's start counts from startedAt", async () => {
     const { clock, run } = setup([ok(0, { reveals: [{ n: 1 }] })]);
     expect(run.serverNow()).toBe(1_005_000);
+    // No `activeMs` at start: the server's time since the start, then only while it's on screen.
     expect(run.elapsedMs()).toBe(5000);
+    clock.advance(2000);
+    expect(run.elapsedMs()).toBe(5000);
+    run.setShown(true);
     clock.advance(2000);
     expect(run.elapsedMs()).toBe(7000);
     await run.hint();
     expect(run.elapsedMs()).toBe(37_000);
+  });
+
+  test("a pause tells the server the time since the last call: an empty batch, once, or the waiting moves", async () => {
+    const { clock, run, calls, actives } = setup([ok(0), ok(1)], { ...START, activeMs: 10_000 });
+    // Shown and hidden with no time passing: nothing new to say.
+    run.setShown(true);
+    run.setShown(false);
+    expect(calls).toEqual([]);
+    run.setShown(true);
+    clock.advance(4000);
+    run.setVisible(false);
+    await flush();
+    expect(calls.map((c) => [c.path.split("?")[0]!.split("/").at(-1), c.body])).toEqual([["moves", { from: 0, moves: [] }]]);
+    expect(actives).toEqual([14_000]);
+    // Paused again with nothing more played: no second one.
+    run.setShown(false);
+    run.setVisible(true);
+    expect(calls).toHaveLength(1);
+    // A move waiting when the clock pauses goes at once and carries the time.
+    run.setShown(true);
+    clock.advance(1000);
+    void run.send(step(1));
+    clock.advance(500);
+    run.setShown(false);
+    await flush();
+    expect(calls.map((c) => c.body)).toEqual([{ from: 0, moves: [] }, { from: 0, moves: [step(1)] }]);
+    expect(actives).toEqual([14_000, 15_500]);
+  });
+
+  test("active time pauses off screen and in a hidden tab, and goes with every call", async () => {
+    const giveUp = { ...solved, outcome: "gaveUp", timeMs: 40_000, progress: 0.25 };
+    const { clock, run, calls, actives } = setup([ok(0), ok(1), ok(1, { reveals: [{ n: 2 }] }), ok(1, { result: giveUp })], { ...START, activeMs: 18_000 });
+    expect(run.activeMs()).toBe(18_000);
+    run.setShown(true);
+    clock.advance(1500);
+    run.setVisible(false);
+    clock.advance(60_000);
+    run.setVisible(true);
+    clock.advance(500);
+    expect(run.activeMs()).toBe(20_000);
+    void run.send(step(1), { urgent: true });
+    await flush();
+    run.setShown(false); // a sheet over the puzzle
+    clock.advance(30_000);
+    run.setShown(true);
+    clock.advance(1000);
+    await run.hint();
+    clock.advance(250);
+    await run.giveUp();
+    // The hidden tab's empty batch; the sheet's pause had nothing new to say.
+    expect(calls.map((c) => c.path.split("?")[0]!.split("/").at(-1))).toEqual(["moves", "moves", "hint", "giveup"]);
+    expect(actives).toEqual([19_500, 20_000, 21_000, 21_250]);
+    // Ended: the result's time, and no more counting.
+    expect(run.elapsedMs()).toBe(40_000);
+    clock.advance(5000);
+    expect(run.activeMs()).toBe(21_250);
+  });
+
+  test("a hint adds the start's hintMs: none under Nine Lives' lives", async () => {
+    const { clock, run } = setup([ok(0, { reveals: [{ n: 1 }] })], { ...START, hintMs: 0 });
+    run.setShown(true);
+    clock.advance(2000);
+    await run.hint();
+    expect(run.elapsedMs()).toBe(7000);
+  });
+
+  test("Nine Lives asks for the lives rules at start, and on a resync; no other game does", async () => {
+    expect(startBody("nine-lives")).toEqual({ rules: "lives" });
+    for (const g of ["sniff", "cat-nap", "box-fort", "test"] as const) expect(startBody(g)).toBeUndefined();
+    const calls: Call[] = [];
+    const call = async (method: string, path: string, body?: unknown) => {
+      calls.push({ method, path, body });
+      return new Response(JSON.stringify({ ...START, game: path.includes("nine-lives") ? "nine-lives" : "sniff" }), { status: 200 });
+    };
+    const run = (await startRun("nine-lives", "pe_1", call))!;
+    await startRun("sniff", "pe_1", call);
+    expect(calls).toEqual([
+      { method: "POST", path: "/v1/daily/nine-lives/start?person=pe_1", body: { rules: "lives" } },
+      { method: "POST", path: "/v1/daily/sniff/start?person=pe_1", body: undefined },
+    ]);
+    expect(run.game).toBe("nine-lives");
+    // A stale batch resyncs with the same body (the server ignores it after the first start).
+    const nl = { ...START, game: "nine-lives" as const };
+    const r = setup([{ ok: false, error: "stale", at: 0, seq: 0 }, nl], nl);
+    void r.run.send(step(1), { urgent: true });
+    await flush();
+    await flush();
+    await flush();
+    expect(r.calls.map((c) => [c.path.split("?")[0], c.body])).toEqual([
+      [`/v1/daily/runs/${"R".repeat(43)}/moves`, { from: 0, moves: [step(1)] }],
+      ["/v1/daily/nine-lives/start", { rules: "lives" }],
+    ]);
   });
 
   test("a batch holds at most 100 moves", async () => {

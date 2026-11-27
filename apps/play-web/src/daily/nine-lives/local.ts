@@ -2,19 +2,23 @@
  * Plays Nine Lives with no server, for the views before the Daily Dish host exists. It knows the
  * sample's solution, which no real client ever does: real hints come from the server.
  */
+import type { MoveReveal } from "./model";
 import type { NineLivesMove, NineLivesState } from "@pounce/play-api/daily/nine-lives/grid";
 
 /** Where a board's moves go: the Daily Dish host's run session (`dish.tsx`), or this local stand-in. */
 export interface NineLivesDriver {
   /**
-   * A move the board already shows. Sent on; never awaited by a click. `urgent`: the move that
-   * fills the grid, so the server's answer (and the end) comes at once.
+   * A move the board already shows. Sent on; never awaited by a click. `urgent`: send it now (the
+   * move that fills the grid, and every set under the lives rules), so the server's answer comes
+   * at once. Resolves once the server has answered the batch that carried it.
    */
-  send(move: NineLivesMove, urgent: boolean): void;
+  send(move: NineLivesMove, urgent: boolean): Promise<unknown> | void;
   /** The server's hint: the cell and digit, or null when there is none. */
   hint(): Promise<{ i: number; d: number } | null>;
   /** Hears the server's board when it replaces ours (a refused batch). Returns the unsubscribe. */
   resyncs?(listener: (state: NineLivesState) => void): () => void;
+  /** Hears what the server's answers to moves reveal (lives: wrong numbers, the solution). */
+  reveals?(listener: (reveal: MoveReveal) => void): () => void;
 }
 
 const digits = (text: string): number[] => [...text].map(Number);

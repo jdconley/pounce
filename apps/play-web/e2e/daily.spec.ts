@@ -92,7 +92,8 @@ test("a run carries on after a reload, and Give up ends it", async ({ browser })
   await page.locator(".dd-end").getByRole("button", { name: "Dish", exact: true }).click();
   await dismissTip(page);
   await page.getByRole("tab", { name: "Test" }).click();
-  await expect(page.getByRole("tabpanel").getByText("Gave up")).toBeVisible();
+  // An unfinished run's row says how far it got.
+  await expect(page.getByRole("tabpanel").getByText(/^\d+%$/)).toBeVisible();
   await closeAll(sam.context);
 });
 
