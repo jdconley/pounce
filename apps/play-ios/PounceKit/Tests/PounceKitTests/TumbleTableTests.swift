@@ -29,6 +29,41 @@ import Testing
         #expect(sent.messages.first == .tumble(r: 1, ev: [.move(n: 0, rot: 0, x: TumbleToys.spawn(TumbleQueue.toyAt([7, 7, 7, 7], 0)).x, y: TumbleToys.spawn(TumbleQueue.toyAt([7, 7, 7, 7], 0)).y)]))
     }
 
+    /// `room.tumble.now`: a device whose clock is 5 s fast still starts with everyone else.
+    @Test func theRoundCountsOnTheServersClock() {
+        let table = TumbleTable { _ in }
+        var room = Self.room()
+        room.tumble?.now = 1000
+        table.update(room: room, now: 6000)
+        #expect(table.clockOffset == -5000)
+        #expect(table.startsAt == 8000)
+        #expect(table.local?.startsAt == 8000)
+        table.step(now: 7990)
+        #expect(table.local?.toy == nil)
+        table.step(now: 8000)
+        #expect(table.local?.toy != nil)
+    }
+
+    @Test func aHitThatBuriesTheToyLiftsItAndSaysWhere() throws {
+        let sent = Sent()
+        let table = TumbleTable { sent.messages.append($0) }
+        table.update(room: Self.room(status: .playing), now: 0)
+        table.step(now: 3000)
+        table.step(now: 9000)
+        let toy = try #require(table.local?.toy)
+        // Fill the box up to just under the toy's lowest row, then swap that box in.
+        var full = TumbleBox(trickSeed: [9, 9, 9, 9])
+        let top = toy.cells.map(\.y).max() ?? 0
+        #expect(top < 17)
+        for y in 0...top { for x in 0..<11 { full.cells[y * 12 + x] = Tumble.junk } }
+        table.receive(.hit(TumbleHitWire(r: 1, id: 7, from: 1, to: 0, k: .swap, hit: .swap(cells: full.cells, tricks: full.tricks))), now: 9100)
+        let lifted = try #require(table.local?.toy)
+        #expect(lifted.spot.y > toy.spot.y)
+        guard case .tumble(_, let ev) = sent.messages.last else { Issue.record("nothing sent"); return }
+        #expect(ev.contains(.move(n: lifted.n, rot: lifted.spot.rot, x: lifted.spot.x, y: lifted.spot.y)))
+        #expect(ev.contains(.ack(id: 7)))
+    }
+
     @Test func theSameRoundKeepsItsBoxesAndANewOneStartsFresh() {
         let table = TumbleTable { _ in }
         table.update(room: Self.room(), now: 0)

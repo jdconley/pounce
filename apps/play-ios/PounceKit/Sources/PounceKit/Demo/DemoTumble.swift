@@ -33,6 +33,8 @@ public final class TumbleDemoRoom {
     public private(set) var room: RoomView
     public private(set) var seq = 1
     private let o: Options
+    /// The room's clock: the last `now` it was given, stamped on snapshots as `room.tumble.now`.
+    private var clockNow: Double
     private var boxes: [TumbleBox] = []
     private var queue: TumbleQueue
     private var q: [Int] = []
@@ -54,6 +56,7 @@ public final class TumbleDemoRoom {
 
     public init(_ options: Options = Options(), now: Double) {
         o = options
+        clockNow = now
         let n = options.seats
         dice = [41, 42, 43, 44]
         queue = TumbleQueue(roundSeed: [1, 2, 3, 4])
@@ -82,7 +85,11 @@ public final class TumbleDemoRoom {
 
     private func rollInt(_ n: Int) -> Int { min(n - 1, Int(roll() * Double(n))) }
 
-    public var snapshot: ServerMessage { .snapshot(protocol: PounceKit.protocolVersion, seq: seq, room: room) }
+    public var snapshot: ServerMessage {
+        var r = room
+        r.tumble?.now = clockNow
+        return .snapshot(protocol: PounceKit.protocolVersion, seq: seq, room: r)
+    }
 
     private func bump() -> ServerMessage {
         seq += 1
@@ -148,6 +155,7 @@ public final class TumbleDemoRoom {
     // MARK: this device's stream
 
     public func receive(_ message: ClientMessage, now: Double) -> [ServerMessage] {
+        clockNow = now
         switch message {
         case .setOptions(let options):
             room.options = options
@@ -197,6 +205,7 @@ public final class TumbleDemoRoom {
 
     /// Advances the cats and the round to `now`.
     public func tick(now: Double) -> [ServerMessage] {
+        clockNow = now
         guard var t = room.tumble else { return [] }
         if let until = betweenUntil {
             guard now >= until else { return [] }

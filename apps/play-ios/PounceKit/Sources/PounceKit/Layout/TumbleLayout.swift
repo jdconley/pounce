@@ -18,6 +18,10 @@ public struct TumbleLayout: Equatable, Sendable {
     public static let rows = 18
     public static let trays = 6
     public static let buttonHit: CGFloat = 44
+    /// The chest's walls and rim around a mini's cells, in cells on each side.
+    public static let wall: CGFloat = 0.7
+    /// Your own box's walls, thinner, so its cells stay 20 pt on an iPhone SE.
+    public static let ownWall: CGFloat = 0.35
 
     public let size: CGSize
     public let mode: Mode
@@ -57,7 +61,7 @@ public struct TumbleLayout: Equatable, Sendable {
         let h = size.height
         let tv = mode == .tv
         roomy = tv || min(w, h) >= 640
-        let pad: CGFloat = tv ? 60 : (roomy ? 20 : 8)
+        let pad: CGFloat = tv ? 60 : (roomy ? 20 : 6)
         safe = CGRect(x: safeLeft + pad, y: safeBottom + (tv ? 40 : 6), width: w - safeLeft - safeRight - pad * 2,
                       height: h - safeTop - safeBottom - (tv ? 80 : 10))
         let gap: CGFloat = tv ? 36 : (roomy ? 14 : 6)
@@ -96,23 +100,25 @@ public struct TumbleLayout: Equatable, Sendable {
         let playBottom = tray.maxY + gap
         let playH = playTop - playBottom
         let landscapeSplit = roomy && w > h && others > 0
-        let meterPart: CGFloat = 0.75
+        let meterPart: CGFloat = 0.6
         // The minis' share of the width: enough for a readable column, more on a roomy screen.
-        let minisW: CGFloat = others == 0 ? 0 : (self.chips ? (roomy ? 200 : 84) : max(roomy ? 0.3 * safe.width : 0.25 * safe.width, 88))
-        let cellW = (safe.width - minisW - gap * (others == 0 ? 1 : 2)) / (CGFloat(Self.columns) + meterPart)
-        let cellH = playH / CGFloat(Self.rows)
+        let minisW: CGFloat = others == 0 ? 0 : (self.chips ? (roomy ? 200 : 84) : max(roomy ? 0.3 * safe.width : 0.22 * safe.width, 80))
+        let walls = Self.ownWall * 2
+        let cellW = (safe.width - minisW - gap * (others == 0 ? 1 : 2)) / (CGFloat(Self.columns) + walls + meterPart)
+        let cellH = playH / (CGFloat(Self.rows) + walls)
         cell = floor(min(cellW, cellH, tv ? 60 : (roomy ? 48 : 40)))
         let boxW = cell * CGFloat(Self.columns)
         let boxH = cell * CGFloat(Self.rows)
         let meterW = max(cell * meterPart, 8)
+        let wallW = cell * Self.ownWall
         let boxX: CGFloat
         if landscapeSplit {
-            boxX = safe.midX - (boxW + meterW + gap) / 2
+            boxX = safe.midX - (boxW + wallW * 2 + meterW + gap) / 2 + wallW
         } else {
-            boxX = safe.minX
+            boxX = safe.minX + wallW
         }
-        box = CGRect(x: boxX, y: playTop - boxH, width: boxW, height: boxH)
-        meter = CGRect(x: box.maxX + 2, y: box.minY, width: meterW, height: box.height)
+        box = CGRect(x: boxX, y: playTop - wallW - boxH, width: boxW, height: boxH)
+        meter = CGRect(x: box.maxX + wallW + 2, y: box.minY, width: meterW, height: box.height)
 
         guard others > 0 else {
             minis = []
@@ -161,17 +167,18 @@ public struct TumbleLayout: Equatable, Sendable {
         let options = oneRow ? [count] : Array(1...min(maxColumns, count))
         for cols in options {
             let rowsN = (count + cols - 1) / cols
-            let byW = (area.width - gap * CGFloat(cols - 1)) / CGFloat(cols) / CGFloat(columns)
-            let byH = ((area.height - gap * CGFloat(rowsN - 1)) / CGFloat(rowsN) - label) / CGFloat(rows)
+            let byW = (area.width - gap * CGFloat(cols - 1)) / CGFloat(cols) / (CGFloat(columns) + wall * 2)
+            let byH = ((area.height - gap * CGFloat(rowsN - 1)) / CGFloat(rowsN) - label) / (CGFloat(rows) + wall * 2)
             let c = floor(min(byW, byH) * 2) / 2
             if c > best.cell { best = (cols, c) }
         }
         let cell = fixed.map { min($0, best.cell) } ?? best.cell
         let cols = best.cols
         let rowsN = (count + cols - 1) / cols
-        let bw = cell * CGFloat(columns)
+        let inset = cell * wall
+        let bw = cell * CGFloat(columns) + inset * 2
         let bh = cell * CGFloat(rows)
-        let itemH = bh + label
+        let itemH = bh + inset * 2 + label
         let gridW = bw * CGFloat(cols) + gap * CGFloat(cols - 1)
         let gridH = itemH * CGFloat(rowsN) + gap * CGFloat(rowsN - 1)
         let x0 = area.minX + (area.width - gridW) / 2
@@ -187,7 +194,7 @@ public struct TumbleLayout: Equatable, Sendable {
             let x = (inRow < cols ? area.minX + (area.width - rowW) / 2 : x0) + CGFloat(col) * (bw + gap)
             let y = y0 - CGFloat(row + 1) * itemH - CGFloat(row) * gap
             items.append(CGRect(x: x, y: y, width: bw, height: itemH))
-            boxes.append(CGRect(x: x, y: y + label, width: bw, height: bh))
+            boxes.append(CGRect(x: x + inset, y: y + label + inset, width: bw - inset * 2, height: bh))
         }
         return (items, boxes, cell)
     }

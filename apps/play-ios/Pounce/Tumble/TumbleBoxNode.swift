@@ -16,7 +16,15 @@ final class TumbleBoxNode: SKNode {
     private(set) var rect: CGRect = .zero
     private(set) var cell: CGFloat = 20
     private let body = SKNode()
-    private let frameNode = SKSpriteNode()
+    /// The chest, built from flat pieces so its walls stay a share of a cell at any size: an ink
+    /// outline, the magenta walls with a lit inner edge, and the yellow rim along the top.
+    private let frameHolder = SKNode()
+    private let frameInk = SKSpriteNode(color: UIColor(Palette.ink), size: .zero)
+    private let frameWall = SKSpriteNode(color: UIColor(Palette.magenta), size: .zero)
+    private let frameLight = SKSpriteNode(color: UIColor(red: 1, green: 0.42, blue: 0.75, alpha: 1), size: .zero)
+    private let rimInk = SKSpriteNode(color: UIColor(Palette.ink), size: .zero)
+    private let rim = SKSpriteNode(color: UIColor(Palette.yellow), size: .zero)
+    private let rimShine = SKSpriteNode(color: UIColor.white.withAlphaComponent(0.45), size: .zero)
     private let well = SKSpriteNode()
     private let settled = SKEffectNode()
     private var settledSprites: [SKSpriteNode] = []
@@ -36,6 +44,8 @@ final class TumbleBoxNode: SKNode {
     private var catIndex = 0
     private(set) var pose: CatPose = .idle
     private(set) var tipped = false
+    /// The width the cat's face takes at the left of the name strip (0 when it's on the rim).
+    private var stripCat: CGFloat = 0
     private var shownWords: String?
     /// Small: a mini at a phone's side. Names under it, no next toy.
     private(set) var mini = false
@@ -46,9 +56,13 @@ final class TumbleBoxNode: SKNode {
         self.seat = seat
         super.init()
         addChild(body)
-        frameNode.zPosition = Z.frame.rawValue
-        frameNode.anchorPoint = .zero
-        body.addChild(frameNode)
+        frameHolder.zPosition = Z.frame.rawValue
+        for (i, n) in [frameInk, frameWall, frameLight, rimInk, rim, rimShine].enumerated() {
+            n.anchorPoint = .zero
+            n.zPosition = CGFloat(i) * 0.01
+            frameHolder.addChild(n)
+        }
+        body.addChild(frameHolder)
         well.zPosition = Z.well.rawValue
         well.anchorPoint = .zero
         body.addChild(well)
@@ -100,34 +114,53 @@ final class TumbleBoxNode: SKNode {
         guard moved else { return }
         let art = TumbleArt.shared
         // The chest: walls a fixed share of a cell, so a mini's walls are thin too.
-        let wall = max(c * 0.55, 3)
-        let k = wall / 16
-        frameNode.texture = art.boxTexture()
-        frameNode.centerRect = TumbleArt.boxSlice
-        frameNode.setScale(k)
-        frameNode.size = CGSize(width: (rect.width + wall * 2) / k, height: (rect.height + wall * 2.2) / k)
-        frameNode.position = CGPoint(x: -wall, y: -wall)
+        // A mini's walls are a bigger share of its small cells; your own box's are slimmer.
+        let wall = mini ? max(c * 0.45, 2.5) : c * 0.24
+        let line = max(wall * 0.28, 1)
+        frameInk.size = CGSize(width: rect.width + (wall + line) * 2, height: rect.height + wall + line * 2)
+        frameInk.position = CGPoint(x: -wall - line, y: -wall - line)
+        frameWall.size = CGSize(width: rect.width + wall * 2, height: rect.height + wall)
+        frameWall.position = CGPoint(x: -wall, y: -wall)
+        frameLight.size = CGSize(width: rect.width + wall * 0.8, height: rect.height + wall * 0.4)
+        frameLight.position = CGPoint(x: -wall * 0.4, y: -wall * 0.4)
+        let rimH = max(wall * 1.1, 3)
+        rimInk.size = CGSize(width: rect.width + (wall + line * 2) * 2, height: rimH + line * 2)
+        rimInk.position = CGPoint(x: -wall - line * 2, y: rect.height - line)
+        rim.size = CGSize(width: rect.width + (wall + line) * 2, height: rimH)
+        rim.position = CGPoint(x: -wall - line, y: rect.height)
+        rimShine.size = CGSize(width: rim.size.width - wall * 2, height: max(rimH * 0.28, 1))
+        rimShine.position = CGPoint(x: -wall - line + wall, y: rect.height + rimH * 0.6)
         well.texture = art.wellTexture()
         well.size = rect.size
         well.position = .zero
         catnipGlow.size = rect.size
-        let catSide = mini ? max(c * 5, 16) : c * 4.2
+        // Your box: the cat peeks over the rim. Every other box: its face leads the name strip
+        // under it, so boxes in a grid never reach into the one above.
+        let onRim = showsNext
+        let catSide = onRim ? c * 4.2 : max(label * 1.25, 12)
         cat.size = CGSize(width: catSide, height: catSide)
-        // Peeking over the rim at the right, so the next toy sits on its paw at the left.
-        cat.position = CGPoint(x: rect.width - catSide * 0.62, y: rect.height + wall + catSide * 0.18)
+        stripCat = onRim ? 0 : catSide
+        // Peeking over the rim at the left; the next toy sits on its paw, to its right.
+        cat.position = onRim
+            ? CGPoint(x: catSide * 0.55, y: rect.height + wall + catSide * 0.18)
+            : CGPoint(x: catSide / 2, y: -wall - label / 2)
+        cat.zPosition = onRim ? Z.cat.rawValue : Z.words.rawValue
         drawn = nil
         let fontSize = max(min(c * 1.6, 28), 11)
         words.zPosition = Z.words.rawValue
         words.position = CGPoint(x: rect.width / 2, y: rect.height / 2)
         if let shownWords { setWords(shownWords, size: fontSize) }
         zz.position = CGPoint(x: rect.width * 0.25, y: rect.height + wall + c)
-        nameNode.position = CGPoint(x: 0, y: -wall - label / 2)
+        nameNode.position = CGPoint(x: stripCat + 2, y: -wall - label / 2)
         winsNode.position = CGPoint(x: rect.width, y: -wall - label / 2)
         layoutNext()
     }
 
+    /// The next toy sits on the cat's paw, just left of the cat at the rim.
     private func layoutNext() {
-        nextNode.position = CGPoint(x: cell * 0.5, y: rect.height + max(cell * 0.55, 3) + cell * 0.7)
+        let c = cell * 0.62
+        nextNode.position = CGPoint(x: cat.position.x + cat.size.width * 0.42, y: rect.height + max(cell * 0.55, 3) + cell * 0.35)
+        _ = c
     }
 
     // MARK: the settled cells
@@ -296,9 +329,10 @@ final class TumbleBoxNode: SKNode {
 
     /// The name and wins strip under a mini (or a TV box).
     func setName(_ name: String, wins: Int, size: CGFloat) {
+        nameNode.isHidden = name.isEmpty
         let n = CardFaceFactory.shared.numeral(name, size: size, outline: max(size * 0.14, 1.5))
         nameNode.texture = n
-        let w = rect.width - size * 1.6
+        let w = rect.width - size * 1.6 - stripCat - 2
         let k = min(1, w / max(n.size().width, 1))
         nameNode.size = CGSize(width: n.size().width * k, height: n.size().height * k)
         let t = CardFaceFactory.shared.numeral(String(wins), size: size, fill: UIColor(Palette.yellow), outline: max(size * 0.14, 1.5))

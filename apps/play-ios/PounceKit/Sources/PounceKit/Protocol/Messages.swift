@@ -104,6 +104,8 @@ public struct ErrorCode: RawRepresentable, Codable, Hashable, Sendable {
     // Sent to the whole room, unprompted.
     public static let botStalled = ErrorCode(rawValue: "bot_stalled")
     public static let roomClosed = ErrorCode(rawValue: "room_closed")
+    /// Toy Tumble's Start while a person's device is offline.
+    public static let notConnected = ErrorCode(rawValue: "not_connected")
     // Local only, never sent by the server.
     /// An `act` whose send failed (the socket was down): it never reached the server.
     public static let notSent = ErrorCode(rawValue: "local_not_sent")

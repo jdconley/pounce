@@ -274,7 +274,8 @@ public final class TumbleLocal {
         flush(now)
     }
 
-    /// A hit that pushed the stack into the falling toy lifts the toy until it fits again.
+    /// A hit that pushed the stack into the falling toy lifts the toy row by row until it fits
+    /// again, and says where it went (`docs/live-protocol.md`).
     private func unstick() {
         guard var t = toy else { return }
         var lifts = 0
@@ -283,6 +284,7 @@ public final class TumbleLocal {
             lifts += 1
         }
         toy = t
+        if lifts > 0 { queueMove() }
     }
 
     /// The server's whole box: snap to it. The toy in hand restarts at the top.

@@ -52,7 +52,7 @@ struct TumbleStage: View {
                 .allowsHitTesting(false)
             #endif
             if let view, let room, view.status == .between, !over {
-                TumbleBetween(view: view, room: room, mine: mySeat, now: now) { seat in
+                TumbleBetween(view: view, room: room, mine: mySeat, now: now, offset: session.tumble?.clockOffset ?? 0) { seat in
                     session.send(.actTumble(seat: seat, action: .playWithout))
                 }
                 .transition(.scale(scale: 0.9).combined(with: .opacity))
@@ -155,6 +155,8 @@ struct TumbleBetween: View {
     let room: RoomView
     let mine: Int?
     let now: Date
+    /// The server's clock minus this device's (`TumbleTable.clockOffset`).
+    var offset: Double = 0
     let onPlayWithout: (Int) -> Void
 
     /// Human seats still in the game whose device isn't here.
@@ -167,7 +169,7 @@ struct TumbleBetween: View {
 
     private var waitedLong: Bool {
         guard let since = view.waitingSince else { return false }
-        return now.timeIntervalSince1970 * 1000 - since >= 20_000
+        return now.timeIntervalSince1970 * 1000 + offset - since >= 20_000
     }
 
     var body: some View {

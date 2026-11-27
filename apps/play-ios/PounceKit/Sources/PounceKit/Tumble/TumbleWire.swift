@@ -255,11 +255,14 @@ public struct TumbleView: Codable, Equatable, Sendable {
     public var winner: Int?
     /// When a countdown began waiting for a missing device.
     public var waitingSince: Double?
+    /// The server's clock when the room made this snapshot: the device keeps the difference to
+    /// its own clock and counts `startsAt` and the round clock with it.
+    public var now: Double?
 
     public init(
         seats: Int, cats: TumbleCats = .easy, wins: [Int], left: [Bool]? = nil, away: [Bool]? = nil, status: Status, r: Int,
         startsAt: Double? = nil, roundSeed: [UInt32]? = nil, trickSeeds: [[UInt32]]? = nil, outs: [Int] = [], winner: Int? = nil,
-        waitingSince: Double? = nil
+        waitingSince: Double? = nil, now: Double? = nil
     ) {
         self.seats = seats
         self.cats = cats
@@ -274,10 +277,11 @@ public struct TumbleView: Codable, Equatable, Sendable {
         self.outs = outs
         self.winner = winner
         self.waitingSince = waitingSince
+        self.now = now
     }
 
     private enum CodingKeys: String, CodingKey {
-        case seats, cats, wins, left, away, status, r, startsAt, roundSeed, trickSeeds, outs, winner, waitingSince
+        case seats, cats, wins, left, away, status, r, startsAt, roundSeed, trickSeeds, outs, winner, waitingSince, now
     }
 
     public init(from decoder: any Decoder) throws {
@@ -296,6 +300,7 @@ public struct TumbleView: Codable, Equatable, Sendable {
         outs = try c.decodeIfPresent([Int].self, forKey: .outs) ?? []
         winner = try c.decodeIfPresent(Int.self, forKey: .winner)
         waitingSince = try c.decodeIfPresent(Double.self, forKey: .waitingSince)
+        now = try c.decodeIfPresent(Double.self, forKey: .now)
     }
 
     /// The leader's wins, for Home's table card.

@@ -240,7 +240,7 @@ final class TumbleScene: SKScene {
 
     private func drawBoxes(_ now: Double) {
         guard let view = table.view, let room = store.room, let layout else { return }
-        let roundMs = (view.startsAt.map { now - $0 }) ?? 0
+        let roundMs = (table.startsAt.map { now - $0 }) ?? 0
         let newRound = lastRound != view.r
         if newRound {
             lastRound = view.r
@@ -281,7 +281,8 @@ final class TumbleScene: SKScene {
             }
             if node.mini || isScreen || watching {
                 let wins = view.wins[safe: seat] ?? 0
-                node.setName(SeatInfo.name(room, seat), wins: wins, size: layout.labelHeight * 0.8)
+                // A phone's minis show the cat's face and wins; names show on the big boxes.
+                node.setName(node.mini ? "" : SeatInfo.name(room, seat), wins: wins, size: layout.labelHeight * 0.8)
             }
         }
         for (seat, chip) in chipNodes {
@@ -385,9 +386,12 @@ final class TumbleScene: SKScene {
         roundLabel.texture = t
         roundLabel.size = t.size()
         roundLabel.isHidden = false
-        roundLabel.position = CGPoint(x: layout.rim.midX, y: layout.rim.midY)
+        // The round on the rim, right of your cat and its next toy (or in the middle when watching).
+        roundLabel.position = layout.mode == .play
+            ? CGPoint(x: layout.box.maxX - t.size().width / 2, y: layout.rim.midY)
+            : CGPoint(x: layout.rim.midX, y: layout.rim.midY)
         // 3, 2, 1 to the start.
-        if let start = view.startsAt, now < start, view.status == .countdown || view.status == .playing {
+        if let start = table.startsAt, now < start, view.status == .countdown || view.status == .playing {
             let n = Int(((start - now) / 1000).rounded(.up))
             if n != lastCount {
                 lastCount = n

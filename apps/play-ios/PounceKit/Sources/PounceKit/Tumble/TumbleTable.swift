@@ -16,6 +16,14 @@ import Foundation
     private let send: (ClientMessage) -> Void
     private let screen: Bool
     private var backgrounded = false
+    /// The server's clock minus this device's, from the last snapshot's `now` (0 without one).
+    public private(set) var clockOffset: Double = 0
+
+    /// The round's start on this device's clock.
+    public var startsAt: Double? { view?.startsAt.map { $0 - clockOffset } }
+
+    /// A server time (`waitingSince`, `startsAt`) on this device's clock.
+    public func local(_ serverTime: Double) -> Double { serverTime - clockOffset }
 
     /// `send` hands a message to the room's socket (in order, off the main thread).
     public init(screen: Bool = false, send: @escaping (ClientMessage) -> Void) {
@@ -42,13 +50,15 @@ import Foundation
             replay = nil
             return
         }
+        if let serverNow = next.now { clockOffset = serverNow - now }
         let mine = screen ? nil : room.seats.indices.first { room.seats[$0].yours }
         let fresh = next.r != view?.r || mine != mySeat || replay == nil
         view = next
         mySeat = mine
         let live = next.status == .countdown || next.status == .playing
         // Between rounds and at the end the last boxes stay up, still.
-        guard live, let roundSeed = next.roundSeed, let seeds = next.trickSeeds, let startsAt = next.startsAt else { return }
+        guard live, let roundSeed = next.roundSeed, let seeds = next.trickSeeds, let serverStart = next.startsAt else { return }
+        let startsAt = serverStart - clockOffset
         guard fresh else { return }
         let r = next.r
         replay = TumbleReplay(r: r, roundSeed: roundSeed, trickSeeds: seeds, skip: mine)
