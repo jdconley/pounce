@@ -27,6 +27,10 @@ describe("ErrorCode", () => {
       not_your_seat: true,
       seats_open: true,
       not_enough_players: true,
+      no_screen: true,
+      not_near: true,
+      removed: true,
+      easel_full: true,
       not_connected: true,
       game_over: true,
       bad_code: true,
@@ -73,7 +77,7 @@ describe("ErrorCode", () => {
       own_card: true,
       must_follow: true,
     };
-    expect(Object.keys(codes)).toHaveLength(57);
+    expect(Object.keys(codes)).toHaveLength(61);
   });
 });
 
@@ -461,5 +465,49 @@ describe("aim", () => {
       aim: { table: [[1, 2, 3]] },
     });
     expect(parseAim).toHaveBeenCalledWith({ table: [[1, 2, 3]] });
+  });
+});
+
+describe("ink (Purrtrait, design §6.2)", () => {
+  it("parses ink with its ops as they came", () => {
+    const ops = [["s", 0, 0, 1, 384, 210, 3, -1], ["p", 0, 2, 2], ["u", 0], ["c"]];
+    expect(parse({ t: "ink", seat: 3, turn: "2:5", ops })).toEqual({ t: "ink", seat: 3, turn: "2:5", ops });
+    // The last message of a resend reply says so.
+    expect(parse({ t: "ink", seat: 3, turn: "2:5", ops, last: true })).toEqual({ t: "ink", seat: 3, turn: "2:5", ops, last: true });
+  });
+
+  it("refuses a malformed ink", () => {
+    const ops = [["c"]];
+    for (const v of [
+      { t: "ink", seat: 0, turn: "1:0" },
+      { t: "ink", seat: 0, ops },
+      { t: "ink", turn: "1:0", ops },
+      { t: "ink", seat: -1, turn: "1:0", ops },
+      { t: "ink", seat: 0, turn: 5, ops },
+      { t: "ink", seat: 0, turn: "", ops },
+      { t: "ink", seat: 0, turn: "1:".padEnd(40, "0"), ops },
+      { t: "ink", seat: 0, turn: "1:0", ops: [] },
+      { t: "ink", seat: 0, turn: "1:0", ops: [["s", 0, 9, 0, 0, 0]] },
+      { t: "ink", seat: 0, turn: "1:0", ops: [["p", 0, 1]] },
+      { t: "ink", seat: 0, turn: "1:0", ops, extra: 1 },
+      { t: "ink", seat: 0, turn: "1:0", ops, last: false },
+      { t: "ink", seat: 0, turn: "1:0", ops, last: 1 },
+    ])
+      expect(parse(v)).toEqual(BAD);
+  });
+
+  it("refuses an ink over the 8 KB limit", () => {
+    const deltas = Array.from({ length: 4100 }, () => 1);
+    expect(JSON.stringify(deltas).length).toBeGreaterThan(8192);
+    expect(parse({ t: "ink", seat: 0, turn: "1:0", ops: [["p", 0, ...deltas]] })).toEqual(BAD);
+  });
+});
+
+describe("remove (Purrtrait, design §10.2)", () => {
+  it("takes a seat and nothing else", () => {
+    expect(parse({ t: "remove", seat: 4 })).toEqual({ t: "remove", seat: 4 });
+    for (const v of [{ t: "remove" }, { t: "remove", seat: -1 }, { t: "remove", seat: 1.5 }, { t: "remove", seat: "1" }, { t: "remove", seat: 1, device: "x" }]) {
+      expect(parse(v)).toEqual(BAD);
+    }
   });
 });

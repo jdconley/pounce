@@ -621,6 +621,12 @@ Tune the 5-cell rate and the trick weights from this. Record the numbers here.
   3. a phone on cellular, by hand, with the result read from the app's debug overlay.
 - The numbers go in `docs/perf/toy-tumble-latency.md`, against the targets in §6.7.
 
+**Results, 2026-11-26** (`docs/perf/toy-tumble-latency.md`). These were measured on production, with Toy Tumble in `GAMES` but hidden from every app. There is no dev Worker, and the lead chose to measure on production rather than stand one up.
+- **This Mac** (Cloudflare San Jose), 3 and 6 players: hit p95 66 and 73 ms, relay (TV lag) p95 69 and 70 ms.
+- **A GitHub Actions runner**, which GitHub placed in Seattle: hit p95 32 ms, relay p95 31 ms.
+- **Both targets pass:** hit p95 under 250 ms, and TV lag p95 under 200 ms.
+- **Not measured:** cellular (no phone to drive), and a player far from the table's Durable Object. The estimate for a cross-country player is about 150 ms p95, still under the target.
+
 ### 9.6 Cross-play
 
 One game with:

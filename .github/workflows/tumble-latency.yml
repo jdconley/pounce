@@ -1,0 +1,40 @@
+# Toy Tumble over a real network (design §9.5): the latency tool's scripted players, run from a
+# GitHub runner against production, far from the Mac that also measures it. Run by hand.
+name: Toy Tumble latency
+
+on:
+  workflow_dispatch:
+    inputs:
+      players:
+        description: Scripted players at the table (2 to 6)
+        default: "3"
+      seconds:
+        description: How long to play
+        default: "60"
+
+permissions:
+  contents: read
+
+jobs:
+  latency:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+      - uses: pnpm/action-setup@fc06bc1257f339d1d5d8b3a19a8cae5388b55320 # v4.4.0
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Where this runner is
+        run: curl -s https://play.conleychaos.com/cdn-cgi/trace | grep -E "^(colo|loc)="
+      - name: Measure
+        run: pnpm --filter @pounce/play-api latency:tumble -- --base https://play.conleychaos.com --players "$PLAYERS" --seconds "$PLAY_SECONDS" | tee latency.json
+        env:
+          PLAYERS: ${{ inputs.players }}
+          PLAY_SECONDS: ${{ inputs.seconds }}
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: tumble-latency
+          path: latency.json

@@ -11,6 +11,7 @@ import type { BirdView } from "@pounce/play-api/birdwatch/view";
 import type { ClientMessage, ErrorCode, GameAim, RoomEvent, RoomView, ServerMessage } from "@pounce/play-api/protocol";
 import type { GameEvent, Action } from "@pounce/play-api/rules/engine";
 import type { TilesAction, TilesEvent } from "@pounce/play-api/tiles/engine";
+import type { TumbleServer } from "@pounce/play-api/tumble/wire";
 
 
 /** A move any game's table sends. */
@@ -50,7 +51,14 @@ export type RoomListener = {
   /** A room event, as it is played (after the ones before it have had their moment). */
   event?: (e: Paced, room: RoomView | null) => void;
   change?: (s: RoomState) => void;
+  /** Toy Tumble's live stream (`docs/live-protocol.md`): not room state, so never paced or folded. */
+  live?: (m: TumbleServer) => void;
 };
+
+/** The live stream's message types, handed on as they arrive. */
+const LIVE: ReadonlySet<string> = new Set(["tumble", "tumbleHit", "tumbleSync", "tumbleSeat"]);
+/** How many live messages the store keeps for a late listener. */
+const LIVE_KEPT = 256;
 
 /** How long each kind of event holds the stage before the next one plays. */
 export function eventPause(e: RoomEvent): number {
@@ -360,6 +368,13 @@ export class RoomStore {
   private aimTimer: unknown = null;
   /** A clear that couldn't be sent: sent as soon as the socket is back. */
   private clearsOwed = new Set<number>();
+  /** The latest live messages, oldest first. */
+  private liveKept: TumbleServer[] = [];
+
+  /** The live messages that came lately (up to `LIVE_KEPT`), for a listener that joins late. */
+  recentLive(): readonly TumbleServer[] {
+    return this.liveKept;
+  }
 
   constructor(options: RoomStoreOptions) {
     this.state = {
@@ -503,6 +518,15 @@ export class RoomStore {
   }
 
   private onMessage(m: ServerMessage): void {
+    // Toy Tumble's live stream: handed on as it arrives, never paced.
+    if (LIVE.has((m as { t: string }).t)) {
+      const live = m as unknown as TumbleServer;
+      // Kept a while, for a screen that starts listening after the sync it got on connecting.
+      this.liveKept.push(live);
+      if (this.liveKept.length > LIVE_KEPT) this.liveKept.shift();
+      for (const l of [...this.listeners]) l.live?.(live);
+      return;
+    }
     switch (m.t) {
       case "snapshot":
         if (m.protocol !== PROTOCOL) {

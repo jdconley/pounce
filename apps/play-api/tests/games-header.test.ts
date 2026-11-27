@@ -51,8 +51,8 @@ async function tablesOf(mf: Miniflare, device: Device, headers: Record<string, s
   return ((await res.json()) as { tables: TableEntry[] }).tables;
 }
 
-async function upgrade(mf: Miniflare, code: string, device: Device, headers: Record<string, string>): Promise<number> {
-  const res = await mf.dispatchFetch(`${BASE}/v1/rooms/${code}/ws`, { headers: { authorization: `Bearer ${device.token}`, upgrade: "websocket", ...headers } });
+async function upgrade(mf: Miniflare, code: string, device: Device, headers: Record<string, string>, query = ""): Promise<number> {
+  const res = await mf.dispatchFetch(`${BASE}/v1/rooms/${code}/ws${query}`, { headers: { authorization: `Bearer ${device.token}`, upgrade: "websocket", ...headers } });
   if (res.status === 101) (res.webSocket as unknown as { accept(): void; close(): void }).accept();
   return res.status;
 }
@@ -206,5 +206,33 @@ describe("a device that stops sending the header", { timeout: 60_000 }, () => {
     await draw(clients, 0);
     const [push] = await eventually(() => alertsTo(MIA_TOKEN, "your_move"), (l) => l.length === 1);
     expect((push as Sent).body).toMatchObject({ code });
+  });
+});
+
+describe("an app that does not list Purrtrait", { timeout: 30_000 }, () => {
+  const PURR_APP = { "x-pounce-games": "cat-tower,tiles,purrtrait" };
+
+  test("cannot make a table, is told there is none when it joins one, and never sees it listed", async () => {
+    const mf = await worker(script, { sent, tv: true, games: "tiles,purrtrait" });
+    open.push(mf);
+    const [tv, phone] = [await mint(mf), await mint(mf)];
+    expect((await call(mf, tv, "POST", "/v1/rooms", { game: "purrtrait", screen: true }, NEW_APP)).status).toBe(400);
+    // Only a TV makes a Purrtrait table (design §5.1), and a phone joins it with the TV's near key.
+    const made = await call(mf, tv, "POST", "/v1/rooms", { game: "purrtrait", screen: true }, PURR_APP);
+    expect(made.status).toBe(201);
+    const code = ((await made.json()) as { code: string }).code;
+    const screen = await connect(mf, code, tv, PURR_APP);
+    const near = `?near=${(screen.last?.room.near as { key: string }).key}`;
+    // An app that can't draw it is told there is no such table, key or not, and no guess is counted.
+    for (let i = 0; i < 7; i++) expect(await upgrade(mf, code, phone, NEW_APP)).toBe(404);
+    expect(await upgrade(mf, code, phone, NEW_APP, near)).toBe(404);
+    expect(await upgrade(mf, code, phone, PURR_APP, near)).toBe(101);
+    expect((await tablesOf(mf, phone, NEW_APP)).map((t) => t.code)).not.toContain(code);
+  });
+
+  test("with the flag off, nobody can make one", async () => {
+    const mf = await start();
+    const phone = await mint(mf);
+    expect((await call(mf, phone, "POST", "/v1/rooms", { game: "purrtrait" }, PURR_APP)).status).toBe(400);
   });
 });

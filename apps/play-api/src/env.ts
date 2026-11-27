@@ -114,6 +114,13 @@ export interface Env {
    */
   TV_APPLINKS?: string;
   /**
+   * Purrtrait's TV QR links (`/e/<code>?near=`) open the app: the site association lists `/e/*`
+   * when this is "on" and Purrtrait tables can be dealt (`TV` on, `GAMES` lists it). "off" in
+   * wrangler.jsonc until an App Store version draws Purrtrait: until then such a link opens the
+   * web player, which can play, rather than an app that can't (design §5.2).
+   */
+  PURRTRAIT_APPLINKS?: string;
+  /**
    * The games rooms may be created for beyond Cat Tower: a comma-separated list of game ids
    * (`gamesOn` in src/games, e.g. "tiles,birdwatch"). Empty or unset, only Cat Tower: asking for
    * any other game is refused, as it always was. Production's wrangler.jsonc lists the tile game
@@ -224,6 +231,11 @@ export function dailyOn(env: Pick<Env, "DAILY">): boolean {
 /** The site association lists `/tv/*`: `TV` and `TV_APPLINKS` both "on" (see `Env.TV_APPLINKS`). */
 export function tvAppLinksOn(env: Pick<Env, "TV" | "TV_APPLINKS">): boolean {
   return tvOn(env) && ["on", "1", "true"].includes((env.TV_APPLINKS ?? "").toLowerCase());
+}
+
+/** `PURRTRAIT_APPLINKS` is "on" (see `Env.PURRTRAIT_APPLINKS`); the Worker also needs Purrtrait dealt. */
+export function purrtraitAppLinksOn(env: Pick<Env, "PURRTRAIT_APPLINKS">): boolean {
+  return ["on", "1", "true"].includes((env.PURRTRAIT_APPLINKS ?? "").toLowerCase());
 }
 
 /** Nudges when "on" (see `Env.NUDGE`). The push half also needs `NOTIFY` (`notifyOn`). */

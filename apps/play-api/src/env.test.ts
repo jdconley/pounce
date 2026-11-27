@@ -29,17 +29,17 @@ describe("devSpeed", () => {
 });
 
 describe("GAMES in production", () => {
-  it("is listed in wrangler.jsonc and deals Cat Tower, the tile game and Birdwatch", () => {
+  it("is listed in wrangler.jsonc and deals Cat Tower, the tile game, Birdwatch and Toy Tumble", () => {
     const config = readFileSync(new URL("../wrangler.jsonc", import.meta.url), "utf8");
     const value = /"GAMES"\s*:\s*"([^"]*)"/.exec(config)?.[1];
-    expect(value).toBe("tiles,birdwatch");
-    expect(gamesOn({ GAMES: value })).toEqual(["cat-tower", "tiles", "birdwatch"]);
+    expect(value).toBe("tiles,birdwatch,tumble");
+    expect(gamesOn({ GAMES: value })).toEqual(["cat-tower", "tiles", "birdwatch", "tumble"]);
   });
 
-  it("is on for local dev, in the example .dev.vars, with Birdwatch too", () => {
+  it("is on for local dev, in the example .dev.vars, with Toy Tumble and Purrtrait too", () => {
     const vars = readFileSync(new URL("../.dev.vars.example", import.meta.url), "utf8");
     const value = /^GAMES=(.*)$/m.exec(vars)?.[1];
-    expect(gamesOn({ GAMES: value })).toEqual(["cat-tower", "tiles", "birdwatch"]);
+    expect(gamesOn({ GAMES: value })).toEqual(["cat-tower", "tiles", "birdwatch", "tumble", "purrtrait"]);
   });
 });
 

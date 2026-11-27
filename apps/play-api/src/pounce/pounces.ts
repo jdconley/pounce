@@ -14,6 +14,7 @@ import { liveOn, trophyOn } from "../streaks/profile";
 
 import { KEEP_MS, LINK_MS, type Target } from "./limits";
 import { LINK_TOKEN, parseAnswer, parsePounce, POUNCE_ID } from "./parse";
+import { sameRoomTable } from "./same-room";
 
 import type { Env } from "../env";
 import type { Face } from "../notify/pushes";
@@ -81,6 +82,8 @@ export async function createPounce(
   const facts = await pairStub(env, pairId).facts(row.partnerId, now);
   if (!facts) return fail(404, "not_found");
   if (typeof parsed.target === "object" && !facts.tables.includes(parsed.target.table)) return fail(409, "not_shared");
+  // A same-room table (Purrtrait) is played in one room: nobody is asked to it from elsewhere (design §5.1).
+  if (typeof parsed.target === "object" && (await sameRoomTable(env, parsed.target.table))) return fail(409, "not_shared");
   const them = await player(env, row.partnerId).pushProfile();
   if (!them) return fail(404, "not_found");
   // They blocked the sender: the pounce is dropped, and the sender is told nothing.
@@ -119,11 +122,11 @@ async function findPounce(env: Env, id: string, now: number): Promise<{ sender: 
   return row ? { sender: index.playerId, row } : null;
 }
 
-/** Whether both players hold a seat at a table still in play. */
+/** Whether both players hold a seat at a table still in play, of a game played from anywhere. */
 async function shared(env: Env, a: string, b: string, code: string): Promise<boolean> {
   const [x, y] = await Promise.all([player(env, a).listTables(), player(env, b).listTables()]);
   const live = (list: typeof x) => list.some((t) => t.code === code && t.status !== "over");
-  return live(x) && live(y);
+  return live(x) && live(y) && !(await sameRoomTable(env, code));
 }
 
 /**

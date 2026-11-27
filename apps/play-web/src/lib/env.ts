@@ -16,7 +16,15 @@ export const PROTOCOL = PROTOCOL_VERSION;
  * always implied. `dish` says it shows the Daily Dish, so the server sends it the Dish's reminder
  * (docs/daily-protocol.md); no table is a game called `dish`.
  */
-export const GAMES = "cat-tower,tiles,birdwatch,dish";
+export const GAMES = "cat-tower,tiles,birdwatch,tumble,dish";
+
+declare const __TUMBLE__: boolean;
+/**
+ * Toy Tumble on the shelf (Home's and the TV's Play). Off until the server deals it: a build with
+ * `WEB_TUMBLE=on` turns it on (the e2e runs, and the release that switches it on). Tables of it
+ * that someone else made draw either way.
+ */
+export const TUMBLE_ON: boolean = typeof __TUMBLE__ === "boolean" ? __TUMBLE__ : false;
 
 /** `X-Pounce-App`: who is asking. The server never holds the web player to an app minimum. */
 export const APP_HEADER = `platform=web; version=${VERSION}; protocol=${PROTOCOL}`;
