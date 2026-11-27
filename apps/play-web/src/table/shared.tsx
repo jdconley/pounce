@@ -15,6 +15,8 @@ import { CardBack, CardFace } from "./faces";
 import { MOVE, transformOf, type Pose } from "./motion";
 import { seatCat, seatName } from "./seat";
 
+import type { TrayLabel } from "./ct-layout";
+import type { Rect } from "./drag";
 import type { View } from "../store/views";
 import type { RoomView } from "@pounce/play-api/protocol";
 import type { CardId } from "@pounce/play-api/rules/cards";
@@ -160,6 +162,20 @@ if (typeof window !== "undefined") {
       for (const l of [...textListeners]) l(textNow);
     });
   });
+}
+
+/**
+ * A tray's words: what it wants while empty ("Set of 3", as wide as the tray lets it be), then its
+ * count ("2/3") in the room the layout keeps for it at the tray's left (`trayLabel`), clear of its cards.
+ */
+export function TrayCount(props: { tray: Rect; label: TrayLabel; text: string; words: boolean }) {
+  const { label } = props;
+  const style = props.words ? { fontSize: `${label.font}px`, maxWidth: `${props.tray.w - 20}px` } : { fontSize: `${label.font}px`, width: `${label.w}px` };
+  return (
+    <span class={`tray-label ${props.words ? "words" : "count"}`} style={style}>
+      {props.text}
+    </span>
+  );
 }
 
 /** The reader's text size against the default: the root font over 16 px (2 at 200%). */

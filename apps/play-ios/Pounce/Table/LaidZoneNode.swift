@@ -463,7 +463,7 @@ final class LaidZoneNode: SKNode {
     static let badgeSize: CGFloat = 16
 
     /// How far a row's name pill may hang past the row's left edge.
-    static let nameOverhang: CGFloat = 8
+    static let nameOverhang = TableLayout.laidNameOverhang
 
     /// The widest a row's name pill gets: a fair share of a two-column row, more of a wide one.
     static func nameWidth(row: CGRect) -> CGFloat {
