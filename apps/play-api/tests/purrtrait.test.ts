@@ -1,8 +1,12 @@
 import { afterEach, beforeAll, describe, expect, test } from "vitest";
 
+import { WORDS } from "../src/purrtrait/words";
+
 import { BASE, bundle, call, Client, eventually, mint, newPerson, profile, settle, worker, type Device, type Person, type Snapshot } from "./play-helpers";
 
+import type { Stored } from "./room-storage-entry";
 import type { ServerMessage } from "../src/protocol";
+import type { InkOp } from "../src/purrtrait/ink";
 import type { Miniflare } from "miniflare";
 
 /** Purrtrait through the Worker and the room's Durable Object: same room only (design §5). */
@@ -10,7 +14,8 @@ let script = "";
 const open: Miniflare[] = [];
 
 beforeAll(async () => {
-  script = await bundle("../src/index.ts");
+  // The real worker and room; the room can also hand a test every byte it stored.
+  script = await bundle("./room-storage-entry.ts");
 });
 
 afterEach(async () => {
@@ -70,8 +75,9 @@ async function sit(mf: Miniflare, code: string, screen: Client, device: Device, 
   return c;
 }
 
-const refusal = async (res: Awaited<ReturnType<typeof upgrade>>) => ({ status: res.status, body: (await res.json()) as unknown });
-const NOT_NEAR = { status: 403, body: { error: "not_near" } };
+/** A refused upgrade: its status, its body, and the reason header an app reads, since it can't read the body. */
+const refusal = async (res: Awaited<ReturnType<typeof upgrade>>) => ({ status: res.status, body: (await res.json()) as unknown, why: res.headers.get("x-pounce-error") });
+const NOT_NEAR = { status: 403, body: { error: "not_near" }, why: "not_near" };
 
 /** A browser's socket, offered as the web player offers it: its close code once it closes. */
 async function browser(mf: Miniflare, code: string, device: Device, query: string) {
@@ -128,6 +134,18 @@ describe("joining from the TV's code (design §5.2)", { timeout: 30_000 }, () =>
     expect(snap?.room.gameId).toBe("purrtrait");
   });
 
+  test("the room itself refuses a stranger without a key with not_near in a header too", async () => {
+    const mf = await start();
+    const [tv, stranger] = [await mint(mf), await mint(mf)];
+    const { code } = await tvTable(mf, tv);
+    // Straight to the room's Durable Object, as the Worker forwards an upgrade it let through.
+    const rooms = await mf.getDurableObjectNamespace("ROOMS");
+    const res = await rooms.get(rooms.idFromName(code)).fetch(`${BASE}/v1/rooms/${code}/ws`, {
+      headers: { upgrade: "websocket", "x-play-device": stranger.deviceId, ...PURR },
+    });
+    expect({ status: res.status, body: (await res.json()) as unknown, why: res.headers.get("x-pounce-error") }).toEqual(NOT_NEAR);
+  });
+
   test("the typed 8-char code works inside 60 s, in any case", async () => {
     const mf = await start();
     const [tv, a, b, c] = [await mint(mf), await mint(mf), await mint(mf), await mint(mf)];
@@ -158,6 +176,33 @@ describe("joining from the TV's code (design §5.2)", { timeout: 30_000 }, () =>
     }
     expect(await refusal(await upgrade(mf, code, late, `?near=${typed}`, { "cf-connecting-ip": "203.0.113.9" }))).toEqual(NOT_NEAR);
     await opened(await upgrade(mf, code, fresh, `?near=${key}`, { "cf-connecting-ip": "203.0.113.10" }));
+  });
+
+  test("a locked-out device's refused guesses don't close the typed code", async () => {
+    const mf = await start();
+    const [tv, guesser, late] = [await mint(mf), await mint(mf), await mint(mf)];
+    const { code, screen } = await tvTable(mf, tv);
+    const { code: typed } = nearOf(screen);
+    const wrong = `${code}${typed.endsWith("BBB") ? "CCC" : "BBB"}`;
+    // Six counted misses lock the device out; the rest, each from a new /64, are refused uncounted.
+    const statuses: number[] = [];
+    for (let i = 0; i < 40; i++) {
+      const ip = `2001:db8:${(i + 1).toString(16)}::1`;
+      statuses.push((await upgrade(mf, code, guesser, `?near=${wrong}`, { "cf-connecting-ip": ip })).status);
+    }
+    expect(statuses).toEqual([...Array<number>(6).fill(403), ...Array<number>(34).fill(429)]);
+    await opened(await upgrade(mf, code, late, `?near=${typed}`, { "cf-connecting-ip": "203.0.113.9" }));
+  });
+
+  test("a locked-out address's refused looks at /e/ don't close the typed code", async () => {
+    const mf = await start();
+    const [tv, late] = [await mint(mf), await mint(mf)];
+    const { code, screen } = await tvTable(mf, tv);
+    const { code: typed } = nearOf(screen);
+    const wrong = `${code}${typed.endsWith("BBB") ? "CCC" : "BBB"}`;
+    // 21 counted misses lock the address out; the next 15 are refused uncounted.
+    for (let i = 0; i < 36; i++) await mf.dispatchFetch(`${BASE}/e/${code}?near=${wrong}`, { headers: { "cf-connecting-ip": "203.0.113.50" }, redirect: "manual" });
+    await opened(await upgrade(mf, code, late, `?near=${typed}`, { "cf-connecting-ip": "203.0.113.9" }));
   });
 
   test("addresses in one IPv6 /64 share one count", async () => {
@@ -206,6 +251,24 @@ describe("joining from the TV's code (design §5.2)", { timeout: 30_000 }, () =>
   });
 });
 
+describe("the turn clock at a Purrtrait table", { timeout: 30_000 }, () => {
+  test("the first snapshot after Start has the pick's clock running, with the TV connected", async () => {
+    const mf = await start();
+    const [tv, a, b] = [await mint(mf), await mint(mf), await mint(mf)];
+    const { code, screen } = await tvTable(mf, tv);
+    const pa = await sit(mf, code, screen, a, 0, newPerson("Alice", 1));
+    await sit(mf, code, screen, b, 1, newPerson("Bo", 2));
+    pa.send({ t: "start" });
+    for (const c of [pa, screen]) {
+      const first = await c.find<Snapshot>((m) => m.t === "snapshot" && m.room.purrtrait?.phase === "choosing");
+      const view = first.room.purrtrait as unknown as { remainingMs: number | null; paused: boolean };
+      expect(view.paused).toBe(false);
+      expect(view.remainingMs).toBeGreaterThan(9_000);
+      expect(view.remainingMs).toBeLessThanOrEqual(10_000);
+    }
+  });
+});
+
 describe("Play again at a Purrtrait table", { timeout: 30_000 }, () => {
   test("both phones follow with no key, and the TV follows as the screen", async () => {
     const mf = await start();
@@ -238,7 +301,7 @@ describe("Play again at a Purrtrait table", { timeout: 30_000 }, () => {
 });
 
 describe("the host removes a player (design §10.2)", { timeout: 30_000 }, () => {
-  const REMOVED = { status: 403, body: { error: "removed" } };
+  const REMOVED = { status: 403, body: { error: "removed" }, why: "removed" };
   const closing = (c: Client) => new Promise<number>((resolve) => c.ws.addEventListener("close", (e) => resolve(e.code)));
 
   test("remove in the lobby opens the seat and the device is refused after, even with a fresh key", async () => {
@@ -279,6 +342,10 @@ describe("the host removes a player (design §10.2)", { timeout: 30_000 }, () =>
     pa.send({ t: "configure", seat: 2, kind: "open" });
     await pa.until((s) => s.room.seats[2]?.kind === "open");
     const pc = await sit(mf, code, screen, c, 2, cy);
+    const guest = await mint(mf);
+    pa.send({ t: "configure", seat: 3, kind: "open" });
+    await pa.until((s) => s.room.seats[3]?.kind === "open");
+    const pg = await sit(mf, code, screen, guest, 3, newPerson("Di", 4));
     pa.send({ t: "start" });
     await pa.until((s) => s.room.purrtrait?.phase === "choosing");
     const closed = closing(pc);
@@ -286,11 +353,28 @@ describe("the host removes a player (design §10.2)", { timeout: 30_000 }, () =>
     expect(await closed).toBe(4403);
     await pa.until((s) => s.room.purrtrait?.out[2] === true);
     expect(pa.last?.room.status).toBe("playing");
+    // A removed guest's phone (no player of its own) loses the table from its list.
+    const codes = async (d: Device) => ((await (await call(mf, d, "GET", "/v1/devices/me/tables", undefined, PURR)).json()) as { tables: { code: string }[] }).tables.map((t) => t.code);
+    expect(await codes(guest)).toContain(code);
+    const gone = closing(pg);
+    pa.send({ t: "remove", seat: 3 });
+    expect(await gone).toBe(4403);
+    expect(await eventually(() => codes(guest), (list) => !list.includes(code))).not.toContain(code);
+    // The removed player on another device, with the TV's live key: refused too.
+    const y = await mint(mf);
+    await profile(mf, y, [cy]);
+    expect(await refusal(await upgrade(mf, code, y, `?near=${nearOf(screen).key}`))).toEqual(REMOVED);
+    // A removed signed-in player's other devices drop the table: their player's list loses it.
+    expect(await eventually(() => codes(y), (list) => !list.includes(code))).not.toContain(code);
     pb.send({ t: "act", seat: 1, action: { type: "forfeit" } });
     await pa.until((s) => s.room.status === "over");
     pa.send({ t: "rematch" });
     const next = (await pa.find<{ t: "rematch"; code: string }>((m) => m.t === "rematch")).code;
     const tvNext = await opened(await upgrade(mf, next, tv, "?role=screen"));
+    // Nor does it come back, as the old table or the next one, after Play again.
+    await settle();
+    expect(await codes(y)).not.toContain(code);
+    expect(await codes(y)).not.toContain(next);
     const back = await opened(await upgrade(mf, next, a));
     expect(back.last?.room.seats.filter((s) => s.kind === "human").map((s) => s.person?.name)).toEqual(["Bo", "Alice"]);
     // Out of the new table too, with its TV's live key.
@@ -413,5 +497,95 @@ describe("the links to a Purrtrait table", { timeout: 30_000 }, () => {
     expect(await components(await start({ purrtraitAppLinks: true }))).toEqual(["/j/*", "/p/*", "/e/*"]);
     // Not while Purrtrait can't be dealt, whatever the flag says.
     expect(await components(await start({ purrtraitAppLinks: true, games: "tiles" }))).not.toContain("/e/*");
+  });
+});
+
+describe("a drawing is never stored (design §6.5, §8.1)", { timeout: 30_000 }, () => {
+  const stored = async (mf: Miniflare, code: string) => (await (await mf.dispatchFetch(`${BASE}/__test/room-storage?code=${code}`)).json()) as Stored;
+
+  /** Every string and every key in what the room stored, its SQL columns' JSON opened up. */
+  function contents(dump: Stored): { strings: Set<string>; keys: Set<string>; inkLike: unknown[][] } {
+    const strings = new Set<string>();
+    const keys = new Set<string>();
+    const inkLike: unknown[][] = [];
+    const walk = (v: unknown): void => {
+      if (typeof v === "string") {
+        strings.add(v);
+        if (/^[[{]/.test(v)) {
+          try {
+            walk(JSON.parse(v));
+          } catch {
+            // Not JSON: a plain string, already kept.
+          }
+        }
+      } else if (Array.isArray(v)) {
+        if (["s", "p", "u", "c"].includes(v[0] as string) && v.slice(1).every((n) => typeof n === "number")) inkLike.push(v);
+        v.forEach(walk);
+      } else if (v !== null && typeof v === "object") {
+        for (const [k, inner] of Object.entries(v)) {
+          keys.add(k);
+          walk(inner);
+        }
+      }
+    };
+    walk(dump.kv);
+    walk(dump.sql);
+    return { strings, keys, inkLike };
+  }
+
+  test("storage after a full game holds no ink and no unrevealed word", async () => {
+    const mf = await start({ devSpeed: 10 });
+    const [tv, a, b] = [await mint(mf), await mint(mf), await mint(mf)];
+    const { code, screen } = await tvTable(mf, tv);
+    const phones = [await sit(mf, code, screen, a, 0, newPerson("Alice", 1)), await sit(mf, code, screen, b, 1, newPerson("Bo", 2))];
+    phones[0]?.send({ t: "start" });
+    const words = new Set(WORDS.map((w) => w.word));
+    const revealed = new Set<string>();
+    let midTurn: Stored | null = null;
+    // Two seats, two rounds: four turns, each drawn and guessed.
+    for (let turn = 0; turn < 4; turn++) {
+      const s = await screen.until((m) => m.room.purrtrait?.phase === "choosing" && m.room.purrtrait.turn.endsWith(`:${turn}`));
+      const drawer = s.room.purrtrait?.drawer as number;
+      const phone = phones[drawer] as Client;
+      phone.send({ t: "act", seat: drawer, action: { type: "choose", level: turn % 2 === 0 ? "tricky" : "easy" } });
+      const drawing = await phone.until((m) => m.room.purrtrait?.phase === "drawing" && m.room.purrtrait.youDraw === true);
+      const key = drawing.room.purrtrait?.turn as string;
+      const strokes: InkOp[][] = [[["s", 0, turn, 1, 384, 300, 40, 0, 30, 30]], [["p", 0, 2, 2, -5, 9]], [["s", 1, 3, 2, 100, 100, 7, 7]], [["u", 1]]];
+      for (const ops of strokes) phone.send({ t: "ink", seat: drawer, turn: key, ops });
+      // The TV has the whole drawing: every message was taken and relayed.
+      await eventually(() => screen.received.filter((m) => m.t === "ink" && m.turn === key).length, (n) => n === strokes.length);
+      // While the drawing is live it is in the room's memory, and nowhere in its storage.
+      if (turn === 0) {
+        midTurn = await stored(mf, code);
+        const { strings, keys, inkLike } = contents(midTurn);
+        expect(keys.has("ops")).toBe(false);
+        expect(inkLike).toEqual([]);
+        expect([...strings].filter((v) => words.has(v))).toEqual([]);
+      }
+      phone.send({ t: "act", seat: drawer, action: { type: "gotIt", seat: 1 - drawer } });
+      const reveal = await screen.until((m) => m.room.purrtrait?.phase === "reveal" || m.room.purrtrait?.phase === "over");
+      revealed.add(reveal.room.purrtrait?.last?.word as string);
+    }
+    await screen.until((m) => m.room.status === "over");
+    const dump = await stored(mf, code);
+    // The room did store its game (so the check reads real storage), with its revealed words.
+    expect(midTurn).not.toBeNull();
+    expect(Object.keys(dump.sql)).toContain("room");
+    const { strings, keys, inkLike } = contents(dump);
+    expect(strings.has("purrtrait")).toBe(true);
+    expect(keys.has("ops")).toBe(false);
+    expect(inkLike).toEqual([]);
+    const storedWords = [...strings].filter((v) => words.has(v));
+    expect(storedWords.length).toBeGreaterThan(0);
+    for (const word of storedWords) expect(revealed.has(word), word).toBe(true);
+  });
+});
+
+describe("the privacy policy follows the flag (design §8.2)", { timeout: 30_000 }, () => {
+  test("/privacy says what happens to a drawing only while Purrtrait tables can be dealt", async () => {
+    const page = async (mf: Miniflare) => (await mf.dispatchFetch(`${BASE}/privacy`)).text();
+    expect(await page(await start())).toContain("keeps them only until the turn ends");
+    expect(await page(await start({ games: "tiles" }))).not.toContain("Purrtrait");
+    expect(await page(await start({ tv: false }))).not.toContain("Purrtrait");
   });
 });

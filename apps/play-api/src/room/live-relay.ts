@@ -1,16 +1,22 @@
 /**
- * A live relay: one device streams small updates (Purrtrait's ink, Toy Tumble's moves), the room
- * passes each on to the devices that show them, and keeps what was sent for the current key (a
- * turn) in memory only, so a device that joins late can catch up.
+ * The shared live layer: what a real-time game streams through its room, in memory only, never in
+ * `RoomState` or storage. Each game keeps its own messages, checks and fan-out choices; nothing
+ * here knows any game. Two pieces:
  *
- * The relay knows nothing of any game. A game supplies its rate, how a fresh tally starts (its own
- * checking state: next stroke id, points so far) and how to compact its log into the smallest
- * catch-up that looks the same. The room decides who may send and who hears it.
+ * - `LiveRelay`, the rate limit any live game uses (Toy Tumble design §6.10): at most `perSecond`
+ *   messages a second per key (a device), over any rolling second. Toy Tumble uses it as it is.
+ * - `LiveStream`, for a game whose late joiners need the picture so far (Purrtrait's ink): one
+ *   device streams small updates, the room passes each on to the devices that show them, and the
+ *   stream keeps what was sent for the current key (a turn) so a device that joins late can catch
+ *   up. Its per-device rate is a `LiveRelay`, with a resend exemption on top.
  *
- * What it owns:
- * - The log for one key, in memory, never in `RoomState` or storage. A new key starts it empty;
- *   null ends it.
- * - A per-device rolling one-second rate limit (`admit`).
+ * A `LiveStream`'s game supplies its rate, how a fresh tally starts (its own checking state: next
+ * stroke id, points so far) and how to compact its log into the smallest catch-up that looks the
+ * same. The room decides who may send and who hears it.
+ *
+ * What a `LiveStream` owns:
+ * - The log for one key. A new key starts it empty; null ends it.
+ * - The per-device rolling one-second rate limit (`admit`), a `LiveRelay`.
  * - A lost log: a room rebuilt from storage with a key still live (`lost`) has none until the
  *   sender sends a batch that restarts it. `askResend` asks the sender for it, and its whole reply
  *   is exempt from the rate limit once: from its first message (one that restarts) to the one the
@@ -20,20 +26,26 @@
  * Usage:
  *
  * ```ts
- * const relay = new LiveRelay<Op, Tally>({ perSecond: 25, start: (rebuilt) => fresh(rebuilt), compact }, now);
- * relay.follow(liveKey(state));                      // after every change: a new key drops the log
- * if (!relay.admit(device, { restarts: wipes(ops), last })) return [];   // over the limit: dropped
- * const base = relay.base(wipes(ops));               // null: nothing live, or a lost log not restarted
+ * // Rate only (Toy Tumble):
+ * const limit = new LiveRelay(30);
+ * if (!limit.allow(device, now)) return [];          // over the limit: dropped
+ * limit.clear();                                     // a new round starts everyone afresh
+ *
+ * // Log, catch-up and resend (Purrtrait):
+ * const stream = new LiveStream<Op, Tally>({ perSecond: 25, start: (rebuilt) => fresh(rebuilt), compact }, now);
+ * stream.follow(liveKey(state));                     // after every change: a new key drops the log
+ * if (!stream.admit(device, { restarts: wipes(ops), last })) return [];   // over the limit: dropped
+ * const base = stream.base(wipes(ops));              // null: nothing live, or a lost log not restarted
  * const checked = base && check(ops, base);          // the game's own check
- * if (checked?.ok) { relay.record(ops, checked.tally); return relay.fanOut([screen, device], message); }
- * // On connect: relay.missing ? relay.askResend(sender, resendMsg) : relay.catchUp(device, syncMsg)
+ * if (checked?.ok) { stream.record(ops, checked.tally); return stream.fanOut([screen, device], message); }
+ * // On connect: stream.missing ? stream.askResend(sender, resendMsg) : stream.catchUp(device, syncMsg)
  * ```
  */
 
 import type { ServerMessage } from "../protocol";
 import type { Outbound } from "./core";
 
-export type LiveRelayConfig<Op, Tally> = {
+export type LiveStreamConfig<Op, Tally> = {
   /** Most messages one device may send in a rolling second; more are dropped. */
   perSecond: number;
   /**
@@ -58,25 +70,54 @@ export type AdmitInfo = {
   last?: boolean;
 };
 
-const WINDOW_MS = 1000;
 const RESEND_MS = 5000;
 /** The log is compacted once it grows this much past its last compacted size. */
 const COMPACT_SLACK = 256;
 
-export class LiveRelay<Op, Tally> {
+/** At most `perSecond` messages a second per key, over any rolling second. */
+export class LiveRelay {
+  private readonly perSecond: number;
+  private readonly sent = new Map<string, number[]>();
+
+  constructor(perSecond: number) {
+    this.perSecond = perSecond;
+  }
+
+  /** True, and counted, when `key` may send one more at `now`; false when it is over its limit. */
+  allow(key: string, now: number): boolean {
+    const recent = (this.sent.get(key) ?? []).filter((at) => at > now - 1000);
+    if (recent.length >= this.perSecond) {
+      this.sent.set(key, recent);
+      return false;
+    }
+    recent.push(now);
+    this.sent.set(key, recent);
+    return true;
+  }
+
+  /** Forgets every key: a new round starts everyone afresh. */
+  clear(): void {
+    this.sent.clear();
+  }
+}
+
+export class LiveStream<Op, Tally> {
   private current: string | null = null;
   private log: Op[] | null = null;
   private tally: Tally | null = null;
   private lostLog = false;
   private compactedAt = 0;
-  private readonly times = new Map<string, number[]>();
+  /** The per-device rolling second. A new key keeps it: the rate is per device, not per turn. */
+  private readonly rate: LiveRelay;
   /** "armed": asked for a resend, reply not begun. A number: the reply's exemption ends then. */
   private readonly exempt = new Map<string, "armed" | number>();
 
   constructor(
-    private readonly config: LiveRelayConfig<Op, Tally>,
+    private readonly config: LiveStreamConfig<Op, Tally>,
     private readonly now: () => number,
-  ) {}
+  ) {
+    this.rate = new LiveRelay(config.perSecond);
+  }
 
   /** The live key (a turn), or null when nothing is live. */
   get key(): string | null {
@@ -132,13 +173,7 @@ export class LiveRelay<Op, Tally> {
       }
       this.exempt.delete(device);
     }
-    const recent = (this.times.get(device) ?? []).filter((at) => at > now - WINDOW_MS);
-    if (recent.length >= this.config.perSecond) {
-      this.times.set(device, recent);
-      return false;
-    }
-    this.times.set(device, [...recent, now]);
-    return true;
+    return this.rate.allow(device, now);
   }
 
   /**

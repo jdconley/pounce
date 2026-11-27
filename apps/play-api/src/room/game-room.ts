@@ -1,12 +1,12 @@
 import { DurableObject } from "cloudflare:workers";
 
 import { servedAt, storeKnown } from "../app/live";
-import { gameUnsupported } from "../app/status";
+import { gameUnsupported, refused } from "../app/status";
 import { APP_HEADER, parseApp } from "../app/version";
 import { devSpeed, linkOn, nudgeOn, tvOn } from "../env";
 import { reached } from "../funnel/funnel";
 import { roomSteps } from "../funnel/room";
-import { DEFAULT_GAME, GAMES_HEADER, gamesListed, gamesOn, gameTitle, type GameId } from "../games";
+import { DEFAULT_GAME, GAMES_HEADER, gamesFor, gamesOn, gameTitle, type GameId } from "../games";
 import { endBody, startAlert, startBody, updateBody, type LiveState } from "../live/live";
 import { isGeneratedName } from "../names/filter";
 import { yourMoveBody } from "../notify/copy";
@@ -65,11 +65,10 @@ const PING = '{"t":"ping"}';
 const PONG = '{"t":"pong"}';
 const ROOM_CODE_ATTEMPTS = 5;
 const STREAK_ATTEMPTS = 2;
+/** Toy Tumble's round clock while a round plays (§6.9: at most 10 ticks a second). */
+const TUMBLE_TICK_MS = 100;
 
 const cryptoRng = (): number => (crypto.getRandomValues(new Uint32Array(1))[0] as number) / 2 ** 32;
-
-/** A refused upgrade: the status and `{ "error" }`, which a browser hears as close code 4000 + status. */
-const refuse = (status: number, error: string): Response => new Response(JSON.stringify({ error }), { status, headers: { "content-type": "application/json" } });
 
 /**
  * One instance per room code. Holds the room's state in SQLite, the devices'
@@ -95,6 +94,8 @@ export class GameRoom extends DurableObject<Env> {
   /** The funnel steps this instance already reported (`roomSteps`), and the device whose move was just accepted. */
   private funnelTold = new Set<string>();
   private movedNow: string | null = null;
+  /** Toy Tumble's 100 ms round clock, running only while a round plays. */
+  private tumbleClock: ReturnType<typeof setInterval> | null = null;
 
   constructor(ctx: DurableObjectState, env: Env) {
     super(ctx, env);
@@ -108,8 +109,12 @@ export class GameRoom extends DurableObject<Env> {
         if (kitten) this.core.setKitten(deviceId, true);
       }
       await this.dropStaleDevices(this.core);
+      if (!this.core) return;
       // A drawing turn's ink lived only in the old instance: ask the drawer for it again.
       this.deliver(this.core.rebuilt());
+      // A Toy Tumble round lived in the memory this instance lost: it counts down again (§6.6).
+      const replayed = this.core.restartRound();
+      if (replayed.length > 0) await this.after(replayed);
     });
   }
 
@@ -195,7 +200,7 @@ export class GameRoom extends DurableObject<Env> {
     if (!this.core) return new Response(null, { status: 404 });
     // An app that can't draw this room's game (it lists its games; one that lists none draws Cat
     // Tower) is told there is no such table, which every version of the app knows how to show.
-    if (!gamesListed(request.headers.get(GAMES_HEADER)).includes(this.core.state.game)) {
+    if (!gamesFor(request.headers.get(GAMES_HEADER), request.headers.get(APP_HEADER), devSpeed(this.env) > 1).includes(this.core.state.game)) {
       const { game } = this.core.state;
       // An app that said what it is (1.1 on) is told why instead: the game, by id and by name,
       // in headers too, since the app can't read a refused upgrade's body.
@@ -216,19 +221,21 @@ export class GameRoom extends DurableObject<Env> {
     if (request.headers.get("upgrade")?.toLowerCase() !== "websocket") {
       return new Response(null, { status: 426 });
     }
-    // A device the host of a same-room table removed stays out, whatever key it brings (design §10.2).
-    if (this.core.isRemoved(deviceId)) return refuse(403, "removed");
+    // A device the host of a same-room table removed stays out, whatever key it brings, and so
+    // does a removed player on another device (design §10.2).
+    const players = parsePlayers(request.headers.get(PLAYER_HEADER));
+    if (this.core.turnedAway(deviceId, players)) return refused(403, "removed");
     const pair = new WebSocketPair();
     const [client, server] = Object.values(pair) as [WebSocket, WebSocket];
     // A device that sits or hosts is no screen, and only a device the room lists is one: it made
     // the table, a phone linked it, or it followed Play again. Asked before the socket exists, so
     // each refusal is a plain status.
     const screen = tvOn(this.env) && request.headers.get(ROLE_HEADER) === "screen";
-    if (screen && !this.core.mayScreen(deviceId)) return refuse(409, "seated");
-    if (screen && !this.core.isScreen(deviceId)) return refuse(403, "not_screen");
+    if (screen && !this.core.mayScreen(deviceId)) return refused(409, "seated");
+    if (screen && !this.core.isScreen(deviceId)) return refused(403, "not_screen");
     // A same-room table (Purrtrait) lets a stranger in only with the TV's near key. The Worker's
     // guard asked the same and counted a wrong one; asked again here, where the socket is made.
-    if (!screen && this.core.knows(deviceId, nearParam(request), false) === "not_near") return refuse(403, "not_near");
+    if (!screen && this.core.knows(deviceId, nearParam(request), false) === "not_near") return refused(403, "not_near");
     // A game that changes for kittens (Purrtrait's two Easy words) needs the device's age band
     // first. A lookup that fails keeps what the room already knew: a kitten stays one.
     const kitten =
@@ -239,10 +246,13 @@ export class GameRoom extends DurableObject<Env> {
             .catch(() => null)
         : false;
     if (!this.core) return new Response(null, { status: 404 });
+    // The host may have removed it while the age band was looked up.
+    if (this.core.turnedAway(deviceId, players)) return refused(403, "removed");
     if (kitten !== null) this.core.setKitten(deviceId, kitten);
     this.ctx.acceptWebSocket(server, [deviceId]);
-    server.serializeAttachment({ deviceId, ...(this.core.isKitten(deviceId) ? { kitten: true } : {}) });
-    await this.after(this.core.connect(deviceId, parsePlayers(request.headers.get(PLAYER_HEADER))));
+    // `socket`: which of the device's sockets this is (a second tab, a reconnect), for Toy Tumble's one writer per box.
+    server.serializeAttachment({ deviceId, socket: crypto.randomUUID(), ...(this.core.isKitten(deviceId) ? { kitten: true } : {}) });
+    await this.after(this.core.connect(deviceId, players));
     return new Response(null, { status: 101, webSocket: client });
   }
 
@@ -257,16 +267,17 @@ export class GameRoom extends DurableObject<Env> {
       send(ws, parsed === null ? BAD_MESSAGE : { t: "error", code: parsed.error });
       return;
     }
-    // Where a player points: delivered live, never kept. No save, no alarm, no tables list.
-    if (parsed.t === "aim") {
-      this.deliver(core.handle(deviceOf(ws), parsed));
+    // Where a player points, and a Toy Tumble box's events: delivered live, never kept. No save,
+    // no alarm, no tables list. Who is out of a round is decided on its tick, never here.
+    if (parsed.t === "aim" || parsed.t === "tumble") {
+      this.deliver(core.handle(deviceOf(ws), parsed, undefined, socketOf(ws)));
       return;
     }
     // A drawer's ink: the same, back to every socket of the drawer's device but this one. Saved only
     // when it made its device the drawing turn's (a pick the clock made): never the ink itself.
     if (parsed.t === "ink") {
       const owner = core.state.drawerDevice?.deviceId;
-      const out = core.handle(deviceOf(ws), parsed);
+      const out = core.handle(deviceOf(ws), parsed, undefined, socketOf(ws));
       this.deliver(out, ws);
       if (core.state.drawerDevice?.deviceId !== owner) await this.after([]);
       return;
@@ -282,7 +293,7 @@ export class GameRoom extends DurableObject<Env> {
       return;
     }
     const removed = parsed.t === "remove" ? new Set(core.state.removed?.devices) : null;
-    const out = core.handle(deviceOf(ws), parsed);
+    const out = core.handle(deviceOf(ws), parsed, undefined, socketOf(ws));
     if (parsed.t === "act" && !out.some(({ message }) => message.t === "error")) this.movedNow = deviceOf(ws);
     // The devices the host just removed are refused from now on: their open sockets too.
     if (removed) this.closeAll((core.state.removed?.devices ?? []).filter((id) => !removed.has(id)), "removed");
@@ -324,27 +335,30 @@ export class GameRoom extends DurableObject<Env> {
    * `not_near` (a stranger to a same-room table without the TV's live near key, `near`) or
    * `none` (no such room). `screen`: the device asks to be a screen, which no key decides.
    * `games`: what the asking app can draw; one that can't draw this table's game needs no key,
-   * since `fetch` tells it there is no such table. A `not_near` is counted against the table too.
+   * since `fetch` tells it there is no such table. Counts nothing: the guard tells the table of a
+   * `not_near` with `missedNear` once its rate limits have taken the guess.
    */
   knows(deviceId: string, near: string | null = null, screen = false, games?: string[]): "member" | "exists" | "not_near" | "none" {
     const core = this.core;
     if (!core) return "none";
-    const known = core.knows(deviceId, near, screen, games);
-    if (known === "not_near") this.missedNear(core);
-    return known;
+    return core.knows(deviceId, near, screen, games);
   }
 
-  /** Whether `near` is a live near key at this table: what `/e/<code>?near=` asks before it sends a phone on. */
+  /** Whether `near` is a live near key at this table: what `/e/<code>?near=` asks before it sends a phone on. Counts nothing. */
   nearLive(near: string): boolean {
     const core = this.core;
     if (!core) return false;
-    const live = core.nearLive(near);
-    if (!live && core.sameRoom()) this.missedNear(core);
-    return live;
+    return core.nearLive(near);
   }
 
-  /** A wrong near guess, counted by the table itself (whatever address it came from) and kept across a wake. */
-  private missedNear(core: Room): void {
+  /**
+   * A wrong near guess, counted by the table itself (whatever address it came from) and kept
+   * across a wake. Only a guess the rate limits took counts: a locked-out guesser's refused ones
+   * never close the typed code (design §5.3).
+   */
+  missedNear(): void {
+    const core = this.core;
+    if (!core?.sameRoom()) return;
     core.noteNearMiss();
     this.persist(core);
   }
@@ -440,6 +454,36 @@ export class GameRoom extends DurableObject<Env> {
     if (!this.core) return;
     this.heardPings(this.core);
     await this.after(this.core.tick());
+  }
+
+  /** Starts Toy Tumble's round clock when a round plays, and stops it when none does. */
+  private runTumbleClock(): void {
+    const playing = this.core?.tumblePlaying() ?? false;
+    if (playing && this.tumbleClock === null) this.tumbleClock = setInterval(() => void this.tumbleTick(), TUMBLE_TICK_MS);
+    if (!playing && this.tumbleClock !== null) {
+      clearInterval(this.tumbleClock);
+      this.tumbleClock = null;
+    }
+  }
+
+  /**
+   * One tick of a Toy Tumble round: the pings each socket's device answered (they reach no
+   * handler) and the round's own clock, delivered. Saved only when the round's slow state
+   * changed: someone out, or the round over.
+   */
+  private async tumbleTick(): Promise<void> {
+    const core = this.core;
+    if (!core) return;
+    const out: Outbound[] = [];
+    for (const ws of this.ctx.getWebSockets()) {
+      const at = this.ctx.getWebSocketAutoResponseTimestamp(ws);
+      if (at && ws.readyState === WebSocket.OPEN) out.push(...core.tumblePing(deviceOf(ws), socketOf(ws), at.getTime()));
+    }
+    const tick = core.tumbleTick();
+    out.push(...tick.out);
+    if (tick.changed) await this.after(out);
+    else this.deliver(out);
+    this.runTumbleClock();
   }
 
   /** Each open socket's last auto-answered ping, for the seats' links. */
@@ -839,14 +883,20 @@ export class GameRoom extends DurableObject<Env> {
   private async dropped(ws: WebSocket, asked: boolean): Promise<void> {
     if (!this.core) return;
     const deviceId = deviceOf(ws);
+    this.core.tumbleClosed(deviceId, socketOf(ws));
     if (!this.hasOpenSocket(deviceId, ws)) await this.after(this.core.disconnect(deviceId, asked));
   }
 
-  /** Delivers only: nothing is saved. `sender`'s own ink never goes back to it. */
+  /**
+   * Sends each message to its sockets: every one, a device's, or one socket of a device. Nothing
+   * is saved. `sender`'s own ink never goes back to it.
+   */
   private deliver(out: Outbound[], sender?: WebSocket): void {
-    for (const { to, message } of out) {
-      for (const socket of to === "all" ? this.ctx.getWebSockets() : this.ctx.getWebSockets(to)) {
-        if (socket !== sender || message.t !== "ink") send(socket, message);
+    for (const { to, message, socket } of out) {
+      const sockets = to === "all" ? this.ctx.getWebSockets() : this.ctx.getWebSockets(to);
+      for (const ws of sockets) {
+        if (socket !== undefined && socketOf(ws) !== socket) continue;
+        if (ws !== sender || message.t !== "ink") send(ws, message);
       }
     }
   }
@@ -856,10 +906,8 @@ export class GameRoom extends DurableObject<Env> {
     const core = this.core as Room;
     const { state } = core;
 
-    for (const { to, message } of out) {
-      const sockets = to === "all" ? this.ctx.getWebSockets() : this.ctx.getWebSockets(to);
-      for (const ws of sockets) send(ws, message);
-    }
+    this.deliver(out);
+    this.runTumbleClock();
 
     for (const intent of core.drainStreakIntents()) this.reportStreak(intent);
     // Live table pushes go after the turn's streak report (fresh paws) and before
@@ -950,8 +998,11 @@ export class GameRoom extends DurableObject<Env> {
   private async updateTables(core: Room): Promise<void> {
     const { state } = core;
     const actor = state.status === "playing" ? core.actor() : null;
-    const devices = tableDevices(state);
-    const players = new Set(core.seatPlayers());
+    // A device the host turned away is off the list: it can't go back (design §10.2).
+    const devices = new Set([...tableDevices(state)].filter((id) => !core.turnedAway(id)));
+    // A player the host removed is off it too, on every device they sign in on (design §10.2).
+    const removedPlayers = new Set(state.removed?.players);
+    const players = new Set(core.seatPlayers().filter((p) => !removedPlayers.has(p)));
     const next = state.rematch?.code ?? null;
     // Who sits where, and as whom: a join, a rename or a new cat reaches Home's cards.
     const faces = state.seats.map((s) => [s.kind, s.person?.id, s.person?.name, s.person?.cat, s.playerId ?? s.deviceId]);
@@ -986,7 +1037,8 @@ export class GameRoom extends DurableObject<Env> {
       ...(next ? { next } : {}),
       ...(movedAt === null ? {} : { movedAt }),
       ...(this.otherGame() ? { game: this.otherGame() } : {}),
-      ...(options ? { options: { ...options } } : {}),
+      // A card shows a table's rule set (Birdwatch); Toy Tumble's House Cat level isn't on it.
+      ...(options && "rules" in options ? { options: { ...options } } : {}),
     };
     await Promise.all([
       ...[...devices].map((deviceId) =>
@@ -1039,6 +1091,7 @@ export class GameRoom extends DurableObject<Env> {
       },
     );
     this.core = null;
+    this.runTumbleClock();
     this.tablesFingerprint = "";
     this.tableDevices = new Set();
     this.tablePlayers = new Set();
@@ -1093,12 +1146,17 @@ function tableDevices(state: RoomState<unknown>): Set<string> {
 }
 
 /** What a socket remembers across a wake: its device, and whether that device is a kitten's (Purrtrait). */
-function attachment(ws: WebSocket): { deviceId: string; kitten?: true } {
-  return ws.deserializeAttachment() as { deviceId: string; kitten?: true };
+function attachment(ws: WebSocket): { deviceId: string; socket?: string; kitten?: true } {
+  return ws.deserializeAttachment() as { deviceId: string; socket?: string; kitten?: true };
 }
 
 function deviceOf(ws: WebSocket): string {
   return attachment(ws).deviceId;
+}
+
+/** Which of its device's sockets this is. One opened before sockets had an id is "". */
+function socketOf(ws: WebSocket): string {
+  return attachment(ws).socket ?? "";
 }
 
 function send(ws: WebSocket, message: ServerMessage): void {

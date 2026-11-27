@@ -7,8 +7,8 @@ The types are in `apps/play-api/src/tumble/wire.ts`. Samples every client must d
 are in `apps/play-api/fixtures/protocol/tumble-*-messages.json`. The engine every client runs is
 in `apps/play-api/src/tumble/`, with golden vectors in `apps/play-api/fixtures/tumble/`.
 
-Everything here is additive. `PROTOCOL_VERSION` stays 1. Until the server's Toy Tumble room work
-lands, a `tumble` message is answered `{ "t": "error", "code": "bad_message" }`.
+Everything here is additive. `PROTOCOL_VERSION` stays 1. At a table of any other game, a `tumble`
+message is answered `{ "t": "error", "code": "bad_message" }`.
 
 ## The model
 
@@ -43,7 +43,36 @@ A Toy Tumble room's snapshot carries `room.gameId: "tumble"` and `room.tumble`:
 - `outs` lists the seats out this round, in order. `winner` is set at round end, `null` for a
   round nobody won.
 - `waitingSince` is the server time when a countdown began waiting for a missing device (spec §5.1).
+- `now` is the server's clock when the room made this snapshot. A device keeps the difference
+  between `now` and its own clock on arrival, and counts `startsAt` and the round clock with it,
+  so a device whose clock is wrong still counts down 3-2-1 with everyone else.
+  The status stays `between` while it waits.
+- Before the first countdown (a Play again table waiting for its people), `r` is 0, `status` is
+  `between`, and the seeds are absent.
+- `winner` once `over` is the game's: the third win's seat, or after an early end the seat left
+  with the most wins (`null` on a tie).
 - These changes go out with a `seq` as usual.
+
+## The room around a round
+
+- **Lobby.** `options` is `{ "cats": "easy" | "quick" }`, set with `setOptions` (host only).
+  2 to 6 seats. A device that holds a seat can't `claim` or `claimMove` another: `not_allowed`.
+- **Start** is refused with `not_connected` until every person's seat has a connected device.
+  It goes straight to the first countdown.
+- **Between rounds** the standings show 5 seconds. The next countdown starts once every person
+  still playing has a device connected. If one is missing, `waitingSince` is set; 20 seconds
+  later the host may send `{ "t": "act", "seat": <theirs>, "action": { "k": "playWithout" } }`
+  (`too_soon` before then, `not_allowed` from anyone else or while nothing waits). The missing
+  seats become `away` and sit rounds out until their device is back at a countdown.
+- **Leave** is `{ "t": "act", "seat": <theirs>, "action": { "k": "leave" } }`: out for the rest of
+  the game, wins kept, no House Cat takes it. Fewer than 2 seats left, or no person left, ends
+  the game.
+- Nothing is ever "to act": snapshots have no turn, and there are no nudges, retires or live
+  tables.
+- **A server restart** mid-countdown or mid-round loses the round: it counts down again as the
+  same `r`, with new seeds and the wins kept.
+- **Who gets the game.** An iOS or tvOS app below 1.4 is never given `tumble`, whatever its
+  `X-Pounce-Games` lists. The web player always is.
 
 ## Client to server: `tumble`
 
@@ -73,12 +102,15 @@ Positions are the bottom-left corner of the toy's own k by k box (`toyCells`). x
 - **Rate limit.** At most 30 batches a second per device. Over that, the device gets a
   `tumbleSync`.
 - **A batch for another round** (`r` not the current one) is dropped silently.
+- **A screen** may send only an empty batch, `{ "t": "tumble", "r": <round>, "ev": [] }`, to ask
+  for every box (after a gap in `q`, or a reload). It is answered with a `tumbleSync` to that
+  socket alone, within the same rate limit. Any other `tumble` from a screen is `not_allowed`.
 - **Who may send.**
   - Only the device holding a seat, for its own seat. A device holds at most one seat at a Toy
     Tumble table.
   - If the same device has two sockets, only the first to send in a round writes. The other gets
     `{ "t": "error", "code": "not_allowed" }`.
-  - A screen's `tumble` is `not_allowed`.
+  - A screen's `tumble` with events is `not_allowed` (its empty batch is a sync request, above).
 
 ## Server to clients
 
@@ -89,7 +121,8 @@ Positions are the bottom-left corner of the toy's own k by k box (`toyCells`). x
 ```
 
 - It is sent to every connected device and screen except the box's own device.
-- `q` counts up by one per relay of that box. A gap means something was missed, so ask for a sync.
+- `q` counts up by one per relay of that box, starting at 1 each round; a sync carries the last
+  `q` relayed (0 before any). A gap means something was missed, so ask for a sync.
 - `m` events are relayed at most every 66 ms per box (the latest wins).
 
 ### `tumbleHit`: something hits a box
@@ -100,7 +133,7 @@ Positions are the bottom-left corner of the toy's own k by k box (`toyCells`). x
 
 | `k` | `x` |
 | --- | --- |
-| `junk` | `{ rows, gap }`, from a clear (§4.5) |
+| `junk` | `{ rows, gap }`, from a clear (§4.5). The waiting junk's id is the hit's `id`: hits and junk share one id space per round. |
 | `hairball` | `{ gap }` |
 | `swipe` | `{ shifts }`: 22 numbers, -2 to 2, one per row from y 0. Positive moves right, wrapping. |
 | `swap` | `{ cells, tricks }`: the other box's contents as the server last had them (264 numbers each) |
@@ -119,6 +152,11 @@ Positions are the bottom-left corner of the toy's own k by k box (`toyCells`). x
 - **Swap** sends one `tumbleHit` per box, each carrying the other box's contents.
 - An unacked hit is applied by the server after 3 seconds, and the box's sync goes to everyone.
   A later ack for it is refused with a sync.
+
+A hit can leave the target's falling toy overlapping cells (Hairball, Swap). The target's
+device lifts the toy row by row until it fits and sends an `m` for the new position; the server
+takes any `m` for the toy in hand. A toy can always fit in the hidden rows (18 to 21) unless the
+hit filled them, and then the hit has already put the box out.
 
 ### `tumbleSync`: whole boxes
 

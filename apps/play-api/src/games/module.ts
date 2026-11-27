@@ -13,7 +13,7 @@ export type ApplyContext = { easyOnly: boolean };
 
 /**
  * A game's live stream (Purrtrait's ink, design §6): what a room needs to relay it with its
- * `LiveRelay`. `Op` is one update and `Tally` the game's checking state; the checks and the
+ * `LiveStream`. `Op` is one update and `Tally` the game's checking state; the checks and the
  * compaction are the game's, who may send (the device that owns the turn) is the room's.
  * Methods, not properties, so a game's own op and tally types fit the room's `unknown`.
  */

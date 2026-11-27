@@ -53,7 +53,8 @@ final class BirdSeatNode: SKNode {
     func update(
         name: String, active: Bool, count: Int?, ribbon kind: BirdTableModel.Ribbon?, dealer isDealer: Bool,
         sign next: BirdTableModel.Sign?, partner: Bool, bot: Bool, left: Bool, presence: Presence?, maxTagWidth: CGFloat,
-        textScale: CGFloat, edges: (left: CGFloat, right: CGFloat) = (.infinity, .infinity)
+        textScale: CGFloat, edges: (left: CGFloat, right: CGFloat) = (.infinity, .infinity),
+        minimumText: CGFloat = CardFaceFactory.nameSize
     ) {
         cat.setActive(active)
         cat.setCount(count)
@@ -61,7 +62,8 @@ final class BirdSeatNode: SKNode {
         cat.setPresence(bot ? nil : presence)
         let shown = left ? String(localized: "\(name) (left)", comment: "Birdwatch: a seat a House Cat plays for someone who left") : name
         let texture = CardFaceFactory.shared.nameTag(
-            shown, maxWidth: maxTagWidth, active: active, size: (CardFaceFactory.nameSize * textScale).rounded())
+            shown, maxWidth: maxTagWidth, active: active, size: (CardFaceFactory.nameSize * textScale).rounded(),
+            minimum: minimumText)
         tag.texture = texture
         tag.size = texture.size()
         // Centred under the cat, slid inward where the screen's edge is nearer than half the tag.
