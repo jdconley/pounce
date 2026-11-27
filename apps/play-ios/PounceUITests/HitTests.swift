@@ -184,7 +184,7 @@ class HitTests: XCTestCase {
 
     /// The hit probe and the touches the table was handed, for a failure message.
     @MainActor private func report(_ app: XCUIApplication, _ probe: XCUIElement) -> String {
-        "hit \(value(probe) ?? "-"), touches \(value(el(app, "table.touches")) ?? "-")"
+        "hit \(value(probe) ?? "-"), touches \(value(el(app, "table.touches")) ?? "-"), \(touchReport(app))"
     }
 
     @MainActor private func aims(_ probe: XCUIElement) -> Int {

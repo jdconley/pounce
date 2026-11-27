@@ -118,7 +118,7 @@ final class FrameRateTVTests: XCTestCase {
         let window = after - before
         let report = window.report(name) + String(format: " | host load %.2f per core", host.load)
         print(report)
-        for frame in (value(el(app, "watchdog.frames")) ?? "").split(separator: "\n") {
+        for frame in (probeText(app, "watchdog.frames") ?? "").split(separator: "\n") {
             print("FRAMES \(name) \(frame)")
         }
         let note = XCTAttachment(string: report)

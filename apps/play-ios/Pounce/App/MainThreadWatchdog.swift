@@ -104,8 +104,24 @@ final class MainThreadWatchdog {
     /// A SwiftUI play screen with no table (the Daily Dish, a daily puzzle): when it came up.
     private var screenSince: CFTimeInterval?
 
-    private let probe = Probe(id: "watchdog") { MainThreadWatchdog.shared?.summary() }
-    private let framesProbe = Probe(id: "watchdog.frames") { MainThreadWatchdog.shared?.recentFrames() }
+    /// Why a test's touch or a gate's frames went missing: table views that came on screen
+    /// (`views`, one per table unless SwiftUI rehosted it), times a table's view left its window
+    /// (`offs`), times the app left the foreground (`inactive`), and the touches the app's windows
+    /// were handed (`wtouch`: began, moved, ended, cancelled), whatever view they went on to.
+    private(set) var views = 0
+    private(set) var offs = 0
+    private(set) var inactive = 0
+    fileprivate(set) var windowTouches = (began: 0, moved: 0, ended: 0, cancelled: 0)
+    /// The latest touch's view and the gesture recognizers it was handed to (`wgr`): each one's
+    /// class, its state now and whether it holds the view's touch-ends until it decides. A touch
+    /// the window saw end but the table didn't was held or taken by one of these.
+    fileprivate weak var lastTouchView: UIView?
+    fileprivate var lastTouchRecognizers: [WeakRecognizer] = []
+    fileprivate struct WeakRecognizer { weak var value: UIGestureRecognizer? }
+    private var activeObserver: NSObjectProtocol?
+
+    private let probe = PartedProbe(id: "watchdog") { MainThreadWatchdog.shared?.summary() }
+    private let framesProbe = PartedProbe(id: "watchdog.frames") { MainThreadWatchdog.shared?.recentFrames() }
     private var windowObserver: NSObjectProtocol?
     private var sceneObserver: NSObjectProtocol?
     private var displayLink: CADisplayLink?
@@ -223,7 +239,10 @@ final class MainThreadWatchdog {
     /// A table's view went on screen (`window != nil`) or off it.
     func watch(_ view: SKView) {
         if view.window != nil {
-            if tableView !== view { tableSince = CACurrentMediaTime() }
+            if tableView !== view {
+                tableSince = CACurrentMediaTime()
+                views += 1
+            }
             tableView = view
             // The table's screen is known now (at launch there may be none yet, and the link
             // fell back to 60): judge the main thread's frames at that screen's top rate.
@@ -231,6 +250,7 @@ final class MainThreadWatchdog {
         } else if tableView === view {
             tableView = nil
             tableSince = nil
+            offs += 1
         }
         lastTableFrame = nil
     }
@@ -300,7 +320,32 @@ final class MainThreadWatchdog {
             framesOverWorkBudget, worstReadWorkMs, worstReadFrameWorkMs, speedMs)
             + String(format: " apphangs=%d apphangmax=%.1f workh=%@", appHangs, worstAppHangMs,
                      workHistogram.enumerated().filter { $0.element > 0 }.map { "\($0.offset):\($0.element)" }.joined(separator: ","))
-        return "\(head) | link \(link.summary) | table \(table.summary)"
+        let t = windowTouches
+        let seen = String(format: " views=%d offs=%d inactive=%d wtouch=%d,%d,%d,%d",
+                          views, offs, inactive, t.began, t.moved, t.ended, t.cancelled)
+        let held = lastTouchRecognizers.compactMap(\.value).map { g in
+            "\(Self.short(g))/\(Self.name(g.state))/\(g.delaysTouchesEnded ? 1 : 0)\(g.view === lastTouchView ? "" : "^")"
+        }
+        let viewName = lastTouchView.map { "\(Self.short($0))\($0.window == nil ? "/off" : "")" } ?? "-"
+        let grs = " wview=\(viewName) wgr=\(held.isEmpty ? "-" : held.joined(separator: ","))"
+        return "\(head)\(seen)\(grs) | link \(link.summary) | table \(table.summary)"
+    }
+
+    /// A class name without generic arguments, so it holds no spaces or commas.
+    private static func short(_ object: AnyObject) -> String {
+        String(String(describing: type(of: object)).prefix { $0 != "<" && $0 != " " && $0 != "," })
+    }
+
+    private static func name(_ state: UIGestureRecognizer.State) -> String {
+        switch state {
+        case .possible: "possible"
+        case .began: "began"
+        case .changed: "changed"
+        case .ended: "ended"
+        case .cancelled: "cancelled"
+        case .failed: "failed"
+        @unknown default: "other"
+        }
     }
 
     static func screenRate(_ window: UIWindow?) -> Int { UIScreen.topFrameRate(for: window) }
@@ -325,6 +370,12 @@ final class MainThreadWatchdog {
             forName: UIScene.didActivateNotification, object: nil, queue: .main
         ) { _ in
             MainActor.assumeIsolated { MainThreadWatchdog.shared?.matchScreenRate(nil) }
+        }
+
+        activeObserver = NotificationCenter.default.addObserver(
+            forName: UIApplication.willResignActiveNotification, object: nil, queue: .main
+        ) { _ in
+            MainActor.assumeIsolated { MainThreadWatchdog.shared?.inactive += 1 }
         }
 
         // The thread wakes (first in line), and finishes each step (last in line, so a step's
@@ -454,15 +505,95 @@ final class MainThreadWatchdog {
     /// A window just showed: the probe goes at the back of the app's own window (not an overlay
     /// or a system one), if it isn't on one already.
     private func attachProbe() {
-        guard probe.window == nil || probe.window?.isHidden == true else { return }
+        guard let first = probe.views.first, first.window == nil || first.window?.isHidden == true else { return }
         let windows = UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }.flatMap(\.windows)
         guard let window = windows.first(where: { $0.windowLevel == .normal && !$0.isHidden }) else { return }
-        window.insertSubview(probe, at: 0)
-        window.insertSubview(framesProbe, at: 0)
+        for view in probe.views + framesProbe.views { window.insertSubview(view, at: 0) }
+        if window.gestureRecognizers?.contains(where: { $0 is TouchCensus }) != true {
+            window.addGestureRecognizer(TouchCensus())
+        }
     }
 
-    /// The `watchdog` and `watchdog.frames` elements: draw nothing, take no touches, read
-    /// their value live.
+    /// Counts the touches a window is handed (`wtouch`), whichever view they go to, without
+    /// claiming, delaying or cancelling any.
+    private final class TouchCensus: UIGestureRecognizer, UIGestureRecognizerDelegate {
+        init() {
+            super.init(target: nil, action: nil)
+            cancelsTouchesInView = false
+            delaysTouchesBegan = false
+            delaysTouchesEnded = false
+            delegate = self
+        }
+
+        override func touchesBegan(_ touches: Set<UITouch>, with event: UIEvent) {
+            guard let watchdog = MainThreadWatchdog.shared else { return }
+            watchdog.windowTouches.began += touches.count
+            if let touch = touches.first {
+                watchdog.lastTouchView = touch.view
+                watchdog.lastTouchRecognizers = (touch.gestureRecognizers ?? [])
+                    .filter { $0 !== self }.map { WeakRecognizer(value: $0) }
+            }
+        }
+
+        override func touchesMoved(_ touches: Set<UITouch>, with event: UIEvent) {
+            MainThreadWatchdog.shared?.windowTouches.moved += touches.count
+        }
+
+        override func touchesEnded(_ touches: Set<UITouch>, with event: UIEvent) {
+            MainThreadWatchdog.shared?.windowTouches.ended += touches.count
+            if numberOfTouches <= touches.count { state = .failed }
+        }
+
+        override func touchesCancelled(_ touches: Set<UITouch>, with event: UIEvent) {
+            MainThreadWatchdog.shared?.windowTouches.cancelled += touches.count
+            if numberOfTouches <= touches.count { state = .failed }
+        }
+
+        func gestureRecognizer(_ g: UIGestureRecognizer, shouldRecognizeSimultaneouslyWith other: UIGestureRecognizer) -> Bool {
+            true
+        }
+    }
+
+    /// A probe's text in parts. XCTest cuts an accessibility value off at 512 characters, and a
+    /// reading runs past that: its frame histograms spread over many buckets on a starved CI
+    /// runner, and a cut-off reading lost its link and table sections, so a gate read it as no
+    /// watchdog at all. Each part is its own element (`id`, `id.1`, `id.2`, ...) of at most
+    /// `length` characters after the text's generation (`g=7;`): a test joins the parts of one
+    /// generation from one snapshot, and reads again if a snapshot caught two.
+    @MainActor private final class PartedProbe {
+        static let length = 480
+        static let count = 12
+        private(set) var views: [Probe] = []
+        private let read: @MainActor () -> String?
+        private var parts: [Substring] = []
+        private var generation = 0
+        private var readAt: CFTimeInterval = -1
+
+        init(id: String, read: @escaping @MainActor () -> String?) {
+            self.read = read
+            views = (0..<Self.count).map { i in
+                Probe(id: i == 0 ? id : "\(id).\(i)") { @MainActor [unowned self] in self.part(i) }
+            }
+        }
+
+        /// Part `i` of the text, read once for all the parts one snapshot asks for.
+        private func part(_ i: Int) -> String {
+            let now = CACurrentMediaTime()
+            if now - readAt > 0.05 {
+                let text = read() ?? ""
+                parts = stride(from: 0, to: max(text.count, 1), by: Self.length).map { start in
+                    let from = text.index(text.startIndex, offsetBy: start, limitedBy: text.endIndex) ?? text.endIndex
+                    let to = text.index(from, offsetBy: Self.length, limitedBy: text.endIndex) ?? text.endIndex
+                    return text[from..<to]
+                }
+                generation += 1
+                readAt = now
+            }
+            return "g=\(generation);" + (i < parts.count ? String(parts[i]) : "")
+        }
+    }
+
+    /// One part of a probe's text: draws nothing, takes no touches, reads its value live.
     private final class Probe: UIView {
         private let read: @MainActor () -> String?
 
