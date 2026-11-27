@@ -945,7 +945,8 @@ export class GameRoom extends DurableObject<Env> {
       ...(next ? { next } : {}),
       ...(movedAt === null ? {} : { movedAt }),
       ...(this.otherGame() ? { game: this.otherGame() } : {}),
-      ...(options ? { options: { ...options } } : {}),
+      // A card shows a table's rule set (Birdwatch); Toy Tumble's House Cat level isn't on it.
+      ...(options && "rules" in options ? { options: { ...options } } : {}),
     };
     await Promise.all([
       ...[...devices].map((deviceId) =>
