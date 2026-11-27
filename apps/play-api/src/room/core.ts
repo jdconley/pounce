@@ -709,7 +709,7 @@ export class RoomCore<S = CatTowerState> {
   /** The keys still good now: each for two periods from its mint, however late an alarm. */
   private liveNearKeys(): { key: string; at: number }[] {
     if (!this.nearOpen()) return [];
-    const life = (2 * NEAR_KEY_MS) / this.speed;
+    const life = this.devMs(2 * NEAR_KEY_MS);
     return (this.state.nearKeys ?? []).filter((k) => this.now() < k.at + life);
   }
 
@@ -725,7 +725,7 @@ export class RoomCore<S = CatTowerState> {
   private nearDue(): number | null {
     if (!this.nearOpen() || !this.screenConnected()) return null;
     const current = this.state.nearKeys?.[0];
-    return current === undefined ? this.now() : current.at + NEAR_KEY_MS / this.speed;
+    return current === undefined ? this.now() : current.at + this.devMs(NEAR_KEY_MS);
   }
 
   /** Mints the screen's next key when one is due. True when it did: the screen needs a snapshot. */
@@ -746,7 +746,7 @@ export class RoomCore<S = CatTowerState> {
     // The newest key, while it is good: a previous one outlives no current one.
     const current = this.liveNearKeys()[0];
     if (current === undefined) return {};
-    const expiresIn = Math.max(0, current.at + NEAR_KEY_MS / this.speed - this.now());
+    const expiresIn = Math.max(0, current.at + this.devMs(NEAR_KEY_MS) - this.now());
     return { near: { key: current.key, code: typedNear(this.state.code, current.key), expiresIn } };
   }
 
@@ -764,7 +764,7 @@ export class RoomCore<S = CatTowerState> {
   /** A screen is here, or only just left: the phones show the table as on a screen. */
   screenShown(): boolean {
     const { screenLeftAt } = this.state;
-    return this.screenConnected() || (screenLeftAt !== undefined && this.now() < screenLeftAt + SCREEN_GRACE_MS / this.speed);
+    return this.screenConnected() || (screenLeftAt !== undefined && this.now() < screenLeftAt + this.devMs(SCREEN_GRACE_MS));
   }
 
   /**
@@ -994,7 +994,7 @@ export class RoomCore<S = CatTowerState> {
       state.status === "playing" &&
       this.game.stall &&
       (timers.pausedAt ?? null) !== null &&
-      (timers.pausedAt as number) + STALL_END_MS / this.speed <= this.now()
+      (timers.pausedAt as number) + this.devMs(STALL_END_MS) <= this.now()
     ) {
       const ended = this.game.stall(state.gameState as S);
       timers.pausedAt = null;
@@ -1040,13 +1040,13 @@ export class RoomCore<S = CatTowerState> {
 
   nextAlarm(): number {
     const { botAt, nextRoundAt, cleanupAt, turnEndsAt = null, pausedAt = null } = this.state.timers;
-    const stalls = pausedAt === null ? null : pausedAt + STALL_END_MS / this.speed;
+    const stalls = pausedAt === null ? null : pausedAt + this.devMs(STALL_END_MS);
     const decays = Object.values(this.state.devices)
       .filter((device) => device.presence === "away")
       .map((device) => device.since + ASLEEP_AFTER_MS);
     const link = this.linkWatched() ? this.link.nextChange(this.now()) : null;
     const { screenLeftAt } = this.state;
-    const screenGone = screenLeftAt === undefined ? null : screenLeftAt + SCREEN_GRACE_MS / this.speed;
+    const screenGone = screenLeftAt === undefined ? null : screenLeftAt + this.devMs(SCREEN_GRACE_MS);
     return Math.min(
       ...[botAt, nextRoundAt, cleanupAt, turnEndsAt, stalls, link, screenGone, this.nearDue(), this.retireWarningAt(), ...decays, ...Object.values(this.state.live ?? {}).map(deadline)].filter(
         (t): t is number => t !== null,
@@ -1380,14 +1380,14 @@ export class RoomCore<S = CatTowerState> {
       return;
     }
     // The pause began when the grace ran out, however late the alarm that noticed.
-    const at = screenLeftAt === undefined ? now : Math.min(now, screenLeftAt + SCREEN_GRACE_MS / this.speed);
+    const at = screenLeftAt === undefined ? now : Math.min(now, screenLeftAt + this.devMs(SCREEN_GRACE_MS));
     // Carried across turns and phases while the screen stays away: the stall counts the whole absence.
     timers.pausedAt ??= at;
     const due = timers.turnEndsAt ?? null;
     // A deadline that passed before the screen went is the turn's to time out.
     if (due !== null && due > at) {
       // Never more than the phase's own limit: a turn that began within the grace has run less.
-      timers.pausedLeftMs = Math.min(due - at, (this.game.turnLimitMs(this.state.gameState as S) as number) / this.speed);
+      timers.pausedLeftMs = Math.min(due - at, this.devMs(this.game.turnLimitMs(this.state.gameState as S) as number));
       timers.turnEndsAt = null;
     }
   }
@@ -1403,7 +1403,7 @@ export class RoomCore<S = CatTowerState> {
     const key = `${this.turnKey()}/${limit}`;
     if (timers.clockKey !== key) {
       timers.clockKey = key;
-      const left = limit / this.speed;
+      const left = this.devMs(limit);
       if (this.screenShown()) {
         timers.turnEndsAt = this.now() + left;
         timers.pausedLeftMs = null;
@@ -1665,8 +1665,8 @@ export class RoomCore<S = CatTowerState> {
     const last = this.state.nudges?.[String(from)];
     if (last?.turn === this.turnKey()) return { sent: true, wait: 0 };
     const ready = Math.max(
-      this.turnStartedAt() + NUDGE_AFTER_MS / this.speed,
-      last ? last.at + NUDGE_EVERY_MS / this.speed : -Infinity,
+      this.turnStartedAt() + this.devMs(NUDGE_AFTER_MS),
+      last ? last.at + this.devMs(NUDGE_EVERY_MS) : -Infinity,
     );
     return { sent: false, wait: Math.max(0, Math.ceil(ready - now)) };
   }
@@ -1740,7 +1740,7 @@ export class RoomCore<S = CatTowerState> {
 
   /** Ms until the current turn's seat may be retired (0: now). */
   private retireWait(now: number): number {
-    return Math.max(0, Math.ceil(this.turnStartedAt() + RETIRE_AFTER_MS / this.speed - now));
+    return Math.max(0, Math.ceil(this.turnStartedAt() + this.devMs(RETIRE_AFTER_MS) - now));
   }
 
   /** A snapshot's `retire` for this device: the stalled seat it may retire, and how long until it may. */
@@ -1765,7 +1765,7 @@ export class RoomCore<S = CatTowerState> {
   /** When the current turn's holder should be warned; null with nobody to warn, or once warned. */
   private retireWarningAt(): number | null {
     if (this.stalledSeat() === null || this.state.retireWarned === this.turnKey()) return null;
-    return this.turnStartedAt() + (RETIRE_AFTER_MS - RETIRE_WARNING_MS) / this.speed;
+    return this.turnStartedAt() + this.devMs(RETIRE_AFTER_MS - RETIRE_WARNING_MS);
   }
 
   /** Once per turn, a day before the seat becomes retirable: a push to its holder. */
@@ -2341,7 +2341,7 @@ export class RoomCore<S = CatTowerState> {
       return;
     }
     if (phase === "between") {
-      timers.nextRoundAt = now + NEXT_ROUND_DELAY_MS / this.speed;
+      timers.nextRoundAt = now + this.devMs(NEXT_ROUND_DELAY_MS);
       timers.botAt = null;
       this.stopClock(true);
       return;
@@ -2354,7 +2354,7 @@ export class RoomCore<S = CatTowerState> {
     const actor = this.actor() as Seat;
     const seat = state.seats[actor] as SeatInfo;
     if (seat.kind === "bot") {
-      timers.botAt = now + BOT_DELAY_MS / this.speed;
+      timers.botAt = now + this.devMs(BOT_DELAY_MS);
       return;
     }
     timers.botAt = null;
@@ -2467,6 +2467,11 @@ export class RoomCore<S = CatTowerState> {
     return Object.entries(this.state.devices)
       .filter(([, device]) => device.connected)
       .map(([id]) => ({ to: id, message: this.snapshotFor(id) }));
+  }
+
+  /** `ms` divided by the dev speed, in whole milliseconds: a fractional speed never makes a fractional deadline. */
+  private devMs(ms: number): number {
+    return Math.ceil(ms / this.speed);
   }
 
   private fail(deviceId: string, code: ErrorCode): Outbound {
