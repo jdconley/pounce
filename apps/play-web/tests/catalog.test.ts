@@ -3,11 +3,12 @@ import { readFileSync } from "node:fs";
 import { GAMES, gameTitle } from "@pounce/play-api/games/index";
 import { describe, expect, test } from "vitest";
 
-import { CATALOG, GAME_IDS, RULE_NAMES, rulesLine, titleOf } from "../src/lib/catalog";
+import { CATALOG, GAME_IDS, RULE_NAMES, SHELF, rulesLine, titleOf } from "../src/lib/catalog";
+import { TUMBLE_ON } from "../src/lib/env";
 import { RULE_COPY } from "../src/table/bw-model";
 
 /** Games the server deals that this player doesn't draw yet: each leaves the list when its web table lands. */
-const NOT_YET: readonly string[] = ["purrtrait", "tumble"];
+const NOT_YET: readonly string[] = ["purrtrait"];
 
 describe("Home's game shelf", () => {
   test("names and seats every game the server has, exactly as the server does", () => {
@@ -18,6 +19,19 @@ describe("Home's game shelf", () => {
       expect(CATALOG[id].maxSeats).toBe(GAMES[id].maxSeats);
     }
     expect(titleOf("chess")).toBe(gameTitle("chess"));
+  });
+
+  test("has Toy Tumble on the shelf when the build turns it on", () => {
+    expect(SHELF).toEqual(TUMBLE_ON ? ["cat-tower", "tiles", "birdwatch", "tumble"] : ["cat-tower", "tiles", "birdwatch"]);
+    expect(GAME_IDS).toContain("tumble");
+  });
+
+  test("the deployed build turns Toy Tumble on", () => {
+    const ci = readFileSync(new URL("../../../.github/workflows/ci.yml", import.meta.url), "utf8");
+    const deploy = ci.slice(ci.indexOf("\n  deploy-play-api:"));
+    const build = deploy.slice(deploy.indexOf("- name: Build the web player"), deploy.indexOf("- name: Deploy"));
+    expect(build).toContain("pnpm --filter @pounce/play-web build");
+    expect(build).toMatch(/\n\s+WEB_TUMBLE: "on"\n/);
   });
 });
 

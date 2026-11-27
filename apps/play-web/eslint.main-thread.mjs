@@ -74,6 +74,10 @@ const UI_CODE = [
   `${PLAY_WEB}/table/**/*.{ts,tsx}`,
   // The Daily Dish's screens and every game's board; its network code (client, socket, store) keeps its timers.
   `${PLAY_WEB}/daily/**/*.tsx`,
+  // Toy Tumble's screens and drawing; its box, store and input keep their clocks (the key repeat).
+  `${PLAY_WEB}/tumble/**/*.tsx`,
+  `${PLAY_WEB}/tumble/canvas.ts`,
+  `${PLAY_WEB}/tumble/layout.ts`,
   `${PLAY_WEB}/app.tsx`,
   `${PLAY_WEB}/main.tsx`,
 ];

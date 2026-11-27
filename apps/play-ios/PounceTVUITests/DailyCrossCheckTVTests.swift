@@ -32,10 +32,7 @@ final class DailyCrossCheckTVTests: XCTestCase {
         }
         XCTAssertTrue(el(app, "tv.poster.board").waitForExistence(timeout: Live.t(20)), "no Tonight's board poster: is DAILY on?")
         XCTAssertTrue(waitForFocus(app, "tv.poster.cat-tower", timeout: 10))
-        press(app, .right, to: "tv.poster.tiles")
-        press(app, .right, to: "tv.poster.birdwatch")
-        press(app, .right, to: "tv.poster.purrtrait")
-        press(app, .right, to: "tv.poster.board")
+        walkShelfToBoard(app)
         XCUIRemote.shared.press(.select)
         XCTAssertTrue(el(app, "tv.boardLink.code").waitForExistence(timeout: Live.t(15)), "no link code")
         print("CROSSCHECK TV code \(label(el(app, "tv.boardLink.code")) ?? "")")

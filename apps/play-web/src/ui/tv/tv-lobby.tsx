@@ -10,6 +10,7 @@ import { CATALOG } from "../../lib/catalog";
 import { play } from "../../lib/sound";
 import { lobbyRibbons, RULE_COPY } from "../../table/bw-model";
 import { seatCat, seatName } from "../../table/seat";
+import { catsOf, CATS_WORDS } from "../../tumble/store";
 import { Cat, Icon } from "../common";
 import { inviteLink } from "../lobby";
 import { QrCode } from "../qr";
@@ -74,6 +75,7 @@ export function TvLobby(props: { room: RoomView; live: boolean; onChangeGame: (b
           <img class="tv-lobby-art" src={art(CATALOG[game].art)} alt="" width={768} height={512} decoding="async" />
           <h1 class="tv-lobby-title outlined">{CATALOG[game].title}</h1>
           {game === "birdwatch" && room.options && "rules" in room.options ? <p class="tv-lobby-rules outlined">{RULE_COPY[room.options.rules].name}</p> : null}
+          {game === "tumble" && room.seats.some((s) => s.kind === "bot") ? <p class="tv-lobby-rules outlined">{CATS_WORDS[catsOf(room)]}</p> : null}
         </header>
         <div class="tv-lobby-rug">
           <img class="tv-lobby-rug-art" src={art("rug")} alt="" />

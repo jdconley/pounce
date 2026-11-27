@@ -34,6 +34,7 @@ enum TVDemo: Equatable {
         case "tv-hit": return .table(.cattower, seats: seats ?? 6)
         case "tv-tiles": return .table(.tiles, seats: seats ?? 4)
         case "tv-birdwatch": return .table(.birdwatch, seats: seats ?? 4)
+        case "tv-tumble": return .table(.tumble, seats: seats ?? 6)
         case "tv-purrtrait": return .table(.purrtrait, seats: seats ?? 6)
         case "tv-shell": return .shell
         case "tv-over": return .over(seats: seats ?? 4)
@@ -506,12 +507,28 @@ struct TVDemoTableView: View {
     private func start() {
         guard table == nil else { return }
         if still { MainThreadWatchdog.startIfAsked() }
-        let room = TVDemo.room(tiles: game == .tiles, birdwatch: game == .birdwatch, seats: seats, code: DemoFixtures.code)
-        let purr = game == .purrtrait
-        let (seats, still) = (seats, still)
-        let next = TVRoom(code: room.code, socket: { _ in
-            purr ? TVPurrDemoSocket(seats: seats, still: still) as any RoomSocketing : TVDemoSocket(room: room, lobby: false)
-        }, watchesNetwork: false)
+        let next: TVRoom
+        if game == .tumble {
+            // Every seat a House Cat box, playing live on the demo room (spec §5.6).
+            var options = TumbleDemoRoom.Options()
+            options.seats = min(max(seats, 2), 6)
+            options.screen = true
+            options.think = 600...1100
+            options.stack = 3
+            // `-tumble-gone`: seat 1 left the game and seat 2 sits this round out (no boxes).
+            if CommandLine.arguments.contains("-tumble-gone") {
+                options.left = [1]
+                options.away = [2]
+            }
+            let made = options
+            next = TVRoom(code: "TUMBLE", socket: { _ in TumbleDemoSocket(options: made, tv: true) }, watchesNetwork: false)
+        } else if game == .purrtrait {
+            let (seats, still) = (seats, still)
+            next = TVRoom(code: DemoFixtures.code, socket: { _ in TVPurrDemoSocket(seats: seats, still: still) }, watchesNetwork: false)
+        } else {
+            let room = TVDemo.room(tiles: game == .tiles, birdwatch: game == .birdwatch, seats: seats, code: DemoFixtures.code)
+            next = TVRoom(code: room.code, socket: { _ in TVDemoSocket(room: room, lobby: false) }, watchesNetwork: false)
+        }
         next.onChange = { table in
             if table.store.phase == .playing || table.store.phase == .over { table.openTable() }
         }

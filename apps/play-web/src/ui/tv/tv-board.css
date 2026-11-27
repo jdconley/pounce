@@ -43,6 +43,76 @@
   font-size: calc(var(--u) * 64);
 }
 
+/* Five posters (four games and Tonight's board): two by two, shorter, with the last across the
+   bottom as a wide poster, its art beside its words. Three rows fit the 1000-unit stage height. */
+.tv-games.five {
+  flex-basis: calc(var(--u) * 960);
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: calc(var(--u) * 34);
+}
+
+.tv-games.five .tv-poster {
+  height: calc(var(--u) * 296);
+  grid-template-columns: 1fr;
+  grid-template-rows: 56% 1fr;
+}
+
+.tv-games.five .tv-poster-art {
+  object-position: 50% 30%;
+}
+
+.tv-games.five .tv-poster-art,
+.tv-games.five .tv-board-poster-art {
+  border-right: 0;
+  border-bottom: calc(var(--u) * 6) solid var(--ink);
+}
+
+.tv-games.five .tv-poster-body {
+  flex-direction: row;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  align-items: center;
+  align-content: center;
+  gap: calc(var(--u) * 8) calc(var(--u) * 14);
+  padding: calc(var(--u) * 10) calc(var(--u) * 24);
+}
+
+.tv-games.five .tv-poster-title {
+  font-size: calc(var(--u) * 52);
+  white-space: nowrap;
+}
+
+.tv-games.five .tv-players {
+  padding: calc(var(--u) * 6) calc(var(--u) * 18);
+  font-size: calc(var(--u) * 28);
+}
+
+.tv-games.five > :last-child:nth-child(odd) {
+  grid-column: 1 / -1;
+  grid-template-columns: 34% 1fr;
+  grid-template-rows: 1fr;
+}
+
+.tv-games.five > :last-child:nth-child(odd) .tv-poster-art,
+.tv-games.five > :last-child:nth-child(odd) .tv-board-poster-art {
+  border-right: calc(var(--u) * 6) solid var(--ink);
+  border-bottom: 0;
+}
+
+.tv-games.five > :last-child:nth-child(odd) .tv-poster-body {
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: center;
+  gap: calc(var(--u) * 18);
+  padding: calc(var(--u) * 20) calc(var(--u) * 36);
+}
+
+.tv-games.five > :last-child:nth-child(odd) .tv-poster-title {
+  font-size: calc(var(--u) * 64);
+  white-space: normal;
+}
+
 .tv-poster.board {
   background: linear-gradient(180deg, #ff7cc0, #ff2e9a 55%, #d0137a);
 }

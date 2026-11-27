@@ -176,7 +176,7 @@ public struct TableModel: Equatable, Sendable {
     public var canStart: Bool {
         guard room.status == .lobby, !mySeats.isEmpty, firstOpenSeat == nil else { return false }
         let players = room.seats.filter { $0.kind == .human || $0.kind == .bot }.count
-        return players >= neededPlayers && players <= seatRange.upperBound
+        return players >= neededPlayers && players <= seatRange.upperBound && offlineSeats.isEmpty
     }
 
     public var firstOpenSeat: Seat? { blockingSeats.first }

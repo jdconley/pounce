@@ -42,6 +42,8 @@ Mine, open to JD's override.
 14. **The TV has no SpriteKit scene for Purrtrait** (`TVRoom.Scene.purrtrait`); `PurrTVTable` draws in SwiftUI and the easel's layers, and marks itself gameplay for the watchdog. Its paw draws its own icon.
 15. **Tips**: "Pick one to draw" (the word cards), "No letters or numbers" (the easel, learned by a stroke), "Tap who said it first" (Got it, after the easel's), "Guess out loud" (a guesser's "Look at the TV"), and "Pick it on the TV." (the shelf card).
 16. **No video** in How to play for Purrtrait yet: four short sections.
+17. **Purrtrait reaches the apps in 1.4**, behind Toy Tumble's gate (`GameCatalog.ships14`): a Release build below 1.4 has no Purrtrait in `GameCatalog.all`, so the shelf, How to play, the TV's home, `X-Pounce-Games` and the update screen's drawable games all leave it out. Debug builds always have it. The server's side is `GAME_MIN_APP.purrtrait = "1.4"`.
+18. **The easel ignores a finger for 0.4 s after it comes up** (`PurrDrawModel.settle`): the second half of a double tap on a word card never leaves a mark. On a shared phone the words aren't drawn under the curtain.
 
 ## Review Focus
 

@@ -14,7 +14,7 @@ import SwiftUI
 /// keeps moving (the aim hops between groups or the draft comes and goes, a lay-down moment every
 /// few seconds), for watching its frames with `-watchdog -watchdog-log`.
 enum TVTablePreview {
-    enum Game: String { case cattower, tiles, birdwatch, purrtrait }
+    enum Game: String { case cattower, tiles, birdwatch, tumble, purrtrait }
 
     static func from(arguments: [String] = CommandLine.arguments) -> (game: Game, seats: Int, aim: Bool)? {
         guard let i = arguments.firstIndex(of: "-tv-preview"), let game = arguments[safe: i + 1].flatMap(Game.init) else { return nil }
@@ -160,11 +160,13 @@ struct TVTablePreviewView: View {
     private func start() {
         guard table == nil else { return }
         MainThreadWatchdog.startIfAsked()
+        // Toy Tumble's TV table plays live: `-demo tv-tumble` (`TVDemoTableView`).
+        guard game != .tumble else { return }
         let store = RoomStore(code: DemoFixtures.code, socket: PreviewSocket(), role: .screen)
         let room = switch game {
         case .tiles: TVTablePreview.tiles(seats: seats)
         case .birdwatch: TVTablePreview.birdwatch(seats: seats)
-        case .cattower, .purrtrait: TVTablePreview.catTower(seats: seats)
+        case .cattower, .tumble, .purrtrait: TVTablePreview.catTower(seats: seats)
         }
         switch game {
         case .purrtrait:
@@ -176,7 +178,7 @@ struct TVTablePreviewView: View {
                 await BirdCardFactory.shared.prewarm()
                 for await intent in store.intents { scene.enqueue(intent) }
             }
-        case .cattower:
+        case .cattower, .tumble:
             let scene = TableScene(store: store)
             table = .catTower(scene)
             Task { for await intent in store.intents { scene.enqueue(intent) } }

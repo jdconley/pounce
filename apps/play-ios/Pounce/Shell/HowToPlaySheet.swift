@@ -79,12 +79,17 @@ struct HowToPlaySheet: View {
         ViewThatFits(in: .horizontal) {
             HStack(spacing: 10) { chips() }
             HStack(spacing: 6) { chips(compact: true) }
+            // Four games or more: two rows of compact chips before a column.
+            VStack(spacing: 8) {
+                HStack(spacing: 6) { chips(compact: true, GameCatalog.all.prefix((GameCatalog.all.count + 1) / 2)) }
+                HStack(spacing: 6) { chips(compact: true, GameCatalog.all.dropFirst((GameCatalog.all.count + 1) / 2)) }
+            }
             VStack(spacing: 10) { chips() }
         }
     }
 
-    private func chips(compact: Bool = false) -> some View {
-        ForEach(GameCatalog.all) { entry in
+    private func chips(compact: Bool = false, _ entries: ArraySlice<GameCatalog.Entry> = GameCatalog.all[...]) -> some View {
+        ForEach(Array(entries)) { entry in
             let on = entry.id == game.id
             Button {
                 guard !on else { return }

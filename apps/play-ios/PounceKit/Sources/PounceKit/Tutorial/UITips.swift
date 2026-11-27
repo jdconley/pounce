@@ -6,6 +6,8 @@ public enum TipScreen: String, CaseIterable, Codable, Sendable {
     case home, lobby, tableMenu, pounce, us, gear, tiles
     /// Birdwatch's table: its first hands teach the bid sign, dimmed cards, trump and the partner.
     case birdwatch
+    /// Toy Tumble's table: moving, turning, dropping, then tricks and junk as they first come up.
+    case tumble
     /// Cat Tower's table (so far only while a TV shows it: the Cards/Table switch). The tile game's
     /// table is `tiles`.
     case table
@@ -45,6 +47,10 @@ public indirect enum TipTrigger: Hashable, Sendable {
 public enum TipEvent: String, Hashable, Codable, Sendable {
     /// A game ended at a table on this phone.
     case gameOver
+    /// Toy Tumble: this player pocketed a trick for the first time this session.
+    case tumbleTrick
+    /// Toy Tumble: junk started waiting in this player's meter.
+    case tumbleJunk
 }
 
 /// Who a tip is for. Nil means anyone.
@@ -128,6 +134,12 @@ public enum UITip: String, CaseIterable, Codable, Sendable {
     case birdDimmed = "ui.bird.dimmed"
     case birdTrump = "ui.bird.trump"
     case birdPartner = "ui.bird.partner"
+    // Toy Tumble's table (design §5.8): the controls, then tricks and junk when they first come
+    case tumbleDrag = "ui.tumble.drag"
+    case tumbleTap = "ui.tumble.tap"
+    case tumbleFlick = "ui.tumble.flick"
+    case tumbleTrick = "ui.tumble.trick"
+    case tumbleJunk = "ui.tumble.junk"
     // Purrtrait (spec §11.4): the shelf's card, the first word pick, the easel, Got it, and a
     // guesser's phone.
     case purrShelf = "ui.purr.shelf"
@@ -187,6 +199,13 @@ public enum UITip: String, CaseIterable, Codable, Sendable {
         case .birdDimmed: r(.birdwatch, "bird.dimmed", 95, learnedBy: ["bird.play"])
         case .birdTrump: r(.birdwatch, "bird.trump", 85)
         case .birdPartner: r(.birdwatch, "bird.partner", 100)
+        // Toy Tumble's table, one at a time: drag, tap, flick (each learned by doing it), then
+        // the tray when a trick is first pocketed, and the meter when junk first waits.
+        case .tumbleDrag: r(.tumble, "tumble.box", 90, learnedBy: ["tumble.move"])
+        case .tumbleTap: r(.tumble, "tumble.box", 89, .after(.tumbleDrag), learnedBy: ["tumble.turn"])
+        case .tumbleFlick: r(.tumble, "tumble.box", 88, .after(.tumbleTap), learnedBy: ["tumble.drop"])
+        case .tumbleTrick: r(.tumble, "tumble.tray", 100, .event(.tumbleTrick), learnedBy: ["tumble.use"])
+        case .tumbleJunk: r(.tumble, "tumble.meter", 99, .event(.tumbleJunk), learnedBy: ["tumble.block"])
         // A tap on the card says it starts on the TV; the tip says where.
         case .purrShelf: r(.home, "home.game.purrtrait", 55, .after(.homeShelf), learnedBy: ["home.purrtrait"])
         // One at a time, as each comes up: picking learns the pick, a stroke the easel, a tap

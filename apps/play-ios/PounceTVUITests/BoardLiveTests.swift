@@ -133,10 +133,7 @@ final class BoardLiveTests: XCTestCase {
         // Home: the Dish is on, so Tonight's board is the last poster.
         XCTAssertTrue(el(app, "tv.poster.board").waitForExistence(timeout: Live.t(15)), "no Tonight's board poster: is the server's DAILY on?")
         XCTAssertTrue(waitForFocus(app, "tv.poster.cat-tower", timeout: 10))
-        press(app, .right, to: "tv.poster.tiles")
-        press(app, .right, to: "tv.poster.birdwatch")
-        press(app, .right, to: "tv.poster.purrtrait")
-        press(app, .right, to: "tv.poster.board")
+        walkShelfToBoard(app)
         XCUIRemote.shared.press(.select)
         let codeLabel = el(app, "tv.boardLink.code")
         var code = ""

@@ -173,7 +173,8 @@ describe("Birdwatch on the help page and llms.txt", () => {
         expect(on, s).toContain(s);
       }
       expect(on).toContain("It's coming to the iPhone app.");
-      expect(on).toContain("learn Cat Tower and Tuna Tiles and Birdwatch");
+      expect(on).toContain("learn Cat Tower, Tuna Tiles and Birdwatch");
+      expect(on).toContain("Pounce has family games: Cat Tower and Tuna Tiles, and Birdwatch in the browser.");
       expect(on).toContain("It plays Cat Tower and Tuna Tiles at the same tables as the iPhone app, and Birdwatch too.");
       expect(on.includes("<h2>The Daily Dish</h2>")).toBe(daily);
       expect(on).not.toContain("<!--");
@@ -192,5 +193,48 @@ describe("Birdwatch on the help page and llms.txt", () => {
     expect(on).toContain("Birdwatch, a trick-taking card game for four to six players in teams");
     expect(on).toContain("Birdwatch plays in the browser today and is coming to the iPhone app.");
     expect(on).not.toMatch(/\brook\b|[\u2013\u2014]|Apple TV/i);
+  });
+});
+
+describe("Toy Tumble on the help page and llms.txt", () => {
+  test("off: not a word of it; on: how to play it, in the browser and coming to the iPhone app in 1.4", async () => {
+    for (const daily of [false, true]) {
+      for (const birdwatch of [false, true]) {
+        const off = await supportPage(daily, birdwatch).text();
+        expect(off).not.toMatch(/Toy Tumble|hairball|<!--/i);
+        const on = await supportPage(daily, birdwatch, true).text();
+        expect(on).toContain("<h2>How to play Toy Tumble</h2>");
+        expect(on).toContain("Falling toys, for two to six players, all at the same time.");
+        expect(on).toContain("It's coming to the iPhone app in 1.4.");
+        for (const s of ["Drag to move one, tap to turn it, and flick down to drop it.", "Clear rows in time to block them.", "Tap a trick, then a box", "Win three rounds to take the game.", "House Cats at Easy or Quick"]) {
+          expect(on, s).toContain(s);
+        }
+        const newer = birdwatch ? "Birdwatch and Toy Tumble" : "Toy Tumble";
+        expect(on).toContain(`Pounce has family games: Cat Tower and Tuna Tiles, and ${newer} in the browser.`);
+        expect(on).toContain(`It plays Cat Tower and Tuna Tiles at the same tables as the iPhone app, and ${newer} too.`);
+        expect(on).toContain(birdwatch ? "learn Cat Tower, Tuna Tiles, Birdwatch and Toy Tumble" : "learn Cat Tower, Tuna Tiles and Toy Tumble");
+        expect(on.includes("<h2>How to play Birdwatch</h2>")).toBe(birdwatch);
+        expect(on.includes("<h2>The Daily Dish</h2>")).toBe(daily);
+        expect(on).not.toContain("<!--");
+        // Never an App Store claim before 1.4, and none of the words of the games it grew from.
+        expect(on).not.toMatch(/Toy Tumble[^.]*(App Store|in the app\b)/);
+        expect(on).not.toMatch(/[\u2013\u2014]|Apple TV/);
+      }
+    }
+  });
+
+  test("llms.txt names Toy Tumble only with it on, as in the browser and the web TV page and coming to the iPhone app in 1.4", async () => {
+    const off = await llmsTxt("https://play.conleychaos.com", true, true, true).text();
+    expect(off).not.toContain("Toy Tumble");
+    const on = await llmsTxt("https://play.conleychaos.com", true, true, true, true).text();
+    expect(on).toContain("It has four games");
+    expect(on).toContain("Toy Tumble, a real-time game for two to six players where everyone plays at once");
+    expect(on).toContain("a TV shows every box");
+    expect(on).toContain("Birdwatch plays in the browser today and is coming to the iPhone app.");
+    expect(on).toContain("Toy Tumble plays in the browser and on the web TV page today, and is coming to the iPhone app in 1.4.");
+    const alone = await llmsTxt("https://play.conleychaos.com", true, false, false, true).text();
+    expect(alone).toContain("It has three games");
+    expect(alone).not.toContain("Birdwatch");
+    expect(on).not.toMatch(/[\u2013\u2014]|Apple TV/);
   });
 });

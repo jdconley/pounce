@@ -93,6 +93,9 @@ import Observation
     public private(set) var aims: [Seat: GameAim] = [:]
     /// Each `{t:"streak"}` for this device's people: pair, person, view. Set by the session.
     @ObservationIgnored public var onStreak: ((String, String, StreakView) -> Void)?
+    /// Toy Tumble's live stream (relays, hits, syncs, seat links), already decoded off the main
+    /// thread, for the table's `TumbleTable`. Not room state: the store keeps none of it.
+    @ObservationIgnored public var onTumble: ((TumbleMessage) -> Void)?
     /// Purrtrait's ink for the turn on now (the TV's stream, the drawer's own after a reconnect).
     /// Never observed: the easel listens to it.
     @ObservationIgnored public let ink = InkFeed()
@@ -543,6 +546,8 @@ import Observation
         case .inkResend(let turn):
             guard room?.purrtrait?.turn == turn else { return }
             ink.resend(turn: turn)
+        case .tumble(let live):
+            onTumble?(live)
         case .pong:
             break
         }

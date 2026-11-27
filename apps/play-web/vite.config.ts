@@ -29,6 +29,8 @@ export default defineConfig({
   define: {
     __BUILD__: JSON.stringify(buildId()),
     __VERSION__: JSON.stringify(buildVersion()),
+    // Toy Tumble on the shelf: off until the server deals it (src/lib/env.ts).
+    __TUMBLE__: JSON.stringify(process.env.WEB_TUMBLE === "on"),
   },
   build: {
     outDir: fileURLToPath(new URL("../play-api/public/play", import.meta.url)),

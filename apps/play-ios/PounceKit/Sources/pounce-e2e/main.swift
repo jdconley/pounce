@@ -183,7 +183,7 @@ actor Device {
                 state.inkSync = ops
             case .inkResend:
                 state.inkResends += 1
-            case .streak, .rematch, .pong, .nudgeSent, .nudged, .aim:
+            case .streak, .rematch, .pong, .nudgeSent, .nudged, .aim, .tumble:
                 break
             }
         }

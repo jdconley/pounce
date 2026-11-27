@@ -113,6 +113,8 @@ public struct ErrorCode: RawRepresentable, Codable, Hashable, Sendable {
     // Sent to the whole room, unprompted.
     public static let botStalled = ErrorCode(rawValue: "bot_stalled")
     public static let roomClosed = ErrorCode(rawValue: "room_closed")
+    /// Toy Tumble's Start while a person's device is offline.
+    public static let notConnected = ErrorCode(rawValue: "not_connected")
     // Local only, never sent by the server.
     /// An `act` whose send failed (the socket was down): it never reached the server.
     public static let notSent = ErrorCode(rawValue: "local_not_sent")
@@ -142,6 +144,9 @@ public enum ServerMessage: Decodable, Equatable, Sendable {
     /// Where `seat`'s player is pointing now, relayed to every other device; nil: cleared. Not a
     /// state change: no seq, never replayed. An app that predates it skips the unknown type.
     case aim(seat: Seat, aim: GameAim?)
+    /// Toy Tumble's live stream (`docs/live-protocol.md`): relays, hits, syncs and seat links. Not
+    /// room state: no seq. An app that predates it skips the unknown types.
+    case tumble(TumbleMessage)
     /// Purrtrait: the drawer's ops as they came, to the TV and the drawer's other sockets. Not
     /// state: no seq, never in a snapshot.
     case ink(seat: Seat, turn: String, ops: [InkOp])
@@ -151,6 +156,7 @@ public enum ServerMessage: Decodable, Equatable, Sendable {
     case inkResend(turn: String)
 
     private enum CodingKeys: String, CodingKey { case t, `protocol`, seq, room, event, seat, code, pair, person, view, seats, from, aim, turn, ops }
+    enum TumbleKeys: String, CodingKey { case r, s, q, ev, id, from, to, k, x, boxes, st }
 
     public init(from decoder: any Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
@@ -197,6 +203,20 @@ public enum ServerMessage: Decodable, Equatable, Sendable {
             self = .inkSync(turn: try c.decode(String.self, forKey: .turn), ops: try c.decode([InkOp].self, forKey: .ops))
         case "inkResend":
             self = .inkResend(turn: try c.decode(String.self, forKey: .turn))
+        case "tumble":
+            let k = try decoder.container(keyedBy: TumbleKeys.self)
+            self = .tumble(.relay(TumbleRelay(
+                r: try k.decode(Int.self, forKey: .r), s: try k.decode(Int.self, forKey: .s), q: try k.decode(Int.self, forKey: .q),
+                ev: try k.decode([TumbleEvent].self, forKey: .ev))))
+        case "tumbleHit":
+            self = .tumble(.hit(try TumbleHitWire(from: try decoder.container(keyedBy: TumbleKeys.self))))
+        case "tumbleSync":
+            let k = try decoder.container(keyedBy: TumbleKeys.self)
+            self = .tumble(.sync(TumbleSync(r: try k.decode(Int.self, forKey: .r), boxes: try k.decode([TumbleBoxSync].self, forKey: .boxes))))
+        case "tumbleSeat":
+            let k = try decoder.container(keyedBy: TumbleKeys.self)
+            self = .tumble(.seat(TumbleSeat(
+                r: try k.decode(Int.self, forKey: .r), s: try k.decode(Int.self, forKey: .s), st: try k.decode(TumbleSeat.State.self, forKey: .st))))
         default:
             throw DecodingError.dataCorruptedError(
                 forKey: .t, in: c, debugDescription: "unknown server message type: \(t)")
@@ -295,6 +315,8 @@ public enum ClientMessage: Encodable, Equatable, Sendable {
     case actTiles(seat: Seat, action: TilesAction, id: String? = nil)
     /// A Birdwatch move: the same envelope around a `BirdAction`.
     case actBirdwatch(seat: Seat, action: BirdAction, id: String? = nil)
+    /// Toy Tumble's few room actions (leave the game, the host's Play without), in the `act` envelope.
+    case actTumble(seat: Seat, action: TumbleAction)
     /// The host sets the game's options in the lobby (Birdwatch's rule set).
     case setOptions(RoomOptions)
     /// The host swaps two seats in the lobby (Birdwatch's teams follow seat order).
@@ -324,6 +346,9 @@ public enum ClientMessage: Encodable, Equatable, Sendable {
     case retire(seat: Seat)
     /// Live pointing for the TV; nil clears it (`{"t":"aim","seat":n}`).
     case aim(seat: Seat, aim: GameAim?)
+    /// Toy Tumble's events for this device's own box, in order (`docs/live-protocol.md`). An
+    /// empty `ev` asks for a sync of every box.
+    case tumble(r: Int, ev: [TumbleEvent])
     /// A Purrtrait move: the same `act` envelope around a `PurrAction`.
     case actPurrtrait(seat: Seat, action: PurrAction, id: String? = nil)
     /// Purrtrait: the drawer's ops for turn `turn`, from the device that owns the drawing turn.
@@ -332,7 +357,7 @@ public enum ClientMessage: Encodable, Equatable, Sendable {
     /// Purrtrait: the host takes a seat off the table (in the lobby it opens; in a game it's skipped).
     case remove(seat: Seat)
 
-    private enum CodingKeys: String, CodingKey { case t, seat, person, kind, action, state, code, name, rug, back, id, aim, options, seats, turn, ops, last }
+    private enum CodingKeys: String, CodingKey { case t, seat, person, kind, action, state, code, name, rug, back, id, aim, options, seats, r, ev, turn, ops, last }
 
     public func encode(to encoder: any Encoder) throws {
         var c = encoder.container(keyedBy: CodingKeys.self)
@@ -362,6 +387,10 @@ public enum ClientMessage: Encodable, Equatable, Sendable {
             try c.encode(seat, forKey: .seat)
             try c.encode(action, forKey: .action)
             try c.encodeIfPresent(id, forKey: .id)
+        case .actTumble(let seat, let action):
+            try c.encode("act", forKey: .t)
+            try c.encode(seat, forKey: .seat)
+            try c.encode(action, forKey: .action)
         case .setOptions(let options):
             try c.encode("setOptions", forKey: .t)
             try c.encode(options, forKey: .options)
@@ -422,6 +451,10 @@ public enum ClientMessage: Encodable, Equatable, Sendable {
         case .remove(let seat):
             try c.encode("remove", forKey: .t)
             try c.encode(seat, forKey: .seat)
+        case .tumble(let r, let ev):
+            try c.encode("tumble", forKey: .t)
+            try c.encode(r, forKey: .r)
+            try c.encode(ev, forKey: .ev)
         }
     }
 }

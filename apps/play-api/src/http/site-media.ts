@@ -59,22 +59,30 @@ export const MEDIA = {
       "height": 270,
       "webp": [
         {
-          "src": "/static/tv-home-480.85d2280301.webp",
+          "src": "/static/tv-home-480.d8bfea6b65.webp",
           "w": 480
         },
         {
-          "src": "/static/tv-home-760.9817edc6c0.webp",
-          "w": 760
+          "src": "/static/tv-home-720.c393679e33.webp",
+          "w": 720
+        },
+        {
+          "src": "/static/tv-home-1040.17f2a65317.webp",
+          "w": 1040
         }
       ],
       "jpg": [
         {
-          "src": "/static/tv-home-480.08b00459fd.jpg",
+          "src": "/static/tv-home-480.5bb7baf6cc.jpg",
           "w": 480
         },
         {
-          "src": "/static/tv-home-760.50055488b5.jpg",
-          "w": 760
+          "src": "/static/tv-home-720.cf4b0966ed.jpg",
+          "w": 720
+        },
+        {
+          "src": "/static/tv-home-1040.d015109e3e.jpg",
+          "w": 1040
         }
       ]
     },
@@ -205,6 +213,30 @@ export const MEDIA = {
           "w": 400
         }
       ]
+    },
+    "tumble": {
+      "width": 200,
+      "height": 344,
+      "webp": [
+        {
+          "src": "/static/toy-tumble-200.efbb14b48f.webp",
+          "w": 200
+        },
+        {
+          "src": "/static/toy-tumble-400.11346d7595.webp",
+          "w": 400
+        }
+      ],
+      "jpg": [
+        {
+          "src": "/static/toy-tumble-200.71f3c38ad2.jpg",
+          "w": 200
+        },
+        {
+          "src": "/static/toy-tumble-400.dc5ea247bd.jpg",
+          "w": 400
+        }
+      ]
     }
   },
   "art": {
@@ -293,7 +325,8 @@ export const MEDIA = {
     ],
     "previews": {
       "cat-tower": "/static/invite-cat-tower.71cd7c74f9.jpg",
-      "tiles": "/static/invite-tiles.e7c5854191.jpg"
+      "tiles": "/static/invite-tiles.e7c5854191.jpg",
+      "tumble": "/static/invite-tumble.2fccacabc0.jpg"
     },
     "dish": "/static/invite-dish.94897d5228.jpg"
   }

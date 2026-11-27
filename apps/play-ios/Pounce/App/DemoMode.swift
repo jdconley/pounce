@@ -82,6 +82,13 @@ enum DemoMode: String {
     case birdWatch = "bird-watch", birdPartner = "bird-partner", birdPartnerMark = "bird-partner-mark"
     case birdSix = "bird-six", birdBetween = "bird-between", birdOver = "bird-over", birdCurtain = "bird-curtain"
     case birdTV = "bird-tv", birdLobby = "bird-lobby", birdLobbyReady = "bird-lobby-ready"
+    /// Toy Tumble against House Cat boxes on the device (`TumbleDemo`), its lobby, and at a TV.
+    case tumblePlay = "tumble-play", tumbleSix = "tumble-six", tumbleTwo = "tumble-two", tumbleTV = "tumble-tv"
+    case tumbleCountdown = "tumble-countdown", tumbleLobby = "tumble-lobby", tumbleJunk = "tumble-junk"
+    /// The style checkpoint (spec §11): all nine toys, hairball rows and every badge, full size and mini.
+    case tumbleSheet = "tumble-sheet"
+    /// Out at a table a TV shows, with a seat that left and one away: every box that plays, big.
+    case tumbleTVOut = "tumble-tv-out"
     /// Purrtrait's phone in each state (`PurrDemo`).
     case purrPick = "purr-pick", purrDraw = "purr-draw", purrWatch = "purr-watch", purrNext = "purr-next"
     case purrPaused = "purr-paused", purrReveal = "purr-reveal", purrMissed = "purr-missed", purrOver = "purr-over"
@@ -93,6 +100,8 @@ enum DemoMode: String {
     /// A Birdwatch demo.
     var isBirdwatch: Bool { rawValue.hasPrefix("bird-") }
 
+    /// A Toy Tumble demo.
+    var isTumble: Bool { rawValue.hasPrefix("tumble-") }
     /// A Purrtrait demo.
     var isPurrtrait: Bool { rawValue.hasPrefix("purr-") }
 
@@ -131,6 +140,8 @@ enum DemoMode: String {
         case .birdBid, .birdNest, .birdTrump, .birdPlay, .birdWatch, .birdPartner, .birdPartnerMark, .birdSix, .birdBetween,
              .birdOver, .birdCurtain, .birdTV, .birdLobby, .birdLobbyReady:
             return BirdDemo.room(self)
+        case .tumblePlay, .tumbleSix, .tumbleTwo, .tumbleTV, .tumbleCountdown, .tumbleLobby, .tumbleJunk, .tumbleSheet, .tumbleTVOut:
+            return TumbleDemo.room(self)
         case .purrPick, .purrDraw, .purrWatch, .purrNext, .purrPaused, .purrReveal, .purrMissed, .purrOver, .purrCurtain,
              .purrLobby, .purrCrowd:
             return PurrDemo.room(self)
@@ -282,6 +293,7 @@ enum DemoMode: String {
     private func baseSocket() -> any RoomSocketing {
         if isTiles { return TilesDemo.socket(self) }
         if isBirdwatch { return BirdDemo.socket(self) }
+        if isTumble { return TumbleDemo.socket(self) }
         if isPurrtrait { return PurrDemo.socket(self) }
         return switch self {
         case .replay: ReplaySocket(start: DemoFixtures.replayStart(), steps: DemoFixtures.replay(), loops: 2)

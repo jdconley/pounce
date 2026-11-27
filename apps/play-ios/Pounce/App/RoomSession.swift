@@ -82,6 +82,18 @@ final class RoomSession {
         self.socket = socket
         store = RoomStore(code: code, socket: socket)
         store.onStreak = { [weak self] pair, person, view in self?.streakArrived(pair: pair, person: person, view: view) }
+        store.onTumble = { [weak self] live in self?.tumbleTable().receive(live, now: TumbleTable.now()) }
+    }
+
+    /// Toy Tumble's boxes at this table: made with the first Toy Tumble snapshot, kept for the
+    /// session so a scene made again (a size change, the menu) picks up where it was.
+    @ObservationIgnored private(set) var tumble: TumbleTable?
+
+    func tumbleTable() -> TumbleTable {
+        if let tumble { return tumble }
+        let made = TumbleTable(screen: store.isScreen) { [weak self] message in self?.store.send(message) }
+        tumble = made
+        return made
     }
 
     private func streakArrived(pair: String, person: String, view: StreakView) {
@@ -117,6 +129,8 @@ final class RoomSession {
     func background() {
         guard started, !closed, !backgrounded else { return }
         backgrounded = true
+        // Toy Tumble has no pause: the box waits for the server's sync on return (spec §6.6).
+        tumble?.suspend()
         let socket = socket
         let terminal = isTerminal
         enqueue {
@@ -130,6 +144,7 @@ final class RoomSession {
         guard started, !closed, backgrounded else { return }
         backgrounded = false
         presencePending = true
+        tumble?.resume(now: TumbleTable.now())
         let socket = socket
         enqueue { await socket.resume() }
     }
@@ -272,9 +287,12 @@ final class RoomSession {
             arrived = true
             onArrive()
         }
+        if room.isTumble { tumbleTable().update(room: room, now: TumbleTable.now()) }
         if presencePending && !backgrounded {
             presencePending = false
             send(.presence(.active))
+            // Back on a new connection: a box still waiting for its sync asks again.
+            tumble?.reconnected(now: TumbleTable.now())
         }
         let model = TableModel(room: room)
         moveSnapshot(model)

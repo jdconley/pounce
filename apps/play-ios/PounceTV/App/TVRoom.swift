@@ -16,9 +16,13 @@ final class TVRoom {
         case catTower(TableScene)
         case tiles(TilesScene)
         case birdwatch(BirdScene)
+        case tumble(TumbleScene)
         /// Purrtrait draws in SwiftUI and layers (`PurrTVTable`): no scene, nothing to enqueue.
         case purrtrait
     }
+
+    /// Toy Tumble's boxes, replayed from the live stream (a screen has no box of its own).
+    let tumble: TumbleTable
 
     private(set) var scene: Scene?
 
@@ -42,12 +46,21 @@ final class TVRoom {
         self.code = code
         self.socket = SuspendableSocket { socket(code) }
         self.watchesNetwork = watchesNetwork
-        store = RoomStore(code: code, socket: self.socket, role: .screen)
+        let store = RoomStore(code: code, socket: self.socket, role: .screen)
+        self.store = store
+        // A screen can't ask for a sync: a missed relay reconnects, and the server syncs every box.
+        let suspendable = self.socket
+        tumble = TumbleTable(screen: true) { message in
+            if case .tumble(_, let ev) = message, ev.isEmpty { Task { await suspendable.reconnectNow() } }
+        }
+        let tumble = self.tumble
+        store.onTumble = { live in tumble.receive(live, now: TumbleTable.now()) }
     }
 
     /// The table drawn by a game this build knows, whichever the room plays.
     var isTiles: Bool { store.room?.gameId == GameCatalog.tiles.id }
     var isBirdwatch: Bool { store.room?.gameId == GameCatalog.birdwatch.id }
+    var isTumble: Bool { store.room?.gameId == GameCatalog.tumble.id }
     var isPurrtrait: Bool { store.room?.gameId == GameCatalog.purrtrait.id }
 
     /// The TV has the room, and lost its connection to it.
@@ -63,6 +76,9 @@ final class TVRoom {
             for await event in socket.events {
                 guard let self, !self.closed else { return }
                 self.store.handle(event)
+                if case .message(.snapshot(_, _, let room)) = event, room.isTumble {
+                    self.tumble.update(room: room, now: TumbleTable.now())
+                }
                 self.onChange(self)
             }
         })
@@ -110,7 +126,11 @@ final class TVRoom {
             pending.removeAll()
             return
         }
-        if isBirdwatch {
+        if isTumble {
+            let scene = TumbleScene(store: store, table: tumble)
+            scene.onGameOver = finished
+            self.scene = .tumble(scene)
+        } else if isBirdwatch {
             let bird = BirdScene(store: store)
             bird.onGameOver = finished
             scene = .birdwatch(bird)
@@ -149,7 +169,7 @@ final class TVRoom {
         case .catTower(let table): table.enqueue(intent)
         case .tiles(let tiles): tiles.enqueue(intent)
         case .birdwatch(let bird): bird.enqueue(intent)
-        case .purrtrait, nil: break
+        case .tumble, .purrtrait, nil: break
         }
     }
 

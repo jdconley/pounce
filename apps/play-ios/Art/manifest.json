@@ -2111,6 +2111,16 @@
   "fit": "cover"
  },
  {
+  "name": "game-tumble",
+  "dest": "imageset",
+  "points": [
+   384,
+   256
+  ],
+  "batch": "ui",
+  "fit": "cover"
+ },
+ {
   "name": "game-purrtrait",
   "dest": "imageset",
   "points": [

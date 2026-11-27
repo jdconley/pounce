@@ -54,6 +54,15 @@ enum Fixtures {
         try messages(in: "protocol/purrtrait-client-messages.json")
     }
 
+    /// Toy Tumble's live wire samples (`docs/live-protocol.md`), made by play-api from real engine boxes.
+    static func tumbleServerMessages() throws -> [(name: String, json: String)] {
+        try messages(in: "protocol/tumble-server-messages.json")
+    }
+
+    static func tumbleClientMessages() throws -> [(name: String, json: String)] {
+        try messages(in: "protocol/tumble-client-messages.json")
+    }
+
     static func serverMessages() throws -> [(name: String, json: String)] {
         try messages(in: "protocol/server-messages.json")
     }

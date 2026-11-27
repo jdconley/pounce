@@ -57,6 +57,8 @@ struct LobbyView: View {
     @State private var rules: BirdRules = .official
 
     private var isBird: Bool { room?.isBirdwatch == true }
+    private var isTumble: Bool { room?.isTumble == true }
+    @State private var cats: TumbleCats = .easy
 
     private var room: RoomView? { session.store.room }
     private var table: TableModel? { session.model }
@@ -80,6 +82,7 @@ struct LobbyView: View {
                 VStack(spacing: 6) {
                     topBar
                     if isBird { rulePills.padding(.horizontal, 14) }
+                    if isTumble { catsPills.padding(.horizontal, 14) }
                     rug
                         .allowsHitTesting(interactive)
                     startRow
@@ -129,6 +132,7 @@ struct LobbyView: View {
         }
         .animation(.easeOut(duration: 0.15).paced, value: swapFrom)
         .onChange(of: room?.options?.rules, initial: true) { _, next in if let next, next != rules { rules = next } }
+        .onChange(of: room?.options?.cats, initial: true) { _, next in if let next, next != cats { cats = next } }
         .coordinateSpace(.named("lobby"))
         // Tips wait while a seat menu, a sheet or the start question is up.
         .tipHost(.lobby, paused: menuSeat != nil || picker != nil || sharing || renaming || confirmingStart || !interactive)
@@ -213,6 +217,7 @@ struct LobbyView: View {
                             .padding(.horizontal, 12)
                             .padding(.vertical, 6)
                         if isBird { rulePills.frame(maxWidth: 560) }
+                        if isTumble { catsPills.frame(maxWidth: 420) }
                         rug
                             .frame(maxWidth: 820)
                             .allowsHitTesting(interactive)
@@ -240,6 +245,7 @@ struct LobbyView: View {
                 codeChip(size: 30)
                     .allowsHitTesting(interactive)
                 if isBird { rulePills }
+                if isTumble { catsPills }
                 if showQR {
                     QRTile(text: shareURL.absoluteString, side: min(220, height * 0.3))
                         .onTapGesture { withAnimation(.spring(duration: 0.3).paced) { showQR = false } }
@@ -443,6 +449,19 @@ struct LobbyView: View {
         .tipTarget(host ? "lobby.rules" : nil)
     }
 
+    // MARK: Toy Tumble's House Cats
+
+    /// Easy or Quick: the host taps one, everyone else sees which.
+    private var catsPills: some View {
+        let host = room?.youAreHost == true && interactive
+        return TumbleCatsPills(cats: $cats, enabled: host) { next in
+            lastTapped = .rules
+            model.tips.used("lobby.rules")
+            session.send(.setOptions(RoomOptions(cats: next)))
+        }
+        .wiggle(trigger: wiggles[.rules, default: 0])
+    }
+
     // MARK: start
 
     /// Under the rug: what the table is waiting for in words (nothing when it's ready), the ways
@@ -507,7 +526,7 @@ struct LobbyView: View {
     @ViewBuilder private func seatControls(_ table: TableModel) -> some View {
         if let seat = table.seatToAdd, hostTray(table) {
             AddPlayerTray(
-                sharesLinks: model.limits.sharesLinks, scanning: showQR,
+                sharesLinks: model.limits.sharesLinks, scanning: showQR, passAndPlay: !table.oneSeatPerDevice,
                 wiggles: { wiggles[$0, default: 0] },
                 onTV: {
                     Haptics.shared.tick()
@@ -714,6 +733,8 @@ struct LobbyView: View {
             },
         ]
         if !model.limits.sharesLinks { items.removeAll { $0.id == "invite" } }
+        // Toy Tumble: each person plays on their own device.
+        if isTumble { items.removeAll { $0.id == "here" } }
         if seat.kind != .bot {
             items.append(SeatMenuItem(
                 id: "bot", icon: ArtName.badgeBot, color: Palette.orange,
@@ -813,6 +834,8 @@ enum LobbyCopy {
             return String(localized: "Needs \(table.neededPlayers) players.", comment: "Lobby status: too few at the table with a seat open; 2, or 4 for Birdwatch")
         case .notEnoughPlayers(_, let needed):
             return String(localized: "Needs \(needed) players.", comment: "Lobby status: too few at the table with no open seat; 2, or 4 for Birdwatch")
+        case .offline(let seats):
+            return seats.count == 1 ? TumbleWords.waiting(for: SeatInfo.name(table.room, seats[0])) : TumbleWords.waiting(count: seats.count)
         }
     }
 }

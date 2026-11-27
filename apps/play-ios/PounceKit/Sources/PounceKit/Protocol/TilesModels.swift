@@ -6,6 +6,7 @@ public enum GameID {
     public static let catTower = "cat-tower"
     public static let tiles = "tiles"
     public static let birdwatch = "birdwatch"
+    public static let tumble = "tumble"
     public static let purrtrait = "purrtrait"
 }
 

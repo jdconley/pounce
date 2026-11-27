@@ -4,6 +4,7 @@ import "./styles.css";
 import "./ui/screens.css";
 import "./table/table.css";
 import "./table/birdwatch.css";
+import "./tumble/tumble.css";
 
 import { render } from "preact";
 

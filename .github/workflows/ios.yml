@@ -266,6 +266,7 @@ jobs:
             -collect-test-diagnostics never -resultBundlePath build/ui-gates.xcresult \
             -only-testing:PounceUITests/FrameRateTests \
             -only-testing:PounceUITests/HitTests \
+            -only-testing:PounceUITests/ToyTumbleTests \
             -only-testing:PounceUITests/TilesTests/testDragPathPlacesAPieceAndDragsItBack \
             -only-testing:PounceUITests/TilesTests/testSeveralPiecesMakeANewSetAndABrokenSetBlocksPlay \
             -only-testing:PounceUITests/DailyFrameTests/testTheDishBoardHoldsTheFrameRate \
@@ -595,9 +596,10 @@ jobs:
           (umask 077; printenv ASC_KEY_P8 > "$ASC_KEY_PATH")
           trap 'rm -f "$ASC_KEY_PATH"' EXIT
           tv=(PounceTV PounceKit Config project.yml
-            Pounce/Table Pounce/Tiles Pounce/Birdwatch Pounce/Purrtrait/PurrEaselView.swift Pounce/Purrtrait/PurrWords.swift
+            Pounce/Table Pounce/Tiles Pounce/Birdwatch Pounce/Tumble Pounce/Purrtrait/PurrEaselView.swift Pounce/Purrtrait/PurrWords.swift
             ':!Pounce/Tiles/TilesStage.swift' ':!Pounce/Tiles/TilesChrome.swift' ':!Pounce/Tiles/TilesDemo.swift'
             ':!Pounce/Birdwatch/BirdStage.swift' ':!Pounce/Birdwatch/BirdPanels.swift' ':!Pounce/Birdwatch/BirdScoreSheet.swift' ':!Pounce/Birdwatch/BirdDemo.swift'
+            ':!Pounce/Tumble/TumbleStage.swift' ':!Pounce/Tumble/TumbleDemo.swift'
             Pounce/App/FrameWork.swift Pounce/App/MainThreadWatchdog.swift Pounce/App/Autoplay.swift
             Pounce/Design/ArtName.swift Pounce/Design/FadeGroup.swift Pounce/Design/GroupOpacity.swift Pounce/Design/Haptics.swift
             Pounce/Design/Juice.swift Pounce/Design/NameTag.swift Pounce/Design/OutlinedText.swift Pounce/Design/Pace.swift

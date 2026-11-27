@@ -4,6 +4,8 @@
 //   scripts/distribute.swift --dry-run       read only: print the notes and every change it would make
 //   scripts/distribute.swift --build 202611020653 --group "Family and Friends"
 //   scripts/distribute.swift --status        read only: each platform's latest builds and their beta review state
+//   scripts/distribute.swift --review-only --build 202611270111   only submit a build already in the group
+//                                            for beta app review (when an earlier build's review held it up)
 //
 //   --build N      the build number (CFBundleVersion) testflight.sh printed; default: the newest upload
 //   --group NAME   the beta group, looked up by name; default "Family and Friends"
@@ -18,6 +20,9 @@
 // (Info.plist sets ITSAppUsesNonExemptEncryption to false, so normally it isn't); set "What to Test"
 // from the commit subjects since the group's previous build; add the build to the group; for an
 // external group, submit it for beta app review when App Store Connect says it is ready for one.
+// Apple reviews one build per version at a time: while another build of the same version is in beta
+// review, the submission is refused (422). That isn't a failure: the build is uploaded and in the
+// group, the run ends with a notice, and `--review-only --build N` sends it once the other clears.
 //
 // Auth: export ASC_KEY_ID, ASC_ISSUER_ID and ASC_KEY_PATH (the AuthKey_<ID>.p8, kept outside the repo).
 // Each request carries a short-lived ES256 JWT signed with CryptoKit; neither it nor the key is printed.
@@ -37,7 +42,7 @@ func fail(_ message: String) -> Never {
 }
 
 func usage() -> Never {
-  FileHandle.standardError.write(Data("usage: scripts/distribute.swift --status | [--dry-run] [--build N] [--group NAME] [--since DATE | --from SHA] [--timeout MIN] [--platform IOS|TV_OS]\n".utf8))
+  FileHandle.standardError.write(Data("usage: scripts/distribute.swift --status | [--dry-run] [--review-only] [--build N] [--group NAME] [--since DATE | --from SHA] [--timeout MIN] [--platform IOS|TV_OS]\n".utf8))
   exit(64)
 }
 
@@ -46,6 +51,8 @@ func usage() -> Never {
 var dryRun = false
 /// `--status`: print each platform's latest builds and their beta app review state, change nothing.
 var statusOnly = false
+/// `--review-only`: skip What to Test and the group; only submit the build for beta app review.
+var reviewOnly = false
 var buildNumber: String?
 var groupName = "Family and Friends"
 var since: String?
@@ -63,6 +70,7 @@ while let arg = arguments.next() {
   switch arg {
   case "--dry-run": dryRun = true
   case "--status": statusOnly = true
+  case "--review-only": reviewOnly = true
   case "--build": buildNumber = value()
   case "--group": groupName = value()
   case "--since": since = value()
@@ -110,7 +118,7 @@ func changes(from commit: String) -> [String] {
   let paths = isTV
     ? [
       "PounceTV", "PounceKit", "Config", "project.yml",
-      "Pounce/Table", "Pounce/Tiles", "Pounce/Birdwatch",
+      "Pounce/Table", "Pounce/Tiles", "Pounce/Birdwatch", "Pounce/Tumble",
       "Pounce/Purrtrait/PurrEaselView.swift", "Pounce/Purrtrait/PurrWords.swift",
       "Pounce/App/FrameWork.swift", "Pounce/App/MainThreadWatchdog.swift", "Pounce/App/Autoplay.swift",
       "Pounce/Design/ArtName.swift", "Pounce/Design/FadeGroup.swift", "Pounce/Design/GroupOpacity.swift",
@@ -127,7 +135,7 @@ func changes(from commit: String) -> [String] {
   let skipped = isTV
     ? ["Pounce/Tiles/TilesStage.swift", "Pounce/Tiles/TilesChrome.swift", "Pounce/Tiles/TilesDemo.swift",
        "Pounce/Birdwatch/BirdStage.swift", "Pounce/Birdwatch/BirdPanels.swift", "Pounce/Birdwatch/BirdScoreSheet.swift",
-       "Pounce/Birdwatch/BirdDemo.swift"]
+       "Pounce/Birdwatch/BirdDemo.swift", "Pounce/Tumble/TumbleStage.swift", "Pounce/Tumble/TumbleDemo.swift"]
     : []
   let app = paths.map { ":(top)apps/play-ios/\($0)" } + globs.map { ":(top,glob)apps/play-ios/\($0)" }
     + skipped.map { ":(top,exclude)apps/play-ios/\($0)" }
@@ -219,6 +227,12 @@ typealias JSON = [String: Any]
 
 struct APIError: Error, CustomStringConvertible {
   let description: String
+}
+
+/// Apple's refusal of a beta app review while another build of the same version is in one:
+/// 422, "Another build in the same train is already in beta review."
+func anotherBuildInReview(_ error: APIError) -> Bool {
+  error.description.contains("returned 422") && error.description.lowercased().contains("already in beta review")
 }
 
 final class AppStoreConnect {
@@ -421,6 +435,8 @@ do {
   }
 
   // 3. What to Test: the commits since the group's previous build was uploaded.
+  var whatToTest = "(not changed: --review-only)"
+  if !reviewOnly {
   if since == nil, fromCommit == nil {
     do {
       let previous = list(try await asc.get("/v1/builds", previousBuildsQuery(app: appID, group: groupID)))
@@ -430,7 +446,7 @@ do {
       print("warning: can't find the group's previous build, so What to Test is the default text (\(error))")
     }
   }
-  let whatToTest = notes(since: since)
+  whatToTest = notes(since: since)
   print("What to Test (\(locale)):\n\(whatToTest)")
   let localizations = list(try await asc.get("/v1/builds/\(buildID)/betaBuildLocalizations"))
   if let existing = localizations.first(where: { attributes($0)["locale"] as? String == locale }) {
@@ -453,6 +469,7 @@ do {
                         ["data": [["type": "builds", "id": buildID]]],
                         "add build \(version) to \"\(groupName)\"")
   }
+  }
 
   // 5. Beta app review, for external testers.
   var review = "not needed (internal group)"
@@ -460,11 +477,18 @@ do {
     let detail = try await asc.get("/v1/builds/\(buildID)/buildBetaDetail")
     let state = (detail["data"] as? JSON).map(attributes)?["externalBuildState"] as? String ?? "unknown"
     if state == "READY_FOR_BETA_SUBMISSION" || (dryRun && state == "MISSING_EXPORT_COMPLIANCE") {
-      try await asc.write("POST", "/v1/betaAppReviewSubmissions",
-                          ["data": ["type": "betaAppReviewSubmissions",
-                                    "relationships": ["build": ["data": ["type": "builds", "id": buildID]]]]],
-                          "submit build \(version) for beta app review")
-      review = dryRun ? "would be submitted" : "submitted"
+      do {
+        try await asc.write("POST", "/v1/betaAppReviewSubmissions",
+                            ["data": ["type": "betaAppReviewSubmissions",
+                                      "relationships": ["build": ["data": ["type": "builds", "id": buildID]]]]],
+                            "submit build \(version) for beta app review")
+        review = dryRun ? "would be submitted" : "submitted"
+      } catch let error as APIError where anotherBuildInReview(error) {
+        // One build per version in beta review at a time: this one waits its turn.
+        review = "waiting, another build of this version is in beta review; when it clears, run "
+          + "scripts/distribute.swift --review-only --build \(version)\(isTV ? " --platform TV_OS" : "")"
+        print("::notice title=Beta app review waits::\(buildLabel) \(version) is uploaded and in \"\(groupName)\", but \(review)")
+      }
     } else {
       review = "not submitted, the build's external state is \(state)"
       print("beta app review: \(review)")
