@@ -5,11 +5,12 @@ import { ROOM_CODE_ALPHABET } from "./room/codes";
 import { parseRoomName } from "./room/names";
 import { hasKeys, isInt, isObj, type Obj } from "./shape";
 import { isBack, isRug } from "./streaks/catalog";
-import { parseTumble, type TumbleClient } from "./tumble/wire";
+import { parseTumble, type TumbleClient, type TumbleServer } from "./tumble/wire";
 
 import type { BirdEvent } from "./birdwatch/engine";
 import type { BirdView } from "./birdwatch/view";
 import type { GameAction, GameError, GameId, AnyGameOptions } from "./games";
+import type { TumbleView } from "./games/tumble";
 import type { PurrEvent } from "./purrtrait/engine";
 import type { PurrView } from "./purrtrait/view";
 import type { GameEvent, Seat } from "./rules/engine";
@@ -80,6 +81,8 @@ export type RoomView = {
   birdwatch?: BirdView;
   /** Purrtrait's view, in a `purrtrait` room once it is dealt. */
   purrtrait?: PurrView;
+  /** Toy Tumble's rounds and wins, in a `tumble` room once it is dealt (`docs/live-protocol.md`). */
+  tumble?: TumbleView;
   /**
    * What the table chose in its lobby (`setOptions`), for a game that has a choice: Birdwatch's
    * `{ rules }` or Purrtrait's `{ timer }`.
@@ -218,6 +221,8 @@ export type ErrorCode =
   | "not_near"
   | "removed"
   | "easel_full"
+  // Toy Tumble starts only with every person's device connected.
+  | "not_connected"
   // Moving a seat to another device.
   | "game_over"
   | "bad_code"
@@ -261,7 +266,9 @@ export type ServerMessage =
   /** Purrtrait: the turn's drawing so far, compacted, right after a screen's or the drawer's snapshot. */
   | { t: "inkSync"; turn: string; ops: InkOp[] }
   /** Purrtrait: to the drawer's device after the room lost the drawing: send it all again, starting with `["c"]`. */
-  | { t: "inkResend"; turn: string };
+  | { t: "inkResend"; turn: string }
+  /** A Toy Tumble round's live stream (`tumble/wire.ts`): never state, so no seq. */
+  | TumbleServer;
 
 export type BadMessage = { error: "bad_message" | "bad_name" };
 

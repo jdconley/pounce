@@ -34,7 +34,12 @@ struct PounceTVApp: App {
         if TVTablePreview.from() != nil { return nil }
         let demo = TVDemo.from()
         if case .table = demo { return nil }
-        if demo == .shell { return TVModel(services: .demo()) }
+        if demo == .shell {
+            // `-dish`: the server has the Daily Dish on, so home shows Tonight's board too.
+            var services = TVServices.demo()
+            if CommandLine.arguments.contains("-dish") { services.dailyOn = { true } }
+            return TVModel(services: services)
+        }
         if case .over(let seats) = demo { return TVModel(services: .demoOver(seats: seats)) }
         if demo == .board { return TVModel(services: .demoBoard()) }
         #endif

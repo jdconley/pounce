@@ -1,10 +1,10 @@
 import { beforeEach, describe, expect, it } from "vitest";
 
-import { LiveRelay } from "./live-relay";
+import { LiveRelay, LiveStream } from "./live-relay";
 
 import type { ServerMessage } from "../protocol";
 
-/* The generic relay, with a toy game: ops are numbers, 0 wipes, the tally counts ops since a wipe. */
+/* The generic stream, with a toy game: ops are numbers, 0 wipes, the tally counts ops since a wipe. */
 
 type Op = number;
 let clock = 0;
@@ -13,8 +13,8 @@ beforeEach(() => {
 });
 
 const compact = (log: readonly Op[]): Op[] => log.slice(log.lastIndexOf(0) + 1);
-function relay(perSecond = 3, resendMs?: number): LiveRelay<Op, { n: number; rebuilt: boolean }> {
-  return new LiveRelay<Op, { n: number; rebuilt: boolean }>(
+function relay(perSecond = 3, resendMs?: number): LiveStream<Op, { n: number; rebuilt: boolean }> {
+  return new LiveStream<Op, { n: number; rebuilt: boolean }>(
     { perSecond, start: (rebuilt) => ({ n: 0, rebuilt }), compact, ...(resendMs === undefined ? {} : { resendMs }) },
     () => clock,
   );
@@ -24,6 +24,20 @@ const sync = (key: string, ops: Op[]) => ({ t: "sync", key, ops }) as unknown as
 const resend = (key: string) => ({ t: "resend", key }) as unknown as ServerMessage;
 
 describe("LiveRelay", () => {
+  it("allows perSecond a key over any rolling second, each key its own, and clear starts afresh", () => {
+    const r = new LiveRelay(2);
+    expect(r.allow("a", 0)).toBe(true);
+    expect(r.allow("a", 500)).toBe(true);
+    expect(r.allow("a", 999)).toBe(false);
+    expect(r.allow("b", 999)).toBe(true);
+    expect(r.allow("a", 1001)).toBe(true);
+    expect(r.allow("a", 1400)).toBe(false);
+    r.clear();
+    expect(r.allow("a", 1400)).toBe(true);
+  });
+});
+
+describe("LiveStream", () => {
   it("starts with nothing live", () => {
     const r = relay();
     expect(r.key).toBeNull();

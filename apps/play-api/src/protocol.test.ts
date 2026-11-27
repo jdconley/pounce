@@ -31,6 +31,7 @@ describe("ErrorCode", () => {
       not_near: true,
       removed: true,
       easel_full: true,
+      not_connected: true,
       game_over: true,
       bad_code: true,
       too_many_attempts: true,
@@ -76,7 +77,7 @@ describe("ErrorCode", () => {
       own_card: true,
       must_follow: true,
     };
-    expect(Object.keys(codes)).toHaveLength(60);
+    expect(Object.keys(codes)).toHaveLength(61);
   });
 });
 

@@ -1,7 +1,7 @@
 import XCTest
 
 /// Tonight's board at 1080p for review (DEBUG `-demo tv-board`, no server): the board on a busy
-/// evening, the watch card, a watched run, the board's menu, home with its three posters, and the
+/// evening, the watch card, a watched run, the board's menu, home with its posters, and the
 /// board's link panel. Each shot is attached to the result, and written to `TV_SHOTS_DIR`
 /// (`TEST_RUNNER_TV_SHOTS_DIR` for xcodebuild) as `appletv-<name>.png` when it's set.
 @MainActor
@@ -60,8 +60,9 @@ final class BoardShotTests: XCTestCase {
 
         // Back to the board from its poster, then Unlink: home again, and the poster shows the link.
         XCTAssertTrue(waitForFocus(app, "tv.poster.cat-tower"))
-        press(app, .down, to: "tv.poster.tiles")
-        press(app, .down, to: "tv.poster.board")
+        press(app, .right, to: "tv.poster.tiles")
+        press(app, .right, to: "tv.poster.birdwatch")
+        press(app, .right, to: "tv.poster.board")
         XCUIRemote.shared.press(.select)
         XCTAssertTrue(el(app, "tv.board").waitForExistence(timeout: Live.t(10)))
         XCUIRemote.shared.press(.menu)
@@ -70,8 +71,9 @@ final class BoardShotTests: XCTestCase {
         press(app, .down, to: "tv.menu.unlink")
         XCUIRemote.shared.press(.select)
         XCTAssertTrue(waitForFocus(app, "tv.poster.cat-tower", timeout: 10), "Unlink didn't go home")
-        press(app, .down, to: "tv.poster.tiles")
-        press(app, .down, to: "tv.poster.board")
+        press(app, .right, to: "tv.poster.tiles")
+        press(app, .right, to: "tv.poster.birdwatch")
+        press(app, .right, to: "tv.poster.board")
         XCUIRemote.shared.press(.select)
         XCTAssertTrue(waitForFocus(app, "tv.boardLink.back"), "the board's link panel has Back focused")
         Thread.sleep(forTimeInterval: 0.8)

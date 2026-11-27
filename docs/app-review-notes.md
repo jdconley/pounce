@@ -6,11 +6,11 @@ with the app: the birth year, the button names and the consent steps.
 
 ---
 
-Pounce has two family card and tile games, Cat Tower and Tuna Tiles, and four daily puzzles. No account is needed to play, and there is no chat and no public profile.
+Pounce has three family games, Cat Tower, Tuna Tiles and Birdwatch, and four daily puzzles. No account is needed to play, and there is no chat and no public profile.
 
 AGE CHECK (first launch)
 The app first asks Apple's Declared Age Range. If you choose not to share, it asks "What year were you born?". Please type 1980, tap the check, then tap "Yes" when it says "Born in 1980?". This sets the device to an adult. Next, the app suggests a name and a cat; tap the check to keep them.
-The answer is kept in the Keychain, so it stays after a reinstall. A wrong year can't be retyped. On a device set as under 18, Settings (the gear on Home), under Account, shows "Age not right?" and a "Check with Apple" button, which asks Declared Age Range again. Only Apple's answer changes the age.
+The answer is kept in the Keychain and stays after a reinstall. On a device set as under 18, Settings (the gear on Home) has "Check with Apple" under Account, which asks Declared Age Range again.
 
 PLAY ALONE AGAINST THE HOUSE CAT BOT
 Fastest: on Home, tap Practice. A House Cat game starts right away.
@@ -20,8 +20,13 @@ Or:
 3. Tap Start. The bot plays its own turns.
 One device is enough. Turn reminders are local notifications from the device.
 
+BIRDWATCH (new in 1.3, a team card game for four to six)
+1. On Home, tap Play on Birdwatch.
+2. In the lobby, tap "House Cat" until four seats are full. Official, Tucker and Friesen pick the rule set.
+3. Tap Start. Bid or Pass, name trump, then tap a card to play it. Dimmed cards can't be played.
+
 INVITES (optional, needs a second device)
-In the lobby, "Add a player" offers Same room (a QR code to scan), Far away (a link to send) and This phone (pass the phone). A link opens the table in Pounce. If Pounce isn't installed, the link's web page copies the invite, and after installing, Pounce offers a Paste button that opens the same table.
+In the lobby, "Add a player" offers Same room (a QR code to scan), Far away (a link to send) and This phone (pass the phone). A link opens the table in Pounce, or, before Pounce is installed, a web page that copies the invite for Pounce's Paste button.
 
 SIGN IN WITH APPLE (optional)
 Signing in keeps your streaks if you change phones. Find it in Settings (the gear on Home), or on Home after you have played with someone. Adults and teens only. Settings also has the privacy policy and account deletion.
@@ -30,7 +35,7 @@ DAILY DISH (one-player puzzles)
 On Home, the Daily Dish panel shows Sniff, Nine Lives, Cat Nap and Box Fort. Tap Play on any. Same puzzles for everyone. Our server checks every move and works out every score; the app sends none. The header opens today's board: only you and the people you have a streak with.
 
 APPLE TV (no iPhone needed)
-No age check or sign-in. On Home, select Cat Tower or Tuna Tiles; the TV shows a table code and a QR code. In any browser, open play.conleychaos.com/play, type 1980 and a name, then tap "Join" and type the code (or scan the QR). Tap "Add a player", "House Cat", then Start. The TV shows the table; the browser holds the cards. Menu (Back) opens the TV's menu.
+No age check or sign-in. On Home, select Cat Tower, Tuna Tiles or Birdwatch; the TV shows a table code and a QR code. In any browser, open play.conleychaos.com/play, type 1980 and a name, then tap "Join" and type the code (or scan the QR). Tap "Add a player", "House Cat" (Birdwatch needs four seats filled), then Start. The TV shows the table; the browser holds the cards. Menu (Back) opens the TV's menu.
 
 UNDER 13 ("kittens") AND PARENT CONSENT
 If the year typed means under 13, the device is limited: the name comes from a list (dice), there is no sign-in, no share links, and no push notifications from the server. Local turn reminders still work.
@@ -41,7 +46,6 @@ A parent can allow turn alerts on a child's own device. This needs two devices a
 4. A text from Twilio Verify brings a six-digit code. The parent types it. Turn alerts are now on for that child.
 5. A day or two later the parent's own devices get a confirmation notification with a "Revoke" button.
 The parent can turn alerts off or remove the child at any time from the same panel. The phone number is used only for this consent and is deleted when consent ends.
-In the lobby, a child's device without consent shows "Want turn alerts? Show a grown-up here your code." A signed-in parent at the same table with a linked child whose consent isn't finished is asked to set it up.
 
 Consent isn't needed to play. To test it, use one device as the child (a year under 13) and one as the parent (1980, then sign in with Apple in Settings).
 
@@ -63,7 +67,7 @@ A drawing goes only from the drawer's phone to that table's TV, through our serv
 
 - The consent steps need the Twilio Verify secrets on production. Without them, step 3 says "We can't text a code right now" and nothing is sent.
 - App Store Connect's demo account fields can stay empty: no login is needed to play, and Sign in with Apple uses the reviewer's own Apple Account.
-- If Practice, "Add a player" or the Start button get new words before release, update "Play alone".
+- If Practice, "Add a player" or the Start button get new words before release, update "Play alone" and "Birdwatch".
 - The Daily Dish shows only while the server's `DAILY` flag is on. Turn it on before submitting, or App Review won't see it.
 - If the Home panel or its Play buttons get new words, update "Daily Dish".
 - Before pasting PURRTRAIT, check its button names (Join, Start, who got it) against the shipped Purrtrait screens.
