@@ -337,8 +337,8 @@ function familyBoard(): BoardAnswer {
   const [sniff, nineLives, , boxFort] = answer.games;
   sniff!.rows[2] = { ...sniff!.rows[2]!, rank: 2, result: { ...sniff!.rows[2]!.result!, guesses: sniff!.rows[1]!.result!.guesses } };
   nineLives!.rows[1] = { ...nineLives!.rows[1]!, result: { ...nineLives!.rows[1]!.result!, timeMs: 3_725_000 } };
-  // Out of lives, the longest words a Nine Lives row says.
-  nineLives!.rows[4] = { ...nineLives!.rows[4]!, result: { ...nineLives!.rows[4]!.result!, outcome: "missed", progress: 0.6 } };
+  // Out of lives: below every finisher, at how far it got.
+  nineLives!.rows[4] = { ...nineLives!.rows[4]!, result: { ...nineLives!.rows[4]!.result!, outcome: "missed", progress: 0.6, percent: 60 } };
   boxFort!.rows[0] = { ...boxFort!.rows[0]!, result: { ...boxFort!.rows[0]!.result!, points: 12_840 } };
   return answer;
 }
@@ -377,7 +377,8 @@ test("a whole family fits each game's board, nothing under 28 at 1080p", async (
   await expect(page.locator(".tv-dish-crowns img")).toHaveCount(2);
   await expect(page.locator('.tv-board-game[data-game="box-fort"] .tv-row-result').first()).toHaveText("12,840");
   await expect(page.locator('.tv-board-game[data-game="nine-lives"] .tv-row-result').nth(1)).toHaveText("1:02:05");
-  await expect(page.locator('.tv-board-game[data-game="nine-lives"] .tv-row-result').nth(4)).toHaveText("Out of lives");
+  await expect(page.locator('.tv-board-game[data-game="nine-lives"] .tv-row-result').nth(4)).toHaveText("60%");
+  await expect(page.locator('.tv-board-game[data-game="nine-lives"] .tv-board-row').nth(4)).toHaveAttribute("aria-label", /Out of lives, 60%/);
   const smallest = await page.locator(".tv-board-row .tv-row-name, .tv-board-row .tv-row-result, .tv-board-row .tv-rank").evaluateAll((els) => Math.min(...els.map((e) => parseFloat(getComputedStyle(e).fontSize))));
   expect(smallest, "the smallest row text, px at 1080p").toBeGreaterThanOrEqual(28);
   await shot(page, "board-family");
@@ -426,8 +427,9 @@ test("watching Nine Lives run out of lives: lives, the solution, and Out of live
   await shot(page, "watch-nine-lives-lives");
   const send = (m: string) => (socket as unknown as { send: (m: string) => void }).send(m);
   send(frame({ lives: 0, wrong, solution: SAMPLE.solution }));
-  send(JSON.stringify({ t: "watchEnd", player: "pr_mom", result: { game: "nine-lives", date: "2026-11-23", number: 12, outcome: "missed", timeMs: 240_000, hints: 1, progress: 0.4, tooFast: false } }));
+  send(JSON.stringify({ t: "watchEnd", player: "pr_mom", result: { game: "nine-lives", date: "2026-11-23", number: 12, outcome: "missed", timeMs: 240_000, hints: 1, progress: 0.4, percent: 40, tooFast: false } }));
   await expect(page.locator(".tv-watch-ended-title")).toHaveText("Out of lives");
+  await expect(page.locator(".tv-watch-ended-result")).toHaveText("40%");
   await expect(watching.locator(".nl-answer")).toHaveCount(cells.filter((d) => d === 0).length);
   await expect(watching.locator(".nl-watch-line")).toHaveText("Out of lives");
   await shot(page, "watch-nine-lives-out");

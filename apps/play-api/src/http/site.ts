@@ -104,8 +104,8 @@ const supportHtml = (newer: readonly string[]): string =>
 <li>Nine Lives: fill the grid so every row, column and box has 1 to 9 once. In a browser you get three lives and three free hints: a wrong number turns red and costs a life, and the third ends the puzzle. The iPhone and iPad app gets them in its next version.</li>
 <li>Cat Nap: put one cat in each row, column and patch. No two cats touch, not even at a corner.</li>
 <li>Box Fort: drag each set of pieces onto the rug. A full row or column clears and scores. It ends when nothing fits.</li>
-<li>One try a day at each puzzle. The clock keeps running if you leave. A hint in Cat Nap, or in Nine Lives in the app, adds 30 seconds.</li>
-<li>Today's board shows how you and the people you have a streak with did. Tap On TV to put it on a TV showing <a href="/play/tv">play.conleychaos.com/play/tv</a>.</li>
+<li>One try a day at each puzzle. The clock counts only the time you're playing, so it stops when you leave. A hint in Cat Nap, or in Nine Lives in the app, adds 30 seconds.</li>
+<li>Today's board shows how you and the people you have a streak with did. Everyone who finished comes first, then everyone else by how far they got. Tap On TV to put it on a TV showing <a href="/play/tv">play.conleychaos.com/play/tv</a>.</li>
 <li>New puzzles come out at 4 in the morning where you are. Monday's are the easiest.</li>
 </ul>
 </section>
