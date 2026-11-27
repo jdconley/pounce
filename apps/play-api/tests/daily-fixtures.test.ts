@@ -4,9 +4,9 @@ import { afterEach, beforeAll, describe, expect, test } from "vitest";
 
 import { addToStats, dish, rankGame, statsView, type BoardRow } from "../src/daily/board";
 import { liveMessage, resultMessages, tvsMessage, type BoardAnswer } from "../src/daily/messages";
-import { giveUp, moves, newRun, startView, useHint } from "../src/daily/run-core";
 import { nineLives } from "../src/daily/nine-lives/module";
 import { SAMPLE } from "../src/daily/nine-lives/samples";
+import { giveUp, moves, newRun, startView, useHint } from "../src/daily/run-core";
 import { testGame } from "../src/daily/test-game";
 import { createRng } from "../src/rules/rng";
 
