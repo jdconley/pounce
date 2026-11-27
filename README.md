@@ -17,7 +17,7 @@ The games:
   winner calls a card and whoever holds it is their secret partner. Three rule sets: Official,
   Tucker and Friesen. House Cats fill empty seats. In the browser now at
   [play.conleychaos.com/play](https://play.conleychaos.com/play) and on its TV page; coming to the
-  iPhone app in 1.3 (in TestFlight). Design:
+  iPhone, iPad and Apple TV app in 1.4 (in App Review). Design:
   [docs/superpowers/specs/2026-11-25-birdwatch-design.md](docs/superpowers/specs/2026-11-25-birdwatch-design.md).
 - **Toy Tumble**: Pounce's first real-time game, for two to six. Everyone plays at once on their
   own phone or computer, and the TV shows every box. Toys fall into your box; clear rows to send
@@ -58,8 +58,8 @@ version, and a parent decides whether they get turn alerts.
 | 1.0 | On the App Store since November 2026 | Cat Tower, live and turn-based tables, House Cat bots, streaks, widgets, the live table on the Lock Screen, parent consent for kids. |
 | 1.1 | Released on the App Store on 16 November 2026 | Tuna Tiles. A faster first game: a House Cat holds a seat. Add players your way: Same room (scan a QR code), Far away (send a link) or This phone (pass and play). Invites that survive installing the app (Paste). A new Home, How to play videos, clearer Settings, tips. |
 | 1.2 | Released on the App Store on 26 November 2026 | Pounce on the TV: your phone shows just your cards, Tap Table for the whole board, and Show on TV by scanning or typing the TV's code. The Daily Dish: Sniff, Nine Lives, Cat Nap and Box Fort, a family board, and streaks. The Apple TV app is not on the App Store yet. |
-| 1.3 | In TestFlight | Birdwatch, the third table game: bidding, the feeder, trump and the Bird, 4 to 6 players, Official, Tucker and Friesen rules. On the web and its TV page since 26 November 2026. |
-| 1.4 | In development | Toy Tumble, the first real-time game: falling toys, hairballs and tricks, 2 to 6 players at once, every box on the TV. Purrtrait, draw and guess in one room: the drawer draws on their phone, the TV shows it as it's drawn, 2 to 10 players. Both play on the web and its TV page now (Purrtrait since 27 November 2026); the iPhone, iPad and Apple TV app gets them in 1.4. Nine Lives with three lives and three free hints, and Dish clocks that stop when you leave (in the browser since 27 November 2026). |
+| 1.3 | Never released: pulled from App Review on 27 November 2026 for 1.4 | Birdwatch and the Cat Tower fixes, which shipped in 1.4 instead. |
+| 1.4 | In App Review since 27 November 2026, for iPhone, iPad and Apple TV | Birdwatch (from 1.3). Toy Tumble, the first real-time game: falling toys, hairballs and tricks, 2 to 6 players at once, every box on the TV. Purrtrait, draw and guess in one room: the drawer draws on their phone, the TV shows it as it's drawn, 2 to 10 players. Both play on the web and its TV page now (Purrtrait since 27 November 2026); the iPhone, iPad and Apple TV app gets them in 1.4. Nine Lives with three lives and three free hints, and Dish clocks that stop when you leave (in the browser since 27 November 2026). |
 
 Every merge to `main` that touches the app builds to TestFlight and goes to the Family and Friends
 group (`apps/play-ios/README.md`, TestFlight). What each App Store version says is kept in the
