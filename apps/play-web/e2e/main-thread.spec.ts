@@ -515,7 +515,7 @@ test("drawing for 10 seconds keeps every frame, on the drawer's phone and on the
         await drawer.mouse.move(box.x + box.width * (cx + 0.15 * Math.cos(a + k)), box.y + box.height * (cy + 0.12 * Math.sin(2 * a)));
       }
       await drawer.mouse.up();
-      if (k % 6 === 0) await drawer.locator("#purr-undo").click();
+      if (k % 6 === 0) await drawer.locator("#purr-undo").dispatchEvent("click");
     }
   };
   const measured = gate === "tv-chrome" ? tvPage : drawer;
