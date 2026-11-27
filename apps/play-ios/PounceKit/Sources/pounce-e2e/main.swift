@@ -72,6 +72,10 @@ struct DeviceView: Sendable {
     var connected = false
     var link: LinkQuality = .good
     var gone: SocketEvent?
+    /// Purrtrait: every `ink` relayed to this device, and the last `inkSync`.
+    var inkMessages: [[InkOp]] = []
+    var inkSync: [InkOp]?
+    var inkResends = 0
 
     var game: GameView? { room?.game }
     var mySeats: [Seat] { room.map { r in r.seats.indices.filter { r.seats[$0].yours } } ?? [] }
@@ -107,13 +111,13 @@ actor Device {
 
     func createRoom() async throws -> String { try await api.createRoom() }
 
-    func connect(_ code: String) async {
+    func connect(_ code: String, role: RoomRole? = nil, near: String? = nil) async {
         generation += 1
         let gen = generation
         let api = api
         // The upgrade carries this device's headers (Birdwatch's games header among them).
         let s = RoomSocket(
-            code: code, config: config, credential: { try await api.credential() },
+            code: code, config: config, role: role, near: near, credential: { try await api.credential() },
             connector: URLSessionWebSocketConnector(headers: config.headers))
         socket = s
         pump = Task { [weak self] in
@@ -140,12 +144,16 @@ actor Device {
 
     private func handle(_ event: SocketEvent, gen: Int) {
         guard gen == generation else { return }
+        // `E2E_TRACE=1`: every socket event but the messages, for chasing a refused connect.
+        if ProcessInfo.processInfo.environment["E2E_TRACE"] != nil, !{ if case .message = event { true } else { false } }() {
+            log("[\(name)] socket \(event)")
+        }
         switch event {
         case .connecting, .disconnected:
             state.connected = false
         case .connected:
             state.connected = true
-        case .notFound, .locked, .closed, .refused:
+        case .notFound, .locked, .closed, .refused, .forbidden:
             state.gone = event
         case .link(let quality):
             state.link = quality
@@ -169,6 +177,12 @@ actor Device {
             case .link(let seats):
                 state.room?.seats.indices.forEach { state.room?.seats[$0].link = seats.indices.contains($0) ? seats[$0] : nil }
                 log("[\(name)] seats link \(seats.map { $0?.rawValue ?? "-" })")
+            case .ink(_, _, let ops):
+                state.inkMessages.append(ops)
+            case .inkSync(_, let ops):
+                state.inkSync = ops
+            case .inkResend:
+                state.inkResends += 1
             case .streak, .rematch, .pong, .nudgeSent, .nudged, .aim, .tumble:
                 break
             }
@@ -748,6 +762,7 @@ do {
     case "host": try await hostMode(config, options)
     case "screen": try await screenMode(config, options)
     case "birdwatch": try await birdwatchMode(config, options)
+    case "purrtrait": try await purrtraitMode(config, options)
     default:
         log("unknown mode \(mode)")
         exit(2)

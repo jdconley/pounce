@@ -37,6 +37,8 @@ struct TVServices {
     var now: @Sendable () -> Date = { Date() }
     /// The link a phone scans to join table `code`: `/j/<CODE>` on this TV's server.
     var inviteURL: (_ code: String) -> URL = { DeepLink.shareURL(code: $0) }
+    /// The QR a phone scans to join Purrtrait table `code` with the TV's key: `/e/<CODE>?near=<KEY>`.
+    var easelURL: (_ code: String, _ key: String) -> URL = { DeepLink.easelURL(code: $0, near: $1) }
     /// Applies the TV's sound setting to the game's sounds.
     var applySound: @MainActor (Bool) -> Void = { Settings.shared.soundOn = $0 }
     /// Reconnects a table's socket as soon as the network comes back (the live TV only).
@@ -63,6 +65,7 @@ extension TVServices {
             boards: KeychainBoardKeep(),
             dailyOn: { await TVServices.dailyOn(api: api, config: config) },
             inviteURL: { config.endpoint("/j/\($0)") },
+            easelURL: { code, key in config.endpoint("/e/\(code)", query: [URLQueryItem(name: "near", value: key)]) },
             watchesNetwork: true)
     }
 

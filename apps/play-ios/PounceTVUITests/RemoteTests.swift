@@ -134,7 +134,7 @@ final class RemoteTests: XCTestCase {
     // MARK: helpers
 
     /// The shell's demo at home, its link shown and Cat Tower focused.
-    /// Home with the Dish on: four posters on the shelf, Right walks them in order and Left
+    /// Home with the Dish on: six posters on the shelf, Right walks them in order and Left
     /// comes back. Each poster is wholly on screen.
     func testHomeShelfWalksEveryPoster() {
         let app = launchHome(dish: true)

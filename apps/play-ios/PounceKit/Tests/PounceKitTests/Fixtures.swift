@@ -45,6 +45,15 @@ enum Fixtures {
         try messages(in: "protocol/birdwatch-client-messages.json")
     }
 
+    /// Purrtrait's samples, from play-api's real rooms.
+    static func purrtraitServerMessages() throws -> [(name: String, json: String)] {
+        try messages(in: "protocol/purrtrait-server-messages.json")
+    }
+
+    static func purrtraitClientMessages() throws -> [(name: String, json: String)] {
+        try messages(in: "protocol/purrtrait-client-messages.json")
+    }
+
     /// Toy Tumble's live wire samples (`docs/live-protocol.md`), made by play-api from real engine boxes.
     static func tumbleServerMessages() throws -> [(name: String, json: String)] {
         try messages(in: "protocol/tumble-server-messages.json")

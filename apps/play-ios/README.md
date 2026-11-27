@@ -42,8 +42,17 @@ with a SpriteKit table. Apple frameworks only, no third-party packages.
   `TumbleQueue`, `TumbleClock`, the wire) and passes every shared vector in
   `apps/play-api/fixtures/tumble/` (`TumbleFixtureTests`); `TumbleLocal` runs this device's box on the
   frame clock, `TumbleReplay` replays the others from the relays, and `TumbleTable` holds both for a
-  session. `GameCatalog.tumble` exists only in Debug builds or from app version 1.4, so a Release 1.3
+  session. `GameCatalog.tumble` exists only in Debug builds or from app version 1.4 (`ships14`), so a Release 1.3
   build never shows it or lists it in `X-Pounce-Games`.
+- `Pounce/Purrtrait/` Purrtrait, the draw-and-guess game (`docs/superpowers/specs/2026-11-26-purrtrait-design.md`,
+  plan `docs/superpowers/plans/2026-11-26-purrtrait-ios-tv.md`): `PurrEaselView` (our own easel, not PencilKit or
+  SpriteKit: finished strokes in one bitmap drawn off the main thread by PounceKit's `InkRaster`, the live stroke a shape
+  layer), compiled into both apps with `PurrWords`; on the iPhone, `PurrCanvas` (touches, coalesced and predicted, a
+  120 Hz display link while a finger is down), `PurrStage` (the word pick, the drawer's easel and tools, everyone
+  else's "Look at the TV", the reveal, the curtain, game over), `PurrLobbyView` and the demos. The ink itself
+  (`InkCodec`, `InkPen`, `InkFeed`, `PurrDrawModel`) and the wire are in PounceKit. The TV's table is
+  `PounceTV/Shell/PurrTVTable.swift`. Like Toy Tumble, `GameCatalog.purrtrait` exists only in Debug builds or
+  from app version 1.4 (`GameCatalog.ships14`).
 - `PounceKit/` local Swift package (game model, networking, `pounce-e2e` CLI) with Swift Testing tests.
   `PounceKit/Sources/PounceKit/IO/` is the only code that touches the disk or the Keychain: actors
   and `@concurrent` functions, so none of it runs on the main thread. Stores keep their data in
@@ -143,6 +152,14 @@ then the build setting (Debug: `http://localhost:8787`, optionally overridden by
   `-demo tv-tumble -seats <2...6>` (every box a cat's). `ToyTumbleTests` drives the gestures on the demo
   table, `ToyTumbleLiveTests` plays a game against a dev server, and `FrameRateTests` /
   `FrameRateTVTests` have a minute of each. Screenshots are in `Art/screenshots/tumble/`.
+- Purrtrait (game id `purrtrait`, 2 to 10 players) starts only on a TV: the phone's shelf card says so. Its demos,
+  offline, on `PurrDemoSocket` (a pick starts the drawing, Got it and Give up reveal, the next drawer follows):
+  `purr-pick`, `purr-draw`, `purr-watch`, `purr-next` (you draw next), `purr-paused` (no TV), `purr-reveal`,
+  `purr-missed`, `purr-over`, `purr-curtain` (two seats on this phone), `purr-lobby` and `purr-crowd` (ten
+  players). `-autoplay` on `purr-draw` draws with a scripted finger (`FrameRateTests`). A TV's QR opens
+  `pounce-dev://e/<CODE>?near=<KEY>` in Debug. On the TV: `-demo tv-purrtrait [-seats N]` (a phone draws a cat,
+  stroke by stroke, over and over), `-tv-preview purrtrait` (the drawing whole; `-moment` adds the reveal) and the
+  shell's poster. `PurrtraitTests` saves screenshots under `TEST_RUNNER_PURR_SHOTS_DIR`.
 - How to play's videos (`HowTo/README.md`): `-demo howto` is Cat Tower's video table (my whole turn,
   taken by `HowToSocket` as the server would, then the other seats), `-demo tiles-last` the tile
   game's last turn (three pieces left, each fits a row), `-show-touches` draws a ring under every

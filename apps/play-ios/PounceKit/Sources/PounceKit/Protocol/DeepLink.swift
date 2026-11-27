@@ -8,6 +8,9 @@ public enum DeepLink: Equatable, Sendable {
     case pounce(token: String)
     /// A TV's link (docs/tv-protocol.md): `https://play.conleychaos.com/tv/<token>`.
     case tv(token: String)
+    /// A Purrtrait TV's join QR: `https://play.conleychaos.com/e/<CODE>?near=<KEY>`. `near` is nil
+    /// when the link has none (the table then says to scan the TV).
+    case easel(code: String, near: String?)
 
     private static let host = "play.conleychaos.com"
     private static let devScheme = "pounce-dev"
@@ -34,6 +37,17 @@ public enum DeepLink: Equatable, Sendable {
         parts.scheme = "https"
         parts.host = host
         parts.path = "/p/\(token)"
+        return parts.url!
+    }
+
+    /// A Purrtrait TV's join QR: `https://play.conleychaos.com/e/<CODE>?near=<KEY>`.
+    public static func easelURL(code: String, near: String, base: URL? = nil) -> URL {
+        var parts = URLComponents()
+        parts.scheme = base?.scheme ?? "https"
+        parts.host = base?.host ?? host
+        parts.port = base?.port
+        parts.path = "/e/\(code)"
+        parts.queryItems = [URLQueryItem(name: "near", value: near)]
         return parts.url!
     }
 
@@ -70,11 +84,11 @@ public enum DeepLink: Equatable, Sendable {
         case "https":
             guard parts.host?.lowercased() == host, parts.port == nil else { return nil }
             let path = parts.path.split(separator: "/", omittingEmptySubsequences: false).map(String.init)
-            guard path.count == 3, path[0].isEmpty, path[1] == "j" || path[1] == "p" || path[1] == "tv" else { return nil }
+            guard path.count == 3, path[0].isEmpty, path[1] == "j" || path[1] == "p" || path[1] == "tv" || path[1] == "e" else { return nil }
             kind = path[1]
             code = path[2]
         case devScheme where allowDevScheme:
-            guard let h = parts.host, h == "j" || h == "p" || h == "tv" else { return nil }
+            guard let h = parts.host, h == "j" || h == "p" || h == "tv" || h == "e" else { return nil }
             let path = parts.path.split(separator: "/", omittingEmptySubsequences: false).map(String.init)
             guard path.count == 2, path[0].isEmpty else { return nil }
             kind = h
@@ -91,6 +105,14 @@ public enum DeepLink: Equatable, Sendable {
             return isPounceToken(code) && (parts.queryItems ?? []).isEmpty ? .pounce(token: code) : nil
         }
         guard RoomCode.isValid(code) else { return nil }
+        if kind == "e" {
+            // Nothing but the key; a link without one (or a bad one) still opens the table, which
+            // says to scan the TV.
+            let items = parts.queryItems ?? []
+            guard items.allSatisfy({ $0.name == "near" }), items.count <= 1 else { return nil }
+            let near = items.first?.value.map { $0.uppercased() }.flatMap { RoomCode.isValidNearKey($0) ? $0 : nil }
+            return .easel(code: code, near: near)
+        }
 
         let moves = (parts.queryItems ?? []).filter { $0.name == "move" }
         switch moves.count {
@@ -109,7 +131,7 @@ extension DeepLink {
     public var isInvite: Bool {
         switch self {
         case .join, .move, .pounce: true
-        case .tv: false
+        case .tv, .easel: false
         }
     }
 

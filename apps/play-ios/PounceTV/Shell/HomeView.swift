@@ -179,6 +179,7 @@ private struct Poster: View {
         case GameCatalog.tiles.id: Palette.sky
         case GameCatalog.birdwatch.id: Palette.lime
         case GameCatalog.tumble.id: Palette.lime
+        case GameCatalog.purrtrait.id: Palette.magenta
         default: Palette.violet
         }
     }
@@ -197,10 +198,11 @@ private struct Poster: View {
                     .resizable()
                     .scaledToFill()
             } badge: {
-                // "2 to 6 players", with a dot in each seat's colour.
+                // "2 to 6 players", with a dot in each seat's colour. Purrtrait's ten dots and its
+                // words don't fit a poster: past six seats, the words alone.
                 PosterPill(words: String(localized: "\(game.minPlayers) to \(game.maxPlayers) players", comment: "TV home: under a game's name, how many can play")) {
                     HStack(spacing: -5 * k) {
-                        ForEach(0..<game.maxPlayers, id: \.self) { seat in
+                        ForEach(0..<(game.maxPlayers > 6 ? 0 : game.maxPlayers), id: \.self) { seat in
                             Circle()
                                 .fill(tvRing(seat))
                                 .overlay(Circle().strokeBorder(Palette.ink, lineWidth: 3 * k))

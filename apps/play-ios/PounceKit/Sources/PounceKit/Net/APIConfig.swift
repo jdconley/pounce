@@ -26,8 +26,12 @@ public struct APIConfig: Sendable {
 
     /// `http` becomes `ws`, `https` becomes `wss`; the path is `/v1/rooms/<code>/ws`, with
     /// `?role=screen` for a TV showing the table (docs/tv-protocol.md, "A screen").
-    public func socketURL(code: String, role: RoomRole? = nil) -> URL {
-        socket(path: "/v1/rooms/\(code)/ws", query: role.map { [URLQueryItem(name: "role", value: $0.rawValue)] } ?? [])
+    /// `near`: a Purrtrait TV's join key (from its QR) or its 8-character typed code.
+    public func socketURL(code: String, role: RoomRole? = nil, near: String? = nil) -> URL {
+        var query: [URLQueryItem] = []
+        if let role { query.append(URLQueryItem(name: "role", value: role.rawValue)) }
+        if let near { query.append(URLQueryItem(name: "near", value: near)) }
+        return socket(path: "/v1/rooms/\(code)/ws", query: query)
     }
 
     /// The socket a TV waits on for a phone to link its code: `/v1/screens/<token>/ws`.

@@ -3,8 +3,13 @@ import Testing
 @testable import PounceKit
 
 @Suite struct GameCatalogTests {
-    @Test func theCatalogHoldsCatTowerThenTilesThenBirdwatchThenToyTumble() {
-        #expect(GameCatalog.all.map(\.id) == ["cat-tower", "tiles", "birdwatch", "tumble"], "a Debug build has every game")
+    @Test func theCatalogHoldsCatTowerThenTilesThenBirdwatchThenToyTumbleThenPurrtrait() {
+        #expect(GameCatalog.all.map(\.id) == ["cat-tower", "tiles", "birdwatch", "tumble", "purrtrait"], "a Debug build has every game")
+        #expect(GameCatalog.purrtrait.minPlayers == 2)
+        #expect(GameCatalog.purrtrait.maxPlayers == 10)
+        #expect(GameCatalog.purrtrait.startsOnTV)
+        #expect(!GameCatalog.purrtrait.isAvailable)
+        #expect(GameCatalog.purrtrait.isPlayable)
         #expect(GameCatalog.birdwatch.minPlayers == 4)
         #expect(GameCatalog.birdwatch.maxPlayers == 6)
         #expect(GameCatalog.tumble.minPlayers == 2)
@@ -13,19 +18,22 @@ import Testing
         #expect(GameCatalog.tumble.title == "Toy Tumble")
     }
 
-    /// Design §10.4: Toy Tumble is in a Debug build, and in a Release build only from 1.4.
-    @Test func toyTumbleIsGatedTo14InRelease() {
+    /// Design §10.4: Toy Tumble and Purrtrait are in a Debug build, and in a Release build only
+    /// from 1.4.
+    @Test(arguments: ["tumble", "purrtrait"])
+    func the14GamesAreGatedTo14InRelease(_ game: String) {
         let ids = { (debug: Bool, version: String?) in GameCatalog.games(debug: debug, version: version).map(\.id) }
-        #expect(ids(true, "1.3").contains("tumble"))
-        #expect(ids(true, nil).contains("tumble"))
-        #expect(!ids(false, "1.3").contains("tumble"))
-        #expect(!ids(false, "1.3.9").contains("tumble"))
-        #expect(!ids(false, nil).contains("tumble"))
-        #expect(!ids(false, "soon").contains("tumble"))
-        #expect(ids(false, "1.4").contains("tumble"))
-        #expect(ids(false, "1.10").contains("tumble"))
-        #expect(ids(false, "2.0").contains("tumble"))
+        #expect(ids(true, "1.3").contains(game))
+        #expect(ids(true, nil).contains(game))
+        #expect(!ids(false, "1.3").contains(game))
+        #expect(!ids(false, "1.3.9").contains(game))
+        #expect(!ids(false, nil).contains(game))
+        #expect(!ids(false, "soon").contains(game))
+        #expect(ids(false, "1.4").contains(game))
+        #expect(ids(false, "1.10").contains(game))
+        #expect(ids(false, "2.0").contains(game))
         #expect(ids(false, "1.3") == ["cat-tower", "tiles", "birdwatch"])
+        #expect(GameCatalog.shelf(GameCatalog.games(debug: false, version: "1.3")).map(\.id) == ["cat-tower", "tiles", "birdwatch"])
     }
 
     @Test func catTowerIsTheGameTheServerDealsAndCanBeStarted() {
@@ -76,7 +84,8 @@ import Testing
     /// made-up entry has none.
     @Test func everyGameHasItsOwnHowToVideo() {
         let videos = GameCatalog.all.compactMap(\.howTo)
-        #expect(videos.count == GameCatalog.all.count - 2)
+        #expect(videos.count == GameCatalog.all.count - 3)
+        #expect(GameCatalog.purrtrait.howTo == nil)
         #expect(GameCatalog.birdwatch.howTo == nil)
         #expect(GameCatalog.tumble.howTo == nil)
         #expect(Set(videos).count == videos.count)
@@ -102,7 +111,8 @@ import Testing
             game("e", .available),
         ])
         #expect(shelf.map(\.id) == ["a", "c", "e", "b", "d"])
-        #expect(GameCatalog.shelf().map(\.id) == ["cat-tower", "tiles", "birdwatch", "tumble"])
+        #expect(GameCatalog.shelf().map(\.id) == ["cat-tower", "tiles", "birdwatch", "tumble", "purrtrait"])
+        #expect(GameCatalog.shelf([game("t", .onTV), game("s", .comingSoon), game("a", .available)]).map(\.id) == ["a", "t", "s"])
     }
 
     @Test func unlockingAGameOnlyChangesItsAvailability() {

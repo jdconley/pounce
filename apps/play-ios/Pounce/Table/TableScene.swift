@@ -586,7 +586,7 @@ final class TableScene: SKScene {
             reconcileFromStore()
         case .lobbyNope:
             break
-        case .tiles, .birdwatch:
+        case .tiles, .birdwatch, .purrtrait:
             break  // the tile game's events: its own table plays them, never Cat Tower's
         }
     }

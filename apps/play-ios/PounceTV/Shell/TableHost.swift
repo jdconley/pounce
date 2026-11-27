@@ -14,6 +14,7 @@ struct TableHost: View {
             case .tiles(let scene): TilesTableView(scene: scene)
             case .birdwatch(let scene): BirdTableView(scene: scene)
             case .tumble(let scene): TumbleTableView(scene: scene)
+            case .purrtrait: PurrTVTable(table: table)
             case nil: Color.clear
             }
         }

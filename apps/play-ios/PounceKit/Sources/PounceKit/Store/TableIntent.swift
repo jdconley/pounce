@@ -15,6 +15,8 @@ public enum TableIntent: Equatable, Sendable {
     case tiles(TilesEvent, seq: Int)
     /// Animate one Birdwatch event, under the same rules as `game`.
     case birdwatch(BirdEvent, seq: Int)
+    /// A Purrtrait event, under the same rules as `game`.
+    case purrtrait(PurrEvent, seq: Int)
     case presence(seat: Seat, presence: Presence)
     /// Some seat's connection quality changed (`SeatView.link`): redraw the seats.
     case link
@@ -29,6 +31,10 @@ public enum RoomPhase: Equatable, Sendable {
     case connecting, lobby, playing, over, closed, notFound, needsUpdate, stalled
     /// The server refused the connection: too many wrong room codes lately.
     case locked
+    /// Purrtrait: the TV's code was old or missing (403 `not_near`). Scan it again.
+    case notNear
+    /// Purrtrait: the host removed this device or its player (403 `removed`). It stays out.
+    case removed
 }
 
 /// A move code for handing `seat` to another device.

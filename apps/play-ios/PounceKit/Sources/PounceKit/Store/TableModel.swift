@@ -47,7 +47,7 @@ public struct TableModel: Equatable, Sendable {
     }
 
     /// The seat on the move, in either game.
-    public var currentSeat: Seat? { game?.turn ?? room.tiles?.turn ?? room.birdwatch?.turn }
+    public var currentSeat: Seat? { game?.turn ?? room.tiles?.turn ?? room.birdwatch?.turn ?? room.purrtrait?.drawer }
 
     /// The room and its game (either one) are both playing.
     var isLive: Bool { room.liveTurn != nil }

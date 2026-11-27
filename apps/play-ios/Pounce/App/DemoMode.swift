@@ -89,6 +89,10 @@ enum DemoMode: String {
     case tumbleSheet = "tumble-sheet"
     /// Out at a table a TV shows, with a seat that left and one away: every box that plays, big.
     case tumbleTVOut = "tumble-tv-out"
+    /// Purrtrait's phone in each state (`PurrDemo`).
+    case purrPick = "purr-pick", purrDraw = "purr-draw", purrWatch = "purr-watch", purrNext = "purr-next"
+    case purrPaused = "purr-paused", purrReveal = "purr-reveal", purrMissed = "purr-missed", purrOver = "purr-over"
+    case purrCurtain = "purr-curtain", purrLobby = "purr-lobby", purrCrowd = "purr-crowd"
 
     /// A tile game demo.
     var isTiles: Bool { rawValue.hasPrefix("tiles") || rawValue.hasPrefix("controller-tiles") }
@@ -98,6 +102,8 @@ enum DemoMode: String {
 
     /// A Toy Tumble demo.
     var isTumble: Bool { rawValue.hasPrefix("tumble-") }
+    /// A Purrtrait demo.
+    var isPurrtrait: Bool { rawValue.hasPrefix("purr-") }
 
     static func from(arguments: [String] = CommandLine.arguments) -> DemoMode? {
         guard let i = arguments.firstIndex(of: "-demo"), arguments.indices.contains(i + 1) else { return nil }
@@ -136,6 +142,9 @@ enum DemoMode: String {
             return BirdDemo.room(self)
         case .tumblePlay, .tumbleSix, .tumbleTwo, .tumbleTV, .tumbleCountdown, .tumbleLobby, .tumbleJunk, .tumbleSheet, .tumbleTVOut:
             return TumbleDemo.room(self)
+        case .purrPick, .purrDraw, .purrWatch, .purrNext, .purrPaused, .purrReveal, .purrMissed, .purrOver, .purrCurtain,
+             .purrLobby, .purrCrowd:
+            return PurrDemo.room(self)
         case .tiles, .tilesEarly, .tilesOpened, .tilesDraft, .tilesInvalid, .tilesLoupe, .tilesLate, .tilesLong,
              .tilesPass, .tilesOther, .tilesCurtain, .tilesOver, .tilesPlay, .tilesLast,
              .controllerTiles, .controllerTilesOff, .controllerTilesCurtain, .controllerTilesLateOff:
@@ -285,6 +294,7 @@ enum DemoMode: String {
         if isTiles { return TilesDemo.socket(self) }
         if isBirdwatch { return BirdDemo.socket(self) }
         if isTumble { return TumbleDemo.socket(self) }
+        if isPurrtrait { return PurrDemo.socket(self) }
         return switch self {
         case .replay: ReplaySocket(start: DemoFixtures.replayStart(), steps: DemoFixtures.replay(), loops: 2)
         case .handoff: ReplaySocket(start: room, steps: Self.handoffSteps(), loops: 1)

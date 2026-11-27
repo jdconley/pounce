@@ -90,19 +90,30 @@ public struct RoomOptions: Codable, Equatable, Sendable {
     public var rules: BirdRules?
     /// Toy Tumble's House Cat level.
     public var cats: TumbleCats?
+    /// Purrtrait's seconds a turn (45, 60 or 90).
+    public var timer: Int?
 
-    public init(rules: BirdRules? = nil, cats: TumbleCats? = nil) {
+    public init(rules: BirdRules? = nil, cats: TumbleCats? = nil, timer: Int? = nil) {
         self.rules = rules
         self.cats = cats
+        self.timer = timer
     }
 
-    private enum CodingKeys: String, CodingKey { case rules, cats }
+    private enum CodingKeys: String, CodingKey { case rules, cats, timer }
 
     public init(from decoder: any Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         // A rule set or level this build doesn't know reads as none, never as a broken room.
         rules = (try? c.decodeIfPresent(String.self, forKey: .rules)).flatMap(BirdRules.init(rawValue:))
         cats = (try? c.decodeIfPresent(String.self, forKey: .cats)).flatMap(TumbleCats.init(rawValue:))
+        timer = (try? c.decodeIfPresent(Int.self, forKey: .timer)) ?? nil
+    }
+
+    public func encode(to encoder: any Encoder) throws {
+        var c = encoder.container(keyedBy: CodingKeys.self)
+        try c.encodeIfPresent(rules, forKey: .rules)
+        try c.encodeIfPresent(cats, forKey: .cats)
+        try c.encodeIfPresent(timer, forKey: .timer)
     }
 }
 

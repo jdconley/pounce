@@ -122,7 +122,7 @@ extension XCTestCase {
     /// Presses a button on the Siri Remote and waits for the focus to land on `id`.
     /// Home's game posters, left to right, in a Debug build (every game in the catalog). A new
     /// game adds its poster here, and every test that walks the shelf follows.
-    static let shelfGames = ["tv.poster.cat-tower", "tv.poster.tiles", "tv.poster.birdwatch", "tv.poster.tumble"]
+    static let shelfGames = ["tv.poster.cat-tower", "tv.poster.tiles", "tv.poster.birdwatch", "tv.poster.tumble", "tv.poster.purrtrait"]
 
     /// From Cat Tower's poster, Right along every game to Tonight's board.
     func walkShelfToBoard(_ app: XCUIApplication, file: StaticString = #filePath, line: UInt = #line) {

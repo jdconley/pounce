@@ -119,6 +119,7 @@ func changes(from commit: String) -> [String] {
     ? [
       "PounceTV", "PounceKit", "Config", "project.yml",
       "Pounce/Table", "Pounce/Tiles", "Pounce/Birdwatch", "Pounce/Tumble",
+      "Pounce/Purrtrait/PurrEaselView.swift", "Pounce/Purrtrait/PurrWords.swift",
       "Pounce/App/FrameWork.swift", "Pounce/App/MainThreadWatchdog.swift", "Pounce/App/Autoplay.swift",
       "Pounce/Design/ArtName.swift", "Pounce/Design/FadeGroup.swift", "Pounce/Design/GroupOpacity.swift",
       "Pounce/Design/Haptics.swift", "Pounce/Design/Juice.swift", "Pounce/Design/NameTag.swift",

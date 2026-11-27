@@ -561,6 +561,8 @@ struct HomeView: View {
                     playAnchor: dealt ? "home.play" : nil
                 ) {
                     if dealt { model.tips.used("home.newGame") }
+                    // Only a TV starts Purrtrait: the card says so; nothing is made here.
+                    if game.startsOnTV { return model.tips.used("home.purrtrait") }
                     Task { await model.newGame(game, fromHome: true) }
                 }
                 if rules, !bigType { rulesChip(roomy: roomy).padding(roomy ? 16 : 12) }

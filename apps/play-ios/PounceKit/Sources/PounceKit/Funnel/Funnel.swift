@@ -142,7 +142,7 @@ extension APIClient: FunnelSending {
         switch link {
         case .join: came(from: .joinLink)
         case .pounce: came(from: .pounceLink)
-        case .move, .tv: return  // a TV link is no invite either
+        case .move, .tv, .easel: return  // a TV link is no invite either, nor a TV's easel QR
         }
         reach(.linkOpened)
     }

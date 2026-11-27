@@ -21,6 +21,9 @@ public enum SocketEvent: Equatable, Sendable {
     /// The open connection's quality changed (`LinkMeter`). Every new connection starts `good`
     /// without one.
     case link(LinkQuality)
+    /// Terminal, a phone at a Purrtrait table: the room refused it (403 on connect). `notNear`: the
+    /// TV's code was old or missing; `removed`: the host took this device off the table.
+    case forbidden(ErrorCode)
 }
 
 public enum RoomSocketError: Error, Equatable {
@@ -60,6 +63,8 @@ public actor RoomSocket: RoomSocketing {
 
     private let url: URL
     private let role: RoomRole?
+    /// A Purrtrait TV's key this socket joins with (every connect: a member passes with an old one).
+    private let near: String?
     private let credential: @Sendable () async throws -> DeviceCredential
     private let connector: any WebSocketConnector
     private let backoff: [Duration]
@@ -87,6 +92,7 @@ public actor RoomSocket: RoomSocketing {
         code: String,
         config: APIConfig,
         role: RoomRole? = nil,
+        near: String? = nil,
         credential: @escaping @Sendable () async throws -> DeviceCredential,
         connector: any WebSocketConnector = URLSessionWebSocketConnector(),
         backoff: [Duration] = [.milliseconds(250), .milliseconds(500), .seconds(1), .seconds(2), .seconds(4), .seconds(8)],
@@ -96,8 +102,9 @@ public actor RoomSocket: RoomSocketing {
         sleep: @escaping @Sendable (Duration) async throws -> Void = { try await Task.sleep(for: $0) }
     ) {
         (events, continuation) = AsyncStream.makeStream(of: SocketEvent.self)
-        url = config.socketURL(code: code, role: role)
+        url = config.socketURL(code: code, role: role, near: near)
         self.role = role
+        self.near = near
         self.credential = credential
         self.connector = connector
         self.backoff = backoff
@@ -105,6 +112,16 @@ public actor RoomSocket: RoomSocketing {
         self.tick = tick
         self.clock = clock
         self.sleep = sleep
+    }
+
+    /// Why a phone's connect was refused for good: a 403 whose `x-pounce-error` names it
+    /// (`not_near`, `removed`). A 403 without one is only a failed connect, retried as always.
+    /// Nil for anything else.
+    static func refusal(_ error: SocketConnectError) -> ErrorCode? {
+        switch error {
+        case .denied(let why): ErrorCode(rawValue: why)
+        default: nil
+        }
     }
 
     /// The time since this process started, on a clock that keeps going while the app sleeps.
@@ -194,9 +211,16 @@ public actor RoomSocket: RoomSocketing {
                 conn = try await connector.connect(url: url, token: token)
             } catch SocketConnectError.notFound,
                     SocketConnectError.forbidden where role == .screen,
+                    SocketConnectError.denied where role == .screen,
                     SocketConnectError.conflict where role == .screen {
                 guard isCurrent(gen) else { return }
                 emit(.notFound)
+                _ = finish()
+                return
+            } catch let error as SocketConnectError where Self.refusal(error) != nil {
+                // A phone a Purrtrait table won't take: no retry, the screen says why.
+                guard isCurrent(gen), let why = Self.refusal(error) else { return }
+                emit(.forbidden(why))
                 _ = finish()
                 return
             } catch SocketConnectError.tooManyAttempts {
@@ -246,7 +270,17 @@ public actor RoomSocket: RoomSocketing {
     private func receive(_ gen: Int, _ conn: any WebSocketConnection) async {
         while true {
             let text: String
-            do { text = try await conn.receive() } catch { return }
+            do {
+                text = try await conn.receive()
+            } catch let refused as SocketRefused {
+                // Refused for good: a removed phone stays out; a screen the room let go goes home.
+                guard isCurrent(gen) else { return }
+                emit(role == .screen ? .notFound : .forbidden(refused.reason == ErrorCode.notNear.rawValue ? .notNear : .removed))
+                await finish()?.close()
+                return
+            } catch {
+                return
+            }
             guard isCurrent(gen) else { return }
             meter?.heard(now: clock())
             guard let message = try? Codec.decode(text) else { continue }

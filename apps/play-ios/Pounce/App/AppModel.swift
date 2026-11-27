@@ -1023,13 +1023,16 @@ final class AppModel {
 
     /// Join's keypad finished a code. A table this device knows rejoins at once; any other
     /// code is checked first while Join stays on screen, so a bad one can shake the tiles.
-    func joinTyped(_ code: String) {
-        if isKnown(code) {
+    func joinTyped(_ typedCode: String) {
+        // Eight characters: a Purrtrait TV's code, the room's five and three of its key.
+        let code = String(typedCode.prefix(RoomCode.length))
+        let near = typedCode.count > RoomCode.length ? typedCode : nil
+        if near == nil, isKnown(code) {
             open(code: code, intent: .rejoin)
             return
         }
         closeRoom()
-        let session = makeSession(code: code, intent: .join)
+        let session = makeSession(code: code, intent: near.map { .easel(near: $0) } ?? .join)
         room = session
         probing = code
         session.start()
@@ -1126,8 +1129,11 @@ final class AppModel {
     private func makeSession(code: String, intent: RoomIntent) -> RoomSession {
         let config = config
         let api = api
+        // A Purrtrait TV's key goes on every connect (a member passes with an old one). A typed
+        // code with no key reads a 403 as the TV's table asking for one (Join shows three more tiles).
+        let near: String? = if case .easel(let key) = intent { key } else { nil }
         let socket = SuspendableSocket {
-            RoomSocket(code: code, config: config, credential: { try await api.credential() })
+            RoomSocket(code: code, config: config, near: near, credential: { try await api.credential() })
         }
         let session = RoomSession(code: code, intent: intent, socket: socket)
         session.owner = { [weak self] in self?.people.owner }
@@ -1191,7 +1197,7 @@ final class AppModel {
     func gameID(for url: URL) -> String? {
         let code: String
         switch DeepLink.parse(url, allowDevScheme: true) {
-        case .join(let c), .move(let c, _): code = c
+        case .join(let c), .move(let c, _), .easel(let c, _): code = c
         case .pounce, .tv, nil: return GameCatalog.dealt.id
         }
         if let room, room.code == code, let id = room.store.room?.gameId { return id }
@@ -1221,6 +1227,10 @@ final class AppModel {
             Task { await openLink(token) }
         case .tv(let token):
             openTV(token)
+        case .easel(let code, let near):
+            // A Purrtrait TV's QR. A table this device already sits at needs no key; without a
+            // key the table answers "Scan the code on the TV."
+            open(code: code, intent: .easel(near: near ?? ""))
         }
     }
 

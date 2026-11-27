@@ -18,6 +18,10 @@ struct StateCard: View {
         case locked
         /// This phone forfeited every seat it had here (§5.13) while the others play on.
         case out
+        /// Purrtrait: the TV's code was old or missing.
+        case notNear
+        /// Purrtrait: the host took this phone off the table.
+        case removed
 
         var art: String {
             switch self {
@@ -28,6 +32,8 @@ struct StateCard: View {
             case .update: ArtName.stateUpdate
             case .locked: ArtName.cat(3, .terrified)
             case .out: ArtName.cat(5, .asleep)
+            case .notNear: ArtName.iconTV
+            case .removed: ArtName.cat(3, .asleep)
             }
         }
 
@@ -40,6 +46,8 @@ struct StateCard: View {
             case .update: LocalizedStringResource("Update Pounce to play", comment: "State card title: this app version is too old")
             case .locked: LocalizedStringResource("Too many wrong codes", comment: "State card title: room code tries are resting")
             case .out: LocalizedStringResource("You forfeited", comment: "State card title: this phone left the game")
+            case .notNear: LocalizedStringResource("Scan the code on the TV.", comment: "State card title (Purrtrait): this phone came in with an old or no TV code")
+            case .removed: LocalizedStringResource("Not at this table", comment: "State card title (Purrtrait): the host removed this phone")
             }
         }
 
@@ -53,6 +61,8 @@ struct StateCard: View {
             case .update: LocalizedStringResource("Get it from the App Store.", comment: "State card: under Update Pounce to play")
             case .locked: LocalizedStringResource("Wait, then try again.", comment: "State card: under Too many wrong codes")
             case .out: LocalizedStringResource("The others play on.", comment: "State card: under You forfeited")
+            case .notNear: LocalizedStringResource("Its code changes every 30 seconds.", comment: "State card (Purrtrait): under Scan the code on the TV")
+            case .removed: LocalizedStringResource("The host took you off.", comment: "State card (Purrtrait): under Not at this table")
             }
         }
     }
@@ -68,9 +78,16 @@ struct StateCard: View {
             RoomBackground()
             ScrollView {
             VStack(spacing: 22) {
-                Image(kind.art)
-                    .resizable()
-                    .scaledToFit()
+                Group {
+                    // The TV icon is too small an image to draw this big: the game's drawn TV.
+                    if kind == .notNear {
+                        PurrTVGlyph(cat: nil, width: 200)
+                    } else {
+                        Image(kind.art)
+                            .resizable()
+                            .scaledToFit()
+                    }
+                }
                     .frame(width: 220, height: 220)
                     .background(
                         Circle()

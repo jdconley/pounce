@@ -24,9 +24,42 @@ struct HowToGuide {
         case GameCatalog.catTower.id: catTower
         case GameCatalog.tiles.id: tiles
         case GameCatalog.tumble.id: tumble
+        case GameCatalog.purrtrait.id: purrtrait
         default: HowToGuide(sections: [], split: 0)
         }
     }
+
+    /// Purrtrait (spec §4, in our words): the TV is the easel, guesses are said out loud.
+    static let purrtrait = HowToGuide(
+        sections: [
+            Section(
+                title: String(localized: "Get ready", comment: "Purrtrait rules section"), color: Palette.violet,
+                lines: [
+                    String(localized: "Pick Purrtrait on the TV. Everyone scans its code to join. 2 to 10 players.", comment: "Purrtrait rules: setup"),
+                    String(localized: "The host picks the timer: 45, 60 or 90 seconds a turn.", comment: "Purrtrait rules: the timer"),
+                ]),
+            Section(
+                title: String(localized: "Draw", comment: "Purrtrait rules section"), color: Palette.magenta,
+                lines: [
+                    String(localized: "On your turn, pick one of two words: Easy for 1 point, Tricky for 2.", comment: "Purrtrait rules: the pick"),
+                    String(localized: "Draw it on your phone. The TV shows your lines as you draw.", comment: "Purrtrait rules: drawing"),
+                    String(localized: "No letters, numbers or talking about the word.", comment: "Purrtrait rules: what the drawer can't do"),
+                ]),
+            Section(
+                title: String(localized: "Guess", comment: "Purrtrait rules section"), color: Palette.teal,
+                lines: [
+                    String(localized: "Everyone else shouts out guesses. The TV shows the word's group as a hint.", comment: "Purrtrait rules: guessing"),
+                    String(localized: "Heard it? Tap Got it, then who said it first. You both score.", comment: "Purrtrait rules: Got it"),
+                    String(localized: "Time up, or Give up: nobody scores, and the TV shows the word.", comment: "Purrtrait rules: a missed turn"),
+                ]),
+            Section(
+                title: String(localized: "Win", comment: "Purrtrait rules section"), color: Palette.orange,
+                lines: [
+                    String(localized: "Everyone draws twice. The most points wins. A tie shares the win.", comment: "Purrtrait rules: the end"),
+                    String(localized: "Drawings show only on the TV and are gone when the turn ends.", comment: "Purrtrait rules: drawings aren't kept"),
+                ]),
+        ],
+        split: 2)
 
     /// Birdwatch, for one rule set (design §4, in our words).
     static func birdwatch(_ rules: BirdRules) -> HowToGuide {

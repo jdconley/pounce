@@ -131,6 +131,8 @@ public enum RoomEvent: Codable, Equatable, Sendable {
     case birdwatch(BirdEvent)
     /// A seat's person left a Birdwatch game and a House Cat plays on for them.
     case houseCat(seat: Seat)
+    /// A Purrtrait event (`{"kind":"purrtrait","event":{…}}`).
+    case purrtrait(PurrEvent)
 
     private enum CodingKeys: String, CodingKey { case kind, seat, presence, event, rug, back }
 
@@ -149,6 +151,8 @@ public enum RoomEvent: Codable, Equatable, Sendable {
             self = .birdwatch(try c.decode(BirdEvent.self, forKey: .event))
         case "houseCat":
             self = .houseCat(seat: try c.decode(Seat.self, forKey: .seat))
+        case "purrtrait":
+            self = .purrtrait(try c.decode(PurrEvent.self, forKey: .event))
         case "look":
             self = .look(seat: try c.decode(Seat.self, forKey: .seat),
                          look: Look(rug: try c.decode(String.self, forKey: .rug), back: try c.decode(String.self, forKey: .back)))
@@ -177,6 +181,9 @@ public enum RoomEvent: Codable, Equatable, Sendable {
         case .houseCat(let seat):
             try c.encode("houseCat", forKey: .kind)
             try c.encode(seat, forKey: .seat)
+        case .purrtrait(let event):
+            try c.encode("purrtrait", forKey: .kind)
+            try c.encode(event, forKey: .event)
         case .look(let seat, let look):
             try c.encode("look", forKey: .kind)
             try c.encode(seat, forKey: .seat)

@@ -13,6 +13,9 @@ public enum GameCatalog {
             case available
             /// On the shelf, named and pictured, but no table can be started yet.
             case comingSoon
+            /// Played, but only a TV starts a table (Purrtrait: the TV is the easel). The phone's
+            /// card says "Starts on the TV" and a tip says to pick it there.
+            case onTV
         }
 
         /// The card's colour, from the app's palette (`Palette` maps it): the band under the art.
@@ -55,11 +58,17 @@ public enum GameCatalog {
 
         public var isAvailable: Bool { availability == .available }
 
+        /// Played on this app, though a phone can't start it (`onTV`), or startable here.
+        public var isPlayable: Bool { availability != .comingSoon }
+
+        /// Only a TV makes this game's table.
+        public var startsOnTV: Bool { availability == .onTV }
+
         /// The same game, startable (a debug preview of a game before it ships).
         public func unlocked() -> Entry {
             Entry(
                 id: id, title: title, pitch: pitch, minPlayers: minPlayers, maxPlayers: maxPlayers, art: art, tint: tint,
-                availability: .available, howTo: howTo)
+                availability: availability == .onTV ? .onTV : .available, howTo: howTo)
         }
     }
 
@@ -79,15 +88,21 @@ public enum GameCatalog {
         id: "birdwatch", title: "Birdwatch", pitch: "Bid, call trump, take tricks.",
         minPlayers: 4, maxPlayers: 6, art: "game-birdwatch", tint: .lime, availability: .available)
 
-    /// The real-time falling-toys battle (design 2026-11-26). Gated: see `tumbleShips`.
+    /// The real-time falling-toys battle (design 2026-11-26). Gated: see `ships14`.
     public static let tumble = Entry(
         id: "tumble", title: "Toy Tumble", pitch: "Drop toys, clear rows, toss tricks.",
         minPlayers: 2, maxPlayers: 6, art: "game-tumble", tint: .lime, availability: .available)
 
-    /// Toy Tumble comes with the app's 1.4 (design §10.4): a Release build below 1.4 never shows
-    /// it or asks the server for it, so `main` can build 1.3 with it merged. Debug builds always
-    /// have it, to play it on a dev server.
-    public static func tumbleShips(debug: Bool, version: String?) -> Bool {
+    /// The draw-and-guess party game (design 2026-11-26): the TV is the easel, the drawer draws
+    /// on a phone, everyone else shouts. A TV starts the table. Gated: see `ships14`.
+    public static let purrtrait = Entry(
+        id: "purrtrait", title: "Purrtrait", pitch: "Draw it. They shout it.",
+        minPlayers: 2, maxPlayers: 10, art: "game-purrtrait", tint: .magenta, availability: .onTV)
+
+    /// Toy Tumble and Purrtrait come with the app's 1.4 (Toy Tumble design §10.4): a Release
+    /// build below 1.4 never shows them or asks the server for them, so `main` can build 1.3 with
+    /// them merged. Debug builds always have them, to play them on a dev server.
+    public static func ships14(debug: Bool, version: String?) -> Bool {
         if debug { return true }
         guard let version = AppVersion(version), let first = AppVersion("1.4") else { return false }
         return version >= first
@@ -95,7 +110,7 @@ public enum GameCatalog {
 
     /// The games this build has, in catalog order (the order games were added, oldest first).
     public static func games(debug: Bool, version: String?) -> [Entry] {
-        [catTower, tiles, birdwatch] + (tumbleShips(debug: debug, version: version) ? [tumble] : [])
+        [catTower, tiles, birdwatch] + (ships14(debug: debug, version: version) ? [tumble, purrtrait] : [])
     }
 
     static var isDebug: Bool {
@@ -106,7 +121,8 @@ public enum GameCatalog {
         #endif
     }
 
-    /// Catalog order: the order games were added, oldest first. Toy Tumble only from 1.4.
+    /// Catalog order: the order games were added, oldest first. Toy Tumble and Purrtrait only
+    /// from 1.4.
     public static let all: [Entry] = games(debug: isDebug, version: Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String)
 
     /// The game the server deals when a table is created.
@@ -125,7 +141,7 @@ public enum GameCatalog {
     /// The shelf, top to bottom: the games you can start, then the ones on the way, each group in
     /// catalog order.
     public static func shelf(_ entries: [Entry] = all) -> [Entry] {
-        entries.filter(\.isAvailable) + entries.filter { !$0.isAvailable }
+        entries.filter(\.isAvailable) + entries.filter(\.startsOnTV) + entries.filter { !$0.isPlayable }
     }
 }
 

@@ -260,6 +260,11 @@ enum UITipCopy {
         case .tumbleFlick: String(localized: "Flick down to drop.", comment: "Tip at Toy Tumble's table: a fast swipe down drops the toy")
         case .tumbleTrick: String(localized: "Tap a trick, then a box.", comment: "Tip at Toy Tumble's table: the trick tray, the first time a trick is pocketed")
         case .tumbleJunk: String(localized: "Clear rows to block it.", comment: "Tip at Toy Tumble's table: the junk meter, the first time junk waits")
+        case .purrShelf: String(localized: "Pick it on the TV.", comment: "Tip on Home: Purrtrait's card, a game only a TV starts")
+        case .purrPick: String(localized: "Pick one to draw", comment: "Tip in Purrtrait: the drawer's two word cards")
+        case .purrEasel: String(localized: "No letters or numbers", comment: "Tip in Purrtrait: the drawer's easel (draw pictures only)")
+        case .purrGotIt: String(localized: "Tap who said it first", comment: "Tip in Purrtrait: the Got it button")
+        case .purrLook: String(localized: "Guess out loud", comment: "Tip in Purrtrait: a guesser's phone")
         }
     }
 }

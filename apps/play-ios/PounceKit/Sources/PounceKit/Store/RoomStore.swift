@@ -96,6 +96,11 @@ import Observation
     /// Toy Tumble's live stream (relays, hits, syncs, seat links), already decoded off the main
     /// thread, for the table's `TumbleTable`. Not room state: the store keeps none of it.
     @ObservationIgnored public var onTumble: ((TumbleMessage) -> Void)?
+    /// Purrtrait's ink for the turn on now (the TV's stream, the drawer's own after a reconnect).
+    /// Never observed: the easel listens to it.
+    @ObservationIgnored public let ink = InkFeed()
+    /// Purrtrait: the server said the turn's easel is full. `serial` goes up with each.
+    public private(set) var easelFull: ForfeitNotice?
 
     /// This phone's connection as the table shows it.
     public enum Connection: Equatable, Sendable {
@@ -126,12 +131,14 @@ import Observation
         case catTower(Action)
         case tiles(TilesAction)
         case birdwatch(BirdAction)
+        case purrtrait(PurrAction)
 
         func message(seat: Seat, id: String?) -> ClientMessage {
             switch self {
             case .catTower(let action): .act(seat: seat, action: action, id: id)
             case .tiles(let action): .actTiles(seat: seat, action: action, id: id)
             case .birdwatch(let action): .actBirdwatch(seat: seat, action: action, id: id)
+            case .purrtrait(let action): .actPurrtrait(seat: seat, action: action, id: id)
             }
         }
     }
@@ -254,6 +261,23 @@ import Observation
     /// `act` for a Birdwatch move: the same lock, move id and resend rules.
     @discardableResult public func actBirdwatch(seat: Seat, _ action: BirdAction) -> Bool {
         act(seat: seat, move: .birdwatch(action))
+    }
+
+    /// `act` for a Purrtrait move (a word pick, who got it, give up): the same lock and move id.
+    @discardableResult public func actPurrtrait(seat: Seat, _ action: PurrAction) -> Bool {
+        act(seat: seat, move: .purrtrait(action))
+    }
+
+    /// Sends one `ink` message from the drawer's device, in order with everything else, never
+    /// waiting on the move lock (ink is not a move). `failed` runs if it never left the device
+    /// (the socket was down), so the drawer's model can send it again after the reconnect.
+    /// `last` marks the final message of a reply to `inkResend`.
+    public func sendInk(seat: Seat, turn: String, ops: [InkOp], last: Bool = false, failed: @escaping @MainActor () -> Void = {}) {
+        guard !isScreen, !ops.isEmpty else { return }
+        let message = ClientMessage.ink(seat: seat, turn: turn, ops: ops, last: last)
+        callSocket(inOrder: true) { socket in
+            do { try await socket.send(message) } catch { failed() }
+        }
     }
 
     private func act(seat: Seat, move: Move) -> Bool {
@@ -471,6 +495,9 @@ import Observation
                 refusal = why
                 phase = .needsUpdate
             }
+        case .forbidden(let why):
+            connected = false
+            if !isTerminal { phase = why == .removed ? .removed : .notNear }
         case .message(let message):
             guard !isTerminal else { return }
             apply(message)
@@ -479,7 +506,7 @@ import Observation
 
     private var isTerminal: Bool {
         switch phase {
-        case .closed, .notFound, .locked, .needsUpdate: true
+        case .closed, .notFound, .locked, .needsUpdate, .notNear, .removed: true
         default: false
         }
     }
@@ -509,6 +536,16 @@ import Observation
             applyNudged(seat: seat, from: from)
         case .aim(let seat, let aim):
             aims[seat] = aim
+        case .ink(_, let turn, let ops):
+            // Only this turn's: a relay that crossed a turn change is dropped.
+            guard room?.purrtrait.map({ $0.turn == turn && $0.phase != .over }) ?? false else { return }
+            ink.relay(turn: turn, ops: ops)
+        case .inkSync(let turn, let ops):
+            guard room?.purrtrait?.turn == turn else { return }
+            ink.sync(turn: turn, ops: ops)
+        case .inkResend(let turn):
+            guard room?.purrtrait?.turn == turn else { return }
+            ink.resend(turn: turn)
         case .tumble(let live):
             onTumble?(live)
         case .pong:
@@ -544,6 +581,8 @@ import Observation
         if let pending = nudgePending, new.nudge?.seat != pending || new.nudge?.sent == true { nudgePending = nil }
         lastSeq = seq
         settledSeq = seq
+        // A new Purrtrait turn (or none) drops the last one's drawing, here and on the easel.
+        ink.follow(turn: new.purrtrait.flatMap { $0.phase == .over ? nil : $0.turn })
         settlePending(new)
         noteTurn()
         if phase != .stalled {
@@ -639,6 +678,28 @@ import Observation
             }
             noteTurn()
             continuation.yield(.birdwatch(event, seq: seq))
+        case .purrtrait(let event):
+            // As for the other games: the drawer and the phase are folded in, for timing.
+            switch event {
+            case .turn(let drawer, let round):
+                room?.purrtrait?.drawer = drawer
+                room?.purrtrait?.round = round
+                room?.purrtrait?.phase = .choosing
+            case .chosen(_, let group, let level):
+                // The phase waits for the snapshot that brings the drawer's device its word, so
+                // the drawer's screen never shows "watch" for a moment between the two.
+                room?.purrtrait?.group = group
+                room?.purrtrait?.level = level
+            case .guessed, .missed:
+                room?.purrtrait?.phase = .reveal
+            case .over(let winners, _):
+                room?.purrtrait?.phase = .over
+                room?.purrtrait?.winners = winners
+            case .unknown:
+                break
+            }
+            noteTurn()
+            continuation.yield(.purrtrait(event, seq: seq))
         case .houseCat(let seat):
             // The snapshot that follows says the seat is a House Cat's now.
             houseCatNotice = ForfeitNotice(seat: seat, serial: (houseCatNotice?.serial ?? 0) + 1)
@@ -671,6 +732,14 @@ import Observation
             callSocket { await $0.stop() }
         } else if code == .botStalled {
             phase = .stalled
+        } else if code == .removed || code == .notNear {
+            // Purrtrait: the host removed this device (its sockets close next), or the key was old.
+            phase = code == .removed ? .removed : .notNear
+            connected = false
+            callSocket { await $0.stop() }
+        } else if code == .easelFull {
+            // Ink isn't a move: no lock to release, the drawer's screen offers Clear.
+            easelFull = ForfeitNotice(seat: room?.purrtrait?.drawer ?? 0, serial: (easelFull?.serial ?? 0) + 1)
         } else if actionInFlight {
             actionInFlight = false
             pendingMove = nil

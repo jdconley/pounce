@@ -13,6 +13,8 @@ public enum TipScreen: String, CaseIterable, Codable, Sendable {
     case table
     /// The Daily Dish screen (daily games design §7).
     case dish
+    /// Purrtrait's phone: the word pick, the easel, Got it, and a guesser's "Look at the TV".
+    case purrtrait
     /// A daily puzzle being played (the host around a game's board).
     case daily
 }
@@ -147,6 +149,13 @@ public enum UITip: String, CaseIterable, Codable, Sendable {
     case tumbleFlick = "ui.tumble.flick"
     case tumbleTrick = "ui.tumble.trick"
     case tumbleJunk = "ui.tumble.junk"
+    // Purrtrait (spec §11.4): the shelf's card, the first word pick, the easel, Got it, and a
+    // guesser's phone.
+    case purrShelf = "ui.purr.shelf"
+    case purrPick = "ui.purr.pick"
+    case purrEasel = "ui.purr.easel"
+    case purrGotIt = "ui.purr.gotIt"
+    case purrLook = "ui.purr.look"
 
     public var rule: UITipRule {
         switch self {
@@ -209,6 +218,14 @@ public enum UITip: String, CaseIterable, Codable, Sendable {
         case .tumbleFlick: r(.tumble, "tumble.box", 88, .after(.tumbleTap), learnedBy: ["tumble.drop"])
         case .tumbleTrick: r(.tumble, "tumble.tray", 100, .event(.tumbleTrick), learnedBy: ["tumble.use"])
         case .tumbleJunk: r(.tumble, "tumble.meter", 99, .event(.tumbleJunk), learnedBy: ["tumble.block"])
+        // A tap on the card says it starts on the TV; the tip says where.
+        case .purrShelf: r(.home, "home.game.purrtrait", 55, .after(.homeShelf), learnedBy: ["home.purrtrait"])
+        // One at a time, as each comes up: picking learns the pick, a stroke the easel, a tap
+        // on a player Got it.
+        case .purrPick: r(.purrtrait, "purr.pick", 100, learnedBy: ["purr.pick"])
+        case .purrEasel: r(.purrtrait, "purr.easel", 95, learnedBy: ["purr.stroke"])
+        case .purrGotIt: r(.purrtrait, "purr.gotIt", 90, .after(.purrEasel), learnedBy: ["purr.gotIt"])
+        case .purrLook: r(.purrtrait, "purr.look", 85)
         }
     }
 

@@ -59,16 +59,16 @@ import Testing
         #expect(app.headerValue == "platform=ios; version=1.1; build=57; protocol=1")
         #expect(ClientHeaders.headers(for: app) == [
             "X-Pounce-App": "platform=ios; version=1.1; build=57; protocol=1",
-            "X-Pounce-Games": "cat-tower,tiles,birdwatch,tumble,dish",
+            "X-Pounce-Games": "cat-tower,tiles,birdwatch,tumble,purrtrait,dish",
         ])
     }
 
     /// `dish` in the games header says this app shows the Daily Dish, so the server sends it the
     /// Dish reminder. Only the iPhone and iPad app has the Dish; the Apple TV only shows a board.
     @Test func onlyThePhoneAppSaysItHasTheDish() {
-        // A Debug build (these tests) lists Toy Tumble; a Release 1.3 build doesn't (GameCatalogTests).
-        #expect(ClientHeaders.headers(for: AppIdentity(platform: "ios", version: "1.3"))["X-Pounce-Games"] == "cat-tower,tiles,birdwatch,tumble,dish")
-        #expect(ClientHeaders.headers(for: AppIdentity(platform: "tvos", version: "1.3"))["X-Pounce-Games"] == "cat-tower,tiles,birdwatch,tumble")
+        // A Debug build (these tests) lists Toy Tumble and Purrtrait; a Release 1.3 build doesn't (GameCatalogTests).
+        #expect(ClientHeaders.headers(for: AppIdentity(platform: "ios", version: "1.3"))["X-Pounce-Games"] == "cat-tower,tiles,birdwatch,tumble,purrtrait,dish")
+        #expect(ClientHeaders.headers(for: AppIdentity(platform: "tvos", version: "1.3"))["X-Pounce-Games"] == "cat-tower,tiles,birdwatch,tumble,purrtrait")
     }
 
     @Test func itSaysTheProtocolThisBuildSpeaks() {

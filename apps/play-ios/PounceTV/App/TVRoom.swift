@@ -17,6 +17,8 @@ final class TVRoom {
         case tiles(TilesScene)
         case birdwatch(BirdScene)
         case tumble(TumbleScene)
+        /// Purrtrait draws in SwiftUI and layers (`PurrTVTable`): no scene, nothing to enqueue.
+        case purrtrait
     }
 
     /// Toy Tumble's boxes, replayed from the live stream (a screen has no box of its own).
@@ -59,6 +61,7 @@ final class TVRoom {
     var isTiles: Bool { store.room?.gameId == GameCatalog.tiles.id }
     var isBirdwatch: Bool { store.room?.gameId == GameCatalog.birdwatch.id }
     var isTumble: Bool { store.room?.gameId == GameCatalog.tumble.id }
+    var isPurrtrait: Bool { store.room?.gameId == GameCatalog.purrtrait.id }
 
     /// The TV has the room, and lost its connection to it.
     var reconnecting: Bool { store.room != nil && !store.connected }
@@ -118,6 +121,11 @@ final class TVRoom {
     func openTable() {
         guard scene == nil, !closed, store.room != nil else { return }
         let finished: ([Seat]) -> Void = { [weak self] winners in self?.gameOver(winners) }
+        if isPurrtrait {
+            scene = .purrtrait
+            pending.removeAll()
+            return
+        }
         if isTumble {
             let scene = TumbleScene(store: store, table: tumble)
             scene.onGameOver = finished
@@ -161,7 +169,7 @@ final class TVRoom {
         case .catTower(let table): table.enqueue(intent)
         case .tiles(let tiles): tiles.enqueue(intent)
         case .birdwatch(let bird): bird.enqueue(intent)
-        case .tumble, nil: break
+        case .tumble, .purrtrait, nil: break
         }
     }
 

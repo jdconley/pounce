@@ -100,6 +100,65 @@ import Testing
         await socket.stop()
     }
 
+    /// Purrtrait: a phone whose 403 says `not_near` stops, and says it wasn't near.
+    @Test func aPhoneWithAKeyThatIsRefusedStops() async throws {
+        let connector = FakeConnector([.failure(.denied("not_near")), .connection(FakeConnection())])
+        let sleeper = FakeSleeper()
+        let credential = credential
+        let socket = RoomSocket(
+            code: "BCDFG", config: config, near: "ZZZZZZZZ", credential: { credential }, connector: connector,
+            tick: sleeper.pingInterval, sleep: { try await sleeper.sleep($0) })
+        var reader = EventReader(socket.events)
+        await socket.start()
+        #expect(await reader.next(2) == [.connecting, .forbidden(.notNear)])
+        #expect(connector.calls.count == 1, "no reconnect")
+    }
+
+    /// Purrtrait: a removed phone that comes back is told `removed` on the upgrade, and stops.
+    @Test func aRemovedPhoneThatComesBackStops() async throws {
+        let connector = FakeConnector([.failure(.denied("removed")), .connection(FakeConnection())])
+        let sleeper = FakeSleeper()
+        let credential = credential
+        let socket = RoomSocket(
+            code: "BCDFG", config: config, credential: { credential }, connector: connector,
+            tick: sleeper.pingInterval, sleep: { try await sleeper.sleep($0) })
+        var reader = EventReader(socket.events)
+        await socket.start()
+        #expect(await reader.next(2) == [.connecting, .forbidden(.removed)])
+        #expect(connector.calls.count == 1, "no reconnect")
+    }
+
+    /// A 403 that names no reason, even to a socket with a key, is retried as before.
+    @Test func aPlain403WithAKeyIsRetried() async throws {
+        let connector = FakeConnector([.failure(.forbidden), .connection(FakeConnection())])
+        let sleeper = FakeSleeper()
+        let credential = credential
+        let socket = RoomSocket(
+            code: "BCDFG", config: config, near: "ZZZZZZZZ", credential: { credential }, connector: connector,
+            tick: sleeper.pingInterval, sleep: { try await sleeper.sleep($0) })
+        var reader = EventReader(socket.events)
+        await socket.start()
+        #expect(await reader.next(4) == [.connecting, .disconnected, .connecting, .connected])
+        await socket.stop()
+    }
+
+    /// Purrtrait: the host removed this phone; the room closes its socket with 4403 "removed".
+    @Test func aRemovedPhoneIsNotReconnected() async throws {
+        let open = FakeConnection()
+        let connector = FakeConnector([.connection(open), .connection(FakeConnection())])
+        let sleeper = FakeSleeper()
+        let credential = credential
+        let socket = RoomSocket(
+            code: "BCDFG", config: config, near: "ZZZZZZZZ", credential: { credential }, connector: connector,
+            tick: sleeper.pingInterval, sleep: { try await sleeper.sleep($0) })
+        var reader = EventReader(socket.events)
+        await socket.start()
+        #expect(await reader.next(2) == [.connecting, .connected])
+        open.refuse("removed")
+        #expect(await reader.next(1) == [.forbidden(.removed)])
+        #expect(connector.calls.count == 1, "no reconnect")
+    }
+
     @Test func notScreenAfterADropIsStillTerminal() async throws {
         // Linked once, then the room stops listing the TV (a new table, or it was unlinked).
         let first = FakeConnection()

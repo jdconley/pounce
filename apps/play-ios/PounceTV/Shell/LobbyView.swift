@@ -24,6 +24,8 @@ struct LobbyView: View {
                         .frame(width: 1128, height: 520)
                     TVHint(icon: ArtName.Habit.iconPhone, words: room.isBirdwatch
                            ? String(localized: "4 to 6 players. Press Start on any phone", comment: "TV lobby (Birdwatch): how many play, and a phone starts the game")
+                           : room.isPurrtrait
+                           ? String(localized: "2 to 10 players. Press Start on any phone", comment: "TV lobby (Purrtrait): how many play, and a phone starts the game")
                            : String(localized: "Press Start on any phone", comment: "TV lobby: a phone starts the game"))
                     if model.canChangeGame {
                         changeGame
@@ -43,7 +45,12 @@ struct LobbyView: View {
             OutlinedText(String(localized: "Scan to join", comment: "TV lobby: over the QR a phone scans to join the table"), size: 60, width: 4)
             TVQRCode(text: model.inviteURL?.absoluteString, side: 380)
                 .accessibilityLabel(Text("QR code to join table \(room.code)", comment: "TV lobby: the invite QR, for VoiceOver"))
-            TVCode(code: room.code, label: String(localized: "Table code", comment: "TV lobby: VoiceOver, before the table's code is spelled out"))
+                .accessibilityIdentifier("tv.lobby.qr")
+                .accessibilityValue(Text(verbatim: model.inviteURL?.absoluteString ?? ""))
+            // Purrtrait: the 8-letter code that goes with the QR, good for a minute (spec §5.2).
+            TVCode(code: room.isPurrtrait ? room.near?.code : room.code, size: room.isPurrtrait ? 66 : 92,
+                   label: String(localized: "Table code", comment: "TV lobby: VoiceOver, before the table's code is spelled out"))
+                .accessibilityIdentifier("tv.lobby.code")
         }
     }
 
@@ -121,6 +128,15 @@ private struct LobbyRug: View {
         ],
     ]
 
+    /// Seven to ten spots: two rows across the rug.
+    static func rows(_ n: Int) -> [CGPoint] {
+        let top = (n + 1) / 2, bottom = n - top
+        func row(_ count: Int, y: CGFloat) -> [CGPoint] {
+            (0..<count).map { CGPoint(x: (CGFloat($0) + 0.5) / CGFloat(count) * 0.9 + 0.05, y: y) }
+        }
+        return row(top, y: 0.28) + row(bottom, y: 0.76)
+    }
+
     struct Spot: Identifiable {
         let seat: Seat
         let filled: Bool
@@ -129,7 +145,15 @@ private struct LobbyRug: View {
     }
 
     private var spots: [Spot] {
-        room.seats.indices.compactMap { i in
+        // Purrtrait's ten seats: the cats sat down, and one spot for the next.
+        if room.isPurrtrait {
+            let taken = room.seats.indices.filter { room.seats[$0].kind == .human }.map { i in
+                Spot(seat: i, filled: true, id: "\(i):p:\(room.seats[i].person?.id ?? "")")
+            }
+            let open = room.seats.indices.first { room.seats[$0].kind == .open }.map { Spot(seat: $0, filled: false, id: "\($0):open") }
+            return taken + (open.map { [$0] } ?? [])
+        }
+        return room.seats.indices.compactMap { i in
             let s = room.seats[i]
             switch s.kind {
             case .closed: return nil
@@ -142,7 +166,7 @@ private struct LobbyRug: View {
 
     var body: some View {
         let spots = spots
-        let places = Self.spots[min(max(spots.count, 2), 6)] ?? Self.spots[2]!
+        let places = spots.count > 6 ? Self.rows(spots.count) : Self.spots[min(max(spots.count, 2), 6)] ?? Self.spots[2]!
         let filled = spots.filter(\.filled).count
         GeometryReader { g in
             ZStack {
@@ -153,7 +177,7 @@ private struct LobbyRug: View {
                     .accessibilityHidden(true)
                 ForEach(Array(spots.enumerated()), id: \.element.id) { k, spot in
                     let at = places[safe: k] ?? CGPoint(x: 0.5, y: 0.5)
-                    LobbySeat(room: room, spot: spot, crowded: spots.count > 4)
+                    LobbySeat(room: room, spot: spot, crowded: spots.count > 4, tight: spots.count > 6)
                         // One layer: the cat, cushion and name fade in together as it walks on.
                         .compositingGroup()
                         .position(x: at.x * g.size.width, y: at.y * g.size.height)
@@ -176,9 +200,10 @@ private struct LobbySeat: View {
     let room: RoomView
     let spot: LobbyRug.Spot
     let crowded: Bool
+    var tight = false
 
     var body: some View {
-        let cat: CGFloat = crowded ? 136 : 168
+        let cat: CGFloat = tight ? 110 : crowded ? 136 : 168
         if spot.filled {
             let info = room.seats[spot.seat]
             let name = SeatInfo.name(room, spot.seat)
@@ -203,7 +228,7 @@ private struct LobbySeat: View {
                     }
                 }
                 // A 20-letter name whole, even six seats across.
-                NameTag(name, maxWidth: crowded ? 344 : 480, size: crowded ? 28 : 32)
+                NameTag(name, maxWidth: tight ? 210 : crowded ? 344 : 480, size: tight ? 24 : crowded ? 28 : 32)
             }
             .accessibilityElement(children: .ignore)
             .accessibilityLabel(name)
