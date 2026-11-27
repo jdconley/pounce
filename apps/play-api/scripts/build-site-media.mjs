@@ -35,8 +35,9 @@ const GET_URL = "https://play.conleychaos.com/get";
 const SCREENS = {
   // The web TV table (/play/tv), six seats mid-game.
   tv: "docs/screenshots/tv/tv-ct6-mid-1920x1080.jpg",
-  // The web TV's start screen: the code a phone scans, the four games and Tonight's board.
-  tvHome: "docs/screenshots/tumble-web/tv-home-1920x1080.jpg",
+  // The web TV's start screen: the code a phone scans, the five games and Tonight's board (1280
+  // wide).
+  tvHome: "apps/play-web/screenshots/purrtrait/after-tv-home-tv-1080p.jpg",
   // A phone in the browser at a TV table: just its cards, with the Cards/Table switch.
   cards: "docs/screenshots/tv/phone-ct-draw-390x844.jpg",
   // The web player on a laptop: a Cat Tower table.
@@ -49,6 +50,9 @@ const SCREENS = {
   // Toy Tumble in the web player on a large phone, mid-round against five House Cats: it is in the
   // browser before the App Store app (1.4).
   tumble: "apps/play-web/screenshots/tumble/play-iphone-pro-max.jpg",
+  // Purrtrait on the browser TV page, mid-drawing: the easel, the scores and the timer (1280 wide).
+  // It is in the browser before the App Store app (1.4).
+  purrtrait: "apps/play-web/screenshots/purrtrait/after-tv-drawing-tv-1080p.jpg",
 };
 
 const run = (cmd, args) => execFileSync(cmd, args, { stdio: ["ignore", "ignore", "inherit"] });
@@ -273,6 +277,7 @@ const manifest = {
     tiles: screen(SCREENS.tiles, "tuna-tiles", [200, 400]),
     birdwatch: screen(SCREENS.birdwatch, "birdwatch", [200, 400]),
     tumble: screen(SCREENS.tumble, "toy-tumble", [200, 400]),
+    purrtrait: screen(SCREENS.purrtrait, "purrtrait-tv", [320, 640]),
   },
   art: {
     leap: art("Cats.spriteatlas/cat0-leap.imageset/cat0-leap@3x.png", "cat-leap", 360),

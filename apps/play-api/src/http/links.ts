@@ -122,6 +122,13 @@ export const BIRDWATCH_SINCE = "1.3";
 /** The first App Store version with Toy Tumble. Until then it plays in the browser only. */
 export const TUMBLE_SINCE = "1.4";
 
+/**
+ * The first iPhone and Apple TV app version with Purrtrait (`GAME_MIN_APP`). Until then it plays in
+ * the browser and on the browser TV page. Its links never go to the App Store: a Purrtrait table is
+ * joined only from its TV's code.
+ */
+export const PURRTRAIT_SINCE = "1.4";
+
 /** The first app version that can play each game, for games newer than the first release. */
 export const GAME_SINCE: Readonly<Record<string, string>> = { tiles: "1.1", birdwatch: BIRDWATCH_SINCE, tumble: TUMBLE_SINCE, [DISH_GAME]: DISH_SINCE };
 

@@ -3,8 +3,9 @@ import { createHash } from "node:crypto";
 import { describe, expect, test } from "vitest";
 
 import { purrtraitAppLinksOn, tvAppLinksOn } from "../env";
+import { GAME_MIN_APP } from "../games";
 
-import { appSiteAssociation, appStoreId, BETA_LACKS, BIRDWATCH_SINCE, TUMBLE_SINCE, dailyPage, deadLinkPage, DISH_SINCE, INVITE_CSP, INVITE_SCRIPT, INVITE_SCRIPT_HASH, ogImage, pouncePage, scanPage, sharePage, viewerOf } from "./links";
+import { appSiteAssociation, appStoreId, BETA_LACKS, BIRDWATCH_SINCE, PURRTRAIT_SINCE, TUMBLE_SINCE, dailyPage, deadLinkPage, DISH_SINCE, INVITE_CSP, INVITE_SCRIPT, INVITE_SCRIPT_HASH, ogImage, pouncePage, scanPage, sharePage, viewerOf } from "./links";
 import { MEDIA } from "./site-media";
 
 import type { InvitePeek } from "../safety/safety";
@@ -455,6 +456,12 @@ describe("a Birdwatch table: in the browser and TestFlight until the App Store h
     expect(html).toContain('<p class="next">Then open Pounce and tap Paste.</p>');
     expect(html).toContain("Have Pounce? Update it first.");
     expect(html).not.toContain("TestFlight");
+  });
+});
+
+describe("Purrtrait's app version", () => {
+  test("the site says the apps get it in the version the server first lets draw it", () => {
+    expect(PURRTRAIT_SINCE).toBe(GAME_MIN_APP.purrtrait);
   });
 });
 

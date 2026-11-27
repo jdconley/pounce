@@ -58,6 +58,38 @@ function tumbleNamed(path: string): string[] {
   });
 }
 
+/**
+ * Purrtrait is our own game too (Purrtrait design §2): the commercial draw-and-guess game's name is
+ * in none of its files or the pages that describe it. Only the design quotes JD's brief, which names
+ * it. ROT13 again, so this test never spells it.
+ */
+const PURR_BANNED = new RegExp(rot13("Cvpgvbanel"), "i");
+const PURR_PATHS = [
+  "apps/play-api/src/purrtrait",
+  "apps/play-api/src/games/purrtrait.ts",
+  "apps/play-api/fixtures/protocol/purrtrait-client-messages.json",
+  "apps/play-api/fixtures/protocol/purrtrait-server-messages.json",
+  "docs/tv-protocol.md",
+  "docs/superpowers/plans/2026-11-26-purrtrait-web.md",
+  "apps/play-web/src/table",
+  "apps/play-web/src/ui/tv",
+  // The site's pages that describe it.
+  "apps/play-api/src/http/home.ts",
+  "apps/play-api/src/http/site.ts",
+  "apps/play-api/src/http/links.ts",
+  "apps/play-api/src/http/privacy.ts",
+  "README.md",
+];
+
+describe("Purrtrait's words", () => {
+  it("never name the commercial draw-and-guess game", () => {
+    const all = [...new Set(PURR_PATHS.flatMap(files))];
+    expect(all.length).toBeGreaterThan(10);
+    const hits = all.filter((f) => PURR_BANNED.test(readFileSync(f, "utf8"))).map((f) => relative(REPO, f));
+    expect(hits).toEqual([]);
+  });
+});
+
 describe("Toy Tumble's words", () => {
   it("decodes the list it guards against", () => {
     expect(ROT13.map(rot13).every((w) => w.length > 5)).toBe(true);
