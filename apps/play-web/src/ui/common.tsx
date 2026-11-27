@@ -86,12 +86,17 @@ export function IconButton(props: { icon: string; label: string; onClick: () => 
 /** A bottom sheet (a centred card on a wide screen). Escape or a tap outside closes it. */
 export function Sheet(props: { title: string; onClose: () => void; children: ComponentChildren; labelledBy?: string }) {
   const ref = useRef<HTMLDivElement>(null);
-  useEffect(() => {
+  // Focus moves in before the sheet is first painted, so a key pressed as it shows answers it.
+  useLayoutEffect(() => {
     const before = document.activeElement as HTMLElement | null;
     const first = ref.current?.querySelector<HTMLElement>("button, input, [tabindex]");
     first?.focus();
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") props.onClose();
+      if (e.key === "Escape") {
+        // Answered here: a table under the sheet doesn't take the same Esc as its own.
+        e.preventDefault();
+        props.onClose();
+      }
       if (e.key === "Tab" && ref.current) {
         // Keep focus inside the sheet.
         const items = [...ref.current.querySelectorAll<HTMLElement>("button:not(:disabled), input, a[href], [tabindex='0']")];

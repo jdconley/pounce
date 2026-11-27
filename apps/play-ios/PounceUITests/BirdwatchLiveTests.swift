@@ -30,6 +30,31 @@ final class BirdwatchLiveTests: XCTestCase {
             .write(to: URL(fileURLWithPath: dir).appendingPathComponent("\(name).png"))
     }
 
+    /// Home's card names the table's rule set, from the server's tables list (design §5.1), and
+    /// follows the host's pick.
+    func testHomeNamesTheTablesRuleSet() {
+        let app = Live.app()
+        app.launchArguments += ["-settings.soundOn", "<false/>"]
+        app.launch()
+        onboard(app)
+        el(app, "home.game.birdwatch").tap()
+        let seat0 = el(app, "lobby.seat.0")
+        XCTAssertTrue(seat0.waitForExistence(timeout: Live.t(20)), "no lobby: the server refused Birdwatch?")
+        XCTAssertTrue(until(15) { seat0.label.contains("on this phone") }, "seat 0 not claimed: \(seat0.label)")
+        el(app, "bird.rules.tucker").tap()
+        XCTAssertTrue(until(10) { self.el(app, "bird.rules.tucker").isSelected }, "the rule set didn't take")
+        // A House Cat sits down, so the table is on Home without an invite out.
+        seatMenu(app, seat: 1, "bot")
+        let code = lobbyCode(app)
+        XCTAssertEqual(code.count, 5, "no room code")
+        el(app, "lobby.home").tap()
+
+        let card = el(app, "home.table.\(code)")
+        XCTAssertTrue(card.waitForExistence(timeout: Live.t(15)), "the table isn't on Home")
+        XCTAssertTrue(until(15) { card.label.contains("Birdwatch, Tucker rules") }, "no rule set on the card: \(card.label)")
+        shot(app, "bird-home-card")
+    }
+
     func testFourPlayersOfficial() { play(seats: 4, rules: "official") }
     func testFivePlayersTucker() { play(seats: 5, rules: "tucker") }
     func testSixPlayersFriesen() { play(seats: 6, rules: "friesen") }

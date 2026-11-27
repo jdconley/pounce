@@ -957,7 +957,10 @@ export class GameRoom extends DurableObject<Env> {
     const faces = state.seats.map((s) => [s.kind, s.person?.id, s.person?.name, s.person?.cat, s.playerId ?? s.deviceId]);
     const out = core.outSeats();
     const movedAt = core.waitingSince();
-    const fingerprint = JSON.stringify([state.status, actor, state.name, [...devices], [...players], faces, out, movedAt, ...(next ? [next] : [])]);
+    // Birdwatch's rule set, chosen in the lobby. Only a game with options adds it, so a Cat Tower
+    // or tile game room's fingerprint is what it always was.
+    const options = state.options;
+    const fingerprint = JSON.stringify([state.status, actor, state.name, [...devices], [...players], faces, out, movedAt, ...(next ? [next] : []), ...(options ? [options] : [])]);
     if (fingerprint === this.tablesFingerprint) return;
     this.tablesFingerprint = fingerprint;
 
@@ -983,6 +986,7 @@ export class GameRoom extends DurableObject<Env> {
       ...(next ? { next } : {}),
       ...(movedAt === null ? {} : { movedAt }),
       ...(this.otherGame() ? { game: this.otherGame() } : {}),
+      ...(options ? { options: { ...options } } : {}),
     };
     await Promise.all([
       ...[...devices].map((deviceId) =>

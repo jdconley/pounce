@@ -15,13 +15,14 @@ import { noteGameFinished, reloadForUpdate, setSafeToReload } from "../pwa";
 import { addPerson, forgetTable, rememberTable, useApp } from "../store/app";
 import { autoClaimSeat, firstTableMessages, mySeats, practiceMessages } from "../store/lobby";
 import { RoomStore, type RoomState } from "../store/room";
-import { carryView, setView, showController, showSwitch, viewOf, type View } from "../store/views";
+import { carryView, setView, showController, showSwitch, viewAfterLayDown, viewOf, type View } from "../store/views";
 import { BirdwatchTable } from "../table/birdwatch";
 import { BwHowTo } from "../table/bw-help";
 import { bwOverTitle, bwStandings, RULE_COPY } from "../table/bw-model";
 import { ScoreSheet } from "../table/bw-panels";
 import { CatTowerTable } from "../table/cattower";
 import { CtController } from "../table/ct-controller";
+import { useLatest } from "../table/drag";
 import { seatCat, seatName } from "../table/seat";
 import { SwitchView } from "../table/shared";
 import { TilesTable } from "../table/tiles";
@@ -139,6 +140,20 @@ export function TableScreen(props: { code: string; intent: TableIntent; say?: (w
     setView(props.code, next);
     setViewNow(next);
   };
+  // This phone's player lays down on Cards: the Table, for their groups and the hits, as if they
+  // had pressed it (it stays, through a reload, until they press Cards).
+  const viewNow = useLatest({ view, changeView });
+  useEffect(
+    () =>
+      store.subscribe({
+        event: ({ event: e }, shown) => {
+          if (e.kind !== "game" || e.event.kind !== "laidDown" || !shown) return;
+          const next = viewAfterLayDown(shown, viewNow.current.view, e.event.seat);
+          if (next !== viewNow.current.view) viewNow.current.changeView(next);
+        },
+      }),
+    [store],
+  );
 
   const home = () => navigate({ kind: "home" });
   const [menu, setMenu] = useState<null | "menu" | "scores" | "forfeit" | "howto">(null);
