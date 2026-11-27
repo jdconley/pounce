@@ -29,6 +29,11 @@ const PATHS = [
   "docs/superpowers/plans/2026-11-26-toy-tumble-ios-tv.md",
   "docs/perf/toy-tumble-latency.md",
   "apps/play-web/src/tumble",
+  // The site's pages that describe it.
+  "apps/play-api/src/http/home.ts",
+  "apps/play-api/src/http/site.ts",
+  "apps/play-api/src/http/links.ts",
+  "README.md",
   "apps/play-ios/PounceKit/Sources/PounceKit/Tumble",
   "apps/play-ios/Pounce/Tumble",
 ];

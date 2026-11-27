@@ -4,7 +4,7 @@ import { describe, expect, test } from "vitest";
 
 import { purrtraitAppLinksOn, tvAppLinksOn } from "../env";
 
-import { appSiteAssociation, appStoreId, BIRDWATCH_SINCE, dailyPage, deadLinkPage, DISH_SINCE, INVITE_CSP, INVITE_SCRIPT, INVITE_SCRIPT_HASH, ogImage, pouncePage, scanPage, sharePage, viewerOf } from "./links";
+import { appSiteAssociation, appStoreId, BETA_LACKS, BIRDWATCH_SINCE, TUMBLE_SINCE, dailyPage, deadLinkPage, DISH_SINCE, INVITE_CSP, INVITE_SCRIPT, INVITE_SCRIPT_HASH, ogImage, pouncePage, scanPage, sharePage, viewerOf } from "./links";
 import { MEDIA } from "./site-media";
 
 import type { InvitePeek } from "../safety/safety";
@@ -458,11 +458,66 @@ describe("a Birdwatch table: in the browser and TestFlight until the App Store h
   });
 });
 
+describe("a Toy Tumble table: in the browser on every device until an app build plays it", () => {
+  const TUMBLE: InvitePeek = { table: "Saturday Night", game: "tumble", host: { name: "Great Aunt Josephine", cat: 5 } };
+  const STORE_12 = { appStoreUrl: APP_STORE, testflightUrl: TESTFLIGHT, storeVersion: "1.2" };
+
+  test("on an iPhone: Play in your browser is the button, it says 1.4 brings it, and nothing sends anyone to the beta or the App Store", async () => {
+    expect(TUMBLE_SINCE).toBe("1.4");
+    expect(BETA_LACKS.has("tumble")).toBe(true);
+    for (const install of [STORE_12, { ...STORE_12, storeVersion: "1.3" }, { ...STORE_12, storeVersion: null }, TF]) {
+      const html = await sharePage("BCDFG", { ...install, viewer: "apple" }, ORIGIN, TUMBLE).text();
+      expect(html).toContain('<p class="game tumble">Toy Tumble</p>');
+      expect(html).toContain('<p class="table">Saturday Night</p>');
+      expect(html).toContain('<a class="go web" href="/play/j/BCDFG">Play in your browser</a>\n<p class="note">Toy Tumble is coming to the iPhone app in 1.4.</p>');
+      expect(html).toContain("<strong>BCDFG</strong>");
+      for (const no of ["Get Pounce", "TestFlight", "testflight.apple.com", APP_STORE, "apple-itunes-app", "Update it first", "tap Paste", 'id="get"']) expect(html, no).not.toContain(no);
+      // Its chip has its own colour.
+      expect(html).toContain(".game.tumble{background:var(--orange);color:var(--ink)}");
+      // Its own preview, the game's cover.
+      expect(meta(html, "og:image")).toBe(`${ORIGIN}${MEDIA.invite.previews.tumble}`);
+      expect(meta(html, "og:description")).toBe("Toy Tumble · Saturday Night");
+    }
+  });
+
+  test("not an iPhone: the browser, with no app line", async () => {
+    const html = await sharePage("BCDFG", { ...STORE_12, viewer: "other" }, ORIGIN, TUMBLE).text();
+    expect(html).toContain('<a class="go web" href="/play/j/BCDFG">Play in your browser</a>');
+    expect(html).not.toContain("Get the iPhone app");
+    expect(html).not.toContain("coming to the iPhone app");
+    expect(html).not.toContain(TESTFLIGHT);
+  });
+
+  test("a pounce link to Toy Tumble does the same", async () => {
+    const html = await pouncePage({ name: "Mia", cat: 2 }, "D".repeat(22), { ...STORE_12, viewer: "apple" }, ORIGIN, "tumble").text();
+    expect(html).toContain('<p class="game tumble">Toy Tumble</p>');
+    expect(html).toContain('<a class="go web" href="/play/p/DDDDDDDDDDDDDDDDDDDDDD">Play in your browser</a>');
+    expect(html).toContain("Toy Tumble is coming to the iPhone app in 1.4.");
+    expect(html).not.toContain(TESTFLIGHT);
+    expect(html).not.toContain("apple-itunes-app");
+  });
+
+  test("once the App Store has 1.4: the App Store, Paste and the update note, like any other game", async () => {
+    const html = await sharePage("BCDFG", { ...STORE_12, storeVersion: "1.4", viewer: "apple" }, ORIGIN, TUMBLE).text();
+    expect(html).toContain(`<a class="go" id="get" href="${APP_STORE}"`);
+    expect(html).toContain("apple-itunes-app");
+    expect(html).toContain('<p class="next">Then open Pounce and tap Paste.</p>');
+    expect(html).toContain("Have Pounce? Update it first.");
+    expect(html).not.toContain("coming to the iPhone app");
+  });
+
+  test("other games' invites are as before", async () => {
+    const html = await sharePage("BCDFG", { ...STORE_12, viewer: "apple" }, ORIGIN, TOWER).text();
+    expect(html).toContain(`<a class="go" id="get" href="${APP_STORE}"`);
+    expect(html).not.toContain("coming to the iPhone app");
+  });
+});
+
 describe("the invite art", () => {
   test("every cat has a face, and every game a preview", () => {
     expect(MEDIA.invite.cats).toHaveLength(8);
     for (const cat of MEDIA.invite.cats) expect(cat).toMatch(/^\/static\/inviter-\d\.[a-f0-9]{10}\.webp$/);
-    for (const game of ["cat-tower", "tiles"] as const) {
+    for (const game of ["cat-tower", "tiles", "tumble"] as const) {
       expect(MEDIA.invite.previews[game]).toMatch(new RegExp(`^/static/invite-${game}\\.[a-f0-9]{10}\\.jpg$`));
     }
   });

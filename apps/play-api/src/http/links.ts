@@ -37,6 +37,7 @@ const STYLE = css(`
 .game.tiles{background:var(--sky);color:var(--ink)}
 .game.birdwatch{background:var(--lime);color:var(--ink)}
 .game.purrtrait{background:var(--magenta);color:var(--ink)}
+.game.tumble{background:var(--orange);color:var(--ink)}
 .table{margin:4px auto 0;color:var(--muted);font-weight:700;overflow-wrap:anywhere}
 .go{display:block;margin:20px 0 0;padding:15px 20px;border:3px solid var(--ink);border-radius:999px;background:linear-gradient(#FFC21A,#FF8A00);box-shadow:0 6px 0 var(--ink);color:var(--ink);font-family:var(--round);font-size:1.35rem;font-weight:900;text-decoration:none}
 .go:active{transform:translateY(4px);box-shadow:0 2px 0 var(--ink)}
@@ -118,8 +119,20 @@ export const DISH_SINCE = "1.2";
  */
 export const BIRDWATCH_SINCE = "1.3";
 
+/** The first App Store version with Toy Tumble. Until then it plays in the browser only. */
+export const TUMBLE_SINCE = "1.4";
+
 /** The first app version that can play each game, for games newer than the first release. */
-export const GAME_SINCE: Readonly<Record<string, string>> = { tiles: "1.1", birdwatch: BIRDWATCH_SINCE, tumble: "1.4", [DISH_GAME]: DISH_SINCE };
+export const GAME_SINCE: Readonly<Record<string, string>> = { tiles: "1.1", birdwatch: BIRDWATCH_SINCE, tumble: TUMBLE_SINCE, [DISH_GAME]: DISH_SINCE };
+
+/**
+ * Games no build of the app plays yet, the TestFlight beta included: Toy Tumble, while TestFlight
+ * still builds 1.3. A link to one of these tables plays in the browser on every device and says
+ * which version brings it to the iPhone, with no Get Pounce, no beta and no App Store banner. Take
+ * a game out once the beta plays it; `GAME_SINCE` then sends iPhones to the beta until the App
+ * Store has it.
+ */
+export const BETA_LACKS: ReadonlySet<string> = new Set(["tumble"]);
 
 /**
  * Whether the App Store's current version is at least `since`. Unknown counts as no: a page
@@ -139,6 +152,11 @@ function storePlays(install: Install, game: string): boolean {
 /** A table game the App Store has the app for, but whose version there can't open it yet. */
 function notInStoreYet(install: Install, game: string): boolean {
   return isGameId(game) && https(install.appStoreUrl) !== null && !storePlays(install, game);
+}
+
+/** A table game that plays only in the browser for now: no app build has it, the beta included. */
+function browserOnly(install: Install, game: string): boolean {
+  return BETA_LACKS.has(game) && !storePlays(install, game);
 }
 
 export const https = (url: string | undefined): string | null => (url?.startsWith("https://") ? url : null);
@@ -184,8 +202,13 @@ const comingNote = (game: string): string => `<p class="note">${escapeHtml(gameT
  * just the store. Then the one line that says what to do once it's installed.
  */
 function getButton(install: Install, invite: string | null, opts: { game?: string; code?: boolean; web?: string } = {}): string {
-  const to = store(install, opts.game);
   const web = opts.web ? escapeHtml(opts.web) : null;
+  if (web && opts.game && browserOnly(install, opts.game)) {
+    // No app plays it yet, not even the beta: the browser is the way in for everyone.
+    const when = install.viewer === "other" ? "" : `\n<p class="note">${escapeHtml(gameTitle(opts.game))} is coming to the iPhone app in ${GAME_SINCE[opts.game] ?? "a later version"}.</p>`;
+    return `<a class="go web" href="${web}">Play in your browser</a>${when}`;
+  }
+  const to = store(install, opts.game);
   if (web && install.viewer === "other") {
     // Not an iPhone: the browser is the way in; the app is for later.
     const app = to ? `\n<p class="alt"><a href="${escapeHtml(to.url)}">Get the iPhone app</a></p>` : "";
@@ -313,7 +336,7 @@ export function sharePage(code: string, install: Install, origin: string, peek: 
   const title = host ? `${host.name} saved you a seat` : "Come play Pounce";
   const description = known ? [gameTitle(game), known.table].filter(Boolean).join(" · ") : `Table ${code}`;
   // "Update it first" only when an update helps: not for a game the App Store's version can't open yet.
-  const update = known ? game !== DEFAULT_GAME && !notInStoreYet(install, game) : newest;
+  const update = known ? game !== DEFAULT_GAME && !notInStoreYet(install, game) && !browserOnly(install, game) : newest;
   const html = page({
     title: escapeHtml(title),
     head: `${banner(install, url, game)}${previewTags({ title, description, url, origin, game: known ? game : "" })}\n`,

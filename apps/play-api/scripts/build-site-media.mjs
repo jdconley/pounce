@@ -35,9 +35,8 @@ const GET_URL = "https://play.conleychaos.com/get";
 const SCREENS = {
   // The web TV table (/play/tv), six seats mid-game.
   tv: "docs/screenshots/tv/tv-ct6-mid-1920x1080.jpg",
-  // The web TV's start screen: the code a phone scans, the three games and Tonight's board
-  // (from the Birdwatch web branch's screenshots, 760 wide, so no larger size is made from it).
-  tvHome: "docs/screenshots/birdwatch-web/tv-home-760x428.jpg",
+  // The web TV's start screen: the code a phone scans, the four games and Tonight's board.
+  tvHome: "docs/screenshots/tumble-web/tv-home-1920x1080.jpg",
   // A phone in the browser at a TV table: just its cards, with the Cards/Table switch.
   cards: "docs/screenshots/tv/phone-ct-draw-390x844.jpg",
   // The web player on a laptop: a Cat Tower table.
@@ -47,6 +46,9 @@ const SCREENS = {
   tiles: "apps/play-ios/Art/screenshots/tiles/large-phone.jpg",
   // Birdwatch in the web player on a large phone: it is in the browser before the App Store app.
   birdwatch: "docs/screenshots/birdwatch-web/phone-follow-suit-442x760.jpg",
+  // Toy Tumble in the web player on a large phone, mid-round against five House Cats: it is in the
+  // browser before the App Store app (1.4).
+  tumble: "apps/play-web/screenshots/tumble/play-iphone-pro-max.jpg",
 };
 
 const run = (cmd, args) => execFileSync(cmd, args, { stdio: ["ignore", "ignore", "inherit"] });
@@ -199,11 +201,13 @@ magick(
 // invited (WebP only: every Safari that runs Pounce reads it), and each game's cover as the link
 // preview, 1200x630, no words in it (Apple TN3156). The preview's title names the person.
 const CATS = 8;
-const COVERS = { "cat-tower": "game-cat-tower", tiles: "game-tiles" };
+// Toy Tumble's cover is the web player's shelf poster (768 wide) until the app's lands with 1.4.
+const cover = (asset) => join(catalog, `${asset}.imageset/${asset}@3x.png`);
+const COVERS = { "cat-tower": cover("game-cat-tower"), tiles: cover("game-tiles"), tumble: join(repo, "apps/play-web/src/art/game-tumble.webp") };
 const invitePreviews = Object.fromEntries(
-  Object.entries(COVERS).map(([game, asset]) => {
+  Object.entries(COVERS).map(([game, src]) => {
     const file = join(tmp, `invite-${game}.png`);
-    magick(join(catalog, `${asset}.imageset/${asset}@3x.png`), "-resize", "1200x800", "-gravity", "center", "-crop", "1200x630+0+0", "+repage", file);
+    magick(src, "-resize", "1200x800", "-gravity", "center", "-crop", "1200x630+0+0", "+repage", file);
     return [game, jpeg(file, `invite-${game}`, 80)];
   }),
 );
@@ -262,12 +266,13 @@ const manifest = {
   clip: { src: publish(clip, "clip", "mp4", "media"), poster: webp(posterPng, "poster", 74), posterJpg: jpeg(posterPng, "poster", 72), ...CLIP },
   screens: {
     tv: screen(SCREENS.tv, "tv-table", [480, 720, 1040]),
-    tvHome: screen(SCREENS.tvHome, "tv-home", [480, 760]),
+    tvHome: screen(SCREENS.tvHome, "tv-home", [480, 720, 1040]),
     cards: screen(SCREENS.cards, "phone-cards", [180, 360]),
     laptop: screen(SCREENS.laptop, "browser-table", [480, 720, 1040]),
     catTower: screen(SCREENS.catTower, "cat-tower", [200, 400]),
     tiles: screen(SCREENS.tiles, "tuna-tiles", [200, 400]),
     birdwatch: screen(SCREENS.birdwatch, "birdwatch", [200, 400]),
+    tumble: screen(SCREENS.tumble, "toy-tumble", [200, 400]),
   },
   art: {
     leap: art("Cats.spriteatlas/cat0-leap.imageset/cat0-leap@3x.png", "cat-leap", 360),
