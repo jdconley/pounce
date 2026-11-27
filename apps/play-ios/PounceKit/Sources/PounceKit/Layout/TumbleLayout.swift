@@ -70,14 +70,15 @@ public struct TumbleLayout: Equatable, Sendable {
         self.chips = chips && mode == .play
 
         let rimH: CGFloat = tv ? 90 : (roomy ? 74 : 50 + 6 * (scale - 1) / 0.4)
-        rim = CGRect(x: safe.minX, y: safe.maxY - rimH, width: safe.width, height: rimH)
-        menuButton = CGPoint(x: safe.maxX - Self.buttonHit / 2, y: rim.midY)
+        let topRim = CGRect(x: safe.minX, y: safe.maxY - rimH, width: safe.width, height: rimH)
 
         if mode != .play {
+            rim = topRim
+            menuButton = CGPoint(x: safe.maxX - Self.buttonHit / 2, y: topRim.midY)
             tray = .zero
             slots = []
             meter = .zero
-            let area = CGRect(x: safe.minX, y: safe.minY, width: safe.width, height: rim.minY - gap - safe.minY)
+            let area = CGRect(x: safe.minX, y: safe.minY, width: safe.width, height: topRim.minY - gap - safe.minY)
             let grid = Self.grid(count: max(others, 1), in: area, gap: gap, label: labelHeight * (tv ? 2.2 : 1.6), oneRow: tv)
             minis = grid.items
             miniBoxes = grid.boxes
@@ -96,21 +97,28 @@ public struct TumbleLayout: Equatable, Sendable {
             CGRect(x: trayRect.minX + (trayRect.width - slotsW) / 2 + CGFloat(i) * (slotSide + gap), y: trayRect.midY - slotSide / 2,
                    width: slotSide, height: slotSide)
         }
-        let playTop = rim.minY - gap
+        let roomTop = topRim.minY - gap
         let playBottom = tray.maxY + gap
-        let playH = playTop - playBottom
+        let roomH = roomTop - playBottom
         let landscapeSplit = roomy && w > h && others > 0
         let meterPart: CGFloat = 0.6
         // The minis' share of the width: enough for a readable column, more on a roomy screen.
         let minisW: CGFloat = others == 0 ? 0 : (self.chips ? (roomy ? 200 : 84) : max(roomy ? 0.3 * safe.width : 0.22 * safe.width, 80))
         let walls = Self.ownWall * 2
         let cellW = (safe.width - minisW - gap * (others == 0 ? 1 : 2)) / (CGFloat(Self.columns) + walls + meterPart)
-        let cellH = playH / (CGFloat(Self.rows) + walls)
+        let cellH = roomH / (CGFloat(Self.rows) + walls)
         cell = floor(min(cellW, cellH, tv ? 60 : (roomy ? 48 : 40)))
         let boxW = cell * CGFloat(Self.columns)
         let boxH = cell * CGFloat(Self.rows)
         let meterW = max(cell * meterPart, 8)
         let wallW = cell * Self.ownWall
+        // A tall phone has height to spare once the width sets the cells: the box sits on the
+        // tray, in thumb reach, and the rim with your cat comes down with it.
+        let spare = max(0, roomH - (boxH + wallW))
+        let playTop = roomTop - spare
+        let playH = playTop - playBottom
+        rim = CGRect(x: safe.minX, y: playTop + gap, width: safe.width, height: rimH)
+        menuButton = CGPoint(x: safe.maxX - Self.buttonHit / 2, y: rim.midY)
         let boxX: CGFloat
         if landscapeSplit {
             boxX = safe.midX - (boxW + wallW * 2 + meterW + gap) / 2 + wallW

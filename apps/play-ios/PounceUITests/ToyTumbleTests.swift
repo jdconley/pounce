@@ -76,6 +76,24 @@ final class ToyTumbleTests: XCTestCase {
         XCTAssertTrue(el(app, "screen-tumble").exists, "the edge drag left the table")
     }
 
+    /// The paw menu opens How to play on Toy Tumble's page, with the tricks table.
+    func testTheMenuOpensHowToPlayForToyTumble() throws {
+        let app = launch("tumble-two")
+        el(app, "tumble.menu").tap()
+        let rules = el(app, "menu.rules")
+        XCTAssertTrue(rules.waitForExistence(timeout: Live.t(5)), "no menu")
+        rules.tap()
+        XCTAssertTrue(el(app, "sheet-rules").waitForExistence(timeout: Live.t(5)), "no How to play")
+        XCTAssertTrue(app.staticTexts["The tricks"].waitForExistence(timeout: Live.t(5)), "no tricks table")
+        if let dir = ProcessInfo.processInfo.environment["TUMBLE_SHOTS_DIR"], !dir.isEmpty {
+            Thread.sleep(forTimeInterval: 1)
+            try? XCUIScreen.main.screenshot().pngRepresentation.write(to: URL(fileURLWithPath: dir).appendingPathComponent("se-howto.png"))
+            app.swipeUp()
+            Thread.sleep(forTimeInterval: 1)
+            try? XCUIScreen.main.screenshot().pngRepresentation.write(to: URL(fileURLWithPath: dir).appendingPathComponent("se-howto-tricks.png"))
+        }
+    }
+
     /// A trick dragged from the tray onto a mini is used; a tap, then a tap on a box, too.
     func testATrickDraggedOntoAMiniIsUsed() {
         let app = launch("tumble-play")

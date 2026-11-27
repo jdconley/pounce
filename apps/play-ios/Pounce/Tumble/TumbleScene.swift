@@ -239,7 +239,7 @@ final class TumbleScene: SKScene {
         slotBadges.removeAll()
         if mode == .play {
             for r in l.slots {
-                let slot = SKSpriteNode(color: UIColor(Palette.ink).withAlphaComponent(0.45), size: r.size)
+                let slot = SKSpriteNode(color: UIColor(Palette.ink).withAlphaComponent(0.65), size: r.size)
                 slot.position = CGPoint(x: r.midX, y: r.midY)
                 slot.zPosition = Layer.tray.rawValue
                 addChild(slot)
@@ -367,10 +367,10 @@ final class TumbleScene: SKScene {
                 badge.isHidden = false
                 let up = lifted == i
                 badge.setScale(up ? 1.18 : 1)
-                slotNodes[i].color = up ? UIColor(Palette.yellow).withAlphaComponent(0.7) : UIColor(Palette.ink).withAlphaComponent(0.45)
+                slotNodes[i].color = up ? UIColor(Palette.yellow).withAlphaComponent(0.7) : UIColor(Palette.ink).withAlphaComponent(0.65)
             } else {
                 badge.isHidden = true
-                slotNodes[i].color = UIColor(Palette.ink).withAlphaComponent(0.3)
+                slotNodes[i].color = UIColor(Palette.ink).withAlphaComponent(0.5)
             }
         }
         if let lifted, lifted < held.count {

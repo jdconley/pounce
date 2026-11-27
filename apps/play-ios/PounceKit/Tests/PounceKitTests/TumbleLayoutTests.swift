@@ -59,6 +59,14 @@ import Testing
         #expect(pad.minis.contains { $0.minX > pad.meter.maxX })
     }
 
+    /// A tall phone: the box sits on the tray (thumb reach), and the rim comes down with it.
+    @Test func aTallPhonesBoxSitsOnTheTray() {
+        let l = TumbleLayout(size: CGSize(width: 440, height: 956), safeTop: 62, safeBottom: 34, others: 3)
+        #expect(l.box.minY - l.tray.maxY <= 7)
+        #expect(l.rim.minY - l.box.maxY <= l.cell + 7)
+        #expect(l.minis.allSatisfy { $0.maxY <= l.rim.minY })
+    }
+
     @Test func theTVPutsUpToSixBoxesInOneRowAndTwoAreBigger() {
         let six = TumbleLayout(size: CGSize(width: 1920, height: 1080), safeTop: 0, safeBottom: 0, others: 6, mode: .tv)
         #expect(six.minis.count == 6)

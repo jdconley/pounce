@@ -112,6 +112,10 @@ final class TumbleBoxNode: SKNode {
         self.mini = mini
         position = rect.origin
         guard moved else { return }
+        // Lay out upright; a tipped box tips again after.
+        let wasTipped = tipped
+        if tipped { reset() }
+        defer { if wasTipped { tip() } }
         let art = TumbleArt.shared
         // The chest: walls a fixed share of a cell, so a mini's walls are thin too.
         // A mini's walls are a bigger share of its small cells; your own box's are slimmer.
@@ -378,10 +382,11 @@ final class TumbleBoxNode: SKNode {
     func tip() {
         guard !tipped else { return }
         tipped = true
-        let pivot = CGPoint(x: rect.width, y: 0)
+        // Tipped about its foot, a little, and shrunk, so a tipped box never reaches into its neighbour.
+        let pivot = CGPoint(x: rect.width / 2, y: 0)
         body.position = pivot
         for child in body.children { child.position = CGPoint(x: child.position.x - pivot.x, y: child.position.y - pivot.y) }
-        body.run(.rotate(toAngle: -0.18, duration: 0.35, shortestUnitArc: true))
+        body.run(.group([.rotate(toAngle: -0.07, duration: 0.35, shortestUnitArc: true), .scale(to: 0.9, duration: 0.35)]))
         settled.run(.sequence([.wait(forDuration: 0.2), .fadeAlpha(to: 0.55, duration: 0.3)]))
     }
 
@@ -390,6 +395,7 @@ final class TumbleBoxNode: SKNode {
         if tipped {
             body.removeAllActions()
             body.zRotation = 0
+            body.setScale(1)
             let pivot = body.position
             body.position = .zero
             for child in body.children { child.position = CGPoint(x: child.position.x + pivot.x, y: child.position.y + pivot.y) }
