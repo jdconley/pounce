@@ -367,11 +367,24 @@ describe("the live stream", () => {
     expect(errorsOf(out)).toEqual([]);
   });
 
-  it("a screen may not write", () => {
+  it("a screen may not write, but its empty batch gets every box, to it alone", () => {
     const r = play(started(2, 0, { tv: true }));
     r.addScreen("tv");
     r.connect("tv");
-    expect(errorsOf(batch(r, "tv"))).toEqual(["not_allowed"]);
+    expect(errorsOf(batch(r, "tv", [firstDrop(r, 0)]))).toEqual(["not_allowed"]);
+    const asked = batch(r, "tv");
+    expect(errorsOf(asked)).toEqual([]);
+    expect(asked.map((o) => o.to)).toEqual(["tv"]);
+    expect(syncsTo(asked, "tv")[0]?.boxes.map((b) => b.s)).toEqual([0, 1]);
+  });
+
+  it("a screen asking more than 30 times a second hears nothing more that second", () => {
+    const r = play(started(2, 0, { tv: true }));
+    r.addScreen("tv");
+    r.connect("tv");
+    const answers = Array.from({ length: 31 }, () => batch(r, "tv"));
+    expect(answers.slice(0, 30).every((out) => syncsTo(out, "tv").length === 1)).toBe(true);
+    expect(answers[30]).toEqual([]);
   });
 
   it("a screen that connects mid-round gets every box", () => {

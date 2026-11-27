@@ -102,12 +102,15 @@ Positions are the bottom-left corner of the toy's own k by k box (`toyCells`). x
 - **Rate limit.** At most 30 batches a second per device. Over that, the device gets a
   `tumbleSync`.
 - **A batch for another round** (`r` not the current one) is dropped silently.
+- **A screen** may send only an empty batch, `{ "t": "tumble", "r": <round>, "ev": [] }`, to ask
+  for every box (after a gap in `q`, or a reload). It is answered with a `tumbleSync` to that
+  socket alone, within the same rate limit. Any other `tumble` from a screen is `not_allowed`.
 - **Who may send.**
   - Only the device holding a seat, for its own seat. A device holds at most one seat at a Toy
     Tumble table.
   - If the same device has two sockets, only the first to send in a round writes. The other gets
     `{ "t": "error", "code": "not_allowed" }`.
-  - A screen's `tumble` is `not_allowed`.
+  - A screen's `tumble` with events is `not_allowed` (its empty batch is a sync request, above).
 
 ## Server to clients
 
@@ -130,7 +133,7 @@ Positions are the bottom-left corner of the toy's own k by k box (`toyCells`). x
 
 | `k` | `x` |
 | --- | --- |
-| `junk` | `{ rows, gap }`, from a clear (§4.5) |
+| `junk` | `{ rows, gap }`, from a clear (§4.5). The waiting junk's id is the hit's `id`: hits and junk share one id space per round. |
 | `hairball` | `{ gap }` |
 | `swipe` | `{ shifts }`: 22 numbers, -2 to 2, one per row from y 0. Positive moves right, wrapping. |
 | `swap` | `{ cells, tricks }`: the other box's contents as the server last had them (264 numbers each) |

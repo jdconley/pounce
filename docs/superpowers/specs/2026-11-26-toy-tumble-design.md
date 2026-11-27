@@ -117,7 +117,9 @@ The engine implements this section exactly, in TypeScript (server, web, web TV p
   | `p5` | 5 | plus (the paw print) |
   | `u5` | 5 | U (the food bowl) |
 
-- **The queue.** Toys come in bags of 8. Each bag shuffles the seven 3- and 4-cell toys plus one 5-cell toy, alternating `p5` and `u5` bag by bag. **(call; the lead allows tuning the 5-cell rate after the bot soak, §9.3, and the result is recorded here)**
+- **The queue.** Toys come in bags. Every bag shuffles the seven 3- and 4-cell toys. Every other bag also holds a 5-cell toy, so bags run 8, 7, 8, 7: `p5` in bags 0, 4, 8 and so on, `u5` in bags 2, 6 and so on. **(tuned by the soak, §9.3)**
+  - The first design put a 5-cell toy in every bag.
+  - In the soak, a 5-cell toy made a new hole 55 to 60% of the times it was placed, against 16% for the small toys. That is 3.4 times as often, past the 15% line the plan set for an unfair dead end. Halving how often they come keeps the paw print and the bowl in the game without making them the thing that ends it.
 - **Same toys for everyone.** Every box in a round gets the same queue, from the round's seed. **(call: fairness, and a race to read the same toys is part of the fun)**
 - **A new toy** appears centered (rounding left) with its lowest cells in row 18. If it overlaps anything, that box is **out**.
 
@@ -149,7 +151,7 @@ The engine implements this section exactly, in TypeScript (server, web, web TV p
 
 ### 4.4 Out, rounds and winning **(call)**
 
-- A box is **out** when a new toy can't appear, or when any cell is left above row 17. That can follow a set-down after its clears, junk or a trick. Its cat tips the box over. An out player watches the rest of the round.
+- A box is **out** when any cell is left above row 17. That can follow a set-down after its clears, junk or a trick. A new toy that can't appear needs such a cell, so the same rule covers it. Its cat tips the box over. An out player watches the rest of the round.
 - **A round ends** when one box is left, or when no person's box is left.
   - The last box standing wins the round.
   - If only House Cats are left, the one that has cleared the most rows wins.
@@ -183,7 +185,8 @@ The engine implements this section exactly, in TypeScript (server, web, web TV p
 | Swap | trades box contents with the target: cells and the tricks on them. Neither held tricks nor falling toys move. | opponents |
 | Bath | wipes the box empty | yourself |
 
-- A trick used on a napping box is spent and does nothing. The napping box shows a sleepy "zz" puff.
+- A trick used on a napping box is spent and does nothing. The napping box shows a sleepy "zz" puff. The exception is the box's own Scoop, Settle, Nap or Bath used on itself: those still work. **(call)**
+- Swap needs another box. Aimed at your own box it is refused, and you keep it. **(call)**
 - **Waiting junk** belongs to the player, not the box's contents. **(call: so the save tricks really save)**
   - Bath wipes the box and clears its waiting junk too.
   - Swap leaves each player's waiting junk with that player.
@@ -419,6 +422,7 @@ All messages are JSON, as the rest of the wire is. They're compact arrays like P
 - Junk acknowledged more than 4 seconds ago, by the server's clock, has landed or been blocked by the box's next set-down.
 - A trick used is one the box holds, on a box still in the round.
 - Events arrive in a sane order, and set-down times only go forward.
+- A box with no set-down for 25 seconds has its owed junk landed by the server. That is longer than the slowest real fall: 18 rows at 1000 ms, plus the set-down wait. Without it, a connected device that stops setting down could never lose. **(call, found building House Cats)**
 
 Not checked, on purpose **(call)**:
 - whether the toy could actually have been steered to where it set down;
@@ -487,12 +491,15 @@ House Cats are opponents a kid can play alone against, or that turn two siblings
 
   | | Easy | Quick |
   | --- | --- | --- |
-  | Think time per toy | 1.4 to 2.4 s | 0.8 to 1.6 s |
-  | Picks a worse placement | 35% of the time | 15% of the time |
+  | Think time per toy | 3.0 to 4.6 s | 0.8 to 1.6 s |
+  | Picks a worse placement | 50% of the time | 15% of the time |
   | Uses tricks | only Hairball, Paw Swipe, Scoop and Nap; the rest it holds | all of them |
 
-  Both levels must be beatable by a child: the soak (§9.3) also plays each level against a scripted "kid" player (slow, sloppy) and tunes until the kid wins at least 1 round in 3 against one Easy cat.
-- **Placement.** It scores every placement of the current toy (every turn and column, about 48) by holes, height, bumpiness and rows cleared. It never looks ahead to the next toy.
+  Both levels must be beatable by a child. The soak (§9.3) also plays each level against a scripted "kid" player (think 2.5 to 4 s, picks the worse placement half the time, no tricks), and tunes until the kid wins at least 1 round in 3 against one Easy cat.
+  - At the first Easy settings (1.4 to 2.4 s, 35%) the kid won 4%.
+  - At the values above it wins 37.6% of 1,000 rounds.
+- **Placement.** It scores every placement of the current toy (every turn and column, about 48). The score is -0.51 × total column height, +0.76 × rows cleared, -0.36 × holes, and -0.18 × bumpiness. It never looks ahead to the next toy.
+- **Gravity.** A cat's toy falls like anyone's (`tumble/clock.ts`). When the toy has had time to fall to where it would rest, plus the 500 ms set-down wait, the cat sets it down where it is, planned or not. So the Zoomies hurry cats into mistakes, and cat rounds end.
 - **Tricks.** It uses one 1 to 3 seconds after pocketing it.
   - Harmful tricks go to the human with the most round wins, then the lowest stack.
   - Helpful ones go to itself.
@@ -587,6 +594,13 @@ So one generic helper, `apps/play-api/src/room/live-relay.ts`, gives a game exac
 - how often each trick decides a round.
 
 Tune the 5-cell rate and the trick weights from this. Record the numbers here.
+
+**Results, 2026-11-26** (`pnpm --filter @pounce/play-api soak:tumble -- --rounds 2000`, after the tuning in §4.1 and §6.9):
+- **Rounds:** p50 180 s, p95 211 s, max 221 s. None over 5 minutes, and none stopped by the cap. All-cat rounds run long, because good cats rarely top out before the Zoomies; rounds with people end sooner.
+- **5-cell toys:** they make a new hole 60% of the times they're placed, against 16% for the others. They now come in every other bag (§4.1).
+- **Tricks:** the share of rounds where a harmful trick hit the deciding box in its last 5 seconds was Hairball 4%, Paw Swipe 3%, Catnip 3% and Swap 0.1%. No trick decides rounds on its own, so the weights stand.
+- **The kid:** wins 37.6% against one Easy cat (§6.9).
+- **Cost:** 6 Quick cats, the busiest a room gets, cost 0.26 ms of CPU per second of round. With 1 phone and 1 TV connected, that's about 14 sends a second. The budget was 10 ms (§6.9).
 
 ### 9.4 Clients
 

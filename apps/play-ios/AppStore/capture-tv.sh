@@ -28,12 +28,15 @@ shot() {
   local name="$1" wait="$2"
   shift 2
   xcrun simctl terminate "$DEVICE" "$BUNDLE" >/dev/null 2>&1 || true
-  xcrun simctl launch "$DEVICE" "$BUNDLE" "$@" >/dev/null
+  xcrun simctl launch "$DEVICE" "$BUNDLE" -tv.soundOn "<false/>" "$@" >/dev/null
   sleep "$wait"
   xcrun simctl io "$DEVICE" screenshot --type=png "$OUT/$name.png" >/dev/null 2>&1
   echo "$OUT/$name.png"
 }
 
+# Birdwatch mid-trick with the store's cast (`TVTablePreview` takes POUNCE_DEMO_CAST): its long name
+# doesn't fit beside the sill at four seats.
+SIMCTL_CHILD_POUNCE_DEMO_CAST="Jess,Sam,Grandma,Theo,Ruby,Grandpa" shot birdwatch 9 -tv-preview birdwatch -seats 4 -aim
 shot cattower 9 -tv-preview cattower -seats 4 -aim
 shot tiles 9 -tv-preview tiles -seats 3
 shot gameover 9 -demo tv-over -seats 4

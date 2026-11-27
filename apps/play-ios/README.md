@@ -610,7 +610,7 @@ both apps can carry the same build number. With `TV_OS`, What to Test lists the 
 commits and the default note is the TV's. Without credentials, `--dry-run` prints the requests it
 would make, for both platforms.
 
-In CI, the `build` job also builds `PounceTV` for generic tvOS, unsigned. The `testflight` job
+In CI, the `app-build` job (Build and unit tests) also builds `PounceTV` for generic tvOS, unsigned. The `testflight` job
 archives and uploads both apps with one build number, the iPhone app first. The Apple TV archive is
 not development-signed (that needs a registered Apple TV, and the team has none): it is archived
 unsigned, signed ad hoc with its entitlements, and signed for the App Store by the export
