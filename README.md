@@ -19,6 +19,13 @@ The games:
   [play.conleychaos.com/play](https://play.conleychaos.com/play) and on its TV page; coming to the
   iPhone app in 1.3 (in TestFlight). Design:
   [docs/superpowers/specs/2026-11-25-birdwatch-design.md](docs/superpowers/specs/2026-11-25-birdwatch-design.md).
+- **Toy Tumble**: Pounce's first real-time game, for two to six. Everyone plays at once on their
+  own phone or computer, and the TV shows every box. Toys fall into your box; clear rows to send
+  hairballs to everyone else, and pocket tricks to hit a player or save yourself. Win three rounds
+  to take the game. House Cats can fill seats at Easy or Quick. In the browser now at
+  [play.conleychaos.com/play](https://play.conleychaos.com/play) and on its TV page; coming to the
+  iPhone app in 1.4. Design:
+  [docs/superpowers/specs/2026-11-26-toy-tumble-design.md](docs/superpowers/specs/2026-11-26-toy-tumble-design.md).
 - **Purrtrait** (coming): a draw-and-guess game for one room, two to ten players. The drawer
   draws a word on their phone, the TV shows the drawing as it is drawn, and everyone else calls
   out guesses. It starts on a TV, and you join from the TV's code. Not playable yet: the server
@@ -47,6 +54,7 @@ version, and a parent decides whether they get turn alerts.
 | 1.1 | Released on the App Store on 16 November 2026 | Tuna Tiles. A faster first game: a House Cat holds a seat. Add players your way: Same room (scan a QR code), Far away (send a link) or This phone (pass and play). Invites that survive installing the app (Paste). A new Home, How to play videos, clearer Settings, tips. |
 | 1.2 | Released on the App Store on 26 November 2026 | Pounce on the TV: your phone shows just your cards, Tap Table for the whole board, and Show on TV by scanning or typing the TV's code. The Daily Dish: Sniff, Nine Lives, Cat Nap and Box Fort, a family board, and streaks. The Apple TV app is not on the App Store yet. |
 | 1.3 | In TestFlight | Birdwatch, the third table game: bidding, the feeder, trump and the Bird, 4 to 6 players, Official, Tucker and Friesen rules. On the web and its TV page since 26 November 2026. |
+| 1.4 | In development | Toy Tumble, the first real-time game: falling toys, hairballs and tricks, 2 to 6 players at once, every box on the TV. It plays on the web and its TV page now; the iPhone, iPad and Apple TV app gets it in 1.4. |
 
 Every merge to `main` that touches the app builds to TestFlight and goes to the Family and Friends
 group (`apps/play-ios/README.md`, TestFlight). What each App Store version says is kept in the
@@ -94,9 +102,10 @@ pnpm --filter @pounce/play-api exec wrangler dev --port 8787
 The example `.dev.vars` sets `GAMES=tiles,birdwatch,purrtrait`, which lets the local server deal the
 tile game, Birdwatch and Purrtrait as well as Cat Tower; `apps/play-ios/scripts/dev-server.sh` passes `tiles` unless
 `DEV_SERVER_GAMES` says otherwise. Production's
-`GAMES` in `apps/play-api/wrangler.jsonc` is `tiles,birdwatch`: apps from version 1.1 deal and
-play the tile game, version 1.0 never sees a tile table, and only 1.3 and the web player see
-Birdwatch tables.
+`GAMES` in `apps/play-api/wrangler.jsonc` is `tiles,birdwatch,tumble`: apps from version 1.1 deal
+and play the tile game, version 1.0 never sees a tile table, only 1.3 and the web player see
+Birdwatch tables, and only 1.4 and the web player see Toy Tumble tables. The web player shows
+Toy Tumble on its shelf when it is built with `WEB_TUMBLE=on`, as the deploy and the e2e runs do.
 
 ## The website
 
@@ -119,7 +128,11 @@ TestFlight beta, and other invites say "tap Join" (or "tap this link again") ins
 Paste". Once the App Store has 1.1, every invite goes to the App Store with Paste, by itself
 (`GAME_SINCE` and `PASTE_SINCE` in `apps/play-api/src/http/links.ts`). Birdwatch needs 1.3: until
 the App Store has it, a Birdwatch invite sends iPhones to the beta and says the game is coming to
-the iPhone app, and the landing page, help and llms.txt say it plays in the browser.
+the iPhone app, and the landing page, help and llms.txt say it plays in the browser. Toy Tumble
+needs 1.4, and no app build has it yet, the beta included (`BETA_LACKS`), so a Toy Tumble invite
+offers only Play in your browser, on every device, and says the game is coming to the iPhone app in
+1.4. Once TestFlight builds 1.4, take `tumble` out of `BETA_LACKS` and its invites work as
+Birdwatch's do.
 
 `/get` redirects to whichever link is set (or home), so other sites and the QR code can point at
 `https://play.conleychaos.com/get`.

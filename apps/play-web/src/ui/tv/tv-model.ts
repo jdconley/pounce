@@ -18,6 +18,14 @@ export const gameOf = (room: RoomView): GameId => (room.gameId ?? "cat-tower") a
 /** The game a TV's "Change game" makes instead: the next on the shelf, round again after the last. */
 export const otherGame = (id: GameId): GameId => SHELF[(SHELF.indexOf(id) + 1) % SHELF.length] ?? id;
 
+/**
+ * How Home lays out its posters (the games, and Tonight's board when the Dish is on), as a class
+ * on `.tv-games` (tv-board.css): two stack, three stack shorter, four sit two by two, and five
+ * sit two by two with the last across the bottom.
+ */
+export const posterLayout = (posters: number): "" | "three" | "grid" | "five" =>
+  posters >= 5 ? "five" : posters === 4 ? "grid" : posters === 3 ? "three" : "";
+
 /** Someone sits at the table: a person or a House Cat. Until then the TV may change the game. */
 export const anyoneSeated = (room: RoomView): boolean => room.seats.some(playing);
 

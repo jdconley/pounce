@@ -3,8 +3,9 @@
  * Store's Support URL), the short install address `/get`, and robots.txt, the sitemap and llms.txt.
  * Keep the support steps in step with docs/app-review-notes.md.
  */
+import { and, browserGames } from "./home";
 import { CACHE, CSP, docPage } from "./layout";
-import { https } from "./links";
+import { https, TUMBLE_SINCE } from "./links";
 
 import type { Install } from "./links";
 
@@ -13,12 +14,14 @@ export { homePage } from "./home";
 const HEADERS = { "content-type": "text/html; charset=utf-8", "cache-control": CACHE, "content-security-policy": CSP };
 const CONTACT = "privacy@conleychaos.com";
 
-const SUPPORT_HTML = docPage({
-  title: "Pounce: Family Games support",
-  head: '<meta name="description" content="Help for Pounce: Family Games. Start a table and add players, play the House Cat bot, learn Cat Tower and Tuna Tiles<!--birdwatch--> and Birdwatch<!--/birdwatch--><!--daily-->, play the Daily Dish<!--/daily-->, play in a browser or on a TV, set reminders, allow turn alerts for a child, report or block a player, and delete your data.">\n',
-  current: "support",
-  body: `<h1>Pounce: Family Games help</h1>
-<p>Pounce has family games: Cat Tower and Tuna Tiles<!--birdwatch-->, and Birdwatch in the browser<!--/birdwatch-->. Play them in the iPhone and iPad app, or in any web browser at <a href="/play/">play.conleychaos.com/play</a>. Everyone sits at the same tables. If something isn't covered here, write to us at the bottom of the page.</p>
+/** The help page with the browser-only games that are on named in its lists. Its marked parts are cut by `part`. */
+const supportHtml = (newer: readonly string[]): string =>
+  docPage({
+    title: "Pounce: Family Games support",
+    head: `<meta name="description" content="Help for Pounce: Family Games. Start a table and add players, play the House Cat bot, learn ${and(["Cat Tower", "Tuna Tiles", ...newer])}<!--daily-->, play the Daily Dish<!--/daily-->, play in a browser or on a TV, set reminders, allow turn alerts for a child, report or block a player, and delete your data.">\n`,
+    current: "support",
+    body: `<h1>Pounce: Family Games help</h1>
+<p>Pounce has family games: Cat Tower and Tuna Tiles${newer.length ? `, and ${and(newer)} in the browser` : ""}. Play them in the iPhone and iPad app, or in any web browser at <a href="/play/">play.conleychaos.com/play</a>. Everyone sits at the same tables. If something isn't covered here, write to us at the bottom of the page.</p>
 
 <section>
 <h2>Start a table and add players</h2>
@@ -79,7 +82,21 @@ const SUPPORT_HTML = docPage({
 </ul>
 </section>
 
-<!--/birdwatch--><!--daily--><section>
+<!--/birdwatch--><!--tumble--><section>
+<h2>How to play Toy Tumble</h2>
+<p>Falling toys, for two to six players, all at the same time. Each player plays on their own phone or computer, and a TV can show every box. Play it in your browser at <a href="/play/">play.conleychaos.com/play</a>. It's coming to the iPhone app in ${TUMBLE_SINCE}.</p>
+<ul>
+<li>Toys fall into your box one at a time. Drag to move one, tap to turn it, and flick down to drop it. On a keyboard, use the arrow keys and the space bar.</li>
+<li>Fill a row from side to side and it clears. Clear two or more at once to send hairballs to everyone else.</li>
+<li>Hairballs wait beside your box for two seconds before they land. Clear rows in time to block them.</li>
+<li>Each row you clear puts a trick in your box. Clear the row it sits on to pocket it. Tap a trick, then a box, to use it on anyone, yourself included.</li>
+<li>Some tricks hurt, like Hairball, Paw Swipe and Catnip. Some save you, like Scoop, Settle, Nap and Bath. Swap trades boxes with someone. A box near the top gets Swap, Bath and Scoop more often.</li>
+<li>When your toys reach the top, you're out for the round. The last box left wins it. Win three rounds to take the game.</li>
+<li>The host can seat House Cats at Easy or Quick. Each person needs their own device.</li>
+</ul>
+</section>
+
+<!--/tumble--><!--daily--><section>
 <h2>The Daily Dish</h2>
 <p>Four new puzzles every day, the same for the whole family. In the iPhone and iPad app they're on Home. In a browser, go to <a href="/play/daily">play.conleychaos.com/play/daily</a>, or tap Open the Dish on Home there.</p>
 <ul>
@@ -95,7 +112,7 @@ const SUPPORT_HTML = docPage({
 
 <!--/daily--><section>
 <h2>Play in a web browser</h2>
-<p>Go to <a href="/play/">play.conleychaos.com/play</a> on an Android phone, a laptop or a tablet. It plays Cat Tower and Tuna Tiles at the same tables as the iPhone app<!--birdwatch-->, and Birdwatch too<!--/birdwatch-->. To keep it like an app, use your browser's Install or Add to Home Screen option, or Install Pounce in its Settings where your browser offers it. Turn on Turn alerts in Settings to hear when it's your move.</p>
+<p>Go to <a href="/play/">play.conleychaos.com/play</a> on an Android phone, a laptop or a tablet. It plays Cat Tower and Tuna Tiles at the same tables as the iPhone app${newer.length ? `, and ${and(newer)} too` : ""}. To keep it like an app, use your browser's Install or Add to Home Screen option, or Install Pounce in its Settings where your browser offers it. Turn on Turn alerts in Settings to hear when it's your move.</p>
 </section>
 
 <section>
@@ -144,23 +161,32 @@ const SUPPORT_HTML = docPage({
 <h2>Contact us</h2>
 <p>Write to <a href="mailto:${CONTACT}">${CONTACT}</a>. Pounce is made by Conley Chaos LLC.</p>
 </section>`,
-});
+  });
 
 /** Keeps a marked part of the help page (`<!--tag-->...<!--/tag-->`) without its marks, or drops it. */
 const part = (html: string, tag: string, on: boolean): string =>
   on ? html.replace(new RegExp(`<!--/?${tag}-->`, "g"), "") : html.replace(new RegExp(`<!--${tag}-->[\\s\\S]*?<!--/${tag}-->`, "g"), "");
 
+const BOTH = [false, true] as const;
+
 /**
  * With the Daily Dish (`DAILY` on) the help page explains it; off, nothing of it, as the privacy
- * policy does. Birdwatch likewise follows `GAMES`.
+ * policy does. Birdwatch and Toy Tumble likewise follow `GAMES`.
  */
 const SUPPORT: Record<string, string> = Object.fromEntries(
-  [false, true].flatMap((daily) => [false, true].map((birdwatch) => [`${daily}/${birdwatch}`, part(part(SUPPORT_HTML, "daily", daily), "birdwatch", birdwatch)])),
+  BOTH.flatMap((daily) =>
+    BOTH.flatMap((birdwatch) =>
+      BOTH.map((tumble) => [
+        `${daily}/${birdwatch}/${tumble}`,
+        part(part(part(supportHtml(browserGames(birdwatch, tumble)), "daily", daily), "birdwatch", birdwatch), "tumble", tumble),
+      ]),
+    ),
+  ),
 );
 
 /** The help page; public, static, no scripts. */
-export function supportPage(daily = false, birdwatch = false): Response {
-  return new Response(SUPPORT[`${daily}/${birdwatch}`], { headers: HEADERS });
+export function supportPage(daily = false, birdwatch = false, tumble = false): Response {
+  return new Response(SUPPORT[`${daily}/${birdwatch}/${tumble}`], { headers: HEADERS });
 }
 
 /**
@@ -184,13 +210,26 @@ export function robotsTxt(origin: string): Response {
  * llms.txt (llmstxt.org): a plain summary for assistants asked what Pounce is. It says only what
  * the landing page and the privacy policy say.
  */
-export function llmsTxt(origin: string, consent = true, daily = false, birdwatch = false): Response {
+export function llmsTxt(origin: string, consent = true, daily = false, birdwatch = false, tumble = false): Response {
   const dish = daily
     ? `\n\nThe Daily Dish is four new puzzles every day, the same for the whole family: Sniff (find a five-letter word in six tries), Nine Lives (a number grid), Cat Nap (one cat in each row, column and patch, no two touching) and Box Fort (drag block pieces onto a rug and clear lines). A family board shows how everyone you play with did today, and a TV can show it. The server checks every move and works out every result. The puzzles play in the iPhone and iPad app and in the browser at ${origin}/play/daily.`
     : "";
-  const games = birdwatch
-    ? "It has three games: Cat Tower, a rummy-style card game for two to six players where your cats climb a ten-shelf tower; Tuna Tiles, tile rummy for two to four players where yarn is wild; and Birdwatch, a trick-taking card game for four to six players in teams, with bidding, trump and a top card called the Bird. Cat Tower and Tuna Tiles play in the iPhone and iPad app and in any web browser, and players on each sit at the same tables. Birdwatch plays in the browser today and is coming to the iPhone app."
-    : "It has two games: Cat Tower, a rummy-style card game for two to six players where your cats climb a ten-shelf tower, and Tuna Tiles, tile rummy for two to four players where yarn is wild. It plays in the iPhone and iPad app and in any web browser, and players on each sit at the same tables.";
+  const kinds = [
+    "Cat Tower, a rummy-style card game for two to six players where your cats climb a ten-shelf tower",
+    "Tuna Tiles, tile rummy for two to four players where yarn is wild",
+    ...(birdwatch ? ["Birdwatch, a trick-taking card game for four to six players in teams, with bidding, trump and a top card called the Bird"] : []),
+    ...(tumble ? ["Toy Tumble, a real-time game for two to six players where everyone plays at once: toys fall into each player's box, clearing rows sends hairballs to everyone else, tricks hit a player or save you, and a TV shows every box"] : []),
+  ];
+  const count = ["two", "three", "four"][kinds.length - 2] ?? "two";
+  const list = kinds.length === 2 ? `${kinds[0]}, and ${kinds[1]}` : `${kinds.slice(0, -1).join("; ")}; and ${kinds.at(-1) ?? ""}`;
+  const where = [
+    ...(birdwatch ? ["Birdwatch plays in the browser today and is coming to the iPhone app."] : []),
+    ...(tumble ? [`Toy Tumble plays in the browser and on the web TV page today, and is coming to the iPhone app in ${TUMBLE_SINCE}.`] : []),
+  ];
+  const games =
+    birdwatch || tumble
+      ? `It has ${count} games: ${list}. Cat Tower and Tuna Tiles play in the iPhone and iPad app and in any web browser, and players on each sit at the same tables. ${where.join(" ")}`
+      : `It has ${count} games: ${list}. It plays in the iPhone and iPad app and in any web browser, and players on each sit at the same tables.`;
   const alerts = consent ? "a parent decides whether they get notifications" : "they get no push notifications from our server";
   const text = `# Pounce: Family Games
 

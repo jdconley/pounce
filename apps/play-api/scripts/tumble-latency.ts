@@ -11,7 +11,7 @@
  * a cloud runner) to see what remote players get.
  *
  * Run: pnpm --filter @pounce/play-api latency:tumble -- --base https://<worker> --players 3 --seconds 60
- * The Worker must list `tumble` in GAMES (a dev Worker; production keeps it off until launch).
+ * The Worker must list `tumble` in GAMES (production does).
  */
 import { performance } from "node:perf_hooks";
 
