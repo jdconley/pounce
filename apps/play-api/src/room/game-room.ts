@@ -317,14 +317,30 @@ export class GameRoom extends DurableObject<Env> {
    * seat's device, or one that has been here before), `exists` (a stranger to a real room),
    * `not_near` (a stranger to a same-room table without the TV's live near key, `near`) or
    * `none` (no such room). `screen`: the device asks to be a screen, which no key decides.
+   * `games`: what the asking app can draw; one that can't draw this table's game needs no key,
+   * since `fetch` tells it there is no such table. A `not_near` is counted against the table too.
    */
-  knows(deviceId: string, near: string | null = null, screen = false): "member" | "exists" | "not_near" | "none" {
-    return this.core ? this.core.knows(deviceId, near, screen) : "none";
+  knows(deviceId: string, near: string | null = null, screen = false, games?: string[]): "member" | "exists" | "not_near" | "none" {
+    const core = this.core;
+    if (!core) return "none";
+    const known = core.knows(deviceId, near, screen, games);
+    if (known === "not_near") this.missedNear(core);
+    return known;
   }
 
   /** Whether `near` is a live near key at this table: what `/e/<code>?near=` asks before it sends a phone on. */
   nearLive(near: string): boolean {
-    return this.core?.nearLive(near) ?? false;
+    const core = this.core;
+    if (!core) return false;
+    const live = core.nearLive(near);
+    if (!live && core.sameRoom()) this.missedNear(core);
+    return live;
+  }
+
+  /** A wrong near guess, counted by the table itself (whatever address it came from) and kept across a wake. */
+  private missedNear(core: Room): void {
+    core.noteNearMiss();
+    this.persist(core);
   }
 
   /**
@@ -347,7 +363,8 @@ export class GameRoom extends DurableObject<Env> {
     if (!this.core) return "none";
     if (!this.core.mayScreen(deviceId)) return "seated";
     // A same-room table's old screen is refused from now on: its sockets close as a refusal would.
-    for (const old of this.core.addScreen(deviceId)) {
+    const { replaced, out } = this.core.addScreen(deviceId);
+    for (const old of replaced) {
       for (const ws of this.ctx.getWebSockets(old)) {
         try {
           ws.close(NOT_SCREEN_CLOSURE, "not_screen");
@@ -356,7 +373,7 @@ export class GameRoom extends DurableObject<Env> {
         }
       }
     }
-    await this.after([]);
+    await this.after(out);
     return "ok";
   }
 

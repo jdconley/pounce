@@ -160,6 +160,16 @@ export type RoomState<S = CatTowerState> = {
    * from hibernation still takes the key on the TV. Absent: none minted yet, or no such game.
    */
   nearKeys?: { key: string; at: number }[];
+  /**
+   * Wrong near guesses since the current key was minted (`at` is that key's): at
+   * `NEAR_TYPED_MISSES`, only the QR's whole key is taken until the next key. Absent: none.
+   */
+  nearMisses?: { at: number; count: number };
+  /**
+   * A same-room table dealt by Play again: the devices that were at the old one, members here
+   * with no near key, as they were there. Absent: none, or no such game.
+   */
+  members?: string[];
 };
 
 export type Look = { rug: string; back: string };
@@ -238,6 +248,8 @@ export type RematchIntent = {
   options?: AnyGameOptions;
   /** The table's screens, so a TV stays on the new table. Absent: none. */
   screens?: string[];
+  /** A same-room table's devices other than its screens: members of the new table without a near key. Absent: none. */
+  members?: string[];
 };
 
 /** The card backs and rugs the people a device speaks for have unlocked. */
@@ -327,6 +339,12 @@ export const SCREEN_GRACE_MS = 10_000;
 export const STALL_END_MS = 30 * MS_PER_MINUTE;
 /** A same-room table's screen shows a new near key this often; each is good for two of these at most. */
 export const NEAR_KEY_MS = 30_000;
+/**
+ * Wrong near guesses at one table within one key's time before its typed codes stop working until
+ * the next key (the QR's whole key still does): 3 typed characters are few enough to guess at
+ * from many addresses.
+ */
+export const NEAR_TYPED_MISSES = 30;
 
 /** Most aims a device may send in a second; more are dropped. */
 export const AIM_PER_SECOND = 10;
@@ -470,6 +488,7 @@ export class RoomCore<S = CatTowerState> {
   static rematchState<S = CatTowerState>(code: string, spec: RematchIntent, now: number): RoomState<S> {
     const state = RoomCore.create<S>(code, spec.hostDeviceId, now, spec.name, spec.look, spec.game);
     if (spec.screens) state.screens = [...spec.screens];
+    if (spec.members?.length) state.members = [...spec.members];
     if (spec.options) state.options = { ...spec.options };
     state.seats = [
       ...spec.seats.map((s) => ({ ...s })),
@@ -546,21 +565,23 @@ export class RoomCore<S = CatTowerState> {
    * A device already here as a watcher loses the players it sent: a screen speaks for nobody.
    *
    * A same-room table has one screen (design §5.1): the new one takes the old one's place, and
-   * the old one is a stranger from then on, so its sockets are to be closed. Returns those devices.
+   * the old one is a stranger from then on, so its sockets are to be closed. Returns those devices,
+   * and what their leaving tells the room.
    * The phones keep the TV layout for the grace, while the new TV opens its socket.
    */
-  addScreen(deviceId: string): string[] {
+  addScreen(deviceId: string): { replaced: string[]; out: Outbound[] } {
     const replaced = this.sameRoom() ? (this.state.screens ?? []).filter((id) => id !== deviceId) : [];
+    const out: Outbound[] = [];
     for (const id of replaced) {
       // Gone as a screen that left, so the grace and the clock's pause run as for any TV away.
-      this.disconnect(id);
+      out.push(...this.disconnect(id));
       delete this.state.devices[id];
     }
     if (replaced.length > 0) this.state.screens = this.state.screens?.filter((id) => id === deviceId);
     if (!this.isScreen(deviceId)) this.state.screens = [...(this.state.screens ?? []), deviceId];
     const device = this.state.devices[deviceId];
     if (device) delete device.players;
-    return replaced;
+    return { replaced, out };
   }
 
   /** The room's game is same-room only (Purrtrait): screen-made, one screen, joined by near key. */
@@ -573,13 +594,33 @@ export class RoomCore<S = CatTowerState> {
    * `member` (a screen here, the host, a seat's device, or one that has been here before) needs
    * nothing more. A stranger at a same-room table without a live near key is `not_near`: counted
    * as a wrong guess. A device that asks to be a screen is never let in by a key; the room tells
-   * it whether it is one.
+   * it whether it is one. Nor is an app whose `games` (its `X-Pounce-Games`) can't draw this
+   * table's: the room tells it there is no such table, and asks it to update.
    */
-  knows(deviceId: string, near: string | null, screen: boolean): "member" | "exists" | "not_near" {
+  knows(deviceId: string, near: string | null, screen: boolean, games?: readonly string[]): "member" | "exists" | "not_near" {
     const { state } = this;
-    const member = this.isScreen(deviceId) || deviceId === state.hostDeviceId || state.devices[deviceId] !== undefined || this.controlledSeats(deviceId).length > 0;
+    const member =
+      this.isScreen(deviceId) ||
+      deviceId === state.hostDeviceId ||
+      state.devices[deviceId] !== undefined ||
+      (state.members?.includes(deviceId) ?? false) ||
+      this.controlledSeats(deviceId).length > 0;
     if (member) return "member";
-    return !this.sameRoom() || screen || this.nearLive(near) ? "exists" : "not_near";
+    if (!this.sameRoom() || screen || (games !== undefined && !games.includes(state.game))) return "exists";
+    return this.nearLive(near) ? "exists" : "not_near";
+  }
+
+  /** A wrong near guess at this table (the join guard's, or `/e/`'s): counted for the current key's time. */
+  noteNearMiss(): void {
+    const at = this.state.nearKeys?.[0]?.at ?? 0;
+    const prior = this.state.nearMisses;
+    this.state.nearMisses = { at, count: prior?.at === at ? prior.count + 1 : 1 };
+  }
+
+  /** Too many wrong guesses within the current key's time: only the QR's whole key is taken. */
+  private typedClosed(): boolean {
+    const misses = this.state.nearMisses;
+    return misses !== undefined && misses.at === (this.state.nearKeys?.[0]?.at ?? 0) && misses.count >= NEAR_TYPED_MISSES;
   }
 
   /** Near keys are minted and taken only while the table is in its lobby or a game. */
@@ -598,7 +639,8 @@ export class RoomCore<S = CatTowerState> {
   nearLive(near: string | null): boolean {
     if (near === null) return false;
     const asked = near.toUpperCase();
-    return this.liveNearKeys().some((k) => asked === k.key || asked === typedNear(this.state.code, k.key));
+    const typed = !this.typedClosed();
+    return this.liveNearKeys().some((k) => asked === k.key || (typed && asked === typedNear(this.state.code, k.key)));
   }
 
   /** When the screen's next key is due; null while there is no screen to show one. */
@@ -615,6 +657,8 @@ export class RoomCore<S = CatTowerState> {
     const fresh = { key: newNearKey(this.rng), at: this.now() };
     // The previous key stays only while it is still good: a TV away for a while brings none back.
     this.state.nearKeys = [fresh, ...this.liveNearKeys().slice(0, 1)];
+    // A new key's time begins with no wrong guesses: typing works again.
+    delete this.state.nearMisses;
     return true;
   }
 
@@ -1809,11 +1853,20 @@ export class RoomCore<S = CatTowerState> {
       seats: [...state.seats.slice(1), ...state.seats.slice(0, 1)].map((s): SeatInfo => (s.left ? { kind: "bot", botLevel: "house" } : { ...s })),
       hostDeviceId: deviceId,
       ...(state.screens?.length ? { screens: [...state.screens] } : {}),
+      ...this.rematchMembers(),
       ...(state.options ? { options: { ...state.options } } : {}),
       // The same game again. Cat Tower's intent is as it always was.
       ...(state.game === DEFAULT_GAME ? {} : { game: state.game }),
     };
     return [];
+  }
+
+  /** A same-room table's members, for the table Play again deals: every device here but its screens. */
+  private rematchMembers(): Pick<RematchIntent, "members"> {
+    if (!this.sameRoom()) return {};
+    // Every seat's device has been here, so it is among them; so is the device asking.
+    const ids = new Set([...Object.keys(this.state.devices), ...(this.state.members ?? [])]);
+    return { members: [...ids].filter((id) => !this.isScreen(id)) };
   }
 
   /** Four uint32 words from the room's rng, which is crypto-backed in production. */

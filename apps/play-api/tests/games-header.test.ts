@@ -223,6 +223,8 @@ describe("an app that does not list Purrtrait", { timeout: 30_000 }, () => {
     const code = ((await made.json()) as { code: string }).code;
     const screen = await connect(mf, code, tv, PURR_APP);
     const near = `?near=${(screen.last?.room.near as { key: string }).key}`;
+    // An app that can't draw it is told there is no such table, key or not, and no guess is counted.
+    for (let i = 0; i < 7; i++) expect(await upgrade(mf, code, phone, NEW_APP)).toBe(404);
     expect(await upgrade(mf, code, phone, NEW_APP, near)).toBe(404);
     expect(await upgrade(mf, code, phone, PURR_APP, near)).toBe(101);
     expect((await tablesOf(mf, phone, NEW_APP)).map((t) => t.code)).not.toContain(code);

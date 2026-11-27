@@ -2,7 +2,7 @@ import { devicePlayers, player, type Result } from "../players/accounts";
 import { PLAYER_ID } from "../players/ids";
 import { ROOM_CODE } from "../room/codes";
 
-import { DEVICE_JOIN_RULE, IP_JOIN_RULE } from "./backoff";
+import { DEVICE_JOIN_RULE, ipBucket, IP_JOIN_RULE } from "./backoff";
 import { checkName, ownerAsks, parseAfter, parseBlock, parseReport } from "./parse";
 import { REPORTS_NAME, type Report } from "./reports";
 
@@ -60,7 +60,8 @@ export async function mayMakeScreenLink(env: Env, deviceId: string, ip: string, 
  *
  * At a same-room table (Purrtrait) the code alone is not enough: a stranger needs the TV's live
  * near key (`ask.near`), and one without it is a wrong guess too, answered `notNear`. A device
- * asking to be a screen (`ask.screen`) needs none; the room says whether it is one.
+ * asking to be a screen (`ask.screen`) needs none; the room says whether it is one. Nor does an
+ * app that can't draw the table's game (`ask.games`): the room tells it there is no such table.
  */
 export async function guardJoin(
   env: Env,
@@ -68,14 +69,14 @@ export async function guardJoin(
   deviceId: string,
   ip: string,
   now: number,
-  ask: { near?: string | null; screen?: boolean } = {},
+  ask: { near?: string | null; screen?: boolean; games?: string[] } = {},
 ): Promise<{ retryAfter: number } | { exists: boolean; notNear?: true }> {
-  const known = await room(env, code).knows(deviceId, ask.near ?? null, ask.screen ?? false);
+  const known = await room(env, code).knows(deviceId, ask.near ?? null, ask.screen ?? false, ask.games);
   if (known === "member") return { exists: true };
   const failed = known === "none" || known === "not_near";
   const [byDevice, byIp] = await Promise.all([
     limiter(env, `device:${deviceId}`).guess(failed, DEVICE_JOIN_RULE, now),
-    limiter(env, `ip:${ip}`).guess(failed, IP_JOIN_RULE, now),
+    limiter(env, `ip:${ipBucket(ip)}`).guess(failed, IP_JOIN_RULE, now),
   ]);
   const retryAt = Math.max(byDevice.retryAt ?? 0, byIp.retryAt ?? 0);
   if (retryAt > 0) return { retryAfter: Math.max(1, Math.ceil((retryAt - now) / 1000)) };
@@ -90,7 +91,7 @@ export async function guardJoin(
 export async function peekNear(env: Env, code: string, near: string, ip: string, now: number): Promise<boolean> {
   try {
     const live = await room(env, code).nearLive(near);
-    const { retryAt } = await limiter(env, `ip:${ip}`).guess(!live, IP_JOIN_RULE, now);
+    const { retryAt } = await limiter(env, `ip:${ipBucket(ip)}`).guess(!live, IP_JOIN_RULE, now);
     return retryAt === null && live;
   } catch {
     return false;
@@ -105,7 +106,7 @@ export async function peekNear(env: Env, code: string, near: string, ip: string,
 export async function guardScreenCode(env: Env, failed: boolean, deviceId: string, ip: string, now: number): Promise<number | null> {
   const [byDevice, byIp] = await Promise.all([
     limiter(env, `screen:device:${deviceId}`).guess(failed, DEVICE_JOIN_RULE, now),
-    limiter(env, `screen:ip:${ip}`).guess(failed, IP_JOIN_RULE, now),
+    limiter(env, `screen:ip:${ipBucket(ip)}`).guess(failed, IP_JOIN_RULE, now),
   ]);
   const retryAt = Math.max(byDevice.retryAt ?? 0, byIp.retryAt ?? 0);
   return retryAt > 0 ? Math.max(1, Math.ceil((retryAt - now) / 1000)) : null;
@@ -123,7 +124,7 @@ export type InvitePeek = { table: string | null; game: string; host: { name: str
 export async function peekInvite(env: Env, code: string, ip: string, now: number): Promise<InvitePeek | "gone" | "hidden"> {
   try {
     const found = await room(env, code).invite();
-    const { retryAt } = await limiter(env, `ip:${ip}`).guess(found === null, IP_JOIN_RULE, now);
+    const { retryAt } = await limiter(env, `ip:${ipBucket(ip)}`).guess(found === null, IP_JOIN_RULE, now);
     if (retryAt !== null) return "hidden";
     if (!found || found.over) return "gone";
     // A TV's table with nobody seated has no host to ask about: it names nobody.

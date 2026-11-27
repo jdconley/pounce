@@ -283,7 +283,7 @@ async function openSocket(request: Request, env: Env, deviceId: string, code: st
   // A same-room table's near key, off the TV's QR or typed from it: only a key's shape reaches the room.
   const near = parseNear(query.get("near"));
   // Joining by code (`guardJoin`): wrong guesses are counted, and too many lock the guesser out.
-  const guard = await guardJoin(env, code, deviceId, clientIp(request), Date.now(), { near, screen: screen && tvOn(env) });
+  const guard = await guardJoin(env, code, deviceId, clientIp(request), Date.now(), { near, screen: screen && tvOn(env), games: appGames(request) });
   if ("retryAfter" in guard) {
     const response = json(429, { error: "too_many_attempts", retryAfter: guard.retryAfter });
     response.headers.set("retry-after", String(guard.retryAfter));

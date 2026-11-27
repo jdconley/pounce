@@ -1,6 +1,6 @@
 import { afterEach, beforeAll, describe, expect, test } from "vitest";
 
-import { BASE, bundle, call, Client, eventually, mint, newPerson, settle, worker, type Device, type Person, type Snapshot } from "./play-helpers";
+import { BASE, bundle, call, Client, eventually, mint, newPerson, profile, settle, worker, type Device, type Person, type Snapshot } from "./play-helpers";
 
 import type { Miniflare } from "miniflare";
 
@@ -38,8 +38,8 @@ type Near = { key: string; code: string; expiresIn: number };
 const nearOf = (c: Client): Near => c.last?.room.near as Near;
 
 /** An upgrade with whatever query, as the app opens it; the response, unaccepted. */
-function upgrade(mf: Miniflare, code: string, device: Device, query = "") {
-  return mf.dispatchFetch(`${BASE}/v1/rooms/${code}/ws${query}`, { headers: { authorization: `Bearer ${device.token}`, upgrade: "websocket", ...PURR } });
+function upgrade(mf: Miniflare, code: string, device: Device, query = "", headers: Record<string, string> = {}) {
+  return mf.dispatchFetch(`${BASE}/v1/rooms/${code}/ws${query}`, { headers: { authorization: `Bearer ${device.token}`, upgrade: "websocket", ...PURR, ...headers } });
 }
 
 async function opened(res: Response | Awaited<ReturnType<typeof upgrade>>): Promise<Client> {
@@ -138,6 +138,41 @@ describe("joining from the TV's code (design §5.2)", { timeout: 30_000 }, () =>
     await opened(await upgrade(mf, code, c, `?near=${near.key}`));
   });
 
+  test("30 wrong guesses from many addresses close the typed code until the next key; the QR's key still works", async () => {
+    const mf = await start();
+    const [tv, late, fresh] = [await mint(mf), await mint(mf), await mint(mf)];
+    const { code, screen } = await tvTable(mf, tv);
+    const { key, code: typed } = nearOf(screen);
+    // Five devices, six counted misses each, every one from a new IPv6 /64, guessing the typing.
+    const wrong = `${code}${typed.endsWith("BBB") ? "CCC" : "BBB"}`;
+    let n = 0;
+    for (let d = 0; d < 5; d++) {
+      const guesser = await mint(mf);
+      for (let i = 0; i < 6; i++) {
+        const ip = `2001:db8:${(n += 1).toString(16)}::1`;
+        const res = await upgrade(mf, code, guesser, `?near=${wrong}`, { "cf-connecting-ip": ip });
+        expect(res.status).toBe(403);
+      }
+    }
+    expect(await refusal(await upgrade(mf, code, late, `?near=${typed}`, { "cf-connecting-ip": "203.0.113.9" }))).toEqual(NOT_NEAR);
+    await opened(await upgrade(mf, code, fresh, `?near=${key}`, { "cf-connecting-ip": "203.0.113.10" }));
+  });
+
+  test("addresses in one IPv6 /64 share one count", async () => {
+    const mf = await start();
+    const tv = await mint(mf);
+    const { code } = await tvTable(mf, tv);
+    // 20 misses an hour are free per address; the 21st locks the /64 out, whichever address in it.
+    const statuses: number[] = [];
+    for (let i = 0; i < 21; i++) {
+      const guesser = await mint(mf);
+      statuses.push((await upgrade(mf, code, guesser, "", { "cf-connecting-ip": `2001:db8:7:7::${(i + 1).toString(16)}` })).status);
+    }
+    expect(statuses).toEqual(Array<number>(21).fill(403));
+    expect((await upgrade(mf, code, await mint(mf), "", { "cf-connecting-ip": "2001:db8:7:7:ffff::1" })).status).toBe(429);
+    expect((await upgrade(mf, code, await mint(mf), "", { "cf-connecting-ip": "2001:db8:7:8::1" })).status).toBe(403);
+  });
+
   test("a member reconnects with no key, long after the key it joined with", async () => {
     const mf = await start({ devSpeed: FAST });
     const [tv, a] = [await mint(mf), await mint(mf)];
@@ -166,6 +201,37 @@ describe("joining from the TV's code (design §5.2)", { timeout: 30_000 }, () =>
     await eventually(() => nearOf(screen).key, (key) => key !== first.key);
     expect(phone.received.slice(seen).some((m) => m.t === "snapshot" && m.room.near !== undefined)).toBe(false);
     expect(phone.received.every((m) => m.t !== "snapshot" || m.room.near === undefined)).toBe(true);
+  });
+});
+
+describe("Play again at a Purrtrait table", { timeout: 30_000 }, () => {
+  test("both phones follow with no key, and the TV follows as the screen", async () => {
+    const mf = await start();
+    const [tv, a, b] = [await mint(mf), await mint(mf), await mint(mf)];
+    const { code, screen } = await tvTable(mf, tv);
+    // Signed in: their seats are their players', which only a device that speaks for them controls.
+    const [alice, bo] = [newPerson("Alice", 1), newPerson("Bo", 2)];
+    await profile(mf, a, [alice]);
+    await profile(mf, b, [bo]);
+    const pa = await sit(mf, code, screen, a, 0, alice);
+    const pb = await sit(mf, code, screen, b, 1, bo);
+    pa.send({ t: "start" });
+    await pa.until((s) => s.room.purrtrait?.phase === "choosing");
+    pa.send({ t: "act", seat: 0, action: { type: "forfeit" } });
+    await pb.until((s) => s.room.status === "over");
+    pb.send({ t: "rematch" });
+    const next = (await pb.find<{ t: "rematch"; code: string }>((m) => m.t === "rematch")).code;
+    expect(next).not.toBe(code);
+    const tvNext = await opened(await upgrade(mf, next, tv, "?role=screen"));
+    expect(tvNext.last?.room.near).toBeDefined();
+    // The seats move one on at the new table; each phone still has its own.
+    for (const device of [a, b]) {
+      const back = await opened(await upgrade(mf, next, device));
+      expect(back.last?.room.near).toBeUndefined();
+      expect(back.last?.room.seats.filter((s) => s.yours)).toHaveLength(1);
+    }
+    // A stranger still needs the key at the new table.
+    expect(await refusal(await upgrade(mf, next, await mint(mf)))).toEqual(NOT_NEAR);
   });
 });
 
