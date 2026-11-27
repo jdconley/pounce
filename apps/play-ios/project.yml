@@ -22,7 +22,7 @@ settings:
     TVOS_DEPLOYMENT_TARGET: "26.0"
     # One version for every target: the app, its extensions and the Apple TV app (one App Store
     # record, universal purchase). CI sets the build number on the command line (testflight.sh).
-    MARKETING_VERSION: "1.3"
+    MARKETING_VERSION: "1.4"
     CURRENT_PROJECT_VERSION: "1"
 packages:
   PounceKit:
