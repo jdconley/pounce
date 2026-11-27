@@ -278,22 +278,15 @@ struct Watchdog {
 @MainActor
 extension XCTestCase {
     /// The app's watchdog now, or nil when no table is on screen (or the app runs without it).
-    /// The table's watchdog, read again for up to 3 s (scaled) when a read comes back empty. A read
-    /// is an accessibility snapshot, which the app's main thread has to answer; on a starved CI
-    /// runner the app can go unscheduled for seconds (a 6.3 s stall in one soak, none of it the
-    /// app's own work), the snapshot times out, and one empty read failed a frame gate that was
-    /// counting frames fine. The stall itself is still in the reading: hangs and slow frames are
-    /// counted whether or not a read was waiting on them.
+    /// The table's watchdog, read again for up to 3 s (scaled) when a read comes up empty. The
+    /// app serves it in parts (`probeText`), as XCTest cuts an accessibility value off at 512
+    /// characters; a CI reading cut off there lost its sections and failed gates that were
+    /// counting frames fine. A read is a snapshot of the app's accessibility tree, which its main
+    /// thread answers, and a starved runner can hold that up for seconds.
     func watchdog(_ app: XCUIApplication) -> Watchdog? {
         let deadline = Date().addingTimeInterval(Live.t(3))
         while true {
-            var raw: String?
-            do {
-                raw = try el(app, "watchdog").snapshot().value as? String
-                if raw == nil { WatchdogRead.lastError = "no value" }
-            } catch {
-                WatchdogRead.lastError = "\(error)".replacingOccurrences(of: "\n", with: " ")
-            }
+            let raw = probeText(app, "watchdog")
             if let reading = Watchdog(raw) { return reading }
             if raw == "off" { return nil }
             if let raw {
@@ -302,6 +295,49 @@ extension XCTestCase {
             guard Date() < deadline else { return nil }
             Thread.sleep(forTimeInterval: Live.poll(0.5))
         }
+    }
+
+    /// A parted probe's text (`watchdog`, `watchdog.frames`): its parts (`id`, `id.1`, ...) from
+    /// one snapshot, joined, each after its generation (`g=7;`). Nil, with the reason in
+    /// `watchdogReadError`, when the snapshot failed, the probe isn't there, or the snapshot caught
+    /// parts of two readings.
+    func probeText(_ app: XCUIApplication, _ id: String) -> String? {
+        let root: any XCUIElementSnapshot
+        do {
+            root = try app.snapshot()
+        } catch {
+            WatchdogRead.lastError = "\(error)".replacingOccurrences(of: "\n", with: " ")
+            return nil
+        }
+        var values: [String: String] = [:]
+        var stack: [any XCUIElementSnapshot] = [root]
+        while let node = stack.popLast() {
+            if node.identifier == id || node.identifier.hasPrefix(id + "."), values[node.identifier] == nil {
+                values[node.identifier] = node.value as? String
+            }
+            stack.append(contentsOf: node.children)
+        }
+        var generation: Substring?
+        var text = ""
+        for i in 0... {
+            guard let part = values[i == 0 ? id : "\(id).\(i)"] else { break }
+            guard part.hasPrefix("g="), let semi = part.firstIndex(of: ";") else {
+                WatchdogRead.lastError = "\(id) part \(i) has no generation: \(part.prefix(40))"
+                return nil
+            }
+            let g = part[part.index(part.startIndex, offsetBy: 2)..<semi]
+            if let generation, generation != g {
+                WatchdogRead.lastError = "\(id)'s parts came from two readings"
+                return nil
+            }
+            generation = g
+            text += part[part.index(after: semi)...]
+        }
+        guard generation != nil else {
+            WatchdogRead.lastError = "no \(id) element"
+            return nil
+        }
+        return text
     }
 
     /// Why the last watchdog read came back empty, for a failure message.
@@ -327,7 +363,7 @@ extension XCTestCase {
             return (reading?.link.count ?? 0) + (reading?.link.queried ?? 0) > 0
         }
         guard let reading else {
-            XCTFail("no watchdog reading (\(watchdogReadError)); now it reads \(value(el(app, "watchdog")) ?? "nothing")", file: file, line: line)
+            XCTFail("no watchdog reading (\(watchdogReadError))", file: file, line: line)
             return Watchdog("screen=0 table=0 | link n=0 | table n=0")!
         }
         return reading

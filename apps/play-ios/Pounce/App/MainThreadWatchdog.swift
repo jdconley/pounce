@@ -120,8 +120,8 @@ final class MainThreadWatchdog {
     fileprivate struct WeakRecognizer { weak var value: UIGestureRecognizer? }
     private var activeObserver: NSObjectProtocol?
 
-    private let probe = Probe(id: "watchdog") { MainThreadWatchdog.shared?.summary() }
-    private let framesProbe = Probe(id: "watchdog.frames") { MainThreadWatchdog.shared?.recentFrames() }
+    private let probe = PartedProbe(id: "watchdog") { MainThreadWatchdog.shared?.summary() }
+    private let framesProbe = PartedProbe(id: "watchdog.frames") { MainThreadWatchdog.shared?.recentFrames() }
     private var windowObserver: NSObjectProtocol?
     private var sceneObserver: NSObjectProtocol?
     private var displayLink: CADisplayLink?
@@ -505,11 +505,10 @@ final class MainThreadWatchdog {
     /// A window just showed: the probe goes at the back of the app's own window (not an overlay
     /// or a system one), if it isn't on one already.
     private func attachProbe() {
-        guard probe.window == nil || probe.window?.isHidden == true else { return }
+        guard let first = probe.views.first, first.window == nil || first.window?.isHidden == true else { return }
         let windows = UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }.flatMap(\.windows)
         guard let window = windows.first(where: { $0.windowLevel == .normal && !$0.isHidden }) else { return }
-        window.insertSubview(probe, at: 0)
-        window.insertSubview(framesProbe, at: 0)
+        for view in probe.views + framesProbe.views { window.insertSubview(view, at: 0) }
         if window.gestureRecognizers?.contains(where: { $0 is TouchCensus }) != true {
             window.addGestureRecognizer(TouchCensus())
         }
@@ -555,8 +554,46 @@ final class MainThreadWatchdog {
         }
     }
 
-    /// The `watchdog` and `watchdog.frames` elements: draw nothing, take no touches, read
-    /// their value live.
+    /// A probe's text in parts. XCTest cuts an accessibility value off at 512 characters, and a
+    /// reading runs past that: its frame histograms spread over many buckets on a starved CI
+    /// runner, and a cut-off reading lost its link and table sections, so a gate read it as no
+    /// watchdog at all. Each part is its own element (`id`, `id.1`, `id.2`, ...) of at most
+    /// `length` characters after the text's generation (`g=7;`): a test joins the parts of one
+    /// generation from one snapshot, and reads again if a snapshot caught two.
+    @MainActor private final class PartedProbe {
+        static let length = 480
+        static let count = 12
+        private(set) var views: [Probe] = []
+        private let read: @MainActor () -> String?
+        private var parts: [Substring] = []
+        private var generation = 0
+        private var readAt: CFTimeInterval = -1
+
+        init(id: String, read: @escaping @MainActor () -> String?) {
+            self.read = read
+            views = (0..<Self.count).map { i in
+                Probe(id: i == 0 ? id : "\(id).\(i)") { @MainActor [unowned self] in self.part(i) }
+            }
+        }
+
+        /// Part `i` of the text, read once for all the parts one snapshot asks for.
+        private func part(_ i: Int) -> String {
+            let now = CACurrentMediaTime()
+            if now - readAt > 0.05 {
+                let text = read() ?? ""
+                parts = stride(from: 0, to: max(text.count, 1), by: Self.length).map { start in
+                    let from = text.index(text.startIndex, offsetBy: start, limitedBy: text.endIndex) ?? text.endIndex
+                    let to = text.index(from, offsetBy: Self.length, limitedBy: text.endIndex) ?? text.endIndex
+                    return text[from..<to]
+                }
+                generation += 1
+                readAt = now
+            }
+            return "g=\(generation);" + (i < parts.count ? String(parts[i]) : "")
+        }
+    }
+
+    /// One part of a probe's text: draws nothing, takes no touches, reads its value live.
     private final class Probe: UIView {
         private let read: @MainActor () -> String?
 

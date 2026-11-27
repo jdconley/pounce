@@ -115,7 +115,7 @@ final class FrameRateTests: XCTestCase {
         let report = window.report(name) + String(format: " | host load %.2f per core", host.load)
         print(report)
         // What the slow frames held (the app's own work, or none), read once, after the window.
-        for frame in (value(el(app, "watchdog.frames")) ?? "").split(separator: "\n") {
+        for frame in (probeText(app, "watchdog.frames") ?? "").split(separator: "\n") {
             print("FRAMES \(name) \(frame)")
         }
         if tilesTurn {
