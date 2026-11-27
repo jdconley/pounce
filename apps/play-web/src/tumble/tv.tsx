@@ -23,7 +23,7 @@ const LABEL = 0.15;
 
 export function TvTumble(props: { store: RoomStore; state: RoomState; offline: boolean }) {
   const room = props.state.room!;
-  const tumble = useTumble(props.store);
+  const tumble = useTumble(props.store, true);
   const t = tumble.room;
   const [rootRef, size] = useSize<HTMLDivElement>();
   const width = size.width || 1920;
@@ -91,7 +91,7 @@ export function TvTumble(props: { store: RoomStore; state: RoomState; offline: b
   }, [tumble, tumble.r, seats.join()]);
 
   if (!t) return null;
-  if (t.status === "between") return <RoundOver room={room} t={t} tv />;
+  if (t.status === "between") return <RoundOver room={room} t={t} tv now={() => tumble.serverNow()} />;
   return (
     <div class="tt-tv" ref={rootRef} data-sig={ui.sig}>
       <header class="tt-tv-head" style={{ height: `${Math.round(height * HEADER)}px` }}>

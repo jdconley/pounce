@@ -43,8 +43,8 @@ export const TRICK_NAME: Record<Trick, string> = {
 export const WINS_TO_WIN = 3;
 
 /** The store for this table, started for as long as the component is up. */
-export function useTumble(store: RoomStore): TumbleStore {
-  const tumble = useMemo(() => new TumbleStore({ room: store }), [store]);
+export function useTumble(store: RoomStore, screen = false): TumbleStore {
+  const tumble = useMemo(() => new TumbleStore({ room: store, screen }), [store, screen]);
   const [, setN] = useState(0);
   useEffect(() => {
     const off = tumble.subscribe(() => setN((n) => n + 1));
@@ -146,7 +146,7 @@ export function TumbleTable(props: Props) {
   const tumble = useTumble(props.store);
   const t = tumble.room;
   if (!t) return null;
-  if (t.status === "between") return <RoundOver room={room} t={t} onPlayWithout={() => playWithout(props.store, room)} />;
+  if (t.status === "between") return <RoundOver room={room} t={t} now={() => tumble.serverNow()} onPlayWithout={() => playWithout(props.store, room)} />;
   if (t.status === "over") return null;
   return <TumblePlay {...props} tumble={tumble} t={t} />;
 }
@@ -177,7 +177,7 @@ function TumblePlay(props: Props & { tumble: TumbleStore; t: TumbleRoom }) {
   const boxRef = useRef<HTMLDivElement>(null);
 
   // What the chrome shows, redrawn only when it changes.
-  const [ui, setUi] = useState({ held: [] as Trick[], waiting: 0, count: "", states: "", next: -1 });
+  const [ui, setUi] = useState(() => ({ held: [] as Trick[], waiting: 0, count: tumble.countdown() > 0 ? countWords(tumble.countdown()) : "", states: "", next: -1 }));
   const [, setPicked] = useState(0);
   const picker = useMemo(
     () =>
@@ -304,7 +304,7 @@ function TumblePlay(props: Props & { tumble: TumbleStore; t: TumbleRoom }) {
   };
 
   return (
-    <div class={`tt-table ${watching ? "watching" : ""}`} ref={rootRef} style={{ ["--ring" as string]: RINGS[(mine ?? 0) % RINGS.length] }}>
+    <div class={`tt-table ${watching ? "watching" : ""}`} ref={rootRef} data-live={!watching && ui.count === "" && tumble.seatState(mine ?? -1) === "ok" ? "" : undefined} style={{ ["--ring" as string]: RINGS[(mine ?? 0) % RINGS.length] }}>
       {watching ? (
         <>
           <p class="tt-watch-head outlined" style={{ top: `${insets.top + 12}px` }}>
@@ -441,13 +441,13 @@ function TumblePlay(props: Props & { tumble: TumbleStore; t: TumbleRoom }) {
 }
 
 /** The clock, read again about once a second while `on` (on the frame clock, not a timer). */
-function useSecond(on: boolean): number {
-  const [now, setNow] = useState(() => Date.now());
+function useSecond(on: boolean, clock: () => number): number {
+  const [now, setNow] = useState(clock);
   useEffect(() => {
     if (!on) return;
     let raf = 0;
     const tick = () => {
-      const t = Date.now();
+      const t = clock();
       setNow((n) => (t - n >= 1000 ? t : n));
       raf = requestAnimationFrame(tick);
     };
@@ -461,7 +461,7 @@ function useSecond(on: boolean): number {
 const CONFETTI: readonly [number, number, string][] = Array.from({ length: 16 }, (_, i) => [(i * 37) % 100, (i * 113) % 700, RINGS[i % RINGS.length] as string]);
 
 /** Between rounds (spec §5.5): the winner's cat on top with confetti, everyone's paw tokens, and who the next round waits for. */
-export function RoundOver(props: { room: RoomView; t: TumbleRoom; tv?: boolean; onPlayWithout?: () => void }) {
+export function RoundOver(props: { room: RoomView; t: TumbleRoom; tv?: boolean; now?: () => number; onPlayWithout?: () => void }) {
   const { room, t } = props;
   const winner = t.winner;
   const mine = mySeats(room);
@@ -474,13 +474,13 @@ export function RoundOver(props: { room: RoomView; t: TumbleRoom; tv?: boolean; 
   const seats = room.seats.flatMap((s, i) => ((s.kind === "human" || s.kind === "bot") && !t.left[i] ? [i] : []));
   const waiting = waitingSeats(room).filter((s) => !t.left[s] && !t.away[s]);
   // The host may go on without them once the next round has waited 20 seconds (spec §5.1).
-  const now = useSecond(t.waitingSince !== null && waiting.length > 0);
+  const now = useSecond(t.waitingSince !== null && waiting.length > 0, props.now ?? Date.now);
   const waitedLong = t.waitingSince !== null && now - t.waitingSince >= PLAY_WITHOUT_AFTER_MS;
   return (
     <div class={`tt-over ${props.tv ? "tv" : ""}`} role="dialog" aria-label={`Round ${t.r}`}>
       <img class="tt-over-burst" src={art("sunburst")} alt="" />
       <div class="panel tt-over-card">
-        <p class="tt-over-round">Round {t.r}</p>
+        {t.r > 0 ? <p class="tt-over-round">Round {t.r}</p> : null}
         {winner !== null ? (
           <div class="tt-over-winner" style={{ ["--ring" as string]: RINGS[winner % RINGS.length] }}>
             <span class="tt-confetti" aria-hidden="true">

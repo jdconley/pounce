@@ -70,10 +70,10 @@ export async function shownLink(tv: Tv, scope = ".tv-home-screen"): Promise<{ co
 }
 
 /** A game's poster on the TV's home: its name is what it shows, "Cat Tower 2 to 6 players". */
-export const poster = (page: Page, game: "Cat Tower" | "Tuna Tiles" | "Birdwatch") => page.getByRole("button", { name: new RegExp(`^${game}\\s*\\d+ to \\d+ players$`) });
+export const poster = (page: Page, game: "Cat Tower" | "Tuna Tiles" | "Birdwatch" | "Toy Tumble") => page.getByRole("button", { name: new RegExp(`^${game}\\s*\\d+ to \\d+ players$`) });
 
 /** The TV makes a table from its poster; returns the table's code, read off its lobby. */
-export async function tvMakes(tv: Tv, game: "Cat Tower" | "Tuna Tiles" | "Birdwatch"): Promise<string> {
+export async function tvMakes(tv: Tv, game: "Cat Tower" | "Tuna Tiles" | "Birdwatch" | "Toy Tumble"): Promise<string> {
   await poster(tv.page, game).click();
   return tvTable(tv.page);
 }
@@ -86,11 +86,11 @@ export async function tvTable(page: Page): Promise<string> {
 }
 
 /** Phones that join `code` from its invite link, as people scanning the TV's lobby QR do. */
-export async function phonesJoin(browser: Browser, code: string, names: string[], viewport?: { width: number; height: number }) {
+export async function phonesJoin(browser: Browser, code: string, names: string[], viewport?: { width: number; height: number }, before?: (page: Page) => void) {
   const phones = [];
   for (const [i, name] of names.entries()) {
     const device = PHONES[i % PHONES.length]!;
-    const phone = await newPlayer(browser, name, { path: `/play/j/${code}`, context: { ...device, ...(viewport ? { viewport } : {}) } });
+    const phone = await newPlayer(browser, name, { path: `/play/j/${code}`, context: { ...device, ...(viewport ? { viewport } : {}) }, before });
     await expect(phone.page).toHaveURL(new RegExp(`/play/t/${code}$`));
     phones.push(phone);
   }

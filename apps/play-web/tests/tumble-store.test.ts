@@ -95,6 +95,23 @@ describe("the round from the snapshot", () => {
     expect(tumble.countdown(START - 3000)).toBe(3000);
   });
 
+  test("counts the round by the server's clock, whatever this device's says", async () => {
+    const { tumble, snapshot, clock, tumbleSent } = await setup();
+    // This device's clock is 60 s behind the server's.
+    clock.now = START - 60_000 - 3000;
+    snapshot(tumbleRoom({ now: START - 3000 }));
+    expect(tumble.countdown()).toBe(3000);
+    expect(tumble.serverNow()).toBe(START - 3000);
+    clock.now += 3000;
+    tumble.frame();
+    expect(tumble.view(1)?.toy).not.toBeNull();
+    clock.now += 1200;
+    tumble.local!.drop();
+    // The set-down's round clock is the server's: 1200 ms in.
+    const l = tumbleSent().flatMap((m) => m.ev).find((e) => e[0] === "l");
+    expect(l?.[5]).toBe(1200);
+  });
+
   test("a device with no seat (the TV) replays every box", async () => {
     const { tumble, snapshot } = await setup();
     snapshot(tumbleRoom({}, -1));
@@ -156,6 +173,33 @@ describe("the live stream", () => {
     expect(tumble.view(1)?.state).toBe("lag");
     ws.receive(sample("tumble-seat-ok"));
     expect(tumble.view(1)?.state).toBe("ok");
+  });
+
+  test("a store that starts after the connect's sync (a TV drawing its table) still gets it", async () => {
+    const { ws, room, snapshot, clock } = await setup();
+    snapshot(tumbleRoom({ status: "playing" }, -1));
+    clock.now = START + 100;
+    ws.receive(sample("tumble-sync"));
+    ws.receive({ t: "tumble", r: 2, s: 0, q: 42, ev: [] });
+    const late = new TumbleStore({ room, now: () => clock.now, screen: true });
+    late.start();
+    expect(late.view(0)?.box.next).toBe(1);
+    expect(late.view(1)?.state).toBe("lag");
+    expect(late.replay?.needsSync()).toBe(false);
+  });
+
+  test("a screen never sends `tumble`: after a gap it connects again for every box", async () => {
+    const { ws, sockets, room, snapshot, clock } = await setup();
+    snapshot(tumbleRoom({ status: "playing" }, -1));
+    const tv = new TumbleStore({ room, now: () => clock.now, screen: true });
+    tv.start();
+    clock.now = START + 10;
+    ws.receive({ t: "tumble", r: 2, s: 0, q: 5, ev: [] });
+    tv.frame();
+    expect(ws.sent.filter((m) => (m as { t: string }).t === "tumble")).toEqual([]);
+    clock.advance(2000);
+    await flush();
+    expect(sockets.length).toBeGreaterThan(1);
   });
 
   test("a sync that beats the snapshot is kept for the round", async () => {

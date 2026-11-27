@@ -57,6 +57,8 @@ export type RoomListener = {
 
 /** The live stream's message types, handed on as they arrive. */
 const LIVE: ReadonlySet<string> = new Set(["tumble", "tumbleHit", "tumbleSync", "tumbleSeat"]);
+/** How many live messages the store keeps for a late listener. */
+const LIVE_KEPT = 256;
 
 /** How long each kind of event holds the stage before the next one plays. */
 export function eventPause(e: RoomEvent): number {
@@ -359,6 +361,13 @@ export class RoomStore {
   private aimTimer: unknown = null;
   /** A clear that couldn't be sent: sent as soon as the socket is back. */
   private clearsOwed = new Set<number>();
+  /** The latest live messages, oldest first. */
+  private liveKept: TumbleServer[] = [];
+
+  /** The live messages that came lately (up to `LIVE_KEPT`), for a listener that joins late. */
+  recentLive(): readonly TumbleServer[] {
+    return this.liveKept;
+  }
 
   constructor(options: RoomStoreOptions) {
     this.state = {
@@ -502,9 +511,13 @@ export class RoomStore {
   }
 
   private onMessage(m: ServerMessage): void {
-    // The protocol's server union doesn't list the live stream yet (`tumble/wire.ts` has it).
+    // Toy Tumble's live stream: handed on as it arrives, never paced.
     if (LIVE.has((m as { t: string }).t)) {
-      for (const l of [...this.listeners]) l.live?.(m as unknown as TumbleServer);
+      const live = m as unknown as TumbleServer;
+      // Kept a while, for a screen that starts listening after the sync it got on connecting.
+      this.liveKept.push(live);
+      if (this.liveKept.length > LIVE_KEPT) this.liveKept.shift();
+      for (const l of [...this.listeners]) l.live?.(live);
       return;
     }
     switch (m.t) {

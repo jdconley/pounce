@@ -11,6 +11,7 @@ import { LocalBox } from "./local";
 import { Replay, type SeatStatus } from "./replay";
 import { gravityMs, type Fx } from "./rules";
 
+import type { TumbleView } from "@pounce/play-api/games/tumble";
 import type { RoomView } from "@pounce/play-api/protocol";
 import type { Seed } from "@pounce/play-api/rules/rng";
 import type { Box } from "@pounce/play-api/tumble/box";
@@ -20,28 +21,14 @@ import type { ClientEvent, TumbleServer } from "@pounce/play-api/tumble/wire";
 export type TumbleStatus = "countdown" | "playing" | "between" | "over";
 export type Cats = "easy" | "quick";
 
-/** The snapshot's `room.tumble` (`docs/live-protocol.md`). */
-export type TumbleRoom = {
-  seats: number;
-  cats: Cats;
-  wins: number[];
-  left: boolean[];
-  away: boolean[];
-  status: TumbleStatus;
-  r: number;
-  startsAt: number;
-  roundSeed?: Seed;
-  trickSeeds?: Seed[];
-  outs: number[];
-  winner: number | null;
-  waitingSince: number | null;
-};
+/** The snapshot's `room.tumble` (`docs/live-protocol.md`): times are the server's clock. */
+export type TumbleRoom = TumbleView;
 
 /** A Toy Tumble room's state, or null in any other room. */
-export const tumbleOf = (room: RoomView | null | undefined): TumbleRoom | null => (room as { tumble?: TumbleRoom } | null | undefined)?.tumble ?? null;
+export const tumbleOf = (room: RoomView | null | undefined): TumbleRoom | null => room?.tumble ?? null;
 
-/** A room of Toy Tumble. The protocol's game ids don't list it until its server module lands. */
-export const isTumble = (room: Pick<RoomView, "gameId"> | null | undefined): boolean => (room?.gameId as string | undefined) === "tumble";
+/** A room of Toy Tumble. */
+export const isTumble = (room: Pick<RoomView, "gameId"> | null | undefined): boolean => room?.gameId === "tumble";
 
 /** The table's House Cat level (the lobby's two pills): Easy unless it chose Quick. */
 export const catsOf = (room: RoomView): Cats => ((room.options as { cats?: Cats } | undefined)?.cats === "quick" ? "quick" : (tumbleOf(room)?.cats ?? "easy"));
@@ -94,10 +81,14 @@ export type TumbleStoreOptions = {
   room: RoomStore;
   /** The device's clock, epoch ms (the round's `startsAt` is the server's). */
   now?: () => number;
+  /** This device is the table's TV: it never sends `tumble`. */
+  screen?: boolean;
 };
 
 /** The longest a sync request waits before it is asked again. */
 export const SYNC_EVERY_MS = 1000;
+/** A screen that lost a box's stream connects again for it, at most this often. */
+export const SCREEN_SYNC_EVERY_MS = 5000;
 
 export class TumbleStore {
   local: LocalBox | null = null;
@@ -107,8 +98,12 @@ export class TumbleStore {
   /** The seat this device plays, while it has a box this round. */
   mySeat: number | null = null;
   private t: TumbleRoom | null = null;
+  private truth: RoomView | null = null;
+  /** The server's clock minus this device's (ms). */
+  private offset = 0;
   private seats: number[] = [];
   private readonly store: RoomStore;
+  private readonly screen: boolean;
   private readonly now: () => number;
   private lastAsk = -Infinity;
   /** Asked for a sync and not had one yet. */
@@ -123,6 +118,7 @@ export class TumbleStore {
 
   constructor(o: TumbleStoreOptions) {
     this.store = o.room;
+    this.screen = o.screen ?? false;
     this.now = o.now ?? (() => performance.timeOrigin + performance.now());
   }
 
@@ -141,6 +137,17 @@ export class TumbleStore {
       live: (m) => this.onLive(m),
     });
     this.onRoom(this.store.state.truth);
+    // What came before this store listened: from the last sync on (the one a device or screen gets
+    // on connecting), so nothing already applied is applied twice.
+    const kept = this.store.recentLive();
+    let from = -1;
+    for (let i = kept.length - 1; i >= 0; i--) {
+      if (kept[i]!.t === "tumbleSync") {
+        from = i;
+        break;
+      }
+    }
+    if (from >= 0) for (const m of kept.slice(from)) this.onLive(m);
   }
 
   stop(): void {
@@ -181,14 +188,24 @@ export class TumbleStore {
 
   /** Ms until the round starts (0 once it has). */
   countdown(now = this.now()): number {
-    return this.t && (this.t.status === "countdown" || this.t.status === "playing") ? Math.max(0, this.t.startsAt - now) : 0;
+    return this.t && (this.t.status === "countdown" || this.t.status === "playing") ? Math.max(0, this.startsAt() - now) : 0;
+  }
+
+  /** The server's clock now, from the device's and the last snapshot's `now`. */
+  serverNow(): number {
+    return this.now() + this.offset;
+  }
+
+  /** When the round starts, on this device's clock. */
+  private startsAt(): number {
+    return (this.t?.startsAt ?? 0) - this.offset;
   }
 
   /** A seat's box as shown, or null for a seat not in the round. */
   view(seat: number, now = this.now()): BoxView | null {
     const t = this.t;
     if (!t) return null;
-    const elapsed = now - t.startsAt;
+    const elapsed = now - this.startsAt();
     if (this.local && seat === this.mySeat) {
       const v = this.local.view();
       return { ...v, state: this.seatState(seat), gravity: gravityMs(elapsed, v.catnipLeft > 0) };
@@ -224,10 +241,13 @@ export class TumbleStore {
   private askSync(now = false): void {
     if (this.r === null) return;
     const at = this.now();
-    if (!now && this.asked && at - this.lastAsk < SYNC_EVERY_MS) return;
+    // A screen may not send `tumble`: it gets every box again by connecting again.
+    const every = this.screen ? SCREEN_SYNC_EVERY_MS : SYNC_EVERY_MS;
+    if (!now && this.asked && at - this.lastAsk < every) return;
     this.asked = true;
     this.lastAsk = at;
-    this.store.send({ t: "tumble", r: this.r, ev: [] });
+    if (this.screen) this.store.socket.reconnectNow();
+    else this.store.send({ t: "tumble", r: this.r, ev: [] });
   }
 
   private changed(): void {
@@ -238,6 +258,11 @@ export class TumbleStore {
     const t = isTumble(room) ? tumbleOf(room) : null;
     const was = this.t;
     this.t = t;
+    // A new snapshot: keep how far the server's clock is from this device's (spec §6.2, `now`).
+    if (room !== this.truth) {
+      this.truth = room;
+      if (typeof t?.now === "number") this.offset = t.now - this.now();
+    }
     // The round's shape changed (a countdown, its end, a winner, someone away or out): draw again.
     const shape = (x: TumbleRoom | null) => (x ? `${x.r}|${x.status}|${x.winner}|${x.outs.join()}|${x.away.join()}|${x.left.join()}|${x.wins.join()}` : "");
     if (shape(was) !== shape(t)) this.changed();
@@ -267,9 +292,9 @@ export class TumbleStore {
     this.local =
       this.mySeat === null
         ? null
-        : new LocalBox({ r: t.r, seat: this.mySeat, roundSeed, trickSeed: seeds[this.mySeat] as Seed, startsAt: t.startsAt, send: (ev) => this.send(ev), now: this.now });
+        : new LocalBox({ r: t.r, seat: this.mySeat, roundSeed, trickSeed: seeds[this.mySeat] as Seed, startsAt: this.startsAt(), send: (ev) => this.send(ev), now: this.now });
     if (this.local && this.hidden) this.local.hide();
-    this.replay = new Replay({ r: t.r, roundSeed, trickSeeds: seeds, seats: this.seats.filter((s) => s !== this.mySeat), startsAt: t.startsAt, now: this.now });
+    this.replay = new Replay({ r: t.r, roundSeed, trickSeeds: seeds, seats: this.seats.filter((s) => s !== this.mySeat), startsAt: this.startsAt(), now: this.now });
     this.asked = false;
     const early = this.early.filter((m) => m.r === t.r);
     this.early = [];
