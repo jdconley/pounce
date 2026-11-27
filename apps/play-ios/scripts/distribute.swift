@@ -3,7 +3,8 @@
 //
 //   scripts/distribute.swift --dry-run       read only: print the notes and every change it would make
 //   scripts/distribute.swift --build 202611020653 --group "Family and Friends"
-//   scripts/distribute.swift --status        read only: each platform's latest builds and their beta review state
+//   scripts/distribute.swift --status        read only: the latest builds, their beta review state and
+//                                            the App Store versions in review
 //   scripts/distribute.swift --review-only --build 202611270111   only submit a build already in the group
 //                                            for beta app review (when an earlier build's review held it up)
 //
@@ -368,7 +369,7 @@ do {
     for (name, train) in [("iPhone", "IOS"), ("Apple TV", "TV_OS")] {
       let json = try await asc.get("/v1/builds", [
         "filter[app]": appID, "filter[preReleaseVersion.platform]": train,
-        "sort": "-uploadedDate", "limit": "4", "include": "buildBetaDetail",
+        "sort": "-uploadedDate", "limit": "8", "include": "buildBetaDetail",
       ])
       let details = (json["included"] as? [JSON] ?? []).filter { $0["type"] as? String == "buildBetaDetails" }
       var stateByID: [String: String] = [:]
@@ -384,6 +385,18 @@ do {
         let uploaded = attributes(build)["uploadedDate"] as? String ?? ""
         print("\(name) build \(version): processing \(processing), beta review \(review), uploaded \(uploaded)")
         summary += "| \(name) | \(version) | \(processing) | \(review) |\n"
+      }
+    }
+    // The App Store versions in flight, so a watcher sees when a release clears review
+    // (WAITING_FOR_REVIEW, IN_REVIEW, PENDING_DEVELOPER_RELEASE, READY_FOR_DISTRIBUTION, REJECTED, ...).
+    summary += "\n### App Store versions\n\n| App | Version | State |\n|---|---|---|\n"
+    for (name, train) in [("iPhone", "IOS"), ("Apple TV", "TV_OS")] {
+      let versions = list(try await asc.get("/v1/apps/\(appID)/appStoreVersions", ["filter[platform]": train, "limit": "3"]))
+      for version in versions {
+        let number = attributes(version)["versionString"] as? String ?? id(version)
+        let state = attributes(version)["appVersionState"] as? String ?? attributes(version)["appStoreState"] as? String ?? "unknown"
+        print("\(name) App Store \(number): \(state)")
+        summary += "| \(name) | \(number) | \(state) |\n"
       }
     }
     if let path = ProcessInfo.processInfo.environment["GITHUB_STEP_SUMMARY"],
