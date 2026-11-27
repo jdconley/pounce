@@ -62,7 +62,7 @@ Record yours here as you go, as the Birdwatch web plan did.
 
 ### Task 5: Joining, shelf, lobby, remove
 
-**Files:** The `/play/e/<CODE>` route (scan opens it), "Join with code" takes 6 or 8 characters, the shelf poster "Starts on the TV" with a tip, the lobby timer pills (host), the seat menu's Remove (host), "Scan the code on the TV." on `not_near`.
+**Files:** The `/play/e/<CODE>` route (scan opens it), "Join with code" takes 5 or 8 characters, the shelf poster "Starts on the TV" with a tip, the lobby timer pills (host), the seat menu's Remove (host), "Scan the code on the TV." on `not_near`.
 - [ ] e2e: a stale key is refused; a removed phone stays out. Commit.
 
 ### Task 6: Full games, gates and the PR
