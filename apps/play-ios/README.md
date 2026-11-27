@@ -522,8 +522,11 @@ sets `ITSAppUsesNonExemptEncryption` to false, so normally it isn't), sets "What
 commit subjects since the group's previous build (CI, docs and chore commits are left out; with no
 previous build, a short default), adds the build to the group and, for an external group, submits it
 for beta app review when App Store Connect says the build is ready for one. Apple reviews the first
-build of a version; later builds are usually approved in minutes. The run's summary shows the notes
-that went out.
+build of a version; later builds are usually approved in minutes. Only one build of a version can be
+in beta review at a time. While the first one is, a later build's submission is refused (422,
+"Another build in the same train is already in beta review"). The run still passes: the build is
+uploaded and in the group, the summary says it waits, and `--review-only --build N` sends it once
+the first clears. The run's summary shows the notes that went out.
 
 Run it locally with the same three `ASC_*` variables as `testflight.sh`:
 
@@ -531,6 +534,7 @@ Run it locally with the same three `ASC_*` variables as `testflight.sh`:
 scripts/distribute.swift --dry-run                         # read only: notes and planned changes
 scripts/distribute.swift --status                          # read only: latest builds and their beta review state
 scripts/distribute.swift --build 202611020653              # distribute that build to Family and Friends
+scripts/distribute.swift --review-only --build 202611020653   # only its beta app review (it's in the group)
 scripts/distribute.swift --build 202611020653 --group "Family and Friends" --since 2026-11-01
 ```
 
