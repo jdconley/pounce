@@ -1,6 +1,7 @@
 import { mkdirSync } from "node:fs";
 
 import { expect, test, type Page } from "@playwright/test";
+import { SAMPLE } from "@pounce/play-api/daily/nine-lives/samples";
 
 import { dailyPhone, firstMove, type DailyPhone } from "./daily-phone";
 import { closeAll, newPlayer } from "./helpers";
@@ -336,6 +337,8 @@ function familyBoard(): BoardAnswer {
   const [sniff, nineLives, , boxFort] = answer.games;
   sniff!.rows[2] = { ...sniff!.rows[2]!, rank: 2, result: { ...sniff!.rows[2]!.result!, guesses: sniff!.rows[1]!.result!.guesses } };
   nineLives!.rows[1] = { ...nineLives!.rows[1]!, result: { ...nineLives!.rows[1]!.result!, timeMs: 3_725_000 } };
+  // Out of lives, the longest words a Nine Lives row says.
+  nineLives!.rows[4] = { ...nineLives!.rows[4]!, result: { ...nineLives!.rows[4]!.result!, outcome: "missed", progress: 0.6 } };
   boxFort!.rows[0] = { ...boxFort!.rows[0]!, result: { ...boxFort!.rows[0]!.result!, points: 12_840 } };
   return answer;
 }
@@ -374,6 +377,7 @@ test("a whole family fits each game's board, nothing under 28 at 1080p", async (
   await expect(page.locator(".tv-dish-crowns img")).toHaveCount(2);
   await expect(page.locator('.tv-board-game[data-game="box-fort"] .tv-row-result').first()).toHaveText("12,840");
   await expect(page.locator('.tv-board-game[data-game="nine-lives"] .tv-row-result').nth(1)).toHaveText("1:02:05");
+  await expect(page.locator('.tv-board-game[data-game="nine-lives"] .tv-row-result').nth(4)).toHaveText("Out of lives");
   const smallest = await page.locator(".tv-board-row .tv-row-name, .tv-board-row .tv-row-result, .tv-board-row .tv-rank").evaluateAll((els) => Math.min(...els.map((e) => parseFloat(getComputedStyle(e).fontSize))));
   expect(smallest, "the smallest row text, px at 1080p").toBeGreaterThanOrEqual(28);
   await shot(page, "board-family");
@@ -396,3 +400,37 @@ test("a game this build has no watch view for shows a placeholder while someone 
   await expect(watching.locator(".tv-watch-placeholder")).toBeVisible();
   await context.close();
 });
+
+test("watching Nine Lives run out of lives: lives, the solution, and Out of lives", async ({ browser }) => {
+  const context = await browser.newContext({ viewport: TV_VIEWPORT, isMobile: false, hasTouch: false });
+  await context.addInitScript(() => localStorage.setItem("pounce.tv.board", JSON.stringify({ token: "F".repeat(22), until: Date.now() + 86_400_000 })));
+  const open = SAMPLE.givens.flatMap((d, i) => (d === 0 ? [i] : []));
+  const cells = SAMPLE.givens.map((d, i) => (d !== 0 || i % 3 === 0 ? SAMPLE.solution[i]! : 0));
+  const wrong = open.filter((i) => cells[i] === 0).slice(0, 3).map((i) => ({ i, d: (SAMPLE.solution[i]! % 9) + 1 }));
+  const frame = (state: object) => JSON.stringify({ t: "watch", player: "pr_mom", game: "nine-lives", puzzle: { givens: SAMPLE.givens }, state: { cells, hinted: [], rules: "lives", hintsLeft: 2, ...state } });
+  let socket: { send: (m: string) => void } | null = null;
+  await context.routeWebSocket(/\/v1\/daily\/board\/ws/, (ws) => {
+    socket = ws;
+    ws.send(JSON.stringify({ t: "board", board: familyBoard() }));
+    ws.send(JSON.stringify({ t: "watchOffer", player: "pr_mom", name: "Mom", cat: 3, game: "nine-lives" }));
+    ws.send(frame({ lives: 1, wrong: wrong.slice(0, 2) }));
+  });
+  const page = await tvPage(context);
+  await expect(page.getByRole("button", { name: "Not now" })).toBeFocused();
+  await page.keyboard.press("ArrowLeft");
+  await page.keyboard.press("Enter");
+  const watching = page.locator('.tv-watch[data-game="nine-lives"]');
+  await expect(watching.locator(".nl-lives")).toHaveAccessibleName("1 life left");
+  await expect(watching.locator(".nl-watch-line")).toHaveText("2 hints left");
+  await expect(watching.locator(".nl-clash")).toHaveCount(2);
+  await shot(page, "watch-nine-lives-lives");
+  const send = (m: string) => (socket as unknown as { send: (m: string) => void }).send(m);
+  send(frame({ lives: 0, wrong, solution: SAMPLE.solution }));
+  send(JSON.stringify({ t: "watchEnd", player: "pr_mom", result: { game: "nine-lives", date: "2026-11-23", number: 12, outcome: "missed", timeMs: 240_000, hints: 1, progress: 0.4, tooFast: false } }));
+  await expect(page.locator(".tv-watch-ended-title")).toHaveText("Out of lives");
+  await expect(watching.locator(".nl-answer")).toHaveCount(cells.filter((d) => d === 0).length);
+  await expect(watching.locator(".nl-watch-line")).toHaveText("Out of lives");
+  await shot(page, "watch-nine-lives-out");
+  await context.close();
+});
+

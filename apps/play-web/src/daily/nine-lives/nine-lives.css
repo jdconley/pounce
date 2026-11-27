@@ -53,18 +53,24 @@
   margin-top: 16px;
 }
 
+/* Three across the board's width at any text size: the words never outgrow their third. */
 .nl-tools .btn {
   flex: 1;
   min-width: 0;
   padding-inline: 8px;
+  font-size: min(clamp(1.15rem, 4.6vw, 1.45rem), var(--nl-w) / 15);
 }
 
 /* Tablets and laptops: full-size buttons beside a big quilt. */
 @container (min-width: 600px) {
   .nl-tools .btn.small {
     min-height: 58px;
-    font-size: 1.4rem;
+    font-size: min(1.4rem, var(--nl-w) / 15);
     box-shadow: 0 6px 0 var(--ink), inset 0 3px 0 rgba(255, 255, 255, 0.45);
+  }
+
+  .nl-has-lives .nl-lives {
+    --nl-life: 46px;
   }
 
   .nl-tools .nl-hints-left {

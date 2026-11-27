@@ -19,13 +19,16 @@ export function clock(ms: number): string {
 
 const points = (n: number) => `${n.toLocaleString("en-US")} ${n === 1 ? "point" : "points"}`;
 
-/** How a run that didn't end solved ended, in a word or two: Nine Lives' miss is out of lives. */
-export function outcomeWords(r: Pick<DailyResult, "game" | "outcome">): string {
+/**
+ * How a run that didn't end solved ended, in a word or two: Nine Lives' miss is out of lives.
+ * `short`: for the tightest spots (Home's Today tiles), "No lives".
+ */
+export function outcomeWords(r: Pick<DailyResult, "game" | "outcome">, short = false): string {
   switch (r.outcome) {
     case "solved":
       return "Solved";
     case "missed":
-      return r.game === "nine-lives" ? "Out of lives" : "Missed";
+      return r.game !== "nine-lives" ? "Missed" : short ? "No lives" : "Out of lives";
     case "gaveUp":
       return "Gave up";
     case "closed":
@@ -36,7 +39,7 @@ export function outcomeWords(r: Pick<DailyResult, "game" | "outcome">): string {
 }
 
 /** A result in a few words: "4 of 6", "4:05", "1,240 points", "Missed", "Out of lives". */
-export function resultWords(r: DailyResult): string {
+export function resultWords(r: DailyResult, short = false): string {
   if (typeof r.points === "number") return points(r.points);
   switch (r.outcome) {
     case "solved":
@@ -44,7 +47,7 @@ export function resultWords(r: DailyResult): string {
     case "missed":
     case "gaveUp":
     case "closed":
-      return outcomeWords(r);
+      return outcomeWords(r, short);
     default:
       return clock(r.timeMs);
   }

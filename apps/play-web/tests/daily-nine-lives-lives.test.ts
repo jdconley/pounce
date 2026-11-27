@@ -267,7 +267,7 @@ describe("the play screen under the lives rules", () => {
     mount(fakeSession({ cells: [...SAMPLE_GIVENS], hinted: [] }).session);
     expect(root!.querySelector(".nl-lives")).toBeNull();
     expect(hintButton().getAttribute("aria-label")).toBe("Hint");
-    expect(hintButton().textContent).toBe("Hint");
+    expect(hintButton().textContent?.trim()).toBe("Hint");
   });
 
   test("every set goes urgent; a right one locks when the answer comes", async () => {
@@ -361,6 +361,9 @@ describe("Out of lives, in words", () => {
     expect(endTitle(result("nine-lives", "solved"))).toBe("Solved");
     expect(resultWords(result("nine-lives", "missed"))).toBe("Out of lives");
     expect(resultWords(result("sniff", "missed"))).toBe("Missed");
+    // Home's Today tiles are narrow.
+    expect(resultWords(result("nine-lives", "missed"), true)).toBe("No lives");
+    expect(resultWords(result("sniff", "missed"), true)).toBe("Missed");
     expect(outcomeWords(result("nine-lives", "gaveUp"))).toBe("Gave up");
     expect(tvResultWords(result("nine-lives", "missed"))).toBe("Out of lives");
     expect(tvResultWords(result("sniff", "missed"))).toBe("Missed");
