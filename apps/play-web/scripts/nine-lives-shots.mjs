@@ -131,8 +131,9 @@ for (const size of SIZES) {
     await p.put(wrongAt[2], wrongOf(wrongAt[2]));
     if (STEPS.includes("out")) {
       await p.shot("out-reveal", 900);
+      // The end comes over the board after the solution fills in (its CSS delay).
       await p.page.getByRole("heading", { name: /Out of lives|Missed|Solved/ }).waitFor({ timeout: 20_000 }).catch(() => {});
-      await p.shot("out", 1600);
+      await p.shot("out", 3600);
     }
     await p.ctx.close();
   }

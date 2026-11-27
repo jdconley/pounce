@@ -2,16 +2,27 @@ import { expect, type Page } from "@playwright/test";
 
 /** Reading and playing Nine Lives' board in a page, for its specs. */
 
-type Cell = { i: number; d: number; given: boolean; hint: boolean; clash: boolean };
+type Cell = { i: number; d: number; given: boolean; hint: boolean; clash: boolean; wrong: boolean; answer: boolean };
 
-/** The board as the cells' labels say it ("Row 1, column 2, 7, given"). */
+/**
+ * The board as the cells' labels say it ("Row 1, column 2, 7, given"). A wrong number ("..., 7,
+ * wrong") and the solution filled in ("..., 7, answer") read as `d` too, with their flag.
+ */
 export async function readBoard(page: Page): Promise<Cell[]> {
   return page.locator('.nl-board button[data-cell]').evaluateAll((els) =>
     els
       .map((el) => {
         const parts = (el.getAttribute("aria-label") ?? "").split(", ");
         const d = Number(parts[2]);
-        return { i: Number(el.getAttribute("data-cell")), d: Number.isInteger(d) ? d : 0, given: parts.includes("given"), hint: parts.includes("hint"), clash: parts.includes("clash") };
+        return {
+          i: Number(el.getAttribute("data-cell")),
+          d: Number.isInteger(d) ? d : 0,
+          given: parts.includes("given"),
+          hint: parts.includes("hint"),
+          clash: parts.includes("clash"),
+          wrong: parts.includes("wrong"),
+          answer: parts.includes("answer"),
+        };
       })
       .sort((a, b) => a.i - b.i),
   );
@@ -70,9 +81,31 @@ export async function openToday(page: Page): Promise<number[]> {
 /** Fills every open cell with its answer: tap the cell, press its number. */
 export async function fill(page: Page, solution: number[], between = 0) {
   for (const c of await readBoard(page)) {
-    if (c.d === solution[c.i]) continue;
+    if (c.d === solution[c.i] && !c.wrong) continue;
     await cell(page, c.i).click();
     await page.keyboard.press(String(solution[c.i]));
     if (between) await page.waitForTimeout(between);
   }
+}
+
+/** A digit that isn't cell `i`'s answer. */
+export const wrongDigit = (solution: number[], i: number): number => (solution[i]! % 9) + 1;
+
+/**
+ * Enters `d` in cell `i`, and waits for it on the board: placed, wrong, or (the last life) the
+ * solution's digit filled in.
+ */
+export async function enter(page: Page, i: number, d: number) {
+  await cell(page, i).click();
+  await page.keyboard.press(String(d));
+  await expect(cell(page, i)).toHaveAttribute("aria-label", new RegExp(`, (${d}(, wrong)?|\\d, answer)$`));
+}
+
+/** The lives left, as the counter says them. */
+export const lives = (page: Page) => page.getByRole("img", { name: /li(fe|ves) left$/ });
+
+/** Dismisses a tip, if one is up. */
+export async function dismissTip(page: Page) {
+  const x = page.getByRole("button", { name: "Dismiss tip" });
+  if (await x.isVisible().catch(() => false)) await x.click();
 }

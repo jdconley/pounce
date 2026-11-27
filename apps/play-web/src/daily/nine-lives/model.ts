@@ -33,8 +33,11 @@ export type BoardState = {
   solution?: number[];
 };
 
-/** What a moves answer reveals under the lives rules, one per wrong set, then the solution. */
-export type MoveReveal = { k: "wrong"; i: number; d: number; lives: number } | { k: "solution"; cells: number[] };
+/**
+ * What a moves answer reveals under the lives rules: one per wrong set. The one that leaves no
+ * lives also carries the solution.
+ */
+export type MoveReveal = { k: "wrong"; i: number; d: number; lives: number; solution?: number[] };
 
 export const LIVES = 3;
 export const HINTS = 3;

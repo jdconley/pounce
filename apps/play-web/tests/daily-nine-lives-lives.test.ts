@@ -330,10 +330,7 @@ describe("the play screen under the lives rules", () => {
     const i = open[0]!;
     click(cell(i));
     click(key(wrongOf(i)));
-    await fake.answer([
-      { k: "wrong", i, d: wrongOf(i), lives: 0 },
-      { k: "solution", cells: SAMPLE_SOLUTION },
-    ]);
+    await fake.answer([{ k: "wrong", i, d: wrongOf(i), lives: 0, solution: SAMPLE_SOLUTION }]);
     expect(root!.querySelector(".nl-not-quite")!.textContent).toBe("Out of lives");
     expect(cell(i).getAttribute("aria-label")).toMatch(new RegExp(`, ${right(i)}, answer$`));
     expect(root!.querySelectorAll(".nl-answer")).toHaveLength(open.length);

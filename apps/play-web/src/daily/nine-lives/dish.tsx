@@ -44,7 +44,7 @@ function Screen({ session, playing }: Props) {
 }
 
 /** Out of lives: the board fills in the solution for a moment before the end comes up. */
-const OUT_OF_LIVES_MS = 2600;
+const OUT_OF_LIVES_MS = 2000;
 
 const nineLives: DailyGame<Puzzle, BoardState, NineLivesMove, Reveal> = {
   id: "nine-lives",

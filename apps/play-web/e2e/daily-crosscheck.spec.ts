@@ -60,7 +60,7 @@ for (const plan of plans) {
     const who = await newPlayer(browser, "Crosscheck");
     const { page } = who;
     const t0 = await open(page, plan.game);
-    const end = page.getByRole("heading", { name: /^(Solved|Missed|Fort done)$/ });
+    const end = page.getByRole("heading", { name: /^(Solved|Missed|Out of lives|Fort done)$/ });
     for (const [k, move] of plan.moves.entries()) {
       await pace(page, t0, k, plan.paceMs);
       if (plan.game === "nine-lives") {

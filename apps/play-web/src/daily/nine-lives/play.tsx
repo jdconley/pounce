@@ -65,15 +65,15 @@ export function NineLivesPlay(props: { puzzle: Puzzle; state?: BoardState; drive
   // The server's board wins when it replaces ours.
   useEffect(() => props.driver.resyncs?.((state) => setView((v) => adopt(v, state))), [props.driver]);
 
-  // Lives: the server calls a number wrong (a life goes), or fills in the solution.
+  // Lives: the server calls a number wrong (a life goes); the last life brings the solution.
   useEffect(
     () =>
       props.driver.reveals?.((r) => {
-        if (r.k === "wrong") {
-          setView((v) => wrongAt(v, r));
-          play("nope", 0.6);
-          buzz("nope");
-        } else setView((v) => revealSolution(v, r.cells));
+        if (r.k !== "wrong") return;
+        const { solution } = r;
+        setView((v) => (solution ? revealSolution(wrongAt(v, r), solution) : wrongAt(v, r)));
+        play("nope", 0.6);
+        buzz("nope");
       }),
     [props.driver],
   );
@@ -196,7 +196,7 @@ export function NineLivesPlay(props: { puzzle: Puzzle; state?: BoardState; drive
               aria-label={view.hintsLeft === null ? "Hint" : `Hint, ${view.hintsLeft} left`}
               onClick={() => void askHint()}
             >
-              Hint
+              Hint{" "}
               {view.hintsLeft === null ? null : (
                 <span class="nl-hints-left" aria-hidden="true">
                   {view.hintsLeft}

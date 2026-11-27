@@ -66,6 +66,14 @@
     font-size: 1.4rem;
     box-shadow: 0 6px 0 var(--ink), inset 0 3px 0 rgba(255, 255, 255, 0.45);
   }
+
+  .nl-tools .nl-hints-left {
+    top: -12px;
+    right: -4px;
+    min-width: 34px;
+    height: 34px;
+    font-size: 20px;
+  }
 }
 
 @container (min-aspect-ratio: 23 / 20) {
@@ -88,7 +96,7 @@
   }
 
   .nl-has-lives .nl-lives {
-    --nl-life: 46px;
+    --nl-life: 58px;
   }
 
   .nl-keys {
@@ -347,7 +355,7 @@ span.nl-cell {
 /* A lost life: the head's ghost, where it was. */
 .nl-lost .nl-cat-rim {
   fill: none;
-  stroke: rgba(255, 255, 255, 0.32);
+  stroke: rgba(255, 255, 255, 0.42);
   stroke-width: 2.5;
   stroke-dasharray: 4 3.4;
   transform: none;
