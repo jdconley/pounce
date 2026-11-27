@@ -116,6 +116,7 @@ The server can't prove where a device is. So the rules make the TV the only door
 
 - **It stops:** a stranger or relative elsewhere joining from a link, a shared room code, an old screenshot, or a code read out over the phone more than a minute ago. It stops drawings from ever reaching a phone, a second TV or anyone outside the room.
 - **It doesn't stop:** someone in the room texting a fresh photo of the QR to a friend, who scans it within the minute. That friend gets a seat, but sees no drawings and can't type anything. On their turn they could draw on the family's TV. The host removes them from the seat menu, and they stay out (§10.2).
+- **It slows, but doesn't stop, guessing the typed code.** Someone who already has the room code, guessing from many devices and addresses, gets about 60 typed guesses per key lifetime (30 per key's 30 seconds before typing closes, over a key's 60) at 3 characters from the room-code alphabet. The prize is a seat that sees no drawing, and the host can remove it.
 - **Rejected: a same-network check.** Comparing the phone's public address with the TV's would lock out a guest on cellular data, misfire on IPv6 and carrier networks, and still prove nothing. **(call)**
 - **Rejected: Bluetooth, sound or other local proximity signals.** None works in a browser, and the Apple TV can't offer one to a phone without new permissions and pairing. **(call)**
 

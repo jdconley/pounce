@@ -84,3 +84,18 @@ test.each(Object.entries(PINNED_DAILY))("fixtures/%s is byte for byte what the D
   const bytes = readFileSync(new URL(`../fixtures/${file}`, import.meta.url));
   expect(createHash("sha256").update(bytes).digest("hex")).toBe(sha256);
 });
+
+/**
+ * Purrtrait's samples (`tests/purrtrait-protocol-fixtures.test.ts`), pinned when the server half
+ * landed: the web player, the browser TV page, the app and the Apple TV app build against them. A
+ * change to one is a change to the wire, made here on purpose.
+ */
+const PINNED_PURRTRAIT: Record<string, string> = {
+  "protocol/purrtrait-server-messages.json": "c737266e2c7cb96a652ca2a0d945b90900b2ede533dbeddf5032a2bc8cf3ee70",
+  "protocol/purrtrait-client-messages.json": "187b3b97f0ef5b65a2b19f2dd097c6402d44cbaa6977b773cffeb01d5b1c2c24",
+};
+
+test.each(Object.entries(PINNED_PURRTRAIT))("fixtures/%s is byte for byte what Purrtrait's clients decode", (file, sha256) => {
+  const bytes = readFileSync(new URL(`../fixtures/${file}`, import.meta.url));
+  expect(createHash("sha256").update(bytes).digest("hex")).toBe(sha256);
+});

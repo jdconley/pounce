@@ -790,7 +790,7 @@ async function handle(request: Request, env: Env, ctx?: ExecutionContext): Promi
   }
   if (method === "GET" && pathname === "/og/room.jpg") return ogImage();
   if ((method === "GET" || method === "HEAD") && isWebPlayerPath(pathname)) return (await webPlayer(request, env.ASSETS)) ?? notFound();
-  if (method === "GET" && pathname === "/privacy") return privacyPage(consentOn(env), dailyOn(env));
+  if (method === "GET" && pathname === "/privacy") return privacyPage(consentOn(env), dailyOn(env), easelOn(env));
   // Birdwatch on the site follows GAMES: the pages name it only while its tables can be dealt.
   const birdwatch = () => gamesOn(env).includes("birdwatch");
   if (method === "GET" && pathname === "/support") return supportPage(dailyOn(env), birdwatch());

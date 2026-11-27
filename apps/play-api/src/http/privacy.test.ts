@@ -77,3 +77,34 @@ describe("the Daily Dish in the privacy policy", () => {
     }
   });
 });
+
+describe("Purrtrait in the privacy policy (design §8.2)", () => {
+  const text = (html: string) => html.replace(/<[^>]+>/g, "");
+  const KEPT = "Drawings in Purrtrait go from the drawer's phone to the table's TV through our server, which keeps them only until the turn ends. They are never saved, shown on another phone, or shared.";
+  const CHILD = "A child's drawings show only on the table's TV and are gone when the turn ends.";
+
+  test("says nothing of drawings while Purrtrait tables can't be dealt", async () => {
+    for (const html of [await privacyPage().text(), await privacyPage(false).text(), await privacyPage(true, true).text()]) {
+      expect(html).not.toMatch(/purrtrait|\bdrawings?\b/i);
+      expect(html).not.toContain("<!--");
+    }
+  });
+
+  test("with Purrtrait on: what happens to a drawing, under what we keep and in the notice for parents", async () => {
+    for (const consent of [true, false]) {
+      for (const daily of [true, false]) {
+        const html = await privacyPage(consent, daily, true).text();
+        expect(html).not.toContain("<!--");
+        const kept = html.slice(html.indexOf("<h2>What we keep</h2>"), html.indexOf('<h2 id="web">'));
+        expect(text(kept)).toContain(KEPT);
+        const coppa = html.slice(html.indexOf('<section id="coppa">'), html.indexOf("</section>"));
+        expect(text(coppa)).toContain(CHILD);
+        // Each said once, and nothing else changes.
+        expect(text(html).split(KEPT)).toHaveLength(2);
+        expect(text(html).split(CHILD)).toHaveLength(2);
+        const off = await privacyPage(consent, daily, false).text();
+        expect(html.replace(/<li><strong>Drawings in Purrtrait<\/strong>[^\n]*\n/, "").replace(`<p>${CHILD}</p>\n`, "")).toBe(off);
+      }
+    }
+  });
+});

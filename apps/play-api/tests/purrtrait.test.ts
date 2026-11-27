@@ -1,8 +1,12 @@
 import { afterEach, beforeAll, describe, expect, test } from "vitest";
 
+import { WORDS } from "../src/purrtrait/words";
+
 import { BASE, bundle, call, Client, eventually, mint, newPerson, profile, settle, worker, type Device, type Person, type Snapshot } from "./play-helpers";
 
+import type { Stored } from "./room-storage-entry";
 import type { ServerMessage } from "../src/protocol";
+import type { InkOp } from "../src/purrtrait/ink";
 import type { Miniflare } from "miniflare";
 
 /** Purrtrait through the Worker and the room's Durable Object: same room only (design §5). */
@@ -10,7 +14,8 @@ let script = "";
 const open: Miniflare[] = [];
 
 beforeAll(async () => {
-  script = await bundle("../src/index.ts");
+  // The real worker and room; the room can also hand a test every byte it stored.
+  script = await bundle("./room-storage-entry.ts");
 });
 
 afterEach(async () => {
@@ -428,5 +433,95 @@ describe("the links to a Purrtrait table", { timeout: 30_000 }, () => {
     expect(await components(await start({ purrtraitAppLinks: true }))).toEqual(["/j/*", "/p/*", "/e/*"]);
     // Not while Purrtrait can't be dealt, whatever the flag says.
     expect(await components(await start({ purrtraitAppLinks: true, games: "tiles" }))).not.toContain("/e/*");
+  });
+});
+
+describe("a drawing is never stored (design §6.5, §8.1)", { timeout: 30_000 }, () => {
+  const stored = async (mf: Miniflare, code: string) => (await (await mf.dispatchFetch(`${BASE}/__test/room-storage?code=${code}`)).json()) as Stored;
+
+  /** Every string and every key in what the room stored, its SQL columns' JSON opened up. */
+  function contents(dump: Stored): { strings: Set<string>; keys: Set<string>; inkLike: unknown[][] } {
+    const strings = new Set<string>();
+    const keys = new Set<string>();
+    const inkLike: unknown[][] = [];
+    const walk = (v: unknown): void => {
+      if (typeof v === "string") {
+        strings.add(v);
+        if (/^[[{]/.test(v)) {
+          try {
+            walk(JSON.parse(v));
+          } catch {
+            // Not JSON: a plain string, already kept.
+          }
+        }
+      } else if (Array.isArray(v)) {
+        if (["s", "p", "u", "c"].includes(v[0] as string) && v.slice(1).every((n) => typeof n === "number")) inkLike.push(v);
+        v.forEach(walk);
+      } else if (v !== null && typeof v === "object") {
+        for (const [k, inner] of Object.entries(v)) {
+          keys.add(k);
+          walk(inner);
+        }
+      }
+    };
+    walk(dump.kv);
+    walk(dump.sql);
+    return { strings, keys, inkLike };
+  }
+
+  test("storage after a full game holds no ink and no unrevealed word", async () => {
+    const mf = await start({ devSpeed: 10 });
+    const [tv, a, b] = [await mint(mf), await mint(mf), await mint(mf)];
+    const { code, screen } = await tvTable(mf, tv);
+    const phones = [await sit(mf, code, screen, a, 0, newPerson("Alice", 1)), await sit(mf, code, screen, b, 1, newPerson("Bo", 2))];
+    phones[0]?.send({ t: "start" });
+    const words = new Set(WORDS.map((w) => w.word));
+    const revealed = new Set<string>();
+    let midTurn: Stored | null = null;
+    // Two seats, two rounds: four turns, each drawn and guessed.
+    for (let turn = 0; turn < 4; turn++) {
+      const s = await screen.until((m) => m.room.purrtrait?.phase === "choosing" && m.room.purrtrait.turn.endsWith(`:${turn}`));
+      const drawer = s.room.purrtrait?.drawer as number;
+      const phone = phones[drawer] as Client;
+      phone.send({ t: "act", seat: drawer, action: { type: "choose", level: turn % 2 === 0 ? "tricky" : "easy" } });
+      const drawing = await phone.until((m) => m.room.purrtrait?.phase === "drawing" && m.room.purrtrait.youDraw === true);
+      const key = drawing.room.purrtrait?.turn as string;
+      const strokes: InkOp[][] = [[["s", 0, turn, 1, 384, 300, 40, 0, 30, 30]], [["p", 0, 2, 2, -5, 9]], [["s", 1, 3, 2, 100, 100, 7, 7]], [["u", 1]]];
+      for (const ops of strokes) phone.send({ t: "ink", seat: drawer, turn: key, ops });
+      // The TV has the whole drawing: every message was taken and relayed.
+      await eventually(() => screen.received.filter((m) => m.t === "ink" && m.turn === key).length, (n) => n === strokes.length);
+      // While the drawing is live it is in the room's memory, and nowhere in its storage.
+      if (turn === 0) {
+        midTurn = await stored(mf, code);
+        const { strings, keys, inkLike } = contents(midTurn);
+        expect(keys.has("ops")).toBe(false);
+        expect(inkLike).toEqual([]);
+        expect([...strings].filter((v) => words.has(v))).toEqual([]);
+      }
+      phone.send({ t: "act", seat: drawer, action: { type: "gotIt", seat: 1 - drawer } });
+      const reveal = await screen.until((m) => m.room.purrtrait?.phase === "reveal" || m.room.purrtrait?.phase === "over");
+      revealed.add(reveal.room.purrtrait?.last?.word as string);
+    }
+    await screen.until((m) => m.room.status === "over");
+    const dump = await stored(mf, code);
+    // The room did store its game (so the check reads real storage), with its revealed words.
+    expect(midTurn).not.toBeNull();
+    expect(Object.keys(dump.sql)).toContain("room");
+    const { strings, keys, inkLike } = contents(dump);
+    expect(strings.has("purrtrait")).toBe(true);
+    expect(keys.has("ops")).toBe(false);
+    expect(inkLike).toEqual([]);
+    const storedWords = [...strings].filter((v) => words.has(v));
+    expect(storedWords.length).toBeGreaterThan(0);
+    for (const word of storedWords) expect(revealed.has(word), word).toBe(true);
+  });
+});
+
+describe("the privacy policy follows the flag (design §8.2)", { timeout: 30_000 }, () => {
+  test("/privacy says what happens to a drawing only while Purrtrait tables can be dealt", async () => {
+    const page = async (mf: Miniflare) => (await mf.dispatchFetch(`${BASE}/privacy`)).text();
+    expect(await page(await start())).toContain("keeps them only until the turn ends");
+    expect(await page(await start({ games: "tiles" }))).not.toContain("Purrtrait");
+    expect(await page(await start({ tv: false }))).not.toContain("Purrtrait");
   });
 });
