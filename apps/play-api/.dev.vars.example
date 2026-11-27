@@ -1,5 +1,5 @@
 # Copy to .dev.vars (gitignored). Any 64+ hex chars.
 TOKEN_SECRET=
-# Games beyond Cat Tower that rooms may be created for, comma separated. Production lists the
-# tile game, Birdwatch and Toy Tumble (wrangler.jsonc); local dev adds Purrtrait (off in production).
+# Games beyond Cat Tower that rooms may be created for, comma separated. The same as production's
+# (wrangler.jsonc): the tile game, Birdwatch, Toy Tumble and Purrtrait.
 GAMES=tiles,birdwatch,tumble,purrtrait

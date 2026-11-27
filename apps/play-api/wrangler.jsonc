@@ -90,11 +90,12 @@
     // told a tile table doesn't exist. Emptying it again stops new tile tables (Play again
     // answers `game_off`); tables already dealt play to their end. "birdwatch" since the web
     // player and version 1.3 (in TestFlight) draw it (Birdwatch design §8); 1.2 and older don't
-    // list it, so they never see a Birdwatch table. "tumble" (Toy Tumble) is on for the server
-    // only: the web player hides it until its build flag WEB_TUMBLE is on, and an iOS or tvOS
-    // app below 1.4 never gets it whatever it lists (`GAME_MIN_APP`), so the only tables are the
-    // latency tool's while it is measured on real networks (Toy Tumble design §9.5).
-    "GAMES": "tiles,birdwatch,tumble",
+    // list it, so they never see a Birdwatch table. "tumble" (Toy Tumble) and "purrtrait" play in
+    // the web player, which the deploy builds with WEB_TUMBLE and WEB_PURRTRAIT on, and on the
+    // browser TV page; an iOS or tvOS app below 1.4 never gets either, whatever it lists
+    // (`GAME_MIN_APP`). Only a TV makes a Purrtrait table, so it needs TV on as well
+    // (docs/tv-protocol.md, "Switching it on"); PURRTRAIT_APPLINKS stays off until 1.4.
+    "GAMES": "tiles,birdwatch,tumble,purrtrait",
     // App updates (docs/superpowers/specs/2026-11-12-app-updates-design.md). The oldest app
     // version the server still supports, e.g. "1.1": an app below it is told to update, once the
     // App Store has a version at least that new. Empty: every version is supported, and nothing

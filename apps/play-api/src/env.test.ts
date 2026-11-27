@@ -2,7 +2,7 @@ import { readFileSync } from "node:fs";
 
 import { describe, expect, it } from "vitest";
 
-import { dailyOn, devSpeed, tvAppLinksOn, tvOn } from "./env";
+import { dailyOn, devSpeed, purrtraitAppLinksOn, tvAppLinksOn, tvOn } from "./env";
 import { gamesOn } from "./games";
 import { liveOn, notifyOn, streaksOn, trophyOn } from "./streaks/profile";
 
@@ -29,14 +29,19 @@ describe("devSpeed", () => {
 });
 
 describe("GAMES in production", () => {
-  it("is listed in wrangler.jsonc and deals Cat Tower, the tile game, Birdwatch and Toy Tumble", () => {
+  it("is listed in wrangler.jsonc and deals Cat Tower, the tile game, Birdwatch, Toy Tumble and Purrtrait", () => {
     const config = readFileSync(new URL("../wrangler.jsonc", import.meta.url), "utf8");
-    const value = /"GAMES"\s*:\s*"([^"]*)"/.exec(config)?.[1];
-    expect(value).toBe("tiles,birdwatch,tumble");
-    expect(gamesOn({ GAMES: value })).toEqual(["cat-tower", "tiles", "birdwatch", "tumble"]);
+    const read = (key: string) => new RegExp(`"${key}"\\s*:\\s*"([^"]*)"`).exec(config)?.[1];
+    const value = read("GAMES");
+    expect(value).toBe("tiles,birdwatch,tumble,purrtrait");
+    expect(gamesOn({ GAMES: value })).toEqual(["cat-tower", "tiles", "birdwatch", "tumble", "purrtrait"]);
+    // Only a TV makes a Purrtrait table, so TV is on too. The TV's QR opens the web player, not
+    // the app, until an App Store version draws Purrtrait (1.4).
+    expect(tvOn({ TV: read("TV") })).toBe(true);
+    expect(purrtraitAppLinksOn({ PURRTRAIT_APPLINKS: read("PURRTRAIT_APPLINKS") })).toBe(false);
   });
 
-  it("is on for local dev, in the example .dev.vars, with Toy Tumble and Purrtrait too", () => {
+  it("is on for local dev, in the example .dev.vars, as in production", () => {
     const vars = readFileSync(new URL("../.dev.vars.example", import.meta.url), "utf8");
     const value = /^GAMES=(.*)$/m.exec(vars)?.[1];
     expect(gamesOn({ GAMES: value })).toEqual(["cat-tower", "tiles", "birdwatch", "tumble", "purrtrait"]);

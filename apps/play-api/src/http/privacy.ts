@@ -8,7 +8,7 @@
 import { CACHE, CSP, docPage } from "./layout";
 
 const BODY = `<h1>Pounce privacy policy</h1>
-<p class="updated">Last updated 15 November 2026</p>
+<p class="updated">Last updated 27 November 2026</p>
 <p>Pounce is a game app for couples and families, made by Conley Chaos LLC ("we"). This page says what the app and its server keep, why, who else handles it, for how long, and how to delete it. Pounce has no ads, no tracking, no third-party analytics and no third-party SDKs. We never sell your data and never share it for advertising. The only companies that handle it are the service providers named below, and only to run Pounce.</p>
 
 <h2>What we keep</h2>
