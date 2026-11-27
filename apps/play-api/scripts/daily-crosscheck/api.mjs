@@ -56,7 +56,9 @@ async function device(names) {
   return { token, people };
 }
 
-const start = (d, person, g = game) => http(d.token, "POST", `/v1/daily/${g}/start?person=${person.id}`);
+/** Each game's rules as today's apps ask for them (Nine Lives: three lives, three free hints). */
+const RULES = { "nine-lives": "lives" };
+const start = (d, person, g = game) => http(d.token, "POST", `/v1/daily/${g}/start?person=${person.id}`, RULES[g] ? { rules: RULES[g] } : undefined);
 const moves = (d, person, run, body) => http(d.token, "POST", `/v1/daily/runs/${run}/moves?person=${person.id}`, body);
 
 if (mode === "play") {
@@ -156,6 +158,24 @@ if (mode === "cheat") {
   const board = await http(fam.token, "GET", `/v1/daily/board?person=${mom.id}`);
   const rows = board.json.games?.find((g) => g.game === game)?.rows ?? [];
   say({ probe: "unchanged", seq: mine.json.seq, result: mine.json.result, rows, pass: mine.json.run === run && mine.json.seq === 1 && mine.json.result === null && rows.every((r) => r.result === null) });
+
+  // 7. Nine Lives' lives: three free hints and no fourth; nothing to clear; and a start that
+  //    doesn't ask (an app before lives) keeps the first rules.
+  if (game === "nine-lives") {
+    const kidRun = kidStart.json.run;
+    const hints = [];
+    for (let k = 0; k < 4; k++) hints.push((await http(fam.token, "POST", `/v1/daily/runs/${kidRun}/hint?person=${kid.id}`, { hints: k })).json);
+    const clear = await moves(fam, kid, kidRun, { from: 0, moves: [{ k: "clear", i: hints[0]?.reveals?.[0]?.i ?? 0 }] });
+    say({
+      probe: "lives-hints",
+      hintMs: kidStart.json.hintMs,
+      hints: hints.map((h) => (h.ok ? "ok" : h.error)),
+      clear: clear.json,
+      pass: kidStart.json.hintMs === 0 && kidStart.json.state?.lives === 3 && hints.slice(0, 3).every((h) => h.ok && h.result === null) && hints[3]?.error === "illegal" && clear.json.error === "illegal",
+    });
+    const old = await http(other.token, "POST", `/v1/daily/${game}/start?person=${stranger.id}`);
+    say({ probe: "first-rules", state: Object.keys(old.json.state ?? {}), hintMs: old.json.hintMs, pass: old.status === 200 && old.json.state?.rules === undefined && old.json.hintMs === 30000 });
+  }
 }
 
 if (mode === "tv") {

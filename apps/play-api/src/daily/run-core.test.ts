@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest";
 import { createRng } from "../rules/rng";
 
 import { closesAt, puzzleNumber } from "./days";
-import { close, countsForStreak, giveUp, HINT_PENALTY_MS, MAX_BATCH, MOVE_BURST, moves, newRun, startView, useHint, type RunState } from "./run-core";
+import { activeAt, close, countsForStreak, giveUp, HINT_PENALTY_MS, IDLE_CAP_MS, MAX_BATCH, MOVE_BURST, moves, newRun, startView, useHint, type RunState } from "./run-core";
 import { testGame, type TestPuzzle } from "./test-game";
 
 import type { DailyModule } from "./module";
@@ -36,6 +36,9 @@ describe("newRun", () => {
       result: null,
       tv: false,
       answers: {},
+      activeMs: 0,
+      activeReported: false,
+      lastCallAt: T0,
     });
   });
 });
@@ -45,7 +48,7 @@ describe("moves", () => {
     const r = run();
     expect(moves(m, p, r, 0, [step(1), step(2)], T0 + 20_000)).toEqual({ ok: true, seq: 2, reveals: [], progress: 0.5, result: null });
     const done = moves(m, p, r, 2, [step(3), step(4)], T0 + 95_000);
-    const result = { game: "test", date: DATE, number: puzzleNumber(DATE), outcome: "solved", timeMs: 95_000, hints: 0, tooFast: false, progress: 1 };
+    const result = { game: "test", date: DATE, number: puzzleNumber(DATE), outcome: "solved", timeMs: 95_000, hints: 0, tooFast: false, progress: 1, percent: 100 };
     expect(done).toEqual({ ok: true, seq: 4, reveals: [], progress: 1, result });
     expect(r.ended).toEqual({ outcome: "solved", at: T0 + 95_000 });
     expect(r.result).toEqual(result);
@@ -124,9 +127,21 @@ describe("moves", () => {
     expect(giveUp(m, p, r, T0 + 61_000)).toEqual({ ok: false, error: "over", at: 0, seq: 4 });
   });
 
-  it("a batch that runs past the end is refused whole", () => {
+  it("a batch that runs past the end ends at the move that ended it", () => {
     const r = run();
-    expect(moves(m, p, r, 0, [step(1), step(2), step(3), step(4), step(5)], T0 + 60_000)).toEqual({ ok: false, error: "over", at: 4, seq: 0 });
+    const batch = [step(1), step(2), step(3), step(4), step(5)];
+    const a = moves(m, p, r, 0, batch, T0 + 60_000);
+    expect(a).toMatchObject({ ok: true, seq: 4, result: { outcome: "solved", timeMs: 60_000 } });
+    expect(r.seq).toBe(4);
+    expect(r.ended).toEqual({ outcome: "solved", at: T0 + 60_000 });
+    // Resent, it gets the same answer; anything after it is over.
+    expect(moves(m, p, r, 0, batch, T0 + 61_000)).toEqual(a);
+    expect(moves(m, p, r, 4, [step(5)], T0 + 61_000)).toEqual({ ok: false, error: "over", at: 0, seq: 4 });
+  });
+
+  it("an illegal move before the end still refuses the batch whole", () => {
+    const r = run();
+    expect(moves(m, p, r, 0, [step(1), step(3), step(4)], T0 + 60_000)).toEqual({ ok: false, error: "illegal", at: 1, seq: 0 });
     expect(r.ended).toBeNull();
   });
 
@@ -136,7 +151,8 @@ describe("moves", () => {
     const end = closesAt(DATE, LA);
     expect(moves(m, p, r, 1, [step(2)], end)).toEqual({ ok: false, error: "over", at: 0, seq: 1 });
     expect(r.ended).toEqual({ outcome: "closed", at: end });
-    expect(r.result).toMatchObject({ outcome: "closed", progress: 0.25, timeMs: end - T0 });
+    // An app that reports no active time: each gap between its calls counts up to IDLE_CAP_MS.
+    expect(r.result).toMatchObject({ outcome: "closed", progress: 0.25, percent: 25, timeMs: 1000 + IDLE_CAP_MS });
   });
 
   it("over 100 moves is bad_message", () => {
@@ -197,7 +213,7 @@ describe("hints and giving up", () => {
       seq: 1,
       reveals: [],
       progress: 0.25,
-      result: { game: "test", date: DATE, number: puzzleNumber(DATE), outcome: "gaveUp", timeMs: 50_000, hints: 0, tooFast: false, progress: 0.25 },
+      result: { game: "test", date: DATE, number: puzzleNumber(DATE), outcome: "gaveUp", timeMs: 50_000, hints: 0, tooFast: false, progress: 0.25, percent: 25 },
     });
   });
 
@@ -212,11 +228,18 @@ describe("hints and giving up", () => {
 });
 
 describe("the result", () => {
+  const floored = { ...m, floorMs: { 1: 60_000, 2: 0, 3: 0, 4: 0, 5: 0, 6: 0, 7: 0 } } as DailyModule;
+
   it("too fast is kept and marked", () => {
-    const floored = { ...m, floorMs: { 1: 60_000, 2: 0, 3: 0, 4: 0, 5: 0, 6: 0, 7: 0 } } as DailyModule;
     const r = run(floored);
     const a = moves(floored, p, r, 0, [step(1), step(2), step(3), step(4)], T0 + 59_999);
     expect(a).toMatchObject({ ok: true, result: { outcome: "solved", timeMs: 59_999, tooFast: true } });
+  });
+
+  it("only a finished run can be too fast: a quick give-up or loss is just a quick loss", () => {
+    const r = run(floored);
+    moves(floored, p, r, 0, [step(1)], T0 + 2_000);
+    expect(giveUp(floored, p, r, T0 + 5_000)).toMatchObject({ ok: true, result: { outcome: "gaveUp", tooFast: false } });
     const s = run(floored);
     expect(moves(floored, p, s, 0, [step(1), step(2), step(3), step(4)], T0 + 60_000)).toMatchObject({ result: { tooFast: false } });
   });
@@ -234,7 +257,7 @@ describe("the result", () => {
     expect(r.ended).toBeNull();
     // The alarm may run late: the run closed at 04:00 all the same.
     const result = close(m, p, r, closesAt(DATE, LA) + 5000);
-    expect(result).toEqual({ game: "test", date: DATE, number: puzzleNumber(DATE), outcome: "closed", timeMs: closesAt(DATE, LA) - T0, hints: 0, tooFast: false, progress: 0.5 });
+    expect(result).toEqual({ game: "test", date: DATE, number: puzzleNumber(DATE), outcome: "closed", timeMs: 1000 + IDLE_CAP_MS, hints: 0, tooFast: false, progress: 0.5, percent: 50 });
     expect(r.ended).toEqual({ outcome: "closed", at: closesAt(DATE, LA) });
     expect(close(m, p, r, closesAt(DATE, LA) + 9000)).toBeNull();
   });
@@ -282,7 +305,18 @@ describe("startView", () => {
       hints: 0,
       result: null,
       closesAt: closesAt(DATE, LA),
+      hintMs: HINT_PENALTY_MS,
+      activeMs: 2000,
     });
+  });
+
+  it("says what a hint costs, as the game sets it", () => {
+    const free: DailyModule = { ...m, hintMs: () => 0 };
+    const r = run(free);
+    expect(startView(free, p, r, T0).hintMs).toBe(0);
+    useHint(free, p, r, T0 + 1000);
+    useHint(free, p, r, T0 + 2000);
+    expect(moves(free, p, r, 0, [step(3), step(4)], T0 + 40_000)).toMatchObject({ ok: true, result: { outcome: "solved", timeMs: 40_000, hints: 2 } });
   });
 });
 
@@ -329,7 +363,7 @@ describe("what a result carries", () => {
     const r = run(leaky);
     const a = giveUp(leaky, p, r, T0 + 5000);
     expect(a).toMatchObject({ ok: true, result: { guesses: 3, points: 7, progress: 1 } });
-    expect(Object.keys(r.result as object).sort()).toEqual(["date", "game", "guesses", "hints", "number", "outcome", "points", "progress", "timeMs", "tooFast"]);
+    expect(Object.keys(r.result as object).sort()).toEqual(["date", "game", "guesses", "hints", "number", "outcome", "percent", "points", "progress", "timeMs", "tooFast"]);
   });
 });
 
@@ -374,5 +408,68 @@ describe("the move budget", () => {
     const free = spaced(0);
     const q = fresh(free);
     expect(moves(free, big, q, 0, Array.from({ length: 100 }, (_, i) => step(i + 1)), T0)).toMatchObject({ ok: true, seq: 100 });
+  });
+});
+
+describe("active time (spec §3, \"The clock\", JD 2026-11-26)", () => {
+  it("is what the client reports, trusted: a solve's time is its active time, not the wall's", () => {
+    const r = run();
+    moves(m, p, r, 0, [step(1), step(2)], T0 + 600_000, 40_000);
+    expect(r.activeReported).toBe(true);
+    expect(startView(m, p, r, T0 + 900_000).activeMs).toBe(40_000);
+    const done = moves(m, p, r, 2, [step(3), step(4)], T0 + 3_600_000, 75_000);
+    expect(done).toMatchObject({ ok: true, result: { outcome: "solved", timeMs: 75_000 } });
+    expect(startView(m, p, r, T0 + 4_000_000).activeMs).toBe(75_000);
+  });
+
+  it("is kept sane: never less than before, never more than the time since the start, and a bad one is ignored", () => {
+    const r = run();
+    moves(m, p, r, 0, [step(1)], T0 + 10_000, 8_000);
+    moves(m, p, r, 1, [step(2)], T0 + 20_000, 5_000); // a resumed device a little behind
+    expect(r.activeMs).toBe(8_000);
+    moves(m, p, r, 2, [step(3)], T0 + 30_000, 999_999);
+    expect(r.activeMs).toBe(30_000);
+    for (const bad of [-1, 1.5, Number.NaN]) {
+      moves(m, p, r, r.seq, [], T0 + 31_000, bad);
+      expect(r.activeMs).toBe(30_000);
+    }
+  });
+
+  it("adds a hint's cost on top, and a give-up takes the active time it carries", () => {
+    const r = run();
+    useHint(m, p, r, T0 + 100_000, 0, 20_000);
+    expect(giveUp(m, p, r, T0 + 200_000, 30_000)).toMatchObject({ result: { outcome: "gaveUp", timeMs: 30_000 + HINT_PENALTY_MS, hints: 1 } });
+  });
+
+  it("for an app that reports none, counts each gap between calls up to five minutes", () => {
+    const r = run();
+    moves(m, p, r, 0, [step(1)], T0 + 60_000); // 1 min
+    moves(m, p, r, 1, [step(2)], T0 + 60_000 + 3_600_000); // an hour away: 5 min
+    expect(activeAt(r, T0 + 60_000 + 3_600_000)).toBe(60_000 + IDLE_CAP_MS);
+    const done = moves(m, p, r, 2, [step(3), step(4)], T0 + 60_000 + 3_600_000 + 30_000);
+    expect(done).toMatchObject({ result: { outcome: "solved", timeMs: 60_000 + IDLE_CAP_MS + 30_000 } });
+  });
+
+  it("a run stored before active time keeps the server's clock", () => {
+    const r = run();
+    delete r.activeMs;
+    delete r.activeReported;
+    delete r.lastCallAt;
+    moves(m, p, r, 0, [step(1), step(2)], T0 + 600_000, 1_000);
+    expect(moves(m, p, r, 2, [step(3), step(4)], T0 + 3_600_000)).toMatchObject({ result: { timeMs: 3_600_000 } });
+  });
+
+  it("an empty batch when the clock pauses keeps the time since the last move, and changes nothing else", () => {
+    const r = run();
+    moves(m, p, r, 0, [step(1)], T0 + 10_000, 9_000);
+    expect(moves(m, p, r, 1, [], T0 + 70_000, 64_000)).toMatchObject({ ok: true, seq: 1, result: null });
+    expect(r.seq).toBe(1);
+    expect(startView(m, p, r, T0 + 900_000).activeMs).toBe(64_000);
+  });
+
+  it("a run closed at 04:00 keeps its last reported active time", () => {
+    const r = run();
+    moves(m, p, r, 0, [step(1)], T0 + 60_000, 45_000);
+    expect(close(m, p, r, closesAt(DATE, LA))).toMatchObject({ outcome: "closed", timeMs: 45_000, percent: 25 });
   });
 });

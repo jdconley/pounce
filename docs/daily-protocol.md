@@ -54,7 +54,9 @@ carry on. A run ends solved, missed (Sniff), given up, done (Box Fort), or close
 
 ### `POST /v1/daily/{game}/start`
 
-No body. 200:
+No body, or `{ "rules": "<rules>" }` for a game with more than one set of rules (Nine Lives'
+`"lives"`, below). The rules are fixed at the run's first start; a later start's body is ignored,
+and so is anything else in it. 200:
 
 ```json
 {
@@ -70,7 +72,8 @@ No body. 200:
   "seq": 0,
   "hints": 0,
   "result": null,
-  "closesAt": 1795521600000
+  "closesAt": 1795521600000,
+  "hintMs": 30000
 }
 ```
 
@@ -79,6 +82,10 @@ No body. 200:
   game's doc gives their shapes.
 - `seq` counts the moves the server has accepted. `hints` counts hints used. `result` is set once
   the run has ended (below); then show the end screen.
+- `hintMs` is what one hint adds to the run's time: 30 seconds, or 0 under Nine Lives' `"lives"`
+  rules. A server before this field always added 30 seconds.
+- `activeMs` is the run's active time so far (below, "Active time"). Count on from it while the
+  puzzle is on screen. A server before this field had none: count from `startedAt`.
 - `run` is unguessable and names no one. Keep it for the calls below.
 - 404 `{ "error": "not_found" }`: an unknown or unlisted game. 429 `{ "error": "rate_limited" }`:
   over 30 starts by this device in an hour.
@@ -86,7 +93,7 @@ No body. 200:
 ### `POST /v1/daily/runs/{run}/moves`
 
 ```json
-{ "from": 0, "moves": [ { "k": "step", "n": 1 }, { "k": "step", "n": 2 } ] }
+{ "from": 0, "moves": [ { "k": "step", "n": 1 }, { "k": "step", "n": 2 } ], "activeMs": 18250 }
 ```
 
 - `from` is the `seq` the batch starts at. `moves` are the game's moves, in order. Nothing else in
@@ -94,6 +101,9 @@ No body. 200:
 - Send a batch at least every second while moves are waiting, and at once for a Sniff guess or Box
   Fort's last piece of a set. At most 100 moves per batch, and a body of at most 8 KB (else a 400).
 - The batch is all or nothing: the first move refused refuses it, and nothing changes.
+- A move that ends the run (the solving move, Sniff's sixth guess, Nine Lives' third wrong number)
+  ends the batch too: the moves before it and it are taken, any after it are dropped, and `seq`
+  counts only the ones taken.
 
 200, accepted:
 
@@ -111,9 +121,13 @@ No body. 200:
 ```
 
   - `outcome`: `"solved"`, `"missed"`, `"gaveUp"`, `"closed"` or `"done"` (Box Fort's ending).
-  - `timeMs`: from start to the move that ended it, plus 30 seconds a hint.
+  - `timeMs`: the run's active time when it ended, plus `hintMs` a hint.
+  - `progress` (0 to 1) and `percent` (a whole number, rounded down): how far it got by the game's
+    fair measure, 1 and 100 once finished. Show `percent` for a run that didn't finish ("62%"). A
+    result stored before 2026-11-26 has no `percent`: use `floor(progress * 100)`.
   - `guesses` (Sniff) and `points` (Box Fort) appear only for those games.
-  - `tooFast`: faster than the game's floor. Kept, but left off every board.
+  - `tooFast`: a finished run (solved, or Box Fort's `done`) faster than the game's floor. Kept,
+    but left off every board. A run that didn't finish is never too fast.
 
 200, refused:
 
@@ -137,9 +151,10 @@ No body. 200:
 
 ### `POST /v1/daily/runs/{run}/hint`
 
-`{ "hints": <hints used so far> }` (an empty body is accepted, but isn't safe to resend). 200, an
+`{ "hints": <hints used so far>, "activeMs": <active time> }` (an empty body is accepted, but isn't safe to resend). 200, an
 answer as above: `reveals` holds the hint (a cell, a cat), `seq` is unchanged (a hint isn't a move),
-`hints` goes up and the result's time grows by 30 seconds. A game with no hints answers `illegal`.
+`hints` goes up and the result's time grows by `hintMs`. A game with no hints, or none left,
+answers `illegal`.
 Flush waiting moves first.
 
 - **A resent hint is safe** when it carries `hints`: asked again with the same count, it gets the
@@ -148,8 +163,8 @@ Flush waiting moves first.
 
 ### `POST /v1/daily/runs/{run}/giveup`
 
-No body. 200, an answer with the result, `outcome: "gaveUp"`. A run given up before any move
-doesn't count toward streaks.
+`{ "activeMs": <active time> }`, or no body (before active time). 200, an answer with the result,
+`outcome: "gaveUp"`. A run given up before any move doesn't count toward streaks.
 
 ### `PUT /v1/daily/runs/{run}/tv`
 
@@ -192,9 +207,11 @@ someone else's run.
   who leaves the pair drops off. Nobody who hasn't played appears.
 - **`player`** is `"me"` for the board's owner and the pair id for a connection (the `pair` of
   `GET /v1/me/streaks`). No player id is ever sent.
-- **Per game,** rows with a result come first, ranked by the game's own order (best first; for
-  Nine Lives, Sniff and Cat Nap unsolved after solved, furthest first; Box Fort by points). `rank`
-  is a competition rank: ties share it and the next skips. People playing now follow with
+- **Per game,** rows with a result come first, best first: every finished run (solved, or Box
+  Fort's `done`) by the game's own order (time; Sniff guesses then time; Box Fort points then
+  time), then every other run (`missed`, `gaveUp`, `closed`) by `percent`, highest first, then
+  time (spec §6, "Ranking"). Show rows in the order sent; never sort them. `rank` is a competition
+  rank: ties share it and the next skips. People playing now follow with
   `rank: null` and their progress. Results marked `tooFast` are left off.
 - **The Dish:** per game 3, 2 and 1 points for the first three places (ties share a place's
   points), plus 1 for each ended run (a run closed at 04:00 didn't end). `crowns` lists the games
@@ -312,6 +329,65 @@ Unlink: every TV showing this person's board forgets it, and their sockets close
 - **One run per game and date.** When both had started today's puzzle, the run started first
   stays, with its moves and result; the other run and its result go (its id answers 404), and its
   stats come off. `start` on any of the account's devices then returns the run that stayed.
+
+## Active time
+
+Spec §3, "The clock" (JD, 2026-11-26).
+
+- Count the time the puzzle is on screen with the app in front: pause in the background, on a
+  locked screen, on Home or a menu, under a sheet, and (web) in a hidden tab. Show that time, plus
+  `hintMs` a hint, as the run's clock.
+- Send it as `activeMs` with every moves batch, hint and give-up: the total so far, in whole
+  milliseconds, carrying on from start's `activeMs`.
+- When the clock pauses (the app goes to the background, the tab hides, the player leaves the
+  puzzle), send an empty batch, `{ "from": <seq>, "moves": [], "activeMs": <total> }`, so the time
+  since the last move is kept. It changes nothing else and answers like any batch.
+- The server trusts it, and keeps it sane: a value that isn't a whole number of 0 or more is
+  ignored, one below the run's last is ignored, and one past the time since the start is cut to
+  it. The result's `timeMs` is the active time at the end.
+- An app that sends none (1.3 and before) gets an estimate: each gap between its calls on the
+  run, counted up to 5 minutes (`IDLE_CAP_MS`).
+- A run open at 04:00 closes at its active time then.
+
+## Nine Lives
+
+- **Puzzle:** `{ "givens": [81 digits, 0 for an open cell] }`, cells in reading order.
+- **Moves:** `{ "k": "set", "i": 0..80, "d": 1..9 }` and `{ "k": "clear", "i": 0..80 }`. A given or a
+  hinted cell is `illegal`.
+- **Hint reveal:** `{ "i": <cell>, "d": <digit> }`. That cell is locked from then on.
+
+### The first rules (no `rules` at start: every app before 2026-11-26)
+
+- **State:** `{ "cells": [81], "hinted": [cells a hint filled, ascending] }`.
+- Any digit may go in any open cell, and be changed or cleared. The run ends solved when every cell
+  holds its answer. Unlimited hints, 30 seconds each (`hintMs` 30000).
+
+### The `"lives"` rules (`{ "rules": "lives" }` at start)
+
+Send `{ "rules": "lives" }` on EVERY Nine Lives start, a resume too. A start without it on an open
+lives run is an app that can't show lives: the run goes back to the first rules for good (hints
+used so far stay free), and its state then has no `rules`. Draw from the state start returns.
+
+Spec: [Nine Lives: lives and hints](superpowers/specs/2026-11-20-daily-games-design.md#nine-lives-lives-and-hints).
+
+- **State:**
+
+```json
+{ "cells": [81], "hinted": [], "rules": "lives", "lives": 3, "hintsLeft": 3, "wrong": [ { "i": 4, "d": 7 } ] }
+```
+
+  - `lives` (3 to 0) and `hintsLeft` (3 to 0) are what is left. `wrong` is every wrong number
+    entered, in order: at most three. `cells` never holds a wrong number.
+  - `"solution": [81]` is added once the run ended out of lives, and only then.
+- **A set** goes only in an open cell: not a given, not hinted, not already holding its answer
+  (`illegal`). Its answer's digit stays and locks; a wrong one costs a life and changes no cell.
+- **`clear` is `illegal`.** The server holds no wrong numbers to clear; erasing one shown on the
+  phone is the phone's.
+- **Reveals,** in a moves answer, one per wrong set: `{ "k": "wrong", "i", "d", "lives": <left> }`.
+  The set that leaves 0 ends the run `missed`, and its reveal also carries `"solution": [81]`. A
+  right set reveals nothing.
+- **Hints:** three, `hintMs` 0, never a life. A fourth answers `illegal`.
+- **Watch frames** carry this state, so a TV shows lives, hints left and the wrong numbers.
 
 ## For game builders
 

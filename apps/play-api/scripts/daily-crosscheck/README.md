@@ -8,7 +8,7 @@ server refuses cheating. Run it before a daily game launches or its rules change
 | --- | --- |
 | `plan.ts` | From the server's `TOKEN_SECRET` and a date, using the server's own game modules: each game's public puzzle and its hash, one fixed move list (Nine Lives and Cat Nap from the solution, Sniff two guesses and the answer, Box Fort the plain greedy player), its pace past the game's floor, and the result the server must give. |
 | `proxy.mjs` | A logging proxy in front of `wrangler dev`. Every client talks to it; it writes each `/v1/daily` request and answer, and which client sent it, as JSON lines. |
-| `api.mjs` | Plays a plan over plain HTTP (`play`), with a forged result in every batch, and runs the anti-cheat probes (`cheat`). |
+| `api.mjs` | Plays a plan over plain HTTP (`play`), with a forged result in every batch, and runs the anti-cheat probes (`cheat`). Nine Lives starts on its `"lives"` rules, as today's apps do, and its `cheat` run also checks three free hints, no fourth, and that a start without them keeps the first rules. |
 | `analyze.py` | Rebuilds each finished run from the log: client, date, puzzle hash, accepted moves and reveals (hashed), and the server's result, checked against the plan. |
 | `apps/play-ios/PounceUITests/DailyCrossCheckTests.swift` | The iPhone app plays the plan through its own controls. Skipped without `CROSSCHECK_PLAN`. |
 | `apps/play-web/e2e/daily-crosscheck.spec.ts` | The web player does the same. No tests without `CROSSCHECK_PLAN`. |
