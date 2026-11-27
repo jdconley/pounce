@@ -24,10 +24,12 @@ export interface DailyModule<P = unknown, S = unknown, M = unknown> {
   id: DailyGameId;
   make(rng: Rng, level: DayLevel, day: { date: Day; key: Seed }): P; // server only: the whole puzzle, solution included; key: cycleKey, the same every day
   publicPuzzle(p: P): unknown;                  // what start returns: never the solution, answer or future sets
-  init(p: P): S;
+  /** The run's first state. `rules`: what the start asked for (`{ "rules": ... }`); a game ignores rules it doesn't know. */
+  init(p: P, rules?: string): S;
   parseMove(raw: unknown): M | null;            // exact shape or null
   apply(p: P, s: S, m: M, msSinceStart: number): Applied<S>;
   hint(p: P, s: S): Applied<S> | null;          // null: this game has no hints
+  hintMs?(s: S): number;                        // what one hint adds to the time; unset: HINT_PENALTY_MS
   progress(p: P, s: S): number;                 // 0..1, spoiler-free
   publicState(p: P, s: S): unknown;             // what a resuming client and a watching TV get
   result(p: P, s: S, outcome: Outcome, timeMs: number, hints: number): Omit<DailyResult, "game" | "date" | "number" | "tooFast">;

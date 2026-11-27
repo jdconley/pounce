@@ -67,7 +67,7 @@ export async function who(request: Request, env: Env, deviceId: string): Promise
  * `POST /v1/daily/{game}/start` for `playerId` at `now`: the run for the player's day, made on
  * the first start. Exported so the tests can start at a made-up time.
  */
-export async function startRun(env: Env, deviceId: string, playerId: string, game: string, now: number): Promise<Response> {
+export async function startRun(env: Env, deviceId: string, playerId: string, game: string, now: number, rules?: string): Promise<Response> {
   const module = dailyModule(game, env);
   const secret = env.TOKEN_SECRET;
   if (!module || !secret) return notFound();
@@ -80,12 +80,29 @@ export async function startRun(env: Env, deviceId: string, playerId: string, gam
   // The run already started for this game and date, which after an account merge may be one the
   // guest started: one run per person, game and date, never a second.
   const id = (await me.dailyRunFor(day.day, module.id)) ?? (await runId(secret, playerId, module.id, day.day));
-  const view = (await runs(env, id).start({ id, playerId, game: module.id as DailyGameId, date: day.day, zone: day.zone, now })) as StartView;
+  const view = (await runs(env, id).start({ id, playerId, game: module.id as DailyGameId, date: day.day, zone: day.zone, now, ...(rules ? { rules } : {}) })) as StartView;
   const noted = await me.noteRun(view.date, view.game, view.run, view.startedAt);
   if (noted === null) return json(404, { error: "no_player" });
   // A merge noted another run meanwhile: that one is this player's.
   if (noted !== view.run) return json(200, await runs(env, noted).start({ id: noted, playerId, game: module.id as DailyGameId, date: day.day, zone: day.zone, now }));
   return json(200, view);
+}
+
+const RULES = /^[a-z]{1,20}$/;
+
+/**
+ * The rules a start asks for: `{ "rules": "lives" }`, or nothing. No body, or one that isn't
+ * that (an old app sends none), starts on the game's first rules; the start isn't refused for it.
+ */
+async function rulesAsked(request: Request): Promise<string | undefined> {
+  const text = await request.text().catch(() => "");
+  if (text.trim() === "" || text.length > 200) return undefined;
+  try {
+    const rules = (JSON.parse(text) as { rules?: unknown } | null)?.rules;
+    return typeof rules === "string" && RULES.test(rules) ? rules : undefined;
+  } catch {
+    return undefined;
+  }
 }
 
 /** `{ from, moves }`: anything else in the body (a result, a time) is never read. */
@@ -209,7 +226,7 @@ export function dailyRoute(method: string, pathname: string): Route | null {
   if (start) {
     return async (request, env, deviceId) => {
       const playerId = await who(request, env, deviceId);
-      return typeof playerId === "string" ? startRun(env, deviceId, playerId, start[1] as string, Date.now()) : playerId;
+      return typeof playerId === "string" ? startRun(env, deviceId, playerId, start[1] as string, Date.now(), await rulesAsked(request)) : playerId;
     };
   }
   const run = RUN.exec(pathname);

@@ -46,9 +46,11 @@ export type StartView = {
   hints: number;
   result: DailyResult | null;
   closesAt: number;
+  /** What one hint adds to the run's time. */
+  hintMs: number;
 };
 
-/** What a hint costs on the clock. */
+/** What a hint costs on the clock, unless the game says otherwise (`DailyModule.hintMs`). */
 export const HINT_PENALTY_MS = 30_000;
 /**
  * Moves a run may make beyond one per `minMoveGapMs` since its start: a batch of a second's moves,
@@ -68,9 +70,12 @@ function answer(m: DailyModule, p: unknown, r: RunState, reveals: unknown[]): An
   return { ok: true, seq: r.seq, reveals, progress: m.progress(p, r.state), result: r.result };
 }
 
+/** What one hint adds to this run's time. */
+export const hintMs = (m: DailyModule, r: RunState): number => m.hintMs?.(r.state) ?? HINT_PENALTY_MS;
+
 /** Ends the run at `at` and works out its result, on the server's numbers. */
 function end(m: DailyModule, p: unknown, r: RunState, outcome: Outcome, at: number): DailyResult {
-  const timeMs = at - r.startedAt + HINT_PENALTY_MS * r.hints;
+  const timeMs = at - r.startedAt + hintMs(m, r) * r.hints;
   const base = m.result(p, r.state, outcome, timeMs, r.hints);
   // Only the result's own fields: the server's numbers, and the game's guesses, points and
   // progress. Nothing else a game returns (an answer, say) ever reaches a board.
@@ -100,7 +105,7 @@ function finished(m: DailyModule, p: unknown, r: RunState, now: number): Answer 
 export function newRun(
   m: DailyModule,
   p: unknown,
-  a: { id: string; playerId: string; game: DailyGameId; date: Day; zone: string; now: number },
+  a: { id: string; playerId: string; game: DailyGameId; date: Day; zone: string; now: number; rules?: string },
 ): RunState {
   return {
     id: a.id,
@@ -110,7 +115,7 @@ export function newRun(
     zone: a.zone,
     startedAt: a.now,
     seq: 0,
-    state: m.init(p),
+    state: m.init(p, a.rules),
     hints: 0,
     lastMoveAt: 0,
     ended: null,
@@ -136,12 +141,14 @@ export function startView(m: DailyModule, p: unknown, r: RunState, now: number):
     hints: r.hints,
     result: r.result,
     closesAt: closesAt(r.date, r.zone),
+    hintMs: hintMs(m, r),
   };
 }
 
 /**
  * A batch of moves from `from`, all or nothing: the first move refused refuses the batch and
- * nothing changes. A batch resent from an earlier `from` gets the answer it got then.
+ * nothing changes. A move that ends the run ends the batch: it and the moves before it are taken,
+ * any after it dropped. A batch resent from an earlier `from` gets the answer it got then.
  */
 export function moves(m: DailyModule, p: unknown, r: RunState, from: number, raw: unknown[], now: number): Answer {
   if (!Array.isArray(raw) || raw.length > MAX_BATCH) return refuse(r, "bad_message");
@@ -152,8 +159,12 @@ export function moves(m: DailyModule, p: unknown, r: RunState, from: number, raw
   let state = r.state;
   let ending: "solved" | "missed" | "done" | undefined;
   const reveals: unknown[] = [];
+  let taken = raw.length;
   for (const [i, item] of raw.entries()) {
-    if (ending) return refuse(r, "over", i);
+    if (ending) {
+      taken = i;
+      break;
+    }
     const move = m.parseMove(item);
     if (move === null) return refuse(r, "bad_message", i);
     // The move budget: at most one move per `minMoveGapMs` since the start, plus a burst for
@@ -169,7 +180,7 @@ export function moves(m: DailyModule, p: unknown, r: RunState, from: number, raw
   }
   if (raw.length === 0) return answer(m, p, r, reveals);
   r.state = state;
-  r.seq += raw.length;
+  r.seq += taken;
   r.lastMoveAt = now;
   if (ending) end(m, p, r, ending, now);
   const a = answer(m, p, r, reveals);
@@ -183,7 +194,7 @@ export function moves(m: DailyModule, p: unknown, r: RunState, from: number, raw
 }
 
 /**
- * A hint from the server: it costs `HINT_PENALTY_MS` and isn't a move. `seen`: the hints the
+ * A hint from the server: it costs `hintMs` (`HINT_PENALTY_MS` unless the game says) and isn't a move. `seen`: the hints the
  * client had used when it asked; a hint asked again with the same count gets the same answer.
  */
 export function useHint(m: DailyModule, p: unknown, r: RunState, now: number, seen?: number): Answer {

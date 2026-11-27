@@ -12,8 +12,15 @@ export type Cells = number[];
 
 export type NineLivesMove = { k: "set"; i: number; d: number } | { k: "clear"; i: number };
 
-/** The run's board: every cell (givens included), and the cells a hint filled, ascending. */
-export type NineLivesState = { cells: Cells; hinted: number[] };
+/** A wrong number entered under the `"lives"` rules: it cost a life and never reached the board. */
+export type Wrong = { i: number; d: number };
+
+/**
+ * The run's board: every cell (givens included), and the cells a hint filled, ascending. Under the
+ * `"lives"` rules (spec, "Nine Lives: lives and hints") also the lives left and every wrong
+ * number entered; a run on the first rules has neither.
+ */
+export type NineLivesState = { cells: Cells; hinted: number[]; lives?: number; wrong?: Wrong[] };
 
 const range9 = [0, 1, 2, 3, 4, 5, 6, 7, 8];
 
@@ -87,7 +94,7 @@ export function applyMove(givens: Cells, s: NineLivesState, m: NineLivesMove): N
   if (givens[m.i] !== 0 || s.hinted.includes(m.i)) return null;
   const cells = [...s.cells];
   cells[m.i] = m.k === "set" ? m.d : 0;
-  return { cells, hinted: s.hinted };
+  return { ...s, cells };
 }
 
 /** The board after the server's hint filled cell `i` with `d`. That cell is locked from now on. */
@@ -95,5 +102,5 @@ export function applyReveal(s: NineLivesState, r: { i: number; d: number }): Nin
   const cells = [...s.cells];
   cells[r.i] = r.d;
   const hinted = s.hinted.includes(r.i) ? s.hinted : [...s.hinted, r.i].sort((a, b) => a - b);
-  return { cells, hinted };
+  return { ...s, cells, hinted };
 }

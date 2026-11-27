@@ -353,8 +353,8 @@ Spec: [Nine Lives: lives and hints](superpowers/specs/2026-11-20-daily-games-des
 - **`clear` is `illegal`.** The server holds no wrong numbers to clear; erasing one shown on the
   phone is the phone's.
 - **Reveals,** in a moves answer, one per wrong set: `{ "k": "wrong", "i", "d", "lives": <left> }`.
-  The set that leaves 0 also ends the run `missed` and adds `{ "k": "solution", "cells": [81] }`
-  after it. A right set reveals nothing.
+  The set that leaves 0 ends the run `missed`, and its reveal also carries `"solution": [81]`. A
+  right set reveals nothing.
 - **Hints:** three, `hintMs` 0, never a life. A fourth answers `illegal`.
 - **Watch frames** carry this state, so a TV shows lives, hints left and the wrong numbers.
 

@@ -16,7 +16,8 @@
     "seq": 0,
     "hints": 0,
     "result": null,
-    "closesAt": 1795521600000
+    "closesAt": 1795521600000,
+    "hintMs": 30000
   },
   "resumed": {
     "run": "Xq3vL0bNw8sJ2kT9yH4mR6pD1cF7gA5eZuWiOoKnBlM",
@@ -35,7 +36,8 @@
     "seq": 2,
     "hints": 0,
     "result": null,
-    "closesAt": 1795521600000
+    "closesAt": 1795521600000,
+    "hintMs": 30000
   },
   "movesOk": {
     "ok": true,

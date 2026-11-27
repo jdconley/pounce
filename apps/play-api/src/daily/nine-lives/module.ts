@@ -1,7 +1,16 @@
 /**
  * Nine Lives as a Daily Dish game (server plan Task 3). The server holds the whole puzzle; a client
  * gets only the givens, sends one cell at a time, and learns a cell's answer only from a hint.
+ *
+ * Two sets of rules, fixed at a run's first start (spec, "Nine Lives: lives and hints"):
+ * - **The first rules** (no `rules`: every app before 2026-11-26): any digit anywhere, changed and
+ *   cleared at will; unlimited hints at 30 seconds each.
+ * - **`"lives"`:** each set is checked against the solution as it comes. A right digit locks; a
+ *   wrong one costs one of three lives and never reaches the board, and the third ends the run
+ *   `missed`. Three hints, free, never a life.
  */
+import { HINT_PENALTY_MS } from "../run-core";
+
 import {
   applyMove,
   applyReveal,
@@ -15,8 +24,18 @@ import {
 import { makePuzzle, type NineLivesPuzzle } from "./make";
 import { POP } from "./solve";
 
+
 import type { DayLevel } from "../days";
 import type { Applied, DailyModule, DailyResult } from "../module";
+
+/** The rules a start asks for to play with lives. */
+export const LIVES_RULES = "lives";
+/** Lives a run starts with, under the `"lives"` rules. */
+export const LIVES = 3;
+/** Hints a run may use, under the `"lives"` rules. */
+export const HINTS = 3;
+
+const withLives = (s: NineLivesState): boolean => s.lives !== undefined;
 
 /** Faster than this is kept but marked too fast (spec §3). Builder's numbers, from the levels. */
 export const FLOOR_MS: Record<DayLevel, number> = {
@@ -62,25 +81,59 @@ function hintCell(p: NineLivesPuzzle, s: NineLivesState): number {
   return best >= 0 ? best : s.cells.findIndex((d, i) => d !== p.solution[i]);
 }
 
+/**
+ * A move under the `"lives"` rules: a set in an open cell only, checked on entry. A right digit is
+ * placed and locks; a wrong one costs a life, is remembered, and reveals itself (with the solution
+ * when it was the last life). `clear` is illegal: the board never holds a wrong digit to clear.
+ */
+function applyWithLives(p: NineLivesPuzzle, s: NineLivesState, m: NineLivesMove): Applied<NineLivesState> {
+  if ((s.lives as number) <= 0) return { ok: false, reason: "over" };
+  if (m.k !== "set" || p.givens[m.i] !== 0 || s.cells[m.i] !== 0) return { ok: false, reason: "illegal" };
+  if (m.d === p.solution[m.i]) {
+    const next = applyMove(p.givens, s, m);
+    return next ? ended(p, next) : { ok: false, reason: "illegal" };
+  }
+  const lives = (s.lives as number) - 1;
+  const state: NineLivesState = { ...s, lives, wrong: [...(s.wrong ?? []), { i: m.i, d: m.d }] };
+  const reveal = { k: "wrong", i: m.i, d: m.d, lives, ...(lives === 0 ? { solution: [...p.solution] } : {}) };
+  return lives === 0 ? { ok: true, state, reveal, end: "missed" } : { ok: true, state, reveal };
+}
+
 export const nineLives: DailyModule<NineLivesPuzzle, NineLivesState, NineLivesMove> = {
   id: "nine-lives",
   make: makePuzzle,
   publicPuzzle: (p) => ({ givens: [...p.givens] }),
-  init: (p) => ({ cells: [...p.givens], hinted: [] }),
+  init: (p, rules) => (rules === LIVES_RULES ? { cells: [...p.givens], hinted: [], lives: LIVES, wrong: [] } : { cells: [...p.givens], hinted: [] }),
   parseMove,
   apply(p, s, m) {
     if (solved(p, s)) return { ok: false, reason: "over" };
+    if (withLives(s)) return applyWithLives(p, s, m);
     const next = applyMove(p.givens, s, m);
     return next ? ended(p, next) : { ok: false, reason: "illegal" };
   },
   hint(p, s) {
-    if (solved(p, s)) return { ok: false, reason: "over" };
+    if (solved(p, s) || (withLives(s) && (s.lives as number) <= 0)) return { ok: false, reason: "over" };
+    if (withLives(s) && s.hinted.length >= HINTS) return { ok: false, reason: "illegal" };
     const i = hintCell(p, s);
     const reveal = { i, d: p.solution[i]! };
     return ended(p, applyReveal(s, reveal), reveal);
   },
+  hintMs: (s) => (withLives(s) ? 0 : HINT_PENALTY_MS),
   progress: (p, s) => progressOf(p.givens, s.cells),
-  publicState: (_p, s) => ({ cells: [...s.cells], hinted: [...s.hinted] }),
+  publicState(p, s) {
+    if (!withLives(s)) return { cells: [...s.cells], hinted: [...s.hinted] };
+    const lives = s.lives as number;
+    return {
+      cells: [...s.cells],
+      hinted: [...s.hinted],
+      rules: LIVES_RULES,
+      lives,
+      hintsLeft: Math.max(0, HINTS - s.hinted.length),
+      wrong: (s.wrong ?? []).map((w) => ({ ...w })),
+      // Only once the run ended out of lives: the solution, to show kindly.
+      ...(lives === 0 ? { solution: [...p.solution] } : {}),
+    };
+  },
   result: (p, s, outcome, timeMs, hints) => ({
     outcome,
     timeMs,

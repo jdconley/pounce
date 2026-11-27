@@ -124,9 +124,21 @@ describe("moves", () => {
     expect(giveUp(m, p, r, T0 + 61_000)).toEqual({ ok: false, error: "over", at: 0, seq: 4 });
   });
 
-  it("a batch that runs past the end is refused whole", () => {
+  it("a batch that runs past the end ends at the move that ended it", () => {
     const r = run();
-    expect(moves(m, p, r, 0, [step(1), step(2), step(3), step(4), step(5)], T0 + 60_000)).toEqual({ ok: false, error: "over", at: 4, seq: 0 });
+    const batch = [step(1), step(2), step(3), step(4), step(5)];
+    const a = moves(m, p, r, 0, batch, T0 + 60_000);
+    expect(a).toMatchObject({ ok: true, seq: 4, result: { outcome: "solved", timeMs: 60_000 } });
+    expect(r.seq).toBe(4);
+    expect(r.ended).toEqual({ outcome: "solved", at: T0 + 60_000 });
+    // Resent, it gets the same answer; anything after it is over.
+    expect(moves(m, p, r, 0, batch, T0 + 61_000)).toEqual(a);
+    expect(moves(m, p, r, 4, [step(5)], T0 + 61_000)).toEqual({ ok: false, error: "over", at: 0, seq: 4 });
+  });
+
+  it("an illegal move before the end still refuses the batch whole", () => {
+    const r = run();
+    expect(moves(m, p, r, 0, [step(1), step(3), step(4)], T0 + 60_000)).toEqual({ ok: false, error: "illegal", at: 1, seq: 0 });
     expect(r.ended).toBeNull();
   });
 
@@ -282,7 +294,17 @@ describe("startView", () => {
       hints: 0,
       result: null,
       closesAt: closesAt(DATE, LA),
+      hintMs: HINT_PENALTY_MS,
     });
+  });
+
+  it("says what a hint costs, as the game sets it", () => {
+    const free: DailyModule = { ...m, hintMs: () => 0 };
+    const r = run(free);
+    expect(startView(free, p, r, T0).hintMs).toBe(0);
+    useHint(free, p, r, T0 + 1000);
+    useHint(free, p, r, T0 + 2000);
+    expect(moves(free, p, r, 0, [step(3), step(4)], T0 + 40_000)).toMatchObject({ ok: true, result: { outcome: "solved", timeMs: 40_000, hints: 2 } });
   });
 });
 

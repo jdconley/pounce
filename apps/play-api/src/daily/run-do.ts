@@ -61,7 +61,8 @@ export class DailyRun extends DurableObject<Env> {
   }
 
   /** Starts the run, or returns it as it stands: one run per player, game and date. */
-  async start(a: { id: string; playerId: string; game: DailyGameId; date: Day; zone: string; now: number }): Promise<StartView> {
+  /** `rules`: what the first start asked for; the run keeps them, and a later start's are ignored. */
+  async start(a: { id: string; playerId: string; game: DailyGameId; date: Day; zone: string; now: number; rules?: string }): Promise<StartView> {
     if (!this.stored) {
       // Two devices starting at once: the second waits here and gets the first's run.
       await this.ctx.blockConcurrencyWhile(async () => {

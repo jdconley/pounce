@@ -75,9 +75,12 @@ test("no tile game sample mentions Birdwatch or table options", () => {
  * to one is a change to the wire, made here on purpose.
  */
 const PINNED_DAILY: Record<string, string> = {
-  "daily/protocol/http.json": "c38133d01e5919f9aa91bd72a437a5ccd40d715f9a6cb7a67d5a26a408d62c5f",
+  // 2026-11-26: start gained `hintMs` (Nine Lives' free hints), additive.
+  "daily/protocol/http.json": "8878ff9f99f604ba40f201bb47be44b3d8ad1c34bac49828124cfa31d4ee804e",
   "daily/protocol/socket.json": "72d91ed27f5c0dc61fe146d7660f8c7c934a8214540c7050ef161428e6523eb8",
   "daily/protocol/client.json": "7a1625a24ca580670080d50bab5c6344ffb95cfc00d5682f60c2fdc0e7b02c9f",
+  // 2026-11-26: Nine Lives' "lives" rules (docs/daily-protocol.md "## Nine Lives").
+  "daily/protocol/nine-lives.json": "f236dcc911c7637eed945bc2f95ed482b963a1c37d6de9f2aea1bcd447c0a1a7",
 };
 
 test.each(Object.entries(PINNED_DAILY))("fixtures/%s is byte for byte what the Dish's clients decode", (file, sha256) => {
