@@ -378,6 +378,15 @@ describe("the live stream", () => {
     expect(syncsTo(asked, "tv")[0]?.boxes.map((b) => b.s)).toEqual([0, 1]);
   });
 
+  it("a screen asking more than 30 times a second hears nothing more that second", () => {
+    const r = play(started(2, 0, { tv: true }));
+    r.addScreen("tv");
+    r.connect("tv");
+    const answers = Array.from({ length: 31 }, () => batch(r, "tv"));
+    expect(answers.slice(0, 30).every((out) => syncsTo(out, "tv").length === 1)).toBe(true);
+    expect(answers[30]).toEqual([]);
+  });
+
   it("a screen that connects mid-round gets every box", () => {
     const r = play(started(2, 1, { tv: true }));
     r.addScreen("tv");
