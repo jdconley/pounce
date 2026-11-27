@@ -56,8 +56,8 @@ const MAX_HEADER_PLAYERS = 16;
 
 const BAD_MESSAGE: ServerMessage = { t: "error", code: "bad_message" };
 const NORMAL_CLOSURE = 1000;
-/** A screen a same-room table swapped out: refused, as `not_screen` is (4000 + 403). */
-const NOT_SCREEN_CLOSURE = 4403;
+/** A screen a same-room table swapped out, or a device its host removed: refused, as a 403 upgrade is (4000 + 403). */
+const REFUSED_CLOSURE = 4403;
 /** The app closed the socket itself (leaving the table, going to the background). */
 const ASKED_CLOSURES = [NORMAL_CLOSURE, 1001];
 /** The heartbeat the room answers without waking (the bad connection indicator). */
@@ -216,6 +216,8 @@ export class GameRoom extends DurableObject<Env> {
     if (request.headers.get("upgrade")?.toLowerCase() !== "websocket") {
       return new Response(null, { status: 426 });
     }
+    // A device the host of a same-room table removed stays out, whatever key it brings (design §10.2).
+    if (this.core.isRemoved(deviceId)) return refuse(403, "removed");
     const pair = new WebSocketPair();
     const [client, server] = Object.values(pair) as [WebSocket, WebSocket];
     // A device that sits or hosts is no screen, and only a device the room lists is one: it made
@@ -279,8 +281,11 @@ export class GameRoom extends DurableObject<Env> {
       await this.setLook(deviceOf(ws), parsed);
       return;
     }
+    const removed = parsed.t === "remove" ? new Set(core.state.removed?.devices) : null;
     const out = core.handle(deviceOf(ws), parsed);
     if (parsed.t === "act" && !out.some(({ message }) => message.t === "error")) this.movedNow = deviceOf(ws);
+    // The devices the host just removed are refused from now on: their open sockets too.
+    if (removed) this.closeAll((core.state.removed?.devices ?? []).filter((id) => !removed.has(id)), "removed");
     await this.after(out);
   }
 
@@ -305,7 +310,8 @@ export class GameRoom extends DurableObject<Env> {
       const hosts = Object.values(core.state.devices[core.state.hostDeviceId]?.players ?? {});
       if (deviceId !== core.state.hostDeviceId && (await anyBlocked(this.env, hosts, mine()))) return error("blocked");
     }
-    if (msg.t === "nudge") {
+    // A same-room table refuses every nudge (the room answers `not_allowed`).
+    if (msg.t === "nudge" && !core.sameRoom()) {
       const target = core.state.seats[msg.seat]?.playerId;
       if (target && (await anyBlocked(this.env, [target], mine()))) return { t: "nudgeSent", seat: msg.seat };
     }
@@ -364,17 +370,22 @@ export class GameRoom extends DurableObject<Env> {
     if (!this.core.mayScreen(deviceId)) return "seated";
     // A same-room table's old screen is refused from now on: its sockets close as a refusal would.
     const { replaced, out } = this.core.addScreen(deviceId);
-    for (const old of replaced) {
-      for (const ws of this.ctx.getWebSockets(old)) {
+    this.closeAll(replaced, "not_screen");
+    await this.after(out);
+    return "ok";
+  }
+
+  /** Closes every socket of `devices` as a refusal (4403), with `reason`: the room no longer takes them. */
+  private closeAll(devices: readonly string[], reason: "not_screen" | "removed"): void {
+    for (const id of devices) {
+      for (const ws of this.ctx.getWebSockets(id)) {
         try {
-          ws.close(NOT_SCREEN_CLOSURE, "not_screen");
+          ws.close(REFUSED_CLOSURE, reason);
         } catch {
           // Already closing.
         }
       }
     }
-    await this.after(out);
-    return "ok";
   }
 
   /**
@@ -534,7 +545,8 @@ export class GameRoom extends DurableObject<Env> {
       if (made === null || "off" in made) break;
       if ("ok" in made) {
         if (this.core) {
-          if (notifyOn(this.env)) this.ctx.waitUntil(this.pushPlayAgain(spec, code, made.first).catch(() => undefined));
+          // Nobody at a same-room table is pushed: they are all in the room (design §5.1).
+          if (notifyOn(this.env) && !this.core.sameRoom()) this.ctx.waitUntil(this.pushPlayAgain(spec, code, made.first).catch(() => undefined));
           await this.after(this.core.rematchDealt(code));
         }
         return;

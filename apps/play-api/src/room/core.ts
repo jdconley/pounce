@@ -170,7 +170,15 @@ export type RoomState<S = CatTowerState> = {
    * with no near key, as they were there. Absent: none, or no such game.
    */
   members?: string[];
+  /**
+   * A same-room table (design §10.2): the devices and players its host removed. They stay out,
+   * at this table and the ones Play again deals from it. Absent: nobody removed.
+   */
+  removed?: Removed;
 };
+
+/** Who a same-room table's host removed: device ids, and players (whatever device they come back on). */
+export type Removed = { devices: string[]; players: string[] };
 
 export type Look = { rug: string; back: string };
 
@@ -250,6 +258,8 @@ export type RematchIntent = {
   screens?: string[];
   /** A same-room table's devices other than its screens: members of the new table without a near key. Absent: none. */
   members?: string[];
+  /** A same-room table's removed devices and players: still out at the new table. Absent: none. */
+  removed?: Removed;
 };
 
 /** The card backs and rugs the people a device speaks for have unlocked. */
@@ -368,6 +378,8 @@ const LOOK_EVERY_MS = 10_000;
 const NO_UNLOCKS: Unlocks = { backs: [], rugs: [] };
 /** Move ids remembered per device: far more than one app ever has in flight. */
 const ACKS_KEPT = 16;
+/** What a same-room table answers `not_allowed` (ruling 14): seat moves by code, nudges and retiring. */
+const SAME_ROOM_REFUSED: ReadonlySet<ClientMessage["t"]> = new Set(["moveSeat", "claimMove", "nudge", "retire"]);
 /** A turn has to be this old before anyone may nudge it (divided by the dev speed). */
 export const NUDGE_AFTER_MS = 2 * MS_PER_MINUTE;
 /** Between two nudges from the same seat at a table, on any turns (divided by the dev speed). */
@@ -489,6 +501,7 @@ export class RoomCore<S = CatTowerState> {
     const state = RoomCore.create<S>(code, spec.hostDeviceId, now, spec.name, spec.look, spec.game);
     if (spec.screens) state.screens = [...spec.screens];
     if (spec.members?.length) state.members = [...spec.members];
+    if (spec.removed) state.removed = { devices: [...spec.removed.devices], players: [...spec.removed.players] };
     if (spec.options) state.options = { ...spec.options };
     state.seats = [
       ...spec.seats.map((s) => ({ ...s })),
@@ -589,6 +602,18 @@ export class RoomCore<S = CatTowerState> {
     return this.game.sameRoom === true;
   }
 
+  /** The host removed this device (design §10.2): its sockets are refused, with a fresh near key too. */
+  isRemoved(deviceId: string): boolean {
+    return this.state.removed?.devices.includes(deviceId) ?? false;
+  }
+
+  /** The seat's person was removed: by its device, or by its player. */
+  private removedSeat(s: SeatInfo): boolean {
+    const removed = this.state.removed;
+    if (!removed) return false;
+    return (s.playerId !== undefined && removed.players.includes(s.playerId)) || (s.deviceId !== undefined && removed.devices.includes(s.deviceId));
+  }
+
   /**
    * How well the room knows a device that asks to join, for the guard on joining by code: a
    * `member` (a screen here, the host, a seat's device, or one that has been here before) needs
@@ -599,7 +624,9 @@ export class RoomCore<S = CatTowerState> {
    */
   knows(deviceId: string, near: string | null, screen: boolean, games?: readonly string[]): "member" | "exists" | "not_near" {
     const { state } = this;
+    // A removed device needs no key to be told so: the room refuses it (`isRemoved`), uncounted.
     const member =
+      this.isRemoved(deviceId) ||
       this.isScreen(deviceId) ||
       deviceId === state.hostDeviceId ||
       state.devices[deviceId] !== undefined ||
@@ -1052,7 +1079,8 @@ export class RoomCore<S = CatTowerState> {
   private maybeStartLive(deviceId: string): void {
     const { state } = this;
     if (!this.features.live || state.live?.[deviceId]) return;
-    if (!this.midGame()) return;
+    // No live table or Lock Screen for a same-room table (design §5.1).
+    if (!this.midGame() || this.sameRoom()) return;
     const mine = this.controlledSeats(deviceId);
     if (mine.length === 0) return;
     const now = this.now();
@@ -1415,6 +1443,10 @@ export class RoomCore<S = CatTowerState> {
     if (this.isScreen(deviceId) && msg.t !== "ping" && msg.t !== "presence" && msg.t !== "link") {
       return [this.fail(deviceId, "not_allowed")];
     }
+    // A same-room table has no way in from elsewhere and no bots (design §5.1, ruling 14).
+    if (this.sameRoom() && (SAME_ROOM_REFUSED.has(msg.t) || (msg.t === "configure" && msg.kind === "bot"))) {
+      return [this.fail(deviceId, "not_allowed")];
+    }
     switch (msg.t) {
       case "rematch":
         return this.features.streaks ? this.rematch(deviceId) : [this.fail(deviceId, "bad_message")];
@@ -1458,6 +1490,8 @@ export class RoomCore<S = CatTowerState> {
         return this.features.tv ? this.aim(deviceId, msg.seat, msg.aim) : [this.fail(deviceId, "bad_message")];
       case "ink":
         return this.ink(deviceId, msg);
+      case "remove":
+        return this.remove(deviceId, msg.seat);
       default:
         return [this.fail(deviceId, "bad_message")];
     }
@@ -1534,6 +1568,8 @@ export class RoomCore<S = CatTowerState> {
     // A person takes over a House Cat's seat (a first table's cat holds it for whoever comes).
     if (target.kind !== "open" && target.kind !== "bot") return [this.fail(deviceId, "seat_taken")];
     const playerId = this.state.devices[deviceId]?.players?.[person.id];
+    // Removed by the host: not from this device, nor as this player from any other.
+    if (this.isRemoved(deviceId) || (playerId !== undefined && this.state.removed?.players.includes(playerId))) return [this.fail(deviceId, "removed")];
     if (this.state.seats.some((s) => s.person?.id === person.id || (playerId && s.playerId === playerId))) {
       return [this.fail(deviceId, "person_seated")];
     }
@@ -1574,7 +1610,8 @@ export class RoomCore<S = CatTowerState> {
    */
   private nudgeTarget(deviceId: string): { seat: Seat; from: Seat } | null {
     const { state } = this;
-    if (!this.midGame()) return null;
+    // Nobody nudges or retires at a same-room table: everyone is in the room (ruling 14).
+    if (!this.midGame() || this.sameRoom()) return null;
     const seat = this.actor();
     if (seat === null || state.seats[seat]?.kind !== "human" || this.controls(deviceId, seat)) return null;
     const from = this.nudger(deviceId);
@@ -1651,7 +1688,7 @@ export class RoomCore<S = CatTowerState> {
    */
   private stalledSeat(): Seat | null {
     const { state } = this;
-    if (!this.midGame()) return null;
+    if (!this.midGame() || this.sameRoom()) return null;
     const seat = this.actor();
     if (seat === null || state.seats[seat]?.kind !== "human") return null;
     const other = Object.keys(state.devices).some((id) => !this.controls(id, seat) && this.nudger(id) !== null);
@@ -1810,11 +1847,14 @@ export class RoomCore<S = CatTowerState> {
     const { state } = this;
     if (state.status !== "lobby") return [this.fail(deviceId, "not_lobby")];
     if (this.controlledSeats(deviceId).length === 0) return [this.fail(deviceId, "not_seated")];
-    if (state.seats.some((s) => s.kind === "open")) return [this.fail(deviceId, "seats_open")];
+    // A same-room table's open seats wait for phones that may never scan: the start drops them (ruling 17).
+    if (!this.sameRoom() && state.seats.some((s) => s.kind === "open")) return [this.fail(deviceId, "seats_open")];
     const playing = state.seats.flatMap((s, i) =>
       s.kind === "human" || s.kind === "bot" ? [{ seat: s, from: i }] : [],
     );
     if (playing.length < this.game.minSeats) return [this.fail(deviceId, "not_enough_players")];
+    // The TV is the easel: no game starts without it.
+    if (this.sameRoom() && !this.screenShown()) return [this.fail(deviceId, "no_screen")];
     return this.deal();
   }
 
@@ -1845,15 +1885,21 @@ export class RoomCore<S = CatTowerState> {
     }
     // The game was turned off since this table was dealt: it plays on to the end, and no new one is dealt.
     if (state.game !== DEFAULT_GAME && !this.features.games?.includes(state.game)) return [this.fail(deviceId, "game_off")];
+    // The first seat rotates: everyone moves one on. A seat a House Cat took over is a plain one now.
+    const seats = [...state.seats.slice(1), ...state.seats.slice(0, 1)]
+      // A seat its host removed stays out of the new table (design §10.2).
+      .filter((s) => !this.removedSeat(s))
+      .map((s): SeatInfo => (s.left ? { kind: "bot", botLevel: "house" } : { ...s }));
+    if (seats.length < this.game.minSeats) return [this.fail(deviceId, "not_enough_players")];
     state.rematch = { code: null };
     this.rematchIntent = {
       name: state.name,
       look: this.look(),
-      // The first seat rotates: everyone moves one on. A seat a House Cat took over is a plain one now.
-      seats: [...state.seats.slice(1), ...state.seats.slice(0, 1)].map((s): SeatInfo => (s.left ? { kind: "bot", botLevel: "house" } : { ...s })),
+      seats,
       hostDeviceId: deviceId,
       ...(state.screens?.length ? { screens: [...state.screens] } : {}),
       ...this.rematchMembers(),
+      ...(state.removed ? { removed: { devices: [...state.removed.devices], players: [...state.removed.players] } } : {}),
       ...(state.options ? { options: { ...state.options } } : {}),
       // The same game again. Cat Tower's intent is as it always was.
       ...(state.game === DEFAULT_GAME ? {} : { game: state.game }),
@@ -1866,7 +1912,7 @@ export class RoomCore<S = CatTowerState> {
     if (!this.sameRoom()) return {};
     // Every seat's device has been here, so it is among them; so is the device asking.
     const ids = new Set([...Object.keys(this.state.devices), ...(this.state.members ?? [])]);
-    return { members: [...ids].filter((id) => !this.isScreen(id)) };
+    return { members: [...ids].filter((id) => !this.isScreen(id) && !this.isRemoved(id)) };
   }
 
   /** Four uint32 words from the room's rng, which is crypto-backed in production. */
@@ -1882,7 +1928,75 @@ export class RoomCore<S = CatTowerState> {
     if (!this.controls(deviceId, seat)) return [this.fail(deviceId, "not_your_seat")];
     this.state.seats[seat] = { kind: "open" };
     this.dropMoveCodes((entry) => entry.seat === seat);
+    this.handHost(seat);
     return this.changed();
+  }
+
+  /**
+   * The host removes a person at a same-room table (design §10.2, ruling 10): a joiner who
+   * shouldn't be there. In the lobby the seat opens; in a game it leaves for good (the game's
+   * forfeit: a drawer mid-turn misses with "left"), and once over it only stays out of Play again.
+   * The seat's player, and each device of the seat's that holds no other seat still in, go on
+   * `removed` and are refused from then on. The host's own seats are not theirs to remove.
+   */
+  private remove(deviceId: string, seat: Seat): Outbound[] {
+    const { state } = this;
+    if (!this.sameRoom() || deviceId !== state.hostDeviceId) return [this.fail(deviceId, "not_allowed")];
+    const target = state.seats[seat];
+    if (!target || target.kind !== "human" || this.controls(deviceId, seat)) return [this.fail(deviceId, "bad_seat")];
+    const inSeat = this.inSeats();
+    // The devices that hold the seat now, and the one that claimed it, even while it isn't here.
+    const holders = new Set([...Object.keys(state.devices).filter((id) => this.controls(id, seat)), target.deviceId].filter((id) => id !== undefined));
+    const devices = [...holders].filter((id) => id !== state.hostDeviceId && !inSeat.some((i) => i !== seat && this.controls(id, i)));
+    const prior = state.removed ?? { devices: [], players: [] };
+    state.removed = {
+      devices: [...new Set([...prior.devices, ...devices])],
+      players: [...new Set([...prior.players, ...(target.playerId === undefined ? [] : [target.playerId])])],
+    };
+    // Gone at once: it hears nothing more, and the Durable Object closes its sockets.
+    const out: Outbound[] = [];
+    for (const id of devices) {
+      out.push(...this.disconnect(id));
+      delete state.devices[id];
+    }
+    // A same-room table has no move codes to drop: it refuses `moveSeat`.
+    if (state.status === "lobby") {
+      state.seats[seat] = { kind: "open" };
+      this.handHost(seat);
+      return [...out, ...this.changed()];
+    }
+    if (state.status === "playing" && this.outSeats()[seat] !== true) {
+      // The seat is still in the game, so its forfeit is never refused.
+      const applied = this.leaveGame(seat) as { out: Outbound[] };
+      this.handHost(seat);
+      this.touch();
+      this.afterGameChange();
+      return [...out, ...applied.out, ...this.snapshots()];
+    }
+    return [...out, ...this.changed()];
+  }
+
+  /** The seats still in: a person's, in the lobby or not out of the game. */
+  private inSeats(): Seat[] {
+    const out = this.outSeats();
+    return this.state.seats.flatMap((s, i) => (s.kind === "human" && out[i] !== true ? [i] : []));
+  }
+
+  /**
+   * At a same-room table the host is whoever can remove a player (ruling 11): when the host holds
+   * no seat still in once `from` has gone, the role passes to the device of the next seat in seat
+   * order after it that is still in. With nobody seated there is no host, and the next phone to
+   * sit is it, as at a table a TV made.
+   */
+  private handHost(from: Seat): void {
+    const { state } = this;
+    if (!this.sameRoom() || state.hostDeviceId === "") return;
+    const inSeat = this.inSeats();
+    if (inSeat.some((i) => this.controls(state.hostDeviceId, i))) return;
+    const n = state.seats.length;
+    const next = inSeat.map((i) => ({ i, d: (i - from + n) % n })).sort((x, y) => x.d - y.d)[0];
+    // A person's seat always has the device that claimed it, or that it was moved to.
+    state.hostDeviceId = next === undefined ? "" : ((state.seats[next.i] as SeatInfo).deviceId as string);
   }
 
   private moveSeat(deviceId: string, seat: Seat): Outbound[] {
@@ -1954,6 +2068,7 @@ export class RoomCore<S = CatTowerState> {
     if (owner !== null && owner !== deviceId && forActor) return [this.fail(deviceId, "not_allowed")];
     const applied = forfeit ? this.leaveGame(seat) : this.applyGame(seat, action, { easyOnly: this.kittens.has(deviceId) });
     if ("error" in applied) return [this.fail(deviceId, applied.error)];
+    if (forfeit) this.handHost(seat);
     if (forActor && owner === null && this.game.stream) this.state.drawerDevice = { turn, deviceId };
     if (id !== undefined && device) device.acks = [...(device.acks ?? []), id].slice(-ACKS_KEPT);
     const mover = this.state.seats[seat]?.playerId;
@@ -2140,7 +2255,8 @@ export class RoomCore<S = CatTowerState> {
     timers.botAt = null;
 
     const key = this.turnKey();
-    if (this.seatPresence(actor) !== "awake" && state.pushedForTurn !== key) {
+    // Everyone at a same-room table is in the room: no "your move" (design §5.1).
+    if (!this.sameRoom() && this.seatPresence(actor) !== "awake" && state.pushedForTurn !== key) {
       state.pushedForTurn = key;
       this.pushIntents.push({
         deviceId: seat.deviceId as string,

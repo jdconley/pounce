@@ -2,6 +2,7 @@ import { afterEach, beforeAll, describe, expect, test } from "vitest";
 
 import { BASE, bundle, call, Client, eventually, mint, newPerson, profile, settle, worker, type Device, type Person, type Snapshot } from "./play-helpers";
 
+import type { ServerMessage } from "../src/protocol";
 import type { Miniflare } from "miniflare";
 
 /** Purrtrait through the Worker and the room's Durable Object: same room only (design §5). */
@@ -21,9 +22,10 @@ const PURR = { "x-pounce-games": "cat-tower,tiles,purrtrait" };
 /** A near key's life at `DEV_SPEED` 100: 30 s for each of two keys, a hundred times faster. */
 const FAST = 100;
 
-async function start(options: { devSpeed?: number; games?: string; tv?: boolean; purrtraitAppLinks?: boolean } = {}): Promise<Miniflare> {
+async function start(options: { devSpeed?: number; games?: string; tv?: boolean; purrtraitAppLinks?: boolean; streaks?: boolean } = {}): Promise<Miniflare> {
   const mf = await worker(script, {
     sent: [],
+    ...(options.streaks ? { streaks: true, links: true } : {}),
     tv: options.tv ?? true,
     games: options.games ?? "tiles,purrtrait",
     ...(options.devSpeed ? { devSpeed: options.devSpeed } : {}),
@@ -232,6 +234,92 @@ describe("Play again at a Purrtrait table", { timeout: 30_000 }, () => {
     }
     // A stranger still needs the key at the new table.
     expect(await refusal(await upgrade(mf, next, await mint(mf)))).toEqual(NOT_NEAR);
+  });
+});
+
+describe("the host removes a player (design §10.2)", { timeout: 30_000 }, () => {
+  const REMOVED = { status: 403, body: { error: "removed" } };
+  const closing = (c: Client) => new Promise<number>((resolve) => c.ws.addEventListener("close", (e) => resolve(e.code)));
+
+  test("remove in the lobby opens the seat and the device is refused after, even with a fresh key", async () => {
+    const mf = await start();
+    const [tv, host, guest, intruder] = [await mint(mf), await mint(mf), await mint(mf), await mint(mf)];
+    const { code, screen } = await tvTable(mf, tv);
+    const h = await sit(mf, code, screen, host, 0, newPerson("Alice", 1));
+    const g = await sit(mf, code, screen, guest, 1, newPerson("Bo", 2));
+    h.send({ t: "configure", seat: 2, kind: "open" });
+    await h.until((s) => s.room.seats[2]?.kind === "open");
+    const x = await sit(mf, code, screen, intruder, 2, newPerson("Cy", 3));
+    // Only the host may.
+    g.send({ t: "remove", seat: 2 });
+    expect(await g.find((m) => m.t === "error")).toEqual({ t: "error", code: "not_allowed" });
+    const closed = closing(x);
+    h.send({ t: "remove", seat: 2 });
+    expect(await closed).toBe(4403);
+    await h.until((s) => s.room.seats[2]?.kind === "open");
+    // Refused with the TV's live key, as often as it tries: never counted as a wrong guess.
+    for (let i = 0; i < 8; i++) expect(await refusal(await upgrade(mf, code, intruder, `?near=${nearOf(screen).key}`))).toEqual(REMOVED);
+    expect(await refusal(await upgrade(mf, code, intruder))).toEqual(REMOVED);
+    // A browser hears it as 4403.
+    expect(await (await browser(mf, code, intruder, `near=${nearOf(screen).key}`)).closed).toBe(4403);
+    // Somebody else may take the seat.
+    await sit(mf, code, screen, await mint(mf), 2, newPerson("Di", 4));
+  });
+
+  test("remove in a game skips the seat; Play again keeps it out", async () => {
+    const mf = await start();
+    const [tv, a, b, c] = [await mint(mf), await mint(mf), await mint(mf), await mint(mf)];
+    const { code, screen } = await tvTable(mf, tv);
+    const [alice, bo, cy] = [newPerson("Alice", 1), newPerson("Bo", 2), newPerson("Cy", 3)];
+    await profile(mf, a, [alice]);
+    await profile(mf, b, [bo]);
+    await profile(mf, c, [cy]);
+    const pa = await sit(mf, code, screen, a, 0, alice);
+    const pb = await sit(mf, code, screen, b, 1, bo);
+    pa.send({ t: "configure", seat: 2, kind: "open" });
+    await pa.until((s) => s.room.seats[2]?.kind === "open");
+    const pc = await sit(mf, code, screen, c, 2, cy);
+    pa.send({ t: "start" });
+    await pa.until((s) => s.room.purrtrait?.phase === "choosing");
+    const closed = closing(pc);
+    pa.send({ t: "remove", seat: 2 });
+    expect(await closed).toBe(4403);
+    await pa.until((s) => s.room.purrtrait?.out[2] === true);
+    expect(pa.last?.room.status).toBe("playing");
+    pb.send({ t: "act", seat: 1, action: { type: "forfeit" } });
+    await pa.until((s) => s.room.status === "over");
+    pa.send({ t: "rematch" });
+    const next = (await pa.find<{ t: "rematch"; code: string }>((m) => m.t === "rematch")).code;
+    const tvNext = await opened(await upgrade(mf, next, tv, "?role=screen"));
+    const back = await opened(await upgrade(mf, next, a));
+    expect(back.last?.room.seats.filter((s) => s.kind === "human").map((s) => s.person?.name)).toEqual(["Bo", "Alice"]);
+    // Out of the new table too, with its TV's live key.
+    expect(await refusal(await upgrade(mf, next, c, `?near=${nearOf(tvNext).key}`))).toEqual(REMOVED);
+  });
+});
+
+describe("no requests to play at a Purrtrait table (design §5.1)", { timeout: 30_000 }, () => {
+  test("a pair that drew at a Purrtrait table can't send a request to play to it", async () => {
+    const mf = await start({ streaks: true, devSpeed: 10 });
+    const [tv, a, b] = [await mint(mf), await mint(mf), await mint(mf)];
+    const { code, screen } = await tvTable(mf, tv);
+    const [alice, bo] = [newPerson("Alice", 1), newPerson("Bo", 2)];
+    await profile(mf, a, [alice], { apns: "a".repeat(64) });
+    await profile(mf, b, [bo], { apns: "b".repeat(64) });
+    const pa = await sit(mf, code, screen, a, 0, alice);
+    const pb = await sit(mf, code, screen, b, 1, bo);
+    pa.send({ t: "start" });
+    // Each draws a turn that is guessed: a turn each makes them a pair, as at any table.
+    for (const [drawer, guesser, c] of [[0, 1, pa], [1, 0, pb]] as const) {
+      await c.until((s) => s.room.purrtrait?.phase === "choosing" && s.room.purrtrait.drawer === drawer);
+      c.send({ t: "act", seat: drawer, action: { type: "choose", level: "easy" } });
+      await c.until((s) => s.room.purrtrait?.phase === "drawing");
+      c.send({ t: "act", seat: drawer, action: { type: "gotIt", seat: guesser } });
+    }
+    const streak = await pa.find<Extract<ServerMessage, { t: "streak" }>>((m) => m.t === "streak");
+    const res = await call(mf, a, "POST", `/v1/pounces?person=${alice.id}`, { to: streak.pair, target: { table: code } });
+    expect(res.status).toBe(409);
+    expect(await res.json()).toEqual({ error: "not_shared" });
   });
 });
 
