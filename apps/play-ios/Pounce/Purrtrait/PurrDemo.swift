@@ -27,7 +27,16 @@ actor PurrDemoSocket: RoomSocketing {
     /// Ink messages taken (the frame gate's probe).
     private(set) var inkMessages = 0
 
+    /// `-purr-ink` (the App Store shot): the drawer's word is "kitten" and the easel already holds
+    /// the demo cat, as the room's copy of the drawing (an `inkSync`, as after a relaunch).
+    private let inked = CommandLine.arguments.contains("-purr-ink")
+
     init(room: RoomView) {
+        var room = room
+        if inked, room.purrtrait?.youDraw == true {
+            room.purrtrait?.word = "kitten"
+            room.purrtrait?.group = .animals
+        }
         self.room = room
         (events, continuation) = AsyncStream.makeStream(of: SocketEvent.self)
     }
@@ -35,6 +44,9 @@ actor PurrDemoSocket: RoomSocketing {
     func start() async {
         continuation.yield(.connected)
         snapshot()
+        if inked, let view = room.purrtrait, view.youDraw {
+            continuation.yield(.message(.inkSync(turn: view.turn, ops: DemoFixtures.purrCatOps)))
+        }
     }
 
     func reconnectNow() async {}

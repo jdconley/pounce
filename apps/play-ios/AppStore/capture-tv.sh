@@ -34,6 +34,10 @@ shot() {
   echo "$OUT/$name.png"
 }
 
+# Toy Tumble at four seats, the family's names on the boxes (`-tumble-family`), its cats well into
+# the round; then Purrtrait with the demo cat drawn on the easel (Animals).
+SIMCTL_CHILD_POUNCE_DEMO_CAST="Jess,Sam,Grandma,Theo,Ruby,Grandpa" shot tumble 24 -demo tv-tumble -seats 4 -tumble-family
+SIMCTL_CHILD_POUNCE_DEMO_CAST="Jess,Sam,Grandma,Theo,Ruby,Grandpa" shot purrtrait 9 -tv-preview purrtrait -seats 6
 # Birdwatch mid-trick with the store's cast (`TVTablePreview` takes POUNCE_DEMO_CAST): its long name
 # doesn't fit beside the sill at four seats.
 SIMCTL_CHILD_POUNCE_DEMO_CAST="Jess,Sam,Grandma,Theo,Ruby,Grandpa" shot birdwatch 9 -tv-preview birdwatch -seats 4 -aim

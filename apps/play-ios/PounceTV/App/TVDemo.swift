@@ -520,6 +520,10 @@ struct TVDemoTableView: View {
                 options.left = [1]
                 options.away = [2]
             }
+            // `-tumble-family`: the seats are the demo family (POUNCE_DEMO_CAST), not House Cats.
+            if CommandLine.arguments.contains("-tumble-family") {
+                options.family = ["Mia", "Leo", "Kiki", "Otis", "Nova", "Ziggy"].enumerated().map { DemoFixtures.castName($0.offset, $0.element) }
+            }
             let made = options
             next = TVRoom(code: "TUMBLE", socket: { _ in TumbleDemoSocket(options: made, tv: true) }, watchesNetwork: false)
         } else if game == .purrtrait {

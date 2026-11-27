@@ -25,6 +25,8 @@ actor TVPurrDemoSocket: RoomSocketing {
         self.still = still
         self.lobby = lobby
         var room = lobby ? DemoFixtures.purrScreen(.lobby) : DemoFixtures.purrScreen(.draw, seats: self.seats)
+        // A still shows the demo cat: its word's group is Animals.
+        if still { room.purrtrait?.group = .animals }
         if lobby {
             room.seats = (0..<10).map { _ in SeatView(kind: .open) }
             room.near = RoomNear(key: "H4TR9WQZ", code: "\(code)H4T", expiresIn: 30_000)
