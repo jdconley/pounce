@@ -86,7 +86,7 @@ export function LayDownFirst(props: { onLay: () => void; onDiscard: () => void; 
  * Pass and play's curtain (PassCurtainView.swift): the next person's hand stays hidden until
  * they hold the button, so nobody sees a hand that isn't theirs.
  */
-export function Curtain(props: { name: string; cat: number; onReveal: () => void }) {
+export function Curtain(props: { name: string; cat: number; onReveal: () => void; label?: string }) {
   const [holding, setHolding] = useState(false);
   // The hold is the fill animation itself: its end reveals the hand, so no timer runs beside it.
   const start = () => {
@@ -118,7 +118,7 @@ export function Curtain(props: { name: string; cat: number; onReveal: () => void
         onContextMenu={(e) => e.preventDefault()}
       >
         <span class="fill" style={{ animationDuration: `${HOLD_MS}ms` }} onAnimationEnd={filled} />
-        <span class="label">Hold to see your hand</span>
+        <span class="label">{props.label ?? "Hold to see your hand"}</span>
       </button>
     </div>
   );

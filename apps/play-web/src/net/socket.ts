@@ -27,6 +27,10 @@ export type SocketEvent =
   | { kind: "closed" }
   /** The server says this build is too old: reload. */
   | { kind: "refused" }
+  /** A Purrtrait table refused this device's join key (4403 `not_near`). */
+  | { kind: "notNear" }
+  /** The table's host removed this device (4403 `removed`). */
+  | { kind: "removed" }
   | { kind: "link"; quality: LinkQuality };
 
 /** What a WebSocket needs to be, so tests can stand one in. */
@@ -119,8 +123,12 @@ export function wsUrl(origin: string, path: string, role?: "screen"): string {
 }
 
 /** The socket URL for a room on `origin`; a TV joins it as the table's `screen`. */
-export function socketUrl(origin: string, code: string, role?: "screen"): string {
-  return wsUrl(origin, `/v1/rooms/${encodeURIComponent(code)}/ws`, role);
+export function socketUrl(origin: string, code: string, role?: "screen", near?: string): string {
+  const url = wsUrl(origin, `/v1/rooms/${encodeURIComponent(code)}/ws`, role);
+  if (!near) return url;
+  const u = new URL(url);
+  u.searchParams.set("near", near);
+  return u.toString();
 }
 
 export type RoomSocketOptions = {
@@ -128,6 +136,11 @@ export type RoomSocketOptions = {
   origin?: string;
   /** "screen": a TV watching the table, not a seat at it. */
   role?: "screen";
+  /**
+   * A Purrtrait table's join key: sent until the first snapshot (the device is a member then, and
+   * reconnects without one, design §5.1).
+   */
+  near?: string;
   token: () => Promise<string>;
   /** Forget a token the server refused (4401): the next connect mints one. */
   dropToken?: () => void;
@@ -155,7 +168,7 @@ export class RoomSocket {
   private readonly setTimer: (fn: () => void, ms: number) => unknown;
   private readonly clearTimer: (id: unknown) => void;
   private readonly backoff: number[];
-  private readonly url: string;
+  private near: string | undefined;
 
   constructor(private readonly options: RoomSocketOptions) {
     this.factory = options.factory ?? ((url, protocols) => new WebSocket(url, protocols) as unknown as SocketLike);
@@ -163,7 +176,11 @@ export class RoomSocket {
     this.setTimer = options.setTimer ?? ((fn, ms) => setTimeout(fn, ms));
     this.clearTimer = options.clearTimer ?? ((id) => clearTimeout(id as ReturnType<typeof setTimeout>));
     this.backoff = options.backoff ?? BACKOFF;
-    this.url = socketUrl(options.origin ?? location.origin, options.code, options.role);
+    this.near = options.near;
+  }
+
+  private get url(): string {
+    return socketUrl(this.options.origin ?? location.origin, this.options.code, this.options.role, this.near);
   }
 
   on(listener: (e: SocketEvent) => void): () => void {
@@ -284,6 +301,8 @@ export class RoomSocket {
       }
       if (message.t === "snapshot") {
         this.attempt = 0;
+        // In: a member from now on, so the key (soon stale) is never sent again.
+        this.near = undefined;
         this.appPings = message.room.link ? Math.min(Math.max(message.room.link.ping, 1000), 30_000) : null;
         if (this.meter && this.appPings) this.meter.config.pingEvery = this.appPings;
       }
@@ -298,7 +317,10 @@ export class RoomSocket {
       if (gen !== this.generation) return;
       this.clearTimer(timeout);
       const code = ev.code;
-      // 4403: the room doesn't list this device as its screen. As final as a room that's gone.
+      // 4403: a Purrtrait table refusing a join key or a removed device (the reason says which),
+      // or a room that doesn't list this device as its screen, as final as a room that's gone.
+      if (code === 4403 && ev.reason === "not_near") return this.end({ kind: "notNear" });
+      if (code === 4403 && ev.reason === "removed") return this.end({ kind: "removed" });
       if (code === 4404 || code === 4403) return this.end({ kind: "notFound" });
       if (code === 4429) return this.end({ kind: "locked" });
       if (code === 4426) return this.end({ kind: "refused" });

@@ -630,7 +630,7 @@ describe("screen links through the Worker", { timeout: 30_000 }, () => {
 });
 
 describe("Purrtrait's ink through the Worker", { timeout: 30_000 }, () => {
-  const PURR = { "x-pounce-games": "cat-tower,tiles,purrtrait" };
+  const PURR = { "x-pounce-games": "cat-tower,tiles,purrtrait", "x-pounce-app": "platform=ios; version=1.4; build=1; protocol=1" };
   const purr = (c: Client) => c.last?.room.purrtrait as PurrView;
   const inks = (c: Client) => c.received.filter((m) => m.t === "ink");
 

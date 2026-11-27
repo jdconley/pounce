@@ -1,6 +1,6 @@
 import { describe, expect, test } from "vitest";
 
-import { parseRoute, pathFor, type Route } from "../src/lib/router";
+import { parseRoute, pathFor, typedCode, type Route } from "../src/lib/router";
 
 const TOKEN = "AbCdEfGhIjKlMnOpQr_-12";
 
@@ -52,5 +52,21 @@ describe("the web player's routes", () => {
     for (const route of routes) expect(parseRoute(pathFor(route))).toEqual(route);
     expect(pathFor({ kind: "tv" })).toBe("/play/tv");
     expect(pathFor({ kind: "tvLink", token: TOKEN })).toBe(`/play/tv-link/${TOKEN}`);
+  });
+});
+
+describe("Purrtrait's ways in", () => {
+  test("the TV's QR opens the easel route with its key", () => {
+    expect(parseRoute("/play/e/bcdfg", "?near=kq2x7mnp")).toEqual({ kind: "easel", code: "BCDFG", near: "KQ2X7MNP" });
+    expect(parseRoute("/play/e/BCDFG", "")).toEqual({ kind: "easel", code: "BCDFG" });
+    expect(parseRoute("/play/e/BCDFG", "?near=<script>")).toEqual({ kind: "easel", code: "BCDFG" });
+    expect(pathFor({ kind: "easel", code: "BCDFG", near: "KQ2X7MNP" })).toBe("/play/e/BCDFG");
+  });
+
+  test("Join takes a room code, or the TV's eight", () => {
+    expect(typedCode("bcdfg")).toEqual({ code: "BCDFG" });
+    expect(typedCode("BCDFG KQ2")).toEqual({ code: "BCDFG", near: "BCDFGKQ2" });
+    expect(typedCode("BCDFGKQ")).toBeNull();
+    expect(typedCode("AAAAA")).toBeNull();
   });
 });

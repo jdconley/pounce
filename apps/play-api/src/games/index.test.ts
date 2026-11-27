@@ -66,8 +66,8 @@ describe("the games an app is given, by its version", () => {
   const ios = (version: string) => `platform=ios; version=${version}; build=1; protocol=1`;
   const older = ["cat-tower", "tiles", "birdwatch"];
 
-  it("Toy Tumble needs app 1.4", () => {
-    expect(GAME_MIN_APP).toEqual({ tumble: "1.4" });
+  it("Toy Tumble and Purrtrait need app 1.4", () => {
+    expect(GAME_MIN_APP).toEqual({ purrtrait: "1.4", tumble: "1.4" });
   });
 
   it("an iOS or tvOS app below 1.4 never gets Toy Tumble, whatever it lists", () => {
@@ -96,6 +96,23 @@ describe("the games an app is given, by its version", () => {
   it("is still only what the app lists", () => {
     expect(gamesFor("tiles", ios("1.4"), true)).toEqual(["cat-tower", "tiles"]);
     expect(gamesFor(null, ios("1.4"), true)).toEqual(["cat-tower"]);
+  });
+});
+
+describe("Purrtrait, by app version", () => {
+  const all = "cat-tower,tiles,birdwatch,purrtrait";
+  const older = ["cat-tower", "tiles", "birdwatch"];
+
+  it("an iPhone or Apple TV below 1.4 never gets it, so a 1.3 TV can't host it either", () => {
+    expect(gamesFor(all, "platform=ios; version=1.3; build=1; protocol=1", false)).toEqual(older);
+    expect(gamesFor(all, "platform=tvos; version=1.3; protocol=1", false)).toEqual(older);
+  });
+
+  it("1.4 apps, the web player and dev servers do", () => {
+    expect(gamesFor(all, "platform=ios; version=1.4; build=1; protocol=1", false)).toContain("purrtrait");
+    expect(gamesFor(all, "platform=tvos; version=1.4; protocol=1", false)).toContain("purrtrait");
+    expect(gamesFor(all, "platform=web; version=500; protocol=1", false)).toContain("purrtrait");
+    expect(gamesFor(all, "platform=tvos; version=1.3; protocol=1", true)).toContain("purrtrait");
   });
 });
 

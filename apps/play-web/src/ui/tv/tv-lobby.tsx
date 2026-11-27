@@ -9,6 +9,7 @@ import { art, RINGS } from "../../lib/art";
 import { CATALOG } from "../../lib/catalog";
 import { play } from "../../lib/sound";
 import { lobbyRibbons, RULE_COPY } from "../../table/bw-model";
+import { clock, easelLink, isPurr, nearOf, spacedCode, timerOf } from "../../table/purr-model";
 import { seatCat, seatName } from "../../table/seat";
 import { catsOf, CATS_WORDS } from "../../tumble/store";
 import { Cat, Icon } from "../common";
@@ -28,6 +29,16 @@ const SPOTS: Record<number, [number, number][]> = {
   6: [[0.17, 0.27], [0.5, 0.22], [0.83, 0.27], [0.17, 0.77], [0.5, 0.8], [0.83, 0.77]],
 };
 
+/** Seven to ten seats (Purrtrait): two rows, the bottom one offset. */
+export function spotsFor(n: number): [number, number][] {
+  if (n <= 6) return SPOTS[Math.max(n, 2)] ?? SPOTS[2]!;
+  const top = Math.ceil(n / 2);
+  const bottom = n - top;
+  const row = (count: number, y: number, inset: number): [number, number][] =>
+    Array.from({ length: count }, (_, i) => [inset + ((1 - 2 * inset) * (i + 0.5)) / count, y]);
+  return [...row(top, 0.26, 0.02), ...row(bottom, 0.76, bottom < top ? 0.1 : 0.02)];
+}
+
 /** A refused press (Juice.swift's nope), as a shake that leaves the focus ring's scale alone. */
 export const NOPE: Keyframe[] = [
   { translate: "0" },
@@ -42,9 +53,14 @@ export function TvLobby(props: { room: RoomView; live: boolean; onChangeGame: (b
   const { room } = props;
   const game = gameOf(room);
   const seats = lobbySeats(room);
-  const spots = SPOTS[Math.min(Math.max(seats.length, 2), 6)] ?? SPOTS[2]!;
+  const spots = spotsFor(seats.length);
   const filled = seats.filter((s) => s.filled).length;
   const code = room.code;
+  // Purrtrait joins only from the TV's own code, which changes every 30 seconds (design §5.2).
+  const purr = isPurr(room);
+  const near = nearOf(room);
+  const url = purr ? (near ? easelLink(location.origin, code, near.key) : null) : inviteLink(code);
+  const shown = purr ? (near ? spacedCode(near.code, code) : "") : code;
   const ribbons = game === "birdwatch" ? lobbyRibbons(room) : new Map<number, string>();
 
   // A pop as each cat arrives.
@@ -62,19 +78,24 @@ export function TvLobby(props: { room: RoomView; live: boolean; onChangeGame: (b
           <i class="tv-ear left" aria-hidden="true" />
           <i class="tv-ear right" aria-hidden="true" />
           <div class="tv-qr-window">
-            <QrCode url={inviteLink(code)} label={`QR code to join table ${code}`} class="tv-qr" />
+            {url ? <QrCode url={url} label={`QR code to join table ${code}`} class="tv-qr" /> : <div class="qr tv-qr" aria-hidden="true" />}
           </div>
         </div>
-        <p class="tv-code" aria-label={`Table code ${code.split("").join(" ")}`}>
-          {code}
+        <p class={`tv-code ${purr ? "purr-code" : ""}`} aria-label={shown ? `Table code ${shown.replace(" ", "").split("").join(" ")}` : undefined} id="tv-join-code">
+          {shown || " "}
         </p>
       </div>
 
-      <div class={`tv-lobby-table ${seats.length > 4 ? "crowded" : ""}`}>
+      <div class={`tv-lobby-table ${seats.length > 6 ? "crowded packed" : seats.length > 4 ? "crowded" : ""}`}>
         <header class={`tv-lobby-head ${game}`}>
           <img class="tv-lobby-art" src={art(CATALOG[game].art)} alt="" width={768} height={512} decoding="async" />
           <h1 class="tv-lobby-title outlined">{CATALOG[game].title}</h1>
           {game === "birdwatch" && room.options && "rules" in room.options ? <p class="tv-lobby-rules outlined">{RULE_COPY[room.options.rules].name}</p> : null}
+          {purr ? (
+            <p class="tv-lobby-rules outlined" id="tv-purr-timer">
+              {clock(timerOf(room) * 1000)} a turn
+            </p>
+          ) : null}
           {game === "tumble" && room.seats.some((s) => s.kind === "bot") ? <p class="tv-lobby-rules outlined">{CATS_WORDS[catsOf(room)]}</p> : null}
         </header>
         <div class="tv-lobby-rug">

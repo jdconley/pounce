@@ -23,6 +23,7 @@ export function QrCode(props: { url: string; label: string; size?: string; class
       class={`qr ${props.class ?? ""}`}
       role="img"
       aria-label={props.label}
+      data-url={props.url}
       style={props.size ? { width: props.size } : undefined}
       dangerouslySetInnerHTML={{ __html: svg }}
     />

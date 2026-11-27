@@ -1,5 +1,5 @@
 import { parseRoomName } from "@pounce/play-api/room/names";
-import { useState } from "preact/hooks";
+import { useEffect, useState } from "preact/hooks";
 
 
 import { art, RINGS } from "../lib/art";
@@ -7,9 +7,11 @@ import { titleOf } from "../lib/catalog";
 import { buzz } from "../lib/haptics";
 import { play } from "../lib/sound";
 import { reach } from "../store/app";
-import { catsMessage, inviteMessages, mySeats, oneSeatPerDevice, practiceMessages, rulesMessage, seatToAdd, startClosingOpenSeats, startLit, startWords, swapMessage } from "../store/lobby";
+import { catsMessage, inviteMessages, keepSeatOpen, mySeats, oneSeatPerDevice, practiceMessages, removeMessage, rulesMessage, seatToAdd, startClosingOpenSeats, startLit, startWords, swapMessage } from "../store/lobby";
 import { BwHowTo } from "../table/bw-help";
 import { lobbyRibbons, RULE_COPY, RULES_ORDER } from "../table/bw-model";
+import { PurrHowTo } from "../table/purr-help";
+import { clock, isPurr, TIMERS, timerMessage, timerOf } from "../table/purr-model";
 import { seatCat, seatName, seatPose } from "../table/seat";
 import { TumbleHowTo } from "../tumble/help";
 import { catsOf, CATS_WORDS, isTumble, type Cats } from "../tumble/store";
@@ -33,6 +35,15 @@ const SPOTS: Record<number, [number, number][]> = {
   6: [[0.27, 0.15], [0.73, 0.15], [0.12, 0.5], [0.88, 0.5], [0.27, 0.85], [0.73, 0.85]],
 };
 
+/** Seven to ten seats (Purrtrait): a ring around the rug. */
+function spotsFor(n: number): [number, number][] {
+  if (n <= 6) return SPOTS[Math.max(n, 2)] ?? SPOTS[2]!;
+  return Array.from({ length: n }, (_, i): [number, number] => {
+    const a = -Math.PI / 2 + (2 * Math.PI * i) / n;
+    return [0.5 + 0.4 * Math.cos(a), 0.5 + 0.38 * Math.sin(a)];
+  });
+}
+
 export function Lobby(props: {
   store: RoomStore;
   room: RoomView;
@@ -48,7 +59,7 @@ export function Lobby(props: {
   const [swapFrom, setSwapFrom] = useState<number | null>(null);
   const [copied, setCopied] = useState(false);
   const shown = room.seats.map((s, i) => ({ s, i })).filter(({ s }) => s.kind !== "closed");
-  const spots = SPOTS[Math.min(Math.max(shown.length, 2), 6)] ?? SPOTS[2];
+  const spots = spotsFor(shown.length);
   const seated = mySeats(room).length > 0;
   const add = seatToAdd(room);
   const lit = startLit(room);
@@ -62,6 +73,13 @@ export function Lobby(props: {
   const localSeat = !oneSeatPerDevice(room);
   const ribbons = bird ? lobbyRibbons(room) : new Map<number, string>();
   const host = room.youAreHost && seated;
+  // Purrtrait: one room, one TV. Players join from the TV's code; the host can remove one.
+  const purr = isPurr(room);
+  const timer = timerOf(room);
+  const keepOpen = keepSeatOpen(room);
+  useEffect(() => {
+    for (const m of keepOpen ?? []) store.send(m);
+  }, [JSON.stringify(keepOpen)]);
 
   const send = (messages: Parameters<RoomStore["send"]>[0][] | null) => {
     for (const m of messages ?? []) store.send(m);
@@ -111,13 +129,15 @@ export function Lobby(props: {
         <button type="button" class="chip table-name" onClick={() => !props.kitten && seated && setSheet("rename")} aria-label={`Table: ${room.name}${props.kitten ? "" : ". Rename"}`}>
           <span>{room.name}</span>
         </button>
-        <button type="button" class="chip code-chip outlined" onClick={() => setSheet("qr")} aria-label={`${room.code}: table code. Show QR code`}>
-          {room.code}
-        </button>
+        {purr ? null : (
+          <button type="button" class="chip code-chip outlined" onClick={() => setSheet("qr")} aria-label={`${room.code}: table code. Show QR code`}>
+            {room.code}
+          </button>
+        )}
       </header>
 
       <div class="rug-stage">
-        <div class="lobby-rug">
+        <div class={`lobby-rug ${shown.length > 6 ? "packed" : ""}`}>
           <img class="rug-art" src={art("rug")} alt="" />
           {shown.map(({ s, i }, k) => {
             const [x, y] = spots[k] ?? [0.5, 0.5];
@@ -144,7 +164,7 @@ export function Lobby(props: {
                     if (swapFrom !== i) store.send(swapMessage(swapFrom, i));
                     setSwapFrom(null);
                   } else if (s.kind === "open") setSheet("add");
-                  else if (seated && (s.kind === "bot" || s.yours || (bird && host))) setSheet({ seat: i });
+                  else if (seated && (s.kind === "bot" || s.yours || ((bird || purr) && host))) setSheet({ seat: i });
                 }}
               >
                 {s.kind === "open" ? (
@@ -197,6 +217,50 @@ export function Lobby(props: {
         </section>
       ) : null}
 
+      {purr ? (
+        <section class="purr-lobby panel" aria-label="Table" id="purr-lobby">
+          <div class="bw-pills" role="radiogroup" aria-label="Turn time" id="purr-timer">
+            {TIMERS.map((t) => (
+              <button
+                type="button"
+                role="radio"
+                aria-checked={t === timer}
+                class={`bw-pill ${t === timer ? "on" : ""}`}
+                disabled={!host && t !== timer}
+                onClick={() => {
+                  if (!host || t === timer) return;
+                  play("pop", 0.5);
+                  buzz("tap");
+                  store.send(timerMessage(t));
+                }}
+              >
+                {clock(t * 1000)}
+              </button>
+            ))}
+          </div>
+          <p class="purr-join-line">
+            <Icon name="icon-qr" size={30} />
+            <span>Scan the code on the TV.</span>
+          </p>
+          <div class="purr-lobby-actions">
+            <button type="button" class="choice" onClick={() => setSheet("local")} disabled={!seated || room.seats.every((s) => s.kind === "human")} id="purr-this-device">
+              <Icon name="icon-phone" size={34} />
+              <span>This device</span>
+            </button>
+            {host && !room.screen ? (
+              <button type="button" class="choice tv-choice" id="show-on-tv" onClick={props.onShowOnTv}>
+                <TvIcon size={34} />
+                <span>Show on TV</span>
+              </button>
+            ) : null}
+            <button type="button" class="choice" onClick={() => setSheet("howto")}>
+              <Icon name="icon-play" size={34} />
+              <span>How to play</span>
+            </button>
+          </div>
+        </section>
+      ) : null}
+
       {tumble ? (
         <section class="bw-rules panel" aria-label="House Cats" id="tt-cats">
           {room.seats.some((s) => s.kind === "bot") ? (
@@ -228,7 +292,7 @@ export function Lobby(props: {
         </section>
       ) : null}
 
-      <section class="add-bar panel" aria-label="Add a player" id="add-bar">
+      <section class={`add-bar panel ${purr ? "hidden" : ""}`} aria-label="Add a player" id="add-bar" hidden={purr}>
         <h2 class="add-title">Add a player</h2>
         <div class="add-choices">
           <button type="button" class="choice" onClick={() => { send(inviteMessages(room)); reach("invite_sent"); setSheet("qr"); }} disabled={!seated}>
@@ -275,7 +339,7 @@ export function Lobby(props: {
         </Button>
       </div>
 
-      <Tip id="lobby.add" anchor="add-bar" text="Pick how the next player joins." show={seated && !room.seats.some((s) => s.kind === "human" && !s.yours)} />
+      <Tip id="lobby.add" anchor="add-bar" text="Pick how the next player joins." show={!purr && seated && !room.seats.some((s) => s.kind === "human" && !s.yours)} />
       <Tip id="lobby.start" anchor="start" text="Everyone's here? Tap Start." show={lit && room.seats.filter((s) => s.kind === "human").length > 1} />
 
       {sheet === "qr" ? (
@@ -331,7 +395,7 @@ export function Lobby(props: {
           />
         </div>
       ) : null}
-      {sheet === "howto" ? tumble ? <TumbleHowTo onClose={() => setSheet(null)} /> : <BwHowTo rules={rules} onClose={() => setSheet(null)} /> : null}
+      {sheet === "howto" ? purr ? <PurrHowTo onClose={() => setSheet(null)} /> : tumble ? <TumbleHowTo onClose={() => setSheet(null)} /> : <BwHowTo rules={rules} onClose={() => setSheet(null)} /> : null}
       {sheet === "rename" ? <RenameSheet current={room.name} onClose={() => setSheet(null)} onRename={(name) => store.send({ t: "rename", name })} /> : null}
       {typeof sheet === "object" && sheet !== null ? (
         <Sheet title={seatName(room.seats[sheet.seat])} onClose={() => setSheet(null)}>
@@ -347,6 +411,19 @@ export function Lobby(props: {
                 }}
               >
                 <Icon name="icon-swap" size={28} /> Swap seats
+              </Button>
+            ) : null}
+            {purr && host && room.seats[sheet.seat]?.kind === "human" && !room.seats[sheet.seat]?.yours ? (
+              <Button
+                wide
+                variant="magenta"
+                id="remove-seat"
+                onClick={() => {
+                  store.send(removeMessage(sheet.seat));
+                  setSheet(null);
+                }}
+              >
+                <Icon name="icon-remove" size={28} /> Remove
               </Button>
             ) : null}
             {room.seats[sheet.seat]?.kind === "human" && !room.seats[sheet.seat]?.yours ? null : room.seats[sheet.seat]?.kind === "bot" ? (

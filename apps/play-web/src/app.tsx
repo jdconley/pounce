@@ -23,7 +23,7 @@ type TableModule = typeof import("./ui/table-screen");
 let tableModule: Promise<TableModule> | null = null;
 export const loadTables = (): Promise<TableModule> => (tableModule ??= import("./ui/table-screen"));
 
-function LazyTable(props: { code: string; intent: TableIntent; say: (words: string) => void }) {
+function LazyTable(props: { code: string; intent: TableIntent; say: (words: string) => void; near?: string }) {
   const [mod, setMod] = useState<TableModule | null>(null);
   useEffect(() => {
     let live = true;
@@ -33,14 +33,14 @@ function LazyTable(props: { code: string; intent: TableIntent; say: (words: stri
     };
   }, []);
   if (!mod) return <main class="screen violet-bg" aria-busy="true" />;
-  return <mod.TableScreen code={props.code} intent={props.intent} say={props.say} />;
+  return <mod.TableScreen code={props.code} intent={props.intent} say={props.say} near={props.near} />;
 }
 
-/** How the next table screen was asked for (a new table, practice, an invite). */
-const intents = new Map<string, TableIntent>();
+/** How the next table screen was asked for (a new table, practice, an invite), and a Purrtrait table's join key. */
+const intents = new Map<string, { intent: TableIntent; near?: string }>();
 
-export function openTable(code: string, intent: TableIntent, replace = false): void {
-  intents.set(code, intent);
+export function openTable(code: string, intent: TableIntent, replace = false, near?: string): void {
+  intents.set(code, { intent, near });
   navigate({ kind: "table", code }, replace);
 }
 
@@ -132,6 +132,8 @@ function PlayerApp(props: { route: Route }) {
       reach("link_opened");
       openTable(route.code, "guest", true);
     }
+    // The TV's QR at a Purrtrait table: in with its key (the address bar drops it).
+    if (route.kind === "easel" && people.owner) openTable(route.code, "guest", true, route.near);
   }, [route, people.owner]);
 
   const say = (words: string) => setToast({ words, good: false, top: false });
@@ -171,15 +173,16 @@ function PlayerApp(props: { route: Route }) {
   } else {
     switch (route.kind) {
       case "table":
-        screen = <LazyTable key={route.code} code={route.code} intent={intents.get(route.code) ?? "open"} say={cheer} />;
+        screen = <LazyTable key={route.code} code={route.code} intent={intents.get(route.code)?.intent ?? "open"} near={intents.get(route.code)?.near} say={cheer} />;
         break;
       case "keypad":
-        screen = <JoinScreen onJoin={(code) => openTable(code, "guest")} />;
+        screen = <JoinScreen onJoin={(code, near) => openTable(code, "guest", false, near)} />;
         break;
       case "pounce":
         screen = <PounceScreen token={route.token} />;
         break;
       case "join":
+      case "easel":
         screen = <main class="screen violet-bg" />;
         break;
       case "dish":

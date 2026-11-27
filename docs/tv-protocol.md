@@ -314,6 +314,9 @@ Server to client, with no `seq`, never in a snapshot and never stored:
 Purrtrait stays off on production until the apps draw it. To switch it on:
 
 - Add `purrtrait` to `GAMES` (`apps/play-api/wrangler.jsonc`).
+  The web player and the browser TV page get it at once (and need `WEB_PURRTRAIT=on` in the web
+  build). iPhone and Apple TV apps get it only from 1.4 (`GAME_MIN_APP`): a 1.3 app never sees,
+  joins or hosts a Purrtrait table, except on a dev server.
 - The same day, bump the privacy policy's "Last updated" date in `apps/play-api/src/http/privacy.ts`:
   its drawing lines show from the moment Purrtrait tables can be dealt.
 - Trim the App Review notes (`docs/app-review-notes.md`) first, then add their Purrtrait block, so
