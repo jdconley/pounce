@@ -56,7 +56,7 @@ import Testing
     }
 
     @Test func theTVKeepsThisTurnsInkAndDropsItWithTheTurn() throws {
-        let (store, _) = store(try Self.room("snapshot-drawing-screen-paused"), role: .screen)
+        let (store, _) = store(try Self.room("snapshot-drawing-screen"), role: .screen)
         var changes: [InkFeed.Change] = []
         store.ink.onChange = { changes.append($0) }
         store.handle(.message(.ink(seat: 0, turn: "1:0", ops: [stroke])))
@@ -64,7 +64,7 @@ import Testing
         #expect(store.ink.ops == [stroke])
         #expect(changes == [.ops([stroke])])
         // The reveal keeps the picture up; the next turn drops it.
-        store.handle(snapshot(try Self.room("snapshot-reveal"), seq: 6))
+        store.handle(snapshot(try Self.room("snapshot-reveal-screen"), seq: 6))
         #expect(store.ink.ops == [stroke])
         var next = try Self.room("snapshot-choosing-guesser")
         next.purrtrait?.turn = "1:1"
@@ -74,7 +74,7 @@ import Testing
     }
 
     @Test func inkSyncIsTheWholePictureCompacted() throws {
-        let (store, _) = store(try Self.room("snapshot-drawing-screen-paused"), role: .screen)
+        let (store, _) = store(try Self.room("snapshot-drawing-screen"), role: .screen)
         let b = InkOp.stroke(id: 1, color: 2, width: 0, start: InkPoint(1, 1), deltas: [])
         store.handle(.message(.inkSync(turn: "1:0", ops: [stroke, b, .undo(id: 1)])))
         #expect(store.ink.ops == [stroke])
@@ -99,10 +99,10 @@ import Testing
 
     @Test func aRefusedPhoneStaysOut() async throws {
         let socket = FakeSocket()
-        let store = RoomStore(code: "KQ7XP", socket: socket)
+        let store = RoomStore(code: "BCDFG", socket: socket)
         store.handle(.forbidden(.notNear))
         #expect(store.phase == .notNear)
-        store.handle(snapshot(try Self.room("snapshot-lobby-phone"), seq: 1))
+        store.handle(snapshot(try Self.room("snapshot-lobby-guest"), seq: 1))
         #expect(store.phase == .notNear)
 
         let (removed, _) = self.store(try Self.room("snapshot-drawing-guesser"))
@@ -112,7 +112,7 @@ import Testing
     }
 
     @Test func eventsFoldInTheDrawerAndThePhase() throws {
-        let (store, _) = store(try Self.room("snapshot-reveal"))
+        let (store, _) = store(try Self.room("snapshot-reveal-guesser"))
         store.handle(.message(.event(seq: 6, event: .purrtrait(.turn(drawer: 1, round: 1)))))
         #expect(store.room?.purrtrait?.drawer == 1)
         #expect(store.room?.purrtrait?.phase == .choosing)
