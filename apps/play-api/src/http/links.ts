@@ -69,8 +69,8 @@ export const INVITE_CSP = `default-src 'none'; style-src 'unsafe-inline'; img-sr
 /**
  * Apple fetches this to bind `/j/*` links on our domain to the app: with pushes on, `/p/*` pounce
  * links too, and with `TV` on, `/tv/*` TV links (docs/tv-protocol.md). With `TV` off a `/tv/` link
- * is a 404, so the app doesn't claim it. `easel`: Purrtrait's TV QR links, `/e/*`, once an App
- * Store version draws the game (`PURRTRAIT_APPLINKS`); until then they open the web player.
+ * is a 404, so the app doesn't claim it. `easel`: Purrtrait's TV QR links, `/e/*`, with
+ * `PURRTRAIT_APPLINKS` on (since 1.4, the first version that draws the game, went to App Review).
  */
 export function appSiteAssociation(pounces = false, tv = false, easel = false): Response {
   return new Response(association(pounces, tv, easel), {

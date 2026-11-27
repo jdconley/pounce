@@ -35,10 +35,10 @@ describe("GAMES in production", () => {
     const value = read("GAMES");
     expect(value).toBe("tiles,birdwatch,tumble,purrtrait");
     expect(gamesOn({ GAMES: value })).toEqual(["cat-tower", "tiles", "birdwatch", "tumble", "purrtrait"]);
-    // Only a TV makes a Purrtrait table, so TV is on too. The TV's QR opens the web player, not
-    // the app, until an App Store version draws Purrtrait (1.4).
+    // Only a TV makes a Purrtrait table, so TV is on too. The TV's QR opens the app since 1.4 went
+    // to App Review, so the reviewers see it; without the app it opens the web player.
     expect(tvOn({ TV: read("TV") })).toBe(true);
-    expect(purrtraitAppLinksOn({ PURRTRAIT_APPLINKS: read("PURRTRAIT_APPLINKS") })).toBe(false);
+    expect(purrtraitAppLinksOn({ PURRTRAIT_APPLINKS: read("PURRTRAIT_APPLINKS") })).toBe(true);
   });
 
   it("is on for local dev, in the example .dev.vars, as in production", () => {

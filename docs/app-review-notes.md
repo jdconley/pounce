@@ -31,7 +31,7 @@ APPLE TV
 No age check or sign-in. On Home, select a game; the TV shows a code and a QR code. In any browser, open play.conleychaos.com/play, type 1980 and a name, tap "Join" and type the code. Tap "Add a player", "House Cat", then Start. Menu (Back) opens the TV's menu.
 
 PURRTRAIT (new in 1.4, draw and guess, starts on a TV)
-On the Apple TV, or at play.conleychaos.com/play/tv in a computer's browser, pick Purrtrait. The TV shows an 8-character code that changes every 30 seconds. In the iPhone app, tap Join on Home and type it. A second player joins the same way from play.conleychaos.com/play in another browser. Tap Start. The drawer's phone shows a word, and the TV shows the drawing as it is drawn. Guesses are said out loud; the drawer taps "Got it", then who said it.
+On the Apple TV, or at play.conleychaos.com/play/tv in a computer's browser, pick Purrtrait. The TV shows an 8-character code that changes every 30 seconds. Scan the TV's QR code with the iPhone camera, or in the app tap Join on Home and type it. A second player joins the same way from play.conleychaos.com/play in another browser. Tap Start. The drawer's phone shows a word, and the TV shows the drawing as it is drawn. Guesses are said out loud; the drawer taps "Got it", then who said it.
 A drawing goes only from the drawer's phone to that table's TV, through our server, which keeps it in memory until the turn ends. It is never saved or shared. No microphone. There are no House Cats in Purrtrait.
 
 UNDER 13 AND PARENT CONSENT
@@ -54,4 +54,4 @@ The parent can turn alerts off or remove the child from the same panel. The numb
 - The Daily Dish shows only while the server's `DAILY` flag is on. Turn it on before submitting, or App Review won't see it.
 - If the Home panel or its Play buttons get new words, update "Daily Dish".
 - Toy Tumble and Purrtrait show only while the server's `GAMES` flag lists `tumble` and `purrtrait` (it does in `apps/play-api/wrangler.jsonc`).
-- `PURRTRAIT_APPLINKS` stays off until 1.4 is live, so during review a Purrtrait TV's QR opens the web player, not the app. That is why PURRTRAIT says to tap Join in the app and type the code. Once it is on, the camera opens the app too.
+- `PURRTRAIT_APPLINKS` is on since 1.4 went to review, so a Purrtrait TV's QR opens the app. PURRTRAIT also says to tap Join and type the code, in case the reviewer's device still has Apple's older copy of the site association. Once it is on, the camera opens the app too.

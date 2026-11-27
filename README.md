@@ -143,7 +143,8 @@ offers only Play in your browser, on every device, and says the game is coming t
 1.4. Once TestFlight builds 1.4, take `tumble` out of `BETA_LACKS` and its invites work as
 Birdwatch's do. A Purrtrait table has no invite: it is joined only from the code on its TV, so its
 `/j/` page says "Scan the code on the TV.", and the TV's QR (`/e/<code>?near=<key>`) opens the web
-player until `PURRTRAIT_APPLINKS` is turned on for the App Store's 1.4. The landing page, help and
+player only without the app: `PURRTRAIT_APPLINKS` is on since 1.4 went to App Review, so with the
+app it opens there (a 1.2 app can't draw it). The landing page, help and
 llms.txt say Purrtrait starts on the browser TV page and is coming to the iPhone, iPad and Apple TV
 app in 1.4, now in App Review.
 
