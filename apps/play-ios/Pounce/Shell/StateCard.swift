@@ -78,9 +78,16 @@ struct StateCard: View {
             RoomBackground()
             ScrollView {
             VStack(spacing: 22) {
-                Image(kind.art)
-                    .resizable()
-                    .scaledToFit()
+                Group {
+                    // The TV icon is too small an image to draw this big: the game's drawn TV.
+                    if kind == .notNear {
+                        PurrTVGlyph(cat: nil, width: 200)
+                    } else {
+                        Image(kind.art)
+                            .resizable()
+                            .scaledToFit()
+                    }
+                }
                     .frame(width: 220, height: 220)
                     .background(
                         Circle()
