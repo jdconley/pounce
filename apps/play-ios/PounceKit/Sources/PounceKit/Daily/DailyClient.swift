@@ -377,10 +377,21 @@ public actor DailyRunSession {
             guard order > lastActiveOrder else { return }
             lastActiveOrder = order
         }
-        if on, result == nil { active.resume(at: timer.now()) } else { active.pause(at: timer.now()) }
+        if on, result == nil {
+            active.resume(at: timer.now())
+        } else if active.running {
+            active.pause(at: timer.now())
+            // Tell the server the time since the last move: what waits goes now and carries it, or
+            // with nothing waiting, an empty batch (docs/daily-protocol.md, "## Active time").
+            guard result == nil, link != .lost else { return }
+            if let last = queue.last { urgentThrough = last.id } else { touch = true }
+            wake()
+        }
     }
 
     private var lastActiveOrder = -1
+    /// An empty batch is due: the clock paused with nothing waiting.
+    private var touch = false
 
     /// The run's active time now, in whole milliseconds: what every call carries.
     public var activeMs: Int64 { active.ms(at: timer.now()) }
@@ -491,14 +502,14 @@ public actor DailyRunSession {
 
     /// Returns once nothing is waiting or in flight (`flush` without the push; tests wait on it).
     func settled() async {
-        guard pumping || !queue.isEmpty else { return }
+        guard pumping || !queue.isEmpty || touch else { return }
         await withCheckedContinuation { idle.append($0) }
     }
 
     private func pump() async {
-        while let first = queue.first, result == nil, link != .lost {
+        while !queue.isEmpty || touch, result == nil, link != .lost {
             // Wait for the batch window, unless something waiting is urgent.
-            if urgentThrough == nil {
+            if let first = queue.first, urgentThrough == nil {
                 let due = first.at + window
                 if timer.now() < due {
                     let sleep = Task { [timer] in await timer.wait(until: due) }
@@ -509,6 +520,8 @@ public actor DailyRunSession {
                 }
             }
             let batch = Array(queue.prefix(Self.maxBatch))
+            // Any batch carries the time, so an empty one is no longer needed.
+            touch = false
             // One body, resent as it is after a network failure, so the server answers it once.
             let body = DailyMovesBody(from: seq, moves: batch.map(\.move), activeMs: activeMs)
             guard let answer = await call({ service, run, person in
@@ -521,7 +534,8 @@ public actor DailyRunSession {
                 queue.removeFirst(min(batch.count, queue.count))
                 if let urgent = urgentThrough, !queue.contains(where: { $0.id <= urgent }) { urgentThrough = nil }
                 for move in batch { waiters.removeValue(forKey: move.id)?.resume(returning: reveals) }
-                emit(.accepted(seq: seq, reveals: reveals, progress: progress))
+                // An empty batch only kept the time: nothing for the game to hear.
+                if !batch.isEmpty { emit(.accepted(seq: seq, reveals: reveals, progress: progress)) }
                 if let result { end(result) }
             case .refused(_, _, _):
                 // Illegal, stale, over, a move this app got wrong, or past the game's move budget
@@ -564,6 +578,7 @@ public actor DailyRunSession {
 
     private func dropQueue() {
         queue.removeAll()
+        touch = false
         urgentThrough = nil
         let waiting = waiters
         waiters = [:]

@@ -431,4 +431,35 @@ final class ManualTimer: DailyTimer {
         await s.setActive(true)
         #expect(await s.activeMs == 10_000)
     }
+
+    @Test func aPauseSendsAnEmptyBatchWithTheTime() async {
+        let fake = FakeDaily()
+        let timer = ManualTimer()
+        let s = await session(fake, timer: timer)
+        await s.setActive(true)
+        timer.advance(by: .seconds(4))
+        await s.setActive(false)
+        await s.flush()
+        #expect(await fake.calls == [.moves(from: 0, count: 0)])
+        #expect(await fake.bodies.last?.activeMs == 4000)
+        #expect(await s.seq == 0)
+        // Paused again (a second background, a sheet): nothing more to say.
+        await s.setActive(false)
+        await s.flush()
+        #expect(await fake.calls.count == 1)
+    }
+
+    @Test func aPauseSendsWhatWaitsAtOnceInstead() async {
+        let fake = FakeDaily()
+        let timer = ManualTimer()
+        let s = await session(fake, timer: timer)
+        await s.setActive(true)
+        timer.advance(by: .milliseconds(300))
+        await s.send(move: Step(n: 1))
+        // Inside the batch window, but the clock paused: it goes now, carrying the time.
+        await s.setActive(false)
+        await s.settled()
+        #expect(await fake.calls == [.moves(from: 0, count: 1)])
+        #expect(await fake.bodies.last?.activeMs == 300)
+    }
 }

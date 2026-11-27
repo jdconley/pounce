@@ -1,5 +1,6 @@
 import PounceKit
 import SwiftUI
+import UIKit
 
 /// One daily puzzle (daily games design §7, "A puzzle screen"): the host around a game's board.
 ///
@@ -335,7 +336,15 @@ struct DailyPuzzleScreen: View {
         if on { active.resume(at: activeNow()) } else { active.pause(at: activeNow()) }
         activeOrder += 1
         let order = activeOrder
-        Task { await session.setActive(on, order: order) }
+        // Going to the background: a few seconds to tell the server the time so far (the session
+        // sends an empty batch, or what waits). Asking for them doesn't block.
+        let away = !on && scenePhase == .background ? BackgroundTime() : nil
+        Task {
+            await session.setActive(on, order: order)
+            guard let away else { return }
+            await session.flush()
+            away.end()
+        }
     }
 
     private func giveUp() {
@@ -345,5 +354,21 @@ struct DailyPuzzleScreen: View {
             await session.giveUp()
             givingUp = false
         }
+    }
+}
+
+/// A few seconds of background time, ended when the work is done or when the system says time's up.
+@MainActor
+private final class BackgroundTime {
+    private var id = UIBackgroundTaskIdentifier.invalid
+
+    init() {
+        id = UIApplication.shared.beginBackgroundTask(withName: "daily.active") { [weak self] in self?.end() }
+    }
+
+    func end() {
+        guard id != .invalid else { return }
+        UIApplication.shared.endBackgroundTask(id)
+        id = .invalid
     }
 }
