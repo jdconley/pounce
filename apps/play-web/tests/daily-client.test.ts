@@ -213,9 +213,36 @@ describe("the run session", () => {
     expect(run.elapsedMs()).toBe(37_000);
   });
 
+  test("a pause tells the server the time since the last call: an empty batch, once, or the waiting moves", async () => {
+    const { clock, run, calls, actives } = setup([ok(0), ok(1)], { ...START, activeMs: 10_000 });
+    // Shown and hidden with no time passing: nothing new to say.
+    run.setShown(true);
+    run.setShown(false);
+    expect(calls).toEqual([]);
+    run.setShown(true);
+    clock.advance(4000);
+    run.setVisible(false);
+    await flush();
+    expect(calls.map((c) => [c.path.split("?")[0]!.split("/").at(-1), c.body])).toEqual([["moves", { from: 0, moves: [] }]]);
+    expect(actives).toEqual([14_000]);
+    // Paused again with nothing more played: no second one.
+    run.setShown(false);
+    run.setVisible(true);
+    expect(calls).toHaveLength(1);
+    // A move waiting when the clock pauses goes at once and carries the time.
+    run.setShown(true);
+    clock.advance(1000);
+    void run.send(step(1));
+    clock.advance(500);
+    run.setShown(false);
+    await flush();
+    expect(calls.map((c) => c.body)).toEqual([{ from: 0, moves: [] }, { from: 0, moves: [step(1)] }]);
+    expect(actives).toEqual([14_000, 15_500]);
+  });
+
   test("active time pauses off screen and in a hidden tab, and goes with every call", async () => {
     const giveUp = { ...solved, outcome: "gaveUp", timeMs: 40_000, progress: 0.25 };
-    const { clock, run, calls, actives } = setup([ok(1), ok(1, { reveals: [{ n: 2 }] }), ok(1, { result: giveUp })], { ...START, activeMs: 18_000 });
+    const { clock, run, calls, actives } = setup([ok(0), ok(1), ok(1, { reveals: [{ n: 2 }] }), ok(1, { result: giveUp })], { ...START, activeMs: 18_000 });
     expect(run.activeMs()).toBe(18_000);
     run.setShown(true);
     clock.advance(1500);
@@ -233,8 +260,9 @@ describe("the run session", () => {
     await run.hint();
     clock.advance(250);
     await run.giveUp();
-    expect(calls.map((c) => c.path.split("?")[0]!.split("/").at(-1))).toEqual(["moves", "hint", "giveup"]);
-    expect(actives).toEqual([20_000, 21_000, 21_250]);
+    // The hidden tab's empty batch; the sheet's pause had nothing new to say.
+    expect(calls.map((c) => c.path.split("?")[0]!.split("/").at(-1))).toEqual(["moves", "moves", "hint", "giveup"]);
+    expect(actives).toEqual([19_500, 20_000, 21_000, 21_250]);
     // Ended: the result's time, and no more counting.
     expect(run.elapsedMs()).toBe(40_000);
     clock.advance(5000);

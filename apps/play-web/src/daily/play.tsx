@@ -207,6 +207,7 @@ export function PuzzleHost(props: { game: DailyGameId; say: (words: string) => v
       if (mod.share) {
         const fresh = await startRun(game, person).catch(() => null);
         grid = fresh ? mod.share(fresh.start.state, result) : null;
+        fresh?.close();
       }
       const png = await renderCard({ title: look.title, number: result.number, words: resultWords(result), hints: result.hints, color: look.color, deep: look.deep, grid });
       const out = await shareResult(look.title, result, png);

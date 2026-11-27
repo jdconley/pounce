@@ -14,7 +14,8 @@
  *   puzzle is on screen (`setShown`, from the host) and the tab is visible, carrying on from the
  *   start's `activeMs`. Every moves batch, hint and give-up sends it as `activeMs`, and the result's
  *   `timeMs` is it. `elapsedMs()` adds the start's `hintMs` a hint (30 seconds when it's missing).
- *   No timer counts it: two timestamps do, read when asked.
+ *   No timer counts it: two timestamps do, read when asked. When it pauses, an empty batch tells
+ *   the server the time since the last call, so none is lost.
  * - The rules: a game with more than one set asks for the ones this player plays at start
  *   (`startBody`: Nine Lives' lives). The server fixes them at the run's first start.
  *
@@ -107,7 +108,7 @@ export interface RunSession<P = unknown, S = unknown, M = unknown, R = unknown> 
 
 export type RunDeps = {
   /** An authenticated call (`api.call`): throws `ApiError` for anything but a 2xx. */
-  call: (method: string, path: string, body?: unknown) => Promise<Response>;
+  call: (method: string, path: string, body?: unknown, options?: { keepalive?: boolean }) => Promise<Response>;
   /** The person playing (`?person=`). */
   person: string;
   now?: () => number;
@@ -157,6 +158,8 @@ export class Run<P = unknown, S = unknown, M = unknown, R = unknown> implements 
   private since: number | null = null;
   private shown = false;
   private visible = true;
+  /** The active time the server last heard. */
+  private reported = -1;
   private readonly onVisibility = (): void => this.setVisible(typeof document === "undefined" || document.visibilityState !== "hidden");
   private readonly onOnline = (): void => this.retryNow();
 
@@ -173,6 +176,7 @@ export class Run<P = unknown, S = unknown, M = unknown, R = unknown> implements 
     this.clearTimer = deps.clearTimer ?? ((id) => clearTimeout(id as ReturnType<typeof setTimeout>));
     this.offset = start.now - this.now();
     this.active = start.activeMs ?? Math.max(0, start.now - start.startedAt);
+    this.reported = this.active;
     if (typeof window !== "undefined" && !deps.setTimer) {
       window.addEventListener("online", this.onOnline);
       document.addEventListener("visibilitychange", this.onVisibility);
@@ -216,7 +220,33 @@ export class Run<P = unknown, S = unknown, M = unknown, R = unknown> implements 
     else if (!counting && this.since !== null) {
       this.active = this.activeMs();
       this.since = null;
+      this.notePause();
     }
+  }
+
+  /**
+   * The clock paused: the server hears the time since the last call (docs/daily-protocol.md
+   * "Active time"). Waiting moves go now and carry it; with nothing waiting, an empty batch does,
+   * sent to outlive the page. Its answer changes nothing, so it isn't awaited.
+   */
+  private notePause(): void {
+    if (this.result || this.activeMs() === this.reported) return;
+    if (this.queue.length > 0) {
+      this.urgent = true;
+      this.cancelTimer();
+      return this.pump();
+    }
+    // A batch in flight carries an active time a moment older; the next call brings it up to date.
+    if (this.inflight) return;
+    const activeMs = this.stamp();
+    void this.deps.call("POST", dailyPath(`/v1/daily/runs/${this.start.run}/moves`, this.deps.person), { from: this.seq, moves: [], activeMs }, { keepalive: true }).catch(() => undefined);
+  }
+
+  /** The active time now, for a call's body; the server will have heard it. */
+  private stamp(): number {
+    const ms = this.activeMs();
+    this.reported = ms;
+    return ms;
   }
 
   subscribe(listener: (event: RunEvent<S, R>) => void): () => void {
@@ -264,7 +294,7 @@ export class Run<P = unknown, S = unknown, M = unknown, R = unknown> implements 
     if (this.result) return null;
     // The count so far makes a resend safe: asked again with the same count, the server answers
     // the same hint and charges nothing more. So a dropped hint is asked again, a few times.
-    const body = { hints: this.hints, activeMs: this.activeMs() };
+    const body = { hints: this.hints, activeMs: this.stamp() };
     let answer: MovesAnswer<R> | null = null;
     for (let attempt = 0; !answer && attempt < BACKOFF.length; attempt++) {
       answer = await this.post<MovesAnswer<R>>("hint", body).catch(() => null);
@@ -287,7 +317,7 @@ export class Run<P = unknown, S = unknown, M = unknown, R = unknown> implements 
   async giveUp(): Promise<DailyResult | null> {
     await this.flush();
     if (this.result) return this.result;
-    const answer = await this.post<MovesAnswer<R>>("giveup", { activeMs: this.activeMs() });
+    const answer = await this.post<MovesAnswer<R>>("giveup", { activeMs: this.stamp() });
     if (!answer) return null;
     if (!answer.ok) {
       await this.resync();
@@ -375,7 +405,7 @@ export class Run<P = unknown, S = unknown, M = unknown, R = unknown> implements 
   private async sendBatch(batch: Batch<M, R>): Promise<void> {
     let answer: MovesAnswer<R> | null;
     try {
-      answer = await this.post<MovesAnswer<R>>("moves", { from: batch.from, moves: batch.moves, activeMs: this.activeMs() });
+      answer = await this.post<MovesAnswer<R>>("moves", { from: batch.from, moves: batch.moves, activeMs: this.stamp() });
     } catch {
       // A 4xx (the run is gone, a body too big): nothing to resend; the server's state wins.
       this.drop(batch);
@@ -424,7 +454,7 @@ export class Run<P = unknown, S = unknown, M = unknown, R = unknown> implements 
         if (legal.length > 0) {
           const prefix = { from: this.seq, moves: legal, waiters };
           this.inflight = prefix;
-          const kept = await this.post<MovesAnswer<R>>("moves", { from: prefix.from, moves: legal, activeMs: this.activeMs() }).catch(() => null);
+          const kept = await this.post<MovesAnswer<R>>("moves", { from: prefix.from, moves: legal, activeMs: this.stamp() }).catch(() => null);
           if (kept?.ok) {
             this.seq = kept.seq;
             this.emit({ kind: "accepted", seq: kept.seq, reveals: kept.reveals, progress: kept.progress });
@@ -488,7 +518,7 @@ export class Run<P = unknown, S = unknown, M = unknown, R = unknown> implements 
 export async function startRun<P, S, M, R>(
   game: DailyGameId,
   person: string,
-  call: RunDeps["call"] = (m, p, b) => api.call(m, p, b),
+  call: RunDeps["call"] = (m, p, b, o) => api.call(m, p, b, o),
 ): Promise<Run<P, S, M, R> | null> {
   try {
     const res = await call("POST", dailyPath(`/v1/daily/${game}/start`, person), startBody(game));

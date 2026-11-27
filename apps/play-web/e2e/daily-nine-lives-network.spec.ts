@@ -9,7 +9,8 @@ import { cell, enter, lives, openToday, readBoard, wrongDigit } from "./nine-liv
  * - On slow 4G (about 400 ms each way, Chrome's own throttling), a number shows at once as
  *   "checking", never as right, and turns red (or locks) when the server answers.
  * - Offline, it stays "checking" and the screen says Reconnecting; back online, the answer lands.
- * - The clock counts only play time: a hidden tab and a trip to the Dish don't add to the result.
+ * - The clock counts only play time: a hidden tab and a trip to the Dish don't add to the result,
+ *   and the time before the pause, with no move, still counts (the pause's empty batch).
  */
 
 /** Chrome's network throttling, as a slow 4G phone sees it. */
@@ -74,6 +75,13 @@ test("the clock counts only play time: a hidden tab and a trip to the Dish don't
   const open = (await readBoard(page)).filter((c) => c.d === 0).map((c) => c.i);
   const t0 = Date.now();
   await enter(page, open[0]!, solution[open[0]!]!);
+  const empties: number[] = [];
+  page.on("request", (r) => {
+    const body = r.url().includes("/moves") ? (r.postDataJSON() as { moves: unknown[]; activeMs: number } | null) : null;
+    if (body && body.moves.length === 0) empties.push(body.activeMs);
+  });
+  // Three seconds of thinking with no move: play time, kept by the pause's empty batch.
+  await page.waitForTimeout(3000);
 
   // The tab hides for 6 seconds.
   const hide = (hidden: boolean) =>
@@ -101,7 +109,9 @@ test("the clock counts only play time: a hidden tab and a trip to the Dish don't
   const wall = Date.now() - t0;
   console.log(`active time: result ${result.timeMs} ms, wall ${wall} ms`);
   expect(result.timeMs).toBeLessThan(wall - 10_000);
-  expect(result.timeMs).toBeGreaterThan(0);
+  expect(result.timeMs, "the thinking before the tab hid").toBeGreaterThanOrEqual(3000);
+  expect(empties.length, "an empty batch as the clock paused").toBeGreaterThanOrEqual(1);
+  expect(empties[0]).toBeGreaterThanOrEqual(3000);
   // The end: Gave up, and how far it got.
   await expect(page.getByRole("heading", { name: "Gave up" })).toBeVisible();
   await expect(page.locator(".dd-end-result")).toHaveText(`${result.percent}%`);

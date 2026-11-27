@@ -105,7 +105,7 @@ export class Api {
     }
   }
 
-  private async send(method: string, path: string, body: unknown, token: string | null): Promise<Response> {
+  private async send(method: string, path: string, body: unknown, token: string | null, keepalive = false): Promise<Response> {
     const headers: Record<string, string> = { "x-pounce-app": APP_HEADER, "x-pounce-games": GAMES };
     if (token) headers.authorization = `Bearer ${token}`;
     if (body !== undefined) headers["content-type"] = "application/json";
@@ -115,6 +115,7 @@ export class Api {
         method,
         headers,
         ...(body === undefined ? {} : { body: JSON.stringify(body) }),
+        ...(keepalive ? { keepalive: true } : {}),
         cache: "no-store",
       });
     } catch {
@@ -137,16 +138,19 @@ export class Api {
     throw new ApiError(res.status, code || String(res.status), retryAfter);
   }
 
-  /** An authenticated call; a 401 replaces the token once. */
-  async call(method: string, path: string, body?: unknown): Promise<Response> {
+  /**
+   * An authenticated call; a 401 replaces the token once. `keepalive`: the call outlives the page
+   * (a last word as the tab goes away).
+   */
+  async call(method: string, path: string, body?: unknown, options: { keepalive?: boolean } = {}): Promise<Response> {
     let cred = await this.credential();
     try {
-      return await this.send(method, path, body, cred.token);
+      return await this.send(method, path, body, cred.token, options.keepalive);
     } catch (error) {
       if (!(error instanceof ApiError) || error.status !== 401) throw error;
       this.drop(cred);
       cred = await this.credential();
-      return this.send(method, path, body, cred.token);
+      return this.send(method, path, body, cred.token, options.keepalive);
     }
   }
 
