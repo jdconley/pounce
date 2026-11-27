@@ -23,7 +23,26 @@
 
 ## Rulings
 
-Record yours here as you go, as the Birdwatch web plan did.
+Recorded by the web session as it built (branch `claude/purrtrait-web`).
+
+1. **The typed code.** Room codes are 5 characters (`ROOM_CODE`); the server's TV code is the room code and the key's first 3 letters, 8 in all, shown as the server gives it with a space after the room code: `BCDFG KQ2`. "Join with code" takes 5 or 8 (`typedCode` in `lib/router.ts`); 8 go to the socket as `near=`.
+2. **Palette and line shape** are the iOS session's exact values (`COLOURS` in `purr-ink.ts`): #1A1426, #FF3B4A, #FF9419, #FFD400, #2ECC5B, #2F80FF, #9B4DFF, #8B5A2B, white #FFFFFF as the eraser on #FFFFFF paper. A line is moveTo the first point, lineTo the first midpoint, a quadratic through each midpoint with the point between as control, lineTo the last point; one point is a dot of the width.
+3. **What runs where.** A 50 ms batch is tens of points: filtering, RDP and encoding it, and decoding a relayed batch, stay on the page (always far under 1 ms, which `docs/main-thread.md` allows). Whole drawings go to `workers/purr-ink.worker.ts`: an `inkSync` decoded there, and the bitmap layer rastered there on an OffscreenCanvas after an undo, a resize or a sync, handed back as an ImageBitmap. A browser with no OffscreenCanvas draws it on the page.
+4. **Late screens still get the ink.** A TV that reloads gets its snapshot and `inkSync` before its easel mounts, so the room store keeps the current turn's ink messages in memory (`inkLog`) and replays them to a listener that subscribes later. Dropped when a snapshot shows another turn.
+5. **Pacing.** The writer sends at most 22 messages a second (the server takes 25), for jitter. A `["c"]` always starts a message of its own. After `easel_full`, Clear drops what waits and sends `["c"]` alone, at once. Offline, ink waits in the writer and goes when the socket is back. The reply to `inkResend` is the whole easel, sent at once (it is exempt), its last message marked `"last": true`; it carries what was waiting, so nothing goes twice.
+6. **`inkSync` on the drawer's device** is taken only by a page that has drawn nothing this turn (a reload). A page that drew keeps its own picture; its unsent batches follow.
+7. **Seats.** Nobody can open a seat from a scan, so the host's phone keeps one seat open in a Purrtrait lobby (`keepSeatOpen`); Start closes the open ones, as at other tables. A lobby of 7 to 10 seats is a ring on the phone and two rows on the TV.
+8. **The phone's lobby** (a redesign for one room): no code chip, no Far away, no House Cat. One panel: the timer pills (the host's to change), "Scan the code on the TV.", This device, Show on TV (the host, only while no TV shows the table: the new-TV path), How to play. The seat sheet has Remove for the host. Under Start: "Waiting for the TV" until the TV shows the table.
+9. **The shelf** shows Purrtrait with "Starts on the TV" where Play would be, and the tip "Pick Purrtrait on the TV." once Home's Play tip is learned. As Toy Tumble does (`SHELF` in `lib/catalog.ts`), Purrtrait is offered on the shelf and the TV's posters only by a build with `WEB_PURRTRAIT=on`, so it stays off production's shelf until the switch-on release; a table of it still draws. CI's e2e jobs build with `WEB_PURRTRAIT=on`.
+10. **A second e2e server.** Purrtrait runs on the room's clock, which the main e2e server's `DEV_SPEED:20` cuts to seconds, so `playwright.config.ts` starts a second `wrangler dev` at real speed (port `E2E_PORT + 6`) for `purrtrait.spec.ts` and the drawing frame gate.
+11. **Poster art** is composed from the existing tuxedo cat and a drawn easel (no art generator was available); the iOS session may replace it with its own.
+12. **The TV's home** with five posters (four games and Tonight's board) is three rows of two.
+13. **The reveal** sizes the word to its longest word, so a word never breaks in the middle.
+14. **Got it** opens "Who got it?", everyone else's cat and name. **Give up** asks once: Give up / Keep drawing. Undo, Clear and Got it carry no icons, so the tools fit one row on iPhone SE and wrap only at the largest text.
+15. **Tips.** "No letters or numbers" points at the word bar (the easel fills its screen, so a tip beside it would fall off), learned on the first stroke. "Tap who said it first" shows on the Who got it? sheet, over the cats (over the tools it would cover Undo and Clear). "Pick one to draw" on the cards, "Guess out loud" on a guesser's "Look at the TV".
+16. **No Cards/Table switch** at a Purrtrait table, and the table menu's Show on TV is the host's only, while no TV shows it. Forfeit says "Your turns are skipped. The rest play on." A removed phone says "The host removed you from this table."
+17. **The drawer's screen holds through the pick:** the `chosen` event's fold keeps the picking device the drawer's until the snapshot brings the word, so a shared phone's curtain never comes down twice.
+18. **Tests' hooks:** the QR element carries `data-url` (the URL it encodes).
 
 ## Review Focus
 

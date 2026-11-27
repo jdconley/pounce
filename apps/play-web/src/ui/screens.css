@@ -480,6 +480,41 @@
   margin-left: auto;
 }
 
+/* A game only a TV starts (Purrtrait): where Play would be, a label. */
+.poster-tv {
+  display: inline-flex;
+  flex: 1 1 auto;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  max-width: 100%;
+  margin-left: auto;
+  padding: 5px 12px 5px 8px;
+  border: 3px solid var(--ink);
+  border-radius: 16px;
+  background: var(--yellow);
+  color: var(--ink);
+  font: 900 0.9rem/1.1 var(--round);
+  text-align: center;
+}
+
+.poster-tv svg {
+  flex: none;
+}
+
+/* The label takes a row of the poster's foot to itself, so it never runs off a narrow poster. */
+.poster-tv {
+  flex: none;
+  box-sizing: border-box;
+  width: 100%;
+  margin-left: 0;
+}
+
+.poster-grid.compact .poster-tv {
+  align-self: stretch;
+  font-size: 0.8rem;
+}
+
 .home-section {
   flex: none;
 }

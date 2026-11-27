@@ -3,6 +3,7 @@
  */
 import { SHELF, type GameId } from "../../lib/catalog";
 import { bwOverTitle, bwStandings } from "../../table/bw-model";
+import { purrOverTitle, purrStandings } from "../../table/purr-model";
 import { playing, seatName } from "../../table/seat-names";
 import { tumbleOf, tumbleWinners, winsWords } from "../../tumble/store";
 
@@ -43,7 +44,7 @@ export function lobbySeats(room: RoomView): { seat: number; filled: boolean; key
 
 /** The seat whose turn it is, while a hand is being played; null between rounds and after. */
 export function turnSeat(room: RoomView): number | null {
-  if (room.status !== "playing") return null;
+  if (room.status !== "playing" || room.purrtrait) return null;
   const b = room.birdwatch;
   if (b) return b.status === "playing" && b.phase !== "between" ? b.turn : null;
   const g = room.game ?? room.tiles;
@@ -64,6 +65,8 @@ export type Standing = { seat: number; won: boolean; out: boolean; detail: strin
 export function standings(room: RoomView): Standing[] {
   // Birdwatch: one row per side, under its first seat (its cat), named for all of them.
   if (room.birdwatch) return bwStandings(room).map((s) => ({ seat: s.seats[0]!, won: s.won, out: s.left, detail: String(s.score), name: s.name }));
+  const p = room.purrtrait;
+  if (p) return purrStandings(room, p).map((s) => ({ seat: s.seat, won: s.won, out: s.out, detail: s.out ? "Left" : String(s.score) }));
   const tt = tumbleOf(room);
   if (tt) {
     const won = tumbleWinners(tt);
@@ -96,6 +99,7 @@ export function standings(room: RoomView): Standing[] {
 /** Game over's title. */
 export function overTitle(room: RoomView): string {
   if (room.birdwatch) return bwOverTitle(room);
+  if (room.purrtrait) return purrOverTitle(room, room.purrtrait);
   const tt = tumbleOf(room);
   const winners = tt ? tumbleWinners(tt) : (room.game?.winners ?? room.tiles?.winners ?? []);
   if (winners.length === 1) return `${seatName(room.seats[winners[0]!])} wins`;

@@ -43,7 +43,7 @@ describe("the room socket (RoomSocket.swift)", () => {
     const url = new URL(sockets[0]!.url);
     expect(url.protocol).toBe("wss:");
     expect(url.pathname).toBe("/v1/rooms/BCDFG/ws");
-    expect(url.searchParams.get("games")).toBe("cat-tower,tiles,birdwatch,tumble,dish");
+    expect(url.searchParams.get("games")).toBe("cat-tower,tiles,birdwatch,tumble,purrtrait,dish");
     expect(url.searchParams.get("app")).toMatch(/^platform=web; version=\d{4}\.\d{4}\.\d{4}; protocol=1$/);
     expect(socketUrl("http://localhost:8787", "BCDFG")).toMatch(/^ws:\/\/localhost:8787\//);
     expect(socketUrl("http://localhost:8787", "BCDFG")).not.toContain("role=");

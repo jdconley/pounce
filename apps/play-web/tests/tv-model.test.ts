@@ -70,9 +70,11 @@ describe("the TV lobby", () => {
   test("Change game makes the other game", () => {
     expect(otherGame("cat-tower")).toBe("tiles");
     expect(otherGame("tiles")).toBe("birdwatch");
-    // Toy Tumble is on the shelf, after Birdwatch, in a build with WEB_TUMBLE=on (the deployed one).
+    // Toy Tumble is on the shelf, after Birdwatch, in a build with WEB_TUMBLE=on (the deployed one);
+    // Purrtrait only with WEB_PURRTRAIT=on, which tests don't have.
     expect(otherGame("birdwatch")).toBe(TUMBLE_ON ? "tumble" : "cat-tower");
     if (TUMBLE_ON) expect(otherGame("tumble")).toBe("cat-tower");
+    expect(otherGame("purrtrait")).toBe("cat-tower");
     expect(gameOf(lobby([open]))).toBe("cat-tower");
     expect(gameOf(lobby([open], "tiles"))).toBe("tiles");
   });

@@ -3,6 +3,7 @@ import { devices, expect, test, type Browser, type Page, type TestInfo } from "@
 import { bwStep, cardPoint, newStats } from "./birdwatch-helpers";
 import { dailyPhone } from "./daily-phone";
 import { closeAll, firstRun, newPlayer } from "./helpers";
+import { easelPicture, inked, joinLink, phoneScans, PURR, purrTv, tvMakesPurrtrait } from "./purr-helpers";
 import { openSniff, wrongWords } from "./sniff-helpers";
 import { speedAt, REFERENCE, type Speed } from "./speed";
 import { keysTurn, playing, touchTurn } from "./tumble-helpers";
@@ -520,4 +521,81 @@ test("Toy Tumble keeps every frame: a minute against five House Cats, and a TV w
   const r = await measure(browser, page, gate, play);
   await closeAll(...phones.map((p) => p.context));
   await judge(r, gate, info);
+});
+
+/**
+ * Purrtrait's drawing (design §7): a scripted finger draws for 10 seconds on the drawer's phone
+ * while the TV draws the stream. On android-chrome the drawer's slowed phone is measured, on
+ * tv-chrome the TV page: no task over 50 ms, frame work within one 60 Hz frame at p95.
+ */
+test("drawing for 10 seconds keeps every frame, on the drawer's phone and on the TV", async ({ browser, page, context }, info) => {
+  const gate = info.project.name as Gate;
+  test.skip(gate !== "android-chrome" && gate !== "tv-chrome", "the drawer's slowed phone, and the TV");
+  test.setTimeout(240_000);
+  await context.setExtraHTTPHeaders({ "cf-connecting-ip": `10.251.${gate === "tv-chrome" ? 3 : 2}.${(process.pid % 250) + 1}` });
+  await context.addInitScript(RECORDER);
+  await context.addInitScript(() => (Element.prototype.requestFullscreen = () => Promise.resolve()));
+  // The measured page is this project's own: the TV on tv-chrome, the drawer's phone on android-chrome.
+  let tvPage: Page;
+  if (gate === "tv-chrome") {
+    tvPage = page;
+    await page.goto(`${PURR}/play/tv`);
+    await page.getByRole("button", { name: "Start", exact: true }).click();
+  } else {
+    tvPage = (await purrTv(browser)).page;
+  }
+  const tv = { context: tvPage.context(), page: tvPage, links: [] };
+  await tvMakesPurrtrait(tv);
+  const others: Awaited<ReturnType<typeof phoneScans>>[] = [];
+  let drawer: Page;
+  if (gate === "android-chrome") {
+    await page.goto(`${PURR}/play/`);
+    await firstRun(page, "Gauge");
+    await page.goto(await joinLink(tv));
+    await expect(page.getByRole("button", { name: /^Gauge, on this device/ })).toBeVisible();
+    others.push(await phoneScans(browser, tv, "Ben", devices["iPhone 13"]));
+    drawer = page;
+  } else {
+    others.push(await phoneScans(browser, tv, "Ava", devices["Pixel 7"]), await phoneScans(browser, tv, "Ben", devices["iPhone 13"]));
+    drawer = others[0]!.page;
+  }
+  await drawer.locator("#start").click();
+  // The first seat draws first.
+  await expect(drawer.locator("#purr-cards")).toBeVisible();
+  await drawer.locator("#pick-tricky").click();
+  await expect(drawer.locator("#purr-easel")).toBeVisible();
+  for (const tip of await drawer.getByRole("button", { name: "Dismiss tip" }).all()) await tip.click().catch(() => undefined);
+
+  const box = (await drawer.locator("#purr-easel canvas.purr-live").boundingBox())!;
+  const scribble = async () => {
+    const end = Date.now() + 10_000;
+    let k = 0;
+    while (Date.now() < end) {
+      k += 1;
+      const cx = 0.5 + 0.3 * Math.cos(k);
+      const cy = 0.5 + 0.3 * Math.sin(k * 1.3);
+      await drawer.mouse.move(box.x + box.width * cx, box.y + box.height * cy);
+      await drawer.mouse.down();
+      for (let i = 1; i <= 40; i++) {
+        const a = (i / 40) * Math.PI * 2;
+        await drawer.mouse.move(box.x + box.width * (cx + 0.15 * Math.cos(a + k)), box.y + box.height * (cy + 0.12 * Math.sin(2 * a)));
+      }
+      await drawer.mouse.up();
+      if (k % 6 === 0) await drawer.locator("#purr-undo").dispatchEvent("click");
+    }
+  };
+  const measured = gate === "tv-chrome" ? tvPage : drawer;
+  const r = await measure(browser, measured, gate, scribble);
+  // The TV drew what the phone did.
+  await expect.poll(async () => inked(await easelPicture(tvPage))).toBeGreaterThan(50);
+  await closeAll(...others.map((o) => o.context), ...(gate === "tv-chrome" ? [] : [tvPage.context()]));
+  const k = r.speed.residual;
+  const summary = { profile: gate, frames: r.frames, p95FrameWorkMs: Math.round((r.p95 / k) * 100) / 100, budgetMs: BUDGET[gate], longestTaskMs: Math.round(r.longest / k), longEntries: r.long.slice(0, 5) };
+  console.log(`purrtrait drawing: ${JSON.stringify(summary)}`);
+  await info.attach("purrtrait-drawing.json", { body: JSON.stringify(summary, null, 2), contentType: "application/json" });
+  expect(r.frames, "frames traced").toBeGreaterThan(200);
+  const ours = r.long.filter((e) => (e.type === "longtask" ? e.duration / k > LONG_MS : e.blocking / k > 0 || e.scriptMs / k > LONG_MS));
+  expect(ours, "tasks and animation frames over 50 ms on the rendering thread").toEqual([]);
+  expect(r.longest / k, "longest main-thread task, ms").toBeLessThanOrEqual(LONG_MS);
+  expect(r.p95 / k, `p95 main-thread work per frame, ms (budget ${BUDGET[gate]})`).toBeLessThanOrEqual(BUDGET[gate]);
 });

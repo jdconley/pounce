@@ -1,0 +1,839 @@
+/* Purrtrait: the easel on the TV and on the drawer's phone, and the phones' screens. */
+
+/* The easel: white paper, the bitmap layer and the live layer on top of it. */
+.purr-easel {
+  position: relative;
+  aspect-ratio: 3 / 4;
+  overflow: hidden;
+  background: #fff;
+  contain: strict;
+}
+
+.purr-layer {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+}
+
+/* The drawer's input layer takes every touch: no scroll, no zoom, no long-press menu. */
+.purr-easel.drawable .purr-live {
+  pointer-events: auto;
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
+}
+
+/* A loud frame: an orange-to-magenta board with an ink outline and a teal clip on top. */
+.purr-frame {
+  position: relative;
+  border-style: solid;
+  border-color: var(--ink);
+  background: linear-gradient(160deg, var(--yellow), var(--orange) 55%, var(--magenta));
+}
+
+.purr-clip {
+  position: absolute;
+  left: 50%;
+  z-index: 1;
+  background: var(--teal);
+  border-style: solid;
+  border-color: var(--ink);
+  transform: translateX(-50%);
+}
+
+/* ---- The TV ---- */
+
+.tv .purr-tv {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  grid-template-columns: calc(var(--u) * 500) 1fr calc(var(--u) * 500);
+  align-items: center;
+  gap: calc(var(--u) * 30);
+  padding: calc(var(--u) * 34) calc(var(--u) * 48);
+}
+
+.tv .purr-tv-stand {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  height: 100%;
+}
+
+.tv .purr-frame {
+  height: calc(var(--u) * 1010);
+  padding: calc(var(--u) * 26);
+  border-width: calc(var(--u) * 8);
+  border-radius: calc(var(--u) * 40);
+  box-shadow: 0 calc(var(--u) * 12) 0 var(--ink);
+}
+
+.tv .purr-clip {
+  top: calc(var(--u) * -22);
+  width: calc(var(--u) * 150);
+  height: calc(var(--u) * 50);
+  border-width: calc(var(--u) * 7);
+  border-radius: calc(var(--u) * 18);
+}
+
+.tv .purr-tv-easel {
+  height: 100%;
+  border: calc(var(--u) * 6) solid var(--ink);
+  border-radius: calc(var(--u) * 16);
+}
+
+/* Between turns: the paper waits, a sleepy cat's paw print in the middle. */
+.purr-blank {
+  position: absolute;
+  inset: 0;
+  background: url("../art/icon-paw-menu.webp") center / 30% no-repeat;
+  opacity: 0.08;
+}
+
+/* The reveal: the word big across the easel. The picture under it fades as one layer. */
+.purr-reveal {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2%;
+  background: rgba(27, 11, 58, 0.55);
+  animation: purr-reveal-in 420ms var(--ease-spring) both;
+}
+
+.purr-reveal-word {
+  max-width: 94%;
+  margin: 0;
+  color: var(--yellow);
+  /* As big as the longest word allows across the easel: a word never breaks in the middle. */
+  font: 900 calc(var(--u) * min(132, 880 / var(--len, 8))) / 1.02 var(--round);
+  text-align: center;
+  text-transform: uppercase;
+  text-wrap: balance;
+  animation: purr-pop 520ms var(--ease-spring) 80ms both;
+}
+
+.purr-reveal-line {
+  display: flex;
+  align-items: center;
+  gap: calc(var(--u) * 20);
+  margin: 0;
+  color: var(--white);
+  font: 900 calc(var(--u) * 60) / 1.1 var(--round);
+}
+
+.purr-points {
+  padding: 0 calc(var(--u) * 22);
+  border: calc(var(--u) * 5) solid var(--ink);
+  border-radius: 999px;
+  background: var(--lime);
+  color: var(--ink);
+  -webkit-text-stroke: 0;
+  text-shadow: none;
+}
+
+.tv .purr-tv-players {
+  display: flex;
+  flex-direction: column;
+  gap: calc(var(--u) * 14);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.tv .purr-tv-players li {
+  display: grid;
+  grid-template-columns: calc(var(--u) * 92) 1fr auto auto;
+  align-items: center;
+  gap: calc(var(--u) * 14);
+  height: calc(var(--u) * 92);
+  padding: 0 calc(var(--u) * 22) 0 calc(var(--u) * 8);
+  border: calc(var(--u) * 5) solid var(--ink);
+  border-radius: 999px;
+  background: rgba(27, 11, 58, 0.72);
+  box-shadow: 0 calc(var(--u) * 6) 0 var(--ink);
+  transition: background 200ms, transform 200ms var(--ease-spring);
+}
+
+.tv .purr-tv-players.many li {
+  height: calc(var(--u) * 80);
+  grid-template-columns: calc(var(--u) * 78) 1fr auto auto;
+}
+
+.tv .purr-tv-players li.drawing {
+  background: var(--yellow);
+  color: var(--ink);
+  transform: scale(1.04);
+}
+
+.tv .purr-tv-players li.out {
+  opacity: 0.5;
+}
+
+.purr-tv-cat {
+  display: block;
+  aspect-ratio: 1;
+  border: calc(var(--u) * 5) solid var(--ring);
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.16);
+  overflow: hidden;
+}
+
+.scored .purr-tv-cat {
+  animation: purr-jump 640ms var(--ease-spring) 2 both;
+  overflow: visible;
+}
+
+.tv .purr-tv-name {
+  min-width: 0;
+  overflow: hidden;
+  font: 900 calc(var(--u) * 44) / 1.1 var(--round);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tv .purr-tv-players.many .purr-tv-name {
+  font-size: calc(var(--u) * 38);
+}
+
+/* A long name takes two lines, a little smaller, rather than losing its end. */
+.tv .purr-tv-name.long {
+  display: -webkit-box;
+  font-size: calc(var(--u) * 34);
+  line-height: 1.05;
+  white-space: normal;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+.tv .purr-tv-players.many .purr-tv-name.long {
+  font-size: calc(var(--u) * 30);
+}
+
+.tv .purr-tv-score {
+  min-width: calc(var(--u) * 60);
+  font: 900 calc(var(--u) * 52) / 1 var(--round);
+  text-align: right;
+  animation: purr-pop 420ms var(--ease-spring) both;
+}
+
+.tv .purr-brush {
+  width: calc(var(--u) * 52);
+  height: calc(var(--u) * 52);
+}
+
+.tv .purr-tv-turn {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: calc(var(--u) * 30);
+  text-align: center;
+}
+
+.tv .purr-tv-drawer {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.tv .purr-tv-drawer-cat {
+  display: block;
+  width: calc(var(--u) * 250);
+  aspect-ratio: 1;
+  animation: tv-bob 2.6s ease-in-out infinite alternate;
+}
+
+.tv .purr-tv-drawer .name-tag {
+  max-width: calc(var(--u) * 460);
+  white-space: normal;
+  text-align: center;
+  text-wrap: balance;
+  margin-top: calc(var(--u) * -24);
+  padding: calc(var(--u) * 4) calc(var(--u) * 26) calc(var(--u) * 6);
+  border-width: calc(var(--u) * 5);
+  box-shadow: 0 0 0 calc(var(--u) * 6) var(--ring);
+  font: 900 calc(var(--u) * 48) / 1.2 var(--round);
+}
+
+.tv .purr-tv-doing {
+  margin-top: calc(var(--u) * 12);
+  font: 900 calc(var(--u) * 48) / 1.1 var(--round);
+}
+
+.tv .purr-tv-clock {
+  display: flex;
+  align-items: center;
+  gap: calc(var(--u) * 16);
+  margin: 0;
+  font: 900 calc(var(--u) * 150) / 1 var(--round);
+  font-variant-numeric: tabular-nums;
+}
+
+.tv .purr-tv-clock img {
+  width: calc(var(--u) * 96);
+  height: calc(var(--u) * 96);
+}
+
+.tv .purr-tv-clock.low {
+  color: var(--refuse);
+  animation: purr-pulse 1s ease-in-out infinite;
+}
+
+.tv .purr-tv-group {
+  margin: 0;
+  padding: calc(var(--u) * 10) calc(var(--u) * 44) calc(var(--u) * 14);
+  border: calc(var(--u) * 6) solid var(--ink);
+  border-radius: 999px;
+  background: var(--teal);
+  box-shadow: 0 calc(var(--u) * 8) 0 var(--ink);
+  color: var(--ink);
+  font: 900 calc(var(--u) * 64) / 1.1 var(--round);
+}
+
+.tv .purr-tv-round {
+  margin: 0;
+  font: 800 calc(var(--u) * 40) / 1.1 var(--round);
+  opacity: 0.9;
+}
+
+/* The lobby's typed code: the room code and two letters, with a space between. */
+.tv .tv-code.purr-code {
+  letter-spacing: 0.08em;
+}
+
+.tv .tv-lobby-rules {
+  white-space: nowrap;
+}
+
+/* Ten seats on the TV's rug: two rows of five, smaller cats. */
+.tv .packed .tv-seat {
+  --seat: calc(var(--u) * 158);
+}
+
+.tv .packed .tv-seat .name-tag {
+  max-width: calc(var(--seat) * 1.05);
+  padding-inline: calc(var(--u) * 12);
+  font-size: calc(var(--u) * 28);
+}
+
+@keyframes purr-reveal-in {
+  from {
+    opacity: 0;
+  }
+}
+
+@keyframes purr-pop {
+  from {
+    transform: scale(0.4);
+    opacity: 0;
+  }
+}
+
+@keyframes purr-jump {
+  40% {
+    transform: translateY(-40%) scale(1.1);
+  }
+}
+
+@keyframes purr-pulse {
+  50% {
+    transform: scale(1.06);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .purr-reveal,
+  .purr-reveal-word,
+  .scored .purr-tv-cat,
+  .tv .purr-tv-score,
+  .tv .purr-tv-drawer-cat,
+  .tv .purr-tv-clock.low {
+    animation: none;
+  }
+}
+
+/* ---- Phones ---- */
+
+/* The lobby: ten seats need smaller cats; the timer pills, how to join, and this device. */
+.lobby-rug.packed .lobby-seat {
+  width: 21%;
+}
+
+.lobby-rug.packed .lobby-seat .name-tag {
+  max-width: 120%;
+  font-size: 0.8rem;
+}
+
+.purr-lobby {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px 10px 12px;
+  text-align: center;
+}
+
+.purr-join-line {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  margin: 0;
+  font: 900 1.05rem / 1.2 var(--round);
+}
+
+.purr-lobby-actions {
+  display: flex;
+  justify-content: center;
+  gap: 4px;
+}
+
+.purr-lobby-actions .choice {
+  flex: 1 1 0;
+  max-width: 120px;
+  min-height: 64px;
+}
+
+/* A Purrtrait screen on a phone: its own background over the room. */
+.purr-screen {
+  z-index: 1;
+  align-items: center;
+  gap: 10px;
+}
+
+.purr-clock-chip {
+  flex: none;
+  padding: 4px 12px 5px;
+  border: 3px solid var(--ink);
+  border-radius: 999px;
+  background: var(--white);
+  color: var(--ink);
+  font: 900 1.2rem / 1.1 var(--round);
+  font-variant-numeric: tabular-nums;
+}
+
+.purr-clock-chip.low {
+  background: var(--refuse);
+  color: var(--white);
+}
+
+/* Picking: two big cards, Easy and Tricky. */
+.purr-pick {
+  justify-content: center;
+}
+
+.purr-pick-head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.purr-pick-head h1 {
+  margin: 0;
+  font: 900 1.8rem / 1.1 var(--round);
+}
+
+.purr-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 280px), 1fr));
+  gap: 16px;
+  width: 100%;
+  max-width: 860px;
+}
+
+.purr-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  min-height: 150px;
+  padding: 16px 14px 18px;
+  border: 4px solid var(--ink);
+  border-radius: 24px;
+  box-shadow: 0 6px 0 var(--ink);
+  color: var(--ink);
+  font-family: var(--round);
+  cursor: pointer;
+  transition: transform 120ms var(--ease-spring);
+}
+
+.purr-card:active:not(:disabled) {
+  transform: translateY(4px);
+  box-shadow: 0 2px 0 var(--ink);
+}
+
+.purr-card.easy {
+  background: linear-gradient(180deg, #b6f56a, var(--lime));
+}
+
+.purr-card.tricky {
+  background: linear-gradient(180deg, #ffb2dc, var(--magenta));
+}
+
+.purr-card-level {
+  padding: 2px 12px;
+  border-radius: 999px;
+  background: var(--ink);
+  color: var(--white);
+  font: 900 0.95rem / 1.3 var(--round);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+/* Big enough to read at arm's length, never broken inside a word. */
+.purr-card-word {
+  margin: auto 0;
+  font: 900 min(2.4rem, 10vw) / 1.05 var(--round);
+  text-align: center;
+  text-wrap: balance;
+}
+
+@media (min-width: 700px) {
+  .purr-card {
+    min-height: 220px;
+  }
+
+  .purr-card-word {
+    font-size: min(3.4rem, 6vw);
+  }
+}
+
+.purr-card-points {
+  font: 900 1.05rem / 1.2 var(--round);
+}
+
+/* Drawing: the word and clock, the easel, the tools. */
+.purr-draw {
+  gap: 8px;
+  padding-top: calc(var(--safe-top) + 8px);
+  padding-bottom: calc(var(--safe-bottom) + 8px);
+  overflow: hidden;
+}
+
+.purr-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  min-height: var(--bar, 52px);
+  /* The paw menu sits at the top right. */
+  padding-right: 52px;
+}
+
+/* The word never loses letters: as big as the width allows, and two lines for a long one. */
+.purr-word {
+  min-width: 0;
+  /* Sized to its longest word, so a word never breaks, at any text size. */
+  font: 900 min(2rem, 8vw, calc(90vw / var(--len, 8))) / 1.05 var(--round);
+  text-transform: uppercase;
+  text-wrap: balance;
+}
+
+.purr-body {
+  flex: 1 1 auto;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  min-height: 0;
+}
+
+.purr-slot {
+  flex: 1 1 auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  min-height: 0;
+}
+
+.purr-phone-frame {
+  box-sizing: border-box;
+  padding: 7px;
+  border-width: 4px;
+  border-radius: 18px;
+  box-shadow: 0 5px 0 var(--ink);
+}
+
+.purr-phone-frame .purr-easel {
+  width: 100%;
+  height: 100%;
+  border: 3px solid var(--ink);
+  border-radius: 10px;
+}
+
+.purr-tools {
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: 100%;
+  max-width: 560px;
+}
+
+.purr-palette {
+  display: flex;
+  justify-content: space-between;
+  gap: 4px;
+}
+
+.purr-swatch {
+  flex: none;
+  width: var(--swatch, 36px);
+  height: var(--swatch, 36px);
+  padding: 0;
+  border: 3px solid var(--ink);
+  border-radius: 50%;
+  background: var(--c);
+  box-shadow: 0 3px 0 var(--ink);
+  cursor: pointer;
+  transition: transform 140ms var(--ease-spring);
+}
+
+.purr-swatch.eraser {
+  background:
+    linear-gradient(135deg, transparent 44%, var(--magenta) 44% 56%, transparent 56%),
+    #fff;
+}
+
+.purr-swatch.on {
+  outline: 4px solid var(--white);
+  outline-offset: 2px;
+  transform: scale(1.12);
+}
+
+.purr-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+
+.purr-widths {
+  display: flex;
+  gap: 4px;
+  padding: 3px;
+  border: 3px solid var(--ink);
+  border-radius: 999px;
+  background: rgba(27, 11, 58, 0.55);
+}
+
+.purr-width {
+  display: grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  cursor: pointer;
+}
+
+.purr-width i {
+  display: block;
+  border: 2px solid var(--ink);
+  border-radius: 50%;
+}
+
+.purr-width.on {
+  background: var(--yellow);
+}
+
+/* Undo and Clear share the widths' row; with big text they wrap onto a row of their own. */
+.purr-row .btn {
+  flex: 1 1 0;
+  min-width: max-content;
+  padding-inline: 12px;
+}
+
+@media (max-width: 360px) {
+  .purr-width {
+    width: 34px;
+    height: 34px;
+  }
+}
+
+.purr-actions {
+  display: grid;
+  grid-template-columns: 3fr 2fr;
+  gap: 8px;
+}
+
+.purr-actions .btn {
+  min-width: 0;
+  white-space: nowrap;
+  font-size: min(1.35rem, 6vw);
+}
+
+/* Easel full: over the easel, with Clear. */
+.purr-full {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  background: rgba(27, 11, 58, 0.6);
+}
+
+.purr-full p {
+  margin: 0;
+  font: 900 1.6rem var(--round);
+}
+
+/* A tablet on its side or a laptop: the tools in a column beside the easel. */
+.purr-draw.side .purr-body {
+  flex-direction: row;
+  align-items: stretch;
+  gap: 16px;
+}
+
+.purr-draw.side .purr-tools {
+  width: min(360px, 32%);
+  justify-content: center;
+}
+
+.purr-draw.side .purr-palette {
+  flex-wrap: wrap;
+  justify-content: center;
+}
+
+.purr-draw.side .purr-actions {
+  grid-template-columns: 1fr;
+}
+
+/* Who got it: everyone's cat, big buttons. */
+.purr-who {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+  gap: 10px;
+  max-height: 60vh;
+  overflow-y: auto;
+}
+
+.purr-who-btn {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding: 8px 6px 10px;
+  border: 3px solid var(--ink);
+  border-radius: 18px;
+  background: linear-gradient(180deg, #6a35d8, #43169a);
+  box-shadow: 0 4px 0 var(--ink), inset 0 0 0 3px var(--ring);
+  color: var(--white);
+  font: 900 1rem / 1.15 var(--round);
+  overflow-wrap: anywhere;
+  cursor: pointer;
+}
+
+/* Everyone else: look at the TV. */
+.purr-watch {
+  justify-content: center;
+}
+
+.purr-watch-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  max-width: 460px;
+  padding: 20px 16px 24px;
+  text-align: center;
+}
+
+.purr-watch-drawer {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+}
+
+.purr-watch-line {
+  font: 900 1.15rem / 1.2 var(--round);
+}
+
+.purr-look {
+  margin: 0;
+  font: 900 clamp(2rem, 10vw, 3rem) / 1.05 var(--round);
+}
+
+.purr-watch-word {
+  margin: 0;
+  color: var(--yellow);
+  font: 900 clamp(2rem, 10vw, 3rem) / 1.05 var(--round);
+  text-transform: uppercase;
+  overflow-wrap: anywhere;
+}
+
+.purr-next {
+  margin: 0;
+  padding: 6px 16px 8px;
+  border: 3px solid var(--ink);
+  border-radius: 999px;
+  background: var(--yellow);
+  color: var(--ink);
+  font: 900 1.1rem / 1.2 var(--round);
+  animation: purr-pulse 1.4s ease-in-out infinite;
+}
+
+.purr-mine {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.purr-mine li {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 16px 4px 4px;
+  border: 3px solid var(--ink);
+  border-radius: 999px;
+  background: rgba(27, 11, 58, 0.72);
+  box-shadow: inset 0 0 0 3px var(--ring);
+  font: 900 1.05rem var(--round);
+}
+
+.purr-mine .pts {
+  font-size: 1.3rem;
+}
+
+/* Got it's tip sits in the sheet's flow, its arrow down at the cats: it covers none of them. */
+.purr-inline-tip {
+  position: relative;
+  align-self: center;
+  margin: 0 auto 16px;
+  --arrow-x: 50%;
+}
+
+/* A tip over the drawer's tools never takes their taps: only its X does. */
+.purr-draw .tip {
+  pointer-events: none;
+}
+
+.purr-draw .tip button {
+  pointer-events: auto;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .purr-next {
+    animation: none;
+  }
+}

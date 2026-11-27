@@ -18,7 +18,12 @@ export type StartBlock =
   | { kind: "openSeats"; open: number; players: number }
   | { kind: "notEnough"; players: number }
   /** Toy Tumble: a person's device isn't connected, and a real-time round needs everyone (spec §5.1). */
-  | { kind: "waiting"; seats: number[] };
+  | { kind: "waiting"; seats: number[] }
+  /** Purrtrait: no TV shows the table, and the game is played on it (server: `no_screen`). */
+  | { kind: "noScreen" };
+
+/** A Purrtrait table: made by a TV, played in one room. */
+const isPurr = (room: Pick<RoomView, "gameId">): boolean => room.gameId === "purrtrait";
 
 export const mySeats = (room: RoomView): number[] => room.seats.flatMap((s, i) => (s.yours && s.kind === "human" ? [i] : []));
 export const openSeats = (room: RoomView): number[] => room.seats.flatMap((s, i) => (s.kind === "open" ? [i] : []));
@@ -36,6 +41,8 @@ export function waitingSeats(room: RoomView): number[] {
 export function startBlock(room: RoomView): StartBlock | null {
   if (room.status !== "lobby") return null;
   if (mySeats(room).length === 0) return { kind: "notSeated" };
+  // Purrtrait starts only with its TV showing the table (server: `no_screen`).
+  if (isPurr(room) && !room.screen) return { kind: "noScreen" };
   const open = openSeats(room).length;
   if (open > 0) return { kind: "openSeats", open, players: playerCount(room) };
   if (playerCount(room) < minPlayers(room)) return { kind: "notEnough", players: playerCount(room) };
@@ -97,6 +104,20 @@ export const rulesMessage = (rules: "official" | "tucker" | "friesen"): ClientMe
 /** Swaps two seats in the lobby, to choose teams. */
 export const swapMessage = (a: number, b: number): ClientMessage => ({ t: "swapSeats", seats: [a, b] });
 
+/**
+ * A Purrtrait table fills from the TV's code, never an invite: its host's phone keeps one seat
+ * open in the lobby, so whoever scans next has one to take. Null when one is open already.
+ */
+export function keepSeatOpen(room: RoomView): ClientMessage[] | null {
+  if (!isPurr(room) || room.status !== "lobby" || !room.youAreHost || mySeats(room).length === 0) return null;
+  if (room.seats.some((s) => s.kind === "open")) return null;
+  const closed = room.seats.findIndex((s) => s.kind === "closed");
+  return closed >= 0 ? [{ t: "configure", seat: closed, kind: "open" }] : null;
+}
+
+/** The host removes a player from a Purrtrait table: in the lobby the seat opens; in a game it is skipped. */
+export const removeMessage = (seat: number): ClientMessage => ({ t: "remove", seat }) as unknown as ClientMessage;
+
 /** Someone is being invited: make sure a seat is open for them. */
 export function inviteMessages(room: RoomView): ClientMessage[] | null {
   if (room.status !== "lobby" || mySeats(room).length === 0 || room.seats.some((s) => s.kind === "open")) return null;
@@ -130,6 +151,7 @@ export function startWords(room: RoomView): string | null {
   const block = startBlock(room);
   if (!block) return null;
   if (block.kind === "notSeated") return "Take a seat to play.";
+  if (block.kind === "noScreen") return "Waiting for the TV";
   if (block.kind === "waiting") return waitingWords(room, block.seats);
   if (block.kind === "openSeats") {
     if (block.players >= minPlayers(room)) return waitingSeats(room).length > 0 ? waitingWords(room, waitingSeats(room)) : null;

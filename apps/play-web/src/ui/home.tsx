@@ -4,12 +4,13 @@ import { alertsCardDismissed, dismissAlertsCard, turnOnAlerts, useAlerts } from 
 import { TodayDish, useDishOn } from "../daily/dish-home";
 import { art, RINGS } from "../lib/art";
 import { CATALOG, SHELF, rulesLine, titleOf, type GameId } from "../lib/catalog";
-import { isRoomCode, navigate } from "../lib/router";
+import { navigate, typedCode } from "../lib/router";
 import { api, type TableEntry } from "../net/api";
 import { promptInstall, useInstall } from "../pwa";
 import { knownTables, reach, useApp } from "../store/app";
 
-import { Button, Cat, CloseMark, Icon, IconButton, Tip } from "./common";
+import { Button, Cat, CloseMark, Icon, IconButton, Tip, tipLearned } from "./common";
+import { TvIcon } from "./show-on-tv";
 
 
 function Dots(props: { n: number }) {
@@ -137,6 +138,8 @@ export function Home(props: { onSettings: () => void; onPractice: (game: GameId)
         </Button>
       </nav>
       <Tip id="home.play" anchor="play-first" text="Tap Play to start a game." show={open.length === 0} place="below" />
+      {/* One tip at a time: Purrtrait's waits until Play is learned. */}
+      <Tip id="home.purrtrait" anchor="purr-on-tv" text="Pick Purrtrait on the TV." show={open.length > 0 || tipLearned("home.play")} />
     </main>
   );
 }
@@ -155,16 +158,23 @@ export function Posters(props: { onPlay: (game: GameId) => void; firstId?: strin
               <span class="players">
                 <Dots n={CATALOG[id].maxSeats} /> {CATALOG[id].minSeats} to {CATALOG[id].maxSeats} players
               </span>
-              <Button
-                size="small"
-                class="poster-play"
-                id={i === 0 ? props.firstId : undefined}
-                disabled={props.disabled}
-                onClick={() => props.onPlay(id)}
-                aria-label={`Play ${CATALOG[id].title}`}
-              >
-                <Icon name="icon-play" size={26} /> Play
-              </Button>
+              {CATALOG[id].tv ? (
+                // Only a TV makes this table: a label, not a button.
+                <span class="poster-tv" id={id === "purrtrait" ? "purr-on-tv" : undefined}>
+                  <TvIcon size={26} /> Starts on the TV
+                </span>
+              ) : (
+                <Button
+                  size="small"
+                  class="poster-play"
+                  id={i === 0 ? props.firstId : undefined}
+                  disabled={props.disabled}
+                  onClick={() => props.onPlay(id)}
+                  aria-label={`Play ${CATALOG[id].title}`}
+                >
+                  <Icon name="icon-play" size={26} /> Play
+                </Button>
+              )}
             </div>
           </div>
         </article>
@@ -173,23 +183,28 @@ export function Posters(props: { onPlay: (game: GameId) => void; firstId?: strin
   );
 }
 
-/** Join by code: five letters, typed or pasted (a whole invite link works too). */
-export function JoinScreen(props: { onJoin: (code: string) => void }) {
+/**
+ * Join by code: five letters, typed or pasted (a whole invite link works too), or the eight a
+ * Purrtrait table's TV shows (its code and three letters that change every 30 seconds).
+ */
+export function JoinScreen(props: { onJoin: (code: string, near?: string) => void }) {
   const [value, setValue] = useState("");
   const [shake, setShake] = useState(0);
-  const code = value.toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 5);
-  const ok = isRoomCode(code);
+  const code = value.toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 8);
+  const typed = typedCode(code);
+  const ok = typed !== null;
   const submit = () => {
-    if (ok) props.onJoin(code);
+    if (typed) props.onJoin(typed.code, typed.near);
     else setShake((n) => n + 1);
   };
   const paste = async () => {
     try {
       const text = await navigator.clipboard.readText();
-      const found = /\/j\/([A-Za-z0-9]{5})/.exec(text)?.[1] ?? /\b([A-Za-z0-9]{5})\b/.exec(text)?.[1];
+      const found = /\/j\/([A-Za-z0-9]{5})/.exec(text)?.[1] ?? /\b([A-Za-z0-9]{8}|[A-Za-z0-9]{5})\b/.exec(text)?.[1];
       if (found) {
         setValue(found.toUpperCase());
-        if (isRoomCode(found.toUpperCase())) props.onJoin(found.toUpperCase());
+        const t = typedCode(found);
+        if (t) props.onJoin(t.code, t.near);
       }
     } catch {
       // No clipboard access: typing works.
