@@ -1,7 +1,8 @@
 name: iOS
 
 on:
-  # Every PR builds: `build` is a required check on main, so it has to report on all of them.
+  # Every PR runs this workflow: `build` is a required check on main, so it has to report on all
+  # of them. A PR the app can't feel gets a quick pass instead (see `changes`).
   pull_request:
   push:
     branches: [main]
@@ -51,7 +52,76 @@ defaults:
     working-directory: apps/play-ios
 
 jobs:
+  # What this PR changes that the iOS and TV apps are built or tested from.
+  # - `kit`: apps/play-ios, this workflow, or a server file PounceKit's tests read by path (the
+  #   shared fixtures, the funnel's steps, Sniff's word list). Runs the build and unit tests.
+  # - `app`: apps/play-ios or this workflow. Also runs the simulator gates, which play demo tables
+  #   built from apps/play-ios alone, so no server or web change can move them.
+  # When neither, the macOS jobs skip and `build` passes on its own in seconds. Server, web and docs
+  # PRs used to hold three macOS runners for 20-40 minutes for results they couldn't change, and
+  # the queue for those runners held up everything else, the App Store build included. A PounceKit
+  # test that starts reading another file outside apps/play-ios adds it to kit_paths. Pushes and
+  # dispatches always run everything.
+  changes:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      kit: ${{ steps.diff.outputs.kit }}
+      app: ${{ steps.diff.outputs.app }}
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+        if: github.event_name == 'pull_request'
+        with:
+          fetch-depth: 2 # the PR's merge commit and the main it merges into
+      - id: diff
+        working-directory: .
+        run: |
+          app_paths='^(apps/play-ios/|\.github/workflows/ios\.yml$)'
+          kit_paths='^(apps/play-api/fixtures/|apps/play-api/src/funnel/milestones\.ts$|apps/play-api/src/daily/sniff/words/)'
+          if [ "$GITHUB_EVENT_NAME" != pull_request ]; then
+            app=true kit=true
+          else
+            files=$(git diff --name-only HEAD^1 HEAD)
+            app=false kit=false
+            if grep -qE "$app_paths" <<<"$files"; then app=true kit=true
+            elif grep -qE "$kit_paths" <<<"$files"; then kit=true
+            fi
+          fi
+          echo "app=$app" >> "$GITHUB_OUTPUT"
+          echo "kit=$kit" >> "$GITHUB_OUTPUT"
+          echo "::notice title=iOS::build and unit tests: $kit, simulator gates: $app"
+
+  # The required check. It passes when the build and unit tests passed, or when `changes` says the
+  # PR can't affect them.
   build:
+    needs: [changes, app-build]
+    if: ${{ !cancelled() }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - working-directory: .
+        env:
+          CHANGES: ${{ needs.changes.result }}
+          KIT: ${{ needs.changes.outputs.kit }}
+          BUILD: ${{ needs.app-build.result }}
+        run: |
+          if [ "$CHANGES" != success ]; then
+            echo "::error::couldn't tell whether the app changed (changes: $CHANGES)"
+            exit 1
+          elif [ "$KIT" = true ]; then
+            if [ "$BUILD" != success ]; then
+              echo "::error::Build and unit tests: $BUILD"
+              exit 1
+            fi
+            echo "Build and unit tests passed"
+          else
+            echo "::notice title=iOS::nothing the app builds from changed; build and gates skipped"
+          fi
+
+  app-build:
+    name: Build and unit tests
+    needs: changes
+    if: needs.changes.outputs.kit == 'true'
     runs-on: macos-26
     timeout-minutes: 40
     steps:
@@ -137,6 +207,8 @@ jobs:
   # over 16.7 ms are reported here, enforced on a phone (scripts/frame-rate.sh).
   ui-gates:
     name: Smooth play gates (iOS simulator)
+    needs: changes
+    if: needs.changes.outputs.app == 'true'
     runs-on: macos-26
     timeout-minutes: 30
     steps:
@@ -226,6 +298,8 @@ jobs:
   # runner. Not a required check.
   tv-gates:
     name: TV smooth play gates (Apple TV simulator)
+    needs: changes
+    if: needs.changes.outputs.app == 'true'
     runs-on: macos-26
     timeout-minutes: 30
     steps:
