@@ -21,11 +21,6 @@ export async function purrTv(browser: Browser, viewport = TV_VIEWPORT): Promise<
 /** The TV makes a Purrtrait table from its poster; returns the table's code. */
 export async function tvMakesPurrtrait(tv: Tv): Promise<string> {
   await tv.page.getByRole("button", { name: /^Purrtrait\s*2 to 10 players$/ }).click();
-  // TEMP-NO-NEAR: until the server mints keys.
-  if (process.env.E2E_PURR_DIRECT) {
-    await expect(tv.page.locator(".tv-lobby")).toBeVisible();
-    return (await tv.page.evaluate(() => localStorage.getItem("pounce.tv.room")))!;
-  }
   const code = tv.page.locator(".tv-lobby .tv-code");
   await expect(code).toHaveText(/^[A-Z0-9]{5} [A-Z0-9]{3}$/);
   return ((await code.textContent()) ?? "").trim().slice(0, 5);
@@ -33,15 +28,9 @@ export async function tvMakesPurrtrait(tv: Tv): Promise<string> {
 
 /** The URL the TV's join QR holds now. */
 export async function joinLink(tv: Tv): Promise<string> {
-  // TEMP-NO-NEAR: until the server mints keys.
-  if (process.env.E2E_PURR_DIRECT && !(await tv.page.locator(".tv-lobby .tv-qr[data-url]").count())) {
-    await tv.page.waitForTimeout(300);
-    return `/play/e/${await tv.page.evaluate(() => localStorage.getItem("pounce.tv.room"))}?near=NONEYET0`;
-  }
   const qr = tv.page.locator(".tv-lobby .tv-qr[data-url]");
   await expect(qr).toBeVisible();
-  const url = (await qr.getAttribute("data-url"))!;
-  return process.env.E2E_PURR_DIRECT ? url.replace("/e/", "/play/e/") : url;
+  return (await qr.getAttribute("data-url"))!;
 }
 
 /** A phone that scans the TV's code: first run, then the table, seated. */
