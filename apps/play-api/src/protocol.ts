@@ -110,6 +110,12 @@ export type RoomView = {
   retire?: RetireView;
   /** With `TV` on: present only while a screen shows the table, or is within its grace. */
   screen?: true;
+  /**
+   * The screen's own snapshot only, at a same-room table (Purrtrait) in the lobby or a game: the
+   * key its QR carries (`/e/<code>?near=<key>`), the 8 characters a phone may type instead, and
+   * ms until the next key, which comes in a new snapshot. A phone's snapshot never has it.
+   */
+  near?: { key: string; code: string; expiresIn: number };
 };
 
 /** Where a Cat Tower player is pointing: a group laid on the table. */

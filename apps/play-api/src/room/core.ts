@@ -12,7 +12,7 @@ import { POUNCE_LIVE_MS, deadline, expired, liveState, type LiveRecord, type Liv
 import { PROTOCOL_VERSION } from "../protocol";
 import { DEFAULT_BACK, DEFAULT_RUG } from "../streaks/catalog";
 
-import { newMoveCode } from "./codes";
+import { newMoveCode, newNearKey, typedNear } from "./codes";
 import { LINK_PING_MS, LinkTracker } from "./link";
 import { LiveRelay } from "./live-relay";
 import { defaultRoomName } from "./names";
@@ -154,6 +154,12 @@ export type RoomState<S = CatTowerState> = {
    * not a drawing: the ink itself is never stored. Absent: no device yet, or no such game.
    */
   drawerDevice?: { turn: string; deviceId: string };
+  /**
+   * A same-room table (Purrtrait, design §5.2): the near keys its screen shows, current first,
+   * then the previous one, and when each was minted. Kept here, not in memory, so a room woken
+   * from hibernation still takes the key on the TV. Absent: none minted yet, or no such game.
+   */
+  nearKeys?: { key: string; at: number }[];
 };
 
 export type Look = { rug: string; back: string };
@@ -319,6 +325,8 @@ export const RETIRE_WARNING_MS = MS_PER_DAY;
 export const SCREEN_GRACE_MS = 10_000;
 /** A turn clock paused this long (no screen) ends the game as stalled (divided by the dev speed). */
 export const STALL_END_MS = 30 * MS_PER_MINUTE;
+/** A same-room table's screen shows a new near key this often; each is good for two of these at most. */
+export const NEAR_KEY_MS = 30_000;
 
 /** Most aims a device may send in a second; more are dropped. */
 export const AIM_PER_SECOND = 10;
@@ -536,11 +544,95 @@ export class RoomCore<S = CatTowerState> {
   /**
    * Lists a device as a screen here before it connects (a link); callers check `mayScreen` first.
    * A device already here as a watcher loses the players it sent: a screen speaks for nobody.
+   *
+   * A same-room table has one screen (design §5.1): the new one takes the old one's place, and
+   * the old one is a stranger from then on, so its sockets are to be closed. Returns those devices.
+   * The phones keep the TV layout for the grace, while the new TV opens its socket.
    */
-  addScreen(deviceId: string): void {
+  addScreen(deviceId: string): string[] {
+    const replaced = this.sameRoom() ? (this.state.screens ?? []).filter((id) => id !== deviceId) : [];
+    for (const id of replaced) {
+      // Gone as a screen that left, so the grace and the clock's pause run as for any TV away.
+      this.disconnect(id);
+      delete this.state.devices[id];
+    }
+    if (replaced.length > 0) this.state.screens = this.state.screens?.filter((id) => id === deviceId);
     if (!this.isScreen(deviceId)) this.state.screens = [...(this.state.screens ?? []), deviceId];
     const device = this.state.devices[deviceId];
     if (device) delete device.players;
+    return replaced;
+  }
+
+  /** The room's game is same-room only (Purrtrait): screen-made, one screen, joined by near key. */
+  sameRoom(): boolean {
+    return this.game.sameRoom === true;
+  }
+
+  /**
+   * How well the room knows a device that asks to join, for the guard on joining by code: a
+   * `member` (a screen here, the host, a seat's device, or one that has been here before) needs
+   * nothing more. A stranger at a same-room table without a live near key is `not_near`: counted
+   * as a wrong guess. A device that asks to be a screen is never let in by a key; the room tells
+   * it whether it is one.
+   */
+  knows(deviceId: string, near: string | null, screen: boolean): "member" | "exists" | "not_near" {
+    const { state } = this;
+    const member = this.isScreen(deviceId) || deviceId === state.hostDeviceId || state.devices[deviceId] !== undefined || this.controlledSeats(deviceId).length > 0;
+    if (member) return "member";
+    return !this.sameRoom() || screen || this.nearLive(near) ? "exists" : "not_near";
+  }
+
+  /** Near keys are minted and taken only while the table is in its lobby or a game. */
+  private nearOpen(): boolean {
+    return this.sameRoom() && this.state.status !== "over";
+  }
+
+  /** The keys still good now: each for two periods from its mint, however late an alarm. */
+  private liveNearKeys(): { key: string; at: number }[] {
+    if (!this.nearOpen()) return [];
+    const life = (2 * NEAR_KEY_MS) / this.speed;
+    return (this.state.nearKeys ?? []).filter((k) => this.now() < k.at + life);
+  }
+
+  /** Whether `near`, a key off the TV's QR or the 8 characters typed from it, is good now. */
+  nearLive(near: string | null): boolean {
+    if (near === null) return false;
+    const asked = near.toUpperCase();
+    return this.liveNearKeys().some((k) => asked === k.key || asked === typedNear(this.state.code, k.key));
+  }
+
+  /** When the screen's next key is due; null while there is no screen to show one. */
+  private nearDue(): number | null {
+    if (!this.nearOpen() || !this.screenConnected()) return null;
+    const current = this.state.nearKeys?.[0];
+    return current === undefined ? this.now() : current.at + NEAR_KEY_MS / this.speed;
+  }
+
+  /** Mints the screen's next key when one is due. True when it did: the screen needs a snapshot. */
+  private rotateNear(): boolean {
+    const due = this.nearDue();
+    if (due === null || due > this.now()) return false;
+    const fresh = { key: newNearKey(this.rng), at: this.now() };
+    // The previous key stays only while it is still good: a TV away for a while brings none back.
+    this.state.nearKeys = [fresh, ...this.liveNearKeys().slice(0, 1)];
+    return true;
+  }
+
+  /** The screen's view of its near key, for its snapshot alone. */
+  private nearField(deviceId: string): Pick<RoomView, "near"> {
+    if (!this.isScreen(deviceId)) return {};
+    // The newest key, while it is good: a previous one outlives no current one.
+    const current = this.liveNearKeys()[0];
+    if (current === undefined) return {};
+    const expiresIn = Math.max(0, current.at + NEAR_KEY_MS / this.speed - this.now());
+    return { near: { key: current.key, code: typedNear(this.state.code, current.key), expiresIn } };
+  }
+
+  /** Each connected screen's own snapshot (a new near key), at the current seq. */
+  private screenSnapshots(): Outbound[] {
+    return Object.entries(this.state.devices)
+      .filter(([id, device]) => device.connected && this.isScreen(id))
+      .map(([id]) => ({ to: id, message: this.snapshotFor(id) }));
   }
 
   private screenConnected(): boolean {
@@ -578,6 +670,9 @@ export class RoomCore<S = CatTowerState> {
     this.link.connected(deviceId, this.now());
     // Back at the table in the app: its live table goes (§11.3).
     this.endLive(deviceId, "back");
+    // A screen that comes back gets a fresh near key in its snapshot; a phone's connect that
+    // finds one due passes it on to the screen.
+    const minted = this.rotateNear() && !this.isScreen(deviceId) ? this.screenSnapshots() : [];
     if (this.isScreen(deviceId)) {
       // Always: a mark left past the grace would keep an overdue alarm.
       delete this.state.screenLeftAt;
@@ -589,7 +684,7 @@ export class RoomCore<S = CatTowerState> {
         return [...events, ...this.linkCheck(deviceId), ...this.snapshots(), ...this.inkOnConnect(deviceId)];
       }
     }
-    return [...events, ...this.linkCheck(deviceId), { to: deviceId, message: this.snapshotFor(deviceId) }, ...this.inkOnConnect(deviceId)];
+    return [...events, ...this.linkCheck(deviceId), { to: deviceId, message: this.snapshotFor(deviceId) }, ...minted, ...this.inkOnConnect(deviceId)];
   }
 
   /**
@@ -805,6 +900,8 @@ export class RoomCore<S = CatTowerState> {
     this.expireLive(this.now());
     out.push(...this.linkCheck());
     this.warnStalled();
+    // The screen's next near key: a snapshot for it alone, since nothing changed for the phones.
+    if (this.rotateNear()) out.push(...this.screenSnapshots());
 
     // A game dealt under the old 7-day limit gets the longer one.
     timers.cleanupAt = Math.max(timers.cleanupAt, state.lastActivity + this.cleanupAfter());
@@ -827,7 +924,7 @@ export class RoomCore<S = CatTowerState> {
     const { screenLeftAt } = this.state;
     const screenGone = screenLeftAt === undefined ? null : screenLeftAt + SCREEN_GRACE_MS / this.speed;
     return Math.min(
-      ...[botAt, nextRoundAt, cleanupAt, turnEndsAt, stalls, link, screenGone, this.retireWarningAt(), ...decays, ...Object.values(this.state.live ?? {}).map(deadline)].filter(
+      ...[botAt, nextRoundAt, cleanupAt, turnEndsAt, stalls, link, screenGone, this.nearDue(), this.retireWarningAt(), ...decays, ...Object.values(this.state.live ?? {}).map(deadline)].filter(
         (t): t is number => t !== null,
       ),
     );
@@ -1105,6 +1202,7 @@ export class RoomCore<S = CatTowerState> {
         ...(this.features.streaks ? { look: this.look() } : {}),
         ...(state.rematch?.code ? { rematch: state.rematch.code } : {}),
         ...(this.features.tv && this.screenShown() ? { screen: true as const } : {}),
+        ...this.nearField(deviceId),
         ...(this.features.link ? { link: { ping: LINK_PING_MS, acks: [...(state.devices[deviceId]?.acks ?? [])] } } : {}),
         ...this.nudgeField(deviceId),
         ...this.retireField(deviceId),

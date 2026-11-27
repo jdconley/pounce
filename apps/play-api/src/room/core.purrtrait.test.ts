@@ -4,7 +4,7 @@ import { purrtrait } from "../games/purrtrait";
 import { parseClientMessage, type ClientMessage, type Person, type ServerMessage } from "../protocol";
 import { WORDS } from "../purrtrait/words";
 
-import { RoomCore, SCREEN_GRACE_MS, STALL_END_MS, type Outbound } from "./core";
+import { NEAR_KEY_MS, RoomCore, SCREEN_GRACE_MS, STALL_END_MS, type Outbound } from "./core";
 
 import type { RoomGame } from "../games";
 import type { PurrState } from "../purrtrait/engine";
@@ -66,7 +66,9 @@ describe("the turn clock", () => {
     expect(s.phase).toBe("drawing");
     expect(s.level).toBe("easy");
     expect(viewOf(r, "tv").remainingMs).toBe(60_000);
-    expect(r.nextAlarm()).toBe(T0 + 70_000);
+    expect(r.state.timers.turnEndsAt).toBe(T0 + 70_000);
+    // The alarm comes sooner for the TV's next near key.
+    expect(r.nextAlarm()).toBe(T0 + NEAR_KEY_MS);
   });
 
   it("drawing times out to timeUp", () => {
@@ -739,5 +741,165 @@ describe("kittens (ruling 5)", () => {
   it("only a game that changes for kittens wants the age band", () => {
     expect(family().wantsAgeBands()).toBe(true);
     expect(new RoomCore(RoomCore.create("BCDFG", "a", clock), () => clock, rng).wantsAgeBands()).toBe(false);
+  });
+});
+
+describe("near keys (design §5.2, ruling 12)", () => {
+  const PERIOD = 30_000;
+  /** A fresh key at every mint: a counter, unlike the suite's fixed rng. */
+  const counting = () => {
+    let n = 0;
+    return () => ((n++ * 7) % 26) / 26 + 0.001;
+  };
+  const near = (r: Room, device = "tv") => r.snapshotFor(device).room.near;
+  const keyOf = (r: Room) => (near(r) as { key: string }).key;
+  const toScreen = (out: Outbound[]) => out.filter((o) => o.to === "tv" && o.message.t === "snapshot");
+
+  /** A Purrtrait lobby made by its TV ("tv"), which is connected; "a" sits. */
+  function lobby(speed = 1): Room {
+    const state = RoomCore.create<PurrState>("BCDFG", "", clock, undefined, undefined, "purrtrait", "tv");
+    const r = new RoomCore<PurrState>(state, () => clock, counting(), undefined, speed, { games: ["cat-tower", "purrtrait"], tv: true, streaks: true });
+    r.connect("tv");
+    r.connect("a");
+    r.handle("a", { t: "claim", seat: 0, person: person(1) });
+    return r;
+  }
+
+  it("only the screen's snapshot carries near: the key, the typed code and when it changes", () => {
+    const r = lobby();
+    const n = near(r);
+    expect(n).toEqual({ key: expect.stringMatching(/^[BCDFGHJKLMNPQRTVWXZ2346789]{8}$/), code: `BCDFG${keyOf(r).slice(0, 3)}`, expiresIn: PERIOD });
+    expect(near(r, "a")).toBeUndefined();
+    expect(near(r, "stranger")).toBeUndefined();
+    clock += 10_000;
+    expect(near(r)?.expiresIn).toBe(20_000);
+    expect(r.nextAlarm()).toBe(T0 + PERIOD);
+  });
+
+  it("a new key every 30 s goes to the screen; the current and the previous are good, each for 60 s at most", () => {
+    const r = lobby();
+    const k0 = keyOf(r);
+    clock = T0 + PERIOD;
+    const out = r.tick();
+    const k1 = keyOf(r);
+    expect(k1).not.toBe(k0);
+    expect(toScreen(out)).toHaveLength(1);
+    expect(out.filter((o) => o.to === "a")).toEqual([]);
+    expect(r.nearLive(k0)).toBe(true);
+    expect(r.nearLive(k1)).toBe(true);
+    expect(r.nearLive(`BCDFG${k0.slice(0, 3)}`)).toBe(true);
+    expect(r.nearLive(k1.toLowerCase())).toBe(true);
+    clock = T0 + 2 * PERIOD;
+    r.tick();
+    const k2 = keyOf(r);
+    expect(r.nearLive(k0)).toBe(false);
+    expect(r.nearLive(`BCDFG${k0.slice(0, 3)}`)).toBe(false);
+    expect([r.nearLive(k1), r.nearLive(k2)]).toEqual([true, true]);
+    expect(r.nearLive(null)).toBe(false);
+    expect(r.nearLive("BCDFG")).toBe(false);
+    // Another room's code with the right two... three characters is still wrong.
+    expect(r.nearLive(`BCDFH${k2.slice(0, 3)}`)).toBe(false);
+  });
+
+  it("a late alarm never stretches a key past 60 s, and never brings an old one back", () => {
+    const r = lobby();
+    const k0 = keyOf(r);
+    clock = T0 + 70_000;
+    expect(r.nearLive(k0)).toBe(false);
+    r.tick();
+    expect(r.nearLive(k0)).toBe(false);
+    expect(r.state.nearKeys?.map((k) => k.key)).toEqual([keyOf(r)]);
+  });
+
+  it("no screen connected, no new keys and no alarm for them; it mints again as the screen comes back", () => {
+    const r = lobby();
+    const k0 = keyOf(r);
+    r.disconnect("tv");
+    clock = T0 + SCREEN_GRACE_MS + 1;
+    r.tick();
+    expect(r.nextAlarm()).toBeGreaterThan(T0 + 2 * PERIOD);
+    clock = T0 + 5 * PERIOD;
+    expect(r.tick().filter((o) => o.message.t === "snapshot" && o.to === "tv")).toEqual([]);
+    expect(r.nearLive(k0)).toBe(false);
+    r.connect("tv");
+    expect(keyOf(r)).not.toBe(k0);
+    expect(r.nearLive(keyOf(r))).toBe(true);
+  });
+
+  it("a phone that connects while a key is overdue (a late alarm) brings the screen its new one", () => {
+    const r = lobby();
+    const k0 = keyOf(r);
+    clock = T0 + PERIOD + 5;
+    const out = r.connect("b");
+    expect(keyOf(r)).not.toBe(k0);
+    expect(toScreen(out)).toHaveLength(1);
+    expect(r.connect("c").filter((o) => o.to === "tv")).toEqual([]);
+  });
+
+  it("who needs a key: a member never, a stranger always, a screen's ask never", () => {
+    const r = lobby();
+    const key = keyOf(r);
+    expect(r.knows("a", null, false)).toBe("member");
+    expect(r.knows("tv", null, true)).toBe("member");
+    expect(r.knows("b", null, false)).toBe("not_near");
+    expect(r.knows("b", "BCDFG", false)).toBe("not_near");
+    expect(r.knows("b", key, false)).toBe("exists");
+    expect(r.knows("b", `BCDFG${key.slice(0, 3)}`, false)).toBe("exists");
+    // A device that asks to be a screen isn't let in by a key: the room says it is no screen.
+    expect(r.knows("b", null, true)).toBe("exists");
+    // Once it has been here, it is a member and reconnects with no key.
+    r.connect("b");
+    expect(r.knows("b", null, false)).toBe("member");
+  });
+
+  it("a room built from storage keeps accepting the key the TV shows", () => {
+    const r = lobby();
+    const key = keyOf(r);
+    clock += 5_000;
+    const back = rebuild(r);
+    expect(back.nearLive(key)).toBe(true);
+    expect(back.knows("b", key, false)).toBe("exists");
+  });
+
+  it("over: no near, and no key is good", () => {
+    const r = started();
+    const key = (near(r) as { key: string }).key;
+    act(r, "a", 0, { type: "forfeit" });
+    expect(r.state.gameState && game(r).phase).toBe("over");
+    expect(r.state.status).toBe("over");
+    expect(near(r)).toBeUndefined();
+    expect(r.nearLive(key)).toBe(false);
+    expect(r.knows("z", key, false)).toBe("not_near");
+  });
+
+  it("a Cat Tower table has no near keys and asks for none", () => {
+    const r = new RoomCore(RoomCore.create("BCDFG", "", clock, undefined, undefined, "cat-tower", "tv"), () => clock, rng, undefined, 1, { streaks: false, tv: true });
+    r.connect("tv");
+    expect(r.snapshotFor("tv").room.near).toBeUndefined();
+    expect(r.state.nearKeys).toBeUndefined();
+    expect(r.knows("b", null, false)).toBe("exists");
+    expect(r.sameRoom()).toBe(false);
+  });
+
+  it("linking a TV swaps the screen: the old one is no member any more, and the table stays shown", () => {
+    const r = lobby();
+    expect(r.addScreen("tv2")).toEqual(["tv"]);
+    expect(r.state.screens).toEqual(["tv2"]);
+    expect(r.isScreen("tv")).toBe(false);
+    expect(r.state.devices.tv).toBeUndefined();
+    expect(r.knows("tv", null, true)).toBe("exists");
+    expect(r.knows("tv", null, false)).toBe("not_near");
+    // Within the grace the phones still show the TV layout, waiting for the new one.
+    expect(r.snapshotFor("a").room.screen).toBe(true);
+    expect(r.addScreen("tv2")).toEqual([]);
+    r.connect("tv2");
+    expect(near(r, "tv2")).toBeDefined();
+    expect(near(r, "tv")).toBeUndefined();
+  });
+
+  it("a Cat Tower table keeps every screen it is linked to", () => {
+    const r = new RoomCore(RoomCore.create("BCDFG", "", clock, undefined, undefined, "cat-tower", "tv"), () => clock, rng, undefined, 1, { streaks: false, tv: true });
+    expect(r.addScreen("tv2")).toEqual([]);
+    expect(r.state.screens).toEqual(["tv", "tv2"]);
   });
 });

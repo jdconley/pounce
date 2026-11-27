@@ -20,6 +20,7 @@ export const TOKEN_PROTOCOL = "pounce.token.";
 export const REFUSED_BASE = 4000;
 
 const MAX_QUERY_VALUE = 200;
+const MAX_NEAR = 16;
 /** The Daily Dish's board socket (docs/daily-protocol.md). */
 const DAILY_BOARD_WS = "/v1/daily/board/ws";
 
@@ -53,10 +54,13 @@ export function asAppSocket(request: Request): Request {
   if (games !== null && games.length <= MAX_QUERY_VALUE) headers.set(GAMES_HEADER, games);
   const app = url.searchParams.get("app");
   if (app !== null && app.length <= MAX_QUERY_VALUE) headers.set(APP_HEADER, app);
-  // What a socket's query says that no header does: a TV asking to be a screen, and on the Daily
+  // What a socket's query says that no header does: a TV asking to be a screen, a phone's near key, and on the Daily
   // Dish's board socket, the person (a phone) or the board token (a TV).
   const kept = new URLSearchParams();
   if (url.searchParams.get("role") === "screen") kept.set("role", "screen");
+  // A Purrtrait table's near key, off the TV's QR (design §5.2); the Worker checks its shape.
+  const near = url.searchParams.get("near");
+  if (near !== null && near.length <= MAX_NEAR) kept.set("near", near);
   if (url.pathname === DAILY_BOARD_WS) {
     for (const key of ["person", "board"]) {
       const value = url.searchParams.get(key);

@@ -15,6 +15,12 @@ describe("asAppSocket", () => {
     expect(out.headers.get("authorization")).toBe("Bearer abc");
   });
 
+  test("keeps a Purrtrait near key, within its length", () => {
+    expect(new URL(asAppSocket(socket("?near=BCDFGHJK&x=1")).url).search).toBe("?near=BCDFGHJK");
+    expect(new URL(asAppSocket(socket("?role=screen&near=BCDFGHJK")).url).search).toBe("?role=screen&near=BCDFGHJK");
+    expect(new URL(asAppSocket(socket(`?near=${"B".repeat(17)}`)).url).search).toBe("");
+  });
+
   test("any other role is dropped with the rest", () => {
     expect(new URL(asAppSocket(socket("?role=other")).url).search).toBe("");
     expect(new URL(asAppSocket(socket("")).url).search).toBe("");

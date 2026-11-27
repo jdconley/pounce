@@ -57,18 +57,44 @@ export async function mayMakeScreenLink(env: Env, deviceId: string, ip: string, 
  * a wrong one is counted against the device and its address, and once either has too many
  * (`backoff.ts`) every guess, right or wrong, is refused until its lockout ends, so a locked-out
  * guesser learns nothing. Returns the seconds to wait when refused, else whether the room exists.
+ *
+ * At a same-room table (Purrtrait) the code alone is not enough: a stranger needs the TV's live
+ * near key (`ask.near`), and one without it is a wrong guess too, answered `notNear`. A device
+ * asking to be a screen (`ask.screen`) needs none; the room says whether it is one.
  */
-export async function guardJoin(env: Env, code: string, deviceId: string, ip: string, now: number): Promise<{ retryAfter: number } | { exists: boolean }> {
-  const known = await room(env, code).knows(deviceId);
+export async function guardJoin(
+  env: Env,
+  code: string,
+  deviceId: string,
+  ip: string,
+  now: number,
+  ask: { near?: string | null; screen?: boolean } = {},
+): Promise<{ retryAfter: number } | { exists: boolean; notNear?: true }> {
+  const known = await room(env, code).knows(deviceId, ask.near ?? null, ask.screen ?? false);
   if (known === "member") return { exists: true };
-  const failed = known === "none";
+  const failed = known === "none" || known === "not_near";
   const [byDevice, byIp] = await Promise.all([
     limiter(env, `device:${deviceId}`).guess(failed, DEVICE_JOIN_RULE, now),
     limiter(env, `ip:${ip}`).guess(failed, IP_JOIN_RULE, now),
   ]);
   const retryAt = Math.max(byDevice.retryAt ?? 0, byIp.retryAt ?? 0);
   if (retryAt > 0) return { retryAfter: Math.max(1, Math.ceil((retryAt - now) / 1000)) };
-  return { exists: !failed };
+  return known === "not_near" ? { exists: true, notNear: true } : { exists: !failed };
+}
+
+/**
+ * Whether `near` is a live near key at the table `code` (`/e/<code>?near=`), guarded like the
+ * invite page's look: a wrong or stale key is a wrong guess against the address, and an address
+ * locked out is told no, right key or wrong. Never throws.
+ */
+export async function peekNear(env: Env, code: string, near: string, ip: string, now: number): Promise<boolean> {
+  try {
+    const live = await room(env, code).nearLive(near);
+    const { retryAt } = await limiter(env, `ip:${ip}`).guess(!live, IP_JOIN_RULE, now);
+    return retryAt === null && live;
+  } catch {
+    return false;
+  }
 }
 
 /**

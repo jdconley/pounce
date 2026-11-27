@@ -21,7 +21,7 @@ import { FALLBACK_ZONE } from "../streaks/clock";
 import { myStreaks, rememberLook, reportTable, unlocksFor, type PairViews } from "../streaks/pairs";
 import { liveOn, notifyOn, streaksOn, trophyOn } from "../streaks/profile";
 
-import { newRoomCode } from "./codes";
+import { newRoomCode, parseNear } from "./codes";
 import {
   RoomCore,
   type AdoptRule,
@@ -56,6 +56,8 @@ const MAX_HEADER_PLAYERS = 16;
 
 const BAD_MESSAGE: ServerMessage = { t: "error", code: "bad_message" };
 const NORMAL_CLOSURE = 1000;
+/** A screen a same-room table swapped out: refused, as `not_screen` is (4000 + 403). */
+const NOT_SCREEN_CLOSURE = 4403;
 /** The app closed the socket itself (leaving the table, going to the background). */
 const ASKED_CLOSURES = [NORMAL_CLOSURE, 1001];
 /** The heartbeat the room answers without waking (the bad connection indicator). */
@@ -222,6 +224,9 @@ export class GameRoom extends DurableObject<Env> {
     const screen = tvOn(this.env) && request.headers.get(ROLE_HEADER) === "screen";
     if (screen && !this.core.mayScreen(deviceId)) return refuse(409, "seated");
     if (screen && !this.core.isScreen(deviceId)) return refuse(403, "not_screen");
+    // A same-room table (Purrtrait) lets a stranger in only with the TV's near key. The Worker's
+    // guard asked the same and counted a wrong one; asked again here, where the socket is made.
+    if (!screen && this.core.knows(deviceId, nearParam(request), false) === "not_near") return refuse(403, "not_near");
     // A game that changes for kittens (Purrtrait's two Easy words) needs the device's age band
     // first. A lookup that fails keeps what the room already knew: a kitten stays one.
     const kitten =
@@ -309,22 +314,29 @@ export class GameRoom extends DurableObject<Env> {
 
   /**
    * How well the room knows a device, for the guard on joining by code: `member` (the host, a
-   * seat's device, or one that has been here before), `exists` (a stranger to a real room) or
-   * `none` (no such room).
+   * seat's device, or one that has been here before), `exists` (a stranger to a real room),
+   * `not_near` (a stranger to a same-room table without the TV's live near key, `near`) or
+   * `none` (no such room). `screen`: the device asks to be a screen, which no key decides.
    */
-  knows(deviceId: string): "member" | "exists" | "none" {
-    const core = this.core;
-    if (!core) return "none";
-    const { state } = core;
-    const member = core.isScreen(deviceId) || deviceId === state.hostDeviceId || state.devices[deviceId] !== undefined || core.controlledSeats(deviceId).length > 0;
-    return member ? "member" : "exists";
+  knows(deviceId: string, near: string | null = null, screen = false): "member" | "exists" | "not_near" | "none" {
+    return this.core ? this.core.knows(deviceId, near, screen) : "none";
   }
 
-  /** Whether `deviceId` may link a screen to this table (Task 7): the host or someone seated, never a screen. */
-  mayLink(deviceId: string): "ok" | "not_seated" | "none" {
+  /** Whether `near` is a live near key at this table: what `/e/<code>?near=` asks before it sends a phone on. */
+  nearLive(near: string): boolean {
+    return this.core?.nearLive(near) ?? false;
+  }
+
+  /**
+   * Whether `deviceId` may link a screen to this table: the host or someone seated, never a
+   * screen. At a same-room table only the host may, since a link swaps its one screen; anyone
+   * else seated is `not_allowed`. A stranger hears `not_seated`, as for a table that isn't there.
+   */
+  mayLink(deviceId: string): "ok" | "not_seated" | "not_allowed" | "none" {
     const core = this.core;
     if (!core) return "none";
-    return core.mayLink(deviceId) ? "ok" : "not_seated";
+    if (!core.mayLink(deviceId)) return "not_seated";
+    return core.sameRoom() && deviceId !== core.state.hostDeviceId ? "not_allowed" : "ok";
   }
 
   /**
@@ -334,7 +346,16 @@ export class GameRoom extends DurableObject<Env> {
   async addScreen(deviceId: string): Promise<"ok" | "seated" | "none"> {
     if (!this.core) return "none";
     if (!this.core.mayScreen(deviceId)) return "seated";
-    this.core.addScreen(deviceId);
+    // A same-room table's old screen is refused from now on: its sockets close as a refusal would.
+    for (const old of this.core.addScreen(deviceId)) {
+      for (const ws of this.ctx.getWebSockets(old)) {
+        try {
+          ws.close(NOT_SCREEN_CLOSURE, "not_screen");
+        } catch {
+          // Already closing.
+        }
+      }
+    }
     await this.after([]);
     return "ok";
   }
@@ -999,6 +1020,11 @@ export class GameRoom extends DurableObject<Env> {
   private player(playerId: string) {
     return this.env.PLAYERS.get(this.env.PLAYERS.idFromName(playerId));
   }
+}
+
+/** The socket's `near` query: a near key or a typed near code, or null when it has none fit to check. */
+function nearParam(request: Request): string | null {
+  return parseNear(new URL(request.url).searchParams.get("near"));
 }
 
 /** The Worker's `x-play-player` header, or no players when it is missing or malformed. */

@@ -62,6 +62,12 @@ export interface GameModule<S, A, V, E, Err extends string = string, O = never> 
    */
   kittenAware?: boolean;
   /**
+   * Same room only (Purrtrait, design §5): only a screen makes such a table, it has one screen,
+   * which a host's link swaps, and a device that isn't yet a member joins only with the screen's
+   * near key. Absent: any device with the code may join, and a table may have several screens.
+   */
+  sameRoom?: boolean;
+  /**
    * The game takes a live stream (`ink` messages; Purrtrait, design §6). The room keeps it in
    * memory only, relays it to its `audience`, and the device that first acts for the seat on the
    * move owns the turn: only it streams and acts for the seat until the turn ends. Absent: `ink`

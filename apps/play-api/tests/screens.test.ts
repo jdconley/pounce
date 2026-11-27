@@ -61,8 +61,8 @@ async function asScreen(mf: Miniflare, code: string, device: Device, headers: Re
   return client;
 }
 
-async function sit(mf: Miniflare, code: string, device: Device, seat: number, who: Person, headers: Record<string, string> = {}): Promise<Client> {
-  const c = await connect(mf, code, device, headers);
+async function sit(mf: Miniflare, code: string, device: Device, seat: number, who: Person, headers: Record<string, string> = {}, query = ""): Promise<Client> {
+  const c = await connect(mf, code, device, headers, query);
   c.send({ t: "claim", seat, person: face(who) });
   await c.until((s) => s.room.seats[seat]?.kind === "human");
   return c;
@@ -643,8 +643,10 @@ describe("Purrtrait's ink through the Worker", { timeout: 30_000 }, () => {
     const screen = await asScreen(mf, code, tv, PURR);
     const kid = newPerson("Mochi", 1);
     await profile(mf, a, [kid], { band: "kitten" });
-    const a1 = await sit(mf, code, a, 0, kid, PURR);
-    const b1 = await sit(mf, code, b, 1, newPerson("Bo", 2), PURR);
+    // A phone joins a Purrtrait table with the TV's near key, and comes back as a member with none.
+    const near = `?near=${(screen.last?.room.near as { key: string }).key}`;
+    const a1 = await sit(mf, code, a, 0, kid, PURR, near);
+    const b1 = await sit(mf, code, b, 1, newPerson("Bo", 2), PURR, near);
     a1.send({ t: "start" });
     await a1.until((s) => s.room.purrtrait?.phase === "choosing");
     const level = (word: string) => WORDS.find((w) => w.word === word)?.level;

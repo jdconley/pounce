@@ -27,6 +27,7 @@ export const purrtrait: GameModule<PurrState, PurrAction, PurrView, PurrEvent, P
   apply,
   view,
   kittenAware: true,
+  sameRoom: true,
   stream: {
     perSecond: INK_PER_SECOND,
     audience: "screens+owner",

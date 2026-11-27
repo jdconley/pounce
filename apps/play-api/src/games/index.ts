@@ -47,6 +47,9 @@ export function gameModule(id: string | undefined): RoomGame {
   return (isGameId(id) ? GAMES[id] : GAMES[DEFAULT_GAME]) as RoomGame;
 }
 
+/** A game whose tables are same room only (Purrtrait): only a screen makes them, and only its near key lets a phone in. */
+export const sameRoomGame = (id: string): boolean => isGameId(id) && gameModule(id).sameRoom === true;
+
 /** The header an app lists the games it can draw in, comma separated. An app that sends none draws Cat Tower only. */
 export const GAMES_HEADER = "x-pounce-games";
 
