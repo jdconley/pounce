@@ -155,17 +155,26 @@ cell and added 30 seconds.*
   digit for that cell, checked by the server the moment it is entered. A clash is no longer the
   test: a digit that clashes is always wrong, and a digit that clashes with nothing can still be
   wrong.
+- **Right away, not at the end** (JD, 2026-11-26: the family wants to know the moment a number is
+  wrong). Each number goes to the server the moment it's placed, never waiting for a batch. A wrong
+  one shows red with a short shake as soon as the answer is back, and a life goes.
+- **Checked by the server, not on the phone.** *(Ruling.)* The phone never has the solution
+  before the run ends, so the board stays honest. A solution on the phone would be readable from
+  the start answer, and anyone could fill a perfect grid at human speed and top the board. The cost
+  is one round trip, typically 100 to 200 ms, before the red mark shows. The digit shows at once,
+  then turns red or stays.
 - **A right number** stays and locks, like a given. It can't be cleared or changed.
-- **A wrong number** costs one life. It isn't placed: the cell stays empty to the server, and the
-  phone shows the digit in the cell as wrong until the player enters another or erases it. Erasing
-  it costs nothing. The same wrong digit again in the same cell costs another life, so the apps
+- **A wrong number** costs one life. *(Ruling: it stays, marked, until the player clears it.)* It
+  isn't placed: the cell stays empty to the server, and the phone shows the digit in the cell, red,
+  until the player enters another or erases it. That reads better than having it vanish: the player
+  sees what they tried. Erasing it costs nothing. The same wrong digit again in the same cell costs another life, so the apps
   don't send it.
 - **Three lives.** The third wrong number ends the run: outcome `missed`, the same outcome Sniff
   uses when its sixth guess misses.
 - **Three hints, separate from lives.** A hint fills one cell, from the server, as before. It costs
   no time and no life. After three, the Hint button is spent. Lives never limit hints, and hints
   never restore lives.
-- **Notes** stay on the phone and never cost a life.
+- **Notes** (pencil marks) stay on the phone, are never checked, and never cost a life.
 - **Failing.** The board fills in the rest of the solution, kindly, under one short line ("Out of
   lives"), then the end screen. The server sends the solution only once the run has ended this way.
 - **No second try.** A failed run is that day's run, as every run is: starting again returns it,
