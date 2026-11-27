@@ -33,21 +33,29 @@ import Observation
     @ObservationIgnored private var unsent: [[InkOp]] = []
     @ObservationIgnored private let send: @MainActor (_ ops: [InkOp], _ last: Bool, _ failed: @escaping @MainActor () -> Void) -> Void
     @ObservationIgnored private let clock: () -> Duration
+    /// Touches before this are the tap that picked the word (a double tap's second half landing on
+    /// the easel that just came up), not drawing.
+    @ObservationIgnored private let armed: Duration
 
     /// `send` gets each message's ops (for `seat` and `turn`), whether it ends a resend reply
-    /// (`last`), and a closure to call if it never left.
+    /// (`last`), and a closure to call if it never left. A finger down within `settle` of the
+    /// model's making (the easel appearing) draws nothing.
     public init(
         seat: Seat, turn: String, clock: @escaping () -> Duration = { ContinuousClock.now - PurrDrawModel.origin },
+        settle: Duration = PurrDrawModel.settle,
         send: @escaping @MainActor (_ ops: [InkOp], _ last: Bool, _ failed: @escaping @MainActor () -> Void) -> Void
     ) {
         self.seat = seat
         self.turn = turn
         self.clock = clock
         self.send = send
+        armed = clock() + settle
         pen.width = width
     }
 
     public nonisolated static let origin = ContinuousClock.now
+    /// Longer than a double tap's gap, shorter than reaching for the easel to draw.
+    public nonisolated static let settle: Duration = .milliseconds(400)
 
     public var drawing: InkDrawing { pen.drawing }
 
@@ -56,9 +64,10 @@ import Observation
 
     // MARK: input
 
-    /// A finger went down. False while the easel is full (nothing is drawn).
+    /// A finger went down. False while the easel is full, or just after it came up (the tap
+    /// that picked the word): nothing is drawn.
     @discardableResult public func down(_ p: InkPoint) -> Bool {
-        guard !full else { return false }
+        guard !full, clock() >= armed else { return false }
         pen.down(p)
         strokes += 1
         sync()

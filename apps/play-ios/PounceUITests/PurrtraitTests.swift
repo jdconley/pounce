@@ -61,6 +61,25 @@ final class PurrtraitTests: XCTestCase {
         XCTAssertTrue(until(3) { self.probe(app)["scores"]?.hasPrefix("5,1,4") == true }, "Tricky scores 2 each: \(probe(app))")
     }
 
+    /// The tap that picks a word never draws: a child's double tap on the card lands its second
+    /// tap on the easel that just came up, and that must not leave a mark (or send any ink).
+    func testThePickingTapNeverDraws() {
+        // Fast, like a server down the hall: the easel is up before the second tap.
+        let app = Live.demo("purr-pick", speed: 20)
+        app.launchArguments += ["-settings.soundOn", "<false/>"]
+        app.launch()
+        let easy = el(app, "purr.pick.easy")
+        XCTAssertTrue(easy.waitForExistence(timeout: Live.t(10)), "no word cards")
+        // A spot on the screen, not on the card: the card is gone by the second tap.
+        let card = easy.frame
+        let spot = app.coordinate(withNormalizedOffset: .zero).withOffset(CGVector(dx: card.midX, dy: card.midY))
+        spot.tap()
+        spot.tap()
+        XCTAssertTrue(el(app, "purr.easel").waitForExistence(timeout: Live.t(5)), "no easel after the pick: \(probe(app))")
+        XCTAssertFalse(until(1.5) { self.probe(app)["strokes"] != "0" }, "the picking tap drew: \(probe(app))")
+        XCTAssertEqual(probe(app)["strokes"], "0")
+    }
+
     func testGiveUpRevealsWithNoPoints() {
         let app = launch("purr-draw")
         let give = el(app, "purr.giveUp")
@@ -89,7 +108,7 @@ final class PurrtraitTests: XCTestCase {
     func testASharedPhoneHidesTheWordsBehindTheCurtain() {
         let app = launch("purr-curtain")
         XCTAssertTrue(el(app, "screen-curtain").waitForExistence(timeout: Live.t(10)), "no curtain")
-        XCTAssertFalse(el(app, "purr.pick.easy").isHittable, "the words show under the curtain")
+        XCTAssertFalse(el(app, "purr.pick.easy").exists, "the words are drawn under the curtain")
         let hold = el(app, "curtain.hold")
         hold.press(forDuration: 1.2)
         XCTAssertTrue(el(app, "purr.pick.easy").waitForExistence(timeout: Live.t(5)), "no words after the hold")

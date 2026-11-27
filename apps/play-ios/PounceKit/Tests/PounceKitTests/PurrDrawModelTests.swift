@@ -10,8 +10,8 @@ import Testing
         var failures: [@MainActor () -> Void] = []
     }
 
-    private func model(_ wire: Wire, now: @escaping () -> Duration) -> PurrDrawModel {
-        PurrDrawModel(seat: 2, turn: "1:3", clock: now) { ops, last, failed in
+    private func model(_ wire: Wire, settle: Duration = .zero, now: @escaping () -> Duration) -> PurrDrawModel {
+        PurrDrawModel(seat: 2, turn: "1:3", clock: now, settle: settle) { ops, last, failed in
             if wire.failing {
                 wire.failures.append(failed)
             } else {
@@ -19,6 +19,27 @@ import Testing
                 wire.lasts.append(last)
             }
         }
+    }
+
+    /// The tap that picked the word lands on the easel as it comes up (a double tap): no stroke,
+    /// no ink, an empty easel. A finger after the settle draws as usual.
+    @Test func thePickingTapNeverDraws() {
+        let wire = Wire()
+        var now = Duration.seconds(5)
+        let m = model(wire, settle: PurrDrawModel.settle) { now }
+        now += .milliseconds(150)
+        #expect(!m.down(InkPoint(384, 300)))
+        m.move([InkPoint(390, 300)])
+        m.up()
+        m.tick()
+        #expect(wire.sent.isEmpty)
+        #expect(m.drawing.strokes.isEmpty)
+        #expect(m.strokes == 0 && m.visible == 0 && !m.canUndo)
+        now += PurrDrawModel.settle
+        #expect(m.down(InkPoint(384, 300)))
+        m.up()
+        #expect(m.drawing.strokes.count == 1)
+        #expect(!wire.sent.isEmpty)
     }
 
     @Test func batchesGoEveryFiftyMilliseconds() {

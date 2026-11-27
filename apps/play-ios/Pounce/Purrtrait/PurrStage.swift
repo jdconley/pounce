@@ -32,6 +32,15 @@ struct PurrStage: View {
         return seat
     }
 
+    /// The curtain is down on a screen that holds the words (the pick or the drawer's turn).
+    private func hidesSecret(_ table: PurrTableModel) -> Bool {
+        guard curtainSeat != nil else { return false }
+        switch table.screen {
+        case .pick, .draw: return true
+        case .watch, .reveal, .over: return false
+        }
+    }
+
     private var clock: PurrClock {
         PurrClock(deadline: table?.deadline(arrived: arrived), frozen: table?.view.remainingMs.map { $0 / 1000 })
     }
@@ -43,7 +52,11 @@ struct PurrStage: View {
                 VStack(spacing: 0) {
                     // The drawer's screen has the paw in its own top row, beside the word.
                     if !table.isDrawingHere { topBar(table) }
-                    content(table)
+                    Group {
+                        // Under the curtain the words aren't drawn at all, so none shows while it
+                        // slides in.
+                        if hidesSecret(table) { Color.clear } else { content(table) }
+                    }
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
                 }
                 if let seat = curtainSeat, let person = table.room.seats[safe: seat]?.person {
