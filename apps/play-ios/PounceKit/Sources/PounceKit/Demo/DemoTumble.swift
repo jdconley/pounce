@@ -35,6 +35,8 @@ public final class TumbleDemoRoom {
         public var left: [Int] = []
         public var away: [Int] = []
         public var names: [String] = ["Sam", "Mia", "Leo", "Ivy", "Max", "Zoe"]
+        /// The other seats as people with these names (the App Store shots), played like the cats.
+        public var family: [String] = []
         public init() {}
     }
 
@@ -71,7 +73,7 @@ public final class TumbleDemoRoom {
         let seats = (0..<n).map { s in
             s == options.mine && !options.screen
                 ? SeatView(kind: .human, person: Person(id: "p\(s)", name: options.names[s % options.names.count], cat: s % 8), yours: true, presence: .awake)
-                : SeatView(kind: .bot)
+                : Self.seat(s, family: options.family)
         }
         room = RoomView(
             code: "TUMBLE", name: "Toy night", status: .playing, youAreHost: !options.screen, seats: seats, gameId: GameID.tumble,
@@ -81,6 +83,12 @@ public final class TumbleDemoRoom {
     }
 
     private var mine: Int? { o.screen ? nil : o.mine }
+
+    /// Another seat: a House Cat, or a person from `family`.
+    private static func seat(_ s: Int, family: [String]) -> SeatView {
+        guard family.indices.contains(s) else { return SeatView(kind: .bot) }
+        return SeatView(kind: .human, person: Person(id: "f\(s)", name: family[s], cat: (s * 3 + 1) % 8), presence: .awake)
+    }
 
     /// The room's copy of a box, for tests.
     public func box(_ s: Int) -> TumbleBox { boxes[s] }

@@ -1,12 +1,12 @@
 [
-  {"shot": "1-table",   "line1": "Family game night,", "line2": "every night",      "top": "7B2FFF", "bottom": "FF2E9A"},
-  {"shot": "2-bird",    "line1": "New: Birdwatch,",    "line2": "play as a team",   "top": "2EB8FF", "bottom": "7B2FFF"},
-  {"shot": "3-trump",   "line1": "Bid high,",          "line2": "name trump",       "top": "FF2E9A", "bottom": "FF8A00"},
-  {"shot": "4-dish",    "line1": "Four new puzzles",   "line2": "every day",        "top": "FF8A00", "bottom": "7B2FFF"},
-  {"shot": "5-puzzle",  "line1": "Same puzzle",        "line2": "for everyone",     "top": "2EB8FF", "bottom": "00D1C1"},
-  {"shot": "6-us",      "line1": "Play your person.",  "line2": "Keep the streak.", "top": "FF2E9A", "bottom": "FF8A00"},
-  {"shot": "7-family",  "line1": "Room for the",       "line2": "whole family",     "top": "00B8D4", "bottom": "7B2FFF"},
-  {"shot": "8-levels",  "line1": "Climb all",          "line2": "ten levels",       "top": "FF8A00", "bottom": "FF2E9A"},
-  {"shot": "9-kids",    "line1": "Safe for kids.",     "line2": "No chat. No ads.", "top": "2EB8FF", "bottom": "7B2FFF"},
-  {"shot": "10-win",    "line1": "Take the",           "line2": "crown",            "top": "7B2FFF", "bottom": "00D1C1"}
+  {"shot": "1-table",   "line1": "Family game night,", "line2": "every night",       "top": "7B2FFF", "bottom": "FF2E9A"},
+  {"shot": "2-tumble",  "line1": "New: Toy Tumble,",   "line2": "everyone at once",  "top": "FF8A00", "bottom": "FF2E9A"},
+  {"shot": "3-purr",    "line1": "New: Purrtrait,",    "line2": "draw for the room", "top": "00B8D4", "bottom": "7B2FFF"},
+  {"shot": "4-bird",    "line1": "Birdwatch,",         "line2": "play as a team",    "top": "2EB8FF", "bottom": "7B2FFF"},
+  {"shot": "5-dish",    "line1": "Four new puzzles",   "line2": "every day",         "top": "FF8A00", "bottom": "7B2FFF"},
+  {"shot": "6-puzzle",  "line1": "Three lives,",       "line2": "free hints",        "top": "2EB8FF", "bottom": "00D1C1"},
+  {"shot": "7-us",      "line1": "Play your person.",  "line2": "Keep the streak.",  "top": "FF2E9A", "bottom": "FF8A00"},
+  {"shot": "8-family",  "line1": "Room for the",       "line2": "whole family",      "top": "00B8D4", "bottom": "7B2FFF"},
+  {"shot": "9-kids",    "line1": "Safe for kids.",     "line2": "No chat. No ads.",  "top": "2EB8FF", "bottom": "7B2FFF"},
+  {"shot": "10-win",    "line1": "Take the",           "line2": "crown",             "top": "7B2FFF", "bottom": "00D1C1"}
 ]
